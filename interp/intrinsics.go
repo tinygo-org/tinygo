@@ -28,6 +28,10 @@ func parseAsIntrinsic(c *constParser, call callInst) (instruction, error) {
 		return nil, nil
 	case "runtime.runtimePanic":
 		return &runtimePanicInst{call.args[0], call.args[1], call.dbg}, nil
+	case "runtime.typeAssert":
+		return &typeAssertInst{call.args[0], cast(call.args[0].typ().(nonAggTyp), call.args[1]), call}, nil
+	case "(reflect.rawType).elem":
+		return &typeElemInst{cast(c.uintptr, call.args[0]), call}, nil
 	case "memset":
 		return &memSetInst{call.args[0], cast(i8, call.args[1]), call.args[2], call}, nil
 	case "memmove":
@@ -48,6 +52,8 @@ func parseAsIntrinsic(c *constParser, call callInst) (instruction, error) {
 			if call.args[3] == smallIntValue(i1, 0) {
 				return &memMoveInst{call.args[0], call.args[1], call.args[2], false, call}, nil
 			}
+		case strings.HasSuffix(obj.name, "$invoke"):
+			return &interfaceInvokeInst{cast(pointer(defaultAddrSpace, c.uintptr), call.args[len(call.args)-2]), call}, nil
 		case strings.HasPrefix(obj.name, "llvm.lifetime.start.") || strings.HasPrefix(obj.name, "llvm.lifetime.end.") ||
 			strings.HasPrefix(obj.name, "llvm.dbg."):
 			return nil, nil
@@ -267,6 +273,10 @@ func (i *heapAllocInst) exec(state *execState) error {
 	return nil
 }
 
+func (i *heapAllocInst) String() string {
+	return "intrinsic " + i.callInst.String()
+}
+
 type runtimePanicInst struct {
 	base, len value
 	dbg       llvm.Metadata
@@ -411,6 +421,10 @@ func (i *memSetInst) tryExec(state *execState) error {
 	return nil
 }
 
+func (i *memSetInst) String() string {
+	return "intrinsic " + i.callInst.String()
+}
+
 // memMoveInst is an instruction to move a range of data from one location to another.
 type memMoveInst struct {
 	dst, src value
@@ -498,4 +512,224 @@ func (i *memMoveInst) tryExec(state *execState) error {
 	}
 
 	return nil
+}
+
+func (i *memMoveInst) String() string {
+	return "intrinsic " + i.callInst.String()
+}
+
+// typeAssertInst checks if an actual type matches an asserted type exactly.
+// This runtime.typeAssert call would normally be implemented by the interface lowering pass.
+type typeAssertInst struct {
+	actualType, assertedType value
+
+	callInst
+}
+
+func (i *typeAssertInst) exec(state *execState) error {
+	err := i.tryExec(state)
+	if err != nil {
+		if isRuntimeOrRevert(err) {
+			return i.callInst.exec(state)
+		}
+		return err
+	}
+	return nil
+}
+
+func (i *typeAssertInst) tryExec(state *execState) error {
+	locals := state.locals()
+	actualType := i.actualType.resolve(locals)
+	assertedType := i.assertedType.resolve(locals)
+
+	type kind uint8
+	const (
+		idk kind = iota
+		null
+		ty
+	)
+
+	var actual, asserted string
+	var actualKind, assertedKind kind
+	switch val := actualType.val.(type) {
+	case smallInt:
+		if actualType.raw == 0 {
+			actualKind = null
+		}
+	case *offAddr:
+		obj := val.obj()
+		if strings.HasPrefix(obj.name, "reflect/types.type:") {
+			actual, actualKind = strings.TrimPrefix(obj.name, "reflect/types.type:"), ty
+		}
+	}
+	switch val := assertedType.val.(type) {
+	case smallInt:
+		if assertedType.raw == 0 {
+			assertedKind = null
+		}
+	case *offAddr:
+		obj := val.obj()
+		if strings.HasPrefix(obj.name, "reflect/types.typeid:") {
+			asserted, assertedKind = strings.TrimPrefix(obj.name, "reflect/types.typeid:"), ty
+		}
+	}
+
+	type kinds struct{ actual, asserted kind }
+	switch (kinds{actualKind, assertedKind}) {
+	case kinds{null, null}:
+		state.stack = append(state.stack, boolValue(true))
+		return nil
+	case kinds{ty, ty}:
+		state.stack = append(state.stack, boolValue(actual == asserted))
+		return nil
+	}
+
+	return errRuntime
+}
+
+func (i *typeAssertInst) String() string {
+	return "intrinsic " + i.callInst.String()
+}
+
+// typeElemInst looks up the element of the provided type.
+type typeElemInst struct {
+	typeCodeAddr value
+
+	callInst
+}
+
+func (i *typeElemInst) exec(state *execState) error {
+	err := i.tryExec(state)
+	if err != nil {
+		if isRuntimeOrRevert(err) {
+			return i.callInst.exec(state)
+		}
+		return err
+	}
+	return nil
+}
+
+func (i *typeElemInst) tryExec(state *execState) error {
+	typeCodeAddr := i.typeCodeAddr.resolve(state.locals())
+	ptr, ok := typeCodeAddr.val.(*offAddr)
+	if !ok || typeCodeAddr.raw != 0 {
+		if debug {
+			println("cannot use type code addr", typeCodeAddr.String())
+		}
+		return errRuntime
+	}
+	obj := ptr.obj()
+	const prefix = "reflect/types.type:"
+	if !strings.HasPrefix(obj.name, prefix) {
+		if debug {
+			println("type elem code missing prefix", obj.name)
+		}
+		return errRuntime
+	}
+	id := strings.TrimPrefix(obj.name, prefix)
+	class := id[:strings.IndexByte(id, ':')]
+	value := id[len(class)+1:]
+	if class == "named" {
+		// Get the underlying type.
+		class = value[:strings.IndexByte(value, ':')]
+		value = value[len(class)+1:]
+	}
+	// Elem() is only valid for certain type classes.
+	switch class {
+	case "chan", "pointer", "slice", "array":
+	default:
+		return fmt.Errorf("(reflect.Type).Elem() called on %s type", class)
+	}
+	err := obj.parseInit(&state.cp)
+	if err != nil {
+		if debug {
+			println("type elem parse init failed", err.Error())
+		}
+		return err
+	}
+	v, err := obj.data.load(typeCodeAddr.typ(), 0)
+	if err != nil {
+		if debug {
+			println("type elem load failed", err.Error())
+		}
+		return err
+	}
+	state.stack = append(state.stack, v)
+	return nil
+}
+
+func (i *typeElemInst) String() string {
+	return "intrinsic " + i.callInst.String()
+}
+
+type interfaceInvokeInst struct {
+	typeCodePtr value
+
+	callInst
+}
+
+func (i *interfaceInvokeInst) exec(state *execState) error {
+	typeCodePtr := i.typeCodePtr.resolve(state.locals())
+	ptr, ok := typeCodePtr.val.(*offPtr)
+	if !ok || typeCodePtr.raw != 0 {
+		return i.callInst.exec(state)
+	}
+	obj := ptr.obj()
+	if !strings.HasPrefix(obj.name, "reflect/types.type:") {
+		return errors.New("bad type code name")
+	}
+	err := obj.parseInit(&state.cp)
+	if err != nil {
+		return err
+	}
+	methodSet, err := obj.data.load(obj.ptrTy, obj.ty.(*structType).fields[2].offset)
+	if err != nil {
+		return err
+	}
+	thunkSig, err := i.called.val.(*offPtr).obj().parseSig(&state.cp)
+	if err != nil {
+		return err
+	}
+	sig := state.cp.globalsByName[thunkSig.invokeName]
+	if sig == nil {
+		return errors.New("missing invoke signature")
+	}
+	methodSetObj := methodSet.val.(*offPtr).obj()
+	err = methodSetObj.parseInit(&state.cp)
+	if err != nil {
+		return err
+	}
+	marr := methodSetObj.ty.(arrType)
+	interfaceMethodInfo := marr.of.(*structType)
+	pairWidth := interfaceMethodInfo.bytes()
+	for j := uint32(0); j < marr.n; j++ {
+		mSig, err := methodSetObj.data.load(interfaceMethodInfo.fields[0].ty, uint64(j)*pairWidth+interfaceMethodInfo.fields[0].offset)
+		if err != nil {
+			return err
+		}
+		if mSig == sig.ptr(0) {
+			fnPtr, err := methodSetObj.data.load(interfaceMethodInfo.fields[1].ty, uint64(j)*pairWidth+interfaceMethodInfo.fields[1].offset)
+			if err != nil {
+				return err
+			}
+			ptr, ok := fnPtr.val.(*offAddr)
+			if !ok || !ptr.isFunc {
+				return fmt.Errorf("cannot call %s", fnPtr.String())
+			}
+			obj := ptr.obj()
+			sig, err := obj.parseSig(&state.cp)
+			if err != nil {
+				return err
+			}
+			args := make([]value, len(i.args)-1)
+			copy(args, i.args[:len(i.args)-2])
+			args[len(args)-1] = undefValue(pointer(defaultAddrSpace, state.cp.uintptr))
+			return (&callInst{cast(i.callInst.called.typ().(nonAggTyp), fnPtr), args, sig, i.dbg, i.recursiveRevert}).exec(state)
+		}
+	}
+	return errors.New("no matching method")
+}
+
+func (i *interfaceInvokeInst) String() string {
+	return "intrinsic " + i.callInst.String()
 }

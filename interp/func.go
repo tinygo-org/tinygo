@@ -97,11 +97,16 @@ func (c *constParser) parseFuncSignature(fn llvm.Value) (signature, error) {
 		writeOnly = false
 	}
 	noInline := !fn.GetEnumFunctionAttribute(attrNoInline).IsNil()
+	var invokeName string
+	if invokeAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke"); !invokeAttr.IsNil() {
+		invokeName = invokeAttr.GetStringValue()
+	}
 
 	return signature{
 		ty:         ty,
 		args:       args,
 		ret:        i.ret,
+		invokeName: invokeName,
 		conv:       conv,
 		addrSpace:  i.addrSpace,
 		noSync:     noSync,
@@ -160,6 +165,9 @@ type signature struct {
 
 	// ret is the type of the function return.
 	ret typ
+
+	// invokeName is the method identifying name used for invoke thunks.
+	invokeName string
 
 	// conv is the calling convention of the function.
 	conv llvm.CallConv
@@ -225,6 +233,7 @@ func (s signature) merge(with signature) (signature, error) {
 		ty:         s.ty,
 		args:       args,
 		ret:        s.ret,
+		invokeName: s.invokeName,
 		conv:       s.conv,
 		addrSpace:  s.addrSpace,
 		noSync:     noSync,

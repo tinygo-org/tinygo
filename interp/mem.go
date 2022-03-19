@@ -192,6 +192,10 @@ func (c *constParser) mapGlobals(mod llvm.Module, forceNoEscape map[llvm.Value]s
 	}
 
 	c.globals = objs
+	c.globalsByName = make(map[string]*memObj, len(objs))
+	for _, g := range c.globals {
+		c.globalsByName[g.name] = g
+	}
 	return nextID, nil
 }
 

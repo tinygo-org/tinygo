@@ -12,15 +12,16 @@ type parser interface {
 }
 
 type constParser struct {
-	ctx      llvm.Context
-	td       llvm.TargetData
-	tCache   map[llvm.Type]typ
-	vCache   map[llvm.Value]value
-	globals  map[llvm.Value]*memObj
-	fCache   map[llvm.Type]fnTyInfo
-	layouts  map[value]typ
-	uintptr  iType
-	ptrAlign uint64
+	ctx           llvm.Context
+	td            llvm.TargetData
+	tCache        map[llvm.Type]typ
+	vCache        map[llvm.Value]value
+	globals       map[llvm.Value]*memObj
+	globalsByName map[string]*memObj
+	fCache        map[llvm.Type]fnTyInfo
+	layouts       map[value]typ
+	uintptr       iType
+	ptrAlign      uint64
 }
 
 func (p *constParser) value(v llvm.Value) (value, error) {
