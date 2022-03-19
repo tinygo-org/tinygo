@@ -74,13 +74,20 @@ const (
 
 type Signal int
 
+// Source: https://opensource.apple.com/source/xnu/xnu-7195.81.3/bsd/sys/signal.h
 const (
-	SIGCHLD Signal = 0x14
-	SIGINT  Signal = 0x2
-	SIGKILL Signal = 0x9
-	SIGTRAP Signal = 0x5
-	SIGQUIT Signal = 0x3
-	SIGTERM Signal = 0xf
+	SIGINT  Signal = 2  /* interrupt */
+	SIGQUIT Signal = 3  /* quit */
+	SIGILL  Signal = 4  /* illegal instruction (not reset when caught) */
+	SIGTRAP Signal = 5  /* trace trap (not reset when caught) */
+	SIGABRT Signal = 6  /* abort() */
+	SIGFPE  Signal = 8  /* floating point exception */
+	SIGKILL Signal = 9  /* kill (cannot be caught or ignored) */
+	SIGBUS  Signal = 10 /* bus error */
+	SIGSEGV Signal = 11 /* segmentation violation */
+	SIGPIPE Signal = 13 /* write on a pipe with no one to read it */
+	SIGTERM Signal = 15 /* software termination signal from kill */
+	SIGCHLD Signal = 20 /* to parent on child stop or exit */
 )
 
 func (s Signal) Signal() {}
