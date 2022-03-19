@@ -486,11 +486,19 @@ func TestTest(t *testing.T) {
 			}
 		}
 
+		_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
+		if err != nil {
+			t.Fatal("could not read version from GOROOT:", err)
+		}
+		if minor <= 17 {
+			// TODO: fix lack of PROT_READ in upstream syscall package for these two targets
+			targs = append(targs,
+				// QEMU microcontrollers
+				targ{"EmulatedCortexM3", optionsFromTarget("cortex-m-qemu", sema)},
+				targ{"EmulatedRISCV", optionsFromTarget("riscv-qemu", sema)},
+			)
+		}
 		targs = append(targs,
-			// QEMU microcontrollers
-			targ{"EmulatedCortexM3", optionsFromTarget("cortex-m-qemu", sema)},
-			targ{"EmulatedRISCV", optionsFromTarget("riscv-qemu", sema)},
-
 			// Node/Wasmtime
 			targ{"WASM", optionsFromTarget("wasm", sema)},
 			targ{"WASI", optionsFromTarget("wasi", sema)},
