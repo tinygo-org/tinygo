@@ -23,7 +23,7 @@ func parseAsIntrinsic(c *constParser, call callInst) (instruction, error) {
 
 	switch obj.name {
 	case "runtime.alloc":
-		return parseHeapAlloc(c, call)
+		return &heapAllocInst{call.args[0], call.args[1], call}, nil
 	case "runtime.trackPointer":
 		return nil, nil
 	case "runtime.runtimePanic":
@@ -60,15 +60,6 @@ func parseAsIntrinsic(c *constParser, call callInst) (instruction, error) {
 		}
 		return nil, errRuntime
 	}
-}
-
-func parseHeapAlloc(c *constParser, call callInst) (instruction, error) {
-	size, layout := call.args[0], call.args[1]
-	elemTy, err := c.parseLayout(layout)
-	if err != nil {
-		return nil, err
-	}
-	return &heapAllocInst{size, elemTy, call}, nil
 }
 
 func (p *constParser) parseLayout(layout value) (typ, error) {
@@ -150,7 +141,7 @@ func (p *constParser) parseLayout(layout value) (typ, error) {
 		t, err = p.layoutFromBits(size, bitmap)
 
 	default:
-		return nil, err
+		return nil, errRuntime
 	}
 	if err != nil {
 		return nil, err
@@ -213,23 +204,35 @@ type heapAllocInst struct {
 	// size is the size of the allocation in bytes.
 	size value
 
-	// elemTy is the element type of the resulting allocation.
-	elemTy typ
+	// layout is the layout pointer of the allocation.
+	layout value
 
 	// callInst is a raw call to runtime.alloc.
 	callInst
 }
 
 func (i *heapAllocInst) exec(state *execState) error {
-	size := i.size.resolve(state.locals())
+	locals := state.locals()
+	size := i.size.resolve(locals)
 	if _, ok := size.val.(smallInt); !ok {
 		// The size is not constant.
 		// Do the allocation at runtime.
 		return i.callInst.exec(state)
 	}
-	elemSize := i.elemTy.bytes()
+	layout := i.layout.resolve(locals)
+	elemTy, err := state.cp.parseLayout(layout)
+	switch err {
+	case nil:
+	case errRuntime:
+		// The layout is not known.
+		// Do the allocation at runtime.
+		return i.callInst.exec(state)
+	default:
+		return err
+	}
+	elemSize := elemTy.bytes()
 	if (elemSize != 0 && size.raw%elemSize != 0) || (elemSize == 0 && size.raw != 0) {
-		return fmt.Errorf("requested size of %d bytes is not a multiple of element %s size %d", size.raw, i.elemTy.String(), elemSize)
+		return fmt.Errorf("requested size of %d bytes is not a multiple of element %s size %d", size.raw, elemTy.String(), elemSize)
 	}
 	if size.raw >= 1<<32 {
 		return errRevert{fmt.Errorf("allocation of %d bytes is too big", size.raw)}
@@ -249,9 +252,9 @@ func (i *heapAllocInst) exec(state *execState) error {
 	}
 	var ty typ
 	if n == 1 {
-		ty = i.elemTy
+		ty = elemTy
 	} else {
-		ty = array(i.elemTy, n)
+		ty = array(elemTy, n)
 	}
 	mem := makeZeroMem(size.raw)
 	id := state.nextObjID
