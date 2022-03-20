@@ -261,16 +261,16 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 // Returns the size in bytes and the bitmap for a hashmap's bucket allocation
 // given the pointer size and sizes and bitmaps for the key and element.
 func hashmapBucketLayout(
-	pointerSize uint64,
+	pointerSize, pointerAlign uint64,
 	tSizeBytes uint64, tbitmap *big.Int,
 	eSizeBytes uint64, ebitmap *big.Int,
 ) (uint64, *big.Int) {
 	t := Bits{
-		uint(tSizeBytes / pointerSize),
+		uint(tSizeBytes / pointerAlign),
 		tbitmap,
 	}
 	e := Bits{
-		uint(eSizeBytes / pointerSize),
+		uint(eSizeBytes / pointerAlign),
 		ebitmap,
 	}
 	t.AssertValidBitLen()
@@ -292,26 +292,49 @@ func hashmapBucketLayout(
 	//		So the overhead is 8 bytes plus the size of a uintptr (aka pointerSize).
 	//		Will assume the alignment is taken care of by 8 bytes always preceding the 'next' pointer.
 
-	tophash := Repeat(Zero(), 8/uint(pointerSize))
+	tophash := Repeat(Zero(), 8/uint(pointerAlign))
 	next := One()
+	if pointerSize > pointerAlign {
+		// Assuming the size of an alloc layout parameter represents the alignment were
+		// a pointer can start, rather than the words that back-to-back pointers would
+		// occupy, as is the case for the AVR where pointers can start on any byte but
+		// are 2 bytes long: we want a bitmap of '1' followed by as many zeros as there
+		// are surplus pointerSize bytes over the pointerAlign. For the AVR, this would
+		// make next bitmap '10' and have a size of 2.
+		next = Concat(One(), Repeat(Zero(), uint(pointerSize-pointerAlign)))
+	} else if pointerSize < pointerAlign {
+		println(pointerSize, pointerAlign)
+		panic("we don't know how to create a layout yet when a pointer's size is smaller than it's alignment")
+	}
 	key := t
+	if tSizeBytes < pointerAlign {
+		key = Repeat(Zero(), uint((8*tSizeBytes)/pointerAlign))
+	} else {
+		key = By8(key)
+	}
 	elem := e
+	if eSizeBytes < pointerAlign {
+		elem = Repeat(Zero(), uint((8*eSizeBytes)/pointerAlign))
+	} else {
+		elem = By8(elem)
+	}
 
 	// Bucket represents the hashmap bucket layout.
-	bucket := Concat(tophash, next, By8(key), By8(elem))
+	bucket := Concat(tophash, next, key, elem)
 
 	// Each bit in a Bit represents a word in an allocation layout. A word is the same size as a
 	// pointer. The overhead is thus the number of words in [8]uint8 and a pointer word.
 
-	sizeBytes := uint64(bucket.Size()) * pointerSize
+	sizeBytes := uint64(bucket.Size()) * pointerAlign
 	{
 		// TODO A little extra sanity checking. Probably not worth keeping in
 		// the long run as the actual allocation size will be tested to be a
 		// multiple of the layout's advertised size anyway. While this is new,
 		// it can't hurt.
 		// Thu Mar 17 17:14:33 EDT 2022
-		expectedSize := 8 + pointerSize + 8*tSizeBytes + 8*eSizeBytes
+		expectedSize := 8 + pointerAlign + 8*tSizeBytes + 8*eSizeBytes
 		if expectedSize != sizeBytes {
+			println(tSizeBytes, eSizeBytes, pointerAlign)
 			panic(fmt.Sprintf("expectedSize != sizeBytes, %d, %d", expectedSize, sizeBytes))
 		}
 	}

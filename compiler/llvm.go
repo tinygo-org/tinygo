@@ -88,6 +88,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	// information at all.
 	objectSizeBytes := c.targetData.TypeAllocSize(t)
 	pointerSize := c.targetData.TypeAllocSize(c.i8ptrType)
+	pointerAlign := uint64(c.targetData.PrefTypeAlignment(c.i8ptrType))
 	if objectSizeBytes < pointerSize {
 		// Too small to contain a pointer.
 		layout := (uint64(1) << 1) | 1
@@ -101,7 +102,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 		layout := (uint64(1) << 1) | 1
 		return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, layout, false), c.i8ptrType)
 	}
-	return c.createObjectLayout1(pointerSize, objectSizeBytes, bitmap, pos)
+	return c.createObjectLayout1(pointerSize, pointerAlign, objectSizeBytes, bitmap, pos)
 }
 
 // createMapLayout is like createObjectLayout above. It returns an LLVM value
@@ -141,6 +142,7 @@ func (c *compilerContext) createMapLayout(t, e /*elemType*/ llvm.Type, pos token
 	}
 
 	pointerSize := c.targetData.TypeAllocSize(c.i8ptrType)
+	pointerAlign := uint64(c.targetData.PrefTypeAlignment(c.i8ptrType))
 
 	tSizeBytes := c.targetData.TypeAllocSize(t)
 	eSizeBytes := c.targetData.TypeAllocSize(e)
@@ -149,7 +151,7 @@ func (c *compilerContext) createMapLayout(t, e /*elemType*/ llvm.Type, pos token
 	ebitmap := c.getPointerBitmap(e, pos)
 
 	mSizeBytes, mbitmap := hashmapBucketLayout(
-		pointerSize,
+		pointerSize, pointerAlign,
 		tSizeBytes, tbitmap,
 		eSizeBytes, ebitmap,
 	)
@@ -160,18 +162,17 @@ func (c *compilerContext) createMapLayout(t, e /*elemType*/ llvm.Type, pos token
 	// We know there are pointers, we added one ourself for the bucket overhead
 	// so no check for that.
 
-	return c.createObjectLayout1(pointerSize, mSizeBytes, mbitmap, pos)
+	return c.createObjectLayout1(pointerSize, pointerAlign, mSizeBytes, mbitmap, pos)
 }
 
-func (c *compilerContext) createObjectLayout1(pointerSize, objectSizeBytes uint64, bitmap *big.Int, pos token.Pos) llvm.Value {
-	pointerAlignment := c.targetData.PrefTypeAlignment(c.i8ptrType)
-	if objectSizeBytes%uint64(pointerAlignment) != 0 {
+func (c *compilerContext) createObjectLayout1(pointerSize, pointerAlign, objectSizeBytes uint64, bitmap *big.Int, pos token.Pos) llvm.Value {
+	if objectSizeBytes%pointerAlign != 0 {
 		// This shouldn't happen except for packed structs, which aren't
 		// currently used.
 		c.addError(pos, "internal error: unexpected object size for object with pointer field")
 		return llvm.ConstNull(c.i8ptrType)
 	}
-	objectSizeWords := objectSizeBytes / uint64(pointerAlignment)
+	objectSizeWords := objectSizeBytes / pointerAlign
 
 	pointerBits := pointerSize * 8
 	var sizeFieldBits uint64
