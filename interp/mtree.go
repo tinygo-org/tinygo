@@ -747,7 +747,7 @@ type memLeaf struct {
 }
 
 func (l *memLeaf) store(v value, off uint64, version uint64) (memTreeNode, error) {
-	// Check size and index.\
+	// Check size and index.
 	size := v.typ().bytes()
 	if off+size > 64 {
 		return nil, errors.New("store out of bounds")
@@ -767,6 +767,10 @@ func (l *memLeaf) store(v value, off uint64, version uint64) (memTreeNode, error
 	// Store the value.
 	if err := l.doStore(v, off, size); err != nil {
 		return nil, err
+	}
+
+	if assert {
+		l.check()
 	}
 
 	return l, nil
@@ -805,6 +809,11 @@ func (l *memLeaf) doStore(v value, idx, size uint64) error {
 		padding <<= idx
 		l.metaLow |= padding
 		l.pending |= padding
+
+		if assert {
+			l.check()
+		}
+
 		return nil
 
 	default:
@@ -919,11 +928,15 @@ func (l *memLeaf) storeNonAgg(v value, idx, size uint64) error {
 	var mask uint64 = ((1 << size) - 1) << idx
 	spIdx := bits.OnesCount64(l.specialStarts & ((1 << idx) - 1))
 	l.specials = append(l.specials, value{})
-	copy(l.specials[spIdx:], l.specials[spIdx+1:])
+	copy(l.specials[spIdx+1:], l.specials[spIdx:])
 	l.specials[spIdx] = v
 	l.metaHigh |= mask
 	l.specialStarts |= 1 << idx
 	l.pending |= mask
+
+	if assert {
+		l.check()
+	}
 
 	return nil
 }
@@ -943,6 +956,10 @@ func (l *memLeaf) fillUndef(off, size uint64, version uint64) (memTreeNode, erro
 
 	// Fill with undef.
 	l.metaLow |= mask
+
+	if assert {
+		l.check()
+	}
 
 	return l, nil
 }
@@ -969,6 +986,10 @@ func (l *memLeaf) memSet(off, size uint64, v byte, version uint64) (memTreeNode,
 	l.metaLow |= mask
 	l.pending |= mask
 
+	if assert {
+		l.check()
+	}
+
 	return l, nil
 }
 
@@ -993,15 +1014,20 @@ func (l *memLeaf) copyFrom(src *memLeaf, dstOff, srcOff, n uint64, version uint6
 	if err := l.doClobber(dstMask); err != nil {
 		return nil, err
 	}
-	if l == src && srcMask&dstMask != 0 {
+	if l == src {
 		panic("inconsistent state")
 	}
 
 	// Copy raw bytes and undefs.
 	copy(l.data[dstOff:][:n], src.data[srcOff:][:n])
-	l.metaHigh |= ((src.metaLow & srcMask) >> srcOff) << dstOff
-	l.pending |= ((src.metaLow & srcMask) >> srcOff) << dstOff
-	l.metaLow |= ((src.metaLow & srcMask) >> srcOff) << dstOff
+	rawCpyMask := ((src.metaLow & srcMask) >> srcOff) << dstOff
+	l.metaHigh |= rawCpyMask
+	l.pending |= rawCpyMask
+	l.metaLow |= rawCpyMask
+
+	if assert {
+		l.check()
+	}
 
 	// Copy specials.
 	for spMask := (src.metaHigh &^ src.metaLow) & srcMask; spMask != 0; {
@@ -1015,6 +1041,10 @@ func (l *memLeaf) copyFrom(src *memLeaf, dstOff, srcOff, n uint64, version uint6
 			return nil, err
 		}
 		spMask &= -(1 << end)
+	}
+
+	if assert {
+		l.check()
 	}
 
 	return l, nil
@@ -1089,6 +1119,10 @@ func (l *memLeaf) doClobber(mask uint64) error {
 	l.metaLow &^= mask
 	l.pending &^= mask
 
+	if assert {
+		l.check()
+	}
+
 	return nil
 }
 
@@ -1098,6 +1132,11 @@ func (l *memLeaf) markStored(off, size uint64, version uint64) (memTreeNode, err
 	}
 	l = l.modify(version)
 	l.pending &^= ((1 << size) - 1) << off
+
+	if assert {
+		l.check()
+	}
+
 	return l, nil
 }
 
@@ -1250,6 +1289,25 @@ func (l *memLeaf) String() string {
 		specials[i] = v.String()
 	}
 	return fmt.Sprintf("leaf:\n\tversion %d\n\tmeta    %s\n\tnoinit  %s\n\tpending %s\n\tbytes %x\n\tspecials %v", l.version, string(meta[:]), binLEStr(l.noInit), binLEStr(l.pending), l.data, specials)
+}
+
+func (l *memLeaf) check() {
+	for i := range l.data {
+		if (l.specialStarts>>i)&1 != 0 {
+			if (1<<i)&l.metaHigh&^l.metaLow == 0 {
+				panic("special start is not a special")
+			}
+		}
+	}
+	if len(l.specials) != bits.OnesCount64(l.specialStarts) {
+		panic("mismatched special count")
+	}
+	for i, v := range l.specials {
+		if v == (value{}) {
+			println(len(l.specials), i)
+			panic("empty special value")
+		}
+	}
 }
 
 func binLEStr(mask uint64) string {

@@ -237,7 +237,7 @@ func (br *memBranch) flush(to *execState, obj *memObj, off, idx, size uint64, ve
 			return nil, err
 		}
 		if !c.hasPending() {
-			br.pending &^= 1 << idx
+			br.pending &^= 1 << k
 		}
 		br.sub[k] = c
 	}

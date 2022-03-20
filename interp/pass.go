@@ -185,6 +185,10 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 				}
 				c.EraseFromParent()
 			}
+			if debug {
+				mod.Dump()
+				println()
+			}
 		} else {
 			b.EraseFromParent()
 		}
