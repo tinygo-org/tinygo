@@ -104,6 +104,65 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	return c.createObjectLayout1(pointerSize, objectSizeBytes, bitmap, pos)
 }
 
+// createMapLayout is like createObjectLayout above. It returns an LLVM value
+// (of type i8*) that describes where there are pointers in an object type,
+// but specifically for a hashmap's bucket type. It uses the sizes and pointer
+// bitmaps of the map's key and element types and its knowledge of the bucket
+// layout, as implemented in src/runtime/hashmap, to build the size and
+// pointer bitmap of the bucket which it then uses to lookup or create and
+// cache the LLVM layout value. This value can then be used for the creation
+// of a hashmap as initial buckets are allocated and when an insertion to the
+// hashmap may warrant additional bucket allocations.
+//
+// As the hashmap's bucket layout changes over time, the layout changes should
+// be reflected below in the building and ordering of the bucket's components.
+func (c *compilerContext) createMapLayout(t, e /*elemType*/ llvm.Type, pos token.Pos) llvm.Value {
+	for {
+		kind := t.TypeKind()
+		if kind == llvm.StructTypeKind {
+			fields := t.StructElementTypes()
+			if len(fields) == 1 {
+				t = fields[0]
+				continue
+			}
+		}
+		break
+	}
+	for {
+		kind := e.TypeKind()
+		if kind == llvm.StructTypeKind {
+			fields := e.StructElementTypes()
+			if len(fields) == 1 {
+				e = fields[0]
+				continue
+			}
+		}
+		break
+	}
+
+	pointerSize := c.targetData.TypeAllocSize(c.i8ptrType)
+
+	tSizeBytes := c.targetData.TypeAllocSize(t)
+	eSizeBytes := c.targetData.TypeAllocSize(e)
+
+	tbitmap := c.getPointerBitmap(t, pos)
+	ebitmap := c.getPointerBitmap(e, pos)
+
+	mSizeBytes, mbitmap := hashmapBucketLayout(
+		pointerSize,
+		tSizeBytes, tbitmap,
+		eSizeBytes, ebitmap,
+	)
+
+	// We know the bucket will be large enough to contain a pointer
+	// so no check for that.
+
+	// We know there are pointers, we added one ourself for the bucket overhead
+	// so no check for that.
+
+	return c.createObjectLayout1(pointerSize, mSizeBytes, mbitmap, pos)
+}
+
 func (c *compilerContext) createObjectLayout1(pointerSize, objectSizeBytes uint64, bitmap *big.Int, pos token.Pos) llvm.Value {
 	pointerAlignment := c.targetData.PrefTypeAlignment(c.i8ptrType)
 	if objectSizeBytes%uint64(pointerAlignment) != 0 {
