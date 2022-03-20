@@ -66,7 +66,6 @@ func TestBuild(t *testing.T) {
 		"stdlib.go",
 		"string.go",
 		"structs.go",
-		"testing.go",
 		"zeroalloc.go",
 	}
 	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
@@ -75,6 +74,11 @@ func TestBuild(t *testing.T) {
 	}
 	if minor >= 17 {
 		tests = append(tests, "go1.17.go")
+	}
+	if minor >= 18 {
+		tests = append(tests, "testing_go118.go")
+	} else {
+		tests = append(tests, "testing.go")
 	}
 
 	if *testTarget != "" {
