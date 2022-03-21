@@ -52,14 +52,14 @@ func Run(mod llvm.Module, fn llvm.Value) error {
 	params := fn.Params()
 	state := execState{
 		cp: constParser{
-			ctx:      ctx,
-			td:       td,
-			tCache:   make(map[llvm.Type]typ),
-			vCache:   make(map[llvm.Value]value),
-			fCache:   make(map[llvm.Type]fnTyInfo),
-			layouts:  make(map[value]typ),
-			uintptr:  uptr,
-			ptrAlign: uint64(td.ABITypeAlignment(ctx.IntType(int(uptr)))),
+			ctx:        ctx,
+			td:         td,
+			tCache:     make(map[llvm.Type]typ),
+			vCache:     make(map[llvm.Value]value),
+			fCache:     make(map[llvm.Type]fnTyInfo),
+			alignCache: make(map[typ]uint),
+			layouts:    make(map[value]typ),
+			uintptr:    uptr,
 		},
 		stack:       make([]value, minStackSize)[:0],
 		version:     memVersionStart,

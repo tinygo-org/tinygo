@@ -2,6 +2,7 @@ package interp
 
 import (
 	"errors"
+	"math/bits"
 
 	"tinygo.org/x/go-llvm"
 )
@@ -19,9 +20,9 @@ type constParser struct {
 	globals       map[llvm.Value]*memObj
 	globalsByName map[string]*memObj
 	fCache        map[llvm.Type]fnTyInfo
+	alignCache    map[typ]uint
 	layouts       map[value]typ
 	uintptr       iType
-	ptrAlign      uint64
 }
 
 func (p *constParser) value(v llvm.Value) (value, error) {
@@ -182,6 +183,39 @@ func (p *constParser) typ(t llvm.Type) (typ, error) {
 
 	p.tCache[t] = typ
 	return typ, nil
+}
+
+func (p *constParser) align(t typ) uint {
+	if a, ok := p.alignCache[t]; ok {
+		return a
+	}
+
+	a := p.calcAlign(t)
+	p.alignCache[t] = a
+
+	return a
+}
+
+func (p *constParser) calcAlign(t typ) uint {
+	switch t := t.(type) {
+	case iType:
+		return uint(bits.TrailingZeros(uint(p.td.ABITypeAlignment(p.ctx.IntType(int(t))))))
+	case arrType:
+		return p.align(t.of)
+	case ptrType:
+		return p.align(t.idxTy())
+	case *structType:
+		var max uint
+		for _, f := range t.fields {
+			a := p.align(f.ty)
+			if a > max {
+				max = a
+			}
+		}
+		return max
+	default:
+		panic("unknown type " + t.String())
+	}
 }
 
 func parseExtractValue(expr llvm.Value, p parser) (value, error) {

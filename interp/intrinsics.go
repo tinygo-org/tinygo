@@ -151,8 +151,8 @@ func (p *constParser) parseLayout(layout value) (typ, error) {
 	return t, nil
 }
 
-func (p *constParser) layoutFromBits(size uint64, bits *big.Int) (typ, error) {
-	if bits.BitLen() == 0 {
+func (p *constParser) layoutFromBits(size uint64, bitmap *big.Int) (typ, error) {
+	if bitmap.BitLen() == 0 {
 		// There are no pointers here.
 		return i8, nil
 	}
@@ -160,17 +160,40 @@ func (p *constParser) layoutFromBits(size uint64, bits *big.Int) (typ, error) {
 	// Select element types based on the bitmap.
 	uintptr := p.uintptr
 	usize := uintptr.bytes()
-	partSize := uint64(p.ptrAlign)
+	partSize := uint64(1) << p.align(p.uintptr)
 	ptrSplit := usize / partSize
-	rawT, ptrT := p.ctx.IntType(int(8*partSize)), llvm.PointerType(p.ctx.Int8Type(), 0)
+	ptrT := llvm.PointerType(p.ctx.Int8Type(), 0)
+	rawTypes := make([]llvm.Type, 4)[:0]
+	maxTy := i64
+	if (size*partSize)%8 != 0 {
+		// The maximum element alignment is capped by the alignment of the size.
+		maxTy = iType(8*partSize) << bits.TrailingZeros64(size)
+	}
+	for i := iType(8 * partSize); i <= maxTy; i *= 2 {
+		rawTypes = append(rawTypes, p.ctx.IntType(int(i)))
+	}
 	buf := make([]llvm.Type, size)[:0]
 	for i := uint64(0); i < size; {
-		if bits.Bit(int(i)) != 0 {
+		if bitmap.Bit(int(i)) != 0 {
 			buf = append(buf, ptrT)
 			i += ptrSplit
 		} else {
-			buf = append(buf, rawT)
-			i++
+			scale := 0
+			for scale < len(rawTypes)-1 && i+(1<<scale) < size && i&((1<<(scale+1))-1) == 0 {
+				ok := true
+				for j := i + (1 << scale); j > i+((1<<scale)>>1); j-- {
+					if bitmap.Bit(int(j)) != 0 {
+						ok = false
+						break
+					}
+				}
+				if !ok {
+					break
+				}
+				scale++
+			}
+			buf = append(buf, rawTypes[scale])
+			i += 1 << scale
 		}
 	}
 
@@ -196,7 +219,17 @@ func (p *constParser) layoutFromBits(size uint64, bits *big.Int) (typ, error) {
 	if len(buf) == 1 {
 		return p.typ(buf[0])
 	}
-	return p.typ(p.ctx.StructType(buf, false))
+	t, err := p.typ(p.ctx.StructType(buf, false))
+	if err != nil {
+		return nil, err
+	}
+	if assert {
+		gotSize := t.bytes()
+		if gotSize != partSize*size {
+			panic("size mismatch")
+		}
+	}
+	return t, nil
 }
 
 // heapAllocInst is an intrinsic instruction that does a heap allocation.
@@ -228,27 +261,27 @@ func (i *heapAllocInst) exec(state *execState) error {
 		// Do the allocation at runtime.
 		return i.callInst.exec(state)
 	default:
-		return err
+		panic(err)
+		//return err
+	}
+	if size.raw >= 1<<32 {
+		return errRevert{fmt.Errorf("allocation of %d bytes is too big", size.raw)}
+	}
+	if elemTy == i8 && size.raw > 1 && state.cp.align(state.cp.uintptr) != 0 {
+		// Use bigger integers to get maximum alignment.
+		scale := bits.TrailingZeros64(size.raw)
+		if scale > 3 {
+			scale = 3
+		}
+		elemTy = i8 << scale
 	}
 	elemSize := elemTy.bytes()
 	if (elemSize != 0 && size.raw%elemSize != 0) || (elemSize == 0 && size.raw != 0) {
 		return fmt.Errorf("requested size of %d bytes is not a multiple of element %s size %d", size.raw, elemTy.String(), elemSize)
 	}
-	if size.raw >= 1<<32 {
-		return errRevert{fmt.Errorf("allocation of %d bytes is too big", size.raw)}
-	}
 	var n uint32
 	if size.raw != 0 {
 		n = uint32(size.raw / elemSize)
-	}
-	var alignScale uint
-	if n != 0 && state.cp.ptrAlign != 1 {
-		alignScale = uint(bits.Len64(size.raw) - 1)
-		if alignScale > 4 {
-			// TODO: find a better way to select max alignment.
-			// This is the maximum alignment which any target seems to ever expect.
-			alignScale = 4
-		}
 	}
 	var ty typ
 	if n == 1 {
@@ -265,7 +298,7 @@ func (i *heapAllocInst) exec(state *execState) error {
 		id:         id,
 		unique:     size.raw != 0,
 		size:       size.raw,
-		alignScale: alignScale,
+		alignScale: state.cp.align(elemTy),
 		ty:         ty,
 		dbg:        i.dbg,
 		version:    state.version,
