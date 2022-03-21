@@ -861,6 +861,11 @@ func (v Value) FieldByIndex(index []int) Value {
 	panic("unimplemented: (reflect.Value).FieldByIndex()")
 }
 
+// FieldByIndexErr returns the nested field corresponding to index.
+func (v Value) FieldByIndexErr(index []int) (Value, error) {
+	return Value{}, &ValueError{Method: "FieldByIndexErr"}
+}
+
 func (v Value) FieldByName(name string) Value {
 	panic("unimplemented: (reflect.Value).FieldByName()")
 }
