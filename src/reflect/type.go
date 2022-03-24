@@ -359,6 +359,10 @@ func (t rawType) elem() rawType {
 		index := t.stripPrefix()
 		elem, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&arrayTypesSidetable)) + uintptr(index)))
 		return rawType(elem)
+	case Map:
+		index := t.stripPrefix()
+		elem, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&mapTypesSidetable)) + uintptr(index)))
+		return rawType(elem)
 	default: // not implemented: Map
 		panic("unimplemented: (reflect.Type).Elem()")
 	}
@@ -499,6 +503,7 @@ func (t rawType) Len() int {
 	arrayLen, _ := readVarint(p)
 	return int(arrayLen)
 }
+
 
 // NumField returns the number of fields of a struct type. It panics for other
 // type kinds.
@@ -688,7 +693,16 @@ func (t rawType) Name() string {
 }
 
 func (t rawType) Key() Type {
-	panic("unimplemented: (reflect.Type).Key()")
+	if t.Kind() != Map {
+		panic(TypeError{"Key"})
+	}
+
+	// skip past the element type
+	index := t.stripPrefix()
+	_, p := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&mapTypesSidetable)) + uintptr(index)))
+
+	elm, _ := readVarint(p)
+	return rawType(elm)
 }
 
 // A StructField describes a single field in a struct.

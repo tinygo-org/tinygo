@@ -105,6 +105,11 @@ type typeCodeAssignmentState struct {
 	structNamesSidetable      []byte
 	needsStructTypesSidetable bool
 
+	// Map of map types to their type code.
+	mapTypes               map[string]int
+	mapTypesSidetable      []byte
+	needsMapTypesSidetable bool
+
 	// This byte array is stored in reflect.namedNonBasicTypesSidetable and is
 	// used at runtime to get details about a named non-basic type.
 	// Entries are varints (see makeVarint below and readVarint in
@@ -168,12 +173,14 @@ func LowerReflect(mod llvm.Module) {
 		namedBasicTypes:                  make(map[string]int),
 		namedNonBasicTypes:               make(map[string]int),
 		arrayTypes:                       make(map[string]int),
+		mapTypes:                         make(map[string]int),
 		structTypes:                      make(map[string]int),
 		structNames:                      make(map[string]int),
 		needsNamedNonBasicTypesSidetable: len(getUses(mod.NamedGlobal("reflect.namedNonBasicTypesSidetable"))) != 0,
 		needsStructTypesSidetable:        len(getUses(mod.NamedGlobal("reflect.structTypesSidetable"))) != 0,
 		needsStructNamesSidetable:        len(getUses(mod.NamedGlobal("reflect.structNamesSidetable"))) != 0,
 		needsArrayTypesSidetable:         len(getUses(mod.NamedGlobal("reflect.arrayTypesSidetable"))) != 0,
+		needsMapTypesSidetable:           len(getUses(mod.NamedGlobal("reflect.mapTypesSidetable"))) != 0,
 	}
 	for _, t := range types {
 		num := state.getTypeCodeNum(t.typecode)
@@ -214,6 +221,12 @@ func LowerReflect(mod llvm.Module) {
 	}
 	if state.needsArrayTypesSidetable {
 		global := replaceGlobalIntWithArray(mod, "reflect.arrayTypesSidetable", state.arrayTypesSidetable)
+		global.SetLinkage(llvm.InternalLinkage)
+		global.SetUnnamedAddr(true)
+		global.SetGlobalConstant(true)
+	}
+	if state.needsMapTypesSidetable {
+		global := replaceGlobalIntWithArray(mod, "reflect.mapTypesSidetable", state.mapTypesSidetable)
 		global.SetLinkage(llvm.InternalLinkage)
 		global.SetUnnamedAddr(true)
 		global.SetGlobalConstant(true)
@@ -348,6 +361,8 @@ func (state *typeCodeAssignmentState) getNonBasicTypeCode(class string, typecode
 		// An array is basically a pair of (typecode, length) stored in a
 		// sidetable.
 		return big.NewInt(int64(state.getArrayTypeNum(typecode)))
+	case "map":
+		return big.NewInt(int64(state.getMapTypeNum(typecode)))
 	case "struct":
 		// More complicated type kind. The upper bits contain the index to the
 		// struct type in the struct types sidetable.
@@ -426,6 +441,45 @@ func (state *typeCodeAssignmentState) getArrayTypeNum(typecode llvm.Value) int {
 	index := len(state.arrayTypesSidetable)
 	state.arrayTypes[name] = index
 	state.arrayTypesSidetable = append(state.arrayTypesSidetable, buf...)
+	return index
+}
+
+// getMapTypeNum returns the map type number, which is an index into the
+// reflect.mapTypesSidetable or a unique number for this type if this table is
+// not used.
+func (state *typeCodeAssignmentState) getMapTypeNum(typecode llvm.Value) int {
+	name := typecode.Name()
+	if num, ok := state.mapTypes[name]; ok {
+		// This array type already has an entry in the sidetable. Don't store
+		// it twice.
+		return num
+	}
+
+	if !state.needsMapTypesSidetable {
+		// We don't need array sidetables, so we can just assign monotonically
+		// increasing numbers to each array type.
+		num := len(state.mapTypes)
+		state.mapTypes[name] = num
+		return num
+	}
+
+	elemTypeCode := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+
+	elemTypeNum := state.getTypeCodeNum(elemTypeCode)
+	if elemTypeNum.BitLen() > state.uintptrLen || !elemTypeNum.IsUint64() {
+		// TODO: make this a regular error
+		panic("array element type has a type code that is too big")
+	}
+
+	// The map side table is a sequence of {element type, key element type}.
+	keyElemTypeCode := llvm.ConstExtractValue(typecode.Initializer(), []uint32{5})
+
+	keyElemTypeNum := state.getTypeCodeNum(keyElemTypeCode)
+	buf := append(makeVarint(elemTypeNum.Uint64()), makeVarint(keyElemTypeNum.Uint64())...)
+
+	index := len(state.mapTypesSidetable)
+	state.mapTypes[name] = index
+	state.mapTypesSidetable = append(state.mapTypesSidetable, buf...)
 	return index
 }
 

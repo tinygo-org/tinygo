@@ -6,6 +6,7 @@ package reflect_test
 
 import (
 	"math"
+	"reflect"
 	. "reflect"
 	"testing"
 )
@@ -186,3 +187,29 @@ func TestDeepEqualComplexStructInequality(t *testing.T) {
 
 type MyBytes []byte
 type MyByte byte
+
+var mapKeyTypeTests = []struct {
+	m interface{}
+	k interface{}
+}{
+	{
+		map[string]string{}, "",
+	},
+	{
+		map[int]string{}, 0,
+	}, {
+		map[keystruct]string{}, keystruct{},
+	}, 
+}
+
+type keystruct struct{
+	a int
+	b int
+}
+func TestMapKeyType(t *testing.T) {
+	for _, test := range mapKeyTypeTests {
+		if reflect.TypeOf(test.m).Key() !=  reflect.TypeOf(test.k){
+			t.Error("Key() expected equals")
+		}
+	}
+}

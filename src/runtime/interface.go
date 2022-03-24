@@ -123,6 +123,8 @@ type typecodeID struct {
 	// typeAssert is a ptrtoint of a declared interface assert function.
 	// It only exists to make the rtcalls pass easier.
 	typeAssert uintptr
+
+	key *typecodeID
 }
 
 // structField is used by the compiler to pass information to the interface

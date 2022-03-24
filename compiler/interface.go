@@ -57,6 +57,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		var methodSet llvm.Value
 		var ptrTo llvm.Value
 		var typeAssert llvm.Value
+		var key llvm.Value
 		switch typ := typ.(type) {
 		case *types.Named:
 			references = c.getTypeCode(typ.Underlying())
@@ -69,6 +70,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Array:
 			references = c.getTypeCode(typ.Elem())
 			length = typ.Len()
+		case *types.Map:
+			references = c.getTypeCode(typ.Elem())
+			key = c.getTypeCode(typ.Key())
 		case *types.Struct:
 			// Take a pointer to the typecodeID of the first field (if it exists).
 			structGlobal := c.makeStructTypeFields(typ)
@@ -102,6 +106,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		}
 		if !typeAssert.IsNil() {
 			globalValue = llvm.ConstInsertValue(globalValue, typeAssert, []uint32{4})
+		}
+		if !key.IsNil(){
+			globalValue = llvm.ConstInsertValue(globalValue, key, []uint32{5})
 		}
 		global.SetInitializer(globalValue)
 		global.SetLinkage(llvm.LinkOnceODRLinkage)
