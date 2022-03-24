@@ -6,5 +6,6 @@
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "Arduino",
-    "msd-firmware-name": "firmware.uf2"
+    "msd-firmware-name": "firmware.uf2",
+    "openocd-verify": true
 }
