@@ -59,6 +59,7 @@ type TargetSpec struct {
 	OpenOCDTarget    string   `json:"openocd-target"`
 	OpenOCDTransport string   `json:"openocd-transport"`
 	OpenOCDCommands  []string `json:"openocd-commands"`
+	OpenOCDVerify    *bool    `json:"openocd-verify"` // enable verify when flashing with openocd
 	JLinkDevice      string   `json:"jlink-device"`
 	CodeModel        string   `json:"code-model"`
 	RelocationModel  string   `json:"relocation-model"`
