@@ -45,12 +45,23 @@ func (t iType) zero() value {
 	return smallIntValue(t, 0)
 }
 
-/*
 // floatType is a single-precision floating point type.
 type floatType struct{}
 
 func (t floatType) String() string {
 	return "float"
+}
+
+func (t floatType) bits() uint64 {
+	return 32
+}
+
+func (t floatType) bytes() uint64 {
+	return t.bits() / 8
+}
+
+func (t floatType) zero() value {
+	return floatValue(0)
 }
 
 // doubleType is a double-precision floating point type.
@@ -59,7 +70,18 @@ type doubleType struct{}
 func (t doubleType) String() string {
 	return "double"
 }
-*/
+
+func (t doubleType) bits() uint64 {
+	return 64
+}
+
+func (t doubleType) bytes() uint64 {
+	return t.bits() / 8
+}
+
+func (t doubleType) zero() value {
+	return doubleValue(0)
+}
 
 // pointer returns a pointer type.
 // The "in" input is the address space of the pointer type.

@@ -2837,7 +2837,7 @@ func (i *selectInst) exec(state *execState) error {
 	}
 
 	// Push the result onto the stack.
-	state.stack = append(state.stack, v)
+	state.stack = unpack(v, state.stack)
 
 	return nil
 }
@@ -2851,7 +2851,7 @@ func (i *selectInst) runtime(gen *rtGen) error {
 	ifv, elsev := gen.value(t, i.expr.ifv), gen.value(t, i.expr.elsev)
 	res := gen.builder.CreateSelect(gen.value(gen.iType(i1), i.expr.cond), ifv, elsev, "")
 	gen.applyDebug(res)
-	gen.stack = append(gen.stack, res)
+	gen.pushUnpacked(i.expr.ty, res)
 	return nil
 }
 

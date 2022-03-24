@@ -120,6 +120,10 @@ func (g *rtGen) typ(typ typ) llvm.Type {
 		return g.sTypes[typ]
 	case ptrType:
 		return g.ptr(g.iType(i8), typ.in())
+	case floatType:
+		return g.ctx.FloatType()
+	case doubleType:
+		return g.ctx.DoubleType()
 	default:
 		panic("bad type")
 	}

@@ -1,8 +1,11 @@
 package interp
 
 import (
+	"math"
 	"strings"
 	"testing"
+
+	"github.com/chewxy/math32"
 )
 
 func TestSmallIntValue(t *testing.T) {
@@ -256,6 +259,71 @@ func TestCast(t *testing.T) {
 			expr:   cast(iType(2), x.ptr(2)),
 			ty:     iType(2),
 			expect: "i2 -2",
+		},
+
+		// Test casts from floats to integers.
+		exprTest{
+			name:   "FloatToInt",
+			expr:   cast(i32, floatValue(math32.Inf(1))),
+			ty:     iType(32),
+			expect: "i32 2139095040",
+		},
+		exprTest{
+			name:   "DoubleToInt",
+			expr:   cast(i64, doubleValue(math.Inf(1))),
+			ty:     i64,
+			expect: "i64 9218868437227405312",
+		},
+
+		// Test casts from integers to floats.
+		exprTest{
+			name:   "IntToFloat",
+			expr:   cast(floatType{}, smallIntValue(i32, 0)),
+			ty:     floatType{},
+			expect: "float 0e+00",
+		},
+		exprTest{
+			name:   "IntToDouble",
+			expr:   cast(doubleType{}, smallIntValue(i64, 0)),
+			ty:     doubleType{},
+			expect: "double 0e+00",
+		},
+
+		// Test unusual float cast chains.
+		exprTest{
+			name:   "ZExtFloat",
+			expr:   cast(floatType{}, cast(pointer(defaultAddrSpace, i32), doubleValue(0))),
+			ty:     floatType{},
+			expect: "float 0e+00",
+		},
+
+		// Test that a cast to NaN does not produce a NaN value.
+		exprTest{
+			name:   "IntToFloatNaN",
+			expr:   cast(floatType{}, smallIntValue(i32, 0xFFFFFFFF)),
+			ty:     floatType{},
+			expect: "float cast(i32 -1)",
+		},
+		exprTest{
+			name:   "IntToDoubleNaN",
+			expr:   cast(doubleType{}, smallIntValue(i64, 0xFFFFFFFFFFFFFFFF)),
+			ty:     doubleType{},
+			expect: "double cast(i64 -1)",
+		},
+
+		// Test that a cast to NaN can be cast back to extract the fractional payload.
+		// These values are also SNaN on some platforms.
+		exprTest{
+			name:   "IntToFloatNaNToInt",
+			expr:   cast(i8, cast(floatType{}, smallIntValue(i32, 0xFFFFFF11))),
+			ty:     i8,
+			expect: "i8 17",
+		},
+		exprTest{
+			name:   "IntToDoubleNaNToInt",
+			expr:   cast(i8, cast(doubleType{}, smallIntValue(i64, 0xFFFFFFFFFFFFFF11))),
+			ty:     i8,
+			expect: "i8 17",
 		},
 	)
 }

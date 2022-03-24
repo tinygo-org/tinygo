@@ -2,9 +2,11 @@ package interp
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
+	"github.com/chewxy/math32"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -144,6 +146,86 @@ func (v *bigInt) resolve(stack []value, raw uint64) value {
 }
 */
 
+func floatValue(v float32) value {
+	if math32.IsNaN(v) {
+		panic("NaN")
+	}
+
+	return value{floatVal{}, uint64(math.Float32bits(v))}
+}
+
+// floatVal is a raw 32-bit not-NaN float value.
+// The value is stored in the lower 32 bits of raw.
+type floatVal struct{}
+
+func (v floatVal) val(raw uint64) float32 {
+	return math.Float32frombits(uint32(raw))
+}
+
+func (v floatVal) constant(raw uint64) bool {
+	return true
+}
+
+func (v floatVal) typ(raw uint64) typ {
+	return floatType{}
+}
+
+func (v floatVal) str(raw uint64) string {
+	return strconv.FormatFloat(float64(v.val(raw)), 'e', -1, 32)
+}
+
+func (v floatVal) resolve(stack []value, raw uint64) value {
+	return value{v, raw}
+}
+
+func (v floatVal) toLLVM(t llvm.Type, gen *rtGen, raw uint64) llvm.Value {
+	return llvm.ConstFloat(t, float64(v.val(raw)))
+}
+
+func (v floatVal) aliases(objs map[*memObj]struct{}, raw uint64) bool {
+	return true
+}
+
+func doubleValue(v float64) value {
+	if math.IsNaN(v) {
+		panic("NaN")
+	}
+
+	return value{doubleVal{}, math.Float64bits(v)}
+}
+
+// doubleVal is a raw 64-bit not-NaN float value.
+// The value is stored in raw.
+type doubleVal struct{}
+
+func (v doubleVal) val(raw uint64) float64 {
+	return math.Float64frombits(raw)
+}
+
+func (v doubleVal) constant(raw uint64) bool {
+	return true
+}
+
+func (v doubleVal) typ(raw uint64) typ {
+	return doubleType{}
+}
+
+func (v doubleVal) str(raw uint64) string {
+	return strconv.FormatFloat(v.val(raw), 'e', -1, 64)
+}
+
+func (v doubleVal) resolve(stack []value, raw uint64) value {
+	return value{v, raw}
+}
+
+func (v doubleVal) toLLVM(t llvm.Type, gen *rtGen, raw uint64) llvm.Value {
+	return llvm.ConstFloat(t, v.val(raw))
+}
+
+func (v doubleVal) aliases(objs map[*memObj]struct{}, raw uint64) bool {
+	return true
+}
+
 // offPtr is a pointer to an object with a constant offset.
 // It is safe to assume that this is non-nil and does not alias any other object.
 type offPtr memObj
@@ -278,12 +360,26 @@ func cast(to nonAggTyp, v value) value {
 			return cast(to, value{val.val, v.raw})
 		}
 
+	case floatVal:
+		// Bitcast to an integer then cast to the destination type.
+		return cast(to, smallIntValue(i32, v.raw))
+
+	case doubleVal:
+		// Bitcast to an integer then cast to the destination type.
+		return cast(to, smallIntValue(i64, v.raw))
+
 	case smallInt:
 		switch t := to.(type) {
 		case iType:
 			return smallIntValue(t, v.raw)
-
-			// TODO: bitcast int to float
+		case floatType:
+			if v := math.Float32frombits(uint32(v.raw)); !math32.IsNaN(v) {
+				return floatValue(v)
+			}
+		case doubleType:
+			if v := math.Float64frombits(v.raw); !math.IsNaN(v) {
+				return doubleValue(v)
+			}
 		}
 
 	case *offPtr:
@@ -879,6 +975,14 @@ func slice(in value, off, width uint64) value {
 	}
 
 	switch v := in.val.(type) {
+	case floatVal:
+		// Slice as an integer.
+		return slice(cast(i32, in), off, width)
+
+	case doubleVal:
+		// Slice as an integer.
+		return slice(cast(i64, in), off, width)
+
 	case smallInt:
 		// Slice the integer directly by shifting and truncating.
 		return smallIntValue(iType(width), in.raw>>off)
@@ -1110,6 +1214,14 @@ func catAppend(dst []value, v value) []value {
 		}
 	}
 	switch val := v.val.(type) {
+	case floatVal:
+		// Normalize as an integer.
+		return catAppend(dst, cast(i32, v))
+
+	case doubleVal:
+		// Normalize as an integer.
+		return catAppend(dst, cast(i64, v))
+
 	case *bitCat:
 		for _, v := range *val {
 			dst = catAppend(dst, v)

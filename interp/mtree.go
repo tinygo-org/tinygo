@@ -826,6 +826,14 @@ func (l *memLeaf) storeNonAgg(v value, idx, size uint64) error {
 		panic("nil value")
 	}
 	switch val := v.val.(type) {
+	case floatVal:
+		// Store as an integer.
+		return l.storeNonAgg(cast(i32, v), idx, size)
+
+	case doubleVal:
+		// Store as an integer.
+		return l.storeNonAgg(cast(i64, v), idx, size)
+
 	case smallInt:
 		// Convert to little endian and store as raw bytes.
 		var buf [8]byte

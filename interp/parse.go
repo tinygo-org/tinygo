@@ -2,6 +2,7 @@ package interp
 
 import (
 	"errors"
+	"math"
 	"math/bits"
 
 	"tinygo.org/x/go-llvm"
@@ -52,6 +53,22 @@ func (p *constParser) parseConst(v llvm.Value) (value, error) {
 		}
 		if iTyp <= i64 {
 			return smallIntValue(iTyp, v.ZExtValue()), nil
+		}
+
+	case !v.IsAConstantFP().IsNil():
+		typ, err := p.typ(v.Type())
+		if err != nil {
+			return value{}, err
+		}
+		result, inexact := v.DoubleValue()
+		if inexact || math.IsNaN(result) {
+			return value{}, todo("NaN")
+		}
+		switch typ {
+		case floatType{}:
+			return floatValue(float32(result)), nil
+		case doubleType{}:
+			return doubleValue(result), nil
 		}
 
 	case !v.IsAGlobalValue().IsNil():
@@ -110,7 +127,7 @@ func (p *constParser) parseConst(v llvm.Value) (value, error) {
 		return res, nil
 
 	case !v.IsAConstantArray().IsNil():
-		ty, err := p.parseTyp(v.Type())
+		ty, err := p.typ(v.Type())
 		if err != nil {
 			return value{}, err
 		}
@@ -127,7 +144,7 @@ func (p *constParser) parseConst(v llvm.Value) (value, error) {
 
 	case !v.IsAConstant().IsNil() && v.Type().TypeKind() == llvm.ArrayTypeKind:
 		// Yes. This is entirely different from !v.IsAConstantArray().IsNil().
-		ty, err := p.parseTyp(v.Type())
+		ty, err := p.typ(v.Type())
 		if err != nil {
 			return value{}, err
 		}
@@ -143,7 +160,7 @@ func (p *constParser) parseConst(v llvm.Value) (value, error) {
 		return arrayValue(arrTy.of, arr...), nil
 
 	case !v.IsAConstantStruct().IsNil():
-		ty, err := p.parseTyp(v.Type())
+		ty, err := p.typ(v.Type())
 		if err != nil {
 			return value{}, err
 		}
@@ -246,6 +263,12 @@ func (p *constParser) parseTyp(t llvm.Type) (typ, error) {
 			return iType(width), nil
 		}
 
+	case llvm.FloatTypeKind:
+		return floatType{}, nil
+
+	case llvm.DoubleTypeKind:
+		return doubleType{}, nil
+
 	case llvm.PointerTypeKind:
 		space := t.PointerAddressSpace()
 		idxBits := p.td.TypeSizeInBits(t)
@@ -254,7 +277,7 @@ func (p *constParser) parseTyp(t llvm.Type) (typ, error) {
 		}
 
 	case llvm.ArrayTypeKind:
-		elemTyp, err := p.parseTyp(t.ElementType())
+		elemTyp, err := p.typ(t.ElementType())
 		if err != nil {
 			return nil, err
 		}
