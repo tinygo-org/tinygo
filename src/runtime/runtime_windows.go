@@ -107,8 +107,8 @@ func preInitHeap() {
 		PAGE_READWRITE = 0x04
 	)
 	heapStart = uintptr(_VirtualAlloc(nil, heapMaxSize, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE))
-	heapEnd = heapStart + heapSize
 	heapSize = 128 * 1024 // small amount to start
+	heapEnd = heapStart + heapSize
 }
 
 type timeUnit int64

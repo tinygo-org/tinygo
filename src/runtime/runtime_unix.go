@@ -218,6 +218,7 @@ func preInitHeap() {
 	// really be allocated in RAM. Memory will only be allocated when it is
 	// first touched.
 	heapMaxSize = 1 * 1024 * 1024 * 1024 // 1GB for the entire heap
+	heapSize = 128 * 1024                // small amount to start
 	for {
 		addr := mmap(nil, heapMaxSize, flag_PROT_READ|flag_PROT_WRITE, flag_MAP_PRIVATE|flag_MAP_ANONYMOUS, -1, 0)
 		if addr == unsafe.Pointer(^uintptr(0)) {
@@ -232,7 +233,6 @@ func preInitHeap() {
 		heapEnd = heapStart + heapSize
 		break
 	}
-	heapSize = 128 * 1024 // small amount to start
 }
 
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
