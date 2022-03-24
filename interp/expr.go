@@ -43,6 +43,10 @@ func parseExpr(op llvm.Opcode, expr llvm.Value, parser parser) (expr, error) {
 					return smallUIntDivExpr{bin}, nil
 				case llvm.SDiv:
 					return smallSIntDivExpr{bin}, nil
+				case llvm.URem:
+					return smallUIntRemExpr{bin}, nil
+				case llvm.SRem:
+					return smallSIntRemExpr{bin}, nil
 				case llvm.Shl:
 					return smallShiftLeftExpr{bin}, nil
 				case llvm.LShr:
@@ -875,16 +879,16 @@ func (e smallSIntDivExpr) eval() (value, error) {
 		return value{}, errUB
 
 	case kinds{whatever, num}:
-		switch {
-		case y == 0:
+		switch y {
+		case 0:
 			// Division by zero is undefined behavior.
 			return value{}, errUB
 
-		case y == 1:
+		case 1:
 			// undef / 1 = undef
 			return undefValue(e.ty), nil
 
-		case y == (1<<e.ty-1)-1:
+		case (1<<e.ty - 1) - 1:
 			// Signed overflow is undefined behavior.
 			// NOTE: this must be after the previous case for i1 to be handled correctly.
 			return value{}, errUB
@@ -961,6 +965,333 @@ func (i *smallSIntDivInst) exec(state *execState) error {
 
 func (i *smallSIntDivInst) runtime(gen *rtGen) error {
 	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateSDiv)
+}
+
+// smallUIntRemExpr is an expression for the remainder of division of two small unsigned integers.
+type smallUIntRemExpr struct {
+	binIntExpr
+}
+
+func (e smallUIntRemExpr) eval() (value, error) {
+	if assert {
+		if e.ty > 64 {
+			panic("input too big")
+		}
+		if xTy := e.x.typ(); xTy != e.ty {
+			return value{}, typeError{e.ty, xTy}
+		}
+		if yTy := e.y.typ(); yTy != e.ty {
+			return value{}, typeError{e.ty, yTy}
+		}
+	}
+
+	type kind uint8
+	const (
+		idk kind = iota
+		num
+		whatever
+	)
+
+	var x, y uint64
+	xKind, yKind := idk, idk
+	switch e.x.val.(type) {
+	case smallInt:
+		x, xKind = e.x.raw, num
+	case undef:
+		xKind = whatever
+	}
+	switch e.y.val.(type) {
+	case smallInt:
+		y, yKind = e.y.raw, num
+	case undef:
+		yKind = whatever
+	}
+
+	type kinds struct{ x, y kind }
+	switch (kinds{xKind, yKind}) {
+	case kinds{num, num}:
+		// Evaluate directly.
+		if y == 0 {
+			// Division by zero is undefined behavior.
+			return value{}, errUB
+		}
+		return smallIntValue(e.ty, x%y), nil
+
+	case kinds{num, idk}:
+		if x == 0 {
+			// 0 % y = 0 (for y != 0)
+			return smallIntValue(e.ty, 0), nil
+		}
+
+	case kinds{idk, num}:
+		switch {
+		case y == 0:
+			// Division by zero is undefined behavior.
+			return value{}, errUB
+
+		case y == 1:
+			// x % 1 = 0
+			return smallIntValue(e.ty, 0), nil
+
+		case y&(y-1) == 0:
+			// x % (1<<c) = x & ((1 << c)-1)
+			return cast(e.ty, cast(iType(bits.TrailingZeros64(y)), e.x)), nil
+		}
+
+	case kinds{num, whatever}:
+		// Division by undef is undefined behavior.
+		return value{}, errUB
+
+	case kinds{whatever, num}:
+		switch {
+		case y == 0:
+			// Division by zero is undefined behavior.
+			return value{}, errUB
+
+		case y&(y-1) == 0:
+			// undef % (1<<c) = undef & ((1 << c)-1)
+			return cast(e.ty, undefValue(iType(bits.TrailingZeros64(y)))), nil
+		}
+	}
+
+	return value{}, errRuntime
+}
+
+func (e smallUIntRemExpr) resolve(stack []value) (smallUIntRemExpr, error) {
+	res, err := e.binIntExpr.resolve(stack)
+	if err != nil {
+		return smallUIntRemExpr{}, err
+	}
+	return smallUIntRemExpr{res}, nil
+}
+
+func (e smallUIntRemExpr) String() string {
+	return e.binIntExpr.String("urem")
+}
+
+func (e smallUIntRemExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	switch v, err := e.eval(); err {
+	case nil:
+		return v, nil
+	case errRuntime:
+		return dst.insertInst(&smallUIntRemInst{e, dbg}), nil
+	default:
+		return value{}, err
+	}
+}
+
+type smallUIntRemInst struct {
+	expr smallUIntRemExpr
+	dbg  llvm.Metadata
+}
+
+func (i *smallUIntRemInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *smallUIntRemInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *smallUIntRemInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
+		// Create a runtime instruction to evaluate the expression.
+		v = state.rt.insertInst(&smallUIntRemInst{expr, i.dbg})
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *smallUIntRemInst) runtime(gen *rtGen) error {
+	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateURem)
+}
+
+// smallSIntRemExpr is an expression for the remainder of division of two small signed integers.
+type smallSIntRemExpr struct {
+	binIntExpr
+}
+
+func (e smallSIntRemExpr) eval() (value, error) {
+	if assert {
+		if e.ty > 64 {
+			panic("input too big")
+		}
+		if xTy := e.x.typ(); xTy != e.ty {
+			return value{}, typeError{e.ty, xTy}
+		}
+		if yTy := e.y.typ(); yTy != e.ty {
+			return value{}, typeError{e.ty, yTy}
+		}
+	}
+
+	type kind uint8
+	const (
+		idk kind = iota
+		num
+		whatever
+	)
+
+	var x, y uint64
+	xKind, yKind := idk, idk
+	switch e.x.val.(type) {
+	case smallInt:
+		x, xKind = e.x.raw, num
+	case undef:
+		xKind = whatever
+	}
+	switch e.y.val.(type) {
+	case smallInt:
+		y, yKind = e.y.raw, num
+	case undef:
+		yKind = whatever
+	}
+
+	type kinds struct{ x, y kind }
+	switch (kinds{xKind, yKind}) {
+	case kinds{num, num}:
+		// Evaluate directly.
+		switch {
+		case y == 0:
+			// Division by zero is undefined behavior.
+			return value{}, errUB
+
+		case e.ty != i1 && x == 1<<(e.ty-1) && y == (1<<e.ty-1)-1:
+			// Signed overflow is undefined behavior.
+			return value{}, errUB
+
+		default:
+			shift := 64 - e.ty
+			return smallIntValue(e.ty, uint64((int64(x<<shift)>>shift)%(int64(y<<shift)>>shift))), nil
+		}
+
+	case kinds{num, idk}:
+		if x == 0 {
+			// 0 % y = 0 (for y != 0)
+			return smallIntValue(e.ty, 0), nil
+		}
+
+	case kinds{idk, num}:
+		switch y {
+		case 0:
+			// Division by zero is undefined behavior.
+			return value{}, errUB
+
+		case 1:
+			// x % 1 = 0
+			return smallIntValue(e.ty, 0), nil
+		}
+
+	case kinds{num, whatever}:
+		// Division by undef is undefined behavior.
+		return value{}, errUB
+
+	case kinds{whatever, num}:
+		switch y {
+		case 0:
+			// Division by zero is undefined behavior.
+			return value{}, errUB
+
+		case 1:
+			// undef % 1 = 0
+			return undefValue(e.ty), nil
+
+		case (1<<e.ty - 1) - 1:
+			// Signed overflow is undefined behavior.
+			// NOTE: this must be after the previous case for i1 to be handled correctly.
+			return value{}, errUB
+		}
+	}
+
+	return value{}, errRuntime
+}
+
+func (e smallSIntRemExpr) resolve(stack []value) (smallSIntRemExpr, error) {
+	res, err := e.binIntExpr.resolve(stack)
+	if err != nil {
+		return smallSIntRemExpr{}, err
+	}
+	return smallSIntRemExpr{res}, nil
+}
+
+func (e smallSIntRemExpr) String() string {
+	return e.binIntExpr.String("srem")
+}
+
+func (e smallSIntRemExpr) create(dst *builder, dbg llvm.Metadata) (value, error) {
+	switch v, err := e.eval(); err {
+	case nil:
+		return v, nil
+	case errRuntime:
+		return dst.insertInst(&smallSIntRemInst{e, dbg}), nil
+	default:
+		return value{}, err
+	}
+}
+
+type smallSIntRemInst struct {
+	expr smallSIntRemExpr
+	dbg  llvm.Metadata
+}
+
+func (i *smallSIntRemInst) result() typ {
+	return i.expr.ty
+}
+
+func (i *smallSIntRemInst) String() string {
+	return i.expr.String() + dbgSuffix(i.dbg)
+}
+
+func (i *smallSIntRemInst) exec(state *execState) error {
+	// This would be a great use for generics. . .
+
+	// Resolve the expression.
+	expr, err := i.expr.resolve(state.locals())
+	if err != nil {
+		return err
+	}
+
+	// Evaluate the expression.
+	v, err := expr.eval()
+	switch err {
+	case nil:
+	case errRuntime:
+		// Escape inputs.
+		expr.escapeInputs(state)
+
+		// Create a runtime instruction to evaluate the expression.
+		v = state.rt.insertInst(&smallSIntRemInst{expr, i.dbg})
+	default:
+		return err
+	}
+
+	// Push the result onto the stack.
+	state.stack = append(state.stack, v)
+
+	return nil
+}
+
+func (i *smallSIntRemInst) runtime(gen *rtGen) error {
+	return i.expr.runtime(gen, i.dbg, (*llvm.Builder).CreateSRem)
 }
 
 // smallShiftLeftExpr is an expression to bitshift a small integer to the left.

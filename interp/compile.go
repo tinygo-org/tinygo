@@ -316,7 +316,7 @@ func (c *compiler) emitInst(inst llvm.Value) error {
 	dbg := inst.InstructionDebugLoc()
 	op := inst.InstructionOpcode()
 	switch op {
-	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv,
+	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv, llvm.URem, llvm.SRem,
 		llvm.Shl, llvm.LShr, llvm.AShr,
 		llvm.And, llvm.Or, llvm.Xor,
 		llvm.GetElementPtr, llvm.SExt, llvm.ICmp, llvm.Select:
