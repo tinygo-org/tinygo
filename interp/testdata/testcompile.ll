@@ -124,3 +124,20 @@ define void @alloca() {
   %mem = alloca i32, i32 2
   ret void
 }
+
+define void @binIntOps(i32 %x, i32 %y) {
+  %add = add i32 %x, %y
+  %sub = sub i32 %x, %y
+  %mul = mul i32 %x, %y
+  %udiv = udiv i32 %x, %y
+  %sdiv = sdiv i32 %x, %y
+  %urem = urem i32 %x, %y
+  %srem = srem i32 %x, %y
+  %shl = shl i32 %x, %y
+  %lshr = lshr i32 %x, %y
+  %ashr = ashr i32 %x, %y
+  %and = and i32 %x, %y
+  %or = or i32 %x, %y
+  %xor = xor i32 %x, %y
+  ret void
+}

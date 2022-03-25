@@ -18,7 +18,7 @@ type expr interface {
 
 func parseExpr(op llvm.Opcode, expr llvm.Value, parser parser) (expr, error) {
 	switch op {
-	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv,
+	case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv, llvm.URem, llvm.SRem,
 		llvm.Shl, llvm.LShr, llvm.AShr,
 		llvm.And, llvm.Or, llvm.Xor:
 		typ, err := parser.typ(expr.Type())
