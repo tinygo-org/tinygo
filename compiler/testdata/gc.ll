@@ -3,7 +3,7 @@ source_filename = "gc.go"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
-%runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo*, %runtime.typecodeID*, i32 }
+%runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo*, %runtime.typecodeID*, i32, %runtime.typecodeID* }
 %runtime.interfaceMethodInfo = type { i8*, i32 }
 %runtime._interface = type { i32, i8* }
 
@@ -23,8 +23,8 @@ target triple = "wasm32-unknown-wasi"
 @main.slice3 = hidden global { { i8*, i32, i32 }*, i32, i32 } zeroinitializer, align 8
 @"runtime/gc.layout:62-2000000000000001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c" \00\00\00\00\00\00\01" }
 @"runtime/gc.layout:62-0001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\00\00\00\00\00\00\00\01" }
-@"reflect/types.type:basic:complex128" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* null, i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* @"reflect/types.type:pointer:basic:complex128", i32 0 }
-@"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:complex128", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* null, i32 0 }
+@"reflect/types.type:basic:complex128" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* null, i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* @"reflect/types.type:pointer:basic:complex128", i32 0, %runtime.typecodeID* null }
+@"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:complex128", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* null, i32 0, %runtime.typecodeID* null }
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
 
