@@ -199,16 +199,17 @@ var mapKeyTypeTests = []struct {
 		map[int]string{}, 0,
 	}, {
 		map[keystruct]string{}, keystruct{},
-	}, 
+	},
 }
 
-type keystruct struct{
+type keystruct struct {
 	a int
 	b int
 }
+
 func TestMapKeyType(t *testing.T) {
 	for _, test := range mapKeyTypeTests {
-		if reflect.TypeOf(test.m).Key() !=  reflect.TypeOf(test.k){
+		if reflect.TypeOf(test.m).Key() != reflect.TypeOf(test.k) {
 			t.Error("Key() expected equals")
 		}
 	}

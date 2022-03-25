@@ -107,7 +107,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		if !typeAssert.IsNil() {
 			globalValue = llvm.ConstInsertValue(globalValue, typeAssert, []uint32{4})
 		}
-		if !key.IsNil(){
+		if !key.IsNil() {
 			globalValue = llvm.ConstInsertValue(globalValue, key, []uint32{5})
 		}
 		global.SetInitializer(globalValue)

@@ -456,8 +456,8 @@ func (state *typeCodeAssignmentState) getMapTypeNum(typecode llvm.Value) int {
 	}
 
 	if !state.needsMapTypesSidetable {
-		// We don't need array sidetables, so we can just assign monotonically
-		// increasing numbers to each array type.
+		// We don't need map sidetables, so we can just assign monotonically
+		// increasing numbers to each map type.
 		num := len(state.mapTypes)
 		state.mapTypes[name] = num
 		return num

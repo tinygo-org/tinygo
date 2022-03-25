@@ -504,7 +504,6 @@ func (t rawType) Len() int {
 	return int(arrayLen)
 }
 
-
 // NumField returns the number of fields of a struct type. It panics for other
 // type kinds.
 func (t rawType) NumField() int {
