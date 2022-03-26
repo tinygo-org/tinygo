@@ -74,3 +74,14 @@ func nanotime() int64 {
 func os_sigpipe() {
 	runtimePanic("too many writes on closed pipe")
 }
+
+// LockOSThread wires the calling goroutine to its current operating system thread.
+// Stub for now
+// Called by go1.18 standard library on windows, see https://github.com/golang/go/issues/49320
+func LockOSThread() {
+}
+
+// UnlockOSThread undoes an earlier call to LockOSThread.
+// Stub for now
+func UnlockOSThread() {
+}
