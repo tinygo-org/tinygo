@@ -15,7 +15,7 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.17'
-      - uses: MinoruSekine/setup-scoop@main
+      - uses: cocotyty/setup-scoop@main
       - name: Install Dependencies
         shell: bash
         run: |
