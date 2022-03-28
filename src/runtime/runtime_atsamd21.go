@@ -39,6 +39,18 @@ func putchar(c byte) {
 	machine.Serial.WriteByte(c)
 }
 
+func getchar() byte {
+	for machine.Serial.Buffered() == 0 {
+		Gosched()
+	}
+	v, _ := machine.Serial.ReadByte()
+	return v
+}
+
+func buffered() int {
+	return machine.Serial.Buffered()
+}
+
 func initClocks() {
 	// Set 1 Flash Wait State for 48MHz, required for 3.3V operation according to SAMD21 Datasheet
 	sam.NVMCTRL.CTRLB.SetBits(sam.NVMCTRL_CTRLB_RWS_HALF << sam.NVMCTRL_CTRLB_RWS_Pos)

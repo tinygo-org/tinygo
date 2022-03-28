@@ -38,9 +38,26 @@ func NewFile(fd uintptr, name string) *File {
 	return &File{&file{stdioFileHandle(fd), name}}
 }
 
-// Read is unsupported on this system.
+// Read reads up to len(b) bytes from machine.Serial.
+// It returns the number of bytes read and any error encountered.
 func (f stdioFileHandle) Read(b []byte) (n int, err error) {
-	return 0, ErrUnsupported
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	size := buffered()
+	for size == 0 {
+		gosched()
+		size = buffered()
+	}
+
+	if size > len(b) {
+		size = len(b)
+	}
+	for i := 0; i < size; i++ {
+		b[i] = getchar()
+	}
+	return size, nil
 }
 
 func (f stdioFileHandle) ReadAt(b []byte, off int64) (n int, err error) {
@@ -77,6 +94,15 @@ func (f stdioFileHandle) Fd() uintptr {
 
 //go:linkname putchar runtime.putchar
 func putchar(c byte)
+
+//go:linkname getchar runtime.getchar
+func getchar() byte
+
+//go:linkname buffered runtime.buffered
+func buffered() int
+
+//go:linkname gosched runtime.Gosched
+func gosched() int
 
 func Pipe() (r *File, w *File, err error) {
 	return nil, nil, ErrNotImplemented
