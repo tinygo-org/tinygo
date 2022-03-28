@@ -18,6 +18,18 @@ func putchar(c byte) {
 	machine.Serial.WriteByte(c)
 }
 
+func getchar() byte {
+	for machine.Serial.Buffered() == 0 {
+		Gosched()
+	}
+	v, _ := machine.Serial.ReadByte()
+	return v
+}
+
+func buffered() int {
+	return machine.Serial.Buffered()
+}
+
 // Write to the internal control bus (using I2C?).
 // Signature found here:
 // https://github.com/espressif/ESP8266_RTOS_SDK/blob/14171de0/components/esp8266/include/esp8266/rom_functions.h#L54

@@ -16,6 +16,18 @@ func putchar(c byte) {
 	machine.Serial.WriteByte(c)
 }
 
+func getchar() byte {
+	for machine.Serial.Buffered() == 0 {
+		Gosched()
+	}
+	v, _ := machine.Serial.ReadByte()
+	return v
+}
+
+func buffered() int {
+	return machine.Serial.Buffered()
+}
+
 // Sleep for a given period. The period is defined by the WDT peripheral, and is
 // on most chips (at least) 3 bits wide, in powers of two from 16ms to 2s
 // (0=16ms, 1=32ms, 2=64ms...). Note that the WDT is not very accurate: it can

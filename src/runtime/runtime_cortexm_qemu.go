@@ -49,6 +49,16 @@ func putchar(c byte) {
 	stdoutWrite.Set(uint8(c))
 }
 
+func getchar() byte {
+	// dummy, TODO
+	return 0
+}
+
+func buffered() int {
+	// dummy, TODO
+	return 0
+}
+
 func waitForEvents() {
 	arm.Asm("wfe")
 }

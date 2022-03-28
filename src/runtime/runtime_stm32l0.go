@@ -16,6 +16,18 @@ func putchar(c byte) {
 	machine.Serial.WriteByte(c)
 }
 
+func getchar() byte {
+	for machine.Serial.Buffered() == 0 {
+		Gosched()
+	}
+	v, _ := machine.Serial.ReadByte()
+	return v
+}
+
+func buffered() int {
+	return machine.Serial.Buffered()
+}
+
 func initCLK() {
 	// Set Power Regulator to enable max performance (1.8V)
 	stm32.PWR.CR.ReplaceBits(1<<stm32.PWR_CR_VOS_Pos, stm32.PWR_CR_VOS_Msk, 0)
