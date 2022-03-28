@@ -15,11 +15,11 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.17'
-      - uses: MinoruSekine/setup-scoop@v1
+      - uses: MinoruSekine/setup-scoop@main
       - name: Install Dependencies
         shell: bash
         run: |
-          scoop install ninja binaryen
+          scoop install  ninja binaryen
       - name: Checkout
         uses: actions/checkout@v2
         with:
