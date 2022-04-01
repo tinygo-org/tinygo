@@ -74,19 +74,7 @@ var (
 func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 	// timeout in microseconds.
 	const timeout = 40 * 1000 // 40ms is a reasonable time for a real-time system.
-	if len(w) > 0 {
-		if err := i2c.tx(uint8(addr), w, false, timeout); nil != err {
-			return err
-		}
-	}
-
-	if len(r) > 0 {
-		if err := i2c.rx(uint8(addr), r, false, timeout); nil != err {
-			return err
-		}
-	}
-
-	return nil
+	return i2c.tx(uint8(addr), w, r, timeout)
 }
 
 // Configure initializes i2c peripheral and configures I2C config's pins passed.
@@ -239,16 +227,16 @@ func (i2c *I2C) deinit() (resetVal uint32) {
 	return resetVal
 }
 
-// tx is a primitive i2c blocking write to bus routine. timeout is time to wait
-// in microseconds since calling this function for write to finish.
-func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err error) {
-	deadline := ticks() + timeout
+// tx performs blocking write followed by read to I2C bus.
+func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
+	deadline := ticks() + timeout_us
 	if addr >= 0x80 || isReservedI2CAddr(addr) {
 		return ErrInvalidTgtAddr
 	}
-	tlen := len(tx)
+	txlen := len(tx)
+	rxlen := len(rx)
 	// Quick return if possible.
-	if tlen == 0 {
+	if txlen == 0 && rxlen == 0 {
 		return nil
 	}
 
@@ -258,17 +246,18 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 	}
 	i2c.Bus.IC_TAR.Set(uint32(addr))
 	i2c.enable()
-	// If no timeout was passed timeoutCheck is false.
 	abort := false
 	var abortReason uint32
-	byteCtr := 0
-	for ; byteCtr < tlen; byteCtr++ {
-		first := byteCtr == 0
-		last := byteCtr == tlen-1
+	for txCtr := 0; txCtr < txlen; txCtr++ {
+		if abort {
+			break
+		}
+		first := txCtr == 0
+		last := txCtr == txlen-1 && rxlen == 0
 		i2c.Bus.IC_DATA_CMD.Set(
 			(boolToBit(first && i2c.restartOnNext) << rp.I2C0_IC_DATA_CMD_RESTART_Pos) |
-				(boolToBit(last && !nostop) << rp.I2C0_IC_DATA_CMD_STOP_Pos) |
-				uint32(tx[byteCtr]))
+				(boolToBit(last) << rp.I2C0_IC_DATA_CMD_STOP_Pos) |
+				uint32(tx[txCtr]))
 
 		// Wait until the transmission of the address/data from the internal
 		// shift register has completed. For this to function correctly, the
@@ -288,7 +277,6 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 		// any activity, then with ic_en=0, this bit is set to 0.
 		for !i2c.interrupted(rp.I2C0_IC_RAW_INTR_STAT_TX_EMPTY) {
 			if ticks() > deadline {
-				i2c.restartOnNext = nostop
 				return errI2CWriteTimeout // If there was a timeout, don't attempt to do anything else.
 			}
 		}
@@ -298,7 +286,7 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 			i2c.clearAbortReason()
 			abort = true
 		}
-		if abort || (last && !nostop) {
+		if abort || last {
 			// If the transaction was aborted or if it completed
 			// successfully wait until the STOP condition has occured.
 
@@ -307,7 +295,6 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 			// to take care of the abort.
 			for !i2c.interrupted(rp.I2C0_IC_RAW_INTR_STAT_STOP_DET) {
 				if ticks() > deadline {
-					i2c.restartOnNext = nostop
 					return errI2CWriteTimeout
 				}
 			}
@@ -315,6 +302,33 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 		}
 	}
 
+	if rxlen > 0 && !abort {
+		for rxCtr := 0; rxCtr < rxlen; rxCtr++ {
+			first := rxCtr == 0
+			last := rxCtr == rxlen-1
+			for i2c.writeAvailable() == 0 {
+			}
+			i2c.Bus.IC_DATA_CMD.Set(
+				boolToBit(first && i2c.restartOnNext)<<rp.I2C0_IC_DATA_CMD_RESTART_Pos |
+					boolToBit(last)<<rp.I2C0_IC_DATA_CMD_STOP_Pos |
+					rp.I2C0_IC_DATA_CMD_CMD) // -> 1 for read
+
+			for !abort && i2c.readAvailable() == 0 {
+				abortReason = i2c.getAbortReason()
+				i2c.clearAbortReason()
+				if abortReason != 0 {
+					abort = true
+				}
+				if ticks() > deadline {
+					return errI2CReadTimeout // If there was a timeout, don't attempt to do anything else.
+				}
+			}
+			if abort {
+				break
+			}
+			rx[rxCtr] = uint8(i2c.Bus.IC_DATA_CMD.Get())
+		}
+	}
 	// From Pico SDK: A lot of things could have just happened due to the ingenious and
 	// creative design of I2C. Try to figure things out.
 	if abort {
@@ -327,78 +341,9 @@ func (i2c *I2C) tx(addr uint8, tx []byte, nostop bool, timeout uint64) (err erro
 			// Address acknowledged, some data not acknowledged
 			fallthrough
 		default:
-			// panic("unknown i2c abortReason:" + strconv.Itoa(abortReason)
 			err = makeI2CAbortError(abortReason)
 		}
 	}
-
-	// nostop means we are now at the end of a *message* but not the end of a *transfer*
-	i2c.restartOnNext = nostop
-	return err
-}
-
-// rx is a primitive i2c blocking read routine. timeout is time to wait
-// in microseconds since calling this function for read to finish.
-func (i2c *I2C) rx(addr uint8, rx []byte, nostop bool, timeout uint64) (err error) {
-	deadline := ticks() + timeout
-	if addr >= 0x80 || isReservedI2CAddr(addr) {
-		return ErrInvalidTgtAddr
-	}
-	rlen := len(rx)
-	// Quick return if possible.
-	if rlen == 0 {
-		return nil
-	}
-	err = i2c.disable()
-	if err != nil {
-		return err
-	}
-	i2c.Bus.IC_TAR.Set(uint32(addr))
-	i2c.enable()
-	// If no timeout was passed timeoutCheck is false.
-	abort := false
-	var abortReason uint32
-	byteCtr := 0
-	for ; byteCtr < rlen; byteCtr++ {
-		first := byteCtr == 0
-		last := byteCtr == rlen-1
-		for i2c.writeAvailable() == 0 {
-		}
-		i2c.Bus.IC_DATA_CMD.Set(
-			boolToBit(first && i2c.restartOnNext)<<rp.I2C0_IC_DATA_CMD_RESTART_Pos |
-				boolToBit(last && !nostop)<<rp.I2C0_IC_DATA_CMD_STOP_Pos |
-				rp.I2C0_IC_DATA_CMD_CMD) // -> 1 for read
-
-		for !abort && i2c.readAvailable() == 0 {
-			abortReason = i2c.getAbortReason()
-			i2c.clearAbortReason()
-			if abortReason != 0 {
-				abort = true
-			}
-			if ticks() > deadline {
-				i2c.restartOnNext = nostop
-				return errI2CReadTimeout // If there was a timeout, don't attempt to do anything else.
-			}
-		}
-		if abort {
-			break
-		}
-		rx[byteCtr] = uint8(i2c.Bus.IC_DATA_CMD.Get())
-	}
-
-	if abort {
-		switch {
-		case abortReason == 0 || abortReason&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_7B_ADDR_NOACK != 0:
-			// No reported errors - seems to happen if there is nothing connected to the bus.
-			// Address byte not acknowledged
-			err = ErrI2CGeneric
-		default:
-			// undefined abort sequence
-			err = makeI2CAbortError(abortReason)
-		}
-	}
-
-	i2c.restartOnNext = nostop
 	return err
 }
 
@@ -423,6 +368,7 @@ func (i2c *I2C) clearAbortReason() {
 	i2c.Bus.IC_CLR_TX_ABRT.Get()
 }
 
+// getAbortReason reads IC_TX_ABRT_SOURCE register.
 //go:inline
 func (i2c *I2C) getAbortReason() uint32 {
 	return i2c.Bus.IC_TX_ABRT_SOURCE.Get()
