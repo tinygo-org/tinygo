@@ -41,11 +41,11 @@ type hashmapBucket struct {
 }
 
 type hashmapIterator struct {
-	buckets      unsafe.Pointer // pointer to array of hashapBuckets
-	numBuckets   uintptr        // length of buckets array
-	bucketNumber uintptr        // current index into buckets array
-	bucket       *hashmapBucket // current bucket in chain
-	bucketIndex  uint8          // current index into bucket
+	buckets      unsafe.Pointer
+	numBuckets   uintptr
+	bucketNumber uintptr
+	bucket       *hashmapBucket
+	bucketIndex  uint8
 }
 
 // Get the topmost 8 bits of the hash, without using a special value (like 0).
