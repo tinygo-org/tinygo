@@ -59,7 +59,6 @@ func TestBuild(t *testing.T) {
 		"json.go",
 		"map.go",
 		"math.go",
-		"mapgrowth.go",
 		"print.go",
 		"reflect.go",
 		"slice.go",
