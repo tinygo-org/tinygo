@@ -42,6 +42,9 @@ const (
 	SPIQ       = IO17
 	U0RXD      = IO20
 	U0TXD      = IO21
+
+	UART_TX_PIN = U0TXD
+	UART_RX_PIN = U0RXD
 )
 
 const (
