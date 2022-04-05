@@ -1554,7 +1554,11 @@ func (c *compilerContext) maxSliceSize(elementType llvm.Type) uint64 {
 	// Determine the maximum allowed size for a slice. The biggest possible
 	// pointer (starting from 0) would be maxPointerValue*sizeof(elementType) so
 	// divide by the element type to get the real maximum size.
-	maxSize := maxPointerValue / c.targetData.TypeAllocSize(elementType)
+	elementSize := c.targetData.TypeAllocSize(elementType)
+	if elementSize == 0 {
+		elementSize = 1
+	}
+	maxSize := maxPointerValue / elementSize
 
 	// len(slice) is an int. Make sure the length remains small enough to fit in
 	// an int.

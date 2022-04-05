@@ -19,6 +19,9 @@ func main() {
 	printslice("foo[1:2]", foo[1:2])
 	println("sum foo:", sum(foo))
 
+	// creating a slice of uncommon base type
+	assert(len(make([]struct{}, makeInt(4))) == 4)
+
 	// creating a slice with uncommon len, cap types
 	assert(len(make([]int, makeInt(2), makeInt(3))) == 2)
 	assert(len(make([]int, makeInt8(2), makeInt8(3))) == 2)
