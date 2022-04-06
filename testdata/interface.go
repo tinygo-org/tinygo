@@ -40,6 +40,9 @@ func main() {
 	// https://github.com/tinygo-org/tinygo/issues/453
 	_, _ = itf.(Empty)
 
+	var v Byter = FooByte(3)
+	println("Byte(): ", v.Byte())
+
 	var n int
 	var f float32
 	var interfaceEqualTests = []struct {
@@ -266,3 +269,11 @@ type StaticBlocker interface {
 }
 
 type Empty interface{}
+
+type FooByte int
+
+func (f FooByte) Byte() byte { return byte(f) }
+
+type Byter interface {
+	Byte() uint8
+}

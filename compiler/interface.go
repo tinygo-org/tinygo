@@ -152,6 +152,27 @@ func (c *compilerContext) makeStructTypeFields(typ *types.Struct) llvm.Value {
 	return structGlobal
 }
 
+var basicTypes = [...]string{
+	types.Bool:          "bool",
+	types.Int:           "int",
+	types.Int8:          "int8",
+	types.Int16:         "int16",
+	types.Int32:         "int32",
+	types.Int64:         "int64",
+	types.Uint:          "uint",
+	types.Uint8:         "uint8",
+	types.Uint16:        "uint16",
+	types.Uint32:        "uint32",
+	types.Uint64:        "uint64",
+	types.Uintptr:       "uintptr",
+	types.Float32:       "float32",
+	types.Float64:       "float64",
+	types.Complex64:     "complex64",
+	types.Complex128:    "complex128",
+	types.String:        "string",
+	types.UnsafePointer: "unsafe.Pointer",
+}
+
 // getTypeCodeName returns a name for this type that can be used in the
 // interface lowering pass to assign type codes as expected by the reflect
 // package. See getTypeCodeNum.
@@ -162,48 +183,7 @@ func getTypeCodeName(t types.Type) string {
 	case *types.Array:
 		return "array:" + strconv.FormatInt(t.Len(), 10) + ":" + getTypeCodeName(t.Elem())
 	case *types.Basic:
-		var kind string
-		switch t.Kind() {
-		case types.Bool:
-			kind = "bool"
-		case types.Int:
-			kind = "int"
-		case types.Int8:
-			kind = "int8"
-		case types.Int16:
-			kind = "int16"
-		case types.Int32:
-			kind = "int32"
-		case types.Int64:
-			kind = "int64"
-		case types.Uint:
-			kind = "uint"
-		case types.Uint8:
-			kind = "uint8"
-		case types.Uint16:
-			kind = "uint16"
-		case types.Uint32:
-			kind = "uint32"
-		case types.Uint64:
-			kind = "uint64"
-		case types.Uintptr:
-			kind = "uintptr"
-		case types.Float32:
-			kind = "float32"
-		case types.Float64:
-			kind = "float64"
-		case types.Complex64:
-			kind = "complex64"
-		case types.Complex128:
-			kind = "complex128"
-		case types.String:
-			kind = "string"
-		case types.UnsafePointer:
-			kind = "unsafeptr"
-		default:
-			panic("unknown basic type: " + t.Name())
-		}
-		return "basic:" + kind
+		return "basic:" + basicTypes[t.Kind()]
 	case *types.Chan:
 		return "chan:" + getTypeCodeName(t.Elem())
 	case *types.Interface:
@@ -591,23 +571,77 @@ func signature(sig *types.Signature) string {
 			if i > 0 {
 				s += ", "
 			}
-			s += sig.Params().At(i).Type().String()
+			s += typestring(sig.Params().At(i).Type())
 		}
 		s += ")"
 	}
 	if sig.Results().Len() == 0 {
 		// keep as-is
 	} else if sig.Results().Len() == 1 {
-		s += " " + sig.Results().At(0).Type().String()
+		s += " " + typestring(sig.Results().At(0).Type())
 	} else {
 		s += " ("
 		for i := 0; i < sig.Results().Len(); i++ {
 			if i > 0 {
 				s += ", "
 			}
-			s += sig.Results().At(i).Type().String()
+			s += typestring(sig.Results().At(i).Type())
 		}
 		s += ")"
 	}
 	return s
+}
+
+// typestring returns a stable (human-readable) type string for the given type
+// that can be used for interface equality checks. It is almost (but not
+// exactly) the same as calling t.String(). The main difference is some
+// normalization around `byte` vs `uint8` for example.
+func typestring(t types.Type) string {
+	// See: https://github.com/golang/go/blob/master/src/go/types/typestring.go
+	switch t := t.(type) {
+	case *types.Array:
+		return "[" + strconv.FormatInt(t.Len(), 10) + "]" + typestring(t.Elem())
+	case *types.Basic:
+		return basicTypes[t.Kind()]
+	case *types.Chan:
+		switch t.Dir() {
+		case types.SendRecv:
+			return "chan (" + typestring(t.Elem()) + ")"
+		case types.SendOnly:
+			return "chan<- (" + typestring(t.Elem()) + ")"
+		case types.RecvOnly:
+			return "<-chan (" + typestring(t.Elem()) + ")"
+		default:
+			panic("unknown channel direction")
+		}
+	case *types.Interface:
+		methods := make([]string, t.NumMethods())
+		for i := range methods {
+			method := t.Method(i)
+			methods[i] = method.Name() + signature(method.Type().(*types.Signature))
+		}
+		return "interface{" + strings.Join(methods, ";") + "}"
+	case *types.Map:
+		return "map[" + typestring(t.Key()) + "]" + typestring(t.Elem())
+	case *types.Named:
+		return t.String()
+	case *types.Pointer:
+		return "*" + typestring(t.Elem())
+	case *types.Signature:
+		return "func" + signature(t)
+	case *types.Slice:
+		return "[]" + typestring(t.Elem())
+	case *types.Struct:
+		fields := make([]string, t.NumFields())
+		for i := range fields {
+			field := t.Field(i)
+			fields[i] = field.Name() + " " + typestring(field.Type())
+			if tag := t.Tag(i); tag != "" {
+				fields[i] += " " + strconv.Quote(tag)
+			}
+		}
+		return "struct{" + strings.Join(fields, ";") + "}"
+	default:
+		panic("unknown type: " + t.String())
+	}
 }
