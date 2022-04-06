@@ -20,6 +20,7 @@ Stringer.String(): foo
 Stringer.(*Thing).String(): foo
 s has String() method: foo
 nested switch: true
+Byte():  3
 non-blocking call on sometimes-blocking interface
 slept 1ms
 slept 1ms

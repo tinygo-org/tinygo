@@ -128,5 +128,5 @@ declare %runtime._string @"interface:{Error:func:{}{basic:string}}.Error$invoke"
 attributes #0 = { nounwind }
 attributes #1 = { "tinygo-methods"="reflect/methods.Error() string" }
 attributes #2 = { "tinygo-methods"="reflect/methods.String() string" }
-attributes #3 = { "tinygo-invoke"="main.$methods.foo(int) byte" "tinygo-methods"="reflect/methods.String() string; main.$methods.foo(int) byte" }
+attributes #3 = { "tinygo-invoke"="main.$methods.foo(int) uint8" "tinygo-methods"="reflect/methods.String() string; main.$methods.foo(int) uint8" }
 attributes #4 = { "tinygo-invoke"="reflect/methods.Error() string" "tinygo-methods"="reflect/methods.Error() string" }
