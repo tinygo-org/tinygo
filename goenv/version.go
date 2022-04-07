@@ -58,9 +58,9 @@ func GorootVersionString(goroot string) (string, error) {
 		return string(data), nil
 
 	} else if data, err := ioutil.ReadFile(filepath.Join(
-		goroot, "src", "runtime", "internal", "sys", "zversion.go")); err == nil {
+		goroot, "src", "internal", "buildcfg", "zbootstrap.go")); err == nil {
 
-		r := regexp.MustCompile("const TheVersion = `(.*)`")
+		r := regexp.MustCompile("const version = `(.*)`")
 		matches := r.FindSubmatch(data)
 		if len(matches) != 2 {
 			return "", errors.New("Invalid go version output:\n" + string(data))
