@@ -109,15 +109,27 @@ func hashmapKeyHashAlg(alg hashmapAlgorithm) func(key unsafe.Pointer, n uintptr)
 }
 
 func hashmapShouldGrow(m *hashmap) bool {
-	if m.bucketBits == 32 {
-		// can't grow any more
-		return false
+	// with 29 bucket bits, we have potentially 8*(1 << 29) == 2^32 elements
+	if m.bucketBits <= 29 {
+		// "maximum" number of elements is 0.75 * buckets * elements per bucket
+		// to avoid overflow, this is calculated as
+		// max = 3 * (1/4 * buckets * elements per bucket)
+		//     = 3 * (buckets * (elements per bucket)/4)
+		//     = 3 * (buckets * (8/4)
+		//     = 3 * (buckets * 2)
+		//     = 6 * buckets
+		max := (uintptr(6) << m.bucketBits)
+		return m.count > max
 	}
 
-	// "maximum" number of elements is 0.75 * buckets * elements per bucket
-	max := uintptr((3 * ((1 << m.bucketBits) * 8)) / 4)
+	if m.bucketBits == 30 && m.count > uintptr(0xe0000000) {
+		return true
+	}
 
-	return m.count > max
+	// bucketBits == 32 will cause overflow problems on 32-bit platforms, so we limit it to 31.
+	// We're also likely to overflow the `int`-sized map length, causing other issues.
+
+	return false
 }
 
 // Return the number of entries in this hashmap, called from the len builtin.
