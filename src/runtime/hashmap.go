@@ -153,12 +153,6 @@ func hashmapLenUnsafePointer(p unsafe.Pointer) int {
 func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
 	tophash := hashmapTopHash(hash)
 
-	if m.buckets == nil {
-		// No bucket was allocated yet, do so now.
-		m.buckets = unsafe.Pointer(hashmapInsertIntoNewBucket(m, key, value, tophash))
-		return
-	}
-
 	if hashmapShouldGrow(m) {
 		hashmapGrow(m)
 	}
