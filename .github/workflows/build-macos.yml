@@ -10,12 +10,12 @@ on:
 jobs:
   build-macos:
     name: build-macos
-    runs-on: macos-10.15
+    runs-on: macos-10.16
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17'
+          go-version: '1.18'
       - name: Install Dependencies
         shell: bash
         run: |
