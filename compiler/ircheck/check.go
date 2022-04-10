@@ -31,7 +31,7 @@ func (c *checker) checkType(t llvm.Type, checked map[llvm.Type]struct{}, special
 		return fmt.Errorf("type %q uses global context", t.String())
 	default:
 		// we used some other context by accident
-		return fmt.Errorf("type %q uses context %v instead of the main context %v", t.Context(), c.ctx)
+		return fmt.Errorf("type %q uses context %v instead of the main context %v", t.String(), t.Context(), c.ctx)
 	}
 
 	// if this is a composite type, check the components of the type
