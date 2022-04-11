@@ -226,9 +226,9 @@ func filterIrrelevantIRLines(lines []string) []string {
 			// Right now test outputs are for LLVM 12 and higher.
 			continue
 		}
-		if llvmVersion < 13 && strings.HasPrefix(line, "target datalayout = ") {
+		if llvmVersion < 14 && strings.HasPrefix(line, "target datalayout = ") {
 			// The datalayout string may vary betewen LLVM versions.
-			// Right now test outputs are for LLVM 13 and higher.
+			// Right now test outputs are for LLVM 14 and higher.
 			continue
 		}
 		out = append(out, line)
