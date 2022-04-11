@@ -957,10 +957,10 @@ func (b *builder) createFunction() {
 			} else {
 				fieldOffsets := b.expandFormalParamOffsets(llvmType)
 				for i, field := range fields {
-					expr := b.dibuilder.CreateExpression([]int64{
-						0x1000,                     // DW_OP_LLVM_fragment
-						int64(fieldOffsets[i]) * 8, // offset in bits
-						int64(b.targetData.TypeAllocSize(field.Type())) * 8, // size in bits
+					expr := b.dibuilder.CreateExpression([]uint64{
+						0x1000,                      // DW_OP_LLVM_fragment
+						uint64(fieldOffsets[i]) * 8, // offset in bits
+						uint64(b.targetData.TypeAllocSize(field.Type())) * 8, // size in bits
 					})
 					b.dibuilder.InsertValueAtEnd(field, dbgParam, expr, loc, entryBlock)
 				}
