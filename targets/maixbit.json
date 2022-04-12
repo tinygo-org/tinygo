@@ -3,5 +3,5 @@
 	"build-tags": ["maixbit"],
 	"serial": "uart",
 	"linkerscript": "targets/maixbit.ld",
-	"flash-command": "kflash --Board bit -p {port} --noansi --verbose {bin}"
+	"flash-command": "kflash -p {port} --noansi --verbose {bin}"
 }
