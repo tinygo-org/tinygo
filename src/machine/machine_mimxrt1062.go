@@ -883,3 +883,179 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		panic("machine: invalid pin mode")
 	}
 }
+
+// maximum ADC value for the currently configured resolution (used for scaling)
+var adcMaximum uint32
+
+// InitADC is not used by this machine. Use `(ADC).Configure()`.
+func InitADC() {}
+
+// Configure initializes the receiver's ADC peripheral and pin for analog input.
+func (a ADC) Configure(config ADCConfig) {
+	// if not specified, use defaults: 10-bit resolution, 4 samples/conversion
+	const (
+		defaultResolution = uint32(10)
+		defaultSamples    = uint32(4)
+	)
+
+	a.Pin.Configure(PinConfig{Mode: PinInputAnalog})
+
+	resolution, samples := config.Resolution, config.Samples
+	if 0 == resolution {
+		resolution = defaultResolution
+	}
+	if 0 == samples {
+		samples = defaultSamples
+	}
+	if resolution > 12 {
+		resolution = 12 // maximum resolution of 12 bits
+	}
+	adcMaximum = (uint32(1) << resolution) - 1
+
+	mode, average := a.mode(resolution, samples)
+
+	nxp.ADC1.CFG.Set(mode | nxp.ADC_CFG_ADHSC) // configure ADC1
+	nxp.ADC2.CFG.Set(mode | nxp.ADC_CFG_ADHSC) // configure ADC2
+
+	// begin calibration
+	nxp.ADC1.GC.Set(average | nxp.ADC_GC_CAL)
+	nxp.ADC2.GC.Set(average | nxp.ADC_GC_CAL)
+
+	for a.isCalibrating() {
+	} // wait for calibration
+}
+
+// Get performs a single ADC conversion, returning a 16-bit unsigned integer.
+// The value returned will be scaled (uniformly distributed) if necessary so
+// that it is always in the range [0..65535], regardless of the ADC's configured
+// bit size (resolution).
+func (a ADC) Get() uint16 {
+	if ch1, ch2, ok := a.Pin.getADCChannel(); ok {
+		for a.isCalibrating() {
+		} // wait for calibration
+		var val uint32
+		if noADCChannel != ch1 {
+			nxp.ADC1.HC0.Set(uint32(ch1))
+			for !nxp.ADC1.HS.HasBits(nxp.ADC_HS_COCO0) {
+			}
+			val = nxp.ADC1.R0.Get() & 0xFFFF
+		} else {
+			nxp.ADC2.HC0.Set(uint32(ch2))
+			for !nxp.ADC2.HS.HasBits(nxp.ADC_HS_COCO0) {
+			}
+			val = nxp.ADC2.R0.Get() & 0xFFFF
+		}
+		// should never be zero, but just in case, use UINT16_MAX so that the scalar
+		// gets factored out of the conversion result, leaving the original reading
+		// to be returned unaltered/unscaled.
+		if adcMaximum == 0 {
+			adcMaximum = 0xFFFF
+		}
+		// scale up to a 16-bit value
+		return uint16((val * 0xFFFF) / adcMaximum)
+	}
+	return 0
+}
+
+// mode constructs bit masks for mode and average - used in ADC configuration
+// registers - from a given ADC bit size (resolution) and sample count.
+func (a ADC) mode(resolution, samples uint32) (mode, average uint32) {
+
+	// use asynchronous clock (ADACK) (0 = IPG, 1 = IPG/2, or 3 = ADACK)
+	mode = (nxp.ADC_CFG_ADICLK_ADICLK_3 << nxp.ADC_CFG_ADICLK_Pos) & nxp.ADC_CFG_ADICLK_Msk
+
+	// input clock DIV2 (0 = DIV1, 1 = DIV2, 2 = DIV4, or 3 = DIV8)
+	mode |= (nxp.ADC_CFG_ADIV_ADIV_1 << nxp.ADC_CFG_ADIV_Pos) & nxp.ADC_CFG_ADIV_Msk
+
+	switch resolution {
+	case 8: // 8-bit conversion, sample period (ADC clocks) = 8
+		mode |= (nxp.ADC_CFG_MODE_MODE_0 << nxp.ADC_CFG_MODE_Pos) & nxp.ADC_CFG_MODE_Msk
+		mode |= (nxp.ADC_CFG_ADSTS_ADSTS_3 << nxp.ADC_CFG_ADSTS_Pos) & nxp.ADC_CFG_ADSTS_Msk
+
+	case 12: // 12-bit conversion, sample period (ADC clocks) = 24
+		mode |= (nxp.ADC_CFG_MODE_MODE_2 << nxp.ADC_CFG_MODE_Pos) & nxp.ADC_CFG_MODE_Msk
+		mode |= (nxp.ADC_CFG_ADSTS_ADSTS_3 << nxp.ADC_CFG_ADSTS_Pos) & nxp.ADC_CFG_ADSTS_Msk
+		mode |= nxp.ADC_CFG_ADLSMP
+
+	default: // 10-bit conversion, sample period (ADC clocks) = 20
+		mode |= (nxp.ADC_CFG_MODE_MODE_1 << nxp.ADC_CFG_MODE_Pos) & nxp.ADC_CFG_MODE_Msk
+		mode |= (nxp.ADC_CFG_ADSTS_ADSTS_2 << nxp.ADC_CFG_ADSTS_Pos) & nxp.ADC_CFG_ADSTS_Msk
+		mode |= nxp.ADC_CFG_ADLSMP
+	}
+
+	if samples >= 4 {
+		if samples >= 32 {
+			// 32 samples averaged
+			mode |= (nxp.ADC_CFG_AVGS_AVGS_3 << nxp.ADC_CFG_AVGS_Pos) & nxp.ADC_CFG_AVGS_Msk
+		} else if samples >= 16 {
+			// 16 samples averaged
+			mode |= (nxp.ADC_CFG_AVGS_AVGS_2 << nxp.ADC_CFG_AVGS_Pos) & nxp.ADC_CFG_AVGS_Msk
+		} else if samples >= 8 {
+			// 8 samples averaged
+			mode |= (nxp.ADC_CFG_AVGS_AVGS_1 << nxp.ADC_CFG_AVGS_Pos) & nxp.ADC_CFG_AVGS_Msk
+		} else {
+			// 4 samples averaged
+			mode |= (nxp.ADC_CFG_AVGS_AVGS_0 << nxp.ADC_CFG_AVGS_Pos) & nxp.ADC_CFG_AVGS_Msk
+		}
+		average = nxp.ADC_GC_AVGE
+	}
+
+	return mode, average
+}
+
+// isCalibrating returns true if and only if either one (or both) of ADC1 and
+// ADC2 have their calibrating flags set. ADC reads must wait until these flags
+// are clear before attempting a conversion.
+func (a ADC) isCalibrating() bool {
+	return nxp.ADC1.GC.HasBits(nxp.ADC_GC_CAL) || nxp.ADC2.GC.HasBits(nxp.ADC_GC_CAL)
+}
+
+const noADCChannel = uint8(0xFF)
+
+// getADCChannel returns the input channel for ADC1/ADC2 of the receiver Pin p.
+func (p Pin) getADCChannel() (adc1, adc2 uint8, ok bool) {
+	switch p {
+	case PA12: // [AD_B0_12]:       ADC1_IN1        ~
+		return 1, noADCChannel, true
+	case PA13: // [AD_B0_13]:       ADC1_IN2        ~
+		return 2, noADCChannel, true
+	case PA14: // [AD_B0_14]:       ADC1_IN3        ~
+		return 3, noADCChannel, true
+	case PA15: // [AD_B0_15]:       ADC1_IN4        ~
+		return 4, noADCChannel, true
+	case PA16: // [AD_B1_00]:       ADC1_IN5     ADC2_IN5
+		return 5, 5, true
+	case PA17: // [AD_B1_01]:       ADC1_IN6     ADC2_IN6
+		return 6, 6, true
+	case PA18: // [AD_B1_02]:       ADC1_IN7     ADC2_IN7
+		return 7, 7, true
+	case PA19: // [AD_B1_03]:       ADC1_IN8     ADC2_IN8
+		return 8, 8, true
+	case PA20: // [AD_B1_04]:       ADC1_IN9     ADC2_IN9
+		return 9, 9, true
+	case PA21: // [AD_B1_05]:       ADC1_IN10    ADC2_IN10
+		return 10, 10, true
+	case PA22: // [AD_B1_06]:       ADC1_IN11    ADC2_IN11
+		return 11, 11, true
+	case PA23: // [AD_B1_07]:       ADC1_IN12    ADC2_IN12
+		return 12, 12, true
+	case PA24: // [AD_B1_08]:       ADC1_IN13    ADC2_IN13
+		return 13, 13, true
+	case PA25: // [AD_B1_09]:       ADC1_IN14    ADC2_IN14
+		return 14, 14, true
+	case PA26: // [AD_B1_10]:       ADC1_IN15    ADC2_IN15
+		return 15, 15, true
+	case PA27: // [AD_B1_11]:       ADC1_IN0     ADC2_IN0
+		return 16, 16, true
+	case PA28: // [AD_B1_12]:          ~         ADC2_IN1
+		return noADCChannel, 1, true
+	case PA29: // [AD_B1_13]:          ~         ADC2_IN2
+		return noADCChannel, 2, true
+	case PA30: // [AD_B1_14]:          ~         ADC2_IN3
+		return noADCChannel, 3, true
+	case PA31: // [AD_B1_15]:          ~         ADC2_IN4
+		return noADCChannel, 4, true
+	default:
+		return noADCChannel, noADCChannel, false
+	}
+}
