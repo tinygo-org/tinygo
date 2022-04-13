@@ -32,6 +32,7 @@ type cgoPackage struct {
 	errors          []error
 	currentDir      string // current working directory
 	packageDir      string // full path to the package to process
+	importPath      string
 	fset            *token.FileSet
 	tokenFiles      map[string]*token.File
 	definedGlobally map[string]ast.Node
@@ -39,12 +40,15 @@ type cgoPackage struct {
 	cflags          []string // CFlags from #cgo lines
 	ldflags         []string // LDFlags from #cgo lines
 	visitedFiles    map[string][]byte
+	cgoHeaders      []string
 }
 
 // cgoFile holds information only for a single Go file (with one or more
 // `import "C"` statements).
 type cgoFile struct {
 	*cgoPackage
+	file    *ast.File
+	index   int
 	defined map[string]ast.Node
 	names   map[string]clangCursor
 }
@@ -158,9 +162,10 @@ func GoBytes(ptr unsafe.Pointer, length C.int) []byte {
 // functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
 // hashes of the accessed C header files. If there is one or more error, it
 // returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string, clangHeaders string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, clangHeaders string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		currentDir:      dir,
+		importPath:      importPath,
 		fset:            fset,
 		tokenFiles:      map[string]*token.File{},
 		definedGlobally: map[string]ast.Node{},
@@ -210,13 +215,13 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 		}
 	}
 	// Patch some types, for example *C.char in C.CString.
-	cf := p.newCGoFile()
+	cf := p.newCGoFile(nil, -1) // dummy *cgoFile for the walker
 	astutil.Apply(p.generated, func(cursor *astutil.Cursor) bool {
 		return cf.walker(cursor, nil)
 	}, nil)
 
 	// Find `import "C"` C fragments in the file.
-	cgoHeaders := make([]string, len(files)) // combined CGo header fragment for each file
+	p.cgoHeaders = make([]string, len(files)) // combined CGo header fragment for each file
 	for i, f := range files {
 		var cgoHeader string
 		for i := 0; i < len(f.Decls); i++ {
@@ -275,7 +280,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 			cgoHeader += fragment
 		}
 
-		cgoHeaders[i] = cgoHeader
+		p.cgoHeaders[i] = cgoHeader
 	}
 
 	// Define CFlags that will be used while parsing the package.
@@ -289,7 +294,7 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	}
 
 	// Retrieve types such as C.int, C.longlong, etc from C.
-	p.newCGoFile().readNames(builtinAliasTypedefs, cflagsForCGo, "", func(names map[string]clangCursor) {
+	p.newCGoFile(nil, -1).readNames(builtinAliasTypedefs, cflagsForCGo, "", func(names map[string]clangCursor) {
 		gen := &ast.GenDecl{
 			TokPos: token.NoPos,
 			Tok:    token.TYPE,
@@ -303,8 +308,8 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 
 	// Process CGo imports for each file.
 	for i, f := range files {
-		cf := p.newCGoFile()
-		cf.readNames(cgoHeaders[i], cflagsForCGo, filepath.Base(fset.File(f.Pos()).Name()), func(names map[string]clangCursor) {
+		cf := p.newCGoFile(f, i)
+		cf.readNames(p.cgoHeaders[i], cflagsForCGo, filepath.Base(fset.File(f.Pos()).Name()), func(names map[string]clangCursor) {
 			for _, name := range builtinAliases {
 				// Names such as C.int should not be obtained from C.
 				// This works around an issue in picolibc that has `#define int`
@@ -320,12 +325,14 @@ func Process(files []*ast.File, dir string, fset *token.FileSet, cflags []string
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
+	return p.generated, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
 }
 
-func (p *cgoPackage) newCGoFile() *cgoFile {
+func (p *cgoPackage) newCGoFile(file *ast.File, index int) *cgoFile {
 	return &cgoFile{
 		cgoPackage: p,
+		file:       file,
+		index:      index,
 		defined:    make(map[string]ast.Node),
 		names:      make(map[string]clangCursor),
 	}
@@ -1117,8 +1124,11 @@ func (f *cgoFile) getASTDeclName(name string, found clangCursor, iscall bool) st
 		return alias
 	}
 	node := f.getASTDeclNode(name, found, iscall)
-	if _, ok := node.(*ast.FuncDecl); ok && !iscall {
-		return "C." + name + "$funcaddr"
+	if node, ok := node.(*ast.FuncDecl); ok {
+		if !iscall {
+			return node.Name.Name + "$funcaddr"
+		}
+		return node.Name.Name
 	}
 	return "C." + name
 }
@@ -1142,7 +1152,7 @@ func (f *cgoFile) getASTDeclNode(name string, found clangCursor, iscall bool) as
 			// Original cgo reports an error like
 			//   cgo: inconsistent definitions for C.myint
 			// which is far less helpful.
-			f.addError(getPos(node), "defined previously at "+f.fset.Position(getPos(newNode)).String()+" with a different type")
+			f.addError(getPos(node), name+" defined previously at "+f.fset.Position(getPos(newNode)).String()+" with a different type")
 		}
 		f.defined[name] = node
 		return node
@@ -1150,11 +1160,39 @@ func (f *cgoFile) getASTDeclNode(name string, found clangCursor, iscall bool) as
 
 	// The declaration has no AST node. Create it now.
 	f.defined[name] = nil
-	node, elaboratedType := f.createASTNode(name, found)
+	node, extra := f.createASTNode(name, found)
 	f.defined[name] = node
-	f.definedGlobally[name] = node
 	switch node := node.(type) {
 	case *ast.FuncDecl:
+		if strings.HasPrefix(node.Doc.List[0].Text, "//export _Cgo_static_") {
+			// Static function. Only accessible in the current Go file.
+			globalName := strings.TrimPrefix(node.Doc.List[0].Text, "//export ")
+			// Make an alias. Normally this is done using the alias function
+			// attribute, but MacOS for some reason doesn't support this (even
+			// though the linker has support for aliases in the form of N_INDR).
+			// Therefore, create an actual function for MacOS.
+			var params []string
+			for _, param := range node.Type.Params.List {
+				params = append(params, param.Names[0].Name)
+			}
+			callInst := fmt.Sprintf("%s(%s);", name, strings.Join(params, ", "))
+			if node.Type.Results != nil {
+				callInst = "return " + callInst
+			}
+			aliasDeclaration := fmt.Sprintf(`
+#ifdef __APPLE__
+%s {
+	%s
+}
+#else
+extern __typeof(%s) %s __attribute__((alias(%#v)));
+#endif
+`, extra.(string), callInst, name, globalName, name)
+			f.cgoHeaders[f.index] += "\n\n" + aliasDeclaration
+		} else {
+			// Regular (non-static) function.
+			f.definedGlobally[name] = node
+		}
 		f.generated.Decls = append(f.generated.Decls, node)
 		// Also add a declaration like the following:
 		//   var C.foo$funcaddr unsafe.Pointer
@@ -1162,7 +1200,7 @@ func (f *cgoFile) getASTDeclNode(name string, found clangCursor, iscall bool) as
 			Tok: token.VAR,
 			Specs: []ast.Spec{
 				&ast.ValueSpec{
-					Names: []*ast.Ident{{Name: "C." + name + "$funcaddr"}},
+					Names: []*ast.Ident{{Name: node.Name.Name + "$funcaddr"}},
 					Type: &ast.SelectorExpr{
 						X:   &ast.Ident{Name: "unsafe"},
 						Sel: &ast.Ident{Name: "Pointer"},
@@ -1171,8 +1209,10 @@ func (f *cgoFile) getASTDeclNode(name string, found clangCursor, iscall bool) as
 			},
 		})
 	case *ast.GenDecl:
+		f.definedGlobally[name] = node
 		f.generated.Decls = append(f.generated.Decls, node)
 	case *ast.TypeSpec:
+		f.definedGlobally[name] = node
 		f.generated.Decls = append(f.generated.Decls, &ast.GenDecl{
 			Tok:   token.TYPE,
 			Specs: []ast.Spec{node},
@@ -1186,7 +1226,8 @@ func (f *cgoFile) getASTDeclNode(name string, found clangCursor, iscall bool) as
 
 	// If this is a struct or union it may need bitfields or union accessor
 	// methods.
-	if elaboratedType != nil {
+	switch elaboratedType := extra.(type) {
+	case *elaboratedTypeInfo:
 		// Add struct bitfields.
 		for _, bitfield := range elaboratedType.bitfields {
 			f.createBitfieldGetter(bitfield, "C."+name)
