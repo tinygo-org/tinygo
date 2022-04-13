@@ -4,7 +4,9 @@ package cgo
 // modification. It does not touch the AST itself.
 
 import (
+	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
 	"go/ast"
 	"go/scanner"
@@ -43,6 +45,8 @@ typedef struct {
 GoCXCursor tinygo_clang_getTranslationUnitCursor(CXTranslationUnit tu);
 unsigned tinygo_clang_visitChildren(GoCXCursor parent, CXCursorVisitor visitor, CXClientData client_data);
 CXString tinygo_clang_getCursorSpelling(GoCXCursor c);
+CXString tinygo_clang_getCursorPrettyPrinted(GoCXCursor c, CXPrintingPolicy Policy);
+CXPrintingPolicy tinygo_clang_getCursorPrintingPolicy(GoCXCursor c);
 enum CXCursorKind tinygo_clang_getCursorKind(GoCXCursor c);
 CXType tinygo_clang_getCursorType(GoCXCursor c);
 GoCXCursor tinygo_clang_getTypeDeclaration(CXType t);
@@ -50,6 +54,7 @@ CXType tinygo_clang_getTypedefDeclUnderlyingType(GoCXCursor c);
 CXType tinygo_clang_getCursorResultType(GoCXCursor c);
 int tinygo_clang_Cursor_getNumArguments(GoCXCursor c);
 GoCXCursor tinygo_clang_Cursor_getArgument(GoCXCursor c, unsigned i);
+enum CX_StorageClass tinygo_clang_Cursor_getStorageClass(GoCXCursor c);
 CXSourceLocation tinygo_clang_getCursorLocation(GoCXCursor c);
 CXSourceRange tinygo_clang_getCursorExtent(GoCXCursor c);
 CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(GoCXCursor c);
@@ -189,7 +194,7 @@ func (f *cgoFile) readNames(fragment string, cflags []string, filename string, c
 
 // Convert the AST node under the given Clang cursor to a Go AST node and return
 // it.
-func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, *elaboratedTypeInfo) {
+func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 	kind := C.tinygo_clang_getCursorKind(c)
 	pos := f.getCursorPosition(c)
 	switch kind {
@@ -200,19 +205,43 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, *elaborat
 			Kind: ast.Fun,
 			Name: "C." + name,
 		}
+		exportName := name
+		localName := name
+		var stringSignature string
+		if C.tinygo_clang_Cursor_getStorageClass(c) == C.CX_SC_Static {
+			// A static function is assigned a globally unique symbol name based
+			// on the file path (like _Cgo_static_2d09198adbf58f4f4655_foo) and
+			// has a different Go name in the form of C.foo!symbols.go instead
+			// of just C.foo.
+			path := f.importPath + "/" + filepath.Base(f.fset.File(f.file.Pos()).Name())
+			staticIDBuf := sha256.Sum256([]byte(path))
+			staticID := hex.EncodeToString(staticIDBuf[:10])
+			exportName = "_Cgo_static_" + staticID + "_" + name
+			localName = name + "!" + filepath.Base(path)
+
+			// Create a signature. This is necessary for MacOS to forward the
+			// call, because MacOS doesn't support aliases like ELF and PE do.
+			// (There is N_INDR but __attribute__((alias("..."))) doesn't work).
+			policy := C.tinygo_clang_getCursorPrintingPolicy(c)
+			defer C.clang_PrintingPolicy_dispose(policy)
+			C.clang_PrintingPolicy_setProperty(policy, C.CXPrintingPolicy_TerseOutput, 1)
+			stringSignature = getString(C.tinygo_clang_getCursorPrettyPrinted(c, policy))
+			stringSignature = strings.Replace(stringSignature, " "+name+"(", " "+exportName+"(", 1)
+			stringSignature = strings.TrimPrefix(stringSignature, "static ")
+		}
 		args := make([]*ast.Field, numArgs)
 		decl := &ast.FuncDecl{
 			Doc: &ast.CommentGroup{
 				List: []*ast.Comment{
 					{
 						Slash: pos - 1,
-						Text:  "//export " + name,
+						Text:  "//export " + exportName,
 					},
 				},
 			},
 			Name: &ast.Ident{
 				NamePos: pos,
-				Name:    "C." + name,
+				Name:    "C." + localName,
 				Obj:     obj,
 			},
 			Type: &ast.FuncType{
@@ -263,7 +292,7 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, *elaborat
 			}
 		}
 		obj.Decl = decl
-		return decl, nil
+		return decl, stringSignature
 	case C.CXCursor_StructDecl, C.CXCursor_UnionDecl:
 		typ := f.makeASTRecordType(c, pos)
 		typeName := "C." + name

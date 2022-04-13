@@ -12,6 +12,7 @@ int mul(int, int);
 import "C"
 
 // int headerfunc(int a) { return a + 1; }
+// static int headerfunc_static(int a) { return a - 1; }
 import "C"
 
 import "unsafe"
@@ -47,6 +48,8 @@ func main() {
 
 	// functions in the header C snippet
 	println("headerfunc:", C.headerfunc(5))
+	println("static headerfunc:", C.headerfunc_static(5))
+	headerfunc_2()
 
 	// equivalent types
 	var goInt8 int8 = 5
