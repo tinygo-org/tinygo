@@ -56,7 +56,7 @@ func getGorootVersion(goroot string) (int, int, error) {
 	}
 
 	if !strings.HasPrefix(s, "go") {
-		return 0, 0, fmt.Errorf("%s: version does not start with 'go' prefix", errPrefix)
+		return 0, 0, fmt.Errorf("%s: [%s] version does not start with 'go' prefix", s, errPrefix)
 	}
 
 	parts := strings.Split(s[2:], ".")
