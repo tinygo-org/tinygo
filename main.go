@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -714,38 +715,121 @@ func Run(pkgName string, options *compileopts.Options) error {
 		return err
 	}
 
-	return builder.Build(pkgName, ".elf", config, func(result builder.BuildResult) error {
-		emulator := config.Emulator()
-		if len(emulator) == 0 {
-			// Run directly.
-			cmd := executeCommand(config.Options, result.Binary)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err := cmd.Run()
-			if err != nil {
-				if err, ok := err.(*exec.ExitError); ok && err.Exited() {
-					// Workaround for QEMU which always exits with an error.
-					return nil
-				}
-				return &commandError{"failed to run compiled binary", result.Binary, err}
-			}
-			return nil
-		} else {
-			// Run in an emulator.
-			args := append(emulator[1:], result.Binary)
-			cmd := executeCommand(config.Options, emulator[0], args...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err := cmd.Run()
-			if err != nil {
-				if err, ok := err.(*exec.ExitError); ok && err.Exited() {
-					// Workaround for QEMU which always exits with an error.
-					return nil
-				}
-				return &commandError{"failed to run emulator with", result.Binary, err}
-			}
-			return nil
+	return buildAndRun(pkgName, config, os.Stdout, nil, nil, 0)
+}
+
+// buildAndRun builds and runs the given program, writing output to stdout and
+// errors to os.Stderr. It takes care of emulators (qemu, wasmtime, etc) and
+// passes command line arguments and evironment variables in a way appropriate
+// for the given emulator.
+func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration) error {
+	// make sure any special vars in the emulator definition are rewritten
+	emulator := config.Emulator()
+
+	// Determine whether we're on a system that supports environment variables
+	// and command line parameters (operating systems, WASI) or not (baremetal,
+	// WebAssembly in the browser). If we're on a system without an environment,
+	// we need to pass command line arguments and environment variables through
+	// global variables (built into the binary directly) instead of the
+	// conventional way.
+	needsEnvInVars := config.GOOS() == "js"
+	for _, tag := range config.BuildTags() {
+		if tag == "baremetal" {
+			needsEnvInVars = true
 		}
+	}
+	var args, env []string
+	if needsEnvInVars {
+		runtimeGlobals := make(map[string]string)
+		if len(cmdArgs) != 0 {
+			runtimeGlobals["osArgs"] = strings.Join(cmdArgs, "\x00")
+		}
+		if len(environmentVars) != 0 {
+			runtimeGlobals["osEnv"] = strings.Join(environmentVars, "\x00")
+		}
+		if len(runtimeGlobals) != 0 {
+			// This sets the global variables like they would be set with
+			// `-ldflags="-X=runtime.osArgs=first\x00second`.
+			// The runtime package has two variables (osArgs and osEnv) that are
+			// both strings, from which the parameters and environment variables
+			// are read.
+			config.Options.GlobalValues = map[string]map[string]string{
+				"runtime": runtimeGlobals,
+			}
+		}
+	} else if len(emulator) != 0 && emulator[0] == "wasmtime" {
+		// Wasmtime needs some special flags to pass environment variables
+		// and allow reading from the current directory.
+		args = append(args, "--dir=.")
+		for _, v := range environmentVars {
+			args = append(args, "--env", v)
+		}
+		args = append(args, cmdArgs...)
+	} else {
+		// Pass environment variables and command line parameters as usual.
+		// This also works on qemu-aarch64 etc.
+		args = cmdArgs
+		env = environmentVars
+	}
+
+	return builder.Build(pkgName, "", config, func(result builder.BuildResult) error {
+		// If needed, set a timeout on the command. This is done in tests so
+		// they don't waste resources on a stalled test.
+		var ctx context.Context
+		if timeout != 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+		}
+
+		// Set up the command.
+		var name string
+		if len(emulator) == 0 {
+			name = result.Binary
+		} else {
+			name = emulator[0]
+			emuArgs := append([]string(nil), emulator[1:]...)
+			emuArgs = append(emuArgs, result.Binary)
+			args = append(emuArgs, args...)
+		}
+		var cmd *exec.Cmd
+		if ctx != nil {
+			cmd = exec.CommandContext(ctx, name, args...)
+		} else {
+			cmd = exec.Command(name, args...)
+		}
+		cmd.Env = env
+
+		// Configure stdout/stderr. The stdout may go to a buffer, not a real
+		// stdout.
+		cmd.Stdout = stdout
+		cmd.Stderr = os.Stderr
+		if len(emulator) != 0 && emulator[0] == "simavr" {
+			cmd.Stdout = nil // don't print initial load commands
+			cmd.Stderr = stdout
+		}
+
+		// If this is a test, reserve CPU time for it so that increased
+		// parallelism doesn't blow up memory usage. If this isn't a test but
+		// simply `tinygo run`, then it is practically a no-op.
+		config.Options.Semaphore <- struct{}{}
+		defer func() {
+			<-config.Options.Semaphore
+		}()
+
+		// Run binary.
+		if config.Options.PrintCommands != nil {
+			config.Options.PrintCommands(cmd.Path, cmd.Args...)
+		}
+		err := cmd.Run()
+		if err != nil {
+			if cerr := ctx.Err(); cerr == context.DeadlineExceeded {
+				stdout.Write([]byte(fmt.Sprintf("--- timeout of %s exceeded, terminating...\n", timeout)))
+				err = cerr
+			}
+			return &commandError{"failed to run compiled binary", result.Binary, err}
+		}
+		return nil
 	})
 }
 

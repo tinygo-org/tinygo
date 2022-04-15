@@ -6,7 +6,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -324,110 +322,21 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		t.Fatal("could not read expected output file:", err)
 	}
 
-	// Create a temporary directory for test output files.
-	tmpdir := t.TempDir()
-
-	// Determine whether we're on a system that supports environment variables
-	// and command line parameters (operating systems, WASI) or not (baremetal,
-	// WebAssembly in the browser). If we're on a system without an environment,
-	// we need to pass command line arguments and environment variables through
-	// global variables (built into the binary directly) instead of the
-	// conventional way.
-	spec, err := compileopts.LoadTarget(&options)
+	config, err := builder.NewConfig(&options)
 	if err != nil {
-		t.Fatal("failed to load target spec:", err)
+		t.Fatal(err)
 	}
-	needsEnvInVars := spec.GOOS == "js"
-	for _, tag := range spec.BuildTags {
-		if tag == "baremetal" {
-			needsEnvInVars = true
-		}
-	}
-	if needsEnvInVars {
-		runtimeGlobals := make(map[string]string)
-		if len(cmdArgs) != 0 {
-			runtimeGlobals["osArgs"] = strings.Join(cmdArgs, "\x00")
-		}
-		if len(environmentVars) != 0 {
-			runtimeGlobals["osEnv"] = strings.Join(environmentVars, "\x00")
-		}
-		if len(runtimeGlobals) != 0 {
-			// This sets the global variables like they would be set with
-			// `-ldflags="-X=runtime.osArgs=first\x00second`.
-			// The runtime package has two variables (osArgs and osEnv) that are
-			// both strings, from which the parameters and environment variables
-			// are read.
-			options.GlobalValues = map[string]map[string]string{
-				"runtime": runtimeGlobals,
-			}
-		}
-	}
+
+	// make sure any special vars in the emulator definition are rewritten
+	emulator := config.Emulator()
 
 	// Build the test binary.
-	binary := filepath.Join(tmpdir, "test")
-	if spec.GOOS == "windows" {
-		binary += ".exe"
-	}
-	err = Build("./"+path, binary, &options)
+	stdout := &bytes.Buffer{}
+	err = buildAndRun("./"+path, config, stdout, cmdArgs, environmentVars, time.Minute)
 	if err != nil {
 		printCompilerError(t.Log, err)
 		t.Fail()
 		return
-	}
-
-	// Reserve CPU time for the test to run.
-	// This attempts to ensure that the test is not CPU-starved.
-	options.Semaphore <- struct{}{}
-	defer func() { <-options.Semaphore }()
-
-	// Create the test command, taking care of emulators etc.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	var cmd *exec.Cmd
-
-	// make sure any special vars in the emulator definition are rewritten
-	config := compileopts.Config{Target: spec}
-	emulator := config.Emulator()
-
-	if len(emulator) == 0 {
-		cmd = exec.CommandContext(ctx, binary)
-	} else {
-		args := append(emulator[1:], binary)
-		cmd = exec.CommandContext(ctx, emulator[0], args...)
-	}
-
-	if len(emulator) != 0 && emulator[0] == "wasmtime" {
-		// Allow reading from the current directory.
-		cmd.Args = append(cmd.Args, "--dir=.")
-		for _, v := range environmentVars {
-			cmd.Args = append(cmd.Args, "--env", v)
-		}
-		cmd.Args = append(cmd.Args, cmdArgs...)
-	} else {
-		if !needsEnvInVars {
-			cmd.Args = append(cmd.Args, cmdArgs...) // works on qemu-aarch64 etc
-			cmd.Env = append(cmd.Env, environmentVars...)
-		}
-	}
-
-	// Run the test.
-	stdout := &bytes.Buffer{}
-	if len(emulator) != 0 && emulator[0] == "simavr" {
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = stdout
-	} else {
-		cmd.Stdout = stdout
-		cmd.Stderr = os.Stderr
-	}
-	err = cmd.Start()
-	if err != nil {
-		t.Fatal("failed to start:", err)
-	}
-	err = cmd.Wait()
-
-	if cerr := ctx.Err(); cerr == context.DeadlineExceeded {
-		stdout.WriteString("--- test ran too long, terminating...\n")
-		err = cerr
 	}
 
 	// putchar() prints CRLF, convert it to LF.
