@@ -709,13 +709,13 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 // the options, it will run the program directly on the host or will run it in
 // an emulator. For example, -target=wasm will cause the binary to be run inside
 // of a WebAssembly VM.
-func Run(pkgName string, options *compileopts.Options) error {
+func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
 
-	return buildAndRun(pkgName, config, os.Stdout, nil, nil, 0)
+	return buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0)
 }
 
 // buildAndRun builds and runs the given program, writing output to stdout and
@@ -1495,13 +1495,13 @@ func main() {
 			handleCompilerError(err)
 		}
 	case "run":
-		if flag.NArg() != 1 {
+		if flag.NArg() < 1 {
 			fmt.Fprintln(os.Stderr, "No package specified.")
 			usage(command)
 			os.Exit(1)
 		}
 		pkgName := filepath.ToSlash(flag.Arg(0))
-		err := Run(pkgName, options)
+		err := Run(pkgName, options, flag.Args()[1:])
 		handleCompilerError(err)
 	case "test":
 		var pkgNames []string
