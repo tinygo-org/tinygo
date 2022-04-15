@@ -287,6 +287,7 @@ func (c *Config) CFlags() []string {
 		path, _ := c.LibcPath("picolibc")
 		cflags = append(cflags,
 			"--sysroot="+path,
+			"-isystem", filepath.Join(path, "include"), // necessary for Xtensa
 			"-isystem", filepath.Join(picolibcDir, "include"),
 			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
 		)
