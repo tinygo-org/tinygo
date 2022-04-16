@@ -237,6 +237,8 @@ var (
 	}
 )
 
+// #==================================================================#
+// |                               SPI                                |
 // #===========#==========#===============#===========================#
 // | Interface | Hardware |  Clock(Freq)  | SDI/SDO/SCK/CS  :   Alt   |
 // #===========#==========#===============#=================-=========#
@@ -259,6 +261,70 @@ const (
 	SPI3_SDO_PIN = D35
 	SPI3_SCK_PIN = D37
 	SPI3_CS_PIN  = D36
+)
+
+var (
+	SPI0  = SPI1 // SPI0 is an alias of SPI1 (LPSPI4)
+	SPI1  = &_SPI1
+	_SPI1 = SPI{
+		Bus: nxp.LPSPI4,
+		muxSDI: muxSelect{ // D12 (PB1 [B0_01])
+			mux: nxp.IOMUXC_LPSPI4_SDI_SELECT_INPUT_DAISY_GPIO_B0_01_ALT3,
+			sel: &nxp.IOMUXC.LPSPI4_SDI_SELECT_INPUT,
+		},
+		muxSDO: muxSelect{ // D11 (PB2 [B0_02])
+			mux: nxp.IOMUXC_LPSPI4_SDO_SELECT_INPUT_DAISY_GPIO_B0_02_ALT3,
+			sel: &nxp.IOMUXC.LPSPI4_SDO_SELECT_INPUT,
+		},
+		muxSCK: muxSelect{ // D13 (PB3 [B0_03])
+			mux: nxp.IOMUXC_LPSPI4_SCK_SELECT_INPUT_DAISY_GPIO_B0_03_ALT3,
+			sel: &nxp.IOMUXC.LPSPI4_SCK_SELECT_INPUT,
+		},
+		muxCS: muxSelect{ // D10 (PB0 [B0_00])
+			mux: nxp.IOMUXC_LPSPI4_PCS0_SELECT_INPUT_DAISY_GPIO_B0_00_ALT3,
+			sel: &nxp.IOMUXC.LPSPI4_PCS0_SELECT_INPUT,
+		},
+	}
+	SPI2  = &_SPI2
+	_SPI2 = SPI{
+		Bus: nxp.LPSPI3,
+		muxSDI: muxSelect{ // D1 (PA2 [AD_B0_02])
+			mux: nxp.IOMUXC_LPSPI3_SDI_SELECT_INPUT_DAISY_GPIO_AD_B0_02_ALT7,
+			sel: &nxp.IOMUXC.LPSPI3_SDI_SELECT_INPUT,
+		},
+		muxSDO: muxSelect{ // D26 (PA30 [AD_B1_14])
+			mux: nxp.IOMUXC_LPSPI3_SDO_SELECT_INPUT_DAISY_GPIO_AD_B1_14_ALT2,
+			sel: &nxp.IOMUXC.LPSPI3_SDO_SELECT_INPUT,
+		},
+		muxSCK: muxSelect{ // D27 (PA31 [AD_B1_15])
+			mux: nxp.IOMUXC_LPSPI3_SCK_SELECT_INPUT_DAISY_GPIO_AD_B1_15,
+			sel: &nxp.IOMUXC.LPSPI3_SCK_SELECT_INPUT,
+		},
+		muxCS: muxSelect{ // D0 (PA3 [AD_B0_03])
+			mux: nxp.IOMUXC_LPSPI3_PCS0_SELECT_INPUT_DAISY_GPIO_AD_B0_03_ALT7,
+			sel: &nxp.IOMUXC.LPSPI3_PCS0_SELECT_INPUT,
+		},
+	}
+	SPI3  = &_SPI3
+	_SPI3 = SPI{
+		Bus: nxp.LPSPI1,
+		muxSDI: muxSelect{ // D34 (PC15 [SD_B0_03])
+			mux: nxp.IOMUXC_LPSPI1_SDI_SELECT_INPUT_DAISY_GPIO_SD_B0_03_ALT4,
+			sel: &nxp.IOMUXC.LPSPI1_SDI_SELECT_INPUT,
+		},
+		muxSDO: muxSelect{ // D35 (PC14 [SD_B0_02])
+			mux: nxp.IOMUXC_LPSPI1_SDO_SELECT_INPUT_DAISY_GPIO_SD_B0_02_ALT4,
+			sel: &nxp.IOMUXC.LPSPI1_SDO_SELECT_INPUT,
+		},
+		muxSCK: muxSelect{ // D37 (PC12 [SD_B0_00])
+			mux: nxp.IOMUXC_LPSPI1_SCK_SELECT_INPUT_DAISY_GPIO_SD_B0_00_ALT4,
+			sel: &nxp.IOMUXC.LPSPI1_SCK_SELECT_INPUT,
+		},
+		muxCS: muxSelect{ // D36 (PC13 [SD_B0_01])
+			mux: nxp.IOMUXC_LPSPI1_PCS0_SELECT_INPUT_DAISY_GPIO_SD_B0_01_ALT4,
+			sel: &nxp.IOMUXC.LPSPI1_PCS0_SELECT_INPUT,
+		},
+	}
 )
 
 // #====================================================#
