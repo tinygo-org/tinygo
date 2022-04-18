@@ -216,7 +216,6 @@ test: wasi-libc
 # Standard library packages that pass tests on darwin, linux, wasi, and windows, but take over a minute in wasi
 TEST_PACKAGES_SLOW = \
 	compress/bzip2 \
-	compress/flate \
 	crypto/dsa \
 	index/suffixarray \
 
@@ -269,10 +268,12 @@ TEST_PACKAGES_FAST = \
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # io/fs requires os.ReadDir, which is not yet supported on windows or wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
+# compress/flate fails windows go 1.18, https://github.com/tinygo-org/tinygo/issues/2762
 
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
+	compress/flate \
 	debug/dwarf \
 	debug/plan9obj \
 	io/fs \
