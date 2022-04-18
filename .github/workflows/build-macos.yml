@@ -10,7 +10,7 @@ on:
 jobs:
   build-macos:
     name: build-macos
-    runs-on: macos-10.16
+    runs-on: macos-11
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
