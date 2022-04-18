@@ -19,6 +19,24 @@ var (
 )
 
 // The following code is copied from the official implementation.
+// src/internal/poll/fd.go
+
+// ErrDeadlineExceeded is returned for an expired deadline.
+// This is exported by the os package as os.ErrDeadlineExceeded.
+var ErrDeadlineExceeded error = &DeadlineExceededError{}
+
+// DeadlineExceededError is returned for an expired deadline.
+type DeadlineExceededError struct{}
+
+// Implement the net.Error interface.
+// The string is "i/o timeout" because that is what was returned
+// by earlier Go versions. Changing it may break programs that
+// match on error strings.
+func (e *DeadlineExceededError) Error() string   { return "i/o timeout" }
+func (e *DeadlineExceededError) Timeout() bool   { return true }
+func (e *DeadlineExceededError) Temporary() bool { return true }
+
+// The following code is copied from the official implementation.
 // https://github.com/golang/go/blob/4ce6a8e89668b87dce67e2f55802903d6eb9110a/src/os/error.go#L65-L104
 
 func NewSyscallError(syscall string, err error) error {
