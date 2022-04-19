@@ -188,6 +188,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	if err != nil {
 		return err
 	}
+	defer machine.Dispose()
 
 	// Load entire program AST into memory.
 	lprogram, err := loader.Load(config, []string{pkgName}, config.ClangHeaders, types.Config{
@@ -287,6 +288,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				// Compile AST to IR. The compiler.CompilePackage function will
 				// build the SSA as needed.
 				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, program.Package(pkg.Pkg), machine, compilerConfig, config.DumpSSA())
+				defer mod.Context().Dispose()
+				defer mod.Dispose()
 				if errs != nil {
 					return newMultiError(errs)
 				}
@@ -432,6 +435,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 
 	// Add job that links and optimizes all packages together.
 	var mod llvm.Module
+	defer func() {
+		if !mod.IsNil() {
+			ctx := mod.Context()
+			mod.Dispose()
+			ctx.Dispose()
+		}
+	}()
 	var stackSizeLoads []string
 	programJob := &compileJob{
 		description:  "link+optimize packages (LTO)",
@@ -534,6 +544,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			if err != nil {
 				return err
 			}
+			defer llvmBuf.Dispose()
 			return ioutil.WriteFile(outpath, llvmBuf.Bytes(), 0666)
 		case ".bc":
 			var buf llvm.MemoryBuffer

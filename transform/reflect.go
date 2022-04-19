@@ -161,10 +161,12 @@ func LowerReflect(mod llvm.Module) {
 	})
 
 	// Assign typecodes the way the reflect package expects.
-	uintptrType := mod.Context().IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
+	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
+	uintptrType := mod.Context().IntType(targetData.PointerSize() * 8)
 	state := typeCodeAssignmentState{
 		fallbackIndex:                    1,
-		uintptrLen:                       llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8,
+		uintptrLen:                       targetData.PointerSize() * 8,
 		namedBasicTypes:                  make(map[string]int),
 		namedNonBasicTypes:               make(map[string]int),
 		arrayTypes:                       make(map[string]int),

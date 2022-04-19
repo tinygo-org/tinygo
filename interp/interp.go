@@ -50,10 +50,17 @@ func newRunner(mod llvm.Module, debug bool) *runner {
 	return &r
 }
 
+// Dispose deallocates all alloated LLVM resources.
+func (r *runner) dispose() {
+	r.targetData.Dispose()
+	r.targetData = llvm.TargetData{}
+}
+
 // Run evaluates runtime.initAll function as much as possible at compile time.
 // Set debug to true if it should print output while running.
 func Run(mod llvm.Module, debug bool) error {
 	r := newRunner(mod, debug)
+	defer r.dispose()
 
 	initAll := mod.NamedFunction("runtime.initAll")
 	bb := initAll.EntryBasicBlock()
@@ -196,6 +203,7 @@ func RunFunc(fn llvm.Value, debug bool) error {
 	// Create and initialize *runner object.
 	mod := fn.GlobalParent()
 	r := newRunner(mod, debug)
+	defer r.dispose()
 	initName := fn.Name()
 	if !strings.HasSuffix(initName, ".init") {
 		return errorAt(fn, "interp: unexpected function name (expected *.init)")

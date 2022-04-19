@@ -36,8 +36,10 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 	}
 
 	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
 	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
 	builder := mod.Context().NewBuilder()
+	defer builder.Dispose()
 
 	for _, heapalloc := range getUses(allocator) {
 		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())

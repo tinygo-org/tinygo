@@ -15,8 +15,9 @@ import (
 func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needsStackObjects bool, values []llvm.Value) llvm.Value {
 	ctx := mod.Context()
 	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
 	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-	uintptrType := ctx.IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
+	uintptrType := ctx.IntType(targetData.PointerSize() * 8)
 
 	valueTypes := make([]llvm.Type, len(values))
 	for i, value := range values {
@@ -127,8 +128,9 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needs
 func EmitPointerUnpack(builder llvm.Builder, mod llvm.Module, ptr llvm.Value, valueTypes []llvm.Type) []llvm.Value {
 	ctx := mod.Context()
 	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
 	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-	uintptrType := ctx.IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
+	uintptrType := ctx.IntType(targetData.PointerSize() * 8)
 
 	packedType := ctx.StructType(valueTypes, false)
 

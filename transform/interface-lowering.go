@@ -101,19 +101,23 @@ type lowerInterfacesPass struct {
 // before LLVM can work on them. This is done so that a few cleanup passes can
 // run before assigning the final type codes.
 func LowerInterfaces(mod llvm.Module, config *compileopts.Config) error {
+	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
 	p := &lowerInterfacesPass{
 		mod:         mod,
 		config:      config,
 		builder:     mod.Context().NewBuilder(),
 		ctx:         mod.Context(),
-		uintptrType: mod.Context().IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8),
+		uintptrType: mod.Context().IntType(targetData.PointerSize() * 8),
 		types:       make(map[string]*typeInfo),
 		signatures:  make(map[string]*signatureInfo),
 		interfaces:  make(map[string]*interfaceInfo),
 	}
+	defer p.builder.Dispose()
 
 	if config.Debug() {
 		p.dibuilder = llvm.NewDIBuilder(mod)
+		defer p.dibuilder.Destroy()
 		defer p.dibuilder.Finalize()
 		p.difiles = make(map[string]llvm.Metadata)
 	}

@@ -301,6 +301,7 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 			}),
 		)
 		c.dibuilder.Finalize()
+		c.dibuilder.Destroy()
 	}
 
 	return c.mod, c.diagnostics
