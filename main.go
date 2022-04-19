@@ -200,8 +200,26 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		return false, err
 	}
 
+	// Pass test flags to the test binary.
+	var flags []string
+	if testVerbose {
+		flags = append(flags, "-test.v")
+	}
+	if testShort {
+		flags = append(flags, "-test.short")
+	}
+	if testRunRegexp != "" {
+		flags = append(flags, "-test.run="+testRunRegexp)
+	}
+	if testBenchRegexp != "" {
+		flags = append(flags, "-test.bench="+testBenchRegexp)
+	}
+	if testBenchTime != "" {
+		flags = append(flags, "-test.benchtime="+testBenchTime)
+	}
+
 	passed := false
-	err = builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+	err = buildAndRun(pkgName, config, os.Stdout, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
 		if testCompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
@@ -217,27 +235,53 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			return nil
 		}
 
-		// Run the test.
-		config.Options.Semaphore <- struct{}{}
-		defer func() {
-			<-config.Options.Semaphore
-		}()
-		start := time.Now()
-		var err error
-		passed, err = runPackageTest(config, stdout, stderr, result, testVerbose, testShort, testRunRegexp, testBenchRegexp, testBenchTime)
-		if err != nil {
-			return err
+		// Tests are always run in the package directory.
+		cmd.Dir = result.MainDir
+
+		// Wasmtime needs a few extra flags to work.
+		emulator := config.Emulator()
+		if len(emulator) != 0 && emulator[0] == "wasmtime" {
+			// Add directories to the module root, but skip the current working
+			// directory which is already added by buildAndRun.
+			dirs := dirsToModuleRoot(result.MainDir, result.ModuleRoot)
+			var args []string
+			for _, d := range dirs[1:] {
+				args = append(args, "--dir="+d)
+			}
+
+			// create a new temp directory just for this run, announce it to os.TempDir() via TMPDIR
+			tmpdir, err := ioutil.TempDir("", "tinygotmp")
+			if err != nil {
+				return fmt.Errorf("failed to create temporary directory: %w", err)
+			}
+			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
+			// TODO: add option to not delete temp dir for debugging?
+			defer os.RemoveAll(tmpdir)
+
+			// Insert new argments at the front of the command line argments.
+			args = append(args, cmd.Args[1:]...)
+			cmd.Args = append(cmd.Args[:1:1], args...)
 		}
+
+		// Run the test.
+		start := time.Now()
+		err = cmd.Run()
 		duration := time.Since(start)
 
 		// Print the result.
 		importPath := strings.TrimSuffix(result.ImportPath, ".test")
+		passed = err == nil
 		if passed {
 			fmt.Fprintf(stdout, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
 		} else {
 			fmt.Fprintf(stdout, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 		}
-		return nil
+		if _, ok := err.(*exec.ExitError); ok {
+			// Binary exited with a non-zero exit code, which means the test
+			// failed.
+			return nil
+		}
+		return err
 	})
 	if err, ok := err.(loader.NoTestFilesError); ok {
 		fmt.Fprintf(stdout, "?   \t%s\t[no test files]\n", err.ImportPath)
@@ -258,81 +302,6 @@ func dirsToModuleRoot(maindir, modroot string) []string {
 		maindir = filepath.Dir(maindir)
 	}
 	return dirs
-}
-
-// runPackageTest runs a test binary that was previously built. The return
-// values are whether the test passed and any errors encountered while trying to
-// run the binary.
-func runPackageTest(config *compileopts.Config, stdout, stderr io.Writer, result builder.BuildResult, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string) (bool, error) {
-	var cmd *exec.Cmd
-	emulator := config.Emulator()
-	if len(emulator) == 0 {
-		// Run directly.
-		var flags []string
-		if testVerbose {
-			flags = append(flags, "-test.v")
-		}
-		if testShort {
-			flags = append(flags, "-test.short")
-		}
-		if testRunRegexp != "" {
-			flags = append(flags, "-test.run="+testRunRegexp)
-		}
-		if testBenchRegexp != "" {
-			flags = append(flags, "-test.bench="+testBenchRegexp)
-		}
-		if testBenchTime != "" {
-			flags = append(flags, "-test.benchtime="+testBenchTime)
-		}
-		cmd = executeCommand(config.Options, result.Binary, flags...)
-	} else {
-		// Run in an emulator.
-		args := append(emulator[1:], result.Binary)
-		if emulator[0] == "wasmtime" {
-			// create a new temp directory just for this run, announce it to os.TempDir() via TMPDIR
-			tmpdir, err := ioutil.TempDir("", "tinygotmp")
-			if err != nil {
-				return false, &commandError{"failed to create temporary directory", "tinygotmp", err}
-			}
-			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
-			// TODO: add option to not delete temp dir for debugging?
-			defer os.RemoveAll(tmpdir)
-
-			// allow reading from directories up to module root
-			for _, d := range dirsToModuleRoot(result.MainDir, result.ModuleRoot) {
-				args = append(args, "--dir="+d)
-			}
-
-			// mark end of wasmtime arguments and start of program ones: --
-			args = append(args, "--")
-			if testVerbose {
-				args = append(args, "-test.v")
-			}
-			if testShort {
-				args = append(args, "-test.short")
-			}
-			if testRunRegexp != "" {
-				args = append(args, "-test.run="+testRunRegexp)
-			}
-			if testBenchRegexp != "" {
-				args = append(args, "-test.bench="+testBenchRegexp)
-			}
-		}
-		cmd = executeCommand(config.Options, emulator[0], args...)
-	}
-	cmd.Dir = result.MainDir
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	err := cmd.Run()
-	if err != nil {
-		if _, ok := err.(*exec.ExitError); ok {
-			// Binary exited with a non-zero exit code, which means the test
-			// failed.
-			return false, nil
-		}
-		return false, &commandError{"failed to run compiled binary", result.Binary, err}
-	}
-	return true, nil
 }
 
 // Flash builds and flashes the built binary to the given serial port.
@@ -715,14 +684,16 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 		return err
 	}
 
-	return buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0)
+	return buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		return cmd.Run()
+	})
 }
 
 // buildAndRun builds and runs the given program, writing output to stdout and
 // errors to os.Stderr. It takes care of emulators (qemu, wasmtime, etc) and
 // passes command line arguments and evironment variables in a way appropriate
 // for the given emulator.
-func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration) error {
+func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) error {
 	// make sure any special vars in the emulator definition are rewritten
 	emulator := config.Emulator()
 
@@ -764,7 +735,11 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		for _, v := range environmentVars {
 			args = append(args, "--env", v)
 		}
-		args = append(args, cmdArgs...)
+		if len(cmdArgs) != 0 {
+			// mark end of wasmtime arguments and start of program ones: --
+			args = append(args, "--")
+			args = append(args, cmdArgs...)
+		}
 	} else {
 		// Pass environment variables and command line parameters as usual.
 		// This also works on qemu-aarch64 etc.
@@ -821,11 +796,11 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		if config.Options.PrintCommands != nil {
 			config.Options.PrintCommands(cmd.Path, cmd.Args...)
 		}
-		err := cmd.Run()
+		err := run(cmd, result)
 		if err != nil {
-			if cerr := ctx.Err(); cerr == context.DeadlineExceeded {
+			if ctx != nil && ctx.Err() == context.DeadlineExceeded {
 				stdout.Write([]byte(fmt.Sprintf("--- timeout of %s exceeded, terminating...\n", timeout)))
-				err = cerr
+				err = ctx.Err()
 			}
 			return &commandError{"failed to run compiled binary", result.Binary, err}
 		}

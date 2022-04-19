@@ -332,7 +332,9 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 
 	// Build the test binary.
 	stdout := &bytes.Buffer{}
-	err = buildAndRun("./"+path, config, stdout, cmdArgs, environmentVars, time.Minute)
+	err = buildAndRun("./"+path, config, stdout, cmdArgs, environmentVars, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		return cmd.Run()
+	})
 	if err != nil {
 		printCompilerError(t.Log, err)
 		t.Fail()
