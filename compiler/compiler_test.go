@@ -106,6 +106,7 @@ func TestCompiler(t *testing.T) {
 			if err != nil {
 				t.Fatal("failed to create target machine:", err)
 			}
+			defer machine.Dispose()
 
 			// Load entire program AST into memory.
 			lprogram, err := loader.Load(config, []string{"./testdata/" + tc.file}, config.ClangHeaders, types.Config{

@@ -40,6 +40,7 @@ func TestInterp(t *testing.T) {
 func runTest(t *testing.T, pathPrefix string) {
 	// Read the input IR.
 	ctx := llvm.NewContext()
+	defer ctx.Dispose()
 	buf, err := llvm.NewMemoryBufferFromFile(pathPrefix + ".ll")
 	os.Stat(pathPrefix + ".ll") // make sure this file is tracked by `go test` caching
 	if err != nil {
@@ -49,6 +50,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	if err != nil {
 		t.Fatalf("could not load module:\n%v", err)
 	}
+	defer mod.Dispose()
 
 	// Perform the transform.
 	err = Run(mod, false)

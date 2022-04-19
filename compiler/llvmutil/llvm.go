@@ -34,6 +34,7 @@ func CreateEntryBlockAlloca(builder llvm.Builder, t llvm.Type, name string) llvm
 func CreateTemporaryAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type, name string) (alloca, bitcast, size llvm.Value) {
 	ctx := t.Context()
 	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
 	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 	alloca = CreateEntryBlockAlloca(builder, t, name)
 	bitcast = builder.CreateBitCast(alloca, i8ptrType, name+".bitcast")
@@ -46,6 +47,7 @@ func CreateTemporaryAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type, n
 func CreateInstructionAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type, inst llvm.Value, name string) llvm.Value {
 	ctx := mod.Context()
 	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
 	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 
 	alloca := CreateEntryBlockAlloca(builder, t, name)

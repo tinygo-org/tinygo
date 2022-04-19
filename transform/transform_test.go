@@ -32,6 +32,7 @@ var defaultTestConfig = &compileopts.Config{
 func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Module)) {
 	// Read the input IR.
 	ctx := llvm.NewContext()
+	defer ctx.Dispose()
 	buf, err := llvm.NewMemoryBufferFromFile(pathPrefix + ".ll")
 	os.Stat(pathPrefix + ".ll") // make sure this file is tracked by `go test` caching
 	if err != nil {
@@ -41,6 +42,7 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 	if err != nil {
 		t.Fatalf("could not load module:\n%v", err)
 	}
+	defer mod.Dispose()
 
 	// Perform the transform.
 	transform(mod)
@@ -141,6 +143,7 @@ func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
 	if err != nil {
 		t.Fatal("failed to create target machine:", err)
 	}
+	defer machine.Dispose()
 
 	// Load entire program AST into memory.
 	lprogram, err := loader.Load(config, []string{filename}, config.ClangHeaders, types.Config{

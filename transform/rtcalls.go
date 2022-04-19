@@ -114,7 +114,9 @@ func OptimizeReflectImplements(mod llvm.Module) {
 	defer builder.Dispose()
 
 	// Get a few useful object for use later.
-	uintptrType := mod.Context().IntType(llvm.NewTargetData(mod.DataLayout()).PointerSize() * 8)
+	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
+	uintptrType := mod.Context().IntType(targetData.PointerSize() * 8)
 
 	// Look up the (reflect.Value).Implements() method.
 	var implementsFunc llvm.Value

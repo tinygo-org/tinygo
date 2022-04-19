@@ -33,7 +33,9 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 	ctx := mod.Context()
 	builder := ctx.NewBuilder()
+	defer builder.Dispose()
 	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
 	uintptrType := ctx.IntType(targetData.PointerSize() * 8)
 
 	// Look at *all* functions to see whether they are free of function pointer
@@ -326,6 +328,7 @@ func AddGlobalsBitmap(mod llvm.Module) bool {
 
 	ctx := mod.Context()
 	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
 	uintptrType := ctx.IntType(targetData.PointerSize() * 8)
 
 	// Collect all globals that contain pointers (and thus must be scanned by
