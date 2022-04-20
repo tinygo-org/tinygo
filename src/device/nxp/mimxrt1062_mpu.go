@@ -142,18 +142,14 @@ func (mpu *MPU_Type) Enable(enable bool) {
 	if enable {
 		mpu.CTRL.Set(MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk)
 		SystemControl.SHCSR.SetBits(SCB_SHCSR_MEMFAULTENA_Msk)
-		arm.AsmFull(`
-      dsb 0xF
-      isb 0xF
-    `, nil)
+		arm.Asm("dsb 0xF")
+		arm.Asm("isb 0xF")
 		enableDcache(true)
 		enableIcache(true)
 	} else {
 		enableIcache(false)
 		enableDcache(false)
-		arm.AsmFull(`
-      dmb 0xF
-    `, nil)
+		arm.Asm("dmb 0xF")
 		SystemControl.SHCSR.ClearBits(SCB_SHCSR_MEMFAULTENA_Msk)
 		mpu.CTRL.ClearBits(MPU_CTRL_ENABLE_Msk)
 	}
@@ -188,31 +184,21 @@ func (mpu *MPU_Type) SetRASR(size RegionSize, access AccessPerms, ext Extension,
 func enableIcache(enable bool) {
 	if enable != SystemControl.CCR.HasBits(SCB_CCR_IC_Msk) {
 		if enable {
-			arm.AsmFull(`
-        dsb 0xF
-        isb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
+			arm.Asm("isb 0xF")
 			SystemControl.ICIALLU.Set(0)
-			arm.AsmFull(`
-        dsb 0xF
-        isb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
+			arm.Asm("isb 0xF")
 			SystemControl.CCR.SetBits(SCB_CCR_IC_Msk)
-			arm.AsmFull(`
-        dsb 0xF
-        isb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
+			arm.Asm("isb 0xF")
 		} else {
-			arm.AsmFull(`
-        dsb 0xF
-        isb 0xF
-      `, nil)
+		arm.Asm("dsb 0xF")
+		arm.Asm("isb 0xF")
 			SystemControl.CCR.ClearBits(SCB_CCR_IC_Msk)
 			SystemControl.ICIALLU.Set(0)
-			arm.AsmFull(`
-        dsb 0xF
-        isb 0xF
-      `, nil)
+		arm.Asm("dsb 0xF")
+		arm.Asm("isb 0xF")
 		}
 	}
 }
@@ -227,9 +213,7 @@ func enableDcache(enable bool) {
 	if enable != SystemControl.CCR.HasBits(SCB_CCR_DC_Msk) {
 		if enable {
 			SystemControl.CSSELR.Set(0)
-			arm.AsmFull(`
-        dsb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
 			ccsidr := SystemControl.CCSIDR.Get()
 			sets := (ccsidr & SCB_CCSIDR_NUMSETS_Msk) >> SCB_CCSIDR_NUMSETS_Pos
 			for sets != 0 {
@@ -242,23 +226,15 @@ func enableDcache(enable bool) {
 				}
 				sets--
 			}
-			arm.AsmFull(`
-        dsb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
 			SystemControl.CCR.SetBits(SCB_CCR_DC_Msk)
-			arm.AsmFull(`
-        dsb 0xF
-        isb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
+			arm.Asm("isb 0xF")
 		} else {
 			SystemControl.CSSELR.Set(0)
-			arm.AsmFull(`
-        dsb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
 			SystemControl.CCR.ClearBits(SCB_CCR_DC_Msk)
-			arm.AsmFull(`
-        dsb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
 			dcacheCcsidr.Set(SystemControl.CCSIDR.Get())
 			dcacheSets.Set((dcacheCcsidr.Get() & SCB_CCSIDR_NUMSETS_Msk) >> SCB_CCSIDR_NUMSETS_Pos)
 			for dcacheSets.Get() != 0 {
@@ -271,10 +247,8 @@ func enableDcache(enable bool) {
 				}
 				dcacheSets.Set(dcacheSets.Get() - 1)
 			}
-			arm.AsmFull(`
-        dsb 0xF
-        isb 0xF
-      `, nil)
+			arm.Asm("dsb 0xF")
+			arm.Asm("isb 0xF")
 		}
 	}
 }
