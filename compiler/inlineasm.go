@@ -98,7 +98,10 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 			case llvm.IntegerTypeKind:
 				constraints = append(constraints, "r")
 			case llvm.PointerTypeKind:
-				constraints = append(constraints, "*m")
+				// Memory references require a type in LLVM 14, probably as a
+				// preparation for opaque pointers.
+				err = b.makeError(instr.Pos(), "support for pointer operands was dropped in TinyGo 0.23")
+				return s
 			default:
 				err = b.makeError(instr.Pos(), "unknown type in inline assembly for value: "+name)
 				return s
