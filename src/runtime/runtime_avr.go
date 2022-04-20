@@ -77,14 +77,6 @@ func nanosecondsToTicks(ns int64) timeUnit {
 // Sleep this number of ticks of nanoseconds.
 func sleepTicks(d timeUnit) {
 	waitTill := ticks() + d
-	// recalibrate if we have some time (>100ms) and it was a while when we did it last time.
-	if d > 100000 {
-		now := waitTill - d
-		if nextTimerRecalibrate < now {
-			nextTimerRecalibrate = now + timerRecalibrateInterval
-			adjustMonotonicTimer()
-		}
-	}
 	for {
 		// wait for interrupt
 		avr.Asm("sleep")
@@ -120,18 +112,17 @@ func abort() {
 	}
 }
 
-var ticksCount int64        // nanoseconds since start
-var nanosecondsInTick int64 // nanoseconds per each tick
+var ticksCount int64                // nanoseconds since start
+var nanosecondsInTick int64 = 16000 // nanoseconds per each tick
 
 func initMonotonicTimer() {
-	nanosecondsInTick = 0
 	ticksCount = 0
 
 	interrupt.New(avr.IRQ_TIMER0_OVF, func(i interrupt.Interrupt) {
 		// use volatile
-		increment := volatile.LoadUint64((*uint64)(unsafe.Pointer(&nanosecondsInTick)))
 		ticks := volatile.LoadUint64((*uint64)(unsafe.Pointer(&ticksCount)))
-		volatile.StoreUint64((*uint64)(unsafe.Pointer(&ticksCount)), ticks+increment)
+		ticks += uint64(nanosecondsInTick)
+		volatile.StoreUint64((*uint64)(unsafe.Pointer(&ticksCount)), ticks)
 	})
 
 	// initial initialization of the Timer0
@@ -146,8 +137,6 @@ func initMonotonicTimer() {
 	// - Set prescaler 1
 	avr.TCCR0B.Set(avr.TCCR0B_CS00)
 
-	adjustMonotonicTimer()
-
 	// - Unmask interrupt
 	avr.TIMSK0.SetBits(avr.TIMSK0_TOIE0)
 }
@@ -155,7 +144,9 @@ func initMonotonicTimer() {
 //go:linkname adjustMonotonicTimer machine.adjustMonotonicTimer
 func adjustMonotonicTimer() {
 	// adjust the nanosecondsInTick using volatile
+	mask := interrupt.Disable()
 	volatile.StoreUint64((*uint64)(unsafe.Pointer(&nanosecondsInTick)), uint64(currentNanosecondsInTick()))
+	interrupt.Restore(mask)
 }
 
 func currentNanosecondsInTick() int64 {
