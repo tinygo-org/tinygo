@@ -1,0 +1,6 @@
+fn ccc ()->() in default {
+entry: (height: 0)
+	ptr(in default, idx i32) %0 = ptr(in default, idx i32) alloca i32 2 of i32 align 4
+	br [to ret, φ()]
+ret: (height: 0)
+}

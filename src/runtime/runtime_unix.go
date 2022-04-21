@@ -68,8 +68,6 @@ var stackTop uintptr
 // Entry point for Go. Initialize all packages and call main.main().
 //export main
 func main(argc int32, argv *unsafe.Pointer) int {
-	preinit()
-
 	// Store argc and argv for later use.
 	main_argc = argc
 	main_argv = argv
@@ -210,16 +208,17 @@ func procPin() {
 func procUnpin() {
 }
 
-var heapSize uintptr = 128 * 1024 // small amount to start
+var heapSize uintptr
 var heapMaxSize uintptr
 
 var heapStart, heapEnd uintptr
 
-func preinit() {
+func preInitHeap() {
 	// Allocate a large chunk of virtual memory. Because it is virtual, it won't
 	// really be allocated in RAM. Memory will only be allocated when it is
 	// first touched.
 	heapMaxSize = 1 * 1024 * 1024 * 1024 // 1GB for the entire heap
+	heapSize = 128 * 1024                // small amount to start
 	for {
 		addr := mmap(nil, heapMaxSize, flag_PROT_READ|flag_PROT_WRITE, flag_MAP_PRIVATE|flag_MAP_ANONYMOUS, -1, 0)
 		if addr == unsafe.Pointer(^uintptr(0)) {

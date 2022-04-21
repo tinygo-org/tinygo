@@ -80,6 +80,7 @@ define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %context) {
   ret i32 %ret
 }
 
+; Function Attrs: nounwind
 define internal i32 @"Doubler.Double$invoke"(i8* %receiver, i32 %actualType, i8* %context) unnamed_addr #0 {
 entry:
   %"named:Number.icmp" = icmp eq i32 %actualType, ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32)
@@ -94,6 +95,7 @@ entry:
   unreachable
 }
 
+; Function Attrs: nounwind
 define internal i1 @"Doubler$typeassert"(i32 %actualType) unnamed_addr #1 {
 entry:
   %"named:Number.icmp" = icmp eq i32 %actualType, ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32)
@@ -106,6 +108,7 @@ then:                                             ; preds = %entry
   ret i1 false
 }
 
+; Function Attrs: nounwind
 define internal i1 @"Unmatched$typeassert"(i32 %actualType) unnamed_addr #2 {
 entry:
   ret i1 false
@@ -114,6 +117,6 @@ then:                                             ; No predecessors!
   ret i1 true
 }
 
-attributes #0 = { "tinygo-invoke"="reflect/methods.Double() int" "tinygo-methods"="reflect/methods.Double() int" }
-attributes #1 = { "tinygo-methods"="reflect/methods.Double() int" }
-attributes #2 = { "tinygo-methods"="reflect/methods.NeverImplementedMethod()" }
+attributes #0 = { nounwind "tinygo-invoke"="reflect/methods.Double() int" "tinygo-methods"="reflect/methods.Double() int" }
+attributes #1 = { nounwind "tinygo-methods"="reflect/methods.Double() int" }
+attributes #2 = { nounwind "tinygo-methods"="reflect/methods.NeverImplementedMethod()" }

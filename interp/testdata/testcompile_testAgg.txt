@@ -1,0 +1,5 @@
+fn ccc ({0: ptr(in default, idx i32), 4: i32, 8: i32} {0: ptr(in default, idx i32) %0, 4: i32 %1, 8: i32 %2})->({0: ptr(in default, idx i32), 4: i32, 8: i32} {0: ptr(in default, idx i32) %0, 4: i32 %1, 8: i32 %2}) in default {
+entry: (height: 3)
+	br [to ret, φ(ptr(in default, idx i32) %0, i32 0, i32 %2)]
+ret: (height: 3)
+}

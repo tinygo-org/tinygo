@@ -12,7 +12,7 @@ import (
 )
 
 // Ever-incrementing pointer: no memory is freed.
-var heapptr = heapStart
+var heapptr uintptr
 
 // Inlining alloc() speeds things up slightly but bloats the executable by 50%,
 // see https://github.com/tinygo-org/tinygo/issues/2674.  So don't.
@@ -66,7 +66,8 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 }
 
 func initHeap() {
-	// preinit() may have moved heapStart; reset heapptr
+	preInitHeap()
+
 	ptr := heapStart
 	if GOARCH == "wasm" {
 		// llvm11 and llvm12 do not correctly align the heap on wasm

@@ -48,7 +48,7 @@ func hashmapTopHash(hash uint32) uint8 {
 }
 
 // Create a new hashmap with the given keySize and valueSize.
-func hashmapMake(keySize, valueSize uint8, sizeHint uintptr) *hashmap {
+func hashmapMake(keySize, valueSize uint8, sizeHint uintptr, layout unsafe.Pointer) *hashmap {
 	numBuckets := sizeHint / 8
 	bucketBits := uint8(0)
 	for numBuckets != 0 {
@@ -56,7 +56,7 @@ func hashmapMake(keySize, valueSize uint8, sizeHint uintptr) *hashmap {
 		bucketBits++
 	}
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(keySize)*8 + uintptr(valueSize)*8
-	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
+	buckets := alloc(bucketBufSize*(1<<bucketBits), layout)
 	return &hashmap{
 		buckets:    buckets,
 		keySize:    keySize,
@@ -83,12 +83,12 @@ func hashmapLenUnsafePointer(p unsafe.Pointer) int {
 
 // Set a specified key to a given value. Grow the map if necessary.
 //go:nobounds
-func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) {
+func hashmapSet(m *hashmap, key, value, layout unsafe.Pointer, hash uint32, keyEqual func(x, y unsafe.Pointer, n uintptr) bool) {
 	tophash := hashmapTopHash(hash)
 
 	if m.buckets == nil {
 		// No bucket was allocated yet, do so now.
-		m.buckets = unsafe.Pointer(hashmapInsertIntoNewBucket(m, key, value, tophash))
+		m.buckets = unsafe.Pointer(hashmapInsertIntoNewBucket(m, key, value, layout, tophash))
 		return
 	}
 
@@ -131,7 +131,7 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 	if emptySlotKey == nil {
 		// Add a new bucket to the bucket chain.
 		// TODO: rebalance if necessary to avoid O(n) insert and lookup time.
-		lastBucket.next = (*hashmapBucket)(hashmapInsertIntoNewBucket(m, key, value, tophash))
+		lastBucket.next = (*hashmapBucket)(hashmapInsertIntoNewBucket(m, key, value, layout, tophash))
 		return
 	}
 	m.count++
@@ -142,9 +142,9 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 
 // hashmapInsertIntoNewBucket creates a new bucket, inserts the given key and
 // value into the bucket, and returns a pointer to this bucket.
-func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash uint8) *hashmapBucket {
+func hashmapInsertIntoNewBucket(m *hashmap, key, value, layout unsafe.Pointer, tophash uint8) *hashmapBucket {
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
-	bucketBuf := alloc(bucketBufSize, nil)
+	bucketBuf := alloc(bucketBufSize, layout)
 	// Insert into the first slot, which is empty as it has just been allocated.
 	slotKeyOffset := unsafe.Sizeof(hashmapBucket{})
 	slotKey := unsafe.Pointer(uintptr(bucketBuf) + slotKeyOffset)
@@ -293,10 +293,10 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 
 // Hashmap with plain binary data keys (not containing strings etc.).
 
-func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
+func hashmapBinarySet(m *hashmap, key, value, layout unsafe.Pointer) {
 	// TODO: detect nil map here and throw a better panic message?
 	hash := hash32(key, uintptr(m.keySize))
-	hashmapSet(m, key, value, hash, memequal)
+	hashmapSet(m, key, value, layout, hash, memequal)
 }
 
 func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) bool {
@@ -327,9 +327,9 @@ func hashmapStringHash(s string) uint32 {
 	return hash32(unsafe.Pointer(_s.ptr), uintptr(_s.length))
 }
 
-func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
+func hashmapStringSet(m *hashmap, key string, value, layout unsafe.Pointer) {
 	hash := hashmapStringHash(key)
-	hashmapSet(m, unsafe.Pointer(&key), value, hash, hashmapStringEqual)
+	hashmapSet(m, unsafe.Pointer(&key), value, layout, hash, hashmapStringEqual)
 }
 
 func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize uintptr) bool {
@@ -431,9 +431,9 @@ func hashmapInterfaceEqual(x, y unsafe.Pointer, n uintptr) bool {
 	return *(*interface{})(x) == *(*interface{})(y)
 }
 
-func hashmapInterfaceSet(m *hashmap, key interface{}, value unsafe.Pointer) {
+func hashmapInterfaceSet(m *hashmap, key interface{}, value, layout unsafe.Pointer) {
 	hash := hashmapInterfaceHash(key)
-	hashmapSet(m, unsafe.Pointer(&key), value, hash, hashmapInterfaceEqual)
+	hashmapSet(m, unsafe.Pointer(&key), value, layout, hash, hashmapInterfaceEqual)
 }
 
 func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer, valueSize uintptr) bool {

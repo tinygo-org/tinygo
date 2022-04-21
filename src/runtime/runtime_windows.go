@@ -43,8 +43,6 @@ func __p___argv() **unsafe.Pointer
 
 //export mainCRTStartup
 func mainCRTStartup() int {
-	preinit()
-
 	// Obtain the initial stack pointer right before calling the run() function.
 	// The run function has been moved to a separate (non-inlined) function so
 	// that the correct stack pointer is read.
@@ -93,12 +91,12 @@ func putchar(c byte) {
 	libc_putchar(int(c))
 }
 
-var heapSize uintptr = 128 * 1024 // small amount to start
+var heapSize uintptr
 var heapMaxSize uintptr
 
 var heapStart, heapEnd uintptr
 
-func preinit() {
+func preInitHeap() {
 	// Allocate a large chunk of virtual memory. Because it is virtual, it won't
 	// really be allocated in RAM. Memory will only be allocated when it is
 	// first touched.
@@ -109,6 +107,7 @@ func preinit() {
 		PAGE_READWRITE = 0x04
 	)
 	heapStart = uintptr(_VirtualAlloc(nil, heapMaxSize, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE))
+	heapSize = 128 * 1024 // small amount to start
 	heapEnd = heapStart + heapSize
 }
 

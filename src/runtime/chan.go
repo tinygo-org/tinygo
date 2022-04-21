@@ -129,11 +129,11 @@ type channel struct {
 
 // chanMake creates a new channel with the given element size and buffer length in number of elements.
 // This is a compiler intrinsic.
-func chanMake(elementSize uintptr, bufSize uintptr) *channel {
+func chanMake(elementSize uintptr, bufSize uintptr, layout unsafe.Pointer) *channel {
 	return &channel{
 		elementSize: elementSize,
 		bufSize:     bufSize,
-		buf:         alloc(elementSize*bufSize, nil),
+		buf:         alloc(elementSize*bufSize, layout),
 	}
 }
 

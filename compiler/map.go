@@ -3,8 +3,10 @@ package compiler
 // This file emits the correct map intrinsics for map operations.
 
 import (
+	"fmt"
 	"go/token"
 	"go/types"
+	"math/big"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -41,7 +43,8 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 			return llvm.Value{}, err
 		}
 	}
-	hashmap := b.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint}, "")
+	layoutValue := b.createMapLayout(llvmKeyType, llvmValueType, expr.Pos())
+	hashmap := b.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint, layoutValue}, "")
 	return hashmap, nil
 }
 
@@ -109,19 +112,22 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 
 // createMapUpdate updates a map key to a given value, by creating an
 // appropriate runtime call.
-func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) {
+func (b *builder) createMapUpdate(keyType, elemType types.Type, m, key, value llvm.Value, pos token.Pos) {
 	valueAlloca, valuePtr, valueSize := b.createTemporaryAlloca(value.Type(), "hashmap.value")
 	b.CreateStore(value, valueAlloca)
 	keyType = keyType.Underlying()
+	elemType = elemType.Underlying()
+	layoutValue := b.createMapLayout(b.getLLVMType(keyType), b.getLLVMType(elemType), pos)
+
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
-		params := []llvm.Value{m, key, valuePtr}
+		params := []llvm.Value{m, key, valuePtr, layoutValue}
 		b.createRuntimeCall("hashmapStringSet", params, "")
 	} else if hashmapIsBinaryKey(keyType) {
 		// key can be compared with runtime.memequal
 		keyAlloca, keyPtr, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
-		params := []llvm.Value{m, keyPtr, valuePtr}
+		params := []llvm.Value{m, keyPtr, valuePtr, layoutValue}
 		b.createRuntimeCall("hashmapBinarySet", params, "")
 		b.emitLifetimeEnd(keyPtr, keySize)
 	} else {
@@ -131,7 +137,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 			// Not already an interface, so convert it to an interface first.
 			itfKey = b.createMakeInterface(key, keyType, pos)
 		}
-		params := []llvm.Value{m, itfKey, valuePtr}
+		params := []llvm.Value{m, itfKey, valuePtr, layoutValue}
 		b.createRuntimeCall("hashmapInterfaceSet", params, "")
 	}
 	b.emitLifetimeEnd(valuePtr, valueSize)
@@ -250,4 +256,87 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 	default:
 		return false
 	}
+}
+
+// Returns the size in bytes and the bitmap for a hashmap's bucket allocation
+// given the pointer size and sizes and bitmaps for the key and element.
+func hashmapBucketLayout(
+	pointerSize, pointerAlign uint64,
+	tSizeBytes uint64, tbitmap *big.Int,
+	eSizeBytes uint64, ebitmap *big.Int,
+) (uint64, *big.Int) {
+	t := Bits{
+		uint(tSizeBytes / pointerAlign),
+		tbitmap,
+	}
+	e := Bits{
+		uint(eSizeBytes / pointerAlign),
+		ebitmap,
+	}
+	t.AssertValidBitLen()
+	e.AssertValidBitLen()
+
+	// Currently, a hashmap bucket is some overhead followed by 8 keys followed by 8 values.
+	// The overhead consists of 8 bytes followed by a pointer field.
+	//
+	// From src/runtime/hashmap.go: func hashmapInsertIntoNewBucket
+	//		bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
+	//
+	//		type hashmapBucket struct {
+	//			tophash [8]uint8
+	//			next    *hashmapBucket // next bucket (if there are more than 8 in a chain)
+	//			// Followed by the actual keys, and then the actual values. These are
+	//			// allocated but as they're of variable size they can't be shown here.
+	//		}
+	//
+	//		So the overhead is 8 bytes plus the size of a uintptr (aka pointerSize).
+	//		Will assume the alignment is taken care of by 8 bytes always preceding the 'next' pointer.
+
+	tophash := Repeat(Zero(), 8/uint(pointerAlign))
+	next := One()
+	if pointerSize > pointerAlign {
+		// Assuming the size of an alloc layout parameter represents the alignment were
+		// a pointer can start, rather than the words that back-to-back pointers would
+		// occupy, as is the case for the AVR where pointers can start on any byte but
+		// are 2 bytes long: we want a bitmap of '1' followed by as many zeros as there
+		// are surplus pointerSize bytes over the pointerAlign. For the AVR, this would
+		// make next bitmap '10' and have a size of 2.
+		next = Concat(One(), Repeat(Zero(), uint(pointerSize-pointerAlign)))
+	} else if pointerSize < pointerAlign {
+		println(pointerSize, pointerAlign)
+		panic("we don't know how to create a layout yet when a pointer's size is smaller than it's alignment")
+	}
+	key := t
+	if tSizeBytes < pointerAlign {
+		key = Repeat(Zero(), uint((8*tSizeBytes)/pointerAlign))
+	} else {
+		key = By8(key)
+	}
+	elem := e
+	if eSizeBytes < pointerAlign {
+		elem = Repeat(Zero(), uint((8*eSizeBytes)/pointerAlign))
+	} else {
+		elem = By8(elem)
+	}
+
+	// Bucket represents the hashmap bucket layout.
+	bucket := Concat(tophash, next, key, elem)
+
+	// Each bit in a Bit represents a word in an allocation layout. A word is the same size as a
+	// pointer. The overhead is thus the number of words in [8]uint8 and a pointer word.
+
+	sizeBytes := uint64(bucket.Size()) * pointerAlign
+	{
+		// TODO A little extra sanity checking. Probably not worth keeping in
+		// the long run as the actual allocation size will be tested to be a
+		// multiple of the layout's advertised size anyway. While this is new,
+		// it can't hurt.
+		// Thu Mar 17 17:14:33 EDT 2022
+		expectedSize := 8 + pointerAlign + 8*tSizeBytes + 8*eSizeBytes
+		if expectedSize != sizeBytes {
+			println(tSizeBytes, eSizeBytes, pointerAlign)
+			panic(fmt.Sprintf("expectedSize != sizeBytes, %d, %d", expectedSize, sizeBytes))
+		}
+	}
+	return sizeBytes, bucket.Int()
 }

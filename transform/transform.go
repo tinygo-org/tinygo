@@ -13,6 +13,8 @@
 package transform
 
 import (
+	"strings"
+
 	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
@@ -34,5 +36,10 @@ func AddStandardAttributes(fn llvm.Value, config *compileopts.Config) {
 	}
 	if config.Features() != "" {
 		fn.AddFunctionAttr(ctx.CreateStringAttribute("target-features", config.Features()))
+	}
+	fn.AddFunctionAttr(ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
+	if strings.Split(config.Triple(), "-")[0] == "x86_64" {
+		// Required by the ABI.
+		fn.AddFunctionAttr(ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
 	}
 }
