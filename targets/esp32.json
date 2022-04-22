@@ -15,5 +15,7 @@
 		"src/internal/task/task_stack_esp32.S"
 	],
 	"binary-format": "esp32",
-	"flash-command": "esptool.py --chip=esp32 --port {port} write_flash 0x1000 {bin} -ff 80m -fm dout"
+	"flash-command": "esptool.py --chip=esp32 --port {port} write_flash 0x1000 {bin} -ff 80m -fm dout",
+	"emulator": "qemu-system-xtensa -machine esp32 -nographic -drive file={img},if=mtd,format=raw",
+	"gdb": ["xtensa-esp32-elf-gdb"]
 }

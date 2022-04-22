@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sort"
+	"strings"
 )
 
 type espImageSegment struct {
@@ -78,15 +79,31 @@ func makeESPFirmareImage(infile, outfile, format string) error {
 	// An added benefit is that we don't need to check for errors all the time.
 	outf := &bytes.Buffer{}
 
+	// Separate esp32 and esp32-img. The -img suffix indicates we should make an
+	// image, not just a binary to be flashed at 0x1000 for example.
+	chip := format
+	makeImage := false
+	if strings.HasSuffix(format, "-img") {
+		makeImage = true
+		chip = format[:len(format)-len("-img")]
+	}
+
+	if makeImage {
+		// The bootloader starts at 0x1000, or 4096.
+		// TinyGo doesn't use a separate bootloader and runs the entire
+		// application in the bootloader location.
+		outf.Write(make([]byte, 4096))
+	}
+
 	// Chip IDs. Source:
 	// https://github.com/espressif/esp-idf/blob/v4.3/components/bootloader_support/include/esp_app_format.h#L22
 	chip_id := map[string]uint16{
 		"esp32":   0x0000,
 		"esp32c3": 0x0005,
-	}[format]
+	}[chip]
 
 	// Image header.
-	switch format {
+	switch chip {
 	case "esp32", "esp32c3":
 		// Header format:
 		// https://github.com/espressif/esp-idf/blob/v4.3/components/bootloader_support/include/esp_app_format.h#L71
@@ -155,10 +172,20 @@ func makeESPFirmareImage(infile, outfile, format string) error {
 	outf.Write(make([]byte, 15-outf.Len()%16))
 	outf.WriteByte(checksum)
 
-	if format != "esp8266" {
+	if chip != "esp8266" {
 		// SHA256 hash (to protect against image corruption, not for security).
 		hash := sha256.Sum256(outf.Bytes())
 		outf.Write(hash[:])
+	}
+
+	// QEMU (or more precisely, qemu-system-xtensa from Espressif) expects the
+	// image to be a certain size.
+	if makeImage {
+		// Use a default image size of 4MB.
+		grow := 4096*1024 - outf.Len()
+		if grow > 0 {
+			outf.Write(make([]byte, grow))
+		}
 	}
 
 	// Write the image to the output file.

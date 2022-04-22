@@ -37,8 +37,14 @@ import (
 // BuildResult is the output of a build. This includes the binary itself and
 // some other metadata that is obtained while building the binary.
 type BuildResult struct {
+	// The executable directly from the linker, usually including debug
+	// information. Used for GDB for example.
+	Executable string
+
 	// A path to the output binary. It will be removed after Build returns, so
 	// if it should be kept it must be copied or moved away.
+	// It is often the same as Executable, but differs if the output format is
+	// .hex for example (instead of the usual ELF).
 	Binary string
 
 	// The directory of the main package. This is useful for testing as the test
@@ -835,7 +841,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		if err != nil {
 			return err
 		}
-	case "esp32", "esp32c3", "esp8266":
+	case "esp32", "esp32-img", "esp32c3", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
 		tmppath = filepath.Join(dir, "main"+outext)
@@ -867,6 +873,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	}
 
 	return action(BuildResult{
+		Executable: executable,
 		Binary:     tmppath,
 		MainDir:    lprogram.MainPkg().Dir,
 		ModuleRoot: moduleroot,
