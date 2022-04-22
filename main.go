@@ -634,7 +634,7 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		// Construct and execute a gdb or lldb command.
 		// By default: gdb -ex run <binary>
 		// Exit the debugger with Ctrl-D.
-		params := []string{result.Binary}
+		params := []string{result.Executable}
 		switch debugger {
 		case "gdb":
 			if port != "" {
@@ -668,7 +668,7 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		if err != nil {
-			return &commandError{"failed to run " + cmdName + " with", result.Binary, err}
+			return &commandError{"failed to run " + cmdName + " with", result.Executable, err}
 		}
 		return nil
 	})

@@ -395,6 +395,13 @@ func (c *Config) BinaryFormat(ext string) string {
 			return c.Target.BinaryFormat
 		}
 		return "bin"
+	case ".img":
+		// Image file. Only defined for the ESP32 at the moment, where it is a
+		// full (runnable) image that can be used in the Espressif QEMU fork.
+		if c.Target.BinaryFormat != "" {
+			return c.Target.BinaryFormat + "-img"
+		}
+		return "bin"
 	case ".hex":
 		// Similar to bin, but includes the start address and is thus usually a
 		// better format.
@@ -507,9 +514,14 @@ func (c *Config) EmulatorName() string {
 
 // EmulatorFormat returns the binary format for the emulator and the associated
 // file extension. An empty string means to pass directly whatever the linker
-// produces directly without conversion.
+// produces directly without conversion (usually ELF format).
 func (c *Config) EmulatorFormat() (format, fileExt string) {
-	return "", ""
+	switch {
+	case strings.Contains(c.Target.Emulator, "{img}"):
+		return "img", ".img"
+	default:
+		return "", ""
+	}
 }
 
 // Emulator returns a ready-to-run command to run the given binary in an
