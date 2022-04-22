@@ -223,7 +223,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest(name, options, t, nil, nil)
 		})
 	}
-	if len(spec.Emulator) == 0 || spec.Emulator[0] != "simavr" {
+	if !strings.HasPrefix(spec.Emulator, "simavr ") {
 		t.Run("env.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
@@ -257,8 +257,8 @@ func emuCheck(t *testing.T, options compileopts.Options) {
 	if err != nil {
 		t.Fatal("failed to load target spec:", err)
 	}
-	if len(spec.Emulator) != 0 {
-		_, err := exec.LookPath(spec.Emulator[0])
+	if spec.Emulator != "" {
+		_, err := exec.LookPath(strings.SplitN(spec.Emulator, " ", 2)[0])
 		if err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
 				t.Skipf("emulator not installed: %q", spec.Emulator[0])
@@ -327,9 +327,6 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		t.Fatal(err)
 	}
 
-	// make sure any special vars in the emulator definition are rewritten
-	emulator := config.Emulator()
-
 	// Build the test binary.
 	stdout := &bytes.Buffer{}
 	err = buildAndRun("./"+path, config, stdout, cmdArgs, environmentVars, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
@@ -345,7 +342,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	actual := bytes.Replace(stdout.Bytes(), []byte{'\r', '\n'}, []byte{'\n'}, -1)
 	expected = bytes.Replace(expected, []byte{'\r', '\n'}, []byte{'\n'}, -1) // for Windows
 
-	if len(emulator) != 0 && emulator[0] == "simavr" {
+	if config.EmulatorName() == "simavr" {
 		// Strip simavr log formatting.
 		actual = bytes.Replace(actual, []byte{0x1b, '[', '3', '2', 'm'}, nil, -1)
 		actual = bytes.Replace(actual, []byte{0x1b, '[', '0', 'm'}, nil, -1)

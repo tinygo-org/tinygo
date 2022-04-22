@@ -44,8 +44,8 @@ type TargetSpec struct {
 	LDFlags          []string `json:"ldflags"`
 	LinkerScript     string   `json:"linkerscript"`
 	ExtraFiles       []string `json:"extra-files"`
-	RP2040BootPatch  *bool    `json:"rp2040-boot-patch"`        // Patch RP2040 2nd stage bootloader checksum
-	Emulator         []string `json:"emulator" override:"copy"` // inherited Emulator must not be append
+	RP2040BootPatch  *bool    `json:"rp2040-boot-patch"` // Patch RP2040 2nd stage bootloader checksum
+	Emulator         string   `json:"emulator"`
 	FlashCommand     string   `json:"flash-command"`
 	GDB              []string `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
@@ -90,19 +90,8 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 			if !src.IsNil() {
 				dst.Set(src)
 			}
-		case reflect.Slice: // for slices...
-			if src.Len() > 0 { // ... if not empty ...
-				switch tag := field.Tag.Get("override"); tag {
-				case "copy":
-					// copy the field of child to spec
-					dst.Set(src)
-				case "append", "":
-					// or append the field of child to spec
-					dst.Set(reflect.AppendSlice(dst, src))
-				default:
-					panic("override mode must be 'copy' or 'append' (default). I don't know how to '" + tag + "'.")
-				}
-			}
+		case reflect.Slice: // for slices, append the field
+			dst.Set(reflect.AppendSlice(dst, src))
 		default:
 			panic("unknown field type : " + kind.String())
 		}
@@ -335,20 +324,20 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			case "386":
 				// amd64 can _usually_ run 32-bit programs, so skip the emulator in that case.
 				if runtime.GOARCH != "amd64" {
-					spec.Emulator = []string{"qemu-i386"}
+					spec.Emulator = "qemu-i386 {}"
 				}
 			case "amd64":
-				spec.Emulator = []string{"qemu-x86_64"}
+				spec.Emulator = "qemu-x86_64 {}"
 			case "arm":
-				spec.Emulator = []string{"qemu-arm"}
+				spec.Emulator = "qemu-arm {}"
 			case "arm64":
-				spec.Emulator = []string{"qemu-aarch64"}
+				spec.Emulator = "qemu-aarch64 {}"
 			}
 		}
 	}
 	if goos != runtime.GOOS {
 		if goos == "windows" {
-			spec.Emulator = []string{"wine"}
+			spec.Emulator = "wine {}"
 		}
 	}
 	return &spec, nil

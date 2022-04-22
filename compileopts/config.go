@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -494,13 +495,38 @@ func (c *Config) WasmAbi() string {
 	return c.Target.WasmAbi
 }
 
-// Emulator returns the emulator target config
-func (c *Config) Emulator() []string {
-	var emulator []string
-	for _, s := range c.Target.Emulator {
-		emulator = append(emulator, strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT")))
+// EmulatorName is a shorthand to get the command for this emulator, something
+// like qemu-system-arm or simavr.
+func (c *Config) EmulatorName() string {
+	parts := strings.SplitN(c.Target.Emulator, " ", 2)
+	if len(parts) > 1 {
+		return parts[0]
 	}
-	return emulator
+	return ""
+}
+
+// EmulatorFormat returns the binary format for the emulator and the associated
+// file extension. An empty string means to pass directly whatever the linker
+// produces directly without conversion.
+func (c *Config) EmulatorFormat() (format, fileExt string) {
+	return "", ""
+}
+
+// Emulator returns a ready-to-run command to run the given binary in an
+// emulator. Give it the format (returned by EmulatorFormat()) and the path to
+// the compiled binary.
+func (c *Config) Emulator(format, binary string) ([]string, error) {
+	parts, err := shlex.Split(c.Target.Emulator)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse emulator command: %w", err)
+	}
+	var emulator []string
+	for _, s := range parts {
+		s = strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT"))
+		s = strings.ReplaceAll(s, "{"+format+"}", binary)
+		emulator = append(emulator, s)
+	}
+	return emulator, nil
 }
 
 type TestConfig struct {
