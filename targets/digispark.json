@@ -6,5 +6,5 @@
 		"-Wl,--defsym=_stack_size=128"
 	],
 	"flash-command": "micronucleus --run {hex}",
-	"emulator": ["simavr", "-m", "attiny85", "-f", "16000000"]
+	"emulator": "simavr -m attiny85 -f 16000000 {}"
 }

@@ -239,8 +239,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		cmd.Dir = result.MainDir
 
 		// Wasmtime needs a few extra flags to work.
-		emulator := config.Emulator()
-		if len(emulator) != 0 && emulator[0] == "wasmtime" {
+		if config.EmulatorName() == "wasmtime" {
 			// Add directories to the module root, but skip the current working
 			// directory which is already added by buildAndRun.
 			dirs := dirsToModuleRoot(result.MainDir, result.ModuleRoot)
@@ -484,18 +483,19 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		return err
 	}
 
-	return builder.Build(pkgName, "", config, func(result builder.BuildResult) error {
+	format, fileExt := config.EmulatorFormat()
+	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
 		// Find a good way to run GDB.
 		gdbInterface, openocdInterface := config.Programmer()
 		switch gdbInterface {
 		case "msd", "command", "":
-			emulator := config.Emulator()
-			if len(emulator) != 0 {
-				if emulator[0] == "mgba" {
+			emulator := config.EmulatorName()
+			if emulator != "" {
+				if emulator == "mgba" {
 					gdbInterface = "mgba"
-				} else if emulator[0] == "simavr" {
+				} else if emulator == "simavr" {
 					gdbInterface = "simavr"
-				} else if strings.HasPrefix(emulator[0], "qemu-system-") {
+				} else if strings.HasPrefix(emulator, "qemu-system-") {
 					gdbInterface = "qemu"
 				} else {
 					// Assume QEMU as an emulator.
@@ -514,6 +514,10 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		port := ""
 		var gdbCommands []string
 		var daemon *exec.Cmd
+		emulator, err := config.Emulator(format, result.Binary)
+		if err != nil {
+			return err
+		}
 		switch gdbInterface {
 		case "native":
 			// Run GDB directly.
@@ -563,33 +567,29 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 			}
 		case "qemu":
 			port = ":1234"
-			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(emulator[1:], result.Binary, "-s", "-S")
+			args := append(emulator[1:], "-s", "-S")
 			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "qemu-user":
 			port = ":1234"
-			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(emulator[1:], "-g", "1234", result.Binary)
+			args := append(emulator[1:], "-g", "1234")
 			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "mgba":
 			port = ":2345"
-			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(emulator[1:], result.Binary, "-g")
+			args := append(emulator[1:], "-g")
 			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
 		case "simavr":
 			port = ":1234"
-			emulator := config.Emulator()
 			// Run in an emulator.
-			args := append(emulator[1:], "-g", result.Binary)
+			args := append(emulator[1:], "-g")
 			daemon = executeCommand(config.Options, emulator[0], args...)
 			daemon.Stdout = os.Stdout
 			daemon.Stderr = os.Stderr
@@ -666,7 +666,7 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		err := cmd.Run()
+		err = cmd.Run()
 		if err != nil {
 			return &commandError{"failed to run " + cmdName + " with", result.Binary, err}
 		}
@@ -694,9 +694,6 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 // passes command line arguments and evironment variables in a way appropriate
 // for the given emulator.
 func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) error {
-	// make sure any special vars in the emulator definition are rewritten
-	emulator := config.Emulator()
-
 	// Determine whether we're on a system that supports environment variables
 	// and command line parameters (operating systems, WASI) or not (baremetal,
 	// WebAssembly in the browser). If we're on a system without an environment,
@@ -728,7 +725,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 				"runtime": runtimeGlobals,
 			}
 		}
-	} else if len(emulator) != 0 && emulator[0] == "wasmtime" {
+	} else if config.EmulatorName() == "wasmtime" {
 		// Wasmtime needs some special flags to pass environment variables
 		// and allow reading from the current directory.
 		args = append(args, "--dir=.")
@@ -747,7 +744,8 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		env = environmentVars
 	}
 
-	return builder.Build(pkgName, "", config, func(result builder.BuildResult) error {
+	format, fileExt := config.EmulatorFormat()
+	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
 		// If needed, set a timeout on the command. This is done in tests so
 		// they don't waste resources on a stalled test.
 		var ctx context.Context
@@ -759,12 +757,15 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 
 		// Set up the command.
 		var name string
-		if len(emulator) == 0 {
+		if config.Target.Emulator == "" {
 			name = result.Binary
 		} else {
+			emulator, err := config.Emulator(format, result.Binary)
+			if err != nil {
+				return err
+			}
 			name = emulator[0]
 			emuArgs := append([]string(nil), emulator[1:]...)
-			emuArgs = append(emuArgs, result.Binary)
 			args = append(emuArgs, args...)
 		}
 		var cmd *exec.Cmd
@@ -779,7 +780,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		// stdout.
 		cmd.Stdout = stdout
 		cmd.Stderr = os.Stderr
-		if len(emulator) != 0 && emulator[0] == "simavr" {
+		if config.EmulatorName() == "simavr" {
 			cmd.Stdout = nil // don't print initial load commands
 			cmd.Stderr = stdout
 		}
@@ -1572,7 +1573,7 @@ func main() {
 				os.Exit(1)
 				return
 			}
-			if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == nil {
+			if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == "" {
 				// This doesn't look like a regular target file, but rather like
 				// a parent target (such as targets/cortex-m.json).
 				continue

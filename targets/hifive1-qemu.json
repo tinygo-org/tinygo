@@ -4,5 +4,5 @@
 	"serial": "uart",
 	"default-stack-size": 4096,
 	"linkerscript": "targets/hifive1-qemu.ld",
-	"emulator": ["qemu-system-riscv32", "-machine", "sifive_e", "-nographic", "-kernel"]
+	"emulator": "qemu-system-riscv32 -machine sifive_e -nographic -kernel {}"
 }
