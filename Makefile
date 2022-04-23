@@ -221,7 +221,6 @@ TEST_PACKAGES_SLOW = \
 
 # Standard library packages that pass tests quickly on darwin, linux, wasi, and windows
 TEST_PACKAGES_FAST = \
-	compress/lzw \
 	compress/zlib \
 	container/heap \
 	container/list \
@@ -269,17 +268,22 @@ TEST_PACKAGES_FAST = \
 # io/fs requires os.ReadDir, which is not yet supported on windows or wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
 # compress/flate fails windows go 1.18, https://github.com/tinygo-org/tinygo/issues/2762
+# compress/lzw fails windows go 1.18 wasi, https://github.com/tinygo-org/tinygo/issues/2762
 
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
 	compress/flate \
+	compress/lzw \
 	debug/dwarf \
 	debug/plan9obj \
 	io/fs \
 	testing/fstest
 
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
+
+TEST_PACKAGES_WINDOWS := \
+	compress/lzw
 
 # Report platforms on which each standard library package is known to pass tests
 jointmp := $(shell echo /tmp/join.$$$$)
@@ -299,7 +303,7 @@ ifeq ($(shell uname),Linux)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_LINUX)
 endif
 ifeq ($(OS),Windows_NT)
-TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST)
+TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
 endif
 
 # Test known-working standard library packages.
