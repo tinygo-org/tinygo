@@ -96,3 +96,5 @@ jobs:
         run: make smoketest TINYGO=$(PWD)/build/tinygo AVR=0 XTENSA=0
       - name: Test stdlib packages
         run: make tinygo-test
+      - name: Test stdlib packages on wasi
+        run: make tinygo-test-wasi-fast
