@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/google/shlex"
 	"github.com/mattn/go-colorable"
@@ -191,6 +192,37 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 	})
 }
 
+// isOnDefaultDrive returns whether the given path is on the default drive on windows
+// Only for use on win32
+func isOnDefaultDrive(s string) bool {
+	wd, err := os.Getwd()
+	if err != nil || len(wd) < 1 || len(s) < 1 {
+		return false
+	}
+	// Assume drive letter is ascii
+	return unicode.ToUpper(rune(wd[0])) == unicode.ToUpper(rune(s[0]))
+}
+
+// dos2unix converts a Windows absolute path of the form C:\Directory
+// to a Unix absolute path by removing the drive letter and mapping backslashes to slashes.
+// Only for use on win32
+func dos2unix(s string) (string, error) {
+	if len(s) < 3 {
+		return "", fmt.Errorf("too short")
+	}
+	if s[1] != ':' {
+		return "", fmt.Errorf("no drive letter")
+	}
+	if !isOnDefaultDrive(s) {
+		return "", fmt.Errorf("not on default drive")
+	}
+	s = strings.ReplaceAll(s[2:], `\`, `/`)
+	if s[0] != '/' {
+		return "", fmt.Errorf("not absolute")
+	}
+	return s, nil
+}
+
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
 func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string, outpath string) (bool, error) {
@@ -253,6 +285,13 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			tmpdir, err := ioutil.TempDir("", "tinygotmp")
 			if err != nil {
 				return fmt.Errorf("failed to create temporary directory: %w", err)
+			}
+			if runtime.GOOS == `windows` {
+				// Work around wasmtime not recognizing windows paths properly with --dir?
+				tmpdir, err = dos2unix(tmpdir)
+				if err != nil {
+					return fmt.Errorf("failed to convert temporary directory path: %w", err)
+				}
 			}
 			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
 			// TODO: add option to not delete temp dir for debugging?
