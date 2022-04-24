@@ -389,6 +389,8 @@ ifneq ($(WASM), 0)
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=circuitplay_express  examples/blinky1
 	@$(MD5SUM) test.wasm
+	$(TINYGO) build -size short -o test.wasm -tags=circuitplay_bluefruit examples/blinky1
+	@$(MD5SUM) test.wasm
 endif
 	# test all targets/boards
 	$(TINYGO) build -size short -o test.hex -target=pca10040-s132v6     examples/blinky1
