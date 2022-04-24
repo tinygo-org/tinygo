@@ -241,6 +241,7 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"reflect/":              false,
 		"runtime/":              false,
 		"sync/":                 true,
+		"sync/atomic/":          true,
 		"testing/":              true,
 	}
 	if needsSyscallPackage {
