@@ -14,7 +14,7 @@ import (
 func (b *builder) createAtomicOp(call *ssa.CallCommon) (llvm.Value, bool) {
 	name := call.Value.(*ssa.Function).Name()
 	switch name {
-	case "AddInt32", "AddInt64", "AddUint32", "AddUint64", "AddUintptr":
+	case "llvm_AddInt32", "llvm_AddInt64", "llvm_AddUint32", "llvm_AddUint64", "llvm_AddUintptr":
 		ptr := b.getValue(call.Args[0])
 		val := b.getValue(call.Args[1])
 		if strings.HasPrefix(b.Triple, "avr") {
@@ -34,7 +34,7 @@ func (b *builder) createAtomicOp(call *ssa.CallCommon) (llvm.Value, bool) {
 		oldVal := b.CreateAtomicRMW(llvm.AtomicRMWBinOpAdd, ptr, val, llvm.AtomicOrderingSequentiallyConsistent, true)
 		// Return the new value, not the original value returned by atomicrmw.
 		return b.CreateAdd(oldVal, val, ""), true
-	case "SwapInt32", "SwapInt64", "SwapUint32", "SwapUint64", "SwapUintptr", "SwapPointer":
+	case "llvm_SwapInt32", "llvm_SwapInt64", "llvm_SwapUint32", "llvm_SwapUint64", "llvm_SwapUintptr", "llvm_SwapPointer":
 		ptr := b.getValue(call.Args[0])
 		val := b.getValue(call.Args[1])
 		isPointer := val.Type().TypeKind() == llvm.PointerTypeKind
@@ -48,7 +48,7 @@ func (b *builder) createAtomicOp(call *ssa.CallCommon) (llvm.Value, bool) {
 			oldVal = b.CreateIntToPtr(oldVal, b.i8ptrType, "")
 		}
 		return oldVal, true
-	case "CompareAndSwapInt32", "CompareAndSwapInt64", "CompareAndSwapUint32", "CompareAndSwapUint64", "CompareAndSwapUintptr", "CompareAndSwapPointer":
+	case "llvm_CompareAndSwapInt32", "llvm_CompareAndSwapInt64", "llvm_CompareAndSwapUint32", "llvm_CompareAndSwapUint64", "llvm_CompareAndSwapUintptr", "llvm_CompareAndSwapPointer":
 		ptr := b.getValue(call.Args[0])
 		old := b.getValue(call.Args[1])
 		newVal := b.getValue(call.Args[2])
@@ -79,13 +79,13 @@ func (b *builder) createAtomicOp(call *ssa.CallCommon) (llvm.Value, bool) {
 		tuple := b.CreateAtomicCmpXchg(ptr, old, newVal, llvm.AtomicOrderingSequentiallyConsistent, llvm.AtomicOrderingSequentiallyConsistent, true)
 		swapped := b.CreateExtractValue(tuple, 1, "")
 		return swapped, true
-	case "LoadInt32", "LoadInt64", "LoadUint32", "LoadUint64", "LoadUintptr", "LoadPointer":
+	case "llvm_LoadInt32", "llvm_LoadInt64", "llvm_LoadUint32", "llvm_LoadUint64", "llvm_LoadUintptr", "llvm_LoadPointer":
 		ptr := b.getValue(call.Args[0])
 		val := b.CreateLoad(ptr, "")
 		val.SetOrdering(llvm.AtomicOrderingSequentiallyConsistent)
 		val.SetAlignment(b.targetData.PrefTypeAlignment(val.Type())) // required
 		return val, true
-	case "StoreInt32", "StoreInt64", "StoreUint32", "StoreUint64", "StoreUintptr", "StorePointer":
+	case "llvm_StoreInt32", "llvm_StoreInt64", "llvm_StoreUint32", "llvm_StoreUint64", "llvm_StoreUintptr", "llvm_StorePointer":
 		ptr := b.getValue(call.Args[0])
 		val := b.getValue(call.Args[1])
 		if strings.HasPrefix(b.Triple, "avr") {
