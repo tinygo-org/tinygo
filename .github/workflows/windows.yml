@@ -71,6 +71,9 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
+      - name: Install wasmtime
+        run: |
+          scoop install wasmtime
       - name: Test TinyGo
         shell: bash
         run: make test GOTESTFLAGS="-v -short"
@@ -97,4 +100,9 @@ jobs:
       - name: Test stdlib packages
         run: make tinygo-test
       - name: Test stdlib packages on wasi
-        run: make tinygo-test-wasi-fast
+        shell: cmd
+        run: |
+          set TMP=%RUNNER_TEMP%\DTMP
+          mkdir %TMP%
+          make tinygo-test-wasi-fast
+          rd /S /Q  %TMP%
