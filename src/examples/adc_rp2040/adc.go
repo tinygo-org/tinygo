@@ -1,9 +1,5 @@
-/*
-Read 3 rp2040 ADC channels
-   ADC0_CH     - GPIO26 Raw reading every 100ms
-   ADC1_CH     - GPIO27 Voltage reading every 3s
-   ADC_TEMP_CH - Temperature sensor reading every serial output (I.e. every second)
-*/
+// Reads multiple rp2040 ADC channels concurrently. Including the internal temperature sensor
+
 package main
 
 import (
@@ -18,48 +14,36 @@ func (c celsius) String() string {
 	return fmt.Sprintf("%4.1f℃", c)
 }
 
-type volts float32
+// rp2040 ADC is 12 bits. Reading are shifted <<4 to fill the 16-bit range.
+var adcReading [3]uint16
 
-func (v volts) String() string {
-	return fmt.Sprintf("%2.1fV", v)
-}
-
-var (
-	adc0Raw   uint16
-	adc1Volts volts
-)
-
-func readRawOften(c machine.ADCChannel) {
+func readADC(a machine.ADC, w time.Duration, i int) {
 	for {
-		adc0Raw = c.GetOnce()
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-func readVoltsInfrequently(c machine.ADCChannel) {
-	for {
-		adc1Volts = volts(c.GetVoltage())
-		time.Sleep(3000 * time.Millisecond)
+		adcReading[i] = a.Get()
+		time.Sleep(w)
 	}
 }
 
 func main() {
 	machine.InitADC()
-	a0 := machine.ADC0_CH    // GPIO26 input
-	a1 := machine.ADC1_CH    // GPIO27 input
-	t := machine.ADC_TEMP_CH // Internal Temperature sensor
+	a0 := machine.ADC{machine.ADC0} // GPIO26 input
+	a1 := machine.ADC{machine.ADC1} // GPIO27 input
+	a2 := machine.ADC{machine.ADC2} // GPIO28 input
+	t := machine.ADC_TEMP_SENSOR    // Internal Temperature sensor
 	// Configure sets the GPIOs to PinAnalog mode
-	a0.Configure(machine.ADCChConfig{})
-	a1.Configure(machine.ADCChConfig{})
+	a0.Configure(machine.ADCConfig{})
+	a1.Configure(machine.ADCConfig{})
+	a2.Configure(machine.ADCConfig{})
 	// Configure powers on the temperature sensor
-	t.Configure(machine.ADCChConfig{})
+	t.Configure(machine.ADCConfig{})
 
 	// Safe to read concurrently
-	go readRawOften(a0)
-	go readVoltsInfrequently(a1)
+	go readADC(a0, 10*time.Millisecond, 0)
+	go readADC(a1, 17*time.Millisecond, 1)
+	go readADC(a2, 29*time.Millisecond, 2)
 
 	for {
-		fmt.Printf("ADC0: %5d ADC1: %v Temp: %v\n\r", adc0Raw, adc1Volts, celsius(t.GetTemp()))
+		fmt.Printf("ADC0: %5d ADC1: %5d ADC2: %5d Temp: %v\n\r", adcReading[0], adcReading[1], adcReading[2], celsius(float32(t.ReadTemperature())/1000))
 		time.Sleep(1000 * time.Millisecond)
 	}
 }
