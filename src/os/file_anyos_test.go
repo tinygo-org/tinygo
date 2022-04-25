@@ -31,9 +31,14 @@ func TestTempDir(t *testing.T) {
 
 func TestChdir(t *testing.T) {
 	// create and cd into a new directory
+	oldDir, err := Getwd()
+	if err != nil {
+		t.Errorf("Getwd() returned %v", err)
+		return
+	}
 	dir := "_os_test_TestChDir"
 	Remove(dir)
-	err := Mkdir(dir, 0755)
+	err = Mkdir(dir, 0755)
 	defer Remove(dir) // even though not quite sure which directory it will execute in
 	if err != nil {
 		t.Errorf("Mkdir(%s, 0755) returned %v", dir, err)
@@ -55,7 +60,9 @@ func TestChdir(t *testing.T) {
 		t.Errorf("Close %s: %s", file, err)
 	}
 	// cd back to original directory
-	err = Chdir("..")
+	// TODO: emulate "cd .." in wasi-libc better?
+	//err = Chdir("..")
+	err = Chdir(oldDir)
 	if err != nil {
 		t.Errorf("Chdir ..: %s", err)
 	}
