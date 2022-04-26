@@ -39,11 +39,12 @@ func InitADC() {
 }
 
 // Configure sets the ADC pin to analog input mode.
-// Does nothing if the GPIO is not an ADC muxed pin.
-func (a ADC) Configure(config ADCConfig) {
-	if c, err := a.GetADCChannel(); err == nil {
-		c.Configure(config)
+func (a ADC) Configure(config ADCConfig) error {
+	c, err := a.GetADCChannel()
+	if err != nil {
+		return err
 	}
+	return c.Configure(config)
 }
 
 // Get returns a one-shot ADC sample reading.
@@ -75,7 +76,7 @@ func (a ADC) GetADCChannel() (c ADCChannel, err error) {
 
 // Configure sets the channel's associated pin to analog input mode or powers on the temperature sensor for ADC_TEMP_SENSOR.
 // The powered on temperature sensor increases ADC_AVDD current by approximately 40 μA.
-func (c ADCChannel) Configure(config ADCConfig) {
+func (c ADCChannel) Configure(config ADCConfig) error {
 	if config.Reference != 0 {
 		adcAref = config.Reference
 	}
@@ -86,6 +87,7 @@ func (c ADCChannel) Configure(config ADCConfig) {
 		// Enable temperature sensor bias source
 		rp.ADC.CS.SetBits(rp.ADC_CS_TS_EN)
 	}
+	return nil
 }
 
 // getOnce returns a one-shot ADC sample reading from an ADC channel.
