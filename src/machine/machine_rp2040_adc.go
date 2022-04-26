@@ -25,7 +25,7 @@ const (
 var adcLock sync.Mutex
 
 // ADC peripheral reference voltage (mV)
-var adcAref uint32 = 3300
+var adcAref uint32
 
 // InitADC resets the ADC peripheral.
 func InitADC() {
@@ -35,6 +35,7 @@ func InitADC() {
 	}
 	// enable ADC
 	rp.ADC.CS.Set(rp.ADC_CS_EN)
+	adcAref = 3300
 	waitForReady()
 }
 
