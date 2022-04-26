@@ -3,8 +3,8 @@
         "rp2040"
     ],
     "serial": "uart",
-    "build-tags": ["thingsplus_rp2040"],
-    "linkerscript": "targets/thingsplus-rp2040.ld",
+    "build-tags": ["thingplus_rp2040"],
+    "linkerscript": "targets/thingplus-rp2040.ld",
     "extra-files": [
         "targets/pico-boot-stage2.S"
     ]
