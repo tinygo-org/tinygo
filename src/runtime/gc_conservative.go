@@ -310,6 +310,13 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			index = 0
 			// Reset numFreeBlocks as allocations cannot wrap.
 			numFreeBlocks = 0
+			// In rare cases, the initial heap might be so small that there are
+			// no blocks at all. In this case, it's better to jump back to the
+			// start of the loop and try again, until the GC realizes there is
+			// no memory and grows the heap.
+			// This can sometimes happen on WebAssembly, where the initial heap
+			// is created by whatever is left on the last memory page.
+			continue
 		}
 
 		// Is the block we're looking at free?
