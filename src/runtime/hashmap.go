@@ -91,7 +91,8 @@ func hashmapKeyEqualAlg(alg hashmapAlgorithm) func(x, y unsafe.Pointer, n uintpt
 	case hashmapAlgorithmInterface:
 		return hashmapInterfaceEqual
 	default:
-		panic("unknown hashmap equal algorithm")
+		// compiler bug :(
+		return nil
 	}
 }
 
@@ -104,7 +105,8 @@ func hashmapKeyHashAlg(alg hashmapAlgorithm) func(key unsafe.Pointer, n uintptr)
 	case hashmapAlgorithmInterface:
 		return hashmapInterfacePtrHash
 	default:
-		panic("unknown hashmap hash algorithm")
+		// compiler bug :(
+		return nil
 	}
 }
 
