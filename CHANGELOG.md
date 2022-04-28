@@ -1,3 +1,101 @@
+0.23.0
+---
+
+* **command line**
+  - add `-work` flag
+  - add Go 1.18 support
+  - add LLVM 14 support
+  - `run`: add support for command-line parameters
+  - `build`: calculate default output path if `-o` is not specified
+  - `build`: add JSON output
+  - `test`: support multiple test binaries with `-c`
+  - `test`: support flags like `-v` on all targets (including emulated firmware)
+* **compiler**
+  - add support for ThinLTO
+  - use compiler-rt from LLVM
+  - `builder`: prefer GNU build ID over Go build ID for caching
+  - `builder`: add support for cross compiling to Darwin
+  - `builder`: support machine outlining pass in stacksize calculation
+  - `builder`: disable asynchronous unwind tables
+  - `compileopts`: fix emulator configuration on non-amd64 Linux architectures
+  - `compiler`: move allocations > 256  bytes to the heap
+  - `compiler`: fix incorrect `unsafe.Alignof` on some 32-bit architectures
+  - `compiler`: accept alias for slice `cap` builtin
+  - `compiler`: allow slices of empty structs
+  - `compiler`: fix difference in aliases in interface methods
+  - `compiler`: make `RawSyscall` an alias for `Syscall`
+  - `compiler`: remove support for memory references in `AsmFull`
+  - `loader`: only add Clang header path for CGo
+  - `transform`: fix poison value in heap-to-stack transform
+* **standard library**
+  - `internal/fuzz`: add this package as a shim
+  - `os`: implement readdir for darwin and linux
+  - `os`: add `DirFS`, which is used by many programs to access readdir.
+  - `os`: isWine: be compatible with older versions of wine, too
+  - `os`: implement `RemoveAll`
+  - `os`: Use a `uintptr` for `NewFile`
+  - `os`: add stubs for `exec.ExitError` and `ProcessState.ExitCode`
+  - `os`: export correct values for `DevNull` for each OS
+  - `os`: improve support for `Signal` by fixing various bugs
+  - `os`: implement `File.Fd` method
+  - `os`: implement `UserHomeDir`
+  - `os`: add `exec.ProcessState` stub
+  - `os`: implement `Pipe` for darwin
+  - `os`: define stub `ErrDeadlineExceeded`
+  - `reflect`: add stubs for more missing methods
+  - `reflect`: rename `reflect.Ptr` to `reflect.Pointer`
+  - `reflect`: add `Value.FieldByIndexErr` stub
+  - `runtime`: fix various small GC bugs
+  - `runtime`: use memzero for leaking collector instead of manually zeroing objects
+  - `runtime`: implement `memhash`
+  - `runtime`: implement `fastrand`
+  - `runtime`: add stub for `debug.ReadBuildInfo`
+  - `runtime`: add stub for `NumCPU`
+  - `runtime`: don't inline `runtime.alloc` with `-gc=leaking`
+  - `runtime`: add `Version`
+  - `runtime`: add stubs for `NumCgoCall` and `NumGoroutine`
+  - `runtime`: stub {Lock,Unlock}OSThread on Windows
+  - `runtime`: be able to deal with a very small heap
+  - `syscall`: make `Environ` return a copy of the environment
+  - `syscall`: implement getpagesize and munmap
+  - `syscall`: `wasi`: define `MAP_SHARED` and `PROT_READ`
+  - `syscall`: stub mmap(), munmap(), MAP_SHARED, PROT_READ, SIGBUS, etc. on nonhosted targets
+  - `syscall`: darwin: more complete list of signals
+  - `syscall`: `wasi`: more complete list of signals
+  - `syscall`: stub `WaitStatus`
+  - `syscall/js`: allow copyBytesTo(Go|JS) to use `Uint8ClampedArray`
+  - `testing`: implement `TempDir`
+  - `testing`: nudge type TB closer to upstream; should be a no-op change.
+  - `testing`: on baremetal platforms, use simpler test matcher
+* **targets**
+  - `atsamd`: fix usbcdc initialization when `-serial=uart`
+  - `atsamd51`: allow higher frequency when using SPI
+  - `esp`: support CGo
+  - `esp32c3`: add support for input pin
+  - `esp32c3`: add support for GPIO interrupts
+  - `esp32c3`: add support to receive UART data
+  - `rp2040`: fix PWM bug at high frequency
+  - `rp2040`: fix some minor I2C bugs
+  - `rp2040`: fix incorrect inline assembly
+  - `rp2040`: fix spurious i2c STOP during write+read transaction
+  - `rp2040`: improve ADC support
+  - `wasi`: remove `--export-dynamic` linker flag
+  - `wasm`: remove heap allocator from wasi-libc
+* **boards**
+  - `circuitplay-bluefruit`: move pin mappings so board can be compiled for WASM use in Playground
+  - `esp32-c3-12f`: add the ESP32-C3-12f Kit
+  - `m5stamp-c3`: add pin setting of UART
+  - `macropad-rp2040`: add the Adafruit MacroPad RP2040 board
+  - `nano-33-ble`: typo in LPS22HB peripheral definition and documentation (#2579)
+  - `teensy41`: add the Teensy 4.1 board
+  - `teensy40`: add ADC support
+  - `teensy40`: add SPI support
+  - `thingplus-rp2040`: add the SparkFun Thing Plus RP2040 board
+  - `wioterminal`: add DefaultUART
+  - `wioterminal`: verify written data when flashing through OpenOCD
+  - `xiao-ble`: add XIAO BLE nRF52840 support
+
+
 0.22.0
 ---
 
