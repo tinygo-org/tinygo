@@ -14,19 +14,25 @@ concurrency:
 jobs:
   build-linux:
     # Build Linux binaries, ready for release.
-    # This intentionally uses an older Linux image, so that we compile against
-    # an older glibc version and therefore are compatible with a wide range of
-    # Linux distributions.
-    runs-on: ubuntu-18.04
+    # This runs inside an Alpine Linux container so we can more easily create a
+    # statically linked binary.
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.16
     steps:
+      - name: Install apk dependencies
+        # tar: needed for actions/cache@v2
+        # git+openssh: needed for checkout (I think?)
+        # gcompat: needed for go binary
+        # ruby: needed to install fpm
+        run: apk add tar git openssh gcompat make g++ ruby
+      - name: Work around CVE-2022-24765
+        # We're not on a multi-user machine, so this is safe.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v2
         with:
           submodules: true
-      - name: Install apt dependencies
-        run: |
-          sudo apt-get install --no-install-recommends \
-              ninja-build
       - name: Install Go
         uses: actions/setup-go@v2
         with:
@@ -34,7 +40,7 @@ jobs:
       - name: Cache Go
         uses: actions/cache@v2
         with:
-          key: go-cache-linux-v1-${{ hashFiles('go.mod') }}
+          key: go-cache-linux-alpine-v1-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
@@ -42,7 +48,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-source
         with:
-          key: llvm-source-14-linux-v2
+          key: llvm-source-14-linux-alpine-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -56,7 +62,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-build
         with:
-          key: llvm-build-14-linux-v1
+          key: llvm-build-14-linux-alpine-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -64,6 +70,8 @@ jobs:
           # fetch LLVM source
           rm -rf llvm-project
           make llvm-source
+          # install dependencies
+          apk add cmake samurai python3
           # build!
           make llvm-build
           # Remove unnecessary object files (to reduce cache size).
@@ -72,26 +80,28 @@ jobs:
         uses: actions/cache@v2
         id: cache-binaryen
         with:
-          key: binaryen-linux-v1
+          key: binaryen-linux-alpine-v1
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
-        run: make binaryen
+        run: |
+          apk add cmake samurai python3
+          make binaryen STATIC=1
       - name: Cache wasi-libc
         uses: actions/cache@v2
         id: cache-wasi-libc
         with:
-          key: wasi-libc-sysroot-linux-asserts-v5
+          key: wasi-libc-sysroot-linux-alpine-v1
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
       - name: Install fpm
         run: |
-          sudo gem install --no-document fpm
+          gem install --no-document fpm
       - name: Build TinyGo release
         run: |
-          make release deb -j3
+          make release deb -j3 STATIC=1
           cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_amd64.deb
       - name: Publish release artifact
