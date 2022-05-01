@@ -1449,7 +1449,12 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		case strings.HasPrefix(name, "runtime/volatile.Store"):
 			return b.createVolatileStore(instr)
 		case strings.HasPrefix(name, "sync/atomic."):
-			val, ok := b.createAtomicOp(instr)
+			var params []llvm.Value
+			for _, param := range instr.Args {
+				params = append(params, b.getValue(param))
+			}
+
+			val, ok := b.createAtomicOp(instr.StaticCallee(), params)
 			if ok {
 				// This call could be lowered as an atomic operation.
 				return val, nil

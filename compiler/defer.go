@@ -15,6 +15,7 @@ package compiler
 
 import (
 	"go/types"
+	"strings"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
@@ -373,9 +374,18 @@ func (b *builder) createRunDefers() {
 				forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
 			}
 
-			// Call real function.
-			b.createCall(b.getFunction(callback), forwardParams, "")
+			createdAtomicOp := false
+			fqName := callback.RelString(nil)
+			// If this is an atomic operation, don't generate a function call
+			// instead just inline an atomic operation
+			if strings.HasPrefix(fqName, "sync/atomic.") {
+				_, createdAtomicOp = b.createAtomicOp(callback, forwardParams)
+			}
 
+			// this was not an atomic operation, just do a normal function call
+			if !createdAtomicOp {
+				b.createCall(b.getFunction(callback), forwardParams, "")
+			}
 		case *ssa.MakeClosure:
 			// Get the real defer struct type and cast to it.
 			fn := callback.Fn.(*ssa.Function)
