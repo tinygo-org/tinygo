@@ -300,6 +300,7 @@ TEST_PACKAGES_LINUX := \
 	debug/dwarf \
 	debug/plan9obj \
 	io/fs \
+	io/ioutil \
 	testing/fstest
 
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)

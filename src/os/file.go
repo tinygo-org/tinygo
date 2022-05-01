@@ -12,6 +12,7 @@ package os
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"runtime"
 	"syscall"
 )
@@ -201,21 +202,7 @@ func (f *File) Truncate(size int64) error {
 }
 
 // PathError records an error and the operation and file path that caused it.
-// TODO: PathError moved to io/fs in go 1.16 and left an alias in os/errors.go.
-// Do the same once we drop support for go 1.15.
-type PathError struct {
-	Op   string
-	Path string
-	Err  error
-}
-
-func (e *PathError) Error() string {
-	return e.Op + " " + e.Path + ": " + e.Err.Error()
-}
-
-func (e *PathError) Unwrap() error {
-	return e.Err
-}
+type PathError = fs.PathError
 
 // LinkError records an error during a link or symlink or rename system call and
 // the paths that caused it.
