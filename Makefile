@@ -56,6 +56,23 @@ else
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=OFF'
 endif
 
+ifeq (1, $(STATIC))
+    # Build TinyGo as a fully statically linked binary (no dynamically loaded
+    # libraries such as a libc). This is not supported with glibc which is used
+    # on most major Linux distributions. However, it is supported in Alpine
+    # Linux with musl.
+    CGO_LDFLAGS += -static
+    # Also set the thread stack size to 1MB. This is necessary on musl as the
+    # default stack size is 128kB and LLVM uses more than that.
+    # For more information, see:
+    # https://wiki.musl-libc.org/functional-differences-from-glibc.html#Thread-stack-size
+    CGO_LDFLAGS += -Wl,-z,stack-size=1048576
+    # Build wasm-opt with static linking.
+    # For details, see:
+    # https://github.com/WebAssembly/binaryen/blob/version_102/.github/workflows/ci.yml#L181
+    BINARYEN_OPTION += -DCMAKE_CXX_FLAGS="-static" -DCMAKE_C_FLAGS="-static"
+endif
+
 # Cross compiling support.
 ifneq ($(CROSS),)
     CC = $(CROSS)-gcc
@@ -246,9 +263,9 @@ lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 # Build the Go compiler.
 tinygo:
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags byollvm -ldflags="-X github.com/tinygo-org/tinygo/goenv.GitSha1=`git rev-parse --short HEAD`" .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags "byollvm osusergo" -ldflags="-X github.com/tinygo-org/tinygo/goenv.GitSha1=`git rev-parse --short HEAD`" .
 test: wasi-libc
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags "byollvm osusergo" ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
 # Standard library packages that pass tests on darwin, linux, wasi, and windows, but take over a minute in wasi
 TEST_PACKAGES_SLOW = \
