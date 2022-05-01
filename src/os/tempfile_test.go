@@ -9,6 +9,7 @@ package os_test
 
 import (
 	"errors"
+	"io/fs"
 	. "os"
 	"path/filepath"
 	"regexp"
@@ -157,8 +158,7 @@ func TestMkdirTempBadDir(t *testing.T) {
 
 	badDir := filepath.Join(dir, "not-exist")
 	_, err = MkdirTemp(badDir, "foo")
-	// TODO: when we drop support for go 1.15, PathError should move to fs
-	if pe, ok := err.(*PathError); !ok || !IsNotExist(err) || pe.Path != badDir {
+	if pe, ok := err.(*fs.PathError); !ok || !IsNotExist(err) || pe.Path != badDir {
 		t.Errorf("TempDir error = %#v; want PathError for path %q satisifying IsNotExist", err, badDir)
 	}
 }

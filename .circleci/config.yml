@@ -102,9 +102,9 @@ commands:
       - run: make fmt-check
 
 jobs:
-  test-llvm11-go115:
+  test-llvm11-go116:
     docker:
-      - image: circleci/golang:1.15-buster
+      - image: circleci/golang:1.16-buster
     steps:
       - test-linux:
           llvm: "11"
@@ -118,5 +118,5 @@ jobs:
 workflows:
   test-all:
     jobs:
-      - test-llvm11-go115
+      - test-llvm11-go116
       - test-llvm12-go117

@@ -1,21 +1,32 @@
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package os
 
 import (
 	"errors"
+	"io/fs"
 	"syscall"
 )
 
+// Portable analogs of some common system call errors.
+//
+// Errors returned from this package may be tested against these errors
+// with errors.Is.
 var (
-	ErrInvalid    = errors.New("invalid argument")
-	ErrPermission = errors.New("permission denied")
-	ErrClosed     = errors.New("file already closed")
+	// ErrInvalid indicates an invalid argument.
+	// Methods on File will return this error when the receiver is nil.
+	ErrInvalid = fs.ErrInvalid // "invalid argument"
 
-	// Portable analogs of some common system call errors.
+	ErrPermission = fs.ErrPermission // "permission denied"
+	ErrExist      = fs.ErrExist      // "file already exists"
+	ErrNotExist   = fs.ErrNotExist   // "file does not exist"
+	ErrClosed     = fs.ErrClosed     // "file already closed"
+
 	// Note that these are exported for use in the Filesystem interface.
 	ErrUnsupported    = errors.New("operation not supported")
 	ErrNotImplemented = errors.New("operation not implemented")
-	ErrNotExist       = errors.New("file not found")
-	ErrExist          = errors.New("file exists")
 )
 
 // The following code is copied from the official implementation.
@@ -45,6 +56,9 @@ func NewSyscallError(syscall string, err error) error {
 	}
 	return &SyscallError{syscall, err}
 }
+
+// PathError records an error and the operation and file path that caused it.
+type PathError = fs.PathError
 
 // SyscallError records an error from a specific system call.
 type SyscallError struct {
