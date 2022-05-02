@@ -298,6 +298,10 @@ func TestDirFSPathsValid(t *testing.T) {
 		t.Log("skipping on Windows")
 		return
 	}
+	if isWASI {
+		t.Log("skipping on wasi because it fails on wasi on windows")
+		return
+	}
 
 	// TODO: switch back to t.TempDir once it's implemented
 	d, err := MkdirTemp("", "TestDirFSPathsValid")
