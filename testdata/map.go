@@ -2,6 +2,7 @@ package main
 
 import (
 	"sort"
+	"unsafe"
 )
 
 var testmap1 = map[string]int{"data": 3}
@@ -211,10 +212,12 @@ func testBigMap(squares map[int]int, n int) {
 func mapgrow() {
 	m := make(map[int]int)
 
-	const (
-		Delete = 500
-		N      = Delete * 2
-	)
+	var Delete = 500
+	if unsafe.Sizeof(uintptr(0)) < 4 {
+		// Reduce the number of iterations on low-memory devices like AVR.
+		Delete = 20
+	}
+	var N = Delete * 2
 
 	for i := 0; i < Delete; i++ {
 		m[i] = i
@@ -246,7 +249,7 @@ func mapgrow() {
 		println("bad length post grow/delete", len(m))
 	}
 
-	seen := make([]bool, 500)
+	seen := make([]bool, Delete)
 
 	var mcount int
 	for k, v := range m {
