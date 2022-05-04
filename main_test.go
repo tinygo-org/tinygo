@@ -194,10 +194,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Breaks interp.
 				continue
 
-			case "map.go":
-				// Reflect size calculation crashes.
-				continue
-
 			case "channel.go":
 				// Freezes after recv from closed channel.
 				continue
