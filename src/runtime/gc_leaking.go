@@ -67,12 +67,7 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 
 func initHeap() {
 	// preinit() may have moved heapStart; reset heapptr
-	ptr := heapStart
-	if GOARCH == "wasm" {
-		// llvm11 and llvm12 do not correctly align the heap on wasm
-		ptr = align(ptr)
-	}
-	heapptr = ptr
+	heapptr = heapStart
 }
 
 // setHeapEnd sets a new (larger) heapEnd pointer.

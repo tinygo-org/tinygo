@@ -52,30 +52,6 @@ func (b *builder) createAtomicOp(call *ssa.CallCommon) (llvm.Value, bool) {
 		ptr := b.getValue(call.Args[0])
 		old := b.getValue(call.Args[1])
 		newVal := b.getValue(call.Args[2])
-		if strings.HasSuffix(name, "64") {
-			if strings.HasPrefix(b.Triple, "thumb") {
-				// Work around a bug in LLVM, at least LLVM 11:
-				// https://reviews.llvm.org/D95891
-				// Check for thumbv6m, thumbv7, thumbv7em, and perhaps others.
-				// See also: https://gcc.gnu.org/onlinedocs/gcc/_005f_005fsync-Builtins.html
-				compareAndSwap := b.mod.NamedFunction("__sync_val_compare_and_swap_8")
-				if compareAndSwap.IsNil() {
-					// Declare the function if it isn't already declared.
-					i64Type := b.ctx.Int64Type()
-					fnType := llvm.FunctionType(i64Type, []llvm.Type{llvm.PointerType(i64Type, 0), i64Type, i64Type}, false)
-					compareAndSwap = llvm.AddFunction(b.mod, "__sync_val_compare_and_swap_8", fnType)
-				}
-				actualOldValue := b.CreateCall(compareAndSwap, []llvm.Value{ptr, old, newVal}, "")
-				// The __sync_val_compare_and_swap_8 function returns the old
-				// value. However, we shouldn't return the old value, we should
-				// return whether the compare/exchange was successful. This is
-				// easily done by comparing the returned (actual) old value with
-				// the expected old value passed to
-				// __sync_val_compare_and_swap_8.
-				swapped := b.CreateICmp(llvm.IntEQ, old, actualOldValue, "")
-				return swapped, true
-			}
-		}
 		tuple := b.CreateAtomicCmpXchg(ptr, old, newVal, llvm.AtomicOrderingSequentiallyConsistent, llvm.AtomicOrderingSequentiallyConsistent, true)
 		swapped := b.CreateExtractValue(tuple, 1, "")
 		return swapped, true
