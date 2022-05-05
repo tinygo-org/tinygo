@@ -18,17 +18,3 @@ func ApplyFunctionSections(mod llvm.Module) {
 		llvmFn = llvm.NextFunction(llvmFn)
 	}
 }
-
-// DisableTailCalls adds the "disable-tail-calls"="true" function attribute to
-// all functions. This may be necessary, in particular to avoid an error with
-// WebAssembly in LLVM 11.
-func DisableTailCalls(mod llvm.Module) {
-	attribute := mod.Context().CreateStringAttribute("disable-tail-calls", "true")
-	llvmFn := mod.FirstFunction()
-	for !llvmFn.IsNil() {
-		if !llvmFn.IsDeclaration() {
-			llvmFn.AddFunctionAttr(attribute)
-		}
-		llvmFn = llvm.NextFunction(llvmFn)
-	}
-}

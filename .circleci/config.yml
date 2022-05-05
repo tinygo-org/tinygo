@@ -102,21 +102,16 @@ commands:
       - run: make fmt-check
 
 jobs:
-  test-llvm11-go116:
+  test-llvm13-go116:
     docker:
       - image: circleci/golang:1.16-buster
     steps:
       - test-linux:
-          llvm: "11"
-  test-llvm12-go117:
-    docker:
-      - image: circleci/golang:1.17-buster
-    steps:
-      - test-linux:
-          llvm: "12"
+          llvm: "13"
 
 workflows:
   test-all:
     jobs:
-      - test-llvm11-go116
-      - test-llvm12-go117
+      # This tests our lowest supported versions of Go and LLVM, to make sure at
+      # least the smoke tests still pass.
+      - test-llvm13-go116

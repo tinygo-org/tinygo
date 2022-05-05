@@ -26,7 +26,7 @@ func TestClangAttributes(t *testing.T) {
 		"cortex-m0",
 		"cortex-m0plus",
 		"cortex-m3",
-		//"cortex-m33", // TODO: broken in LLVM 11, fixed in https://reviews.llvm.org/D90305
+		"cortex-m33",
 		"cortex-m4",
 		"cortex-m7",
 		"esp32c3",

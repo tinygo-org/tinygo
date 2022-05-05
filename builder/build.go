@@ -935,17 +935,6 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		return errors.New("verification failure after LLVM optimization passes")
 	}
 
-	// LLVM 11 by default tries to emit tail calls (even with the target feature
-	// disabled) unless it is explicitly disabled with a function attribute.
-	// This is a problem, as it tries to emit them and prints an error when it
-	// can't with this feature disabled.
-	// Because as of september 2020 tail calls are not yet widely supported,
-	// they need to be disabled until they are widely supported (at which point
-	// the +tail-call target feautre can be set).
-	if strings.HasPrefix(config.Triple(), "wasm") {
-		transform.DisableTailCalls(mod)
-	}
-
 	return nil
 }
 
