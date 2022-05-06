@@ -710,12 +710,12 @@ endif
 	@cp -rp llvm-project/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
-	./build/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/compiler-rt     compiler-rt
-	./build/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/compiler-rt compiler-rt
-	./build/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/compiler-rt    compiler-rt
-	./build/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/picolibc     picolibc
-	./build/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/picolibc picolibc
-	./build/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/picolibc    picolibc
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/compiler-rt     compiler-rt
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/compiler-rt compiler-rt
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/compiler-rt    compiler-rt
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/picolibc     picolibc
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/picolibc picolibc
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/picolibc    picolibc
 
 release:
 	tar -czf build/release.tar.gz -C build/release tinygo
