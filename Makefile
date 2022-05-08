@@ -328,7 +328,6 @@ TEST_PACKAGES_FAST = \
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
-	compress/flate \
 	compress/lzw \
 	crypto/hmac \
 	debug/dwarf \
@@ -336,8 +335,15 @@ TEST_PACKAGES_LINUX := \
 	io/fs \
 	io/ioutil \
 	strconv \
-	testing/fstest \
 	text/template/parse
+ifneq ($(shell getconf LONG_BIT),32)
+# Some tests are skipped on 32-bit because:
+# compress/flate runs out of memory
+# testing/fstest uses Seek, which is not implemented there
+TEST_PACKAGES_LINUX += \
+	compress/flate \
+	testing/fstest
+endif
 
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 
