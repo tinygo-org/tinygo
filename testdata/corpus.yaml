@@ -147,8 +147,8 @@
     - pkg: timespanset
       skipwasi: true # needs timezone stuff
 - repo: github.com/google/okay
-- repo: github.com/google/go-patchutils
-  skipwasi: true # needs os.readdir
+#- repo: github.com/google/go-patchutils  -- crashes on linux?  #2842
+#  skipwasi: true # needs os.readdir
 - repo: golang.org/x/text
   subdirs:
   - pkg: encoding
