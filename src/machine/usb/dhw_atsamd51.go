@@ -497,6 +497,9 @@ func (d *dhw) controlTransferContinue(endpoint uint8, count, total uint32) {
 	if xfer, ok := d.ep[num][dir].activeTransfer(); ok {
 		data, size := xfer.packetComplete(count)
 		d.endpointTransfer(endpoint, data, size)
+		if size == 0 || size < xfer.maxPacketSize {
+			d.controlTransferComplete(endpoint, count, total)
+		}
 	}
 }
 

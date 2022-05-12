@@ -1974,7 +1974,7 @@ func (tcc *TCC) Set(channel uint8, value uint32) {
 	}
 }
 
-func InitUSBIO() {
+func initUSB() {
 	// Configure USB D+/D- pins.
 	USBCDC_DM_PIN.Configure(PinConfig{Mode: PinCom})
 	USBCDC_DP_PIN.Configure(PinConfig{Mode: PinCom})

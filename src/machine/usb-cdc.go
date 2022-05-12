@@ -7,8 +7,7 @@ import "machine/usb"
 
 var USB = &usb.CDC{}
 
-func InitUSB(port int) {
-	InitUSBIO()
-	USB.Port = port
+func InitUSB() {
+	initUSB()
 	USB.Configure(usb.CDCConfig{})
 }
