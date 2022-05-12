@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	uart := machine.UART0
+	uart := machine.Serial
 	uart.Write([]byte("Echo console enabled. Type something then press enter:\r\n"))
 
 	input := make([]byte, 4096)

@@ -1,8 +1,10 @@
 package usb
 
+import "unsafe"
+
 const descUSBSpecVersion = uint16(0x0200) // USB 2.0
 
-const descLanguageEnglish = uint16(0x0409)
+const descLanguageEnglish = uint16(0x0409) // (US) English
 
 // USB constants defined per specification.
 const (
@@ -135,6 +137,11 @@ const (
 	descDeviceCapExtAttrBESLPos = 2
 )
 
+const (
+	descDirOut = descRequestTypeDirOut >> descRequestTypeDirPos
+	descDirIn  = descRequestTypeDirIn >> descRequestTypeDirPos
+)
+
 // device returns the enumerated device descriptor value, defined per USB
 // specification, for the receiver Speed s.
 func (s Speed) device() uint32 {
@@ -153,7 +160,7 @@ func (s Speed) device() uint32 {
 }
 
 const (
-	// Attributes of all endpoint descriptor configurations.
+	// Common attributes for all endpoint descriptor configurations.
 	descEndptConfigAttr = descConfigAttrD7Msk | // Bit 7: reserved (1)
 		(0 << descConfigAttrSelfPoweredPos) | // Bit 6: self-powered
 		(0 << descConfigAttrRemoteWakeupPos) | // Bit 5: remote wakeup
@@ -161,8 +168,8 @@ const (
 
 	descEndptConfigAttrRxPos = 0
 	descEndptConfigAttrTxPos = 16
-	descEndptConfigAttrRxMsk = (descEndptConfigAttr | descEndptAttrSyncTypeMsk) << descEndptConfigAttrRxPos
-	descEndptConfigAttrTxMsk = (descEndptConfigAttr | descEndptAttrSyncTypeMsk) << descEndptConfigAttrTxPos
+	descEndptConfigAttrRxMsk = (descEndptAttrSyncTypeMsk | descEndptConfigAttr) << descEndptConfigAttrRxPos
+	descEndptConfigAttrTxMsk = (descEndptAttrSyncTypeMsk | descEndptConfigAttr) << descEndptConfigAttrTxPos
 
 	descEndptConfigAttrRxUnused      = 0x02 << descEndptConfigAttrRxPos
 	descEndptConfigAttrTxUnused      = 0x02 << descEndptConfigAttrTxPos
@@ -419,8 +426,11 @@ const (
 	// for each string) seems a good compromise.
 )
 
+// descEndpointInvalid represents an invalid endpoint address.
+const descEndpointInvalid = ^uint8(descEndptAddrNumberMsk | descEndptAddrDirectionMsk)
+
 // descCDCACMCodingSize defines the length of a CDC-ACM UART line coding buffer.
-const descCDCACMCodingSize = 7
+const descCDCACMCodingSize = unsafe.Sizeof(descCDCACMLineCoding{})
 
 // descCDCACMLineCoding represents an emulated UART's line configuration.
 type descCDCACMLineCoding struct {
@@ -454,6 +464,9 @@ const (
 // structures for the USB CDC-ACM (single) device class.
 type descCDCACMClass struct {
 	*descCDCACMClassData // Target-defined, class-specific data
+
+	line descCDCACMLineCoding
+	term struct{ dtr, rts bool }
 
 	locale *[descCDCACMLanguageCount]descStringLanguage // string descriptors
 	device *[descLengthDevice]uint8                     // device descriptor

@@ -41,7 +41,7 @@ const (
 	descBankOut = 0 // descriptor bank 0 holds OUT endpoints
 	descBankIn  = 1 // descriptor bank 1 holds IN endpoints
 
-	descControlPacketSize = 16
+	descControlPacketSize = 64
 )
 
 // Constants for USB CDC-ACM device classes.
@@ -64,7 +64,8 @@ const (
 	//   | than the data payload specified by PCKSIZE.SIZE minus two, both CRC
 	//   | data bytes are written to the data buffer.
 	// Thus, we need to allocate 2 extra bytes for control endpoint 0 Rx (OUT).
-	descCDCACMCxSize = 8 + 2
+	descCDCACMSxSize = 8 + 2
+	descCDCACMCxSize = descControlPacketSize
 
 	// CDC-ACM Data Buffers
 
@@ -85,7 +86,7 @@ const (
 	// CDC-ACM Endpoint Configurations for Full-Speed Device
 
 	descCDCACMStatusFSInterval   = 5  // Status
-	descCDCACMStatusFSPacketSize = 16 //  (full-speed)
+	descCDCACMStatusFSPacketSize = 64 //  (full-speed)
 
 	descCDCACMDataRxFSPacketSize = 64 // Data Rx (full-speed)
 	descCDCACMDataTxFSPacketSize = 64 // Data Tx (full-speed)
@@ -115,7 +116,8 @@ const (
 	//   | than the data payload specified by PCKSIZE.SIZE minus two, both CRC
 	//   | data bytes are written to the data buffer.
 	// Thus, we need to allocate 2 extra bytes for control endpoint 0 Rx (OUT).
-	descHIDCxSize = 8 + 2
+	descHIDSxSize = 8 + 2
+	descHIDCxSize = descControlPacketSize
 
 	// HID Serial Buffers
 
@@ -192,10 +194,15 @@ const (
 // DMA controller the buffer and transfer properties for each endpoint, for the
 // default CDC-ACM (single) device class configuration (index 1).
 //go:align 32
-var descCDCACM0ED [descCDCACMEDCount]dhwEndptAddrDesc
+var descCDCACM0ED [descCDCACMEDCount]dhwEPAddrDesc
 
-// descCDCACM0Cx is the buffer for control/status data received on endpoint 0 of
-// the default CDC-ACM (single) device class configuration (index 1).
+// descCDCACM0Sx is the receive (Rx) buffer for setup packets on control endpoint
+// 0 of the default CDC-ACM (single) device class configuration (index 1).
+//go:align 32
+var descCDCACM0Sx [descCDCACMSxSize]uint8
+
+// descCDCACM0Cx is the transmit (Tx) buffer for control/status packets on control
+// endpoint 0 of the default CDC-ACM (single) device class configuration (index 1).
 //go:align 32
 var descCDCACM0Cx [descCDCACMCxSize]uint8
 
@@ -227,9 +234,10 @@ type descCDCACMClassData struct {
 
 	// CDC-ACM Control Buffers
 
-	ed *[descCDCACMEDCount]dhwEndptAddrDesc // endpoint descriptors
+	ed *[descCDCACMEDCount]dhwEPAddrDesc // endpoint descriptors
 
-	cx *[descCDCACMCxSize]uint8     // control endpoint 0 Rx/Tx transfer buffer
+	sx *[descCDCACMSxSize]uint8     // control endpoint 0 Rx (OUT) setup packets
+	cx *[descCDCACMCxSize]uint8     // control endpoint 0 Tx (IN) control/status packets
 	dx *[descCDCACMConfigSize]uint8 // control endpoint 0 Tx (IN) descriptor transfer buffer
 
 	// CDC-ACM Data Buffers
@@ -254,6 +262,7 @@ var descCDCACMData = [dcdCount]descCDCACMClassData{
 
 		ed: &descCDCACM0ED,
 
+		sx: &descCDCACM0Sx,
 		cx: &descCDCACM0Cx,
 		dx: &descCDCACM0Dx,
 
@@ -272,10 +281,15 @@ var descCDCACMData = [dcdCount]descCDCACMClassData{
 // DMA controller the buffer and transfer properties for each endpoint, for the
 // default HID device class configuration (index 1).
 //go:align 32
-var descHID0ED [descHIDEDCount]dhwEndptAddrDesc
+var descHID0ED [descHIDEDCount]dhwEPAddrDesc
 
-// descHID0Cx is the buffer for control/status data received on endpoint 0 of
-// the default HID device class configuration (index 1).
+// descHID0Sx is the receive (Rx) buffer for setup packets on control endpoint 0
+// of the default HID device class configuration (index 1).
+//go:align 32
+var descHID0Sx [descHIDSxSize]uint8
+
+// descHID0Cx is the transmit (Tx) buffer for control/status packets on control
+// endpoint 0 of the default CDC-ACM (single) device class configuration (index 1).
 //go:align 32
 var descHID0Cx [descHIDCxSize]uint8
 
@@ -339,9 +353,10 @@ type descHIDClassData struct {
 
 	// HID Control Buffers
 
-	ed *[descHIDEDCount]dhwEndptAddrDesc // endpoint descriptors
+	ed *[descHIDEDCount]dhwEPAddrDesc // endpoint descriptors
 
-	cx *[descHIDCxSize]uint8     // control endpoint 0 Rx/Tx transfer buffer
+	sx *[descHIDSxSize]uint8     // control endpoint 0 Rx (OUT) setup packets
+	cx *[descHIDCxSize]uint8     // control endpoint 0 Tx (IN) control/status packets
 	dx *[descHIDConfigSize]uint8 // control endpoint 0 Tx (IN) descriptor transfer buffer
 
 	// HID Serial Buffers
@@ -391,6 +406,7 @@ var descHIDData = [dcdCount]descHIDClassData{
 
 		ed: &descHID0ED,
 
+		sx: &descHID0Sx,
 		cx: &descHID0Cx,
 		dx: &descHID0Dx,
 

@@ -7,7 +7,10 @@ package usb
 // implemented for each target, providing common/shared functionality and
 // defining a standard interface with which the dhw must adhere.
 
-import "unsafe"
+import (
+	"runtime/volatile"
+	"unsafe"
+)
 
 // dcdCount defines the number of USB cores to configure for device mode. It is
 // computed as the sum of all declared device configuration descriptors.
@@ -29,6 +32,8 @@ type dcd struct {
 	port int   // USB port index
 	cc   class // USB device class
 	id   int   // USB device controller index
+
+	st volatile.Register8 // USB device state
 }
 
 // initDCD initializes and assigns a free device controller instance to the
@@ -54,6 +59,7 @@ func initDCD(port int, speed Speed, class class) (*dcd, status) {
 			dcdInstance[i].port = port
 			dcdInstance[i].cc = class
 			dcdInstance[i].id = i
+			dcdInstance[i].setState(dcdStateNotReady)
 			return &dcdInstance[i], statusOK
 		}
 	}
@@ -77,24 +83,19 @@ type dcdSetup struct {
 
 // setupFrom decodes and returns a USB standard setup packet located at the
 // memory address pointed to by addr.
-func setupFrom(addr uintptr) dcdSetup {
+func setupFrom(addr uintptr) (s dcdSetup) {
 	var u uint64
-	for i := uintptr(0); i < 8; i++ {
+	for i := uintptr(0); i < dcdSetupSize; i++ {
 		u |= uint64(*(*uint8)(unsafe.Pointer(addr + i))) << (i << 3)
 	}
-	return dcdSetup{
-		bmRequestType: uint8(u & 0xFF),
-		bRequest:      uint8((u & 0xFF00) >> 8),
-		wValue:        uint16((u & 0xFFFF0000) >> 16),
-		wIndex:        uint16((u & 0xFFFF00000000) >> 32),
-		wLength:       uint16((u & 0xFFFF000000000000) >> 48),
-	}
+	s.set(u)
+	return
 }
 
 // setup decodes and returns a USB standard setup packet stored in the given
 // byte slice b.
 func setup(b []uint8) dcdSetup {
-	if len(b) >= 8 {
+	if len(b) >= int(dcdSetupSize) {
 		return dcdSetup{
 			bmRequestType: b[0],
 			bRequest:      b[1],
@@ -106,13 +107,71 @@ func setup(b []uint8) dcdSetup {
 	return dcdSetup{}
 }
 
+//go:inline
+func (s *dcdSetup) set(u uint64) {
+	s.bmRequestType = uint8(u & 0xFF)
+	s.bRequest = uint8((u & 0xFF00) >> 8)
+	s.wValue = uint16((u & 0xFFFF0000) >> 16)
+	s.wIndex = uint16((u & 0xFFFF00000000) >> 32)
+	s.wLength = uint16((u & 0xFFFF000000000000) >> 48)
+}
+
 // pack returns the receiver USB standard setup packet s encoded as uint64.
+//go:inline
 func (s dcdSetup) pack() uint64 {
 	return ((uint64(s.bmRequestType) & 0xFF) << 0) |
 		((uint64(s.bRequest) & 0xFF) << 8) |
 		((uint64(s.wValue) & 0xFFFF) << 16) |
 		((uint64(s.wIndex) & 0xFFFF) << 32) |
 		((uint64(s.wLength) & 0xFFFF) << 48)
+}
+
+// direction parses the direction bit from the bmRequestType field of a SETUP
+// packet, returning 0 for OUT (Rx) and 1 for IN (Tx) requests.
+//go:inline
+func (s dcdSetup) direction() uint8 {
+	return (s.bmRequestType & descRequestTypeDirMsk) >> descRequestTypeDirPos
+}
+
+//go:inline
+func (s dcdSetup) equals(t dcdSetup) bool {
+	return s.bmRequestType == t.bmRequestType && s.bRequest == t.bRequest &&
+		s.wValue == t.wValue && s.wIndex == t.wIndex && s.wLength == t.wLength
+}
+
+// dcdState defines the current state of the device class driver.
+type dcdState uint8
+
+const (
+	dcdStateNotReady   dcdState = iota // initial state, before END_OF_RESET
+	dcdStateDefault                    // after END_OF_RESET, before SET_ADDRESS
+	dcdStateAddressed                  // after SET_ADDRESS, before SET_CONFIGURATION
+	dcdStateConfigured                 // after SET_CONFIGURATION, operational state
+	dcdStateSuspended                  // while operational, after SUSPEND
+)
+
+func (d *dcd) state() dcdState { return dcdState(d.st.Get()) }
+
+func (d *dcd) setState(state dcdState) (ok bool) {
+	curr := d.state()
+	switch state {
+	case dcdStateNotReady:
+		ok = true
+	case dcdStateDefault:
+		ok = curr == dcdStateNotReady || curr == dcdStateDefault
+	case dcdStateAddressed:
+		ok = curr == dcdStateDefault
+	case dcdStateConfigured:
+		ok = curr == dcdStateAddressed || curr == dcdStateConfigured || curr == dcdStateSuspended
+	case dcdStateSuspended:
+		ok = curr == dcdStateAddressed || curr == dcdStateConfigured || curr == dcdStateSuspended
+	default:
+		ok = false
+	}
+	if ok {
+		d.st.Set(uint8(state))
+	}
+	return
 }
 
 // dcdEvent is used to describe virtual interrupts on the USB bus to a device
@@ -132,47 +191,85 @@ type dcdEvent struct {
 
 // Enumerated constants for all possible USB device controller interrupt codes.
 const (
-	dcdEventInvalid          uint8 = iota // Invalid interrupt
-	dcdEventStatusReset                   // USB reset received
-	dcdEventStatusRun                     // USB controller entered run state
-	dcdEventStatusSuspend                 // USB suspend received
-	dcdEventStatusError                   // USB error condition detected on bus
-	dcdEventControlSetup                  // USB setup received
-	dcdEventPeripheralReady               // USB PHY powered and ready to _go_
-	dcdEventTransactComplete              // USB transaction complete
-	dcdEventTimer                         // USB (system) timer
+	dcdEventInvalid             uint8 = iota // Invalid interrupt
+	dcdEventStatusReset                      // USB RESET received
+	dcdEventStatusResume                     // USB RESUME condition
+	dcdEventStatusSuspend                    // USB SUSPEND received
+	dcdEventStatusError                      // USB error condition detected on bus
+	dcdEventDeviceReady                      // USB PHY powered and ready to _go_
+	dcdEventDeviceAddress                    // USB device SET_ADDRESS complete
+	dcdEventDeviceConfiguration              // USB device SET_CONFIGURATION complete
+	dcdEventControlSetup                     // USB SETUP received
+	dcdEventControlComplete                  // USB control request complete
+	dcdEventTransferComplete                 // USB data transfer complete
+	dcdEventTimer                            // USB (system) timer
 )
 
 func (d *dcd) event(ev dcdEvent) {
 
 	switch ev.id {
-	case dcdEventInvalid:
+
 	case dcdEventStatusReset:
-		d.endpointMask = 0
+		d.setState(dcdStateNotReady)
 
-	case dcdEventPeripheralReady:
-		// Configure and enable control endpoint 0
-		d.endpointEnable(0, true, 0)
+	case dcdEventStatusResume:
+		d.setState(dcdStateConfigured)
 
-	case dcdEventStatusRun:
 	case dcdEventStatusSuspend:
-	case dcdEventStatusError:
-	case dcdEventControlSetup:
-		// On control endpoint 0 setup events, the ev.setup field will be defined
-		d.stage = d.controlSetup(ev.setup)
-		switch d.stage {
-		case dcdStageSetup:
-		case dcdStageDataIn:
-		case dcdStageDataOut:
-		case dcdStageStatusIn:
-		case dcdStageStatusOut:
-		case dcdStageStall:
-			d.controlStall()
+		d.setState(dcdStateSuspended)
+
+	case dcdEventDeviceReady:
+		if d.setState(dcdStateDefault) {
+			// Configure and enable control endpoint 0
+			d.endpointEnable(0, true, 0)
 		}
 
-	case dcdEventTransactComplete:
-	case dcdEventTimer:
+	case dcdEventDeviceAddress:
+		// -- ** IMPORTANT ** --
+		// dcdEventDeviceAddress must be triggered by the target driver, because
+		// different MCUs require setting the device address at different times
+		// during the enumeration process.
+		d.setState(dcdStateAddressed)
+
+	case dcdEventDeviceConfiguration:
+		d.setState(dcdStateConfigured)
+
+	case dcdEventControlSetup:
+		// On control endpoint 0 setup events, the ev.setup field will be defined.
+		// We overwrite the receiver's setup field, leaving it unmodified throughout
+		// all transactions of a control transfer. It is only cleared once the
+		// completion event dcdEventControlComplete has been called and finished
+		// processing, or if its initial processing fails due to error.
+		d.setup = ev.setup
+		d.stage = d.controlSetup(ev.setup)
+		switch d.stage {
+		case dcdStageDataIn, dcdStageDataOut:
+			// TBD: control endpoint data transfer
+
+		case dcdStageStatusIn, dcdStageStatusOut:
+			// TBD: control endpoint status transfer
+
+		case dcdStageStall:
+			d.controlStall(true, ev.setup.direction())
+
+		case dcdStageSetup:
+			fallthrough
+		default:
+			// TBD: no stage transition occurred
+		}
+
+	case dcdEventControlComplete:
+		d.controlComplete()
+		// clear the active SETUP packet once the control transfer completes.
+		d.setup = dcdSetup{}
+
+	case dcdEventTransferComplete:
+		// TBD: data endpoint transfer complete
+
+	case dcdEventInvalid, dcdEventStatusError, dcdEventTimer:
+		fallthrough
 	default:
+		// TBD: unhandled events
 	}
 }
 
@@ -191,9 +288,6 @@ const (
 
 // controlSetup handles setup messages on control endpoint 0.
 func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
-
-	// Reset endpoint 0 notify mask
-	d.controlMask = 0
 
 	// First, switch on the type of request (standard, class, or vendor)
 	switch sup.bmRequestType & descRequestTypeTypeMsk {
@@ -215,7 +309,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 			case descRequestStandardSetAddress:
 				d.setDeviceAddress(sup.wValue)
 				d.controlReceive(uintptr(0), 0, false)
-				return dcdStageSetup
+				return dcdStageStatusOut
 
 			// SET CONFIGURATION (0x09):
 			case descRequestStandardSetConfiguration:
@@ -224,6 +318,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 					// Use default if invalid index received
 					d.cc.config = 1
 				}
+				d.event(dcdEvent{id: dcdEventDeviceConfiguration})
 
 				// Respond based on our device class configuration
 				switch d.cc.id {
@@ -244,7 +339,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				default:
 					// Unhandled device class
 				}
-				return dcdStageSetup
+				return dcdStageStatusOut
 
 			default:
 				// Unhandled request
@@ -258,11 +353,10 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 
 			// GET STATUS (0x00):
 			case descRequestStandardGetStatus:
-				d.controlReply[0] = 0
-				d.controlReply[1] = 0
 				d.controlTransmit(
-					uintptr(unsafe.Pointer(&d.controlReply[0])), 2, false)
-				return dcdStageSetup
+					d.controlStatusBuffer([]uint8{0, 0}),
+					2, false)
+				return dcdStageDataIn
 
 			// GET DESCRIPTOR (0x06):
 			case descRequestStandardGetDescriptor:
@@ -273,12 +367,12 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// CDC-ACM (single)
 				case classDeviceCDCACM:
 					d.controlDescriptorCDCACM(sup)
-					return dcdStageSetup
+					return dcdStageDataIn
 
 				// HID
 				case classDeviceHID:
 					d.controlDescriptorHID(sup)
-					return dcdStageSetup
+					return dcdStageDataIn
 
 				default:
 					// Unhandled device class
@@ -286,10 +380,12 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 
 			// GET CONFIGURATION (0x08):
 			case descRequestStandardGetConfiguration:
-				d.controlReply[0] = uint8(d.cc.config)
 				d.controlTransmit(
-					uintptr(unsafe.Pointer(&d.controlReply[0])), 1, false)
-				return dcdStageSetup
+					d.controlStatusBuffer([]uint8{
+						uint8(d.cc.config),
+					}),
+					1, false)
+				return dcdStageDataIn
 
 			default:
 				// Unhandled request
@@ -310,12 +406,12 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// CDC-ACM (single)
 				case classDeviceCDCACM:
 					d.controlDescriptorCDCACM(sup)
-					return dcdStageSetup
+					return dcdStageDataIn
 
 				// HID
 				case classDeviceHID:
 					d.controlDescriptorHID(sup)
-					return dcdStageSetup
+					return dcdStageDataIn
 
 				default:
 					// Unhandled device class
@@ -330,7 +426,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// HID
 				case classDeviceHID:
 					d.controlDescriptorHID(sup)
-					return dcdStageSetup
+					return dcdStageDataIn
 
 				default:
 					// Unhandled device class
@@ -350,13 +446,13 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 			case descRequestStandardClearFeature:
 				d.endpointClearFeature(uint8(sup.wIndex))
 				d.controlReceive(uintptr(0), 0, false)
-				return dcdStageSetup
+				return dcdStageStatusOut
 
 			// SET FEATURE (0x03):
 			case descRequestStandardSetFeature:
 				d.endpointSetFeature(uint8(sup.wIndex))
 				d.controlReceive(uintptr(0), 0, false)
-				return dcdStageSetup
+				return dcdStageStatusOut
 
 			default:
 				// Unhandled request
@@ -371,11 +467,13 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 			// GET STATUS (0x00):
 			case descRequestStandardGetStatus:
 				status := d.endpointStatus(uint8(sup.wIndex))
-				d.controlReply[0] = uint8(status)
-				d.controlReply[1] = uint8(status >> 8)
 				d.controlTransmit(
-					uintptr(unsafe.Pointer(&d.controlReply[0])), 2, false)
-				return dcdStageSetup
+					d.controlStatusBuffer([]uint8{
+						uint8(status),
+						uint8(status >> 8),
+					}),
+					2, false)
+				return dcdStageDataIn
 
 			default:
 				// Unhandled request
@@ -407,14 +505,14 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// CDC-ACM (single)
 				case classDeviceCDCACM:
 					// line coding must contain exactly 7 bytes
-					if descCDCACMCodingSize == sup.wLength {
+					if uint16(descCDCACMCodingSize) == sup.wLength {
 						d.setup = sup
 						d.controlReceive(
 							uintptr(unsafe.Pointer(&descCDCACM[d.cc.config-1].cx[0])),
-							descCDCACMCodingSize, true)
+							uint32(descCDCACMCodingSize), true)
 						// CDC Line Coding packet receipt handling occurs in method
 						// controlComplete().
-						return dcdStageSetup
+						return dcdStageDataOut
 					}
 
 				default:
@@ -438,7 +536,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 						// DTR is bit 0 (mask 0x01), RTS is bit 1 (mask 0x02)
 						d.uartSetLineState(0 != sup.wValue&0x01, 0 != sup.wValue&0x02)
 						d.controlReceive(uintptr(0), 0, false)
-						return dcdStageSetup
+						return dcdStageStatusOut
 
 					default:
 						// Unhandled device interface
@@ -457,7 +555,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// CDC-ACM (single)
 				case classDeviceCDCACM:
 					d.controlReceive(uintptr(0), 0, false)
-					return dcdStageSetup
+					return dcdStageStatusOut
 
 				default:
 					// Unhandled device class
@@ -471,13 +569,13 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 
 				// HID
 				case classDeviceHID:
-					if sup.wLength <= descHIDCxSize {
+					if sup.wLength <= descHIDSxSize {
 						d.setup = sup
 						descHID[d.cc.config-1].cx[0] = 0xE9
 						d.controlReceive(
 							uintptr(unsafe.Pointer(&descHID[d.cc.config-1].cx[0])),
 							uint32(sup.wLength), true)
-						return dcdStageSetup
+						return dcdStageDataOut
 					}
 
 				default:
@@ -493,9 +591,11 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				// HID
 				case classDeviceHID:
 					idleRate := sup.wValue >> 8
+					// TBD: do we need to handle this request? wIndex contains the target
+					// interface of the request.
 					_ = idleRate
 					d.controlReceive(uintptr(0), 0, false)
-					return dcdStageSetup
+					return dcdStageStatusOut
 
 				default:
 					// Unhandled device class
@@ -521,12 +621,13 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 				case classDeviceHID:
 					reportType := uint8(sup.wValue >> 8)
 					reportID := uint8(sup.wValue)
+					// TBD: do we need to handle this request? wIndex contains the target
+					// interface of the request.
 					_, _ = reportType, reportID
-					d.controlReply[0] = 0
-					d.controlReply[1] = 0
 					d.controlTransmit(
-						uintptr(unsafe.Pointer(&d.controlReply[0])), 2, false)
-					return dcdStageSetup
+						d.controlStatusBuffer([]uint8{0, 0}),
+						2, false)
+					return dcdStageDataIn
 
 				default:
 					// Unhandled device class
@@ -551,10 +652,7 @@ func (d *dcd) controlSetup(sup dcdSetup) dcdStage {
 }
 
 // controlComplete handles the setup completion of control endpoint 0.
-func (d *dcd) controlComplete(status uint32) {
-
-	// Reset endpoint 0 notify mask
-	d.controlMask = 0
+func (d *dcd) controlComplete() {
 
 	// First, switch on the type of request (standard, class, or vendor)
 	switch d.setup.bmRequestType & descRequestTypeTypeMsk {

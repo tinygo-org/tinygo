@@ -1,3 +1,4 @@
+//go:build mimxrt1062
 // +build mimxrt1062
 
 package usb
@@ -236,6 +237,8 @@ func (d *dhw) interrupt() {
 			// wait for flush to complete
 			for d.bus.ENDPTFLUSH.HasBits(0x00010001) {
 			}
+			// Reset notify mask for control endpoint 0
+			d.controlMask = 0
 			// Notify device controller driver
 			d.event(dcdEvent{
 				id:    dcdEventControlSetup,
@@ -248,7 +251,11 @@ func (d *dhw) interrupt() {
 		if 0 != completeStatus {
 			d.bus.ENDPTCOMPLETE.Set(completeStatus)
 			if 0 != completeStatus&d.controlMask {
-				d.controlComplete(completeStatus)
+				// Clear notify mask for control endpoint 0
+				d.controlMask = 0
+				// Notify device controller driver, which invokes any appropriate
+				// callback(s) for the current device class configuration.
+				d.controlComplete()
 			}
 			completeStatus &= d.endpointMask
 			if 0 != completeStatus {
@@ -289,6 +296,7 @@ func (d *dhw) interrupt() {
 		}
 		d.bus.ENDPTFLUSH.Set(0xFFFFFFFF)
 		d.event(dcdEvent{id: dcdEventStatusReset})
+		d.endpointMask = 0
 	}
 
 	// General Purpose Timer Interrupt 0(GPTINT0) - R/WC
@@ -375,6 +383,7 @@ func (d *dhw) setDeviceAddress(addr uint16) {
 	d.bus.DEVICEADDR.Set(nxp.USB_DEVICEADDR_USBADRA |
 		((uint32(addr) << nxp.USB_DEVICEADDR_USBADR_Pos) &
 			nxp.USB_DEVICEADDR_USBADR_Msk))
+	d.event(dcdEvent{id: dcdEventDeviceAddress})
 }
 
 // =============================================================================
@@ -383,8 +392,8 @@ func (d *dhw) setDeviceAddress(addr uint16) {
 
 // controlStall stalls a transfer on control endpoint 0. To stall a transfer on
 // any other endpoint, use method endpointStall().
-func (d *dhw) controlStall() {
-	d.endpointStall(0)
+func (d *dhw) controlStall(stall bool) {
+	d.endpointStall(0, stall)
 }
 
 // controlReceive receives (Rx, OUT) data on control endpoint 0.
@@ -554,7 +563,7 @@ func (d *dhw) endpointStatus(endpoint uint8) uint16 {
 }
 
 // endpointStall stalls a transfer on the given endpoint.
-func (d *dhw) endpointStall(endpoint uint8) {
+func (d *dhw) endpointStall(endpoint uint8, stall bool) {
 	// RXS and TXS bits at same position in all endpoint control registers.
 	d.endpointControlRegister(endpoint).SetBits(
 		nxp.USB_ENDPTCTRL0_RXS | nxp.USB_ENDPTCTRL0_TXS,

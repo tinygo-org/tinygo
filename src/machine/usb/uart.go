@@ -37,14 +37,18 @@ func (uart *UART) Configure(config UARTConfig) error {
 	return nil
 }
 
+func (uart *UART) Ready() bool {
+	return uart.core.dc.uartReady()
+}
+
 // Buffered returns the number of bytes currently stored in the RX buffer.
-func (uart UART) Buffered() int {
+func (uart *UART) Buffered() int {
 	return uart.core.dc.uartAvailable()
 }
 
 // ReadByte reads a single byte from the RX buffer.
 // If there is no data in the buffer, returns an error.
-func (uart UART) ReadByte() (byte, error) {
+func (uart *UART) ReadByte() (byte, error) {
 	n, ok := uart.core.dc.uartReadByte()
 	if !ok {
 		return 0, ErrUARTEmptyBuffer
@@ -53,12 +57,12 @@ func (uart UART) ReadByte() (byte, error) {
 }
 
 // Read from the RX buffer.
-func (uart UART) Read(data []byte) (n int, err error) {
+func (uart *UART) Read(data []byte) (n int, err error) {
 	return uart.core.dc.uartRead(data), nil
 }
 
 // WriteByte writes a single byte of data to the UART interface.
-func (uart UART) WriteByte(c byte) error {
+func (uart *UART) WriteByte(c byte) error {
 	if !uart.core.dc.uartWriteByte(c) {
 		return ErrUARTWriteFailed
 	}
@@ -66,6 +70,6 @@ func (uart UART) WriteByte(c byte) error {
 }
 
 // Write data to the UART.
-func (uart UART) Write(data []byte) (n int, err error) {
+func (uart *UART) Write(data []byte) (n int, err error) {
 	return uart.core.dc.uartWrite(data), nil
 }

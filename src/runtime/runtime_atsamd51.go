@@ -7,6 +7,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"machine"
+	"machine/usb"
 	"runtime/interrupt"
 	"runtime/volatile"
 )
@@ -25,13 +26,12 @@ func init() {
 	initClocks()
 	initRTC()
 	initSERCOMClocks()
-	initUSBClock()
 	initADCClock()
 
 	// connect to USB CDC interface
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.Serial.Configure(usb.UARTConfig{})
 	if !machine.USB.Configured() {
-		machine.USB.Configure(machine.UARTConfig{})
+		machine.USB.Configure(usb.UARTConfig{})
 	}
 }
 

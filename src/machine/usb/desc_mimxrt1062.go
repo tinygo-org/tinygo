@@ -1,3 +1,4 @@
+//go:build mimxrt1062
 // +build mimxrt1062
 
 package usb

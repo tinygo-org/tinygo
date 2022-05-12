@@ -1985,10 +1985,10 @@ type USBCDC struct {
 	configured        bool
 }
 
-var (
-	// USB is a USB CDC interface.
-	USB = &USBCDC{Buffer: NewRingBuffer()}
-)
+// var (
+// 	// USB is a USB CDC interface.
+// 	USB = &USBCDC{Buffer: NewRingBuffer()}
+// )
 
 const (
 	usbcdcTxSizeMask          uint8 = 0x3F
@@ -2163,10 +2163,10 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_ENABLE)
 
 	// enable IRQ at highest priority
-	interrupt.New(sam.IRQ_USB_OTHER, handleUSBIRQ).Enable()
-	interrupt.New(sam.IRQ_USB_SOF_HSOF, handleUSBIRQ).Enable()
-	interrupt.New(sam.IRQ_USB_TRCPT0, handleUSBIRQ).Enable()
-	interrupt.New(sam.IRQ_USB_TRCPT1, handleUSBIRQ).Enable()
+	//interrupt.New(sam.IRQ_USB_OTHER, handleUSBIRQ).Enable()
+	//interrupt.New(sam.IRQ_USB_SOF_HSOF, handleUSBIRQ).Enable()
+	//interrupt.New(sam.IRQ_USB_TRCPT0, handleUSBIRQ).Enable()
+	//interrupt.New(sam.IRQ_USB_TRCPT1, handleUSBIRQ).Enable()
 
 	usbcdc.configured = true
 }
@@ -2240,7 +2240,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 
 	// Start of frame
 	if (flags & sam.USB_DEVICE_INTFLAG_SOF) > 0 {
-		USB.Flush()
+		//USB.Flush()
 		// if you want to blink LED showing traffic, this would be the place...
 	}
 
@@ -2300,7 +2300,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 				setEPINTFLAG(i, sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1)
 
 				if i == usb_CDC_ENDPOINT_IN {
-					USB.waitTxc = false
+					//USB.waitTxc = false
 				}
 			}
 		}
@@ -2614,7 +2614,7 @@ func handleEndpoint(ep uint32) {
 
 	// move to ring buffer
 	for i := 0; i < count; i++ {
-		USB.Receive(byte((udd_ep_out_cache_buffer[ep][i] & 0xFF)))
+		//USB.Receive(byte((udd_ep_out_cache_buffer[ep][i] & 0xFF)))
 	}
 
 	// set byte count to zero
