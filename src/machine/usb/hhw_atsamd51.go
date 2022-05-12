@@ -1,5 +1,5 @@
-//go:build (sam && atsamd51) || (sam && atsame5x)
-// +build sam,atsamd51 sam,atsame5x
+//go:build atsamd51 || atsame5x
+// +build atsamd51 atsame5x
 
 package usb
 

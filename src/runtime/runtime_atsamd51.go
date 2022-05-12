@@ -33,7 +33,7 @@ func init() {
 	//	machine.USB.Configure(usb.UARTConfig{})
 	//}
 
-	initUSB()
+	machine.InitUSB(0)
 }
 
 func putchar(c byte) {

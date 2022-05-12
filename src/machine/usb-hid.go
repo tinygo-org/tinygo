@@ -1,14 +1,14 @@
-//go:build baremetal && usb.hid
-// +build baremetal,usb.hid
+//go:build usb.hid
+// +build usb.hid
 
 package machine
 
 import "machine/usb"
 
-var USB = &usb.HID{Port: 0}
+var USB = &usb.HID{}
 
-func init() {
-	// Configure USB D+/D- pins.
-	USBCDC_DM_PIN.Configure(PinConfig{Mode: PinCom})
-	USBCDC_DP_PIN.Configure(PinConfig{Mode: PinCom})
+func InitUSB(port int) {
+	InitUSBIO()
+	USB.Port = port
+	USB.Configure(usb.HIDConfig{})
 }

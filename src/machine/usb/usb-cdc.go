@@ -1,5 +1,5 @@
-//go:build baremetal && usb.cdc
-// +build baremetal,usb.cdc
+//go:build usb.cdc
+// +build usb.cdc
 
 package usb
 

@@ -1,5 +1,5 @@
-//go:build (sam && atsamd51) || (sam && atsame5x)
-// +build sam,atsamd51 sam,atsame5x
+//go:build atsamd51 || atsame5x
+// +build atsamd51 atsame5x
 
 package usb
 
@@ -10,14 +10,6 @@ const descCPUFrequencyHz = 120000000
 // independent of the number of cores which shall be configured as TinyGo USB
 // host/device controller instances.
 const descCoreCount = 1 // SAMx51 has a single, full-speed USB PHY
-
-// descCDCCount defines the number of USB cores that may be configured as
-// CDC-ACM (single) devices.
-const descCDCCount = 0
-
-// descHIDCount defines the number of USB cores that may be configured as a
-// composite (keyboard + mouse + joystick) human interface device (HID).
-const descHIDCount = 1
 
 // General USB device identification constants.
 const (

@@ -1,7 +1,11 @@
-//go:build baremetal && usb.hid
-// +build baremetal,usb.hid
+//go:build usb.hid
+// +build usb.hid
 
 package usb
+
+// descCDCCount defines the number of USB cores that may be configured as
+// CDC-ACM (single) devices.
+const descCDCCount = 0
 
 // USB HID constants defined per specification
 const (

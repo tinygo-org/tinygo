@@ -1,5 +1,5 @@
-//go:build sam || nrf52840
-// +build sam nrf52840
+//go:build nrf52840
+// +build nrf52840
 
 package machine
 

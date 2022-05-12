@@ -1,11 +1,14 @@
-//go:build baremetal && usb.cdc && (atsamd51 || atsame5x)
-// +build baremetal
+//go:build usb.cdc && (atsamd51 || atsame5x)
 // +build usb.cdc
 // +build atsamd51 atsame5x
 
 package usb
 
 import "runtime/volatile"
+
+// descCDCCount defines the number of USB cores that may be configured as
+// CDC-ACM (single) devices.
+const descCDCCount = 1
 
 // Constants for USB CDC-ACM device classes.
 const (

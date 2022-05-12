@@ -1,14 +1,14 @@
-//go:build baremetal && usb.cdc
-// +build baremetal,usb.cdc
+//go:build usb.cdc
+// +build usb.cdc
 
 package machine
 
 import "machine/usb"
 
-var USB = &usb.CDC{Port: 0}
+var USB = &usb.CDC{}
 
-func init() {
-	// Configure USB D+/D- pins.
-	USBCDC_DM_PIN.Configure(PinConfig{Mode: PinCom})
-	USBCDC_DP_PIN.Configure(PinConfig{Mode: PinCom})
+func InitUSB(port int) {
+	InitUSBIO()
+	USB.Port = port
+	USB.Configure(usb.CDCConfig{})
 }

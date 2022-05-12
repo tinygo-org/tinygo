@@ -1,7 +1,11 @@
-//go:build baremetal && usb.cdc
-// +build baremetal,usb.cdc
+//go:build usb.cdc
+// +build usb.cdc
 
 package usb
+
+// descHIDCount defines the number of USB cores that may be configured as a
+// composite (keyboard + mouse + joystick) human interface device (HID).
+const descHIDCount = 0
 
 // USB CDC constants defined per specification.
 const (
@@ -291,7 +295,7 @@ var descCDC = [dcdCount]descCDCClass{
 			1,                         // Index of string descriptor describing manufacturer
 			2,                         // Index of string descriptor describing product
 			3,                         // Index of string descriptor describing the device's serial number
-			descCDCACMCount,           // Number of possible configurations
+			descCDCCount,              // Number of possible configurations
 		},
 		qualif: &[descLengthQualification]uint8{
 			descLengthQualification,  // Size of this descriptor in bytes
@@ -302,7 +306,7 @@ var descCDC = [dcdCount]descCDCClass{
 			0,                        // Subclass code (assigned by the USB-IF).
 			0,                        // Protocol code (assigned by the USB-IF).
 			descEndptMaxPktSize,      // Maximum packet size for endpoint zero (8, 16, 32, or 64)
-			descCDCACMCount,          // Number of possible configurations
+			descCDCCount,             // Number of possible configurations
 			0,                        // Reserved
 		},
 		config: &[descCDCConfigSize]uint8{

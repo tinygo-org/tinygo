@@ -1,5 +1,4 @@
-//go:build baremetal && usb.hid && (atsamd51 || atsame5x)
-// +build baremetal
+//go:build usb.hid && (atsamd51 || atsame5x)
 // +build usb.hid
 // +build atsamd51 atsame5x
 

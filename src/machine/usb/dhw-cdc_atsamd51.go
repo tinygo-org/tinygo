@@ -1,5 +1,4 @@
-//go:build baremetal && usb.cdc && (atsamd51 || atsame5x)
-// +build baremetal
+//go:build usb.cdc && (atsamd51 || atsame5x)
 // +build usb.cdc
 // +build atsamd51 atsame5x
 

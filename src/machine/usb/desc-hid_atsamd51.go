@@ -1,9 +1,12 @@
-//go:build baremetal && usb.hid && (atsamd51 || atsame5x)
-// +build baremetal
+//go:build usb.hid && (atsamd51 || atsame5x)
 // +build usb.hid
 // +build atsamd51 atsame5x
 
 package usb
+
+// descHIDCount defines the number of USB cores that may be configured as a
+// composite (keyboard + mouse + joystick) human interface device (HID).
+const descHIDCount = 1
 
 // Constants for USB HID (keyboard, mouse, joystick) device classes.
 const (

@@ -1,5 +1,5 @@
-//go:build baremetal && usb.hid
-// +build baremetal,usb.hid
+//go:build usb.hid
+// +build usb.hid
 
 package usb
 
