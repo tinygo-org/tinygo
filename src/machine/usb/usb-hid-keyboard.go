@@ -1,3 +1,6 @@
+//go:build baremetal && usb.hid
+// +build baremetal,usb.hid
+
 package usb
 
 import "errors"
@@ -55,6 +58,10 @@ const (
 func (kb *Keyboard) configure(dc *dcd, hc *descHIDClass) {
 	kb.dc = dc
 	kb.hc = hc
+}
+
+func (kb *Keyboard) ready() bool {
+	return kb.dc != nil && kb.hc != nil
 }
 
 // Write transmits press-and-release key sequences for each Keycode translated

@@ -120,15 +120,15 @@ type class struct {
 
 // Enumerated constants for all supported host/device class configurations.
 const (
-	classDeviceCDCACM = 0
-	classDeviceHID    = 1
+	classDeviceCDC = 0
+	classDeviceHID = 1
 )
 
 // mode returns the USB core operating mode of the receiver class c.
 //go:inline
 func (c class) mode() int {
 	switch c.id {
-	case classDeviceCDCACM, classDeviceHID:
+	case classDeviceCDC, classDeviceHID:
 		return modeDevice
 	default:
 		return modeIdle

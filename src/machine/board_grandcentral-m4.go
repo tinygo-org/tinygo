@@ -3,10 +3,6 @@
 
 package machine
 
-import (
-	"machine/usb"
-)
-
 // Digital pins
 const (
 	//  = Pin     Alt. Function        SERCOM   PWM Timer   Interrupt
@@ -251,8 +247,6 @@ const (
 const (
 	RESET_MAGIC_VALUE = 0xF01669EF // Used to reset into bootloader
 )
-
-var USB = usb.UART{Port: 0}
 
 // USB CDC pins
 const (

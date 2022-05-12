@@ -1,3 +1,6 @@
+//go:build baremetal && usb.hid
+// +build baremetal,usb.hid
+
 package usb
 
 import (
@@ -34,6 +37,10 @@ func (hid *HID) Configure(config HIDConfig) error {
 		return ErrHIDInvalidPort
 	}
 	return nil
+}
+
+func (hid *HID) Ready() bool {
+	return hid.core.dc.keyboard().ready()
 }
 
 func (hid *HID) Keyboard() *Keyboard {

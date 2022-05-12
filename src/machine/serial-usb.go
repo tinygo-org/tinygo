@@ -5,11 +5,3 @@ package machine
 
 // Serial is implemented via USB (USB-CDC).
 var Serial = USB
-
-func init() {
-
-	// configure pins
-	USBCDC_DM_PIN.Configure(PinConfig{Mode: PinCom})
-	USBCDC_DP_PIN.Configure(PinConfig{Mode: PinCom})
-
-}

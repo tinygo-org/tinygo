@@ -6,9 +6,12 @@ import (
 	"time"
 )
 
-var keyboard = machine.HID0.Keyboard()
+var keyboard = machine.USB.Keyboard()
 
 func main() {
+
+	for !machine.USB.Ready() {
+	}
 
 	println("USB HID keyboard demo")
 
