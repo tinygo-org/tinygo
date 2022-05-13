@@ -58,10 +58,10 @@ deferred CompareAndSwapUint64: true 9 58
 deferred LoadUint64: true 11 11
 deferred StoreUint64: true 11 15
 Uintptr --
-deferred SwapUintptr: true 7 100
-deferred CompareAndSwapUintptr: true 9 58
-deferred LoadUintptr: true 11 11
-deferred StoreUintptr: true 11 15
+deferred SwapUintptr: true
+deferred CompareAndSwapUintptr: true
+deferred LoadUintptr: true
+deferred StoreUintptr: true
 Pointer --
 deferred SwapPointer: true
 deferred CompareAndSwapPointer: true

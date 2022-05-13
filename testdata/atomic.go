@@ -431,25 +431,25 @@ func testUintptr() {
 	before = deferredSwapUintptr(&value, 100)
 	after = atomic.LoadUintptr(&value)
 	success = before == 7 && after == 100
-	println("deferred SwapUintptr:", success, before, after)
+	println("deferred SwapUintptr:", success)
 
 	value = 9
 	before = deferredCompareAndSwapUintptr(&value, 9, 58)
 	after = atomic.LoadUintptr(&value)
 	success = before == 9 && after == 58
-	println("deferred CompareAndSwapUintptr:", success, before, after)
+	println("deferred CompareAndSwapUintptr:", success)
 
 	value = 11
 	before = deferredLoadUintptr(&value)
 	after = atomic.LoadUintptr(&value)
 	success = before == 11 && after == 11
-	println("deferred LoadUintptr:", success, before, after)
+	println("deferred LoadUintptr:", success)
 
 	value = 11
 	before = deferredStoreUintptr(&value, 15)
 	after = atomic.LoadUintptr(&value)
 	success = before == 11 && after == 15
-	println("deferred StoreUintptr:", success, before, after)
+	println("deferred StoreUintptr:", success)
 }
 
 func deferredSwapPointer(addr *unsafe.Pointer, new unsafe.Pointer) unsafe.Pointer {
