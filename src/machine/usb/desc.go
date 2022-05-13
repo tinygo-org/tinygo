@@ -8,16 +8,17 @@ const descLanguageEnglish = uint16(0x0409) // (US) English
 const (
 
 	// Descriptor length
-	descLengthDevice            = 18
-	descLengthConfigure         = 9
-	descLengthInterface         = 9
-	descLengthEndpoint          = 7
-	descLengthQualification     = 10
-	descLengthOTG               = 5
-	descLengthBOS               = 5
-	descLengthEndpointCompanion = 6
-	descLengthUSB20Extension    = 7
-	descLengthSuperspeed        = 10
+	descLengthDevice               = 18
+	descLengthConfigure            = 9
+	descLengthInterface            = 9
+	descLengthInterfaceAssociation = 8
+	descLengthEndpoint             = 7
+	descLengthQualification        = 10
+	descLengthOTG                  = 5
+	descLengthBOS                  = 5
+	descLengthEndpointCompanion    = 6
+	descLengthUSB20Extension       = 7
+	descLengthSuperspeed           = 10
 
 	// Descriptor type
 	descTypeDevice                  = 0x01
@@ -133,6 +134,11 @@ const (
 	descDeviceCapExtAttrLPMPos  = 1
 	descDeviceCapExtAttrBESLMsk = 0x04
 	descDeviceCapExtAttrBESLPos = 2
+
+	// Device class
+	descDeviceClassCodeMisc  = 0xEF
+	descDeviceSubClassCommon = 0x02
+	descDeviceProtocolIAD    = 0x01
 )
 
 // descEndpointInvalid represents an invalid endpoint address.

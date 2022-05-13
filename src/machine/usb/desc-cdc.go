@@ -159,6 +159,7 @@ const (
 	descCDCConfigSize = uint16(
 		descLengthConfigure + // Configuration Header
 			descLengthInterface + // CDC Interface Descriptor
+			descLengthInterfaceAssociation + // IAD
 			descCDCFuncLengthHeader + // CDC Header
 			descCDCFuncLengthCallManagement + // CDC Call Management Func Descriptor
 			descCDCFuncLengthAbstractControl + // CDC Abstract Control Func Descriptor
@@ -282,9 +283,9 @@ var descCDC = [dcdCount]descCDCClass{
 			descTypeDevice,            // Descriptor Type
 			lsU8(descUSBSpecVersion),  // USB Specification Release Number in BCD (low)
 			msU8(descUSBSpecVersion),  // USB Specification Release Number in BCD (high)
-			0,                         // Class code (assigned by the USB-IF).
-			0,                         // Subclass code (assigned by the USB-IF).
-			0,                         // Protocol code (assigned by the USB-IF).
+			descDeviceClassCodeMisc,   // Class code (assigned by the USB-IF).
+			descDeviceSubClassCommon,  // Subclass code (assigned by the USB-IF).
+			descDeviceProtocolIAD,     // Protocol code (assigned by the USB-IF).
 			descEndptMaxPktSize,       // Maximum packet size for endpoint zero (8, 16, 32, or 64)
 			lsU8(descCommonVendorID),  // Vendor ID (low) (assigned by the USB-IF)
 			msU8(descCommonVendorID),  // Vendor ID (high) (assigned by the USB-IF)
@@ -319,6 +320,16 @@ var descCDC = [dcdCount]descCDCClass{
 			0,                       // Index of string descriptor describing this configuration
 			descEndptConfigAttr,     // Configuration attributes
 			descCDCMaxPowerMa >> 1,  // Max power consumption when fully-operational (2 mA units)
+
+			// Interface Association Descriptor
+			descLengthInterfaceAssociation, // Size of this descriptor in bytes
+			descTypeInterfaceAssociation,   // Descriptor Type
+			0x00,                           // bFirstInterface
+			descCDCInterfaceCount,          // bInterfaceCount
+			0x02,                           // bFunctionClass  : Communications and CDC Control (0x02)
+			0x02,                           // bFunctionSubClass
+			0x00,                           // bFunctionProtocol
+			0x00,                           // iFunction
 
 			// Communication/Control Interface Descriptor
 			descLengthInterface,       // Descriptor length
