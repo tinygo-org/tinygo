@@ -33,3 +33,37 @@ StoreUint32: 20
 StoreUint64: 20
 StoreUintptr: 20
 StorePointer: true
+Int32 --
+deferred AddInt32: true -9 2
+deferred SwapInt32: true -7 100
+deferred CompareAndSwapInt32: true -9 58
+deferred LoadInt32: true -11 -11
+deferred StoreInt32: true -11 15
+Uint32 --
+deferred AddUint32: true 9 20
+deferred SwapUint32: true 7 100
+deferred CompareAndSwapUint32: true 9 58
+deferred LoadUint32: true 11 11
+deferred StoreUint32: true 11 15
+Int64 --
+deferred AddInt64: true -9 2
+deferred SwapInt64: true -7 100
+deferred CompareAndSwapInt64: true -9 58
+deferred LoadInt64: true -11 -11
+deferred StoreInt64: true -11 15
+Uint64 --
+deferred AddUint64: true 9 20
+deferred SwapUint64: true 7 100
+deferred CompareAndSwapUint64: true 9 58
+deferred LoadUint64: true 11 11
+deferred StoreUint64: true 11 15
+Uintptr --
+deferred SwapUintptr: true 7 100
+deferred CompareAndSwapUintptr: true 9 58
+deferred LoadUintptr: true 11 11
+deferred StoreUintptr: true 11 15
+Pointer --
+deferred SwapPointer: true
+deferred CompareAndSwapPointer: true
+deferred LoadPointer: true
+deferred StorePointer: true
