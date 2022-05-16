@@ -74,7 +74,7 @@ func LookupCommand(name string) (string, error) {
 		}
 		return cmdName, nil
 	}
-	return "", errors.New("%#v: none of these commands were found in your $PATH: " + strings.Join(commands[name], " "))
+	return "", errors.New("none of these commands were found in your $PATH: " + strings.Join(commands[name], " "))
 }
 
 func execCommand(name string, args ...string) error {
