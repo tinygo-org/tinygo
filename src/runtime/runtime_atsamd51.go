@@ -34,6 +34,7 @@ func init() {
 	//}
 
 	machine.InitUSB()
+	machine.InitSerial()
 }
 
 func putchar(c byte) {
