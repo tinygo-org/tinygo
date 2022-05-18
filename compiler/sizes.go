@@ -21,6 +21,12 @@ func (s *stdSizes) Alignof(T types.Type) int64 {
 	// of alignment of the elements and fields, respectively.
 	switch t := T.Underlying().(type) {
 	case *types.Array:
+		if t.Len() == 0 {
+			// 0-sized arrays, always have 0 size.
+			// And from the spec, should have an alignment of _at least_ 1
+			return 1
+		}
+
 		// spec: "For a variable x of array type: unsafe.Alignof(x)
 		// is the same as unsafe.Alignof(x[0]), but at least 1."
 		return s.Alignof(t.Elem())
