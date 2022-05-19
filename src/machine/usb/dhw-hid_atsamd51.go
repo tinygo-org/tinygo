@@ -126,34 +126,35 @@ func (d *dhw) keyboardConfigure() {
 func (d *dhw) keyboardSendKeys(consumer bool) bool {
 
 	hid := &descHID[d.cc.config-1]
+	data := [8]uint8{}
 
 	if !consumer {
 
-		hid.txKeyboard[0] = hid.keyboard.mod
-		hid.txKeyboard[1] = 0
-		hid.txKeyboard[2] = hid.keyboard.key[0]
-		hid.txKeyboard[3] = hid.keyboard.key[1]
-		hid.txKeyboard[4] = hid.keyboard.key[2]
-		hid.txKeyboard[5] = hid.keyboard.key[3]
-		hid.txKeyboard[6] = hid.keyboard.key[4]
-		hid.txKeyboard[7] = hid.keyboard.key[5]
+		data[0] = hid.keyboard.mod
+		data[1] = 0
+		data[2] = hid.keyboard.key[0]
+		data[3] = hid.keyboard.key[1]
+		data[4] = hid.keyboard.key[2]
+		data[5] = hid.keyboard.key[3]
+		data[6] = hid.keyboard.key[4]
+		data[7] = hid.keyboard.key[5]
 
-		return d.keyboardWrite(txEndpoint(descHIDEndpointKeyboard), hid.txKeyboard[:])
+		return d.keyboardWrite(txEndpoint(descHIDEndpointKeyboard), data[:])
 
 	} else {
 
 		// 44444444 44333333 33332222 22222211 11111111  [ word ]
 		// 98765432 10987654 32109876 54321098 76543210  [ index ]  (right-to-left)
 
-		hid.txKeyboard[1] = uint8((hid.keyboard.con[1] << 2) | ((hid.keyboard.con[0] >> 8) & 0x03))
-		hid.txKeyboard[2] = uint8((hid.keyboard.con[2] << 4) | ((hid.keyboard.con[1] >> 6) & 0x0F))
-		hid.txKeyboard[3] = uint8((hid.keyboard.con[3] << 6) | ((hid.keyboard.con[2] >> 4) & 0x3F))
-		hid.txKeyboard[4] = uint8(hid.keyboard.con[3] >> 2)
-		hid.txKeyboard[5] = hid.keyboard.sys[0]
-		hid.txKeyboard[6] = hid.keyboard.sys[1]
-		hid.txKeyboard[7] = hid.keyboard.sys[2]
+		data[1] = uint8((hid.keyboard.con[1] << 2) | ((hid.keyboard.con[0] >> 8) & 0x03))
+		data[2] = uint8((hid.keyboard.con[2] << 4) | ((hid.keyboard.con[1] >> 6) & 0x0F))
+		data[3] = uint8((hid.keyboard.con[3] << 6) | ((hid.keyboard.con[2] >> 4) & 0x3F))
+		data[4] = uint8(hid.keyboard.con[3] >> 2)
+		data[5] = hid.keyboard.sys[0]
+		data[6] = hid.keyboard.sys[1]
+		data[7] = hid.keyboard.sys[2]
 
-		return d.keyboardWrite(txEndpoint(descHIDEndpointMediaKey), hid.txKeyboard[:])
+		return d.keyboardWrite(txEndpoint(descHIDEndpointMediaKey), data[:])
 
 	}
 }
@@ -184,7 +185,7 @@ func (d *dhw) keyboardWrite(endpoint uint8, data []uint8) bool {
 		}
 
 		ready, _ := d.ep[num][descDirTx].scheduleTransfer(
-			uintptr(unsafe.Pointer(&hid.txKeyboard[0])), uint32(cnt))
+			uintptr(unsafe.Pointer(&data[0])), uint32(cnt))
 		if ready {
 			if xfer, ok := d.ep[num][descDirTx].pendingTransfer(); ok {
 				d.ep[num][descDirTx].setActiveTransfer(xfer)
