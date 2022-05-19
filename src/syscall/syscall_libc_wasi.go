@@ -309,6 +309,14 @@ func Getpagesize() int {
 	return 65536
 }
 
+func SockAccept(fd int, flags int) (nfd int, err error) {
+	var retptr0 __wasi_fd_t
+	if n := sock_accept(__wasi_fd_t(fd), __wasi_fdflags_t(flags), &retptr0); n != 0 {
+		return -1, Errno(n)
+	}
+	return int(retptr0), nil
+}
+
 // int stat(const char *path, struct stat * buf);
 //
 //export stat
@@ -323,3 +331,14 @@ func libc_fstat(fd int32, ptr unsafe.Pointer) int32
 //
 //export lstat
 func libc_lstat(pathname *byte, ptr unsafe.Pointer) int32
+
+type (
+	__wasi_errno_t = uint16
+
+	__wasi_fd_t      = int32
+	__wasi_fdflags_t = uint16
+)
+
+//go:wasm-module wasi_snapshot_preview1
+//export sock_accept
+func sock_accept(fd __wasi_fd_t, flags __wasi_fdflags_t, retptr0 *__wasi_fd_t) __wasi_errno_t
