@@ -39,19 +39,8 @@ const (
 			descLengthInterface + // Keyboard Interface Descriptor
 			descLengthInterface + // Keyboard HID Interface Descriptor
 			descLengthEndpoint + // Keyboard Endpoint Descriptor
-			descLengthInterface + // Mouse Interface Descriptor
-			descLengthInterface + // Mouse HID Interface Descriptor
-			descLengthEndpoint + // Mouse Endpoint Descriptor
-			descLengthInterface + // Serial Interface Descriptor
-			descLengthInterface + // Serial HID Interface Descriptor
-			descLengthEndpoint + // Serial Tx Endpoint Descriptor
-			descLengthEndpoint + // Serial Rx Endpoint Descriptor
-			descLengthInterface + // Joystick Interface Descriptor
-			descLengthInterface + // Joystick HID Interface Descriptor
-			descLengthEndpoint + // Joystick Endpoint Descriptor
-			descLengthInterface + // Keyboard Media Keys Interface Descriptor
-			descLengthInterface + // Keyboard Media Keys HID Interface Descriptor
-			descLengthEndpoint) // Keyboard Media Keys Endpoint Descriptor
+			64 +
+			0)
 
 	// Position of each HID interface descriptor as offsets into the configuration
 	// descriptor. See comments in the configuration descriptor definition for the
@@ -169,7 +158,7 @@ var descHID = [dcdCount]descHIDClass{
 			descTypeConfigure,       // Descriptor Type
 			lsU8(descHIDConfigSize), // Total length of data returned for this configuration (low)
 			msU8(descHIDConfigSize), // Total length of data returned for this configuration (high)
-			descHIDInterfaceCount,   // Number of interfaces supported by this configuration
+			1,                       // Number of interfaces supported by this configuration
 			1,                       // Value to use to select this configuration (1 = CDC-ACM[0])
 			0,                       // Index of string descriptor describing this configuration
 			descEndptConfigAttr,     // Configuration attributes
@@ -206,144 +195,6 @@ var descHID = [dcdCount]descHIDClass{
 			lsU8(descHIDKeyboardTxPacketSize), // Max packet size (low)
 			msU8(descHIDKeyboardTxPacketSize), // Max packet size (high)
 			descHIDKeyboardTxInterval,         // Polling Interval
-
-			// [34+9] Mouse Interface Descriptor
-			descLengthInterface,   // Descriptor length
-			descTypeInterface,     // Descriptor type
-			descHIDInterfaceMouse, // Interface index
-			0,                     // Alternate setting
-			1,                     // Number of endpoints
-			descHIDType,           // Class code (HID = 0x03)
-			descHIDSubBoot,        // Subclass code (Boot = 0x01)
-			descHIDProtoMouse,     // Protocol code (Mouse = 0x02)
-			0,                     // Interface Description String Index
-
-			// [43+9] Mouse HID Interface Descriptor
-			descLengthInterface,                   // Descriptor length
-			descTypeHID,                           // Descriptor type
-			0x11,                                  // HID BCD (low)
-			0x01,                                  // HID BCD (high)
-			0,                                     // Country code
-			1,                                     // Number of descriptors
-			descTypeHIDReport,                     // Descriptor type
-			lsU8(uint16(len(descHIDReportMouse))), // Descriptor length (low)
-			msU8(uint16(len(descHIDReportMouse))), // Descriptor length (high)
-
-			// [52+7] Mouse Endpoint Descriptor
-			descLengthEndpoint, // Size of this descriptor in bytes
-			descTypeEndpoint,   // Descriptor Type
-			descHIDEndpointMouse | // Endpoint address
-				descEndptAddrDirectionIn,
-			descEndptTypeInterrupt,         // Attributes
-			lsU8(descHIDMouseTxPacketSize), // Max packet size (low)
-			msU8(descHIDMouseTxPacketSize), // Max packet size (high)
-			descHIDMouseTxInterval,         // Polling Interval
-
-			// [59+9] Serial Interface Descriptor
-			descLengthInterface,    // Descriptor length
-			descTypeInterface,      // Descriptor type
-			descHIDInterfaceSerial, // Interface index
-			0,                      // Alternate setting
-			2,                      // Number of endpoints
-			descHIDType,            // Class code (HID = 0x03)
-			descHIDSubNone,         // Subclass code
-			descHIDProtoNone,       // Protocol code
-			0,                      // Interface Description String Index
-
-			// [68+9] Serial HID Interface Descriptor
-			descLengthInterface,                    // Descriptor length
-			descTypeHID,                            // Descriptor type
-			0x11,                                   // HID BCD (low)
-			0x01,                                   // HID BCD (high)
-			0,                                      // Country code
-			1,                                      // Number of descriptors
-			descTypeHIDReport,                      // Descriptor type
-			lsU8(uint16(len(descHIDReportSerial))), // Descriptor length (low)
-			msU8(uint16(len(descHIDReportSerial))), // Descriptor length (high)
-
-			// [77+7] Serial Tx Endpoint Descriptor
-			descLengthEndpoint, // Size of this descriptor in bytes
-			descTypeEndpoint,   // Descriptor Type
-			descHIDEndpointSerialTx | // Endpoint address
-				descEndptAddrDirectionIn,
-			descEndptTypeInterrupt,          // Attributes
-			lsU8(descHIDSerialTxPacketSize), // Max packet size (low)
-			msU8(descHIDSerialTxPacketSize), // Max packet size (high)
-			descHIDSerialTxInterval,         // Polling Interval
-
-			// [84+7] Serial Rx Endpoint Descriptor
-			descLengthEndpoint, // Size of this descriptor in bytes
-			descTypeEndpoint,   // Descriptor Type
-			descHIDEndpointSerialRx | // Endpoint address
-				descEndptAddrDirectionOut,
-			descEndptTypeInterrupt,          // Attributes
-			lsU8(descHIDSerialRxPacketSize), // Max packet size (low)
-			msU8(descHIDSerialRxPacketSize), // Max packet size (high)
-			descHIDSerialRxInterval,         // Polling Interval
-
-			// [91+9] Joystick Interface Descriptor
-			descLengthInterface,      // Descriptor length
-			descTypeInterface,        // Descriptor type
-			descHIDInterfaceJoystick, // Interface index
-			0,                        // Alternate setting
-			1,                        // Number of endpoints
-			descHIDType,              // Class code (HID = 0x03)
-			descHIDSubNone,           // Subclass code
-			descHIDProtoNone,         // Protocol code
-			0,                        // Interface Description String Index
-
-			// [100+9] Joystick HID Interface Descriptor
-			descLengthInterface,                      // Descriptor length
-			descTypeHID,                              // Descriptor type
-			0x11,                                     // HID BCD (low)
-			0x01,                                     // HID BCD (high)
-			0,                                        // Country code
-			1,                                        // Number of descriptors
-			descTypeHIDReport,                        // Descriptor type
-			lsU8(uint16(len(descHIDReportJoystick))), // Descriptor length (low)
-			msU8(uint16(len(descHIDReportJoystick))), // Descriptor length (high)
-
-			// [109+7] Joystick Endpoint Descriptor
-			descLengthEndpoint, // Size of this descriptor in bytes
-			descTypeEndpoint,   // Descriptor Type
-			descHIDEndpointJoystick | // Endpoint address
-				descEndptAddrDirectionIn,
-			descEndptTypeInterrupt,            // Attributes
-			lsU8(descHIDJoystickTxPacketSize), // Max packet size (low)
-			msU8(descHIDJoystickTxPacketSize), // Max packet size (high)
-			descHIDJoystickTxInterval,         // Polling Interval
-
-			// [116+9] Keyboard Media Keys Interface Descriptor
-			descLengthInterface,      // Descriptor length
-			descTypeInterface,        // Descriptor type
-			descHIDInterfaceMediaKey, // Interface index
-			0,                        // Alternate setting
-			1,                        // Number of endpoints
-			descHIDType,              // Class code (HID = 0x03)
-			descHIDSubNone,           // Subclass code
-			descHIDProtoNone,         // Protocol code
-			0,                        // Interface Description String Index
-
-			// [125+9] Keyboard Media Keys HID Interface Descriptor
-			descLengthInterface,                      // Descriptor length
-			descTypeHID,                              // Descriptor type
-			0x11,                                     // HID BCD (low)
-			0x01,                                     // HID BCD (high)
-			0,                                        // Country code
-			1,                                        // Number of descriptors
-			descTypeHIDReport,                        // Descriptor type
-			lsU8(uint16(len(descHIDReportMediaKey))), // Descriptor length (low)
-			msU8(uint16(len(descHIDReportMediaKey))), // Descriptor length (high)
-
-			// [134+7] Keyboard Media Keys Endpoint Descriptor
-			descLengthEndpoint, // Size of this descriptor in bytes
-			descTypeEndpoint,   // Descriptor Type
-			descHIDEndpointMediaKey | // Endpoint address
-				descEndptAddrDirectionIn,
-			descEndptTypeInterrupt,            // Attributes
-			lsU8(descHIDMediaKeyTxPacketSize), // Max packet size (low)
-			msU8(descHIDMediaKeyTxPacketSize), // Max packet size (high)
-			descHIDMediaKeyTxInterval,         // Polling Interval
 		},
 	},
 }
