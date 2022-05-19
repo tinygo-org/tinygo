@@ -6,6 +6,9 @@
 
 // Fake networking. It is intended to allow tests of other package to pass.
 
+//go:build !wasi
+// +build !wasi
+
 package net
 
 import (
