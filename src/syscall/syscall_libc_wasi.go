@@ -306,7 +306,7 @@ func Getpagesize() int {
 //export stat
 func libc_stat(pathname *byte, ptr unsafe.Pointer) int32
 
-// int fstat(fd int, struct stat * buf);
+// int fstat(int fd, struct stat * buf);
 //
 //export fstat
 func libc_fstat(fd int32, ptr unsafe.Pointer) int32
