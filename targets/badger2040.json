@@ -1,0 +1,11 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "serial": "uart",
+    "build-tags": ["badger2040"],
+    "linkerscript": "targets/badger2040.ld",
+    "extra-files": [
+        "targets/pico-boot-stage2.S"
+    ]
+}
