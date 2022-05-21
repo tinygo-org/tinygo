@@ -347,6 +347,13 @@ func main() {
 		println("errorValue.Implements(errorType) was true, expected false")
 	}
 
+	println("\nalignment / offset:")
+	v2 := struct {
+		noCompare [0]func()
+		data      byte
+	}{}
+	println("struct{[0]func(); byte}:", unsafe.Offsetof(v2.data) == uintptr(unsafe.Pointer(&v2.data))-uintptr(unsafe.Pointer(&v2)))
+
 	println("\nstruct tags")
 	TestStructTag()
 

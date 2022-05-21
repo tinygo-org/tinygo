@@ -21,12 +21,6 @@ func (s *stdSizes) Alignof(T types.Type) int64 {
 	// of alignment of the elements and fields, respectively.
 	switch t := T.Underlying().(type) {
 	case *types.Array:
-		if t.Len() == 0 {
-			// 0-sized arrays, always have 0 size.
-			// And from the spec, should have an alignment of _at least_ 1
-			return 1
-		}
-
 		// spec: "For a variable x of array type: unsafe.Alignof(x)
 		// is the same as unsafe.Alignof(x[0]), but at least 1."
 		return s.Alignof(t.Elem())
@@ -51,7 +45,11 @@ func (s *stdSizes) Alignof(T types.Type) int64 {
 		if t.Info()&types.IsString != 0 {
 			return s.PtrSize
 		}
+	case *types.Signature:
+		// Even though functions in tinygo are 2 pointers, they are not 2 pointer aligned
+		return s.PtrSize
 	}
+
 	a := s.Sizeof(T) // may be 0
 	// spec: "For a variable x of any type: unsafe.Alignof(x) is at least 1."
 	if a < 1 {
