@@ -694,15 +694,23 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				config.Options.PrintCommands(config.Target.Linker, ldflags...)
 			}
 			if config.UseThinLTO() {
-				ldflags = append(ldflags,
-					"-mllvm", "-mcpu="+config.CPU(),
-					"--lto-O"+strconv.Itoa(optLevel))
-				if config.GOOS() == "darwin" {
+				ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
+				if config.GOOS() == "windows" {
+					// Options for the MinGW wrapper for the lld COFF linker.
+					ldflags = append(ldflags,
+						"-Xlink=/opt:lldlto="+strconv.Itoa(optLevel),
+						"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
+				} else if config.GOOS() == "darwin" {
 					// Options for the ld64-compatible lld linker.
-					ldflags = append(ldflags, "-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
+					ldflags = append(ldflags,
+						"--lto-O"+strconv.Itoa(optLevel),
+						"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
 				} else {
 					// Options for the ELF linker.
-					ldflags = append(ldflags, "--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
+					ldflags = append(ldflags,
+						"--lto-O"+strconv.Itoa(optLevel),
+						"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
+					)
 				}
 				if config.CodeModel() != "default" {
 					ldflags = append(ldflags,
