@@ -219,6 +219,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, err
 				}
+			case callFn.name == "internal/task.Pause":
+				// Task scheduling isn't possible at compile time.
+				return nil, mem, r.errorAt(inst, errUnsupportedRuntimeInst)
 			case callFn.name == "runtime.nanotime" && r.pkgName == "time":
 				// The time package contains a call to runtime.nanotime.
 				// This appears to be to work around a limitation in Windows
