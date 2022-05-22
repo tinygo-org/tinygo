@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+const gcAsserts = false // perform sanity checks
+
 // Ever-incrementing pointer: no memory is freed.
 var heapptr = heapStart
 
@@ -75,4 +77,8 @@ func setHeapEnd(newHeapEnd uintptr) {
 	// This "heap" is so simple that simply assigning a new value is good
 	// enough.
 	heapEnd = newHeapEnd
+}
+
+func markRoots(start, end uintptr) {
+	// dummy, so that markGlobals will compile
 }
