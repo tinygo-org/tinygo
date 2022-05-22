@@ -695,10 +695,15 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			}
 			if config.UseThinLTO() {
 				ldflags = append(ldflags,
-					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
-					"-plugin-opt=mcpu="+config.CPU(),
-					"-plugin-opt=O"+strconv.Itoa(optLevel),
-					"-plugin-opt=thinlto")
+					"-mllvm", "-mcpu="+config.CPU(),
+					"--lto-O"+strconv.Itoa(optLevel))
+				if config.GOOS() == "darwin" {
+					// Options for the ld64-compatible lld linker.
+					ldflags = append(ldflags, "-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
+				} else {
+					// Options for the ELF linker.
+					ldflags = append(ldflags, "--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
+				}
 				if config.CodeModel() != "default" {
 					ldflags = append(ldflags,
 						"-mllvm", "-code-model="+config.CodeModel())
