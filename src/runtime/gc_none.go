@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+const gcAsserts = false // perform sanity checks
+
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer
@@ -37,4 +39,8 @@ func initHeap() {
 
 func setHeapEnd(newHeapEnd uintptr) {
 	// Nothing to do here, this function is never actually called.
+}
+
+func markRoots(start, end uintptr) {
+	// dummy, so that markGlobals will compile
 }
