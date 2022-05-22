@@ -192,10 +192,6 @@ func (c *Config) UseThinLTO() bool {
 		// through a plugin, but it's too much hassle to set up.
 		return false
 	}
-	if len(parts) >= 2 && strings.HasPrefix(parts[2], "macos") {
-		// We use an external linker here at the moment.
-		return false
-	}
 	if len(parts) >= 2 && parts[2] == "windows" {
 		// Linker error (undefined runtime.trackedGlobalsBitmap) when linking
 		// for Windows. Disable it for now until that's figured out and fixed.
