@@ -190,6 +190,16 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 			if err != nil {
 				return err
 			}
+		case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv, llvm.URem, llvm.SRem, llvm.Shl, llvm.LShr, llvm.AShr, llvm.And, llvm.Or, llvm.Xor:
+			// Integer binary operators. Mark both operands.
+			err := mv.markExternal(llvmValue.Operand(0), mark)
+			if err != nil {
+				return err
+			}
+			err = mv.markExternal(llvmValue.Operand(1), mark)
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("interp: unknown constant expression '%s'", instructionNameMap[llvmValue.Opcode()])
 		}
