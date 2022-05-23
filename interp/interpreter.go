@@ -945,12 +945,18 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		args := operands[:len(operands)-1]
 		for _, arg := range args {
 			if arg.Type().TypeKind() == llvm.PointerTypeKind {
-				mem.markExternalStore(arg)
+				err := mem.markExternalStore(arg)
+				if err != nil {
+					return r.errorAt(inst, err)
+				}
 			}
 		}
 		result = r.builder.CreateCall(llvmFn, args, inst.name)
 	case llvm.Load:
-		mem.markExternalLoad(operands[0])
+		err := mem.markExternalLoad(operands[0])
+		if err != nil {
+			return r.errorAt(inst, err)
+		}
 		result = r.builder.CreateLoad(operands[0], inst.name)
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
@@ -959,7 +965,10 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			result.SetOrdering(ordering)
 		}
 	case llvm.Store:
-		mem.markExternalStore(operands[1])
+		err := mem.markExternalStore(operands[1])
+		if err != nil {
+			return r.errorAt(inst, err)
+		}
 		result = r.builder.CreateStore(operands[0], operands[1])
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
