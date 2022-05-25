@@ -601,7 +601,7 @@ func (t *dhwTransfer) packetStart(data uintptr, size uint32) (next uint32) {
 }
 
 func (t *dhwTransfer) packetComplete(sent uint32) (data uintptr, size uint32) {
-	t.sent = sent
+	t.sent += sent
 	if size = t.size - t.sent; size > t.maxPacketSize {
 		size = t.maxPacketSize
 	}
