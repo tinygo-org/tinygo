@@ -1,5 +1,5 @@
-//go:build gc.conservative && !baremetal && !tinygo.wasm
-// +build gc.conservative,!baremetal,!tinygo.wasm
+//go:build gc.conservative && !baremetal && !darwin && !tinygo.wasm && !windows
+// +build gc.conservative,!baremetal,!darwin,!tinygo.wasm,!windows
 
 package runtime
 

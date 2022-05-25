@@ -13,6 +13,6 @@
 		"--stack-first",
 		"--no-demangle"
 	],
-	"emulator":      ["wasmtime"],
+	"emulator":      "wasmtime {}",
 	"wasm-abi":      "generic"
 }

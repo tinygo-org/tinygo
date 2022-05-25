@@ -81,12 +81,28 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		if inst.opcode != llvm.PHI {
 			for _, v := range inst.operands {
 				if v, ok := v.(localValue); ok {
-					if localVal := locals[fn.locals[v.value]]; localVal == nil {
+					index, ok := fn.locals[v.value]
+					if !ok {
+						// This is a localValue that is not local to the
+						// function. An example would be an inline assembly call
+						// operand.
+						isRuntimeInst = true
+						break
+					}
+					localVal := locals[index]
+					if localVal == nil {
+						// Trying to read a function-local value before it is
+						// set.
 						return nil, mem, r.errorAt(inst, errors.New("interp: local not defined"))
 					} else {
 						operands = append(operands, localVal)
 						if _, ok := localVal.(localValue); ok {
+							// The function-local value is still just a
+							// localValue (which can't be interpreted at compile
+							// time). Not sure whether this ever happens in
+							// practice.
 							isRuntimeInst = true
+							break
 						}
 						continue
 					}
@@ -219,6 +235,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, err
 				}
+			case callFn.name == "internal/task.Pause":
+				// Task scheduling isn't possible at compile time.
+				return nil, mem, r.errorAt(inst, errUnsupportedRuntimeInst)
 			case callFn.name == "runtime.nanotime" && r.pkgName == "time":
 				// The time package contains a call to runtime.nanotime.
 				// This appears to be to work around a limitation in Windows
@@ -926,12 +945,18 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		args := operands[:len(operands)-1]
 		for _, arg := range args {
 			if arg.Type().TypeKind() == llvm.PointerTypeKind {
-				mem.markExternalStore(arg)
+				err := mem.markExternalStore(arg)
+				if err != nil {
+					return r.errorAt(inst, err)
+				}
 			}
 		}
 		result = r.builder.CreateCall(llvmFn, args, inst.name)
 	case llvm.Load:
-		mem.markExternalLoad(operands[0])
+		err := mem.markExternalLoad(operands[0])
+		if err != nil {
+			return r.errorAt(inst, err)
+		}
 		result = r.builder.CreateLoad(operands[0], inst.name)
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
@@ -940,7 +965,10 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			result.SetOrdering(ordering)
 		}
 	case llvm.Store:
-		mem.markExternalStore(operands[1])
+		err := mem.markExternalStore(operands[1])
+		if err != nil {
+			return r.errorAt(inst, err)
+		}
 		result = r.builder.CreateStore(operands[0], operands[1])
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)

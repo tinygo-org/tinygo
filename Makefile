@@ -10,7 +10,7 @@ LLD_SRC ?= $(LLVM_PROJECTDIR)/lld
 
 # Try to autodetect LLVM build tools.
 # Versions are listed here in descending priority order.
-LLVM_VERSIONS = 13 12 11
+LLVM_VERSIONS = 14 13 12 11
 errifempty = $(if $(1),$(1),$(error $(2)))
 detect = $(shell which $(call errifempty,$(firstword $(foreach p,$(2),$(shell command -v $(p) 2> /dev/null && echo $(p)))),failed to locate $(1) at any of: $(2)))
 toolSearchPathsVersion = $(1)-$(2)
@@ -48,6 +48,38 @@ ifeq (1, $(ASSERT))
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=ON'
 else
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=OFF'
+endif
+
+# Cross compiling support.
+ifneq ($(CROSS),)
+    CC = $(CROSS)-gcc
+    CXX = $(CROSS)-g++
+    LLVM_OPTION += \
+        -DCMAKE_C_COMPILER=$(CC) \
+        -DCMAKE_CXX_COMPILER=$(CXX) \
+        -DLLVM_DEFAULT_TARGET_TRIPLE=$(CROSS) \
+        -DCROSS_TOOLCHAIN_FLAGS_NATIVE="-UCMAKE_C_COMPILER;-UCMAKE_CXX_COMPILER"
+    ifeq ($(CROSS), arm-linux-gnueabihf)
+        # Assume we're building on a Debian-like distro, with QEMU installed.
+        LLVM_CONFIG_PREFIX = qemu-arm -L /usr/arm-linux-gnueabihf/
+        # The CMAKE_SYSTEM_NAME flag triggers cross compilation mode.
+        LLVM_OPTION += \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DLLVM_TARGET_ARCH=ARM
+        GOENVFLAGS = GOARCH=arm CC=$(CC) CXX=$(CXX) CGO_ENABLED=1
+        BINARYEN_OPTION += -DCMAKE_C_COMPILER=$(CC) -DCMAKE_CXX_COMPILER=$(CXX)
+    else ifeq ($(CROSS), aarch64-linux-gnu)
+        # Assume we're building on a Debian-like distro, with QEMU installed.
+        LLVM_CONFIG_PREFIX = qemu-aarch64 -L /usr/aarch64-linux-gnu/
+        # The CMAKE_SYSTEM_NAME flag triggers cross compilation mode.
+        LLVM_OPTION += \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DLLVM_TARGET_ARCH=AArch64
+        GOENVFLAGS = GOARCH=arm64 CC=$(CC) CXX=$(CXX) CGO_ENABLED=1
+        BINARYEN_OPTION += -DCMAKE_C_COMPILER=$(CC) -DCMAKE_CXX_COMPILER=$(CXX)
+    else
+        $(error Unknown cross compilation target: $(CROSS))
+    endif
 endif
 
 .PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-nxp gen-device-avr gen-device-rp
@@ -91,11 +123,11 @@ CLANG_LIB_NAMES = clangAnalysis clangAST clangASTMatchers clangBasic clangCodeGe
 CLANG_LIBS = $(START_GROUP) $(addprefix -l,$(CLANG_LIB_NAMES)) $(END_GROUP) -lstdc++
 
 # Libraries that should be linked in for the statically linked LLD.
-LLD_LIB_NAMES = lldCOFF lldCommon lldCore lldDriver lldELF lldMachO2 lldMinGW lldReaderWriter lldWasm lldYAML
+LLD_LIB_NAMES = lldCOFF lldCommon lldELF lldMachO lldMinGW lldWasm
 LLD_LIBS = $(START_GROUP) $(addprefix -l,$(LLD_LIB_NAMES)) $(END_GROUP)
 
 # Other libraries that are needed to link TinyGo.
-EXTRA_LIB_NAMES = LLVMInterpreter
+EXTRA_LIB_NAMES = LLVMInterpreter LLVMMCA LLVMX86TargetMCA
 
 # All libraries to be built and linked with the tinygo binary (lib/lib*.a).
 LIB_NAMES = clang $(CLANG_LIB_NAMES) $(LLD_LIB_NAMES) $(EXTRA_LIB_NAMES)
@@ -110,9 +142,9 @@ NINJA_BUILD_TARGETS = clang llvm-config llvm-ar llvm-nm $(addprefix lib/lib,$(ad
 
 # For static linking.
 ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
-    CGO_CPPFLAGS+=$(shell $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
+    CGO_CPPFLAGS+=$(shell $(LLVM_CONFIG_PREFIX) $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
     CGO_CXXFLAGS=-std=c++14
-    CGO_LDFLAGS+=-L$(abspath $(LLVM_BUILDDIR)/lib) -lclang $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
+    CGO_LDFLAGS+=-L$(abspath $(LLVM_BUILDDIR)/lib) -lclang $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_CONFIG_PREFIX) $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
 
 clean:
@@ -175,12 +207,12 @@ gen-device-rp: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b xtensa_release_13.0.0 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b xtensa_release_14.0.0-patched --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm
 
 # Configure LLVM.
 TINYGO_SOURCE_DIR=$(shell pwd)
-$(LLVM_BUILDDIR)/build.ninja: llvm-source
+$(LLVM_BUILDDIR)/build.ninja:
 	mkdir -p $(LLVM_BUILDDIR) && cd $(LLVM_BUILDDIR) && cmake -G Ninja $(TINYGO_SOURCE_DIR)/$(LLVM_PROJECTDIR)/llvm "-DLLVM_TARGETS_TO_BUILD=X86;ARM;AArch64;RISCV;WebAssembly" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR;Xtensa" -DCMAKE_BUILD_TYPE=Release -DLIBCLANG_BUILD_STATIC=ON -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_Z3_SOLVER=OFF -DLLVM_ENABLE_OCAMLDOC=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_TOOL_CLANG_TOOLS_EXTRA_BUILD=OFF -DCLANG_ENABLE_STATIC_ANALYZER=OFF -DCLANG_ENABLE_ARCMT=OFF $(LLVM_OPTION)
 
 # Build LLVM.
@@ -208,21 +240,18 @@ lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 # Build the Go compiler.
 tinygo:
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags byollvm -ldflags="-X github.com/tinygo-org/tinygo/goenv.GitSha1=`git rev-parse --short HEAD`" .
-
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags byollvm -ldflags="-X github.com/tinygo-org/tinygo/goenv.GitSha1=`git rev-parse --short HEAD`" .
 test: wasi-libc
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags byollvm ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
 # Standard library packages that pass tests on darwin, linux, wasi, and windows, but take over a minute in wasi
 TEST_PACKAGES_SLOW = \
 	compress/bzip2 \
-	compress/flate \
 	crypto/dsa \
 	index/suffixarray \
 
 # Standard library packages that pass tests quickly on darwin, linux, wasi, and windows
 TEST_PACKAGES_FAST = \
-	compress/lzw \
 	compress/zlib \
 	container/heap \
 	container/list \
@@ -269,16 +298,24 @@ TEST_PACKAGES_FAST = \
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # io/fs requires os.ReadDir, which is not yet supported on windows or wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
+# compress/flate fails windows go 1.18, https://github.com/tinygo-org/tinygo/issues/2762
+# compress/lzw fails windows go 1.18 wasi, https://github.com/tinygo-org/tinygo/issues/2762
 
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
+	compress/flate \
+	compress/lzw \
 	debug/dwarf \
 	debug/plan9obj \
 	io/fs \
+	io/ioutil \
 	testing/fstest
 
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
+
+TEST_PACKAGES_WINDOWS := \
+	compress/lzw
 
 # Report platforms on which each standard library package is known to pass tests
 jointmp := $(shell echo /tmp/join.$$$$)
@@ -298,7 +335,7 @@ ifeq ($(shell uname),Linux)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_LINUX)
 endif
 ifeq ($(OS),Windows_NT)
-TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST)
+TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
 endif
 
 # Test known-working standard library packages.
@@ -387,6 +424,8 @@ ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o test.wasm -tags=pca10056             examples/blinky2
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=circuitplay_express  examples/blinky1
+	@$(MD5SUM) test.wasm
+	$(TINYGO) build -size short -o test.wasm -tags=circuitplay_bluefruit examples/blinky1
 	@$(MD5SUM) test.wasm
 endif
 	# test all targets/boards
@@ -604,7 +643,8 @@ endif
 	@$(MD5SUM) test.hex
 	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o test.elf       ./testdata/cgo
 	GOOS=windows GOARCH=amd64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
-	GOOS=darwin GOARCH=amd64 $(TINYGO) build              -o test       ./testdata/cgo
+	GOOS=darwin GOARCH=amd64 $(TINYGO) build  -size short -o test       ./testdata/cgo
+	GOOS=darwin GOARCH=arm64 $(TINYGO) build  -size short -o test       ./testdata/cgo
 ifneq ($(OS),Windows_NT)
 	# TODO: this does not yet work on Windows. Somehow, unused functions are
 	# not garbage collected.
@@ -680,19 +720,25 @@ endif
 	@cp -rp llvm-project/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
-	./build/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/compiler-rt     compiler-rt
-	./build/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/compiler-rt compiler-rt
-	./build/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/compiler-rt    compiler-rt
-	./build/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/picolibc     picolibc
-	./build/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/picolibc picolibc
-	./build/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/picolibc    picolibc
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/compiler-rt     compiler-rt
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/compiler-rt compiler-rt
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/compiler-rt    compiler-rt
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/picolibc     picolibc
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/picolibc picolibc
+	./build/release/tinygo/bin/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/picolibc    picolibc
 
-release: build/release
+release:
 	tar -czf build/release.tar.gz -C build/release tinygo
 
-deb: build/release
+DEB_ARCH ?= native
+deb:
 	@mkdir -p build/release-deb/usr/local/bin
 	@mkdir -p build/release-deb/usr/local/lib
 	cp -ar build/release/tinygo build/release-deb/usr/local/lib/tinygo
 	ln -sf ../lib/tinygo/bin/tinygo build/release-deb/usr/local/bin/tinygo
-	fpm -f -s dir -t deb -n tinygo -v $(shell grep "const Version = " goenv/version.go | awk '{print $$NF}') -m '@tinygo-org' --description='TinyGo is a Go compiler for small places.' --license='BSD 3-Clause' --url=https://tinygo.org/ --deb-changelog CHANGELOG.md -p build/release.deb -C ./build/release-deb
+	fpm -f -s dir -t deb -n tinygo -a $(DEB_ARCH) -v $(shell grep "const Version = " goenv/version.go | awk '{print $$NF}') -m '@tinygo-org' --description='TinyGo is a Go compiler for small places.' --license='BSD 3-Clause' --url=https://tinygo.org/ --deb-changelog CHANGELOG.md -p build/release.deb -C ./build/release-deb
+
+ifneq ($(RELEASEONLY), 1)
+release: build/release
+deb: build/release
+endif

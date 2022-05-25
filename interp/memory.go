@@ -17,6 +17,7 @@ package interp
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -104,28 +105,28 @@ func (mv *memoryView) revert() {
 // means that the interpreter can still read from it, but cannot write to it as
 // that would mean the external read (done at runtime) reads from a state that
 // would not exist had the whole initialization been done at runtime.
-func (mv *memoryView) markExternalLoad(llvmValue llvm.Value) {
-	mv.markExternal(llvmValue, 1)
+func (mv *memoryView) markExternalLoad(llvmValue llvm.Value) error {
+	return mv.markExternal(llvmValue, 1)
 }
 
 // markExternalStore marks the given LLVM value as having an external write.
 // This means that the interpreter can no longer read from it or write to it, as
 // that would happen in a different order than if all initialization were
 // happening at runtime.
-func (mv *memoryView) markExternalStore(llvmValue llvm.Value) {
-	mv.markExternal(llvmValue, 2)
+func (mv *memoryView) markExternalStore(llvmValue llvm.Value) error {
+	return mv.markExternal(llvmValue, 2)
 }
 
 // markExternal is a helper for markExternalLoad and markExternalStore, and
 // should not be called directly.
-func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) {
+func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 	if llvmValue.IsUndef() || llvmValue.IsNull() {
 		// Null and undef definitely don't contain (valid) pointers.
-		return
+		return nil
 	}
 	if !llvmValue.IsAInstruction().IsNil() || !llvmValue.IsAArgument().IsNil() {
 		// These are considered external by default, there is nothing to mark.
-		return
+		return nil
 	}
 
 	if !llvmValue.IsAGlobalValue().IsNil() {
@@ -144,7 +145,10 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) {
 					// Using mark '2' (which means read/write access) because
 					// even from an object that is only read from, the resulting
 					// loaded pointer can be written to.
-					mv.markExternal(initializer, 2)
+					err := mv.markExternal(initializer, 2)
+					if err != nil {
+						return err
+					}
 				}
 			} else {
 				// This is a function. Go through all instructions and mark all
@@ -170,7 +174,10 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) {
 						for i := 0; i < numOperands; i++ {
 							// Using mark '2' (which means read/write access)
 							// because this might be a store instruction.
-							mv.markExternal(inst.Operand(i), 2)
+							err := mv.markExternal(inst.Operand(i), 2)
+							if err != nil {
+								return err
+							}
 						}
 					}
 				}
@@ -179,9 +186,22 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) {
 	} else if !llvmValue.IsAConstantExpr().IsNil() {
 		switch llvmValue.Opcode() {
 		case llvm.IntToPtr, llvm.PtrToInt, llvm.BitCast, llvm.GetElementPtr:
-			mv.markExternal(llvmValue.Operand(0), mark)
+			err := mv.markExternal(llvmValue.Operand(0), mark)
+			if err != nil {
+				return err
+			}
+		case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv, llvm.URem, llvm.SRem, llvm.Shl, llvm.LShr, llvm.AShr, llvm.And, llvm.Or, llvm.Xor:
+			// Integer binary operators. Mark both operands.
+			err := mv.markExternal(llvmValue.Operand(0), mark)
+			if err != nil {
+				return err
+			}
+			err = mv.markExternal(llvmValue.Operand(1), mark)
+			if err != nil {
+				return err
+			}
 		default:
-			panic("interp: unknown constant expression")
+			return fmt.Errorf("interp: unknown constant expression '%s'", instructionNameMap[llvmValue.Opcode()])
 		}
 	} else if !llvmValue.IsAInlineAsm().IsNil() {
 		// Inline assembly can modify globals but only exported globals. Let's
@@ -196,18 +216,25 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) {
 			numElements := llvmType.StructElementTypesCount()
 			for i := 0; i < numElements; i++ {
 				element := llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)})
-				mv.markExternal(element, mark)
+				err := mv.markExternal(element, mark)
+				if err != nil {
+					return err
+				}
 			}
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
 			for i := 0; i < numElements; i++ {
 				element := llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)})
-				mv.markExternal(element, mark)
+				err := mv.markExternal(element, mark)
+				if err != nil {
+					return err
+				}
 			}
 		default:
-			panic("interp: unknown type kind in markExternalValue")
+			return errors.New("interp: unknown type kind in markExternalValue")
 		}
 	}
+	return nil
 }
 
 // hasExternalLoadOrStore returns true if this object has an external load or

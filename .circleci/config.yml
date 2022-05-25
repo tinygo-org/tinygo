@@ -22,12 +22,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-13-v3
+            - llvm-source-14-v2
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-13-v3
+          key: llvm-source-14-v2
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -86,10 +86,10 @@ commands:
       - run: go install -tags=llvm<<parameters.llvm>> .
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-systemclang-v4
+            - wasi-libc-sysroot-systemclang-v5
       - run: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-systemclang-v4
+          key: wasi-libc-sysroot-systemclang-v5
           paths:
             - lib/wasi-libc/sysroot
       - run: make gen-device -j4
@@ -102,21 +102,16 @@ commands:
       - run: make fmt-check
 
 jobs:
-  test-llvm11-go115:
-    docker:
-      - image: circleci/golang:1.15-buster
-    steps:
-      - test-linux:
-          llvm: "11"
-  test-llvm12-go116:
+  test-llvm13-go116:
     docker:
       - image: circleci/golang:1.16-buster
     steps:
       - test-linux:
-          llvm: "12"
+          llvm: "13"
 
 workflows:
   test-all:
     jobs:
-      - test-llvm11-go115
-      - test-llvm12-go116
+      # This tests our lowest supported versions of Go and LLVM, to make sure at
+      # least the smoke tests still pass.
+      - test-llvm13-go116

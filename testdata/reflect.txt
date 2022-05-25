@@ -405,6 +405,9 @@ offset for int64 matches: true
 offset for complex128 matches: true
 type assertion succeeded for unreferenced type
 
+alignment / offset:
+struct{[0]func(); byte}: true
+
 struct tags
 blue gopher
 

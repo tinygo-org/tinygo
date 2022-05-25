@@ -6,6 +6,7 @@
 	"gc": "conservative",
 	"linker": "avr-gcc",
 	"scheduler": "none",
+	"rtlib": "compiler-rt",
 	"default-stack-size": 256,
 	"cflags": [
 		"-Werror"

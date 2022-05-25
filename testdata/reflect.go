@@ -52,6 +52,12 @@ func main() {
 	println("\nvalues of interfaces")
 	var zeroSlice []byte
 	var zeroFunc func()
+	// by embedding a 0-array func type in your struct, it is not comparable
+	type doNotCompare [0]func()
+	type notComparable struct {
+		doNotCompare
+		data *int32
+	}
 	var zeroMap map[string]int
 	var zeroChan chan int
 	n := 42
@@ -169,6 +175,10 @@ func main() {
 	assertSize(reflect.TypeOf("").Size() == unsafe.Sizeof(""), "string")
 	assertSize(reflect.TypeOf(new(int)).Size() == unsafe.Sizeof(new(int)), "*int")
 	assertSize(reflect.TypeOf(zeroFunc).Size() == unsafe.Sizeof(zeroFunc), "func()")
+
+	// make sure embedding a zero-sized "not comparable" struct does not add size to a struct
+	assertSize(reflect.TypeOf(doNotCompare{}).Size() == unsafe.Sizeof(doNotCompare{}), "[0]func()")
+	assertSize(unsafe.Sizeof(notComparable{}) == unsafe.Sizeof((*int32)(nil)), "struct{[0]func(); *int32}")
 
 	// Test that offset is correctly calculated.
 	// This doesn't just test reflect but also (indirectly) that unsafe.Alignof
@@ -336,6 +346,13 @@ func main() {
 	if reflect.TypeOf(errorValue).Implements(stringerType) != false {
 		println("errorValue.Implements(errorType) was true, expected false")
 	}
+
+	println("\nalignment / offset:")
+	v2 := struct {
+		noCompare [0]func()
+		data      byte
+	}{}
+	println("struct{[0]func(); byte}:", unsafe.Offsetof(v2.data) == uintptr(unsafe.Pointer(&v2.data))-uintptr(unsafe.Pointer(&v2)))
 
 	println("\nstruct tags")
 	TestStructTag()

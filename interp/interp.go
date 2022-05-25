@@ -121,7 +121,10 @@ func Run(mod llvm.Module, debug bool) error {
 				r.builder.CreateCall(fn, []llvm.Value{i8undef}, "")
 				// Make sure that any globals touched by the package
 				// initializer, won't be accessed by later package initializers.
-				r.markExternalLoad(fn)
+				err := r.markExternalLoad(fn)
+				if err != nil {
+					return fmt.Errorf("failed to interpret package %s: %w", r.pkgName, err)
+				}
 				continue
 			}
 			return callErr
@@ -288,12 +291,16 @@ func (r *runner) getFunction(llvmFn llvm.Value) *function {
 // variable. Another package initializer might read from the same global
 // variable. By marking this function as being run at runtime, that load
 // instruction will need to be run at runtime instead of at compile time.
-func (r *runner) markExternalLoad(llvmValue llvm.Value) {
+func (r *runner) markExternalLoad(llvmValue llvm.Value) error {
 	mem := memoryView{r: r}
-	mem.markExternalLoad(llvmValue)
+	err := mem.markExternalLoad(llvmValue)
+	if err != nil {
+		return err
+	}
 	for index, obj := range mem.objects {
 		if obj.marked > r.objects[index].marked {
 			r.objects[index].marked = obj.marked
 		}
 	}
+	return nil
 }

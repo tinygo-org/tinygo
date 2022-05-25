@@ -37,8 +37,14 @@ import (
 // BuildResult is the output of a build. This includes the binary itself and
 // some other metadata that is obtained while building the binary.
 type BuildResult struct {
+	// The executable directly from the linker, usually including debug
+	// information. Used for GDB for example.
+	Executable string
+
 	// A path to the output binary. It will be removed after Build returns, so
 	// if it should be kept it must be copied or moved away.
+	// It is often the same as Executable, but differs if the output format is
+	// .hex for example (instead of the usual ELF).
 	Binary string
 
 	// The directory of the main package. This is useful for testing as the test
@@ -688,11 +694,24 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				config.Options.PrintCommands(config.Target.Linker, ldflags...)
 			}
 			if config.UseThinLTO() {
-				ldflags = append(ldflags,
-					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
-					"-plugin-opt=mcpu="+config.CPU(),
-					"-plugin-opt=O"+strconv.Itoa(optLevel),
-					"-plugin-opt=thinlto")
+				ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
+				if config.GOOS() == "windows" {
+					// Options for the MinGW wrapper for the lld COFF linker.
+					ldflags = append(ldflags,
+						"-Xlink=/opt:lldlto="+strconv.Itoa(optLevel),
+						"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
+				} else if config.GOOS() == "darwin" {
+					// Options for the ld64-compatible lld linker.
+					ldflags = append(ldflags,
+						"--lto-O"+strconv.Itoa(optLevel),
+						"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
+				} else {
+					// Options for the ELF linker.
+					ldflags = append(ldflags,
+						"--lto-O"+strconv.Itoa(optLevel),
+						"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
+					)
+				}
 				if config.CodeModel() != "default" {
 					ldflags = append(ldflags,
 						"-mllvm", "-code-model="+config.CodeModel())
@@ -835,7 +854,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		if err != nil {
 			return err
 		}
-	case "esp32", "esp32c3", "esp8266":
+	case "esp32", "esp32-img", "esp32c3", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
 		tmppath = filepath.Join(dir, "main"+outext)
@@ -867,6 +886,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	}
 
 	return action(BuildResult{
+		Executable: executable,
 		Binary:     tmppath,
 		MainDir:    lprogram.MainPkg().Dir,
 		ModuleRoot: moduleroot,
@@ -926,17 +946,6 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	}
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 		return errors.New("verification failure after LLVM optimization passes")
-	}
-
-	// LLVM 11 by default tries to emit tail calls (even with the target feature
-	// disabled) unless it is explicitly disabled with a function attribute.
-	// This is a problem, as it tries to emit them and prints an error when it
-	// can't with this feature disabled.
-	// Because as of september 2020 tail calls are not yet widely supported,
-	// they need to be disabled until they are widely supported (at which point
-	// the +tail-call target feautre can be set).
-	if strings.HasPrefix(config.Triple(), "wasm") {
-		transform.DisableTailCalls(mod)
 	}
 
 	return nil

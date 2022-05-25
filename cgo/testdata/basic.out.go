@@ -24,23 +24,16 @@ func C.GoBytes(ptr unsafe.Pointer, length C.int) []byte {
 	return C.__GoBytes(ptr, uintptr(length))
 }
 
-type C.int16_t = int16
-type C.int32_t = int32
-type C.int64_t = int64
-type C.int8_t = int8
-type C.uint16_t = uint16
-type C.uint32_t = uint32
-type C.uint64_t = uint64
-type C.uint8_t = uint8
-type C.uintptr_t = uintptr
-type C.char uint8
-type C.int int32
-type C.long int32
-type C.longlong int64
-type C.schar int8
-type C.short int16
-type C.uchar uint8
-type C.uint uint32
-type C.ulong uint32
-type C.ulonglong uint64
-type C.ushort uint16
+type (
+	C.char      uint8
+	C.schar     int8
+	C.uchar     uint8
+	C.short     int16
+	C.ushort    uint16
+	C.int       int32
+	C.uint      uint32
+	C.long      int32
+	C.ulong     uint32
+	C.longlong  int64
+	C.ulonglong uint64
+)

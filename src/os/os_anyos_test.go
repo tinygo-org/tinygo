@@ -4,6 +4,7 @@
 package os_test
 
 import (
+	"io/fs"
 	"io/ioutil"
 	. "os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -55,8 +57,7 @@ func TestStatBadDir(t *testing.T) {
 	dir := TempDir()
 	badDir := filepath.Join(dir, "not-exist/really-not-exist")
 	_, err := Stat(badDir)
-	// TODO: PathError moved to io/fs in go 1.16; fix next line once we drop go 1.15 support.
-	if pe, ok := err.(*PathError); !ok || !IsNotExist(err) || pe.Path != badDir {
+	if pe, ok := err.(*fs.PathError); !ok || !IsNotExist(err) || pe.Path != badDir {
 		t.Errorf("Mkdir error = %#v; want PathError for path %q satisifying IsNotExist", err, badDir)
 	}
 }
@@ -123,8 +124,7 @@ func TestRemove(t *testing.T) {
 	if err == nil {
 		t.Errorf("TestRemove: remove of nonexistent file did not fail")
 	} else {
-		// FIXME: once we drop go 1.15, switch this to fs.PathError
-		if pe, ok := err.(*PathError); !ok {
+		if pe, ok := err.(*fs.PathError); !ok {
 			t.Errorf("TestRemove: expected PathError, got err %q", err.Error())
 		} else {
 			if pe.Path != f {
@@ -269,5 +269,65 @@ func TestUserHomeDir(t *testing.T) {
 	}
 	if !fi.IsDir() {
 		t.Fatalf("dir %s is not directory; type = %v", dir, fi.Mode())
+	}
+}
+
+func TestDirFS(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Log("TODO: implement Readdir for Windows")
+		return
+	}
+	if isWASI {
+		t.Log("TODO: allow foo/bar/. as synonym for path foo/bar on wasi?")
+		return
+	}
+	if err := fstest.TestFS(DirFS("./testdata/dirfs"), "a", "b", "dir/x"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test that Open does not accept backslash as separator.
+	d := DirFS(".")
+	_, err := d.Open(`testdata\dirfs`)
+	if err == nil {
+		t.Fatalf(`Open testdata\dirfs succeeded`)
+	}
+}
+
+func TestDirFSPathsValid(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Log("skipping on Windows")
+		return
+	}
+	if isWASI {
+		t.Log("skipping on wasi because it fails on wasi on windows")
+		return
+	}
+
+	// TODO: switch back to t.TempDir once it's implemented
+	d, err := MkdirTemp("", "TestDirFSPathsValid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Remove(d)
+	if err := WriteFile(filepath.Join(d, "control.txt"), []byte(string("Hello, world!")), 0644); err != nil {
+		t.Fatal(err)
+	}
+	defer Remove(filepath.Join(d, "control.txt"))
+	if err := WriteFile(filepath.Join(d, `e:xperi\ment.txt`), []byte(string("Hello, colon and backslash!")), 0644); err != nil {
+		t.Fatal(err)
+	}
+	defer Remove(filepath.Join(d, `e:xperi\ment.txt`))
+
+	fsys := DirFS(d)
+	err = fs.WalkDir(fsys, ".", func(path string, e fs.DirEntry, err error) error {
+		if fs.ValidPath(e.Name()) {
+			t.Logf("%q ok", e.Name())
+		} else {
+			t.Errorf("%q INVALID", e.Name())
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

@@ -86,6 +86,11 @@ func ticks() uint64 {
 	return timer.timeElapsed()
 }
 
+//go:linkname lightSleep runtime.machineLightSleep
+func lightSleep(ticks uint64) {
+	timer.lightSleep(ticks)
+}
+
 // UART pins
 const (
 	UART_TX_PIN  = UART0_TX_PIN

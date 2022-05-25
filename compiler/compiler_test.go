@@ -28,17 +28,10 @@ type testCase struct {
 func TestCompiler(t *testing.T) {
 	t.Parallel()
 
-	// Check LLVM version.
+	// Determine LLVM version.
 	llvmMajor, err := strconv.Atoi(strings.SplitN(llvm.Version, ".", 2)[0])
 	if err != nil {
 		t.Fatal("could not parse LLVM version:", llvm.Version)
-	}
-	if llvmMajor < 11 {
-		// It is likely this version needs to be bumped in the future.
-		// The goal is to at least test the LLVM version that's used by default
-		// in TinyGo and (if possible without too many workarounds) also some
-		// previous versions.
-		t.Skip("compiler tests require LLVM 11 or above, got LLVM ", llvm.Version)
 	}
 
 	// Determine Go minor version (e.g. 16 in go1.16.3).
@@ -221,14 +214,9 @@ func filterIrrelevantIRLines(lines []string) []string {
 		if strings.HasPrefix(line, "source_filename = ") {
 			continue
 		}
-		if llvmVersion < 12 && strings.HasPrefix(line, "attributes ") {
-			// Ignore attribute groups. These may change between LLVM versions.
-			// Right now test outputs are for LLVM 12 and higher.
-			continue
-		}
-		if llvmVersion < 13 && strings.HasPrefix(line, "target datalayout = ") {
+		if llvmVersion < 14 && strings.HasPrefix(line, "target datalayout = ") {
 			// The datalayout string may vary betewen LLVM versions.
-			// Right now test outputs are for LLVM 13 and higher.
+			// Right now test outputs are for LLVM 14 and higher.
 			continue
 		}
 		out = append(out, line)

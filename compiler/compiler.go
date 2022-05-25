@@ -957,10 +957,10 @@ func (b *builder) createFunction() {
 			} else {
 				fieldOffsets := b.expandFormalParamOffsets(llvmType)
 				for i, field := range fields {
-					expr := b.dibuilder.CreateExpression([]int64{
-						0x1000,                     // DW_OP_LLVM_fragment
-						int64(fieldOffsets[i]) * 8, // offset in bits
-						int64(b.targetData.TypeAllocSize(field.Type())) * 8, // size in bits
+					expr := b.dibuilder.CreateExpression([]uint64{
+						0x1000,              // DW_OP_LLVM_fragment
+						fieldOffsets[i] * 8, // offset in bits
+						b.targetData.TypeAllocSize(field.Type()) * 8, // size in bits
 					})
 					b.dibuilder.InsertValueAtEnd(field, dbgParam, expr, loc, entryBlock)
 				}
@@ -1469,6 +1469,14 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		case *ssa.Function:
 			// Regular function call. No context is necessary.
 			context = llvm.Undef(b.i8ptrType)
+			if info.variadic && len(fn.Params) == 0 {
+				// This matches Clang, see: https://godbolt.org/z/Gqv49xKMq
+				// Eventually we might be able to eliminate this special case
+				// entirely. For details, see:
+				// https://discourse.llvm.org/t/rfc-enabling-wstrict-prototypes-by-default-in-c/60521
+				fnType := llvm.FunctionType(callee.Type().ElementType().ReturnType(), nil, false)
+				callee = llvm.ConstBitCast(callee, llvm.PointerType(fnType, b.funcPtrAddrSpace))
+			}
 		case *ssa.MakeClosure:
 			// A call on a func value, but the callee is trivial to find. For
 			// example: immediately applied functions.

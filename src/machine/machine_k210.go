@@ -236,10 +236,10 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 			kendryte.GPIOHS.RISE_IE.ClearBits(1 << pin)
 			// Acknowledge interrupt atomically.
 			riscv.AsmFull(
-				"amoor.w {}, {mask}, {reg}",
+				"amoor.w {}, {mask}, ({reg})",
 				map[string]interface{}{
 					"mask": uint32(1 << pin),
-					"reg":  &kendryte.GPIOHS.RISE_IP.Reg,
+					"reg":  uintptr(unsafe.Pointer(&kendryte.GPIOHS.RISE_IP.Reg)),
 				})
 			kendryte.GPIOHS.RISE_IE.SetBits(1 << pin)
 		}
@@ -248,10 +248,10 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 			kendryte.GPIOHS.FALL_IE.ClearBits(1 << pin)
 			// Acknowledge interrupt atomically.
 			riscv.AsmFull(
-				"amoor.w {}, {mask}, {reg}",
+				"amoor.w {}, {mask}, ({reg})",
 				map[string]interface{}{
 					"mask": uint32(1 << pin),
-					"reg":  &kendryte.GPIOHS.FALL_IP.Reg,
+					"reg":  uintptr(unsafe.Pointer(&kendryte.GPIOHS.FALL_IP.Reg)),
 				})
 			kendryte.GPIOHS.FALL_IE.SetBits(1 << pin)
 		}

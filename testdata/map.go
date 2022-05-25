@@ -2,6 +2,7 @@ package main
 
 import (
 	"sort"
+	"unsafe"
 )
 
 var testmap1 = map[string]int{"data": 3}
@@ -126,6 +127,8 @@ func main() {
 	println("tested growing of a map")
 
 	floatcmplx()
+
+	mapgrow()
 }
 
 func floatcmplx() {
@@ -204,4 +207,70 @@ func testBigMap(squares map[int]int, n int) {
 			}
 		}
 	}
+}
+
+func mapgrow() {
+	m := make(map[int]int)
+
+	var Delete = 500
+	if unsafe.Sizeof(uintptr(0)) < 4 {
+		// Reduce the number of iterations on low-memory devices like AVR.
+		Delete = 20
+	}
+	var N = Delete * 2
+
+	for i := 0; i < Delete; i++ {
+		m[i] = i
+	}
+
+	var deleted bool
+	for k, v := range m {
+		if k == 0 {
+			// grow map
+			for i := Delete; i < N; i++ {
+				m[i] = i
+			}
+
+			// delete some elements
+			for i := 0; i < Delete; i++ {
+				delete(m, i)
+			}
+			deleted = true
+			continue
+		}
+
+		// make sure we never see a deleted element later in our iteration
+		if deleted && v < Delete {
+			println("saw deleted element", v)
+		}
+	}
+
+	if len(m) != N-Delete {
+		println("bad length post grow/delete", len(m))
+	}
+
+	seen := make([]bool, Delete)
+
+	var mcount int
+	for k, v := range m {
+		if k != v {
+			println("element mismatch", k, v)
+		}
+		if k < Delete {
+			println("saw deleted element post-grow", k)
+		}
+		seen[v-Delete] = true
+		mcount++
+	}
+
+	for _, v := range seen {
+		if !v {
+			println("missing key", v)
+		}
+	}
+
+	if mcount != N-Delete {
+		println("bad number of elements post-grow:", mcount)
+	}
+	println("done")
 }

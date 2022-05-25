@@ -9,13 +9,15 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-2019
+    runs-on: windows-2022
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17'
+          go-version: '1.18.1'
       - uses: brechtm/setup-scoop@v2
+        with:
+          scoop_update: 'false'
       - name: Install Dependencies
         shell: bash
         run: |
@@ -35,7 +37,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-source
         with:
-          key: llvm-source-13-windows-v2
+          key: llvm-source-14-windows-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -49,7 +51,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-build
         with:
-          key: llvm-build-13-windows-v2
+          key: llvm-build-14-windows-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -66,11 +68,14 @@ jobs:
         uses: actions/cache@v2
         id: cache-wasi-libc
         with:
-          key: wasi-libc-sysroot-v2
+          key: wasi-libc-sysroot-v3
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
+      - name: Install wasmtime
+        run: |
+          scoop install wasmtime
       - name: Test TinyGo
         shell: bash
         run: make test GOTESTFLAGS="-v -short"
@@ -96,3 +101,5 @@ jobs:
         run: make smoketest TINYGO=$(PWD)/build/tinygo AVR=0 XTENSA=0
       - name: Test stdlib packages
         run: make tinygo-test
+      - name: Test stdlib packages on wasi
+        run: make tinygo-test-wasi-fast

@@ -6,7 +6,7 @@
 //     testdata/errors.go:19:26: unexpected token ), expected end of expression
 
 // Type checking errors after CGo processing:
-//     testdata/errors.go:102: cannot use 2 << 10 (untyped int constant 2048) as uint8 value in variable declaration (overflows)
+//     testdata/errors.go:102: cannot use 2 << 10 (untyped int constant 2048) as C.char value in variable declaration (overflows)
 //     testdata/errors.go:105: unknown field z in struct literal
 //     testdata/errors.go:108: undeclared name: C.SOME_CONST_1
 //     testdata/errors.go:110: cannot use C.SOME_CONST_3 (untyped int constant 1234) as byte value in variable declaration (overflows)
@@ -38,29 +38,23 @@ func C.GoBytes(ptr unsafe.Pointer, length C.int) []byte {
 	return C.__GoBytes(ptr, uintptr(length))
 }
 
-const C.SOME_CONST_3 = 1234
-
-type C.int16_t = int16
-type C.int32_t = int32
-type C.int64_t = int64
-type C.int8_t = int8
-type C.uint16_t = uint16
-type C.uint32_t = uint32
-type C.uint64_t = uint64
-type C.uint8_t = uint8
-type C.uintptr_t = uintptr
-type C.char uint8
-type C.int int32
-type C.long int32
-type C.longlong int64
-type C.schar int8
-type C.short int16
-type C.uchar uint8
-type C.uint uint32
-type C.ulong uint32
-type C.ulonglong uint64
-type C.ushort uint16
-type C.point_t = struct {
+type (
+	C.char      uint8
+	C.schar     int8
+	C.uchar     uint8
+	C.short     int16
+	C.ushort    uint16
+	C.int       int32
+	C.uint      uint32
+	C.long      int32
+	C.ulong     uint32
+	C.longlong  int64
+	C.ulonglong uint64
+)
+type C._Ctype_struct___0 struct {
 	x C.int
 	y C.int
 }
+type C.point_t = C._Ctype_struct___0
+
+const C.SOME_CONST_3 = 1234

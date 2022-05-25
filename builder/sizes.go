@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"debug/dwarf"
 	"debug/elf"
+	"debug/macho"
 	"debug/pe"
 	"encoding/binary"
 	"fmt"
@@ -365,6 +366,58 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 					Address: section.Addr,
 					Size:    section.Size,
 					Type:    memoryROData,
+				})
+			}
+		}
+	} else if file, err := macho.NewFile(f); err == nil {
+		// TODO: read DWARF information. On MacOS, DWARF debug information isn't
+		// stored in the executable but stays in the object files. The
+		// executable does however contain the object file paths that contain
+		// debug information.
+
+		// Read segments, for use while reading through sections.
+		segments := map[string]*macho.Segment{}
+		for _, load := range file.Loads {
+			switch load := load.(type) {
+			case *macho.Segment:
+				segments[load.Name] = load
+			}
+		}
+
+		// Read MachO sections.
+		for _, section := range file.Sections {
+			sectionType := section.Flags & 0xff
+			sectionFlags := section.Flags >> 8
+			segment := segments[section.Seg]
+			// For the constants used here, see:
+			// https://github.com/llvm/llvm-project/blob/release/14.x/llvm/include/llvm/BinaryFormat/MachO.h
+			if sectionFlags&0x800000 != 0 { // S_ATTR_PURE_INSTRUCTIONS
+				// Section containing only instructions.
+				sections = append(sections, memorySection{
+					Address: section.Addr,
+					Size:    uint64(section.Size),
+					Type:    memoryCode,
+				})
+			} else if sectionType == 1 { // S_ZEROFILL
+				// Section filled with zeroes on demand.
+				sections = append(sections, memorySection{
+					Address: section.Addr,
+					Size:    uint64(section.Size),
+					Type:    memoryBSS,
+				})
+			} else if segment.Maxprot&0b011 == 0b001 { // --r (read-only data)
+				// Protection doesn't allow writes, so mark this section read-only.
+				sections = append(sections, memorySection{
+					Address: section.Addr,
+					Size:    uint64(section.Size),
+					Type:    memoryROData,
+				})
+			} else {
+				// The rest is assumed to be regular data.
+				sections = append(sections, memorySection{
+					Address: section.Addr,
+					Size:    uint64(section.Size),
+					Type:    memoryData,
 				})
 			}
 		}

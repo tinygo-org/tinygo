@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -191,15 +192,6 @@ func (c *Config) UseThinLTO() bool {
 		// through a plugin, but it's too much hassle to set up.
 		return false
 	}
-	if len(parts) >= 2 && strings.HasPrefix(parts[2], "macos") {
-		// We use an external linker here at the moment.
-		return false
-	}
-	if len(parts) >= 2 && parts[2] == "windows" {
-		// Linker error (undefined runtime.trackedGlobalsBitmap) when linking
-		// for Windows. Disable it for now until that's figured out and fixed.
-		return false
-	}
 	// Other architectures support ThinLTO.
 	return true
 }
@@ -287,6 +279,7 @@ func (c *Config) CFlags() []string {
 		path, _ := c.LibcPath("picolibc")
 		cflags = append(cflags,
 			"--sysroot="+path,
+			"-isystem", filepath.Join(path, "include"), // necessary for Xtensa
 			"-isystem", filepath.Join(picolibcDir, "include"),
 			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
 		)
@@ -393,6 +386,13 @@ func (c *Config) BinaryFormat(ext string) string {
 			return c.Target.BinaryFormat
 		}
 		return "bin"
+	case ".img":
+		// Image file. Only defined for the ESP32 at the moment, where it is a
+		// full (runnable) image that can be used in the Espressif QEMU fork.
+		if c.Target.BinaryFormat != "" {
+			return c.Target.BinaryFormat + "-img"
+		}
+		return "bin"
 	case ".hex":
 		// Similar to bin, but includes the start address and is thus usually a
 		// better format.
@@ -493,13 +493,43 @@ func (c *Config) WasmAbi() string {
 	return c.Target.WasmAbi
 }
 
-// Emulator returns the emulator target config
-func (c *Config) Emulator() []string {
-	var emulator []string
-	for _, s := range c.Target.Emulator {
-		emulator = append(emulator, strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT")))
+// EmulatorName is a shorthand to get the command for this emulator, something
+// like qemu-system-arm or simavr.
+func (c *Config) EmulatorName() string {
+	parts := strings.SplitN(c.Target.Emulator, " ", 2)
+	if len(parts) > 1 {
+		return parts[0]
 	}
-	return emulator
+	return ""
+}
+
+// EmulatorFormat returns the binary format for the emulator and the associated
+// file extension. An empty string means to pass directly whatever the linker
+// produces directly without conversion (usually ELF format).
+func (c *Config) EmulatorFormat() (format, fileExt string) {
+	switch {
+	case strings.Contains(c.Target.Emulator, "{img}"):
+		return "img", ".img"
+	default:
+		return "", ""
+	}
+}
+
+// Emulator returns a ready-to-run command to run the given binary in an
+// emulator. Give it the format (returned by EmulatorFormat()) and the path to
+// the compiled binary.
+func (c *Config) Emulator(format, binary string) ([]string, error) {
+	parts, err := shlex.Split(c.Target.Emulator)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse emulator command: %w", err)
+	}
+	var emulator []string
+	for _, s := range parts {
+		s = strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT"))
+		s = strings.ReplaceAll(s, "{"+format+"}", binary)
+		emulator = append(emulator, s)
+	}
+	return emulator, nil
 }
 
 type TestConfig struct {

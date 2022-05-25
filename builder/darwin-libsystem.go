@@ -39,7 +39,7 @@ func makeDarwinLibSystemJob(config *compileopts.Config, tmpdir string) *compileJ
 			// Link object file to dynamic library.
 			platformVersion := strings.TrimPrefix(strings.Split(config.Triple(), "-")[2], "macosx")
 			flags = []string{
-				"-flavor", "darwinnew",
+				"-flavor", "darwin",
 				"-demangle",
 				"-dynamic",
 				"-dylib",

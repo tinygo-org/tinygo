@@ -29,7 +29,6 @@ func TestOverrideProperties(t *testing.T) {
 		CPU:              "baseCpu",
 		CFlags:           []string{"-base-foo", "-base-bar"},
 		BuildTags:        []string{"bt1", "bt2"},
-		Emulator:         []string{"be1", "be2"},
 		DefaultStackSize: 42,
 		AutoStackSize:    &baseAutoStackSize,
 	}
@@ -38,7 +37,6 @@ func TestOverrideProperties(t *testing.T) {
 		GOOS:             "",
 		CPU:              "chlidCpu",
 		CFlags:           []string{"-child-foo", "-child-bar"},
-		Emulator:         []string{"ce1", "ce2"},
 		AutoStackSize:    &childAutoStackSize,
 		DefaultStackSize: 64,
 	}
@@ -56,9 +54,6 @@ func TestOverrideProperties(t *testing.T) {
 	}
 	if !reflect.DeepEqual(base.BuildTags, []string{"bt1", "bt2"}) {
 		t.Errorf("Overriding failed : got %v", base.BuildTags)
-	}
-	if !reflect.DeepEqual(base.Emulator, []string{"ce1", "ce2"}) {
-		t.Errorf("Overriding failed : got %v", base.Emulator)
 	}
 	if *base.AutoStackSize != false {
 		t.Errorf("Overriding failed : got %v", base.AutoStackSize)
