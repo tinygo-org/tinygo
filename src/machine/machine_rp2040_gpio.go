@@ -88,8 +88,8 @@ const (
 	PinSPI
 )
 
-func (p Pin) PortMaskSet() (*volatile.Register32, uint32) {
-	return &rp.SIO.GPIO_OUT_SET, 1 << p
+func (p Pin) PortMaskSet() (*uint32, uint32) {
+	return (*uint32)(unsafe.Pointer(&rp.SIO.GPIO_OUT_SET)), 1 << p
 }
 
 // set drives the pin high
@@ -98,8 +98,8 @@ func (p Pin) set() {
 	rp.SIO.GPIO_OUT_SET.Set(mask)
 }
 
-func (p Pin) PortMaskClear() (*volatile.Register32, uint32) {
-	return &rp.SIO.GPIO_OUT_CLR, 1 << p
+func (p Pin) PortMaskClear() (*uint32, uint32) {
+	return (*uint32)(unsafe.Pointer(&rp.SIO.GPIO_OUT_CLR)), 1 << p
 }
 
 // clr drives the pin low
