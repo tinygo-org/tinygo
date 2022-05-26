@@ -208,8 +208,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add jobs to compile each package.
 	// Packages that have a cache hit will not be compiled again.
 	var packageJobs []*compileJob
-	packageBitcodePaths := make(map[string]string)
-	packageActionIDs := make(map[string]string)
+	packageActionIDJobs := make(map[string]*compileJob)
 
 	if config.Options.GlobalValues["runtime"]["buildVersion"] == "" {
 		version := goenv.Version
@@ -234,52 +233,68 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		}
 		sort.Strings(undefinedGlobals)
 
-		// Create a cache key: a hash from the action ID below that contains all
-		// the parameters for the build.
-		actionID := packageAction{
-			ImportPath:       pkg.ImportPath,
-			CompilerBuildID:  string(compilerBuildID),
-			TinyGoVersion:    goenv.Version,
-			LLVMVersion:      llvm.Version,
-			Config:           compilerConfig,
-			CFlags:           pkg.CFlags,
-			FileHashes:       make(map[string]string, len(pkg.FileHashes)),
-			Imports:          make(map[string]string, len(pkg.Pkg.Imports())),
-			OptLevel:         optLevel,
-			SizeLevel:        sizeLevel,
-			UndefinedGlobals: undefinedGlobals,
-		}
-		for filePath, hash := range pkg.FileHashes {
-			actionID.FileHashes[filePath] = hex.EncodeToString(hash)
-		}
+		// Action ID jobs need to know the action ID of all the jobs the package
+		// imports.
+		var importedPackages []*compileJob
 		for _, imported := range pkg.Pkg.Imports() {
-			hash, ok := packageActionIDs[imported.Path()]
+			job, ok := packageActionIDJobs[imported.Path()]
 			if !ok {
 				return fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
 			}
-			actionID.Imports[imported.Path()] = hash
+			importedPackages = append(importedPackages, job)
 		}
-		buf, err := json.Marshal(actionID)
-		if err != nil {
-			panic(err) // shouldn't happen
+
+		// Create a job that will calculate the action ID for a package compile
+		// job. The action ID is the cache key that is used for caching this
+		// package.
+		packageActionIDJob := &compileJob{
+			description:  "calculate cache key for package " + pkg.ImportPath,
+			dependencies: importedPackages,
+			run: func(job *compileJob) error {
+				// Create a cache key: a hash from the action ID below that contains all
+				// the parameters for the build.
+				actionID := packageAction{
+					ImportPath:       pkg.ImportPath,
+					CompilerBuildID:  string(compilerBuildID),
+					TinyGoVersion:    goenv.Version,
+					LLVMVersion:      llvm.Version,
+					Config:           compilerConfig,
+					CFlags:           pkg.CFlags,
+					FileHashes:       make(map[string]string, len(pkg.FileHashes)),
+					Imports:          make(map[string]string, len(pkg.Pkg.Imports())),
+					OptLevel:         optLevel,
+					SizeLevel:        sizeLevel,
+					UndefinedGlobals: undefinedGlobals,
+				}
+				for filePath, hash := range pkg.FileHashes {
+					actionID.FileHashes[filePath] = hex.EncodeToString(hash)
+				}
+				for i, imported := range pkg.Pkg.Imports() {
+					actionID.Imports[imported.Path()] = importedPackages[i].result
+				}
+				buf, err := json.Marshal(actionID)
+				if err != nil {
+					return err // shouldn't happen
+				}
+				hash := sha512.Sum512_224(buf)
+				job.result = hex.EncodeToString(hash[:])
+				return nil
+			},
 		}
-		hash := sha512.Sum512_224(buf)
-		packageActionIDs[pkg.ImportPath] = hex.EncodeToString(hash[:])
+		packageActionIDJobs[pkg.ImportPath] = packageActionIDJob
 
-		// Determine the path of the bitcode file (which is a serialized version
-		// of a LLVM module).
-		bitcodePath := filepath.Join(cacheDir, "pkg-"+hex.EncodeToString(hash[:])+".bc")
-		packageBitcodePaths[pkg.ImportPath] = bitcodePath
-
-		// The package has not yet been compiled, so create a job to do so.
+		// Now create the job to actually build the package. It will exit early
+		// if the package is already compiled.
 		job := &compileJob{
-			description: "compile package " + pkg.ImportPath,
-			run: func(*compileJob) error {
+			description:  "compile package " + pkg.ImportPath,
+			dependencies: []*compileJob{packageActionIDJob},
+			run: func(job *compileJob) error {
+				job.result = filepath.Join(cacheDir, "pkg-"+packageActionIDJob.result+".bc")
 				// Acquire a lock (if supported).
-				unlock := lock(bitcodePath + ".lock")
+				unlock := lock(job.result + ".lock")
 				defer unlock()
 
-				if _, err := os.Stat(bitcodePath); err == nil {
+				if _, err := os.Stat(job.result); err == nil {
 					// Already cached, don't recreate this package.
 					return nil
 				}
@@ -398,7 +413,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				// Write to a temporary path that is renamed to the destination
 				// file to avoid race conditions with other TinyGo invocatiosn
 				// that might also be compiling this package at the same time.
-				f, err := ioutil.TempFile(filepath.Dir(bitcodePath), filepath.Base(bitcodePath))
+				f, err := ioutil.TempFile(filepath.Dir(job.result), filepath.Base(job.result))
 				if err != nil {
 					return err
 				}
@@ -418,13 +433,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				if err != nil {
 					// WriteBitcodeToFile doesn't produce a useful error on its
 					// own, so create a somewhat useful error message here.
-					return fmt.Errorf("failed to write bitcode for package %s to file %s", pkg.ImportPath, bitcodePath)
+					return fmt.Errorf("failed to write bitcode for package %s to file %s", pkg.ImportPath, job.result)
 				}
 				err = f.Close()
 				if err != nil {
 					return err
 				}
-				return os.Rename(f.Name(), bitcodePath)
+				return os.Rename(f.Name(), job.result)
 			},
 		}
 		packageJobs = append(packageJobs, job)
@@ -441,8 +456,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			// anything, it only links the bitcode files together.
 			ctx := llvm.NewContext()
 			mod = ctx.NewModule("main")
-			for _, pkg := range lprogram.Sorted() {
-				pkgMod, err := ctx.ParseBitcodeFile(packageBitcodePaths[pkg.ImportPath])
+			for _, pkgJob := range packageJobs {
+				pkgMod, err := ctx.ParseBitcodeFile(pkgJob.result)
 				if err != nil {
 					return fmt.Errorf("failed to load bitcode file: %w", err)
 				}
