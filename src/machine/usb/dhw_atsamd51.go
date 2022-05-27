@@ -1122,8 +1122,7 @@ func (d *dhw) endpointStall(endpoint uint8, stall bool) {
 					sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_DTGLOUT)
 		case txEndpoint(endpoint):
 			d.bus.DEVICE_ENDPOINT[endpointNumber(endpoint)].EPSTATUSCLR.Set(
-				sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_STALLRQ1 |
-					sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_DTGLIN)
+				sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_STALLRQ1)
 		}
 	}
 	num, dir := unpackEndpoint(endpoint)
