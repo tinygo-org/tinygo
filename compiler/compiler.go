@@ -2470,42 +2470,41 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 }
 
 // createConst creates a LLVM constant value from a Go constant.
-func (b *builder) createConst(expr *ssa.Const) llvm.Value {
+func (c *compilerContext) createConst(expr *ssa.Const) llvm.Value {
 	switch typ := expr.Type().Underlying().(type) {
 	case *types.Basic:
-		llvmType := b.getLLVMType(typ)
+		llvmType := c.getLLVMType(typ)
 		if typ.Info()&types.IsBoolean != 0 {
-			b := constant.BoolVal(expr.Value)
 			n := uint64(0)
-			if b {
+			if constant.BoolVal(expr.Value) {
 				n = 1
 			}
 			return llvm.ConstInt(llvmType, n, false)
 		} else if typ.Info()&types.IsString != 0 {
 			str := constant.StringVal(expr.Value)
-			strLen := llvm.ConstInt(b.uintptrType, uint64(len(str)), false)
+			strLen := llvm.ConstInt(c.uintptrType, uint64(len(str)), false)
 			var strPtr llvm.Value
 			if str != "" {
-				objname := b.pkg.Path() + "$string"
-				global := llvm.AddGlobal(b.mod, llvm.ArrayType(b.ctx.Int8Type(), len(str)), objname)
-				global.SetInitializer(b.ctx.ConstString(str, false))
+				objname := c.pkg.Path() + "$string"
+				global := llvm.AddGlobal(c.mod, llvm.ArrayType(c.ctx.Int8Type(), len(str)), objname)
+				global.SetInitializer(c.ctx.ConstString(str, false))
 				global.SetLinkage(llvm.InternalLinkage)
 				global.SetGlobalConstant(true)
 				global.SetUnnamedAddr(true)
 				global.SetAlignment(1)
-				zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-				strPtr = b.CreateInBoundsGEP(global, []llvm.Value{zero, zero}, "")
+				zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
+				strPtr = llvm.ConstInBoundsGEP(global, []llvm.Value{zero, zero})
 			} else {
-				strPtr = llvm.ConstNull(b.i8ptrType)
+				strPtr = llvm.ConstNull(c.i8ptrType)
 			}
-			strObj := llvm.ConstNamedStruct(b.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
+			strObj := llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
 			return strObj
 		} else if typ.Kind() == types.UnsafePointer {
 			if !expr.IsNil() {
 				value, _ := constant.Uint64Val(constant.ToInt(expr.Value))
-				return llvm.ConstIntToPtr(llvm.ConstInt(b.uintptrType, value, false), b.i8ptrType)
+				return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, value, false), c.i8ptrType)
 			}
-			return llvm.ConstNull(b.i8ptrType)
+			return llvm.ConstNull(c.i8ptrType)
 		} else if typ.Info()&types.IsUnsigned != 0 {
 			n, _ := constant.Uint64Val(constant.ToInt(expr.Value))
 			return llvm.ConstInt(llvmType, n, false)
@@ -2516,18 +2515,18 @@ func (b *builder) createConst(expr *ssa.Const) llvm.Value {
 			n, _ := constant.Float64Val(expr.Value)
 			return llvm.ConstFloat(llvmType, n)
 		} else if typ.Kind() == types.Complex64 {
-			r := b.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
-			i := b.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
-			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.FloatType(), b.ctx.FloatType()}, false))
-			cplx = b.CreateInsertValue(cplx, r, 0, "")
-			cplx = b.CreateInsertValue(cplx, i, 1, "")
+			r := c.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
+			i := c.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
+			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
+			cplx = llvm.ConstInsertValue(cplx, r, []uint32{0})
+			cplx = llvm.ConstInsertValue(cplx, i, []uint32{1})
 			return cplx
 		} else if typ.Kind() == types.Complex128 {
-			r := b.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
-			i := b.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
-			cplx := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.DoubleType(), b.ctx.DoubleType()}, false))
-			cplx = b.CreateInsertValue(cplx, r, 0, "")
-			cplx = b.CreateInsertValue(cplx, i, 1, "")
+			r := c.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
+			i := c.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
+			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
+			cplx = llvm.ConstInsertValue(cplx, r, []uint32{0})
+			cplx = llvm.ConstInsertValue(cplx, i, []uint32{1})
 			return cplx
 		} else {
 			panic("unknown constant of basic type: " + expr.String())
@@ -2536,35 +2535,35 @@ func (b *builder) createConst(expr *ssa.Const) llvm.Value {
 		if expr.Value != nil {
 			panic("expected nil chan constant")
 		}
-		return llvm.ConstNull(b.getLLVMType(expr.Type()))
+		return llvm.ConstNull(c.getLLVMType(expr.Type()))
 	case *types.Signature:
 		if expr.Value != nil {
 			panic("expected nil signature constant")
 		}
-		return llvm.ConstNull(b.getLLVMType(expr.Type()))
+		return llvm.ConstNull(c.getLLVMType(expr.Type()))
 	case *types.Interface:
 		if expr.Value != nil {
 			panic("expected nil interface constant")
 		}
 		// Create a generic nil interface with no dynamic type (typecode=0).
 		fields := []llvm.Value{
-			llvm.ConstInt(b.uintptrType, 0, false),
-			llvm.ConstPointerNull(b.i8ptrType),
+			llvm.ConstInt(c.uintptrType, 0, false),
+			llvm.ConstPointerNull(c.i8ptrType),
 		}
-		return llvm.ConstNamedStruct(b.getLLVMRuntimeType("_interface"), fields)
+		return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_interface"), fields)
 	case *types.Pointer:
 		if expr.Value != nil {
 			panic("expected nil pointer constant")
 		}
-		return llvm.ConstPointerNull(b.getLLVMType(typ))
+		return llvm.ConstPointerNull(c.getLLVMType(typ))
 	case *types.Slice:
 		if expr.Value != nil {
 			panic("expected nil slice constant")
 		}
-		elemType := b.getLLVMType(typ.Elem())
+		elemType := c.getLLVMType(typ.Elem())
 		llvmPtr := llvm.ConstPointerNull(llvm.PointerType(elemType, 0))
-		llvmLen := llvm.ConstInt(b.uintptrType, 0, false)
-		slice := b.ctx.ConstStruct([]llvm.Value{
+		llvmLen := llvm.ConstInt(c.uintptrType, 0, false)
+		slice := c.ctx.ConstStruct([]llvm.Value{
 			llvmPtr, // backing array
 			llvmLen, // len
 			llvmLen, // cap
@@ -2575,7 +2574,7 @@ func (b *builder) createConst(expr *ssa.Const) llvm.Value {
 			// I believe this is not allowed by the Go spec.
 			panic("non-nil map constant")
 		}
-		llvmType := b.getLLVMType(typ)
+		llvmType := c.getLLVMType(typ)
 		return llvm.ConstNull(llvmType)
 	default:
 		panic("unknown constant: " + expr.String())
