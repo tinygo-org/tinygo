@@ -233,6 +233,31 @@ func getHeapEnd() uintptr {
 	return heapEnd
 }
 
+//go:extern __data_start
+var dataStartSymbol [0]byte
+
+//go:extern __data_end
+var dataEndSymbol [0]byte
+
+//go:extern __bss_start
+var bssStartSymbol [0]byte
+
+//go:extern __bss_end
+var bssEndSymbol [0]byte
+
+// Mark global variables.
+// The linker script provides __*_start and __*_end symbols that can be used to
+// scan the given sections. They are already aligned so don't need to be
+// manually aligned here.
+func markGlobals() {
+	dataStart := uintptr(unsafe.Pointer(&dataStartSymbol))
+	dataEnd := uintptr(unsafe.Pointer(&dataEndSymbol))
+	markRoots(dataStart, dataEnd)
+	bssStart := uintptr(unsafe.Pointer(&bssStartSymbol))
+	bssEnd := uintptr(unsafe.Pointer(&bssEndSymbol))
+	markRoots(bssStart, bssEnd)
+}
+
 // getContextPtr returns the hblauncher context
 // this is externally linked by gonx
 func getContextPtr() uintptr {
