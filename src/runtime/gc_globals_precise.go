@@ -1,5 +1,5 @@
-//go:build gc.conservative && !baremetal && !darwin && !tinygo.wasm && !windows
-// +build gc.conservative,!baremetal,!darwin,!tinygo.wasm,!windows
+//go:build gc.conservative && !baremetal && !darwin && !nintendoswitch && !tinygo.wasm && !windows
+// +build gc.conservative,!baremetal,!darwin,!nintendoswitch,!tinygo.wasm,!windows
 
 package runtime
 
