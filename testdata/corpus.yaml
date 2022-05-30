@@ -129,10 +129,10 @@
   - pkg: tea
   - pkg: twofish
   - pkg: xtea
-    # chacha20 -- panic: chacha20: SetCounter attempted to rollback counter
-    # cryptobyte -- panic: unimplemented: reflect.OverflowInt()
-    # salsa20/salsa -- panic: runtime error: index out of range
-    # sha3 -- panic: unimplemented: (reflect.Type).NumMethod()
+  #- pkg: chacha20 # panic: chacha20: SetCounter attempted to rollback counter
+  #- pkg: cryptobyte # panic: unimplemented: reflect.OverflowInt()
+  #- pkg: salsa20/salsa # panic: runtime error: index out of range
+  #- pkg: sha3 # panic: unimplemented: (reflect.Type).NumMethod()
 - repo: github.com/google/shlex
 - repo: github.com/google/btree
 - repo: github.com/google/der-ascii
@@ -167,15 +167,15 @@
   - pkg: search
   - pkg: unicode/rangetable
   - pkg: message/catalog
-    # 'collate/build', # -- panic: (reflect.Value).Interface: unexported
-    # 'feature/plural', # TestSelect, TestOrdinal, TestCardinal fail
-    # 'internal/catmsg', # TestCodec fails
-    # 'internal/gen/bitfield', # panic: unimplemented: (reflect.Type).Name()
-    # 'number', # fails due to printf %T formatting
+  #- pkg: collate/build # panic: (reflect.Value).Interface: unexported
+  #- pkg: feature/plural # TestSelect, TestOrdinal, TestCardinal fail
+  #- pkg: internal/catmsg  # TestCodec fails
+  #- pkg: internal/gen/bitfield # panic: unimplemented: (reflect.Type).Name()
+  #- pkg: number # fails due to printf %T formatting
 - repo: golang.org/x/image
   tags: noasm
   subdirs:
-  # - bmp: needs  _time.startTimer
+  #- pkg: bmp # needs  _time.startTimer
   - pkg: ccitt
   - pkg: colornames
   - pkg: draw
@@ -193,7 +193,7 @@
   - pkg: r2
   - pkg: r3
   - pkg: s1
-    #  's2' -- reflect.DeepEqual() -> MapKeys
+  #- pkg: s2 # reflect.DeepEqual() -> MapKeys
 - repo: github.com/golang/groupcache
   subdirs:
   - pkg: consistenthash
@@ -236,40 +236,40 @@
     slow: true
   - pkg: stat/samplemv
     skipwasi: true # takes too long
-            # 'blas/blas64', # -- TestDasum panic: blas: n < 0
-            # 'blas/gonum', # -- panic: blas: n < 0
-            # 'cmplxs', # -- TestAdd panic: cmplxs: slice lengths do not match
-            # 'diff/fd', # -- panic: fd: slice length mismatch
-            # 'floats', # -- panic: floats: destination slice length does not match input
-            # 'graph', # ld.lld-11:  -- error: undefined symbol: reflect.mapiterkey (among other reflect errors)
-            # 'graph/topo', # -- Reflect: Same as above
-            # 'internal/math32', # -- /usr/local/go/src/testing/quick/quick.go:273:11: fType.NumOut undefined (type reflect.Type has no field or method NumOut)
-            # 'interp', # -- panic: interp: input slices have different lengths
-            # 'mat', # -- panic: mat: row index out of range
-            # 'num/dual', # -- TestFormat unexpected result for fmt.Sprintf("%#v", T{Real:1.1, Emag:2.1}): got:"T{Real:1.1, Emag:2.1}", want:"dual.Number{Real:1.1, Emag:2.1}"    unexpected result for fmt.Sprintf("%#v", T{Real:-1.1, Emag:-2.1}): got:"T{Real:-1.1, Emag:-2.1}", want:"dual.Number{Real:-1.1, Emag:-2.1}"
-            # 'num/dualcmplx', # -- TestFormat (similar to above)
-            # 'num/dualquat', # -- TestFormat (similar to above)
-            # 'num/hyperdual', # -- TestFormat (similar to above)
-            # 'num/quat', # -- TestFormat (similar to above)
-            # 'optimize', # // ld.lld-11: error: undefined symbol: golang.org/x/tools/container/intsets.havePOPCNT error: failed to link ...
-            # 'spatial/barneshut', # -- panic: unimplemented: (reflect.Value).MapKeys()
-            # 'spatial/kdtree', # -- panic: unimplemented: (reflect.Value).MapKeys()
-            # 'spatial/vptree', # -- panic: unimplemented: (reflect.Value).MapKeys()
-            # 'stat', # -- panic: stat: slice length mismatch
-            # 'stat/card', # -- /usr/local/go/src/encoding/gob/decode.go:562:21: MakeMapWithSize not declared by package reflect
-            # 'stat/distuv', # -- panic: distuv: cannot compute Mode for Beta != 0\
-            # 'stat/sampleuv', # -- TestWeightedTimeSeeded requires t.Skip(), otherwise passes
-            # 'unit', # -- All Format tests fail. Similar to `num` subpackages.
+  #- pkg: blas/blas64 # -- TestDasum panic: blas: n < 0
+  #- pkg: blas/gonum # -- panic: blas: n < 0
+  #- pkg: cmplxs # -- TestAdd panic: cmplxs: slice lengths do not match
+  #- pkg: diff/fd # -- panic: fd: slice length mismatch
+  #- pkg: floats # -- panic: floats: destination slice length does not match input
+  #- pkg: graph # ld.lld-11:  -- error: undefined symbol: reflect.mapiterkey (among other reflect errors)
+  #- pkg: graph/topo # -- Reflect: Same as above
+  #- pkg: internal/math32 # -- /usr/local/go/src/testing/quick/quick.go:273:11: fType.NumOut undefined (type reflect.Type has no field or method NumOut)
+  #- pkg: interp # -- panic: interp: input slices have different lengths
+  #- pkg: mat # -- panic: mat: row index out of range
+  #- pkg: num/dual # TestFormat unexpected result for fmt.Sprintf("%#v", T{Real:1.1, Emag:2.1}): got:"T{Real:1.1, Emag:2.1}", want:"dual.Number{Real:1.1, Emag:2.1}"    unexpected result for fmt.Sprintf("%#v", T{Real:-1.1, Emag:-2.1}): got:"T{Real:-1.1, Emag:-2.1}", want:"dual.Number{Real:-1.1, Emag:-2.1}"
+  #- pkg: num/dualcmplx # TestFormat (similar to above)
+  #- pkg: num/dualquat # TestFormat (similar to above)
+  #- pkg: num/hyperdual # TestFormat (similar to above)
+  #- pkg: num/quat # TestFormat (similar to above)
+  #- pkg: optimize', # ld.lld-11: error: undefined symbol: golang.org/x/tools/container/intsets.havePOPCNT error: failed to link ...
+  #- pkg: spatial/barneshut # panic: unimplemented: (reflect.Value).MapKeys()
+  #- pkg: spatial/kdtree # panic: unimplemented: (reflect.Value).MapKeys()
+  #- pkg: spatial/vptree # panic: unimplemented: (reflect.Value).MapKeys()
+  #- pkg: stat # panic: stat: slice length mismatch
+  #- pkg: stat/card # /usr/local/go/src/encoding/gob/decode.go:562:21: MakeMapWithSize not declared by package reflect
+  #- pkg: stat/distuv # panic: distuv: cannot compute Mode for Beta != 0\
+  #- pkg: stat/sampleuv # TestWeightedTimeSeeded requires t.Skip(), otherwise passes
+  #- pkg: unit # All Format tests fail. Similar to `num` subpackages.
 
 - repo: github.com/cloudflare/bm
 - repo: github.com/cloudflare/bn256
   tags: generic
-# "cloudflare/ahocorasick" -- interp timeout building regexps in test
-# - repo: github.com/google/open-location-code # unfortunately, Go discards the test files
-#   version: master
-#   skipwasi: true # needs file access
-#   subdirs:
-#   - pkg: go
+#- repo: cloudflare/ahocorasick # interp timeout building regexps in test
+#- repo: github.com/google/open-location-code # unfortunately, Go discards the test files
+#  version: master
+#  skipwasi: true # needs file access
+#  subdirs:
+#  - pkg: go
 - repo: github.com/chewxy/math32
   tags: noasm
   version: master
