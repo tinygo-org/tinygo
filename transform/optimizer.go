@@ -157,8 +157,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 	builder.Populate(modPasses)
 	modPasses.Run(mod)
 
-	hasGCPass := AddGlobalsBitmap(mod)
-	hasGCPass = MakeGCStackSlots(mod) || hasGCPass
+	hasGCPass := MakeGCStackSlots(mod)
 	if hasGCPass {
 		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 			return []error{errors.New("GC pass caused a verification failure")}
