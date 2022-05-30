@@ -439,27 +439,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					return errors.New("verification error after interpreting " + pkgInit.Name())
 				}
 
-				// Run function passes for each function in the module.
-				// These passes are intended to be run on each function right
-				// after they're created to reduce IR size (and maybe also for
-				// cache locality to improve performance), but for now they're
-				// run here for each function in turn. Maybe this can be
-				// improved in the future.
-				builder := llvm.NewPassManagerBuilder()
-				defer builder.Dispose()
-				builder.SetOptLevel(optLevel)
-				builder.SetSizeLevel(sizeLevel)
-				funcPasses := llvm.NewFunctionPassManagerForModule(mod)
-				defer funcPasses.Dispose()
-				builder.PopulateFunc(funcPasses)
-				funcPasses.InitializeFunc()
-				for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-					if fn.IsDeclaration() {
-						continue
-					}
-					funcPasses.RunFunc(fn)
-				}
-				funcPasses.FinalizeFunc()
+				transform.OptimizePackage(mod, config)
 
 				// Serialize the LLVM module as a bitcode file.
 				// Write to a temporary path that is renamed to the destination
