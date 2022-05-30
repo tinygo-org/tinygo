@@ -649,6 +649,7 @@ ifneq ($(OS),Windows_NT)
 	# TODO: this does not yet work on Windows. Somehow, unused functions are
 	# not garbage collected.
 	$(TINYGO) build -o test.elf -gc=leaking -scheduler=none examples/serial
+	$(TINYGO) build -o test.elf                             examples/callcpp
 endif
 
 

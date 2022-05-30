@@ -334,6 +334,14 @@ func (c *Config) CFlags() []string {
 	return cflags
 }
 
+func (c *Config) CXXFlags() []string {
+	var cxxflags []string
+	for _, flag := range c.Target.CXXFlags {
+		cxxflags = append(cxxflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
+	}
+	return cxxflags
+}
+
 // LDFlags returns the flags to pass to the linker. A few more flags are needed
 // (like the one for the compiler runtime), but this represents the majority of
 // the flags.
