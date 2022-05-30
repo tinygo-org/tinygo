@@ -37,6 +37,11 @@ func OptimizePackage(mod llvm.Module, config *compileopts.Config) {
 		funcPasses.RunFunc(fn)
 	}
 	funcPasses.FinalizeFunc()
+
+	// Run TinyGo-specific optimization passes.
+	if optLevel > 0 {
+		OptimizeMaps(mod)
+	}
 }
 
 // Optimize runs a number of optimization and transformation passes over the
@@ -92,7 +97,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config, optLevel, sizeLevel i
 		goPasses.Run(mod)
 
 		// Run TinyGo-specific optimization passes.
-		OptimizeMaps(mod)
 		OptimizeStringToBytes(mod)
 		OptimizeReflectImplements(mod)
 		OptimizeAllocs(mod, nil, nil)
