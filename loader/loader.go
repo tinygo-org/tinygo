@@ -290,7 +290,7 @@ func (p *Program) Parse() error {
 	for _, pkg := range p.sorted {
 		err := pkg.Parse()
 		if err != nil {
-			return err
+			return fmt.Errorf("when parsing the package %q: %w", pkg.ImportPath, err)
 		}
 	}
 
@@ -298,7 +298,7 @@ func (p *Program) Parse() error {
 	for _, pkg := range p.sorted {
 		err := pkg.Check()
 		if err != nil {
-			return err
+			return fmt.Errorf("when checking the package %q: %w", pkg.ImportPath, err)
 		}
 	}
 
