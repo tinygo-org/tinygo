@@ -288,7 +288,14 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 				// could be found. Run a garbage collection cycle to reclaim
 				// free memory and try again.
 				heapScanCount = 2
-				GC()
+				freeBytes := runGC()
+				heapSize := uintptr(metadataStart) - heapStart
+				if freeBytes < heapSize/3 {
+					// Ensure there is at least 33% headroom.
+					// This percentage was arbitrarily chosen, and may need to
+					// be tuned in the future.
+					growHeap()
+				}
 			} else {
 				// Even after garbage collection, no free memory could be found.
 				// Try to increase heap size.
@@ -379,6 +386,13 @@ func free(ptr unsafe.Pointer) {
 
 // GC performs a garbage collection cycle.
 func GC() {
+	runGC()
+}
+
+// runGC performs a garbage colleciton cycle. It is the internal implementation
+// of the runtime.GC() function. The difference is that it returns the number of
+// free bytes in the heap after the GC is finished.
+func runGC() (freeBytes uintptr) {
 	if gcDebug {
 		println("running collection cycle...")
 	}
@@ -420,12 +434,14 @@ func GC() {
 
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle.
-	sweep()
+	freeBytes = sweep()
 
 	// Show how much has been sweeped, for debugging.
 	if gcDebug {
 		dumpHeap()
 	}
+
+	return
 }
 
 // markRoots reads all pointers from start to end (exclusive) and if they look
@@ -568,7 +584,8 @@ func markRoot(addr, root uintptr) {
 }
 
 // Sweep goes through all memory and frees unmarked memory.
-func sweep() {
+// It returns how many bytes are free in the heap after the sweep.
+func sweep() (freeBytes uintptr) {
 	freeCurrentObject := false
 	for block := gcBlock(0); block < endBlock; block++ {
 		switch block.state() {
@@ -577,11 +594,13 @@ func sweep() {
 			block.markFree()
 			freeCurrentObject = true
 			gcFrees++
+			freeBytes += bytesPerBlock
 		case blockStateTail:
 			if freeCurrentObject {
 				// This is a tail object following an unmarked head.
 				// Free it now.
 				block.markFree()
+				freeBytes += bytesPerBlock
 			}
 		case blockStateMark:
 			// This is a marked object. The next tail blocks must not be freed,
@@ -589,8 +608,11 @@ func sweep() {
 			// collect this object if it is unreferenced then.
 			block.unmark()
 			freeCurrentObject = false
+		case blockStateFree:
+			freeBytes += bytesPerBlock
 		}
 	}
+	return
 }
 
 // looksLikePointer returns whether this could be a pointer. Currently, it
