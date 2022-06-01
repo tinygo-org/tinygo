@@ -121,8 +121,9 @@ func (usbcdc *USBCDC) RTS() bool {
 }
 
 var (
-	USB  = &_USB
-	_USB = USBCDC{Buffer: NewRingBuffer()}
+	USB        = &_USB
+	_USB       = USBCDC{Buffer: NewRingBuffer()}
+	waitHidTxc bool
 
 	usbEndpointDescriptors [8]usbDeviceDescriptor
 
@@ -201,6 +202,9 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_SOF.Get() == 1 {
 		nrf.USBD.EVENTS_SOF.Set(0)
 		usbcdc.Flush()
+		if hidCallback != nil && !waitHidTxc {
+			hidCallback()
+		}
 		// if you want to blink LED showing traffic, this would be the place...
 	}
 
@@ -262,6 +266,9 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 		} else {
 			if setup.wIndex == usb_CDC_ACM_INTERFACE {
 				ok = cdcSetup(setup)
+			} else if setup.bmRequestType == usb_SET_REPORT_TYPE && setup.bRequest == usb_SET_IDLE {
+				sendZlp()
+				ok = true
 			}
 		}
 
@@ -297,6 +304,8 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 						usbcdc.waitTxc = false
 						exitCriticalSection()
 					}
+				case usb_HID_ENDPOINT_IN:
+					waitHidTxc = false
 				}
 			}
 		}
@@ -378,7 +387,7 @@ func handleStandardSetup(setup usbSetup) bool {
 			}
 		}
 
-		sendUSBPacket(0, buf)
+		sendUSBPacket(0, buf, setup.wLength)
 		return true
 
 	case usb_CLEAR_FEATURE:
@@ -412,7 +421,7 @@ func handleStandardSetup(setup usbSetup) bool {
 
 	case usb_GET_CONFIGURATION:
 		buff := []byte{usbConfiguration}
-		sendUSBPacket(0, buff)
+		sendUSBPacket(0, buff, setup.wLength)
 		return true
 
 	case usb_SET_CONFIGURATION:
@@ -420,6 +429,11 @@ func handleStandardSetup(setup usbSetup) bool {
 			nrf.USBD.TASKS_EP0STATUS.Set(1)
 			for i := 1; i < len(endPoints); i++ {
 				initEndpoint(uint32(i), endPoints[i])
+			}
+
+			// Enable interrupt for HID messages from host
+			if hidCallback != nil {
+				nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << usb_HID_ENDPOINT_IN)
 			}
 
 			usbConfiguration = setup.wValueL
@@ -430,7 +444,7 @@ func handleStandardSetup(setup usbSetup) bool {
 
 	case usb_GET_INTERFACE:
 		buff := []byte{usbSetInterface}
-		sendUSBPacket(0, buff)
+		sendUSBPacket(0, buff, setup.wLength)
 		return true
 
 	case usb_SET_INTERFACE:
@@ -456,7 +470,7 @@ func cdcSetup(setup usbSetup) bool {
 			b[5] = byte(usbLineInfo.bParityType)
 			b[6] = byte(usbLineInfo.bDataBits)
 
-			sendUSBPacket(0, b[:])
+			sendUSBPacket(0, b[:], setup.wLength)
 			return true
 		}
 	}
@@ -482,10 +496,29 @@ func cdcSetup(setup usbSetup) bool {
 	return false
 }
 
+// SendUSBHIDPacket sends a packet for USBHID (interrupt / in).
+func SendUSBHIDPacket(ep uint32, data []byte) bool {
+	if waitHidTxc {
+		return false
+	}
+
+	sendUSBPacket(ep, data, 0)
+
+	// clear transfer complete flag
+	nrf.USBD.INTENCLR.Set(nrf.USBD_INTENCLR_ENDEPOUT0 << 4)
+
+	waitHidTxc = true
+
+	return true
+}
+
 //go:noinline
-func sendUSBPacket(ep uint32, data []byte) {
+func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
 	count := len(data)
-	copy(udd_ep_in_cache_buffer[ep][:], data)
+	if 0 < int(maxsize) && int(maxsize) < count {
+		count = int(maxsize)
+	}
+	copy(udd_ep_in_cache_buffer[ep][:], data[:count])
 	if ep == 0 && count > usbEndpointPacketSize {
 		sendOnEP0DATADONE.ptr = &udd_ep_in_cache_buffer[ep][usbEndpointPacketSize]
 		sendOnEP0DATADONE.count = count - usbEndpointPacketSize
