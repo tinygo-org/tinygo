@@ -414,6 +414,10 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/test
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=wioterminal         examples/hid-mouse
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=wioterminal         examples/hid-keyboard
+	@$(MD5SUM) test.hex
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o test.wasm -tags=arduino              examples/blinky1
@@ -554,6 +558,11 @@ endif
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m4        examples/pwm
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/pwm
+	@$(MD5SUM) test.hex
+	# test usbhid
+	$(TINYGO) build -size short -o test.hex -target=feather-nrf52840    examples/hid-keyboard
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/hid-keyboard
 	@$(MD5SUM) test.hex
 ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o test.hex -target=bluepill            examples/blinky1
