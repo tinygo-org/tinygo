@@ -49,7 +49,7 @@ const (
 	D36 = PA19  // ESP32 SPI SDO      1[3]   PWM  EXTI3
 	D37 = NoPin // USB Host enable
 	D38 = PA24  // USB DM
-	D39 = PA27  // USB DP
+	D39 = PA25  // USB DP
 	D40 = PA03  // DAC/VREFP
 	D41 = PB10  // Flash QSPI SCK
 	D42 = PB11  // Flash QSPI CS
