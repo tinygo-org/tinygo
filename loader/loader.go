@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -40,6 +41,7 @@ type Program struct {
 
 	Packages map[string]*Package
 	sorted   []*Package
+	mainPkg  *Package
 	fset     *token.FileSet
 
 	// Information obtained during parsing.
@@ -152,6 +154,11 @@ func Load(config *compileopts.Config, inputPkg string, clangHeaders string, type
 
 	// Parse the returned json from `go list`.
 	decoder := json.NewDecoder(buf)
+
+	var (
+		testingPkgs = map[int]*Package{}
+		testPkgs    = map[string][]*Package{}
+	)
 	for {
 		pkg := &Package{
 			program:      p,
@@ -207,6 +214,10 @@ func Load(config *compileopts.Config, inputPkg string, clangHeaders string, type
 			}
 			return nil, err
 		}
+
+		// insertPkgDirectly decides whether to insert pkg directly into the
+		// sorted list or afterwards preserving the dependency order.
+		insertPkgDirectly := true
 		if config.TestConfig.CompileTestBinary {
 			// When creating a test binary, `go list` will list two or three
 			// packages used for testing the package. The first is the original
@@ -227,29 +238,71 @@ func Load(config *compileopts.Config, inputPkg string, clangHeaders string, type
 			// This is necessary because the change in import paths results in
 			// breakage to //go:linkname. Additionally, the duplicated package
 			// slows down the build and so is best removed.
+			// The replacer package must be added keeping the same order it was listed
+			// to keep sorted packages.
 			if pkg.ForTest != "" && strings.HasSuffix(pkg.ImportPath, " ["+pkg.ForTest+".test]") {
 				newImportPath := pkg.ImportPath[:len(pkg.ImportPath)-len(" ["+pkg.ForTest+".test]")]
 				if _, ok := p.Packages[newImportPath]; ok {
 					// Delete the previous package (that this package overrides).
 					delete(p.Packages, newImportPath)
-					for i, pkg := range p.sorted {
-						if pkg.ImportPath == newImportPath {
+					for i, pp := range p.sorted {
+						if pp.ImportPath == newImportPath {
 							p.sorted = append(p.sorted[:i], p.sorted[i+1:]...) // remove element from slice
+							// add the package to testingPackages slice so it can be readded later respecting the order.
+							testingPkgs[i+len(testingPkgs)] = pkg
+							insertPkgDirectly = false // do not insert in the loop, we will insert it later in the right order
 							break
 						}
 					}
+				} else if strings.HasSuffix(newImportPath, "_test") {
+					// if it is a _test package we also need to guarantee it will be added to testingPackages slice so
+					// it can be readded later respecting the order.
+					testingImportPath := newImportPath[:len(newImportPath)-len("_test")]
+					testPkgs[testingImportPath] = append(testPkgs[testingImportPath], pkg)
+					insertPkgDirectly = false // do not insert in the loop, we will insert it later in the right order
 				}
 				pkg.ImportPath = newImportPath
+			} else if strings.HasSuffix(pkg.ImportPath, ".test") {
+				// If the test package get listed we want to delay the addition of it, right after
+				// the main package to avoid dependency errors.
+				testingImportPath := pkg.ImportPath[:len(pkg.ImportPath)-len(".test")]
+				testPkgs[testingImportPath] = append(testPkgs[testingImportPath], pkg)
+				insertPkgDirectly = false
 			}
 		}
-		p.sorted = append(p.sorted, pkg)
+
 		p.Packages[pkg.ImportPath] = pkg
+		if insertPkgDirectly {
+			p.sorted = append(p.sorted, pkg)
+		}
+		p.mainPkg = pkg
 	}
 
-	if config.TestConfig.CompileTestBinary && !strings.HasSuffix(p.sorted[len(p.sorted)-1].ImportPath, ".test") {
+	keys := make([]int, 0, len(testingPkgs))
+	for k := range testingPkgs {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		p.sorted = append(p.sorted, testingPkgs[k])
+		// if we find test packages, we add them right after the testing package.
+		if pkgs, ok := testPkgs[testingPkgs[k].ImportPath]; ok {
+			p.sorted = append(p.sorted, pkgs...)
+			delete(testPkgs, testingPkgs[k].ImportPath)
+		}
+	}
+
+	// it can happen that there is pkga but not pkga [pkga.test] in which case testingPkgs
+	// does not contain pkga, however pkga_test is in testPkgs, hence we backfill the orphan
+	// tests into the sorted slice.
+	for _, pkg := range testPkgs {
+		p.sorted = append(p.sorted, pkg...)
+	}
+
+	if _, ok := p.Packages[inputPkg+".test"]; config.TestConfig.CompileTestBinary && !ok {
 		// Trying to compile a test binary but there are no test files in this
 		// package.
-		return p, NoTestFilesError{p.sorted[len(p.sorted)-1].ImportPath}
+		return p, NoTestFilesError{inputPkg}
 	}
 
 	return p, nil
@@ -294,10 +347,10 @@ func (p *Program) Sorted() []*Package {
 	return p.sorted
 }
 
-// MainPkg returns the last package in the Sorted() slice. This is the main
-// package of the program.
+// MainPkg returns the last package added from the sorted dependency list. This
+// is the main package of the program.
 func (p *Program) MainPkg() *Package {
-	return p.sorted[len(p.sorted)-1]
+	return p.mainPkg
 }
 
 // Parse parses all packages and typechecks them.
@@ -725,3 +778,5 @@ func (p *Package) Import(to string) (*types.Package, error) {
 		return nil, errors.New("package not imported: " + to)
 	}
 }
+
+var _ types.Importer = (*Package)(nil)
