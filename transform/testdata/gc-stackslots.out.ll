@@ -5,6 +5,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 
 @runtime.stackChainStart = internal global %runtime.stackChainObject* null
 @someGlobal = global i8 3
+@ptrGlobal = global i8** null
 
 declare void @runtime.trackPointer(i8* nocapture readonly)
 
@@ -25,9 +26,9 @@ define i8* @needsStackSlots() {
   %ptr = call i8* @runtime.alloc(i32 4, i8* null)
   %4 = getelementptr { %runtime.stackChainObject*, i32, i8* }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, i32 0, i32 2
   store i8* %ptr, i8** %4, align 4
-  store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart, align 4
   call void @someArbitraryFunction()
   %val = load i8, i8* @someGlobal, align 1
+  store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart, align 4
   ret i8* %ptr
 }
 
@@ -75,8 +76,8 @@ define i8* @fibNext(i8* %x, i8* %y) {
   %out.alloc = call i8* @runtime.alloc(i32 1, i8* null)
   %4 = getelementptr { %runtime.stackChainObject*, i32, i8* }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, i32 0, i32 2
   store i8* %out.alloc, i8** %4, align 4
-  store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart, align 4
   store i8 %out.val, i8* %out.alloc, align 1
+  store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart, align 4
   ret i8* %out.alloc
 }
 
@@ -139,5 +140,39 @@ define void @testGEPBitcast() {
 }
 
 define void @someArbitraryFunction() {
+  ret void
+}
+
+define void @earlyPopRegression() {
+  %gc.stackobject = alloca { %runtime.stackChainObject*, i32, i8* }, align 8
+  store { %runtime.stackChainObject*, i32, i8* } { %runtime.stackChainObject* null, i32 1, i8* null }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, align 4
+  %1 = load %runtime.stackChainObject*, %runtime.stackChainObject** @runtime.stackChainStart, align 4
+  %2 = getelementptr { %runtime.stackChainObject*, i32, i8* }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, i32 0, i32 0
+  store %runtime.stackChainObject* %1, %runtime.stackChainObject** %2, align 4
+  %3 = bitcast { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject to %runtime.stackChainObject*
+  store %runtime.stackChainObject* %3, %runtime.stackChainObject** @runtime.stackChainStart, align 4
+  %x.alloc = call i8* @runtime.alloc(i32 4, i8* null)
+  %4 = getelementptr { %runtime.stackChainObject*, i32, i8* }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, i32 0, i32 2
+  store i8* %x.alloc, i8** %4, align 4
+  %x = bitcast i8* %x.alloc to i8**
+  call void @allocAndSave(i8** %x)
+  store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart, align 4
+  ret void
+}
+
+define void @allocAndSave(i8** %x) {
+  %gc.stackobject = alloca { %runtime.stackChainObject*, i32, i8* }, align 8
+  store { %runtime.stackChainObject*, i32, i8* } { %runtime.stackChainObject* null, i32 1, i8* null }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, align 4
+  %1 = load %runtime.stackChainObject*, %runtime.stackChainObject** @runtime.stackChainStart, align 4
+  %2 = getelementptr { %runtime.stackChainObject*, i32, i8* }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, i32 0, i32 0
+  store %runtime.stackChainObject* %1, %runtime.stackChainObject** %2, align 4
+  %3 = bitcast { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject to %runtime.stackChainObject*
+  store %runtime.stackChainObject* %3, %runtime.stackChainObject** @runtime.stackChainStart, align 4
+  %y = call i8* @runtime.alloc(i32 4, i8* null)
+  %4 = getelementptr { %runtime.stackChainObject*, i32, i8* }, { %runtime.stackChainObject*, i32, i8* }* %gc.stackobject, i32 0, i32 2
+  store i8* %y, i8** %4, align 4
+  store i8* %y, i8** %x, align 4
+  store i8** %x, i8*** @ptrGlobal, align 4
+  store %runtime.stackChainObject* %1, %runtime.stackChainObject** @runtime.stackChainStart, align 4
   ret void
 }

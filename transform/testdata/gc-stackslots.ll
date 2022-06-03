@@ -5,6 +5,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 
 @runtime.stackChainStart = external global %runtime.stackChainObject*
 @someGlobal = global i8 3
+@ptrGlobal = global i8** null
 
 declare void @runtime.trackPointer(i8* nocapture readonly)
 
@@ -20,8 +21,6 @@ define i8* @needsStackSlots() {
   ; so tracking it is not really necessary.
   %ptr = call i8* @runtime.alloc(i32 4, i8* null)
   call void @runtime.trackPointer(i8* %ptr)
-  ; Restoring the stack pointer can happen at this position, before the return.
-  ; This avoids issues with tail calls.
   call void @someArbitraryFunction()
   %val = load i8, i8* @someGlobal
   ret i8* %ptr
@@ -101,5 +100,22 @@ define void @testGEPBitcast() {
 }
 
 define void @someArbitraryFunction() {
+  ret void
+}
+
+define void @earlyPopRegression() {
+  %x.alloc = call i8* @runtime.alloc(i32 4, i8* null)
+  call void @runtime.trackPointer(i8* %x.alloc)
+  %x = bitcast i8* %x.alloc to i8**
+  ; At this point the pass used to pop the stack chain, resulting in a potential use-after-free during allocAndSave.
+  musttail call void @allocAndSave(i8** %x)
+  ret void
+}
+
+define void @allocAndSave(i8** %x) {
+  %y = call i8* @runtime.alloc(i32 4, i8* null)
+  call void @runtime.trackPointer(i8* %y)
+  store i8* %y, i8** %x
+  store i8** %x, i8*** @ptrGlobal
   ret void
 }
