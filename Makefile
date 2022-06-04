@@ -377,6 +377,8 @@ tinygo-baremetal:
 .PHONY: smoketest
 smoketest:
 	$(TINYGO) version
+	# regression test for #2892
+	cd tests/testing/recurse && ($(TINYGO) test ./... > recurse.log && cat recurse.log && test $$(wc -l < recurse.log) = 2 && rm recurse.log)
 	# compile-only platform-independent examples
 	cd tests/text/template/smoke && $(TINYGO) test -c && rm -f smoke.test
 	# regression test for #2563
