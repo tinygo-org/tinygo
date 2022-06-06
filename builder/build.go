@@ -193,7 +193,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	defer machine.Dispose()
 
 	// Load entire program AST into memory.
-	lprogram, err := loader.Load(config, []string{pkgName}, config.ClangHeaders, types.Config{
+	lprogram, err := loader.Load(config, pkgName, config.ClangHeaders, types.Config{
 		Sizes: compiler.Sizes(machine),
 	})
 	if err != nil {

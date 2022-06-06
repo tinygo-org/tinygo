@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -1252,6 +1253,35 @@ func parseGoLinkFlag(flagsString string) (map[string]map[string]string, error) {
 	return map[string]map[string]string(globalVarValues), nil
 }
 
+// getListOfPackages returns a standard list of packages for a given list that might
+// include wildards using `go list`.
+// For example [./...] => ["pkg1", "pkg1/pkg12", "pkg2"]
+func getListOfPackages(pkgs []string, options *compileopts.Options) ([]string, error) {
+	config, err := builder.NewConfig(options)
+	if err != nil {
+		return nil, err
+	}
+	cmd, err := loader.List(config, nil, pkgs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run `go list`: %w", err)
+	}
+	outputBuf := bytes.NewBuffer(nil)
+	cmd.Stdout = outputBuf
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	var pkgNames []string
+	sc := bufio.NewScanner(outputBuf)
+	for sc.Scan() {
+		pkgNames = append(pkgNames, sc.Text())
+	}
+
+	return pkgNames, nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
@@ -1487,14 +1517,21 @@ func main() {
 		if len(pkgNames) == 0 {
 			pkgNames = []string{"."}
 		}
-		if outpath != "" && len(pkgNames) > 1 {
+
+		explicitPkgNames, err := getListOfPackages(pkgNames, options)
+		if err != nil {
+			fmt.Printf("cannot resolve packages: %v\n", err)
+			os.Exit(1)
+		}
+
+		if outpath != "" && len(explicitPkgNames) > 1 {
 			fmt.Println("cannot use -o flag with multiple packages")
 			os.Exit(1)
 		}
 
 		fail := make(chan struct{}, 1)
 		var wg sync.WaitGroup
-		bufs := make([]testOutputBuf, len(pkgNames))
+		bufs := make([]testOutputBuf, len(explicitPkgNames))
 		for i := range bufs {
 			bufs[i].done = make(chan struct{})
 		}
@@ -1520,7 +1557,7 @@ func main() {
 		// Build and run the tests concurrently.
 		// This uses an additional semaphore to reduce the memory usage.
 		testSema := make(chan struct{}, cap(options.Semaphore))
-		for i, pkgName := range pkgNames {
+		for i, pkgName := range explicitPkgNames {
 			pkgName := pkgName
 			buf := &bufs[i]
 			testSema <- struct{}{}

@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -518,6 +519,46 @@ func ioLogger(t *testing.T, wg *sync.WaitGroup) io.WriteCloser {
 	}()
 
 	return w
+}
+
+func TestGetListOfPackages(t *testing.T) {
+	opts := optionsFromTarget("", sema)
+	tests := []struct {
+		pkgs          []string
+		expectedPkgs  []string
+		expectesError bool
+	}{
+		{
+			pkgs: []string{"./tests/testing/recurse/..."},
+			expectedPkgs: []string{
+				"github.com/tinygo-org/tinygo/tests/testing/recurse",
+				"github.com/tinygo-org/tinygo/tests/testing/recurse/subdir",
+			},
+		},
+		{
+			pkgs: []string{"./tests/testing/pass"},
+			expectedPkgs: []string{
+				"github.com/tinygo-org/tinygo/tests/testing/pass",
+			},
+		},
+		{
+			pkgs:          []string{"./tests/testing"},
+			expectesError: true,
+		},
+	}
+
+	for _, test := range tests {
+		actualPkgs, err := getListOfPackages(test.pkgs, &opts)
+		if err != nil && !test.expectesError {
+			t.Errorf("unexpected error: %v", err)
+		} else if err == nil && test.expectesError {
+			t.Error("expected error, but got none")
+		}
+
+		if !reflect.DeepEqual(test.expectedPkgs, actualPkgs) {
+			t.Errorf("expected two slices to be equal, expected %v got %v", test.expectedPkgs, actualPkgs)
+		}
+	}
 }
 
 // This TestMain is necessary because TinyGo may also be invoked to run certain
