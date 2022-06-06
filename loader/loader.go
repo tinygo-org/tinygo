@@ -104,7 +104,7 @@ type EmbedFile struct {
 // Load loads the given package with all dependencies (including the runtime
 // package). Call .Parse() afterwards to parse all Go files (including CGo
 // processing, if necessary).
-func Load(config *compileopts.Config, inputPkgs []string, clangHeaders string, typeChecker types.Config) (*Program, error) {
+func Load(config *compileopts.Config, inputPkg string, clangHeaders string, typeChecker types.Config) (*Program, error) {
 	goroot, err := GetCachedGoroot(config)
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func Load(config *compileopts.Config, inputPkgs []string, clangHeaders string, t
 	if config.TestConfig.CompileTestBinary {
 		extraArgs = append(extraArgs, "-test")
 	}
-	cmd, err := List(config, extraArgs, inputPkgs)
+	cmd, err := List(config, extraArgs, []string{inputPkg})
 	if err != nil {
 		return nil, err
 	}

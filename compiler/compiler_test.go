@@ -109,7 +109,7 @@ func TestCompiler(t *testing.T) {
 			defer machine.Dispose()
 
 			// Load entire program AST into memory.
-			lprogram, err := loader.Load(config, []string{"./testdata/" + tc.file}, config.ClangHeaders, types.Config{
+			lprogram, err := loader.Load(config, "./testdata/"+tc.file, config.ClangHeaders, types.Config{
 				Sizes: Sizes(machine),
 			})
 			if err != nil {
