@@ -187,8 +187,6 @@ func (clk *clock) configure(src, auxsrc, srcFreq, freq uint32) {
 //
 // Must be called before any other clock function.
 func (clks *clocksType) init() {
-	// Start the watchdog tick
-	watchdog.startTick(xoscFreq)
 
 	// Disable resus that may be enabled from previous software
 	clks.resus.ctrl.Set(0)
