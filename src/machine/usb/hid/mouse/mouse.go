@@ -6,8 +6,17 @@ import (
 
 var Mouse *mouse
 
+type Button byte
+
+const (
+	Left Button = 1 << iota
+	Right
+	Middle
+)
+
 type mouse struct {
-	buf *hid.RingBuffer
+	buf    *hid.RingBuffer
+	button Button
 }
 
 func init() {
@@ -57,11 +66,33 @@ func (m *mouse) Move(vx, vy int) {
 	}
 
 	m.buf.Put([]byte{
-		0x01, 0x00, byte(vx), byte(vy), 0x00,
+		0x01, byte(m.button), byte(vx), byte(vy), 0x00,
 	})
 }
 
-// WHEEL controls the mouse wheel.
+// Cilck clicks the mouse button.
+func (m *mouse) Click(btn Button) {
+	m.Press(btn)
+	m.Release(btn)
+}
+
+// Press presses the given mouse buttons.
+func (m *mouse) Press(btn Button) {
+	m.button |= btn
+	m.buf.Put([]byte{
+		0x01, byte(m.button), 0x00, 0x00, 0x00,
+	})
+}
+
+// Release releases the given mouse buttons.
+func (m *mouse) Release(btn Button) {
+	m.button &= ^btn
+	m.buf.Put([]byte{
+		0x01, byte(m.button), 0x00, 0x00, 0x00,
+	})
+}
+
+// Wheel controls the mouse wheel.
 func (m *mouse) Wheel(v int) {
 	if v == 0 {
 		return
@@ -75,7 +106,7 @@ func (m *mouse) Wheel(v int) {
 	}
 
 	m.buf.Put([]byte{
-		0x01, 0x00, 0x00, 0x00, byte(v),
+		0x01, byte(m.button), 0x00, 0x00, byte(v),
 	})
 }
 
