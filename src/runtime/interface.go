@@ -59,7 +59,7 @@ func reflectValueEqual(x, y reflect.Value) bool {
 	case reflect.String:
 		return x.String() == y.String()
 	case reflect.Chan, reflect.Ptr, reflect.UnsafePointer:
-		return x.Pointer() == y.Pointer()
+		return x.UnsafePointer() == y.UnsafePointer()
 	case reflect.Array:
 		for i := 0; i < x.Len(); i++ {
 			if !reflectValueEqual(x.Index(i), y.Index(i)) {

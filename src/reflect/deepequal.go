@@ -76,7 +76,7 @@ func deepValueEqual(v1, v2 Value, visited map[visit]struct{}) bool {
 		if v1.Len() != v2.Len() {
 			return false
 		}
-		if v1.Pointer() == v2.Pointer() {
+		if v1.UnsafePointer() == v2.UnsafePointer() {
 			return true
 		}
 		for i := 0; i < v1.Len(); i++ {
@@ -91,7 +91,7 @@ func deepValueEqual(v1, v2 Value, visited map[visit]struct{}) bool {
 		}
 		return deepValueEqual(v1.Elem(), v2.Elem(), visited)
 	case Ptr:
-		if v1.Pointer() == v2.Pointer() {
+		if v1.UnsafePointer() == v2.UnsafePointer() {
 			return true
 		}
 		return deepValueEqual(v1.Elem(), v2.Elem(), visited)
@@ -109,7 +109,7 @@ func deepValueEqual(v1, v2 Value, visited map[visit]struct{}) bool {
 		if v1.Len() != v2.Len() {
 			return false
 		}
-		if v1.Pointer() == v2.Pointer() {
+		if v1.UnsafePointer() == v2.UnsafePointer() {
 			return true
 		}
 		for _, k := range v1.MapKeys() {
