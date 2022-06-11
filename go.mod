@@ -13,7 +13,7 @@ require (
 	github.com/mattn/go-colorable v0.1.8
 	go.bug.st/serial v1.1.3
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
-	golang.org/x/tools v0.1.6-0.20210813165731-45389f592fe9
+	golang.org/x/tools v0.1.11
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20220420140351-512c94c1e71f
 )

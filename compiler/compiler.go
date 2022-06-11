@@ -21,6 +21,10 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+var typeParamUnderlyingType = func(t types.Type) types.Type {
+	return t
+}
+
 func init() {
 	llvm.InitializeAllTargets()
 	llvm.InitializeAllTargetMCs()
@@ -335,6 +339,7 @@ func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 // makeLLVMType creates a LLVM type for a Go type. Don't call this, use
 // getLLVMType instead.
 func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
+	goType = typeParamUnderlyingType(goType)
 	switch typ := goType.(type) {
 	case *types.Array:
 		elemType := c.getLLVMType(typ.Elem())
@@ -444,6 +449,7 @@ func (c *compilerContext) getDIType(typ types.Type) llvm.Metadata {
 // createDIType creates a new DWARF type. Don't call this function directly,
 // call getDIType instead.
 func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
+	typ = typeParamUnderlyingType(typ)
 	llvmType := c.getLLVMType(typ)
 	sizeInBytes := c.targetData.TypeAllocSize(llvmType)
 	switch typ := typ.(type) {
@@ -794,6 +800,9 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			for _, method := range methods {
 				// Parse this method.
 				fn := pkg.Prog.MethodValue(method)
+				if fn == nil {
+					continue // probably a generic method
+				}
 				if fn.Blocks == nil {
 					continue // external function
 				}
