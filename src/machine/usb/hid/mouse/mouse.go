@@ -73,7 +73,6 @@ func (m *mouse) Move(vx, vy int) {
 // Cilck clicks the mouse button.
 func (m *mouse) Click(btn Button) {
 	m.Press(btn)
-	//time.Sleep(100 * time.Millisecond)
 	m.Release(btn)
 }
 
