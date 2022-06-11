@@ -22,6 +22,11 @@ jobs:
         shell: bash
         run: |
           scoop install ninja binaryen
+      - name: git config
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       - name: Checkout
         uses: actions/checkout@v2
         with:
