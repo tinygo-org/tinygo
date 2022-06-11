@@ -709,6 +709,12 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				return fmt.Errorf("stripping debug information is unnecessary for baremetal targets")
 			}
 		}
+		if config.GOOS() == "darwin" {
+			// Debug information isn't stored in the binary itself on MacOS but
+			// is left in the object files by default. The binary does store the
+			// path to these object files though.
+			return errors.New("cannot remove debug information: MacOS doesn't store debug info in the executable by default")
+		}
 		if config.Target.Linker == "wasm-ld" {
 			// Don't just strip debug information, also compress relocations
 			// while we're at it. Relocations can only be compressed when debug
@@ -718,21 +724,8 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			// ld.lld is also used on Linux.
 			ldflags = append(ldflags, "--strip-debug")
 		} else {
-			switch config.GOOS() {
-			case "linux":
-				// Either real linux or an embedded system (like AVR) that
-				// pretends to be Linux. It's a ELF linker wrapped by GCC in any
-				// case (not ld.lld - that case is handled above).
-				ldflags = append(ldflags, "-Wl,--strip-debug")
-			case "darwin":
-				// MacOS (darwin) doesn't have a linker flag to strip debug
-				// information. Apple expects you to use the strip command
-				// instead.
-				return errors.New("cannot remove debug information: MacOS doesn't suppor this linker flag")
-			default:
-				// Other OSes may have different flags.
-				return errors.New("cannot remove debug information: unknown OS: " + config.GOOS())
-			}
+			// Other linkers may have different flags.
+			return errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
 		}
 	}
 
