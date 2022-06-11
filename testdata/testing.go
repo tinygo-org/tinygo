@@ -55,6 +55,8 @@ var tests = []testing.InternalTest{
 
 var benchmarks = []testing.InternalBenchmark{}
 
+var fuzzes = []testing.InternalFuzzTarget{}
+
 var examples = []testing.InternalExample{}
 
 // A fake regexp matcher.
@@ -73,7 +75,7 @@ func fakeMatchString(pat, str string) (bool, error) {
 func main() {
 	testing.Init()
 	flag.Set("test.run", ".*/B")
-	m := testing.MainStart(matchStringOnly(fakeMatchString /*regexp.MatchString*/), tests, benchmarks, examples)
+	m := testing.MainStart(matchStringOnly(fakeMatchString /*regexp.MatchString*/), tests, benchmarks, fuzzes, examples)
 
 	exitcode := m.Run()
 	if exitcode != 0 {

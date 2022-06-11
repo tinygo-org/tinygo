@@ -22,10 +22,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-var typeParamUnderlyingType = func(t types.Type) types.Type {
-	return t
-}
-
 func init() {
 	llvm.InitializeAllTargets()
 	llvm.InitializeAllTargetMCs()
@@ -345,7 +341,6 @@ func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 // makeLLVMType creates a LLVM type for a Go type. Don't call this, use
 // getLLVMType instead.
 func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
-	goType = typeParamUnderlyingType(goType)
 	switch typ := goType.(type) {
 	case *types.Array:
 		elemType := c.getLLVMType(typ.Elem())
@@ -420,6 +415,8 @@ func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 			members[i] = c.getLLVMType(typ.Field(i).Type())
 		}
 		return c.ctx.StructType(members, false)
+	case *types.TypeParam:
+		return c.getLLVMType(typ.Underlying())
 	case *types.Tuple:
 		members := make([]llvm.Type, typ.Len())
 		for i := 0; i < typ.Len(); i++ {
@@ -455,7 +452,6 @@ func (c *compilerContext) getDIType(typ types.Type) llvm.Metadata {
 // createDIType creates a new DWARF type. Don't call this function directly,
 // call getDIType instead.
 func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
-	typ = typeParamUnderlyingType(typ)
 	llvmType := c.getLLVMType(typ)
 	sizeInBytes := c.targetData.TypeAllocSize(llvmType)
 	switch typ := typ.(type) {
@@ -619,6 +615,8 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 		})
 		temporaryMDNode.ReplaceAllUsesWith(md)
 		return md
+	case *types.TypeParam:
+		return c.getDIType(typ.Underlying())
 	default:
 		panic("unknown type while generating DWARF debug type: " + typ.String())
 	}

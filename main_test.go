@@ -51,6 +51,7 @@ func TestBuild(t *testing.T) {
 		"embed/",
 		"float.go",
 		"gc.go",
+		"generics.go",
 		"goroutines.go",
 		"init.go",
 		"init_multi.go",
@@ -65,21 +66,9 @@ func TestBuild(t *testing.T) {
 		"stdlib.go",
 		"string.go",
 		"structs.go",
+		"testing.go",
 		"timers.go",
 		"zeroalloc.go",
-	}
-	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
-	if err != nil {
-		t.Fatal("could not read version from GOROOT:", err)
-	}
-	if minor >= 17 {
-		tests = append(tests, "go1.17.go")
-	}
-	if minor >= 18 {
-		tests = append(tests, "generics.go")
-		tests = append(tests, "testing_go118.go")
-	} else {
-		tests = append(tests, "testing.go")
 	}
 
 	if *testTarget != "" {
@@ -201,7 +190,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Does not pass due to high mark false positive rate.
 				continue
 
-			case "json.go", "stdlib.go", "testing.go", "testing_go118.go":
+			case "json.go", "stdlib.go", "testing.go":
 				// Breaks interp.
 				continue
 

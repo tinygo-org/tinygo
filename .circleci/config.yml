@@ -112,9 +112,9 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm14-go116:
+  test-llvm14-go118:
     docker:
-      - image: golang:1.16-buster
+      - image: golang:1.18-buster
     steps:
       - test-linux:
           llvm: "14"
@@ -131,7 +131,7 @@ workflows:
     jobs:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
-      - test-llvm14-go116
+      - test-llvm14-go118
       # This tests a beta version of Go. It should be removed once regular
       # release builds are built using this version.
       - test-llvm14-go119
