@@ -205,3 +205,9 @@ type Timeval struct {
 	Sec  int64
 	Usec int64
 }
+
+func Getpagesize() int {
+	// There is no right value to return here, but 4096 is a
+	// common assumption when pagesize is unknown
+	return 4096
+}

@@ -67,3 +67,7 @@ func getErrno() error {
 func Pipe2(p []int, flags int) (err error) {
 	return ENOSYS // TODO
 }
+
+func Getpagesize() int {
+	return 4096 // TODO
+}

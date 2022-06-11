@@ -7,6 +7,11 @@
 
 package os
 
+import "syscall"
+
+// Getpagesize returns the underlying system's memory page size.
+func Getpagesize() int { return syscall.Getpagesize() }
+
 func (fs *fileStat) Name() string { return fs.name }
 func (fs *fileStat) IsDir() bool  { return fs.Mode().IsDir() }
 

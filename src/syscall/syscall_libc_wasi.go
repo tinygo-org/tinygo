@@ -296,6 +296,11 @@ func Pipe2(p []int, flags int) (err error) {
 	return ENOSYS // TODO
 }
 
+func Getpagesize() int {
+	// per upstream
+	return 65536
+}
+
 // int stat(const char *path, struct stat * buf);
 //export stat
 func libc_stat(pathname *byte, ptr unsafe.Pointer) int32

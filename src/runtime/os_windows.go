@@ -90,3 +90,26 @@ func markGlobals() {
 		section = (*peSection)(unsafe.Pointer(uintptr(unsafe.Pointer(section)) + unsafe.Sizeof(peSection{})))
 	}
 }
+
+type systeminfo struct {
+	anon0                       [4]byte
+	dwpagesize                  uint32
+	lpminimumapplicationaddress *byte
+	lpmaximumapplicationaddress *byte
+	dwactiveprocessormask       uintptr
+	dwnumberofprocessors        uint32
+	dwprocessortype             uint32
+	dwallocationgranularity     uint32
+	wprocessorlevel             uint16
+	wprocessorrevision          uint16
+}
+
+//export GetSystemInfo
+func _GetSystemInfo(lpSystemInfo unsafe.Pointer)
+
+//go:linkname syscall_Getpagesize syscall.Getpagesize
+func syscall_Getpagesize() int {
+	var info systeminfo
+	_GetSystemInfo(unsafe.Pointer(&info))
+	return int(info.dwpagesize)
+}
