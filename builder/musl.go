@@ -115,6 +115,7 @@ var Musl = Library{
 			"internal/libc.c",
 			"internal/syscall_ret.c",
 			"internal/vdso.c",
+			"legacy/*.c",
 			"malloc/*.c",
 			"mman/*.c",
 			"signal/*.c",

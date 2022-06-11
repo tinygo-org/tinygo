@@ -40,3 +40,11 @@ func markGlobals() {
 	start = (start + unsafe.Alignof(uintptr(0)) - 1) &^ (unsafe.Alignof(uintptr(0)) - 1) // align on word boundary
 	markRoots(start, end)
 }
+
+//export getpagesize
+func libc_getpagesize() int
+
+//go:linkname syscall_Getpagesize syscall.Getpagesize
+func syscall_Getpagesize() int {
+	return libc_getpagesize()
+}

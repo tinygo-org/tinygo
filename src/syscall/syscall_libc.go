@@ -251,10 +251,6 @@ func Mprotect(b []byte, prot int) (err error) {
 	return
 }
 
-func Getpagesize() int {
-	return int(libc_getpagesize())
-}
-
 func Environ() []string {
 
 	// This function combines all the environment into a single allocation.
@@ -371,10 +367,6 @@ func libc_munmap(addr unsafe.Pointer, length uintptr) int32
 // int mprotect(void *addr, size_t len, int prot);
 //export mprotect
 func libc_mprotect(addr unsafe.Pointer, len uintptr, prot int32) int32
-
-// int getpagesize();
-//export getpagesize
-func libc_getpagesize() int32
 
 // int chdir(const char *pathname, mode_t mode);
 //export chdir

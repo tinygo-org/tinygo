@@ -267,6 +267,14 @@ func readdir_r(dir uintptr, entry *Dirent, result **Dirent) (err error) {
 	return
 }
 
+func Getpagesize() int {
+	return int(libc_getpagesize())
+}
+
 // int pipe(int32 *fds);
 //export pipe
 func libc_pipe(fds *int32) int32
+
+// int getpagesize();
+//export getpagesize
+func libc_getpagesize() int32
