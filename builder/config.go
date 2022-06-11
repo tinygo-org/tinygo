@@ -33,8 +33,8 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
 	}
-	if major != 1 || minor < 16 || minor > 18 {
-		return nil, fmt.Errorf("requires go version 1.16 through 1.18, got go%d.%d", major, minor)
+	if major != 1 || minor < 16 || minor > 19 {
+		return nil, fmt.Errorf("requires go version 1.16 through 1.19, got go%d.%d", major, minor)
 	}
 
 	clangHeaderPath := getClangHeaderPath(goenv.Get("TINYGOROOT"))
