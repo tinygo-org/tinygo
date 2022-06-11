@@ -76,6 +76,7 @@ func TestBuild(t *testing.T) {
 		tests = append(tests, "go1.17.go")
 	}
 	if minor >= 18 {
+		tests = append(tests, "generics.go")
 		tests = append(tests, "testing_go118.go")
 	} else {
 		tests = append(tests, "testing.go")

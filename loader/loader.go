@@ -28,6 +28,8 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
+var addInstances func(*types.Info)
+
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
 	config       *compileopts.Config
@@ -163,6 +165,9 @@ func Load(config *compileopts.Config, inputPkg string, clangHeaders string, type
 				Scopes:     make(map[ast.Node]*types.Scope),
 				Selections: make(map[*ast.SelectorExpr]*types.Selection),
 			},
+		}
+		if addInstances != nil {
+			addInstances(&pkg.info)
 		}
 		err := decoder.Decode(&pkg.PackageJSON)
 		if err != nil {
