@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"tinygo.org/x/go-llvm"
 )
@@ -34,12 +33,6 @@ func TestCompiler(t *testing.T) {
 		t.Fatal("could not parse LLVM version:", llvm.Version)
 	}
 
-	// Determine Go minor version (e.g. 16 in go1.16.3).
-	_, goMinor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
-	if err != nil {
-		t.Fatal("could not read Go version:", err)
-	}
-
 	// Determine which tests to run, depending on the Go and LLVM versions.
 	tests := []testCase{
 		{"basic.go", "", ""},
@@ -61,12 +54,6 @@ func TestCompiler(t *testing.T) {
 	if llvmMajor >= 12 {
 		tests = append(tests, testCase{"intrinsics.go", "cortex-m-qemu", ""})
 		tests = append(tests, testCase{"intrinsics.go", "wasm", ""})
-	}
-	if goMinor >= 17 {
-		tests = append(tests, testCase{"go1.17.go", "", ""})
-	}
-	if goMinor >= 18 {
-		tests = append(tests, testCase{"generics.go", "", ""})
 	}
 
 	for _, tc := range tests {

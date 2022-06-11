@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/format"
 	"go/parser"
 	"go/token"
@@ -40,20 +39,6 @@ func TestCGo(t *testing.T) {
 	} {
 		name := name // avoid a race condition
 		t.Run(name, func(t *testing.T) {
-			// Skip tests that require specific Go version.
-			if name == "errors" {
-				ok := false
-				for _, version := range build.Default.ReleaseTags {
-					if version == "go1.16" {
-						ok = true
-						break
-					}
-				}
-				if !ok {
-					t.Skip("Results for errors test are only valid for Go 1.16+")
-				}
-			}
-
 			// Read the AST in memory.
 			path := filepath.Join("testdata", name+".go")
 			fset := token.NewFileSet()
