@@ -99,9 +99,9 @@ func Pause() {
 //export tinygo_unwind
 func (*stackState) unwind()
 
-// Resume the task until it pauses or completes.
+// Switch to this task until it pauses or completes.
 // This may only be called from the scheduler.
-func (t *Task) Resume() {
+func (t *Task) Switch() {
 	// The current task must be saved and restored because this can nest on WASM with JS.
 	prevTask := currentTask
 	t.gcData.swap()
@@ -121,9 +121,3 @@ func (t *Task) Resume() {
 
 //export tinygo_rewind
 func (*state) rewind()
-
-// OnSystemStack returns whether the caller is running on the system stack.
-func OnSystemStack() bool {
-	// If there is not an active goroutine, then this must be running on the system stack.
-	return Current() == nil
-}

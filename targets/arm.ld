@@ -27,6 +27,7 @@ SECTIONS
     .stack (NOLOAD) :
     {
         . = ALIGN(4);
+        _stack_bottom = .;
         . += _stack_size;
         _stack_top = .;
     } >RAM

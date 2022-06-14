@@ -1,9 +1,3 @@
-.section .bss.tinygo_systemStack
-.global tinygo_systemStack
-.type   tinygo_systemStack, %object
-tinygo_systemStack:
-    .short 0
-
 .section .text.tinygo_startTask
 .global  tinygo_startTask
 .type    tinygo_startTask, %function

@@ -15,7 +15,7 @@ func getElfSectionData(executable string, sectionName string) ([]byte, elf.FileH
 
 	section := elfFile.Section(sectionName)
 	if section == nil {
-		return nil, elf.FileHeader{}, fmt.Errorf("could not find %s section", sectionName)
+		return nil, elf.FileHeader{}, nil
 	}
 
 	data, err := section.Data()

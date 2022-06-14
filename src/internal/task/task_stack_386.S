@@ -20,11 +20,8 @@ tinygo_startTask:
     // Branch to the "goroutine start" function.
     calll *%ebx
 
-    // Rebalance the stack (to undo the above push).
-    addl $4, %esp
-
-    // After return, exit this goroutine. This is a tail call.
-    jmp tinygo_pause
+    // After return, exit this goroutine.
+    calll tinygo_pause
     .cfi_endproc
 
 .global tinygo_swapTask

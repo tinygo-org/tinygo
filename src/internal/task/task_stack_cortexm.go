@@ -52,19 +52,23 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 	r.r5 = uintptr(args)
 }
 
-func (s *state) resume() {
-	switchToTask(s.sp)
+func (s *state) switchTo(current *Task) {
+	// This code is probably more complex than it needs to be.
+	// TODO: simplify this, ideally to a single function call.
+	if s == &mainTask.state {
+		switchToMain(&current.state.sp)
+	} else if current == &mainTask {
+		switchToTask(s.sp)
+	} else {
+		swapTask(s.sp, &current.state.sp)
+	}
 }
 
 //export tinygo_switchToTask
 func switchToTask(uintptr)
 
-//export tinygo_switchToScheduler
-func switchToScheduler(*uintptr)
-
-func (s *state) pause() {
-	switchToScheduler(&s.sp)
-}
+//export tinygo_switchToMain
+func switchToMain(*uintptr)
 
 // SystemStack returns the system stack pointer. On Cortex-M, it is always
 // available.

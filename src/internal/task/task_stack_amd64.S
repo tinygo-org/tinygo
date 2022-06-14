@@ -28,11 +28,11 @@ tinygo_startTask:
     // Branch to the "goroutine start" function.
     callq *%r12
 
-    // After return, exit this goroutine. This is a tail call.
+    // After return, exit this goroutine.
     #ifdef __MACH__
-    jmp _tinygo_pause
+    callq _tinygo_pause
     #else
-    jmp tinygo_pause
+    callq tinygo_pause
     #endif
     .cfi_endproc
 

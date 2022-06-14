@@ -112,9 +112,7 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 	*q = t
 }
 
-// Run the scheduler until all tasks have finished.
 func scheduler() {
-	// Main scheduler loop.
 	var now timeUnit
 	for !schedulerDone {
 		scheduleLog("")
@@ -164,7 +162,11 @@ func scheduler() {
 
 		// Run the given task.
 		scheduleLogTask("  run:", t)
-		t.Resume()
+		t.Switch()
+		if GOARCH != "wasm" {
+			// Don't return when using Asyncify.
+			return
+		}
 	}
 }
 
@@ -181,7 +183,7 @@ func minSched() {
 		}
 
 		scheduleLogTask("  run:", t)
-		t.Resume()
+		t.Switch()
 	}
 	scheduleLog("stop nested scheduler")
 }

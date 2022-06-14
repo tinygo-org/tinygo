@@ -67,6 +67,11 @@ _heap_end = ORIGIN(DRAM) + LENGTH(DRAM);
  */
 _stack_top = 0x40000000;
 
+/* This is the stack bottom according to this forum post:
+ * https://bbs.espressif.com/viewtopic.php?t=8879#p19038
+ */
+_stack_bottom = 0x3fffeb2c;
+
 /* Functions normally provided by a libc.
  * Source:
  * https://github.com/espressif/ESP8266_NONOS_SDK/blob/master/ld/eagle.rom.addr.v6.ld

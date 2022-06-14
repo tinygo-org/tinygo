@@ -1228,10 +1228,15 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 	// Goroutines need to be started and finished and take up some stack space
 	// that way. This can be measured by measuing the stack size of
 	// tinygo_startTask.
-	if numFuncs := len(functions["tinygo_startTask"]); numFuncs != 1 {
-		return nil, nil, fmt.Errorf("expected exactly one definition of tinygo_startTask, got %d", numFuncs)
+	var baseStackSize uint64
+	var baseStackSizeType stacksize.SizeType
+	var baseStackSizeFailedAt *stacksize.CallNode
+	if len(gowrappers) != 0 {
+		if numFuncs := len(functions["tinygo_startTask"]); numFuncs != 1 {
+			return nil, nil, fmt.Errorf("expected exactly one definition of tinygo_startTask, got %d", numFuncs)
+		}
+		baseStackSize, baseStackSizeType, baseStackSizeFailedAt = functions["tinygo_startTask"][0].StackSize()
 	}
-	baseStackSize, baseStackSizeType, baseStackSizeFailedAt := functions["tinygo_startTask"][0].StackSize()
 
 	sizes := make(map[string]functionStackSize)
 
@@ -1302,6 +1307,11 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 	data, fileHeader, err := getElfSectionData(executable, ".tinygo_stacksizes")
 	if err != nil {
 		return err
+	}
+	if data == nil {
+		// The .tinygo_stacksizes section doesn't exist, so assume this
+		// modification isn't needed.
+		return nil
 	}
 
 	if len(stackSizeLoads)*4 != len(data) {

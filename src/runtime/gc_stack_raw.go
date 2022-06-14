@@ -14,7 +14,7 @@ func markStack() {
 	// Scan the current stack, and all current registers.
 	scanCurrentStack()
 
-	if !task.OnSystemStack() {
+	if !task.MainTask() {
 		// Mark system stack.
 		markRoots(getSystemStackPointer(), stackTop)
 	}
@@ -28,7 +28,7 @@ func scanstack(sp uintptr) {
 	// Mark current stack.
 	// This function is called by scanCurrentStack, after pushing all registers onto the stack.
 	// Callee-saved registers have been pushed onto stack by tinygo_localscan, so this will scan them too.
-	if task.OnSystemStack() {
+	if task.MainTask() {
 		// This is the system stack.
 		// Scan all words on the stack.
 		markRoots(sp, stackTop)
