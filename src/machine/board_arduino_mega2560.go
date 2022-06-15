@@ -3,6 +3,11 @@
 
 package machine
 
+import (
+	"device/avr"
+	"runtime/interrupt"
+)
+
 // Return the current CPU frequency in hertz.
 func CPUFrequency() uint32 {
 	return 16000000
@@ -62,12 +67,12 @@ const (
 	D11 Pin = PB5
 	D12 Pin = PB6
 	D13 Pin = PB7
-	D14 Pin = PJ1
-	D15 Pin = PJ0
-	D16 Pin = PH1
-	D17 Pin = PH0
-	D18 Pin = PD3
-	D19 Pin = PD2
+	D14 Pin = PJ1 // TX3
+	D15 Pin = PJ0 // RX3
+	D16 Pin = PH1 // TX2
+	D17 Pin = PH0 // RX2
+	D18 Pin = PD3 // TX1
+	D19 Pin = PD2 // RX1
 	D20 Pin = PD1
 	D21 Pin = PD0
 	D22 Pin = PA0
@@ -103,3 +108,59 @@ const (
 	D52 Pin = PB1
 	D53 Pin = PB0
 )
+
+// UART pins
+const (
+	UART_TX_PIN  Pin = UART0_TX_PIN
+	UART_RX_PIN  Pin = UART0_RX_PIN
+	UART0_TX_PIN Pin = D1
+	UART0_RX_PIN Pin = D0
+	UART1_TX_PIN Pin = D18
+	UART1_RX_PIN Pin = D19
+	UART2_TX_PIN Pin = D16
+	UART2_RX_PIN Pin = D17
+	UART3_TX_PIN Pin = D14
+	UART3_RX_PIN Pin = D15
+)
+
+var (
+	UART1  = &_UART1
+	_UART1 = UART{
+		Buffer: NewRingBuffer(),
+
+		dataReg:    avr.UDR1,
+		baudRegH:   avr.UBRR1H,
+		baudRegL:   avr.UBRR1L,
+		statusRegA: avr.UCSR1A,
+		statusRegB: avr.UCSR1B,
+		statusRegC: avr.UCSR1C,
+	}
+	UART2  = &_UART2
+	_UART2 = UART{
+		Buffer: NewRingBuffer(),
+
+		dataReg:    avr.UDR2,
+		baudRegH:   avr.UBRR2H,
+		baudRegL:   avr.UBRR2L,
+		statusRegA: avr.UCSR2A,
+		statusRegB: avr.UCSR2B,
+		statusRegC: avr.UCSR2C,
+	}
+	UART3  = &_UART3
+	_UART3 = UART{
+		Buffer: NewRingBuffer(),
+
+		dataReg:    avr.UDR3,
+		baudRegH:   avr.UBRR3H,
+		baudRegL:   avr.UBRR3L,
+		statusRegA: avr.UCSR3A,
+		statusRegB: avr.UCSR3B,
+		statusRegC: avr.UCSR3C,
+	}
+)
+
+func init() {
+	interrupt.New(irq_USART1_RX, _UART1.handleInterrupt)
+	interrupt.New(irq_USART2_RX, _UART2.handleInterrupt)
+	interrupt.New(irq_USART3_RX, _UART3.handleInterrupt)
+}
