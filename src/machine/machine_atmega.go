@@ -129,12 +129,34 @@ var DefaultUART = UART0
 var (
 	// UART0 is the hardware serial port on the AVR.
 	UART0  = &_UART0
-	_UART0 = UART{Buffer: NewRingBuffer()}
+	_UART0 = UART{
+		Buffer: NewRingBuffer(),
+
+		dataReg:    avr.UDR0,
+		baudRegH:   avr.UBRR0H,
+		baudRegL:   avr.UBRR0L,
+		statusRegA: avr.UCSR0A,
+		statusRegB: avr.UCSR0B,
+		statusRegC: avr.UCSR0C,
+	}
 )
+
+func init() {
+	// Register the UART interrupt.
+	interrupt.New(irq_USART0_RX, _UART0.handleInterrupt)
+}
 
 // UART on the AVR.
 type UART struct {
 	Buffer *RingBuffer
+
+	dataReg  *volatile.Register8
+	baudRegH *volatile.Register8
+	baudRegL *volatile.Register8
+
+	statusRegA *volatile.Register8
+	statusRegB *volatile.Register8
+	statusRegC *volatile.Register8
 }
 
 // Configure the UART on the AVR. Defaults to 9600 baud on Arduino.
@@ -143,38 +165,37 @@ func (uart *UART) Configure(config UARTConfig) {
 		config.BaudRate = 9600
 	}
 
-	// Register the UART interrupt.
-	interrupt.New(irq_USART0_RX, func(intr interrupt.Interrupt) {
-		// Read register to clear it.
-		data := avr.UDR0.Get()
-
-		// Ensure no error.
-		if !avr.UCSR0A.HasBits(avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0) {
-			// Put data from UDR register into buffer.
-			UART0.Receive(byte(data))
-		}
-	})
-
 	// Set baud rate based on prescale formula from
 	// https://www.microchip.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_wrong_baud_rate.html
 	// ((F_CPU + UART_BAUD_RATE * 8L) / (UART_BAUD_RATE * 16L) - 1)
 	ps := ((CPUFrequency()+config.BaudRate*8)/(config.BaudRate*16) - 1)
-	avr.UBRR0H.Set(uint8(ps >> 8))
-	avr.UBRR0L.Set(uint8(ps & 0xff))
+	uart.baudRegH.Set(uint8(ps >> 8))
+	uart.baudRegL.Set(uint8(ps & 0xff))
 
 	// enable RX, TX and RX interrupt
-	avr.UCSR0B.Set(avr.UCSR0B_RXEN0 | avr.UCSR0B_TXEN0 | avr.UCSR0B_RXCIE0)
+	uart.statusRegB.Set(avr.UCSR0B_RXEN0 | avr.UCSR0B_TXEN0 | avr.UCSR0B_RXCIE0)
 
 	// 8-bits data
-	avr.UCSR0C.Set(avr.UCSR0C_UCSZ01 | avr.UCSR0C_UCSZ00)
+	uart.statusRegC.Set(avr.UCSR0C_UCSZ01 | avr.UCSR0C_UCSZ00)
+}
+
+func (uart *UART) handleInterrupt(intr interrupt.Interrupt) {
+	// Read register to clear it.
+	data := uart.dataReg.Get()
+
+	// Ensure no error.
+	if !uart.statusRegA.HasBits(avr.UCSR0A_FE0 | avr.UCSR0A_DOR0 | avr.UCSR0A_UPE0) {
+		// Put data from UDR register into buffer.
+		uart.Receive(byte(data))
+	}
 }
 
 // WriteByte writes a byte of data to the UART.
 func (uart *UART) WriteByte(c byte) error {
 	// Wait until UART buffer is not busy.
-	for !avr.UCSR0A.HasBits(avr.UCSR0A_UDRE0) {
+	for !uart.statusRegA.HasBits(avr.UCSR0A_UDRE0) {
 	}
-	avr.UDR0.Set(c) // send char
+	uart.dataReg.Set(c) // send char
 	return nil
 }
 

@@ -9,6 +9,9 @@ import (
 )
 
 const irq_USART0_RX = avr.IRQ_USART0_RX
+const irq_USART1_RX = avr.IRQ_USART1_RX
+const irq_USART2_RX = avr.IRQ_USART2_RX
+const irq_USART3_RX = avr.IRQ_USART3_RX
 
 const (
 	portA Pin = iota * 8
