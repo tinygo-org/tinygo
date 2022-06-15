@@ -1,6 +1,13 @@
 //go:build runtime_memhash_leveldb
 // +build runtime_memhash_leveldb
 
+// This is the hash function from Google's leveldb key-value storage system. It
+// processes 4 bytes at a time making it faster than the FNV hash for buffer
+// lengths > 16 bytes.
+
+// https://github.com/google/leveldb
+// https://en.wikipedia.org/wiki/LevelDB
+
 package runtime
 
 import (
@@ -57,6 +64,8 @@ func hash32(ptr unsafe.Pointer, n, seed uintptr) uint32 {
 	return h
 }
 
+// hash64finalizer is a 64-bit integer mixing function from
+// https://web.archive.org/web/20120720045250/http://www.cris.com/~Ttwang/tech/inthash.htm
 func hash64finalizer(key uint64) uint64 {
 	key = ^key + (key << 21) // key = (key << 21) - key - 1;
 	key = key ^ (key >> 24)
@@ -68,6 +77,9 @@ func hash64finalizer(key uint64) uint64 {
 	return key
 }
 
+// hash64 turns hash32 into a 64-bit hash, by use hash64finalizer to
+// mix the result of hash32 function combined with an xorshifted version of
+// the seed.
 func hash64(ptr unsafe.Pointer, n, seed uintptr) uint64 {
 	h32 := hash32(ptr, n, seed)
 	return hash64finalizer((uint64(h32^xorshift32(uint32(seed))) << 32) | uint64(h32))

@@ -1,6 +1,13 @@
 //go:build runtime_memhash_tsip
 // +build runtime_memhash_tsip
 
+// This is the tsip hash developed by Damian Gryski, based on ideas from SipHash.
+// It is slower than leveldb's hash, but should be "stronger".
+
+// https://en.wikipedia.org/wiki/SipHash
+// https://github.com/veorq/SipHash
+// https://github.com/dgryski/tsip
+
 package runtime
 
 import (
@@ -25,8 +32,6 @@ func ptrToSlice(ptr unsafe.Pointer, n uintptr) []byte {
 
 	return p
 }
-
-// tsip hash -- github.com/dgryski/tsip
 
 type sip struct {
 	v0, v1 uint64
