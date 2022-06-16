@@ -7,6 +7,10 @@ on:
   push:
     branches: [ dev, fix-docker-llvm-build ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   push_to_registry:
     name: build-push-dev
