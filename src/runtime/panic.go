@@ -13,7 +13,7 @@ func trap()
 // Inline assembly stub. It is essentially C longjmp but modified a bit for the
 // purposes of TinyGo. It restores the stack pointer and jumps to the given pc.
 //export tinygo_longjmp
-func tinygo_longjmp(sp, pc unsafe.Pointer)
+func tinygo_longjmp(frame *task.DeferFrame)
 
 // Compiler intrinsic.
 // Returns whether recover is supported on the current architecture.
@@ -26,7 +26,7 @@ func _panic(message interface{}) {
 		if frame != nil {
 			frame.PanicValue = message
 			frame.Panicking = true
-			tinygo_longjmp(frame.JumpSP, frame.JumpPC)
+			tinygo_longjmp(frame)
 			// unreachable
 		}
 	}

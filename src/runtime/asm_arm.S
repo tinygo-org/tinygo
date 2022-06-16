@@ -40,6 +40,8 @@ tinygo_longjmp:
     .cfi_startproc
     // Note: the code we jump to assumes r0 is set to a non-zero value if we
     // jump from here (which is conveniently already the case).
+
+    ldm r0, {r0, r1}
     mov sp, r0 // jumpSP
     mov pc, r1 // jumpPC
     .cfi_endproc
