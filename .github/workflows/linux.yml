@@ -167,7 +167,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: '12'
+          node-version: '14'
       - name: Install wasmtime
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
