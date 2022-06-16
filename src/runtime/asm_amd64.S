@@ -37,11 +37,11 @@ tinygo_longjmp:
 .global _tinygo_longjmp
 _tinygo_longjmp:
 #endif
-    // Note: the code we jump to assumes rax is non-zero so we have to load it
-    // with some value here.
-    movq $1, %rax
-    movq %rdi, %rsp // jumpSP
-    jmpq *%rsi      // jumpPC
+    // Note: the code we jump to assumes rax is set to a non-zero value if we
+    // jump from here, so we use rax as the temporary value for jumpPC.
+    movq 0(%rdi), %rsp // jumpSP
+    movq 8(%rdi), %rax // jumpPC
+    jmpq *%rax
 
 
 #ifdef __MACH__ // Darwin

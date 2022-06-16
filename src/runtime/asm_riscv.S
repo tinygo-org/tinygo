@@ -46,6 +46,7 @@ tinygo_scanCurrentStack:
 .global tinygo_longjmp
 tinygo_longjmp:
     // Note: the code we jump to assumes a0 is non-zero, which is already the
-    // case because that's jumpSP (the stack pointer).
-    mv sp, a0 // jumpSP
-    jr a1     // jumpPC
+    // case because that's the defer frame pointer.
+    lw sp, 0(a0)       // jumpSP
+    lw a1, REGSIZE(a0) // jumpPC
+    jr a1

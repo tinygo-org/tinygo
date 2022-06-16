@@ -28,6 +28,7 @@ tinygo_scanCurrentStack:
 tinygo_longjmp:
     // Note: the code we jump to assumes eax is set to a non-zero value if we
     // jump from here.
-    movl 8(%esp), %eax // jumpPC (stash in volatile register)
-    movl 4(%esp), %esp // jumpSP
+    movl 4(%esp), %eax
+    movl 0(%eax), %esp // jumpSP
+    movl 4(%eax), %eax // jumpPC (stash in volatile register)
     jmpl *%eax
