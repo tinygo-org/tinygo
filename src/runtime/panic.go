@@ -13,16 +13,29 @@ func trap()
 // Inline assembly stub. It is essentially C longjmp but modified a bit for the
 // purposes of TinyGo. It restores the stack pointer and jumps to the given pc.
 //export tinygo_longjmp
-func tinygo_longjmp(frame *task.DeferFrame)
+func tinygo_longjmp(frame *deferFrame)
 
 // Compiler intrinsic.
 // Returns whether recover is supported on the current architecture.
 func supportsRecover() bool
 
+// DeferFrame is a stack allocated object that stores information for the
+// current "defer frame", which is used in functions that use the `defer`
+// keyword.
+// The compiler knows about the JumpPC struct offset, so it should not be moved
+// without also updating compiler/defer.go.
+type deferFrame struct {
+	JumpSP     unsafe.Pointer // stack pointer to return to
+	JumpPC     unsafe.Pointer // pc to return to
+	Previous   *deferFrame    // previous recover buffer pointer
+	Panicking  bool           // true iff this defer frame is panicking
+	PanicValue interface{}    // panic value, might be nil for panic(nil) for example
+}
+
 // Builtin function panic(msg), used as a compiler intrinsic.
 func _panic(message interface{}) {
 	if supportsRecover() {
-		frame := task.Current().DeferFrame
+		frame := (*deferFrame)(task.Current().DeferFrame)
 		if frame != nil {
 			frame.PanicValue = message
 			frame.Panicking = true
@@ -49,12 +62,12 @@ func runtimePanic(msg string) {
 // that will be used.
 //go:inline
 //go:nobounds
-func setupDeferFrame(frame *task.DeferFrame, jumpSP unsafe.Pointer) {
+func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 	currentTask := task.Current()
-	frame.Previous = currentTask.DeferFrame
+	frame.Previous = (*deferFrame)(currentTask.DeferFrame)
 	frame.JumpSP = jumpSP
 	frame.Panicking = false
-	currentTask.DeferFrame = frame
+	currentTask.DeferFrame = unsafe.Pointer(frame)
 }
 
 // Called right before the return instruction. It pops the defer frame from the
@@ -62,8 +75,8 @@ func setupDeferFrame(frame *task.DeferFrame, jumpSP unsafe.Pointer) {
 // still panicking.
 //go:inline
 //go:nobounds
-func destroyDeferFrame(frame *task.DeferFrame) {
-	task.Current().DeferFrame = frame.Previous
+func destroyDeferFrame(frame *deferFrame) {
+	task.Current().DeferFrame = unsafe.Pointer(frame.Previous)
 	if frame.Panicking {
 		// We're still panicking!
 		// Re-raise the panic now.
@@ -83,7 +96,7 @@ func _recover(useParentFrame bool) interface{} {
 	// TODO: somehow check that recover() is called directly by a deferred
 	// function in a panicking goroutine. Maybe this can be done by comparing
 	// the frame pointer?
-	frame := task.Current().DeferFrame
+	frame := (*deferFrame)(task.Current().DeferFrame)
 	if useParentFrame {
 		// Don't recover panic from the current frame (which can't be panicking
 		// already), but instead from the previous frame.

@@ -71,7 +71,7 @@ func (b *builder) deferInitFunc() {
 		// possibly broken by the C alloca function).
 		// The frame pointer is _not_ saved, because it is marked as clobbered
 		// in the setjmp-like inline assembly.
-		deferFrameType := b.getLLVMType(b.program.ImportedPackage("internal/task").Members["DeferFrame"].Type())
+		deferFrameType := b.getLLVMRuntimeType("deferFrame")
 		b.deferFrame = b.CreateAlloca(deferFrameType, "deferframe.buf")
 		stackPointer := b.readStackPointer()
 		b.createRuntimeCall("setupDeferFrame", []llvm.Value{b.deferFrame, stackPointer}, "")
