@@ -5,11 +5,9 @@ target triple = "thumbv7m-unknown-unknown-eabi"
 
 %runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
 %runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }
-%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i64, %"internal/task.gcData", %"internal/task.state", %"internal/task.DeferFrame"* }
+%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i64, %"internal/task.gcData", %"internal/task.state", i8* }
 %"internal/task.gcData" = type {}
 %"internal/task.state" = type { i32, i32* }
-%"internal/task.DeferFrame" = type { i8*, i8*, %"internal/task.DeferFrame"*, i1, %runtime._interface }
-%runtime._interface = type { i32, i8* }
 %runtime.chanSelectState = type { %runtime.channel*, i8* }
 
 @"main$string" = internal unnamed_addr constant [4 x i8] c"test", align 1

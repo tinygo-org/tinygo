@@ -4,7 +4,7 @@ target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-unknown-unknown-eabi"
 
 %runtime._defer = type { i32, %runtime._defer* }
-%"internal/task.DeferFrame" = type { i8*, i8*, %"internal/task.DeferFrame"*, i1, %runtime._interface }
+%runtime.deferFrame = type { i8*, i8*, %runtime.deferFrame*, i1, %runtime._interface }
 %runtime._interface = type { i32, i8* }
 
 declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*) #0
@@ -23,16 +23,16 @@ entry:
   %defer.alloca = alloca { i32, %runtime._defer* }, align 4
   %deferPtr = alloca %runtime._defer*, align 4
   store %runtime._defer* null, %runtime._defer** %deferPtr, align 4
-  %deferframe.buf = alloca %"internal/task.DeferFrame", align 4
+  %deferframe.buf = alloca %runtime.deferFrame, align 4
   %0 = call i8* @llvm.stacksave()
-  call void @runtime.setupDeferFrame(%"internal/task.DeferFrame"* nonnull %deferframe.buf, i8* %0, i8* undef) #3
+  call void @runtime.setupDeferFrame(%runtime.deferFrame* nonnull %deferframe.buf, i8* %0, i8* undef) #3
   %defer.alloca.repack = getelementptr inbounds { i32, %runtime._defer* }, { i32, %runtime._defer* }* %defer.alloca, i32 0, i32 0
   store i32 0, i32* %defer.alloca.repack, align 4
   %defer.alloca.repack16 = getelementptr inbounds { i32, %runtime._defer* }, { i32, %runtime._defer* }* %defer.alloca, i32 0, i32 1
   store %runtime._defer* null, %runtime._defer** %defer.alloca.repack16, align 4
   %1 = bitcast %runtime._defer** %deferPtr to { i32, %runtime._defer* }**
   store { i32, %runtime._defer* }* %defer.alloca, { i32, %runtime._defer* }** %1, align 4
-  %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%"internal/task.DeferFrame"* nonnull %deferframe.buf) #4
+  %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%runtime.deferFrame* nonnull %deferframe.buf) #4
   %setjmp.result = icmp eq i32 %setjmp, 0
   br i1 %setjmp.result, label %2, label %lpad
 
@@ -56,7 +56,7 @@ rundefers.loop:                                   ; preds = %rundefers.loophead
   ]
 
 rundefers.callback0:                              ; preds = %rundefers.loop
-  %setjmp1 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%"internal/task.DeferFrame"* nonnull %deferframe.buf) #4
+  %setjmp1 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%runtime.deferFrame* nonnull %deferframe.buf) #4
   %setjmp.result2 = icmp eq i32 %setjmp1, 0
   br i1 %setjmp.result2, label %4, label %lpad
 
@@ -68,11 +68,11 @@ rundefers.default:                                ; preds = %rundefers.loop
   unreachable
 
 rundefers.end:                                    ; preds = %rundefers.loophead
-  call void @runtime.destroyDeferFrame(%"internal/task.DeferFrame"* nonnull %deferframe.buf, i8* undef) #3
+  call void @runtime.destroyDeferFrame(%runtime.deferFrame* nonnull %deferframe.buf, i8* undef) #3
   ret void
 
 recover:                                          ; preds = %rundefers.end3
-  call void @runtime.destroyDeferFrame(%"internal/task.DeferFrame"* nonnull %deferframe.buf, i8* undef) #3
+  call void @runtime.destroyDeferFrame(%runtime.deferFrame* nonnull %deferframe.buf, i8* undef) #3
   ret void
 
 lpad:                                             ; preds = %rundefers.callback012, %rundefers.callback0, %entry
@@ -94,7 +94,7 @@ rundefers.loop5:                                  ; preds = %rundefers.loophead6
   ]
 
 rundefers.callback012:                            ; preds = %rundefers.loop5
-  %setjmp14 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%"internal/task.DeferFrame"* nonnull %deferframe.buf) #4
+  %setjmp14 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%runtime.deferFrame* nonnull %deferframe.buf) #4
   %setjmp.result15 = icmp eq i32 %setjmp14, 0
   br i1 %setjmp.result15, label %6, label %lpad
 
@@ -112,7 +112,7 @@ rundefers.end3:                                   ; preds = %rundefers.loophead6
 ; Function Attrs: nofree nosync nounwind willreturn
 declare i8* @llvm.stacksave() #2
 
-declare void @runtime.setupDeferFrame(%"internal/task.DeferFrame"* dereferenceable_or_null(24), i8*, i8*) #0
+declare void @runtime.setupDeferFrame(%runtime.deferFrame* dereferenceable_or_null(24), i8*, i8*) #0
 
 ; Function Attrs: nounwind
 define hidden void @"main.deferSimple$1"(i8* %context) unnamed_addr #1 {
@@ -121,7 +121,7 @@ entry:
   ret void
 }
 
-declare void @runtime.destroyDeferFrame(%"internal/task.DeferFrame"* dereferenceable_or_null(24), i8*) #0
+declare void @runtime.destroyDeferFrame(%runtime.deferFrame* dereferenceable_or_null(24), i8*) #0
 
 declare void @runtime.printint32(i32, i8*) #0
 
@@ -132,9 +132,9 @@ entry:
   %defer.alloca = alloca { i32, %runtime._defer* }, align 4
   %deferPtr = alloca %runtime._defer*, align 4
   store %runtime._defer* null, %runtime._defer** %deferPtr, align 4
-  %deferframe.buf = alloca %"internal/task.DeferFrame", align 4
+  %deferframe.buf = alloca %runtime.deferFrame, align 4
   %0 = call i8* @llvm.stacksave()
-  call void @runtime.setupDeferFrame(%"internal/task.DeferFrame"* nonnull %deferframe.buf, i8* %0, i8* undef) #3
+  call void @runtime.setupDeferFrame(%runtime.deferFrame* nonnull %deferframe.buf, i8* %0, i8* undef) #3
   %defer.alloca.repack = getelementptr inbounds { i32, %runtime._defer* }, { i32, %runtime._defer* }* %defer.alloca, i32 0, i32 0
   store i32 0, i32* %defer.alloca.repack, align 4
   %defer.alloca.repack26 = getelementptr inbounds { i32, %runtime._defer* }, { i32, %runtime._defer* }* %defer.alloca, i32 0, i32 1
@@ -148,7 +148,7 @@ entry:
   store { i32, %runtime._defer* }* %defer.alloca, { i32, %runtime._defer* }** %2, align 4
   %3 = bitcast %runtime._defer** %deferPtr to { i32, %runtime._defer* }**
   store { i32, %runtime._defer* }* %defer.alloca2, { i32, %runtime._defer* }** %3, align 4
-  %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%"internal/task.DeferFrame"* nonnull %deferframe.buf) #4
+  %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%runtime.deferFrame* nonnull %deferframe.buf) #4
   %setjmp.result = icmp eq i32 %setjmp, 0
   br i1 %setjmp.result, label %4, label %lpad
 
@@ -173,7 +173,7 @@ rundefers.loop:                                   ; preds = %rundefers.loophead
   ]
 
 rundefers.callback0:                              ; preds = %rundefers.loop
-  %setjmp4 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%"internal/task.DeferFrame"* nonnull %deferframe.buf) #4
+  %setjmp4 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%runtime.deferFrame* nonnull %deferframe.buf) #4
   %setjmp.result5 = icmp eq i32 %setjmp4, 0
   br i1 %setjmp.result5, label %6, label %lpad
 
@@ -182,7 +182,7 @@ rundefers.callback0:                              ; preds = %rundefers.loop
   br label %rundefers.loophead
 
 rundefers.callback1:                              ; preds = %rundefers.loop
-  %setjmp7 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%"internal/task.DeferFrame"* nonnull %deferframe.buf) #4
+  %setjmp7 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%runtime.deferFrame* nonnull %deferframe.buf) #4
   %setjmp.result8 = icmp eq i32 %setjmp7, 0
   br i1 %setjmp.result8, label %7, label %lpad
 
@@ -194,11 +194,11 @@ rundefers.default:                                ; preds = %rundefers.loop
   unreachable
 
 rundefers.end:                                    ; preds = %rundefers.loophead
-  call void @runtime.destroyDeferFrame(%"internal/task.DeferFrame"* nonnull %deferframe.buf, i8* undef) #3
+  call void @runtime.destroyDeferFrame(%runtime.deferFrame* nonnull %deferframe.buf, i8* undef) #3
   ret void
 
 recover:                                          ; preds = %rundefers.end9
-  call void @runtime.destroyDeferFrame(%"internal/task.DeferFrame"* nonnull %deferframe.buf, i8* undef) #3
+  call void @runtime.destroyDeferFrame(%runtime.deferFrame* nonnull %deferframe.buf, i8* undef) #3
   ret void
 
 lpad:                                             ; preds = %rundefers.callback122, %rundefers.callback018, %rundefers.callback1, %rundefers.callback0, %entry
@@ -221,7 +221,7 @@ rundefers.loop11:                                 ; preds = %rundefers.loophead1
   ]
 
 rundefers.callback018:                            ; preds = %rundefers.loop11
-  %setjmp20 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%"internal/task.DeferFrame"* nonnull %deferframe.buf) #4
+  %setjmp20 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%runtime.deferFrame* nonnull %deferframe.buf) #4
   %setjmp.result21 = icmp eq i32 %setjmp20, 0
   br i1 %setjmp.result21, label %9, label %lpad
 
@@ -230,7 +230,7 @@ rundefers.callback018:                            ; preds = %rundefers.loop11
   br label %rundefers.loophead12
 
 rundefers.callback122:                            ; preds = %rundefers.loop11
-  %setjmp24 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%"internal/task.DeferFrame"* nonnull %deferframe.buf) #4
+  %setjmp24 = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(%runtime.deferFrame* nonnull %deferframe.buf) #4
   %setjmp.result25 = icmp eq i32 %setjmp24, 0
   br i1 %setjmp.result25, label %10, label %lpad
 
