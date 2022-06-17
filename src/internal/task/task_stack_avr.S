@@ -72,7 +72,10 @@ tinygo_swapTask:
     std Y+1, r3
 
     // Switch to the new stack pointer.
+    in   r0, 0x3f ; SREG
+    cli
     out  0x3d, r24; SPL
+    out  0x3f, r0 ; SREG, restore interrupts (after the next instruction)
     out  0x3e, r25; SPH
 
     // Load saved register from the new stack.
