@@ -50,3 +50,33 @@ tinygo_scanCurrentStack:
     pop r17
     pop r28 // Y
     pop r29 // Y
+
+
+.section .text.tinygo_longjmp
+.global tinygo_longjmp
+tinygo_longjmp:
+    ; Move the *DeferFrame pointer to the X register.
+    mov r26, r24
+    mov r27, r25
+
+    ; Load the stack pointer
+    ld r24, X+
+    ld r25, X+
+
+    ; Switch to the given stack pointer.
+    in r0, 0x3f   ; SREG
+    cli           ; disable interrupts
+    out 0x3d, r24 ; SPL
+    out 0x3f, r0  ; re-enable interrupts (with one instruction delay)
+    out 0x3e, r25 ; SPH
+
+    ; Load the new PC
+    ld r30, X+
+    ld r31, X+
+
+    ; Load the new Y register
+    ld r28, X+
+    ld r29, X+
+
+    ; Jump to the PC (stored in the Z register)
+    icall

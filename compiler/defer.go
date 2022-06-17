@@ -31,7 +31,7 @@ func (b *builder) supportsRecover() bool {
 		// proposal of WebAssembly:
 		// https://github.com/WebAssembly/exception-handling
 		return false
-	case "avr", "riscv64", "xtensa":
+	case "riscv64", "xtensa":
 		// TODO: add support for these architectures
 		return false
 	default:
@@ -116,8 +116,8 @@ func (b *builder) createInvokeCheckpoint() {
 	//   * The return value (eax, rax, r0, etc) is set to zero in the inline
 	//     assembly but set to an unspecified non-zero value when jumping using
 	//     a longjmp.
-	asmType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.deferFrame.Type()}, false)
 	var asmString, constraints string
+	resultType := b.uintptrType
 	switch b.archFamily() {
 	case "i386":
 		asmString = `
@@ -163,6 +163,21 @@ mov x0, #0
 `
 		constraints = "={x0},{x1},~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x18},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{fp},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{q16},~{q17},~{q18},~{q19},~{q20},~{q21},~{q22},~{q23},~{q24},~{q25},~{q26},~{q27},~{q28},~{q29},~{q30},~{nzcv},~{ffr},~{vg},~{memory}"
 		// TODO: SVE registers, which we don't use in TinyGo at the moment.
+	case "avr":
+		// Note: the Y register (R28:R29) is a fixed register and therefore
+		// needs to be saved manually. TODO: do this only once per function with
+		// a defer frame, not for every call.
+		resultType = b.ctx.Int8Type()
+		asmString = `
+ldi r24, pm_lo8(1f)
+ldi r25, pm_hi8(1f)
+std z+2, r24
+std z+3, r25
+std z+4, r28
+std z+5, r29
+ldi r24, 0
+1:`
+		constraints = "={r24},z,~{r0},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{r13},~{r14},~{r15},~{r16},~{r17},~{r18},~{r19},~{r20},~{r21},~{r22},~{r23},~{r25},~{r26},~{r27}"
 	case "riscv32":
 		asmString = `
 la a2, 1f
@@ -174,10 +189,11 @@ li a0, 0
 		// This case should have been handled by b.supportsRecover().
 		b.addError(b.fn.Pos(), "unknown architecture for defer: "+b.archFamily())
 	}
+	asmType := llvm.FunctionType(resultType, []llvm.Type{b.deferFrame.Type()}, false)
 	asm := llvm.InlineAsm(asmType, asmString, constraints, false, false, 0, false)
 	result := b.CreateCall(asm, []llvm.Value{b.deferFrame}, "setjmp")
 	result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("returns_twice"), 0))
-	isZero := b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(b.uintptrType, 0, false), "setjmp.result")
+	isZero := b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(resultType, 0, false), "setjmp.result")
 	continueBB := b.insertBasicBlock("")
 	b.CreateCondBr(isZero, continueBB, b.landingpad)
 	b.SetInsertPointAtEnd(continueBB)

@@ -25,11 +25,12 @@ func supportsRecover() bool
 // The compiler knows about the JumpPC struct offset, so it should not be moved
 // without also updating compiler/defer.go.
 type deferFrame struct {
-	JumpSP     unsafe.Pointer // stack pointer to return to
-	JumpPC     unsafe.Pointer // pc to return to
-	Previous   *deferFrame    // previous recover buffer pointer
-	Panicking  bool           // true iff this defer frame is panicking
-	PanicValue interface{}    // panic value, might be nil for panic(nil) for example
+	JumpSP     unsafe.Pointer                 // stack pointer to return to
+	JumpPC     unsafe.Pointer                 // pc to return to
+	ExtraRegs  [deferExtraRegs]unsafe.Pointer // extra registers (depending on the architecture)
+	Previous   *deferFrame                    // previous recover buffer pointer
+	Panicking  bool                           // true iff this defer frame is panicking
+	PanicValue interface{}                    // panic value, might be nil for panic(nil) for example
 }
 
 // Builtin function panic(msg), used as a compiler intrinsic.
