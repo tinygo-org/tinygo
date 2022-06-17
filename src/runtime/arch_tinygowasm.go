@@ -12,6 +12,8 @@ const GOARCH = "wasm"
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 32
 
+const deferExtraRegs = 0
+
 //go:extern __heap_base
 var heapStartSymbol [0]byte
 

@@ -5,6 +5,8 @@ package runtime
 
 import "device/riscv"
 
+const deferExtraRegs = 0
+
 func getCurrentStackPointer() uintptr {
 	return uintptr(stacksave())
 }

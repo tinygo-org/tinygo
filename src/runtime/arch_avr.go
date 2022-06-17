@@ -10,6 +10,8 @@ const GOARCH = "arm" // avr pretends to be arm
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 8
 
+const deferExtraRegs = 1 // the frame pointer (Y register) also needs to be stored
+
 // Align on a word boundary.
 func align(ptr uintptr) uintptr {
 	// No alignment necessary on the AVR.
