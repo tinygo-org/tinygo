@@ -115,7 +115,7 @@ func CheckCorpus(vals []any, types []reflect.Type) error {
 	return errors.New("not implemented")
 }
 
-func ResetCoverage() {}
+func ResetCoverage()    {}
 func SnapshotCoverage() {}
 
 // RunFuzzWorker is called in a worker process to communicate with the

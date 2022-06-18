@@ -1,3 +1,4 @@
+//go:build scheduler.tasks && tinygo.riscv
 // +build scheduler.tasks,tinygo.riscv
 
 package task

@@ -95,6 +95,14 @@ commands:
           key: wasi-libc-sysroot-systemclang-v6
           paths:
             - lib/wasi-libc/sysroot
+      - when:
+          condition: <<parameters.fmt-check>>
+          steps:
+          - run:
+              # Do this before gen-device so that it doesn't check the
+              # formatting of generated files.
+              name: Check Go code formatting
+              command: make fmt-check
       - run: make gen-device -j4
       - run: make smoketest XTENSA=0
       - save_cache:
@@ -102,12 +110,6 @@ commands:
           paths:
             - ~/.cache/go-build
             - /go/pkg/mod
-      - when:
-          condition: <<parameters.fmt-check>>
-          steps:
-          - run:
-              name: Check Go code formatting
-              command: make fmt-check
 
 jobs:
   test-llvm13-go116:

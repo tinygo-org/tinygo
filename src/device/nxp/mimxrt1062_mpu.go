@@ -193,12 +193,12 @@ func enableIcache(enable bool) {
 			arm.Asm("dsb 0xF")
 			arm.Asm("isb 0xF")
 		} else {
-		arm.Asm("dsb 0xF")
-		arm.Asm("isb 0xF")
+			arm.Asm("dsb 0xF")
+			arm.Asm("isb 0xF")
 			SystemControl.CCR.ClearBits(SCB_CCR_IC_Msk)
 			SystemControl.ICIALLU.Set(0)
-		arm.Asm("dsb 0xF")
-		arm.Asm("isb 0xF")
+			arm.Asm("dsb 0xF")
+			arm.Asm("isb 0xF")
 		}
 	}
 }
