@@ -808,8 +808,7 @@ func (e *ValueError) Error() string {
 	return "reflect: call of " + e.Method + " on " + e.Kind.String() + " Value"
 }
 
-// Calls to this function are converted to LLVM intrinsic calls such as
-// llvm.memcpy.p0i8.p0i8.i32().
+//go:linkname memcpy runtime.memcpy
 func memcpy(dst, src unsafe.Pointer, size uintptr)
 
 //go:linkname alloc runtime.alloc
