@@ -1619,10 +1619,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// applied) function call. If it is anonymous, it may be a closure.
 		name := fn.RelString(nil)
 		switch {
-		case name == "runtime.memcpy" || name == "runtime.memmove" || name == "reflect.memcpy":
-			return b.createMemoryCopyCall(fn, instr.Args)
-		case name == "runtime.memzero":
-			return b.createMemoryZeroCall(instr.Args)
 		case name == "math.Ceil" || name == "math.Floor" || name == "math.Sqrt" || name == "math.Trunc":
 			result, ok := b.createMathOp(instr)
 			if ok {
