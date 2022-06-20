@@ -34,3 +34,4 @@ StoreUint64: 20
 StoreUintptr: 20
 StorePointer: true
 deferred atomic add: 8
+deferred volatile store: 22
