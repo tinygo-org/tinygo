@@ -16,20 +16,7 @@ import (
 func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 	num := b.getValue(call.Args[0])
 	switch {
-	case b.GOARCH == "amd64":
-		if b.GOOS == "darwin" {
-			// Darwin adds this magic number to system call numbers:
-			//
-			// > Syscall classes for 64-bit system call entry.
-			// > For 64-bit users, the 32-bit syscall number is partitioned
-			// > with the high-order bits representing the class and low-order
-			// > bits being the syscall number within that class.
-			// > The high-order 32-bits of the 64-bit syscall number are unused.
-			// > All system classes enter the kernel via the syscall instruction.
-			//
-			// Source: https://opensource.apple.com/source/xnu/xnu-792.13.8/osfmk/mach/i386/syscall_sw.h
-			num = b.CreateOr(num, llvm.ConstInt(b.uintptrType, 0x2000000, false), "")
-		}
+	case b.GOARCH == "amd64" && b.GOOS == "linux":
 		// Sources:
 		//   https://stackoverflow.com/a/2538212
 		//   https://en.wikibooks.org/wiki/X86_Assembly/Interfacing_with_Linux#syscall
@@ -174,26 +161,6 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		inrange2 := b.CreateICmp(llvm.IntSGT, syscallResult, llvm.ConstInt(b.uintptrType, 0xfffffffffffff000, true), "") // -4096
 		hasError := b.CreateAnd(inrange1, inrange2, "")
 		errResult := b.CreateSelect(hasError, b.CreateSub(zero, syscallResult, ""), zero, "syscallError")
-		retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
-		retval = b.CreateInsertValue(retval, syscallResult, 0, "")
-		retval = b.CreateInsertValue(retval, zero, 1, "")
-		retval = b.CreateInsertValue(retval, errResult, 2, "")
-		return retval, nil
-	case "darwin":
-		syscallResult, err := b.createRawSyscall(call)
-		if err != nil {
-			return syscallResult, err
-		}
-		// Return values: r0, r1 uintptr, err Errno
-		// Pseudocode:
-		//     var err uintptr
-		//     if syscallResult != 0 {
-		//         err = syscallResult
-		//     }
-		//     return syscallResult, 0, err
-		zero := llvm.ConstInt(b.uintptrType, 0, false)
-		hasError := b.CreateICmp(llvm.IntNE, syscallResult, llvm.ConstInt(b.uintptrType, 0, false), "")
-		errResult := b.CreateSelect(hasError, syscallResult, zero, "syscallError")
 		retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
 		retval = b.CreateInsertValue(retval, syscallResult, 0, "")
 		retval = b.CreateInsertValue(retval, zero, 1, "")
