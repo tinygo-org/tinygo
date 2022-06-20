@@ -20,6 +20,10 @@ import (
 func (b *builder) defineIntrinsicFunction() {
 	name := b.fn.RelString(nil)
 	switch {
+	case strings.HasPrefix(name, "runtime/volatile.Load"):
+		b.createVolatileLoad()
+	case strings.HasPrefix(name, "runtime/volatile.Store"):
+		b.createVolatileStore()
 	case strings.HasPrefix(name, "sync/atomic.") && token.IsExported(b.fn.Name()):
 		b.createFunctionStart()
 		returnValue := b.createAtomicOp(b.fn.Name())

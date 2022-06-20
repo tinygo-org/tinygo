@@ -3,6 +3,8 @@ package main
 import (
 	"sync/atomic"
 	"unsafe"
+
+	"runtime/volatile"
 )
 
 func main() {
@@ -82,7 +84,7 @@ func main() {
 	testValue(int(3), int(-2))
 	testValue("", "foobar", "baz")
 
-	// Test atomic operations as deferred values.
+	// Test atomic and volatile operations as deferred values.
 	testDefer()
 }
 
@@ -99,8 +101,11 @@ func testValue(values ...interface{}) {
 
 func testDefer() {
 	n1 := int32(5)
+	n2 := uint32(6)
 	defer func() {
 		println("deferred atomic add:", n1)
+		println("deferred volatile store:", n2)
 	}()
 	defer atomic.AddInt32(&n1, 3)
+	defer volatile.StoreUint32(&n2, 22)
 }

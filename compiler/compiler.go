@@ -1642,10 +1642,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createSyscall(instr)
 		case strings.HasPrefix(name, "syscall.rawSyscallNoError"):
 			return b.createRawSyscallNoError(instr)
-		case strings.HasPrefix(name, "runtime/volatile.Load"):
-			return b.createVolatileLoad(instr)
-		case strings.HasPrefix(name, "runtime/volatile.Store"):
-			return b.createVolatileStore(instr)
 		case name == "runtime.supportsRecover":
 			supportsRecover := uint64(0)
 			if b.supportsRecover() {
