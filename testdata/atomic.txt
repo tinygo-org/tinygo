@@ -33,3 +33,4 @@ StoreUint32: 20
 StoreUint64: 20
 StoreUintptr: 20
 StorePointer: true
+deferred atomic add: 8

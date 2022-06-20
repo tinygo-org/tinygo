@@ -3,11 +3,33 @@ package compiler
 // This file contains helper functions to create calls to LLVM intrinsics.
 
 import (
+	"go/token"
 	"strconv"
+	"strings"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
+
+// Define unimplemented intrinsic functions.
+//
+// Some functions are either normally implemented in Go assembly (like
+// sync/atomic functions) or intentionally left undefined to be implemented
+// directly in the compiler (like runtime/volatile functions). Either way, look
+// for these and implement them if this is the case.
+func (b *builder) defineIntrinsicFunction() {
+	name := b.fn.RelString(nil)
+	switch {
+	case strings.HasPrefix(name, "sync/atomic.") && token.IsExported(b.fn.Name()):
+		b.createFunctionStart()
+		returnValue := b.createAtomicOp(b.fn.Name())
+		if !returnValue.IsNil() {
+			b.CreateRet(returnValue)
+		} else {
+			b.CreateRetVoid()
+		}
+	}
+}
 
 // createMemoryCopyCall creates a call to a builtin LLVM memcpy or memmove
 // function, declaring this function if needed. These calls are treated
