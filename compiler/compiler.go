@@ -785,7 +785,12 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			// Create the function definition.
 			b := newBuilder(c, irbuilder, member)
 			if member.Blocks == nil {
-				continue // external function
+				// Try to define this as an intrinsic function.
+				b.defineIntrinsicFunction()
+				// It might not be an intrinsic function but simply an external
+				// function (defined via //go:linkname). Leave it undefined in
+				// that case.
+				continue
 			}
 			b.createFunction()
 		case *ssa.Type:
@@ -1009,10 +1014,11 @@ func (c *compilerContext) getEmbedFileString(file *loader.EmbedFile) llvm.Value 
 	return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
 }
 
-// createFunction builds the LLVM IR implementation for this function. The
-// function must not yet be defined, otherwise this function will create a
-// diagnostic.
-func (b *builder) createFunction() {
+// Start defining a function so that it can be filled with instructions: load
+// parameters, create basic blocks, and set up debug information.
+// This is separated out from createFunction() so that it is also usable to
+// define compiler intrinsics like the atomic operations in sync/atomic.
+func (b *builder) createFunctionStart() {
 	if b.DumpSSA {
 		fmt.Printf("\nfunc %s:\n", b.fn)
 	}
@@ -1082,7 +1088,16 @@ func (b *builder) createFunction() {
 		b.blockEntries[block] = llvmBlock
 		b.blockExits[block] = llvmBlock
 	}
-	entryBlock := b.blockEntries[b.fn.Blocks[0]]
+	var entryBlock llvm.BasicBlock
+	if len(b.fn.Blocks) != 0 {
+		// Normal functions have an entry block.
+		entryBlock = b.blockEntries[b.fn.Blocks[0]]
+	} else {
+		// This function isn't defined in Go SSA. It is probably a compiler
+		// intrinsic (like an atomic operation). Create the entry block
+		// manually.
+		entryBlock = b.ctx.AddBasicBlock(b.llvmFn, "entry")
+	}
 	b.SetInsertPointAtEnd(entryBlock)
 
 	if b.fn.Synthetic == "package initializer" {
@@ -1157,6 +1172,13 @@ func (b *builder) createFunction() {
 		// them.
 		b.deferInitFunc()
 	}
+}
+
+// createFunction builds the LLVM IR implementation for this function. The
+// function must not yet be defined, otherwise this function will create a
+// diagnostic.
+func (b *builder) createFunction() {
+	b.createFunctionStart()
 
 	// Fill blocks with instructions.
 	for _, block := range b.fn.DomPreorder() {
@@ -1630,14 +1652,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 				supportsRecover = 1
 			}
 			return llvm.ConstInt(b.ctx.Int1Type(), supportsRecover, false), nil
-		case strings.HasPrefix(name, "sync/atomic."):
-			val, ok := b.createAtomicOp(instr)
-			if ok {
-				// This call could be lowered as an atomic operation.
-				return val, nil
-			}
-			// This call couldn't be lowered as an atomic operation, it's
-			// probably something else. Continue as usual.
 		case name == "runtime/interrupt.New":
 			return b.createInterruptGlobal(instr)
 		}
