@@ -7,36 +7,36 @@ target triple = "wasm32-unknown-wasi"
 
 @"main$string" = internal unnamed_addr constant [3 x i8] c"foo", align 1
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
+declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*) #0
 
-declare void @runtime.trackPointer(i8* nocapture readonly, i8*)
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.init(i8* %context) unnamed_addr #0 {
+define hidden void @main.init(i8* %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.someString(i8* %context) unnamed_addr #0 {
+define hidden %runtime._string @main.someString(i8* %context) unnamed_addr #1 {
 entry:
   ret %runtime._string { i8* getelementptr inbounds ([3 x i8], [3 x i8]* @"main$string", i32 0, i32 0), i32 3 }
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.zeroLengthString(i8* %context) unnamed_addr #0 {
+define hidden %runtime._string @main.zeroLengthString(i8* %context) unnamed_addr #1 {
 entry:
   ret %runtime._string zeroinitializer
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.stringLen(i8* %s.data, i32 %s.len, i8* %context) unnamed_addr #0 {
+define hidden i32 @main.stringLen(i8* %s.data, i32 %s.len, i8* %context) unnamed_addr #1 {
 entry:
   ret i32 %s.len
 }
 
 ; Function Attrs: nounwind
-define hidden i8 @main.stringIndex(i8* %s.data, i32 %s.len, i32 %index, i8* %context) unnamed_addr #0 {
+define hidden i8 @main.stringIndex(i8* %s.data, i32 %s.len, i32 %index, i8* %context) unnamed_addr #1 {
 entry:
   %.not = icmp ult i32 %index, %s.len
   br i1 %.not, label %lookup.next, label %lookup.throw
@@ -47,40 +47,40 @@ lookup.next:                                      ; preds = %entry
   ret i8 %1
 
 lookup.throw:                                     ; preds = %entry
-  call void @runtime.lookupPanic(i8* undef) #0
+  call void @runtime.lookupPanic(i8* undef) #2
   unreachable
 }
 
-declare void @runtime.lookupPanic(i8*)
+declare void @runtime.lookupPanic(i8*) #0
 
 ; Function Attrs: nounwind
-define hidden i1 @main.stringCompareEqual(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* %context) unnamed_addr #0 {
+define hidden i1 @main.stringCompareEqual(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* %context) unnamed_addr #1 {
 entry:
-  %0 = call i1 @runtime.stringEqual(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* undef) #0
+  %0 = call i1 @runtime.stringEqual(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* undef) #2
   ret i1 %0
 }
 
-declare i1 @runtime.stringEqual(i8*, i32, i8*, i32, i8*)
+declare i1 @runtime.stringEqual(i8*, i32, i8*, i32, i8*) #0
 
 ; Function Attrs: nounwind
-define hidden i1 @main.stringCompareUnequal(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* %context) unnamed_addr #0 {
+define hidden i1 @main.stringCompareUnequal(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* %context) unnamed_addr #1 {
 entry:
-  %0 = call i1 @runtime.stringEqual(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* undef) #0
+  %0 = call i1 @runtime.stringEqual(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* undef) #2
   %1 = xor i1 %0, true
   ret i1 %1
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.stringCompareLarger(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* %context) unnamed_addr #0 {
+define hidden i1 @main.stringCompareLarger(i8* %s1.data, i32 %s1.len, i8* %s2.data, i32 %s2.len, i8* %context) unnamed_addr #1 {
 entry:
-  %0 = call i1 @runtime.stringLess(i8* %s2.data, i32 %s2.len, i8* %s1.data, i32 %s1.len, i8* undef) #0
+  %0 = call i1 @runtime.stringLess(i8* %s2.data, i32 %s2.len, i8* %s1.data, i32 %s1.len, i8* undef) #2
   ret i1 %0
 }
 
-declare i1 @runtime.stringLess(i8*, i32, i8*, i32, i8*)
+declare i1 @runtime.stringLess(i8*, i32, i8*, i32, i8*) #0
 
 ; Function Attrs: nounwind
-define hidden i8 @main.stringLookup(i8* %s.data, i32 %s.len, i8 %x, i8* %context) unnamed_addr #0 {
+define hidden i8 @main.stringLookup(i8* %s.data, i32 %s.len, i8 %x, i8* %context) unnamed_addr #1 {
 entry:
   %0 = zext i8 %x to i32
   %.not = icmp ult i32 %0, %s.len
@@ -92,8 +92,10 @@ lookup.next:                                      ; preds = %entry
   ret i8 %2
 
 lookup.throw:                                     ; preds = %entry
-  call void @runtime.lookupPanic(i8* undef) #0
+  call void @runtime.lookupPanic(i8* undef) #2
   unreachable
 }
 
-attributes #0 = { nounwind }
+attributes #0 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { nounwind }

@@ -26,91 +26,91 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:basic:complex128" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* null, i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* @"reflect/types.type:pointer:basic:complex128", i32 0 }
 @"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:complex128", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* null, i32 0 }
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*)
+declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*) #0
 
-declare void @runtime.trackPointer(i8* nocapture readonly, i8*)
+declare void @runtime.trackPointer(i8* nocapture readonly, i8*) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.init(i8* %context) unnamed_addr #0 {
+define hidden void @main.init(i8* %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.newScalar(i8* %context) unnamed_addr #0 {
+define hidden void @main.newScalar(i8* %context) unnamed_addr #1 {
 entry:
-  %new = call i8* @runtime.alloc(i32 1, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new, i8* undef) #0
+  %new = call i8* @runtime.alloc(i32 1, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new, i8* undef) #2
   store i8* %new, i8** @main.scalar1, align 4
-  %new1 = call i8* @runtime.alloc(i32 4, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new1, i8* undef) #0
+  %new1 = call i8* @runtime.alloc(i32 4, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new1, i8* undef) #2
   store i8* %new1, i8** bitcast (i32** @main.scalar2 to i8**), align 4
-  %new2 = call i8* @runtime.alloc(i32 8, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new2, i8* undef) #0
+  %new2 = call i8* @runtime.alloc(i32 8, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new2, i8* undef) #2
   store i8* %new2, i8** bitcast (i64** @main.scalar3 to i8**), align 4
-  %new3 = call i8* @runtime.alloc(i32 4, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new3, i8* undef) #0
+  %new3 = call i8* @runtime.alloc(i32 4, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new3, i8* undef) #2
   store i8* %new3, i8** bitcast (float** @main.scalar4 to i8**), align 4
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.newArray(i8* %context) unnamed_addr #0 {
+define hidden void @main.newArray(i8* %context) unnamed_addr #1 {
 entry:
-  %new = call i8* @runtime.alloc(i32 3, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new, i8* undef) #0
+  %new = call i8* @runtime.alloc(i32 3, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new, i8* undef) #2
   store i8* %new, i8** bitcast ([3 x i8]** @main.array1 to i8**), align 4
-  %new1 = call i8* @runtime.alloc(i32 71, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new1, i8* undef) #0
+  %new1 = call i8* @runtime.alloc(i32 71, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new1, i8* undef) #2
   store i8* %new1, i8** bitcast ([71 x i8]** @main.array2 to i8**), align 4
-  %new2 = call i8* @runtime.alloc(i32 12, i8* nonnull inttoptr (i32 67 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new2, i8* undef) #0
+  %new2 = call i8* @runtime.alloc(i32 12, i8* nonnull inttoptr (i32 67 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new2, i8* undef) #2
   store i8* %new2, i8** bitcast ([3 x i8*]** @main.array3 to i8**), align 4
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.newStruct(i8* %context) unnamed_addr #0 {
+define hidden void @main.newStruct(i8* %context) unnamed_addr #1 {
 entry:
-  %new = call i8* @runtime.alloc(i32 0, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new, i8* undef) #0
+  %new = call i8* @runtime.alloc(i32 0, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new, i8* undef) #2
   store i8* %new, i8** bitcast ({}** @main.struct1 to i8**), align 4
-  %new1 = call i8* @runtime.alloc(i32 8, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new1, i8* undef) #0
+  %new1 = call i8* @runtime.alloc(i32 8, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new1, i8* undef) #2
   store i8* %new1, i8** bitcast ({ i32, i32 }** @main.struct2 to i8**), align 4
-  %new2 = call i8* @runtime.alloc(i32 248, i8* bitcast ({ i32, [8 x i8] }* @"runtime/gc.layout:62-2000000000000001" to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new2, i8* undef) #0
+  %new2 = call i8* @runtime.alloc(i32 248, i8* bitcast ({ i32, [8 x i8] }* @"runtime/gc.layout:62-2000000000000001" to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new2, i8* undef) #2
   store i8* %new2, i8** bitcast ({ i8*, [60 x i32], i8* }** @main.struct3 to i8**), align 4
-  %new3 = call i8* @runtime.alloc(i32 248, i8* bitcast ({ i32, [8 x i8] }* @"runtime/gc.layout:62-0001" to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %new3, i8* undef) #0
+  %new3 = call i8* @runtime.alloc(i32 248, i8* bitcast ({ i32, [8 x i8] }* @"runtime/gc.layout:62-0001" to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %new3, i8* undef) #2
   store i8* %new3, i8** bitcast ({ i8*, [61 x i32] }** @main.struct4 to i8**), align 4
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden { i8*, void ()* }* @main.newFuncValue(i8* %context) unnamed_addr #0 {
+define hidden { i8*, void ()* }* @main.newFuncValue(i8* %context) unnamed_addr #1 {
 entry:
-  %new = call i8* @runtime.alloc(i32 8, i8* nonnull inttoptr (i32 197 to i8*), i8* undef) #0
+  %new = call i8* @runtime.alloc(i32 8, i8* nonnull inttoptr (i32 197 to i8*), i8* undef) #2
   %0 = bitcast i8* %new to { i8*, void ()* }*
-  call void @runtime.trackPointer(i8* nonnull %new, i8* undef) #0
+  call void @runtime.trackPointer(i8* nonnull %new, i8* undef) #2
   ret { i8*, void ()* }* %0
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.makeSlice(i8* %context) unnamed_addr #0 {
+define hidden void @main.makeSlice(i8* %context) unnamed_addr #1 {
 entry:
-  %makeslice = call i8* @runtime.alloc(i32 5, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %makeslice, i8* undef) #0
+  %makeslice = call i8* @runtime.alloc(i32 5, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %makeslice, i8* undef) #2
   store i8* %makeslice, i8** getelementptr inbounds ({ i8*, i32, i32 }, { i8*, i32, i32 }* @main.slice1, i32 0, i32 0), align 8
   store i32 5, i32* getelementptr inbounds ({ i8*, i32, i32 }, { i8*, i32, i32 }* @main.slice1, i32 0, i32 1), align 4
   store i32 5, i32* getelementptr inbounds ({ i8*, i32, i32 }, { i8*, i32, i32 }* @main.slice1, i32 0, i32 2), align 8
-  %makeslice1 = call i8* @runtime.alloc(i32 20, i8* nonnull inttoptr (i32 67 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %makeslice1, i8* undef) #0
+  %makeslice1 = call i8* @runtime.alloc(i32 20, i8* nonnull inttoptr (i32 67 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %makeslice1, i8* undef) #2
   store i8* %makeslice1, i8** bitcast ({ i32**, i32, i32 }* @main.slice2 to i8**), align 8
   store i32 5, i32* getelementptr inbounds ({ i32**, i32, i32 }, { i32**, i32, i32 }* @main.slice2, i32 0, i32 1), align 4
   store i32 5, i32* getelementptr inbounds ({ i32**, i32, i32 }, { i32**, i32, i32 }* @main.slice2, i32 0, i32 2), align 8
-  %makeslice3 = call i8* @runtime.alloc(i32 60, i8* nonnull inttoptr (i32 71 to i8*), i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %makeslice3, i8* undef) #0
+  %makeslice3 = call i8* @runtime.alloc(i32 60, i8* nonnull inttoptr (i32 71 to i8*), i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %makeslice3, i8* undef) #2
   store i8* %makeslice3, i8** bitcast ({ { i8*, i32, i32 }*, i32, i32 }* @main.slice3 to i8**), align 8
   store i32 5, i32* getelementptr inbounds ({ { i8*, i32, i32 }*, i32, i32 }, { { i8*, i32, i32 }*, i32, i32 }* @main.slice3, i32 0, i32 1), align 4
   store i32 5, i32* getelementptr inbounds ({ { i8*, i32, i32 }*, i32, i32 }, { { i8*, i32, i32 }*, i32, i32 }* @main.slice3, i32 0, i32 2), align 8
@@ -118,18 +118,20 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._interface @main.makeInterface(double %v.r, double %v.i, i8* %context) unnamed_addr #0 {
+define hidden %runtime._interface @main.makeInterface(double %v.r, double %v.i, i8* %context) unnamed_addr #1 {
 entry:
-  %0 = call i8* @runtime.alloc(i32 16, i8* null, i8* undef) #0
-  call void @runtime.trackPointer(i8* nonnull %0, i8* undef) #0
+  %0 = call i8* @runtime.alloc(i32 16, i8* null, i8* undef) #2
+  call void @runtime.trackPointer(i8* nonnull %0, i8* undef) #2
   %.repack = bitcast i8* %0 to double*
   store double %v.r, double* %.repack, align 8
   %.repack1 = getelementptr inbounds i8, i8* %0, i32 8
   %1 = bitcast i8* %.repack1 to double*
   store double %v.i, double* %1, align 8
   %2 = insertvalue %runtime._interface { i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:complex128" to i32), i8* undef }, i8* %0, 1
-  call void @runtime.trackPointer(i8* nonnull %0, i8* undef) #0
+  call void @runtime.trackPointer(i8* nonnull %0, i8* undef) #2
   ret %runtime._interface %2
 }
 
-attributes #0 = { nounwind }
+attributes #0 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { nounwind }
