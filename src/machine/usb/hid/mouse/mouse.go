@@ -15,8 +15,9 @@ const (
 )
 
 type mouse struct {
-	buf    *hid.RingBuffer
-	button Button
+	buf     *hid.RingBuffer
+	button  Button
+	waitTxc bool
 }
 
 func init() {
@@ -38,11 +39,22 @@ func newMouse() *mouse {
 }
 
 func (m *mouse) Callback() bool {
+	m.waitTxc = false
 	if b, ok := m.buf.Get(); ok {
+		m.waitTxc = true
 		hid.SendUSBPacket(b[:5])
 		return true
 	}
 	return false
+}
+
+func (m *mouse) tx(b []byte) {
+	if m.waitTxc {
+		m.buf.Put(b)
+	} else {
+		m.waitTxc = true
+		hid.SendUSBPacket(b)
+	}
 }
 
 // Move is a function that moves the mouse cursor.
@@ -65,7 +77,7 @@ func (m *mouse) Move(vx, vy int) {
 		vy = 127
 	}
 
-	m.buf.Put([]byte{
+	m.tx([]byte{
 		0x01, byte(m.button), byte(vx), byte(vy), 0x00,
 	})
 }
@@ -79,7 +91,7 @@ func (m *mouse) Click(btn Button) {
 // Press presses the given mouse buttons.
 func (m *mouse) Press(btn Button) {
 	m.button |= btn
-	m.buf.Put([]byte{
+	m.tx([]byte{
 		0x01, byte(m.button), 0x00, 0x00, 0x00,
 	})
 }
@@ -87,7 +99,7 @@ func (m *mouse) Press(btn Button) {
 // Release releases the given mouse buttons.
 func (m *mouse) Release(btn Button) {
 	m.button &= ^btn
-	m.buf.Put([]byte{
+	m.tx([]byte{
 		0x01, byte(m.button), 0x00, 0x00, 0x00,
 	})
 }
@@ -105,7 +117,7 @@ func (m *mouse) Wheel(v int) {
 		v = 127
 	}
 
-	m.buf.Put([]byte{
+	m.tx([]byte{
 		0x01, byte(m.button), 0x00, 0x00, byte(v),
 	})
 }
