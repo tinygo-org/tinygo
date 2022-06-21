@@ -1,3 +1,4 @@
+//go:build mimxrt1062
 // +build mimxrt1062
 
 package machine
@@ -37,16 +38,14 @@ type I2CConfig struct {
 	SCL       Pin
 }
 
-func (c I2CConfig) getPins() (sda, scl Pin) {
-	if 0 == c.SDA && 0 == c.SCL {
-		// default pins if none specified
-		return I2C_SDA_PIN, I2C_SCL_PIN
-	}
-	return c.SDA, c.SCL
-}
-
 type I2C struct {
 	Bus *nxp.LPI2C_Type
+
+	// these pins are initialized by each global I2C variable declared in the
+	// board_teensy4x.go file according to the board manufacturer's default pin
+	// mapping. they can be overridden with the I2CConfig argument given to
+	// (*I2C) Configure(I2CConfig).
+	sda, scl Pin
 
 	// these hold the input selector ("daisy chain") values that select which pins
 	// are connected to the LPI2C device, and should be defined where the I2C
@@ -150,11 +149,20 @@ const (
 	stateWaitForCompletion stateFlag = 0x5
 )
 
+func (i2c *I2C) setPins(c I2CConfig) (sda, scl Pin) {
+	// if both given pins are defined, or either receiver pin is undefined.
+	if 0 != c.SDA && 0 != c.SCL || 0 == i2c.sda || 0 == i2c.scl {
+		// override the receiver's pins.
+		i2c.sda, i2c.scl = c.SDA, c.SCL
+	}
+	// return the selected pins.
+	return i2c.sda, i2c.scl
+}
+
 // Configure is intended to setup an I2C interface for transmit/receive.
 func (i2c *I2C) Configure(config I2CConfig) {
-
 	// init pins
-	sda, scl := config.getPins()
+	sda, scl := i2c.setPins(config)
 
 	// configure the mux and pad control registers
 	sda.Configure(PinConfig{Mode: PinModeI2CSDA})
@@ -174,7 +182,6 @@ func (i2c *I2C) Configure(config I2CConfig) {
 }
 
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
-
 	// perform transmit transfer
 	if nil != w {
 		// generate start condition on bus
@@ -281,6 +288,10 @@ func (i2c *I2C) reset(freq uint32) {
 
 	// clear reset, and enable the interface
 	i2c.Bus.MCR.Set(nxp.LPI2C_MCR_MEN)
+
+	// wait for the I2C bus to idle
+	for i2c.Bus.MSR.Get()&nxp.LPI2C_MSR_BBF != 0 {
+	}
 }
 
 func (i2c *I2C) setFrequency(freq uint32) {
