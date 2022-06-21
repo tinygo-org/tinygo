@@ -41,7 +41,8 @@ type keyboard struct {
 	// wideChar holds high bits for the UTF-8 decoder.
 	wideChar uint16
 
-	buf *hid.RingBuffer
+	buf     *hid.RingBuffer
+	waitTxc bool
 }
 
 // decodeState represents a state in the UTF-8 decode state machine.
@@ -74,11 +75,22 @@ func newKeyboard() *keyboard {
 }
 
 func (kb *keyboard) Callback() bool {
+	kb.waitTxc = false
 	if b, ok := kb.buf.Get(); ok {
+		kb.waitTxc = true
 		hid.SendUSBPacket(b)
 		return true
 	}
 	return false
+}
+
+func (kb *keyboard) tx(b []byte) {
+	if kb.waitTxc {
+		kb.buf.Put(b)
+	} else {
+		kb.waitTxc = true
+		hid.SendUSBPacket(b)
+	}
 }
 
 func (kb *keyboard) ready() bool {
@@ -214,7 +226,7 @@ func (kb *keyboard) Press(c Keycode) error {
 }
 
 func (kb *keyboard) sendKey(consumer bool, b []byte) bool {
-	kb.buf.Put(b)
+	kb.tx(b)
 	return true
 }
 
