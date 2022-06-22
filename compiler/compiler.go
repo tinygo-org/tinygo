@@ -1541,6 +1541,12 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			case *types.Pointer:
 				ptrValue := b.CreatePtrToInt(value, b.uintptrType, "")
 				b.createRuntimeCall("printptr", []llvm.Value{ptrValue}, "")
+			case *types.Slice:
+				bufptr := b.CreateExtractValue(value, 0, "")
+				buflen := b.CreateExtractValue(value, 1, "")
+				bufcap := b.CreateExtractValue(value, 2, "")
+				ptrValue := b.CreatePtrToInt(bufptr, b.uintptrType, "")
+				b.createRuntimeCall("printslice", []llvm.Value{ptrValue, buflen, bufcap}, "")
 			default:
 				return llvm.Value{}, b.makeError(pos, "unknown arg type: "+typ.String())
 			}

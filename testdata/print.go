@@ -45,4 +45,8 @@ func main() {
 
 	// print bool
 	println(true, false)
+
+	// print slice
+	println([]byte(nil))
+	println([]int(nil))
 }
