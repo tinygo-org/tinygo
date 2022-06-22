@@ -346,3 +346,49 @@ const (
 	I2C3_SDA_PIN = D25
 	I2C3_SCL_PIN = D24
 )
+
+var (
+	I2C0  = I2C1 // I2C0 is an alias for I2C1 (LPI2C1)
+	I2C1  = &_I2C1
+	_I2C1 = I2C{
+		Bus: nxp.LPI2C1,
+		sda: I2C1_SDA_PIN, // D18 (PA17 [AD_B1_01])
+		scl: I2C1_SCL_PIN, // D19 (PA16 [AD_B1_00])
+		muxSDA: muxSelect{
+			mux: nxp.IOMUXC_LPI2C1_SDA_SELECT_INPUT_DAISY_GPIO_AD_B1_01_ALT3,
+			sel: &nxp.IOMUXC.LPI2C1_SDA_SELECT_INPUT,
+		},
+		muxSCL: muxSelect{
+			mux: nxp.IOMUXC_LPI2C1_SCL_SELECT_INPUT_DAISY_GPIO_AD_B1_00_ALT3,
+			sel: &nxp.IOMUXC.LPI2C1_SCL_SELECT_INPUT,
+		},
+	}
+	I2C2  = &_I2C2
+	_I2C2 = I2C{
+		Bus: nxp.LPI2C3,
+		sda: I2C2_SDA_PIN, // D17 (PA22 [AD_B1_06])
+		scl: I2C2_SCL_PIN, // D16 (PA23 [AD_B1_07])
+		muxSDA: muxSelect{
+			mux: nxp.IOMUXC_LPI2C3_SDA_SELECT_INPUT_DAISY_GPIO_AD_B1_06_ALT1,
+			sel: &nxp.IOMUXC.LPI2C3_SDA_SELECT_INPUT,
+		},
+		muxSCL: muxSelect{
+			mux: nxp.IOMUXC_LPI2C3_SCL_SELECT_INPUT_DAISY_GPIO_AD_B1_07_ALT1,
+			sel: &nxp.IOMUXC.LPI2C3_SCL_SELECT_INPUT,
+		},
+	}
+	I2C3  = &_I2C3
+	_I2C3 = I2C{
+		Bus: nxp.LPI2C4,
+		sda: I2C3_SDA_PIN, // D25 (PA13 [AD_B0_13])
+		scl: I2C3_SCL_PIN, // D24 (PA12 [AD_B0_12])
+		muxSDA: muxSelect{
+			mux: nxp.IOMUXC_LPI2C4_SDA_SELECT_INPUT_DAISY_GPIO_AD_B0_13_ALT0,
+			sel: &nxp.IOMUXC.LPI2C4_SDA_SELECT_INPUT,
+		},
+		muxSCL: muxSelect{
+			mux: nxp.IOMUXC_LPI2C4_SCL_SELECT_INPUT_DAISY_GPIO_AD_B0_12_ALT0,
+			sel: &nxp.IOMUXC.LPI2C4_SCL_SELECT_INPUT,
+		},
+	}
+)

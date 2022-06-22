@@ -166,8 +166,9 @@ func initClocks() {
 	nxp.ClockIpLpi2c1.Enable(false) // disable LPI2C
 	nxp.ClockIpLpi2c2.Enable(false) //
 	nxp.ClockIpLpi2c3.Enable(false) //
+	nxp.ClockIpLpi2c4.Enable(false) //
 	nxp.DivIpLpi2c.Div(0)           // divide LPI2C_CLK_PODF (DIV1)
-	nxp.MuxIpLpi2c.Mux(0)           // LPI2C select PLL3_SW_60M
+	nxp.MuxIpLpi2c.Mux(1)           // LPI2C select OSC
 
 	nxp.ClockIpCan1.Enable(false)  // disable CAN
 	nxp.ClockIpCan2.Enable(false)  //
@@ -266,7 +267,6 @@ func initClocks() {
 }
 
 func enableTimerClocks() {
-
 	nxp.ClockIpGpt1.Enable(true)  // enable GPT/PIT
 	nxp.ClockIpGpt1S.Enable(true) //
 	nxp.ClockIpGpt2.Enable(true)  //
@@ -275,7 +275,6 @@ func enableTimerClocks() {
 }
 
 func enablePinClocks() {
-
 	nxp.ClockIpIomuxcGpr.Enable(true) // enable IOMUXC
 	nxp.ClockIpIomuxc.Enable(true)    //
 
@@ -286,7 +285,6 @@ func enablePinClocks() {
 }
 
 func enablePeripheralClocks() {
-
 	nxp.ClockIpAdc1.Enable(true) // enable ADC
 	nxp.ClockIpAdc2.Enable(true) //
 
@@ -309,6 +307,7 @@ func enablePeripheralClocks() {
 	nxp.ClockIpLpi2c1.Enable(true) // enable LPI2C
 	nxp.ClockIpLpi2c2.Enable(true) //
 	nxp.ClockIpLpi2c3.Enable(true) //
+	nxp.ClockIpLpi2c4.Enable(true) //
 
 	nxp.ClockIpCan1.Enable(true)  // enable CAN
 	nxp.ClockIpCan2.Enable(true)  //

@@ -342,10 +342,10 @@ func (jt *pinJumpTable) dispatchInterrupt(interrupt.Interrupt) {
 		if status := gpio.ISR.Get() & gpio.IMR.Get(); status != 0 {
 			gpio.ISR.Set(status) // clear interrupt
 			for status != 0 {
-				p := Pin(bits.TrailingZeros32(status))
-				i := Pin(port + p)
-				jt.lut[i](i)
-				status &^= 1 << p
+				off := Pin(bits.TrailingZeros32(status)) // ctz
+				pin := Pin(port + off)
+				jt.lut[pin](pin)
+				status &^= 1 << off
 			}
 		}
 	}
