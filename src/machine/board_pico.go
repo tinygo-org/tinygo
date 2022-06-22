@@ -64,3 +64,14 @@ const (
 	// Default Serial In Bus 1 for SPI communications
 	SPI1_SDI_PIN = GPIO12 // Rx
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "Raspberry Pi Pico"
+	usb_STRING_MANUFACTURER = "Raspberry Pi"
+)
+
+var (
+	usb_VID uint16 = 0x2E8A
+	usb_PID uint16 = 0x0003
+)
