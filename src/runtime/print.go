@@ -39,6 +39,17 @@ func printint8(n int8) {
 	}
 }
 
+func printuint(n uintptr) {
+	switch unsafe.Sizeof(n) {
+	case 2:
+		printuint16(uint16(n))
+	case 4:
+		printuint32(uint32(n))
+	case 8:
+		printuint64(uint64(n))
+	}
+}
+
 func printuint16(n uint16) {
 	printuint32(uint32(n))
 }
@@ -323,14 +334,7 @@ func printitf(msg interface{}) {
 		// cast to underlying type
 		itf := *(*_interface)(unsafe.Pointer(&msg))
 		putchar('(')
-		switch unsafe.Sizeof(itf.typecode) {
-		case 2:
-			printuint16(uint16(itf.typecode))
-		case 4:
-			printuint32(uint32(itf.typecode))
-		case 8:
-			printuint64(uint64(itf.typecode))
-		}
+		printuint(uintptr(itf.typecode))
 		putchar(':')
 		print(itf.value)
 		putchar(')')
@@ -371,4 +375,13 @@ func printbool(b bool) {
 	} else {
 		printstring("false")
 	}
+}
+
+func printslice(ptr, len_, cap_ uintptr) {
+	putchar('[')
+	printuint(len_)
+	putchar('/')
+	printuint(cap_)
+	putchar(']')
+	printptr(ptr)
 }

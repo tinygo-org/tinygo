@@ -21,3 +21,5 @@ a b c
 (0:nil)
 map[2]
 true false
+[0/0]nil
+[0/0]nil
