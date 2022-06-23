@@ -340,12 +340,15 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	return c.mod, c.diagnostics
 }
 
+func (c *compilerContext) getRuntimeType(name string) types.Type {
+	return c.runtimePkg.Scope().Lookup(name).(*types.TypeName).Type()
+}
+
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
 // it as a LLVM type, creating it if necessary. It is a shorthand for
 // getLLVMType(getRuntimeType(name)).
 func (c *compilerContext) getLLVMRuntimeType(name string) llvm.Type {
-	typ := c.runtimePkg.Scope().Lookup(name).(*types.TypeName).Type()
-	return c.getLLVMType(typ)
+	return c.getLLVMType(c.getRuntimeType(name))
 }
 
 // getLLVMType returns a LLVM type for a Go type. It doesn't recreate already

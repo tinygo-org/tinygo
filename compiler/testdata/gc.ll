@@ -3,8 +3,7 @@ source_filename = "gc.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
-%runtime.typecodeID = type { ptr, i32, ptr, ptr, i32 }
-%runtime._interface = type { i32, ptr }
+%runtime._interface = type { ptr, ptr }
 
 @main.scalar1 = hidden global ptr null, align 4
 @main.scalar2 = hidden global ptr null, align 4
@@ -22,8 +21,8 @@ target triple = "wasm32-unknown-wasi"
 @main.slice3 = hidden global { ptr, i32, i32 } zeroinitializer, align 8
 @"runtime/gc.layout:62-2000000000000001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00 " }
 @"runtime/gc.layout:62-0001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00\00" }
-@"reflect/types.type:basic:complex128" = linkonce_odr constant %runtime.typecodeID { ptr null, i32 0, ptr null, ptr @"reflect/types.type:pointer:basic:complex128", i32 0 }
-@"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:basic:complex128", i32 0, ptr null, ptr null, i32 0 }
+@"reflect/types.type:basic:complex128" = linkonce_odr constant { i8, ptr } { i8 16, ptr @"reflect/types.type:pointer:basic:complex128" }, align 4
+@"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant { i8, ptr } { i8 21, ptr @"reflect/types.type:basic:complex128" }, align 4
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
@@ -129,7 +128,8 @@ entry:
   store double %v.r, ptr %0, align 8
   %.repack1 = getelementptr inbounds { double, double }, ptr %0, i32 0, i32 1
   store double %v.i, ptr %.repack1, align 8
-  %1 = insertvalue %runtime._interface { i32 ptrtoint (ptr @"reflect/types.type:basic:complex128" to i32), ptr undef }, ptr %0, 1
+  %1 = insertvalue %runtime._interface { ptr @"reflect/types.type:basic:complex128", ptr undef }, ptr %0, 1
+  call void @runtime.trackPointer(ptr nonnull @"reflect/types.type:basic:complex128", ptr nonnull %stackalloc, ptr undef) #2
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #2
   ret %runtime._interface %1
 }
