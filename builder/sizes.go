@@ -127,7 +127,7 @@ var (
 // readProgramSizeFromDWARF reads the source location for each line of code and
 // each variable in the program, as far as this is stored in the DWARF debug
 // information.
-func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64) ([]addressLine, error) {
+func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone bool) ([]addressLine, error) {
 	r := data.Reader()
 	var lines []*dwarf.LineFile
 	var addresses []addressLine
@@ -169,7 +169,7 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64) ([]addressLin
 					return nil, err
 				}
 
-				if prevLineEntry.EndSequence && lineEntry.Address == 0 {
+				if prevLineEntry.EndSequence && lineEntry.Address == 0 && skipTombstone {
 					// Tombstone value. This symbol has been removed, for
 					// example by the --gc-sections linker flag. It is still
 					// here in the debug information because the linker can't
@@ -178,6 +178,10 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64) ([]addressLin
 					// skipped.
 					// For more details, see (among others):
 					// https://reviews.llvm.org/D84825
+					// The value 0 can however really occur in object files,
+					// that typically start at address 0. So don't skip
+					// tombstone values in object files (like when parsing MachO
+					// files).
 					for {
 						err := lr.Next(&lineEntry)
 						if err != nil {
@@ -256,6 +260,65 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64) ([]addressLin
 	return addresses, nil
 }
 
+// Read a MachO object file and return a line table.
+// Also return an index from symbol name to start address in the line table.
+func readMachOSymbolAddresses(path string) (map[string]int, []addressLine, error) {
+	// Some constants from mach-o/nlist.h
+	// See: https://opensource.apple.com/source/xnu/xnu-7195.141.2/EXTERNAL_HEADERS/mach-o/nlist.h.auto.html
+	const (
+		N_STAB = 0xe0
+		N_TYPE = 0x0e // bitmask for N_TYPE field
+		N_SECT = 0xe  // one of the possible type in the N_TYPE field
+	)
+
+	// Read DWARF from the given object file.
+	file, err := macho.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close()
+	dwarf, err := file.DWARF()
+	if err != nil {
+		return nil, nil, err
+	}
+	lines, err := readProgramSizeFromDWARF(dwarf, 0, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Make a map from start addresses to indices in the line table (because the
+	// line table is a slice, not a map).
+	addressToLine := make(map[uint64]int, len(lines))
+	for i, line := range lines {
+		if _, ok := addressToLine[line.Address]; ok {
+			addressToLine[line.Address] = -1
+			continue
+		}
+		addressToLine[line.Address] = i
+	}
+
+	// Make a map that for each symbol gives the start index in the line table.
+	addresses := make(map[string]int, len(addressToLine))
+	for _, symbol := range file.Symtab.Syms {
+		if symbol.Type&N_STAB != 0 {
+			continue // STABS entry, ignore
+		}
+		if symbol.Type&0x0e != N_SECT {
+			continue // undefined symbol
+		}
+		if index, ok := addressToLine[symbol.Value]; ok && index >= 0 {
+			if _, ok := addresses[symbol.Name]; ok {
+				// There is a duplicate. Mark it as unavailable.
+				addresses[symbol.Name] = -1
+				continue
+			}
+			addresses[symbol.Name] = index
+		}
+	}
+
+	return addresses, lines, nil
+}
+
 // loadProgramSize calculate a program/data size breakdown of each package for a
 // given ELF file.
 // If the file doesn't contain DWARF debug information, the returned program
@@ -278,7 +341,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 		// Read DWARF information. The error is intentionally ignored.
 		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, 0)
+			addresses, err = readProgramSizeFromDWARF(data, 0, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
@@ -370,11 +433,6 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 			}
 		}
 	} else if file, err := macho.NewFile(f); err == nil {
-		// TODO: read DWARF information. On MacOS, DWARF debug information isn't
-		// stored in the executable but stays in the object files. The
-		// executable does however contain the object file paths that contain
-		// debug information.
-
 		// Read segments, for use while reading through sections.
 		segments := map[string]*macho.Segment{}
 		for _, load := range file.Loads {
@@ -421,11 +479,86 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				})
 			}
 		}
+
+		// Read DWARF information.
+		// The data isn't stored directly in the binary as in most executable
+		// formats. Instead, it is left in the object files that were used as a
+		// basis for linking. The executable does however contain STABS debug
+		// information that points to the source object file and is used by
+		// debuggers.
+		// For more information:
+		// http://wiki.dwarfstd.org/index.php?title=Apple%27s_%22Lazy%22_DWARF_Scheme
+		var objSymbolNames map[string]int
+		var objAddresses []addressLine
+		var previousSymbol macho.Symbol
+		for _, symbol := range file.Symtab.Syms {
+			// STABS constants, from mach-o/stab.h:
+			// https://opensource.apple.com/source/xnu/xnu-7195.141.2/EXTERNAL_HEADERS/mach-o/stab.h.auto.html
+			const (
+				N_GSYM  = 0x20
+				N_FUN   = 0x24
+				N_STSYM = 0x26
+				N_SO    = 0x64
+				N_OSO   = 0x66
+			)
+			if symbol.Type == N_OSO {
+				// Found an object file. Now try to parse it.
+				objSymbolNames, objAddresses, err = readMachOSymbolAddresses(symbol.Name)
+				if err != nil && sizesDebug {
+					// Errors are normally ignored. If there is an error, it's
+					// simply treated as that the DWARF is not available.
+					fmt.Fprintf(os.Stderr, "could not read DWARF from file %s: %s\n", symbol.Name, err)
+				}
+			} else if symbol.Type == N_FUN {
+				// Found a function.
+				// The way this is encoded is a bit weird. MachO symbols don't
+				// have a length. What I've found is that the length is encoded
+				// by first having a N_FUN symbol as usual, and then having a
+				// symbol with a zero-length name that has the value not set to
+				// the address of the symbol but to the length. So in order to
+				// get both the address and the length, we look for a symbol
+				// with a name followed by a symbol without a name.
+				if symbol.Name == "" && previousSymbol.Type == N_FUN && previousSymbol.Name != "" {
+					// Functions are encoded as many small chunks in the line
+					// table (one or a few instructions per source line). But
+					// the symbol length covers the whole symbols, over many
+					// lines and possibly including inlined functions. So we
+					// continue to iterate through the objAddresses slice until
+					// we've found all the source lines that are part of this
+					// symbol.
+					address := previousSymbol.Value
+					length := symbol.Value
+					if index, ok := objSymbolNames[previousSymbol.Name]; ok && index >= 0 {
+						for length > 0 {
+							line := objAddresses[index]
+							line.Address = address
+							if line.Length > length {
+								// Line extends beyond the end of te symbol?
+								// Weird, shouldn't happen.
+								break
+							}
+							addresses = append(addresses, line)
+							index++
+							length -= line.Length
+							address += line.Length
+						}
+					}
+				}
+			} else if symbol.Type == N_GSYM || symbol.Type == N_STSYM {
+				// Global variables.
+				if index, ok := objSymbolNames[symbol.Name]; ok {
+					address := objAddresses[index]
+					address.Address = symbol.Value
+					addresses = append(addresses, address)
+				}
+			}
+			previousSymbol = symbol
+		}
 	} else if file, err := pe.NewFile(f); err == nil {
 		// Read DWARF information. The error is intentionally ignored.
 		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, 0)
+			addresses, err = readProgramSizeFromDWARF(data, 0, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
@@ -495,9 +628,9 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 		const codeOffset = 0x8000_0000_0000_0000
 
 		// Read DWARF information. The error is intentionally ignored.
-		data, err := file.DWARF()
+		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, codeOffset)
+			addresses, err = readProgramSizeFromDWARF(data, codeOffset, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
