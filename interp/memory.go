@@ -501,7 +501,7 @@ func (v pointerValue) offset() uint32 {
 // addOffset essentially does a GEP operation (pointer arithmetic): it adds the
 // offset to the pointer. It also checks that the offset doesn't overflow the
 // maximum offset size (which is 4GB).
-func (v pointerValue) addOffset(offset uint32) pointerValue {
+func (v pointerValue) addOffset(offset int64) pointerValue {
 	result := pointerValue{v.pointer + uint64(offset)}
 	if checks && v.index() != result.index() {
 		panic("interp: offset out of range")
@@ -815,7 +815,7 @@ func (v rawValue) rawLLVMValue(mem *memoryView) (llvm.Value, error) {
 					// as a ptrtoint, so that they can be used in certain
 					// optimizations.
 					name := elementType.StructName()
-					if name == "runtime.typecodeID" || name == "runtime.funcValueWithSignature" {
+					if name == "runtime.funcValueWithSignature" {
 						uintptrType := ctx.IntType(int(mem.r.pointerSize) * 8)
 						field = llvm.ConstPtrToInt(field, uintptrType)
 					}

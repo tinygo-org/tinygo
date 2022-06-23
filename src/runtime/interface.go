@@ -11,17 +11,17 @@ import (
 )
 
 type _interface struct {
-	typecode uintptr
+	typecode unsafe.Pointer
 	value    unsafe.Pointer
 }
 
 //go:inline
-func composeInterface(typecode uintptr, value unsafe.Pointer) _interface {
+func composeInterface(typecode, value unsafe.Pointer) _interface {
 	return _interface{typecode, value}
 }
 
 //go:inline
-func decomposeInterface(i _interface) (uintptr, unsafe.Pointer) {
+func decomposeInterface(i _interface) (unsafe.Pointer, unsafe.Pointer) {
 	return i.typecode, i.value
 }
 
@@ -34,7 +34,7 @@ func reflectValueEqual(x, y reflect.Value) bool {
 	// Note: doing a x.Type() == y.Type() comparison would not work here as that
 	// would introduce an infinite recursion: comparing two reflect.Type values
 	// is done with this reflectValueEqual runtime call.
-	if x.RawType() == 0 || y.RawType() == 0 {
+	if x.RawType() == nil || y.RawType() == nil {
 		// One of them is nil.
 		return x.RawType() == y.RawType()
 	}
@@ -94,48 +94,13 @@ func interfaceTypeAssert(ok bool) {
 // lowered to inline IR in the interface lowering pass.
 // See compiler/interface-lowering.go for details.
 
-type interfaceMethodInfo struct {
-	signature *uint8  // external *i8 with a name identifying the Go function signature
-	funcptr   uintptr // bitcast from the actual function pointer
-}
-
-type typecodeID struct {
-	// Depending on the type kind of this typecodeID, this pointer is something
-	// different:
-	// * basic types: null
-	// * named type: the underlying type
-	// * interface: null
-	// * chan/pointer/slice/array: the element type
-	// * struct: bitcast of global with structField array
-	// * func/map: TODO
-	references *typecodeID
-
-	// The array length, for array types.
-	length uintptr
-
-	methodSet *interfaceMethodInfo // nil or a GEP of an array
-
-	// The type that's a pointer to this type, nil if it is already a pointer.
-	// Keeping the type struct alive here is important so that values from
-	// reflect.New (which uses reflect.PtrTo) can be used in type asserts etc.
-	ptrTo *typecodeID
-
-	// typeAssert is a ptrtoint of a declared interface assert function.
-	// It only exists to make the rtcalls pass easier.
-	typeAssert uintptr
-}
-
-// structField is used by the compiler to pass information to the interface
-// lowering pass. It is not used in the final binary.
 type structField struct {
-	typecode *typecodeID // type of this struct field
-	name     *uint8      // pointer to char array
-	tag      *uint8      // pointer to char array, or nil
-	embedded bool
+	typecode unsafe.Pointer // type of this struct field
+	data     *uint8         // pointer to byte array containing name, tag, and 'embedded' flag
 }
 
 // Pseudo function call used during a type assert. It is used during interface
 // lowering, to assign the lowest type numbers to the types with the most type
 // asserts. Also, it is replaced with const false if this type assert can never
 // happen.
-func typeAssert(actualType uintptr, assertedType *uint8) bool
+func typeAssert(actualType unsafe.Pointer, assertedType *uint8) bool

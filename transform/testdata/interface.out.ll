@@ -1,12 +1,12 @@
 target datalayout = "e-m:e-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "armv7m-none-eabi"
 
-%runtime.typecodeID = type { %runtime.typecodeID*, i32, %runtime.interfaceMethodInfo*, %runtime.typecodeID*, i32 }
-%runtime.interfaceMethodInfo = type { i8*, i32 }
-
-@"reflect/types.type:basic:uint8" = private constant %runtime.typecodeID zeroinitializer
-@"reflect/types.type:basic:int" = private constant %runtime.typecodeID zeroinitializer
-@"reflect/types.type:named:Number" = private constant %runtime.typecodeID { %runtime.typecodeID* @"reflect/types.type:basic:int", i32 0, %runtime.interfaceMethodInfo* null, %runtime.typecodeID* null, i32 0 }
+@"reflect/types.type:basic:uint8" = linkonce_odr constant { i8, i8* } { i8 8, i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:pointer:basic:uint8", i32 0, i32 0) }, align 4
+@"reflect/types.type:pointer:basic:uint8" = linkonce_odr constant { i8, i8* } { i8 21, i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:basic:uint8", i32 0, i32 0) }, align 4
+@"reflect/types.type:basic:int" = linkonce_odr constant { i8, i8* } { i8 2, i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:pointer:basic:int", i32 0, i32 0) }, align 4
+@"reflect/types.type:pointer:basic:int" = linkonce_odr constant { i8, i8* } { i8 21, i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:basic:int", i32 0, i32 0) }, align 4
+@"reflect/types.type:pointer:named:Number" = linkonce_odr constant { i8, i8* } { i8 21, i8* getelementptr inbounds ({ i8, i8*, i8* }, { i8, i8*, i8* }* @"reflect/types.type:named:Number", i32 0, i32 0) }, align 4
+@"reflect/types.type:named:Number" = linkonce_odr constant { i8, i8*, i8* } { i8 34, i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:pointer:named:Number", i32 0, i32 0), i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:basic:int", i32 0, i32 0) }, align 4
 
 declare void @runtime.printuint8(i8)
 
@@ -21,14 +21,14 @@ declare void @runtime.printnl()
 declare void @runtime.nilPanic(i8*)
 
 define void @printInterfaces() {
-  call void @printInterface(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:int" to i32), i8* inttoptr (i32 5 to i8*))
-  call void @printInterface(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:uint8" to i32), i8* inttoptr (i8 120 to i8*))
-  call void @printInterface(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32), i8* inttoptr (i32 3 to i8*))
+  call void @printInterface(i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:basic:int", i32 0, i32 0), i8* inttoptr (i32 5 to i8*))
+  call void @printInterface(i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:basic:uint8", i32 0, i32 0), i8* inttoptr (i8 120 to i8*))
+  call void @printInterface(i8* getelementptr inbounds ({ i8, i8*, i8* }, { i8, i8*, i8* }* @"reflect/types.type:named:Number", i32 0, i32 0), i8* inttoptr (i32 3 to i8*))
   ret void
 }
 
-define void @printInterface(i32 %typecode, i8* %value) {
-  %isUnmatched = call i1 @"Unmatched$typeassert"(i32 %typecode)
+define void @printInterface(i8* %typecode, i8* %value) {
+  %isUnmatched = call i1 @"Unmatched$typeassert"(i8* %typecode)
   br i1 %isUnmatched, label %typeswitch.Unmatched, label %typeswitch.notUnmatched
 
 typeswitch.Unmatched:                             ; preds = %0
@@ -38,16 +38,16 @@ typeswitch.Unmatched:                             ; preds = %0
   ret void
 
 typeswitch.notUnmatched:                          ; preds = %0
-  %isDoubler = call i1 @"Doubler$typeassert"(i32 %typecode)
+  %isDoubler = call i1 @"Doubler$typeassert"(i8* %typecode)
   br i1 %isDoubler, label %typeswitch.Doubler, label %typeswitch.notDoubler
 
 typeswitch.Doubler:                               ; preds = %typeswitch.notUnmatched
-  %doubler.result = call i32 @"Doubler.Double$invoke"(i8* %value, i32 %typecode, i8* undef)
+  %doubler.result = call i32 @"Doubler.Double$invoke"(i8* %value, i8* %typecode, i8* undef)
   call void @runtime.printint32(i32 %doubler.result)
   ret void
 
 typeswitch.notDoubler:                            ; preds = %typeswitch.notUnmatched
-  %typeassert.ok = icmp eq i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:uint8" to i32), %typecode
+  %typeassert.ok = icmp eq i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:basic:uint8", i32 0, i32 0), %typecode
   br i1 %typeassert.ok, label %typeswitch.byte, label %typeswitch.notByte
 
 typeswitch.byte:                                  ; preds = %typeswitch.notDoubler
@@ -80,9 +80,9 @@ define i32 @"(Number).Double$invoke"(i8* %receiverPtr, i8* %context) {
   ret i32 %ret
 }
 
-define internal i32 @"Doubler.Double$invoke"(i8* %receiver, i32 %actualType, i8* %context) unnamed_addr #0 {
+define internal i32 @"Doubler.Double$invoke"(i8* %receiver, i8* %actualType, i8* %context) unnamed_addr #0 {
 entry:
-  %"named:Number.icmp" = icmp eq i32 %actualType, ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32)
+  %"named:Number.icmp" = icmp eq i8* %actualType, getelementptr inbounds ({ i8, i8*, i8* }, { i8, i8*, i8* }* @"reflect/types.type:named:Number", i32 0, i32 0)
   br i1 %"named:Number.icmp", label %"named:Number", label %"named:Number.next"
 
 "named:Number":                                   ; preds = %entry
@@ -94,9 +94,9 @@ entry:
   unreachable
 }
 
-define internal i1 @"Doubler$typeassert"(i32 %actualType) unnamed_addr #1 {
+define internal i1 @"Doubler$typeassert"(i8* %actualType) unnamed_addr #1 {
 entry:
-  %"named:Number.icmp" = icmp eq i32 %actualType, ptrtoint (%runtime.typecodeID* @"reflect/types.type:named:Number" to i32)
+  %"named:Number.icmp" = icmp eq i8* %actualType, getelementptr inbounds ({ i8, i8*, i8* }, { i8, i8*, i8* }* @"reflect/types.type:named:Number", i32 0, i32 0)
   br i1 %"named:Number.icmp", label %then, label %"named:Number.next"
 
 then:                                             ; preds = %entry
@@ -106,7 +106,7 @@ then:                                             ; preds = %entry
   ret i1 false
 }
 
-define internal i1 @"Unmatched$typeassert"(i32 %actualType) unnamed_addr #2 {
+define internal i1 @"Unmatched$typeassert"(i8* %actualType) unnamed_addr #2 {
 entry:
   ret i1 false
 

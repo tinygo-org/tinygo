@@ -271,7 +271,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
 		receiverValue := b.CreateExtractValue(itf, 1, "invoke.func.receiver")
 		values = []llvm.Value{callback, next, typecode, receiverValue}
-		valueTypes = append(valueTypes, b.uintptrType, b.i8ptrType)
+		valueTypes = append(valueTypes, b.i8ptrType, b.i8ptrType)
 		for _, arg := range instr.Call.Args {
 			val := b.getValue(arg)
 			values = append(values, val)
@@ -476,7 +476,7 @@ func (b *builder) createRunDefers() {
 				valueTypes = append(valueTypes, b.getFuncType(callback.Signature()))
 			} else {
 				//Expect typecode
-				valueTypes = append(valueTypes, b.uintptrType, b.i8ptrType)
+				valueTypes = append(valueTypes, b.i8ptrType, b.i8ptrType)
 			}
 
 			for _, arg := range callback.Args {
