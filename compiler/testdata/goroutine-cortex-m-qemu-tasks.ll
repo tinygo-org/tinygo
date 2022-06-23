@@ -145,34 +145,34 @@ entry:
 declare void @runtime.chanClose(ptr dereferenceable_or_null(32), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.startInterfaceMethod(i32 %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
+define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call ptr @runtime.alloc(i32 16, ptr null, ptr undef) #8
   store ptr %itf.value, ptr %0, align 4
-  %1 = getelementptr inbounds { ptr, %runtime._string, i32 }, ptr %0, i32 0, i32 1
+  %1 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 1
   store ptr @"main$string", ptr %1, align 4
-  %.repack1 = getelementptr inbounds { ptr, %runtime._string, i32 }, ptr %0, i32 0, i32 1, i32 1
+  %.repack1 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 1, i32 1
   store i32 4, ptr %.repack1, align 4
-  %2 = getelementptr inbounds { ptr, %runtime._string, i32 }, ptr %0, i32 0, i32 2
-  store i32 %itf.typecode, ptr %2, align 4
+  %2 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 2
+  store ptr %itf.typecode, ptr %2, align 4
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr undef) #8
   call void @"internal/task.start"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #8
   ret void
 }
 
-declare void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr, ptr, i32, i32, ptr) #6
+declare void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr, ptr, i32, ptr, ptr) #6
 
 ; Function Attrs: nounwind
 define linkonce_odr void @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper"(ptr %0) unnamed_addr #7 {
 entry:
   %1 = load ptr, ptr %0, align 4
-  %2 = getelementptr inbounds { ptr, ptr, i32, i32 }, ptr %0, i32 0, i32 1
+  %2 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 1
   %3 = load ptr, ptr %2, align 4
-  %4 = getelementptr inbounds { ptr, ptr, i32, i32 }, ptr %0, i32 0, i32 2
+  %4 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 2
   %5 = load i32, ptr %4, align 4
-  %6 = getelementptr inbounds { ptr, ptr, i32, i32 }, ptr %0, i32 0, i32 3
-  %7 = load i32, ptr %6, align 4
-  call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr %1, ptr %3, i32 %5, i32 %7, ptr undef) #8
+  %6 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 3
+  %7 = load ptr, ptr %6, align 4
+  call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr %1, ptr %3, i32 %5, ptr %7, ptr undef) #8
   ret void
 }
 

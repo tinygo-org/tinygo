@@ -15,7 +15,7 @@ import "unsafe"
 type visit struct {
 	a1  unsafe.Pointer
 	a2  unsafe.Pointer
-	typ rawType
+	typ *rawType
 }
 
 // Tests for deep equality using reflected types. The map argument tracks
