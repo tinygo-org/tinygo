@@ -1,3 +1,55 @@
+0.24.0
+---
+
+* **command line**
+  - remove support for go 1.15
+  - remove support for LLVM 11 and LLVM 12
+  - add initial Go 1.19 beta support
+  - `test`: fix package/... syntax
+* **compiler**
+  - add support for the embed package
+  - `builder`: improve error message for "command not found"
+  - `builder`: add support for ThinLTO on MacOS and Windows
+  - `builder`: free LLVM objects after use, to reduce memory leaking
+  - `builder`: improve `-no-debug` error messages
+  - `cgo`: be more strict: CGo now requires every Go file to import the headers it needs
+  - `compiler`: alignof(func) is 1 pointer, not 2
+  - `compiler`: add support for type parameters (aka generics)
+  - `compiler`: implement `recover()` built-in function
+  - `compiler`: support atomic, volatile, and LLVM memcpy-like functions in defer
+  - `compiler`: drop support for macos syscalls via inline assembly
+  - `interp`: do not try to interpret past task.Pause()
+  - `interp`: fix some buggy localValue handling
+  - `interp`: do not unroll loops
+  - `transform`: fix MakeGCStackSlots that caused a possible GC bug on WebAssembly
+* **standard library**
+  - `os`: enable os.Stdin for baremetal target
+  - `reflect`: add `Value.UnsafePointer` method
+  - `runtime`: scan GC globals conservatively on Windows, MacOS, Linux and Nintendo Switch
+  - `runtime`: add per-map hash seeds
+  - `runtime`: handle nil map write panics
+  - `runtime`: add stronger hash functions
+  - `syscall`: implement `Getpagesize`
+* **targets**
+  - `atmega2560`: support UART1-3 + example for uart
+  - `avr`: use compiler-rt for improved float64 support
+  - `avr`: simplify timer-based time
+  - `avr`: fix race condition in stack write
+  - `darwin`: add support for `GOARCH=arm64` (aka Apple Silicon)
+  - `darwin`: support `-size=short` and `-size=full` flag
+  - `rp2040`: replace sleep 'busy loop' with timer alarm
+  - `rp2040`: align api for `PortMaskSet`, `PortMaskClear`
+  - `rp2040`: fix GPIO interrupts
+  - `samd21`, `samd51`, `nrf52840`: add support for USBHID (keyboard / mouse)
+  - `wasm`: update wasi-libc version
+  - `wasm`: use newer WebAssembly features
+* **boards**
+  - add Badger 2040
+  - `matrixportal-m4`: attach USB DP to the correct pin
+  - `teensy40`: add I2C support
+  - `wioterminal`: fix I2C definition
+
+
 0.23.0
 ---
 
