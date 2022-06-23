@@ -506,7 +506,7 @@ func hashmapFloat64Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
 
 func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 	x := reflect.ValueOf(itf)
-	if x.RawType() == 0 {
+	if x.RawType() == nil {
 		return 0 // nil interface
 	}
 

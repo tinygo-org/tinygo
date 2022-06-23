@@ -238,7 +238,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// which case this call won't even get to this point but will
 				// already be emitted in initAll.
 				continue
-			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" ||
+			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" || callFn.name == "runtime.hashmapInterfaceHash" ||
 				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current":
 				// These functions should be run at runtime. Specifically:
 				//   * Print and panic functions are best emitted directly without
@@ -378,42 +378,6 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				copy(dstBuf.buf[dst.offset():dst.offset()+nBytes], srcBuf.buf[src.offset():])
 				dstObj.buffer = dstBuf
 				mem.put(dst.index(), dstObj)
-			case callFn.name == "(reflect.rawType).elem":
-				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"call (reflect.rawType).elem:", operands[1:])
-				}
-				// Extract the type code global from the first parameter.
-				typecodeIDPtrToInt, err := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				typecodeID := typecodeIDPtrToInt.Operand(0)
-
-				// Get the type class.
-				// See also: getClassAndValueFromTypeCode in transform/reflect.go.
-				typecodeName := typecodeID.Name()
-				const prefix = "reflect/types.type:"
-				if !strings.HasPrefix(typecodeName, prefix) {
-					panic("unexpected typecode name: " + typecodeName)
-				}
-				id := typecodeName[len(prefix):]
-				class := id[:strings.IndexByte(id, ':')]
-				value := id[len(class)+1:]
-				if class == "named" {
-					// Get the underlying type.
-					class = value[:strings.IndexByte(value, ':')]
-					value = value[len(class)+1:]
-				}
-
-				// Elem() is only valid for certain type classes.
-				switch class {
-				case "chan", "pointer", "slice", "array":
-					elementType := r.builder.CreateExtractValue(typecodeID.Initializer(), 0, "")
-					uintptrType := r.mod.Context().IntType(int(mem.r.pointerSize) * 8)
-					locals[inst.localIndex] = r.getValue(llvm.ConstPtrToInt(elementType, uintptrType))
-				default:
-					return nil, mem, r.errorAt(inst, fmt.Errorf("(reflect.Type).Elem() called on %s type", class))
-				}
 			case callFn.name == "runtime.typeAssert":
 				// This function must be implemented manually as it is normally
 				// implemented by the interface lowering pass.
@@ -424,15 +388,22 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
-				actualTypePtrToInt, err := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
+				actualType, err := operands[1].toLLVMValue(inst.llvmInst.Operand(0).Type(), &mem)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
-				if !actualTypePtrToInt.IsAConstantInt().IsNil() && actualTypePtrToInt.ZExtValue() == 0 {
+				if !actualType.IsAConstantInt().IsNil() && actualType.ZExtValue() == 0 {
 					locals[inst.localIndex] = literalValue{uint8(0)}
 					break
 				}
-				actualType := actualTypePtrToInt.Operand(0)
+				// Strip pointer casts (bitcast, getelementptr).
+				for !actualType.IsAConstantExpr().IsNil() {
+					opcode := actualType.Opcode()
+					if opcode != llvm.GetElementPtr && opcode != llvm.BitCast {
+						break
+					}
+					actualType = actualType.Operand(0)
+				}
 				if strings.TrimPrefix(actualType.Name(), "reflect/types.type:") == strings.TrimPrefix(assertedType.Name(), "reflect/types.typeid:") {
 					locals[inst.localIndex] = literalValue{uint8(1)}
 				} else {
@@ -448,11 +419,12 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
-				methodSetPtr, err := mem.load(typecodePtr.addOffset(r.pointerSize*2), r.pointerSize).asPointer(r)
+				methodSetPtr, err := mem.load(typecodePtr.addOffset(-int64(r.pointerSize)), r.pointerSize).asPointer(r)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
 				methodSet := mem.get(methodSetPtr.index()).llvmGlobal.Initializer()
+				numMethods := int(r.builder.CreateExtractValue(methodSet, 0, "").ZExtValue())
 				llvmFn := inst.llvmInst.CalledValue()
 				methodSetAttr := llvmFn.GetStringAttributeAtIndex(-1, "tinygo-methods")
 				methodSetString := methodSetAttr.GetStringValue()
@@ -460,9 +432,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Make a set of all the methods on the concrete type, for
 				// easier checking in the next step.
 				concreteTypeMethods := map[string]struct{}{}
-				for i := 0; i < methodSet.Type().ArrayLength(); i++ {
-					methodInfo := r.builder.CreateExtractValue(methodSet, i, "")
-					name := r.builder.CreateExtractValue(methodInfo, 0, "").Name()
+				for i := 0; i < numMethods; i++ {
+					methodInfo := r.builder.CreateExtractValue(methodSet, 1, "")
+					name := r.builder.CreateExtractValue(methodInfo, i, "").Name()
 					concreteTypeMethods[name] = struct{}{}
 				}
 
@@ -488,15 +460,16 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					fmt.Fprintln(os.Stderr, indent+"invoke method:", operands[1:])
 				}
 
-				// Load the type code of the interface value.
-				typecodeIDBitCast, err := operands[len(operands)-2].toLLVMValue(inst.llvmInst.Operand(len(operands)-3).Type(), &mem)
+				// Load the type code and method set of the interface value.
+				typecodePtr, err := operands[len(operands)-2].asPointer(r)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
-				typecodeID := typecodeIDBitCast.Operand(0).Initializer()
-
-				// Load the method set, which is part of the typecodeID object.
-				methodSet := stripPointerCasts(r.builder.CreateExtractValue(typecodeID, 2, "")).Initializer()
+				methodSetPtr, err := mem.load(typecodePtr.addOffset(-int64(r.pointerSize)), r.pointerSize).asPointer(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				methodSet := mem.get(methodSetPtr.index()).llvmGlobal.Initializer()
 
 				// We don't need to load the interface method set.
 
@@ -508,13 +481,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 
 				// Iterate through all methods, looking for the one method that
 				// should be returned.
-				numMethods := methodSet.Type().ArrayLength()
+				numMethods := int(r.builder.CreateExtractValue(methodSet, 0, "").ZExtValue())
 				var method llvm.Value
 				for i := 0; i < numMethods; i++ {
-					methodSignatureAgg := r.builder.CreateExtractValue(methodSet, i, "")
-					methodSignature := r.builder.CreateExtractValue(methodSignatureAgg, 0, "")
+					methodSignatureAgg := r.builder.CreateExtractValue(methodSet, 1, "")
+					methodSignature := r.builder.CreateExtractValue(methodSignatureAgg, i, "")
 					if methodSignature == signature {
-						method = r.builder.CreateExtractValue(methodSignatureAgg, 1, "").Operand(0)
+						methodAgg := r.builder.CreateExtractValue(methodSet, 2, "")
+						method = r.builder.CreateExtractValue(methodAgg, i, "")
 					}
 				}
 				if method.IsNil() {
@@ -685,7 +659,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 				continue
 			}
-			ptr = ptr.addOffset(uint32(offset))
+			ptr = ptr.addOffset(int64(offset))
 			locals[inst.localIndex] = ptr
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+"gep:", operands, "->", ptr)
@@ -784,7 +758,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				case llvm.Add:
 					// This likely means this is part of a
 					// unsafe.Pointer(uintptr(ptr) + offset) pattern.
-					lhsPtr = lhsPtr.addOffset(uint32(rhs.Uint()))
+					lhsPtr = lhsPtr.addOffset(int64(rhs.Uint()))
 					locals[inst.localIndex] = lhsPtr
 					continue
 				case llvm.Xor:
