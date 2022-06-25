@@ -73,9 +73,7 @@ func (c *Config) BuildTags() []string {
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
-	if extraTags := strings.Fields(c.Options.Tags); len(extraTags) != 0 {
-		tags = append(tags, extraTags...)
-	}
+	tags = append(tags, c.Options.Tags...)
 	return tags
 }
 
