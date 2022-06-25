@@ -17,8 +17,8 @@ type io struct {
 
 type irqCtrl struct {
 	intE [4]volatile.Register32
-	intS [4]volatile.Register32
 	intF [4]volatile.Register32
+	intS [4]volatile.Register32
 }
 
 type ioBank0Type struct {
@@ -237,8 +237,8 @@ const (
 
 // Callbacks to be called for pins configured with SetInterrupt.
 var (
-	pinCallbacks [2]func(Pin)
-	setInt       [2]bool
+	pinCallbacks [2][_NUMBANK0_GPIOS]func(Pin)
+	setInt       [2][_NUMBANK0_GPIOS]bool
 )
 
 // SetInterrupt sets an interrupt to be executed when a particular pin changes
@@ -256,20 +256,19 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	if callback == nil {
 		// disable current interrupt
 		p.setInterrupt(change, false)
-		pinCallbacks[core] = nil
+		pinCallbacks[core][p] = nil
 		return nil
 	}
 
-	if pinCallbacks[core] != nil {
+	if pinCallbacks[core][p] != nil {
 		// Callback already configured. Should disable callback by passing a nil callback first.
 		return ErrNoPinChangeChannel
 	}
 	p.setInterrupt(change, true)
-	pinCallbacks[core] = callback
+	pinCallbacks[core][p] = callback
 
-	if setInt[core] {
+	if setInt[core][p] {
 		// interrupt has already been set. Exit.
-		println("core set")
 		return nil
 	}
 	interrupt.New(rp.IRQ_IO_IRQ_BANK0, gpioHandleInterrupt).Enable()
@@ -280,31 +279,27 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 // gpioHandleInterrupt finds the corresponding pin for the interrupt.
 // C SDK equivalent of gpio_irq_handler
 func gpioHandleInterrupt(intr interrupt.Interrupt) {
-	// panic("END") // if program is not ended here rp2040 will call interrupt again when finished, a vicious spin cycle.
+
 	core := CurrentCore()
-	callback := pinCallbacks[core]
-	if callback != nil {
-		// TODO fix gpio acquisition (see below)
-		// For now all callbacks get pin 255 (nonexistent).
-		callback(0xff)
-	}
 	var gpio Pin
 	for gpio = 0; gpio < _NUMBANK0_GPIOS; gpio++ {
-		// Acknowledge all GPIO interrupts for now
-		// since we are yet unable to acquire interrupt status
-		gpio.acknowledgeInterrupt(0xff) // TODO fix status get. For now we acknowledge all pending interrupts.
-		// Commented code below from C SDK not working.
-		// statreg := base.intS[gpio>>3]
-		// change := getIntChange(gpio, statreg.Get())
-		// if change != 0 {
-		// 	gpio.acknowledgeInterrupt(change)
-		// 	if callback != nil {
-		// 		callback(gpio)
-		// 		return
-		// 	} else {
-		// 		panic("unset callback in handler")
-		// 	}
-		// }
+		var base *irqCtrl
+		switch core {
+		case 0:
+			base = &ioBank0.proc0IRQctrl
+		case 1:
+			base = &ioBank0.proc1IRQctrl
+		}
+
+		statreg := base.intS[gpio>>3]
+		change := getIntChange(gpio, statreg.Get())
+		if change != 0 {
+			gpio.acknowledgeInterrupt(change)
+			callback := pinCallbacks[core][gpio]
+			if callback != nil {
+				callback(gpio)
+			}
+		}
 	}
 }
 
