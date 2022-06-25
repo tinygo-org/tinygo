@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"golang.org/x/tools/go/buildutil"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -111,7 +112,9 @@ func TestCorpus(t *testing.T) {
 
 				opts := optionsFromTarget(target, sema)
 				opts.Directory = dir
-				opts.Tags = repo.Tags
+				var tags buildutil.TagsFlag
+				tags.Set(repo.Tags)
+				opts.Tags = []string(tags)
 
 				passed, err := Test(path, out, out, &opts, false, testing.Verbose(), false, "", "", "", "")
 				if err != nil {

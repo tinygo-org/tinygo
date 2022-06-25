@@ -38,7 +38,7 @@ type Options struct {
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
 	PrintStacks     bool
-	Tags            string
+	Tags            []string
 	WasmAbi         string
 	GlobalValues    map[string]map[string]string // map[pkgpath]map[varname]value
 	TestConfig      TestConfig

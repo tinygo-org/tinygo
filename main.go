@@ -32,6 +32,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
+	"golang.org/x/tools/go/buildutil"
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
@@ -1297,7 +1298,8 @@ func main() {
 	printIR := flag.Bool("printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
-	tags := flag.String("tags", "", "a space-separated list of extra build tags")
+	var tags buildutil.TagsFlag
+	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
@@ -1391,7 +1393,7 @@ func main() {
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
 		PrintAllocs:     printAllocs,
-		Tags:            *tags,
+		Tags:            []string(tags),
 		GlobalValues:    globalVarValues,
 		WasmAbi:         *wasmAbi,
 		Programmer:      *programmer,
