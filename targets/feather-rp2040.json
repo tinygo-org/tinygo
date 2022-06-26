@@ -2,7 +2,8 @@
     "inherits": [
         "rp2040"
     ],
-    "serial": "uart",
+    "serial": "usb",
+    "serial-port": ["acm:239a:80f1"],
     "build-tags": ["feather_rp2040"],
     "linkerscript": "targets/feather-rp2040.ld",
     "extra-files": [
