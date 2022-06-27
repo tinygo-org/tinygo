@@ -6,7 +6,7 @@ const (
 	cdcEndpointIn  = 3
 )
 
-// New returns hid-mouse.
+// New returns USBCDC struct.
 func New() *USBCDC {
 	if USB == nil {
 		USB = &USBCDC{

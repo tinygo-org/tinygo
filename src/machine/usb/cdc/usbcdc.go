@@ -166,7 +166,6 @@ func cdcSetup(setup machine.USBSetup) bool {
 			b[5] = byte(usbLineInfo.bParityType)
 			b[6] = byte(usbLineInfo.bDataBits)
 
-			//machine.SendUSBPacket(0, b[:], setup.WLength)
 			machine.SendUSBInPacket(0, b[:])
 			return true
 		}
@@ -196,14 +195,14 @@ func cdcSetup(setup machine.USBSetup) bool {
 			} else {
 				// TODO: cancel any reset
 			}
-			sendZlp()
+			machine.SendZlp()
 		}
 
 		if setup.BRequest == usb_CDC_SEND_BREAK {
 			// TODO: something with this value?
 			// breakValue = ((uint16_t)setup.wValueH << 8) | setup.wValueL;
 			// return false;
-			sendZlp()
+			machine.SendZlp()
 		}
 		return true
 	}
@@ -213,8 +212,4 @@ func cdcSetup(setup machine.USBSetup) bool {
 func EnableUSBCDC() {
 	machine.USBCDC = New()
 	machine.EnableCDC(USB.Flush, cdcCallbackRx, cdcSetup)
-}
-
-func sendZlp() {
-	machine.SendZlp()
 }
