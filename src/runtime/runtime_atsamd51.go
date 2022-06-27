@@ -32,6 +32,7 @@ func init() {
 	// connect to USB CDC interface
 	cdc.EnableUSBCDC()
 	machine.USB.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 	machine.Serial.Configure(machine.UARTConfig{})
 }
 

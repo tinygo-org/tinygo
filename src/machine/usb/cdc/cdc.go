@@ -8,9 +8,11 @@ const (
 
 // New returns hid-mouse.
 func New() *USBCDC {
-	USB = &USBCDC{
-		Buffer:  NewRingBuffer(),
-		Buffer2: NewRingBuffer2(),
+	if USB == nil {
+		USB = &USBCDC{
+			Buffer:  NewRingBuffer(),
+			Buffer2: NewRingBuffer2(),
+		}
 	}
 	return USB
 }

@@ -29,6 +29,7 @@ const (
 func init() {
 	initCLK()
 
+	machine.InitSerial()
 	machine.Serial.Configure(machine.UARTConfig{})
 
 	initTickTimer(&machine.TIM3)

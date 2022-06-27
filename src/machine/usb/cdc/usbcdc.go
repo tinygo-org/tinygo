@@ -105,7 +105,8 @@ var (
 )
 
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
-func (usbcdc *USBCDC) Configure(config machine.UARTConfig) {
+func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
+	return nil
 }
 
 // Flush flushes buffered data.
@@ -210,7 +211,7 @@ func cdcSetup(setup machine.USBSetup) bool {
 }
 
 func EnableUSBCDC() {
-	machine.Serial = USB
+	machine.USBCDC = New()
 	machine.EnableCDC(USB.Flush, cdcCallbackRx, cdcSetup)
 }
 

@@ -156,6 +156,7 @@ func initCLK() {
 
 func initCOM() {
 	if machine.NUM_UART_INTERFACES > 0 {
+		machine.InitSerial()
 		machine.Serial.Configure(machine.UARTConfig{})
 	}
 }

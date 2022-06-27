@@ -3,5 +3,8 @@
 
 package machine
 
-// Serial is a null device: writes to it are ignored.
-var Serial = NullSerial{}
+var Serial NullSerial
+
+func InitSerial() {
+	Serial = NullSerial{}
+}

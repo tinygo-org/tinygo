@@ -78,6 +78,7 @@ func init() {
 
 	cdc.EnableUSBCDC()
 	machine.USB.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 	machine.Serial.Configure(machine.UARTConfig{})
 }
 

@@ -12,8 +12,17 @@ type USBDevice struct {
 }
 
 var (
-	USB = &USBDevice{}
+	USB    = &USBDevice{}
+	USBCDC Serialer
 )
+
+type Serialer interface {
+	WriteByte(c byte) error
+	Write(data []byte) (n int, err error)
+	Configure(config UARTConfig) error
+	Buffered() int
+	ReadByte() (byte, error)
+}
 
 var usbDescriptor = descriptorCDC
 

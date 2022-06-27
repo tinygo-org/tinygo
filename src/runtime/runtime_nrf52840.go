@@ -1,5 +1,5 @@
-//go:build nrf && !nrf52840
-// +build nrf,!nrf52840
+//go:build nrf && nrf52840
+// +build nrf,nrf52840
 
 package runtime
 
@@ -7,6 +7,7 @@ import (
 	"device/arm"
 	"device/nrf"
 	"machine"
+	"machine/usb/cdc"
 	"runtime/interrupt"
 	"runtime/volatile"
 )
@@ -28,6 +29,9 @@ func main() {
 }
 
 func init() {
+	// connect to USB CDC interface
+	cdc.EnableUSBCDC()
+	machine.USB.Configure(machine.UARTConfig{})
 	machine.InitSerial()
 	machine.Serial.Configure(machine.UARTConfig{})
 	initLFCLK()
