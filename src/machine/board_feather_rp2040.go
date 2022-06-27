@@ -63,7 +63,7 @@ const (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Adafruit Feather RP2040"
+	usb_STRING_PRODUCT      = "Feather RP2040"
 	usb_STRING_MANUFACTURER = "Adafruit"
 )
 

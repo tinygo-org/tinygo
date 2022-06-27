@@ -64,3 +64,14 @@ const (
 	SPI0_SDO_PIN = 31 // not pinned out
 	SPI0_SDI_PIN = 31 // not pinned out
 )
+
+// USB CDC identifiers
+const (
+	usb_STRING_PRODUCT      = "MacroPad RP2040"
+	usb_STRING_MANUFACTURER = "Adafruit"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x80F1
+)

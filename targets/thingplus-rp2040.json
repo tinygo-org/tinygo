@@ -2,7 +2,8 @@
     "inherits": [
         "rp2040"
     ],
-    "serial": "uart",
+    "serial": "usb",
+    "serial-port": ["acm:1b4f:0026"],
     "build-tags": ["thingplus_rp2040"],
     "linkerscript": "targets/thingplus-rp2040.ld",
     "extra-files": [
