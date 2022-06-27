@@ -32,6 +32,7 @@ var usbDescriptor = descriptorCDC
 const (
 	usbDescriptorConfigCDC = 1 << iota
 	usbDescriptorConfigHID
+	usbDescriptorConfigMIDI
 )
 
 var usbDescriptorConfig uint8 = usbDescriptorConfigCDC
@@ -137,11 +138,13 @@ const (
 	usb_HID_INTERFACE      = 2 // HID
 
 	// Endpoint
-	usb_CONTROL_ENDPOINT = 0
-	usb_CDC_ENDPOINT_ACM = 1
-	usb_CDC_ENDPOINT_OUT = 2
-	usb_CDC_ENDPOINT_IN  = 3
-	usb_HID_ENDPOINT_IN  = 4
+	usb_CONTROL_ENDPOINT  = 0
+	usb_CDC_ENDPOINT_ACM  = 1
+	usb_CDC_ENDPOINT_OUT  = 2
+	usb_CDC_ENDPOINT_IN   = 3
+	usb_HID_ENDPOINT_IN   = 4
+	usb_MIDI_ENDPOINT_OUT = 5
+	usb_MIDI_ENDPOINT_IN  = 6
 
 	// bmRequestType
 	usb_REQUEST_HOSTTODEVICE = 0x00
@@ -170,11 +173,13 @@ var (
 	usbSetupHandler [numberOfInterfaces]func(USBSetup) bool
 
 	endPoints = []uint32{
-		usb_CONTROL_ENDPOINT: usb_ENDPOINT_TYPE_CONTROL,
-		usb_CDC_ENDPOINT_ACM: (usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn),
-		usb_CDC_ENDPOINT_OUT: (usb_ENDPOINT_TYPE_BULK | usbEndpointOut),
-		usb_CDC_ENDPOINT_IN:  (usb_ENDPOINT_TYPE_BULK | usbEndpointIn),
-		usb_HID_ENDPOINT_IN:  (usb_ENDPOINT_TYPE_DISABLE), // Interrupt In
+		usb_CONTROL_ENDPOINT:  usb_ENDPOINT_TYPE_CONTROL,
+		usb_CDC_ENDPOINT_ACM:  (usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn),
+		usb_CDC_ENDPOINT_OUT:  (usb_ENDPOINT_TYPE_BULK | usbEndpointOut),
+		usb_CDC_ENDPOINT_IN:   (usb_ENDPOINT_TYPE_BULK | usbEndpointIn),
+		usb_HID_ENDPOINT_IN:   (usb_ENDPOINT_TYPE_DISABLE), // Interrupt In
+		usb_MIDI_ENDPOINT_OUT: (usb_ENDPOINT_TYPE_DISABLE), // Bulk Out
+		usb_MIDI_ENDPOINT_IN:  (usb_ENDPOINT_TYPE_DISABLE), // Bulk In
 	}
 )
 
@@ -222,6 +227,8 @@ func sendDescriptor(setup USBSetup) {
 		// composite descriptor
 		if (usbDescriptorConfig & usbDescriptorConfigHID) > 0 {
 			usbDescriptor = descriptorCDCHID
+		} else if (usbDescriptorConfig & usbDescriptorConfigMIDI) > 0 {
+			usbDescriptor = descriptorCDCMIDI
 		} else {
 			usbDescriptor = descriptorCDC
 		}
@@ -359,4 +366,13 @@ func EnableHID(txHandler func(), rxHandler func([]byte), setupHandler func(USBSe
 	endPoints[usb_HID_ENDPOINT_IN] = (usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn)
 	usbTxHandler[usb_HID_ENDPOINT_IN] = txHandler
 	usbSetupHandler[usb_HID_INTERFACE] = setupHandler // 0x03 (HID - Human Interface Device)
+}
+
+// EnableMIDI enables MIDI. This function must be executed from the init().
+func EnableMIDI(txHandler func(), rxHandler func([]byte), setupHandler func(USBSetup) bool) {
+	usbDescriptorConfig |= usbDescriptorConfigMIDI
+	endPoints[usb_MIDI_ENDPOINT_OUT] = (usb_ENDPOINT_TYPE_BULK | usbEndpointOut)
+	endPoints[usb_MIDI_ENDPOINT_IN] = (usb_ENDPOINT_TYPE_BULK | usbEndpointIn)
+	usbRxHandler[usb_MIDI_ENDPOINT_OUT] = rxHandler
+	usbTxHandler[usb_MIDI_ENDPOINT_IN] = txHandler
 }

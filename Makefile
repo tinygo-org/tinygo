@@ -595,10 +595,12 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/pwm
 	@$(MD5SUM) test.hex
-	# test usbhid
+	# test usb
 	$(TINYGO) build -size short -o test.hex -target=feather-nrf52840    examples/hid-keyboard
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/hid-keyboard
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-nrf52840    examples/usb-midi
 	@$(MD5SUM) test.hex
 ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o test.hex -target=bluepill            examples/blinky1
