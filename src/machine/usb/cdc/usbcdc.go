@@ -90,7 +90,6 @@ type USBCDC struct {
 	TxIdx             volatile.Register8
 	waitTxcRetryCount uint8
 	sent              bool
-	configured        bool
 	waitTxc           bool
 }
 
@@ -146,11 +145,6 @@ func (usbcdc *USBCDC) DTR() bool {
 
 func (usbcdc *USBCDC) RTS() bool {
 	return (usbLineInfo.lineState & usb_CDC_LINESTATE_RTS) > 0
-}
-
-// Configured returns whether usbcdc is configured or not.
-func (usbcdc *USBCDC) Configured() bool {
-	return usbcdc.configured
 }
 
 func cdcCallbackRx(b []byte) {
