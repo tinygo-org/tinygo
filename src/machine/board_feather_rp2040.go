@@ -60,3 +60,14 @@ const (
 	// Default Serial In Bus 1 for SPI communications
 	SPI1_SDI_PIN = GPIO12 // Rx
 )
+
+// USB identifiers
+const (
+	usb_STRING_PRODUCT      = "Feather RP2040"
+	usb_STRING_MANUFACTURER = "Adafruit"
+)
+
+var (
+	usb_VID uint16 = 0x239A
+	usb_PID uint16 = 0x80F1
+)

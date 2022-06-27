@@ -4,6 +4,7 @@
     ],
     "build-tags": ["pico"],
     "serial": "uart",
+    "serial-port": ["acm:2e8a:000A"],
     "linkerscript": "targets/pico.ld",
     "extra-files": [
         "targets/pico-boot-stage2.S"

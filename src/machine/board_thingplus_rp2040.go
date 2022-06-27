@@ -79,3 +79,14 @@ const (
 	// Default Serial In Bus 1 for SPI communications to muSDcard
 	SPI1_SDI_PIN = GPIO12 // Rx
 )
+
+// USB identifiers
+const (
+	usb_STRING_PRODUCT      = "Thing Plus RP2040"
+	usb_STRING_MANUFACTURER = "SparkFun"
+)
+
+var (
+	usb_VID uint16 = 0x1B4F
+	usb_PID uint16 = 0x0026
+)
