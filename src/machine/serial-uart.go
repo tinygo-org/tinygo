@@ -3,5 +3,8 @@
 
 package machine
 
-// Serial is implemented via the default (usually the first) UART on the chip.
-var Serial = DefaultUART
+var Serial *UART
+
+func InitSerial() {
+	Serial = DefaultUART
+}

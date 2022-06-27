@@ -76,6 +76,7 @@ func machineInit()
 func init() {
 	machineInit()
 
+	machine.InitSerial()
 	machine.Serial.Configure(machine.UARTConfig{})
 }
 

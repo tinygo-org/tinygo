@@ -119,6 +119,7 @@ func initPins() {
 }
 
 func initUART() {
+	machine.InitSerial()
 	machine.Serial.Configure(machine.UARTConfig{})
 }
 

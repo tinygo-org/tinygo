@@ -3,5 +3,8 @@
 
 package machine
 
-// Serial is implemented via USB (USB-CDC).
-var Serial = USB
+var Serial Serialer
+
+func InitSerial() {
+	Serial = USBCDC
+}

@@ -9,6 +9,7 @@ import (
 )
 
 func initUART() {
+	machine.InitSerial()
 	machine.Serial.Configure(machine.UARTConfig{})
 }
 

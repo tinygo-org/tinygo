@@ -43,6 +43,7 @@ func main() {
 	clearbss()
 
 	// Initialize UART.
+	machine.InitSerial()
 	machine.Serial.Configure(machine.UARTConfig{})
 
 	// Initialize main system timer used for time.Now.

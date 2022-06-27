@@ -3,5 +3,5 @@
 
 package machine
 
-func checkShouldReset() {
+func ResetProcessor() {
 }

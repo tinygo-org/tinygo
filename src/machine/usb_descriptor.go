@@ -14,6 +14,9 @@ func (d *USBDescriptor) Configure(idVendor, idProduct uint16) {
 	d.Device[9] = byte(idVendor >> 8)
 	d.Device[10] = byte(idProduct)
 	d.Device[11] = byte(idProduct >> 8)
+
+	d.Configuration[2] = byte(len(d.Configuration))
+	d.Configuration[3] = byte(len(d.Configuration) >> 8)
 }
 
 var descriptorCDC = USBDescriptor{
