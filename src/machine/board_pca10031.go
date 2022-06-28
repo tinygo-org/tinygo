@@ -11,21 +11,21 @@ const HasLowFrequencyCrystal = true
 
 // LED on the pca10031
 const (
-	LED       Pin = LED_RED
-	LED1      Pin = LED_RED
-	LED2      Pin = LED_GREEN
-	LED3      Pin = LED_BLUE
-	LED_RED   Pin = 21
-	LED_GREEN Pin = 22
-	LED_BLUE  Pin = 23
+	LED       = LED_RED
+	LED1      = LED_RED
+	LED2      = LED_GREEN
+	LED3      = LED_BLUE
+	LED_RED   = P0_21
+	LED_GREEN = P0_22
+	LED_BLUE  = P0_23
 )
 
 var DefaultUART = UART0
 
 // UART pins
 const (
-	UART_TX_PIN Pin = 9
-	UART_RX_PIN Pin = 11
+	UART_TX_PIN = P0_09
+	UART_RX_PIN = P0_11
 )
 
 // I2C pins (disabled)

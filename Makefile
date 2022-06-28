@@ -454,9 +454,7 @@ ifneq ($(WASM), 0)
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=reelboard            examples/blinky1
 	@$(MD5SUM) test.wasm
-	$(TINYGO) build -size short -o test.wasm -tags=pca10040             examples/blinky2
-	@$(MD5SUM) test.wasm
-	$(TINYGO) build -size short -o test.wasm -tags=pca10056             examples/blinky2
+	$(TINYGO) build -size short -o test.wasm -tags=microbit             examples/microbit-blink
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=circuitplay_express  examples/blinky1
 	@$(MD5SUM) test.wasm
