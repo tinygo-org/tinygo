@@ -20,39 +20,39 @@ const (
 	//     N/C      | 5V
 	//     N/C      | BAT
 
-	IO0  Pin = 0
-	IO1  Pin = 1 // U0TXD
-	IO2  Pin = 2
-	IO3  Pin = 3 // U0RXD
-	IO4  Pin = 4
-	IO5  Pin = 5
-	IO6  Pin = 6  // SD_CLK
-	IO7  Pin = 7  // SD_DATA0
-	IO8  Pin = 8  // SD_DATA1
-	IO9  Pin = 9  // SD_DATA2
-	IO10 Pin = 10 // SD_DATA3
-	IO11 Pin = 11 // SD_CMD
-	IO12 Pin = 12
-	IO13 Pin = 13 // U0RXD
-	IO14 Pin = 14 // U1TXD
-	IO15 Pin = 15
-	IO16 Pin = 16
-	IO17 Pin = 17
-	IO18 Pin = 18 // SPI0_SCK
-	IO19 Pin = 19
-	IO21 Pin = 21 // SDA0
-	IO22 Pin = 22 // SCL0
-	IO23 Pin = 23 // SPI0_SDO
-	IO25 Pin = 25
-	IO26 Pin = 26
-	IO27 Pin = 27
-	IO32 Pin = 32 // SDA1
-	IO33 Pin = 33 // SCL1
-	IO34 Pin = 34
-	IO35 Pin = 35 // ADC1
-	IO36 Pin = 36 // ADC2
-	IO38 Pin = 38 // SPI0_SDI
-	IO39 Pin = 39
+	IO0  = GPIO0
+	IO1  = GPIO1 // U0TXD
+	IO2  = GPIO2
+	IO3  = GPIO3 // U0RXD
+	IO4  = GPIO4
+	IO5  = GPIO5
+	IO6  = GPIO6  // SD_CLK
+	IO7  = GPIO7  // SD_DATA0
+	IO8  = GPIO8  // SD_DATA1
+	IO9  = GPIO9  // SD_DATA2
+	IO10 = GPIO10 // SD_DATA3
+	IO11 = GPIO11 // SD_CMD
+	IO12 = GPIO12
+	IO13 = GPIO13 // U0RXD
+	IO14 = GPIO14 // U1TXD
+	IO15 = GPIO15
+	IO16 = GPIO16
+	IO17 = GPIO17
+	IO18 = GPIO18 // SPI0_SCK
+	IO19 = GPIO19
+	IO21 = GPIO21 // SDA0
+	IO22 = GPIO22 // SCL0
+	IO23 = GPIO23 // SPI0_SDO
+	IO25 = GPIO25
+	IO26 = GPIO26
+	IO27 = GPIO27
+	IO32 = GPIO32 // SDA1
+	IO33 = GPIO33 // SCL1
+	IO34 = GPIO34
+	IO35 = GPIO35 // ADC1
+	IO36 = GPIO36 // ADC2
+	IO38 = GPIO38 // SPI0_SDI
+	IO39 = GPIO39
 )
 
 // SPI pins
