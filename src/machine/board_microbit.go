@@ -8,72 +8,72 @@ const HasLowFrequencyCrystal = false
 
 // Buttons on the micro:bit (A and B)
 const (
-	BUTTON  Pin = BUTTONA
-	BUTTONA Pin = 17
-	BUTTONB Pin = 26
+	BUTTON  = BUTTONA
+	BUTTONA = P0_17
+	BUTTONB = P0_26
 )
 
 var DefaultUART = UART0
 
 // UART pins
 const (
-	UART_TX_PIN Pin = 24
-	UART_RX_PIN Pin = 25
+	UART_TX_PIN = P0_24
+	UART_RX_PIN = P0_25
 )
 
 // ADC pins
 const (
-	ADC0 Pin = 3 // P0 on the board
-	ADC1 Pin = 2 // P1 on the board
-	ADC2 Pin = 1 // P2 on the board
+	ADC0 = P0_03 // P0 on the board
+	ADC1 = P0_02 // P1 on the board
+	ADC2 = P0_01 // P2 on the board
 )
 
 // I2C pins
 const (
-	SDA_PIN Pin = 30 // P20 on the board
-	SCL_PIN Pin = 0  // P19 on the board
+	SDA_PIN = P0_30 // P20 on the board
+	SCL_PIN = P0_00 // P19 on the board
 )
 
 // SPI pins
 const (
-	SPI0_SCK_PIN Pin = 23 // P13 on the board
-	SPI0_SDO_PIN Pin = 21 // P15 on the board
-	SPI0_SDI_PIN Pin = 22 // P14 on the board
+	SPI0_SCK_PIN = P0_23 // P13 on the board
+	SPI0_SDO_PIN = P0_21 // P15 on the board
+	SPI0_SDI_PIN = P0_22 // P14 on the board
 )
 
 // GPIO/Analog pins
 const (
-	P0  Pin = 3
-	P1  Pin = 2
-	P2  Pin = 1
-	P3  Pin = 4
-	P4  Pin = 5
-	P5  Pin = 17
-	P6  Pin = 12
-	P7  Pin = 11
-	P8  Pin = 18
-	P9  Pin = 10
-	P10 Pin = 6
-	P11 Pin = 26
-	P12 Pin = 20
-	P13 Pin = 23
-	P14 Pin = 22
-	P15 Pin = 21
-	P16 Pin = 16
+	P0  = P0_03
+	P1  = P0_02
+	P2  = P0_01
+	P3  = P0_04
+	P4  = P0_05
+	P5  = P0_17
+	P6  = P0_12
+	P7  = P0_11
+	P8  = P0_18
+	P9  = P0_10
+	P10 = P0_06
+	P11 = P0_26
+	P12 = P0_20
+	P13 = P0_23
+	P14 = P0_22
+	P15 = P0_21
+	P16 = P0_16
 )
 
 // LED matrix pins
 const (
-	LED_COL_1 Pin = 4
-	LED_COL_2 Pin = 5
-	LED_COL_3 Pin = 6
-	LED_COL_4 Pin = 7
-	LED_COL_5 Pin = 8
-	LED_COL_6 Pin = 9
-	LED_COL_7 Pin = 10
-	LED_COL_8 Pin = 11
-	LED_COL_9 Pin = 12
-	LED_ROW_1 Pin = 13
-	LED_ROW_2 Pin = 14
-	LED_ROW_3 Pin = 15
+	LED_COL_1 = P0_04
+	LED_COL_2 = P0_05
+	LED_COL_3 = P0_06
+	LED_COL_4 = P0_07
+	LED_COL_5 = P0_08
+	LED_COL_6 = P0_09
+	LED_COL_7 = P0_10
+	LED_COL_8 = P0_11
+	LED_COL_9 = P0_12
+	LED_ROW_1 = P0_13
+	LED_ROW_2 = P0_14
+	LED_ROW_3 = P0_15
 )
