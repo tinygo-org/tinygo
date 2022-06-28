@@ -87,10 +87,10 @@ const (
 	PK1 = portK + 1
 	PK2 = portK + 2
 	PK3 = portK + 3
-	PK4 = portH + 4
-	PK5 = portH + 5
-	PK6 = portH + 6
-	PK7 = portH + 7
+	PK4 = portK + 4
+	PK5 = portK + 5
+	PK6 = portK + 6
+	PK7 = portK + 7
 	PL0 = portL + 0
 	PL1 = portL + 1
 	PL2 = portL + 2
