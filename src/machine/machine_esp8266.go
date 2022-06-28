@@ -19,6 +19,27 @@ const (
 	PinInput
 )
 
+// Hardware pin numbers
+const (
+	GPIO0 Pin = iota
+	GPIO1
+	GPIO2
+	GPIO3
+	GPIO4
+	GPIO5
+	GPIO6
+	GPIO7
+	GPIO8
+	GPIO9
+	GPIO10
+	GPIO11
+	GPIO12
+	GPIO13
+	GPIO14
+	GPIO15
+	GPIO16
+)
+
 // Pins that are fixed by the chip.
 const (
 	UART_TX_PIN Pin = 1
