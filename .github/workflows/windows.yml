@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2019
     steps:
       - name: Install Go
         uses: actions/setup-go@v2
@@ -64,8 +64,6 @@ jobs:
           # fetch LLVM source
           rm -rf llvm-project
           make llvm-source
-          choco install ccache
-          choco install mingw
           # build!
           make llvm-build
           # Remove unnecessary object files (to reduce cache size).
