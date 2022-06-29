@@ -15,6 +15,9 @@ jobs:
   build-windows:
     runs-on: windows-2022
     steps:
+      - name: Test ccache
+        shell: bash
+        run: ccache --version
       - name: Install Go
         uses: actions/setup-go@v2
         with:
@@ -55,7 +58,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-build
         with:
-          key: llvm-build-14-windows-v1
+          key: llvm-build-14-windows-v1-test
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
