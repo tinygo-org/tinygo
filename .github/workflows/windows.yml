@@ -55,7 +55,7 @@ jobs:
         uses: actions/cache@v2
         id: cache-llvm-build
         with:
-          key: llvm-build-14-windows-v1
+          key: llvm-build-14-windows-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -65,7 +65,7 @@ jobs:
           rm -rf llvm-project
           make llvm-source
           # build!
-          make llvm-build
+          make llvm-build CCACHE=OFF
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Cache wasi-libc sysroot
