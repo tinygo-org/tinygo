@@ -65,6 +65,7 @@ jobs:
           rm -rf llvm-project
           make llvm-source
           choco install ccache
+          choco install mingw
           # build!
           make llvm-build
           # Remove unnecessary object files (to reduce cache size).
