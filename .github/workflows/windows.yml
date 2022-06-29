@@ -65,6 +65,7 @@ jobs:
           rm -rf llvm-project
           make llvm-source
           # build!
+          choco uninstall ccache
           make llvm-build
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
