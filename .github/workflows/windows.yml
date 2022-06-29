@@ -64,6 +64,7 @@ jobs:
           # fetch LLVM source
           rm -rf llvm-project
           make llvm-source
+          choco install ccache
           # build!
           make llvm-build
           # Remove unnecessary object files (to reduce cache size).
