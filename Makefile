@@ -38,10 +38,16 @@ MD5SUM = md5sum
 # tinygo binary for tests
 TINYGO ?= $(call detect,tinygo,tinygo $(CURDIR)/build/tinygo)
 
-# Use CCACHE for LLVM if possible
-ifneq (, $(shell command -v ccache 2> /dev/null))
-    LLVM_OPTION += '-DLLVM_CCACHE_BUILD=ON'
+# Check for ccache if the user hasn't set it to on or off.
+ifeq (, $(CCACHE))
+    # Use CCACHE for LLVM if possible
+    ifneq (, $(shell command -v ccache 2> /dev/null))
+        CCACHE := ON
+    else
+        CCACHE := OFF
+    endif
 endif
+LLVM_OPTION += '-DLLVM_CCACHE_BUILD=$(CCACHE)'
 
 # Allow enabling LLVM assertions
 ifeq (1, $(ASSERT))
