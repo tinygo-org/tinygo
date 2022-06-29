@@ -460,6 +460,8 @@ ifneq ($(WASM), 0)
 	@$(MD5SUM) test.wasm
 	$(TINYGO) build -size short -o test.wasm -tags=circuitplay_bluefruit examples/blinky1
 	@$(MD5SUM) test.wasm
+	$(TINYGO) build -size short -o test.wasm -tags=mch2022              examples/serial
+	@$(MD5SUM) test.wasm
 endif
 	# test all targets/boards
 	$(TINYGO) build -size short -o test.hex -target=pca10040-s132v6     examples/blinky1
@@ -662,6 +664,8 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target m5stack-core2       examples/serial
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5stack             examples/serial
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target mch2022             examples/serial
 	@$(MD5SUM) test.bin
 endif
 	$(TINYGO) build -size short -o test.bin -target=esp32c3           	examples/serial

@@ -1,0 +1,4 @@
+{
+	"inherits": ["esp32"],
+	"build-tags": ["mch2022"]
+}
