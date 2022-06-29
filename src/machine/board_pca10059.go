@@ -8,17 +8,17 @@ const HasLowFrequencyCrystal = true
 
 // LEDs on the PCA10059 (nRF52840 dongle)
 const (
-	LED  Pin = LED1
 	LED1 Pin = 6
 	LED2 Pin = 8
 	LED3 Pin = (1 << 5) | 9
 	LED4 Pin = 12
+	LED  Pin = LED1
 )
 
 // Buttons on the PCA10059 (nRF52840 dongle)
 const (
-	BUTTON  Pin = BUTTON1
 	BUTTON1 Pin = (1 << 5) | 6
+	BUTTON  Pin = BUTTON1
 )
 
 // ADC pins

@@ -8,14 +8,6 @@ const HasLowFrequencyCrystal = true
 // More info: https://docs.particle.io/datasheets/discontinued/xenon-datasheet/
 // Board diagram: https://docs.particle.io/assets/images/xenon/xenon-block-diagram.png
 
-// LEDs
-const (
-	LED       Pin = 44
-	LED_GREEN Pin = 14
-	LED_RED   Pin = 13
-	LED_BLUE  Pin = 15
-)
-
 // GPIOs
 const (
 	A0  Pin = 3
@@ -38,6 +30,14 @@ const (
 	D11 Pin = 46 // Also SDI
 	D12 Pin = 45 // Also SDO
 	D13 Pin = 47 // Also SCK
+)
+
+// LEDs
+const (
+	LED       Pin = 44
+	LED_GREEN Pin = 14
+	LED_RED   Pin = 13
+	LED_BLUE  Pin = 15
 )
 
 // UART

@@ -8,20 +8,20 @@ const HasLowFrequencyCrystal = true
 
 // LEDs on the PCA10040 (nRF52832 dev board)
 const (
-	LED  Pin = LED1
 	LED1 Pin = 17
 	LED2 Pin = 18
 	LED3 Pin = 19
 	LED4 Pin = 20
+	LED  Pin = LED1
 )
 
 // Buttons on the PCA10040 (nRF52832 dev board)
 const (
-	BUTTON  Pin = BUTTON1
 	BUTTON1 Pin = 13
 	BUTTON2 Pin = 14
 	BUTTON3 Pin = 15
 	BUTTON4 Pin = 16
+	BUTTON  Pin = BUTTON1
 )
 
 var DefaultUART = UART0

@@ -8,12 +8,8 @@ import (
 	"runtime/interrupt"
 )
 
-const (
-	LED = GPIO13
-
-	// Onboard crystal oscillator frequency, in MHz.
-	xoscFreq = 12 // MHz
-)
+// Onboard crystal oscillator frequency, in MHz.
+const xoscFreq = 12 // MHz
 
 // GPIO Pins
 const (
@@ -36,6 +32,8 @@ const (
 	A2 = GPIO28
 	A3 = GPIO29
 )
+
+const LED = GPIO13
 
 // I2C Pins.
 const (

@@ -6,14 +6,35 @@ package machine
 // The micro:bit does not have a 32kHz crystal on board.
 const HasLowFrequencyCrystal = false
 
-// Buttons on the micro:bit (A and B)
+var DefaultUART = UART0
+
+// GPIO/Analog pins
 const (
-	BUTTON  = BUTTONA
-	BUTTONA = P0_17
-	BUTTONB = P0_26
+	P0  = P0_03
+	P1  = P0_02
+	P2  = P0_01
+	P3  = P0_04
+	P4  = P0_05
+	P5  = P0_17
+	P6  = P0_12
+	P7  = P0_11
+	P8  = P0_18
+	P9  = P0_10
+	P10 = P0_06
+	P11 = P0_26
+	P12 = P0_20
+	P13 = P0_23
+	P14 = P0_22
+	P15 = P0_21
+	P16 = P0_16
 )
 
-var DefaultUART = UART0
+// Buttons on the micro:bit (A and B)
+const (
+	BUTTONA = P0_17
+	BUTTONB = P0_26
+	BUTTON  = BUTTONA
+)
 
 // UART pins
 const (
@@ -39,27 +60,6 @@ const (
 	SPI0_SCK_PIN = P0_23 // P13 on the board
 	SPI0_SDO_PIN = P0_21 // P15 on the board
 	SPI0_SDI_PIN = P0_22 // P14 on the board
-)
-
-// GPIO/Analog pins
-const (
-	P0  = P0_03
-	P1  = P0_02
-	P2  = P0_01
-	P3  = P0_04
-	P4  = P0_05
-	P5  = P0_17
-	P6  = P0_12
-	P7  = P0_11
-	P8  = P0_18
-	P9  = P0_10
-	P10 = P0_06
-	P11 = P0_26
-	P12 = P0_20
-	P13 = P0_23
-	P14 = P0_22
-	P15 = P0_21
-	P16 = P0_16
 )
 
 // LED matrix pins
