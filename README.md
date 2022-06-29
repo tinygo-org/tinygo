@@ -95,6 +95,7 @@ The following 88 microcontroller boards are currently supported:
 * [M5Stamp C3](https://docs.m5stack.com/en/core/stamp_c3)
 * [Makerdiary nRF52840-MDK](https://wiki.makerdiary.com/nrf52840-mdk/)
 * [Makerdiary nRF52840-MDK USB Dongle](https://wiki.makerdiary.com/nrf52840-mdk-usb-dongle/)
+* [MCH2022 badge](https://badge.team/docs/badges/mch2022/)
 * [Microchip SAM E54 Xplained Pro](https://www.microchip.com/developmenttools/productdetails/atsame54-xpro)
 * [nice!nano](https://docs.nicekeyboards.com/#/nice!nano/)
 * [Nintendo Switch](https://www.nintendo.com/switch/)
