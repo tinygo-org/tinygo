@@ -4,28 +4,28 @@
 package machine
 
 const (
-	IO0  Pin = 0
-	IO1  Pin = 1
-	IO2  Pin = 2
-	IO3  Pin = 3
-	IO4  Pin = 4
-	IO5  Pin = 5
-	IO6  Pin = 6
-	IO7  Pin = 7
-	IO8  Pin = 8
-	IO9  Pin = 9
-	IO10 Pin = 10
-	IO11 Pin = 11
-	IO12 Pin = 12
-	IO13 Pin = 13
-	IO14 Pin = 14
-	IO15 Pin = 15
-	IO16 Pin = 16
-	IO17 Pin = 17
-	IO18 Pin = 18
-	IO19 Pin = 19
-	IO20 Pin = 20
-	IO21 Pin = 21
+	IO0  = GPIO0
+	IO1  = GPIO1
+	IO2  = GPIO2
+	IO3  = GPIO3
+	IO4  = GPIO4
+	IO5  = GPIO5
+	IO6  = GPIO6
+	IO7  = GPIO7
+	IO8  = GPIO8
+	IO9  = GPIO9
+	IO10 = GPIO10
+	IO11 = GPIO11
+	IO12 = GPIO12
+	IO13 = GPIO13
+	IO14 = GPIO14
+	IO15 = GPIO15
+	IO16 = GPIO16
+	IO17 = GPIO17
+	IO18 = GPIO18
+	IO19 = GPIO19
+	IO20 = GPIO20
+	IO21 = GPIO21
 
 	XTAL_32K_P = IO0
 	XTAL_32K_N = IO1

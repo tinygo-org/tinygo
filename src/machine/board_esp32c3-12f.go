@@ -12,21 +12,21 @@ const (
 )
 
 const (
-	IO0  Pin = 0
-	IO1  Pin = 1
-	IO10 Pin = 10
-	IO18 Pin = 18
-	IO19 Pin = 19
-	IO2  Pin = 2
-	IO3  Pin = 3
-	IO4  Pin = 4
-	IO5  Pin = 5
-	IO6  Pin = 6
-	IO7  Pin = 7
-	IO8  Pin = 8
-	IO9  Pin = 9
-	RXD  Pin = 20
-	TXD  Pin = 21
+	IO0  = GPIO0
+	IO1  = GPIO1
+	IO2  = GPIO2
+	IO3  = GPIO3
+	IO4  = GPIO4
+	IO5  = GPIO5
+	IO6  = GPIO6
+	IO7  = GPIO7
+	IO8  = GPIO8
+	IO9  = GPIO9
+	IO10 = GPIO10
+	IO18 = GPIO18
+	IO19 = GPIO19
+	RXD  = GPIO20
+	TXD  = GPIO21
 )
 
 // ADC pins

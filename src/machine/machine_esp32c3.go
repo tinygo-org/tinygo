@@ -30,6 +30,31 @@ const (
 	PinInputPulldown
 )
 
+const (
+	GPIO0  Pin = 0
+	GPIO1  Pin = 1
+	GPIO2  Pin = 2
+	GPIO3  Pin = 3
+	GPIO4  Pin = 4
+	GPIO5  Pin = 5
+	GPIO6  Pin = 6
+	GPIO7  Pin = 7
+	GPIO8  Pin = 8
+	GPIO9  Pin = 9
+	GPIO10 Pin = 10
+	GPIO11 Pin = 11
+	GPIO12 Pin = 12
+	GPIO13 Pin = 13
+	GPIO14 Pin = 14
+	GPIO15 Pin = 15
+	GPIO16 Pin = 16
+	GPIO17 Pin = 17
+	GPIO18 Pin = 18
+	GPIO19 Pin = 19
+	GPIO20 Pin = 20
+	GPIO21 Pin = 21
+)
+
 type PinChange uint8
 
 // Pin change interrupt constants for SetInterrupt.
