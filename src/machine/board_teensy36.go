@@ -9,9 +9,6 @@ func CPUFrequency() uint32 { return 180000000 }
 // ClockFrequency returns the frequency of the external oscillator (16MHz)
 func ClockFrequency() uint32 { return 16000000 }
 
-// LED on the Teensy
-const LED = PC05
-
 // digital IO
 const (
 	D00 = PB16
@@ -79,6 +76,9 @@ const (
 	D62 = PE04
 	D63 = PE05
 )
+
+// LED on the Teensy
+const LED = PC05
 
 var (
 	TeensyUART1 = UART0

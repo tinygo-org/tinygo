@@ -8,14 +8,42 @@ import (
 	"runtime/interrupt"
 )
 
+// Pins printed on the silkscreen
 const (
-	LED = PC13
-)
-
-const (
-	// This board does not have a user button, so
-	// use first GPIO pin by default
-	BUTTON = PA0
+	C13 = PC13
+	C14 = PC14
+	C15 = PC15
+	A0  = PA0
+	A1  = PA1
+	A2  = PA2
+	A3  = PA3
+	A4  = PA4
+	A5  = PA5
+	A6  = PA6
+	A7  = PA7
+	B0  = PB0
+	B1  = PB1
+	B10 = PB10
+	B11 = PB11
+	B12 = PB12
+	B13 = PB13
+	B14 = PB14
+	B15 = PB15
+	A8  = PA8
+	A9  = PA9
+	A10 = PA10
+	A11 = PA11
+	A12 = PA12
+	A13 = PA13
+	A14 = PA14
+	A15 = PA15
+	B3  = PB3
+	B4  = PB4
+	B5  = PB5
+	B6  = PB6
+	B7  = PB7
+	B8  = PB8
+	B9  = PB9
 )
 
 // Analog Pins
@@ -30,6 +58,14 @@ const (
 	ADC7 = PA7
 	ADC8 = PB0
 	ADC9 = PB1
+)
+
+const (
+	// This board does not have a user button, so
+	// use first GPIO pin by default
+	BUTTON = PA0
+
+	LED = PC13
 )
 
 var DefaultUART = UART1

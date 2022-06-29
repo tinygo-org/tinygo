@@ -9,18 +9,6 @@ import (
 )
 
 const (
-	LED         = LED_BUILTIN
-	LED_BUILTIN = LED_GREEN
-	LED_GREEN   = PB3
-)
-
-const (
-	// This board does not have a user button, so
-	// use first GPIO pin by default
-	BUTTON = PA0
-)
-
-const (
 	// Arduino Pins
 	A0 = PA0 // ADC_IN0
 	A1 = PA1 // ADC_IN1
@@ -43,6 +31,18 @@ const (
 	D11 = PB5  // SPI1_MOSI || TIM3_CH2
 	D12 = PB4  // SPI1_MISO
 	D13 = PB3  // SPI1_SCK
+)
+
+const (
+	LED         = LED_BUILTIN
+	LED_BUILTIN = LED_GREEN
+	LED_GREEN   = PB3
+)
+
+const (
+	// This board does not have a user button, so
+	// use first GPIO pin by default
+	BUTTON = PA0
 )
 
 const (

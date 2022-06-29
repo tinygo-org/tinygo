@@ -11,13 +11,13 @@ const HasLowFrequencyCrystal = true
 
 // LED on the pca10031
 const (
-	LED       = LED_RED
 	LED1      = LED_RED
 	LED2      = LED_GREEN
 	LED3      = LED_BLUE
 	LED_RED   = P0_21
 	LED_GREEN = P0_22
 	LED_BLUE  = P0_23
+	LED       = LED_RED
 )
 
 var DefaultUART = UART0

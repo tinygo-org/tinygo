@@ -7,15 +7,15 @@ const HasLowFrequencyCrystal = true
 
 // Pins on the reel board
 const (
-	LED              Pin = LED1
-	LED1             Pin = LED_YELLOW
-	LED2             Pin = LED_RED
-	LED3             Pin = LED_GREEN
-	LED4             Pin = LED_BLUE
 	LED_RED          Pin = 11
 	LED_GREEN        Pin = 12
 	LED_BLUE         Pin = 41
 	LED_YELLOW       Pin = 13
+	LED1             Pin = LED_YELLOW
+	LED2             Pin = LED_RED
+	LED3             Pin = LED_GREEN
+	LED4             Pin = LED_BLUE
+	LED              Pin = LED1
 	EPD_BUSY_PIN     Pin = 14
 	EPD_RESET_PIN    Pin = 15
 	EPD_DC_PIN       Pin = 16

@@ -12,10 +12,10 @@ const HasLowFrequencyCrystal = true
 // LEDs simply expose the three brightness level LEDs on the PineTime. They can
 // be useful for simple "hello world" style programs.
 const (
-	LED  = LED1
 	LED1 = LCD_BACKLIGHT_HIGH
 	LED2 = LCD_BACKLIGHT_MID
 	LED3 = LCD_BACKLIGHT_LOW
+	LED  = LED1
 )
 
 var DefaultUART = UART0

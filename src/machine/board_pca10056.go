@@ -7,20 +7,20 @@ const HasLowFrequencyCrystal = true
 
 // LEDs on the pca10056
 const (
-	LED  Pin = LED1
 	LED1 Pin = 13
 	LED2 Pin = 14
 	LED3 Pin = 15
 	LED4 Pin = 16
+	LED  Pin = LED1
 )
 
 // Buttons on the pca10056
 const (
-	BUTTON  Pin = BUTTON1
 	BUTTON1 Pin = 11
 	BUTTON2 Pin = 12
 	BUTTON3 Pin = 24
 	BUTTON4 Pin = 25
+	BUTTON  Pin = BUTTON1
 )
 
 var DefaultUART = UART0
