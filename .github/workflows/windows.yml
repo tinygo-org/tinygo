@@ -84,6 +84,7 @@ jobs:
         shell: bash
         run: make test GOTESTFLAGS="-v -short"
       - name: Build TinyGo release tarball
+        shell: bash
         run: make build/release -j4
       - name: Make release artifact
         shell: bash
