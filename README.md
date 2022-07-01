@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 87 microcontroller boards are currently supported:
+The following 88 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -89,6 +89,7 @@ The following 87 microcontroller boards are currently supported:
 * [ESP8266 - d1mini](https://www.espressif.com/en/products/socs/esp8266)
 * [ESP8266 - NodeMCU](https://www.espressif.com/en/products/socs/esp8266)
 * [Game Boy Advance](https://en.wikipedia.org/wiki/Game_Boy_Advance)
+* [iLabs Challenger RP2040 LoRa](https://ilabs.se/product/challenger-rp2040-lora/)
 * [M5Stack](https://docs.m5stack.com/en/core/basic)
 * [M5Stack Core2](https://shop.m5stack.com/products/m5stack-core2-esp32-iot-development-kit)
 * [M5Stamp C3](https://docs.m5stack.com/en/core/stamp_c3)

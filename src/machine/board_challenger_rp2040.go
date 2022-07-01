@@ -1,5 +1,5 @@
-//go:build feather_rp2040
-// +build feather_rp2040
+//go:build challenger_rp2040
+// +build challenger_rp2040
 
 package machine
 
@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	LED = GPIO13
+	LED = GPIO24
 
 	// Onboard crystal oscillator frequency, in MHz.
 	xoscFreq = 12 // MHz
@@ -17,24 +17,21 @@ const (
 
 // GPIO Pins
 const (
-	D4  = GPIO6
-	D5  = GPIO7
-	D6  = GPIO8
-	D9  = GPIO9
-	D10 = GPIO10
-	D11 = GPIO11
-	D12 = GPIO12
-	D13 = GPIO13
-	D24 = GPIO24
-	D25 = GPIO25
+	D5  = GPIO2
+	D6  = GPIO3
+	D9  = GPIO4
+	D10 = GPIO5
+	D11 = GPIO6
+	D12 = GPIO7
+	D13 = GPIO8
 )
 
 // Analog pins
 const (
-	A0 = GPIO26
-	A1 = GPIO27
-	A2 = GPIO28
-	A3 = GPIO29
+	A0 = ADC0
+	A1 = ADC1
+	A2 = ADC2
+	A3 = ADC3
 )
 
 // I2C Pins.
@@ -52,9 +49,9 @@ const (
 // SPI default pins
 const (
 	// Default Serial Clock Bus 0 for SPI communications
-	SPI0_SCK_PIN = GPIO18
+	SPI0_SCK_PIN = GPIO22
 	// Default Serial Out Bus 0 for SPI communications
-	SPI0_SDO_PIN = GPIO19 // Tx
+	SPI0_SDO_PIN = GPIO23 // Tx
 	// Default Serial In Bus 0 for SPI communications
 	SPI0_SDI_PIN = GPIO20 // Rx
 
@@ -66,12 +63,24 @@ const (
 	SPI1_SDI_PIN = GPIO12 // Rx
 )
 
+// LoRa default pins
+const (
+	LORA_CS    = GPIO9
+	LORA_SCK   = GPIO10
+	LORA_SDO   = GPIO11
+	LORA_SDI   = GPIO12
+	LORA_RESET = GPIO13
+	LORA_DIO0  = GPIO14
+	LORA_DIO1  = GPIO15
+	LORA_DIO2  = GPIO18
+)
+
 // UART pins
 const (
-	UART0_TX_PIN = GPIO0
-	UART0_RX_PIN = GPIO1
-	UART1_TX_PIN = GPIO8
-	UART1_RX_PIN = GPIO9
+	UART0_TX_PIN = GPIO16
+	UART0_RX_PIN = GPIO17
+	UART1_TX_PIN = GPIO4
+	UART1_RX_PIN = GPIO5
 	UART_TX_PIN  = UART0_TX_PIN
 	UART_RX_PIN  = UART0_RX_PIN
 )
@@ -100,11 +109,11 @@ func init() {
 
 // USB identifiers
 const (
-	usb_STRING_PRODUCT      = "Feather RP2040"
-	usb_STRING_MANUFACTURER = "Adafruit"
+	usb_STRING_PRODUCT      = "Challenger 2040 LoRa"
+	usb_STRING_MANUFACTURER = "iLabs"
 )
 
 var (
-	usb_VID uint16 = 0x239A
-	usb_PID uint16 = 0x80F1
+	usb_VID uint16 = 0x2e8a
+	usb_PID uint16 = 0x1023
 )
