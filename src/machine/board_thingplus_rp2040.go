@@ -3,6 +3,11 @@
 
 package machine
 
+import (
+	"device/rp"
+	"runtime/interrupt"
+)
+
 const (
 	LED = GPIO25
 
@@ -79,6 +84,29 @@ const (
 	// Default Serial In Bus 1 for SPI communications to muSDcard
 	SPI1_SDI_PIN = GPIO12 // Rx
 )
+
+// UART pins
+const (
+	UART0_TX_PIN = GPIO0
+	UART0_RX_PIN = GPIO1
+	UART_TX_PIN  = UART0_TX_PIN
+	UART_RX_PIN  = UART0_RX_PIN
+)
+
+// UART on the RP2040
+var (
+	UART0  = &_UART0
+	_UART0 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    rp.UART0,
+	}
+)
+
+var DefaultUART = UART0
+
+func init() {
+	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
+}
 
 // USB identifiers
 const (
