@@ -67,6 +67,7 @@ const (
 	EMFILE      Errno = 24
 	EPIPE       Errno = 32
 	EAGAIN      Errno = 35
+	ENOTCONN    Errno = 57
 	ETIMEDOUT   Errno = 60
 	ENOSYS      Errno = 78
 	EWOULDBLOCK Errno = EAGAIN
