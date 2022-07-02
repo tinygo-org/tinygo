@@ -65,6 +65,7 @@ func TestBuild(t *testing.T) {
 		"stdlib.go",
 		"string.go",
 		"structs.go",
+		"timers.go",
 		"zeroalloc.go",
 	}
 	_, minor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
@@ -180,6 +181,14 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 
 	for _, name := range tests {
+		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
+			switch name {
+			case "timers.go":
+				// Timer tests do not work because syscall.seek is implemented
+				// as Assembly in mainline Go and causes linker failure
+				continue
+			}
+		}
 		if options.Target == "simavr" {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
@@ -206,6 +215,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 
 			case "cgo/":
 				// CGo does not work on AVR.
+				continue
+
+			case "timers.go":
+				// Doesn't compile:
+				//   panic: compiler: could not store type code number inside interface type code
 				continue
 
 			default:
