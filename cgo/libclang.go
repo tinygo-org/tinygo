@@ -13,10 +13,13 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+
+	"tinygo.org/x/go-llvm"
 )
 
 /*
 #include <clang-c/Index.h> // If this fails, libclang headers aren't available. Please take a look here: https://tinygo.org/docs/guides/build/
+#include <llvm/Config/llvm-config.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -75,6 +78,16 @@ var diagnosticSeverity = [...]string{
 // Alias so that cgo.go (which doesn't import Clang related stuff and is in
 // theory decoupled from Clang) can also use this type.
 type clangCursor = C.GoCXCursor
+
+func init() {
+	// Check that we haven't messed up LLVM versioning.
+	// This can happen when llvm_config_*.go files in either this or the
+	// tinygo.org/x/go-llvm packages is incorrect. It should not ever happen
+	// with byollvm.
+	if C.LLVM_VERSION_STRING != llvm.Version {
+		panic("incorrect build: using LLVM version " + llvm.Version + " in the tinygo.org/x/llvm package, and version " + C.LLVM_VERSION_STRING + " in the ./cgo package")
+	}
+}
 
 func (f *cgoFile) readNames(fragment string, cflags []string, filename string, callback func(map[string]clangCursor)) {
 	index := C.clang_createIndex(0, 0)
