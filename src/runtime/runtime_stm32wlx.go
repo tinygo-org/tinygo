@@ -23,7 +23,7 @@ func init() {
 	initCLK()
 
 	// UART init
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 
 	// Timers init
 	initTickTimer(&machine.TIM1)

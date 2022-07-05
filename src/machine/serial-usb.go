@@ -5,3 +5,7 @@ package machine
 
 // Serial is implemented via USB (USB-CDC).
 var Serial = USB
+
+func InitSerial() {
+	Serial.Configure(UARTConfig{})
+}

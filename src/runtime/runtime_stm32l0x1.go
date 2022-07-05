@@ -15,7 +15,7 @@ const (
 func init() {
 	initCLK()
 
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 
 	initTickTimer(&machine.TIM21)
 }

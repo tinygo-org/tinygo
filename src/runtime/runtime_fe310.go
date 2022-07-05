@@ -92,7 +92,7 @@ func initPeripherals() {
 	sifive.RTC.RTCCFG.Set(sifive.RTC_RTCCFG_ENALWAYS)
 
 	// Configure the UART.
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 }
 
 func putchar(c byte) {
