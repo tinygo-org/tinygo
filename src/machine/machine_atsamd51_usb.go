@@ -586,7 +586,7 @@ func cdcSetup(setup usbSetup) bool {
 		if setup.bRequest == usb_CDC_SET_LINE_CODING || setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
 			// auto-reset into the bootloader
 			if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
-				ResetProcessor()
+				EnterBootloader()
 			} else {
 				// TODO: cancel any reset
 			}
