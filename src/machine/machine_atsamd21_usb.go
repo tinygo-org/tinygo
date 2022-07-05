@@ -22,7 +22,6 @@ type USBCDC struct {
 	waitTxc           bool
 	waitTxcRetryCount uint8
 	sent              bool
-	configured        bool
 }
 
 var (
@@ -149,26 +148,8 @@ const (
 	usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask = 0x3FFF
 )
 
-var (
-	usbEndpointDescriptors [8]usbDeviceDescriptor
-
-	udd_ep_in_cache_buffer  [7][128]uint8
-	udd_ep_out_cache_buffer [7][128]uint8
-
-	isEndpointHalt        = false
-	isRemoteWakeUpEnabled = false
-	endPoints             = []uint32{usb_ENDPOINT_TYPE_CONTROL,
-		(usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn),
-		(usb_ENDPOINT_TYPE_BULK | usbEndpointOut),
-		(usb_ENDPOINT_TYPE_BULK | usbEndpointIn)}
-
-	usbConfiguration uint8
-	usbSetInterface  uint8
-	usbLineInfo      = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
-)
-
-// Configure the USB CDC interface. The config is here for compatibility with the UART interface.
-func (usbcdc *USBCDC) Configure(config UARTConfig) {
+// Configure the USB peripheral. The config is here for compatibility with the UART interface.
+func (dev *USBDevice) Configure(config UARTConfig) {
 	// reset USB interface
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_SWRST)
 	for sam.USB_DEVICE.SYNCBUSY.HasBits(sam.USB_DEVICE_SYNCBUSY_SWRST) ||
@@ -203,15 +184,11 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_ENABLE)
 
 	// enable IRQ
-	intr := interrupt.New(sam.IRQ_USB, handleUSB)
-	intr.Enable()
-
-	usbcdc.configured = true
+	interrupt.New(sam.IRQ_USB, handleUSBIRQ).Enable()
 }
 
-// Configured returns whether usbcdc is configured or not.
-func (usbcdc *USBCDC) Configured() bool {
-	return usbcdc.configured
+func (usbcdc *USBCDC) Configure(config UARTConfig) {
+	// dummy
 }
 
 func handlePadCalibration() {
@@ -257,7 +234,7 @@ func handlePadCalibration() {
 	sam.USB_DEVICE.PADCAL.SetBits(calibTrim << sam.USB_DEVICE_PADCAL_TRIM_Pos)
 }
 
-func handleUSB(intr interrupt.Interrupt) {
+func handleUSBIRQ(intr interrupt.Interrupt) {
 	// reset all interrupt flags
 	flags := sam.USB_DEVICE.INTFLAG.Get()
 	sam.USB_DEVICE.INTFLAG.Set(flags)

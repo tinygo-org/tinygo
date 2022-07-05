@@ -8,6 +8,12 @@ import (
 	"runtime/volatile"
 )
 
+type USBDevice struct {
+}
+
+var (
+	USBDev = &USBDevice{}
+)
 var usbDescriptor = descriptorCDC
 
 var (
@@ -45,6 +51,24 @@ func strToUTF16LEDescriptor(in string, out []byte) {
 var (
 	// TODO: allow setting these
 	usb_STRING_LANGUAGE = [2]uint16{(3 << 8) | (2 + 2), 0x0409} // English
+)
+
+var (
+	usbEndpointDescriptors [8]usbDeviceDescriptor
+
+	udd_ep_in_cache_buffer  [7][128]uint8
+	udd_ep_out_cache_buffer [7][128]uint8
+
+	isEndpointHalt        = false
+	isRemoteWakeUpEnabled = false
+	endPoints             = []uint32{usb_ENDPOINT_TYPE_CONTROL,
+		(usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn),
+		(usb_ENDPOINT_TYPE_BULK | usbEndpointOut),
+		(usb_ENDPOINT_TYPE_BULK | usbEndpointIn)}
+
+	usbConfiguration uint8
+	usbSetInterface  uint8
+	usbLineInfo      = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
 )
 
 const (
