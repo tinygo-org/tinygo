@@ -3,5 +3,7 @@
 
 package machine
 
-func checkShouldReset() {
+// EnterBootloader resets the chip into the serial bootloader.
+func EnterBootloader() {
+	// skip
 }

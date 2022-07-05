@@ -1734,9 +1734,9 @@ func (tcc *TCC) Set(channel uint8, value uint32) {
 	}
 }
 
-// ResetProcessor should perform a system reset in preperation
+// EnterBootloader should perform a system reset in preperation
 // to switch to the bootloader to flash new firmware.
-func ResetProcessor() {
+func EnterBootloader() {
 	arm.DisableInterrupts()
 
 	// Perform magic reset into bootloader, as mentioned in

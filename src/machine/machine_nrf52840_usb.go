@@ -320,7 +320,9 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 				count := int(nrf.USBD.SIZE.EPOUT[0].Get())
 				if count >= 7 {
 					parseUSBLineInfo(udd_ep_out_cache_buffer[0][:count])
-					checkShouldReset()
+					if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
+						EnterBootloader()
+					}
 				}
 				nrf.USBD.TASKS_EP0STATUS.Set(1)
 			}
@@ -484,7 +486,9 @@ func cdcSetup(setup usbSetup) bool {
 
 		if setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
 			usbLineInfo.lineState = setup.wValueL
-			checkShouldReset()
+			if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
+				EnterBootloader()
+			}
 			nrf.USBD.TASKS_EP0STATUS.Set(1)
 		}
 
