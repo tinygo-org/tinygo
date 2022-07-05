@@ -1,5 +1,5 @@
-//go:build nrf && !nrf52840
-// +build nrf,!nrf52840
+//go:build nrf && nrf52840
+// +build nrf,nrf52840
 
 package runtime
 
@@ -28,6 +28,7 @@ func main() {
 }
 
 func init() {
+	machine.USBDev.Configure(machine.UARTConfig{})
 	machine.InitSerial()
 	initLFCLK()
 	initRTC()

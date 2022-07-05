@@ -14,8 +14,6 @@ import (
 // USBCDC is the USB CDC aka serial over USB interface on the nRF52840
 type USBCDC struct {
 	Buffer            *RingBuffer
-	interrupt         interrupt.Interrupt
-	initcomplete      bool
 	TxIdx             volatile.Register8
 	waitTxc           bool
 	waitTxcRetryCount uint8
@@ -125,25 +123,11 @@ var (
 	_USB       = USBCDC{Buffer: NewRingBuffer()}
 	waitHidTxc bool
 
-	usbEndpointDescriptors [8]usbDeviceDescriptor
-
-	udd_ep_in_cache_buffer  [7][128]uint8
-	udd_ep_out_cache_buffer [7][128]uint8
-
 	sendOnEP0DATADONE struct {
 		ptr   *byte
 		count int
 	}
-	isEndpointHalt        = false
-	isRemoteWakeUpEnabled = false
-	endPoints             = []uint32{usb_ENDPOINT_TYPE_CONTROL,
-		(usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn),
-		(usb_ENDPOINT_TYPE_BULK | usbEndpointOut),
-		(usb_ENDPOINT_TYPE_BULK | usbEndpointIn)}
 
-	usbConfiguration         uint8
-	usbSetInterface          uint8
-	usbLineInfo              = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
 	epinen                   uint32
 	epouten                  uint32
 	easyDMABusy              volatile.Register8
@@ -167,19 +151,15 @@ func exitCriticalSection() {
 	easyDMABusy.ClearBits(1)
 }
 
-// Configure the USB CDC interface. The config is here for compatibility with the UART interface.
-func (usbcdc *USBCDC) Configure(config UARTConfig) {
-	if usbcdc.initcomplete {
-		return
-	}
-
+// Configure the USB peripheral. The config is here for compatibility with the UART interface.
+func (dev *USBDevice) Configure(config UARTConfig) {
 	// Enable IRQ. Make sure this is higher than the SWI2 interrupt handler so
 	// that it is possible to print to the console from a BLE interrupt. You
 	// shouldn't generally do that but it is useful for debugging and panic
 	// logging.
-	usbcdc.interrupt = interrupt.New(nrf.IRQ_USBD, _USB.handleInterrupt)
-	usbcdc.interrupt.SetPriority(0x40) // interrupt priority 2 (lower number means more important)
-	usbcdc.interrupt.Enable()
+	intr := interrupt.New(nrf.IRQ_USBD, handleUSBIRQ)
+	intr.SetPriority(0x40) // interrupt priority 2 (lower number means more important)
+	intr.Enable()
 
 	// enable USB
 	nrf.USBD.ENABLE.Set(1)
@@ -194,14 +174,16 @@ func (usbcdc *USBCDC) Configure(config UARTConfig) {
 	)
 
 	nrf.USBD.USBPULLUP.Set(0)
-
-	usbcdc.initcomplete = true
 }
 
-func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
+func (usbcdc *USBCDC) Configure(config UARTConfig) {
+	// dummy
+}
+
+func handleUSBIRQ(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_SOF.Get() == 1 {
 		nrf.USBD.EVENTS_SOF.Set(0)
-		usbcdc.Flush()
+		USB.Flush()
 		if hidCallback != nil && !waitHidTxc {
 			hidCallback()
 		}
@@ -301,7 +283,7 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 					}
 				case usb_CDC_ENDPOINT_IN: //, usb_CDC_ENDPOINT_ACM:
 					if inDataDone {
-						usbcdc.waitTxc = false
+						USB.waitTxc = false
 						exitCriticalSection()
 					}
 				case usb_HID_ENDPOINT_IN:
@@ -327,7 +309,7 @@ func (usbcdc *USBCDC) handleInterrupt(interrupt.Interrupt) {
 				nrf.USBD.TASKS_EP0STATUS.Set(1)
 			}
 			if i == usb_CDC_ENDPOINT_OUT {
-				usbcdc.handleEndpoint(uint32(i))
+				USB.handleEndpoint(uint32(i))
 			}
 			exitCriticalSection()
 		}

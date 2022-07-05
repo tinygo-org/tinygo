@@ -7,5 +7,4 @@ package machine
 var Serial = USB
 
 func InitSerial() {
-	Serial.Configure(UARTConfig{})
 }
