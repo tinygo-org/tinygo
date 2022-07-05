@@ -7,6 +7,6 @@
     "serial-port": ["acm:239a:8107"],
     "linkerscript": "targets/pico.ld",
     "extra-files": [
-        "targets/pico-boot-stage2.S"
+        "targets/macropad-rp2040-boot-stage2.S"
     ]
 }
