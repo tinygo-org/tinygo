@@ -76,7 +76,7 @@ func machineInit()
 func init() {
 	machineInit()
 
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 }
 
 //export Reset_Handler

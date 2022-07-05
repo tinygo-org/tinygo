@@ -104,7 +104,7 @@ func initPeripherals() {
 	// Enable FPIOA peripheral.
 	kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_FPIOA_CLK_EN)
 
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 }
 
 func putchar(c byte) {

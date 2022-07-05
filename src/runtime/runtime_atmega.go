@@ -9,7 +9,7 @@ import (
 )
 
 func initUART() {
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 }
 
 func putchar(c byte) {

@@ -29,7 +29,7 @@ func init() {
 	initADCClock()
 
 	// connect to USB CDC interface
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 	if !machine.USB.Configured() {
 		machine.USB.Configure(machine.UARTConfig{})
 	}

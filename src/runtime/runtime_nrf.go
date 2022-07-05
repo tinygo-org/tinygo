@@ -28,7 +28,7 @@ func main() {
 }
 
 func init() {
-	machine.Serial.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 	initLFCLK()
 	initRTC()
 }
