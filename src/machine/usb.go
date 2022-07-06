@@ -176,13 +176,6 @@ const (
 )
 
 // usbDeviceDescBank is the USB device endpoint descriptor.
-// typedef struct {
-// 	__IO USB_DEVICE_ADDR_Type      ADDR;        /**< \brief Offset: 0x000 (R/W 32) DEVICE_DESC_BANK Endpoint Bank, Adress of Data Buffer */
-// 	__IO USB_DEVICE_PCKSIZE_Type   PCKSIZE;     /**< \brief Offset: 0x004 (R/W 32) DEVICE_DESC_BANK Endpoint Bank, Packet Size */
-// 	__IO USB_DEVICE_EXTREG_Type    EXTREG;      /**< \brief Offset: 0x008 (R/W 16) DEVICE_DESC_BANK Endpoint Bank, Extended */
-// 	__IO USB_DEVICE_STATUS_BK_Type STATUS_BK;   /**< \brief Offset: 0x00A (R/W  8) DEVICE_DESC_BANK Enpoint Bank, Status of Bank */
-// 		 RoReg8                    Reserved1[0x5];
-//   } UsbDeviceDescBank;
 type usbDeviceDescBank struct {
 	ADDR      volatile.Register32
 	PCKSIZE   volatile.Register32
@@ -195,38 +188,23 @@ type usbDeviceDescriptor struct {
 	DeviceDescBank [2]usbDeviceDescBank
 }
 
-// typedef struct {
-// 	union {
-// 		uint8_t bmRequestType;
-// 		struct {
-// 			uint8_t direction : 5;
-// 			uint8_t type : 2;
-// 			uint8_t transferDirection : 1;
-// 		};
-// 	};
-// 	uint8_t bRequest;
-// 	uint8_t wValueL;
-// 	uint8_t wValueH;
-// 	uint16_t wIndex;
-// 	uint16_t wLength;
-// } USBSetup;
-type usbSetup struct {
-	bmRequestType uint8
-	bRequest      uint8
-	wValueL       uint8
-	wValueH       uint8
-	wIndex        uint16
-	wLength       uint16
+type USBSetup struct {
+	BmRequestType uint8
+	BRequest      uint8
+	WValueL       uint8
+	WValueH       uint8
+	WIndex        uint16
+	WLength       uint16
 }
 
-func newUSBSetup(data []byte) usbSetup {
-	u := usbSetup{}
-	u.bmRequestType = uint8(data[0])
-	u.bRequest = uint8(data[1])
-	u.wValueL = uint8(data[2])
-	u.wValueH = uint8(data[3])
-	u.wIndex = uint16(data[4]) | (uint16(data[5]) << 8)
-	u.wLength = uint16(data[6]) | (uint16(data[7]) << 8)
+func newUSBSetup(data []byte) USBSetup {
+	u := USBSetup{}
+	u.BmRequestType = uint8(data[0])
+	u.BRequest = uint8(data[1])
+	u.WValueL = uint8(data[2])
+	u.WValueH = uint8(data[3])
+	u.WIndex = uint16(data[4]) | (uint16(data[5]) << 8)
+	u.WLength = uint16(data[6]) | (uint16(data[7]) << 8)
 	return u
 }
 
@@ -299,41 +277,41 @@ func (usbcdc *USBCDC) Receive(data byte) {
 
 // sendDescriptor creates and sends the various USB descriptor types that
 // can be requested by the host.
-func sendDescriptor(setup usbSetup) {
-	switch setup.wValueH {
+func sendDescriptor(setup USBSetup) {
+	switch setup.WValueH {
 	case usb_CONFIGURATION_DESCRIPTOR_TYPE:
-		sendUSBPacket(0, usbDescriptor.Configuration, setup.wLength)
+		sendUSBPacket(0, usbDescriptor.Configuration, setup.WLength)
 		return
 	case usb_DEVICE_DESCRIPTOR_TYPE:
 		// composite descriptor
 		usbDescriptor.Configure(usb_VID, usb_PID)
-		sendUSBPacket(0, usbDescriptor.Device, setup.wLength)
+		sendUSBPacket(0, usbDescriptor.Device, setup.WLength)
 		return
 
 	case usb_STRING_DESCRIPTOR_TYPE:
-		switch setup.wValueL {
+		switch setup.WValueL {
 		case 0:
 			b := []byte{0x04, 0x03, 0x09, 0x04}
-			sendUSBPacket(0, b, setup.wLength)
+			sendUSBPacket(0, b, setup.WLength)
 
 		case usb_IPRODUCT:
 			b := make([]byte, (len(usb_STRING_PRODUCT)<<1)+2)
 			strToUTF16LEDescriptor(usb_STRING_PRODUCT, b)
-			sendUSBPacket(0, b, setup.wLength)
+			sendUSBPacket(0, b, setup.WLength)
 
 		case usb_IMANUFACTURER:
 			b := make([]byte, (len(usb_STRING_MANUFACTURER)<<1)+2)
 			strToUTF16LEDescriptor(usb_STRING_MANUFACTURER, b)
-			sendUSBPacket(0, b, setup.wLength)
+			sendUSBPacket(0, b, setup.WLength)
 
 		case usb_ISERIAL:
 			// TODO: allow returning a product serial number
-			sendZlp()
+			SendZlp()
 		}
 		return
 	case usb_HID_REPORT_TYPE:
-		if h, ok := usbDescriptor.HID[setup.wIndex]; ok {
-			sendUSBPacket(0, h, setup.wLength)
+		if h, ok := usbDescriptor.HID[setup.WIndex]; ok {
+			sendUSBPacket(0, h, setup.WLength)
 			return
 		}
 	case usb_DEVICE_QUALIFIER:
@@ -342,7 +320,7 @@ func sendDescriptor(setup usbSetup) {
 	}
 
 	// do not know how to handle this message, so return zero
-	sendZlp()
+	SendZlp()
 	return
 }
 

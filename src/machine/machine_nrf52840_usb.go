@@ -242,14 +242,14 @@ func handleUSBIRQ(interrupt.Interrupt) {
 		setup := parseUSBSetupRegisters()
 
 		ok := false
-		if (setup.bmRequestType & usb_REQUEST_TYPE) == usb_REQUEST_STANDARD {
+		if (setup.BmRequestType & usb_REQUEST_TYPE) == usb_REQUEST_STANDARD {
 			// Standard Requests
 			ok = handleStandardSetup(setup)
 		} else {
-			if setup.wIndex == usb_CDC_ACM_INTERFACE {
+			if setup.WIndex == usb_CDC_ACM_INTERFACE {
 				ok = cdcSetup(setup)
-			} else if setup.bmRequestType == usb_SET_REPORT_TYPE && setup.bRequest == usb_SET_IDLE {
-				sendZlp()
+			} else if setup.BmRequestType == usb_SET_REPORT_TYPE && setup.BRequest == usb_SET_IDLE {
+				SendZlp()
 				ok = true
 			}
 		}
@@ -323,14 +323,14 @@ func parseUSBLineInfo(b []byte) {
 	usbLineInfo.bDataBits = b[6]
 }
 
-func parseUSBSetupRegisters() usbSetup {
-	return usbSetup{
-		bmRequestType: uint8(nrf.USBD.BMREQUESTTYPE.Get()),
-		bRequest:      uint8(nrf.USBD.BREQUEST.Get()),
-		wValueL:       uint8(nrf.USBD.WVALUEL.Get()),
-		wValueH:       uint8(nrf.USBD.WVALUEH.Get()),
-		wIndex:        uint16((nrf.USBD.WINDEXH.Get() << 8) | nrf.USBD.WINDEXL.Get()),
-		wLength:       uint16(((nrf.USBD.WLENGTHH.Get() & 0xff) << 8) | (nrf.USBD.WLENGTHL.Get() & 0xff)),
+func parseUSBSetupRegisters() USBSetup {
+	return USBSetup{
+		BmRequestType: uint8(nrf.USBD.BMREQUESTTYPE.Get()),
+		BRequest:      uint8(nrf.USBD.BREQUEST.Get()),
+		WValueL:       uint8(nrf.USBD.WVALUEL.Get()),
+		WValueH:       uint8(nrf.USBD.WVALUEH.Get()),
+		WIndex:        uint16((nrf.USBD.WINDEXH.Get() << 8) | nrf.USBD.WINDEXL.Get()),
+		WLength:       uint16(((nrf.USBD.WLENGTHH.Get() & 0xff) << 8) | (nrf.USBD.WLENGTHL.Get() & 0xff)),
 	}
 }
 
@@ -360,33 +360,33 @@ func initEndpoint(ep, config uint32) {
 	}
 }
 
-func handleStandardSetup(setup usbSetup) bool {
-	switch setup.bRequest {
+func handleStandardSetup(setup USBSetup) bool {
+	switch setup.BRequest {
 	case usb_GET_STATUS:
 		buf := []byte{0, 0}
 
-		if setup.bmRequestType != 0 { // endpoint
+		if setup.BmRequestType != 0 { // endpoint
 			if isEndpointHalt {
 				buf[0] = 1
 			}
 		}
 
-		sendUSBPacket(0, buf, setup.wLength)
+		sendUSBPacket(0, buf, setup.WLength)
 		return true
 
 	case usb_CLEAR_FEATURE:
-		if setup.wValueL == 1 { // DEVICEREMOTEWAKEUP
+		if setup.WValueL == 1 { // DEVICEREMOTEWAKEUP
 			isRemoteWakeUpEnabled = false
-		} else if setup.wValueL == 0 { // ENDPOINTHALT
+		} else if setup.WValueL == 0 { // ENDPOINTHALT
 			isEndpointHalt = false
 		}
 		nrf.USBD.TASKS_EP0STATUS.Set(1)
 		return true
 
 	case usb_SET_FEATURE:
-		if setup.wValueL == 1 { // DEVICEREMOTEWAKEUP
+		if setup.WValueL == 1 { // DEVICEREMOTEWAKEUP
 			isRemoteWakeUpEnabled = true
-		} else if setup.wValueL == 0 { // ENDPOINTHALT
+		} else if setup.WValueL == 0 { // ENDPOINTHALT
 			isEndpointHalt = true
 		}
 		nrf.USBD.TASKS_EP0STATUS.Set(1)
@@ -405,11 +405,11 @@ func handleStandardSetup(setup usbSetup) bool {
 
 	case usb_GET_CONFIGURATION:
 		buff := []byte{usbConfiguration}
-		sendUSBPacket(0, buff, setup.wLength)
+		sendUSBPacket(0, buff, setup.WLength)
 		return true
 
 	case usb_SET_CONFIGURATION:
-		if setup.bmRequestType&usb_REQUEST_RECIPIENT == usb_REQUEST_DEVICE {
+		if setup.BmRequestType&usb_REQUEST_RECIPIENT == usb_REQUEST_DEVICE {
 			nrf.USBD.TASKS_EP0STATUS.Set(1)
 			for i := 1; i < len(endPoints); i++ {
 				initEndpoint(uint32(i), endPoints[i])
@@ -420,7 +420,7 @@ func handleStandardSetup(setup usbSetup) bool {
 				nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << usb_HID_ENDPOINT_IN)
 			}
 
-			usbConfiguration = setup.wValueL
+			usbConfiguration = setup.WValueL
 			return true
 		} else {
 			return false
@@ -428,11 +428,11 @@ func handleStandardSetup(setup usbSetup) bool {
 
 	case usb_GET_INTERFACE:
 		buff := []byte{usbSetInterface}
-		sendUSBPacket(0, buff, setup.wLength)
+		sendUSBPacket(0, buff, setup.WLength)
 		return true
 
 	case usb_SET_INTERFACE:
-		usbSetInterface = setup.wValueL
+		usbSetInterface = setup.WValueL
 
 		nrf.USBD.TASKS_EP0STATUS.Set(1)
 		return true
@@ -442,9 +442,9 @@ func handleStandardSetup(setup usbSetup) bool {
 	}
 }
 
-func cdcSetup(setup usbSetup) bool {
-	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
-		if setup.bRequest == usb_CDC_GET_LINE_CODING {
+func cdcSetup(setup USBSetup) bool {
+	if setup.BmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
+		if setup.BRequest == usb_CDC_GET_LINE_CODING {
 			var b [cdcLineInfoSize]byte
 			b[0] = byte(usbLineInfo.dwDTERate)
 			b[1] = byte(usbLineInfo.dwDTERate >> 8)
@@ -454,27 +454,27 @@ func cdcSetup(setup usbSetup) bool {
 			b[5] = byte(usbLineInfo.bParityType)
 			b[6] = byte(usbLineInfo.bDataBits)
 
-			sendUSBPacket(0, b[:], setup.wLength)
+			sendUSBPacket(0, b[:], setup.WLength)
 			return true
 		}
 	}
 
-	if setup.bmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
-		if setup.bRequest == usb_CDC_SET_LINE_CODING {
+	if setup.BmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
+		if setup.BRequest == usb_CDC_SET_LINE_CODING {
 			epout0data_setlinecoding = true
 			nrf.USBD.TASKS_EP0RCVOUT.Set(1)
 			return true
 		}
 
-		if setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
-			usbLineInfo.lineState = setup.wValueL
+		if setup.BRequest == usb_CDC_SET_CONTROL_LINE_STATE {
+			usbLineInfo.lineState = setup.WValueL
 			if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
 				EnterBootloader()
 			}
 			nrf.USBD.TASKS_EP0STATUS.Set(1)
 		}
 
-		if setup.bRequest == usb_CDC_SEND_BREAK {
+		if setup.BRequest == usb_CDC_SEND_BREAK {
 			nrf.USBD.TASKS_EP0STATUS.Set(1)
 		}
 		return true
@@ -530,7 +530,7 @@ func (usbcdc *USBCDC) handleEndpoint(ep uint32) {
 	nrf.USBD.SIZE.EPOUT[ep].Set(0)
 }
 
-func sendZlp() {
+func SendZlp() {
 	nrf.USBD.TASKS_EP0STATUS.Set(1)
 }
 
