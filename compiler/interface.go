@@ -69,6 +69,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Array:
 			references = c.getTypeCode(typ.Elem())
 			length = typ.Len()
+		case *types.Map:
+			mapGlobal := c.makeMapType(typ)
+			references = llvm.ConstBitCast(mapGlobal, global.Type())
 		case *types.Struct:
 			// Take a pointer to the typecodeID of the first field (if it exists).
 			structGlobal := c.makeStructTypeFields(typ)
@@ -108,6 +111,32 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		global.SetGlobalConstant(true)
 	}
 	return global
+}
+
+// makeMapType creates a new global that stores all type information
+// related to this map type, and returns the resulting global. This global is
+// actually an pair of (typecodeID, typecodeID).
+func (c *compilerContext) makeMapType(typ *types.Map) llvm.Value {
+	// The global is an pair of typecodeIDs
+	runtimeTypecodeID := c.getLLVMRuntimeType("typecodeID")
+	mapGlobalType := llvm.ArrayType(runtimeTypecodeID, 2)
+
+	// not sure if this is right
+	globalName := "reflect/types.type:" + getTypeCodeName(typ)
+
+	mapGlobal := llvm.AddGlobal(c.mod, mapGlobalType, globalName)
+	mapGlobalValue := llvm.ConstNull(mapGlobalType)
+
+	keyTypeCode := c.getTypeCode(typ.Key())
+	elemTypeCode := c.getTypeCode(typ.Elem())
+
+	mapGlobalValue = llvm.ConstInsertValue(mapGlobalValue, keyTypeCode, []uint32{uint32(0)})
+	mapGlobalValue = llvm.ConstInsertValue(mapGlobalValue, elemTypeCode, []uint32{uint32(1)})
+
+	mapGlobal.SetInitializer(mapGlobalValue)
+	mapGlobal.SetUnnamedAddr(true)
+	mapGlobal.SetLinkage(llvm.PrivateLinkage)
+	return mapGlobal
 }
 
 // makeStructTypeFields creates a new global that stores all type information

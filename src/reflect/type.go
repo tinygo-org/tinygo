@@ -387,7 +387,7 @@ func (t rawType) Elem() Type {
 
 func (t rawType) elem() rawType {
 	switch t.Kind() {
-	case Chan, Pointer, Slice:
+	case Chan, Pointer, Slice, Map:
 		return t.stripPrefix()
 	case Array:
 		index := t.stripPrefix()
