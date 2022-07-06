@@ -279,15 +279,15 @@ func handleUSBIRQ(interrupt.Interrupt) {
 		usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
 		ok := false
-		if (setup.bmRequestType & usb_REQUEST_TYPE) == usb_REQUEST_STANDARD {
+		if (setup.BmRequestType & usb_REQUEST_TYPE) == usb_REQUEST_STANDARD {
 			// Standard Requests
 			ok = handleStandardSetup(setup)
 		} else {
 			// Class Interface Requests
-			if setup.wIndex == usb_CDC_ACM_INTERFACE {
+			if setup.WIndex == usb_CDC_ACM_INTERFACE {
 				ok = cdcSetup(setup)
-			} else if setup.bmRequestType == usb_SET_REPORT_TYPE && setup.bRequest == usb_SET_IDLE {
-				sendZlp()
+			} else if setup.BmRequestType == usb_SET_REPORT_TYPE && setup.BRequest == usb_SET_IDLE {
+				SendZlp()
 				ok = true
 			}
 		}
@@ -415,37 +415,37 @@ func initEndpoint(ep, config uint32) {
 	}
 }
 
-func handleStandardSetup(setup usbSetup) bool {
-	switch setup.bRequest {
+func handleStandardSetup(setup USBSetup) bool {
+	switch setup.BRequest {
 	case usb_GET_STATUS:
 		buf := []byte{0, 0}
 
-		if setup.bmRequestType != 0 { // endpoint
+		if setup.BmRequestType != 0 { // endpoint
 			// TODO: actually check if the endpoint in question is currently halted
 			if isEndpointHalt {
 				buf[0] = 1
 			}
 		}
 
-		sendUSBPacket(0, buf, setup.wLength)
+		sendUSBPacket(0, buf, setup.WLength)
 		return true
 
 	case usb_CLEAR_FEATURE:
-		if setup.wValueL == 1 { // DEVICEREMOTEWAKEUP
+		if setup.WValueL == 1 { // DEVICEREMOTEWAKEUP
 			isRemoteWakeUpEnabled = false
-		} else if setup.wValueL == 0 { // ENDPOINTHALT
+		} else if setup.WValueL == 0 { // ENDPOINTHALT
 			isEndpointHalt = false
 		}
-		sendZlp()
+		SendZlp()
 		return true
 
 	case usb_SET_FEATURE:
-		if setup.wValueL == 1 { // DEVICEREMOTEWAKEUP
+		if setup.WValueL == 1 { // DEVICEREMOTEWAKEUP
 			isRemoteWakeUpEnabled = true
-		} else if setup.wValueL == 0 { // ENDPOINTHALT
+		} else if setup.WValueL == 0 { // ENDPOINTHALT
 			isEndpointHalt = true
 		}
-		sendZlp()
+		SendZlp()
 		return true
 
 	case usb_SET_ADDRESS:
@@ -469,7 +469,7 @@ func handleStandardSetup(setup usbSetup) bool {
 		}
 
 		// last, set the device address to that requested by host
-		sam.USB_DEVICE.DADD.SetBits(setup.wValueL)
+		sam.USB_DEVICE.DADD.SetBits(setup.WValueL)
 		sam.USB_DEVICE.DADD.SetBits(sam.USB_DEVICE_DADD_ADDEN)
 
 		return true
@@ -483,16 +483,16 @@ func handleStandardSetup(setup usbSetup) bool {
 
 	case usb_GET_CONFIGURATION:
 		buff := []byte{usbConfiguration}
-		sendUSBPacket(0, buff, setup.wLength)
+		sendUSBPacket(0, buff, setup.WLength)
 		return true
 
 	case usb_SET_CONFIGURATION:
-		if setup.bmRequestType&usb_REQUEST_RECIPIENT == usb_REQUEST_DEVICE {
+		if setup.BmRequestType&usb_REQUEST_RECIPIENT == usb_REQUEST_DEVICE {
 			for i := 1; i < len(endPoints); i++ {
 				initEndpoint(uint32(i), endPoints[i])
 			}
 
-			usbConfiguration = setup.wValueL
+			usbConfiguration = setup.WValueL
 
 			// Enable interrupt for CDC control messages from host (OUT packet)
 			setEPINTENSET(usb_CDC_ENDPOINT_ACM, sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT1)
@@ -505,7 +505,7 @@ func handleStandardSetup(setup usbSetup) bool {
 				setEPINTENSET(usb_HID_ENDPOINT_IN, sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT1)
 			}
 
-			sendZlp()
+			SendZlp()
 			return true
 		} else {
 			return false
@@ -513,13 +513,13 @@ func handleStandardSetup(setup usbSetup) bool {
 
 	case usb_GET_INTERFACE:
 		buff := []byte{usbSetInterface}
-		sendUSBPacket(0, buff, setup.wLength)
+		sendUSBPacket(0, buff, setup.WLength)
 		return true
 
 	case usb_SET_INTERFACE:
-		usbSetInterface = setup.wValueL
+		usbSetInterface = setup.WValueL
 
-		sendZlp()
+		SendZlp()
 		return true
 
 	default:
@@ -527,9 +527,9 @@ func handleStandardSetup(setup usbSetup) bool {
 	}
 }
 
-func cdcSetup(setup usbSetup) bool {
-	if setup.bmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
-		if setup.bRequest == usb_CDC_GET_LINE_CODING {
+func cdcSetup(setup USBSetup) bool {
+	if setup.BmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
+		if setup.BRequest == usb_CDC_GET_LINE_CODING {
 			var b [cdcLineInfoSize]byte
 			b[0] = byte(usbLineInfo.dwDTERate)
 			b[1] = byte(usbLineInfo.dwDTERate >> 8)
@@ -539,13 +539,13 @@ func cdcSetup(setup usbSetup) bool {
 			b[5] = byte(usbLineInfo.bParityType)
 			b[6] = byte(usbLineInfo.bDataBits)
 
-			sendUSBPacket(0, b[:], setup.wLength)
+			sendUSBPacket(0, b[:], setup.WLength)
 			return true
 		}
 	}
 
-	if setup.bmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
-		if setup.bRequest == usb_CDC_SET_LINE_CODING {
+	if setup.BmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
+		if setup.BRequest == usb_CDC_SET_LINE_CODING {
 			b, err := receiveUSBControlPacket()
 			if err != nil {
 				return false
@@ -557,25 +557,25 @@ func cdcSetup(setup usbSetup) bool {
 			usbLineInfo.bDataBits = b[6]
 		}
 
-		if setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
-			usbLineInfo.lineState = setup.wValueL
+		if setup.BRequest == usb_CDC_SET_CONTROL_LINE_STATE {
+			usbLineInfo.lineState = setup.WValueL
 		}
 
-		if setup.bRequest == usb_CDC_SET_LINE_CODING || setup.bRequest == usb_CDC_SET_CONTROL_LINE_STATE {
+		if setup.BRequest == usb_CDC_SET_LINE_CODING || setup.BRequest == usb_CDC_SET_CONTROL_LINE_STATE {
 			// auto-reset into the bootloader
 			if usbLineInfo.dwDTERate == 1200 && usbLineInfo.lineState&usb_CDC_LINESTATE_DTR == 0 {
 				EnterBootloader()
 			} else {
 				// TODO: cancel any reset
 			}
-			sendZlp()
+			SendZlp()
 		}
 
-		if setup.bRequest == usb_CDC_SEND_BREAK {
+		if setup.BRequest == usb_CDC_SEND_BREAK {
 			// TODO: something with this value?
 			// breakValue = ((uint16_t)setup.wValueH << 8) | setup.wValueL;
 			// return false;
-			sendZlp()
+			SendZlp()
 		}
 		return true
 	}
@@ -683,7 +683,7 @@ func handleEndpoint(ep uint32) {
 	setEPSTATUSCLR(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_BK0RDY)
 }
 
-func sendZlp() {
+func SendZlp() {
 	usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 }
 
