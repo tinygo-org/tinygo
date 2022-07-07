@@ -244,9 +244,6 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 		// Configure control endpoint
 		initEndpoint(0, usb_ENDPOINT_TYPE_CONTROL)
 
-		// Enable Setup-Received interrupt
-		setEPINTENSET(0, sam.USB_DEVICE_EPINTENSET_RXSTP)
-
 		usbConfiguration = 0
 
 		// ack the End-Of-Reset interrupt
@@ -343,6 +340,8 @@ func initEndpoint(ep, config uint32) {
 		// set endpoint type
 		setEPCFG(ep, ((usb_ENDPOINT_TYPE_INTERRUPT + 1) << sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
 
+		setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT1)
+
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
 		// set packet size
 		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
@@ -378,6 +377,8 @@ func initEndpoint(ep, config uint32) {
 		// NAK on endpoint IN, the bank is not yet filled in.
 		setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK1RDY)
 
+		setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT1)
+
 	case usb_ENDPOINT_TYPE_CONTROL:
 		// Control OUT
 		// set packet size
@@ -408,6 +409,9 @@ func initEndpoint(ep, config uint32) {
 
 		// NAK on endpoint OUT to show we are ready to receive control data
 		setEPSTATUSSET(ep, sam.USB_DEVICE_EPSTATUSSET_BK0RDY)
+
+		// Enable Setup-Received interrupt
+		setEPINTENSET(0, sam.USB_DEVICE_EPINTENSET_RXSTP)
 	}
 }
 
@@ -417,7 +421,6 @@ func handleStandardSetup(setup USBSetup) bool {
 		buf := []byte{0, 0}
 
 		if setup.BmRequestType != 0 { // endpoint
-			// TODO: actually check if the endpoint in question is currently halted
 			if isEndpointHalt {
 				buf[0] = 1
 			}
@@ -445,30 +448,7 @@ func handleStandardSetup(setup USBSetup) bool {
 		return true
 
 	case usb_SET_ADDRESS:
-		// set packet size 64 with auto Zlp after transfer
-		usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE.Set((epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos) |
-			uint32(1<<31)) // autozlp
-
-		// ack the transfer is complete from the request
-		setEPINTFLAG(0, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
-
-		// set bank ready for data
-		setEPSTATUSSET(0, sam.USB_DEVICE_EPSTATUSSET_BK1RDY)
-
-		// wait for transfer to complete
-		timeout := 3000
-		for (getEPINTFLAG(0) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
-			timeout--
-			if timeout == 0 {
-				return true
-			}
-		}
-
-		// last, set the device address to that requested by host
-		sam.USB_DEVICE.DADD.SetBits(setup.WValueL)
-		sam.USB_DEVICE.DADD.SetBits(sam.USB_DEVICE_DADD_ADDEN)
-
-		return true
+		return handleUSBSetAddress(setup)
 
 	case usb_GET_DESCRIPTOR:
 		sendDescriptor(setup)
@@ -490,17 +470,6 @@ func handleStandardSetup(setup USBSetup) bool {
 
 			usbConfiguration = setup.WValueL
 
-			// Enable interrupt for CDC control messages from host (OUT packet)
-			setEPINTENSET(usb_CDC_ENDPOINT_ACM, sam.USB_DEVICE_EPINTENSET_TRCPT1)
-
-			// Enable interrupt for CDC data messages from host
-			setEPINTENSET(usb_CDC_ENDPOINT_OUT, sam.USB_DEVICE_EPINTENSET_TRCPT0)
-
-			// Enable interrupt for HID messages from host
-			if hidCallback != nil {
-				setEPINTENSET(usb_HID_ENDPOINT_IN, sam.USB_DEVICE_EPINTENSET_TRCPT1)
-			}
-
 			SendZlp()
 			return true
 		} else {
@@ -521,6 +490,33 @@ func handleStandardSetup(setup USBSetup) bool {
 	default:
 		return true
 	}
+}
+
+func handleUSBSetAddress(setup USBSetup) bool {
+	// set packet size 64 with auto Zlp after transfer
+	usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE.Set((epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos) |
+		uint32(1<<31)) // autozlp
+
+	// ack the transfer is complete from the request
+	setEPINTFLAG(0, sam.USB_DEVICE_EPINTFLAG_TRCPT1)
+
+	// set bank ready for data
+	setEPSTATUSSET(0, sam.USB_DEVICE_EPSTATUSSET_BK1RDY)
+
+	// wait for transfer to complete
+	timeout := 3000
+	for (getEPINTFLAG(0) & sam.USB_DEVICE_EPINTFLAG_TRCPT1) == 0 {
+		timeout--
+		if timeout == 0 {
+			return true
+		}
+	}
+
+	// last, set the device address to that requested by host
+	sam.USB_DEVICE.DADD.SetBits(setup.WValueL)
+	sam.USB_DEVICE.DADD.SetBits(sam.USB_DEVICE_DADD_ADDEN)
+
+	return true
 }
 
 func cdcSetup(setup USBSetup) bool {

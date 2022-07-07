@@ -197,9 +197,6 @@ func handleUSBIRQ(interrupt.Interrupt) {
 
 			// Configure control endpoint
 			initEndpoint(0, usb_ENDPOINT_TYPE_CONTROL)
-
-			// Enable Setup-Received interrupt
-			nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_EP0SETUP)
 			nrf.USBD.USBPULLUP.Set(1)
 
 			usbConfiguration = 0
@@ -228,7 +225,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 			sendOnEP0DATADONE.ptr = nil
 		} else {
 			// no more data, so set status stage
-			nrf.USBD.TASKS_EP0STATUS.Set(1)
+			SendZlp() // nrf.USBD.TASKS_EP0STATUS.Set(1)
 		}
 		return
 	}
@@ -353,10 +350,11 @@ func initEndpoint(ep, config uint32) {
 		enableEPIn(ep)
 
 	case usb_ENDPOINT_TYPE_CONTROL:
+		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0)
+		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_EP0SETUP)
 		enableEPIn(0)
 		enableEPOut(0)
-		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0)
-		nrf.USBD.TASKS_EP0STATUS.Set(1)
+		SendZlp() // nrf.USBD.TASKS_EP0STATUS.Set(1)
 	}
 }
 
@@ -380,7 +378,7 @@ func handleStandardSetup(setup USBSetup) bool {
 		} else if setup.WValueL == 0 { // ENDPOINTHALT
 			isEndpointHalt = false
 		}
-		nrf.USBD.TASKS_EP0STATUS.Set(1)
+		SendZlp()
 		return true
 
 	case usb_SET_FEATURE:
@@ -389,12 +387,11 @@ func handleStandardSetup(setup USBSetup) bool {
 		} else if setup.WValueL == 0 { // ENDPOINTHALT
 			isEndpointHalt = true
 		}
-		nrf.USBD.TASKS_EP0STATUS.Set(1)
+		SendZlp()
 		return true
 
 	case usb_SET_ADDRESS:
-		// nrf USBD handles this
-		return true
+		return handleUSBSetAddress(setup)
 
 	case usb_GET_DESCRIPTOR:
 		sendDescriptor(setup)
@@ -410,17 +407,13 @@ func handleStandardSetup(setup USBSetup) bool {
 
 	case usb_SET_CONFIGURATION:
 		if setup.BmRequestType&usb_REQUEST_RECIPIENT == usb_REQUEST_DEVICE {
-			nrf.USBD.TASKS_EP0STATUS.Set(1)
 			for i := 1; i < len(endPoints); i++ {
 				initEndpoint(uint32(i), endPoints[i])
 			}
 
-			// Enable interrupt for HID messages from host
-			if hidCallback != nil {
-				nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << usb_HID_ENDPOINT_IN)
-			}
-
 			usbConfiguration = setup.WValueL
+
+			SendZlp()
 			return true
 		} else {
 			return false
@@ -434,7 +427,7 @@ func handleStandardSetup(setup USBSetup) bool {
 	case usb_SET_INTERFACE:
 		usbSetInterface = setup.WValueL
 
-		nrf.USBD.TASKS_EP0STATUS.Set(1)
+		SendZlp()
 		return true
 
 	default:
@@ -550,4 +543,9 @@ func enableEPOut(ep uint32) {
 func enableEPIn(ep uint32) {
 	epinen = epinen | (nrf.USBD_EPINEN_IN0 << ep)
 	nrf.USBD.EPINEN.Set(epinen)
+}
+
+func handleUSBSetAddress(setup USBSetup) bool {
+	// nrf USBD handles this
+	return true
 }
