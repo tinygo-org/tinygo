@@ -9,6 +9,7 @@ import (
 )
 
 type USBDevice struct {
+	initcomplete bool
 }
 
 var (

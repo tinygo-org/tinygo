@@ -153,6 +153,15 @@ func exitCriticalSection() {
 
 // Configure the USB peripheral. The config is here for compatibility with the UART interface.
 func (dev *USBDevice) Configure(config UARTConfig) {
+	if dev.initcomplete {
+		return
+	}
+
+	state := interrupt.Disable()
+	defer interrupt.Restore(state)
+
+	nrf.USBD.USBPULLUP.Set(0)
+
 	// Enable IRQ. Make sure this is higher than the SWI2 interrupt handler so
 	// that it is possible to print to the console from a BLE interrupt. You
 	// shouldn't generally do that but it is useful for debugging and panic
@@ -161,19 +170,33 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	intr.SetPriority(0x40) // interrupt priority 2 (lower number means more important)
 	intr.Enable()
 
+	// enable interrupt for end of reset and start of frame
+	nrf.USBD.INTEN.Set(nrf.USBD_INTENSET_USBEVENT | nrf.USBD_INTENSET_SOF)
+
+	// errata 187
+	// https://infocenter.nordicsemi.com/topic/errata_nRF52840_EngB/ERR/nRF52840/EngineeringB/latest/anomaly_840_187.html
+	(*volatile.Register32)(unsafe.Pointer(uintptr(0x4006EC00))).Set(0x00009375)
+	(*volatile.Register32)(unsafe.Pointer(uintptr(0x4006ED14))).Set(0x00000003)
+	(*volatile.Register32)(unsafe.Pointer(uintptr(0x4006EC00))).Set(0x00009375)
+
 	// enable USB
 	nrf.USBD.ENABLE.Set(1)
 
-	// enable interrupt for end of reset and start of frame
-	nrf.USBD.INTENSET.Set(
-		nrf.USBD_INTENSET_EPDATA |
-			nrf.USBD_INTENSET_EP0DATADONE |
-			nrf.USBD_INTENSET_USBEVENT |
-			nrf.USBD_INTENSET_SOF |
-			nrf.USBD_INTENSET_EP0SETUP,
-	)
+	timeout := 300000
+	for !nrf.USBD.EVENTCAUSE.HasBits(nrf.USBD_EVENTCAUSE_READY) {
+		timeout--
+		if timeout == 0 {
+			return
+		}
+	}
+	nrf.USBD.EVENTCAUSE.ClearBits(nrf.USBD_EVENTCAUSE_READY)
 
-	nrf.USBD.USBPULLUP.Set(0)
+	// errata 187
+	(*volatile.Register32)(unsafe.Pointer(uintptr(0x4006EC00))).Set(0x00009375)
+	(*volatile.Register32)(unsafe.Pointer(uintptr(0x4006ED14))).Set(0x00000000)
+	(*volatile.Register32)(unsafe.Pointer(uintptr(0x4006EC00))).Set(0x00009375)
+
+	dev.initcomplete = true
 }
 
 func (usbcdc *USBCDC) Configure(config UARTConfig) {
@@ -350,10 +373,12 @@ func initEndpoint(ep, config uint32) {
 		enableEPIn(ep)
 
 	case usb_ENDPOINT_TYPE_CONTROL:
-		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0)
-		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_EP0SETUP)
 		enableEPIn(0)
 		enableEPOut(0)
+		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 |
+			nrf.USBD_INTENSET_EP0SETUP |
+			nrf.USBD_INTENSET_EPDATA |
+			nrf.USBD_INTENSET_EP0DATADONE)
 		SendZlp() // nrf.USBD.TASKS_EP0STATUS.Set(1)
 	}
 }
