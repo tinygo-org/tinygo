@@ -150,6 +150,10 @@ const (
 
 // Configure the USB peripheral. The config is here for compatibility with the UART interface.
 func (dev *USBDevice) Configure(config UARTConfig) {
+	if dev.initcomplete {
+		return
+	}
+
 	// reset USB interface
 	sam.USB_DEVICE.CTRLA.SetBits(sam.USB_DEVICE_CTRLA_SWRST)
 	for sam.USB_DEVICE.SYNCBUSY.HasBits(sam.USB_DEVICE_SYNCBUSY_SWRST) ||
@@ -185,6 +189,8 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 
 	// enable IRQ
 	interrupt.New(sam.IRQ_USB, handleUSBIRQ).Enable()
+
+	dev.initcomplete = true
 }
 
 func (usbcdc *USBCDC) Configure(config UARTConfig) {
