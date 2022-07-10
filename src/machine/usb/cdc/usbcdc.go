@@ -71,10 +71,6 @@ type USBCDC struct {
 	waitTxc  bool
 }
 
-func (x *USBCDC) Debug() int {
-	return 3
-}
-
 var (
 	// USB is a USB CDC interface.
 	USB *USBCDC
