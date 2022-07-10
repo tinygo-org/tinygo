@@ -7,6 +7,7 @@ import (
 	"device/arm"
 	"device/nrf"
 	"machine"
+	"machine/usb/cdc"
 	"runtime/interrupt"
 	"runtime/volatile"
 )
@@ -28,6 +29,7 @@ func main() {
 }
 
 func init() {
+	cdc.EnableUSBCDC()
 	machine.USBDev.Configure(machine.UARTConfig{})
 	machine.InitSerial()
 	initLFCLK()
