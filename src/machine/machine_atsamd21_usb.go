@@ -148,8 +148,8 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			ok = handleStandardSetup(setup)
 		} else {
 			// Class Interface Requests
-			if setup.WIndex < uint16(len(callbackUSBSetup)) && callbackUSBSetup[setup.WIndex] != nil {
-				ok = callbackUSBSetup[setup.WIndex](setup)
+			if setup.WIndex < uint16(len(usbSetupHandler)) && usbSetupHandler[setup.WIndex] != nil {
+				ok = usbSetupHandler[setup.WIndex](setup)
 			}
 		}
 
@@ -178,13 +178,13 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 		setEPINTFLAG(i, epFlags)
 		if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT0) > 0 {
 			buf := handleEndpointRx(i)
-			if callbackUSBRx[i] != nil {
-				callbackUSBRx[i](buf)
+			if usbRxHandler[i] != nil {
+				usbRxHandler[i](buf)
 			}
 			handleEndpointRxComplete(i)
 		} else if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT1) > 0 {
-			if callbackUSBTx[i] != nil {
-				callbackUSBTx[i]()
+			if usbTxHandler[i] != nil {
+				usbTxHandler[i]()
 			}
 		}
 	}
@@ -358,7 +358,7 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	for (getEPSTATUS(0) & sam.USB_DEVICE_EPSTATUS_BK0RDY) == 0 {
 		timeout--
 		if timeout == 0 {
-			return b, errUSBCDCReadTimeout
+			return b, ErrUSBReadTimeout
 		}
 	}
 
@@ -367,7 +367,7 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	for (getEPINTFLAG(0) & sam.USB_DEVICE_EPINTFLAG_TRCPT0) == 0 {
 		timeout--
 		if timeout == 0 {
-			return b, errUSBCDCReadTimeout
+			return b, ErrUSBReadTimeout
 		}
 	}
 
@@ -376,7 +376,7 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 		usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask)
 
 	if bytesread != cdcLineInfoSize {
-		return b, errUSBCDCBytesRead
+		return b, ErrUSBBytesRead
 	}
 
 	copy(b[:7], udd_ep_out_cache_buffer[0][:7])

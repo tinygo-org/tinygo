@@ -10,8 +10,8 @@ const (
 func New() *USBCDC {
 	if USB == nil {
 		USB = &USBCDC{
-			Buffer:  NewRingBuffer(),
-			Buffer2: NewRingBuffer2(),
+			rxBuffer: NewRxRingBuffer(),
+			txBuffer: NewTxRingBuffer(),
 		}
 	}
 	return USB

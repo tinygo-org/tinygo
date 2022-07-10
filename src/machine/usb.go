@@ -57,14 +57,12 @@ var (
 const cdcLineInfoSize = 7
 
 var (
-	errUSBCDCBufferEmpty      = errors.New("USB-CDC buffer empty")
-	errUSBCDCWriteByteTimeout = errors.New("USB-CDC write byte timeout")
-	errUSBCDCReadTimeout      = errors.New("USB-CDC read timeout")
-	errUSBCDCBytesRead        = errors.New("USB-CDC invalid number of bytes read")
+	ErrUSBReadTimeout = errors.New("USB read timeout")
+	ErrUSBBytesRead   = errors.New("USB invalid number of bytes read")
 )
 
 var (
-	usbEndpointDescriptors [8]usbDeviceDescriptor
+	usbEndpointDescriptors [numberOfEndpoints]usbDeviceDescriptor
 
 	udd_ep_control_cache_buffer [256]uint8
 	udd_ep_in_cache_buffer      [7][64]uint8
@@ -101,8 +99,8 @@ const (
 	usbEndpointOut = 0x00
 	usbEndpointIn  = 0x80
 
+	numberOfEndpoints     = 8
 	usbEndpointPacketSize = 64 // 64 for Full Speed, EPT size max is 1024
-	usb_EPT_NUM           = 7
 
 	// standard requests
 	usb_GET_STATUS        = 0
@@ -129,7 +127,8 @@ const (
 	usb_CONFIG_SELF_POWERED  = 0xC0
 	usb_CONFIG_REMOTE_WAKEUP = 0x20
 
-	// CDC
+	// Interface
+	numberOfInterfaces     = 3
 	usb_CDC_ACM_INTERFACE  = 0 // CDC ACM
 	usb_CDC_DATA_INTERFACE = 1 // CDC Data
 	usb_CDC_FIRST_ENDPOINT = 1
@@ -164,9 +163,9 @@ const (
 )
 
 var (
-	callbackUSBTx    [8]func()
-	callbackUSBRx    [8]func([]byte)
-	callbackUSBSetup [3]func(USBSetup) bool
+	usbTxHandler    [numberOfEndpoints]func()
+	usbRxHandler    [numberOfEndpoints]func([]byte)
+	usbSetupHandler [numberOfInterfaces]func(USBSetup) bool
 
 	endPoints = []uint32{
 		usb_CONTROL_ENDPOINT: usb_ENDPOINT_TYPE_CONTROL,
@@ -341,21 +340,21 @@ func handleStandardSetup(setup USBSetup) bool {
 	}
 }
 
-func EnableCDC(callback func(), callbackRx func([]byte), callbackSetup func(USBSetup) bool) {
+func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(USBSetup) bool) {
 	usbDescriptorConfig |= usbDescriptorConfigCDC
 	endPoints[usb_CDC_ENDPOINT_ACM] = (usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn)
 	endPoints[usb_CDC_ENDPOINT_OUT] = (usb_ENDPOINT_TYPE_BULK | usbEndpointOut)
 	endPoints[usb_CDC_ENDPOINT_IN] = (usb_ENDPOINT_TYPE_BULK | usbEndpointIn)
-	callbackUSBRx[usb_CDC_ENDPOINT_OUT] = callbackRx
-	callbackUSBTx[usb_CDC_ENDPOINT_IN] = callback
-	callbackUSBSetup[usb_CDC_ACM_INTERFACE] = callbackSetup // 0x02 (Communications and CDC Control)
-	callbackUSBSetup[usb_CDC_DATA_INTERFACE] = nil          // 0x0A (CDC-Data)
+	usbRxHandler[usb_CDC_ENDPOINT_OUT] = rxHandler
+	usbTxHandler[usb_CDC_ENDPOINT_IN] = txHandler
+	usbSetupHandler[usb_CDC_ACM_INTERFACE] = setupHandler // 0x02 (Communications and CDC Control)
+	usbSetupHandler[usb_CDC_DATA_INTERFACE] = nil         // 0x0A (CDC-Data)
 }
 
 // EnableHID enables HID. This function must be executed from the init().
-func EnableHID(callback func(), callbackRx func([]byte), callbackSetup func(USBSetup) bool) {
+func EnableHID(txHandler func(), rxHandler func([]byte), setupHandler func(USBSetup) bool) {
 	usbDescriptorConfig |= usbDescriptorConfigHID
 	endPoints[usb_HID_ENDPOINT_IN] = (usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn)
-	callbackUSBTx[usb_HID_ENDPOINT_IN] = callback
-	callbackUSBSetup[usb_HID_INTERFACE] = callbackSetup // 0x03 (HID - Human Interface Device)
+	usbTxHandler[usb_HID_ENDPOINT_IN] = txHandler
+	usbSetupHandler[usb_HID_INTERFACE] = setupHandler // 0x03 (HID - Human Interface Device)
 }

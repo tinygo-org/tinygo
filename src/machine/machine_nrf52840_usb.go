@@ -153,8 +153,8 @@ func handleUSBIRQ(interrupt.Interrupt) {
 			ok = handleStandardSetup(setup)
 		} else {
 			// Class Interface Requests
-			if setup.WIndex < uint16(len(callbackUSBSetup)) && callbackUSBSetup[setup.WIndex] != nil {
-				ok = callbackUSBSetup[setup.WIndex](setup)
+			if setup.WIndex < uint16(len(usbSetupHandler)) && usbSetupHandler[setup.WIndex] != nil {
+				ok = usbSetupHandler[setup.WIndex](setup)
 			}
 		}
 
@@ -175,8 +175,8 @@ func handleUSBIRQ(interrupt.Interrupt) {
 			inDataDone := epDataStatus&(nrf.USBD_EPDATASTATUS_EPIN1<<(i-1)) > 0
 			outDataDone := epDataStatus&(nrf.USBD_EPDATASTATUS_EPOUT1<<(i-1)) > 0
 			if inDataDone {
-				if callbackUSBTx[i] != nil {
-					callbackUSBTx[i]()
+				if usbTxHandler[i] != nil {
+					usbTxHandler[i]()
 				}
 			} else if outDataDone {
 				enterCriticalSection()
@@ -193,8 +193,8 @@ func handleUSBIRQ(interrupt.Interrupt) {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
 			buf := handleEndpointRx(uint32(i))
-			if callbackUSBRx[i] != nil {
-				callbackUSBRx[i](buf)
+			if usbRxHandler[i] != nil {
+				usbRxHandler[i](buf)
 			}
 			handleEndpointRxComplete(uint32(i))
 			exitCriticalSection()
@@ -340,7 +340,7 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 		}
 		timeout--
 		if timeout == 0 {
-			return b, errUSBCDCReadTimeout
+			return b, ErrUSBReadTimeout
 		}
 	}
 
@@ -353,7 +353,7 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 
 		timeout--
 		if timeout == 0 {
-			return b, errUSBCDCReadTimeout
+			return b, ErrUSBReadTimeout
 		}
 	}
 

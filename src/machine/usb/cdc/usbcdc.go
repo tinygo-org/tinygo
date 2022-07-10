@@ -4,14 +4,10 @@ import (
 	"errors"
 	"machine"
 	"runtime/interrupt"
-	"runtime/volatile"
 )
 
 var (
-	errUSBCDCBufferEmpty      = errors.New("USB-CDC buffer empty")
-	errUSBCDCWriteByteTimeout = errors.New("USB-CDC write byte timeout")
-	errUSBCDCReadTimeout      = errors.New("USB-CDC read timeout")
-	errUSBCDCBytesRead        = errors.New("USB-CDC invalid number of bytes read")
+	ErrBufferEmpty = errors.New("USB-CDC buffer empty")
 )
 
 const cdcLineInfoSize = 7
@@ -23,21 +19,6 @@ type cdcLineInfo struct {
 	bDataBits   uint8
 	lineState   uint8
 }
-
-// USBCDC is the serial interface that works over the USB port.
-// To implement the USBCDC interface for a board, you must declare a concrete type as follows:
-//
-// 		type USBCDC struct {
-// 			Buffer *RingBuffer
-// 		}
-//
-// You can also add additional members to this struct depending on your implementation,
-// but the *RingBuffer is required.
-// When you are declaring the USBCDC for your board, make sure that you also declare the
-// RingBuffer using the NewRingBuffer() function:
-//
-//		USBCDC{Buffer: NewRingBuffer()}
-//
 
 // Read from the RX buffer.
 func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
@@ -65,32 +46,29 @@ func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
 // If there is no data in the buffer, returns an error.
 func (usbcdc *USBCDC) ReadByte() (byte, error) {
 	// check if RX buffer is empty
-	buf, ok := usbcdc.Buffer.Get()
+	buf, ok := usbcdc.rxBuffer.Get()
 	if !ok {
-		return 0, errUSBCDCBufferEmpty
+		return 0, ErrBufferEmpty
 	}
 	return buf, nil
 }
 
 // Buffered returns the number of bytes currently stored in the RX buffer.
 func (usbcdc *USBCDC) Buffered() int {
-	return int(usbcdc.Buffer.Used())
+	return int(usbcdc.rxBuffer.Used())
 }
 
 // Receive handles adding data to the UART's data buffer.
 // Usually called by the IRQ handler for a machine.
 func (usbcdc *USBCDC) Receive(data byte) {
-	usbcdc.Buffer.Put(data)
+	usbcdc.rxBuffer.Put(data)
 }
 
-// USBCDC is the USB CDC aka serial over USB interface on the SAMD21.
+// USBCDC is the USB CDC aka serial over USB interface.
 type USBCDC struct {
-	Buffer            *RingBuffer
-	Buffer2           *RingBuffer2
-	TxIdx             volatile.Register8
-	waitTxcRetryCount uint8
-	sent              bool
-	waitTxc           bool
+	rxBuffer *rxRingBuffer
+	txBuffer *txRingBuffer
+	waitTxc  bool
 }
 
 func (x *USBCDC) Debug() int {
@@ -112,7 +90,7 @@ func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 // Flush flushes buffered data.
 func (usbcdc *USBCDC) Flush() {
 	mask := interrupt.Disable()
-	if b, ok := usbcdc.Buffer2.Get(); ok {
+	if b, ok := usbcdc.txBuffer.Get(); ok {
 		machine.SendUSBInPacket(cdcEndpointIn, b)
 	} else {
 		usbcdc.waitTxc = false
@@ -124,7 +102,7 @@ func (usbcdc *USBCDC) Flush() {
 func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	if usbLineInfo.lineState > 0 {
 		mask := interrupt.Disable()
-		usbcdc.Buffer2.Put(data)
+		usbcdc.txBuffer.Put(data)
 		if !usbcdc.waitTxc {
 			usbcdc.waitTxc = true
 			usbcdc.Flush()
