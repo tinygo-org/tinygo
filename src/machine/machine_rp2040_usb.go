@@ -71,10 +71,9 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			}
 		}
 
-		if ok {
-			// set Bank1 ready?
-		} else {
+		if !ok {
 			// Stall endpoint?
+			sendStallViaEPIn(0)
 		}
 
 	}
@@ -244,6 +243,17 @@ func sendViaEPIn(ep uint32, data []byte, count int) {
 	val |= usbBuf0CtrlFull
 
 	copy(usbDPSRAM.EPxBuffer[ep&0x7F].Buffer0[:], data[:count])
+	usbDPSRAM.EPxBufferControl[ep&0x7F].In = val
+}
+
+func sendStallViaEPIn(ep uint32) {
+	// Prepare buffer control register value
+	if ep == 0 {
+		rp.USBCTRL_REGS.EP_STALL_ARM.Set(rp.USBCTRL_REGS_EP_STALL_ARM_EP0_IN)
+	}
+	val := uint32(usbBuf0CtrlFull)
+	usbDPSRAM.EPxBufferControl[ep&0x7F].In = val
+	val |= uint32(usbBuf0CtrlStall)
 	usbDPSRAM.EPxBufferControl[ep&0x7F].In = val
 }
 
