@@ -1,15 +1,27 @@
-//go:build sam || nrf52840 || rp2040
-// +build sam nrf52840 rp2040
+package usb
 
-package machine
+import "runtime/volatile"
 
-type USBDescriptor struct {
+// DeviceDescBank is the USB device endpoint descriptor.
+type DeviceDescBank struct {
+	ADDR      volatile.Register32
+	PCKSIZE   volatile.Register32
+	EXTREG    volatile.Register16
+	STATUS_BK volatile.Register8
+	_reserved [5]volatile.Register8
+}
+
+type DeviceDescriptor struct {
+	DeviceDescBank [2]DeviceDescBank
+}
+
+type Descriptor struct {
 	Device        []byte
 	Configuration []byte
 	HID           map[uint16][]byte
 }
 
-func (d *USBDescriptor) Configure(idVendor, idProduct uint16) {
+func (d *Descriptor) Configure(idVendor, idProduct uint16) {
 	d.Device[8] = byte(idVendor)
 	d.Device[9] = byte(idVendor >> 8)
 	d.Device[10] = byte(idProduct)
@@ -19,7 +31,7 @@ func (d *USBDescriptor) Configure(idVendor, idProduct uint16) {
 	d.Configuration[3] = byte(len(d.Configuration) >> 8)
 }
 
-var descriptorCDC = USBDescriptor{
+var DescriptorCDC = Descriptor{
 	Device: []byte{
 		0x12, 0x01, 0x00, 0x02, 0xef, 0x02, 0x01, 0x40, 0x86, 0x28, 0x2d, 0x80, 0x00, 0x01, 0x01, 0x02, 0x03, 0x01,
 	},
@@ -38,7 +50,7 @@ var descriptorCDC = USBDescriptor{
 	},
 }
 
-var descriptorCDCHID = USBDescriptor{
+var DescriptorCDCHID = Descriptor{
 	Device: []byte{
 		0x12, 0x01, 0x00, 0x02, 0xef, 0x02, 0x01, 0x40, 0x86, 0x28, 0x2d, 0x80, 0x00, 0x01, 0x01, 0x02, 0x03, 0x01,
 	},
@@ -72,7 +84,7 @@ var descriptorCDCHID = USBDescriptor{
 	},
 }
 
-var descriptorCDCMIDI = USBDescriptor{
+var DescriptorCDCMIDI = Descriptor{
 	Device: []byte{
 		0x12, 0x01, 0x00, 0x02, 0xef, 0x02, 0x01, 0x40, 0x86, 0x28, 0x2d, 0x80, 0x00, 0x01, 0x01, 0x02, 0x03, 0x01,
 	},

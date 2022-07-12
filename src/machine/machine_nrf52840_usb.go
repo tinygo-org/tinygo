@@ -6,6 +6,7 @@ package machine
 import (
 	"device/arm"
 	"device/nrf"
+	"machine/usb"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -100,7 +101,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 		if (nrf.USBD.EVENTCAUSE.Get() & nrf.USBD_EVENTCAUSE_READY) > 0 {
 
 			// Configure control endpoint
-			initEndpoint(0, usb_ENDPOINT_TYPE_CONTROL)
+			initEndpoint(0, usb.ENDPOINT_TYPE_CONTROL)
 			nrf.USBD.USBPULLUP.Set(1)
 
 			usbConfiguration = 0
@@ -115,10 +116,10 @@ func handleUSBIRQ(interrupt.Interrupt) {
 			// previous data was too big for one packet, so send a second
 			ptr := sendOnEP0DATADONE.ptr
 			count := sendOnEP0DATADONE.count
-			if count > usbEndpointPacketSize {
-				sendOnEP0DATADONE.offset += usbEndpointPacketSize
+			if count > usb.EndpointPacketSize {
+				sendOnEP0DATADONE.offset += usb.EndpointPacketSize
 				sendOnEP0DATADONE.ptr = &udd_ep_control_cache_buffer[sendOnEP0DATADONE.offset]
-				count = usbEndpointPacketSize
+				count = usb.EndpointPacketSize
 			}
 			sendOnEP0DATADONE.count -= count
 			sendViaEPIn(
@@ -148,7 +149,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 		setup := parseUSBSetupRegisters()
 
 		ok := false
-		if (setup.BmRequestType & usb_REQUEST_TYPE) == usb_REQUEST_STANDARD {
+		if (setup.BmRequestType & usb.REQUEST_TYPE) == usb.REQUEST_STANDARD {
 			// Standard Requests
 			ok = handleStandardSetup(setup)
 		} else {
@@ -202,8 +203,8 @@ func handleUSBIRQ(interrupt.Interrupt) {
 	}
 }
 
-func parseUSBSetupRegisters() USBSetup {
-	return USBSetup{
+func parseUSBSetupRegisters() usb.Setup {
+	return usb.Setup{
 		BmRequestType: uint8(nrf.USBD.BMREQUESTTYPE.Get()),
 		BRequest:      uint8(nrf.USBD.BREQUEST.Get()),
 		WValueL:       uint8(nrf.USBD.WVALUEL.Get()),
@@ -215,23 +216,23 @@ func parseUSBSetupRegisters() USBSetup {
 
 func initEndpoint(ep, config uint32) {
 	switch config {
-	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn:
+	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn:
 		enableEPIn(ep)
 
-	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
+	case usb.ENDPOINT_TYPE_BULK | usb.EndpointOut:
 		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << ep)
 		nrf.USBD.SIZE.EPOUT[ep].Set(0)
 		enableEPOut(ep)
 
-	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointOut:
+	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut:
 		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << ep)
 		nrf.USBD.SIZE.EPOUT[ep].Set(0)
 		enableEPOut(ep)
 
-	case usb_ENDPOINT_TYPE_BULK | usbEndpointIn:
+	case usb.ENDPOINT_TYPE_BULK | usb.EndpointIn:
 		enableEPIn(ep)
 
-	case usb_ENDPOINT_TYPE_CONTROL:
+	case usb.ENDPOINT_TYPE_CONTROL:
 		enableEPIn(0)
 		enableEPOut(0)
 		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 |
@@ -261,11 +262,11 @@ func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
 
 	if ep == 0 {
 		copy(udd_ep_control_cache_buffer[:], data[:count])
-		if count > usbEndpointPacketSize {
-			sendOnEP0DATADONE.offset = usbEndpointPacketSize
+		if count > usb.EndpointPacketSize {
+			sendOnEP0DATADONE.offset = usb.EndpointPacketSize
 			sendOnEP0DATADONE.ptr = &udd_ep_control_cache_buffer[sendOnEP0DATADONE.offset]
-			sendOnEP0DATADONE.count = count - usbEndpointPacketSize
-			count = usbEndpointPacketSize
+			sendOnEP0DATADONE.count = count - usb.EndpointPacketSize
+			count = usb.EndpointPacketSize
 		}
 		sendViaEPIn(
 			ep,
@@ -316,7 +317,7 @@ func enableEPIn(ep uint32) {
 	nrf.USBD.EPINEN.Set(epinen)
 }
 
-func handleUSBSetAddress(setup USBSetup) bool {
+func handleUSBSetAddress(setup usb.Setup) bool {
 	// nrf USBD handles this
 	return true
 }

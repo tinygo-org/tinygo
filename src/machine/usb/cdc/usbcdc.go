@@ -3,6 +3,7 @@ package cdc
 import (
 	"errors"
 	"machine"
+	"machine/usb"
 	"runtime/interrupt"
 )
 
@@ -128,7 +129,7 @@ func cdcCallbackRx(b []byte) {
 	}
 }
 
-func cdcSetup(setup machine.USBSetup) bool {
+func cdcSetup(setup usb.Setup) bool {
 	if setup.BmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.BRequest == usb_CDC_GET_LINE_CODING {
 			var b [cdcLineInfoSize]byte
