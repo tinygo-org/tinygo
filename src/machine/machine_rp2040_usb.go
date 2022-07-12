@@ -6,6 +6,7 @@ package machine
 import (
 	"device/arm"
 	"device/rp"
+	"machine/usb"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -58,10 +59,10 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 	// Setup packet received
 	if (status & rp.USBCTRL_REGS_INTS_SETUP_REQ) > 0 {
 		rp.USBCTRL_REGS.SIE_STATUS.Set(rp.USBCTRL_REGS_SIE_STATUS_SETUP_REC)
-		setup := newUSBSetup(usbDPSRAM.setupBytes())
+		setup := usb.NewSetup(usbDPSRAM.setupBytes())
 
 		ok := false
-		if (setup.BmRequestType & usb_REQUEST_TYPE) == usb_REQUEST_STANDARD {
+		if (setup.BmRequestType & usb.REQUEST_TYPE) == usb.REQUEST_STANDARD {
 			// Standard Requests
 			ok = handleStandardSetup(setup)
 		} else {
@@ -84,8 +85,8 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			ep := uint32(0)
 			data := sendOnEP0DATADONE.data
 			count := len(data) - sendOnEP0DATADONE.offset
-			if ep == 0 && count > usbEndpointPacketSize {
-				count = usbEndpointPacketSize
+			if ep == 0 && count > usb.EndpointPacketSize {
+				count = usb.EndpointPacketSize
 			}
 
 			sendViaEPIn(ep, data[sendOnEP0DATADONE.offset:], count)
@@ -122,7 +123,7 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 	// Bus is reset
 	if (status & rp.USBCTRL_REGS_INTS_BUS_RESET) > 0 {
 		rp.USBCTRL_REGS.SIE_STATUS.Set(rp.USBCTRL_REGS_SIE_STATUS_BUS_RESET)
-		initEndpoint(0, usb_ENDPOINT_TYPE_CONTROL)
+		initEndpoint(0, usb.ENDPOINT_TYPE_CONTROL)
 	}
 }
 
@@ -132,31 +133,31 @@ func initEndpoint(ep, config uint32) {
 	val |= offset
 
 	switch config {
-	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn:
+	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn:
 		val |= usbEpControlEndpointTypeInterrupt
 		usbDPSRAM.EPxControl[ep].In = val
 
-	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
+	case usb.ENDPOINT_TYPE_BULK | usb.EndpointOut:
 		val |= usbEpControlEndpointTypeBulk
 		usbDPSRAM.EPxControl[ep].Out = val
 		usbDPSRAM.EPxBufferControl[ep].Out = USBBufferLen & usbBuf0CtrlLenMask
 		usbDPSRAM.EPxBufferControl[ep].Out |= usbBuf0CtrlAvail
 
-	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointOut:
+	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut:
 		// TODO: not really anything, seems like...
 
-	case usb_ENDPOINT_TYPE_BULK | usbEndpointIn:
+	case usb.ENDPOINT_TYPE_BULK | usb.EndpointIn:
 		val |= usbEpControlEndpointTypeBulk
 		usbDPSRAM.EPxControl[ep].In = val
 
-	case usb_ENDPOINT_TYPE_CONTROL:
+	case usb.ENDPOINT_TYPE_CONTROL:
 		val |= usbEpControlEndpointTypeControl
 		usbDPSRAM.EPxBufferControl[ep].Out = usbBuf0CtrlAvail
 
 	}
 }
 
-func handleUSBSetAddress(setup USBSetup) bool {
+func handleUSBSetAddress(setup usb.Setup) bool {
 	sendUSBPacket(0, []byte{}, 0)
 
 	// last, set the device address to that requested by host
@@ -189,8 +190,8 @@ func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
 	}
 
 	if ep == 0 {
-		if count > usbEndpointPacketSize {
-			count = usbEndpointPacketSize
+		if count > usb.EndpointPacketSize {
+			count = usb.EndpointPacketSize
 
 			sendOnEP0DATADONE.offset = count
 			sendOnEP0DATADONE.data = data
@@ -298,14 +299,14 @@ var (
 func (d *USBDPSRAM) setupBytes() []byte {
 	var buf [8]byte
 
-	buf[0] = byte(d.EPxControl[usb_CONTROL_ENDPOINT].In)
-	buf[1] = byte(d.EPxControl[usb_CONTROL_ENDPOINT].In >> 8)
-	buf[2] = byte(d.EPxControl[usb_CONTROL_ENDPOINT].In >> 16)
-	buf[3] = byte(d.EPxControl[usb_CONTROL_ENDPOINT].In >> 24)
-	buf[4] = byte(d.EPxControl[usb_CONTROL_ENDPOINT].Out)
-	buf[5] = byte(d.EPxControl[usb_CONTROL_ENDPOINT].Out >> 8)
-	buf[6] = byte(d.EPxControl[usb_CONTROL_ENDPOINT].Out >> 16)
-	buf[7] = byte(d.EPxControl[usb_CONTROL_ENDPOINT].Out >> 24)
+	buf[0] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In)
+	buf[1] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In >> 8)
+	buf[2] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In >> 16)
+	buf[3] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In >> 24)
+	buf[4] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out)
+	buf[5] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out >> 8)
+	buf[6] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out >> 16)
+	buf[7] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out >> 24)
 
 	return buf[:]
 }

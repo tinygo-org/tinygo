@@ -3,6 +3,7 @@ package hid
 import (
 	"errors"
 	"machine"
+	"machine/usb"
 )
 
 // from usb-hid.go
@@ -48,7 +49,7 @@ func handler() {
 	}
 }
 
-func setupHandler(setup machine.USBSetup) bool {
+func setupHandler(setup usb.Setup) bool {
 	ok := false
 	if setup.BmRequestType == usb_SET_REPORT_TYPE && setup.BRequest == usb_SET_IDLE {
 		machine.SendZlp()
