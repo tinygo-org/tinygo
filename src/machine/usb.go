@@ -23,6 +23,8 @@ type Serialer interface {
 	Configure(config UARTConfig) error
 	Buffered() int
 	ReadByte() (byte, error)
+	DTR() bool
+	RTS() bool
 }
 
 var usbDescriptor = descriptorCDC
