@@ -12,9 +12,9 @@ const (
 var Midi *midi
 
 type midi struct {
-	buf            *RingBuffer
-	callbackFuncRx func([]byte)
-	waitTxc        bool
+	buf       *RingBuffer
+	rxHandler func([]byte)
+	waitTxc   bool
 }
 
 func init() {
@@ -32,12 +32,12 @@ func newMidi() *midi {
 	m := &midi{
 		buf: NewRingBuffer(),
 	}
-	machine.EnableMIDI(m.Callback, m.CallbackRx, nil)
+	machine.EnableMIDI(m.Handler, m.rxHandler, nil)
 	return m
 }
 
-func (m *midi) SetCallback(callbackRx func([]byte)) {
-	m.callbackFuncRx = callbackRx
+func (m *midi) SetHandler(rxHandler func([]byte)) {
+	m.rxHandler = rxHandler
 }
 
 func (m *midi) Write(b []byte) (n int, err error) {
@@ -54,7 +54,7 @@ func (m *midi) sendUSBPacket(b []byte) {
 }
 
 // from BulkIn
-func (m *midi) Callback() {
+func (m *midi) Handler() {
 	m.waitTxc = false
 	if b, ok := m.buf.Get(); ok {
 		m.waitTxc = true
@@ -72,8 +72,8 @@ func (m *midi) tx(b []byte) {
 }
 
 // from BulkOut
-func (m *midi) CallbackRx(b []byte) {
-	if m.callbackFuncRx != nil {
-		m.callbackFuncRx(b)
+func (m *midi) RxHandler(b []byte) {
+	if m.rxHandler != nil {
+		m.rxHandler(b)
 	}
 }

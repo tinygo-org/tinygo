@@ -23,7 +23,7 @@ type mouse struct {
 func init() {
 	if Mouse == nil {
 		Mouse = newMouse()
-		hid.SetCallbackHandler(Mouse)
+		hid.SetHandler(Mouse)
 	}
 }
 
@@ -38,7 +38,7 @@ func newMouse() *mouse {
 	}
 }
 
-func (m *mouse) Callback() bool {
+func (m *mouse) Handler() bool {
 	m.waitTxc = false
 	if b, ok := m.buf.Get(); ok {
 		m.waitTxc = true
@@ -82,7 +82,7 @@ func (m *mouse) Move(vx, vy int) {
 	})
 }
 
-// Cilck clicks the mouse button.
+// Click clicks the mouse button.
 func (m *mouse) Click(btn Button) {
 	m.Press(btn)
 	m.Release(btn)
