@@ -128,30 +128,31 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 }
 
 func initEndpoint(ep, config uint32) {
-	val := uint32(0x80000000) | uint32(0x20000000)
-	offset := ep*2*64 + 0x100
+	val := uint32(usbEpControlEnable) | uint32(usbEpControlInterruptPerBuff)
+	offset := ep*2*USBBufferLen + 0x100
 	val |= offset
 
 	switch config {
 	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointIn:
-		val |= 0x0C000000
+		val |= usbEpControlEndpointTypeInterrupt
 		usbDPSRAM.EPxControl[ep].In = val
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointOut:
-		val |= 0x08000000
+		val |= usbEpControlEndpointTypeBulk
 		usbDPSRAM.EPxControl[ep].Out = val
-		usbDPSRAM.EPxBufferControl[ep].Out = 0x00000040
-		usbDPSRAM.EPxBufferControl[ep].Out |= 0x00000400
+		usbDPSRAM.EPxBufferControl[ep].Out = USBBufferLen & usbBuf0CtrlLenMask
+		usbDPSRAM.EPxBufferControl[ep].Out |= usbBuf0CtrlAvail
 
 	case usb_ENDPOINT_TYPE_INTERRUPT | usbEndpointOut:
 		// TODO: not really anything, seems like...
 
 	case usb_ENDPOINT_TYPE_BULK | usbEndpointIn:
-		val |= 0x08000000
+		val |= usbEpControlEndpointTypeBulk
 		usbDPSRAM.EPxControl[ep].In = val
 
 	case usb_ENDPOINT_TYPE_CONTROL:
-		usbDPSRAM.EPxBufferControl[ep].Out = 0x00000400
+		val |= usbEpControlEndpointTypeControl
+		usbDPSRAM.EPxBufferControl[ep].Out = usbBuf0CtrlAvail
 
 	}
 }
@@ -210,17 +211,17 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 
 func handleEndpointRx(ep uint32) []byte {
 	ctrl := usbDPSRAM.EPxBufferControl[ep].Out
-	usbDPSRAM.EPxBufferControl[ep].Out = 0x00000040
-	sz := ctrl & 0x0000003F
+	usbDPSRAM.EPxBufferControl[ep].Out = USBBufferLen & usbBuf0CtrlLenMask
+	sz := ctrl & usbBuf0CtrlLenMask
 	buf := make([]byte, sz)
 	copy(buf, usbDPSRAM.EPxBuffer[ep].Buffer0[:sz])
 
 	epXdata0[ep] = !epXdata0[ep]
 	if epXdata0[ep] {
-		usbDPSRAM.EPxBufferControl[ep].Out |= 0x00002000
+		usbDPSRAM.EPxBufferControl[ep].Out |= usbBuf0CtrlData1Pid
 	}
 
-	usbDPSRAM.EPxBufferControl[ep].Out |= 0x00000400
+	usbDPSRAM.EPxBufferControl[ep].Out |= usbBuf0CtrlAvail
 
 	return buf
 }
@@ -231,16 +232,16 @@ func SendZlp() {
 
 func sendViaEPIn(ep uint32, data []byte, count int) {
 	// Prepare buffer control register value
-	val := uint32(count) | 0x00000400
+	val := uint32(count) | usbBuf0CtrlAvail
 
 	// DATA0 or DATA1
 	epXdata0[ep&0x7F] = !epXdata0[ep&0x7F]
 	if !epXdata0[ep&0x7F] {
-		val |= 0x00002000
+		val |= usbBuf0CtrlData1Pid
 	}
 
 	// Mark as full
-	val |= 0x00008000
+	val |= usbBuf0CtrlFull
 
 	copy(usbDPSRAM.EPxBuffer[ep&0x7F].Buffer0[:], data[:count])
 	usbDPSRAM.EPxBufferControl[ep&0x7F].In = val
@@ -275,8 +276,8 @@ type USBBufferControlRegister struct {
 }
 
 type USBBuffer struct {
-	Buffer0 [64]byte
-	Buffer1 [64]byte
+	Buffer0 [USBBufferLen]byte
+	Buffer1 [USBBufferLen]byte
 }
 
 var (
@@ -307,3 +308,40 @@ func (d *USBDPSRAM) clear() {
 		d.EPxBufferControl[i].Out = 0
 	}
 }
+
+const (
+	// DPRAM : Endpoint control register
+	usbEpControlEnable                 = 0x80000000
+	usbEpControlDoubleBuffered         = 0x40000000
+	usbEpControlInterruptPerBuff       = 0x20000000
+	usbEpControlInterruptPerDoubleBuff = 0x10000000
+	usbEpControlEndpointType           = 0x0c000000
+	usbEpControlInterruptOnStall       = 0x00020000
+	usbEpControlInterruptOnNak         = 0x00010000
+	usbEpControlBufferAddress          = 0x0000ffff
+
+	usbEpControlEndpointTypeControl   = 0x00000000
+	usbEpControlEndpointTypeISO       = 0x04000000
+	usbEpControlEndpointTypeBulk      = 0x08000000
+	usbEpControlEndpointTypeInterrupt = 0x0c000000
+
+	// Endpoint buffer control bits
+	usbBuf1CtrlFull     = 0x80000000
+	usbBuf1CtrlLast     = 0x40000000
+	usbBuf1CtrlData0Pid = 0x20000000
+	usbBuf1CtrlData1Pid = 0x00000000
+	usbBuf1CtrlSel      = 0x10000000
+	usbBuf1CtrlStall    = 0x08000000
+	usbBuf1CtrlAvail    = 0x04000000
+	usbBuf1CtrlLenMask  = 0x03FF0000
+	usbBuf0CtrlFull     = 0x00008000
+	usbBuf0CtrlLast     = 0x00004000
+	usbBuf0CtrlData0Pid = 0x00000000
+	usbBuf0CtrlData1Pid = 0x00002000
+	usbBuf0CtrlSel      = 0x00001000
+	usbBuf0CtrlStall    = 0x00000800
+	usbBuf0CtrlAvail    = 0x00000400
+	usbBuf0CtrlLenMask  = 0x000003FF
+
+	USBBufferLen = 64
+)
