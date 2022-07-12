@@ -59,7 +59,7 @@ const (
 func init() {
 	if Keyboard == nil {
 		Keyboard = newKeyboard()
-		hid.SetCallbackHandler(Keyboard)
+		hid.SetHandler(Keyboard)
 	}
 }
 
@@ -74,7 +74,7 @@ func newKeyboard() *keyboard {
 	}
 }
 
-func (kb *keyboard) Callback() bool {
+func (kb *keyboard) Handler() bool {
 	kb.waitTxc = false
 	if b, ok := kb.buf.Get(); ok {
 		kb.waitTxc = true
