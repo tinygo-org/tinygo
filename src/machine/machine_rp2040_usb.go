@@ -8,6 +8,7 @@ import (
 	"device/rp"
 	"machine/usb"
 	"runtime/interrupt"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -135,24 +136,24 @@ func initEndpoint(ep, config uint32) {
 	switch config {
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn:
 		val |= usbEpControlEndpointTypeInterrupt
-		usbDPSRAM.EPxControl[ep].In = val
+		usbDPSRAM.EPxControl[ep].In.Set(val)
 
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointOut:
 		val |= usbEpControlEndpointTypeBulk
-		usbDPSRAM.EPxControl[ep].Out = val
-		usbDPSRAM.EPxBufferControl[ep].Out = USBBufferLen & usbBuf0CtrlLenMask
-		usbDPSRAM.EPxBufferControl[ep].Out |= usbBuf0CtrlAvail
+		usbDPSRAM.EPxControl[ep].Out.Set(val)
+		usbDPSRAM.EPxBufferControl[ep].Out.Set(USBBufferLen & usbBuf0CtrlLenMask)
+		usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlAvail)
 
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut:
 		// TODO: not really anything, seems like...
 
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointIn:
 		val |= usbEpControlEndpointTypeBulk
-		usbDPSRAM.EPxControl[ep].In = val
+		usbDPSRAM.EPxControl[ep].In.Set(val)
 
 	case usb.ENDPOINT_TYPE_CONTROL:
 		val |= usbEpControlEndpointTypeControl
-		usbDPSRAM.EPxBufferControl[ep].Out = usbBuf0CtrlAvail
+		usbDPSRAM.EPxBufferControl[ep].Out.Set(usbBuf0CtrlAvail)
 
 	}
 }
@@ -210,18 +211,18 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 }
 
 func handleEndpointRx(ep uint32) []byte {
-	ctrl := usbDPSRAM.EPxBufferControl[ep].Out
-	usbDPSRAM.EPxBufferControl[ep].Out = USBBufferLen & usbBuf0CtrlLenMask
+	ctrl := usbDPSRAM.EPxBufferControl[ep].Out.Get()
+	usbDPSRAM.EPxBufferControl[ep].Out.Set(USBBufferLen & usbBuf0CtrlLenMask)
 	sz := ctrl & usbBuf0CtrlLenMask
 	buf := make([]byte, sz)
 	copy(buf, usbDPSRAM.EPxBuffer[ep].Buffer0[:sz])
 
 	epXdata0[ep] = !epXdata0[ep]
 	if epXdata0[ep] {
-		usbDPSRAM.EPxBufferControl[ep].Out |= usbBuf0CtrlData1Pid
+		usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlData1Pid)
 	}
 
-	usbDPSRAM.EPxBufferControl[ep].Out |= usbBuf0CtrlAvail
+	usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlAvail)
 
 	return buf
 }
@@ -244,7 +245,7 @@ func sendViaEPIn(ep uint32, data []byte, count int) {
 	val |= usbBuf0CtrlFull
 
 	copy(usbDPSRAM.EPxBuffer[ep&0x7F].Buffer0[:], data[:count])
-	usbDPSRAM.EPxBufferControl[ep&0x7F].In = val
+	usbDPSRAM.EPxBufferControl[ep&0x7F].In.Set(val)
 }
 
 func sendStallViaEPIn(ep uint32) {
@@ -253,9 +254,9 @@ func sendStallViaEPIn(ep uint32) {
 		rp.USBCTRL_REGS.EP_STALL_ARM.Set(rp.USBCTRL_REGS_EP_STALL_ARM_EP0_IN)
 	}
 	val := uint32(usbBuf0CtrlFull)
-	usbDPSRAM.EPxBufferControl[ep&0x7F].In = val
+	usbDPSRAM.EPxBufferControl[ep&0x7F].In.Set(val)
 	val |= uint32(usbBuf0CtrlStall)
-	usbDPSRAM.EPxBufferControl[ep&0x7F].In = val
+	usbDPSRAM.EPxBufferControl[ep&0x7F].In.Set(val)
 }
 
 // EnterBootloader should perform a system reset in preparation
@@ -278,12 +279,12 @@ type USBDPSRAM struct {
 }
 
 type USBEndpointControlRegister struct {
-	In  uint32
-	Out uint32
+	In  volatile.Register32
+	Out volatile.Register32
 }
 type USBBufferControlRegister struct {
-	In  uint32
-	Out uint32
+	In  volatile.Register32
+	Out volatile.Register32
 }
 
 type USBBuffer struct {
@@ -299,24 +300,24 @@ var (
 func (d *USBDPSRAM) setupBytes() []byte {
 	var buf [8]byte
 
-	buf[0] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In)
-	buf[1] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In >> 8)
-	buf[2] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In >> 16)
-	buf[3] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In >> 24)
-	buf[4] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out)
-	buf[5] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out >> 8)
-	buf[6] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out >> 16)
-	buf[7] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out >> 24)
+	buf[0] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In.Get())
+	buf[1] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In.Get() >> 8)
+	buf[2] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In.Get() >> 16)
+	buf[3] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In.Get() >> 24)
+	buf[4] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get())
+	buf[5] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get() >> 8)
+	buf[6] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get() >> 16)
+	buf[7] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get() >> 24)
 
 	return buf[:]
 }
 
 func (d *USBDPSRAM) clear() {
 	for i := 0; i < len(d.EPxControl); i++ {
-		d.EPxControl[i].In = 0
-		d.EPxControl[i].Out = 0
-		d.EPxBufferControl[i].In = 0
-		d.EPxBufferControl[i].Out = 0
+		d.EPxControl[i].In.Set(0)
+		d.EPxControl[i].Out.Set(0)
+		d.EPxBufferControl[i].In.Set(0)
+		d.EPxBufferControl[i].Out.Set(0)
 	}
 }
 
