@@ -350,16 +350,14 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		// do we need port reset to put MCU into bootloader mode?
 		if config.Target.PortReset == "true" && flashMethod != "openocd" {
 			port, err := getDefaultPort(port, config.Target.SerialPort)
-			if err != nil {
-				return err
+			if err == nil {
+				err = touchSerialPortAt1200bps(port)
+				if err != nil {
+					return &commandError{"failed to reset port", result.Binary, err}
+				}
+				// give the target MCU a chance to restart into bootloader
+				time.Sleep(3 * time.Second)
 			}
-
-			err = touchSerialPortAt1200bps(port)
-			if err != nil {
-				return &commandError{"failed to reset port", result.Binary, err}
-			}
-			// give the target MCU a chance to restart into bootloader
-			time.Sleep(3 * time.Second)
 		}
 
 		// this flashing method copies the binary data to a Mass Storage Device (msd)
