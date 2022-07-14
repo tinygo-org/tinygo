@@ -2,7 +2,7 @@
     "inherits": [
         "rp2040"
     ],
-    "serial": "uart",
+    "serial-port": ["acm:2e8a:000a"],
     "build-tags": ["xiao_rp2040"],
     "linkerscript": "targets/xiao-rp2040.ld",
     "extra-files": [

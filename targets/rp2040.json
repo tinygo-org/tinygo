@@ -2,6 +2,7 @@
     "inherits": ["cortex-m0plus"],
     "build-tags": ["rp2040", "rp"],
     "flash-method": "msd",
+    "serial": "usb",
     "msd-volume-name": "RPI-RP2",
     "msd-firmware-name": "firmware.uf2",
     "binary-format": "uf2",

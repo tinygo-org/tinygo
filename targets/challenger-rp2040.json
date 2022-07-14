@@ -2,7 +2,7 @@
     "inherits": [
         "rp2040"
     ],
-    "serial": "uart",
+    "serial-port": ["acm:2e8a:1023"],
     "build-tags": ["challenger_rp2040"],
     "linkerscript": "targets/feather-rp2040.ld",
     "extra-files": [
