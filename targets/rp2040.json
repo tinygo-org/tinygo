@@ -1,6 +1,7 @@
 {
     "inherits": ["cortex-m0plus"],
     "build-tags": ["rp2040", "rp"],
+    "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "serial": "usb",
     "msd-volume-name": "RPI-RP2",
