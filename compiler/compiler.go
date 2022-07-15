@@ -390,6 +390,12 @@ func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 			// LLVM. This is because it is otherwise impossible to create
 			// self-referencing types such as linked lists.
 			llvmName := typ.Obj().Pkg().Path() + "." + typ.Obj().Name()
+			if llvmType := c.mod.GetTypeByName(llvmName); !llvmType.IsNil() {
+				// For some reason, *types.Named isn't unique when working with
+				// generics. I'm not sure whether this is an upstream bug or
+				// not.
+				return llvmType
+			}
 			llvmType := c.ctx.StructCreateNamed(llvmName)
 			c.llvmTypes[goType] = llvmType // avoid infinite recursion
 			underlying := c.getLLVMType(st)
