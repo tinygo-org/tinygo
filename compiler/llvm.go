@@ -277,6 +277,9 @@ func (c *compilerContext) getPointerBitmap(typ llvm.Type, pos token.Pos) *big.In
 // architecture name ("arm").
 func (c *compilerContext) archFamily() string {
 	arch := strings.Split(c.Triple, "-")[0]
+	if strings.HasPrefix(arch, "arm64") {
+		return "aarch64"
+	}
 	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
 		return "arm"
 	}
