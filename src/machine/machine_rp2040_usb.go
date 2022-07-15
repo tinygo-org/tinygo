@@ -105,6 +105,7 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 				if usbRxHandler[i] != nil {
 					usbRxHandler[i](buf)
 				}
+				handleEndpointRxComplete(uint32(i))
 			}
 		}
 
@@ -229,17 +230,17 @@ func handleEndpointRx(ep uint32) []byte {
 	ctrl := usbDPSRAM.EPxBufferControl[ep].Out.Get()
 	usbDPSRAM.EPxBufferControl[ep].Out.Set(USBBufferLen & usbBuf0CtrlLenMask)
 	sz := ctrl & usbBuf0CtrlLenMask
-	buf := make([]byte, sz)
-	copy(buf, usbDPSRAM.EPxBuffer[ep].Buffer0[:sz])
 
+	return usbDPSRAM.EPxBuffer[ep].Buffer0[:sz]
+}
+
+func handleEndpointRxComplete(ep uint32) {
 	epXdata0[ep] = !epXdata0[ep]
 	if epXdata0[ep] || ep == 0 {
 		usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlData1Pid)
 	}
 
 	usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlAvail)
-
-	return buf
 }
 
 func SendZlp() {
