@@ -161,7 +161,17 @@ str x2, [x1, #8]
 mov x0, #0
 1:
 `
-		constraints = "={x0},{x1},~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x18},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{fp},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{q16},~{q17},~{q18},~{q19},~{q20},~{q21},~{q22},~{q23},~{q24},~{q25},~{q26},~{q27},~{q28},~{q29},~{q30},~{nzcv},~{ffr},~{vg},~{memory}"
+		constraints = "={x0},{x1},~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{q16},~{q17},~{q18},~{q19},~{q20},~{q21},~{q22},~{q23},~{q24},~{q25},~{q26},~{q27},~{q28},~{q29},~{q30},~{nzcv},~{ffr},~{vg},~{memory}"
+		if b.GOOS != "darwin" {
+			// These registers cause the following warning when compiling for
+			// MacOS:
+			//     warning: inline asm clobber list contains reserved registers:
+			//     X18, FP
+			//     Reserved registers on the clobber list may not be preserved
+			//     across the asm statement, and clobbering them may lead to
+			//     undefined behaviour.
+			constraints += ",~{x18},~{fp}"
+		}
 		// TODO: SVE registers, which we don't use in TinyGo at the moment.
 	case "avr":
 		// Note: the Y register (R28:R29) is a fixed register and therefore
