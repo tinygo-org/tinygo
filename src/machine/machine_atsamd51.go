@@ -1988,10 +1988,12 @@ func EnterBootloader() {
 
 // DAC on the SAMD51.
 type DAC struct {
+	Channel uint8
 }
 
 var (
-	DAC0 = DAC{}
+	DAC0 = DAC{Channel: 0}
+	DAC1 = DAC{Channel: 1}
 )
 
 // DACConfig placeholder for future expansion.
@@ -2004,43 +2006,64 @@ func (dac DAC) Configure(config DACConfig) {
 	// Turn on clock for DAC
 	sam.MCLK.APBDMASK.SetBits(sam.MCLK_APBDMASK_DAC_)
 
-	// Use Generic Clock Generator 4 as source for DAC.
-	sam.GCLK.PCHCTRL[42].Set((sam.GCLK_PCHCTRL_GEN_GCLK4 << sam.GCLK_PCHCTRL_GEN_Pos) | sam.GCLK_PCHCTRL_CHEN)
-	for sam.GCLK.SYNCBUSY.HasBits(sam.GCLK_SYNCBUSY_GENCTRL_GCLK4 << sam.GCLK_SYNCBUSY_GENCTRL_Pos) {
+	if !sam.GCLK.PCHCTRL[42].HasBits(sam.GCLK_PCHCTRL_CHEN) {
+		// Use Generic Clock Generator 4 as source for DAC.
+		sam.GCLK.PCHCTRL[42].Set((sam.GCLK_PCHCTRL_GEN_GCLK4 << sam.GCLK_PCHCTRL_GEN_Pos) | sam.GCLK_PCHCTRL_CHEN)
+		for sam.GCLK.SYNCBUSY.HasBits(sam.GCLK_SYNCBUSY_GENCTRL_GCLK4 << sam.GCLK_SYNCBUSY_GENCTRL_Pos) {
+		}
+
+		// reset DAC
+		sam.DAC.CTRLA.Set(sam.DAC_CTRLA_SWRST)
+
+		// wait for reset complete
+		for sam.DAC.CTRLA.HasBits(sam.DAC_CTRLA_SWRST) {
+		}
+		for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_SWRST) {
+		}
 	}
 
-	// reset DAC
-	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_SWRST)
-
-	// wait for reset complete
-	for sam.DAC.CTRLA.HasBits(sam.DAC_CTRLA_SWRST) {
-	}
-	for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_SWRST) {
+	sam.DAC.CTRLA.ClearBits(sam.DAC_CTRLA_ENABLE)
+	for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_ENABLE) {
 	}
 
 	// enable
 	sam.DAC.CTRLB.Set(sam.DAC_CTRLB_REFSEL_VREFPU << sam.DAC_CTRLB_REFSEL_Pos)
-	sam.DAC.DACCTRL[0].SetBits((sam.DAC_DACCTRL_CCTRL_CC12M << sam.DAC_DACCTRL_CCTRL_Pos) | sam.DAC_DACCTRL_ENABLE)
+	sam.DAC.DACCTRL[dac.Channel].SetBits((sam.DAC_DACCTRL_CCTRL_CC12M << sam.DAC_DACCTRL_CCTRL_Pos) | sam.DAC_DACCTRL_ENABLE)
 	sam.DAC.CTRLA.Set(sam.DAC_CTRLA_ENABLE)
 
 	for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_ENABLE) {
 	}
-	for !sam.DAC.STATUS.HasBits(sam.DAC_STATUS_READY0) {
+
+	switch dac.Channel {
+	case 0:
+		for !sam.DAC.STATUS.HasBits(sam.DAC_STATUS_READY0) {
+		}
+	default:
+		for !sam.DAC.STATUS.HasBits(sam.DAC_STATUS_READY1) {
+		}
 	}
 }
 
 // Set writes a single 16-bit value to the DAC.
 // Since the ATSAMD51 only has a 12-bit DAC, the passed-in value will be scaled down.
 func (dac DAC) Set(value uint16) error {
-	sam.DAC.DATA[0].Set(value >> 4)
-	syncDAC()
+	sam.DAC.DATA[dac.Channel].Set(value >> 4)
+	dac.syncDAC()
 	return nil
 }
 
-func syncDAC() {
-	for !sam.DAC.STATUS.HasBits(sam.DAC_STATUS_EOC0) {
-	}
-	for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_DATA0) {
+func (dac DAC) syncDAC() {
+	switch dac.Channel {
+	case 0:
+		for !sam.DAC.STATUS.HasBits(sam.DAC_STATUS_EOC0) {
+		}
+		for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_DATA0) {
+		}
+	default:
+		for !sam.DAC.STATUS.HasBits(sam.DAC_STATUS_EOC1) {
+		}
+		for sam.DAC.SYNCBUSY.HasBits(sam.DAC_SYNCBUSY_DATA1) {
+		}
 	}
 }
 
