@@ -18,6 +18,7 @@ import (
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
+	"golang.org/x/tools/go/types/typeutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -70,7 +71,7 @@ type compilerContext struct {
 	cu               llvm.Metadata
 	difiles          map[string]llvm.Metadata
 	ditypes          map[types.Type]llvm.Metadata
-	llvmTypes        map[types.Type]llvm.Type
+	llvmTypes        typeutil.Map
 	machine          llvm.TargetMachine
 	targetData       llvm.TargetData
 	intType          llvm.Type
@@ -95,7 +96,6 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		DumpSSA:     dumpSSA,
 		difiles:     make(map[string]llvm.Metadata),
 		ditypes:     make(map[types.Type]llvm.Metadata),
-		llvmTypes:   make(map[types.Type]llvm.Type),
 		machine:     machine,
 		targetData:  machine.CreateTargetData(),
 		astComments: map[string]*ast.CommentGroup{},
@@ -329,12 +329,16 @@ func (c *compilerContext) getLLVMRuntimeType(name string) llvm.Type {
 // important for named struct types (which should only be created once).
 func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 	// Try to load the LLVM type from the cache.
-	if t, ok := c.llvmTypes[goType]; ok {
-		return t
+	// Note: *types.Named isn't unique when working with generics.
+	// See https://github.com/golang/go/issues/53914
+	// This is the reason for using typeutil.Map to lookup LLVM types for Go types.
+	ival := c.llvmTypes.At(goType)
+	if ival != nil {
+		return ival.(llvm.Type)
 	}
 	// Not already created, so adding this type to the cache.
 	llvmType := c.makeLLVMType(goType)
-	c.llvmTypes[goType] = llvmType
+	c.llvmTypes.Set(goType, llvmType)
 	return llvmType
 }
 
@@ -391,7 +395,7 @@ func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 			// self-referencing types such as linked lists.
 			llvmName := typ.Obj().Pkg().Path() + "." + typ.Obj().Name()
 			llvmType := c.ctx.StructCreateNamed(llvmName)
-			c.llvmTypes[goType] = llvmType // avoid infinite recursion
+			c.llvmTypes.Set(goType, llvmType) // avoid infinite recursion
 			underlying := c.getLLVMType(st)
 			llvmType.StructSetBody(underlying.StructElementTypes(), false)
 			return llvmType
