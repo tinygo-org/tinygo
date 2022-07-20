@@ -12,6 +12,7 @@ const (
 var Midi *midi
 
 type midi struct {
+	msg       [4]byte
 	buf       *RingBuffer
 	rxHandler func([]byte)
 	waitTxc   bool
