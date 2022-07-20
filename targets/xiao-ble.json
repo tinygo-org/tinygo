@@ -1,8 +1,9 @@
 {
 	"inherits": ["nrf52840"],
-	"build-tags": ["xiao_ble", "softdevice", "s140v7"],
-	"serial": "uart",
+	"build-tags": ["xiao_ble", "nrf52840_reset_uf2", "softdevice", "s140v7"],
+	"serial": "usb",
 	"serial-port": ["acm:2886:8045", "acm:2886:0045"],
+	"flash-1200-bps-reset": "true",
 	"flash-method": "msd",
 	"msd-volume-name": "XIAO-SENSE",
 	"msd-firmware-name": "firmware.uf2",
