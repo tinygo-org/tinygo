@@ -39,12 +39,12 @@ func main() {
 			led.Set(current)
 			if current {
 				for _, c := range chords[index].keys {
-					m.Write([]byte{0x08, 0x80, c, 0x40})
+					m.NoteOff(0, 0, c, 0x40)
 				}
 				index = (index + 1) % len(chords)
 			} else {
 				for _, c := range chords[index].keys {
-					m.Write([]byte{0x09, 0x90, c, 0x40})
+					m.NoteOn(0, 0, c, 0x40)
 				}
 			}
 			prev = current
