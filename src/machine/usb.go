@@ -56,16 +56,21 @@ var (
 var (
 	usbEndpointDescriptors [usb.NumberOfEndpoints]usb.DeviceDescriptor
 
-	udd_ep_control_cache_buffer [256]uint8
-	udd_ep_in_cache_buffer      [7][64]uint8
-	udd_ep_out_cache_buffer     [7][64]uint8
-
 	isEndpointHalt        = false
 	isRemoteWakeUpEnabled = false
 
 	usbConfiguration uint8
 	usbSetInterface  uint8
 )
+
+//go:align 4
+var udd_ep_control_cache_buffer [256]uint8
+
+//go:align 4
+var udd_ep_in_cache_buffer [7][64]uint8
+
+//go:align 4
+var udd_ep_out_cache_buffer [7][64]uint8
 
 var (
 	usbTxHandler    [usb.NumberOfEndpoints]func()
