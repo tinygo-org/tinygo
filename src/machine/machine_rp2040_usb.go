@@ -21,35 +21,39 @@ var (
 
 // Configure the USB peripheral. The config is here for compatibility with the UART interface.
 func (dev *USBDevice) Configure(config UARTConfig) {
-	//// Clear any previous state in dpram just in case
+	// Reset usb controller
+	resetBlock(rp.RESETS_RESET_USBCTRL)
+	unresetBlockWait(rp.RESETS_RESET_USBCTRL)
+
+	// Clear any previous state in dpram just in case
 	usbDPSRAM.clear()
 
-	//// Enable USB interrupt at processor
+	// Enable USB interrupt at processor
 	rp.USBCTRL_REGS.INTE.Set(0)
 	intr := interrupt.New(rp.IRQ_USBCTRL_IRQ, handleUSBIRQ)
 	intr.SetPriority(0x00)
 	intr.Enable()
 	irqSet(rp.IRQ_USBCTRL_IRQ, true)
 
-	//// Mux the controller to the onboard usb phy
+	// Mux the controller to the onboard usb phy
 	rp.USBCTRL_REGS.USB_MUXING.Set(rp.USBCTRL_REGS_USB_MUXING_TO_PHY | rp.USBCTRL_REGS_USB_MUXING_SOFTCON)
 
-	//// Force VBUS detect so the device thinks it is plugged into a host
+	// Force VBUS detect so the device thinks it is plugged into a host
 	rp.USBCTRL_REGS.USB_PWR.Set(rp.USBCTRL_REGS_USB_PWR_VBUS_DETECT | rp.USBCTRL_REGS_USB_PWR_VBUS_DETECT_OVERRIDE_EN)
 
-	//// Enable the USB controller in device mode.
+	// Enable the USB controller in device mode.
 	rp.USBCTRL_REGS.MAIN_CTRL.Set(rp.USBCTRL_REGS_MAIN_CTRL_CONTROLLER_EN)
 
-	//// Enable an interrupt per EP0 transaction
+	// Enable an interrupt per EP0 transaction
 	rp.USBCTRL_REGS.SIE_CTRL.Set(rp.USBCTRL_REGS_SIE_CTRL_EP0_INT_1BUF)
 
-	//// Enable interrupts for when a buffer is done, when the bus is reset,
-	//// and when a setup packet is received
+	// Enable interrupts for when a buffer is done, when the bus is reset,
+	// and when a setup packet is received
 	rp.USBCTRL_REGS.INTE.Set(rp.USBCTRL_REGS_INTE_BUFF_STATUS |
 		rp.USBCTRL_REGS_INTE_BUS_RESET |
 		rp.USBCTRL_REGS_INTE_SETUP_REQ)
 
-	//// Present full speed device by enabling pull up on DP
+	// Present full speed device by enabling pull up on DP
 	rp.USBCTRL_REGS.SIE_CTRL.SetBits(rp.USBCTRL_REGS_SIE_CTRL_PULLUP_EN)
 }
 
