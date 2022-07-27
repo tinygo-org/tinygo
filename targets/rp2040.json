@@ -12,6 +12,7 @@
     "extra-files": [
         "src/device/rp/rp2040.s"
     ],
+    "openocd-interface": "picoprobe",
     "openocd-transport": "swd",
     "openocd-target": "rp2040"
 }
