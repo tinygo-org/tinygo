@@ -98,6 +98,7 @@ jobs:
         run: make wasi-libc
       - name: Install fpm
         run: |
+          gem install --version 2.7.6 dotenv
           gem install --no-document fpm
       - name: Build TinyGo release
         run: |
@@ -333,6 +334,7 @@ jobs:
           make CROSS=arm-linux-gnueabihf binaryen
       - name: Install fpm
         run: |
+          sudo gem install --version 2.7.6 dotenv
           sudo gem install --no-document fpm
       - name: Build TinyGo binary
         run: |
@@ -434,6 +436,7 @@ jobs:
           make CROSS=aarch64-linux-gnu binaryen
       - name: Install fpm
         run: |
+          sudo gem install --version 2.7.6 dotenv
           sudo gem install --no-document fpm
       - name: Build TinyGo binary
         run: |
