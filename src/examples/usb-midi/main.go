@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// Try it easily by opening the following site in Chrome.
+// https://www.onlinemusictools.com/kb/
+
 func main() {
 	led := machine.LED
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
@@ -24,12 +27,12 @@ func main() {
 	prev := true
 	chords := []struct {
 		name string
-		keys []byte
+		keys []midi.Note
 	}{
-		{name: "C ", keys: []byte{60, 64, 67}},
-		{name: "G ", keys: []byte{55, 59, 62}},
-		{name: "Am", keys: []byte{57, 60, 64}},
-		{name: "F ", keys: []byte{53, 57, 60}},
+		{name: "C ", keys: []midi.Note{midi.C4, midi.E4, midi.G4}},
+		{name: "G ", keys: []midi.Note{midi.G3, midi.B3, midi.D4}},
+		{name: "Am", keys: []midi.Note{midi.A3, midi.C4, midi.E4}},
+		{name: "F ", keys: []midi.Note{midi.F3, midi.A3, midi.C4}},
 	}
 	index := 0
 
