@@ -181,6 +181,7 @@ func (p Pin) Configure(config PinConfig) {
 		rp.SIO.GPIO_OE_SET.Set(mask)
 	case PinInput:
 		p.setFunc(fnSIO)
+		p.pulloff()
 	case PinInputPulldown:
 		p.setFunc(fnSIO)
 		p.pulldown()
