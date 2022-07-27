@@ -478,16 +478,35 @@ func (spi SPI) Tx(w, r []byte) error {
 
 		// Fill tx buffer.
 		transferWords := (*[16]volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(&spi.Bus.W0))))
-		var outBuf [16]uint32
-		txSize := 64
-		if txSize > len(w) {
-			txSize = len(w)
-		}
-		for i := 0; i < txSize; i++ {
-			outBuf[i/4] = outBuf[i/4] | uint32(w[i])<<((i%4)*8)
-		}
-		for i, word := range outBuf {
-			transferWords[i].Set(word)
+		if len(w) >= 64 {
+			// We can fill the entire 64-byte transfer buffer with data.
+			// This loop is slightly faster than the loop below.
+			for i := 0; i < 16; i++ {
+				word := uint32(w[i*4])<<0 | uint32(w[i*4+1])<<8 | uint32(w[i*4+2])<<16 | uint32(w[i*4+3])<<24
+				transferWords[i].Set(word)
+			}
+		} else {
+			// We can't fill the entire transfer buffer, so we need to be a bit
+			// more careful.
+			// Note that parts of the transfer buffer that aren't used still
+			// need to be set to zero, otherwise we might be transferring
+			// garbage from a previous transmission if w is smaller than r.
+			for i := 0; i < 16; i++ {
+				var word uint32
+				if i*4+3 < len(w) {
+					word |= uint32(w[i*4+3]) << 24
+				}
+				if i*4+2 < len(w) {
+					word |= uint32(w[i*4+2]) << 16
+				}
+				if i*4+1 < len(w) {
+					word |= uint32(w[i*4+1]) << 8
+				}
+				if i*4+0 < len(w) {
+					word |= uint32(w[i*4+0]) << 0
+				}
+				transferWords[i].Set(word)
+			}
 		}
 
 		// Do the transfer.
