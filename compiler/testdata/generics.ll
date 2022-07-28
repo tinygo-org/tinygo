@@ -94,6 +94,8 @@ entry:
   store float %b.X, float* %b.repack14, align 8
   %b.repack15 = getelementptr inbounds %"main.Point[float32]", %"main.Point[float32]"* %b, i32 0, i32 1
   store float %b.Y, float* %b.repack15, align 4
+  call void @main.checkSize(i32 4, i8* undef) #2
+  call void @main.checkSize(i32 8, i8* undef) #2
   %complit.repack = getelementptr inbounds %"main.Point[float32]", %"main.Point[float32]"* %complit, i32 0, i32 0
   store float 0.000000e+00, float* %complit.repack, align 8
   %complit.repack17 = getelementptr inbounds %"main.Point[float32]", %"main.Point[float32]"* %complit, i32 0, i32 1
@@ -157,6 +159,8 @@ store.throw7:                                     ; preds = %store.next
   unreachable
 }
 
+declare void @main.checkSize(i32, i8*) #0
+
 declare void @runtime.nilPanic(i8*) #0
 
 ; Function Attrs: nounwind
@@ -185,6 +189,8 @@ entry:
   store i32 %b.X, i32* %b.repack14, align 8
   %b.repack15 = getelementptr inbounds %"main.Point[int]", %"main.Point[int]"* %b, i32 0, i32 1
   store i32 %b.Y, i32* %b.repack15, align 4
+  call void @main.checkSize(i32 4, i8* undef) #2
+  call void @main.checkSize(i32 8, i8* undef) #2
   %complit.repack = getelementptr inbounds %"main.Point[int]", %"main.Point[int]"* %complit, i32 0, i32 0
   store i32 0, i32* %complit.repack, align 8
   %complit.repack17 = getelementptr inbounds %"main.Point[int]", %"main.Point[int]"* %complit, i32 0, i32 1

@@ -1585,6 +1585,20 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		ptr := argValues[0]
 		len := argValues[1]
 		return b.CreateGEP(ptr, []llvm.Value{len}, ""), nil
+	case "Alignof": // unsafe.Alignof
+		align := b.targetData.ABITypeAlignment(argValues[0].Type())
+		return llvm.ConstInt(b.uintptrType, uint64(align), false), nil
+	case "Offsetof": // unsafe.Offsetof
+		// This builtin is a bit harder to implement and may need a bit of
+		// refactoring to work (it may be easier to implement if we have access
+		// to the underlying Go SSA instruction). It is also rarely used: it
+		// only applies in generic code and unsafe.Offsetof isn't very commonly
+		// used anyway.
+		// In other words, postpone it to some other day.
+		return llvm.Value{}, b.makeError(pos, "todo: unsafe.Offsetof")
+	case "Sizeof": // unsafe.Sizeof
+		size := b.targetData.TypeAllocSize(argValues[0].Type())
+		return llvm.ConstInt(b.uintptrType, size, false), nil
 	case "Slice": // unsafe.Slice
 		// This creates a slice from a pointer and a length.
 		// Note that the exception mentioned in the documentation (if the
