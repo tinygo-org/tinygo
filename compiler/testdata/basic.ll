@@ -196,7 +196,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @"main.foo$1"(%main.kv.0* dereferenceable_or_null(1) %b, i8* %context) unnamed_addr #1 {
+define internal void @"main.foo$1"(%main.kv.0* dereferenceable_or_null(1) %b, i8* %context) unnamed_addr #1 {
 entry:
   ret void
 }

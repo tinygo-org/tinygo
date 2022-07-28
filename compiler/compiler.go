@@ -1039,9 +1039,17 @@ func (b *builder) createFunctionStart() {
 		b.addError(b.fn.Pos(), errValue)
 		return
 	}
+
 	b.addStandardDefinedAttributes(b.llvmFn)
 	if !b.info.exported {
-		b.llvmFn.SetVisibility(llvm.HiddenVisibility)
+		// Do not set visibility for local linkage (internal or private).
+		// Otherwise a "local linkage requires default visibility"
+		// assertion error in llvm-project/llvm/include/llvm/IR/GlobalValue.h:236
+		// is thrown.
+		if b.llvmFn.Linkage() != llvm.InternalLinkage &&
+			b.llvmFn.Linkage() != llvm.PrivateLinkage {
+			b.llvmFn.SetVisibility(llvm.HiddenVisibility)
+		}
 		b.llvmFn.SetUnnamedAddr(true)
 	}
 	if b.info.section != "" {
@@ -1265,6 +1273,7 @@ func (b *builder) createFunction() {
 	// Create anonymous functions (closures etc.).
 	for _, sub := range b.fn.AnonFuncs {
 		b := newBuilder(b.compilerContext, b.Builder, sub)
+		b.llvmFn.SetLinkage(llvm.InternalLinkage)
 		b.createFunction()
 	}
 }
