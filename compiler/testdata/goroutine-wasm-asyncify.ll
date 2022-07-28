@@ -53,7 +53,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @"main.inlineFunctionGoroutine$1"(i32 %x, i8* %context) unnamed_addr #1 {
+define internal void @"main.inlineFunctionGoroutine$1"(i32 %x, i8* %context) unnamed_addr #1 {
 entry:
   ret void
 }
@@ -90,7 +90,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @"main.closureFunctionGoroutine$1"(i32 %x, i8* %context) unnamed_addr #1 {
+define internal void @"main.closureFunctionGoroutine$1"(i32 %x, i8* %context) unnamed_addr #1 {
 entry:
   %unpack.ptr = bitcast i8* %context to i32*
   store i32 7, i32* %unpack.ptr, align 4

@@ -115,7 +115,7 @@ declare i8* @llvm.stacksave() #2
 declare void @runtime.setupDeferFrame(%runtime.deferFrame* dereferenceable_or_null(24), i8*, i8*) #0
 
 ; Function Attrs: nounwind
-define hidden void @"main.deferSimple$1"(i8* %context) unnamed_addr #1 {
+define internal void @"main.deferSimple$1"(i8* %context) unnamed_addr #1 {
 entry:
   call void @runtime.printint32(i32 3, i8* undef) #3
   ret void
@@ -246,14 +246,14 @@ rundefers.end9:                                   ; preds = %rundefers.loophead1
 }
 
 ; Function Attrs: nounwind
-define hidden void @"main.deferMultiple$1"(i8* %context) unnamed_addr #1 {
+define internal void @"main.deferMultiple$1"(i8* %context) unnamed_addr #1 {
 entry:
   call void @runtime.printint32(i32 3, i8* undef) #3
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @"main.deferMultiple$2"(i8* %context) unnamed_addr #1 {
+define internal void @"main.deferMultiple$2"(i8* %context) unnamed_addr #1 {
 entry:
   call void @runtime.printint32(i32 5, i8* undef) #3
   ret void
