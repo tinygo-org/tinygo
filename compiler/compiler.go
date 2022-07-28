@@ -786,6 +786,10 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		member := pkg.Members[name]
 		switch member := member.(type) {
 		case *ssa.Function:
+			if member.Synthetic == "generic function" {
+				// Do not try to build generic (non-instantiated) functions.
+				continue
+			}
 			// Create the function definition.
 			b := newBuilder(c, irbuilder, member)
 			if member.Blocks == nil {
