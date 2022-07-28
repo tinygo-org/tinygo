@@ -18,4 +18,7 @@ func Add[T Coord](a, b Point[T]) Point[T] {
 func main() {
 	var af, bf Point[float32]
 	Add(af, bf)
+
+	var ai, bi Point[int]
+	Add(ai, bi)
 }

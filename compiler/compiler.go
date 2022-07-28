@@ -393,7 +393,7 @@ func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 			// in LLVM IR, named structs are implemented as named structs in
 			// LLVM. This is because it is otherwise impossible to create
 			// self-referencing types such as linked lists.
-			llvmName := typ.Obj().Pkg().Path() + "." + typ.Obj().Name()
+			llvmName := typ.String()
 			llvmType := c.ctx.StructCreateNamed(llvmName)
 			c.llvmTypes.Set(goType, llvmType) // avoid infinite recursion
 			underlying := c.getLLVMType(st)
