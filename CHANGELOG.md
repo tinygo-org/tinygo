@@ -1,3 +1,58 @@
+0.25.0
+---
+
+* **command line**
+  - change to ignore PortReset failures
+* **compiler**
+  - `compiler`: darwin/arm64 is aarch64, not arm
+  - `compiler`: don't clobber X18 and FP registers on darwin/arm64
+  - `compiler`: fix issue with methods on generic structs
+  - `compiler`: do not try to build generic functions
+  - `compiler`: fix type names for generic named structs
+  - `compiler`: fix multiple defined function issue for generic functions
+  - `compiler`: implement `unsafe.Alignof` and `unsafe.Sizeof` for generic code
+* **standard library**
+  - `machine`: add DTR and RTS to Serialer interface
+  - `machine`: reorder pin definitions to improve pin list on tinygo.org
+  - `machine/usb`: add support for MIDI
+  - `machine/usb`: adjust buffer alignment (samd21, samd51, nrf52840)
+  - `machine/usb/midi`: add `NoteOn`, `NoteOff`, and `SendCC` methods
+  - `machine/usb/midi`: add definition of MIDI note number
+  - `runtime`: add benchmarks for memhash
+  - `runtime`: add support for printing slices via print/println
+* **targets**
+  - `avr`: fix some apparent mistake in atmega1280/atmega2560 pin constants
+  - `esp32`: provide hardware pin constants
+  - `esp32`: fix WDT reset on the MCH2022 badge
+  - `esp32`: optimize SPI transmit
+  - `esp32c3`: provide hardware pin constants
+  - `esp8266`: provide hardware pin constants like `GPIO2`
+  - `nrf51`: define and use `P0_xx` constants
+  - `nrf52840`, `samd21`, `samd51`: unify bootloader entry process
+  - `nrf52840`, `samd21`, `samd51`: change usbSetup and sendZlp to public
+  - `nrf52840`, `samd21`, `samd51`: refactor handleStandardSetup and initEndpoint
+  - `nrf52840`, `samd21`, `samd51`: improve usb-device initialization
+  - `nrf52840`, `samd21`, `samd51`: move usbcdc to machine/usb/cdc
+  - `rp2040`: add usb serial vendor/product ID
+  - `rp2040`: add support for usb
+  - `rp2040`: change default for serial to usb
+  - `rp2040`: add support for `machine.EnterBootloader`
+  - `rp2040`: turn off pullup/down when input type is not specified
+  - `rp2040`: make picoprobe default openocd interface
+  - `samd51`: add support for `DAC1`
+  - `samd51`: improve TRNG
+  - `wasm`: stub `runtime.buffered`, `runtime.getchar`
+  - `wasi`: make leveldb runtime hash the default
+* **boards**
+  - add Challenger RP2040 LoRa
+  - add MCH2022 badge
+  - add XIAO RP2040
+  - `clue`: remove pins `D21`..`D28`
+  - `feather-rp2040`, `macropad-rp2040`: fix qspi-flash settings
+  - `xiao-ble`: add support for flash-1200-bps-reset
+  - `gopherbot`, `gopherbot2`: add these aliases to simplify for newer users
+
+
 0.24.0
 ---
 
