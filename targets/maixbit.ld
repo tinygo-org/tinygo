@@ -57,6 +57,7 @@ SECTIONS
 }
 
 PROVIDE(_stack_top = ORIGIN(RAM) + LENGTH(RAM));
+_stack_bottom = _stack_top - _stack_size;
 
 /* For the memory allocator. */
 _heap_start = _ebss;

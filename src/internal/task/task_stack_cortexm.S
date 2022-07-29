@@ -30,10 +30,10 @@ tinygo_startTask:
     .cfi_endproc
 .size tinygo_startTask, .-tinygo_startTask
 
-.section .text.tinygo_switchToScheduler
-.global  tinygo_switchToScheduler
-.type    tinygo_switchToScheduler, %function
-tinygo_switchToScheduler:
+.section .text.tinygo_switchToMain
+.global  tinygo_switchToMain
+.type    tinygo_switchToMain, %function
+tinygo_switchToMain:
     .cfi_startproc
     // r0 = sp *uintptr
 
@@ -43,9 +43,9 @@ tinygo_switchToScheduler:
     subs r1, #36
     str r1, [r0]
 
-    b tinygo_swapTask
+    b tinygo_swapTaskInternal
     .cfi_endproc
-.size tinygo_switchToScheduler, .-tinygo_switchToScheduler
+.size tinygo_switchToMain, .-tinygo_switchToMain
 
 .section .text.tinygo_switchToTask
 .global  tinygo_switchToTask
@@ -55,17 +55,17 @@ tinygo_switchToTask:
     // r0 = sp uintptr
 
     // Currently on the scheduler stack (SP=MSP). We'll have to update the PSP,
-    // and then we can invoke swapTask.
+    // and then we can invoke swapTaskInternal.
     msr PSP, r0
 
-    b.n tinygo_swapTask
+    b.n tinygo_swapTaskInternal
     .cfi_endproc
 .size tinygo_switchToTask, .-tinygo_switchToTask
 
-.section .text.tinygo_swapTask
-.global  tinygo_swapTask
-.type    tinygo_swapTask, %function
-tinygo_swapTask:
+.section .text.tinygo_swapTaskInternal
+.global  tinygo_swapTaskInternal
+.type    tinygo_swapTaskInternal, %function
+tinygo_swapTaskInternal:
     .cfi_startproc
     // This function stores the current register state to the stack, switches to
     // the other stack (MSP/PSP), and loads the register state from the other
@@ -77,15 +77,15 @@ tinygo_swapTask:
     // used directly. Only very few operations work on them, such as mov. That's
     // why the higher register values are first stored in the temporary register
     // r3 when loading/storing them.
-    // It is possible to reduce the swapTask by two instructions (~2 cycles) on
-    // Cortex-M0 by reordering the layout of the pushed registers from {r4-r11,
-    // lr} to {r8-r11, r4-r8, lr}. However, that also requires a change on the
-    // Go side (depending on thumb1/thumb2!) and so is not really worth the
-    // complexity.
+    // It is possible to reduce the swapTaskInternal by two instructions (~2
+    // cycles) on Cortex-M0 by reordering the layout of the pushed registers
+    // from {r4-r11, lr} to {r8-r11, r4-r8, lr}. However, that also requires a
+    // change on the Go side (depending on thumb1/thumb2!) and so is not really
+    // worth the complexity.
 
     // Store state to old task. It saves the lr instead of the pc, because that
     // will be the pc after returning back to the old task (in a different
-    // invocation of swapTask).
+    // invocation of swapTaskInternal).
     #if defined(__thumb2__)
     push {r4-r11, lr}
     .cfi_def_cfa_offset 9*4
@@ -107,6 +107,63 @@ tinygo_swapTask:
     eors r0, r0, r3  // flip the SPSEL (active stack pointer) bit
     msr  CONTROL, r0 // store CONTROL register
     isb              // required to flush the pipeline
+
+    // Load state from new task and branch to the previous position in the
+    // program.
+    #if defined(__thumb2__)
+    pop {r4-r11, pc}
+    #else
+    pop {r4-r7}
+    .cfi_def_cfa_offset 5*9
+    pop {r0-r3}
+    .cfi_def_cfa_offset 1*9
+    mov r8, r0
+    mov r9, r1
+    mov r10, r2
+    mov r11, r3
+    pop {pc}
+    #endif
+    .cfi_endproc
+.size tinygo_swapTaskInternal, .-tinygo_swapTaskInternal
+
+
+.section .text.tinygo_swapTask
+.global  tinygo_swapTask
+.type    tinygo_swapTask, %function
+tinygo_swapTask:
+    .cfi_startproc
+    // This function is like tinygo_swapTaskInternal but only switches the stack
+    // pointer without touching the SPSEL bit (to switch between MSP and PSP).
+    // Therefore, it is used to switch between two tasks that are not the main
+    // goroutine.
+
+    // Store state to old task. It saves the lr instead of the pc, because that
+    // will be the pc after returning back to the old task (in a different
+    // invocation of swapTask).
+    #if defined(__thumb2__)
+    push {r4-r11, lr}
+    .cfi_def_cfa_offset 9*4
+    #else
+    mov r0, r8
+    mov r1, r9
+    mov r2, r10
+    mov r3, r11
+    push {r0-r3, lr}
+    .cfi_def_cfa_offset 5*4
+    push {r4-r7}
+    .cfi_def_cfa_offset 9*4
+    #endif
+
+    // Save the current stack pointer in oldStack.
+    #if defined(__thumb2__)
+    str sp, [r1]
+    #else
+    mov r2, sp
+    str r2, [r1]
+    #endif
+
+    // Switch to the new stack pointer.
+    mov sp, r0
 
     // Load state from new task and branch to the previous position in the
     // program.

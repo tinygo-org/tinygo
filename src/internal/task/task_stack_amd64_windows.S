@@ -17,8 +17,8 @@ tinygo_startTask:
     // Branch to the "goroutine start" function.
     callq *%r12
 
-    // After return, exit this goroutine. This is a tail call.
-    jmp tinygo_pause
+    // After return, exit this goroutine.
+    callq tinygo_pause
 
 .global tinygo_swapTask
 .section .text.tinygo_swapTask,"ax"

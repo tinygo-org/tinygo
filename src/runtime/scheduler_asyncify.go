@@ -1,5 +1,5 @@
-//go:build !scheduler.none
-// +build !scheduler.none
+//go:build scheduler.asyncify
+// +build scheduler.asyncify
 
 package runtime
 

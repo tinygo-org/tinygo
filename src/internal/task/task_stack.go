@@ -27,8 +27,12 @@ type state struct {
 	canaryPtr *uintptr
 }
 
-// currentTask is the current running task, or nil if currently in the scheduler.
-var currentTask *Task
+// The task struct for the main goroutine.
+var mainTask Task
+
+// currentTask is the current running task. The default value is the main
+// goroutine.
+var currentTask = &mainTask
 
 // Current returns the current active task.
 func Current() *Task {
@@ -36,29 +40,36 @@ func Current() *Task {
 }
 
 // Pause suspends the current task and returns to the scheduler.
-// This function may only be called when running on a goroutine stack, not when running on the system stack or in an interrupt.
+// This function may only be called when running on a goroutine stack, not when in an interrupt.
 func Pause() {
 	// Check whether the canary (the lowest address of the stack) is still
 	// valid. If it is not, a stack overflow has occured.
-	if *currentTask.state.canaryPtr != stackCanary {
+	if currentTask.state.canaryPtr != nil && *currentTask.state.canaryPtr != stackCanary {
 		runtimePanic("goroutine stack overflow")
 	}
-	currentTask.state.pause()
+	scheduler()
 }
+
+//go:linkname scheduler runtime.scheduler
+func scheduler()
 
 //export tinygo_pause
 func pause() {
 	Pause()
 }
 
-// Resume the task until it pauses or completes.
+// Switch to the given task until it pauses or completes.
 // This may only be called from the scheduler.
-func (t *Task) Resume() {
+func (t *Task) Switch() {
+	current := currentTask
+	if current == t {
+		// Nothing to switch to: we're already in this task.
+		return
+	}
 	currentTask = t
 	t.gcData.swap()
-	t.state.resume()
+	t.state.switchTo(current)
 	t.gcData.swap()
-	currentTask = nil
 }
 
 // initialize the state and prepare to call the specified function with the specified argument bundle.
@@ -103,8 +114,8 @@ func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	runqueuePushBack(t)
 }
 
-// OnSystemStack returns whether the caller is running on the system stack.
-func OnSystemStack() bool {
+// MainTask returns whether the caller is running in the main goroutine.
+func MainTask() bool {
 	// If there is not an active goroutine, then this must be running on the system stack.
-	return Current() == nil
+	return currentTask == &mainTask
 }
