@@ -49,6 +49,16 @@ func putchar(c byte) {
 	}
 }
 
+func getchar() byte {
+	// dummy, TODO
+	return 0
+}
+
+func buffered() int {
+	// dummy, TODO
+	return 0
+}
+
 //go:linkname now time.now
 func now() (sec int64, nsec int32, mono int64) {
 	mono = nanotime()
