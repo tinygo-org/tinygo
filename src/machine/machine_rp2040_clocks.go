@@ -11,6 +11,11 @@ import (
 )
 
 const (
+	// XOSC_MHZ is the frequency of the external crystal
+	XOSC_MHZ = 12
+)
+
+const (
 	KHz = 1000
 	MHz = 1000000
 )
@@ -183,6 +188,13 @@ func (clk *clock) configure(src, auxsrc, srcFreq, freq uint32) {
 
 }
 
+// stop the clock (usually used before going dormant)
+func (clk *clock) stop() {
+	// Disable clock. On clkRef and clkSys this does nothing,
+	// all other clocks have the ENABLE bit in the same position.
+	clk.ctrl.ClearBits(rp.CLOCKS_CLK_GPOUT0_CTRL_ENABLE)
+}
+
 // init initializes the clock hardware.
 //
 // Must be called before any other clock function.
@@ -192,6 +204,10 @@ func (clks *clocksType) init() {
 
 	// Disable resus that may be enabled from previous software
 	clks.resus.ctrl.Set(0)
+
+	// Ensure ROSC is initialized since clock setup sequence assumes ROSC available.
+	// It may have been disabled (e.g. after being dormant)
+	rp.ROSC.CTRL.ReplaceBits(rp.ROSC_CTRL_ENABLE_ENABLE<<rp.ROSC_CTRL_ENABLE_Pos, rp.ROSC_CTRL_ENABLE_Msk, 0)
 
 	// Enable the xosc
 	xosc.init()
@@ -256,4 +272,58 @@ func (clks *clocksType) init() {
 		rp.CLOCKS_CLK_PERI_CTRL_AUXSRC_CLK_SYS,
 		125*MHz,
 		125*MHz)
+}
+
+// Turn off clocks & PLLs in preparation for going dormant.  After
+// awakening, need to call init() to re-initialize.
+func (clks *clocksType) deinit() {
+	// For now, hard-coded to use external oscillator to go dormant
+	const src_hz = XOSC_MHZ * MHz
+	const clk_ref_src = rp.CLOCKS_CLK_REF_CTRL_SRC_XOSC_CLKSRC
+	const clk_rtc_src = rp.CLOCKS_CLK_RTC_CTRL_AUXSRC_XOSC_CLKSRC
+
+	// Configure clocks
+	// clkRef = xosc (12MHz) / 1 = 12MHz
+	clkref := clks.clock(clkRef)
+	clkref.configure(clk_ref_src,
+		0, // No aux mux
+		src_hz,
+		src_hz)
+
+	// CLK SYS = CLK_REF
+	clksys := clks.clock(clkSys)
+	clksys.configure(rp.CLOCKS_CLK_SYS_CTRL_SRC_CLK_REF,
+		0, // Using glitchless mux
+		src_hz,
+		src_hz)
+
+	// CLK USB = 0MHz
+	clkusb := clks.clock(clkUSB)
+	clkusb.stop()
+
+	// CLK ADC = 0MHz
+	clkadc := clks.clock(clkADC)
+	clkadc.stop()
+
+	// clkRTC = XOSC (12MHz) / 256 = 46875Hz
+	clkrtc := clks.clock(clkRTC)
+	clkrtc.configure(0, // No GLMUX
+		clk_rtc_src,
+		src_hz,
+		46875)
+
+	// clkPeri = clkSys. Used as reference clock for Peripherals.
+	// No dividers so just select and enable.
+	clkperi := clks.clock(clkPeri)
+	clkperi.configure(0,
+		rp.CLOCKS_CLK_PERI_CTRL_AUXSRC_CLK_SYS,
+		src_hz,
+		src_hz)
+
+	// Deinitialize the PLLs
+	pllSys.deinit()
+	pllUSB.deinit()
+
+	// Disable ROSC since using XOSC
+	rp.ROSC.CTRL.ReplaceBits(rp.ROSC_CTRL_ENABLE_DISABLE<<rp.ROSC_CTRL_ENABLE_Pos, rp.ROSC_CTRL_ENABLE_Msk, 0)
 }

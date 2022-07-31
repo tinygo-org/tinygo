@@ -99,3 +99,11 @@ func (pll *pll) init(refdiv, vcoFreq, postDiv1, postDiv2 uint32) {
 	pll.pwr.ClearBits(rp.PLL_SYS_PWR_POSTDIVPD)
 
 }
+
+func (pll *pll) deinit() {
+	// from Pico SDK pll.h
+	const PLL_PWR_BITS = 0x0000002d
+
+	// Set bits to disable
+	pll.pwr.Set(PLL_PWR_BITS)
+}
