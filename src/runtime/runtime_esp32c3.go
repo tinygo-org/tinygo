@@ -12,6 +12,7 @@ import (
 
 // This is the function called on startup after the flash (IROM/DROM) is
 // initialized and the stack pointer has been set.
+//
 //export main
 func main() {
 	// This initialization configures the following things:

@@ -51,6 +51,7 @@ func preinit() {
 }
 
 // Entry point for Go. Initialize all packages and call main.main().
+//
 //export main
 func main() {
 	preinit()
@@ -274,31 +275,37 @@ func getMainThreadHandle() uintptr {
 func getArmSystemTick() int64
 
 // nxExit exits the program to homebrew launcher
+//
 //export __nx_exit
 func nxExit(code int, stackTop uintptr, exitFunction uintptr)
 
 // Horizon System Calls
 // svcSetHeapSize Set the process heap to a given size. It can both extend and shrink the heap.
 // svc 0x01
+//
 //export svcSetHeapSize
 func svcSetHeapSize(addr *uintptr, length uint64) uint64
 
 // svcExitProcess Exits the current process.
 // svc 0x07
+//
 //export svcExitProcess
 func svcExitProcess(code int)
 
 // svcSleepThread Sleeps the current thread for the specified amount of time.
 // svc 0x0B
+//
 //export svcSleepThread
 func svcSleepThread(nanos uint64)
 
 // svcOutputDebugString Outputs debug text, if used during debugging.
 // svc 0x27
+//
 //export svcOutputDebugString
 func svcOutputDebugString(str *uint8, size uint64) uint64
 
 // svcGetInfo Retrieves information about the system, or a certain kernel object.
 // svc 0x29
+//
 //export svcGetInfo
 func svcGetInfo(output *uint64, id0 uint32, handle uint32, id1 uint64) uint64

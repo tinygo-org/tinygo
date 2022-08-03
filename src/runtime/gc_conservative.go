@@ -259,6 +259,7 @@ func calculateHeapAddresses() {
 
 // alloc tries to find some free space on the heap, possibly doing a garbage
 // collection cycle if needed. If no space is free, it panics.
+//
 //go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {

@@ -72,7 +72,8 @@ func (p Pin) Configure(config PinConfig) {
 }
 
 // Configure this pin with the given configuration including alternate
-//  function mapping if necessary.
+//
+//	function mapping if necessary.
 func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 	// Configure the GPIO pin.
 	p.enableClock()

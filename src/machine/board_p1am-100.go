@@ -4,7 +4,6 @@
 // This contains the pin mappings for the ProductivityOpen P1AM-100 board.
 //
 // For more information, see: https://facts-engineering.github.io/
-//
 package machine
 
 // used to reset into bootloader

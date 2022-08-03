@@ -4,7 +4,6 @@
 // This contains the pin mappings for the Arduino Nano33 IoT board.
 //
 // For more information, see: https://store.arduino.cc/nano-33-iot
-//
 package machine
 
 // used to reset into bootloader

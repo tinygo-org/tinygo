@@ -18,6 +18,7 @@ func usleep(usec uint) int
 // Note: off_t is defined as int64 because:
 //   - musl (used on Linux) always defines it as int64
 //   - darwin is practically always 64-bit anyway
+//
 //export mmap
 func mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int, offset int64) unsafe.Pointer
 
@@ -66,6 +67,7 @@ type timespec struct {
 var stackTop uintptr
 
 // Entry point for Go. Initialize all packages and call main.main().
+//
 //export main
 func main(argc int32, argv *unsafe.Pointer) int {
 	preinit()
@@ -113,6 +115,7 @@ func os_runtime_args() []string {
 }
 
 // Must be a separate function to get the correct stack pointer.
+//
 //go:noinline
 func runMain() {
 	run()

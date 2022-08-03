@@ -40,6 +40,7 @@ var _sidata [0]byte
 var _edata [0]byte
 
 // Entry point for Go. Initialize all packages and call main.main().
+//
 //export main
 func main() {
 	// Initialize .data and .bss sections.

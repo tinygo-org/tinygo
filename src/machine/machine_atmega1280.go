@@ -264,7 +264,7 @@ func (pwm PWM) Configure(config PWMConfig) error {
 // SetPeriod updates the period of this PWM peripheral.
 // To set a particular frequency, use the following formula:
 //
-//     period = 1e9 / frequency
+//	period = 1e9 / frequency
 //
 // If you use a period of 0, a period that works well for LEDs will be picked.
 //
@@ -694,7 +694,7 @@ func (pwm PWM) SetInverting(channel uint8, inverting bool) {
 // cycle, in other words the fraction of time the channel output is high (or low
 // when inverted). For example, to set it to a 25% duty cycle, use:
 //
-//     pwm.Set(channel, pwm.Top() / 4)
+//	pwm.Set(channel, pwm.Top() / 4)
 //
 // pwm.Set(channel, 0) will set the output to low and pwm.Set(channel,
 // pwm.Top()) will set the output to high, assuming the output isn't inverted.

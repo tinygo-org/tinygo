@@ -1367,10 +1367,10 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 //
 // It might print something like the following:
 //
-//     function                         stack usage (in bytes)
-//     Reset_Handler                    316
-//     examples/blinky2.led1            92
-//     runtime.run$1                    300
+//	function                         stack usage (in bytes)
+//	Reset_Handler                    316
+//	examples/blinky2.led1            92
+//	runtime.run$1                    300
 func printStacks(calculatedStacks []string, stackSizes map[string]functionStackSize) {
 	// Print the sizes of all stacks.
 	fmt.Printf("%-32s %s\n", "function", "stack usage (in bytes)")

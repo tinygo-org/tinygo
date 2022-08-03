@@ -5,7 +5,6 @@
 //
 // Datasheet:
 // http://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-Family-DataSheet-DS40001882D.pdf
-//
 package machine
 
 import (
@@ -88,10 +87,11 @@ const (
 // SERCOM and SERCOM-ALT.
 //
 // Observations:
-//   * There are six SERCOMs. Those SERCOM numbers can be encoded in 3 bits.
-//   * Even pad numbers are always on even pins, and odd pad numbers are always on
+//   - There are six SERCOMs. Those SERCOM numbers can be encoded in 3 bits.
+//   - Even pad numbers are always on even pins, and odd pad numbers are always on
 //     odd pins.
-//   * Pin pads come in pairs. If PA00 has pad 0, then PA01 has pad 1.
+//   - Pin pads come in pairs. If PA00 has pad 0, then PA01 has pad 1.
+//
 // With this information, we can encode SERCOM pin/pad numbers much more
 // efficiently. First of all, due to pads coming in pairs, we can ignore half
 // the pins: the information for an odd pin can be calculated easily from the
@@ -1285,17 +1285,16 @@ var (
 // This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
 // Note that the tx and rx buffers must be the same size:
 //
-// 		spi.Tx(tx, rx)
+//	spi.Tx(tx, rx)
 //
 // This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
 // until all the bytes in the command packet have been received:
 //
-// 		spi.Tx(tx, nil)
+//	spi.Tx(tx, nil)
 //
 // This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
 //
-// 		spi.Tx(nil, rx)
-//
+//	spi.Tx(nil, rx)
 func (spi SPI) Tx(w, r []byte) error {
 	switch {
 	case w == nil:
@@ -1441,7 +1440,7 @@ func (tcc *TCC) Configure(config PWMConfig) error {
 // SetPeriod updates the period of this TCC peripheral.
 // To set a particular frequency, use the following formula:
 //
-//     period = 1e9 / frequency
+//	period = 1e9 / frequency
 //
 // If you use a period of 0, a period that works well for LEDs will be picked.
 //
@@ -1709,7 +1708,7 @@ func (tcc *TCC) SetInverting(channel uint8, inverting bool) {
 // cycle, in other words the fraction of time the channel output is high (or low
 // when inverted). For example, to set it to a 25% duty cycle, use:
 //
-//     tcc.Set(channel, tcc.Top() / 4)
+//	tcc.Set(channel, tcc.Top() / 4)
 //
 // tcc.Set(channel, 0) will set the output to low and tcc.Set(channel,
 // tcc.Top()) will set the output to high, assuming the output isn't inverted.

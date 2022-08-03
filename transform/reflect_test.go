@@ -15,13 +15,13 @@ type reflectAssert struct {
 
 // Test reflect lowering. This code looks at IR like this:
 //
-//   call void @main.assertType(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:int" to i32), i8* inttoptr (i32 3 to i8*), i32 4, i8* undef, i8* undef)
+//	call void @main.assertType(i32 ptrtoint (%runtime.typecodeID* @"reflect/types.type:basic:int" to i32), i8* inttoptr (i32 3 to i8*), i32 4, i8* undef, i8* undef)
 //
 // and verifies that the ptrtoint constant (the first parameter of
 // @main.assertType) is replaced with the correct type code.  The expected
 // output is this:
 //
-//   call void @main.assertType(i32 4, i8* inttoptr (i32 3 to i8*), i32 4, i8* undef, i8* undef)
+//	call void @main.assertType(i32 4, i8* inttoptr (i32 3 to i8*), i32 4, i8* undef, i8* undef)
 //
 // The first and third parameter are compared and must match, the second
 // parameter is ignored.

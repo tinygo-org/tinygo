@@ -11,9 +11,9 @@ type State uint8
 // Disable disables all interrupts and returns the previous interrupt state. It
 // can be used in a critical section like this:
 //
-//     state := interrupt.Disable()
-//     // critical section
-//     interrupt.Restore(state)
+//	state := interrupt.Disable()
+//	// critical section
+//	interrupt.Restore(state)
 //
 // Critical sections can be nested. Make sure to call Restore in the same order
 // as you called Disable (this happens naturally with the pattern above).

@@ -120,16 +120,16 @@ func (b *builder) createGo(instr *ssa.Go) {
 // createGoroutineStartWrapper creates a wrapper for the task-based
 // implementation of goroutines. For example, to call a function like this:
 //
-//     func add(x, y int) int { ... }
+//	func add(x, y int) int { ... }
 //
 // It creates a wrapper like this:
 //
-//     func add$gowrapper(ptr *unsafe.Pointer) {
-//         args := (*struct{
-//             x, y int
-//         })(ptr)
-//         add(args.x, args.y)
-//     }
+//	func add$gowrapper(ptr *unsafe.Pointer) {
+//	    args := (*struct{
+//	        x, y int
+//	    })(ptr)
+//	    add(args.x, args.y)
+//	}
 //
 // This is useful because the task-based goroutine start implementation only
 // allows a single (pointer) argument to the newly started goroutine. Also, it

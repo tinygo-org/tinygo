@@ -317,86 +317,107 @@ func splitSlice(p []byte) (buf *byte, len uintptr) {
 func libc_strlen(ptr unsafe.Pointer) uintptr
 
 // ssize_t write(int fd, const void *buf, size_t count)
+//
 //export write
 func libc_write(fd int32, buf *byte, count uint) int
 
 // char *getenv(const char *name);
+//
 //export getenv
 func libc_getenv(name *byte) *byte
 
 // int setenv(const char *name, const char *val, int replace);
+//
 //export setenv
 func libc_setenv(name *byte, val *byte, replace int32) int32
 
 // int unsetenv(const char *name);
+//
 //export unsetenv
 func libc_unsetenv(name *byte) int32
 
 // ssize_t read(int fd, void *buf, size_t count);
+//
 //export read
 func libc_read(fd int32, buf *byte, count uint) int
 
 // ssize_t pread(int fd, void *buf, size_t count, off_t offset);
+//
 //export pread
 func libc_pread(fd int32, buf *byte, count uint, offset int64) int
 
 // ssize_t lseek(int fd, off_t offset, int whence);
+//
 //export lseek
 func libc_lseek(fd int32, offset int64, whence int) int64
 
 // int open(const char *pathname, int flags, mode_t mode);
+//
 //export open
 func libc_open(pathname *byte, flags int32, mode uint32) int32
 
 // int close(int fd)
+//
 //export close
 func libc_close(fd int32) int32
 
 // int dup(int fd)
+//
 //export dup
 func libc_dup(fd int32) int32
 
 // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+//
 //export mmap
 func libc_mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int32, offset uintptr) unsafe.Pointer
 
 // int munmap(void *addr, size_t length);
+//
 //export munmap
 func libc_munmap(addr unsafe.Pointer, length uintptr) int32
 
 // int mprotect(void *addr, size_t len, int prot);
+//
 //export mprotect
 func libc_mprotect(addr unsafe.Pointer, len uintptr, prot int32) int32
 
 // int chdir(const char *pathname, mode_t mode);
+//
 //export chdir
 func libc_chdir(pathname *byte) int32
 
 // int chmod(const char *pathname, mode_t mode);
+//
 //export chmod
 func libc_chmod(pathname *byte, mode uint32) int32
 
 // int mkdir(const char *pathname, mode_t mode);
+//
 //export mkdir
 func libc_mkdir(pathname *byte, mode uint32) int32
 
 // int rmdir(const char *pathname);
+//
 //export rmdir
 func libc_rmdir(pathname *byte) int32
 
 // int rename(const char *from, *to);
+//
 //export rename
 func libc_rename(from, to *byte) int32
 
 // int symlink(const char *from, *to);
+//
 //export symlink
 func libc_symlink(from, to *byte) int32
 
 // ssize_t readlink(const char *path, void *buf, size_t count);
+//
 //export readlink
 func libc_readlink(path *byte, buf *byte, count uint) int
 
 // int unlink(const char *pathname);
+//
 //export unlink
 func libc_unlink(pathname *byte) int32
 

@@ -133,6 +133,7 @@ func hashmapShouldGrow(m *hashmap) bool {
 
 // Return the number of entries in this hashmap, called from the len builtin.
 // A nil hashmap is defined as having length 0.
+//
 //go:inline
 func hashmapLen(m *hashmap) int {
 	if m == nil {
@@ -148,6 +149,7 @@ func hashmapLenUnsafePointer(p unsafe.Pointer) int {
 }
 
 // Set a specified key to a given value. Grow the map if necessary.
+//
 //go:nobounds
 func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
 	if hashmapShouldGrow(m) {
@@ -251,6 +253,7 @@ func hashmapGrow(m *hashmap) {
 }
 
 // Get the value of a specified key, or zero the value if not found.
+//
 //go:nobounds
 func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash uint32) bool {
 	if m == nil {
@@ -298,6 +301,7 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 
 // Delete a given key from the map. No-op when the key does not exist in the
 // map.
+//
 //go:nobounds
 func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 	if m == nil {
@@ -338,6 +342,7 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 }
 
 // Iterate over a hashmap.
+//
 //go:nobounds
 func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) bool {
 	if m == nil {
@@ -477,6 +482,7 @@ func hashmapStringDelete(m *hashmap, key string) {
 // is identical to the Interface() method call, except it doesn't check whether
 // a field is exported and thus allows circumventing the type system.
 // The hash function needs it as it also needs to hash unexported struct fields.
+//
 //go:linkname valueInterfaceUnsafe reflect.valueInterfaceUnsafe
 func valueInterfaceUnsafe(v reflect.Value) interface{}
 

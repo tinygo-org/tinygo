@@ -18,7 +18,7 @@ import (
 // makeArchive creates an arcive for static linking from a list of object files
 // given as a parameter. It is equivalent to the following command:
 //
-//     ar -rcs <archivePath> <objs...>
+//	ar -rcs <archivePath> <objs...>
 func makeArchive(arfile *os.File, objs []string) error {
 	// Open the archive file.
 	arwriter := ar.NewWriter(arfile)
