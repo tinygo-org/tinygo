@@ -114,24 +114,21 @@ func (kb *keyboard) Write(b []byte) (n int, err error) {
 // stateful method with respect to the receiver Keyboard, meaning that its exact
 // behavior will depend on the current state of its UTF-8 decode state machine:
 //
-//  (a) If the given byte is a valid ASCII encoding (0-127), then a keypress
-//      sequence is immediately transmitted for the respective Keycode.
+//  1. If the given byte is a valid ASCII encoding (0-127), then a keypress
+//     sequence is immediately transmitted for the respective Keycode.
+//  2. If the given byte represents the final byte in a multi-byte codepoint,
+//     then a keypress sequence is immediately transmitted by translating the
+//     multi-byte codepoint to its respective Keycode.
+//  3. If the given byte appears to represent high bits for a multi-byte
+//     codepoint, then the bits are copied to the receiver's internal state
+//     machine buffer for use by a subsequent call to WriteByte() (or Write())
+//     that completes the codepoint.
+//  4. If the given byte is out of range, or contains illegal bits for the
+//     current state of the UTF-8 decoder, then the UTF-8 decode state machine
+//     is reset to its initial state.
 //
-//  (b) If the given byte represents the final byte in a multi-byte codepoint,
-//      then a keypress sequence is immediately transmitted by translating the
-//      multi-byte codepoint to its respective Keycode.
-//
-//  (c) If the given byte appears to represent high bits for a multi-byte
-//      codepoint, then the bits are copied to the receiver's internal state
-//      machine buffer for use by a subsequent call to WriteByte() (or Write())
-//      that completes the codepoint.
-//
-//  (d) If the given byte is out of range, or contains illegal bits for the
-//      current state of the UTF-8 decoder, then the UTF-8 decode state machine
-//      is reset to its initial state.
-//
-// In cases (c) and (d), a keypress sequence is not generated and no data is
-// transmitted. In case (c), additional bytes must be received via WriteByte()
+// In cases 3 and 4, a keypress sequence is not generated and no data is
+// transmitted. In case 3, additional bytes must be received via WriteByte()
 // (or Write()) to complete or discard the current codepoint.
 func (kb *keyboard) WriteByte(b byte) error {
 	switch {
@@ -211,13 +208,13 @@ func (kb *keyboard) writeKeycode(c Keycode) error {
 //
 // The following values of Keycode are supported:
 //
-//   0x0020 - 0x007F  ASCII               (U+0020 to U+007F)  [USES LAYOUT]
-//   0x0080 - 0xC1FF  Unicode             (U+0080 to U+C1FF)  [USES LAYOUT]
-//   0xC200 - 0xDFFF  UTF-8 packed        (U+0080 to U+07FF)  [USES LAYOUT]
-//   0xE000 - 0xE0FF  Modifier key        (bitmap, 8 keys, Shift/Ctrl/Alt/GUI)
-//   0xE200 - 0xE2FF  System key          (HID usage code, page 1)
-//   0xE400 - 0xE7FF  Media/Consumer key  (HID usage code, page 12)
-//   0xF000 - 0xFFFF  Normal key          (HID usage code, page 7)
+//	0x0020 - 0x007F  ASCII               (U+0020 to U+007F)  [USES LAYOUT]
+//	0x0080 - 0xC1FF  Unicode             (U+0080 to U+C1FF)  [USES LAYOUT]
+//	0xC200 - 0xDFFF  UTF-8 packed        (U+0080 to U+07FF)  [USES LAYOUT]
+//	0xE000 - 0xE0FF  Modifier key        (bitmap, 8 keys, Shift/Ctrl/Alt/GUI)
+//	0xE200 - 0xE2FF  System key          (HID usage code, page 1)
+//	0xE400 - 0xE7FF  Media/Consumer key  (HID usage code, page 12)
+//	0xF000 - 0xFFFF  Normal key          (HID usage code, page 7)
 func (kb *keyboard) Press(c Keycode) error {
 	if err := kb.Down(c); nil != err {
 		return err

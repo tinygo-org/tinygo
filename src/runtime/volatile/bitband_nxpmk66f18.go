@@ -28,7 +28,7 @@ type BitRegister struct {
 
 // Get returns the of the mapped register bit. It is the volatile equivalent of:
 //
-//     *r.Reg
+//	*r.Reg
 //
 //go:inline
 func (r *BitRegister) Get() bool {
@@ -37,7 +37,7 @@ func (r *BitRegister) Get() bool {
 
 // Set sets the mapped register bit. It is the volatile equivalent of:
 //
-//     *r.Reg = 1
+//	*r.Reg = 1
 //
 //go:inline
 func (r *BitRegister) Set(v bool) {

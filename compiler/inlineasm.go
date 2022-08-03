@@ -17,7 +17,7 @@ import (
 // operands or return values. It is useful for trivial instructions, like wfi in
 // ARM or sleep in AVR.
 //
-//     func Asm(asm string)
+//	func Asm(asm string)
 //
 // The provided assembly must be a constant.
 func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
@@ -31,17 +31,17 @@ func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
 // This is a compiler builtin, which allows assembly to be called in a flexible
 // way.
 //
-//     func AsmFull(asm string, regs map[string]interface{}) uintptr
+//	func AsmFull(asm string, regs map[string]interface{}) uintptr
 //
 // The asm parameter must be a constant string. The regs parameter must be
 // provided immediately. For example:
 //
-//     arm.AsmFull(
-//         "str {value}, {result}",
-//         map[string]interface{}{
-//             "value":  1
-//             "result": &dest,
-//         })
+//	arm.AsmFull(
+//	    "str {value}, {result}",
+//	    map[string]interface{}{
+//	        "value":  1
+//	        "result": &dest,
+//	    })
 func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error) {
 	asmString := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
 	registers := map[string]llvm.Value{}
@@ -132,11 +132,11 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 // This is a compiler builtin which emits an inline SVCall instruction. It can
 // be one of:
 //
-//     func SVCall0(num uintptr) uintptr
-//     func SVCall1(num uintptr, a1 interface{}) uintptr
-//     func SVCall2(num uintptr, a1, a2 interface{}) uintptr
-//     func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
-//     func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
+//	func SVCall0(num uintptr) uintptr
+//	func SVCall1(num uintptr, a1 interface{}) uintptr
+//	func SVCall2(num uintptr, a1, a2 interface{}) uintptr
+//	func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
+//	func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
 //
 // The num parameter must be a constant. All other parameters may be any scalar
 // value supported by LLVM inline assembly.
@@ -169,11 +169,11 @@ func (b *builder) emitSVCall(args []ssa.Value) (llvm.Value, error) {
 // This is a compiler builtin which emits an inline SVCall instruction. It can
 // be one of:
 //
-//     func SVCall0(num uintptr) uintptr
-//     func SVCall1(num uintptr, a1 interface{}) uintptr
-//     func SVCall2(num uintptr, a1, a2 interface{}) uintptr
-//     func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
-//     func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
+//	func SVCall0(num uintptr) uintptr
+//	func SVCall1(num uintptr, a1 interface{}) uintptr
+//	func SVCall2(num uintptr, a1, a2 interface{}) uintptr
+//	func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
+//	func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
 //
 // The num parameter must be a constant. All other parameters may be any scalar
 // value supported by LLVM inline assembly.
@@ -206,10 +206,10 @@ func (b *builder) emitSV64Call(args []ssa.Value) (llvm.Value, error) {
 
 // This is a compiler builtin which emits CSR instructions. It can be one of:
 //
-//     func (csr CSR) Get() uintptr
-//     func (csr CSR) Set(uintptr)
-//     func (csr CSR) SetBits(uintptr) uintptr
-//     func (csr CSR) ClearBits(uintptr) uintptr
+//	func (csr CSR) Get() uintptr
+//	func (csr CSR) Set(uintptr)
+//	func (csr CSR) SetBits(uintptr) uintptr
+//	func (csr CSR) ClearBits(uintptr) uintptr
 //
 // The csr parameter (method receiver) must be a constant. Other parameter can
 // be any value.

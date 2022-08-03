@@ -7,6 +7,7 @@ import (
 // This stores a varint for each named type. Named types are identified by their
 // name instead of by their type. The named types stored in this struct are
 // non-basic types: pointer, struct, and channel.
+//
 //go:extern reflect.namedNonBasicTypesSidetable
 var namedNonBasicTypesSidetable uintptr
 

@@ -5,7 +5,6 @@
 //
 // Datasheet:
 // http://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-Family-DataSheet-DS40001882D.pdf
-//
 package machine
 
 import (

@@ -7,11 +7,13 @@ import (
 
 // trap is a compiler hint that this function cannot be executed. It is
 // translated into either a trap instruction or a call to abort().
+//
 //export llvm.trap
 func trap()
 
 // Inline assembly stub. It is essentially C longjmp but modified a bit for the
 // purposes of TinyGo. It restores the stack pointer and jumps to the given pc.
+//
 //export tinygo_longjmp
 func tinygo_longjmp(frame *deferFrame)
 
@@ -61,6 +63,7 @@ func runtimePanic(msg string) {
 // It gets passed in the stack-allocated defer frame and configures it.
 // Note that the frame is not zeroed yet, so we need to initialize all values
 // that will be used.
+//
 //go:inline
 //go:nobounds
 func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
@@ -74,6 +77,7 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 // Called right before the return instruction. It pops the defer frame from the
 // linked list of defer frames. It also re-raises a panic if the goroutine is
 // still panicking.
+//
 //go:inline
 //go:nobounds
 func destroyDeferFrame(frame *deferFrame) {

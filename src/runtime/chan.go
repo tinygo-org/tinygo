@@ -139,6 +139,7 @@ func chanMake(elementSize uintptr, bufSize uintptr) *channel {
 
 // Return the number of entries in this chan, called from the len builtin.
 // A nil chan is defined as having length 0.
+//
 //go:inline
 func chanLen(c *channel) int {
 	if c == nil {
@@ -155,6 +156,7 @@ func chanLenUnsafePointer(p unsafe.Pointer) int {
 
 // Return the capacity of this chan, called from the cap builtin.
 // A nil chan is defined as having capacity 0.
+//
 //go:inline
 func chanCap(c *channel) int {
 	if c == nil {

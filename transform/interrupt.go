@@ -12,9 +12,9 @@ import (
 //
 // The operation is as follows. The compiler creates the following during IR
 // generation:
-//     * calls to runtime/interrupt.callHandlers with an interrupt number.
-//     * runtime/interrupt.handle objects that store the (constant) interrupt ID and
-//       interrupt handler func value.
+//   - calls to runtime/interrupt.callHandlers with an interrupt number.
+//   - runtime/interrupt.handle objects that store the (constant) interrupt ID and
+//     interrupt handler func value.
 //
 // This pass then replaces those callHandlers calls with calls to the actual
 // interrupt handlers. If there are no interrupt handlers for the given call,

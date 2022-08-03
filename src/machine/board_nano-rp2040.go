@@ -10,7 +10,6 @@
 // Also
 // - Datasheets: https://docs.arduino.cc/hardware/nano-rp2040-connect
 // - Nano RP2040 Connect technical reference: https://docs.arduino.cc/tutorials/nano-rp2040-connect/rp2040-01-technical-reference
-//
 package machine
 
 import (

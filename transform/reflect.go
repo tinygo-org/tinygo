@@ -366,10 +366,13 @@ func (state *typeCodeAssignmentState) getNonBasicTypeCode(class string, typecode
 // getClassAndValueFromTypeCode takes a typecode (a llvm.Value of type
 // runtime.typecodeID), looks at the name, and extracts the typecode class and
 // value from it. For example, for a typecode with the following name:
-//     reflect/types.type:pointer:named:reflect.ValueError
+//
+//	reflect/types.type:pointer:named:reflect.ValueError
+//
 // It extracts:
-//     class = "pointer"
-//     value = "named:reflect.ValueError"
+//
+//	class = "pointer"
+//	value = "named:reflect.ValueError"
 func getClassAndValueFromTypeCode(typecode llvm.Value) (class, value string) {
 	typecodeName := typecode.Name()
 	const prefix = "reflect/types.type:"

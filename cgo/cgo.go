@@ -493,15 +493,15 @@ func (p *cgoPackage) makeUnionField(typ *elaboratedTypeInfo) *ast.StructType {
 // createUnionAccessor creates a function that returns a typed pointer to a
 // union field for each field in a union. For example:
 //
-//     func (union *C.union_1) unionfield_d() *float64 {
-//         return (*float64)(unsafe.Pointer(&union.$union))
-//     }
+//	func (union *C.union_1) unionfield_d() *float64 {
+//	    return (*float64)(unsafe.Pointer(&union.$union))
+//	}
 //
 // Where C.union_1 is defined as:
 //
-//     type C.union_1 struct{
-//         $union uint64
-//     }
+//	type C.union_1 struct{
+//	    $union uint64
+//	}
 //
 // The returned pointer can be used to get or set the field, or get the pointer
 // to a subfield.
@@ -617,9 +617,9 @@ func (p *cgoPackage) createUnionAccessor(field *ast.Field, typeName string) {
 
 // createBitfieldGetter creates a bitfield getter function like the following:
 //
-//     func (s *C.struct_foo) bitfield_b() byte {
-//         return (s.__bitfield_1 >> 5) & 0x1
-//     }
+//	func (s *C.struct_foo) bitfield_b() byte {
+//	    return (s.__bitfield_1 >> 5) & 0x1
+//	}
 func (p *cgoPackage) createBitfieldGetter(bitfield bitfieldInfo, typeName string) {
 	// The value to return from the getter.
 	// Not complete: this is just an expression to get the complete field.
@@ -729,15 +729,15 @@ func (p *cgoPackage) createBitfieldGetter(bitfield bitfieldInfo, typeName string
 
 // createBitfieldSetter creates a bitfield setter function like the following:
 //
-//     func (s *C.struct_foo) set_bitfield_b(value byte) {
-//         s.__bitfield_1 = s.__bitfield_1 ^ 0x60 | ((value & 1) << 5)
-//     }
+//	func (s *C.struct_foo) set_bitfield_b(value byte) {
+//	    s.__bitfield_1 = s.__bitfield_1 ^ 0x60 | ((value & 1) << 5)
+//	}
 //
 // Or the following:
 //
-//     func (s *C.struct_foo) set_bitfield_c(value byte) {
-//         s.__bitfield_1 = s.__bitfield_1 & 0x3f | (value << 6)
-//     }
+//	func (s *C.struct_foo) set_bitfield_c(value byte) {
+//	    s.__bitfield_1 = s.__bitfield_1 & 0x3f | (value << 6)
+//	}
 func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string) {
 	// The full field with all bitfields.
 	var field ast.Expr = &ast.SelectorExpr{

@@ -16,11 +16,11 @@ import (
 // The Interrupt.New(x, f) (x = [1..31]) attaches CPU interrupt to function f.
 // Caller must map the selected interrupt using following sequence (for example using id 5):
 //
-//    // map interrupt 5 to my XXXX module
-//    esp.INTERRUPT_CORE0.XXXX_INTERRUPT_PRO_MAP.Set( 5 )
-//    _ = Interrupt.New(5, func(interrupt.Interrupt) {
-//        ...
-//    }).Enable()
+//	// map interrupt 5 to my XXXX module
+//	esp.INTERRUPT_CORE0.XXXX_INTERRUPT_PRO_MAP.Set( 5 )
+//	_ = Interrupt.New(5, func(interrupt.Interrupt) {
+//	    ...
+//	}).Enable()
 func (i Interrupt) Enable() error {
 	if i.num < 1 && i.num > 31 {
 		return errors.New("interrupt for ESP32-C3 must be in range of 1 through 31")
@@ -49,6 +49,7 @@ func (i Interrupt) Enable() error {
 
 // Adding pseudo function calls that is replaced by the compiler with the actual
 // functions registered through interrupt.New.
+//
 //go:linkname callHandlers runtime/interrupt.callHandlers
 func callHandlers(num int)
 

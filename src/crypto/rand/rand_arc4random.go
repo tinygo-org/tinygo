@@ -27,5 +27,6 @@ func (r *reader) Read(b []byte) (n int, err error) {
 }
 
 // void arc4random_buf(void *buf, size_t buflen);
+//
 //export arc4random_buf
 func libc_arc4random_buf(buf unsafe.Pointer, buflen uint)

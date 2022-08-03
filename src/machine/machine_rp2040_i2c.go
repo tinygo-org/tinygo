@@ -66,10 +66,12 @@ var (
 // Passing a nil value for w or r skips the transfer corresponding to write
 // or read, respectively.
 //
-//  i2c.Tx(addr, nil, r)
+//	i2c.Tx(addr, nil, r)
+//
 // Performs only a read transfer.
 //
-//  i2c.Tx(addr, w, nil)
+//	i2c.Tx(addr, w, nil)
+//
 // Performs only a write transfer.
 func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 	// timeout in microseconds.
@@ -79,11 +81,14 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 
 // Configure initializes i2c peripheral and configures I2C config's pins passed.
 // Here's a list of valid SDA and SCL GPIO pins on bus I2C0 of the rp2040:
-//  SDA: 0, 4, 8, 12, 16, 20
-//  SCL: 1, 5, 9, 13, 17, 21
+//
+//	SDA: 0, 4, 8, 12, 16, 20
+//	SCL: 1, 5, 9, 13, 17, 21
+//
 // Same as above for I2C1 bus:
-//  SDA: 2, 6, 10, 14, 18, 26
-//  SCL: 3, 7, 11, 15, 19, 27
+//
+//	SDA: 2, 6, 10, 14, 18, 26
+//	SCL: 3, 7, 11, 15, 19, 27
 func (i2c *I2C) Configure(config I2CConfig) error {
 	const defaultBaud uint32 = 100_000 // 100kHz standard mode
 	if config.SCL == 0 {
@@ -107,6 +112,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 // SetBaudRate sets the I2C frequency. It has the side effect of also
 // enabling the I2C hardware if disabled beforehand.
+//
 //go:inline
 func (i2c *I2C) SetBaudRate(br uint32) error {
 
@@ -168,6 +174,7 @@ func (i2c *I2C) enable() {
 }
 
 // Implemented as per 4.3.10.3. Disabling DW_apb_i2c section.
+//
 //go:inline
 func (i2c *I2C) disable() error {
 	const MAX_T_POLL_COUNT = 64 // 64 us timeout corresponds to around 1000kb/s i2c transfer rate.
@@ -203,6 +210,7 @@ func (i2c *I2C) init(config I2CConfig) error {
 }
 
 // reset sets I2C register RESET bits in the reset peripheral and then clears them.
+//
 //go:inline
 func (i2c *I2C) reset() {
 	resetVal := i2c.deinit()
@@ -213,6 +221,7 @@ func (i2c *I2C) reset() {
 }
 
 // deinit sets reset bit for I2C. Must call reset to reenable I2C after deinit.
+//
 //go:inline
 func (i2c *I2C) deinit() (resetVal uint32) {
 	switch {
@@ -348,18 +357,21 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 }
 
 // writeAvailable determines non-blocking write space available
+//
 //go:inline
 func (i2c *I2C) writeAvailable() uint32 {
 	return rp.I2C0_IC_COMP_PARAM_1_TX_BUFFER_DEPTH_Pos - i2c.Bus.IC_TXFLR.Get()
 }
 
 // readAvailable determines number of bytes received
+//
 //go:inline
 func (i2c *I2C) readAvailable() uint32 {
 	return i2c.Bus.IC_RXFLR.Get()
 }
 
 // Equivalent to IC_CLR_TX_ABRT.Get() (side effect clears ABORT_REASON)
+//
 //go:inline
 func (i2c *I2C) clearAbortReason() {
 	// Note clearing the abort flag also clears the reason, and
@@ -369,13 +381,16 @@ func (i2c *I2C) clearAbortReason() {
 }
 
 // getAbortReason reads IC_TX_ABRT_SOURCE register.
+//
 //go:inline
 func (i2c *I2C) getAbortReason() uint32 {
 	return i2c.Bus.IC_TX_ABRT_SOURCE.Get()
 }
 
 // returns true if RAW_INTR_STAT bits in mask are all set. performs:
-//  RAW_INTR_STAT & mask == mask
+//
+//	RAW_INTR_STAT & mask == mask
+//
 //go:inline
 func (i2c *I2C) interrupted(mask uint32) bool {
 	reg := i2c.Bus.IC_RAW_INTR_STAT.Get()

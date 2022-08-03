@@ -11,6 +11,7 @@ import (
 
 // This is the function called on startup right after the stack pointer has been
 // set.
+//
 //export main
 func main() {
 	// Disable the protection on the watchdog timer (needed when started from

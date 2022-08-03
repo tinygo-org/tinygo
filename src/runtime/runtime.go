@@ -44,6 +44,7 @@ func memzero(ptr unsafe.Pointer, size uintptr)
 // This intrinsic returns the current stack pointer.
 // It is normally used together with llvm.stackrestore but also works to get the
 // current stack pointer in a platform-independent way.
+//
 //export llvm.stacksave
 func stacksave() unsafe.Pointer
 
@@ -70,6 +71,7 @@ func nanotime() int64 {
 }
 
 // Copied from the Go runtime source code.
+//
 //go:linkname os_sigpipe os.sigpipe
 func os_sigpipe() {
 	runtimePanic("too many writes on closed pipe")

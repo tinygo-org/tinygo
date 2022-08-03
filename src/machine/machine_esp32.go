@@ -462,7 +462,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 // interface, there must always be the same number of bytes written as bytes read.
 // This is accomplished by sending zero bits if r is bigger than w or discarding
 // the incoming data if w is bigger than r.
-//
 func (spi SPI) Tx(w, r []byte) error {
 	toTransfer := len(w)
 	if len(r) > toTransfer {

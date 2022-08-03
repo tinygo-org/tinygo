@@ -18,6 +18,7 @@ type stringIterator struct {
 }
 
 // Return true iff the strings match.
+//
 //go:nobounds
 func stringEqual(x, y string) bool {
 	if len(x) != len(y) {
@@ -32,6 +33,7 @@ func stringEqual(x, y string) bool {
 }
 
 // Return true iff x < y.
+//
 //go:nobounds
 func stringLess(x, y string) bool {
 	l := len(x)
@@ -181,6 +183,7 @@ func encodeUTF8(x rune) ([4]byte, uintptr) {
 }
 
 // Decode a single UTF-8 character from a string.
+//
 //go:nobounds
 func decodeUTF8(s string, index uintptr) (rune, uintptr) {
 	remaining := uintptr(len(s)) - index // must be >= 1 before calling this function

@@ -17,7 +17,6 @@
 //
 // - https://wiki.seeedstudio.com/XIAO_BLE/
 // - https://github.com/Seeed-Studio/ArduinoCore-mbed/tree/master/variants/SEEED_XIAO_NRF52840_SENSE
-//
 package machine
 
 const HasLowFrequencyCrystal = true

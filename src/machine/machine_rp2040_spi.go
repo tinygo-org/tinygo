@@ -58,21 +58,21 @@ const _SPITimeout = 10 * 1000 // 10 ms
 // This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
 // Note that the tx and rx buffers must be the same size:
 //
-// 		spi.Tx(tx, rx)
+//	spi.Tx(tx, rx)
 //
 // This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
 // until all the bytes in the command packet have been received:
 //
-// 		spi.Tx(tx, nil)
+//	spi.Tx(tx, nil)
 //
 // This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
 //
-// 		spi.Tx(nil, rx)
+//	spi.Tx(nil, rx)
 //
 // Remark: This implementation (RP2040) allows reading into buffer with a custom repeated
 // value on tx.
 //
-// 		spi.Tx([]byte{0xff}, rx) // may cause unwanted heap allocations.
+//	spi.Tx([]byte{0xff}, rx) // may cause unwanted heap allocations.
 //
 // This form sends 0xff and puts the result into rx buffer. Useful for reading from SD cards
 // which require 0xff input on SI.
@@ -150,13 +150,17 @@ func (spi SPI) GetBaudRate() uint32 {
 // Default baudrate of 115200 is used if Frequency == 0. Default
 // word length (data bits) is 8.
 // Below is a list of GPIO pins corresponding to SPI0 bus on the rp2040:
-//  SI : 0, 4, 17  a.k.a RX and MISO (if rp2040 is master)
-//  SO : 3, 7, 19  a.k.a TX and MOSI (if rp2040 is master)
-//  SCK: 2, 6, 18
+//
+//	SI : 0, 4, 17  a.k.a RX and MISO (if rp2040 is master)
+//	SO : 3, 7, 19  a.k.a TX and MOSI (if rp2040 is master)
+//	SCK: 2, 6, 18
+//
 // SPI1 bus GPIO pins:
-//  SI : 8, 12
-//  SO : 11, 15
-//  SCK: 10, 14
+//
+//	SI : 8, 12
+//	SO : 11, 15
+//	SCK: 10, 14
+//
 // No pin configuration is needed of SCK, SDO and SDI needed after calling Configure.
 func (spi SPI) Configure(config SPIConfig) error {
 	const defaultBaud uint32 = 115200
@@ -217,6 +221,7 @@ func (spi SPI) setFormat(databits, mode uint8, frameFormat uint32) {
 }
 
 // reset resets SPI and waits until reset is done.
+//
 //go:inline
 func (spi SPI) reset() {
 	resetVal := spi.deinit()
@@ -240,12 +245,14 @@ func (spi SPI) deinit() (resetVal uint32) {
 }
 
 // isWritable returns false if no space is available to write. True if a write is possible
+//
 //go:inline
 func (spi SPI) isWritable() bool {
 	return spi.Bus.SSPSR.HasBits(rp.SPI0_SSPSR_TNF)
 }
 
 // isReadable returns true if a read is possible i.e. data is present
+//
 //go:inline
 func (spi SPI) isReadable() bool {
 	return spi.Bus.SSPSR.HasBits(rp.SPI0_SSPSR_RNE)

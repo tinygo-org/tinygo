@@ -54,7 +54,8 @@ func scheduleLogChan(msg string, ch *channel, t *task.Task) {
 // not exited (so deferred calls won't run). This can happen for example in code
 // like this, that blocks forever:
 //
-//     select{}
+//	select{}
+//
 //go:noinline
 func deadlock() {
 	// call yield without requesting a wakeup
@@ -65,6 +66,7 @@ func deadlock() {
 // Goexit terminates the currently running goroutine. No other goroutines are affected.
 //
 // Unlike the main Go implementation, no deffered calls will be run.
+//
 //go:inline
 func Goexit() {
 	// its really just a deadlock

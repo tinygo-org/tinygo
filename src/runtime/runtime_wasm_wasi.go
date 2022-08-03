@@ -10,6 +10,7 @@ import (
 type timeUnit int64
 
 // libc constructors
+//
 //export __wasm_call_ctors
 func __wasm_call_ctors()
 
@@ -24,7 +25,7 @@ func _start() {
 // Read the command line arguments from WASI.
 // For example, they can be passed to a program with wasmtime like this:
 //
-//     wasmtime ./program.wasm arg1 arg2
+//	wasmtime ./program.wasm arg1 arg2
 func init() {
 	__wasm_call_ctors()
 }
