@@ -100,3 +100,28 @@ jobs:
       - name: Smoke tests
         shell: bash
         run: make smoketest TINYGO=$(PWD)/build/tinygo AVR=0
+  test-macos-homebrew:
+    name: homebrew-install
+    runs-on: macos-latest
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18'
+      - name: Install LLVM
+        shell: bash
+        run: |
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@14
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Cache Go
+        uses: actions/cache@v2
+        with:
+          key: go-cache-macos-homebrew-v1-${{ hashFiles('go.mod') }}
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+      - name: Build TinyGo
+        run: go install
+      - name: Check binary
+        run: tinygo version
