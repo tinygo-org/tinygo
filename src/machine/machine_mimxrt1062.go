@@ -726,7 +726,7 @@ func (p Pin) getPad() (pad *volatile.Register32, mux *volatile.Register32) {
 //
 // The reference manual refers to this functionality as a "Daisy Chain". The
 // associated docs are found in the i.MX RT1060 Processor Reference Manual:
-//   "Chapter 11.3.3 Daisy chain - multi pads driving same module input pin"
+// "Chapter 11.3.3 Daisy chain - multi pads driving same module input pin"
 type muxSelect struct {
 	mux uint8                // AF mux selection (NOT a Pin type)
 	sel *volatile.Register32 // AF selection register

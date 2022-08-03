@@ -127,7 +127,6 @@ var _ TB = (*B)(nil)
 
 // T is a type passed to Test functions to manage test state and support formatted test logs.
 // Logs are accumulated during execution and dumped to standard output when done.
-//
 type T struct {
 	common
 	context *testContext // For running tests and subtests.

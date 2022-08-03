@@ -4,7 +4,6 @@
 // This contains the pin mappings for the Arduino MKR WiFi 1010 board.
 //
 // For more information, see: https://store.arduino.cc/usa/mkr-wifi-1010
-//
 package machine
 
 // used to reset into bootloader

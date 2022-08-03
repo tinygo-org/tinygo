@@ -4,7 +4,6 @@
 // This contains the pin mappings for the Arduino MKR1000 board.
 //
 // For more information, see: https://store.arduino.cc/usa/arduino-mkr1000-with-headers-mounted
-//
 package machine
 
 // used to reset into bootloader

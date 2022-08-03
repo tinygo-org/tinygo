@@ -18,6 +18,7 @@ func _VirtualAlloc(lpAddress unsafe.Pointer, dwSize uintptr, flAllocationType, f
 func _QueryUnbiasedInterruptTime(UnbiasedTime *uint64) bool
 
 // The parameter is really a LPFILETIME, but *uint64 should be compatible.
+//
 //export GetSystemTimeAsFileTime
 func _GetSystemTimeAsFileTime(lpSystemTimeAsFileTime *uint64)
 
@@ -56,6 +57,7 @@ func mainCRTStartup() int {
 }
 
 // Must be a separate function to get the correct stack pointer.
+//
 //go:noinline
 func runMain() {
 	run()

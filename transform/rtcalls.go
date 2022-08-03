@@ -12,7 +12,7 @@ import (
 // OptimizeStringToBytes transforms runtime.stringToBytes(...) calls into const
 // []byte slices whenever possible. This optimizes the following pattern:
 //
-//     w.Write([]byte("foo"))
+//	w.Write([]byte("foo"))
 //
 // where Write does not store to the slice.
 func OptimizeStringToBytes(mod llvm.Module) {
@@ -91,12 +91,12 @@ func OptimizeStringEqual(mod llvm.Module) {
 
 // OptimizeReflectImplements optimizes the following code:
 //
-//     implements := someType.Implements(someInterfaceType)
+//	implements := someType.Implements(someInterfaceType)
 //
 // where someType is an arbitrary reflect.Type and someInterfaceType is a
 // reflect.Type of interface kind, to the following code:
 //
-//     _, implements := someType.(interfaceType)
+//	_, implements := someType.(interfaceType)
 //
 // if the interface type is known at compile time (that is, someInterfaceType is
 // a LLVM constant aggregate). This optimization is especially important for the

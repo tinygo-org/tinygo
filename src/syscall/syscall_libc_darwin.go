@@ -14,10 +14,10 @@ import (
 // This function returns the error location in the darwin ABI.
 // Discovered by compiling the following code using Clang:
 //
-//     #include <errno.h>
-//     int getErrno() {
-//         return errno;
-//     }
+//	#include <errno.h>
+//	int getErrno() {
+//	    return errno;
+//	}
 //
 //export __error
 func libc___error() *int32
@@ -272,9 +272,11 @@ func Getpagesize() int {
 }
 
 // int pipe(int32 *fds);
+//
 //export pipe
 func libc_pipe(fds *int32) int32
 
 // int getpagesize();
+//
 //export getpagesize
 func libc_getpagesize() int32

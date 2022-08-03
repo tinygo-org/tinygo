@@ -8,14 +8,15 @@ import (
 )
 
 /*
-   clock settings
-   +-------------+-----------+
-   | LSE         | 32.768khz |
-   | SYSCLK      | 80mhz     |
-   | HCLK        | 80mhz     |
-   | APB1(PCLK1) | 80mhz     |
-   | APB2(PCLK2) | 80mhz     |
-   +-------------+-----------+
+clock settings
+
+	+-------------+-----------+
+	| LSE         | 32.768khz |
+	| SYSCLK      | 80mhz     |
+	| HCLK        | 80mhz     |
+	| APB1(PCLK1) | 80mhz     |
+	| APB2(PCLK2) | 80mhz     |
+	+-------------+-----------+
 */
 const (
 	HSE_STARTUP_TIMEOUT = 0x0500

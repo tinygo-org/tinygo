@@ -550,8 +550,8 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 // internally to match interfaces and to call the correct method on an
 // interface. Examples:
 //
-//     String() string
-//     Read([]byte) (int, error)
+//	String() string
+//	Read([]byte) (int, error)
 func methodSignature(method *types.Func) string {
 	return method.Name() + signature(method.Type().(*types.Signature))
 }
@@ -559,8 +559,8 @@ func methodSignature(method *types.Func) string {
 // Make a readable version of a function (pointer) signature.
 // Examples:
 //
-//     () string
-//     (string, int) (int, error)
+//	() string
+//	(string, int) (int, error)
 func signature(sig *types.Signature) string {
 	s := ""
 	if sig.Params().Len() == 0 {

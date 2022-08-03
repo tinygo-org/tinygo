@@ -5,7 +5,6 @@
 //
 // Datasheet:
 // http://ww1.microchip.com/downloads/en/DeviceDoc/60001507C.pdf
-//
 package machine
 
 import "device/sam"

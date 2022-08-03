@@ -18,6 +18,7 @@ const (
 )
 
 // See runtime_cortexm_hardfault.go
+//
 //go:export handleHardFault
 func handleHardFault(sp *interruptStack) {
 	fault := GetFaultStatus()

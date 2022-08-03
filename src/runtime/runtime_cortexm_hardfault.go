@@ -17,6 +17,7 @@ import (
 // For details, see:
 // https://community.arm.com/developer/ip-products/system/f/embedded-forum/3257/debugging-a-cortex-m0-hard-fault
 // https://blog.feabhas.com/2013/02/developing-a-generic-hard-fault-handler-for-arm-cortex-m3cortex-m4/
+//
 //export handleHardFault
 func handleHardFault(sp *interruptStack) {
 	print("fatal error: ")

@@ -6,7 +6,6 @@
 // XIAO RP2040 is a microcontroller using the Raspberry Pi RP2040 chip.
 //
 // - https://wiki.seeedstudio.com/XIAO-RP2040/
-//
 package machine
 
 import (

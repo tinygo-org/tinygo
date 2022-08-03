@@ -49,6 +49,7 @@ type segmentLoadCommand struct {
 }
 
 // MachO header of the currently running process.
+//
 //go:extern _mh_execute_header
 var libc_mh_execute_header machHeader
 

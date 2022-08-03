@@ -10,11 +10,11 @@
 //
 // Special version of bossac is required.
 // This executable can be obtained two ways:
-// 1) In Arduino IDE, install support for the board ("Arduino Mbed OS Nano Boards")
-//    Search for "tools/bossac/1.9.1-arduino2/bossac" in Arduino IDEs directory
-// 2) Download https://downloads.arduino.cc/packages/package_index.json
-//    Search for "bossac-1.9.1-arduino2" in that file
-//    Download tarball for your OS and unpack it
+//  1. In Arduino IDE, install support for the board ("Arduino Mbed OS Nano Boards")
+//     Search for "tools/bossac/1.9.1-arduino2/bossac" in Arduino IDEs directory
+//  2. Download https://downloads.arduino.cc/packages/package_index.json
+//     Search for "bossac-1.9.1-arduino2" in that file
+//     Download tarball for your OS and unpack it
 //
 // Once you have the executable, make it accessible in your PATH as "bossac_arduino2".
 //
@@ -29,7 +29,6 @@
 //
 // SoftDevice overwrites original bootloader and flashing method described above is not avalable anymore.
 // Instead, please use debug probe and flash your code with "nano-33-ble-s140v7" target.
-//
 package machine
 
 const HasLowFrequencyCrystal = true

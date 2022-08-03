@@ -89,6 +89,7 @@ func swapTask(oldStack uintptr, newStack *uintptr)
 // startTask is a small wrapper function that sets up the first (and only)
 // argument to the new goroutine and makes sure it is exited when the goroutine
 // finishes.
+//
 //go:extern tinygo_startTask
 var startTask [0]uint8
 

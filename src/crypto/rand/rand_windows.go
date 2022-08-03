@@ -38,5 +38,6 @@ func (r *reader) Read(b []byte) (n int, err error) {
 // Cryptographically secure random number generator.
 // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/rand-s?view=msvc-170
 // errno_t rand_s(unsigned int* randomValue);
+//
 //export rand_s
 func libc_rand_s(randomValue *uint32) int32
