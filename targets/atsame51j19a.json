@@ -3,7 +3,7 @@
 	"build-tags": ["atsame51j19a", "atsame51j19", "atsame51", "atsame5x", "sam"],
 	"linkerscript": "targets/atsame5xx19.ld",
 	"extra-files": [
-		"src/device/sam/atsame51j19a.s"
+		"lib/device/sam/atsame51j19a.s"
 	],
 	"openocd-transport": "swd",
 	"openocd-target": "atsame5x"

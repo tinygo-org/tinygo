@@ -4,8 +4,9 @@
 package machine
 
 import (
-	"device/nxp"
 	"runtime/interrupt"
+
+	"tinygo.org/x/device/nxp"
 )
 
 // Digital pins

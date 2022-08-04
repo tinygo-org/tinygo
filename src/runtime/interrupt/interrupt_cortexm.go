@@ -4,7 +4,7 @@
 package interrupt
 
 import (
-	"device/arm"
+	"tinygo.org/x/device/arm"
 )
 
 // Enable enables this interrupt. Right after calling this function, the

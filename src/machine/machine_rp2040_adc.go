@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/rp"
 	"errors"
 	"sync"
+
+	"tinygo.org/x/device/rp"
 )
 
 // ADCChannel is the ADC peripheral mux channel. 0-4.

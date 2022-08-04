@@ -4,7 +4,7 @@
 package machine
 
 import (
-	"device/sam"
+	"tinygo.org/x/device/sam"
 )
 
 // used to reset into bootloader

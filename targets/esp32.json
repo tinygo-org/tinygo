@@ -11,8 +11,8 @@
 	"libc": "picolibc",
 	"linkerscript": "targets/esp32.ld",
 	"extra-files": [
-		"src/device/esp/esp32.S",
-		"src/internal/task/task_stack_esp32.S"
+		"lib/device/esp/esp32.S",
+		"lib/internal/task/task_stack_esp32.S"
 	],
 	"binary-format": "esp32",
 	"flash-command": "esptool.py --chip=esp32 --port {port} write_flash 0x1000 {bin} -ff 80m -fm dout",

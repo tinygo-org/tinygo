@@ -6,10 +6,11 @@ package machine
 // Peripheral abstraction layer for the stm32l5
 
 import (
-	"device/stm32"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/stm32"
 )
 
 const (

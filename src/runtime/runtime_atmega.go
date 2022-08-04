@@ -4,8 +4,9 @@
 package runtime
 
 import (
-	"device/avr"
 	"machine"
+
+	"tinygo.org/x/device/avr"
 )
 
 func initUART() {

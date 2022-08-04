@@ -3,7 +3,7 @@
 
 package machine
 
-import "device/sifive"
+import "tinygo.org/x/device/sifive"
 
 // SPI on the HiFive1.
 var (

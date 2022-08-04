@@ -2,7 +2,7 @@
     "inherits": ["cortex-m4"],
     "build-tags": [ "stm32wl5x_cm4","stm32wlx", "stm32"],
     "extra-files": [
-      "src/device/stm32/stm32wl5x_cm4.s"
+      "lib/device/stm32/stm32wl5x_cm4.s"
     ],
     "linkerscript": "targets/stm32wlx.ld"
 }

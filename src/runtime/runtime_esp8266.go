@@ -4,10 +4,11 @@
 package runtime
 
 import (
-	"device"
-	"device/esp"
 	"machine"
 	"unsafe"
+
+	"tinygo.org/x/device"
+	"tinygo.org/x/device/esp"
 )
 
 type timeUnit int64

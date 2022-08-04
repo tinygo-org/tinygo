@@ -4,7 +4,7 @@
 	"serial": "uart",
 	"linkerscript": "targets/nxpmk66f18.ld",
 	"extra-files": [
-		"src/device/nxp/mk66f18.s",
+		"lib/device/nxp/mk66f18.s",
 		"targets/teensy36.s"
 	],
 	"flash-command": "teensy_loader_cli -mmcu=mk66fx1m0 -v -w {hex}"

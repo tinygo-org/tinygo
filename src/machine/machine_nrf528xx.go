@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/nrf"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/nrf"
 )
 
 func CPUFrequency() uint32 {

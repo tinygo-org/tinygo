@@ -3,7 +3,7 @@
 
 package machine
 
-import "device/kendryte"
+import "tinygo.org/x/device/kendryte"
 
 // SPI on the MAix Bit.
 var (

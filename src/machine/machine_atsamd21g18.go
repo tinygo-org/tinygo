@@ -8,8 +8,9 @@
 package machine
 
 import (
-	"device/sam"
 	"runtime/interrupt"
+
+	"tinygo.org/x/device/sam"
 )
 
 var (

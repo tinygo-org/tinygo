@@ -6,10 +6,11 @@ package machine
 // Peripheral abstraction layer for the stm32.
 
 import (
-	"device/stm32"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/stm32"
 )
 
 func CPUFrequency() uint32 {

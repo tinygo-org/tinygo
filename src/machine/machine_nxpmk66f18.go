@@ -33,9 +33,10 @@
 package machine
 
 import (
-	"device/nxp"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/nxp"
 )
 
 const deviceName = nxp.Device

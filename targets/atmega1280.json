@@ -7,9 +7,9 @@
         "-mmcu=avr51",
         "-Wl,--defsym=_stack_size=512"
     ],
-    "linkerscript": "src/device/avr/atmega1280.ld",
+    "linkerscript": "lib/device/avr/atmega1280.ld",
     "extra-files": [
         "targets/avr.S",
-        "src/device/avr/atmega1280.s"
+        "lib/device/avr/atmega1280.s"
     ]
 }

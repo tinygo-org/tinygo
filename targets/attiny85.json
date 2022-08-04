@@ -8,9 +8,9 @@
 	"ldflags": [
 		"-mmcu=avr25"
 	],
-	"linkerscript": "src/device/avr/attiny85.ld",
+	"linkerscript": "lib/device/avr/attiny85.ld",
 	"extra-files": [
 		"targets/avr.S",
-		"src/device/avr/attiny85.s"
+		"lib/device/avr/attiny85.s"
 	]
 }

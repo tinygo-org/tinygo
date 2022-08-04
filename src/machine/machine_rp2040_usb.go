@@ -4,11 +4,12 @@
 package machine
 
 import (
-	"device/rp"
 	"machine/usb"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/rp"
 )
 
 var (

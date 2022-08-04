@@ -4,11 +4,12 @@
 package interrupt
 
 import (
-	"device/esp"
-	"device/riscv"
 	"errors"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/esp"
+	"tinygo.org/x/device/riscv"
 )
 
 // Enable register CPU interrupt with interrupt.Interrupt.

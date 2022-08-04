@@ -4,8 +4,9 @@
 package machine
 
 import (
-	"device/stm32"
 	"unsafe"
+
+	"tinygo.org/x/device/stm32"
 )
 
 // InitADC initializes the registers needed for ADC1.

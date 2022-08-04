@@ -4,11 +4,12 @@
 package machine
 
 import (
-	"device/arm"
-	"device/rp"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/arm"
+	"tinygo.org/x/device/rp"
 )
 
 const numTimers = 4

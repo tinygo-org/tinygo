@@ -4,9 +4,10 @@
 package runtime
 
 import (
-	"device/arm"
 	"machine"
 	"machine/usb/cdc"
+
+	"tinygo.org/x/device/arm"
 )
 
 // machineTicks is provided by package machine.

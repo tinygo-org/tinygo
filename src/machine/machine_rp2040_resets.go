@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/rp"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/rp"
 )
 
 // RESETS_RESET_Msk is bitmask to reset all peripherals

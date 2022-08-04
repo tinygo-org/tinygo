@@ -4,7 +4,7 @@
   "serial": "uart",
   "linkerscript": "targets/stm32f103rb.ld",
   "extra-files": [
-    "src/device/stm32/stm32f103.s"
+    "lib/device/stm32/stm32f103.s"
   ],
   "flash-method": "openocd",
   "openocd-interface": "stlink-v2-1",

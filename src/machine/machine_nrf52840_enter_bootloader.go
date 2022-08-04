@@ -4,8 +4,8 @@
 package machine
 
 import (
-	"device/arm"
-	"device/nrf"
+	"tinygo.org/x/device/arm"
+	"tinygo.org/x/device/nrf"
 )
 
 const (

@@ -4,11 +4,12 @@
 package machine
 
 import (
-	"device/kendryte"
-	"device/riscv"
 	"errors"
 	"runtime/interrupt"
 	"unsafe"
+
+	"tinygo.org/x/device/kendryte"
+	"tinygo.org/x/device/riscv"
 )
 
 const deviceName = kendryte.Device

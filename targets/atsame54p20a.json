@@ -3,7 +3,7 @@
 	"build-tags": ["sam", "atsame5x", "atsame54", "atsame54p20", "atsame54p20a"],
 	"linkerscript": "targets/atsame5xx20-no-bootloader.ld",
 	"extra-files": [
-		"src/device/sam/atsame54p20a.s"
+		"lib/device/sam/atsame54p20a.s"
 	],
 	"openocd-transport": "swd",
 	"openocd-target": "atsame5x"

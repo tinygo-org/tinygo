@@ -4,11 +4,12 @@
 package runtime
 
 import (
-	"device/arm"
-	"device/nxp"
 	"machine"
 	"math/bits"
 	"unsafe"
+
+	"tinygo.org/x/device/arm"
+	"tinygo.org/x/device/nxp"
 )
 
 //go:extern _svectors

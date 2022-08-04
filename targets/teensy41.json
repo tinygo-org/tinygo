@@ -6,7 +6,7 @@
   "default-stack-size": 4096,
   "linkerscript": "targets/mimxrt1062-teensy40.ld",
   "extra-files": [
-    "src/device/nxp/mimxrt1062.s",
+    "lib/device/nxp/mimxrt1062.s",
     "targets/teensy40.s"
   ],
   "flash-command": "teensy_loader_cli -mmcu=imxrt1062 -v -w {hex}"

@@ -4,10 +4,11 @@
 package runtime
 
 import (
-	"device/esp"
-	"device/riscv"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/esp"
+	"tinygo.org/x/device/riscv"
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is

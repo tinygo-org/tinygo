@@ -3,7 +3,7 @@
 
 package runtime
 
-import "device/riscv"
+import "tinygo.org/x/device/riscv"
 
 const deferExtraRegs = 0
 

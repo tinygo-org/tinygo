@@ -4,8 +4,9 @@
 package machine
 
 import (
-	"device/rp"
 	"errors"
+
+	"tinygo.org/x/device/rp"
 )
 
 // SPI on the RP2040

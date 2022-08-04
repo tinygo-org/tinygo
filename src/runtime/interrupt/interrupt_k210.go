@@ -4,8 +4,8 @@
 package interrupt
 
 import (
-	"device/kendryte"
-	"device/riscv"
+	"tinygo.org/x/device/kendryte"
+	"tinygo.org/x/device/riscv"
 )
 
 // Enable enables this interrupt. Right after calling this function, the

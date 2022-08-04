@@ -7,7 +7,7 @@
 // http://ww1.microchip.com/downloads/en/DeviceDoc/60001507C.pdf
 package machine
 
-import "device/sam"
+import "tinygo.org/x/device/sam"
 
 const HSRAM_SIZE = 0x00030000
 

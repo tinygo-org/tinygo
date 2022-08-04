@@ -4,7 +4,7 @@
 package machine
 
 import (
-	"device/stm32"
+	"tinygo.org/x/device/stm32"
 )
 
 // This variant of the GPIO input interrupt logic is for

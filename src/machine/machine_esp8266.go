@@ -4,8 +4,9 @@
 package machine
 
 import (
-	"device/esp"
 	"runtime/volatile"
+
+	"tinygo.org/x/device/esp"
 )
 
 const deviceName = esp.Device

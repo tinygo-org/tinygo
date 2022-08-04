@@ -7,9 +7,10 @@ package machine
 // depending on the size of that register in the MCU's TIM_Type structure.
 
 import (
-	"device/stm32"
 	"runtime/interrupt"
 	"runtime/volatile"
+
+	"tinygo.org/x/device/stm32"
 )
 
 const PWM_MODE1 = 0x6

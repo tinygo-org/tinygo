@@ -4,12 +4,13 @@
 package runtime
 
 import (
-	"device/arm"
-	"device/nrf"
 	"machine"
 	"machine/usb/cdc"
 	"runtime/interrupt"
 	"runtime/volatile"
+
+	"tinygo.org/x/device/arm"
+	"tinygo.org/x/device/nrf"
 )
 
 type timeUnit int64

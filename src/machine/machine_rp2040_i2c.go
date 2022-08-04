@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/rp"
 	"errors"
 	"internal/itoa"
+
+	"tinygo.org/x/device/rp"
 )
 
 // I2C on the RP2040.

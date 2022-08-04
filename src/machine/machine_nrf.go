@@ -4,10 +4,11 @@
 package machine
 
 import (
-	"device/nrf"
 	"errors"
 	"runtime/interrupt"
 	"unsafe"
+
+	"tinygo.org/x/device/nrf"
 )
 
 var (

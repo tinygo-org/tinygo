@@ -3,7 +3,7 @@
 
 package interrupt
 
-import "device/riscv"
+import "tinygo.org/x/device/riscv"
 
 // State represents the previous global interrupt state.
 type State uintptr

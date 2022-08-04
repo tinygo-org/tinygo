@@ -4,7 +4,7 @@
 package machine
 
 import (
-	"device/nrf"
+	"tinygo.org/x/device/nrf"
 )
 
 // Hardware pins
