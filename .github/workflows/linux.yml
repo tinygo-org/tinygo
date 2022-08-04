@@ -241,7 +241,7 @@ jobs:
       - run: make gen-device -j4
       - name: Test TinyGo
         run: |
-          go mod tidy
+          go get tinygo.org/x/device@669b1701736c
           make ASSERT=1 test
       - name: Build TinyGo
         run: |
