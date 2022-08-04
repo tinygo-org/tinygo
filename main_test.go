@@ -275,14 +275,15 @@ func emuCheck(t *testing.T, options compileopts.Options) {
 func optionsFromTarget(target string, sema chan struct{}) compileopts.Options {
 	return compileopts.Options{
 		// GOOS/GOARCH are only used if target == ""
-		GOOS:      goenv.Get("GOOS"),
-		GOARCH:    goenv.Get("GOARCH"),
-		GOARM:     goenv.Get("GOARM"),
-		Target:    target,
-		Semaphore: sema,
-		Debug:     true,
-		VerifyIR:  true,
-		Opt:       "z",
+		GOOS:          goenv.Get("GOOS"),
+		GOARCH:        goenv.Get("GOARCH"),
+		GOARM:         goenv.Get("GOARM"),
+		Target:        target,
+		Semaphore:     sema,
+		InterpTimeout: 180 * time.Second,
+		Debug:         true,
+		VerifyIR:      true,
+		Opt:           "z",
 	}
 }
 
@@ -292,12 +293,13 @@ func optionsFromTarget(target string, sema chan struct{}) compileopts.Options {
 func optionsFromOSARCH(osarch string, sema chan struct{}) compileopts.Options {
 	parts := strings.Split(osarch, "/")
 	options := compileopts.Options{
-		GOOS:      parts[0],
-		GOARCH:    parts[1],
-		Semaphore: sema,
-		Debug:     true,
-		VerifyIR:  true,
-		Opt:       "z",
+		GOOS:          parts[0],
+		GOARCH:        parts[1],
+		Semaphore:     sema,
+		InterpTimeout: 180 * time.Second,
+		Debug:         true,
+		VerifyIR:      true,
+		Opt:           "z",
 	}
 	if options.GOARCH == "arm" {
 		options.GOARM = parts[2]
