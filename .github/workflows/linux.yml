@@ -240,7 +240,9 @@ jobs:
         run: make wasi-libc
       - run: make gen-device -j4
       - name: Test TinyGo
-        run: make ASSERT=1 test
+        run: |
+          go mod tidy
+          make ASSERT=1 test
       - name: Build TinyGo
         run: |
           make ASSERT=1
