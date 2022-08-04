@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
@@ -29,6 +30,7 @@ type Options struct {
 	Scheduler       string
 	Serial          string
 	Work            bool // -work flag to print temporary build directory
+	InterpTimeout   time.Duration
 	PrintIR         bool
 	DumpSSA         bool
 	VerifyIR        bool

@@ -431,7 +431,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				err := interp.RunFunc(pkgInit, config.DumpSSA())
+				err := interp.RunFunc(pkgInit, config.Options.InterpTimeout, config.DumpSSA())
 				if err != nil {
 					return err
 				}
@@ -1055,7 +1055,7 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
-	err := interp.Run(mod, config.DumpSSA())
+	err := interp.Run(mod, config.Options.InterpTimeout, config.DumpSSA())
 	if err != nil {
 		return err
 	}
