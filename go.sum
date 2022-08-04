@@ -83,3 +83,5 @@ tinygo.org/x/go-llvm v0.0.0-20220802112859-5bb0b77907a7 h1:nSLR52mUw7DPQQVA3ZJFH
 tinygo.org/x/go-llvm v0.0.0-20220802112859-5bb0b77907a7/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
 tinygo.org/x/device v0.0.0-20220804093151-4ffc1ac38f70 h1:MEF4RyMu1+KPlCgH36dVedV0bJpeSRzvwC/GT0Y1DTk=
 tinygo.org/x/device v0.0.0-20220804093151-4ffc1ac38f70/go.mod h1:Kw2xNGKK/STJw9D7LupWt6ilG/qtbe2yoCD2Ru0AbTI=
+tinygo.org/x/device v0.0.0-20220804122646-669b1701736c h1:lzTBO76RgvNizeU9aCOfBc+OT1Rs8d7Mm7goZmh2aLA=
+tinygo.org/x/device v0.0.0-20220804122646-669b1701736c/go.mod h1:Kw2xNGKK/STJw9D7LupWt6ilG/qtbe2yoCD2Ru0AbTI=

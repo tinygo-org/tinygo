@@ -16,5 +16,5 @@ require (
 	golang.org/x/tools v0.1.11
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20220802112859-5bb0b77907a7
-	tinygo.org/x/device v0.0.0-20220804093151-4ffc1ac38f70 // indirect
+	tinygo.org/x/device v0.0.0-20220804122646-669b1701736c // indirect
 )
