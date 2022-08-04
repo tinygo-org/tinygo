@@ -232,7 +232,7 @@ func isSourceDir(root string) bool {
 	if err != nil {
 		return false
 	}
-	_, err = os.Stat(filepath.Join(root, "src/device/arm/arm.go"))
+	_, err = os.Stat(filepath.Join(root, "src/machine/machine.go"))
 	return err == nil
 }
 

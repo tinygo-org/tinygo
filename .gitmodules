@@ -31,3 +31,6 @@
 [submodule "lib/macos-minimal-sdk"]
 	path = lib/macos-minimal-sdk
 	url = https://github.com/aykevl/macos-minimal-sdk.git
+[submodule "lib/device"]
+	path = lib/device
+	url = https://github.com/tinygo-org/device
