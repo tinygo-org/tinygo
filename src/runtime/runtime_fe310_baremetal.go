@@ -4,7 +4,7 @@
 package runtime
 
 import (
-	"device/riscv"
+	"tinygo.org/x/device/riscv"
 )
 
 // ticksToNanoseconds converts RTC ticks (at 32768Hz) to nanoseconds.

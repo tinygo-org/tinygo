@@ -4,8 +4,9 @@
 package machine
 
 import (
-	"device/avr"
 	"runtime/interrupt"
+
+	"tinygo.org/x/device/avr"
 )
 
 // Return the current CPU frequency in hertz.

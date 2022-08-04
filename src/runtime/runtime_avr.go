@@ -4,11 +4,12 @@
 package runtime
 
 import (
-	"device/avr"
 	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/avr"
 )
 
 const BOARD = "arduino"

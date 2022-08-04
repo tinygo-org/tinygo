@@ -6,9 +6,10 @@ package machine
 // SPI peripheral abstraction layer for the MIMXRT1062
 
 import (
-	"device/nxp"
 	"errors"
 	"unsafe"
+
+	"tinygo.org/x/device/nxp"
 )
 
 // SPIConfig is used to store config info for SPI.

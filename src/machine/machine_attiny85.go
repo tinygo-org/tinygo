@@ -4,8 +4,9 @@
 package machine
 
 import (
-	"device/avr"
 	"runtime/volatile"
+
+	"tinygo.org/x/device/avr"
 )
 
 const (

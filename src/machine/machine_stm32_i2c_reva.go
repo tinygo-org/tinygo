@@ -7,8 +7,9 @@ package machine
 // of MCUs.
 
 import (
-	"device/stm32"
 	"unsafe"
+
+	"tinygo.org/x/device/stm32"
 )
 
 const (

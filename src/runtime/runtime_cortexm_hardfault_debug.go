@@ -4,8 +4,9 @@
 package runtime
 
 import (
-	"device/arm"
 	"unsafe"
+
+	"tinygo.org/x/device/arm"
 )
 
 const (

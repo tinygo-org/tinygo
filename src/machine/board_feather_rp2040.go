@@ -4,8 +4,9 @@
 package machine
 
 import (
-	"device/rp"
 	"runtime/interrupt"
+
+	"tinygo.org/x/device/rp"
 )
 
 // Onboard crystal oscillator frequency, in MHz.

@@ -4,8 +4,9 @@
 package machine
 
 import (
-	"device/stm32"
 	"runtime/interrupt"
+
+	"tinygo.org/x/device/stm32"
 )
 
 // Pins printed on the silkscreen

@@ -6,8 +6,9 @@ package machine
 // I2C peripheral abstraction layer for the MIMXRT1062
 
 import (
-	"device/nxp"
 	"errors"
+
+	"tinygo.org/x/device/nxp"
 )
 
 const (

@@ -4,9 +4,10 @@
 package runtime
 
 import (
-	"device/riscv"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/riscv"
 )
 
 // This file implements the VirtIO RISC-V interface implemented in QEMU, which

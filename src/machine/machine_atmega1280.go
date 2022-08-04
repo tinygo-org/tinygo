@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/avr"
 	"runtime/interrupt"
 	"runtime/volatile"
+
+	"tinygo.org/x/device/avr"
 )
 
 const irq_USART0_RX = avr.IRQ_USART0_RX

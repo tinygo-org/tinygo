@@ -8,11 +8,12 @@
 package machine
 
 import (
-	"device/arm"
-	"device/sam"
 	"errors"
 	"runtime/interrupt"
 	"unsafe"
+
+	"tinygo.org/x/device/arm"
+	"tinygo.org/x/device/sam"
 )
 
 const deviceName = sam.Device

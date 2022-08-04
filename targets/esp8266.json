@@ -10,8 +10,8 @@
 	"libc": "picolibc",
 	"linkerscript": "targets/esp8266.ld",
 	"extra-files": [
-		"src/device/esp/esp8266.S",
-		"src/internal/task/task_stack_esp8266.S"
+		"lib/device/esp/esp8266.S",
+		"lib/internal/task/task_stack_esp8266.S"
 	],
 	"binary-format": "esp8266",
 	"flash-command": "esptool.py --chip=esp8266 --port {port} write_flash 0x00000 {bin} -fm qio"

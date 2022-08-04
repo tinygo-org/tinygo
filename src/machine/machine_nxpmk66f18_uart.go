@@ -33,11 +33,12 @@
 package machine
 
 import (
-	"device/arm"
-	"device/nxp"
 	"errors"
 	"runtime/interrupt"
 	"runtime/volatile"
+
+	"tinygo.org/x/device/arm"
+	"tinygo.org/x/device/nxp"
 
 	_ "unsafe" // for go:linkname
 )

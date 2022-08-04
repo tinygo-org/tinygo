@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/sifive"
 	"runtime/interrupt"
 	"unsafe"
+
+	"tinygo.org/x/device/sifive"
 )
 
 const deviceName = sifive.Device

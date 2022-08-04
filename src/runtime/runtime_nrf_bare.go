@@ -3,7 +3,7 @@
 
 package runtime
 
-import "device/arm"
+import "tinygo.org/x/device/arm"
 
 func waitForEvents() {
 	arm.Asm("wfe")

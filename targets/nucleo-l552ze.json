@@ -4,7 +4,7 @@
     "serial": "uart",
     "linkerscript": "targets/stm32l5x2xe.ld",
     "extra-files": [
-      "src/device/stm32/stm32l552.s"
+      "lib/device/stm32/stm32l552.s"
     ],
     "flash-method": "openocd",
     "openocd-interface": "stlink",

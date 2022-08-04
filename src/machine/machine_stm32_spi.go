@@ -6,9 +6,10 @@ package machine
 // Peripheral abstraction layer for SPI on the stm32 family
 
 import (
-	"device/stm32"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/stm32"
 )
 
 // SPIConfig is used to store config info for SPI.

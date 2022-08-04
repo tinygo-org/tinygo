@@ -8,10 +8,10 @@
         "-Wl,--defsym=_bootloader_size=0",
         "-Wl,--defsym=_stack_size=512"
     ],
-    "linkerscript": "src/device/avr/atmega1284p.ld",
+    "linkerscript": "lib/device/avr/atmega1284p.ld",
     "extra-files": [
         "targets/avr.S",
-        "src/device/avr/atmega1284p.s"
+        "lib/device/avr/atmega1284p.s"
     ],
     "emulator": "simavr -m atmega1284p -f 20000000 {}"
 }

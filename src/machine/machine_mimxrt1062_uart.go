@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/nxp"
 	"runtime/interrupt"
 	"runtime/volatile"
+
+	"tinygo.org/x/device/nxp"
 )
 
 // UART peripheral abstraction layer for the MIMXRT1062

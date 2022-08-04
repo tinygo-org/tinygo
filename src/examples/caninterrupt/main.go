@@ -1,10 +1,11 @@
 package main
 
 import (
-	"device/sam"
 	"fmt"
 	"machine"
 	"time"
+
+	"tinygo.org/x/device/sam"
 )
 
 type canMsg struct {

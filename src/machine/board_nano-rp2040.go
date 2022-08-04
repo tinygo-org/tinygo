@@ -13,8 +13,9 @@
 package machine
 
 import (
-	"device/rp"
 	"runtime/interrupt"
+
+	"tinygo.org/x/device/rp"
 )
 
 // Digital Pins

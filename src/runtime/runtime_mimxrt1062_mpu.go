@@ -4,7 +4,7 @@
 package runtime
 
 import (
-	"device/nxp"
+	"tinygo.org/x/device/nxp"
 )
 
 func initCache() {

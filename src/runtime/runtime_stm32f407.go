@@ -3,7 +3,7 @@
 
 package runtime
 
-import "device/stm32"
+import "tinygo.org/x/device/stm32"
 
 /*
 clock settings

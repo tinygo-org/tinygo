@@ -9,7 +9,7 @@
 	"linkerscript": "targets/nrf52833.ld",
 	"extra-files": [
 		"lib/nrfx/mdk/system_nrf52833.c",
-		"src/device/nrf/nrf52833.s"
+		"lib/device/nrf/nrf52833.s"
 	],
 	"openocd-transport": "swd",
 	"openocd-target": "nrf52"

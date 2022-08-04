@@ -4,7 +4,7 @@
 package machine
 
 import (
-	"device/nrf"
+	"tinygo.org/x/device/nrf"
 )
 
 // Get peripheral and pin number for this GPIO pin.

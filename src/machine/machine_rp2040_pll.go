@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/rp"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/rp"
 )
 
 type pll struct {

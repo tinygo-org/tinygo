@@ -8,11 +8,11 @@ package runtime
 
 import (
 	"machine"
+	"runtime/volatile"
 	"unsafe"
 
-	"device/riscv"
-	"device/sifive"
-	"runtime/volatile"
+	"tinygo.org/x/device/riscv"
+	"tinygo.org/x/device/sifive"
 )
 
 type timeUnit int64

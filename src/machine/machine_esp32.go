@@ -4,10 +4,11 @@
 package machine
 
 import (
-	"device/esp"
 	"errors"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/esp"
 )
 
 const deviceName = esp.Device

@@ -4,7 +4,7 @@
 package machine
 
 import (
-	"device/rp"
+	"tinygo.org/x/device/rp"
 )
 
 const deviceName = rp.Device

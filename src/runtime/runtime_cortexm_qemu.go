@@ -7,9 +7,10 @@ package runtime
 // QEMU.
 
 import (
-	"device/arm"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/arm"
 )
 
 type timeUnit int64

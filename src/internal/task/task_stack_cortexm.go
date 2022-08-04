@@ -10,8 +10,9 @@ package task
 // space for interrupts.
 
 import (
-	"device/arm"
 	"unsafe"
+
+	"tinygo.org/x/device/arm"
 )
 
 // calleeSavedRegs is the list of registers that must be saved and restored when

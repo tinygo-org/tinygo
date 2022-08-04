@@ -33,11 +33,12 @@
 package runtime
 
 import (
-	"device/arm"
-	"device/nxp"
 	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
+
+	"tinygo.org/x/device/arm"
+	"tinygo.org/x/device/nxp"
 )
 
 type timeUnit int64

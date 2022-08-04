@@ -227,7 +227,6 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"":                      true,
 		"crypto/":               true,
 		"crypto/rand/":          false,
-		"device/":               false,
 		"examples/":             false,
 		"internal/":             true,
 		"internal/fuzz/":        false,

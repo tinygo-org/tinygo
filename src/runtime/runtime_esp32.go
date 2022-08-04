@@ -4,9 +4,10 @@
 package runtime
 
 import (
-	"device"
-	"device/esp"
 	"machine"
+
+	"tinygo.org/x/device"
+	"tinygo.org/x/device/esp"
 )
 
 // This is the function called on startup right after the stack pointer has been

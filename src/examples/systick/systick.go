@@ -1,8 +1,9 @@
 package main
 
 import (
-	"device/arm"
 	"machine"
+
+	"tinygo.org/x/device/arm"
 )
 
 var timerCh = make(chan struct{}, 1)

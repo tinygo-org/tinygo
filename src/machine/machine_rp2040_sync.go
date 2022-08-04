@@ -4,7 +4,7 @@
 package machine
 
 import (
-	"device/rp"
+	"tinygo.org/x/device/rp"
 )
 
 // machine_rp2040_sync.go contains interrupt and

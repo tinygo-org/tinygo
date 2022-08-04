@@ -4,7 +4,7 @@
 package runtime
 
 import (
-	"device/arm"
+	"tinygo.org/x/device/arm"
 )
 
 func exit(code int) {

@@ -4,9 +4,10 @@
 package machine
 
 import (
-	"device/avr"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/avr"
 )
 
 const deviceName = avr.DEVICE

@@ -7,11 +7,12 @@
 package runtime
 
 import (
-	"device/kendryte"
-	"device/riscv"
 	"machine"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/kendryte"
+	"tinygo.org/x/device/riscv"
 )
 
 type timeUnit int64

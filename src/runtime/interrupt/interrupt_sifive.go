@@ -3,7 +3,7 @@
 
 package interrupt
 
-import "device/sifive"
+import "tinygo.org/x/device/sifive"
 
 // Enable enables this interrupt. Right after calling this function, the
 // interrupt may be invoked if it was already pending.

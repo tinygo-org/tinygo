@@ -4,7 +4,7 @@
 package machine
 
 import (
-	"device/sam"
+	"tinygo.org/x/device/sam"
 )
 
 // Definition for compatibility, but not used

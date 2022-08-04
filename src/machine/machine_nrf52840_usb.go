@@ -4,12 +4,13 @@
 package machine
 
 import (
-	"device/arm"
-	"device/nrf"
 	"machine/usb"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
+
+	"tinygo.org/x/device/arm"
+	"tinygo.org/x/device/nrf"
 )
 
 var (

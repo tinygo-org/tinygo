@@ -4,10 +4,11 @@
 package machine
 
 import (
-	"device/sam"
 	"errors"
 	"runtime/interrupt"
 	"unsafe"
+
+	"tinygo.org/x/device/sam"
 )
 
 const (

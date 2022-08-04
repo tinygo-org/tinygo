@@ -1655,6 +1655,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// Direct function call, either to a named or anonymous (directly
 		// applied) function call. If it is anonymous, it may be a closure.
 		name := fn.RelString(nil)
+		name = strings.Replace(name, "tinygo.org/x/", "", 1)
 		switch {
 		case name == "math.Ceil" || name == "math.Floor" || name == "math.Sqrt" || name == "math.Trunc":
 			result, ok := b.createMathOp(instr)
