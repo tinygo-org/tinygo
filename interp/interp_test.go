@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"tinygo.org/x/go-llvm"
 )
@@ -53,7 +54,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	defer mod.Dispose()
 
 	// Perform the transform.
-	err = Run(mod, false)
+	err = Run(mod, 10*time.Minute, false)
 	if err != nil {
 		if err, match := err.(*Error); match {
 			println(err.Error())

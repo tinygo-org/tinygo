@@ -30,10 +30,11 @@ type runner struct {
 	objects       []object                 // slice of objects in memory
 	globals       map[llvm.Value]int       // map from global to index in objects slice
 	start         time.Time
+	timeout       time.Duration
 	callsExecuted uint64
 }
 
-func newRunner(mod llvm.Module, debug bool) *runner {
+func newRunner(mod llvm.Module, timeout time.Duration, debug bool) *runner {
 	r := runner{
 		mod:           mod,
 		targetData:    llvm.NewTargetData(mod.DataLayout()),
@@ -42,6 +43,7 @@ func newRunner(mod llvm.Module, debug bool) *runner {
 		objects:       []object{{}},
 		globals:       make(map[llvm.Value]int),
 		start:         time.Now(),
+		timeout:       timeout,
 	}
 	r.pointerSize = uint32(r.targetData.PointerSize())
 	r.i8ptrType = llvm.PointerType(mod.Context().Int8Type(), 0)
@@ -58,8 +60,8 @@ func (r *runner) dispose() {
 
 // Run evaluates runtime.initAll function as much as possible at compile time.
 // Set debug to true if it should print output while running.
-func Run(mod llvm.Module, debug bool) error {
-	r := newRunner(mod, debug)
+func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
+	r := newRunner(mod, timeout, debug)
 	defer r.dispose()
 
 	initAll := mod.NamedFunction("runtime.initAll")
@@ -199,10 +201,10 @@ func Run(mod llvm.Module, debug bool) error {
 
 // RunFunc evaluates a single package initializer at compile time.
 // Set debug to true if it should print output while running.
-func RunFunc(fn llvm.Value, debug bool) error {
+func RunFunc(fn llvm.Value, timeout time.Duration, debug bool) error {
 	// Create and initialize *runner object.
 	mod := fn.GlobalParent()
-	r := newRunner(mod, debug)
+	r := newRunner(mod, timeout, debug)
 	defer r.dispose()
 	initName := fn.Name()
 	if !strings.HasSuffix(initName, ".init") {
