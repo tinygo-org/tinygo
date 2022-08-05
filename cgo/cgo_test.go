@@ -10,7 +10,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -107,7 +107,7 @@ func TestCGo(t *testing.T) {
 
 			// Read the file with the expected output, to compare against.
 			outfile := filepath.Join("testdata", name+".out.go")
-			expectedBytes, err := ioutil.ReadFile(outfile)
+			expectedBytes, err := os.ReadFile(outfile)
 			if err != nil {
 				t.Fatalf("could not read expected output: %v", err)
 			}
@@ -118,7 +118,7 @@ func TestCGo(t *testing.T) {
 				// It is not. Test failed.
 				if *flagUpdate {
 					// Update the file with the expected data.
-					err := ioutil.WriteFile(outfile, []byte(actual), 0666)
+					err := os.WriteFile(outfile, []byte(actual), 0666)
 					if err != nil {
 						t.Error("could not write updated output file:", err)
 					}

@@ -5,7 +5,7 @@ package os_test
 
 import (
 	"io/fs"
-	"io/ioutil"
+	"os"
 	. "os"
 	"path/filepath"
 	"runtime"
@@ -198,13 +198,13 @@ func TestRenameOverwriteDest(t *testing.T) {
 	toData := []byte("to")
 	fromData := []byte("from")
 
-	err := ioutil.WriteFile(to, toData, 0777)
+	err := os.WriteFile(to, toData, 0777)
 	defer Remove(to) // TODO: switch to t.Tempdir, remove this line
 	if err != nil {
 		t.Fatalf("write file %q failed: %v", to, err)
 	}
 
-	err = ioutil.WriteFile(from, fromData, 0777)
+	err = os.WriteFile(from, fromData, 0777)
 	defer Remove(from) // TODO: switch to t.Tempdir, remove this line
 	if err != nil {
 		t.Fatalf("write file %q failed: %v", from, err)

@@ -1,7 +1,6 @@
 package interp
 
 import (
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -87,7 +86,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	pm.Run(mod)
 
 	// Read the expected output IR.
-	out, err := ioutil.ReadFile(pathPrefix + ".out.ll")
+	out, err := os.ReadFile(pathPrefix + ".out.ll")
 	if err != nil {
 		t.Fatalf("could not read output file %s: %v", pathPrefix+".out.ll", err)
 	}
