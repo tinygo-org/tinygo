@@ -3,7 +3,6 @@ package builder
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,7 +34,7 @@ var Musl = Library{
 			filepath.Join(muslDir, "include", "alltypes.h.in"),
 		}
 		for _, infile := range infiles {
-			data, err := ioutil.ReadFile(infile)
+			data, err := os.ReadFile(infile)
 			if err != nil {
 				return err
 			}
@@ -63,7 +62,7 @@ var Musl = Library{
 		if err != nil {
 			return err
 		}
-		data, err := ioutil.ReadFile(filepath.Join(muslDir, "arch", arch, "bits", "syscall.h.in"))
+		data, err := os.ReadFile(filepath.Join(muslDir, "arch", arch, "bits", "syscall.h.in"))
 		if err != nil {
 			return err
 		}

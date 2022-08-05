@@ -13,7 +13,7 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 )
@@ -189,5 +189,5 @@ func makeESPFirmareImage(infile, outfile, format string) error {
 	}
 
 	// Write the image to the output file.
-	return ioutil.WriteFile(outfile, outf.Bytes(), 0666)
+	return os.WriteFile(outfile, outf.Bytes(), 0666)
 }

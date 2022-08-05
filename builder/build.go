@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"go/types"
 	"hash/crc32"
-	"io/ioutil"
 	"math/bits"
 	"os"
 	"os/exec"
@@ -103,7 +102,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	}
 
 	// Create a temporary directory for intermediary files.
-	dir, err := ioutil.TempDir("", "tinygo")
+	dir, err := os.MkdirTemp("", "tinygo")
 	if err != nil {
 		return err
 	}
@@ -370,7 +369,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				// Packages are compiled independently anyway.
 				for _, cgoHeader := range pkg.CGoHeaders {
 					// Store the header text in a temporary file.
-					f, err := ioutil.TempFile(dir, "cgosnippet-*.c")
+					f, err := os.CreateTemp(dir, "cgosnippet-*.c")
 					if err != nil {
 						return err
 					}
@@ -445,7 +444,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				// Write to a temporary path that is renamed to the destination
 				// file to avoid race conditions with other TinyGo invocatiosn
 				// that might also be compiling this package at the same time.
-				f, err := ioutil.TempFile(filepath.Dir(job.result), filepath.Base(job.result))
+				f, err := os.CreateTemp(filepath.Dir(job.result), filepath.Base(job.result))
 				if err != nil {
 					return err
 				}
@@ -589,7 +588,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				return err
 			}
 			defer llvmBuf.Dispose()
-			return ioutil.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+			return os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
 		case ".bc":
 			var buf llvm.MemoryBuffer
 			if config.UseThinLTO() {
@@ -598,10 +597,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				buf = llvm.WriteBitcodeToMemoryBuffer(mod)
 			}
 			defer buf.Dispose()
-			return ioutil.WriteFile(outpath, buf.Bytes(), 0666)
+			return os.WriteFile(outpath, buf.Bytes(), 0666)
 		case ".ll":
 			data := []byte(mod.String())
-			return ioutil.WriteFile(outpath, data, 0666)
+			return os.WriteFile(outpath, data, 0666)
 		default:
 			panic("unreachable")
 		}
@@ -629,7 +628,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 			}
 			defer llvmBuf.Dispose()
-			return ioutil.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+			return os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
 		},
 	}
 

@@ -13,7 +13,6 @@ import (
 	"go/token"
 	"go/types"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -335,7 +334,7 @@ func (p *Package) OriginalDir() string {
 // parseFile is a wrapper around parser.ParseFile.
 func (p *Package) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 	originalPath := p.program.getOriginalPath(path)
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
