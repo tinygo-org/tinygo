@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -122,13 +123,13 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	// Rename the new merged gorooot into place.
 	err = os.Rename(tmpgoroot, cachedgoroot)
 	if err != nil {
-		if os.IsExist(err) {
+		if errors.Is(err, fs.ErrExist) {
 			// Another invocation of TinyGo also seems to have created a GOROOT.
 			// Use that one instead. Our new GOROOT will be automatically
 			// deleted by the defer above.
 			return cachedgoroot, nil
 		}
-		if runtime.GOOS == "windows" && os.IsPermission(err) {
+		if runtime.GOOS == "windows" && errors.Is(err, fs.ErrPermission) {
 			// On Windows, a rename with a destination directory that already
 			// exists does not result in an IsExist error, but rather in an
 			// access denied error. To be sure, check for this case by checking

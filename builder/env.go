@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"errors"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -17,13 +19,13 @@ import (
 func getClangHeaderPath(TINYGOROOT string) string {
 	// Check whether we're running from the source directory.
 	path := filepath.Join(TINYGOROOT, "llvm-project", "clang", "lib", "Headers")
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
 		return path
 	}
 
 	// Check whether we're running from the installation directory.
 	path = filepath.Join(TINYGOROOT, "lib", "clang", "include")
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
+	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
 		return path
 	}
 
