@@ -10,8 +10,10 @@ package testing
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
@@ -277,7 +279,7 @@ func (c *common) TempDir() string {
 		nonExistent = true
 	} else {
 		_, err := os.Stat(c.tempDir)
-		nonExistent = os.IsNotExist(err)
+		nonExistent = errors.Is(err, fs.ErrNotExist)
 		if err != nil && !nonExistent {
 			c.Fatalf("TempDir: %v", err)
 		}
