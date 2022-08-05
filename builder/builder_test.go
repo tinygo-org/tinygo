@@ -2,7 +2,6 @@ package builder
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -90,7 +89,7 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 
 	// Create a very simple C input file.
 	srcpath := filepath.Join(testDir, "test.c")
-	err = ioutil.WriteFile(srcpath, []byte("int add(int a, int b) { return a + b; }"), 0o666)
+	err = os.WriteFile(srcpath, []byte("int add(int a, int b) { return a + b; }"), 0o666)
 	if err != nil {
 		t.Fatalf("could not write target file %s: %s", srcpath, err)
 	}

@@ -3,7 +3,7 @@ package compiler
 import (
 	"flag"
 	"go/types"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -162,14 +162,14 @@ func TestCompiler(t *testing.T) {
 
 			// Update test if needed. Do not check the result.
 			if *flagUpdate {
-				err := ioutil.WriteFile(outPath, []byte(mod.String()), 0666)
+				err := os.WriteFile(outPath, []byte(mod.String()), 0666)
 				if err != nil {
 					t.Error("failed to write updated output file:", err)
 				}
 				return
 			}
 
-			expected, err := ioutil.ReadFile(outPath)
+			expected, err := os.ReadFile(outPath)
 			if err != nil {
 				t.Fatal("failed to read golden file:", err)
 			}

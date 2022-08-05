@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"reflect"
@@ -319,7 +318,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	if path[len(path)-1] == '/' {
 		txtpath = path + "out.txt"
 	}
-	expected, err := ioutil.ReadFile(txtpath)
+	expected, err := os.ReadFile(txtpath)
 	if err != nil {
 		t.Fatal("could not read expected output file:", err)
 	}
