@@ -6,7 +6,7 @@ package os_test
 
 import (
 	"io"
-	"io/ioutil"
+	"os"
 	. "os"
 	"runtime"
 	"strings"
@@ -129,7 +129,7 @@ func TestSeek(t *testing.T) {
 		off, err := f.Seek(tt.in, tt.whence)
 		if off != tt.out || err != nil {
 			if e, ok := err.(*PathError); ok && e.Err == syscall.EINVAL && tt.out > 1<<32 && runtime.GOOS == "linux" {
-				mounts, _ := ioutil.ReadFile("/proc/mounts")
+				mounts, _ := os.ReadFile("/proc/mounts")
 				if strings.Contains(string(mounts), "reiserfs") {
 					// Reiserfs rejects the big seeks.
 					t.Skipf("skipping test known to fail on reiserfs; https://golang.org/issue/91")
