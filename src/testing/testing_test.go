@@ -10,6 +10,8 @@
 package testing_test
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +44,7 @@ func TestTempDirInCleanup(t *testing.T) {
 	if fi != nil {
 		t.Fatalf("Directory %q from user Cleanup still exists", dir)
 	}
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 }
@@ -85,7 +87,7 @@ func testTempDir(t *testing.T) {
 		select {
 		case dir := <-dirCh:
 			fi, err := os.Stat(dir)
-			if os.IsNotExist(err) {
+			if errors.Is(err, fs.ErrNotExist) {
 				// All good
 				return
 			}
