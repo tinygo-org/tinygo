@@ -440,13 +440,13 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 	if openocdInterface == "" {
 		return nil, errors.New("OpenOCD programmer not set")
 	}
-	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(openocdInterface) {
+	if !regexp.MustCompile(`^[\p{L}0-9_-]+$`).MatchString(openocdInterface) {
 		return nil, fmt.Errorf("OpenOCD programmer has an invalid name: %#v", openocdInterface)
 	}
 	if c.Target.OpenOCDTarget == "" {
 		return nil, errors.New("OpenOCD chip not set")
 	}
-	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(c.Target.OpenOCDTarget) {
+	if !regexp.MustCompile(`^[\p{L}0-9_-]+$`).MatchString(c.Target.OpenOCDTarget) {
 		return nil, fmt.Errorf("OpenOCD target has an invalid name: %#v", c.Target.OpenOCDTarget)
 	}
 	if c.Target.OpenOCDTransport != "" && c.Target.OpenOCDTransport != "swd" {
