@@ -1,7 +1,8 @@
 package compileopts
 
 import (
-	"os"
+	"errors"
+	"io/fs"
 	"reflect"
 	"testing"
 )
@@ -17,7 +18,7 @@ func TestLoadTarget(t *testing.T) {
 		t.Error("LoadTarget should have failed with non existing target")
 	}
 
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, fs.ErrNotExist) {
 		t.Error("LoadTarget failed for wrong reason:", err)
 	}
 }
