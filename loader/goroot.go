@@ -83,7 +83,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	}
 
 	// Create a temporary directory to construct the goroot within.
-	tmpgoroot, err := ioutil.TempDir(goenv.Get("GOCACHE"), cachedGorootName+".tmp")
+	tmpgoroot, err := os.MkdirTemp(goenv.Get("GOCACHE"), cachedGorootName+".tmp")
 	if err != nil {
 		return "", err
 	}
