@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -94,7 +93,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	target := config.Triple()
 	if l.makeHeaders != nil {
 		if _, err = os.Stat(headerPath); err != nil {
-			temporaryHeaderPath, err := ioutil.TempDir(outdir, "include.tmp*")
+			temporaryHeaderPath, err := os.MkdirTemp(outdir, "include.tmp*")
 			if err != nil {
 				return nil, nil, err
 			}
@@ -189,7 +188,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			defer once.Do(unlock)
 
 			// Create an archive of all object files.
-			f, err := ioutil.TempFile(outdir, "libc.a.tmp*")
+			f, err := os.CreateTemp(outdir, "libc.a.tmp*")
 			if err != nil {
 				return err
 			}
@@ -250,7 +249,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			run: func(*compileJob) error {
 				var compileArgs []string
 				compileArgs = append(compileArgs, args...)
-				tmpfile, err := ioutil.TempFile(outdir, "crt1.o.tmp*")
+				tmpfile, err := os.CreateTemp(outdir, "crt1.o.tmp*")
 				if err != nil {
 					return err
 				}

@@ -2,7 +2,7 @@ package builder
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os/exec"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -18,7 +18,7 @@ func makeDFUFirmwareImage(options *compileopts.Options, infile, outfile string) 
 	}
 
 	cmd := exec.Command(cmdLine[0], cmdLine[1:]...)
-	cmd.Stdout = ioutil.Discard
+	cmd.Stdout = io.Discard
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("could not run nrfutil pkg generate: %w", err)

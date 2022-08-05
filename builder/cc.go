@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -93,7 +92,7 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 	// Load dependencies file, if possible.
 	depfileName := "dep-" + depfileNameHash + ".json"
 	depfileCachePath := filepath.Join(goenv.Get("GOCACHE"), depfileName)
-	depfileBuf, err := ioutil.ReadFile(depfileCachePath)
+	depfileBuf, err := os.ReadFile(depfileCachePath)
 	var dependencies []string // sorted list of dependency paths
 	if err == nil {
 		// There is a dependency file, that's great!
@@ -117,12 +116,12 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 		return "", err
 	}
 
-	objTmpFile, err := ioutil.TempFile(goenv.Get("GOCACHE"), "tmp-*"+ext)
+	objTmpFile, err := os.CreateTemp(goenv.Get("GOCACHE"), "tmp-*"+ext)
 	if err != nil {
 		return "", err
 	}
 	objTmpFile.Close()
-	depTmpFile, err := ioutil.TempFile(tmpdir, "dep-*.d")
+	depTmpFile, err := os.CreateTemp(tmpdir, "dep-*.d")
 	if err != nil {
 		return "", err
 	}
@@ -166,7 +165,7 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 	sort.Strings(dependencySlice)
 
 	// Write dependencies file.
-	f, err := ioutil.TempFile(filepath.Dir(depfileCachePath), depfileName)
+	f, err := os.CreateTemp(filepath.Dir(depfileCachePath), depfileName)
 	if err != nil {
 		return "", err
 	}
@@ -267,7 +266,7 @@ func hashFile(path string) (string, error) {
 // allowed on Windows, but of course can be used on POSIX like systems. Still,
 // it's the most sane of any of the formats so readDepFile will use that format.
 func readDepFile(filename string) ([]string, error) {
-	buf, err := ioutil.ReadFile(filename)
+	buf, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

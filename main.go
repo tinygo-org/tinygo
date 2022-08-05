@@ -251,7 +251,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			}
 
 			// create a new temp directory just for this run, announce it to os.TempDir() via TMPDIR
-			tmpdir, err := ioutil.TempDir("", "tinygotmp")
+			tmpdir, err := os.MkdirTemp("", "tinygotmp")
 			if err != nil {
 				return fmt.Errorf("failed to create temporary directory: %w", err)
 			}
@@ -1467,7 +1467,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Unknown library: %s\n", name)
 			os.Exit(1)
 		}
-		tmpdir, err := ioutil.TempDir("", "tinygo*")
+		tmpdir, err := os.MkdirTemp("", "tinygo*")
 		if err != nil {
 			handleCompilerError(err)
 		}

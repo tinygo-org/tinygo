@@ -2,7 +2,7 @@ package builder
 
 import (
 	"debug/elf"
-	"io/ioutil"
+	"io"
 	"os"
 	"sort"
 
@@ -87,7 +87,7 @@ func extractROM(path string) (uint64, []byte, error) {
 			// Pad the difference
 			rom = append(rom, make([]byte, diff)...)
 		}
-		data, err := ioutil.ReadAll(prog.Open())
+		data, err := io.ReadAll(prog.Open())
 		if err != nil {
 			return 0, nil, objcopyError{"failed to extract segment from ELF file: " + path, err}
 		}
