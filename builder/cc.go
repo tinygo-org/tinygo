@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -107,11 +108,11 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 		if err == nil {
 			if _, err := os.Stat(outpath); err == nil {
 				return outpath, nil
-			} else if !os.IsNotExist(err) {
+			} else if !errors.Is(err, fs.ErrNotExist) {
 				return "", err
 			}
 		}
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, fs.ErrNotExist) {
 		// expected either nil or IsNotExist
 		return "", err
 	}

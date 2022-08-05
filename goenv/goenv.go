@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"os/user"
@@ -122,7 +123,7 @@ func findWasmOpt() string {
 		}
 
 		_, err := os.Stat(path)
-		if err != nil && os.IsNotExist(err) {
+		if err != nil && errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 

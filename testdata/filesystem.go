@@ -1,13 +1,15 @@
 package main
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 )
 
 func main() {
 	_, err := os.Open("non-exist")
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, fs.ErrNotExist) {
 		panic("should be non exist error")
 	}
 

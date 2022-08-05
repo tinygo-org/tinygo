@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"go/types"
 	"hash/crc32"
+	"io/fs"
 	"math/bits"
 	"os"
 	"os/exec"
@@ -147,7 +148,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
 		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
-		if _, err := os.Stat(path); os.IsNotExist(err) {
+		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
 		}
 		libcDependencies = append(libcDependencies, dummyCompileJob(path))

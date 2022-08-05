@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"encoding/xml"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1402,7 +1404,7 @@ __isr_vector:
 }
 
 func generate(indir, outdir, sourceURL, interruptSystem string) error {
-	if _, err := os.Stat(indir); os.IsNotExist(err) {
+	if _, err := os.Stat(indir); errors.Is(err, fs.ErrNotExist) {
 		fmt.Fprintln(os.Stderr, "cannot find input directory:", indir)
 		os.Exit(1)
 	}
