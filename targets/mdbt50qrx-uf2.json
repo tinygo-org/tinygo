@@ -1,12 +1,6 @@
 {
-    "inherits": ["nrf52840"],
-    "build-tags": ["mdbt50qrx", "nrf52840_reset_uf2", "softdevice", "s140v6"],
-    "serial": "usb",
-    "flash-1200-bps-reset": "true",
-    "flash-method": "msd",
+    "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
+    "build-tags": ["mdbt50qrx"],
     "serial-port": ["acm:239a:810b", "acm:239a:010b", "acm:239a:810c"],
-    "msd-volume-name": "MDBT50QBOOT",
-    "msd-firmware-name": "firmware.uf2",
-    "uf2-family-id": "0xADA52840",
-    "linkerscript": "targets/circuitplay-bluefruit.ld"
+    "msd-volume-name": "MDBT50QBOOT"
 }

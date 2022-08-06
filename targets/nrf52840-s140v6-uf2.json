@@ -1,0 +1,10 @@
+{
+	"build-tags": ["nrf52840_reset_uf2", "softdevice", "s140v6"],
+	"linkerscript": "targets/nrf52840-s140v6-uf2.ld",
+	"serial": "usb",
+	"flash-1200-bps-reset": "true",
+	"flash-method": "msd",
+	"msd-firmware-name": "firmware.uf2",
+	"binary-format": "uf2",
+	"uf2-family-id": "0xADA52840"
+}
