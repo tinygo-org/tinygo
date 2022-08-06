@@ -280,7 +280,6 @@ TEST_PACKAGES_FAST = \
 	container/list \
 	container/ring \
 	crypto/des \
-	crypto/elliptic/internal/fiat \
 	crypto/internal/subtle \
 	crypto/md5 \
 	crypto/rc4 \
@@ -317,6 +316,14 @@ TEST_PACKAGES_FAST = \
 	unicode \
 	unicode/utf16 \
 	unicode/utf8 \
+	$(nil)
+
+# Assume this will go away before Go2, so only check minor version.
+ifeq ($(filter $(shell $(GO) env GOVERSION | cut -f 2 -d.), 16 17 18), )
+TEST_PACKAGES_FAST += crypto/internal/nistec/fiat
+else
+TEST_PACKAGES_FAST += crypto/elliptic/internal/fiat
+endif
 
 # archive/zip requires os.ReadAt, which is not yet supported on windows
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
