@@ -24,14 +24,12 @@
 
 - repo: github.com/buger/jsonparser
 - repo: github.com/dgryski/go-bloomindex
-  tags_linux:  purego noasm
   tags_darwin: purego noasm
   tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-arc
 - repo: github.com/dgryski/go-camellia
 - repo: github.com/dgryski/go-change
 - repo: github.com/dgryski/go-chaskey
-  tags_linux:  appengine purego noasm
   tags_darwin: appengine purego noasm
   tags_wasi:   appengine purego noasm
   skipwasi: true # siphash has build tag issues
@@ -39,14 +37,12 @@
 - repo: github.com/dgryski/go-clockpro
 - repo: github.com/dgryski/go-cobs
 - repo: github.com/dgryski/go-cuckoof
-  tags_linux:  pureno noasm
   tags_darwin: pureno noasm
   tags_wasi:   pureno noasm
 - repo: github.com/dgryski/go-discreterand
 - repo: github.com/dgryski/go-expirecache
 - repo: github.com/dgryski/go-factor
 - repo: github.com/dgryski/go-farm
-  tags_linux:  purego noasm
   tags_darwin: purego noasm
   tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-fuzzstr
@@ -63,26 +59,21 @@
 - repo: github.com/dgryski/go-linebreak
 - repo: github.com/dgryski/go-linlog
 - repo: github.com/dgryski/go-maglev
-  tags_linux:  appengine # for dchest/siphash
   tags_darwin: appengine # for dchest/siphash
   tags_wasi:   appengine # for dchest/siphash
   skipwasi: true
 - repo: github.com/dgryski/go-marvin32
-  tags_linux:  purego
   tags_darwin: purego
   tags_wasi:   purego
 - repo: github.com/dgryski/go-md5crypt
 - repo: github.com/dgryski/go-metro
-  tags_linux:  purego noasm
   tags_darwin: purego noasm
   tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-misty1
 - repo: github.com/dgryski/go-mph
-  tags_linux:  purego noasm
   tags_darwin: purego noasm
   tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-mpchash
-  tags_linux:  appengine # for dchest/siphash
   tags_darwin: appengine # for dchest/siphash
   tags_wasi:   appengine # for dchest/siphash
   skipwasi: true
@@ -100,7 +91,6 @@
 - repo: github.com/dgryski/go-s4lru
 - repo: github.com/dgryski/go-sequitur
 - repo: github.com/dgryski/go-sip13
-  tags_linux:  purego noasm
   tags_darwin: purego noasm
   tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-skinny
@@ -198,7 +188,6 @@
   #- pkg: internal/gen/bitfield # panic: unimplemented: (reflect.Type).Name()
   #- pkg: number # fails due to printf %T formatting
 - repo: golang.org/x/image
-  tags_linux:  noasm
   tags_darwin: noasm
   tags_wasi:   noasm
   subdirs:

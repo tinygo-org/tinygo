@@ -124,3 +124,11 @@ func write(fd uintptr, p unsafe.Pointer, n int32) int32 {
 	}
 	return 0
 }
+
+//export __GoABI0_runtime.entersyscall
+func entersyscall() {
+}
+
+//export __GoABI0_runtime.exitsyscall
+func exitsyscall() {
+}

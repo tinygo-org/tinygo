@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gofrs/flock"
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -85,6 +86,7 @@ type packageAction struct {
 	Imports          map[string]string // map from imported package to action ID hash
 	OptLevel         string            // LLVM optimization level (O0, O1, O2, Os, Oz)
 	UndefinedGlobals []string          // globals that are left as external globals (no initializer)
+	GoAsmReferences  map[string]string // symbols that are defined or referenced in Go assembly
 }
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -240,6 +242,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	var packageJobs []*compileJob
 	packageActionIDJobs := make(map[string]*compileJob)
 
+	var goasmObjectFiles []*compileJob
 	var embedFileObjects []*compileJob
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
@@ -291,6 +294,39 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			embedFileObjects = append(embedFileObjects, job)
 		}
 
+		// References from Go code to assembly functions implemented in Go
+		// assembly. Example: {"math.archSqrt": "__GoABI0_math.archSqrt"}
+		goAsmReferences := map[string]string{}
+		var goAsmReferencesLock sync.Mutex
+		for _, filename := range pkg.SFiles {
+			parts := strings.Split(config.Triple(), "-")
+			if len(parts) < 3 || parts[2] != "linux" {
+				// Go assembly files are only supported on Linux so far.
+				continue
+			}
+			abspath := filepath.Join(pkg.Dir, filename)
+			job := &compileJob{
+				description: "compile Go assembly file " + abspath,
+				run: func(job *compileJob) error {
+					result, references, err := compileAsmFile(abspath, tmpdir, pkg.Pkg.Path(), config)
+
+					// Add references (both defined and undefined) to the
+					// goAsmReferences map so that the compiler can create
+					// wrapper functions.
+					goAsmReferencesLock.Lock()
+					for internal, external := range references {
+						goAsmReferences[internal] = external
+					}
+					goAsmReferencesLock.Unlock()
+
+					job.result = result
+					return err
+				},
+			}
+			actionIDDependencies = append(actionIDDependencies, job)
+			goasmObjectFiles = append(goasmObjectFiles, job)
+		}
+
 		// Action ID jobs need to know the action ID of all the jobs the package
 		// imports.
 		var importedPackages []*compileJob
@@ -323,6 +359,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					Imports:          make(map[string]string, len(pkg.Pkg.Imports())),
 					OptLevel:         optLevel,
 					UndefinedGlobals: undefinedGlobals,
+					GoAsmReferences:  goAsmReferences,
 				}
 				for filePath, hash := range pkg.FileHashes {
 					actionID.FileHashes[filePath] = hex.EncodeToString(hash)
@@ -366,7 +403,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 				// Compile AST to IR. The compiler.CompilePackage function will
 				// build the SSA as needed.
-				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, program.Package(pkg.Pkg), machine, compilerConfig, config.DumpSSA())
+				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, program.Package(pkg.Pkg), machine, compilerConfig, goAsmReferences, config.DumpSSA())
 				defer mod.Context().Dispose()
 				defer mod.Dispose()
 				if errs != nil {
@@ -694,6 +731,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if len(lprogram.LDFlags) > 0 {
 		ldflags = append(ldflags, lprogram.LDFlags...)
 	}
+
+	// Add ELF object files created from Go assembly files.
+	linkerDependencies = append(linkerDependencies, goasmObjectFiles...)
 
 	// Add libc dependencies, if they exist.
 	linkerDependencies = append(linkerDependencies, libcDependencies...)

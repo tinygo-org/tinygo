@@ -62,6 +62,7 @@ type PackageJSON struct {
 	GoFiles  []string
 	CgoFiles []string
 	CFiles   []string
+	SFiles   []string
 
 	// Embedded files
 	EmbedFiles []string

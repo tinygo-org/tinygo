@@ -87,20 +87,22 @@ type compilerContext struct {
 	pkg              *types.Package
 	packageDir       string // directory for this package
 	runtimePkg       *types.Package
+	goAsmReferences  map[string]string // map from internal name to Go name, such as "math.archSqrt" => "__GoABI0_math.archSqrt"
 }
 
 // newCompilerContext returns a new compiler context ready for use, most
 // importantly with a newly created LLVM context and module.
-func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, dumpSSA bool) *compilerContext {
+func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, goAsmReferences map[string]string, dumpSSA bool) *compilerContext {
 	c := &compilerContext{
-		Config:        config,
-		DumpSSA:       dumpSSA,
-		difiles:       make(map[string]llvm.Metadata),
-		ditypes:       make(map[types.Type]llvm.Metadata),
-		machine:       machine,
-		targetData:    machine.CreateTargetData(),
-		functionInfos: map[*ssa.Function]functionInfo{},
-		astComments:   map[string]*ast.CommentGroup{},
+		Config:          config,
+		DumpSSA:         dumpSSA,
+		difiles:         make(map[string]llvm.Metadata),
+		ditypes:         make(map[types.Type]llvm.Metadata),
+		machine:         machine,
+		targetData:      machine.CreateTargetData(),
+		functionInfos:   map[*ssa.Function]functionInfo{},
+		astComments:     map[string]*ast.CommentGroup{},
+		goAsmReferences: goAsmReferences,
 	}
 
 	c.ctx = llvm.NewContext()
@@ -270,8 +272,8 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 }
 
 // CompilePackage compiles a single package to a LLVM module.
-func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
-	c := newCompilerContext(moduleName, machine, config, dumpSSA)
+func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, goAsmReferences map[string]string, dumpSSA bool) (llvm.Module, []error) {
+	c := newCompilerContext(moduleName, machine, config, goAsmReferences, dumpSSA)
 	defer c.dispose()
 	c.packageDir = pkg.OriginalDir()
 	c.embedGlobals = pkg.EmbedGlobals
@@ -849,6 +851,13 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 				continue
 			}
 			b.createFunction()
+			if forwardName, ok := c.goAsmReferences[b.info.linkName]; ok {
+				// This function is defined in Go, but called from an assembly
+				// function. Create an exported wrapper for this Go function so
+				// that the Go assembly can call this function using the Go ABI.
+				b := newBuilder(c, irbuilder, member)
+				b.createGoAsmExport(forwardName)
+			}
 		case *ssa.Type:
 			if types.IsInterface(member.Type()) {
 				// Interfaces don't have concrete methods.
@@ -892,12 +901,20 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			global := c.getGlobal(member)
 			if files, ok := c.embedGlobals[member.Name()]; ok {
 				c.createEmbedGlobal(member, global, files)
-			} else if !info.extern {
+				continue
+			}
+			if !info.extern {
 				global.SetInitializer(llvm.ConstNull(global.GlobalValueType()))
 				global.SetVisibility(llvm.HiddenVisibility)
 				if info.section != "" {
 					global.SetSection(info.section)
 				}
+			}
+			if forwardName, ok := c.goAsmReferences[info.linkName]; ok {
+				// This global variable is accessed from Go assembly.
+				// Add an alias so that the Go assembly can access this global
+				// using the name it will use (prefixed with __GoABI0_).
+				llvm.AddAlias(c.mod, global.GlobalValueType(), 0, global, forwardName)
 			}
 		}
 	}
@@ -909,7 +926,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		switch member := member.(type) {
 		case *ssa.Function:
 			if member.Blocks != nil {
-				continue // external function
+				continue // defined function
 			}
 			info := c.getFunctionInfo(member)
 			if aliasName, ok := stdlibAliases[info.linkName]; ok {
@@ -920,6 +937,9 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 					continue
 				}
 				b := newBuilder(c, irbuilder, member)
+				if !b.llvmFn.IsDeclaration() {
+					continue
+				}
 				b.createAlias(alias)
 			}
 		}
@@ -1488,19 +1508,11 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		if b.hasDeferFrame() {
 			b.createRuntimeCall("destroyDeferFrame", []llvm.Value{b.deferFrame}, "")
 		}
-		if len(instr.Results) == 0 {
-			b.CreateRetVoid()
-		} else if len(instr.Results) == 1 {
-			b.CreateRet(b.getValue(instr.Results[0], getPos(instr)))
-		} else {
-			// Multiple return values. Put them all in a struct.
-			retVal := llvm.ConstNull(b.llvmFn.GlobalValueType().ReturnType())
-			for i, result := range instr.Results {
-				val := b.getValue(result, getPos(instr))
-				retVal = b.CreateInsertValue(retVal, val, i, "")
-			}
-			b.CreateRet(retVal)
+		var values []llvm.Value
+		for _, value := range instr.Results {
+			values = append(values, b.getValue(value, getPos(instr)))
 		}
+		b.createReturn(values)
 	case *ssa.RunDefers:
 		// Note where we're going to put the rundefers block
 		run := b.insertBasicBlock("rundefers.block")
@@ -1956,6 +1968,22 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 			// indicates a compiler bug
 			panic("local has not been parsed: " + expr.String())
 		}
+	}
+}
+
+// Create a return instruction that packs the above values in a single value.
+func (b *builder) createReturn(values []llvm.Value) {
+	if len(values) == 0 {
+		b.CreateRetVoid()
+	} else if len(values) == 1 {
+		b.CreateRet(values[0])
+	} else {
+		// Multiple return values. Put them all in a struct.
+		retVal := llvm.ConstNull(b.llvmFn.GlobalValueType().ReturnType())
+		for i, value := range values {
+			retVal = b.CreateInsertValue(retVal, value, i, "")
+		}
+		b.CreateRet(retVal)
 	}
 }
 

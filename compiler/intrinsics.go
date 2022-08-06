@@ -37,6 +37,8 @@ func (b *builder) defineIntrinsicFunction() {
 		} else {
 			b.CreateRetVoid()
 		}
+	case b.goAsmReferences[b.info.linkName] != "":
+		b.createGoAsmWrapper(b.goAsmReferences[b.info.linkName])
 	}
 }
 

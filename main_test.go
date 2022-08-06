@@ -189,14 +189,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	isWebAssembly := options.Target == "wasi" || options.Target == "wasm" || (options.Target == "" && options.GOARCH == "wasm")
 
 	for _, name := range tests {
-		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
-			switch name {
-			case "timers.go":
-				// Timer tests do not work because syscall.seek is implemented
-				// as Assembly in mainline Go and causes linker failure
-				continue
-			}
-		}
 		if options.Target == "simavr" {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
