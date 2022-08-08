@@ -24,7 +24,7 @@ func ReadBuildID() ([]byte, error) {
 	defer f.Close()
 
 	switch runtime.GOOS {
-	case "linux", "freebsd":
+	case "linux", "freebsd", "android":
 		// Read the GNU build id section. (Not sure about FreeBSD though...)
 		file, err := elf.NewFile(f)
 		if err != nil {
