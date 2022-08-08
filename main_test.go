@@ -259,10 +259,11 @@ func emuCheck(t *testing.T, options compileopts.Options) {
 		t.Fatal("failed to load target spec:", err)
 	}
 	if spec.Emulator != "" {
-		_, err := exec.LookPath(strings.SplitN(spec.Emulator, " ", 2)[0])
+		emulatorCommand := strings.SplitN(spec.Emulator, " ", 2)[0]
+		_, err := exec.LookPath(emulatorCommand)
 		if err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
-				t.Skipf("emulator not installed: %q", spec.Emulator[0])
+				t.Skipf("emulator not installed: %q", emulatorCommand)
 			}
 
 			t.Errorf("searching for emulator: %v", err)
