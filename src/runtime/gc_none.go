@@ -13,6 +13,8 @@ import (
 
 const gcAsserts = false // perform sanity checks
 
+var gcTotalAlloc uint64 // for runtime.MemStats
+
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer
