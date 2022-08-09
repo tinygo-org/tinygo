@@ -35,6 +35,13 @@ type MemStats struct {
 	// HeapReleased is bytes of physical memory returned to the OS.
 	HeapReleased uint64
 
+	// TotalAlloc is cumulative bytes allocated for heap objects.
+	//
+	// TotalAlloc increases as heap objects are allocated, but
+	// unlike Alloc and HeapAlloc, it does not decrease when
+	// objects are freed.
+	TotalAlloc uint64
+
 	// Off-heap memory statistics.
 	//
 	// The following statistics measure runtime-internal

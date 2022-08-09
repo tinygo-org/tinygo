@@ -16,6 +16,9 @@ const gcAsserts = false // perform sanity checks
 // Ever-incrementing pointer: no memory is freed.
 var heapptr = heapStart
 
+// Total amount allocated for runtime.MemStats
+var gcTotalAlloc uint64
+
 // Inlining alloc() speeds things up slightly but bloats the executable by 50%,
 // see https://github.com/tinygo-org/tinygo/issues/2674.  So don't.
 //
@@ -26,6 +29,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// systems).
 	size = align(size)
 	addr := heapptr
+	gcTotalAlloc += uint64(size)
 	heapptr += size
 	for heapptr >= heapEnd {
 		// Try to increase the heap and check again.

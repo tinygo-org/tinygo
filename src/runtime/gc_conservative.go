@@ -55,6 +55,7 @@ var (
 	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
 	nextAlloc     gcBlock        // the next block that should be tried by the allocator
 	endBlock      gcBlock        // the block just past the end of the available space
+	gcTotalAlloc  uint64         // for runtime.MemStats
 )
 
 // zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
@@ -265,6 +266,8 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {
 		return unsafe.Pointer(&zeroSizedAlloc)
 	}
+
+	gcTotalAlloc += uint64(size)
 
 	neededBlocks := (size + (bytesPerBlock - 1)) / bytesPerBlock
 

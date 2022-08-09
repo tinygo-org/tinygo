@@ -21,5 +21,6 @@ func ReadMemStats(m *MemStats) {
 	m.HeapReleased = 0 // always 0, we don't currently release memory back to the OS.
 	m.HeapSys = m.HeapInuse + m.HeapIdle
 	m.GCSys = uint64(heapEnd - uintptr(metadataStart))
+	m.TotalAlloc = gcTotalAlloc
 	m.Sys = uint64(heapEnd - heapStart)
 }
