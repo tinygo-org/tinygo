@@ -22,5 +22,7 @@ func ReadMemStats(m *MemStats) {
 	m.HeapSys = m.HeapInuse + m.HeapIdle
 	m.GCSys = uint64(heapEnd - uintptr(metadataStart))
 	m.TotalAlloc = gcTotalAlloc
+	m.Mallocs = gcMallocs
+	m.Frees = gcFrees
 	m.Sys = uint64(heapEnd - heapStart)
 }
