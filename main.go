@@ -195,7 +195,7 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string, outpath string) (bool, error) {
+func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string, testBenchMem bool, outpath string) (bool, error) {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
@@ -218,6 +218,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	}
 	if testBenchTime != "" {
 		flags = append(flags, "-test.benchtime="+testBenchTime)
+	}
+	if testBenchMem {
+		flags = append(flags, "-test.benchmem")
 	}
 
 	passed := false
@@ -1332,6 +1335,7 @@ func main() {
 	var testBenchRegexp *string
 	var testBenchTime *string
 	var testRunRegexp *string
+	var testBenchMem *bool
 	if command == "help" || command == "test" {
 		testCompileOnlyFlag = flag.Bool("c", false, "compile the test binary but do not run it")
 		testVerboseFlag = flag.Bool("v", false, "verbose: print additional output")
@@ -1339,6 +1343,7 @@ func main() {
 		testRunRegexp = flag.String("run", "", "run: regexp of tests to run")
 		testBenchRegexp = flag.String("bench", "", "run: regexp of benchmarks to run")
 		testBenchTime = flag.String("benchtime", "", "run each benchmark for duration `d`")
+		testBenchMem = flag.Bool("benchmem", false, "show memory stats for benchmarks")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -1568,7 +1573,7 @@ func main() {
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
 				stderr := (*testStderr)(buf)
-				passed, err := Test(pkgName, stdout, stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testBenchRegexp, *testBenchTime, outpath)
+				passed, err := Test(pkgName, stdout, stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testBenchRegexp, *testBenchTime, *testBenchMem, outpath)
 				if err != nil {
 					printCompilerError(func(args ...interface{}) {
 						fmt.Fprintln(stderr, args...)
