@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -18,11 +19,13 @@ import (
 
 func initBenchmarkFlags() {
 	matchBenchmarks = flag.String("test.bench", "", "run only benchmarks matching `regexp`")
+	benchmarkMemory = flag.Bool("test.benchmem", false, "print memory allocations for benchmarks")
 	flag.Var(&benchTime, "test.benchtime", "run each benchmark for duration `d`")
 }
 
 var (
 	matchBenchmarks *string
+	benchmarkMemory *bool
 	benchTime       = benchTimeFlag{d: 1 * time.Second} // changed during test of testing package
 )
 
@@ -85,6 +88,15 @@ type B struct {
 	benchTime    benchTimeFlag
 	timerOn      bool
 	result       BenchmarkResult
+
+	// report memory statistics
+	showAllocResult bool
+	// initial state of MemStats.Mallocs and MemStats.TotalAlloc
+	startAllocs uint64
+	startBytes  uint64
+	// net total after running benchmar
+	netAllocs uint64
+	netBytes  uint64
 }
 
 // StartTimer starts timing a test. This function is called automatically
@@ -94,6 +106,11 @@ func (b *B) StartTimer() {
 	if !b.timerOn {
 		b.start = time.Now()
 		b.timerOn = true
+
+		var mstats runtime.MemStats
+		runtime.ReadMemStats(&mstats)
+		b.startAllocs = mstats.Mallocs
+		b.startBytes = mstats.TotalAlloc
 	}
 }
 
@@ -104,6 +121,11 @@ func (b *B) StopTimer() {
 	if b.timerOn {
 		b.duration += time.Since(b.start)
 		b.timerOn = false
+
+		var mstats runtime.MemStats
+		runtime.ReadMemStats(&mstats)
+		b.netAllocs += mstats.Mallocs - b.startAllocs
+		b.netBytes += mstats.TotalAlloc - b.startBytes
 	}
 }
 
@@ -112,8 +134,15 @@ func (b *B) StopTimer() {
 func (b *B) ResetTimer() {
 	if b.timerOn {
 		b.start = time.Now()
+
+		var mstats runtime.MemStats
+		runtime.ReadMemStats(&mstats)
+		b.startAllocs = mstats.Mallocs
+		b.startBytes = mstats.TotalAlloc
 	}
 	b.duration = 0
+	b.netAllocs = 0
+	b.netBytes = 0
 }
 
 // SetBytes records the number of bytes processed in a single operation.
@@ -124,7 +153,7 @@ func (b *B) SetBytes(n int64) { b.bytes = n }
 // It is equivalent to setting -test.benchmem, but it only affects the
 // benchmark function that calls ReportAllocs.
 func (b *B) ReportAllocs() {
-	return // TODO: implement
+	b.showAllocResult = true
 }
 
 // runN runs a single benchmark for the specified number of iterations.
@@ -216,7 +245,7 @@ func (b *B) launch() {
 			b.runN(int(n))
 		}
 	}
-	b.result = BenchmarkResult{b.N, b.duration, b.bytes}
+	b.result = BenchmarkResult{b.N, b.duration, b.bytes, b.netAllocs, b.netBytes}
 }
 
 // BenchmarkResult contains the results of a benchmark run.
@@ -224,6 +253,9 @@ type BenchmarkResult struct {
 	N     int           // The number of iterations.
 	T     time.Duration // The total time taken.
 	Bytes int64         // Bytes processed in one iteration.
+
+	MemAllocs uint64 // The total number of memory allocations.
+	MemBytes  uint64 // The total number of bytes allocated.
 }
 
 // NsPerOp returns the "ns/op" metric.
@@ -245,13 +277,19 @@ func (r BenchmarkResult) mbPerSec() float64 {
 // AllocsPerOp returns the "allocs/op" metric,
 // which is calculated as r.MemAllocs / r.N.
 func (r BenchmarkResult) AllocsPerOp() int64 {
-	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
+	if r.N <= 0 {
+		return 0
+	}
+	return int64(r.MemAllocs) / int64(r.N)
 }
 
 // AllocedBytesPerOp returns the "B/op" metric,
 // which is calculated as r.MemBytes / r.N.
 func (r BenchmarkResult) AllocedBytesPerOp() int64 {
-	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
+	if r.N <= 0 {
+		return 0
+	}
+	return int64(r.MemBytes) / int64(r.N)
 }
 
 // String returns a summary of the benchmark results.
@@ -276,6 +314,12 @@ func (r BenchmarkResult) String() string {
 		fmt.Fprintf(buf, "\t%7.2f MB/s", mbs)
 	}
 	return buf.String()
+}
+
+// MemString returns r.AllocedBytesPerOp and r.AllocsPerOp in the same format as 'go test'.
+func (r BenchmarkResult) MemString() string {
+	return fmt.Sprintf("%8d B/op\t%8d allocs/op",
+		r.AllocedBytesPerOp(), r.AllocsPerOp())
 }
 
 func prettyPrint(w io.Writer, x float64, unit string) {
@@ -363,6 +407,10 @@ func (b *B) processBench(ctx *benchContext) {
 	}
 	if ctx != nil {
 		results := r.String()
+
+		if *benchmarkMemory || b.showAllocResult {
+			results += "\t" + r.MemString()
+		}
 		fmt.Println(results)
 	}
 }

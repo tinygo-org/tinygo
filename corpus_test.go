@@ -116,7 +116,7 @@ func TestCorpus(t *testing.T) {
 				tags.Set(repo.Tags)
 				opts.Tags = []string(tags)
 
-				passed, err := Test(path, out, out, &opts, false, testing.Verbose(), false, "", "", "", "")
+				passed, err := Test(path, out, out, &opts, false, testing.Verbose(), false, "", "", "", false, "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}
