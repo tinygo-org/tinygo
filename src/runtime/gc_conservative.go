@@ -55,7 +55,9 @@ var (
 	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
 	nextAlloc     gcBlock        // the next block that should be tried by the allocator
 	endBlock      gcBlock        // the block just past the end of the available space
-	gcTotalAlloc  uint64         // for runtime.MemStats
+	gcTotalAlloc  uint64         // total number of bytes allocated
+	gcMallocs     uint64         // total number of allocations
+	gcFrees       uint64         // total number of objects freed
 )
 
 // zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
@@ -268,6 +270,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 
 	gcTotalAlloc += uint64(size)
+	gcMallocs++
 
 	neededBlocks := (size + (bytesPerBlock - 1)) / bytesPerBlock
 
@@ -573,6 +576,7 @@ func sweep() {
 			// Unmarked head. Free it, including all tail blocks following it.
 			block.markFree()
 			freeCurrentObject = true
+			gcFrees++
 		case blockStateTail:
 			if freeCurrentObject {
 				// This is a tail object following an unmarked head.

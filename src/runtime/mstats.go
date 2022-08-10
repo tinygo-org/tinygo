@@ -42,6 +42,13 @@ type MemStats struct {
 	// objects are freed.
 	TotalAlloc uint64
 
+	// Mallocs is the cumulative count of heap objects allocated.
+	// The number of live objects is Mallocs - Frees.
+	Mallocs uint64
+
+	// Frees is the cumulative count of heap objects freed.
+	Frees uint64
+
 	// Off-heap memory statistics.
 	//
 	// The following statistics measure runtime-internal
