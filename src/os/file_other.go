@@ -1,5 +1,5 @@
-//go:build baremetal || (wasm && !wasi)
-// +build baremetal wasm,!wasi
+//go:build baremetal || unknow_wasm || (wasm && !wasi)
+// +build baremetal unknow_wasm wasm,!wasi
 
 package os
 

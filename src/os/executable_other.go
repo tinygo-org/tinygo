@@ -1,5 +1,5 @@
-//go:build !linux || baremetal
-// +build !linux baremetal
+//go:build !linux || baremetal || unknow_wasm
+// +build !linux baremetal unknow_wasm
 
 package os
 
