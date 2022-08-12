@@ -42,10 +42,14 @@ var TINYGOROOT string
 func Get(name string) string {
 	switch name {
 	case "GOOS":
-		if dir := os.Getenv("GOOS"); dir != "" {
-			return dir
+		goos := os.Getenv("GOOS")
+		if goos == "" {
+			goos = runtime.GOOS
 		}
-		return runtime.GOOS
+		if goos == "android" {
+			goos = "linux"
+		}
+		return goos
 	case "GOARCH":
 		if dir := os.Getenv("GOARCH"); dir != "" {
 			return dir
