@@ -20,6 +20,10 @@ func StartCPUProfile(w io.Writer) error {
 func StopCPUProfile() {
 }
 
+func WriteHeapProfile(w io.Writer) error {
+	return nil
+}
+
 func Lookup(name string) *Profile {
 	return nil
 }
