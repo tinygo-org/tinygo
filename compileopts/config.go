@@ -457,7 +457,14 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 		args = append(args, "-c", cmd)
 	}
 	if c.Target.OpenOCDTransport != "" {
-		args = append(args, "-c", "transport select "+c.Target.OpenOCDTransport)
+		transport := c.Target.OpenOCDTransport
+		if transport == "swd" {
+			switch openocdInterface {
+			case "stlink-dap":
+				transport = "dapdirect_swd"
+			}
+		}
+		args = append(args, "-c", "transport select "+transport)
 	}
 	args = append(args, "-f", "target/"+c.Target.OpenOCDTarget+".cfg")
 	return args, nil
