@@ -688,7 +688,7 @@ func (b *builder) getLocalVariable(variable *types.Var) llvm.Metadata {
 				Name:           param.Name(),
 				File:           b.getDIFile(pos.Filename),
 				Line:           pos.Line,
-				Type:           b.getDIType(variable.Type()),
+				Type:           b.getDIType(param.Type()),
 				AlwaysPreserve: true,
 				ArgNo:          i + 1,
 			})
