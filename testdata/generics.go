@@ -12,6 +12,8 @@ func main() {
 	var c C[int]
 	c.F() // issue 2951
 
+	SliceOp([]int(nil)) // issue 3002
+
 	testa.Test()
 	testb.Test()
 }
@@ -28,3 +30,6 @@ func Add[T Integer](a, b T) T {
 type C[V any] struct{}
 
 func (c *C[V]) F() {}
+
+// Test for https://github.com/tinygo-org/tinygo/issues/3002
+func SliceOp[S ~[]E, E any](s S) {}
