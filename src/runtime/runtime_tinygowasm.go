@@ -1,5 +1,5 @@
-//go:build tinygo.wasm && !unknow_wasm
-// +build tinygo.wasm,!unknow_wasm
+//go:build tinygo.wasm && !unknown_wasm
+// +build tinygo.wasm,!unknown_wasm
 
 package runtime
 

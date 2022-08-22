@@ -1,5 +1,5 @@
-//go:build !windows && !baremetal && !js && !wasi && !unknow_wasm
-// +build !windows,!baremetal,!js,!wasi,!unknow_wasm
+//go:build !windows && !baremetal && !js && !wasi && !unknown_wasm
+// +build !windows,!baremetal,!js,!wasi,!unknown_wasm
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

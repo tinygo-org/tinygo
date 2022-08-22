@@ -2,7 +2,7 @@
 	"llvm-target":   "wasm32-unknown-unknown",
 	"cpu":           "generic",
 	"features":      "+bulk-memory,+nontrapping-fptoint,+sign-ext",
-	"build-tags":    ["tinygo.wasm", "unknow_wasm", "runtime_memhash_leveldb"],
+	"build-tags":    ["tinygo.wasm", "unknown_wasm", "runtime_memhash_leveldb"],
 	"goos":          "linux",
 	"goarch":        "arm",
 	"linker":        "wasm-ld",

@@ -1,5 +1,5 @@
-//go:build linux && !baremetal && !nintendoswitch && !wasi && !unknow_wasm
-// +build linux,!baremetal,!nintendoswitch,!wasi,!unknow_wasm
+//go:build linux && !baremetal && !nintendoswitch && !wasi && !unknown_wasm
+// +build linux,!baremetal,!nintendoswitch,!wasi,!unknown_wasm
 
 package runtime
 

@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !unknow_wasm
-// +build !unknow_wasm
+//go:build !unknown_wasm
+// +build !unknown_wasm
 
 package os
 

@@ -1,5 +1,5 @@
-//go:build baremetal || js || unknow_wasm
-// +build baremetal js unknow_wasm
+//go:build baremetal || js || unknown_wasm
+// +build baremetal js unknown_wasm
 
 package syscall
 
