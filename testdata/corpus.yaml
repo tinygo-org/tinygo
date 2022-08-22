@@ -280,3 +280,5 @@
 - repo: github.com/chewxy/math32
   tags: noasm
   version: master
+- repo: github.com/russross/blackfriday
+  version: v2
