@@ -38,4 +38,17 @@ func main() {
 	<-timer.C
 	println("waited on timer at 250ms")
 	time.Sleep(time.Millisecond * 250)
+
+	reset := timer.Reset(time.Millisecond * 250)
+	println("timer reset:", reset)
+	println("waiting on timer")
+	go func() {
+		time.Sleep(time.Millisecond * 125)
+		println(" - after 125ms")
+		time.Sleep(time.Millisecond * 250)
+		println(" - after 250ms")
+	}()
+	<-timer.C
+	println("waited on timer at 250ms")
+	time.Sleep(time.Millisecond * 250)
 }

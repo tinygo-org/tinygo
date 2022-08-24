@@ -9,3 +9,8 @@ waiting on timer
  - after 125ms
 waited on timer at 250ms
  - after 250ms
+timer reset: false
+waiting on timer
+ - after 125ms
+waited on timer at 250ms
+ - after 250ms
