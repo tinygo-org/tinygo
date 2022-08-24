@@ -978,8 +978,7 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 			preferredPortIDs = append(preferredPortIDs, [2]uint16{uint16(vid), uint16(pid)})
 		}
 
-		var primaryPorts []string   // ports picked from preferred USB VID/PID
-		var secondaryPorts []string // other ports (as a fallback)
+		var primaryPorts []string // ports picked from preferred USB VID/PID
 		for _, p := range portsList {
 			if !p.IsUSB {
 				continue
@@ -1001,8 +1000,6 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 					continue
 				}
 			}
-
-			secondaryPorts = append(secondaryPorts, p.Name)
 		}
 		if len(primaryPorts) == 1 {
 			// There is exactly one match in the set of preferred ports. Use
@@ -1014,10 +1011,6 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 			// one device of the same type are connected (e.g. two Arduino
 			// Unos).
 			ports = primaryPorts
-		} else {
-			// No preferred ports found. Fall back to other serial ports
-			// available in the system.
-			ports = secondaryPorts
 		}
 
 		if len(ports) == 0 {
