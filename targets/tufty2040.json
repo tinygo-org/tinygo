@@ -1,0 +1,11 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "serial-port": ["acm:2e8a:0003"],
+    "build-tags": ["tufty2040"],
+    "linkerscript": "targets/tufty2040.ld",
+    "extra-files": [
+        "targets/pico-boot-stage2.S"
+    ]
+}

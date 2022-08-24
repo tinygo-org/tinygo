@@ -43,7 +43,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 88 microcontroller boards are currently supported:
+The following 89 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
@@ -109,6 +109,7 @@ The following 88 microcontroller boards are currently supported:
 * [Particle Xenon](https://docs.particle.io/datasheets/discontinued/xenon-datasheet/)
 * [Phytec reel board](https://www.phytec.eu/product-eu/internet-of-things/reelboard/)
 * [Pimoroni Badger2040](https://shop.pimoroni.com/products/badger-2040)
+* [Pimoroni Tufty2040](https://shop.pimoroni.com/products/tufty-2040)
 * [PineTime DevKit](https://www.pine64.org/pinetime/)
 * [PJRC Teensy 3.6](https://www.pjrc.com/store/teensy36.html)
 * [PJRC Teensy 4.0](https://www.pjrc.com/store/teensy40.html)
