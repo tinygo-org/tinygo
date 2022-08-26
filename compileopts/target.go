@@ -88,8 +88,17 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 			if !src.IsNil() {
 				dst.Set(src)
 			}
-		case reflect.Slice: // for slices, append the field
+		case reflect.Slice: // for slices, append the field and check for duplicates
 			dst.Set(reflect.AppendSlice(dst, src))
+			for i := 0; i < dst.Len(); i++ {
+				v := dst.Index(i).String()
+				for j := i + 1; j < dst.Len(); j++ {
+					w := dst.Index(j).String()
+					if v == w {
+						panic("duplicate value '" + v + "' in field : " + field.Name)
+					}
+				}
+			}
 		default:
 			panic("unknown field type : " + kind.String())
 		}
