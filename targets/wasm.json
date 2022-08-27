@@ -17,7 +17,8 @@
 	"ldflags": [
 		"--allow-undefined",
 		"--stack-first",
-		"--no-demangle"
+		"--no-demangle",
+		"--import-memory"
 	],
 	"emulator":      "node {root}/targets/wasm_exec.js {}",
 	"wasm-abi":      "js"
