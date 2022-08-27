@@ -156,7 +156,11 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		}
 	}
 	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
-		args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
+		if strings.Split(target, "-")[2] == "linux" {
+			args = append(args, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
+		} else {
+			args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
+		}
 	}
 	if strings.HasPrefix(target, "avr") {
 		// AVR defaults to C float and double both being 32-bit. This deviates
