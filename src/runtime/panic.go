@@ -15,6 +15,10 @@ func trap()
 //export tinygo_longjmp
 func tinygo_longjmp(frame *deferFrame)
 
+//go:wasm-module wrap
+//export __wrap_abort
+func wrap_abort(msgPtr, msgLen, filePtr, fileLen, line, column uint32)
+
 // Compiler intrinsic.
 // Returns whether recover is supported on the current architecture.
 func supportsRecover() bool
@@ -52,8 +56,21 @@ func _panic(message interface{}) {
 
 // Cause a runtime panic, which is (currently) always a string.
 func runtimePanic(msg string) {
-	printstring("panic: runtime error: ")
-	println(msg)
+	wrapPanic(msg)
+}
+
+func wrapPanic(msg interface{}) {
+	msgStr := msg.(string)
+	msgPtr := unsafe.Pointer(&msgStr)
+
+	file := ""
+	var line, column uint32
+	line = 0
+	column = 0
+	filePtr := unsafe.Pointer(&file)
+
+	wrap_abort(*(*uint32)(msgPtr), uint32(len(msg.(string))), *(*uint32)(filePtr), uint32(len(file)), line, column)
+
 	abort()
 }
 
