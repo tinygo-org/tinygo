@@ -1657,10 +1657,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		name := fn.RelString(nil)
 		switch {
 		case name == "math.Ceil" || name == "math.Floor" || name == "math.Sqrt" || name == "math.Trunc":
-			result, ok := b.createMathOp(instr)
-			if ok {
-				return result, nil
-			}
+			return b.createMathOp(instr), nil
 		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
 		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/arm64.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":

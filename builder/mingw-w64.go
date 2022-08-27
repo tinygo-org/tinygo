@@ -78,7 +78,7 @@ func makeMinGWExtraLibs(tmpdir string) []*compileJob {
 					// .in files need to be preprocessed by a preprocessor (-E)
 					// first.
 					defpath = outpath + ".def"
-					err := runCCompiler("-E", "-x", "c", "-Wp,-w", "-P", "-DDEF_X64", "-o", defpath, inpath, "-I"+goenv.Get("TINYGOROOT")+"/lib/mingw-w64/mingw-w64-crt/def-include/")
+					err := runCCompiler("-E", "-x", "c", "-Wp,-w", "-P", "-DDEF_X64", "-DDATA", "-o", defpath, inpath, "-I"+goenv.Get("TINYGOROOT")+"/lib/mingw-w64/mingw-w64-crt/def-include/")
 					if err != nil {
 						return err
 					}
