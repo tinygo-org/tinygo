@@ -81,9 +81,12 @@ func (b *builder) createMemoryZeroImpl() {
 }
 
 var mathToLLVMMapping = map[string]string{
-	"math.Sqrt":  "llvm.sqrt.f64",
-	"math.Floor": "llvm.floor.f64",
 	"math.Ceil":  "llvm.ceil.f64",
+	"math.Exp":   "llvm.exp.f64",
+	"math.Exp2":  "llvm.exp2.f64",
+	"math.Floor": "llvm.floor.f64",
+	"math.Log":   "llvm.log.f64",
+	"math.Sqrt":  "llvm.sqrt.f64",
 	"math.Trunc": "llvm.trunc.f64",
 }
 
