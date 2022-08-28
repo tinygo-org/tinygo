@@ -6,7 +6,7 @@ package compiler
 // createVolatileLoad is the implementation of the intrinsic function
 // runtime/volatile.LoadT().
 func (b *builder) createVolatileLoad() {
-	b.createFunctionStart()
+	b.createFunctionStart(true)
 	addr := b.getValue(b.fn.Params[0])
 	b.createNilCheck(b.fn.Params[0], addr, "deref")
 	val := b.CreateLoad(addr, "")
@@ -17,7 +17,7 @@ func (b *builder) createVolatileLoad() {
 // createVolatileStore is the implementation of the intrinsic function
 // runtime/volatile.StoreT().
 func (b *builder) createVolatileStore() {
-	b.createFunctionStart()
+	b.createFunctionStart(true)
 	addr := b.getValue(b.fn.Params[0])
 	val := b.getValue(b.fn.Params[1])
 	b.createNilCheck(b.fn.Params[0], addr, "deref")

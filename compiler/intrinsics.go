@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -29,7 +28,7 @@ func (b *builder) defineIntrinsicFunction() {
 	case strings.HasPrefix(name, "runtime/volatile.Store"):
 		b.createVolatileStore()
 	case strings.HasPrefix(name, "sync/atomic.") && token.IsExported(b.fn.Name()):
-		b.createFunctionStart()
+		b.createFunctionStart(true)
 		returnValue := b.createAtomicOp(b.fn.Name())
 		if !returnValue.IsNil() {
 			b.CreateRet(returnValue)
@@ -44,7 +43,7 @@ func (b *builder) defineIntrinsicFunction() {
 // specially by optimization passes possibly resulting in better generated code,
 // and will otherwise be lowered to regular libc memcpy/memmove calls.
 func (b *builder) createMemoryCopyImpl() {
-	b.createFunctionStart()
+	b.createFunctionStart(true)
 	fnName := "llvm." + b.fn.Name() + ".p0i8.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
@@ -64,7 +63,7 @@ func (b *builder) createMemoryCopyImpl() {
 // memory, declaring the function if needed. These calls will be lowered to
 // regular libc memset calls if they aren't optimized out in a different way.
 func (b *builder) createMemoryZeroImpl() {
-	b.createFunctionStart()
+	b.createFunctionStart(true)
 	fnName := "llvm.memset.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
@@ -88,10 +87,19 @@ var mathToLLVMMapping = map[string]string{
 	"math.Trunc": "llvm.trunc.f64",
 }
 
-// createMathOp lowers the given call as a LLVM math intrinsic. It returns the
-// resulting value.
-func (b *builder) createMathOp(call *ssa.CallCommon) llvm.Value {
-	llvmName := mathToLLVMMapping[call.StaticCallee().RelString(nil)]
+// defineMathOp defines a math function body as a call to a LLVM intrinsic,
+// instead of the regular Go implementation. This allows LLVM to reason about
+// the math operation and (depending on the architecture) allows it to lower the
+// operation to very fast floating point instructions. If this is not possible,
+// LLVM will emit a call to a libm function that implements the same operation.
+//
+// One example of an optimization that LLVM can do is to convert
+// float32(math.Sqrt(float64(v))) to a 32-bit floating point operation, which is
+// beneficial on architectures where 64-bit floating point operations are (much)
+// more expensive than 32-bit ones.
+func (b *builder) defineMathOp() {
+	b.createFunctionStart(true)
+	llvmName := mathToLLVMMapping[b.fn.RelString(nil)]
 	if llvmName == "" {
 		panic("unreachable: unknown math operation") // sanity check
 	}
@@ -104,9 +112,10 @@ func (b *builder) createMathOp(call *ssa.CallCommon) llvm.Value {
 		llvmFn = llvm.AddFunction(b.mod, llvmName, llvmType)
 	}
 	// Create a call to the intrinsic.
-	args := make([]llvm.Value, len(call.Args))
-	for i, arg := range call.Args {
-		args[i] = b.getValue(arg)
+	args := make([]llvm.Value, len(b.fn.Params))
+	for i, param := range b.fn.Params {
+		args[i] = b.getValue(param)
 	}
-	return b.CreateCall(llvmFn, args, "")
+	result := b.CreateCall(llvmFn, args, "")
+	b.CreateRet(result)
 }

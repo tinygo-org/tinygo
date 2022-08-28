@@ -790,6 +790,10 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			}
 			// Create the function definition.
 			b := newBuilder(c, irbuilder, member)
+			if _, ok := mathToLLVMMapping[member.RelString(nil)]; ok {
+				b.defineMathOp()
+				continue
+			}
 			if member.Blocks == nil {
 				// Try to define this as an intrinsic function.
 				b.defineIntrinsicFunction()
@@ -1024,7 +1028,7 @@ func (c *compilerContext) getEmbedFileString(file *loader.EmbedFile) llvm.Value 
 // parameters, create basic blocks, and set up debug information.
 // This is separated out from createFunction() so that it is also usable to
 // define compiler intrinsics like the atomic operations in sync/atomic.
-func (b *builder) createFunctionStart() {
+func (b *builder) createFunctionStart(intrinsic bool) {
 	if b.DumpSSA {
 		fmt.Printf("\nfunc %s:\n", b.fn)
 	}
@@ -1097,20 +1101,20 @@ func (b *builder) createFunctionStart() {
 	}
 
 	// Pre-create all basic blocks in the function.
-	for _, block := range b.fn.DomPreorder() {
-		llvmBlock := b.ctx.AddBasicBlock(b.llvmFn, block.Comment)
-		b.blockEntries[block] = llvmBlock
-		b.blockExits[block] = llvmBlock
-	}
 	var entryBlock llvm.BasicBlock
-	if len(b.fn.Blocks) != 0 {
-		// Normal functions have an entry block.
-		entryBlock = b.blockEntries[b.fn.Blocks[0]]
-	} else {
+	if intrinsic {
 		// This function isn't defined in Go SSA. It is probably a compiler
 		// intrinsic (like an atomic operation). Create the entry block
 		// manually.
 		entryBlock = b.ctx.AddBasicBlock(b.llvmFn, "entry")
+	} else {
+		for _, block := range b.fn.DomPreorder() {
+			llvmBlock := b.ctx.AddBasicBlock(b.llvmFn, block.Comment)
+			b.blockEntries[block] = llvmBlock
+			b.blockExits[block] = llvmBlock
+		}
+		// Normal functions have an entry block.
+		entryBlock = b.blockEntries[b.fn.Blocks[0]]
 	}
 	b.SetInsertPointAtEnd(entryBlock)
 
@@ -1192,7 +1196,7 @@ func (b *builder) createFunctionStart() {
 // function must not yet be defined, otherwise this function will create a
 // diagnostic.
 func (b *builder) createFunction() {
-	b.createFunctionStart()
+	b.createFunctionStart(false)
 
 	// Fill blocks with instructions.
 	for _, block := range b.fn.DomPreorder() {
@@ -1654,8 +1658,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		// applied) function call. If it is anonymous, it may be a closure.
 		name := fn.RelString(nil)
 		switch {
-		case name == "math.Ceil" || name == "math.Floor" || name == "math.Sqrt" || name == "math.Trunc":
-			return b.createMathOp(instr), nil
 		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
 		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/arm64.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
