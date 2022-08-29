@@ -1,5 +1,5 @@
-//go:build baremetal || wasi || wasm || unknown_wasm
-// +build baremetal wasi wasm unknown_wasm
+//go:build baremetal || wasi || wasm || wasm_freestanding
+// +build baremetal wasi wasm wasm_freestanding
 
 // This file emulates some process-related functions that are only available
 // under a real operating system.

@@ -1,5 +1,5 @@
-//go:build unknown_wasm
-// +build unknown_wasm
+//go:build wasm_freestanding
+// +build wasm_freestanding
 
 package runtime
 

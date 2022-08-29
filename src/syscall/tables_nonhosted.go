@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build baremetal || nintendoswitch || js || unknown_wasm
-// +build baremetal nintendoswitch js unknown_wasm
+//go:build baremetal || nintendoswitch || js || wasm_freestanding
+// +build baremetal nintendoswitch js wasm_freestanding
 
 package syscall
 

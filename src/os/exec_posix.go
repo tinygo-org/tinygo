@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build aix || darwin || dragonfly || freebsd || (js && wasm) || (linux && !unknown_wasm) || netbsd || openbsd || solaris || windows
-// +build aix darwin dragonfly freebsd js,wasm linux,!unknown_wasm netbsd openbsd solaris windows
+//go:build aix || darwin || dragonfly || freebsd || (js && wasm) || (linux && !wasm_freestanding) || netbsd || openbsd || solaris || windows
+// +build aix darwin dragonfly freebsd js,wasm linux,!wasm_freestanding netbsd openbsd solaris windows
 
 package os
 

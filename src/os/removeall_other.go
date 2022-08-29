@@ -1,5 +1,5 @@
-//go:build baremetal || unknown_wasm || js || wasi
-// +build baremetal unknown_wasm js wasi
+//go:build baremetal || wasm_freestanding || js || wasi
+// +build baremetal wasm_freestanding js wasi
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

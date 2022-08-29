@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build darwin || (linux && !unknown_wasm)
-// +build darwin linux,!unknown_wasm
+//go:build darwin || (linux && !wasm_freestanding)
+// +build darwin linux,!wasm_freestanding
 
 package os_test
 

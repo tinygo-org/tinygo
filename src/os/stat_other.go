@@ -1,5 +1,5 @@
-//go:build baremetal || unknown_wasm || (wasm && !wasi)
-// +build baremetal unknown_wasm wasm,!wasi
+//go:build baremetal || wasm_freestanding || (wasm && !wasi)
+// +build baremetal wasm_freestanding wasm,!wasi
 
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

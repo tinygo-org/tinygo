@@ -1,5 +1,5 @@
-//go:build (darwin || (linux && !baremetal && !wasi && !unknown_wasm)) && !nintendoswitch
-// +build darwin linux,!baremetal,!wasi,!unknown_wasm
+//go:build (darwin || (linux && !baremetal && !wasi && !wasm_freestanding)) && !nintendoswitch
+// +build darwin linux,!baremetal,!wasi,!wasm_freestanding
 // +build !nintendoswitch
 
 package runtime

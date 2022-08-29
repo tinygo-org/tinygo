@@ -1,5 +1,5 @@
-//go:build wasm && !wasi && !unknown_wasm
-// +build wasm,!wasi,!unknown_wasm
+//go:build wasm && !wasi && !wasm_freestanding
+// +build wasm,!wasi,!wasm_freestanding
 
 package runtime
 
