@@ -38,7 +38,7 @@ func getchar() byte {
 }
 
 func buffered() int {
-	return 0
+	return -1
 }
 
 type timeUnit int64

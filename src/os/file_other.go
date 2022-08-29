@@ -4,6 +4,7 @@
 package os
 
 import (
+	"io"
 	_ "unsafe"
 )
 
@@ -46,6 +47,10 @@ func (f stdioFileHandle) Read(b []byte) (n int, err error) {
 	}
 
 	size := buffered()
+	if size < 0 {
+		return 0, io.EOF
+	}
+
 	for size == 0 {
 		gosched()
 		size = buffered()
