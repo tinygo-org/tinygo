@@ -413,6 +413,9 @@ func showValue(rv reflect.Value, indent string) {
 	if rv.CanAddr() {
 		print(" addrable=true")
 	}
+	if !rv.CanInterface() {
+		print(" caninterface=false")
+	}
 	if !rt.Comparable() {
 		print(" comparable=false")
 	}
