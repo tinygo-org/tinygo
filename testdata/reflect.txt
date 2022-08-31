@@ -236,7 +236,7 @@ reflect type: struct
   tag: 
   embedded: true
   exported: false
-  reflect type: interface
+  reflect type: interface caninterface=false
     interface
     nil: true
 reflect type: struct
@@ -245,19 +245,19 @@ reflect type: struct
   tag: 
   embedded: false
   exported: false
-  reflect type: uint8
+  reflect type: uint8 caninterface=false
     uint: 42
   field: 1 b
   tag: 
   embedded: false
   exported: false
-  reflect type: int16
+  reflect type: int16 caninterface=false
     int: 321
   field: 2 c
   tag: 
   embedded: false
   exported: false
-  reflect type: int8
+  reflect type: int8 caninterface=false
     int: 123
 reflect type: struct comparable=false
   struct: 5
@@ -265,45 +265,45 @@ reflect type: struct comparable=false
   tag: foo:"bar"
   embedded: false
   exported: false
-  reflect type: int
+  reflect type: int caninterface=false
     int: 5
   field: 1 some
   tag: 
   embedded: false
   exported: false
-  reflect type: struct
+  reflect type: struct caninterface=false
     struct: 2
     field: 0 X
     tag: 
     embedded: false
     exported: true
-    reflect type: int16
+    reflect type: int16 caninterface=false
       int: -5
     field: 1 Y
     tag: 
     embedded: false
     exported: true
-    reflect type: int16
+    reflect type: int16 caninterface=false
       int: 3
   field: 2 zero
   tag: 
   embedded: false
   exported: false
-  reflect type: struct
+  reflect type: struct caninterface=false
     struct: 0
   field: 3 buf
   tag: 
   embedded: false
   exported: false
-  reflect type: slice comparable=false
+  reflect type: slice caninterface=false comparable=false
     slice: uint8 2 2
     pointer: true
     nil: false
     indexing: 0
-    reflect type: uint8 addrable=true
+    reflect type: uint8 addrable=true caninterface=false
       uint: 71
     indexing: 1
-    reflect type: uint8 addrable=true
+    reflect type: uint8 addrable=true caninterface=false
       uint: 111
   field: 4 Buf
   tag: 
@@ -325,14 +325,14 @@ reflect type: ptr
     tag: description:"chain"
     embedded: false
     exported: false
-    reflect type: ptr addrable=true
+    reflect type: ptr addrable=true caninterface=false
       pointer: false struct
       nil: true
     field: 1 foo
     tag: 
     embedded: false
     exported: false
-    reflect type: int addrable=true
+    reflect type: int addrable=true caninterface=false
       int: 42
 reflect type: slice comparable=false
   slice: interface 3 3
