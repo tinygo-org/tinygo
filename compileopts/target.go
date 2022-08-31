@@ -202,11 +202,10 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		// triples for historical reasons) have the form:
 		//   arch-vendor-os-environment
 		target := llvmarch + "-unknown-" + llvmos
-		if options.GOARCH == "arm" {
-			target += "-gnueabihf"
-		}
 		if options.GOOS == "windows" {
 			target += "-gnu"
+		} else if options.GOARCH == "arm" {
+			target += "-gnueabihf"
 		}
 		return defaultTarget(options.GOOS, options.GOARCH, target)
 	}
