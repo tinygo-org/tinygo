@@ -175,6 +175,8 @@ func main() {
 	assertSize(reflect.TypeOf("").Size() == unsafe.Sizeof(""), "string")
 	assertSize(reflect.TypeOf(new(int)).Size() == unsafe.Sizeof(new(int)), "*int")
 	assertSize(reflect.TypeOf(zeroFunc).Size() == unsafe.Sizeof(zeroFunc), "func()")
+	assertSize(reflect.TypeOf(zeroChan).Size() == unsafe.Sizeof(zeroChan), "chan int")
+	assertSize(reflect.TypeOf(zeroMap).Size() == unsafe.Sizeof(zeroMap), "map[string]int")
 
 	// make sure embedding a zero-sized "not comparable" struct does not add size to a struct
 	assertSize(reflect.TypeOf(doNotCompare{}).Size() == unsafe.Sizeof(doNotCompare{}), "[0]func()")
