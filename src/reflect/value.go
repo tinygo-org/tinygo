@@ -168,8 +168,7 @@ func (v Value) IsValid() bool {
 }
 
 func (v Value) CanInterface() bool {
-	// No Value types of private data can be constructed at the moment.
-	return true
+	return v.isExported()
 }
 
 func (v Value) CanAddr() bool {
@@ -502,6 +501,9 @@ func (v Value) Index(i int) Value {
 		// Extract a character from a string.
 		// A string is never stored directly in the interface, but always as a
 		// pointer to the string value.
+		// Keeping valueFlagExported if set, but don't set valueFlagIndirect
+		// otherwise CanSet will return true for string elements (which is bad,
+		// strings are read-only).
 		s := *(*stringHeader)(v.value)
 		if uint(i) >= uint(s.len) {
 			panic("reflect: string index out of range")
@@ -509,6 +511,7 @@ func (v Value) Index(i int) Value {
 		return Value{
 			typecode: Uint8.basicType(),
 			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Pointer(uintptr(s.data) + uintptr(i))))),
+			flags:    v.flags & valueFlagExported,
 		}
 	case Array:
 		// Extract an element from the array.
