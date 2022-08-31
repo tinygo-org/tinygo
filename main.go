@@ -1668,7 +1668,6 @@ func main() {
 			fmt.Printf("LLVM triple:       %s\n", config.Triple())
 			fmt.Printf("GOOS:              %s\n", config.GOOS())
 			fmt.Printf("GOARCH:            %s\n", config.GOARCH())
-			fmt.Printf("GOARM:             %s\n", config.GOARM())
 			fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
 			fmt.Printf("garbage collector: %s\n", config.GC())
 			fmt.Printf("scheduler:         %s\n", config.Scheduler())
