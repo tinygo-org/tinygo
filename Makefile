@@ -419,6 +419,7 @@ tinygo-baremetal:
 .PHONY: smoketest
 smoketest:
 	$(TINYGO) version
+	$(TINYGO) targets > /dev/null
 	# regression test for #2892
 	cd tests/testing/recurse && ($(TINYGO) test ./... > recurse.log && cat recurse.log && test $$(wc -l < recurse.log) = 2 && rm recurse.log)
 	# compile-only platform-independent examples
