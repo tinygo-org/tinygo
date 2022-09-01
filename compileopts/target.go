@@ -65,7 +65,7 @@ type TargetSpec struct {
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
-func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
+func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 	specType := reflect.TypeOf(spec).Elem()
 	specValue := reflect.ValueOf(spec).Elem()
 	childValue := reflect.ValueOf(child).Elem()
@@ -95,14 +95,15 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 				for j := i + 1; j < dst.Len(); j++ {
 					w := dst.Index(j).String()
 					if v == w {
-						panic("duplicate value '" + v + "' in field : " + field.Name)
+						return fmt.Errorf("duplicate value '" + v + "' in field : " + field.Name)
 					}
 				}
 			}
 		default:
-			panic("unknown field type : " + kind.String())
+			return fmt.Errorf("unknown field type : " + kind.String())
 		}
 	}
+	return nil
 }
 
 // load reads a target specification from the JSON in the given io.Reader. It
@@ -117,10 +118,10 @@ func (spec *TargetSpec) load(r io.Reader) error {
 }
 
 // loadFromGivenStr loads the TargetSpec from the given string that could be:
-// - targets/ directory inside the compiler sources
-// - a relative or absolute path to custom (project specific) target specification .json file;
-//   the Inherits[] could contain the files from target folder (ex. stm32f4disco)
-//   as well as path to custom files (ex. myAwesomeProject.json)
+//   - targets/ directory inside the compiler sources
+//   - a relative or absolute path to custom (project specific) target specification .json file;
+//     the Inherits[] could contain the files from target folder (ex. stm32f4disco)
+//     as well as path to custom files (ex. myAwesomeProject.json)
 func (spec *TargetSpec) loadFromGivenStr(str string) error {
 	path := ""
 	if strings.HasSuffix(str, ".json") {
@@ -150,11 +151,17 @@ func (spec *TargetSpec) resolveInherits() error {
 		if err != nil {
 			return err
 		}
-		newSpec.overrideProperties(subtarget)
+		err = newSpec.overrideProperties(subtarget)
+		if err != nil {
+			return err
+		}
 	}
 
 	// When all properties are loaded, make sure they are properly inherited.
-	newSpec.overrideProperties(spec)
+	err := newSpec.overrideProperties(spec)
+	if err != nil {
+		return err
+	}
 	*spec = *newSpec
 
 	return nil
@@ -221,7 +228,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	// it includes all parents as specified in the "inherits" key.
 	err = spec.resolveInherits()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s : %w", options.Target, err)
 	}
 
 	if spec.Scheduler == "asyncify" {
