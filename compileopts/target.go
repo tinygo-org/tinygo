@@ -95,7 +95,7 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 				for j := i + 1; j < dst.Len(); j++ {
 					w := dst.Index(j).String()
 					if v == w {
-						return fmt.Errorf("duplicate value '" + v + "' in field : " + field.Name)
+						return fmt.Errorf("duplicate value '%s' in field %s", v, field.Name)
 					}
 				}
 			}
