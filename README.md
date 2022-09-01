@@ -66,6 +66,7 @@ The following 88 microcontroller boards are currently supported:
 * [Adafruit PyGamer](https://www.adafruit.com/product/4242)
 * [Adafruit PyPortal](https://www.adafruit.com/product/4116)
 * [Adafruit QT Py](https://www.adafruit.com/product/4600)
+* [Adafruit QT Py RP2040](https://www.adafruit.com/product/4900)
 * [Adafruit Trinket M0](https://www.adafruit.com/product/3500)
 * [Arduino Mega 1280](https://www.arduino.cc/en/Main/arduinoBoardMega/)
 * [Arduino Mega 2560](https://store.arduino.cc/arduino-mega-2560-rev3)
