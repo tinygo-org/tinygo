@@ -100,7 +100,7 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 				}
 			}
 		default:
-			return fmt.Errorf("unknown field type : " + kind.String())
+			return fmt.Errorf("unknown field type: %s", kind)
 		}
 	}
 	return nil
