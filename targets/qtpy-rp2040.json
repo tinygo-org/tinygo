@@ -1,0 +1,11 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "serial-port": ["acm:239a:80f7"],
+    "build-tags": ["qtpy_rp2040"],
+    "linkerscript": "targets/qtpy-rp2040.ld",
+    "extra-files": [
+        "targets/qtpy-rp2040-boot-stage2.S"
+    ]
+}
