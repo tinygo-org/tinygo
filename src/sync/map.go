@@ -34,6 +34,17 @@ func (m *Map) LoadOrStore(key, value interface{}) (actual interface{}, loaded bo
 	return value, false
 }
 
+func (m *Map) LoadAndDelete(key interface{}) (value interface{}, loaded bool) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	value, ok := m.m[key]
+	if !ok {
+		return nil, false
+	}
+	delete(m.m, key)
+	return value, true
+}
+
 func (m *Map) Store(key, value interface{}) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
