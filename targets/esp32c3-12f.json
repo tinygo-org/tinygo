@@ -1,5 +1,5 @@
 {
 	"inherits": ["esp32c3"],
-	"build-tags": ["esp32c312f", "esp32c3", "esp"]
+	"build-tags": ["esp32c312f"]
 }
 
