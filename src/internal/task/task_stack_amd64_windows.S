@@ -1,5 +1,8 @@
 // Windows on amd64 has a slightly different ABI than other (*nix) systems.
 // Therefore, assembly functions need to be tweaked slightly.
+//
+// The calling convention is described here:
+// https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
 
 .section .text.tinygo_startTask,"ax"
 .global  tinygo_startTask
@@ -17,8 +20,9 @@ tinygo_startTask:
     // Branch to the "goroutine start" function.
     callq *%r12
 
-    // After return, exit this goroutine. This is a tail call.
-    jmp tinygo_pause
+    // After return, exit this goroutine.
+    // This has to be a call, not a jump, to keep the stack correctly aligned.
+    callq tinygo_pause
 
 .global tinygo_swapTask
 .section .text.tinygo_swapTask,"ax"
@@ -35,6 +39,17 @@ tinygo_swapTask:
     pushq %rsi
     pushq %rdi
     pushq %rbp
+    sub   $160, %rsp
+    movaps  %xmm6, 144(%rsp)
+    movaps  %xmm7, 128(%rsp)
+    movaps  %xmm8, 112(%rsp)
+    movaps  %xmm9,  96(%rsp)
+    movaps  %xmm10, 80(%rsp)
+    movaps  %xmm11, 64(%rsp)
+    movaps  %xmm12, 48(%rsp)
+    movaps  %xmm13, 32(%rsp)
+    movaps  %xmm14, 16(%rsp)
+    movaps  %xmm15,  0(%rsp)
     pushq %rbx
 
     // Save the current stack pointer in oldStack.
@@ -45,6 +60,17 @@ tinygo_swapTask:
 
     // Load saved register from the new stack.
     popq %rbx
+    movaps 0(%rsp),   %xmm15
+    movaps 16(%rsp),  %xmm14
+    movaps 32(%rsp),  %xmm13
+    movaps 48(%rsp),  %xmm12
+    movaps 64(%rsp),  %xmm11
+    movaps 80(%rsp),  %xmm10
+    movaps 96(%rsp),  %xmm9
+    movaps 112(%rsp), %xmm8
+    movaps 128(%rsp), %xmm7
+    movaps 144(%rsp), %xmm6
+    add   $160, %rsp
     popq %rbp
     popq %rdi
     popq %rsi
