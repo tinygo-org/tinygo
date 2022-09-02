@@ -124,7 +124,7 @@ The following 91 microcontroller boards are currently supported:
 * [Seeed LoRa-E5 Development Kit](https://www.seeedstudio.com/LoRa-E5-Dev-Kit-p-4868.html)
 * [Seeed Sipeed MAix BiT](https://www.seeedstudio.com/Sipeed-MAix-BiT-for-RISC-V-AI-IoT-p-2872.html)
 * [Seeed Wio Terminal](https://www.seeedstudio.com/Wio-Terminal-p-4509.html)
-* [SiFIve HiFive1 Rev B](https://www.sifive.com/boards/hifive1)
+* [SiFIve HiFive1 Rev B](https://www.sifive.com/boards/hifive1-rev-b)
 * [Sparkfun Thing Plus RP2040](https://www.sparkfun.com/products/17745)
 * [ST Micro "Nucleo" F103RB](https://www.st.com/en/evaluation-tools/nucleo-f103rb.html)
 * [ST Micro "Nucleo" F722ZE](https://www.st.com/en/evaluation-tools/nucleo-f722ze.html)
