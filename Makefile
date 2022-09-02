@@ -528,6 +528,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-m4          examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=matrixportal-m4     examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pybadge             examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=metro-m4-airlift    examples/blinky1
@@ -690,7 +692,9 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target mch2022             examples/serial
 	@$(MD5SUM) test.bin
 endif
-	$(TINYGO) build -size short -o test.bin -target=esp32c3           	examples/serial
+	$(TINYGO) build -size short -o test.bin -target=esp32c3             examples/serial
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32c3-12f         examples/serial
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=m5stamp-c3          examples/serial
 	@$(MD5SUM) test.bin
