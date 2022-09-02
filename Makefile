@@ -326,11 +326,15 @@ TEST_PACKAGES_FAST += crypto/elliptic/internal/fiat
 endif
 
 # archive/zip requires os.ReadAt, which is not yet supported on windows
+# compress/flate appears to hang on wasi
+# compress/lzw appears to hang on wasi
+# crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # io/fs requires os.ReadDir, which is not yet supported on windows or wasi
+# io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
+# strconv requires recover() which is not yet supported on wasi
+# text/template/parse requires recover(), which is not yet supported on wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
-# compress/flate fails windows go 1.18, https://github.com/tinygo-org/tinygo/issues/2762
-# compress/lzw fails windows go 1.18 wasi, https://github.com/tinygo-org/tinygo/issues/2762
 
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
@@ -349,7 +353,12 @@ TEST_PACKAGES_LINUX := \
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 
 TEST_PACKAGES_WINDOWS := \
-	compress/lzw
+	compress/flate \
+	compress/lzw \
+	crypto/hmac \
+	strconv \
+	text/template/parse \
+	$(nil)
 
 # Report platforms on which each standard library package is known to pass tests
 jointmp := $(shell echo /tmp/join.$$$$)
