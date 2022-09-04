@@ -1,0 +1,16 @@
+syscall/js.copyBytesToGo
+syscall/js.copyBytesToJS
+syscall/js.finalizeRef
+syscall/js.stringVal
+syscall/js.valueCall
+syscall/js.valueDelete
+syscall/js.valueGet
+syscall/js.valueIndex
+syscall/js.valueInstanceOf
+syscall/js.valueInvoke
+syscall/js.valueLength
+syscall/js.valueLoadString
+syscall/js.valueNew
+syscall/js.valuePrepareString
+syscall/js.valueSet
+syscall/js.valueSetIndex

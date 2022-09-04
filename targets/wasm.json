@@ -15,7 +15,7 @@
 		"-msign-ext"
 	],
 	"ldflags": [
-		"--allow-undefined",
+		"--allow-undefined-file={root}/targets/wasm-undefined.txt",
 		"--stack-first",
 		"--no-demangle"
 	],
