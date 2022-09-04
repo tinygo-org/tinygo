@@ -15,7 +15,6 @@
 		"-msign-ext"
 	],
 	"ldflags": [
-		"--allow-undefined",
 		"--stack-first",
 		"--no-demangle"
 	],

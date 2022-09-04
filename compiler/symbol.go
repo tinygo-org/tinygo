@@ -163,18 +163,20 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 	// External/exported functions may not retain pointer values.
 	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
 	if info.exported {
-		// Set the wasm-import-module attribute if the function's module is set.
-		if info.module != "" {
-
+		if c.archFamily() == "wasm32" {
 			// We need to add the wasm-import-module and the wasm-import-name
-			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", info.module)
-			llvmFn.AddFunctionAttr(wasmImportModuleAttr)
-
-			// Add the Wasm Import Name, if we are a named wasm import
-			if info.importName != "" {
-				wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
-				llvmFn.AddFunctionAttr(wasmImportNameAttr)
+			// attributes.
+			module := info.module
+			if module == "" {
+				module = "env"
 			}
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-module", module))
+
+			name := info.importName
+			if name == "" {
+				name = info.linkName
+			}
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-name", name))
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
