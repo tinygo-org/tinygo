@@ -12,9 +12,9 @@ const (
 
 const (
 	PB0 = portB + 0
-	PB1 = portB + 1
-	PB2 = portB + 2
-	PB3 = portB + 3
+	PB1 = portB + 1 // peripherals: Timer1 channel A
+	PB2 = portB + 2 // peripherals: Timer1 channel B
+	PB3 = portB + 3 // peripherals: Timer2 channel A
 	PB4 = portB + 4
 	PB5 = portB + 5
 	PB6 = portB + 6
@@ -30,9 +30,9 @@ const (
 	PD0 = portD + 0
 	PD1 = portD + 1
 	PD2 = portD + 2
-	PD3 = portD + 3
+	PD3 = portD + 3 // peripherals: Timer2 channel B
 	PD4 = portD + 4
-	PD5 = portD + 5
-	PD6 = portD + 6
+	PD5 = portD + 5 // peripherals: Timer0 channel B
+	PD6 = portD + 6 // peripherals: Timer0 channel A
 	PD7 = portD + 7
 )
