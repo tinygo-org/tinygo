@@ -36,10 +36,10 @@ const (
 )
 
 const (
-	NEOPIXELS       = GPIO12
-	WS2812          = GPIO12
-	NEOPIXELS_POWER = GPIO11
-	LED             = GPIO20
+	NEOPIXEL       = GPIO12
+	WS2812         = GPIO12
+	NEOPIXEL_POWER = GPIO11
+	LED            = GPIO20
 )
 
 // I2C Pins.
