@@ -115,6 +115,85 @@ func TestCGo(t *testing.T) {
 	}
 }
 
+func Test_cgoPackage_isEquivalentAST(t *testing.T) {
+	fieldA := &ast.Field{Type: &ast.BasicLit{Kind: token.STRING, Value: "a"}}
+	fieldB := &ast.Field{Type: &ast.BasicLit{Kind: token.STRING, Value: "b"}}
+	listOfFieldA := &ast.FieldList{List: []*ast.Field{fieldA}}
+	listOfFieldB := &ast.FieldList{List: []*ast.Field{fieldB}}
+	funcDeclA := &ast.FuncDecl{Name: &ast.Ident{Name: "a"}, Type: &ast.FuncType{Params: &ast.FieldList{}, Results: listOfFieldA}}
+	funcDeclB := &ast.FuncDecl{Name: &ast.Ident{Name: "b"}, Type: &ast.FuncType{Params: &ast.FieldList{}, Results: listOfFieldB}}
+	funcDeclNoResults := &ast.FuncDecl{Name: &ast.Ident{Name: "C"}, Type: &ast.FuncType{Params: &ast.FieldList{}}}
+
+	testCases := []struct {
+		name     string
+		a, b     ast.Node
+		expected bool
+	}{
+		{
+			name:     "both nil",
+			expected: true,
+		},
+		{
+			name:     "not same type",
+			a:        fieldA,
+			b:        &ast.FuncDecl{},
+			expected: false,
+		},
+		{
+			name:     "Field same",
+			a:        fieldA,
+			b:        fieldA,
+			expected: true,
+		},
+		{
+			name:     "Field different",
+			a:        fieldA,
+			b:        fieldB,
+			expected: false,
+		},
+		{
+			name:     "FuncDecl Type Results nil",
+			a:        funcDeclNoResults,
+			b:        funcDeclNoResults,
+			expected: true,
+		},
+		{
+			name:     "FuncDecl Type Results same",
+			a:        funcDeclA,
+			b:        funcDeclA,
+			expected: true,
+		},
+		{
+			name:     "FuncDecl Type Results different",
+			a:        funcDeclA,
+			b:        funcDeclB,
+			expected: false,
+		},
+		{
+			name:     "FuncDecl Type Results a nil",
+			a:        funcDeclNoResults,
+			b:        funcDeclB,
+			expected: false,
+		},
+		{
+			name:     "FuncDecl Type Results b nil",
+			a:        funcDeclA,
+			b:        funcDeclNoResults,
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc // avoid a race condition
+		t.Run(tc.name, func(t *testing.T) {
+			p := &cgoPackage{}
+			if got := p.isEquivalentAST(tc.a, tc.b); tc.expected != got {
+				t.Errorf("expected %v, got %v", tc.expected, got)
+			}
+		})
+	}
+}
+
 // simpleImporter implements the types.Importer interface, but only allows
 // importing the unsafe package.
 type simpleImporter struct {
