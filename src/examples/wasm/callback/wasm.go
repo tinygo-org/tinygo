@@ -8,10 +8,12 @@ import (
 var a, b int
 
 func main() {
+	wait := make(chan struct{}, 0)
 	document := js.Global().Get("document")
 	document.Call("getElementById", "a").Set("oninput", updater(&a))
 	document.Call("getElementById", "b").Set("oninput", updater(&b))
 	update()
+	<-wait
 }
 
 func updater(n *int) js.Func {
