@@ -62,7 +62,7 @@ declare void @main.undefinedFunctionNotInSection(i8*) #0
 
 attributes #0 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="extern_func" "wasm-import-module"="env" "wasm-import-name"="extern_func" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-export-module"="env" "wasm-export-name"="extern_func" "wasm-import-module"="env" "wasm-import-name"="extern_func" }
 attributes #3 = { inlinehint nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #4 = { noinline nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #5 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exportedFunctionInSection" "wasm-import-module"="env" "wasm-import-name"="exportedFunctionInSection" }
+attributes #5 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-export-module"="env" "wasm-export-name"="exportedFunctionInSection" "wasm-import-module"="env" "wasm-import-name"="exportedFunctionInSection" }

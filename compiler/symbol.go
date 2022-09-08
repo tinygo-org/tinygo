@@ -210,8 +210,9 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 // exported.
 func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	info := functionInfo{
-		// Pick the default linkName.
-		linkName: f.RelString(nil),
+		module:     "env",
+		importName: f.Name(),
+		linkName:   f.RelString(nil), // pick the default linkName
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
 	info.parsePragmas(f)
@@ -225,10 +226,6 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 		return
 	}
 	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
-
-		// Our importName for a wasm module (if we are compiling to wasm), or llvm link name
-		var importName string
-
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
 			if strings.HasPrefix(text, "//export ") {
@@ -246,7 +243,8 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					continue
 				}
 
-				importName = parts[1]
+				info.importName = parts[1]
+				info.linkName = parts[1]
 				info.exported = true
 			case "//go:interrupt":
 				if hasUnsafeImport(f.Pkg.Pkg) {
@@ -254,10 +252,13 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				}
 			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
-				if len(parts) != 2 {
-					continue
+				if len(parts) == 1 {
+					// Function must not be exported outside of the WebAssembly
+					// module (but only be made available for linking).
+					info.module = ""
+				} else if len(parts) == 2 {
+					info.module = parts[1]
 				}
-				info.module = parts[1]
 			case "//go:inline":
 				info.inline = inlineHint
 			case "//go:noinline":
@@ -297,17 +298,6 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				}
 			}
 		}
-
-		// Set the importName for our exported function if we have one
-		if importName != "" {
-			if info.module == "" {
-				info.linkName = importName
-			} else {
-				// WebAssembly import
-				info.importName = importName
-			}
-		}
-
 	}
 }
 

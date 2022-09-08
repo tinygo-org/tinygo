@@ -68,6 +68,7 @@ func growHeap() bool {
 var allocs = make(map[uintptr][]byte)
 
 //export malloc
+//go:wasm-module
 func libc_malloc(size uintptr) unsafe.Pointer {
 	buf := make([]byte, size)
 	ptr := unsafe.Pointer(&buf[0])
@@ -76,6 +77,7 @@ func libc_malloc(size uintptr) unsafe.Pointer {
 }
 
 //export free
+//go:wasm-module
 func libc_free(ptr unsafe.Pointer) {
 	if ptr == nil {
 		return
@@ -88,12 +90,14 @@ func libc_free(ptr unsafe.Pointer) {
 }
 
 //export calloc
+//go:wasm-module
 func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 	// No difference between calloc and malloc.
 	return libc_malloc(nmemb * size)
 }
 
 //export realloc
+//go:wasm-module
 func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	// It's hard to optimize this to expand the current buffer with our GC, but
 	// it is theoretically possible. For now, just always allocate fresh.
