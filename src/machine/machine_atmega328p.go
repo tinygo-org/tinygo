@@ -477,14 +477,10 @@ var (
 )
 
 func handlePCINTInterrupts(intr uint8, port *volatile.Register8) {
-	println("Interrupted: ", intr, port)
 	current := port.Get()
-	println("Current: ", current)
 	new := current ^ previous[intr]
-	println("Toggled: ", new)
 	for i := uint8(0); i < 8; i++ {
 		if (current>>i)&0x01 == 0x01 && pinCallbacks[intr][i] != nil {
-			println("Calling: ", intr, i)
 			pinCallbacks[intr][i](Pin(i * (intr + 1)))
 		}
 	}
@@ -504,80 +500,65 @@ func handlePCINT2Interrupts(intr interrupt.Interrupt) {
 }
 
 func SetInterrupt(pin Pin, callback func(Pin)) (err error) {
-	// if p == nil {
-	// 	// Disable this pin interrupt
-	// 	return errors.New("Not implemented")
-	// } else {
-	var PCMSK_REG *volatile.Register8
-	var PCIE uint8
-	var PCINT uint8
-	var IRQ uint8
-	var PIN0 Pin
-	//var PIN *volatile.Register8
-	switch {
-	case pin >= PB0 && pin <= PB7:
-		println("PCMSK0: ", pin)
-		// PCMSK0 - PCINT0-7
-		PCMSK_REG = avr.PCMSK0
-		PCIE = avr.PCICR_PCIE0
-		PIN0 = PD0
-		PCINT = 1 << (pin - PIN0)
-		IRQ = avr.IRQ_PCINT0
-		//PIN = avr.PINB
-		if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
-			println("Registering interrupt: ", IRQ)
-			intr := interrupt.New(avr.IRQ_PCINT0, handlePCINT0Interrupts)
-			interrupts[IRQ-avr.IRQ_PCINT0] = &intr
-		} else {
-			println("interrupt already defined")
-		}
-	case pin >= PC0 && pin <= PC7:
-		println("PCMSK1: ", pin)
-		// PCMSK1 - PCINT8-14
-		PCMSK_REG = avr.PCMSK1
-		PCIE = avr.PCICR_PCIE1
-		PIN0 = PC0
-		PCINT = 1 << (pin - PIN0)
-		IRQ = avr.IRQ_PCINT1
-		//PIN = avr.PINC
-		if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
-			println("Registering interrupt: ", IRQ)
-			intr := interrupt.New(avr.IRQ_PCINT1, handlePCINT1Interrupts)
-			interrupts[IRQ-avr.IRQ_PCINT0] = &intr
-		} else {
-			println("interrupt already defined")
-		}
-	case pin >= PD0 && pin <= PD7:
-		println("PCMSK2: ", pin)
-		// PCMSK2 - PCINT16-23
-		PCMSK_REG = avr.PCMSK2
-		PCIE = avr.PCICR_PCIE2
-		PIN0 = PD0
-		PCINT = 1 << (pin - PIN0)
-		IRQ = avr.IRQ_PCINT2
-		//PIN = avr.PIND
-		if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
-			println("Registering interrupt: ", IRQ)
-			intr := interrupt.New(avr.IRQ_PCINT2, handlePCINT2Interrupts)
-			interrupts[IRQ-avr.IRQ_PCINT0] = &intr
-		} else {
-			println("interrupt already defined")
-		}
-	default:
-		return errors.New("Unsupported pin")
-	}
-
-	if pinCallbacks[IRQ-avr.IRQ_PCINT0][pin-PIN0] == nil {
-		println("Registering callback: ", IRQ-avr.IRQ_PCINT0, pin-PIN0)
-		pinCallbacks[IRQ-avr.IRQ_PCINT0][pin-PIN0] = callback
+	if p == nil {
+		// Disable this pin interrupt
+		return errors.New("Not implemented")
 	} else {
-		return errors.New("callback already defined")
+		var PCMSK_REG *volatile.Register8
+		var PCIE uint8
+		var PCINT uint8
+		var IRQ uint8
+		var PIN0 Pin
+		//var PIN *volatile.Register8
+		switch {
+		case pin >= PB0 && pin <= PB7:
+			// PCMSK0 - PCINT0-7
+			PCMSK_REG = avr.PCMSK0
+			PCIE = avr.PCICR_PCIE0
+			PIN0 = PD0
+			PCINT = 1 << (pin - PIN0)
+			IRQ = avr.IRQ_PCINT0
+			if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
+				intr := interrupt.New(avr.IRQ_PCINT0, handlePCINT0Interrupts)
+				interrupts[IRQ-avr.IRQ_PCINT0] = &intr
+			} else {
+			}
+		case pin >= PC0 && pin <= PC7:
+			// PCMSK1 - PCINT8-14
+			PCMSK_REG = avr.PCMSK1
+			PCIE = avr.PCICR_PCIE1
+			PIN0 = PC0
+			PCINT = 1 << (pin - PIN0)
+			IRQ = avr.IRQ_PCINT1
+			if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
+				intr := interrupt.New(avr.IRQ_PCINT1, handlePCINT1Interrupts)
+				interrupts[IRQ-avr.IRQ_PCINT0] = &intr
+			} else {
+			}
+		case pin >= PD0 && pin <= PD7:
+			// PCMSK2 - PCINT16-23
+			PCMSK_REG = avr.PCMSK2
+			PCIE = avr.PCICR_PCIE2
+			PIN0 = PD0
+			PCINT = 1 << (pin - PIN0)
+			IRQ = avr.IRQ_PCINT2
+			if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
+				intr := interrupt.New(avr.IRQ_PCINT2, handlePCINT2Interrupts)
+				interrupts[IRQ-avr.IRQ_PCINT0] = &intr
+			}
+		default:
+			return errors.New("Unsupported pin")
+		}
+
+		if pinCallbacks[IRQ-avr.IRQ_PCINT0][pin-PIN0] == nil {
+			pinCallbacks[IRQ-avr.IRQ_PCINT0][pin-PIN0] = callback
+		} else {
+			return errors.New("callback already defined")
+		}
+
+		PCMSK_REG.SetBits(PCINT)
+		avr.PCICR.SetBits(PCIE)
+
+		return nil
 	}
-
-	println("Setting PCMSK_REG to PCINT: ", PCMSK_REG, PCINT)
-	PCMSK_REG.SetBits(PCINT)
-	println("Setting PCICR to PCIE:", avr.PCICR, PCIE)
-	avr.PCICR.SetBits(PCIE)
-
-	return nil
 }
