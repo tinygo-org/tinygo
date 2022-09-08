@@ -36,7 +36,7 @@ jobs:
         with:
           submodules: true
       - name: Cache LLVM source
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-source
         with:
           key: llvm-source-14-macos-v1
@@ -50,7 +50,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache LLVM build
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-build
         with:
           key: llvm-build-14-macos-v1
@@ -68,7 +68,7 @@ jobs:
           make llvm-build
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Cache wasi-libc sysroot
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-v4
@@ -115,7 +115,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Cache Go
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           key: go-cache-macos-homebrew-v1-${{ hashFiles('go.mod') }}
           path: |
