@@ -478,7 +478,6 @@ var (
 
 func handlePCINTInterrupts(intr uint8, port *volatile.Register8) {
 	current := port.Get()
-	new := current ^ previous[intr]
 	for i := uint8(0); i < 8; i++ {
 		if (current>>i)&0x01 == 0x01 && pinCallbacks[intr][i] != nil {
 			pinCallbacks[intr][i](Pin(i * (intr + 1)))
