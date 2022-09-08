@@ -21,7 +21,7 @@ jobs:
       image: alpine:3.16
     steps:
       - name: Install apk dependencies
-        # tar: needed for actions/cache@v2
+        # tar: needed for actions/cache@v3
         # git+openssh: needed for checkout (I think?)
         # gcompat: needed for go binary
         # ruby: needed to install fpm
@@ -38,14 +38,14 @@ jobs:
         with:
           go-version: '1.18.1'
       - name: Cache Go
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           key: go-cache-linux-alpine-v1-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
       - name: Cache LLVM source
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-source
         with:
           key: llvm-source-14-linux-alpine-v1
@@ -59,7 +59,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache LLVM build
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-build
         with:
           key: llvm-build-14-linux-alpine-v1
@@ -77,7 +77,7 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Cache Binaryen
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-binaryen
         with:
           key: binaryen-linux-alpine-v1
@@ -88,7 +88,7 @@ jobs:
           apk add cmake samurai python3
           make binaryen STATIC=1
       - name: Cache wasi-libc
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-linux-alpine-v1
@@ -185,14 +185,14 @@ jobs:
           curl https://wasmtime.dev/install.sh -sSf | bash
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Cache Go
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           key: go-cache-linux-asserts-v1-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
       - name: Cache LLVM source
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-source
         with:
           key: llvm-source-14-linux-asserts-v2
@@ -206,7 +206,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache LLVM build
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-build
         with:
           key: llvm-build-14-linux-asserts-v1
@@ -222,7 +222,7 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Cache Binaryen
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-binaryen
         with:
           key: binaryen-linux-asserts-v1
@@ -231,7 +231,7 @@ jobs:
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
       - name: Cache wasi-libc
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-linux-asserts-v5
@@ -283,14 +283,14 @@ jobs:
         with:
           go-version: '1.18.1'
       - name: Cache Go
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           key: go-cache-linux-arm-v2-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
       - name: Cache LLVM source
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-source
         with:
           key: llvm-source-14-linux-v2
@@ -304,7 +304,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache LLVM build
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-build
         with:
           key: llvm-build-14-linux-arm-v1
@@ -322,7 +322,7 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Cache Binaryen
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-binaryen
         with:
           key: binaryen-linux-arm-v1
@@ -389,14 +389,14 @@ jobs:
         with:
           go-version: '1.18.1'
       - name: Cache Go
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           key: go-cache-linux-arm64-v2-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
       - name: Cache LLVM source
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-source
         with:
           key: llvm-source-14-linux-v1
@@ -410,7 +410,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache LLVM build
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-build
         with:
           key: llvm-build-14-linux-arm64-v1
@@ -426,7 +426,7 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Cache Binaryen
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-binaryen
         with:
           key: binaryen-linux-arm64-v1

@@ -31,14 +31,14 @@ jobs:
         with:
           submodules: true
       - name: Cache Go
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           key: go-cache-windows-v1-${{ hashFiles('go.mod') }}
           path: |
             ~/AppData/Local/go-build
             ~/go/pkg/mod
       - name: Cache LLVM source
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-source
         with:
           key: llvm-source-14-windows-v2
@@ -52,7 +52,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache LLVM build
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-llvm-build
         with:
           key: llvm-build-14-windows-v2
@@ -69,7 +69,7 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Cache wasi-libc sysroot
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-v4
