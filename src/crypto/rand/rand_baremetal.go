@@ -1,5 +1,5 @@
-//go:build stm32 || (sam && atsamd51) || (sam && atsame5x)
-// +build stm32 sam,atsamd51 sam,atsame5x
+//go:build stm32 || (sam && atsamd51) || (sam && atsame5x) || rp2040
+// +build stm32 sam,atsamd51 sam,atsame5x rp2040
 
 package rand
 
