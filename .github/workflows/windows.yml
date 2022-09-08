@@ -29,7 +29,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.18.1'
+          go-version: '1.18'
           cache: true
       - name: Cache LLVM source
         uses: actions/cache@v3
