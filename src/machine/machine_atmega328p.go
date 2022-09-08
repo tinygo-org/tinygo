@@ -500,7 +500,7 @@ func handlePCINT2Interrupts(intr interrupt.Interrupt) {
 }
 
 func SetInterrupt(pin Pin, callback func(Pin)) (err error) {
-	if p == nil {
+	if callback == nil {
 		// Disable this pin interrupt
 		return errors.New("Not implemented")
 	} else {
