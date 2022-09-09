@@ -34,6 +34,7 @@ jobs:
         with:
           submodules: true
       - name: Install Go
+        # TODO: v2 until https://github.com/tinygo-org/tinygo/issues/3146
         uses: actions/setup-go@v2
         with:
           go-version: '1.18.1'
@@ -121,9 +122,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: '1.18.1'
+          cache: true
       - name: Install wasmtime
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
@@ -173,9 +175,10 @@ jobs:
               simavr \
               ninja-build
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: '1.18.1'
+          cache: true
       - name: Install Node.js
         uses: actions/setup-node@v2
         with:
@@ -184,13 +187,6 @@ jobs:
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-      - name: Cache Go
-        uses: actions/cache@v3
-        with:
-          key: go-cache-linux-asserts-v1-${{ hashFiles('go.mod') }}
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
       - name: Cache LLVM source
         uses: actions/cache@v3
         id: cache-llvm-source
@@ -279,16 +275,10 @@ jobs:
               g++-arm-linux-gnueabihf \
               libc6-dev-armhf-cross
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: '1.18.1'
-      - name: Cache Go
-        uses: actions/cache@v3
-        with:
-          key: go-cache-linux-arm-v2-${{ hashFiles('go.mod') }}
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
+          cache: true
       - name: Cache LLVM source
         uses: actions/cache@v3
         id: cache-llvm-source
@@ -385,16 +375,10 @@ jobs:
               libc6-dev-arm64-cross \
               ninja-build
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: '1.18.1'
-      - name: Cache Go
-        uses: actions/cache@v3
-        with:
-          key: go-cache-linux-arm64-v2-${{ hashFiles('go.mod') }}
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
+          cache: true
       - name: Cache LLVM source
         uses: actions/cache@v3
         id: cache-llvm-source
