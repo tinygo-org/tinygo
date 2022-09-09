@@ -61,31 +61,44 @@ func growHeap() bool {
 	return true
 }
 
-// The below functions override the default allocator of wasi-libc.
-// Most functions are defined but unimplemented to make sure that if there is
-// any code using them, they will get an error instead of (incorrectly) using
-// the wasi-libc dlmalloc heap implementation instead. If they are needed by any
-// program, they can certainly be implemented.
+// The below functions override the default allocator of wasi-libc. This ensures
+// code linked from other languages can allocate memory without colliding with
+// our GC allocations.
+
+var allocs = make(map[uintptr][]byte)
 
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
-	return alloc(size, nil)
+	buf := make([]byte, size)
+	ptr := unsafe.Pointer(&buf[0])
+	allocs[uintptr(ptr)] = buf
+	return ptr
 }
 
 //export free
 func libc_free(ptr unsafe.Pointer) {
-	free(ptr)
+	delete(allocs, uintptr(ptr))
 }
 
 //export calloc
 func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
-	// Note: we could be even more correct here and check that nmemb * size
-	// doesn't overflow. However the current implementation should normally work
-	// fine.
-	return alloc(nmemb*size, nil)
+	// No difference between calloc and malloc.
+	return libc_malloc(nmemb * size)
 }
 
 //export realloc
-func libc_realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
-	return realloc(ptr, size)
+func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	// It's hard to optimize this to expand the current buffer with our GC, but
+	// it is theoretically possible. For now, just always allocate fresh.
+	buf := make([]byte, size)
+
+	if oldPtr != nil {
+		oldBuf := allocs[uintptr(oldPtr)]
+		delete(allocs, uintptr(oldPtr))
+		copy(buf, oldBuf)
+	}
+
+	ptr := unsafe.Pointer(&buf[0])
+	allocs[uintptr(ptr)] = buf
+	return ptr
 }
