@@ -77,7 +77,14 @@ func libc_malloc(size uintptr) unsafe.Pointer {
 
 //export free
 func libc_free(ptr unsafe.Pointer) {
-	delete(allocs, uintptr(ptr))
+	if ptr == nil {
+		return
+	}
+	if _, ok := allocs[uintptr(ptr)]; ok {
+		delete(allocs, uintptr(ptr))
+	} else {
+		panic("invalid pointer")
+	}
 }
 
 //export calloc
@@ -93,9 +100,12 @@ func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	buf := make([]byte, size)
 
 	if oldPtr != nil {
-		oldBuf := allocs[uintptr(oldPtr)]
-		delete(allocs, uintptr(oldPtr))
-		copy(buf, oldBuf)
+		if oldBuf, ok := allocs[uintptr(oldPtr)]; ok {
+			delete(allocs, uintptr(oldPtr))
+			copy(buf, oldBuf)
+		} else {
+			panic("invalid pointer")
+		}
 	}
 
 	ptr := unsafe.Pointer(&buf[0])
