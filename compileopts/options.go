@@ -50,6 +50,7 @@ type Options struct {
 	LLVMFeatures    string
 	Directory       string
 	PrintJSON       bool
+	Monitor         bool
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.

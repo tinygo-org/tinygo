@@ -423,7 +423,6 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			if err != nil {
 				return &commandError{"failed to flash", result.Binary, err}
 			}
-			return nil
 		case "msd":
 			switch fileExt {
 			case ".uf2":
@@ -431,13 +430,11 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 				if err != nil {
 					return &commandError{"failed to flash", result.Binary, err}
 				}
-				return nil
 			case ".hex":
 				err := flashHexUsingMSD(config.Target.FlashVolume, result.Binary, config.Options)
 				if err != nil {
 					return &commandError{"failed to flash", result.Binary, err}
 				}
-				return nil
 			default:
 				return errors.New("mass storage device flashing currently only supports uf2 and hex")
 			}
@@ -458,7 +455,6 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			if err != nil {
 				return &commandError{"failed to flash", result.Binary, err}
 			}
-			return nil
 		case "bmp":
 			gdb, err := config.Target.LookupGDB()
 			if err != nil {
@@ -477,10 +473,13 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			if err != nil {
 				return &commandError{"failed to flash", result.Binary, err}
 			}
-			return nil
 		default:
 			return fmt.Errorf("unknown flash method: %s", flashMethod)
 		}
+		if options.Monitor {
+			return Monitor("", options)
+		}
+		return nil
 	})
 }
 
@@ -1058,7 +1057,9 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 	}
 
 	if len(portCandidates) == 0 {
-		if len(ports) == 1 {
+		if len(usbInterfaces) > 0 {
+			return "", errors.New("unable to search for a default USB device - use -port flag, available ports are " + strings.Join(ports, ", "))
+		} else if len(ports) == 1 {
 			return ports[0], nil
 		} else {
 			return "", errors.New("multiple serial ports available - use -port flag, available ports are " + strings.Join(ports, ", "))
@@ -1123,6 +1124,7 @@ func usage(command string) {
 		fmt.Fprintln(os.Stderr, "  flash:   compile and flash to the device")
 		fmt.Fprintln(os.Stderr, "  gdb:     run/flash and immediately enter GDB")
 		fmt.Fprintln(os.Stderr, "  lldb:    run/flash and immediately enter LLDB")
+		fmt.Fprintln(os.Stderr, "  monitor: open communication port")
 		fmt.Fprintln(os.Stderr, "  env:     list environment variables used during build")
 		fmt.Fprintln(os.Stderr, "  list:    run go list using the TinyGo root")
 		fmt.Fprintln(os.Stderr, "  clean:   empty cache directory ("+goenv.Get("GOCACHE")+")")
@@ -1339,6 +1341,7 @@ func main() {
 	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
+	monitor := flag.Bool("monitor", false, "enable serial monitor")
 
 	var flagJSON, flagDeps, flagTest bool
 	if command == "help" || command == "list" || command == "info" || command == "build" {
@@ -1428,6 +1431,7 @@ func main() {
 		OpenOCDCommands: ocdCommands,
 		LLVMFeatures:    *llvmFeatures,
 		PrintJSON:       flagJSON,
+		Monitor:         *monitor,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
@@ -1618,6 +1622,9 @@ func main() {
 			fmt.Println("FAIL")
 			os.Exit(1)
 		}
+	case "monitor":
+		err := Monitor(*port, options)
+		handleCompilerError(err)
 	case "targets":
 		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
 		entries, err := ioutil.ReadDir(dir)
