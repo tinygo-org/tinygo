@@ -243,17 +243,36 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// Tests are always run in the package directory.
 		cmd.Dir = result.MainDir
 
-		// Wasmtime needs a few extra flags to work.
+		// wasmtime is the default emulator used for `-target=wasi`. wasmtime
+		// is a WebAssembly runtime CLI with WASI enabled by default. However,
+		// only stdio are allowed by default. For example, while STDOUT routes
+		// to the host, other files don't. It also does not inherit environment
+		// variables from the host. Some tests read testdata files, often from
+		// outside the package directory. Other tests require temporary
+		// writeable directories. We allow this by adding wasmtime flags below.
 		if config.EmulatorName() == "wasmtime" {
-			// Add directories to the module root, but skip the current working
-			// directory which is already added by buildAndRun.
+			// At this point, The current working directory is at the package
+			// directory. Ex. $GOROOT/src/compress/flate for compress/flate.
+			// buildAndRun has already added arguments for wasmtime, that allow
+			// read-access to files such as "testdata/huffman-zero.in".
+			//
+			// Ex. main(.wasm) --dir=. -- -test.v
+
+			// Below adds additional wasmtime flags in case a test reads files
+			// outside its directory, like "../testdata/e.txt". This allows any
+			// relative directory up to the module root, even if the test never
+			// reads any files.
+			//
+			// Ex. --dir=.. --dir=../.. --dir=../../..
 			dirs := dirsToModuleRoot(result.MainDir, result.ModuleRoot)
 			var args []string
 			for _, d := range dirs[1:] {
 				args = append(args, "--dir="+d)
 			}
 
-			// create a new temp directory just for this run, announce it to os.TempDir() via TMPDIR
+			// Some tests create temp directories using os.MkdirTemp or via
+			// t.TempDir(). Create a writeable directory and map it to the
+			// default tempDir environment variable: TMPDIR.
 			tmpdir, err := os.MkdirTemp("", "tinygotmp")
 			if err != nil {
 				return fmt.Errorf("failed to create temporary directory: %w", err)
@@ -262,7 +281,8 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			// TODO: add option to not delete temp dir for debugging?
 			defer os.RemoveAll(tmpdir)
 
-			// Insert new argments at the front of the command line argments.
+			// The below re-organizes the arguments so that the current
+			// directory is added last.
 			args = append(args, cmd.Args[1:]...)
 			cmd.Args = append(cmd.Args[:1:1], args...)
 		}
