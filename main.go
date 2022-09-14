@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/shlex"
+	"github.com/inhies/go-bytesize"
 	"github.com/mattn/go-colorable"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -1318,6 +1319,12 @@ func main() {
 	var tags buildutil.TagsFlag
 	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
+	var stackSize uint64
+	flag.Func("stack-size", "goroutine stack size (if unknown at compile time)", func(s string) error {
+		size, err := bytesize.Parse(s)
+		stackSize = uint64(size)
+		return err
+	})
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
@@ -1398,6 +1405,7 @@ func main() {
 		GOARCH:          goenv.Get("GOARCH"),
 		GOARM:           goenv.Get("GOARM"),
 		Target:          *target,
+		StackSize:       stackSize,
 		Opt:             *opt,
 		GC:              *gc,
 		PanicStrategy:   *panicStrategy,

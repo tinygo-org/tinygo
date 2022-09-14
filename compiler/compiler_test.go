@@ -79,7 +79,7 @@ func TestCompiler(t *testing.T) {
 				RelocationModel:    config.RelocationModel(),
 				Scheduler:          config.Scheduler(),
 				AutomaticStackSize: config.AutomaticStackSize(),
-				DefaultStackSize:   config.Target.DefaultStackSize,
+				DefaultStackSize:   config.StackSize(),
 				NeedsStackObjects:  config.NeedsStackObjects(),
 			}
 			machine, err := NewTargetMachine(compilerConfig)
