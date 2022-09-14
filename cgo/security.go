@@ -142,6 +142,7 @@ var validLinkerFlags = []*regexp.Regexp{
 	re(`-L([^@\-].*)`),
 	re(`-O`),
 	re(`-O([^@\-].*)`),
+	re(`--export=(.+)`), // for wasm-ld
 	re(`-f(no-)?(pic|PIC|pie|PIE)`),
 	re(`-f(no-)?openmp(-simd)?`),
 	re(`-fsanitize=([^@\-].*)`),
