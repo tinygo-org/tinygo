@@ -40,7 +40,7 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 	stackSizesGlobal := llvm.AddGlobal(mod, stackSizesGlobalType, "internal/task.stackSizes")
 	stackSizesGlobal.SetSection(".tinygo_stacksizes")
 	defaultStackSizes := make([]llvm.Value, len(functions))
-	defaultStackSize := llvm.ConstInt(functions[0].Type(), config.Target.DefaultStackSize, false)
+	defaultStackSize := llvm.ConstInt(functions[0].Type(), config.StackSize(), false)
 	for i := range defaultStackSizes {
 		defaultStackSizes[i] = defaultStackSize
 	}

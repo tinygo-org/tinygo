@@ -28,6 +28,7 @@ type Options struct {
 	GC              string
 	PanicStrategy   string
 	Scheduler       string
+	StackSize       uint64 // goroutine stack size (if none could be automatically determined)
 	Serial          string
 	Work            bool // -work flag to print temporary build directory
 	InterpTimeout   time.Duration

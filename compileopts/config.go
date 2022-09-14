@@ -175,6 +175,15 @@ func (c *Config) AutomaticStackSize() bool {
 	return false
 }
 
+// StackSize returns the default stack size to be used for goroutines, if the
+// stack size could not be determined automatically at compile time.
+func (c *Config) StackSize() uint64 {
+	if c.Options.StackSize != 0 {
+		return c.Options.StackSize
+	}
+	return c.Target.DefaultStackSize
+}
+
 // UseThinLTO returns whether ThinLTO should be used for the given target. Some
 // targets (such as wasm) are not yet supported.
 // We should try and remove as many exceptions as possible in the future, so
