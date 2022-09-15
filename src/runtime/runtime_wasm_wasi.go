@@ -101,20 +101,16 @@ func ticks() timeUnit {
 
 // Implementations of WASI APIs
 
-//go:wasm-module wasi_snapshot_preview1
-//export args_get
+//go:wasmimport wasi_snapshot_preview1 args_get
 func args_get(argv *unsafe.Pointer, argv_buf unsafe.Pointer) (errno uint16)
 
-//go:wasm-module wasi_snapshot_preview1
-//export args_sizes_get
+//go:wasmimport wasi_snapshot_preview1 args_sizes_get
 func args_sizes_get(argc *uint32, argv_buf_size *uint32) (errno uint16)
 
-//go:wasm-module wasi_snapshot_preview1
-//export clock_time_get
+//go:wasmimport wasi_snapshot_preview1 clock_time_get
 func clock_time_get(clockid uint32, precision uint64, time *uint64) (errno uint16)
 
-//go:wasm-module wasi_snapshot_preview1
-//export poll_oneoff
+//go:wasmimport wasi_snapshot_preview1 poll_oneoff
 func poll_oneoff(in *__wasi_subscription_t, out *__wasi_event_t, nsubscriptions uint32, nevents *uint32) (errno uint16)
 
 type __wasi_eventtype_t = uint8
