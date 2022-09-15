@@ -13,6 +13,10 @@ import (
 const numberOfCycles = 32
 
 // GetRNG returns 32 bits of semi-random data based on ring oscillator.
+//
+// Unlike some other implementations of GetRNG, these random numbers are not
+// cryptographically secure and must not be used for cryptographic operations
+// (nonces, etc).
 func GetRNG() (uint32, error) {
 	var val uint32
 	for i := 0; i < 4; i++ {
