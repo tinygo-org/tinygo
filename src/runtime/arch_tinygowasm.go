@@ -62,53 +62,63 @@ func growHeap() bool {
 }
 
 // The below functions override the default allocator of wasi-libc. This ensures
-// code linked from other languages can allocate memory without colliding with
-// our GC allocations.
+// code linked from other languages can allocate memory on the same heap as the
+// TinyGo heap.
 
-var allocs = make(map[uintptr][]byte)
+// Keep track of all the heap allocations while they're in use.
+// This is not the most efficient solution but it costs a lot less in code size
+// compared to a map.
+var allocs []unsafe.Pointer
+
+func trackAlloc(ptr unsafe.Pointer) {
+	// Try to find some empty space in the allocs slice.
+	for i, slot := range allocs {
+		if slot == nil {
+			allocs[i] = slot
+			return
+		}
+	}
+	// Couldn't find this space. Fall back to appending to the end.
+	allocs = append(allocs, ptr)
+}
+
+func removeAlloc(ptr unsafe.Pointer) {
+	// Remove the pointer so it can be garbage collected.
+	for i, slot := range allocs {
+		if ptr == slot {
+			allocs[i] = nil
+			return
+		}
+	}
+}
 
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
-	buf := make([]byte, size)
-	ptr := unsafe.Pointer(&buf[0])
-	allocs[uintptr(ptr)] = buf
+	ptr := alloc(size, nil)
+	trackAlloc(ptr)
 	return ptr
 }
 
 //export free
 func libc_free(ptr unsafe.Pointer) {
-	if ptr == nil {
-		return
-	}
-	if _, ok := allocs[uintptr(ptr)]; ok {
-		delete(allocs, uintptr(ptr))
-	} else {
-		panic("free: invalid pointer")
-	}
+	removeAlloc(ptr)
+	free(ptr)
 }
 
 //export calloc
 func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
-	// No difference between calloc and malloc.
+	// Note: we could be even more correct here and check that nmemb * size
+	// doesn't overflow. However the current implementation should normally work
+	// fine.
 	return libc_malloc(nmemb * size)
 }
 
 //export realloc
 func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
-	// It's hard to optimize this to expand the current buffer with our GC, but
-	// it is theoretically possible. For now, just always allocate fresh.
-	buf := make([]byte, size)
-
-	if oldPtr != nil {
-		if oldBuf, ok := allocs[uintptr(oldPtr)]; ok {
-			copy(buf, oldBuf)
-			delete(allocs, uintptr(oldPtr))
-		} else {
-			panic("realloc: invalid pointer")
-		}
+	newPtr := realloc(oldPtr, size)
+	if newPtr != oldPtr {
+		removeAlloc(oldPtr)
+		trackAlloc(newPtr)
 	}
-
-	ptr := unsafe.Pointer(&buf[0])
-	allocs[uintptr(ptr)] = buf
-	return ptr
+	return newPtr
 }
