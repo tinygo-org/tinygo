@@ -288,6 +288,15 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					continue
 				}
 				info.module = parts[1]
+			case "//go:wasmimport":
+				// Import a WebAssembly function, for example a WASI function.
+				// For details, see: https://github.com/golang/go/issues/38248
+				if len(parts) != 3 {
+					continue
+				}
+				info.exported = true
+				info.module = parts[1]
+				info.importName = parts[2]
 			case "//go:inline":
 				info.inline = inlineHint
 			case "//go:noinline":

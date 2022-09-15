@@ -12,15 +12,13 @@ type __wasi_iovec_t struct {
 	bufLen uint
 }
 
-//go:wasm-module wasi_snapshot_preview1
-//export fd_write
+//go:wasmimport wasi_snapshot_preview1 fd_write
 func fd_write(id uint32, iovs *__wasi_iovec_t, iovs_len uint, nwritten *uint) (errno uint)
 
 // See:
 // https://github.com/WebAssembly/WASI/blob/main/phases/snapshot/docs.md#-proc_exitrval-exitcode
 //
-//go:wasm-module wasi_snapshot_preview1
-//export proc_exit
+//go:wasmimport wasi_snapshot_preview1 proc_exit
 func proc_exit(exitcode uint32)
 
 const (
