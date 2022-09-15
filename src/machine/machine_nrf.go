@@ -350,3 +350,30 @@ func (i2c *I2C) readByte() (byte, error) {
 	i2c.Bus.EVENTS_RXDREADY.Set(0)
 	return byte(i2c.Bus.RXD.Get()), nil
 }
+
+var rngStarted = false
+
+// GetRNG returns 32 bits of non-deterministic random data based on internal thermal noise.
+// According to Nordic's documentation, the random output is suitable for cryptographic purposes.
+func GetRNG() (ret uint32, err error) {
+	// There's no apparent way to check the status of the RNG peripheral's task, so simply start it
+	// to avoid deadlocking while waiting for output.
+	if !rngStarted {
+		nrf.RNG.TASKS_START.Set(1)
+		nrf.RNG.SetCONFIG_DERCEN(nrf.RNG_CONFIG_DERCEN_Enabled)
+		rngStarted = true
+	}
+
+	// The RNG returns one byte at a time, so stack up four bytes into a single uint32 for return.
+	for i := 0; i < 4; i++ {
+		// Wait for data to be ready.
+		for nrf.RNG.EVENTS_VALRDY.Get() == 0 {
+		}
+		// Append random byte to output.
+		ret = (ret << 8) ^ nrf.RNG.GetVALUE()
+		// Unset the EVENTS_VALRDY register to avoid reading the same random output twice.
+		nrf.RNG.EVENTS_VALRDY.Set(0)
+	}
+
+	return ret, nil
+}
