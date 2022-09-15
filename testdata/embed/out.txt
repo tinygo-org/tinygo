@@ -1,5 +1,6 @@
 string: hello world!
 bytes: hello world!
+[]byte(string): hello world!
 files:
 - a
 - a/b
