@@ -20,9 +20,12 @@ var (
 //go:embed a/b/.hidden
 var hidden string
 
+var helloStringBytes = []byte(helloString)
+
 func main() {
 	println("string:", strings.TrimSpace(helloString))
 	println("bytes:", strings.TrimSpace(string(helloBytes)))
+	println("[]byte(string):", strings.TrimSpace(string(helloStringBytes)))
 	println("files:")
 	readFiles(".")
 }

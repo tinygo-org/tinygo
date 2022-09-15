@@ -369,6 +369,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				nBytes := uint32(operands[3].Uint())
 				dstObj := mem.getWritable(dst.index())
 				dstBuf := dstObj.buffer.asRawValue(r)
+				if mem.get(src.index()).buffer == nil {
+					// Looks like the source buffer is not defined.
+					// This can happen with //extern or //go:embed.
+					return nil, mem, r.errorAt(inst, errUnsupportedRuntimeInst)
+				}
 				srcBuf := mem.get(src.index()).buffer.asRawValue(r)
 				copy(dstBuf.buf[dst.offset():dst.offset()+nBytes], srcBuf.buf[src.offset():])
 				dstObj.buffer = dstBuf
