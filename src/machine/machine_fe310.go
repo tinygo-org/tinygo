@@ -231,7 +231,7 @@ type I2CConfig struct {
 func (i2c *I2C) Configure(config I2CConfig) error {
 	var i2cClockFrequency uint32 = 32000000
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100 * KHz
 	}
 
 	if config.SDA == 0 && config.SCL == 0 {

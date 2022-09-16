@@ -8,6 +8,8 @@ import (
 )
 
 // TWI_FREQ is the I2C bus speed. Normally either 100 kHz, or 400 kHz for high-speed bus.
+//
+// Deprecated: use 100 * machine.KHz or 400 * machine.KHz instead.
 const (
 	TWI_FREQ_100KHZ = 100000
 	TWI_FREQ_400KHZ = 400000

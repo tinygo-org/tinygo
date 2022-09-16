@@ -230,7 +230,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100 * KHz
 	}
 	// Default I2C pins if not set.
 	if config.SDA == 0 && config.SCL == 0 {
@@ -253,7 +253,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
-	if config.Frequency == TWI_FREQ_400KHZ {
+	if config.Frequency >= 400*KHz {
 		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
 	} else {
 		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)

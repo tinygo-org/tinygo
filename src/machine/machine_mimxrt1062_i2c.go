@@ -10,15 +10,6 @@ import (
 	"errors"
 )
 
-const (
-	TWI_FREQ_BUS     = 24000000        // LPI2C root clock is on 24 MHz OSC
-	TWI_FREQ_100KHZ  = 100000          // StandardMode (100 kHz)
-	TWI_FREQ_400KHZ  = 400000          // FastMode (400 kHz)
-	TWI_FREQ_1MHZ    = 1000000         // FastModePlus (1 MHz)
-	TWI_FREQ_5MHZ    = 5000000         // UltraFastMode (5 MHz)
-	TWI_FREQ_DEFAULT = TWI_FREQ_100KHZ // default to StandardMode (100 kHz)
-)
-
 var (
 	errI2CWriteTimeout       = errors.New("I2C timeout during write")
 	errI2CReadTimeout        = errors.New("I2C timeout during read")
@@ -174,7 +165,7 @@ func (i2c *I2C) Configure(config I2CConfig) {
 
 	freq := config.Frequency
 	if 0 == freq {
-		freq = TWI_FREQ_DEFAULT
+		freq = 100 * KHz
 	}
 
 	// reset clock and registers, and enable LPI2C module interface
@@ -305,7 +296,7 @@ func (i2c *I2C) setFrequency(freq uint32) {
 	wasEnabled := i2c.Bus.MCR.HasBits(nxp.LPI2C_MCR_MEN)
 	i2c.Bus.MCR.ClearBits(nxp.LPI2C_MCR_MEN)
 
-	// baud rate = (TWI_FREQ_BUS/(2^pre))/(CLKLO+1 + CLKHI+1 + FLOOR((2+FILTSCL)/(2^pre)))
+	// baud rate = (24MHz/(2^pre))/(CLKLO+1 + CLKHI+1 + FLOOR((2+FILTSCL)/(2^pre)))
 	// assume: CLKLO=2*CLKHI, SETHOLD=CLKHI, DATAVD=CLKHI/2
 	for pre := uint32(1); pre <= 128; pre *= 2 {
 		if bestError == 0 {
@@ -314,9 +305,9 @@ func (i2c *I2C) setFrequency(freq uint32) {
 		for clkHi := uint32(1); clkHi < 32; clkHi++ {
 			var absError, rate uint32
 			if clkHi == 1 {
-				rate = (TWI_FREQ_BUS / pre) / (1 + 3 + 2 + 2/pre)
+				rate = (24 * MHz / pre) / (1 + 3 + 2 + 2/pre)
 			} else {
-				rate = (TWI_FREQ_BUS / pre) / (3*clkHi + 2 + 2/pre)
+				rate = (24 * MHz / pre) / (3*clkHi + 2 + 2/pre)
 			}
 			if freq > rate {
 				absError = freq - rate
@@ -370,15 +361,15 @@ func (i2c *I2C) setFrequency(freq uint32) {
 		mcfgr2, mcfgr3 uint32
 	)
 	const i2cClockStretchTimeout = 15000 // microseconds
-	if freq >= TWI_FREQ_5MHZ {
+	if freq >= 5*MHz {
 		// I2C UltraFastMode 5 MHz
 		mcfgr2 = 0 // disable glitch filters and timeout for UltraFastMode
 		mcfgr3 = 0 //
-	} else if freq >= TWI_FREQ_1MHZ {
+	} else if freq >= 1*MHz {
 		// I2C FastModePlus 1 MHz
 		mcfgr2 = filtsda(1) | filtscl(1) | busidle(2400) // 100us timeout
 		mcfgr3 = pinlow(i2cClockStretchTimeout*24/256 + 1)
-	} else if freq >= TWI_FREQ_400KHZ {
+	} else if freq >= 400*KHz {
 		// I2C FastMode 400 kHz
 		mcfgr2 = filtsda(2) | filtscl(2) | busidle(3600) // 150us timeout
 		mcfgr3 = pinlow(i2cClockStretchTimeout*24/256 + 1)
