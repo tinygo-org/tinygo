@@ -1151,7 +1151,7 @@ const i2cTimeout = 1000
 func (i2c *I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100 * KHz
 	}
 
 	// Use default I2C pins if not set.

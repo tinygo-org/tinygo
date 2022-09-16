@@ -18,6 +18,13 @@ var (
 // particular chip but instead runs in WebAssembly for example.
 const Device = deviceName
 
+// Generic constants.
+const (
+	KHz = 1000
+	MHz = 1000_000
+	GHz = 1000_000_000
+)
+
 // PinMode sets the direction and pull mode of the pin. For example, PinOutput
 // sets the pin as an output and PinInputPullup sets the pin as an input with a
 // pull-up.

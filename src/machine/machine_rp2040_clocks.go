@@ -10,11 +10,6 @@ import (
 	"unsafe"
 )
 
-const (
-	KHz = 1000
-	MHz = 1000000
-)
-
 func CPUFrequency() uint32 {
 	return 125 * MHz
 }
