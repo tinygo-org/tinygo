@@ -3,7 +3,7 @@
     "build-tags": ["circuitplay_express"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "serial-port": ["acm:239a:8018", "acm:239a:18"],
+    "serial-port": ["acm:239a:8018"],
     "msd-volume-name": "CPLAYBOOT",
     "msd-firmware-name": "firmware.uf2"
 }

@@ -2,7 +2,7 @@
     "inherits": ["atsamd21g18a"],
     "build-tags": ["feather_m0"],
     "serial": "usb",
-    "serial-port": ["acm:239a:801b", "acm:239a:001b", "acm:239a:800b", "acm:239a:000b", "acm:239a:0015"],
+    "serial-port": ["acm:239a:801b", "acm:239a:800b"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "FEATHERBOOT",

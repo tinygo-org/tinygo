@@ -2,7 +2,7 @@
     "inherits": ["atsamd51j19a"],
     "build-tags": ["matrixportal_m4"],
     "serial": "usb",
-    "serial-port": ["acm:239a:80c9", "acm:239a:00c9", "acm:239a:80ca"],
+    "serial-port": ["acm:239a:80c9", "acm:239a:80ca"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "MATRIXBOOT",

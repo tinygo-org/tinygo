@@ -1,6 +1,6 @@
 {
     "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
     "build-tags": ["mdbt50qrx"],
-    "serial-port": ["acm:239a:810b", "acm:239a:010b", "acm:239a:810c"],
+    "serial-port": ["acm:239a:810b", "acm:239a:810c"],
     "msd-volume-name": "MDBT50QBOOT"
 }

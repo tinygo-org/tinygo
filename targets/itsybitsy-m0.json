@@ -2,7 +2,7 @@
     "inherits": ["atsamd21g18a"],
     "build-tags": ["itsybitsy_m0"],
     "serial": "usb",
-    "serial-port": ["acm:239a:800f", "acm:239a:000f", "acm:239a:8012"],
+    "serial-port": ["acm:239a:800f", "acm:239a:8012"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "ITSYBOOT",
