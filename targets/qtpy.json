@@ -2,7 +2,7 @@
     "inherits": ["atsamd21e18a"],
     "build-tags": ["qtpy"],
     "serial": "usb",
-    "serial-port": ["acm:239a:80cb", "acm:239a:00cb", "acm:239a:00cc"],
+    "serial-port": ["acm:239a:80cb"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "QTPY_BOOT",
