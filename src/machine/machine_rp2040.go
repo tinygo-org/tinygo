@@ -97,3 +97,22 @@ func CurrentCore() int {
 
 // NumCores returns number of cores available on the device.
 func NumCores() int { return 2 }
+
+func Sleep(pin Pin, change PinChange) error {
+	if pin > 31 {
+		return ErrInvalidInputPin
+	}
+
+	base := &ioBank0.dormantWakeIRQctrl
+	pin.ctrlSetInterrupt(change, true, base) // gpio_set_dormant_irq_enabled
+
+	clocks.deinit() // Reconfigure clocks, disable PLLs etc
+
+	xosc.Dormant() // Execution stops here until woken up
+
+	clocks.init() // Re-initialize clocks
+
+	// Clear the irq so we can go back to dormant mode again if we want
+	pin.acknowledgeInterrupt(change)
+	return nil
+}
