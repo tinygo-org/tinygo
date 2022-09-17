@@ -104,7 +104,7 @@ const (
 
 var (
 	usb_VID uint16 = 0x2886
-	usb_PID uint16 = 0x0045
+	usb_PID uint16 = 0x8045
 )
 
 var (
