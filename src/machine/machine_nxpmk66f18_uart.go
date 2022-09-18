@@ -203,8 +203,8 @@ func (u *UART) Disable() {
 	u.C2.Set(0)
 
 	// reconfigure pin
-	u.DefaultRX.Configure(PinConfig{Mode: PinInputPullUp})
-	u.DefaultTX.Configure(PinConfig{Mode: PinInputPullUp})
+	u.DefaultRX.Configure(PinConfig{Mode: PinInputPullup})
+	u.DefaultTX.Configure(PinConfig{Mode: PinInputPullup})
 
 	// clear flags
 	u.S1.Get()

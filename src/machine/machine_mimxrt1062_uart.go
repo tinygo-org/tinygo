@@ -159,8 +159,8 @@ func (uart *UART) Disable() {
 		uart.Bus.CTRL.ClearBits(nxp.LPUART_CTRL_TE | nxp.LPUART_CTRL_RE)
 
 		// put pins back into GPIO mode
-		uart.rx.Configure(PinConfig{Mode: PinInputPullUp})
-		uart.tx.Configure(PinConfig{Mode: PinInputPullUp})
+		uart.rx.Configure(PinConfig{Mode: PinInputPullup})
+		uart.tx.Configure(PinConfig{Mode: PinInputPullup})
 	}
 	uart.configured = false
 }
