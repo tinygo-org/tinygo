@@ -8,20 +8,20 @@ import "errors"
 var errUARTBufferEmpty = errors.New("UART buffer empty")
 
 // UARTParity is the parity setting to be used for UART communication.
-type UARTParity int
+type UARTParity uint8
 
 const (
 	// ParityNone means to not use any parity checking. This is
 	// the most common setting.
-	ParityNone UARTParity = 0
+	ParityNone UARTParity = iota
 
 	// ParityEven means to expect that the total number of 1 bits sent
 	// should be an even number.
-	ParityEven UARTParity = 1
+	ParityEven
 
 	// ParityOdd means to expect that the total number of 1 bits sent
 	// should be an odd number.
-	ParityOdd UARTParity = 2
+	ParityOdd
 )
 
 // To implement the UART interface for a board, you must declare a concrete type as follows:
