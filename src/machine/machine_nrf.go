@@ -377,3 +377,14 @@ func GetRNG() (ret uint32, err error) {
 
 	return ret, nil
 }
+
+// ReadTemperature reads the silicon die temperature of the chip. The return
+// value is in milli-celsius.
+func ReadTemperature() int32 {
+	nrf.TEMP.TASKS_START.Set(1)
+	for nrf.TEMP.EVENTS_DATARDY.Get() == 0 {
+	}
+	temp := int32(nrf.TEMP.TEMP.Get()) * 250 // the returned value is in units of 0.25°C
+	nrf.TEMP.EVENTS_DATARDY.Set(0)
+	return temp
+}
