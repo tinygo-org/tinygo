@@ -17,8 +17,8 @@ const (
 	adc0_CH ADCChannel = iota
 	adc1_CH
 	adc2_CH
-	adc3_CH         // Note: GPIO29 not broken out on pico board
-	ADC_TEMP_SENSOR // Internal temperature sensor channel
+	adc3_CH       // Note: GPIO29 not broken out on pico board
+	adcTempSensor // Internal temperature sensor channel
 )
 
 // Used to serialise ADC sampling
@@ -75,19 +75,17 @@ func (a ADC) GetADCChannel() (c ADCChannel, err error) {
 	return c, err
 }
 
-// Configure sets the channel's associated pin to analog input mode or powers on the temperature sensor for ADC_TEMP_SENSOR.
+// Configure sets the channel's associated pin to analog input mode.
 // The powered on temperature sensor increases ADC_AVDD current by approximately 40 μA.
 func (c ADCChannel) Configure(config ADCConfig) error {
 	if config.Reference != 0 {
 		adcAref = config.Reference
 	}
-	if p, err := c.Pin(); err == nil {
-		p.Configure(PinConfig{Mode: PinAnalog})
+	p, err := c.Pin()
+	if err != nil {
+		return err
 	}
-	if c == ADC_TEMP_SENSOR {
-		// Enable temperature sensor bias source
-		rp.ADC.CS.SetBits(rp.ADC_CS_TS_EN)
-	}
+	p.Configure(PinConfig{Mode: PinAnalog})
 	return nil
 }
 
@@ -112,13 +110,16 @@ func (c ADCChannel) getVoltage() uint32 {
 }
 
 // ReadTemperature does a one-shot sample of the internal temperature sensor and returns a milli-celsius reading.
-// Only works on the ADC_TEMP_SENSOR channel. aka AINSEL=4. Other channels will return 0
-func (c ADCChannel) ReadTemperature() (millicelsius uint32) {
-	if c != ADC_TEMP_SENSOR {
-		return
+func ReadTemperature() (millicelsius int32) {
+	if rp.ADC.CS.Get()&rp.ADC_CS_EN == 0 {
+		InitADC()
 	}
+
+	// Enable temperature sensor bias source
+	rp.ADC.CS.SetBits(rp.ADC_CS_TS_EN)
+
 	// T = 27 - (ADC_voltage - 0.706)/0.001721
-	return (27000<<16 - (c.getVoltage()-706<<16)*581) >> 16
+	return (27000<<16 - (int32(adcTempSensor.getVoltage())-706<<16)*581) >> 16
 }
 
 // waitForReady spins waiting for the ADC peripheral to become ready.
