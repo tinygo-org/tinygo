@@ -264,15 +264,6 @@ type UART struct {
 	DataOverflowDetected bool // set when data overflow detected in UART FIFO buffer or RingBuffer
 }
 
-type UARTStopBits int
-
-const (
-	UARTStopBits_Default UARTStopBits = iota
-	UARTStopBits_1
-	UARTStopBits_1_5
-	UARTStopBits_2
-)
-
 const (
 	defaultDataBits = 8
 	defaultStopBit  = 1
