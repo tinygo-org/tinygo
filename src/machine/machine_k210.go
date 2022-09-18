@@ -23,9 +23,15 @@ type PinChange uint8
 // Pin modes.
 const (
 	PinInput PinMode = iota
-	PinInputPullUp
-	PinInputPullDown
+	PinInputPullup
+	PinInputPulldown
 	PinOutput
+)
+
+// Deprecated: use PinInputPullup and PinInputPulldown instead.
+const (
+	PinInputPullUp   = PinInputPullup
+	PinInputPullDown = PinInputPulldown
 )
 
 // FPIOA internal pull resistors.
@@ -89,10 +95,10 @@ func (p Pin) Configure(config PinConfig) {
 	case PinInput:
 		p.setFPIOAIOPull(fpioaPullNone)
 		input = true
-	case PinInputPullUp:
+	case PinInputPullup:
 		p.setFPIOAIOPull(fpioaPullUp)
 		input = true
-	case PinInputPullDown:
+	case PinInputPulldown:
 		p.setFPIOAIOPull(fpioaPullDown)
 		input = true
 	case PinOutput:

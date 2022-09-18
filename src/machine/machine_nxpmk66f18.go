@@ -42,11 +42,17 @@ const deviceName = nxp.Device
 
 const (
 	PinInput PinMode = iota
-	PinInputPullUp
-	PinInputPullDown
+	PinInputPullup
+	PinInputPulldown
 	PinOutput
 	PinOutputOpenDrain
 	PinDisable
+)
+
+// Deprecated: use PinInputPullup and PinInputPulldown instead.
+const (
+	PinInputPullUp   = PinInputPullup
+	PinInputPullDown = PinInputPulldown
 )
 
 const (
@@ -223,11 +229,11 @@ func (p Pin) Configure(config PinConfig) {
 		gpio.PDDR.ClearBits(1 << pos)
 		pcr.Set((1 << nxp.PORT_PCR0_MUX_Pos))
 
-	case PinInputPullUp:
+	case PinInputPullup:
 		gpio.PDDR.ClearBits(1 << pos)
 		pcr.Set((1 << nxp.PORT_PCR0_MUX_Pos) | nxp.PORT_PCR0_PE | nxp.PORT_PCR0_PS)
 
-	case PinInputPullDown:
+	case PinInputPulldown:
 		gpio.PDDR.ClearBits(1 << pos)
 		pcr.Set((1 << nxp.PORT_PCR0_MUX_Pos) | nxp.PORT_PCR0_PE)
 

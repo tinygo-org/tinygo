@@ -21,8 +21,8 @@ func CPUFrequency() uint32 {
 const (
 	// GPIO
 	PinInput PinMode = iota
-	PinInputPullUp
-	PinInputPullDown
+	PinInputPullup
+	PinInputPulldown
 	PinOutput
 	PinOutputOpenDrain
 	PinDisable
@@ -43,6 +43,12 @@ const (
 	// I2C
 	PinModeI2CSDA
 	PinModeI2CSCL
+)
+
+// Deprecated: use PinInputPullup and PinInputPulldown instead.
+const (
+	PinInputPullUp   = PinInputPullup
+	PinInputPullDown = PinInputPulldown
 )
 
 type PinChange uint8
@@ -259,11 +265,11 @@ func (p Pin) Configure(config PinConfig) {
 		gpio.GDIR.ClearBits(p.getMask())
 		pad.Set(dse(7))
 
-	case PinInputPullUp:
+	case PinInputPullup:
 		gpio.GDIR.ClearBits(p.getMask())
 		pad.Set(dse(7) | pke | pue | pup(3) | hys)
 
-	case PinInputPullDown:
+	case PinInputPulldown:
 		gpio.GDIR.ClearBits(p.getMask())
 		pad.Set(dse(7) | pke | pue | hys)
 
@@ -746,7 +752,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 	switch config.Mode {
 
 	// GPIO
-	case PinInput, PinInputPullUp, PinInputPullDown,
+	case PinInput, PinInputPullup, PinInputPulldown,
 		PinOutput, PinOutputOpenDrain, PinDisable:
 		mode := uint32(0x5) // GPIO is always alternate function 5
 		if forcePath {
