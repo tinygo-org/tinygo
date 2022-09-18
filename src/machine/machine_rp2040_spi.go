@@ -38,10 +38,9 @@ type SPIConfig struct {
 }
 
 var (
-	ErrLSBNotSupported    = errors.New("SPI LSB unsupported on PL022")
-	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
-	ErrSPITimeout         = errors.New("SPI timeout")
-	ErrSPIBaud            = errors.New("SPI baud too low or above 66.5Mhz")
+	ErrLSBNotSupported = errors.New("SPI LSB unsupported on PL022")
+	ErrSPITimeout      = errors.New("SPI timeout")
+	ErrSPIBaud         = errors.New("SPI baud too low or above 66.5Mhz")
 )
 
 type SPI struct {

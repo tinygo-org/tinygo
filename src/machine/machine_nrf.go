@@ -5,13 +5,8 @@ package machine
 
 import (
 	"device/nrf"
-	"errors"
 	"runtime/interrupt"
 	"unsafe"
-)
-
-var (
-	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
 )
 
 const deviceName = nrf.Device
