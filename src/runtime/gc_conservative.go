@@ -25,7 +25,9 @@ package runtime
 // heapStart..metadataStart.
 //
 // More information:
+// https://aykevl.nl/2020/09/gc-tinygo
 // https://github.com/micropython/micropython/wiki/Memory-Manager
+// https://github.com/micropython/micropython/blob/master/py/gc.c
 // "The Garbage Collection Handbook" by Richard Jones, Antony Hosking, Eliot
 // Moss.
 
