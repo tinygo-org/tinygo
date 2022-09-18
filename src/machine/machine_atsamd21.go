@@ -10,7 +10,6 @@ package machine
 import (
 	"device/arm"
 	"device/sam"
-	"errors"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -1273,10 +1272,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	// return data
 	return byte(spi.Bus.DATA.Get()), nil
 }
-
-var (
-	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
-)
 
 // Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
