@@ -611,7 +611,7 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=challenger-rp2040    examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=trinkey-qt2040      examples/adc_rp2040
+	$(TINYGO) build -size short -o test.hex -target=trinkey-qt2040      examples/temp
 	@$(MD5SUM) test.hex
 	# test pwm
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm
