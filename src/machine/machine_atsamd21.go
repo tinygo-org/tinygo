@@ -1735,7 +1735,7 @@ func EnterBootloader() {
 
 	// Perform magic reset into bootloader, as mentioned in
 	// https://github.com/arduino/ArduinoCore-samd/issues/197
-	*(*uint32)(unsafe.Pointer(uintptr(0x20007FFC))) = RESET_MAGIC_VALUE
+	*(*uint32)(unsafe.Pointer(uintptr(0x20007FFC))) = resetMagicValue
 
 	arm.SystemReset()
 }
