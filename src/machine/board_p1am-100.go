@@ -7,7 +7,7 @@
 package machine
 
 // used to reset into bootloader
-const RESET_MAGIC_VALUE = 0x07738135
+const resetMagicValue = 0x07738135
 
 // Note: On the P1AM-100, pins D8, D9, D10, A3, and A4 are used for
 // communication with the base controller.
