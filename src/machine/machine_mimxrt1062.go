@@ -48,9 +48,7 @@ const (
 type PinChange uint8
 
 const (
-	PinLow PinChange = iota
-	PinHigh
-	PinRising
+	PinRising PinChange = iota + 2
 	PinFalling
 	PinToggle
 )
@@ -387,7 +385,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	mask := p.getMask()
 	if nil != callback {
 		switch change {
-		case PinLow, PinHigh, PinRising, PinFalling:
+		case PinRising, PinFalling:
 			gpio.EDGE_SEL.ClearBits(mask)
 			var reg *volatile.Register32
 			var pos uint8
