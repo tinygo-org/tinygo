@@ -59,12 +59,9 @@ type PinChange uint8
 
 // Pin change interrupt constants for SetInterrupt.
 const (
-	PinNoInterrupt PinChange = iota
-	PinRising
+	PinRising PinChange = iota + 1
 	PinFalling
 	PinToggle
-	PinLowLevel
-	PinHighLevel
 )
 
 // Configure this pin with the given configuration.
@@ -190,7 +187,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) (err error) {
 		return ErrInvalidInputPin
 	}
 
-	if callback == nil || change == PinNoInterrupt {
+	if callback == nil {
 		// Disable this pin interrupt
 		p.pin().ClearBits(esp.GPIO_PIN_PIN_INT_TYPE_Msk | esp.GPIO_PIN_PIN_INT_ENA_Msk)
 
