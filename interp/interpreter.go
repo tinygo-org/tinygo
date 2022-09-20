@@ -408,7 +408,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Elem() is only valid for certain type classes.
 				switch class {
 				case "chan", "pointer", "slice", "array":
-					elementType := llvm.ConstExtractValue(typecodeID.Initializer(), []uint32{0})
+					elementType := r.builder.CreateExtractValue(typecodeID.Initializer(), 0, "")
 					uintptrType := r.mod.Context().IntType(int(mem.r.pointerSize) * 8)
 					locals[inst.localIndex] = r.getValue(llvm.ConstPtrToInt(elementType, uintptrType))
 				default:
@@ -461,8 +461,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// easier checking in the next step.
 				concreteTypeMethods := map[string]struct{}{}
 				for i := 0; i < methodSet.Type().ArrayLength(); i++ {
-					methodInfo := llvm.ConstExtractValue(methodSet, []uint32{uint32(i)})
-					name := llvm.ConstExtractValue(methodInfo, []uint32{0}).Name()
+					methodInfo := r.builder.CreateExtractValue(methodSet, i, "")
+					name := r.builder.CreateExtractValue(methodInfo, 0, "").Name()
 					concreteTypeMethods[name] = struct{}{}
 				}
 
@@ -496,7 +496,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				typecodeID := typecodeIDBitCast.Operand(0).Initializer()
 
 				// Load the method set, which is part of the typecodeID object.
-				methodSet := llvm.ConstExtractValue(typecodeID, []uint32{2}).Operand(0).Initializer()
+				methodSet := r.builder.CreateExtractValue(typecodeID, 2, "").Operand(0).Initializer()
 
 				// We don't need to load the interface method set.
 
@@ -511,9 +511,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				numMethods := methodSet.Type().ArrayLength()
 				var method llvm.Value
 				for i := 0; i < numMethods; i++ {
-					methodSignature := llvm.ConstExtractValue(methodSet, []uint32{uint32(i), 0})
+					methodSignatureAgg := r.builder.CreateExtractValue(methodSet, i, "")
+					methodSignature := r.builder.CreateExtractValue(methodSignatureAgg, 0, "")
 					if methodSignature == signature {
-						method = llvm.ConstExtractValue(methodSet, []uint32{uint32(i), 1}).Operand(0)
+						method = r.builder.CreateExtractValue(methodSignatureAgg, 1, "").Operand(0)
 					}
 				}
 				if method.IsNil() {

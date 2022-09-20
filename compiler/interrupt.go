@@ -49,9 +49,11 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	global.SetGlobalConstant(true)
 	global.SetUnnamedAddr(true)
 	initializer := llvm.ConstNull(globalLLVMType)
-	initializer = llvm.ConstInsertValue(initializer, funcContext, []uint32{0})
-	initializer = llvm.ConstInsertValue(initializer, funcPtr, []uint32{1})
-	initializer = llvm.ConstInsertValue(initializer, llvm.ConstInt(b.intType, uint64(id.Int64()), true), []uint32{2, 0})
+	initializer = b.CreateInsertValue(initializer, funcContext, 0, "")
+	initializer = b.CreateInsertValue(initializer, funcPtr, 1, "")
+	initializer = b.CreateInsertValue(initializer, llvm.ConstNamedStruct(globalLLVMType.StructElementTypes()[2], []llvm.Value{
+		llvm.ConstInt(b.intType, uint64(id.Int64()), true),
+	}), 2, "")
 	global.SetInitializer(initializer)
 
 	// Add debug info to the interrupt global.

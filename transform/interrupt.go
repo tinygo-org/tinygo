@@ -44,7 +44,8 @@ func LowerInterrupts(mod llvm.Module) []error {
 
 			// Get the interrupt number from the initializer
 			initializer := global.Initializer()
-			num := llvm.ConstExtractValue(initializer, []uint32{2, 0}).SExtValue()
+			interrupt := builder.CreateExtractValue(initializer, 2, "")
+			num := builder.CreateExtractValue(interrupt, 0, "").SExtValue()
 			pkg := packageFromInterruptHandle(global)
 
 			handles, exists := handleMap[num]
@@ -89,8 +90,8 @@ func LowerInterrupts(mod llvm.Module) []error {
 			builder.SetInsertPointBefore(call)
 			for _, handler := range handlers {
 				initializer := handler.Initializer()
-				context := llvm.ConstExtractValue(initializer, []uint32{0})
-				funcPtr := llvm.ConstExtractValue(initializer, []uint32{1}).Operand(0)
+				context := builder.CreateExtractValue(initializer, 0, "")
+				funcPtr := builder.CreateExtractValue(initializer, 1, "").Operand(0)
 				builder.CreateCall(funcPtr.GlobalValueType(), funcPtr, []llvm.Value{
 					num,
 					context,

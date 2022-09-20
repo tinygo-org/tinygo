@@ -63,6 +63,7 @@ type compilerContext struct {
 	DumpSSA          bool
 	mod              llvm.Module
 	ctx              llvm.Context
+	builder          llvm.Builder // only used for constant operations
 	dibuilder        *llvm.DIBuilder
 	cu               llvm.Metadata
 	difiles          map[string]llvm.Metadata
@@ -98,6 +99,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 	}
 
 	c.ctx = llvm.NewContext()
+	c.builder = c.ctx.NewBuilder()
 	c.mod = c.ctx.NewModule(moduleName)
 	c.mod.SetTarget(config.Triple)
 	c.mod.SetDataLayout(c.targetData.String())
@@ -124,6 +126,12 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 	dummyFunc.EraseFromParentAsFunction()
 
 	return c
+}
+
+// Dispose everything related to the context, _except_ for the IR module (and
+// the associated context).
+func (c *compilerContext) dispose() {
+	c.builder.Dispose()
 }
 
 // builder contains all information relevant to build a single function.
@@ -256,6 +264,7 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 // CompilePackage compiles a single package to a LLVM module.
 func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
 	c := newCompilerContext(moduleName, machine, config, dumpSSA)
+	defer c.dispose()
 	c.packageDir = pkg.OriginalDir()
 	c.embedGlobals = pkg.EmbedGlobals
 	c.pkg = pkg.Pkg
@@ -972,10 +981,10 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		for _, file := range allFiles {
 			fileStruct := llvm.ConstNull(embedFileStructType)
 			name := c.createConst(ssa.NewConst(constant.MakeString(file.Name), types.Typ[types.String]))
-			fileStruct = llvm.ConstInsertValue(fileStruct, name, []uint32{0}) // "name" field
+			fileStruct = c.builder.CreateInsertValue(fileStruct, name, 0, "") // "name" field
 			if file.Hash != "" {
 				data := c.getEmbedFileString(file)
-				fileStruct = llvm.ConstInsertValue(fileStruct, data, []uint32{1}) // "data" field
+				fileStruct = c.builder.CreateInsertValue(fileStruct, data, 1, "") // "data" field
 			}
 			fileStructs = append(fileStructs, fileStruct)
 		}
@@ -1006,7 +1015,7 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		// Define the embed.FS struct. It has only one field: the files (as a
 		// *[]embed.file).
 		globalInitializer := llvm.ConstNull(c.getLLVMType(member.Type().(*types.Pointer).Elem()))
-		globalInitializer = llvm.ConstInsertValue(globalInitializer, sliceGlobal, []uint32{0})
+		globalInitializer = c.builder.CreateInsertValue(globalInitializer, sliceGlobal, 0, "")
 		global.SetInitializer(globalInitializer)
 		global.SetVisibility(llvm.HiddenVisibility)
 		global.SetAlignment(c.targetData.ABITypeAlignment(globalInitializer.Type()))
@@ -2757,15 +2766,15 @@ func (c *compilerContext) createConst(expr *ssa.Const) llvm.Value {
 			r := c.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]))
 			i := c.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]))
 			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
-			cplx = llvm.ConstInsertValue(cplx, r, []uint32{0})
-			cplx = llvm.ConstInsertValue(cplx, i, []uint32{1})
+			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 			return cplx
 		} else if typ.Kind() == types.Complex128 {
 			r := c.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]))
 			i := c.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]))
 			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
-			cplx = llvm.ConstInsertValue(cplx, r, []uint32{0})
-			cplx = llvm.ConstInsertValue(cplx, i, []uint32{1})
+			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
+			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
 			return cplx
 		} else {
 			panic("unknown constant of basic type: " + expr.String())

@@ -218,7 +218,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		initialStackObject := llvm.ConstNull(stackObjectType)
 		numSlots := (targetData.TypeAllocSize(stackObjectType) - uint64(targetData.PointerSize())*2) / uint64(targetData.ABITypeAlignment(uintptrType))
 		numSlotsValue := llvm.ConstInt(uintptrType, numSlots, false)
-		initialStackObject = llvm.ConstInsertValue(initialStackObject, numSlotsValue, []uint32{1})
+		initialStackObject = builder.CreateInsertValue(initialStackObject, numSlotsValue, 1, "")
 		builder.CreateStore(initialStackObject, stackObject)
 
 		// Update stack start.

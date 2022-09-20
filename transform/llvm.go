@@ -36,25 +36,27 @@ func hasUses(value llvm.Value) bool {
 // linkage/constant/etc properties yourself.
 func makeGlobalArray(mod llvm.Module, bufItf interface{}, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
 	buf := reflect.ValueOf(bufItf)
-	globalType := llvm.ArrayType(elementType, buf.Len())
-	global := llvm.AddGlobal(mod, globalType, name)
-	value := llvm.Undef(globalType)
+	var values []llvm.Value
 	for i := 0; i < buf.Len(); i++ {
 		ch := buf.Index(i).Uint()
-		value = llvm.ConstInsertValue(value, llvm.ConstInt(elementType, ch, false), []uint32{uint32(i)})
+		values = append(values, llvm.ConstInt(elementType, ch, false))
 	}
+	value := llvm.ConstArray(elementType, values)
+	global := llvm.AddGlobal(mod, value.Type(), name)
 	global.SetInitializer(value)
-	return globalType, global
+	return value.Type(), global
 }
 
 // getGlobalBytes returns the slice contained in the array of the provided
 // global. It can recover the bytes originally created using makeGlobalArray, if
 // makeGlobalArray was given a byte slice.
-func getGlobalBytes(global llvm.Value) []byte {
+//
+// The builder parameter is only used for constant operations.
+func getGlobalBytes(global llvm.Value, builder llvm.Builder) []byte {
 	value := global.Initializer()
 	buf := make([]byte, value.Type().ArrayLength())
 	for i := range buf {
-		buf[i] = byte(llvm.ConstExtractValue(value, []uint32{uint32(i)}).ZExtValue())
+		buf[i] = byte(builder.CreateExtractValue(value, i, "").ZExtValue())
 	}
 	return buf
 }
