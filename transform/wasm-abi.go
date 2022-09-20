@@ -124,12 +124,12 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 					// Pass a stack-allocated pointer as the first parameter
 					// where the return value should be stored, instead of using
 					// the regular return value.
-					builder.CreateCall(externalFn, callParams, callName)
+					builder.CreateCall(externalFnType, externalFn, callParams, callName)
 					returnValue := builder.CreateLoad(retvalAlloca, "retval")
 					call.ReplaceAllUsesWith(returnValue)
 					call.EraseFromParentAsInstruction()
 				} else {
-					newCall := builder.CreateCall(externalFn, callParams, callName)
+					newCall := builder.CreateCall(externalFnType, externalFn, callParams, callName)
 					call.ReplaceAllUsesWith(newCall)
 					call.EraseFromParentAsInstruction()
 				}
@@ -156,7 +156,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 				}
 				callParams = append(callParams, paramValue)
 			}
-			retval := builder.CreateCall(fn, callParams, "")
+			retval := builder.CreateCall(fn.GlobalValueType(), fn, callParams, "")
 			if retval.Type().TypeKind() == llvm.VoidTypeKind {
 				builder.CreateRetVoid()
 			} else {

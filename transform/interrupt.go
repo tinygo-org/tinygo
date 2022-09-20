@@ -91,7 +91,7 @@ func LowerInterrupts(mod llvm.Module) []error {
 				initializer := handler.Initializer()
 				context := llvm.ConstExtractValue(initializer, []uint32{0})
 				funcPtr := llvm.ConstExtractValue(initializer, []uint32{1}).Operand(0)
-				builder.CreateCall(funcPtr, []llvm.Value{
+				builder.CreateCall(funcPtr.GlobalValueType(), funcPtr, []llvm.Value{
 					num,
 					context,
 				}, "")

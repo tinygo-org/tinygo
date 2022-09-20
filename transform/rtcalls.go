@@ -165,7 +165,7 @@ func OptimizeReflectImplements(mod llvm.Module) {
 
 		// Replace Implements call with the type assert call.
 		builder.SetInsertPointBefore(call)
-		implements := builder.CreateCall(typeAssertFunction, []llvm.Value{
+		implements := builder.CreateCall(typeAssertFunction.GlobalValueType(), typeAssertFunction, []llvm.Value{
 			builder.CreatePtrToInt(call.Operand(0), uintptrType, ""), // typecode to check
 		}, "")
 		call.ReplaceAllUsesWith(implements)

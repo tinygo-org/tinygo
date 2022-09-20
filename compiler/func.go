@@ -55,14 +55,15 @@ func (b *builder) extractFuncContext(funcValue llvm.Value) llvm.Value {
 
 // decodeFuncValue extracts the context and the function pointer from this func
 // value. This may be an expensive operation.
-func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value) {
+func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcType llvm.Type, funcPtr, context llvm.Value) {
 	context = b.CreateExtractValue(funcValue, 0, "")
 	bitcast := b.CreateExtractValue(funcValue, 1, "")
 	if !bitcast.IsAConstantExpr().IsNil() && bitcast.Opcode() == llvm.BitCast {
 		funcPtr = bitcast.Operand(0)
 		return
 	}
-	llvmSig := llvm.PointerType(b.getRawFuncType(sig), b.funcPtrAddrSpace)
+	funcType = b.getRawFuncType(sig)
+	llvmSig := llvm.PointerType(funcType, b.funcPtrAddrSpace)
 	funcPtr = b.CreateBitCast(bitcast, llvmSig, "")
 	return
 }
@@ -141,5 +142,6 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	context := b.emitPointerPack(boundVars)
 
 	// Create the closure.
-	return b.createFuncValue(b.getFunction(f), context, f.Signature), nil
+	_, fn := b.getFunction(f)
+	return b.createFuncValue(fn, context, f.Signature), nil
 }

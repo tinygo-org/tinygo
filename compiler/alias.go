@@ -52,7 +52,7 @@ func (b *builder) createAlias(alias llvm.Value) {
 		b.CreateUnreachable()
 		return
 	}
-	result := b.CreateCall(alias, b.llvmFn.Params(), "")
+	result := b.CreateCall(alias.GlobalValueType(), alias, b.llvmFn.Params(), "")
 	if result.Type().TypeKind() == llvm.VoidTypeKind {
 		b.CreateRetVoid()
 	} else {

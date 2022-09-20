@@ -127,7 +127,7 @@ func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
 				// Create a call to the package initializer (which was
 				// previously deleted).
 				i8undef := llvm.Undef(r.i8ptrType)
-				r.builder.CreateCall(fn, []llvm.Value{i8undef}, "")
+				r.builder.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{i8undef}, "")
 				// Make sure that any globals touched by the package
 				// initializer, won't be accessed by later package initializers.
 				err := r.markExternalLoad(fn)

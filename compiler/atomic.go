@@ -25,7 +25,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 			if fn.IsNil() {
 				fn = llvm.AddFunction(b.mod, name, llvm.FunctionType(vType, []llvm.Type{ptr.Type(), vType}, false))
 			}
-			oldVal := b.createCall(fn, []llvm.Value{ptr, val}, "")
+			oldVal := b.createCall(fn.GlobalValueType(), fn, []llvm.Value{ptr, val}, "")
 			// Return the new value, not the original value returned.
 			return b.CreateAdd(oldVal, val, "")
 		}
@@ -78,7 +78,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 			if fn.IsNil() {
 				fn = llvm.AddFunction(b.mod, name, llvm.FunctionType(vType, []llvm.Type{ptr.Type(), vType, b.uintptrType}, false))
 			}
-			b.createCall(fn, []llvm.Value{ptr, val, llvm.ConstInt(b.uintptrType, 5, false)}, "")
+			b.createCall(fn.GlobalValueType(), fn, []llvm.Value{ptr, val, llvm.ConstInt(b.uintptrType, 5, false)}, "")
 			return llvm.Value{}
 		}
 		store := b.CreateStore(val, ptr)

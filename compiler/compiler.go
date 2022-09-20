@@ -131,6 +131,7 @@ type builder struct {
 	*compilerContext
 	llvm.Builder
 	fn                *ssa.Function
+	llvmFnType        llvm.Type
 	llvmFn            llvm.Value
 	info              functionInfo
 	locals            map[ssa.Value]llvm.Value            // local variables
@@ -155,11 +156,13 @@ type builder struct {
 }
 
 func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *builder {
+	fnType, fn := c.getFunction(f)
 	return &builder{
 		compilerContext: c,
 		Builder:         irbuilder,
 		fn:              f,
-		llvmFn:          c.getFunction(f),
+		llvmFnType:      fnType,
+		llvmFn:          fn,
 		info:            c.getFunctionInfo(f),
 		locals:          make(map[ssa.Value]llvm.Value),
 		dilocals:        make(map[*types.Var]llvm.Metadata),
@@ -711,7 +714,8 @@ func (b *builder) getLocalVariable(variable *types.Var) llvm.Metadata {
 // DISubprogram metadata node.
 func (c *compilerContext) attachDebugInfo(f *ssa.Function) llvm.Metadata {
 	pos := c.program.Fset.Position(f.Syntax().Pos())
-	return c.attachDebugInfoRaw(f, c.getFunction(f), "", pos.Filename, pos.Line)
+	_, fn := c.getFunction(f)
+	return c.attachDebugInfoRaw(f, fn, "", pos.Filename, pos.Line)
 }
 
 // attachDebugInfo adds debug info to a function declaration. It returns the
@@ -1654,6 +1658,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 
 	// Try to call the function directly for trivially static calls.
 	var callee, context llvm.Value
+	var calleeType llvm.Type
 	exported := false
 	if fn := instr.StaticCallee(); fn != nil {
 		// Direct function call, either to a named or anonymous (directly
@@ -1684,7 +1689,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.createInterruptGlobal(instr)
 		}
 
-		callee = b.getFunction(fn)
+		calleeType, callee = b.getFunction(fn)
 		info := b.getFunctionInfo(fn)
 		if callee.IsNil() {
 			return llvm.Value{}, b.makeError(instr.Pos(), "undefined function: "+info.linkName)
@@ -1698,8 +1703,8 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 				// Eventually we might be able to eliminate this special case
 				// entirely. For details, see:
 				// https://discourse.llvm.org/t/rfc-enabling-wstrict-prototypes-by-default-in-c/60521
-				fnType := llvm.FunctionType(callee.Type().ElementType().ReturnType(), nil, false)
-				callee = llvm.ConstBitCast(callee, llvm.PointerType(fnType, b.funcPtrAddrSpace))
+				calleeType = llvm.FunctionType(callee.Type().ElementType().ReturnType(), nil, false)
+				callee = llvm.ConstBitCast(callee, llvm.PointerType(calleeType, b.funcPtrAddrSpace))
 			}
 		case *ssa.MakeClosure:
 			// A call on a func value, but the callee is trivial to find. For
@@ -1726,13 +1731,14 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		params = append([]llvm.Value{value}, params...)
 		params = append(params, typecode)
 		callee = b.getInvokeFunction(instr)
+		calleeType = callee.GlobalValueType()
 		context = llvm.Undef(b.i8ptrType)
 	} else {
 		// Function pointer.
 		value := b.getValue(instr.Value)
 		// This is a func value, which cannot be called directly. We have to
 		// extract the function pointer and context first from the func value.
-		callee, context = b.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
+		calleeType, callee, context = b.decodeFuncValue(value, instr.Value.Type().Underlying().(*types.Signature))
 		b.createNilCheck(instr.Value, callee, "fpcall")
 	}
 
@@ -1742,7 +1748,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		params = append(params, context)
 	}
 
-	return b.createInvoke(callee, params, ""), nil
+	return b.createInvoke(calleeType, callee, params, ""), nil
 }
 
 // getValue returns the LLVM value of a constant, function value, global, or
@@ -1756,7 +1762,8 @@ func (b *builder) getValue(expr ssa.Value) llvm.Value {
 			b.addError(expr.Pos(), "cannot use an exported function as value: "+expr.String())
 			return llvm.Undef(b.getLLVMType(expr.Type()))
 		}
-		return b.createFuncValue(b.getFunction(expr), llvm.Undef(b.i8ptrType), expr.Signature)
+		_, fn := b.getFunction(expr)
+		return b.createFuncValue(fn, llvm.Undef(b.i8ptrType), expr.Signature)
 	case *ssa.Global:
 		value := b.getGlobal(expr)
 		if value.IsNil() {
@@ -3080,7 +3087,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			// Instead of a load from the global, create a bitcast of the
 			// function pointer itself.
 			name := strings.TrimSuffix(unop.X.(*ssa.Global).Name(), "$funcaddr")
-			fn := b.getFunction(b.fn.Pkg.Members[name].(*ssa.Function))
+			_, fn := b.getFunction(b.fn.Pkg.Members[name].(*ssa.Function))
 			if fn.IsNil() {
 				return llvm.Value{}, b.makeError(unop.Pos(), "cgo function not found: "+name)
 			}

@@ -977,7 +977,7 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 				}
 			}
 		}
-		result = r.builder.CreateCall(llvmFn, args, inst.name)
+		result = r.builder.CreateCall(inst.llvmInst.CalledFunctionType(), llvmFn, args, inst.name)
 	case llvm.Load:
 		err := mem.markExternalLoad(operands[0])
 		if err != nil {

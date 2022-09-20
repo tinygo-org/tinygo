@@ -53,11 +53,11 @@ const (
 
 // getFunction returns the LLVM function for the given *ssa.Function, creating
 // it if needed. It can later be filled with compilerContext.createFunction().
-func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
+func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 	info := c.getFunctionInfo(fn)
 	llvmFn := c.mod.NamedFunction(info.linkName)
 	if !llvmFn.IsNil() {
-		return llvmFn
+		return llvmFn.GlobalValueType(), llvmFn
 	}
 
 	var retType llvm.Type
@@ -202,7 +202,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		llvmFn.SetUnnamedAddr(true)
 	}
 
-	return llvmFn
+	return fnType, llvmFn
 }
 
 // getFunctionInfo returns information about a function that is not directly

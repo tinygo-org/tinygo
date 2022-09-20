@@ -312,5 +312,5 @@ func (b *builder) readStackPointer() llvm.Value {
 		fnType := llvm.FunctionType(b.i8ptrType, nil, false)
 		stacksave = llvm.AddFunction(b.mod, "llvm.stacksave", fnType)
 	}
-	return b.CreateCall(stacksave, nil, "")
+	return b.CreateCall(stacksave.GlobalValueType(), stacksave, nil, "")
 }
