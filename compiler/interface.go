@@ -254,12 +254,12 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 		method := ms.At(i)
 		signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
 		fn := c.program.MethodValue(method)
-		llvmFn := c.getFunction(fn)
+		llvmFnType, llvmFn := c.getFunction(fn)
 		if llvmFn.IsNil() {
 			// compiler error, so panic
 			panic("cannot find function: " + c.getFunctionInfo(fn).linkName)
 		}
-		wrapper := c.getInterfaceInvokeWrapper(fn, llvmFn)
+		wrapper := c.getInterfaceInvokeWrapper(fn, llvmFnType, llvmFn)
 		methodInfo := llvm.ConstNamedStruct(interfaceMethodInfoType, []llvm.Value{
 			signatureGlobal,
 			llvm.ConstPtrToInt(wrapper, c.uintptrType),
@@ -361,7 +361,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		// implements each method of the interface. See:
 		// https://research.swtch.com/interfaces
 		fn := b.getInterfaceImplementsFunc(expr.AssertedType)
-		commaOk = b.CreateCall(fn, []llvm.Value{actualTypeNum}, "")
+		commaOk = b.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{actualTypeNum}, "")
 
 	} else {
 		globalName := "reflect/types.typeid:" + getTypeCodeName(expr.AssertedType)
@@ -480,7 +480,7 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 // value, dereferences or unpacks it if necessary, and calls the real method.
 // If the method to wrap has a pointer receiver, no wrapping is necessary and
 // the function is returned directly.
-func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llvm.Value) llvm.Value {
+func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Type, llvmFn llvm.Value) llvm.Value {
 	wrapperName := llvmFn.Name() + "$invoke"
 	wrapper := c.mod.NamedFunction(wrapperName)
 	if !wrapper.IsNil() {
@@ -505,9 +505,8 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 	}
 
 	// create wrapper function
-	fnType := llvmFn.Type().ElementType()
-	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[len(expandedReceiverType):]...)
-	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
+	paramTypes := append([]llvm.Type{c.i8ptrType}, llvmFnType.ParamTypes()[len(expandedReceiverType):]...)
+	wrapFnType := llvm.FunctionType(llvmFnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
 	c.addStandardAttributes(wrapper)
 
@@ -535,10 +534,10 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 	receiverValue := b.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
 	params := append(b.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
 	if llvmFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
-		b.CreateCall(llvmFn, params, "")
+		b.CreateCall(llvmFnType, llvmFn, params, "")
 		b.CreateRetVoid()
 	} else {
-		ret := b.CreateCall(llvmFn, params, "ret")
+		ret := b.CreateCall(llvmFnType, llvmFn, params, "ret")
 		b.CreateRet(ret)
 	}
 

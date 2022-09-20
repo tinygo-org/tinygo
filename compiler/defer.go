@@ -201,7 +201,7 @@ li a0, 0
 	}
 	asmType := llvm.FunctionType(resultType, []llvm.Type{b.deferFrame.Type()}, false)
 	asm := llvm.InlineAsm(asmType, asmString, constraints, false, false, 0, false)
-	result := b.CreateCall(asm, []llvm.Value{b.deferFrame}, "setjmp")
+	result := b.CreateCall(asmType, asm, []llvm.Value{b.deferFrame}, "setjmp")
 	result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("returns_twice"), 0))
 	isZero := b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(resultType, 0, false), "setjmp.result")
 	continueBB := b.insertBasicBlock("")
@@ -492,6 +492,7 @@ func (b *builder) createRunDefers() {
 			}
 
 			var fnPtr llvm.Value
+			var fnType llvm.Type
 
 			if !callback.IsInvoke() {
 				// Isolate the func value.
@@ -499,8 +500,8 @@ func (b *builder) createRunDefers() {
 				forwardParams = forwardParams[1:]
 
 				//Get function pointer and context
-				fp, context := b.decodeFuncValue(funcValue, callback.Signature())
-				fnPtr = fp
+				var context llvm.Value
+				fnType, fnPtr, context = b.decodeFuncValue(funcValue, callback.Signature())
 
 				//Pass context
 				forwardParams = append(forwardParams, context)
@@ -509,6 +510,7 @@ func (b *builder) createRunDefers() {
 				// parameters.
 				forwardParams = append(forwardParams[1:], forwardParams[0])
 				fnPtr = b.getInvokeFunction(callback)
+				fnType = fnPtr.GlobalValueType()
 
 				// Add the context parameter. An interface call cannot also be a
 				// closure but we have to supply the parameter anyway for platforms
@@ -516,7 +518,7 @@ func (b *builder) createRunDefers() {
 				forwardParams = append(forwardParams, llvm.Undef(b.i8ptrType))
 			}
 
-			b.createCall(fnPtr, forwardParams, "")
+			b.createCall(fnType, fnPtr, forwardParams, "")
 
 		case *ssa.Function:
 			// Direct call.
@@ -547,7 +549,8 @@ func (b *builder) createRunDefers() {
 			}
 
 			// Call real function.
-			b.createInvoke(b.getFunction(callback), forwardParams, "")
+			fnType, fn := b.getFunction(callback)
+			b.createInvoke(fnType, fn, forwardParams, "")
 
 		case *ssa.MakeClosure:
 			// Get the real defer struct type and cast to it.
@@ -571,7 +574,8 @@ func (b *builder) createRunDefers() {
 			}
 
 			// Call deferred function.
-			b.createCall(b.getFunction(fn), forwardParams, "")
+			fnType, llvmFn := b.getFunction(fn)
+			b.createCall(fnType, llvmFn, forwardParams, "")
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]
 

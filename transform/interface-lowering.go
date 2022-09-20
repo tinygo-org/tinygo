@@ -493,12 +493,13 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 			paramTypes = append(paramTypes, param.Type())
 		}
 		calledFunctionType := function.Type()
-		sig := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), calledFunctionType.PointerAddressSpace())
+		functionType := llvm.FunctionType(returnType, paramTypes, false)
+		sig := llvm.PointerType(functionType, calledFunctionType.PointerAddressSpace())
 		if sig != function.Type() {
 			function = p.builder.CreateBitCast(function, sig, "")
 		}
 
-		retval := p.builder.CreateCall(function, append([]llvm.Value{receiver}, params...), "")
+		retval := p.builder.CreateCall(functionType, function, append([]llvm.Value{receiver}, params...), "")
 		if retval.Type().TypeKind() == llvm.VoidTypeKind {
 			p.builder.CreateRetVoid()
 		} else {
@@ -518,7 +519,7 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	// importantly, it avoids undefined behavior when accidentally calling a
 	// method on a nil interface.
 	nilPanic := p.mod.NamedFunction("runtime.nilPanic")
-	p.builder.CreateCall(nilPanic, []llvm.Value{
+	p.builder.CreateCall(nilPanic.GlobalValueType(), nilPanic, []llvm.Value{
 		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
 	}, "")
 	p.builder.CreateUnreachable()

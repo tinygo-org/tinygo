@@ -55,7 +55,7 @@ func (b *builder) createMemoryCopyImpl() {
 		params = append(params, b.getValue(param))
 	}
 	params = append(params, llvm.ConstInt(b.ctx.Int1Type(), 0, false))
-	b.CreateCall(llvmFn, params, "")
+	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
 	b.CreateRetVoid()
 }
 
@@ -76,7 +76,7 @@ func (b *builder) createMemoryZeroImpl() {
 		b.getValue(b.fn.Params[1]),
 		llvm.ConstInt(b.ctx.Int1Type(), 0, false),
 	}
-	b.CreateCall(llvmFn, params, "")
+	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
 	b.CreateRetVoid()
 }
 
@@ -119,6 +119,6 @@ func (b *builder) defineMathOp() {
 	for i, param := range b.fn.Params {
 		args[i] = b.getValue(param)
 	}
-	result := b.CreateCall(llvmFn, args, "")
+	result := b.CreateCall(llvmFn.GlobalValueType(), llvmFn, args, "")
 	b.CreateRet(result)
 }

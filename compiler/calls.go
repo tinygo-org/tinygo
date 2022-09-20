@@ -37,15 +37,15 @@ const (
 // createRuntimeInvoke instead.
 func (b *builder) createRuntimeCallCommon(fnName string, args []llvm.Value, name string, isInvoke bool) llvm.Value {
 	fn := b.program.ImportedPackage("runtime").Members[fnName].(*ssa.Function)
-	llvmFn := b.getFunction(fn)
+	fnType, llvmFn := b.getFunction(fn)
 	if llvmFn.IsNil() {
 		panic("trying to call non-existent function: " + fn.RelString(nil))
 	}
 	args = append(args, llvm.Undef(b.i8ptrType)) // unused context parameter
 	if isInvoke {
-		return b.createInvoke(llvmFn, args, name)
+		return b.createInvoke(fnType, llvmFn, args, name)
 	}
-	return b.createCall(llvmFn, args, name)
+	return b.createCall(fnType, llvmFn, args, name)
 }
 
 // createRuntimeCall creates a new call to runtime.<fnName> with the given
@@ -65,22 +65,22 @@ func (b *builder) createRuntimeInvoke(fnName string, args []llvm.Value, name str
 
 // createCall creates a call to the given function with the arguments possibly
 // expanded.
-func (b *builder) createCall(fn llvm.Value, args []llvm.Value, name string) llvm.Value {
+func (b *builder) createCall(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string) llvm.Value {
 	expanded := make([]llvm.Value, 0, len(args))
 	for _, arg := range args {
 		fragments := b.expandFormalParam(arg)
 		expanded = append(expanded, fragments...)
 	}
-	return b.CreateCall(fn, expanded, name)
+	return b.CreateCall(fnType, fn, expanded, name)
 }
 
 // createInvoke is like createCall but continues execution at the landing pad if
 // the call resulted in a panic.
-func (b *builder) createInvoke(fn llvm.Value, args []llvm.Value, name string) llvm.Value {
+func (b *builder) createInvoke(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string) llvm.Value {
 	if b.hasDeferFrame() {
 		b.createInvokeCheckpoint()
 	}
-	return b.createCall(fn, args, name)
+	return b.createCall(fnType, fn, args, name)
 }
 
 // Expand an argument type to a list that can be used in a function call

@@ -25,7 +25,7 @@ func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
 	fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{}, false)
 	asm := constant.StringVal(args[0].(*ssa.Const).Value)
 	target := llvm.InlineAsm(fnType, asm, "", true, false, 0, false)
-	return b.CreateCall(target, nil, ""), nil
+	return b.CreateCall(fnType, target, nil, ""), nil
 }
 
 // This is a compiler builtin, which allows assembly to be called in a flexible
@@ -120,7 +120,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 	}
 	fnType := llvm.FunctionType(outputType, argTypes, false)
 	target := llvm.InlineAsm(fnType, asmString, strings.Join(constraints, ","), true, false, 0, false)
-	result := b.CreateCall(target, args, "")
+	result := b.CreateCall(fnType, target, args, "")
 	if hasOutput {
 		return result, nil
 	} else {
@@ -163,7 +163,7 @@ func (b *builder) emitSVCall(args []ssa.Value) (llvm.Value, error) {
 	constraints += ",~{r1},~{r2},~{r3}"
 	fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 	target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0, false)
-	return b.CreateCall(target, llvmArgs, ""), nil
+	return b.CreateCall(fnType, target, llvmArgs, ""), nil
 }
 
 // This is a compiler builtin which emits an inline SVCall instruction. It can
@@ -201,7 +201,7 @@ func (b *builder) emitSV64Call(args []ssa.Value) (llvm.Value, error) {
 	constraints += ",~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7}"
 	fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 	target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0, false)
-	return b.CreateCall(target, llvmArgs, ""), nil
+	return b.CreateCall(fnType, target, llvmArgs, ""), nil
 }
 
 // This is a compiler builtin which emits CSR instructions. It can be one of:
@@ -226,24 +226,24 @@ func (b *builder) emitCSROperation(call *ssa.CallCommon) (llvm.Value, error) {
 		fnType := llvm.FunctionType(b.uintptrType, nil, false)
 		asm := fmt.Sprintf("csrr $0, %d", csr)
 		target := llvm.InlineAsm(fnType, asm, "=r", true, false, 0, false)
-		return b.CreateCall(target, nil, ""), nil
+		return b.CreateCall(fnType, target, nil, ""), nil
 	case "Set":
 		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrw %d, $0", csr)
 		target := llvm.InlineAsm(fnType, asm, "r", true, false, 0, false)
-		return b.CreateCall(target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
+		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
 	case "SetBits":
 		// Note: it may be possible to optimize this to csrrsi in many cases.
 		fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrrs $0, %d, $1", csr)
 		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0, false)
-		return b.CreateCall(target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
+		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
 	case "ClearBits":
 		// Note: it may be possible to optimize this to csrrci in many cases.
 		fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrrc $0, %d, $1", csr)
 		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0, false)
-		return b.CreateCall(target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
+		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown CSR operation: "+name)
 	}
