@@ -62,7 +62,7 @@ func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (f
 		funcPtr = bitcast.Operand(0)
 		return
 	}
-	llvmSig := b.getRawFuncType(sig)
+	llvmSig := llvm.PointerType(b.getRawFuncType(sig), b.funcPtrAddrSpace)
 	funcPtr = b.CreateBitCast(bitcast, llvmSig, "")
 	return
 }
@@ -117,7 +117,7 @@ func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 	paramTypes = append(paramTypes, c.i8ptrType) // context
 
 	// Make a func type out of the signature.
-	return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace)
+	return llvm.FunctionType(returnType, paramTypes, false)
 }
 
 // parseMakeClosure makes a function value (with context) from the given
