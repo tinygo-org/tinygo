@@ -154,7 +154,7 @@ func (p *lowerInterfacesPass) run() error {
 				if initializer.IsNil() {
 					continue
 				}
-				methodSet := llvm.ConstExtractValue(initializer, []uint32{2})
+				methodSet := p.builder.CreateExtractValue(initializer, 2, "")
 				p.addTypeMethods(t, methodSet)
 			}
 		}
@@ -288,9 +288,9 @@ func (p *lowerInterfacesPass) run() error {
 	zeroUintptr := llvm.ConstNull(p.uintptrType)
 	for _, t := range p.types {
 		initializer := t.typecode.Initializer()
-		methodSet := llvm.ConstExtractValue(initializer, []uint32{2})
-		initializer = llvm.ConstInsertValue(initializer, llvm.ConstNull(methodSet.Type()), []uint32{2})
-		initializer = llvm.ConstInsertValue(initializer, zeroUintptr, []uint32{4})
+		methodSet := p.builder.CreateExtractValue(initializer, 2, "")
+		initializer = p.builder.CreateInsertValue(initializer, llvm.ConstNull(methodSet.Type()), 2, "")
+		initializer = p.builder.CreateInsertValue(initializer, zeroUintptr, 4, "")
 		t.typecode.SetInitializer(initializer)
 	}
 
@@ -311,10 +311,10 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 	t.methodSet = methodSet
 	set := methodSet.Initializer() // get value from global
 	for i := 0; i < set.Type().ArrayLength(); i++ {
-		methodData := llvm.ConstExtractValue(set, []uint32{uint32(i)})
-		signatureGlobal := llvm.ConstExtractValue(methodData, []uint32{0})
+		methodData := p.builder.CreateExtractValue(set, i, "")
+		signatureGlobal := p.builder.CreateExtractValue(methodData, 0, "")
 		signatureName := signatureGlobal.Name()
-		function := llvm.ConstExtractValue(methodData, []uint32{1}).Operand(0)
+		function := p.builder.CreateExtractValue(methodData, 1, "").Operand(0)
 		signature := p.getSignature(signatureName)
 		method := &methodInfo{
 			function:      function,

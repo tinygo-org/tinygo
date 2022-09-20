@@ -70,7 +70,7 @@ func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType l
 	value := llvm.Undef(globalType)
 	for i := 0; i < len(buf); i++ {
 		ch := uint64(buf[i])
-		value = llvm.ConstInsertValue(value, llvm.ConstInt(elementType, ch, false), []uint32{uint32(i)})
+		value = c.builder.CreateInsertValue(value, llvm.ConstInt(elementType, ch, false), i, "")
 	}
 	global.SetInitializer(value)
 	return globalType, global

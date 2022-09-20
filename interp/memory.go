@@ -215,7 +215,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		case llvm.StructTypeKind:
 			numElements := llvmType.StructElementTypesCount()
 			for i := 0; i < numElements; i++ {
-				element := llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)})
+				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
 				err := mv.markExternal(element, mark)
 				if err != nil {
 					return err
@@ -224,7 +224,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
 			for i := 0; i < numElements; i++ {
-				element := llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)})
+				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
 				err := mv.markExternal(element, mark)
 				if err != nil {
 					return err
@@ -1074,7 +1074,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				field.set(llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)}), r)
+				field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r)
 			}
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
@@ -1085,7 +1085,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				field.set(llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)}), r)
+				field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r)
 			}
 		case llvm.DoubleTypeKind:
 			f, _ := llvmValue.DoubleValue()

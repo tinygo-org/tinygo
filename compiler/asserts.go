@@ -145,7 +145,7 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 	}
 	// Make the maxBufSize actually the maximum allowed value (in number of
 	// elements in the channel buffer).
-	maxBufSize = llvm.ConstUDiv(maxBufSize, llvm.ConstInt(b.uintptrType, elementSize, false))
+	maxBufSize = b.CreateUDiv(maxBufSize, llvm.ConstInt(b.uintptrType, elementSize, false), "")
 
 	// Make sure maxBufSize has the same type as bufSize.
 	if maxBufSize.Type() != bufSize.Type() {

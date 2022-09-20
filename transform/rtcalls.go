@@ -149,7 +149,7 @@ func OptimizeReflectImplements(mod llvm.Module) {
 		interfaceType := interfaceTypeBitCast.Operand(0)
 		if strings.HasPrefix(interfaceType.Name(), "reflect/types.type:named:") {
 			// Get the underlying type.
-			interfaceType = llvm.ConstExtractValue(interfaceType.Initializer(), []uint32{0})
+			interfaceType = builder.CreateExtractValue(interfaceType.Initializer(), 0, "")
 		}
 		if !strings.HasPrefix(interfaceType.Name(), "reflect/types.type:interface:") {
 			// This is an error. The Type passed to Implements should be of
@@ -161,7 +161,7 @@ func OptimizeReflectImplements(mod llvm.Module) {
 			// Interface is unknown at compile time. This can't be optimized.
 			continue
 		}
-		typeAssertFunction := llvm.ConstExtractValue(interfaceType.Initializer(), []uint32{4}).Operand(0)
+		typeAssertFunction := builder.CreateExtractValue(interfaceType.Initializer(), 4, "").Operand(0)
 
 		// Replace Implements call with the type assert call.
 		builder.SetInsertPointBefore(call)
