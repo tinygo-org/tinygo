@@ -377,8 +377,8 @@ func (c *Config) VerifyIR() bool {
 }
 
 // Debug returns whether debug (DWARF) information should be retained by the
-// linker. By default, debug information is retained but it can be removed with
-// the -no-debug flag.
+// linker. By default, debug information is retained, but it can be removed
+// with the -no-debug flag.
 func (c *Config) Debug() bool {
 	return c.Options.Debug
 }
