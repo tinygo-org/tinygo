@@ -11,8 +11,6 @@ import (
 	"unsafe"
 )
 
-const gcAsserts = false // perform sanity checks
-
 var gcTotalAlloc uint64 // for runtime.MemStats
 var gcMallocs uint64
 var gcFrees uint64
