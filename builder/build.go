@@ -700,21 +700,25 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add embedded files.
 	linkerDependencies = append(linkerDependencies, embedFileObjects...)
 
+	// Determine whether the compilation configuration would result in debug
+	// (DWARF) information in the object files.
+	var hasDebug = true
+	for _, tag := range config.BuildTags() {
+		if tag == "baremetal" {
+			// Don't use -no-debug on baremetal targets. It makes no sense:
+			// the debug information isn't flashed to the device anyway.
+			hasDebug = false
+		}
+	}
+	if config.GOOS() == "darwin" {
+		// Debug information isn't stored in the binary itself on MacOS but
+		// is left in the object files by default. The binary does store the
+		// path to these object files though.
+		hasDebug = false
+	}
+
 	// Strip debug information with -no-debug.
-	if !config.Debug() {
-		for _, tag := range config.BuildTags() {
-			if tag == "baremetal" {
-				// Don't use -no-debug on baremetal targets. It makes no sense:
-				// the debug information isn't flashed to the device anyway.
-				return fmt.Errorf("stripping debug information is unnecessary for baremetal targets")
-			}
-		}
-		if config.GOOS() == "darwin" {
-			// Debug information isn't stored in the binary itself on MacOS but
-			// is left in the object files by default. The binary does store the
-			// path to these object files though.
-			return errors.New("cannot remove debug information: MacOS doesn't store debug info in the executable by default")
-		}
+	if hasDebug && !config.Debug() {
 		if config.Target.Linker == "wasm-ld" {
 			// Don't just strip debug information, also compress relocations
 			// while we're at it. Relocations can only be compressed when debug
