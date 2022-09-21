@@ -222,7 +222,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		builder.CreateStore(initialStackObject, stackObject)
 
 		// Update stack start.
-		parent := builder.CreateLoad(stackChainStart, "")
+		parent := builder.CreateLoad(stackChainStartType, stackChainStart, "")
 		gep := builder.CreateGEP(stackObject, []llvm.Value{
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 			llvm.ConstInt(ctx.Int32Type(), 0, false),

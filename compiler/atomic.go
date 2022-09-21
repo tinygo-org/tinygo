@@ -56,7 +56,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 		return swapped
 	case "LoadInt32", "LoadInt64", "LoadUint32", "LoadUint64", "LoadUintptr", "LoadPointer":
 		ptr := b.getValue(b.fn.Params[0])
-		val := b.CreateLoad(ptr, "")
+		val := b.CreateLoad(b.getLLVMType(b.fn.Signature.Results().At(0).Type()), ptr, "")
 		val.SetOrdering(llvm.AtomicOrderingSequentiallyConsistent)
 		val.SetAlignment(b.targetData.PrefTypeAlignment(val.Type())) // required
 		return val

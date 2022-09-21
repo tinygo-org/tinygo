@@ -983,7 +983,7 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		if err != nil {
 			return r.errorAt(inst, err)
 		}
-		result = r.builder.CreateLoad(operands[0], inst.name)
+		result = r.builder.CreateLoad(inst.llvmInst.Type(), operands[0], inst.name)
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
 		}

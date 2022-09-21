@@ -1931,11 +1931,12 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 		// Can't load directly from array (as index is non-constant), so have to
 		// do it using an alloca+gep+load.
-		alloca, allocaPtr, allocaSize := b.createTemporaryAlloca(array.Type(), "index.alloca")
+		arrayType := array.Type()
+		alloca, allocaPtr, allocaSize := b.createTemporaryAlloca(arrayType, "index.alloca")
 		b.CreateStore(array, alloca)
 		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 		ptr := b.CreateInBoundsGEP(alloca, []llvm.Value{zero, index}, "index.gep")
-		result := b.CreateLoad(ptr, "index.load")
+		result := b.CreateLoad(arrayType.ElementType(), ptr, "index.load")
 		b.emitLifetimeEnd(allocaPtr, allocaSize)
 		return result, nil
 	case *ssa.IndexAddr:
@@ -2012,7 +2013,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			// Lookup byte
 			buf := b.CreateExtractValue(value, 0, "")
 			bufPtr := b.CreateInBoundsGEP(buf, []llvm.Value{index}, "")
-			return b.CreateLoad(bufPtr, ""), nil
+			return b.CreateLoad(b.ctx.Int8Type(), bufPtr, ""), nil
 		case *types.Map:
 			valueType := expr.Type()
 			if expr.CommaOk {
@@ -3076,10 +3077,10 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown type for negate: "+unop.X.Type().Underlying().String())
 		}
 	case token.MUL: // *x, dereference pointer
-		unop.X.Type().Underlying().(*types.Pointer).Elem()
+		valueType := b.getLLVMType(unop.X.Type().Underlying().(*types.Pointer).Elem())
 		if b.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
 			// zero-length data
-			return llvm.ConstNull(x.Type().ElementType()), nil
+			return llvm.ConstNull(valueType), nil
 		} else if strings.HasSuffix(unop.X.String(), "$funcaddr") {
 			// CGo function pointer. The cgo part has rewritten CGo function
 			// pointers as stub global variables of the form:
@@ -3094,7 +3095,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			return b.CreateBitCast(fn, b.i8ptrType, ""), nil
 		} else {
 			b.createNilCheck(unop.X, x, "deref")
-			load := b.CreateLoad(x, "")
+			load := b.CreateLoad(valueType, x, "")
 			return load, nil
 		}
 	case token.XOR: // ^x, toggle all bits in integer

@@ -63,7 +63,7 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needs
 		}
 
 		// Load value (the *i8) from the alloca.
-		result := builder.CreateLoad(packedAlloc, "")
+		result := builder.CreateLoad(i8ptrType, packedAlloc, "")
 
 		// End the lifetime of the alloca, to help the optimizer.
 		packedPtr := builder.CreateBitCast(packedAlloc, i8ptrType, "")
@@ -171,7 +171,7 @@ func EmitPointerUnpack(builder llvm.Builder, mod llvm.Module, ptr llvm.Value, va
 			llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 		}
 		gep := builder.CreateInBoundsGEP(packedAlloc, indices, "")
-		values[i] = builder.CreateLoad(gep, "")
+		values[i] = builder.CreateLoad(valueType, gep, "")
 	}
 	if !packedRawAlloc.IsNil() {
 		allocPtr := builder.CreateBitCast(packedRawAlloc, i8ptrType, "")
