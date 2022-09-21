@@ -35,11 +35,7 @@ import (
 	"unsafe"
 )
 
-// Set gcDebug to true to print debug information.
-const (
-	gcDebug   = false   // print debug info
-	gcAsserts = gcDebug // perform sanity checks
-)
+const gcDebug = false
 
 // Some globals + constants for the entire GC.
 

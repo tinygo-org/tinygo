@@ -11,8 +11,6 @@ import (
 	"unsafe"
 )
 
-const gcAsserts = false // perform sanity checks
-
 // Ever-incrementing pointer: no memory is freed.
 var heapptr = heapStart
 
