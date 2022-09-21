@@ -637,7 +637,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// Create the new object.
 			size := operands[0].(literalValue).value.(uint64)
 			alloca := object{
-				llvmType:   inst.llvmInst.Type(),
+				llvmType:   inst.llvmInst.AllocatedType(),
 				globalName: r.pkgName + "$alloca",
 				buffer:     newRawValue(uint32(size)),
 				size:       uint32(size),

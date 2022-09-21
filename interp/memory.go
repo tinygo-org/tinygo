@@ -37,7 +37,7 @@ import (
 // ability to roll back interpreting a function.
 type object struct {
 	llvmGlobal     llvm.Value
-	llvmType       llvm.Type // must match llvmGlobal.Type() if both are set, may be unset if llvmGlobal is set
+	llvmType       llvm.Type // must match llvmGlobal.GlobalValueType() if both are set, may be unset if llvmGlobal is set
 	llvmLayoutType llvm.Type // LLVM type based on runtime.alloc layout parameter, if available
 	globalName     string    // name, if not yet created (not guaranteed to be the final name)
 	buffer         value     // buffer with value as given by interp, nil if external
@@ -594,7 +594,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 			var globalType llvm.Type
 			if !obj.llvmType.IsNil() {
 				// The exact type is known.
-				globalType = obj.llvmType.ElementType()
+				globalType = obj.llvmType
 			} else { // !obj.llvmLayoutType.IsNil()
 				// The exact type isn't known, but the object layout is known.
 				globalType = obj.llvmLayoutType
