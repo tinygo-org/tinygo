@@ -184,7 +184,6 @@ func Test_cgoPackage_isEquivalentAST(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc // avoid a race condition
 		t.Run(tc.name, func(t *testing.T) {
 			p := &cgoPackage{}
 			if got := p.isEquivalentAST(tc.a, tc.b); tc.expected != got {
