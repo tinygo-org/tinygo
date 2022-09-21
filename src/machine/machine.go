@@ -3,12 +3,13 @@ package machine
 import "errors"
 
 var (
-	ErrTimeoutRNG         = errors.New("machine: RNG Timeout")
-	ErrInvalidInputPin    = errors.New("machine: invalid input pin")
-	ErrInvalidOutputPin   = errors.New("machine: invalid output pin")
-	ErrInvalidClockPin    = errors.New("machine: invalid clock pin")
-	ErrInvalidDataPin     = errors.New("machine: invalid data pin")
-	ErrNoPinChangeChannel = errors.New("machine: no channel available for pin interrupt")
+	ErrTimeoutRNG            = errors.New("machine: RNG Timeout")
+	ErrInvalidInputPin       = errors.New("machine: invalid input pin")
+	ErrInvalidOutputPin      = errors.New("machine: invalid output pin")
+	ErrInvalidClockPin       = errors.New("machine: invalid clock pin")
+	ErrInvalidDataPin        = errors.New("machine: invalid data pin")
+	ErrNoPinChangeChannel    = errors.New("machine: no channel available for pin interrupt")
+	ErrFeatureNotImplemented = errors.New("machine: this feature is not yet implemented")
 )
 
 // Device is the running program's chip name, such as "ATSAMD51J19A" or
