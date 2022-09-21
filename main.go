@@ -1337,6 +1337,7 @@ func main() {
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
+	baudrate := flag.Int("baudrate", 0, "baudrate of serial monitor")
 
 	var flagJSON, flagDeps, flagTest bool
 	if command == "help" || command == "list" || command == "info" || command == "build" {
@@ -1427,6 +1428,7 @@ func main() {
 		LLVMFeatures:    *llvmFeatures,
 		PrintJSON:       flagJSON,
 		Monitor:         *monitor,
+		BaudRate:        *baudrate,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand

@@ -32,10 +32,15 @@ func Monitor(port string, options *compileopts.Options) error {
 		break
 	}
 
+	br := options.BaudRate
+	if br <= 0 {
+		br = 115200
+	}
+
 	wait = 300
 	var p serial.Port
 	for i := 0; i <= wait; i++ {
-		p, err = serial.Open(port, &serial.Mode{})
+		p, err = serial.Open(port, &serial.Mode{BaudRate: br})
 		if err != nil {
 			if i < wait {
 				time.Sleep(10 * time.Millisecond)
