@@ -918,7 +918,7 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		bufferGlobal.SetInitializer(bufferValue)
 		bufferGlobal.SetLinkage(llvm.InternalLinkage)
 		bufferGlobal.SetAlignment(1)
-		slicePtr := llvm.ConstInBoundsGEP(bufferGlobal, []llvm.Value{
+		slicePtr := llvm.ConstInBoundsGEP(bufferValue.Type(), bufferGlobal, []llvm.Value{
 			llvm.ConstInt(c.uintptrType, 0, false),
 			llvm.ConstInt(c.uintptrType, 0, false),
 		})
@@ -990,7 +990,7 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		// Create the slice object itself.
 		// Because embed.FS refers to it as *[]embed.file instead of a plain
 		// []embed.file, we have to store this as a global.
-		slicePtr := llvm.ConstInBoundsGEP(sliceDataGlobal, []llvm.Value{
+		slicePtr := llvm.ConstInBoundsGEP(sliceDataInitializer.Type(), sliceDataGlobal, []llvm.Value{
 			llvm.ConstInt(c.uintptrType, 0, false),
 			llvm.ConstInt(c.uintptrType, 0, false),
 		})
@@ -1018,11 +1018,11 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 func (c *compilerContext) getEmbedFileString(file *loader.EmbedFile) llvm.Value {
 	dataGlobalName := "embed/file_" + file.Hash
 	dataGlobal := c.mod.NamedGlobal(dataGlobalName)
+	dataGlobalType := llvm.ArrayType(c.ctx.Int8Type(), int(file.Size))
 	if dataGlobal.IsNil() {
-		dataGlobalType := llvm.ArrayType(c.ctx.Int8Type(), int(file.Size))
 		dataGlobal = llvm.AddGlobal(c.mod, dataGlobalType, dataGlobalName)
 	}
-	strPtr := llvm.ConstInBoundsGEP(dataGlobal, []llvm.Value{
+	strPtr := llvm.ConstInBoundsGEP(dataGlobalType, dataGlobal, []llvm.Value{
 		llvm.ConstInt(c.uintptrType, 0, false),
 		llvm.ConstInt(c.uintptrType, 0, false),
 	})
@@ -1601,7 +1601,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		// Note: the pointer is always of type *i8.
 		ptr := argValues[0]
 		len := argValues[1]
-		return b.CreateGEP(ptr, []llvm.Value{len}, ""), nil
+		return b.CreateGEP(b.ctx.Int8Type(), ptr, []llvm.Value{len}, ""), nil
 	case "Alignof": // unsafe.Alignof
 		align := b.targetData.ABITypeAlignment(argValues[0].Type())
 		return llvm.ConstInt(b.uintptrType, uint64(align), false), nil
@@ -1911,7 +1911,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(b.ctx.Int32Type(), uint64(expr.Field), false),
 		}
-		return b.CreateInBoundsGEP(val, indices, ""), nil
+		elementType := b.getLLVMType(expr.X.Type().Underlying().(*types.Pointer).Elem())
+		return b.CreateInBoundsGEP(elementType, val, indices, ""), nil
 	case *ssa.Function:
 		panic("function is not an expression")
 	case *ssa.Global:
@@ -1935,7 +1936,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		alloca, allocaPtr, allocaSize := b.createTemporaryAlloca(arrayType, "index.alloca")
 		b.CreateStore(array, alloca)
 		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-		ptr := b.CreateInBoundsGEP(alloca, []llvm.Value{zero, index}, "index.gep")
+		ptr := b.CreateInBoundsGEP(arrayType, alloca, []llvm.Value{zero, index}, "index.gep")
 		result := b.CreateLoad(arrayType.ElementType(), ptr, "index.load")
 		b.emitLifetimeEnd(allocaPtr, allocaSize)
 		return result, nil
@@ -1945,13 +1946,15 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 		// Get buffer pointer and length
 		var bufptr, buflen llvm.Value
+		var bufType llvm.Type
 		switch ptrTyp := expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
-			typ := expr.X.Type().Underlying().(*types.Pointer).Elem().Underlying()
+			typ := ptrTyp.Elem().Underlying()
 			switch typ := typ.(type) {
 			case *types.Array:
 				bufptr = val
 				buflen = llvm.ConstInt(b.uintptrType, uint64(typ.Len()), false)
+				bufType = b.getLLVMType(typ)
 				// Check for nil pointer before calculating the address, from
 				// the spec:
 				// > For an operand x of type T, the address operation &x
@@ -1965,6 +1968,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		case *types.Slice:
 			bufptr = b.CreateExtractValue(val, 0, "indexaddr.ptr")
 			buflen = b.CreateExtractValue(val, 1, "indexaddr.len")
+			bufType = b.getLLVMType(ptrTyp.Elem())
 		default:
 			return llvm.Value{}, b.makeError(expr.Pos(), "todo: indexaddr: "+ptrTyp.String())
 		}
@@ -1982,9 +1986,9 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 				index,
 			}
-			return b.CreateInBoundsGEP(bufptr, indices, ""), nil
+			return b.CreateInBoundsGEP(bufType, bufptr, indices, ""), nil
 		case *types.Slice:
-			return b.CreateInBoundsGEP(bufptr, []llvm.Value{index}, ""), nil
+			return b.CreateInBoundsGEP(bufType, bufptr, []llvm.Value{index}, ""), nil
 		default:
 			panic("unreachable")
 		}
@@ -2012,8 +2016,9 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 			// Lookup byte
 			buf := b.CreateExtractValue(value, 0, "")
-			bufPtr := b.CreateInBoundsGEP(buf, []llvm.Value{index}, "")
-			return b.CreateLoad(b.ctx.Int8Type(), bufPtr, ""), nil
+			bufElemType := b.ctx.Int8Type()
+			bufPtr := b.CreateInBoundsGEP(bufElemType, buf, []llvm.Value{index}, "")
+			return b.CreateLoad(bufElemType, bufPtr, ""), nil
 		case *types.Map:
 			valueType := expr.Type()
 			if expr.CommaOk {
@@ -2146,7 +2151,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		switch typ := expr.X.Type().Underlying().(type) {
 		case *types.Pointer: // pointer to array
 			// slice an array
-			length := typ.Elem().Underlying().(*types.Array).Len()
+			arrayType := typ.Elem().Underlying().(*types.Array)
+			length := arrayType.Len()
 			llvmLen := llvm.ConstInt(b.uintptrType, uint64(length), false)
 			if high.IsNil() {
 				high = llvmLen
@@ -2175,7 +2181,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			}
 
 			sliceLen := b.CreateSub(high, low, "slice.len")
-			slicePtr := b.CreateInBoundsGEP(value, indices, "slice.ptr")
+			slicePtr := b.CreateInBoundsGEP(b.getLLVMType(arrayType), value, indices, "slice.ptr")
 			sliceCap := b.CreateSub(max, low, "slice.cap")
 
 			slice := b.ctx.ConstStruct([]llvm.Value{
@@ -2214,7 +2220,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				max = b.CreateTrunc(max, b.uintptrType, "")
 			}
 
-			newPtr := b.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
+			ptrElemType := b.getLLVMType(typ.Elem())
+			newPtr := b.CreateInBoundsGEP(ptrElemType, oldPtr, []llvm.Value{low}, "")
 			newLen := b.CreateSub(high, low, "")
 			newCap := b.CreateSub(max, low, "")
 			slice := b.ctx.ConstStruct([]llvm.Value{
@@ -2254,7 +2261,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				high = b.CreateTrunc(high, b.uintptrType, "")
 			}
 
-			newPtr := b.CreateInBoundsGEP(oldPtr, []llvm.Value{low}, "")
+			newPtr := b.CreateInBoundsGEP(b.ctx.Int8Type(), oldPtr, []llvm.Value{low}, "")
 			newLen := b.CreateSub(high, low, "")
 			str := llvm.Undef(b.getLLVMRuntimeType("_string"))
 			str = b.CreateInsertValue(str, newPtr, 0, "")
@@ -2717,14 +2724,15 @@ func (c *compilerContext) createConst(expr *ssa.Const) llvm.Value {
 			var strPtr llvm.Value
 			if str != "" {
 				objname := c.pkg.Path() + "$string"
-				global := llvm.AddGlobal(c.mod, llvm.ArrayType(c.ctx.Int8Type(), len(str)), objname)
+				globalType := llvm.ArrayType(c.ctx.Int8Type(), len(str))
+				global := llvm.AddGlobal(c.mod, globalType, objname)
 				global.SetInitializer(c.ctx.ConstString(str, false))
 				global.SetLinkage(llvm.InternalLinkage)
 				global.SetGlobalConstant(true)
 				global.SetUnnamedAddr(true)
 				global.SetAlignment(1)
 				zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
-				strPtr = llvm.ConstInBoundsGEP(global, []llvm.Value{zero, zero})
+				strPtr = llvm.ConstInBoundsGEP(globalType, global, []llvm.Value{zero, zero})
 			} else {
 				strPtr = llvm.ConstNull(c.i8ptrType)
 			}
@@ -2844,7 +2852,7 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 					// create a GEP that is not in bounds. However, we're
 					// talking about unsafe code here so the programmer has to
 					// be careful anyway.
-					return b.CreateInBoundsGEP(origptr, []llvm.Value{index}, ""), nil
+					return b.CreateInBoundsGEP(b.ctx.Int8Type(), origptr, []llvm.Value{index}, ""), nil
 				}
 			}
 		}

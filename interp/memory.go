@@ -646,8 +646,8 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 		if llvmValue.Type() != mem.r.i8ptrType {
 			llvmValue = llvm.ConstBitCast(llvmValue, mem.r.i8ptrType)
 		}
-		llvmValue = llvm.ConstInBoundsGEP(llvmValue, []llvm.Value{
-			llvm.ConstInt(llvmValue.Type().Context().Int32Type(), uint64(v.offset()), false),
+		llvmValue = llvm.ConstInBoundsGEP(mem.r.mod.Context().Int8Type(), llvmValue, []llvm.Value{
+			llvm.ConstInt(mem.r.mod.Context().Int32Type(), uint64(v.offset()), false),
 		})
 	}
 

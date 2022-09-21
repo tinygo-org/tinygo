@@ -173,7 +173,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		allocaType := llvm.ArrayType(b.ctx.Int8Type(), int(recvbufSize))
 		recvbufAlloca, _, _ := b.createTemporaryAlloca(allocaType, "select.recvbuf.alloca")
 		recvbufAlloca.SetAlignment(recvbufAlign)
-		recvbuf = b.CreateGEP(recvbufAlloca, []llvm.Value{
+		recvbuf = b.CreateGEP(allocaType, recvbufAlloca, []llvm.Value{
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		}, "select.recvbuf")
@@ -184,13 +184,13 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	statesAlloca, statesI8, statesSize := b.createTemporaryAlloca(statesAllocaType, "select.states.alloca")
 	for i, state := range selectStates {
 		// Set each slice element to the appropriate channel.
-		gep := b.CreateGEP(statesAlloca, []llvm.Value{
+		gep := b.CreateGEP(statesAllocaType, statesAlloca, []llvm.Value{
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
 		}, "")
 		b.CreateStore(state, gep)
 	}
-	statesPtr := b.CreateGEP(statesAlloca, []llvm.Value{
+	statesPtr := b.CreateGEP(statesAllocaType, statesAlloca, []llvm.Value{
 		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 	}, "select.states")
@@ -204,7 +204,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		chBlockAllocaType := llvm.ArrayType(b.getLLVMRuntimeType("channelBlockedList"), len(selectStates))
 		chBlockAlloca, chBlockAllocaPtr, chBlockSize := b.createTemporaryAlloca(chBlockAllocaType, "select.block.alloca")
 		chBlockLen := llvm.ConstInt(b.uintptrType, uint64(len(selectStates)), false)
-		chBlockPtr := b.CreateGEP(chBlockAlloca, []llvm.Value{
+		chBlockPtr := b.CreateGEP(chBlockAllocaType, chBlockAlloca, []llvm.Value{
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		}, "select.block")

@@ -58,7 +58,7 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needs
 				llvm.ConstInt(ctx.Int32Type(), 0, false),
 				llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 			}
-			gep := builder.CreateInBoundsGEP(packedAllocCast, indices, "")
+			gep := builder.CreateInBoundsGEP(packedType, packedAllocCast, indices, "")
 			builder.CreateStore(value, gep)
 		}
 
@@ -115,7 +115,7 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needs
 				llvm.ConstInt(ctx.Int32Type(), 0, false),
 				llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 			}
-			gep := builder.CreateInBoundsGEP(packedAlloc, indices, "")
+			gep := builder.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 			builder.CreateStore(value, gep)
 		}
 
@@ -170,7 +170,7 @@ func EmitPointerUnpack(builder llvm.Builder, mod llvm.Module, ptr llvm.Value, va
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 			llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 		}
-		gep := builder.CreateInBoundsGEP(packedAlloc, indices, "")
+		gep := builder.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 		values[i] = builder.CreateLoad(valueType, gep, "")
 	}
 	if !packedRawAlloc.IsNil() {

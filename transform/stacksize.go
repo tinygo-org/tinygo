@@ -59,7 +59,7 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 	defer irbuilder.Dispose()
 	for i, function := range functions {
 		for _, use := range functionMap[function] {
-			ptr := llvm.ConstGEP(stackSizesGlobal, []llvm.Value{
+			ptr := llvm.ConstGEP(stackSizesGlobalType, stackSizesGlobal, []llvm.Value{
 				llvm.ConstInt(ctx.Int32Type(), 0, false),
 				llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 			})

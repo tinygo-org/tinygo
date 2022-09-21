@@ -223,7 +223,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 		// Update stack start.
 		parent := builder.CreateLoad(stackChainStartType, stackChainStart, "")
-		gep := builder.CreateGEP(stackObject, []llvm.Value{
+		gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 		}, "")
@@ -244,7 +244,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			builder.SetInsertPointBefore(insertionPoint)
 
 			// Extract a pointer to the appropriate section of the stack object.
-			gep := builder.CreateGEP(stackObject, []llvm.Value{
+			gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
 				llvm.ConstInt(ctx.Int32Type(), 0, false),
 				llvm.ConstInt(ctx.Int32Type(), uint64(2+i), false),
 			}, "")

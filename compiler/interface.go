@@ -122,19 +122,19 @@ func (c *compilerContext) makeStructTypeFields(typ *types.Struct) llvm.Value {
 	for i := 0; i < typ.NumFields(); i++ {
 		fieldGlobalValue := llvm.ConstNull(runtimeStructField)
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, c.getTypeCode(typ.Field(i).Type()), []uint32{0})
-		fieldName := c.makeGlobalArray([]byte(typ.Field(i).Name()), "reflect/types.structFieldName", c.ctx.Int8Type())
+		fieldNameType, fieldName := c.makeGlobalArray([]byte(typ.Field(i).Name()), "reflect/types.structFieldName", c.ctx.Int8Type())
 		fieldName.SetLinkage(llvm.PrivateLinkage)
 		fieldName.SetUnnamedAddr(true)
-		fieldName = llvm.ConstGEP(fieldName, []llvm.Value{
+		fieldName = llvm.ConstGEP(fieldNameType, fieldName, []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 		})
 		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldName, []uint32{1})
 		if typ.Tag(i) != "" {
-			fieldTag := c.makeGlobalArray([]byte(typ.Tag(i)), "reflect/types.structFieldTag", c.ctx.Int8Type())
+			fieldTagType, fieldTag := c.makeGlobalArray([]byte(typ.Tag(i)), "reflect/types.structFieldTag", c.ctx.Int8Type())
 			fieldTag.SetLinkage(llvm.PrivateLinkage)
 			fieldTag.SetUnnamedAddr(true)
-			fieldTag = llvm.ConstGEP(fieldTag, []llvm.Value{
+			fieldTag = llvm.ConstGEP(fieldTagType, fieldTag, []llvm.Value{
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			})
@@ -239,7 +239,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 	if !global.IsNil() {
 		// the method set already exists
-		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+		return llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{zero, zero})
 	}
 
 	ms := c.program.MethodSets.MethodSet(typ)
@@ -272,7 +272,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
 	global.SetLinkage(llvm.LinkOnceODRLinkage)
-	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+	return llvm.ConstGEP(arrayType, global, []llvm.Value{zero, zero})
 }
 
 // getInterfaceMethodSet returns a global variable with the method set of the
@@ -288,7 +288,7 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 	if !global.IsNil() {
 		// method set already exist, return it
-		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+		return llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{zero, zero})
 	}
 
 	// Every method is a *i8 reference indicating the signature of this method.
@@ -303,7 +303,7 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
 	global.SetLinkage(llvm.LinkOnceODRLinkage)
-	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+	return llvm.ConstGEP(value.Type(), global, []llvm.Value{zero, zero})
 }
 
 // getMethodSignatureName returns a unique name (that can be used as the name of

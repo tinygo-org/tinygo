@@ -31,10 +31,10 @@ func hasUses(value llvm.Value) bool {
 }
 
 // makeGlobalArray creates a new LLVM global with the given name and integers as
-// contents, and returns the global.
+// contents, and returns the global and initializer type.
 // Note that it is left with the default linkage etc., you should set
 // linkage/constant/etc properties yourself.
-func makeGlobalArray(mod llvm.Module, bufItf interface{}, name string, elementType llvm.Type) llvm.Value {
+func makeGlobalArray(mod llvm.Module, bufItf interface{}, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
 	buf := reflect.ValueOf(bufItf)
 	globalType := llvm.ArrayType(elementType, buf.Len())
 	global := llvm.AddGlobal(mod, globalType, name)
@@ -44,7 +44,7 @@ func makeGlobalArray(mod llvm.Module, bufItf interface{}, name string, elementTy
 		value = llvm.ConstInsertValue(value, llvm.ConstInt(elementType, ch, false), []uint32{uint32(i)})
 	}
 	global.SetInitializer(value)
-	return global
+	return globalType, global
 }
 
 // getGlobalBytes returns the slice contained in the array of the provided
@@ -64,8 +64,8 @@ func getGlobalBytes(global llvm.Value) []byte {
 // function used for creating reflection sidetables, for example.
 func replaceGlobalIntWithArray(mod llvm.Module, name string, buf interface{}) llvm.Value {
 	oldGlobal := mod.NamedGlobal(name)
-	global := makeGlobalArray(mod, buf, name+".tmp", oldGlobal.Type().ElementType())
-	gep := llvm.ConstGEP(global, []llvm.Value{
+	globalType, global := makeGlobalArray(mod, buf, name+".tmp", oldGlobal.Type().ElementType())
+	gep := llvm.ConstGEP(globalType, global, []llvm.Value{
 		llvm.ConstInt(mod.Context().Int32Type(), 0, false),
 		llvm.ConstInt(mod.Context().Int32Type(), 0, false),
 	})
