@@ -125,7 +125,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 					// where the return value should be stored, instead of using
 					// the regular return value.
 					builder.CreateCall(externalFnType, externalFn, callParams, callName)
-					returnValue := builder.CreateLoad(retvalAlloca, "retval")
+					returnValue := builder.CreateLoad(int64Type, retvalAlloca, "retval")
 					call.ReplaceAllUsesWith(returnValue)
 					call.EraseFromParentAsInstruction()
 				} else {
@@ -152,7 +152,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 			for i, origParam := range fn.Params() {
 				paramValue := externalFn.Param(i)
 				if origParam.Type() == int64Type {
-					paramValue = builder.CreateLoad(paramValue, "i64")
+					paramValue = builder.CreateLoad(int64Type, paramValue, "i64")
 				}
 				callParams = append(callParams, paramValue)
 			}

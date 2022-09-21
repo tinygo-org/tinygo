@@ -1,5 +1,7 @@
 package compiler
 
+import "go/types"
+
 // This file implements volatile loads/stores in runtime/volatile.LoadT and
 // runtime/volatile.StoreT as compiler builtins.
 
@@ -9,7 +11,8 @@ func (b *builder) createVolatileLoad() {
 	b.createFunctionStart(true)
 	addr := b.getValue(b.fn.Params[0])
 	b.createNilCheck(b.fn.Params[0], addr, "deref")
-	val := b.CreateLoad(addr, "")
+	valType := b.getLLVMType(b.fn.Params[0].Type().(*types.Pointer).Elem())
+	val := b.CreateLoad(valType, addr, "")
 	val.SetVolatile(true)
 	b.CreateRet(val)
 }

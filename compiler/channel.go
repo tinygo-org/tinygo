@@ -84,7 +84,7 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 	if isZeroSize {
 		received = llvm.ConstNull(valueType)
 	} else {
-		received = b.CreateLoad(valueAlloca, "chan.received")
+		received = b.CreateLoad(valueType, valueAlloca, "chan.received")
 		b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
 	}
 	b.emitLifetimeEnd(channelBlockedListAllocaCast, channelBlockedListAllocaSize)
@@ -264,8 +264,8 @@ func (b *builder) getChanSelectResult(expr *ssa.Extract) llvm.Value {
 		// receive can proceed at a time) so we'll get that alloca, bitcast
 		// it to the correct type, and dereference it.
 		recvbuf := b.selectRecvBuf[expr.Tuple.(*ssa.Select)]
-		typ := llvm.PointerType(b.getLLVMType(expr.Type()), 0)
-		ptr := b.CreateBitCast(recvbuf, typ, "")
-		return b.CreateLoad(ptr, "")
+		typ := b.getLLVMType(expr.Type())
+		ptr := b.CreateBitCast(recvbuf, llvm.PointerType(typ, 0), "")
+		return b.CreateLoad(typ, ptr, "")
 	}
 }

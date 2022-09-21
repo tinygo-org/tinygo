@@ -34,6 +34,11 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 		return nil
 	}
 
+	ctx := mod.Context()
+	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
+	uintptrType := ctx.IntType(targetData.PointerSize() * 8)
+
 	// Create the new global with stack sizes, that will be put in a new section
 	// just for itself.
 	stackSizesGlobalType := llvm.ArrayType(functions[0].Type(), len(functions))
@@ -50,16 +55,16 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 	appendToUsedGlobals(mod, append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
 
 	// Replace the calls with loads from the new global with stack sizes.
-	irbuilder := mod.Context().NewBuilder()
+	irbuilder := ctx.NewBuilder()
 	defer irbuilder.Dispose()
 	for i, function := range functions {
 		for _, use := range functionMap[function] {
 			ptr := llvm.ConstGEP(stackSizesGlobal, []llvm.Value{
-				llvm.ConstInt(mod.Context().Int32Type(), 0, false),
-				llvm.ConstInt(mod.Context().Int32Type(), uint64(i), false),
+				llvm.ConstInt(ctx.Int32Type(), 0, false),
+				llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 			})
 			irbuilder.SetInsertPointBefore(use)
-			stacksize := irbuilder.CreateLoad(ptr, "stacksize")
+			stacksize := irbuilder.CreateLoad(uintptrType, ptr, "stacksize")
 			use.ReplaceAllUsesWith(stacksize)
 			use.EraseFromParentAsInstruction()
 		}
