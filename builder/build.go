@@ -1146,7 +1146,7 @@ func setGlobalValues(mod llvm.Module, globals map[string]map[string]string) erro
 
 			// Create the string value, which is a {ptr, len} pair.
 			zero := llvm.ConstInt(mod.Context().Int32Type(), 0, false)
-			ptr := llvm.ConstGEP(buf, []llvm.Value{zero, zero})
+			ptr := llvm.ConstGEP(bufInitializer.Type(), buf, []llvm.Value{zero, zero})
 			if ptr.Type() != elementTypes[0] {
 				return fmt.Errorf("%s: not a string", globalName)
 			}

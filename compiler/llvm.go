@@ -61,10 +61,10 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 }
 
 // makeGlobalArray creates a new LLVM global with the given name and integers as
-// contents, and returns the global.
+// contents, and returns the global and initializer type.
 // Note that it is left with the default linkage etc., you should set
 // linkage/constant/etc properties yourself.
-func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType llvm.Type) llvm.Value {
+func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
 	globalType := llvm.ArrayType(elementType, len(buf))
 	global := llvm.AddGlobal(c.mod, globalType, name)
 	value := llvm.Undef(globalType)
@@ -73,7 +73,7 @@ func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType l
 		value = llvm.ConstInsertValue(value, llvm.ConstInt(elementType, ch, false), []uint32{uint32(i)})
 	}
 	global.SetInitializer(value)
-	return global
+	return globalType, global
 }
 
 // createObjectLayout returns a LLVM value (of type i8*) that describes where

@@ -407,7 +407,8 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 // createRunDefers emits code to run all deferred functions.
 func (b *builder) createRunDefers() {
-	deferType := llvm.PointerType(b.getLLVMRuntimeType("_defer"), 0)
+	deferType := b.getLLVMRuntimeType("_defer")
+	deferPtrType := llvm.PointerType(deferType, 0)
 
 	// Add a loop like the following:
 	//     for stack != nil {
@@ -434,7 +435,7 @@ func (b *builder) createRunDefers() {
 	// Create loop head:
 	//     for stack != nil {
 	b.SetInsertPointAtEnd(loophead)
-	deferData := b.CreateLoad(deferType, b.deferPtr, "")
+	deferData := b.CreateLoad(deferPtrType, b.deferPtr, "")
 	stackIsNil := b.CreateICmp(llvm.IntEQ, deferData, llvm.ConstPointerNull(deferData.Type()), "stackIsNil")
 	b.CreateCondBr(stackIsNil, end, loop)
 
@@ -443,13 +444,13 @@ func (b *builder) createRunDefers() {
 	//     stack = stack.next
 	//     switch stack.callback {
 	b.SetInsertPointAtEnd(loop)
-	nextStackGEP := b.CreateInBoundsGEP(deferData, []llvm.Value{
+	nextStackGEP := b.CreateInBoundsGEP(deferType, deferData, []llvm.Value{
 		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		llvm.ConstInt(b.ctx.Int32Type(), 1, false), // .next field
 	}, "stack.next.gep")
-	nextStack := b.CreateLoad(deferType, nextStackGEP, "stack.next")
+	nextStack := b.CreateLoad(deferPtrType, nextStackGEP, "stack.next")
 	b.CreateStore(nextStack, b.deferPtr)
-	gep := b.CreateInBoundsGEP(deferData, []llvm.Value{
+	gep := b.CreateInBoundsGEP(deferType, deferData, []llvm.Value{
 		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		llvm.ConstInt(b.ctx.Int32Type(), 0, false), // .callback field
 	}, "callback.gep")
@@ -489,7 +490,7 @@ func (b *builder) createRunDefers() {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			for i := 2; i < len(valueTypes); i++ {
-				gep := b.CreateInBoundsGEP(deferredCallPtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "gep")
+				gep := b.CreateInBoundsGEP(deferredCallType, deferredCallPtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "gep")
 				forwardParam := b.CreateLoad(valueTypes[i], gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
@@ -538,7 +539,7 @@ func (b *builder) createRunDefers() {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			for i := range getParams(callback.Signature) {
-				gep := b.CreateInBoundsGEP(deferredCallPtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
+				gep := b.CreateInBoundsGEP(deferredCallType, deferredCallPtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
 				forwardParam := b.CreateLoad(valueTypes[i+2], gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
@@ -571,7 +572,7 @@ func (b *builder) createRunDefers() {
 			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			for i := 2; i < len(valueTypes); i++ {
-				gep := b.CreateInBoundsGEP(deferredCallPtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
+				gep := b.CreateInBoundsGEP(deferredCallType, deferredCallPtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
 				forwardParam := b.CreateLoad(valueTypes[i], gep, "param")
 				forwardParams = append(forwardParams, forwardParam)
 			}
@@ -598,7 +599,7 @@ func (b *builder) createRunDefers() {
 			var argValues []llvm.Value
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			for i := 0; i < params.Len(); i++ {
-				gep := b.CreateInBoundsGEP(deferredCallPtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
+				gep := b.CreateInBoundsGEP(deferredCallType, deferredCallPtr, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
 				forwardParam := b.CreateLoad(valueTypes[i+2], gep, "param")
 				argValues = append(argValues, forwardParam)
 			}
