@@ -476,8 +476,6 @@ var SPI0 = SPI{
 // Pin Change Interrupts
 var (
 	pinCallbacks [3][8]func(Pin)
-	interrupts   [3]*interrupt.Interrupt
-	previous     [3]uint8
 )
 
 func handlePCINTInterrupts(intr uint8, port *volatile.Register8) {
@@ -487,7 +485,6 @@ func handlePCINTInterrupts(intr uint8, port *volatile.Register8) {
 			pinCallbacks[intr][i](Pin(i * (intr + 1)))
 		}
 	}
-	previous[intr] = current
 }
 
 func handlePCINT0Interrupts(intr interrupt.Interrupt) {
@@ -502,63 +499,44 @@ func handlePCINT2Interrupts(intr interrupt.Interrupt) {
 	handlePCINTInterrupts(avr.IRQ_PCINT2-avr.IRQ_PCINT0, avr.PIND)
 }
 
-func SetInterrupt(pin Pin, callback func(Pin)) (err error) {
+type PinChange uint8
+
+// Pin change interrupt constants for SetInterrupt.
+const (
+	PinBoth PinChange = nil
+)
+
+func (pin Pin) SetInterrupt(pinChange PinChange, callback func(Pin)) (err error) {
 	if callback == nil {
 		// Disable this pin interrupt
 		return ErrFeatureNotImplemented
 	}
-	var PCMSK_REG *volatile.Register8
-	var PCIE uint8
-	var PCINT uint8
-	var IRQ uint8
-	var PIN0 Pin
 
 	switch {
 	case pin >= PB0 && pin <= PB7:
 		// PCMSK0 - PCINT0-7
-		PCMSK_REG = avr.PCMSK0
-		PCIE = avr.PCICR_PCIE0
-		PIN0 = PD0
-		PCINT = 1 << (pin - PIN0)
-		IRQ = avr.IRQ_PCINT0
-		if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
-			intr := interrupt.New(avr.IRQ_PCINT0, handlePCINT0Interrupts)
-			interrupts[IRQ-avr.IRQ_PCINT0] = &intr
-		}
+		pinIndex := pin - PD0
+		pinCallbacks[0][pinIndex] = callback
+		avr.PCMSK0.SetBits(1 << pinIndex)
+		avr.PCICR.SetBits(avr.PCICR_PCIE0)
+		interrupt.New(avr.IRQ_PCINT0, handlePCINT0Interrupts)
 	case pin >= PC0 && pin <= PC7:
 		// PCMSK1 - PCINT8-14
-		PCMSK_REG = avr.PCMSK1
-		PCIE = avr.PCICR_PCIE1
-		PIN0 = PC0
-		PCINT = 1 << (pin - PIN0)
-		IRQ = avr.IRQ_PCINT1
-		if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
-			intr := interrupt.New(avr.IRQ_PCINT1, handlePCINT1Interrupts)
-			interrupts[IRQ-avr.IRQ_PCINT0] = &intr
-		}
+		pinIndex := pin - PC0
+		pinCallbacks[1][pinIndex] = callback
+		avr.PCMSK1.SetBits(1 << pinIndex)
+		avr.PCICR.SetBits(avr.PCICR_PCIE1)
+		interrupt.New(avr.IRQ_PCINT1, handlePCINT1Interrupts)
 	case pin >= PD0 && pin <= PD7:
 		// PCMSK2 - PCINT16-23
-		PCMSK_REG = avr.PCMSK2
-		PCIE = avr.PCICR_PCIE2
-		PIN0 = PD0
-		PCINT = 1 << (pin - PIN0)
-		IRQ = avr.IRQ_PCINT2
-		if interrupts[IRQ-avr.IRQ_PCINT0] == nil {
-			intr := interrupt.New(avr.IRQ_PCINT2, handlePCINT2Interrupts)
-			interrupts[IRQ-avr.IRQ_PCINT0] = &intr
-		}
+		pinIndex := pin - PD0
+		pinCallbacks[2][pinIndex] = callback
+		avr.PCMSK2.SetBits(1 << pinIndex)
+		avr.PCICR.SetBits(avr.PCICR_PCIE2)
+		interrupt.New(avr.IRQ_PCINT2, handlePCINT2Interrupts)
 	default:
 		return ErrInvalidInputPin
 	}
-
-	if pinCallbacks[IRQ-avr.IRQ_PCINT0][pin-PIN0] != nil {
-		return ErrCallbackAlreadyDefined
-	}
-
-	pinCallbacks[IRQ-avr.IRQ_PCINT0][pin-PIN0] = callback
-
-	PCMSK_REG.SetBits(PCINT)
-	avr.PCICR.SetBits(PCIE)
 
 	return nil
 }
