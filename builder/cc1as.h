@@ -85,6 +85,9 @@ struct AssemblerInvocation {
   unsigned IncrementalLinkerCompatible : 1;
   unsigned EmbedBitcode : 1;
 
+  /// Whether to emit DWARF unwind info.
+  EmitDwarfUnwindType EmitDwarfUnwind;
+
   /// The name of the relocation model to use.
   std::string RelocationModel;
 
@@ -92,6 +95,9 @@ struct AssemblerInvocation {
   /// otherwise.
   std::string TargetABI;
 
+  /// Darwin target variant triple, the variant of the deployment target
+  /// for which the code is being compiled.
+  llvm::Optional<llvm::Triple> DarwinTargetVariantTriple;
   /// @}
 
 public:
@@ -112,6 +118,7 @@ public:
     Dwarf64 = 0;
     DwarfVersion = 0;
     EmbedBitcode = 0;
+    EmitDwarfUnwind = EmitDwarfUnwindType::Default;
   }
 
   static bool CreateFromArgs(AssemblerInvocation &Res,

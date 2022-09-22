@@ -80,6 +80,12 @@ func replaceGlobalIntWithArray(mod llvm.Module, name string, buf interface{}) ll
 // stripPointerCasts strips instruction pointer casts (getelementptr and
 // bitcast) and returns the original value without the casts.
 func stripPointerCasts(value llvm.Value) llvm.Value {
+	if !value.IsAConstantExpr().IsNil() {
+		switch value.Opcode() {
+		case llvm.GetElementPtr, llvm.BitCast:
+			return stripPointerCasts(value.Operand(0))
+		}
+	}
 	if !value.IsAInstruction().IsNil() {
 		switch value.InstructionOpcode() {
 		case llvm.GetElementPtr, llvm.BitCast:

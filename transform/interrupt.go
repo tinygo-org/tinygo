@@ -36,9 +36,8 @@ func LowerInterrupts(mod llvm.Module) []error {
 	handleMap := map[int64][]llvm.Value{}
 	handleType := mod.GetTypeByName("runtime/interrupt.handle")
 	if !handleType.IsNil() {
-		handlePtrType := llvm.PointerType(handleType, 0)
 		for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
-			if global.Type() != handlePtrType {
+			if global.GlobalValueType() != handleType {
 				continue
 			}
 

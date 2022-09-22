@@ -57,14 +57,15 @@ func (b *builder) extractFuncContext(funcValue llvm.Value) llvm.Value {
 // value. This may be an expensive operation.
 func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcType llvm.Type, funcPtr, context llvm.Value) {
 	context = b.CreateExtractValue(funcValue, 0, "")
-	bitcast := b.CreateExtractValue(funcValue, 1, "")
-	if !bitcast.IsAConstantExpr().IsNil() && bitcast.Opcode() == llvm.BitCast {
-		funcPtr = bitcast.Operand(0)
-		return
+	funcPtr = b.CreateExtractValue(funcValue, 1, "")
+	if !funcPtr.IsAConstantExpr().IsNil() && funcPtr.Opcode() == llvm.BitCast {
+		funcPtr = funcPtr.Operand(0) // needed for LLVM 14 (no opaque pointers)
 	}
-	funcType = b.getRawFuncType(sig)
-	llvmSig := llvm.PointerType(funcType, b.funcPtrAddrSpace)
-	funcPtr = b.CreateBitCast(bitcast, llvmSig, "")
+	if sig != nil {
+		funcType = b.getRawFuncType(sig)
+		llvmSig := llvm.PointerType(funcType, b.funcPtrAddrSpace)
+		funcPtr = b.CreateBitCast(funcPtr, llvmSig, "")
+	}
 	return
 }
 

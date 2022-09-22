@@ -305,7 +305,9 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 		// no methods or methods already read
 		return
 	}
-	methodSet = methodSet.Operand(0) // get global from GEP
+	if !methodSet.IsAConstantExpr().IsNil() && methodSet.Opcode() == llvm.GetElementPtr {
+		methodSet = methodSet.Operand(0) // get global from GEP, for LLVM 14 (non-opaque pointers)
+	}
 
 	// This type has methods, collect all methods of this type.
 	t.methodSet = methodSet

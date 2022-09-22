@@ -1,6 +1,6 @@
 {
 	"inherits": ["riscv32"],
-	"features": "+c,+m",
+	"features": "+c,+m,-relax,-save-restore",
 	"build-tags": ["esp32c3", "esp"],
 	"serial": "uart",
 	"rtlib": "compiler-rt",

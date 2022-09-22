@@ -40,7 +40,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-14-macos-v1
+          key: llvm-source-15-macos-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-14-macos-v1
+          key: llvm-build-15-macos-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -108,7 +108,7 @@ jobs:
       - name: Install LLVM
         shell: bash
         run: |
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@14
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@15
       - name: Checkout
         uses: actions/checkout@v2
       - name: Install Go
