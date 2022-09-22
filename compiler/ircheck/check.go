@@ -70,10 +70,7 @@ func (c *checker) checkType(t llvm.Type, checked map[llvm.Type]struct{}, special
 			return fmt.Errorf("failed to verify element type of array type %s: %s", t.String(), err.Error())
 		}
 	case llvm.PointerTypeKind:
-		// check underlying type
-		if err := c.checkType(t.ElementType(), checked, specials); err != nil {
-			return fmt.Errorf("failed to verify underlying type of pointer type %s: %s", t.String(), err.Error())
-		}
+		// Pointers can't be checked in an opaque pointer world.
 	case llvm.VectorTypeKind:
 		// check element type
 		if err := c.checkType(t.ElementType(), checked, specials); err != nil {

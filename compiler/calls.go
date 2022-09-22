@@ -20,7 +20,7 @@ const maxFieldsPerParam = 3
 type paramInfo struct {
 	llvmType llvm.Type
 	name     string // name, possibly with suffixes for e.g. struct fields
-	flags    paramFlags
+	elemSize uint64 // size of pointer element type, or 0 if this isn't a pointer
 }
 
 // paramFlags identifies parameter attributes for flags. Most importantly, it
@@ -96,13 +96,7 @@ func (c *compilerContext) expandFormalParamType(t llvm.Type, name string, goType
 		// failed to expand this parameter: too many fields
 	}
 	// TODO: split small arrays
-	return []paramInfo{
-		{
-			llvmType: t,
-			name:     name,
-			flags:    getTypeFlags(goType),
-		},
-	}
+	return []paramInfo{c.getParamInfo(t, name, goType)}
 }
 
 // expandFormalParamOffsets returns a list of offsets from the start of an
@@ -152,7 +146,6 @@ func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 // Try to flatten a struct type to a list of types. Returns a 1-element slice
 // with the passed in type if this is not possible.
 func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType types.Type) []paramInfo {
-	typeFlags := getTypeFlags(goType)
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		var paramInfos []paramInfo
@@ -183,40 +176,37 @@ func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType 
 				}
 			}
 			subInfos := c.flattenAggregateType(subfield, name+"."+suffix, extractSubfield(goType, i))
-			for i := range subInfos {
-				subInfos[i].flags |= typeFlags
-			}
 			paramInfos = append(paramInfos, subInfos...)
 		}
 		return paramInfos
 	default:
-		return []paramInfo{
-			{
-				llvmType: t,
-				name:     name,
-				flags:    typeFlags,
-			},
-		}
+		return []paramInfo{c.getParamInfo(t, name, goType)}
 	}
 }
 
-// getTypeFlags returns the type flags for a given type. It will not recurse
-// into sub-types (such as in structs).
-func getTypeFlags(t types.Type) paramFlags {
-	if t == nil {
-		return 0
+// getParamInfo collects information about a parameter. For example, if this
+// parameter is pointer-like, it will also store the element type for the
+// dereferenceable_or_null attribute.
+func (c *compilerContext) getParamInfo(t llvm.Type, name string, goType types.Type) paramInfo {
+	info := paramInfo{
+		llvmType: t,
+		name:     name,
 	}
-	switch t.Underlying().(type) {
-	case *types.Pointer:
-		// Pointers in Go must either point to an object or be nil.
-		return paramIsDeferenceableOrNull
-	case *types.Chan, *types.Map:
-		// Channels and maps are implemented as pointers pointing to some
-		// object, and follow the same rules as *types.Pointer.
-		return paramIsDeferenceableOrNull
-	default:
-		return 0
+	if goType != nil {
+		switch underlying := goType.Underlying().(type) {
+		case *types.Pointer:
+			// Pointers in Go must either point to an object or be nil.
+			info.elemSize = c.targetData.TypeAllocSize(c.getLLVMType(underlying.Elem()))
+		case *types.Chan:
+			// Channels are implemented simply as a *runtime.channel.
+			info.elemSize = c.targetData.TypeAllocSize(c.getLLVMRuntimeType("channel"))
+		case *types.Map:
+			// Maps are similar to channels: they are implemented as a
+			// *runtime.hashmap.
+			info.elemSize = c.targetData.TypeAllocSize(c.getLLVMRuntimeType("hashmap"))
+		}
 	}
+	return info
 }
 
 // extractSubfield extracts a field from a struct, or returns null if this is

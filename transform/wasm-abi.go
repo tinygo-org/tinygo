@@ -50,7 +50,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 		paramTypes := []llvm.Type{}
 
 		// Check return type for 64-bit integer.
-		fnType := fn.Type().ElementType()
+		fnType := fn.GlobalValueType()
 		returnType := fnType.ReturnType()
 		if returnType == int64Type {
 			hasInt64 = true

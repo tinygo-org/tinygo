@@ -86,7 +86,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		if _, ok := typ.Underlying().(*types.Pointer); !ok {
 			ptrTo = c.getTypeCode(types.NewPointer(typ))
 		}
-		globalValue := llvm.ConstNull(global.Type().ElementType())
+		globalValue := llvm.ConstNull(global.GlobalValueType())
 		if !references.IsNil() {
 			globalValue = c.builder.CreateInsertValue(globalValue, references, 0, "")
 		}
@@ -533,7 +533,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 
 	receiverValue := b.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
 	params := append(b.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
-	if llvmFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
+	if llvmFnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
 		b.CreateCall(llvmFnType, llvmFn, params, "")
 		b.CreateRetVoid()
 	} else {

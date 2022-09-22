@@ -73,7 +73,7 @@ func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 	return c.ctx.StructType([]llvm.Type{c.i8ptrType, c.rawVoidFuncType}, false)
 }
 
-// getRawFuncType returns a LLVM function pointer type for a given signature.
+// getRawFuncType returns a LLVM function type for a given signature.
 func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 	// Get the return type.
 	var returnType llvm.Type

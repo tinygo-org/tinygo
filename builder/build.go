@@ -411,7 +411,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						return errors.New("global not found: " + globalName)
 					}
 					name := global.Name()
-					newGlobal := llvm.AddGlobal(mod, global.Type().ElementType(), name+".tmp")
+					newGlobal := llvm.AddGlobal(mod, global.GlobalValueType(), name+".tmp")
 					global.ReplaceAllUsesWith(newGlobal)
 					global.EraseFromParentAsGlobal()
 					newGlobal.SetName(name)
@@ -1127,7 +1127,7 @@ func setGlobalValues(mod llvm.Module, globals map[string]map[string]string) erro
 
 			// A strin is a {ptr, len} pair. We need these types to build the
 			// initializer.
-			initializerType := global.Type().ElementType()
+			initializerType := global.GlobalValueType()
 			if initializerType.TypeKind() != llvm.StructTypeKind || initializerType.StructName() == "" {
 				return fmt.Errorf("%s: not a string", globalName)
 			}

@@ -124,7 +124,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 		alloca.SetAlignment(alignment)
 
 		// Zero the allocation inside the block where the value was originally allocated.
-		zero := llvm.ConstNull(alloca.Type().ElementType())
+		zero := llvm.ConstNull(alloca.AllocatedType())
 		builder.SetInsertPointBefore(bitcast)
 		store := builder.CreateStore(zero, alloca)
 		store.SetAlignment(alignment)

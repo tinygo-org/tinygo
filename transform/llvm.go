@@ -66,7 +66,7 @@ func getGlobalBytes(global llvm.Value, builder llvm.Builder) []byte {
 // function used for creating reflection sidetables, for example.
 func replaceGlobalIntWithArray(mod llvm.Module, name string, buf interface{}) llvm.Value {
 	oldGlobal := mod.NamedGlobal(name)
-	globalType, global := makeGlobalArray(mod, buf, name+".tmp", oldGlobal.Type().ElementType())
+	globalType, global := makeGlobalArray(mod, buf, name+".tmp", oldGlobal.GlobalValueType())
 	gep := llvm.ConstGEP(globalType, global, []llvm.Value{
 		llvm.ConstInt(mod.Context().Int32Type(), 0, false),
 		llvm.ConstInt(mod.Context().Int32Type(), 0, false),
