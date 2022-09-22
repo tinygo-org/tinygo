@@ -503,7 +503,7 @@ type PinChange uint8
 
 // Pin change interrupt constants for SetInterrupt.
 const (
-	PinBoth PinChange = nil
+	PinToggle PinChange = 1
 )
 
 func (pin Pin) SetInterrupt(pinChange PinChange, callback func(Pin)) (err error) {
