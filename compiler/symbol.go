@@ -83,7 +83,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	// Add an extra parameter as the function context. This context is used in
 	// closures and bound methods, but should be optimized away when not used.
 	if !info.exported {
-		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "context", flags: 0})
+		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "context", elemSize: 0})
 	}
 
 	var paramTypes []llvm.Type
@@ -112,17 +112,8 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 
 	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
 	for i, info := range paramInfos {
-		if info.flags&paramIsDeferenceableOrNull == 0 {
-			continue
-		}
-		if info.llvmType.TypeKind() == llvm.PointerTypeKind {
-			el := info.llvmType.ElementType()
-			size := c.targetData.TypeAllocSize(el)
-			if size == 0 {
-				// dereferenceable_or_null(0) appears to be illegal in LLVM.
-				continue
-			}
-			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, size)
+		if info.elemSize != 0 {
+			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, info.elemSize)
 			llvmFn.AddAttributeAtIndex(i+1, dereferenceableOrNull)
 		}
 	}

@@ -91,7 +91,7 @@ func (b *builder) createSliceToArrayPointerCheck(sliceLen llvm.Value, arrayLen i
 
 // createUnsafeSliceCheck inserts a runtime check used for unsafe.Slice. This
 // function must panic if the ptr/len parameters are invalid.
-func (b *builder) createUnsafeSliceCheck(ptr, len llvm.Value, lenType *types.Basic) {
+func (b *builder) createUnsafeSliceCheck(ptr, len llvm.Value, elementType llvm.Type, lenType *types.Basic) {
 	// From the documentation of unsafe.Slice:
 	//   > At run time, if len is negative, or if ptr is nil and len is not
 	//   > zero, a run-time panic occurs.
@@ -105,7 +105,7 @@ func (b *builder) createUnsafeSliceCheck(ptr, len llvm.Value, lenType *types.Bas
 
 	// Determine the maximum slice size, and therefore the maximum value of the
 	// len parameter.
-	maxSize := b.maxSliceSize(ptr.Type().ElementType())
+	maxSize := b.maxSliceSize(elementType)
 	maxSizeValue := llvm.ConstInt(len.Type(), maxSize, false)
 
 	// Do the check. By using unsigned greater than for the length check, signed

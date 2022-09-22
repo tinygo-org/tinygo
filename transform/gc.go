@@ -18,7 +18,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		stackChainStart := mod.NamedGlobal("runtime.stackChainStart")
 		if !stackChainStart.IsNil() {
 			stackChainStart.SetLinkage(llvm.InternalLinkage)
-			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
+			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.GlobalValueType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
 		return false
@@ -96,7 +96,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		return false
 	}
 	stackChainStart.SetLinkage(llvm.InternalLinkage)
-	stackChainStartType := stackChainStart.Type().ElementType()
+	stackChainStartType := stackChainStart.GlobalValueType()
 	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))
 
 	// Iterate until runtime.trackPointer has no uses left.

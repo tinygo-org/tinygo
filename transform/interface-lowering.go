@@ -423,7 +423,7 @@ func (p *lowerInterfacesPass) defineInterfaceImplementsFunc(fn llvm.Value, itf *
 func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *interfaceInfo, signature *signatureInfo) {
 	context := fn.LastParam()
 	actualType := llvm.PrevParam(context)
-	returnType := fn.Type().ElementType().ReturnType()
+	returnType := fn.GlobalValueType().ReturnType()
 	context.SetName("context")
 	actualType.SetName("actualType")
 	fn.SetLinkage(llvm.InternalLinkage)

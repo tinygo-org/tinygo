@@ -655,7 +655,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// GetElementPtr does pointer arithmetic, changing the offset of the
 			// pointer into the underlying object.
 			var offset uint64
-			for i := 2; i < len(operands); i += 2 {
+			for i := 1; i < len(operands); i += 2 {
 				index := operands[i].Uint()
 				elementSize := operands[i+1].Uint()
 				if int64(elementSize) < 0 {

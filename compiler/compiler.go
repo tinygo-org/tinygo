@@ -862,7 +862,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			if files, ok := c.embedGlobals[member.Name()]; ok {
 				c.createEmbedGlobal(member, global, files)
 			} else if !info.extern {
-				global.SetInitializer(llvm.ConstNull(global.Type().ElementType()))
+				global.SetInitializer(llvm.ConstNull(global.GlobalValueType()))
 				global.SetVisibility(llvm.HiddenVisibility)
 				if info.section != "" {
 					global.SetSection(info.section)
@@ -1405,7 +1405,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			b.CreateRet(b.getValue(instr.Results[0]))
 		} else {
 			// Multiple return values. Put them all in a struct.
-			retVal := llvm.ConstNull(b.llvmFn.Type().ElementType().ReturnType())
+			retVal := llvm.ConstNull(b.llvmFn.GlobalValueType().ReturnType())
 			for i, result := range instr.Results {
 				val := b.getValue(result)
 				retVal = b.CreateInsertValue(retVal, val, i, "")
@@ -1444,7 +1444,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		elemsBuf := b.CreateExtractValue(elems, 0, "append.elemsBuf")
 		elemsPtr := b.CreateBitCast(elemsBuf, b.i8ptrType, "append.srcPtr")
 		elemsLen := b.CreateExtractValue(elems, 1, "append.elemsLen")
-		elemType := srcBuf.Type().ElementType()
+		elemType := b.getLLVMType(argTypes[0].Underlying().(*types.Slice).Elem())
 		elemSize := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(elemType), false)
 		result := b.createRuntimeCall("sliceAppend", []llvm.Value{srcPtr, elemsPtr, srcLen, srcCap, elemsLen, elemSize}, "append.new")
 		newPtr := b.CreateExtractValue(result, 0, "append.newPtr")
@@ -1497,7 +1497,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		srcLen := b.CreateExtractValue(src, 1, "copy.srcLen")
 		dstBuf := b.CreateExtractValue(dst, 0, "copy.dstArray")
 		srcBuf := b.CreateExtractValue(src, 0, "copy.srcArray")
-		elemType := dstBuf.Type().ElementType()
+		elemType := b.getLLVMType(argTypes[0].Underlying().(*types.Slice).Elem())
 		dstBuf = b.CreateBitCast(dstBuf, b.i8ptrType, "copy.dstPtr")
 		srcBuf = b.CreateBitCast(srcBuf, b.i8ptrType, "copy.srcPtr")
 		elemSize := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(elemType), false)
@@ -1637,7 +1637,8 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			b.uintptrType,
 			b.uintptrType,
 		}, false))
-		b.createUnsafeSliceCheck(ptr, len, argTypes[1].Underlying().(*types.Basic))
+		elementType := b.getLLVMType(argTypes[0].Underlying().(*types.Pointer).Elem())
+		b.createUnsafeSliceCheck(ptr, len, elementType, argTypes[1].Underlying().(*types.Basic))
 		if len.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
 			// Too small, zero-extend len.
 			len = b.CreateZExt(len, b.uintptrType, "")
@@ -1712,7 +1713,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 				// Eventually we might be able to eliminate this special case
 				// entirely. For details, see:
 				// https://discourse.llvm.org/t/rfc-enabling-wstrict-prototypes-by-default-in-c/60521
-				calleeType = llvm.FunctionType(callee.Type().ElementType().ReturnType(), nil, false)
+				calleeType = llvm.FunctionType(callee.GlobalValueType().ReturnType(), nil, false)
 				callee = llvm.ConstBitCast(callee, llvm.PointerType(calleeType, b.funcPtrAddrSpace))
 			}
 		case *ssa.MakeClosure:
@@ -3095,7 +3096,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 		}
 	case token.MUL: // *x, dereference pointer
 		valueType := b.getLLVMType(unop.X.Type().Underlying().(*types.Pointer).Elem())
-		if b.targetData.TypeAllocSize(x.Type().ElementType()) == 0 {
+		if b.targetData.TypeAllocSize(valueType) == 0 {
 			// zero-length data
 			return llvm.ConstNull(valueType), nil
 		} else if strings.HasSuffix(unop.X.String(), "$funcaddr") {

@@ -808,14 +808,17 @@ func (v rawValue) rawLLVMValue(mem *memoryView) (llvm.Value, error) {
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			elementType := field.Type().ElementType()
-			if elementType.TypeKind() == llvm.StructTypeKind {
-				// There are some special pointer types that should be used as a
-				// ptrtoint, so that they can be used in certain optimizations.
-				name := elementType.StructName()
-				if name == "runtime.typecodeID" || name == "runtime.funcValueWithSignature" {
-					uintptrType := ctx.IntType(int(mem.r.pointerSize) * 8)
-					field = llvm.ConstPtrToInt(field, uintptrType)
+			if !field.IsAGlobalVariable().IsNil() {
+				elementType := field.GlobalValueType()
+				if elementType.TypeKind() == llvm.StructTypeKind {
+					// There are some special pointer types that should be used
+					// as a ptrtoint, so that they can be used in certain
+					// optimizations.
+					name := elementType.StructName()
+					if name == "runtime.typecodeID" || name == "runtime.funcValueWithSignature" {
+						uintptrType := ctx.IntType(int(mem.r.pointerSize) * 8)
+						field = llvm.ConstPtrToInt(field, uintptrType)
+					}
 				}
 			}
 			structFields = append(structFields, field)
@@ -998,7 +1001,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			ptr := llvmValue.Operand(0)
 			index := llvmValue.Operand(1)
 			numOperands := llvmValue.OperandsCount()
-			elementType := ptr.Type().ElementType()
+			elementType := llvmValue.GEPSourceElementType()
 			totalOffset := r.targetData.TypeAllocSize(elementType) * index.ZExtValue()
 			for i := 2; i < numOperands; i++ {
 				indexValue := llvmValue.Operand(i)
@@ -1173,7 +1176,7 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 			r.globals[llvmValue] = index
 			r.objects = append(r.objects, obj)
 			if !llvmValue.IsAGlobalVariable().IsNil() {
-				obj.size = uint32(r.targetData.TypeAllocSize(llvmValue.Type().ElementType()))
+				obj.size = uint32(r.targetData.TypeAllocSize(llvmValue.GlobalValueType()))
 				if initializer := llvmValue.Initializer(); !initializer.IsNil() {
 					obj.buffer = r.getValue(initializer)
 					obj.constant = llvmValue.IsGlobalConstant()
