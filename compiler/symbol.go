@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -353,7 +354,15 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
 	if strings.Split(c.Triple, "-")[0] == "x86_64" {
 		// Required by the ABI.
-		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
+		if llvmutil.Major() < 15 {
+			// Needed for LLVM 14 support.
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
+		} else {
+			// The uwtable has two possible values: sync (1) or async (2). We
+			// use sync because we currently don't use async unwind tables.
+			// For details, see: https://llvm.org/docs/LangRef.html#function-attributes
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 1))
+		}
 	}
 }
 

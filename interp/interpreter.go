@@ -356,7 +356,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				default:
 					panic("unknown integer type width")
 				}
-			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0i8.p0i8.") || strings.HasPrefix(callFn.name, "llvm.memmove.p0i8.p0i8."):
+			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
 				// Copy a block of memory from one pointer to another.
 				dst, err := operands[1].asPointer(r)
 				if err != nil {
@@ -496,7 +496,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				typecodeID := typecodeIDBitCast.Operand(0).Initializer()
 
 				// Load the method set, which is part of the typecodeID object.
-				methodSet := r.builder.CreateExtractValue(typecodeID, 2, "").Operand(0).Initializer()
+				methodSet := stripPointerCasts(r.builder.CreateExtractValue(typecodeID, 2, "")).Initializer()
 
 				// We don't need to load the interface method set.
 
@@ -1094,4 +1094,16 @@ func intPredicateString(predicate llvm.IntPredicate) string {
 	default:
 		return "cmp?"
 	}
+}
+
+// Strip some pointer casts. This is probably unnecessary once support for
+// LLVM 14 (non-opaque pointers) is dropped.
+func stripPointerCasts(value llvm.Value) llvm.Value {
+	if !value.IsAConstantExpr().IsNil() {
+		switch value.Opcode() {
+		case llvm.GetElementPtr, llvm.BitCast:
+			return stripPointerCasts(value.Operand(0))
+		}
+	}
+	return value
 }

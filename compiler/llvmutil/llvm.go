@@ -7,7 +7,22 @@
 // places would be a big risk if only one of them is updated.
 package llvmutil
 
-import "tinygo.org/x/go-llvm"
+import (
+	"strconv"
+	"strings"
+
+	"tinygo.org/x/go-llvm"
+)
+
+// Major returns the LLVM major version.
+func Major() int {
+	llvmMajor, err := strconv.Atoi(strings.SplitN(llvm.Version, ".", 2)[0])
+	if err != nil {
+		// sanity check, should be unreachable
+		panic("could not parse LLVM version: " + err.Error())
+	}
+	return llvmMajor
+}
 
 // CreateEntryBlockAlloca creates a new alloca in the entry block, even though
 // the IR builder is located elsewhere. It assumes that the insert point is
@@ -78,12 +93,16 @@ func EmitLifetimeEnd(builder llvm.Builder, mod llvm.Module, ptr, size llvm.Value
 // getLifetimeStartFunc returns the llvm.lifetime.start intrinsic and creates it
 // first if it doesn't exist yet.
 func getLifetimeStartFunc(mod llvm.Module) (llvm.Type, llvm.Value) {
-	fn := mod.NamedFunction("llvm.lifetime.start.p0i8")
+	fnName := "llvm.lifetime.start.p0"
+	if Major() < 15 { // compatibility with LLVM 14
+		fnName = "llvm.lifetime.start.p0i8"
+	}
+	fn := mod.NamedFunction(fnName)
 	ctx := mod.Context()
 	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 	fnType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ctx.Int64Type(), i8ptrType}, false)
 	if fn.IsNil() {
-		fn = llvm.AddFunction(mod, "llvm.lifetime.start.p0i8", fnType)
+		fn = llvm.AddFunction(mod, fnName, fnType)
 	}
 	return fnType, fn
 }
@@ -91,12 +110,16 @@ func getLifetimeStartFunc(mod llvm.Module) (llvm.Type, llvm.Value) {
 // getLifetimeEndFunc returns the llvm.lifetime.end intrinsic and creates it
 // first if it doesn't exist yet.
 func getLifetimeEndFunc(mod llvm.Module) (llvm.Type, llvm.Value) {
-	fn := mod.NamedFunction("llvm.lifetime.end.p0i8")
+	fnName := "llvm.lifetime.end.p0"
+	if Major() < 15 {
+		fnName = "llvm.lifetime.end.p0i8"
+	}
+	fn := mod.NamedFunction(fnName)
 	ctx := mod.Context()
 	i8ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 	fnType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ctx.Int64Type(), i8ptrType}, false)
 	if fn.IsNil() {
-		fn = llvm.AddFunction(mod, "llvm.lifetime.end.p0i8", fnType)
+		fn = llvm.AddFunction(mod, fnName, fnType)
 	}
 	return fnType, fn
 }

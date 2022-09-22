@@ -139,14 +139,13 @@ func OptimizeReflectImplements(mod llvm.Module) {
 		if call.IsACallInst().IsNil() {
 			continue
 		}
-		interfaceTypeBitCast := call.Operand(2)
-		if interfaceTypeBitCast.IsAConstantExpr().IsNil() || interfaceTypeBitCast.Opcode() != llvm.BitCast {
+		interfaceType := stripPointerCasts(call.Operand(2))
+		if interfaceType.IsAGlobalVariable().IsNil() {
 			// The asserted interface is not constant, so can't optimize this
 			// code.
 			continue
 		}
 
-		interfaceType := interfaceTypeBitCast.Operand(0)
 		if strings.HasPrefix(interfaceType.Name(), "reflect/types.type:named:") {
 			// Get the underlying type.
 			interfaceType = builder.CreateExtractValue(interfaceType.Initializer(), 0, "")

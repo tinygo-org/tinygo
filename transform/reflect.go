@@ -251,7 +251,10 @@ func LowerReflect(mod llvm.Module) {
 			// a pointer to a runtime.structField array and therefore a
 			// bitcast. This global should be erased separately, otherwise
 			// typecode objects cannot be erased.
-			structFields := references.Operand(0)
+			structFields := references
+			if !structFields.IsAConstantExpr().IsNil() && structFields.Opcode() == llvm.BitCast {
+				structFields = structFields.Operand(0) // get global from bitcast, for LLVM 14 compatibility (non-opaque pointers)
+			}
 			structFields.EraseFromParentAsGlobal()
 		}
 	}
@@ -460,7 +463,7 @@ func (state *typeCodeAssignmentState) getStructTypeNum(typecode llvm.Value) int 
 
 	// Get the fields this struct type contains.
 	// The struct number will be the start index of
-	structTypeGlobal := state.builder.CreateExtractValue(typecode.Initializer(), 0, "").Operand(0).Initializer()
+	structTypeGlobal := stripPointerCasts(state.builder.CreateExtractValue(typecode.Initializer(), 0, "")).Initializer()
 	numFields := structTypeGlobal.Type().ArrayLength()
 
 	// The first data that is stored in the struct sidetable is the number of
@@ -483,7 +486,7 @@ func (state *typeCodeAssignmentState) getStructTypeNum(typecode llvm.Value) int 
 		if nameGlobal == llvm.ConstPointerNull(nameGlobal.Type()) {
 			panic("compiler: no name for this struct field")
 		}
-		fieldNameBytes := getGlobalBytes(nameGlobal.Operand(0), state.builder)
+		fieldNameBytes := getGlobalBytes(stripPointerCasts(nameGlobal), state.builder)
 		fieldNameNumber := state.getStructNameNumber(fieldNameBytes)
 
 		// See whether this struct field has an associated tag, and if so,
@@ -493,7 +496,7 @@ func (state *typeCodeAssignmentState) getStructTypeNum(typecode llvm.Value) int 
 		tagNumber := 0
 		if tagGlobal != llvm.ConstPointerNull(tagGlobal.Type()) {
 			hasTag = true
-			tagBytes := getGlobalBytes(tagGlobal.Operand(0), state.builder)
+			tagBytes := getGlobalBytes(stripPointerCasts(tagGlobal), state.builder)
 			tagNumber = state.getStructNameNumber(tagBytes)
 		}
 

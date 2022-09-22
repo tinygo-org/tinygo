@@ -27,18 +27,18 @@ func GOROOT() string {
 
 // Copy size bytes from src to dst. The memory areas must not overlap.
 // This function is implemented by the compiler as a call to a LLVM intrinsic
-// like llvm.memcpy.p0i8.p0i8.i32(dst, src, size, false).
+// like llvm.memcpy.p0.p0.i32(dst, src, size, false).
 func memcpy(dst, src unsafe.Pointer, size uintptr)
 
 // Copy size bytes from src to dst. The memory areas may overlap and will do the
 // correct thing.
 // This function is implemented by the compiler as a call to a LLVM intrinsic
-// like llvm.memmove.p0i8.p0i8.i32(dst, src, size, false).
+// like llvm.memmove.p0.p0.i32(dst, src, size, false).
 func memmove(dst, src unsafe.Pointer, size uintptr)
 
 // Set the given number of bytes to zero.
 // This function is implemented by the compiler as a call to a LLVM intrinsic
-// like llvm.memset.p0i8.i32(ptr, 0, size, false).
+// like llvm.memset.p0.i32(ptr, 0, size, false).
 func memzero(ptr unsafe.Pointer, size uintptr)
 
 // This intrinsic returns the current stack pointer.
