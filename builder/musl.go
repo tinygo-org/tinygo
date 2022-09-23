@@ -90,6 +90,7 @@ var Musl = Library{
 			"-Wno-ignored-attributes",
 			"-Wno-string-plus-int",
 			"-Wno-ignored-pragmas",
+			"-Wno-tautological-constant-out-of-range-compare",
 			"-Qunused-arguments",
 			// Select include dirs. Don't include standard library includes
 			// (that would introduce host dependencies and other complications),
@@ -117,6 +118,7 @@ var Musl = Library{
 			"internal/vdso.c",
 			"legacy/*.c",
 			"malloc/*.c",
+			"malloc/mallocng/*.c",
 			"mman/*.c",
 			"math/*.c",
 			"signal/*.c",
