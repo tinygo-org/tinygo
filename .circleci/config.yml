@@ -118,13 +118,6 @@ jobs:
     steps:
       - test-linux:
           llvm: "14"
-  test-llvm14-go119:
-    docker:
-      - image: golang:1.19beta1-buster
-    steps:
-      - test-linux:
-          llvm: "14"
-          fmt-check: false
 
 workflows:
   test-all:
@@ -132,6 +125,3 @@ workflows:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
       - test-llvm14-go118
-      # This tests a beta version of Go. It should be removed once regular
-      # release builds are built using this version.
-      - test-llvm14-go119

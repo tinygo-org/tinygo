@@ -1,5 +1,5 @@
 # tinygo-llvm stage obtains the llvm source for TinyGo
-FROM golang:1.18 AS tinygo-llvm
+FROM golang:1.19 AS tinygo-llvm
 
 RUN apt-get update && \
     apt-get install -y apt-utils make cmake clang-11 binutils-avr gcc-avr avr-libc ninja-build

@@ -34,7 +34,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.18'
+          go-version: '1.19'
           cache: true
       - name: Cache LLVM source
         uses: actions/cache@v3
@@ -114,7 +114,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.18'
+          go-version: '1.19'
           cache: true
       - name: Build TinyGo
         run: go install
