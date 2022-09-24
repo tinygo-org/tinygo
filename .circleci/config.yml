@@ -118,6 +118,7 @@ jobs:
     steps:
       - test-linux:
           llvm: "14"
+    resource_class: large
 
 workflows:
   test-all:
