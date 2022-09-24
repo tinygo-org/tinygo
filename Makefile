@@ -330,7 +330,6 @@ endif
 # compress/lzw appears to hang on wasi
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
-# io/fs requires os.ReadDir, which is not yet supported on windows or wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
 # strconv requires recover() which is not yet supported on wasi
 # text/template/parse requires recover(), which is not yet supported on wasi
@@ -344,7 +343,6 @@ TEST_PACKAGES_LINUX := \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
-	io/fs \
 	io/ioutil \
 	strconv \
 	testing/fstest \
@@ -373,12 +371,15 @@ report-stdlib-tests-pass:
 # Standard library packages that pass tests quickly on the current platform
 ifeq ($(shell uname),Darwin)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_DARWIN)
+TEST_IOFS := true
 endif
 ifeq ($(shell uname),Linux)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_LINUX)
+TEST_IOFS := true
 endif
 ifeq ($(OS),Windows_NT)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
+TEST_IOFS := false
 endif
 
 # Test known-working standard library packages.
@@ -386,6 +387,12 @@ endif
 .PHONY: tinygo-test
 tinygo-test:
 	$(TINYGO) test $(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW)
+	@# io/fs requires os.ReadDir, not yet supported on windows or wasi. It also
+	@# requires a large stack-size. Hence, io/fs is only run conditionally.
+	@# For more details, see the comments on issue #3143.
+ifeq ($(TEST_IOFS),true)
+	$(TINYGO) test -stack-size=6MB io/fs
+endif
 tinygo-test-fast:
 	$(TINYGO) test $(TEST_PACKAGES_HOST)
 tinygo-bench:
