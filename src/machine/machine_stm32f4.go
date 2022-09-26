@@ -640,8 +640,8 @@ const (
 
 func (uart *UART) configurePins(config UARTConfig) {
 	// enable the alternate functions on the TX and RX pins
-	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.TxAltFuncSelector)
-	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.RxAltFuncSelector)
+	config.TX.ConfigureAltFunc(PinConfig{Mode: pinModeUARTTX}, uart.TxAltFuncSelector)
+	config.RX.ConfigureAltFunc(PinConfig{Mode: pinModeUARTRX}, uart.RxAltFuncSelector)
 }
 
 func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
@@ -674,9 +674,9 @@ func (spi SPI) config8Bits() {
 }
 
 func (spi SPI) configurePins(config SPIConfig) {
-	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
-	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
-	config.SDI.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDI}, spi.AltFuncSelector)
+	config.SCK.ConfigureAltFunc(PinConfig{Mode: pinModeSPICLK}, spi.AltFuncSelector)
+	config.SDO.ConfigureAltFunc(PinConfig{Mode: pinModeSPISDO}, spi.AltFuncSelector)
+	config.SDI.ConfigureAltFunc(PinConfig{Mode: pinModeSPISDI}, spi.AltFuncSelector)
 }
 
 func (spi SPI) getBaudRate(config SPIConfig) uint32 {
@@ -723,8 +723,8 @@ type I2C struct {
 }
 
 func (i2c *I2C) configurePins(config I2CConfig) {
-	config.SCL.ConfigureAltFunc(PinConfig{Mode: PinModeI2CSCL}, i2c.AltFuncSelector)
-	config.SDA.ConfigureAltFunc(PinConfig{Mode: PinModeI2CSDA}, i2c.AltFuncSelector)
+	config.SCL.ConfigureAltFunc(PinConfig{Mode: pinModeI2CSCL}, i2c.AltFuncSelector)
+	config.SDA.ConfigureAltFunc(PinConfig{Mode: pinModeI2CSDA}, i2c.AltFuncSelector)
 }
 
 func (i2c *I2C) getFreqRange(config I2CConfig) uint32 {

@@ -92,7 +92,7 @@ func (pwm *pwmGroup) Channel(pin Pin) (channel uint8, err error) {
 	if pin > maxPWMPins || pwmGPIOToSlice(pin) != pwm.peripheral() {
 		return 3, ErrInvalidOutputPin
 	}
-	pin.Configure(PinConfig{PinPWM})
+	pin.Configure(PinConfig{pinPWM})
 	return pwmGPIOToChannel(pin), nil
 }
 

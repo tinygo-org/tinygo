@@ -86,53 +86,53 @@ func (p Pin) Configure(config PinConfig) {
 		sam.PORT.OUTSET0.Set(1 << uint8(p))
 		p.setPinCfg(sam.PORT_PINCFG0_INEN | sam.PORT_PINCFG0_PULLEN)
 
-	case PinSERCOM:
+	case pinSERCOM:
 		if uint8(p)&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-			p.setPMux(val | (uint8(PinSERCOM) << sam.PORT_PMUX0_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinSERCOM) << sam.PORT_PMUX0_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (uint8(PinSERCOM) << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinSERCOM) << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR | sam.PORT_PINCFG0_INEN)
 
-	case PinSERCOMAlt:
+	case pinSERCOMAlt:
 		if uint8(p)&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-			p.setPMux(val | (uint8(PinSERCOMAlt) << sam.PORT_PMUX0_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinSERCOMAlt) << sam.PORT_PMUX0_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (uint8(PinSERCOMAlt) << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinSERCOMAlt) << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR)
 
-	case PinCom:
+	case pinCom:
 		if uint8(p)&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-			p.setPMux(val | (uint8(PinCom) << sam.PORT_PMUX0_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinCom) << sam.PORT_PMUX0_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (uint8(PinCom) << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinCom) << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN)
-	case PinAnalog:
+	case pinAnalog:
 		if uint8(p)&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXE_Msk
-			p.setPMux(val | (uint8(PinAnalog) << sam.PORT_PMUX0_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinAnalog) << sam.PORT_PMUX0_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_PMUX0_PMUXO_Msk
-			p.setPMux(val | (uint8(PinAnalog) << sam.PORT_PMUX0_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinAnalog) << sam.PORT_PMUX0_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_PINCFG0_PMUXEN | sam.PORT_PINCFG0_DRVSTR)

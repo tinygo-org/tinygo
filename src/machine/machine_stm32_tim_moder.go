@@ -7,5 +7,5 @@ package machine
 // register (most MCUs except STM32F1 series).
 
 func (t *TIM) configurePin(channel uint8, pf PinFunction) {
-	pf.Pin.ConfigureAltFunc(PinConfig{Mode: PinModePWMOutput}, pf.AltFunc)
+	pf.Pin.ConfigureAltFunc(PinConfig{Mode: pinModePWMOutput}, pf.AltFunc)
 }

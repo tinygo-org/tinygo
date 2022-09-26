@@ -156,8 +156,8 @@ func (i2c *I2C) Configure(config I2CConfig) {
 	sda, scl := i2c.setPins(config)
 
 	// configure the mux and pad control registers
-	sda.Configure(PinConfig{Mode: PinModeI2CSDA})
-	scl.Configure(PinConfig{Mode: PinModeI2CSCL})
+	sda.Configure(PinConfig{Mode: pinModeI2CSDA})
+	scl.Configure(PinConfig{Mode: pinModeI2CSCL})
 
 	// configure the mux input selector
 	i2c.muxSDA.connect()

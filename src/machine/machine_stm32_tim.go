@@ -183,7 +183,7 @@ func (t *TIM) Channel(pin Pin) (uint8, error) {
 		for _, p := range ch.Pins {
 			if p.Pin == pin {
 				t.configurePin(uint8(chi), p)
-				//p.Pin.ConfigureAltFunc(PinConfig{Mode: PinModePWMOutput}, p.AltFunc)
+				//p.Pin.ConfigureAltFunc(PinConfig{Mode: pinModePWMOutput}, p.AltFunc)
 				return uint8(chi), nil
 			}
 		}

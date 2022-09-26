@@ -42,8 +42,8 @@ func (uart *UART) Configure(config UARTConfig) error {
 		rp.UART0_UARTCR_TXE)
 
 	// set GPIO mux to UART for the pins
-	config.TX.Configure(PinConfig{Mode: PinUART})
-	config.RX.Configure(PinConfig{Mode: PinUART})
+	config.TX.Configure(PinConfig{Mode: pinUART})
+	config.RX.Configure(PinConfig{Mode: pinUART})
 
 	// Enable RX IRQ.
 	uart.Interrupt.SetPriority(0x80)

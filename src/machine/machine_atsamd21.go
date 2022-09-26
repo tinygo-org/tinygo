@@ -17,20 +17,20 @@ import (
 const deviceName = sam.Device
 
 const (
-	PinAnalog    PinMode = 1
-	PinSERCOM    PinMode = 2
-	PinSERCOMAlt PinMode = 3
-	PinTimer     PinMode = 4
-	PinTimerAlt  PinMode = 5
-	PinCom       PinMode = 6
-	//PinAC_CLK        PinMode = 7
-	PinDigital       PinMode = 8
 	PinInput         PinMode = 9
 	PinInputPullup   PinMode = 10
 	PinOutput        PinMode = 11
-	PinTCC           PinMode = PinTimer
-	PinTCCAlt        PinMode = PinTimerAlt
 	PinInputPulldown PinMode = 12
+
+	// internal pin modes
+	pinAnalog    PinMode = 1
+	pinSERCOM    PinMode = 2
+	pinSERCOMAlt PinMode = 3
+	pinTCC       PinMode = 4
+	pinTCCAlt    PinMode = 5
+	pinCom       PinMode = 6
+	//PinAC_CLK        PinMode = 7
+	pinDigital PinMode = 8
 )
 
 type PinChange uint8
@@ -149,7 +149,7 @@ func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok b
 	if upper != 0 {
 		// SERCOM
 		if (upper>>1)-1 == sercom {
-			pinMode = PinSERCOM
+			pinMode = pinSERCOM
 			pad |= uint32((upper & 1) << 1)
 			ok = true
 		}
@@ -157,7 +157,7 @@ func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok b
 	if lower != 0 {
 		// SERCOM-ALT
 		if (lower>>1)-1 == sercom {
-			pinMode = PinSERCOMAlt
+			pinMode = pinSERCOMAlt
 			pad |= uint32((lower & 1) << 1)
 			ok = true
 		}
@@ -381,7 +381,7 @@ func (a ADC) Configure(config ADCConfig) {
 	// 1/2 VDDANA = 0.5 * 3V3 = 1.65V
 	sam.ADC.REFCTRL.SetBits(sam.ADC_REFCTRL_REFSEL_INTVCC1 << sam.ADC_REFCTRL_REFSEL_Pos)
 
-	a.Pin.Configure(PinConfig{Mode: PinAnalog})
+	a.Pin.Configure(PinConfig{Mode: pinAnalog})
 	return
 }
 
@@ -1000,11 +1000,11 @@ func (i2s I2S) Configure(config I2SConfig) {
 	}
 
 	// configure pin for clock
-	config.SCK.Configure(PinConfig{Mode: PinCom})
+	config.SCK.Configure(PinConfig{Mode: pinCom})
 
 	// configure pin for WS, if needed
 	if config.WS != NoPin {
-		config.WS.Configure(PinConfig{Mode: PinCom})
+		config.WS.Configure(PinConfig{Mode: pinCom})
 	}
 
 	// now set serializer data size.
@@ -1043,7 +1043,7 @@ func (i2s I2S) Configure(config I2SConfig) {
 	}
 
 	// configure data pin
-	config.SD.Configure(PinConfig{Mode: PinCom})
+	config.SD.Configure(PinConfig{Mode: pinCom})
 
 	// re-enable
 	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_ENABLE)
@@ -1636,12 +1636,12 @@ func findPinTimerMapping(timer uint8, pin Pin) (PinMode, uint8) {
 	if mapping&0x07 == timer+1 {
 		// PWM output is on peripheral function E.
 		evenChannel := ((mapping >> 3) & 1) * 2
-		return PinTCC, evenChannel + uint8(pin&1)
+		return pinTCC, evenChannel + uint8(pin&1)
 	}
 	if (mapping&0x70)>>4 == timer+1 {
 		// PWM output is on peripheral function F.
 		evenChannel := ((mapping >> 7) & 1) * 2
-		return PinTCCAlt, evenChannel + uint8(pin&1)
+		return pinTCCAlt, evenChannel + uint8(pin&1)
 	}
 	return 0, 0
 }

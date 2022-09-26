@@ -68,8 +68,8 @@ func (uart *UART) Configure(config UARTConfig) {
 	uart.tx = config.TX
 
 	// configure the mux and pad control registers
-	uart.rx.Configure(PinConfig{Mode: PinModeUARTRX})
-	uart.tx.Configure(PinConfig{Mode: PinModeUARTTX})
+	uart.rx.Configure(PinConfig{Mode: pinModeUARTRX})
+	uart.tx.Configure(PinConfig{Mode: pinModeUARTTX})
 
 	// configure the mux input selector
 	uart.muxRX.connect()

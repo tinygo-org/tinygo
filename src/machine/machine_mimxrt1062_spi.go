@@ -77,10 +77,10 @@ func (spi *SPI) Configure(config SPIConfig) {
 	spi.sdi, spi.sdo, spi.sck, spi.cs = config.getPins()
 
 	// configure the mux and pad control registers
-	spi.sdi.Configure(PinConfig{Mode: PinModeSPISDI})
-	spi.sdo.Configure(PinConfig{Mode: PinModeSPISDO})
-	spi.sck.Configure(PinConfig{Mode: PinModeSPICLK})
-	spi.cs.Configure(PinConfig{Mode: PinModeSPICS})
+	spi.sdi.Configure(PinConfig{Mode: pinModeSPISDI})
+	spi.sdo.Configure(PinConfig{Mode: pinModeSPISDO})
+	spi.sck.Configure(PinConfig{Mode: pinModeSPICLK})
+	spi.cs.Configure(PinConfig{Mode: pinModeSPICS})
 
 	// configure the mux input selector
 	spi.muxSDI.connect()

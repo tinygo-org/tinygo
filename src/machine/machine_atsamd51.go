@@ -21,30 +21,29 @@ func CPUFrequency() uint32 {
 }
 
 const (
-	PinAnalog        PinMode = 1
-	PinSERCOM        PinMode = 2
-	PinSERCOMAlt     PinMode = 3
-	PinTimer         PinMode = 4
-	PinTimerAlt      PinMode = 5
-	PinTCCPDEC       PinMode = 6
-	PinCom           PinMode = 7
-	PinSDHC          PinMode = 8
-	PinI2S           PinMode = 9
-	PinPCC           PinMode = 10
-	PinGMAC          PinMode = 11
-	PinACCLK         PinMode = 12
-	PinCCL           PinMode = 13
-	PinDigital       PinMode = 14
 	PinInput         PinMode = 15
 	PinInputPullup   PinMode = 16
 	PinOutput        PinMode = 17
-	PinTCCE          PinMode = PinTimer
-	PinTCCF          PinMode = PinTimerAlt
-	PinTCCG          PinMode = PinTCCPDEC
 	PinInputPulldown PinMode = 18
-	PinCAN           PinMode = 19
-	PinCAN0          PinMode = PinSDHC
-	PinCAN1          PinMode = PinCom
+
+	// internal pin modes
+	pinAnalog    PinMode = 1
+	pinSERCOM    PinMode = 2
+	pinSERCOMAlt PinMode = 3
+	pinTCCE      PinMode = 4
+	pinTCCF      PinMode = 5
+	pinTCCG      PinMode = 6
+	pinCom       PinMode = 7
+	pinSDHC      PinMode = 8
+	pinI2S       PinMode = 9
+	pinPCC       PinMode = 10
+	pinGMAC      PinMode = 11
+	pinACCLK     PinMode = 12
+	pinCCL       PinMode = 13
+	pinDigital   PinMode = 14
+	pinCAN       PinMode = 19
+	pinCAN0      PinMode = pinSDHC
+	pinCAN1      PinMode = pinCom
 )
 
 type PinChange uint8
@@ -338,7 +337,7 @@ func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok b
 	if upper != 0 {
 		// SERCOM
 		if (upper>>4)-1 == sercom {
-			pinMode = PinSERCOM
+			pinMode = pinSERCOM
 			pad |= uint32(upper % 4)
 			ok = true
 		}
@@ -346,7 +345,7 @@ func findPinPadMapping(sercom uint8, pin Pin) (pinMode PinMode, pad uint32, ok b
 	if lower != 0 {
 		// SERCOM-ALT
 		if (lower>>4)-1 == sercom {
-			pinMode = PinSERCOMAlt
+			pinMode = pinSERCOMAlt
 			pad |= uint32(lower % 4)
 			ok = true
 		}
@@ -580,65 +579,65 @@ func (p Pin) Configure(config PinConfig) {
 		sam.PORT.GROUP[group].OUTSET.Set(1 << pin_in_group)
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_INEN | sam.PORT_GROUP_PINCFG_PULLEN)
 
-	case PinSERCOM:
+	case pinSERCOM:
 		if p&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXE_Msk
-			p.setPMux(val | (uint8(PinSERCOM) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinSERCOM) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXO_Msk
-			p.setPMux(val | (uint8(PinSERCOM) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinSERCOM) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN | sam.PORT_GROUP_PINCFG_DRVSTR | sam.PORT_GROUP_PINCFG_INEN)
 
-	case PinSERCOMAlt:
+	case pinSERCOMAlt:
 		if p&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXE_Msk
-			p.setPMux(val | (uint8(PinSERCOMAlt) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinSERCOMAlt) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXO_Msk
-			p.setPMux(val | (uint8(PinSERCOMAlt) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinSERCOMAlt) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN | sam.PORT_GROUP_PINCFG_DRVSTR)
 
-	case PinCom:
+	case pinCom:
 		if p&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXE_Msk
-			p.setPMux(val | (uint8(PinCom) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinCom) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXO_Msk
-			p.setPMux(val | (uint8(PinCom) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinCom) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN)
-	case PinAnalog:
+	case pinAnalog:
 		if p&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXE_Msk
-			p.setPMux(val | (uint8(PinAnalog) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinAnalog) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXO_Msk
-			p.setPMux(val | (uint8(PinAnalog) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinAnalog) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN | sam.PORT_GROUP_PINCFG_DRVSTR)
-	case PinSDHC:
+	case pinSDHC:
 		if p&1 > 0 {
 			// odd pin, so save the even pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXE_Msk
-			p.setPMux(val | (uint8(PinSDHC) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
+			p.setPMux(val | (uint8(pinSDHC) << sam.PORT_GROUP_PMUX_PMUXO_Pos))
 		} else {
 			// even pin, so save the odd pins
 			val := p.getPMux() & sam.PORT_GROUP_PMUX_PMUXO_Msk
-			p.setPMux(val | (uint8(PinSDHC) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
+			p.setPMux(val | (uint8(pinSDHC) << sam.PORT_GROUP_PMUX_PMUXE_Pos))
 		}
 		// enable port config
 		p.setPinCfg(sam.PORT_GROUP_PINCFG_PMUXEN)
@@ -814,7 +813,7 @@ func (a ADC) Configure(config ADCConfig) {
 		adc.REFCTRL.SetBits(sam.ADC_REFCTRL_REFSEL_INTVCC1)
 	}
 
-	a.Pin.Configure(PinConfig{Mode: PinAnalog})
+	a.Pin.Configure(PinConfig{Mode: pinAnalog})
 }
 
 // Get returns the current value of a ADC pin, in the range 0..0xffff.
@@ -1867,7 +1866,7 @@ var pinTimerMapping = [...]struct{ F, G uint8 }{
 	PB02 / 2: {pinTCC2_2, 0},
 }
 
-// findPinPadMapping returns the pin mode (PinTCCF or PinTCCG) and the channel
+// findPinPadMapping returns the pin mode (pinTCCF or pinTCCG) and the channel
 // number for a given timer and pin. A zero PinMode is returned if no mapping
 // could be found.
 func findPinTimerMapping(timer uint8, pin Pin) (PinMode, uint8) {
@@ -1879,12 +1878,12 @@ func findPinTimerMapping(timer uint8, pin Pin) (PinMode, uint8) {
 
 	// Check for column F in the datasheet.
 	if mapping.F>>4-1 == timer {
-		return PinTCCF, mapping.F&0x0f + uint8(pin)&1
+		return pinTCCF, mapping.F&0x0f + uint8(pin)&1
 	}
 
 	// Check for column G in the datasheet.
 	if mapping.G>>4-1 == timer {
-		return PinTCCG, mapping.G&0x0f + uint8(pin)&1
+		return pinTCCG, mapping.G&0x0f + uint8(pin)&1
 	}
 
 	// Nothing found.

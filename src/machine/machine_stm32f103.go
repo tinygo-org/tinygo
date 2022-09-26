@@ -29,20 +29,20 @@ const (
 	PinOutput50MHz PinMode = 3 // Output mode, max speed 50MHz
 	PinOutput      PinMode = PinOutput2MHz
 
-	PinInputModeAnalog     PinMode = 0  // Input analog mode
-	PinInputModeFloating   PinMode = 4  // Input floating mode
-	PinInputModePullUpDown PinMode = 8  // Input pull up/down mode
-	PinInputModeReserved   PinMode = 12 // Input mode (reserved)
+	pinInputModeAnalog     PinMode = 0  // Input analog mode
+	pinInputModeFloating   PinMode = 4  // Input floating mode
+	pinInputModePullUpDown PinMode = 8  // Input pull up/down mode
+	pinInputModeReserved   PinMode = 12 // Input mode (reserved)
 
-	PinOutputModeGPPushPull   PinMode = 0  // Output mode general purpose push/pull
-	PinOutputModeGPOpenDrain  PinMode = 4  // Output mode general purpose open drain
-	PinOutputModeAltPushPull  PinMode = 8  // Output mode alt. purpose push/pull
-	PinOutputModeAltOpenDrain PinMode = 12 // Output mode alt. purpose open drain
+	pinOutputModeGPPushPull   PinMode = 0  // Output mode general purpose push/pull
+	pinOutputModeGPOpenDrain  PinMode = 4  // Output mode general purpose open drain
+	pinOutputModeAltPushPull  PinMode = 8  // Output mode alt. purpose push/pull
+	pinOutputModeAltOpenDrain PinMode = 12 // Output mode alt. purpose open drain
 
 	// Pull-up vs Pull down is not part of the CNF0 / CNF1 bits, but is
 	// controlled by PxODR.  Encoded using the 'spare' bit 5.
-	PinInputPulldown PinMode = PinInputModePullUpDown
-	PinInputPullup   PinMode = PinInputModePullUpDown | 0x10
+	PinInputPulldown PinMode = pinInputModePullUpDown
+	PinInputPullup   PinMode = pinInputModePullUpDown | 0x10
 )
 
 // Pin constants for all stm32f103 package sizes
@@ -166,7 +166,7 @@ func (p Pin) Configure(config PinConfig) {
 
 	// If configured for input pull-up or pull-down, set ODR
 	// for desired pull-up or pull-down.
-	if (config.Mode & 0xf) == PinInputModePullUpDown {
+	if (config.Mode & 0xf) == pinInputModePullUpDown {
 		var pullup uint32
 		if config.Mode == PinInputPullup {
 			pullup = 1
@@ -290,8 +290,8 @@ func (uart *UART) configurePins(config UARTConfig) {
 	default:
 		// use standard TX/RX pins PA9 and PA10
 	}
-	config.TX.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-	config.RX.Configure(PinConfig{Mode: PinInputModeFloating})
+	config.TX.Configure(PinConfig{Mode: PinOutput50MHz + pinOutputModeAltPushPull})
+	config.RX.Configure(PinConfig{Mode: pinInputModeFloating})
 }
 
 // Determine the divisor for USARTs to get the given baudrate
@@ -363,9 +363,9 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 
 // Configure SPI pins for input output and clock
 func (spi SPI) configurePins(config SPIConfig) {
-	config.SCK.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-	config.SDO.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
-	config.SDI.Configure(PinConfig{Mode: PinInputModeFloating})
+	config.SCK.Configure(PinConfig{Mode: PinOutput50MHz + pinOutputModeAltPushPull})
+	config.SDO.Configure(PinConfig{Mode: PinOutput50MHz + pinOutputModeAltPushPull})
+	config.SDI.Configure(PinConfig{Mode: pinInputModeFloating})
 }
 
 //---------- I2C related types and code
@@ -390,8 +390,8 @@ func (i2c *I2C) configurePins(config I2CConfig) {
 		stm32.AFIO.MAPR.SetBits(stm32.AFIO_MAPR_I2C1_REMAP)
 	}
 
-	config.SDA.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltOpenDrain})
-	config.SCL.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltOpenDrain})
+	config.SDA.Configure(PinConfig{Mode: PinOutput50MHz + pinOutputModeAltOpenDrain})
+	config.SCL.Configure(PinConfig{Mode: PinOutput50MHz + pinOutputModeAltOpenDrain})
 }
 
 func (i2c *I2C) getFreqRange(config I2CConfig) uint32 {
@@ -717,7 +717,7 @@ func (t *TIM) configurePin(channel uint8, pf PinFunction) {
 		stm32.AFIO.MAPR.ReplaceBits(remap<<stm32.AFIO_MAPR2_TIM14_REMAP_Pos, stm32.AFIO_MAPR2_TIM14_REMAP_Msk, 0)
 	}
 
-	pf.Pin.Configure(PinConfig{Mode: PinOutput + PinOutputModeAltPushPull})
+	pf.Pin.Configure(PinConfig{Mode: PinOutput + pinOutputModeAltPushPull})
 }
 
 func (t *TIM) enableMainOutput() {

@@ -18,9 +18,11 @@ func CPUFrequency() uint32 {
 const (
 	PinInput PinMode = iota
 	PinOutput
-	PinPWM
-	PinSPI
-	PinI2C = PinSPI
+
+	// internal pin modes
+	pinPWM
+	pinSPI
+	pinI2C = pinSPI
 )
 
 // Configure this pin with the given configuration.
@@ -29,10 +31,10 @@ func (p Pin) Configure(config PinConfig) {
 	switch config.Mode {
 	case PinOutput:
 		sifive.GPIO0.OUTPUT_EN.SetBits(1 << uint8(p))
-	case PinPWM:
+	case pinPWM:
 		sifive.GPIO0.IOF_EN.SetBits(1 << uint8(p))
 		sifive.GPIO0.IOF_SEL.SetBits(1 << uint8(p))
-	case PinSPI:
+	case pinSPI:
 		sifive.GPIO0.IOF_EN.SetBits(1 << uint8(p))
 		sifive.GPIO0.IOF_SEL.ClearBits(1 << uint8(p))
 	}
@@ -145,9 +147,9 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// enable pins for SPI
-	config.SCK.Configure(PinConfig{Mode: PinSPI})
-	config.SDO.Configure(PinConfig{Mode: PinSPI})
-	config.SDI.Configure(PinConfig{Mode: PinSPI})
+	config.SCK.Configure(PinConfig{Mode: pinSPI})
+	config.SDO.Configure(PinConfig{Mode: pinSPI})
+	config.SDI.Configure(PinConfig{Mode: pinSPI})
 
 	// set default frequency
 	if config.Frequency == 0 {
@@ -251,8 +253,8 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	// enable controller
 	i2c.Bus.CTR.SetBits(sifive.I2C_CTR_EN)
 
-	config.SDA.Configure(PinConfig{Mode: PinI2C})
-	config.SCL.Configure(PinConfig{Mode: PinI2C})
+	config.SDA.Configure(PinConfig{Mode: pinI2C})
+	config.SCL.Configure(PinConfig{Mode: pinI2C})
 
 	return nil
 }
