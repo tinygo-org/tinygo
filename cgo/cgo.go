@@ -948,6 +948,9 @@ func (p *cgoPackage) isEquivalentAST(a, b ast.Node) bool {
 		if !ok {
 			return false
 		}
+		if node == nil || b == nil {
+			return node == b
+		}
 		if len(node.List) != len(b.List) {
 			return false
 		}
