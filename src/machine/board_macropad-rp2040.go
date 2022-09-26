@@ -52,8 +52,8 @@ const (
 	I2C0_SDA_PIN = GPIO20
 	I2C0_SCL_PIN = GPIO21
 
-	I2C1_SDA_PIN = 31 // not pinned out
-	I2C1_SCL_PIN = 31 // not pinned out
+	I2C1_SDA_PIN = NoPin // not pinned out
+	I2C1_SCL_PIN = NoPin // not pinned out
 )
 
 // SPI default pins
@@ -65,9 +65,9 @@ const (
 	// Default Serial In Bus 1 for SPI communications
 	SPI1_SDI_PIN = GPIO28 // Rx
 
-	SPI0_SCK_PIN = 31 // not pinned out
-	SPI0_SDO_PIN = 31 // not pinned out
-	SPI0_SDI_PIN = 31 // not pinned out
+	SPI0_SCK_PIN = NoPin // not pinned out
+	SPI0_SDO_PIN = NoPin // not pinned out
+	SPI0_SDI_PIN = NoPin // not pinned out
 )
 
 // UART pins
