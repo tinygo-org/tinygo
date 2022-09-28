@@ -3,6 +3,5 @@
     "build-tags": ["atsame54_xpro"],
     "serial": "usb",
     "flash-method": "openocd",
-    "openocd-interface": "cmsis-dap",
-    "default-stack-size": 4096
+    "openocd-interface": "cmsis-dap"
 }
