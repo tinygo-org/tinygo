@@ -703,13 +703,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Determine whether the compilation configuration would result in debug
 	// (DWARF) information in the object files.
 	var hasDebug = true
-	for _, tag := range config.BuildTags() {
-		if tag == "baremetal" {
-			// Don't use -no-debug on baremetal targets. It makes no sense:
-			// the debug information isn't flashed to the device anyway.
-			hasDebug = false
-		}
-	}
 	if config.GOOS() == "darwin" {
 		// Debug information isn't stored in the binary itself on MacOS but
 		// is left in the object files by default. The binary does store the
