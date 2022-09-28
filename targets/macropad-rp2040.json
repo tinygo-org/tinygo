@@ -3,7 +3,7 @@
         "rp2040"
     ],
     "build-tags": ["macropad_rp2040"],
-    "serial-port": ["acm:239a:8107"],
+    "serial-port": ["239a:8107"],
     "linkerscript": "targets/pico.ld",
     "extra-files": [
         "targets/macropad-rp2040-boot-stage2.S"

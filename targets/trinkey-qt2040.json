@@ -2,7 +2,7 @@
     "inherits": [
         "rp2040"
     ],
-    "serial-port": ["acm:239a:8109"],
+    "serial-port": ["239a:8109"],
     "build-tags": ["trinkey_qt2040"],
     "linkerscript": "targets/trinkey-qt2040.ld",
     "extra-files": [

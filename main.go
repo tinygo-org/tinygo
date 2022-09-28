@@ -980,12 +980,8 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 		var preferredPortIDs [][2]uint16
 		for _, s := range usbInterfaces {
 			parts := strings.Split(s, ":")
-			if len(parts) != 3 || (parts[0] != "acm" && parts[0] == "usb") {
-				// acm and usb are the two types of serial ports recognized
-				// under Linux (ttyACM*, ttyUSB*). Other operating systems don't
-				// generally make this distinction. If this is not one of the
-				// given USB devices, don't try to parse the USB IDs.
-				continue
+			if len(parts) != 2 {
+				return "", fmt.Errorf("could not parse USB VID/PID pair %q", s)
 			}
 			vid, err := strconv.ParseUint(parts[1], 16, 16)
 			if err != nil {

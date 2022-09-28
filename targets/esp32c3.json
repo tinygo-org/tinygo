@@ -14,7 +14,7 @@
 	],
 	"binary-format": "esp32c3",
 	"flash-command": "esptool.py --chip=esp32c3 --port {port} write_flash 0x0 {bin}",
-	"serial-port": ["acm:303a:1001"],
+	"serial-port": ["303a:1001"],
 	"openocd-interface": "esp_usb_jtag",
 	"openocd-target": "esp32c3",
  	"openocd-commands": ["gdb_memory_map disable"],
