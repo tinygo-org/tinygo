@@ -1,3 +1,87 @@
+0.26.0
+---
+
+* **general**
+  - remove support for LLVM 13
+  - remove calls to deprecated ioutil package
+  - move from `os.IsFoo` to `errors.Is(err, ErrFoo)`
+  - fix for builds using an Android host
+  - make interp timeout configurable from command line
+  - ignore ports with VID/PID if there is no candidates
+  - drop support for Go 1.16 and Go 1.17
+  - update serial package to v1.3.5 for latest bugfixes
+  - remove GOARM from `tinygo info`
+  - add flag for setting the goroutine stack size
+  - add serial port monitoring functionality
+* **compiler**
+  - `cgo`: implement support for static functions
+  - `cgo`: fix panic when FuncType.Results is nil
+  - `compiler`: add aliases for `edwards25519/field.feMul` and `field.feSquare`
+  - `compiler`: fix incorrect DWARF type in some generic parameters
+  - `compiler`: use LLVM math builtins everywhere
+  - `compiler`: replace some math operation bodies with LLVM intrinsics
+  - `compiler`: replace math aliases with intrinsics
+  - `compiler`: fix `unsafe.Sizeof` for chan and map values
+  - `compileopts`: use tags parser from buildutil
+  - `compileopts`: use backticks for regexp to avoid extra escapes
+  - `compileopts`: fail fast on duplicate values in target field slices
+  - `compileopts`: fix windows/arm target triple
+  - `compileopts`: improve error handling when loading target/*.json
+  - `compileopts`: add support for stlink-dap programmer
+  - `compileopts`: do not complain about `-no-debug` on MacOS
+  - `goenv`: support `GOOS=android`
+  - `interp`: fix reading from external global
+  - `loader`: fix link error for `crypto/internal/boring/sig.StandardCrypto`
+* **standard library**
+  - rename assembly files to .S extension
+  - `machine`: add PWM peripheral comments to pins
+  - `machine`: improve UARTParity slightly
+  - `machine`: do not export DFU_MAGIC_* constants on nrf52840
+  - `machine`: rename `PinInputPullUp`/`PinInputPullDown`
+  - `machine`: add `KHz`, `MHz`, `GHz` constants, deprecate `TWI_FREQ_*` constants
+  - `machine`: remove level triggered pin interrupts
+  - `machine`: do not expose `RESET_MAGIC_VALUE`
+  - `machine`: use `NoPin` constant where appropriate (instead of `0` for example)
+  - `net`: sync net.go with Go 1.18 stdlib
+  - `os`: add `SyscallError.Timeout`
+  - `os`: add `ErrProcessDone` error
+  - `reflect`: implement `CanInterface` and fix string `Index`
+  - `runtime`: make `MemStats` available to leaking collector
+  - `runtime`: add `MemStats.TotalAlloc`
+  - `runtime`: add `MemStats.Mallocs` and `Frees`
+  - `runtime`: add support for `time.NewTimer` and `time.NewTicker`
+  - `runtime`: implement `resetTimer`
+  - `runtime`: ensure some headroom for the GC to run
+  - `runtime`: make gc and scheduler asserts settable with build tags
+  - `runtime/pprof`: add `WriteHeapProfile`
+  - `runtime/pprof`: `runtime/trace`: stub some additional functions
+  - `sync`: implement `Map.LoadAndDelete`
+  - `syscall`: group WASI consts by purpose
+  - `syscall`: add WASI `{D,R}SYNC`, `NONBLOCK` FD flags
+  - `syscall`: add ENOTCONN on darwin
+  - `testing`: add support for -benchmem
+* **targets**
+  - remove USB vid/pid pair of bootloader
+  - `esp32c3`: remove unused `UARTStopBits` constants
+  - `nrf`: implement `GetRNG` function
+  - `nrf`: `rp2040`: add `machine.ReadTemperature`
+  - `nrf52`: cleanup s140v6 and s140v7 uf2 targets
+  - `rp2040`: implement semi-random RNG based on ROSC based on pico-sdk
+  - `wasm`: add summary of wasm examples and fix callback bug
+  - `wasm`: do not allow undefined symbols (`--allow-undefined`)
+  - `wasm`: make sure buffers returned by `malloc` are kept until `free` is called
+  - `windows`: save and restore xmm registers when switching goroutines
+* **boards**
+  - add Pimoroni's Tufty2040
+  - add XIAO ESP32C3
+  - add Adafruit QT2040
+  - add Adafruit QT Py RP2040
+  - `esp32c3-12f`: `matrixportal-m4`: `p1am-100`: remove duplicate build tags
+  - `hifive1-qemu`: remove this emulated board
+  - `wioterminal`: add UART3 for RTL8720DN
+  - `xiao-ble`: fix usbpid
+
+
 0.25.0
 ---
 
