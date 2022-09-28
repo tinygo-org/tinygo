@@ -4,7 +4,7 @@
     "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "serial-port": ["acm:239a:802b"],
+    "serial-port": ["239a:802b"],
     "msd-volume-name": "ITSYM4BOOT",
     "msd-firmware-name": "firmware.uf2"
 }

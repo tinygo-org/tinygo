@@ -1,5 +1,5 @@
 {
 	"inherits": ["esp32"],
 	"build-tags": ["m5stack_core2"],
-	"serial-port": ["acm:10c4:ea60"]
+	"serial-port": ["10c4:ea60"]
 }

@@ -2,7 +2,7 @@
     "inherits": ["atsamd51j19a"],
     "build-tags": ["pygamer"],
     "serial": "usb",
-    "serial-port": ["acm:239a:803d", "acm:239a:803e"],
+    "serial-port": ["239a:803d", "239a:803e"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "PYGAMERBOOT",
