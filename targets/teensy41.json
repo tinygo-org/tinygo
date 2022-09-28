@@ -3,7 +3,6 @@
   "build-tags": ["teensy41", "teensy", "mimxrt1062", "nxp"],
   "serial": "uart",
   "automatic-stack-size": false,
-  "default-stack-size": 4096,
   "linkerscript": "targets/mimxrt1062-teensy40.ld",
   "extra-files": [
     "src/device/nxp/mimxrt1062.s",

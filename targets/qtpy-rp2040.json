@@ -7,6 +7,5 @@
     "linkerscript": "targets/qtpy-rp2040.ld",
     "extra-files": [
         "targets/qtpy-rp2040-boot-stage2.S"
-    ],
-    "default-stack-size": 4096
+    ]
 }

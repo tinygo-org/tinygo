@@ -6,6 +6,5 @@
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "msd-volume-name": "FTHRCANBOOT",
-    "msd-firmware-name": "firmware.uf2",
-    "default-stack-size": 4096
+    "msd-firmware-name": "firmware.uf2"
 }
