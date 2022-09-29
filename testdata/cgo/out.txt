@@ -32,7 +32,8 @@ struct: true 256 -123456 +3.140000e+000
 array: 5 6 7
 union: true
 union s: 22
-union f: +3.140000e+000
+union f (C.float): +6.280000e+000
+union f (float32): +3.140000e+000
 union global data: 5 8 1
 union local data:  5 8 1
 union s: true

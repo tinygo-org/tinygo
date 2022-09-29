@@ -112,6 +112,10 @@ import "C"
 import "C"
 
 var (
+	// aliases
+	_ C.float
+	_ C.double
+
 	// Simple typedefs.
 	_ C.myint
 
