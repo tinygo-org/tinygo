@@ -86,6 +86,8 @@ var cgoAliases = map[string]string{
 	"C.uint32_t":  "uint32",
 	"C.uint64_t":  "uint64",
 	"C.uintptr_t": "uintptr",
+	"C.float":     "float32",
+	"C.double":    "float64",
 }
 
 // builtinAliases are handled specially because they only exist on the Go side
@@ -309,6 +311,12 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Process CGo imports for each file.
 	for i, f := range files {
 		cf := p.newCGoFile(f, i)
+		// Float and double are aliased, meaning that C.float is the same thing
+		// as float32 in Go.
+		cf.names["float"] = clangCursor{}
+		cf.names["double"] = clangCursor{}
+		// Now read all the names (identifies) that C defines in the header
+		// snippet.
 		cf.readNames(p.cgoHeaders[i], cflagsForCGo, filepath.Base(fset.File(f.Pos()).Name()), func(names map[string]clangCursor) {
 			for _, name := range builtinAliases {
 				// Names such as C.int should not be obtained from C.
