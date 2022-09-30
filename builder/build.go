@@ -42,8 +42,8 @@ type BuildResult struct {
 	// information. Used for GDB for example.
 	Executable string
 
-	// A path to the output binary. It will be removed after Build returns, so
-	// if it should be kept it must be copied or moved away.
+	// A path to the output binary. It is stored in the tmpdir directory of the
+	// Build function, so if it should be kept it must be copied or moved away.
 	// It is often the same as Executable, but differs if the output format is
 	// .hex for example (instead of the usual ELF).
 	Binary string
@@ -94,23 +94,16 @@ type packageAction struct {
 //
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
-func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
+func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildResult, error) {
 	// Read the build ID of the tinygo binary.
 	// Used as a cache key for package builds.
 	compilerBuildID, err := ReadBuildID()
 	if err != nil {
-		return err
+		return BuildResult{}, err
 	}
 
-	// Create a temporary directory for intermediary files.
-	dir, err := os.MkdirTemp("", "tinygo")
-	if err != nil {
-		return err
-	}
 	if config.Options.Work {
-		fmt.Printf("WORK=%s\n", dir)
-	} else {
-		defer os.RemoveAll(dir)
+		fmt.Printf("WORK=%s\n", tmpdir)
 	}
 
 	// Look up the build cache directory, which is used to speed up incremental
@@ -119,7 +112,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	if cacheDir == "off" {
 		// Use temporary build directory instead, effectively disabling the
 		// build cache.
-		cacheDir = dir
+		cacheDir = tmpdir
 	}
 
 	// Check for a libc dependency.
@@ -129,40 +122,40 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var libcDependencies []*compileJob
 	switch config.Target.Libc {
 	case "darwin-libSystem":
-		job := makeDarwinLibSystemJob(config, dir)
+		job := makeDarwinLibSystemJob(config, tmpdir)
 		libcDependencies = append(libcDependencies, job)
 	case "musl":
-		job, unlock, err := Musl.load(config, dir)
+		job, unlock, err := Musl.load(config, tmpdir)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(job.result), "crt1.o")))
 		libcDependencies = append(libcDependencies, job)
 	case "picolibc":
-		libcJob, unlock, err := Picolibc.load(config, dir)
+		libcJob, unlock, err := Picolibc.load(config, tmpdir)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
 		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
 		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
+			return BuildResult{}, errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
 		}
 		libcDependencies = append(libcDependencies, dummyCompileJob(path))
 	case "mingw-w64":
-		_, unlock, err := MinGW.load(config, dir)
+		_, unlock, err := MinGW.load(config, tmpdir)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 		unlock()
-		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(dir)...)
+		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(tmpdir)...)
 	case "":
 		// no library specified, so nothing to do
 	default:
-		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
+		return BuildResult{}, fmt.Errorf("unknown libc: %s", config.Target.Libc)
 	}
 
 	optLevel, sizeLevel, _ := config.OptLevels()
@@ -188,7 +181,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// address spaces, etc).
 	machine, err := compiler.NewTargetMachine(compilerConfig)
 	if err != nil {
-		return err
+		return BuildResult{}, err
 	}
 	defer machine.Dispose()
 
@@ -197,11 +190,11 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		Sizes: compiler.Sizes(machine),
 	})
 	if err != nil {
-		return err
+		return BuildResult{}, err
 	}
 	err = lprogram.Parse()
 	if err != nil {
-		return err
+		return BuildResult{}, err
 	}
 
 	// Create the *ssa.Program. This does not yet build the entire SSA of the
@@ -270,7 +263,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 						}
 					}
 
-					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.OriginalDir(), dir, compilerConfig)
+					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.OriginalDir(), tmpdir, compilerConfig)
 					return err
 				},
 			}
@@ -284,7 +277,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		for _, imported := range pkg.Pkg.Imports() {
 			job, ok := packageActionIDJobs[imported.Path()]
 			if !ok {
-				return fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
+				return BuildResult{}, fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
 			}
 			importedPackages = append(importedPackages, job)
 			actionIDDependencies = append(actionIDDependencies, job)
@@ -370,7 +363,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				// Packages are compiled independently anyway.
 				for _, cgoHeader := range pkg.CGoHeaders {
 					// Store the header text in a temporary file.
-					f, err := os.CreateTemp(dir, "cgosnippet-*.c")
+					f, err := os.CreateTemp(tmpdir, "cgosnippet-*.c")
 					if err != nil {
 						return err
 					}
@@ -579,17 +572,17 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// Run jobs to produce the LLVM module.
 		err := runJobs(programJob, config.Options.Semaphore)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 		// Generate output.
 		switch outext {
 		case ".o":
 			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
 			if err != nil {
-				return err
+				return BuildResult{}, err
 			}
 			defer llvmBuf.Dispose()
-			return os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+			return BuildResult{}, os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
 		case ".bc":
 			var buf llvm.MemoryBuffer
 			if config.UseThinLTO() {
@@ -598,10 +591,10 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				buf = llvm.WriteBitcodeToMemoryBuffer(mod)
 			}
 			defer buf.Dispose()
-			return os.WriteFile(outpath, buf.Bytes(), 0666)
+			return BuildResult{}, os.WriteFile(outpath, buf.Bytes(), 0666)
 		case ".ll":
 			data := []byte(mod.String())
-			return os.WriteFile(outpath, data, 0666)
+			return BuildResult{}, os.WriteFile(outpath, data, 0666)
 		default:
 			panic("unreachable")
 		}
@@ -612,7 +605,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// run all jobs in parallel as far as possible.
 
 	// Add job to write the output object file.
-	objfile := filepath.Join(dir, "main.o")
+	objfile := filepath.Join(tmpdir, "main.o")
 	outputObjectFileJob := &compileJob{
 		description:  "generate output file",
 		dependencies: []*compileJob{programJob},
@@ -635,7 +628,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 
 	// Prepare link command.
 	linkerDependencies := []*compileJob{outputObjectFileJob}
-	executable := filepath.Join(dir, "main")
+	executable := filepath.Join(tmpdir, "main")
 	if config.GOOS() == "windows" {
 		executable += ".exe"
 	}
@@ -645,9 +638,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		job, unlock, err := CompilerRT.load(config, dir)
+		job, unlock, err := CompilerRT.load(config, tmpdir)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
@@ -661,7 +654,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
-				result, err := compileAndCacheCFile(abspath, dir, config.CFlags(), config.UseThinLTO(), config.Options.PrintCommands)
+				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(), config.UseThinLTO(), config.Options.PrintCommands)
 				job.result = result
 				return err
 			},
@@ -679,7 +672,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			job := &compileJob{
 				description: "compile CGo file " + abspath,
 				run: func(job *compileJob) error {
-					result, err := compileAndCacheCFile(abspath, dir, pkg.CFlags, config.UseThinLTO(), config.Options.PrintCommands)
+					result, err := compileAndCacheCFile(abspath, tmpdir, pkg.CFlags, config.UseThinLTO(), config.Options.PrintCommands)
 					job.result = result
 					return err
 				},
@@ -722,7 +715,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			ldflags = append(ldflags, "--strip-debug")
 		} else {
 			// Other linkers may have different flags.
-			return errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
+			return BuildResult{}, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
 		}
 	}
 
@@ -879,7 +872,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// is simpler and cannot be parallelized.
 	err = runJobs(linkJob, config.Options.Semaphore)
 	if err != nil {
-		return err
+		return BuildResult{}, err
 	}
 
 	// Get an Intel .hex file or .bin file from the .elf file.
@@ -890,40 +883,40 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	case "hex", "bin":
 		// Extract raw binary, either encoding it as a hex file or as a raw
 		// firmware file.
-		tmppath = filepath.Join(dir, "main"+outext)
+		tmppath = filepath.Join(tmpdir, "main"+outext)
 		err := objcopy(executable, tmppath, outputBinaryFormat)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 	case "uf2":
 		// Get UF2 from the .elf file.
-		tmppath = filepath.Join(dir, "main"+outext)
+		tmppath = filepath.Join(tmpdir, "main"+outext)
 		err := convertELFFileToUF2File(executable, tmppath, config.Target.UF2FamilyID)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 	case "esp32", "esp32-img", "esp32c3", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
-		tmppath = filepath.Join(dir, "main"+outext)
+		tmppath = filepath.Join(tmpdir, "main"+outext)
 		err := makeESPFirmareImage(executable, tmppath, outputBinaryFormat)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 	case "nrf-dfu":
 		// special format for nrfutil for Nordic chips
-		tmphexpath := filepath.Join(dir, "main.hex")
+		tmphexpath := filepath.Join(tmpdir, "main.hex")
 		err := objcopy(executable, tmphexpath, "hex")
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
-		tmppath = filepath.Join(dir, "main"+outext)
+		tmppath = filepath.Join(tmpdir, "main"+outext)
 		err = makeDFUFirmwareImage(config.Options, tmphexpath, tmppath)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 	default:
-		return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
+		return BuildResult{}, fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
 
 	// If there's a module root, use that.
@@ -933,13 +926,13 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		moduleroot = lprogram.MainPkg().Root
 	}
 
-	return action(BuildResult{
+	return BuildResult{
 		Executable: executable,
 		Binary:     tmppath,
 		MainDir:    lprogram.MainPkg().Dir,
 		ModuleRoot: moduleroot,
 		ImportPath: lprogram.MainPkg().ImportPath,
-	})
+	}, nil
 }
 
 // createEmbedObjectFile creates a new object file with the given contents, for
