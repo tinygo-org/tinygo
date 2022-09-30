@@ -23,13 +23,13 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer
 //export realloc
 func libc_realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer
 
-func getFilledBuffer_malloc() uintptr {
+func getFilledBuffer_malloc() unsafe.Pointer {
 	ptr := libc_malloc(5)
 	fillPanda(ptr)
-	return uintptr(ptr)
+	return ptr
 }
 
-func getFilledBuffer_calloc() uintptr {
+func getFilledBuffer_calloc() unsafe.Pointer {
 	ptr := libc_calloc(2, 5)
 	fillPanda(ptr)
 	*(*byte)(unsafe.Add(ptr, 5)) = 'b'
@@ -37,23 +37,23 @@ func getFilledBuffer_calloc() uintptr {
 	*(*byte)(unsafe.Add(ptr, 7)) = 'a'
 	*(*byte)(unsafe.Add(ptr, 8)) = 'r'
 	*(*byte)(unsafe.Add(ptr, 9)) = 's'
-	return uintptr(ptr)
+	return ptr
 }
 
-func getFilledBuffer_realloc() uintptr {
+func getFilledBuffer_realloc() unsafe.Pointer {
 	origPtr := getFilledBuffer_malloc()
-	ptr := libc_realloc(unsafe.Pointer(origPtr), 9)
+	ptr := libc_realloc(origPtr, 9)
 	*(*byte)(unsafe.Add(ptr, 5)) = 'b'
 	*(*byte)(unsafe.Add(ptr, 6)) = 'e'
 	*(*byte)(unsafe.Add(ptr, 7)) = 'a'
 	*(*byte)(unsafe.Add(ptr, 8)) = 'r'
-	return uintptr(ptr)
+	return ptr
 }
 
-func getFilledBuffer_reallocNil() uintptr {
+func getFilledBuffer_reallocNil() unsafe.Pointer {
 	ptr := libc_realloc(nil, 5)
 	fillPanda(ptr)
-	return uintptr(ptr)
+	return ptr
 }
 
 func fillPanda(ptr unsafe.Pointer) {
@@ -64,10 +64,10 @@ func fillPanda(ptr unsafe.Pointer) {
 	*(*byte)(unsafe.Add(ptr, 4)) = 'a'
 }
 
-func checkFilledBuffer(t *testing.T, ptr uintptr, content string) {
+func checkFilledBuffer(t *testing.T, ptr unsafe.Pointer, content string) {
 	t.Helper()
 	buf := *(*string)(unsafe.Pointer(&reflect.StringHeader{
-		Data: ptr,
+		Data: uintptr(ptr),
 		Len:  uintptr(len(content)),
 	}))
 	if buf != content {
@@ -78,7 +78,7 @@ func checkFilledBuffer(t *testing.T, ptr uintptr, content string) {
 func TestMallocFree(t *testing.T) {
 	tests := []struct {
 		name      string
-		getBuffer func() uintptr
+		getBuffer func() unsafe.Pointer
 		content   string
 	}{
 		{
@@ -121,7 +121,7 @@ func TestMallocFree(t *testing.T) {
 
 			checkFilledBuffer(t, bufPtr, tt.content)
 
-			libc_free(unsafe.Pointer(bufPtr))
+			libc_free(bufPtr)
 		})
 	}
 }
