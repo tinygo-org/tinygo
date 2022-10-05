@@ -129,19 +129,20 @@ func cdcCallbackRx(b []byte) {
 	}
 }
 
+var cdcSetupBuff [cdcLineInfoSize]byte
+
 func cdcSetup(setup usb.Setup) bool {
 	if setup.BmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.BRequest == usb_CDC_GET_LINE_CODING {
-			var b [cdcLineInfoSize]byte
-			b[0] = byte(usbLineInfo.dwDTERate)
-			b[1] = byte(usbLineInfo.dwDTERate >> 8)
-			b[2] = byte(usbLineInfo.dwDTERate >> 16)
-			b[3] = byte(usbLineInfo.dwDTERate >> 24)
-			b[4] = byte(usbLineInfo.bCharFormat)
-			b[5] = byte(usbLineInfo.bParityType)
-			b[6] = byte(usbLineInfo.bDataBits)
+			cdcSetupBuff[0] = byte(usbLineInfo.dwDTERate)
+			cdcSetupBuff[1] = byte(usbLineInfo.dwDTERate >> 8)
+			cdcSetupBuff[2] = byte(usbLineInfo.dwDTERate >> 16)
+			cdcSetupBuff[3] = byte(usbLineInfo.dwDTERate >> 24)
+			cdcSetupBuff[4] = byte(usbLineInfo.bCharFormat)
+			cdcSetupBuff[5] = byte(usbLineInfo.bParityType)
+			cdcSetupBuff[6] = byte(usbLineInfo.bDataBits)
 
-			machine.SendUSBInPacket(0, b[:])
+			machine.SendUSBInPacket(0, cdcSetupBuff[:])
 			return true
 		}
 	}
