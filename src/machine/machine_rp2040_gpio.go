@@ -288,8 +288,8 @@ func gpioHandleInterrupt(intr interrupt.Interrupt) {
 			base = &ioBank0.proc1IRQctrl
 		}
 
-		statreg := base.intS[gpio>>3]
-		change := getIntChange(gpio, statreg.Get())
+		statreg := base.intS[gpio>>3].Get()
+		change := getIntChange(gpio, statreg)
 		if change != 0 {
 			gpio.acknowledgeInterrupt(change)
 			callback := pinCallbacks[core][gpio]
