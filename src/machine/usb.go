@@ -72,6 +72,13 @@ var udd_ep_in_cache_buffer [7][64]uint8
 //go:align 4
 var udd_ep_out_cache_buffer [7][64]uint8
 
+// usb_trans_buffer max size is 255 since that is max size
+// for a descriptor (bLength is 1 byte), and the biggest use
+// for this buffer is to transmit string descriptors.  If
+// this buffer is used for new purposes in future the length
+// must be revisited.
+var usb_trans_buffer [255]uint8
+
 var (
 	usbTxHandler    [usb.NumberOfEndpoints]func()
 	usbRxHandler    [usb.NumberOfEndpoints]func([]byte)
@@ -113,16 +120,19 @@ func sendDescriptor(setup usb.Setup) {
 	case usb.STRING_DESCRIPTOR_TYPE:
 		switch setup.WValueL {
 		case 0:
-			b := []byte{0x04, 0x03, 0x09, 0x04}
-			sendUSBPacket(0, b, setup.WLength)
+			usb_trans_buffer[0] = 0x04
+			usb_trans_buffer[1] = 0x03
+			usb_trans_buffer[2] = 0x09
+			usb_trans_buffer[3] = 0x04
+			sendUSBPacket(0, usb_trans_buffer[:4], setup.WLength)
 
 		case usb.IPRODUCT:
-			b := make([]byte, (len(usb_STRING_PRODUCT)<<1)+2)
+			b := usb_trans_buffer[:(len(usb_STRING_PRODUCT)<<1)+2]
 			strToUTF16LEDescriptor(usb_STRING_PRODUCT, b)
 			sendUSBPacket(0, b, setup.WLength)
 
 		case usb.IMANUFACTURER:
-			b := make([]byte, (len(usb_STRING_MANUFACTURER)<<1)+2)
+			b := usb_trans_buffer[:(len(usb_STRING_MANUFACTURER)<<1)+2]
 			strToUTF16LEDescriptor(usb_STRING_MANUFACTURER, b)
 			sendUSBPacket(0, b, setup.WLength)
 
@@ -149,15 +159,16 @@ func sendDescriptor(setup usb.Setup) {
 func handleStandardSetup(setup usb.Setup) bool {
 	switch setup.BRequest {
 	case usb.GET_STATUS:
-		buf := []byte{0, 0}
+		usb_trans_buffer[0] = 0
+		usb_trans_buffer[1] = 0
 
 		if setup.BmRequestType != 0 { // endpoint
 			if isEndpointHalt {
-				buf[0] = 1
+				usb_trans_buffer[0] = 1
 			}
 		}
 
-		sendUSBPacket(0, buf, setup.WLength)
+		sendUSBPacket(0, usb_trans_buffer[:2], setup.WLength)
 		return true
 
 	case usb.CLEAR_FEATURE:
@@ -189,8 +200,8 @@ func handleStandardSetup(setup usb.Setup) bool {
 		return false
 
 	case usb.GET_CONFIGURATION:
-		buff := []byte{usbConfiguration}
-		sendUSBPacket(0, buff, setup.WLength)
+		usb_trans_buffer[0] = usbConfiguration
+		sendUSBPacket(0, usb_trans_buffer[:1], setup.WLength)
 		return true
 
 	case usb.SET_CONFIGURATION:
@@ -208,8 +219,8 @@ func handleStandardSetup(setup usb.Setup) bool {
 		}
 
 	case usb.GET_INTERFACE:
-		buff := []byte{usbSetInterface}
-		sendUSBPacket(0, buff, setup.WLength)
+		usb_trans_buffer[0] = usbSetInterface
+		sendUSBPacket(0, usb_trans_buffer[:1], setup.WLength)
 		return true
 
 	case usb.SET_INTERFACE:
