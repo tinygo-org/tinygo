@@ -738,9 +738,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 				ldflags = append(ldflags, dependency.result)
 			}
-			if config.Options.PrintCommands != nil {
-				config.Options.PrintCommands(config.Target.Linker, ldflags...)
-			}
 			if config.UseThinLTO() {
 				ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
 				if config.GOOS() == "windows" {
@@ -771,6 +768,9 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 					ldflags = append(ldflags,
 						"-mllvm", "--rotation-max-header-size=0")
 				}
+			}
+			if config.Options.PrintCommands != nil {
+				config.Options.PrintCommands(config.Target.Linker, ldflags...)
 			}
 			err = link(config.Target.Linker, ldflags...)
 			if err != nil {
