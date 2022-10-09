@@ -105,7 +105,7 @@ var Musl = Library{
 		}
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl/src") },
-	librarySources: func(target string) []string {
+	librarySources: func(target string) ([]string, error) {
 		arch := compileopts.MuslArchitecture(target)
 		globs := []string{
 			"env/*.c",
@@ -123,10 +123,13 @@ var Musl = Library{
 			"stdio/*.c",
 			"string/*.c",
 			"thread/" + arch + "/*.s",
-			"thread/" + arch + "/*.c",
 			"thread/*.c",
 			"time/*.c",
 			"unistd/*.c",
+		}
+		if arch == "arm" {
+			// These files need to be added to the start for some reason.
+			globs = append([]string{"thread/arm/*.c"}, globs...)
 		}
 
 		var sources []string
@@ -141,13 +144,16 @@ var Musl = Library{
 				// > ErrBadPattern, when pattern is malformed.
 				// So the only possible error is when the (statically defined)
 				// pattern is wrong. In other words, a programming bug.
-				panic("could not glob source dirs: " + err.Error())
+				return nil, fmt.Errorf("musl: could not glob source dirs: %w", err)
+			}
+			if len(matches) == 0 {
+				return nil, fmt.Errorf("musl: did not find any files for pattern %#v", pattern)
 			}
 			for _, match := range matches {
 				relpath, err := filepath.Rel(basepath, match)
 				if err != nil {
 					// Not sure if this is even possible.
-					panic(err)
+					return nil, err
 				}
 				// Make sure architecture specific files override generic files.
 				id := strings.ReplaceAll(relpath, "/"+arch+"/", "/")
@@ -159,7 +165,7 @@ var Musl = Library{
 				sources = append(sources, relpath)
 			}
 		}
-		return sources
+		return sources, nil
 	},
 	crt1Source: "../crt/crt1.c", // lib/musl/crt/crt1.c
 }

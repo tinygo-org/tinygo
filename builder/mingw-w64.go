@@ -31,9 +31,9 @@ var MinGW = Library{
 		// No flags necessary because there are no files to compile.
 		return nil
 	},
-	librarySources: func(target string) []string {
+	librarySources: func(target string) ([]string, error) {
 		// We only use the UCRT DLL file. No source files necessary.
-		return nil
+		return nil, nil
 	},
 }
 

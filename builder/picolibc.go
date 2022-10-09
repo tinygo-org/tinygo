@@ -38,8 +38,8 @@ var Picolibc = Library{
 		}
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc/newlib") },
-	librarySources: func(target string) []string {
-		return picolibcSources
+	librarySources: func(target string) ([]string, error) {
+		return picolibcSources, nil
 	},
 }
 
