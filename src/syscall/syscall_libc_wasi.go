@@ -323,3 +323,8 @@ func libc_fstat(fd int32, ptr unsafe.Pointer) int32
 //
 //export lstat
 func libc_lstat(pathname *byte, ptr unsafe.Pointer) int32
+
+// int open(const char *pathname, int flags, mode_t mode);
+//
+//export open
+func libc_open(pathname *byte, flags int32, mode uint32) int32

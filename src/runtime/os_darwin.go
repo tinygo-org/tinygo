@@ -5,6 +5,8 @@ package runtime
 
 import "unsafe"
 
+import "C" // dummy import so that os_darwin.c works
+
 const GOOS = "darwin"
 
 const (
