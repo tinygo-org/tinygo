@@ -281,3 +281,8 @@ func libc_pipe(fds *int32) int32
 //
 //export getpagesize
 func libc_getpagesize() int32
+
+// int open(const char *pathname, int flags, mode_t mode);
+//
+//export syscall_libc_open
+func libc_open(pathname *byte, flags int32, mode uint32) int32

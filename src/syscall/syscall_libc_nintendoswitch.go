@@ -71,3 +71,8 @@ func Pipe2(p []int, flags int) (err error) {
 func Getpagesize() int {
 	return 4096 // TODO
 }
+
+// int open(const char *pathname, int flags, mode_t mode);
+//
+//export open
+func libc_open(pathname *byte, flags int32, mode uint32) int32

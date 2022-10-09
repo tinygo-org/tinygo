@@ -351,11 +351,6 @@ func libc_pread(fd int32, buf *byte, count uint, offset int64) int
 //export lseek
 func libc_lseek(fd int32, offset int64, whence int) int64
 
-// int open(const char *pathname, int flags, mode_t mode);
-//
-//export open
-func libc_open(pathname *byte, flags int32, mode uint32) int32
-
 // int close(int fd)
 //
 //export close
