@@ -181,11 +181,11 @@ var CompilerRT = Library{
 		// Development build.
 		return filepath.Join(goenv.Get("TINYGOROOT"), "lib/compiler-rt-builtins")
 	},
-	librarySources: func(target string) []string {
+	librarySources: func(target string) ([]string, error) {
 		builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
 		if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
 			builtins = append(builtins, aeabiBuiltins...)
 		}
-		return builtins
+		return builtins, nil
 	},
 }

@@ -29,7 +29,7 @@ type Library struct {
 	sourceDir func() string
 
 	// The source files, relative to sourceDir.
-	librarySources func(target string) []string
+	librarySources func(target string) ([]string, error)
 
 	// The source code for the crt1.o file, relative to sourceDir.
 	crt1Source string
@@ -219,7 +219,11 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 
 	// Create jobs to compile all sources. These jobs are depended upon by the
 	// archive job above, so must be run first.
-	for _, path := range l.librarySources(target) {
+	paths, err := l.librarySources(target)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, path := range paths {
 		// Strip leading "../" parts off the path.
 		cleanpath := path
 		for strings.HasPrefix(cleanpath, "../") {
