@@ -1,0 +1,18 @@
+{
+	"llvm-target":   "wasm32-unknown-wasi",
+	"cpu":           "generic",
+	"build-tags":    ["tinygo.wasm"],
+	"goos":          "js",
+	"goarch":        "wasm",
+	"linker":        "wasm-ld",
+	"libc":          "wasi-libc",
+	"scheduler":     "asyncify",
+	"default-stack-size": 16384,
+	"ldflags": [
+		"--allow-undefined-file={root}/targets/wasm-undefined.txt",
+		"--stack-first",
+		"--no-demangle"
+	],
+	"emulator":      "node {root}/targets/wasm_exec.js {}",
+	"wasm-abi":      "js"
+}

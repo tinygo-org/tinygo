@@ -1,24 +1,9 @@
 {
-	"llvm-target":   "wasm32-unknown-wasi",
-	"cpu":           "generic",
-	"features":      "+bulk-memory,+nontrapping-fptoint,+sign-ext",
-	"build-tags":    ["tinygo.wasm"],
-	"goos":          "js",
-	"goarch":        "wasm",
-	"linker":        "wasm-ld",
-	"libc":          "wasi-libc",
-	"scheduler":     "asyncify",
-	"default-stack-size": 16384,
+	"inherits": ["wasm-legacy"],
+	"features": "+bulk-memory,+nontrapping-fptoint,+sign-ext",
 	"cflags": [
 		"-mbulk-memory",
 		"-mnontrapping-fptoint",
 		"-msign-ext"
-	],
-	"ldflags": [
-		"--allow-undefined-file={root}/targets/wasm-undefined.txt",
-		"--stack-first",
-		"--no-demangle"
-	],
-	"emulator":      "node {root}/targets/wasm_exec.js {}",
-	"wasm-abi":      "js"
+	]
 }
