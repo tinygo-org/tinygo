@@ -26,6 +26,7 @@ type TargetSpec struct {
 	Inherits         []string `json:"inherits"`
 	Triple           string   `json:"llvm-target"`
 	CPU              string   `json:"cpu"`
+	ABI              string   `json:"target-abi"` // rougly equivalent to -mabi= flag
 	Features         string   `json:"features"`
 	GOOS             string   `json:"goos"`
 	GOARCH           string   `json:"goarch"`
