@@ -572,6 +572,20 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 				daemon.Stdout = w
 				daemon.Stderr = w
 			}
+		case "pyocd":
+			port = ":3333"
+			gdbCommands = append(gdbCommands, "monitor halt", "load", "monitor reset halt")
+			daemon = executeCommand(config.Options, "pyocd", "gdbserver", "--persist", "-t", config.Target.OpenOCDTarget)
+			if ocdOutput {
+				// Make it clear which output is from the daemon.
+				w := &ColorWriter{
+					Out:    colorable.NewColorableStderr(),
+					Prefix: "pyocd: ",
+					Color:  TermColorYellow,
+				}
+				daemon.Stdout = w
+				daemon.Stderr = w
+			}
 		case "jlink":
 			port = ":2331"
 			gdbCommands = append(gdbCommands, "load", "monitor reset halt")
