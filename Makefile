@@ -56,6 +56,12 @@ else
     LLVM_OPTION += '-DLLVM_ENABLE_ASSERTIONS=OFF'
 endif
 
+# Enable AddressSanitizer
+ifeq (1, $(ASAN))
+    LLVM_OPTION += -DLLVM_USE_SANITIZER=Address
+    CGO_LDFLAGS += -fsanitize=address
+endif
+
 ifeq (1, $(STATIC))
     # Build TinyGo as a fully statically linked binary (no dynamically loaded
     # libraries such as a libc). This is not supported with glibc which is used
