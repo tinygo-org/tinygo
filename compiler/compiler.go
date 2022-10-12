@@ -41,6 +41,7 @@ type Config struct {
 	Triple          string
 	CPU             string
 	Features        string
+	ABI             string
 	GOOS            string
 	GOARCH          string
 	CodeModel       string
@@ -319,6 +320,18 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 		)
 		c.dibuilder.Finalize()
 		c.dibuilder.Destroy()
+	}
+
+	// Add the "target-abi" flag, which is necessary on RISC-V otherwise it will
+	// pick one that doesn't match the -mabi Clang flag.
+	if c.ABI != "" {
+		c.mod.AddNamedMetadataOperand("llvm.module.flags",
+			c.ctx.MDNode([]llvm.Metadata{
+				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+				c.ctx.MDString("target-abi"),
+				c.ctx.MDString(c.ABI),
+			}),
+		)
 	}
 
 	return c.mod, c.diagnostics

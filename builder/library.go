@@ -155,6 +155,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			args = append(args, "-mcpu="+cpu)
 		}
 	}
+	if config.ABI() != "" {
+		args = append(args, "-mabi="+config.ABI())
+	}
 	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
 		if strings.Split(target, "-")[2] == "linux" {
 			args = append(args, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
@@ -170,10 +173,10 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		args = append(args, "-mdouble=64")
 	}
 	if strings.HasPrefix(target, "riscv32-") {
-		args = append(args, "-march=rv32imac", "-mabi=ilp32", "-fforce-enable-int128")
+		args = append(args, "-march=rv32imac", "-fforce-enable-int128")
 	}
 	if strings.HasPrefix(target, "riscv64-") {
-		args = append(args, "-march=rv64gc", "-mabi=lp64")
+		args = append(args, "-march=rv64gc")
 	}
 	if strings.HasPrefix(target, "xtensa") {
 		// Hack to work around an issue in the Xtensa port:

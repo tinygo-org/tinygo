@@ -163,6 +163,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		Triple:          config.Triple(),
 		CPU:             config.CPU(),
 		Features:        config.Features(),
+		ABI:             config.ABI(),
 		GOOS:            config.GOOS(),
 		GOARCH:          config.GOARCH(),
 		CodeModel:       config.CodeModel(),
