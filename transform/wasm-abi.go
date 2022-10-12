@@ -88,8 +88,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 			// Update all users to call the external function.
 			// The old $i64wrapper function could be removed, but it may as well
 			// be left in place.
-			for use := fn.FirstUse(); !use.IsNil(); use = use.NextUse() {
-				call := use.User()
+			for _, call := range getUses(fn) {
 				entryBlockBuilder.SetInsertPointBefore(call.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
 				builder.SetInsertPointBefore(call)
 				callParams := []llvm.Value{}
