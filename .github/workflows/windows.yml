@@ -95,10 +95,87 @@ jobs:
         with:
           name: release-double-zipped
           path: build/release/release.zip
+
+  smoke-test-windows:
+    runs-on: windows-2022
+    needs: build-windows
+    steps:
+      - uses: brechtm/setup-scoop@v2
+        with:
+          scoop_update: 'false'
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          scoop install binaryen
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v2
+        with:
+          name: release-double-zipped
+          path: build/
+      - name: Unzip TinyGo build
+        shell: bash
+        working-directory: build
+        run: 7z x release.zip -r
       - name: Smoke tests
         shell: bash
-        run: make smoketest TINYGO=$(PWD)/build/tinygo AVR=0 XTENSA=0
+        run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo AVR=0 XTENSA=0
+
+  stdlib-test-windows:
+    runs-on: windows-2022
+    needs: build-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v2
+        with:
+          name: release-double-zipped
+          path: build/
+      - name: Unzip TinyGo build
+        shell: bash
+        working-directory: build
+        run: 7z x release.zip -r
       - name: Test stdlib packages
-        run: make tinygo-test
+        run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
+
+  stdlib-wasi-test-windows:
+    runs-on: windows-2022
+    needs: build-windows
+    steps:
+      - uses: brechtm/setup-scoop@v2
+        with:
+          scoop_update: 'false'
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          scoop install binaryen wasmtime
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v2
+        with:
+          name: release-double-zipped
+          path: build/
+      - name: Unzip TinyGo build
+        shell: bash
+        working-directory: build
+        run: 7z x release.zip -r
       - name: Test stdlib packages on wasi
-        run: make tinygo-test-wasi-fast
+        run: make tinygo-test-wasi-fast TINYGO=$(PWD)/build/tinygo/bin/tinygo
