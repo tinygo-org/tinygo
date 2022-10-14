@@ -26,6 +26,7 @@ var (
 	flagVerbose   bool
 	flagShort     bool
 	flagRunRegexp string
+	flagBatch     bool
 )
 
 var initRan bool
@@ -40,6 +41,7 @@ func Init() {
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
+	flag.BoolVar(&flagBatch, "test.batch", false, "batch: run test as part of a batch")
 
 	initBenchmarkFlags()
 }
@@ -449,7 +451,7 @@ func (m *M) Run() (code int) {
 		fmt.Println("FAIL")
 		m.exitCode = 1
 	} else {
-		if flagVerbose {
+		if !flagBatch || flagVerbose {
 			fmt.Println("PASS")
 		}
 		m.exitCode = 0

@@ -290,6 +290,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 
 		// Run the test.
 		start := time.Now()
+		cmd.Args = append(cmd.Args, "--test.batch")
 		err = cmd.Run()
 		duration := time.Since(start)
 
