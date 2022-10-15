@@ -286,12 +286,15 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			// directory is added last.
 			args = append(args, cmd.Args[1:]...)
 			cmd.Args = append(cmd.Args[:1:1], args...)
+			// Allow
+			cmd.Args = append(cmd.Args, "--")
+		} else {
+			// Make sure the test knows its running as part of a batch
+			cmd.Args = append(cmd.Args, "-test.batch")
 		}
 
 		// Run the test.
 		start := time.Now()
-		// Make sure the test knows its running as part of a batch
-		cmd.Args = append(cmd.Args, "-test.batch")
 		err = cmd.Run()
 		duration := time.Since(start)
 
