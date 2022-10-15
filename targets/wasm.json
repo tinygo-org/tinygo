@@ -19,6 +19,9 @@
 		"--stack-first",
 		"--no-demangle"
 	],
+	"extra-files": [
+		"src/runtime/asm_tinygowasm.S"
+	],
 	"emulator":      "node {root}/targets/wasm_exec.js {}",
 	"wasm-abi":      "js"
 }

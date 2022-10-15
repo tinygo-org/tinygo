@@ -75,26 +75,14 @@ func replaceGlobalIntWithArray(mod llvm.Module, name string, buf interface{}) ll
 	return global
 }
 
-// typeHasPointers returns whether this type is a pointer or contains pointers.
-// If the type is an aggregate type, it will check whether there is a pointer
-// inside.
-func typeHasPointers(t llvm.Type) bool {
-	switch t.TypeKind() {
-	case llvm.PointerTypeKind:
-		return true
-	case llvm.StructTypeKind:
-		for _, subType := range t.StructElementTypes() {
-			if typeHasPointers(subType) {
-				return true
-			}
+// stripPointerCasts strips instruction pointer casts (getelementptr and
+// bitcast) and returns the original value without the casts.
+func stripPointerCasts(value llvm.Value) llvm.Value {
+	if !value.IsAInstruction().IsNil() {
+		switch value.InstructionOpcode() {
+		case llvm.GetElementPtr, llvm.BitCast:
+			return stripPointerCasts(value.Operand(0))
 		}
-		return false
-	case llvm.ArrayTypeKind:
-		if typeHasPointers(t.ElementType()) {
-			return true
-		}
-		return false
-	default:
-		return false
 	}
+	return value
 }
