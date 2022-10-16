@@ -1028,11 +1028,11 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 			if len(parts) != 2 {
 				return "", fmt.Errorf("could not parse USB VID/PID pair %q", s)
 			}
-			vid, err := strconv.ParseUint(parts[1], 16, 16)
+			vid, err := strconv.ParseUint(parts[0], 16, 16)
 			if err != nil {
 				return "", fmt.Errorf("could not parse USB vendor ID %q: %w", parts[1], err)
 			}
-			pid, err := strconv.ParseUint(parts[2], 16, 16)
+			pid, err := strconv.ParseUint(parts[1], 16, 16)
 			if err != nil {
 				return "", fmt.Errorf("could not parse USB product ID %q: %w", parts[1], err)
 			}
