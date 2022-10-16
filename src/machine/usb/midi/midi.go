@@ -24,8 +24,8 @@ func init() {
 	}
 }
 
-// New returns hid-mouse.
-func New() *midi {
+// Port returns the USB midi port.
+func Port() *midi {
 	return Midi
 }
 

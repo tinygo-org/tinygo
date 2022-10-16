@@ -63,8 +63,8 @@ func init() {
 	}
 }
 
-// New returns hid-keybord.
-func New() *keyboard {
+// Port returns the USB hid-keyboard port.
+func Port() *keyboard {
 	return Keyboard
 }
 

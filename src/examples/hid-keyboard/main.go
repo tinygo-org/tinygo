@@ -10,7 +10,7 @@ func main() {
 	button := machine.BUTTON
 	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
-	kb := keyboard.New()
+	kb := keyboard.Port()
 
 	for {
 		if !button.Get() {

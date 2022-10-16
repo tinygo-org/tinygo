@@ -27,8 +27,8 @@ func init() {
 	}
 }
 
-// New returns hid-mouse.
-func New() *mouse {
+// Port returns the USB hid-mouse port.
+func Port() *mouse {
 	return Mouse
 }
 

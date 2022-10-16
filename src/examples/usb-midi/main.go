@@ -17,7 +17,7 @@ func main() {
 	button := machine.BUTTON
 	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
-	m := midi.New()
+	m := midi.Port()
 	m.SetHandler(func(b []byte) {
 		led.Set(!led.Get())
 		fmt.Printf("% X\r\n", b)
