@@ -401,7 +401,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		if err == nil {
 			err = touchSerialPortAt1200bps(port)
 			if err != nil {
-				return &commandError{"failed to reset port", result.Binary, err}
+				return &commandError{"failed to reset port", port, err}
 			}
 			// give the target MCU a chance to restart into bootloader
 			time.Sleep(3 * time.Second)
