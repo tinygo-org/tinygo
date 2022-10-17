@@ -63,6 +63,12 @@ func init() {
 	}
 }
 
+// New returns the USB hid-keyboard port.
+// Deprecated, better to just use Port()
+func New() *keyboard {
+	return Port()
+}
+
 // Port returns the USB hid-keyboard port.
 func Port() *keyboard {
 	return Keyboard

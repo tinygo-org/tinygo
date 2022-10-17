@@ -24,6 +24,12 @@ func init() {
 	}
 }
 
+// New returns the USB MIDI port.
+// Deprecated, better to just use Port()
+func New() *midi {
+	return Port()
+}
+
 // Port returns the USB midi port.
 func Port() *midi {
 	return Midi
