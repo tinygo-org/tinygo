@@ -27,6 +27,12 @@ func init() {
 	}
 }
 
+// New returns the USB hid-mouse port.
+// Deprecated, better to just use Port()
+func New() *mouse {
+	return Port()
+}
+
 // Port returns the USB hid-mouse port.
 func Port() *mouse {
 	return Mouse
