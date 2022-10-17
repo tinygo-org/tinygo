@@ -224,8 +224,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		flags = append(flags, "-test.benchmem")
 	}
 
+	buf := bytes.Buffer{}
 	passed := false
-	err = buildAndRun(pkgName, config, os.Stdout, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	err = buildAndRun(pkgName, config, &buf, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
 		if testCompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
@@ -286,9 +287,6 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			// directory is added last.
 			args = append(args, cmd.Args[1:]...)
 			cmd.Args = append(cmd.Args[:1:1], args...)
-		} else if config.EmulatorName() == "" {
-			// Make sure the test knows its running as part of a batch
-			cmd.Args = append(cmd.Args, "-test.batch")
 		}
 
 		// Run the test.
@@ -300,8 +298,12 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		importPath := strings.TrimSuffix(result.ImportPath, ".test")
 		passed = err == nil
 		if passed {
+			if testVerbose {
+				buf.WriteTo(stdout)
+			}
 			fmt.Fprintf(stdout, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
 		} else {
+			buf.WriteTo(stdout)
 			fmt.Fprintf(stdout, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 		}
 		if _, ok := err.(*exec.ExitError); ok {
@@ -1619,7 +1621,7 @@ func main() {
 		wg.Wait()
 		close(fail)
 		if _, fail := <-fail; fail {
-			fmt.Println("FAIL")
+			//fmt.Println("FAIL")
 			os.Exit(1)
 		}
 	case "monitor":
