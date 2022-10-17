@@ -1621,7 +1621,6 @@ func main() {
 		wg.Wait()
 		close(fail)
 		if _, fail := <-fail; fail {
-			//fmt.Println("FAIL")
 			os.Exit(1)
 		}
 	case "monitor":
