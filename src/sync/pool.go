@@ -6,7 +6,7 @@ type Pool struct {
 	items []interface{}
 }
 
-// Get returns the value of calling Pool.New().
+// Get returns an item in the pool, or the value of calling Pool.New() if there are no items.
 func (p *Pool) Get() interface{} {
 	if len(p.items) > 0 {
 		x := p.items[len(p.items)-1]
@@ -19,7 +19,7 @@ func (p *Pool) Get() interface{} {
 	return p.New()
 }
 
-// Put drops the value put into the pool.
+// Put adds a value back into the pool.
 func (p *Pool) Put(x interface{}) {
 	p.items = append(p.items, x)
 }
