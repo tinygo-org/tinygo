@@ -304,7 +304,10 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 					// Unfortunately the heap could not be increased. This
 					// happens on baremetal systems for example (where all
 					// available RAM has already been dedicated to the heap).
-					runtimePanic("out of memory")
+					printstring("panic: runtime error: out of memory allocating ")
+					printuint64(uint64(size))
+					println(" bytes")
+					abort()
 				}
 			}
 		}
