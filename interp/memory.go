@@ -1031,6 +1031,17 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			for i := uint32(0); i < ptrSize; i++ {
 				v.buf[i] = ptrValue.pointer
 			}
+		case llvm.ICmp:
+			size := r.targetData.TypeAllocSize(llvmValue.Operand(0).Type())
+			lhs := newRawValue(uint32(size))
+			rhs := newRawValue(uint32(size))
+			lhs.set(llvmValue.Operand(0), r)
+			rhs.set(llvmValue.Operand(1), r)
+			if r.interpretICmp(lhs, rhs, llvmValue.IntPredicate()) {
+				v.buf[0] = 1 // result is true
+			} else {
+				v.buf[0] = 0 // result is false
+			}
 		default:
 			llvmValue.Dump()
 			println()

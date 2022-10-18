@@ -723,46 +723,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			locals[inst.localIndex] = newagg
 		case llvm.ICmp:
 			predicate := llvm.IntPredicate(operands[2].(literalValue).value.(uint8))
-			var result bool
 			lhs := operands[0]
 			rhs := operands[1]
-			switch predicate {
-			case llvm.IntEQ, llvm.IntNE:
-				lhsPointer, lhsErr := lhs.asPointer(r)
-				rhsPointer, rhsErr := rhs.asPointer(r)
-				if (lhsErr == nil) != (rhsErr == nil) {
-					// Fast path: only one is a pointer, so they can't be equal.
-					result = false
-				} else if lhsErr == nil {
-					// Both must be nil, so both are pointers.
-					// Compare them directly.
-					result = lhsPointer.equal(rhsPointer)
-				} else {
-					// Fall back to generic comparison.
-					result = lhs.asRawValue(r).equal(rhs.asRawValue(r))
-				}
-				if predicate == llvm.IntNE {
-					result = !result
-				}
-			case llvm.IntUGT:
-				result = lhs.Uint() > rhs.Uint()
-			case llvm.IntUGE:
-				result = lhs.Uint() >= rhs.Uint()
-			case llvm.IntULT:
-				result = lhs.Uint() < rhs.Uint()
-			case llvm.IntULE:
-				result = lhs.Uint() <= rhs.Uint()
-			case llvm.IntSGT:
-				result = lhs.Int() > rhs.Int()
-			case llvm.IntSGE:
-				result = lhs.Int() >= rhs.Int()
-			case llvm.IntSLT:
-				result = lhs.Int() < rhs.Int()
-			case llvm.IntSLE:
-				result = lhs.Int() <= rhs.Int()
-			default:
-				return nil, mem, r.errorAt(inst, errors.New("interp: unsupported icmp"))
-			}
+			result := r.interpretICmp(lhs, rhs, predicate)
 			if result {
 				locals[inst.localIndex] = literalValue{uint8(1)}
 			} else {
@@ -946,6 +909,51 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		}
 	}
 	return nil, mem, r.errorAt(bb.instructions[len(bb.instructions)-1], errors.New("interp: reached end of basic block without terminator"))
+}
+
+// Interpret an icmp instruction. Doesn't have side effects, only returns the
+// output of the comparison.
+func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) bool {
+	switch predicate {
+	case llvm.IntEQ, llvm.IntNE:
+		var result bool
+		lhsPointer, lhsErr := lhs.asPointer(r)
+		rhsPointer, rhsErr := rhs.asPointer(r)
+		if (lhsErr == nil) != (rhsErr == nil) {
+			// Fast path: only one is a pointer, so they can't be equal.
+			result = false
+		} else if lhsErr == nil {
+			// Both must be nil, so both are pointers.
+			// Compare them directly.
+			result = lhsPointer.equal(rhsPointer)
+		} else {
+			// Fall back to generic comparison.
+			result = lhs.asRawValue(r).equal(rhs.asRawValue(r))
+		}
+		if predicate == llvm.IntNE {
+			result = !result
+		}
+		return result
+	case llvm.IntUGT:
+		return lhs.Uint() > rhs.Uint()
+	case llvm.IntUGE:
+		return lhs.Uint() >= rhs.Uint()
+	case llvm.IntULT:
+		return lhs.Uint() < rhs.Uint()
+	case llvm.IntULE:
+		return lhs.Uint() <= rhs.Uint()
+	case llvm.IntSGT:
+		return lhs.Int() > rhs.Int()
+	case llvm.IntSGE:
+		return lhs.Int() >= rhs.Int()
+	case llvm.IntSLT:
+		return lhs.Int() < rhs.Int()
+	case llvm.IntSLE:
+		return lhs.Int() <= rhs.Int()
+	default:
+		// _should_ be unreachable, until LLVM adds new icmp operands (unlikely)
+		panic("interp: unsupported icmp")
+	}
 }
 
 func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
