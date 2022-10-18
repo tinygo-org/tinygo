@@ -59,6 +59,15 @@ func runtimePanic(msg string) {
 	abort()
 }
 
+func oomPanic(size uintptr) {
+	// pretend to be a runtime panic, but without allocating a concatenated
+	// string
+	printstring("panic: runtime error: out of memory allocating ")
+	printuint64(uint64(size))
+	println(" bytes")
+	abort()
+}
+
 // Called at the start of a function that includes a deferred call.
 // It gets passed in the stack-allocated defer frame and configures it.
 // Note that the frame is not zeroed yet, so we need to initialize all values
