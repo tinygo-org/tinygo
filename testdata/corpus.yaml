@@ -204,7 +204,6 @@
 - repo: github.com/cespare/xxhash
   tags: appengine
 - repo: gonum.org/v1/gonum
-  tags: noasm
 - repo: gonum.org/v1/gonum
   tags: noasm appengine
   subdirs:
@@ -277,7 +276,6 @@
 #  subdirs:
 #  - pkg: go
 - repo: github.com/chewxy/math32
-  tags: noasm
   version: master
 - repo: github.com/russross/blackfriday
   version: v2
