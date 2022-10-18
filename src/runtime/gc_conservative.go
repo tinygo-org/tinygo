@@ -202,7 +202,7 @@ func initHeap() {
 // will be expensive.
 func setHeapEnd(newHeapEnd uintptr) {
 	if gcAsserts && newHeapEnd <= heapEnd {
-		panic("gc: setHeapEnd didn't grow the heap")
+		runtimePanic("gc: setHeapEnd didn't grow the heap")
 	}
 
 	// Save some old variables we need later.
@@ -224,7 +224,7 @@ func setHeapEnd(newHeapEnd uintptr) {
 	// should be used to avoid corruption.
 	// This assert checks whether that's true.
 	if gcAsserts && uintptr(metadataStart) < uintptr(oldMetadataStart)+oldMetadataSize {
-		panic("gc: heap did not grow enough at once")
+		runtimePanic("gc: heap did not grow enough at once")
 	}
 }
 
