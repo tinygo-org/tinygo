@@ -83,8 +83,8 @@ type clock struct {
 }
 
 // clock returns the clock identified by cix.
-func (clks *clocksType) clock(cix clockIndex) *clock {
-	return &clock{
+func (clks *clocksType) clock(cix clockIndex) clock {
+	return clock{
 		&clks.clk[cix],
 		cix,
 	}
