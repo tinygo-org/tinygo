@@ -168,37 +168,44 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 		return err
 	}
 
-	if outpath == "" {
-		if strings.HasSuffix(pkgName, ".go") {
-			// A Go file was specified directly on the command line.
-			// Base the binary name off of it.
-			outpath = filepath.Base(pkgName[:len(pkgName)-3]) + config.DefaultBinaryExtension()
-		} else {
-			// Pick a default output path based on the main directory.
-			outpath = filepath.Base(result.MainDir) + config.DefaultBinaryExtension()
-		}
-	}
+	if result.Binary != "" {
+		// If result.Binary is set, it means there is a build output (elf, hex,
+		// etc) that we need to move to the outpath. If it isn't set, it means
+		// the build output was a .ll, .bc or .o file that has already been
+		// written to outpath and so we don't need to do anything.
 
-	if err := os.Rename(result.Binary, outpath); err != nil {
-		// Moving failed. Do a file copy.
-		inf, err := os.Open(result.Binary)
-		if err != nil {
-			return err
-		}
-		defer inf.Close()
-		outf, err := os.OpenFile(outpath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
-		if err != nil {
-			return err
+		if outpath == "" {
+			if strings.HasSuffix(pkgName, ".go") {
+				// A Go file was specified directly on the command line.
+				// Base the binary name off of it.
+				outpath = filepath.Base(pkgName[:len(pkgName)-3]) + config.DefaultBinaryExtension()
+			} else {
+				// Pick a default output path based on the main directory.
+				outpath = filepath.Base(result.MainDir) + config.DefaultBinaryExtension()
+			}
 		}
 
-		// Copy data to output file.
-		_, err = io.Copy(outf, inf)
-		if err != nil {
-			return err
-		}
+		if err := os.Rename(result.Binary, outpath); err != nil {
+			// Moving failed. Do a file copy.
+			inf, err := os.Open(result.Binary)
+			if err != nil {
+				return err
+			}
+			defer inf.Close()
+			outf, err := os.OpenFile(outpath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+			if err != nil {
+				return err
+			}
 
-		// Check whether file writing was successful.
-		return outf.Close()
+			// Copy data to output file.
+			_, err = io.Copy(outf, inf)
+			if err != nil {
+				return err
+			}
+
+			// Check whether file writing was successful.
+			return outf.Close()
+		}
 	}
 
 	// Move was successful.
