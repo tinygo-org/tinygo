@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -44,7 +45,10 @@ func (b *builder) defineIntrinsicFunction() {
 // and will otherwise be lowered to regular libc memcpy/memmove calls.
 func (b *builder) createMemoryCopyImpl() {
 	b.createFunctionStart(true)
-	fnName := "llvm." + b.fn.Name() + ".p0i8.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+	fnName := "llvm." + b.fn.Name() + ".p0.p0.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+	if llvmutil.Major() < 15 { // compatibility with LLVM 14
+		fnName = "llvm." + b.fn.Name() + ".p0i8.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+	}
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
 		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.i8ptrType, b.i8ptrType, b.uintptrType, b.ctx.Int1Type()}, false)
@@ -55,7 +59,7 @@ func (b *builder) createMemoryCopyImpl() {
 		params = append(params, b.getValue(param))
 	}
 	params = append(params, llvm.ConstInt(b.ctx.Int1Type(), 0, false))
-	b.CreateCall(llvmFn, params, "")
+	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
 	b.CreateRetVoid()
 }
 
@@ -64,7 +68,10 @@ func (b *builder) createMemoryCopyImpl() {
 // regular libc memset calls if they aren't optimized out in a different way.
 func (b *builder) createMemoryZeroImpl() {
 	b.createFunctionStart(true)
-	fnName := "llvm.memset.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+	fnName := "llvm.memset.p0.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+	if llvmutil.Major() < 15 { // compatibility with LLVM 14
+		fnName = "llvm.memset.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+	}
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
 		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.i8ptrType, b.ctx.Int8Type(), b.uintptrType, b.ctx.Int1Type()}, false)
@@ -76,7 +83,7 @@ func (b *builder) createMemoryZeroImpl() {
 		b.getValue(b.fn.Params[1]),
 		llvm.ConstInt(b.ctx.Int1Type(), 0, false),
 	}
-	b.CreateCall(llvmFn, params, "")
+	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
 	b.CreateRetVoid()
 }
 
@@ -119,6 +126,6 @@ func (b *builder) defineMathOp() {
 	for i, param := range b.fn.Params {
 		args[i] = b.getValue(param)
 	}
-	result := b.CreateCall(llvmFn, args, "")
+	result := b.CreateCall(llvmFn.GlobalValueType(), llvmFn, args, "")
 	b.CreateRet(result)
 }

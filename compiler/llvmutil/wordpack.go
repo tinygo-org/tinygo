@@ -58,12 +58,12 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needs
 				llvm.ConstInt(ctx.Int32Type(), 0, false),
 				llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 			}
-			gep := builder.CreateInBoundsGEP(packedAllocCast, indices, "")
+			gep := builder.CreateInBoundsGEP(packedType, packedAllocCast, indices, "")
 			builder.CreateStore(value, gep)
 		}
 
 		// Load value (the *i8) from the alloca.
-		result := builder.CreateLoad(packedAlloc, "")
+		result := builder.CreateLoad(i8ptrType, packedAlloc, "")
 
 		// End the lifetime of the alloca, to help the optimizer.
 		packedPtr := builder.CreateBitCast(packedAlloc, i8ptrType, "")
@@ -95,14 +95,14 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needs
 		// Packed data is bigger than a pointer, so allocate it on the heap.
 		sizeValue := llvm.ConstInt(uintptrType, size, false)
 		alloc := mod.NamedFunction("runtime.alloc")
-		packedHeapAlloc := builder.CreateCall(alloc, []llvm.Value{
+		packedHeapAlloc := builder.CreateCall(alloc.GlobalValueType(), alloc, []llvm.Value{
 			sizeValue,
 			llvm.ConstNull(i8ptrType),
 			llvm.Undef(i8ptrType), // unused context parameter
 		}, "")
 		if needsStackObjects {
 			trackPointer := mod.NamedFunction("runtime.trackPointer")
-			builder.CreateCall(trackPointer, []llvm.Value{
+			builder.CreateCall(trackPointer.GlobalValueType(), trackPointer, []llvm.Value{
 				packedHeapAlloc,
 				llvm.Undef(i8ptrType), // unused context parameter
 			}, "")
@@ -115,7 +115,7 @@ func EmitPointerPack(builder llvm.Builder, mod llvm.Module, prefix string, needs
 				llvm.ConstInt(ctx.Int32Type(), 0, false),
 				llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 			}
-			gep := builder.CreateInBoundsGEP(packedAlloc, indices, "")
+			gep := builder.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 			builder.CreateStore(value, gep)
 		}
 
@@ -170,8 +170,8 @@ func EmitPointerUnpack(builder llvm.Builder, mod llvm.Module, ptr llvm.Value, va
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 			llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 		}
-		gep := builder.CreateInBoundsGEP(packedAlloc, indices, "")
-		values[i] = builder.CreateLoad(gep, "")
+		gep := builder.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
+		values[i] = builder.CreateLoad(valueType, gep, "")
 	}
 	if !packedRawAlloc.IsNil() {
 		allocPtr := builder.CreateBitCast(packedRawAlloc, i8ptrType, "")

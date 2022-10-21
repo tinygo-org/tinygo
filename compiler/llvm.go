@@ -61,19 +61,19 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 }
 
 // makeGlobalArray creates a new LLVM global with the given name and integers as
-// contents, and returns the global.
+// contents, and returns the global and initializer type.
 // Note that it is left with the default linkage etc., you should set
 // linkage/constant/etc properties yourself.
-func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType llvm.Type) llvm.Value {
+func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
 	globalType := llvm.ArrayType(elementType, len(buf))
 	global := llvm.AddGlobal(c.mod, globalType, name)
 	value := llvm.Undef(globalType)
 	for i := 0; i < len(buf); i++ {
 		ch := uint64(buf[i])
-		value = llvm.ConstInsertValue(value, llvm.ConstInt(elementType, ch, false), []uint32{uint32(i)})
+		value = c.builder.CreateInsertValue(value, llvm.ConstInt(elementType, ch, false), i, "")
 	}
 	global.SetInitializer(value)
-	return global
+	return globalType, global
 }
 
 // createObjectLayout returns a LLVM value (of type i8*) that describes where
@@ -312,5 +312,5 @@ func (b *builder) readStackPointer() llvm.Value {
 		fnType := llvm.FunctionType(b.i8ptrType, nil, false)
 		stacksave = llvm.AddFunction(b.mod, "llvm.stacksave", fnType)
 	}
-	return b.CreateCall(stacksave, nil, "")
+	return b.CreateCall(stacksave.GlobalValueType(), stacksave, nil, "")
 }

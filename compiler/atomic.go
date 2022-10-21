@@ -25,7 +25,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 			if fn.IsNil() {
 				fn = llvm.AddFunction(b.mod, name, llvm.FunctionType(vType, []llvm.Type{ptr.Type(), vType}, false))
 			}
-			oldVal := b.createCall(fn, []llvm.Value{ptr, val}, "")
+			oldVal := b.createCall(fn.GlobalValueType(), fn, []llvm.Value{ptr, val}, "")
 			// Return the new value, not the original value returned.
 			return b.CreateAdd(oldVal, val, "")
 		}
@@ -56,7 +56,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 		return swapped
 	case "LoadInt32", "LoadInt64", "LoadUint32", "LoadUint64", "LoadUintptr", "LoadPointer":
 		ptr := b.getValue(b.fn.Params[0])
-		val := b.CreateLoad(ptr, "")
+		val := b.CreateLoad(b.getLLVMType(b.fn.Signature.Results().At(0).Type()), ptr, "")
 		val.SetOrdering(llvm.AtomicOrderingSequentiallyConsistent)
 		val.SetAlignment(b.targetData.PrefTypeAlignment(val.Type())) // required
 		return val
@@ -78,7 +78,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 			if fn.IsNil() {
 				fn = llvm.AddFunction(b.mod, name, llvm.FunctionType(vType, []llvm.Type{ptr.Type(), vType, b.uintptrType}, false))
 			}
-			b.createCall(fn, []llvm.Value{ptr, val, llvm.ConstInt(b.uintptrType, 5, false)}, "")
+			b.createCall(fn.GlobalValueType(), fn, []llvm.Value{ptr, val, llvm.ConstInt(b.uintptrType, 5, false)}, "")
 			return llvm.Value{}
 		}
 		store := b.CreateStore(val, ptr)

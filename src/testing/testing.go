@@ -449,9 +449,7 @@ func (m *M) Run() (code int) {
 		fmt.Println("FAIL")
 		m.exitCode = 1
 	} else {
-		if flagVerbose {
-			fmt.Println("PASS")
-		}
+		fmt.Println("PASS")
 		m.exitCode = 0
 	}
 	return

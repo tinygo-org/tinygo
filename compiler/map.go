@@ -106,7 +106,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 
 	// Load the resulting value from the hashmap. The value is set to the zero
 	// value if the key doesn't exist in the hashmap.
-	mapValue := b.CreateLoad(mapValueAlloca, "")
+	mapValue := b.CreateLoad(llvmValueType, mapValueAlloca, "")
 	b.emitLifetimeEnd(mapValuePtr, mapValueAllocaSize)
 
 	if commaOk {
@@ -217,8 +217,8 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 	mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(llvmStoredKeyType, "range.key")
 	mapValueAlloca, mapValuePtr, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
 	ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
-	mapKey := b.CreateLoad(mapKeyAlloca, "")
-	mapValue := b.CreateLoad(mapValueAlloca, "")
+	mapKey := b.CreateLoad(llvmStoredKeyType, mapKeyAlloca, "")
+	mapValue := b.CreateLoad(llvmValueType, mapValueAlloca, "")
 
 	if isKeyStoredAsInterface {
 		// The key is stored as an interface but it isn't of interface type.

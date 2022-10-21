@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
+	"tinygo.org/x/go-llvm"
 )
 
 var Musl = Library{
@@ -77,7 +79,7 @@ var Musl = Library{
 	cflags: func(target, headerPath string) []string {
 		arch := compileopts.MuslArchitecture(target)
 		muslDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl")
-		return []string{
+		cflags := []string{
 			"-std=c99",            // same as in musl
 			"-D_XOPEN_SOURCE=700", // same as in musl
 			// Musl triggers some warnings and we don't want to show any
@@ -104,6 +106,12 @@ var Musl = Library{
 			"-I" + muslDir + "/include",
 			"-fno-stack-protector",
 		}
+		llvmMajor, _ := strconv.Atoi(strings.SplitN(llvm.Version, ".", 2)[0])
+		if llvmMajor >= 15 {
+			// This flag was added in Clang 15. It is not present in LLVM 14.
+			cflags = append(cflags, "-Wno-deprecated-non-prototype")
+		}
+		return cflags
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl/src") },
 	librarySources: func(target string) ([]string, error) {

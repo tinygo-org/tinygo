@@ -18,7 +18,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		stackChainStart := mod.NamedGlobal("runtime.stackChainStart")
 		if !stackChainStart.IsNil() {
 			stackChainStart.SetLinkage(llvm.InternalLinkage)
-			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.Type().ElementType()))
+			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.GlobalValueType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
 		return false
@@ -96,7 +96,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		return false
 	}
 	stackChainStart.SetLinkage(llvm.InternalLinkage)
-	stackChainStartType := stackChainStart.Type().ElementType()
+	stackChainStartType := stackChainStart.GlobalValueType()
 	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))
 
 	// Iterate until runtime.trackPointer has no uses left.
@@ -139,7 +139,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		}
 
 		// Determine what to do with each call.
-		var allocas, pointers []llvm.Value
+		var pointers []llvm.Value
 		for _, call := range calls {
 			ptr := call.Operand(0)
 			call.EraseFromParentAsInstruction()
@@ -189,16 +189,15 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 				// be optimized if needed.
 			}
 
-			if !ptr.IsAAllocaInst().IsNil() {
-				if typeHasPointers(ptr.Type().ElementType()) {
-					allocas = append(allocas, ptr)
-				}
-			} else {
-				pointers = append(pointers, ptr)
+			if ptr := stripPointerCasts(ptr); !ptr.IsAAllocaInst().IsNil() {
+				// Allocas don't need to be tracked because they are allocated
+				// on the C stack which is scanned separately.
+				continue
 			}
+			pointers = append(pointers, ptr)
 		}
 
-		if len(allocas) == 0 && len(pointers) == 0 {
+		if len(pointers) == 0 {
 			// This function does not need to keep track of stack pointers.
 			continue
 		}
@@ -207,9 +206,6 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		fields := []llvm.Type{
 			stackChainStartType, // Pointer to parent frame.
 			uintptrType,         // Number of elements in this frame.
-		}
-		for _, alloca := range allocas {
-			fields = append(fields, alloca.Type().ElementType())
 		}
 		for _, ptr := range pointers {
 			fields = append(fields, ptr.Type())
@@ -222,28 +218,18 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		initialStackObject := llvm.ConstNull(stackObjectType)
 		numSlots := (targetData.TypeAllocSize(stackObjectType) - uint64(targetData.PointerSize())*2) / uint64(targetData.ABITypeAlignment(uintptrType))
 		numSlotsValue := llvm.ConstInt(uintptrType, numSlots, false)
-		initialStackObject = llvm.ConstInsertValue(initialStackObject, numSlotsValue, []uint32{1})
+		initialStackObject = builder.CreateInsertValue(initialStackObject, numSlotsValue, 1, "")
 		builder.CreateStore(initialStackObject, stackObject)
 
 		// Update stack start.
-		parent := builder.CreateLoad(stackChainStart, "")
-		gep := builder.CreateGEP(stackObject, []llvm.Value{
+		parent := builder.CreateLoad(stackChainStartType, stackChainStart, "")
+		gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 		}, "")
 		builder.CreateStore(parent, gep)
 		stackObjectCast := builder.CreateBitCast(stackObject, stackChainStartType, "")
 		builder.CreateStore(stackObjectCast, stackChainStart)
-
-		// Replace all independent allocas with GEPs in the stack object.
-		for i, alloca := range allocas {
-			gep := builder.CreateGEP(stackObject, []llvm.Value{
-				llvm.ConstInt(ctx.Int32Type(), 0, false),
-				llvm.ConstInt(ctx.Int32Type(), uint64(2+i), false),
-			}, "")
-			alloca.ReplaceAllUsesWith(gep)
-			alloca.EraseFromParentAsInstruction()
-		}
 
 		// Do a store to the stack object after each new pointer that is created.
 		pointerStores := make(map[llvm.Value]struct{})
@@ -258,9 +244,9 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			builder.SetInsertPointBefore(insertionPoint)
 
 			// Extract a pointer to the appropriate section of the stack object.
-			gep := builder.CreateGEP(stackObject, []llvm.Value{
+			gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
 				llvm.ConstInt(ctx.Int32Type(), 0, false),
-				llvm.ConstInt(ctx.Int32Type(), uint64(2+len(allocas)+i), false),
+				llvm.ConstInt(ctx.Int32Type(), uint64(2+i), false),
 			}, "")
 
 			// Store the pointer into the stack slot.

@@ -86,22 +86,22 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		if _, ok := typ.Underlying().(*types.Pointer); !ok {
 			ptrTo = c.getTypeCode(types.NewPointer(typ))
 		}
-		globalValue := llvm.ConstNull(global.Type().ElementType())
+		globalValue := llvm.ConstNull(global.GlobalValueType())
 		if !references.IsNil() {
-			globalValue = llvm.ConstInsertValue(globalValue, references, []uint32{0})
+			globalValue = c.builder.CreateInsertValue(globalValue, references, 0, "")
 		}
 		if length != 0 {
 			lengthValue := llvm.ConstInt(c.uintptrType, uint64(length), false)
-			globalValue = llvm.ConstInsertValue(globalValue, lengthValue, []uint32{1})
+			globalValue = c.builder.CreateInsertValue(globalValue, lengthValue, 1, "")
 		}
 		if !methodSet.IsNil() {
-			globalValue = llvm.ConstInsertValue(globalValue, methodSet, []uint32{2})
+			globalValue = c.builder.CreateInsertValue(globalValue, methodSet, 2, "")
 		}
 		if !ptrTo.IsNil() {
-			globalValue = llvm.ConstInsertValue(globalValue, ptrTo, []uint32{3})
+			globalValue = c.builder.CreateInsertValue(globalValue, ptrTo, 3, "")
 		}
 		if !typeAssert.IsNil() {
-			globalValue = llvm.ConstInsertValue(globalValue, typeAssert, []uint32{4})
+			globalValue = c.builder.CreateInsertValue(globalValue, typeAssert, 4, "")
 		}
 		global.SetInitializer(globalValue)
 		global.SetLinkage(llvm.LinkOnceODRLinkage)
@@ -121,30 +121,30 @@ func (c *compilerContext) makeStructTypeFields(typ *types.Struct) llvm.Value {
 	structGlobalValue := llvm.ConstNull(structGlobalType)
 	for i := 0; i < typ.NumFields(); i++ {
 		fieldGlobalValue := llvm.ConstNull(runtimeStructField)
-		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, c.getTypeCode(typ.Field(i).Type()), []uint32{0})
-		fieldName := c.makeGlobalArray([]byte(typ.Field(i).Name()), "reflect/types.structFieldName", c.ctx.Int8Type())
+		fieldGlobalValue = c.builder.CreateInsertValue(fieldGlobalValue, c.getTypeCode(typ.Field(i).Type()), 0, "")
+		fieldNameType, fieldName := c.makeGlobalArray([]byte(typ.Field(i).Name()), "reflect/types.structFieldName", c.ctx.Int8Type())
 		fieldName.SetLinkage(llvm.PrivateLinkage)
 		fieldName.SetUnnamedAddr(true)
-		fieldName = llvm.ConstGEP(fieldName, []llvm.Value{
+		fieldName = llvm.ConstGEP(fieldNameType, fieldName, []llvm.Value{
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 		})
-		fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldName, []uint32{1})
+		fieldGlobalValue = c.builder.CreateInsertValue(fieldGlobalValue, fieldName, 1, "")
 		if typ.Tag(i) != "" {
-			fieldTag := c.makeGlobalArray([]byte(typ.Tag(i)), "reflect/types.structFieldTag", c.ctx.Int8Type())
+			fieldTagType, fieldTag := c.makeGlobalArray([]byte(typ.Tag(i)), "reflect/types.structFieldTag", c.ctx.Int8Type())
 			fieldTag.SetLinkage(llvm.PrivateLinkage)
 			fieldTag.SetUnnamedAddr(true)
-			fieldTag = llvm.ConstGEP(fieldTag, []llvm.Value{
+			fieldTag = llvm.ConstGEP(fieldTagType, fieldTag, []llvm.Value{
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 			})
-			fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldTag, []uint32{2})
+			fieldGlobalValue = c.builder.CreateInsertValue(fieldGlobalValue, fieldTag, 2, "")
 		}
 		if typ.Field(i).Embedded() {
 			fieldEmbedded := llvm.ConstInt(c.ctx.Int1Type(), 1, false)
-			fieldGlobalValue = llvm.ConstInsertValue(fieldGlobalValue, fieldEmbedded, []uint32{3})
+			fieldGlobalValue = c.builder.CreateInsertValue(fieldGlobalValue, fieldEmbedded, 3, "")
 		}
-		structGlobalValue = llvm.ConstInsertValue(structGlobalValue, fieldGlobalValue, []uint32{uint32(i)})
+		structGlobalValue = c.builder.CreateInsertValue(structGlobalValue, fieldGlobalValue, i, "")
 	}
 	structGlobal.SetInitializer(structGlobalValue)
 	structGlobal.SetUnnamedAddr(true)
@@ -239,7 +239,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 	if !global.IsNil() {
 		// the method set already exists
-		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+		return llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{zero, zero})
 	}
 
 	ms := c.program.MethodSets.MethodSet(typ)
@@ -254,12 +254,12 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 		method := ms.At(i)
 		signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
 		fn := c.program.MethodValue(method)
-		llvmFn := c.getFunction(fn)
+		llvmFnType, llvmFn := c.getFunction(fn)
 		if llvmFn.IsNil() {
 			// compiler error, so panic
 			panic("cannot find function: " + c.getFunctionInfo(fn).linkName)
 		}
-		wrapper := c.getInterfaceInvokeWrapper(fn, llvmFn)
+		wrapper := c.getInterfaceInvokeWrapper(fn, llvmFnType, llvmFn)
 		methodInfo := llvm.ConstNamedStruct(interfaceMethodInfoType, []llvm.Value{
 			signatureGlobal,
 			llvm.ConstPtrToInt(wrapper, c.uintptrType),
@@ -272,7 +272,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
 	global.SetLinkage(llvm.LinkOnceODRLinkage)
-	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+	return llvm.ConstGEP(arrayType, global, []llvm.Value{zero, zero})
 }
 
 // getInterfaceMethodSet returns a global variable with the method set of the
@@ -288,7 +288,7 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 	zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 	if !global.IsNil() {
 		// method set already exist, return it
-		return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+		return llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{zero, zero})
 	}
 
 	// Every method is a *i8 reference indicating the signature of this method.
@@ -303,7 +303,7 @@ func (c *compilerContext) getInterfaceMethodSet(typ types.Type) llvm.Value {
 	global.SetInitializer(value)
 	global.SetGlobalConstant(true)
 	global.SetLinkage(llvm.LinkOnceODRLinkage)
-	return llvm.ConstGEP(global, []llvm.Value{zero, zero})
+	return llvm.ConstGEP(value.Type(), global, []llvm.Value{zero, zero})
 }
 
 // getMethodSignatureName returns a unique name (that can be used as the name of
@@ -361,7 +361,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		// implements each method of the interface. See:
 		// https://research.swtch.com/interfaces
 		fn := b.getInterfaceImplementsFunc(expr.AssertedType)
-		commaOk = b.CreateCall(fn, []llvm.Value{actualTypeNum}, "")
+		commaOk = b.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{actualTypeNum}, "")
 
 	} else {
 		globalName := "reflect/types.typeid:" + getTypeCodeName(expr.AssertedType)
@@ -465,7 +465,7 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 			paramTuple = append(paramTuple, sig.Params().At(i))
 		}
 		paramTuple = append(paramTuple, types.NewVar(token.NoPos, nil, "$typecode", types.Typ[types.Uintptr]))
-		llvmFnType := c.getRawFuncType(types.NewSignature(sig.Recv(), types.NewTuple(paramTuple...), sig.Results(), false)).ElementType()
+		llvmFnType := c.getRawFuncType(types.NewSignature(sig.Recv(), types.NewTuple(paramTuple...), sig.Results(), false))
 		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
 		c.addStandardDeclaredAttributes(llvmFn)
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-invoke", c.getMethodSignatureName(instr.Method)))
@@ -480,7 +480,7 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 // value, dereferences or unpacks it if necessary, and calls the real method.
 // If the method to wrap has a pointer receiver, no wrapping is necessary and
 // the function is returned directly.
-func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llvm.Value) llvm.Value {
+func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Type, llvmFn llvm.Value) llvm.Value {
 	wrapperName := llvmFn.Name() + "$invoke"
 	wrapper := c.mod.NamedFunction(wrapperName)
 	if !wrapper.IsNil() {
@@ -505,9 +505,8 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 	}
 
 	// create wrapper function
-	fnType := llvmFn.Type().ElementType()
-	paramTypes := append([]llvm.Type{c.i8ptrType}, fnType.ParamTypes()[len(expandedReceiverType):]...)
-	wrapFnType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
+	paramTypes := append([]llvm.Type{c.i8ptrType}, llvmFnType.ParamTypes()[len(expandedReceiverType):]...)
+	wrapFnType := llvm.FunctionType(llvmFnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
 	c.addStandardAttributes(wrapper)
 
@@ -534,11 +533,11 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFn llv
 
 	receiverValue := b.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
 	params := append(b.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
-	if llvmFn.Type().ElementType().ReturnType().TypeKind() == llvm.VoidTypeKind {
-		b.CreateCall(llvmFn, params, "")
+	if llvmFnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
+		b.CreateCall(llvmFnType, llvmFn, params, "")
 		b.CreateRetVoid()
 	} else {
-		ret := b.CreateCall(llvmFn, params, "ret")
+		ret := b.CreateCall(llvmFnType, llvmFn, params, "ret")
 		b.CreateRet(ret)
 	}
 

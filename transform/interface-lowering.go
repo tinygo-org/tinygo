@@ -154,7 +154,7 @@ func (p *lowerInterfacesPass) run() error {
 				if initializer.IsNil() {
 					continue
 				}
-				methodSet := llvm.ConstExtractValue(initializer, []uint32{2})
+				methodSet := p.builder.CreateExtractValue(initializer, 2, "")
 				p.addTypeMethods(t, methodSet)
 			}
 		}
@@ -288,9 +288,9 @@ func (p *lowerInterfacesPass) run() error {
 	zeroUintptr := llvm.ConstNull(p.uintptrType)
 	for _, t := range p.types {
 		initializer := t.typecode.Initializer()
-		methodSet := llvm.ConstExtractValue(initializer, []uint32{2})
-		initializer = llvm.ConstInsertValue(initializer, llvm.ConstNull(methodSet.Type()), []uint32{2})
-		initializer = llvm.ConstInsertValue(initializer, zeroUintptr, []uint32{4})
+		methodSet := p.builder.CreateExtractValue(initializer, 2, "")
+		initializer = p.builder.CreateInsertValue(initializer, llvm.ConstNull(methodSet.Type()), 2, "")
+		initializer = p.builder.CreateInsertValue(initializer, zeroUintptr, 4, "")
 		t.typecode.SetInitializer(initializer)
 	}
 
@@ -305,16 +305,18 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 		// no methods or methods already read
 		return
 	}
-	methodSet = methodSet.Operand(0) // get global from GEP
+	if !methodSet.IsAConstantExpr().IsNil() && methodSet.Opcode() == llvm.GetElementPtr {
+		methodSet = methodSet.Operand(0) // get global from GEP, for LLVM 14 (non-opaque pointers)
+	}
 
 	// This type has methods, collect all methods of this type.
 	t.methodSet = methodSet
 	set := methodSet.Initializer() // get value from global
 	for i := 0; i < set.Type().ArrayLength(); i++ {
-		methodData := llvm.ConstExtractValue(set, []uint32{uint32(i)})
-		signatureGlobal := llvm.ConstExtractValue(methodData, []uint32{0})
+		methodData := p.builder.CreateExtractValue(set, i, "")
+		signatureGlobal := p.builder.CreateExtractValue(methodData, 0, "")
 		signatureName := signatureGlobal.Name()
-		function := llvm.ConstExtractValue(methodData, []uint32{1}).Operand(0)
+		function := p.builder.CreateExtractValue(methodData, 1, "").Operand(0)
 		signature := p.getSignature(signatureName)
 		method := &methodInfo{
 			function:      function,
@@ -423,7 +425,7 @@ func (p *lowerInterfacesPass) defineInterfaceImplementsFunc(fn llvm.Value, itf *
 func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *interfaceInfo, signature *signatureInfo) {
 	context := fn.LastParam()
 	actualType := llvm.PrevParam(context)
-	returnType := fn.Type().ElementType().ReturnType()
+	returnType := fn.GlobalValueType().ReturnType()
 	context.SetName("context")
 	actualType.SetName("actualType")
 	fn.SetLinkage(llvm.InternalLinkage)
@@ -493,12 +495,13 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 			paramTypes = append(paramTypes, param.Type())
 		}
 		calledFunctionType := function.Type()
-		sig := llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), calledFunctionType.PointerAddressSpace())
+		functionType := llvm.FunctionType(returnType, paramTypes, false)
+		sig := llvm.PointerType(functionType, calledFunctionType.PointerAddressSpace())
 		if sig != function.Type() {
 			function = p.builder.CreateBitCast(function, sig, "")
 		}
 
-		retval := p.builder.CreateCall(function, append([]llvm.Value{receiver}, params...), "")
+		retval := p.builder.CreateCall(functionType, function, append([]llvm.Value{receiver}, params...), "")
 		if retval.Type().TypeKind() == llvm.VoidTypeKind {
 			p.builder.CreateRetVoid()
 		} else {
@@ -518,7 +521,7 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	// importantly, it avoids undefined behavior when accidentally calling a
 	// method on a nil interface.
 	nilPanic := p.mod.NamedFunction("runtime.nilPanic")
-	p.builder.CreateCall(nilPanic, []llvm.Value{
+	p.builder.CreateCall(nilPanic.GlobalValueType(), nilPanic, []llvm.Value{
 		llvm.Undef(llvm.PointerType(p.ctx.Int8Type(), 0)),
 	}, "")
 	p.builder.CreateUnreachable()

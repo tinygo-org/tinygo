@@ -1,6 +1,6 @@
 {
 	"inherits": ["riscv64"],
-	"features": "+64bit,+a,+c,+d,+f,+m",
+	"features": "+64bit,+a,+c,+d,+f,+m,-relax,-save-restore",
 	"build-tags": ["k210", "kendryte"],
 	"code-model": "medium"
 }

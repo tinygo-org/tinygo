@@ -76,6 +76,10 @@ var nonBasicTypes = map[string]int64{
 // typeCodeAssignmentState keeps some global state around for type code
 // assignments, used to assign one unique type code to each Go type.
 type typeCodeAssignmentState struct {
+	// Builder used purely for constant operations (because LLVM 15 removed many
+	// llvm.Const* functions).
+	builder llvm.Builder
+
 	// An integer that's incremented each time it's used to give unique IDs to
 	// type codes that are not yet fully supported otherwise by the reflect
 	// package (or are simply unused in the compiled program).
@@ -165,6 +169,7 @@ func LowerReflect(mod llvm.Module) {
 	defer targetData.Dispose()
 	uintptrType := mod.Context().IntType(targetData.PointerSize() * 8)
 	state := typeCodeAssignmentState{
+		builder:                          mod.Context().NewBuilder(),
 		fallbackIndex:                    1,
 		uintptrLen:                       targetData.PointerSize() * 8,
 		namedBasicTypes:                  make(map[string]int),
@@ -177,6 +182,7 @@ func LowerReflect(mod llvm.Module) {
 		needsStructNamesSidetable:        len(getUses(mod.NamedGlobal("reflect.structNamesSidetable"))) != 0,
 		needsArrayTypesSidetable:         len(getUses(mod.NamedGlobal("reflect.arrayTypesSidetable"))) != 0,
 	}
+	defer state.builder.Dispose()
 	for _, t := range types {
 		num := state.getTypeCodeNum(t.typecode)
 		if num.BitLen() > state.uintptrLen || !num.IsUint64() {
@@ -238,14 +244,17 @@ func LowerReflect(mod llvm.Module) {
 	// It also cleans up the IR for testing.
 	for _, typ := range types {
 		initializer := typ.typecode.Initializer()
-		references := llvm.ConstExtractValue(initializer, []uint32{0})
+		references := state.builder.CreateExtractValue(initializer, 0, "")
 		typ.typecode.SetInitializer(llvm.ConstNull(initializer.Type()))
 		if strings.HasPrefix(typ.name, "reflect/types.type:struct:") {
 			// Structs have a 'references' field that is not a typecode but
 			// a pointer to a runtime.structField array and therefore a
 			// bitcast. This global should be erased separately, otherwise
 			// typecode objects cannot be erased.
-			structFields := references.Operand(0)
+			structFields := references
+			if !structFields.IsAConstantExpr().IsNil() && structFields.Opcode() == llvm.BitCast {
+				structFields = structFields.Operand(0) // get global from bitcast, for LLVM 14 compatibility (non-opaque pointers)
+			}
 			structFields.EraseFromParentAsGlobal()
 		}
 	}
@@ -260,7 +269,7 @@ func (state *typeCodeAssignmentState) getTypeCodeNum(typecode llvm.Value) *big.I
 	name := ""
 	if class == "named" {
 		name = value
-		typecode = llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+		typecode = state.builder.CreateExtractValue(typecode.Initializer(), 0, "")
 		class, value = getClassAndValueFromTypeCode(typecode)
 	}
 	if class == "basic" {
@@ -344,7 +353,7 @@ func (state *typeCodeAssignmentState) getNonBasicTypeCode(class string, typecode
 	switch class {
 	case "chan", "pointer", "slice":
 		// Prefix-style type kinds. The upper bits contain the element type.
-		sub := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+		sub := state.builder.CreateExtractValue(typecode.Initializer(), 0, "")
 		return state.getTypeCodeNum(sub)
 	case "array":
 		// An array is basically a pair of (typecode, length) stored in a
@@ -416,7 +425,7 @@ func (state *typeCodeAssignmentState) getArrayTypeNum(typecode llvm.Value) int {
 		return num
 	}
 
-	elemTypeCode := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0})
+	elemTypeCode := state.builder.CreateExtractValue(typecode.Initializer(), 0, "")
 	elemTypeNum := state.getTypeCodeNum(elemTypeCode)
 	if elemTypeNum.BitLen() > state.uintptrLen || !elemTypeNum.IsUint64() {
 		// TODO: make this a regular error
@@ -424,7 +433,7 @@ func (state *typeCodeAssignmentState) getArrayTypeNum(typecode llvm.Value) int {
 	}
 
 	// The array side table is a sequence of {element type, array length}.
-	arrayLength := llvm.ConstExtractValue(typecode.Initializer(), []uint32{1}).ZExtValue()
+	arrayLength := state.builder.CreateExtractValue(typecode.Initializer(), 1, "").ZExtValue()
 	buf := makeVarint(elemTypeNum.Uint64())
 	buf = append(buf, makeVarint(arrayLength)...)
 
@@ -454,7 +463,7 @@ func (state *typeCodeAssignmentState) getStructTypeNum(typecode llvm.Value) int 
 
 	// Get the fields this struct type contains.
 	// The struct number will be the start index of
-	structTypeGlobal := llvm.ConstExtractValue(typecode.Initializer(), []uint32{0}).Operand(0).Initializer()
+	structTypeGlobal := stripPointerCasts(state.builder.CreateExtractValue(typecode.Initializer(), 0, "")).Initializer()
 	numFields := structTypeGlobal.Type().ArrayLength()
 
 	// The first data that is stored in the struct sidetable is the number of
@@ -471,28 +480,28 @@ func (state *typeCodeAssignmentState) getStructTypeNum(typecode llvm.Value) int 
 	// the sidetable bigger.
 	for i := 0; i < numFields; i++ {
 		// Collect some information about this field.
-		field := llvm.ConstExtractValue(structTypeGlobal, []uint32{uint32(i)})
+		field := state.builder.CreateExtractValue(structTypeGlobal, i, "")
 
-		nameGlobal := llvm.ConstExtractValue(field, []uint32{1})
+		nameGlobal := state.builder.CreateExtractValue(field, 1, "")
 		if nameGlobal == llvm.ConstPointerNull(nameGlobal.Type()) {
 			panic("compiler: no name for this struct field")
 		}
-		fieldNameBytes := getGlobalBytes(nameGlobal.Operand(0))
+		fieldNameBytes := getGlobalBytes(stripPointerCasts(nameGlobal), state.builder)
 		fieldNameNumber := state.getStructNameNumber(fieldNameBytes)
 
 		// See whether this struct field has an associated tag, and if so,
 		// store that tag in the tags sidetable.
-		tagGlobal := llvm.ConstExtractValue(field, []uint32{2})
+		tagGlobal := state.builder.CreateExtractValue(field, 2, "")
 		hasTag := false
 		tagNumber := 0
 		if tagGlobal != llvm.ConstPointerNull(tagGlobal.Type()) {
 			hasTag = true
-			tagBytes := getGlobalBytes(tagGlobal.Operand(0))
+			tagBytes := getGlobalBytes(stripPointerCasts(tagGlobal), state.builder)
 			tagNumber = state.getStructNameNumber(tagBytes)
 		}
 
 		// The 'embedded' or 'anonymous' flag for this field.
-		embedded := llvm.ConstExtractValue(field, []uint32{3}).ZExtValue() != 0
+		embedded := state.builder.CreateExtractValue(field, 3, "").ZExtValue() != 0
 
 		// The first byte in the struct types sidetable is a flags byte with
 		// two bits in it.
@@ -510,7 +519,7 @@ func (state *typeCodeAssignmentState) getStructTypeNum(typecode llvm.Value) int 
 
 		// Get the type number and add it to the buffer.
 		// All fields have a type, so include it directly here.
-		typeNum := state.getTypeCodeNum(llvm.ConstExtractValue(field, []uint32{0}))
+		typeNum := state.getTypeCodeNum(state.builder.CreateExtractValue(field, 0, ""))
 		if typeNum.BitLen() > state.uintptrLen || !typeNum.IsUint64() {
 			// TODO: make this a regular error
 			panic("struct field has a type code that is too big")

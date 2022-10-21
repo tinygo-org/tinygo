@@ -18,6 +18,9 @@
 		"--stack-first",
 		"--no-demangle"
 	],
+	"extra-files": [
+		"src/runtime/asm_tinygowasm.S"
+	],
 	"emulator":      "wasmtime {}",
 	"wasm-abi":      "generic"
 }

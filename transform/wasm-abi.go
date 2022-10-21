@@ -50,7 +50,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 		paramTypes := []llvm.Type{}
 
 		// Check return type for 64-bit integer.
-		fnType := fn.Type().ElementType()
+		fnType := fn.GlobalValueType()
 		returnType := fnType.ReturnType()
 		if returnType == int64Type {
 			hasInt64 = true
@@ -88,8 +88,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 			// Update all users to call the external function.
 			// The old $i64wrapper function could be removed, but it may as well
 			// be left in place.
-			for use := fn.FirstUse(); !use.IsNil(); use = use.NextUse() {
-				call := use.User()
+			for _, call := range getUses(fn) {
 				entryBlockBuilder.SetInsertPointBefore(call.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
 				builder.SetInsertPointBefore(call)
 				callParams := []llvm.Value{}
@@ -124,12 +123,12 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 					// Pass a stack-allocated pointer as the first parameter
 					// where the return value should be stored, instead of using
 					// the regular return value.
-					builder.CreateCall(externalFn, callParams, callName)
-					returnValue := builder.CreateLoad(retvalAlloca, "retval")
+					builder.CreateCall(externalFnType, externalFn, callParams, callName)
+					returnValue := builder.CreateLoad(int64Type, retvalAlloca, "retval")
 					call.ReplaceAllUsesWith(returnValue)
 					call.EraseFromParentAsInstruction()
 				} else {
-					newCall := builder.CreateCall(externalFn, callParams, callName)
+					newCall := builder.CreateCall(externalFnType, externalFn, callParams, callName)
 					call.ReplaceAllUsesWith(newCall)
 					call.EraseFromParentAsInstruction()
 				}
@@ -152,11 +151,11 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 			for i, origParam := range fn.Params() {
 				paramValue := externalFn.Param(i)
 				if origParam.Type() == int64Type {
-					paramValue = builder.CreateLoad(paramValue, "i64")
+					paramValue = builder.CreateLoad(int64Type, paramValue, "i64")
 				}
 				callParams = append(callParams, paramValue)
 			}
-			retval := builder.CreateCall(fn, callParams, "")
+			retval := builder.CreateCall(fn.GlobalValueType(), fn, callParams, "")
 			if retval.Type().TypeKind() == llvm.VoidTypeKind {
 				builder.CreateRetVoid()
 			} else {

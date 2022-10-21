@@ -58,6 +58,8 @@ var (
 
 	globalsStart = uintptr(unsafe.Pointer(&globalsStartSymbol))
 	globalsEnd   = uintptr(unsafe.Pointer(&heapStartSymbol))
+
+	stackTop = uintptr(unsafe.Pointer(&globalsStartSymbol))
 )
 
 func align(ptr uintptr) uintptr {
@@ -67,6 +69,7 @@ func align(ptr uintptr) uintptr {
 	return (ptr + heapAlign - 1) &^ (heapAlign - 1)
 }
 
+//export tinygo_getCurrentStackPointer
 func getCurrentStackPointer() uintptr
 
 // growHeap tries to grow the heap size. It returns true if it succeeds, false

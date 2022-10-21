@@ -356,7 +356,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				default:
 					panic("unknown integer type width")
 				}
-			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0i8.p0i8.") || strings.HasPrefix(callFn.name, "llvm.memmove.p0i8.p0i8."):
+			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
 				// Copy a block of memory from one pointer to another.
 				dst, err := operands[1].asPointer(r)
 				if err != nil {
@@ -408,7 +408,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Elem() is only valid for certain type classes.
 				switch class {
 				case "chan", "pointer", "slice", "array":
-					elementType := llvm.ConstExtractValue(typecodeID.Initializer(), []uint32{0})
+					elementType := r.builder.CreateExtractValue(typecodeID.Initializer(), 0, "")
 					uintptrType := r.mod.Context().IntType(int(mem.r.pointerSize) * 8)
 					locals[inst.localIndex] = r.getValue(llvm.ConstPtrToInt(elementType, uintptrType))
 				default:
@@ -461,8 +461,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// easier checking in the next step.
 				concreteTypeMethods := map[string]struct{}{}
 				for i := 0; i < methodSet.Type().ArrayLength(); i++ {
-					methodInfo := llvm.ConstExtractValue(methodSet, []uint32{uint32(i)})
-					name := llvm.ConstExtractValue(methodInfo, []uint32{0}).Name()
+					methodInfo := r.builder.CreateExtractValue(methodSet, i, "")
+					name := r.builder.CreateExtractValue(methodInfo, 0, "").Name()
 					concreteTypeMethods[name] = struct{}{}
 				}
 
@@ -496,7 +496,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				typecodeID := typecodeIDBitCast.Operand(0).Initializer()
 
 				// Load the method set, which is part of the typecodeID object.
-				methodSet := llvm.ConstExtractValue(typecodeID, []uint32{2}).Operand(0).Initializer()
+				methodSet := stripPointerCasts(r.builder.CreateExtractValue(typecodeID, 2, "")).Initializer()
 
 				// We don't need to load the interface method set.
 
@@ -511,9 +511,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				numMethods := methodSet.Type().ArrayLength()
 				var method llvm.Value
 				for i := 0; i < numMethods; i++ {
-					methodSignature := llvm.ConstExtractValue(methodSet, []uint32{uint32(i), 0})
+					methodSignatureAgg := r.builder.CreateExtractValue(methodSet, i, "")
+					methodSignature := r.builder.CreateExtractValue(methodSignatureAgg, 0, "")
 					if methodSignature == signature {
-						method = llvm.ConstExtractValue(methodSet, []uint32{uint32(i), 1}).Operand(0)
+						method = r.builder.CreateExtractValue(methodSignatureAgg, 1, "").Operand(0)
 					}
 				}
 				if method.IsNil() {
@@ -636,7 +637,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// Create the new object.
 			size := operands[0].(literalValue).value.(uint64)
 			alloca := object{
-				llvmType:   inst.llvmInst.Type(),
+				llvmType:   inst.llvmInst.AllocatedType(),
 				globalName: r.pkgName + "$alloca",
 				buffer:     newRawValue(uint32(size)),
 				size:       uint32(size),
@@ -654,7 +655,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// GetElementPtr does pointer arithmetic, changing the offset of the
 			// pointer into the underlying object.
 			var offset uint64
-			for i := 2; i < len(operands); i += 2 {
+			for i := 1; i < len(operands); i += 2 {
 				index := operands[i].Uint()
 				elementSize := operands[i+1].Uint()
 				if int64(elementSize) < 0 {
@@ -722,46 +723,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			locals[inst.localIndex] = newagg
 		case llvm.ICmp:
 			predicate := llvm.IntPredicate(operands[2].(literalValue).value.(uint8))
-			var result bool
 			lhs := operands[0]
 			rhs := operands[1]
-			switch predicate {
-			case llvm.IntEQ, llvm.IntNE:
-				lhsPointer, lhsErr := lhs.asPointer(r)
-				rhsPointer, rhsErr := rhs.asPointer(r)
-				if (lhsErr == nil) != (rhsErr == nil) {
-					// Fast path: only one is a pointer, so they can't be equal.
-					result = false
-				} else if lhsErr == nil {
-					// Both must be nil, so both are pointers.
-					// Compare them directly.
-					result = lhsPointer.equal(rhsPointer)
-				} else {
-					// Fall back to generic comparison.
-					result = lhs.asRawValue(r).equal(rhs.asRawValue(r))
-				}
-				if predicate == llvm.IntNE {
-					result = !result
-				}
-			case llvm.IntUGT:
-				result = lhs.Uint() > rhs.Uint()
-			case llvm.IntUGE:
-				result = lhs.Uint() >= rhs.Uint()
-			case llvm.IntULT:
-				result = lhs.Uint() < rhs.Uint()
-			case llvm.IntULE:
-				result = lhs.Uint() <= rhs.Uint()
-			case llvm.IntSGT:
-				result = lhs.Int() > rhs.Int()
-			case llvm.IntSGE:
-				result = lhs.Int() >= rhs.Int()
-			case llvm.IntSLT:
-				result = lhs.Int() < rhs.Int()
-			case llvm.IntSLE:
-				result = lhs.Int() <= rhs.Int()
-			default:
-				return nil, mem, r.errorAt(inst, errors.New("interp: unsupported icmp"))
-			}
+			result := r.interpretICmp(lhs, rhs, predicate)
 			if result {
 				locals[inst.localIndex] = literalValue{uint8(1)}
 			} else {
@@ -947,6 +911,51 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 	return nil, mem, r.errorAt(bb.instructions[len(bb.instructions)-1], errors.New("interp: reached end of basic block without terminator"))
 }
 
+// Interpret an icmp instruction. Doesn't have side effects, only returns the
+// output of the comparison.
+func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) bool {
+	switch predicate {
+	case llvm.IntEQ, llvm.IntNE:
+		var result bool
+		lhsPointer, lhsErr := lhs.asPointer(r)
+		rhsPointer, rhsErr := rhs.asPointer(r)
+		if (lhsErr == nil) != (rhsErr == nil) {
+			// Fast path: only one is a pointer, so they can't be equal.
+			result = false
+		} else if lhsErr == nil {
+			// Both must be nil, so both are pointers.
+			// Compare them directly.
+			result = lhsPointer.equal(rhsPointer)
+		} else {
+			// Fall back to generic comparison.
+			result = lhs.asRawValue(r).equal(rhs.asRawValue(r))
+		}
+		if predicate == llvm.IntNE {
+			result = !result
+		}
+		return result
+	case llvm.IntUGT:
+		return lhs.Uint() > rhs.Uint()
+	case llvm.IntUGE:
+		return lhs.Uint() >= rhs.Uint()
+	case llvm.IntULT:
+		return lhs.Uint() < rhs.Uint()
+	case llvm.IntULE:
+		return lhs.Uint() <= rhs.Uint()
+	case llvm.IntSGT:
+		return lhs.Int() > rhs.Int()
+	case llvm.IntSGE:
+		return lhs.Int() >= rhs.Int()
+	case llvm.IntSLT:
+		return lhs.Int() < rhs.Int()
+	case llvm.IntSLE:
+		return lhs.Int() <= rhs.Int()
+	default:
+		// _should_ be unreachable, until LLVM adds new icmp operands (unlikely)
+		panic("interp: unsupported icmp")
+	}
+}
+
 func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
@@ -977,13 +986,13 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 				}
 			}
 		}
-		result = r.builder.CreateCall(llvmFn, args, inst.name)
+		result = r.builder.CreateCall(inst.llvmInst.CalledFunctionType(), llvmFn, args, inst.name)
 	case llvm.Load:
 		err := mem.markExternalLoad(operands[0])
 		if err != nil {
 			return r.errorAt(inst, err)
 		}
-		result = r.builder.CreateLoad(operands[0], inst.name)
+		result = r.builder.CreateLoad(inst.llvmInst.Type(), operands[0], inst.name)
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
 		}
@@ -1085,4 +1094,16 @@ func intPredicateString(predicate llvm.IntPredicate) string {
 	default:
 		return "cmp?"
 	}
+}
+
+// Strip some pointer casts. This is probably unnecessary once support for
+// LLVM 14 (non-opaque pointers) is dropped.
+func stripPointerCasts(value llvm.Value) llvm.Value {
+	if !value.IsAConstantExpr().IsNil() {
+		switch value.Opcode() {
+		case llvm.GetElementPtr, llvm.BitCast:
+			return stripPointerCasts(value.Operand(0))
+		}
+	}
+	return value
 }

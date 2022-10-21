@@ -10,12 +10,12 @@ target triple = "wasm32-unknown-wasi"
 @undefinedGlobalNotInSection = external global i32, align 4
 @main.multipleGlobalPragmas = hidden global i32 0, section ".global_section", align 1024
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*) #0
+declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
-declare void @runtime.trackPointer(i8* nocapture readonly, i8*) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.init(i8* %context) unnamed_addr #1 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
@@ -27,27 +27,27 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @somepkg.someFunction1(i8* %context) unnamed_addr #1 {
+define hidden void @somepkg.someFunction1(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
-declare void @somepkg.someFunction2(i8*) #0
+declare void @somepkg.someFunction2(ptr) #0
 
 ; Function Attrs: inlinehint nounwind
-define hidden void @main.inlineFunc(i8* %context) unnamed_addr #3 {
+define hidden void @main.inlineFunc(ptr %context) unnamed_addr #3 {
 entry:
   ret void
 }
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.noinlineFunc(i8* %context) unnamed_addr #4 {
+define hidden void @main.noinlineFunc(ptr %context) unnamed_addr #4 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.functionInSection(i8* %context) unnamed_addr #1 section ".special_function_section" {
+define hidden void @main.functionInSection(ptr %context) unnamed_addr #1 section ".special_function_section" {
 entry:
   ret void
 }
@@ -58,7 +58,7 @@ entry:
   ret void
 }
 
-declare void @main.undefinedFunctionNotInSection(i8*) #0
+declare void @main.undefinedFunctionNotInSection(ptr) #0
 
 attributes #0 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -53,11 +54,11 @@ const (
 
 // getFunction returns the LLVM function for the given *ssa.Function, creating
 // it if needed. It can later be filled with compilerContext.createFunction().
-func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
+func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 	info := c.getFunctionInfo(fn)
 	llvmFn := c.mod.NamedFunction(info.linkName)
 	if !llvmFn.IsNil() {
-		return llvmFn
+		return llvmFn.GlobalValueType(), llvmFn
 	}
 
 	var retType llvm.Type
@@ -83,7 +84,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 	// Add an extra parameter as the function context. This context is used in
 	// closures and bound methods, but should be optimized away when not used.
 	if !info.exported {
-		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "context", flags: 0})
+		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "context", elemSize: 0})
 	}
 
 	var paramTypes []llvm.Type
@@ -112,17 +113,8 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 
 	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
 	for i, info := range paramInfos {
-		if info.flags&paramIsDeferenceableOrNull == 0 {
-			continue
-		}
-		if info.llvmType.TypeKind() == llvm.PointerTypeKind {
-			el := info.llvmType.ElementType()
-			size := c.targetData.TypeAllocSize(el)
-			if size == 0 {
-				// dereferenceable_or_null(0) appears to be illegal in LLVM.
-				continue
-			}
-			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, size)
+		if info.elemSize != 0 {
+			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, info.elemSize)
 			llvmFn.AddAttributeAtIndex(i+1, dereferenceableOrNull)
 		}
 	}
@@ -202,7 +194,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		llvmFn.SetUnnamedAddr(true)
 	}
 
-	return llvmFn
+	return fnType, llvmFn
 }
 
 // getFunctionInfo returns information about a function that is not directly
@@ -362,7 +354,15 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
 	if strings.Split(c.Triple, "-")[0] == "x86_64" {
 		// Required by the ABI.
-		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
+		if llvmutil.Major() < 15 {
+			// Needed for LLVM 14 support.
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
+		} else {
+			// The uwtable has two possible values: sync (1) or async (2). We
+			// use sync because we currently don't use async unwind tables.
+			// For details, see: https://llvm.org/docs/LangRef.html#function-attributes
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 1))
+		}
 	}
 }
 

@@ -47,6 +47,12 @@ func (c *Config) Features() string {
 	return c.Target.Features + "," + c.Options.LLVMFeatures
 }
 
+// ABI returns the -mabi= flag for this target (like -mabi=lp64). A zero-length
+// string is returned if the target doesn't specify an ABI.
+func (c *Config) ABI() string {
+	return c.Target.ABI
+}
+
 // GOOS returns the GOOS of the target. This might not always be the actual OS:
 // for example, bare-metal targets will usually pretend to be linux to get the
 // standard library to compile.
@@ -230,6 +236,9 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 	if c.CPU() != "" {
 		archname += "-" + c.CPU()
 	}
+	if c.ABI() != "" {
+		archname += "-" + c.ABI()
+	}
 
 	// Try to load a precompiled library.
 	precompiledDir := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", archname, name)
@@ -337,6 +346,10 @@ func (c *Config) CFlags() []string {
 			// The rest just uses -mcpu.
 			cflags = append(cflags, "-mcpu="+c.Target.CPU)
 		}
+	}
+	// Set the -mabi flag, if needed.
+	if c.ABI() != "" {
+		cflags = append(cflags, "-mabi="+c.ABI())
 	}
 	return cflags
 }

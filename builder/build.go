@@ -163,6 +163,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		Triple:          config.Triple(),
 		CPU:             config.CPU(),
 		Features:        config.Features(),
+		ABI:             config.ABI(),
 		GOOS:            config.GOOS(),
 		GOARCH:          config.GOARCH(),
 		CodeModel:       config.CodeModel(),
@@ -411,7 +412,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						return errors.New("global not found: " + globalName)
 					}
 					name := global.Name()
-					newGlobal := llvm.AddGlobal(mod, global.Type().ElementType(), name+".tmp")
+					newGlobal := llvm.AddGlobal(mod, global.GlobalValueType(), name+".tmp")
 					global.ReplaceAllUsesWith(newGlobal)
 					global.EraseFromParentAsGlobal()
 					newGlobal.SetName(name)
@@ -516,7 +517,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				irbuilder.CreateCall(pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
+				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
 			}
 			irbuilder.CreateRetVoid()
 
@@ -1127,7 +1128,7 @@ func setGlobalValues(mod llvm.Module, globals map[string]map[string]string) erro
 
 			// A strin is a {ptr, len} pair. We need these types to build the
 			// initializer.
-			initializerType := global.Type().ElementType()
+			initializerType := global.GlobalValueType()
 			if initializerType.TypeKind() != llvm.StructTypeKind || initializerType.StructName() == "" {
 				return fmt.Errorf("%s: not a string", globalName)
 			}
@@ -1146,7 +1147,7 @@ func setGlobalValues(mod llvm.Module, globals map[string]map[string]string) erro
 
 			// Create the string value, which is a {ptr, len} pair.
 			zero := llvm.ConstInt(mod.Context().Int32Type(), 0, false)
-			ptr := llvm.ConstGEP(buf, []llvm.Value{zero, zero})
+			ptr := llvm.ConstGEP(bufInitializer.Type(), buf, []llvm.Value{zero, zero})
 			if ptr.Type() != elementTypes[0] {
 				return fmt.Errorf("%s: not a string", globalName)
 			}
