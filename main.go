@@ -315,13 +315,19 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// Print the result.
 		importPath := strings.TrimSuffix(result.ImportPath, ".test")
 		passed = err == nil
+
+		// print the test output if
+		// 1) the tests passed and in verbose mode
+		// 2) the tests failed
+		// 3) running benchmarks
+		if (passed && testVerbose) || (!passed) || (testBenchRegexp != "") {
+			buf.WriteTo(stdout)
+		}
+
+		// final status line
 		if passed {
-			if testVerbose {
-				buf.WriteTo(stdout)
-			}
 			fmt.Fprintf(stdout, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
 		} else {
-			buf.WriteTo(stdout)
 			fmt.Fprintf(stdout, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 		}
 		if _, ok := err.(*exec.ExitError); ok {
