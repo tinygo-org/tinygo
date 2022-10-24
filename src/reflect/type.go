@@ -295,7 +295,7 @@ type Type interface {
 	// to the index sequence. It is equivalent to calling Field
 	// successively for each index i.
 	// It panics if the type's Kind is not Struct.
-	//FieldByIndex(index []int) StructField
+	FieldByIndex(index []int) StructField
 
 	// FieldByName returns the struct field with the given name
 	// and a boolean indicating if the field was found.
@@ -759,6 +759,10 @@ func (t rawType) PkgPath() string {
 
 func (t rawType) FieldByName(name string) (StructField, bool) {
 	panic("unimplemented: (reflect.Type).FieldByName()")
+}
+
+func (t rawType) FieldByIndex(index []int) StructField {
+	panic("unimplemented: (reflect.Type).FieldByIndex()")
 }
 
 // A StructField describes a single field in a struct.
