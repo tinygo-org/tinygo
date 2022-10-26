@@ -14,29 +14,28 @@ import (
 const (
 	// Mode Flag
 	PinOutput        PinMode = 0
-	PinInput         PinMode = PinInputFloating
-	PinInputFloating PinMode = 1
+	PinInput         PinMode = 1
 	PinInputPulldown PinMode = 2
 	PinInputPullup   PinMode = 3
 
 	// for UART
-	PinModeUARTTX PinMode = 4
-	PinModeUARTRX PinMode = 5
+	pinModeUARTTX PinMode = 4
+	pinModeUARTRX PinMode = 5
 
 	// for I2C
-	PinModeI2CSCL PinMode = 6
-	PinModeI2CSDA PinMode = 7
+	pinModeI2CSCL PinMode = 6
+	pinModeI2CSDA PinMode = 7
 
 	// for SPI
-	PinModeSPICLK PinMode = 8
-	PinModeSPISDO PinMode = 9
-	PinModeSPISDI PinMode = 10
+	pinModeSPICLK PinMode = 8
+	pinModeSPISDO PinMode = 9
+	pinModeSPISDI PinMode = 10
 
 	// for analog/ADC
-	PinInputAnalog PinMode = 11
+	pinInputAnalog PinMode = 11
 
 	// for PWM
-	PinModePWMOutput PinMode = 12
+	pinModePWMOutput PinMode = 12
 )
 
 // Define several bitfields that have different names across chip families but
@@ -83,7 +82,7 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 	switch config.Mode {
 
 	// GPIO
-	case PinInputFloating:
+	case PinInput:
 		port.MODER.ReplaceBits(gpioModeInput, gpioModeMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 	case PinInputPulldown:
@@ -97,24 +96,24 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
 
 	// UART
-	case PinModeUARTTX:
+	case pinModeUARTTX:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullUp, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
-	case PinModeUARTRX:
+	case pinModeUARTRX:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
 
 	// I2C
-	case PinModeI2CSCL:
+	case pinModeI2CSCL:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OTYPER.ReplaceBits(stm32.GPIO_OTYPER_OT0_OpenDrain, stm32.GPIO_OTYPER_OT0_Msk, pos/2)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedLow, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullUp, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
-	case PinModeI2CSDA:
+	case pinModeI2CSDA:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OTYPER.ReplaceBits(stm32.GPIO_OTYPER_OT0_OpenDrain, stm32.GPIO_OTYPER_OT0_Msk, pos/2)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedLow, gpioOutputSpeedMask, pos)
@@ -122,31 +121,31 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 		p.SetAltFunc(altFunc)
 
 	// SPI
-	case PinModeSPICLK:
+	case pinModeSPICLK:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
-	case PinModeSPISDO:
+	case pinModeSPISDO:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedLow, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
-	case PinModeSPISDI:
+	case pinModeSPISDI:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedLow, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
 
 	// PWM
-	case PinModePWMOutput:
+	case pinModePWMOutput:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
 		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 		p.SetAltFunc(altFunc)
 
 	// ADC
-	case PinInputAnalog:
+	case pinInputAnalog:
 		port.MODER.ReplaceBits(gpioModeAnalog, gpioModeMask, pos)
 	}
 }

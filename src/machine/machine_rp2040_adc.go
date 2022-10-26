@@ -85,7 +85,7 @@ func (c ADCChannel) Configure(config ADCConfig) error {
 	if err != nil {
 		return err
 	}
-	p.Configure(PinConfig{Mode: PinAnalog})
+	p.Configure(PinConfig{Mode: pinAnalog})
 	return nil
 }
 

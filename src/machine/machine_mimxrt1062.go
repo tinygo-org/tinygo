@@ -28,21 +28,21 @@ const (
 	PinDisable
 
 	// ADC
-	PinInputAnalog
+	pinInputAnalog
 
 	// UART
-	PinModeUARTTX
-	PinModeUARTRX
+	pinModeUARTTX
+	pinModeUARTRX
 
 	// SPI
-	PinModeSPISDI
-	PinModeSPISDO
-	PinModeSPICLK
-	PinModeSPICS
+	pinModeSPISDI
+	pinModeSPISDO
+	pinModeSPICLK
+	pinModeSPICS
 
 	// I2C
-	PinModeI2CSDA
-	PinModeI2CSCL
+	pinModeI2CSDA
+	pinModeI2CSCL
 )
 
 // Deprecated: use PinInputPullup and PinInputPulldown instead.
@@ -283,29 +283,29 @@ func (p Pin) Configure(config PinConfig) {
 		gpio.GDIR.ClearBits(p.getMask())
 		pad.Set(dse(7) | hys)
 
-	case PinInputAnalog:
+	case pinInputAnalog:
 		gpio.GDIR.ClearBits(p.getMask())
 		pad.Set(dse(7))
 
-	case PinModeUARTTX:
+	case pinModeUARTTX:
 		pad.Set(sre | dse(3) | spd(3))
 
-	case PinModeUARTRX:
+	case pinModeUARTRX:
 		pad.Set(dse(7) | pke | pue | pup(3) | hys)
 
-	case PinModeSPISDI:
+	case pinModeSPISDI:
 		pad.Set(dse(7) | spd(2))
 
-	case PinModeSPISDO:
+	case pinModeSPISDO:
 		pad.Set(dse(7) | spd(2))
 
-	case PinModeSPICLK:
+	case pinModeSPICLK:
 		pad.Set(dse(7) | spd(2))
 
-	case PinModeSPICS:
+	case pinModeSPICS:
 		pad.Set(dse(7))
 
-	case PinModeI2CSDA, PinModeI2CSCL:
+	case pinModeI2CSDA, pinModeI2CSCL:
 		pad.Set(ode | sre | dse(4) | spd(1) | pke | pue | pup(3))
 	}
 
@@ -759,7 +759,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		return mode
 
 	// ADC
-	case PinInputAnalog:
+	case pinInputAnalog:
 		mode := uint32(0x5) // use alternate function 5 (GPIO)
 		if forcePath {
 			mode |= 0x10 // SION bit
@@ -767,7 +767,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		return mode
 
 	// UART RX/TX
-	case PinModeUARTRX, PinModeUARTTX:
+	case pinModeUARTRX, pinModeUARTTX:
 		mode := uint32(0x2) // UART is usually alternate function 2 on Teensy 4.x
 		// Teensy 4.1 has a UART (LPUART5) with alternate function 1
 		if p == PB28 || p == PB29 {
@@ -776,7 +776,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		return mode
 
 	// SPI SDI
-	case PinModeSPISDI:
+	case pinModeSPISDI:
 		var mode uint32
 		switch p {
 		case PC15: // LPSPI1 SDI on PC15 alternate function 4
@@ -794,7 +794,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		return mode
 
 	// SPI SDO
-	case PinModeSPISDO:
+	case pinModeSPISDO:
 		var mode uint32
 		switch p {
 		case PC14: // LPSPI1 SDO on PC14 alternate function 4
@@ -812,7 +812,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		return mode
 
 	// SPI SCK
-	case PinModeSPICLK:
+	case pinModeSPICLK:
 		var mode uint32
 		switch p {
 		case PC12: // LPSPI1 SCK on PC12 alternate function 4
@@ -830,7 +830,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		return mode
 
 	// SPI CS
-	case PinModeSPICS:
+	case pinModeSPICS:
 		var mode uint32
 		switch p {
 		case PC13: // LPSPI1 CS on PC13 alternate function 4
@@ -848,7 +848,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		return mode
 
 	// I2C SDA
-	case PinModeI2CSDA:
+	case pinModeI2CSDA:
 		var mode uint32
 		switch p {
 		case PA13: // LPI2C4 SDA on PA13 alternate function 0
@@ -866,7 +866,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 		return mode
 
 	// I2C SCL
-	case PinModeI2CSCL:
+	case pinModeI2CSCL:
 		var mode uint32
 		switch p {
 		case PA12: // LPI2C4 SCL on PA12 alternate function 0
@@ -902,7 +902,7 @@ func (a ADC) Configure(config ADCConfig) {
 		defaultSamples    = uint32(4)
 	)
 
-	a.Pin.Configure(PinConfig{Mode: PinInputAnalog})
+	a.Pin.Configure(PinConfig{Mode: pinInputAnalog})
 
 	resolution, samples := config.Resolution, config.Samples
 	if 0 == resolution {

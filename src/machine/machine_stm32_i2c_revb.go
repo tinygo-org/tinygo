@@ -102,8 +102,8 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 }
 
 func (i2c *I2C) configurePins(config I2CConfig) {
-	config.SCL.ConfigureAltFunc(PinConfig{Mode: PinModeI2CSCL}, i2c.AltFuncSelector)
-	config.SDA.ConfigureAltFunc(PinConfig{Mode: PinModeI2CSDA}, i2c.AltFuncSelector)
+	config.SCL.ConfigureAltFunc(PinConfig{Mode: pinModeI2CSCL}, i2c.AltFuncSelector)
+	config.SDA.ConfigureAltFunc(PinConfig{Mode: pinModeI2CSDA}, i2c.AltFuncSelector)
 }
 
 func (i2c *I2C) controllerTransmit(addr uint16, w []byte) error {

@@ -81,11 +81,13 @@ const (
 	PinInput
 	PinInputPulldown
 	PinInputPullup
-	PinAnalog
-	PinUART
-	PinPWM
-	PinI2C
-	PinSPI
+
+	// internal pin modes
+	pinAnalog
+	pinUART
+	pinPWM
+	pinI2C
+	pinSPI
 )
 
 func (p Pin) PortMaskSet() (*uint32, uint32) {
@@ -188,20 +190,20 @@ func (p Pin) Configure(config PinConfig) {
 	case PinInputPullup:
 		p.setFunc(fnSIO)
 		p.pullup()
-	case PinAnalog:
+	case pinAnalog:
 		p.setFunc(fnNULL)
 		p.pulloff()
-	case PinUART:
+	case pinUART:
 		p.setFunc(fnUART)
-	case PinPWM:
+	case pinPWM:
 		p.setFunc(fnPWM)
-	case PinI2C:
+	case pinI2C:
 		// IO config according to 4.3.1.3 of rp2040 datasheet.
 		p.setFunc(fnI2C)
 		p.pullup()
 		p.setSchmitt(true)
 		p.setSlew(false)
-	case PinSPI:
+	case pinSPI:
 		p.setFunc(fnSPI)
 	}
 }

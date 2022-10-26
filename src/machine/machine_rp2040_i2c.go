@@ -105,8 +105,8 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	if config.Frequency == 0 {
 		config.Frequency = defaultBaud
 	}
-	config.SDA.Configure(PinConfig{PinI2C})
-	config.SCL.Configure(PinConfig{PinI2C})
+	config.SDA.Configure(PinConfig{pinI2C})
+	config.SCL.Configure(PinConfig{pinI2C})
 	return i2c.init(config)
 }
 

@@ -68,9 +68,9 @@ func (can *CAN) Configure(config CANConfig) error {
 		config.Standby.Low()
 	}
 
-	mode := PinCAN0
+	mode := pinCAN0
 	if can.instance() == 1 {
-		mode = PinCAN1
+		mode = pinCAN1
 	}
 
 	config.Rx.Configure(PinConfig{Mode: mode})

@@ -37,8 +37,8 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	sam.USB_DEVICE.DESCADD.Set(uint32(uintptr(unsafe.Pointer(&usbEndpointDescriptors))))
 
 	// configure pins
-	USBCDC_DM_PIN.Configure(PinConfig{Mode: PinCom})
-	USBCDC_DP_PIN.Configure(PinConfig{Mode: PinCom})
+	USBCDC_DM_PIN.Configure(PinConfig{Mode: pinCom})
+	USBCDC_DP_PIN.Configure(PinConfig{Mode: pinCom})
 
 	// performs pad calibration from store fuses
 	handlePadCalibration()

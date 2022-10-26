@@ -41,7 +41,7 @@ func InitADC() {
 
 // Configure configures an ADC pin to be able to read analog data.
 func (a ADC) Configure(ADCConfig) {
-	a.Pin.Configure(PinConfig{Mode: PinInputModeAnalog})
+	a.Pin.Configure(PinConfig{Mode: pinInputModeAnalog})
 
 	// set sample time
 	ch := a.getChannel()
