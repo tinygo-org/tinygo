@@ -17,7 +17,7 @@ require (
 	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
 	golang.org/x/tools v0.1.11
 	gopkg.in/yaml.v2 v2.4.0
-	tinygo.org/x/go-llvm v0.0.0-20220922115213-dcb078a26266
+	tinygo.org/x/go-llvm v0.0.0-20221028183034-8341240c0b32
 )
 
 require (
@@ -29,5 +29,4 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 )
