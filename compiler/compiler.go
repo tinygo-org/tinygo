@@ -1085,11 +1085,12 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	if b.info.section != "" {
 		b.llvmFn.SetSection(b.info.section)
 	}
-	if b.info.exported && strings.HasPrefix(b.Triple, "wasm") {
+	if b.info.exported && b.info.module != "" && strings.HasPrefix(b.Triple, "wasm") {
 		// Set the exported name. This is necessary for WebAssembly because
 		// otherwise the function is not exported.
-		functionAttr := b.ctx.CreateStringAttribute("wasm-export-name", b.info.linkName)
-		b.llvmFn.AddFunctionAttr(functionAttr)
+		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("wasm-export-name", b.info.linkName))
+		// Set the export module.
+		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("wasm-export-module", b.info.module))
 	}
 
 	// Some functions have a pragma controlling the inlining level.
