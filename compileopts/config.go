@@ -329,7 +329,7 @@ func (c *Config) CFlags() []string {
 		panic("unknown libc: " + c.Target.Libc)
 	}
 	// Always emit debug information. It is optionally stripped at link time.
-	cflags = append(cflags, "-g")
+	cflags = append(cflags, "-gdwarf-4")
 	// Use the same optimization level as TinyGo.
 	cflags = append(cflags, "-O"+c.Options.Opt)
 	// Set the LLVM target triple.
