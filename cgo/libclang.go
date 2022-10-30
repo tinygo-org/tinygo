@@ -533,6 +533,26 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 	return C.CXChildVisit_Continue
 }
 
+// Get the precise location in the source code. Used for uniquely identifying
+// source locations.
+func (f *cgoFile) getUniqueLocationID(pos token.Pos, cursor C.GoCXCursor) interface{} {
+	clangLocation := C.tinygo_clang_getCursorLocation(cursor)
+	var file C.CXFile
+	var line C.unsigned
+	var column C.unsigned
+	C.clang_getFileLocation(clangLocation, &file, &line, &column, nil)
+	location := token.Position{
+		Filename: getString(C.clang_getFileName(file)),
+		Line:     int(line),
+		Column:   int(column),
+	}
+	if location.Filename == "" || location.Line == 0 {
+		// Not sure when this would happen, but protect from it anyway.
+		f.addError(pos, "could not find file/line information")
+	}
+	return location
+}
+
 // getCursorPosition returns a usable token.Pos from a libclang cursor.
 func (p *cgoPackage) getCursorPosition(cursor C.GoCXCursor) token.Pos {
 	return p.getClangLocationPosition(C.tinygo_clang_getCursorLocation(cursor), C.tinygo_clang_Cursor_getTranslationUnit(cursor))
@@ -788,20 +808,7 @@ func (f *cgoFile) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 		}
 		if name == "" {
 			// Anonymous record, probably inside a typedef.
-			clangLocation := C.tinygo_clang_getCursorLocation(cursor)
-			var file C.CXFile
-			var line C.unsigned
-			var column C.unsigned
-			C.clang_getFileLocation(clangLocation, &file, &line, &column, nil)
-			location := token.Position{
-				Filename: getString(C.clang_getFileName(file)),
-				Line:     int(line),
-				Column:   int(column),
-			}
-			if location.Filename == "" || location.Line == 0 {
-				// Not sure when this would happen, but protect from it anyway.
-				f.addError(pos, "could not find file/line information")
-			}
+			location := f.getUniqueLocationID(pos, cursor)
 			name = f.getUnnamedDeclName("_Ctype_"+cgoRecordPrefix+"__", location)
 		} else {
 			name = cgoRecordPrefix + name
@@ -814,7 +821,9 @@ func (f *cgoFile) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
 		name := getString(C.tinygo_clang_getCursorSpelling(cursor))
 		if name == "" {
-			name = f.getUnnamedDeclName("_Ctype_enum___", cursor)
+			// Anonymous enum, probably inside a typedef.
+			location := f.getUniqueLocationID(pos, cursor)
+			name = f.getUnnamedDeclName("_Ctype_enum___", location)
 		} else {
 			name = "enum_" + name
 		}
