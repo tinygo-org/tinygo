@@ -2,6 +2,7 @@ package main
 
 // Make sure CGo supports multiple files.
 
+// #include "test.h"
 // int fortytwo(void);
 // static float headerfunc_static(float a) { return a - 1; }
 // static void headerfunc_void(int a, int *ptr) { *ptr = a; }
@@ -17,4 +18,8 @@ func headerfunc_2() {
 	var n C.int
 	C.headerfunc_void(3, &n)
 	println("static headerfunc void:", n)
+
+	// anonymous structs and enums in multiple Go files
+	var _ C.teststruct
+	var _ C.testenum
 }

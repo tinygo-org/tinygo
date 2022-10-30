@@ -4,6 +4,7 @@ package main
 #include <stdio.h>
 int fortytwo(void);
 #include "main.h"
+#include "test.h"
 int mul(int, int);
 #include <string.h>
 #cgo CFLAGS: -DSOME_CONSTANT=17
@@ -127,6 +128,10 @@ func main() {
 	var _ C.option3_t = C.option3A
 	println("option 2A:", C.option2A)
 	println("option 3A:", C.option3A)
+
+	// anonymous structs and enums in multiple Go files
+	var _ C.teststruct
+	var _ C.testenum
 
 	// Check that enums are considered the same width in C and CGo.
 	println("enum width matches:", unsafe.Sizeof(C.option2_t(0)) == uintptr(C.smallEnumWidth))
