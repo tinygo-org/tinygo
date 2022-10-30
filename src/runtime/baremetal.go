@@ -42,6 +42,12 @@ func libc_malloc(size uintptr) unsafe.Pointer {
 	return alloc(size, nil)
 }
 
+//export calloc
+func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
+	// No difference between calloc and malloc.
+	return libc_malloc(nmemb * size)
+}
+
 //export free
 func libc_free(ptr unsafe.Pointer) {
 	free(ptr)
