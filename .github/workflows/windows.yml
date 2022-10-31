@@ -23,7 +23,7 @@ jobs:
         run: |
           scoop install ninja binaryen
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
       - name: Install Go
@@ -91,7 +91,7 @@ jobs:
         # - have a dobule-zipped artifact when downloaded from the UI
         # - have a very slow artifact upload
         # We're doing the former here, to keep artifact uploads fast.
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: release-double-zipped
           path: build/release/release.zip

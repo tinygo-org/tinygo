@@ -28,7 +28,7 @@ jobs:
           sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
           rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
       - name: Install Go

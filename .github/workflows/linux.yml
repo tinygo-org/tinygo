@@ -29,7 +29,7 @@ jobs:
         # We're not on a multi-user machine, so this is safe.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
       - name: Cache Go
@@ -102,7 +102,7 @@ jobs:
           cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_amd64.deb
       - name: Publish release artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: linux-amd64-double-zipped
           path: |
@@ -114,7 +114,7 @@ jobs:
     needs: build-linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install Go
         uses: actions/setup-go@v3
         with:
@@ -125,7 +125,7 @@ jobs:
           curl https://wasmtime.dev/install.sh -sSf | bash
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Download release artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: linux-amd64-double-zipped
       - name: Extract release tarball
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
       - name: Install apt dependencies
@@ -174,7 +174,7 @@ jobs:
           go-version: '1.19'
           cache: true
       - name: Install Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: '14'
       - name: Install wasmtime
@@ -260,7 +260,7 @@ jobs:
     needs: build-linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install apt dependencies
         run: |
           sudo apt-get update
@@ -326,7 +326,7 @@ jobs:
         run: |
           make CROSS=arm-linux-gnueabihf
       - name: Download amd64 release
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: linux-amd64-double-zipped
       - name: Extract amd64 release
@@ -343,7 +343,7 @@ jobs:
           cp -p build/release.tar.gz /tmp/tinygo.linux-arm.tar.gz
           cp -p build/release.deb    /tmp/tinygo_armhf.deb
       - name: Publish release artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: linux-arm-double-zipped
           path: |
@@ -359,7 +359,7 @@ jobs:
     needs: build-linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install apt dependencies
         run: |
           sudo apt-get update
@@ -423,7 +423,7 @@ jobs:
         run: |
           make CROSS=aarch64-linux-gnu
       - name: Download amd64 release
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: linux-amd64-double-zipped
       - name: Extract amd64 release
@@ -440,7 +440,7 @@ jobs:
           cp -p build/release.tar.gz /tmp/tinygo.linux-arm64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_arm64.deb
       - name: Publish release artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: linux-arm64-double-zipped
           path: |
