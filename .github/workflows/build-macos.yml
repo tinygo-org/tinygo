@@ -20,13 +20,6 @@ jobs:
         shell: bash
         run: |
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
-      - name: Install Xtensa toolchain
-        shell: bash
-        run: |
-          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
-          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
-          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
-          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -40,7 +33,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-macos-v1
+          key: llvm-source-15-macos-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -54,7 +47,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-macos-v1
+          key: llvm-build-15-macos-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'

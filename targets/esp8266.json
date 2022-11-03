@@ -4,7 +4,7 @@
 	"features": "+debug,+density,+exception,+extendedl32r,+highpriinterrupts,+interrupt,+mul32,+nsa,+prid,+regprotect,+rvector,+timerint",
 	"build-tags": ["esp8266", "esp"],
 	"scheduler": "tasks",
-	"linker": "xtensa-esp32-elf-ld",
+	"linker": "ld.lld",
 	"default-stack-size": 2048,
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
