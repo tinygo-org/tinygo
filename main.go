@@ -1392,7 +1392,6 @@ func main() {
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
-	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
@@ -1481,7 +1480,6 @@ func main() {
 		PrintAllocs:     printAllocs,
 		Tags:            []string(tags),
 		GlobalValues:    globalVarValues,
-		WasmAbi:         *wasmAbi,
 		Programmer:      *programmer,
 		OpenOCDCommands: ocdCommands,
 		LLVMFeatures:    *llvmFeatures,

@@ -14,8 +14,7 @@ import (
 // resolved, this pass may be avoided. For more details:
 // https://github.com/WebAssembly/design/issues/1172
 //
-// This pass can be enabled/disabled with the -wasm-abi flag, and is enabled by
-// default as of december 2019.
+// This pass is enabled via the wasm-abi JSON target key.
 func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 	ctx := mod.Context()
 	builder := ctx.NewBuilder()
@@ -145,7 +144,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 			builder.SetInsertPointAtEnd(entryBlock)
 			var callParams []llvm.Value
 			if fnType.ReturnType() == int64Type {
-				return errors.New("not yet implemented: exported function returns i64 with -wasm-abi=js; " +
+				return errors.New("not yet implemented: exported function returns i64 with the JS wasm-abi; " +
 					"see https://tinygo.org/compiler-internals/calling-convention/")
 			}
 			for i, origParam := range fn.Params() {
