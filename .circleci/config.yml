@@ -6,18 +6,6 @@ commands:
       - run:
           name: "Pull submodules"
           command: git submodule update --init
-  install-xtensa-toolchain:
-    parameters:
-      variant:
-        type: string
-    steps:
-      - run:
-          name: "Install Xtensa toolchain"
-          command: |
-            curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
-            sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
-            sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
-            rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
   llvm-source-linux:
     steps:
       - restore_cache:
