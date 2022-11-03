@@ -27,7 +27,7 @@ func main() {
 		println("ticker was stopped (didn't send anything after 750ms)")
 	}
 
-	timer := time.NewTimer(time.Millisecond * 500)
+	timer := time.NewTimer(time.Millisecond * 750)
 	println("waiting on timer")
 	go func() {
 		time.Sleep(time.Millisecond * 200)
@@ -36,10 +36,10 @@ func main() {
 		println(" - after 400ms")
 	}()
 	<-timer.C
-	println("waited on timer at 500ms")
+	println("waited on timer at 750ms")
 	time.Sleep(time.Millisecond * 500)
 
-	reset := timer.Reset(time.Millisecond * 500)
+	reset := timer.Reset(time.Millisecond * 750)
 	println("timer reset:", reset)
 	println("waiting on timer")
 	go func() {
@@ -49,6 +49,6 @@ func main() {
 		println(" - after 400ms")
 	}()
 	<-timer.C
-	println("waited on timer at 500ms")
+	println("waited on timer at 750ms")
 	time.Sleep(time.Millisecond * 500)
 }
