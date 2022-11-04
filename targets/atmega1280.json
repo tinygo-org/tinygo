@@ -4,8 +4,7 @@
     "build-tags": ["atmega1280", "atmega"],
     "serial": "uart",
     "ldflags": [
-        "-mmcu=avr51",
-        "-Wl,--defsym=_stack_size=512"
+        "--defsym=_stack_size=512"
     ],
     "linkerscript": "src/device/avr/atmega1280.ld",
     "extra-files": [

@@ -63,8 +63,6 @@ commands:
                 clang-<<parameters.llvm>> \
                 libclang-<<parameters.llvm>>-dev \
                 lld-<<parameters.llvm>> \
-                gcc-avr \
-                avr-libc \
                 cmake \
                 ninja-build
       - hack-ninja-jobs

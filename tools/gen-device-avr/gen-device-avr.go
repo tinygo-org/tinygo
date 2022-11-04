@@ -60,7 +60,7 @@ type Device struct {
 
 // AddressSpace is the Go version of an XML element like the following:
 //
-//     <address-space endianness="little" name="data" id="data" start="0x0000" size="0x0900">
+//	<address-space endianness="little" name="data" id="data" start="0x0000" size="0x0900">
 //
 // It describes one address space in an AVR microcontroller. One address space
 // may have multiple memory segments.
@@ -71,7 +71,7 @@ type AddressSpace struct {
 
 // MemorySegment is the Go version of an XML element like the following:
 //
-//     <memory-segment name="IRAM" start="0x0100" size="0x0800" type="ram" external="false"/>
+//	<memory-segment name="IRAM" start="0x0100" size="0x0800" type="ram" external="false"/>
 //
 // It describes a single contiguous area of memory in a particular address space
 // (see AddressSpace).
@@ -432,7 +432,7 @@ __vector_default:
 .endm
 
 ; The interrupt vector of this device. Must be placed at address 0 by the linker.
-.section .vectors
+.section .vectors, "a", %progbits
 .global  __vectors
 `))
 	err = t.Execute(out, device.metadata)

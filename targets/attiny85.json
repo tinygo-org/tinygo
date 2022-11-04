@@ -5,9 +5,6 @@
 	"cflags": [
 		"-D__AVR_ARCH__=25"
 	],
-	"ldflags": [
-		"-mmcu=avr25"
-	],
 	"linkerscript": "src/device/avr/attiny85.ld",
 	"extra-files": [
 		"targets/avr.S",

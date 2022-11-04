@@ -133,11 +133,6 @@ jobs:
           mkdir -p ~/lib
           tar -C ~/lib -xf tinygo.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
-      - name: Install apt dependencies
-        run: |
-          sudo apt-get install --no-install-recommends \
-              gcc-avr \
-              avr-libc
       - run: make tinygo-test-wasi-fast
       - run: make smoketest
   assert-test-linux:
@@ -158,8 +153,6 @@ jobs:
               qemu-system-arm \
               qemu-system-riscv32 \
               qemu-user \
-              gcc-avr \
-              avr-libc \
               simavr \
               ninja-build
       - name: Install Go
