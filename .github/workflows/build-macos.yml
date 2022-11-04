@@ -93,7 +93,7 @@ jobs:
           path: build/tinygo.darwin-amd64.tar.gz
       - name: Smoke tests
         shell: bash
-        run: make smoketest TINYGO=$(PWD)/build/tinygo AVR=0
+        run: make smoketest TINYGO=$(PWD)/build/tinygo
   test-macos-homebrew:
     name: homebrew-install
     runs-on: macos-latest

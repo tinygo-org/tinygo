@@ -125,7 +125,7 @@ jobs:
         run: 7z x release.zip -r
       - name: Smoke tests
         shell: bash
-        run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo AVR=0
+        run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-test-windows:
     runs-on: windows-2022

@@ -162,6 +162,15 @@ var aeabiBuiltins = []string{
 	"udivmodsi4.c",
 }
 
+var avrBuiltins = []string{
+	"avr/divmodhi4.S",
+	"avr/divmodqi4.S",
+	"avr/mulhi3.S",
+	"avr/mulqi3.S",
+	"avr/udivmodhi4.S",
+	"avr/udivmodqi4.S",
+}
+
 // CompilerRT is a library with symbols required by programs compiled with LLVM.
 // These symbols are for operations that cannot be emitted with a single
 // instruction or a short sequence of instructions for that target.
@@ -185,6 +194,9 @@ var CompilerRT = Library{
 		builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
 		if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
 			builtins = append(builtins, aeabiBuiltins...)
+		}
+		if strings.HasPrefix(target, "avr") {
+			builtins = append(builtins, avrBuiltins...)
 		}
 		return builtins, nil
 	},

@@ -78,7 +78,7 @@ var picolibcSources = []string{
 	"libc/tinystdio/fputc.c",
 	"libc/tinystdio/fputs.c",
 	"libc/tinystdio/fread.c",
-	"libc/tinystdio/freopen.c",
+	//"libc/tinystdio/freopen.c", // crashes with AVR, see: https://github.com/picolibc/picolibc/pull/369
 	"libc/tinystdio/fscanf.c",
 	"libc/tinystdio/fseek.c",
 	"libc/tinystdio/fseeko.c",

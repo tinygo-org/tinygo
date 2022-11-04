@@ -4,8 +4,7 @@
     "build-tags": ["atmega2560", "atmega"],
     "serial": "uart",
     "ldflags": [
-        "-mmcu=avr6",
-        "-Wl,--defsym=_stack_size=512"
+        "--defsym=_stack_size=512"
     ],
     "linkerscript": "src/device/avr/atmega2560.ld",
     "extra-files": [

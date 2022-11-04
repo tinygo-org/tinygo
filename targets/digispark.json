@@ -2,8 +2,8 @@
 	"inherits": ["attiny85"],
 	"build-tags": ["digispark"],
 	"ldflags": [
-		"-Wl,--defsym=_bootloader_size=2180",
-		"-Wl,--defsym=_stack_size=128"
+		"--defsym=_bootloader_size=2180",
+		"--defsym=_stack_size=128"
 	],
 	"flash-command": "micronucleus --run {hex}",
 	"emulator": "simavr -m attiny85 -f 16000000 {}"

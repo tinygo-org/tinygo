@@ -674,7 +674,6 @@ ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o test.hex -target=swan                examples/blinky1
 	@$(MD5SUM) test.hex
 endif
-ifneq ($(AVR), 0)
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino             examples/blinky1
@@ -693,7 +692,6 @@ ifneq ($(AVR), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=digispark -gc=leaking examples/blinky1
 	@$(MD5SUM) test.hex
-endif
 ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target=esp32-mini32      	examples/blinky1
 	@$(MD5SUM) test.bin
