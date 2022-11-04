@@ -200,7 +200,7 @@ func (c *Config) UseThinLTO() bool {
 		// wasm-ld doesn't seem to support ThinLTO yet.
 		return false
 	}
-	if parts[0] == "avr" || parts[0] == "xtensa" {
+	if parts[0] == "avr" {
 		// These use external (GNU) linkers which might perhaps support ThinLTO
 		// through a plugin, but it's too much hassle to set up.
 		return false
