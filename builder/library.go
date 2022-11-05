@@ -242,6 +242,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				var compileArgs []string
 				compileArgs = append(compileArgs, args...)
 				compileArgs = append(compileArgs, "-o", objpath, srcpath)
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands("clang", compileArgs...)
+				}
 				err := runCCompiler(compileArgs...)
 				if err != nil {
 					return &commandError{"failed to build", srcpath, err}
@@ -268,6 +271,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				}
 				tmpfile.Close()
 				compileArgs = append(compileArgs, "-o", tmpfile.Name(), srcpath)
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands("clang", compileArgs...)
+				}
 				err = runCCompiler(compileArgs...)
 				if err != nil {
 					return &commandError{"failed to build", srcpath, err}
