@@ -195,6 +195,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		default:
 			llvmarch = options.GOARCH
 		}
+		llvmvendor := "unknown"
 		llvmos := options.GOOS
 		if llvmos == "darwin" {
 			// Use macosx* instead of darwin, otherwise darwin/arm64 will refer
@@ -204,12 +205,14 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 				// Looks like Apple prefers to call this architecture ARM64
 				// instead of AArch64.
 				llvmarch = "arm64"
+				llvmos = "macosx11.0.0"
 			}
+			llvmvendor = "apple"
 		}
 		// Target triples (which actually have four components, but are called
 		// triples for historical reasons) have the form:
 		//   arch-vendor-os-environment
-		target := llvmarch + "-unknown-" + llvmos
+		target := llvmarch + "-" + llvmvendor + "-" + llvmos
 		if options.GOOS == "windows" {
 			target += "-gnu"
 		} else if options.GOARCH == "arm" {
