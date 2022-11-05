@@ -160,7 +160,9 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpdir)
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Do the build.
 	result, err := builder.Build(pkgName, outpath, tmpdir, config)
@@ -405,7 +407,9 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpdir)
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Build the binary.
 	result, err := builder.Build(pkgName, fileExt, tmpdir, config)
@@ -552,7 +556,9 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpdir)
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Build the binary to debug.
 	format, fileExt := config.EmulatorFormat()
@@ -824,7 +830,9 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpdir)
+	if !config.Options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Build the binary to be run.
 	format, fileExt := config.EmulatorFormat()
