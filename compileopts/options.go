@@ -51,6 +51,7 @@ type Options struct {
 	PrintJSON       bool
 	Monitor         bool
 	BaudRate        int
+	Retries         int
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.
