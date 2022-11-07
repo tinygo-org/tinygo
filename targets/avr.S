@@ -11,6 +11,11 @@
 #define zl r30
 #define zh r31
 
+; Ugly hack until https://reviews.llvm.org/D137572 is merged.
+#if !defined(__AVR_HAVE_ELPM__) && defined(__flash1)
+#define __AVR_HAVE_ELPM__
+#endif
+
 ; Startup code
 .section .text.__vector_RESET
 .global  __vector_RESET
@@ -34,11 +39,19 @@ init_data:
     ldi  yh, hi8(_edata)
     ldi  zl, lo8(_sidata)
     ldi  zh, hi8(_sidata)
+#ifdef __AVR_HAVE_ELPM__
+    ldi  r16, hh8(_sidata) ; RAMPZ = hh8(_sidata)
+    out  0x3b, r16
+#endif
 init_data_loop:
     cp   xl, yl         ; if x == y
     cpc  xh, yh
     breq init_data_end  ; goto main
+#ifdef __AVR_HAVE_ELPM__
+    elpm r0, Z+         ; r0 = *(z++)
+#else
     lpm  r0, Z+         ; r0 = *(z++)
+#endif
     st   X+, r0         ; *(x++) = r0
     rjmp init_data_loop ; goto init_data_loop
 init_data_end:
