@@ -4,8 +4,8 @@
 package runtime
 
 // This GC strategy provides no memory allocation at all. It can be useful to
-// detect where in a program memory is allocated, or to combine this runtime
-// with a separate (external) garbage collector.
+// detect where in a program memory is allocated (via linker errors) or for
+// targets that have far too little RAM even for the leaking memory allocator.
 
 import (
 	"unsafe"
