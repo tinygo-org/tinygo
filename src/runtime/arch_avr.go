@@ -40,6 +40,8 @@ func procUnpin() {
 
 // The following functions are workarounds for things missing in compiler-rt.
 // They will likely need special assembly implementations.
+// They are treated specially: they're added to @llvm.compiler.used so that the
+// linker won't eliminate them.
 
 //export __mulsi3
 func __mulsi3(a, b uint32) uint32 {

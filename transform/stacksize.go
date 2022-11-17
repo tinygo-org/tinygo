@@ -53,7 +53,7 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 	stackSizesGlobal.SetInitializer(llvm.ConstArray(functions[0].Type(), defaultStackSizes))
 
 	// Add all relevant values to llvm.used (for LTO).
-	llvmutil.AppendToUsedGlobals(mod, append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
+	llvmutil.AppendToGlobal(mod, "llvm.used", append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
 
 	// Replace the calls with loads from the new global with stack sizes.
 	irbuilder := ctx.NewBuilder()

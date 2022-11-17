@@ -5,7 +5,7 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0x800000 + __ram_start, LENGTH = __ram_size
 }
 
-ENTRY(__vector_RESET)
+ENTRY(main)
 
 SECTIONS
 {
