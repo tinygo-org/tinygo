@@ -150,6 +150,19 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		// that the only thing we'll do is read the pointer.
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
+	case "__mulsi3", "__divmodsi4", "__udivmodsi4":
+		if strings.Split(c.Triple, "-")[0] == "avr" {
+			// These functions are compiler-rt/libgcc functions that are
+			// currently implemented in Go. Assembly versions should appear in
+			// LLVM 16 hopefully. Until then, they need to be made available to
+			// the linker and the best way to do that is llvm.compiler.used.
+			// I considered adding a pragma for this, but the LLVM language
+			// reference explicitly says that this feature should not be exposed
+			// to source languages:
+			// > This is a rare construct that should only be used in rare
+			// > circumstances, and should not be exposed to source languages.
+			llvmutil.AppendToGlobal(c.mod, "llvm.compiler.used", llvmFn)
+		}
 	}
 
 	// External/exported functions may not retain pointer values.

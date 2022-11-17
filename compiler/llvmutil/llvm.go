@@ -196,21 +196,31 @@ func SplitBasicBlock(builder llvm.Builder, afterInst llvm.Value, insertAfter llv
 	return newBlock
 }
 
-// Append the given values to the llvm.used array. The values can be any pointer
-// type, they will be bitcast to i8*.
-func AppendToUsedGlobals(mod llvm.Module, values ...llvm.Value) {
-	if !mod.NamedGlobal("llvm.used").IsNil() {
-		// Sanity check. TODO: we don't emit such a global at the moment, but
-		// when we do we should append to it instead.
-		panic("todo: append to existing llvm.used")
+// Append the given values to a global array like llvm.used. The global might
+// not exist yet. The values can be any pointer type, they will be cast to i8*.
+func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
+	// Read the existing values in the llvm.used array (if it exists).
+	var usedValues []llvm.Value
+	if used := mod.NamedGlobal(globalName); !used.IsNil() {
+		builder := mod.Context().NewBuilder()
+		defer builder.Dispose()
+		usedInitializer := used.Initializer()
+		num := usedInitializer.Type().ArrayLength()
+		for i := 0; i < num; i++ {
+			usedValues = append(usedValues, builder.CreateExtractValue(usedInitializer, i, ""))
+		}
+		used.EraseFromParentAsGlobal()
 	}
+
+	// Add the new values.
 	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-	var castValues []llvm.Value
 	for _, value := range values {
-		castValues = append(castValues, llvm.ConstBitCast(value, i8ptrType))
+		usedValues = append(usedValues, llvm.ConstPointerCast(value, i8ptrType))
 	}
-	usedInitializer := llvm.ConstArray(i8ptrType, castValues)
-	used := llvm.AddGlobal(mod, usedInitializer.Type(), "llvm.used")
+
+	// Create a new array (with the old and new values).
+	usedInitializer := llvm.ConstArray(i8ptrType, usedValues)
+	used := llvm.AddGlobal(mod, usedInitializer.Type(), globalName)
 	used.SetInitializer(usedInitializer)
 	used.SetLinkage(llvm.AppendingLinkage)
 }
