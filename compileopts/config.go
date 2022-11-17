@@ -105,8 +105,6 @@ func (c *Config) GC() string {
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "none":
-		fallthrough
 	case "conservative":
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
