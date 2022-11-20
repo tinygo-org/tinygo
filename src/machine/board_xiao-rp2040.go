@@ -24,8 +24,8 @@ const (
 	D6  Pin = GPIO0
 	D7  Pin = GPIO1
 	D8  Pin = GPIO2
-	D9  Pin = GPIO3
-	D10 Pin = GPIO4
+	D9  Pin = GPIO4
+	D10 Pin = GPIO3
 )
 
 // Analog pins
