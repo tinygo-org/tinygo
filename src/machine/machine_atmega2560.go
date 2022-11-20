@@ -13,6 +13,11 @@ const irq_USART1_RX = avr.IRQ_USART1_RX
 const irq_USART2_RX = avr.IRQ_USART2_RX
 const irq_USART3_RX = avr.IRQ_USART3_RX
 
+// Size returns the size of the EEPROM for this machine.
+func (e EEPROM) Size() int64 {
+	return 4096
+}
+
 const (
 	portA Pin = iota * 8
 	portB
