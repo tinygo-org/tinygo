@@ -5,10 +5,120 @@ package machine
 
 import (
 	"device/avr"
+	"errors"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
+
+// Default size of the EEPROM on ATMega MCUs
+const eepromSize = 1024
+
+// EECR bitfield values.
+// The constants provided by the AVR package are not correct, so these are the correct fields instead.
+const (
+	eecrEERE  = avr.EECR_EERE - 1
+	eecrEEPE  = avr.EECR_EEPE - 1
+	eecrEEMPE = avr.EECR_EEMPE - 2
+	eecrEERIE = avr.EECR_EERIE - 5
+	eecrEEPM0 = avr.EECR_EEPM0 - 12
+	eecrEEPM1 = avr.EECR_EEPM1 - 27
+)
+
+// EEPROM on ATMega
+type EEPROM struct {
+}
+
+// setAddress sets the address for a given read or write into the MCUs EEARH/L register.
+func (e *EEPROM) setAddress(addr int64) error {
+	if addr < 0 || addr > int64(eepromSize) {
+		return errors.New("address provided is out of bounds")
+	}
+
+	avr.EEARH.Set(uint8(addr >> 8))
+	avr.EEARL.Set(uint8(addr & 0xFF))
+
+	return nil
+}
+
+// WriteAt writes len(data) bytes in the EEPROMs at the provided offset.
+func (e *EEPROM) WriteAt(data []byte, off int64) (int, error) {
+	written := 0
+	for i, value := range data {
+		if err := e.WriteByteAt(value, off+int64(i)); err != nil {
+			return written, err
+		}
+		written++
+	}
+	return written, nil
+}
+
+// WriteByteAt performs the logic to writes a byte into the EEPROM at the given address.
+func (e *EEPROM) WriteByteAt(value byte, addr int64) error {
+	notReady := true
+	for notReady {
+		// Wait for the completion of the previous write (if there is one)
+		if !avr.EECR.HasBits(1 << eecrEEPE) {
+			notReady = false
+		}
+	}
+
+	if err := e.setAddress(addr); err != nil {
+		return err
+	}
+
+	avr.EEDR.Set(value)
+
+	avr.EECR.SetBits(1 << eecrEEMPE)
+	avr.EECR.SetBits(1 << eecrEEPE)
+
+	return nil
+}
+
+// ReadAt reads exactly len(buf) into buf at the offset. It will return the amount of bytes copied or an error if one exists.
+// The buffer cannot be empty, and an an error is thrown if fewer bytes are read than the size of the buffer.
+func (e *EEPROM) ReadAt(buf []byte, off int64) (int, error) {
+	if len(buf) == 0 {
+		return 0, errors.New("buffer cannot be empty")
+	}
+
+	size := len(buf)
+	read := 0
+	for i := 0; i < size; i++ {
+		val, err := e.ReadByteAt(off + int64(i))
+		if err != nil {
+			return read, err
+		}
+
+		buf[i] = val
+
+		read++
+	}
+
+	if read < size {
+		return read, errors.New("fewer bytes read than size of buffer")
+	}
+
+	return read, nil
+}
+
+// ReadByteAt reads and returns the byte at the specified address. An error is returned if there is a failure to read.
+func (e *EEPROM) ReadByteAt(addr int64) (byte, error) {
+	notReady := true
+	for notReady {
+		if !avr.EECR.HasBits(1 << eecrEEPE) {
+			notReady = false
+		}
+	}
+
+	if err := e.setAddress(addr); err != nil {
+		return byte(0), err
+	}
+
+	avr.EECR.SetBits(1 << eecrEERE)
+
+	return avr.EEDR.Get(), nil
+}
 
 // I2C on AVR.
 type I2C struct {

@@ -9,6 +9,8 @@ import (
 	"runtime/volatile"
 )
 
+const eepromSize = 4096
+
 const irq_USART0_RX = avr.IRQ_USART0_RX
 
 const (
