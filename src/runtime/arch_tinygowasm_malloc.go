@@ -1,5 +1,5 @@
-//go:build tinygo.wasm && !custommalloc
-// +build tinygo.wasm,!custommalloc
+//go:build tinygo.wasm && !gc.custom
+// +build tinygo.wasm,!gc.custom
 
 package runtime
 

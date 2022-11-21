@@ -106,6 +106,8 @@ func (c *Config) GC() string {
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
 	case "conservative":
+		fallthrough
+	case "custom":
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
 				return true

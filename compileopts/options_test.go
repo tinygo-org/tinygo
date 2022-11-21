@@ -49,6 +49,12 @@ func TestVerifyOptions(t *testing.T) {
 			},
 		},
 		{
+			name: "GCOptionCustom",
+			opts: compileopts.Options{
+				GC: "custom",
+			},
+		},
+		{
 			name: "InvalidSchedulerOption",
 			opts: compileopts.Options{
 				Scheduler: "incorrect",

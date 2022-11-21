@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	validGCOptions            = []string{"none", "leaking", "conservative"}
+	validGCOptions            = []string{"none", "leaking", "conservative", "custom"}
 	validSchedulerOptions     = []string{"none", "tasks", "asyncify"}
 	validSerialOptions        = []string{"none", "uart", "usb"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
