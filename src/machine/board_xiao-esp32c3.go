@@ -34,6 +34,12 @@ const (
 	A3 = GPIO5
 )
 
+// Button
+const (
+	BUTTON      = BUTTON_BOOT
+	BUTTON_BOOT = GPIO9
+)
+
 // UART pins
 const (
 	UART_RX_PIN = GPIO20
