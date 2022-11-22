@@ -40,6 +40,7 @@ type stackChainObject struct {
 // stackChainStart. Luckily we don't need to scan these, as these globals are
 // stored on the goroutine stack and are therefore already getting scanned.
 func markStack() {
+	loadStackChain()
 	if task.OnSystemStack() {
 		markRoots(getCurrentStackPointer(), stackTop)
 	}
@@ -57,6 +58,14 @@ func swapStackChain(dst **stackChainObject) {
 }
 
 func init() {
+	// At least currently, it is enough to load the stack chain once in the app to make
+	// sure stack tracking is emitted by LLVM, which will mostly be important when using
+	// gc=custom. In the future, this may change if LLVM optimizes away the stack chain
+	// because the load happens before the writes and we may need to revisit.
+	loadStackChain()
+}
+
+func loadStackChain() {
 	// Hack to force LLVM to consider stackChainStart to be live.
 	// Without this hack, loads and stores may be considered dead and objects on
 	// the stack might not be correctly tracked. With this volatile load, LLVM
