@@ -194,10 +194,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Breaks interp.
 				continue
 
-			case "channel.go":
-				// Freezes after recv from closed channel.
-				continue
-
 			case "math.go":
 				// Stuck somewhere, not sure what's happening.
 				continue
