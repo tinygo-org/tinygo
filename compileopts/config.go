@@ -190,17 +190,11 @@ func (c *Config) StackSize() uint64 {
 	return c.Target.DefaultStackSize
 }
 
-// UseThinLTO returns whether ThinLTO should be used for the given target. Some
-// targets (such as wasm) are not yet supported.
-// We should try and remove as many exceptions as possible in the future, so
-// that this optimization can be applied in more places.
+// UseThinLTO returns whether ThinLTO should be used for the given target.
 func (c *Config) UseThinLTO() bool {
-	parts := strings.Split(c.Triple(), "-")
-	if parts[0] == "wasm32" {
-		// wasm-ld doesn't seem to support ThinLTO yet.
-		return false
-	}
-	// Other architectures support ThinLTO.
+	// All architectures support ThinLTO now. However, this code is kept for the
+	// time being in case there are regressions. The non-ThinLTO code support
+	// should be removed when it is proven to work reliably.
 	return true
 }
 

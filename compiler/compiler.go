@@ -1099,6 +1099,11 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// otherwise the function is not exported.
 		functionAttr := b.ctx.CreateStringAttribute("wasm-export-name", b.info.linkName)
 		b.llvmFn.AddFunctionAttr(functionAttr)
+		// Unlike most targets, exported functions are actually visible in
+		// WebAssembly (even if it's not called from within the WebAssembly
+		// module). But LTO generally optimizes such functions away. Therefore,
+		// exported functions must be explicitly marked as used.
+		llvmutil.AppendToGlobal(b.mod, "llvm.used", b.llvmFn)
 	}
 
 	// Some functions have a pragma controlling the inlining level.

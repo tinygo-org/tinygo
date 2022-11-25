@@ -6,6 +6,7 @@ target triple = "wasm32-unknown-wasi"
 @extern_global = external global [0 x i8], align 1
 @main.alignedGlobal = hidden global [4 x i32] zeroinitializer, align 32
 @main.alignedGlobal16 = hidden global [4 x i32] zeroinitializer, align 16
+@llvm.used = appending global [2 x ptr] [ptr @extern_func, ptr @exportedFunctionInSection]
 @main.globalInSection = hidden global i32 0, section ".special_global_section", align 4
 @undefinedGlobalNotInSection = external global i32, align 4
 @main.multipleGlobalPragmas = hidden global i32 0, section ".global_section", align 1024
