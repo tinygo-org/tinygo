@@ -233,7 +233,7 @@ func (can *CAN) TxRaw(e *CANTxBufferElement) {
 		id <<= 18
 	}
 
-	f[3] = byte(id >> 24)
+	f[3] = byte(id>>24) & 0x1F
 	if e.ESI {
 		f[3] |= 0x80
 	}
@@ -245,7 +245,7 @@ func (can *CAN) TxRaw(e *CANTxBufferElement) {
 	}
 	f[2] = byte(id >> 16)
 	f[1] = byte(id >> 8)
-	f[0] = byte(0)
+	f[0] = byte(id)
 	f[7] = e.MM
 	f[6] = e.DLC
 	if e.EFC {
@@ -337,7 +337,7 @@ func (can *CAN) RxRaw(e *CANRxBufferElement) {
 	}
 
 	id := ((uint32(f[3]) << 24) + (uint32(f[2]) << 16) + (uint32(f[1]) << 8) + uint32(f[0])) & 0x1FFFFFFF
-	if (f[3] & 0x20) == 0 {
+	if !e.XTD {
 		id >>= 18
 		id &= 0x000007FF
 	}
