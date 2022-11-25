@@ -424,6 +424,11 @@ func (e CANRxBufferElement) Data() []byte {
 	return e.DB[:CANDlcToLength(e.DLC, e.FDF)]
 }
 
+// Length returns its actual length.
+func (e CANRxBufferElement) Length() byte {
+	return CANDlcToLength(e.DLC, e.FDF)
+}
+
 // CANDlcToLength() converts a DLC value to its actual length.
 func CANDlcToLength(dlc byte, isFD bool) byte {
 	length := dlc
