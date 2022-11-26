@@ -4,9 +4,8 @@
     "build-tags": ["atmega1284p", "atmega"],
     "serial": "uart",
     "ldflags": [
-        "-mmcu=avr51",
-        "-Wl,--defsym=_bootloader_size=0",
-        "-Wl,--defsym=_stack_size=512"
+        "--defsym=_bootloader_size=0",
+        "--defsym=_stack_size=512"
     ],
     "linkerscript": "src/device/avr/atmega1284p.ld",
     "extra-files": [

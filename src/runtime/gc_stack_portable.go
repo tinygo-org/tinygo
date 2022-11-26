@@ -5,6 +5,7 @@ package runtime
 
 import (
 	"internal/task"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -38,6 +39,13 @@ type stackChainObject struct {
 // stackChainStart. Luckily we don't need to scan these, as these globals are
 // stored on the goroutine stack and are therefore already getting scanned.
 func markStack() {
+	// Hack to force LLVM to consider stackChainStart to be live.
+	// Without this hack, loads and stores may be considered dead and objects on
+	// the stack might not be correctly tracked. With this volatile load, LLVM
+	// is forced to consider stackChainStart (and everything it points to) as
+	// live.
+	volatile.LoadUint32((*uint32)(unsafe.Pointer(&stackChainStart)))
+
 	if task.OnSystemStack() {
 		markRoots(getCurrentStackPointer(), stackTop)
 	}

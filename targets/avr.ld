@@ -5,6 +5,8 @@ MEMORY
     RAM (xrw)       : ORIGIN = 0x800000 + __ram_start, LENGTH = __ram_size
 }
 
+ENTRY(main)
+
 SECTIONS
 {
     .text :
@@ -12,9 +14,11 @@ SECTIONS
         KEEP(*(.vectors))
         KEEP(*(.text.__vector_RESET))
         KEEP(*(.text.main)) /* main must follow the reset handler */
+        *(.text)
         *(.text.*)
         *(.progmem)
         *(.progmem.*)
+        . = ALIGN(16); /* needed with ld.lld for some reasoon */
     }
 
     .stack (NOLOAD) :

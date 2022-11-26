@@ -22,6 +22,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+- repo: github.com/buger/jsonparser
 - repo: github.com/dgryski/go-bloomindex
   tags: purego noasm
 - repo: github.com/dgryski/go-arc

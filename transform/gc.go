@@ -143,9 +143,6 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		for _, call := range calls {
 			ptr := call.Operand(0)
 			call.EraseFromParentAsInstruction()
-			if ptr.IsAInstruction().IsNil() {
-				continue
-			}
 
 			// Some trivial optimizations.
 			if ptr.IsAInstruction().IsNil() {

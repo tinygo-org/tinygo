@@ -2,6 +2,7 @@ package transform
 
 import (
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -52,7 +53,7 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 	stackSizesGlobal.SetInitializer(llvm.ConstArray(functions[0].Type(), defaultStackSizes))
 
 	// Add all relevant values to llvm.used (for LTO).
-	appendToUsedGlobals(mod, append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
+	llvmutil.AppendToGlobal(mod, "llvm.used", append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
 
 	// Replace the calls with loads from the new global with stack sizes.
 	irbuilder := ctx.NewBuilder()
@@ -71,23 +72,4 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 	}
 
 	return functionNames
-}
-
-// Append the given values to the llvm.used array. The values can be any pointer
-// type, they will be bitcast to i8*.
-func appendToUsedGlobals(mod llvm.Module, values ...llvm.Value) {
-	if !mod.NamedGlobal("llvm.used").IsNil() {
-		// Sanity check. TODO: we don't emit such a global at the moment, but
-		// when we do we should append to it instead.
-		panic("todo: append to existing llvm.used")
-	}
-	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-	var castValues []llvm.Value
-	for _, value := range values {
-		castValues = append(castValues, llvm.ConstBitCast(value, i8ptrType))
-	}
-	usedInitializer := llvm.ConstArray(i8ptrType, castValues)
-	used := llvm.AddGlobal(mod, usedInitializer.Type(), "llvm.used")
-	used.SetInitializer(usedInitializer)
-	used.SetLinkage(llvm.AppendingLinkage)
 }

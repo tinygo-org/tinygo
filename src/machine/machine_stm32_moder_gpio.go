@@ -148,6 +148,7 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 	// ADC
 	case PinInputAnalog:
 		port.MODER.ReplaceBits(gpioModeAnalog, gpioModeMask, pos)
+		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 	}
 }
 

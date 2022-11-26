@@ -35,7 +35,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-windows-v1
+          key: llvm-source-15-windows-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -49,7 +49,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-windows-v1
+          key: llvm-build-15-windows-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -125,7 +125,7 @@ jobs:
         run: 7z x release.zip -r
       - name: Smoke tests
         shell: bash
-        run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo AVR=0 XTENSA=0
+        run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-test-windows:
     runs-on: windows-2022

@@ -43,7 +43,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-alpine-v1
+          key: llvm-source-15-linux-alpine-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -57,7 +57,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-alpine-v1
+          key: llvm-build-15-linux-alpine-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -133,17 +133,6 @@ jobs:
           mkdir -p ~/lib
           tar -C ~/lib -xf tinygo.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
-      - name: Install apt dependencies
-        run: |
-          sudo apt-get install --no-install-recommends \
-              gcc-avr \
-              avr-libc
-      - name: "Install Xtensa toolchain"
-        run: |
-          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
-          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
       - run: make tinygo-test-wasi-fast
       - run: make smoketest
   assert-test-linux:
@@ -164,8 +153,6 @@ jobs:
               qemu-system-arm \
               qemu-system-riscv32 \
               qemu-user \
-              gcc-avr \
-              avr-libc \
               simavr \
               ninja-build
       - name: Install Go
@@ -185,7 +172,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-asserts-v1
+          key: llvm-source-15-linux-asserts-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -199,7 +186,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-asserts-v1
+          key: llvm-build-15-linux-asserts-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -238,12 +225,6 @@ jobs:
           echo "$(pwd)/build" >> $GITHUB_PATH
       - name: Test stdlib packages
         run: make tinygo-test
-      - name: Install Xtensa toolchain
-        run: |
-          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
-          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
       - run: make smoketest
       - run: make wasmtest
       - run: make tinygo-baremetal
@@ -277,7 +258,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-v1
+          key: llvm-source-15-linux-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -291,7 +272,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-arm-v1
+          key: llvm-build-15-linux-arm-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -377,7 +358,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-v1
+          key: llvm-source-15-linux-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -391,7 +372,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-arm64-v1
+          key: llvm-build-15-linux-arm64-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'

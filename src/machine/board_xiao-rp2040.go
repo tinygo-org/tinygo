@@ -24,8 +24,8 @@ const (
 	D6  Pin = GPIO0
 	D7  Pin = GPIO1
 	D8  Pin = GPIO2
-	D9  Pin = GPIO3
-	D10 Pin = GPIO4
+	D9  Pin = GPIO4
+	D10 Pin = GPIO3
 )
 
 // Analog pins
@@ -38,7 +38,10 @@ const (
 
 // Onboard LEDs
 const (
-	NEOPIXEL = GPIO12
+	NEOPIXEL       = GPIO12
+	WS2812         = GPIO12
+	NEO_PWR        = GPIO11
+	NEOPIXEL_POWER = GPIO11
 
 	LED       = GPIO17
 	LED_RED   = GPIO17
@@ -58,8 +61,8 @@ const (
 // SPI pins
 const (
 	SPI0_SCK_PIN Pin = D8
-	SPI0_SDO_PIN Pin = D9
-	SPI0_SDI_PIN Pin = D10
+	SPI0_SDO_PIN Pin = D10
+	SPI0_SDI_PIN Pin = D9
 
 	SPI1_SCK_PIN Pin = NoPin
 	SPI1_SDO_PIN Pin = NoPin

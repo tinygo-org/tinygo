@@ -125,3 +125,32 @@ func TestMallocFree(t *testing.T) {
 		})
 	}
 }
+
+func TestMallocEmpty(t *testing.T) {
+	ptr := libc_malloc(0)
+	if ptr != nil {
+		t.Errorf("expected nil pointer, got %p", ptr)
+	}
+}
+
+func TestCallocEmpty(t *testing.T) {
+	ptr := libc_calloc(0, 1)
+	if ptr != nil {
+		t.Errorf("expected nil pointer, got %p", ptr)
+	}
+	ptr = libc_calloc(1, 0)
+	if ptr != nil {
+		t.Errorf("expected nil pointer, got %p", ptr)
+	}
+}
+
+func TestReallocEmpty(t *testing.T) {
+	ptr := libc_malloc(1)
+	if ptr == nil {
+		t.Error("expected pointer but was nil")
+	}
+	ptr = libc_realloc(ptr, 0)
+	if ptr != nil {
+		t.Errorf("expected nil pointer, got %p", ptr)
+	}
+}

@@ -42,7 +42,6 @@ type Options struct {
 	PrintAllocs     *regexp.Regexp // regexp string
 	PrintStacks     bool
 	Tags            []string
-	WasmAbi         string
 	GlobalValues    map[string]map[string]string // map[pkgpath]map[varname]value
 	TestConfig      TestConfig
 	Programmer      string
@@ -52,6 +51,7 @@ type Options struct {
 	PrintJSON       bool
 	Monitor         bool
 	BaudRate        int
+	Retries         int
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.

@@ -160,7 +160,9 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpdir)
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Do the build.
 	result, err := builder.Build(pkgName, outpath, tmpdir, config)
@@ -405,7 +407,9 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpdir)
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Build the binary.
 	result, err := builder.Build(pkgName, fileExt, tmpdir, config)
@@ -552,7 +556,9 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpdir)
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Build the binary to debug.
 	format, fileExt := config.EmulatorFormat()
@@ -824,7 +830,9 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpdir)
+	if !config.Options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
 	// Build the binary to be run.
 	format, fileExt := config.EmulatorFormat()
@@ -920,8 +928,6 @@ func touchSerialPortAt1200bps(port string) (err error) {
 	return fmt.Errorf("opening port: %s", err)
 }
 
-const maxMSDRetries = 10
-
 func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) error {
 	// find standard UF2 info path
 	var infoPath string
@@ -943,7 +949,7 @@ func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) erro
 		infoPath = path + "/INFO_UF2.TXT"
 	}
 
-	d, err := locateDevice(volume, infoPath)
+	d, err := locateDevice(volume, infoPath, options.Retries)
 	if err != nil {
 		return err
 	}
@@ -972,7 +978,7 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 		destPath = path + "/"
 	}
 
-	d, err := locateDevice(volume, destPath)
+	d, err := locateDevice(volume, destPath, options.Retries)
 	if err != nil {
 		return err
 	}
@@ -980,10 +986,10 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	return moveFile(tmppath, d+"/flash.hex")
 }
 
-func locateDevice(volume, path string) (string, error) {
+func locateDevice(volume, path string, maxRetries int) (string, error) {
 	var d []string
 	var err error
-	for i := 0; i < maxMSDRetries; i++ {
+	for i := 0; i < maxRetries; i++ {
 		d, err = filepath.Glob(path)
 		if err != nil {
 			return "", err
@@ -1390,9 +1396,9 @@ func main() {
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
+	maxRetries := flag.Int("retries", 10, "the maximum number of times to retry locating the MSD volume to be used for flashing")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
-	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
@@ -1481,13 +1487,13 @@ func main() {
 		PrintAllocs:     printAllocs,
 		Tags:            []string(tags),
 		GlobalValues:    globalVarValues,
-		WasmAbi:         *wasmAbi,
 		Programmer:      *programmer,
 		OpenOCDCommands: ocdCommands,
 		LLVMFeatures:    *llvmFeatures,
 		PrintJSON:       flagJSON,
 		Monitor:         *monitor,
 		BaudRate:        *baudrate,
+		Retries:         *maxRetries,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
