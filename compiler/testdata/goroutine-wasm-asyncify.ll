@@ -188,13 +188,13 @@ entry:
   unreachable
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #3 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper"="main.regularFunction" }
-attributes #4 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
-attributes #5 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
-attributes #6 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper" }
-attributes #7 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "tinygo-invoke"="reflect/methods.Print(string)" "tinygo-methods"="reflect/methods.Print(string)" }
-attributes #8 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper"="interface:{Print:func:{basic:string}{}}.Print$invoke" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #3 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper"="main.regularFunction" }
+attributes #4 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
+attributes #5 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
+attributes #6 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper" }
+attributes #7 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "tinygo-invoke"="reflect/methods.Print(string)" "tinygo-methods"="reflect/methods.Print(string)" }
+attributes #8 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "tinygo-gowrapper"="interface:{Print:func:{basic:string}{}}.Print$invoke" }
 attributes #9 = { nounwind }

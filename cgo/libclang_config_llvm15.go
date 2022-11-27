@@ -1,4 +1,4 @@
-//go:build !byollvm && !llvm14
+//go:build !byollvm && llvm15
 
 package cgo
 

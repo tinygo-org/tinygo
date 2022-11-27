@@ -180,7 +180,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		if strings.Split(c.Triple, "-")[0] == "avr" {
 			// These functions are compiler-rt/libgcc functions that are
 			// currently implemented in Go. Assembly versions should appear in
-			// LLVM 16 hopefully. Until then, they need to be made available to
+			// LLVM 17 hopefully. Until then, they need to be made available to
 			// the linker and the best way to do that is llvm.compiler.used.
 			// I considered adding a pragma for this, but the LLVM language
 			// reference explicitly says that this feature should not be exposed

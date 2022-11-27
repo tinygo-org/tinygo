@@ -138,7 +138,7 @@ entry:
   ret void
 }
 
-; Function Attrs: argmemonly nocallback nofree nounwind willreturn writeonly
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
 declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #3
 
 ; Function Attrs: nounwind
@@ -156,24 +156,24 @@ entry:
 
 declare void @runtime.hashmapClear(ptr dereferenceable_or_null(40), ptr) #1
 
-; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.smin.i32(i32, i32) #4
 
-; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i8 @llvm.umin.i8(i8, i8) #4
 
-; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umin.i32(i32, i32) #4
 
-; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.smax.i32(i32, i32) #4
 
-; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umax.i32(i32, i32) #4
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #3 = { argmemonly nocallback nofree nounwind willreturn writeonly }
-attributes #4 = { nocallback nofree nosync nounwind readnone speculatable willreturn }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: write) }
+attributes #4 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #5 = { nounwind }
