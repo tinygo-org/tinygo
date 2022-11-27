@@ -53,7 +53,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-contexts: tinygo-llvm-build=docker-image://tinygo/llvm-15
+          build-contexts: tinygo-llvm-build=docker-image://tinygo/llvm-16
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Trigger Drivers repo build on Github Actions

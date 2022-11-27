@@ -1,7 +1,7 @@
 {
   "llvm-target": "aarch64",
   "cpu": "cortex-a57",
-  "features": "+aes,+crc,+crypto,+fp-armv8,+neon,+sha2,+v8a",
+  "features": "+aes,+crc,+crypto,+fp-armv8,+neon,+sha2,+v8a,-fmv",
   "build-tags": ["nintendoswitch", "arm64"],
   "scheduler": "tasks",
   "goos": "linux",
