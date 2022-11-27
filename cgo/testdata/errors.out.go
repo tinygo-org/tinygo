@@ -51,10 +51,10 @@ type (
 	C.longlong  int64
 	C.ulonglong uint64
 )
-type C._Ctype_struct___0 struct {
+type C.struct_point_t struct {
 	x C.int
 	y C.int
 }
-type C.point_t = C._Ctype_struct___0
+type C.point_t = C.struct_point_t
 
 const C.SOME_CONST_3 = 1234

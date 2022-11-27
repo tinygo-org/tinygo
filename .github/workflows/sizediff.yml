@@ -24,19 +24,19 @@ jobs:
           submodules: true
       - name: Install apt dependencies
         run: |
-          echo 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-15 main' | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-16 main' | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-              llvm-15-dev \
-              clang-15 \
-              libclang-15-dev \
-              lld-15
+              llvm-16-dev \
+              clang-16 \
+              libclang-16-dev \
+              lld-16
       - name: Restore LLVM source cache
         uses: actions/cache@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-sizediff-v1
+          key: llvm-source-16-sizediff-v1
           path: |
             llvm-project/compiler-rt
       - name: Download LLVM source
