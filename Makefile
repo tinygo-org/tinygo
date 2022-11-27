@@ -612,6 +612,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=qtpy-rp2040         examples/echo
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=kb2040              examples/echo
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=macropad-rp2040 	examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=badger2040          examples/blinky1
