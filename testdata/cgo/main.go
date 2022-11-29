@@ -159,9 +159,7 @@ func main() {
 	println("C.GoString(nil):", C.GoString(nil))
 	println("len(C.GoStringN(nil, 0)):", len(C.GoStringN(nil, 0)))
 	println("len(C.GoBytes(nil, 0)):", len(C.GoBytes(nil, 0)))
-
-	// C.CBytes will return a random pointer every time, so this style test won't work for it.
-	/*println("C.CBytes(nil):", C.CBytes(nil))*/
+	println("len(C.GoBytes(C.CBytes(nil),0)):", len(C.GoBytes(C.CBytes(nil), 0)))
 
 	// libc: test whether C functions work at all.
 	buf1 := []byte("foobar\x00")
