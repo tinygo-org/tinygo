@@ -70,7 +70,7 @@ func (a ADC) Get() uint16 {
 	stm32.ADC1.SR.ClearBits(stm32.ADC_SR_EOC)
 
 	// clear rank
-	stm32.ADC1.SMPR1.ClearBits(ch)
+	stm32.ADC1.SQR3.ClearBits(ch)
 
 	return result
 }

@@ -13,6 +13,9 @@ var allocs = make(map[uintptr][]byte)
 
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
+	if size == 0 {
+		return nil
+	}
 	buf := make([]byte, size)
 	ptr := unsafe.Pointer(&buf[0])
 	allocs[uintptr(ptr)] = buf
@@ -39,6 +42,11 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 
 //export realloc
 func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	if size == 0 {
+		libc_free(oldPtr)
+		return nil
+	}
+
 	// It's hard to optimize this to expand the current buffer with our GC, but
 	// it is theoretically possible. For now, just always allocate fresh.
 	buf := make([]byte, size)

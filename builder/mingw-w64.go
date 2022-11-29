@@ -52,7 +52,7 @@ func makeMinGWExtraLibs(tmpdir string) []*compileJob {
 	for _, name := range []string{
 		"kernel32.def.in",
 		"api-ms-win-crt-conio-l1-1-0.def",
-		"api-ms-win-crt-convert-l1-1-0.def",
+		"api-ms-win-crt-convert-l1-1-0.def.in",
 		"api-ms-win-crt-environment-l1-1-0.def",
 		"api-ms-win-crt-filesystem-l1-1-0.def",
 		"api-ms-win-crt-heap-l1-1-0.def",

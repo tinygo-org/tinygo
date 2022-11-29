@@ -134,10 +134,7 @@ func TestBuild(t *testing.T) {
 	})
 
 	t.Run("AVR", func(t *testing.T) {
-		// LLVM backend crash:
-		// LIBCLANG FATAL ERROR: Cannot select: t3: i16 = JumpTable<0>
-		// This bug is non-deterministic.
-		t.Skip("skipped due to non-deterministic backend bugs")
+		t.Parallel()
 		runPlatTests(optionsFromTarget("simavr", sema), tests, t)
 	})
 
@@ -192,10 +189,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 
 			case "json.go", "stdlib.go", "testing.go":
 				// Breaks interp.
-				continue
-
-			case "channel.go":
-				// Freezes after recv from closed channel.
 				continue
 
 			case "math.go":
