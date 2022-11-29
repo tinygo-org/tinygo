@@ -155,6 +155,13 @@ func __GoBytes(unsafe.Pointer, uintptr) []byte
 func GoBytes(ptr unsafe.Pointer, length C.int) []byte {
 	return C.__GoBytes(ptr, uintptr(length))
 }
+
+//go:linkname C.__CBytes runtime.cgo_CBytes
+func __CBytes([]byte) unsafe.Pointer
+
+func CBytes(b []byte) unsafe.Pointer {
+	return C.__CBytes(b)
+}
 `
 
 // Process extracts `import "C"` statements from the AST, parses the comment
@@ -209,7 +216,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 		switch decl := decl.(type) {
 		case *ast.FuncDecl:
 			switch decl.Name.Name {
-			case "CString", "GoString", "GoStringN", "__GoStringN", "GoBytes", "__GoBytes":
+			case "CString", "GoString", "GoStringN", "__GoStringN", "GoBytes", "__GoBytes", "CBytes", "__CBytes":
 				// Adjust the name to have a "C." prefix so it is correctly
 				// resolved.
 				decl.Name.Name = "C." + decl.Name.Name
