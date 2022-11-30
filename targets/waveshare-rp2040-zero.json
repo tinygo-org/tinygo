@@ -4,7 +4,7 @@
     ],
     "serial-port": ["2e8a:0003"],
     "build-tags": ["waveshare_rp2040_zero"],
-    "linkerscript": "targets/waveshare_rp2040-zero.ld",
+    "linkerscript": "targets/waveshare-rp2040-zero.ld",
     "extra-files": [
         "targets/pico-boot-stage2.S"
     ]
