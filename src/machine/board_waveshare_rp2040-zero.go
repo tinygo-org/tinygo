@@ -1,11 +1,11 @@
 //go:build waveshare_rp2040_zero
 // +build waveshare_rp2040_zero
 
-// This file contains the pin mappings for the Seeed XIAO RP2040 boards.
+// This file contains the pin mappings for the Waveshare RP2040-Zero boards.
 //
-// XIAO RP2040 is a microcontroller using the Raspberry Pi RP2040 chip.
+// Waveshare RP2040-Zero is a microcontroller using the Raspberry Pi RP2040 chip.
 //
-// - https://wiki.seeedstudio.com/XIAO-RP2040/
+// - https://www.waveshare.com/wiki/RP2040-Zero
 package machine
 
 import (
