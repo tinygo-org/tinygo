@@ -1,5 +1,5 @@
-//go:build avr && atmega
-// +build avr,atmega
+//go:build (avr && atmega) || (avr && atmega32u4)
+// +build avr,atmega avr,atmega32u4
 
 package runtime
 
