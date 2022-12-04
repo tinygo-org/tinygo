@@ -186,6 +186,20 @@ func (kb *keyboard) write(p uint16) error {
 	return kb.writeKeycode(c)
 }
 
+func (kb *keyboard) SendReport(mod, k1, k2, k3, k4, k5, k6 byte) bool {
+	var b [9]byte
+	b[0] = 0x02
+	b[1] = mod
+	b[2] = 0
+	b[3] = k1
+	b[4] = k2
+	b[5] = k3
+	b[6] = k4
+	b[7] = k5
+	b[8] = k6
+	return kb.sendKey(false, b[:])
+}
+
 func (kb *keyboard) writeKeycode(c Keycode) error {
 	var b [9]byte
 	b[0] = 0x02
