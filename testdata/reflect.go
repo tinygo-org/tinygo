@@ -129,6 +129,7 @@ func main() {
 		&linkedList{
 			foo: 42,
 		},
+		struct{ A, B uintptr }{2, 3},
 		// interfaces
 		[]interface{}{3, "str", -4 + 2.5i},
 	} {

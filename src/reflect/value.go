@@ -507,7 +507,7 @@ func (v Value) Field(i int) Value {
 		ptr := unsafe.Pointer(uintptr(v.value) + structField.Offset)
 		value := unsafe.Pointer(loadValue(ptr, fieldSize))
 		return Value{
-			flags:    0,
+			flags:    flags &^ valueFlagIndirect,
 			typecode: fieldType,
 			value:    value,
 		}

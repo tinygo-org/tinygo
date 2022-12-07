@@ -334,6 +334,20 @@ reflect type: ptr
     exported: false
     reflect type: int addrable=true caninterface=false
       int: 42
+reflect type: struct
+  struct: 2
+  field: 0 A
+  tag: 
+  embedded: false
+  exported: true
+  reflect type: uintptr
+    uint: 2
+  field: 1 B
+  tag: 
+  embedded: false
+  exported: true
+  reflect type: uintptr
+    uint: 3
 reflect type: slice comparable=false
   slice: interface 3 3
   pointer: true
