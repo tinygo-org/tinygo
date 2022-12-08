@@ -800,28 +800,38 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 			}
 
-			// Run wasm-opt if necessary.
-			if config.Scheduler() == "asyncify" {
-				var optLevel, shrinkLevel int
+			// Run wasm-opt for wasm binaries
+			if arch := strings.Split(config.Triple(), "-")[0]; arch == "wasm32" {
+				var opt string
 				switch config.Options.Opt {
 				case "none", "0":
+					opt = "-O0"
 				case "1":
-					optLevel = 1
+					opt = "-O1"
 				case "2":
-					optLevel = 2
+					opt = "-O2"
 				case "s":
-					optLevel = 2
-					shrinkLevel = 1
+					opt = "-Os"
 				case "z":
-					optLevel = 2
-					shrinkLevel = 2
+					opt = "-Oz"
 				default:
 					return fmt.Errorf("unknown opt level: %q", config.Options.Opt)
 				}
-				cmd := exec.Command(goenv.Get("WASMOPT"), "--asyncify", "-g",
-					"--optimize-level", strconv.Itoa(optLevel),
-					"--shrink-level", strconv.Itoa(shrinkLevel),
-					executable, "--output", executable)
+
+				var args []string
+
+				if config.Scheduler() == "asyncify" {
+					args = append(args, "--asyncify")
+				}
+
+				args = append(args,
+					opt,
+					"-g",
+					executable,
+					"--output", executable,
+				)
+
+				cmd := exec.Command(goenv.Get("WASMOPT"), args...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 
