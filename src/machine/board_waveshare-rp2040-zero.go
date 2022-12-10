@@ -58,7 +58,6 @@ const (
 // Onboard LEDs
 const (
 	NEOPIXEL = GPIO16
-	LED      = NoPin
 )
 
 // I2C pins
