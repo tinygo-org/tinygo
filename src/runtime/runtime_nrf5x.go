@@ -1,4 +1,5 @@
-//go:build nrf && nrf52840
+//go:build nrf && !nrf52840 && !nrf9160
+// +build nrf,!nrf52840,!nrf9160
 
 package runtime
 
@@ -6,7 +7,6 @@ import (
 	"device/arm"
 	"device/nrf"
 	"machine"
-	"machine/usb/cdc"
 )
 
 //export Reset_Handler
@@ -21,8 +21,6 @@ func main() {
 }
 
 func init() {
-	cdc.EnableUSBCDC()
-	machine.USBDev.Configure(machine.UARTConfig{})
 	machine.InitSerial()
 	initLFCLK()
 	initRTC(nrf.RTC1)

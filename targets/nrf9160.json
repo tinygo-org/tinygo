@@ -1,0 +1,17 @@
+{
+	"inherits": ["cortex-m33"],
+	"build-tags": ["nrf9160", "nrf"],
+	"serial": "uart",
+	"cflags": [
+		"-DNRF9160_XXAA",
+		"-I{root}/lib/CMSIS/CMSIS/Core/Include",
+		"-I{root}/lib/nrfx/mdk"
+	],
+	"linkerscript": "targets/nrf9160.ld",
+	"extra-files": [
+		"lib/nrfx/mdk/system_nrf9160.c",
+		"src/device/nrf/nrf9160.s"
+	],
+	"openocd-transport": "swd",
+	"openocd-target": "nrf91"
+}
