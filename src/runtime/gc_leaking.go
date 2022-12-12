@@ -69,14 +69,6 @@ func GC() {
 	// No-op.
 }
 
-func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
-}
-
 func initHeap() {
 	// preinit() may have moved heapStart; reset heapptr
 	heapptr = heapStart

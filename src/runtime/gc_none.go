@@ -27,14 +27,6 @@ func GC() {
 	// Unimplemented.
 }
 
-func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
-}
-
 func initHeap() {
 	// Nothing to initialize.
 }
