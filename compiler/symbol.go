@@ -147,8 +147,8 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	case "runtime.trackPointer":
 		// This function is necessary for tracking pointers on the stack in a
 		// portable way (see gc_stack_portable.go). Indicate to the optimizer
-		// that the only thing we'll do is read the pointer.
-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		// that the only thing we'll do is read the pointer.  This function is not
+		// marked as 'nocapture' because the gc pass captures the pointer in the shadow stack.
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
 	case "__mulsi3", "__divmodsi4", "__udivmodsi4":
 		if strings.Split(c.Triple, "-")[0] == "avr" {
