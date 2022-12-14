@@ -748,7 +748,7 @@ wasmtest:
 build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN)),,binaryen)
 	@mkdir -p build/release/tinygo/bin
 	@mkdir -p build/release/tinygo/lib/clang/include
-	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
+	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS/Core
 	@mkdir -p build/release/tinygo/lib/macos-minimal-sdk
 	@mkdir -p build/release/tinygo/lib/mingw-w64/mingw-w64-crt/lib-common
 	@mkdir -p build/release/tinygo/lib/mingw-w64/mingw-w64-headers/defaults
@@ -768,7 +768,7 @@ ifneq ($(USE_SYSTEM_BINARYEN),1)
 	@cp -p  build/wasm-opt$(EXE)         build/release/tinygo/bin
 endif
 	@cp -p $(abspath $(CLANG_SRC))/lib/Headers/*.h build/release/tinygo/lib/clang/include
-	@cp -rp lib/CMSIS/CMSIS/Include      build/release/tinygo/lib/CMSIS/CMSIS
+	@cp -rp lib/CMSIS/CMSIS/Core/Include build/release/tinygo/lib/CMSIS/CMSIS/Core
 	@cp -rp lib/CMSIS/README.md          build/release/tinygo/lib/CMSIS
 	@cp -rp lib/macos-minimal-sdk/*      build/release/tinygo/lib/macos-minimal-sdk
 	@cp -rp lib/musl/arch/aarch64        build/release/tinygo/lib/musl/arch
