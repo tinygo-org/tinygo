@@ -216,19 +216,9 @@ func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64,
 
 		if subdim > 1 {
 			subcpRegisters := []*PeripheralField{}
-			subregSize := 0
 			for _, regEl := range subClusterEl.Registers {
-				if regEl.Size == nil {
-					continue
-				}
-				size, err := strconv.ParseInt(*regEl.Size, 0, 32)
-				if err != nil {
-					panic(err)
-				}
-				subregSize += int(size)
 				subcpRegisters = append(subcpRegisters, parseRegister(p.GroupName, regEl, p.BaseAddress+clusterOffset+subclusterOffset, subclusterPrefix)...)
 			}
-			peripheralsList = append(peripheralsList, processSubCluster(p, subClusterEl, clusterOffset+subclusterOffset, subclusterName, peripheralDict)...)
 
 			cpRegisters = append(cpRegisters, &PeripheralField{
 				Name:        subclusterName,
