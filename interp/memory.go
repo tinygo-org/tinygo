@@ -1236,6 +1236,8 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 
 // readObjectLayout reads the object layout as it is stored by the compiler. It
 // returns the size in the number of words and the bitmap.
+//
+// For details on this format, see src/runtime/gc_precise.go.
 func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 	pointerSize := layoutValue.len(r)
 	if checks && uint64(pointerSize) != r.targetData.TypeAllocSize(r.i8ptrType) {
