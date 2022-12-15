@@ -1,4 +1,4 @@
-//go:build gc.conservative && (baremetal || tinygo.wasm)
+//go:build (gc.conservative || gc.precise) && (baremetal || tinygo.wasm)
 
 package runtime
 
