@@ -1,4 +1,4 @@
-//go:build gc.conservative
+//go:build gc.conservative || gc.precise
 
 package runtime
 
@@ -187,6 +187,10 @@ func (b gcBlock) unmark() {
 	}
 }
 
+func isOnHeap(ptr uintptr) bool {
+	return ptr >= heapStart && ptr < uintptr(metadataStart)
+}
+
 // Initialize the memory allocator.
 // No memory may be allocated before this is called. That means the runtime and
 // any packages the runtime depends upon may not allocate memory during package
@@ -267,6 +271,10 @@ func calculateHeapAddresses() {
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {
 		return unsafe.Pointer(&zeroSizedAlloc)
+	}
+
+	if preciseHeap {
+		size += align(unsafe.Sizeof(layout))
 	}
 
 	gcTotalAlloc += uint64(size)
@@ -352,6 +360,15 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 
 			// Return a pointer to this allocation.
 			pointer := thisAlloc.pointer()
+			if preciseHeap {
+				// Store the object layout at the start of the object.
+				// TODO: this wastes a little bit of space on systems with
+				// larger-than-pointer alignment requirements.
+				*(*unsafe.Pointer)(pointer) = layout
+				add := align(unsafe.Sizeof(layout))
+				pointer = unsafe.Add(pointer, add)
+				size -= add
+			}
 			memzero(pointer, size)
 			return pointer
 		}
@@ -493,12 +510,23 @@ func startMark(root gcBlock) {
 		}
 
 		// Scan all pointers inside the block.
+		scanner := newGCObjectScanner(block)
+		if scanner.pointerFree() {
+			// This object doesn't contain any pointers.
+			// This is a fast path for objects like make([]int, 4096).
+			continue
+		}
 		start, end := block.address(), block.findNext().address()
+		if preciseHeap {
+			// The first word of the object is just the pointer layout value.
+			// Skip it.
+			start += align(unsafe.Sizeof(uintptr(0)))
+		}
 		for addr := start; addr != end; addr += unsafe.Alignof(addr) {
 			// Load the word.
 			word := *(*uintptr)(unsafe.Pointer(addr))
 
-			if !looksLikePointer(word) {
+			if !scanner.nextIsPointer(word, root.address(), addr) {
 				// Not a heap pointer.
 				continue
 			}
@@ -565,7 +593,7 @@ func finishMark() {
 
 // mark a GC root at the address addr.
 func markRoot(addr, root uintptr) {
-	if looksLikePointer(root) {
+	if isOnHeap(root) {
 		block := blockFromAddr(root)
 		if block.state() == blockStateFree {
 			// The to-be-marked object doesn't actually exist.

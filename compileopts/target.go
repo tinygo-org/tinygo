@@ -250,6 +250,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GOOS:             goos,
 		GOARCH:           goarch,
 		BuildTags:        []string{goos, goarch},
+		GC:               "precise",
 		Scheduler:        "tasks",
 		Linker:           "cc",
 		DefaultStackSize: 1024 * 64, // 64kB

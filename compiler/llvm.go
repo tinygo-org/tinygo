@@ -84,6 +84,8 @@ func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType l
 // which words contain a pointer (indicated by setting the given bit to 1). For
 // arrays, only the element is stored. This works because the GC knows the
 // object size and can therefore know how this value is repeated in the object.
+//
+// For details on what's in this value, see src/runtime/gc_precise.go.
 func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
 	// Use the element type for arrays. This works even for nested arrays.
 	for {
