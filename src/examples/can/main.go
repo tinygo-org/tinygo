@@ -37,7 +37,11 @@ func main() {
 			fmt.Printf("CAN0 %d\r\n", sz0)
 			for i := 0; i < sz0; i++ {
 				can0.RxRaw(&rxMsg)
-				fmt.Printf("-> %08X %X %#v\r\n", rxMsg.ID, rxMsg.DLC, rxMsg.Data())
+				fmt.Printf("-> %08X %X", rxMsg.ID, rxMsg.DLC)
+				for j := byte(0); j < rxMsg.Length(); j++ {
+					fmt.Printf(" %02X", rxMsg.DB[j])
+				}
+				fmt.Printf("\r\n")
 			}
 		}
 
@@ -46,7 +50,11 @@ func main() {
 			fmt.Printf("CAN1 %d\r\n", sz1)
 			for i := 0; i < sz1; i++ {
 				can1.RxRaw(&rxMsg)
-				fmt.Printf("-> %08X %X %#v\r\n", rxMsg.ID, rxMsg.DLC, rxMsg.Data())
+				fmt.Printf("-> %08X %X", rxMsg.ID, rxMsg.DLC)
+				for j := byte(0); j < rxMsg.Length(); j++ {
+					fmt.Printf(" %02X", rxMsg.DB[j])
+				}
+				fmt.Printf("\r\n")
 			}
 		}
 	}

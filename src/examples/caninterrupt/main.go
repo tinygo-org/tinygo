@@ -7,30 +7,20 @@ import (
 	"time"
 )
 
+var (
+	can0 = machine.CAN0
+	can1 = machine.CAN1
+	ch   = make(chan canMsg, 10)
+)
+
 type canMsg struct {
-	ch   byte
-	id   uint32
-	dlc  byte
-	data []byte
+	bus byte
+	can machine.CANRxBufferElement
 }
 
 func main() {
-	ch := make(chan canMsg, 10)
-	go func() {
-		for {
-			select {
-			case m := <-ch:
-				fmt.Printf("%d %03X %X ", m.ch, m.id, m.dlc)
-				for _, d := range m.data {
-					fmt.Printf("%02X ", d)
-				}
-				fmt.Printf("\r\n")
-			}
+	go print(ch)
 
-		}
-	}()
-
-	can1 := machine.CAN1
 	can1.Configure(machine.CANConfig{
 		TransferRate:   machine.CANTransferRate500kbps,
 		TransferRateFD: machine.CANTransferRate1000kbps,
@@ -39,16 +29,18 @@ func main() {
 		Standby:        machine.CAN1_STANDBY,
 	})
 	// RF0NE : Rx FIFO 0 New Message Interrupt Enable
-	can1.SetInterrupt(sam.CAN_IE_RF0NE, func(*machine.CAN) {
+	can1.SetInterrupt(sam.CAN_IE_RF0NE, func(can *machine.CAN) {
 		rxMsg := machine.CANRxBufferElement{}
-		can1.RxRaw(&rxMsg)
-		m := canMsg{ch: 1, id: rxMsg.ID, dlc: rxMsg.DLC, data: rxMsg.Data()}
+		can.RxRaw(&rxMsg)
+		msg := canMsg{
+			bus: 1,
+			can: rxMsg,
+		}
 		select {
-		case ch <- m:
+		case ch <- msg:
 		}
 	})
 
-	can0 := machine.CAN0
 	can0.Configure(machine.CANConfig{
 		TransferRate:   machine.CANTransferRate500kbps,
 		TransferRateFD: machine.CANTransferRate1000kbps,
@@ -57,12 +49,15 @@ func main() {
 		Standby:        machine.NoPin,
 	})
 	// RF0NE : Rx FIFO 0 New Message Interrupt Enable
-	can0.SetInterrupt(sam.CAN_IE_RF0NE, func(*machine.CAN) {
+	can0.SetInterrupt(sam.CAN_IE_RF0NE, func(can *machine.CAN) {
 		rxMsg := machine.CANRxBufferElement{}
-		can0.RxRaw(&rxMsg)
-		m := canMsg{ch: 2, id: rxMsg.ID, dlc: rxMsg.DLC, data: rxMsg.Data()}
+		can.RxRaw(&rxMsg)
+		msg := canMsg{
+			bus: 1,
+			can: rxMsg,
+		}
 		select {
-		case ch <- m:
+		case ch <- msg:
 		}
 	})
 
@@ -71,5 +66,18 @@ func main() {
 		time.Sleep(time.Millisecond * 500)
 		can1.Tx(0x456, []byte{0xAA, 0xBB, 0xCC}, false, false)
 		time.Sleep(time.Millisecond * 1000)
+	}
+}
+
+func print(ch <-chan canMsg) {
+	for {
+		select {
+		case m := <-ch:
+			fmt.Printf("%d %03X %X ", m.bus, m.can.ID, m.can.DLC)
+			for _, d := range m.can.DB[:m.can.Length()] {
+				fmt.Printf("%02X ", d)
+			}
+			fmt.Printf("\r\n")
+		}
 	}
 }
