@@ -46,6 +46,7 @@ func markStack() {
 	// is forced to consider stackChainStart (and everything it points to) as
 	// live.
 	volatile.LoadUint32((*uint32)(unsafe.Pointer(&stackChainStart)))
+
 	if task.OnSystemStack() {
 		markRoots(getCurrentStackPointer(), stackTop)
 	}
