@@ -3,7 +3,7 @@
 	url = https://github.com/NordicSemiconductor/nrfx.git
 [submodule "lib/CMSIS"]
 	path = lib/CMSIS
-	url = https://github.com/ARM-software/CMSIS_5.git
+	url = https://github.com/ARM-software/CMSIS.git
 [submodule "lib/avr"]
 	path = lib/avr
 	url = https://github.com/avr-rust/avr-mcu.git
