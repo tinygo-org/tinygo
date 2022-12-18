@@ -949,7 +949,7 @@ func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) erro
 		infoPath = path + "/INFO_UF2.TXT"
 	}
 
-	d, err := locateDevice(volume, infoPath, options.Retries)
+	d, err := locateDevice(volume, infoPath, options.Timeout)
 	if err != nil {
 		return err
 	}
@@ -978,7 +978,7 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 		destPath = path + "/"
 	}
 
-	d, err := locateDevice(volume, destPath, options.Retries)
+	d, err := locateDevice(volume, destPath, options.Timeout)
 	if err != nil {
 		return err
 	}
@@ -986,10 +986,10 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	return moveFile(tmppath, d+"/flash.hex")
 }
 
-func locateDevice(volume, path string, maxRetries int) (string, error) {
+func locateDevice(volume, path string, timeout time.Duration) (string, error) {
 	var d []string
 	var err error
-	for i := 0; i < maxRetries; i++ {
+	for start := time.Now(); time.Since(start) < timeout; {
 		d, err = filepath.Glob(path)
 		if err != nil {
 			return "", err
@@ -1396,7 +1396,7 @@ func main() {
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
-	maxRetries := flag.Int("retries", 10, "the maximum number of times to retry locating the MSD volume to be used for flashing")
+	timeout := flag.Duration("timeout", 20*time.Second, "the length of time to retry locating the MSD volume to be used for flashing")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
@@ -1493,7 +1493,7 @@ func main() {
 		PrintJSON:       flagJSON,
 		Monitor:         *monitor,
 		BaudRate:        *baudrate,
-		Retries:         *maxRetries,
+		Timeout:         *timeout,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
