@@ -1,7 +1,7 @@
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
 target triple = "wasm32--wasi"
 
-@"runtime/gc.layout:62-2000000000000001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c" \00\00\00\00\00\00\01" }
+@"runtime/gc.layout:62-2000000000000001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00 " }
 @pointerFree12 = global i8* null
 @pointerFree7 = global i8* null
 @pointerFree3 = global i8* null
