@@ -168,6 +168,9 @@ func (b gcBlock) markFree() {
 	if gcAsserts && b.state() != blockStateFree {
 		runtimePanic("gc: markFree() was not successful")
 	}
+	if gcAsserts {
+		*(*[wordsPerBlock]uintptr)(unsafe.Pointer(b.address())) = [wordsPerBlock]uintptr{}
+	}
 }
 
 // unmark changes the state of the block from mark to head. It must be marked
