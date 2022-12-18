@@ -20,8 +20,8 @@ target triple = "wasm32-unknown-wasi"
 @main.slice1 = hidden global { ptr, i32, i32 } zeroinitializer, align 8
 @main.slice2 = hidden global { ptr, i32, i32 } zeroinitializer, align 8
 @main.slice3 = hidden global { ptr, i32, i32 } zeroinitializer, align 8
-@"runtime/gc.layout:62-2000000000000001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c" \00\00\00\00\00\00\01" }
-@"runtime/gc.layout:62-0001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\00\00\00\00\00\00\00\01" }
+@"runtime/gc.layout:62-2000000000000001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00 " }
+@"runtime/gc.layout:62-0001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00\00" }
 @"reflect/types.type:basic:complex128" = linkonce_odr constant %runtime.typecodeID { ptr null, i32 0, ptr null, ptr @"reflect/types.type:pointer:basic:complex128", i32 0 }
 @"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:basic:complex128", i32 0, ptr null, ptr null, i32 0 }
 
