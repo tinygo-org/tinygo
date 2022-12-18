@@ -166,6 +166,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	// Create the global initializer.
 	bitmapBytes := make([]byte, int(objectSizeWords+7)/8)
 	bitmap.FillBytes(bitmapBytes)
+	reverseBytes(bitmapBytes) // big-endian to little-endian
 	var bitmapByteValues []llvm.Value
 	for _, b := range bitmapBytes {
 		bitmapByteValues = append(bitmapByteValues, llvm.ConstInt(c.ctx.Int8Type(), uint64(b), false))
@@ -313,4 +314,13 @@ func (b *builder) readStackPointer() llvm.Value {
 		stacksave = llvm.AddFunction(b.mod, "llvm.stacksave", fnType)
 	}
 	return b.CreateCall(stacksave.GlobalValueType(), stacksave, nil, "")
+}
+
+// Reverse a slice of bytes. From the wiki:
+// https://github.com/golang/go/wiki/SliceTricks#reversing
+func reverseBytes(buf []byte) {
+	for i := len(buf)/2 - 1; i >= 0; i-- {
+		opp := len(buf) - 1 - i
+		buf[i], buf[opp] = buf[opp], buf[i]
+	}
 }

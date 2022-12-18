@@ -1289,6 +1289,7 @@ func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 		}
 		rawBytes[i] = byte(v)
 	}
+	reverseBytes(rawBytes) // little-endian to big-endian
 	bitmap := new(big.Int).SetBytes(rawBytes)
 	return objectSizeWords, bitmap
 }
@@ -1337,4 +1338,13 @@ func (r *runner) getLLVMTypeFromLayout(layoutValue value) llvm.Type {
 		panic("unexpected size") // sanity check
 	}
 	return llvmLayoutType
+}
+
+// Reverse a slice of bytes. From the wiki:
+// https://github.com/golang/go/wiki/SliceTricks#reversing
+func reverseBytes(buf []byte) {
+	for i := len(buf)/2 - 1; i >= 0; i-- {
+		opp := len(buf) - 1 - i
+		buf[i], buf[opp] = buf[opp], buf[i]
+	}
 }
