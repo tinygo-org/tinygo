@@ -1,5 +1,4 @@
 //go:build stm32f4
-// +build stm32f4
 
 package machine
 

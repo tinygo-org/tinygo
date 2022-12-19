@@ -1,5 +1,4 @@
 //go:build pybadge
-// +build pybadge
 
 package machine
 

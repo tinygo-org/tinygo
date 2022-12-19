@@ -1,5 +1,4 @@
 //go:build runtime_memhash_leveldb
-// +build runtime_memhash_leveldb
 
 // This is the hash function from Google's leveldb key-value storage system. It
 // processes 4 bytes at a time making it faster than the FNV hash for buffer

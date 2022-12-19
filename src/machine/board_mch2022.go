@@ -1,5 +1,4 @@
 //go:build mch2022
-// +build mch2022
 
 package machine
 

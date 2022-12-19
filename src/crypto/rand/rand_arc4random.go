@@ -1,5 +1,4 @@
 //go:build darwin || tinygo.wasm
-// +build darwin tinygo.wasm
 
 // This implementation of crypto/rand uses the arc4random_buf function
 // (available on both MacOS and WASI) to generate random numbers.

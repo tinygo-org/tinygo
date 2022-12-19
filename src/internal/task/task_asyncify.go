@@ -1,5 +1,4 @@
 //go:build scheduler.asyncify
-// +build scheduler.asyncify
 
 package task
 

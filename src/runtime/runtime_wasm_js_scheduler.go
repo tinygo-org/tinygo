@@ -1,5 +1,4 @@
 //go:build wasm && !wasi && !scheduler.none
-// +build wasm,!wasi,!scheduler.none
 
 package runtime
 

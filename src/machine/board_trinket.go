@@ -1,5 +1,4 @@
 //go:build sam && atsamd21 && trinket_m0
-// +build sam,atsamd21,trinket_m0
 
 package machine
 

@@ -1,5 +1,4 @@
 //go:build nano_33_ble
-// +build nano_33_ble
 
 // This contains the pin mappings for the Arduino Nano 33 BLE [Sense] boards.
 // - https://store.arduino.cc/arduino-nano-33-ble

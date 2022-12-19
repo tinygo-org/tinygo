@@ -1,5 +1,4 @@
 //go:build qtpy_rp2040
-// +build qtpy_rp2040
 
 package machine
 

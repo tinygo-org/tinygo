@@ -1,5 +1,4 @@
 //go:build xiao_esp32c3
-// +build xiao_esp32c3
 
 // This file contains the pin mappings for the Seeed XIAO ESP32C3 boards.
 //

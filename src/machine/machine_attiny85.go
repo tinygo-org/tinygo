@@ -1,5 +1,4 @@
 //go:build attiny85
-// +build attiny85
 
 package machine
 

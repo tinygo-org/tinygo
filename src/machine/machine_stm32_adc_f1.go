@@ -1,5 +1,4 @@
 //go:build stm32f103
-// +build stm32f103
 
 package machine
 

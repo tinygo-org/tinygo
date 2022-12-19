@@ -1,5 +1,4 @@
 //go:build scheduler.tasks && arm && !cortexm && !avr && !xtensa && !tinygo.riscv
-// +build scheduler.tasks,arm,!cortexm,!avr,!xtensa,!tinygo.riscv
 
 package task
 

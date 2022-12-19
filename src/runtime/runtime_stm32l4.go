@@ -1,5 +1,4 @@
 //go:build stm32 && stm32l4
-// +build stm32,stm32l4
 
 package runtime
 

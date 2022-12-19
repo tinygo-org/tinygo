@@ -1,5 +1,4 @@
 //go:build cortexm && !nxp && !qemu
-// +build cortexm,!nxp,!qemu
 
 package runtime
 

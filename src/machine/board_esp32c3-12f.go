@@ -1,5 +1,4 @@
 //go:build esp32c312f
-// +build esp32c312f
 
 package machine
 

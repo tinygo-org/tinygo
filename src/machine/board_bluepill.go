@@ -1,5 +1,4 @@
 //go:build bluepill
-// +build bluepill
 
 package machine
 

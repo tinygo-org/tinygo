@@ -1,5 +1,4 @@
 //go:build arduino_mkr1000
-// +build arduino_mkr1000
 
 // This contains the pin mappings for the Arduino MKR1000 board.
 //

@@ -1,5 +1,4 @@
 //go:build stm32f7
-// +build stm32f7
 
 package main
 

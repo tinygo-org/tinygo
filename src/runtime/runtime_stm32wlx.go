@@ -1,5 +1,4 @@
 //go:build stm32wlx
-// +build stm32wlx
 
 package runtime
 

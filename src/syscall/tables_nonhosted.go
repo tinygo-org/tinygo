@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build baremetal || nintendoswitch || js
-// +build baremetal nintendoswitch js
 
 package syscall
 

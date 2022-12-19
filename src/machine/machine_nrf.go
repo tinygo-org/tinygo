@@ -1,5 +1,4 @@
 //go:build nrf
-// +build nrf
 
 package machine
 

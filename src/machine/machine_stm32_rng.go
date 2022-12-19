@@ -1,5 +1,4 @@
 //go:build stm32 && !(stm32f103 || stm32l0x1)
-// +build stm32,!stm32f103,!stm32l0x1
 
 package machine
 

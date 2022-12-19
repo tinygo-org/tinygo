@@ -1,5 +1,4 @@
 //go:build lorae5
-// +build lorae5
 
 package machine
 
