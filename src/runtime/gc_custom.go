@@ -9,6 +9,9 @@ package runtime
 // The interface defined in this file is not stable and can be broken at anytime, even
 // across minor versions.
 //
+// runtime.markStack() must be called at the beginning of any GC cycle. //go:linkname
+// on a function without a body can be used to access this internal function.
+//
 // The custom implementation must provide the following functions in the runtime package
 // using the go:linkname directive:
 //
