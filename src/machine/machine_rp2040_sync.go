@@ -20,6 +20,27 @@ const (
 	_NUMBANK0_GPIOS       = 30
 )
 
+// Sets raspberry pico in dormant state until interrupt event is triggered
+// usage:
+//  err := machine.Sleep(interruptPin, machine.PinRising)
+// Above code will cause program to sleep until a high level signal
+// is found on interruptPin. Be sure to configure pin as input beforehand.
+// Taken from https://github.com/raspberrypi/pico-extras/ -> pico/sleep.h
+func Sleep(pin Pin, change PinChange) error {
+	if pin > 31 {
+		return ErrInvalidInputPin
+	}
+
+	base := &ioBank0.dormantWakeIRQctrl
+	pin.ctrlSetInterrupt(change, true, base) // gpio_set_dormant_irq_enabled
+
+	xosc.Dormant() // Execution stops here until woken up
+
+	// Clear the irq so we can go back to dormant mode again if we want
+	pin.acknowledgeInterrupt(change)
+	return nil
+}
+
 // Clears interrupt flag on a pin
 func (p Pin) acknowledgeInterrupt(change PinChange) {
 	ioBank0.intR[p>>3].Set(p.ioIntBit(change))
