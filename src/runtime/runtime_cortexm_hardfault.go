@@ -1,5 +1,4 @@
 //go:build atsamd21 || nrf51
-// +build atsamd21 nrf51
 
 package runtime
 

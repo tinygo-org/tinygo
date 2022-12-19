@@ -1,5 +1,4 @@
 //go:build scheduler.tasks && esp32
-// +build scheduler.tasks,esp32
 
 package task
 

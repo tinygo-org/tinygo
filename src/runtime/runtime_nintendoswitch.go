@@ -1,5 +1,4 @@
 //go:build nintendoswitch
-// +build nintendoswitch
 
 package runtime
 

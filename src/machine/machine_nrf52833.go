@@ -1,5 +1,4 @@
 //go:build nrf52833
-// +build nrf52833
 
 package machine
 

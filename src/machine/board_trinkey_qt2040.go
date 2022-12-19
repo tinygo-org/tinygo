@@ -1,5 +1,4 @@
 //go:build trinkey_qt2040
-// +build trinkey_qt2040
 
 // This file contains the pin mappings for the Adafruit Trinkey QT2040 board.
 //

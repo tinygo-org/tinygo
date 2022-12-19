@@ -1,5 +1,4 @@
 //go:build circuitplay_bluefruit
-// +build circuitplay_bluefruit
 
 package machine
 

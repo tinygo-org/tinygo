@@ -1,5 +1,4 @@
 //go:build gc.conservative
-// +build gc.conservative
 
 package runtime
 

@@ -1,5 +1,4 @@
 //go:build m5stack_core2
-// +build m5stack_core2
 
 package machine
 

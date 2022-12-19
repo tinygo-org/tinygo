@@ -1,5 +1,4 @@
 //go:build reelboard
-// +build reelboard
 
 package machine
 

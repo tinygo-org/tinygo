@@ -1,5 +1,4 @@
 //go:build sam
-// +build sam
 
 // This is the definition for I2S bus functions.
 // Actual implementations if available for any given hardware

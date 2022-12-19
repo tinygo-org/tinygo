@@ -1,5 +1,4 @@
 //go:build nrf52 || nrf52840 || nrf52833
-// +build nrf52 nrf52840 nrf52833
 
 package machine
 

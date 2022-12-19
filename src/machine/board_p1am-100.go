@@ -1,5 +1,4 @@
 //go:build p1am_100
-// +build p1am_100
 
 // This contains the pin mappings for the ProductivityOpen P1AM-100 board.
 //

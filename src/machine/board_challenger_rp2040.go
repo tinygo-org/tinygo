@@ -1,5 +1,4 @@
 //go:build challenger_rp2040
-// +build challenger_rp2040
 
 package machine
 

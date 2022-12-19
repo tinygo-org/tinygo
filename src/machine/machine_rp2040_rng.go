@@ -1,5 +1,4 @@
 //go:build rp2040
-// +build rp2040
 
 // Implementation based on code located here:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/pico_lwip/random.c
