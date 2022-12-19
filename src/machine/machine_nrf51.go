@@ -1,5 +1,4 @@
 //go:build nrf51
-// +build nrf51
 
 package machine
 

@@ -5,7 +5,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build linux && !baremetal
-// +build linux,!baremetal
 
 package os
 

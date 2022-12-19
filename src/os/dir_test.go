@@ -1,5 +1,4 @@
 //go:build darwin || (linux && !baremetal && !js && !wasi && !386 && !arm)
-// +build darwin linux,!baremetal,!js,!wasi,!386,!arm
 
 package os_test
 

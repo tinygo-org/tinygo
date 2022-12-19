@@ -1,5 +1,4 @@
 //go:build stm32l5 || stm32f7 || stm32l4 || stm32l0 || stm32wlx
-// +build stm32l5 stm32f7 stm32l4 stm32l0 stm32wlx
 
 package machine
 

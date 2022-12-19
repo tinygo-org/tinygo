@@ -1,5 +1,4 @@
 //go:build stm32f4 && stm32f469
-// +build stm32f4,stm32f469
 
 package machine
 

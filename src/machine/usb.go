@@ -1,5 +1,4 @@
 //go:build sam || nrf52840 || rp2040
-// +build sam nrf52840 rp2040
 
 package machine
 

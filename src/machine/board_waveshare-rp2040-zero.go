@@ -1,5 +1,4 @@
 //go:build waveshare_rp2040_zero
-// +build waveshare_rp2040_zero
 
 // This file contains the pin mappings for the Waveshare RP2040-Zero boards.
 //

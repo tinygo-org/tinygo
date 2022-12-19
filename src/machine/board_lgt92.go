@@ -1,5 +1,4 @@
 //go:build lgt92
-// +build lgt92
 
 package machine
 

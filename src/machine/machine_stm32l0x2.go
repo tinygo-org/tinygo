@@ -1,5 +1,4 @@
 //go:build stm32l0x2
-// +build stm32l0x2
 
 package machine
 

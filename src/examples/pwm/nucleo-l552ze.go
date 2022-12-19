@@ -1,5 +1,4 @@
 //go:build stm32l5
-// +build stm32l5
 
 package main
 

@@ -1,5 +1,4 @@
 //go:build sam && atsamd21 && xiao
-// +build sam,atsamd21,xiao
 
 package machine
 

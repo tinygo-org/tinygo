@@ -1,5 +1,4 @@
 //go:build runtime_memhash_tsip
-// +build runtime_memhash_tsip
 
 // This is the tsip hash developed by Damian Gryski, based on ideas from SipHash.
 // It is slower than leveldb's hash, but should be "stronger".

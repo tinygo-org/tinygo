@@ -1,5 +1,4 @@
 //go:build (sam && atsamd51) || (sam && atsame5x)
-// +build sam,atsamd51 sam,atsame5x
 
 // Peripheral abstraction layer for the atsamd51.
 //

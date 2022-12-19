@@ -1,5 +1,4 @@
 //go:build stm32 && !stm32f103
-// +build stm32,!stm32f103
 
 package machine
 
@@ -8,7 +7,7 @@ import (
 )
 
 // GPIO for the stm32 families except the stm32f1xx which uses a simpler but
-//  less flexible mechanism. Extend the +build directive above to exclude other
+//  less flexible mechanism. Extend the go:build directive above to exclude other
 //  models in the stm32f1xx series as necessary
 
 const (

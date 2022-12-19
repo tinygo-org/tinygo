@@ -1,5 +1,4 @@
 //go:build arm7tdmi
-// +build arm7tdmi
 
 package runtime
 

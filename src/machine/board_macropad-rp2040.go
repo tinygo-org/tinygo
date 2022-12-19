@@ -1,5 +1,4 @@
 //go:build macropad_rp2040
-// +build macropad_rp2040
 
 package machine
 

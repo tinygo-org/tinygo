@@ -1,5 +1,4 @@
 //go:build cortexm && qemu
-// +build cortexm,qemu
 
 package runtime
 

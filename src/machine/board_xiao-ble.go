@@ -1,5 +1,4 @@
 //go:build xiao_ble
-// +build xiao_ble
 
 // This file contains the pin mappings for the Seeed XIAO BLE nRF52840 [Sense] boards.
 //

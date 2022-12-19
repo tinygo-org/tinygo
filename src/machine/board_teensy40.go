@@ -1,5 +1,4 @@
 //go:build teensy40
-// +build teensy40
 
 package machine
 
