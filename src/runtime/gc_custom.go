@@ -17,8 +17,6 @@ package runtime
 // - func free(ptr unsafe.Pointer)
 // - func markRoots(start, end uintptr)
 // - func GC()
-// - func KeepAlive(x interface{})
-// - func SetFinalizer(obj interface{}, finalizer interface{})
 //
 //
 // In addition, if targeting wasi, the following functions should be exported for interoperability
@@ -48,13 +46,6 @@ func markRoots(start, end uintptr)
 
 // GC is called to explicitly run garbage collection.
 func GC()
-
-// KeepAlive is called to ensure the given object is kept alive until this function call.
-func KeepAlive(x interface{})
-
-// SetFinalizer is called to set a finalizer method to run when an object is about to be
-// cleaned.
-func SetFinalizer(obj interface{}, finalizer interface{})
 
 func setHeapEnd(newHeapEnd uintptr) {
 	// Heap is in custom GC so ignore for when called from wasm initialization.
