@@ -1,5 +1,4 @@
 //go:build rp2040
-// +build rp2040
 
 package machine
 
@@ -122,7 +121,7 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			}
 		}
 
-		rp.USBCTRL_REGS.BUFF_STATUS.Set(0xFFFFFFFF)
+		rp.USBCTRL_REGS.BUFF_STATUS.Set(s2)
 	}
 
 	// Bus is reset

@@ -1,5 +1,4 @@
 //go:build feather_m4
-// +build feather_m4
 
 package machine
 

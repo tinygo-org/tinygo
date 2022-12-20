@@ -1,5 +1,4 @@
 //go:build !runtime_memhash_tsip && !runtime_memhash_leveldb
-// +build !runtime_memhash_tsip,!runtime_memhash_leveldb
 
 package runtime
 

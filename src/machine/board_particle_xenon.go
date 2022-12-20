@@ -1,5 +1,4 @@
 //go:build particle_xenon
-// +build particle_xenon
 
 package machine
 

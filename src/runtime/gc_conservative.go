@@ -1,5 +1,4 @@
 //go:build gc.conservative
-// +build gc.conservative
 
 package runtime
 
@@ -639,12 +638,4 @@ func dumpHeap() {
 			println()
 		}
 	}
-}
-
-func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
 }

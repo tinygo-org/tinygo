@@ -1,5 +1,4 @@
 //go:build scheduler.tasks
-// +build scheduler.tasks
 
 package runtime
 

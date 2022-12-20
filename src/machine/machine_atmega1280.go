@@ -1,5 +1,4 @@
 //go:build avr && atmega1280
-// +build avr,atmega1280
 
 package machine
 

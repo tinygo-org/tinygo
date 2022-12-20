@@ -1,5 +1,4 @@
 //go:build badger2040
-// +build badger2040
 
 // This contains the pin mappings for the Badger 2040 Connect board.
 //

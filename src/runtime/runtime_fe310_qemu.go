@@ -1,5 +1,4 @@
 //go:build fe310 && qemu
-// +build fe310,qemu
 
 package runtime
 

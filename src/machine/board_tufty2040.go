@@ -1,12 +1,10 @@
 //go:build tufty2040
-// +build tufty2040
 
 // This contains the pin mappings for the Badger 2040 Connect board.
 //
 // For more information, see: https://shop.pimoroni.com/products/tufty-2040
 // Also
 // - Tufty 2040 schematic: https://cdn.shopify.com/s/files/1/0174/1800/files/tufty_schematic.pdf?v=1655385675
-//
 package machine
 
 import (

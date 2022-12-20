@@ -1,5 +1,4 @@
 //go:build nrf && !softdevice
-// +build nrf,!softdevice
 
 package runtime
 

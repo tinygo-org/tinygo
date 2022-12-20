@@ -1,5 +1,4 @@
 //go:build !windows
-// +build !windows
 
 // TODO: implement readdir for windows, then enable this file
 
