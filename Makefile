@@ -680,6 +680,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino             examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=arduino-leonardo    examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino             examples/pwm
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino -scheduler=tasks  examples/blinky1
