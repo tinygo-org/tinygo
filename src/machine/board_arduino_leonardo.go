@@ -1,5 +1,4 @@
 //go:build arduino_leonardo
-// +build arduino_leonardo
 
 package machine
 

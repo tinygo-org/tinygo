@@ -1,5 +1,4 @@
 //go:build avr && atmega32u4
-// +build avr,atmega32u4
 
 package machine
 
