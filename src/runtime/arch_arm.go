@@ -9,9 +9,9 @@ const TargetBits = 32
 
 const deferExtraRegs = 0
 
-// Align on word boundary.
+// Align on the maximum alignment for this platform (double).
 func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
+	return (ptr + 7) &^ 7
 }
 
 func getCurrentStackPointer() uintptr {
