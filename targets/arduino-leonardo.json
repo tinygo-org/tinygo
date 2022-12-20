@@ -1,0 +1,10 @@
+{
+	"inherits": ["atmega32u4"],
+	"build-tags": ["arduino_leonardo"],
+	"ldflags": [
+		"--defsym=_bootloader_size=512",
+		"--defsym=_stack_size=512"
+	],
+	"flash-command": "avrdude -c avr109 -p atmega32u4 -b 57600 -P {port} -U flash:w:{hex}:i",
+	"emulator": "simavr -m atmega32u4 -f 16000000 {}"
+}
