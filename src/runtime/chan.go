@@ -243,13 +243,8 @@ func (ch *channel) push(value unsafe.Pointer) bool {
 
 	// copy value to buffer
 	memcpy(
-		unsafe.Pointer( // pointer to the base of the buffer + offset = pointer to destination element
-			uintptr(ch.buf)+
-				uintptr( // element size * equivalent slice index = offset
-					ch.elementSize* // element size (bytes)
-						ch.bufHead, // index of first available buffer entry
-				),
-		),
+		unsafe.Add(ch.buf, // pointer to the base of the buffer + offset = pointer to destination element
+			ch.elementSize*ch.bufHead), // element size * equivalent slice index = offset
 		value,
 		ch.elementSize,
 	)
@@ -274,7 +269,7 @@ func (ch *channel) pop(value unsafe.Pointer) bool {
 	}
 
 	// compute address of source
-	addr := unsafe.Pointer(uintptr(ch.buf) + (ch.elementSize * ch.bufTail))
+	addr := unsafe.Add(ch.buf, (ch.elementSize * ch.bufTail))
 
 	// copy value from buffer
 	memcpy(

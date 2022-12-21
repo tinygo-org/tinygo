@@ -31,8 +31,8 @@ func Swapper(slice interface{}) func(i, j int) {
 		if uint(i) >= uint(header.len) || uint(j) >= uint(header.len) {
 			panic("reflect: slice index out of range")
 		}
-		val1 := unsafe.Pointer(uintptr(header.data) + uintptr(i)*size)
-		val2 := unsafe.Pointer(uintptr(header.data) + uintptr(j)*size)
+		val1 := unsafe.Add(header.data, uintptr(i)*size)
+		val2 := unsafe.Add(header.data, uintptr(j)*size)
 		memcpy(tmp, val1, size)
 		memcpy(val1, val2, size)
 		memcpy(val2, tmp, size)

@@ -61,7 +61,7 @@ func stringConcat(x, y _string) _string {
 		length := x.length + y.length
 		buf := alloc(length, nil)
 		memcpy(buf, unsafe.Pointer(x.ptr), x.length)
-		memcpy(unsafe.Pointer(uintptr(buf)+x.length), unsafe.Pointer(y.ptr), y.length)
+		memcpy(unsafe.Add(buf, x.length), unsafe.Pointer(y.ptr), y.length)
 		return _string{ptr: (*byte)(buf), length: length}
 	}
 }
@@ -107,7 +107,7 @@ func stringFromRunes(runeSlice []rune) (s _string) {
 	for _, r := range runeSlice {
 		array, numBytes := encodeUTF8(r)
 		for _, c := range array[:numBytes] {
-			*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(s.ptr)) + index)) = c
+			*(*byte)(unsafe.Add(unsafe.Pointer(s.ptr), index)) = c
 			index++
 		}
 	}
@@ -243,7 +243,7 @@ func isContinuation(b byte) bool {
 func cgo_CString(s _string) unsafe.Pointer {
 	buf := malloc(s.length + 1)
 	memcpy(buf, unsafe.Pointer(s.ptr), s.length)
-	*(*byte)(unsafe.Pointer(uintptr(buf) + s.length)) = 0 // trailing 0 byte
+	*(*byte)(unsafe.Add(buf, s.length)) = 0 // trailing 0 byte
 	return buf
 }
 

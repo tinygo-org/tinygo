@@ -43,9 +43,9 @@ func dynamicLoader(base uintptr, dyn *dyn64) {
 			relasz = uint64(dyn.Val) / uint64(unsafe.Sizeof(rela64{}))
 		}
 
-		ptr := uintptr(unsafe.Pointer(dyn))
-		ptr += unsafe.Sizeof(dyn64{})
-		dyn = (*dyn64)(unsafe.Pointer(ptr))
+		ptr := unsafe.Pointer(dyn)
+		ptr = unsafe.Add(ptr, unsafe.Sizeof(dyn64{}))
+		dyn = (*dyn64)(ptr)
 	}
 
 	if rela == nil {
@@ -70,9 +70,9 @@ func dynamicLoader(base uintptr, dyn *dyn64) {
 			}
 		}
 
-		rptr := uintptr(unsafe.Pointer(rela))
-		rptr += unsafe.Sizeof(rela64{})
-		rela = (*rela64)(unsafe.Pointer(rptr))
+		rptr := unsafe.Pointer(rela)
+		rptr = unsafe.Add(rptr, unsafe.Sizeof(rela64{}))
+		rela = (*rela64)(rptr)
 		relasz--
 	}
 }
