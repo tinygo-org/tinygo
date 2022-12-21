@@ -37,7 +37,7 @@ func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintp
 	}
 
 	// The slice fits (after possibly allocating a new one), append it in-place.
-	memmove(unsafe.Pointer(uintptr(srcBuf)+srcLen*elemSize), elemsBuf, elemsLen*elemSize)
+	memmove(unsafe.Add(srcBuf, srcLen*elemSize), elemsBuf, elemsLen*elemSize)
 	return srcBuf, srcLen + elemsLen, srcCap
 }
 

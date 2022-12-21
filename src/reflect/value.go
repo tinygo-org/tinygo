@@ -81,7 +81,7 @@ func valueInterfaceUnsafe(v Value) interface{} {
 		// value.
 		var value uintptr
 		for j := v.typecode.Size(); j != 0; j-- {
-			value = (value << 8) | uintptr(*(*uint8)(unsafe.Pointer(uintptr(v.value) + j - 1)))
+			value = (value << 8) | uintptr(*(*uint8)(unsafe.Add(v.value, j-1)))
 		}
 		v.value = unsafe.Pointer(value)
 	}
@@ -481,7 +481,7 @@ func (v Value) Field(i int) Value {
 		return Value{
 			flags:    flags,
 			typecode: fieldType,
-			value:    unsafe.Pointer(uintptr(v.value) + structField.Offset),
+			value:    unsafe.Add(v.value, structField.Offset),
 		}
 	}
 
@@ -496,7 +496,7 @@ func (v Value) Field(i int) Value {
 		return Value{
 			flags:    flags,
 			typecode: fieldType,
-			value:    unsafe.Pointer(uintptr(0)),
+			value:    unsafe.Pointer(nil),
 		}
 	}
 
@@ -504,7 +504,7 @@ func (v Value) Field(i int) Value {
 		// The value was not stored in the interface before but will be
 		// afterwards, so load the value (from the correct offset) and return
 		// it.
-		ptr := unsafe.Pointer(uintptr(v.value) + structField.Offset)
+		ptr := unsafe.Add(v.value, structField.Offset)
 		value := unsafe.Pointer(loadValue(ptr, fieldSize))
 		return Value{
 			flags:    flags &^ valueFlagIndirect,
@@ -537,8 +537,7 @@ func (v Value) Index(i int) Value {
 			typecode: v.typecode.elem(),
 			flags:    v.flags | valueFlagIndirect,
 		}
-		addr := uintptr(slice.data) + elem.typecode.Size()*uintptr(i) // pointer to new value
-		elem.value = unsafe.Pointer(addr)
+		elem.value = unsafe.Add(slice.data, elem.typecode.Size()*uintptr(i)) // pointer to new value
 		return elem
 	case String:
 		// Extract a character from a string.
@@ -553,7 +552,7 @@ func (v Value) Index(i int) Value {
 		}
 		return Value{
 			typecode: uint8Type,
-			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Pointer(uintptr(s.data) + uintptr(i))))),
+			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Add(s.data, i)))),
 			flags:    v.flags & valueFlagExported,
 		}
 	case Array:
@@ -573,18 +572,18 @@ func (v Value) Index(i int) Value {
 			// indirect. Also, because size != 0 this implies that the array
 			// length must be != 0, and thus that the total size is at least
 			// elemSize.
-			addr := uintptr(v.value) + elemSize*uintptr(i) // pointer to new value
+			addr := unsafe.Add(v.value, elemSize*uintptr(i)) // pointer to new value
 			return Value{
 				typecode: v.typecode.elem(),
 				flags:    v.flags,
-				value:    unsafe.Pointer(addr),
+				value:    addr,
 			}
 		}
 
 		if size > unsafe.Sizeof(uintptr(0)) || v.isIndirect() {
 			// The element fits in a pointer, but the array is not stored in the pointer directly.
 			// Load the value from the pointer.
-			addr := unsafe.Pointer(uintptr(v.value) + elemSize*uintptr(i)) // pointer to new value
+			addr := unsafe.Add(v.value, elemSize*uintptr(i)) // pointer to new value
 			value := addr
 			if !v.isIndirect() {
 				// Use a pointer to the value (don't load the value) if the
@@ -621,7 +620,7 @@ func loadValue(ptr unsafe.Pointer, size uintptr) uintptr {
 	for i := uintptr(0); i < size; i++ {
 		loadedValue |= uintptr(*(*byte)(ptr)) << shift
 		shift += 8
-		ptr = unsafe.Pointer(uintptr(ptr) + 1)
+		ptr = unsafe.Add(ptr, 1)
 	}
 	return loadedValue
 }

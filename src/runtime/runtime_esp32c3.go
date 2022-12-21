@@ -78,7 +78,7 @@ func interruptInit() {
 	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1
 	for i := 0; i < 31; i++ {
 		priReg.Set(0)
-		priReg = (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(priReg)) + uintptr(4)))
+		priReg = (*volatile.Register32)(unsafe.Add(unsafe.Pointer(priReg), 4))
 	}
 
 	// default threshold for interrupts is 5

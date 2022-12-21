@@ -34,7 +34,7 @@ func (i Interrupt) Enable() error {
 	esp.INTERRUPT_CORE0.CPU_INT_TYPE.SetBits(1 << i.num)
 
 	// Set default threshold to defaultThreshold
-	reg := (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0)) + uintptr(i.num)*4)))
+	reg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0), i.num*4))
 	reg.Set(defaultThreshold)
 
 	// Reset interrupt before reenabling
@@ -171,7 +171,7 @@ func handleInterrupt() {
 		mepc := riscv.MEPC.Get()
 		// Useing threshold to temporary disable this interrupts.
 		// FYI: using CPU interrupt enable bit make runtime to loose interrupts.
-		reg := (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0)) + uintptr(interruptNumber)*4)))
+		reg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0), interruptNumber*4))
 		thresholdSave := reg.Get()
 		reg.Set(disableThreshold)
 		riscv.Asm("fence")

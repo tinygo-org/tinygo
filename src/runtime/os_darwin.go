@@ -109,6 +109,6 @@ func markGlobals() {
 
 		// Move on to the next load command (wich may or may not be a
 		// LC_SEGMENT_64).
-		cmd = (*segmentLoadCommand)(unsafe.Pointer(uintptr(unsafe.Pointer(cmd)) + uintptr(cmd.cmdsize)))
+		cmd = (*segmentLoadCommand)(unsafe.Add(unsafe.Pointer(cmd), cmd.cmdsize))
 	}
 }
