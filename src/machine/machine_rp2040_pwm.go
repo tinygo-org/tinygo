@@ -50,7 +50,7 @@ type pwmGroup struct {
 //
 // 0x14 is the size of a pwmGroup.
 func getPWMGroup(index uintptr) *pwmGroup {
-	return (*pwmGroup)(unsafe.Pointer(uintptr(unsafe.Pointer(rp.PWM)) + 0x14*index))
+	return (*pwmGroup)(unsafe.Add(unsafe.Pointer(rp.PWM), 0x14*index))
 }
 
 // Hardware Pulse Width Modulation (PWM) API

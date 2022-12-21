@@ -258,7 +258,7 @@ func Environ() []string {
 	for environ := libc_environ; *environ != nil; {
 		length += libc_strlen(*environ)
 		vars++
-		environ = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(environ)) + unsafe.Sizeof(environ)))
+		environ = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(environ), unsafe.Sizeof(environ)))
 	}
 
 	// allocate our backing slice for the strings
@@ -287,7 +287,7 @@ func Environ() []string {
 		// add s to our list of environment variables
 		envs = append(envs, s)
 		// environ++
-		environ = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(environ)) + unsafe.Sizeof(environ)))
+		environ = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(environ), unsafe.Sizeof(environ)))
 	}
 	return envs
 }

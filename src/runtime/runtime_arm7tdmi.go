@@ -54,7 +54,7 @@ func preinit() {
 	ptr := unsafe.Pointer(&_sbss)
 	for ptr != unsafe.Pointer(&_ebss) {
 		*(*uint32)(ptr) = 0
-		ptr = unsafe.Pointer(uintptr(ptr) + 4)
+		ptr = unsafe.Add(ptr, 4)
 	}
 
 	// Initialize .data: global variables initialized from flash.
@@ -62,8 +62,8 @@ func preinit() {
 	dst := unsafe.Pointer(&_sdata)
 	for dst != unsafe.Pointer(&_edata) {
 		*(*uint32)(dst) = *(*uint32)(src)
-		dst = unsafe.Pointer(uintptr(dst) + 4)
-		src = unsafe.Pointer(uintptr(src) + 4)
+		dst = unsafe.Add(dst, 4)
+		src = unsafe.Add(src, 4)
 	}
 }
 

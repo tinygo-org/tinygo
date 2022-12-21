@@ -169,8 +169,7 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 	numBuckets := uintptr(1) << m.bucketBits
 	bucketNumber := (uintptr(hash) & (numBuckets - 1))
 	bucketSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
-	bucketAddr := uintptr(m.buckets) + bucketSize*bucketNumber
-	bucket := (*hashmapBucket)(unsafe.Pointer(bucketAddr))
+	bucket := (*hashmapBucket)(unsafe.Add(m.buckets, bucketSize*bucketNumber))
 	var lastBucket *hashmapBucket
 
 	// See whether the key already exists somewhere.
@@ -180,9 +179,9 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 	for bucket != nil {
 		for i := uintptr(0); i < 8; i++ {
 			slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*uintptr(i)
-			slotKey := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotKeyOffset)
+			slotKey := unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
 			slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*uintptr(i)
-			slotValue := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotValueOffset)
+			slotValue := unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
 			if bucket.tophash[i] == 0 && emptySlotKey == nil {
 				// Found an empty slot, store it for if we couldn't find an
 				// existing slot.
@@ -225,9 +224,9 @@ func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash u
 	bucketBuf := alloc(bucketBufSize, nil)
 	// Insert into the first slot, which is empty as it has just been allocated.
 	slotKeyOffset := unsafe.Sizeof(hashmapBucket{})
-	slotKey := unsafe.Pointer(uintptr(bucketBuf) + slotKeyOffset)
+	slotKey := unsafe.Add(bucketBuf, slotKeyOffset)
 	slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8
-	slotValue := unsafe.Pointer(uintptr(bucketBuf) + slotValueOffset)
+	slotValue := unsafe.Add(bucketBuf, slotValueOffset)
 	m.count++
 	memcpy(slotKey, key, m.keySize)
 	memcpy(slotValue, value, m.valueSize)
@@ -276,8 +275,7 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 	numBuckets := uintptr(1) << m.bucketBits
 	bucketNumber := (uintptr(hash) & (numBuckets - 1))
 	bucketSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
-	bucketAddr := uintptr(m.buckets) + bucketSize*bucketNumber
-	bucket := (*hashmapBucket)(unsafe.Pointer(bucketAddr))
+	bucket := (*hashmapBucket)(unsafe.Add(m.buckets, bucketSize*bucketNumber))
 
 	tophash := uint8(hash >> 24)
 	if tophash < 1 {
@@ -289,9 +287,9 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 	for bucket != nil {
 		for i := uintptr(0); i < 8; i++ {
 			slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*uintptr(i)
-			slotKey := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotKeyOffset)
+			slotKey := unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
 			slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*uintptr(i)
-			slotValue := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotValueOffset)
+			slotValue := unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
 			if bucket.tophash[i] == tophash {
 				// This could be the key we're looking for.
 				if m.keyEqual(key, slotKey, m.keySize) {
@@ -327,8 +325,7 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 	numBuckets := uintptr(1) << m.bucketBits
 	bucketNumber := (uintptr(hash) & (numBuckets - 1))
 	bucketSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
-	bucketAddr := uintptr(m.buckets) + bucketSize*bucketNumber
-	bucket := (*hashmapBucket)(unsafe.Pointer(bucketAddr))
+	bucket := (*hashmapBucket)(unsafe.Add(m.buckets, bucketSize*bucketNumber))
 
 	tophash := uint8(hash >> 24)
 	if tophash < 1 {
@@ -340,7 +337,7 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 	for bucket != nil {
 		for i := uintptr(0); i < 8; i++ {
 			slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*uintptr(i)
-			slotKey := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotKeyOffset)
+			slotKey := unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
 			if bucket.tophash[i] == tophash {
 				// This could be the key we're looking for.
 				if m.keyEqual(key, slotKey, m.keySize) {
@@ -382,8 +379,7 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 				return false
 			}
 			bucketSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
-			bucketAddr := uintptr(it.buckets) + bucketSize*it.bucketNumber
-			it.bucket = (*hashmapBucket)(unsafe.Pointer(bucketAddr))
+			it.bucket = (*hashmapBucket)(unsafe.Add(it.buckets, bucketSize*it.bucketNumber))
 			it.bucketNumber++ // next bucket
 		}
 		if it.bucket.tophash[it.bucketIndex] == 0 {
@@ -392,16 +388,15 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 			continue
 		}
 
-		bucketAddr := uintptr(unsafe.Pointer(it.bucket))
 		slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*uintptr(it.bucketIndex)
-		slotKey := unsafe.Pointer(bucketAddr + slotKeyOffset)
+		slotKey := unsafe.Add(unsafe.Pointer(it.bucket), slotKeyOffset)
 		memcpy(key, slotKey, m.keySize)
 
 		if it.buckets == m.buckets {
 			// Our view of the buckets is the same as the parent map.
 			// Just copy the value we have
 			slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*uintptr(it.bucketIndex)
-			slotValue := unsafe.Pointer(bucketAddr + slotValueOffset)
+			slotValue := unsafe.Add(unsafe.Pointer(it.bucket), slotValueOffset)
 			memcpy(value, slotValue, m.valueSize)
 			it.bucketIndex++
 		} else {
@@ -574,10 +569,10 @@ func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 	case reflect.Float64:
 		return hashmapFloat64Hash(ptr, seed)
 	case reflect.Complex64:
-		rptr, iptr := ptr, unsafe.Pointer(uintptr(ptr)+4)
+		rptr, iptr := ptr, unsafe.Add(ptr, 4)
 		return hashmapFloat32Hash(rptr, seed) ^ hashmapFloat32Hash(iptr, seed)
 	case reflect.Complex128:
-		rptr, iptr := ptr, unsafe.Pointer(uintptr(ptr)+8)
+		rptr, iptr := ptr, unsafe.Add(ptr, 8)
 		return hashmapFloat64Hash(rptr, seed) ^ hashmapFloat64Hash(iptr, seed)
 	case reflect.String:
 		return hashmapStringHash(x.String(), seed)

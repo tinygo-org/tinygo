@@ -146,7 +146,7 @@ func (b gcBlock) findNext() gcBlock {
 
 // State returns the current block state.
 func (b gcBlock) state() blockState {
-	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
+	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 	return blockState(*stateBytePtr>>((b%blocksPerStateByte)*stateBits)) & blockStateMask
 }
 
@@ -154,7 +154,7 @@ func (b gcBlock) state() blockState {
 // bits than the current state. Allowed transitions: from free to any state and
 // from head to mark.
 func (b gcBlock) setState(newState blockState) {
-	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
+	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 	*stateBytePtr |= uint8(newState << ((b % blocksPerStateByte) * stateBits))
 	if gcAsserts && b.state() != newState {
 		runtimePanic("gc: setState() was not successful")
@@ -163,7 +163,7 @@ func (b gcBlock) setState(newState blockState) {
 
 // markFree sets the block state to free, no matter what state it was in before.
 func (b gcBlock) markFree() {
-	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
+	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 	*stateBytePtr &^= uint8(blockStateMask << ((b % blocksPerStateByte) * stateBits))
 	if gcAsserts && b.state() != blockStateFree {
 		runtimePanic("gc: markFree() was not successful")
@@ -180,7 +180,7 @@ func (b gcBlock) unmark() {
 		runtimePanic("gc: unmark() on a block that is not marked")
 	}
 	clearMask := blockStateMask ^ blockStateHead // the bits to clear from the state
-	stateBytePtr := (*uint8)(unsafe.Pointer(uintptr(metadataStart) + uintptr(b/blocksPerStateByte)))
+	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 	*stateBytePtr &^= uint8(clearMask << ((b % blocksPerStateByte) * stateBits))
 	if gcAsserts && b.state() != blockStateHead {
 		runtimePanic("gc: unmark() was not successful")

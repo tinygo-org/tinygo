@@ -11,7 +11,7 @@ func hash32(ptr unsafe.Pointer, n, seed uintptr) uint32 {
 	var result uint32 = 2166136261 // FNV offset basis
 	result *= uint32(seed)
 	for i := uintptr(0); i < n; i++ {
-		c := *(*uint8)(unsafe.Pointer(uintptr(ptr) + i))
+		c := *(*uint8)(unsafe.Add(ptr, i))
 		result ^= uint32(c) // XOR with byte
 		result *= 16777619  // FNV prime
 	}
@@ -23,7 +23,7 @@ func hash64(ptr unsafe.Pointer, n, seed uintptr) uint64 {
 	var result uint64 = 14695981039346656037 // FNV offset basis
 	result *= uint64(seed)
 	for i := uintptr(0); i < n; i++ {
-		c := *(*uint8)(unsafe.Pointer(uintptr(ptr) + i))
+		c := *(*uint8)(unsafe.Add(ptr, i))
 		result ^= uint64(c)     // XOR with byte
 		result *= 1099511628211 // FNV prime
 	}

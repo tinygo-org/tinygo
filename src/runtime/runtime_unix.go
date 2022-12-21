@@ -106,7 +106,7 @@ func os_runtime_args() []string {
 			arg.length = length
 			arg.ptr = (*byte)(*argv)
 			// This is the Go equivalent of "argv++" in C.
-			argv = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(argv)) + unsafe.Sizeof(argv)))
+			argv = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(argv), unsafe.Sizeof(argv)))
 		}
 	}
 	return args
@@ -129,7 +129,7 @@ func syscall_runtime_envs() []string {
 	numEnvs := 0
 	for *env != nil {
 		numEnvs++
-		env = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(env)) + unsafe.Sizeof(environ)))
+		env = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(env), unsafe.Sizeof(environ)))
 	}
 
 	// Create a string slice of all environment variables.
@@ -144,7 +144,7 @@ func syscall_runtime_envs() []string {
 			length: length,
 		}
 		envs = append(envs, *(*string)(unsafe.Pointer(&s)))
-		env = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(env)) + unsafe.Sizeof(environ)))
+		env = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(env), unsafe.Sizeof(environ)))
 	}
 
 	return envs
