@@ -109,7 +109,7 @@ func markGlobals() {
 				markRoots(start, end)
 			}
 		}
-		headerPtr = unsafe.Pointer(uintptr(headerPtr) + uintptr(ehdr_start.phentsize))
+		headerPtr = unsafe.Add(headerPtr, ehdr_start.phentsize)
 	}
 }
 

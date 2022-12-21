@@ -143,13 +143,13 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
 // output function selection.
 func (p Pin) outFunc() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.FUNC0_OUT_SEL_CFG)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.FUNC0_OUT_SEL_CFG), uintptr(p)*4))
 }
 
 // inFunc returns the FUNCy_IN_SEL_CFG register used for configuring the input
 // function selection.
 func inFunc(signal uint32) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.FUNC0_IN_SEL_CFG)) + uintptr(signal)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.FUNC0_IN_SEL_CFG), uintptr(signal)*4))
 }
 
 // Set the pin to high or low.

@@ -85,7 +85,7 @@ func os_runtime_args() []string {
 			arg.length = length
 			arg.ptr = (*byte)(*argv)
 			// This is the Go equivalent of "argv++" in C.
-			argv = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(argv)) + unsafe.Sizeof(argv)))
+			argv = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(argv), unsafe.Sizeof(argv)))
 		}
 	}
 	return args

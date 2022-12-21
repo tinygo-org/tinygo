@@ -109,7 +109,7 @@ func write(fd int32, buf *byte, count int) int {
 	// TODO: Proper handling write
 	for i := 0; i < count; i++ {
 		putchar(*buf)
-		buf = (*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(buf)) + 1))
+		buf = (*byte)(unsafe.Add(unsafe.Pointer(buf), 1))
 	}
 	return count
 }
