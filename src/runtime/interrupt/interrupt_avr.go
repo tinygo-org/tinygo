@@ -1,5 +1,4 @@
 //go:build avr
-// +build avr
 
 package interrupt
 

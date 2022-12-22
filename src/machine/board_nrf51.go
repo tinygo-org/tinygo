@@ -1,5 +1,4 @@
 //go:build nrf51 || microbit
-// +build nrf51 microbit
 
 package machine
 

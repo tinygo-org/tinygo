@@ -1,6 +1,4 @@
 //go:build stm32f4 && (stm32f407 || stm32f469)
-// +build stm32f4
-// +build stm32f407 stm32f469
 
 package runtime
 

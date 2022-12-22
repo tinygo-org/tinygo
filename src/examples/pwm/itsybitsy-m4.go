@@ -1,5 +1,4 @@
 //go:build itsybitsy_m4
-// +build itsybitsy_m4
 
 package main
 

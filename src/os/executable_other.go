@@ -1,5 +1,4 @@
 //go:build !linux || baremetal
-// +build !linux baremetal
 
 package os
 

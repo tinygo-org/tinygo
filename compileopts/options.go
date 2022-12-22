@@ -51,7 +51,7 @@ type Options struct {
 	PrintJSON       bool
 	Monitor         bool
 	BaudRate        int
-	Retries         int
+	Timeout         time.Duration
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.

@@ -17,7 +17,7 @@ var tmpl = template.Must(template.New("go").Funcs(template.FuncMap{
 		return v
 	},
 	"title": strings.Title,
-}).Parse(`//+build baremetal,!tinygo.wasm
+}).Parse(`//go:build baremetal && !tinygo.wasm
 
 // Automatically generated file. DO NOT EDIT.
 // This file implements standins for non-native atomics using critical sections.

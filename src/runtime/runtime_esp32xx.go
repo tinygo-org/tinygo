@@ -1,5 +1,4 @@
 //go:build esp32 || esp32c3
-// +build esp32 esp32c3
 
 package runtime
 
@@ -43,7 +42,10 @@ func initTimer() {
 	//   INCREASE: Count up every tick (as opposed to counting down).
 	//   DIVIDER:  16-bit prescaler, set to 2 for dividing the APB clock by two
 	//             (40MHz).
+	// esp.TIMG0.T0CONFIG.Set(0 << esp.TIMG_T0CONFIG_T0_EN_Pos)
 	esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_T0_EN | esp.TIMG_T0CONFIG_T0_INCREASE | 2<<esp.TIMG_T0CONFIG_T0_DIVIDER_Pos)
+	// esp.TIMG0.T0CONFIG.Set(1 << esp.TIMG_T0CONFIG_T0_DIVCNT_RST_Pos)
+	// esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_T0_EN)
 
 	// Set the timer counter value to 0.
 	esp.TIMG0.T0LOADLO.Set(0)

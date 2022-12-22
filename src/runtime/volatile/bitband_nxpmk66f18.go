@@ -1,5 +1,4 @@
 //go:build nxp && mk66f18
-// +build nxp,mk66f18
 
 package volatile
 

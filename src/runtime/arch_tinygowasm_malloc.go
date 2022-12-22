@@ -1,5 +1,4 @@
 //go:build tinygo.wasm && !gc.custom
-// +build tinygo.wasm,!gc.custom
 
 package runtime
 

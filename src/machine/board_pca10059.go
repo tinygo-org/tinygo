@@ -1,5 +1,4 @@
 //go:build pca10059
-// +build pca10059
 
 package machine
 

@@ -1,5 +1,4 @@
 //go:build sam && atsame5x && atsame54p20
-// +build sam,atsame5x,atsame54p20
 
 package runtime
 

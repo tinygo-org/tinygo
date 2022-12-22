@@ -1,5 +1,4 @@
 //go:build baremetal && serial.uart
-// +build baremetal,serial.uart
 
 package machine
 

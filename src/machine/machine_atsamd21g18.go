@@ -1,5 +1,4 @@
 //go:build sam && atsamd21 && atsamd21g18
-// +build sam,atsamd21,atsamd21g18
 
 // Peripheral abstraction layer for the atsamd21.
 //

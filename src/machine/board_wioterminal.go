@@ -1,5 +1,4 @@
 //go:build wioterminal
-// +build wioterminal
 
 package machine
 

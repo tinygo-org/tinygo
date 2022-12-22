@@ -1,5 +1,4 @@
 //go:build (!gc.conservative && !gc.custom) || !tinygo.wasm
-// +build !gc.conservative,!gc.custom !tinygo.wasm
 
 package task
 

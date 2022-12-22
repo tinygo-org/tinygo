@@ -1,5 +1,4 @@
 //go:build !baremetal
-// +build !baremetal
 
 package runtime
 

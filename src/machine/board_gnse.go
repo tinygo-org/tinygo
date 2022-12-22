@@ -1,5 +1,4 @@
 //go:build gnse
-// +build gnse
 
 package machine
 

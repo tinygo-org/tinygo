@@ -1,5 +1,4 @@
 //go:build arduino_mega1280
-// +build arduino_mega1280
 
 package machine
 

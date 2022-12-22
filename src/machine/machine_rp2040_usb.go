@@ -1,5 +1,4 @@
 //go:build rp2040
-// +build rp2040
 
 package machine
 
@@ -122,7 +121,7 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			}
 		}
 
-		rp.USBCTRL_REGS.BUFF_STATUS.Set(0xFFFFFFFF)
+		rp.USBCTRL_REGS.BUFF_STATUS.Set(s2)
 	}
 
 	// Bus is reset
@@ -131,6 +130,7 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 		rp.USBCTRL_REGS.ADDR_ENDP.Set(0)
 
 		initEndpoint(0, usb.ENDPOINT_TYPE_CONTROL)
+		fixRP2040UsbDeviceEnumeration()
 	}
 }
 

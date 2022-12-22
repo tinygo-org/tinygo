@@ -1,5 +1,4 @@
 //go:build wasm && !wasi
-// +build wasm,!wasi
 
 package runtime
 

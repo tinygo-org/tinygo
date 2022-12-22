@@ -1,5 +1,4 @@
 //go:build atsame54_xpro
-// +build atsame54_xpro
 
 package machine
 

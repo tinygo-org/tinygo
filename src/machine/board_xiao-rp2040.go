@@ -1,5 +1,4 @@
 //go:build xiao_rp2040
-// +build xiao_rp2040
 
 // This file contains the pin mappings for the Seeed XIAO RP2040 boards.
 //

@@ -1,5 +1,4 @@
 //go:build fe310 && hifive1b
-// +build fe310,hifive1b
 
 package machine
 

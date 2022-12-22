@@ -1,5 +1,4 @@
 //go:build sam && atsamd21 && qtpy
-// +build sam,atsamd21,qtpy
 
 package machine
 
