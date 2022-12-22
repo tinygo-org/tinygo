@@ -7,6 +7,8 @@ target triple = "wasm32-unknown-wasi"
 %main.kv.0 = type { i8, i32, i32, i32 }
 
 @main.kvGlobal = hidden global %main.kv zeroinitializer, align 4
+@main.a = hidden global { ptr, i32, i32 } zeroinitializer, align 4
+@main.b = hidden global [2 x ptr] zeroinitializer, align 4
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
