@@ -285,9 +285,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			// relative directory up to the module root, even if the test never
 			// reads any files.
 			//
-			// Ex. --dir=.. --dir=../.. --dir=../../..
+			// Ex. run --dir=.. --dir=../.. --dir=../../..
 			dirs := dirsToModuleRoot(result.MainDir, result.ModuleRoot)
-			var args []string
+			args := []string{"run"}
 			for _, d := range dirs[1:] {
 				args = append(args, "--dir="+d)
 			}
