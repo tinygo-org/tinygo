@@ -76,6 +76,7 @@ type compilerContext struct {
 	i8ptrType        llvm.Type // for convenience
 	rawVoidFuncType  llvm.Type // for convenience
 	funcPtrAddrSpace int
+	hasTypedPointers bool // for LLVM 14 backwards compatibility
 	uintptrType      llvm.Type
 	program          *ssa.Program
 	diagnostics      []error
@@ -123,6 +124,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 	dummyFuncType := llvm.FunctionType(c.ctx.VoidType(), nil, false)
 	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
+	c.hasTypedPointers = c.i8ptrType != llvm.PointerType(c.ctx.Int16Type(), 0) // with opaque pointers, all pointers are the same type (LLVM 15+)
 	c.rawVoidFuncType = dummyFunc.Type()
 	dummyFunc.EraseFromParentAsFunction()
 
@@ -422,14 +424,20 @@ func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 		}
 		return c.getLLVMType(typ.Underlying())
 	case *types.Pointer:
-		ptrTo := c.getLLVMType(typ.Elem())
-		return llvm.PointerType(ptrTo, 0)
+		if c.hasTypedPointers {
+			ptrTo := c.getLLVMType(typ.Elem())
+			return llvm.PointerType(ptrTo, 0)
+		}
+		return c.i8ptrType // all pointers are the same
 	case *types.Signature: // function value
 		return c.getFuncType(typ)
 	case *types.Slice:
-		elemType := c.getLLVMType(typ.Elem())
+		ptrType := c.i8ptrType
+		if c.hasTypedPointers {
+			ptrType = llvm.PointerType(c.getLLVMType(typ.Elem()), 0)
+		}
 		members := []llvm.Type{
-			llvm.PointerType(elemType, 0),
+			ptrType,
 			c.uintptrType, // len
 			c.uintptrType, // cap
 		}
