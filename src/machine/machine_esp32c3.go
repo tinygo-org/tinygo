@@ -22,6 +22,10 @@ func CPUFrequency() uint32 {
 	return 160e6 // 160MHz
 }
 
+var (
+        ErrInvalidSPIBus = errors.New("machine: invalid SPI bus")
+)
+
 const (
 	PinOutput PinMode = iota
 	PinInput
@@ -502,3 +506,210 @@ func (uart *UART) WriteByte(b byte) error {
 	uart.Bus.FIFO.Set(uint32(b))
 	return nil
 }
+
+// Serial Peripheral Interface on the ESP32.
+type SPI struct {
+	Bus *esp.SPI2_Type
+}
+
+var SPI2 = SPI{esp.SPI2}
+
+// SPIConfig configures a SPI peripheral on the ESP32. Make sure to set at least
+// SCK, SDO and SDI (possibly to NoPin if not in use). The default for LSBFirst
+// (false) and Mode (0) are good for most applications. The frequency defaults
+// to 1MHz if not set but can be configured up to 40MHz. Possible values are
+// 40MHz and integer divisions from 40MHz such as 20MHz, 13.3MHz, 10MHz, 8MHz,
+// etc.
+type SPIConfig struct {
+	Frequency uint32
+	SCK       Pin
+	SDO       Pin
+	SDI       Pin
+	LSBFirst  bool
+	Mode      uint8
+}
+
+// Configure and make the SPI peripheral ready to use.
+func (spi SPI) Configure(config SPIConfig) error {
+	if config.Frequency == 0 {
+		config.Frequency = 4e6 // default to 4MHz
+	}
+
+	// Configure the SPI clock. This assumes a peripheral clock of 80MHz.
+	var clockReg uint32
+	if config.Frequency > 40e6 {
+		// Don't use a prescaler, but directly connect to the APB clock. This
+		// results in a SPI clock frequency of 40MHz.
+		clockReg |= esp.SPI2_CLOCK_CLK_EQU_SYSCLK
+	} else {
+		// Use a prescaler for frequencies below 40MHz. They will get rounded
+		// down to the next possible frequency (20MHz, 13.3MHz, 10MHz, 8MHz,
+		// 6.7MHz, 5.7MHz, 5MHz, etc).
+		// This code is much simpler than how ESP-IDF configures the frequency,
+		// but should be just as accurate. The only exception is for frequencies
+		// below 4883Hz, which will need special support.
+		if config.Frequency < 4883 {
+			// The current lower limit is 4883Hz.
+			// The hardware supports lower frequencies by setting the h and n
+			// variables, but that's not yet implemented.
+			config.Frequency = 4883
+		}
+		// The prescaler value is 40e6 / config.Frequency, but rounded up so
+		// that the actual frequency is never higher than the frequency
+		// requested in config.Frequency.
+		var (
+			pre uint32 = (40e6 + config.Frequency - 1) / config.Frequency
+			n   uint32 = 2 // this value seems to equal the number of ticks per SPI clock tick
+			h   uint32 = 1 // must be half of n according to the formula in the reference manual
+			l   uint32 = n // must equal n according to the reference manual
+		)
+		clockReg |= (pre - 1) << esp.SPI2_CLOCK_CLKDIV_PRE_Pos
+		clockReg |= (n - 1) << esp.SPI2_CLOCK_CLKCNT_N_Pos
+		clockReg |= (h - 1) << esp.SPI2_CLOCK_CLKCNT_H_Pos
+		clockReg |= (l - 1) << esp.SPI2_CLOCK_CLKCNT_L_Pos
+	}
+	spi.Bus.CLOCK.Set(clockReg)
+
+	// SPI_CTRL_REG controls bit order.
+	var ctrlReg uint32
+	if config.LSBFirst {
+		ctrlReg |= esp.SPI2_CTRL_WR_BIT_ORDER
+		ctrlReg |= esp.SPI2_CTRL_RD_BIT_ORDER
+	}
+	spi.Bus.CTRL.Set(ctrlReg)
+
+	// SPI_USER_REG and SPI_MISC_REG control SPI clock polarity (mode), among others.
+	var userReg, miscReg uint32
+	// For mode configuration, see table 29 in the reference manual (page 128).
+	switch config.Mode {
+	case 0:
+	case 1:
+		userReg |= esp.SPI2_USER_CK_OUT_EDGE
+	case 2:
+		userReg |= esp.SPI2_USER_CK_OUT_EDGE
+		miscReg |= esp.SPI2_MISC_CK_IDLE_EDGE
+	case 3:
+		miscReg |= esp.SPI2_MISC_CK_IDLE_EDGE
+	}
+	// Enable full-duplex communication.
+	userReg |= esp.SPI2_USER_DOUTDIN
+	userReg |= esp.SPI2_USER_USR_MOSI
+	// Write values to registers.
+	spi.Bus.USER.Set(userReg)
+	spi.Bus.MISC.Set(miscReg)
+
+	// Configure pins.
+	// TODO: use direct output if possible, if the configured pins match the
+	// possible direct configurations (e.g. for SPI2, when SCK is pin 14 etc).
+	if spi.Bus == esp.SPI2 {
+//TODO: mux
+		config.SCK.Configure(PinConfig{Mode: PinOutput})  //  8 HSPICLK
+		config.SDI.Configure(PinConfig{Mode: PinInput})   //  9 HSPIQ
+		config.SDO.Configure(PinConfig{Mode: PinOutput})  // 10 HSPID
+	} else {
+		// Don't know how to configure this bus.
+		return ErrInvalidSPIBus
+	}
+
+	return nil
+}
+
+// Transfer writes/reads a single byte using the SPI interface. If you need to
+// transfer larger amounts of data, Tx will be faster.
+func (spi SPI) Transfer(w byte) (byte, error) {
+	spi.Bus.MS_DLEN.Set(7 << esp.SPI2_MS_DLEN_MS_DATA_BITLEN_Pos)
+
+	spi.Bus.W0.Set(uint32(w))
+
+	// Send/receive byte.
+	spi.Bus.CMD.Set(esp.SPI2_CMD_USR)
+	for spi.Bus.CMD.Get() != 0 {
+	}
+
+	// The received byte is stored in W0.
+	return byte(spi.Bus.W0.Get()), nil
+}
+
+// Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
+// interface, there must always be the same number of bytes written as bytes read.
+// This is accomplished by sending zero bits if r is bigger than w or discarding
+// the incoming data if w is bigger than r.
+func (spi SPI) Tx(w, r []byte) error {
+	toTransfer := len(w)
+	if len(r) > toTransfer {
+		toTransfer = len(r)
+	}
+
+	for toTransfer != 0 {
+		// Do only 64 bytes at a time.
+		chunkSize := toTransfer
+		if chunkSize > 64 {
+			chunkSize = 64
+		}
+
+		// Fill tx buffer.
+		transferWords := (*[16]volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(&spi.Bus.W0))))
+		if len(w) >= 64 {
+			// We can fill the entire 64-byte transfer buffer with data.
+			// This loop is slightly faster than the loop below.
+			for i := 0; i < 16; i++ {
+				word := uint32(w[i*4])<<0 | uint32(w[i*4+1])<<8 | uint32(w[i*4+2])<<16 | uint32(w[i*4+3])<<24
+				transferWords[i].Set(word)
+			}
+		} else {
+			// We can't fill the entire transfer buffer, so we need to be a bit
+			// more careful.
+			// Note that parts of the transfer buffer that aren't used still
+			// need to be set to zero, otherwise we might be transferring
+			// garbage from a previous transmission if w is smaller than r.
+			for i := 0; i < 16; i++ {
+				var word uint32
+				if i*4+3 < len(w) {
+					word |= uint32(w[i*4+3]) << 24
+				}
+				if i*4+2 < len(w) {
+					word |= uint32(w[i*4+2]) << 16
+				}
+				if i*4+1 < len(w) {
+					word |= uint32(w[i*4+1]) << 8
+				}
+				if i*4+0 < len(w) {
+					word |= uint32(w[i*4+0]) << 0
+				}
+				transferWords[i].Set(word)
+			}
+		}
+
+		// Do the transfer.
+		spi.Bus.MS_DLEN.Set((uint32(chunkSize)*8 - 1) << esp.SPI2_MS_DLEN_MS_DATA_BITLEN_Pos)
+		spi.Bus.CMD.Set(esp.SPI2_CMD_USR)
+		for spi.Bus.CMD.Get() != 0 {
+		}
+
+		// Read rx buffer.
+		rxSize := 64
+		if rxSize > len(r) {
+			rxSize = len(r)
+		}
+		for i := 0; i < rxSize; i++ {
+			r[i] = byte(transferWords[i/4].Get() >> ((i % 4) * 8))
+		}
+
+		// Cut off some part of the output buffer so the next iteration we will
+		// only send the remaining bytes.
+		if len(w) < chunkSize {
+			w = nil
+		} else {
+			w = w[chunkSize:]
+		}
+		if len(r) < chunkSize {
+			r = nil
+		} else {
+			r = r[chunkSize:]
+		}
+		toTransfer -= chunkSize
+	}
+
+	return nil
+}
+
