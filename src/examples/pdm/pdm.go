@@ -12,7 +12,7 @@ var (
 
 func main() {
 	machine.BUTTONA.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
-	err := pdm.Configure(machine.PDMConfig{})
+	err := pdm.Configure(machine.PDMConfig{CLK: machine.PDM_CLK_PIN, DIN: machine.PDM_DIN_PIN})
 	if err != nil {
 		panic(fmt.Sprintf("Failed to configure PDM:%v", err))
 	}
