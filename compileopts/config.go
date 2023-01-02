@@ -21,6 +21,7 @@ type Config struct {
 	GoMinorVersion int
 	ClangHeaders   string // Clang built-in header include path
 	TestConfig     TestConfig
+	CacheDir       string
 }
 
 // Triple returns the LLVM target triple, like armv6m-unknown-unknown-eabi.
@@ -275,17 +276,16 @@ func (c *Config) DefaultBinaryExtension() string {
 // preprocessing.
 func (c *Config) CFlags() []string {
 	var cflags []string
+	root := c.CacheDir
 	for _, flag := range c.Target.CFlags {
-		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
+		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", root))
 	}
 	switch c.Target.Libc {
 	case "darwin-libSystem":
-		root := goenv.Get("TINYGOROOT")
 		cflags = append(cflags,
 			"--sysroot="+filepath.Join(root, "lib/macos-minimal-sdk/src"),
 		)
 	case "picolibc":
-		root := goenv.Get("TINYGOROOT")
 		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
 		path, _ := c.LibcPath("picolibc")
 		cflags = append(cflags,
@@ -295,7 +295,6 @@ func (c *Config) CFlags() []string {
 			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
 		)
 	case "musl":
-		root := goenv.Get("TINYGOROOT")
 		path, _ := c.LibcPath("musl")
 		arch := MuslArchitecture(c.Triple())
 		cflags = append(cflags,
@@ -305,10 +304,8 @@ func (c *Config) CFlags() []string {
 			"-isystem", filepath.Join(root, "lib", "musl", "include"),
 		)
 	case "wasi-libc":
-		root := goenv.Get("TINYGOROOT")
 		cflags = append(cflags, "--sysroot="+root+"/lib/wasi-libc/sysroot")
 	case "mingw-w64":
-		root := goenv.Get("TINYGOROOT")
 		path, _ := c.LibcPath("mingw-w64")
 		cflags = append(cflags,
 			"--sysroot="+path,
@@ -353,7 +350,7 @@ func (c *Config) CFlags() []string {
 // (like the one for the compiler runtime), but this represents the majority of
 // the flags.
 func (c *Config) LDFlags() []string {
-	root := goenv.Get("TINYGOROOT")
+	root := c.CacheDir
 	// Merge and adjust LDFlags.
 	var ldflags []string
 	for _, flag := range c.Target.LDFlags {
@@ -543,7 +540,7 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 	}
 	var emulator []string
 	for _, s := range parts {
-		s = strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT"))
+		s = strings.ReplaceAll(s, "{root}", goenv.Get("GOCACHE"))
 		s = strings.ReplaceAll(s, "{"+format+"}", binary)
 		emulator = append(emulator, s)
 	}

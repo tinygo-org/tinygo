@@ -118,7 +118,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// Check for a libc dependency.
 	// As a side effect, this also creates the headers for the given libc, if
 	// the libc needs them.
-	root := goenv.Get("TINYGOROOT")
+	root, err := loader.GetCachedGoroot(config)
+	if err != nil {
+		return BuildResult{}, err
+	}
 	var libcDependencies []*compileJob
 	switch config.Target.Libc {
 	case "darwin-libSystem":

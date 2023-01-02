@@ -725,6 +725,7 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		for _, cmd := range gdbCommands {
 			params = append(params, "-ex", cmd)
 		}
+		params = append(params, "--tui")
 	case "lldb":
 		params = append(params, "--arch", config.Triple())
 		if port != "" {
