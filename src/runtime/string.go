@@ -286,12 +286,7 @@ func cgo_GoBytes(ptr unsafe.Pointer, length uintptr) []byte {
 
 func cgo_CBytes(b []byte) unsafe.Pointer {
 	p := malloc(uintptr(len(b)))
-	sliceHeader := struct {
-		p   unsafe.Pointer
-		len uintptr
-		cap uintptr
-	}{p, uintptr(len(b)), uintptr(len(b))}
-	s := *(*[]byte)(unsafe.Pointer(&sliceHeader))
+    s := unsafe.Slice((*byte)(p), len(b))
 	copy(s, b)
 	return p
 }
