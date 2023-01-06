@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"machine/usb/joystick"
+	"math"
 	"time"
 )
 
@@ -12,11 +13,14 @@ func main() {
 	log.SetFlags(log.Lmicroseconds)
 	ticker := time.NewTicker(10 * time.Millisecond)
 	cnt := 0
+	const f = 3.0
 	for range ticker.C {
-		button := cnt%100 == 0
+		t := float64(cnt) * 0.01
+		x := 32767 * math.Sin(2*math.Pi*f*t)
+		button := cnt%100 > 50
 		js.SetButton(2, button)
 		js.SetButton(3, !button)
-		js.SetAxis(0, cnt%65535-32767)
+		js.SetAxis(0, int(x))
 		js.SendState()
 		cnt++
 	}
