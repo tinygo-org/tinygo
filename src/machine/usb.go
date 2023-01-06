@@ -3,6 +3,8 @@
 package machine
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"machine/usb"
 )
@@ -89,8 +91,9 @@ var (
 		usb.CDC_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_BULK | usb.EndpointOut),
 		usb.CDC_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn),
 		usb.HID_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_DISABLE), // Interrupt In
-		usb.MIDI_ENDPOINT_OUT: (usb.ENDPOINT_TYPE_DISABLE), // Bulk Out
+		usb.HID_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_DISABLE), // Interrupt Out
 		usb.MIDI_ENDPOINT_IN:  (usb.ENDPOINT_TYPE_DISABLE), // Bulk In
+		usb.MIDI_ENDPOINT_OUT: (usb.ENDPOINT_TYPE_DISABLE), // Bulk Out
 	}
 )
 
@@ -108,6 +111,8 @@ func sendDescriptor(setup usb.Setup) {
 			usbDescriptor = usb.DescriptorCDCHID
 		case (usbDescriptorConfig & usb.DescriptorConfigMIDI) > 0:
 			usbDescriptor = usb.DescriptorCDCMIDI
+		case (usbDescriptorConfig & usb.DescriptorConfigJoystick) > 0:
+			usbDescriptor = usb.DescriptorCDCJoystick
 		default:
 			usbDescriptor = usb.DescriptorCDC
 		}
@@ -259,4 +264,19 @@ func EnableMIDI(txHandler func(), rxHandler func([]byte), setupHandler func(usb.
 	endPoints[usb.MIDI_ENDPOINT_IN] = (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn)
 	usbRxHandler[usb.MIDI_ENDPOINT_OUT] = rxHandler
 	usbTxHandler[usb.MIDI_ENDPOINT_IN] = txHandler
+}
+
+// EnableJoystick enables HID. This function must be executed from the init().
+func EnableJoystick(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool, hidDesc []byte) {
+	idx := bytes.Index(usb.DescriptorCDCJoystick.Configuration, []byte{
+		0x09, 0x21, 0x11, 0x01, 0x00, 0x01, 0x22,
+	})
+	binary.LittleEndian.PutUint16(usb.DescriptorCDCJoystick.Configuration[idx+7:idx+9], uint16(len(hidDesc)))
+	usb.DescriptorCDCJoystick.HID[2] = hidDesc
+	usbDescriptorConfig |= usb.DescriptorConfigJoystick
+	endPoints[usb.HID_ENDPOINT_OUT] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut)
+	usbRxHandler[usb.HID_ENDPOINT_OUT] = rxHandler
+	endPoints[usb.HID_ENDPOINT_IN] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn)
+	usbTxHandler[usb.HID_ENDPOINT_IN] = txHandler
+	usbSetupHandler[usb.HID_INTERFACE] = setupHandler // 0x03 (HID - Human Interface Device)
 }
