@@ -18,5 +18,6 @@ func main() {
 		js.SetButton(3, !button)
 		js.SetAxis(0, cnt%65535-32767)
 		js.SendState()
+		cnt++
 	}
 }
