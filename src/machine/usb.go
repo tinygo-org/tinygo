@@ -66,10 +66,10 @@ var (
 var udd_ep_control_cache_buffer [256]uint8
 
 //go:align 4
-var udd_ep_in_cache_buffer [7][64]uint8
+var udd_ep_in_cache_buffer [usb.NumberOfEndpoints][64]uint8
 
 //go:align 4
-var udd_ep_out_cache_buffer [7][64]uint8
+var udd_ep_out_cache_buffer [usb.NumberOfEndpoints][64]uint8
 
 // usb_trans_buffer max size is 255 since that is max size
 // for a descriptor (bLength is 1 byte), and the biggest use
