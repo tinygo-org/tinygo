@@ -10,7 +10,8 @@ import (
 )
 
 type USBDevice struct {
-	initcomplete bool
+	initcomplete         bool
+	InitEndpointComplete bool
 }
 
 var (
@@ -215,6 +216,7 @@ func handleStandardSetup(setup usb.Setup) bool {
 			}
 
 			usbConfiguration = setup.WValueL
+			USBDev.InitEndpointComplete = true
 
 			SendZlp()
 			return true
