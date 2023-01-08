@@ -76,11 +76,13 @@ func (m *Joystick) rxHandler(b []byte) {
 }
 
 func (m *Joystick) tx(b []byte) {
-	if m.waitTxc {
-		m.buf.Put(b)
-	} else {
-		m.waitTxc = true
-		m.sendUSBPacket(b)
+	if machine.USBDev.InitEndpointComplete {
+		if m.waitTxc {
+			m.buf.Put(b)
+		} else {
+			m.waitTxc = true
+			m.sendUSBPacket(b)
+		}
 	}
 }
 
