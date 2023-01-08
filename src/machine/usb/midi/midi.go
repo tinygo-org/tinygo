@@ -71,11 +71,13 @@ func (m *midi) Handler() {
 }
 
 func (m *midi) tx(b []byte) {
-	if m.waitTxc {
-		m.buf.Put(b)
-	} else {
-		m.waitTxc = true
-		m.sendUSBPacket(b)
+	if machine.USBDev.InitEndpointComplete {
+		if m.waitTxc {
+			m.buf.Put(b)
+		} else {
+			m.waitTxc = true
+			m.sendUSBPacket(b)
+		}
 	}
 }
 

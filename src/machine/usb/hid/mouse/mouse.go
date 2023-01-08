@@ -1,6 +1,7 @@
 package mouse
 
 import (
+	"machine"
 	"machine/usb/hid"
 )
 
@@ -55,11 +56,13 @@ func (m *mouse) Handler() bool {
 }
 
 func (m *mouse) tx(b []byte) {
-	if m.waitTxc {
-		m.buf.Put(b)
-	} else {
-		m.waitTxc = true
-		hid.SendUSBPacket(b)
+	if machine.USBDev.InitEndpointComplete {
+		if m.waitTxc {
+			m.buf.Put(b)
+		} else {
+			m.waitTxc = true
+			hid.SendUSBPacket(b)
+		}
 	}
 }
 
