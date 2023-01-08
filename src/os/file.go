@@ -2,6 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// This file was originally copied from Go, see:
+// https://github.com/golang/go/blob/master/src/os/file.go
+//
+// Some of the code inherited from Go is not used anymore in Tinygo, but we keep
+// changes to a minimum to help simplify bringing changes (e.g. the lstat global
+// is not used here anymore, but we might need it if we add tests from Go in
+// this package).
+
 // Package os implements a subset of the Go "os" package. See
 // https://godoc.org/os for details.
 //
