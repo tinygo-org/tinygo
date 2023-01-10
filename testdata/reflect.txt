@@ -233,7 +233,7 @@ reflect type: struct
 reflect type: struct
   struct: 1
   field: 0 error
-  tag: 
+  tag: ""
   embedded: true
   exported: false
   reflect type: interface caninterface=false
@@ -242,19 +242,19 @@ reflect type: struct
 reflect type: struct
   struct: 3
   field: 0 a
-  tag: 
+  tag: ""
   embedded: false
   exported: false
   reflect type: uint8 caninterface=false
     uint: 42
   field: 1 b
-  tag: 
+  tag: ""
   embedded: false
   exported: false
   reflect type: int16 caninterface=false
     int: 321
   field: 2 c
-  tag: 
+  tag: ""
   embedded: false
   exported: false
   reflect type: int8 caninterface=false
@@ -262,37 +262,37 @@ reflect type: struct
 reflect type: struct comparable=false
   struct: 5
   field: 0 n
-  tag: foo:"bar"
+  tag: "foo:\"bar\""
   embedded: false
   exported: false
   reflect type: int caninterface=false
     int: 5
   field: 1 some
-  tag: 
+  tag: "some\x00tag"
   embedded: false
   exported: false
   reflect type: struct caninterface=false
     struct: 2
     field: 0 X
-    tag: 
+    tag: ""
     embedded: false
     exported: true
     reflect type: int16 caninterface=false
       int: -5
     field: 1 Y
-    tag: 
+    tag: ""
     embedded: false
     exported: true
     reflect type: int16 caninterface=false
       int: 3
   field: 2 zero
-  tag: 
+  tag: ""
   embedded: false
   exported: false
   reflect type: struct caninterface=false
     struct: 0
   field: 3 buf
-  tag: 
+  tag: ""
   embedded: false
   exported: false
   reflect type: slice caninterface=false comparable=false
@@ -306,7 +306,7 @@ reflect type: struct comparable=false
     reflect type: uint8 addrable=true caninterface=false
       uint: 111
   field: 4 Buf
-  tag: 
+  tag: ""
   embedded: false
   exported: true
   reflect type: slice comparable=false
@@ -322,14 +322,14 @@ reflect type: ptr
   reflect type: struct settable=true addrable=true
     struct: 2
     field: 0 next
-    tag: description:"chain"
+    tag: "description:\"chain\""
     embedded: false
     exported: false
     reflect type: ptr addrable=true caninterface=false
       pointer: false struct
       nil: true
     field: 1 foo
-    tag: 
+    tag: ""
     embedded: false
     exported: false
     reflect type: int addrable=true caninterface=false
@@ -337,13 +337,13 @@ reflect type: ptr
 reflect type: struct
   struct: 2
   field: 0 A
-  tag: 
+  tag: ""
   embedded: false
   exported: true
   reflect type: uintptr
     uint: 2
   field: 1 B
-  tag: 
+  tag: ""
   embedded: false
   exported: true
   reflect type: uintptr
