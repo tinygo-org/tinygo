@@ -42,7 +42,7 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 	keySize := b.targetData.TypeAllocSize(llvmKeyType)
 	valueSize := b.targetData.TypeAllocSize(llvmValueType)
 	llvmKeySize := llvm.ConstInt(b.ctx.Int8Type(), keySize, false)
-	llvmValueSize := llvm.ConstInt(b.ctx.Int8Type(), valueSize, false)
+	llvmValueSize := llvm.ConstInt(b.ctx.Int32Type(), valueSize, false)
 	sizeHint := llvm.ConstInt(b.uintptrType, 8, false)
 	algEnum := llvm.ConstInt(b.ctx.Int8Type(), alg, false)
 	if expr.Reserve != nil {
