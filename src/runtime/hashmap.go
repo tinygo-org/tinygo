@@ -15,8 +15,8 @@ type hashmap struct {
 	buckets    unsafe.Pointer // pointer to array of buckets
 	seed       uintptr
 	count      uintptr
+	valueSize  uint32
 	keySize    uint8 // maybe this can store the key type as well? E.g. keysize == 5 means string?
-	valueSize  uint8
 	bucketBits uint8
 	keyEqual   func(x, y unsafe.Pointer, n uintptr) bool
 	keyHash    func(key unsafe.Pointer, size, seed uintptr) uint32
@@ -60,7 +60,7 @@ func hashmapTopHash(hash uint32) uint8 {
 }
 
 // Create a new hashmap with the given keySize and valueSize.
-func hashmapMake(keySize, valueSize uint8, sizeHint uintptr, alg uint8) *hashmap {
+func hashmapMake(keySize uint8, valueSize uint32, sizeHint uintptr, alg uint8) *hashmap {
 	numBuckets := sizeHint / 8
 	bucketBits := uint8(0)
 	for numBuckets != 0 {
