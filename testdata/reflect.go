@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"unsafe"
 )
 
@@ -17,8 +18,8 @@ type (
 		Y int16
 	}
 	mystruct struct {
-		n    int `foo:"bar"`
-		some point
+		n    int   `foo:"bar"`
+		some point "some\x00tag"
 		zero struct{}
 		buf  []byte
 		Buf  []byte
@@ -480,7 +481,7 @@ func showValue(rv reflect.Value, indent string) {
 		for i := 0; i < rv.NumField(); i++ {
 			field := rt.Field(i)
 			println(indent+"  field:", i, field.Name)
-			println(indent+"  tag:", field.Tag)
+			println(indent+"  tag:", strconv.Quote(string(field.Tag)))
 			println(indent+"  embedded:", field.Anonymous)
 			println(indent+"  exported:", field.IsExported())
 			showValue(rv.Field(i), indent+"  ")
