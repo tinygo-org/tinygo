@@ -4,6 +4,7 @@ package machine
 
 import (
 	"runtime/interrupt"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -49,6 +50,10 @@ typedef void (*flash_connect_internal_fn)(void);
 typedef void (*flash_range_erase_fn)(uint32_t, size_t, uint32_t, uint16_t);
 typedef void (*flash_range_program_fn)(uint32_t, const uint8_t*, size_t);
 
+static inline __attribute__((always_inline)) void __compiler_memory_barrier(void) {
+    __asm__ volatile ("" : : : "memory");
+}
+
 #define rom_hword_as_ptr(rom_address) (void *)(uintptr_t)(*(uint16_t *)(uintptr_t)(rom_address))
 
 void *rom_func_lookup(uint32_t code) {
@@ -73,47 +78,47 @@ void reset_usb_boot(uint32_t usb_activity_gpio_pin_mask, uint32_t disable_interf
 #define BOOT2_SIZE_WORDS 64
 #define XIP_BASE 0x10000000
 
-// Flash Storage location region 256k from the start of flash
-#define FLASH_TARGET_OFFSET (256 * 1024)
+// Flash Storage location region 512k from the start of flash
+#define FLASH_TARGET_OFFSET (512 * 1024)
 
 static uint32_t boot2_copyout[BOOT2_SIZE_WORDS];
 static bool boot2_copyout_valid = false;
 
-void flash_init_boot2_copyout() {
-	// if (boot2_copyout_valid)
-	// 		return;
-	// for (int i = 0; i < BOOT2_SIZE_WORDS; ++i)
-	// 		boot2_copyout[i] = ((uint32_t *)XIP_BASE)[i];
-	// //__compiler_memory_barrier();
-	// boot2_copyout_valid = true;
+static void flash_init_boot2_copyout() {
+	if (boot2_copyout_valid)
+			return;
+	for (int i = 0; i < BOOT2_SIZE_WORDS; ++i)
+			boot2_copyout[i] = ((uint32_t *)XIP_BASE)[i];
+	__compiler_memory_barrier();
+	boot2_copyout_valid = true;
 }
 
-void flash_enable_xip_via_boot2() {
+static void flash_enable_xip_via_boot2() {
 	// This would only be used with no flash
 	// Set up XIP for 03h read on bus access (slow but generic)
-	flash_enable_xip_via_boot2_fn func = (flash_enable_xip_via_boot2_fn) rom_func_lookup(ROM_FUNC_FLASH_ENTER_CMD_XIP);
-	func();
+	//flash_enable_xip_via_boot2_fn func = (flash_enable_xip_via_boot2_fn) rom_func_lookup(ROM_FUNC_FLASH_ENTER_CMD_XIP);
+	//func();
 
 	// This is used with flash
-	//((void (*)(void))boot2_copyout+1)();
+	((void (*)(void))boot2_copyout+1)();
 }
 
-void flash_exit_xip() {
+static void flash_exit_xip() {
 	flash_exit_xip_fn func = (flash_exit_xip_fn) rom_func_lookup(ROM_FUNC_FLASH_EXIT_XIP);
 	func();
 }
 
-void flash_flush_cache() {
+static void flash_flush_cache() {
 	flash_flush_cache_fn func = (flash_flush_cache_fn) rom_func_lookup(ROM_FUNC_FLASH_FLUSH_CACHE);
 	func();
 }
 
-void flash_connect_internal() {
+static void flash_connect_internal() {
 	flash_connect_internal_fn func = (flash_connect_internal_fn) rom_func_lookup(ROM_FUNC_CONNECT_INTERNAL_FLASH);
 	func();
 }
 
-void flash_range_erase(uint32_t offset, size_t count) {
+static void flash_range_erase(uint32_t offset, size_t count) {
 	flash_range_erase_fn func = (flash_range_erase_fn) rom_func_lookup(ROM_FUNC_FLASH_RANGE_ERASE);
 	func(offset, count, FLASH_BLOCK_SIZE, FLASH_BLOCK_ERASE_CMD);
 }
@@ -123,6 +128,27 @@ void flash_range_program(uint32_t offset, const uint8_t *data, size_t count)
 	flash_range_program_fn func = (flash_range_program_fn) rom_func_lookup(ROM_FUNC_FLASH_RANGE_PROGRAM);
 	func(offset, data, count);
 }
+
+// See https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_flash/flash.c#L86
+void flash_range_write(uint32_t offset, const uint8_t *data, size_t count)
+{
+	flash_range_program_fn flash_range_program_func = (flash_range_program_fn) rom_func_lookup(ROM_FUNC_FLASH_RANGE_PROGRAM);
+	flash_connect_internal_fn flash_connect_internal_func = (flash_connect_internal_fn) rom_func_lookup(ROM_FUNC_CONNECT_INTERNAL_FLASH);
+	flash_exit_xip_fn flash_exit_xip_func = (flash_exit_xip_fn) rom_func_lookup(ROM_FUNC_FLASH_EXIT_XIP);
+	flash_flush_cache_fn flash_flush_cache_func = (flash_flush_cache_fn) rom_func_lookup(ROM_FUNC_FLASH_FLUSH_CACHE);
+
+	flash_init_boot2_copyout();
+
+	__compiler_memory_barrier();
+
+	flash_connect_internal_func();
+	flash_exit_xip_func();
+
+	flash_range_program_func(offset, data, count);
+	flash_flush_cache_func();
+	flash_enable_xip_via_boot2();
+}
+
 */
 import "C"
 
@@ -135,30 +161,34 @@ func EnterBootloader() {
 // flashFreeAreaStart estimates where free area of the flash might be.
 // Be careful...
 func flashFreeAreaStart() uintptr {
-	return uintptr(C.XIP_BASE+C.FLASH_TARGET_OFFSET)
+	return uintptr(C.XIP_BASE + C.FLASH_TARGET_OFFSET)
 }
 
 func flashAddress(offset uintptr) uintptr {
 	return flashFreeAreaStart() + offset
 }
 
-var flashWriteBuffer [FLASH_PAGE_SIZE]byte
+var flashWriteBuffer [FLASH_PAGE_SIZE]volatile.Register8
 
 func clearFlashWriteBuffer() {
-	flashWriteBuffer[0] = 0
+	for i := 0; i < len(flashWriteBuffer); i++ {
+		flashWriteBuffer[i].Set(0)
+	}
+}
 
-    for i := 1; i < len(flashWriteBuffer); i *= 2 {
-	    copy(flashWriteBuffer[i:], flashWriteBuffer[:i])
-    } 
+func copyFlashWriteBuffer(data []byte) {
+	for i := 0; i < len(data); i++ {
+		flashWriteBuffer[i].Set(data[i])
+	}
 }
 
 const (
-	FLASH_PAGE_SIZE = 1 << 8
+	FLASH_PAGE_SIZE   = 1 << 8
 	FLASH_SECTOR_SIZE = 1 << 12
-	FLASH_BLOCK_SIZE = 1 << 16
+	FLASH_BLOCK_SIZE  = 1 << 16
 )
 
-// FlashErase erases the flash memory starting at the "safe" starting address 
+// FlashErase erases the flash memory starting at the "safe" starting address
 // plus the offset for the number of bytes in size.
 func FlashErase(offset uintptr, size int) error {
 	// TODO: make sure not erasing beyond end of flash
@@ -188,7 +218,7 @@ func FlashErase(offset uintptr, size int) error {
 	return nil
 }
 
-// FlashRead reads the flash memory starting at the "safe" starting address 
+// FlashRead reads the flash memory starting at the "safe" starting address
 // plus the offset for the number of bytes in size.
 func FlashRead(offset uintptr, size int) ([]byte, error) {
 	// TODO: make sure not reading beyond end of flash
@@ -197,41 +227,25 @@ func FlashRead(offset uintptr, size int) ([]byte, error) {
 	flash := unsafe.Slice((*byte)(unsafe.Pointer(flashAddress(offset))), size)
 
 	copy(result, flash)
-	
+
 	return result, nil
 }
 
-// FlashWrite writes the flash memory starting at the "safe" starting address 
+// FlashWrite writes the flash memory starting at the "safe" starting address
 // plus the offset with the bytes in data.
 func FlashWrite(offset uintptr, data []byte) (int, error) {
 	// TODO: make sure not writing beyond end of flash
+	// println("writing to flashAddress(offset)=", flashAddress(offset))
 
 	clearFlashWriteBuffer()
-	copy(flashWriteBuffer[:], data)
+	copyFlashWriteBuffer(data)
 
-	println("writing to flashAddress(offset)=", flashAddress(offset))
+	state := interrupt.Disable()
+	defer interrupt.Restore(state)
 
-	// state := interrupt.Disable()
-	// defer interrupt.Restore(state)
-
-	C.flash_init_boot2_copyout()
-
-    //__compiler_memory_barrier();
-
-	println("connect internal")
-    C.flash_connect_internal()
-
-	println("exit xip")
-    C.flash_exit_xip()
-
-	println("flash range")
-	C.flash_range_program(C.uint32_t(flashAddress(offset)),
-		(*C.uint8_t)(unsafe.Pointer(&flashWriteBuffer[0])), 
-		C.ulong(len(flashWriteBuffer)));
-
-	// Note this is needed to remove CSn IO force as well as cache flushing
-    C.flash_flush_cache()
-    C.flash_enable_xip_via_boot2()
+	C.flash_range_write(C.uint32_t(flashAddress(offset)),
+		(*C.uint8_t)(unsafe.Pointer(&flashWriteBuffer[0])),
+		C.ulong(len(flashWriteBuffer)))
 
 	return len(data), nil
 }

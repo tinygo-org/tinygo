@@ -13,7 +13,7 @@ func main() {
 	println("reading starting flash")
 	data, _ := machine.FlashRead(0, 12)
 	println(string(data))
-	
+
 	for {
 		// println("erasing flash")
 		// machine.FlashErase(0, 12)
