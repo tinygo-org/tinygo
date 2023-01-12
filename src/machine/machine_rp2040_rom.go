@@ -158,14 +158,16 @@ func EnterBootloader() {
 	C.reset_usb_boot(0, 0)
 }
 
-// flashFreeAreaStart estimates where free area of the flash might be.
-// Be careful...
-func flashFreeAreaStart() uintptr {
-	return uintptr(C.XIP_BASE + C.FLASH_TARGET_OFFSET)
+// read address includes the full memory space
+func flashReadAddress(offset uintptr) uintptr {
+	return uintptr(C.XIP_BASE+C.FLASH_TARGET_OFFSET) + offset
 }
 
-func flashAddress(offset uintptr) uintptr {
-	return flashFreeAreaStart() + offset
+// write address starts from 0 where the flash starts
+// The target offset then estimates where free area of the flash might be.
+// be careful...
+func flashWriteAddress(offset uintptr) uintptr {
+	return uintptr(C.FLASH_TARGET_OFFSET) + offset
 }
 
 var flashWriteBuffer [FLASH_PAGE_SIZE]volatile.Register8
@@ -209,7 +211,7 @@ func FlashErase(offset uintptr, size int) error {
 	C.flash_connect_internal()
 
 	C.flash_exit_xip()
-	C.flash_range_erase(C.uint32_t(flashAddress(offset)), C.ulong(size))
+	C.flash_range_erase(C.uint32_t(offset), C.ulong(size))
 
 	// Note this is needed to remove CSn IO force as well as cache flushing
 	C.flash_flush_cache()
@@ -224,7 +226,7 @@ func FlashRead(offset uintptr, size int) ([]byte, error) {
 	// TODO: make sure not reading beyond end of flash
 
 	result := make([]byte, size)
-	flash := unsafe.Slice((*byte)(unsafe.Pointer(flashAddress(offset))), size)
+	flash := unsafe.Slice((*byte)(unsafe.Pointer(flashReadAddress(offset))), size)
 
 	copy(result, flash)
 
@@ -243,7 +245,7 @@ func FlashWrite(offset uintptr, data []byte) (int, error) {
 	state := interrupt.Disable()
 	defer interrupt.Restore(state)
 
-	C.flash_range_write(C.uint32_t(flashAddress(offset)),
+	C.flash_range_write(C.uint32_t(flashWriteAddress(offset)),
 		(*C.uint8_t)(unsafe.Pointer(&flashWriteBuffer[0])),
 		C.ulong(len(flashWriteBuffer)))
 
