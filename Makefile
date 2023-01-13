@@ -286,7 +286,6 @@ TEST_PACKAGES_FAST = \
 	container/list \
 	container/ring \
 	crypto/des \
-	crypto/internal/subtle \
 	crypto/md5 \
 	crypto/rc4 \
 	crypto/sha1 \

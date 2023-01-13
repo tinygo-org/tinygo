@@ -24,7 +24,7 @@ func main() {
 	syscall.Getppid()
 
 	// package math/rand
-	fmt.Println("pseudorandom number:", rand.Int31())
+	fmt.Println("pseudorandom number:", rand.New(rand.NewSource(1)).Int31())
 
 	// package strings
 	fmt.Println("strings.IndexByte:", strings.IndexByte("asdf", 'd'))
