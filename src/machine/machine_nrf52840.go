@@ -77,9 +77,9 @@ func (pdm *PDM) Configure(config PDMConfig) error {
 
 // Read stores a set of samples in the given target buffer. Pointer should
 // represent first element of buffer slice, not the pointer to the slice itself.
-func (pdm *PDM) Read(bufptr *int16, bufsz uint32) (uint32, error) {
-	pdm.device.SAMPLE.SetPTR(uint32(uintptr(unsafe.Pointer(bufptr))))
-	pdm.device.SAMPLE.MAXCNT.Set(bufsz)
+func (pdm *PDM) Read(buf []int16) (uint32, error) {
+	pdm.device.SAMPLE.SetPTR(uint32(uintptr(unsafe.Pointer(&buf[0]))))
+	pdm.device.SAMPLE.MAXCNT.Set(uint32(len(buf)))
 	pdm.device.EVENTS_STARTED.Set(0)
 
 	// Step 1: wait for new sampling to start for target buffer
@@ -102,5 +102,5 @@ func (pdm *PDM) Read(bufptr *int16, bufsz uint32) (uint32, error) {
 	for !pdm.device.EVENTS_STARTED.HasBits(nrf.PDM_EVENTS_STARTED_EVENTS_STARTED) {
 	}
 
-	return bufsz, nil
+	return uint32(len(buf)), nil
 }

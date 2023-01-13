@@ -20,7 +20,7 @@ func main() {
 	for {
 		if machine.BUTTONA.Get() {
 			println("Recording new audio clip into memory")
-			pdm.Read(&audio[0], uint32(len(audio)))
+			pdm.Read(audio)
 			println(fmt.Sprintf("Recorded new audio clip into memory: %v", audio))
 		}
 	}
