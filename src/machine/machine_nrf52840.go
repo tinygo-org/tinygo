@@ -75,8 +75,7 @@ func (pdm *PDM) Configure(config PDMConfig) error {
 	return nil
 }
 
-// Read stores a set of samples in the given target buffer. Pointer should
-// represent first element of buffer slice, not the pointer to the slice itself.
+// Read stores a set of samples in the given target buffer.
 func (pdm *PDM) Read(buf []int16) (uint32, error) {
 	pdm.device.SAMPLE.SetPTR(uint32(uintptr(unsafe.Pointer(&buf[0]))))
 	pdm.device.SAMPLE.MAXCNT.Set(uint32(len(buf)))
