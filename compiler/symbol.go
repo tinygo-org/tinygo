@@ -198,7 +198,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	// should be created right away.
 	// The exception is the package initializer, which does appear in the
 	// *ssa.Package members and so shouldn't be created here.
-	if fn.Synthetic != "" && fn.Synthetic != "package initializer" && fn.Synthetic != "generic function" {
+	if isWrapperFunction(fn) {
 		irbuilder := c.ctx.NewBuilder()
 		b := newBuilder(c, irbuilder, fn)
 		b.createFunction()
@@ -217,6 +217,9 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	info := functionInfo{
 		// Pick the default linkName.
 		linkName: f.RelString(nil),
+	}
+	if isWrapperFunction(f) {
+		info.linkName += "$" + f.Synthetic
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
 	info.parsePragmas(f)
@@ -526,4 +529,20 @@ func hasUnsafeImport(pkg *types.Package) bool {
 		}
 	}
 	return false
+}
+
+func isPackageInitializer(f *ssa.Function) bool {
+	return f.Synthetic == "package initializer"
+}
+
+func isGenericFunction(f *ssa.Function) bool {
+	return f.Synthetic == "generic function"
+}
+
+func isSyntheticFunction(f *ssa.Function) bool {
+	return f.Synthetic != ""
+}
+
+func isWrapperFunction(f *ssa.Function) bool {
+	return isSyntheticFunction(f) && !isPackageInitializer(f) && !isGenericFunction(f)
 }

@@ -191,12 +191,12 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.structFieldName.46" = private unnamed_addr global [10 x i8] c"stackState"
 @"reflect/types.structFieldName.47" = private unnamed_addr global [8 x i8] c"launched"
 @"reflect/types.type:pointer:struct:{entry:basic:uintptr,args:basic:unsafe.Pointer,#stackState:named:internal/task.stackState,launched:basic:bool}" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:struct:{entry:basic:uintptr,args:basic:unsafe.Pointer,#stackState:named:internal/task.stackState,launched:basic:bool}", i32 0, ptr @"*struct{entry uintptr; args unsafe.Pointer; internal/task.stackState; launched bool}$methodset", ptr null, i32 0 }
-@"*struct{entry uintptr; args unsafe.Pointer; internal/task.stackState; launched bool}$methodset" = linkonce_odr constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"internal/task.$methods.unwind()", i32 ptrtoint (ptr @"(*struct{entry uintptr; args unsafe.Pointer; internal/task.stackState; launched bool}).unwind" to i32) }]
+@"*struct{entry uintptr; args unsafe.Pointer; internal/task.stackState; launched bool}$methodset" = linkonce_odr constant [1 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"internal/task.$methods.unwind()", i32 ptrtoint (ptr @"(*struct{entry uintptr; args unsafe.Pointer; internal/task.stackState; launched bool}).unwind$wrapper for func (*internal/task.stackState).unwind()" to i32) }]
 @"reflect/types.type:pointer:named:internal/task.state" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:named:internal/task.state", i32 0, ptr @"*internal/task.state$methodset", ptr null, i32 0 }
 @"internal/task.$methods.initialize(uintptr, unsafe.Pointer, uintptr)" = linkonce_odr constant i8 0, align 1
 @"internal/task.$methods.launch()" = linkonce_odr constant i8 0, align 1
 @"internal/task.$methods.rewind()" = linkonce_odr constant i8 0, align 1
-@"*internal/task.state$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"internal/task.$methods.initialize(uintptr, unsafe.Pointer, uintptr)", i32 ptrtoint (ptr @"(*internal/task.state).initialize" to i32) }, %runtime.interfaceMethodInfo { ptr @"internal/task.$methods.launch()", i32 ptrtoint (ptr @tinygo_launch to i32) }, %runtime.interfaceMethodInfo { ptr @"internal/task.$methods.rewind()", i32 ptrtoint (ptr @tinygo_rewind to i32) }, %runtime.interfaceMethodInfo { ptr @"internal/task.$methods.unwind()", i32 ptrtoint (ptr @"(*internal/task.state).unwind" to i32) }]
+@"*internal/task.state$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"internal/task.$methods.initialize(uintptr, unsafe.Pointer, uintptr)", i32 ptrtoint (ptr @"(*internal/task.state).initialize" to i32) }, %runtime.interfaceMethodInfo { ptr @"internal/task.$methods.launch()", i32 ptrtoint (ptr @tinygo_launch to i32) }, %runtime.interfaceMethodInfo { ptr @"internal/task.$methods.rewind()", i32 ptrtoint (ptr @tinygo_rewind to i32) }, %runtime.interfaceMethodInfo { ptr @"internal/task.$methods.unwind()", i32 ptrtoint (ptr @"(*internal/task.state).unwind$wrapper for func (*internal/task.stackState).unwind()" to i32) }]
 @"reflect/types.structFieldName.48" = private unnamed_addr global [5 x i8] c"state"
 @"reflect/types.structFieldName.49" = private unnamed_addr global [10 x i8] c"DeferFrame"
 @"reflect/types.type:pointer:struct:{Next:pointer:named:internal/task.Task,Ptr:basic:unsafe.Pointer,Data:basic:uint64,gcData:named:internal/task.gcData,state:named:internal/task.state,DeferFrame:basic:unsafe.Pointer}" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:struct:{Next:pointer:named:internal/task.Task,Ptr:basic:unsafe.Pointer,Data:basic:uint64,gcData:named:internal/task.gcData,state:named:internal/task.state,DeferFrame:basic:unsafe.Pointer}", i32 0, ptr null, ptr null, i32 0 }
@@ -229,12 +229,12 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}", i32 0, ptr null, ptr null, i32 0 }
 @"reflect/types.type:pointer:named:error" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:named:error", i32 0, ptr null, ptr null, i32 0 }
 @"reflect/types.structFieldName.54" = private unnamed_addr global [3 x i8] c"err"
-@"struct{*os.File; once sync.Once; err error}$methodset" = linkonce_odr constant [17 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Close() error", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Close$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Fd() uintptr", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Fd$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Name() string", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Name$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Read([]uint8) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Read$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).ReadAt$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadDir(int) ([]io/fs.DirEntry, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).ReadDir$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdir(int) ([]io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Readdir$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdirnames(int) ([]string, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Readdirnames$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Seek(int64, int) (int64, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Seek$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Stat() (io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Stat$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sync() error", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Sync$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.SyscallConn() (syscall.RawConn, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).SyscallConn$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Truncate(int64) error", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Truncate$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Write([]uint8) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Write$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).WriteAt$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteString(string) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).WriteString$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"os.$methods.readdir(int, os.readdirMode) ([]string, []io/fs.DirEntry, []io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).readdir$invoke" to i32) }]
+@"struct{*os.File; once sync.Once; err error}$methodset" = linkonce_odr constant [17 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Close() error", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Close$wrapper for func (*os.File).Close() (err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Fd() uintptr", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Fd$wrapper for func (*os.File).Fd() uintptr$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Name() string", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Name$wrapper for func (*os.File).Name() string$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Read([]uint8) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadDir(int) ([]io/fs.DirEntry, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdir(int) ([]io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdirnames(int) ([]string, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Seek(int64, int) (int64, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Stat() (io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sync() error", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Sync$wrapper for func (*os.File).Sync() error$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.SyscallConn() (syscall.RawConn, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Truncate(int64) error", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Truncate$wrapper for func (*os.File).Truncate(size int64) error$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Write([]uint8) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteString(string) (int, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"os.$methods.readdir(int, os.readdirMode) ([]string, []io/fs.DirEntry, []io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(struct{*os.File; once sync.Once; err error}).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)$invoke" to i32) }]
 @"reflect/types.type:pointer:struct:{#File:pointer:named:os.File,once:named:sync.Once,err:named:error}" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:struct:{#File:pointer:named:os.File,once:named:sync.Once,err:named:error}", i32 0, ptr @"*struct{*os.File; once sync.Once; err error}$methodset", ptr null, i32 0 }
-@"*struct{*os.File; once sync.Once; err error}$methodset" = linkonce_odr constant [17 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Close() error", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Close" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Fd() uintptr", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Fd" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Name() string", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Name" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Read([]uint8) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Read" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).ReadAt" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadDir(int) ([]io/fs.DirEntry, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).ReadDir" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdir(int) ([]io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Readdir" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdirnames(int) ([]string, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Readdirnames" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Seek(int64, int) (int64, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Seek" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Stat() (io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Stat" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sync() error", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Sync" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.SyscallConn() (syscall.RawConn, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).SyscallConn" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Truncate(int64) error", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Truncate" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Write([]uint8) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Write" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).WriteAt" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteString(string) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).WriteString" to i32) }, %runtime.interfaceMethodInfo { ptr @"os.$methods.readdir(int, os.readdirMode) ([]string, []io/fs.DirEntry, []io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).readdir" to i32) }]
-@"main.closeOnce$methodset" = linkonce_odr constant [16 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Fd() uintptr", i32 ptrtoint (ptr @"(main.closeOnce).Fd$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Name() string", i32 ptrtoint (ptr @"(main.closeOnce).Name$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Read([]uint8) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).Read$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).ReadAt$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadDir(int) ([]io/fs.DirEntry, error)", i32 ptrtoint (ptr @"(main.closeOnce).ReadDir$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdir(int) ([]io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(main.closeOnce).Readdir$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdirnames(int) ([]string, error)", i32 ptrtoint (ptr @"(main.closeOnce).Readdirnames$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Seek(int64, int) (int64, error)", i32 ptrtoint (ptr @"(main.closeOnce).Seek$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Stat() (io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(main.closeOnce).Stat$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sync() error", i32 ptrtoint (ptr @"(main.closeOnce).Sync$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.SyscallConn() (syscall.RawConn, error)", i32 ptrtoint (ptr @"(main.closeOnce).SyscallConn$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Truncate(int64) error", i32 ptrtoint (ptr @"(main.closeOnce).Truncate$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Write([]uint8) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).Write$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).WriteAt$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteString(string) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).WriteString$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"os.$methods.readdir(int, os.readdirMode) ([]string, []io/fs.DirEntry, []io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(main.closeOnce).readdir$invoke" to i32) }]
+@"*struct{*os.File; once sync.Once; err error}$methodset" = linkonce_odr constant [17 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Close() error", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Close$wrapper for func (*os.File).Close() (err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Fd() uintptr", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Fd$wrapper for func (*os.File).Fd() uintptr" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Name() string", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Name$wrapper for func (*os.File).Name() string" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Read([]uint8) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadDir(int) ([]io/fs.DirEntry, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdir(int) ([]io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdirnames(int) ([]string, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Seek(int64, int) (int64, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Stat() (io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sync() error", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Sync$wrapper for func (*os.File).Sync() error" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.SyscallConn() (syscall.RawConn, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Truncate(int64) error", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Truncate$wrapper for func (*os.File).Truncate(size int64) error" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Write([]uint8) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteString(string) (int, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"os.$methods.readdir(int, os.readdirMode) ([]string, []io/fs.DirEntry, []io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*struct{*os.File; once sync.Once; err error}).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)" to i32) }]
+@"main.closeOnce$methodset" = linkonce_odr constant [16 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Fd() uintptr", i32 ptrtoint (ptr @"(main.closeOnce).Fd$wrapper for func (*os.File).Fd() uintptr$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Name() string", i32 ptrtoint (ptr @"(main.closeOnce).Name$wrapper for func (*os.File).Name() string$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Read([]uint8) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadDir(int) ([]io/fs.DirEntry, error)", i32 ptrtoint (ptr @"(main.closeOnce).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdir(int) ([]io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(main.closeOnce).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdirnames(int) ([]string, error)", i32 ptrtoint (ptr @"(main.closeOnce).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Seek(int64, int) (int64, error)", i32 ptrtoint (ptr @"(main.closeOnce).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Stat() (io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(main.closeOnce).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sync() error", i32 ptrtoint (ptr @"(main.closeOnce).Sync$wrapper for func (*os.File).Sync() error$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.SyscallConn() (syscall.RawConn, error)", i32 ptrtoint (ptr @"(main.closeOnce).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Truncate(int64) error", i32 ptrtoint (ptr @"(main.closeOnce).Truncate$wrapper for func (*os.File).Truncate(size int64) error$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Write([]uint8) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteString(string) (int, error)", i32 ptrtoint (ptr @"(main.closeOnce).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"os.$methods.readdir(int, os.readdirMode) ([]string, []io/fs.DirEntry, []io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(main.closeOnce).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)$invoke" to i32) }]
 @"main.$methods.close()" = linkonce_odr constant i8 0, align 1
-@"*main.closeOnce$methodset" = linkonce_odr constant [18 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Close() error", i32 ptrtoint (ptr @"(*main.closeOnce).Close" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Fd() uintptr", i32 ptrtoint (ptr @"(*main.closeOnce).Fd" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Name() string", i32 ptrtoint (ptr @"(*main.closeOnce).Name" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Read([]uint8) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Read" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).ReadAt" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadDir(int) ([]io/fs.DirEntry, error)", i32 ptrtoint (ptr @"(*main.closeOnce).ReadDir" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdir(int) ([]io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Readdir" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdirnames(int) ([]string, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Readdirnames" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Seek(int64, int) (int64, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Seek" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Stat() (io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Stat" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sync() error", i32 ptrtoint (ptr @"(*main.closeOnce).Sync" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.SyscallConn() (syscall.RawConn, error)", i32 ptrtoint (ptr @"(*main.closeOnce).SyscallConn" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Truncate(int64) error", i32 ptrtoint (ptr @"(*main.closeOnce).Truncate" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Write([]uint8) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Write" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).WriteAt" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteString(string) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).WriteString" to i32) }, %runtime.interfaceMethodInfo { ptr @"main.$methods.close()", i32 ptrtoint (ptr @"(*main.closeOnce).close" to i32) }, %runtime.interfaceMethodInfo { ptr @"os.$methods.readdir(int, os.readdirMode) ([]string, []io/fs.DirEntry, []io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*main.closeOnce).readdir" to i32) }]
+@"*main.closeOnce$methodset" = linkonce_odr constant [18 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Close() error", i32 ptrtoint (ptr @"(*main.closeOnce).Close" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Fd() uintptr", i32 ptrtoint (ptr @"(*main.closeOnce).Fd$wrapper for func (*os.File).Fd() uintptr" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Name() string", i32 ptrtoint (ptr @"(*main.closeOnce).Name$wrapper for func (*os.File).Name() string" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Read([]uint8) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ReadDir(int) ([]io/fs.DirEntry, error)", i32 ptrtoint (ptr @"(*main.closeOnce).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdir(int) ([]io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Readdirnames(int) ([]string, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Seek(int64, int) (int64, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Stat() (io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sync() error", i32 ptrtoint (ptr @"(*main.closeOnce).Sync$wrapper for func (*os.File).Sync() error" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.SyscallConn() (syscall.RawConn, error)", i32 ptrtoint (ptr @"(*main.closeOnce).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Truncate(int64) error", i32 ptrtoint (ptr @"(*main.closeOnce).Truncate$wrapper for func (*os.File).Truncate(size int64) error" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Write([]uint8) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteAt([]uint8, int64) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.WriteString(string) (int, error)", i32 ptrtoint (ptr @"(*main.closeOnce).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)" to i32) }, %runtime.interfaceMethodInfo { ptr @"main.$methods.close()", i32 ptrtoint (ptr @"(*main.closeOnce).close" to i32) }, %runtime.interfaceMethodInfo { ptr @"os.$methods.readdir(int, os.readdirMode) ([]string, []io/fs.DirEntry, []io/fs.FileInfo, error)", i32 ptrtoint (ptr @"(*main.closeOnce).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)" to i32) }]
 @"main$string.55" = internal unnamed_addr constant [24 x i8] c"exec: Stdout already set", align 1
 @"main$string.56" = internal unnamed_addr constant [38 x i8] c"exec: StdoutPipe after process started", align 1
 @"main$string.57" = internal unnamed_addr constant [1 x i8] c" ", align 1
@@ -255,11 +255,11 @@ target triple = "wasm32-unknown-wasi"
 @"*os.ProcessState$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(*os.ProcessState).ExitCode" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(*os.ProcessState).String" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(*os.ProcessState).Success" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(*os.ProcessState).Sys" to i32) }]
 @"reflect/types.structFieldName.62" = private unnamed_addr global [12 x i8] c"ProcessState"
 @"reflect/types.structFieldName.63" = private unnamed_addr global [6 x i8] c"Stderr"
-@"struct{*os.ProcessState; Stderr []byte}$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(struct{*os.ProcessState; Stderr []byte}).ExitCode$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(struct{*os.ProcessState; Stderr []byte}).String$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(struct{*os.ProcessState; Stderr []byte}).Success$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(struct{*os.ProcessState; Stderr []byte}).Sys$invoke" to i32) }]
+@"struct{*os.ProcessState; Stderr []byte}$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(struct{*os.ProcessState; Stderr []byte}).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(struct{*os.ProcessState; Stderr []byte}).String$wrapper for func (*os.ProcessState).String() string$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(struct{*os.ProcessState; Stderr []byte}).Success$wrapper for func (*os.ProcessState).Success() bool$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(struct{*os.ProcessState; Stderr []byte}).Sys$wrapper for func (*os.ProcessState).Sys() interface{}$invoke" to i32) }]
 @"reflect/types.type:pointer:struct:{#ProcessState:pointer:named:os.ProcessState,Stderr:slice:basic:uint8}" = linkonce_odr constant %runtime.typecodeID { ptr @"reflect/types.type:struct:{#ProcessState:pointer:named:os.ProcessState,Stderr:slice:basic:uint8}", i32 0, ptr @"*struct{*os.ProcessState; Stderr []byte}$methodset", ptr null, i32 0 }
-@"*struct{*os.ProcessState; Stderr []byte}$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(*struct{*os.ProcessState; Stderr []byte}).ExitCode" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(*struct{*os.ProcessState; Stderr []byte}).String" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(*struct{*os.ProcessState; Stderr []byte}).Success" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(*struct{*os.ProcessState; Stderr []byte}).Sys" to i32) }]
-@"main.ExitError$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(main.ExitError).ExitCode$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(main.ExitError).String$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(main.ExitError).Success$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(main.ExitError).Sys$invoke" to i32) }]
-@"*main.ExitError$methodset" = linkonce_odr constant [5 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Error() string", i32 ptrtoint (ptr @"(*main.ExitError).Error" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(*main.ExitError).ExitCode" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(*main.ExitError).String" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(*main.ExitError).Success" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(*main.ExitError).Sys" to i32) }]
+@"*struct{*os.ProcessState; Stderr []byte}$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(*struct{*os.ProcessState; Stderr []byte}).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(*struct{*os.ProcessState; Stderr []byte}).String$wrapper for func (*os.ProcessState).String() string" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(*struct{*os.ProcessState; Stderr []byte}).Success$wrapper for func (*os.ProcessState).Success() bool" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(*struct{*os.ProcessState; Stderr []byte}).Sys$wrapper for func (*os.ProcessState).Sys() interface{}" to i32) }]
+@"main.ExitError$methodset" = linkonce_odr constant [4 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(main.ExitError).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(main.ExitError).String$wrapper for func (*os.ProcessState).String() string$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(main.ExitError).Success$wrapper for func (*os.ProcessState).Success() bool$invoke" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(main.ExitError).Sys$wrapper for func (*os.ProcessState).Sys() interface{}$invoke" to i32) }]
+@"*main.ExitError$methodset" = linkonce_odr constant [5 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Error() string", i32 ptrtoint (ptr @"(*main.ExitError).Error" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.ExitCode() int", i32 ptrtoint (ptr @"(*main.ExitError).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.String() string", i32 ptrtoint (ptr @"(*main.ExitError).String$wrapper for func (*os.ProcessState).String() string" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Success() bool", i32 ptrtoint (ptr @"(*main.ExitError).Success$wrapper for func (*os.ProcessState).Success() bool" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Sys() interface{}", i32 ptrtoint (ptr @"(*main.ExitError).Sys$wrapper for func (*os.ProcessState).Sys() interface{}" to i32) }]
 @"main$string.64" = internal unnamed_addr constant [9 x i8] c"/dev/null", align 1
 @"reflect/types.typeid:pointer:named:os.File" = external constant i8
 @os.ErrProcessDone = external global %runtime._interface, align 4
@@ -277,7 +277,7 @@ target triple = "wasm32-unknown-wasi"
 @"main$string.70" = internal unnamed_addr constant [5 x i8] c"Error", align 1
 @"main$string.71" = internal unnamed_addr constant [17 x i8] c"main.wrappedError", align 1
 @"main$string.72" = internal unnamed_addr constant [6 x i8] c"Unwrap", align 1
-@"*main.wrappedError$methodset" = linkonce_odr constant [2 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Error() string", i32 ptrtoint (ptr @"(*main.wrappedError).Error" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Unwrap() error", i32 ptrtoint (ptr @"(*main.wrappedError).Unwrap" to i32) }]
+@"*main.wrappedError$methodset" = linkonce_odr constant [2 x %runtime.interfaceMethodInfo] [%runtime.interfaceMethodInfo { ptr @"reflect/methods.Error() string", i32 ptrtoint (ptr @"(*main.wrappedError).Error$wrapper for func (main.wrappedError).Error() string" to i32) }, %runtime.interfaceMethodInfo { ptr @"reflect/methods.Unwrap() error", i32 ptrtoint (ptr @"(*main.wrappedError).Unwrap$wrapper for func (main.wrappedError).Unwrap() error" to i32) }]
 @"main$string.73" = internal unnamed_addr constant [31 x i8] c"blocking select matched no case", align 1
 @"main$pack" = internal unnamed_addr constant { %runtime._string } { %runtime._string { ptr @"main$string.73", i32 31 } }
 @"main$string.74" = internal unnamed_addr constant [9 x i8] c"/dev/null", align 1
@@ -2004,11 +2004,11 @@ store.next115:                                    ; preds = %slice.next
   %slicelit = call ptr @runtime.alloc(i32 24, ptr nonnull inttoptr (i32 197 to ptr), ptr undef) #14
   call void @runtime.trackPointer(ptr nonnull %slicelit, ptr undef) #14
   %slicelit.repack245 = getelementptr inbounds { ptr, ptr }, ptr %slicelit, i32 0, i32 1
-  store ptr @"(*main.Cmd).stdin$thunk", ptr %slicelit.repack245, align 4
+  store ptr @"(*main.Cmd).stdin$thunk$thunk for func (*main.Cmd).stdin() (f *os.File, err error)", ptr %slicelit.repack245, align 4
   %.repack246 = getelementptr inbounds [3 x { ptr, ptr }], ptr %slicelit, i32 0, i32 1, i32 1
-  store ptr @"(*main.Cmd).stdout$thunk", ptr %.repack246, align 4
+  store ptr @"(*main.Cmd).stdout$thunk$thunk for func (*main.Cmd).stdout() (f *os.File, err error)", ptr %.repack246, align 4
   %.repack247 = getelementptr inbounds [3 x { ptr, ptr }], ptr %slicelit, i32 0, i32 2, i32 1
-  store ptr @"(*main.Cmd).stderr$thunk", ptr %.repack247, align 4
+  store ptr @"(*main.Cmd).stderr$thunk$thunk for func (*main.Cmd).stderr() (f *os.File, err error)", ptr %.repack247, align 4
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %store.next133, %store.next115
@@ -3254,7 +3254,7 @@ declare %runtime._interface @"interface:{Deadline:func:{}{named:time.Time,basic:
 declare void @runtime.slicePanic(ptr) #0
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { ptr, %runtime._interface } @"(*main.Cmd).stdin$thunk"(ptr dereferenceable_or_null(168) %c, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { ptr, %runtime._interface } @"(*main.Cmd).stdin$thunk$thunk for func (*main.Cmd).stdin() (f *os.File, err error)"(ptr dereferenceable_or_null(168) %c, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call { ptr, %runtime._interface } @"(*main.Cmd).stdin"(ptr %c, ptr undef)
   %1 = extractvalue { ptr, %runtime._interface } %0, 0
@@ -3612,7 +3612,7 @@ store.throw73:                                    ; preds = %deref.next61
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { ptr, %runtime._interface } @"(*main.Cmd).stdout$thunk"(ptr dereferenceable_or_null(168) %c, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { ptr, %runtime._interface } @"(*main.Cmd).stdout$thunk$thunk for func (*main.Cmd).stdout() (f *os.File, err error)"(ptr dereferenceable_or_null(168) %c, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call { ptr, %runtime._interface } @"(*main.Cmd).stdout"(ptr %c, ptr undef)
   %1 = extractvalue { ptr, %runtime._interface } %0, 0
@@ -3655,7 +3655,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { ptr, %runtime._interface } @"(*main.Cmd).stderr$thunk"(ptr dereferenceable_or_null(168) %c, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { ptr, %runtime._interface } @"(*main.Cmd).stderr$thunk$thunk for func (*main.Cmd).stderr() (f *os.File, err error)"(ptr dereferenceable_or_null(168) %c, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call { ptr, %runtime._interface } @"(*main.Cmd).stderr"(ptr %c, ptr undef)
   %1 = extractvalue { ptr, %runtime._interface } %0, 0
@@ -4428,7 +4428,7 @@ declare void @"(*internal/task.gcData).swap"(ptr dereferenceable_or_null(4), ptr
 declare void @tinygo_unwind(ptr nocapture dereferenceable_or_null(8)) #8
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden void @"(*struct{entry uintptr; args unsafe.Pointer; internal/task.stackState; launched bool}).unwind"(ptr dereferenceable_or_null(20) %arg0, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden void @"(*struct{entry uintptr; args unsafe.Pointer; internal/task.stackState; launched bool}).unwind$wrapper for func (*internal/task.stackState).unwind()"(ptr dereferenceable_or_null(20) %arg0, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %arg0, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -4450,7 +4450,7 @@ declare void @tinygo_launch(ptr nocapture dereferenceable_or_null(20)) #9
 declare void @tinygo_rewind(ptr nocapture dereferenceable_or_null(20)) #10
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden void @"(*internal/task.state).unwind"(ptr dereferenceable_or_null(20) %arg0, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden void @"(*internal/task.state).unwind$wrapper for func (*internal/task.stackState).unwind()"(ptr dereferenceable_or_null(20) %arg0, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %arg0, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -4484,7 +4484,7 @@ declare void @"(*sync.Once).Do"(ptr dereferenceable_or_null(12), ptr, ptr, ptr) 
 declare i1 @"interface:{Error:func:{}{basic:string}}.$typeassert"(i32) #11
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Close"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Close$wrapper for func (*os.File).Close() (err error)"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4522,7 +4522,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Close$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Close$wrapper for func (*os.File).Close() (err error)$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -4536,12 +4536,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue { ptr, %sync.Once, %runtime._interface } %3, %runtime._interface %.unpack47, 2
-  %ret = call %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Close"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
+  %ret = call %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Close$wrapper for func (*os.File).Close() (err error)"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
   ret %runtime._interface %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"(struct{*os.File; once sync.Once; err error}).Fd"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"(struct{*os.File; once sync.Once; err error}).Fd$wrapper for func (*os.File).Fd() uintptr"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4577,7 +4577,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr i32 @"(struct{*os.File; once sync.Once; err error}).Fd$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr i32 @"(struct{*os.File; once sync.Once; err error}).Fd$wrapper for func (*os.File).Fd() uintptr$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -4591,12 +4591,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue { ptr, %sync.Once, %runtime._interface } %3, %runtime._interface %.unpack47, 2
-  %ret = call i32 @"(struct{*os.File; once sync.Once; err error}).Fd"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
+  %ret = call i32 @"(struct{*os.File; once sync.Once; err error}).Fd$wrapper for func (*os.File).Fd() uintptr"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
   ret i32 %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(struct{*os.File; once sync.Once; err error}).Name"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(struct{*os.File; once sync.Once; err error}).Name$wrapper for func (*os.File).Name() string"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4634,7 +4634,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._string @"(struct{*os.File; once sync.Once; err error}).Name$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._string @"(struct{*os.File; once sync.Once; err error}).Name$wrapper for func (*os.File).Name() string$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -4648,12 +4648,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue { ptr, %sync.Once, %runtime._interface } %3, %runtime._interface %.unpack47, 2
-  %ret = call %runtime._string @"(struct{*os.File; once sync.Once; err error}).Name"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
+  %ret = call %runtime._string @"(struct{*os.File; once sync.Once; err error}).Name$wrapper for func (*os.File).Name() string"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
   ret %runtime._string %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Read"({ ptr, %sync.Once, %runtime._interface } %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4692,7 +4692,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Read$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, ptr %4) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, ptr %4) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %5 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -4706,12 +4706,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %7, ptr %.unpack4.unpack6, 1
   %8 = insertvalue { ptr, %sync.Once, %runtime._interface } %6, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Read"({ ptr, %sync.Once, %runtime._interface } %8, ptr %1, i32 %2, i32 %3, ptr %4)
+  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %8, ptr %1, i32 %2, i32 %3, ptr %4)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadAt"({ ptr, %sync.Once, %runtime._interface } %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %offset, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %offset, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4750,7 +4750,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadAt$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %6 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -4764,12 +4764,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %8, ptr %.unpack4.unpack6, 1
   %9 = insertvalue { ptr, %sync.Once, %runtime._interface } %7, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadAt"({ ptr, %sync.Once, %runtime._interface } %9, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5)
+  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %9, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadDir"({ ptr, %sync.Once, %runtime._interface } %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)"({ ptr, %sync.Once, %runtime._interface } %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4811,7 +4811,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadDir$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
+define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %3 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -4825,12 +4825,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %5, ptr %.unpack4.unpack6, 1
   %6 = insertvalue { ptr, %sync.Once, %runtime._interface } %4, %runtime._interface %.unpack47, 2
-  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadDir"({ ptr, %sync.Once, %runtime._interface } %6, i32 %1, ptr %2)
+  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)"({ ptr, %sync.Once, %runtime._interface } %6, i32 %1, ptr %2)
   ret { { ptr, i32, i32 }, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdir"({ ptr, %sync.Once, %runtime._interface } %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)"({ ptr, %sync.Once, %runtime._interface } %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4872,7 +4872,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdir$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
+define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %3 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -4886,12 +4886,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %5, ptr %.unpack4.unpack6, 1
   %6 = insertvalue { ptr, %sync.Once, %runtime._interface } %4, %runtime._interface %.unpack47, 2
-  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdir"({ ptr, %sync.Once, %runtime._interface } %6, i32 %1, ptr %2)
+  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)"({ ptr, %sync.Once, %runtime._interface } %6, i32 %1, ptr %2)
   ret { { ptr, i32, i32 }, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdirnames"({ ptr, %sync.Once, %runtime._interface } %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)"({ ptr, %sync.Once, %runtime._interface } %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4933,7 +4933,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdirnames$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
+define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %3 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -4947,12 +4947,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %5, ptr %.unpack4.unpack6, 1
   %6 = insertvalue { ptr, %sync.Once, %runtime._interface } %4, %runtime._interface %.unpack47, 2
-  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdirnames"({ ptr, %sync.Once, %runtime._interface } %6, i32 %1, ptr %2)
+  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)"({ ptr, %sync.Once, %runtime._interface } %6, i32 %1, ptr %2)
   ret { { ptr, i32, i32 }, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i64, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Seek"({ ptr, %sync.Once, %runtime._interface } %f, i64 %offset, i32 %whence, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i64, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)"({ ptr, %sync.Once, %runtime._interface } %f, i64 %offset, i32 %whence, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -4991,7 +4991,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i64, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Seek$invoke"(ptr %0, i64 %1, i32 %2, ptr %3) unnamed_addr #1 {
+define linkonce_odr { i64, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)$invoke"(ptr %0, i64 %1, i32 %2, ptr %3) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %4 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5005,12 +5005,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %6, ptr %.unpack4.unpack6, 1
   %7 = insertvalue { ptr, %sync.Once, %runtime._interface } %5, %runtime._interface %.unpack47, 2
-  %ret = call { i64, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Seek"({ ptr, %sync.Once, %runtime._interface } %7, i64 %1, i32 %2, ptr %3)
+  %ret = call { i64, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)"({ ptr, %sync.Once, %runtime._interface } %7, i64 %1, i32 %2, ptr %3)
   ret { i64, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Stat"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -5052,7 +5052,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Stat$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5066,12 +5066,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue { ptr, %sync.Once, %runtime._interface } %3, %runtime._interface %.unpack47, 2
-  %ret = call { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Stat"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
+  %ret = call { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
   ret { %runtime._interface, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Sync"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Sync$wrapper for func (*os.File).Sync() error"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -5109,7 +5109,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Sync$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Sync$wrapper for func (*os.File).Sync() error$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5123,12 +5123,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue { ptr, %sync.Once, %runtime._interface } %3, %runtime._interface %.unpack47, 2
-  %ret = call %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Sync"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
+  %ret = call %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Sync$wrapper for func (*os.File).Sync() error"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
   ret %runtime._interface %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).SyscallConn"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)"({ ptr, %sync.Once, %runtime._interface } %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -5170,7 +5170,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).SyscallConn$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5184,12 +5184,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue { ptr, %sync.Once, %runtime._interface } %3, %runtime._interface %.unpack47, 2
-  %ret = call { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).SyscallConn"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
+  %ret = call { %runtime._interface, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)"({ ptr, %sync.Once, %runtime._interface } %5, ptr %1)
   ret { %runtime._interface, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Truncate"({ ptr, %sync.Once, %runtime._interface } %f, i64 %size, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Truncate$wrapper for func (*os.File).Truncate(size int64) error"({ ptr, %sync.Once, %runtime._interface } %f, i64 %size, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -5227,7 +5227,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Truncate$invoke"(ptr %0, i64 %1, ptr %2) unnamed_addr #1 {
+define linkonce_odr %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Truncate$wrapper for func (*os.File).Truncate(size int64) error$invoke"(ptr %0, i64 %1, ptr %2) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %3 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5241,12 +5241,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %5, ptr %.unpack4.unpack6, 1
   %6 = insertvalue { ptr, %sync.Once, %runtime._interface } %4, %runtime._interface %.unpack47, 2
-  %ret = call %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Truncate"({ ptr, %sync.Once, %runtime._interface } %6, i64 %1, ptr %2)
+  %ret = call %runtime._interface @"(struct{*os.File; once sync.Once; err error}).Truncate$wrapper for func (*os.File).Truncate(size int64) error"({ ptr, %sync.Once, %runtime._interface } %6, i64 %1, ptr %2)
   ret %runtime._interface %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Write"({ ptr, %sync.Once, %runtime._interface } %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -5285,7 +5285,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Write$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, ptr %4) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, ptr %4) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %5 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5299,12 +5299,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %7, ptr %.unpack4.unpack6, 1
   %8 = insertvalue { ptr, %sync.Once, %runtime._interface } %6, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Write"({ ptr, %sync.Once, %runtime._interface } %8, ptr %1, i32 %2, i32 %3, ptr %4)
+  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %8, ptr %1, i32 %2, i32 %3, ptr %4)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteAt"({ ptr, %sync.Once, %runtime._interface } %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %off, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %off, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -5343,7 +5343,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteAt$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %6 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5357,12 +5357,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %8, ptr %.unpack4.unpack6, 1
   %9 = insertvalue { ptr, %sync.Once, %runtime._interface } %7, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteAt"({ ptr, %sync.Once, %runtime._interface } %9, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5)
+  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %9, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteString"({ ptr, %sync.Once, %runtime._interface } %f, ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %f, ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -5401,7 +5401,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteString$invoke"(ptr %0, ptr %1, i32 %2, ptr %3) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, ptr %3) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %4 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5415,12 +5415,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %6, ptr %.unpack4.unpack6, 1
   %7 = insertvalue { ptr, %sync.Once, %runtime._interface } %5, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteString"({ ptr, %sync.Once, %runtime._interface } %7, ptr %1, i32 %2, ptr %3)
+  %ret = call { i32, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)"({ ptr, %sync.Once, %runtime._interface } %7, ptr %1, i32 %2, ptr %3)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).readdir"({ ptr, %sync.Once, %runtime._interface } %f, i32 %n, i32 %mode, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)"({ ptr, %sync.Once, %runtime._interface } %f, i32 %n, i32 %mode, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca { ptr, %sync.Once, %runtime._interface }, align 8
   store ptr null, ptr %f1, align 8
@@ -5476,7 +5476,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).readdir$invoke"(ptr %0, i32 %1, i32 %2, ptr %3) unnamed_addr #1 {
+define linkonce_odr { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)$invoke"(ptr %0, i32 %1, i32 %2, ptr %3) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %4 = insertvalue { ptr, %sync.Once, %runtime._interface } undef, ptr %.unpack, 0
@@ -5490,12 +5490,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %6, ptr %.unpack4.unpack6, 1
   %7 = insertvalue { ptr, %sync.Once, %runtime._interface } %5, %runtime._interface %.unpack47, 2
-  %ret = call { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).readdir"({ ptr, %sync.Once, %runtime._interface } %7, i32 %1, i32 %2, ptr %3)
+  %ret = call { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(struct{*os.File; once sync.Once; err error}).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)"({ ptr, %sync.Once, %runtime._interface } %7, i32 %1, i32 %2, ptr %3)
   ret { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(*struct{*os.File; once sync.Once; err error}).Close"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(*struct{*os.File; once sync.Once; err error}).Close$wrapper for func (*os.File).Close() (err error)"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5520,7 +5520,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"(*struct{*os.File; once sync.Once; err error}).Fd"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"(*struct{*os.File; once sync.Once; err error}).Fd$wrapper for func (*os.File).Fd() uintptr"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5543,7 +5543,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(*struct{*os.File; once sync.Once; err error}).Name"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(*struct{*os.File; once sync.Once; err error}).Name$wrapper for func (*os.File).Name() string"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5568,7 +5568,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Read"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5594,7 +5594,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).ReadAt"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %offset, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %offset, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5620,7 +5620,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).ReadDir"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5649,7 +5649,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Readdir"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5678,7 +5678,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Readdirnames"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5707,7 +5707,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i64, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Seek"(ptr dereferenceable_or_null(24) %f, i64 %offset, i32 %whence, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i64, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)"(ptr dereferenceable_or_null(24) %f, i64 %offset, i32 %whence, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5733,7 +5733,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Stat"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5762,7 +5762,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(*struct{*os.File; once sync.Once; err error}).Sync"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(*struct{*os.File; once sync.Once; err error}).Sync$wrapper for func (*os.File).Sync() error"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5787,7 +5787,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).SyscallConn"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5816,7 +5816,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(*struct{*os.File; once sync.Once; err error}).Truncate"(ptr dereferenceable_or_null(24) %f, i64 %size, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(*struct{*os.File; once sync.Once; err error}).Truncate$wrapper for func (*os.File).Truncate(size int64) error"(ptr dereferenceable_or_null(24) %f, i64 %size, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5841,7 +5841,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Write"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5867,7 +5867,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).WriteAt"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %off, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %off, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5893,7 +5893,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).WriteString"(ptr dereferenceable_or_null(24) %f, ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5919,7 +5919,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).readdir"(ptr dereferenceable_or_null(24) %f, i32 %n, i32 %mode, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(*struct{*os.File; once sync.Once; err error}).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)"(ptr dereferenceable_or_null(24) %f, i32 %n, i32 %mode, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -5962,7 +5962,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"(main.closeOnce).Fd"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"(main.closeOnce).Fd$wrapper for func (*os.File).Fd() uintptr"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -5998,7 +5998,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr i32 @"(main.closeOnce).Fd$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr i32 @"(main.closeOnce).Fd$wrapper for func (*os.File).Fd() uintptr$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6012,12 +6012,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue %main.closeOnce %3, %runtime._interface %.unpack47, 2
-  %ret = call i32 @"(main.closeOnce).Fd"(%main.closeOnce %5, ptr %1)
+  %ret = call i32 @"(main.closeOnce).Fd$wrapper for func (*os.File).Fd() uintptr"(%main.closeOnce %5, ptr %1)
   ret i32 %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(main.closeOnce).Name"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(main.closeOnce).Name$wrapper for func (*os.File).Name() string"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6055,7 +6055,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._string @"(main.closeOnce).Name$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._string @"(main.closeOnce).Name$wrapper for func (*os.File).Name() string$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6069,12 +6069,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue %main.closeOnce %3, %runtime._interface %.unpack47, 2
-  %ret = call %runtime._string @"(main.closeOnce).Name"(%main.closeOnce %5, ptr %1)
+  %ret = call %runtime._string @"(main.closeOnce).Name$wrapper for func (*os.File).Name() string"(%main.closeOnce %5, ptr %1)
   ret %runtime._string %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).Read"(%main.closeOnce %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)"(%main.closeOnce %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6113,7 +6113,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).Read$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, ptr %4) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, ptr %4) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %5 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6127,12 +6127,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %7, ptr %.unpack4.unpack6, 1
   %8 = insertvalue %main.closeOnce %6, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(main.closeOnce).Read"(%main.closeOnce %8, ptr %1, i32 %2, i32 %3, ptr %4)
+  %ret = call { i32, %runtime._interface } @"(main.closeOnce).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)"(%main.closeOnce %8, ptr %1, i32 %2, i32 %3, ptr %4)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).ReadAt"(%main.closeOnce %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %offset, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)"(%main.closeOnce %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %offset, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6171,7 +6171,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).ReadAt$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %6 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6185,12 +6185,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %8, ptr %.unpack4.unpack6, 1
   %9 = insertvalue %main.closeOnce %7, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(main.closeOnce).ReadAt"(%main.closeOnce %9, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5)
+  %ret = call { i32, %runtime._interface } @"(main.closeOnce).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)"(%main.closeOnce %9, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).ReadDir"(%main.closeOnce %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)"(%main.closeOnce %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6232,7 +6232,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).ReadDir$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
+define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %3 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6246,12 +6246,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %5, ptr %.unpack4.unpack6, 1
   %6 = insertvalue %main.closeOnce %4, %runtime._interface %.unpack47, 2
-  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).ReadDir"(%main.closeOnce %6, i32 %1, ptr %2)
+  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)"(%main.closeOnce %6, i32 %1, ptr %2)
   ret { { ptr, i32, i32 }, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdir"(%main.closeOnce %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)"(%main.closeOnce %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6293,7 +6293,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdir$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
+define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %3 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6307,12 +6307,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %5, ptr %.unpack4.unpack6, 1
   %6 = insertvalue %main.closeOnce %4, %runtime._interface %.unpack47, 2
-  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdir"(%main.closeOnce %6, i32 %1, ptr %2)
+  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)"(%main.closeOnce %6, i32 %1, ptr %2)
   ret { { ptr, i32, i32 }, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdirnames"(%main.closeOnce %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)"(%main.closeOnce %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6354,7 +6354,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdirnames$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
+define linkonce_odr { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)$invoke"(ptr %0, i32 %1, ptr %2) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %3 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6368,12 +6368,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %5, ptr %.unpack4.unpack6, 1
   %6 = insertvalue %main.closeOnce %4, %runtime._interface %.unpack47, 2
-  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdirnames"(%main.closeOnce %6, i32 %1, ptr %2)
+  %ret = call { { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)"(%main.closeOnce %6, i32 %1, ptr %2)
   ret { { ptr, i32, i32 }, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i64, %runtime._interface } @"(main.closeOnce).Seek"(%main.closeOnce %f, i64 %offset, i32 %whence, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i64, %runtime._interface } @"(main.closeOnce).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)"(%main.closeOnce %f, i64 %offset, i32 %whence, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6412,7 +6412,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i64, %runtime._interface } @"(main.closeOnce).Seek$invoke"(ptr %0, i64 %1, i32 %2, ptr %3) unnamed_addr #1 {
+define linkonce_odr { i64, %runtime._interface } @"(main.closeOnce).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)$invoke"(ptr %0, i64 %1, i32 %2, ptr %3) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %4 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6426,12 +6426,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %6, ptr %.unpack4.unpack6, 1
   %7 = insertvalue %main.closeOnce %5, %runtime._interface %.unpack47, 2
-  %ret = call { i64, %runtime._interface } @"(main.closeOnce).Seek"(%main.closeOnce %7, i64 %1, i32 %2, ptr %3)
+  %ret = call { i64, %runtime._interface } @"(main.closeOnce).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)"(%main.closeOnce %7, i64 %1, i32 %2, ptr %3)
   ret { i64, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(main.closeOnce).Stat"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(main.closeOnce).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6473,7 +6473,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { %runtime._interface, %runtime._interface } @"(main.closeOnce).Stat$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr { %runtime._interface, %runtime._interface } @"(main.closeOnce).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6487,12 +6487,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue %main.closeOnce %3, %runtime._interface %.unpack47, 2
-  %ret = call { %runtime._interface, %runtime._interface } @"(main.closeOnce).Stat"(%main.closeOnce %5, ptr %1)
+  %ret = call { %runtime._interface, %runtime._interface } @"(main.closeOnce).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)"(%main.closeOnce %5, ptr %1)
   ret { %runtime._interface, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(main.closeOnce).Sync"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(main.closeOnce).Sync$wrapper for func (*os.File).Sync() error"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6530,7 +6530,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._interface @"(main.closeOnce).Sync$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._interface @"(main.closeOnce).Sync$wrapper for func (*os.File).Sync() error$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6544,12 +6544,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue %main.closeOnce %3, %runtime._interface %.unpack47, 2
-  %ret = call %runtime._interface @"(main.closeOnce).Sync"(%main.closeOnce %5, ptr %1)
+  %ret = call %runtime._interface @"(main.closeOnce).Sync$wrapper for func (*os.File).Sync() error"(%main.closeOnce %5, ptr %1)
   ret %runtime._interface %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(main.closeOnce).SyscallConn"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(main.closeOnce).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)"(%main.closeOnce %f, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6591,7 +6591,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { %runtime._interface, %runtime._interface } @"(main.closeOnce).SyscallConn$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr { %runtime._interface, %runtime._interface } @"(main.closeOnce).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6605,12 +6605,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %4, ptr %.unpack4.unpack6, 1
   %5 = insertvalue %main.closeOnce %3, %runtime._interface %.unpack47, 2
-  %ret = call { %runtime._interface, %runtime._interface } @"(main.closeOnce).SyscallConn"(%main.closeOnce %5, ptr %1)
+  %ret = call { %runtime._interface, %runtime._interface } @"(main.closeOnce).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)"(%main.closeOnce %5, ptr %1)
   ret { %runtime._interface, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(main.closeOnce).Truncate"(%main.closeOnce %f, i64 %size, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(main.closeOnce).Truncate$wrapper for func (*os.File).Truncate(size int64) error"(%main.closeOnce %f, i64 %size, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6648,7 +6648,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._interface @"(main.closeOnce).Truncate$invoke"(ptr %0, i64 %1, ptr %2) unnamed_addr #1 {
+define linkonce_odr %runtime._interface @"(main.closeOnce).Truncate$wrapper for func (*os.File).Truncate(size int64) error$invoke"(ptr %0, i64 %1, ptr %2) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %3 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6662,12 +6662,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %5, ptr %.unpack4.unpack6, 1
   %6 = insertvalue %main.closeOnce %4, %runtime._interface %.unpack47, 2
-  %ret = call %runtime._interface @"(main.closeOnce).Truncate"(%main.closeOnce %6, i64 %1, ptr %2)
+  %ret = call %runtime._interface @"(main.closeOnce).Truncate$wrapper for func (*os.File).Truncate(size int64) error"(%main.closeOnce %6, i64 %1, ptr %2)
   ret %runtime._interface %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).Write"(%main.closeOnce %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)"(%main.closeOnce %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6706,7 +6706,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).Write$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, ptr %4) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, ptr %4) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %5 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6720,12 +6720,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %7, ptr %.unpack4.unpack6, 1
   %8 = insertvalue %main.closeOnce %6, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(main.closeOnce).Write"(%main.closeOnce %8, ptr %1, i32 %2, i32 %3, ptr %4)
+  %ret = call { i32, %runtime._interface } @"(main.closeOnce).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)"(%main.closeOnce %8, ptr %1, i32 %2, i32 %3, ptr %4)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).WriteAt"(%main.closeOnce %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %off, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)"(%main.closeOnce %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %off, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6764,7 +6764,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).WriteAt$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %6 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6778,12 +6778,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %8, ptr %.unpack4.unpack6, 1
   %9 = insertvalue %main.closeOnce %7, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(main.closeOnce).WriteAt"(%main.closeOnce %9, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5)
+  %ret = call { i32, %runtime._interface } @"(main.closeOnce).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)"(%main.closeOnce %9, ptr %1, i32 %2, i32 %3, i64 %4, ptr %5)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).WriteString"(%main.closeOnce %f, ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(main.closeOnce).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)"(%main.closeOnce %f, ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6822,7 +6822,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).WriteString$invoke"(ptr %0, ptr %1, i32 %2, ptr %3) unnamed_addr #1 {
+define linkonce_odr { i32, %runtime._interface } @"(main.closeOnce).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)$invoke"(ptr %0, ptr %1, i32 %2, ptr %3) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %4 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6836,12 +6836,12 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %6, ptr %.unpack4.unpack6, 1
   %7 = insertvalue %main.closeOnce %5, %runtime._interface %.unpack47, 2
-  %ret = call { i32, %runtime._interface } @"(main.closeOnce).WriteString"(%main.closeOnce %7, ptr %1, i32 %2, ptr %3)
+  %ret = call { i32, %runtime._interface } @"(main.closeOnce).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)"(%main.closeOnce %7, ptr %1, i32 %2, ptr %3)
   ret { i32, %runtime._interface } %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).readdir"(%main.closeOnce %f, i32 %n, i32 %mode, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)"(%main.closeOnce %f, i32 %n, i32 %mode, ptr %context) unnamed_addr #1 {
 entry:
   %f1 = alloca %main.closeOnce, align 8
   store ptr null, ptr %f1, align 8
@@ -6897,7 +6897,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).readdir$invoke"(ptr %0, i32 %1, i32 %2, ptr %3) unnamed_addr #1 {
+define linkonce_odr { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)$invoke"(ptr %0, i32 %1, i32 %2, ptr %3) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %4 = insertvalue %main.closeOnce undef, ptr %.unpack, 0
@@ -6911,7 +6911,7 @@ entry:
   %.unpack4.unpack6 = load ptr, ptr %.unpack4.elt5, align 4
   %.unpack47 = insertvalue %runtime._interface %6, ptr %.unpack4.unpack6, 1
   %7 = insertvalue %main.closeOnce %5, %runtime._interface %.unpack47, 2
-  %ret = call { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).readdir"(%main.closeOnce %7, i32 %1, i32 %2, ptr %3)
+  %ret = call { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(main.closeOnce).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)"(%main.closeOnce %7, i32 %1, i32 %2, ptr %3)
   ret { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } %ret
 }
 
@@ -6924,8 +6924,8 @@ entry:
 gep.next:                                         ; preds = %entry
   %1 = getelementptr inbounds %main.closeOnce, ptr %c, i32 0, i32 1
   call void @runtime.trackPointer(ptr nonnull %c, ptr undef) #14
-  call void @runtime.trackPointer(ptr nonnull @"(*main.closeOnce).close$bound", ptr undef) #14
-  call void @"(*sync.Once).Do"(ptr nonnull %1, ptr nonnull %c, ptr nonnull @"(*main.closeOnce).close$bound", ptr undef) #14
+  call void @runtime.trackPointer(ptr nonnull @"(*main.closeOnce).close$bound$bound method wrapper for func (*main.closeOnce).close()", ptr undef) #14
+  call void @"(*sync.Once).Do"(ptr nonnull %1, ptr nonnull %c, ptr nonnull @"(*main.closeOnce).close$bound$bound method wrapper for func (*main.closeOnce).close()", ptr undef) #14
   br i1 false, label %gep.throw1, label %gep.next2
 
 gep.next2:                                        ; preds = %gep.next
@@ -6953,7 +6953,7 @@ deref.throw:                                      ; preds = %gep.next2
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"(*main.closeOnce).Fd"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"(*main.closeOnce).Fd$wrapper for func (*os.File).Fd() uintptr"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -6976,7 +6976,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(*main.closeOnce).Name"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(*main.closeOnce).Name$wrapper for func (*os.File).Name() string"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7001,7 +7001,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).Read"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).Read$wrapper for func (*os.File).Read(b []byte) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7027,7 +7027,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).ReadAt"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %offset, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).ReadAt$wrapper for func (*os.File).ReadAt(b []byte, offset int64) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %offset, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7053,7 +7053,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*main.closeOnce).ReadDir"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*main.closeOnce).ReadDir$wrapper for func (*os.File).ReadDir(n int) ([]io/fs.DirEntry, error)"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7082,7 +7082,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*main.closeOnce).Readdir"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*main.closeOnce).Readdir$wrapper for func (*os.File).Readdir(n int) ([]io/fs.FileInfo, error)"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7111,7 +7111,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*main.closeOnce).Readdirnames"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, %runtime._interface } @"(*main.closeOnce).Readdirnames$wrapper for func (*os.File).Readdirnames(n int) (names []string, err error)"(ptr dereferenceable_or_null(24) %f, i32 %n, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7140,7 +7140,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i64, %runtime._interface } @"(*main.closeOnce).Seek"(ptr dereferenceable_or_null(24) %f, i64 %offset, i32 %whence, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i64, %runtime._interface } @"(*main.closeOnce).Seek$wrapper for func (*os.File).Seek(offset int64, whence int) (ret int64, err error)"(ptr dereferenceable_or_null(24) %f, i64 %offset, i32 %whence, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7166,7 +7166,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(*main.closeOnce).Stat"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(*main.closeOnce).Stat$wrapper for func (*os.File).Stat() (io/fs.FileInfo, error)"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7195,7 +7195,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(*main.closeOnce).Sync"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(*main.closeOnce).Sync$wrapper for func (*os.File).Sync() error"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7220,7 +7220,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(*main.closeOnce).SyscallConn"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { %runtime._interface, %runtime._interface } @"(*main.closeOnce).SyscallConn$wrapper for func (*os.File).SyscallConn() (syscall.RawConn, error)"(ptr dereferenceable_or_null(24) %f, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7249,7 +7249,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(*main.closeOnce).Truncate"(ptr dereferenceable_or_null(24) %f, i64 %size, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(*main.closeOnce).Truncate$wrapper for func (*os.File).Truncate(size int64) error"(ptr dereferenceable_or_null(24) %f, i64 %size, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7274,7 +7274,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).Write"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).Write$wrapper for func (*os.File).Write(b []byte) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7300,7 +7300,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).WriteAt"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %off, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).WriteAt$wrapper for func (*os.File).WriteAt(b []byte, off int64) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %b.data, i32 %b.len, i32 %b.cap, i64 %off, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7326,7 +7326,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).WriteString"(ptr dereferenceable_or_null(24) %f, ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { i32, %runtime._interface } @"(*main.closeOnce).WriteString$wrapper for func (*os.File).WriteString(s string) (n int, err error)"(ptr dereferenceable_or_null(24) %f, ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7395,7 +7395,7 @@ store.throw:                                      ; preds = %deref.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(*main.closeOnce).readdir"(ptr dereferenceable_or_null(24) %f, i32 %n, i32 %mode, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden { { ptr, i32, i32 }, { ptr, i32, i32 }, { ptr, i32, i32 }, %runtime._interface } @"(*main.closeOnce).readdir$wrapper for func (*os.File).readdir(n int, mode os.readdirMode) (names []string, dirents []io/fs.DirEntry, infos []io/fs.FileInfo, err error)"(ptr dereferenceable_or_null(24) %f, i32 %n, i32 %mode, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %f, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -7817,7 +7817,7 @@ declare %runtime._string @"(*os.ProcessState).String"(ptr, ptr) #0
 declare %runtime._interface @"(*os.ProcessState).Sys"(ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"(struct{*os.ProcessState; Stderr []byte}).ExitCode"({ ptr, { ptr, i32, i32 } } %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"(struct{*os.ProcessState; Stderr []byte}).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int"({ ptr, { ptr, i32, i32 } } %p, ptr %context) unnamed_addr #1 {
 entry:
   %p1 = alloca { ptr, { ptr, i32, i32 } }, align 8
   store ptr null, ptr %p1, align 8
@@ -7853,7 +7853,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr i32 @"(struct{*os.ProcessState; Stderr []byte}).ExitCode$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr i32 @"(struct{*os.ProcessState; Stderr []byte}).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, { ptr, i32, i32 } } undef, ptr %.unpack, 0
@@ -7867,12 +7867,12 @@ entry:
   %.unpack2.unpack6 = load i32, ptr %.unpack2.elt5, align 4
   %.unpack27 = insertvalue { ptr, i32, i32 } %4, i32 %.unpack2.unpack6, 2
   %5 = insertvalue { ptr, { ptr, i32, i32 } } %2, { ptr, i32, i32 } %.unpack27, 1
-  %ret = call i32 @"(struct{*os.ProcessState; Stderr []byte}).ExitCode"({ ptr, { ptr, i32, i32 } } %5, ptr %1)
+  %ret = call i32 @"(struct{*os.ProcessState; Stderr []byte}).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int"({ ptr, { ptr, i32, i32 } } %5, ptr %1)
   ret i32 %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(struct{*os.ProcessState; Stderr []byte}).String"({ ptr, { ptr, i32, i32 } } %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(struct{*os.ProcessState; Stderr []byte}).String$wrapper for func (*os.ProcessState).String() string"({ ptr, { ptr, i32, i32 } } %p, ptr %context) unnamed_addr #1 {
 entry:
   %p1 = alloca { ptr, { ptr, i32, i32 } }, align 8
   store ptr null, ptr %p1, align 8
@@ -7910,7 +7910,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._string @"(struct{*os.ProcessState; Stderr []byte}).String$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._string @"(struct{*os.ProcessState; Stderr []byte}).String$wrapper for func (*os.ProcessState).String() string$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, { ptr, i32, i32 } } undef, ptr %.unpack, 0
@@ -7924,12 +7924,12 @@ entry:
   %.unpack2.unpack6 = load i32, ptr %.unpack2.elt5, align 4
   %.unpack27 = insertvalue { ptr, i32, i32 } %4, i32 %.unpack2.unpack6, 2
   %5 = insertvalue { ptr, { ptr, i32, i32 } } %2, { ptr, i32, i32 } %.unpack27, 1
-  %ret = call %runtime._string @"(struct{*os.ProcessState; Stderr []byte}).String"({ ptr, { ptr, i32, i32 } } %5, ptr %1)
+  %ret = call %runtime._string @"(struct{*os.ProcessState; Stderr []byte}).String$wrapper for func (*os.ProcessState).String() string"({ ptr, { ptr, i32, i32 } } %5, ptr %1)
   ret %runtime._string %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i1 @"(struct{*os.ProcessState; Stderr []byte}).Success"({ ptr, { ptr, i32, i32 } } %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i1 @"(struct{*os.ProcessState; Stderr []byte}).Success$wrapper for func (*os.ProcessState).Success() bool"({ ptr, { ptr, i32, i32 } } %p, ptr %context) unnamed_addr #1 {
 entry:
   %p1 = alloca { ptr, { ptr, i32, i32 } }, align 8
   store ptr null, ptr %p1, align 8
@@ -7965,7 +7965,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr i1 @"(struct{*os.ProcessState; Stderr []byte}).Success$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr i1 @"(struct{*os.ProcessState; Stderr []byte}).Success$wrapper for func (*os.ProcessState).Success() bool$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, { ptr, i32, i32 } } undef, ptr %.unpack, 0
@@ -7979,12 +7979,12 @@ entry:
   %.unpack2.unpack6 = load i32, ptr %.unpack2.elt5, align 4
   %.unpack27 = insertvalue { ptr, i32, i32 } %4, i32 %.unpack2.unpack6, 2
   %5 = insertvalue { ptr, { ptr, i32, i32 } } %2, { ptr, i32, i32 } %.unpack27, 1
-  %ret = call i1 @"(struct{*os.ProcessState; Stderr []byte}).Success"({ ptr, { ptr, i32, i32 } } %5, ptr %1)
+  %ret = call i1 @"(struct{*os.ProcessState; Stderr []byte}).Success$wrapper for func (*os.ProcessState).Success() bool"({ ptr, { ptr, i32, i32 } } %5, ptr %1)
   ret i1 %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(struct{*os.ProcessState; Stderr []byte}).Sys"({ ptr, { ptr, i32, i32 } } %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(struct{*os.ProcessState; Stderr []byte}).Sys$wrapper for func (*os.ProcessState).Sys() interface{}"({ ptr, { ptr, i32, i32 } } %p, ptr %context) unnamed_addr #1 {
 entry:
   %p1 = alloca { ptr, { ptr, i32, i32 } }, align 8
   store ptr null, ptr %p1, align 8
@@ -8022,7 +8022,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._interface @"(struct{*os.ProcessState; Stderr []byte}).Sys$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._interface @"(struct{*os.ProcessState; Stderr []byte}).Sys$wrapper for func (*os.ProcessState).Sys() interface{}$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue { ptr, { ptr, i32, i32 } } undef, ptr %.unpack, 0
@@ -8036,12 +8036,12 @@ entry:
   %.unpack2.unpack6 = load i32, ptr %.unpack2.elt5, align 4
   %.unpack27 = insertvalue { ptr, i32, i32 } %4, i32 %.unpack2.unpack6, 2
   %5 = insertvalue { ptr, { ptr, i32, i32 } } %2, { ptr, i32, i32 } %.unpack27, 1
-  %ret = call %runtime._interface @"(struct{*os.ProcessState; Stderr []byte}).Sys"({ ptr, { ptr, i32, i32 } } %5, ptr %1)
+  %ret = call %runtime._interface @"(struct{*os.ProcessState; Stderr []byte}).Sys$wrapper for func (*os.ProcessState).Sys() interface{}"({ ptr, { ptr, i32, i32 } } %5, ptr %1)
   ret %runtime._interface %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"(*struct{*os.ProcessState; Stderr []byte}).ExitCode"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"(*struct{*os.ProcessState; Stderr []byte}).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %p, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -8064,7 +8064,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(*struct{*os.ProcessState; Stderr []byte}).String"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(*struct{*os.ProcessState; Stderr []byte}).String$wrapper for func (*os.ProcessState).String() string"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %p, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -8089,7 +8089,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i1 @"(*struct{*os.ProcessState; Stderr []byte}).Success"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i1 @"(*struct{*os.ProcessState; Stderr []byte}).Success$wrapper for func (*os.ProcessState).Success() bool"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %p, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -8112,7 +8112,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(*struct{*os.ProcessState; Stderr []byte}).Sys"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(*struct{*os.ProcessState; Stderr []byte}).Sys$wrapper for func (*os.ProcessState).Sys() interface{}"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %p, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -8137,7 +8137,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"(main.ExitError).ExitCode"(%main.ExitError %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"(main.ExitError).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int"(%main.ExitError %p, ptr %context) unnamed_addr #1 {
 entry:
   %p1 = alloca %main.ExitError, align 8
   store ptr null, ptr %p1, align 8
@@ -8173,7 +8173,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr i32 @"(main.ExitError).ExitCode$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr i32 @"(main.ExitError).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.ExitError undef, ptr %.unpack, 0
@@ -8187,12 +8187,12 @@ entry:
   %.unpack2.unpack6 = load i32, ptr %.unpack2.elt5, align 4
   %.unpack27 = insertvalue { ptr, i32, i32 } %4, i32 %.unpack2.unpack6, 2
   %5 = insertvalue %main.ExitError %2, { ptr, i32, i32 } %.unpack27, 1
-  %ret = call i32 @"(main.ExitError).ExitCode"(%main.ExitError %5, ptr %1)
+  %ret = call i32 @"(main.ExitError).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int"(%main.ExitError %5, ptr %1)
   ret i32 %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(main.ExitError).String"(%main.ExitError %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(main.ExitError).String$wrapper for func (*os.ProcessState).String() string"(%main.ExitError %p, ptr %context) unnamed_addr #1 {
 entry:
   %p1 = alloca %main.ExitError, align 8
   store ptr null, ptr %p1, align 8
@@ -8230,7 +8230,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._string @"(main.ExitError).String$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._string @"(main.ExitError).String$wrapper for func (*os.ProcessState).String() string$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.ExitError undef, ptr %.unpack, 0
@@ -8244,12 +8244,12 @@ entry:
   %.unpack2.unpack6 = load i32, ptr %.unpack2.elt5, align 4
   %.unpack27 = insertvalue { ptr, i32, i32 } %4, i32 %.unpack2.unpack6, 2
   %5 = insertvalue %main.ExitError %2, { ptr, i32, i32 } %.unpack27, 1
-  %ret = call %runtime._string @"(main.ExitError).String"(%main.ExitError %5, ptr %1)
+  %ret = call %runtime._string @"(main.ExitError).String$wrapper for func (*os.ProcessState).String() string"(%main.ExitError %5, ptr %1)
   ret %runtime._string %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i1 @"(main.ExitError).Success"(%main.ExitError %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i1 @"(main.ExitError).Success$wrapper for func (*os.ProcessState).Success() bool"(%main.ExitError %p, ptr %context) unnamed_addr #1 {
 entry:
   %p1 = alloca %main.ExitError, align 8
   store ptr null, ptr %p1, align 8
@@ -8285,7 +8285,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr i1 @"(main.ExitError).Success$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr i1 @"(main.ExitError).Success$wrapper for func (*os.ProcessState).Success() bool$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.ExitError undef, ptr %.unpack, 0
@@ -8299,12 +8299,12 @@ entry:
   %.unpack2.unpack6 = load i32, ptr %.unpack2.elt5, align 4
   %.unpack27 = insertvalue { ptr, i32, i32 } %4, i32 %.unpack2.unpack6, 2
   %5 = insertvalue %main.ExitError %2, { ptr, i32, i32 } %.unpack27, 1
-  %ret = call i1 @"(main.ExitError).Success"(%main.ExitError %5, ptr %1)
+  %ret = call i1 @"(main.ExitError).Success$wrapper for func (*os.ProcessState).Success() bool"(%main.ExitError %5, ptr %1)
   ret i1 %ret
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(main.ExitError).Sys"(%main.ExitError %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(main.ExitError).Sys$wrapper for func (*os.ProcessState).Sys() interface{}"(%main.ExitError %p, ptr %context) unnamed_addr #1 {
 entry:
   %p1 = alloca %main.ExitError, align 8
   store ptr null, ptr %p1, align 8
@@ -8342,7 +8342,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr %runtime._interface @"(main.ExitError).Sys$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
+define linkonce_odr %runtime._interface @"(main.ExitError).Sys$wrapper for func (*os.ProcessState).Sys() interface{}$invoke"(ptr %0, ptr %1) unnamed_addr #1 {
 entry:
   %.unpack = load ptr, ptr %0, align 4
   %2 = insertvalue %main.ExitError undef, ptr %.unpack, 0
@@ -8356,7 +8356,7 @@ entry:
   %.unpack2.unpack6 = load i32, ptr %.unpack2.elt5, align 4
   %.unpack27 = insertvalue { ptr, i32, i32 } %4, i32 %.unpack2.unpack6, 2
   %5 = insertvalue %main.ExitError %2, { ptr, i32, i32 } %.unpack27, 1
-  %ret = call %runtime._interface @"(main.ExitError).Sys"(%main.ExitError %5, ptr %1)
+  %ret = call %runtime._interface @"(main.ExitError).Sys$wrapper for func (*os.ProcessState).Sys() interface{}"(%main.ExitError %5, ptr %1)
   ret %runtime._interface %ret
 }
 
@@ -8386,7 +8386,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"(*main.ExitError).ExitCode"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"(*main.ExitError).ExitCode$wrapper for func (*os.ProcessState).ExitCode() int"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %p, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -8409,7 +8409,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(*main.ExitError).String"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(*main.ExitError).String$wrapper for func (*os.ProcessState).String() string"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %p, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -8434,7 +8434,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i1 @"(*main.ExitError).Success"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i1 @"(*main.ExitError).Success$wrapper for func (*os.ProcessState).Success() bool"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %p, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -8457,7 +8457,7 @@ deref.throw:                                      ; preds = %gep.next
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(*main.ExitError).Sys"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(*main.ExitError).Sys$wrapper for func (*os.ProcessState).Sys() interface{}"(ptr dereferenceable_or_null(16) %p, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %p, null
   br i1 %0, label %gep.throw, label %gep.next
@@ -9183,7 +9183,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._string @"(*main.wrappedError).Error"(ptr dereferenceable_or_null(16) %w, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._string @"(*main.wrappedError).Error$wrapper for func (main.wrappedError).Error() string"(ptr dereferenceable_or_null(16) %w, ptr %context) unnamed_addr #1 {
 entry:
   call void @runtime.trackPointer(ptr %w, ptr undef) #14
   %0 = icmp eq ptr %w, null
@@ -9216,7 +9216,7 @@ deref.throw:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %runtime._interface @"(*main.wrappedError).Unwrap"(ptr dereferenceable_or_null(16) %w, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %runtime._interface @"(*main.wrappedError).Unwrap$wrapper for func (main.wrappedError).Unwrap() error"(ptr dereferenceable_or_null(16) %w, ptr %context) unnamed_addr #1 {
 entry:
   call void @runtime.trackPointer(ptr %w, ptr undef) #14
   %0 = icmp eq ptr %w, null
@@ -9434,7 +9434,7 @@ declare %runtime._string @"path/filepath.Join"(ptr, i32, i32, ptr) #0
 declare %runtime._string @strings.TrimPrefix(ptr, i32, ptr, i32, ptr) #0
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden void @"(*main.closeOnce).close$bound"(ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden void @"(*main.closeOnce).close$bound$bound method wrapper for func (*main.closeOnce).close()"(ptr %context) unnamed_addr #1 {
 entry:
   call void @"(*main.closeOnce).close"(ptr %context, ptr undef)
   ret void
