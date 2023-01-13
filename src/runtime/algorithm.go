@@ -7,6 +7,14 @@ import (
 	"unsafe"
 )
 
+// This function is needed by math/rand since Go 1.20.
+// See: https://github.com/golang/go/issues/54880
+//
+//go:linkname rand_fastrand64 math/rand.fastrand64
+func rand_fastrand64() uint64 {
+	return fastrand64()
+}
+
 // This function is used by hash/maphash.
 func fastrand() uint32 {
 	xorshift32State = xorshift32(xorshift32State)
