@@ -1646,20 +1646,20 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 	case "Sizeof": // unsafe.Sizeof
 		size := b.targetData.TypeAllocSize(argValues[0].Type())
 		return llvm.ConstInt(b.uintptrType, size, false), nil
-	case "Slice": // unsafe.Slice
-		// This creates a slice from a pointer and a length.
+	case "Slice", "String": // unsafe.Slice, unsafe.String
+		// This creates a slice or string from a pointer and a length.
 		// Note that the exception mentioned in the documentation (if the
 		// pointer and length are nil, the slice is also nil) is trivially
 		// already the case.
 		ptr := argValues[0]
 		len := argValues[1]
-		slice := llvm.Undef(b.ctx.StructType([]llvm.Type{
-			ptr.Type(),
-			b.uintptrType,
-			b.uintptrType,
-		}, false))
-		elementType := b.getLLVMType(argTypes[0].Underlying().(*types.Pointer).Elem())
-		b.createUnsafeSliceCheck(ptr, len, elementType, argTypes[1].Underlying().(*types.Basic))
+		var elementType llvm.Type
+		if callName == "Slice" {
+			elementType = b.getLLVMType(argTypes[0].Underlying().(*types.Pointer).Elem())
+		} else {
+			elementType = b.ctx.Int8Type()
+		}
+		b.createUnsafeSliceStringCheck("unsafe."+callName, ptr, len, elementType, argTypes[1].Underlying().(*types.Basic))
 		if len.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
 			// Too small, zero-extend len.
 			len = b.CreateZExt(len, b.uintptrType, "")
@@ -1667,10 +1667,24 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			// Too big, truncate len.
 			len = b.CreateTrunc(len, b.uintptrType, "")
 		}
-		slice = b.CreateInsertValue(slice, ptr, 0, "")
-		slice = b.CreateInsertValue(slice, len, 1, "")
-		slice = b.CreateInsertValue(slice, len, 2, "")
-		return slice, nil
+		if callName == "Slice" {
+			slice := llvm.Undef(b.ctx.StructType([]llvm.Type{
+				ptr.Type(),
+				b.uintptrType,
+				b.uintptrType,
+			}, false))
+			slice = b.CreateInsertValue(slice, ptr, 0, "")
+			slice = b.CreateInsertValue(slice, len, 1, "")
+			slice = b.CreateInsertValue(slice, len, 2, "")
+			return slice, nil
+		} else {
+			str := llvm.Undef(b.getLLVMRuntimeType("_string"))
+			str = b.CreateInsertValue(str, argValues[0], 0, "")
+			str = b.CreateInsertValue(str, len, 1, "")
+			return str, nil
+		}
+	case "SliceData", "StringData": // unsafe.SliceData, unsafe.StringData
+		return b.CreateExtractValue(argValues[0], 0, "slice.data"), nil
 	default:
 		return llvm.Value{}, b.makeError(pos, "todo: builtin: "+callName)
 	}
