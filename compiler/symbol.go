@@ -279,8 +279,12 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					info.linkName = parts[2]
 				}
 			case "//go:section":
+				// Only enable go:section when the package imports "unsafe".
+				// go:section also implies go:noinline since inlining could
+				// move the code to a different section than that requested.
 				if len(parts) == 2 && hasUnsafeImport(f.Pkg.Pkg) {
 					info.section = parts[1]
+					info.inline = inlineNone
 				}
 			case "//go:nobounds":
 				// Skip bounds checking in this function. Useful for some

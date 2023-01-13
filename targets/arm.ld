@@ -42,6 +42,8 @@ SECTIONS
         *(.data)
         *(.data.*)
         . = ALIGN(4);
+        *(.ramfuncs*)      /* Functions that must execute from RAM */
+        . = ALIGN(4);
         _edata = .;        /* used by startup code */
     } >RAM AT>FLASH_TEXT
 
