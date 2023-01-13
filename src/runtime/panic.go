@@ -143,10 +143,11 @@ func sliceToArrayPointerPanic() {
 	runtimePanic("slice smaller than array")
 }
 
-// Panic when calling unsafe.Slice() (Go 1.17+) with a len that's too large
-// (which includes if the ptr is nil and len is nonzero).
+// Panic when calling unsafe.Slice() (Go 1.17+) or unsafe.String() (Go 1.20+)
+// with a len that's too large (which includes if the ptr is nil and len is
+// nonzero).
 func unsafeSlicePanic() {
-	runtimePanic("unsafe.Slice: len out of range")
+	runtimePanic("unsafe.Slice/String: len out of range")
 }
 
 // Panic when trying to create a new channel that is too big.
