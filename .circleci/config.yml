@@ -105,6 +105,13 @@ jobs:
       - test-linux:
           llvm: "14"
     resource_class: large
+  test-llvm15-go120:
+    docker:
+      - image: golang:1.20-rc-buster
+    steps:
+      - test-linux:
+          llvm: "15"
+    resource_class: large
 
 workflows:
   test-all:
@@ -112,3 +119,4 @@ workflows:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
       - test-llvm14-go118
+      - test-llvm15-go120
