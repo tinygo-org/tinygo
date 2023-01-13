@@ -818,7 +818,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		member := pkg.Members[name]
 		switch member := member.(type) {
 		case *ssa.Function:
-			if member.Synthetic == "generic function" {
+			if member.TypeParams() != nil {
 				// Do not try to build generic (non-instantiated) functions.
 				continue
 			}
@@ -1949,28 +1949,55 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Global:
 		panic("global is not an expression")
 	case *ssa.Index:
-		array := b.getValue(expr.X)
+		collection := b.getValue(expr.X)
 		index := b.getValue(expr.Index)
 
-		// Extend index to at least uintptr size, because getelementptr assumes
-		// index is a signed integer.
-		index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+		switch xType := expr.X.Type().Underlying().(type) {
+		case *types.Basic: // extract byte from string
+			// Value type must be a string, which is a basic type.
+			if xType.Info()&types.IsString == 0 {
+				panic("lookup on non-string?")
+			}
 
-		// Check bounds.
-		arrayLen := expr.X.Type().Underlying().(*types.Array).Len()
-		arrayLenLLVM := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
-		b.createLookupBoundsCheck(arrayLenLLVM, index)
+			// Sometimes, the index can be e.g. an uint8 or int8, and we have to
+			// correctly extend that type for two reasons:
+			//  1. The lookup bounds check expects an index of at least uintptr
+			//     size.
+			//  2. getelementptr has signed operands, and therefore s[uint8(x)]
+			//     can be lowered as s[int8(x)]. That would be a bug.
+			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
 
-		// Can't load directly from array (as index is non-constant), so have to
-		// do it using an alloca+gep+load.
-		arrayType := array.Type()
-		alloca, allocaPtr, allocaSize := b.createTemporaryAlloca(arrayType, "index.alloca")
-		b.CreateStore(array, alloca)
-		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-		ptr := b.CreateInBoundsGEP(arrayType, alloca, []llvm.Value{zero, index}, "index.gep")
-		result := b.CreateLoad(arrayType.ElementType(), ptr, "index.load")
-		b.emitLifetimeEnd(allocaPtr, allocaSize)
-		return result, nil
+			// Bounds check.
+			length := b.CreateExtractValue(collection, 1, "len")
+			b.createLookupBoundsCheck(length, index)
+
+			// Lookup byte
+			buf := b.CreateExtractValue(collection, 0, "")
+			bufElemType := b.ctx.Int8Type()
+			bufPtr := b.CreateInBoundsGEP(bufElemType, buf, []llvm.Value{index}, "")
+			return b.CreateLoad(bufElemType, bufPtr, ""), nil
+		case *types.Array: // extract element from array
+			// Extend index to at least uintptr size, because getelementptr
+			// assumes index is a signed integer.
+			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+
+			// Check bounds.
+			arrayLen := llvm.ConstInt(b.uintptrType, uint64(xType.Len()), false)
+			b.createLookupBoundsCheck(arrayLen, index)
+
+			// Can't load directly from array (as index is non-constant), so
+			// have to do it using an alloca+gep+load.
+			arrayType := collection.Type()
+			alloca, allocaPtr, allocaSize := b.createTemporaryAlloca(arrayType, "index.alloca")
+			b.CreateStore(collection, alloca)
+			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			ptr := b.CreateInBoundsGEP(arrayType, alloca, []llvm.Value{zero, index}, "index.gep")
+			result := b.CreateLoad(arrayType.ElementType(), ptr, "index.load")
+			b.emitLifetimeEnd(allocaPtr, allocaSize)
+			return result, nil
+		default:
+			panic("unknown *ssa.Index type")
+		}
 	case *ssa.IndexAddr:
 		val := b.getValue(expr.X)
 		index := b.getValue(expr.Index)
@@ -2023,42 +2050,14 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		default:
 			panic("unreachable")
 		}
-	case *ssa.Lookup:
+	case *ssa.Lookup: // map lookup
 		value := b.getValue(expr.X)
 		index := b.getValue(expr.Index)
-		switch xType := expr.X.Type().Underlying().(type) {
-		case *types.Basic:
-			// Value type must be a string, which is a basic type.
-			if xType.Info()&types.IsString == 0 {
-				panic("lookup on non-string?")
-			}
-
-			// Sometimes, the index can be e.g. an uint8 or int8, and we have to
-			// correctly extend that type for two reasons:
-			//  1. The lookup bounds check expects an index of at least uintptr
-			//     size.
-			//  2. getelementptr has signed operands, and therefore s[uint8(x)]
-			//     can be lowered as s[int8(x)]. That would be a bug.
-			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
-
-			// Bounds check.
-			length := b.CreateExtractValue(value, 1, "len")
-			b.createLookupBoundsCheck(length, index)
-
-			// Lookup byte
-			buf := b.CreateExtractValue(value, 0, "")
-			bufElemType := b.ctx.Int8Type()
-			bufPtr := b.CreateInBoundsGEP(bufElemType, buf, []llvm.Value{index}, "")
-			return b.CreateLoad(bufElemType, bufPtr, ""), nil
-		case *types.Map:
-			valueType := expr.Type()
-			if expr.CommaOk {
-				valueType = valueType.(*types.Tuple).At(0).Type()
-			}
-			return b.createMapLookup(xType.Key(), valueType, value, index, expr.CommaOk, expr.Pos())
-		default:
-			panic("unknown lookup type: " + expr.String())
+		valueType := expr.Type()
+		if expr.CommaOk {
+			valueType = valueType.(*types.Tuple).At(0).Type()
 		}
+		return b.createMapLookup(expr.X.Type().Underlying().(*types.Map).Key(), valueType, value, index, expr.CommaOk, expr.Pos())
 	case *ssa.MakeChan:
 		return b.createMakeChan(expr), nil
 	case *ssa.MakeClosure:
