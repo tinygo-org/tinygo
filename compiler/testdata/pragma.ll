@@ -47,13 +47,13 @@ entry:
   ret void
 }
 
-; Function Attrs: nounwind
-define hidden void @main.functionInSection(ptr %context) unnamed_addr #1 section ".special_function_section" {
+; Function Attrs: noinline nounwind
+define hidden void @main.functionInSection(ptr %context) unnamed_addr #4 section ".special_function_section" {
 entry:
   ret void
 }
 
-; Function Attrs: nounwind
+; Function Attrs: noinline nounwind
 define void @exportedFunctionInSection() #5 section ".special_function_section" {
 entry:
   ret void
@@ -66,4 +66,4 @@ attributes #1 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,
 attributes #2 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="extern_func" "wasm-import-module"="env" "wasm-import-name"="extern_func" }
 attributes #3 = { inlinehint nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #4 = { noinline nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #5 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exportedFunctionInSection" "wasm-import-module"="env" "wasm-import-name"="exportedFunctionInSection" }
+attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exportedFunctionInSection" "wasm-import-module"="env" "wasm-import-name"="exportedFunctionInSection" }
