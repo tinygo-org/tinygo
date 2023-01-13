@@ -1,0 +1,7 @@
+{
+    "inherits": ["nrf9160"],
+    "build-tags": ["feather_nrf9160"],
+    "flash-command": "nrfjprog -f nrf91 --sectorerase --program {hex} --reset --verify",
+    "openocd-interface": "jlink",
+    "openocd-transport": "swd"
+}

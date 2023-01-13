@@ -1,4 +1,4 @@
-//go:build nrf52 || nrf52840 || nrf52833
+//go:build nrf52 || nrf52840 || nrf52833 || nrf9160
 
 package machine
 
@@ -117,13 +117,6 @@ type SPI struct {
 	Bus *nrf.SPIM_Type
 	buf *[1]byte // 1-byte buffer for the Transfer method
 }
-
-// There are 3 SPI interfaces on the NRF528xx.
-var (
-	SPI0 = SPI{Bus: nrf.SPIM0, buf: new([1]byte)}
-	SPI1 = SPI{Bus: nrf.SPIM1, buf: new([1]byte)}
-	SPI2 = SPI{Bus: nrf.SPIM2, buf: new([1]byte)}
-)
 
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {

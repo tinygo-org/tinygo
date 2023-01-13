@@ -1,9 +1,8 @@
-//go:build nrf && !nrf52840
+//go:build nrf
 
 package runtime
 
 import (
-	"device/arm"
 	"device/nrf"
 	"machine"
 	"runtime/interrupt"
@@ -12,51 +11,27 @@ import (
 
 type timeUnit int64
 
+var rtcHandle *nrf.RTC_Type
+
 //go:linkname systemInit SystemInit
 func systemInit()
 
-//export Reset_Handler
-func main() {
-	if nrf.FPUPresent {
-		arm.SCB.CPACR.Set(0) // disable FPU if it is enabled
-	}
-	systemInit()
-	preinit()
-	run()
-	exit(0)
-}
-
-func init() {
-	machine.InitSerial()
-	initLFCLK()
-	initRTC()
-}
-
-func initLFCLK() {
-	if machine.HasLowFrequencyCrystal {
-		nrf.CLOCK.LFCLKSRC.Set(nrf.CLOCK_LFCLKSTAT_SRC_Xtal)
-	}
-	nrf.CLOCK.TASKS_LFCLKSTART.Set(1)
-	for nrf.CLOCK.EVENTS_LFCLKSTARTED.Get() == 0 {
-	}
-	nrf.CLOCK.EVENTS_LFCLKSTARTED.Set(0)
-}
-
-func initRTC() {
-	nrf.RTC1.TASKS_START.Set(1)
+func initRTC(rtc *nrf.RTC_Type) {
+	rtcHandle = rtc
+	rtcHandle.TASKS_START.Set(1)
 	intr := interrupt.New(nrf.IRQ_RTC1, func(intr interrupt.Interrupt) {
-		if nrf.RTC1.EVENTS_COMPARE[0].Get() != 0 {
-			nrf.RTC1.EVENTS_COMPARE[0].Set(0)
-			nrf.RTC1.INTENCLR.Set(nrf.RTC_INTENSET_COMPARE0)
-			nrf.RTC1.EVENTS_COMPARE[0].Set(0)
+		if rtcHandle.EVENTS_COMPARE[0].Get() != 0 {
+			rtcHandle.EVENTS_COMPARE[0].Set(0)
+			rtcHandle.INTENCLR.Set(nrf.RTC_INTENSET_COMPARE0)
+			rtcHandle.EVENTS_COMPARE[0].Set(0)
 			rtc_wakeup.Set(1)
 		}
-		if nrf.RTC1.EVENTS_OVRFLW.Get() != 0 {
-			nrf.RTC1.EVENTS_OVRFLW.Set(0)
+		if rtcHandle.EVENTS_OVRFLW.Get() != 0 {
+			rtcHandle.EVENTS_OVRFLW.Set(0)
 			rtcOverflows.Set(rtcOverflows.Get() + 1)
 		}
 	})
-	nrf.RTC1.INTENSET.Set(nrf.RTC_INTENSET_OVRFLW)
+	rtcHandle.INTENSET.Set(nrf.RTC_INTENSET_OVRFLW)
 	intr.SetPriority(0xc0) // low priority
 	intr.Enable()
 }
@@ -66,7 +41,7 @@ func putchar(c byte) {
 }
 
 func getchar() byte {
-	for machine.Serial.Buffered() == 0 {
+	for buffered() == 0 {
 		Gosched()
 	}
 	v, _ := machine.Serial.ReadByte()
@@ -112,9 +87,9 @@ func ticks() timeUnit {
 	// code and is perhaps easier to prove correct.
 	for {
 		mask := interrupt.Disable()
-		counter := uint32(nrf.RTC1.COUNTER.Get())
+		counter := uint32(rtcHandle.COUNTER.Get())
 		overflows := rtcOverflows.Get()
-		hasOverflow := nrf.RTC1.EVENTS_OVRFLW.Get() != 0
+		hasOverflow := rtcHandle.EVENTS_OVRFLW.Get() != 0
 		interrupt.Restore(mask)
 
 		if hasOverflow {
@@ -132,7 +107,7 @@ func ticks() timeUnit {
 var rtc_wakeup volatile.Register8
 
 func rtc_sleep(ticks uint32) {
-	nrf.RTC1.INTENSET.Set(nrf.RTC_INTENSET_COMPARE0)
+	rtcHandle.INTENSET.Set(nrf.RTC_INTENSET_COMPARE0)
 	rtc_wakeup.Set(0)
 	if ticks == 1 {
 		// Race condition (even in hardware) at ticks == 1.
@@ -140,7 +115,7 @@ func rtc_sleep(ticks uint32) {
 		// describes.
 		ticks = 2
 	}
-	nrf.RTC1.CC[0].Set((nrf.RTC1.COUNTER.Get() + ticks) & 0x00ffffff)
+	rtcHandle.CC[0].Set((rtcHandle.COUNTER.Get() + ticks) & 0x00ffffff)
 	for rtc_wakeup.Get() == 0 {
 		waitForEvents()
 	}

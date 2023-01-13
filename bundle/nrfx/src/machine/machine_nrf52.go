@@ -48,8 +48,8 @@ func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
 }
 
 func (uart *UART) setPins(tx, rx Pin) {
-	nrf.UART0.PSELTXD.Set(uint32(tx))
-	nrf.UART0.PSELRXD.Set(uint32(rx))
+	uart.UART_Type.PSELTXD.Set(uint32(tx))
+	uart.UART_Type.PSELRXD.Set(uint32(rx))
 }
 
 func (i2c *I2C) setPins(scl, sda Pin) {
@@ -63,3 +63,11 @@ var (
 	PWM1 = &PWM{PWM: nrf.PWM1}
 	PWM2 = &PWM{PWM: nrf.PWM2}
 )
+
+// There are 3 SPI interfaces on the NRF528xx.
+var (
+	SPI0 = SPI{Bus: nrf.SPIM0, buf: new([1]byte)}
+	SPI1 = SPI{Bus: nrf.SPIM1, buf: new([1]byte)}
+	SPI2 = SPI{Bus: nrf.SPIM2, buf: new([1]byte)}
+)
+

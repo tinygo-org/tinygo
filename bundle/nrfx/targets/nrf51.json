@@ -3,7 +3,7 @@
 	"build-tags": ["nrf51822", "nrf51", "nrf"],
 	"cflags": [
 		"-DNRF51",
-		"-I{root}/lib/CMSIS/CMSIS/Include",
+		"-I{root}/lib/CMSIS/CMSIS/Core/Include",
 		"-I{root}/lib/nrfx/mdk"
 	],
 	"linkerscript": "targets/nrf51.ld",

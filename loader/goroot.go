@@ -16,11 +16,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"io/fs"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -73,6 +71,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	// Check if the goroot already exists.
 	cachedGorootName := "goroot-" + hex.EncodeToString(hash[:])
 	cachedgoroot := filepath.Join(goenv.Get("GOCACHE"), cachedGorootName)
+	config.CacheDir = cachedgoroot
 	if _, err := os.Stat(cachedgoroot); err == nil {
 		return cachedgoroot, nil
 	}
@@ -102,25 +101,42 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 				dirs = append(dirs, filepath.Join(tmpgoroot, "src", dir))
 			}
 		}
-		sort.Strings(dirs)
-
-		for _, dir := range dirs {
-			err := os.Mkdir(dir, 0777)
+		for dst, src := range merge {
+			info, err := os.Stat(src)
 			if err != nil {
 				return "", err
 			}
+			if !info.IsDir() {
+				dirs = append(dirs, filepath.Join(tmpgoroot, filepath.Dir(dst)))
+			}
+		}
+		sort.Strings(dirs)
+
+		var lastDir string
+		for _, dir := range dirs {
+			if dir == lastDir {
+				continue
+			}
+			err := os.MkdirAll(dir, 0777)
+			if err != nil {
+				return "", err
+			}
+			lastDir = dir
 		}
 	}
 
+	// TODO: Reduce merge symlinks by grouping symlinks with top-most base directory
+	// that doesn't mix different source base directories for files/dirs.
+
 	// Create all symlinks.
 	for dst, src := range merge {
-		err := symlink(src, filepath.Join(tmpgoroot, dst))
+		err := compileopts.Symlink(src, filepath.Join(tmpgoroot, dst))
 		if err != nil {
 			return "", err
 		}
 	}
 
-	// Rename the new merged gorooot into place.
+	// Rename the new merged goroot into place.
 	err = os.Rename(tmpgoroot, cachedgoroot)
 	if err != nil {
 		if errors.Is(err, fs.ErrExist) {
@@ -147,11 +163,66 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) (map[string]string, error) {
 	goSrc := filepath.Join(goroot, "src")
 	tinygoSrc := filepath.Join(tinygoroot, "src")
+	tinygoRootBundle := filepath.Join(tinygoroot, "bundle")
 	merges := make(map[string]string)
+
+	tinygoBundleEntries, err := ioutil.ReadDir(tinygoRootBundle)
+	if err != nil {
+		return nil, err
+	}
+	for _, be := range tinygoBundleEntries {
+		bundleName := be.Name()
+		tinygoBundle := filepath.Join(tinygoRootBundle, bundleName)
+		for _, dir := range []string{"bin", "lib"} {
+			tinygoBundleSubdir := filepath.Join(tinygoBundle, dir)
+			if _, err := os.Stat(tinygoBundleSubdir); err != nil {
+				// TODO: handle non-existing Vs. EPERM
+				continue
+			}
+			goEntries, err := ioutil.ReadDir(tinygoBundleSubdir)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range goEntries {
+				merges[filepath.Join(dir, e.Name())] = filepath.Join(tinygoBundleSubdir, e.Name())
+			}
+		}
+		tinygoBundleSrc := filepath.Join(tinygoBundle, "src")
+		if _, err := os.Stat(tinygoBundleSrc); err != nil {
+			// TODO: handle non-existing Vs. EPERM
+			continue
+		}
+		err := filepath.Walk(tinygoBundleSrc, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				merges[path[len(tinygoBundle)+1:]] = path
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for dir, merge := range overrides {
 		if !merge {
 			// Use the TinyGo version.
-			merges[filepath.Join("src", dir)] = filepath.Join(tinygoSrc, dir)
+			// merges[filepath.Join("src", dir)] = filepath.Join(tinygoSrc, dir)
+			walkPath := filepath.Join(tinygoSrc, dir)
+			err := filepath.Walk(walkPath, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() {
+					merges[path[len(tinygoroot)+1:]] = path
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
 			continue
 		}
 
@@ -182,8 +253,7 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 			return nil, err
 		}
 		for _, e := range goEntries {
-			isDir := e.IsDir()
-			if hasTinyGoFiles && !isDir {
+			if hasTinyGoFiles && !e.IsDir() {
 				// Only merge files from Go if TinyGo does not have any files.
 				// Otherwise we'd end up with a weird mix from both Go
 				// implementations.
@@ -202,10 +272,25 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 		}
 	}
 
-	// Merge the special directories from goroot.
-	for _, dir := range []string{"bin", "lib", "pkg"} {
-		merges[dir] = filepath.Join(goroot, dir)
+	// Merge the special directories from tinygo root and goroot.
+	for _, topdir := range []string{tinygoroot, goroot} {
+		for _, dir := range []string{"bin", "lib"} {
+			goDir := filepath.Join(topdir, dir)
+			goEntries, err := ioutil.ReadDir(goDir)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range goEntries {
+				merges[filepath.Join(dir, e.Name())] = filepath.Join(goDir, e.Name())
+			}
+		}
 	}
+	merges["pkg"] = filepath.Join(goroot, "pkg")
+	merges["targets"] = filepath.Join(goenv.Get("GOCACHE"), "targets")
+	// // Merge the special directories from goroot.
+	// for _, dir := range []string{"bin", "lib", "pkg"} {
+	// 	merges[dir] = filepath.Join(goroot, dir)
+	// }
 
 	return merges, nil
 }
@@ -254,64 +339,4 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		paths["syscall/"] = true // include syscall/js
 	}
 	return paths
-}
-
-// symlink creates a symlink or something similar. On Unix-like systems, it
-// always creates a symlink. On Windows, it tries to create a symlink and if
-// that fails, creates a hardlink or directory junction instead.
-//
-// Note that while Windows 10 does support symlinks and allows them to be
-// created using os.Symlink, it requires developer mode to be enabled.
-// Therefore provide a fallback for when symlinking is not possible.
-// Unfortunately this fallback only works when TinyGo is installed on the same
-// filesystem as the TinyGo cache and the Go installation (which is usually the
-// C drive).
-func symlink(oldname, newname string) error {
-	symlinkErr := os.Symlink(oldname, newname)
-	if runtime.GOOS == "windows" && symlinkErr != nil {
-		// Fallback for when developer mode is disabled.
-		// Note that we return the symlink error even if something else fails
-		// later on. This is because symlinks are the easiest to support
-		// (they're also used on Linux and MacOS) and enabling them is easy:
-		// just enable developer mode.
-		st, err := os.Stat(oldname)
-		if err != nil {
-			return symlinkErr
-		}
-		if st.IsDir() {
-			// Make a directory junction. There may be a way to do this
-			// programmatically, but it involves a lot of magic. Use the mklink
-			// command built into cmd instead (mklink is a builtin, not an
-			// external command).
-			err := exec.Command("cmd", "/k", "mklink", "/J", newname, oldname).Run()
-			if err != nil {
-				return symlinkErr
-			}
-		} else {
-			// Try making a hard link.
-			err := os.Link(oldname, newname)
-			if err != nil {
-				// Making a hardlink failed. Try copying the file as a last
-				// fallback.
-				inf, err := os.Open(oldname)
-				if err != nil {
-					return err
-				}
-				defer inf.Close()
-				outf, err := os.Create(newname)
-				if err != nil {
-					return err
-				}
-				defer outf.Close()
-				_, err = io.Copy(outf, inf)
-				if err != nil {
-					os.Remove(newname)
-					return err
-				}
-				// File was copied.
-			}
-		}
-		return nil // success
-	}
-	return symlinkErr
 }

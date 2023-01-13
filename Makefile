@@ -207,8 +207,8 @@ gen-device-esp: build/gen-device-svd
 	GO111MODULE=off $(GO) fmt ./src/device/esp
 
 gen-device-nrf: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk lib/nrfx/mdk/ src/device/nrf/
-	GO111MODULE=off $(GO) fmt ./src/device/nrf
+	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk bundle/nrfx/lib/nrfx/mdk/ bundle/nrfx/src/device/nrf/
+	GO111MODULE=off $(GO) fmt ./bundle/nrfx/src/device/nrf
 
 gen-device-nxp: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/NXP lib/cmsis-svd/data/NXP/ src/device/nxp/
@@ -227,8 +227,8 @@ gen-device-kendryte: build/gen-device-svd
 	GO111MODULE=off $(GO) fmt ./src/device/kendryte
 
 gen-device-stm32: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/tinygo-org/stm32-svd lib/stm32-svd/svd src/device/stm32/
-	GO111MODULE=off $(GO) fmt ./src/device/stm32
+	./build/gen-device-svd -source=https://github.com/tinygo-org/stm32-svd bundle/stm32/lib/stm32-svd/svd bundle/stm32/src/device/stm32/
+	GO111MODULE=off $(GO) fmt ./bundle/stm32/src/device/stm32
 
 gen-device-rp: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/RaspberryPi lib/cmsis-svd/data/RaspberryPi/ src/device/rp/
@@ -761,7 +761,7 @@ build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN
 	@mkdir -p build/release/tinygo/lib/musl/arch
 	@mkdir -p build/release/tinygo/lib/musl/crt
 	@mkdir -p build/release/tinygo/lib/musl/src
-	@mkdir -p build/release/tinygo/lib/nrfx
+	@mkdir -p build/release/tinygo/bundle/nrfx/lib/nrfx
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libm
 	@mkdir -p build/release/tinygo/lib/wasi-libc
@@ -805,7 +805,7 @@ endif
 	@cp -rp lib/mingw-w64/mingw-w64-crt/lib-common/kernel32.def.in  build/release/tinygo/lib/mingw-w64/mingw-w64-crt/lib-common
 	@cp -rp lib/mingw-w64/mingw-w64-headers/crt/                    build/release/tinygo/lib/mingw-w64/mingw-w64-headers
 	@cp -rp lib/mingw-w64/mingw-w64-headers/defaults/include        build/release/tinygo/lib/mingw-w64/mingw-w64-headers/defaults
-	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
+	@cp -rp bundle/nrfx/lib/nrfx/*                   build/release/tinygo/bundle/nrfx/lib/nrfx
 	@cp -rp lib/picolibc/newlib/libc/ctype       build/release/tinygo/lib/picolibc/newlib/libc
 	@cp -rp lib/picolibc/newlib/libc/include     build/release/tinygo/lib/picolibc/newlib/libc
 	@cp -rp lib/picolibc/newlib/libc/locale      build/release/tinygo/lib/picolibc/newlib/libc

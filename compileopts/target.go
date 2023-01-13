@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -128,7 +129,7 @@ func (spec *TargetSpec) loadFromGivenStr(str string) error {
 	if strings.HasSuffix(str, ".json") {
 		path, _ = filepath.Abs(str)
 	} else {
-		path = filepath.Join(goenv.Get("TINYGOROOT"), "targets", strings.ToLower(str)+".json")
+		path = filepath.Join(goenv.Get("GOCACHE"), "targets", strings.ToLower(str)+".json")
 	}
 	fp, err := os.Open(path)
 	if err != nil {
@@ -224,6 +225,59 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	// See whether there is a target specification for this target (e.g.
 	// Arduino).
 	spec := &TargetSpec{}
+
+	tinygoRootBundle := filepath.Join(goenv.Get("TINYGOROOT"), "bundle")
+	cacheDir := goenv.Get("GOCACHE")
+
+	for _, dir := range []string{"targets"} {
+
+	destDir := filepath.Join(cacheDir, dir)
+	tinygoBundleEntries, err := ioutil.ReadDir(tinygoRootBundle)
+	if err != nil {
+		return nil, err
+	}
+	err = os.MkdirAll(destDir, 0777)
+	if err != nil {
+		return nil, err
+	}
+	for _, be := range tinygoBundleEntries {
+		bundleName := be.Name()
+		srcDir := filepath.Join(tinygoRootBundle, bundleName, dir)
+		entries, err := ioutil.ReadDir(srcDir)
+		if err != nil {
+		// return nil, err
+			continue
+		}
+		// Create all symlinks.
+		for _, e := range entries {
+			if _, err := os.Stat(filepath.Join(destDir, e.Name())); err == nil {
+				continue
+			}
+			err := Symlink(filepath.Join(srcDir, e.Name()), filepath.Join(destDir, e.Name()))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	{
+		tinygoSrcDir := filepath.Join(goenv.Get("TINYGOROOT"), dir)
+		entries, err := ioutil.ReadDir(tinygoSrcDir)
+		if err != nil {
+			return nil, err
+		}
+		// Create all symlinks.
+		for _, e := range entries {
+			if _, err := os.Stat(filepath.Join(destDir, e.Name())); err == nil {
+				continue
+			}
+			err := Symlink(filepath.Join(tinygoSrcDir, e.Name()), filepath.Join(destDir, e.Name()))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	}
 	err := spec.loadFromGivenStr(options.Target)
 	if err != nil {
 		return nil, err
@@ -363,4 +417,64 @@ func (spec *TargetSpec) LookupGDB() (string, error) {
 		}
 	}
 	return "", errors.New("no gdb found configured in the target specification (" + strings.Join(spec.GDB, ", ") + ")")
+}
+
+// Symlink creates a symlink or something similar. On Unix-like systems, it
+// always creates a symlink. On Windows, it tries to create a symlink and if
+// that fails, creates a hardlink or directory junction instead.
+//
+// Note that while Windows 10 does support symlinks and allows them to be
+// created using os.Symlink, it requires developer mode to be enabled.
+// Therefore provide a fallback for when symlinking is not possible.
+// Unfortunately this fallback only works when TinyGo is installed on the same
+// filesystem as the TinyGo cache and the Go installation (which is usually the
+// C drive).
+func Symlink(oldname, newname string) error {
+	symlinkErr := os.Symlink(oldname, newname)
+	if runtime.GOOS == "windows" && symlinkErr != nil {
+		// Fallback for when developer mode is disabled.
+		// Note that we return the symlink error even if something else fails
+		// later on. This is because symlinks are the easiest to support
+		// (they're also used on Linux and MacOS) and enabling them is easy:
+		// just enable developer mode.
+		st, err := os.Stat(oldname)
+		if err != nil {
+			return symlinkErr
+		}
+		if st.IsDir() {
+			// Make a directory junction. There may be a way to do this
+			// programmatically, but it involves a lot of magic. Use the mklink
+			// command built into cmd instead (mklink is a builtin, not an
+			// external command).
+			err := exec.Command("cmd", "/k", "mklink", "/J", newname, oldname).Run()
+			if err != nil {
+				return symlinkErr
+			}
+		} else {
+			// Try making a hard link.
+			err := os.Link(oldname, newname)
+			if err != nil {
+				// Making a hardlink failed. Try copying the file as a last
+				// fallback.
+				inf, err := os.Open(oldname)
+				if err != nil {
+					return err
+				}
+				defer inf.Close()
+				outf, err := os.Create(newname)
+				if err != nil {
+					return err
+				}
+				defer outf.Close()
+				_, err = io.Copy(outf, inf)
+				if err != nil {
+					os.Remove(newname)
+					return err
+				}
+				// File was copied.
+			}
+		}
+		return nil // success
+	}
+	return symlinkErr
 }
