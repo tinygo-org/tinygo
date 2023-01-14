@@ -159,6 +159,7 @@ func (b *B) ReportAllocs() {
 
 // runN runs a single benchmark for the specified number of iterations.
 func (b *B) runN(n int) {
+	b.runCleanup() // start fresh in the next iteration
 	b.N = n
 	runtime.GC()
 	b.ResetTimer()
@@ -457,6 +458,7 @@ func (b *B) Run(name string, f func(b *B)) bool {
 		// Only process sub-benchmarks, if any.
 		sub.hasSub = true
 	}
+	defer sub.runCleanup() // make sure all cleanups are run, even when panicking
 	if sub.run1() {
 		sub.run()
 	}
