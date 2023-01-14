@@ -117,6 +117,7 @@ type TB interface {
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
 	Name() string
+	Setenv(key, value string)
 	Skip(args ...interface{})
 	SkipNow()
 	Skipf(format string, args ...interface{})
@@ -328,6 +329,27 @@ func (c *common) TempDir() string {
 		c.Fatalf("TempDir: %v", err)
 	}
 	return dir
+}
+
+// Setenv calls os.Setenv(key, value) and uses Cleanup to
+// restore the environment variable to its original value
+// after the test.
+func (c *common) Setenv(key, value string) {
+	prevValue, ok := os.LookupEnv(key)
+
+	if err := os.Setenv(key, value); err != nil {
+		c.Fatalf("cannot set environment variable: %v", err)
+	}
+
+	if ok {
+		c.Cleanup(func() {
+			os.Setenv(key, prevValue)
+		})
+	} else {
+		c.Cleanup(func() {
+			os.Unsetenv(key)
+		})
+	}
 }
 
 // runCleanup is called at the end of the test.
