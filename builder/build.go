@@ -190,12 +190,21 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	lprogram, err := loader.Load(config, pkgName, config.ClangHeaders, types.Config{
 		Sizes: compiler.Sizes(machine),
 	})
-	if err != nil {
-		return BuildResult{}, err
+	result := BuildResult{
+		ModuleRoot: lprogram.MainPkg().Module.Dir,
+		MainDir:    lprogram.MainPkg().Dir,
+		ImportPath: lprogram.MainPkg().ImportPath,
+	}
+	if result.ModuleRoot == "" {
+		// If there is no module root, just the regular root.
+		result.ModuleRoot = lprogram.MainPkg().Root
+	}
+	if err != nil { // failed to load AST
+		return result, err
 	}
 	err = lprogram.Parse()
 	if err != nil {
-		return BuildResult{}, err
+		return result, err
 	}
 
 	// Create the *ssa.Program. This does not yet build the entire SSA of the
@@ -278,7 +287,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		for _, imported := range pkg.Pkg.Imports() {
 			job, ok := packageActionIDJobs[imported.Path()]
 			if !ok {
-				return BuildResult{}, fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
+				return result, fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
 			}
 			importedPackages = append(importedPackages, job)
 			actionIDDependencies = append(actionIDDependencies, job)
@@ -573,17 +582,17 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		// Run jobs to produce the LLVM module.
 		err := runJobs(programJob, config.Options.Semaphore)
 		if err != nil {
-			return BuildResult{}, err
+			return result, err
 		}
 		// Generate output.
 		switch outext {
 		case ".o":
 			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
 			if err != nil {
-				return BuildResult{}, err
+				return result, err
 			}
 			defer llvmBuf.Dispose()
-			return BuildResult{}, os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+			return result, os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
 		case ".bc":
 			var buf llvm.MemoryBuffer
 			if config.UseThinLTO() {
@@ -592,10 +601,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				buf = llvm.WriteBitcodeToMemoryBuffer(mod)
 			}
 			defer buf.Dispose()
-			return BuildResult{}, os.WriteFile(outpath, buf.Bytes(), 0666)
+			return result, os.WriteFile(outpath, buf.Bytes(), 0666)
 		case ".ll":
 			data := []byte(mod.String())
-			return BuildResult{}, os.WriteFile(outpath, data, 0666)
+			return result, os.WriteFile(outpath, data, 0666)
 		default:
 			panic("unreachable")
 		}
@@ -629,19 +638,19 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	// Prepare link command.
 	linkerDependencies := []*compileJob{outputObjectFileJob}
-	executable := filepath.Join(tmpdir, "main")
+	result.Executable = filepath.Join(tmpdir, "main")
 	if config.GOOS() == "windows" {
-		executable += ".exe"
+		result.Executable += ".exe"
 	}
-	tmppath := executable // final file
-	ldflags := append(config.LDFlags(), "-o", executable)
+	result.Binary = result.Executable // final file
+	ldflags := append(config.LDFlags(), "-o", result.Executable)
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
 		job, unlock, err := CompilerRT.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return result, err
 		}
 		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
@@ -716,7 +725,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			ldflags = append(ldflags, "--strip-debug")
 		} else {
 			// Other linkers may have different flags.
-			return BuildResult{}, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
+			return result, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
 		}
 	}
 
@@ -768,7 +777,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			err = link(config.Target.Linker, ldflags...)
 			if err != nil {
-				return &commandError{"failed to link", executable, err}
+				return &commandError{"failed to link", result.Executable, err}
 			}
 
 			var calculatedStacks []string
@@ -777,7 +786,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				// Try to determine stack sizes at compile time.
 				// Don't do this by default as it usually doesn't work on
 				// unsupported architectures.
-				calculatedStacks, stackSizes, err = determineStackSizes(mod, executable)
+				calculatedStacks, stackSizes, err = determineStackSizes(mod, result.Executable)
 				if err != nil {
 					return err
 				}
@@ -787,14 +796,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			if config.AutomaticStackSize() {
 				// Modify the .tinygo_stacksizes section that contains a stack size
 				// for each goroutine.
-				err = modifyStackSizes(executable, stackSizeLoads, stackSizes)
+				err = modifyStackSizes(result.Executable, stackSizeLoads, stackSizes)
 				if err != nil {
 					return fmt.Errorf("could not modify stack sizes: %w", err)
 				}
 			}
 			if config.RP2040BootPatch() {
 				// Patch the second stage bootloader CRC into the .boot2 section
-				err = patchRP2040BootCRC(executable)
+				err = patchRP2040BootCRC(result.Executable)
 				if err != nil {
 					return fmt.Errorf("could not patch RP2040 second stage boot loader: %w", err)
 				}
@@ -827,8 +836,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				args = append(args,
 					opt,
 					"-g",
-					executable,
-					"--output", executable,
+					result.Executable,
+					"--output", result.Executable,
 				)
 
 				cmd := exec.Command(goenv.Get("WASMOPT"), args...)
@@ -847,7 +856,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				for _, pkg := range lprogram.Sorted() {
 					packagePathMap[pkg.OriginalDir()] = pkg.Pkg.Path()
 				}
-				sizes, err := loadProgramSize(executable, packagePathMap)
+				sizes, err := loadProgramSize(result.Executable, packagePathMap)
 				if err != nil {
 					return err
 				}
@@ -883,7 +892,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// is simpler and cannot be parallelized.
 	err = runJobs(linkJob, config.Options.Semaphore)
 	if err != nil {
-		return BuildResult{}, err
+		return result, err
 	}
 
 	// Get an Intel .hex file or .bin file from the .elf file.
@@ -894,56 +903,43 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	case "hex", "bin":
 		// Extract raw binary, either encoding it as a hex file or as a raw
 		// firmware file.
-		tmppath = filepath.Join(tmpdir, "main"+outext)
-		err := objcopy(executable, tmppath, outputBinaryFormat)
+		result.Binary = filepath.Join(tmpdir, "main"+outext)
+		err := objcopy(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
-			return BuildResult{}, err
+			return result, err
 		}
 	case "uf2":
 		// Get UF2 from the .elf file.
-		tmppath = filepath.Join(tmpdir, "main"+outext)
-		err := convertELFFileToUF2File(executable, tmppath, config.Target.UF2FamilyID)
+		result.Binary = filepath.Join(tmpdir, "main"+outext)
+		err := convertELFFileToUF2File(result.Executable, result.Binary, config.Target.UF2FamilyID)
 		if err != nil {
-			return BuildResult{}, err
+			return result, err
 		}
 	case "esp32", "esp32-img", "esp32c3", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
-		tmppath = filepath.Join(tmpdir, "main"+outext)
-		err := makeESPFirmareImage(executable, tmppath, outputBinaryFormat)
+		result.Binary = filepath.Join(tmpdir, "main"+outext)
+		err := makeESPFirmareImage(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
-			return BuildResult{}, err
+			return result, err
 		}
 	case "nrf-dfu":
 		// special format for nrfutil for Nordic chips
 		tmphexpath := filepath.Join(tmpdir, "main.hex")
-		err := objcopy(executable, tmphexpath, "hex")
+		err := objcopy(result.Executable, tmphexpath, "hex")
 		if err != nil {
-			return BuildResult{}, err
+			return result, err
 		}
-		tmppath = filepath.Join(tmpdir, "main"+outext)
-		err = makeDFUFirmwareImage(config.Options, tmphexpath, tmppath)
+		result.Binary = filepath.Join(tmpdir, "main"+outext)
+		err = makeDFUFirmwareImage(config.Options, tmphexpath, result.Binary)
 		if err != nil {
-			return BuildResult{}, err
+			return result, err
 		}
 	default:
-		return BuildResult{}, fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
+		return result, fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
 
-	// If there's a module root, use that.
-	moduleroot := lprogram.MainPkg().Module.Dir
-	if moduleroot == "" {
-		// if not, just the regular root
-		moduleroot = lprogram.MainPkg().Root
-	}
-
-	return BuildResult{
-		Executable: executable,
-		Binary:     tmppath,
-		MainDir:    lprogram.MainPkg().Dir,
-		ModuleRoot: moduleroot,
-		ImportPath: lprogram.MainPkg().ImportPath,
-	}, nil
+	return result, nil
 }
 
 // createEmbedObjectFile creates a new object file with the given contents, for
