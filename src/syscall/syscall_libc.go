@@ -197,21 +197,12 @@ func Setenv(key, val string) (err error) {
 			return EINVAL
 		}
 	}
-	keydata := cstring(key)
-	valdata := cstring(val)
-	errCode := libc_setenv(&keydata[0], &valdata[0], 1)
-	if errCode != 0 {
-		err = getErrno()
-	}
+	runtimeSetenv(key, val)
 	return
 }
 
 func Unsetenv(key string) (err error) {
-	keydata := cstring(key)
-	errCode := libc_unsetenv(&keydata[0])
-	if errCode != 0 {
-		err = getErrno()
-	}
+	runtimeUnsetenv(key)
 	return
 }
 
@@ -312,6 +303,10 @@ func splitSlice(p []byte) (buf *byte, len uintptr) {
 	return slice.buf, slice.len
 }
 
+// These two functions are provided by the runtime.
+func runtimeSetenv(key, value string)
+func runtimeUnsetenv(key string)
+
 //export strlen
 func libc_strlen(ptr unsafe.Pointer) uintptr
 
@@ -324,16 +319,6 @@ func libc_write(fd int32, buf *byte, count uint) int
 //
 //export getenv
 func libc_getenv(name *byte) *byte
-
-// int setenv(const char *name, const char *val, int replace);
-//
-//export setenv
-func libc_setenv(name *byte, val *byte, replace int32) int32
-
-// int unsetenv(const char *name);
-//
-//export unsetenv
-func libc_unsetenv(name *byte) int32
 
 // ssize_t read(int fd, void *buf, size_t count);
 //
