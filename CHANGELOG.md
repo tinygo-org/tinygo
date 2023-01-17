@@ -1,3 +1,100 @@
+0.27.0
+---
+
+* **general**
+  - all: update musl
+  - all: remove "acm:"` prefix for USB vid/pid pair
+  - all: add support for LLVM 15
+  - all: use DWARF version 4
+  - all: add initial (incomplete) support for Go 1.20
+  - all: add `-gc=custom` option
+  - `main`: print ldflags including ThinLTO flags with -x
+  - `main`: fix error message when a serial port can't be accessed
+  - `main`: add `-timeout` flag to allow setting how long TinyGo will try looking for a MSD volume for flashing
+  - `test`: print PASS on pass when running standalone test binaries
+  - `test`: fix printing of benchmark output
+  - `test`: print package name when compilation failed (not just when the test failed)
+* **compiler**
+  - refactor to support LLVM 15
+  - `builder`: print compiler commands while building a library
+  - `compiler`: fix stack overflow when creating recursive pointer types (fix for LLVM 15+ only)
+  - `compiler`: allow map keys and values of ≥256 bytes
+  - `cgo`: add support for `C.float` and `C.double`
+  - `cgo`: support anonymous enums included in multiple Go files
+  - `cgo`: add support for bitwise operators
+  - `interp`: add support for constant icmp instructions
+  - `transform`: fix memory corruption issues
+* **standard library**
+  - `machine/usb`: remove allocs in USB ISR
+  - `machine/usb`: add `Port()` and deprecate `New()` to have the API better match the singleton that is actually being returned
+  - `machine/usb`: change HID usage-maximum to 0xFF
+  - `machine/usb`: add USB HID joystick support
+  - `machine/usb`: change to not send before endpoint initialization
+  - `net`: implement `Pipe`
+  - `os`: add stub for `os.Chtimes`
+  - `reflect`: stub out `Type.FieldByIndex`
+  - `reflect`: add `Value.IsZero` method
+  - `reflect`: fix bug in `.Field` method when the field fits in a pointer but the parent doesn't
+  - `runtime`: switch some `panic()` calls in the gc to `runtimePanic()` for consistency
+  - `runtime`: add xorshift-based fastrand64
+  - `runtime`: fix alignment for arm64, arm, xtensa, riscv
+  - `runtime`: implement precise GC
+  - `runtime/debug`: stub `PrintStack`
+  - `sync`: implement simple pooling in `sync.Pool`
+  - `syscall`: stubbed `Setuid`, Exec and friends
+  - `syscall`: add more stubs as needed for Go 1.20 support
+  - `testing`: implement `t.Setenv`
+  - `unsafe`: add support for Go 1.20 slice/string functions
+* **targets**
+  - `all`: do not set stack size per board
+  - `all`: update picolibc to v1.7.9
+  - `atsame5x`: fix CAN extendedID handling
+  - `atsame5x`: reduce heap allocation
+  - `avr`: drop GNU toolchain dependency
+  - `avr`: fix .data initialization for binaries over 64kB
+  - `avr`: support ThinLTO
+  - `baremetal`: implements calloc
+  - `darwin`: fix `syscall.Open` on darwin/arm64
+  - `darwin`: fix error with `tinygo lldb`
+  - `esp`: use LLVM Xtensa linker instead of Espressif toolchain
+  - `esp`: use ThinLTO for Xtensa
+  - `esp32c3`: add SPI support
+  - `linux`: include musl `getpagesize` function in release
+  - `nrf51`: add ADC implementation
+  - `nrf52840`: add PDM support
+  - `riscv`: add "target-abi" metadata flag
+  - `rp2040`: remove mem allocation in GPIO ISR
+  - `rp2040`: avoid allocating clock on heap
+  - `rp2040`: add basic GPIO support for PIO
+  - `rp2040`: fix USB interrupt issue
+  - `rp2040`: fix RP2040-E5 USB errata
+  - `stm32`: always set ADC pins to pullups floating
+  - `stm32f1`, `stm32f4`: fix ADC by clearing the correct bit for rank after each read
+  - `stm32wl`: Fix incomplete RNG initialisation
+  - `stm32wlx`: change order for init so clock speeds are set before peripheral start
+  - `wasi`: makes wasmtime "run" explicit
+  - `wasm`: fix GC scanning of allocas
+  - `wasm`: allow custom malloc implementation
+  - `wasm`: remove `-wasm-abi=` flag (use `-target` instead)
+  - `wasm`: fix scanning of the stack
+  - `wasm`: fix panic when allocating 0 bytes using malloc
+  - `wasm`: always run wasm-opt even with `-scheduler=none`
+  - `wasm`: avoid miscompile with ThinLTO
+  - `wasm`: allow the emulator to expand `{tmpDir}`
+  - `wasm`: support ThinLTO
+  - `windows`: update mingw-w64 version to avoid linker warning
+  - `windows`: add ARM64 support
+* **boards**
+  - Add Waveshare RP2040 Zero
+  - Add Arduino Leonardo support
+  - Add Adafruit KB2040
+  - Add Adafruit Feather M0 Express
+  - Add Makerfabs ESP32C3SPI35 TFT Touchscreen board
+  - Add Espressif ESP32-C3-DevKit-RUST-1 board
+  - `lgt92`: fix OpenOCD configuration
+  - `xiao-rp2040`: fix D9 and D10 constants
+  - `xiao-rp2040`: add pin definitions
+
 0.26.0
 ---
 
