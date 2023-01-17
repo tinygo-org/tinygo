@@ -539,7 +539,7 @@ func isPackageInitializer(f *ssa.Function) bool {
 }
 
 func isGenericFunction(f *ssa.Function) bool {
-	return f.Synthetic == "generic function"
+	return f.TypeParams() != nil
 }
 
 func isSyntheticFunction(f *ssa.Function) bool {
