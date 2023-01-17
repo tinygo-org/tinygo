@@ -8,7 +8,7 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -58,7 +58,8 @@ define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(32) %ch, ptr %
 entry:
   %complit = alloca {}, align 8
   %chan.blockedList = alloca %runtime.channelBlockedList, align 8
-  call void @runtime.trackPointer(ptr nonnull %complit, ptr undef) #3
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #3
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %chan.blockedList)
   call void @runtime.chanSend(ptr %ch, ptr null, ptr nonnull %chan.blockedList, ptr undef) #3
   call void @llvm.lifetime.end.p0(i64 24, ptr nonnull %chan.blockedList)

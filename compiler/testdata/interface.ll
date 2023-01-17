@@ -23,7 +23,7 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -34,21 +34,24 @@ entry:
 ; Function Attrs: nounwind
 define hidden %runtime._interface @main.simpleType(ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr null, ptr undef) #6
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr null, ptr nonnull %stackalloc, ptr undef) #6
   ret %runtime._interface { i32 ptrtoint (ptr @"reflect/types.type:basic:int" to i32), ptr null }
 }
 
 ; Function Attrs: nounwind
 define hidden %runtime._interface @main.pointerType(ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr null, ptr undef) #6
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr null, ptr nonnull %stackalloc, ptr undef) #6
   ret %runtime._interface { i32 ptrtoint (ptr @"reflect/types.type:pointer:basic:int" to i32), ptr null }
 }
 
 ; Function Attrs: nounwind
 define hidden %runtime._interface @main.interfaceType(ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr null, ptr undef) #6
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr null, ptr nonnull %stackalloc, ptr undef) #6
   ret %runtime._interface { i32 ptrtoint (ptr @"reflect/types.type:pointer:named:error" to i32), ptr null }
 }
 
@@ -57,7 +60,8 @@ declare i1 @"interface:{Error:func:{}{basic:string}}.$typeassert"(i32) #2
 ; Function Attrs: nounwind
 define hidden %runtime._interface @main.anonymousInterfaceType(ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr null, ptr undef) #6
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr null, ptr nonnull %stackalloc, ptr undef) #6
   ret %runtime._interface { i32 ptrtoint (ptr @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" to i32), ptr null }
 }
 
@@ -116,9 +120,10 @@ declare i8 @"interface:{String:func:{}{basic:string},main.foo:func:{basic:int}{b
 ; Function Attrs: nounwind
 define hidden %runtime._string @main.callErrorMethod(i32 %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
   %0 = call %runtime._string @"interface:{Error:func:{}{basic:string}}.Error$invoke"(ptr %itf.value, i32 %itf.typecode, ptr undef) #6
   %1 = extractvalue %runtime._string %0, 0
-  call void @runtime.trackPointer(ptr %1, ptr undef) #6
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #6
   ret %runtime._string %0
 }
 

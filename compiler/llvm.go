@@ -136,11 +136,7 @@ func (b *builder) emitPointerPack(values []llvm.Value) llvm.Value {
 			llvm.Undef(b.i8ptrType), // unused context parameter
 		}, "")
 		if b.NeedsStackObjects {
-			trackPointer := b.mod.NamedFunction("runtime.trackPointer")
-			b.CreateCall(trackPointer.GlobalValueType(), trackPointer, []llvm.Value{
-				packedHeapAlloc,
-				llvm.Undef(b.i8ptrType), // unused context parameter
-			}, "")
+			b.trackPointer(packedHeapAlloc)
 		}
 		packedAlloc := b.CreateBitCast(packedHeapAlloc, llvm.PointerType(packedType, 0), "")
 

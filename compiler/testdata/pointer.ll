@@ -5,7 +5,7 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -22,52 +22,58 @@ entry:
 ; Function Attrs: nounwind
 define hidden ptr @main.pointerCastFromUnsafe(ptr %x, ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr %x, ptr undef) #2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %x
 }
 
 ; Function Attrs: nounwind
 define hidden ptr @main.pointerCastToUnsafe(ptr dereferenceable_or_null(4) %x, ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr %x, ptr undef) #2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %x
 }
 
 ; Function Attrs: nounwind
 define hidden ptr @main.pointerCastToUnsafeNoop(ptr dereferenceable_or_null(1) %x, ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr %x, ptr undef) #2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %x
 }
 
 ; Function Attrs: nounwind
 define hidden ptr @main.pointerUnsafeGEPFixedOffset(ptr dereferenceable_or_null(1) %ptr, ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr %ptr, ptr undef) #2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #2
   %0 = getelementptr inbounds i8, ptr %ptr, i32 10
-  call void @runtime.trackPointer(ptr nonnull %0, ptr undef) #2
-  call void @runtime.trackPointer(ptr nonnull %0, ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %0
 }
 
 ; Function Attrs: nounwind
 define hidden ptr @main.pointerUnsafeGEPByteOffset(ptr dereferenceable_or_null(1) %ptr, i32 %offset, ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr %ptr, ptr undef) #2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #2
   %0 = getelementptr inbounds i8, ptr %ptr, i32 %offset
-  call void @runtime.trackPointer(ptr %0, ptr undef) #2
-  call void @runtime.trackPointer(ptr %0, ptr undef) #2
+  call void @runtime.trackPointer(ptr %0, ptr nonnull %stackalloc, ptr undef) #2
+  call void @runtime.trackPointer(ptr %0, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %0
 }
 
 ; Function Attrs: nounwind
 define hidden ptr @main.pointerUnsafeGEPIntOffset(ptr dereferenceable_or_null(4) %ptr, i32 %offset, ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr %ptr, ptr undef) #2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #2
   %0 = shl i32 %offset, 2
   %1 = getelementptr inbounds i8, ptr %ptr, i32 %0
-  call void @runtime.trackPointer(ptr %1, ptr undef) #2
-  call void @runtime.trackPointer(ptr %1, ptr undef) #2
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #2
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %1
 }
 
