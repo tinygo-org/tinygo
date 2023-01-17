@@ -1,4 +1,4 @@
-// +build byollvm
+//go:build byollvm
 
 // This file provides C wrappers for liblld.
 
