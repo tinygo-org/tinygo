@@ -4,6 +4,7 @@ package compiler
 // pragmas, determines the link name, etc.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -218,6 +219,7 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 		// Pick the default linkName.
 		linkName: f.RelString(nil),
 	}
+	fmt.Println("getFunctionInfo:", f, "=>", info.linkName)
 	if isWrapperFunction(f) {
 		// FIX!
 		//info.linkName += "$" + f.Synthetic
