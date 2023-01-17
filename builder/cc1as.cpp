@@ -1,4 +1,4 @@
-// +build byollvm
+//go:build byollvm
 
 //===-- cc1as.cpp - Clang Assembler  --------------------------------------===//
 //
