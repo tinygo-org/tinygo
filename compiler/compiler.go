@@ -152,6 +152,7 @@ type builder struct {
 	phis              []phiNode
 	deferPtr          llvm.Value
 	deferFrame        llvm.Value
+	stackChainAlloca  llvm.Value
 	landingpad        llvm.BasicBlock
 	difunc            llvm.Metadata
 	dilocals          map[*types.Var]llvm.Metadata
@@ -1225,6 +1226,13 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// This function has deferred function calls. Set some things up for
 		// them.
 		b.deferInitFunc()
+	}
+
+	if b.NeedsStackObjects {
+		// Create a dummy alloca that will be used in runtime.trackPointer.
+		// It is necessary to pass a dummy alloca to runtime.trackPointer
+		// because runtime.trackPointer is replaced by an alloca store.
+		b.stackChainAlloca = b.CreateAlloca(b.ctx.Int8Type(), "stackalloc")
 	}
 }
 

@@ -9,7 +9,7 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -64,13 +64,14 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.closureFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
   %n = call ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #8
-  call void @runtime.trackPointer(ptr nonnull %n, ptr undef) #8
+  call void @runtime.trackPointer(ptr nonnull %n, ptr nonnull %stackalloc, ptr undef) #8
   store i32 3, ptr %n, align 4
-  call void @runtime.trackPointer(ptr nonnull %n, ptr undef) #8
-  call void @runtime.trackPointer(ptr nonnull @"main.closureFunctionGoroutine$1", ptr undef) #8
+  call void @runtime.trackPointer(ptr nonnull %n, ptr nonnull %stackalloc, ptr undef) #8
+  call void @runtime.trackPointer(ptr nonnull @"main.closureFunctionGoroutine$1", ptr nonnull %stackalloc, ptr undef) #8
   %0 = call ptr @runtime.alloc(i32 8, ptr null, ptr undef) #8
-  call void @runtime.trackPointer(ptr nonnull %0, ptr undef) #8
+  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #8
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds { i32, ptr }, ptr %0, i32 0, i32 1
   store ptr %n, ptr %1, align 4
@@ -103,8 +104,9 @@ declare void @runtime.printint32(i32, ptr) #0
 ; Function Attrs: nounwind
 define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
   %0 = call ptr @runtime.alloc(i32 12, ptr null, ptr undef) #8
-  call void @runtime.trackPointer(ptr nonnull %0, ptr undef) #8
+  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #8
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds { i32, ptr, ptr }, ptr %0, i32 0, i32 1
   store ptr %fn.context, ptr %1, align 4
@@ -154,8 +156,9 @@ declare void @runtime.chanClose(ptr dereferenceable_or_null(32), ptr) #0
 ; Function Attrs: nounwind
 define hidden void @main.startInterfaceMethod(i32 %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
   %0 = call ptr @runtime.alloc(i32 16, ptr null, ptr undef) #8
-  call void @runtime.trackPointer(ptr nonnull %0, ptr undef) #8
+  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #8
   store ptr %itf.value, ptr %0, align 4
   %1 = getelementptr inbounds { ptr, %runtime._string, i32 }, ptr %0, i32 0, i32 1
   store ptr @"main$string", ptr %1, align 4

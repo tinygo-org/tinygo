@@ -84,7 +84,7 @@ func (b *builder) trackPointer(value llvm.Value) {
 	if value.Type() != b.i8ptrType {
 		value = b.CreateBitCast(value, b.i8ptrType, "")
 	}
-	b.createRuntimeCall("trackPointer", []llvm.Value{value}, "")
+	b.createRuntimeCall("trackPointer", []llvm.Value{value, b.stackChainAlloca}, "")
 }
 
 // typeHasPointers returns whether this type is a pointer or contains pointers.

@@ -7,7 +7,7 @@ target triple = "wasm32-unknown-wasi"
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -18,13 +18,15 @@ entry:
 ; Function Attrs: nounwind
 define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr %s.data, ptr undef) #2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %s.data
 }
 
 ; Function Attrs: nounwind
 define hidden %runtime._string @main.unsafeString(ptr dereferenceable_or_null(1) %ptr, i16 %len, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
   %0 = icmp slt i16 %len, 0
   %1 = icmp eq ptr %ptr, null
   %2 = icmp ne i16 %len, 0
@@ -36,7 +38,7 @@ unsafe.String.next:                               ; preds = %entry
   %5 = zext i16 %len to i32
   %6 = insertvalue %runtime._string undef, ptr %ptr, 0
   %7 = insertvalue %runtime._string %6, i32 %5, 1
-  call void @runtime.trackPointer(ptr %ptr, ptr undef) #2
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #2
   ret %runtime._string %7
 
 unsafe.String.throw:                              ; preds = %entry
@@ -49,7 +51,8 @@ declare void @runtime.unsafeSlicePanic(ptr) #0
 ; Function Attrs: nounwind
 define hidden ptr @main.unsafeStringData(ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.trackPointer(ptr %s.data, ptr undef) #2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %s.data
 }
 
