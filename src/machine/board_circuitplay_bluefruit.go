@@ -73,6 +73,12 @@ const (
 	SPI0_SDI_PIN = P0_23 // SDI
 )
 
+// PDM pins
+const (
+	PDM_CLK_PIN = P0_17 // CLK
+	PDM_DIN_PIN = P0_16 // DIN
+)
+
 // USB CDC identifiers
 const (
 	usb_STRING_PRODUCT      = "Adafruit Circuit Playground Bluefruit"
