@@ -219,7 +219,8 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 		linkName: f.RelString(nil),
 	}
 	if isWrapperFunction(f) {
-		info.linkName += "$" + f.Synthetic
+		// FIX!
+		//info.linkName += "$" + f.Synthetic
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
 	info.parsePragmas(f)
