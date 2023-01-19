@@ -293,17 +293,6 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 				args = append(args, "--dir="+d)
 			}
 
-			// Some tests create temp directories using os.MkdirTemp or via
-			// t.TempDir(). Create a writeable directory and map it to the
-			// default tempDir environment variable: TMPDIR.
-			tmpdir, err := os.MkdirTemp("", "tinygotmp")
-			if err != nil {
-				return fmt.Errorf("failed to create temporary directory: %w", err)
-			}
-			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
-			// TODO: add option to not delete temp dir for debugging?
-			defer os.RemoveAll(tmpdir)
-
 			// The below re-organizes the arguments so that the current
 			// directory is added last.
 			args = append(args, cmd.Args[1:]...)
