@@ -6,27 +6,17 @@ package main
 //
 // An alarm can be set to execute user callback function once or on a schedule.
 //
-// Unfortunately, it is not possible to use time.Time to work with RTC,
+// Unfortunately, it is not possible to use time.Time to work with RTC directly,
 // that would introduce a circular dependency between "machine" and "time" packages.
 
 import (
 	"fmt"
 	"machine"
+	"runtime"
 	"time"
 )
 
-// For RTC to work, it must be set to some reference time first
-var rtcTimeReference = machine.RtcTime{
-	Year:  2023,
-	Month: 01,
-	Day:   19,
-	Dotw:  4,
-	Hour:  1,
-	Min:   12,
-	Sec:   45,
-}
-
-// Alarm shall fire every minute at 5 sec
+// Alarm shall fire every minute at 20 sec
 var rtcTimeAlarm = machine.RtcTime{
 	Year:  -1,
 	Month: -1,
@@ -34,28 +24,52 @@ var rtcTimeAlarm = machine.RtcTime{
 	Dotw:  -1,
 	Hour:  -1,
 	Min:   -1,
-	Sec:   5,
+	Sec:   20,
 }
 
 func main() {
 
-	// configure RTC and set alarm
-	machine.RTC.SetTime(rtcTimeReference)
+	// Set system clock to some date and time.
+	t, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
+	runtime.AdjustTimeOffset(-1 * int64(time.Since(t)))
+
+	// Set RTC from system time and enable recurring alarm
+	machine.RTC.SetTime(toRtcTime(time.Now()))
 	machine.RTC.SetAlarm(rtcTimeAlarm, func() { println("Pekabo!") }) // the callback function executes on interrupt and shall be as quick as possible
 
-	// wait a bit to let user connect to serial console and for RTC to initialize
+	// Wait a bit to let user connect to serial console and for RTC to initialize
 	time.Sleep(3 * time.Second)
 
 	for {
-		rtcTime, err := machine.RTC.GetTime() // reading time from RTC, it shall increase 1 second each read
-		if err != nil {
-			println(err.Error())
-		}
-		printTime(rtcTime)
+		rtcTime, _ := machine.RTC.GetTime() // shall increase 1 second each time
+		nowRtc := toTime(rtcTime)
+		nowSys := time.Now()
+		diff := nowRtc.Sub(nowSys)
+		// Some descrepancy is expected, diff shall be constant
+		fmt.Printf("SYS: %v, RTC: %v, DIFF: %v\r\n", nowSys.Format(time.RFC3339), nowRtc.Format(time.RFC3339), diff)
 		time.Sleep(time.Second)
 	}
 }
 
-func printTime(t machine.RtcTime) {
-	fmt.Printf("%4d-%02d-%02d %s %02d:%02d:%02d\r\n", t.Year, t.Month, t.Day, time.Weekday(t.Dotw).String()[:3], t.Hour, t.Min, t.Sec)
+func toRtcTime(t time.Time) machine.RtcTime {
+	return machine.RtcTime{
+		Year:  int16(t.Year()),
+		Month: int8(t.Month()),
+		Day:   int8(t.Day()),
+		Dotw:  int8(t.Weekday()),
+		Hour:  int8(t.Hour()),
+		Min:   int8(t.Minute()),
+		Sec:   int8(t.Second()),
+	}
+}
+
+func toTime(t machine.RtcTime) time.Time {
+	return time.Date(
+		int(t.Year),
+		time.Month(t.Month),
+		int(t.Day),
+		int(t.Hour),
+		int(t.Min),
+		int(t.Sec),
+		0, time.Local)
 }

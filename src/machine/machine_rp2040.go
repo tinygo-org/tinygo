@@ -76,8 +76,6 @@ func machineInit() {
 
 	clocks.init()
 
-	RTC.init()
-
 	// Peripheral clocks should now all be running
 	unresetBlockWait(RESETS_RESET_Msk)
 }

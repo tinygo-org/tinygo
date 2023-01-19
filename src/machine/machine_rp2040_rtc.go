@@ -9,42 +9,30 @@ import (
 	"device/rp"
 	"errors"
 	"runtime/interrupt"
-	"runtime/volatile"
 	"unsafe"
 )
 
-type rtcType struct {
-	clkDivM1  volatile.Register32
-	setup0    volatile.Register32
-	setup1    volatile.Register32
-	ctrl      volatile.Register32
-	irqSetup0 volatile.Register32
-	irqSetup1 volatile.Register32
-	rtc1      volatile.Register32
-	rtc0      volatile.Register32
-	intR      volatile.Register32
-	intE      volatile.Register32
-	intF      volatile.Register32
-	intS      volatile.Register32
-}
+type rtcType rp.RTC_Type
 
 var RTC = (*rtcType)(unsafe.Pointer(rp.RTC))
 
 var rtcAlarmRepeats bool
 var rtcCallback func()
 
-var ErrRtcNotRunning = errors.New("RTC not running")
+var ErrRtcNoFreq = errors.New("RTC frequency not set")
+var ErrRtcBigFreq = errors.New("RTC frequency too big to divide")
+var ErrRtcNotActive = errors.New("RTC not active")
 var ErrRtcInvalidTime = errors.New("invalid time for RTC")
 
-func (rtc *rtcType) running() bool {
-	return rtc.ctrl.HasBits(rp.RTC_CTRL_RTC_ACTIVE)
+func (rtc *rtcType) isActive() bool {
+	return rtc.CTRL.HasBits(rp.RTC_CTRL_RTC_ACTIVE)
 }
 
-func (rtc *rtcType) init() {
+func (rtc *rtcType) init() error {
 	// Get clk_rtc freq and make sure it is running
 	rtcFreq := configuredFreq[clkRTC]
 	if rtcFreq == 0 {
-		panic("rtc freq is zero")
+		return ErrRtcNoFreq
 	}
 
 	// Take rtc out of reset now that we know clk_rtc is running
@@ -57,52 +45,60 @@ func (rtc *rtcType) init() {
 
 	// Check the freq is not too big to divide
 	if rtcFreq > rp.RTC_CLKDIV_M1_CLKDIV_M1_Msk {
-		panic("rtc freq is too big to divide")
+		return ErrRtcBigFreq
 	}
 
 	// Write divide value
-	rtc.clkDivM1.Set(rtcFreq)
+	rtc.CLKDIV_M1.Set(rtcFreq)
+	return nil
 }
 
+// SetTime configures RTC with supplied time, initialises and activates it.
 func (rtc *rtcType) SetTime(t RtcTime) error {
-	if !t.IsValid() {
+	if !t.isValid() {
 		return ErrRtcInvalidTime
 	}
 
-	// Disable RTC and wait while it is still active
-	rtc.ctrl.Set(0)
-	for rtc.running() {
+	err := rtc.init()
+	if err != nil {
+		return err
 	}
 
-	rtc.setup0.SetBits(uint32(t.Year) << rp.RTC_SETUP_0_YEAR_Pos)
-	rtc.setup0.SetBits(uint32(t.Month) << rp.RTC_SETUP_0_MONTH_Pos)
-	rtc.setup0.SetBits(uint32(t.Day) << rp.RTC_SETUP_0_DAY_Pos)
+	// Disable RTC and wait while it is still running
+	rtc.CTRL.Set(0)
+	for rtc.isActive() {
+	}
 
-	rtc.setup1.SetBits(uint32(t.Dotw) << rp.RTC_SETUP_1_DOTW_Pos)
-	rtc.setup1.SetBits(uint32(t.Hour) << rp.RTC_SETUP_1_HOUR_Pos)
-	rtc.setup1.SetBits(uint32(t.Min) << rp.RTC_SETUP_1_MIN_Pos)
-	rtc.setup1.SetBits(uint32(t.Sec) << rp.RTC_SETUP_1_SEC_Pos)
+	rtc.SETUP_0.Set((uint32(t.Year) << rp.RTC_SETUP_0_YEAR_Pos) |
+		(uint32(t.Month) << rp.RTC_SETUP_0_MONTH_Pos) |
+		(uint32(t.Day) << rp.RTC_SETUP_0_DAY_Pos))
 
-	// Load setup values into rtc clock domain
-	rtc.ctrl.SetBits(rp.RTC_CTRL_LOAD)
+	rtc.SETUP_1.Set((uint32(t.Dotw) << rp.RTC_SETUP_1_DOTW_Pos) |
+		(uint32(t.Hour) << rp.RTC_SETUP_1_HOUR_Pos) |
+		(uint32(t.Min) << rp.RTC_SETUP_1_MIN_Pos) |
+		(uint32(t.Sec) << rp.RTC_SETUP_1_SEC_Pos))
+
+	// Load setup values into RTC clock domain
+	rtc.CTRL.SetBits(rp.RTC_CTRL_LOAD)
 
 	// Enable RTC and wait for it to be running
-	rtc.ctrl.SetBits(rp.RTC_CTRL_RTC_ENABLE)
-	for !rtc.running() {
+	rtc.CTRL.SetBits(rp.RTC_CTRL_RTC_ENABLE)
+	for !rtc.isActive() {
 	}
 
 	return nil
 }
 
+// GetTime returns current RTC time if RTC is active.
 func (rtc *rtcType) GetTime() (t RtcTime, err error) {
 	// Make sure RTC is running
-	if !rtc.running() {
-		return RtcTime{}, ErrRtcNotRunning
+	if !rtc.isActive() {
+		return RtcTime{}, ErrRtcNotActive
 	}
 
 	// Note: RTC_0 should be read before RTC_1
-	rtc_0 := rtc.rtc0.Get()
-	rtc_1 := rtc.rtc1.Get()
+	rtc_0 := rtc.RTC_0.Get()
+	rtc_1 := rtc.RTC_1.Get()
 
 	t = RtcTime{
 		Dotw:  int8((rtc_0 & rp.RTC_RTC_0_DOTW_Msk) >> rp.RTC_RTC_0_DOTW_Pos),
@@ -117,51 +113,54 @@ func (rtc *rtcType) GetTime() (t RtcTime, err error) {
 	return t, nil
 }
 
-// void rtc_set_alarm(datetime_t *t, rtc_callback_t user_callback) {
+// SetAlarm configures alarm in RTC and arms it.
+// The callback is executed in the context of an interrupt handler,
+// so regular restructions for this sort of code apply: no blocking, no memory allocation, etc.
 func (rtc *rtcType) SetAlarm(t RtcTime, callback func()) {
 
 	rtc.disableInterruptMatch()
 
-	// Only add to setup if it isn't -1
-	// Set the match enable bits for things we care about
+	// Clear all match enable bits
+	rtc.IRQ_SETUP_0.ClearBits(rp.RTC_IRQ_SETUP_0_YEAR_ENA | rp.RTC_IRQ_SETUP_0_MONTH_ENA | rp.RTC_IRQ_SETUP_0_DAY_ENA)
+	rtc.IRQ_SETUP_1.ClearBits(rp.RTC_IRQ_SETUP_1_DOTW_ENA | rp.RTC_IRQ_SETUP_1_HOUR_ENA | rp.RTC_IRQ_SETUP_1_MIN_ENA | rp.RTC_IRQ_SETUP_1_SEC_ENA)
 
+	// Only add to setup if it isn't -1 and set the match enable bits for things we care about
 	if t.Year >= 0 {
-		rtc.irqSetup0.SetBits(uint32(t.Year) << rp.RTC_SETUP_0_YEAR_Pos)
-		rtc.irqSetup0.SetBits(rp.RTC_IRQ_SETUP_0_YEAR_ENA)
+		rtc.IRQ_SETUP_0.SetBits(uint32(t.Year) << rp.RTC_SETUP_0_YEAR_Pos)
+		rtc.IRQ_SETUP_0.SetBits(rp.RTC_IRQ_SETUP_0_YEAR_ENA)
 	}
 
 	if t.Month >= 0 {
-		rtc.irqSetup0.SetBits(uint32(t.Month) << rp.RTC_SETUP_0_MONTH_Pos)
-		rtc.irqSetup0.SetBits(rp.RTC_IRQ_SETUP_0_MONTH_ENA)
+		rtc.IRQ_SETUP_0.SetBits(uint32(t.Month) << rp.RTC_SETUP_0_MONTH_Pos)
+		rtc.IRQ_SETUP_0.SetBits(rp.RTC_IRQ_SETUP_0_MONTH_ENA)
 	}
 
 	if t.Day >= 0 {
-		rtc.irqSetup0.SetBits(uint32(t.Day) << rp.RTC_SETUP_0_DAY_Pos)
-		rtc.irqSetup0.SetBits(rp.RTC_IRQ_SETUP_0_DAY_ENA)
+		rtc.IRQ_SETUP_0.SetBits(uint32(t.Day) << rp.RTC_SETUP_0_DAY_Pos)
+		rtc.IRQ_SETUP_0.SetBits(rp.RTC_IRQ_SETUP_0_DAY_ENA)
 	}
 
 	if t.Dotw >= 0 {
-		rtc.irqSetup1.SetBits(uint32(t.Dotw) << rp.RTC_SETUP_1_DOTW_Pos)
-		rtc.irqSetup1.SetBits(rp.RTC_IRQ_SETUP_1_DOTW_ENA)
+		rtc.IRQ_SETUP_1.SetBits(uint32(t.Dotw) << rp.RTC_SETUP_1_DOTW_Pos)
+		rtc.IRQ_SETUP_1.SetBits(rp.RTC_IRQ_SETUP_1_DOTW_ENA)
 	}
 
 	if t.Hour >= 0 {
-		rtc.irqSetup1.SetBits(uint32(t.Hour) << rp.RTC_SETUP_1_HOUR_Pos)
-		rtc.irqSetup1.SetBits(rp.RTC_IRQ_SETUP_1_HOUR_ENA)
+		rtc.IRQ_SETUP_1.SetBits(uint32(t.Hour) << rp.RTC_SETUP_1_HOUR_Pos)
+		rtc.IRQ_SETUP_1.SetBits(rp.RTC_IRQ_SETUP_1_HOUR_ENA)
 	}
 
 	if t.Min >= 0 {
-		rtc.irqSetup1.SetBits(uint32(t.Min) << rp.RTC_SETUP_1_MIN_Pos)
-		rtc.irqSetup1.SetBits(rp.RTC_IRQ_SETUP_1_MIN_ENA)
+		rtc.IRQ_SETUP_1.SetBits(uint32(t.Min) << rp.RTC_SETUP_1_MIN_Pos)
+		rtc.IRQ_SETUP_1.SetBits(rp.RTC_IRQ_SETUP_1_MIN_ENA)
 	}
 
 	if t.Sec >= 0 {
-		rtc.irqSetup1.SetBits(uint32(t.Sec) << rp.RTC_SETUP_1_SEC_Pos)
-		rtc.irqSetup1.SetBits(rp.RTC_IRQ_SETUP_1_SEC_ENA)
+		rtc.IRQ_SETUP_1.SetBits(uint32(t.Sec) << rp.RTC_SETUP_1_SEC_Pos)
+		rtc.IRQ_SETUP_1.SetBits(rp.RTC_IRQ_SETUP_1_SEC_ENA)
 	}
 
-	// Does it repeat? I.e. do we not match on any of the bits
-	rtcAlarmRepeats = t.AlarmRepeats()
+	rtcAlarmRepeats = t.alarmRepeats()
 
 	// Store function pointer we can call later
 	rtcCallback = callback
@@ -171,7 +170,7 @@ func (rtc *rtcType) SetAlarm(t RtcTime, callback func()) {
 	irqSet(rp.IRQ_RTC_IRQ, true)
 
 	// Enable the IRQ at the peri
-	rtc.intE.Set(rp.RTC_INTE_RTC)
+	rtc.INTE.Set(rp.RTC_INTE_RTC)
 
 	rtc.enableInterruptMatch()
 }
@@ -180,15 +179,15 @@ func (rtc *rtcType) SetAlarm(t RtcTime, callback func()) {
 
 func (rtc *rtcType) enableInterruptMatch() {
 	// Set matching and wait for it to be enabled
-	rtc.irqSetup0.SetBits(rp.RTC_IRQ_SETUP_0_MATCH_ENA)
-	for !rtc.irqSetup0.HasBits(rp.RTC_IRQ_SETUP_0_MATCH_ACTIVE) {
+	rtc.IRQ_SETUP_0.SetBits(rp.RTC_IRQ_SETUP_0_MATCH_ENA)
+	for !rtc.IRQ_SETUP_0.HasBits(rp.RTC_IRQ_SETUP_0_MATCH_ACTIVE) {
 	}
 }
 
 func (rtc *rtcType) disableInterruptMatch() {
 	// Disable matching and wait for it to stop being active
-	rtc.irqSetup0.ClearBits(rp.RTC_IRQ_SETUP_0_MATCH_ENA)
-	for rtc.irqSetup0.HasBits(rp.RTC_IRQ_SETUP_0_MATCH_ACTIVE) {
+	rtc.IRQ_SETUP_0.ClearBits(rp.RTC_IRQ_SETUP_0_MATCH_ENA)
+	for rtc.IRQ_SETUP_0.HasBits(rp.RTC_IRQ_SETUP_0_MATCH_ACTIVE) {
 	}
 }
 
@@ -223,9 +222,9 @@ type RtcTime struct {
 	Sec   int8
 }
 
-// IsValid when fields are in ranges taken from RTC doc.
+// isValid when fields are in ranges taken from RTC doc.
 // Note when setting an RTC alarm these values are allowed to be -1 to say "don't match this value"
-func (t RtcTime) IsValid() bool {
+func (t RtcTime) isValid() bool {
 	if !(t.Year >= 0 && t.Year <= 4095) {
 		return false
 	}
@@ -251,6 +250,6 @@ func (t RtcTime) IsValid() bool {
 }
 
 // alarmRepeats if any value is set to -1 since we don't match on that value in SetAlarm
-func (t RtcTime) AlarmRepeats() bool {
+func (t RtcTime) alarmRepeats() bool {
 	return t.Year < 0 || t.Month < 0 || t.Day < 0 || t.Dotw < 0 || t.Hour < 0 || t.Min < 0 || t.Sec < 0
 }
