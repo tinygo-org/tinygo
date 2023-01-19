@@ -544,6 +544,8 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 	var emulator []string
 	for _, s := range parts {
 		s = strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT"))
+		// Allow replacement of what's usually /tmp except notably Windows.
+		s = strings.ReplaceAll(s, "{tmpDir}", os.TempDir())
 		s = strings.ReplaceAll(s, "{"+format+"}", binary)
 		emulator = append(emulator, s)
 	}
