@@ -33,21 +33,27 @@ func main() {
 	t, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
 	runtime.AdjustTimeOffset(-1 * int64(time.Since(t)))
 
-	// Set RTC from system time and enable recurring alarm
+	// Set RTC from system time.
+	// Some descrepancy is expected. RTC may show 1 second ahead system time.
 	machine.RTC.SetTime(toRtcTime(time.Now()))
-	machine.RTC.SetAlarm(rtcTimeAlarm, func() { println("Pekabo!") }) // the callback function executes on interrupt and shall be as quick as possible
 
-	// Wait a bit to let user connect to serial console and for RTC to initialize
-	time.Sleep(3 * time.Second)
+	// Schedule and enable recurring alarm.
+	// The callback function is executed in the context of an interrupt handler,
+	// so regular restructions for this sort of code apply: no blocking, no memory allocation, etc.
+	machine.RTC.SetAlarm(rtcTimeAlarm, func() { println("Pekabo!") })
 
 	for {
-		rtcTime, _ := machine.RTC.GetTime() // shall increase 1 second each time
+		rtcTime, _ := machine.RTC.GetTime()
 		nowRtc := toTime(rtcTime)
 		nowSys := time.Now()
-		diff := nowRtc.Sub(nowSys)
-		// Some descrepancy is expected, diff shall be constant
-		fmt.Printf("SYS: %v, RTC: %v, DIFF: %v\r\n", nowSys.Format(time.RFC3339), nowRtc.Format(time.RFC3339), diff)
-		time.Sleep(time.Second)
+
+		// One iterration takes slightly more than a second.
+		// Both clocks run from the same source internally (XOSC) and are in sync.
+		// Since we don't show milliseconds, the accumulated error remains invisible for roughly 20 minutes.
+		// Then both SYS and RTC values will "jump" two seconds a time.
+		fmt.Printf("SYS: %v, RTC: %v\r\n", nowSys.Format(time.RFC3339), nowRtc.Format(time.RFC3339))
+
+		time.Sleep(1 * time.Second)
 	}
 }
 
