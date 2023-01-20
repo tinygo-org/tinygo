@@ -11,6 +11,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -21,9 +22,15 @@ var flagUpdate = flag.Bool("update", false, "Update images based on test output.
 
 // normalizeResult normalizes Go source code that comes out of tests across
 // platforms and Go versions.
-func normalizeResult(result string) string {
-	actual := strings.ReplaceAll(result, "\r\n", "\n")
-	return actual
+func normalizeResult(t *testing.T, result string) string {
+	result = strings.ReplaceAll(result, "\r\n", "\n")
+
+	// This changed to 'undefined:', in Go 1.20.
+	result = strings.ReplaceAll(result, ": undeclared name:", ": undefined:")
+	// Go 1.20 added a bit more detail
+	result = regexp.MustCompile(`(unknown field z in struct literal).*`).ReplaceAllString(result, "$1")
+
+	return result
 }
 
 func TestCGo(t *testing.T) {
@@ -88,7 +95,7 @@ func TestCGo(t *testing.T) {
 			if err != nil {
 				t.Errorf("could not write out CGo AST: %v", err)
 			}
-			actual := normalizeResult(buf.String())
+			actual := normalizeResult(t, buf.String())
 
 			// Read the file with the expected output, to compare against.
 			outfile := filepath.Join("testdata", name+".out.go")

@@ -1,28 +1,40 @@
-//go:build linux
+//go:build linux || darwin
 
 package runtime
 
 // Update the C environment if cgo is loaded.
-// Called from syscall.Setenv.
+// Called from Go 1.20 and above.
 //
-//go:linkname syscall_setenv_c syscall.setenv_c
-func syscall_setenv_c(key string, val string) {
+//go:linkname syscallSetenv syscall.runtimeSetenv
+func syscallSetenv(key, value string) {
 	keydata := cstring(key)
-	valdata := cstring(val)
+	valdata := cstring(value)
 	// ignore any errors
 	libc_setenv(&keydata[0], &valdata[0], 1)
-	return
 }
 
 // Update the C environment if cgo is loaded.
-// Called from syscall.Unsetenv.
+// Called from Go 1.20 and above.
 //
-//go:linkname syscall_unsetenv_c syscall.unsetenv_c
-func syscall_unsetenv_c(key string) {
+//go:linkname syscallUnsetenv syscall.runtimeUnsetenv
+func syscallUnsetenv(key string) {
 	keydata := cstring(key)
 	// ignore any errors
 	libc_unsetenv(&keydata[0])
-	return
+}
+
+// Compatibility with Go 1.19 and below.
+//
+//go:linkname syscall_setenv_c syscall.setenv_c
+func syscall_setenv_c(key string, val string) {
+	syscallSetenv(key, val)
+}
+
+// Compatibility with Go 1.19 and below.
+//
+//go:linkname syscall_unsetenv_c syscall.unsetenv_c
+func syscall_unsetenv_c(key string) {
+	syscallUnsetenv(key)
 }
 
 // cstring converts a Go string to a C string.

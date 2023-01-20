@@ -151,7 +151,10 @@ func initEndpoint(ep, config uint32) {
 		usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlAvail)
 
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut:
-		// TODO: not really anything, seems like...
+		val |= usbEpControlEndpointTypeInterrupt
+		usbDPSRAM.EPxControl[ep].Out.Set(val)
+		usbDPSRAM.EPxBufferControl[ep].Out.Set(USBBufferLen & usbBuf0CtrlLenMask)
+		usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlAvail)
 
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointIn:
 		val |= usbEpControlEndpointTypeBulk

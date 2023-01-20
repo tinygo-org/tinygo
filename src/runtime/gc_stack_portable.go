@@ -1,4 +1,4 @@
-//go:build (gc.conservative || gc.custom) && tinygo.wasm
+//go:build (gc.conservative || gc.custom || gc.precise) && tinygo.wasm
 
 package runtime
 
@@ -53,7 +53,7 @@ func markStack() {
 // trackPointer is a stub function call inserted by the compiler during IR
 // construction. Calls to it are later replaced with regular stack bookkeeping
 // code.
-func trackPointer(ptr unsafe.Pointer)
+func trackPointer(ptr, alloca unsafe.Pointer)
 
 // swapStackChain swaps the stack chain.
 // This is called from internal/task when switching goroutines.

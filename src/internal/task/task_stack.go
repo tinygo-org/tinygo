@@ -17,6 +17,9 @@ const stackCanary = uintptr(uint64(0x670c1333b83bf575) & uint64(^uintptr(0)))
 type state struct {
 	// sp is the stack pointer of the saved state.
 	// When the task is inactive, the saved registers are stored at the top of the stack.
+	// Note: this should ideally be a unsafe.Pointer for the precise GC. The GC
+	// will find the stack through canaryPtr though so it's not currently a
+	// problem to store this value as uintptr.
 	sp uintptr
 
 	// canaryPtr points to the top word of the stack (the lowest address).
@@ -63,20 +66,20 @@ func (t *Task) Resume() {
 // initialize the state and prepare to call the specified function with the specified argument bundle.
 func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// Create a stack.
-	stack := make([]uintptr, stackSize/unsafe.Sizeof(uintptr(0)))
+	stack := runtime_alloc(stackSize, nil)
 
 	// Set up the stack canary, a random number that should be checked when
 	// switching from the task back to the scheduler. The stack canary pointer
 	// points to the first word of the stack. If it has changed between now and
 	// the next stack switch, there was a stack overflow.
-	s.canaryPtr = &stack[0]
+	s.canaryPtr = (*uintptr)(stack)
 	*s.canaryPtr = stackCanary
 
 	// Get a pointer to the top of the stack, where the initial register values
 	// are stored. They will be popped off the stack on the first stack switch
 	// to the goroutine, and will start running tinygo_startTask (this setup
 	// happens in archInit).
-	r := (*calleeSavedRegs)(unsafe.Pointer(&stack[uintptr(len(stack))-(unsafe.Sizeof(calleeSavedRegs{})/unsafe.Sizeof(uintptr(0)))]))
+	r := (*calleeSavedRegs)(unsafe.Add(stack, stackSize-unsafe.Sizeof(calleeSavedRegs{})))
 
 	// Invoke architecture-specific initialization.
 	s.archInit(r, fn, args)
@@ -94,6 +97,9 @@ var startTask [0]uint8
 
 //go:linkname runqueuePushBack runtime.runqueuePushBack
 func runqueuePushBack(*Task)
+
+//go:linkname runtime_alloc runtime.alloc
+func runtime_alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 // start creates and starts a new goroutine with the given function and arguments.
 // The new goroutine is scheduled to run later.

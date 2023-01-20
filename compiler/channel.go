@@ -43,7 +43,7 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	}
 
 	// Allocate blockedlist buffer.
-	channelBlockedList := b.mod.GetTypeByName("runtime.channelBlockedList")
+	channelBlockedList := b.getLLVMRuntimeType("channelBlockedList")
 	channelBlockedListAlloca, channelBlockedListAllocaCast, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
 
 	// Do the send.
@@ -75,7 +75,7 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 	}
 
 	// Allocate blockedlist buffer.
-	channelBlockedList := b.mod.GetTypeByName("runtime.channelBlockedList")
+	channelBlockedList := b.getLLVMRuntimeType("channelBlockedList")
 	channelBlockedListAlloca, channelBlockedListAllocaCast, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
 
 	// Do the receive.

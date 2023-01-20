@@ -263,7 +263,7 @@ endif
 wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
 lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
-	cd lib/wasi-libc && make -j4 WASM_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC=$(CLANG) AR=$(LLVM_AR) NM=$(LLVM_NM)
+	cd lib/wasi-libc && make -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC=$(CLANG) AR=$(LLVM_AR) NM=$(LLVM_NM)
 
 
 # Build the Go compiler.
@@ -286,7 +286,6 @@ TEST_PACKAGES_FAST = \
 	container/list \
 	container/ring \
 	crypto/des \
-	crypto/internal/subtle \
 	crypto/md5 \
 	crypto/rc4 \
 	crypto/sha1 \
@@ -611,6 +610,8 @@ endif
 	$(TINYGO) build -size short -o test.hex -target=feather-rp2040 		examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=qtpy-rp2040         examples/echo
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=kb2040              examples/echo
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=macropad-rp2040 	examples/blinky1
 	@$(MD5SUM) test.hex

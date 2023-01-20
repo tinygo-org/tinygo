@@ -43,12 +43,13 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
 
-The following 91 microcontroller boards are currently supported:
+The following 94 microcontroller boards are currently supported:
 
 * [Adafruit Circuit Playground Bluefruit](https://www.adafruit.com/product/4333)
 * [Adafruit Circuit Playground Express](https://www.adafruit.com/product/3333)
 * [Adafruit CLUE](https://www.adafruit.com/product/4500)
 * [Adafruit Feather M0](https://www.adafruit.com/product/2772)
+* [Adafruit Feather M0 Express](https://www.adafruit.com/product/3403)
 * [Adafruit Feather M4](https://www.adafruit.com/product/3857)
 * [Adafruit Feather M4 CAN](https://www.adafruit.com/product/4759)
 * [Adafruit Feather nRF52840 Express](https://www.adafruit.com/product/4062)
@@ -59,6 +60,7 @@ The following 91 microcontroller boards are currently supported:
 * [Adafruit ItsyBitsy M0](https://www.adafruit.com/product/3727)
 * [Adafruit ItsyBitsy M4](https://www.adafruit.com/product/3800)
 * [Adafruit ItsyBitsy nRF52840](https://www.adafruit.com/product/4481)
+* [Adafruit KB2040](https://www.adafruit.com/product/5302)
 * [Adafruit MacroPad RP2040](https://www.adafruit.com/product/5100)
 * [Adafruit Matrix Portal M4](https://www.adafruit.com/product/4745)
 * [Adafruit Metro M4 Express Airlift](https://www.adafruit.com/product/4000)
@@ -136,8 +138,10 @@ The following 91 microcontroller boards are currently supported:
 * [ST Micro STM32F103XX "Bluepill"](https://stm32-base.org/boards/STM32F103C8T6-Blue-Pill)
 * [ST Micro STM32F407 "Discovery"](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
 * [ST Micro STM32F469 "Discovery"](https://www.st.com/content/st_com/en/products/evaluation-tools/product-evaluation-tools/mcu-mpu-eval-tools/stm32-mcu-mpu-eval-tools/stm32-discovery-kits/32f469idiscovery.html)
-* [X9 Pro smartwatch](https://github.com/curtpw/nRF5x-device-reverse-engineering/tree/master/X9-nrf52832-activity-tracker/)
 * [The Things Industries Generic Node Sensor Edition](https://www.genericnode.com/docs/sensor-edition/)
+* [Waveshare RP2040-Zero](https://www.waveshare.com/wiki/RP2040-Zero)
+* [X9 Pro smartwatch](https://github.com/curtpw/nRF5x-device-reverse-engineering/tree/master/X9-nrf52832-activity-tracker/)
+
 
 For more information, see [this list of boards](https://tinygo.org/microcontrollers/). Pull requests for additional support are welcome!
 

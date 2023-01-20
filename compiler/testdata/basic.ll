@@ -7,10 +7,12 @@ target triple = "wasm32-unknown-wasi"
 %main.kv.0 = type { i8, i32, i32, i32 }
 
 @main.kvGlobal = hidden global %main.kv zeroinitializer, align 4
+@main.a = hidden global { ptr, i32, i32 } zeroinitializer, align 4
+@main.b = hidden global [2 x ptr] zeroinitializer, align 4
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -194,8 +196,9 @@ entry:
 define hidden void @main.foo(ptr %context) unnamed_addr #1 {
 entry:
   %complit = alloca %main.kv.0, align 8
+  %stackalloc = alloca i8, align 1
   store %main.kv.0 zeroinitializer, ptr %complit, align 8
-  call void @runtime.trackPointer(ptr nonnull %complit, ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #2
   call void @"main.foo$1"(%main.kv.0 zeroinitializer, ptr undef)
   ret void
 }
@@ -204,8 +207,9 @@ entry:
 define internal void @"main.foo$1"(%main.kv.0 %b, ptr %context) unnamed_addr #1 {
 entry:
   %b1 = alloca %main.kv.0, align 8
+  %stackalloc = alloca i8, align 1
   store %main.kv.0 zeroinitializer, ptr %b1, align 8
-  call void @runtime.trackPointer(ptr nonnull %b1, ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %b1, ptr nonnull %stackalloc, ptr undef) #2
   store %main.kv.0 %b, ptr %b1, align 8
   ret void
 }

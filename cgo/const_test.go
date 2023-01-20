@@ -37,6 +37,10 @@ func TestParseConst(t *testing.T) {
 		{`5*5`, `5 * 5`},
 		{`5/5`, `5 / 5`},
 		{`5%5`, `5 % 5`},
+		{`5&5`, `5 & 5`},
+		{`5|5`, `5 | 5`},
+		{`5^5`, `5 ^ 5`},
+		{`5||5`, `error: 1:2: unexpected token ||, expected end of expression`}, // logical binops aren't supported yet
 		{`(5/5)`, `(5 / 5)`},
 		{`1 - 2`, `1 - 2`},
 		{`1 - 2 + 3`, `1 - 2 + 3`},

@@ -90,7 +90,7 @@ func (c *Config) CgoEnabled() bool {
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid
-// values are "none", "leaking", and "conservative".
+// values are "none", "leaking", "conservative" and "precise".
 func (c *Config) GC() string {
 	if c.Options.GC != "" {
 		return c.Options.GC
@@ -105,7 +105,7 @@ func (c *Config) GC() string {
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "conservative", "custom":
+	case "conservative", "custom", "precise":
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
 				return true
@@ -544,6 +544,8 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 	var emulator []string
 	for _, s := range parts {
 		s = strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT"))
+		// Allow replacement of what's usually /tmp except notably Windows.
+		s = strings.ReplaceAll(s, "{tmpDir}", os.TempDir())
 		s = strings.ReplaceAll(s, "{"+format+"}", binary)
 		emulator = append(emulator, s)
 	}

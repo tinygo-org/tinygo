@@ -3,12 +3,15 @@
 package machine
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"machine/usb"
 )
 
 type USBDevice struct {
-	initcomplete bool
+	initcomplete         bool
+	InitEndpointComplete bool
 }
 
 var (
@@ -66,10 +69,10 @@ var (
 var udd_ep_control_cache_buffer [256]uint8
 
 //go:align 4
-var udd_ep_in_cache_buffer [7][64]uint8
+var udd_ep_in_cache_buffer [usb.NumberOfEndpoints][64]uint8
 
 //go:align 4
-var udd_ep_out_cache_buffer [7][64]uint8
+var udd_ep_out_cache_buffer [usb.NumberOfEndpoints][64]uint8
 
 // usb_trans_buffer max size is 255 since that is max size
 // for a descriptor (bLength is 1 byte), and the biggest use
@@ -89,8 +92,9 @@ var (
 		usb.CDC_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_BULK | usb.EndpointOut),
 		usb.CDC_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn),
 		usb.HID_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_DISABLE), // Interrupt In
-		usb.MIDI_ENDPOINT_OUT: (usb.ENDPOINT_TYPE_DISABLE), // Bulk Out
+		usb.HID_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_DISABLE), // Interrupt Out
 		usb.MIDI_ENDPOINT_IN:  (usb.ENDPOINT_TYPE_DISABLE), // Bulk In
+		usb.MIDI_ENDPOINT_OUT: (usb.ENDPOINT_TYPE_DISABLE), // Bulk Out
 	}
 )
 
@@ -108,6 +112,8 @@ func sendDescriptor(setup usb.Setup) {
 			usbDescriptor = usb.DescriptorCDCHID
 		case (usbDescriptorConfig & usb.DescriptorConfigMIDI) > 0:
 			usbDescriptor = usb.DescriptorCDCMIDI
+		case (usbDescriptorConfig & usb.DescriptorConfigJoystick) > 0:
+			usbDescriptor = usb.DescriptorCDCJoystick
 		default:
 			usbDescriptor = usb.DescriptorCDC
 		}
@@ -210,6 +216,7 @@ func handleStandardSetup(setup usb.Setup) bool {
 			}
 
 			usbConfiguration = setup.WValueL
+			USBDev.InitEndpointComplete = true
 
 			SendZlp()
 			return true
@@ -259,4 +266,19 @@ func EnableMIDI(txHandler func(), rxHandler func([]byte), setupHandler func(usb.
 	endPoints[usb.MIDI_ENDPOINT_IN] = (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn)
 	usbRxHandler[usb.MIDI_ENDPOINT_OUT] = rxHandler
 	usbTxHandler[usb.MIDI_ENDPOINT_IN] = txHandler
+}
+
+// EnableJoystick enables HID. This function must be executed from the init().
+func EnableJoystick(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool, hidDesc []byte) {
+	idx := bytes.Index(usb.DescriptorCDCJoystick.Configuration, []byte{
+		0x09, 0x21, 0x11, 0x01, 0x00, 0x01, 0x22,
+	})
+	binary.LittleEndian.PutUint16(usb.DescriptorCDCJoystick.Configuration[idx+7:idx+9], uint16(len(hidDesc)))
+	usb.DescriptorCDCJoystick.HID[2] = hidDesc
+	usbDescriptorConfig |= usb.DescriptorConfigJoystick
+	endPoints[usb.HID_ENDPOINT_OUT] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut)
+	usbRxHandler[usb.HID_ENDPOINT_OUT] = rxHandler
+	endPoints[usb.HID_ENDPOINT_IN] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn)
+	usbTxHandler[usb.HID_ENDPOINT_IN] = txHandler
+	usbSetupHandler[usb.HID_INTERFACE] = setupHandler // 0x03 (HID - Human Interface Device)
 }
