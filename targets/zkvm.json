@@ -1,0 +1,17 @@
+{
+    "inherits": ["riscv"],
+	"llvm-target": "riscv32",
+    "scheduler": "none",
+	"build-tags": ["tinygo.zkvm"],
+    "cflags": [
+        "-march=rv32im",
+        "-mabi=ilp32"
+    ],
+    "ldflags": [
+        "-melf32lriscv"
+    ],
+    "gc": "leaking",
+    "features": "+m",
+    "linkerscript": "targets/riscv32im-risc0-zkvm-elf.ld",
+	"gdb": ["gdb-multiarch"]
+}
