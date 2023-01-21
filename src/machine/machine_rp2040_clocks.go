@@ -180,6 +180,7 @@ func (clk *clock) configure(src, auxsrc, srcFreq, freq uint32) {
 // init initializes the clock hardware.
 //
 // Must be called before any other clock function.
+// Must be called on start and wake up from deep sleep
 func (clks *clocksType) init() {
 	// Start the watchdog tick
 	watchdog.startTick(xoscFreq)
@@ -235,11 +236,11 @@ func (clks *clocksType) init() {
 		48*MHz,
 		48*MHz)
 
-	// clkRTC = pllUSB (48MHz) / 1024 = 46875Hz
+	// clkRTC = xosc (12MHz) / 256 = 46875Hz
 	clkrtc := clks.clock(clkRTC)
 	clkrtc.configure(0, // No GLMUX
-		rp.CLOCKS_CLK_RTC_CTRL_AUXSRC_CLKSRC_PLL_USB,
-		48*MHz,
+		rp.CLOCKS_CLK_RTC_CTRL_AUXSRC_XOSC_CLKSRC,
+		12*MHz,
 		46875)
 
 	// clkPeri = clkSys. Used as reference clock for Peripherals.
@@ -250,4 +251,46 @@ func (clks *clocksType) init() {
 		rp.CLOCKS_CLK_PERI_CTRL_AUXSRC_CLK_SYS,
 		125*MHz,
 		125*MHz)
+}
+
+// stop the clock
+func (clk *clock) stop() {
+	// Disable clock. On clkRef and clkSys this does nothing,
+	// all other clocks have the ENABLE bit in the same position.
+	clk.ctrl.ClearBits(rp.CLOCKS_CLK_GPOUT0_CTRL_ENABLE)
+	configuredFreq[clk.cix] = 0
+}
+
+// Stop most clocks & PLLs in preparation for sleep.
+// Ref, Sys and Rtc clocks run from XOSC.
+// After awakening, need to call configure() to re-initialize.
+func (clks *clocksType) sleep() {
+
+	// Configure clocks
+	// clkRef = xosc (12MHz) / 1 = 12MHz
+
+	// clkSys = xosc (12MHz) / 1 = 12MHz
+	clksys := clks.clock(clkSys)
+	clksys.configure(rp.CLOCKS_CLK_SYS_CTRL_SRC_CLKSRC_CLK_SYS_AUX,
+		rp.CLOCKS_CLK_SYS_CTRL_AUXSRC_XOSC_CLKSRC,
+		12*MHz,
+		12*MHz)
+
+	// clkUSB = 0MHz
+	clkusb := clks.clock(clkUSB)
+	clkusb.stop()
+
+	// clkADC = 0MHz
+	clkadc := clks.clock(clkADC)
+	clkadc.stop()
+
+	// clkRTC = xosc (12MHz) / 256 = 46875Hz
+
+	// clkPeri = 0MHz
+	clkperi := clks.clock(clkPeri)
+	clkperi.stop()
+
+	// Stop the PLLs
+	pllSys.stop()
+	pllUSB.stop()
 }

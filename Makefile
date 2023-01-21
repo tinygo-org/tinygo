@@ -467,6 +467,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nano-rp2040         examples/rtcinterrupt
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=nano-rp2040         examples/rtcsleep
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/serial
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/systick
