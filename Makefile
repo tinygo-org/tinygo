@@ -478,6 +478,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/test
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pca10040            examples/time-offset
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=wioterminal         examples/hid-mouse
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=wioterminal         examples/hid-keyboard
