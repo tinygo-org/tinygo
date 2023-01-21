@@ -34,7 +34,7 @@ import (
 	"sort"
 	"strings"
 
-	"tinygo.org/x/go-llvm"
+	llvm "tinygo.org/x/go-llvm"
 )
 
 // A list of basic types and their numbers. This list should be kept in sync
@@ -125,6 +125,12 @@ type typeCodeAssignmentState struct {
 	// all. If it is false, namedNonBasicTypesSidetable will contain simple
 	// monotonically increasing numbers.
 	needsNamedNonBasicTypesSidetable bool
+
+	pkgPaths                            map[string]int
+	pkgPathsSidetable                   []byte
+	needsPkgPathsSidetable              bool
+	namedBasicTypesPkgPathsSidetable    []uint64
+	namedNonBasicTypesPkgPathsSidetable []uint64
 }
 
 // LowerReflect is used to assign a type code to each type in the program
@@ -177,10 +183,15 @@ func LowerReflect(mod llvm.Module) {
 		arrayTypes:                       make(map[string]int),
 		structTypes:                      make(map[string]int),
 		structNames:                      make(map[string]int),
+		pkgPaths:                         make(map[string]int),
 		needsNamedNonBasicTypesSidetable: len(getUses(mod.NamedGlobal("reflect.namedNonBasicTypesSidetable"))) != 0,
 		needsStructTypesSidetable:        len(getUses(mod.NamedGlobal("reflect.structTypesSidetable"))) != 0,
 		needsStructNamesSidetable:        len(getUses(mod.NamedGlobal("reflect.structNamesSidetable"))) != 0,
 		needsArrayTypesSidetable:         len(getUses(mod.NamedGlobal("reflect.arrayTypesSidetable"))) != 0,
+		needsPkgPathsSidetable:           len(getUses(mod.NamedGlobal("reflect.pkgPathsSidetable"))) != 0,
+	}
+	if state.needsPkgPathsSidetable {
+		state.getPkgPathNumber([]byte{})
 	}
 	defer state.builder.Dispose()
 	for _, t := range types {
@@ -238,6 +249,26 @@ func LowerReflect(mod llvm.Module) {
 		global.SetUnnamedAddr(true)
 		global.SetGlobalConstant(true)
 	}
+	if state.needsPkgPathsSidetable {
+		{
+			global := replaceGlobalIntWithArray(mod, "reflect.pkgPathsSidetable", state.pkgPathsSidetable)
+			global.SetLinkage(llvm.InternalLinkage)
+			global.SetUnnamedAddr(true)
+			global.SetGlobalConstant(true)
+		}
+		{
+			global := replaceGlobalIntWithArray(mod, "reflect.namedBasicTypesPkgPathsSidetable", state.namedBasicTypesPkgPathsSidetable)
+			global.SetLinkage(llvm.InternalLinkage)
+			global.SetUnnamedAddr(true)
+			global.SetGlobalConstant(true)
+		}
+		{
+			global := replaceGlobalIntWithArray(mod, "reflect.namedNonBasicTypesPkgPathsSidetable", state.namedNonBasicTypesPkgPathsSidetable)
+			global.SetLinkage(llvm.InternalLinkage)
+			global.SetUnnamedAddr(true)
+			global.SetGlobalConstant(true)
+		}
+	}
 
 	// Remove most objects created for interface and reflect lowering.
 	// They would normally be removed anyway in later passes, but not always.
@@ -282,8 +313,20 @@ func (state *typeCodeAssignmentState) getTypeCodeNum(typecode llvm.Value) *big.I
 			panic("invalid basic type: " + value)
 		}
 		if name != "" {
+			typeNum := state.getBasicNamedTypeNum(name)
 			// This type is named, set the upper bits to the name ID.
-			num |= int64(state.getBasicNamedTypeNum(name)) << 5
+			num |= int64(typeNum) << 5
+			if state.needsPkgPathsSidetable {
+				var pkgPath string
+				pos := strings.LastIndex(name, ".")
+				if pos >= 0 {
+					pkgPath = name[:pos]
+				}
+				if needed := typeNum - len(state.namedBasicTypesPkgPathsSidetable) + 1; needed > 0 {
+					state.namedBasicTypesPkgPathsSidetable = append(state.namedBasicTypesPkgPathsSidetable, make([]uint64, needed)...)
+				}
+				state.namedBasicTypesPkgPathsSidetable[typeNum] = uint64(state.getPkgPathNumber([]byte(pkgPath)))
+			}
 		}
 		return big.NewInt(num << 1)
 	} else {
@@ -339,6 +382,18 @@ func (state *typeCodeAssignmentState) getTypeCodeNum(typecode llvm.Value) *big.I
 				// contains that same pointer).
 				state.namedNonBasicTypesSidetable[index] = num.Uint64()
 				num = big.NewInt(int64(index))
+			}
+			if state.needsPkgPathsSidetable {
+				var pkgPath string
+				pos := strings.LastIndex(name, ".")
+				if pos >= 0 {
+					pkgPath = name[:pos]
+				}
+				typeNum := int(num.Int64())
+				if needed := typeNum - len(state.namedNonBasicTypesPkgPathsSidetable) + 1; needed > 0 {
+					state.namedNonBasicTypesPkgPathsSidetable = append(state.namedNonBasicTypesPkgPathsSidetable, make([]uint64, needed)...)
+				}
+				state.namedNonBasicTypesPkgPathsSidetable[typeNum] = uint64(state.getPkgPathNumber([]byte(pkgPath)))
 			}
 		}
 		// Concatenate the 'num' and 'lowBits' bitstrings.
@@ -556,6 +611,24 @@ func (state *typeCodeAssignmentState) getStructNameNumber(nameBytes []byte) int 
 	state.structNames[name] = n
 	state.structNamesSidetable = append(state.structNamesSidetable, makeVarint(uint64(len(nameBytes)))...)
 	state.structNamesSidetable = append(state.structNamesSidetable, nameBytes...)
+	return n
+}
+
+// getPkgPathNumber stores this string (name or tag) onto the pkg paths
+// sidetable. The format is a varint of the length of the package, followed by
+// the raw bytes of the name. Multiple identical strings are stored under the
+// same name for space efficiency.
+func (state *typeCodeAssignmentState) getPkgPathNumber(nameBytes []byte) int {
+	name := string(nameBytes)
+	if n, ok := state.pkgPaths[name]; ok {
+		// This name was used before, re-use it now (for space efficiency).
+		return n
+	}
+	// This name is not yet in the names sidetable. Add it now.
+	n := len(state.pkgPathsSidetable)
+	state.pkgPaths[name] = n
+	state.pkgPathsSidetable = append(state.pkgPathsSidetable, makeVarint(uint64(len(nameBytes)))...)
+	state.pkgPathsSidetable = append(state.pkgPathsSidetable, nameBytes...)
 	return n
 }
 

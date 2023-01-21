@@ -754,7 +754,23 @@ func (t rawType) MethodByName(name string) (Method, bool) {
 }
 
 func (t rawType) PkgPath() string {
-	panic("unimplemented: (reflect.Type).PkgPath()")
+	if t%2 == 0 {
+		// basic type
+		id := t >> 6
+		if id == 0 {
+			// not a named type
+			return ""
+		}
+		n, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&namedBasicTypesPkgPathsSidetable)) + uintptr(id)*unsafe.Sizeof(uintptr(0))))
+		return readStringSidetable(unsafe.Pointer(&pkgPathsSidetable), n)
+	} else if (t>>4)%2 == 0 {
+		// not a named type
+		return ""
+	}
+	// named complex type
+	id := t >> 5
+	n, _ := readVarint(unsafe.Pointer(uintptr(unsafe.Pointer(&namedNonBasicTypesPkgPathsSidetable)) + uintptr(id)*unsafe.Sizeof(uintptr(0))))
+	return readStringSidetable(unsafe.Pointer(&pkgPathsSidetable), n)
 }
 
 func (t rawType) FieldByName(name string) (StructField, bool) {
