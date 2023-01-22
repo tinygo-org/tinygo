@@ -171,6 +171,12 @@ func (i2c *I2C) Configure(config I2CConfig) {
 	i2c.reset(freq)
 }
 
+// SetBaudRate sets the communication speed for I2C.
+func (i2c I2C) SetBaudRate(br uint32) error {
+	// TODO: implement
+	return nil
+}
+
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	// perform transmit transfer
 	if nil != w {

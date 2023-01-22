@@ -259,6 +259,12 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	return nil
 }
 
+// SetBaudRate sets the communication speed for I2C.
+func (i2c *I2C) SetBaudRate(br uint32) error {
+	// TODO: implement
+	return nil
+}
+
 // Tx does a single I2C transaction at the specified address.
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.
