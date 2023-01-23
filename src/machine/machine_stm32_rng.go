@@ -15,6 +15,13 @@ func GetRNG() (uint32, error) {
 		rngInitDone = true
 	}
 
+	if stm32.RNG.SR.HasBits(stm32.RNG_SR_CECS) {
+		return 0, ErrClockRNG
+	}
+	if stm32.RNG.SR.HasBits(stm32.RNG_SR_SECS) {
+		return 0, ErrSeedRNG
+	}
+
 	cnt := RNG_MAX_READ_RETRIES
 	for !stm32.RNG.SR.HasBits(stm32.RNG_SR_DRDY) {
 		cnt--
