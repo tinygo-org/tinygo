@@ -407,7 +407,12 @@ func (t *TIM) enableMainOutput() {
 
 func initRNG() {
 	stm32.RCC.AHB3ENR.SetBits(stm32.RCC_AHB3ENR_RNGEN)
-	stm32.RNG.CR.SetBits(stm32.RNG_CR_RNGEN)
+
+	// Enable RNG with config.A  (See RM0453 22.6.2)
+	stm32.RNG.CR.Set(0x40F00D40)   // RNG Config. A
+	stm32.RNG.HTCR.Set(0x17590ABC) // MAGIC NUMBER
+	stm32.RNG.HTCR.Set(0x0000AA74) // HTCR VALUE
+	stm32.RNG.CR.Set(0x00F00D4C)   // CONFIG A  + RNG_EN=1 + IE=1
 }
 
 //----------
