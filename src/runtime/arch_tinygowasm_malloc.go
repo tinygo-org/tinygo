@@ -13,7 +13,7 @@ var allocs = make(map[uintptr][]byte)
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
 	if size == 0 {
-		return nil
+		size = 1 // Match dlmalloc's behavior to allocate a "minimum-sized chunk"
 	}
 	buf := make([]byte, size)
 	ptr := unsafe.Pointer(&buf[0])
@@ -42,8 +42,7 @@ func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
 //export realloc
 func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	if size == 0 {
-		libc_free(oldPtr)
-		return nil
+		size = 1 // Match dlmalloc's behavior to allocate a "minimum-sized chunk"
 	}
 
 	// It's hard to optimize this to expand the current buffer with our GC, but
