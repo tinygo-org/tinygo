@@ -8,6 +8,6 @@
 	"serial": "uart",
 	"linkerscript": "targets/stm32l072czt6.ld",
 	"flash-method": "openocd",
-	"openocd-interface": "stlink-v2",
-	"openocd-target": "stm32f0x"
+	"openocd-interface": "stlink",
+	"openocd-target": "stm32l0"
 }
