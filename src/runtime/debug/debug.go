@@ -9,6 +9,11 @@ func SetMaxStack(n int) int {
 	return n
 }
 
+// PrintStack prints to standard error the stack trace returned by runtime.Stack.
+//
+// Not implemented.
+func PrintStack() {}
+
 // Stack returns a formatted stack trace of the goroutine that calls it.
 //
 // Not implemented.
