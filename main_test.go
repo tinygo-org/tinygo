@@ -210,10 +210,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// limited amount of memory.
 				continue
 
-			case "gc.go":
-				// Does not pass due to high mark false positive rate.
-				continue
-
 			case "json.go", "stdlib.go", "testing.go":
 				// Too big for AVR. Doesn't fit in flash/RAM.
 				continue
