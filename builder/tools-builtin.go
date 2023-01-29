@@ -28,7 +28,7 @@ const hasBuiltinTools = true
 func RunTool(tool string, args ...string) error {
 	linker := "elf"
 	if tool == "ld.lld" && len(args) >= 2 {
-		if args[0] == "-m" && args[1] == "i386pep" {
+		if args[0] == "-m" && (args[1] == "i386pep" || args[1] == "arm64pe") {
 			linker = "mingw"
 		} else if args[0] == "-flavor" {
 			linker = args[1]
