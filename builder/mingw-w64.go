@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -43,7 +44,7 @@ var MinGW = Library{
 //
 // TODO: cache the result. At the moment, it costs a few hundred milliseconds to
 // compile these files.
-func makeMinGWExtraLibs(tmpdir string) []*compileJob {
+func makeMinGWExtraLibs(tmpdir, goarch string) []*compileJob {
 	var jobs []*compileJob
 	root := goenv.Get("TINYGOROOT")
 	// Normally all the api-ms-win-crt-*.def files are all compiled to a single
@@ -74,16 +75,27 @@ func makeMinGWExtraLibs(tmpdir string) []*compileJob {
 			result:      outpath,
 			run: func(job *compileJob) error {
 				defpath := inpath
+				var archDef, emulation string
+				switch goarch {
+				case "amd64":
+					archDef = "-DDEF_X64"
+					emulation = "i386pep"
+				case "arm64":
+					archDef = "-DDEF_ARM64"
+					emulation = "arm64pe"
+				default:
+					return fmt.Errorf("unsupported architecture for mingw-w64: %s", goarch)
+				}
 				if strings.HasSuffix(inpath, ".in") {
 					// .in files need to be preprocessed by a preprocessor (-E)
 					// first.
 					defpath = outpath + ".def"
-					err := runCCompiler("-E", "-x", "c", "-Wp,-w", "-P", "-DDEF_X64", "-DDATA", "-o", defpath, inpath, "-I"+goenv.Get("TINYGOROOT")+"/lib/mingw-w64/mingw-w64-crt/def-include/")
+					err := runCCompiler("-E", "-x", "c", "-Wp,-w", "-P", archDef, "-DDATA", "-o", defpath, inpath, "-I"+goenv.Get("TINYGOROOT")+"/lib/mingw-w64/mingw-w64-crt/def-include/")
 					if err != nil {
 						return err
 					}
 				}
-				return link("ld.lld", "-m", "i386pep", "-o", outpath, defpath)
+				return link("ld.lld", "-m", emulation, "-o", outpath, defpath)
 			},
 		}
 		jobs = append(jobs, job)
