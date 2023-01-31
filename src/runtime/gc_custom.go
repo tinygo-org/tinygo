@@ -20,6 +20,7 @@ package runtime
 // - func free(ptr unsafe.Pointer)
 // - func markRoots(start, end uintptr)
 // - func GC()
+// - func ReadMemStats(ms *runtime.MemStats)
 //
 //
 // In addition, if targeting wasi, the following functions should be exported for interoperability
@@ -49,6 +50,9 @@ func markRoots(start, end uintptr)
 
 // GC is called to explicitly run garbage collection.
 func GC()
+
+// ReadMemStats populates m with memory statistics.
+func ReadMemStats(ms *MemStats)
 
 func setHeapEnd(newHeapEnd uintptr) {
 	// Heap is in custom GC so ignore for when called from wasm initialization.
