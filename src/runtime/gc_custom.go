@@ -21,6 +21,7 @@ package runtime
 // - func markRoots(start, end uintptr)
 // - func GC()
 // - func SetFinalizer(obj interface{}, finalizer interface{})
+// - func ReadMemStats(ms *runtime.MemStats)
 //
 //
 // In addition, if targeting wasi, the following functions should be exported for interoperability
@@ -53,6 +54,9 @@ func GC()
 
 // SetFinalizer registers a finalizer.
 func SetFinalizer(obj interface{}, finalizer interface{})
+
+// ReadMemStats populates m with memory statistics.
+func ReadMemStats(ms *MemStats)
 
 func setHeapEnd(newHeapEnd uintptr) {
 	// Heap is in custom GC so ignore for when called from wasm initialization.

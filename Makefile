@@ -738,6 +738,7 @@ endif
 	@$(MD5SUM) test.hex
 	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o test.elf       ./testdata/cgo
 	GOOS=windows GOARCH=amd64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
+	GOOS=windows GOARCH=arm64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
 	GOOS=darwin GOARCH=amd64 $(TINYGO) build  -size short -o test       ./testdata/cgo
 	GOOS=darwin GOARCH=arm64 $(TINYGO) build  -size short -o test       ./testdata/cgo
 ifneq ($(OS),Windows_NT)
