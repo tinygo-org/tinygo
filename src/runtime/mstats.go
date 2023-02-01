@@ -9,6 +9,11 @@ package runtime
 type MemStats struct {
 	// General statistics.
 
+	// Alloc is bytes of allocated heap objects.
+	//
+	// This is the same as HeapAlloc (see below).
+	Alloc uint64
+
 	// Sys is the total bytes of memory obtained from the OS.
 	//
 	// Sys is the sum of the XSys fields below. Sys measures the
@@ -17,6 +22,19 @@ type MemStats struct {
 	Sys uint64
 
 	// Heap memory statistics.
+
+	// HeapAlloc is bytes of allocated heap objects.
+	//
+	// "Allocated" heap objects include all reachable objects, as
+	// well as unreachable objects that the garbage collector has
+	// not yet freed. Specifically, HeapAlloc increases as heap
+	// objects are allocated and decreases as the heap is swept
+	// and unreachable objects are freed. Sweeping occurs
+	// incrementally between GC cycles, so these two processes
+	// occur simultaneously, and as a result HeapAlloc tends to
+	// change smoothly (in contrast with the sawtooth that is
+	// typical of stop-the-world garbage collectors).
+	HeapAlloc uint64
 
 	// HeapSys is bytes of heap memory, total.
 	//
