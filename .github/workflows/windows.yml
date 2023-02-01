@@ -71,9 +71,6 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
-      - name: Install wasmtime
-        run: |
-          scoop install wasmtime
       - name: Test TinyGo
         shell: bash
         run: make test GOTESTFLAGS="-v -short"
@@ -160,7 +157,7 @@ jobs:
       - name: Install Dependencies
         shell: bash
         run: |
-          scoop install binaryen wasmtime
+          scoop install binaryen
       - name: Checkout
         uses: actions/checkout@v2
       - name: Install Go

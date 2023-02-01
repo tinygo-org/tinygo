@@ -120,10 +120,6 @@ jobs:
         with:
           go-version: '1.19'
           cache: true
-      - name: Install wasmtime
-        run: |
-          curl https://wasmtime.dev/install.sh -sSf | bash
-          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Download release artifact
         uses: actions/download-artifact@v3
         with:
@@ -164,10 +160,6 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '14'
-      - name: Install wasmtime
-        run: |
-          curl https://wasmtime.dev/install.sh -sSf | bash
-          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Cache LLVM source
         uses: actions/cache@v3
         id: cache-llvm-source

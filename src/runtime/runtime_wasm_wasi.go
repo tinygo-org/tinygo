@@ -22,9 +22,9 @@ func _start() {
 }
 
 // Read the command line arguments from WASI.
-// For example, they can be passed to a program with wasmtime like this:
+// For example, they can be passed to a program with wazero like this:
 //
-//	wasmtime run ./program.wasm arg1 arg2
+//	wazero run ./program.wasm arg1 arg2
 func init() {
 	__wasm_call_ctors()
 }

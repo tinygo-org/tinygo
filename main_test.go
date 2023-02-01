@@ -404,7 +404,7 @@ func TestTest(t *testing.T) {
 			targ{"EmulatedCortexM3", optionsFromTarget("cortex-m-qemu", sema)},
 			targ{"EmulatedRISCV", optionsFromTarget("riscv-qemu", sema)},
 
-			// Node/Wasmtime
+			// Node/wazero
 			targ{"WASM", optionsFromTarget("wasm", sema)},
 			targ{"WASI", optionsFromTarget("wasi", sema)},
 		)

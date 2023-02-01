@@ -266,39 +266,6 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// Tests are always run in the package directory.
 		cmd.Dir = result.MainDir
 
-		// wasmtime is the default emulator used for `-target=wasi`. wasmtime
-		// is a WebAssembly runtime CLI with WASI enabled by default. However,
-		// only stdio are allowed by default. For example, while STDOUT routes
-		// to the host, other files don't. It also does not inherit environment
-		// variables from the host. Some tests read testdata files, often from
-		// outside the package directory. Other tests require temporary
-		// writeable directories. We allow this by adding wasmtime flags below.
-		if config.EmulatorName() == "wasmtime" {
-			// At this point, The current working directory is at the package
-			// directory. Ex. $GOROOT/src/compress/flate for compress/flate.
-			// buildAndRun has already added arguments for wasmtime, that allow
-			// read-access to files such as "testdata/huffman-zero.in".
-			//
-			// Ex. main(.wasm) --dir=. -- -test.v
-
-			// Below adds additional wasmtime flags in case a test reads files
-			// outside its directory, like "../testdata/e.txt". This allows any
-			// relative directory up to the module root, even if the test never
-			// reads any files.
-			//
-			// Ex. run --dir=.. --dir=../.. --dir=../../..
-			dirs := dirsToModuleRoot(result.MainDir, result.ModuleRoot)
-			args := []string{"run"}
-			for _, d := range dirs[1:] {
-				args = append(args, "--dir="+d)
-			}
-
-			// The below re-organizes the arguments so that the current
-			// directory is added last.
-			args = append(args, cmd.Args[1:]...)
-			cmd.Args = append(cmd.Args[:1:1], args...)
-		}
-
 		// Run the test.
 		start := time.Now()
 		err = cmd.Run()
@@ -759,7 +726,7 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 }
 
 // buildAndRun builds and runs the given program, writing output to stdout and
-// errors to os.Stderr. It takes care of emulators (qemu, wasmtime, etc) and
+// errors to os.Stderr. It takes care of emulators (qemu, etc) and
 // passes command line arguments and evironment variables in a way appropriate
 // for the given emulator.
 func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) (builder.BuildResult, error) {
@@ -793,18 +760,6 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			config.Options.GlobalValues = map[string]map[string]string{
 				"runtime": runtimeGlobals,
 			}
-		}
-	} else if config.EmulatorName() == "wasmtime" {
-		// Wasmtime needs some special flags to pass environment variables
-		// and allow reading from the current directory.
-		args = append(args, "--dir=.")
-		for _, v := range environmentVars {
-			args = append(args, "--env", v)
-		}
-		if len(cmdArgs) != 0 {
-			// mark end of wasmtime arguments and start of program ones: --
-			args = append(args, "--")
-			args = append(args, cmdArgs...)
 		}
 	} else {
 		// Pass environment variables and command line parameters as usual.
