@@ -761,6 +761,12 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 				"runtime": runtimeGlobals,
 			}
 		}
+	} else if strings.Contains(config.Target.Emulator, "wazero") {
+		// wazero needs some special flags to pass environment variables
+		for _, v := range environmentVars {
+			args = append(args, "-env", v)
+		}
+		args = append(args, cmdArgs...)
 	} else {
 		// Pass environment variables and command line parameters as usual.
 		// This also works on qemu-aarch64 etc.
