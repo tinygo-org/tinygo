@@ -11,6 +11,12 @@ func syscallSetenv(key, value string) {
 	valdata := cstring(value)
 	// ignore any errors
 	libc_setenv(&keydata[0], &valdata[0], 1)
+	if key == "GODEBUG" && godebugUpdate != nil {
+		// Starting with Go 1.20, we need to call a callback (set by
+		// internal/godebug) to notify the GODEBUG environment variable has
+		// changed. This is necessary to get archive/zip to pass tests.
+		godebugUpdate(key, value)
+	}
 }
 
 // Update the C environment if cgo is loaded.
