@@ -103,7 +103,7 @@ jobs:
         run: |
           HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@15
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install Go
         uses: actions/setup-go@v3
         with:
