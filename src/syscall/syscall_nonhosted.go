@@ -210,3 +210,11 @@ func Getpagesize() int {
 	// common assumption when pagesize is unknown
 	return 4096
 }
+
+type RawSockaddrInet4 struct {
+	// stub
+}
+
+type RawSockaddrInet6 struct {
+	// stub
+}

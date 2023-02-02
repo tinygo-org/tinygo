@@ -146,6 +146,8 @@ func Unlink(path string) (err error) {
 	return
 }
 
+func Faccessat(dirfd int, path string, mode uint32, flags int) (err error)
+
 func Kill(pid int, sig Signal) (err error) {
 	return ENOSYS // TODO
 }
@@ -288,6 +290,18 @@ func Environ() []string {
 		environ = (*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(environ)) + unsafe.Sizeof(environ)))
 	}
 	return envs
+}
+
+// BytePtrFromString returns a pointer to a NUL-terminated array of
+// bytes containing the text of s. If s contains a NUL byte at any
+// location, it returns (nil, EINVAL).
+func BytePtrFromString(s string) (*byte, error) {
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0 {
+			return nil, EINVAL
+		}
+	}
+	return &cstring(s)[0], nil
 }
 
 // cstring converts a Go string to a C string.
