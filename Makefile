@@ -263,7 +263,7 @@ endif
 wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
 lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
-	cd lib/wasi-libc && make -j4 WASM_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC=$(CLANG) AR=$(LLVM_AR) NM=$(LLVM_NM)
+	cd lib/wasi-libc && make -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC=$(CLANG) AR=$(LLVM_AR) NM=$(LLVM_NM)
 
 
 # Build the Go compiler.
@@ -286,7 +286,6 @@ TEST_PACKAGES_FAST = \
 	container/list \
 	container/ring \
 	crypto/des \
-	crypto/internal/subtle \
 	crypto/md5 \
 	crypto/rc4 \
 	crypto/sha1 \
@@ -739,6 +738,7 @@ endif
 	@$(MD5SUM) test.hex
 	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o test.elf       ./testdata/cgo
 	GOOS=windows GOARCH=amd64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
+	GOOS=windows GOARCH=arm64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
 	GOOS=darwin GOARCH=amd64 $(TINYGO) build  -size short -o test       ./testdata/cgo
 	GOOS=darwin GOARCH=arm64 $(TINYGO) build  -size short -o test       ./testdata/cgo
 ifneq ($(OS),Windows_NT)

@@ -1,4 +1,4 @@
-//go:build scheduler.tasks && arm64
+//go:build scheduler.tasks && arm64 && !windows
 
 package task
 

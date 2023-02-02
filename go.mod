@@ -14,8 +14,8 @@ require (
 	github.com/mattn/go-colorable v0.1.8
 	github.com/mattn/go-tty v0.0.4
 	go.bug.st/serial v1.3.5
-	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
-	golang.org/x/tools v0.1.11
+	golang.org/x/sys v0.4.0
+	golang.org/x/tools v0.5.0
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20221028183034-8341240c0b32
 )

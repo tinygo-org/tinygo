@@ -246,7 +246,8 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 
 	buf := bytes.Buffer{}
 	passed := false
-	err = buildAndRun(pkgName, config, &buf, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	var duration time.Duration
+	result, err := buildAndRun(pkgName, config, &buf, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
 		if testCompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
@@ -292,17 +293,6 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 				args = append(args, "--dir="+d)
 			}
 
-			// Some tests create temp directories using os.MkdirTemp or via
-			// t.TempDir(). Create a writeable directory and map it to the
-			// default tempDir environment variable: TMPDIR.
-			tmpdir, err := os.MkdirTemp("", "tinygotmp")
-			if err != nil {
-				return fmt.Errorf("failed to create temporary directory: %w", err)
-			}
-			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
-			// TODO: add option to not delete temp dir for debugging?
-			defer os.RemoveAll(tmpdir)
-
 			// The below re-organizes the arguments so that the current
 			// directory is added last.
 			args = append(args, cmd.Args[1:]...)
@@ -312,10 +302,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// Run the test.
 		start := time.Now()
 		err = cmd.Run()
-		duration := time.Since(start)
-
-		// Print the result.
-		importPath := strings.TrimSuffix(result.ImportPath, ".test")
+		duration = time.Since(start)
 		passed = err == nil
 
 		// print the test output if
@@ -326,23 +313,23 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			buf.WriteTo(stdout)
 		}
 
-		// final status line
-		if passed {
-			fmt.Fprintf(stdout, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
-		} else {
-			fmt.Fprintf(stdout, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
-		}
 		if _, ok := err.(*exec.ExitError); ok {
 			// Binary exited with a non-zero exit code, which means the test
-			// failed.
+			// failed. Return nil to avoid printing a useless "exited with
+			// error" error message.
 			return nil
 		}
 		return err
 	})
+	importPath := strings.TrimSuffix(result.ImportPath, ".test")
 	if err, ok := err.(loader.NoTestFilesError); ok {
 		fmt.Fprintf(stdout, "?   \t%s\t[no test files]\n", err.ImportPath)
 		// Pretend the test passed - it at least didn't fail.
 		return true, nil
+	} else if passed {
+		fmt.Fprintf(stdout, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
+	} else {
+		fmt.Fprintf(stdout, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 	}
 	return passed, err
 }
@@ -765,16 +752,17 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 		return err
 	}
 
-	return buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
 		return cmd.Run()
 	})
+	return err
 }
 
 // buildAndRun builds and runs the given program, writing output to stdout and
 // errors to os.Stderr. It takes care of emulators (qemu, wasmtime, etc) and
 // passes command line arguments and evironment variables in a way appropriate
 // for the given emulator.
-func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) error {
+func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) (builder.BuildResult, error) {
 	// Determine whether we're on a system that supports environment variables
 	// and command line parameters (operating systems, WASI) or not (baremetal,
 	// WebAssembly in the browser). If we're on a system without an environment,
@@ -828,7 +816,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	// Create a temporary directory for intermediary files.
 	tmpdir, err := os.MkdirTemp("", "tinygo")
 	if err != nil {
-		return err
+		return builder.BuildResult{}, err
 	}
 	if !config.Options.Work {
 		defer os.RemoveAll(tmpdir)
@@ -838,7 +826,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	format, fileExt := config.EmulatorFormat()
 	result, err := builder.Build(pkgName, fileExt, tmpdir, config)
 	if err != nil {
-		return err
+		return result, err
 	}
 
 	// If needed, set a timeout on the command. This is done in tests so
@@ -857,7 +845,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	} else {
 		emulator, err := config.Emulator(format, result.Binary)
 		if err != nil {
-			return err
+			return result, err
 		}
 		name = emulator[0]
 		emuArgs := append([]string(nil), emulator[1:]...)
@@ -898,9 +886,9 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			stdout.Write([]byte(fmt.Sprintf("--- timeout of %s exceeded, terminating...\n", timeout)))
 			err = ctx.Err()
 		}
-		return &commandError{"failed to run compiled binary", result.Binary, err}
+		return result, &commandError{"failed to run compiled binary", result.Binary, err}
 	}
-	return nil
+	return result, nil
 }
 
 func touchSerialPortAt1200bps(port string) (err error) {

@@ -7,7 +7,6 @@ import (
 	"go/token"
 	"go/types"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -145,8 +144,11 @@ func (b *builder) createGo(instr *ssa.Go) {
 func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, prefix string, hasContext bool, pos token.Pos) llvm.Value {
 	var wrapper llvm.Value
 
-	builder := c.ctx.NewBuilder()
-	defer builder.Dispose()
+	b := &builder{
+		compilerContext: c,
+		Builder:         c.ctx.NewBuilder(),
+	}
+	defer b.Dispose()
 
 	var deadlock llvm.Value
 	var deadlockType llvm.Type
@@ -170,7 +172,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 		wrapper.SetUnnamedAddr(true)
 		wrapper.AddAttributeAtIndex(-1, c.ctx.CreateStringAttribute("tinygo-gowrapper", name))
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
-		builder.SetInsertPointAtEnd(entry)
+		b.SetInsertPointAtEnd(entry)
 
 		if c.Debug {
 			pos := c.program.Fset.Position(pos)
@@ -191,7 +193,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 				Optimized:    true,
 			})
 			wrapper.SetSubprogram(difunc)
-			builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+			b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 		}
 
 		// Create the list of params for the call.
@@ -199,16 +201,16 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 		if !hasContext {
 			paramTypes = paramTypes[:len(paramTypes)-1] // strip context parameter
 		}
-		params := llvmutil.EmitPointerUnpack(builder, c.mod, wrapper.Param(0), paramTypes)
+		params := b.emitPointerUnpack(wrapper.Param(0), paramTypes)
 		if !hasContext {
 			params = append(params, llvm.Undef(c.i8ptrType)) // add dummy context parameter
 		}
 
 		// Create the call.
-		builder.CreateCall(fnType, fn, params, "")
+		b.CreateCall(fnType, fn, params, "")
 
 		if c.Scheduler == "asyncify" {
-			builder.CreateCall(deadlockType, deadlock, []llvm.Value{
+			b.CreateCall(deadlockType, deadlock, []llvm.Value{
 				llvm.Undef(c.i8ptrType),
 			}, "")
 		}
@@ -239,7 +241,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 		wrapper.SetUnnamedAddr(true)
 		wrapper.AddAttributeAtIndex(-1, c.ctx.CreateStringAttribute("tinygo-gowrapper", ""))
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
-		builder.SetInsertPointAtEnd(entry)
+		b.SetInsertPointAtEnd(entry)
 
 		if c.Debug {
 			pos := c.program.Fset.Position(pos)
@@ -260,23 +262,23 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 				Optimized:    true,
 			})
 			wrapper.SetSubprogram(difunc)
-			builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+			b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 		}
 
 		// Get the list of parameters, with the extra parameters at the end.
 		paramTypes := fnType.ParamTypes()
 		paramTypes = append(paramTypes, fn.Type()) // the last element is the function pointer
-		params := llvmutil.EmitPointerUnpack(builder, c.mod, wrapper.Param(0), paramTypes)
+		params := b.emitPointerUnpack(wrapper.Param(0), paramTypes)
 
 		// Get the function pointer.
 		fnPtr := params[len(params)-1]
 		params = params[:len(params)-1]
 
 		// Create the call.
-		builder.CreateCall(fnType, fnPtr, params, "")
+		b.CreateCall(fnType, fnPtr, params, "")
 
 		if c.Scheduler == "asyncify" {
-			builder.CreateCall(deadlockType, deadlock, []llvm.Value{
+			b.CreateCall(deadlockType, deadlock, []llvm.Value{
 				llvm.Undef(c.i8ptrType),
 			}, "")
 		}
@@ -284,13 +286,13 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 
 	if c.Scheduler == "asyncify" {
 		// The goroutine was terminated via deadlock.
-		builder.CreateUnreachable()
+		b.CreateUnreachable()
 	} else {
 		// Finish the function. Every basic block must end in a terminator, and
 		// because goroutines never return a value we can simply return void.
-		builder.CreateRetVoid()
+		b.CreateRetVoid()
 	}
 
 	// Return a ptrtoint of the wrapper, not the function itself.
-	return builder.CreatePtrToInt(wrapper, c.uintptrType, "")
+	return b.CreatePtrToInt(wrapper, c.uintptrType, "")
 }

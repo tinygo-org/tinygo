@@ -4,6 +4,8 @@ import "errors"
 
 var (
 	ErrTimeoutRNG         = errors.New("machine: RNG Timeout")
+	ErrClockRNG           = errors.New("machine: RNG Clock Error")
+	ErrSeedRNG            = errors.New("machine: RNG Seed Error")
 	ErrInvalidInputPin    = errors.New("machine: invalid input pin")
 	ErrInvalidOutputPin   = errors.New("machine: invalid output pin")
 	ErrInvalidClockPin    = errors.New("machine: invalid clock pin")

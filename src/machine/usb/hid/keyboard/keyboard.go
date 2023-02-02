@@ -2,6 +2,7 @@ package keyboard
 
 import (
 	"errors"
+	"machine"
 	"machine/usb/hid"
 )
 
@@ -91,11 +92,13 @@ func (kb *keyboard) Handler() bool {
 }
 
 func (kb *keyboard) tx(b []byte) {
-	if kb.waitTxc {
-		kb.buf.Put(b)
-	} else {
-		kb.waitTxc = true
-		hid.SendUSBPacket(b)
+	if machine.USBDev.InitEndpointComplete {
+		if kb.waitTxc {
+			kb.buf.Put(b)
+		} else {
+			kb.waitTxc = true
+			hid.SendUSBPacket(b)
+		}
 	}
 }
 

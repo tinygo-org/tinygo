@@ -2,11 +2,12 @@ package midi
 
 import (
 	"machine"
+	"machine/usb"
 )
 
 const (
-	midiEndpointOut = 5 // from PC
-	midiEndpointIn  = 6 // to PC
+	midiEndpointOut = usb.MIDI_ENDPOINT_OUT // from PC
+	midiEndpointIn  = usb.MIDI_ENDPOINT_IN  // to PC
 )
 
 var Midi *midi
@@ -70,11 +71,13 @@ func (m *midi) Handler() {
 }
 
 func (m *midi) tx(b []byte) {
-	if m.waitTxc {
-		m.buf.Put(b)
-	} else {
-		m.waitTxc = true
-		m.sendUSBPacket(b)
+	if machine.USBDev.InitEndpointComplete {
+		if m.waitTxc {
+			m.buf.Put(b)
+		} else {
+			m.waitTxc = true
+			m.sendUSBPacket(b)
+		}
 	}
 }
 

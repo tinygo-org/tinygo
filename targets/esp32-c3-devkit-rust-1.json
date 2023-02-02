@@ -1,0 +1,4 @@
+{
+	"inherits": ["esp32c3"],
+	"build-tags": ["esp32_c3_devkit_rust_1"]
+}

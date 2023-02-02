@@ -14,6 +14,9 @@ import (
 var (
 	prefixParseFns map[token.Token]func(*tokenizer) (ast.Expr, *scanner.Error)
 	precedences    = map[token.Token]int{
+		token.OR:  precedenceOr,
+		token.XOR: precedenceXor,
+		token.AND: precedenceAnd,
 		token.ADD: precedenceAdd,
 		token.SUB: precedenceAdd,
 		token.MUL: precedenceMul,
@@ -24,6 +27,9 @@ var (
 
 const (
 	precedenceLowest = iota + 1
+	precedenceOr
+	precedenceXor
+	precedenceAnd
 	precedenceAdd
 	precedenceMul
 	precedencePrefix
@@ -76,7 +82,7 @@ func parseConstExpr(t *tokenizer, precedence int) (ast.Expr, *scanner.Error) {
 
 	for t.peekToken != token.EOF && precedence < precedences[t.peekToken] {
 		switch t.peekToken {
-		case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+		case token.OR, token.XOR, token.AND, token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
 			t.Next()
 			leftExpr, err = parseBinaryExpr(t, leftExpr)
 		}
@@ -199,7 +205,18 @@ func (t *tokenizer) Next() {
 			// https://en.cppreference.com/w/cpp/string/byte/isspace
 			t.peekPos++
 			t.buf = t.buf[1:]
-		case c == '(' || c == ')' || c == '+' || c == '-' || c == '*' || c == '/' || c == '%':
+		case len(t.buf) >= 2 && (string(t.buf[:2]) == "||" || string(t.buf[:2]) == "&&"):
+			// Two-character tokens.
+			switch c {
+			case '&':
+				t.peekToken = token.LAND
+			case '|':
+				t.peekToken = token.LOR
+			}
+			t.peekValue = t.buf[:2]
+			t.buf = t.buf[2:]
+			return
+		case c == '(' || c == ')' || c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '&' || c == '|' || c == '^':
 			// Single-character tokens.
 			// TODO: ++ (increment) and -- (decrement) operators.
 			switch c {
@@ -217,6 +234,12 @@ func (t *tokenizer) Next() {
 				t.peekToken = token.QUO
 			case '%':
 				t.peekToken = token.REM
+			case '&':
+				t.peekToken = token.AND
+			case '|':
+				t.peekToken = token.OR
+			case '^':
+				t.peekToken = token.XOR
 			}
 			t.peekValue = t.buf[:1]
 			t.buf = t.buf[1:]

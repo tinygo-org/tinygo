@@ -7,6 +7,14 @@ import (
 	"unsafe"
 )
 
+// This function is needed by math/rand since Go 1.20.
+// See: https://github.com/golang/go/issues/54880
+//
+//go:linkname rand_fastrand64 math/rand.fastrand64
+func rand_fastrand64() uint64 {
+	return fastrand64()
+}
+
 // This function is used by hash/maphash.
 func fastrand() uint32 {
 	xorshift32State = xorshift32(xorshift32State)
@@ -23,6 +31,22 @@ func xorshift32(x uint32) uint32 {
 	x ^= x >> 1
 	x ^= x << 9
 	return x
+}
+
+// This function is used by hash/maphash.
+func fastrand64() uint64 {
+	xorshift64State = xorshiftMult64(xorshift64State)
+	return xorshift64State
+}
+
+var xorshift64State uint64 = 1
+
+// 64-bit xorshift multiply rng from http://vigna.di.unimi.it/ftp/papers/xorshift.pdf
+func xorshiftMult64(x uint64) uint64 {
+	x ^= x >> 12 // a
+	x ^= x << 25 // b
+	x ^= x >> 27 // c
+	return x * 2685821657736338717
 }
 
 // This function is used by hash/maphash.

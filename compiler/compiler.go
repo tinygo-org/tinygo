@@ -152,6 +152,7 @@ type builder struct {
 	phis              []phiNode
 	deferPtr          llvm.Value
 	deferFrame        llvm.Value
+	stackChainAlloca  llvm.Value
 	landingpad        llvm.BasicBlock
 	difunc            llvm.Metadata
 	dilocals          map[*types.Var]llvm.Metadata
@@ -818,7 +819,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		member := pkg.Members[name]
 		switch member := member.(type) {
 		case *ssa.Function:
-			if member.Synthetic == "generic function" {
+			if member.TypeParams() != nil {
 				// Do not try to build generic (non-instantiated) functions.
 				continue
 			}
@@ -1098,6 +1099,11 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// otherwise the function is not exported.
 		functionAttr := b.ctx.CreateStringAttribute("wasm-export-name", b.info.linkName)
 		b.llvmFn.AddFunctionAttr(functionAttr)
+		// Unlike most targets, exported functions are actually visible in
+		// WebAssembly (even if it's not called from within the WebAssembly
+		// module). But LTO generally optimizes such functions away. Therefore,
+		// exported functions must be explicitly marked as used.
+		llvmutil.AppendToGlobal(b.mod, "llvm.used", b.llvmFn)
 	}
 
 	// Some functions have a pragma controlling the inlining level.
@@ -1225,6 +1231,13 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// This function has deferred function calls. Set some things up for
 		// them.
 		b.deferInitFunc()
+	}
+
+	if b.NeedsStackObjects {
+		// Create a dummy alloca that will be used in runtime.trackPointer.
+		// It is necessary to pass a dummy alloca to runtime.trackPointer
+		// because runtime.trackPointer is replaced by an alloca store.
+		b.stackChainAlloca = b.CreateAlloca(b.ctx.Int8Type(), "stackalloc")
 	}
 }
 
@@ -1646,20 +1659,20 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 	case "Sizeof": // unsafe.Sizeof
 		size := b.targetData.TypeAllocSize(argValues[0].Type())
 		return llvm.ConstInt(b.uintptrType, size, false), nil
-	case "Slice": // unsafe.Slice
-		// This creates a slice from a pointer and a length.
+	case "Slice", "String": // unsafe.Slice, unsafe.String
+		// This creates a slice or string from a pointer and a length.
 		// Note that the exception mentioned in the documentation (if the
 		// pointer and length are nil, the slice is also nil) is trivially
 		// already the case.
 		ptr := argValues[0]
 		len := argValues[1]
-		slice := llvm.Undef(b.ctx.StructType([]llvm.Type{
-			ptr.Type(),
-			b.uintptrType,
-			b.uintptrType,
-		}, false))
-		elementType := b.getLLVMType(argTypes[0].Underlying().(*types.Pointer).Elem())
-		b.createUnsafeSliceCheck(ptr, len, elementType, argTypes[1].Underlying().(*types.Basic))
+		var elementType llvm.Type
+		if callName == "Slice" {
+			elementType = b.getLLVMType(argTypes[0].Underlying().(*types.Pointer).Elem())
+		} else {
+			elementType = b.ctx.Int8Type()
+		}
+		b.createUnsafeSliceStringCheck("unsafe."+callName, ptr, len, elementType, argTypes[1].Underlying().(*types.Basic))
 		if len.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
 			// Too small, zero-extend len.
 			len = b.CreateZExt(len, b.uintptrType, "")
@@ -1667,10 +1680,24 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			// Too big, truncate len.
 			len = b.CreateTrunc(len, b.uintptrType, "")
 		}
-		slice = b.CreateInsertValue(slice, ptr, 0, "")
-		slice = b.CreateInsertValue(slice, len, 1, "")
-		slice = b.CreateInsertValue(slice, len, 2, "")
-		return slice, nil
+		if callName == "Slice" {
+			slice := llvm.Undef(b.ctx.StructType([]llvm.Type{
+				ptr.Type(),
+				b.uintptrType,
+				b.uintptrType,
+			}, false))
+			slice = b.CreateInsertValue(slice, ptr, 0, "")
+			slice = b.CreateInsertValue(slice, len, 1, "")
+			slice = b.CreateInsertValue(slice, len, 2, "")
+			return slice, nil
+		} else {
+			str := llvm.Undef(b.getLLVMRuntimeType("_string"))
+			str = b.CreateInsertValue(str, argValues[0], 0, "")
+			str = b.CreateInsertValue(str, len, 1, "")
+			return str, nil
+		}
+	case "SliceData", "StringData": // unsafe.SliceData, unsafe.StringData
+		return b.CreateExtractValue(argValues[0], 0, "slice.data"), nil
 	default:
 		return llvm.Value{}, b.makeError(pos, "todo: builtin: "+callName)
 	}
@@ -1949,28 +1976,55 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Global:
 		panic("global is not an expression")
 	case *ssa.Index:
-		array := b.getValue(expr.X)
+		collection := b.getValue(expr.X)
 		index := b.getValue(expr.Index)
 
-		// Extend index to at least uintptr size, because getelementptr assumes
-		// index is a signed integer.
-		index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+		switch xType := expr.X.Type().Underlying().(type) {
+		case *types.Basic: // extract byte from string
+			// Value type must be a string, which is a basic type.
+			if xType.Info()&types.IsString == 0 {
+				panic("lookup on non-string?")
+			}
 
-		// Check bounds.
-		arrayLen := expr.X.Type().Underlying().(*types.Array).Len()
-		arrayLenLLVM := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
-		b.createLookupBoundsCheck(arrayLenLLVM, index)
+			// Sometimes, the index can be e.g. an uint8 or int8, and we have to
+			// correctly extend that type for two reasons:
+			//  1. The lookup bounds check expects an index of at least uintptr
+			//     size.
+			//  2. getelementptr has signed operands, and therefore s[uint8(x)]
+			//     can be lowered as s[int8(x)]. That would be a bug.
+			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
 
-		// Can't load directly from array (as index is non-constant), so have to
-		// do it using an alloca+gep+load.
-		arrayType := array.Type()
-		alloca, allocaPtr, allocaSize := b.createTemporaryAlloca(arrayType, "index.alloca")
-		b.CreateStore(array, alloca)
-		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-		ptr := b.CreateInBoundsGEP(arrayType, alloca, []llvm.Value{zero, index}, "index.gep")
-		result := b.CreateLoad(arrayType.ElementType(), ptr, "index.load")
-		b.emitLifetimeEnd(allocaPtr, allocaSize)
-		return result, nil
+			// Bounds check.
+			length := b.CreateExtractValue(collection, 1, "len")
+			b.createLookupBoundsCheck(length, index)
+
+			// Lookup byte
+			buf := b.CreateExtractValue(collection, 0, "")
+			bufElemType := b.ctx.Int8Type()
+			bufPtr := b.CreateInBoundsGEP(bufElemType, buf, []llvm.Value{index}, "")
+			return b.CreateLoad(bufElemType, bufPtr, ""), nil
+		case *types.Array: // extract element from array
+			// Extend index to at least uintptr size, because getelementptr
+			// assumes index is a signed integer.
+			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
+
+			// Check bounds.
+			arrayLen := llvm.ConstInt(b.uintptrType, uint64(xType.Len()), false)
+			b.createLookupBoundsCheck(arrayLen, index)
+
+			// Can't load directly from array (as index is non-constant), so
+			// have to do it using an alloca+gep+load.
+			arrayType := collection.Type()
+			alloca, allocaPtr, allocaSize := b.createTemporaryAlloca(arrayType, "index.alloca")
+			b.CreateStore(collection, alloca)
+			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			ptr := b.CreateInBoundsGEP(arrayType, alloca, []llvm.Value{zero, index}, "index.gep")
+			result := b.CreateLoad(arrayType.ElementType(), ptr, "index.load")
+			b.emitLifetimeEnd(allocaPtr, allocaSize)
+			return result, nil
+		default:
+			panic("unknown *ssa.Index type")
+		}
 	case *ssa.IndexAddr:
 		val := b.getValue(expr.X)
 		index := b.getValue(expr.Index)
@@ -2023,42 +2077,14 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		default:
 			panic("unreachable")
 		}
-	case *ssa.Lookup:
+	case *ssa.Lookup: // map lookup
 		value := b.getValue(expr.X)
 		index := b.getValue(expr.Index)
-		switch xType := expr.X.Type().Underlying().(type) {
-		case *types.Basic:
-			// Value type must be a string, which is a basic type.
-			if xType.Info()&types.IsString == 0 {
-				panic("lookup on non-string?")
-			}
-
-			// Sometimes, the index can be e.g. an uint8 or int8, and we have to
-			// correctly extend that type for two reasons:
-			//  1. The lookup bounds check expects an index of at least uintptr
-			//     size.
-			//  2. getelementptr has signed operands, and therefore s[uint8(x)]
-			//     can be lowered as s[int8(x)]. That would be a bug.
-			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
-
-			// Bounds check.
-			length := b.CreateExtractValue(value, 1, "len")
-			b.createLookupBoundsCheck(length, index)
-
-			// Lookup byte
-			buf := b.CreateExtractValue(value, 0, "")
-			bufElemType := b.ctx.Int8Type()
-			bufPtr := b.CreateInBoundsGEP(bufElemType, buf, []llvm.Value{index}, "")
-			return b.CreateLoad(bufElemType, bufPtr, ""), nil
-		case *types.Map:
-			valueType := expr.Type()
-			if expr.CommaOk {
-				valueType = valueType.(*types.Tuple).At(0).Type()
-			}
-			return b.createMapLookup(xType.Key(), valueType, value, index, expr.CommaOk, expr.Pos())
-		default:
-			panic("unknown lookup type: " + expr.String())
+		valueType := expr.Type()
+		if expr.CommaOk {
+			valueType = valueType.(*types.Tuple).At(0).Type()
 		}
+		return b.createMapLookup(expr.X.Type().Underlying().(*types.Map).Key(), valueType, value, index, expr.CommaOk, expr.Pos())
 	case *ssa.MakeChan:
 		return b.createMakeChan(expr), nil
 	case *ssa.MakeClosure:

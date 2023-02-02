@@ -89,10 +89,11 @@ func (b *builder) createSliceToArrayPointerCheck(sliceLen llvm.Value, arrayLen i
 	b.createRuntimeAssert(isLess, "slicetoarray", "sliceToArrayPointerPanic")
 }
 
-// createUnsafeSliceCheck inserts a runtime check used for unsafe.Slice. This
-// function must panic if the ptr/len parameters are invalid.
-func (b *builder) createUnsafeSliceCheck(ptr, len llvm.Value, elementType llvm.Type, lenType *types.Basic) {
-	// From the documentation of unsafe.Slice:
+// createUnsafeSliceStringCheck inserts a runtime check used for unsafe.Slice
+// and unsafe.String. This function must panic if the ptr/len parameters are
+// invalid.
+func (b *builder) createUnsafeSliceStringCheck(name string, ptr, len llvm.Value, elementType llvm.Type, lenType *types.Basic) {
+	// From the documentation of unsafe.Slice and unsafe.String:
 	//   > At run time, if len is negative, or if ptr is nil and len is not
 	//   > zero, a run-time panic occurs.
 	// However, in practice, it is also necessary to check that the length is
@@ -117,7 +118,7 @@ func (b *builder) createUnsafeSliceCheck(ptr, len llvm.Value, elementType llvm.T
 	lenIsNotZero := b.CreateICmp(llvm.IntNE, len, zero, "")
 	assert := b.CreateAnd(ptrIsNil, lenIsNotZero, "")
 	assert = b.CreateOr(assert, lenOutOfBounds, "")
-	b.createRuntimeAssert(assert, "unsafe.Slice", "unsafeSlicePanic")
+	b.createRuntimeAssert(assert, name, "unsafeSlicePanic")
 }
 
 // createChanBoundsCheck creates a bounds check before creating a new channel to

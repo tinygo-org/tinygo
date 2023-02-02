@@ -250,6 +250,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GOOS:             goos,
 		GOARCH:           goarch,
 		BuildTags:        []string{goos, goarch},
+		GC:               "precise",
 		Scheduler:        "tasks",
 		Linker:           "cc",
 		DefaultStackSize: 1024 * 64, // 64kB
@@ -303,10 +304,19 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		// normally present in Go (without explicitly opting in).
 		// For more discussion:
 		// https://groups.google.com/g/Golang-nuts/c/Jd9tlNc6jUE/m/Zo-7zIP_m3MJ?pli=1
+		switch goarch {
+		case "amd64":
+			spec.LDFlags = append(spec.LDFlags,
+				"-m", "i386pep",
+				"--image-base", "0x400000",
+			)
+		case "arm64":
+			spec.LDFlags = append(spec.LDFlags,
+				"-m", "arm64pe",
+			)
+		}
 		spec.LDFlags = append(spec.LDFlags,
-			"-m", "i386pep",
 			"-Bdynamic",
-			"--image-base", "0x400000",
 			"--gc-sections",
 			"--no-insert-timestamp",
 			"--no-dynamicbase",

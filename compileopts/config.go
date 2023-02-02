@@ -91,7 +91,7 @@ func (c *Config) CgoEnabled() bool {
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid
-// values are "none", "leaking", and "conservative".
+// values are "none", "leaking", "conservative" and "precise".
 func (c *Config) GC() string {
 	if c.Options.GC != "" {
 		return c.Options.GC
@@ -106,7 +106,7 @@ func (c *Config) GC() string {
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "conservative":
+	case "conservative", "custom", "precise":
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
 				return true
@@ -191,17 +191,11 @@ func (c *Config) StackSize() uint64 {
 	return c.Target.DefaultStackSize
 }
 
-// UseThinLTO returns whether ThinLTO should be used for the given target. Some
-// targets (such as wasm) are not yet supported.
-// We should try and remove as many exceptions as possible in the future, so
-// that this optimization can be applied in more places.
+// UseThinLTO returns whether ThinLTO should be used for the given target.
 func (c *Config) UseThinLTO() bool {
-	parts := strings.Split(c.Triple(), "-")
-	if parts[0] == "wasm32" {
-		// wasm-ld doesn't seem to support ThinLTO yet.
-		return false
-	}
-	// Other architectures support ThinLTO.
+	// All architectures support ThinLTO now. However, this code is kept for the
+	// time being in case there are regressions. The non-ThinLTO code support
+	// should be removed when it is proven to work reliably.
 	return true
 }
 
@@ -545,6 +539,8 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 	var emulator []string
 	for _, s := range parts {
 		s = strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT"))
+		// Allow replacement of what's usually /tmp except notably Windows.
+		s = strings.ReplaceAll(s, "{tmpDir}", os.TempDir())
 		s = strings.ReplaceAll(s, "{"+format+"}", binary)
 		emulator = append(emulator, s)
 	}
