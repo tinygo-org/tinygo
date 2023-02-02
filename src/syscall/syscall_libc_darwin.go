@@ -52,6 +52,9 @@ const (
 	DT_SOCK    = 0xc
 	DT_UNKNOWN = 0x0
 	DT_WHT     = 0xe
+	F_GETFL    = 0x3
+	F_SETFL    = 0x4
+	O_NONBLOCK = 0x4
 )
 
 // Source: https://opensource.apple.com/source/xnu/xnu-7195.81.3/bsd/sys/errno.h.auto.html
@@ -62,6 +65,7 @@ const (
 	EEXIST      Errno = 17
 	EINTR       Errno = 4
 	ENOTDIR     Errno = 20
+	EISDIR      Errno = 21
 	EINVAL      Errno = 22
 	EMFILE      Errno = 24
 	EPIPE       Errno = 32
@@ -269,6 +273,32 @@ func readdir_r(dir uintptr, entry *Dirent, result **Dirent) (err error) {
 
 func Getpagesize() int {
 	return int(libc_getpagesize())
+}
+
+// The following RawSockAddr* types have been copied from the Go source tree and
+// are here purely to fix build errors.
+
+type RawSockaddr struct {
+	Len    uint8
+	Family uint8
+	Data   [14]int8
+}
+
+type RawSockaddrInet4 struct {
+	Len    uint8
+	Family uint8
+	Port   uint16
+	Addr   [4]byte /* in_addr */
+	Zero   [8]int8
+}
+
+type RawSockaddrInet6 struct {
+	Len      uint8
+	Family   uint8
+	Port     uint16
+	Flowinfo uint32
+	Addr     [16]byte /* in6_addr */
+	Scope_id uint32
 }
 
 // int pipe(int32 *fds);

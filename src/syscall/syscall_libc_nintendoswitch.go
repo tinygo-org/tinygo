@@ -71,6 +71,14 @@ func Getpagesize() int {
 	return 4096 // TODO
 }
 
+type RawSockaddrInet4 struct {
+	// stub
+}
+
+type RawSockaddrInet6 struct {
+	// stub
+}
+
 // int open(const char *pathname, int flags, mode_t mode);
 //
 //export open

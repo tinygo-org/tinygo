@@ -87,6 +87,22 @@ const (
 	PROT_READ  = 1
 	PROT_WRITE = 2
 	PROT_EXEC  = 4
+
+	// ../../lib/wasi-libc/expected/wasm32-wasi/predefined-macros.txt
+	F_GETFL = 3
+	F_SETFL = 4
+)
+
+// These values are needed as a stub until Go supports WASI as a full target.
+// The constant values don't have a meaning and don't correspond to anything
+// real.
+const (
+	_ = iota
+	SYS_FCNTL
+	SYS_FCNTL64
+	SYS_FSTATAT64
+	SYS_OPENAT
+	SYS_UNLINKAT
 )
 
 //go:extern errno
@@ -307,6 +323,32 @@ func Getpagesize() int {
 	// per upstream
 	return 65536
 }
+
+type Utsname struct {
+	Sysname    [65]int8
+	Nodename   [65]int8
+	Release    [65]int8
+	Version    [65]int8
+	Machine    [65]int8
+	Domainname [65]int8
+}
+
+// Stub Utsname, needed because WASI pretends to be linux/arm.
+func Uname(buf *Utsname) (err error)
+
+type RawSockaddrInet4 struct {
+	// stub
+}
+
+type RawSockaddrInet6 struct {
+	// stub
+}
+
+// This is a stub, it is not functional.
+func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err Errno)
+
+// This is a stub, it is not functional.
+func Syscall6(trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno)
 
 // int stat(const char *path, struct stat * buf);
 //
