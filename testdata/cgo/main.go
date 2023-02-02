@@ -160,7 +160,7 @@ func main() {
 	println("len(C.GoStringN(nil, 0)):", len(C.GoStringN(nil, 0)))
 	println("len(C.GoBytes(nil, 0)):", len(C.GoBytes(nil, 0)))
 	println("len(C.GoBytes(C.CBytes(nil),0)):", len(C.GoBytes(C.CBytes(nil), 0)))
-	println(`rountrip CBytes:`, C.GoString(C.CBytes([]byte("hello\000"))))
+	println(`rountrip CBytes:`, C.GoString((*C.char)(C.CBytes([]byte("hello\000")))))
 
 	// libc: test whether C functions work at all.
 	buf1 := []byte("foobar\x00")
