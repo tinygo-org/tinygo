@@ -96,8 +96,11 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 	// Unimplemented.
 }
 
+var godebugUpdate func(string, string)
+
 //go:linkname godebug_setUpdate internal/godebug.setUpdate
 func godebug_setUpdate(update func(string, string)) {
-	// Unimplemented. The 'update' function needs to be called whenever the
-	// GODEBUG environment variable changes (for example, via os.Setenv).
+	// The 'update' function needs to be called whenever the GODEBUG environment
+	// variable changes (for example, via os.Setenv).
+	godebugUpdate = update
 }
