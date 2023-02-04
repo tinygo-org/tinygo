@@ -23,6 +23,7 @@ func run() {
 	initHeap()
 	initAll()
 	callMain()
+	postMain()
 }
 
 const hasScheduler = false

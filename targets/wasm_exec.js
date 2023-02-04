@@ -137,6 +137,15 @@
 			this._callbackTimeouts = new Map();
 			this._nextCallbackTimeoutID = 1;
 
+			this._errExited = new Error("exited")
+			this.exit = (code) => {
+				if (code !== 0) {
+					console.warn("exit code:", code);
+				}
+				this.exited = true;
+				throw this._errExited;
+			};
+
 			const mem = () => {
 				// The buffer may change when requesting more memory.
 				return new DataView(this._inst.exports.memory.buffer);
@@ -281,13 +290,7 @@
 					fd_fdstat_get: () => 0, // dummy
 					fd_seek: () => 0,       // dummy
 					"proc_exit": (code) => {
-						if (global.process) {
-							// Node.js
-							process.exit(code);
-						} else {
-							// Can't exit in a browser.
-							throw 'trying to exit with code ' + code;
-						}
+						this.exit(code);
 					},
 					random_get: (bufPtr, bufLen) => {
 						crypto.getRandomValues(loadSlice(bufPtr, bufLen));
@@ -303,7 +306,17 @@
 					// func sleepTicks(timeout float64)
 					"runtime.sleepTicks": (timeout) => {
 						// Do not sleep, only reactivate scheduler after the given timeout.
-						setTimeout(this._inst.exports.go_scheduler, timeout);
+						setTimeout(() => {
+							try {
+								this._inst.exports.go_scheduler();
+							} catch (e) {
+								if (e == this._errExited) {
+									this._resolveExitPromise();
+								} else {
+									throw e;
+								}
+							}
+						}, timeout);
 					},
 
 					// func finalizeRef(v ref)
@@ -474,30 +487,34 @@
 
 			const mem = new DataView(this._inst.exports.memory.buffer)
 
-			while (true) {
-				const callbackPromise = new Promise((resolve) => {
-					this._resolveCallbackPromise = () => {
-						if (this.exited) {
-							throw new Error("bad callback: Go program has already exited");
-						}
-						setTimeout(resolve, 0); // make sure it is asynchronous
-					};
-				});
+			this._exit = new Promise((resolve) => {
+				this._resolveExitPromise = resolve;
+			});
+
+			try {
 				this._inst.exports._start();
-				if (this.exited) {
-					break;
+			} catch (e) {
+				if (e == this._errExited) {
+					this._resolveExitPromise();
+				} else {
+					throw e;
 				}
-				await callbackPromise;
 			}
+			await this._exit;
 		}
 
 		_resume() {
 			if (this.exited) {
 				throw new Error("Go program has already exited");
 			}
-			this._inst.exports.resume();
-			if (this.exited) {
-				this._resolveExitPromise();
+			try {
+				this._inst.exports.resume();
+			} catch (e) {
+				if (e == this._errExited) {
+					this._resolveExitPromise();
+				} else {
+					throw e;
+				}
 			}
 		}
 
@@ -525,6 +542,7 @@
 		}
 
 		const go = new Go();
+		go.exit = process.exit;
 		WebAssembly.instantiate(fs.readFileSync(process.argv[2]), go.importObject).then((result) => {
 			return go.run(result.instance);
 		}).catch((err) => {
