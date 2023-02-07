@@ -819,7 +819,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		member := pkg.Members[name]
 		switch member := member.(type) {
 		case *ssa.Function:
-			if isGenericFunction(member) {
+			if member.TypeParams() != nil {
 				// Do not try to build generic (non-instantiated) functions.
 				continue
 			}
@@ -865,7 +865,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 					// function.
 					continue
 				}
-				if isSyntheticFunction(fn) {
+				if isSyntheticFunction(fn) && !isPackageInitializer(fn) {
 					// This function is a kind of wrapper function (created by
 					// the ssa package, not appearing in the source code) that
 					// is created by the getFunction method as needed.
