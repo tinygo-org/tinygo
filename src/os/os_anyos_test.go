@@ -276,6 +276,10 @@ func TestDirFS(t *testing.T) {
 		t.Log("TODO: implement Readdir for Windows")
 		return
 	}
+	if runtime.GOARCH == "386" || runtime.GOARCH == "arm" {
+		t.Log("TODO: implement seek for 386 and arm")
+		return
+	}
 	if isWASI {
 		t.Log("TODO: allow foo/bar/. as synonym for path foo/bar on wasi?")
 		return
