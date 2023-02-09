@@ -77,6 +77,7 @@ const (
 	KeyModifierRightAlt   Keycode = 0x40 | 0xE000
 	KeyModifierRightGUI   Keycode = 0x80 | 0xE000
 
+	// KeySystemXXX is not supported now
 	KeySystemPowerDown Keycode = 0x81 | 0xE200
 	KeySystemSleep     Keycode = 0x82 | 0xE200
 	KeySystemWakeUp    Keycode = 0x83 | 0xE200

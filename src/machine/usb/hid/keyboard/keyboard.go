@@ -238,16 +238,31 @@ func (kb *keyboard) sendKey(consumer bool, b []byte) bool {
 
 func (kb *keyboard) keyboardSendKeys(consumer bool) bool {
 	var b [9]byte
-	b[0] = 0x02
-	b[1] = kb.mod
-	b[2] = 0x02
-	b[3] = kb.key[0]
-	b[4] = kb.key[1]
-	b[5] = kb.key[2]
-	b[6] = kb.key[3]
-	b[7] = kb.key[4]
-	b[8] = kb.key[5]
-	return kb.sendKey(consumer, b[:])
+
+	if !consumer {
+		b[0] = 0x02 // REPORT_ID
+		b[1] = kb.mod
+		b[2] = 0x02
+		b[3] = kb.key[0]
+		b[4] = kb.key[1]
+		b[5] = kb.key[2]
+		b[6] = kb.key[3]
+		b[7] = kb.key[4]
+		b[8] = kb.key[5]
+		return kb.sendKey(consumer, b[:])
+
+	} else {
+		b[0] = 0x03 // REPORT_ID
+		b[1] = uint8(kb.con[0])
+		b[2] = uint8((kb.con[0] & 0x0300) >> 8)
+		b[3] = uint8(kb.con[1])
+		b[4] = uint8((kb.con[1] & 0x0300) >> 8)
+		b[5] = uint8(kb.con[2])
+		b[6] = uint8((kb.con[2] & 0x0300) >> 8)
+		b[7] = uint8(kb.con[3])
+		b[8] = uint8((kb.con[3] & 0x0300) >> 8)
+		return kb.sendKey(consumer, b[:])
+	}
 }
 
 // Down transmits a key-down event for the given Keycode.
