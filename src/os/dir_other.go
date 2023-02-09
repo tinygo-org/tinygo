@@ -13,6 +13,9 @@ import (
 type dirInfo struct {
 }
 
+func (*dirInfo) close() {
+}
+
 func (f *File) readdir(n int, mode readdirMode) (names []string, dirents []DirEntry, infos []FileInfo, err error) {
 	return nil, nil, nil, &PathError{Op: "readdir unimplemented", Err: syscall.ENOTDIR}
 }

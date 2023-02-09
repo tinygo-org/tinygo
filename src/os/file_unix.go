@@ -42,6 +42,14 @@ type file struct {
 	dirinfo *dirInfo // nil unless directory being read
 }
 
+func (f *file) close() (err error) {
+	if f.dirinfo != nil {
+		f.dirinfo.close()
+		f.dirinfo = nil
+	}
+	return f.handle.Close()
+}
+
 func NewFile(fd uintptr, name string) *File {
 	return &File{&file{unixFileHandle(fd), name, nil}}
 }

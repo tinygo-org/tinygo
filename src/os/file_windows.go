@@ -39,6 +39,10 @@ type file struct {
 	name   string
 }
 
+func (f *file) close() error {
+	return f.handle.Close()
+}
+
 func NewFile(fd uintptr, name string) *File {
 	return &File{&file{unixFileHandle(fd), name}}
 }

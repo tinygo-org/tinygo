@@ -3,6 +3,7 @@
 package os_test
 
 import (
+	"errors"
 	"io"
 	. "os"
 	"runtime"
@@ -118,5 +119,61 @@ func TestFd(t *testing.T) {
 
 	if string(b) != data[:5] {
 		t.Errorf("File descriptor contents not equal to file contents.")
+	}
+}
+
+// closeTests is the list of tests used to validate that after calling Close,
+// calling any method of File returns ErrClosed.
+var closeTests = map[string]func(*File) error{
+	"Close": func(f *File) error {
+		return f.Close()
+	},
+	"Read": func(f *File) error {
+		_, err := f.Read(nil)
+		return err
+	},
+	"ReadAt": func(f *File) error {
+		_, err := f.ReadAt(nil, 0)
+		return err
+	},
+	"Seek": func(f *File) error {
+		_, err := f.Seek(0, 0)
+		return err
+	},
+	"SyscallConn": func(f *File) error {
+		_, err := f.SyscallConn()
+		return err
+	},
+	"Truncate": func(f *File) error {
+		return f.Truncate(0)
+	},
+	"Write": func(f *File) error {
+		_, err := f.Write(nil)
+		return err
+	},
+	"WriteAt": func(f *File) error {
+		_, err := f.WriteAt(nil, 0)
+		return err
+	},
+	"WriteString": func(f *File) error {
+		_, err := f.WriteString("")
+		return err
+	},
+}
+
+func TestClose(t *testing.T) {
+	f := newFile("TestClose.txt", t)
+
+	if err := f.Close(); err != nil {
+		t.Error("unexpected error closing the file:", err)
+	}
+	if fd := f.Fd(); fd != ^uintptr(0) {
+		t.Error("unexpected file handle after closing the file:", fd)
+	}
+
+	for name, test := range closeTests {
+		if err := test(f); !errors.Is(err, ErrClosed) {
+			t.Errorf("unexpected error returned by calling %s on a closed file: %v", name, err)
+		}
 	}
 }

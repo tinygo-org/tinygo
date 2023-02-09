@@ -263,6 +263,14 @@ func Pipe2(fds []int, flags int) (err error) {
 	return
 }
 
+func closedir(dir uintptr) (err error) {
+	e := libc_closedir(unsafe.Pointer(dir))
+	if e != 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func readdir_r(dir uintptr, entry *Dirent, result **Dirent) (err error) {
 	e1 := libc_readdir_r(unsafe.Pointer(dir), unsafe.Pointer(entry), unsafe.Pointer(result))
 	if e1 != 0 {
