@@ -49,6 +49,7 @@ func TestCompiler(t *testing.T) {
 		{"goroutine.go", "cortex-m-qemu", "tasks"},
 		{"channel.go", "", ""},
 		{"gc.go", "", ""},
+		{"zeromap.go", "", ""},
 	}
 	if goMinor >= 20 {
 		tests = append(tests, testCase{"go1.20.go", "", ""})

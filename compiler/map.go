@@ -89,6 +89,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 		// growth.
 		mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, mapKeyAlloca)
+		b.zeroUndefBytes(b.getLLVMType(keyType), mapKeyAlloca)
 		// Fetch the value from the hashmap.
 		params := []llvm.Value{m, mapKeyPtr, mapValuePtr, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapBinaryGet", params, "")
@@ -133,6 +134,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 		// key can be compared with runtime.memequal
 		keyAlloca, keyPtr, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
+		b.zeroUndefBytes(b.getLLVMType(keyType), keyAlloca)
 		params := []llvm.Value{m, keyPtr, valuePtr}
 		b.createRuntimeCall("hashmapBinarySet", params, "")
 		b.emitLifetimeEnd(keyPtr, keySize)
@@ -161,6 +163,7 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 	} else if hashmapIsBinaryKey(keyType) {
 		keyAlloca, keyPtr, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
+		b.zeroUndefBytes(b.getLLVMType(keyType), keyAlloca)
 		params := []llvm.Value{m, keyPtr}
 		b.createRuntimeCall("hashmapBinaryDelete", params, "")
 		b.emitLifetimeEnd(keyPtr, keySize)
@@ -240,7 +243,8 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 }
 
 // Returns true if this key type does not contain strings, interfaces etc., so
-// can be compared with runtime.memequal.
+// can be compared with runtime.memequal.  Note that padding bytes are undef
+// and can alter two "equal" structs being equal when compared with memequal.
 func hashmapIsBinaryKey(keyType types.Type) bool {
 	switch keyType := keyType.(type) {
 	case *types.Basic:
@@ -262,4 +266,70 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 	default:
 		return false
 	}
+}
+
+func (b *builder) zeroUndefBytes(llvmType llvm.Type, ptr llvm.Value) error {
+	// We know that hashmapIsBinaryKey is true, so we only have to handle those types that can show up there.
+	// To zero all undefined bytes, we iterate over all the fields in the type.  For each element, compute the
+	// offset of that element.  If it's Basic type, there are no internal padding bytes.  For compound types, we recurse to ensure
+	// we handle nested types.  Next, we determine if there are any padding bytes before the next
+	// element and zero those as well.
+
+	zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+
+	switch llvmType.TypeKind() {
+	case llvm.IntegerTypeKind:
+		// no padding bytes
+		return nil
+	case llvm.PointerTypeKind:
+		// mo padding bytes
+		return nil
+	case llvm.ArrayTypeKind:
+		llvmArrayType := llvmType
+		llvmElemType := llvmType.ElementType()
+
+		for i := 0; i < llvmArrayType.ArrayLength(); i++ {
+			idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
+			elemPtr := b.CreateInBoundsGEP(llvmArrayType, ptr, []llvm.Value{zero, idx}, "")
+
+			// zero any padding bytes in this element
+			b.zeroUndefBytes(llvmElemType, elemPtr)
+		}
+
+	case llvm.StructTypeKind:
+		llvmStructType := llvmType
+		numFields := llvmStructType.StructElementTypesCount()
+		llvmElementTypes := llvmStructType.StructElementTypes()
+
+		for i := 0; i < numFields; i++ {
+			idx := llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)
+			elemPtr := b.CreateInBoundsGEP(llvmStructType, ptr, []llvm.Value{zero, idx}, "")
+
+			// zero any padding bytes in this field
+			llvmElemType := llvmElementTypes[i]
+			b.zeroUndefBytes(llvmElemType, elemPtr)
+
+			// zero any padding bytes before the next field, if any
+			offset := b.targetData.ElementOffset(llvmStructType, i)
+			storeSize := b.targetData.TypeStoreSize(llvmElemType)
+			fieldEndOffset := offset + storeSize
+
+			var nextOffset uint64
+			if i < numFields-1 {
+				nextOffset = b.targetData.ElementOffset(llvmStructType, i+1)
+			} else {
+				// Last field?  Next offset is the total size of the allcoate struct.
+				nextOffset = b.targetData.TypeAllocSize(llvmStructType)
+			}
+
+			if fieldEndOffset != nextOffset {
+				n := llvm.ConstInt(b.uintptrType, nextOffset-fieldEndOffset, false)
+				llvmStoreSize := llvm.ConstInt(b.uintptrType, storeSize, false)
+				paddingStart := b.CreateInBoundsGEP(b.i8ptrType, elemPtr, []llvm.Value{llvmStoreSize}, "")
+				b.createRuntimeCall("memzero", []llvm.Value{paddingStart, n}, "")
+			}
+		}
+	}
+
+	return nil
 }
