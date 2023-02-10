@@ -35,6 +35,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 // Errors used by the HTTP server.
@@ -545,7 +547,7 @@ func (w *response) finalTrailers() Header {
 // written in the trailers at the end of the response.
 func (w *response) declareTrailer(k string) {
 	k = CanonicalHeaderKey(k)
-	if !ValidTrailerHeader(k) {
+	if !httpguts.ValidTrailerHeader(k) {
 		// Forbidden by RFC 7230, section 4.1.2
 		return
 	}
@@ -1013,15 +1015,15 @@ func (c *conn) readRequest(ctx context.Context) (w *response, err error) {
 	if req.ProtoAtLeast(1, 1) && (!haveHost || len(hosts) == 0) && !isH2Upgrade && req.Method != "CONNECT" {
 		return nil, badRequestError("missing required Host header")
 	}
-	if len(hosts) == 1 && !ValidHostHeader(hosts[0]) {
+	if len(hosts) == 1 && !httpguts.ValidHostHeader(hosts[0]) {
 		return nil, badRequestError("malformed Host header")
 	}
 	for k, vv := range req.Header {
-		if !ValidHeaderFieldName(k) {
+		if !httpguts.ValidHeaderFieldName(k) {
 			return nil, badRequestError("invalid header name")
 		}
 		for _, v := range vv {
-			if !ValidHeaderFieldValue(v) {
+			if !httpguts.ValidHeaderFieldValue(v) {
 				return nil, badRequestError("invalid header value")
 			}
 		}

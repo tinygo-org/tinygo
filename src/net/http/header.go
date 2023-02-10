@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 // A Header represents the key-value pairs in an HTTP header.
@@ -201,7 +203,7 @@ func (h Header) writeSubset(w io.Writer, exclude map[string]bool) error {
 	}
 	kvs, sorter := h.sortedKeyValues(exclude)
 	for _, kv := range kvs {
-		if !ValidHeaderFieldName(kv.key) {
+		if !httpguts.ValidHeaderFieldName(kv.key) {
 			// This could be an error. In the common case of
 			// writing response headers, however, we have no good
 			// way to provide the error back to the server
