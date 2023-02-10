@@ -23,6 +23,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 // A Client is an HTTP client. Its zero value (DefaultClient) is a
@@ -175,12 +177,12 @@ func roundTrip(req *Request) (*Response, error) {
 	isHTTP := scheme == "http" || scheme == "https"
 	if isHTTP {
 		for k, vv := range req.Header {
-			if !ValidHeaderFieldName(k) {
+			if !httpguts.ValidHeaderFieldName(k) {
 				req.closeBody()
 				return nil, fmt.Errorf("net/http: invalid header field name %q", k)
 			}
 			for _, v := range vv {
-				if !ValidHeaderFieldValue(v) {
+				if !httpguts.ValidHeaderFieldValue(v) {
 					req.closeBody()
 					// Don't include the value in the error, because it may be sensitive.
 					return nil, fmt.Errorf("net/http: invalid header field value for %q", k)

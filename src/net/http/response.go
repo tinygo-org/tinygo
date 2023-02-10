@@ -21,6 +21,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 var respExcludeHeader = map[string]bool{
@@ -367,5 +369,5 @@ func isProtocolSwitchResponse(code int, h Header) bool {
 // is for a protocol switch.
 func isProtocolSwitchHeader(h Header) bool {
 	return h.Get("Upgrade") != "" &&
-		HeaderValuesContainsToken(h["Connection"], "Upgrade")
+		httpguts.HeaderValuesContainsToken(h["Connection"], "Upgrade")
 }
