@@ -93,6 +93,15 @@ func OpenFile(name string, flag int, perm FileMode) (*File, error) {
 	return NewFile(handle, name), nil
 }
 
+// Rename renames (moves) oldpath to newpath.
+// If newpath already exists and is not a directory, Rename replaces it.
+// OS-specific restrictions may apply when oldpath and newpath are in different directories.
+// If there is an error, it will be of type *LinkError.
+func Rename(oldpath, newpath string) error {
+	panic("not implemented")
+	return nil
+}
+
 // Open opens the file named for reading.
 func Open(name string) (*File, error) {
 	return OpenFile(name, O_RDONLY, 0)
