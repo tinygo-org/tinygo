@@ -16,19 +16,22 @@ import (
 
 // TINYGO: Removed IPv6 stuff
 
-// TCPAddr represents the address of a TCP end point.
-type TCPAddr struct {
+// UDPAddr represents the address of a UDP end point.
+type UDPAddr struct {
 	IP   IP
 	Port int
 }
 
-// Network returns the address's network name, "tcp".
-func (a *TCPAddr) Network() string { return "tcp" }
+// Network returns the address's network name, "udp".
+func (a *UDPAddr) Network() string { return "udp" }
 
-func (a *TCPAddr) String() string {
+func (a *UDPAddr) String() string {
 	if a == nil {
 		return "<nil>"
 	}
+	
+	// TINYGO: Work around not having internal/itoa
+
 	ip := []byte(a.IP)
 	if a.Port == 0 {
 		return fmt.Sprintf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3])
@@ -36,13 +39,13 @@ func (a *TCPAddr) String() string {
 	return fmt.Sprintf("%d.%d.%d.%d:%d", ip[0], ip[1], ip[2], ip[3], a.Port)
 }
 
-// ResolveTCPAddr returns an address of TCP end point.
+// ResolveUDPAddr returns an address of UDP end point.
 //
-// The network must be a TCP network name.
+// The network must be a UDP network name.
 //
 // If the host in the address parameter is not a literal IP address or
-// the port is not a literal port number, ResolveTCPAddr resolves the
-// address to an address of TCP end point.
+// the port is not a literal port number, ResolveUDPAddr resolves the
+// address to an address of UDP end point.
 // Otherwise, it parses the address as a pair of literal IP address
 // and port number.
 // The address parameter can use a host name, but this is not
@@ -51,11 +54,10 @@ func (a *TCPAddr) String() string {
 //
 // See func Dial for a description of the network and address
 // parameters.
-func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
+func ResolveUDPAddr(network, address string) (*UDPAddr, error) {
 
-	//	println("ResolveTCPAddr", address)
 	switch network {
-	case "tcp", "tcp4":
+	case "udp", "udp4":
 	default:
 		return nil, fmt.Errorf("Network '%s' not supported", network)
 	}
@@ -74,7 +76,7 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 	}
 
 	if host == "" {
-		return &TCPAddr{Port: port}, nil
+		return &UDPAddr{Port: port}, nil
 	}
 
 	ip, err := dev.GetHostByName(host)
@@ -82,59 +84,91 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 		return nil, fmt.Errorf("Lookup of host name '%s' failed: %s", host, err)
 	}
 
-	return &TCPAddr{IP: IP(ip[:]), Port: port}, nil
+	return &UDPAddr{IP: ip[:4], Port: port}, nil
 }
 
-// TCPConn is an implementation of the Conn interface for TCP network
-// connections.
-type TCPConn struct {
+// UDPConn is the implementation of the Conn and PacketConn interfaces
+// for UDP network connections.
+type UDPConn struct {
 	fd            netdev.Sockfd
-	laddr         *TCPAddr
-	raddr         *TCPAddr
+	laddr         *UDPAddr
+	raddr         *UDPAddr
 	readDeadline  time.Time
 	writeDeadline time.Time
 }
 
-// DialTCP acts like Dial for TCP networks.
+// Use IANA RFC 6335 port range 49152–65535 for ephemeral (dynamic) ports
+var eport = int32(49151)
+func ephemeralPort() int {
+	// TODO: this is racy, if concurrent DialUDPs; use atomic?
+	if eport == int32(65535) {
+		eport = int32(49151)
+	} else {
+		eport++
+	}
+	return int(eport)
+}
+
+// DialUDP acts like Dial for UDP networks.
 //
-// The network must be a TCP network name; see func Dial for details.
+// The network must be a UDP network name; see func Dial for details.
 //
 // If laddr is nil, a local address is automatically chosen.
 // If the IP field of raddr is nil or an unspecified IP address, the
 // local system is assumed.
-func DialTCP(network string, laddr, raddr *TCPAddr) (*TCPConn, error) {
-
+func DialUDP(network string, laddr, raddr *UDPAddr) (*UDPConn, error) {
 	switch network {
-	case "tcp", "tcp4":
+	case "udp", "udp4":
 	default:
 		return nil, fmt.Errorf("Network '%s' not supported", network)
 	}
 
-	// TINYGO: Use netdev to create TCP socket and connect
+	// TINYGO: Use netdev to create UDP socket and connect
+
+	if laddr == nil {
+		laddr = &UDPAddr{}
+	}
 
 	if raddr == nil {
-		raddr = &TCPAddr{}
+		raddr = &UDPAddr{}
 	}
 
 	if raddr.IP.IsUnspecified() {
 		return nil, fmt.Errorf("Sorry, localhost isn't available on Tinygo")
 	}
 
-	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_STREAM, netdev.IPPROTO_TCP)
+	// If no port was given, grab an ephemeral port
+	if laddr.Port == 0 {
+		laddr.Port = ephemeralPort()
+	}
+
+	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_DGRAM, netdev.IPPROTO_UDP)
 	if err != nil {
 		return nil, err
 	}
 
 	var ip netdev.IP
-	copy(ip[:], raddr.IP)
-	addr := netdev.NewSockAddr("", netdev.Port(raddr.Port), ip)
 
-	if err = dev.Connect(fd, addr); err != nil {
+	copy(ip[:], laddr.IP)
+	local := netdev.NewSockAddr("", netdev.Port(laddr.Port), ip)
+
+	copy(ip[:], raddr.IP)
+	remote := netdev.NewSockAddr("", netdev.Port(raddr.Port), ip)
+
+	// Remote connect
+	if err = dev.Connect(fd, remote); err != nil {
 		dev.Close(fd)
 		return nil, err
 	}
 
-	return &TCPConn{
+	// Local bind
+	err = dev.Bind(fd, local)
+	if err != nil {
+		dev.Close(fd)
+		return nil, err
+	}
+
+	return &UDPConn{
 		fd:    fd,
 		laddr: laddr,
 		raddr: raddr,
@@ -143,7 +177,7 @@ func DialTCP(network string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 
 // TINYGO: Use netdev for Conn methods: Read = Recv, Write = Send, etc.
 
-func (c *TCPConn) Read(b []byte) (int, error) {
+func (c *UDPConn) Read(b []byte) (int, error) {
 	var timeout time.Duration
 
 	now := time.Now()
@@ -164,7 +198,7 @@ func (c *TCPConn) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func (c *TCPConn) Write(b []byte) (int, error) {
+func (c *UDPConn) Write(b []byte) (int, error) {
 	var timeout time.Duration
 
 	now := time.Now()
@@ -185,91 +219,30 @@ func (c *TCPConn) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func (c *TCPConn) Close() error {
+func (c *UDPConn) Close() error {
 	return dev.Close(c.fd)
 }
 
-func (c *TCPConn) LocalAddr() Addr {
+func (c *UDPConn) LocalAddr() Addr {
 	return c.laddr
 }
 
-func (c *TCPConn) RemoteAddr() Addr {
+func (c *UDPConn) RemoteAddr() Addr {
 	return c.raddr
 }
 
-func (c *TCPConn) SetDeadline(t time.Time) error {
+func (c *UDPConn) SetDeadline(t time.Time) error {
 	c.readDeadline = t
 	c.writeDeadline = t
 	return nil
 }
 
-func (c *TCPConn) SetKeepAlive(keepalive bool) error {
-	return dev.SetSockOpt(c.fd, netdev.SOL_SOCKET, netdev.SO_KEEPALIVE, keepalive)
-}
-
-func (c *TCPConn) SetKeepAlivePeriod(d time.Duration) error {
-	// Units are 1/2 seconds
-	return dev.SetSockOpt(c.fd, netdev.SOL_TCP, netdev.TCP_KEEPINTVL, 2*d.Seconds())
-}
-
-func (c *TCPConn) SetReadDeadline(t time.Time) error {
+func (c *UDPConn) SetReadDeadline(t time.Time) error {
 	c.readDeadline = t
 	return nil
 }
 
-func (c *TCPConn) SetWriteDeadline(t time.Time) error {
+func (c *UDPConn) SetWriteDeadline(t time.Time) error {
 	c.writeDeadline = t
 	return nil
-}
-
-func (c *TCPConn) CloseWrite() error {
-	return fmt.Errorf("CloseWrite not implemented")
-}
-
-type listener struct {
-	fd    netdev.Sockfd
-	laddr *TCPAddr
-}
-
-func (l *listener) Accept() (Conn, error) {
-	fd, err := dev.Accept(l.fd, netdev.SockAddr{})
-	if err != nil {
-		return nil, err
-	}
-
-	return &TCPConn{
-		fd:    fd,
-		laddr: l.laddr,
-	}, nil
-}
-
-func (l *listener) Close() error {
-	return dev.Close(l.fd)
-}
-
-func (l *listener) Addr() Addr {
-	return l.laddr
-}
-
-func listenTCP(laddr *TCPAddr) (Listener, error) {
-	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_STREAM, netdev.IPPROTO_TCP)
-	if err != nil {
-		return nil, err
-	}
-
-	var ip netdev.IP
-	copy(ip[:], laddr.IP)
-	addr := netdev.NewSockAddr("", netdev.Port(laddr.Port), ip)
-
-	err = dev.Bind(fd, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	err = dev.Listen(fd, 5)
-	if err != nil {
-		return nil, err
-	}
-
-	return &listener{fd: fd, laddr: laddr}, nil
 }

@@ -1,0 +1,4 @@
+This is a port of Go's "net" package version 1.19.3.
+
+It offers a subset of Go's "net" package and is modified to use the netdev
+driver interface.
