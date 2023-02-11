@@ -57,7 +57,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-alpine-v2
+          key: llvm-build-15-linux-alpine-v3
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -186,7 +186,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-asserts-v2
+          key: llvm-build-15-linux-asserts-v3
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -272,7 +272,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-arm-v2
+          key: llvm-build-15-linux-arm-v3
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -372,7 +372,7 @@ jobs:
         uses: actions/cache@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-arm64-v2
+          key: llvm-build-15-linux-arm64-v3
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
