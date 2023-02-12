@@ -90,7 +90,7 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 //	SCL: 3, 7, 11, 15, 19, 27
 func (i2c *I2C) Configure(config I2CConfig) error {
 	const defaultBaud uint32 = 100_000 // 100kHz standard mode
-	if config.SCL == 0 {
+	if config.SCL == 0 && config.SDA == 0 {
 		// If config pins are zero valued or clock pin is invalid then we set default values.
 		switch i2c.Bus {
 		case rp.I2C0:
@@ -100,6 +100,20 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 			config.SCL = I2C1_SCL_PIN
 			config.SDA = I2C1_SDA_PIN
 		}
+	}
+	var okSDA, okSCL bool
+	switch i2c.Bus {
+	case rp.I2C0:
+		okSDA = config.SDA%4 == 0
+		okSCL = (config.SCL+1)%4 == 0
+	case rp.I2C1:
+		okSDA = (config.SDA+2)%4 == 0
+		okSCL = (config.SCL+3)%4 == 0
+	}
+	if !okSDA {
+		return errors.New("invalid I2C SDA pin")
+	} else if !okSCL {
+		return errors.New("invalid I2C SCL pin")
 	}
 	if config.Frequency == 0 {
 		config.Frequency = defaultBaud
