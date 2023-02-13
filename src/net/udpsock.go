@@ -29,7 +29,7 @@ func (a *UDPAddr) String() string {
 	if a == nil {
 		return "<nil>"
 	}
-	
+
 	// TINYGO: Work around not having internal/itoa
 
 	ip := []byte(a.IP)
@@ -99,6 +99,7 @@ type UDPConn struct {
 
 // Use IANA RFC 6335 port range 49152–65535 for ephemeral (dynamic) ports
 var eport = int32(49151)
+
 func ephemeralPort() int {
 	// TODO: this is racy, if concurrent DialUDPs; use atomic?
 	if eport == int32(65535) {
