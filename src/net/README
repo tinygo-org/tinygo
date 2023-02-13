@@ -31,21 +31,14 @@ src/net
 │   ├── transfer.go		*
 │   └── transport.go		*
 ├── ip.go
+├── iprawsock.go		*
 ├── ipsock.go			*
 ├── mac.go
 ├── net.go			*
 ├── parse.go
 ├── tcpsock.go			*
-├── textproto
-│   ├── header.go
-│   ├── pipeline.go
-│   ├── reader.go
-│   ├── textproto.go
-│   └── writer.go
 ├── tlssock.go			*
-├── udpsock.go			*
-└── url
-    └── url.go
+└── udpsock.go			*
 
 src/crypto/tls/
 ├── common.go			*
@@ -60,5 +53,7 @@ The modifications to "net/http" are on the client and server side.  On the
 client side, the TinyGo code changes remove the back-end round-tripper code and
 replaces it with direct calls to TCPConns/TLSConns.  All of Go's http
 request/response handling code is intact and operational in TinyGo.  Same holds
-true for the server side.  The server side additionally supports the normal
-server features like ServeMux and Hijacker (for websockets).
+true for the server side.  The server side supports the normal server features
+like ServeMux and Hijacker (for websockets).
+
+There are no new exported names added to the "net" or "net/http" packages.
