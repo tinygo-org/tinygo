@@ -296,6 +296,7 @@ TEST_PACKAGES_FAST = \
 	encoding \
 	encoding/ascii85 \
 	encoding/base32 \
+	encoding/base64 \
 	encoding/csv \
 	encoding/hex \
 	go/scanner \
@@ -331,26 +332,34 @@ TEST_PACKAGES_FAST += crypto/elliptic/internal/fiat
 endif
 
 # archive/zip requires os.ReadAt, which is not yet supported on windows
+# bytes requires mmap
 # compress/flate appears to hang on wasi
 # compress/lzw appears to hang on wasi
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
+# image requires recover(), which is not  yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
+# mime/quotedprintable requires syscall.Faccessat
 # strconv requires recover() which is not yet supported on wasi
+# text/tabwriter requries recover(), which is not  yet supported on wasi
 # text/template/parse requires recover(), which is not yet supported on wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
 
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
+	bytes \
 	compress/flate \
 	compress/lzw \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
+	image \
 	io/ioutil \
+	mime/quotedprintable \
 	strconv \
 	testing/fstest \
+	text/tabwriter \
 	text/template/parse
 
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
