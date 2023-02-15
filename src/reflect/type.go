@@ -439,7 +439,7 @@ type structField struct {
 // Equivalent to (go/types.Type).Underlying(): if this is a named type return
 // the underlying type, else just return the type itself.
 func (t *rawType) underlying() *rawType {
-	if t.meta&flagNamed != 0 {
+	if t.isNamed() {
 		return (*elemType)(unsafe.Pointer(t)).elem
 	}
 	return t
