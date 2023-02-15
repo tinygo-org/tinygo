@@ -459,6 +459,11 @@ func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
+func hashmapStringSetUnsafePointer(p unsafe.Pointer, key string, value unsafe.Pointer) {
+	m := (*hashmap)(p)
+	hashmapStringSet(m, key, value)
+}
+
 func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize uintptr) bool {
 	if m == nil {
 		memzero(value, uintptr(valueSize))
