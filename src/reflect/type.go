@@ -445,6 +445,10 @@ func (t *rawType) underlying() *rawType {
 	return t
 }
 
+func (t *rawType) isNamed() bool {
+	return t.meta&flagNamed != 0
+}
+
 func TypeOf(i interface{}) Type {
 	return ValueOf(i).typecode
 }
@@ -463,7 +467,12 @@ func PointerTo(t Type) Type {
 }
 
 func (t *rawType) String() string {
-	return "T"
+	if t.isNamed() {
+		// TODO(dgryski): lookup named type here
+		return "T"
+	}
+	// TODO(dgryski): doesn't yet handle complex types
+	return t.Kind().String()
 }
 
 func (t *rawType) Kind() Kind {
@@ -810,11 +819,15 @@ func (t *rawType) NumMethod() int {
 }
 
 func (t *rawType) Name() string {
-	panic("unimplemented: (reflect.Type).Name()")
+	return "unimplemented: (reflect.Type).Name()"
 }
 
 func (t *rawType) Key() Type {
-	panic("unimplemented: (reflect.Type).Key()")
+	if t.Kind() != Map {
+		panic(TypeError{"Key"})
+	}
+
+	return t.key()
 }
 
 func (t rawType) In(i int) Type {
