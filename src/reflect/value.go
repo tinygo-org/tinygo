@@ -645,7 +645,25 @@ func (v Value) MapKeys() []Value {
 }
 
 func (v Value) MapIndex(key Value) Value {
-	panic("unimplemented: (reflect.Value).MapIndex()")
+	if v.Kind() != Map {
+		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
+	}
+
+	// compare key type with actual key type of map
+	if key.typecode != v.typecode.key() {
+		panic(&ValueError{Method: "MapIndex"})
+	}
+
+	elemType := v.Type().Elem()
+	elem := New(elemType)
+
+	switch key.Kind() {
+	case String:
+		hashmapStringGet(v.value, *(*string)(key.value), elem.value, elemType.Size())
+		return elem.Elem()
+	default:
+		panic("unimplemented: (reflect.Value).MapIndex()")
+	}
 }
 
 func (v Value) MapRange() *MapIter {
@@ -862,6 +880,9 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 //go:linkname sliceAppend runtime.sliceAppend
 func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
+
+//go:linkname hashmapStringGet runtime.hashmapStringGetUnsafePointer
+func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool
 
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.

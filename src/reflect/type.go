@@ -481,11 +481,19 @@ func (t *rawType) elem() *rawType {
 	switch underlying.Kind() {
 	case Pointer:
 		return (*ptrType)(unsafe.Pointer(underlying)).elem
-	case Chan, Slice, Array:
+	case Chan, Slice, Array, Map:
 		return (*elemType)(unsafe.Pointer(underlying)).elem
-	default: // not implemented: Map
+	default:
 		panic("unimplemented: (reflect.Type).Elem()")
 	}
+}
+
+func (t *rawType) key() *rawType {
+	underlying := t.underlying()
+	if underlying.Kind() != Map {
+		panic("key called on non-map type")
+	}
+	return (*mapType)(unsafe.Pointer(underlying)).key
 }
 
 // Field returns the type of the i'th field of this struct type. It panics if t
