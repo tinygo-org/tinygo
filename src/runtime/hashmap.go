@@ -468,6 +468,11 @@ func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize ui
 	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
 }
 
+func hashmapStringGetUnsafePointer(p unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool {
+	m := (*hashmap)(p)
+	return hashmapStringGet(m, key, value, valueSize)
+}
+
 func hashmapStringDelete(m *hashmap, key string) {
 	if m == nil {
 		return
