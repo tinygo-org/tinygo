@@ -884,6 +884,9 @@ func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintp
 //go:linkname hashmapStringGet runtime.hashmapStringGetUnsafePointer
 func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool
 
+//go:linkname hashmapStringSet runtime.hashmapStringSetUnsafePointer
+func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
+
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
 func Copy(dst, src Value) int {
@@ -925,7 +928,25 @@ func AppendSlice(s, t Value) Value {
 }
 
 func (v Value) SetMapIndex(key, elem Value) {
-	panic("unimplemented: (reflect.Value).SetMapIndex()")
+	if v.Kind() != Map {
+		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
+	}
+
+	// compare key type with actual key type of map
+	if key.typecode != v.typecode.key() {
+		panic(&ValueError{Method: "MapIndex"})
+	}
+
+	if elem.typecode != v.typecode.elem() {
+		panic(&ValueError{Method: "MapIndex"})
+	}
+
+	switch key.Kind() {
+	case String:
+		hashmapStringSet(v.value, *(*string)(key.value), elem.value)
+	default:
+		panic("unimplemented: (reflect.Value).MapIndex()")
+	}
 }
 
 // FieldByIndex returns the nested field corresponding to index.
