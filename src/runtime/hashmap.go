@@ -49,6 +49,11 @@ type hashmapIterator struct {
 	bucketIndex  uint8          // current index into bucket
 }
 
+// for reflect
+func hashmapNewIterator() unsafe.Pointer {
+	return unsafe.Pointer(new(hashmapIterator))
+}
+
 // Get the topmost 8 bits of the hash, without using a special value (like 0).
 func hashmapTopHash(hash uint32) uint8 {
 	tophash := uint8(hash >> 24)
@@ -408,6 +413,9 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 		return true
 	}
 }
+
+// for reflect
+func hashmapNextUnsafePointer(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool
 
 // Hashmap with plain binary data keys (not containing strings etc.).
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
