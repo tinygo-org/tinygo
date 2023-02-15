@@ -33,6 +33,8 @@
 // - map types (this is still missing the key and element types)
 //     meta         uint8
 //     ptrTo        *typeStruct
+//     elem         *typeStruct
+//     key          *typeStruct
 // - struct types (see structType):
 //     meta         uint8
 //     numField     uint16
@@ -406,6 +408,13 @@ type arrayType struct {
 	ptrTo    *rawType
 	elem     *rawType
 	arrayLen uintptr
+}
+
+type mapType struct {
+	rawType
+	ptrTo *rawType
+	elem  *rawType
+	key   *rawType
 }
 
 // Type for struct types. The numField value is intentionally put before ptrTo
