@@ -687,22 +687,56 @@ func (v Value) MapIndex(key Value) Value {
 }
 
 func (v Value) MapRange() *MapIter {
-	panic("unimplemented: (reflect.Value).MapRange()")
+	return &MapIter{
+		m:   v,
+		it:  hashmapNewIterator(),
+		key: New(v.typecode.Key()),
+		val: New(v.typecode.Elem()),
+	}
 }
 
 type MapIter struct {
+	m   Value
+	it  unsafe.Pointer
+	key Value
+	val Value
+
+	valid bool
+	done  bool
 }
 
 func (it *MapIter) Key() Value {
-	panic("unimplemented: (*reflect.MapIter).Key()")
+	if !it.valid {
+		panic("MapIter: Key() called before Next()")
+	}
+
+	if it.done {
+		panic("MapIter.Key called on exhausted iterator")
+	}
+
+	return it.key.Elem()
 }
 
 func (it *MapIter) Value() Value {
-	panic("unimplemented: (*reflect.MapIter).Value()")
+	if !it.valid {
+		panic("MapIter: Value() called before Next()")
+	}
+
+	if it.done {
+		panic("MapIter.Value called on exhausted iterator")
+	}
+
+	return it.val.Elem()
 }
 
 func (it *MapIter) Next() bool {
-	panic("unimplemented: (*reflect.MapIter).Next()")
+	it.valid = true
+	ok := hashmapNext(it.m.value, it.it, it.key.value, it.val.value)
+	if !ok {
+		it.done = true
+	}
+
+	return ok
 }
 
 func (v Value) Set(x Value) {
