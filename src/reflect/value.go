@@ -641,7 +641,27 @@ func (v Value) OverflowFloat(x float64) bool {
 }
 
 func (v Value) MapKeys() []Value {
-	panic("unimplemented: (reflect.Value).MapKeys()")
+	if v.Kind() != Map {
+		panic(&ValueError{Method: "MapKeys", Kind: v.Kind()})
+	}
+
+	// empty map
+	if v.Len() == 0 {
+		return nil
+	}
+
+	var keys []Value
+
+	it := hashmapNewIterator()
+	k := New(v.typecode.Key())
+	e := New(v.typecode.Elem())
+
+	for hashmapNext(v.value, it, k.value, e.value) {
+		keys = append(keys, k.Elem())
+		k = New(v.typecode.Key())
+	}
+
+	return keys
 }
 
 func (v Value) MapIndex(key Value) Value {
@@ -886,6 +906,12 @@ func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueS
 
 //go:linkname hashmapStringSet runtime.hashmapStringSetUnsafePointer
 func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
+
+//go:linkname hashmapNewIterator runtime.hashmapNewIterator
+func hashmapNewIterator() unsafe.Pointer
+
+//go:linkname hashmapNext runtime.hashmapNext
+func hashmapNext(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool
 
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
