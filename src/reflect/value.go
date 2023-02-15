@@ -943,7 +943,12 @@ func (v Value) SetMapIndex(key, elem Value) {
 
 	switch key.Kind() {
 	case String:
-		hashmapStringSet(v.value, *(*string)(key.value), elem.value)
+		if elem.isIndirect() {
+			hashmapStringSet(v.value, *(*string)(key.value), elem.value)
+		} else {
+			hashmapStringSet(v.value, *(*string)(key.value), (unsafe.Pointer)(&elem.value))
+		}
+
 	default:
 		panic("unimplemented: (reflect.Value).MapIndex()")
 	}
