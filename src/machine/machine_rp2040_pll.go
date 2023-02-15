@@ -98,3 +98,9 @@ func (pll *pll) init(refdiv, vcoFreq, postDiv1, postDiv2 uint32) {
 	pll.pwr.ClearBits(rp.PLL_SYS_PWR_POSTDIVPD)
 
 }
+
+func (pll *pll) stop() {
+	// Turn off PLL
+	pwr := uint32(rp.PLL_SYS_PWR_PD | rp.PLL_SYS_PWR_VCOPD | rp.PLL_SYS_PWR_POSTDIVPD)
+	pll.pwr.SetBits(pwr)
+}
