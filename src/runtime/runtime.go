@@ -89,11 +89,10 @@ func UnlockOSThread() {
 }
 
 func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
 	// Unimplemented.
+	// TODO: This function needs to be implemented in a way that LLVM doesn't optimize away the x
+	// parameter. This will likely need either a volatile operation or calling an assembly stub
+	// that simply returns.
 }
 
 var godebugUpdate func(string, string)

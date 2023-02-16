@@ -687,3 +687,7 @@ func ReadMemStats(m *MemStats) {
 	m.Frees = gcFrees
 	m.Sys = uint64(heapEnd - heapStart)
 }
+
+func SetFinalizer(obj interface{}, finalizer interface{}) {
+	// Unimplemented.
+}
