@@ -15,6 +15,11 @@ jobs:
   build-windows:
     runs-on: windows-2022
     steps:
+      - name: Configure pagefile
+        uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 4GB
+          maximum-size: 6GB
       - uses: brechtm/setup-scoop@v2
         with:
           scoop_update: 'false'
@@ -49,7 +54,7 @@ jobs:
         uses: actions/cache/save@v3
         if: always()
         with:
-          key: llvm-source-15-windows-v2
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -77,7 +82,7 @@ jobs:
         uses: actions/cache/save@v3
         if: always()
         with:
-          key: llvm-build-15-windows-v3
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
       - name: Cache wasi-libc sysroot
         uses: actions/cache@v3
