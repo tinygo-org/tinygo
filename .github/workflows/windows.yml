@@ -18,8 +18,9 @@ jobs:
       - name: Configure pagefile
         uses: al-cheb/configure-pagefile-action@v1.3
         with:
-          minimum-size: 4GB
-          maximum-size: 6GB
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: "C:"
       - uses: brechtm/setup-scoop@v2
         with:
           scoop_update: 'false'
