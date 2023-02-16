@@ -1094,9 +1094,41 @@ func (v Value) FieldByName(name string) Value {
 	panic("unimplemented: (reflect.Value).FieldByName()")
 }
 
+//go:linkname hashmapMake runtime.hashmapMake
+func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
+
 // MakeMap creates a new map with the specified type.
 func MakeMap(typ Type) Value {
-	panic("unimplemented: reflect.MakeMap()")
+
+	const (
+		hashmapAlgorithmBinary uint8 = iota
+		hashmapAlgorithmString
+		hashmapAlgorithmInterface
+	)
+
+	if typ.Kind() != Map {
+		panic("makemap: not map")
+	}
+
+	key := typ.Key()
+	val := typ.Elem()
+
+	var alg uint8
+
+	switch key.Kind() {
+	case String:
+		alg = hashmapAlgorithmString
+	default:
+		panic("makemap: unknown key type")
+	}
+
+	m := hashmapMake(key.Size(), val.Size(), 0, alg)
+
+	return Value{
+		typecode: typ.(*rawType),
+		value:    unsafe.Pointer(&m),
+		flags:    0, // what should the flags be
+	}
 }
 
 func (v Value) Call(in []Value) []Value {
