@@ -26,6 +26,10 @@ func GC() {
 	// Unimplemented.
 }
 
+func SetFinalizer(obj interface{}, finalizer interface{}) {
+	// Unimplemented.
+}
+
 func initHeap() {
 	// Nothing to initialize.
 }

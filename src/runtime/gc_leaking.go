@@ -85,6 +85,10 @@ func GC() {
 	// No-op.
 }
 
+func SetFinalizer(obj interface{}, finalizer interface{}) {
+	// No-op.
+}
+
 func initHeap() {
 	// preinit() may have moved heapStart; reset heapptr
 	heapptr = heapStart
