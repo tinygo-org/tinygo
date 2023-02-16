@@ -88,9 +88,11 @@ func LockOSThread() {
 func UnlockOSThread() {
 }
 
-//go:noinline
 func KeepAlive(x interface{}) {
 	// Unimplemented.
+	// TODO: This function needs to be implemented in a way that LLVM doesn't optimize away the x
+	// parameter. This will likely need either a volatile operation or calling an assembly stub
+	// that simply returns.
 }
 
 //go:linkname godebug_setUpdate internal/godebug.setUpdate
