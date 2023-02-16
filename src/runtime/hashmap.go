@@ -147,12 +147,6 @@ func hashmapLen(m *hashmap) int {
 	return int(m.count)
 }
 
-// wrapper for use in reflect
-func hashmapLenUnsafePointer(p unsafe.Pointer) int {
-	m := (*hashmap)(p)
-	return hashmapLen(m)
-}
-
 // Set a specified key to a given value. Grow the map if necessary.
 //
 //go:nobounds
@@ -414,9 +408,6 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 	}
 }
 
-// for reflect
-func hashmapNextUnsafePointer(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool
-
 // Hashmap with plain binary data keys (not containing strings etc.).
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	if m == nil {
@@ -467,11 +458,6 @@ func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
-func hashmapStringSetUnsafePointer(p unsafe.Pointer, key string, value unsafe.Pointer) {
-	m := (*hashmap)(p)
-	hashmapStringSet(m, key, value)
-}
-
 func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize uintptr) bool {
 	if m == nil {
 		memzero(value, uintptr(valueSize))
@@ -479,11 +465,6 @@ func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize ui
 	}
 	hash := hashmapStringHash(key, m.seed)
 	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
-}
-
-func hashmapStringGetUnsafePointer(p unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool {
-	m := (*hashmap)(p)
-	return hashmapStringGet(m, key, value, valueSize)
 }
 
 func hashmapStringDelete(m *hashmap, key string) {
