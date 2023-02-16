@@ -20,6 +20,7 @@ package runtime
 // - func free(ptr unsafe.Pointer)
 // - func markRoots(start, end uintptr)
 // - func GC()
+// - func SetFinalizer(obj interface{}, finalizer interface{})
 // - func ReadMemStats(ms *runtime.MemStats)
 //
 //
@@ -50,6 +51,9 @@ func markRoots(start, end uintptr)
 
 // GC is called to explicitly run garbage collection.
 func GC()
+
+// SetFinalizer registers a finalizer.
+func SetFinalizer(obj interface{}, finalizer interface{})
 
 // ReadMemStats populates m with memory statistics.
 func ReadMemStats(ms *MemStats)
