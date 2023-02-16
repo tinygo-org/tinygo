@@ -217,7 +217,15 @@ func (v Value) CanAddr() bool {
 }
 
 func (v Value) Addr() Value {
-	panic("unimplemented: (reflect.Value).Addr()")
+	if !v.CanAddr() {
+		panic("taking addr of un-addr-able value")
+	}
+
+	return Value{
+		typecode: PtrTo(v.Type()).(*rawType),
+		value:    unsafe.Pointer(&v.value),
+		flags:    v.flags,
+	}
 }
 
 func (v Value) CanSet() bool {
@@ -844,7 +852,15 @@ func (v Value) SetCap(n int) {
 }
 
 func (v Value) SetLen(n int) {
-	panic("unimplemented: (reflect.Value).SetLen()")
+	if v.typecode.Kind() != Slice {
+		panic("setlen: not slice")
+	}
+
+	hdr := (*sliceHeader)(v.value)
+	if uintptr(n) > hdr.cap {
+		panic("setlen: cap too big")
+	}
+	hdr.len = uintptr(n)
 }
 
 func (v Value) checkAddressable() {
@@ -853,8 +869,16 @@ func (v Value) checkAddressable() {
 	}
 }
 
+// OverflowInt reports whether the int64 x cannot be represented by v's type.
+// It panics if v's Kind is not Int, Int8, Int16, Int32, or Int64.
 func (v Value) OverflowInt(x int64) bool {
-	panic("unimplemented: reflect.OverflowInt()")
+	switch v.Kind() {
+	case Int, Int8, Int16, Int32, Int64:
+		bitSize := v.typecode.Size() * 8
+		trunc := (x << (64 - bitSize)) >> (64 - bitSize)
+		return x != trunc
+	}
+	panic(&ValueError{"reflect.Value.OverflowInt", v.Kind()})
 }
 
 func (v Value) OverflowUint(x uint64) bool {
@@ -866,7 +890,30 @@ func (v Value) Convert(t Type) Value {
 }
 
 func MakeSlice(typ Type, len, cap int) Value {
-	panic("unimplemented: reflect.MakeSlice()")
+	if typ.Kind() != Slice {
+		panic("reflect.MakeSlice of non-slice type")
+	}
+	if len < 0 {
+		panic("reflect.MakeSlice: negative len")
+	}
+	if cap < 0 {
+		panic("reflect.MakeSlice: negative cap")
+	}
+	if len > cap {
+		panic("reflect.MakeSlice: len > cap")
+	}
+
+	var slice sliceHeader
+	slice.cap = uintptr(cap)
+	slice.len = uintptr(len)
+	slice.data = unsafe.Pointer(alloc(typ.Size()*uintptr(cap), nil))
+
+	return Value{
+		typecode: typ.(*rawType),
+		value:    unsafe.Pointer(&slice),
+		//	flags:    valueFlagIndirect,
+	}
+
 }
 
 func Zero(typ Type) Value {
@@ -947,10 +994,29 @@ func hashmapNewIterator() unsafe.Pointer
 //go:linkname hashmapNext runtime.hashmapNext
 func hashmapNext(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool
 
+//go:linkname sliceCopy runtime.sliceCopy
+func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr) int
+
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
 func Copy(dst, src Value) int {
-	panic("unimplemented: reflect.Copy()")
+
+	if dst.typecode.Kind() != Slice {
+		panic("dst not slice " + dst.typecode.Kind().String())
+	}
+
+	if src.typecode.Kind() != Slice {
+		panic("src not slice")
+	}
+
+	if dst.typecode != src.typecode {
+		panic("type mismatch")
+	}
+
+	dhdr := (*sliceHeader)(dst.value)
+	shdr := (*sliceHeader)(src.value)
+
+	return sliceCopy(dhdr.data, shdr.data, dhdr.len, shdr.len, dst.typecode.Elem().Size())
 }
 
 // Append appends the values x to a slice s and returns the resulting slice.
