@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net"
 	"net/http/internal/ascii"
 	"net/textproto"
@@ -50,12 +51,9 @@ type ProtocolError struct {
 func (pe *ProtocolError) Error() string { return pe.ErrorString }
 
 var (
-	// ErrNotSupported indicates that a feature is not supported.
-	//
-	// It is returned by ResponseController methods to indicate that
-	// the handler does not support the method, and by the Push method
-	// of Pusher implementations to indicate that HTTP/2 Push support
-	// is not available.
+	// ErrNotSupported is returned by the Push method of Pusher
+	// implementations to indicate that HTTP/2 Push support is not
+	// available.
 	ErrNotSupported = &ProtocolError{"feature not supported"}
 
 	// Deprecated: ErrUnexpectedTrailer is no longer returned by
@@ -255,6 +253,11 @@ type Request struct {
 	// The HTTP client ignores PostForm and uses Body instead.
 	PostForm url.Values
 
+	// MultipartForm is the parsed multipart form, including file uploads.
+	// This field is only available after ParseMultipartForm is called.
+	// The HTTP client ignores MultipartForm and uses Body instead.
+	MultipartForm *multipart.Form
+
 	// Trailer specifies additional headers that are sent after the request
 	// body.
 	//
@@ -316,7 +319,7 @@ type Request struct {
 	Response *Response
 
 	// ctx is either the client or server context. It should only
-	// be modified via copying the whole Request using Clone or WithContext.
+	// be modified via copying the whole Request using WithContext.
 	// It is unexported to prevent people from using Context wrong
 	// and mutating the contexts held by callers of the same request.
 	ctx context.Context
@@ -327,7 +330,7 @@ type Request struct {
 }
 
 // Context returns the request's context. To change the context, use
-// Clone or WithContext.
+// WithContext.
 //
 // The returned context is always non-nil; it defaults to the
 // background context.
@@ -352,7 +355,9 @@ func (r *Request) Context() context.Context {
 // sending the request, and reading the response headers and body.
 //
 // To create a new request with a context, use NewRequestWithContext.
-// To make a deep copy of a request with a new context, use Request.Clone.
+// To change the context of a request, such as an incoming request you
+// want to modify before sending back out, use Request.Clone. Between
+// those two uses, it's rare to need WithContext.
 func (r *Request) WithContext(ctx context.Context) *Request {
 	if ctx == nil {
 		panic("nil context")
@@ -390,6 +395,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	}
 	r2.Form = cloneURLValues(r.Form)
 	r2.PostForm = cloneURLValues(r.PostForm)
+	r2.MultipartForm = cloneMultipartForm(r.MultipartForm)
 	return r2
 }
 
@@ -418,9 +424,6 @@ var ErrNoCookie = errors.New("http: named cookie not present")
 // If multiple cookies match the given name, only one cookie will
 // be returned.
 func (r *Request) Cookie(name string) (*Cookie, error) {
-	if name == "" {
-		return nil, ErrNoCookie
-	}
 	for _, c := range readCookies(r.Header, name) {
 		return c, nil
 	}
@@ -452,6 +455,48 @@ func (r *Request) AddCookie(c *Cookie) {
 // diagnose programs that use Header["Referrer"].
 func (r *Request) Referer() string {
 	return r.Header.Get("Referer")
+}
+
+// multipartByReader is a sentinel value.
+// Its presence in Request.MultipartForm indicates that parsing of the request
+// body has been handed off to a MultipartReader instead of ParseMultipartForm.
+var multipartByReader = &multipart.Form{
+	Value: make(map[string][]string),
+	File:  make(map[string][]*multipart.FileHeader),
+}
+
+// MultipartReader returns a MIME multipart reader if this is a
+// multipart/form-data or a multipart/mixed POST request, else returns nil and an error.
+// Use this function instead of ParseMultipartForm to
+// process the request body as a stream.
+func (r *Request) MultipartReader() (*multipart.Reader, error) {
+	if r.MultipartForm == multipartByReader {
+		return nil, errors.New("http: MultipartReader called twice")
+	}
+	if r.MultipartForm != nil {
+		return nil, errors.New("http: multipart handled by ParseMultipartForm")
+	}
+	r.MultipartForm = multipartByReader
+	return r.multipartReader(true)
+}
+
+func (r *Request) multipartReader(allowMixed bool) (*multipart.Reader, error) {
+	v := r.Header.Get("Content-Type")
+	if v == "" {
+		return nil, ErrNotMultipart
+	}
+	if r.Body == nil {
+		return nil, errors.New("missing form body")
+	}
+	d, params, err := mime.ParseMediaType(v)
+	if err != nil || !(d == "multipart/form-data" || allowMixed && d == "multipart/mixed") {
+		return nil, ErrNotMultipart
+	}
+	boundary, ok := params["boundary"]
+	if !ok {
+		return nil, ErrMissingBoundary
+	}
+	return multipart.NewReader(r.Body, boundary), nil
 }
 
 // isH2Upgrade reports whether r represents the http2 "client preface"
@@ -948,8 +993,6 @@ func ReadRequest(b *bufio.Reader) (*Request, error) {
 
 func readRequest(b *bufio.Reader) (req *Request, err error) {
 	tp := newTextprotoReader(b)
-	defer putTextprotoReader(tp)
-
 	req = new(Request)
 
 	// First line: GET /index.html HTTP/1.0
@@ -958,6 +1001,7 @@ func readRequest(b *bufio.Reader) (req *Request, err error) {
 		return nil, err
 	}
 	defer func() {
+		putTextprotoReader(tp)
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
@@ -1088,8 +1132,7 @@ func (l *maxBytesReader) Read(p []byte) (n int, err error) {
 	// If they asked for a 32KB byte read but only 5 bytes are
 	// remaining, no need to read 32KB. 6 bytes will answer the
 	// question of the whether we hit the limit or go past it.
-	// 0 < len(p) < 2^63
-	if int64(len(p))-1 > l.n {
+	if int64(len(p)) > l.n+1 {
 		p = p[:l.n+1]
 	}
 	n, err = l.r.Read(p)
@@ -1227,6 +1270,105 @@ func (r *Request) ParseForm() error {
 		}
 	}
 	return err
+}
+
+// ParseMultipartForm parses a request body as multipart/form-data.
+// The whole request body is parsed and up to a total of maxMemory bytes of
+// its file parts are stored in memory, with the remainder stored on
+// disk in temporary files.
+// ParseMultipartForm calls ParseForm if necessary.
+// If ParseForm returns an error, ParseMultipartForm returns it but also
+// continues parsing the request body.
+// After one call to ParseMultipartForm, subsequent calls have no effect.
+func (r *Request) ParseMultipartForm(maxMemory int64) error {
+	if r.MultipartForm == multipartByReader {
+		return errors.New("http: multipart handled by MultipartReader")
+	}
+	var parseFormErr error
+	if r.Form == nil {
+		// Let errors in ParseForm fall through, and just
+		// return it at the end.
+		parseFormErr = r.ParseForm()
+	}
+	if r.MultipartForm != nil {
+		return nil
+	}
+
+	mr, err := r.multipartReader(false)
+	if err != nil {
+		return err
+	}
+
+	f, err := mr.ReadForm(maxMemory)
+	if err != nil {
+		return err
+	}
+
+	if r.PostForm == nil {
+		r.PostForm = make(url.Values)
+	}
+	for k, v := range f.Value {
+		r.Form[k] = append(r.Form[k], v...)
+		// r.PostForm should also be populated. See Issue 9305.
+		r.PostForm[k] = append(r.PostForm[k], v...)
+	}
+
+	r.MultipartForm = f
+
+	return parseFormErr
+}
+
+// FormValue returns the first value for the named component of the query.
+// POST and PUT body parameters take precedence over URL query string values.
+// FormValue calls ParseMultipartForm and ParseForm if necessary and ignores
+// any errors returned by these functions.
+// If key is not present, FormValue returns the empty string.
+// To access multiple values of the same key, call ParseForm and
+// then inspect Request.Form directly.
+func (r *Request) FormValue(key string) string {
+	if r.Form == nil {
+		r.ParseMultipartForm(defaultMaxMemory)
+	}
+	if vs := r.Form[key]; len(vs) > 0 {
+		return vs[0]
+	}
+	return ""
+}
+
+// PostFormValue returns the first value for the named component of the POST,
+// PATCH, or PUT request body. URL query parameters are ignored.
+// PostFormValue calls ParseMultipartForm and ParseForm if necessary and ignores
+// any errors returned by these functions.
+// If key is not present, PostFormValue returns the empty string.
+func (r *Request) PostFormValue(key string) string {
+	if r.PostForm == nil {
+		r.ParseMultipartForm(defaultMaxMemory)
+	}
+	if vs := r.PostForm[key]; len(vs) > 0 {
+		return vs[0]
+	}
+	return ""
+}
+
+// FormFile returns the first file for the provided form key.
+// FormFile calls ParseMultipartForm and ParseForm if necessary.
+func (r *Request) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
+	if r.MultipartForm == multipartByReader {
+		return nil, nil, errors.New("http: multipart handled by MultipartReader")
+	}
+	if r.MultipartForm == nil {
+		err := r.ParseMultipartForm(defaultMaxMemory)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	if r.MultipartForm != nil && r.MultipartForm.File != nil {
+		if fhs := r.MultipartForm.File[key]; len(fhs) > 0 {
+			f, err := fhs[0].Open()
+			return f, fhs[0], err
+		}
+	}
+	return nil, nil, ErrMissingFile
 }
 
 func (r *Request) expectsContinue() bool {

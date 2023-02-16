@@ -6,19 +6,9 @@
 
 package net
 
-// import "internal/bytealg"
-// Copied from "tinygo/src/internal/bytealg"
-
-// Index finds the index of the first instance of the specified byte in the string.
-// If the byte is not found, this returns -1.
-func indexByteString(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
-}
+import (
+	"internal/bytealg"
+)
 
 // SplitHostPort splits a network address of the form "host:port",
 // "host%zone:port", "[host]:port" or "[host%zone]:port" into host or
@@ -47,7 +37,7 @@ func SplitHostPort(hostport string) (host, port string, err error) {
 
 	if hostport[0] == '[' {
 		// Expect the first ']' just before the last ':'.
-		end := indexByteString(hostport, ']')
+		end := bytealg.IndexByteString(hostport, ']')
 		if end < 0 {
 			return addrErr(hostport, "missing ']' in address")
 		}
@@ -69,14 +59,14 @@ func SplitHostPort(hostport string) (host, port string, err error) {
 		j, k = 1, end+1 // there can't be a '[' resp. ']' before these positions
 	} else {
 		host = hostport[:i]
-		if indexByteString(host, ':') >= 0 {
+		if bytealg.IndexByteString(host, ':') >= 0 {
 			return addrErr(hostport, tooManyColons)
 		}
 	}
-	if indexByteString(hostport[j:], '[') >= 0 {
+	if bytealg.IndexByteString(hostport[j:], '[') >= 0 {
 		return addrErr(hostport, "unexpected '[' in address")
 	}
-	if indexByteString(hostport[k:], ']') >= 0 {
+	if bytealg.IndexByteString(hostport[k:], ']') >= 0 {
 		return addrErr(hostport, "unexpected ']' in address")
 	}
 
@@ -103,7 +93,7 @@ func splitHostZone(s string) (host, zone string) {
 func JoinHostPort(host, port string) string {
 	// We assume that host is a literal IPv6 address if host has
 	// colons.
-	if indexByteString(host, ':') >= 0 {
+	if bytealg.IndexByteString(host, ':') >= 0 {
 		return "[" + host + "]:" + port
 	}
 	return host + ":" + port
