@@ -253,45 +253,9 @@ func (kb *keyboard) keyboardSendKeys(consumer bool) bool {
 
 	} else {
 		b[0] = 0x03 // REPORT_ID
+		b[1] = uint8(kb.con[0])
+		b[2] = uint8((kb.con[0] & 0x0300) >> 8)
 
-		flag := uint16(0x0000)
-		for _, con := range kb.con {
-			switch Keycode(con) | 0xE400 {
-			case KeyMediaPlay:
-				flag |= 0x0001
-			case KeyMediaPause:
-				flag |= 0x0002
-			case KeyMediaRecord:
-				flag |= 0x0004
-			case KeyMediaFastForward:
-				flag |= 0x0008
-			case KeyMediaRewind:
-				flag |= 0x0010
-			case KeyMediaNextTrack:
-				flag |= 0x0020
-			case KeyMediaPrevTrack:
-				flag |= 0x0040
-			case KeyMediaStop:
-				flag |= 0x0080
-			case KeyMediaEject:
-				flag |= 0x0100
-			case KeyMediaRandomPlay:
-				flag |= 0x0200
-			case KeyMediaPlayPause:
-				flag |= 0x0400
-			case KeyMediaPlaySkip:
-				flag |= 0x0800
-			case KeyMediaMute:
-				flag |= 0x1000
-			case KeyMediaVolumeInc:
-				flag |= 0x2000
-			case KeyMediaVolumeDec:
-				flag |= 0x4000
-			}
-
-		}
-		b[1] = uint8(flag)
-		b[2] = uint8(flag >> 8)
 		return kb.sendKey(consumer, b[:3])
 	}
 }
