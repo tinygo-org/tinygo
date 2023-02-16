@@ -31,8 +31,8 @@ jobs:
         with:
           go-version: '1.20'
           cache: true
-      - name: Cache LLVM source
-        uses: actions/cache@v3
+      - name: Restore cached LLVM source
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
           key: llvm-source-15-windows-v2
@@ -45,8 +45,19 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v3
+      - name: Save cached LLVM source
+        uses: actions/cache/save@v3
+        if: always()
+        with:
+          key: llvm-source-15-windows-v2
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore cached LLVM build
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
           key: llvm-build-15-windows-v3
@@ -62,6 +73,12 @@ jobs:
           make llvm-build CCACHE=OFF
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save cached LLVM build
+        uses: actions/cache/save@v3
+        if: always()
+        with:
+          key: llvm-build-15-windows-v3
+          path: llvm-build
       - name: Cache wasi-libc sysroot
         uses: actions/cache@v3
         id: cache-wasi-libc
