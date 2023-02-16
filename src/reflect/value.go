@@ -389,10 +389,10 @@ func (v Value) Slice3(i, j, k int) Value {
 	panic("unimplemented: (reflect.Value).Slice3()")
 }
 
-//go:linkname maplen runtime.hashmapLenUnsafePointer
+//go:linkname maplen runtime.hashmapLen
 func maplen(p unsafe.Pointer) int
 
-//go:linkname chanlen runtime.chanLenUnsafePointer
+//go:linkname chanlen runtime.chanLen
 func chanlen(p unsafe.Pointer) int
 
 // Len returns the length of this value for slices, strings, arrays, channels,
@@ -414,7 +414,7 @@ func (v Value) Len() int {
 	}
 }
 
-//go:linkname chancap runtime.chanCapUnsafePointer
+//go:linkname chancap runtime.chanCap
 func chancap(p unsafe.Pointer) int
 
 // Cap returns the capacity of this value for arrays, channels and slices.
@@ -935,10 +935,10 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 //go:linkname sliceAppend runtime.sliceAppend
 func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
 
-//go:linkname hashmapStringGet runtime.hashmapStringGetUnsafePointer
+//go:linkname hashmapStringGet runtime.hashmapStringGet
 func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool
 
-//go:linkname hashmapStringSet runtime.hashmapStringSetUnsafePointer
+//go:linkname hashmapStringSet runtime.hashmapStringSet
 func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
 
 //go:linkname hashmapNewIterator runtime.hashmapNewIterator
