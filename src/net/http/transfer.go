@@ -553,7 +553,7 @@ func readTransfer(msg any, r *bufio.Reader, onEOF func()) (err error) {
 	// or close connection when finished, since multipart is not supported yet
 	switch {
 	case t.Chunked:
-		if isResponse && (noResponseBodyExpected(t.RequestMethod) || !bodyAllowedForStatus(t.StatusCode)) {
+		if noResponseBodyExpected(t.RequestMethod) || !bodyAllowedForStatus(t.StatusCode) {
 			t.Body = NoBody
 		} else {
 			t.Body = &body{src: internal.NewChunkedReader(r), hdr: msg, r: r, closing: t.Close, onHitEOF: onEOF}
@@ -596,7 +596,7 @@ func readTransfer(msg any, r *bufio.Reader, onEOF func()) (err error) {
 	return nil
 }
 
-// Checks whether chunked is part of the encodings stack.
+// Checks whether chunked is part of the encodings stack
 func chunked(te []string) bool { return len(te) > 0 && te[0] == "chunked" }
 
 // Checks whether the encoding is explicitly "identity".
@@ -687,7 +687,14 @@ func fixLength(isResponse bool, status int, requestMethod string, header Header,
 	}
 
 	// Logic based on response type or status
-	if isResponse && noResponseBodyExpected(requestMethod) {
+	if noResponseBodyExpected(requestMethod) {
+		// For HTTP requests, as part of hardening against request
+		// smuggling (RFC 7230), don't allow a Content-Length header for
+		// methods which don't permit bodies. As an exception, allow
+		// exactly one Content-Length header if its value is "0".
+		if isRequest && len(contentLens) > 0 && !(len(contentLens) == 1 && contentLens[0] == "0") {
+			return 0, fmt.Errorf("http: method cannot contain a Content-Length; got %q", contentLens)
+		}
 		return 0, nil
 	}
 	if status/100 == 1 {

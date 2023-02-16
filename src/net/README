@@ -1,8 +1,10 @@
-This is a port of Go's "net" package version 1.19.3.
+This is a port of Go's "net" package, version 1.19.3.
 
 It offers a subset of Go's "net" package and is modified to use the netdev
 driver interface.  For TLS support, Go's "crypto/tls" package is modified
-to use the netdev interface to offload mbed TLS to the device.
+to use the netdev interface to offload embedded TLS to the device.
+
+There are no new exported names added to the "net" or "net/http" packages.
 
 The tree listings below shows the files copied from Go 1.19.3.  If the file
 is marked with an "*", it is copied _and_ modified to work with netdev.  If
@@ -55,5 +57,3 @@ replaces it with direct calls to TCPConns/TLSConns.  All of Go's http
 request/response handling code is intact and operational in TinyGo.  Same holds
 true for the server side.  The server side supports the normal server features
 like ServeMux and Hijacker (for websockets).
-
-There are no new exported names added to the "net" or "net/http" packages.
