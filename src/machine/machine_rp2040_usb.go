@@ -127,10 +127,10 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 	// Bus is reset
 	if (status & rp.USBCTRL_REGS_INTS_BUS_RESET) > 0 {
 		rp.USBCTRL_REGS.SIE_STATUS.Set(rp.USBCTRL_REGS_SIE_STATUS_BUS_RESET)
-		rp.USBCTRL_REGS.ADDR_ENDP.Set(0)
-
-		initEndpoint(0, usb.ENDPOINT_TYPE_CONTROL)
 		fixRP2040UsbDeviceEnumeration()
+
+		rp.USBCTRL_REGS.ADDR_ENDP.Set(0)
+		initEndpoint(0, usb.ENDPOINT_TYPE_CONTROL)
 	}
 }
 
