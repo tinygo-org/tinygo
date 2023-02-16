@@ -41,7 +41,7 @@ jobs:
         uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-windows-v2
+          key: llvm-source-15-windows-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -66,7 +66,7 @@ jobs:
         uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-windows-v3
+          key: llvm-build-15-windows-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -123,6 +123,12 @@ jobs:
     runs-on: windows-2022
     needs: build-windows
     steps:
+      - name: Configure pagefile
+        uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: "C:"
       - uses: brechtm/setup-scoop@v2
         with:
           scoop_update: 'false'
@@ -154,6 +160,12 @@ jobs:
     runs-on: windows-2022
     needs: build-windows
     steps:
+      - name: Configure pagefile
+        uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: "C:"
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Go
@@ -177,6 +189,12 @@ jobs:
     runs-on: windows-2022
     needs: build-windows
     steps:
+      - name: Configure pagefile
+        uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: "C:"
       - uses: brechtm/setup-scoop@v2
         with:
           scoop_update: 'false'
