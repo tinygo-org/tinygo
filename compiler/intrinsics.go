@@ -24,6 +24,8 @@ func (b *builder) defineIntrinsicFunction() {
 		b.createMemoryCopyImpl()
 	case name == "runtime.memzero":
 		b.createMemoryZeroImpl()
+	case name == "runtime.KeepAlive":
+		b.createKeepAliveImpl()
 	case strings.HasPrefix(name, "runtime/volatile.Load"):
 		b.createVolatileLoad()
 	case strings.HasPrefix(name, "runtime/volatile.Store"):
@@ -84,6 +86,29 @@ func (b *builder) createMemoryZeroImpl() {
 		llvm.ConstInt(b.ctx.Int1Type(), 0, false),
 	}
 	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
+	b.CreateRetVoid()
+}
+
+// createKeepAlive creates the runtime.KeepAlive function. It is implemented
+// using inline assembly.
+func (b *builder) createKeepAliveImpl() {
+	b.createFunctionStart(true)
+
+	// Get the underlying value of the interface value.
+	interfaceValue := b.getValue(b.fn.Params[0])
+	pointerValue := b.CreateExtractValue(interfaceValue, 1, "")
+
+	// Create an equivalent of the following C code, which is basically just a
+	// nop but ensures the pointerValue is kept alive:
+	//
+	//     __asm__ __volatile__("" : : "r"(pointerValue))
+	//
+	// It should be portable to basically everything as the "r" register type
+	// exists basically everywhere.
+	asmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.i8ptrType}, false)
+	asmFn := llvm.InlineAsm(asmType, "", "r", true, false, 0, false)
+	b.createCall(asmType, asmFn, []llvm.Value{pointerValue}, "")
+
 	b.CreateRetVoid()
 }
 
