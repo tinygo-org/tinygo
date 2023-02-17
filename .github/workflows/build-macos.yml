@@ -29,11 +29,11 @@ jobs:
         with:
           go-version: '1.20'
           cache: true
-      - name: Cache LLVM source
-        uses: actions/cache@v3
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-macos-v2
+          key: llvm-source-15-macos-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -43,11 +43,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v3
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-macos-v3
+          key: llvm-build-15-macos-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -61,6 +72,12 @@ jobs:
           # build!
           make llvm-build
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache wasi-libc sysroot
         uses: actions/cache@v3
         id: cache-wasi-libc

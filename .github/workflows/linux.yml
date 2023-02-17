@@ -39,11 +39,11 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-      - name: Cache LLVM source
-        uses: actions/cache@v3
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-alpine-v2
+          key: llvm-source-15-linux-alpine-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -53,11 +53,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v3
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-alpine-v3
+          key: llvm-build-15-linux-alpine-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -71,6 +82,12 @@ jobs:
           make llvm-build
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache Binaryen
         uses: actions/cache@v3
         id: cache-binaryen
@@ -168,11 +185,11 @@ jobs:
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-      - name: Cache LLVM source
-        uses: actions/cache@v3
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-asserts-v2
+          key: llvm-source-15-linux-asserts-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -182,11 +199,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v3
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-asserts-v3
+          key: llvm-build-15-linux-asserts-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -198,6 +226,12 @@ jobs:
           make llvm-build ASSERT=1
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache Binaryen
         uses: actions/cache@v3
         id: cache-binaryen
@@ -254,11 +288,11 @@ jobs:
         with:
           go-version: '1.20'
           cache: true
-      - name: Cache LLVM source
-        uses: actions/cache@v3
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-v2
+          key: llvm-source-15-linux-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -268,11 +302,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v3
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-arm-v3
+          key: llvm-build-15-linux-arm-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -286,6 +331,12 @@ jobs:
           make llvm-build CROSS=arm-linux-gnueabihf
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache Binaryen
         uses: actions/cache@v3
         id: cache-binaryen
@@ -354,11 +405,11 @@ jobs:
         with:
           go-version: '1.20'
           cache: true
-      - name: Cache LLVM source
-        uses: actions/cache@v3
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-v2
+          key: llvm-source-15-linux-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -368,11 +419,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v3
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-linux-arm64-v3
+          key: llvm-build-15-linux-arm64-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -384,6 +446,12 @@ jobs:
           make llvm-build CROSS=aarch64-linux-gnu
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache Binaryen
         uses: actions/cache@v3
         id: cache-binaryen
