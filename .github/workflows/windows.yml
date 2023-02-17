@@ -41,7 +41,7 @@ jobs:
         uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-windows-v3
+          key: llvm-source-15-windows-v4
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -53,7 +53,7 @@ jobs:
         run: make llvm-source
       - name: Save cached LLVM source
         uses: actions/cache/save@v3
-        if: always()
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
           path: |
@@ -66,7 +66,7 @@ jobs:
         uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-15-windows-v4
+          key: llvm-build-15-windows-v5
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -81,7 +81,7 @@ jobs:
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save cached LLVM build
         uses: actions/cache/save@v3
-        if: always()
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
