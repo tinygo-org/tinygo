@@ -1,5 +1,7 @@
 package main
 
+import "runtime"
+
 var xorshift32State uint32 = 1
 
 func xorshift32(x uint32) uint32 {
@@ -17,6 +19,7 @@ func randuint32() uint32 {
 
 func main() {
 	testNonPointerHeap()
+	testKeepAlive()
 }
 
 var scalarSlices [4][]byte
@@ -63,4 +66,11 @@ func testNonPointerHeap() {
 		}
 	}
 	println("ok")
+}
+
+func testKeepAlive() {
+	// There isn't much we can test, but at least we can test that
+	// runtime.KeepAlive compiles correctly.
+	var x int
+	runtime.KeepAlive(&x)
 }
