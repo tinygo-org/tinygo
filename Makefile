@@ -309,6 +309,7 @@ TEST_PACKAGES_FAST = \
 	math \
 	math/cmplx \
 	net \
+	net/http/internal \
 	net/http/internal/ascii \
 	net/mail \
 	os \
