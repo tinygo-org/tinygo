@@ -88,12 +88,9 @@ func LockOSThread() {
 func UnlockOSThread() {
 }
 
-func KeepAlive(x interface{}) {
-	// Unimplemented.
-	// TODO: This function needs to be implemented in a way that LLVM doesn't optimize away the x
-	// parameter. This will likely need either a volatile operation or calling an assembly stub
-	// that simply returns.
-}
+// KeepAlive makes sure the value in the interface is alive until at least the
+// point of the call.
+func KeepAlive(x interface{})
 
 var godebugUpdate func(string, string)
 
