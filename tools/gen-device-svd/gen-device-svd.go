@@ -90,9 +90,10 @@ type SVDCluster struct {
 }
 
 type Device struct {
-	Metadata    *Metadata
-	Interrupts  []*Interrupt
-	Peripherals []*Peripheral
+	Metadata       *Metadata
+	Interrupts     []*Interrupt
+	Peripherals    []*Peripheral
+	PeripheralDict map[string]*Peripheral
 }
 
 type Metadata struct {
@@ -189,6 +190,142 @@ func cleanName(text string) string {
 		text = "_" + text
 	}
 	return text
+}
+
+func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64, clusterName string, peripheralDict map[string]*Peripheral) []*Peripheral {
+	var peripheralsList []*Peripheral
+	clusterPrefix := clusterName + "_"
+	cpRegisters := []*PeripheralField{}
+
+	for _, regEl := range cluster.Registers {
+		cpRegisters = append(cpRegisters, parseRegister(p.GroupName, regEl, p.BaseAddress+clusterOffset, clusterPrefix)...)
+	}
+	// handle sub-clusters of registers
+	for _, subClusterEl := range cluster.Clusters {
+		subclusterName := strings.ReplaceAll(subClusterEl.Name, "[%s]", "")
+		subclusterPrefix := subclusterName + "_"
+		subclusterOffset, err := strconv.ParseUint(subClusterEl.AddressOffset, 0, 32)
+		if err != nil {
+			panic(err)
+		}
+		subdim := *subClusterEl.Dim
+		subdimIncrement, err := strconv.ParseInt(subClusterEl.DimIncrement, 0, 32)
+		if err != nil {
+			panic(err)
+		}
+
+		if subdim > 1 {
+			subcpRegisters := []*PeripheralField{}
+			for _, regEl := range subClusterEl.Registers {
+				subcpRegisters = append(subcpRegisters, parseRegister(p.GroupName, regEl, p.BaseAddress+clusterOffset+subclusterOffset, subclusterPrefix)...)
+			}
+
+			cpRegisters = append(cpRegisters, &PeripheralField{
+				Name:        subclusterName,
+				Address:     p.BaseAddress + clusterOffset + subclusterOffset,
+				Description: subClusterEl.Description,
+				Registers:   subcpRegisters,
+				Array:       subdim,
+				ElementSize: int(subdimIncrement),
+				ShortName:   clusterPrefix + subclusterName,
+			})
+		} else {
+			for _, regEl := range subClusterEl.Registers {
+				cpRegisters = append(cpRegisters, parseRegister(regEl.Name, regEl, p.BaseAddress+clusterOffset+subclusterOffset, subclusterPrefix)...)
+			}
+		}
+	}
+
+	sort.SliceStable(cpRegisters, func(i, j int) bool {
+		return cpRegisters[i].Address < cpRegisters[j].Address
+	})
+	clusterPeripheral := &Peripheral{
+		Name:        p.Name + "_" + clusterName,
+		GroupName:   p.GroupName + "_" + clusterName,
+		Description: p.Description + " - " + clusterName,
+		ClusterName: clusterName,
+		BaseAddress: p.BaseAddress + clusterOffset,
+		Registers:   cpRegisters,
+	}
+	peripheralsList = append(peripheralsList, clusterPeripheral)
+	peripheralDict[clusterPeripheral.Name] = clusterPeripheral
+	p.Subtypes = append(p.Subtypes, clusterPeripheral)
+
+	return peripheralsList
+}
+
+func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[string]*Peripheral) []*Peripheral {
+	var peripheralsList []*Peripheral
+	for _, cluster := range clusters {
+		clusterName := strings.ReplaceAll(cluster.Name, "[%s]", "")
+		if cluster.DimIndex != nil {
+			clusterName = strings.ReplaceAll(clusterName, "%s", "")
+		}
+		clusterPrefix := clusterName + "_"
+		clusterOffset, err := strconv.ParseUint(cluster.AddressOffset, 0, 32)
+		if err != nil {
+			panic(err)
+		}
+		var dim, dimIncrement int
+		if cluster.Dim == nil {
+			// Nordic SVD have sub-clusters with another sub-clusters.
+			if clusterOffset == 0 || len(cluster.Clusters) > 0 {
+				peripheralsList = append(peripheralsList, processSubCluster(p, cluster, clusterOffset, clusterName, peripheralDict)...)
+				continue
+			}
+			dim = -1
+			dimIncrement = -1
+		} else {
+			dim = *cluster.Dim
+			if dim == 1 {
+				dimIncrement = -1
+			} else {
+				inc, err := strconv.ParseUint(cluster.DimIncrement, 0, 32)
+				if err != nil {
+					panic(err)
+				}
+				dimIncrement = int(inc)
+			}
+		}
+		clusterRegisters := []*PeripheralField{}
+		for _, regEl := range cluster.Registers {
+			regName := p.GroupName
+			if regName == "" {
+				regName = p.Name
+			}
+			clusterRegisters = append(clusterRegisters, parseRegister(regName, regEl, p.BaseAddress+clusterOffset, clusterPrefix)...)
+		}
+		sort.SliceStable(clusterRegisters, func(i, j int) bool {
+			return clusterRegisters[i].Address < clusterRegisters[j].Address
+		})
+		if dimIncrement == -1 && len(clusterRegisters) > 0 {
+			lastReg := clusterRegisters[len(clusterRegisters)-1]
+			lastAddress := lastReg.Address
+			if lastReg.Array != -1 {
+				lastAddress = lastReg.Address + uint64(lastReg.Array*lastReg.ElementSize)
+			}
+			firstAddress := clusterRegisters[0].Address
+			dimIncrement = int(lastAddress - firstAddress)
+		}
+
+		if !unicode.IsUpper(rune(clusterName[0])) && !unicode.IsDigit(rune(clusterName[0])) {
+			clusterName = strings.ToUpper(clusterName)
+		}
+
+		p.Registers = append(p.Registers, &PeripheralField{
+			Name:        clusterName,
+			Address:     p.BaseAddress + clusterOffset,
+			Description: cluster.Description,
+			Registers:   clusterRegisters,
+			Array:       dim,
+			ElementSize: dimIncrement,
+			ShortName:   clusterName,
+		})
+	}
+	sort.SliceStable(p.Registers, func(i, j int) bool {
+		return p.Registers[i].Address < p.Registers[j].Address
+	})
+	return peripheralsList
 }
 
 // Read ARM SVD files.
@@ -293,133 +430,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 			}
 			p.Registers = append(p.Registers, parseRegister(regName, register, baseAddress, "")...)
 		}
-		for _, cluster := range periphEl.Clusters {
-			clusterName := strings.ReplaceAll(cluster.Name, "[%s]", "")
-			if cluster.DimIndex != nil {
-				clusterName = strings.ReplaceAll(clusterName, "%s", "")
-			}
-			clusterPrefix := clusterName + "_"
-			clusterOffset, err := strconv.ParseUint(cluster.AddressOffset, 0, 32)
-			if err != nil {
-				panic(err)
-			}
-			var dim, dimIncrement int
-			if cluster.Dim == nil {
-				if clusterOffset == 0 {
-					// make this a separate peripheral
-					cpRegisters := []*PeripheralField{}
-					for _, regEl := range cluster.Registers {
-						cpRegisters = append(cpRegisters, parseRegister(groupName, regEl, baseAddress, clusterName+"_")...)
-					}
-					// handle sub-clusters of registers
-					for _, subClusterEl := range cluster.Clusters {
-						subclusterName := strings.ReplaceAll(subClusterEl.Name, "[%s]", "")
-						subclusterPrefix := subclusterName + "_"
-						subclusterOffset, err := strconv.ParseUint(subClusterEl.AddressOffset, 0, 32)
-						if err != nil {
-							panic(err)
-						}
-						subdim := *subClusterEl.Dim
-						subdimIncrement, err := strconv.ParseInt(subClusterEl.DimIncrement, 0, 32)
-						if err != nil {
-							panic(err)
-						}
-
-						if subdim > 1 {
-							subcpRegisters := []*PeripheralField{}
-							subregSize := 0
-							for _, regEl := range subClusterEl.Registers {
-								size, err := strconv.ParseInt(*regEl.Size, 0, 32)
-								if err != nil {
-									panic(err)
-								}
-								subregSize += int(size)
-								subcpRegisters = append(subcpRegisters, parseRegister(groupName, regEl, baseAddress+subclusterOffset, subclusterPrefix)...)
-							}
-							cpRegisters = append(cpRegisters, &PeripheralField{
-								Name:        subclusterName,
-								Address:     baseAddress + subclusterOffset,
-								Description: subClusterEl.Description,
-								Registers:   subcpRegisters,
-								Array:       subdim,
-								ElementSize: int(subdimIncrement),
-								ShortName:   clusterPrefix + subclusterName,
-							})
-						} else {
-							for _, regEl := range subClusterEl.Registers {
-								cpRegisters = append(cpRegisters, parseRegister(regEl.Name, regEl, baseAddress+subclusterOffset, subclusterPrefix)...)
-							}
-						}
-					}
-
-					sort.SliceStable(cpRegisters, func(i, j int) bool {
-						return cpRegisters[i].Address < cpRegisters[j].Address
-					})
-					clusterPeripheral := &Peripheral{
-						Name:        periphEl.Name + "_" + clusterName,
-						GroupName:   groupName + "_" + clusterName,
-						Description: description + " - " + clusterName,
-						ClusterName: clusterName,
-						BaseAddress: baseAddress,
-						Registers:   cpRegisters,
-					}
-					peripheralsList = append(peripheralsList, clusterPeripheral)
-					peripheralDict[clusterPeripheral.Name] = clusterPeripheral
-					p.Subtypes = append(p.Subtypes, clusterPeripheral)
-					continue
-				}
-				dim = -1
-				dimIncrement = -1
-			} else {
-				dim = *cluster.Dim
-				if dim == 1 {
-					dimIncrement = -1
-				} else {
-					inc, err := strconv.ParseUint(cluster.DimIncrement, 0, 32)
-					if err != nil {
-						panic(err)
-					}
-					dimIncrement = int(inc)
-				}
-			}
-			clusterRegisters := []*PeripheralField{}
-			for _, regEl := range cluster.Registers {
-				regName := groupName
-				if regName == "" {
-					regName = periphEl.Name
-				}
-				clusterRegisters = append(clusterRegisters, parseRegister(regName, regEl, baseAddress+clusterOffset, clusterPrefix)...)
-			}
-			sort.SliceStable(clusterRegisters, func(i, j int) bool {
-				return clusterRegisters[i].Address < clusterRegisters[j].Address
-			})
-			if dimIncrement == -1 && len(clusterRegisters) > 0 {
-				lastReg := clusterRegisters[len(clusterRegisters)-1]
-				lastAddress := lastReg.Address
-				if lastReg.Array != -1 {
-					lastAddress = lastReg.Address + uint64(lastReg.Array*lastReg.ElementSize)
-				}
-				firstAddress := clusterRegisters[0].Address
-				dimIncrement = int(lastAddress - firstAddress)
-			}
-
-			if !unicode.IsUpper(rune(clusterName[0])) && !unicode.IsDigit(rune(clusterName[0])) {
-				clusterName = strings.ToUpper(clusterName)
-			}
-
-			p.Registers = append(p.Registers, &PeripheralField{
-				Name:        clusterName,
-				Address:     baseAddress + clusterOffset,
-				Description: cluster.Description,
-				Registers:   clusterRegisters,
-				Array:       dim,
-				ElementSize: dimIncrement,
-				ShortName:   clusterName,
-			})
-		}
-		sort.SliceStable(p.Registers, func(i, j int) bool {
-			return p.Registers[i].Address < p.Registers[j].Address
-		})
+		peripheralsList = append(peripheralsList, processCluster(p, periphEl.Clusters, peripheralDict)...)
 	}
 
 	// Make a sorted list of interrupts.
@@ -459,9 +470,10 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		metadata.NVICPrioBits = device.CPU.NVICPrioBits
 	}
 	return &Device{
-		Metadata:    metadata,
-		Interrupts:  interruptList,
-		Peripherals: peripheralsList,
+		Metadata:       metadata,
+		Interrupts:     interruptList,
+		Peripherals:    peripheralsList,
+		PeripheralDict: peripheralDict,
 	}, nil
 }
 
@@ -979,10 +991,11 @@ var (
 
 		address := peripheral.BaseAddress
 		type clusterInfo struct {
-			name      string
-			address   uint64
-			size      uint64
-			registers []*PeripheralField
+			name        string
+			description string
+			address     uint64
+			size        uint64
+			registers   []*PeripheralField
 		}
 		clusters := []clusterInfo{}
 		for _, register := range peripheral.Registers {
@@ -1024,7 +1037,7 @@ var (
 			if register.Registers != nil {
 				// This is a cluster, not a register. Create the cluster type.
 				regType = peripheral.GroupName + "_" + register.Name
-				clusters = append(clusters, clusterInfo{regType, register.Address, uint64(register.ElementSize), register.Registers})
+				clusters = append(clusters, clusterInfo{regType, register.Description, register.Address, uint64(register.ElementSize), register.Registers})
 				regType = regType + "_Type"
 				subaddress := register.Address
 				for _, subregister := range register.Registers {
@@ -1075,7 +1088,16 @@ var (
 				continue
 			}
 
+			if _, ok := device.PeripheralDict[cluster.name]; ok {
+				continue
+			}
+
 			fmt.Fprintln(w)
+			if cluster.description != "" {
+				for _, l := range splitLine(cluster.description) {
+					fmt.Fprintf(w, "// %s\n", l)
+				}
+			}
 			fmt.Fprintf(w, "type %s_Type struct {\n", cluster.name)
 
 			address := cluster.address
@@ -1116,7 +1138,7 @@ var (
 				if register.Registers != nil {
 					// This is a cluster, not a register. Create the cluster type.
 					regType = peripheral.GroupName + "_" + register.Name
-					clusters = append(clusters, clusterInfo{regType, register.Address, uint64(register.ElementSize), register.Registers})
+					clusters = append(clusters, clusterInfo{regType, register.Description, register.Address, uint64(register.ElementSize), register.Registers})
 					regType = regType + "_Type"
 
 					subaddress := register.Address
