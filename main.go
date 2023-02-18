@@ -644,7 +644,7 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 	case "qemu-user":
 		port = ":1234"
 		// Run in an emulator.
-		args := append(emulator[1:], "-g", "1234")
+		args := append([]string{"-g", "1234"}, emulator[1:]...)
 		daemon = executeCommand(config.Options, emulator[0], args...)
 		daemon.Stdout = os.Stdout
 		daemon.Stderr = os.Stderr
