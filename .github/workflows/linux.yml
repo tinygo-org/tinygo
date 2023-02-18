@@ -52,7 +52,7 @@ jobs:
             llvm-project/llvm/include
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
+        run: make llvm-source -j2
       - name: Save LLVM source cache
         uses: actions/cache/save@v3
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
@@ -75,11 +75,11 @@ jobs:
         run: |
           # fetch LLVM source
           rm -rf llvm-project
-          make llvm-source
+          make llvm-source -j2
           # install dependencies
           apk add cmake samurai python3
           # build!
-          make llvm-build
+          make llvm-build -j2
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
@@ -98,7 +98,7 @@ jobs:
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: |
           apk add cmake samurai python3
-          make binaryen STATIC=1
+          make binaryen -j2 STATIC=1
       - name: Cache wasi-libc
         uses: actions/cache@v3
         id: cache-wasi-libc
@@ -107,7 +107,7 @@ jobs:
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
-        run: make wasi-libc
+        run: make wasi-libc -j2
       - name: Install fpm
         run: |
           gem install --version 4.0.7 public_suffix
@@ -115,7 +115,7 @@ jobs:
           gem install --no-document fpm
       - name: Build TinyGo release
         run: |
-          make release deb -j3 STATIC=1
+          make release deb -j2 STATIC=1
           cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_amd64.deb
       - name: Publish release artifact
@@ -152,8 +152,8 @@ jobs:
           mkdir -p ~/lib
           tar -C ~/lib -xf tinygo.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
-      - run: make tinygo-test-wasi-fast
-      - run: make smoketest
+      - run: make tinygo-test-wasi-fast -j2
+      - run: make smoketest -j2
   assert-test-linux:
     # Run all tests that can run on Linux, with LLVM assertions enabled to catch
     # potential bugs.
@@ -202,7 +202,7 @@ jobs:
             llvm-project/llvm/include
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
+        run: make llvm-source -j2
       - name: Save LLVM source cache
         uses: actions/cache/save@v3
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
@@ -225,9 +225,9 @@ jobs:
         run: |
           # fetch LLVM source
           rm -rf llvm-project
-          make llvm-source
+          make llvm-source -j2
           # build!
-          make llvm-build ASSERT=1
+          make llvm-build -j2 ASSERT=1
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
@@ -244,7 +244,7 @@ jobs:
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
-        run: make binaryen
+        run: make binaryen -j2
       - name: Cache wasi-libc
         uses: actions/cache@v3
         id: cache-wasi-libc
@@ -253,19 +253,19 @@ jobs:
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
-        run: make wasi-libc
-      - run: make gen-device -j4
+        run: make wasi-libc -j2
+      - run: make gen-device -j2
       - name: Test TinyGo
-        run: make ASSERT=1 test
+        run: make ASSERT=1 test -j2
       - name: Build TinyGo
         run: |
-          make ASSERT=1
+          make -j2 ASSERT=1
           echo "$(pwd)/build" >> $GITHUB_PATH
       - name: Test stdlib packages
-        run: make tinygo-test
-      - run: make smoketest
-      - run: make wasmtest
-      - run: make tinygo-baremetal
+        run: make tinygo-test -j2
+      - run: make smoketest -j2
+      - run: make wasmtest -j2
+      - run: make tinygo-baremetal -j2
   build-linux-arm:
     # Build ARM Linux binaries, ready for release.
     # This intentionally uses an older Linux image, so that we compile against
@@ -305,7 +305,7 @@ jobs:
             llvm-project/llvm/include
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
+        run: make llvm-source -j2
       - name: Save LLVM source cache
         uses: actions/cache/save@v3
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
@@ -328,11 +328,11 @@ jobs:
         run: |
           # fetch LLVM source
           rm -rf llvm-project
-          make llvm-source
+          make llvm-source -j2
           # Install build dependencies.
           sudo apt-get install --no-install-recommends ninja-build
           # build!
-          make llvm-build CROSS=arm-linux-gnueabihf
+          make llvm-build -j2 CROSS=arm-linux-gnueabihf
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
@@ -352,7 +352,7 @@ jobs:
         run: |
           sudo apt-get install --no-install-recommends ninja-build
           git submodule update --init lib/binaryen
-          make CROSS=arm-linux-gnueabihf binaryen
+          make CROSS=arm-linux-gnueabihf binaryen -j2
       - name: Install fpm
         run: |
           sudo gem install --version 4.0.7 public_suffix
@@ -360,7 +360,7 @@ jobs:
           sudo gem install --no-document fpm
       - name: Build TinyGo binary
         run: |
-          make CROSS=arm-linux-gnueabihf
+          make -j2 CROSS=arm-linux-gnueabihf
       - name: Download amd64 release
         uses: actions/download-artifact@v3
         with:
@@ -375,7 +375,7 @@ jobs:
           cp -p build/wasm-opt build/release/tinygo/bin
       - name: Create arm release
         run: |
-          make release deb RELEASEONLY=1 DEB_ARCH=armhf
+          make release deb -j2 RELEASEONLY=1 DEB_ARCH=armhf
           cp -p build/release.tar.gz /tmp/tinygo.linux-arm.tar.gz
           cp -p build/release.deb    /tmp/tinygo_armhf.deb
       - name: Publish release artifact
@@ -422,7 +422,7 @@ jobs:
             llvm-project/llvm/include
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
+        run: make llvm-source -j2
       - name: Save LLVM source cache
         uses: actions/cache/save@v3
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
@@ -445,9 +445,9 @@ jobs:
         run: |
           # fetch LLVM source
           rm -rf llvm-project
-          make llvm-source
+          make llvm-source -j2
           # build!
-          make llvm-build CROSS=aarch64-linux-gnu
+          make llvm-build -j2 CROSS=aarch64-linux-gnu
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
@@ -466,7 +466,7 @@ jobs:
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: |
           git submodule update --init lib/binaryen
-          make CROSS=aarch64-linux-gnu binaryen
+          make CROSS=aarch64-linux-gnu binaryen -j2
       - name: Install fpm
         run: |
           sudo gem install --version 4.0.7 public_suffix
@@ -474,7 +474,7 @@ jobs:
           sudo gem install --no-document fpm
       - name: Build TinyGo binary
         run: |
-          make CROSS=aarch64-linux-gnu
+          make CROSS=aarch64-linux-gnu -j2
       - name: Download amd64 release
         uses: actions/download-artifact@v3
         with:
@@ -489,7 +489,7 @@ jobs:
           cp -p build/wasm-opt build/release/tinygo/bin
       - name: Create arm64 release
         run: |
-          make release deb RELEASEONLY=1 DEB_ARCH=arm64
+          make release deb -j2 RELEASEONLY=1 DEB_ARCH=arm64
           cp -p build/release.tar.gz /tmp/tinygo.linux-arm64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_arm64.deb
       - name: Publish release artifact

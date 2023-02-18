@@ -42,7 +42,7 @@ jobs:
             llvm-project/llvm/include
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
+        run: make llvm-source -j3
       - name: Save LLVM source cache
         uses: actions/cache/save@v3
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
@@ -66,11 +66,11 @@ jobs:
         run: |
           # fetch LLVM source
           rm -rf llvm-project
-          make llvm-source
+          make llvm-source -j3
           # install dependencies
           HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
           # build!
-          make llvm-build
+          make llvm-build -j3
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
         uses: actions/cache/save@v3
@@ -86,14 +86,14 @@ jobs:
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
-        run: make wasi-libc
+        run: make wasi-libc -j3
       - name: Test TinyGo
         shell: bash
-        run: make test GOTESTFLAGS="-v -short"
+        run: make test -j3 GOTESTFLAGS="-v -short"
       - name: Build TinyGo release tarball
         run: make release -j3
       - name: Test stdlib packages
-        run: make tinygo-test
+        run: make tinygo-test -j3
       - name: Make release artifact
         shell: bash
         run: cp -p build/release.tar.gz build/tinygo.darwin-amd64.tar.gz 
@@ -110,7 +110,7 @@ jobs:
           path: build/tinygo.darwin-amd64.tar.gz
       - name: Smoke tests
         shell: bash
-        run: make smoketest TINYGO=$(PWD)/build/tinygo
+        run: make smoketest -j3 TINYGO=$(PWD)/build/tinygo
   test-macos-homebrew:
     name: homebrew-install
     runs-on: macos-latest

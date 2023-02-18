@@ -50,7 +50,7 @@ jobs:
             llvm-project/llvm/include
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
+        run: make llvm-source -j2
       - name: Save cached LLVM source
         uses: actions/cache/save@v3
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
@@ -74,9 +74,9 @@ jobs:
         run: |
           # fetch LLVM source
           rm -rf llvm-project
-          make llvm-source
+          make llvm-source -j2
           # build!
-          make llvm-build CCACHE=OFF
+          make llvm-build -j2 CCACHE=OFF
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save cached LLVM build
@@ -93,16 +93,16 @@ jobs:
           path: lib/wasi-libc/sysroot
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
-        run: make wasi-libc
+        run: make wasi-libc -j2
       - name: Install wasmtime
         run: |
           scoop install wasmtime
       - name: Test TinyGo
         shell: bash
-        run: make test GOTESTFLAGS="-v -short"
+        run: make test -j2 GOTESTFLAGS="-v -short"
       - name: Build TinyGo release tarball
         shell: bash
-        run: make build/release -j4
+        run: make build/release -j2
       - name: Make release artifact
         shell: bash
         working-directory: build/release
@@ -154,7 +154,7 @@ jobs:
         run: 7z x release.zip -r
       - name: Smoke tests
         shell: bash
-        run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo
+        run: make smoketest -j2 TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-test-windows:
     runs-on: windows-2022
@@ -183,7 +183,7 @@ jobs:
         working-directory: build
         run: 7z x release.zip -r
       - name: Test stdlib packages
-        run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
+        run: make tinygo-test -j2 TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-wasi-test-windows:
     runs-on: windows-2022
@@ -219,4 +219,4 @@ jobs:
         working-directory: build
         run: 7z x release.zip -r
       - name: Test stdlib packages on wasi
-        run: make tinygo-test-wasi-fast TINYGO=$(PWD)/build/tinygo/bin/tinygo
+        run: make tinygo-test-wasi-fast -j2 TINYGO=$(PWD)/build/tinygo/bin/tinygo
