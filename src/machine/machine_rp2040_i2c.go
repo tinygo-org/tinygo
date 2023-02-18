@@ -57,6 +57,8 @@ var (
 	ErrInvalidTgtAddr     = errors.New("invalid target i2c address not in 0..0x80 or is reserved")
 	ErrI2CGeneric         = errors.New("i2c error")
 	ErrRP2040I2CDisable   = errors.New("i2c rp2040 peripheral timeout in disable")
+	errInvalidI2CSDA      = errors.New("invalid I2C SDA pin")
+	errInvalidI2CSCL      = errors.New("invalid I2C SCL pin")
 )
 
 // Tx performs a write and then a read transfer placing the result in
@@ -110,10 +112,11 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 		okSDA = (config.SDA+2)%4 == 0
 		okSCL = (config.SCL+3)%4 == 0
 	}
+
 	if !okSDA {
-		return errors.New("invalid I2C SDA pin")
+		return errInvalidI2CSDA
 	} else if !okSCL {
-		return errors.New("invalid I2C SCL pin")
+		return errInvalidI2CSCL
 	}
 	if config.Frequency == 0 {
 		config.Frequency = defaultBaud

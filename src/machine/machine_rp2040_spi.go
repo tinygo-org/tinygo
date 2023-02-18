@@ -40,6 +40,9 @@ var (
 	ErrLSBNotSupported = errors.New("SPI LSB unsupported on PL022")
 	ErrSPITimeout      = errors.New("SPI timeout")
 	ErrSPIBaud         = errors.New("SPI baud too low or above 66.5Mhz")
+	errSPIInvalidSDI   = errors.New("invalid SPI SDI pin")
+	errSPIInvalidSDO   = errors.New("invalid SPI SDO pin")
+	errSPIInvalidSCK   = errors.New("invalid SPI SCK pin")
 )
 
 type SPI struct {
@@ -186,12 +189,13 @@ func (spi SPI) Configure(config SPIConfig) error {
 		okSDO = config.SDO == 11 || config.SDO == 15
 		okSDO = config.SCK == 10 || config.SCK == 14
 	}
+
 	if !okSDI {
-		return errors.New("invalid SPI SDI pin")
+		return errSPIInvalidSDI
 	} else if !okSDO {
-		return errors.New("invalid SPI SDO pin")
+		return errSPIInvalidSDO
 	} else if !okSCK {
-		return errors.New("invalid SPI SCK pin")
+		return errSPIInvalidSCK
 	}
 	if config.DataBits < 4 || config.DataBits > 16 {
 		config.DataBits = 8
