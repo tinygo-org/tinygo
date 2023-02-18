@@ -139,7 +139,9 @@ jobs:
           cache: true
       - name: Install wasmtime
         run: |
-          curl https://wasmtime.dev/install.sh -sSf | bash
+          mkdir -p $HOME/.wasmtime $HOME/.wasmtime/bin
+          curl https://github.com/bytecodealliance/wasmtime/releases/download/v5.0.0/wasmtime-v5.0.0-x86_64-linux.tar.xz -o wasmtime-v5.0.0-x86_64-linux.tar.xz -SfL
+          tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v5.0.0-x86_64-linux.tar.xz --strip-components=1 wasmtime-v5.0.0-x86_64-linux/*
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Download release artifact
         uses: actions/download-artifact@v3
@@ -183,7 +185,9 @@ jobs:
           node-version: '14'
       - name: Install wasmtime
         run: |
-          curl https://wasmtime.dev/install.sh -sSf | bash
+          mkdir -p $HOME/.wasmtime $HOME/.wasmtime/bin
+          curl -L https://github.com/bytecodealliance/wasmtime/releases/download/v5.0.0/wasmtime-v5.0.0-x86_64-linux.tar.xz -o wasmtime-v5.0.0-x86_64-linux.tar.xz -SfL
+          tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v5.0.0-x86_64-linux.tar.xz --strip-components=1 wasmtime-v5.0.0-x86_64-linux/*
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v3
