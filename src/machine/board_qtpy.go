@@ -29,7 +29,7 @@ const (
 
 // Analog pins
 const (
-	A0 = D1
+	A0 = D0
 	A1 = D1
 	A2 = D2
 	A3 = D3
