@@ -296,7 +296,7 @@ jobs:
         uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-v3
+          key: llvm-source-15-linux-arm-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -413,7 +413,7 @@ jobs:
         uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-15-linux-v3
+          key: llvm-source-15-linux-arm64-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
