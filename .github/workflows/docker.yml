@@ -69,21 +69,31 @@ jobs:
           -H "Accept: application/vnd.github.v3+json" \
           https://api.github.com/repos/tinygo-org/bluetooth/actions/workflows/linux.yml/dispatches \
           -d '{"ref": "dev"}'
-      - name: Trigger TinyFS repo build on CircleCI
+      - name: Trigger TinyFS repo build on Github Actions
         run: |
-          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinyfs/pipeline' \
-            --header 'Content-Type: application/json' \
-            -d '{"branch": "dev"}' \
-            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
-      - name: Trigger TinyFont repo build on CircleCI
+          curl -X POST \
+          -H "Authorization: Bearer ${{secrets.GHA_ACCESS_TOKEN}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/tinygo-org/tinyfs/actions/workflows/build.yml/dispatches \
+          -d '{"ref": "dev"}'
+      - name: Trigger TinyFont repo build on Github Actions
         run: |
-          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinyfont/pipeline' \
-            --header 'Content-Type: application/json' \
-            -d '{"branch": "dev"}' \
-            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
-      - name: Trigger TinyDraw repo build on CircleCI
+          curl -X POST \
+          -H "Authorization: Bearer ${{secrets.GHA_ACCESS_TOKEN}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/tinygo-org/tinyfont/actions/workflows/build.yml/dispatches \
+          -d '{"ref": "dev"}'
+      - name: Trigger TinyDraw repo build on Github Actions
         run: |
-          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinydraw/pipeline' \
-            --header 'Content-Type: application/json' \
-            -d '{"branch": "dev"}' \
-            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
+          curl -X POST \
+          -H "Authorization: Bearer ${{secrets.GHA_ACCESS_TOKEN}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/tinygo-org/tinydraw/actions/workflows/build.yml/dispatches \
+          -d '{"ref": "dev"}'
+      - name: Trigger TinyTerm repo build on Github Actions
+        run: |
+          curl -X POST \
+          -H "Authorization: Bearer ${{secrets.GHA_ACCESS_TOKEN}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/tinygo-org/tinyterm/actions/workflows/build.yml/dispatches \
+          -d '{"ref": "dev"}'
