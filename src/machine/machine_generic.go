@@ -1,4 +1,4 @@
-//go:build !baremetal
+//go:build !baremetal && !raspberrypi
 
 package machine
 

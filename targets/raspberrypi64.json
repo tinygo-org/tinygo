@@ -1,0 +1,13 @@
+{
+	"llvm-target":   "aarch64-unknown-linux",
+
+	"build-tags":    ["raspberrypi"],
+	"goos":          "linux",
+	"goarch":        "arm64",
+	"linker": "ld.lld",
+	"libc": "musl",
+	"rtlib": "compiler-rt",
+	"extra-files": [
+		"src/runtime/asm_arm64.S"
+	]
+}

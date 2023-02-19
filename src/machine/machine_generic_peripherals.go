@@ -1,4 +1,4 @@
-//go:build !baremetal && !arduino_mkr1000 && !arduino_mkrwifi1010 && !arduino_nano33 && !arduino_zero && !circuitplay_express && !feather_m0 && !feather_m4 && !grandcentral_m4 && !itsybitsy_m0 && !itsybitsy_m4 && !matrixportal_m4 && !metro_m4_airlift && !p1am_100 && !pybadge && !pygamer && !pyportal && !qtpy && !trinket_m0 && !wioterminal && !xiao
+//go:build !baremetal && !raspberrypi && !arduino_mkr1000 && !arduino_mkrwifi1010 && !arduino_nano33 && !arduino_zero && !circuitplay_express && !feather_m0 && !feather_m4 && !grandcentral_m4 && !itsybitsy_m0 && !itsybitsy_m4 && !matrixportal_m4 && !metro_m4_airlift && !p1am_100 && !pybadge && !pygamer && !pyportal && !qtpy && !trinket_m0 && !wioterminal && !xiao
 
 package machine
 

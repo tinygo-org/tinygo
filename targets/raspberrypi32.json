@@ -1,0 +1,15 @@
+{
+	"llvm-target":   "armv6-unknown-linux",
+
+	"build-tags":    ["raspberrypi"],
+	"goos":          "linux",
+	"goarch":        "arm",
+	"features": "-thumb-mode",
+	"linker": "ld.lld",
+	"libc": "musl",
+	"rtlib": "compiler-rt",
+	"extra-files": [
+
+		"src/runtime/asm_arm.S"
+	]
+}
