@@ -50,11 +50,11 @@ const (
 
 // I2C pins
 const (
-	I2C0_SDA_PIN Pin = D4
-	I2C0_SCL_PIN Pin = D5
+	I2C0_SDA_PIN Pin = D2
+	I2C0_SCL_PIN Pin = D3
 
-	I2C1_SDA_PIN Pin = NoPin
-	I2C1_SCL_PIN Pin = NoPin
+	I2C1_SDA_PIN Pin = D4
+	I2C1_SCL_PIN Pin = D5
 )
 
 // SPI pins
