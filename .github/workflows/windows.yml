@@ -99,7 +99,7 @@ jobs:
           scoop install wasmtime
       - name: Test TinyGo
         shell: bash
-        run: make test GOTESTFLAGS="-v -short"
+        run: make test GOTESTFLAGS="-short"
       - name: Build TinyGo release tarball
         shell: bash
         run: make build/release -j4
