@@ -4,7 +4,6 @@ _tinygo_startTask:
 #else
 .section .text.tinygo_startTask
 .global  tinygo_startTask
-.type    tinygo_startTask, %function
 tinygo_startTask:
 #endif
     .cfi_startproc
@@ -35,7 +34,6 @@ tinygo_startTask:
 #endif
     .cfi_endproc
 #ifndef __MACH__
-.size tinygo_startTask, .-tinygo_startTask
 #endif
 
 
@@ -44,7 +42,6 @@ tinygo_startTask:
 _tinygo_swapTask:
 #else
 .global tinygo_swapTask
-.type tinygo_swapTask, %function
 tinygo_swapTask:
 #endif
     // This function gets the following parameters:
@@ -52,12 +49,16 @@ tinygo_swapTask:
     // x1 = oldStack *uintptr
 
     // Save all callee-saved registers:
-    stp     x19, x20, [sp, #-96]!
+    stp     x19, x20, [sp, #-160]!
     stp     x21, x22, [sp, #16]
     stp     x23, x24, [sp, #32]
     stp     x25, x26, [sp, #48]
     stp     x27, x28, [sp, #64]
     stp     x29, x30, [sp, #80]
+    stp     d8,  d9,  [sp, #96]
+    stp     d10, d11, [sp, #112]
+    stp     d12, d13, [sp, #128]
+    stp     d14, d15, [sp, #144]
 
     // Save the current stack pointer in oldStack.
     mov x8, sp
@@ -67,10 +68,14 @@ tinygo_swapTask:
     mov sp, x0
 
     // Restore stack state and return.
+    ldp     d14, d15, [sp, #144]
+    ldp     d12, d13, [sp, #128]
+    ldp     d10, d11, [sp, #112]
+    ldp     d8, d9, [sp, #96]
     ldp     x29, x30, [sp, #80]
     ldp     x27, x28, [sp, #64]
     ldp     x25, x26, [sp, #48]
     ldp     x23, x24, [sp, #32]
     ldp     x21, x22, [sp, #16]
-    ldp     x19, x20, [sp], #96
+    ldp     x19, x20, [sp], #160
     ret

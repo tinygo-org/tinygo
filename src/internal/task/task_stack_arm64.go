@@ -1,4 +1,4 @@
-//go:build scheduler.tasks && arm64 && !windows
+//go:build scheduler.tasks && arm64
 
 package task
 
@@ -21,8 +21,16 @@ type calleeSavedRegs struct {
 	x27 uintptr
 	x28 uintptr
 	x29 uintptr
+	pc  uintptr // aka x30 aka LR
 
-	pc uintptr // aka x30 aka LR
+	d8  uintptr
+	d9  uintptr
+	d10 uintptr
+	d11 uintptr
+	d12 uintptr
+	d13 uintptr
+	d14 uintptr
+	d15 uintptr
 }
 
 // archInit runs architecture-specific setup for the goroutine startup.

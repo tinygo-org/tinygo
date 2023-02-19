@@ -326,9 +326,9 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	}
 	if goarch != "wasm" {
 		suffix := ""
-		if goos == "windows" {
-			// Windows uses a different calling convention from other operating
-			// systems so we need separate assembly files.
+		if goos == "windows" && goarch == "amd64" {
+			// Windows uses a different calling convention on amd64 from other
+			// operating systems so we need separate assembly files.
 			suffix = "_windows"
 		}
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+goarch+suffix+".S")
