@@ -89,7 +89,7 @@ jobs:
         run: make wasi-libc
       - name: Test TinyGo
         shell: bash
-        run: make test GOTESTFLAGS="-v -short"
+        run: make test GOTESTFLAGS="-short"
       - name: Build TinyGo release tarball
         run: make release -j3
       - name: Test stdlib packages

@@ -30,7 +30,7 @@ GO ?= go
 export GOROOT = $(shell $(GO) env GOROOT)
 
 # Flags to pass to go test.
-GOTESTFLAGS ?= -v
+GOTESTFLAGS ?=
 
 # md5sum binary
 MD5SUM = md5sum
