@@ -278,6 +278,9 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	case "arm64":
 		spec.CPU = "generic"
 		spec.Features = "+neon"
+	case "mips":
+		spec.CPU = "mips32r2"
+		spec.Features = "+mips32r2,-noabicalls"
 	}
 	if goos == "darwin" {
 		spec.Linker = "ld.lld"
@@ -350,6 +353,8 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 				spec.Emulator = "qemu-arm {}"
 			case "arm64":
 				spec.Emulator = "qemu-aarch64 {}"
+			case "mips":
+				spec.Emulator = "qemu-mips {}"
 			}
 		}
 	}

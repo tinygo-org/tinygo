@@ -31,7 +31,7 @@ func (b *builder) supportsRecover() bool {
 		// proposal of WebAssembly:
 		// https://github.com/WebAssembly/exception-handling
 		return false
-	case "riscv64", "xtensa":
+	case "riscv64", "xtensa", "mips":
 		// TODO: add support for these architectures
 		return false
 	default:

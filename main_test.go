@@ -34,6 +34,7 @@ var supportedLinuxArches = map[string]string{
 	"X86Linux":   "linux/386",
 	"ARMLinux":   "linux/arm/6",
 	"ARM64Linux": "linux/arm64",
+	"MIPSLinux":  "linux/mips",
 }
 
 var sema = make(chan struct{}, runtime.NumCPU())
