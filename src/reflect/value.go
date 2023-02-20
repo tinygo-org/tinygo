@@ -664,7 +664,7 @@ func (v Value) MapKeys() []Value {
 	k := New(v.typecode.Key())
 	e := New(v.typecode.Elem())
 
-	for hashmapNext(v.value, it, k.value, e.value) {
+	for hashmapNext(v.pointer(), it, k.value, e.value) {
 		keys = append(keys, k.Elem())
 		k = New(v.typecode.Key())
 	}
@@ -687,7 +687,7 @@ func (v Value) MapIndex(key Value) Value {
 
 	switch key.Kind() {
 	case String:
-		hashmapStringGet(v.value, *(*string)(key.value), elem.value, elemType.Size())
+		hashmapStringGet(v.pointer(), *(*string)(key.value), elem.value, elemType.Size())
 		return elem.Elem()
 	default:
 		panic("unimplemented: (reflect.Value).MapIndex()")
@@ -739,7 +739,7 @@ func (it *MapIter) Value() Value {
 
 func (it *MapIter) Next() bool {
 	it.valid = true
-	ok := hashmapNext(it.m.value, it.it, it.key.value, it.val.value)
+	ok := hashmapNext(it.m.pointer(), it.it, it.key.value, it.val.value)
 	if !ok {
 		it.done = true
 	}
