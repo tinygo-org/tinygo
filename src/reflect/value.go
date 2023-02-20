@@ -1137,10 +1137,33 @@ func (v Value) MethodByName(name string) Value {
 	panic("unimplemented: (reflect.Value).MethodByName()")
 }
 
+func NewAt(typ Type, p unsafe.Pointer) Value {
+	panic("unimplemented: reflect.New()")
+}
+
+type SelectDir int
+
+const (
+	_             SelectDir = iota
+	SelectSend              // case Chan <- Send
+	SelectRecv              // case <-Chan:
+	SelectDefault           // default
+)
+
+type SelectCase struct {
+	Dir  SelectDir // direction of case
+	Chan Value     // channel to use (for send or receive)
+	Send Value     // value to send (for send)
+}
+
+func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
+	panic("unimplemented: reflect.Select")
+}
+
 func (v Value) Recv() (x Value, ok bool) {
 	panic("unimplemented: (reflect.Value).Recv()")
 }
 
-func NewAt(typ Type, p unsafe.Pointer) Value {
-	panic("unimplemented: reflect.New()")
+func (v Value) Send(x Value) {
+	panic("unimplemented: reflect.Value.Send()")
 }
