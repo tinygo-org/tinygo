@@ -456,14 +456,19 @@ func TypeOf(i interface{}) Type {
 func PtrTo(t Type) Type { return PointerTo(t) }
 
 func PointerTo(t Type) Type {
+	return pointerTo(t.(*rawType))
+}
+
+func pointerTo(t *rawType) *rawType {
 	switch t.Kind() {
 	case Pointer:
 		panic("reflect: cannot make **T type")
 	case Struct:
-		return (*structType)(unsafe.Pointer(t.(*rawType))).ptrTo
+		return (*structType)(unsafe.Pointer(t)).ptrTo
 	default:
-		return (*elemType)(unsafe.Pointer(t.(*rawType))).ptrTo
+		return (*elemType)(unsafe.Pointer(t)).ptrTo
 	}
+
 }
 
 func (t *rawType) String() string {

@@ -222,7 +222,7 @@ func (v Value) Addr() Value {
 	}
 
 	return Value{
-		typecode: PtrTo(v.Type()).(*rawType),
+		typecode: pointerTo(v.typecode),
 		value:    unsafe.Pointer(&v.value),
 		flags:    v.flags,
 	}
@@ -924,7 +924,7 @@ func Zero(typ Type) Value {
 // new value of the given type.
 func New(typ Type) Value {
 	return Value{
-		typecode: PtrTo(typ).(*rawType),
+		typecode: pointerTo(typ.(*rawType)),
 		value:    alloc(typ.Size(), nil),
 		flags:    valueFlagExported,
 	}
