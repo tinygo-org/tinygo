@@ -911,7 +911,7 @@ func MakeSlice(typ Type, len, cap int) Value {
 	return Value{
 		typecode: typ.(*rawType),
 		value:    unsafe.Pointer(&slice),
-		//	flags:    valueFlagIndirect,
+		flags:    valueFlagIndirect,
 	}
 
 }
@@ -1127,7 +1127,7 @@ func MakeMap(typ Type) Value {
 	return Value{
 		typecode: typ.(*rawType),
 		value:    unsafe.Pointer(m),
-		flags:    0, // what should the flags be
+		flags:    0,
 	}
 }
 
