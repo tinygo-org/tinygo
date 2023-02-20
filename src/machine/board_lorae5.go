@@ -56,6 +56,18 @@ var (
 	}
 	DefaultUART = UART0
 
+	// Since we treat UART1 as zero, let's also call it by the real name
+	UART1 = UART0
+
+	// UART2
+	UART2  = &_UART2
+	_UART2 = UART{
+		Buffer:            NewRingBuffer(),
+		Bus:               stm32.USART2,
+		TxAltFuncSelector: AF7_USART1_2,
+		RxAltFuncSelector: AF7_USART1_2,
+	}
+
 	// I2C Busses
 	I2C1 = &I2C{
 		Bus:             stm32.I2C1,
@@ -72,4 +84,5 @@ var (
 func init() {
 	// Enable UARTs Interrupts
 	UART0.Interrupt = interrupt.New(stm32.IRQ_USART1, _UART0.handleInterrupt)
+	UART2.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART2.handleInterrupt)
 }
