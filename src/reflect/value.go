@@ -1126,7 +1126,7 @@ func MakeMap(typ Type) Value {
 
 	return Value{
 		typecode: typ.(*rawType),
-		value:    unsafe.Pointer(&m),
+		value:    unsafe.Pointer(m),
 		flags:    0, // what should the flags be
 	}
 }
