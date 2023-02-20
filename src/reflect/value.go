@@ -658,7 +658,7 @@ func (v Value) MapKeys() []Value {
 		return nil
 	}
 
-	var keys []Value
+	keys := make([]Value, 0, v.Len())
 
 	it := hashmapNewIterator()
 	k := New(v.typecode.Key())
