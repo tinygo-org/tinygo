@@ -12,6 +12,8 @@ func CPUFrequency() uint32 {
 	return 64000000
 }
 
+const flashPageSize = 4096
+
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
 	return // no specific setup on nrf52 machine.
