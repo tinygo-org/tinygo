@@ -891,12 +891,52 @@ func (t rawType) PkgPath() string {
 	panic("unimplemented: (reflect.Type).PkgPath()")
 }
 
-func (t rawType) FieldByName(name string) (StructField, bool) {
-	panic("unimplemented: (reflect.Type).FieldByName()")
+func (t *rawType) FieldByName(name string) (StructField, bool) {
+	if t.Kind() != Struct {
+		panic(TypeError{"FieldByName"})
+	}
+
+	numField := t.NumField()
+
+	// This is incredibly inefficient
+	for i := 0; i < numField; i++ {
+		field := t.rawField(i)
+		if field.Name == name {
+			return StructField{
+				Name:      field.Name,
+				PkgPath:   field.PkgPath,
+				Type:      field.Type, // note: converts rawType to Type
+				Tag:       field.Tag,
+				Anonymous: field.Anonymous,
+				Offset:    field.Offset,
+			}, true
+		}
+	}
+
+	return StructField{}, false
 }
 
-func (t rawType) FieldByIndex(index []int) StructField {
-	panic("unimplemented: (reflect.Type).FieldByIndex()")
+func (t *rawType) FieldByIndex(index []int) StructField {
+	ftype := t
+	var field rawStructField
+
+	for _, n := range index {
+		if ftype.Kind() != Struct {
+			panic(TypeError{"FieldByIndex"})
+		}
+
+		field = ftype.rawField(n)
+		ftype = field.Type
+	}
+
+	return StructField{
+		Name:      field.Name,
+		PkgPath:   field.PkgPath,
+		Type:      field.Type, // note: converts rawType to Type
+		Tag:       field.Tag,
+		Anonymous: field.Anonymous,
+		Offset:    field.Offset,
+	}
 }
 
 // A StructField describes a single field in a struct.
