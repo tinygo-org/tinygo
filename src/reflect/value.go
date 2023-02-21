@@ -701,13 +701,21 @@ func (v Value) MapIndex(key Value) Value {
 	elemType := v.Type().Elem()
 	elem := New(elemType)
 
-	switch key.Kind() {
-	case String:
+	if key.Kind() == String {
 		hashmapStringGet(v.pointer(), *(*string)(key.value), elem.value, elemType.Size())
 		return elem.Elem()
-	default:
-		panic("unimplemented: (reflect.Value).MapIndex()")
+	} else if key.typecode.isBinary() {
+		var keyptr unsafe.Pointer
+		if key.isIndirect() {
+			keyptr = key.value
+		} else {
+			keyptr = unsafe.Pointer(&key.value)
+		}
+		hashmapBinaryGet(v.pointer(), keyptr, elem.value, elemType.Size())
+		return elem.Elem()
 	}
+
+	panic("unimplemented: (reflect.Value).MapIndex()")
 }
 
 func (v Value) MapRange() *MapIter {
@@ -1011,6 +1019,12 @@ func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueS
 //go:linkname hashmapStringSet runtime.hashmapStringSet
 func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
 
+//go:linkname hashmapBinaryGet runtime.hashmapBinaryGet
+func hashmapBinaryGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
+
+//go:linkname hashmapBinarySet runtime.hashmapBinarySet
+func hashmapBinarySet(m unsafe.Pointer, key, value unsafe.Pointer)
+
 //go:linkname hashmapNewIterator runtime.hashmapNewIterator
 func hashmapNewIterator() unsafe.Pointer
 
@@ -1090,15 +1104,30 @@ func (v Value) SetMapIndex(key, elem Value) {
 		panic(&ValueError{Method: "MapIndex"})
 	}
 
-	switch key.Kind() {
-	case String:
+	if key.Kind() == String {
 		if elem.isIndirect() {
 			hashmapStringSet(v.value, *(*string)(key.value), elem.value)
 		} else {
 			hashmapStringSet(v.value, *(*string)(key.value), (unsafe.Pointer)(&elem.value))
 		}
 
-	default:
+	} else if key.typecode.isBinary() {
+		var keyptr unsafe.Pointer
+		if key.isIndirect() {
+			keyptr = key.value
+		} else {
+			keyptr = unsafe.Pointer(&key.value)
+		}
+
+		var elemptr unsafe.Pointer
+		if elem.isIndirect() {
+			elemptr = elem.value
+		} else {
+			elemptr = unsafe.Pointer(&elem.value)
+		}
+
+		hashmapBinarySet(v.pointer(), keyptr, elemptr)
+	} else {
 		panic("unimplemented: (reflect.Value).MapIndex()")
 	}
 }
@@ -1122,7 +1151,6 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe
 
 // MakeMap creates a new map with the specified type.
 func MakeMap(typ Type) Value {
-
 	const (
 		hashmapAlgorithmBinary uint8 = iota
 		hashmapAlgorithmString
@@ -1130,19 +1158,20 @@ func MakeMap(typ Type) Value {
 	)
 
 	if typ.Kind() != Map {
-		panic("makemap: not map")
+		panic(&ValueError{"MakeMap", typ.Kind()})
 	}
 
-	key := typ.Key()
-	val := typ.Elem()
+	key := typ.Key().(*rawType)
+	val := typ.Elem().(*rawType)
 
 	var alg uint8
 
-	switch key.Kind() {
-	case String:
+	if key.Kind() == String {
 		alg = hashmapAlgorithmString
-	default:
-		panic("makemap: unknown key type")
+	} else if key.isBinary() {
+		alg = hashmapAlgorithmBinary
+	} else {
+		panic("reflect.MakeMap: invalid key type")
 	}
 
 	m := hashmapMake(key.Size(), val.Size(), 0, alg)
