@@ -644,8 +644,24 @@ func (v Value) NumMethod() int {
 	return v.typecode.NumMethod()
 }
 
+// OverflowFloat reports whether the float64 x cannot be represented by v's type.
+// It panics if v's Kind is not Float32 or Float64.
 func (v Value) OverflowFloat(x float64) bool {
-	panic("unimplemented: (reflect.Value).OverflowFloat()")
+	k := v.Kind()
+	switch k {
+	case Float32:
+		return overflowFloat32(x)
+	case Float64:
+		return false
+	}
+	panic(&ValueError{"reflect.Value.OverflowFloat", v.Kind()})
+}
+
+func overflowFloat32(x float64) bool {
+	if x < 0 {
+		x = -x
+	}
+	return math.MaxFloat32 < x && x <= math.MaxFloat64
 }
 
 func (v Value) MapKeys() []Value {
@@ -881,8 +897,17 @@ func (v Value) OverflowInt(x int64) bool {
 	panic(&ValueError{"reflect.Value.OverflowInt", v.Kind()})
 }
 
+// OverflowUint reports whether the uint64 x cannot be represented by v's type.
+// It panics if v's Kind is not Uint, Uintptr, Uint8, Uint16, Uint32, or Uint64.
 func (v Value) OverflowUint(x uint64) bool {
-	panic("unimplemented: reflect.OverflowUint()")
+	k := v.Kind()
+	switch k {
+	case Uint, Uintptr, Uint8, Uint16, Uint32, Uint64:
+		bitSize := v.typecode.Size() * 8
+		trunc := (x << (64 - bitSize)) >> (64 - bitSize)
+		return x != trunc
+	}
+	panic(&ValueError{"reflect.Value.OverflowUint", v.Kind()})
 }
 
 func (v Value) Convert(t Type) Value {
