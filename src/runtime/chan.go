@@ -148,6 +148,10 @@ func chanLen(c *channel) int {
 	return int(c.bufUsed)
 }
 
+func chanLenUnsafePtr(c unsafe.Pointer) int {
+	return chanLen((*channel)(c))
+}
+
 // Return the capacity of this chan, called from the cap builtin.
 // A nil chan is defined as having capacity 0.
 //
@@ -157,6 +161,10 @@ func chanCap(c *channel) int {
 		return 0
 	}
 	return int(c.bufSize)
+}
+
+func chanCapUnsafePtr(c unsafe.Pointer) int {
+	return chanCap((*channel)(c))
 }
 
 // resumeRX resumes the next receiver and returns the destination pointer.

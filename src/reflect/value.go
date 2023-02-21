@@ -397,10 +397,10 @@ func (v Value) Slice3(i, j, k int) Value {
 	panic("unimplemented: (reflect.Value).Slice3()")
 }
 
-//go:linkname maplen runtime.hashmapLen
+//go:linkname maplen runtime.hashmapLenUnsafePtr
 func maplen(p unsafe.Pointer) int
 
-//go:linkname chanlen runtime.chanLen
+//go:linkname chanlen runtime.chanLenUnsafePtr
 func chanlen(p unsafe.Pointer) int
 
 // Len returns the length of this value for slices, strings, arrays, channels,
@@ -422,7 +422,7 @@ func (v Value) Len() int {
 	}
 }
 
-//go:linkname chancap runtime.chanCap
+//go:linkname chancap runtime.chanCapUnsafePtr
 func chancap(p unsafe.Pointer) int
 
 // Cap returns the capacity of this value for arrays, channels and slices.
@@ -1013,22 +1013,22 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 //go:linkname sliceAppend runtime.sliceAppend
 func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
 
-//go:linkname hashmapStringGet runtime.hashmapStringGet
+//go:linkname hashmapStringGet runtime.hashmapStringGetUnsafePtr
 func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool
 
-//go:linkname hashmapStringSet runtime.hashmapStringSet
+//go:linkname hashmapStringSet runtime.hashmapStringSetUnsafePtr
 func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
 
-//go:linkname hashmapBinaryGet runtime.hashmapBinaryGet
+//go:linkname hashmapBinaryGet runtime.hashmapBinaryGetUnsafePtr
 func hashmapBinaryGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
 
-//go:linkname hashmapBinarySet runtime.hashmapBinarySet
+//go:linkname hashmapBinarySet runtime.hashmapBinarySetUnsafePtr
 func hashmapBinarySet(m unsafe.Pointer, key, value unsafe.Pointer)
 
 //go:linkname hashmapNewIterator runtime.hashmapNewIterator
 func hashmapNewIterator() unsafe.Pointer
 
-//go:linkname hashmapNext runtime.hashmapNext
+//go:linkname hashmapNext runtime.hashmapNextUnsafePtr
 func hashmapNext(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool
 
 //go:linkname sliceCopy runtime.sliceCopy
@@ -1146,7 +1146,7 @@ func (v Value) FieldByName(name string) Value {
 	panic("unimplemented: (reflect.Value).FieldByName()")
 }
 
-//go:linkname hashmapMake runtime.hashmapMake
+//go:linkname hashmapMake runtime.hashmapMakeUnsafePtr
 func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
 
 // MakeMap creates a new map with the specified type.
