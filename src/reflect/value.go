@@ -853,7 +853,7 @@ func (v Value) SetCap(n int) {
 
 func (v Value) SetLen(n int) {
 	if v.typecode.Kind() != Slice {
-		panic("setlen: not slice")
+		panic(&ValueError{"reflect.Value.SetLen", v.Kind()})
 	}
 
 	hdr := (*sliceHeader)(v.value)
