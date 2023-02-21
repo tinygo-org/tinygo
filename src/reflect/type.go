@@ -417,6 +417,14 @@ type mapType struct {
 	key   *rawType
 }
 
+type namedType struct {
+	rawType
+	ptrTo      *rawType
+	underlying *rawType
+	nlen       uintptr
+	name       [1]byte
+}
+
 // Type for struct types. The numField value is intentionally put before ptrTo
 // for better struct packing on 32-bit and 64-bit architectures. On these
 // architectures, the ptrTo field still has the same offset as in all the other
@@ -847,7 +855,16 @@ func (t *rawType) NumMethod() int {
 }
 
 func (t *rawType) Name() string {
-	return "unimplemented: (reflect.Type).Name()"
+	if t.isNamed() {
+		ntype := (*namedType)(unsafe.Pointer(t))
+		name := stringHeader{
+			data: unsafe.Pointer(&ntype.name),
+			len:  ntype.nlen,
+		}
+		return *(*string)(unsafe.Pointer(&name))
+	}
+
+	return t.Kind().String()
 }
 
 func (t *rawType) Key() Type {
