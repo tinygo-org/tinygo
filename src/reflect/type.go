@@ -799,6 +799,29 @@ func (t *rawType) Comparable() bool {
 	}
 }
 
+// isbinary() returns if the hashmapAlgorithmBinary functions can be used on this type
+func (t *rawType) isBinary() bool {
+	switch t.Kind() {
+	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+		return true
+	case Float32, Float64, Complex64, Complex128:
+		return true
+	case Pointer:
+		return true
+	case Array:
+		return t.elem().isBinary()
+	case Struct:
+		numField := t.NumField()
+		for i := 0; i < numField; i++ {
+			if !t.rawField(i).Type.isBinary() {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 func (t rawType) ChanDir() ChanDir {
 	panic("unimplemented: (reflect.Type).ChanDir()")
 }
