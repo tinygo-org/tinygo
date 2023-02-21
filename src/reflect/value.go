@@ -858,7 +858,7 @@ func (v Value) SetLen(n int) {
 
 	hdr := (*sliceHeader)(v.value)
 	if uintptr(n) > hdr.cap {
-		panic("setlen: cap too big")
+		panic("setlen: len too big")
 	}
 	hdr.len = uintptr(n)
 }
