@@ -12,7 +12,7 @@ func CPUFrequency() uint32 {
 	return 64000000
 }
 
-const flashPageSize = 4096
+const FlashPageSize = 4096
 
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
