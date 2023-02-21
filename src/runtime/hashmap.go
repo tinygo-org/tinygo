@@ -89,6 +89,10 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashm
 	}
 }
 
+func hashmapMakeUnsafePtr(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer {
+	return (unsafe.Pointer)(hashmapMake(keySize, valueSize, sizeHint, alg))
+}
+
 func hashmapKeyEqualAlg(alg hashmapAlgorithm) func(x, y unsafe.Pointer, n uintptr) bool {
 	switch alg {
 	case hashmapAlgorithmBinary:
@@ -145,6 +149,10 @@ func hashmapLen(m *hashmap) int {
 		return 0
 	}
 	return int(m.count)
+}
+
+func hashmapLenUnsafePtr(m unsafe.Pointer) int {
+	return hashmapLen((*hashmap)(m))
 }
 
 // Set a specified key to a given value. Grow the map if necessary.
@@ -205,6 +213,10 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 	memcpy(emptySlotKey, key, m.keySize)
 	memcpy(emptySlotValue, value, m.valueSize)
 	*emptySlotTophash = tophash
+}
+
+func hashmapSetUnsafePtr(m unsafe.Pointer, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
+	hashmapSet((*hashmap)(m), key, value, hash)
 }
 
 // hashmapInsertIntoNewBucket creates a new bucket, inserts the given key and
@@ -296,6 +308,10 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 	// Did not find the key.
 	memzero(value, m.valueSize)
 	return false
+}
+
+func hashmapGetUnsafePtr(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr, hash uint32) bool {
+	return hashmapGet((*hashmap)(m), key, value, valueSize, hash)
 }
 
 // Delete a given key from the map. No-op when the key does not exist in the
@@ -408,6 +424,10 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 	}
 }
 
+func hashmapNextUnsafePtr(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool {
+	return hashmapNext((*hashmap)(m), (*hashmapIterator)(it), key, value)
+}
+
 // Hashmap with plain binary data keys (not containing strings etc.).
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	if m == nil {
@@ -417,6 +437,10 @@ func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	hashmapSet(m, key, value, hash)
 }
 
+func hashmapBinarySetUnsafePtr(m unsafe.Pointer, key, value unsafe.Pointer) {
+	hashmapBinarySet((*hashmap)(m), key, value)
+}
+
 func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) bool {
 	if m == nil {
 		memzero(value, uintptr(valueSize))
@@ -424,6 +448,10 @@ func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) 
 	}
 	hash := hash32(key, m.keySize, m.seed)
 	return hashmapGet(m, key, value, valueSize, hash)
+}
+
+func hashmapBinaryGetUnsafePtr(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool {
+	return hashmapBinaryGet((*hashmap)(m), key, value, valueSize)
 }
 
 func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
@@ -458,6 +486,10 @@ func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
+func hashmapStringSetUnsafePtr(m unsafe.Pointer, key string, value unsafe.Pointer) {
+	hashmapStringSet((*hashmap)(m), key, value)
+}
+
 func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize uintptr) bool {
 	if m == nil {
 		memzero(value, uintptr(valueSize))
@@ -465,6 +497,10 @@ func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize ui
 	}
 	hash := hashmapStringHash(key, m.seed)
 	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
+}
+
+func hashmapStringGetUnsafePtr(m unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool {
+	return hashmapStringGet((*hashmap)(m), key, value, valueSize)
 }
 
 func hashmapStringDelete(m *hashmap, key string) {
