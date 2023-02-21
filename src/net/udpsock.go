@@ -12,8 +12,6 @@ import (
 	"net/netip"
 	"strconv"
 	"time"
-
-	"tinygo.org/x/drivers/netdev"
 )
 
 // UDPAddr represents the address of a UDP end point.

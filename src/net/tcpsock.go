@@ -12,8 +12,6 @@ import (
 	"net/netip"
 	"strconv"
 	"time"
-
-	"tinygo.org/x/drivers/netdev"
 )
 
 // TCPAddr represents the address of a TCP end point.

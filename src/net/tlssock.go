@@ -10,10 +10,9 @@ package net
 
 import (
 	"fmt"
+	"net/netdev"
 	"strconv"
 	"time"
-
-	"tinygo.org/x/drivers/netdev"
 )
 
 func DialTLS(addr string) (*TLSConn, error) {
