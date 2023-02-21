@@ -55,7 +55,6 @@ src/net
 │   └── socket.go		+
 ├── net.go			*
 ├── parse.go
-├── parse_test.go
 ├── pipe.go
 ├── README.md
 ├── tcpsock.go			*
