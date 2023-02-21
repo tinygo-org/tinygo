@@ -7,16 +7,15 @@
 package net
 
 import (
+	"net/netdev"
 	"time"
-
-	"tinygo.org/x/drivers/netdev"
 )
 
 // dev is the current TinyGo network device
 var dev netdev.Netdever
 
-// useNetdev sets the netdev
-func useNetdev(n netdev.Netdever) {
+// UseNetdev sets the netdev
+func UseNetdev(n netdev.Netdever) {
 	dev = n
 }
 

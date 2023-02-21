@@ -8,10 +8,9 @@ package net
 
 import (
 	"fmt"
+	"net/netdev"
 	"strconv"
 	"time"
-
-	"tinygo.org/x/drivers/netdev"
 )
 
 // TINYGO: Removed IPv6 stuff
