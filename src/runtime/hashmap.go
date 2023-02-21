@@ -462,6 +462,10 @@ func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
 	hashmapDelete(m, key, hash)
 }
 
+func hashmapBinaryDeleteUnsafePtr(m unsafe.Pointer, key unsafe.Pointer) {
+	hashmapBinaryDelete((*hashmap)(m), key)
+}
+
 // Hashmap with string keys (a common case).
 
 func hashmapStringEqual(x, y unsafe.Pointer, n uintptr) bool {
@@ -509,6 +513,10 @@ func hashmapStringDelete(m *hashmap, key string) {
 	}
 	hash := hashmapStringHash(key, m.seed)
 	hashmapDelete(m, unsafe.Pointer(&key), hash)
+}
+
+func hashmapStringDeleteUnsafePtr(m unsafe.Pointer, key string) {
+	hashmapStringDelete((*hashmap)(m), key)
 }
 
 // Hashmap with interface keys (for everything else).

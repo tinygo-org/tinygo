@@ -1090,6 +1090,12 @@ func AppendSlice(s, t Value) Value {
 	}
 }
 
+//go:linkname hashmapStringDelete runtime.hashmapStringDeleteUnsafePtr
+func hashmapStringDelete(m unsafe.Pointer, key string)
+
+//go:linkname hashmapBinaryDelete runtime.hashmapBinaryDeleteUnsafePtr
+func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
+
 func (v Value) SetMapIndex(key, elem Value) {
 	if v.Kind() != Map {
 		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
@@ -1100,15 +1106,24 @@ func (v Value) SetMapIndex(key, elem Value) {
 		panic(&ValueError{Method: "MapIndex"})
 	}
 
-	if elem.typecode != v.typecode.elem() {
+	// if elem is the zero Value, it means delete
+	del := elem == Value{}
+
+	if !del && elem.typecode != v.typecode.elem() {
 		panic(&ValueError{Method: "MapIndex"})
 	}
 
 	if key.Kind() == String {
-		if elem.isIndirect() {
-			hashmapStringSet(v.value, *(*string)(key.value), elem.value)
+		if del {
+			hashmapStringDelete(v.pointer(), *(*string)(key.value))
 		} else {
-			hashmapStringSet(v.value, *(*string)(key.value), (unsafe.Pointer)(&elem.value))
+			var elemptr unsafe.Pointer
+			if elem.isIndirect() {
+				elemptr = elem.value
+			} else {
+				elemptr = unsafe.Pointer(&elem.value)
+			}
+			hashmapStringSet(v.pointer(), *(*string)(key.value), elemptr)
 		}
 
 	} else if key.typecode.isBinary() {
@@ -1119,14 +1134,17 @@ func (v Value) SetMapIndex(key, elem Value) {
 			keyptr = unsafe.Pointer(&key.value)
 		}
 
-		var elemptr unsafe.Pointer
-		if elem.isIndirect() {
-			elemptr = elem.value
+		if del {
+			hashmapBinaryDelete(v.pointer(), keyptr)
 		} else {
-			elemptr = unsafe.Pointer(&elem.value)
+			var elemptr unsafe.Pointer
+			if elem.isIndirect() {
+				elemptr = elem.value
+			} else {
+				elemptr = unsafe.Pointer(&elem.value)
+			}
+			hashmapBinarySet(v.pointer(), keyptr, elemptr)
 		}
-
-		hashmapBinarySet(v.pointer(), keyptr, elemptr)
 	} else {
 		panic("unimplemented: (reflect.Value).MapIndex()")
 	}
