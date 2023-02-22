@@ -6,6 +6,12 @@ import (
 	"device/stm32"
 )
 
+const flashPageSizeValue = 2048
+
+func flashPageSize(address uintptr) uint32 {
+	return flashPageSizeValue
+}
+
 func erasePage(page uint32) error {
 	// wait until other flash operations are done
 	for stm32.FLASH.GetSR_BSY() != 0 {

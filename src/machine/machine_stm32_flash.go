@@ -9,8 +9,6 @@ import (
 	"unsafe"
 )
 
-const FlashPageSize = 2048
-
 var (
 	errFlashCannotErasePage    = errors.New("cannot erase flash page")
 	errFlashInvalidWriteLength = errors.New("write flash data must align to 64 bits")
@@ -28,7 +26,7 @@ func (f flash) ErasePage(address uintptr) error {
 	defer lockFlash()
 
 	// calculate page number from address
-	var page uint32 = uint32(address) / FlashPageSize
+	var page uint32 = uint32(address) / FlashPageSize(address)
 
 	return erasePage(page)
 }

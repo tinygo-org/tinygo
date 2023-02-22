@@ -6,7 +6,11 @@ import (
 	"device/nrf"
 )
 
-const FlashPageSize = 1024
+const flashPageSizeValue = 1024
+
+func flashPageSize(address uintptr) uint32 {
+	return flashPageSizeValue
+}
 
 // Get peripheral and pin number for this GPIO pin.
 func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
