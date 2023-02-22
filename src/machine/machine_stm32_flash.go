@@ -1,4 +1,4 @@
-//go:build stm32
+//go:build stm32wlx
 
 package machine
 
@@ -30,31 +30,7 @@ func (f flash) ErasePage(address uintptr) error {
 	// calculate page number from address
 	var page uint32 = uint32(address) / FlashPageSize
 
-	// wait until other flash operations are done
-	for stm32.FLASH.GetSR_BSY() != 0 {
-	}
-
-	// check if operation is allowed.
-	if stm32.FLASH.GetSR_PESD() == 0 {
-		return errFlashCannotErasePage
-	}
-
-	// TODO: clear any previous errors
-
-	// page erase operation
-	stm32.FLASH.SetCR_PER(1)
-
-	// set the address to the page to be written
-	stm32.FLASH.SetCR_PNB(page)
-
-	// start the page erase
-	stm32.FLASH.SetCR_STRT(1)
-
-	// wait until page erase is done
-	for stm32.FLASH.GetSR_BSY() != 0 {
-	}
-
-	return nil
+	return erasePage(page)
 }
 
 // WriteData writes the flash that starts at address with data.
