@@ -702,7 +702,9 @@ func (v Value) MapIndex(key Value) Value {
 	elem := New(elemType)
 
 	if key.Kind() == String {
-		hashmapStringGet(v.pointer(), *(*string)(key.value), elem.value, elemType.Size())
+		if ok := hashmapStringGet(v.pointer(), *(*string)(key.value), elem.value, elemType.Size()); !ok {
+			return Value{}
+		}
 		return elem.Elem()
 	} else if key.typecode.isBinary() {
 		var keyptr unsafe.Pointer
@@ -711,7 +713,9 @@ func (v Value) MapIndex(key Value) Value {
 		} else {
 			keyptr = unsafe.Pointer(&key.value)
 		}
-		hashmapBinaryGet(v.pointer(), keyptr, elem.value, elemType.Size())
+		if ok := hashmapBinaryGet(v.pointer(), keyptr, elem.value, elemType.Size()); !ok {
+			return Value{}
+		}
 		return elem.Elem()
 	}
 
