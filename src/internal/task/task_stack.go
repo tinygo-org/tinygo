@@ -2,7 +2,10 @@
 
 package task
 
-import "unsafe"
+import (
+	"runtime/interrupt"
+	"unsafe"
+)
 
 //go:linkname runtimePanic runtime.runtimePanic
 func runtimePanic(str string)
@@ -44,6 +47,9 @@ func Pause() {
 	// valid. If it is not, a stack overflow has occured.
 	if *currentTask.state.canaryPtr != stackCanary {
 		runtimePanic("goroutine stack overflow")
+	}
+	if interrupt.In() {
+		runtimePanic("blocked inside interrupt")
 	}
 	currentTask.state.pause()
 }
