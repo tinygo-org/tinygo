@@ -713,6 +713,7 @@ func (v Value) MapIndex(key Value) Value {
 		} else {
 			keyptr = unsafe.Pointer(&key.value)
 		}
+		//TODO(dgryski): zero out padding bytes in key, if any
 		if ok := hashmapBinaryGet(v.pointer(), keyptr, elem.value, elemType.Size()); !ok {
 			return Value{}
 		}
