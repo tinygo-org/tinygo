@@ -1102,19 +1102,19 @@ func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
 
 func (v Value) SetMapIndex(key, elem Value) {
 	if v.Kind() != Map {
-		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
+		panic(&ValueError{Method: "SetMapIndex", Kind: v.Kind()})
 	}
 
 	// compare key type with actual key type of map
 	if key.typecode != v.typecode.key() {
-		panic(&ValueError{Method: "MapIndex"})
+		panic("reflect.Value.SetMapIndex: incompatible types for key")
 	}
 
 	// if elem is the zero Value, it means delete
 	del := elem == Value{}
 
 	if !del && elem.typecode != v.typecode.elem() {
-		panic(&ValueError{Method: "MapIndex"})
+		panic("reflect.Value.SetMapIndex: incompatible types for value")
 	}
 
 	if key.Kind() == String {
