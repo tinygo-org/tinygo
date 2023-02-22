@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/stm32"
+	"encoding/binary"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -542,4 +543,91 @@ func initRNG() {
 
 	stm32.RCC.AHB2ENR.SetBits(stm32.RCC_AHB2ENR_RNGEN)
 	stm32.RNG.CR.SetBits(stm32.RNG_CR_RNGEN)
+}
+
+//---------- Flash related code
+
+const flashPageSizeValue = 4096
+
+func flashPageSize(address uintptr) uint32 {
+	return flashPageSizeValue
+}
+
+func pageAndBankNumber(address uintptr) (uint32, uint32) {
+	switch {
+	case address >= 0x08000000 && address <= 0x080FFFFF:
+		return uint32(address-0x08000000) / flashPageSizeValue, 0
+	case address >= 0x08100000 && address <= 0x081FFFFF:
+		return uint32(address-0x08100000) / flashPageSizeValue, 1
+	default:
+		return 0, 0
+	}
+}
+
+// see RM0432 page 127
+func eraseFlashPage(address uintptr) error {
+	// calculate page number from address
+	var page, bank uint32 = pageAndBankNumber(address)
+
+	// wait until other flash operations are done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	// TODO: check errors
+
+	// page erase operation
+	stm32.FLASH.SetCR_PER(1)
+
+	// set the page to be written
+	stm32.FLASH.SetCR_PNB(page)
+
+	// set the bank to be written
+	stm32.FLASH.SetCR_BKER(bank)
+
+	// start the page erase
+	stm32.FLASH.SetCR_START(1)
+
+	// wait until page erase is done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	return nil
+}
+
+const flashWriteLength = 8
+
+// see RM0432 page 128
+// It is only possible to program double word (2 x 32-bit data).
+func writeFlashData(address uintptr, data []byte) error {
+	if len(data)%flashWriteLength != 0 {
+		return errFlashInvalidWriteLength
+	}
+
+	// wait until other flash operations are done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	// start page write operation
+	stm32.FLASH.SetCR_PG(1)
+
+	// end page write when done
+	defer stm32.FLASH.SetCR_PG(0)
+
+	for i := 0; i < len(data); i += flashWriteLength {
+		// write first word in an address aligned with double-word
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[i : i+flashWriteLength/2])
+
+		// now write second word
+		*(*uint32)(unsafe.Pointer(address + flashWriteLength/2)) = binary.BigEndian.Uint32(data[i+flashWriteLength/2 : i+flashWriteLength])
+
+		// wait until not busy
+		for stm32.FLASH.GetSR_BSY() != 0 {
+		}
+
+		if stm32.FLASH.GetSR_EOP() == 0 {
+			return errFlashCannotWriteData
+		}
+	}
+
+	return nil
 }

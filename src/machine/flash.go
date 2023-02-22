@@ -1,4 +1,4 @@
-//go:build nrf || stm32wlx
+//go:build nrf || stm32f4 || stm32l4 || stm32wlx
 
 package machine
 

@@ -6,6 +6,7 @@ package machine
 
 import (
 	"device/stm32"
+	"encoding/binary"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -790,4 +791,101 @@ func (i2c *I2C) getSpeed(config I2CConfig) uint32 {
 			return s | stm32.I2C_CCR_F_S
 		}
 	}
+}
+
+//---------- Flash related code
+
+const flashPageSizeValue = 2048
+
+func flashPageSize(address uintptr) uint32 {
+	return flashPageSizeValue
+}
+
+func sectorNumber(address uintptr) uint32 {
+	switch {
+	case address >= 0x08000000 && address <= 0x080FFFFF:
+		return 0
+	case address >= 0x08100000 && address <= 0x081FFFFF:
+		return 1
+	case address >= 0x08008000 && address <= 0x0800BFFF:
+		return 2
+	case address >= 0x0800C000 && address <= 0x0800FFFF:
+		return 3
+	case address >= 0x08010000 && address <= 0x0801FFFF:
+		return 4
+	case address >= 0x08020000 && address <= 0x0803FFFF:
+		return 5
+	case address >= 0x08040000 && address <= 0x0805FFFF:
+		return 6
+	case address >= 0x08060000 && address <= 0x0807FFFF:
+		return 7
+	case address >= 0x08080000 && address <= 0x0809FFFF:
+		return 8
+	case address >= 0x080A0000 && address <= 0x080BFFFF:
+		return 9
+	case address >= 0x080C0000 && address <= 0x080DFFFF:
+		return 10
+	case address >= 0x080E0000 && address <= 0x080FFFFF:
+		return 11
+	default:
+		return 0
+	}
+}
+
+// see RM0090 page 85
+func eraseFlashPage(address uintptr) error {
+	// calculate sector number from address
+	var sector uint32 = sectorNumber(address)
+
+	// wait until other flash operations are done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	// set SER bit
+	stm32.FLASH.SetCR_SER(1)
+
+	// set the sector to be erased
+	stm32.FLASH.SetCR_SNB(sector)
+
+	// start the page erase
+	stm32.FLASH.SetCR_STRT(1)
+
+	// wait until page erase is done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	return nil
+}
+
+const flashWriteLength = 2
+
+// see RM0090 page 86
+// must write data in word-length
+func writeFlashData(address uintptr, data []byte) error {
+	if len(data)%flashWriteLength != 0 {
+		return errFlashInvalidWriteLength
+	}
+
+	// wait until other flash operations are done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	// set parallelism to x32
+	stm32.FLASH.SetCR_PSIZE(2)
+
+	// start page write operation
+	stm32.FLASH.SetCR_PG(1)
+
+	// end page write when done
+	defer stm32.FLASH.SetCR_PG(0)
+
+	for i := 0; i < len(data); i += flashWriteLength {
+		*(*uint16)(unsafe.Pointer(address)) = binary.BigEndian.Uint16(data[i : i+flashWriteLength])
+
+		// wait until not busy
+		for stm32.FLASH.GetSR_BSY() != 0 {
+		}
+	}
+
+	return nil
 }

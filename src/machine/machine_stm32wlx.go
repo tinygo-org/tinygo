@@ -6,6 +6,7 @@ package machine
 
 import (
 	"device/stm32"
+	"encoding/binary"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -424,3 +425,89 @@ const (
 	ARR_MAX = 0x10000
 	PSC_MAX = 0x10000
 )
+
+//---------- Flash related code
+
+const flashPageSizeValue = 2048
+
+func flashPageSize(address uintptr) uint32 {
+	return flashPageSizeValue
+}
+
+func eraseFlashPage(address uintptr) error {
+	// calculate page number from address
+	var page uint32 = uint32(address) / FlashPageSize(address)
+
+	// wait until other flash operations are done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	// check if operation is allowed.
+	if stm32.FLASH.GetSR_PESD() == 0 {
+		return errFlashCannotErasePage
+	}
+
+	// TODO: clear any previous errors
+
+	// page erase operation
+	stm32.FLASH.SetCR_PER(1)
+
+	// set the address to the page to be written
+	stm32.FLASH.SetCR_PNB(page)
+
+	// start the page erase
+	stm32.FLASH.SetCR_STRT(1)
+
+	// wait until page erase is done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	return nil
+}
+
+const flashWriteLength = 8
+
+func writeFlashData(address uintptr, data []byte) error {
+	if len(data)%flashWriteLength != 0 {
+		return errFlashInvalidWriteLength
+	}
+
+	// wait until other flash operations are done
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	// check if operation is allowed
+	if stm32.FLASH.GetSR_PESD() == 0 {
+		return errFlashCannotWriteData
+	}
+
+	// TODO: clear any previous errors
+
+	// start page write operation
+	stm32.FLASH.SetCR_PG(1)
+
+	// end page write when done
+	defer stm32.FLASH.SetCR_PG(0)
+
+	for i := 0; i < len(data); i += flashWriteLength {
+		// write first word in an address aligned with double-word
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[i : i+flashWriteLength/2])
+
+		// now write second word
+		*(*uint32)(unsafe.Pointer(address + flashWriteLength/2)) = binary.BigEndian.Uint32(data[i+flashWriteLength/2 : i+flashWriteLength])
+
+		// wait until not busy
+		for stm32.FLASH.GetSR_BSY() != 0 {
+		}
+
+		// verify write
+		if stm32.FLASH.GetSR_EOP() == 0 {
+			return errFlashCannotWriteData
+		}
+
+		// prepare for next operation
+		stm32.FLASH.SetSR_EOP(0)
+	}
+
+	return nil
+}

@@ -1,4 +1,4 @@
-//go:build stm32wlx
+//go:build stm32f4 || stm32l4 || stm32wlx
 
 package machine
 
@@ -25,10 +25,7 @@ func (f flash) ErasePage(address uintptr) error {
 	unlockFlash()
 	defer lockFlash()
 
-	// calculate page number from address
-	var page uint32 = uint32(address) / FlashPageSize(address)
-
-	return erasePage(page)
+	return eraseFlashPage(address)
 }
 
 // WriteData writes the flash that starts at address with data.
@@ -41,44 +38,7 @@ func (f flash) WriteData(address uintptr, data []byte) error {
 	unlockFlash()
 	defer lockFlash()
 
-	// wait until other flash operations are done
-	for stm32.FLASH.GetSR_BSY() != 0 {
-	}
-
-	// check if operation is allowed
-	if stm32.FLASH.GetSR_PESD() == 0 {
-		return errFlashCannotWriteData
-	}
-
-	// TODO: clear any previous errors
-
-	// start page write operation
-	stm32.FLASH.SetCR_PG(1)
-
-	// end page write when done
-	defer stm32.FLASH.SetCR_PG(0)
-
-	for i := 0; i < len(data); i += 4 {
-		// write first word in an address aligned with double-word
-		*(*uint32)(unsafe.Pointer(address)) = uint32(data[i] & data[i+1] << 16)
-
-		// now write second word
-		*(*uint32)(unsafe.Pointer(address + 2)) = uint32(data[i+2] & data[i+3] << 16)
-
-		// wait until not busy
-		for stm32.FLASH.GetSR_BSY() != 0 {
-		}
-
-		// verify write
-		if stm32.FLASH.GetSR_EOP() == 0 {
-			return errFlashCannotWriteData
-		}
-
-		// prepare for next operation
-		stm32.FLASH.SetSR_EOP(0)
-	}
-
-	return nil
+	return writeFlashData(address, data)
 }
 
 // ReadData reads the data starting at address.
