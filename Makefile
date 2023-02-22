@@ -484,6 +484,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=wioterminal         examples/hid-keyboard
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=nano-rp2040         examples/rtc
+	@$(MD5SUM) test.hex
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o test.wasm -tags=arduino              examples/blinky1
