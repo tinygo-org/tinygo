@@ -103,21 +103,23 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 			config.SDA = I2C1_SDA_PIN
 		}
 	}
-	var okSDA, okSCL bool
+	var okSCL, okSDA bool
 	switch i2c.Bus {
 	case rp.I2C0:
-		okSDA = config.SDA%4 == 0
-		okSCL = (config.SCL+1)%4 == 0
-	case rp.I2C1:
-		okSDA = (config.SDA+2)%4 == 0
 		okSCL = (config.SCL+3)%4 == 0
+		okSDA = (config.SDA+4)%4 == 0
+	case rp.I2C1:
+		okSCL = (config.SCL+1)%4 == 0
+		okSDA = (config.SDA+2)%4 == 0
 	}
 
-	if !okSDA {
-		return errInvalidI2CSDA
-	} else if !okSCL {
+	switch {
+	case !okSCL:
 		return errInvalidI2CSCL
+	case !okSDA:
+		return errInvalidI2CSDA
 	}
+
 	if config.Frequency == 0 {
 		config.Frequency = defaultBaud
 	}
