@@ -1172,8 +1172,10 @@ func (v Value) FieldByName(name string) Value {
 //go:linkname hashmapMake runtime.hashmapMakeUnsafePtr
 func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
 
-// MakeMap creates a new map with the specified type.
-func MakeMap(typ Type) Value {
+// MakeMapWithSize creates a new map with the specified type and initial space
+// for approximately n elements.
+func MakeMapWithSize(typ Type, n int) Value {
+
 	const (
 		hashmapAlgorithmBinary uint8 = iota
 		hashmapAlgorithmString
@@ -1182,6 +1184,10 @@ func MakeMap(typ Type) Value {
 
 	if typ.Kind() != Map {
 		panic(&ValueError{"MakeMap", typ.Kind()})
+	}
+
+	if n < 0 {
+		panic("reflect.MakeMapWithSize: negative size hint")
 	}
 
 	key := typ.Key().(*rawType)
@@ -1197,13 +1203,18 @@ func MakeMap(typ Type) Value {
 		panic("reflect.MakeMap: invalid key type")
 	}
 
-	m := hashmapMake(key.Size(), val.Size(), 0, alg)
+	m := hashmapMake(key.Size(), val.Size(), uintptr(n), alg)
 
 	return Value{
 		typecode: typ.(*rawType),
 		value:    unsafe.Pointer(m),
 		flags:    0,
 	}
+}
+
+// MakeMap creates a new map with the specified type.
+func MakeMap(typ Type) Value {
+	return MakeMapWithSize(typ, 8)
 }
 
 func (v Value) Call(in []Value) []Value {
