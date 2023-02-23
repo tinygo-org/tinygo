@@ -7,6 +7,7 @@ package machine
 import (
 	"device/stm32"
 	"encoding/binary"
+	"errors"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -837,21 +838,26 @@ func eraseFlashPage(address uintptr) error {
 	// calculate sector number from address
 	var sector uint32 = sectorNumber(address)
 
-	// wait until other flash operations are done
-	for stm32.FLASH.GetSR_BSY() != 0 {
-	}
+	waitUntilFlashDone()
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0xF0)
 
 	// set SER bit
 	stm32.FLASH.SetCR_SER(1)
+	defer stm32.FLASH.SetCR_SER(0)
 
 	// set the sector to be erased
 	stm32.FLASH.SetCR_SNB(sector)
+	defer stm32.FLASH.SetCR_SNB(0)
 
 	// start the page erase
 	stm32.FLASH.SetCR_STRT(1)
 
-	// wait until page erase is done
-	for stm32.FLASH.GetSR_BSY() != 0 {
+	waitUntilFlashDone()
+
+	if err := checkError(); err != nil {
+		return err
 	}
 
 	return nil
@@ -866,25 +872,55 @@ func writeFlashData(address uintptr, data []byte) error {
 		return errFlashInvalidWriteLength
 	}
 
-	// wait until other flash operations are done
-	for stm32.FLASH.GetSR_BSY() != 0 {
-	}
+	waitUntilFlashDone()
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0xF0)
 
 	// set parallelism to x32
 	stm32.FLASH.SetCR_PSIZE(2)
 
-	// start page write operation
-	stm32.FLASH.SetCR_PG(1)
-
-	// end page write when done
-	defer stm32.FLASH.SetCR_PG(0)
-
 	for i := 0; i < len(data); i += flashWriteLength {
+		// start write operation
+		stm32.FLASH.SetCR_PG(1)
+
 		*(*uint16)(unsafe.Pointer(address)) = binary.BigEndian.Uint16(data[i : i+flashWriteLength])
 
-		// wait until not busy
-		for stm32.FLASH.GetSR_BSY() != 0 {
+		waitUntilFlashDone()
+
+		if err := checkError(); err != nil {
+			return err
 		}
+
+		// end write operation
+		stm32.FLASH.SetCR_PG(0)
+	}
+
+	return nil
+}
+
+func waitUntilFlashDone() {
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+}
+
+var (
+	errFlashPGS = errors.New("errFlashPGS")
+	errFlashPGP = errors.New("errFlashPGP")
+	errFlashPGA = errors.New("errFlashPGA")
+	errFlashWRP = errors.New("errFlashWRP")
+)
+
+func checkError() error {
+	switch {
+	case stm32.FLASH.GetSR_PGSERR() != 0:
+		return errFlashPGS
+	case stm32.FLASH.GetSR_PGPERR() != 0:
+		return errFlashPGP
+	case stm32.FLASH.GetSR_PGAERR() != 0:
+		return errFlashPGA
+	case stm32.FLASH.GetSR_WRPERR() != 0:
+		return errFlashWRP
 	}
 
 	return nil
