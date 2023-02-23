@@ -7,6 +7,7 @@ package machine
 import (
 	"device/stm32"
 	"encoding/binary"
+	"errors"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -436,30 +437,36 @@ func flashPageSize(address uintptr) uint32 {
 
 func eraseFlashPage(address uintptr) error {
 	// calculate page number from address
-	var page uint32 = uint32(address) / FlashPageSize(address)
+	var page uint32 = uint32(address-0x08000000) / FlashPageSize(address)
 
 	// wait until other flash operations are done
-	for stm32.FLASH.GetSR_BSY() != 0 {
-	}
+	waitUntilFlashDone()
 
 	// check if operation is allowed.
-	if stm32.FLASH.GetSR_PESD() == 0 {
+	if stm32.FLASH.GetSR_PESD() != 0 {
 		return errFlashCannotErasePage
 	}
 
-	// TODO: clear any previous errors
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0x3FA)
 
 	// page erase operation
 	stm32.FLASH.SetCR_PER(1)
+	defer stm32.FLASH.SetCR_PER(0)
 
 	// set the address to the page to be written
 	stm32.FLASH.SetCR_PNB(page)
+	defer stm32.FLASH.SetCR_PNB(0)
 
 	// start the page erase
 	stm32.FLASH.SetCR_STRT(1)
 
 	// wait until page erase is done
-	for stm32.FLASH.GetSR_BSY() != 0 {
+	waitUntilFlashDone()
+
+	// check for error
+	if err := checkError(); err != nil {
+		return err
 	}
 
 	return nil
@@ -473,40 +480,72 @@ func writeFlashData(address uintptr, data []byte) error {
 	}
 
 	// wait until other flash operations are done
+	waitUntilFlashDone()
+
+	// check if operation is allowed
+	if stm32.FLASH.GetSR_PESD() != 0 {
+		return errFlashNotAllowedWriteData
+	}
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0x3FA)
+
+	for j := 0; j < len(data); j += flashWriteLength {
+		// start page write operation
+		stm32.FLASH.SetCR_PG(1)
+
+		// write first word using double-word low order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j+flashWriteLength/2 : j+flashWriteLength])
+
+		address += flashWriteLength / 2
+
+		// write second word using double-word high order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j : j+flashWriteLength/2])
+
+		// wait until not busy
+		waitUntilFlashDone()
+
+		// check for error
+		if err := checkError(); err != nil {
+			return err
+		}
+
+		// end flash write
+		stm32.FLASH.SetCR_PG(0)
+		address += flashWriteLength / 2
+	}
+
+	return nil
+}
+
+func waitUntilFlashDone() {
 	for stm32.FLASH.GetSR_BSY() != 0 {
 	}
 
-	// check if operation is allowed
-	if stm32.FLASH.GetSR_PESD() == 0 {
-		return errFlashCannotWriteData
+	for stm32.FLASH.GetSR_CFGBSY() != 0 {
 	}
+}
 
-	// TODO: clear any previous errors
+var (
+	errFlashPGS  = errors.New("errFlashPGS")
+	errFlashSIZE = errors.New("errFlashSIZE")
+	errFlashPGA  = errors.New("errFlashPGA")
+	errFlashWRP  = errors.New("errFlashWRP")
+	errFlashPROG = errors.New("errFlashPROG")
+)
 
-	// start page write operation
-	stm32.FLASH.SetCR_PG(1)
-
-	// end page write when done
-	defer stm32.FLASH.SetCR_PG(0)
-
-	for i := 0; i < len(data); i += flashWriteLength {
-		// write first word in an address aligned with double-word
-		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[i : i+flashWriteLength/2])
-
-		// now write second word
-		*(*uint32)(unsafe.Pointer(address + flashWriteLength/2)) = binary.BigEndian.Uint32(data[i+flashWriteLength/2 : i+flashWriteLength])
-
-		// wait until not busy
-		for stm32.FLASH.GetSR_BSY() != 0 {
-		}
-
-		// verify write
-		if stm32.FLASH.GetSR_EOP() == 0 {
-			return errFlashCannotWriteData
-		}
-
-		// prepare for next operation
-		stm32.FLASH.SetSR_EOP(0)
+func checkError() error {
+	switch {
+	case stm32.FLASH.GetSR_PGSERR() != 0:
+		return errFlashPGS
+	case stm32.FLASH.GetSR_SIZERR() != 0:
+		return errFlashSIZE
+	case stm32.FLASH.GetSR_PGAERR() != 0:
+		return errFlashPGA
+	case stm32.FLASH.GetSR_WRPERR() != 0:
+		return errFlashWRP
+	case stm32.FLASH.GetSR_PROGERR() != 0:
+		return errFlashPROG
 	}
 
 	return nil

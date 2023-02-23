@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	errFlashCannotErasePage    = errors.New("cannot erase flash page")
-	errFlashInvalidWriteLength = errors.New("write flash data must align to 64 bits")
-	errFlashCannotWriteData    = errors.New("cannot write flash data")
+	errFlashCannotErasePage     = errors.New("cannot erase flash page")
+	errFlashInvalidWriteLength  = errors.New("write flash data must align to 64 bits")
+	errFlashNotAllowedWriteData = errors.New("not allowed to write flash data")
+	errFlashCannotWriteData     = errors.New("cannot write flash data")
 )
 
 var Flash flash
@@ -31,10 +32,6 @@ func (f flash) ErasePage(address uintptr) error {
 // WriteData writes the flash that starts at address with data.
 // Only double-word (64 bits) can be programmed. See rm0461 page 78.
 func (f flash) WriteData(address uintptr, data []byte) error {
-	if len(data)%4 != 0 {
-		return errFlashInvalidWriteLength
-	}
-
 	unlockFlash()
 	defer lockFlash()
 

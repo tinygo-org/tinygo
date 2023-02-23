@@ -65,17 +65,52 @@ func (fl *FlashBuffer) Write(p []byte) (n int, err error) {
 	pagesize := uintptr(FlashPageSize(fl.current))
 	currentPageCount := (fl.current - fl.start + pagesize - 1) / pagesize
 	totalPagesNeeded := (fl.current - fl.start + uintptr(len(p)) + pagesize - 1) / pagesize
-	pageAddress := fl.start + (currentPageCount * pagesize)
-	for i := 0; i < int(totalPagesNeeded-currentPageCount); i++ {
-		fl.f.ErasePage(pageAddress)
-		pageAddress += pagesize
+	if currentPageCount == totalPagesNeeded {
+		// just write the data
+		err := fl.f.WriteData(fl.current, p)
+		if err != nil {
+			return 0, err
+		}
+		fl.current += uintptr(len(p))
+		return len(p), nil
 	}
 
-	// TODO: write the data
-	return 0, nil
+	// erase enough pages to hold all data
+	nextPageAddress := fl.start + (currentPageCount * pagesize)
+	for i := 0; i < int(totalPagesNeeded-currentPageCount); i++ {
+		if err := fl.f.ErasePage(nextPageAddress); err != nil {
+			return 0, err
+		}
+		nextPageAddress += pagesize
+	}
+
+	// write the data
+	for i := 0; i < len(p); i += int(pagesize) {
+		var last int = i + int(pagesize)
+		if i+int(pagesize) > len(p) {
+			last = len(p)
+		}
+
+		err := fl.f.WriteData(fl.current, p[i:last])
+		if err != nil {
+			return 0, err
+		}
+		fl.current += uintptr(last - i)
+	}
+
+	return len(p), nil
 }
 
 // Close the FlashBuffer.
 func (fl *FlashBuffer) Close() error {
 	return nil
+}
+
+// Seek implements io.Seeker interface, but with limitations.
+// You can only seek relative to the start.
+// Also, you cannot use seek before write operations, only read.
+func (fl *FlashBuffer) Seek(offset int64, whence int) (int64, error) {
+	fl.current = fl.start + uintptr(offset)
+
+	return offset, nil
 }
