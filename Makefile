@@ -309,7 +309,6 @@ TEST_PACKAGES_FAST = \
 	internal/profile \
 	math \
 	math/cmplx \
-	mime/multipart \
 	net \
 	net/http/internal/ascii \
 	net/mail \
@@ -342,6 +341,7 @@ endif
 # image requires recover(), which is not  yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
 # mime/quotedprintable requires syscall.Faccessat
+# mime/multipart hangs on wasi and fails on windows
 # strconv requires recover() which is not yet supported on wasi
 # text/tabwriter requries recover(), which is not  yet supported on wasi
 # text/template/parse requires recover(), which is not yet supported on wasi
@@ -358,6 +358,7 @@ TEST_PACKAGES_LINUX := \
 	debug/plan9obj \
 	image \
 	io/ioutil \
+	mime/multipart \
 	mime/quotedprintable \
 	strconv \
 	testing/fstest \
