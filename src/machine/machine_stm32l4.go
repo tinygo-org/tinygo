@@ -5,6 +5,7 @@ package machine
 import (
 	"device/stm32"
 	"encoding/binary"
+	"errors"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -547,48 +548,37 @@ func initRNG() {
 
 //---------- Flash related code
 
-const flashPageSizeValue = 4096
+const flashPageSizeValue = 2048
 
 func flashPageSize(address uintptr) uint32 {
 	return flashPageSizeValue
 }
 
-func pageAndBankNumber(address uintptr) (uint32, uint32) {
-	switch {
-	case address >= 0x08000000 && address <= 0x080FFFFF:
-		return uint32(address-0x08000000) / flashPageSizeValue, 0
-	case address >= 0x08100000 && address <= 0x081FFFFF:
-		return uint32(address-0x08100000) / flashPageSizeValue, 1
-	default:
-		return 0, 0
-	}
-}
-
-// see RM0432 page 127
+// see RM0394 page 83
 func eraseFlashPage(address uintptr) error {
 	// calculate page number from address
-	var page, bank uint32 = pageAndBankNumber(address)
+	var page uint32 = uint32(address-0x08000000) / FlashPageSize(address)
 
-	// wait until other flash operations are done
-	for stm32.FLASH.GetSR_BSY() != 0 {
-	}
+	waitUntilFlashDone()
 
-	// TODO: check errors
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0x3FA)
 
 	// page erase operation
 	stm32.FLASH.SetCR_PER(1)
+	defer stm32.FLASH.SetCR_PER(0)
 
 	// set the page to be written
 	stm32.FLASH.SetCR_PNB(page)
 
-	// set the bank to be written
-	stm32.FLASH.SetCR_BKER(bank)
-
 	// start the page erase
 	stm32.FLASH.SetCR_START(1)
 
-	// wait until page erase is done
-	for stm32.FLASH.GetSR_BSY() != 0 {
+	waitUntilFlashDone()
+
+	// check for error
+	if err := checkError(); err != nil {
+		return err
 	}
 
 	return nil
@@ -596,37 +586,71 @@ func eraseFlashPage(address uintptr) error {
 
 const flashWriteLength = 8
 
-// see RM0432 page 128
+// see RM0394 page 84
 // It is only possible to program double word (2 x 32-bit data).
 func writeFlashData(address uintptr, data []byte) error {
 	if len(data)%flashWriteLength != 0 {
 		return errFlashInvalidWriteLength
 	}
 
-	// wait until other flash operations are done
-	for stm32.FLASH.GetSR_BSY() != 0 {
-	}
+	waitUntilFlashDone()
 
-	// start page write operation
-	stm32.FLASH.SetCR_PG(1)
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0x3FA)
 
-	// end page write when done
-	defer stm32.FLASH.SetCR_PG(0)
+	for j := 0; j < len(data); j += flashWriteLength {
+		// start page write operation
+		stm32.FLASH.SetCR_PG(1)
 
-	for i := 0; i < len(data); i += flashWriteLength {
-		// write first word in an address aligned with double-word
-		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[i : i+flashWriteLength/2])
+		// write first word using double-word low order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j+flashWriteLength/2 : j+flashWriteLength])
 
-		// now write second word
-		*(*uint32)(unsafe.Pointer(address + flashWriteLength/2)) = binary.BigEndian.Uint32(data[i+flashWriteLength/2 : i+flashWriteLength])
+		address += flashWriteLength / 2
+
+		// write second word using double-word high order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j : j+flashWriteLength/2])
 
 		// wait until not busy
-		for stm32.FLASH.GetSR_BSY() != 0 {
+		waitUntilFlashDone()
+
+		// check for error
+		if err := checkError(); err != nil {
+			return err
 		}
 
-		if stm32.FLASH.GetSR_EOP() == 0 {
-			return errFlashCannotWriteData
-		}
+		// end flash write
+		stm32.FLASH.SetCR_PG(0)
+		address += flashWriteLength / 2
+	}
+
+	return nil
+}
+
+func waitUntilFlashDone() {
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+}
+
+var (
+	errFlashPGS  = errors.New("errFlashPGS")
+	errFlashSIZE = errors.New("errFlashSIZE")
+	errFlashPGA  = errors.New("errFlashPGA")
+	errFlashWRP  = errors.New("errFlashWRP")
+	errFlashPROG = errors.New("errFlashPROG")
+)
+
+func checkError() error {
+	switch {
+	case stm32.FLASH.GetSR_PGSERR() != 0:
+		return errFlashPGS
+	case stm32.FLASH.GetSR_SIZERR() != 0:
+		return errFlashSIZE
+	case stm32.FLASH.GetSR_PGAERR() != 0:
+		return errFlashPGA
+	case stm32.FLASH.GetSR_WRPERR() != 0:
+		return errFlashWRP
+	case stm32.FLASH.GetSR_PROGERR() != 0:
+		return errFlashPROG
 	}
 
 	return nil
