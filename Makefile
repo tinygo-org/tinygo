@@ -312,6 +312,7 @@ TEST_PACKAGES_FAST = \
 	net \
 	net/http/internal/ascii \
 	net/mail \
+	net/textproto \
 	os \
 	path \
 	reflect \
@@ -337,9 +338,11 @@ endif
 # compress/lzw appears to hang on wasi
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
+# go/build/constraint requires recover(), which is not yet supported on wasi
 # image requires recover(), which is not  yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
 # mime/quotedprintable requires syscall.Faccessat
+# mime/multipart hangs on wasi and fails on windows
 # strconv requires recover() which is not yet supported on wasi
 # text/tabwriter requries recover(), which is not  yet supported on wasi
 # text/template/parse requires recover(), which is not yet supported on wasi
@@ -354,8 +357,10 @@ TEST_PACKAGES_LINUX := \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
+	go/build/constraint \
 	image \
 	io/ioutil \
+	mime/multipart \
 	mime/quotedprintable \
 	strconv \
 	testing/fstest \
