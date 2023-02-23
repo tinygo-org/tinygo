@@ -40,6 +40,9 @@ var (
 	ErrLSBNotSupported = errors.New("SPI LSB unsupported on PL022")
 	ErrSPITimeout      = errors.New("SPI timeout")
 	ErrSPIBaud         = errors.New("SPI baud too low or above 66.5Mhz")
+	errSPIInvalidSDI   = errors.New("invalid SPI SDI pin")
+	errSPIInvalidSDO   = errors.New("invalid SPI SDO pin")
+	errSPIInvalidSCK   = errors.New("invalid SPI SCK pin")
 )
 
 type SPI struct {
@@ -162,7 +165,7 @@ func (spi SPI) GetBaudRate() uint32 {
 // No pin configuration is needed of SCK, SDO and SDI needed after calling Configure.
 func (spi SPI) Configure(config SPIConfig) error {
 	const defaultBaud uint32 = 115200
-	if config.SCK == 0 {
+	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		// set default pins if config zero valued or invalid clock pin supplied.
 		switch spi.Bus {
 		case rp.SPI0:
@@ -174,6 +177,25 @@ func (spi SPI) Configure(config SPIConfig) error {
 			config.SDO = SPI1_SDO_PIN
 			config.SDI = SPI1_SDI_PIN
 		}
+	}
+	var okSDI, okSDO, okSCK bool
+	switch spi.Bus {
+	case rp.SPI0:
+		okSDI = config.SDI == 0 || config.SDI == 4 || config.SDI == 17
+		okSDO = config.SDO == 3 || config.SDO == 7 || config.SDO == 19
+		okSCK = config.SCK == 2 || config.SCK == 6 || config.SCK == 18
+	case rp.SPI1:
+		okSDI = config.SDI == 8 || config.SDI == 12
+		okSDO = config.SDO == 11 || config.SDO == 15
+		okSDO = config.SCK == 10 || config.SCK == 14
+	}
+
+	if !okSDI {
+		return errSPIInvalidSDI
+	} else if !okSDO {
+		return errSPIInvalidSDO
+	} else if !okSCK {
+		return errSPIInvalidSCK
 	}
 	if config.DataBits < 4 || config.DataBits > 16 {
 		config.DataBits = 8
