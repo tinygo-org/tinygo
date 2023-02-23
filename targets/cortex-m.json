@@ -8,7 +8,7 @@
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"automatic-stack-size": true,
-	"default-stack-size": 2048,
+	"default-stack-size": 4096,
 	"cflags": [
 		"-Werror",
 		"-fshort-enums",
