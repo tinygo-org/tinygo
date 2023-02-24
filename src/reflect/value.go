@@ -947,7 +947,7 @@ func MakeSlice(typ Type, len, cap int) Value {
 	return Value{
 		typecode: typ.(*rawType),
 		value:    unsafe.Pointer(&slice),
-		flags:    valueFlagIndirect,
+		flags:    valueFlagExported,
 	}
 
 }
