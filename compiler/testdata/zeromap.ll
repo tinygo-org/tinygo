@@ -31,9 +31,9 @@ entry:
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   call void @llvm.lifetime.start.p0(i64 12, ptr nonnull %hashmap.key)
   store %main.hasPadding %2, ptr %hashmap.key, align 8
-  %3 = getelementptr inbounds ptr, ptr %hashmap.key, i32 1
+  %3 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
   call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #4
-  %4 = getelementptr inbounds { i1, i32, i1 }, ptr %hashmap.key, i32 1
+  %4 = getelementptr inbounds i8, ptr %hashmap.key, i32 9
   call void @runtime.memzero(ptr nonnull %4, i32 3, ptr undef) #4
   %5 = call i1 @runtime.hashmapBinaryGet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, i32 4, ptr undef) #4
   call void @llvm.lifetime.end.p0(i64 12, ptr nonnull %hashmap.key)
@@ -69,9 +69,9 @@ entry:
   store i32 5, ptr %hashmap.value, align 4
   call void @llvm.lifetime.start.p0(i64 12, ptr nonnull %hashmap.key)
   store %main.hasPadding %2, ptr %hashmap.key, align 8
-  %3 = getelementptr inbounds ptr, ptr %hashmap.key, i32 1
+  %3 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
   call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #4
-  %4 = getelementptr inbounds { i1, i32, i1 }, ptr %hashmap.key, i32 1
+  %4 = getelementptr inbounds i8, ptr %hashmap.key, i32 9
   call void @runtime.memzero(ptr nonnull %4, i32 3, ptr undef) #4
   call void @runtime.hashmapBinarySet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, ptr undef) #4
   call void @llvm.lifetime.end.p0(i64 12, ptr nonnull %hashmap.key)
@@ -104,13 +104,13 @@ entry:
   %hashmap.key.repack8 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
   %s.elt9 = extractvalue [2 x %main.hasPadding] %s, 1
   store %main.hasPadding %s.elt9, ptr %hashmap.key.repack8, align 4
-  %0 = getelementptr inbounds ptr, ptr %hashmap.key, i32 1
+  %0 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
   call void @runtime.memzero(ptr nonnull %0, i32 3, ptr undef) #4
-  %1 = getelementptr inbounds %main.hasPadding, ptr %hashmap.key, i32 1
+  %1 = getelementptr inbounds i8, ptr %hashmap.key, i32 9
   call void @runtime.memzero(ptr nonnull %1, i32 3, ptr undef) #4
-  %2 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1, i32 1
+  %2 = getelementptr inbounds i8, ptr %hashmap.key, i32 13
   call void @runtime.memzero(ptr nonnull %2, i32 3, ptr undef) #4
-  %3 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 1
+  %3 = getelementptr inbounds i8, ptr %hashmap.key, i32 21
   call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #4
   %4 = call i1 @runtime.hashmapBinaryGet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, i32 4, ptr undef) #4
   call void @llvm.lifetime.end.p0(i64 24, ptr nonnull %hashmap.key)
@@ -143,13 +143,13 @@ entry:
   %hashmap.key.repack8 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
   %s.elt9 = extractvalue [2 x %main.hasPadding] %s, 1
   store %main.hasPadding %s.elt9, ptr %hashmap.key.repack8, align 4
-  %0 = getelementptr inbounds ptr, ptr %hashmap.key, i32 1
+  %0 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
   call void @runtime.memzero(ptr nonnull %0, i32 3, ptr undef) #4
-  %1 = getelementptr inbounds %main.hasPadding, ptr %hashmap.key, i32 1
+  %1 = getelementptr inbounds i8, ptr %hashmap.key, i32 9
   call void @runtime.memzero(ptr nonnull %1, i32 3, ptr undef) #4
-  %2 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1, i32 1
+  %2 = getelementptr inbounds i8, ptr %hashmap.key, i32 13
   call void @runtime.memzero(ptr nonnull %2, i32 3, ptr undef) #4
-  %3 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 1
+  %3 = getelementptr inbounds i8, ptr %hashmap.key, i32 21
   call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #4
   call void @runtime.hashmapBinarySet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, ptr undef) #4
   call void @llvm.lifetime.end.p0(i64 24, ptr nonnull %hashmap.key)

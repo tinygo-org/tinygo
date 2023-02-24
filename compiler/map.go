@@ -325,7 +325,14 @@ func (b *builder) zeroUndefBytes(llvmType llvm.Type, ptr llvm.Value) error {
 			if fieldEndOffset != nextOffset {
 				n := llvm.ConstInt(b.uintptrType, nextOffset-fieldEndOffset, false)
 				llvmStoreSize := llvm.ConstInt(b.uintptrType, storeSize, false)
-				paddingStart := b.CreateInBoundsGEP(b.i8ptrType, elemPtr, []llvm.Value{llvmStoreSize}, "")
+				gepPtr := elemPtr
+				if gepPtr.Type() != b.i8ptrType {
+					gepPtr = b.CreateBitCast(gepPtr, b.i8ptrType, "") // LLVM 14
+				}
+				paddingStart := b.CreateInBoundsGEP(b.ctx.Int8Type(), gepPtr, []llvm.Value{llvmStoreSize}, "")
+				if paddingStart.Type() != b.i8ptrType {
+					paddingStart = b.CreateBitCast(paddingStart, b.i8ptrType, "") // LLVM 14
+				}
 				b.createRuntimeCall("memzero", []llvm.Value{paddingStart, n}, "")
 			}
 		}
