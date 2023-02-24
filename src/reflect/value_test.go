@@ -177,6 +177,10 @@ func TestSlice(t *testing.T) {
 	var a [10]int
 	v := reflect.ValueOf(&a)
 
+	if got, want := v.String(), "<*[10]int Value>"; got != want {
+		t.Errorf("v.String()=%q, want %q", got, want)
+	}
+
 	for i := 0; i < v.Elem().Len(); i++ {
 		v.Elem().Index(i).Set(reflect.ValueOf(i))
 	}

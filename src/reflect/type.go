@@ -53,6 +53,7 @@
 package reflect
 
 import (
+	"internal/itoa"
 	"unsafe"
 )
 
@@ -485,6 +486,22 @@ func (t *rawType) String() string {
 		return "T"
 	}
 	// TODO(dgryski): doesn't yet handle complex types
+
+	switch t.Kind() {
+	case Chan:
+		return "chan " + t.elem().String()
+	case Pointer:
+		return "*" + t.elem().String()
+	case Slice:
+		return "[]" + t.elem().String()
+	case Array:
+		return "[" + itoa.Itoa(t.Len()) + "]" + t.elem().String()
+	case Map:
+		return "map[" + t.key().String() + "]" + t.elem().String()
+	default:
+		return t.Kind().String()
+	}
+
 	return t.Kind().String()
 }
 
