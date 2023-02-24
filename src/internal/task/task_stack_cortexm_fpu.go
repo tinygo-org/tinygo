@@ -1,4 +1,4 @@
-//go:build scheduler.tasks && cortexm && !fpu
+//go:build scheduler.tasks && cortexm && fpu
 
 package task
 
@@ -25,8 +25,8 @@ type calleeSavedRegs struct {
 	r9  uintptr
 	r10 uintptr
 	r11 uintptr
-
-	pc uintptr
+	pc  uintptr
+	s   [32]uintptr
 }
 
 // archInit runs architecture-specific setup for the goroutine startup.

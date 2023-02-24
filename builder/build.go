@@ -796,7 +796,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			if config.AutomaticStackSize() {
 				// Modify the .tinygo_stacksizes section that contains a stack size
 				// for each goroutine.
-				err = modifyStackSizes(result.Executable, stackSizeLoads, stackSizes)
+				err = modifyStackSizes(result.Executable, stackSizeLoads, stackSizes, config)
 				if err != nil {
 					return fmt.Errorf("could not modify stack sizes: %w", err)
 				}
@@ -1294,7 +1294,7 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 // modifyStackSizes modifies the .tinygo_stacksizes section with the updated
 // stack size information. Before this modification, all stack sizes in the
 // section assume the default stack size (which is relatively big).
-func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map[string]functionStackSize) error {
+func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map[string]functionStackSize, config *compileopts.Config) error {
 	data, fileHeader, err := getElfSectionData(executable, ".tinygo_stacksizes")
 	if err != nil {
 		return err
@@ -1338,11 +1338,22 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 				// https://interrupt.memfault.com/blog/cortex-m-rtos-context-switching
 				stackSize += 32
 
-				// Adding 4 for the stack canary, and another 4 to keep the
-				// stack aligned. Even though the size may be automatically
-				// determined, stack overflow checking is still important as the
-				// stack size cannot be determined for all goroutines.
-				stackSize += 8
+				if sort.SearchStrings(config.CFlags(), "-mfloat-abi=hard") != len(config.CFlags()) {
+					println("Detected FPU")
+					// The stack will contain 17 additional words or 68 bytes
+					// (S0-S15 and FPSCR) when the FPU is enabled. Add 4
+					// bytes to maintain an 8-byte alignment.
+					stackSize += 72
+				} else {
+					// Adding 4 bytes to keep the stack aligned. Even though the size
+					// may be automatically determined, stack overflow checking is
+					// still important as the stack size cannot be determined
+					// for all goroutines.
+					stackSize += 4
+				}
+
+				// Adding 4 for the stack canary.
+				stackSize += 4
 			default:
 				return fmt.Errorf("unknown architecture: %s", fileHeader.Machine.String())
 			}

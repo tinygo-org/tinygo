@@ -40,7 +40,11 @@ tinygo_switchToScheduler:
     // Currently on the task stack (SP=PSP). We need to store the position on
     // the stack where the in-use registers will be stored.
     mov r1, sp
-    subs r1, #36
+#if defined(FPU_ENABLED)
+    subs r1, #41*4      // Includes the floating-point registers
+#else
+    subs r1, #9*4
+#endif
     str r1, [r0]
 
     b tinygo_swapTask
@@ -87,8 +91,18 @@ tinygo_swapTask:
     // will be the pc after returning back to the old task (in a different
     // invocation of swapTask).
     #if defined(__thumb2__)
-    push {r4-r11, lr}
-    .cfi_def_cfa_offset 9*4
+        #if defined(FPU_ENABLED)
+            vpush {s0-s31}              // Push the floating-point registers to the stack
+            .cfi_def_cfa_offset 32*4
+        #endif
+
+        push {r4-r11, lr}
+
+        #if defined(FPU_ENABLED)
+            .cfi_def_cfa_offset 41*4
+        #else
+            .cfi_def_cfa_offset 9*4
+        #endif
     #else
     mov r0, r8
     mov r1, r9
@@ -111,7 +125,12 @@ tinygo_swapTask:
     // Load state from new task and branch to the previous position in the
     // program.
     #if defined(__thumb2__)
-    pop {r4-r11, pc}
+    pop {r4-r11}
+    pop {r1}
+    #if defined(FPU_ENABLED)
+        vpop {s0-s31}               // Pop the floating-point registers from the stack
+    #endif
+    mov pc, r1                  // Jump to the instruct this task was to execute next
     #else
     pop {r4-r7}
     .cfi_def_cfa_offset 5*9

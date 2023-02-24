@@ -15,8 +15,17 @@ type timeUnit int64
 
 //export Reset_Handler
 func main() {
-	arm.SCB.CPACR.Set(0) // disable FPU if it is enabled
 	preinit()
+
+	if fpuEnabled {
+		// Enabled full-access to FPU if the FPU should be enabled
+		arm.SCB.CPACR.ReplaceBits(arm.SCB_CPACR_CP_FULL_ACCESS, arm.SCB_CPACR_CP10_Msk, arm.SCB_CPACR_CP10_Pos)
+		arm.SCB.CPACR.ReplaceBits(arm.SCB_CPACR_CP_FULL_ACCESS, arm.SCB_CPACR_CP11_Msk, arm.SCB_CPACR_CP11_Pos)
+	} else {
+		// Disable the fpu
+		arm.SCB.CPACR.Set(0)
+	}
+
 	run()
 	exit(0)
 }
@@ -264,8 +273,8 @@ func nanosecondsToTicks(ns int64) timeUnit {
 func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks := uint32(d)
-		if !timerSleep(ticks) {
-			return
+		if timeUnit(ticks) != d {
+			ticks = 0xffffffff
 		}
 		d -= timeUnit(ticks)
 	}
