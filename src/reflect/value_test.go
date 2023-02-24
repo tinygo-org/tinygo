@@ -173,6 +173,38 @@ func TestStruct(t *testing.T) {
 
 }
 
+func TestSlice(t *testing.T) {
+	var a [10]int
+	v := reflect.ValueOf(&a)
+
+	for i := 0; i < v.Elem().Len(); i++ {
+		v.Elem().Index(i).Set(reflect.ValueOf(i))
+	}
+
+	for i := 0; i < len(a); i++ {
+		if a[i] != i {
+			t.Errorf("v.Elem().Index(%d).Set(reflect.ValueOf(%d)=%v, want %d\n", i, i, a[i], i)
+		}
+	}
+
+	s := a[:]
+	v = reflect.ValueOf(s)
+
+	s28 := a[2:8]
+	s28ref := v.Slice(2, 8)
+
+	if len(s28) != s28ref.Len() || cap(s28) != s28ref.Cap() {
+		t.Errorf("len(s28)=%d s28ref.Len()=%d cap(s28)=%d s28ref.Cap()=%d\n", len(s28), s28ref.Len(), cap(s28), s28ref.Cap())
+	}
+
+	for i, got := range s28 {
+		want := int(s28ref.Index(i).Int())
+		if got != want {
+			t.Errorf("s28[%d]=%d, want %d", i, got, want)
+		}
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false

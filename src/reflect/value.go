@@ -395,7 +395,77 @@ func (v Value) Bytes() []byte {
 }
 
 func (v Value) Slice(i, j int) Value {
-	panic("unimplemented: (reflect.Value).Slice()")
+
+	switch v.Kind() {
+	case Slice:
+		hdr := *(*sliceHeader)(v.value)
+
+		i, j := uintptr(i), uintptr(j)
+
+		if i < 0 || i > hdr.len || j < 0 || j > hdr.len {
+			slicePanic()
+		}
+
+		elemSize := v.typecode.underlying().elem().Size()
+
+		hdr.len = j - i
+		hdr.cap = hdr.cap - i
+		hdr.data = unsafe.Add(hdr.data, i*elemSize)
+
+		return Value{
+			typecode: v.typecode,
+			value:    unsafe.Pointer(&hdr),
+			flags:    v.flags,
+		}
+
+	case Array:
+		// TODO(dgryski): can't do this yet because the resulting value needs type slice of v.elem(), not array of v.elem().
+		// need to be able to look up this "new" type so pointer equality of types still works
+
+		/*
+			if i < 0 || i > hdr.len || j < 0 || j > hdr.len {
+				slicePanic()
+			}
+
+			elemSize := v.typecode.Size()
+			hdr := sliceHeader {
+			    data: unsafe.Add(hdr.data, elemSize * i)
+			    hdr.len: j - i
+			    hdr.cap:  v.typecode.Len() - i
+			}
+
+			return Value{
+				typecode: v.typecode, <-- new type goes here
+				value:    unsafe.Pointer(&hdr),
+				flags:    v.flags,
+			}
+		*/
+
+	case String:
+
+		i, j := uintptr(i), uintptr(j)
+
+		str := *(*stringHeader)(v.value)
+
+		if i < 0 || i > str.len || j < 0 || j > str.len {
+			slicePanic()
+		}
+
+		hdr := sliceHeader{
+			data: unsafe.Add(str.data, i),
+			len:  j - i,
+			cap:  str.len - i,
+		}
+
+		return Value{
+			typecode: v.typecode,
+			value:    unsafe.Pointer(&hdr),
+			flags:    v.flags,
+		}
+	}
+
+	panic(&ValueError{"Slice", v.Kind()})
+
 }
 
 func (v Value) Slice3(i, j, k int) Value {
