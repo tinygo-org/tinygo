@@ -493,7 +493,7 @@ func (v Value) Len() int {
 	case String:
 		return int((*stringHeader)(v.value).len)
 	default:
-		panic(&ValueError{Method: "Len"})
+		panic(&ValueError{Method: "Len", Kind: v.Kind()})
 	}
 }
 
@@ -511,7 +511,7 @@ func (v Value) Cap() int {
 	case Slice:
 		return int((*sliceHeader)(v.value).cap)
 	default:
-		panic(&ValueError{Method: "Cap"})
+		panic(&ValueError{Method: "Cap", Kind: v.Kind()})
 	}
 }
 
@@ -541,12 +541,16 @@ func (v Value) Elem() Value {
 			flags:    v.flags &^ valueFlagIndirect,
 		}
 	default:
-		panic(&ValueError{Method: "Elem"})
+		panic(&ValueError{Method: "Elem", Kind: v.Kind()})
 	}
 }
 
 // Field returns the value of the i'th field of this struct.
 func (v Value) Field(i int) Value {
+	if v.Kind() != Struct {
+		panic(&ValueError{Method: "Field", Kind: v.Kind()})
+	}
+
 	structField := v.typecode.rawField(i)
 	flags := v.flags
 	if structField.PkgPath != "" {
@@ -691,7 +695,7 @@ func (v Value) Index(i int) Value {
 			value:    unsafe.Pointer(value),
 		}
 	default:
-		panic(&ValueError{Method: "Index"})
+		panic(&ValueError{Method: "Index", Kind: v.Kind()})
 	}
 }
 
@@ -770,6 +774,7 @@ func (v Value) MapIndex(key Value) Value {
 
 	// compare key type with actual key type of map
 	if key.typecode != v.typecode.key() {
+		// type error?
 		panic(&ValueError{Method: "MapIndex"})
 	}
 
@@ -799,6 +804,10 @@ func (v Value) MapIndex(key Value) Value {
 }
 
 func (v Value) MapRange() *MapIter {
+	if v.Kind() != Map {
+		panic(&ValueError{Method: "MapRange", Kind: v.Kind()})
+	}
+
 	return &MapIter{
 		m:   v,
 		it:  hashmapNewIterator(),
@@ -873,7 +882,7 @@ func (v Value) SetBool(x bool) {
 	case Bool:
 		*(*bool)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetBool"})
+		panic(&ValueError{Method: "SetBool", Kind: v.Kind()})
 	}
 }
 
@@ -892,7 +901,7 @@ func (v Value) SetInt(x int64) {
 	case Int64:
 		*(*int64)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetInt"})
+		panic(&ValueError{Method: "SetInt", Kind: v.Kind()})
 	}
 }
 
@@ -913,7 +922,7 @@ func (v Value) SetUint(x uint64) {
 	case Uintptr:
 		*(*uintptr)(v.value) = uintptr(x)
 	default:
-		panic(&ValueError{Method: "SetUint"})
+		panic(&ValueError{Method: "SetUint", Kind: v.Kind()})
 	}
 }
 
@@ -926,7 +935,7 @@ func (v Value) SetFloat(x float64) {
 	case Float64:
 		*(*float64)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetFloat"})
+		panic(&ValueError{Method: "SetFloat", Kind: v.Kind()})
 	}
 }
 
@@ -939,7 +948,7 @@ func (v Value) SetComplex(x complex128) {
 	case Complex128:
 		*(*complex128)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetComplex"})
+		panic(&ValueError{Method: "SetComplex", Kind: v.Kind()})
 	}
 }
 
@@ -950,7 +959,7 @@ func (v Value) SetString(x string) {
 	case String:
 		*(*string)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetString"})
+		panic(&ValueError{Method: "SetString", Kind: v.Kind()})
 	}
 }
 
