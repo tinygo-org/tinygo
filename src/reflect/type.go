@@ -532,6 +532,7 @@ func (t *rawType) Field(i int) StructField {
 		Tag:       field.Tag,
 		Anonymous: field.Anonymous,
 		Offset:    field.Offset,
+		Index:     []int{i},
 	}
 }
 
@@ -912,6 +913,7 @@ func (t *rawType) FieldByName(name string) (StructField, bool) {
 				Tag:       field.Tag,
 				Anonymous: field.Anonymous,
 				Offset:    field.Offset,
+				Index:     []int{i},
 			}, true
 		}
 	}
@@ -939,6 +941,7 @@ func (t *rawType) FieldByIndex(index []int) StructField {
 		Tag:       field.Tag,
 		Anonymous: field.Anonymous,
 		Offset:    field.Offset,
+		Index:     index,
 	}
 }
 
