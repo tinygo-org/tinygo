@@ -391,7 +391,33 @@ func (v Value) String() string {
 }
 
 func (v Value) Bytes() []byte {
-	panic("unimplemented: (reflect.Value).Bytes()")
+
+	switch v.Kind() {
+	case Slice:
+		if v.typecode.elem().Kind() != Uint8 {
+			panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
+		}
+		hdr := *(*sliceHeader)(v.value)
+		return *(*[]byte)(unsafe.Pointer(&hdr))
+
+	case Array:
+		if v.typecode.elem().Kind() != Uint8 {
+			panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
+		}
+
+		var hdr sliceHeader
+
+		l := uintptr(v.Len())
+
+		hdr.len = l
+		hdr.cap = l
+		hdr.data = v.value
+
+		return *(*[]byte)(unsafe.Pointer(&hdr))
+
+	}
+
+	panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
 }
 
 func (v Value) Slice(i, j int) Value {
@@ -1196,25 +1222,53 @@ func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
 func Copy(dst, src Value) int {
-
-	if dst.typecode.Kind() != Slice {
-		panic("dst not slice " + dst.typecode.Kind().String())
-	}
-
-	if src.typecode.Kind() != Slice {
-		panic("src not slice")
-	}
-
-	if dst.typecode != src.typecode {
-		panic("type mismatch")
-	}
-
 	dst.checkRO()
 
-	dhdr := (*sliceHeader)(dst.value)
-	shdr := (*sliceHeader)(src.value)
+	compatibleTypes := false ||
+		// dst and src are both slices or arrays with equal types
+		((dst.typecode.Kind() == Slice || dst.typecode.Kind() == Array) &&
+			(src.typecode.Kind() == Slice || src.typecode.Kind() == Array) &&
+			(dst.typecode.elem() == src.typecode.elem())) ||
+		// dst is array or slice of uint8 and src is string
+		((dst.typecode.Kind() == Slice || dst.typecode.Kind() == Array) &&
+			dst.typecode.elem().Kind() == Uint8 &&
+			src.typecode.Kind() == String)
 
-	return sliceCopy(dhdr.data, shdr.data, dhdr.len, shdr.len, dst.typecode.Elem().Size())
+	if !compatibleTypes {
+		panic("Copy: type mismatch: " + dst.typecode.String() + "/" + src.typecode.String())
+	}
+
+	dstbuf, dstlen := buflen(dst)
+	srcbuf, srclen := buflen(src)
+
+	return sliceCopy(dstbuf, srcbuf, dstlen, srclen, dst.typecode.elem().Size())
+}
+
+func buflen(v Value) (unsafe.Pointer, uintptr) {
+	var buf unsafe.Pointer
+	var len uintptr
+	switch v.typecode.Kind() {
+	case Slice:
+		hdr := (*sliceHeader)(v.value)
+		buf = hdr.data
+		len = hdr.len
+	case Array:
+		if v.isIndirect() {
+			buf = v.value
+			len = uintptr(v.Len())
+		} else {
+			// TODO(dgryski): Need to fix this
+			panic("Copy: does not support small inline arrays")
+		}
+	case String:
+		hdr := (*stringHeader)(v.value)
+		buf = hdr.data
+		len = hdr.len
+	default:
+		panic("reflect.Copy: not slice or array or string")
+	}
+
+	return buf, len
 }
 
 //go:linkname sliceGrow runtime.sliceGrow

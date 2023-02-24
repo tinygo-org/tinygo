@@ -221,6 +221,36 @@ func TestSlice(t *testing.T) {
 			t.Errorf("s268[%d]=%d, want %d", i, got, want)
 		}
 	}
+}
+
+func TestBytes(t *testing.T) {
+
+	b := []byte("12345")
+	bref := reflect.ValueOf(b)
+
+	refbytes := bref.Bytes()
+
+	if !reflect.DeepEqual(refbytes, b) {
+		t.Errorf("Failed to get bytes back: %v != %v", refbytes, b)
+	}
+
+	var a [16]byte
+	aref := reflect.ValueOf(&a)
+
+	reflect.Copy(aref.Elem(), bref)
+
+	var want [16]byte
+	copy(want[:], b)
+
+	if want != a || reflect.DeepEqual(aref.Elem(), reflect.ValueOf(want)) {
+		t.Errorf("Copy/Bytes failed: %v != %v", a, want)
+	}
+
+	reflect.Copy(bref, reflect.ValueOf("abcde"))
+
+	if string(b) != "abcde" {
+		t.Errorf("Copy()=%q, want `abcde`", string(b))
+	}
 
 }
 
