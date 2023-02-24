@@ -203,6 +203,21 @@ func TestSlice(t *testing.T) {
 			t.Errorf("s28[%d]=%d, want %d", i, got, want)
 		}
 	}
+
+	s268 := a[2:6:8]
+	s268ref := v.Slice3(2, 6, 8)
+
+	if len(s268) != s268ref.Len() || cap(s268) != s268ref.Cap() {
+		t.Errorf("len(s268)=%d s268ref.Len()=%d cap(s268)=%d s268ref.Cap()=%d\n", len(s268), s268ref.Len(), cap(s268), s268ref.Cap())
+	}
+
+	for i, got := range s268 {
+		want := int(s268ref.Index(i).Int())
+		if got != want {
+			t.Errorf("s268[%d]=%d, want %d", i, got, want)
+		}
+	}
+
 }
 
 func equal[T comparable](a, b []T) bool {
