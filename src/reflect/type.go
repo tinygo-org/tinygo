@@ -471,6 +471,8 @@ func PointerTo(t Type) Type {
 func pointerTo(t *rawType) *rawType {
 	switch t.Kind() {
 	case Pointer:
+		// TODO(dgryski): This is blocking https://github.com/tinygo-org/tinygo/issues/3131
+		// We need to be able to create types that match existing types to prevent typecode equality.
 		panic("reflect: cannot make **T type")
 	case Struct:
 		return (*structType)(unsafe.Pointer(t)).ptrTo
