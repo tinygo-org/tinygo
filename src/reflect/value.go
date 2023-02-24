@@ -14,6 +14,7 @@ type valueFlags uint8
 const (
 	valueFlagIndirect valueFlags = 1 << iota
 	valueFlagExported
+	valueFlagRO
 )
 
 type Value struct {
@@ -34,6 +35,10 @@ func (v Value) isIndirect() bool {
 // set for unexported struct fields.
 func (v Value) isExported() bool {
 	return v.flags&valueFlagExported != 0
+}
+
+func (v Value) isRO() bool {
+	return v.flags&valueFlagRO == valueFlagRO
 }
 
 func Indirect(v Value) Value {
@@ -213,7 +218,7 @@ func (v Value) CanInterface() bool {
 }
 
 func (v Value) CanAddr() bool {
-	return v.flags&(valueFlagIndirect) == valueFlagIndirect
+	return v.flags&(valueFlagIndirect&^valueFlagRO) == valueFlagIndirect&^valueFlagRO
 }
 
 func (v Value) Addr() Value {
@@ -229,7 +234,7 @@ func (v Value) Addr() Value {
 }
 
 func (v Value) CanSet() bool {
-	return v.flags&(valueFlagExported|valueFlagIndirect) == valueFlagExported|valueFlagIndirect
+	return v.flags&(valueFlagExported|valueFlagIndirect)&^valueFlagRO == (valueFlagExported|valueFlagIndirect)&^valueFlagRO
 }
 
 func (v Value) Bool() bool {
@@ -778,6 +783,7 @@ func (it *MapIter) Next() bool {
 
 func (v Value) Set(x Value) {
 	v.checkAddressable()
+	v.checkRO()
 	if !v.typecode.AssignableTo(x.typecode) {
 		panic("reflect: cannot set")
 	}
@@ -792,6 +798,7 @@ func (v Value) Set(x Value) {
 
 func (v Value) SetBool(x bool) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Bool:
 		*(*bool)(v.value) = x
@@ -802,6 +809,7 @@ func (v Value) SetBool(x bool) {
 
 func (v Value) SetInt(x int64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Int:
 		*(*int)(v.value) = int(x)
@@ -820,6 +828,7 @@ func (v Value) SetInt(x int64) {
 
 func (v Value) SetUint(x uint64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Uint:
 		*(*uint)(v.value) = uint(x)
@@ -840,6 +849,7 @@ func (v Value) SetUint(x uint64) {
 
 func (v Value) SetFloat(x float64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Float32:
 		*(*float32)(v.value) = float32(x)
@@ -852,6 +862,7 @@ func (v Value) SetFloat(x float64) {
 
 func (v Value) SetComplex(x complex128) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Complex64:
 		*(*complex64)(v.value) = complex64(x)
@@ -864,6 +875,7 @@ func (v Value) SetComplex(x complex128) {
 
 func (v Value) SetString(x string) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case String:
 		*(*string)(v.value) = x
@@ -885,6 +897,8 @@ func (v Value) SetLen(n int) {
 		panic(&ValueError{"reflect.Value.SetLen", v.Kind()})
 	}
 
+	v.checkRO()
+
 	hdr := (*sliceHeader)(v.value)
 	if uintptr(n) > hdr.cap {
 		panic("reflect.Value.SetLen: slice length out of range")
@@ -895,6 +909,12 @@ func (v Value) SetLen(n int) {
 func (v Value) checkAddressable() {
 	if !v.isIndirect() {
 		panic("reflect: value is not addressable")
+	}
+}
+
+func (v Value) checkRO() {
+	if v.isRO() {
+		panic("reflect: value is not settable")
 	}
 }
 
@@ -949,11 +969,38 @@ func MakeSlice(typ Type, len, cap int) Value {
 		value:    unsafe.Pointer(&slice),
 		flags:    valueFlagExported,
 	}
-
 }
 
+var zerobuffer [256]byte
+
 func Zero(typ Type) Value {
-	panic("unimplemented: reflect.Zero()")
+
+	if typ.Size() < unsafe.Sizeof(uintptr(0)) {
+		return Value{
+			typecode: typ.(*rawType),
+			value:    nil,
+			flags:    valueFlagRO,
+		}
+	}
+
+	if typ.Size() < uintptr(len(zerobuffer)) {
+		flags := valueFlagRO
+		if typ.Kind() != Slice {
+			flags |= valueFlagIndirect
+		}
+
+		return Value{
+			typecode: typ.(*rawType),
+			value:    unsafe.Pointer(&zerobuffer[0]),
+			flags:    flags,
+		}
+	}
+
+	return Value{
+		typecode: typ.(*rawType),
+		value:    alloc(typ.Size(), nil),
+		flags:    valueFlagRO | valueFlagIndirect,
+	}
 }
 
 // New is the reflect equivalent of the new(T) keyword, returning a pointer to a
@@ -1055,6 +1102,8 @@ func Copy(dst, src Value) int {
 		panic("type mismatch")
 	}
 
+	dst.checkRO()
+
 	dhdr := (*sliceHeader)(dst.value)
 	shdr := (*sliceHeader)(src.value)
 
@@ -1093,6 +1142,7 @@ func (v *Value) extendSlice(n int) {
 // Append appends the values x to a slice s and returns the resulting slice.
 // As in Go, each x's value must be assignable to the slice's element type.
 func Append(v Value, x ...Value) Value {
+	//TODO(dgrysk): v.checkRO() ?
 	if v.Kind() != Slice {
 		panic(&ValueError{Method: "Append", Kind: v.Kind()})
 	}
@@ -1116,6 +1166,7 @@ func AppendSlice(s, t Value) Value {
 		// One of the sides was not exported, so can't access the data.
 		panic("reflect.AppendSlice: unexported")
 	}
+	// TODO(dgryski): s.checkRO()
 	sSlice := (*sliceHeader)(s.value)
 	tSlice := (*sliceHeader)(t.value)
 	elemSize := s.typecode.elem().Size()
@@ -1142,6 +1193,8 @@ func (v Value) SetMapIndex(key, elem Value) {
 	if v.Kind() != Map {
 		panic(&ValueError{Method: "SetMapIndex", Kind: v.Kind()})
 	}
+
+	v.checkRO()
 
 	// compare key type with actual key type of map
 	if key.typecode != v.typecode.key() {
