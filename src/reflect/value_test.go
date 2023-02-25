@@ -44,4 +44,13 @@ func TestMap(t *testing.T) {
 	if got, want := mtyp.Elem().Kind().String(), "int"; got != want {
 		t.Errorf("m.Elem().String()=%q, want %q", got, want)
 	}
+
+	m["foo"] = 2
+
+	mref := ValueOf(m)
+	two := mref.MapIndex(ValueOf("foo"))
+
+	if got, want := two.Interface().(int), 2; got != want {
+		t.Errorf("MapIndex(`foo`)=%v, want %v", got, want)
+	}
 }
