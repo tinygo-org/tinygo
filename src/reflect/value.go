@@ -687,23 +687,53 @@ func (v Value) MapIndex(key Value) Value {
 	panic("unimplemented: (reflect.Value).MapIndex()")
 }
 
+//go:linkname hashmapNewIterator runtime.hashmapNewIterator
+func hashmapNewIterator() unsafe.Pointer
+
+//go:linkname hashmapNext runtime.hashmapNextUnsafePointer
+func hashmapNext(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool
+
 func (v Value) MapRange() *MapIter {
-	panic("unimplemented: (reflect.Value).MapRange()")
+	if v.Kind() != Map {
+		panic(&ValueError{Method: "MapRange", Kind: v.Kind()})
+	}
+
+	return &MapIter{
+		m:   v,
+		it:  hashmapNewIterator(),
+		key: New(v.typecode.Key()),
+		val: New(v.typecode.Elem()),
+	}
 }
 
 type MapIter struct {
+	m   Value
+	it  unsafe.Pointer
+	key Value
+	val Value
+
+	valid bool
 }
 
 func (it *MapIter) Key() Value {
-	panic("unimplemented: (*reflect.MapIter).Key()")
+	if !it.valid {
+		panic("reflect.MapIter.Key called on invalid iterator")
+	}
+
+	return it.key.Elem()
 }
 
 func (it *MapIter) Value() Value {
-	panic("unimplemented: (*reflect.MapIter).Value()")
+	if !it.valid {
+		panic("reflect.MapIter.Value called on invalid iterator")
+	}
+
+	return it.val.Elem()
 }
 
 func (it *MapIter) Next() bool {
-	panic("unimplemented: (*reflect.MapIter).Next()")
+	it.valid = hashmapNext(it.m.pointer(), it.it, it.key.value, it.val.value)
+	return it.valid
 }
 
 func (v Value) Set(x Value) {

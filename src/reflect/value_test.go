@@ -2,6 +2,7 @@ package reflect_test
 
 import (
 	. "reflect"
+	"sort"
 	"testing"
 )
 
@@ -53,4 +54,48 @@ func TestMap(t *testing.T) {
 	if got, want := two.Interface().(int), 2; got != want {
 		t.Errorf("MapIndex(`foo`)=%v, want %v", got, want)
 	}
+
+	m["bar"] = 3
+	m["baz"] = 4
+	m["qux"] = 5
+
+	it := mref.MapRange()
+
+	var gotKeys []string
+	for it.Next() {
+		k := it.Key()
+		v := it.Value()
+
+		kstr := k.Interface().(string)
+		vint := v.Interface().(int)
+
+		gotKeys = append(gotKeys, kstr)
+
+		if m[kstr] != vint {
+			t.Errorf("m[%v]=%v, want %v", kstr, vint, m[kstr])
+		}
+	}
+	var wantKeys []string
+	for k := range m {
+		wantKeys = append(wantKeys, k)
+	}
+	sort.Strings(gotKeys)
+	sort.Strings(wantKeys)
+
+	if !equal(gotKeys, wantKeys) {
+		t.Errorf("MapRange return unexpected keys: got %v, want %v", gotKeys, wantKeys)
+	}
+}
+
+func equal[T comparable](a, b []T) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i, aa := range a {
+		if b[i] != aa {
+			return false
+		}
+	}
+	return true
 }
