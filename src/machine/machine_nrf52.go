@@ -63,3 +63,9 @@ var (
 	PWM1 = &PWM{PWM: nrf.PWM1}
 	PWM2 = &PWM{PWM: nrf.PWM2}
 )
+
+const flashPageSizeValue = 4096
+
+func flashPageSize(address uintptr) uint32 {
+	return flashPageSizeValue
+}

@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/nrf"
+	"encoding/binary"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -381,4 +382,58 @@ func ReadTemperature() int32 {
 	temp := int32(nrf.TEMP.TEMP.Get()) * 250 // the returned value is in units of 0.25°C
 	nrf.TEMP.EVENTS_DATARDY.Set(0)
 	return temp
+}
+
+var Flash flash
+
+type flash struct {
+}
+
+// ErasePage erases the page of flash data that starts at address.
+func (f flash) ErasePage(address uintptr) error {
+	waitWhileFlashBusy()
+
+	nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Een)
+	defer nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Ren)
+
+	nrf.NVMC.ERASEPAGE.Set(uint32(address))
+	waitWhileFlashBusy()
+	return nil
+}
+
+const flashWriteLength = 4
+
+// WriteData writes the flash that starts at address with data.
+// Only words (32 bits) can be programmed.
+func (f flash) WriteData(address uintptr, data []byte) error {
+	if len(data)%flashWriteLength != 0 {
+		return errFlashInvalidWriteLength
+	}
+
+	waitWhileFlashBusy()
+
+	nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Wen)
+	defer nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Ren)
+
+	for j := 0; j < len(data); j += flashWriteLength {
+		// write word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(data[j : j+flashWriteLength])
+		address += flashWriteLength
+		waitWhileFlashBusy()
+	}
+
+	return nil
+}
+
+// ReadData reads the data starting at address.
+func (f flash) ReadData(address uintptr, data []byte) (n int, err error) {
+	p := unsafe.Slice((*byte)(unsafe.Pointer(address)), len(data))
+	copy(data, p)
+
+	return len(data), nil
+}
+
+func waitWhileFlashBusy() {
+	for nrf.NVMC.GetREADY() != nrf.NVMC_READY_READY_Ready {
+	}
 }
