@@ -49,6 +49,10 @@ type hashmapIterator struct {
 	bucketIndex  uint8          // current index into bucket
 }
 
+func hashmapNewIterator() unsafe.Pointer {
+	return unsafe.Pointer(new(hashmapIterator))
+}
+
 // Get the topmost 8 bits of the hash, without using a special value (like 0).
 func hashmapTopHash(hash uint32) uint8 {
 	tophash := uint8(hash >> 24)
@@ -82,6 +86,10 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashm
 		keyEqual:   keyEqual,
 		keyHash:    keyHash,
 	}
+}
+
+func hashmapMakeUnsafePointer(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer {
+	return (unsafe.Pointer)(hashmapMake(keySize, valueSize, sizeHint, alg))
 }
 
 func hashmapKeyEqualAlg(alg hashmapAlgorithm) func(x, y unsafe.Pointer, n uintptr) bool {
@@ -142,10 +150,8 @@ func hashmapLen(m *hashmap) int {
 	return int(m.count)
 }
 
-// wrapper for use in reflect
-func hashmapLenUnsafePointer(p unsafe.Pointer) int {
-	m := (*hashmap)(p)
-	return hashmapLen(m)
+func hashmapLenUnsafePointer(m unsafe.Pointer) int {
+	return hashmapLen((*hashmap)(m))
 }
 
 // Set a specified key to a given value. Grow the map if necessary.
@@ -206,6 +212,10 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 	memcpy(emptySlotKey, key, m.keySize)
 	memcpy(emptySlotValue, value, m.valueSize)
 	*emptySlotTophash = tophash
+}
+
+func hashmapSetUnsafePointer(m unsafe.Pointer, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
+	hashmapSet((*hashmap)(m), key, value, hash)
 }
 
 // hashmapInsertIntoNewBucket creates a new bucket, inserts the given key and
@@ -297,6 +307,10 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 	// Did not find the key.
 	memzero(value, m.valueSize)
 	return false
+}
+
+func hashmapGetUnsafePointer(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr, hash uint32) bool {
+	return hashmapGet((*hashmap)(m), key, value, valueSize, hash)
 }
 
 // Delete a given key from the map. No-op when the key does not exist in the
@@ -409,6 +423,10 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 	}
 }
 
+func hashmapNextUnsafePointer(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool {
+	return hashmapNext((*hashmap)(m), (*hashmapIterator)(it), key, value)
+}
+
 // Hashmap with plain binary data keys (not containing strings etc.).
 func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	if m == nil {
@@ -416,6 +434,10 @@ func hashmapBinarySet(m *hashmap, key, value unsafe.Pointer) {
 	}
 	hash := hash32(key, m.keySize, m.seed)
 	hashmapSet(m, key, value, hash)
+}
+
+func hashmapBinarySetUnsafePointer(m unsafe.Pointer, key, value unsafe.Pointer) {
+	hashmapBinarySet((*hashmap)(m), key, value)
 }
 
 func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) bool {
@@ -427,12 +449,20 @@ func hashmapBinaryGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) 
 	return hashmapGet(m, key, value, valueSize, hash)
 }
 
+func hashmapBinaryGetUnsafePointer(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool {
+	return hashmapBinaryGet((*hashmap)(m), key, value, valueSize)
+}
+
 func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
 	if m == nil {
 		return
 	}
 	hash := hash32(key, m.keySize, m.seed)
 	hashmapDelete(m, key, hash)
+}
+
+func hashmapBinaryDeleteUnsafePointer(m unsafe.Pointer, key unsafe.Pointer) {
+	hashmapBinaryDelete((*hashmap)(m), key)
 }
 
 // Hashmap with string keys (a common case).
@@ -459,6 +489,10 @@ func hashmapStringSet(m *hashmap, key string, value unsafe.Pointer) {
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
+func hashmapStringSetUnsafePointer(m unsafe.Pointer, key string, value unsafe.Pointer) {
+	hashmapStringSet((*hashmap)(m), key, value)
+}
+
 func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize uintptr) bool {
 	if m == nil {
 		memzero(value, uintptr(valueSize))
@@ -468,12 +502,20 @@ func hashmapStringGet(m *hashmap, key string, value unsafe.Pointer, valueSize ui
 	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
 }
 
+func hashmapStringGetUnsafePointer(m unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool {
+	return hashmapStringGet((*hashmap)(m), key, value, valueSize)
+}
+
 func hashmapStringDelete(m *hashmap, key string) {
 	if m == nil {
 		return
 	}
 	hash := hashmapStringHash(key, m.seed)
 	hashmapDelete(m, unsafe.Pointer(&key), hash)
+}
+
+func hashmapStringDeleteUnsafePointer(m unsafe.Pointer, key string) {
+	hashmapStringDelete((*hashmap)(m), key)
 }
 
 // Hashmap with interface keys (for everything else).
