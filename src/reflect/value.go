@@ -641,7 +641,27 @@ func (v Value) OverflowFloat(x float64) bool {
 }
 
 func (v Value) MapKeys() []Value {
-	panic("unimplemented: (reflect.Value).MapKeys()")
+	if v.Kind() != Map {
+		panic(&ValueError{Method: "MapKeys", Kind: v.Kind()})
+	}
+
+	// empty map
+	if v.Len() == 0 {
+		return nil
+	}
+
+	keys := make([]Value, 0, v.Len())
+
+	it := hashmapNewIterator()
+	k := New(v.typecode.Key())
+	e := New(v.typecode.Elem())
+
+	for hashmapNext(v.pointer(), it, k.value, e.value) {
+		keys = append(keys, k.Elem())
+		k = New(v.typecode.Key())
+	}
+
+	return keys
 }
 
 //go:linkname hashmapStringGet runtime.hashmapStringGetUnsafePointer

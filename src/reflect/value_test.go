@@ -86,6 +86,17 @@ func TestMap(t *testing.T) {
 		t.Errorf("MapRange return unexpected keys: got %v, want %v", gotKeys, wantKeys)
 	}
 
+	refMapKeys := mref.MapKeys()
+	gotKeys = gotKeys[:0]
+	for _, v := range refMapKeys {
+		gotKeys = append(gotKeys, v.Interface().(string))
+	}
+
+	sort.Strings(gotKeys)
+	if !equal(gotKeys, wantKeys) {
+		t.Errorf("MapKeys return unexpected keys: got %v, want %v", gotKeys, wantKeys)
+	}
+
 	mref.SetMapIndex(ValueOf("bar"), Value{})
 	if _, ok := m["bar"]; ok {
 		t.Errorf("SetMapIndex failed to delete `bar`")
