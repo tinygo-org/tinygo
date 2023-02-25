@@ -85,6 +85,17 @@ func TestMap(t *testing.T) {
 	if !equal(gotKeys, wantKeys) {
 		t.Errorf("MapRange return unexpected keys: got %v, want %v", gotKeys, wantKeys)
 	}
+
+	mref.SetMapIndex(ValueOf("bar"), Value{})
+	if _, ok := m["bar"]; ok {
+		t.Errorf("SetMapIndex failed to delete `bar`")
+	}
+
+	mref.SetMapIndex(ValueOf("baz"), ValueOf(6))
+	if got, want := m["baz"], 6; got != want {
+		t.Errorf("SetMapIndex(bar, 6) got %v, want %v", got, want)
+	}
+
 }
 
 func equal[T comparable](a, b []T) bool {
