@@ -563,7 +563,7 @@ func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 }
 
 func hashmapInterfacePtrHash(iptr unsafe.Pointer, size uintptr, seed uintptr) uint32 {
-	_i := *(*_interface)(iptr)
+	_i := *(*interface{})(iptr)
 	return hashmapInterfaceHash(_i, seed)
 }
 
