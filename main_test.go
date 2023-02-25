@@ -180,7 +180,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// Skip the ones that aren't.
 			switch name {
 			case "reflect.go":
-				// Reflect tests do not work due to type code issues.
+				// Reflect tests do not run correctly, probably because of the
+				// limited amount of memory.
 				continue
 
 			case "gc.go":
@@ -188,20 +189,16 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 
 			case "json.go", "stdlib.go", "testing.go":
-				// Breaks interp.
+				// Too big for AVR. Doesn't fit in flash/RAM.
 				continue
 
 			case "math.go":
-				// Stuck somewhere, not sure what's happening.
+				// Needs newer picolibc version (for sqrt).
 				continue
 
 			case "cgo/":
-				// CGo does not work on AVR.
-				continue
-
-			case "timers.go":
-				// Doesn't compile:
-				//   panic: compiler: could not store type code number inside interface type code
+				// CGo function pointers don't work on AVR (needs LLVM 16 and
+				// some compiler changes).
 				continue
 
 			default:
