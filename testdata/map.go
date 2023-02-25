@@ -129,6 +129,8 @@ func main() {
 	floatcmplx()
 
 	mapgrow()
+
+	interfacerehash()
 }
 
 func floatcmplx() {
@@ -273,4 +275,36 @@ func mapgrow() {
 		println("bad number of elements post-grow:", mcount)
 	}
 	println("done")
+}
+
+type Counter interface {
+	count() int
+}
+
+type counter struct {
+	i int
+}
+
+func (c *counter) count() int {
+	return c.i
+}
+
+func interfacerehash() {
+	m := make(map[Counter]int)
+
+	for i := 0; i < 20; i++ {
+		c := &counter{i}
+		m[c] = i
+	}
+
+	var failures int
+	for k, v := range m {
+		if got := m[k]; got != v {
+			println("lookup failure got", got, "want", v)
+			failures++
+		}
+	}
+	if failures == 0 {
+		println("no interface lookup failures")
+	}
 }
