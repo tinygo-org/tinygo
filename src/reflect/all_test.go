@@ -71,7 +71,7 @@ var deepEqualTests = []DeepEqualTest{
 	{&[3]int{1, 2, 3}, &[3]int{1, 2, 3}, true},
 	{Basic{1, 0.5}, Basic{1, 0.5}, true},
 	{error(nil), error(nil), true},
-	//{map[int]string{1: "one", 2: "two"}, map[int]string{2: "two", 1: "one"}, true},
+	{map[int]string{1: "one", 2: "two"}, map[int]string{2: "two", 1: "one"}, true},
 	{fn1, fn2, true},
 	{[]byte{1, 2, 3}, []byte{1, 2, 3}, true},
 	{[]MyByte{1, 2, 3}, []MyByte{1, 2, 3}, true},
@@ -87,10 +87,10 @@ var deepEqualTests = []DeepEqualTest{
 	{&[3]int{1, 2, 3}, &[3]int{1, 2, 4}, false},
 	{Basic{1, 0.5}, Basic{1, 0.6}, false},
 	{Basic{1, 0}, Basic{2, 0}, false},
-	//{map[int]string{1: "one", 3: "two"}, map[int]string{2: "two", 1: "one"}, false},
-	//{map[int]string{1: "one", 2: "txo"}, map[int]string{2: "two", 1: "one"}, false},
-	//{map[int]string{1: "one"}, map[int]string{2: "two", 1: "one"}, false},
-	//{map[int]string{2: "two", 1: "one"}, map[int]string{1: "one"}, false},
+	{map[int]string{1: "one", 3: "two"}, map[int]string{2: "two", 1: "one"}, false},
+	{map[int]string{1: "one", 2: "txo"}, map[int]string{2: "two", 1: "one"}, false},
+	{map[int]string{1: "one"}, map[int]string{2: "two", 1: "one"}, false},
+	{map[int]string{2: "two", 1: "one"}, map[int]string{1: "one"}, false},
 	{nil, 1, false},
 	{1, nil, false},
 	{fn1, fn3, false},
@@ -104,16 +104,16 @@ var deepEqualTests = []DeepEqualTest{
 	{&[1]float64{math.NaN()}, self{}, true},
 	{[]float64{math.NaN()}, []float64{math.NaN()}, false},
 	{[]float64{math.NaN()}, self{}, true},
-	//{map[float64]float64{math.NaN(): 1}, map[float64]float64{1: 2}, false},
-	//{map[float64]float64{math.NaN(): 1}, self{}, true},
+	{map[float64]float64{math.NaN(): 1}, map[float64]float64{1: 2}, false},
+	{map[float64]float64{math.NaN(): 1}, self{}, true},
 
 	// Nil vs empty: not the same.
 	{[]int{}, []int(nil), false},
 	{[]int{}, []int{}, true},
 	{[]int(nil), []int(nil), true},
-	//{map[int]int{}, map[int]int(nil), false},
-	//{map[int]int{}, map[int]int{}, true},
-	//{map[int]int(nil), map[int]int(nil), true},
+	{map[int]int{}, map[int]int(nil), false},
+	{map[int]int{}, map[int]int{}, true},
+	{map[int]int(nil), map[int]int(nil), true},
 
 	// Mismatched types
 	{1, 1.0, false},
@@ -130,8 +130,8 @@ var deepEqualTests = []DeepEqualTest{
 	// Possible loops.
 	{&loopy1, &loopy1, true},
 	{&loopy1, &loopy2, true},
-	//{&cycleMap1, &cycleMap2, true},
-	//{&cycleMap1, &cycleMap3, false},
+	{&cycleMap1, &cycleMap2, true},
+	{&cycleMap1, &cycleMap3, false},
 }
 
 func TestDeepEqual(t *testing.T) {
