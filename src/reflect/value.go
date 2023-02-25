@@ -972,8 +972,70 @@ func AppendSlice(s, t Value) Value {
 	}
 }
 
+//go:linkname hashmapStringSet runtime.hashmapStringSetUnsafePointer
+func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
+
+//go:linkname hashmapBinarySet runtime.hashmapBinarySetUnsafePointer
+func hashmapBinarySet(m unsafe.Pointer, key, value unsafe.Pointer)
+
+//go:linkname hashmapStringDelete runtime.hashmapStringDeleteUnsafePointer
+func hashmapStringDelete(m unsafe.Pointer, key string)
+
+//go:linkname hashmapBinaryDelete runtime.hashmapBinaryDeleteUnsafePointer
+func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
+
 func (v Value) SetMapIndex(key, elem Value) {
-	panic("unimplemented: (reflect.Value).SetMapIndex()")
+	if v.Kind() != Map {
+		panic(&ValueError{Method: "SetMapIndex", Kind: v.Kind()})
+	}
+
+	// compare key type with actual key type of map
+	if key.typecode != v.typecode.key() {
+		panic("reflect.Value.SetMapIndex: incompatible types for key")
+	}
+
+	// if elem is the zero Value, it means delete
+	del := elem == Value{}
+
+	if !del && elem.typecode != v.typecode.elem() {
+		panic("reflect.Value.SetMapIndex: incompatible types for value")
+	}
+
+	if key.Kind() == String {
+		if del {
+			hashmapStringDelete(v.pointer(), *(*string)(key.value))
+		} else {
+			var elemptr unsafe.Pointer
+			if elem.isIndirect() || elem.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+				elemptr = elem.value
+			} else {
+				elemptr = unsafe.Pointer(&elem.value)
+			}
+			hashmapStringSet(v.pointer(), *(*string)(key.value), elemptr)
+		}
+
+	} else if key.typecode.isBinary() {
+		var keyptr unsafe.Pointer
+		if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+			keyptr = key.value
+		} else {
+			keyptr = unsafe.Pointer(&key.value)
+		}
+
+		if del {
+			hashmapBinaryDelete(v.pointer(), keyptr)
+		} else {
+			var elemptr unsafe.Pointer
+			if elem.isIndirect() || elem.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+				elemptr = elem.value
+			} else {
+				elemptr = unsafe.Pointer(&elem.value)
+			}
+			hashmapBinarySet(v.pointer(), keyptr, elemptr)
+		}
+	} else {
+		panic("unimplemented: (reflect.Value).MapIndex()")
+	}
 }
 
 // FieldByIndex returns the nested field corresponding to index.
