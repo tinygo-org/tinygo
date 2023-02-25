@@ -30,3 +30,18 @@ func TestIndirectPointers(t *testing.T) {
 		t.Errorf("bad indirect array index via reflect")
 	}
 }
+
+func TestMap(t *testing.T) {
+
+	m := make(map[string]int)
+
+	mtyp := TypeOf(m)
+
+	if got, want := mtyp.Key().Kind().String(), "string"; got != want {
+		t.Errorf("m.Type().Key().String()=%q, want %q", got, want)
+	}
+
+	if got, want := mtyp.Elem().Kind().String(), "int"; got != want {
+		t.Errorf("m.Elem().String()=%q, want %q", got, want)
+	}
+}
