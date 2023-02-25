@@ -9,13 +9,6 @@ import (
 	"unsafe"
 )
 
-var (
-	errFlashCannotErasePage     = errors.New("cannot erase flash page")
-	errFlashInvalidWriteLength  = errors.New("write flash data must align to 64 bits")
-	errFlashNotAllowedWriteData = errors.New("not allowed to write flash data")
-	errFlashCannotWriteData     = errors.New("cannot write flash data")
-)
-
 var Flash flash
 
 type flash struct {

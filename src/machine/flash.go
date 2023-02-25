@@ -2,7 +2,10 @@
 
 package machine
 
-import "unsafe"
+import (
+	"errors"
+	"unsafe"
+)
 
 //go:extern __flash_data_start
 var flashDataStart [0]byte
@@ -28,6 +31,13 @@ func FlashDataEnd() uintptr {
 func FlashPageSize(address uintptr) uint32 {
 	return flashPageSize(address)
 }
+
+var (
+	errFlashCannotErasePage     = errors.New("cannot erase flash page")
+	errFlashInvalidWriteLength  = errors.New("write flash data must align to correct number of bits")
+	errFlashNotAllowedWriteData = errors.New("not allowed to write flash data")
+	errFlashCannotWriteData     = errors.New("cannot write flash data")
+)
 
 // Flasher interface is what a processor needs to implement for Flash API.
 type Flasher interface {
