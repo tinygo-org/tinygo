@@ -80,3 +80,4 @@ tested growing of a map
 2
 2
 done
+no interface lookup failures
