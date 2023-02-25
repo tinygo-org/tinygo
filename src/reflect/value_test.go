@@ -96,6 +96,14 @@ func TestMap(t *testing.T) {
 		t.Errorf("SetMapIndex(bar, 6) got %v, want %v", got, want)
 	}
 
+	m2ref := MakeMap(mref.Type())
+	m2ref.SetMapIndex(ValueOf("foo"), ValueOf(2))
+
+	m2 := m2ref.Interface().(map[string]int)
+
+	if m2["foo"] != 2 {
+		t.Errorf("MakeMap failed to create map")
+	}
 }
 
 func equal[T comparable](a, b []T) bool {
