@@ -1052,9 +1052,53 @@ func (v Value) FieldByName(name string) Value {
 	panic("unimplemented: (reflect.Value).FieldByName()")
 }
 
+//go:linkname hashmapMake runtime.hashmapMakeUnsafePointer
+func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
+
+// MakeMapWithSize creates a new map with the specified type and initial space
+// for approximately n elements.
+func MakeMapWithSize(typ Type, n int) Value {
+
+	// TODO(dgryski): deduplicate these?  runtime and reflect both need them.
+	const (
+		hashmapAlgorithmBinary uint8 = iota
+		hashmapAlgorithmString
+		hashmapAlgorithmInterface
+	)
+
+	if typ.Kind() != Map {
+		panic(&ValueError{"MakeMap", typ.Kind()})
+	}
+
+	if n < 0 {
+		panic("reflect.MakeMapWithSize: negative size hint")
+	}
+
+	key := typ.Key().(*rawType)
+	val := typ.Elem().(*rawType)
+
+	var alg uint8
+
+	if key.Kind() == String {
+		alg = hashmapAlgorithmString
+	} else if key.isBinary() {
+		alg = hashmapAlgorithmBinary
+	} else {
+		panic("reflect.MakeMap: unimplemented key type")
+	}
+
+	m := hashmapMake(key.Size(), val.Size(), uintptr(n), alg)
+
+	return Value{
+		typecode: typ.(*rawType),
+		value:    m,
+		flags:    valueFlagExported,
+	}
+}
+
 // MakeMap creates a new map with the specified type.
 func MakeMap(typ Type) Value {
-	panic("unimplemented: reflect.MakeMap()")
+	return MakeMapWithSize(typ, 8)
 }
 
 func (v Value) Call(in []Value) []Value {
