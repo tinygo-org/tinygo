@@ -644,7 +644,46 @@ func (v Value) MapKeys() []Value {
 	panic("unimplemented: (reflect.Value).MapKeys()")
 }
 
+//go:linkname hashmapStringGet runtime.hashmapStringGetUnsafePointer
+func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool
+
+//go:linkname hashmapBinaryGet runtime.hashmapBinaryGetUnsafePointer
+func hashmapBinaryGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
+
 func (v Value) MapIndex(key Value) Value {
+	if v.Kind() != Map {
+		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
+	}
+
+	// compare key type with actual key type of map
+	if key.typecode != v.typecode.key() {
+		// type error?
+		panic("reflect.Value.MapIndex: incompatible types for key")
+	}
+
+	elemType := v.typecode.Elem()
+	elem := New(elemType)
+
+	if key.Kind() == String {
+		if ok := hashmapStringGet(v.pointer(), *(*string)(key.value), elem.value, elemType.Size()); !ok {
+			return Value{}
+		}
+		return elem.Elem()
+	} else if key.typecode.isBinary() {
+		var keyptr unsafe.Pointer
+		if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+			keyptr = key.value
+		} else {
+			keyptr = unsafe.Pointer(&key.value)
+		}
+		//TODO(dgryski): zero out padding bytes in key, if any
+		if ok := hashmapBinaryGet(v.pointer(), keyptr, elem.value, elemType.Size()); !ok {
+			return Value{}
+		}
+		return elem.Elem()
+	}
+
+	// TODO(dgryski): Add other map types.  For now, just string and binary types are supported.
 	panic("unimplemented: (reflect.Value).MapIndex()")
 }
 
