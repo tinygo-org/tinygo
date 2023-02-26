@@ -1074,10 +1074,57 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 //go:linkname sliceAppend runtime.sliceAppend
 func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
 
+//go:linkname sliceCopy runtime.sliceCopy
+func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr) int
+
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
 func Copy(dst, src Value) int {
-	panic("unimplemented: reflect.Copy()")
+	compatibleTypes := false ||
+		// dst and src are both slices or arrays with equal types
+		((dst.typecode.Kind() == Slice || dst.typecode.Kind() == Array) &&
+			(src.typecode.Kind() == Slice || src.typecode.Kind() == Array) &&
+			(dst.typecode.elem() == src.typecode.elem())) ||
+		// dst is array or slice of uint8 and src is string
+		((dst.typecode.Kind() == Slice || dst.typecode.Kind() == Array) &&
+			dst.typecode.elem().Kind() == Uint8 &&
+			src.typecode.Kind() == String)
+
+	if !compatibleTypes {
+		panic("Copy: type mismatch: " + dst.typecode.String() + "/" + src.typecode.String())
+	}
+
+	dstbuf, dstlen := buflen(dst)
+	srcbuf, srclen := buflen(src)
+
+	return sliceCopy(dstbuf, srcbuf, dstlen, srclen, dst.typecode.elem().Size())
+}
+
+func buflen(v Value) (unsafe.Pointer, uintptr) {
+	var buf unsafe.Pointer
+	var len uintptr
+	switch v.typecode.Kind() {
+	case Slice:
+		hdr := (*sliceHeader)(v.value)
+		buf = hdr.data
+		len = hdr.len
+	case Array:
+		if v.isIndirect() {
+			buf = v.value
+			len = uintptr(v.Len())
+		} else {
+			panic("reflect.Copy: unaddressable array value")
+		}
+	case String:
+		hdr := (*stringHeader)(v.value)
+		buf = hdr.data
+		len = hdr.len
+	default:
+		// This shouldn't happen
+		panic("reflect.Copy: not slice or array or string")
+	}
+
+	return buf, len
 }
 
 //go:linkname sliceGrow runtime.sliceGrow

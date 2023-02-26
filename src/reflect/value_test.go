@@ -178,6 +178,13 @@ func TestBytes(t *testing.T) {
 	if !equal(s, s2) {
 		t.Errorf("Failed to get Bytes(): %v != %v", s, s2)
 	}
+
+	Copy(refs, ValueOf("12345"))
+
+	if string(s) != "12345" {
+		t.Errorf("Copy()=%q, want `12345`", string(s))
+	}
+
 }
 
 func equal[T comparable](a, b []T) bool {
