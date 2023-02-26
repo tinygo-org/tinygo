@@ -133,6 +133,20 @@ func TestSlice(t *testing.T) {
 		}
 	}
 
+	s28 := s[2:8]
+	s28ref := refs.Slice(2, 8)
+
+	if len(s28) != s28ref.Len() || cap(s28) != s28ref.Cap() {
+		t.Errorf("len(s28)=%d s28ref.Len()=%d cap(s28)=%d s28ref.Cap()=%d\n", len(s28), s28ref.Len(), cap(s28), s28ref.Cap())
+	}
+
+	for i, got := range s28 {
+		want := int(s28ref.Index(i).Int())
+		if got != want {
+			t.Errorf("s28[%d]=%d, want %d", i, got, want)
+		}
+	}
+
 	refs = MakeSlice(TypeOf(s), 5, 10)
 	s = refs.Interface().([]int)
 
