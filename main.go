@@ -1357,6 +1357,7 @@ func main() {
 	command := os.Args[1]
 
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
+	lto := flag.String("lto", "legacy", "LTO mode: legacy or thin")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, asyncify)")
@@ -1459,6 +1460,7 @@ func main() {
 		Target:          *target,
 		StackSize:       stackSize,
 		Opt:             *opt,
+		LTO:             *lto,
 		GC:              *gc,
 		PanicStrategy:   *panicStrategy,
 		Scheduler:       *scheduler,

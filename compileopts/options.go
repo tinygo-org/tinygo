@@ -14,6 +14,7 @@ var (
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
 	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
+	validLTOOptions           = []string{"legacy", "thin"}
 )
 
 // Options contains extra options to give to the compiler. These options are
@@ -25,6 +26,7 @@ type Options struct {
 	GOARM           string // environment variable (only used with GOARCH=arm)
 	Target          string
 	Opt             string
+	LTO             string
 	GC              string
 	PanicStrategy   string
 	Scheduler       string
@@ -104,6 +106,12 @@ func (o *Options) Verify() error {
 	if o.Opt != "" {
 		if !isInArray(validOptOptions, o.Opt) {
 			return fmt.Errorf("invalid -opt=%s: valid values are %s", o.Opt, strings.Join(validOptOptions, ", "))
+		}
+	}
+
+	if o.LTO != "" {
+		if !isInArray(validLTOOptions, o.LTO) {
+			return fmt.Errorf("invalid -lto=%s: valid values are %s", o.LTO, strings.Join(validLTOOptions, ", "))
 		}
 	}
 

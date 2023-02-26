@@ -45,7 +45,9 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	globalLLVMType := b.getLLVMType(globalType)
 	globalName := b.fn.Package().Pkg.Path() + "$interrupt" + strconv.FormatInt(id.Int64(), 10)
 	global := llvm.AddGlobal(b.mod, globalLLVMType, globalName)
-	global.SetVisibility(llvm.HiddenVisibility)
+	if !b.LTO {
+		global.SetVisibility(llvm.HiddenVisibility)
+	}
 	global.SetGlobalConstant(true)
 	global.SetUnnamedAddr(true)
 	initializer := llvm.ConstNull(globalLLVMType)

@@ -105,6 +105,13 @@ func TestBuild(t *testing.T) {
 			runTestWithConfig("print.go", t, opts, nil, nil)
 		})
 
+		t.Run("lto=thin", func(t *testing.T) {
+			t.Parallel()
+			opts := optionsFromTarget("", sema)
+			opts.LTO = "thin"
+			runTestWithConfig("init.go", t, opts, nil, nil)
+		})
+
 		t.Run("ldflags", func(t *testing.T) {
 			t.Parallel()
 			opts := optionsFromTarget("", sema)

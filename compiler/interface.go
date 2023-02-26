@@ -490,17 +490,22 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		commaOk = b.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{actualTypeNum}, "")
 
 	} else {
-		globalName := "reflect/types.typeid:" + getTypeCodeName(expr.AssertedType)
-		assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
-		if assertedTypeCodeGlobal.IsNil() {
-			// Create a new typecode global.
-			assertedTypeCodeGlobal = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), globalName)
-			assertedTypeCodeGlobal.SetGlobalConstant(true)
+		if b.LTO {
+			assertedTypeCodeGlobal := b.getTypeCode(expr.AssertedType)
+			commaOk = b.CreateICmp(llvm.IntEQ, actualTypeNum, assertedTypeCodeGlobal, "commaok")
+		} else {
+			globalName := "reflect/types.typeid:" + getTypeCodeName(expr.AssertedType)
+			assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
+			if assertedTypeCodeGlobal.IsNil() {
+				// Create a new typecode global.
+				assertedTypeCodeGlobal = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), globalName)
+				assertedTypeCodeGlobal.SetGlobalConstant(true)
+			}
+			// Type assert on concrete type.
+			// Call runtime.typeAssert, which will be lowered to a simple icmp
+			// or const false in the interface lowering pass.
+			commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
 		}
-		// Type assert on concrete type.
-		// Call runtime.typeAssert, which will be lowered to a simple icmp or
-		// const false in the interface lowering pass.
-		commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
 	}
 
 	// Add 2 new basic blocks (that should get optimized away): one for the

@@ -165,6 +165,14 @@ func (c *Config) OptLevels() (optLevel, sizeLevel int, inlinerThreshold uint) {
 	}
 }
 
+// LTO returns one of the possible LTO configurations: legacy or thin.
+func (c *Config) LTO() string {
+	if c.Options.LTO != "" {
+		return c.Options.LTO
+	}
+	return "legacy"
+}
+
 // PanicStrategy returns the panic strategy selected for this target. Valid
 // values are "print" (print the panic value, then exit) or "trap" (issue a trap
 // instruction).

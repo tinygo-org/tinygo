@@ -176,6 +176,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		DefaultStackSize:   config.StackSize(),
 		NeedsStackObjects:  config.NeedsStackObjects(),
 		Debug:              true,
+		LTO:                config.LTO() != "legacy",
 	}
 
 	// Load the target machine, which is the LLVM object that contains all
@@ -452,18 +453,24 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if err != nil {
 					return err
 				}
-				if runtime.GOOS == "windows" {
-					// Work around a problem on Windows.
-					// For some reason, WriteBitcodeToFile causes TinyGo to
-					// exit with the following message:
-					//   LLVM ERROR: IO failure on output stream: Bad file descriptor
-					buf := llvm.WriteBitcodeToMemoryBuffer(mod)
+				if compilerConfig.LTO {
+					buf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
 					defer buf.Dispose()
 					_, err = f.Write(buf.Bytes())
 				} else {
-					// Otherwise, write bitcode directly to the file (probably
-					// faster).
-					err = llvm.WriteBitcodeToFile(mod, f)
+					if runtime.GOOS == "windows" {
+						// Work around a problem on Windows.
+						// For some reason, WriteBitcodeToFile causes TinyGo to
+						// exit with the following message:
+						//   LLVM ERROR: IO failure on output stream: Bad file descriptor
+						buf := llvm.WriteBitcodeToMemoryBuffer(mod)
+						defer buf.Dispose()
+						_, err = f.Write(buf.Bytes())
+					} else {
+						// Otherwise, write bitcode directly to the file (probably
+						// faster).
+						err = llvm.WriteBitcodeToFile(mod, f)
+					}
 				}
 				if err != nil {
 					// WriteBitcodeToFile doesn't produce a useful error on its
@@ -609,8 +616,38 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		},
 	}
 
+	// Add job to create the runtime.initAll function in a new module.
+	initAllJob := &compileJob{
+		description: "create runtime.initAll",
+		result:      filepath.Join(tmpdir, "runtime-initAll.bc"),
+		run: func(job *compileJob) (err error) {
+			// Create module with runtime.initAll.
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			initAllMod := createInitAll(ctx, config, compilerConfig, lprogram.Sorted())
+			defer initAllMod.Dispose()
+
+			// Write module to bitcode file.
+			llvmBuf := llvm.WriteThinLTOBitcodeToMemoryBuffer(initAllMod)
+			defer llvmBuf.Dispose()
+			return os.WriteFile(job.result, llvmBuf.Bytes(), 0666)
+		},
+	}
+
 	// Prepare link command.
-	linkerDependencies := []*compileJob{outputObjectFileJob}
+	var linkerDependencies []*compileJob
+	switch config.LTO() {
+	case "legacy":
+		// Link all Go bitcode files together into a single large module and
+		// then do a ThinLTO link with the resulting large module + extra C
+		// files (from CGo etc).
+		linkerDependencies = append(linkerDependencies, outputObjectFileJob)
+	case "thin":
+		// Do a real thin link, with each Go package in a separate translation
+		// unit. This is faster than merging them into one big LTO module.
+		linkerDependencies = append(linkerDependencies, packageJobs...)
+		linkerDependencies = append(linkerDependencies, initAllJob)
+	}
 	result.Executable = filepath.Join(tmpdir, "main")
 	if config.GOOS() == "windows" {
 		result.Executable += ".exe"
