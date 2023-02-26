@@ -378,7 +378,27 @@ func (v Value) String() string {
 }
 
 func (v Value) Bytes() []byte {
-	panic("unimplemented: (reflect.Value).Bytes()")
+	switch v.Kind() {
+	case Slice:
+		if v.typecode.elem().Kind() != Uint8 {
+			panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
+		}
+		return *(*[]byte)(v.value)
+
+	case Array:
+		v.checkAddressable()
+
+		if v.typecode.elem().Kind() != Uint8 {
+			panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
+		}
+
+		// Small inline arrays are not addressable, so we only have to
+		// handle addressable arrays which will be stored as pointers
+		// in v.value
+		return unsafe.Slice((*byte)(v.value), v.Len())
+	}
+
+	panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
 }
 
 func (v Value) Slice(i, j int) Value {
