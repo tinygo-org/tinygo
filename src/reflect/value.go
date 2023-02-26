@@ -882,8 +882,43 @@ func (v Value) Convert(t Type) Value {
 	panic("unimplemented: (reflect.Value).Convert()")
 }
 
+//go:linkname slicePanic runtime.slicePanic
+func slicePanic()
+
 func MakeSlice(typ Type, len, cap int) Value {
-	panic("unimplemented: reflect.MakeSlice()")
+	if typ.Kind() != Slice {
+		panic("reflect.MakeSlice of non-slice type")
+	}
+
+	ulen := uintptr(len)
+	ucap := uintptr(cap)
+	if ulen > ucap {
+		slicePanic()
+	}
+
+	size, ok := mulNoOverflow(typ.Size(), ucap)
+	if !ok {
+		panic("reflect.MakeSlice: slice size out of range")
+	}
+
+	var slice sliceHeader
+	slice.cap = ucap
+	slice.len = ulen
+	slice.data = alloc(size, nil)
+
+	return Value{
+		typecode: typ.(*rawType),
+		value:    unsafe.Pointer(&slice),
+		flags:    valueFlagExported,
+	}
+}
+
+func mulNoOverflow(x, y uintptr) (uintptr, bool) {
+	if x <= 1 || y <= 1 {
+		return x * y, false
+	}
+	m := x * y
+	return m, x == m/y
 }
 
 func Zero(typ Type) Value {
