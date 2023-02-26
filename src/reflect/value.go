@@ -958,10 +958,54 @@ func Copy(dst, src Value) int {
 	panic("unimplemented: reflect.Copy()")
 }
 
+//go:linkname sliceGrow runtime.sliceGrow
+func sliceGrow(buf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
+
+// extend slice to hold n new elements
+func (v *Value) extendSlice(n int) {
+	if v.Kind() != Slice {
+		panic(&ValueError{Method: "extendSlice", Kind: v.Kind()})
+	}
+
+	var old sliceHeader
+	if v.value != nil {
+		old = *(*sliceHeader)(v.value)
+	}
+
+	var nbuf unsafe.Pointer
+	var nlen, ncap uintptr
+
+	if old.len+uintptr(n) > old.cap {
+		// we need to grow the slice
+		nbuf, nlen, ncap = sliceGrow(old.data, old.len, old.cap, old.cap+uintptr(n), v.typecode.elem().Size())
+	} else {
+		// we can reuse the slice we have
+		nbuf = old.data
+		nlen = old.len
+		ncap = old.cap
+	}
+
+	newslice := sliceHeader{
+		data: nbuf,
+		len:  nlen + uintptr(n),
+		cap:  ncap,
+	}
+
+	v.value = (unsafe.Pointer)(&newslice)
+}
+
 // Append appends the values x to a slice s and returns the resulting slice.
 // As in Go, each x's value must be assignable to the slice's element type.
-func Append(s Value, x ...Value) Value {
-	panic("unimplemented: reflect.Append()")
+func Append(v Value, x ...Value) Value {
+	if v.Kind() != Slice {
+		panic(&ValueError{Method: "Append", Kind: v.Kind()})
+	}
+	oldLen := v.Len()
+	v.extendSlice(len(x))
+	for i, xx := range x {
+		v.Index(oldLen + i).Set(xx)
+	}
+	return v
 }
 
 // AppendSlice appends a slice t to a slice s and returns the resulting slice.
