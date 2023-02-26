@@ -396,15 +396,23 @@ type flashBlockDevice struct {
 
 // ReadAt reads the given number of bytes from the block device.
 func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotReadPastEOF
+	}
+
 	data := unsafe.Slice((*byte)(unsafe.Pointer(FlashDataStart()+uintptr(off))), len(p))
 	copy(p, data)
 
-	return 0, nil
+	return len(p), nil
 }
 
 // WriteAt writes the given number of bytes to the block device.
 // Only double-word (64 bits) length data can be programmed. See rm0461 page 78.
 func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotWritePastEOF
+	}
+
 	address := FlashDataStart() + uintptr(off)
 	if int64(len(p))%f.WriteBlockSize() != 0 {
 		return 0, errFlashInvalidWriteLength

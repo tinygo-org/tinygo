@@ -32,6 +32,8 @@ var (
 	errFlashInvalidWriteLength  = errors.New("write flash data must align to correct number of bits")
 	errFlashNotAllowedWriteData = errors.New("not allowed to write flash data")
 	errFlashCannotWriteData     = errors.New("cannot write flash data")
+	errFlashCannotReadPastEOF   = errors.New("cannot read beyond end of flash data")
+	errFlashCannotWritePastEOF  = errors.New("cannot write beyond end of flash data")
 )
 
 // BlockDevice is the raw device that is meant to store flash data.
