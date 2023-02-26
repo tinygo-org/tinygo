@@ -47,6 +47,7 @@ type Config struct {
 	CodeModel       string
 	RelocationModel string
 	SizeLevel       int
+	TinyGoVersion   string // for llvm.ident
 
 	// Various compiler options that determine how code is generated.
 	Scheduler          string
@@ -321,6 +322,14 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 				llvm.ConstInt(c.ctx.Int32Type(), 4, false).ConstantAsMetadata(),
 			}),
 		)
+		if c.TinyGoVersion != "" {
+			// It is necessary to set llvm.ident, otherwise debugging on MacOS
+			// won't work.
+			c.mod.AddNamedMetadataOperand("llvm.ident",
+				c.ctx.MDNode(([]llvm.Metadata{
+					c.ctx.MDString("TinyGo version " + c.TinyGoVersion),
+				})))
+		}
 		c.dibuilder.Finalize()
 		c.dibuilder.Destroy()
 	}
