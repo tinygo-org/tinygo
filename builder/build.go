@@ -169,6 +169,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		CodeModel:       config.CodeModel(),
 		RelocationModel: config.RelocationModel(),
 		SizeLevel:       sizeLevel,
+		TinyGoVersion:   goenv.Version,
 
 		Scheduler:          config.Scheduler(),
 		AutomaticStackSize: config.AutomaticStackSize(),
@@ -305,7 +306,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				actionID := packageAction{
 					ImportPath:       pkg.ImportPath,
 					CompilerBuildID:  string(compilerBuildID),
-					TinyGoVersion:    goenv.Version,
 					LLVMVersion:      llvm.Version,
 					Config:           compilerConfig,
 					CFlags:           pkg.CFlags,
