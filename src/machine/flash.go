@@ -1,9 +1,10 @@
-//go:build nrf || stm32f4 || stm32l4 || stm32wlx
+//go:build nrf || nrf51 || nrf52 || nrf528xx || stm32f4 || stm32l4 || stm32wlx
 
 package machine
 
 import (
 	"errors"
+	"io"
 	"unsafe"
 )
 
@@ -16,7 +17,7 @@ var flashDataEnd [0]byte
 // Return the start of the writable flash area, aligned on a page boundary. This
 // is usually just after the program and static data.
 func FlashDataStart() uintptr {
-	pagesize := uintptr(FlashPageSize(uintptr(unsafe.Pointer(&flashDataStart))))
+	pagesize := uintptr(eraseBlockSize())
 	return (uintptr(unsafe.Pointer(&flashDataStart)) + pagesize - 1) &^ (pagesize - 1)
 }
 
@@ -26,12 +27,6 @@ func FlashDataEnd() uintptr {
 	return uintptr(unsafe.Pointer(&flashDataEnd))
 }
 
-// FlashPageSize returns the page size for the address requested.
-// Some processors have different page or sector sizes in different regions of flash.
-func FlashPageSize(address uintptr) uint32 {
-	return flashPageSize(address)
-}
-
 var (
 	errFlashCannotErasePage     = errors.New("cannot erase flash page")
 	errFlashInvalidWriteLength  = errors.New("write flash data must align to correct number of bits")
@@ -39,28 +34,49 @@ var (
 	errFlashCannotWriteData     = errors.New("cannot write flash data")
 )
 
-// Flasher interface is what a processor needs to implement for Flash API.
-type Flasher interface {
-	ErasePage(address uintptr) error
-	WriteData(address uintptr, data []byte) error
-	ReadData(address uintptr, data []byte) (n int, err error)
+// BlockDevice is the raw device that is meant to store flash data.
+type BlockDevice interface {
+	// ReadAt reads the given number of bytes from the block device.
+	io.ReaderAt
+
+	// WriteAt writes the given number of bytes to the block device.
+	io.WriterAt
+
+	// Size returns the number of bytes in this block device.
+	Size() int64
+
+	// WriteBlockSize returns the block size in which data can be written to
+	// memory. It can be used by a client to optimize writes, non-aligned writes
+	// should always work correctly.
+	WriteBlockSize() int64
+
+	// EraseBlockSize returns the smallest erasable area on this particular chip
+	// in bytes. This is used for the block size in EraseBlocks.
+	// It must be a power of two, and may be as small as 1. A typical size is 4096.
+	EraseBlockSize() int64
+
+	// EraseBlocks erases the given number of blocks. An implementation may
+	// transparently coalesce ranges of blocks into larger bundles if the chip
+	// supports this. The start and len parameters are in block numbers, use
+	// EraseBlockSize to map addresses to blocks.
+	EraseBlocks(start, len int64) error
 }
 
-// FlashBuffer implements the ReadWriteCloser interface using the Flasher interface.
+// FlashBuffer implements the ReadWriteCloser interface using the BlockDevice interface.
 type FlashBuffer struct {
-	f       Flasher
+	b       BlockDevice
 	start   uintptr
 	current uintptr
 }
 
 // OpenFlashBuffer opens a FlashBuffer.
-func OpenFlashBuffer(f Flasher, address uintptr) *FlashBuffer {
-	return &FlashBuffer{f: f, start: address, current: address}
+func OpenFlashBuffer(b BlockDevice, address uintptr) *FlashBuffer {
+	return &FlashBuffer{b: b, start: address, current: address}
 }
 
 // Read data from a FlashBuffer.
 func (fl *FlashBuffer) Read(p []byte) (n int, err error) {
-	fl.f.ReadData(fl.current, p)
+	fl.b.ReadAt(p, int64(fl.current))
 
 	fl.current += uintptr(len(p))
 
@@ -70,29 +86,24 @@ func (fl *FlashBuffer) Read(p []byte) (n int, err error) {
 // Write data to a FlashBuffer.
 func (fl *FlashBuffer) Write(p []byte) (n int, err error) {
 	// any new pages needed?
-	// NOTE probably will not work as expected if you try to write over page boundry
-	// of different sizes.
-	pagesize := uintptr(FlashPageSize(fl.current))
+	// NOTE probably will not work as expected if you try to write over page boundary
+	// of pages with different sizes.
+	pagesize := uintptr(fl.b.EraseBlockSize())
 	currentPageCount := (fl.current - fl.start + pagesize - 1) / pagesize
 	totalPagesNeeded := (fl.current - fl.start + uintptr(len(p)) + pagesize - 1) / pagesize
 	if currentPageCount == totalPagesNeeded {
 		// just write the data
-		err := fl.f.WriteData(fl.current, p)
+		n, err := fl.b.WriteAt(p, int64(fl.current))
 		if err != nil {
 			return 0, err
 		}
-		fl.current += uintptr(len(p))
-		return len(p), nil
+		fl.current += uintptr(n)
+		return n, nil
 	}
 
-	// erase enough pages to hold all data
-	nextPageAddress := fl.start + (currentPageCount * pagesize)
-	for i := 0; i < int(totalPagesNeeded-currentPageCount); i++ {
-		if err := fl.f.ErasePage(nextPageAddress); err != nil {
-			return 0, err
-		}
-		nextPageAddress += pagesize
-	}
+	// erase enough blocks to hold the data
+	page := fl.flashPageFromAddress(fl.start + (currentPageCount * pagesize))
+	fl.b.EraseBlocks(page, int64(totalPagesNeeded-currentPageCount))
 
 	// write the data
 	for i := 0; i < len(p); i += int(pagesize) {
@@ -101,7 +112,7 @@ func (fl *FlashBuffer) Write(p []byte) (n int, err error) {
 			last = len(p)
 		}
 
-		err := fl.f.WriteData(fl.current, p[i:last])
+		_, err := fl.b.WriteAt(p[i:last], int64(fl.current))
 		if err != nil {
 			return 0, err
 		}
@@ -123,4 +134,9 @@ func (fl *FlashBuffer) Seek(offset int64, whence int) (int64, error) {
 	fl.current = fl.start + uintptr(offset)
 
 	return offset, nil
+}
+
+// calculate page number from address
+func (fl *FlashBuffer) flashPageFromAddress(address uintptr) int64 {
+	return int64(address-memoryStart) / fl.b.EraseBlockSize()
 }

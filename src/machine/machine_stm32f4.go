@@ -796,26 +796,32 @@ func (i2c *I2C) getSpeed(config I2CConfig) uint32 {
 
 //---------- Flash related code
 
-const flashPageSizeValue = 2048
+// the block size actually depends on the sector.
+// TODO: handle this correctly for sectors > 3
+const eraseBlockSizeValue = 16384
 
-func flashPageSize(address uintptr) uint32 {
-	return flashPageSizeValue
-}
-
+// see RM0090 page 75
 func sectorNumber(address uintptr) uint32 {
 	switch {
-	case address >= 0x08000000 && address <= 0x080FFFFF:
+	// 0x0800 0000 - 0x0800 3FFF
+	case address >= 0x08000000 && address <= 0x08003FFF:
 		return 0
-	case address >= 0x08100000 && address <= 0x081FFFFF:
+	// 0x0800 4000 - 0x0800 7FFF
+	case address >= 0x08004000 && address <= 0x08007FFF:
 		return 1
+	// 0x0800 8000 - 0x0800 BFFF
 	case address >= 0x08008000 && address <= 0x0800BFFF:
 		return 2
+	// 0x0800 C000 - 0x0800 FFFF
 	case address >= 0x0800C000 && address <= 0x0800FFFF:
 		return 3
+	// 0x0801 0000 - 0x0801 FFFF
 	case address >= 0x08010000 && address <= 0x0801FFFF:
 		return 4
+	// 0x0802 0000 - 0x0803 FFFF
 	case address >= 0x08020000 && address <= 0x0803FFFF:
 		return 5
+	// 0x0804 0000 - 0x0805 FFFF
 	case address >= 0x08040000 && address <= 0x0805FFFF:
 		return 6
 	case address >= 0x08060000 && address <= 0x0807FFFF:
@@ -833,11 +839,12 @@ func sectorNumber(address uintptr) uint32 {
 	}
 }
 
-// see RM0090 page 85
-func eraseFlashPage(address uintptr) error {
-	// calculate sector number from address
-	var sector uint32 = sectorNumber(address)
+// calculate sector number from address
+// var sector uint32 = sectorNumber(address)
 
+// see RM0090 page 85
+// eraseBlock at the passed in block number
+func eraseBlock(block uint32) error {
 	waitUntilFlashDone()
 
 	// clear any previous errors
@@ -847,8 +854,8 @@ func eraseFlashPage(address uintptr) error {
 	stm32.FLASH.SetCR_SER(1)
 	defer stm32.FLASH.SetCR_SER(0)
 
-	// set the sector to be erased
-	stm32.FLASH.SetCR_SNB(sector)
+	// set the block (aka sector) to be erased
+	stm32.FLASH.SetCR_SNB(block)
 	defer stm32.FLASH.SetCR_SNB(0)
 
 	// start the page erase
@@ -863,13 +870,13 @@ func eraseFlashPage(address uintptr) error {
 	return nil
 }
 
-const flashWriteLength = 2
+const writeBlockSize = 2
 
 // see RM0090 page 86
 // must write data in word-length
-func writeFlashData(address uintptr, data []byte) error {
-	if len(data)%flashWriteLength != 0 {
-		return errFlashInvalidWriteLength
+func writeFlashData(address uintptr, data []byte) (int, error) {
+	if len(data)%writeBlockSize != 0 {
+		return 0, errFlashInvalidWriteLength
 	}
 
 	waitUntilFlashDone()
@@ -880,23 +887,23 @@ func writeFlashData(address uintptr, data []byte) error {
 	// set parallelism to x32
 	stm32.FLASH.SetCR_PSIZE(2)
 
-	for i := 0; i < len(data); i += flashWriteLength {
+	for i := 0; i < len(data); i += writeBlockSize {
 		// start write operation
 		stm32.FLASH.SetCR_PG(1)
 
-		*(*uint16)(unsafe.Pointer(address)) = binary.BigEndian.Uint16(data[i : i+flashWriteLength])
+		*(*uint16)(unsafe.Pointer(address)) = binary.BigEndian.Uint16(data[i : i+writeBlockSize])
 
 		waitUntilFlashDone()
 
 		if err := checkError(); err != nil {
-			return err
+			return i, err
 		}
 
 		// end write operation
 		stm32.FLASH.SetCR_PG(0)
 	}
 
-	return nil
+	return len(data), nil
 }
 
 func waitUntilFlashDone() {

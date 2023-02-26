@@ -64,8 +64,8 @@ var (
 	PWM2 = &PWM{PWM: nrf.PWM2}
 )
 
-const flashPageSizeValue = 4096
+const eraseBlockSizeValue = 4096
 
-func flashPageSize(address uintptr) uint32 {
-	return flashPageSizeValue
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
 }

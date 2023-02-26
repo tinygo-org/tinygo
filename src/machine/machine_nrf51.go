@@ -6,10 +6,10 @@ import (
 	"device/nrf"
 )
 
-const flashPageSizeValue = 1024
+const eraseBlockSizeValue = 1024
 
-func flashPageSize(address uintptr) uint32 {
-	return flashPageSizeValue
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
 }
 
 // Get peripheral and pin number for this GPIO pin.

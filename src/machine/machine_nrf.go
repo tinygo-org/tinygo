@@ -384,30 +384,30 @@ func ReadTemperature() int32 {
 	return temp
 }
 
-var Flash flash
+const memoryStart = 0x0
 
-type flash struct {
+// compile-time check for ensuring we fulfill BlockDevice interface
+var _ BlockDevice = flashBlockDevice{}
+
+var Flash flashBlockDevice
+
+type flashBlockDevice struct {
 }
 
-// ErasePage erases the page of flash data that starts at address.
-func (f flash) ErasePage(address uintptr) error {
-	waitWhileFlashBusy()
+// ReadAt reads the given number of bytes from the block device.
+func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
+	data := unsafe.Slice((*byte)(unsafe.Pointer(FlashDataStart()+uintptr(off))), len(p))
+	copy(p, data)
 
-	nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Een)
-	defer nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Ren)
-
-	nrf.NVMC.ERASEPAGE.Set(uint32(address))
-	waitWhileFlashBusy()
-	return nil
+	return 0, nil
 }
 
-const flashWriteLength = 4
-
-// WriteData writes the flash that starts at address with data.
-// Only words (32 bits) can be programmed.
-func (f flash) WriteData(address uintptr, data []byte) error {
-	if len(data)%flashWriteLength != 0 {
-		return errFlashInvalidWriteLength
+// WriteAt writes the given number of bytes to the block device.
+// Only double-word (64 bits) length data can be programmed. See rm0461 page 78.
+func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
+	address := FlashDataStart() + uintptr(off)
+	if int64(len(p))%f.WriteBlockSize() != 0 {
+		return 0, errFlashInvalidWriteLength
 	}
 
 	waitWhileFlashBusy()
@@ -415,22 +415,55 @@ func (f flash) WriteData(address uintptr, data []byte) error {
 	nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Wen)
 	defer nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Ren)
 
-	for j := 0; j < len(data); j += flashWriteLength {
+	for j := 0; j < len(p); j += int(f.WriteBlockSize()) {
 		// write word
-		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(data[j : j+flashWriteLength])
-		address += flashWriteLength
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(p[j : j+int(f.WriteBlockSize())])
+		address += uintptr(f.WriteBlockSize())
 		waitWhileFlashBusy()
 	}
 
-	return nil
+	return len(p), nil
 }
 
-// ReadData reads the data starting at address.
-func (f flash) ReadData(address uintptr, data []byte) (n int, err error) {
-	p := unsafe.Slice((*byte)(unsafe.Pointer(address)), len(data))
-	copy(data, p)
+// Size returns the number of bytes in this block device.
+func (f flashBlockDevice) Size() int64 {
+	return int64(FlashDataEnd() - FlashDataStart())
+}
 
-	return len(data), nil
+const writeBlockSize = 4
+
+// WriteBlockSize returns the block size in which data can be written to
+// memory. It can be used by a client to optimize writes, non-aligned writes
+// should always work correctly.
+func (f flashBlockDevice) WriteBlockSize() int64 {
+	return writeBlockSize
+}
+
+// EraseBlockSize returns the smallest erasable area on this particular chip
+// in bytes. This is used for the block size in EraseBlocks.
+// It must be a power of two, and may be as small as 1. A typical size is 4096.
+func (f flashBlockDevice) EraseBlockSize() int64 {
+	return eraseBlockSize()
+}
+
+// EraseBlocks erases the given number of blocks. An implementation may
+// transparently coalesce ranges of blocks into larger bundles if the chip
+// supports this. The start and len parameters are in block numbers, use
+// EraseBlockSize to map addresses to blocks.
+func (f flashBlockDevice) EraseBlocks(start, len int64) error {
+	address := FlashDataStart() + uintptr(start*f.EraseBlockSize())
+	waitWhileFlashBusy()
+
+	nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Een)
+	defer nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Ren)
+
+	for i := start; i < start+len; i++ {
+		nrf.NVMC.ERASEPAGE.Set(uint32(address))
+		waitWhileFlashBusy()
+		address += uintptr(f.EraseBlockSize())
+	}
+
+	return nil
 }
 
 func waitWhileFlashBusy() {

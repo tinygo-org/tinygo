@@ -5,39 +5,77 @@ package machine
 import (
 	"device/stm32"
 
-	"errors"
 	"unsafe"
 )
 
-var Flash flash
+// compile-time check for ensuring we fulfill BlockDevice interface
+var _ BlockDevice = flashBlockDevice{}
 
-type flash struct {
+var Flash flashBlockDevice
+
+type flashBlockDevice struct {
 }
 
-// ErasePage erases the page of flash data that starts at address.
-func (f flash) ErasePage(address uintptr) error {
+// ReadAt reads the given number of bytes from the block device.
+func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
+	data := unsafe.Slice((*byte)(unsafe.Pointer(FlashDataStart()+uintptr(off))), len(p))
+	copy(p, data)
+
+	return 0, nil
+}
+
+// WriteAt writes the given number of bytes to the block device.
+// Only double-word (64 bits) length data can be programmed. See rm0461 page 78.
+func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	unlockFlash()
 	defer lockFlash()
 
-	return eraseFlashPage(address)
+	return writeFlashData(FlashDataStart()+uintptr(off), p)
 }
 
-// WriteData writes the flash that starts at address with data.
-// Only double-word (64 bits) can be programmed. See rm0461 page 78.
-func (f flash) WriteData(address uintptr, data []byte) error {
+// Size returns the number of bytes in this block device.
+func (f flashBlockDevice) Size() int64 {
+	return int64(FlashDataEnd() - FlashDataStart())
+}
+
+// WriteBlockSize returns the block size in which data can be written to
+// memory. It can be used by a client to optimize writes, non-aligned writes
+// should always work correctly.
+func (f flashBlockDevice) WriteBlockSize() int64 {
+	return writeBlockSize
+}
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
+
+// EraseBlockSize returns the smallest erasable area on this particular chip
+// in bytes. This is used for the block size in EraseBlocks.
+// It must be a power of two, and may be as small as 1. A typical size is 4096.
+// TODO: correctly handle processors that have differently sized blocks
+// in different areas of memory like the STM32F40x and STM32F1x.
+func (f flashBlockDevice) EraseBlockSize() int64 {
+	return eraseBlockSize()
+}
+
+// EraseBlocks erases the given number of blocks. An implementation may
+// transparently coalesce ranges of blocks into larger bundles if the chip
+// supports this. The start and len parameters are in block numbers, use
+// EraseBlockSize to map addresses to blocks.
+func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 	unlockFlash()
 	defer lockFlash()
 
-	return writeFlashData(address, data)
+	for i := start; i < start+len; i++ {
+		if err := eraseBlock(uint32(i)); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-// ReadData reads the data starting at address.
-func (f flash) ReadData(address uintptr, data []byte) (n int, err error) {
-	p := unsafe.Slice((*byte)(unsafe.Pointer(address)), len(data))
-	copy(data, p)
-
-	return len(data), nil
-}
+const memoryStart = 0x08000000
 
 func unlockFlash() {
 	// keys as described rm0461 page 76

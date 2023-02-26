@@ -429,17 +429,10 @@ const (
 
 //---------- Flash related code
 
-const flashPageSizeValue = 2048
+const eraseBlockSizeValue = 2048
 
-func flashPageSize(address uintptr) uint32 {
-	return flashPageSizeValue
-}
-
-func eraseFlashPage(address uintptr) error {
-	// calculate page number from address
-	var page uint32 = uint32(address-0x08000000) / FlashPageSize(address)
-
-	// wait until other flash operations are done
+// eraseBlock of the passed in block number
+func eraseBlock(block uint32) error {
 	waitUntilFlashDone()
 
 	// check if operation is allowed.
@@ -455,16 +448,14 @@ func eraseFlashPage(address uintptr) error {
 	defer stm32.FLASH.SetCR_PER(0)
 
 	// set the address to the page to be written
-	stm32.FLASH.SetCR_PNB(page)
+	stm32.FLASH.SetCR_PNB(block)
 	defer stm32.FLASH.SetCR_PNB(0)
 
 	// start the page erase
 	stm32.FLASH.SetCR_STRT(1)
 
-	// wait until page erase is done
 	waitUntilFlashDone()
 
-	// check for error
 	if err := checkError(); err != nil {
 		return err
 	}
@@ -472,50 +463,47 @@ func eraseFlashPage(address uintptr) error {
 	return nil
 }
 
-const flashWriteLength = 8
+const writeBlockSize = 8
 
-func writeFlashData(address uintptr, data []byte) error {
-	if len(data)%flashWriteLength != 0 {
-		return errFlashInvalidWriteLength
+func writeFlashData(address uintptr, data []byte) (int, error) {
+	if len(data)%writeBlockSize != 0 {
+		return 0, errFlashInvalidWriteLength
 	}
 
-	// wait until other flash operations are done
 	waitUntilFlashDone()
 
 	// check if operation is allowed
 	if stm32.FLASH.GetSR_PESD() != 0 {
-		return errFlashNotAllowedWriteData
+		return 0, errFlashNotAllowedWriteData
 	}
 
 	// clear any previous errors
 	stm32.FLASH.SR.SetBits(0x3FA)
 
-	for j := 0; j < len(data); j += flashWriteLength {
+	for j := 0; j < len(data); j += writeBlockSize {
 		// start page write operation
 		stm32.FLASH.SetCR_PG(1)
 
 		// write first word using double-word low order word
-		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j+flashWriteLength/2 : j+flashWriteLength])
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j+writeBlockSize/2 : j+writeBlockSize])
 
-		address += flashWriteLength / 2
+		address += writeBlockSize / 2
 
 		// write second word using double-word high order word
-		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j : j+flashWriteLength/2])
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j : j+writeBlockSize/2])
 
-		// wait until not busy
 		waitUntilFlashDone()
 
-		// check for error
 		if err := checkError(); err != nil {
-			return err
+			return j, err
 		}
 
 		// end flash write
 		stm32.FLASH.SetCR_PG(0)
-		address += flashWriteLength / 2
+		address += writeBlockSize / 2
 	}
 
-	return nil
+	return len(data), nil
 }
 
 func waitUntilFlashDone() {
