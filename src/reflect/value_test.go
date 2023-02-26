@@ -117,6 +117,23 @@ func TestMap(t *testing.T) {
 	}
 }
 
+func TestSlice(t *testing.T) {
+	s := []int{0, 10, 20}
+	refs := ValueOf(s)
+
+	for i := 3; i < 10; i++ {
+		refs = Append(refs, ValueOf(i*10))
+	}
+
+	s = refs.Interface().([]int)
+
+	for i := 0; i < 10; i++ {
+		if s[i] != i*10 {
+			t.Errorf("s[%d]=%d, want %d", i, s[i], i*10)
+		}
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
