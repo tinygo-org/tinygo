@@ -169,6 +169,37 @@ func TestSlice(t *testing.T) {
 	}
 }
 
+func TestBytes(t *testing.T) {
+	s := []byte("abcde")
+	refs := ValueOf(s)
+
+	s2 := refs.Bytes()
+
+	if !equal(s, s2) {
+		t.Errorf("Failed to get Bytes(): %v != %v", s, s2)
+	}
+
+	Copy(refs, ValueOf("12345"))
+
+	if string(s) != "12345" {
+		t.Errorf("Copy()=%q, want `12345`", string(s))
+	}
+
+	// test small arrays that fit in a pointer
+	a := [3]byte{10, 20, 30}
+	v := ValueOf(&a)
+	vslice := v.Elem().Bytes()
+	if len(vslice) != 3 || cap(vslice) != 3 {
+		t.Errorf("len(vslice)=%v, cap(vslice)=%v", len(vslice), cap(vslice))
+	}
+
+	for i, got := range vslice {
+		if want := (byte(i) + 1) * 10; got != want {
+			t.Errorf("vslice[%d]=%d, want %d", i, got, want)
+		}
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
