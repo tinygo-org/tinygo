@@ -132,6 +132,13 @@ func TestSlice(t *testing.T) {
 			t.Errorf("s[%d]=%d, want %d", i, s[i], i*10)
 		}
 	}
+
+	refs = MakeSlice(TypeOf(s), 5, 10)
+	s = refs.Interface().([]int)
+
+	if len(s) != refs.Len() || cap(s) != refs.Cap() {
+		t.Errorf("len(s)=%v refs.Len()=%v cap(s)=%v refs.Cap()=%v", len(s), refs.Len(), cap(s), refs.Cap())
+	}
 }
 
 func equal[T comparable](a, b []T) bool {
