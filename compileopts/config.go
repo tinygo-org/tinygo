@@ -191,14 +191,6 @@ func (c *Config) StackSize() uint64 {
 	return c.Target.DefaultStackSize
 }
 
-// UseThinLTO returns whether ThinLTO should be used for the given target.
-func (c *Config) UseThinLTO() bool {
-	// All architectures support ThinLTO now. However, this code is kept for the
-	// time being in case there are regressions. The non-ThinLTO code support
-	// should be removed when it is proven to work reliably.
-	return true
-}
-
 // RP2040BootPatch returns whether the RP2040 boot patch should be applied that
 // calculates and patches in the checksum for the 2nd stage bootloader.
 func (c *Config) RP2040BootPatch() bool {

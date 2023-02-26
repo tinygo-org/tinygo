@@ -56,7 +56,7 @@ import (
 //     depfile but without invalidating its name. For this reason, the depfile is
 //     written on each new compilation (even when it seems unnecessary). However, it
 //     could in rare cases lead to a stale file fetched from the cache.
-func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool, printCommands func(string, ...string)) (string, error) {
+func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands func(string, ...string)) (string, error) {
 	// Hash input file.
 	fileHash, err := hashFile(abspath)
 	if err != nil {
@@ -66,11 +66,6 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 	// Acquire a lock (if supported).
 	unlock := lock(filepath.Join(goenv.Get("GOCACHE"), fileHash+".c.lock"))
 	defer unlock()
-
-	ext := ".o"
-	if thinlto {
-		ext = ".bc"
-	}
 
 	// Create cache key for the dependencies file.
 	buf, err := json.Marshal(struct {
@@ -104,7 +99,7 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 		}
 
 		// Obtain hashes of all the files listed as a dependency.
-		outpath, err := makeCFileCachePath(dependencies, depfileNameHash, ext)
+		outpath, err := makeCFileCachePath(dependencies, depfileNameHash)
 		if err == nil {
 			if _, err := os.Stat(outpath); err == nil {
 				return outpath, nil
@@ -117,7 +112,7 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 		return "", err
 	}
 
-	objTmpFile, err := os.CreateTemp(goenv.Get("GOCACHE"), "tmp-*"+ext)
+	objTmpFile, err := os.CreateTemp(goenv.Get("GOCACHE"), "tmp-*.bc")
 	if err != nil {
 		return "", err
 	}
@@ -127,11 +122,8 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 		return "", err
 	}
 	depTmpFile.Close()
-	flags := append([]string{}, cflags...)                                   // copy cflags
-	flags = append(flags, "-MD", "-MV", "-MTdeps", "-MF", depTmpFile.Name()) // autogenerate dependencies
-	if thinlto {
-		flags = append(flags, "-flto=thin")
-	}
+	flags := append([]string{}, cflags...)                                                 // copy cflags
+	flags = append(flags, "-MD", "-MV", "-MTdeps", "-MF", depTmpFile.Name(), "-flto=thin") // autogenerate dependencies
 	flags = append(flags, "-c", "-o", objTmpFile.Name(), abspath)
 	if strings.ToLower(filepath.Ext(abspath)) == ".s" {
 		// If this is an assembly file (.s or .S, lowercase or uppercase), then
@@ -189,7 +181,7 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 	}
 
 	// Move temporary object file to final location.
-	outpath, err := makeCFileCachePath(dependencySlice, depfileNameHash, ext)
+	outpath, err := makeCFileCachePath(dependencySlice, depfileNameHash)
 	if err != nil {
 		return "", err
 	}
@@ -204,7 +196,7 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, thinlto bool,
 // Create a cache path (a path in GOCACHE) to store the output of a compiler
 // job. This path is based on the dep file name (which is a hash of metadata
 // including compiler flags) and the hash of all input files in the paths slice.
-func makeCFileCachePath(paths []string, depfileNameHash, ext string) (string, error) {
+func makeCFileCachePath(paths []string, depfileNameHash string) (string, error) {
 	// Hash all input files.
 	fileHashes := make(map[string]string, len(paths))
 	for _, path := range paths {
@@ -229,7 +221,7 @@ func makeCFileCachePath(paths []string, depfileNameHash, ext string) (string, er
 	outFileNameBuf := sha512.Sum512_224(buf)
 	cacheKey := hex.EncodeToString(outFileNameBuf[:])
 
-	outpath := filepath.Join(goenv.Get("GOCACHE"), "obj-"+cacheKey+ext)
+	outpath := filepath.Join(goenv.Get("GOCACHE"), "obj-"+cacheKey+".bc")
 	return outpath, nil
 }
 
