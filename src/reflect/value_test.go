@@ -169,6 +169,17 @@ func TestSlice(t *testing.T) {
 	}
 }
 
+func TestBytes(t *testing.T) {
+	s := []byte("abcde")
+	refs := ValueOf(s)
+
+	s2 := refs.Bytes()
+
+	if !equal(s, s2) {
+		t.Errorf("Failed to get Bytes(): %v != %v", s, s2)
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false

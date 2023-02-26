@@ -378,7 +378,22 @@ func (v Value) String() string {
 }
 
 func (v Value) Bytes() []byte {
-	panic("unimplemented: (reflect.Value).Bytes()")
+	switch v.Kind() {
+	case Slice:
+		if v.typecode.elem().Kind() != Uint8 {
+			panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
+		}
+		return *(*[]byte)(v.value)
+
+	case Array:
+		if v.typecode.elem().Kind() != Uint8 {
+			panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
+		}
+
+		return unsafe.Slice((*byte)(v.value), v.Len())
+	}
+
+	panic(&ValueError{Method: "Bytes", Kind: v.Kind()})
 }
 
 func (v Value) Slice(i, j int) Value {
