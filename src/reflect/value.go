@@ -382,7 +382,52 @@ func (v Value) Bytes() []byte {
 }
 
 func (v Value) Slice(i, j int) Value {
-	panic("unimplemented: (reflect.Value).Slice()")
+	switch v.Kind() {
+	case Slice:
+		hdr := *(*sliceHeader)(v.value)
+		i, j := uintptr(i), uintptr(j)
+
+		if j < i || hdr.cap < j {
+			slicePanic()
+		}
+
+		elemSize := v.typecode.underlying().elem().Size()
+
+		hdr.len = j - i
+		hdr.cap = hdr.cap - i
+		hdr.data = unsafe.Add(hdr.data, i*elemSize)
+
+		return Value{
+			typecode: v.typecode,
+			value:    unsafe.Pointer(&hdr),
+			flags:    v.flags,
+		}
+
+	case Array:
+		// TODO(dgryski): can't do this yet because the resulting value needs type slice of v.elem(), not array of v.elem().
+		// need to be able to look up this "new" type so pointer equality of types still works
+
+	case String:
+		i, j := uintptr(i), uintptr(j)
+		str := *(*stringHeader)(v.value)
+
+		if j < i || str.len < j {
+			slicePanic()
+		}
+
+		hdr := stringHeader{
+			data: unsafe.Add(str.data, i),
+			len:  j - i,
+		}
+
+		return Value{
+			typecode: v.typecode,
+			value:    unsafe.Pointer(&hdr),
+			flags:    v.flags,
+		}
+	}
+
+	panic(&ValueError{"Slice", v.Kind()})
 }
 
 func (v Value) Slice3(i, j, k int) Value {
