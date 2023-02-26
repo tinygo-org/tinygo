@@ -511,24 +511,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 			// Create runtime.initAll function that calls the runtime
 			// initializer of each package.
-			llvmInitFn := mod.NamedFunction("runtime.initAll")
-			llvmInitFn.SetLinkage(llvm.InternalLinkage)
-			llvmInitFn.SetUnnamedAddr(true)
-			transform.AddStandardAttributes(llvmInitFn, config)
-			llvmInitFn.Param(0).SetName("context")
-			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
-			irbuilder := mod.Context().NewBuilder()
-			defer irbuilder.Dispose()
-			irbuilder.SetInsertPointAtEnd(block)
-			i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-			for _, pkg := range lprogram.Sorted() {
-				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
-				if pkgInit.IsNil() {
-					panic("init not found for " + pkg.Pkg.Path())
-				}
-				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
+			initAllModule := createInitAll(ctx, config, compilerConfig, lprogram.Sorted())
+			err := llvm.LinkModules(mod, initAllModule)
+			if err != nil {
+				return fmt.Errorf("failed to link module: %w", err)
 			}
-			irbuilder.CreateRetVoid()
 
 			// After linking, functions should (as far as possible) be set to
 			// private linkage or internal linkage. The compiler package marks
@@ -561,7 +548,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 			// Run all optimization passes, which are much more effective now
 			// that the optimizer can see the whole program at once.
-			err := optimizeProgram(mod, config)
+			err = optimizeProgram(mod, config)
 			if err != nil {
 				return err
 			}
@@ -1030,6 +1017,45 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 		return "", err
 	}
 	return outfile.Name(), outfile.Close()
+}
+
+// Create a module with the runtime.initAll function that calls all package
+// initializers in initialization order.
+func createInitAll(ctx llvm.Context, config *compileopts.Config, compilerConfig *compiler.Config, pkgs []*loader.Package) llvm.Module {
+	// Create LLVM module.
+	mod := ctx.NewModule("runtime-initAll")
+
+	// Add datalayout string.
+	machine, err := compiler.NewTargetMachine(compilerConfig)
+	if err != nil {
+		panic(err) // extremely unlikely to fail here (NewTargetMachine is called many times before)
+	}
+	defer machine.Dispose()
+	targetData := machine.CreateTargetData()
+	defer targetData.Dispose()
+	mod.SetTarget(config.Triple())
+	mod.SetDataLayout(targetData.String())
+
+	// Create empty runtime.initAll function.
+	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
+	fnType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{i8ptrType}, false)
+	fn := llvm.AddFunction(mod, "runtime.initAll", fnType)
+	fn.SetUnnamedAddr(true)
+	transform.AddStandardAttributes(fn, config)
+
+	// Add calls to package initializers.
+	fn.Param(0).SetName("context")
+	block := mod.Context().AddBasicBlock(fn, "entry")
+	irbuilder := mod.Context().NewBuilder()
+	defer irbuilder.Dispose()
+	irbuilder.SetInsertPointAtEnd(block)
+	for _, pkg := range pkgs {
+		pkgInit := llvm.AddFunction(mod, pkg.Pkg.Path()+".init", fnType)
+		irbuilder.CreateCall(fnType, pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
+	}
+	irbuilder.CreateRetVoid()
+
+	return mod
 }
 
 // optimizeProgram runs a series of optimizations and transformations that are
