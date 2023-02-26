@@ -594,12 +594,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			defer llvmBuf.Dispose()
 			return result, os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
 		case ".bc":
-			var buf llvm.MemoryBuffer
-			if config.UseThinLTO() {
-				buf = llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
-			} else {
-				buf = llvm.WriteBitcodeToMemoryBuffer(mod)
-			}
+			buf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
 			defer buf.Dispose()
 			return result, os.WriteFile(outpath, buf.Bytes(), 0666)
 		case ".ll":
@@ -621,16 +616,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		dependencies: []*compileJob{programJob},
 		result:       objfile,
 		run: func(*compileJob) error {
-			var llvmBuf llvm.MemoryBuffer
-			if config.UseThinLTO() {
-				llvmBuf = llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
-			} else {
-				var err error
-				llvmBuf, err = machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
-				if err != nil {
-					return err
-				}
-			}
+			llvmBuf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
 			defer llvmBuf.Dispose()
 			return os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
 		},
@@ -664,7 +650,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
-				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(), config.UseThinLTO(), config.Options.PrintCommands)
+				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(), config.Options.PrintCommands)
 				job.result = result
 				return err
 			},
@@ -682,7 +668,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			job := &compileJob{
 				description: "compile CGo file " + abspath,
 				run: func(job *compileJob) error {
-					result, err := compileAndCacheCFile(abspath, tmpdir, pkg.CFlags, config.UseThinLTO(), config.Options.PrintCommands)
+					result, err := compileAndCacheCFile(abspath, tmpdir, pkg.CFlags, config.Options.PrintCommands)
 					job.result = result
 					return err
 				},
@@ -741,36 +727,34 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 				ldflags = append(ldflags, dependency.result)
 			}
-			if config.UseThinLTO() {
-				ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
-				if config.GOOS() == "windows" {
-					// Options for the MinGW wrapper for the lld COFF linker.
-					ldflags = append(ldflags,
-						"-Xlink=/opt:lldlto="+strconv.Itoa(optLevel),
-						"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
-				} else if config.GOOS() == "darwin" {
-					// Options for the ld64-compatible lld linker.
-					ldflags = append(ldflags,
-						"--lto-O"+strconv.Itoa(optLevel),
-						"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
-				} else {
-					// Options for the ELF linker.
-					ldflags = append(ldflags,
-						"--lto-O"+strconv.Itoa(optLevel),
-						"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
-					)
-				}
-				if config.CodeModel() != "default" {
-					ldflags = append(ldflags,
-						"-mllvm", "-code-model="+config.CodeModel())
-				}
-				if sizeLevel >= 2 {
-					// Workaround with roughly the same effect as
-					// https://reviews.llvm.org/D119342.
-					// Can hopefully be removed in LLVM 15.
-					ldflags = append(ldflags,
-						"-mllvm", "--rotation-max-header-size=0")
-				}
+			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
+			if config.GOOS() == "windows" {
+				// Options for the MinGW wrapper for the lld COFF linker.
+				ldflags = append(ldflags,
+					"-Xlink=/opt:lldlto="+strconv.Itoa(optLevel),
+					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
+			} else if config.GOOS() == "darwin" {
+				// Options for the ld64-compatible lld linker.
+				ldflags = append(ldflags,
+					"--lto-O"+strconv.Itoa(optLevel),
+					"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
+			} else {
+				// Options for the ELF linker.
+				ldflags = append(ldflags,
+					"--lto-O"+strconv.Itoa(optLevel),
+					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
+				)
+			}
+			if config.CodeModel() != "default" {
+				ldflags = append(ldflags,
+					"-mllvm", "-code-model="+config.CodeModel())
+			}
+			if sizeLevel >= 2 {
+				// Workaround with roughly the same effect as
+				// https://reviews.llvm.org/D119342.
+				// Can hopefully be removed in LLVM 15.
+				ldflags = append(ldflags,
+					"-mllvm", "--rotation-max-header-size=0")
 			}
 			if config.Options.PrintCommands != nil {
 				config.Options.PrintCommands(config.Target.Linker, ldflags...)
@@ -1067,10 +1051,6 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 			return errors.New("verification error after interpreting runtime.initAll")
 		}
-	}
-
-	if config.GOOS() != "darwin" && !config.UseThinLTO() {
-		transform.ApplyFunctionSections(mod) // -ffunction-sections
 	}
 
 	// Insert values from -ldflags="-X ..." into the IR.
