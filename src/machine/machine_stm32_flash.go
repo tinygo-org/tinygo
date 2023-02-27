@@ -5,6 +5,7 @@ package machine
 import (
 	"device/stm32"
 
+	"bytes"
 	"unsafe"
 )
 
@@ -30,6 +31,8 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 
 // WriteAt writes the given number of bytes to the block device.
 // Only double-word (64 bits) length data can be programmed. See rm0461 page 78.
+// If the length of p is not long enough it will be padded with 0xFF bytes.
+// This method assumes that the destination is already erased.
 func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
 		return 0, errFlashCannotWritePastEOF
@@ -38,7 +41,7 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	unlockFlash()
 	defer lockFlash()
 
-	return writeFlashData(FlashDataStart()+uintptr(off), p)
+	return writeFlashData(FlashDataStart()+uintptr(off), f.pad(p))
 }
 
 // Size returns the number of bytes in this block device.
@@ -81,6 +84,17 @@ func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 	}
 
 	return nil
+}
+
+// pad data if needed so it is long enough for correct byte alignment on writes.
+func (f flashBlockDevice) pad(p []byte) []byte {
+	paddingNeeded := f.WriteBlockSize() - (int64(len(p)) % f.WriteBlockSize())
+	if paddingNeeded == 0 {
+		return p
+	}
+
+	padded := bytes.Repeat([]byte{0xff}, int(paddingNeeded))
+	return append(p, padded...)
 }
 
 const memoryStart = 0x08000000

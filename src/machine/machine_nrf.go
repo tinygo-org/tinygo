@@ -3,6 +3,7 @@
 package machine
 
 import (
+	"bytes"
 	"device/nrf"
 	"encoding/binary"
 	"runtime/interrupt"
@@ -408,29 +409,29 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 
 // WriteAt writes the given number of bytes to the block device.
 // Only double-word (64 bits) length data can be programmed. See rm0461 page 78.
+// If the length of p is not long enough it will be padded with 0xFF bytes.
+// This method assumes that the destination is already erased.
 func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
 		return 0, errFlashCannotWritePastEOF
 	}
 
 	address := FlashDataStart() + uintptr(off)
-	if int64(len(p))%f.WriteBlockSize() != 0 {
-		return 0, errFlashInvalidWriteLength
-	}
+	padded := f.pad(p)
 
 	waitWhileFlashBusy()
 
 	nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Wen)
 	defer nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Ren)
 
-	for j := 0; j < len(p); j += int(f.WriteBlockSize()) {
+	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
 		// write word
-		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(p[j : j+int(f.WriteBlockSize())])
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize())])
 		address += uintptr(f.WriteBlockSize())
 		waitWhileFlashBusy()
 	}
 
-	return len(p), nil
+	return len(padded), nil
 }
 
 // Size returns the number of bytes in this block device.
@@ -472,6 +473,17 @@ func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 	}
 
 	return nil
+}
+
+// pad data if needed so it is long enough for correct byte alignment on writes.
+func (f flashBlockDevice) pad(p []byte) []byte {
+	paddingNeeded := f.WriteBlockSize() - (int64(len(p)) % f.WriteBlockSize())
+	if paddingNeeded == 0 {
+		return p
+	}
+
+	padding := bytes.Repeat([]byte{0xff}, int(paddingNeeded))
+	return append(p, padding...)
 }
 
 func waitWhileFlashBusy() {
