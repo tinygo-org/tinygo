@@ -80,6 +80,7 @@ The following 94 microcontroller boards are currently supported:
 * [Arduino Nano 33 BLE Sense](https://store.arduino.cc/nano-33-ble-sense)
 * [Arduino Nano 33 IoT](https://store.arduino.cc/nano-33-iot)
 * [Arduino Nano RP2040 Connect](https://store.arduino.cc/nano-rp2040-connect)
+* [Arduino Pro Mini](https://www.sparkfun.com/products/11113)
 * [Arduino Uno](https://store.arduino.cc/arduino-uno-rev3)
 * [Arduino Zero](https://store.arduino.cc/usa/arduino-zero)
 * [BBC micro:bit](https://microbit.org/)
