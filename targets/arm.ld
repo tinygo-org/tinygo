@@ -69,3 +69,7 @@ _heap_start = _ebss;
 _heap_end = ORIGIN(RAM) + LENGTH(RAM);
 _globals_start = _sdata;
 _globals_end = _ebss;
+
+/* For the flash API */
+__flash_data_start = LOADADDR(.data) + SIZEOF(.data);
+__flash_data_end = ORIGIN(FLASH_TEXT) + LENGTH(FLASH_TEXT);
