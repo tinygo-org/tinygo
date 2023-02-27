@@ -6,6 +6,8 @@ package machine
 
 import (
 	"device/stm32"
+	"encoding/binary"
+	"errors"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -424,3 +426,115 @@ const (
 	ARR_MAX = 0x10000
 	PSC_MAX = 0x10000
 )
+
+//---------- Flash related code
+
+const eraseBlockSizeValue = 2048
+
+// eraseBlock of the passed in block number
+func eraseBlock(block uint32) error {
+	waitUntilFlashDone()
+
+	// check if operation is allowed.
+	if stm32.FLASH.GetSR_PESD() != 0 {
+		return errFlashCannotErasePage
+	}
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0x3FA)
+
+	// page erase operation
+	stm32.FLASH.SetCR_PER(1)
+	defer stm32.FLASH.SetCR_PER(0)
+
+	// set the address to the page to be written
+	stm32.FLASH.SetCR_PNB(block)
+	defer stm32.FLASH.SetCR_PNB(0)
+
+	// start the page erase
+	stm32.FLASH.SetCR_STRT(1)
+
+	waitUntilFlashDone()
+
+	if err := checkError(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+const writeBlockSize = 8
+
+func writeFlashData(address uintptr, data []byte) (int, error) {
+	if len(data)%writeBlockSize != 0 {
+		return 0, errFlashInvalidWriteLength
+	}
+
+	waitUntilFlashDone()
+
+	// check if operation is allowed
+	if stm32.FLASH.GetSR_PESD() != 0 {
+		return 0, errFlashNotAllowedWriteData
+	}
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0x3FA)
+
+	for j := 0; j < len(data); j += writeBlockSize {
+		// start page write operation
+		stm32.FLASH.SetCR_PG(1)
+
+		// write first word using double-word low order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j+writeBlockSize/2 : j+writeBlockSize])
+
+		address += writeBlockSize / 2
+
+		// write second word using double-word high order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j : j+writeBlockSize/2])
+
+		waitUntilFlashDone()
+
+		if err := checkError(); err != nil {
+			return j, err
+		}
+
+		// end flash write
+		stm32.FLASH.SetCR_PG(0)
+		address += writeBlockSize / 2
+	}
+
+	return len(data), nil
+}
+
+func waitUntilFlashDone() {
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+
+	for stm32.FLASH.GetSR_CFGBSY() != 0 {
+	}
+}
+
+var (
+	errFlashPGS  = errors.New("errFlashPGS")
+	errFlashSIZE = errors.New("errFlashSIZE")
+	errFlashPGA  = errors.New("errFlashPGA")
+	errFlashWRP  = errors.New("errFlashWRP")
+	errFlashPROG = errors.New("errFlashPROG")
+)
+
+func checkError() error {
+	switch {
+	case stm32.FLASH.GetSR_PGSERR() != 0:
+		return errFlashPGS
+	case stm32.FLASH.GetSR_SIZERR() != 0:
+		return errFlashSIZE
+	case stm32.FLASH.GetSR_PGAERR() != 0:
+		return errFlashPGA
+	case stm32.FLASH.GetSR_WRPERR() != 0:
+		return errFlashWRP
+	case stm32.FLASH.GetSR_PROGERR() != 0:
+		return errFlashPROG
+	}
+
+	return nil
+}

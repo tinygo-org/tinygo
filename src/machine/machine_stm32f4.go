@@ -6,6 +6,8 @@ package machine
 
 import (
 	"device/stm32"
+	"encoding/binary"
+	"errors"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -790,4 +792,143 @@ func (i2c *I2C) getSpeed(config I2CConfig) uint32 {
 			return s | stm32.I2C_CCR_F_S
 		}
 	}
+}
+
+//---------- Flash related code
+
+// the block size actually depends on the sector.
+// TODO: handle this correctly for sectors > 3
+const eraseBlockSizeValue = 16384
+
+// see RM0090 page 75
+func sectorNumber(address uintptr) uint32 {
+	switch {
+	// 0x0800 0000 - 0x0800 3FFF
+	case address >= 0x08000000 && address <= 0x08003FFF:
+		return 0
+	// 0x0800 4000 - 0x0800 7FFF
+	case address >= 0x08004000 && address <= 0x08007FFF:
+		return 1
+	// 0x0800 8000 - 0x0800 BFFF
+	case address >= 0x08008000 && address <= 0x0800BFFF:
+		return 2
+	// 0x0800 C000 - 0x0800 FFFF
+	case address >= 0x0800C000 && address <= 0x0800FFFF:
+		return 3
+	// 0x0801 0000 - 0x0801 FFFF
+	case address >= 0x08010000 && address <= 0x0801FFFF:
+		return 4
+	// 0x0802 0000 - 0x0803 FFFF
+	case address >= 0x08020000 && address <= 0x0803FFFF:
+		return 5
+	// 0x0804 0000 - 0x0805 FFFF
+	case address >= 0x08040000 && address <= 0x0805FFFF:
+		return 6
+	case address >= 0x08060000 && address <= 0x0807FFFF:
+		return 7
+	case address >= 0x08080000 && address <= 0x0809FFFF:
+		return 8
+	case address >= 0x080A0000 && address <= 0x080BFFFF:
+		return 9
+	case address >= 0x080C0000 && address <= 0x080DFFFF:
+		return 10
+	case address >= 0x080E0000 && address <= 0x080FFFFF:
+		return 11
+	default:
+		return 0
+	}
+}
+
+// calculate sector number from address
+// var sector uint32 = sectorNumber(address)
+
+// see RM0090 page 85
+// eraseBlock at the passed in block number
+func eraseBlock(block uint32) error {
+	waitUntilFlashDone()
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0xF0)
+
+	// set SER bit
+	stm32.FLASH.SetCR_SER(1)
+	defer stm32.FLASH.SetCR_SER(0)
+
+	// set the block (aka sector) to be erased
+	stm32.FLASH.SetCR_SNB(block)
+	defer stm32.FLASH.SetCR_SNB(0)
+
+	// start the page erase
+	stm32.FLASH.SetCR_STRT(1)
+
+	waitUntilFlashDone()
+
+	if err := checkError(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+const writeBlockSize = 2
+
+// see RM0090 page 86
+// must write data in word-length
+func writeFlashData(address uintptr, data []byte) (int, error) {
+	if len(data)%writeBlockSize != 0 {
+		return 0, errFlashInvalidWriteLength
+	}
+
+	waitUntilFlashDone()
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0xF0)
+
+	// set parallelism to x32
+	stm32.FLASH.SetCR_PSIZE(2)
+
+	for i := 0; i < len(data); i += writeBlockSize {
+		// start write operation
+		stm32.FLASH.SetCR_PG(1)
+
+		*(*uint16)(unsafe.Pointer(address)) = binary.BigEndian.Uint16(data[i : i+writeBlockSize])
+
+		waitUntilFlashDone()
+
+		if err := checkError(); err != nil {
+			return i, err
+		}
+
+		// end write operation
+		stm32.FLASH.SetCR_PG(0)
+	}
+
+	return len(data), nil
+}
+
+func waitUntilFlashDone() {
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+}
+
+var (
+	errFlashPGS = errors.New("errFlashPGS")
+	errFlashPGP = errors.New("errFlashPGP")
+	errFlashPGA = errors.New("errFlashPGA")
+	errFlashWRP = errors.New("errFlashWRP")
+)
+
+func checkError() error {
+	switch {
+	case stm32.FLASH.GetSR_PGSERR() != 0:
+		return errFlashPGS
+	case stm32.FLASH.GetSR_PGPERR() != 0:
+		return errFlashPGP
+	case stm32.FLASH.GetSR_PGAERR() != 0:
+		return errFlashPGA
+	case stm32.FLASH.GetSR_WRPERR() != 0:
+		return errFlashWRP
+	}
+
+	return nil
 }

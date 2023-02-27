@@ -102,3 +102,9 @@ func (pdm *PDM) Read(buf []int16) (uint32, error) {
 
 	return uint32(len(buf)), nil
 }
+
+const eraseBlockSizeValue = 4096
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
