@@ -6,6 +6,12 @@ import (
 	"device/nrf"
 )
 
+const eraseBlockSizeValue = 1024
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
+
 // Get peripheral and pin number for this GPIO pin.
 func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
 	return nrf.GPIO, uint32(p)

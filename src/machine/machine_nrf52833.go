@@ -84,3 +84,9 @@ var (
 	PWM2 = &PWM{PWM: nrf.PWM2}
 	PWM3 = &PWM{PWM: nrf.PWM3}
 )
+
+const eraseBlockSizeValue = 4096
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
