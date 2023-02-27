@@ -27,6 +27,7 @@ func init() {
 	initSERCOMClocks()
 	initUSBClock()
 	initADCClock()
+	enableCache()
 
 	cdc.EnableUSBCDC()
 	machine.USBDev.Configure(machine.UARTConfig{})
@@ -365,6 +366,10 @@ func initADCClock() {
 		sam.GCLK_PCHCTRL_CHEN)
 	sam.GCLK.PCHCTRL[sam.PCHCTRL_GCLK_ADC1].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
+}
+
+func enableCache() {
+	sam.CMCC.CTRL.SetBits(sam.CMCC_CTRL_CEN)
 }
 
 func waitForEvents() {
