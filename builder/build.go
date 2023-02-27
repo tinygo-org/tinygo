@@ -190,6 +190,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	lprogram, err := loader.Load(config, pkgName, config.ClangHeaders, types.Config{
 		Sizes: compiler.Sizes(machine),
 	})
+	if err != nil {
+		return BuildResult{}, err
+	}
 	result := BuildResult{
 		ModuleRoot: lprogram.MainPkg().Module.Dir,
 		MainDir:    lprogram.MainPkg().Dir,
@@ -198,9 +201,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if result.ModuleRoot == "" {
 		// If there is no module root, just the regular root.
 		result.ModuleRoot = lprogram.MainPkg().Root
-	}
-	if err != nil { // failed to load AST
-		return result, err
 	}
 	err = lprogram.Parse()
 	if err != nil {
