@@ -11,24 +11,43 @@ import (
 )
 
 const (
+	ADC0  Pin = GPIO26
+	ADC1  Pin = GPIO27
+	ADC2  Pin = GPIO28
+	GPIO4 Pin = GPIO4
+	GPIO5 Pin = GPIO5
+	GPIO6 Pin = GPIO6
+	GPIO7 Pin = GPIO7
+	GPIO8 Pin = GPIO8
+	GPIO9 Pin = GPIO9
+
+	LED       Pin = GPIO2
 	NEOPIXELS Pin = GPIO26
+	WS2812    Pin = GPIO26
 
-	EPD_BUSY_PIN  Pin = GPIO26
-	EPD_RESET_PIN Pin = GPIO21
-	EPD_DC_PIN    Pin = GPIO20
-	EPD_CS_PIN    Pin = GPIO17
-	EPD_SCK_PIN   Pin = GPIO18
-	EPD_SDO_PIN   Pin = GPIO19
+	BUTTON_A     Pin = GPIO10
+	BUTTON_B     Pin = GPIO11
+	BUTTON_LEFT  Pin = GPIO25
+	BUTTON_UP    Pin = GPIO24
+	BUTTON_RIGHT Pin = GPIO22
+	BUTTON_DOWN  Pin = GPIO23
 
-	VBUS_DETECT Pin = GPIO24
-	BATTERY     Pin = GPIO29
-	ENABLE_3V3  Pin = GPIO10
+	TFT_RST       Pin = GPIO21
+	TFT_SDI       Pin = GPIO19
+	TFT_SDO       Pin = GPIO16
+	TFT_CS        Pin = GPIO17
+	TFT_SCL       Pin = GPIO18
+	TFT_WRX       Pin = GPIO20
+	TFT_BACKLIGHT Pin = GPIO12
+
+	SPEAKER        Pin = GPIO14
+	SPEAKER_ENABLE Pin = GPIO3
 )
 
 // I2C pins
 const (
-	I2C0_SDA_PIN Pin = GPIO4
-	I2C0_SCL_PIN Pin = GPIO5
+	I2C0_SDA_PIN Pin = GPIO0
+	I2C0_SCL_PIN Pin = GPIO1
 
 	I2C1_SDA_PIN Pin = NoPin
 	I2C1_SCL_PIN Pin = NoPin
@@ -45,20 +64,6 @@ const (
 	SPI1_SDI_PIN Pin = NoPin
 )
 
-// QSPI pins¿?
-const (
-/*
-	TODO
-
-SPI0_SD0_PIN Pin = QSPI_SD0
-SPI0_SD1_PIN Pin = QSPI_SD1
-SPI0_SD2_PIN Pin = QSPI_SD2
-SPI0_SD3_PIN Pin = QSPI_SD3
-SPI0_SCK_PIN Pin = QSPI_SCLKGPIO6
-SPI0_CS_PIN  Pin = QSPI_CS
-*/
-)
-
 // Onboard crystal oscillator frequency, in MHz.
 const (
 	xoscFreq = 12 // MHz
@@ -66,8 +71,8 @@ const (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Badger 2040"
-	usb_STRING_MANUFACTURER = "Pimoroni"
+	usb_STRING_PRODUCT      = "Gopher Badger"
+	usb_STRING_MANUFACTURER = "TinyGo"
 )
 
 var (
