@@ -14,6 +14,7 @@ type valueFlags uint8
 const (
 	valueFlagIndirect valueFlags = 1 << iota
 	valueFlagExported
+	valueFlagRO
 )
 
 type Value struct {
@@ -34,6 +35,10 @@ func (v Value) isIndirect() bool {
 // set for unexported struct fields.
 func (v Value) isExported() bool {
 	return v.flags&valueFlagExported != 0
+}
+
+func (v Value) isRO() bool {
+	return v.flags&valueFlagRO != 0
 }
 
 func Indirect(v Value) Value {
@@ -213,7 +218,7 @@ func (v Value) CanInterface() bool {
 }
 
 func (v Value) CanAddr() bool {
-	return v.flags&(valueFlagIndirect) == valueFlagIndirect
+	return v.flags&(valueFlagIndirect|valueFlagRO) == valueFlagIndirect
 }
 
 func (v Value) Addr() Value {
@@ -221,7 +226,7 @@ func (v Value) Addr() Value {
 }
 
 func (v Value) CanSet() bool {
-	return v.flags&(valueFlagExported|valueFlagIndirect) == valueFlagExported|valueFlagIndirect
+	return v.flags&(valueFlagExported|valueFlagIndirect|valueFlagRO) == valueFlagExported|valueFlagIndirect
 }
 
 func (v Value) Bool() bool {
@@ -845,6 +850,7 @@ func (it *MapIter) Next() bool {
 
 func (v Value) Set(x Value) {
 	v.checkAddressable()
+	v.checkRO()
 	if !v.typecode.AssignableTo(x.typecode) {
 		panic("reflect: cannot set")
 	}
@@ -859,6 +865,7 @@ func (v Value) Set(x Value) {
 
 func (v Value) SetBool(x bool) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Bool:
 		*(*bool)(v.value) = x
@@ -869,6 +876,7 @@ func (v Value) SetBool(x bool) {
 
 func (v Value) SetInt(x int64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Int:
 		*(*int)(v.value) = int(x)
@@ -887,6 +895,7 @@ func (v Value) SetInt(x int64) {
 
 func (v Value) SetUint(x uint64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Uint:
 		*(*uint)(v.value) = uint(x)
@@ -907,6 +916,7 @@ func (v Value) SetUint(x uint64) {
 
 func (v Value) SetFloat(x float64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Float32:
 		*(*float32)(v.value) = float32(x)
@@ -919,6 +929,7 @@ func (v Value) SetFloat(x float64) {
 
 func (v Value) SetComplex(x complex128) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Complex64:
 		*(*complex64)(v.value) = complex64(x)
@@ -931,6 +942,7 @@ func (v Value) SetComplex(x complex128) {
 
 func (v Value) SetString(x string) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case String:
 		*(*string)(v.value) = x
@@ -948,6 +960,7 @@ func (v Value) SetCap(n int) {
 }
 
 func (v Value) SetLen(n int) {
+	v.checkRO()
 	if v.typecode.Kind() != Slice {
 		panic(&ValueError{"reflect.Value.SetLen", v.Kind()})
 	}
@@ -962,6 +975,12 @@ func (v Value) SetLen(n int) {
 func (v Value) checkAddressable() {
 	if !v.isIndirect() {
 		panic("reflect: value is not addressable")
+	}
+}
+
+func (v Value) checkRO() {
+	if v.isRO() {
+		panic("reflect: value is not settable")
 	}
 }
 
@@ -1088,6 +1107,10 @@ func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
 func Copy(dst, src Value) int {
+	if src.Len() > 0 {
+		dst.checkRO()
+	}
+
 	compatibleTypes := false ||
 		// dst and src are both slices or arrays with equal types
 		((dst.typecode.Kind() == Slice || dst.typecode.Kind() == Array) &&
@@ -1152,7 +1175,7 @@ func (v *Value) extendSlice(n int) {
 	var nbuf unsafe.Pointer
 	var nlen, ncap uintptr
 
-	if old.len+uintptr(n) > old.cap {
+	if old.len+uintptr(n) > old.cap || v.isRO() {
 		// we need to grow the slice
 		nbuf, nlen, ncap = sliceGrow(old.data, old.len, old.cap, old.cap+uintptr(n), v.typecode.elem().Size())
 	} else {
@@ -1188,6 +1211,7 @@ func Append(v Value, x ...Value) Value {
 // AppendSlice appends a slice t to a slice s and returns the resulting slice.
 // The slices s and t must have the same element type.
 func AppendSlice(s, t Value) Value {
+	// No RO check; a zero value slice for s is valid argument to sliceAppend().  A new slice will be returned.
 	if s.typecode.Kind() != Slice || t.typecode.Kind() != Slice || s.typecode != t.typecode {
 		// Not a very helpful error message, but shortened to just one error to
 		// keep code size down.
@@ -1226,6 +1250,8 @@ func hashmapStringDelete(m unsafe.Pointer, key string)
 func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
 
 func (v Value) SetMapIndex(key, elem Value) {
+	// No RO check here; we let the map code panic if it's a zero value map.  This matches upstream behaviour.
+
 	if v.Kind() != Map {
 		panic(&ValueError{Method: "SetMapIndex", Kind: v.Kind()})
 	}
