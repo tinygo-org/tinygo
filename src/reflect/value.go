@@ -133,7 +133,7 @@ func (v Value) IsZero() bool {
 	default:
 		// This should never happens, but will act as a safeguard for
 		// later, as a default value doesn't makes sense here.
-		panic(&ValueError{"reflect.Value.IsZero", v.Kind()})
+		panic(&ValueError{Method: "reflect.Value.IsZero", Kind: v.Kind()})
 	}
 }
 
@@ -174,7 +174,7 @@ func (v Value) IsNil() bool {
 		_, val := decomposeInterface(*(*interface{})(v.value))
 		return val == nil
 	default:
-		panic(&ValueError{Method: "IsNil"})
+		panic(&ValueError{Method: "IsNil", Kind: v.Kind()})
 	}
 }
 
@@ -196,7 +196,7 @@ func (v Value) UnsafePointer() unsafe.Pointer {
 	case Func:
 		panic("unimplemented: (reflect.Value).UnsafePointer()")
 	default: // not implemented: Func
-		panic(&ValueError{Method: "UnsafePointer"})
+		panic(&ValueError{Method: "UnsafePointer", Kind: v.Kind()})
 	}
 }
 
@@ -246,7 +246,7 @@ func (v Value) Bool() bool {
 			return uintptr(v.value) != 0
 		}
 	default:
-		panic(&ValueError{Method: "Bool"})
+		panic(&ValueError{Method: "Bool", Kind: v.Kind()})
 	}
 }
 
@@ -283,7 +283,7 @@ func (v Value) Int() int64 {
 			return int64(int64(uintptr(v.value)))
 		}
 	default:
-		panic(&ValueError{Method: "Int"})
+		panic(&ValueError{Method: "Int", Kind: v.Kind()})
 	}
 }
 
@@ -326,7 +326,7 @@ func (v Value) Uint() uint64 {
 			return uint64(uintptr(v.value))
 		}
 	default:
-		panic(&ValueError{Method: "Uint"})
+		panic(&ValueError{Method: "Uint", Kind: v.Kind()})
 	}
 }
 
@@ -352,7 +352,7 @@ func (v Value) Float() float64 {
 			return *(*float64)(unsafe.Pointer(&v.value))
 		}
 	default:
-		panic(&ValueError{Method: "Float"})
+		panic(&ValueError{Method: "Float", Kind: v.Kind()})
 	}
 }
 
@@ -374,7 +374,7 @@ func (v Value) Complex() complex128 {
 		// architectures with 128-bit pointers, however.
 		return *(*complex128)(v.value)
 	default:
-		panic(&ValueError{Method: "Complex"})
+		panic(&ValueError{Method: "Complex", Kind: v.Kind()})
 	}
 }
 
@@ -455,7 +455,7 @@ func (v Value) Slice(i, j int) Value {
 		}
 	}
 
-	panic(&ValueError{"Slice", v.Kind()})
+	panic(&ValueError{Method: "Slice", Kind: v.Kind()})
 }
 
 func (v Value) Slice3(i, j, k int) Value {
@@ -510,7 +510,7 @@ func (v Value) Len() int {
 	case String:
 		return int((*stringHeader)(v.value).len)
 	default:
-		panic(&ValueError{Method: "Len"})
+		panic(&ValueError{Method: "Len", Kind: v.Kind()})
 	}
 }
 
@@ -528,7 +528,7 @@ func (v Value) Cap() int {
 	case Slice:
 		return int((*sliceHeader)(v.value).cap)
 	default:
-		panic(&ValueError{Method: "Cap"})
+		panic(&ValueError{Method: "Cap", Kind: v.Kind()})
 	}
 }
 
@@ -558,7 +558,7 @@ func (v Value) Elem() Value {
 			flags:    v.flags &^ valueFlagIndirect,
 		}
 	default:
-		panic(&ValueError{Method: "Elem"})
+		panic(&ValueError{Method: "Elem", Kind: v.Kind()})
 	}
 }
 
@@ -708,7 +708,7 @@ func (v Value) Index(i int) Value {
 			value:    unsafe.Pointer(value),
 		}
 	default:
-		panic(&ValueError{Method: "Index"})
+		panic(&ValueError{Method: "Index", Kind: v.Kind()})
 	}
 }
 
@@ -746,7 +746,7 @@ func (v Value) OverflowFloat(x float64) bool {
 	case Float64:
 		return false
 	}
-	panic(&ValueError{"reflect.Value.OverflowFloat", v.Kind()})
+	panic(&ValueError{Method: "reflect.Value.OverflowFloat", Kind: v.Kind()})
 }
 
 func overflowFloat32(x float64) bool {
@@ -894,7 +894,7 @@ func (v Value) SetBool(x bool) {
 	case Bool:
 		*(*bool)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetBool"})
+		panic(&ValueError{Method: "SetBool", Kind: v.Kind()})
 	}
 }
 
@@ -913,7 +913,7 @@ func (v Value) SetInt(x int64) {
 	case Int64:
 		*(*int64)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetInt"})
+		panic(&ValueError{Method: "SetInt", Kind: v.Kind()})
 	}
 }
 
@@ -934,7 +934,7 @@ func (v Value) SetUint(x uint64) {
 	case Uintptr:
 		*(*uintptr)(v.value) = uintptr(x)
 	default:
-		panic(&ValueError{Method: "SetUint"})
+		panic(&ValueError{Method: "SetUint", Kind: v.Kind()})
 	}
 }
 
@@ -947,7 +947,7 @@ func (v Value) SetFloat(x float64) {
 	case Float64:
 		*(*float64)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetFloat"})
+		panic(&ValueError{Method: "SetFloat", Kind: v.Kind()})
 	}
 }
 
@@ -960,7 +960,7 @@ func (v Value) SetComplex(x complex128) {
 	case Complex128:
 		*(*complex128)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetComplex"})
+		panic(&ValueError{Method: "SetComplex", Kind: v.Kind()})
 	}
 }
 
@@ -971,7 +971,7 @@ func (v Value) SetString(x string) {
 	case String:
 		*(*string)(v.value) = x
 	default:
-		panic(&ValueError{Method: "SetString"})
+		panic(&ValueError{Method: "SetString", Kind: v.Kind()})
 	}
 }
 
@@ -986,7 +986,7 @@ func (v Value) SetCap(n int) {
 func (v Value) SetLen(n int) {
 	v.checkRO()
 	if v.typecode.Kind() != Slice {
-		panic(&ValueError{"reflect.Value.SetLen", v.Kind()})
+		panic(&ValueError{Method: "reflect.Value.SetLen", Kind: v.Kind()})
 	}
 
 	hdr := (*sliceHeader)(v.value)
@@ -1017,7 +1017,7 @@ func (v Value) OverflowInt(x int64) bool {
 		trunc := (x << (64 - bitSize)) >> (64 - bitSize)
 		return x != trunc
 	}
-	panic(&ValueError{"reflect.Value.OverflowInt", v.Kind()})
+	panic(&ValueError{Method: "reflect.Value.OverflowInt", Kind: v.Kind()})
 }
 
 // OverflowUint reports whether the uint64 x cannot be represented by v's type.
@@ -1030,7 +1030,7 @@ func (v Value) OverflowUint(x uint64) bool {
 		trunc := (x << (64 - bitSize)) >> (64 - bitSize)
 		return x != trunc
 	}
-	panic(&ValueError{"reflect.Value.OverflowUint", v.Kind()})
+	panic(&ValueError{Method: "reflect.Value.OverflowUint", Kind: v.Kind()})
 }
 
 func (v Value) Convert(t Type) Value {
@@ -1404,7 +1404,7 @@ func MakeMapWithSize(typ Type, n int) Value {
 	)
 
 	if typ.Kind() != Map {
-		panic(&ValueError{"MakeMap", typ.Kind()})
+		panic(&ValueError{Method: "MakeMap", Kind: typ.Kind()})
 	}
 
 	if n < 0 {
