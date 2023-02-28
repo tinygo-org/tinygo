@@ -473,6 +473,9 @@ func (t *rawType) String() string {
 }
 
 func (t *rawType) Kind() Kind {
+	if t == nil {
+		return Invalid
+	}
 	return Kind(t.meta & kindMask)
 }
 
