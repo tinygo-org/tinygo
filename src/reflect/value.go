@@ -1017,8 +1017,39 @@ func MakeSlice(typ Type, len, cap int) Value {
 	}
 }
 
+var zerobuffer unsafe.Pointer
+
+const zerobufferLen = 32
+
+func init() {
+	// 32 characters of zero bytes
+	zerobufferStr := "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+	s := (*stringHeader)(unsafe.Pointer(&zerobufferStr))
+	zerobuffer = s.data
+}
+
 func Zero(typ Type) Value {
-	panic("unimplemented: reflect.Zero()")
+	if typ.Size() < unsafe.Sizeof(uintptr(0)) {
+		return Value{
+			typecode: typ.(*rawType),
+			value:    nil,
+			flags:    valueFlagExported,
+		}
+	}
+
+	if typ.Size() <= zerobufferLen {
+		return Value{
+			typecode: typ.(*rawType),
+			value:    unsafe.Pointer(zerobuffer),
+			flags:    valueFlagExported,
+		}
+	}
+
+	return Value{
+		typecode: typ.(*rawType),
+		value:    alloc(typ.Size(), nil),
+		flags:    valueFlagExported,
+	}
 }
 
 // New is the reflect equivalent of the new(T) keyword, returning a pointer to a
