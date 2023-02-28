@@ -1016,7 +1016,7 @@ func Zero(typ Type) Value {
 // new value of the given type.
 func New(typ Type) Value {
 	return Value{
-		typecode: PtrTo(typ).(*rawType),
+		typecode: pointerTo(typ.(*rawType)),
 		value:    alloc(typ.Size(), nil),
 		flags:    valueFlagExported,
 	}
