@@ -222,7 +222,15 @@ func (v Value) CanAddr() bool {
 }
 
 func (v Value) Addr() Value {
-	panic("unimplemented: (reflect.Value).Addr()")
+	if !v.CanAddr() {
+		panic("reflect.Value.Addr of unaddressable value")
+	}
+
+	return Value{
+		typecode: pointerTo(v.typecode),
+		value:    unsafe.Pointer(&v.value),
+		flags:    v.flags,
+	}
 }
 
 func (v Value) CanSet() bool {
