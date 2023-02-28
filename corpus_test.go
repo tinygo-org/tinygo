@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"golang.org/x/tools/go/buildutil"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -57,11 +58,25 @@ func TestCorpus(t *testing.T) {
 		t.Fatalf("loading corpus: %v", err)
 	}
 
+	// Get the target spec, just for GOOS information.
+	options := optionsFromTarget(target, nil)
+	spec, err := compileopts.LoadTarget(&options)
+
 	for _, repo := range repos {
 		repo := repo
+
+		var tagsString string
+		if strings.HasPrefix(spec.Triple, "wasm") {
+			tagsString = repo.TagsWasi
+		} else if spec.GOOS == "darwin" {
+			tagsString = repo.TagsDarwin
+		} else if spec.GOOS == "linux" {
+			tagsString = repo.TagsLinux
+		}
+
 		name := repo.Repo
-		if repo.Tags != "" {
-			name += "(" + strings.ReplaceAll(repo.Tags, " ", "-") + ")"
+		if tagsString != "" {
+			name += "(" + strings.ReplaceAll(tagsString, " ", "-") + ")"
 		}
 		if repo.Version != "" {
 			name += "@" + repo.Version
@@ -113,7 +128,7 @@ func TestCorpus(t *testing.T) {
 				opts := optionsFromTarget(target, sema)
 				opts.Directory = dir
 				var tags buildutil.TagsFlag
-				tags.Set(repo.Tags)
+				tags.Set(tagsString)
 				opts.Tags = []string(tags)
 				opts.TestConfig.Verbose = testing.Verbose()
 
@@ -150,12 +165,14 @@ func TestCorpus(t *testing.T) {
 }
 
 type T struct {
-	Repo     string
-	Tags     string
-	Subdirs  []Subdir
-	SkipWASI bool
-	Slow     bool
-	Version  string
+	Repo       string
+	TagsLinux  string `yaml:"tags_linux"`
+	TagsDarwin string `yaml:"tags_darwin"`
+	TagsWasi   string `yaml:"tags_wasi"`
+	Subdirs    []Subdir
+	SkipWASI   bool
+	Slow       bool
+	Version    string
 }
 
 type Subdir struct {

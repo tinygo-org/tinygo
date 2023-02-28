@@ -24,23 +24,31 @@
 
 - repo: github.com/buger/jsonparser
 - repo: github.com/dgryski/go-bloomindex
-  tags: purego noasm
+  tags_linux:  purego noasm
+  tags_darwin: purego noasm
+  tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-arc
 - repo: github.com/dgryski/go-camellia
 - repo: github.com/dgryski/go-change
 - repo: github.com/dgryski/go-chaskey
-  tags: appengine purego noasm
+  tags_linux:  appengine purego noasm
+  tags_darwin: appengine purego noasm
+  tags_wasi:   appengine purego noasm
   skipwasi: true # siphash has build tag issues
 - repo: github.com/dgryski/go-clefia
 - repo: github.com/dgryski/go-clockpro
 - repo: github.com/dgryski/go-cobs
 - repo: github.com/dgryski/go-cuckoof
-  tags: pureno noasm
+  tags_linux:  pureno noasm
+  tags_darwin: pureno noasm
+  tags_wasi:   pureno noasm
 - repo: github.com/dgryski/go-discreterand
 - repo: github.com/dgryski/go-expirecache
 - repo: github.com/dgryski/go-factor
 - repo: github.com/dgryski/go-farm
-  tags: purego noasm
+  tags_linux:  purego noasm
+  tags_darwin: purego noasm
+  tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-fuzzstr
 - repo: github.com/dgryski/go-hollow
 - repo: github.com/dgryski/go-idea
@@ -55,18 +63,28 @@
 - repo: github.com/dgryski/go-linebreak
 - repo: github.com/dgryski/go-linlog
 - repo: github.com/dgryski/go-maglev
-  tags: appengine # for dchest/siphash
+  tags_linux:  appengine # for dchest/siphash
+  tags_darwin: appengine # for dchest/siphash
+  tags_wasi:   appengine # for dchest/siphash
   skipwasi: true
 - repo: github.com/dgryski/go-marvin32
-  tags: purego
+  tags_linux:  purego
+  tags_darwin: purego
+  tags_wasi:   purego
 - repo: github.com/dgryski/go-md5crypt
 - repo: github.com/dgryski/go-metro
-  tags: purego noasm
+  tags_linux:  purego noasm
+  tags_darwin: purego noasm
+  tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-misty1
 - repo: github.com/dgryski/go-mph
-  tags: purego noasm
+  tags_linux:  purego noasm
+  tags_darwin: purego noasm
+  tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-mpchash
-  tags: appengine # for dchest/siphash
+  tags_linux:  appengine # for dchest/siphash
+  tags_darwin: appengine # for dchest/siphash
+  tags_wasi:   appengine # for dchest/siphash
   skipwasi: true
 - repo: github.com/dgryski/go-neeva
 - repo: github.com/dgryski/go-nibz
@@ -82,7 +100,9 @@
 - repo: github.com/dgryski/go-s4lru
 - repo: github.com/dgryski/go-sequitur
 - repo: github.com/dgryski/go-sip13
-  tags: purego noasm
+  tags_linux:  purego noasm
+  tags_darwin: purego noasm
+  tags_wasi:   purego noasm
 - repo: github.com/dgryski/go-skinny
 - repo: github.com/dgryski/go-skip32
 - repo: github.com/dgryski/go-skipjack
@@ -97,9 +117,13 @@
 - repo: github.com/dgryski/go-xoshiro
 - repo: github.com/dgryski/go-zlatlong
 - repo: github.com/dgryski/go-postings
-  tags: purego noasm
+  tags_linux:  purego noasm
+  tags_darwin: purego noasm
+  tags_wasi:   purego noasm
 - repo: golang.org/x/crypto
-  tags: purego noasm
+  tags_linux:  purego noasm
+  tags_darwin: purego noasm
+  tags_wasi:   purego noasm
   subdirs:
   - pkg: argon2
   - pkg: bcrypt
@@ -174,7 +198,9 @@
   #- pkg: internal/gen/bitfield # panic: unimplemented: (reflect.Type).Name()
   #- pkg: number # fails due to printf %T formatting
 - repo: golang.org/x/image
-  tags: noasm
+  tags_linux:  noasm
+  tags_darwin: noasm
+  tags_wasi:   noasm
   subdirs:
   #- pkg: bmp # needs  _time.startTimer
   - pkg: ccitt
@@ -203,10 +229,14 @@
 - repo: github.com/armon/circbuf
 - repo: github.com/VividCortex/gohistogram
 - repo: github.com/cespare/xxhash
-  tags: appengine
+  tags_linux:  appengine
+  tags_darwin: appengine
+  tags_wasi:   appengine
 - repo: gonum.org/v1/gonum
 - repo: gonum.org/v1/gonum
-  tags: noasm appengine
+  tags_linux:  noasm appengine
+  tags_darwin: noasm appengine
+  tags_wasi:   noasm appengine
   subdirs:
   - pkg: blas/blas32
   - pkg: blas/blas64
@@ -269,7 +299,9 @@
 
 - repo: github.com/cloudflare/bm
 - repo: github.com/cloudflare/bn256
-  tags: generic
+  tags_linux:  generic
+  tags_darwin: generic
+  tags_wasi:   generic
 #- repo: cloudflare/ahocorasick # interp timeout building regexps in test
 #- repo: github.com/google/open-location-code # unfortunately, Go discards the test files
 #  version: master
