@@ -1035,8 +1035,37 @@ func mulNoOverflow(x, y uintptr) (uintptr, bool) {
 	return m, x == m/y
 }
 
+var zerobuffer [256]byte
+
 func Zero(typ Type) Value {
-	panic("unimplemented: reflect.Zero()")
+	if typ.Size() < unsafe.Sizeof(uintptr(0)) {
+		return Value{
+			typecode: typ.(*rawType),
+			value:    nil,
+			flags:    valueFlagRO,
+		}
+	}
+
+	if typ.Size() < uintptr(len(zerobuffer)) {
+		flags := valueFlagRO
+
+		// slices are bigger than pointer but don't have the indirect flag set
+		if typ.Kind() != Slice {
+			flags |= valueFlagIndirect
+		}
+
+		return Value{
+			typecode: typ.(*rawType),
+			value:    unsafe.Pointer(&zerobuffer[0]),
+			flags:    flags,
+		}
+	}
+
+	return Value{
+		typecode: typ.(*rawType),
+		value:    alloc(typ.Size(), nil),
+		flags:    valueFlagRO | valueFlagIndirect,
+	}
 }
 
 // New is the reflect equivalent of the new(T) keyword, returning a pointer to a
