@@ -952,7 +952,15 @@ func (v Value) SetCap(n int) {
 }
 
 func (v Value) SetLen(n int) {
-	panic("unimplemented: (reflect.Value).SetLen()")
+	if v.typecode.Kind() != Slice {
+		panic(&ValueError{"reflect.Value.SetLen", v.Kind()})
+	}
+
+	hdr := (*sliceHeader)(v.value)
+	if int(uintptr(n)) != n || uintptr(n) > hdr.cap {
+		panic("reflect.Value.SetLen: slice length out of range")
+	}
+	hdr.len = uintptr(n)
 }
 
 func (v Value) checkAddressable() {
