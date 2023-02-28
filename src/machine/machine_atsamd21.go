@@ -7,8 +7,10 @@
 package machine
 
 import (
+	"bytes"
 	"device/arm"
 	"device/sam"
+	"encoding/binary"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -1786,5 +1788,142 @@ func (dac DAC) Set(value uint16) error {
 
 func syncDAC() {
 	for sam.DAC.STATUS.HasBits(sam.DAC_STATUS_SYNCBUSY) {
+	}
+}
+
+// Flash related code
+const memoryStart = 0x0
+
+// compile-time check for ensuring we fulfill BlockDevice interface
+var _ BlockDevice = flashBlockDevice{}
+
+var Flash flashBlockDevice
+
+type flashBlockDevice struct {
+	initComplete bool
+}
+
+// ReadAt reads the given number of bytes from the block device.
+func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotReadPastEOF
+	}
+
+	f.ensureInitComplete()
+
+	waitWhileFlashBusy()
+
+	data := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(FlashDataStart()), uintptr(off))), len(p))
+	copy(p, data)
+
+	return len(p), nil
+}
+
+// WriteAt writes the given number of bytes to the block device.
+// Only word (32 bits) length data can be programmed.
+// See Atmel-42181G–SAM-D21_Datasheet–09/2015 page 359.
+// If the length of p is not long enough it will be padded with 0xFF bytes.
+// This method assumes that the destination is already erased.
+func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotWritePastEOF
+	}
+
+	f.ensureInitComplete()
+
+	address := FlashDataStart() + uintptr(off)
+	padded := f.pad(p)
+
+	waitWhileFlashBusy()
+
+	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
+		// write word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize())])
+
+		sam.NVMCTRL.SetADDR(uint32(address >> 1))
+		sam.NVMCTRL.CTRLA.Set(sam.NVMCTRL_CTRLA_CMD_WP | (sam.NVMCTRL_CTRLA_CMDEX_KEY << sam.NVMCTRL_CTRLA_CMDEX_Pos))
+
+		waitWhileFlashBusy()
+
+		// TODO: check for error
+		address += uintptr(f.WriteBlockSize())
+	}
+
+	return len(padded), nil
+}
+
+// Size returns the number of bytes in this block device.
+func (f flashBlockDevice) Size() int64 {
+	return int64(FlashDataEnd() - FlashDataStart())
+}
+
+const writeBlockSize = 4
+
+// WriteBlockSize returns the block size in which data can be written to
+// memory. It can be used by a client to optimize writes, non-aligned writes
+// should always work correctly.
+func (f flashBlockDevice) WriteBlockSize() int64 {
+	return writeBlockSize
+}
+
+const eraseBlockSizeValue = 64
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
+
+// EraseBlockSize returns the smallest erasable area on this particular chip
+// in bytes. This is used for the block size in EraseBlocks.
+func (f flashBlockDevice) EraseBlockSize() int64 {
+	return eraseBlockSize()
+}
+
+// EraseBlocks erases the given number of blocks. An implementation may
+// transparently coalesce ranges of blocks into larger bundles if the chip
+// supports this. The start and len parameters are in block numbers, use
+// EraseBlockSize to map addresses to blocks.
+func (f flashBlockDevice) EraseBlocks(start, len int64) error {
+	f.ensureInitComplete()
+
+	address := FlashDataStart() + uintptr(start*f.EraseBlockSize())
+	waitWhileFlashBusy()
+
+	for i := start; i < start+len; i++ {
+		sam.NVMCTRL.SetADDR(uint32(address >> 1))
+		sam.NVMCTRL.CTRLA.Set(sam.NVMCTRL_CTRLA_CMD_ER | (sam.NVMCTRL_CTRLA_CMDEX_KEY << sam.NVMCTRL_CTRLA_CMDEX_Pos))
+
+		waitWhileFlashBusy()
+		address += uintptr(f.EraseBlockSize())
+	}
+
+	return nil
+}
+
+// pad data if needed so it is long enough for correct byte alignment on writes.
+func (f flashBlockDevice) pad(p []byte) []byte {
+	paddingNeeded := f.WriteBlockSize() - (int64(len(p)) % f.WriteBlockSize())
+	if paddingNeeded == 0 {
+		return p
+	}
+
+	padding := bytes.Repeat([]byte{0xff}, int(paddingNeeded))
+	return append(p, padding...)
+}
+
+func (f flashBlockDevice) ensureInitComplete() {
+	if f.initComplete {
+		return
+	}
+
+	sam.NVMCTRL.SetCTRLB_READMODE(sam.NVMCTRL_CTRLB_READMODE_NO_MISS_PENALTY)
+	sam.NVMCTRL.SetCTRLB_SLEEPPRM(sam.NVMCTRL_CTRLB_SLEEPPRM_WAKEONACCESS)
+
+	waitWhileFlashBusy()
+
+	f.initComplete = true
+}
+
+func waitWhileFlashBusy() {
+	for sam.NVMCTRL.GetINTFLAG_READY() != sam.NVMCTRL_INTFLAG_READY {
 	}
 }
