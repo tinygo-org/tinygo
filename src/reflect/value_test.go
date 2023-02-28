@@ -137,7 +137,7 @@ func TestSlice(t *testing.T) {
 	s28ref := refs.Slice(2, 8)
 
 	if len(s28) != s28ref.Len() || cap(s28) != s28ref.Cap() {
-		t.Errorf("len(s28)=%d s28ref.Len()=%d cap(s28)=%d s28ref.Cap()=%d\n", len(s28), s28ref.Len(), cap(s28), s28ref.Cap())
+		t.Errorf("Slice: len(s28)=%d s28ref.Len()=%d cap(s28)=%d s28ref.Cap()=%d\n", len(s28), s28ref.Len(), cap(s28), s28ref.Cap())
 	}
 
 	for i, got := range s28 {
@@ -151,13 +151,26 @@ func TestSlice(t *testing.T) {
 	s268ref := refs.Slice3(2, 6, 8)
 
 	if len(s268) != s268ref.Len() || cap(s268) != s268ref.Cap() {
-		t.Errorf("len(s268)=%d s268ref.Len()=%d cap(s268)=%d s268ref.Cap()=%d\n", len(s268), s268ref.Len(), cap(s268), s268ref.Cap())
+		t.Errorf("Slice3: len(s268)=%d s268ref.Len()=%d cap(s268)=%d s268ref.Cap()=%d\n", len(s268), s268ref.Len(), cap(s268), s268ref.Cap())
 	}
 
 	for i, got := range s268 {
 		want := int(s268ref.Index(i).Int())
 		if got != want {
 			t.Errorf("s268[%d]=%d, want %d", i, got, want)
+		}
+	}
+
+	// should be equivalent to s28 now, except for the capacity which doesn't change
+	s268ref.SetLen(6)
+	if len(s28) != s268ref.Len() || cap(s268) != s268ref.Cap() {
+		t.Errorf("SetLen: len(s268)=%d s268ref.Len()=%d cap(s268)=%d s268ref.Cap()=%d\n", len(s28), s268ref.Len(), cap(s268), s268ref.Cap())
+	}
+
+	for i, got := range s28 {
+		want := int(s268ref.Index(i).Int())
+		if got != want {
+			t.Errorf("s28[%d]=%d, want %d", i, got, want)
 		}
 	}
 
