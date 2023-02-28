@@ -21,9 +21,11 @@ const (
 	GPIO8 Pin = GPIO8
 	GPIO9 Pin = GPIO9
 
+	PENIRQ Pin = GPIO13
+
 	LED       Pin = GPIO2
-	NEOPIXELS Pin = GPIO26
-	WS2812    Pin = GPIO26
+	NEOPIXELS Pin = GPIO15
+	WS2812    Pin = GPIO15
 
 	BUTTON_A     Pin = GPIO10
 	BUTTON_B     Pin = GPIO11
@@ -84,21 +86,23 @@ var (
 const (
 	UART0_TX_PIN = GPIO0
 	UART0_RX_PIN = GPIO1
+	UART0_TX_PIN = GPIO4
+	UART0_RX_PIN = GPIO5
 	UART_TX_PIN  = UART0_TX_PIN
 	UART_RX_PIN  = UART0_RX_PIN
 )
 
 // UART on the RP2040
 var (
-	UART0  = &_UART0
-	_UART0 = UART{
+	UART1  = &_UART1
+	_UART1 = UART{
 		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
+		Bus:    rp.UART1,
 	}
 )
 
-var DefaultUART = UART0
+var DefaultUART = UART1
 
 func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
+	UART1.Interrupt = interrupt.New(rp.IRQ_UART1_IRQ, _UART1.handleInterrupt)
 }
