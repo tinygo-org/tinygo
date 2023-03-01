@@ -575,6 +575,40 @@ func (t *rawType) Field(i int) StructField {
 	}
 }
 
+func rawStructFieldFromPointer(fieldType *rawType, data unsafe.Pointer, flagsByte uint8, name string, offset uintptr) rawStructField {
+	// Read the field tag, if there is one.
+	var tag string
+	if flagsByte&structFieldFlagHasTag != 0 {
+		data = unsafe.Add(data, 1) // C: data+1
+		tagLen := uintptr(*(*byte)(data))
+		data = unsafe.Add(data, 1) // C: data+1
+		tag = *(*string)(unsafe.Pointer(&stringHeader{
+			data: data,
+			len:  tagLen,
+		}))
+	}
+
+	// Set the PkgPath to some (arbitrary) value if the package path is not
+	// exported.
+	pkgPath := ""
+	if flagsByte&structFieldFlagIsExported == 0 {
+		// This field is unexported.
+		// TODO: list the real package path here. Storing it should not
+		// significantly impact binary size as there is only a limited
+		// number of packages in any program.
+		pkgPath = "<unimplemented>"
+	}
+
+	return rawStructField{
+		Name:      name,
+		PkgPath:   pkgPath,
+		Type:      fieldType,
+		Tag:       StructTag(tag),
+		Anonymous: flagsByte&structFieldFlagAnonymous != 0,
+		Offset:    offset,
+	}
+}
+
 // rawField returns nearly the same value as Field but without converting the
 // Type member to an interface.
 //
@@ -611,49 +645,56 @@ func (t *rawType) rawField(n int) rawStructField {
 	flagsByte := *(*byte)(data)
 	data = unsafe.Add(data, 1)
 
-	// Read the field name.
-	nameStart := data
-	var nameLen uintptr
-	for *(*byte)(data) != 0 {
-		nameLen++
-		data = unsafe.Add(data, 1) // C: data++
-	}
-	name := *(*string)(unsafe.Pointer(&stringHeader{
-		data: nameStart,
-		len:  nameLen,
-	}))
+	name := readStringZ(data)
+	data = unsafe.Add(data, len(name))
 
-	// Read the field tag, if there is one.
-	var tag string
-	if flagsByte&structFieldFlagHasTag != 0 {
-		data = unsafe.Add(data, 1) // C: data+1
-		tagLen := uintptr(*(*byte)(data))
-		data = unsafe.Add(data, 1) // C: data+1
-		tag = *(*string)(unsafe.Pointer(&stringHeader{
-			data: data,
-			len:  tagLen,
-		}))
+	return rawStructFieldFromPointer(field.fieldType, data, flagsByte, name, offset)
+}
+
+// rawFieldByName returns nearly the same value as FieldByName but without converting the
+// Type member to an interface.
+//
+// For internal use only.
+func (t *rawType) rawFieldByName(n string) (rawStructField, int, bool) {
+	if t.Kind() != Struct {
+		panic(&TypeError{"Field"})
+	}
+	descriptor := (*structType)(unsafe.Pointer(t.underlying()))
+
+	// Iterate over all the fields looking for the matching name
+	// Also calculate field offset.
+
+	field := &descriptor.fields[0]
+	var offset uintptr = 0
+	for i := uint16(0); i < descriptor.numField; i++ {
+		data := field.data
+
+		// Read some flags of this field, like whether the field is an embedded
+		// field. See structFieldFlagAnonymous and similar flags.
+		flagsByte := *(*byte)(data)
+		data = unsafe.Add(data, 1)
+
+		name := readStringZ(data)
+		data = unsafe.Add(data, len(name))
+		if name == n {
+			return rawStructFieldFromPointer(field.fieldType, data, flagsByte, name, offset), int(i), true
+		}
+
+		// update offset/field pointer if there *is* a next field
+		if i < descriptor.numField-1 {
+			offset += field.fieldType.Size()
+
+			// Increment pointer to the next field.
+			field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
+
+			// Align the offset for the next field.
+			offset = align(offset, uintptr(field.fieldType.Align()))
+		}
 	}
 
-	// Set the PkgPath to some (arbitrary) value if the package path is not
-	// exported.
-	pkgPath := ""
-	if flagsByte&structFieldFlagIsExported == 0 {
-		// This field is unexported.
-		// TODO: list the real package path here. Storing it should not
-		// significantly impact binary size as there is only a limited
-		// number of packages in any program.
-		pkgPath = "<unimplemented>"
-	}
+	// No match
+	return rawStructField{}, 0, false
 
-	return rawStructField{
-		Name:      name,
-		PkgPath:   pkgPath,
-		Type:      field.fieldType,
-		Tag:       StructTag(tag),
-		Anonymous: flagsByte&structFieldFlagAnonymous != 0,
-		Offset:    offset,
-	}
 }
 
 // Bits returns the number of bits that this type uses. It is only valid for
@@ -959,12 +1000,49 @@ func (t *rawType) PkgPath() string {
 	return ""
 }
 
-func (t rawType) FieldByName(name string) (StructField, bool) {
-	panic("unimplemented: (reflect.Type).FieldByName()")
+func (t *rawType) FieldByName(name string) (StructField, bool) {
+	if t.Kind() != Struct {
+		panic(TypeError{"FieldByName"})
+	}
+
+	field, index, ok := t.rawFieldByName(name)
+	if !ok {
+		return StructField{}, false
+	}
+
+	return StructField{
+		Name:      field.Name,
+		PkgPath:   field.PkgPath,
+		Type:      field.Type, // note: converts rawType to Type
+		Tag:       field.Tag,
+		Anonymous: field.Anonymous,
+		Offset:    field.Offset,
+		Index:     []int{index},
+	}, true
 }
 
-func (t rawType) FieldByIndex(index []int) StructField {
-	panic("unimplemented: (reflect.Type).FieldByIndex()")
+func (t *rawType) FieldByIndex(index []int) StructField {
+	ftype := t
+	var field rawStructField
+
+	for _, n := range index {
+		if ftype.Kind() != Struct {
+			panic(TypeError{"FieldByIndex"})
+		}
+
+		field = ftype.rawField(n)
+		ftype = field.Type
+	}
+
+	return StructField{
+		Name:      field.Name,
+		PkgPath:   field.PkgPath,
+		Type:      field.Type, // note: converts rawType to Type
+		Tag:       field.Tag,
+		Anonymous: field.Anonymous,
+		Offset:    field.Offset,
+		Index:     index,
+	}
 }
 
 // A StructField describes a single field in a struct.
