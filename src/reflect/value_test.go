@@ -221,6 +221,23 @@ func TestNamedTypes(t *testing.T) {
 		t.Errorf("TypeOf.Name()=%v, want %v", got, want)
 	}
 
+	if got, want := TypeOf(map[[4]uint16]string{}).String(), "map[[4]uint16]string"; got != want {
+		t.Errorf("Type.String()=%v, want %v", got, want)
+	}
+
+	s := struct {
+		a int8
+		b int8
+		c int8
+		d int8
+		e int8
+		f int32
+	}{}
+
+	if got, want := TypeOf(s).String(), "struct { a int8; b int8; c int8; d int8; e int8; f int32 }"; got != want {
+		t.Errorf("Type.String()=%v, want %v", got, want)
+	}
+
 }
 
 func equal[T comparable](a, b []T) bool {
