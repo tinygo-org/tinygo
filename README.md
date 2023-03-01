@@ -41,7 +41,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 ## Supported boards/targets
 
-You can compile TinyGo programs for microcontrollers, WebAssembly and Linux.
+You can compile TinyGo programs for microcontrollers, WebAssembly, Windows, and Linux.
 
 The following 94 microcontroller boards are currently supported:
 
