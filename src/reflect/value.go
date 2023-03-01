@@ -1395,7 +1395,24 @@ func (v Value) SetMapIndex(key, elem Value) {
 
 // FieldByIndex returns the nested field corresponding to index.
 func (v Value) FieldByIndex(index []int) Value {
-	panic("unimplemented: (reflect.Value).FieldByIndex()")
+	if len(index) == 1 {
+		return v.Field(index[0])
+	}
+	if v.Kind() != Struct {
+		panic(&ValueError{"FieldByIndex", v.Kind()})
+	}
+	for i, x := range index {
+		if i > 0 {
+			if v.Kind() == Pointer && v.typecode.elem().Kind() == Struct {
+				if v.IsNil() {
+					panic("reflect: indirection through nil pointer to embedded struct")
+				}
+				v = v.Elem()
+			}
+		}
+		v = v.Field(x)
+	}
+	return v
 }
 
 // FieldByIndexErr returns the nested field corresponding to index.
@@ -1404,7 +1421,14 @@ func (v Value) FieldByIndexErr(index []int) (Value, error) {
 }
 
 func (v Value) FieldByName(name string) Value {
-	panic("unimplemented: (reflect.Value).FieldByName()")
+	if v.Kind() != Struct {
+		panic(&ValueError{"FieldByName", v.Kind()})
+	}
+
+	if field, ok := v.typecode.FieldByName(name); ok {
+		return v.FieldByIndex(field.Index)
+	}
+	return Value{}
 }
 
 //go:linkname hashmapMake runtime.hashmapMakeUnsafePointer

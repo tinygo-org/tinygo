@@ -266,6 +266,43 @@ func TestNamedTypes(t *testing.T) {
 	}
 }
 
+func TestStruct(t *testing.T) {
+	type barStruct struct {
+		QuxString string
+		BazInt    int
+	}
+
+	type foobar struct {
+		Foo string `foo:"struct tag"`
+		Bar barStruct
+	}
+
+	var fb foobar
+	fb.Bar.QuxString = "qux"
+
+	reffb := TypeOf(fb)
+
+	q := reffb.FieldByIndex([]int{1, 0})
+	if want := "QuxString"; q.Name != want {
+		t.Errorf("FieldByIndex=%v, want %v", q.Name, want)
+	}
+
+	var ok bool
+	q, ok = reffb.FieldByName("Foo")
+	if q.Name != "Foo" || !ok {
+		t.Errorf("FieldByName(Foo)=%v,%v, want Foo, true")
+	}
+
+	if got, want := q.Tag, `foo:"struct tag"`; string(got) != want {
+		t.Errorf("StrucTag for Foo=%v, want %v", got, want)
+	}
+
+	q, ok = reffb.FieldByName("Snorble")
+	if q.Name != "" || ok {
+		t.Errorf("FieldByName(Snorble)=%v,%v, want ``, false")
+	}
+}
+
 func TestZero(t *testing.T) {
 	s := "hello, world"
 	var sptr *string = &s
