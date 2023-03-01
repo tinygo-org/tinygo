@@ -381,7 +381,7 @@ func (v Value) String() string {
 		return *(*string)(v.value)
 	default:
 		// Special case because of the special treatment of .String() in Go.
-		return "<T>"
+		return "<" + v.typecode.String() + " Value>"
 	}
 }
 
