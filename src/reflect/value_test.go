@@ -200,6 +200,16 @@ func TestBytes(t *testing.T) {
 
 }
 
+func TestNamedTypes(t *testing.T) {
+	type namedString string
+
+	named := namedString("foo")
+	if got, want := TypeOf(named).Name(), "namedString"; got != want {
+		t.Errorf("TypeOf.Name()=%v, want %v", got, want)
+	}
+
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false

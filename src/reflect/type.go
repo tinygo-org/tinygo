@@ -46,6 +46,12 @@
 // - signature types (this is missing input and output parameters):
 //     meta         uint8
 //     ptrTo        *typeStruct
+// - named types
+//     meta         uint8
+//     ptrTo        *typeStruct
+//     elem         *typeStruct // underlying type
+//     nlem         uintptr     // length of name
+//     name         [1]byte     // actual name; length nlem
 //
 // The type struct is essentially a union of all the above types. Which it is,
 // can be determined by looking at the meta byte.
@@ -417,6 +423,14 @@ type mapType struct {
 	key   *rawType
 }
 
+type namedType struct {
+	rawType
+	ptrTo *rawType
+	elem  *rawType
+	nlen  uintptr
+	name  [1]byte
+}
+
 // Type for struct types. The numField value is intentionally put before ptrTo
 // for better struct packing on 32-bit and 64-bit architectures. On these
 // architectures, the ptrTo field still has the same offset as in all the other
@@ -439,10 +453,14 @@ type structField struct {
 // Equivalent to (go/types.Type).Underlying(): if this is a named type return
 // the underlying type, else just return the type itself.
 func (t *rawType) underlying() *rawType {
-	if t.meta&flagNamed != 0 {
+	if t.isNamed() {
 		return (*elemType)(unsafe.Pointer(t)).elem
 	}
 	return t
+}
+
+func (t *rawType) isNamed() bool {
+	return t.meta&flagNamed != 0
 }
 
 func TypeOf(i interface{}) Type {
@@ -842,7 +860,12 @@ func (t *rawType) NumMethod() int {
 }
 
 func (t *rawType) Name() string {
-	panic("unimplemented: (reflect.Type).Name()")
+	if t.isNamed() {
+		ntype := (*namedType)(unsafe.Pointer(t))
+		return unsafe.String(&ntype.name[0], ntype.nlen)
+	}
+
+	return t.Kind().String()
 }
 
 func (t *rawType) Key() Type {
