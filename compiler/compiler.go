@@ -2900,31 +2900,6 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 	if isPtrFrom && !isPtrTo {
 		return b.CreatePtrToInt(value, llvmTypeTo, ""), nil
 	} else if !isPtrFrom && isPtrTo {
-		if !value.IsABinaryOperator().IsNil() && value.InstructionOpcode() == llvm.Add {
-			// This is probably a pattern like the following:
-			// unsafe.Pointer(uintptr(ptr) + index)
-			// Used in functions like memmove etc. for lack of pointer
-			// arithmetic. Convert it to real pointer arithmatic here.
-			ptr := value.Operand(0)
-			index := value.Operand(1)
-			if !index.IsAPtrToIntInst().IsNil() {
-				// Swap if necessary, if ptr and index are reversed.
-				ptr, index = index, ptr
-			}
-			if !ptr.IsAPtrToIntInst().IsNil() {
-				origptr := ptr.Operand(0)
-				if origptr.Type() == b.i8ptrType {
-					// This pointer can be calculated from the original
-					// ptrtoint instruction with a GEP. The leftover inttoptr
-					// instruction is trivial to optimize away.
-					// Making it an in bounds GEP even though it's easy to
-					// create a GEP that is not in bounds. However, we're
-					// talking about unsafe code here so the programmer has to
-					// be careful anyway.
-					return b.CreateInBoundsGEP(b.ctx.Int8Type(), origptr, []llvm.Value{index}, ""), nil
-				}
-			}
-		}
 		return b.CreateIntToPtr(value, llvmTypeTo, ""), nil
 	}
 
