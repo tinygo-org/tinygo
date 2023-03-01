@@ -221,7 +221,9 @@ func TestNamedTypes(t *testing.T) {
 		t.Errorf("TypeOf.Name()=%v, want %v", got, want)
 	}
 
-	if got, want := TypeOf(map[[4]uint16]string{}).String(), "map[[4]uint16]string"; got != want {
+	m := make(map[[4]uint16]string)
+
+	if got, want := TypeOf(m).String(), "map[[4]uint16]string"; got != want {
 		t.Errorf("Type.String()=%v, want %v", got, want)
 	}
 
@@ -238,6 +240,9 @@ func TestNamedTypes(t *testing.T) {
 		t.Errorf("Type.String()=%v, want %v", got, want)
 	}
 
+	if got, want := ValueOf(m).String(), "<map[[4]uint16]string Value>"; got != want {
+		t.Errorf("Value.String()=%v, want %v", got, want)
+	}
 }
 
 func equal[T comparable](a, b []T) bool {
