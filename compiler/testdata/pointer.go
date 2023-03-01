@@ -24,18 +24,3 @@ func pointerCastToUnsafe(x *int) unsafe.Pointer {
 func pointerCastToUnsafeNoop(x *byte) unsafe.Pointer {
 	return unsafe.Pointer(x)
 }
-
-// The compiler has support for a few special cast+add patterns that are
-// transformed into a single GEP.
-
-func pointerUnsafeGEPFixedOffset(ptr *byte) *byte {
-	return (*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(ptr)) + 10))
-}
-
-func pointerUnsafeGEPByteOffset(ptr *byte, offset uintptr) *byte {
-	return (*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(ptr)) + offset))
-}
-
-func pointerUnsafeGEPIntOffset(ptr *int32, offset uintptr) *int32 {
-	return (*int32)(unsafe.Pointer(uintptr(unsafe.Pointer(ptr)) + offset*4))
-}
