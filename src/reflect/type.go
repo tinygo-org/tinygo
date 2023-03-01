@@ -59,6 +59,7 @@
 package reflect
 
 import (
+	"internal/itoa"
 	"unsafe"
 )
 
@@ -487,7 +488,40 @@ func pointerTo(t *rawType) *rawType {
 }
 
 func (t *rawType) String() string {
-	return "T"
+	if t.isNamed() {
+		// TODO(dgryski): `main` until pkgPath support lands
+		return "main" + "." + t.Name()
+	}
+
+	switch t.Kind() {
+	case Chan:
+		return "chan " + t.elem().String()
+	case Pointer:
+		return "*" + t.elem().String()
+	case Slice:
+		return "[]" + t.elem().String()
+	case Array:
+		return "[" + itoa.Itoa(t.Len()) + "]" + t.elem().String()
+	case Map:
+		return "map[" + t.key().String() + "]" + t.elem().String()
+	case Struct:
+		s := "struct {"
+		numField := t.NumField()
+		for i := 0; i < numField; i++ {
+			f := t.rawField(i)
+			s += " " + f.Name + " " + f.Type.String()
+			// every field except the last needs a semicolon
+			if i < numField-1 {
+				s += ";"
+			}
+		}
+		s += " }"
+		return s
+	default:
+		return t.Kind().String()
+	}
+
+	return t.Kind().String()
 }
 
 func (t *rawType) Kind() Kind {
