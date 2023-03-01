@@ -112,6 +112,8 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "underlying", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "len", types.Typ[types.Uintptr]),
+				types.NewVar(token.NoPos, nil, "name", types.NewArray(types.Typ[types.Int8], int64(len(typ.Obj().Name())))),
 			)
 		case *types.Chan, *types.Slice:
 			typeFieldTypes = append(typeFieldTypes,
@@ -169,9 +171,12 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Basic:
 			typeFields = []llvm.Value{c.getTypeCode(types.NewPointer(typ))}
 		case *types.Named:
+			name := typ.Obj().Name()
 			typeFields = []llvm.Value{
-				c.getTypeCode(types.NewPointer(typ)), // ptrTo
-				c.getTypeCode(typ.Underlying()),      // underlying
+				c.getTypeCode(types.NewPointer(typ)),                   // ptrTo
+				c.getTypeCode(typ.Underlying()),                        // underlying
+				llvm.ConstInt(c.uintptrType, uint64(len(name)), false), // length
+				c.ctx.ConstString(name, false),                         // name
 			}
 			metabyte |= 1 << 5 // "named" flag
 		case *types.Chan:
