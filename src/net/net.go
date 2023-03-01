@@ -7,17 +7,8 @@
 package net
 
 import (
-	"net/netdev"
 	"time"
 )
-
-// dev is the current TinyGo network device
-var dev netdev.Netdever
-
-// UseNetdev sets the netdev
-func UseNetdev(n netdev.Netdever) {
-	dev = n
-}
 
 // Addr represents a network end point address.
 //

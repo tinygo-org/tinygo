@@ -8,7 +8,8 @@ package net
 
 import (
 	"fmt"
-	"net/netdev"
+	"net/netip"
+
 	"strconv"
 	"time"
 )
@@ -78,7 +79,7 @@ func ResolveUDPAddr(network, address string) (*UDPAddr, error) {
 		return &UDPAddr{Port: port}, nil
 	}
 
-	ip, err := dev.GetHostByName(host)
+	ip, err := currentdev.GetHostByName(host)
 	if err != nil {
 		return nil, fmt.Errorf("Lookup of host name '%s' failed: %s", host, err)
 	}
@@ -89,7 +90,7 @@ func ResolveUDPAddr(network, address string) (*UDPAddr, error) {
 // UDPConn is the implementation of the Conn and PacketConn interfaces
 // for UDP network connections.
 type UDPConn struct {
-	fd            netdev.Sockfd
+	fd            uintptr
 	laddr         *UDPAddr
 	raddr         *UDPAddr
 	readDeadline  time.Time
@@ -107,6 +108,17 @@ func ephemeralPort() int {
 		eport++
 	}
 	return int(eport)
+}
+
+// UDPAddrFromAddrPort returns addr as a UDPAddr. If addr.IsValid() is false,
+// then the returned UDPAddr will contain a nil IP field, indicating an
+// address family-agnostic unspecified address.
+func UDPAddrFromAddrPort(addr netip.AddrPort) *UDPAddr {
+	return &UDPAddr{
+		IP: addr.Addr().AsSlice(),
+		// Zone: addr.Addr().Zone(),
+		Port: int(addr.Port()),
+	}
 }
 
 // DialUDP acts like Dial for UDP networks.
@@ -142,29 +154,21 @@ func DialUDP(network string, laddr, raddr *UDPAddr) (*UDPConn, error) {
 		laddr.Port = ephemeralPort()
 	}
 
-	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_DGRAM, netdev.IPPROTO_UDP)
+	fd, err := currentdev.Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
 	if err != nil {
 		return nil, err
 	}
 
-	var ip netdev.IP
-
-	copy(ip[:], laddr.IP)
-	local := netdev.NewSockAddr("", netdev.Port(laddr.Port), ip)
-
-	copy(ip[:], raddr.IP)
-	remote := netdev.NewSockAddr("", netdev.Port(raddr.Port), ip)
-
 	// Remote connect
-	if err = dev.Connect(fd, remote); err != nil {
-		dev.Close(fd)
+	if err = currentdev.Connect(fd, raddr); err != nil {
+		currentdev.Close(fd)
 		return nil, err
 	}
 
 	// Local bind
-	err = dev.Bind(fd, local)
+	err = currentdev.Bind(fd, laddr)
 	if err != nil {
-		dev.Close(fd)
+		currentdev.Close(fd)
 		return nil, err
 	}
 
@@ -190,7 +194,7 @@ func (c *UDPConn) Read(b []byte) (int, error) {
 		}
 	}
 
-	n, err := dev.Recv(c.fd, b, 0, timeout)
+	n, err := currentdev.Recv(c.fd, b, 0, timeout)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
@@ -211,7 +215,7 @@ func (c *UDPConn) Write(b []byte) (int, error) {
 		}
 	}
 
-	n, err := dev.Send(c.fd, b, 0, timeout)
+	n, err := currentdev.Send(c.fd, b, 0, timeout)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
@@ -220,7 +224,7 @@ func (c *UDPConn) Write(b []byte) (int, error) {
 }
 
 func (c *UDPConn) Close() error {
-	return dev.Close(c.fd)
+	return currentdev.Close(c.fd)
 }
 
 func (c *UDPConn) LocalAddr() Addr {

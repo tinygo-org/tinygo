@@ -8,7 +8,8 @@ package net
 
 import (
 	"fmt"
-	"net/netdev"
+
+	"net/netip"
 	"strconv"
 	"time"
 )
@@ -76,7 +77,7 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 		return &TCPAddr{Port: port}, nil
 	}
 
-	ip, err := dev.GetHostByName(host)
+	ip, err := currentdev.GetHostByName(host)
 	if err != nil {
 		return nil, fmt.Errorf("Lookup of host name '%s' failed: %s", host, err)
 	}
@@ -87,7 +88,7 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 // TCPConn is an implementation of the Conn interface for TCP network
 // connections.
 type TCPConn struct {
-	fd            netdev.Sockfd
+	fd            uintptr
 	laddr         *TCPAddr
 	raddr         *TCPAddr
 	readDeadline  time.Time
@@ -116,20 +117,16 @@ func DialTCP(network string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 	}
 
 	if raddr.IP.IsUnspecified() {
-		return nil, fmt.Errorf("Sorry, localhost isn't available on Tinygo")
+		return nil, fmt.Errorf("sorry, localhost isn't available on Tinygo")
 	}
 
-	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_STREAM, netdev.IPPROTO_TCP)
+	fd, err := currentdev.Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 	if err != nil {
 		return nil, err
 	}
 
-	var ip netdev.IP
-	copy(ip[:], raddr.IP)
-	addr := netdev.NewSockAddr("", netdev.Port(raddr.Port), ip)
-
-	if err = dev.Connect(fd, addr); err != nil {
-		dev.Close(fd)
+	if err = currentdev.Connect(fd, raddr); err != nil {
+		currentdev.Close(fd)
 		return nil, err
 	}
 
@@ -138,6 +135,17 @@ func DialTCP(network string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 		laddr: laddr,
 		raddr: raddr,
 	}, nil
+}
+
+// TCPAddrFromAddrPort returns addr as a TCPAddr. If addr.IsValid() is false,
+// then the returned TCPAddr will contain a nil IP field, indicating an
+// address family-agnostic unspecified address.
+func TCPAddrFromAddrPort(addr netip.AddrPort) *TCPAddr {
+	return &TCPAddr{
+		IP: addr.Addr().AsSlice(),
+		// Zone: addr.Addr().Zone(),
+		Port: int(addr.Port()),
+	}
 }
 
 // TINYGO: Use netdev for Conn methods: Read = Recv, Write = Send, etc.
@@ -155,7 +163,7 @@ func (c *TCPConn) Read(b []byte) (int, error) {
 		}
 	}
 
-	n, err := dev.Recv(c.fd, b, 0, timeout)
+	n, err := currentdev.Recv(c.fd, b, 0, timeout)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
@@ -176,7 +184,7 @@ func (c *TCPConn) Write(b []byte) (int, error) {
 		}
 	}
 
-	n, err := dev.Send(c.fd, b, 0, timeout)
+	n, err := currentdev.Send(c.fd, b, 0, timeout)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
@@ -185,7 +193,7 @@ func (c *TCPConn) Write(b []byte) (int, error) {
 }
 
 func (c *TCPConn) Close() error {
-	return dev.Close(c.fd)
+	return currentdev.Close(c.fd)
 }
 
 func (c *TCPConn) LocalAddr() Addr {
@@ -203,12 +211,12 @@ func (c *TCPConn) SetDeadline(t time.Time) error {
 }
 
 func (c *TCPConn) SetKeepAlive(keepalive bool) error {
-	return dev.SetSockOpt(c.fd, netdev.SOL_SOCKET, netdev.SO_KEEPALIVE, keepalive)
+	return currentdev.SetSockOpt(c.fd, SOL_SOCKET, SO_KEEPALIVE, keepalive)
 }
 
 func (c *TCPConn) SetKeepAlivePeriod(d time.Duration) error {
 	// Units are 1/2 seconds
-	return dev.SetSockOpt(c.fd, netdev.SOL_TCP, netdev.TCP_KEEPINTVL, 2*d.Seconds())
+	return currentdev.SetSockOpt(c.fd, SOL_TCP, TCP_KEEPINTVL, 2*d.Seconds())
 }
 
 func (c *TCPConn) SetReadDeadline(t time.Time) error {
@@ -226,12 +234,12 @@ func (c *TCPConn) CloseWrite() error {
 }
 
 type listener struct {
-	fd    netdev.Sockfd
+	fd    uintptr
 	laddr *TCPAddr
 }
 
 func (l *listener) Accept() (Conn, error) {
-	fd, err := dev.Accept(l.fd, netdev.SockAddr{})
+	fd, err := currentdev.Accept(l.fd, &TCPAddr{})
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +251,7 @@ func (l *listener) Accept() (Conn, error) {
 }
 
 func (l *listener) Close() error {
-	return dev.Close(l.fd)
+	return currentdev.Close(l.fd)
 }
 
 func (l *listener) Addr() Addr {
@@ -251,21 +259,17 @@ func (l *listener) Addr() Addr {
 }
 
 func listenTCP(laddr *TCPAddr) (Listener, error) {
-	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_STREAM, netdev.IPPROTO_TCP)
+	fd, err := currentdev.Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 	if err != nil {
 		return nil, err
 	}
 
-	var ip netdev.IP
-	copy(ip[:], laddr.IP)
-	addr := netdev.NewSockAddr("", netdev.Port(laddr.Port), ip)
-
-	err = dev.Bind(fd, addr)
+	err = currentdev.Bind(fd, laddr)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dev.Listen(fd, 5)
+	err = currentdev.Listen(fd, 5)
 	if err != nil {
 		return nil, err
 	}
