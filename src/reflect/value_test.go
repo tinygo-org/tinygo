@@ -232,6 +232,39 @@ func TestNamedTypes(t *testing.T) {
 	}
 }
 
+func TestStruct(t *testing.T) {
+	type barStruct struct {
+		QuxString string
+		BazInt    int
+	}
+
+	type foobar struct {
+		Foo string
+		Bar barStruct
+	}
+
+	var fb foobar
+	fb.Bar.QuxString = "qux"
+
+	reffb := TypeOf(fb)
+
+	q := reffb.FieldByIndex([]int{1, 0})
+	if want := "QuxString"; q.Name != want {
+		t.Errorf("FieldByIndex=%v, want %v", q.Name, want)
+	}
+
+	var ok bool
+	q, ok = reffb.FieldByName("Foo")
+	if q.Name != "Foo" || !ok {
+		t.Errorf("FieldByName(Foo)=%v,%v, want Foo, true")
+	}
+
+	q, ok = reffb.FieldByName("Snorble")
+	if q.Name != "" || ok {
+		t.Errorf("FieldByName(Snorble)=%v,%v, want ``, false")
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
