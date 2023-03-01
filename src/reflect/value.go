@@ -564,6 +564,9 @@ func (v Value) Elem() Value {
 
 // Field returns the value of the i'th field of this struct.
 func (v Value) Field(i int) Value {
+	if v.Kind() != Struct {
+		panic(&ValueError{Method: "Field", Kind: v.Kind()})
+	}
 	structField := v.typecode.rawField(i)
 	flags := v.flags
 	if structField.PkgPath != "" {
