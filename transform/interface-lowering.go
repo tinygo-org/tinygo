@@ -302,10 +302,18 @@ func (p *lowerInterfacesPass) run() error {
 		use.EraseFromParentAsInstruction()
 	}
 
+	// Create a sorted list of type names, for predictable iteration.
+	var typeNames []string
+	for name := range p.types {
+		typeNames = append(typeNames, name)
+	}
+	sort.Strings(typeNames)
+
 	// Remove all method sets, which are now unnecessary and inhibit later
 	// optimizations if they are left in place.
 	zero := llvm.ConstInt(p.ctx.Int32Type(), 0, false)
-	for _, t := range p.types {
+	for _, name := range typeNames {
+		t := p.types[name]
 		if !t.methodSet.IsNil() {
 			initializer := t.typecode.Initializer()
 			var newInitializerFields []llvm.Value
