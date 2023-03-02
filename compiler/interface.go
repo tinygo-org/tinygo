@@ -112,6 +112,8 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "underlying", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "pkglen", types.Typ[types.Uintptr]),
+				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "len", types.Typ[types.Uintptr]),
 				types.NewVar(token.NoPos, nil, "name", types.NewArray(types.Typ[types.Int8], int64(len(typ.Obj().Name())))),
 			)
@@ -178,11 +180,33 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				buf = append(buf, llvm.ConstInt(c.ctx.Int8Type(), uint64(b), false))
 			}
 
+			pkg := typ.Obj().Pkg()
+			var pkgpath string
+			pkgpathName := "reflect/types.type.pkgpath.empty"
+			if pkg != nil {
+				pkgpath = pkg.Path()
+				pkgpathName = "reflect/types.type.pkgpath:" + pkgpath
+			}
+
+			pkgpathInitializer := c.ctx.ConstString(pkgpath, false)
+			pkgpathGlobal := llvm.AddGlobal(c.mod, pkgpathInitializer.Type(), pkgpathName)
+			pkgpathGlobal.SetInitializer(pkgpathInitializer)
+			pkgpathGlobal.SetAlignment(1)
+			pkgpathGlobal.SetUnnamedAddr(true)
+			pkgpathGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
+			pkgpathGlobal.SetGlobalConstant(true)
+			pkgpathPtr := llvm.ConstGEP(pkgpathGlobal.GlobalValueType(), pkgpathGlobal, []llvm.Value{
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+			})
+
 			typeFields = []llvm.Value{
-				c.getTypeCode(types.NewPointer(typ)),                   // ptrTo
-				c.getTypeCode(typ.Underlying()),                        // underlying
+				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
+				c.getTypeCode(typ.Underlying()),                           // underlying
+				llvm.ConstInt(c.uintptrType, uint64(len(pkgpath)), false), // pkgpath length
+				pkgpathPtr, // pkgpath pointer
 				llvm.ConstInt(c.uintptrType, uint64(len(name)), false), // length
-				llvm.ConstArray(c.ctx.Int8Type(), buf),
+				llvm.ConstArray(c.ctx.Int8Type(), buf),                 // name
 			}
 			metabyte |= 1 << 5 // "named" flag
 		case *types.Chan:

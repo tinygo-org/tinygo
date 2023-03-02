@@ -50,6 +50,8 @@
 //     meta         uint8
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // underlying type
+//     plen         uintptr     // length of pkgpath
+//     pkg          *byte       // pkgpath
 //     nlem         uintptr     // length of name
 //     name         [1]byte     // actual name; length nlem
 //
@@ -428,6 +430,8 @@ type namedType struct {
 	rawType
 	ptrTo *rawType
 	elem  *rawType
+	plen  uintptr
+	pkg   *byte
 	nlen  uintptr
 	name  [1]byte
 }
@@ -489,8 +493,7 @@ func pointerTo(t *rawType) *rawType {
 
 func (t *rawType) String() string {
 	if t.isNamed() {
-		// TODO(dgryski): `main` until pkgPath support lands
-		return "main" + "." + t.Name()
+		return t.PkgPath() + "." + t.Name()
 	}
 
 	switch t.Kind() {
@@ -968,8 +971,13 @@ func (t rawType) MethodByName(name string) (Method, bool) {
 	panic("unimplemented: (reflect.Type).MethodByName()")
 }
 
-func (t rawType) PkgPath() string {
-	panic("unimplemented: (reflect.Type).PkgPath()")
+func (t *rawType) PkgPath() string {
+	if t.isNamed() {
+		ntype := (*namedType)(unsafe.Pointer(t))
+		return unsafe.String(ntype.pkg, ntype.plen)
+	}
+
+	return ""
 }
 
 func (t *rawType) FieldByName(name string) (StructField, bool) {
