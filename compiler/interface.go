@@ -112,6 +112,8 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "underlying", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "pkglen", types.Typ[types.Uintptr]),
+				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "len", types.Typ[types.Uintptr]),
 				types.NewVar(token.NoPos, nil, "name", types.NewArray(types.Typ[types.Int8], int64(len(typ.Obj().Name())))),
 			)
@@ -172,9 +174,32 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			typeFields = []llvm.Value{c.getTypeCode(types.NewPointer(typ))}
 		case *types.Named:
 			name := typ.Obj().Name()
+
+			pkg := typ.Obj().Pkg()
+			var pkgpath string
+			pkgpathName := "reflect/types.type.pkgpath.empty"
+			if pkg != nil {
+				pkgpath = pkg.Path()
+				pkgpathName = "reflect/types.type.pkgpath:" + pkgpath
+			}
+
+			pkgpathInitializer := c.ctx.ConstString(pkgpath, false)
+			pkgpathGlobal := llvm.AddGlobal(c.mod, pkgpathInitializer.Type(), pkgpathName)
+			pkgpathGlobal.SetInitializer(pkgpathInitializer)
+			pkgpathGlobal.SetAlignment(1)
+			pkgpathGlobal.SetUnnamedAddr(true)
+			pkgpathGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
+			pkgpathGlobal.SetGlobalConstant(true)
+			pkgpathPtr := llvm.ConstGEP(pkgpathGlobal.GlobalValueType(), pkgpathGlobal, []llvm.Value{
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+			})
+
 			typeFields = []llvm.Value{
-				c.getTypeCode(types.NewPointer(typ)),                   // ptrTo
-				c.getTypeCode(typ.Underlying()),                        // underlying
+				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
+				c.getTypeCode(typ.Underlying()),                           // underlying
+				llvm.ConstInt(c.uintptrType, uint64(len(pkgpath)), false), // pkgpath length
+				pkgpathPtr, // pkgpath pointer
 				llvm.ConstInt(c.uintptrType, uint64(len(name)), false), // length
 				c.ctx.ConstString(name, false),                         // name
 			}
