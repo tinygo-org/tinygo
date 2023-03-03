@@ -7,8 +7,11 @@
 package machine
 
 import (
+	"bytes"
 	"device/arm"
 	"device/sam"
+	"encoding/binary"
+	"errors"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -2073,4 +2076,190 @@ func GetRNG() (uint32, error) {
 	}
 	ret := sam.TRNG.DATA.Get()
 	return ret, nil
+}
+
+// Flash related code
+const memoryStart = 0x0
+
+// compile-time check for ensuring we fulfill BlockDevice interface
+var _ BlockDevice = flashBlockDevice{}
+
+var Flash flashBlockDevice
+
+type flashBlockDevice struct {
+	initComplete bool
+}
+
+// ReadAt reads the given number of bytes from the block device.
+func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotReadPastEOF
+	}
+
+	f.ensureInitComplete()
+
+	waitWhileFlashBusy()
+
+	data := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(FlashDataStart()), uintptr(off))), len(p))
+	copy(p, data)
+
+	return len(p), nil
+}
+
+// WriteAt writes the given number of bytes to the block device.
+// Only word (32 bits) length data can be programmed.
+// See SAM-D5x-E5x-Family-Data-Sheet-DS60001507.pdf page 591-592.
+// If the length of p is not long enough it will be padded with 0xFF bytes.
+// This method assumes that the destination is already erased.
+func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotWritePastEOF
+	}
+
+	f.ensureInitComplete()
+
+	address := FlashDataStart() + uintptr(off)
+	padded := f.pad(p)
+
+	waitWhileFlashBusy()
+
+	sam.NVMCTRL.CTRLB.Set(sam.NVMCTRL_CTRLB_CMD_PBC | (sam.NVMCTRL_CTRLB_CMDEX_KEY << sam.NVMCTRL_CTRLB_CMDEX_Pos))
+
+	waitWhileFlashBusy()
+
+	sam.NVMCTRL.SetADDR(uint32(address))
+
+	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
+		// write first word using double-word low order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize()/2)])
+
+		address += uintptr(f.WriteBlockSize()) / 2
+
+		// write second word using double-word high order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j+int(f.WriteBlockSize()/2) : j+int(f.WriteBlockSize())])
+
+		waitWhileFlashBusy()
+
+		sam.NVMCTRL.CTRLB.Set(sam.NVMCTRL_CTRLB_CMD_WQW | (sam.NVMCTRL_CTRLB_CMDEX_KEY << sam.NVMCTRL_CTRLB_CMDEX_Pos))
+
+		waitWhileFlashBusy()
+
+		if err := checkFlashError(); err != nil {
+			return j, err
+		}
+
+		address += uintptr(f.WriteBlockSize()) / 2
+	}
+
+	return len(padded), nil
+}
+
+// Size returns the number of bytes in this block device.
+func (f flashBlockDevice) Size() int64 {
+	return int64(FlashDataEnd() - FlashDataStart())
+}
+
+const writeBlockSize = 8
+
+// WriteBlockSize returns the block size in which data can be written to
+// memory. It can be used by a client to optimize writes, non-aligned writes
+// should always work correctly.
+func (f flashBlockDevice) WriteBlockSize() int64 {
+	return writeBlockSize
+}
+
+const eraseBlockSizeValue = 8192
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
+
+// EraseBlockSize returns the smallest erasable area on this particular chip
+// in bytes. This is used for the block size in EraseBlocks.
+func (f flashBlockDevice) EraseBlockSize() int64 {
+	return eraseBlockSize()
+}
+
+// EraseBlocks erases the given number of blocks. An implementation may
+// transparently coalesce ranges of blocks into larger bundles if the chip
+// supports this. The start and len parameters are in block numbers, use
+// EraseBlockSize to map addresses to blocks.
+func (f flashBlockDevice) EraseBlocks(start, len int64) error {
+	f.ensureInitComplete()
+
+	address := FlashDataStart() + uintptr(start*f.EraseBlockSize())
+	waitWhileFlashBusy()
+
+	for i := start; i < start+len; i++ {
+		sam.NVMCTRL.SetADDR(uint32(address))
+		sam.NVMCTRL.CTRLB.Set(sam.NVMCTRL_CTRLB_CMD_EB | (sam.NVMCTRL_CTRLB_CMDEX_KEY << sam.NVMCTRL_CTRLB_CMDEX_Pos))
+
+		waitWhileFlashBusy()
+
+		if err := checkFlashError(); err != nil {
+			return err
+		}
+
+		address += uintptr(f.EraseBlockSize())
+	}
+
+	return nil
+}
+
+// pad data if needed so it is long enough for correct byte alignment on writes.
+func (f flashBlockDevice) pad(p []byte) []byte {
+	paddingNeeded := f.WriteBlockSize() - (int64(len(p)) % f.WriteBlockSize())
+	if paddingNeeded == 0 {
+		return p
+	}
+
+	padding := bytes.Repeat([]byte{0xff}, int(paddingNeeded))
+	return append(p, padding...)
+}
+
+func (f flashBlockDevice) ensureInitComplete() {
+	if f.initComplete {
+		return
+	}
+
+	// disable caches
+	sam.NVMCTRL.SetCTRLA_CACHEDIS0(1)
+	sam.NVMCTRL.SetCTRLA_CACHEDIS1(1)
+
+	waitWhileFlashBusy()
+
+	f.initComplete = true
+}
+
+func waitWhileFlashBusy() {
+	for sam.NVMCTRL.GetSTATUS_READY() != sam.NVMCTRL_STATUS_READY {
+	}
+}
+
+var (
+	errFlashADDRE   = errors.New("errFlashADDRE")
+	errFlashPROGE   = errors.New("errFlashPROGE")
+	errFlashLOCKE   = errors.New("errFlashLOCKE")
+	errFlashECCSE   = errors.New("errFlashECCSE")
+	errFlashNVME    = errors.New("errFlashNVME")
+	errFlashSEESOVF = errors.New("errFlashSEESOVF")
+)
+
+func checkFlashError() error {
+	switch {
+	case sam.NVMCTRL.GetINTENSET_ADDRE() != 0:
+		return errFlashADDRE
+	case sam.NVMCTRL.GetINTENSET_PROGE() != 0:
+		return errFlashPROGE
+	case sam.NVMCTRL.GetINTENSET_LOCKE() != 0:
+		return errFlashLOCKE
+	case sam.NVMCTRL.GetINTENSET_ECCSE() != 0:
+		return errFlashECCSE
+	case sam.NVMCTRL.GetINTENSET_NVME() != 0:
+		return errFlashNVME
+	case sam.NVMCTRL.GetINTENSET_SEESOVF() != 0:
+		return errFlashSEESOVF
+	}
+
+	return nil
 }
