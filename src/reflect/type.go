@@ -50,9 +50,7 @@
 //     meta         uint8
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // underlying type
-//     plen         uintptr     // length of pkgpath
 //     pkg          *byte       // pkgpath
-//     nlem         uintptr     // length of name
 //     name         [1]byte     // actual name; length nlem
 //
 // The type struct is essentially a union of all the above types. Which it is,
@@ -430,9 +428,7 @@ type namedType struct {
 	rawType
 	ptrTo *rawType
 	elem  *rawType
-	plen  uintptr
 	pkg   *byte
-	nlen  uintptr
 	name  [1]byte
 }
 
@@ -896,10 +892,25 @@ func (t *rawType) NumMethod() int {
 	panic("unimplemented: (reflect.Type).NumMethod()")
 }
 
+// Read and return a null terminated string starting from data.
+func readStringZ(data unsafe.Pointer) string {
+	start := data
+	var len uintptr
+	for *(*byte)(data) != 0 {
+		len++
+		data = unsafe.Add(data, 1) // C: data++
+	}
+
+	return *(*string)(unsafe.Pointer(&stringHeader{
+		data: start,
+		len:  len,
+	}))
+}
+
 func (t *rawType) Name() string {
 	if t.isNamed() {
 		ntype := (*namedType)(unsafe.Pointer(t))
-		return unsafe.String(&ntype.name[0], ntype.nlen)
+		return readStringZ(unsafe.Pointer(&ntype.name[0]))
 	}
 
 	return t.Kind().String()
@@ -924,7 +935,7 @@ func (t rawType) MethodByName(name string) (Method, bool) {
 func (t *rawType) PkgPath() string {
 	if t.isNamed() {
 		ntype := (*namedType)(unsafe.Pointer(t))
-		return unsafe.String(ntype.pkg, ntype.plen)
+		return readStringZ(unsafe.Pointer(ntype.pkg))
 	}
 
 	return ""
