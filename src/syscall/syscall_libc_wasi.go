@@ -210,6 +210,11 @@ type Timespec struct {
 	Nsec int64
 }
 
+// Unix returns the time stored in ts as seconds plus nanoseconds.
+func (ts *Timespec) Unix() (sec int64, nsec int64) {
+	return int64(ts.Sec), int64(ts.Nsec)
+}
+
 // https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__struct_stat.h
 // https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__typedef_ino_t.h
 // etc.
