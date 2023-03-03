@@ -187,6 +187,9 @@ func initClocks() {
 	// it's 32bit cycle counter for timing.
 	//CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
 	//DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+	// Disable automatic NVM write operations
+	sam.NVMCTRL.SetCTRLA_WMODE(sam.NVMCTRL_CTRLA_WMODE_MAN)
 }
 
 func initRTC() {
