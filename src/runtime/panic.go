@@ -54,9 +54,7 @@ func _panic(message interface{}) {
 
 // Cause a runtime panic, which is (currently) always a string.
 func runtimePanic(msg string) {
-	printstring("panic: runtime error: ")
-	println(msg)
-	abort()
+	_panic("runtime error: " + msg)
 }
 
 // Called at the start of a function that includes a deferred call.
