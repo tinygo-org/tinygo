@@ -147,6 +147,11 @@ type Timespec struct {
 	Nsec int64
 }
 
+// Unix returns the time stored in ts as seconds plus nanoseconds.
+func (ts *Timespec) Unix() (sec int64, nsec int64) {
+	return int64(ts.Sec), int64(ts.Nsec)
+}
+
 // Source: upstream ztypes_darwin_amd64.go
 type Dirent struct {
 	Ino       uint64
@@ -168,10 +173,10 @@ type Stat_t struct {
 	Gid       uint32
 	Rdev      int32
 	Pad_cgo_0 [4]byte
-	Atim      Timespec
-	Mtim      Timespec
-	Ctim      Timespec
-	Btim      Timespec
+	Atimespec Timespec
+	Mtimespec Timespec
+	Ctimespec Timespec
+	Btimespec Timespec
 	Size      int64
 	Blocks    int64
 	Blksize   int32
