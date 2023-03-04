@@ -115,6 +115,23 @@ func TestMap(t *testing.T) {
 	if m2["foo"] != 2 {
 		t.Errorf("MakeMap failed to create map")
 	}
+
+	type stringint struct {
+		s string
+		i int
+	}
+
+	simap := make(map[stringint]int)
+
+	refsimap := MakeMap(TypeOf(simap))
+
+	refsimap.SetMapIndex(ValueOf(stringint{"hello", 4}), ValueOf(6))
+
+	six := refsimap.MapIndex(ValueOf(stringint{"hello", 4}))
+
+	if six.Interface().(int) != 6 {
+		t.Errorf("m[hello, 4]=%v, want 6", six)
+	}
 }
 
 func TestSlice(t *testing.T) {
