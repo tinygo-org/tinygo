@@ -970,6 +970,19 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		global.SetInitializer(sliceObj)
 		global.SetVisibility(llvm.HiddenVisibility)
 
+		if c.Debug {
+			// Add debug info to the slice backing array.
+			position := c.program.Fset.Position(member.Pos())
+			diglobal := c.dibuilder.CreateGlobalVariableExpression(llvm.Metadata{}, llvm.DIGlobalVariableExpression{
+				File:        c.getDIFile(position.Filename),
+				Line:        position.Line,
+				Type:        c.getDIType(types.NewArray(types.Typ[types.Byte], int64(len(file.Data)))),
+				LocalToUnit: true,
+				Expr:        c.dibuilder.CreateExpression(nil),
+			})
+			bufferGlobal.AddMetadata(0, diglobal)
+		}
+
 	case *types.Struct:
 		// Assume this is an embed.FS struct:
 		// https://cs.opensource.google/go/go/+/refs/tags/go1.18.2:src/embed/embed.go;l=148
