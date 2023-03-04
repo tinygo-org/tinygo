@@ -785,6 +785,9 @@ func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueS
 //go:linkname hashmapBinaryGet runtime.hashmapBinaryGetUnsafePointer
 func hashmapBinaryGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
 
+//go:linkname hashmapInterfaceGet runtime.hashmapInterfaceGetUnsafePointer
+func hashmapInterfaceGet(m unsafe.Pointer, key interface{}, value unsafe.Pointer, valueSize uintptr) bool
+
 func (v Value) MapIndex(key Value) Value {
 	if v.Kind() != Map {
 		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
@@ -816,10 +819,12 @@ func (v Value) MapIndex(key Value) Value {
 			return Value{}
 		}
 		return elem.Elem()
+	} else {
+		if ok := hashmapInterfaceGet(v.pointer(), key.Interface(), elem.value, elemType.Size()); !ok {
+			return Value{}
+		}
+		return elem.Elem()
 	}
-
-	// TODO(dgryski): Add other map types.  For now, just string and binary types are supported.
-	panic("unimplemented: (reflect.Value).MapIndex()")
 }
 
 //go:linkname hashmapNewIterator runtime.hashmapNewIterator
@@ -1292,11 +1297,17 @@ func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
 //go:linkname hashmapBinarySet runtime.hashmapBinarySetUnsafePointer
 func hashmapBinarySet(m unsafe.Pointer, key, value unsafe.Pointer)
 
+//go:linkname hashmapInterfaceSet runtime.hashmapInterfaceSetUnsafePointer
+func hashmapInterfaceSet(m unsafe.Pointer, key interface{}, value unsafe.Pointer)
+
 //go:linkname hashmapStringDelete runtime.hashmapStringDeleteUnsafePointer
 func hashmapStringDelete(m unsafe.Pointer, key string)
 
 //go:linkname hashmapBinaryDelete runtime.hashmapBinaryDeleteUnsafePointer
 func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
+
+//go:linkname hashmapInterfaceDelete runtime.hashmapInterfaceDeleteUnsafePointer
+func hashmapInterfaceDelete(m unsafe.Pointer, key interface{})
 
 func (v Value) SetMapIndex(key, elem Value) {
 	if v.Kind() != Map {
@@ -1348,7 +1359,18 @@ func (v Value) SetMapIndex(key, elem Value) {
 			hashmapBinarySet(v.pointer(), keyptr, elemptr)
 		}
 	} else {
-		panic("unimplemented: (reflect.Value).MapIndex()")
+		if del {
+			hashmapInterfaceDelete(v.pointer(), key.Interface())
+		} else {
+			var elemptr unsafe.Pointer
+			if elem.isIndirect() || elem.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+				elemptr = elem.value
+			} else {
+				elemptr = unsafe.Pointer(&elem.value)
+			}
+
+			hashmapInterfaceSet(v.pointer(), key.Interface(), elemptr)
+		}
 	}
 }
 
@@ -1398,7 +1420,7 @@ func MakeMapWithSize(typ Type, n int) Value {
 	} else if key.isBinary() {
 		alg = hashmapAlgorithmBinary
 	} else {
-		panic("reflect.MakeMap: unimplemented key type")
+		alg = hashmapAlgorithmInterface
 	}
 
 	m := hashmapMake(key.Size(), val.Size(), uintptr(n), alg)

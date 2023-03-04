@@ -616,6 +616,10 @@ func hashmapInterfaceSet(m *hashmap, key interface{}, value unsafe.Pointer) {
 	hashmapSet(m, unsafe.Pointer(&key), value, hash)
 }
 
+func hashmapInterfaceSetUnsafePointer(m unsafe.Pointer, key interface{}, value unsafe.Pointer) {
+	hashmapInterfaceSet((*hashmap)(m), key, value)
+}
+
 func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer, valueSize uintptr) bool {
 	if m == nil {
 		memzero(value, uintptr(valueSize))
@@ -625,10 +629,18 @@ func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer, valu
 	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
 }
 
+func hashmapInterfaceGetUnsafePointer(m unsafe.Pointer, key interface{}, value unsafe.Pointer, valueSize uintptr) bool {
+	return hashmapInterfaceGet((*hashmap)(m), key, value, valueSize)
+}
+
 func hashmapInterfaceDelete(m *hashmap, key interface{}) {
 	if m == nil {
 		return
 	}
 	hash := hashmapInterfaceHash(key, m.seed)
 	hashmapDelete(m, unsafe.Pointer(&key), hash)
+}
+
+func hashmapInterfaceDeleteUnsafePointer(m unsafe.Pointer, key interface{}) {
+	hashmapInterfaceDelete((*hashmap)(m), key)
 }
