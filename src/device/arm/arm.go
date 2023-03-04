@@ -29,6 +29,7 @@
 //	POSSIBILITY OF SUCH DAMAGE.
 package arm
 
+import "C"
 import (
 	"errors"
 	"runtime/volatile"
@@ -174,20 +175,15 @@ func SetPriority(irq uint32, priority uint32) {
 
 // DisableInterrupts disables all interrupts, and returns the old interrupt
 // state.
-func DisableInterrupts() uintptr {
-	return AsmFull(`
-		mrs {}, PRIMASK
-		cpsid i
-	`, nil)
-}
+//
+//export DisableInterrupts
+func DisableInterrupts() uintptr
 
 // EnableInterrupts enables all interrupts again. The value passed in must be
 // the mask returned by DisableInterrupts.
-func EnableInterrupts(mask uintptr) {
-	AsmFull("msr PRIMASK, {mask}", map[string]interface{}{
-		"mask": mask,
-	})
-}
+//
+//export EnableInterrupts
+func EnableInterrupts(mask uintptr)
 
 // Set up the system timer to generate periodic tick events.
 // This will cause SysTick_Handler to fire once per tick.
