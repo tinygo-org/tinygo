@@ -92,6 +92,11 @@ func IsPermission(err error) bool {
 	return underlyingErrorIs(err, ErrPermission)
 }
 
+func IsTimeout(err error) bool {
+	terr, ok := underlyingError(err).(timeout)
+	return ok && terr.Timeout()
+}
+
 func underlyingErrorIs(err, target error) bool {
 	// Note that this function is not errors.Is:
 	// underlyingError only unwraps the specific error-wrapping types
