@@ -11,6 +11,7 @@ import (
 	"internal/itoa"
 	"net/netip"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -80,7 +81,6 @@ func (a *TCPAddr) opAddr() Addr {
 // parameters.
 func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 
-	//	println("ResolveTCPAddr", address)
 	switch network {
 	case "tcp", "tcp4":
 	default:
@@ -104,7 +104,7 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 		return &TCPAddr{Port: port}, nil
 	}
 
-	ip, err := dev.GetHostByName(host)
+	ip, err := netdev.GetHostByName(host)
 	if err != nil {
 		return nil, fmt.Errorf("Lookup of host name '%s' failed: %s", host, err)
 	}
@@ -115,7 +115,7 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 // TCPConn is an implementation of the Conn interface for TCP network
 // connections.
 type TCPConn struct {
-	fd            netdev.Sockfd
+	fd            int
 	laddr         *TCPAddr
 	raddr         *TCPAddr
 	readDeadline  time.Time
@@ -147,17 +147,13 @@ func DialTCP(network string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 		return nil, fmt.Errorf("Sorry, localhost isn't available on Tinygo")
 	}
 
-	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_STREAM, netdev.IPPROTO_TCP)
+	fd, err := netdev.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
 	if err != nil {
 		return nil, err
 	}
 
-	var ip netdev.IP
-	copy(ip[:], raddr.IP)
-	addr := netdev.NewSockAddr("", netdev.Port(raddr.Port), ip)
-
-	if err = dev.Connect(fd, addr); err != nil {
-		dev.Close(fd)
+	if err = netdev.Connect(fd, "", raddr.IP, raddr.Port); err != nil {
+		netdev.Close(fd)
 		return nil, err
 	}
 
@@ -183,7 +179,7 @@ func (c *TCPConn) Read(b []byte) (int, error) {
 		}
 	}
 
-	n, err := dev.Recv(c.fd, b, 0, timeout)
+	n, err := netdev.Recv(c.fd, b, 0, timeout)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
@@ -204,7 +200,7 @@ func (c *TCPConn) Write(b []byte) (int, error) {
 		}
 	}
 
-	n, err := dev.Send(c.fd, b, 0, timeout)
+	n, err := netdev.Send(c.fd, b, 0, timeout)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
@@ -213,7 +209,7 @@ func (c *TCPConn) Write(b []byte) (int, error) {
 }
 
 func (c *TCPConn) Close() error {
-	return dev.Close(c.fd)
+	return netdev.Close(c.fd)
 }
 
 func (c *TCPConn) LocalAddr() Addr {
@@ -231,12 +227,12 @@ func (c *TCPConn) SetDeadline(t time.Time) error {
 }
 
 func (c *TCPConn) SetKeepAlive(keepalive bool) error {
-	return dev.SetSockOpt(c.fd, netdev.SOL_SOCKET, netdev.SO_KEEPALIVE, keepalive)
+	return netdev.SetSockOpt(c.fd, syscall.SOL_SOCKET, syscall.SO_KEEPALIVE, keepalive)
 }
 
 func (c *TCPConn) SetKeepAlivePeriod(d time.Duration) error {
 	// Units are 1/2 seconds
-	return dev.SetSockOpt(c.fd, netdev.SOL_TCP, netdev.TCP_KEEPINTVL, 2*d.Seconds())
+	return netdev.SetSockOpt(c.fd, syscall.SOL_TCP, syscall.TCP_KEEPINTVL, 2*d.Seconds())
 }
 
 func (c *TCPConn) SetReadDeadline(t time.Time) error {
@@ -254,12 +250,12 @@ func (c *TCPConn) CloseWrite() error {
 }
 
 type listener struct {
-	fd    netdev.Sockfd
+	fd    int
 	laddr *TCPAddr
 }
 
 func (l *listener) Accept() (Conn, error) {
-	fd, err := dev.Accept(l.fd, netdev.SockAddr{})
+	fd, err := netdev.Accept(l.fd, IP{}, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +267,7 @@ func (l *listener) Accept() (Conn, error) {
 }
 
 func (l *listener) Close() error {
-	return dev.Close(l.fd)
+	return netdev.Close(l.fd)
 }
 
 func (l *listener) Addr() Addr {
@@ -279,21 +275,17 @@ func (l *listener) Addr() Addr {
 }
 
 func listenTCP(laddr *TCPAddr) (Listener, error) {
-	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_STREAM, netdev.IPPROTO_TCP)
+	fd, err := netdev.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
 	if err != nil {
 		return nil, err
 	}
 
-	var ip netdev.IP
-	copy(ip[:], laddr.IP)
-	addr := netdev.NewSockAddr("", netdev.Port(laddr.Port), ip)
-
-	err = dev.Bind(fd, addr)
+	err = netdev.Bind(fd, laddr.IP, laddr.Port)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dev.Listen(fd, 5)
+	err = netdev.Listen(fd, 5)
 	if err != nil {
 		return nil, err
 	}

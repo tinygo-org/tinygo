@@ -10,8 +10,8 @@ package net
 
 import (
 	"fmt"
-	"net/netdev"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -31,15 +31,13 @@ func DialTLS(addr string) (*TLSConn, error) {
 		port = 443
 	}
 
-	fd, err := dev.Socket(netdev.AF_INET, netdev.SOCK_STREAM, netdev.IPPROTO_TLS)
+	fd, err := netdev.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TLS)
 	if err != nil {
 		return nil, err
 	}
 
-	saddr := netdev.NewSockAddr(host, netdev.Port(port), netdev.IP{})
-
-	if err = dev.Connect(fd, saddr); err != nil {
-		dev.Close(fd)
+	if err = netdev.Connect(fd, host, IP{}, port); err != nil {
+		netdev.Close(fd)
 		return nil, err
 	}
 
@@ -51,7 +49,7 @@ func DialTLS(addr string) (*TLSConn, error) {
 // A TLSConn represents a secured connection.
 // It implements the net.Conn interface.
 type TLSConn struct {
-	fd            netdev.Sockfd
+	fd            int
 	readDeadline  time.Time
 	writeDeadline time.Time
 }
@@ -109,7 +107,7 @@ func (c *TLSConn) Read(b []byte) (int, error) {
 		}
 	}
 
-	n, err := dev.Recv(c.fd, b, 0, timeout)
+	n, err := netdev.Recv(c.fd, b, 0, timeout)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
@@ -130,7 +128,7 @@ func (c *TLSConn) Write(b []byte) (int, error) {
 		}
 	}
 
-	n, err := dev.Send(c.fd, b, 0, timeout)
+	n, err := netdev.Send(c.fd, b, 0, timeout)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
@@ -139,7 +137,7 @@ func (c *TLSConn) Write(b []byte) (int, error) {
 }
 
 func (c *TLSConn) Close() error {
-	return dev.Close(c.fd)
+	return netdev.Close(c.fd)
 }
 
 // Handshake runs the client or server handshake
