@@ -117,7 +117,7 @@ var (
 	//   alloc:  heap allocations during init interpretation
 	//   pack:   data created when storing a constant in an interface for example
 	//   string: buffer behind strings
-	packageSymbolRegexp = regexp.MustCompile(`\$(alloc|embedfsfiles|embedfsslice|embedslice|pack|string)(\.[0-9]+)?$`)
+	packageSymbolRegexp = regexp.MustCompile(`\$(alloc|embedfsslice|embedslice|pack|string)(\.[0-9]+)?$`)
 )
 
 // readProgramSizeFromDWARF reads the source location for each line of code and
