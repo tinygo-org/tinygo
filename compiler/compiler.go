@@ -1071,6 +1071,17 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		sliceGlobal.SetGlobalConstant(true)
 		sliceGlobal.SetUnnamedAddr(true)
 		sliceGlobal.SetAlignment(c.targetData.ABITypeAlignment(sliceInitializer.Type()))
+		if c.Debug {
+			position := c.program.Fset.Position(member.Pos())
+			diglobal := c.dibuilder.CreateGlobalVariableExpression(llvm.Metadata{}, llvm.DIGlobalVariableExpression{
+				File:        c.getDIFile(position.Filename),
+				Line:        position.Line,
+				Type:        c.getDIType(types.NewSlice(embedFileStructType)),
+				LocalToUnit: true,
+				Expr:        c.dibuilder.CreateExpression(nil),
+			})
+			sliceGlobal.AddMetadata(0, diglobal)
+		}
 
 		// Define the embed.FS struct. It has only one field: the files (as a
 		// *[]embed.file).
