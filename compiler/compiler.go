@@ -1010,10 +1010,11 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		})
 
 		// Make the backing array for the []files slice. This is a LLVM global.
-		embedFileStructType := c.getLLVMType(typ.Field(0).Type().(*types.Pointer).Elem().(*types.Slice).Elem())
+		embedFileStructType := typ.Field(0).Type().(*types.Pointer).Elem().(*types.Slice).Elem()
+		llvmEmbedFileStructType := c.getLLVMType(embedFileStructType)
 		var fileStructs []llvm.Value
 		for _, file := range allFiles {
-			fileStruct := llvm.ConstNull(embedFileStructType)
+			fileStruct := llvm.ConstNull(llvmEmbedFileStructType)
 			name := c.createConst(ssa.NewConst(constant.MakeString(file.Name), types.Typ[types.String]))
 			fileStruct = c.builder.CreateInsertValue(fileStruct, name, 0, "") // "name" field
 			if file.Hash != "" {
@@ -1022,13 +1023,25 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 			}
 			fileStructs = append(fileStructs, fileStruct)
 		}
-		sliceDataInitializer := llvm.ConstArray(embedFileStructType, fileStructs)
+		sliceDataInitializer := llvm.ConstArray(llvmEmbedFileStructType, fileStructs)
 		sliceDataGlobal := llvm.AddGlobal(c.mod, sliceDataInitializer.Type(), c.pkg.Path()+"$embedfsfiles")
 		sliceDataGlobal.SetInitializer(sliceDataInitializer)
 		sliceDataGlobal.SetLinkage(llvm.InternalLinkage)
 		sliceDataGlobal.SetGlobalConstant(true)
 		sliceDataGlobal.SetUnnamedAddr(true)
 		sliceDataGlobal.SetAlignment(c.targetData.ABITypeAlignment(sliceDataInitializer.Type()))
+		if c.Debug {
+			// Add debug information for code size attribution (among others).
+			position := c.program.Fset.Position(member.Pos())
+			diglobal := c.dibuilder.CreateGlobalVariableExpression(llvm.Metadata{}, llvm.DIGlobalVariableExpression{
+				File:        c.getDIFile(position.Filename),
+				Line:        position.Line,
+				Type:        c.getDIType(types.NewArray(embedFileStructType, int64(len(allFiles)))),
+				LocalToUnit: true,
+				Expr:        c.dibuilder.CreateExpression(nil),
+			})
+			sliceDataGlobal.AddMetadata(0, diglobal)
+		}
 
 		// Create the slice object itself.
 		// Because embed.FS refers to it as *[]embed.file instead of a plain
