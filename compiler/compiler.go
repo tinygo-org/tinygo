@@ -1863,6 +1863,14 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 	switch expr := expr.(type) {
 	case *ssa.Const:
+		if pos == token.NoPos {
+			// If the position isn't known, at least try to find in which file
+			// it is defined.
+			file := b.program.Fset.File(b.fn.Pos())
+			if file != nil {
+				pos = file.Pos(0)
+			}
+		}
 		return b.createConst(expr, pos)
 	case *ssa.Function:
 		if b.getFunctionInfo(expr).exported {
