@@ -46,7 +46,7 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 	sizeHint := llvm.ConstInt(b.uintptrType, 8, false)
 	algEnum := llvm.ConstInt(b.ctx.Int8Type(), alg, false)
 	if expr.Reserve != nil {
-		sizeHint = b.getValue(expr.Reserve)
+		sizeHint = b.getValue(expr.Reserve, getPos(expr))
 		var err error
 		sizeHint, err = b.createConvert(expr.Reserve.Type(), types.Typ[types.Uintptr], sizeHint, expr.Pos())
 		if err != nil {
