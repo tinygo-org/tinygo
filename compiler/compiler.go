@@ -2837,6 +2837,18 @@ func (c *compilerContext) createConst(expr *ssa.Const, pos token.Pos) llvm.Value
 				global.SetGlobalConstant(true)
 				global.SetUnnamedAddr(true)
 				global.SetAlignment(1)
+				if c.Debug {
+					// Unfortunately, expr.Pos() is always token.NoPos.
+					position := c.program.Fset.Position(pos)
+					diglobal := c.dibuilder.CreateGlobalVariableExpression(llvm.Metadata{}, llvm.DIGlobalVariableExpression{
+						File:        c.getDIFile(position.Filename),
+						Line:        position.Line,
+						Type:        c.getDIType(types.NewArray(types.Typ[types.Byte], int64(len(str)))),
+						LocalToUnit: true,
+						Expr:        c.dibuilder.CreateExpression(nil),
+					})
+					global.AddMetadata(0, diglobal)
+				}
 				zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
 				strPtr = llvm.ConstInBoundsGEP(globalType, global, []llvm.Value{zero, zero})
 			} else {
