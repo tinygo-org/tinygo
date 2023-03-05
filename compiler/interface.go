@@ -475,7 +475,7 @@ func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
 // Type asserts on concrete types are trivial: just compare type numbers. Type
 // asserts on interfaces are more difficult, see the comments in the function.
 func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
-	itf := b.getValue(expr.X)
+	itf := b.getValue(expr.X, getPos(expr))
 	assertedType := b.getLLVMType(expr.AssertedType)
 
 	actualTypeNum := b.CreateExtractValue(itf, 0, "interface.type")

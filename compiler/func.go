@@ -134,7 +134,7 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	boundVars := make([]llvm.Value, len(expr.Bindings))
 	for i, binding := range expr.Bindings {
 		// The context stores the bound variables.
-		llvmBoundVar := b.getValue(binding)
+		llvmBoundVar := b.getValue(binding, getPos(expr))
 		boundVars[i] = llvmBoundVar
 	}
 

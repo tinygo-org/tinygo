@@ -24,7 +24,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	// Note that bound functions are allowed if the function has a pointer
 	// receiver and is a global. This is rather strict but still allows for
 	// idiomatic Go code.
-	funcValue := b.getValue(instr.Args[1])
+	funcValue := b.getValue(instr.Args[1], getPos(instr))
 	if funcValue.IsAConstant().IsNil() {
 		// Try to determine the cause of the non-constantness for a nice error
 		// message.
