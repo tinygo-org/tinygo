@@ -219,20 +219,9 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone
 			// Try to parse the location. While this could in theory be a very
 			// complex expression, usually it's just a DW_OP_addr opcode
 			// followed by an address.
-			locationCode := location.Val.([]uint8)
-			if locationCode[0] != 3 { // DW_OP_addr
-				continue
-			}
-			var addr uint64
-			switch len(locationCode) {
-			case 1 + 2:
-				addr = uint64(binary.LittleEndian.Uint16(locationCode[1:]))
-			case 1 + 4:
-				addr = uint64(binary.LittleEndian.Uint32(locationCode[1:]))
-			case 1 + 8:
-				addr = binary.LittleEndian.Uint64(locationCode[1:])
-			default:
-				continue // unknown address
+			addr, err := readDWARFConstant(r.AddressSize(), location.Val.([]uint8))
+			if err != nil {
+				continue // ignore the error, we don't know what to do with it
 			}
 
 			// Parse the type of the global variable, which (importantly)
@@ -254,6 +243,52 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone
 		}
 	}
 	return addresses, nil
+}
+
+// Parse a DWARF constant. For addresses, this is usually a very simple
+// expression.
+func readDWARFConstant(addressSize int, bytecode []byte) (uint64, error) {
+	var addr uint64
+	for len(bytecode) != 0 {
+		op := bytecode[0]
+		bytecode = bytecode[1:]
+		switch op {
+		case 0x03: // DW_OP_addr
+			switch addressSize {
+			case 2:
+				addr = uint64(binary.LittleEndian.Uint16(bytecode))
+			case 4:
+				addr = uint64(binary.LittleEndian.Uint32(bytecode))
+			case 8:
+				addr = binary.LittleEndian.Uint64(bytecode)
+			default:
+				panic("unexpected address size")
+			}
+			bytecode = bytecode[addressSize:]
+		case 0x23: // DW_OP_plus_uconst
+			offset, n := readULEB128(bytecode)
+			addr += offset
+			bytecode = bytecode[n:]
+		default:
+			return 0, fmt.Errorf("unknown DWARF opcode: 0x%x", op)
+		}
+	}
+	return addr, nil
+}
+
+// Source: https://en.wikipedia.org/wiki/LEB128#Decode_unsigned_integer
+func readULEB128(buf []byte) (result uint64, n int) {
+	var shift uint8
+	for {
+		b := buf[n]
+		n++
+		result |= uint64(b&0x7f) << shift
+		if b&0x80 == 0 {
+			break
+		}
+		shift += 7
+	}
+	return
 }
 
 // Read a MachO object file and return a line table.
