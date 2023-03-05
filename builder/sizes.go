@@ -829,6 +829,8 @@ func findPackagePath(path string, packagePathMap map[string]string) string {
 			// package, with a "C" prefix. For example: "C compiler-rt" for the
 			// compiler runtime library from LLVM.
 			packagePath = "C " + strings.Split(strings.TrimPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "lib")), string(os.PathSeparator))[1]
+		} else if strings.HasPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "llvm-project")) {
+			packagePath = "C compiler-rt"
 		} else if packageSymbolRegexp.MatchString(path) {
 			// Parse symbol names like main$alloc or runtime$string.
 			packagePath = path[:strings.LastIndex(path, "$")]
