@@ -218,7 +218,6 @@ func (ts *Timespec) Unix() (sec int64, nsec int64) {
 // https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__struct_stat.h
 // https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__typedef_ino_t.h
 // etc.
-// Go chose Linux's field names for Stat_t, see https://github.com/golang/go/issues/31735
 type Stat_t struct {
 	Dev       uint64
 	Ino       uint64
