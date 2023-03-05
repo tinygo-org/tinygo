@@ -58,7 +58,7 @@ func (b *builder) createMemoryCopyImpl() {
 	}
 	var params []llvm.Value
 	for _, param := range b.fn.Params {
-		params = append(params, b.getValue(param))
+		params = append(params, b.getValue(param, getPos(b.fn)))
 	}
 	params = append(params, llvm.ConstInt(b.ctx.Int1Type(), 0, false))
 	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
@@ -80,9 +80,9 @@ func (b *builder) createMemoryZeroImpl() {
 		llvmFn = llvm.AddFunction(b.mod, fnName, fnType)
 	}
 	params := []llvm.Value{
-		b.getValue(b.fn.Params[0]),
+		b.getValue(b.fn.Params[0], getPos(b.fn)),
 		llvm.ConstInt(b.ctx.Int8Type(), 0, false),
-		b.getValue(b.fn.Params[1]),
+		b.getValue(b.fn.Params[1], getPos(b.fn)),
 		llvm.ConstInt(b.ctx.Int1Type(), 0, false),
 	}
 	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
@@ -95,7 +95,7 @@ func (b *builder) createKeepAliveImpl() {
 	b.createFunctionStart(true)
 
 	// Get the underlying value of the interface value.
-	interfaceValue := b.getValue(b.fn.Params[0])
+	interfaceValue := b.getValue(b.fn.Params[0], getPos(b.fn))
 	pointerValue := b.CreateExtractValue(interfaceValue, 1, "")
 
 	// Create an equivalent of the following C code, which is basically just a
@@ -149,7 +149,7 @@ func (b *builder) defineMathOp() {
 	// Create a call to the intrinsic.
 	args := make([]llvm.Value, len(b.fn.Params))
 	for i, param := range b.fn.Params {
-		args[i] = b.getValue(param)
+		args[i] = b.getValue(param, getPos(b.fn))
 	}
 	result := b.CreateCall(llvmFn.GlobalValueType(), llvmFn, args, "")
 	b.CreateRet(result)

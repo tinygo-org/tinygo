@@ -267,13 +267,13 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by the call parameters).
-		itf := b.getValue(instr.Call.Value) // interface
+		itf := b.getValue(instr.Call.Value, getPos(instr)) // interface
 		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
 		receiverValue := b.CreateExtractValue(itf, 1, "invoke.func.receiver")
 		values = []llvm.Value{callback, next, typecode, receiverValue}
 		valueTypes = append(valueTypes, b.i8ptrType, b.i8ptrType)
 		for _, arg := range instr.Call.Args {
-			val := b.getValue(arg)
+			val := b.getValue(arg, getPos(instr))
 			values = append(values, val)
 			valueTypes = append(valueTypes, val.Type())
 		}
@@ -290,7 +290,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// runtime._defer fields).
 		values = []llvm.Value{callback, next}
 		for _, param := range instr.Call.Args {
-			llvmParam := b.getValue(param)
+			llvmParam := b.getValue(param, getPos(instr))
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}
@@ -302,7 +302,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// pointer.
 		// TODO: ignore this closure entirely and put pointers to the free
 		// variables directly in the defer struct, avoiding a memory allocation.
-		closure := b.getValue(instr.Call.Value)
+		closure := b.getValue(instr.Call.Value, getPos(instr))
 		context := b.CreateExtractValue(closure, 0, "")
 
 		// Get the callback number.
@@ -318,7 +318,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// context pointer).
 		values = []llvm.Value{callback, next}
 		for _, param := range instr.Call.Args {
-			llvmParam := b.getValue(param)
+			llvmParam := b.getValue(param, getPos(instr))
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}
@@ -330,7 +330,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		var argValues []llvm.Value
 		for _, arg := range instr.Call.Args {
 			argTypes = append(argTypes, arg.Type())
-			argValues = append(argValues, b.getValue(arg))
+			argValues = append(argValues, b.getValue(arg, getPos(instr)))
 		}
 
 		if _, ok := b.deferBuiltinFuncs[instr.Call.Value]; !ok {
@@ -353,7 +353,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		}
 
 	} else {
-		funcValue := b.getValue(instr.Call.Value)
+		funcValue := b.getValue(instr.Call.Value, getPos(instr))
 
 		if _, ok := b.deferExprFuncs[instr.Call.Value]; !ok {
 			b.deferExprFuncs[instr.Call.Value] = len(b.allDeferFuncs)
@@ -368,7 +368,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		values = []llvm.Value{callback, next, funcValue}
 		valueTypes = append(valueTypes, funcValue.Type())
 		for _, param := range instr.Call.Args {
-			llvmParam := b.getValue(param)
+			llvmParam := b.getValue(param, getPos(instr))
 			values = append(values, llvmParam)
 			valueTypes = append(valueTypes, llvmParam.Type())
 		}

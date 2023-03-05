@@ -16,7 +16,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	// Get all function parameters to pass to the goroutine.
 	var params []llvm.Value
 	for _, param := range instr.Call.Args {
-		params = append(params, b.getValue(param))
+		params = append(params, b.getValue(param, getPos(instr)))
 	}
 
 	var prefix string
@@ -33,7 +33,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		case *ssa.MakeClosure:
 			// A goroutine call on a func value, but the callee is trivial to find. For
 			// example: immediately applied functions.
-			funcValue := b.getValue(value)
+			funcValue := b.getValue(value, getPos(instr))
 			context = b.extractFuncContext(funcValue)
 		default:
 			panic("StaticCallee returned an unexpected value")
@@ -70,13 +70,13 @@ func (b *builder) createGo(instr *ssa.Go) {
 		var argValues []llvm.Value
 		for _, arg := range instr.Call.Args {
 			argTypes = append(argTypes, arg.Type())
-			argValues = append(argValues, b.getValue(arg))
+			argValues = append(argValues, b.getValue(arg, getPos(instr)))
 		}
 		b.createBuiltin(argTypes, argValues, builtin.Name(), instr.Pos())
 		return
 	} else if instr.Call.IsInvoke() {
 		// This is a method call on an interface value.
-		itf := b.getValue(instr.Call.Value)
+		itf := b.getValue(instr.Call.Value, getPos(instr))
 		itfTypeCode := b.CreateExtractValue(itf, 0, "")
 		itfValue := b.CreateExtractValue(itf, 1, "")
 		funcPtr = b.getInvokeFunction(&instr.Call)
@@ -90,7 +90,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		//   * The function context, for closures.
 		//   * The function pointer (for tasks).
 		var context llvm.Value
-		funcPtrType, funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
+		funcPtrType, funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value, getPos(instr)), instr.Call.Value.Type().Underlying().(*types.Signature))
 		params = append(params, context, funcPtr)
 		hasContext = true
 		prefix = b.fn.RelString(nil)
