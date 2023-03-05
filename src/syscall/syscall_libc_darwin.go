@@ -163,7 +163,6 @@ type Dirent struct {
 	Pad_cgo_0 [3]byte
 }
 
-// Go chose Linux's field names for Stat_t, see https://github.com/golang/go/issues/31735
 type Stat_t struct {
 	Dev       int32
 	Mode      uint16
