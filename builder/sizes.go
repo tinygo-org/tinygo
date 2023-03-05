@@ -371,7 +371,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 			if section.Flags&elf.SHF_ALLOC == 0 {
 				continue
 			}
-			if packageSymbolRegexp.MatchString(symbol.Name) {
+			if packageSymbolRegexp.MatchString(symbol.Name) || symbol.Name == "__isr_vector" {
 				addresses = append(addresses, addressLine{
 					Address:    symbol.Value,
 					Length:     symbol.Size,
@@ -834,6 +834,8 @@ func findPackagePath(path string, packagePathMap map[string]string) string {
 		} else if packageSymbolRegexp.MatchString(path) {
 			// Parse symbol names like main$alloc or runtime$string.
 			packagePath = path[:strings.LastIndex(path, "$")]
+		} else if path == "__isr_vector" {
+			packagePath = "C interrupt vector"
 		} else if path == "<Go type>" {
 			packagePath = "Go types"
 		} else if path == "<Go interface assert>" {
