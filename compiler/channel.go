@@ -14,7 +14,7 @@ import (
 func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
 	elementSize := b.targetData.TypeAllocSize(b.getLLVMType(expr.Type().Underlying().(*types.Chan).Elem()))
 	elementSizeValue := llvm.ConstInt(b.uintptrType, elementSize, false)
-	bufSize := b.getValue(expr.Size)
+	bufSize := b.getValue(expr.Size, getPos(expr))
 	b.createChanBoundsCheck(elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
 	if bufSize.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
 		bufSize = b.CreateZExt(bufSize, b.uintptrType, "")
@@ -27,8 +27,8 @@ func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
 // createChanSend emits a pseudo chan send operation. It is lowered to the
 // actual channel send operation during goroutine lowering.
 func (b *builder) createChanSend(instr *ssa.Send) {
-	ch := b.getValue(instr.Chan)
-	chanValue := b.getValue(instr.X)
+	ch := b.getValue(instr.Chan, getPos(instr))
+	chanValue := b.getValue(instr.X, getPos(instr))
 
 	// store value-to-send
 	valueType := b.getLLVMType(instr.X.Type())
@@ -62,7 +62,7 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 // actual channel receive operation during goroutine lowering.
 func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 	valueType := b.getLLVMType(unop.X.Type().Underlying().(*types.Chan).Elem())
-	ch := b.getValue(unop.X)
+	ch := b.getValue(unop.X, getPos(unop))
 
 	// Allocate memory to receive into.
 	isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
@@ -140,7 +140,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	var selectStates []llvm.Value
 	chanSelectStateType := b.getLLVMRuntimeType("chanSelectState")
 	for _, state := range expr.States {
-		ch := b.getValue(state.Chan)
+		ch := b.getValue(state.Chan, state.Pos)
 		selectState := llvm.ConstNull(chanSelectStateType)
 		selectState = b.CreateInsertValue(selectState, ch, 0, "")
 		switch state.Dir {
@@ -156,7 +156,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		case types.SendOnly:
 			// Store this value in an alloca and put a pointer to this alloca
 			// in the send state.
-			sendValue := b.getValue(state.Send)
+			sendValue := b.getValue(state.Send, state.Pos)
 			alloca := llvmutil.CreateEntryBlockAlloca(b.Builder, sendValue.Type(), "select.send.value")
 			b.CreateStore(sendValue, alloca)
 			ptr := b.CreateBitCast(alloca, b.i8ptrType, "")
@@ -247,7 +247,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 func (b *builder) getChanSelectResult(expr *ssa.Extract) llvm.Value {
 	if expr.Index == 0 {
 		// index
-		value := b.getValue(expr.Tuple)
+		value := b.getValue(expr.Tuple, getPos(expr))
 		index := b.CreateExtractValue(value, expr.Index, "")
 		if index.Type().IntTypeWidth() < b.intType.IntTypeWidth() {
 			index = b.CreateSExt(index, b.intType, "")
@@ -255,7 +255,7 @@ func (b *builder) getChanSelectResult(expr *ssa.Extract) llvm.Value {
 		return index
 	} else if expr.Index == 1 {
 		// comma-ok
-		value := b.getValue(expr.Tuple)
+		value := b.getValue(expr.Tuple, getPos(expr))
 		return b.CreateExtractValue(value, expr.Index, "")
 	} else {
 		// Select statements are (index, ok, ...) where ... is a number of

@@ -14,7 +14,7 @@ import (
 // and returns the result as a single integer (the system call result). The
 // result is not further interpreted.
 func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
-	num := b.getValue(call.Args[0])
+	num := b.getValue(call.Args[0], getPos(call))
 	switch {
 	case b.GOARCH == "amd64" && b.GOOS == "linux":
 		// Sources:
@@ -37,7 +37,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{r12}",
 				"{r13}",
 			}[i]
-			llvmValue := b.getValue(arg)
+			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -64,7 +64,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{edi}",
 				"{ebp}",
 			}[i]
-			llvmValue := b.getValue(arg)
+			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -89,7 +89,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{r5}",
 				"{r6}",
 			}[i]
-			llvmValue := b.getValue(arg)
+			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -119,7 +119,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{x4}",
 				"{x5}",
 			}[i]
-			llvmValue := b.getValue(arg)
+			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -177,12 +177,12 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		var paramTypes []llvm.Type
 		var params []llvm.Value
 		for _, val := range call.Args[2:] {
-			param := b.getValue(val)
+			param := b.getValue(val, getPos(call))
 			params = append(params, param)
 			paramTypes = append(paramTypes, param.Type())
 		}
 		llvmType := llvm.FunctionType(b.uintptrType, paramTypes, false)
-		fn := b.getValue(call.Args[0])
+		fn := b.getValue(call.Args[0], getPos(call))
 		fnPtr := b.CreateIntToPtr(fn, llvm.PointerType(llvmType, 0), "")
 
 		// Prepare some functions that will be called later.
