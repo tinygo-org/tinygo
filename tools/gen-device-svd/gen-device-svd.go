@@ -1422,6 +1422,9 @@ __isr_vector:
 	for _, intr := range device.Interrupts {
 		fmt.Fprintf(w, "    IRQ %s_IRQHandler\n", intr.Name)
 	}
+	w.WriteString(`
+.size __isr_vector, .-__isr_vector
+`)
 	return w.Flush()
 }
 
