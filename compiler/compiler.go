@@ -869,13 +869,13 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 				if fn == nil {
 					continue // probably a generic method
 				}
-				if fn.Blocks == nil {
-					continue // external function
-				}
 				if member.Type().String() != member.String() {
 					// This is a member on a type alias. Do not build such a
 					// function.
 					continue
+				}
+				if fn.Blocks == nil {
+					continue // external function
 				}
 				if fn.Synthetic != "" && fn.Synthetic != "package initializer" {
 					// This function is a kind of wrapper function (created by
