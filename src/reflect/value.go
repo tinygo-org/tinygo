@@ -1083,7 +1083,7 @@ func init() {
 }
 
 func Zero(typ Type) Value {
-	if typ.Size() < unsafe.Sizeof(uintptr(0)) {
+	if typ.Size() <= unsafe.Sizeof(uintptr(0)) {
 		return Value{
 			typecode: typ.(*rawType),
 			value:    nil,
