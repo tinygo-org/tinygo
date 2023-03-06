@@ -75,6 +75,7 @@ func (ps *packageSize) RAM() uint64 {
 type addressLine struct {
 	Address    uint64
 	Length     uint64 // length of this chunk
+	Align      uint64 // (maximum) alignment of this line
 	File       string // file path as stored in DWARF
 	IsVariable bool   // true if this is a variable (or constant), false if it is code
 }
@@ -86,6 +87,7 @@ type memorySection struct {
 	Type    memoryType
 	Address uint64
 	Size    uint64
+	Align   uint64
 }
 
 type memoryType int
@@ -123,7 +125,7 @@ var (
 // readProgramSizeFromDWARF reads the source location for each line of code and
 // each variable in the program, as far as this is stored in the DWARF debug
 // information.
-func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone bool) ([]addressLine, error) {
+func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset, codeAlignment uint64, skipTombstone bool) ([]addressLine, error) {
 	r := data.Reader()
 	var lines []*dwarf.LineFile
 	var addresses []addressLine
@@ -195,6 +197,7 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone
 					line := addressLine{
 						Address: prevLineEntry.Address + codeOffset,
 						Length:  lineEntry.Address - prevLineEntry.Address,
+						Align:   codeAlignment,
 						File:    prevLineEntry.File.Name,
 					}
 					if line.Length != 0 {
@@ -232,9 +235,16 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone
 				return nil, err
 			}
 
+			// Read alignment, if it's stored as part of the debug information.
+			var alignment uint64
+			if attr := e.AttrField(dwarf.AttrAlignment); attr != nil {
+				alignment = uint64(attr.Val.(int64))
+			}
+
 			addresses = append(addresses, addressLine{
 				Address:    addr,
 				Length:     uint64(typ.Size()),
+				Align:      alignment,
 				File:       lines[file.Val.(int64)].Name,
 				IsVariable: true,
 			})
@@ -312,7 +322,7 @@ func readMachOSymbolAddresses(path string) (map[string]int, []addressLine, error
 	if err != nil {
 		return nil, nil, err
 	}
-	lines, err := readProgramSizeFromDWARF(dwarf, 0, false)
+	lines, err := readProgramSizeFromDWARF(dwarf, 0, 0, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -369,10 +379,15 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 	// Load the binary file, which could be in a number of file formats.
 	var sections []memorySection
 	if file, err := elf.NewFile(f); err == nil {
+		var codeAlignment uint64
+		switch file.Machine {
+		case elf.EM_ARM:
+			codeAlignment = 4 // usually 2, but can be 4
+		}
 		// Read DWARF information. The error is intentionally ignored.
 		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, 0, true)
+			addresses, err = readProgramSizeFromDWARF(data, 0, codeAlignment, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
@@ -430,6 +445,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 					sections = append(sections, memorySection{
 						Address: section.Addr,
 						Size:    section.Size,
+						Align:   section.Addralign,
 						Type:    memoryStack,
 					})
 				} else {
@@ -437,6 +453,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 					sections = append(sections, memorySection{
 						Address: section.Addr,
 						Size:    section.Size,
+						Align:   section.Addralign,
 						Type:    memoryBSS,
 					})
 				}
@@ -445,6 +462,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    section.Size,
+					Align:   section.Addralign,
 					Type:    memoryCode,
 				})
 			} else if section.Type == elf.SHT_PROGBITS && section.Flags&elf.SHF_WRITE != 0 {
@@ -452,6 +470,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    section.Size,
+					Align:   section.Addralign,
 					Type:    memoryData,
 				})
 			} else if section.Type == elf.SHT_PROGBITS {
@@ -459,6 +478,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    section.Size,
+					Align:   section.Addralign,
 					Type:    memoryROData,
 				})
 			}
@@ -485,6 +505,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    uint64(section.Size),
+					Align:   uint64(section.Align),
 					Type:    memoryCode,
 				})
 			} else if sectionType == 1 { // S_ZEROFILL
@@ -492,6 +513,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    uint64(section.Size),
+					Align:   uint64(section.Align),
 					Type:    memoryBSS,
 				})
 			} else if segment.Maxprot&0b011 == 0b001 { // --r (read-only data)
@@ -499,6 +521,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    uint64(section.Size),
+					Align:   uint64(section.Align),
 					Type:    memoryROData,
 				})
 			} else {
@@ -506,6 +529,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    uint64(section.Size),
+					Align:   uint64(section.Align),
 					Type:    memoryData,
 				})
 			}
@@ -589,7 +613,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 		// Read DWARF information. The error is intentionally ignored.
 		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, 0, true)
+			addresses, err = readProgramSizeFromDWARF(data, 0, 0, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
@@ -661,7 +685,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 		// Read DWARF information. The error is intentionally ignored.
 		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, codeOffset, true)
+			addresses, err = readProgramSizeFromDWARF(data, codeOffset, 0, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
@@ -821,10 +845,18 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 		if addr < line.Address {
 			// There is a gap: there is a space between the current and the
 			// previous line entry.
-			addSize("(unknown)", line.Address-addr, false)
-			if sizesDebug {
-				fmt.Printf("%08x..%08x %5d:  unknown (gap)\n", addr, line.Address, line.Address-addr)
+			// Check whether this is caused by alignment requirements.
+			addrAligned := (addr + line.Align - 1) &^ (line.Align - 1)
+			if line.Align > 1 && addrAligned >= line.Address {
+				// It is, assume that's what causes the gap.
+				addSize("(padding)", line.Address-addr, true)
+			} else {
+				addSize("(unknown)", line.Address-addr, false)
+				if sizesDebug {
+					fmt.Printf("%08x..%08x %5d:  unknown (gap), alignment=%d\n", addr, line.Address, line.Address-addr, line.Align)
+				}
 			}
+			addr = line.Address
 		}
 		if addr > line.Address+line.Length {
 			// The current line is already covered by a previous line entry.
@@ -846,9 +878,16 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 	}
 	if addr < sectionEnd {
 		// There is a gap at the end of the section.
-		addSize("(unknown)", sectionEnd-addr, false)
-		if sizesDebug {
-			fmt.Printf("%08x..%08x %5d:  unknown (end)\n", addr, sectionEnd, sectionEnd-addr)
+		addrAligned := (addr + section.Align - 1) &^ (section.Align - 1)
+		if section.Align > 1 && addrAligned >= sectionEnd {
+			// The gap is caused by the section alignment.
+			// For example, if a .rodata section ends with a non-aligned string.
+			addSize("(padding)", sectionEnd-addr, true)
+		} else {
+			addSize("(unknown)", sectionEnd-addr, false)
+			if sizesDebug {
+				fmt.Printf("%08x..%08x %5d:  unknown (end), alignment=%d\n", addr, sectionEnd, sectionEnd-addr, section.Align)
+			}
 		}
 	}
 }
