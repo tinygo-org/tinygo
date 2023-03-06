@@ -275,7 +275,7 @@ jobs:
     # in that process to avoid doing lots of duplicate work and to avoid
     # complications around precompiled libraries such as compiler-rt shipped as
     # part of the release tarball.
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: build-linux
     steps:
       - name: Checkout
@@ -391,7 +391,7 @@ jobs:
     # in that process to avoid doing lots of duplicate work and to avoid
     # complications around precompiled libraries such as compiler-rt shipped as
     # part of the release tarball.
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: build-linux
     steps:
       - name: Checkout
