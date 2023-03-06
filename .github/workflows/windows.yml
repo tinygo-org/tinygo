@@ -25,9 +25,8 @@ jobs:
         with:
           scoop_update: 'false'
       - name: Use MSYS64 bash version
-        shell: cmd
         run: |
-          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
+          Add-Content $env:GITHUB_PATH "C:\msys64\usr\bin"
       - name: Install Dependencies
         shell: bash
         run: |
@@ -137,9 +136,8 @@ jobs:
         with:
           scoop_update: 'false'
       - name: Use MSYS64 bash version
-        shell: cmd
         run: |
-          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
+          Add-Content $env:GITHUB_PATH "C:\msys64\usr\bin"
       - name: Install Dependencies
         shell: bash
         run: |
@@ -187,9 +185,8 @@ jobs:
           name: release-double-zipped
           path: build/
       - name: Use MSYS64 bash version
-        shell: cmd
         run: |
-          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
+          Add-Content $env:GITHUB_PATH "C:\msys64\usr\bin"
       - name: Unzip TinyGo build
         shell: bash
         working-directory: build
@@ -211,9 +208,8 @@ jobs:
         with:
           scoop_update: 'false'
       - name: Use MSYS64 bash version
-        shell: cmd
         run: |
-          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
+          Add-Content $env:GITHUB_PATH "C:\msys64\usr\bin"
       - name: Install Dependencies
         shell: bash
         run: |
