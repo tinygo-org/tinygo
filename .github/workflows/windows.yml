@@ -24,6 +24,10 @@ jobs:
       - uses: brechtm/setup-scoop@v2
         with:
           scoop_update: 'false'
+      - name: Use MSYS64 bash version
+        shell: cmd
+        run: |
+          echo ::add-path::C:\msys64\usr\bin
       - name: Install Dependencies
         shell: bash
         run: |
@@ -132,6 +136,10 @@ jobs:
       - uses: brechtm/setup-scoop@v2
         with:
           scoop_update: 'false'
+      - name: Use MSYS64 bash version
+        shell: cmd
+        run: |
+          echo ::add-path::C:\msys64\usr\bin
       - name: Install Dependencies
         shell: bash
         run: |
@@ -178,6 +186,10 @@ jobs:
         with:
           name: release-double-zipped
           path: build/
+      - name: Use MSYS64 bash version
+        shell: cmd
+        run: |
+          echo ::add-path::C:\msys64\usr\bin
       - name: Unzip TinyGo build
         shell: bash
         working-directory: build
@@ -198,6 +210,10 @@ jobs:
       - uses: brechtm/setup-scoop@v2
         with:
           scoop_update: 'false'
+      - name: Use MSYS64 bash version
+        shell: cmd
+        run: |
+          echo ::add-path::C:\msys64\usr\bin
       - name: Install Dependencies
         shell: bash
         run: |
