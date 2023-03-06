@@ -57,6 +57,7 @@ const (
 	structFieldFlagAnonymous = 1 << iota
 	structFieldFlagHasTag
 	structFieldFlagIsExported
+	structFieldFlagIsEmbedded
 )
 
 // createMakeInterface emits the LLVM IR for the *ssa.MakeInterface instruction.
@@ -242,6 +243,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				}
 				if token.IsExported(field.Name()) {
 					flags |= structFieldFlagIsExported
+				}
+				if field.Embedded() {
+					flags |= structFieldFlagIsEmbedded
 				}
 				data := string(flags) + field.Name() + "\x00"
 				if typ.Tag(i) != "" {
