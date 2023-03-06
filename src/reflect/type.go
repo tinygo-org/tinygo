@@ -69,6 +69,7 @@ const (
 	structFieldFlagAnonymous = 1 << iota
 	structFieldFlagHasTag
 	structFieldFlagIsExported
+	structFieldFlagIsEmbedded
 )
 
 type Kind uint8
@@ -655,46 +656,98 @@ func (t *rawType) rawField(n int) rawStructField {
 // Type member to an interface.
 //
 // For internal use only.
-func (t *rawType) rawFieldByName(n string) (rawStructField, int, bool) {
+func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 	if t.Kind() != Struct {
 		panic(&TypeError{"Field"})
 	}
-	descriptor := (*structType)(unsafe.Pointer(t.underlying()))
 
-	// Iterate over all the fields looking for the matching name
-	// Also calculate field offset.
-
-	field := &descriptor.fields[0]
-	var offset uintptr = 0
-	for i := uint16(0); i < descriptor.numField; i++ {
-		data := field.data
-
-		// Read some flags of this field, like whether the field is an embedded
-		// field. See structFieldFlagAnonymous and similar flags.
-		flagsByte := *(*byte)(data)
-		data = unsafe.Add(data, 1)
-
-		name := readStringZ(data)
-		data = unsafe.Add(data, len(name))
-		if name == n {
-			return rawStructFieldFromPointer(field.fieldType, data, flagsByte, name, offset), int(i), true
-		}
-
-		// update offset/field pointer if there *is* a next field
-		if i < descriptor.numField-1 {
-			offset += field.fieldType.Size()
-
-			// Increment pointer to the next field.
-			field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
-
-			// Align the offset for the next field.
-			offset = align(offset, uintptr(field.fieldType.Align()))
-		}
+	type fieldWalker struct {
+		t     *rawType
+		index []int
 	}
 
-	// No match
-	return rawStructField{}, 0, false
+	queue := make([]fieldWalker, 0, 4)
+	queue = append(queue, fieldWalker{t, nil})
 
+	for len(queue) > 0 {
+		type result struct {
+			r     rawStructField
+			index []int
+		}
+
+		var found []result
+		var nextlevel []fieldWalker
+
+		// For all the structs at this level..
+		for _, ll := range queue {
+			// Iterate over all the fields looking for the matching name
+			// Also calculate field offset.
+
+			descriptor := (*structType)(unsafe.Pointer(ll.t.underlying()))
+			var offset uintptr
+			field := &descriptor.fields[0]
+
+			for i := uint16(0); i < descriptor.numField; i++ {
+				data := field.data
+
+				// Read some flags of this field, like whether the field is an embedded
+				// field. See structFieldFlagAnonymous and similar flags.
+				flagsByte := *(*byte)(data)
+				data = unsafe.Add(data, 1)
+
+				name := readStringZ(data)
+				data = unsafe.Add(data, len(name))
+				if name == n {
+					found = append(found, result{
+						rawStructFieldFromPointer(field.fieldType, data, flagsByte, name, offset),
+						append(ll.index, int(i)),
+					})
+				}
+
+				structOrPtrToStruct := field.fieldType.Kind() == Struct || (field.fieldType.Kind() == Pointer && field.fieldType.elem().Kind() == Struct)
+				if flagsByte&structFieldFlagIsEmbedded == structFieldFlagIsEmbedded && structOrPtrToStruct {
+					embedded := field.fieldType
+					if embedded.Kind() == Pointer {
+						embedded = embedded.elem()
+					}
+
+					nextlevel = append(nextlevel, fieldWalker{
+						t:     embedded,
+						index: append(ll.index, int(i)),
+					})
+				}
+
+				offset += field.fieldType.Size()
+
+				// update offset/field pointer if there *is* a next field
+				if i < descriptor.numField-1 {
+
+					// Increment pointer to the next field.
+					field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
+
+					// Align the offset for the next field.
+					offset = align(offset, uintptr(field.fieldType.Align()))
+				}
+			}
+		}
+
+		// found multiple hits at this level
+		if len(found) > 1 {
+			return rawStructField{}, nil, false
+		}
+
+		// found the field we were looking for
+		if len(found) == 1 {
+			r := found[0]
+			return r.r, r.index, true
+		}
+
+		// else len(found) == 0, move on to the next level
+		queue = append(queue[:0], nextlevel...)
+	}
+
+	// didn't find it
+	return rawStructField{}, nil, false
 }
 
 // Bits returns the number of bits that this type uses. It is only valid for
@@ -1017,7 +1070,7 @@ func (t *rawType) FieldByName(name string) (StructField, bool) {
 		Tag:       field.Tag,
 		Anonymous: field.Anonymous,
 		Offset:    field.Offset,
-		Index:     []int{index},
+		Index:     index,
 	}, true
 }
 
@@ -1026,8 +1079,13 @@ func (t *rawType) FieldByIndex(index []int) StructField {
 	var field rawStructField
 
 	for _, n := range index {
-		if ftype.Kind() != Struct {
-			panic(TypeError{"FieldByIndex"})
+		structOrPtrToStruct := ftype.Kind() == Struct || (ftype.Kind() == Pointer && ftype.elem().Kind() == Struct)
+		if !structOrPtrToStruct {
+			panic(&TypeError{"FieldByIndex:" + ftype.Kind().String()})
+		}
+
+		if ftype.Kind() == Pointer {
+			ftype = ftype.elem()
 		}
 
 		field = ftype.rawField(n)
