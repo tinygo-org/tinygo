@@ -1508,6 +1508,15 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	// Limit the number of threads to one.
+	// This is an attempted workaround for the crashes we're seeing in CI on
+	// Windows. If this change helps, it indicates there is a concurrency issue.
+	// If it doesn't, then there is something else going on. Either way, this
+	// should be removed once the test is done.
+	if runtime.GOOS == "windows" {
+		runtime.GOMAXPROCS(1)
+	}
+
 	switch command {
 	case "build":
 		pkgName := "."
