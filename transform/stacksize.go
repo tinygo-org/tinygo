@@ -1,8 +1,11 @@
 package transform
 
 import (
+	"path/filepath"
+
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/goenv"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -47,10 +50,49 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 	stackSizesGlobal.SetSection(".tinygo_stacksizes")
 	defaultStackSizes := make([]llvm.Value, len(functions))
 	defaultStackSize := llvm.ConstInt(functions[0].Type(), config.StackSize(), false)
+	alignment := targetData.ABITypeAlignment(functions[0].Type())
 	for i := range defaultStackSizes {
 		defaultStackSizes[i] = defaultStackSize
 	}
 	stackSizesGlobal.SetInitializer(llvm.ConstArray(functions[0].Type(), defaultStackSizes))
+	stackSizesGlobal.SetAlignment(alignment)
+	// TODO: make this a constant. For some reason, that incrases code size though.
+	if config.Debug() {
+		dibuilder := llvm.NewDIBuilder(mod)
+		dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
+			File:      "<unknown>",
+			Dir:       "",
+			Producer:  "TinyGo",
+			Optimized: true,
+		})
+		ditype := dibuilder.CreateArrayType(llvm.DIArrayType{
+			SizeInBits:  targetData.TypeAllocSize(stackSizesGlobalType) * 8,
+			AlignInBits: uint32(alignment * 8),
+			ElementType: dibuilder.CreateBasicType(llvm.DIBasicType{
+				Name:       "uintptr",
+				SizeInBits: targetData.TypeAllocSize(functions[0].Type()) * 8,
+				Encoding:   llvm.DW_ATE_unsigned,
+			}),
+			Subscripts: []llvm.DISubrange{
+				{
+					Lo:    0,
+					Count: int64(len(functions)),
+				},
+			},
+		})
+		diglobal := dibuilder.CreateGlobalVariableExpression(llvm.Metadata{}, llvm.DIGlobalVariableExpression{
+			Name: "internal/task.stackSizes",
+			File: dibuilder.CreateFile("internal/task/task_stack.go", filepath.Join(goenv.Get("TINYGOROOT"), "src")),
+			Line: 1,
+			Type: ditype,
+			Expr: dibuilder.CreateExpression(nil),
+		})
+		stackSizesGlobal.AddMetadata(0, diglobal)
+
+		dibuilder.Finalize()
+		dibuilder.Destroy()
+	}
 
 	// Add all relevant values to llvm.used (for LTO).
 	llvmutil.AppendToGlobal(mod, "llvm.used", append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
