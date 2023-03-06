@@ -266,6 +266,28 @@ func TestNamedTypes(t *testing.T) {
 	}
 }
 
+func TestZero(t *testing.T) {
+	s := "hello, world"
+	var sptr *string = &s
+	v := ValueOf(&sptr).Elem()
+	v.Set(Zero(v.Type()))
+
+	sptr = v.Interface().(*string)
+
+	if sptr != nil {
+		t.Errorf("failed to set a nil string pointer")
+	}
+
+	sl := []int{1, 2, 3}
+	v = ValueOf(&sl).Elem()
+	v.Set(Zero(v.Type()))
+	sl = v.Interface().([]int)
+
+	if sl != nil {
+		t.Errorf("failed to set a nil slice")
+	}
+}
+
 func addrDecode(body interface{}) {
 	vbody := ValueOf(body)
 	ptr := vbody.Elem()
