@@ -27,7 +27,7 @@ jobs:
       - name: Use MSYS64 bash version
         shell: cmd
         run: |
-          echo ::add-path::C:\msys64\usr\bin
+          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
       - name: Install Dependencies
         shell: bash
         run: |
@@ -139,7 +139,7 @@ jobs:
       - name: Use MSYS64 bash version
         shell: cmd
         run: |
-          echo ::add-path::C:\msys64\usr\bin
+          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
       - name: Install Dependencies
         shell: bash
         run: |
@@ -189,7 +189,7 @@ jobs:
       - name: Use MSYS64 bash version
         shell: cmd
         run: |
-          echo ::add-path::C:\msys64\usr\bin
+          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
       - name: Unzip TinyGo build
         shell: bash
         working-directory: build
@@ -213,7 +213,7 @@ jobs:
       - name: Use MSYS64 bash version
         shell: cmd
         run: |
-          echo ::add-path::C:\msys64\usr\bin
+          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
       - name: Install Dependencies
         shell: bash
         run: |
