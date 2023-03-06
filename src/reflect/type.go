@@ -974,9 +974,9 @@ type StructField struct {
 
 	Type      Type
 	Tag       StructTag // field tag string
-	Anonymous bool
 	Offset    uintptr
 	Index     []int // index sequence for Type.FieldByIndex
+	Anonymous bool
 }
 
 // IsExported reports whether the field is exported.
@@ -992,8 +992,8 @@ type rawStructField struct {
 	PkgPath   string
 	Type      *rawType
 	Tag       StructTag
-	Anonymous bool
 	Offset    uintptr
+	Anonymous bool
 }
 
 // A StructTag is the tag string in a struct field.
