@@ -433,7 +433,6 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 		llvmGlobal = llvm.AddGlobal(c.mod, llvmType, info.linkName)
 
 		// Set alignment from the //go:align comment.
-		var alignInBits uint32
 		alignment := c.targetData.ABITypeAlignment(llvmType)
 		if info.align > alignment {
 			alignment = info.align
@@ -444,7 +443,6 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 			c.addError(g.Pos(), "global variable alignment must be a positive power of two")
 		} else {
 			// Set the alignment only when it is a power of two.
-			alignInBits = uint32(alignment) ^ uint32(alignment-1)
 			llvmGlobal.SetAlignment(alignment)
 		}
 
@@ -459,7 +457,7 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 				Type:        c.getDIType(typ),
 				LocalToUnit: false,
 				Expr:        c.dibuilder.CreateExpression(nil),
-				AlignInBits: alignInBits,
+				AlignInBits: uint32(alignment) * 8,
 			})
 			llvmGlobal.AddMetadata(0, diglobal)
 		}
