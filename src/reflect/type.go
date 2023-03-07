@@ -25,6 +25,7 @@
 // - pointer types (see ptrType, this doesn't include chan, map, etc):
 //     meta         uint8
 //     elementType  *typeStruct
+//     nmethods     uint16
 // - array types (see arrayType)
 //     meta         uint8
 //     ptrTo        *typeStruct
@@ -38,6 +39,7 @@
 // - struct types (see structType):
 //     meta         uint8
 //     numField     uint16
+//     nmethods     uint16
 //     ptrTo        *typeStruct
 //     pkgpath      *byte
 //     fields       [...]structField // the remaining fields are all of type structField
@@ -51,6 +53,7 @@
 //     meta         uint8
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // underlying type
+//     nmethods     uint16      // number of methods
 //     pkg          *byte       // pkgpath
 //     name         [1]byte     // actual name; length nlem
 //
@@ -409,7 +412,8 @@ type elemType struct {
 
 type ptrType struct {
 	rawType
-	elem *rawType
+	elem      *rawType
+	numMethod uint16
 }
 
 type arrayType struct {
@@ -428,10 +432,11 @@ type mapType struct {
 
 type namedType struct {
 	rawType
-	ptrTo *rawType
-	elem  *rawType
-	pkg   *byte
-	name  [1]byte
+	ptrTo     *rawType
+	elem      *rawType
+	numMethod uint16
+	pkg       *byte
+	name      [1]byte
 }
 
 // Type for struct types. The numField value is intentionally put before ptrTo
@@ -443,10 +448,11 @@ type namedType struct {
 // checker.
 type structType struct {
 	rawType
-	numField uint16
-	ptrTo    *rawType
-	pkgpath  *byte
-	fields   [1]structField // the remaining fields are all of type structField
+	numField  uint16
+	numMethod uint16
+	ptrTo     *rawType
+	pkgpath   *byte
+	fields    [1]structField // the remaining fields are all of type structField
 }
 
 type structField struct {
@@ -992,7 +998,20 @@ func (t *rawType) NumOut() int {
 }
 
 func (t *rawType) NumMethod() int {
-	panic("unimplemented: (reflect.Type).NumMethod()")
+
+	if t.isNamed() {
+		return int((*namedType)(unsafe.Pointer(t)).numMethod)
+	}
+
+	switch t.Kind() {
+	case Pointer:
+		return int((*ptrType)(unsafe.Pointer(t)).numMethod)
+	case Struct:
+		return int((*structType)(unsafe.Pointer(t)).numMethod)
+	}
+
+	// Other types have no methods attached.  Note we don't panic here.
+	return 0
 }
 
 // Read and return a null terminated string starting from data.
