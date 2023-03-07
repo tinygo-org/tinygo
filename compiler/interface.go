@@ -134,6 +134,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "underlying", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "name", types.NewArray(types.Typ[types.Int8], 1+int64(len(typ.Obj().Name())))),
 			)
@@ -145,6 +146,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Pointer:
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "elementType", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
 			)
 		case *types.Array:
 			typeFieldTypes = append(typeFieldTypes,
@@ -161,6 +163,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Struct:
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "numFields", types.Typ[types.Uint16]),
+				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "fields", types.NewArray(c.getRuntimeType("structField"), int64(typ.NumFields()))),
@@ -201,8 +204,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 			pkgPathPtr := c.pkgPathPtr(pkgpath)
 			typeFields = []llvm.Value{
-				c.getTypeCode(types.NewPointer(typ)),  // ptrTo
-				c.getTypeCode(typ.Underlying()),       // underlying
+				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
+				c.getTypeCode(typ.Underlying()),                           // underlying
+				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false), // numMethods
 				pkgPathPtr,                            // pkgpath pointer
 				c.ctx.ConstString(name+"\x00", false), // name
 			}
@@ -218,7 +222,10 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeCode(typ.Elem()),            // elementType
 			}
 		case *types.Pointer:
-			typeFields = []llvm.Value{c.getTypeCode(typ.Elem())}
+			typeFields = []llvm.Value{
+				c.getTypeCode(typ.Elem()),
+				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false), // numMethods
+			}
 		case *types.Array:
 			typeFields = []llvm.Value{
 				c.getTypeCode(types.NewPointer(typ)),                   // ptrTo
@@ -242,6 +249,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(typ.NumFields()), false), // numFields
+				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false),        // numMethods
 				c.getTypeCode(types.NewPointer(typ)),                             // ptrTo
 				pkgPathPtr,
 			}
