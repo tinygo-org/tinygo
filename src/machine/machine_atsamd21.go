@@ -11,6 +11,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"encoding/binary"
+	"errors"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -1845,7 +1846,10 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 
 		waitWhileFlashBusy()
 
-		// TODO: check for error
+		if err := checkFlashError(); err != nil {
+			return j, err
+		}
+
 		address += uintptr(f.WriteBlockSize())
 	}
 
@@ -1866,7 +1870,7 @@ func (f flashBlockDevice) WriteBlockSize() int64 {
 	return writeBlockSize
 }
 
-const eraseBlockSizeValue = 64
+const eraseBlockSizeValue = 256
 
 func eraseBlockSize() int64 {
 	return eraseBlockSizeValue
@@ -1893,6 +1897,11 @@ func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 		sam.NVMCTRL.CTRLA.Set(sam.NVMCTRL_CTRLA_CMD_ER | (sam.NVMCTRL_CTRLA_CMDEX_KEY << sam.NVMCTRL_CTRLA_CMDEX_Pos))
 
 		waitWhileFlashBusy()
+
+		if err := checkFlashError(); err != nil {
+			return err
+		}
+
 		address += uintptr(f.EraseBlockSize())
 	}
 
@@ -1926,4 +1935,23 @@ func (f flashBlockDevice) ensureInitComplete() {
 func waitWhileFlashBusy() {
 	for sam.NVMCTRL.GetINTFLAG_READY() != sam.NVMCTRL_INTFLAG_READY {
 	}
+}
+
+var (
+	errFlashPROGE = errors.New("errFlashPROGE")
+	errFlashLOCKE = errors.New("errFlashLOCKE")
+	errFlashNVME  = errors.New("errFlashNVME")
+)
+
+func checkFlashError() error {
+	switch {
+	case sam.NVMCTRL.GetSTATUS_PROGE() != 0:
+		return errFlashPROGE
+	case sam.NVMCTRL.GetSTATUS_LOCKE() != 0:
+		return errFlashLOCKE
+	case sam.NVMCTRL.GetSTATUS_NVME() != 0:
+		return errFlashNVME
+	}
+
+	return nil
 }
