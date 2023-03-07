@@ -1180,6 +1180,11 @@ func Copy(dst, src Value) int {
 		panic("Copy: type mismatch: " + dst.typecode.String() + "/" + src.typecode.String())
 	}
 
+	// Can read from an unaddressable array but not write to one.
+	if dst.typecode.Kind() == Array && !dst.isIndirect() {
+		panic("reflect.Copy: unaddressable array value")
+	}
+
 	dstbuf, dstlen := buflen(dst)
 	srcbuf, srclen := buflen(src)
 
@@ -1197,10 +1202,10 @@ func buflen(v Value) (unsafe.Pointer, uintptr) {
 	case Array:
 		if v.isIndirect() {
 			buf = v.value
-			len = uintptr(v.Len())
 		} else {
-			panic("reflect.Copy: unaddressable array value")
+			buf = unsafe.Pointer(&v.value)
 		}
+		len = uintptr(v.Len())
 	case String:
 		hdr := (*stringHeader)(v.value)
 		buf = hdr.data
