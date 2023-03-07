@@ -502,7 +502,13 @@ func pointerTo(t *rawType) *rawType {
 
 func (t *rawType) String() string {
 	if t.isNamed() {
-		return t.PkgPath() + "." + t.Name()
+		path := t.PkgPath()
+		slash := len(path) - 1
+		for slash >= 0 && path[slash] != '/' {
+			slash--
+		}
+		shortened := path[slash+1:]
+		return shortened + "." + t.Name()
 	}
 
 	switch t.Kind() {
