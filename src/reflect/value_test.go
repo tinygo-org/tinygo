@@ -1,6 +1,7 @@
 package reflect_test
 
 import (
+	"encoding/base64"
 	. "reflect"
 	"sort"
 	"testing"
@@ -264,6 +265,11 @@ func TestNamedTypes(t *testing.T) {
 	if got, want := ValueOf(m).String(), "<map[[4]uint16]string Value>"; got != want {
 		t.Errorf("Value.String()=%v, want %v", got, want)
 	}
+
+	if got, want := TypeOf(base64.Encoding{}).String(), "base64.Encoding"; got != want {
+		t.Errorf("Type.String(base64.Encoding{})=%v, want %v", got, want)
+	}
+
 }
 
 func TestStruct(t *testing.T) {
