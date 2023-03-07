@@ -850,10 +850,8 @@ func (v Value) MapRange() *MapIter {
 	}
 
 	return &MapIter{
-		m:   v,
-		it:  hashmapNewIterator(),
-		key: New(v.typecode.Key()),
-		val: New(v.typecode.Elem()),
+		m:  v,
+		it: hashmapNewIterator(),
 	}
 }
 
@@ -883,6 +881,9 @@ func (it *MapIter) Value() Value {
 }
 
 func (it *MapIter) Next() bool {
+	it.key = New(it.m.typecode.Key())
+	it.val = New(it.m.typecode.Elem())
+
 	it.valid = hashmapNext(it.m.pointer(), it.it, it.key.value, it.val.value)
 	return it.valid
 }
