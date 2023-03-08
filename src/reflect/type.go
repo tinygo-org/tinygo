@@ -39,6 +39,7 @@
 //     meta         uint8
 //     numField     uint16
 //     ptrTo        *typeStruct
+//     pkgpath      *byte
 //     fields       [...]structField // the remaining fields are all of type structField
 // - interface types (this is missing the interface methods):
 //     meta         uint8
@@ -444,6 +445,7 @@ type structType struct {
 	rawType
 	numField uint16
 	ptrTo    *rawType
+	pkgpath  *byte
 	fields   [1]structField // the remaining fields are all of type structField
 }
 
@@ -576,7 +578,7 @@ func (t *rawType) Field(i int) StructField {
 	}
 }
 
-func rawStructFieldFromPointer(fieldType *rawType, data unsafe.Pointer, flagsByte uint8, name string, offset uintptr) rawStructField {
+func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data unsafe.Pointer, flagsByte uint8, name string, offset uintptr) rawStructField {
 	// Read the field tag, if there is one.
 	var tag string
 	if flagsByte&structFieldFlagHasTag != 0 {
@@ -594,7 +596,7 @@ func rawStructFieldFromPointer(fieldType *rawType, data unsafe.Pointer, flagsByt
 	pkgPath := ""
 	if flagsByte&structFieldFlagIsExported == 0 {
 		// This field is unexported.
-		pkgPath = fieldType.PkgPath()
+		pkgPath = readStringZ(unsafe.Pointer(descriptor.pkgpath))
 	}
 
 	return rawStructField{
@@ -646,7 +648,7 @@ func (t *rawType) rawField(n int) rawStructField {
 	name := readStringZ(data)
 	data = unsafe.Add(data, len(name))
 
-	return rawStructFieldFromPointer(field.fieldType, data, flagsByte, name, offset)
+	return rawStructFieldFromPointer(descriptor, field.fieldType, data, flagsByte, name, offset)
 }
 
 // rawFieldByName returns nearly the same value as FieldByName but without converting the
@@ -696,7 +698,7 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 				data = unsafe.Add(data, len(name))
 				if name == n {
 					found = append(found, result{
-						rawStructFieldFromPointer(field.fieldType, data, flagsByte, name, offset),
+						rawStructFieldFromPointer(descriptor, field.fieldType, data, flagsByte, name, offset),
 						append(ll.index, int(i)),
 					})
 				}

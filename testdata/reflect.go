@@ -481,6 +481,7 @@ func showValue(rv reflect.Value, indent string) {
 		for i := 0; i < rv.NumField(); i++ {
 			field := rt.Field(i)
 			println(indent+"  field:", i, field.Name)
+			println(indent+"  pkg:", field.PkgPath)
 			println(indent+"  tag:", strconv.Quote(string(field.Tag)))
 			println(indent+"  embedded:", field.Anonymous)
 			println(indent+"  exported:", field.IsExported())
