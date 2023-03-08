@@ -378,6 +378,42 @@ func TestSetBytes(t *testing.T) {
 	}
 }
 
+type methodStruct struct {
+	i int
+}
+
+func (m methodStruct) valueMethod1() int {
+	return m.i
+}
+
+func (m methodStruct) valueMethod2() int {
+	return m.i
+}
+
+func (m *methodStruct) pointerMethod1() int {
+	return m.i
+}
+
+func (m *methodStruct) pointerMethod2() int {
+	return m.i
+}
+
+func (m *methodStruct) pointerMethod3() int {
+	return m.i
+}
+
+func TestNumMethods(t *testing.T) {
+	refptrt := TypeOf(&methodStruct{})
+	if got, want := refptrt.NumMethod(), 2+3; got != want {
+		t.Errorf("Pointer Methods=%v, want %v", got, want)
+	}
+
+	reft := refptrt.Elem()
+	if got, want := reft.NumMethod(), 2; got != want {
+		t.Errorf("Value Methods=%v, want %v", got, want)
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
