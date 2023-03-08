@@ -84,6 +84,27 @@ func (b *builder) extractValueFromInterface(itf llvm.Value, llvmType llvm.Type) 
 	return b.emitPointerUnpack(valuePtr, []llvm.Type{llvmType})[0]
 }
 
+func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
+	pkgpathName := "reflect/types.type.pkgpath.empty"
+	if pkgpath != "" {
+		pkgpathName = "reflect/types.type.pkgpath:" + pkgpath
+	}
+
+	pkgpathInitializer := c.ctx.ConstString(pkgpath+"\x00", false)
+	pkgpathGlobal := llvm.AddGlobal(c.mod, pkgpathInitializer.Type(), pkgpathName)
+	pkgpathGlobal.SetInitializer(pkgpathInitializer)
+	pkgpathGlobal.SetAlignment(1)
+	pkgpathGlobal.SetUnnamedAddr(true)
+	pkgpathGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
+	pkgpathGlobal.SetGlobalConstant(true)
+	pkgPathPtr := llvm.ConstGEP(pkgpathGlobal.GlobalValueType(), pkgpathGlobal, []llvm.Value{
+		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+	})
+
+	return pkgPathPtr
+}
+
 // getTypeCode returns a reference to a type code.
 // A type code is a pointer to a constant global that describes the type.
 // This function returns a pointer to the 'kind' field (which might not be the
@@ -141,6 +162,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "numFields", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "fields", types.NewArray(c.getRuntimeType("structField"), int64(typ.NumFields()))),
 			)
 		case *types.Interface:
@@ -173,31 +195,15 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			typeFields = []llvm.Value{c.getTypeCode(types.NewPointer(typ))}
 		case *types.Named:
 			name := typ.Obj().Name()
-
-			pkg := typ.Obj().Pkg()
 			var pkgpath string
-			pkgpathName := "reflect/types.type.pkgpath.empty"
-			if pkg != nil {
+			if pkg := typ.Obj().Pkg(); pkg != nil {
 				pkgpath = pkg.Path()
-				pkgpathName = "reflect/types.type.pkgpath:" + pkgpath
 			}
-
-			pkgpathInitializer := c.ctx.ConstString(pkgpath+"\x00", false)
-			pkgpathGlobal := llvm.AddGlobal(c.mod, pkgpathInitializer.Type(), pkgpathName)
-			pkgpathGlobal.SetInitializer(pkgpathInitializer)
-			pkgpathGlobal.SetAlignment(1)
-			pkgpathGlobal.SetUnnamedAddr(true)
-			pkgpathGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
-			pkgpathGlobal.SetGlobalConstant(true)
-			pkgpathPtr := llvm.ConstGEP(pkgpathGlobal.GlobalValueType(), pkgpathGlobal, []llvm.Value{
-				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-			})
-
+			pkgPathPtr := c.pkgPathPtr(pkgpath)
 			typeFields = []llvm.Value{
 				c.getTypeCode(types.NewPointer(typ)),  // ptrTo
 				c.getTypeCode(typ.Underlying()),       // underlying
-				pkgpathPtr,                            // pkgpath pointer
+				pkgPathPtr,                            // pkgpath pointer
 				c.ctx.ConstString(name+"\x00", false), // name
 			}
 			metabyte |= 1 << 5 // "named" flag
@@ -226,9 +232,18 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeCode(typ.Key()),             // key
 			}
 		case *types.Struct:
+			var pkgpath string
+			if typ.NumFields() > 0 {
+				if pkg := typ.Field(0).Pkg(); pkg != nil {
+					pkgpath = pkg.Path()
+				}
+			}
+			pkgPathPtr := c.pkgPathPtr(pkgpath)
+
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(typ.NumFields()), false), // numFields
 				c.getTypeCode(types.NewPointer(typ)),                             // ptrTo
+				pkgPathPtr,
 			}
 			structFieldType := c.getLLVMRuntimeType("structField")
 			var fields []llvm.Value
