@@ -1,6 +1,13 @@
 {
-	"inherits": ["cortex-m4"],
-	"build-tags": ["sam", "atsamd51", "atsamd51j20", "atsamd51j20a"],
+	"inherits": [
+		"cortex-m4"
+	],
+	"build-tags": [
+		"sam",
+		"atsamd51",
+		"atsamd51j20",
+		"atsamd51j20a"
+	],
 	"linkerscript": "targets/atsamd51j20a.ld",
 	"extra-files": [
 		"src/device/sam/atsamd51j20a.s"

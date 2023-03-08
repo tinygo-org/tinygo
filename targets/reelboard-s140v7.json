@@ -1,4 +1,7 @@
 {
-	"inherits": ["reelboard", "nrf52840-s140v7"],
+	"inherits": [
+		"reelboard",
+		"nrf52840-s140v7"
+	],
 	"flash-method": "openocd"
 }

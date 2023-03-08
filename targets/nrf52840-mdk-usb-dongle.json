@@ -1,5 +1,10 @@
 {
-    "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
-    "build-tags": ["nrf52840_mdk_usb_dongle"],
-    "msd-volume-name": "MDK-DONGLE"
+	"inherits": [
+		"nrf52840",
+		"nrf52840-s140v6-uf2"
+	],
+	"build-tags": [
+		"nrf52840_mdk_usb_dongle"
+	],
+	"msd-volume-name": "MDK-DONGLE"
 }

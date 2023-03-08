@@ -1,4 +1,7 @@
 {
-	"build-tags": ["softdevice", "s110v8"],
+	"build-tags": [
+		"softdevice",
+		"s110v8"
+	],
 	"linkerscript": "targets/nrf51-s110v8.ld"
 }

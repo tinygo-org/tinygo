@@ -1,5 +1,10 @@
 {
-    "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
-    "build-tags": ["nicenano"],
-    "msd-volume-name": "NICENANO"
+	"inherits": [
+		"nrf52840",
+		"nrf52840-s140v6-uf2"
+	],
+	"build-tags": [
+		"nicenano"
+	],
+	"msd-volume-name": "NICENANO"
 }

@@ -1,11 +1,15 @@
 {
-    "inherits": [
-        "rp2040"
-    ],
-    "serial-port": ["2341:005e"],
-    "build-tags": ["nano_rp2040"],
-    "linkerscript": "targets/pico.ld",
-    "extra-files": [
-        "targets/pico-boot-stage2.S"
-    ]
+	"inherits": [
+		"rp2040"
+	],
+	"serial-port": [
+		"2341:005e"
+	],
+	"build-tags": [
+		"nano_rp2040"
+	],
+	"linkerscript": "targets/pico.ld",
+	"extra-files": [
+		"targets/pico-boot-stage2.S"
+	]
 }

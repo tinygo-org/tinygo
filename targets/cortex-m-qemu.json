@@ -1,8 +1,13 @@
 {
-	"inherits": ["cortex-m3"],
-	"build-tags": ["qemu", "lm3s6965"],
+	"inherits": [
+		"cortex-m3"
+	],
+	"build-tags": [
+		"qemu",
+		"lm3s6965"
+	],
 	"linkerscript": "targets/lm3s6965.ld",
-        "default-stack-size": 4096,
+	"default-stack-size": 4096,
 	"extra-files": [
 		"targets/cortex-m-qemu.s"
 	],

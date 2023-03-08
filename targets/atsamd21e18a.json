@@ -1,6 +1,13 @@
 {
-	"inherits": ["cortex-m0plus"],
-	"build-tags": ["atsamd21e18a", "atsamd21e18", "atsamd21", "sam"],
+	"inherits": [
+		"cortex-m0plus"
+	],
+	"build-tags": [
+		"atsamd21e18a",
+		"atsamd21e18",
+		"atsamd21",
+		"sam"
+	],
 	"serial": "usb",
 	"linkerscript": "targets/atsamd21.ld",
 	"extra-files": [

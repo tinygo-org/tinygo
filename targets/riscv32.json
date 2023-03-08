@@ -1,8 +1,12 @@
 {
-	"inherits": ["riscv"],
+	"inherits": [
+		"riscv"
+	],
 	"llvm-target": "riscv32-unknown-none",
 	"target-abi": "ilp32",
-	"build-tags": ["tinygo.riscv32"],
+	"build-tags": [
+		"tinygo.riscv32"
+	],
 	"scheduler": "tasks",
 	"default-stack-size": 2048,
 	"cflags": [
@@ -11,5 +15,7 @@
 	"ldflags": [
 		"-melf32lriscv"
 	],
-	"gdb": ["gdb-multiarch"]
+	"gdb": [
+		"gdb-multiarch"
+	]
 }

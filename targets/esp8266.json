@@ -1,8 +1,13 @@
 {
-	"inherits": ["xtensa"],
+	"inherits": [
+		"xtensa"
+	],
 	"cpu": "esp8266",
 	"features": "+debug,+density,+exception,+extendedl32r,+highpriinterrupts,+interrupt,+mul32,+nsa,+prid,+regprotect,+rvector,+timerint",
-	"build-tags": ["esp8266", "esp"],
+	"build-tags": [
+		"esp8266",
+		"esp"
+	],
 	"scheduler": "tasks",
 	"linker": "ld.lld",
 	"default-stack-size": 2048,

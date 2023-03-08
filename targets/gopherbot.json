@@ -1,3 +1,5 @@
 {
-	"inherits": ["circuitplay-express"]
+	"inherits": [
+		"circuitplay-express"
+	]
 }

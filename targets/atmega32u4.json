@@ -1,7 +1,12 @@
 {
-	"inherits": ["avr"],
+	"inherits": [
+		"avr"
+	],
 	"cpu": "atmega32u4",
-	"build-tags": ["atmega32u4", "avr5"],
+	"build-tags": [
+		"atmega32u4",
+		"avr5"
+	],
 	"serial": "none",
 	"linkerscript": "src/device/avr/atmega32u4.ld",
 	"extra-files": [

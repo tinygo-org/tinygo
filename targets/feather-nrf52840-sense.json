@@ -1,6 +1,14 @@
 {
-    "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
-    "build-tags": ["feather_nrf52840_sense"],
-    "serial-port": ["239a:8087", "239a:8088"],
-    "msd-volume-name": "FTHRSNSBOOT"
+	"inherits": [
+		"nrf52840",
+		"nrf52840-s140v6-uf2"
+	],
+	"build-tags": [
+		"feather_nrf52840_sense"
+	],
+	"serial-port": [
+		"239a:8087",
+		"239a:8088"
+	],
+	"msd-volume-name": "FTHRSNSBOOT"
 }

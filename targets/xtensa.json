@@ -2,15 +2,23 @@
 	"llvm-target": "xtensa",
 	"goos": "linux",
 	"goarch": "arm",
-	"build-tags": ["xtensa", "baremetal", "linux", "arm"],
+	"build-tags": [
+		"xtensa",
+		"baremetal",
+		"linux",
+		"arm"
+	],
 	"gc": "conservative",
 	"scheduler": "none",
 	"cflags": [
 		"-Werror",
 		"-fshort-enums",
 		"-Wno-macro-redefined",
-		"-fno-exceptions", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
-		"-ffunction-sections", "-fdata-sections"
+		"-fno-exceptions",
+		"-fno-unwind-tables",
+		"-fno-asynchronous-unwind-tables",
+		"-ffunction-sections",
+		"-fdata-sections"
 	],
 	"ldflags": [
 		"--gc-sections"

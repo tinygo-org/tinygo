@@ -1,4 +1,6 @@
 {
-	"inherits": ["arduino-nano"],
+	"inherits": [
+		"arduino-nano"
+	],
 	"flash-command": "avrdude -c arduino -p atmega328p -b 115200 -P {port} -U flash:w:{hex}:i"
 }

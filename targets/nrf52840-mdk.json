@@ -1,6 +1,10 @@
 {
-	"inherits": ["nrf52840"],
-	"build-tags": ["nrf52840_mdk"],
+	"inherits": [
+		"nrf52840"
+	],
+	"build-tags": [
+		"nrf52840_mdk"
+	],
 	"serial": "usb",
 	"flash-method": "openocd",
 	"openocd-interface": "cmsis-dap"

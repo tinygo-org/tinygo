@@ -1,10 +1,16 @@
 {
-    "inherits": ["atsamd51g19a"],
-    "build-tags": ["itsybitsy_m4"],
-    "serial": "usb",
-    "flash-1200-bps-reset": "true",
-    "flash-method": "msd",
-    "serial-port": ["239a:802b"],
-    "msd-volume-name": "ITSYM4BOOT",
-    "msd-firmware-name": "firmware.uf2"
+	"inherits": [
+		"atsamd51g19a"
+	],
+	"build-tags": [
+		"itsybitsy_m4"
+	],
+	"serial": "usb",
+	"flash-1200-bps-reset": "true",
+	"flash-method": "msd",
+	"serial-port": [
+		"239a:802b"
+	],
+	"msd-volume-name": "ITSYM4BOOT",
+	"msd-firmware-name": "firmware.uf2"
 }

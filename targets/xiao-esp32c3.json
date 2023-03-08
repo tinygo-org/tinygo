@@ -1,4 +1,8 @@
 {
-	"inherits": ["esp32c3"],
-	"build-tags": ["xiao_esp32c3"]
+	"inherits": [
+		"esp32c3"
+	],
+	"build-tags": [
+		"xiao_esp32c3"
+	]
 }

@@ -1,35 +1,43 @@
 {
-  "llvm-target": "aarch64",
-  "cpu": "cortex-a57",
-  "features": "+aes,+crc,+crypto,+fp-armv8,+neon,+sha2,+v8a",
-  "build-tags": ["nintendoswitch", "arm64"],
-  "scheduler": "tasks",
-  "goos": "linux",
-  "goarch": "arm64",
-  "linker": "ld.lld",
-  "rtlib": "compiler-rt",
-  "libc": "picolibc",
-  "gc": "conservative",
-  "relocation-model": "pic",
-  "default-stack-size": 2048,
-  "cflags": [
-    "-target", "aarch64-unknown-none",
-    "-fPIE",
-    "-Werror",
-    "-fshort-enums",
-    "-fomit-frame-pointer",
-    "-fno-exceptions", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
-    "-ffunction-sections", "-fdata-sections"
-  ],
-  "ldflags": [
-    "-pie",
-    "-z", "notext"
-  ],
-  "linkerscript": "targets/nintendoswitch.ld",
-  "extra-files": [
-    "targets/nintendoswitch.s",
-    "src/internal/task/task_stack_arm64.S",
-    "src/runtime/asm_arm64.S",
-    "src/runtime/runtime_nintendoswitch.S"
-  ]
+	"llvm-target": "aarch64",
+	"cpu": "cortex-a57",
+	"features": "+aes,+crc,+crypto,+fp-armv8,+neon,+sha2,+v8a",
+	"build-tags": [
+		"nintendoswitch",
+		"arm64"
+	],
+	"scheduler": "tasks",
+	"goos": "linux",
+	"goarch": "arm64",
+	"linker": "ld.lld",
+	"rtlib": "compiler-rt",
+	"libc": "picolibc",
+	"gc": "conservative",
+	"relocation-model": "pic",
+	"default-stack-size": 2048,
+	"cflags": [
+		"-target",
+		"aarch64-unknown-none",
+		"-fPIE",
+		"-Werror",
+		"-fshort-enums",
+		"-fomit-frame-pointer",
+		"-fno-exceptions",
+		"-fno-unwind-tables",
+		"-fno-asynchronous-unwind-tables",
+		"-ffunction-sections",
+		"-fdata-sections"
+	],
+	"ldflags": [
+		"-pie",
+		"-z",
+		"notext"
+	],
+	"linkerscript": "targets/nintendoswitch.ld",
+	"extra-files": [
+		"targets/nintendoswitch.s",
+		"src/internal/task/task_stack_arm64.S",
+		"src/runtime/asm_arm64.S",
+		"src/runtime/runtime_nintendoswitch.S"
+	]
 }

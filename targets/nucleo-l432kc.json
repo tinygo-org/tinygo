@@ -1,12 +1,20 @@
 {
-    "inherits": ["cortex-m4"],
-    "build-tags": ["nucleol432kc", "stm32l432", "stm32l4x2", "stm32l4", "stm32"],
-    "serial": "uart",
-    "linkerscript": "targets/stm32l4x2.ld",
-    "extra-files": [
-      "src/device/stm32/stm32l4x2.s"
-    ],
-    "flash-method": "openocd",
-    "openocd-interface": "stlink-v2-1",
-    "openocd-target": "stm32l4x"
-  }
+	"inherits": [
+		"cortex-m4"
+	],
+	"build-tags": [
+		"nucleol432kc",
+		"stm32l432",
+		"stm32l4x2",
+		"stm32l4",
+		"stm32"
+	],
+	"serial": "uart",
+	"linkerscript": "targets/stm32l4x2.ld",
+	"extra-files": [
+		"src/device/stm32/stm32l4x2.s"
+	],
+	"flash-method": "openocd",
+	"openocd-interface": "stlink-v2-1",
+	"openocd-target": "stm32l4x"
+}

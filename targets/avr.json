@@ -1,6 +1,11 @@
 {
 	"llvm-target": "avr",
-	"build-tags": ["avr", "baremetal", "linux", "arm"],
+	"build-tags": [
+		"avr",
+		"baremetal",
+		"linux",
+		"arm"
+	],
 	"goos": "linux",
 	"goarch": "arm",
 	"gc": "conservative",
@@ -13,12 +18,15 @@
 		"-Werror"
 	],
 	"ldflags": [
-		"-T", "targets/avr.ld",
+		"-T",
+		"targets/avr.ld",
 		"--gc-sections"
 	],
 	"extra-files": [
 		"src/internal/task/task_stack_avr.S",
 		"src/runtime/asm_avr.S"
 	],
-	"gdb": ["avr-gdb"]
+	"gdb": [
+		"avr-gdb"
+	]
 }

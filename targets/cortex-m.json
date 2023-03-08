@@ -1,5 +1,10 @@
 {
-	"build-tags": ["cortexm", "baremetal", "linux", "arm"],
+	"build-tags": [
+		"cortexm",
+		"baremetal",
+		"linux",
+		"arm"
+	],
 	"goos": "linux",
 	"goarch": "arm",
 	"gc": "conservative",
@@ -14,8 +19,11 @@
 		"-fshort-enums",
 		"-fomit-frame-pointer",
 		"-mfloat-abi=soft",
-		"-fno-exceptions", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
-		"-ffunction-sections", "-fdata-sections"
+		"-fno-exceptions",
+		"-fno-unwind-tables",
+		"-fno-asynchronous-unwind-tables",
+		"-ffunction-sections",
+		"-fdata-sections"
 	],
 	"ldflags": [
 		"--emit-relocs",
@@ -26,5 +34,8 @@
 		"src/internal/task/task_stack_cortexm.S",
 		"src/runtime/asm_arm.S"
 	],
-	"gdb": ["gdb-multiarch", "arm-none-eabi-gdb"]
+	"gdb": [
+		"gdb-multiarch",
+		"arm-none-eabi-gdb"
+	]
 }

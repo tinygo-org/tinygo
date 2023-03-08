@@ -1,11 +1,17 @@
 {
-    "inherits": ["atsamd51p20a"],
-    "build-tags": ["grandcentral_m4"],
-    "serial": "usb",
-    "serial-port": ["239a:8031"],
-    "flash-1200-bps-reset": "true",
-    "flash-method": "msd",
-    "msd-volume-name": "GCM4BOOT",
-    "msd-firmware-name": "firmware.uf2",
-    "openocd-interface": "jlink"
+	"inherits": [
+		"atsamd51p20a"
+	],
+	"build-tags": [
+		"grandcentral_m4"
+	],
+	"serial": "usb",
+	"serial-port": [
+		"239a:8031"
+	],
+	"flash-1200-bps-reset": "true",
+	"flash-method": "msd",
+	"msd-volume-name": "GCM4BOOT",
+	"msd-firmware-name": "firmware.uf2",
+	"openocd-interface": "jlink"
 }

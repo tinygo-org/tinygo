@@ -1,15 +1,22 @@
 {
-  "inherits": ["cortex-m4"],
-  "build-tags": ["feather_stm32f405", "stm32f405", "stm32f4", "stm32"],
-  "serial": "uart",
-  "automatic-stack-size": false,
-  "linkerscript": "targets/stm32f405.ld",
-  "extra-files": [
-    "src/device/stm32/stm32f405.s"
-  ],
-  "flash-method": "command",
-  "flash-command": "dfu-util --alt 0 --dfuse-address 0x08000000 --download {bin}",
-  "openocd-transport": "swd",
-  "openocd-interface": "jlink",
-  "openocd-target": "stm32f4x"
+	"inherits": [
+		"cortex-m4"
+	],
+	"build-tags": [
+		"feather_stm32f405",
+		"stm32f405",
+		"stm32f4",
+		"stm32"
+	],
+	"serial": "uart",
+	"automatic-stack-size": false,
+	"linkerscript": "targets/stm32f405.ld",
+	"extra-files": [
+		"src/device/stm32/stm32f405.s"
+	],
+	"flash-method": "command",
+	"flash-command": "dfu-util --alt 0 --dfuse-address 0x08000000 --download {bin}",
+	"openocd-transport": "swd",
+	"openocd-interface": "jlink",
+	"openocd-target": "stm32f4x"
 }

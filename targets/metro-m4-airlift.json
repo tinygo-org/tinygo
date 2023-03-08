@@ -1,10 +1,16 @@
 {
-    "inherits": ["atsamd51j19a"],
-    "build-tags": ["metro_m4_airlift"],
-    "serial": "usb",
-    "serial-port": ["239A:8037"],
-    "flash-1200-bps-reset": "true",
-    "flash-method": "msd",
-    "msd-volume-name": "METROM4BOOT",
-    "msd-firmware-name": "firmware.uf2"
+	"inherits": [
+		"atsamd51j19a"
+	],
+	"build-tags": [
+		"metro_m4_airlift"
+	],
+	"serial": "usb",
+	"serial-port": [
+		"239A:8037"
+	],
+	"flash-1200-bps-reset": "true",
+	"flash-method": "msd",
+	"msd-volume-name": "METROM4BOOT",
+	"msd-firmware-name": "firmware.uf2"
 }

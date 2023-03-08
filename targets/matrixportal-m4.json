@@ -1,13 +1,20 @@
 {
-    "inherits": ["atsamd51j19a"],
-    "build-tags": ["matrixportal_m4"],
-    "serial": "usb",
-    "serial-port": ["239a:80c9", "239a:80ca"],
-    "flash-1200-bps-reset": "true",
-    "flash-method": "msd",
-    "msd-volume-name": "MATRIXBOOT",
-    "msd-firmware-name": "firmware.uf2",
-    "openocd-transport": "swd",
-    "openocd-interface": "jlink",
-    "openocd-target": "atsame5x"
+	"inherits": [
+		"atsamd51j19a"
+	],
+	"build-tags": [
+		"matrixportal_m4"
+	],
+	"serial": "usb",
+	"serial-port": [
+		"239a:80c9",
+		"239a:80ca"
+	],
+	"flash-1200-bps-reset": "true",
+	"flash-method": "msd",
+	"msd-volume-name": "MATRIXBOOT",
+	"msd-firmware-name": "firmware.uf2",
+	"openocd-transport": "swd",
+	"openocd-interface": "jlink",
+	"openocd-target": "atsame5x"
 }

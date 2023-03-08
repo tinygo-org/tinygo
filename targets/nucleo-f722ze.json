@@ -1,12 +1,19 @@
 {
-  "inherits": ["cortex-m7"],
-  "build-tags": ["nucleof722ze", "stm32f7x2", "stm32f7", "stm32"],
-  "serial": "uart",
-  "linkerscript": "targets/stm32f7x2zetx.ld",
-  "extra-files": [
-    "src/device/stm32/stm32f7x2.s"
-  ],
-  "flash-method": "openocd",
-  "openocd-interface": "stlink-v2-1",
-  "openocd-target": "stm32f7x"
+	"inherits": [
+		"cortex-m7"
+	],
+	"build-tags": [
+		"nucleof722ze",
+		"stm32f7x2",
+		"stm32f7",
+		"stm32"
+	],
+	"serial": "uart",
+	"linkerscript": "targets/stm32f7x2zetx.ld",
+	"extra-files": [
+		"src/device/stm32/stm32f7x2.s"
+	],
+	"flash-method": "openocd",
+	"openocd-interface": "stlink-v2-1",
+	"openocd-target": "stm32f7x"
 }

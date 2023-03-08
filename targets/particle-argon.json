@@ -1,4 +1,8 @@
 {
-	"inherits": ["particle-3rd-gen"],
-	"build-tags": ["particle_argon"]
+	"inherits": [
+		"particle-3rd-gen"
+	],
+	"build-tags": [
+		"particle_argon"
+	]
 }

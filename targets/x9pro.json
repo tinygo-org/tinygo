@@ -1,6 +1,10 @@
 {
-	"inherits": ["nrf52"],
-	"build-tags": ["x9pro"],
+	"inherits": [
+		"nrf52"
+	],
+	"build-tags": [
+		"x9pro"
+	],
 	"serial": "uart",
 	"flash-method": "openocd",
 	"flash-command": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",

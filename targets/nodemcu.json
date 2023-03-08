@@ -1,5 +1,9 @@
 {
-	"inherits": ["esp8266"],
-	"build-tags": ["nodemcu"],
+	"inherits": [
+		"esp8266"
+	],
+	"build-tags": [
+		"nodemcu"
+	],
 	"serial": "uart"
 }

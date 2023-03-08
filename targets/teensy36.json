@@ -1,6 +1,13 @@
 {
-	"inherits": ["cortex-m4"],
-	"build-tags": ["teensy36", "teensy", "mk66f18", "nxp"],
+	"inherits": [
+		"cortex-m4"
+	],
+	"build-tags": [
+		"teensy36",
+		"teensy",
+		"mk66f18",
+		"nxp"
+	],
 	"serial": "uart",
 	"linkerscript": "targets/nxpmk66f18.ld",
 	"extra-files": [
@@ -9,4 +16,3 @@
 	],
 	"flash-command": "teensy_loader_cli -mmcu=mk66fx1m0 -v -w {hex}"
 }
-

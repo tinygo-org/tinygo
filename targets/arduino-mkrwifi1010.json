@@ -1,8 +1,15 @@
 {
-    "inherits": ["atsamd21g18a"],
-    "build-tags": ["arduino_mkrwifi1010"],
-    "serial": "usb",
-    "serial-port": ["2341:8054", "2341:0054"],
-    "flash-command": "bossac -i -e -w -v -R -U --port={port} --offset=0x2000 {bin}",
-    "flash-1200-bps-reset": "true"
+	"inherits": [
+		"atsamd21g18a"
+	],
+	"build-tags": [
+		"arduino_mkrwifi1010"
+	],
+	"serial": "usb",
+	"serial-port": [
+		"2341:8054",
+		"2341:0054"
+	],
+	"flash-command": "bossac -i -e -w -v -R -U --port={port} --offset=0x2000 {bin}",
+	"flash-1200-bps-reset": "true"
 }

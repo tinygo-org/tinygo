@@ -1,4 +1,8 @@
 {
-	"inherits": ["esp32"],
-	"build-tags": ["esp32_coreboard_v2"]
+	"inherits": [
+		"esp32"
+	],
+	"build-tags": [
+		"esp32_coreboard_v2"
+	]
 }

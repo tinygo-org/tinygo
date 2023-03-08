@@ -1,12 +1,19 @@
 {
-  "inherits": ["cortex-m3"],
-  "build-tags": ["nucleof103rb", "stm32f103", "stm32f1","stm32"],
-  "serial": "uart",
-  "linkerscript": "targets/stm32f103rb.ld",
-  "extra-files": [
-    "src/device/stm32/stm32f103.s"
-  ],
-  "flash-method": "openocd",
-  "openocd-interface": "stlink-v2-1",
-  "openocd-target": "stm32f1x"
+	"inherits": [
+		"cortex-m3"
+	],
+	"build-tags": [
+		"nucleof103rb",
+		"stm32f103",
+		"stm32f1",
+		"stm32"
+	],
+	"serial": "uart",
+	"linkerscript": "targets/stm32f103rb.ld",
+	"extra-files": [
+		"src/device/stm32/stm32f103.s"
+	],
+	"flash-method": "openocd",
+	"openocd-interface": "stlink-v2-1",
+	"openocd-target": "stm32f1x"
 }

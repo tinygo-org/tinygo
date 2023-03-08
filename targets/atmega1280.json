@@ -1,14 +1,19 @@
 {
-    "inherits": ["avr"],
-    "cpu": "atmega1280",
-    "build-tags": ["atmega1280", "atmega"],
-    "serial": "uart",
-    "ldflags": [
-        "--defsym=_stack_size=512"
-    ],
-    "linkerscript": "src/device/avr/atmega1280.ld",
-    "extra-files": [
-        "targets/avr.S",
-        "src/device/avr/atmega1280.s"
-    ]
+	"inherits": [
+		"avr"
+	],
+	"cpu": "atmega1280",
+	"build-tags": [
+		"atmega1280",
+		"atmega"
+	],
+	"serial": "uart",
+	"ldflags": [
+		"--defsym=_stack_size=512"
+	],
+	"linkerscript": "src/device/avr/atmega1280.ld",
+	"extra-files": [
+		"targets/avr.S",
+		"src/device/avr/atmega1280.s"
+	]
 }

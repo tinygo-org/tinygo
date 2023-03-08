@@ -1,6 +1,11 @@
 {
-	"inherits": ["cortex-m4"],
-	"build-tags": ["nrf52", "nrf"],
+	"inherits": [
+		"cortex-m4"
+	],
+	"build-tags": [
+		"nrf52",
+		"nrf"
+	],
 	"cflags": [
 		"-DNRF52832_XXAA",
 		"-I{root}/lib/CMSIS/CMSIS/Include",

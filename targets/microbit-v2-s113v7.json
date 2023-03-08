@@ -1,3 +1,6 @@
 {
-	"inherits": ["microbit-v2", "nrf52833-s113v7"]
+	"inherits": [
+		"microbit-v2",
+		"nrf52833-s113v7"
+	]
 }

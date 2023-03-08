@@ -1,6 +1,10 @@
 {
-	"inherits": ["k210"],
-	"build-tags": ["maixbit"],
+	"inherits": [
+		"k210"
+	],
+	"build-tags": [
+		"maixbit"
+	],
 	"serial": "uart",
 	"linkerscript": "targets/maixbit.ld",
 	"flash-command": "kflash -p {port} --noansi --verbose {bin}"

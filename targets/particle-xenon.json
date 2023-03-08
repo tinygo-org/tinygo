@@ -1,4 +1,8 @@
 {
-	"inherits": ["particle-3rd-gen"],
-	"build-tags": ["particle_xenon"]
+	"inherits": [
+		"particle-3rd-gen"
+	],
+	"build-tags": [
+		"particle_xenon"
+	]
 }
