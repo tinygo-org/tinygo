@@ -594,10 +594,7 @@ func rawStructFieldFromPointer(fieldType *rawType, data unsafe.Pointer, flagsByt
 	pkgPath := ""
 	if flagsByte&structFieldFlagIsExported == 0 {
 		// This field is unexported.
-		// TODO: list the real package path here. Storing it should not
-		// significantly impact binary size as there is only a limited
-		// number of packages in any program.
-		pkgPath = "<unimplemented>"
+		pkgPath = fieldType.PkgPath()
 	}
 
 	return rawStructField{
