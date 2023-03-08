@@ -2096,8 +2096,6 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 		return 0, errFlashCannotReadPastEOF
 	}
 
-	f.ensureInitComplete()
-
 	waitWhileFlashBusy()
 
 	data := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(FlashDataStart()), uintptr(off))), len(p))
@@ -2116,10 +2114,11 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 		return 0, errFlashCannotWritePastEOF
 	}
 
-	f.ensureInitComplete()
-
 	address := FlashDataStart() + uintptr(off)
 	padded := f.pad(p)
+
+	settings := disableFlashCache()
+	defer restoreFlashCache(settings)
 
 	waitWhileFlashBusy()
 
@@ -2127,19 +2126,16 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 
 	waitWhileFlashBusy()
 
-	sam.NVMCTRL.SetADDR(uint32(address))
-
 	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
 		// write first word using double-word low order word
 		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize()/2)])
 
-		address += uintptr(f.WriteBlockSize()) / 2
-
 		// write second word using double-word high order word
-		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j+int(f.WriteBlockSize()/2) : j+int(f.WriteBlockSize())])
+		*(*uint32)(unsafe.Add(unsafe.Pointer(address), uintptr(f.WriteBlockSize())/2)) = binary.LittleEndian.Uint32(padded[j+int(f.WriteBlockSize()/2) : j+int(f.WriteBlockSize())])
 
 		waitWhileFlashBusy()
 
+		sam.NVMCTRL.SetADDR(uint32(address))
 		sam.NVMCTRL.CTRLB.Set(sam.NVMCTRL_CTRLB_CMD_WQW | (sam.NVMCTRL_CTRLB_CMDEX_KEY << sam.NVMCTRL_CTRLB_CMDEX_Pos))
 
 		waitWhileFlashBusy()
@@ -2148,7 +2144,7 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 			return j, err
 		}
 
-		address += uintptr(f.WriteBlockSize()) / 2
+		address += uintptr(f.WriteBlockSize())
 	}
 
 	return len(padded), nil
@@ -2185,9 +2181,11 @@ func (f flashBlockDevice) EraseBlockSize() int64 {
 // supports this. The start and len parameters are in block numbers, use
 // EraseBlockSize to map addresses to blocks.
 func (f flashBlockDevice) EraseBlocks(start, len int64) error {
-	f.ensureInitComplete()
-
 	address := FlashDataStart() + uintptr(start*f.EraseBlockSize())
+
+	settings := disableFlashCache()
+	defer restoreFlashCache(settings)
+
 	waitWhileFlashBusy()
 
 	for i := start; i < start+len; i++ {
@@ -2217,10 +2215,8 @@ func (f flashBlockDevice) pad(p []byte) []byte {
 	return append(p, padding...)
 }
 
-func (f flashBlockDevice) ensureInitComplete() {
-	if f.initComplete {
-		return
-	}
+func disableFlashCache() uint16 {
+	settings := sam.NVMCTRL.CTRLA.Get()
 
 	// disable caches
 	sam.NVMCTRL.SetCTRLA_CACHEDIS0(1)
@@ -2228,7 +2224,12 @@ func (f flashBlockDevice) ensureInitComplete() {
 
 	waitWhileFlashBusy()
 
-	f.initComplete = true
+	return settings
+}
+
+func restoreFlashCache(settings uint16) {
+	sam.NVMCTRL.CTRLA.Set(settings)
+	waitWhileFlashBusy()
 }
 
 func waitWhileFlashBusy() {
