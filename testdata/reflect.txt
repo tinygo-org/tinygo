@@ -233,6 +233,7 @@ reflect type: struct
 reflect type: struct
   struct: 1
   field: 0 error
+  pkg: main
   tag: ""
   embedded: true
   exported: false
@@ -242,18 +243,21 @@ reflect type: struct
 reflect type: struct
   struct: 3
   field: 0 a
+  pkg: main
   tag: ""
   embedded: false
   exported: false
   reflect type: uint8 caninterface=false
     uint: 42
   field: 1 b
+  pkg: main
   tag: ""
   embedded: false
   exported: false
   reflect type: int16 caninterface=false
     int: 321
   field: 2 c
+  pkg: main
   tag: ""
   embedded: false
   exported: false
@@ -262,36 +266,42 @@ reflect type: struct
 reflect type: struct comparable=false
   struct: 5
   field: 0 n
+  pkg: main
   tag: "foo:\"bar\""
   embedded: false
   exported: false
   reflect type: int caninterface=false
     int: 5
   field: 1 some
+  pkg: main
   tag: "some\x00tag"
   embedded: false
   exported: false
   reflect type: struct caninterface=false
     struct: 2
     field: 0 X
+    pkg: 
     tag: ""
     embedded: false
     exported: true
     reflect type: int16 caninterface=false
       int: -5
     field: 1 Y
+    pkg: 
     tag: ""
     embedded: false
     exported: true
     reflect type: int16 caninterface=false
       int: 3
   field: 2 zero
+  pkg: main
   tag: ""
   embedded: false
   exported: false
   reflect type: struct caninterface=false
     struct: 0
   field: 3 buf
+  pkg: main
   tag: ""
   embedded: false
   exported: false
@@ -306,6 +316,7 @@ reflect type: struct comparable=false
     reflect type: uint8 addrable=true caninterface=false
       uint: 111
   field: 4 Buf
+  pkg: 
   tag: ""
   embedded: false
   exported: true
@@ -322,6 +333,7 @@ reflect type: ptr
   reflect type: struct settable=true addrable=true
     struct: 2
     field: 0 next
+    pkg: main
     tag: "description:\"chain\""
     embedded: false
     exported: false
@@ -329,6 +341,7 @@ reflect type: ptr
       pointer: false struct
       nil: true
     field: 1 foo
+    pkg: main
     tag: ""
     embedded: false
     exported: false
@@ -337,12 +350,14 @@ reflect type: ptr
 reflect type: struct
   struct: 2
   field: 0 A
+  pkg: 
   tag: ""
   embedded: false
   exported: true
   reflect type: uintptr
     uint: 2
   field: 1 B
+  pkg: 
   tag: ""
   embedded: false
   exported: true
