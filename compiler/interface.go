@@ -90,13 +90,16 @@ func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
 		pkgpathName = "reflect/types.type.pkgpath:" + pkgpath
 	}
 
-	pkgpathInitializer := c.ctx.ConstString(pkgpath+"\x00", false)
-	pkgpathGlobal := llvm.AddGlobal(c.mod, pkgpathInitializer.Type(), pkgpathName)
-	pkgpathGlobal.SetInitializer(pkgpathInitializer)
-	pkgpathGlobal.SetAlignment(1)
-	pkgpathGlobal.SetUnnamedAddr(true)
-	pkgpathGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
-	pkgpathGlobal.SetGlobalConstant(true)
+	pkgpathGlobal := c.mod.NamedGlobal(pkgpathName)
+	if pkgpathGlobal.IsNil() {
+		pkgpathInitializer := c.ctx.ConstString(pkgpath+"\x00", false)
+		pkgpathGlobal = llvm.AddGlobal(c.mod, pkgpathInitializer.Type(), pkgpathName)
+		pkgpathGlobal.SetInitializer(pkgpathInitializer)
+		pkgpathGlobal.SetAlignment(1)
+		pkgpathGlobal.SetUnnamedAddr(true)
+		pkgpathGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
+		pkgpathGlobal.SetGlobalConstant(true)
+	}
 	pkgPathPtr := llvm.ConstGEP(pkgpathGlobal.GlobalValueType(), pkgpathGlobal, []llvm.Value{
 		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
