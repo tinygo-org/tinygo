@@ -20,7 +20,10 @@ var (
 )
 
 var (
-	I2C0 = sercomI2CM1
+	I2C0 = sercomI2CM0
+	I2C1 = sercomI2CM1
+	I2C2 = sercomI2CM2
+	I2C3 = sercomI2CM3
 )
 
 const (
