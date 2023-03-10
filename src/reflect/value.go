@@ -228,6 +228,10 @@ func (v Value) Addr() Value {
 	}
 }
 
+func (v Value) UnsafeAddr() uintptr {
+	return uintptr(v.Addr().UnsafePointer())
+}
+
 func (v Value) CanSet() bool {
 	return v.flags&(valueFlagExported|valueFlagIndirect) == valueFlagExported|valueFlagIndirect
 }
