@@ -235,7 +235,7 @@ type Type interface {
 	//
 	// Only exported methods are accessible and they are sorted in
 	// lexicographic order.
-	//Method(int) Method
+	Method(int) Method
 
 	// MethodByName returns the method with that name in the type's
 	// method set and a boolean indicating if the method was found.
@@ -928,6 +928,10 @@ func (t rawType) Out(i int) Type {
 	panic("unimplemented: (reflect.Type).Out()")
 }
 
+func (t rawType) Method(i int) Method {
+	panic("unimplemented: (reflect.Type).Method()")
+}
+
 func (t rawType) MethodByName(name string) (Method, bool) {
 	panic("unimplemented: (reflect.Type).MethodByName()")
 }
@@ -1062,4 +1066,8 @@ func align(offset uintptr, alignment uintptr) uintptr {
 
 func SliceOf(t Type) Type {
 	panic("unimplemented: reflect.SliceOf()")
+}
+
+func ArrayOf(n int, t Type) Type {
+	panic("unimplemented: reflect.ArrayOf()")
 }

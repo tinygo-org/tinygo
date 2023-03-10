@@ -1023,6 +1023,10 @@ func (v Value) OverflowUint(x uint64) bool {
 	panic(&ValueError{Method: "reflect.Value.OverflowUint", Kind: v.Kind()})
 }
 
+func (v Value) CanConvert(t Type) bool {
+	panic("unimplemented: (reflect.Value).CanConvert()")
+}
+
 func (v Value) Convert(t Type) Value {
 	panic("unimplemented: (reflect.Value).Convert()")
 }
@@ -1439,6 +1443,10 @@ func MakeMap(typ Type) Value {
 
 func (v Value) Call(in []Value) []Value {
 	panic("unimplemented: (reflect.Value).Call()")
+}
+
+func (v Value) Method(i int) Value {
+	panic("unimplemented: (reflect.Value).Method()")
 }
 
 func (v Value) MethodByName(name string) Value {
