@@ -189,8 +189,12 @@ func (v Value) UnsafePointer() unsafe.Pointer {
 		slice := (*sliceHeader)(v.value)
 		return slice.data
 	case Func:
-		panic("unimplemented: (reflect.Value).UnsafePointer()")
-	default: // not implemented: Func
+		fn := (*funcHeader)(v.value)
+		if fn.Context != nil {
+			return fn.Context
+		}
+		return fn.Code
+	default:
 		panic(&ValueError{Method: "UnsafePointer", Kind: v.Kind()})
 	}
 }
