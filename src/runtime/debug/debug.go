@@ -45,3 +45,8 @@ type Module struct {
 	Sum     string  // checksum
 	Replace *Module // replaced by this module
 }
+
+// Not implemented.
+func SetGCPercent(n int) int {
+	return n
+}
