@@ -1370,6 +1370,15 @@ func (v Value) SetMapIndex(key, elem Value) {
 		panic("reflect.Value.SetMapIndex: incompatible types for value")
 	}
 
+	// make elem an interface if it needs to be converted
+	if v.typecode.elem().Kind() == Interface && elem.typecode.Kind() != Interface {
+		intf := composeInterface(unsafe.Pointer(elem.typecode), elem.value)
+		elem = Value{
+			typecode: v.typecode.elem(),
+			value:    unsafe.Pointer(&intf),
+		}
+	}
+
 	if key.Kind() == String {
 		if del {
 			hashmapStringDelete(v.pointer(), *(*string)(key.value))
