@@ -135,6 +135,24 @@ func TestMap(t *testing.T) {
 	}
 }
 
+func TestMapInterfaceElem(t *testing.T) {
+	m := make(map[string]interface{})
+	refm := ValueOf(m)
+
+	four := ValueOf(4)
+	hello := ValueOf("hello")
+
+	refm.SetMapIndex(hello, four)
+
+	if v := refm.MapIndex(hello).Interface().(int); v != 4 {
+		t.Errorf("failed to get value assigned to interface via MapIndex")
+	}
+
+	if v := m["hello"].(int); v != 4 {
+		t.Errorf("failed to get value assigned to interface via direct lookup")
+	}
+}
+
 func TestSlice(t *testing.T) {
 	s := []int{0, 10, 20}
 	refs := ValueOf(s)
