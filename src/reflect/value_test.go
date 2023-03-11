@@ -579,6 +579,14 @@ func TestConvert(t *testing.T) {
 	if c.Type().Kind() != Uint8 || c.Uint() != 3 {
 		t.Errorf("Conver(uint64 -> byte failed: kind=%v, value=%d", c.Type().Kind().String(), c.Uint())
 	}
+
+	v = ValueOf("hello")
+	c = v.Convert(TypeOf([]byte("")))
+
+	if c.Type().Kind() != Slice || c.Type().Elem().Kind() != Uint8 && c.Len() != 5 && string(c.Bytes()) != "hello" {
+		t.Errorf("Conver(string -> []byte")
+	}
+
 }
 
 func equal[T comparable](a, b []T) bool {

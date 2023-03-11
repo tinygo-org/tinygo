@@ -77,6 +77,16 @@ func stringFromBytes(x struct {
 	return _string{ptr: (*byte)(buf), length: x.len}
 }
 
+func stringFromBytesTyped(x []byte) string {
+	slice := *(*struct {
+		ptr *byte
+		len uintptr
+		cap uintptr
+	})(unsafe.Pointer(&x))
+	s := stringFromBytes(slice)
+	return *(*string)(unsafe.Pointer(&s))
+}
+
 // Convert a string to a []byte slice.
 func stringToBytes(x _string) (slice struct {
 	ptr *byte
@@ -89,6 +99,12 @@ func stringToBytes(x _string) (slice struct {
 	slice.len = x.length
 	slice.cap = x.length
 	return
+}
+
+func stringToBytesTyped(x string) []byte {
+	s := *(*_string)(unsafe.Pointer(&x))
+	slice := stringToBytes(s)
+	return *(*[]byte)(unsafe.Pointer(&slice))
 }
 
 // Convert a []rune slice to a string.
