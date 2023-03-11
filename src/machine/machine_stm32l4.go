@@ -595,13 +595,13 @@ func writeFlashData(address uintptr, data []byte) (int, error) {
 		// start page write operation
 		stm32.FLASH.SetCR_PG(1)
 
-		// write first word using double-word low order word
-		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j+writeBlockSize/2 : j+writeBlockSize])
+		// write second word using double-word high order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(data[j : j+writeBlockSize/2])
 
 		address += writeBlockSize / 2
 
-		// write second word using double-word high order word
-		*(*uint32)(unsafe.Pointer(address)) = binary.BigEndian.Uint32(data[j : j+writeBlockSize/2])
+		// write first word using double-word low order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(data[j+writeBlockSize/2 : j+writeBlockSize])
 
 		waitUntilFlashDone()
 
