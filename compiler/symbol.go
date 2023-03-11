@@ -52,6 +52,17 @@ const (
 	inlineNone
 )
 
+// Values for the allockind attribute. Source:
+// https://github.com/llvm/llvm-project/blob/release/16.x/llvm/include/llvm/IR/Attributes.h#L49
+const (
+	allocKindAlloc = 1 << iota
+	allocKindRealloc
+	allocKindFree
+	allocKindUninitialized
+	allocKindZeroed
+	allocKindAligned
+)
+
 // getFunction returns the LLVM function for the given *ssa.Function, creating
 // it if needed. It can later be filled with compilerContext.createFunction().
 func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
@@ -132,6 +143,20 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		// returns values that are never null and never alias to an existing value.
 		for _, attrName := range []string{"noalias", "nonnull"} {
 			llvmFn.AddAttributeAtIndex(0, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(attrName), 0))
+		}
+		if llvmutil.Major() >= 15 { // allockind etc are not available in LLVM 14
+			// Add attributes to signal to LLVM that this is an allocator
+			// function. This enables a number of optimizations.
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("allockind"), allocKindAlloc|allocKindZeroed))
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("alloc-family", "runtime.alloc"))
+			// Use a special value to indicate the first parameter:
+			// > allocsize has two integer arguments, but because they're both 32 bits, we can
+			// > pack them into one 64-bit value, at the cost of making said value
+			// > nonsensical.
+			// >
+			// > In order to do this, we need to reserve one value of the second (optional)
+			// > allocsize argument to signify "not present."
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("allocsize"), 0x0000_0000_ffff_ffff))
 		}
 	case "runtime.sliceAppend":
 		// Appending a slice will only read the to-be-appended slice, it won't
