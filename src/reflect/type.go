@@ -795,6 +795,11 @@ func (t *rawType) AssignableTo(u Type) bool {
 	if t == u.(*rawType) {
 		return true
 	}
+
+	if u.Kind() == Interface && u.NumMethod() == 0 {
+		return true
+	}
+
 	if u.Kind() == Interface {
 		panic("reflect: unimplemented: AssignableTo with interface")
 	}
