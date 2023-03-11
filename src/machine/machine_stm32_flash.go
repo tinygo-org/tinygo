@@ -73,11 +73,15 @@ func (f flashBlockDevice) EraseBlockSize() int64 {
 // transparently coalesce ranges of blocks into larger bundles if the chip
 // supports this. The start and len parameters are in block numbers, use
 // EraseBlockSize to map addresses to blocks.
+// Note that block 0 should map to the address of FlashDataStart().
 func (f flashBlockDevice) EraseBlocks(start, len int64) error {
+	var address uintptr = uintptr(start*f.EraseBlockSize()) + FlashDataStart()
+	blk := int64(address-uintptr(memoryStart)) / f.EraseBlockSize()
+
 	unlockFlash()
 	defer lockFlash()
 
-	for i := start; i < start+len; i++ {
+	for i := blk; i < blk+len; i++ {
 		if err := eraseBlock(uint32(i)); err != nil {
 			return err
 		}
