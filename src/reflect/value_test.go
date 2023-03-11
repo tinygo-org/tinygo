@@ -445,6 +445,15 @@ func TestNumMethods(t *testing.T) {
 	}
 }
 
+func TestAssignableTo(t *testing.T) {
+	var a any
+	refa := ValueOf(&a).Elem()
+	refa.Set(ValueOf(4))
+	if got, want := refa.Interface().(int), 4; got != want {
+		t.Errorf("AssignableTo / Set failed, got %v, want %v", got, want)
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
