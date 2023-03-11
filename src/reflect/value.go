@@ -1102,6 +1102,32 @@ func convertOp(src Value, typ Type) (Value, bool) {
 		case String:
 			return cvtUintString(src, rtype), true
 		}
+
+	case Slice:
+		if typ.Kind() == String && !src.typecode.elem().isNamed() {
+			rtype := typ.(*rawType)
+
+			switch src.Type().Elem().Kind() {
+			case Uint8:
+				return cvtBytesString(src, rtype), true
+			case Int32:
+				return cvtRunesString(src, rtype), true
+			}
+		}
+
+		// TODO(dgryski): Implement other cases
+
+	case String:
+		rtype := typ.(*rawType)
+		if typ.Kind() == Slice && !rtype.elem().isNamed() {
+			switch typ.Elem().Kind() {
+			case Uint8:
+				return cvtStringBytes(src, rtype), true
+			case Int32:
+				return cvtStringRunes(src, rtype), true
+			}
+		}
+
 	}
 
 	return Value{}, false
@@ -1121,6 +1147,30 @@ func cvtIntFloat(v Value, t *rawType) Value {
 
 func cvtUintFloat(v Value, t *rawType) Value {
 	return makeFloat(v.flags, float64(v.Uint()), t)
+}
+
+//go:linkname stringToBytes runtime.stringToBytesTyped
+func stringToBytes(x string) []byte
+
+func cvtStringBytes(v Value, t *rawType) Value {
+	b := stringToBytes(*(*string)(v.value))
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&b),
+		flags:    v.flags,
+	}
+}
+
+//go:linkname stringFromBytes runtime.stringFromBytesTyped
+func stringFromBytes(x []byte) string
+
+func cvtBytesString(v Value, t *rawType) Value {
+	s := stringFromBytes(*(*[]byte)(v.value))
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&s),
+		flags:    v.flags,
+	}
 }
 
 func makeInt(flags valueFlags, bits uint64, t *rawType) Value {
@@ -1165,6 +1215,14 @@ func cvtIntString(src Value, t *rawType) Value {
 
 func cvtUintString(src Value, t *rawType) Value {
 	panic("cvtUintString: unimplemented")
+}
+
+func cvtStringRunes(src Value, t *rawType) Value {
+	panic("cvsStringRunes: unimplemented")
+}
+
+func cvtRunesString(src Value, t *rawType) Value {
+	panic("cvsRunesString: unimplemented")
 }
 
 //go:linkname slicePanic runtime.slicePanic
