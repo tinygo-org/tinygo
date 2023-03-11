@@ -61,7 +61,13 @@ func scheduleLogChan(msg string, ch *channel, t *task.Task) {
 //go:noinline
 func deadlock() {
 	// call yield without requesting a wakeup
-	task.Pause()
+	if hasScheduler {
+		task.Pause()
+	} else {
+		for {
+			waitForEvents()
+		}
+	}
 	panic("unreachable")
 }
 
