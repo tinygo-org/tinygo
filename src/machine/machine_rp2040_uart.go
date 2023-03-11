@@ -131,3 +131,9 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	}
 	uart.Receive(byte((uart.Bus.UARTDR.Get() & 0xFF)))
 }
+
+// Flush blocks until all bytes in UART transmit buffer have been sent over the wire.
+func (uart *UART) Flush() {
+	for uart.Bus.UARTFR.HasBits(rp.UART0_UARTFR_BUSY) {
+	}
+}
