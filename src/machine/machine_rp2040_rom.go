@@ -75,8 +75,6 @@ void reset_usb_boot(uint32_t usb_activity_gpio_pin_mask, uint32_t disable_interf
 #define FLASH_SECTOR_SIZE (1u << 12)
 #define FLASH_BLOCK_SIZE (1u << 16)
 
-#define FLASH_UNIQUE_ID_SIZE_BYTES 8
-
 #define BOOT2_SIZE_WORDS 64
 #define XIP_BASE 0x10000000
 
@@ -145,7 +143,7 @@ func EnterBootloader() {
 }
 
 // Flash related code
-const memoryStart = 0
+const memoryStart = C.XIP_BASE // memory start for purpose of erase
 
 // compile-time check for ensuring we fulfill BlockDevice interface
 var _ BlockDevice = flashBlockDevice{}
@@ -157,11 +155,11 @@ type flashBlockDevice struct {
 
 // ReadAt reads the given number of bytes from the block device.
 func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
-	if uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+	if readAddress(off) > FlashDataEnd() {
 		return 0, errFlashCannotReadPastEOF
 	}
 
-	data := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(off))), len(p))
+	data := unsafe.Slice((*byte)(unsafe.Pointer(readAddress(off))), len(p))
 	copy(p, data)
 
 	return len(p), nil
@@ -172,7 +170,7 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 // If the length of p is not long enough it will be padded with 0xFF bytes.
 // This method assumes that the destination is already erased.
 func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
-	if uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+	if writeAddress(off)+uintptr(C.XIP_BASE) > FlashDataEnd() {
 		return 0, errFlashCannotWritePastEOF
 	}
 
@@ -182,7 +180,7 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	// rp2040 writes to offset, not actual address
 	// e.g. real address 0x10003000 is written to at
 	// 0x00003000
-	address := uintptr(off) - C.XIP_BASE
+	address := writeAddress(off)
 	padded := f.pad(p)
 
 	C.flash_range_write(C.uint32_t(address),
@@ -223,11 +221,15 @@ func (f flashBlockDevice) EraseBlockSize() int64 {
 // supports this. The start and len parameters are in block numbers, use
 // EraseBlockSize to map addresses to blocks.
 func (f flashBlockDevice) EraseBlocks(start, length int64) error {
+	address := writeAddress(start * f.EraseBlockSize())
+	if address+uintptr(C.XIP_BASE) > FlashDataEnd() {
+		return errFlashCannotErasePastEOF
+	}
+
 	state := interrupt.Disable()
 	defer interrupt.Restore(state)
 
-	address := uintptr(start*f.EraseBlockSize()) - C.XIP_BASE
-	C.flash_erase_blocks(C.uint32_t(address), C.ulong(length*f.EraseBlockSize()))
+	C.flash_erase_blocks(C.uint32_t(address), C.ulong(length))
 
 	return nil
 }
@@ -241,4 +243,14 @@ func (f flashBlockDevice) pad(p []byte) []byte {
 
 	padding := bytes.Repeat([]byte{0xff}, int(paddingNeeded))
 	return append(p, padding...)
+}
+
+// return the correct address to be used for write
+func writeAddress(off int64) uintptr {
+	return readAddress(off) - uintptr(C.XIP_BASE)
+}
+
+// return the correct address to be used for reads
+func readAddress(off int64) uintptr {
+	return FlashDataStart() + uintptr(off)
 }
