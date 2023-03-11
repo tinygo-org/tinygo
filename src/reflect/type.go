@@ -1071,3 +1071,7 @@ func SliceOf(t Type) Type {
 func ArrayOf(n int, t Type) Type {
 	panic("unimplemented: reflect.ArrayOf()")
 }
+
+func StructOf([]StructField) Type {
+	panic("unimplemented: reflect.StructOf()")
+}
