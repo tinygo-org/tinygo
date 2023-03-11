@@ -18,7 +18,7 @@ func main() {
 	s3 := make([]int, 3) // OUT: object allocated on the heap: escapes at line 19
 	returnIntSlice(s3)
 
-	_ = make([]int, getUnknownNumber()) // OUT: object allocated on the heap: size is not constant
+	useSlice(make([]int, getUnknownNumber())) // OUT: object allocated on the heap: size is not constant
 
 	s4 := make([]byte, 300) // OUT: object allocated on the heap: object size 300 exceeds maximum stack allocation size 256
 	readByteSlice(s4)
@@ -82,3 +82,5 @@ func getComplex128() complex128
 func useInterface(interface{})
 
 func callVariadic(...int)
+
+func useSlice([]int)
