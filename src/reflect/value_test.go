@@ -572,6 +572,15 @@ func TestAssignableTo(t *testing.T) {
 	}
 }
 
+func TestConvert(t *testing.T) {
+	v := ValueOf(int64(3))
+	c := v.Convert(TypeOf(byte(0)))
+
+	if c.Type().Kind() != Uint8 || c.Uint() != 3 {
+		t.Errorf("Conver(uint64 -> byte failed: kind=%v, value=%d", c.Type().Kind().String(), c.Uint())
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false

@@ -1074,7 +1074,97 @@ func (v Value) CanConvert(t Type) bool {
 }
 
 func (v Value) Convert(t Type) Value {
-	panic("unimplemented: (reflect.Value).Convert()")
+	if v, ok := convertOp(v, t); ok {
+		return v
+	}
+
+	panic("reflect.Value.Convert: value of type " + v.typecode.String() + " cannot be converted to type " + t.String())
+}
+
+func convertOp(src Value, typ Type) (Value, bool) {
+	switch src.Kind() {
+	case Int, Int8, Int16, Int32, Int64:
+		switch rtype := typ.(*rawType); rtype.Kind() {
+		case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+			return cvtInt(src, rtype), true
+		case Float32, Float64:
+			return cvtIntFloat(src, rtype), true
+		case String:
+			return cvtIntString(src, rtype), true
+		}
+
+	case Uint, Uint8, Uint16, Uint32, Uint64:
+		switch rtype := typ.(*rawType); rtype.Kind() {
+		case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+			return cvtUint(src, rtype), true
+		case Float32, Float64:
+			return cvtUintFloat(src, rtype), true
+		case String:
+			return cvtUintString(src, rtype), true
+		}
+	}
+
+	return Value{}, false
+}
+
+func cvtInt(v Value, t *rawType) Value {
+	return makeInt(v.flags, uint64(v.Int()), t)
+}
+
+func cvtUint(v Value, t *rawType) Value {
+	return makeInt(v.flags, v.Uint(), t)
+}
+
+func cvtIntFloat(v Value, t *rawType) Value {
+	return makeFloat(v.flags, float64(v.Int()), t)
+}
+
+func cvtUintFloat(v Value, t *rawType) Value {
+	return makeFloat(v.flags, float64(v.Uint()), t)
+}
+
+func makeInt(flags valueFlags, bits uint64, t *rawType) Value {
+	size := t.Size()
+	ptr := alloc(size, nil)
+	switch size {
+	case 1:
+		*(*uint8)(ptr) = uint8(bits)
+	case 2:
+		*(*uint16)(ptr) = uint16(bits)
+	case 4:
+		*(*uint32)(ptr) = uint32(bits)
+	case 8:
+		*(*uint64)(ptr) = bits
+	}
+	return Value{
+		typecode: t,
+		value:    ptr,
+		flags:    flags | valueFlagIndirect,
+	}
+}
+
+func makeFloat(flags valueFlags, v float64, t *rawType) Value {
+	size := t.Size()
+	ptr := alloc(size, nil)
+	switch size {
+	case 4:
+		*(*float32)(ptr) = float32(v)
+	case 8:
+		*(*float64)(ptr) = v
+	}
+	return Value{
+		typecode: t,
+		value:    ptr,
+		flags:    flags | valueFlagIndirect,
+	}
+}
+
+func cvtIntString(src Value, t *rawType) Value {
+	panic("cvtUintString: unimplemented")
+}
+
+func cvtUintString(src Value, t *rawType) Value {
+	panic("cvtUintString: unimplemented")
 }
 
 //go:linkname slicePanic runtime.slicePanic
