@@ -1,6 +1,9 @@
 package machine
 
-import "errors"
+import (
+	"errors"
+	"io"
+)
 
 var errNoByte = errors.New("machine: no byte read")
 
@@ -44,3 +47,14 @@ func (ns NullSerial) Buffered() int {
 func (ns NullSerial) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
+
+// Read is a no-op; always returns that zero bytes were read with no error
+func (ns NullSerial) Read(p []byte) (n int, err error) {
+	return 0, nil
+}
+
+// type check to ensure NullSerial implements interfaces for drivers.UART
+var (
+	_ io.Reader = NullSerial{}
+	_ io.Writer = NullSerial{}
+)
