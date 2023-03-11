@@ -1346,7 +1346,7 @@ func (v Value) SetMapIndex(key, elem Value) {
 	// if elem is the zero Value, it means delete
 	del := elem == Value{}
 
-	if !del && elem.typecode != v.typecode.elem() {
+	if !del && !elem.typecode.AssignableTo(v.typecode.elem()) {
 		panic("reflect.Value.SetMapIndex: incompatible types for value")
 	}
 
