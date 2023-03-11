@@ -887,7 +887,7 @@ func (it *MapIter) Next() bool {
 
 func (v Value) Set(x Value) {
 	v.checkAddressable()
-	if !v.typecode.AssignableTo(x.typecode) {
+	if !x.typecode.AssignableTo(v.typecode) {
 		panic("reflect: cannot set")
 	}
 	size := v.typecode.Size()
