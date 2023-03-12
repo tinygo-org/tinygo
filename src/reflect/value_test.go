@@ -275,6 +275,14 @@ func TestNamedTypes(t *testing.T) {
 		t.Errorf("Type.String(base64.Encoding{})=%v, want %v", got, want)
 	}
 
+	type Repository struct {
+		RoleName *string `json:"role_name,omitempty"`
+	}
+
+	var repo *Repository
+	v := ValueOf(&repo).Elem()
+	n := New(v.Type().Elem())
+	v.Set(n)
 }
 
 func TestStruct(t *testing.T) {
