@@ -890,6 +890,15 @@ func (v Value) Set(x Value) {
 	if !v.typecode.AssignableTo(x.typecode) {
 		panic("reflect: cannot set")
 	}
+
+	if v.typecode.Kind() == Interface && x.typecode.Kind() != Interface {
+		intf := composeInterface(unsafe.Pointer(x.typecode), x.value)
+		x = Value{
+			typecode: v.typecode,
+			value:    unsafe.Pointer(&intf),
+		}
+	}
+
 	size := v.typecode.Size()
 	xptr := x.value
 	if size <= unsafe.Sizeof(uintptr(0)) && !x.isIndirect() {
