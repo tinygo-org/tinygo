@@ -465,7 +465,8 @@ func (t *rawType) isNamed() bool {
 }
 
 func TypeOf(i interface{}) Type {
-	return ValueOf(i).typecode
+	typecode, _ := decomposeInterface(i)
+	return (*rawType)(typecode)
 }
 
 func PtrTo(t Type) Type { return PointerTo(t) }
