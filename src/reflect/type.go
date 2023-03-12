@@ -490,6 +490,10 @@ func PointerTo(t Type) Type {
 }
 
 func pointerTo(t *rawType) *rawType {
+	if t.isNamed() {
+		return (*elemType)(unsafe.Pointer(t)).ptrTo
+	}
+
 	switch t.Kind() {
 	case Pointer:
 		// TODO(dgryski): This is blocking https://github.com/tinygo-org/tinygo/issues/3131
