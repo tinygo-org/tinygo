@@ -14,34 +14,33 @@
 // - basic types (Bool..UnsafePointer):
 //     meta         uint8 // actually: kind + flags
 //     ptrTo        *typeStruct
-// - named types (see elemType):
-//     meta         uint8
-//     ptrTo        *typeStruct
-//     underlying   *typeStruct // the underlying, non-named type
 // - channels and slices (see elemType):
 //     meta          uint8
+//     nmethods     uint16 (0)
 //     ptrTo        *typeStruct
 //     elementType  *typeStruct // the type that you get with .Elem()
 // - pointer types (see ptrType, this doesn't include chan, map, etc):
 //     meta         uint8
-//     elementType  *typeStruct
 //     nmethods     uint16
+//     elementType  *typeStruct
 // - array types (see arrayType)
 //     meta         uint8
+//     nmethods     uint16 (0)
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // element type of the array
 //     arrayLen     uintptr     // length of the array (this is part of the type)
 // - map types (this is still missing the key and element types)
 //     meta         uint8
+//     nmethods     uint16 (0)
 //     ptrTo        *typeStruct
 //     elem         *typeStruct
 //     key          *typeStruct
 // - struct types (see structType):
 //     meta         uint8
-//     numField     uint16
 //     nmethods     uint16
 //     ptrTo        *typeStruct
-//     pkgpath      *byte
+//     pkgpath      *byte       // package path; null terminated
+//     numField     uint16
 //     fields       [...]structField // the remaining fields are all of type structField
 // - interface types (this is missing the interface methods):
 //     meta         uint8
@@ -51,11 +50,11 @@
 //     ptrTo        *typeStruct
 // - named types
 //     meta         uint8
+//     nmethods     uint16      // number of methods
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // underlying type
-//     nmethods     uint16      // number of methods
-//     pkg          *byte       // pkgpath
-//     name         [1]byte     // actual name; length nlem
+//     pkgpath      *byte       // pkgpath; null terminated
+//     name         [1]byte     // actual name; null terminated
 //
 // The type struct is essentially a union of all the above types. Which it is,
 // can be determined by looking at the meta byte.
@@ -406,35 +405,38 @@ type rawType struct {
 // pointer because it doesn't have ptrTo).
 type elemType struct {
 	rawType
-	ptrTo *rawType
-	elem  *rawType
+	numMethod uint16
+	ptrTo     *rawType
+	elem      *rawType
 }
 
 type ptrType struct {
 	rawType
-	elem      *rawType
 	numMethod uint16
+	elem      *rawType
 }
 
 type arrayType struct {
 	rawType
-	ptrTo    *rawType
-	elem     *rawType
-	arrayLen uintptr
+	numMethod uint16
+	ptrTo     *rawType
+	elem      *rawType
+	arrayLen  uintptr
 }
 
 type mapType struct {
 	rawType
-	ptrTo *rawType
-	elem  *rawType
-	key   *rawType
+	numMethod uint16
+	ptrTo     *rawType
+	elem      *rawType
+	key       *rawType
 }
 
 type namedType struct {
 	rawType
+	numMethod uint16
 	ptrTo     *rawType
 	elem      *rawType
-	numMethod uint16
 	pkg       *byte
 	name      [1]byte
 }
@@ -448,10 +450,10 @@ type namedType struct {
 // checker.
 type structType struct {
 	rawType
-	numField  uint16
 	numMethod uint16
 	ptrTo     *rawType
 	pkgpath   *byte
+	numField  uint16
 	fields    [1]structField // the remaining fields are all of type structField
 }
 
