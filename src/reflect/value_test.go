@@ -243,6 +243,11 @@ func TestNamedTypes(t *testing.T) {
 		t.Errorf("TypeOf.String()=%v, want %v", got, want)
 	}
 
+	errorType := TypeOf((*error)(nil)).Elem()
+	if s := errorType.String(); s != "error" {
+		t.Errorf("error type = %v, want error", s)
+	}
+
 	m := make(map[[4]uint16]string)
 
 	if got, want := TypeOf(m).String(), "map[[4]uint16]string"; got != want {
