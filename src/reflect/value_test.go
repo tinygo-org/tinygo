@@ -266,6 +266,31 @@ func TestNamedTypes(t *testing.T) {
 	}
 }
 
+func addrDecode(body interface{}) {
+	vbody := ValueOf(body)
+	ptr := vbody.Elem()
+	pptr := ptr.Addr()
+	addrSetInt(pptr.Interface())
+}
+
+func addrSetInt(intf interface{}) {
+	ptr := intf.(*uint64)
+	*ptr = 112358
+}
+
+func TestAddr(t *testing.T) {
+	var n uint64
+	addrDecode(&n)
+	if n != 112358 {
+		t.Errorf("Failed to set t=112358, got %v", n)
+	}
+
+	v := ValueOf(&n)
+	if got, want := v.Elem().Addr().CanAddr(), false; got != want {
+		t.Errorf("Elem.Addr.CanAddr=%v, want %v", got, want)
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
