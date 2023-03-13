@@ -504,13 +504,11 @@ func pointerTo(t *rawType) *rawType {
 
 func (t *rawType) String() string {
 	if t.isNamed() {
-		path := t.PkgPath()
-		slash := len(path) - 1
-		for slash >= 0 && path[slash] != '/' {
-			slash--
+		s := t.name()
+		if s[0] == '.' {
+			return s[1:]
 		}
-		shortened := path[slash+1:]
-		return shortened + "." + t.Name()
+		return s
 	}
 
 	switch t.Kind() {
@@ -1037,10 +1035,20 @@ func readStringZ(data unsafe.Pointer) string {
 	}))
 }
 
+func (t *rawType) name() string {
+	ntype := (*namedType)(unsafe.Pointer(t))
+	return readStringZ(unsafe.Pointer(&ntype.name[0]))
+}
+
 func (t *rawType) Name() string {
 	if t.isNamed() {
-		ntype := (*namedType)(unsafe.Pointer(t))
-		return readStringZ(unsafe.Pointer(&ntype.name[0]))
+		name := t.name()
+		for i := 0; i < len(name); i++ {
+			if name[i] == '.' {
+				return name[i+1:]
+			}
+		}
+		panic("corrupt name data")
 	}
 
 	if t.Kind() <= UnsafePointer {

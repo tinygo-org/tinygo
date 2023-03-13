@@ -134,12 +134,17 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 			)
 		case *types.Named:
+			name := typ.Obj().Name()
+			var pkgname string
+			if pkg := typ.Obj().Pkg(); pkg != nil {
+				pkgname = pkg.Name()
+			}
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "underlying", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
-				types.NewVar(token.NoPos, nil, "name", types.NewArray(types.Typ[types.Int8], 1+int64(len(typ.Obj().Name())))),
+				types.NewVar(token.NoPos, nil, "name", types.NewArray(types.Typ[types.Int8], int64(len(pkgname)+1+len(name)+1))),
 			)
 		case *types.Chan, *types.Slice:
 			typeFieldTypes = append(typeFieldTypes,
@@ -205,8 +210,10 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Named:
 			name := typ.Obj().Name()
 			var pkgpath string
+			var pkgname string
 			if pkg := typ.Obj().Pkg(); pkg != nil {
 				pkgpath = pkg.Path()
+				pkgname = pkg.Name()
 			}
 			pkgPathPtr := c.pkgPathPtr(pkgpath)
 			typeFields = []llvm.Value{
@@ -214,7 +221,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
 				c.getTypeCode(typ.Underlying()),                           // underlying
 				pkgPathPtr,                                                // pkgpath pointer
-				c.ctx.ConstString(name+"\x00", false),                     // name
+				c.ctx.ConstString(pkgname+"."+name+"\x00", false),         // name
 			}
 			metabyte |= 1 << 5 // "named" flag
 		case *types.Chan:
