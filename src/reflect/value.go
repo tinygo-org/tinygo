@@ -223,7 +223,7 @@ func (v Value) Addr() Value {
 
 	return Value{
 		typecode: pointerTo(v.typecode),
-		value:    unsafe.Pointer(&v.value),
+		value:    v.value,
 		flags:    v.flags ^ valueFlagIndirect,
 	}
 }
