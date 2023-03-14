@@ -465,6 +465,9 @@ func (t *rawType) isNamed() bool {
 }
 
 func TypeOf(i interface{}) Type {
+	if i == nil {
+		return nil
+	}
 	typecode, _ := decomposeInterface(i)
 	return (*rawType)(typecode)
 }
