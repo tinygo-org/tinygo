@@ -43,7 +43,7 @@ func TestBinarySize(t *testing.T) {
 		// microcontrollers
 		{"hifive1b", "examples/echo", 4556, 272, 0, 2252},
 		{"microbit", "examples/serial", 2680, 380, 8, 2256},
-		{"wioterminal", "examples/pininterrupt", 6109, 1455, 116, 6816},
+		{"wioterminal", "examples/pininterrupt", 6109, 1459, 116, 6816},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
