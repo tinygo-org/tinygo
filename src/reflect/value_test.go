@@ -313,6 +313,14 @@ func TestAddr(t *testing.T) {
 	}
 }
 
+func TestNilType(t *testing.T) {
+	var a any = nil
+	typ := TypeOf(a)
+	if typ != nil {
+		t.Errorf("Type of any{nil} is not nil")
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
