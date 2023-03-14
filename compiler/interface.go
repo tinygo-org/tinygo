@@ -184,6 +184,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Pointer:
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
+				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "elementType", types.Typ[types.UnsafePointer]),
 			)
 		case *types.Array:
@@ -279,8 +280,20 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeCode(typ.Elem()),                  // elementType
 			}
 		case *types.Pointer:
+			// We want to create T, *T, and **T
+			// If we're a pointer to a concrete type, add a ptrTo field.
+			// That gives us **T.  Anything higher (ptr-to-ptr-to-ptr...) gets a zero.
+			var ptrptr llvm.Value
+			if _, ok := typ.Elem().Underlying().(*types.Pointer); !ok {
+				ptrptr = c.getTypeCode(types.NewPointer(typ))
+			} else {
+				// ptr to a pointer gets nil
+				ptrptr = llvm.ConstPointerNull(c.getLLVMType(types.Typ[types.UnsafePointer]))
+			}
+
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false), // numMethods
+				ptrptr,
 				c.getTypeCode(typ.Elem()),
 			}
 		case *types.Array:

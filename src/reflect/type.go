@@ -415,6 +415,7 @@ type elemType struct {
 type ptrType struct {
 	rawType
 	numMethod uint16
+	ptrTo     *rawType
 	elem      *rawType
 }
 
@@ -500,6 +501,9 @@ func pointerTo(t *rawType) *rawType {
 	case Pointer:
 		// TODO(dgryski): This is blocking https://github.com/tinygo-org/tinygo/issues/3131
 		// We need to be able to create types that match existing types to prevent typecode equality.
+		if ptrTo := (*ptrType)(unsafe.Pointer(t)).ptrTo; ptrTo != nil {
+			return ptrTo
+		}
 		panic("reflect: cannot make **T type")
 	case Struct:
 		return (*structType)(unsafe.Pointer(t)).ptrTo
