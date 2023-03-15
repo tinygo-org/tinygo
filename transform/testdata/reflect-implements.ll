@@ -3,11 +3,11 @@ target triple = "i686--linux"
 
 %runtime._interface = type { ptr, ptr }
 
-@"reflect/types.type:named:error" = internal constant { i8, ptr, ptr } { i8 52, ptr @"reflect/types.type:pointer:named:error", ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}" }, align 4
+@"reflect/types.type:named:error" = internal constant { i8, i16, ptr, ptr } { i8 52, i16 0, ptr @"reflect/types.type:pointer:named:error", ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}" }, align 4
 @"reflect/types.type:interface:{Error:func:{}{basic:string}}" = internal constant { i8, ptr } { i8 20, ptr @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" }, align 4
 @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" = internal constant { i8, ptr } { i8 21, ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}" }, align 4
-@"reflect/types.type:pointer:named:error" = internal constant { i8, ptr } { i8 21, ptr @"reflect/types.type:named:error" }, align 4
-@"reflect/types.type:pointer:named:reflect.rawType" = internal constant { ptr, i8, ptr } { ptr null, i8 21, ptr null }, align 4
+@"reflect/types.type:pointer:named:error" = internal constant { i8, i16, ptr } { i8 21, i16 0, ptr @"reflect/types.type:named:error" }, align 4
+@"reflect/types.type:pointer:named:reflect.rawType" = internal constant { ptr, i8, i16, ptr } { ptr null, i8 21, i16 0, ptr null }, align 4
 @"reflect/methods.Implements(reflect.Type) bool" = internal constant i8 0, align 1
 
 ; var errorType = reflect.TypeOf((*error)(nil)).Elem()
