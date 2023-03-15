@@ -163,10 +163,7 @@ func (v Value) IsNil() bool {
 		slice := (*sliceHeader)(v.value)
 		return slice.data == nil
 	case Interface:
-		if v.value == nil {
-			return true
-		}
-		_, val := decomposeInterface(*(*interface{})(v.value))
+		val := *(*interface{})(v.value)
 		return val == nil
 	default:
 		panic(&ValueError{Method: "IsNil", Kind: v.Kind()})
