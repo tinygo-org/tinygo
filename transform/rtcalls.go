@@ -142,7 +142,7 @@ func OptimizeReflectImplements(mod llvm.Module) {
 
 		if strings.HasPrefix(interfaceType.Name(), "reflect/types.type:named:") {
 			// Get the underlying type.
-			interfaceType = stripPointerCasts(builder.CreateExtractValue(interfaceType.Initializer(), 2, ""))
+			interfaceType = stripPointerCasts(builder.CreateExtractValue(interfaceType.Initializer(), 3, ""))
 		}
 		if !strings.HasPrefix(interfaceType.Name(), "reflect/types.type:interface:") {
 			// This is an error. The Type passed to Implements should be of
