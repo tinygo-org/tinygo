@@ -982,7 +982,13 @@ func (v Value) SetString(x string) {
 }
 
 func (v Value) SetBytes(x []byte) {
-	panic("unimplemented: (reflect.Value).SetBytes()")
+	v.checkAddressable()
+	if v.typecode.Kind() != Slice || v.typecode.elem().Kind() != Uint8 {
+		panic("reflect.Value.SetBytes called on not []byte")
+	}
+
+	// copy the header contents over
+	*(*sliceHeader)(v.value) = *(*sliceHeader)(unsafe.Pointer(&x))
 }
 
 func (v Value) SetCap(n int) {
