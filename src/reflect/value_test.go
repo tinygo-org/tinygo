@@ -321,6 +321,20 @@ func TestNilType(t *testing.T) {
 	}
 }
 
+func TestSetBytes(t *testing.T) {
+	var b []byte
+	refb := ValueOf(&b).Elem()
+	s := []byte("hello")
+	refb.SetBytes(s)
+	s[0] = 'b'
+
+	refbSlice := refb.Interface().([]byte)
+
+	if len(refbSlice) != len(s) || b[0] != s[0] || refbSlice[0] != s[0] {
+		t.Errorf("SetBytes(): reflection slice mismatch")
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
