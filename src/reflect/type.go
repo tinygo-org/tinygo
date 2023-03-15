@@ -923,7 +923,11 @@ func (t *rawType) Name() string {
 		return readStringZ(unsafe.Pointer(&ntype.name[0]))
 	}
 
-	return t.Kind().String()
+	if t.Kind() <= UnsafePointer {
+		return t.Kind().String()
+	}
+
+	return ""
 }
 
 func (t *rawType) Key() Type {
