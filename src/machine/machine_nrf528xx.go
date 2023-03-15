@@ -25,7 +25,7 @@ func (a ADC) Configure(ADCConfig) {
 // Get returns the current value of a ADC pin in the range 0..0xffff.
 func (a ADC) Get() uint16 {
 	var pwmPin uint32
-	var value int16
+	var rawValue volatile.Register16
 
 	switch a.Pin {
 	case 2:
@@ -78,7 +78,7 @@ func (a ADC) Get() uint16 {
 	nrf.SAADC.CH[0].PSELP.Set(pwmPin)
 
 	// Destination for sample result.
-	nrf.SAADC.RESULT.PTR.Set(uint32(uintptr(unsafe.Pointer(&value))))
+	nrf.SAADC.RESULT.PTR.Set(uint32(uintptr(unsafe.Pointer(&rawValue))))
 	nrf.SAADC.RESULT.MAXCNT.Set(1) // One sample
 
 	// Start tasks.
@@ -104,6 +104,7 @@ func (a ADC) Get() uint16 {
 	// Disable the ADC.
 	nrf.SAADC.ENABLE.Set(nrf.SAADC_ENABLE_ENABLE_Disabled << nrf.SAADC_ENABLE_ENABLE_Pos)
 
+	value := int16(rawValue.Get())
 	if value < 0 {
 		value = 0
 	}
