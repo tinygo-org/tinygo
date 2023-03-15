@@ -988,7 +988,7 @@ func (v Value) SetBytes(x []byte) {
 	}
 
 	// copy the header contents over
-	*(*sliceHeader)(v.value) = *(*sliceHeader)(unsafe.Pointer(&x))
+	*(*[]byte)(v.value) = x
 }
 
 func (v Value) SetCap(n int) {
