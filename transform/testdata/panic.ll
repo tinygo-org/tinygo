@@ -3,12 +3,12 @@ target triple = "armv7m-none-eabi"
 
 @"runtime.lookupPanic$string" = constant [18 x i8] c"index out of range"
 
-declare void @runtime.runtimePanic(i8*, i32)
+declare void @runtime.runtimePanic(ptr, i32)
 
-declare void @runtime._panic(i32, i8*)
+declare void @runtime._panic(i32, ptr)
 
 define void @runtime.lookupPanic() {
-  call void @runtime.runtimePanic(i8* getelementptr inbounds ([18 x i8], [18 x i8]* @"runtime.lookupPanic$string", i64 0, i64 0), i32 18)
+  call void @runtime.runtimePanic(ptr @"runtime.lookupPanic$string", i32 18)
   ret void
 }
 
@@ -16,7 +16,7 @@ define void @runtime.lookupPanic() {
 ;     func someFunc(x interface{}) {
 ;         panic(x)
 ;     }
-define void @someFunc(i32 %typecode, i8* %value) {
-  call void @runtime._panic(i32 %typecode, i8* %value)
+define void @someFunc(i32 %typecode, ptr %value) {
+  call void @runtime._panic(i32 %typecode, ptr %value)
   unreachable
 }
