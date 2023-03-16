@@ -3,17 +3,17 @@ target triple = "armv7m-none-eabi"
 
 @zeroString = constant [0 x i8] zeroinitializer
 
-declare i1 @runtime.stringEqual(i8*, i32, i8*, i32, i8*)
+declare i1 @runtime.stringEqual(ptr, i32, ptr, i32, ptr)
 
-define i1 @main.stringCompareEqualConstantZero(i8* %s1.data, i32 %s1.len, i8* %context) {
+define i1 @main.stringCompareEqualConstantZero(ptr %s1.data, i32 %s1.len, ptr %context) {
 entry:
-  %0 = call i1 @runtime.stringEqual(i8* %s1.data, i32 %s1.len, i8* getelementptr inbounds ([0 x i8], [0 x i8]* @zeroString, i32 0, i32 0), i32 0, i8* undef)
+  %0 = call i1 @runtime.stringEqual(ptr %s1.data, i32 %s1.len, ptr @zeroString, i32 0, ptr undef)
   ret i1 %0
 }
 
-define i1 @main.stringCompareUnequalConstantZero(i8* %s1.data, i32 %s1.len, i8* %context) {
+define i1 @main.stringCompareUnequalConstantZero(ptr %s1.data, i32 %s1.len, ptr %context) {
 entry:
-  %0 = call i1 @runtime.stringEqual(i8* %s1.data, i32 %s1.len, i8* getelementptr inbounds ([0 x i8], [0 x i8]* @zeroString, i32 0, i32 0), i32 0, i8* undef)
+  %0 = call i1 @runtime.stringEqual(ptr %s1.data, i32 %s1.len, ptr @zeroString, i32 0, ptr undef)
   %1 = xor i1 %0, true
   ret i1 %1
 }
