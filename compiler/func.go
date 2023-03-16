@@ -32,7 +32,8 @@ func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context
 // global reference is not real, it is only used during func lowering to assign
 // signature types to functions and will then be removed.
 func (c *compilerContext) getFuncSignatureID(sig *types.Signature) llvm.Value {
-	sigGlobalName := "reflect/types.funcid:" + getTypeCodeName(sig)
+	s, _ := getTypeCodeName(sig)
+	sigGlobalName := "reflect/types.funcid:" + s
 	sigGlobal := c.mod.NamedGlobal(sigGlobalName)
 	if sigGlobal.IsNil() {
 		sigGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), sigGlobalName)
