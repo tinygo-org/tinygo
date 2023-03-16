@@ -6,6 +6,8 @@ type MySlice [32]byte
 
 type myUint8 uint8
 
+type RecursiveSlice []RecursiveSlice
+
 // Indexing into slice with named type (regression test).
 var array = [4]int{
 	myUint8(2): 3,
@@ -160,6 +162,10 @@ func main() {
 	for _, c := range named {
 		assert(c == 0)
 	}
+
+	// Test recursive slices.
+	rs := []RecursiveSlice(nil)
+	println("len:", len(rs))
 }
 
 func printslice(name string, s []int) {

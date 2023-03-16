@@ -569,10 +569,19 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 	case *types.Map:
 		return c.getDIType(types.NewPointer(c.program.ImportedPackage("runtime").Members["hashmap"].(*ssa.Type).Type()))
 	case *types.Named:
-		return c.dibuilder.CreateTypedef(llvm.DITypedef{
+		// Placeholder metadata node, to be replaced afterwards.
+		temporaryMDNode := c.dibuilder.CreateReplaceableCompositeType(llvm.Metadata{}, llvm.DIReplaceableCompositeType{
+			Tag:         dwarf.TagTypedef,
+			SizeInBits:  sizeInBytes * 8,
+			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+		})
+		c.ditypes[typ] = temporaryMDNode
+		md := c.dibuilder.CreateTypedef(llvm.DITypedef{
 			Type: c.getDIType(typ.Underlying()),
 			Name: typ.String(),
 		})
+		temporaryMDNode.ReplaceAllUsesWith(md)
+		return md
 	case *types.Pointer:
 		return c.dibuilder.CreatePointerType(llvm.DIPointerType{
 			Pointee:      c.getDIType(typ.Elem()),
@@ -634,13 +643,6 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 			},
 		})
 	case *types.Struct:
-		// Placeholder metadata node, to be replaced afterwards.
-		temporaryMDNode := c.dibuilder.CreateReplaceableCompositeType(llvm.Metadata{}, llvm.DIReplaceableCompositeType{
-			Tag:         dwarf.TagStructType,
-			SizeInBits:  sizeInBytes * 8,
-			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
-		})
-		c.ditypes[typ] = temporaryMDNode
 		elements := make([]llvm.Metadata, typ.NumFields())
 		for i := range elements {
 			field := typ.Field(i)
@@ -659,7 +661,6 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
 			Elements:    elements,
 		})
-		temporaryMDNode.ReplaceAllUsesWith(md)
 		return md
 	case *types.TypeParam:
 		return c.getDIType(typ.Underlying())

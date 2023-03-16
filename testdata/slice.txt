@@ -16,3 +16,4 @@ bytes: len=6 cap=6 data: 1 2 3 102 111 111
 slice to array pointer: 1 -2 20 4
 unsafe.Add array: 1 5 8 4
 unsafe.Slice array: 3 3 9 15 4
+len: 0
