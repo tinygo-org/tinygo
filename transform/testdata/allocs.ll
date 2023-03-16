@@ -3,57 +3,51 @@ target triple = "armv7m-none-eabi"
 
 @runtime.zeroSizedAlloc = internal global i8 0, align 1
 
-declare nonnull i8* @runtime.alloc(i32, i8*)
+declare nonnull ptr @runtime.alloc(i32, ptr)
 
 ; Test allocating a single int (i32) that should be allocated on the stack.
 define void @testInt() {
-  %1 = call i8* @runtime.alloc(i32 4, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  store i32 5, i32* %2
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  store i32 5, ptr %alloc
   ret void
 }
 
 ; Test allocating an array of 3 i16 values that should be allocated on the
 ; stack.
 define i16 @testArray() {
-  %1 = call i8* @runtime.alloc(i32 6, i8* null)
-  %2 = bitcast i8* %1 to i16*
-  %3 = getelementptr i16, i16* %2, i32 1
-  store i16 5, i16* %3
-  %4 = getelementptr i16, i16* %2, i32 2
-  %5 = load i16, i16* %4
-  ret i16 %5
+  %alloc = call ptr @runtime.alloc(i32 6, ptr null)
+  %alloc.1 = getelementptr i16, ptr %alloc, i32 1
+  store i16 5, ptr %alloc.1
+  %alloc.2 = getelementptr i16, ptr %alloc, i32 2
+  %val = load i16, ptr %alloc.2
+  ret i16 %val
 }
 
 ; Call a function that will let the pointer escape, so the heap-to-stack
 ; transform shouldn't be applied.
 define void @testEscapingCall() {
-  %1 = call i8* @runtime.alloc(i32 4, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  %3 = call i32* @escapeIntPtr(i32* %2)
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %val = call ptr @escapeIntPtr(ptr %alloc)
   ret void
 }
 
 define void @testEscapingCall2() {
-  %1 = call i8* @runtime.alloc(i32 4, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  %3 = call i32* @escapeIntPtrSometimes(i32* %2, i32* %2)
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %val = call ptr @escapeIntPtrSometimes(ptr %alloc, ptr %alloc)
   ret void
 }
 
 ; Call a function that doesn't let the pointer escape.
 define void @testNonEscapingCall() {
-  %1 = call i8* @runtime.alloc(i32 4, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  %3 = call i32* @noescapeIntPtr(i32* %2)
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %val = call ptr @noescapeIntPtr(ptr %alloc)
   ret void
 }
 
 ; Return the allocated value, which lets it escape.
-define i32* @testEscapingReturn() {
-  %1 = call i8* @runtime.alloc(i32 4, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  ret i32* %2
+define ptr @testEscapingReturn() {
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  ret ptr %alloc
 }
 
 ; Do a non-escaping allocation in a loop.
@@ -61,25 +55,23 @@ define void @testNonEscapingLoop() {
 entry:
   br label %loop
 loop:
-  %0 = call i8* @runtime.alloc(i32 4, i8* null)
-  %1 = bitcast i8* %0 to i32*
-  %2 = call i32* @noescapeIntPtr(i32* %1)
-  %3 = icmp eq i32* null, %2
-  br i1 %3, label %loop, label %end
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %ptr = call ptr @noescapeIntPtr(ptr %alloc)
+  %result = icmp eq ptr null, %ptr
+  br i1 %result, label %loop, label %end
 end:
   ret void
 }
 
 ; Test a zero-sized allocation.
 define void @testZeroSizedAlloc() {
-  %1 = call i8* @runtime.alloc(i32 0, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  %3 = call i32* @noescapeIntPtr(i32* %2)
+  %alloc = call ptr @runtime.alloc(i32 0, ptr null)
+  %ptr = call ptr @noescapeIntPtr(ptr %alloc)
   ret void
 }
 
-declare i32* @escapeIntPtr(i32*)
+declare ptr @escapeIntPtr(ptr)
 
-declare i32* @noescapeIntPtr(i32* nocapture)
+declare ptr @noescapeIntPtr(ptr nocapture)
 
-declare i32* @escapeIntPtrSometimes(i32* nocapture, i32*)
+declare ptr @escapeIntPtrSometimes(ptr nocapture, ptr)
