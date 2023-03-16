@@ -71,6 +71,7 @@ type compilerContext struct {
 	difiles          map[string]llvm.Metadata
 	ditypes          map[types.Type]llvm.Metadata
 	llvmTypes        typeutil.Map
+	interfaceTypes   typeutil.Map
 	machine          llvm.TargetMachine
 	targetData       llvm.TargetData
 	intType          llvm.Type
