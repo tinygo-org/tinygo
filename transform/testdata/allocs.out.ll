@@ -3,53 +3,47 @@ target triple = "armv7m-none-eabi"
 
 @runtime.zeroSizedAlloc = internal global i8 0, align 1
 
-declare nonnull i8* @runtime.alloc(i32, i8*)
+declare nonnull ptr @runtime.alloc(i32, ptr)
 
 define void @testInt() {
   %stackalloc.alloca = alloca [4 x i8], align 4
-  store [4 x i8] zeroinitializer, [4 x i8]* %stackalloc.alloca, align 4
-  %stackalloc = bitcast [4 x i8]* %stackalloc.alloca to i32*
-  store i32 5, i32* %stackalloc, align 4
+  store [4 x i8] zeroinitializer, ptr %stackalloc.alloca, align 4
+  store i32 5, ptr %stackalloc.alloca, align 4
   ret void
 }
 
 define i16 @testArray() {
   %stackalloc.alloca = alloca [6 x i8], align 2
-  store [6 x i8] zeroinitializer, [6 x i8]* %stackalloc.alloca, align 2
-  %stackalloc = bitcast [6 x i8]* %stackalloc.alloca to i16*
-  %1 = getelementptr i16, i16* %stackalloc, i32 1
-  store i16 5, i16* %1, align 2
-  %2 = getelementptr i16, i16* %stackalloc, i32 2
-  %3 = load i16, i16* %2, align 2
-  ret i16 %3
+  store [6 x i8] zeroinitializer, ptr %stackalloc.alloca, align 2
+  %alloc.1 = getelementptr i16, ptr %stackalloc.alloca, i32 1
+  store i16 5, ptr %alloc.1, align 2
+  %alloc.2 = getelementptr i16, ptr %stackalloc.alloca, i32 2
+  %val = load i16, ptr %alloc.2, align 2
+  ret i16 %val
 }
 
 define void @testEscapingCall() {
-  %1 = call i8* @runtime.alloc(i32 4, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  %3 = call i32* @escapeIntPtr(i32* %2)
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %val = call ptr @escapeIntPtr(ptr %alloc)
   ret void
 }
 
 define void @testEscapingCall2() {
-  %1 = call i8* @runtime.alloc(i32 4, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  %3 = call i32* @escapeIntPtrSometimes(i32* %2, i32* %2)
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %val = call ptr @escapeIntPtrSometimes(ptr %alloc, ptr %alloc)
   ret void
 }
 
 define void @testNonEscapingCall() {
   %stackalloc.alloca = alloca [4 x i8], align 4
-  store [4 x i8] zeroinitializer, [4 x i8]* %stackalloc.alloca, align 4
-  %stackalloc = bitcast [4 x i8]* %stackalloc.alloca to i32*
-  %1 = call i32* @noescapeIntPtr(i32* %stackalloc)
+  store [4 x i8] zeroinitializer, ptr %stackalloc.alloca, align 4
+  %val = call ptr @noescapeIntPtr(ptr %stackalloc.alloca)
   ret void
 }
 
-define i32* @testEscapingReturn() {
-  %1 = call i8* @runtime.alloc(i32 4, i8* null)
-  %2 = bitcast i8* %1 to i32*
-  ret i32* %2
+define ptr @testEscapingReturn() {
+  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  ret ptr %alloc
 }
 
 define void @testNonEscapingLoop() {
@@ -58,24 +52,22 @@ entry:
   br label %loop
 
 loop:                                             ; preds = %loop, %entry
-  store [4 x i8] zeroinitializer, [4 x i8]* %stackalloc.alloca, align 4
-  %stackalloc = bitcast [4 x i8]* %stackalloc.alloca to i32*
-  %0 = call i32* @noescapeIntPtr(i32* %stackalloc)
-  %1 = icmp eq i32* null, %0
-  br i1 %1, label %loop, label %end
+  store [4 x i8] zeroinitializer, ptr %stackalloc.alloca, align 4
+  %ptr = call ptr @noescapeIntPtr(ptr %stackalloc.alloca)
+  %result = icmp eq ptr null, %ptr
+  br i1 %result, label %loop, label %end
 
 end:                                              ; preds = %loop
   ret void
 }
 
 define void @testZeroSizedAlloc() {
-  %1 = bitcast i8* @runtime.zeroSizedAlloc to i32*
-  %2 = call i32* @noescapeIntPtr(i32* %1)
+  %ptr = call ptr @noescapeIntPtr(ptr @runtime.zeroSizedAlloc)
   ret void
 }
 
-declare i32* @escapeIntPtr(i32*)
+declare ptr @escapeIntPtr(ptr)
 
-declare i32* @noescapeIntPtr(i32* nocapture)
+declare ptr @noescapeIntPtr(ptr nocapture)
 
-declare i32* @escapeIntPtrSometimes(i32* nocapture, i32*)
+declare ptr @escapeIntPtrSometimes(ptr nocapture, ptr)
