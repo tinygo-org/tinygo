@@ -3,15 +3,15 @@ target triple = "armv7m-none-eabi"
 
 @zeroString = constant [0 x i8] zeroinitializer
 
-declare i1 @runtime.stringEqual(i8*, i32, i8*, i32, i8*)
+declare i1 @runtime.stringEqual(ptr, i32, ptr, i32, ptr)
 
-define i1 @main.stringCompareEqualConstantZero(i8* %s1.data, i32 %s1.len, i8* %context) {
+define i1 @main.stringCompareEqualConstantZero(ptr %s1.data, i32 %s1.len, ptr %context) {
 entry:
   %0 = icmp eq i32 %s1.len, 0
   ret i1 %0
 }
 
-define i1 @main.stringCompareUnequalConstantZero(i8* %s1.data, i32 %s1.len, i8* %context) {
+define i1 @main.stringCompareUnequalConstantZero(ptr %s1.data, i32 %s1.len, ptr %context) {
 entry:
   %0 = icmp eq i32 %s1.len, 0
   %1 = xor i1 %0, true
