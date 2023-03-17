@@ -1263,3 +1263,7 @@ func ArrayOf(n int, t Type) Type {
 func StructOf([]StructField) Type {
 	panic("unimplemented: reflect.StructOf()")
 }
+
+func MapOf(key, value Type) Type {
+	panic("unimplemented: reflect.MapOf()")
+}
