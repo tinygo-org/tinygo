@@ -779,8 +779,17 @@ func (v Value) MapKeys() []Value {
 	k := New(v.typecode.Key())
 	e := New(v.typecode.Elem())
 
+	keyType := v.typecode.Key().(*rawType)
+	isKeyStoredAsInterface := keyType.Kind() != String && !keyType.isBinary()
+
 	for hashmapNext(v.pointer(), it, k.value, e.value) {
-		keys = append(keys, k.Elem())
+		if isKeyStoredAsInterface {
+			intf := *(*interface{})(k.value)
+			v := ValueOf(intf)
+			keys = append(keys, v)
+		} else {
+			keys = append(keys, k.Elem())
+		}
 		k = New(v.typecode.Key())
 	}
 

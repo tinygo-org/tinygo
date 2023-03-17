@@ -133,6 +133,20 @@ func TestMap(t *testing.T) {
 	if six.Interface().(int) != 6 {
 		t.Errorf("m[hello, 4]=%v, want 6", six)
 	}
+
+	keys := refsimap.MapKeys()
+	if len(keys) != 1 {
+		t.Errorf("refsimap: MapKeys()=%v, want 1", len(keys))
+	}
+	if keys[0].Type() != TypeOf(stringint{}) {
+		t.Errorf("keys[0] has wrong type: %v", keys[0].Type().String())
+	}
+
+	sikey := keys[0].Interface().(stringint)
+
+	if sikey != (stringint{"hello", 4}) {
+		t.Errorf("sikey has unexpected value: %#v", sikey)
+	}
 }
 
 func TestSlice(t *testing.T) {
