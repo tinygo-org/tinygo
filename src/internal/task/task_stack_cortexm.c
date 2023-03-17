@@ -1,3 +1,4 @@
+//go:build scheduler.tasks && cortexm
 #include <stdint.h>
 
 uintptr_t SystemStack() {
