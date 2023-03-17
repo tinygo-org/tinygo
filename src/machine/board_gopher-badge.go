@@ -1,8 +1,8 @@
-//go:build gopher_badger
+//go:build gopher_badge
 
 // This contains the pin mappings for the Gopher Badge.
 //
-// For more information, see: https://tinygo.org/gopherbadge
+// For more information, see: https://gopherbadge.com/
 package machine
 
 import (
@@ -11,15 +11,15 @@ import (
 )
 
 const (
-	ADC0  Pin = GPIO26
-	ADC1  Pin = GPIO27
-	ADC2  Pin = GPIO28
+	/*ADC0 Pin = GPIO26
+	ADC1 Pin = GPIO27
+	ADC2 Pin = GPIO28
 	GPIO4 Pin = GPIO4
 	GPIO5 Pin = GPIO5
 	GPIO6 Pin = GPIO6
 	GPIO7 Pin = GPIO7
 	GPIO8 Pin = GPIO8
-	GPIO9 Pin = GPIO9
+	GPIO9 Pin = GPIO9*/
 
 	PENIRQ Pin = GPIO13
 
@@ -86,8 +86,8 @@ var (
 const (
 	UART0_TX_PIN = GPIO0
 	UART0_RX_PIN = GPIO1
-	UART0_TX_PIN = GPIO4
-	UART0_RX_PIN = GPIO5
+	UART1_TX_PIN = GPIO4
+	UART1_RX_PIN = GPIO5
 	UART_TX_PIN  = UART0_TX_PIN
 	UART_RX_PIN  = UART0_RX_PIN
 )
