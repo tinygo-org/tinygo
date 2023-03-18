@@ -78,6 +78,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 
 	// Do the lookup. How it is done depends on the key type.
 	var commaOkValue llvm.Value
+	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
@@ -99,7 +100,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 		itfKey := key
 		if _, ok := keyType.(*types.Interface); !ok {
 			// Not already an interface, so convert it to an interface now.
-			itfKey = b.createMakeInterface(key, keyType, pos)
+			itfKey = b.createMakeInterface(key, origKeyType, pos)
 		}
 		params := []llvm.Value{m, itfKey, mapValuePtr, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapInterfaceGet", params, "")
@@ -125,6 +126,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) {
 	valueAlloca, valuePtr, valueSize := b.createTemporaryAlloca(value.Type(), "hashmap.value")
 	b.CreateStore(value, valueAlloca)
+	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
@@ -143,7 +145,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 		itfKey := key
 		if _, ok := keyType.(*types.Interface); !ok {
 			// Not already an interface, so convert it to an interface first.
-			itfKey = b.createMakeInterface(key, keyType, pos)
+			itfKey = b.createMakeInterface(key, origKeyType, pos)
 		}
 		params := []llvm.Value{m, itfKey, valuePtr}
 		b.createRuntimeCall("hashmapInterfaceSet", params, "")
@@ -154,6 +156,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 // createMapDelete deletes a key from a map by calling the appropriate runtime
 // function. It is the implementation of the Go delete() builtin.
 func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos token.Pos) error {
+	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
@@ -174,7 +177,7 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 		itfKey := key
 		if _, ok := keyType.(*types.Interface); !ok {
 			// Not already an interface, so convert it to an interface first.
-			itfKey = b.createMakeInterface(key, keyType, pos)
+			itfKey = b.createMakeInterface(key, origKeyType, pos)
 		}
 		params := []llvm.Value{m, itfKey}
 		b.createRuntimeCall("hashmapInterfaceDelete", params, "")
