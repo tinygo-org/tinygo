@@ -846,9 +846,13 @@ func (v Value) MapRange() *MapIter {
 		panic(&ValueError{Method: "MapRange", Kind: v.Kind()})
 	}
 
+	keyType := v.typecode.Key().(*rawType)
+	isKeyStoredAsInterface := keyType.Kind() != String && !keyType.isBinary()
+
 	return &MapIter{
-		m:  v,
-		it: hashmapNewIterator(),
+		m:            v,
+		it:           hashmapNewIterator(),
+		keyInterface: isKeyStoredAsInterface,
 	}
 }
 
@@ -858,12 +862,19 @@ type MapIter struct {
 	key Value
 	val Value
 
-	valid bool
+	valid        bool
+	keyInterface bool
 }
 
 func (it *MapIter) Key() Value {
 	if !it.valid {
 		panic("reflect.MapIter.Key called on invalid iterator")
+	}
+
+	if it.keyInterface {
+		intf := *(*interface{})(it.key.value)
+		v := ValueOf(intf)
+		return v
 	}
 
 	return it.key.Elem()
