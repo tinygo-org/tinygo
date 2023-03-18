@@ -133,6 +133,49 @@ func TestTinyMap(t *testing.T) {
 	if six.Interface().(int) != 6 {
 		t.Errorf("m[hello, 4]=%v, want 6", six)
 	}
+
+	// make sure we can look up interface keys with reflection
+	type unmarshalerText struct {
+		A, B string
+	}
+
+	ut := make(map[unmarshalerText]bool)
+
+	refut := ValueOf(ut)
+
+	// put in a key with the compiler
+	ut[unmarshalerText{"x", "y"}] = true
+
+	// make sure we can get it out
+	v2 := refut.MapIndex(ValueOf(unmarshalerText{"x", "y"}))
+	if !v2.IsValid() || !v2.Bool() {
+		t.Errorf("Failed to look up map struct key with refection")
+	}
+
+	// put in a key with reflection
+	refut.SetMapIndex(ValueOf(unmarshalerText{"y", "z"}), ValueOf(true))
+
+	// make sure we can get it out with the compiler
+	if !ut[unmarshalerText{"y", "z"}] {
+		t.Errorf("Failed to look up up reflect-set map key with compiler")
+	}
+
+	utKeys := refut.MapKeys()
+
+	// make sure keys extracted via reflection have the correct ype
+	if _, ok := utKeys[0].Interface().(unmarshalerText); !ok {
+		t.Errorf("Map keys via MapKeys() have wrong type: %v", utKeys[0].Type().String())
+	}
+
+	// and via iteration
+
+	utIter := refut.MapRange()
+	utIter.Next()
+	utIterKey := utIter.Key()
+
+	if _, ok := utIterKey.Interface().(unmarshalerText); !ok {
+		t.Errorf("Map keys via MapIter() have wrong type: %v", utIterKey.Type().String())
+	}
 }
 
 func TestTinySlice(t *testing.T) {
