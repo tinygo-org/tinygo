@@ -1,0 +1,63 @@
+# This is the Github action to build and push the LLVM Docker image
+# used by the tinygo/tinygo-dev Docker image.
+#
+# It only needs to be rebuilt when updating the LLVM version.
+#
+# To update, make any needed changes to this file,
+# then push to the "build-llvm-image" branch.
+#
+# The needed image will be rebuilt, which will very likely take at least 1-2 hours.
+name: LLVM
+on:
+  push:
+    branches: [ build-llvm-image ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-push-llvm:
+    name: build-push-llvm
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            tinygo/llvm-15
+            ghcr.io/${{ github.repository_owner }}/llvm-15
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Log in to Github Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          target: tinygo-llvm-build
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
