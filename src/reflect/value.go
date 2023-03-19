@@ -330,6 +330,27 @@ func (v Value) Uint() uint64 {
 	}
 }
 
+func (v Value) Float32() float32 {
+	switch v.Kind() {
+	case Float32:
+		if v.isIndirect() || unsafe.Sizeof(float32(0)) > unsafe.Sizeof(uintptr(0)) {
+			// The float is stored as an external value on systems with 16-bit
+			// pointers.
+			return *(*float32)(v.value)
+		} else {
+			// The float is directly stored in the interface value on systems
+			// with 32-bit and 64-bit pointers.
+			return *(*float32)(unsafe.Pointer(&v.value))
+		}
+
+	case Float64:
+		return float32(v.Float())
+
+	}
+
+	panic(&ValueError{Method: "Float", Kind: v.Kind()})
+}
+
 func (v Value) Float() float64 {
 	switch v.Kind() {
 	case Float32:
@@ -1103,6 +1124,24 @@ func convertOp(src Value, typ Type) (Value, bool) {
 			return cvtUintString(src, rtype), true
 		}
 
+	case Float32, Float64:
+		switch rtype := typ.(*rawType); rtype.Kind() {
+		case Int, Int8, Int16, Int32, Int64:
+			return cvtFloatInt(src, rtype), true
+		case Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+			return cvtFloatUint(src, rtype), true
+		case Float32, Float64:
+			return cvtFloat(src, rtype), true
+		}
+
+		/*
+			case Complex64, Complex128:
+				switch src.Kind() {
+				case Complex64, Complex128:
+					return cvtComplex
+				}
+		*/
+
 	case Slice:
 		if typ.Kind() == String && !src.typecode.elem().isNamed() {
 			rtype := typ.(*rawType)
@@ -1147,6 +1186,24 @@ func cvtIntFloat(v Value, t *rawType) Value {
 
 func cvtUintFloat(v Value, t *rawType) Value {
 	return makeFloat(v.flags, float64(v.Uint()), t)
+}
+
+func cvtFloatInt(v Value, t *rawType) Value {
+	return makeInt(v.flags, uint64(int64(v.Float())), t)
+}
+
+func cvtFloatUint(v Value, t *rawType) Value {
+	return makeInt(v.flags, uint64(v.Float()), t)
+}
+
+func cvtFloat(v Value, t *rawType) Value {
+	if v.Type().Kind() == Float32 && t.Kind() == Float32 {
+		// Don't do any conversion if both types have underlying type float32.
+		// This avoids converting to float64 and back, which will
+		// convert a signaling NaN to a quiet NaN. See issue 36400.
+		return makeFloat32(v.flags, v.Float32(), t)
+	}
+	return makeFloat(v.flags, v.Float(), t)
 }
 
 //go:linkname stringToBytes runtime.stringToBytesTyped
@@ -1202,6 +1259,17 @@ func makeFloat(flags valueFlags, v float64, t *rawType) Value {
 	case 8:
 		*(*float64)(ptr) = v
 	}
+	return Value{
+		typecode: t,
+		value:    ptr,
+		flags:    flags | valueFlagIndirect,
+	}
+}
+
+func makeFloat32(flags valueFlags, v float32, t *rawType) Value {
+	size := t.Size()
+	ptr := alloc(size, nil)
+	*(*float32)(ptr) = float32(v)
 	return Value{
 		typecode: t,
 		value:    ptr,
