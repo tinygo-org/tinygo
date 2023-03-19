@@ -511,8 +511,11 @@ func (t *rawType) String() string {
 	case Map:
 		return "map[" + t.key().String() + "]" + t.elem().String()
 	case Struct:
-		s := "struct {"
 		numField := t.NumField()
+		if numField == 0 {
+			return "struct {}"
+		}
+		s := "struct {"
 		for i := 0; i < numField; i++ {
 			f := t.rawField(i)
 			s += " " + f.Name + " " + f.Type.String()
