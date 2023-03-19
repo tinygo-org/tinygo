@@ -972,8 +972,6 @@ func (t *rawType) isBinary() bool {
 	switch t.Kind() {
 	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
 		return true
-	case Float32, Float64, Complex64, Complex128:
-		return true
 	case Pointer:
 		return true
 	case Array:
