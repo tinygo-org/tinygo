@@ -542,6 +542,9 @@ func (t *rawType) String() string {
 		}
 		s += " }"
 		return s
+	case Interface:
+		// TODO(dgryski): Needs actual method set info
+		return "interface {}"
 	default:
 		return t.Kind().String()
 	}
