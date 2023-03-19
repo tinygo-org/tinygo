@@ -31,7 +31,7 @@ jobs:
         with:
           images: |
             tinygo/tinygo-dev
-            ghcr.io/${{ github.repository }}/tinygo-dev
+            ghcr.io/${{ github.repository_owner }}/tinygo-dev
           tags: |
             type=sha,format=long
             type=raw,value=latest
