@@ -126,3 +126,21 @@ func NewSetup(data []byte) Setup {
 	u.WLength = uint16(data[6]) | (uint16(data[7]) << 8)
 	return u
 }
+
+var (
+	// VendorID aka VID is the officially assigned vendor number
+	// for this USB device. Only set this if you know what you are doing,
+	// since changing it can make it difficult to reflash some devices.
+	VendorID uint16
+
+	// ProductID aka PID is the product number associated with the officially assigned
+	// vendor number for this USB device. Only set this if you know what you are doing,
+	// since changing it can make it difficult to reflash some devices.
+	ProductID uint16
+
+	// Manufacturer is the manufacturer name displayed for this USB device.
+	Manufacturer string
+
+	// Product is the product name displayed for this USB device.
+	Product string
+)
