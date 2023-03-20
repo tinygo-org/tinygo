@@ -33,6 +33,38 @@ var usbDescriptor = usb.DescriptorCDC
 
 var usbDescriptorConfig uint8 = usb.DescriptorConfigCDC
 
+func usbVendorID() uint16 {
+	if usb.VendorID != 0 {
+		return usb.VendorID
+	}
+
+	return usb_VID
+}
+
+func usbProductID() uint16 {
+	if usb.ProductID != 0 {
+		return usb.ProductID
+	}
+
+	return usb_PID
+}
+
+func usbManufacturer() string {
+	if usb.Manufacturer != "" {
+		return usb.Manufacturer
+	}
+
+	return usb_STRING_MANUFACTURER
+}
+
+func usbProduct() string {
+	if usb.Product != "" {
+		return usb.Product
+	}
+
+	return usb_STRING_PRODUCT
+}
+
 // strToUTF16LEDescriptor converts a utf8 string into a string descriptor
 // note: the following code only converts ascii characters to UTF16LE. In order
 // to do a "proper" conversion, we would need to pull in the 'unicode/utf16'
@@ -118,7 +150,7 @@ func sendDescriptor(setup usb.Setup) {
 			usbDescriptor = usb.DescriptorCDC
 		}
 
-		usbDescriptor.Configure(usb_VID, usb_PID)
+		usbDescriptor.Configure(usbVendorID(), usbProductID())
 		sendUSBPacket(0, usbDescriptor.Device, setup.WLength)
 		return
 
@@ -132,13 +164,13 @@ func sendDescriptor(setup usb.Setup) {
 			sendUSBPacket(0, usb_trans_buffer[:4], setup.WLength)
 
 		case usb.IPRODUCT:
-			b := usb_trans_buffer[:(len(usb_STRING_PRODUCT)<<1)+2]
-			strToUTF16LEDescriptor(usb_STRING_PRODUCT, b)
+			b := usb_trans_buffer[:(len(usbProduct())<<1)+2]
+			strToUTF16LEDescriptor(usbProduct(), b)
 			sendUSBPacket(0, b, setup.WLength)
 
 		case usb.IMANUFACTURER:
-			b := usb_trans_buffer[:(len(usb_STRING_MANUFACTURER)<<1)+2]
-			strToUTF16LEDescriptor(usb_STRING_MANUFACTURER, b)
+			b := usb_trans_buffer[:(len(usbManufacturer())<<1)+2]
+			strToUTF16LEDescriptor(usbManufacturer(), b)
 			sendUSBPacket(0, b, setup.WLength)
 
 		case usb.ISERIAL:
