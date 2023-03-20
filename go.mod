@@ -18,6 +18,7 @@ require (
 	golang.org/x/tools v0.5.1-0.20230114154351-e035d0c426c8
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20221028183034-8341240c0b32
+	tinygo.org/x/tinydraw v0.3.0
 )
 
 require (
@@ -26,7 +27,14 @@ require (
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.1.0 // indirect
+	github.com/golang/protobuf v1.3.3 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mitchellh/go-grpc-net-conn v0.0.0-20200427190222-eb030e4876f0 // indirect
+	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
+	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55 // indirect
+	google.golang.org/grpc v1.28.1 // indirect
+	tinygo.org/x/drivers v0.24.0 // indirect
 )
