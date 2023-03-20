@@ -193,6 +193,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "elementType", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "length", types.Typ[types.Uintptr]),
+				types.NewVar(token.NoPos, nil, "sliceOf", types.Typ[types.UnsafePointer]),
 			)
 		case *types.Map:
 			typeFieldTypes = append(typeFieldTypes,
@@ -302,6 +303,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeCode(types.NewPointer(typ)),                   // ptrTo
 				c.getTypeCode(typ.Elem()),                              // elementType
 				llvm.ConstInt(c.uintptrType, uint64(typ.Len()), false), // length
+				c.getTypeCode(types.NewSlice(typ.Elem())),              // slicePtr
 			}
 		case *types.Map:
 			typeFields = []llvm.Value{

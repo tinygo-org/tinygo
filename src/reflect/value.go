@@ -555,8 +555,26 @@ func (v Value) Slice(i, j int) Value {
 		}
 
 	case Array:
-		// TODO(dgryski): can't do this yet because the resulting value needs type slice of v.elem(), not array of v.elem().
-		// need to be able to look up this "new" type so pointer equality of types still works
+		v.checkAddressable()
+		buf, length := buflen(v)
+		i, j := uintptr(i), uintptr(j)
+		if j < i || length < j {
+			slicePanic()
+		}
+
+		elemSize := v.typecode.underlying().elem().Size()
+
+		var hdr sliceHeader
+		hdr.len = j - i
+		hdr.cap = length - i
+		hdr.data = unsafe.Add(buf, i*elemSize)
+
+		sliceType := (*arrayType)(unsafe.Pointer(v.typecode.underlying())).slicePtr
+		return Value{
+			typecode: sliceType,
+			value:    unsafe.Pointer(&hdr),
+			flags:    v.flags,
+		}
 
 	case String:
 		i, j := uintptr(i), uintptr(j)
@@ -604,9 +622,26 @@ func (v Value) Slice3(i, j, k int) Value {
 		}
 
 	case Array:
-		// TODO(dgryski): can't do this yet because the resulting value needs type v.elem(), not array of v.elem().
-		// need to be able to look up this "new" type so pointer equality of types still works
+		v.checkAddressable()
+		buf, length := buflen(v)
+		i, j, k := uintptr(i), uintptr(j), uintptr(k)
+		if j < i || k < j || length < k {
+			slicePanic()
+		}
 
+		elemSize := v.typecode.underlying().elem().Size()
+
+		var hdr sliceHeader
+		hdr.len = j - i
+		hdr.cap = k - i
+		hdr.data = unsafe.Add(buf, i*elemSize)
+
+		sliceType := (*arrayType)(unsafe.Pointer(v.typecode.underlying())).slicePtr
+		return Value{
+			typecode: sliceType,
+			value:    unsafe.Pointer(&hdr),
+			flags:    v.flags,
+		}
 	}
 
 	panic("unimplemented: (reflect.Value).Slice3()")
