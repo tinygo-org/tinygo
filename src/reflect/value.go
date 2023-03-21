@@ -999,7 +999,7 @@ func (v Value) SetLen(n int) {
 	if v.typecode.Kind() != Slice {
 		panic(&ValueError{Method: "reflect.Value.SetLen", Kind: v.Kind()})
 	}
-
+	v.checkAddressable()
 	hdr := (*sliceHeader)(v.value)
 	if int(uintptr(n)) != n || uintptr(n) > hdr.cap {
 		panic("reflect.Value.SetLen: slice length out of range")
