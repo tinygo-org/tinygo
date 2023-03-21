@@ -309,7 +309,7 @@ func TestStruct(t *testing.T) {
 	var ok bool
 	q, ok = reffb.FieldByName("Foo")
 	if q.Name != "Foo" || !ok {
-		t.Errorf("FieldByName(Foo)=%v,%v, want Foo, true")
+		t.Errorf("FieldByName(Foo)=%v,%v, want Foo, true", q.Name, ok)
 	}
 
 	if got, want := q.Tag, `foo:"struct tag"`; string(got) != want {
@@ -318,7 +318,7 @@ func TestStruct(t *testing.T) {
 
 	q, ok = reffb.FieldByName("Snorble")
 	if q.Name != "" || ok {
-		t.Errorf("FieldByName(Snorble)=%v,%v, want ``, false")
+		t.Errorf("FieldByName(Snorble)=%v,%v, want ``, false", q.Name, ok)
 	}
 }
 
