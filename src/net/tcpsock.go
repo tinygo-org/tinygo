@@ -109,7 +109,7 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 		return nil, fmt.Errorf("Lookup of host name '%s' failed: %s", host, err)
 	}
 
-	return &TCPAddr{IP: IP(ip[:]), Port: port}, nil
+	return &TCPAddr{IP: ip, Port: port}, nil
 }
 
 // TCPConn is an implementation of the Conn interface for TCP network
