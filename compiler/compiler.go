@@ -55,6 +55,7 @@ type Config struct {
 	DefaultStackSize   uint64
 	NeedsStackObjects  bool
 	Debug              bool // Whether to emit debug information in the LLVM module.
+	LTO                bool // non-legacy LTO (meaning: package bitcode is merged by the linker)
 }
 
 // compilerContext contains function-independent data that should still be
@@ -898,7 +899,9 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 				c.createEmbedGlobal(member, global, files)
 			} else if !info.extern {
 				global.SetInitializer(llvm.ConstNull(global.GlobalValueType()))
-				global.SetVisibility(llvm.HiddenVisibility)
+				if !c.LTO {
+					global.SetVisibility(llvm.HiddenVisibility)
+				}
 				if info.section != "" {
 					global.SetSection(info.section)
 				}
@@ -945,7 +948,9 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		}
 		strObj := c.getEmbedFileString(files[0])
 		global.SetInitializer(strObj)
-		global.SetVisibility(llvm.HiddenVisibility)
+		if !c.LTO {
+			global.SetVisibility(llvm.HiddenVisibility)
+		}
 
 	case *types.Slice:
 		if typ.Elem().Underlying().(*types.Basic).Kind() != types.Byte {
@@ -969,7 +974,9 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		sliceLen := llvm.ConstInt(c.uintptrType, file.Size, false)
 		sliceObj := c.ctx.ConstStruct([]llvm.Value{slicePtr, sliceLen, sliceLen}, false)
 		global.SetInitializer(sliceObj)
-		global.SetVisibility(llvm.HiddenVisibility)
+		if !c.LTO {
+			global.SetVisibility(llvm.HiddenVisibility)
+		}
 
 		if c.Debug {
 			// Add debug info to the slice backing array.
@@ -1089,7 +1096,9 @@ func (c *compilerContext) createEmbedGlobal(member *ssa.Global, global llvm.Valu
 		globalInitializer := llvm.ConstNull(c.getLLVMType(member.Type().(*types.Pointer).Elem()))
 		globalInitializer = c.builder.CreateInsertValue(globalInitializer, sliceGlobal, 0, "")
 		global.SetInitializer(globalInitializer)
-		global.SetVisibility(llvm.HiddenVisibility)
+		if !c.LTO {
+			global.SetVisibility(llvm.HiddenVisibility)
+		}
 		global.SetAlignment(c.targetData.ABITypeAlignment(globalInitializer.Type()))
 	}
 }
@@ -1136,7 +1145,8 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// assertion error in llvm-project/llvm/include/llvm/IR/GlobalValue.h:236
 		// is thrown.
 		if b.llvmFn.Linkage() != llvm.InternalLinkage &&
-			b.llvmFn.Linkage() != llvm.PrivateLinkage {
+			b.llvmFn.Linkage() != llvm.PrivateLinkage &&
+			!b.LTO {
 			b.llvmFn.SetVisibility(llvm.HiddenVisibility)
 		}
 		b.llvmFn.SetUnnamedAddr(true)

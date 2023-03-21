@@ -176,6 +176,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		DefaultStackSize:   config.StackSize(),
 		NeedsStackObjects:  config.NeedsStackObjects(),
 		Debug:              true,
+		LTO:                config.LTO() != "legacy",
 	}
 
 	// Load the target machine, which is the LLVM object that contains all
@@ -452,18 +453,24 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if err != nil {
 					return err
 				}
-				if runtime.GOOS == "windows" {
-					// Work around a problem on Windows.
-					// For some reason, WriteBitcodeToFile causes TinyGo to
-					// exit with the following message:
-					//   LLVM ERROR: IO failure on output stream: Bad file descriptor
-					buf := llvm.WriteBitcodeToMemoryBuffer(mod)
+				if compilerConfig.LTO {
+					buf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
 					defer buf.Dispose()
 					_, err = f.Write(buf.Bytes())
 				} else {
-					// Otherwise, write bitcode directly to the file (probably
-					// faster).
-					err = llvm.WriteBitcodeToFile(mod, f)
+					if runtime.GOOS == "windows" {
+						// Work around a problem on Windows.
+						// For some reason, WriteBitcodeToFile causes TinyGo to
+						// exit with the following message:
+						//   LLVM ERROR: IO failure on output stream: Bad file descriptor
+						buf := llvm.WriteBitcodeToMemoryBuffer(mod)
+						defer buf.Dispose()
+						_, err = f.Write(buf.Bytes())
+					} else {
+						// Otherwise, write bitcode directly to the file (probably
+						// faster).
+						err = llvm.WriteBitcodeToFile(mod, f)
+					}
 				}
 				if err != nil {
 					// WriteBitcodeToFile doesn't produce a useful error on its
@@ -511,24 +518,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 			// Create runtime.initAll function that calls the runtime
 			// initializer of each package.
-			llvmInitFn := mod.NamedFunction("runtime.initAll")
-			llvmInitFn.SetLinkage(llvm.InternalLinkage)
-			llvmInitFn.SetUnnamedAddr(true)
-			transform.AddStandardAttributes(llvmInitFn, config)
-			llvmInitFn.Param(0).SetName("context")
-			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
-			irbuilder := mod.Context().NewBuilder()
-			defer irbuilder.Dispose()
-			irbuilder.SetInsertPointAtEnd(block)
-			i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-			for _, pkg := range lprogram.Sorted() {
-				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
-				if pkgInit.IsNil() {
-					panic("init not found for " + pkg.Pkg.Path())
-				}
-				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
+			initAllModule := createInitAll(ctx, config, compilerConfig, lprogram.Sorted())
+			err := llvm.LinkModules(mod, initAllModule)
+			if err != nil {
+				return fmt.Errorf("failed to link module: %w", err)
 			}
-			irbuilder.CreateRetVoid()
 
 			// After linking, functions should (as far as possible) be set to
 			// private linkage or internal linkage. The compiler package marks
@@ -561,7 +555,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 			// Run all optimization passes, which are much more effective now
 			// that the optimizer can see the whole program at once.
-			err := optimizeProgram(mod, config)
+			err = optimizeProgram(mod, config)
 			if err != nil {
 				return err
 			}
@@ -622,8 +616,38 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		},
 	}
 
+	// Add job to create the runtime.initAll function in a new module.
+	initAllJob := &compileJob{
+		description: "create runtime.initAll",
+		result:      filepath.Join(tmpdir, "runtime-initAll.bc"),
+		run: func(job *compileJob) (err error) {
+			// Create module with runtime.initAll.
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			initAllMod := createInitAll(ctx, config, compilerConfig, lprogram.Sorted())
+			defer initAllMod.Dispose()
+
+			// Write module to bitcode file.
+			llvmBuf := llvm.WriteThinLTOBitcodeToMemoryBuffer(initAllMod)
+			defer llvmBuf.Dispose()
+			return os.WriteFile(job.result, llvmBuf.Bytes(), 0666)
+		},
+	}
+
 	// Prepare link command.
-	linkerDependencies := []*compileJob{outputObjectFileJob}
+	var linkerDependencies []*compileJob
+	switch config.LTO() {
+	case "legacy":
+		// Link all Go bitcode files together into a single large module and
+		// then do a ThinLTO link with the resulting large module + extra C
+		// files (from CGo etc).
+		linkerDependencies = append(linkerDependencies, outputObjectFileJob)
+	case "thin":
+		// Do a real thin link, with each Go package in a separate translation
+		// unit. This is faster than merging them into one big LTO module.
+		linkerDependencies = append(linkerDependencies, packageJobs...)
+		linkerDependencies = append(linkerDependencies, initAllJob)
+	}
 	result.Executable = filepath.Join(tmpdir, "main")
 	if config.GOOS() == "windows" {
 		result.Executable += ".exe"
@@ -1030,6 +1054,45 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 		return "", err
 	}
 	return outfile.Name(), outfile.Close()
+}
+
+// Create a module with the runtime.initAll function that calls all package
+// initializers in initialization order.
+func createInitAll(ctx llvm.Context, config *compileopts.Config, compilerConfig *compiler.Config, pkgs []*loader.Package) llvm.Module {
+	// Create LLVM module.
+	mod := ctx.NewModule("runtime-initAll")
+
+	// Add datalayout string.
+	machine, err := compiler.NewTargetMachine(compilerConfig)
+	if err != nil {
+		panic(err) // extremely unlikely to fail here (NewTargetMachine is called many times before)
+	}
+	defer machine.Dispose()
+	targetData := machine.CreateTargetData()
+	defer targetData.Dispose()
+	mod.SetTarget(config.Triple())
+	mod.SetDataLayout(targetData.String())
+
+	// Create empty runtime.initAll function.
+	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
+	fnType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{i8ptrType}, false)
+	fn := llvm.AddFunction(mod, "runtime.initAll", fnType)
+	fn.SetUnnamedAddr(true)
+	transform.AddStandardAttributes(fn, config)
+
+	// Add calls to package initializers.
+	fn.Param(0).SetName("context")
+	block := mod.Context().AddBasicBlock(fn, "entry")
+	irbuilder := mod.Context().NewBuilder()
+	defer irbuilder.Dispose()
+	irbuilder.SetInsertPointAtEnd(block)
+	for _, pkg := range pkgs {
+		pkgInit := llvm.AddFunction(mod, pkg.Pkg.Path()+".init", fnType)
+		irbuilder.CreateCall(fnType, pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
+	}
+	irbuilder.CreateRetVoid()
+
+	return mod
 }
 
 // optimizeProgram runs a series of optimizations and transformations that are
