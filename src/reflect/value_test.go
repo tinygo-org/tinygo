@@ -180,6 +180,8 @@ func TestSlice(t *testing.T) {
 	}
 
 	// should be equivalent to s28 now, except for the capacity which doesn't change
+
+	s268ref = ValueOf(&s268).Elem()
 	s268ref.SetLen(6)
 	if len(s28) != s268ref.Len() || cap(s268) != s268ref.Cap() {
 		t.Errorf("SetLen: len(s268)=%d s268ref.Len()=%d cap(s268)=%d s268ref.Cap()=%d\n", len(s28), s268ref.Len(), cap(s268), s268ref.Cap())
