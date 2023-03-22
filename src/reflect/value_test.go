@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestIndirectPointers(t *testing.T) {
+func TestTinyIndirectPointers(t *testing.T) {
 	var m = map[string]int{}
 	m["x"] = 1
 
@@ -33,7 +33,7 @@ func TestIndirectPointers(t *testing.T) {
 	}
 }
 
-func TestMap(t *testing.T) {
+func TestTinyMap(t *testing.T) {
 
 	m := make(map[string]int)
 
@@ -135,7 +135,7 @@ func TestMap(t *testing.T) {
 	}
 }
 
-func TestSlice(t *testing.T) {
+func TestTinySlice(t *testing.T) {
 	s := []int{0, 10, 20}
 	refs := ValueOf(s)
 
@@ -202,7 +202,7 @@ func TestSlice(t *testing.T) {
 	}
 }
 
-func TestBytes(t *testing.T) {
+func TestTinyBytes(t *testing.T) {
 	s := []byte("abcde")
 	refs := ValueOf(s)
 
@@ -233,7 +233,7 @@ func TestBytes(t *testing.T) {
 	}
 }
 
-func TestNamedTypes(t *testing.T) {
+func TestTinyNamedTypes(t *testing.T) {
 	type namedString string
 
 	named := namedString("foo")
@@ -287,7 +287,7 @@ func TestNamedTypes(t *testing.T) {
 	v.Set(n)
 }
 
-func TestStruct(t *testing.T) {
+func TestTinyStruct(t *testing.T) {
 	type barStruct struct {
 		QuxString string
 		BazInt    int
@@ -324,7 +324,7 @@ func TestStruct(t *testing.T) {
 	}
 }
 
-func TestZero(t *testing.T) {
+func TestTinyZero(t *testing.T) {
 	s := "hello, world"
 	var sptr *string = &s
 	v := ValueOf(&sptr).Elem()
@@ -358,7 +358,7 @@ func addrSetInt(intf interface{}) {
 	*ptr = 112358
 }
 
-func TestAddr(t *testing.T) {
+func TestTinyAddr(t *testing.T) {
 	var n uint64
 	addrDecode(&n)
 	if n != 112358 {
@@ -371,7 +371,7 @@ func TestAddr(t *testing.T) {
 	}
 }
 
-func TestNilType(t *testing.T) {
+func TestTinyNilType(t *testing.T) {
 	var a any = nil
 	typ := TypeOf(a)
 	if typ != nil {
@@ -379,7 +379,7 @@ func TestNilType(t *testing.T) {
 	}
 }
 
-func TestSetBytes(t *testing.T) {
+func TestTinySetBytes(t *testing.T) {
 	var b []byte
 	refb := ValueOf(&b).Elem()
 	s := []byte("hello")
@@ -417,7 +417,7 @@ func (m *methodStruct) pointerMethod3() int {
 	return m.i
 }
 
-func TestNumMethods(t *testing.T) {
+func TestTinyNumMethods(t *testing.T) {
 	refptrt := TypeOf(&methodStruct{})
 	if got, want := refptrt.NumMethod(), 2+3; got != want {
 		t.Errorf("Pointer Methods=%v, want %v", got, want)
