@@ -1154,8 +1154,6 @@ func convertOp(src Value, typ Type) (Value, bool) {
 			}
 		}
 
-		// TODO(dgryski): Implement other cases
-
 	case String:
 		rtype := typ.(*rawType)
 		if typ.Kind() == Slice && !rtype.elem().isNamed() {
@@ -1166,8 +1164,13 @@ func convertOp(src Value, typ Type) (Value, bool) {
 				return cvtStringRunes(src, rtype), true
 			}
 		}
-
 	}
+
+	// TODO(dgryski): Unimplemented:
+	// Chan
+	// Identical underlying types
+	// Non-defined pointers types with same underlying base type
+	// Interface <-> Type conversions
 
 	return Value{}, false
 }
