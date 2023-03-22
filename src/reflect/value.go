@@ -1235,7 +1235,18 @@ func cvtBytesString(v Value, t *rawType) Value {
 
 func makeInt(flags valueFlags, bits uint64, t *rawType) Value {
 	size := t.Size()
-	ptr := alloc(size, nil)
+
+	v := Value{
+		typecode: t,
+		flags:    flags,
+	}
+
+	ptr := unsafe.Pointer(&v.value)
+	if size > unsafe.Sizeof(uintptr(0)) {
+		ptr = alloc(size, nil)
+		v.value = ptr
+	}
+
 	switch size {
 	case 1:
 		*(*uint8)(ptr) = uint8(bits)
@@ -1246,38 +1257,38 @@ func makeInt(flags valueFlags, bits uint64, t *rawType) Value {
 	case 8:
 		*(*uint64)(ptr) = bits
 	}
-	return Value{
-		typecode: t,
-		value:    ptr,
-		flags:    flags | valueFlagIndirect,
-	}
+	return v
 }
 
-func makeFloat(flags valueFlags, v float64, t *rawType) Value {
+func makeFloat(flags valueFlags, f float64, t *rawType) Value {
 	size := t.Size()
-	ptr := alloc(size, nil)
+
+	v := Value{
+		typecode: t,
+		flags:    flags,
+	}
+
+	ptr := unsafe.Pointer(&v.value)
+	if size > unsafe.Sizeof(uintptr(0)) {
+		ptr = alloc(size, nil)
+	}
+
 	switch size {
 	case 4:
-		*(*float32)(ptr) = float32(v)
+		*(*float32)(ptr) = float32(f)
 	case 8:
-		*(*float64)(ptr) = v
+		*(*float64)(ptr) = f
 	}
-	return Value{
-		typecode: t,
-		value:    ptr,
-		flags:    flags | valueFlagIndirect,
-	}
+	return v
 }
 
-func makeFloat32(flags valueFlags, v float32, t *rawType) Value {
-	size := t.Size()
-	ptr := alloc(size, nil)
-	*(*float32)(ptr) = float32(v)
-	return Value{
+func makeFloat32(flags valueFlags, f float32, t *rawType) Value {
+	v := Value{
 		typecode: t,
-		value:    ptr,
-		flags:    flags | valueFlagIndirect,
+		flags:    flags,
 	}
+	*(*float32)(unsafe.Pointer(&v.value)) = float32(f)
+	return v
 }
 
 func cvtIntString(src Value, t *rawType) Value {
