@@ -8,12 +8,12 @@ import (
 func main() {
 }
 
-//export add
+//go:wasmimport add
 func add(a, b int) int {
 	return a + b
 }
 
-//export update
+//go:wasmimport update
 func update() {
 	document := js.Global().Get("document")
 	aStr := document.Call("getElementById", "a").Get("value").String()
