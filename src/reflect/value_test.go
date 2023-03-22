@@ -161,7 +161,7 @@ func TestMap(t *testing.T) {
 
 	utKeys := refut.MapKeys()
 
-	// make sure keys extracted via reflection have the correct ype
+	// make sure keys extracted via reflection have the correct type
 	if _, ok := utKeys[0].Interface().(unmarshalerText); !ok {
 		t.Errorf("Map keys via MapKeys() have wrong type: %v", utKeys[0].Type().String())
 	}
