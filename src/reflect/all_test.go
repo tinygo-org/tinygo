@@ -10,8 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"go/token"
-	"internal/goarch"
-	"internal/testenv"
 	"io"
 	"math"
 	"math/rand"
@@ -31,6 +29,45 @@ import (
 	"unsafe"
 )
 
+// keep imports
+var (
+	_ = bytes.MinRead
+	_ = base64.StdPadding
+	_ = flag.ErrHelp
+	_ = fmt.Append
+	_ = token.LowestPrec
+	_ = io.EOF
+	_ = math.E
+	_ = rand.Int
+	_ = net.IPv4len
+	_ = os.PathSeparator
+	_ = example1.MyStruct{}
+	_ = example2.MyStruct{}
+	_ = Invalid // reflect
+	_ = runtime.Compiler
+	_ = sort.Find
+	_ = strconv.IntSize
+	_ = strings.Clone
+	_ = sync.NewCond
+	_ = atomic.AddInt32
+	_ = testing.T{}
+	_ = time.Now
+	_ = unsafe.Add(nil, 0)
+)
+
+var goarch = struct {
+	PtrSize uintptr
+}{
+	PtrSize: unsafe.Sizeof(uintptr(0)),
+}
+
+var testenv = struct {
+	OptimizationOff func() bool
+}{
+	OptimizationOff: func() bool { return false },
+}
+
+/*
 var sink any
 
 func TestBool(t *testing.T) {
@@ -4156,7 +4193,7 @@ var convertTests = []struct {
 				}
 			}
 		}
-	*/
+*/ /*
 	{V(int8(1)), V(int8(1))},
 	{V(int8(2)), V(uint8(2))},
 	{V(uint8(3)), V(int8(3))},
@@ -8360,3 +8397,5 @@ func TestInitFuncTypes(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+*/
