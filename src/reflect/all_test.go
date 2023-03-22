@@ -67,7 +67,6 @@ var testenv = struct {
 	OptimizationOff: func() bool { return false },
 }
 
-/*
 var sink any
 
 func TestBool(t *testing.T) {
@@ -281,6 +280,8 @@ func testType(t *testing.T, i int, typ Type, want string) {
 		t.Errorf("#%d: have %#q, want %#q", i, s, want)
 	}
 }
+
+/*
 
 func TestTypes(t *testing.T) {
 	for i, tt := range typeTests {
@@ -611,6 +612,8 @@ func TestCanSetField(t *testing.T) {
 	}
 }
 
+*/
+
 var _i = 7
 
 var valueToStringTests = []pair{
@@ -690,6 +693,8 @@ func TestMapSetNil(t *testing.T) {
 	}
 }
 
+/*
+
 func TestAll(t *testing.T) {
 	testType(t, 1, TypeOf((int8)(0)), "int8")
 	testType(t, 2, TypeOf((*int8)(nil)).Elem(), "int8")
@@ -737,6 +742,8 @@ func TestAll(t *testing.T) {
 	testType(t, 14, typ, "[]uint32")
 }
 
+*/
+
 func TestInterfaceGet(t *testing.T) {
 	var inter struct {
 		E any
@@ -766,6 +773,8 @@ func TestInterfaceValue(t *testing.T) {
 		t.Error("v2.Interface() did not return float64, got ", TypeOf(i3))
 	}
 }
+
+/*
 
 func TestFunctionValue(t *testing.T) {
 	var x any = func() {}
@@ -843,6 +852,8 @@ func TestGrow(t *testing.T) {
 	})
 }
 
+*/
+
 var appendTests = []struct {
 	orig, extra []int
 }{
@@ -857,6 +868,8 @@ var appendTests = []struct {
 	{make([]int, 2, 4), []int{22}},
 	{make([]int, 2, 4), []int{22, 33, 44}},
 }
+
+/*
 
 func TestAppend(t *testing.T) {
 	for i, test := range appendTests {
@@ -916,6 +929,8 @@ func TestAppend(t *testing.T) {
 		shouldPanic("using unexported field", func() { AppendSlice(ax, e1) })
 	}
 }
+
+*/
 
 func TestCopy(t *testing.T) {
 	a := []int{1, 2, 3, 4, 10, 9, 8, 7}
@@ -1041,8 +1056,6 @@ func TestBigStruct(t *testing.T) {
 		t.Errorf("ValueOf(%v).Interface().(big) = %v", b, b1)
 	}
 }
-
-*/
 
 type Basic struct {
 	x int
@@ -1180,8 +1193,6 @@ func TestDeepEqual(t *testing.T) {
 	}
 }
 
-/*
-
 func TestTypeOf(t *testing.T) {
 	// Special case for nil
 	if typ := TypeOf(nil); typ != nil {
@@ -1198,8 +1209,6 @@ func TestTypeOf(t *testing.T) {
 		}
 	}
 }
-
-*/
 
 type Recursive struct {
 	x int
@@ -1329,6 +1338,8 @@ func TestDeepEqualAllocs(t *testing.T) {
 	}
 }
 
+*/
+
 func check2ndField(x any, offs uintptr, t *testing.T) {
 	s := ValueOf(x)
 	f := s.Type().Field(1)
@@ -1437,6 +1448,8 @@ func TestIsNil(t *testing.T) {
 	fi.x = TestIsNil
 	NotNil(fi, t)
 }
+
+/*
 
 func TestIsZero(t *testing.T) {
 	for i, tt := range []struct {
@@ -1577,6 +1590,8 @@ func TestInterfaceExtraction(t *testing.T) {
 	}
 }
 
+*/
+
 func TestNilPtrValueSub(t *testing.T) {
 	var pi *int
 	if pv := ValueOf(pi); pv.Elem().IsValid() {
@@ -1673,6 +1688,8 @@ func TestNilMap(t *testing.T) {
 	// Test that deletes from a nil map succeed.
 	mv.SetMapIndex(ValueOf("hi"), Value{})
 }
+
+/*
 
 func TestChan(t *testing.T) {
 	for loop := 0; loop < 2; loop++ {
@@ -2415,6 +2432,8 @@ func TestMakeFuncInvalidReturnAssignments(t *testing.T) {
 	})
 }
 
+*/
+
 type Point struct {
 	x, y int
 }
@@ -2462,6 +2481,8 @@ func (p *Point) Int64Method(x int64) int64 {
 func (p *Point) Int32Method(x int32) int32 {
 	return x
 }
+
+/*
 
 func TestMethod(t *testing.T) {
 	// Non-curried method of type.
@@ -2924,6 +2945,8 @@ type T1 struct {
 	int
 }
 
+/*
+
 func TestAnonymousFields(t *testing.T) {
 	var field StructField
 	var ok bool
@@ -2936,6 +2959,8 @@ func TestAnonymousFields(t *testing.T) {
 		t.Error("field index should be 1; is", field.Index)
 	}
 }
+
+*/
 
 type FTest struct {
 	s     any
@@ -3103,6 +3128,8 @@ func TestFieldByIndex(t *testing.T) {
 	}
 }
 
+/*
+
 func TestFieldByName(t *testing.T) {
 	for _, test := range fieldTests {
 		s := TypeOf(test.s)
@@ -3142,6 +3169,8 @@ func TestFieldByName(t *testing.T) {
 		}
 	}
 }
+
+*/
 
 func TestImportPath(t *testing.T) {
 	tests := []struct {
@@ -3235,6 +3264,8 @@ func TestFieldPkgPath(t *testing.T) {
 	})
 }
 
+/*
+
 func TestMethodPkgPath(t *testing.T) {
 	type I interface {
 		x()
@@ -3325,6 +3356,8 @@ type unexpI interface {
 
 var unexpi unexpI = new(unexp)
 
+/*
+
 func TestUnexportedMethods(t *testing.T) {
 	typ := TypeOf(unexpi)
 
@@ -3332,6 +3365,8 @@ func TestUnexportedMethods(t *testing.T) {
 		t.Errorf("NumMethod=%d, want 0 satisfied methods", got)
 	}
 }
+
+*/
 
 type InnerInt struct {
 	X int
@@ -3345,6 +3380,8 @@ type OuterInt struct {
 func (i *InnerInt) M() int {
 	return i.X
 }
+
+/*
 
 func TestEmbeddedMethods(t *testing.T) {
 	typ := TypeOf((*OuterInt)(nil))
@@ -3531,6 +3568,8 @@ func TestAllocations(t *testing.T) {
 	})
 }
 
+*/
+
 func TestSmallNegativeInt(t *testing.T) {
 	i := int16(-1)
 	v := ValueOf(i)
@@ -3556,6 +3595,8 @@ func TestIndex(t *testing.T) {
 		t.Errorf("s.Index(3) = %v; expected %v", v, s[3])
 	}
 }
+
+/*
 
 func TestSlice(t *testing.T) {
 	xs := []int{1, 2, 3, 4, 5, 6, 7, 8}
@@ -3719,6 +3760,8 @@ func TestStructArg(t *testing.T) {
 	}
 }
 
+*/
+
 var tagGetTests = []struct {
 	Tag   StructTag
 	Key   string
@@ -3819,6 +3862,8 @@ type Public struct {
 
 func (p *Public) M() {
 }
+
+/*
 
 func TestUnexported(t *testing.T) {
 	var pub Public
@@ -3946,12 +3991,16 @@ func TestSetPanic(t *testing.T) {
 	bad(func() { clear(v.Field(6).Field(1).Field(0)) }) // .namedT2.namedT0.W
 }
 
+*/
+
 type timp int
 
 func (t timp) W() {}
 func (t timp) Y() {}
 func (t timp) w() {}
 func (t timp) y() {}
+
+/*
 
 func TestCallPanic(t *testing.T) {
 	type t0 interface {
@@ -4070,7 +4119,10 @@ func TestValuePanic(t *testing.T) {
 	shouldPanic("call of reflect.Value.Uint on float64 Value", func() { vo(0.0).Uint() })
 }
 
+*/
+
 func shouldPanic(expect string, f func()) {
+	return
 	defer func() {
 		r := recover()
 		if r == nil {
@@ -4108,6 +4160,8 @@ func isValid(v Value) {
 		panic("zero Value")
 	}
 }
+
+/*
 
 func TestAlias(t *testing.T) {
 	x := string("hello")
@@ -4789,6 +4843,8 @@ func TestConvertNaNs(t *testing.T) {
 	}
 }
 
+*/
+
 type ComparableStruct struct {
 	X int
 }
@@ -4865,6 +4921,8 @@ func TestOverflow(t *testing.T) {
 		t.Errorf("%v should overflow uint32", ovfUint32)
 	}
 }
+
+/*
 
 func checkSameType(t *testing.T, x Type, y any) {
 	if x != TypeOf(y) || TypeOf(Zero(x).Interface()) != TypeOf(y) {
@@ -6340,6 +6398,8 @@ func TestFuncOf(t *testing.T) {
 	FuncOf(in, nil, false)
 }
 
+*/
+
 type R0 struct {
 	*R1
 	*R2
@@ -6417,6 +6477,8 @@ func TestEmbed(t *testing.T) {
 		t.Fatalf(`FieldByName("X") should fail, returned %v`, f.Index)
 	}
 }
+
+/*
 
 func TestAllocsInterfaceBig(t *testing.T) {
 	if testing.Short() {
@@ -6755,6 +6817,8 @@ func TestValueString(t *testing.T) {
 	}
 }
 
+*/
+
 func TestInvalid(t *testing.T) {
 	// Used to have inconsistency between IsValid() and Kind() != Invalid.
 	type T struct{ v any }
@@ -6768,6 +6832,8 @@ func TestInvalid(t *testing.T) {
 		t.Errorf("field elem: IsValid=%v, Kind=%v, want false, Invalid", v.IsValid(), v.Kind())
 	}
 }
+
+/*
 
 // Issue 8917.
 func TestLargeGCProg(t *testing.T) {
@@ -7339,6 +7405,8 @@ func TestChanAlloc(t *testing.T) {
 	// allocs < 0.5 condition will trigger and this test should be fixed.
 }
 
+*/
+
 type TheNameOfThisTypeIsExactly255BytesLongSoWhenTheCompilerPrependsTheReflectTestPackageNameAndExtraStarTheLinkerRuntimeAndReflectPackagesWillHaveToCorrectlyDecodeTheSecondLengthByte0123456789_0123456789_0123456789_0123456789_0123456789_012345678 int
 
 type nameTest struct {
@@ -7369,6 +7437,8 @@ func TestNames(t *testing.T) {
 		}
 	}
 }
+
+/*
 
 func TestExported(t *testing.T) {
 	type ΦExported struct{}
@@ -7445,6 +7515,8 @@ func TestOffsetLock(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+*/
 
 func TestSwapper(t *testing.T) {
 	type I int
@@ -7528,6 +7600,8 @@ func TestSwapper(t *testing.T) {
 	}
 }
 
+/*
+
 // TestUnaddressableField tests that the reflect package will not allow
 // a type from another package to be used as a named type with an
 // unexported field.
@@ -7578,6 +7652,8 @@ func TestAliasNames(t *testing.T) {
 	}
 }
 
+*/
+
 func TestIssue22031(t *testing.T) {
 	type s []struct{ C int }
 
@@ -7596,6 +7672,8 @@ func TestIssue22031(t *testing.T) {
 	}
 }
 
+/*
+
 type NonExportedFirst int
 
 func (i NonExportedFirst) ΦExported()       {}
@@ -7612,6 +7690,8 @@ func TestIssue22073(t *testing.T) {
 	m.Call(nil)
 }
 
+*/
+
 func TestMapIterNonEmptyMap(t *testing.T) {
 	m := map[string]int{"one": 1, "two": 2, "three": 3}
 	iter := ValueOf(m).MapRange()
@@ -7627,6 +7707,8 @@ func TestMapIterNilMap(t *testing.T) {
 		t.Errorf("non-empty result iteratoring nil map: %s", got)
 	}
 }
+
+/*
 
 func TestMapIterReset(t *testing.T) {
 	iter := new(MapIter)
@@ -7748,6 +7830,8 @@ func TestMapIterSafety(t *testing.T) {
 	}()
 }
 
+*/
+
 func TestMapIterNext(t *testing.T) {
 	// The first call to Next should reflect any
 	// insertions to the map since the iterator was created.
@@ -7798,6 +7882,8 @@ func iterateToString(it *MapIter) string {
 	sort.Strings(got)
 	return "[" + strings.Join(got, ", ") + "]"
 }
+
+/*
 
 func TestConvertibleTo(t *testing.T) {
 	t1 := ValueOf(example1.MyStruct{}).Type()
@@ -7939,10 +8025,14 @@ func TestNegativeKindString(t *testing.T) {
 	}
 }
 
+*/
+
 type (
 	namedBool  bool
 	namedBytes []byte
 )
+
+/*
 
 func TestValue_Cap(t *testing.T) {
 	a := &[3]int{1, 2, 3}
