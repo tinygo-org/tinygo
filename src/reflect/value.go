@@ -846,7 +846,7 @@ func (v Value) MapRange() *MapIter {
 		panic(&ValueError{Method: "MapRange", Kind: v.Kind()})
 	}
 
-	keyType := v.typecode.Key().(*rawType)
+	keyType := v.typecode.key()
 	isKeyStoredAsInterface := keyType.Kind() != String && !keyType.isBinary()
 
 	return &MapIter{
