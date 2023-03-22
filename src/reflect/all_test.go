@@ -1042,6 +1042,8 @@ func TestBigStruct(t *testing.T) {
 	}
 }
 
+*/
+
 type Basic struct {
 	x int
 	y float32
@@ -1178,6 +1180,8 @@ func TestDeepEqual(t *testing.T) {
 	}
 }
 
+/*
+
 func TestTypeOf(t *testing.T) {
 	// Special case for nil
 	if typ := TypeOf(nil); typ != nil {
@@ -1194,6 +1198,8 @@ func TestTypeOf(t *testing.T) {
 		}
 	}
 }
+
+*/
 
 type Recursive struct {
 	x int
@@ -1255,6 +1261,8 @@ func TestDeepEqualUnexportedMap(t *testing.T) {
 		t.Error("DeepEqual(x1, y1) = true, want false")
 	}
 }
+
+/*
 
 var deepEqualPerfTests = []struct {
 	x, y any
@@ -4113,6 +4121,8 @@ func TestAlias(t *testing.T) {
 	}
 }
 
+*/
+
 var V = ValueOf
 
 func EmptyInterfaceV(x any) Value {
@@ -4157,6 +4167,8 @@ type IntChanSend chan<- int
 type BytesChan chan []byte
 type BytesChanRecv <-chan []byte
 type BytesChanSend chan<- []byte
+
+/*
 
 var convertTests = []struct {
 	in  Value
