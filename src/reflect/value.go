@@ -810,8 +810,10 @@ func (v Value) MapIndex(key Value) Value {
 		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
 	}
 
+	vkey := v.typecode.key()
+
 	// compare key type with actual key type of map
-	if key.typecode != v.typecode.key() {
+	if !key.typecode.AssignableTo(vkey) {
 		// type error?
 		panic("reflect.Value.MapIndex: incompatible types for key")
 	}
@@ -819,12 +821,12 @@ func (v Value) MapIndex(key Value) Value {
 	elemType := v.typecode.Elem()
 	elem := New(elemType)
 
-	if key.Kind() == String {
+	if vkey.Kind() == String {
 		if ok := hashmapStringGet(v.pointer(), *(*string)(key.value), elem.value, elemType.Size()); !ok {
 			return Value{}
 		}
 		return elem.Elem()
-	} else if key.typecode.isBinary() {
+	} else if vkey.isBinary() {
 		var keyptr unsafe.Pointer
 		if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
 			keyptr = key.value
@@ -1367,8 +1369,10 @@ func (v Value) SetMapIndex(key, elem Value) {
 		panic(&ValueError{Method: "SetMapIndex", Kind: v.Kind()})
 	}
 
+	vkey := v.typecode.key()
+
 	// compare key type with actual key type of map
-	if key.typecode != v.typecode.key() {
+	if !key.typecode.AssignableTo(vkey) {
 		panic("reflect.Value.SetMapIndex: incompatible types for key")
 	}
 
