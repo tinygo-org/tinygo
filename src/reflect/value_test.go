@@ -192,6 +192,65 @@ func TestTinyMap(t *testing.T) {
 	}
 }
 
+// For an interface type, it returns the number of exported and unexported methods.
+
+type counter interface {
+	count() int
+}
+
+type count struct {
+	i int
+}
+
+func (c *count) count() int {
+	return c.i
+}
+
+func TestMapInterfaceKeys(t *testing.T) {
+	m := make(map[interface{}]int)
+	for i := 0; i < 20; i++ {
+		c := &count{i}
+		m[c] = i
+	}
+
+	for k, v := range m {
+		if got := m[k]; got != v {
+			t.Error("lookup failure got", got, "want", v)
+		}
+	}
+
+	refm := ValueOf(m)
+
+	keys := refm.MapKeys()
+	if len(keys) != 20 {
+		t.Error("failed to look up 20 keys")
+	}
+	for _, k := range keys {
+		c := k.Interface().(*count)
+		e := refm.MapIndex(k)
+		if e.Interface().(int) != c.i {
+			t.Error("reflect lookup failure:", c.i)
+		}
+	}
+
+	it := refm.MapRange()
+	var totalKeys int
+	for it.Next() {
+		totalKeys++
+		k := it.Key()
+		v := it.Value().Interface().(int)
+
+		c := k.Interface().(*count)
+		if v != c.i || refm.MapIndex(k).Interface().(int) != c.i {
+			t.Error("reflect iter lookup failure:", c.i)
+		}
+	}
+
+	if totalKeys != 20 {
+		t.Errorf("failed to get 20 keys")
+	}
+}
+
 func TestMapInterfaceElem(t *testing.T) {
 	m := make(map[string]interface{})
 	refm := ValueOf(m)
