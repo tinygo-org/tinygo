@@ -48,6 +48,22 @@ func inlineFunc() {
 func noinlineFunc() {
 }
 
+type Int interface {
+	int8 | int16
+}
+
+// Same for generic functions (but the compiler may miss the pragma due to it
+// being generic).
+//
+//go:noinline
+func noinlineGenericFunc[T Int]() {
+}
+
+func useGeneric() {
+	// Make sure the generic function above is instantiated.
+	noinlineGenericFunc[int8]()
+}
+
 // This function should have the specified section.
 //
 //go:section .special_function_section

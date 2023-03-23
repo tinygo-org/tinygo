@@ -48,6 +48,19 @@ entry:
   ret void
 }
 
+; Function Attrs: nounwind
+define hidden void @main.useGeneric(ptr %context) unnamed_addr #2 {
+entry:
+  call void @"main.noinlineGenericFunc[int8]"(ptr undef)
+  ret void
+}
+
+; Function Attrs: noinline nounwind
+define linkonce_odr hidden void @"main.noinlineGenericFunc[int8]"(ptr %context) unnamed_addr #5 {
+entry:
+  ret void
+}
+
 ; Function Attrs: noinline nounwind
 define hidden void @main.functionInSection(ptr %context) unnamed_addr #5 section ".special_function_section" {
 entry:

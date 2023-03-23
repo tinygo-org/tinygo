@@ -250,10 +250,14 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
 // //export or //go:noinline.
 func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
-	if f.Syntax() == nil {
+	syntax := f.Syntax()
+	if f.Origin() != nil {
+		syntax = f.Origin().Syntax()
+	}
+	if syntax == nil {
 		return
 	}
-	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
+	if decl, ok := syntax.(*ast.FuncDecl); ok && decl.Doc != nil {
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
 			if strings.HasPrefix(text, "//export ") {
