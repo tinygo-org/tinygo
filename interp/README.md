@@ -70,7 +70,7 @@ object. Every memory object is given an index, and pointers use that index to
 look up the current active object for the pointer to load from or to copy
 when storing to it.
 
-Rolling back a function should roll back everyting, including the few
+Rolling back a function should roll back everything, including the few
 instructions emitted at runtime. This is done by treating instructions much
 like memory objects and removing the created instructions when necessary.
 
@@ -88,7 +88,7 @@ LLVM than initialization code. Also, there are a few other benefits:
     they can be propagated and provide some opportunities for other
     optimizations (like dead code elimination when branching on the contents of
     a global).
-  * Constants are much more efficent on microcontrollers, as they can be
+  * Constants are much more efficient on microcontrollers, as they can be
     allocated in flash instead of RAM.
 
 The Go SSA package does not create constant initializers for globals.
