@@ -517,7 +517,23 @@ func (t *rawType) String() string {
 
 	switch t.Kind() {
 	case Chan:
-		return "chan " + t.elem().String()
+		elem := t.elem().String()
+		switch t.ChanDir() {
+		case SendDir:
+			return "chan<- " + elem
+		case RecvDir:
+			return "<-chan " + elem
+		case BothDir:
+			if elem[0] == '<' {
+				// typ is recv chan, need parentheses as "<-" associates with leftmost
+				// chan possible, see:
+				// * https://golang.org/ref/spec#Channel_types
+				// * https://github.com/golang/go/issues/39897
+				return "chan (" + elem + ")"
+			}
+			return "chan " + elem
+		}
+
 	case Pointer:
 		return "*" + t.elem().String()
 	case Slice:
@@ -991,8 +1007,15 @@ func (t *rawType) isBinary() bool {
 	return false
 }
 
-func (t rawType) ChanDir() ChanDir {
-	panic("unimplemented: (reflect.Type).ChanDir()")
+func (t *rawType) ChanDir() ChanDir {
+	if t.Kind() != Chan {
+		panic(TypeError{"ChanDir"})
+	}
+
+	dir := int((*elemType)(unsafe.Pointer(t)).numMethod)
+
+	// nummethod is overloaded for channel to store channel direction
+	return ChanDir(dir)
 }
 
 func (t *rawType) ConvertibleTo(u Type) bool {

@@ -60,6 +60,14 @@ const (
 	structFieldFlagIsEmbedded
 )
 
+type reflectChanDir int
+
+const (
+	refRecvDir reflectChanDir            = 1 << iota // <-chan
+	refSendDir                                       // chan<-
+	refBothDir = refRecvDir | refSendDir             // chan
+)
+
 // createMakeInterface emits the LLVM IR for the *ssa.MakeInterface instruction.
 // It tries to put the type in the interface value, but if that's not possible,
 // it will do an allocation of the right size and put that in the interface
@@ -161,7 +169,13 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "name", types.NewArray(types.Typ[types.Int8], int64(len(pkgname)+1+len(name)+1))),
 			)
-		case *types.Chan, *types.Slice:
+		case *types.Chan:
+			typeFieldTypes = append(typeFieldTypes,
+				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]), // reuse for select chan direction
+				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "elementType", types.Typ[types.UnsafePointer]),
+			)
+		case *types.Slice:
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
@@ -243,10 +257,20 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 			metabyte |= 1 << 5 // "named" flag
 		case *types.Chan:
+			var dir reflectChanDir
+			switch typ.Dir() {
+			case types.SendRecv:
+				dir = refBothDir
+			case types.RecvOnly:
+				dir = refRecvDir
+			case types.SendOnly:
+				dir = refSendDir
+			}
+
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), 0, false), // numMethods
-				c.getTypeCode(types.NewPointer(typ)),       // ptrTo
-				c.getTypeCode(typ.Elem()),                  // elementType
+				llvm.ConstInt(c.ctx.Int16Type(), uint64(dir), false), // actually channel direction
+				c.getTypeCode(types.NewPointer(typ)),                 // ptrTo
+				c.getTypeCode(typ.Elem()),                            // elementType
 			}
 		case *types.Slice:
 			typeFields = []llvm.Value{
@@ -448,7 +472,17 @@ func getTypeCodeName(t types.Type) (string, bool) {
 		return "basic:" + basicTypeNames[t.Kind()], false
 	case *types.Chan:
 		s, isLocal := getTypeCodeName(t.Elem())
-		return "chan:" + s, isLocal
+		var dir string
+		switch t.Dir() {
+		case types.SendOnly:
+			dir = "s:"
+		case types.RecvOnly:
+			dir = "r:"
+		case types.SendRecv:
+			dir = "sr:"
+		}
+
+		return "chan:" + dir + s, isLocal
 	case *types.Interface:
 		isLocal := false
 		methods := make([]string, t.NumMethods())
