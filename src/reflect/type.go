@@ -116,6 +116,8 @@ const Ptr = Pointer
 
 func (k Kind) String() string {
 	switch k {
+	case Invalid:
+		return "invalid"
 	case Bool:
 		return "bool"
 	case Int:
@@ -169,7 +171,7 @@ func (k Kind) String() string {
 	case Struct:
 		return "struct"
 	default:
-		return "invalid"
+		return "kind" + itoa.Itoa(int(int8(k)))
 	}
 }
 
