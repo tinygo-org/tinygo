@@ -8021,6 +8021,8 @@ func TestIssue50208(t *testing.T) {
 	}
 }
 
+*/
+
 func TestNegativeKindString(t *testing.T) {
 	x := -1
 	s := Kind(x).String()
@@ -8029,8 +8031,6 @@ func TestNegativeKindString(t *testing.T) {
 		t.Fatalf("Kind(-1).String() = %q, want %q", s, want)
 	}
 }
-
-*/
 
 type (
 	namedBool  bool
