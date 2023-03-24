@@ -129,6 +129,7 @@ var typeTests = []pair{
 	}{},
 		"struct { c chan *int32; d float32 }",
 	},
+	/* // TODO(tinygo): No function support
 	{struct{ x (func(a int8, b int32)) }{}, "func(int8, int32)"},
 	{struct {
 		x struct {
@@ -136,7 +137,7 @@ var typeTests = []pair{
 		}
 	}{},
 		"struct { c func(chan *reflect_test.integer, *int8) }",
-	},
+	}, */
 	{struct {
 		x struct {
 			a int8
@@ -187,6 +188,7 @@ var typeTests = []pair{
 	}{},
 		"struct { a int8; b int8; c int8; d int8; e int8; f int32 }",
 	},
+	/* // TODO(tinygo): Reflects tags aren't properly quoted
 	{struct {
 		x struct {
 			a int8 `reflect:"hi there"`
@@ -224,6 +226,7 @@ var typeTests = []pair{
 	}{},
 		"struct { int32; int64 }",
 	},
+	*/
 }
 
 var valueTests = []pair{
@@ -249,16 +252,18 @@ var valueTests = []pair{
 	{new(**integer), "**reflect_test.integer(0)"},
 	{new(map[string]int32), "map[string]int32{<can't iterate on maps>}"},
 	{new(chan<- string), "chan<- string"},
-	{new(func(a int8, b int32)), "func(int8, int32)(0)"},
+	//{new(func(a int8, b int32)), "func(int8, int32)(0)"}, // TODO(tinygo): No function support
 	{new(struct {
 		c chan *int32
 		d float32
 	}),
 		"struct { c chan *int32; d float32 }{chan *int32, 0}",
 	},
+	/* // TODO(tinygo): No function support
 	{new(struct{ c func(chan *integer, *int8) }),
 		"struct { c func(chan *reflect_test.integer, *int8) }{func(chan *reflect_test.integer, *int8)(0)}",
 	},
+	*/
 	{new(struct {
 		a int8
 		b int32
@@ -280,8 +285,6 @@ func testType(t *testing.T, i int, typ Type, want string) {
 		t.Errorf("#%d: have %#q, want %#q", i, s, want)
 	}
 }
-
-/*
 
 func TestTypes(t *testing.T) {
 	for i, tt := range typeTests {
@@ -377,6 +380,8 @@ func TestSetValue(t *testing.T) {
 		}
 	}
 }
+
+/*
 
 func TestMapIterSet(t *testing.T) {
 	m := make(map[string]any, len(valueTests))
