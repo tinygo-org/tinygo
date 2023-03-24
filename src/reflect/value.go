@@ -639,6 +639,9 @@ func (v Value) Field(i int) Value {
 		// The fact that PkgPath is present means that this field is not
 		// exported.
 		flags &^= valueFlagExported
+	} else {
+		// Parent field may not have been exported but we are
+		flags |= valueFlagExported
 	}
 
 	size := v.typecode.Size()
