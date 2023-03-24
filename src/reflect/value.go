@@ -1753,6 +1753,33 @@ func MakeMapWithSize(typ Type, n int) Value {
 	}
 }
 
+type SelectDir int
+
+const (
+	_             SelectDir = iota
+	SelectSend              // case Chan <- Send
+	SelectRecv              // case <-Chan:
+	SelectDefault           // default
+)
+
+type SelectCase struct {
+	Dir  SelectDir // direction of case
+	Chan Value     // channel to use (for send or receive)
+	Send Value     // value to send (for send)
+}
+
+func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
+	panic("unimplemented: reflect.Select")
+}
+
+func (v Value) Send(x Value) {
+	panic("unimplemented: reflect.Value.Send()")
+}
+
+func (v Value) Close() {
+	panic("unimplemented: reflect.Value.Close()")
+}
+
 // MakeMap creates a new map with the specified type.
 func MakeMap(typ Type) Value {
 	return MakeMapWithSize(typ, 8)
