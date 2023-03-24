@@ -254,7 +254,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					}
 				}
 			case llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt:
-				// Bitcasts are ususally used to cast a pointer from one type to
+				// Bitcasts are usually used to cast a pointer from one type to
 				// another leaving the pointer itself intact.
 				inst.name = llvmInst.Name()
 				inst.operands = []value{

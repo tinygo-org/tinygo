@@ -12,7 +12,7 @@ package interp
 //     done in interp and results in a revert.
 //
 // Right now the memory is assumed to be little endian. This will need an update
-// for big endian arcitectures, if TinyGo ever adds support for one.
+// for big endian architectures, if TinyGo ever adds support for one.
 
 import (
 	"encoding/binary"
