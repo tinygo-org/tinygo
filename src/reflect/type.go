@@ -551,6 +551,13 @@ func (t *rawType) String() string {
 		for i := 0; i < numField; i++ {
 			f := t.rawField(i)
 			s += " " + f.Name + " " + f.Type.String()
+			if f.Tag != "" {
+				// TODO(dgryski): The tag should be
+				// double-quoted and escaped; that requires
+				// strconv and reflectlite or our own Quote()
+				// implementation
+				s += " " + string(f.Tag)
+			}
 			// every field except the last needs a semicolon
 			if i < numField-1 {
 				s += ";"
