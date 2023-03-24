@@ -416,7 +416,7 @@
   - `interp`: always run atomic and volatile loads/stores at runtime
   - `interp`: bump timeout to 180 seconds
   - `interp`: handle type assertions on nil interfaces
-  - `loader`: elminate goroot cache inconsistency
+  - `loader`: eliminate goroot cache inconsistency
   - `loader`: respect $GOROOT when running `go list`
   - `transform`: allocate the correct amount of bytes in an alloca
   - `transform`: remove switched func lowering
@@ -1115,7 +1115,7 @@
   - `sync`: add WaitGroup
 * **targets**
   - `arm`: allow nesting in DisableInterrupts and EnableInterrupts
-  - `arm`: make FPU configuraton consistent
+  - `arm`: make FPU configuration consistent
   - `arm`: do not mask fault handlers in critical sections
   - `atmega2560`: fix pin mapping for pins D2, D5 and the L port
   - `atsamd`: return an error when an incorrect PWM pin is used
@@ -1144,7 +1144,7 @@
   - `nrf`: add microbit-s110v8 target
   - `nrf`: fix bug in SPI.Tx
   - `nrf`: support debugging the PCA10056
-  - `pygamer`: add Adafruit PyGamer suport
+  - `pygamer`: add Adafruit PyGamer support
   - `riscv`: fix interrupt configuration bug
   - `riscv`: disable linker relaxations during gp init
   - `stm32f4disco`: add new target with ST-Link v2.1 debugger

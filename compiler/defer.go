@@ -544,7 +544,7 @@ func (b *builder) createRunDefers() {
 				forwardParams = append(forwardParams, forwardParam)
 			}
 
-			// Plain TinyGo functions add some extra parameters to implement async functionality and function recievers.
+			// Plain TinyGo functions add some extra parameters to implement async functionality and function receivers.
 			// These parameters should not be supplied when calling into an external C/ASM function.
 			if !b.getFunctionInfo(callback).exported {
 				// Add the context parameter. We know it is ignored by the receiving

@@ -26,10 +26,10 @@ select n from chan: 55
 select n from closed chan: 0
 select send
 sum: 235
-non-concurrent channel recieve: 1
-non-concurrent channel recieve: 2
-closed buffered channel recieve: 3
-closed buffered channel recieve: 4
-closed buffered channel recieve: 0
-hybrid buffered channel recieve: 2
+non-concurrent channel receive: 1
+non-concurrent channel receive: 2
+closed buffered channel receive: 3
+closed buffered channel receive: 4
+closed buffered channel receive: 0
+hybrid buffered channel receive: 2
 blocking select sum: 3

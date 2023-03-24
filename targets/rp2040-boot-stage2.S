@@ -6,7 +6,7 @@
 // symbols from the included files in the reference implementation directly into
 // the source.  It has also been modified to include the conditional logic from
 // the CircuitPython implementation that supports additional flash chips.  The
-// CiruitPython source is here:
+// CircuitPython source is here:
 //   https://github.com/adafruit/circuitpython/blob/main/ports/raspberrypi/stage2.c.jinja
 //
 // This file cannot be assembled directly, instead assemble the board-specific file
