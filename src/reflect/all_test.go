@@ -430,6 +430,8 @@ func TestMapIterSet(t *testing.T) {
 	}
 }
 
+*/
+
 func TestCanIntUintFloatComplex(t *testing.T) {
 	type integer int
 	type uinteger uint
@@ -616,8 +618,6 @@ func TestCanSetField(t *testing.T) {
 		})
 	}
 }
-
-*/
 
 var _i = 7
 
