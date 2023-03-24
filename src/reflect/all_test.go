@@ -7624,6 +7624,8 @@ func TestUnaddressableField(t *testing.T) {
 	})
 }
 
+*/
+
 type Tint int
 
 type Tint2 = Tint
@@ -7657,7 +7659,7 @@ func TestAliasNames(t *testing.T) {
 	}
 }
 
-*/
+/*
 
 func TestIssue22031(t *testing.T) {
 	type s []struct{ C int }
@@ -7676,8 +7678,6 @@ func TestIssue22031(t *testing.T) {
 		}
 	}
 }
-
-/*
 
 type NonExportedFirst int
 
