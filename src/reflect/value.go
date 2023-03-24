@@ -250,6 +250,16 @@ func (v Value) Bool() bool {
 	}
 }
 
+// CanInt reports whether Uint can be used without panicking.
+func (v Value) CanInt() bool {
+	switch v.Kind() {
+	case Int, Int8, Int16, Int32, Int64:
+		return true
+	default:
+		return false
+	}
+}
+
 func (v Value) Int() int64 {
 	switch v.Kind() {
 	case Int:
@@ -284,6 +294,16 @@ func (v Value) Int() int64 {
 		}
 	default:
 		panic(&ValueError{Method: "Int", Kind: v.Kind()})
+	}
+}
+
+// CanUint reports whether Uint can be used without panicking.
+func (v Value) CanUint() bool {
+	switch v.Kind() {
+	case Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -327,6 +347,16 @@ func (v Value) Uint() uint64 {
 		}
 	default:
 		panic(&ValueError{Method: "Uint", Kind: v.Kind()})
+	}
+}
+
+// CanFloat reports whether Float can be used without panicking.
+func (v Value) CanFloat() bool {
+	switch v.Kind() {
+	case Float32, Float64:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -374,6 +404,16 @@ func (v Value) Float() float64 {
 		}
 	default:
 		panic(&ValueError{Method: "Float", Kind: v.Kind()})
+	}
+}
+
+// CanComplex reports whether Complex can be used without panicking.
+func (v Value) CanComplex() bool {
+	switch v.Kind() {
+	case Complex64, Complex128:
+		return true
+	default:
+		return false
 	}
 }
 
