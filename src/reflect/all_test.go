@@ -8105,6 +8105,8 @@ func TestValue_Len(t *testing.T) {
 	}
 }
 
+*/
+
 func TestValue_Comparable(t *testing.T) {
 	var a int
 	var s []int
@@ -8285,6 +8287,8 @@ func TestValue_Comparable(t *testing.T) {
 		}
 	}
 }
+
+/*
 
 type ValueEqualTest struct {
 	v, u           any
