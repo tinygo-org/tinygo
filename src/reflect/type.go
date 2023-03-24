@@ -958,6 +958,8 @@ func (t *rawType) Implements(u Type) bool {
 // Comparable returns whether values of this type can be compared to each other.
 func (t *rawType) Comparable() bool {
 	switch t.Kind() {
+	case Invalid:
+		return false
 	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
 		return true
 	case Float32, Float64, Complex64, Complex128:

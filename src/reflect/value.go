@@ -217,6 +217,40 @@ func (v Value) CanAddr() bool {
 	return v.flags&(valueFlagIndirect) == valueFlagIndirect
 }
 
+func (v Value) Comparable() bool {
+	k := v.Kind()
+	switch k {
+	case Invalid:
+		return false
+
+	case Array:
+		switch v.Type().Elem().Kind() {
+		case Interface, Array, Struct:
+			for i := 0; i < v.Type().Len(); i++ {
+				if !v.Index(i).Comparable() {
+					return false
+				}
+			}
+			return true
+		}
+		return v.Type().Comparable()
+
+	case Interface:
+		return v.Elem().Comparable()
+
+	case Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if !v.Field(i).Comparable() {
+				return false
+			}
+		}
+		return true
+
+	default:
+		return v.Type().Comparable()
+	}
+}
+
 func (v Value) Addr() Value {
 	if !v.CanAddr() {
 		panic("reflect.Value.Addr of unaddressable value")
