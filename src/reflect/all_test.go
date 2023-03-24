@@ -188,7 +188,6 @@ var typeTests = []pair{
 	}{},
 		"struct { a int8; b int8; c int8; d int8; e int8; f int32 }",
 	},
-	/* // TODO(tinygo): Reflects tags aren't properly quoted
 	{struct {
 		x struct {
 			a int8 `reflect:"hi there"`
@@ -203,6 +202,7 @@ var typeTests = []pair{
 	}{},
 		`struct { a int8 "reflect:\"hi \\x00there\\t\\n\\\"\\\\\"" }`,
 	},
+	/* // TODO(tinygo):  Functions not supported
 	{struct {
 		x struct {
 			f func(args ...int)
