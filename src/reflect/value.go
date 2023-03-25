@@ -1271,6 +1271,7 @@ func makeFloat(flags valueFlags, f float64, t *rawType) Value {
 	ptr := unsafe.Pointer(&v.value)
 	if size > unsafe.Sizeof(uintptr(0)) {
 		ptr = alloc(size, nil)
+		v.value = ptr
 	}
 
 	switch size {
