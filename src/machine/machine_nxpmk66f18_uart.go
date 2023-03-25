@@ -59,9 +59,6 @@ var (
 	ErrNotConfigured  = errors.New("device has not been configured")
 )
 
-//go:linkname gosched runtime.Gosched
-func gosched()
-
 // PutcharUART writes a byte to the UART synchronously, without using interrupts
 // or calling the scheduler
 func PutcharUART(u *UART, c byte) {
