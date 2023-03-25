@@ -206,6 +206,7 @@ type I2CConfig struct {
 	Frequency uint32
 	SCL       Pin
 	SDA       Pin
+	Mode      I2CMode
 }
 
 // Configure is intended to setup the I2C interface.
@@ -238,15 +239,21 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
-	if config.Frequency >= 400*KHz {
-		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
-	} else {
-		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
-	}
-
 	i2c.setPins(config.SCL, config.SDA)
 
-	i2c.enableAsController()
+	i2c.mode = config.Mode
+
+	if i2c.mode == I2CModeController {
+		if config.Frequency >= 400*KHz {
+			i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
+		} else {
+			i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
+		}
+
+		i2c.enableAsController()
+	} else {
+		i2c.enableAsTarget()
+	}
 
 	return nil
 }

@@ -6,7 +6,8 @@ import "device/nrf"
 
 // I2C on the NRF51 and NRF52.
 type I2C struct {
-	Bus *nrf.TWI_Type
+	Bus  *nrf.TWI_Type
+	mode I2CMode
 }
 
 // There are 2 I2C interfaces on the NRF.
@@ -17,6 +18,10 @@ var (
 
 func (i2c *I2C) enableAsController() {
 	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
+}
+
+func (i2c *I2C) enableAsTarget() {
+	// Not supported on this hardware
 }
 
 func (i2c *I2C) disable() {
