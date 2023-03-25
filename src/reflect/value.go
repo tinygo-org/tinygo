@@ -1114,7 +1114,7 @@ func convertOp(src Value, typ Type) (Value, bool) {
 			return cvtIntString(src, rtype), true
 		}
 
-	case Uint, Uint8, Uint16, Uint32, Uint64:
+	case Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
 		switch rtype := typ.(*rawType); rtype.Kind() {
 		case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
 			return cvtUint(src, rtype), true
