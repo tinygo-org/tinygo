@@ -63,6 +63,7 @@ package reflect
 
 import (
 	"internal/itoa"
+	"math/bits"
 	"unsafe"
 )
 
@@ -652,6 +653,74 @@ func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data 
 	}
 }
 
+const fieldOffsetCacheSize = 16
+
+type fieldOffsetCacheType [fieldOffsetCacheSize]struct {
+	t       *structType
+	offsets map[int]uintptr
+}
+
+var fieldOffsetCache fieldOffsetCacheType
+
+func (f *fieldOffsetCacheType) lookup(t *structType, n int) uintptr {
+	idx := hashStructTypePtr(t)
+	idx %= fieldOffsetCacheSize
+	if f[idx].t != t {
+		// Cache miss; populate cache for this type.
+		// Clear out the old map so we have space to allocate a new one
+		f[idx].offsets = nil
+		offsets := make(map[int]uintptr, t.numField)
+		field := &t.fields[0]
+
+		var offset uintptr = 0
+		for i := 0; i < int(t.numField)-1; i++ {
+			offsets[i] = offset
+
+			offset += field.fieldType.Size()
+
+			// Increment pointer to the next field.
+			field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
+
+			// Align the offset for the next field.
+			offset = align(offset, uintptr(field.fieldType.Align()))
+		}
+
+		// Add in offset of last field
+		offsets[int(t.numField)-1] = offset
+
+		// Fill in cache entry
+		f[idx].t = t
+		f[idx].offsets = offsets
+	}
+
+	return f[idx].offsets[n]
+}
+
+func hashStructTypePtr(t *structType) uintptr {
+	const halfPtrBits = (unsafe.Sizeof(uintptr(0)) * 8) / 2
+
+	idx := uintptr(unsafe.Pointer(t))
+	idx ^= uintptr(unsafe.Pointer(t.ptrTo)) << halfPtrBits
+	idx = hashuintptr(idx)
+	idx ^= idx >> halfPtrBits
+	idx ^= uintptr(bits.RotateLeft32(uint32(idx), int(t.numField)))
+
+	return idx
+}
+
+//go:linkname xorshift32 runtime.xorshift32
+func xorshift32(x uint32) uint32
+
+//go:linkname xorshiftMult64 runtime.xorshiftMult64
+func xorshiftMult64(x uint64) uint64
+
+func hashuintptr(p uintptr) uintptr {
+	if unsafe.Sizeof(p) == 4 {
+		return uintptr(xorshift32(uint32(p)))
+	}
+	return uintptr(xorshiftMult64(uint64(p)))
+}
+
 // rawField returns nearly the same value as Field but without converting the
 // Type member to an interface.
 //
@@ -665,21 +734,10 @@ func (t *rawType) rawField(n int) rawStructField {
 		panic("reflect: field index out of range")
 	}
 
-	// Iterate over all the fields to calculate the offset.
-	// This offset could have been stored directly in the array (to make the
-	// lookup faster), but by calculating it on-the-fly a bit of storage can be
-	// saved.
-	field := &descriptor.fields[0]
-	var offset uintptr = 0
-	for i := 0; i < n; i++ {
-		offset += field.fieldType.Size()
-
-		// Increment pointer to the next field.
-		field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
-
-		// Align the offset for the next field.
-		offset = align(offset, uintptr(field.fieldType.Align()))
-	}
+	//  Lookup field struct
+	field := (*structField)(unsafe.Add(unsafe.Pointer(&descriptor.fields[0]), uintptr(n)*unsafe.Sizeof(structField{})))
+	// Grab offset
+	offset := fieldOffsetCache.lookup(descriptor, n)
 
 	data := field.data
 
