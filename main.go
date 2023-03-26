@@ -21,7 +21,6 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -1620,64 +1619,25 @@ func main() {
 			os.Exit(1)
 		}
 
-		fail := make(chan struct{}, 1)
-		var wg sync.WaitGroup
-		bufs := make([]testOutputBuf, len(explicitPkgNames))
-		for i := range bufs {
-			bufs[i].done = make(chan struct{})
-		}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			// Flush the output one test at a time.
-			// This ensures that outputs from different tests are not mixed together.
-			for i := range bufs {
-				err := bufs[i].flush(os.Stdout, os.Stderr)
-				if err != nil {
-					// There was an error writing to stdout or stderr, so we probbably cannot print this.
-					select {
-					case fail <- struct{}{}:
-					default:
-					}
-				}
-			}
-		}()
-
 		// Build and run the tests concurrently.
 		// This uses an additional semaphore to reduce the memory usage.
-		testSema := make(chan struct{}, cap(options.Semaphore))
-		for i, pkgName := range explicitPkgNames {
-			pkgName := pkgName
-			buf := &bufs[i]
-			testSema <- struct{}{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer func() { <-testSema }()
-				defer close(buf.done)
-				stdout := (*testStdout)(buf)
-				stderr := (*testStderr)(buf)
-				passed, err := Test(pkgName, stdout, stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testBenchRegexp, *testBenchTime, *testBenchMem, outpath)
-				if err != nil {
-					printCompilerError(func(args ...interface{}) {
-						fmt.Fprintln(stderr, args...)
-					}, err)
-				}
-				if !passed {
-					select {
-					case fail <- struct{}{}:
-					default:
-					}
-				}
-			}()
+		allTestsPassed := true
+		for _, pkgName := range explicitPkgNames {
+			passed, err := Test(pkgName, os.Stdout, os.Stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testBenchRegexp, *testBenchTime, *testBenchMem, outpath)
+
+			if err != nil {
+				printCompilerError(func(args ...interface{}) {
+					fmt.Fprintln(os.Stderr, args...)
+				}, err)
+				passed = false
+			}
+
+			if !passed {
+				allTestsPassed = false
+			}
 		}
 
-		// Wait for all tests to finish.
-		wg.Wait()
-		close(fail)
-		if _, fail := <-fail; fail {
+		if !allTestsPassed {
 			os.Exit(1)
 		}
 	case "monitor":
@@ -1838,118 +1798,4 @@ func main() {
 		usage("")
 		os.Exit(1)
 	}
-}
-
-// testOutputBuf is used to buffer the output of concurrent tests.
-type testOutputBuf struct {
-	mu             sync.Mutex
-	output         []outputEntry
-	stdout, stderr io.Writer
-	outerr, errerr error
-	done           chan struct{}
-}
-
-// flush the output to stdout and stderr.
-// This waits until done is closed.
-func (b *testOutputBuf) flush(stdout, stderr io.Writer) error {
-	b.mu.Lock()
-
-	var err error
-	b.stdout = stdout
-	b.stderr = stderr
-	for _, e := range b.output {
-		var w io.Writer
-		var errDst *error
-		if e.stderr {
-			w = stderr
-			errDst = &b.errerr
-		} else {
-			w = stdout
-			errDst = &b.outerr
-		}
-		if *errDst != nil {
-			continue
-		}
-
-		_, werr := w.Write(e.data)
-		if werr != nil {
-			if err == nil {
-				err = werr
-			}
-			*errDst = err
-		}
-	}
-
-	b.mu.Unlock()
-
-	<-b.done
-
-	return err
-}
-
-// testStdout writes stdout from a test to the output buffer.
-type testStdout testOutputBuf
-
-func (out *testStdout) Write(data []byte) (int, error) {
-	buf := (*testOutputBuf)(out)
-	buf.mu.Lock()
-
-	if buf.stdout != nil {
-		// Write the output directly.
-		err := out.outerr
-		buf.mu.Unlock()
-		if err != nil {
-			return 0, err
-		}
-		return buf.stdout.Write(data)
-	}
-
-	defer buf.mu.Unlock()
-
-	// Append the output.
-	if len(buf.output) == 0 || buf.output[len(buf.output)-1].stderr {
-		buf.output = append(buf.output, outputEntry{
-			stderr: false,
-		})
-	}
-	last := &buf.output[len(buf.output)-1]
-	last.data = append(last.data, data...)
-
-	return len(data), nil
-}
-
-// testStderr writes stderr from a test to the output buffer.
-type testStderr testOutputBuf
-
-func (out *testStderr) Write(data []byte) (int, error) {
-	buf := (*testOutputBuf)(out)
-	buf.mu.Lock()
-
-	if buf.stderr != nil {
-		// Write the output directly.
-		err := out.errerr
-		buf.mu.Unlock()
-		if err != nil {
-			return 0, err
-		}
-		return buf.stderr.Write(data)
-	}
-
-	defer buf.mu.Unlock()
-
-	// Append the output.
-	if len(buf.output) == 0 || !buf.output[len(buf.output)-1].stderr {
-		buf.output = append(buf.output, outputEntry{
-			stderr: true,
-		})
-	}
-	last := &buf.output[len(buf.output)-1]
-	last.data = append(last.data, data...)
-
-	return len(data), nil
-}
-
-type outputEntry struct {
-	stderr bool
-	data   []byte
 }
