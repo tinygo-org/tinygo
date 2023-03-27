@@ -584,3 +584,9 @@ func equal[T comparable](a, b []T) bool {
 	}
 	return true
 }
+
+func TestUnsafeAddr(t *testing.T) {
+	s := "hello, world"
+	refa := ValueOf(&s)
+	_ = refa.UnsafeAddr()
+}
