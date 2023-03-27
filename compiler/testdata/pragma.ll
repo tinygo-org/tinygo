@@ -60,6 +60,14 @@ entry:
   ret void
 }
 
+declare void @main.declaredImport() #7
+
+; Function Attrs: nounwind
+define hidden void @main.definedImport(ptr %context) unnamed_addr #2 {
+entry:
+  ret void
+}
+
 declare void @main.undefinedFunctionNotInSection(ptr) #1
 
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
@@ -69,3 +77,4 @@ attributes #3 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,
 attributes #4 = { inlinehint nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #6 = { noinline nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exportedFunctionInSection" "wasm-import-module"="env" "wasm-import-name"="exportedFunctionInSection" }
+attributes #7 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" "wasm-import-module"="modulename" "wasm-import-name"="import1" }
