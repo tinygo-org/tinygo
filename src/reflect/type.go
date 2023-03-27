@@ -658,6 +658,7 @@ const fieldOffsetCacheSize = 16
 type fieldOffsetCacheType [fieldOffsetCacheSize]struct {
 	t       *structType
 	offsets map[int]uintptr
+	locked  bool
 }
 
 var fieldOffsetCache fieldOffsetCacheType
@@ -665,10 +666,27 @@ var fieldOffsetCache fieldOffsetCacheType
 func (f *fieldOffsetCacheType) lookup(t *structType, n int) uintptr {
 	idx := hashStructTypePtr(t)
 	idx %= fieldOffsetCacheSize
+
+	if f[idx].locked {
+		// Locked; don't use this cache entry.  Calculate offset by hand.
+		field := &t.fields[0]
+		var offset uintptr = 0
+		for i := 0; i < n; i++ {
+			offset += field.fieldType.Size()
+			field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
+			offset = align(offset, uintptr(field.fieldType.Align()))
+		}
+		return offset
+	}
+
 	if f[idx].t != t {
 		// Cache miss; populate cache for this type.
-		// Clear out the old map so we have space to allocate a new one
+		// Clear out the old map so we have space to allocate a new one.
+		// Also clear out the type just to be safe.
+		f[idx].t = nil
 		f[idx].offsets = nil
+		f[idx].locked = true
+
 		offsets := make(map[int]uintptr, t.numField)
 		field := &t.fields[0]
 
@@ -688,9 +706,10 @@ func (f *fieldOffsetCacheType) lookup(t *structType, n int) uintptr {
 		// Add in offset of last field
 		offsets[int(t.numField)-1] = offset
 
-		// Fill in cache entry
+		// This entry is now valid to be used.
 		f[idx].t = t
 		f[idx].offsets = offsets
+		f[idx].locked = false
 	}
 
 	return f[idx].offsets[n]
