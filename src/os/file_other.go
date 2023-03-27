@@ -42,6 +42,14 @@ func NewFile(fd uintptr, name string) *File {
 	return &File{&file{handle: stdioFileHandle(fd), name: name}}
 }
 
+// Rename renames (moves) oldpath to newpath.
+// If newpath already exists and is not a directory, Rename replaces it.
+// OS-specific restrictions may apply when oldpath and newpath are in different directories.
+// If there is an error, it will be of type *LinkError.
+func Rename(oldpath, newpath string) error {
+	return ErrNotImplemented
+}
+
 // Read reads up to len(b) bytes from machine.Serial.
 // It returns the number of bytes read and any error encountered.
 func (f stdioFileHandle) Read(b []byte) (n int, err error) {
