@@ -90,7 +90,6 @@ const (
 
 	// ../../lib/wasi-libc/expected/wasm32-wasi/predefined-macros.txt
 	F_GETFL = 3
-	F_SETFL = 4
 )
 
 // These values are needed as a stub until Go supports WASI as a full target.
