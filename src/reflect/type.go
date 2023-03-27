@@ -803,7 +803,6 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 			// Also calculate field offset.
 
 			descriptor := (*structType)(unsafe.Pointer(ll.t.underlying()))
-			var offset uintptr
 			field := &descriptor.fields[0]
 
 			for i := uint16(0); i < descriptor.numField; i++ {
@@ -817,6 +816,7 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 				name := readStringZ(data)
 				data = unsafe.Add(data, len(name))
 				if name == n {
+					offset := fieldOffsetCache.lookup(descriptor, int(i))
 					found = append(found, result{
 						rawStructFieldFromPointer(descriptor, field.fieldType, data, flagsByte, name, offset),
 						append(ll.index, int(i)),
@@ -836,17 +836,8 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 					})
 				}
 
-				offset += field.fieldType.Size()
-
-				// update offset/field pointer if there *is* a next field
-				if i < descriptor.numField-1 {
-
-					// Increment pointer to the next field.
-					field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
-
-					// Align the offset for the next field.
-					offset = align(offset, uintptr(field.fieldType.Align()))
-				}
+				// Increment pointer to the next field.
+				field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
 			}
 		}
 
