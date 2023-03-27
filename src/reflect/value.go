@@ -1209,7 +1209,7 @@ func cvtFloat(v Value, t *rawType) Value {
 	return makeFloat(v.flags, v.Float(), t)
 }
 
-//go:linkname stringToBytes runtime.stringToBytesTyped
+//go:linkname stringToBytes runtime.stringToBytes
 func stringToBytes(x string) []byte
 
 func cvtStringBytes(v Value, t *rawType) Value {
@@ -1221,7 +1221,7 @@ func cvtStringBytes(v Value, t *rawType) Value {
 	}
 }
 
-//go:linkname stringFromBytes runtime.stringFromBytesTyped
+//go:linkname stringFromBytes runtime.stringFromBytes
 func stringFromBytes(x []byte) string
 
 func cvtBytesString(v Value, t *rawType) Value {
