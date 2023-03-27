@@ -65,12 +65,11 @@ func hashmapTopHash(hash uint32) uint8 {
 
 // Create a new hashmap with the given keySize and valueSize.
 func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashmap {
-	numBuckets := sizeHint / 8
 	bucketBits := uint8(0)
-	for numBuckets != 0 {
-		numBuckets /= 2
+	for hashmapOverLoadFactor(sizeHint, bucketBits) {
 		bucketBits++
 	}
+
 	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + keySize*8 + valueSize*8
 	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
 
@@ -120,14 +119,14 @@ func hashmapKeyHashAlg(alg hashmapAlgorithm) func(key unsafe.Pointer, n, seed ui
 	}
 }
 
-func hashmapShouldGrow(m *hashmap) bool {
-	if m.bucketBits > uint8((unsafe.Sizeof(uintptr(0))*8)-3) {
-		// Over this limit, we're likely to overflow uintptrs during calculations
-		// or numbers of hash elements.   Don't allow any more growth.
-		// With 29 bits, this is 2^32 elements anyway.
-		return false
-	}
+func hashmapHasSpaceToGrow(m *hashmap) bool {
+	// Over this limit, we're likely to overflow uintptrs during calculations
+	// or numbers of hash elements.   Don't allow any more growth.
+	// With 29 bits, this is 2^32 elements anyway.
+	return m.bucketBits <= uint8((unsafe.Sizeof(uintptr(0))*8)-3)
+}
 
+func hashmapOverLoadFactor(n uintptr, bucketBits uint8) bool {
 	// "maximum" number of elements is 0.75 * buckets * elements per bucket
 	// to avoid overflow, this is calculated as
 	// max = 3 * (1/4 * buckets * elements per bucket)
@@ -135,8 +134,8 @@ func hashmapShouldGrow(m *hashmap) bool {
 	//     = 3 * (buckets * (8/4)
 	//     = 3 * (buckets * 2)
 	//     = 6 * buckets
-	max := (uintptr(6) << m.bucketBits)
-	return m.count > max
+	max := (uintptr(6) << bucketBits)
+	return n > max
 }
 
 // Return the number of entries in this hashmap, called from the len builtin.
@@ -158,7 +157,7 @@ func hashmapLenUnsafePointer(m unsafe.Pointer) int {
 //
 //go:nobounds
 func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
-	if hashmapShouldGrow(m) {
+	if hashmapHasSpaceToGrow(m) && hashmapOverLoadFactor(m.count, m.bucketBits) {
 		hashmapGrow(m)
 		// seed changed when we grew; rehash key with new seed
 		hash = m.keyHash(key, m.keySize, m.seed)
