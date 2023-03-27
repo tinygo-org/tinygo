@@ -1,4 +1,4 @@
-// The following is copied from Go 1.16 official implementation.
+// TINYGO: The following is copied and modified from Go 1.19.3 official implementation.
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -6,7 +6,9 @@
 
 package net
 
-import "internal/bytealg"
+import (
+	"internal/bytealg"
+)
 
 // SplitHostPort splits a network address of the form "host:port",
 // "host%zone:port", "[host]:port" or "[host%zone]:port" into host or
