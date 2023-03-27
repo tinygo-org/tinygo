@@ -291,7 +291,7 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 			case "//go:wasmimport":
 				// Import a WebAssembly function, for example a WASI function.
 				// For details, see: https://github.com/golang/go/issues/38248
-				if len(parts) != 3 {
+				if len(parts) != 3 || len(f.Blocks) != 0 {
 					continue
 				}
 				info.exported = true

@@ -59,6 +59,13 @@ func functionInSection() {
 func exportedFunctionInSection() {
 }
 
+//go:wasmimport modulename import1
+func declaredImport()
+
+//go:wasmimport modulename import2
+func definedImport() {
+}
+
 // This function should not: it's only a declaration and not a definition.
 //
 //go:section .special_function_section
