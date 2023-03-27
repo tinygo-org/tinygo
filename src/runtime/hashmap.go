@@ -342,6 +342,11 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 				if m.keyEqual(key, slotKey, m.keySize) {
 					// Found the key, delete it.
 					bucket.tophash[i] = 0
+					// Zero out the key and value so garbage collector doesn't pin the allocations.
+					memzero(slotKey, m.keySize)
+					slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*uintptr(i)
+					slotValue := unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
+					memzero(slotValue, m.valueSize)
 					m.count--
 					return
 				}
