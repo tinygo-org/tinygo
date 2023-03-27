@@ -153,6 +153,39 @@ func hashmapLenUnsafePointer(m unsafe.Pointer) int {
 	return hashmapLen((*hashmap)(m))
 }
 
+//go:inline
+func hashmapBucketSize(m *hashmap) uintptr {
+	return unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
+}
+
+//go:inline
+func hashmapBucketAddr(m *hashmap, buckets unsafe.Pointer, n uintptr) *hashmapBucket {
+	bucketSize := hashmapBucketSize(m)
+	bucket := (*hashmapBucket)(unsafe.Add(buckets, bucketSize*n))
+	return bucket
+}
+
+//go:inline
+func hashmapBucketAddrForHash(m *hashmap, hash uint32) *hashmapBucket {
+	numBuckets := uintptr(1) << m.bucketBits
+	bucketNumber := (uintptr(hash) & (numBuckets - 1))
+	return hashmapBucketAddr(m, m.buckets, bucketNumber)
+}
+
+//go:inline
+func hashmapSlotKey(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Pointer {
+	slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*uintptr(slot)
+	slotKey := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotKeyOffset)
+	return slotKey
+}
+
+//go:inline
+func hashmapSlotValue(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Pointer {
+	slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*uintptr(slot)
+	slotValue := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotValueOffset)
+	return slotValue
+}
+
 // Set a specified key to a given value. Grow the map if necessary.
 //
 //go:nobounds
@@ -164,11 +197,7 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 	}
 
 	tophash := hashmapTopHash(hash)
-
-	numBuckets := uintptr(1) << m.bucketBits
-	bucketNumber := (uintptr(hash) & (numBuckets - 1))
-	bucketSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
-	bucket := (*hashmapBucket)(unsafe.Add(m.buckets, bucketSize*bucketNumber))
+	bucket := hashmapBucketAddrForHash(m, hash)
 	var lastBucket *hashmapBucket
 
 	// See whether the key already exists somewhere.
@@ -176,11 +205,9 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 	var emptySlotValue unsafe.Pointer
 	var emptySlotTophash *byte
 	for bucket != nil {
-		for i := uintptr(0); i < 8; i++ {
-			slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*uintptr(i)
-			slotKey := unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
-			slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*uintptr(i)
-			slotValue := unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
+		for i := uint8(0); i < 8; i++ {
+			slotKey := hashmapSlotKey(m, bucket, i)
+			slotValue := hashmapSlotValue(m, bucket, i)
 			if bucket.tophash[i] == 0 && emptySlotKey == nil {
 				// Found an empty slot, store it for if we couldn't find an
 				// existing slot.
@@ -219,17 +246,16 @@ func hashmapSetUnsafePointer(m unsafe.Pointer, key unsafe.Pointer, value unsafe.
 // hashmapInsertIntoNewBucket creates a new bucket, inserts the given key and
 // value into the bucket, and returns a pointer to this bucket.
 func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash uint8) *hashmapBucket {
-	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
+	bucketBufSize := hashmapBucketSize(m)
 	bucketBuf := alloc(bucketBufSize, nil)
+	bucket := (*hashmapBucket)(bucketBuf)
+
 	// Insert into the first slot, which is empty as it has just been allocated.
-	slotKeyOffset := unsafe.Sizeof(hashmapBucket{})
-	slotKey := unsafe.Add(bucketBuf, slotKeyOffset)
-	slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8
-	slotValue := unsafe.Add(bucketBuf, slotValueOffset)
+	slotKey := hashmapSlotKey(m, bucket, 0)
+	slotValue := hashmapSlotValue(m, bucket, 0)
 	m.count++
 	memcpy(slotKey, key, m.keySize)
 	memcpy(slotValue, value, m.valueSize)
-	bucket := (*hashmapBucket)(bucketBuf)
 	bucket.tophash[0] = tophash
 	return bucket
 }
@@ -243,7 +269,7 @@ func hashmapGrow(m *hashmap) {
 	// allocate our new buckets twice as big
 	n.bucketBits = m.bucketBits + 1
 	numBuckets := uintptr(1) << n.bucketBits
-	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
+	bucketBufSize := hashmapBucketSize(m)
 	n.buckets = alloc(bucketBufSize*numBuckets, nil)
 
 	// use a hashmap iterator to go through the old map
@@ -271,24 +297,15 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 		memzero(value, uintptr(valueSize))
 		return false
 	}
-	numBuckets := uintptr(1) << m.bucketBits
-	bucketNumber := (uintptr(hash) & (numBuckets - 1))
-	bucketSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
-	bucket := (*hashmapBucket)(unsafe.Add(m.buckets, bucketSize*bucketNumber))
 
-	tophash := uint8(hash >> 24)
-	if tophash < 1 {
-		// 0 means empty slot, so make it bigger.
-		tophash += 1
-	}
+	tophash := hashmapTopHash(hash)
+	bucket := hashmapBucketAddrForHash(m, hash)
 
 	// Try to find the key.
 	for bucket != nil {
-		for i := uintptr(0); i < 8; i++ {
-			slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*uintptr(i)
-			slotKey := unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
-			slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*uintptr(i)
-			slotValue := unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
+		for i := uint8(0); i < 8; i++ {
+			slotKey := hashmapSlotKey(m, bucket, i)
+			slotValue := hashmapSlotValue(m, bucket, i)
 			if bucket.tophash[i] == tophash {
 				// This could be the key we're looking for.
 				if m.keyEqual(key, slotKey, m.keySize) {
@@ -321,22 +338,14 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 		// > no-op.
 		return
 	}
-	numBuckets := uintptr(1) << m.bucketBits
-	bucketNumber := (uintptr(hash) & (numBuckets - 1))
-	bucketSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
-	bucket := (*hashmapBucket)(unsafe.Add(m.buckets, bucketSize*bucketNumber))
 
-	tophash := uint8(hash >> 24)
-	if tophash < 1 {
-		// 0 means empty slot, so make it bigger.
-		tophash += 1
-	}
+	tophash := hashmapTopHash(hash)
+	bucket := hashmapBucketAddrForHash(m, hash)
 
 	// Try to find the key.
 	for bucket != nil {
-		for i := uintptr(0); i < 8; i++ {
-			slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*uintptr(i)
-			slotKey := unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
+		for i := uint8(0); i < 8; i++ {
+			slotKey := hashmapSlotKey(m, bucket, i)
 			if bucket.tophash[i] == tophash {
 				// This could be the key we're looking for.
 				if m.keyEqual(key, slotKey, m.keySize) {
@@ -344,8 +353,7 @@ func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 					bucket.tophash[i] = 0
 					// Zero out the key and value so garbage collector doesn't pin the allocations.
 					memzero(slotKey, m.keySize)
-					slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*uintptr(i)
-					slotValue := unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
+					slotValue := hashmapSlotValue(m, bucket, i)
 					memzero(slotValue, m.valueSize)
 					m.count--
 					return
@@ -382,8 +390,7 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 				// went through all buckets
 				return false
 			}
-			bucketSize := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*8
-			it.bucket = (*hashmapBucket)(unsafe.Add(it.buckets, bucketSize*it.bucketNumber))
+			it.bucket = hashmapBucketAddr(m, it.buckets, it.bucketNumber)
 			it.bucketNumber++ // next bucket
 		}
 		if it.bucket.tophash[it.bucketIndex] == 0 {
@@ -392,15 +399,13 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 			continue
 		}
 
-		slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*uintptr(it.bucketIndex)
-		slotKey := unsafe.Add(unsafe.Pointer(it.bucket), slotKeyOffset)
+		slotKey := hashmapSlotKey(m, it.bucket, it.bucketIndex)
 		memcpy(key, slotKey, m.keySize)
 
 		if it.buckets == m.buckets {
 			// Our view of the buckets is the same as the parent map.
 			// Just copy the value we have
-			slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + m.keySize*8 + m.valueSize*uintptr(it.bucketIndex)
-			slotValue := unsafe.Add(unsafe.Pointer(it.bucket), slotValueOffset)
+			slotValue := hashmapSlotValue(m, it.bucket, it.bucketIndex)
 			memcpy(value, slotValue, m.valueSize)
 			it.bucketIndex++
 		} else {
