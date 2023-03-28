@@ -44,10 +44,4 @@ const (
 	IPPROTO_TCP   = 0x6
 	IPPROTO_UDP   = 0x11
 	F_SETFL       = 0x4
-
-	// TINYGO: Made up, not a real IP protocol number.  This is used to
-	// create a TLS socket on the device, assuming the device supports mbed
-	// TLS.
-
-	IPPROTO_TLS = 0xFE
 )
