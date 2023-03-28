@@ -66,7 +66,7 @@ func hashmapTopHash(hash uint32) uint8 {
 // Create a new hashmap with the given keySize and valueSize.
 func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashmap {
 	bucketBits := uint8(0)
-	for hashmapOverLoadFactor(sizeHint, bucketBits) {
+	for hashmapHasSpaceToGrow(bucketBits) && hashmapOverLoadFactor(sizeHint, bucketBits) {
 		bucketBits++
 	}
 
@@ -119,11 +119,11 @@ func hashmapKeyHashAlg(alg hashmapAlgorithm) func(key unsafe.Pointer, n, seed ui
 	}
 }
 
-func hashmapHasSpaceToGrow(m *hashmap) bool {
+func hashmapHasSpaceToGrow(bucketBits uint8) bool {
 	// Over this limit, we're likely to overflow uintptrs during calculations
 	// or numbers of hash elements.   Don't allow any more growth.
 	// With 29 bits, this is 2^32 elements anyway.
-	return m.bucketBits <= uint8((unsafe.Sizeof(uintptr(0))*8)-3)
+	return bucketBits <= uint8((unsafe.Sizeof(uintptr(0))*8)-3)
 }
 
 func hashmapOverLoadFactor(n uintptr, bucketBits uint8) bool {
@@ -190,7 +190,7 @@ func hashmapSlotValue(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Poin
 //
 //go:nobounds
 func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
-	if hashmapHasSpaceToGrow(m) && hashmapOverLoadFactor(m.count, m.bucketBits) {
+	if hashmapHasSpaceToGrow(m.bucketBits) && hashmapOverLoadFactor(m.count, m.bucketBits) {
 		hashmapGrow(m)
 		// seed changed when we grew; rehash key with new seed
 		hash = m.keyHash(key, m.keySize, m.seed)
