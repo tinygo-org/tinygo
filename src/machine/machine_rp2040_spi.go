@@ -26,8 +26,6 @@ type SPIConfig struct {
 	LSBFirst bool
 	// Mode's two most LSB are CPOL and CPHA. i.e. Mode==2 (0b10) is CPOL=1, CPHA=0
 	Mode uint8
-	// Number of data bits per transfer. Valid values 4..16. Default and recommended is 8.
-	DataBits uint8
 	// Serial clock pin
 	SCK Pin
 	// TX or Serial Data Out (MOSI if rp2040 is master)
@@ -199,9 +197,6 @@ func (spi SPI) Configure(config SPIConfig) error {
 		return errSPIInvalidSCK
 	}
 
-	if config.DataBits < 4 || config.DataBits > 16 {
-		config.DataBits = 8
-	}
 	if config.Frequency == 0 {
 		config.Frequency = defaultBaud
 	}
@@ -221,7 +216,7 @@ func (spi SPI) initSPI(config SPIConfig) (err error) {
 	}
 	err = spi.SetBaudRate(config.Frequency)
 	// Set SPI Format (CPHA and CPOL) and frame format (default is Motorola)
-	spi.setFormat(config.DataBits, config.Mode, rp.XIP_SSI_CTRLR0_SPI_FRF_STD)
+	spi.setFormat(config.Mode, rp.XIP_SSI_CTRLR0_SPI_FRF_STD)
 
 	// Always enable DREQ signals -- harmless if DMA is not listening
 	spi.Bus.SSPDMACR.SetBits(rp.SPI0_SSPDMACR_TXDMAE | rp.SPI0_SSPDMACR_RXDMAE)
@@ -231,13 +226,13 @@ func (spi SPI) initSPI(config SPIConfig) (err error) {
 }
 
 //go:inline
-func (spi SPI) setFormat(databits, mode uint8, frameFormat uint32) {
+func (spi SPI) setFormat(mode uint8, frameFormat uint32) {
 	cpha := uint32(mode) & 1
 	cpol := uint32(mode>>1) & 1
 	spi.Bus.SSPCR0.ReplaceBits(
 		(cpha<<rp.SPI0_SSPCR0_SPH_Pos)|
 			(cpol<<rp.SPI0_SSPCR0_SPO_Pos)|
-			(uint32(databits-1)<<rp.SPI0_SSPCR0_DSS_Pos)| // Set databits (SPI word length). Valid inputs are 4-16.
+			(uint32(7)<<rp.SPI0_SSPCR0_DSS_Pos)| // Set databits (SPI word length) to 8 bits.
 			(frameFormat&0b11)<<rp.SPI0_SSPCR0_FRF_Pos, // Frame format bits 4:5
 		rp.SPI0_SSPCR0_SPH_Msk|rp.SPI0_SSPCR0_SPO_Msk|rp.SPI0_SSPCR0_DSS_Msk|rp.SPI0_SSPCR0_FRF_Msk, 0)
 }
