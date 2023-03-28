@@ -307,7 +307,6 @@ TEST_PACKAGES_FAST = \
 	internal/profile \
 	math \
 	math/cmplx \
-	net \
 	net/http/internal/ascii \
 	net/mail \
 	os \
@@ -355,6 +354,7 @@ TEST_PACKAGES_LINUX := \
 	image \
 	io/ioutil \
 	mime/quotedprintable \
+	net \
 	strconv \
 	testing/fstest \
 	text/tabwriter \
