@@ -4,6 +4,12 @@ import (
 	"time"
 )
 
+const (
+	// Made up, not a real IP protocol number.  This is used to create a
+	// TLS socket on the device, assuming the device supports mbed TLS.
+	IPPROTO_TLS = 0xFE
+)
+
 // netdev is the current netdev, set by the application with useNetdev()
 var netdev netdever
 
