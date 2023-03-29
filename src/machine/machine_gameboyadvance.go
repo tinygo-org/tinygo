@@ -38,27 +38,27 @@ func (p Pin) Set(value bool) {
 	// do nothing
 }
 
-var Display = FramebufDisplay{(*[160][240]volatile.Register16)(unsafe.Pointer(uintptr(gba.MEM_VRAM)))}
+var Display = DisplayMode3{(*[160][240]volatile.Register16)(unsafe.Pointer(uintptr(gba.MEM_VRAM)))}
 
-type FramebufDisplay struct {
+type DisplayMode3 struct {
 	port *[160][240]volatile.Register16
 }
 
-func (d FramebufDisplay) Configure() {
+func (d *DisplayMode3) Configure() {
 	// Use video mode 3 (in BG2, a 16bpp bitmap in VRAM) and Enable BG2
 	gba.DISP.DISPCNT.Set(gba.DISPCNT_BGMODE_3<<gba.DISPCNT_BGMODE_Pos |
 		gba.DISPCNT_SCREENDISPLAY_BG2_ENABLE<<gba.DISPCNT_SCREENDISPLAY_BG2_Pos)
 }
 
-func (d FramebufDisplay) Size() (x, y int16) {
+func (d *DisplayMode3) Size() (x, y int16) {
 	return 240, 160
 }
 
-func (d FramebufDisplay) SetPixel(x, y int16, c color.RGBA) {
+func (d *DisplayMode3) SetPixel(x, y int16, c color.RGBA) {
 	d.port[y][x].Set((uint16(c.R) >> 3) | ((uint16(c.G) >> 3) << 5) | ((uint16(c.B) >> 3) << 10))
 }
 
-func (d FramebufDisplay) Display() error {
+func (d *DisplayMode3) Display() error {
 	// Nothing to do here.
 	return nil
 }
