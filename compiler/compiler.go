@@ -845,6 +845,11 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 				b.defineMathOp()
 				continue
 			}
+			if ok := b.defineMathBitsIntrinsic(); ok {
+				// Like a math intrinsic, the body of this function was replaced
+				// with a LLVM intrinsic.
+				continue
+			}
 			if member.Blocks == nil {
 				// Try to define this as an intrinsic function.
 				b.defineIntrinsicFunction()
