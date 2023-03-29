@@ -175,14 +175,14 @@ func hashmapBucketAddrForHash(m *hashmap, hash uint32) *hashmapBucket {
 //go:inline
 func hashmapSlotKey(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Pointer {
 	slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*uintptr(slot)
-	slotKey := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotKeyOffset)
+	slotKey := unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
 	return slotKey
 }
 
 //go:inline
 func hashmapSlotValue(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Pointer {
 	slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*uintptr(slot)
-	slotValue := unsafe.Pointer(uintptr(unsafe.Pointer(bucket)) + slotValueOffset)
+	slotValue := unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
 	return slotValue
 }
 
