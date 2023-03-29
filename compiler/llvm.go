@@ -464,6 +464,19 @@ func (b *builder) readStackPointer() llvm.Value {
 	return b.CreateCall(stacksave.GlobalValueType(), stacksave, nil, "")
 }
 
+// createZExtOrTrunc lets the input value fit in the output type bits, by zero
+// extending or truncating the integer.
+func (b *builder) createZExtOrTrunc(value llvm.Value, t llvm.Type) llvm.Value {
+	valueBits := value.Type().IntTypeWidth()
+	resultBits := t.IntTypeWidth()
+	if valueBits > resultBits {
+		value = b.CreateTrunc(value, t, "")
+	} else if valueBits < resultBits {
+		value = b.CreateZExt(value, t, "")
+	}
+	return value
+}
+
 // Reverse a slice of bytes. From the wiki:
 // https://github.com/golang/go/wiki/SliceTricks#reversing
 func reverseBytes(buf []byte) {
