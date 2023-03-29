@@ -653,7 +653,7 @@ func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data 
 	}
 }
 
-const fieldOffsetCacheSize = 16
+const fieldOffsetCacheSize = 4 * unsafe.Sizeof(uintptr(0))
 
 type fieldOffsetCacheType [fieldOffsetCacheSize]struct {
 	t       *structType
