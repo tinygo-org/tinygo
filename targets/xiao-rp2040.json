@@ -4,7 +4,9 @@
     ],
     "serial-port": ["2e8a:000a"],
     "build-tags": ["xiao_rp2040"],
-    "linkerscript": "targets/xiao-rp2040.ld",
+    "ldflags": [
+        "--defsym=__flash_size=1020K"
+    ],
     "extra-files": [
         "targets/pico-boot-stage2.S"
     ]

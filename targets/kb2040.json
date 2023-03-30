@@ -4,7 +4,9 @@
     ],
     "serial-port": ["239a:8106"],
     "build-tags": ["kb2040"],
-    "linkerscript": "targets/qtpy-rp2040.ld",
+    "ldflags": [
+        "--defsym=__flash_size=8192K"
+    ],
     "extra-files": [
         "targets/qtpy-rp2040-boot-stage2.S"
     ]

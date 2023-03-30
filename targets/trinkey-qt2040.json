@@ -4,7 +4,9 @@
     ],
     "serial-port": ["239a:8109"],
     "build-tags": ["trinkey_qt2040"],
-    "linkerscript": "targets/trinkey-qt2040.ld",
+    "ldflags": [
+        "--defsym=__flash_size=8192K"
+    ],
     "extra-files": [
         "targets/trinkey-qt2040-boot-stage2.S"
     ]
