@@ -1032,6 +1032,7 @@ func (it *MapIter) Next() bool {
 
 func (v Value) Set(x Value) {
 	v.checkAddressable()
+	v.checkRO()
 	if !x.typecode.AssignableTo(v.typecode) {
 		panic("reflect: cannot set")
 	}
@@ -1055,6 +1056,7 @@ func (v Value) Set(x Value) {
 
 func (v Value) SetBool(x bool) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Bool:
 		*(*bool)(v.value) = x
@@ -1065,6 +1067,7 @@ func (v Value) SetBool(x bool) {
 
 func (v Value) SetInt(x int64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Int:
 		*(*int)(v.value) = int(x)
@@ -1083,6 +1086,7 @@ func (v Value) SetInt(x int64) {
 
 func (v Value) SetUint(x uint64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Uint:
 		*(*uint)(v.value) = uint(x)
@@ -1103,6 +1107,7 @@ func (v Value) SetUint(x uint64) {
 
 func (v Value) SetFloat(x float64) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Float32:
 		*(*float32)(v.value) = float32(x)
@@ -1115,6 +1120,7 @@ func (v Value) SetFloat(x float64) {
 
 func (v Value) SetComplex(x complex128) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case Complex64:
 		*(*complex64)(v.value) = complex64(x)
@@ -1127,6 +1133,7 @@ func (v Value) SetComplex(x complex128) {
 
 func (v Value) SetString(x string) {
 	v.checkAddressable()
+	v.checkRO()
 	switch v.Kind() {
 	case String:
 		*(*string)(v.value) = x
@@ -1137,6 +1144,7 @@ func (v Value) SetString(x string) {
 
 func (v Value) SetBytes(x []byte) {
 	v.checkAddressable()
+	v.checkRO()
 	if v.typecode.Kind() != Slice || v.typecode.elem().Kind() != Uint8 {
 		panic("reflect.Value.SetBytes called on not []byte")
 	}
@@ -1702,6 +1710,7 @@ func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
 func hashmapInterfaceDelete(m unsafe.Pointer, key interface{})
 
 func (v Value) SetMapIndex(key, elem Value) {
+	v.checkRO()
 	if v.Kind() != Map {
 		panic(&ValueError{Method: "SetMapIndex", Kind: v.Kind()})
 	}
