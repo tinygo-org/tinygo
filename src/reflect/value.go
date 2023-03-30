@@ -14,6 +14,10 @@ type valueFlags uint8
 const (
 	valueFlagIndirect valueFlags = 1 << iota
 	valueFlagExported
+	valueFlagEmbedRO
+	valueFlagStickyRO
+
+	valueFlagRO = valueFlagEmbedRO | valueFlagStickyRO
 )
 
 type Value struct {
@@ -34,6 +38,16 @@ func (v Value) isIndirect() bool {
 // set for unexported struct fields.
 func (v Value) isExported() bool {
 	return v.flags&valueFlagExported != 0
+}
+
+func (v Value) isRO() bool {
+	return v.flags&(valueFlagRO) != 0
+}
+
+func (v Value) checkRO() {
+	if v.isRO() {
+		panic("reflect: value is not settable")
+	}
 }
 
 func Indirect(v Value) Value {
@@ -210,7 +224,7 @@ func (v Value) IsValid() bool {
 }
 
 func (v Value) CanInterface() bool {
-	return v.isExported()
+	return v.isExported() && !v.isRO()
 }
 
 func (v Value) CanAddr() bool {
@@ -268,7 +282,7 @@ func (v Value) UnsafeAddr() uintptr {
 }
 
 func (v Value) CanSet() bool {
-	return v.flags&(valueFlagExported|valueFlagIndirect) == valueFlagExported|valueFlagIndirect
+	return v.flags&(valueFlagExported|valueFlagIndirect|valueFlagRO) == valueFlagExported|valueFlagIndirect
 }
 
 func (v Value) Bool() bool {
@@ -668,11 +682,22 @@ func (v Value) Field(i int) Value {
 		panic(&ValueError{Method: "Field", Kind: v.Kind()})
 	}
 	structField := v.typecode.rawField(i)
-	flags := v.flags
+
+	// Copy flags but clear EmbedRO; we're not an embedded field anymore
+	flags := v.flags & ^valueFlagEmbedRO
+
 	if structField.PkgPath != "" {
-		// The fact that PkgPath is present means that this field is not
-		// exported.
+		// No PkgPath => not exported.
+		// Clear exported flag even if the parent was exported.
 		flags &^= valueFlagExported
+
+		// Update the RO flag
+		if structField.Anonymous {
+			// Embedded field
+			flags |= valueFlagEmbedRO
+		} else {
+			flags |= valueFlagStickyRO
+		}
 	} else {
 		// Parent field may not have been exported but we are
 		flags |= valueFlagExported
@@ -1437,7 +1462,7 @@ func Zero(typ Type) Value {
 		return Value{
 			typecode: typ.(*rawType),
 			value:    nil,
-			flags:    valueFlagExported,
+			flags:    valueFlagExported | valueFlagRO,
 		}
 	}
 
@@ -1445,14 +1470,14 @@ func Zero(typ Type) Value {
 		return Value{
 			typecode: typ.(*rawType),
 			value:    unsafe.Pointer(zerobuffer),
-			flags:    valueFlagExported,
+			flags:    valueFlagExported | valueFlagRO,
 		}
 	}
 
 	return Value{
 		typecode: typ.(*rawType),
 		value:    alloc(typ.Size(), nil),
-		flags:    valueFlagExported,
+		flags:    valueFlagExported | valueFlagRO,
 	}
 }
 
@@ -1545,6 +1570,10 @@ func Copy(dst, src Value) int {
 
 	dstbuf, dstlen := buflen(dst)
 	srcbuf, srclen := buflen(src)
+
+	if srclen > 0 {
+		dst.checkRO()
+	}
 
 	return sliceCopy(dstbuf, srcbuf, dstlen, srclen, dst.typecode.elem().Size())
 }
