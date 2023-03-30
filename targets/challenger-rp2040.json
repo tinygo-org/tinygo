@@ -4,7 +4,9 @@
     ],
     "serial-port": ["2e8a:1023"],
     "build-tags": ["challenger_rp2040"],
-    "linkerscript": "targets/feather-rp2040.ld",
+    "ldflags": [
+        "--defsym=__flash_size=8M"
+    ],
     "extra-files": [
         "targets/feather-rp2040-boot-stage2.S"
     ]
