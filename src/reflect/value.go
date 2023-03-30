@@ -276,7 +276,9 @@ func (v Value) Addr() Value {
 	if !v.CanAddr() {
 		panic("reflect.Value.Addr of unaddressable value")
 	}
-	flags := (v.flags & (valueFlagExported)) | v.flags.ro()
+	// Preserve flagRO instead of using v.flag.ro() so that
+	// v.Addr().Elem() is equivalent to v (#32772)
+	flags := v.flags & (valueFlagExported | valueFlagRO)
 	return Value{
 		typecode: pointerTo(v.typecode),
 		value:    v.value,
