@@ -1,6 +1,10 @@
 {
-	"inherits": ["atmega32u4"],
-	"build-tags": ["arduino_leonardo"],
+	"inherits": [
+		"atmega32u4"
+	],
+	"build-tags": [
+		"arduino_leonardo"
+	],
 	"ldflags": [
 		"--defsym=_bootloader_size=512",
 		"--defsym=_stack_size=512"

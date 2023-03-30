@@ -1,6 +1,14 @@
 {
-    "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
-    "build-tags": ["itsybitsy_nrf52840"],
-    "serial-port": ["239A:8052", "239A:8051"],
-    "msd-volume-name": "ITSY840BOOT"
+	"inherits": [
+		"nrf52840",
+		"nrf52840-s140v6-uf2"
+	],
+	"build-tags": [
+		"itsybitsy_nrf52840"
+	],
+	"serial-port": [
+		"239A:8052",
+		"239A:8051"
+	],
+	"msd-volume-name": "ITSY840BOOT"
 }

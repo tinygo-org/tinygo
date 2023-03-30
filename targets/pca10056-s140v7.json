@@ -1,3 +1,6 @@
 {
-	"inherits": ["pca10056", "nrf52840-s140v7"]
+	"inherits": [
+		"pca10056",
+		"nrf52840-s140v7"
+	]
 }

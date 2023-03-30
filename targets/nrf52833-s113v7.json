@@ -1,5 +1,8 @@
 {
-	"build-tags": ["softdevice", "s113v7"],
+	"build-tags": [
+		"softdevice",
+		"s113v7"
+	],
 	"linkerscript": "targets/nrf52833-s113v7.ld",
 	"ldflags": [
 		"--defsym=__softdevice_stack=0x700"

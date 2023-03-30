@@ -1,14 +1,19 @@
 {
-    "inherits": ["avr"],
-    "cpu": "atmega2560",
-    "build-tags": ["atmega2560", "atmega"],
-    "serial": "uart",
-    "ldflags": [
-        "--defsym=_stack_size=512"
-    ],
-    "linkerscript": "src/device/avr/atmega2560.ld",
-    "extra-files": [
-        "targets/avr.S",
-        "src/device/avr/atmega2560.s"
-    ]
+	"inherits": [
+		"avr"
+	],
+	"cpu": "atmega2560",
+	"build-tags": [
+		"atmega2560",
+		"atmega"
+	],
+	"serial": "uart",
+	"ldflags": [
+		"--defsym=_stack_size=512"
+	],
+	"linkerscript": "src/device/avr/atmega2560.ld",
+	"extra-files": [
+		"targets/avr.S",
+		"src/device/avr/atmega2560.s"
+	]
 }

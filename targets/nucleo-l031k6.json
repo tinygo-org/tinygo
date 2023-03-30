@@ -1,12 +1,20 @@
 {
-    "inherits": ["cortex-m0"],
-    "build-tags": ["nucleol031k6", "stm32l031", "stm32l0x1", "stm32l0", "stm32"],
-    "serial": "uart",
-    "linkerscript": "targets/stm32l031k6.ld",
-    "extra-files": [
-        "src/device/stm32/stm32l0x1.s"
-    ],
-    "flash-method": "openocd",
-    "openocd-interface": "stlink",
-    "openocd-target": "stm32l0"
+	"inherits": [
+		"cortex-m0"
+	],
+	"build-tags": [
+		"nucleol031k6",
+		"stm32l031",
+		"stm32l0x1",
+		"stm32l0",
+		"stm32"
+	],
+	"serial": "uart",
+	"linkerscript": "targets/stm32l031k6.ld",
+	"extra-files": [
+		"src/device/stm32/stm32l0x1.s"
+	],
+	"flash-method": "openocd",
+	"openocd-interface": "stlink",
+	"openocd-target": "stm32l0"
 }

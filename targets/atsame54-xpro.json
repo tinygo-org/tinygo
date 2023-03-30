@@ -1,7 +1,11 @@
 {
-    "inherits": ["atsame54p20a"],
-    "build-tags": ["atsame54_xpro"],
-    "serial": "usb",
-    "flash-method": "openocd",
-    "openocd-interface": "cmsis-dap"
+	"inherits": [
+		"atsame54p20a"
+	],
+	"build-tags": [
+		"atsame54_xpro"
+	],
+	"serial": "usb",
+	"flash-method": "openocd",
+	"openocd-interface": "cmsis-dap"
 }

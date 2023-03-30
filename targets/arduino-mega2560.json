@@ -1,8 +1,12 @@
 {
-    "inherits": ["atmega2560"],
-    "build-tags": ["arduino_mega2560"],
-    "ldflags": [
-        "--defsym=_bootloader_size=8192"
-    ],
-    "flash-command":"avrdude -c wiring -b 115200 -p atmega2560 -P {port} -U flash:w:{hex}:i -v -D"
+	"inherits": [
+		"atmega2560"
+	],
+	"build-tags": [
+		"arduino_mega2560"
+	],
+	"ldflags": [
+		"--defsym=_bootloader_size=8192"
+	],
+	"flash-command": "avrdude -c wiring -b 115200 -p atmega2560 -P {port} -U flash:w:{hex}:i -v -D"
 }

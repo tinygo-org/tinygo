@@ -1,6 +1,10 @@
 {
-	"inherits": ["fe310"],
-	"build-tags": ["hifive1b"],
+	"inherits": [
+		"fe310"
+	],
+	"build-tags": [
+		"hifive1b"
+	],
 	"serial": "uart",
 	"linkerscript": "targets/hifive1b.ld",
 	"flash-method": "msd",

@@ -1,18 +1,23 @@
 {
-    "inherits": ["cortex-m0plus"],
-    "build-tags": ["rp2040", "rp"],
-    "flash-1200-bps-reset": "true",
-    "flash-method": "msd",
-    "serial": "usb",
-    "msd-volume-name": "RPI-RP2",
-    "msd-firmware-name": "firmware.uf2",
-    "binary-format": "uf2",
-    "uf2-family-id": "0xe48bff56",
-    "rp2040-boot-patch": true,
-    "extra-files": [
-        "src/device/rp/rp2040.s"
-    ],
-    "openocd-interface": "picoprobe",
-    "openocd-transport": "swd",
-    "openocd-target": "rp2040"
+	"inherits": [
+		"cortex-m0plus"
+	],
+	"build-tags": [
+		"rp2040",
+		"rp"
+	],
+	"flash-1200-bps-reset": "true",
+	"flash-method": "msd",
+	"serial": "usb",
+	"msd-volume-name": "RPI-RP2",
+	"msd-firmware-name": "firmware.uf2",
+	"binary-format": "uf2",
+	"uf2-family-id": "0xe48bff56",
+	"rp2040-boot-patch": true,
+	"extra-files": [
+		"src/device/rp/rp2040.s"
+	],
+	"openocd-interface": "picoprobe",
+	"openocd-transport": "swd",
+	"openocd-target": "rp2040"
 }

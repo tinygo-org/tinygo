@@ -1,12 +1,19 @@
 {
-  "inherits": ["cortex-m4"],
-  "build-tags": ["stm32f4disco", "stm32f407", "stm32f4", "stm32"],
-  "serial": "uart",
-  "linkerscript": "targets/stm32f407.ld",
-  "extra-files": [
-    "src/device/stm32/stm32f407.s"
-  ],
-  "flash-method": "openocd",
-  "openocd-interface": "stlink-v2",
-  "openocd-target": "stm32f4x"
+	"inherits": [
+		"cortex-m4"
+	],
+	"build-tags": [
+		"stm32f4disco",
+		"stm32f407",
+		"stm32f4",
+		"stm32"
+	],
+	"serial": "uart",
+	"linkerscript": "targets/stm32f407.ld",
+	"extra-files": [
+		"src/device/stm32/stm32f407.s"
+	],
+	"flash-method": "openocd",
+	"openocd-interface": "stlink-v2",
+	"openocd-target": "stm32f4x"
 }

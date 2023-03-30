@@ -1,3 +1,5 @@
 {
-	"inherits": ["esp32-coreboard-v2"]
+	"inherits": [
+		"esp32-coreboard-v2"
+	]
 }

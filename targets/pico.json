@@ -1,11 +1,15 @@
 {
-    "inherits": [
-        "rp2040"
-    ],
-    "build-tags": ["pico"],
-    "serial-port": ["2e8a:000A"],
-    "linkerscript": "targets/pico.ld",
-    "extra-files": [
-        "targets/pico-boot-stage2.S"
-    ]
+	"inherits": [
+		"rp2040"
+	],
+	"build-tags": [
+		"pico"
+	],
+	"serial-port": [
+		"2e8a:000A"
+	],
+	"linkerscript": "targets/pico.ld",
+	"extra-files": [
+		"targets/pico-boot-stage2.S"
+	]
 }

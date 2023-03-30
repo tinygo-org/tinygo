@@ -1,6 +1,10 @@
 {
-	"inherits": ["nrf52840"],
-	"build-tags": ["pca10059"],
+	"inherits": [
+		"nrf52840"
+	],
+	"build-tags": [
+		"pca10059"
+	],
 	"serial": "usb",
 	"linkerscript": "targets/pca10059.ld",
 	"binary-format": "nrf-dfu",

@@ -1,5 +1,7 @@
 {
-    "inherits": ["atmega1284p"],
-    "scheduler": "tasks",
-    "default-stack-size": 384
+	"inherits": [
+		"atmega1284p"
+	],
+	"scheduler": "tasks",
+	"default-stack-size": 384
 }

@@ -1,7 +1,14 @@
 {
-	"inherits": ["avr"],
+	"inherits": [
+		"avr"
+	],
 	"cpu": "attiny85",
-	"build-tags": ["attiny85", "attiny", "avr2", "avr25"],
+	"build-tags": [
+		"attiny85",
+		"attiny",
+		"avr2",
+		"avr25"
+	],
 	"cflags": [
 		"-D__AVR_ARCH__=25"
 	],

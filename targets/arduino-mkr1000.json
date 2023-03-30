@@ -1,7 +1,11 @@
 {
-    "inherits": ["atsamd21g18a"],
-    "build-tags": ["arduino_mkr1000"],
+	"inherits": [
+		"atsamd21g18a"
+	],
+	"build-tags": [
+		"arduino_mkr1000"
+	],
 	"serial": "usb",
-    "flash-command": "bossac -i -e -w -v -R -U --port={port} --offset=0x2000 {bin}",
-    "flash-1200-bps-reset": "true"
+	"flash-command": "bossac -i -e -w -v -R -U --port={port} --offset=0x2000 {bin}",
+	"flash-1200-bps-reset": "true"
 }

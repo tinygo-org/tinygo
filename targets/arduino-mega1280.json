@@ -1,8 +1,12 @@
 {
-    "inherits": ["atmega1280"],
-    "build-tags": ["arduino_mega1280"],
-    "ldflags": [
-        "--defsym=_bootloader_size=4096"
-    ],
-    "flash-command":"avrdude -c arduino -b 57600 -p atmega1280 -P {port} -U flash:w:{hex}:i -v -D"
+	"inherits": [
+		"atmega1280"
+	],
+	"build-tags": [
+		"arduino_mega1280"
+	],
+	"ldflags": [
+		"--defsym=_bootloader_size=4096"
+	],
+	"flash-command": "avrdude -c arduino -b 57600 -p atmega1280 -P {port} -U flash:w:{hex}:i -v -D"
 }

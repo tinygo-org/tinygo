@@ -1,3 +1,5 @@
 {
-	"inherits": ["clue-alpha"]
+	"inherits": [
+		"clue-alpha"
+	]
 }

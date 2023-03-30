@@ -1,6 +1,10 @@
 {
-    "inherits": ["atsamd21g18a"],
-    "build-tags": ["p1am_100"],
-    "flash-command": "bossac -d -i -e -w -v -R --port={port} --offset=0x2000 {bin}",
-    "flash-1200-bps-reset": "true"
+	"inherits": [
+		"atsamd21g18a"
+	],
+	"build-tags": [
+		"p1am_100"
+	],
+	"flash-command": "bossac -d -i -e -w -v -R --port={port} --offset=0x2000 {bin}",
+	"flash-1200-bps-reset": "true"
 }

@@ -1,12 +1,20 @@
 {
-    "inherits": ["cortex-m33"],
-    "build-tags": ["nucleol552ze", "stm32l552", "stm32l5x2", "stm32l5", "stm32"],
-    "serial": "uart",
-    "linkerscript": "targets/stm32l5x2xe.ld",
-    "extra-files": [
-      "src/device/stm32/stm32l552.s"
-    ],
-    "flash-method": "openocd",
-    "openocd-interface": "stlink",
-    "openocd-target": "stm32l5x"
-  }
+	"inherits": [
+		"cortex-m33"
+	],
+	"build-tags": [
+		"nucleol552ze",
+		"stm32l552",
+		"stm32l5x2",
+		"stm32l5",
+		"stm32"
+	],
+	"serial": "uart",
+	"linkerscript": "targets/stm32l5x2xe.ld",
+	"extra-files": [
+		"src/device/stm32/stm32l552.s"
+	],
+	"flash-method": "openocd",
+	"openocd-interface": "stlink",
+	"openocd-target": "stm32l5x"
+}

@@ -1,6 +1,10 @@
 {
-	"inherits": ["attiny85"],
-	"build-tags": ["digispark"],
+	"inherits": [
+		"attiny85"
+	],
+	"build-tags": [
+		"digispark"
+	],
 	"ldflags": [
 		"--defsym=_bootloader_size=2180",
 		"--defsym=_stack_size=128"

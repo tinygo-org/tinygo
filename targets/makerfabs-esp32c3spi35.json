@@ -1,4 +1,8 @@
 {
-	"inherits": ["esp32c3"],
-	"build-tags": ["makerfabs_esp32c3spi35"]
+	"inherits": [
+		"esp32c3"
+	],
+	"build-tags": [
+		"makerfabs_esp32c3spi35"
+	]
 }

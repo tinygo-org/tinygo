@@ -1,7 +1,12 @@
 {
-	"inherits": ["riscv32"],
+	"inherits": [
+		"riscv32"
+	],
 	"features": "+c,+m,-relax,-save-restore",
-	"build-tags": ["esp32c3", "esp"],
+	"build-tags": [
+		"esp32c3",
+		"esp"
+	],
 	"serial": "uart",
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
@@ -14,10 +19,15 @@
 	],
 	"binary-format": "esp32c3",
 	"flash-command": "esptool.py --chip=esp32c3 --port {port} write_flash 0x0 {bin}",
-	"serial-port": ["303a:1001"],
+	"serial-port": [
+		"303a:1001"
+	],
 	"openocd-interface": "esp_usb_jtag",
 	"openocd-target": "esp32c3",
- 	"openocd-commands": ["gdb_memory_map disable"],
- 	"gdb": ["riscv32-esp-elf-gdb"]
+	"openocd-commands": [
+		"gdb_memory_map disable"
+	],
+	"gdb": [
+		"riscv32-esp-elf-gdb"
+	]
 }
-

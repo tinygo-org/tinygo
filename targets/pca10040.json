@@ -1,6 +1,10 @@
 {
-	"inherits": ["nrf52"],
-	"build-tags": ["pca10040"],
+	"inherits": [
+		"nrf52"
+	],
+	"build-tags": [
+		"pca10040"
+	],
 	"serial": "uart",
 	"flash-method": "openocd",
 	"flash-command": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",

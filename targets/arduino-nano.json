@@ -1,6 +1,10 @@
 {
-	"inherits": ["atmega328p"],
-	"build-tags": ["arduino_nano"],
+	"inherits": [
+		"atmega328p"
+	],
+	"build-tags": [
+		"arduino_nano"
+	],
 	"ldflags": [
 		"--defsym=_bootloader_size=512",
 		"--defsym=_stack_size=512"

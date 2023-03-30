@@ -1,5 +1,8 @@
 {
-	"build-tags": ["softdevice", "s140v7"],
+	"build-tags": [
+		"softdevice",
+		"s140v7"
+	],
 	"linkerscript": "targets/nrf52840-s140v7.ld",
 	"ldflags": [
 		"--defsym=__softdevice_stack=0x700"

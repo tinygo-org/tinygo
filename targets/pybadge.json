@@ -1,10 +1,16 @@
 {
-    "inherits": ["atsamd51j19a"],
-    "build-tags": ["pybadge"],
-    "serial": "usb",
-    "flash-1200-bps-reset": "true",
-    "flash-method": "msd",
-    "serial-port": ["239a:8033"],
-    "msd-volume-name": "PYBADGEBOOT",
-    "msd-firmware-name": "arcade.uf2"
+	"inherits": [
+		"atsamd51j19a"
+	],
+	"build-tags": [
+		"pybadge"
+	],
+	"serial": "usb",
+	"flash-1200-bps-reset": "true",
+	"flash-method": "msd",
+	"serial-port": [
+		"239a:8033"
+	],
+	"msd-volume-name": "PYBADGEBOOT",
+	"msd-firmware-name": "arcade.uf2"
 }

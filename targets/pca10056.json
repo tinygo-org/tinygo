@@ -1,6 +1,10 @@
 {
-	"inherits": ["nrf52840"],
-	"build-tags": ["pca10056"],
+	"inherits": [
+		"nrf52840"
+	],
+	"build-tags": [
+		"pca10056"
+	],
 	"serial": "uart",
 	"flash-method": "command",
 	"flash-command": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",

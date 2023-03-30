@@ -1,4 +1,7 @@
 {
-	"inherits": ["microbit", "nrf51-s110v8"],
+	"inherits": [
+		"microbit",
+		"nrf51-s110v8"
+	],
 	"flash-method": "openocd"
 }

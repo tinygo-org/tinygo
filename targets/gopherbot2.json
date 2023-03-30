@@ -1,3 +1,5 @@
 {
-	"inherits": ["circuitplay-bluefruit"]
+	"inherits": [
+		"circuitplay-bluefruit"
+	]
 }

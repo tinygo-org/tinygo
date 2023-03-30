@@ -1,7 +1,12 @@
 {
 	"goos": "linux",
 	"goarch": "arm",
-	"build-tags": ["tinygo.riscv", "baremetal", "linux", "arm"],
+	"build-tags": [
+		"tinygo.riscv",
+		"baremetal",
+		"linux",
+		"arm"
+	],
 	"gc": "conservative",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
@@ -9,8 +14,11 @@
 	"cflags": [
 		"-Werror",
 		"-mno-relax",
-		"-fno-exceptions", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
-		"-ffunction-sections", "-fdata-sections"
+		"-fno-exceptions",
+		"-fno-unwind-tables",
+		"-fno-asynchronous-unwind-tables",
+		"-ffunction-sections",
+		"-fdata-sections"
 	],
 	"ldflags": [
 		"--gc-sections"
@@ -21,5 +29,7 @@
 		"src/runtime/asm_riscv.S",
 		"src/device/riscv/handleinterrupt.S"
 	],
-	"gdb": ["riscv64-unknown-elf-gdb"]
+	"gdb": [
+		"riscv64-unknown-elf-gdb"
+	]
 }
