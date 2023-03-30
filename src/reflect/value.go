@@ -20,6 +20,13 @@ const (
 	valueFlagRO = valueFlagEmbedRO | valueFlagStickyRO
 )
 
+func (v valueFlags) ro() valueFlags {
+	if v&valueFlagRO != 0 {
+		return valueFlagStickyRO
+	}
+	return 0
+}
+
 type Value struct {
 	typecode *rawType
 	value    unsafe.Pointer
@@ -269,11 +276,11 @@ func (v Value) Addr() Value {
 	if !v.CanAddr() {
 		panic("reflect.Value.Addr of unaddressable value")
 	}
-
+	flags := (v.flags & (valueFlagExported)) | v.flags.ro()
 	return Value{
 		typecode: pointerTo(v.typecode),
 		value:    v.value,
-		flags:    v.flags ^ valueFlagIndirect,
+		flags:    flags,
 	}
 }
 
@@ -659,10 +666,12 @@ func (v Value) Elem() Value {
 		if ptr == nil {
 			return Value{}
 		}
+		// Don't copy RO flags
+		flags := (v.flags & (valueFlagIndirect | valueFlagExported)) | valueFlagIndirect
 		return Value{
 			typecode: v.typecode.elem(),
 			value:    ptr,
-			flags:    v.flags | valueFlagIndirect,
+			flags:    flags,
 		}
 	case Interface:
 		typecode, value := decomposeInterface(*(*interface{})(v.value))
@@ -685,7 +694,6 @@ func (v Value) Field(i int) Value {
 
 	// Copy flags but clear EmbedRO; we're not an embedded field anymore
 	flags := v.flags & ^valueFlagEmbedRO
-
 	if structField.PkgPath != "" {
 		// No PkgPath => not exported.
 		// Clear exported flag even if the parent was exported.
@@ -764,9 +772,10 @@ func (v Value) Index(i int) Value {
 		if uint(i) >= uint(slice.len) {
 			panic("reflect: slice index out of range")
 		}
+		flags := (v.flags & (valueFlagExported | valueFlagIndirect)) | valueFlagIndirect | v.flags.ro()
 		elem := Value{
 			typecode: v.typecode.elem(),
-			flags:    v.flags | valueFlagIndirect,
+			flags:    flags,
 		}
 		elem.value = unsafe.Add(slice.data, elem.typecode.Size()*uintptr(i)) // pointer to new value
 		return elem

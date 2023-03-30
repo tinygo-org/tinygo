@@ -7659,8 +7659,6 @@ func TestAliasNames(t *testing.T) {
 	}
 }
 
-/*
-
 func TestIssue22031(t *testing.T) {
 	type s []struct{ C int }
 
@@ -7678,6 +7676,8 @@ func TestIssue22031(t *testing.T) {
 		}
 	}
 }
+
+/*
 
 type NonExportedFirst int
 
