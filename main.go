@@ -236,6 +236,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	if testConfig.RunRegexp != "" {
 		flags = append(flags, "-test.run="+testConfig.RunRegexp)
 	}
+	if testConfig.SkipRegexp != "" {
+		flags = append(flags, "-test.skip="+testConfig.SkipRegexp)
+	}
 	if testConfig.BenchRegexp != "" {
 		flags = append(flags, "-test.bench="+testConfig.BenchRegexp)
 	}
@@ -1434,6 +1437,7 @@ func main() {
 		flag.BoolVar(&testConfig.Verbose, "v", false, "verbose: print additional output")
 		flag.BoolVar(&testConfig.Short, "short", false, "short: run smaller test suite to save time")
 		flag.StringVar(&testConfig.RunRegexp, "run", "", "run: regexp of tests to run")
+		flag.StringVar(&testConfig.SkipRegexp, "skip", "", "run: regexp of tests to run")
 		testConfig.Count = flag.Int("count", 1, "count: number of times to run tests/benchmarks `count` times")
 		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "run: regexp of benchmarks to run")
 		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
