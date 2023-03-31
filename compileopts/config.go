@@ -545,7 +545,7 @@ type TestConfig struct {
 	Verbose           bool
 	Short             bool
 	RunRegexp         string
-	Count             int
+	Count             *int
 	BenchRegexp       string
 	BenchTime         string
 	BenchMem          bool
