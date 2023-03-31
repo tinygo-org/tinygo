@@ -279,6 +279,7 @@ TEST_PACKAGES_SLOW = \
 
 # Standard library packages that pass tests quickly on darwin, linux, wasi, and windows
 TEST_PACKAGES_FAST = \
+	compress/lzw \
 	compress/zlib \
 	container/heap \
 	container/list \
@@ -331,7 +332,6 @@ endif
 # archive/zip requires os.ReadAt, which is not yet supported on windows
 # bytes requires mmap
 # compress/flate appears to hang on wasi
-# compress/lzw appears to hang on wasi
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # image requires recover(), which is not  yet supported on wasi
@@ -347,7 +347,6 @@ TEST_PACKAGES_LINUX := \
 	archive/zip \
 	bytes \
 	compress/flate \
-	compress/lzw \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
@@ -364,7 +363,6 @@ TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 
 TEST_PACKAGES_WINDOWS := \
 	compress/flate \
-	compress/lzw \
 	crypto/hmac \
 	strconv \
 	text/template/parse \
