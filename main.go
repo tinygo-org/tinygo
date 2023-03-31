@@ -216,7 +216,7 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string, testBenchMem bool, outpath string) (bool, error) {
+func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, testCount int, testBenchRegexp string, testBenchTime string, testBenchMem bool, outpath string) (bool, error) {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
@@ -242,6 +242,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	}
 	if testBenchMem {
 		flags = append(flags, "-test.benchmem")
+	}
+	if testCount != 1 {
+		flags = append(flags, "-test.count="+strconv.Itoa(testCount))
 	}
 
 	buf := bytes.Buffer{}
@@ -1405,6 +1408,7 @@ func main() {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
 	var testCompileOnlyFlag, testVerboseFlag, testShortFlag *bool
+	var testCount *int
 	var testBenchRegexp *string
 	var testBenchTime *string
 	var testRunRegexp *string
@@ -1414,6 +1418,7 @@ func main() {
 		testVerboseFlag = flag.Bool("v", false, "verbose: print additional output")
 		testShortFlag = flag.Bool("short", false, "short: run smaller test suite to save time")
 		testRunRegexp = flag.String("run", "", "run: regexp of tests to run")
+		testCount = flag.Int("count", 1, "count: number of times to run tests/benchmarks `count` times")
 		testBenchRegexp = flag.String("bench", "", "run: regexp of benchmarks to run")
 		testBenchTime = flag.String("benchtime", "", "run each benchmark for duration `d`")
 		testBenchMem = flag.Bool("benchmem", false, "show memory stats for benchmarks")
@@ -1659,7 +1664,7 @@ func main() {
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
 				stderr := (*testStderr)(buf)
-				passed, err := Test(pkgName, stdout, stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testBenchRegexp, *testBenchTime, *testBenchMem, outpath)
+				passed, err := Test(pkgName, stdout, stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testCount, *testBenchRegexp, *testBenchTime, *testBenchMem, outpath)
 				if err != nil {
 					printCompilerError(func(args ...interface{}) {
 						fmt.Fprintln(stderr, args...)
