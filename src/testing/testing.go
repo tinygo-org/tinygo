@@ -499,7 +499,7 @@ func (m *M) Run() (code int) {
 func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
 	ok = true
 
-	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run"))
+	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", ""))
 	t := &T{
 		common: common{
 			output: &logger{logToStdout: flagVerbose},
@@ -566,4 +566,15 @@ func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenc
 		Benchmarks: benchmarks,
 		deps:       deps.(testDeps),
 	}
+}
+
+// A fake regexp matcher.
+// Inflexible, but saves 50KB of flash and 50KB of RAM per -size full,
+// and lets tests pass on cortex-m.
+func fakeMatchString(pat, str string) (bool, error) {
+	if pat == ".*" {
+		return true, nil
+	}
+	matched := strings.Contains(str, pat)
+	return matched, nil
 }
