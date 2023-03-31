@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"machine/usb/joystick"
+	"machine/usb/hid/joystick"
 	"math"
 	"time"
 )
