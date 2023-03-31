@@ -545,6 +545,7 @@ type TestConfig struct {
 	Verbose           bool
 	Short             bool
 	RunRegexp         string
+	SkipRegexp        string
 	Count             *int
 	BenchRegexp       string
 	BenchTime         string

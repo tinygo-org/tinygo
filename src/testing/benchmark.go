@@ -365,7 +365,7 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 		return true
 	}
 	ctx := &benchContext{
-		match: newMatcher(matchString, *matchBenchmarks, "-test.bench", ""),
+		match: newMatcher(matchString, *matchBenchmarks, "-test.bench", flagSkipRegexp),
 	}
 	var bs []InternalBenchmark
 	for _, Benchmark := range benchmarks {
