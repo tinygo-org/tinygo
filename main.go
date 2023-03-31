@@ -216,42 +216,44 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, testCount int, testBenchRegexp string, testBenchTime string, testBenchMem bool, outpath string) (bool, error) {
+func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return false, err
 	}
 
+	testConfig := &options.TestConfig
+
 	// Pass test flags to the test binary.
 	var flags []string
-	if testVerbose {
+	if testConfig.Verbose {
 		flags = append(flags, "-test.v")
 	}
-	if testShort {
+	if testConfig.Short {
 		flags = append(flags, "-test.short")
 	}
-	if testRunRegexp != "" {
-		flags = append(flags, "-test.run="+testRunRegexp)
+	if testConfig.RunRegexp != "" {
+		flags = append(flags, "-test.run="+testConfig.RunRegexp)
 	}
-	if testBenchRegexp != "" {
-		flags = append(flags, "-test.bench="+testBenchRegexp)
+	if testConfig.BenchRegexp != "" {
+		flags = append(flags, "-test.bench="+testConfig.BenchRegexp)
 	}
-	if testBenchTime != "" {
-		flags = append(flags, "-test.benchtime="+testBenchTime)
+	if testConfig.BenchTime != "" {
+		flags = append(flags, "-test.benchtime="+testConfig.BenchTime)
 	}
-	if testBenchMem {
+	if testConfig.BenchMem {
 		flags = append(flags, "-test.benchmem")
 	}
-	if testCount != 1 {
-		flags = append(flags, "-test.count="+strconv.Itoa(testCount))
+	if testConfig.Count != 1 {
+		flags = append(flags, "-test.count="+strconv.Itoa(testConfig.Count))
 	}
 
 	buf := bytes.Buffer{}
 	passed := false
 	var duration time.Duration
 	result, err := buildAndRun(pkgName, config, &buf, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
-		if testCompileOnly || outpath != "" {
+		if testConfig.CompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
 				// No -o path was given, so create one now.
@@ -260,7 +262,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			}
 			copyFile(result.Binary, outpath)
 		}
-		if testCompileOnly {
+		if testConfig.CompileOnly {
 			// Do not run the test.
 			passed = true
 			return nil
@@ -312,7 +314,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// 1) the tests passed and in verbose mode
 		// 2) the tests failed
 		// 3) running benchmarks
-		if (passed && testVerbose) || (!passed) || (testBenchRegexp != "") {
+		if (passed && testConfig.Verbose) || (!passed) || (testConfig.BenchRegexp != "") {
 			buf.WriteTo(stdout)
 		}
 
@@ -1407,21 +1409,17 @@ func main() {
 	if command == "help" || command == "build" || command == "build-library" || command == "test" {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
-	var testCompileOnlyFlag, testVerboseFlag, testShortFlag *bool
-	var testCount *int
-	var testBenchRegexp *string
-	var testBenchTime *string
-	var testRunRegexp *string
-	var testBenchMem *bool
+
+	var testConfig compileopts.TestConfig
 	if command == "help" || command == "test" {
-		testCompileOnlyFlag = flag.Bool("c", false, "compile the test binary but do not run it")
-		testVerboseFlag = flag.Bool("v", false, "verbose: print additional output")
-		testShortFlag = flag.Bool("short", false, "short: run smaller test suite to save time")
-		testRunRegexp = flag.String("run", "", "run: regexp of tests to run")
-		testCount = flag.Int("count", 1, "count: number of times to run tests/benchmarks `count` times")
-		testBenchRegexp = flag.String("bench", "", "run: regexp of benchmarks to run")
-		testBenchTime = flag.String("benchtime", "", "run each benchmark for duration `d`")
-		testBenchMem = flag.Bool("benchmem", false, "show memory stats for benchmarks")
+		flag.BoolVar(&testConfig.CompileOnly, "c", false, "compile the test binary but do not run it")
+		flag.BoolVar(&testConfig.Verbose, "v", false, "verbose: print additional output")
+		flag.BoolVar(&testConfig.Short, "short", false, "short: run smaller test suite to save time")
+		flag.StringVar(&testConfig.RunRegexp, "run", "", "run: regexp of tests to run")
+		flag.IntVar(&testConfig.Count, "count", 1, "count: number of times to run tests/benchmarks `count` times")
+		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "run: regexp of benchmarks to run")
+		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
+		flag.BoolVar(&testConfig.BenchMem, "benchmem", false, "show memory stats for benchmarks")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -1479,6 +1477,7 @@ func main() {
 		PrintStacks:     *printStacks,
 		PrintAllocs:     printAllocs,
 		Tags:            []string(tags),
+		TestConfig:      testConfig,
 		GlobalValues:    globalVarValues,
 		Programmer:      *programmer,
 		OpenOCDCommands: ocdCommands,
@@ -1664,7 +1663,7 @@ func main() {
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
 				stderr := (*testStderr)(buf)
-				passed, err := Test(pkgName, stdout, stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testCount, *testBenchRegexp, *testBenchTime, *testBenchMem, outpath)
+				passed, err := Test(pkgName, stdout, stderr, options, outpath)
 				if err != nil {
 					printCompilerError(func(args ...interface{}) {
 						fmt.Fprintln(stderr, args...)
