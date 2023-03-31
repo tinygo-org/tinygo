@@ -658,7 +658,13 @@ const fieldOffsetCacheSize = 4 * unsafe.Sizeof(uintptr(0))
 type fieldOffsetCacheType [fieldOffsetCacheSize]struct {
 	t       *structType
 	offsets map[int]uintptr
-	locked  bool
+
+	// While we don't have threads contending for cache entries, we do have
+	// recursive calls. If a struct has other structs as fields, then
+	// calculating the offsets here will generate calls to Align() and
+	// Size() both of which call rawField which will end up back here in
+	// lookup.  If need to protect cache entries from colliding structs.
+	locked bool
 }
 
 var fieldOffsetCache fieldOffsetCacheType
