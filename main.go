@@ -249,10 +249,12 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		flags = append(flags, "-test.count="+strconv.Itoa(*testConfig.Count))
 	}
 
+	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
+
 	var buf bytes.Buffer
 	var output io.Writer = &buf
 	// Send the test output to stdout if -v or -bench
-	if testConfig.Verbose || testConfig.BenchRegexp != "" {
+	if logToStdout {
 		output = os.Stdout
 	}
 
@@ -318,7 +320,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 
 		// if verbose or benchmarks, then output is already going to stdout
 		// However, if we failed and weren't printing to stdout, print the output we accumulated.
-		if !passed && output != os.Stdout {
+		if !passed && !logToStdout {
 			buf.WriteTo(stdout)
 		}
 
@@ -331,14 +333,19 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		return err
 	})
 	importPath := strings.TrimSuffix(result.ImportPath, ".test")
+
+	var w io.Writer = stdout
+	if logToStdout {
+		w = os.Stdout
+	}
 	if err, ok := err.(loader.NoTestFilesError); ok {
-		fmt.Fprintf(stdout, "?   \t%s\t[no test files]\n", err.ImportPath)
+		fmt.Fprintf(w, "?   \t%s\t[no test files]\n", err.ImportPath)
 		// Pretend the test passed - it at least didn't fail.
 		return true, nil
 	} else if passed {
-		fmt.Fprintf(stdout, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
+		fmt.Fprintf(w, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
 	} else {
-		fmt.Fprintf(stdout, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
+		fmt.Fprintf(w, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 	}
 	return passed, err
 }
