@@ -792,6 +792,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		}
 	}
 	var args, env []string
+	var extraCmdEnv []string
 	if needsEnvInVars {
 		runtimeGlobals := make(map[string]string)
 		if len(cmdArgs) != 0 {
@@ -821,6 +822,11 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			// mark end of wasmtime arguments and start of program ones: --
 			args = append(args, "--")
 			args = append(args, cmdArgs...)
+		}
+
+		// Set this for nicer backtraces during tests, but don't override the user.
+		if _, ok := os.LookupEnv("WASMTIME_BACKTRACE_DETAILS"); !ok {
+			extraCmdEnv = append(extraCmdEnv, "WASMTIME_BACKTRACE_DETAILS=1")
 		}
 	} else {
 		// Pass environment variables and command line parameters as usual.
@@ -873,7 +879,8 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	} else {
 		cmd = exec.Command(name, args...)
 	}
-	cmd.Env = env
+	cmd.Env = append(cmd.Env, env...)
+	cmd.Env = append(cmd.Env, extraCmdEnv...)
 
 	// Configure stdout/stderr. The stdout may go to a buffer, not a real
 	// stdout.
