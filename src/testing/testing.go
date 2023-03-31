@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"strings"
@@ -49,7 +50,7 @@ func Init() {
 // common holds the elements common between T and B and
 // captures common methods such as Errorf.
 type common struct {
-	output   bytes.Buffer
+	output   *logger
 	indent   string
 	ran      bool     // Test or benchmark (or one of its subtests) was executed.
 	failed   bool     // Test or benchmark has failed.
@@ -68,6 +69,27 @@ type common struct {
 	tempDir    string
 	tempDirErr error
 	tempDirSeq int32
+}
+
+type logger struct {
+	logToStdout bool
+	b           bytes.Buffer
+}
+
+func (l *logger) Write(p []byte) (int, error) {
+	if l.logToStdout {
+		return os.Stdout.Write(p)
+	}
+	return l.b.Write(p)
+}
+
+func (l *logger) WriteTo(w io.Writer) (int64, error) {
+	if l.logToStdout {
+		// We've already been logging to stdout; nothing to do.
+		return 0, nil
+	}
+	return l.b.WriteTo(w)
+
 }
 
 // Short reports whether the -test.short flag is set.
@@ -95,8 +117,8 @@ func (c *common) flushToParent(testName, format string, args ...interface{}) {
 		// Not quite sure how this works upstream.
 		c.output.WriteTo(os.Stdout)
 	} else {
-		fmt.Fprintf(&c.parent.output, format, args...)
-		c.output.WriteTo(&c.parent.output)
+		fmt.Fprintf(c.parent.output, format, args...)
+		c.output.WriteTo(c.parent.output)
 	}
 }
 
@@ -178,16 +200,10 @@ func (c *common) log(s string) {
 	}
 	lines := strings.Split(s, "\n")
 	// First line.
-	c.output.WriteString(c.indent)
-	c.output.WriteString("    ") // 4 spaces
-	c.output.WriteString(lines[0])
-	c.output.WriteByte('\n')
+	fmt.Fprintf(c.output, "%s    %s\n", c.indent, lines[0])
 	// More lines.
 	for _, line := range lines[1:] {
-		c.output.WriteString(c.indent)
-		c.output.WriteString("        ") // 8 spaces
-		c.output.WriteString(line)
-		c.output.WriteByte('\n')
+		fmt.Fprintf(c.output, "%s        %s\n", c.indent, line)
 	}
 }
 
@@ -409,6 +425,7 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	// Create a subtest.
 	sub := T{
 		common: common{
+			output: &logger{logToStdout: flagVerbose},
 			name:   testName,
 			parent: &t.common,
 			level:  t.level + 1,
@@ -419,7 +436,7 @@ func (t *T) Run(name string, f func(t *T)) bool {
 		sub.indent = sub.indent + "    "
 	}
 	if flagVerbose {
-		fmt.Fprintf(&t.output, "=== RUN   %s\n", sub.name)
+		fmt.Fprintf(t.output, "=== RUN   %s\n", sub.name)
 	}
 
 	tRunner(&sub, f)
@@ -484,6 +501,9 @@ func runTests(matchString func(pat, str string) (bool, error), tests []InternalT
 
 	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run"))
 	t := &T{
+		common: common{
+			output: &logger{logToStdout: flagVerbose},
+		},
 		context: ctx,
 	}
 

@@ -249,10 +249,16 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		flags = append(flags, "-test.count="+strconv.Itoa(testConfig.Count))
 	}
 
-	buf := bytes.Buffer{}
+	var buf bytes.Buffer
+	var output io.Writer = &buf
+	// Send the test output to stdout if -v or -bench
+	if testConfig.Verbose || testConfig.BenchRegexp != "" {
+		output = os.Stdout
+	}
+
 	passed := false
 	var duration time.Duration
-	result, err := buildAndRun(pkgName, config, &buf, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	result, err := buildAndRun(pkgName, config, output, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
 		if testConfig.CompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
@@ -310,11 +316,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		duration = time.Since(start)
 		passed = err == nil
 
-		// print the test output if
-		// 1) the tests passed and in verbose mode
-		// 2) the tests failed
-		// 3) running benchmarks
-		if (passed && testConfig.Verbose) || (!passed) || (testConfig.BenchRegexp != "") {
+		// if verbose or benchmarks, then output is already going to stdout
+		// However, if we failed and weren't printing to stdout, print the output we accumulated.
+		if !passed && output != os.Stdout {
 			buf.WriteTo(stdout)
 		}
 
