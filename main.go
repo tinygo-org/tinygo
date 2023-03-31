@@ -245,8 +245,8 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	if testConfig.BenchMem {
 		flags = append(flags, "-test.benchmem")
 	}
-	if testConfig.Count != 1 {
-		flags = append(flags, "-test.count="+strconv.Itoa(testConfig.Count))
+	if testConfig.Count != nil && *testConfig.Count != 1 {
+		flags = append(flags, "-test.count="+strconv.Itoa(*testConfig.Count))
 	}
 
 	var buf bytes.Buffer
@@ -1420,7 +1420,7 @@ func main() {
 		flag.BoolVar(&testConfig.Verbose, "v", false, "verbose: print additional output")
 		flag.BoolVar(&testConfig.Short, "short", false, "short: run smaller test suite to save time")
 		flag.StringVar(&testConfig.RunRegexp, "run", "", "run: regexp of tests to run")
-		flag.IntVar(&testConfig.Count, "count", 1, "count: number of times to run tests/benchmarks `count` times")
+		testConfig.Count = flag.Int("count", 1, "count: number of times to run tests/benchmarks `count` times")
 		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "run: regexp of benchmarks to run")
 		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
 		flag.BoolVar(&testConfig.BenchMem, "benchmem", false, "show memory stats for benchmarks")
