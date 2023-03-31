@@ -27,6 +27,7 @@ var (
 	matchBenchmarks *string
 	benchmarkMemory *bool
 	benchTime       = benchTimeFlag{d: 1 * time.Second} // changed during test of testing package
+	testCount       *int
 )
 
 type benchTimeFlag struct {
@@ -213,11 +214,14 @@ func (b *B) doBench() BenchmarkResult {
 // of benchmark iterations until the benchmark runs for the requested benchtime.
 // run1 must have been called on b.
 func (b *B) launch() {
+	runtime.GC()
 	// Run the benchmark for at least the specified amount of time.
 	if b.benchTime.n > 0 {
 		b.runN(b.benchTime.n)
 	} else {
 		d := b.benchTime.d
+		b.failed = false
+		b.duration = 0
 		for n := int64(1); !b.failed && b.duration < d && n < 1e9; {
 			last := n
 			// Predict required iterations.
@@ -394,24 +398,26 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 func (b *B) processBench(ctx *benchContext) {
 	benchName := b.name
 
-	if ctx != nil {
-		fmt.Printf("%-*s\t", ctx.maxLen, benchName)
-	}
-	r := b.doBench()
-	if b.failed {
-		// The output could be very long here, but probably isn't.
-		// We print it all, regardless, because we don't want to trim the reason
-		// the benchmark failed.
-		fmt.Printf("--- FAIL: %s\n%s", benchName, "") // b.output)
-		return
-	}
-	if ctx != nil {
-		results := r.String()
-
-		if *benchmarkMemory || b.showAllocResult {
-			results += "\t" + r.MemString()
+	for i := 0; i < flagCount; i++ {
+		if ctx != nil {
+			fmt.Printf("%-*s\t", ctx.maxLen, benchName)
 		}
-		fmt.Println(results)
+		r := b.doBench()
+		if b.failed {
+			// The output could be very long here, but probably isn't.
+			// We print it all, regardless, because we don't want to trim the reason
+			// the benchmark failed.
+			fmt.Printf("--- FAIL: %s\n%s", benchName, "") // b.output)
+			return
+		}
+		if ctx != nil {
+			results := r.String()
+
+			if *benchmarkMemory || b.showAllocResult {
+				results += "\t" + r.MemString()
+			}
+			fmt.Println(results)
+		}
 	}
 }
 

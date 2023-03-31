@@ -26,6 +26,7 @@ var (
 	flagVerbose   bool
 	flagShort     bool
 	flagRunRegexp string
+	flagCount     int
 )
 
 var initRan bool
@@ -40,6 +41,7 @@ func Init() {
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
+	flag.IntVar(&flagCount, "test.count", 1, "run each test or benchmark `count` times")
 
 	initBenchmarkFlags()
 }
@@ -485,12 +487,14 @@ func runTests(matchString func(pat, str string) (bool, error), tests []InternalT
 		context: ctx,
 	}
 
-	tRunner(t, func(t *T) {
-		for _, test := range tests {
-			t.Run(test.Name, test.F)
-			ok = ok && !t.Failed()
-		}
-	})
+	for i := 0; i < flagCount; i++ {
+		tRunner(t, func(t *T) {
+			for _, test := range tests {
+				t.Run(test.Name, test.F)
+				ok = ok && !t.Failed()
+			}
+		})
+	}
 
 	return t.ran, ok
 }
