@@ -541,7 +541,14 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 
 type TestConfig struct {
 	CompileTestBinary bool
-	// TODO: Filter the test functions to run, include verbose flag, etc
+	CompileOnly       bool
+	Verbose           bool
+	Short             bool
+	RunRegexp         string
+	Count             int
+	BenchRegexp       string
+	BenchTime         string
+	BenchMem          bool
 }
 
 // filterTags removes predefined build tags for a target if a conflicting option

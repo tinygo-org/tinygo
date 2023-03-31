@@ -115,8 +115,9 @@ func TestCorpus(t *testing.T) {
 				var tags buildutil.TagsFlag
 				tags.Set(repo.Tags)
 				opts.Tags = []string(tags)
+				opts.TestConfig.Verbose = testing.Verbose()
 
-				passed, err := Test(path, out, out, &opts, false, testing.Verbose(), false, "", "", "", false, "")
+				passed, err := Test(path, out, out, &opts, "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}
