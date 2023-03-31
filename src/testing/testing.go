@@ -24,10 +24,11 @@ import (
 
 // Testing flags.
 var (
-	flagVerbose   bool
-	flagShort     bool
-	flagRunRegexp string
-	flagCount     int
+	flagVerbose    bool
+	flagShort      bool
+	flagRunRegexp  string
+	flagSkipRegexp string
+	flagCount      int
 )
 
 var initRan bool
@@ -42,6 +43,8 @@ func Init() {
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
+	flag.StringVar(&flagSkipRegexp, "test.skip", "", "skip: regexp of tests to run")
+
 	flag.IntVar(&flagCount, "test.count", 1, "run each test or benchmark `count` times")
 
 	initBenchmarkFlags()
@@ -499,7 +502,7 @@ func (m *M) Run() (code int) {
 func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
 	ok = true
 
-	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", ""))
+	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp))
 	t := &T{
 		common: common{
 			output: &logger{logToStdout: flagVerbose},
