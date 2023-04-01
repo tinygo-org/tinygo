@@ -1696,7 +1696,7 @@ func TestNilMap(t *testing.T) {
 	mv.SetMapIndex(ValueOf("hi"), Value{})
 }
 
-/*
+/* // TODO(tinygo): missing chan reflect support
 
 func TestChan(t *testing.T) {
 	for loop := 0; loop < 2; loop++ {
@@ -2166,6 +2166,8 @@ func fmtSelect(info []caseInfo) string {
 	return buf.String()
 }
 
+// TODO(tinygo): missing func/method/call support
+
 type two [2]uintptr
 
 // Difficult test for function call because of
@@ -2490,7 +2492,7 @@ func (p *Point) Int32Method(x int32) int32 {
 }
 
 /*
-
+// TODO(tinygo): missing method support
 func TestMethod(t *testing.T) {
 	// Non-curried method of type.
 	p := Point{3, 4}
@@ -2947,12 +2949,12 @@ func TestInterfaceSet(t *testing.T) {
 	}
 }
 
+*/
+
 type T1 struct {
 	a string
 	int
 }
-
-/*
 
 func TestAnonymousFields(t *testing.T) {
 	var field StructField
@@ -2966,8 +2968,6 @@ func TestAnonymousFields(t *testing.T) {
 		t.Error("field index should be 1; is", field.Index)
 	}
 }
-
-*/
 
 type FTest struct {
 	s     any
