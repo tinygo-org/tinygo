@@ -27,7 +27,6 @@ var (
 	matchBenchmarks *string
 	benchmarkMemory *bool
 	benchTime       = benchTimeFlag{d: 1 * time.Second} // changed during test of testing package
-	testCount       *int
 )
 
 type benchTimeFlag struct {
