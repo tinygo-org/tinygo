@@ -874,8 +874,6 @@ var appendTests = []struct {
 	{make([]int, 2, 4), []int{22, 33, 44}},
 }
 
-/*
-
 func TestAppend(t *testing.T) {
 	for i, test := range appendTests {
 		origLen, extraLen := len(test.orig), len(test.extra)
@@ -934,8 +932,6 @@ func TestAppend(t *testing.T) {
 		shouldPanic("using unexported field", func() { AppendSlice(ax, e1) })
 	}
 }
-
-*/
 
 func TestCopy(t *testing.T) {
 	a := []int{1, 2, 3, 4, 10, 9, 8, 7}
