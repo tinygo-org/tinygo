@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/rp"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -114,3 +115,23 @@ func ChipVersion() uint8 {
 	version := (chipID & SYSINFO_CHIP_ID_REVISION_BITS) >> SYSINFO_CHIP_ID_REVISION_LSB
 	return uint8(version)
 }
+
+// Single DMA channel. See rp.DMA_Type.
+type dmaChannel struct {
+	READ_ADDR   volatile.Register32
+	WRITE_ADDR  volatile.Register32
+	TRANS_COUNT volatile.Register32
+	CTRL_TRIG   volatile.Register32
+	_           [12]volatile.Register32 // aliases
+}
+
+// Static assignment of DMA channels to peripherals.
+// Allocating them statically is good enough for now. If lots of peripherals use
+// DMA, these might need to be assigned at runtime.
+const (
+	spi0DMAChannel = iota
+	spi1DMAChannel
+)
+
+// DMA channels usable on the RP2040.
+var dmaChannels = (*[12]dmaChannel)(unsafe.Pointer(rp.DMA))

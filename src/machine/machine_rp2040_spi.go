@@ -5,6 +5,7 @@ package machine
 import (
 	"device/rp"
 	"errors"
+	"unsafe"
 )
 
 // SPI on the RP2040
@@ -288,14 +289,51 @@ func (spi SPI) isBusy() bool {
 
 // tx writes buffer to SPI ignoring Rx.
 func (spi SPI) tx(tx []byte) error {
-	// Write to TX FIFO whilst ignoring RX, then clean up afterward. When RX
-	// is full, PL022 inhibits RX pushes, and sets a sticky flag on
-	// push-on-full, but continues shifting. Safe if SSPIMSC_RORIM is not set.
-	for i := range tx {
-		for !spi.isWritable() {
-		}
-		spi.Bus.SSPDR.Set(uint32(tx[i]))
+	if len(tx) == 0 {
+		// We don't have to do anything.
+		// This avoids a panic in &tx[0] when len(tx) == 0.
+		return nil
 	}
+
+	// Pick the DMA channel reserved for this SPI peripheral.
+	var ch *dmaChannel
+	var dreq uint32
+	if spi.Bus == rp.SPI0 {
+		ch = &dmaChannels[spi0DMAChannel]
+		dreq = 16 // DREQ_SPI0_TX
+	} else { // SPI1
+		ch = &dmaChannels[spi1DMAChannel]
+		dreq = 18 // DREQ_SPI1_TX
+	}
+
+	// Configure the DMA peripheral as follows:
+	//   - set read address, write address, and number of transfer units (bytes)
+	//   - increment read address (in memory), don't increment write address (SSPDR)
+	//   - set data size to single bytes
+	//   - set the DREQ so that the DMA will fill the SPI FIFO as needed
+	//   - start the transfer
+	ch.READ_ADDR.Set(uint32(uintptr(unsafe.Pointer(&tx[0]))))
+	ch.WRITE_ADDR.Set(uint32(uintptr(unsafe.Pointer(&spi.Bus.SSPDR))))
+	ch.TRANS_COUNT.Set(uint32(len(tx)))
+	ch.CTRL_TRIG.Set(rp.DMA_CH0_CTRL_TRIG_INCR_READ |
+		rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_SIZE_BYTE<<rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_Pos |
+		dreq<<rp.DMA_CH0_CTRL_TRIG_TREQ_SEL_Pos |
+		rp.DMA_CH0_CTRL_TRIG_EN)
+
+	// Wait until the transfer is complete.
+	// TODO: do this more efficiently:
+	//   - Add a new API to start the transfer, without waiting for it to
+	//     complete. This way, the CPU can do something useful while the
+	//     transfer is in progress.
+	//   - If we have to wait, do so by waiting for an interrupt and blocking
+	//     this goroutine until finished (so that other goroutines can run or
+	//     the CPU can go to sleep).
+	for ch.CTRL_TRIG.Get()&rp.DMA_CH0_CTRL_TRIG_BUSY != 0 {
+	}
+
+	// We didn't read any result values, which means the RX FIFO has likely
+	// overflown. We have to clean up this mess now.
+
 	// Drain RX FIFO, then wait for shifting to finish (which may be *after*
 	// TX FIFO drains), then drain RX FIFO again
 	for spi.isReadable() {
