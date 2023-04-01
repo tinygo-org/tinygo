@@ -1666,6 +1666,7 @@ func (v *Value) extendSlice(n int) {
 		cap:  ncap,
 	}
 
+	v.flags = valueFlagExported
 	v.value = (unsafe.Pointer)(&newslice)
 }
 
