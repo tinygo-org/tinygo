@@ -1437,9 +1437,9 @@ func main() {
 		flag.BoolVar(&testConfig.Verbose, "v", false, "verbose: print additional output")
 		flag.BoolVar(&testConfig.Short, "short", false, "short: run smaller test suite to save time")
 		flag.StringVar(&testConfig.RunRegexp, "run", "", "run: regexp of tests to run")
-		flag.StringVar(&testConfig.SkipRegexp, "skip", "", "run: regexp of tests to run")
+		flag.StringVar(&testConfig.SkipRegexp, "skip", "", "skip: regexp of tests to skip")
 		testConfig.Count = flag.Int("count", 1, "count: number of times to run tests/benchmarks `count` times")
-		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "run: regexp of benchmarks to run")
+		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "bench: regexp of benchmarks to run")
 		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
 		flag.BoolVar(&testConfig.BenchMem, "benchmem", false, "show memory stats for benchmarks")
 	}
