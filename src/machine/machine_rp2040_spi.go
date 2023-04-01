@@ -136,7 +136,7 @@ func (spi SPI) GetBaudRate() uint32 {
 }
 
 // Configure is intended to setup/initialize the SPI interface.
-// Default baudrate of 115200 is used if Frequency == 0. Default
+// Default baudrate of 4MHz is used if Frequency == 0. Default
 // word length (data bits) is 8.
 // Below is a list of GPIO pins corresponding to SPI0 bus on the rp2040:
 //
@@ -152,7 +152,7 @@ func (spi SPI) GetBaudRate() uint32 {
 //
 // No pin configuration is needed of SCK, SDO and SDI needed after calling Configure.
 func (spi SPI) Configure(config SPIConfig) error {
-	const defaultBaud uint32 = 115200
+	const defaultBaud uint32 = 4 * MHz
 	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		// set default pins if config zero valued or invalid clock pin supplied.
 		switch spi.Bus {
