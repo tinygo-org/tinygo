@@ -1450,8 +1450,6 @@ func TestIsNil(t *testing.T) {
 	NotNil(fi, t)
 }
 
-/*
-
 func TestIsZero(t *testing.T) {
 	for i, tt := range []struct {
 		x    any
@@ -1561,14 +1559,20 @@ func TestIsZero(t *testing.T) {
 			t.Errorf("%d: IsZero(Zero(TypeOf((%s)(%+v)))) is false", i, x.Kind(), tt.x)
 		}
 
+		/* // TODO(tinygo): missing SetZero support
+
 		p := New(x.Type()).Elem()
 		p.Set(x)
 		p.SetZero()
 		if !p.IsZero() {
 			t.Errorf("%d: IsZero((%s)(%+v)) is true after SetZero", i, p.Kind(), tt.x)
+
 		}
+		*/
+
 	}
 
+	/* // TODO(tinygo): panic/recover support
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
@@ -1577,8 +1581,10 @@ func TestIsZero(t *testing.T) {
 		}()
 		(Value{}).IsZero()
 	}()
+	*/
 }
 
+/*
 func TestInterfaceExtraction(t *testing.T) {
 	var s struct {
 		W io.Writer
