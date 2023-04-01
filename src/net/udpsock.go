@@ -126,7 +126,6 @@ type UDPConn struct {
 var eport = int32(49151)
 
 func ephemeralPort() int {
-	// TODO: this is racy, if concurrent DialUDPs; use atomic?
 	if eport == int32(65535) {
 		eport = int32(49151)
 	} else {
