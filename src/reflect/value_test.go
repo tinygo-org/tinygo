@@ -587,6 +587,12 @@ func TestConvert(t *testing.T) {
 		t.Errorf("Convert(string -> []byte")
 	}
 
+	type namedString string
+
+	c = v.Convert(TypeOf(namedString("")))
+	if c.Type().Kind() != String || c.Type().Name() != "namedString" {
+		t.Errorf("Convert(string -> namedString")
+	}
 }
 
 func equal[T comparable](a, b []T) bool {

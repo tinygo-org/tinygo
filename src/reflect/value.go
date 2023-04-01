@@ -1224,6 +1224,16 @@ func (v Value) Convert(t Type) Value {
 }
 
 func convertOp(src Value, typ Type) (Value, bool) {
+
+	// Easy check first.  Do we even need to do anything?
+	if src.typecode.underlying() == typ.(*rawType).underlying() {
+		return Value{
+			typecode: typ.(*rawType),
+			value:    src.value,
+			flags:    src.flags,
+		}, true
+	}
+
 	switch src.Kind() {
 	case Int, Int8, Int16, Int32, Int64:
 		switch rtype := typ.(*rawType); rtype.Kind() {
@@ -1289,7 +1299,6 @@ func convertOp(src Value, typ Type) (Value, bool) {
 
 	// TODO(dgryski): Unimplemented:
 	// Chan
-	// Identical underlying types
 	// Non-defined pointers types with same underlying base type
 	// Interface <-> Type conversions
 
