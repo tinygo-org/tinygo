@@ -308,6 +308,8 @@ TEST_PACKAGES_FAST = \
 	internal/profile \
 	math \
 	math/cmplx \
+	net/http/internal/ascii \
+	net/mail \
 	os \
 	path \
 	reflect \
