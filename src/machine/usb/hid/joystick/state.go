@@ -1,6 +1,10 @@
 package joystick
 
-import "encoding/binary"
+import (
+	"machine/usb/descriptor"
+
+	"encoding/binary"
+)
 
 type HatDirection uint8
 
@@ -159,55 +163,6 @@ func DefaultDefinitions() Definitions {
 			{MinIn: -32767, MaxIn: 32767, MinOut: -32767, MaxOut: 32767},
 			{MinIn: -32767, MaxIn: 32767, MinOut: -32767, MaxOut: 32767},
 		},
-		descriptor: []byte{
-			0x05, 0x01,
-			0x09, 0x04,
-			0xa1, 0x01, // COLLECTION (Application)
-			0x85, 0x01, // REPORT_ID (1)
-			0x05, 0x09, // USAGE_PAGE (Button)
-			0x19, 0x01, // USAGE_MINIMUM (Button 1)
-			0x29, 0x10, // USAGE_MAXIMUM (Button 16)
-			0x15, 0x00, // LOGICAL_MINIMUM (0)
-			0x25, 0x01, // LOGICAL_MAXIMUM (1)
-			0x75, 0x01, // REPORT_SIZE (1)
-			0x95, 0x10, // REPORT_COUNT (16)
-			0x55, 0x00, // Unit Exponent (-16)
-			0x65, 0x00, // Unit (0x00)
-			0x81, 0x02, // INPUT (Data/Var/Abs)
-			0x05, 0x01, // USAGE_PAGE (Generic Desktop Controls)
-			0x09, 0x39, // USAGE(Hat Switch)
-			0x15, 0x00, // LOGICAL_MINIMUM (0)
-			0x25, 0x07, // LOGICAL_MAXIMUM (7)
-			0x35, 0x00, // PHYSICAL_MINIMUM (0)
-			0x46, 0x3b, 0x01, // PHYSICAL_MAXIMUM(315)
-			0x65, 0x14, // UNIT (Eng Rot:Angular Pos)
-			0x75, 0x04, // REPORT_SIZE (4)
-			0x95, 0x01, // REPORT_COUNT (1)
-			0x81, 0x02, // INPUT (Data/Var/Abs)
-			0x09, 0x39, // USAGE(Hat Switch)
-			0x15, 0x00, // LOGICAL_MINIMUM (0)
-			0x25, 0x07, // LOGICAL_MAXIMUM (7)
-			0x35, 0x00, // PHYSICAL_MINIMUM (0)
-			0x46, 0x3b, 0x01, // PHYSICAL_MAXIMUM(315)
-			0x65, 0x14, // UNIT (Eng Rot:Angular Pos)
-			0x75, 0x04, // REPORT_SIZE (4)
-			0x95, 0x01, // REPORT_COUNT (1)
-			0x81, 0x02, // INPUT (Data/Var/Abs)
-			0x09, 0x01, // USAGE (Pointer)
-			0x16, 0x01, 0x80, // LOGICAL_MINIMUM (-32767)
-			0x26, 0xff, 0x7f, // LOGICAL_MAXIMUM (32767)
-			0x75, 0x10, // REPORT_SIZE (16bits)
-			0x95, 0x06, // REPORT_COUNT (6)
-			0xa1, 0x00, // COLLECTION (Physical)
-			0x09, 0x30, // USAGE(X)
-			0x09, 0x31, // USAGE(Y)
-			0x09, 0x32, // USAGE(Z)
-			0x09, 0x33, // USAGE(RX)
-			0x09, 0x34, // USAGE(RY)
-			0x09, 0x35, // USAGE(RZ)
-			0x81, 0x02, // INPUT (Data/Var/Abs)
-			0xc0, // END_COLLECTION
-			0xc0, // END_COLLECTION
-		},
+		descriptor: descriptor.JoystickDefaultHIDReport,
 	}
 }
