@@ -18,11 +18,26 @@ type joystick struct {
 
 func init() {
 	if Joystick == nil {
-		Joystick = newJoystick()
+		Joystick = newDefaultJoystick()
 	}
 }
 
-func newJoystick() *joystick {
+// UseSettings overrides the Joystick settings. This function must be
+// called from init().
+func UseSettings(def Definitions, rxHandlerFunc func(b []byte), setupFunc func(setup usb.Setup) bool, hidDesc []byte) *joystick {
+	js := &joystick{
+		buf:   hid.NewRingBuffer(),
+		State: def.NewState(),
+	}
+	if setupFunc == nil {
+		setupFunc = js.setupFunc
+	}
+	machine.EnableJoystick(js.handler, rxHandlerFunc, setupFunc, hidDesc)
+	Joystick = js
+	return js
+}
+
+func newDefaultJoystick() *joystick {
 	def := DefaultDefinitions()
 	js := &joystick{
 		State: def.NewState(),
