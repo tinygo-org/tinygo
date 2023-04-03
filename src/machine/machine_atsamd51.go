@@ -1490,22 +1490,39 @@ func (spi SPI) Configure(config SPIConfig) error {
 		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPIM_CTRLA_CPOL)
 	}
 
-	// set clock
-	freqRef := uint32(0)
-	if config.Frequency > SERCOM_FREQ_REF/2 {
-		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK0)
-		freqRef = uint32(SERCOM_FREQ_REF_GCLK0)
-	} else {
-		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
-		freqRef = uint32(SERCOM_FREQ_REF)
-	}
+	// Set the clock frequency.
+	// There are two clocks we can use GCLK0 (120MHz) and GCLK1 (48MHz).
+	// We can use any even divisor for these clock, which means:
+	//   - for GCLK0 we can make 60MHz, 30MHz, 20MHz, 15MHz, 12MHz, 10MHz, etc
+	//   - for GCLK1 we can make 24MHz, 12MHz, 8MHz, 6MHz, 4.8MHz, 4MHz, etc
+	// This means that by trying both clocks, we can have a wider selection of
+	// available SPI clock frequencies.
 
-	// Set synch speed for SPI
-	baudRate := freqRef / (2 * config.Frequency)
-	if baudRate > 0 {
-		baudRate--
+	// Calculate the baudrate if we would use GCLK1 (48MHz), and the resulting
+	// frequency. The baud rate is rounded up, so that the resulting frequency
+	// is rounded down from the maximum value (meaning it will always be smaller
+	// than or equal to config.Frequency).
+	baudRateGCLK1 := (SERCOM_FREQ_REF/2 + config.Frequency - 1) / config.Frequency
+	freqGCLK1 := SERCOM_FREQ_REF / 2 / baudRateGCLK1
+
+	// Same for GCLK0 (120MHz).
+	baudRateGCLK0 := (SERCOM_FREQ_REF_GCLK0/2 + config.Frequency - 1) / config.Frequency
+	freqGCLK0 := SERCOM_FREQ_REF_GCLK0 / 2 / baudRateGCLK0
+
+	// Pick the clock source that is the closest to the maximum baud rate.
+	// Note: there may be reasons to prefer the lower frequency clock (like
+	// power consumption). If that's the case, we might want to always use the
+	// 48MHz clock at low frequencies (below 4MHz or so).
+	if freqGCLK0 > freqGCLK1 && uint32(uint8(baudRateGCLK0-1))+1 == baudRateGCLK0 {
+		// Pick this 120MHz clock if it results in a better frequency after
+		// division, and the baudRate value fits in the BAUD register.
+		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK0)
+		spi.Bus.BAUD.Set(uint8(baudRateGCLK0 - 1))
+	} else {
+		// Use the 48MHz clock in other cases.
+		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
+		spi.Bus.BAUD.Set(uint8(baudRateGCLK1 - 1))
 	}
-	spi.Bus.BAUD.Set(uint8(baudRate))
 
 	// Enable SPI port.
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
