@@ -1143,12 +1143,12 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 	}
 
 	if len(portCandidates) == 0 {
-		if len(usbInterfaces) > 0 {
-			return "", errors.New("unable to search for a default USB device - use -port flag, available ports are " + strings.Join(ports, ", "))
-		} else if len(ports) == 1 {
+		if len(ports) == 1 {
 			return ports[0], nil
-		} else {
+		} else if len(ports) > 1 {
 			return "", errors.New("multiple serial ports available - use -port flag, available ports are " + strings.Join(ports, ", "))
+		} else {
+			return "", errors.New("unable to search for a default USB device - use -port flag, available ports are " + strings.Join(ports, ", "))
 		}
 	}
 
