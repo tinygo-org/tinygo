@@ -532,7 +532,12 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		return fmt.Errorf("unknown flash method: %s", flashMethod)
 	}
 	if options.Monitor {
-		return Monitor("", options)
+		port, err := getDefaultPort(port, config.Target.SerialPort)
+		if err != nil {
+			return &commandError{"failed to locate port to monitor", port, err}
+		}
+
+		return Monitor(port, options)
 	}
 	return nil
 }
