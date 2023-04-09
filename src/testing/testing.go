@@ -95,6 +95,10 @@ func (l *logger) WriteTo(w io.Writer) (int64, error) {
 
 }
 
+func (l *logger) Len() int {
+	return l.b.Len()
+}
+
 // Short reports whether the -test.short flag is set.
 func Short() bool {
 	return flagShort

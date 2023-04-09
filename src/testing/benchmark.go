@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -378,7 +379,8 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 	}
 	main := &B{
 		common: common{
-			name: "Main",
+			output: &logger{},
+			name:   "Main",
 		},
 		benchTime: benchTime,
 		benchFunc: func(b *B) {
@@ -416,6 +418,12 @@ func (b *B) processBench(ctx *benchContext) {
 				results += "\t" + r.MemString()
 			}
 			fmt.Println(results)
+
+			// Print any benchmark output
+			if b.output.Len() > 0 {
+				fmt.Printf("--- BENCH: %s\n", benchName)
+				b.output.WriteTo(os.Stdout)
+			}
 		}
 	}
 }
@@ -436,8 +444,9 @@ func (b *B) Run(name string, f func(b *B)) bool {
 	b.hasSub = true
 	sub := &B{
 		common: common{
-			name:  benchName,
-			level: b.level + 1,
+			output: &logger{},
+			name:   benchName,
+			level:  b.level + 1,
 		},
 		benchFunc: f,
 		benchTime: b.benchTime,
