@@ -160,6 +160,7 @@ func (b *B) ReportAllocs() {
 // runN runs a single benchmark for the specified number of iterations.
 func (b *B) runN(n int) {
 	b.N = n
+	runtime.GC()
 	b.ResetTimer()
 	b.StartTimer()
 	b.benchFunc(b)
@@ -214,7 +215,6 @@ func (b *B) doBench() BenchmarkResult {
 // of benchmark iterations until the benchmark runs for the requested benchtime.
 // run1 must have been called on b.
 func (b *B) launch() {
-	runtime.GC()
 	// Run the benchmark for at least the specified amount of time.
 	if b.benchTime.n > 0 {
 		b.runN(b.benchTime.n)
