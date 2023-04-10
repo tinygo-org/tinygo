@@ -167,6 +167,8 @@ type builder struct {
 	deferExprFuncs    map[ssa.Value]int
 	selectRecvBuf     map[*ssa.Select]llvm.Value
 	deferBuiltinFuncs map[ssa.Value]deferBuiltin
+	runDefersBlock    []llvm.BasicBlock
+	afterDefersBlock  []llvm.BasicBlock
 }
 
 func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *builder {
@@ -1349,6 +1351,15 @@ func (b *builder) createFunction() {
 		}
 	}
 
+	// The rundefers instruction needs to be created after all defer
+	// instructions have been created. Otherwise it won't handle all defer
+	// cases.
+	for i, bb := range b.runDefersBlock {
+		b.SetInsertPointAtEnd(bb)
+		b.createRunDefers()
+		b.CreateBr(b.afterDefersBlock[i])
+	}
+
 	if b.hasDeferFrame() {
 		// Create the landing pad block, where execution continues after a
 		// panic.
@@ -1503,7 +1514,14 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			b.CreateRet(retVal)
 		}
 	case *ssa.RunDefers:
-		b.createRunDefers()
+		// Note where we're going to put the rundefers block
+		run := b.insertBasicBlock("rundefers.block")
+		b.CreateBr(run)
+		b.runDefersBlock = append(b.runDefersBlock, run)
+
+		after := b.insertBasicBlock("rundefers.after")
+		b.SetInsertPointAtEnd(after)
+		b.afterDefersBlock = append(b.afterDefersBlock, after)
 	case *ssa.Send:
 		b.createChanSend(instr)
 	case *ssa.Store:
