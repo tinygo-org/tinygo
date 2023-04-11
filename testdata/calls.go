@@ -82,6 +82,10 @@ func main() {
 	// covered the entire variable.
 	var x issue1304
 	x.call()
+
+	if testDeferElse(false) != 0 {
+		println("else defer returned wrong value")
+	}
 }
 
 func runFunc(f func(int), arg int) {
@@ -232,3 +236,15 @@ func (x issue1304) call() {
 type recursiveFuncType func(recursiveFuncType)
 
 var recursiveFunction recursiveFuncType
+
+//go:noinline
+func testDeferElse(b bool) (r int) {
+	if !b {
+		defer func() {
+			r = 0
+
+		}()
+	}
+
+	return 1
+}
