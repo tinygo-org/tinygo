@@ -653,6 +653,12 @@ func (p *cgoPackage) addErrorAt(position token.Position, msg string) {
 func (f *cgoFile) makeDecayingASTType(typ C.CXType, pos token.Pos) ast.Expr {
 	// Strip typedefs, if any.
 	underlyingType := typ
+	if underlyingType.kind == C.CXType_Elaborated {
+		elaboratedType := C.clang_Type_getNamedType(typ)
+		if elaboratedType.kind == C.CXType_Typedef {
+			underlyingType = elaboratedType
+		}
+	}
 	if underlyingType.kind == C.CXType_Typedef {
 		c := C.tinygo_clang_getTypeDeclaration(typ)
 		underlyingType = C.tinygo_clang_getTypedefDeclUnderlyingType(c)
@@ -787,6 +793,8 @@ func (f *cgoFile) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 		case C.CXType_Record:
 			return f.makeASTType(underlying, pos)
 		case C.CXType_Enum:
+			return f.makeASTType(underlying, pos)
+		case C.CXType_Typedef:
 			return f.makeASTType(underlying, pos)
 		default:
 			typeKindSpelling := getString(C.clang_getTypeKindSpelling(underlying.kind))
