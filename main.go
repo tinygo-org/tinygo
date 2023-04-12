@@ -251,6 +251,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	if testConfig.Count != nil && *testConfig.Count != 1 {
 		flags = append(flags, "-test.count="+strconv.Itoa(*testConfig.Count))
 	}
+	if testConfig.Shuffle != "" {
+		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
+	}
 
 	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
 
@@ -1442,6 +1445,7 @@ func main() {
 		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "bench: regexp of benchmarks to run")
 		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
 		flag.BoolVar(&testConfig.BenchMem, "benchmem", false, "show memory stats for benchmarks")
+		flag.StringVar(&testConfig.Shuffle, "shuffle", "", "shuffle the order the tests and benchmarks run")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag

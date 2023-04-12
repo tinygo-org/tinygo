@@ -550,6 +550,7 @@ type TestConfig struct {
 	BenchRegexp       string
 	BenchTime         string
 	BenchMem          bool
+	Shuffle           string
 }
 
 // filterTags removes predefined build tags for a target if a conflicting option
