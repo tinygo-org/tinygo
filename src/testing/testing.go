@@ -15,7 +15,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -28,6 +30,7 @@ var (
 	flagShort      bool
 	flagRunRegexp  string
 	flagSkipRegexp string
+	flagShuffle    string
 	flagCount      int
 )
 
@@ -44,6 +47,7 @@ func Init() {
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
 	flag.StringVar(&flagSkipRegexp, "test.skip", "", "skip: regexp of tests to run")
+	flag.StringVar(&flagShuffle, "test.shuffle", "off", "shuffle: off, on, <numeric-seed>")
 
 	flag.IntVar(&flagCount, "test.count", 1, "run each test or benchmark `count` times")
 
@@ -479,6 +483,27 @@ type testDeps interface {
 	MatchString(pat, str string) (bool, error)
 }
 
+func (m *M) shuffle() error {
+	var n int64
+
+	if flagShuffle == "on" {
+		n = time.Now().UnixNano()
+	} else {
+		var err error
+		n, err = strconv.ParseInt(flagShuffle, 10, 64)
+		if err != nil {
+			m.exitCode = 2
+			return fmt.Errorf(`testing: -shuffle should be "off", "on", or a valid integer: %v`, err)
+		}
+	}
+
+	fmt.Println("-test.shuffle", n)
+	rng := rand.New(rand.NewSource(n))
+	rng.Shuffle(len(m.Tests), func(i, j int) { m.Tests[i], m.Tests[j] = m.Tests[j], m.Tests[i] })
+	rng.Shuffle(len(m.Benchmarks), func(i, j int) { m.Benchmarks[i], m.Benchmarks[j] = m.Benchmarks[j], m.Benchmarks[i] })
+	return nil
+}
+
 // Run runs the tests. It returns an exit code to pass to os.Exit.
 func (m *M) Run() (code int) {
 	defer func() {
@@ -487,6 +512,13 @@ func (m *M) Run() (code int) {
 
 	if !flag.Parsed() {
 		flag.Parse()
+	}
+
+	if flagShuffle != "off" {
+		if err := m.shuffle(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
 	}
 
 	testRan, testOk := runTests(m.deps.MatchString, m.Tests)
