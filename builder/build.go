@@ -854,6 +854,33 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 			}
 
+			if config.Options.WizerInit {
+				var args []string
+
+				resultWizer := result.Executable + "-wizer"
+
+				args = append(args,
+					"--allow-wasi",
+					"--wasm-bulk-memory=true",
+					"-f", "runtime.wizerInit",
+					result.Executable,
+					"-o", resultWizer,
+				)
+
+				cmd := exec.Command(goenv.Get("WIZER"), args...)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+
+				err := cmd.Run()
+				if err != nil {
+					return fmt.Errorf("wizer failed: %w", err)
+				}
+
+				if err := os.Rename(resultWizer, result.Executable); err != nil {
+					return fmt.Errorf("rename failed: %w", err)
+				}
+			}
+
 			// Print code size if requested.
 			if config.Options.PrintSizes == "short" || config.Options.PrintSizes == "full" {
 				packagePathMap := make(map[string]string, len(lprogram.Packages))
@@ -1051,9 +1078,10 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config, globalValues map[string]map[string]string) error {
-	err := interp.Run(mod, config.Options.InterpTimeout, config.DumpSSA())
-	if err != nil {
-		return err
+	if !config.Options.WizerInit {
+		if err := interp.Run(mod, config.Options.InterpTimeout, config.DumpSSA()); err != nil {
+			return err
+		}
 	}
 	if config.VerifyIR() {
 		// Only verify if we really need it.
@@ -1069,7 +1097,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config, globalValues m
 	}
 
 	// Insert values from -ldflags="-X ..." into the IR.
-	err = setGlobalValues(mod, globalValues)
+	err := setGlobalValues(mod, globalValues)
 	if err != nil {
 		return err
 	}

@@ -20,8 +20,11 @@ func getSystemStackPointer() uintptr {
 // run is called by the program entry point to execute the go program.
 // With the "none" scheduler, init and the main function are invoked directly.
 func run() {
-	initHeap()
-	initAll()
+	if !runtimeInitialized {
+		initHeap()
+		initAll()
+		runtimeInitialized = true
+	}
 	callMain()
 }
 

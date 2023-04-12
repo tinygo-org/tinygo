@@ -159,6 +159,35 @@ func Get(name string) string {
 		}
 
 		return findWasmOpt()
+
+	case "WIZER":
+		if path := os.Getenv("WIZER"); path != "" {
+			wizerBin := "wizer"
+			if runtime.GOOS == "windows" {
+				wizerBin += ".exe"
+			}
+
+			_, err := exec.LookPath(wizerBin)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "cannot use %q as wasm-opt (from WASMOPT environment variable): %s", path, err.Error())
+				os.Exit(1)
+			}
+
+			return path
+		}
+
+		wizerBin := "wizer"
+		if runtime.GOOS == "windows" {
+			wizerBin += ".exe"
+		}
+
+		path, err := exec.LookPath(wizerBin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cannot use %q as wizer: %s", path, err.Error())
+			os.Exit(1)
+		}
+		return path
+
 	default:
 		return ""
 	}
