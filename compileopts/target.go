@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -135,7 +136,11 @@ func (spec *TargetSpec) loadFromGivenStr(str string) error {
 		return err
 	}
 	defer fp.Close()
-	return spec.load(fp)
+	err = spec.load(fp)
+	if llvmutil.Major() < 16 && (str == "riscv32" || str == "riscv64") {
+		spec.CPU = ""
+	}
+	return err
 }
 
 // resolveInherits loads inherited targets, recursively.
