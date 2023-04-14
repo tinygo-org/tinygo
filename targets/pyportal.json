@@ -5,6 +5,6 @@
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "serial-port": ["239a:8035", "239a:8036"],
-    "msd-volume-name": "PORTALBOOT",
+    "msd-volume-name": ["PORTALBOOT"],
     "msd-firmware-name": "firmware.uf2"
 }

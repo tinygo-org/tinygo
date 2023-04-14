@@ -2,5 +2,5 @@
     "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
     "build-tags": ["circuitplay_bluefruit"],
     "serial-port": ["239a:8045"],
-    "msd-volume-name": "CPLAYBTBOOT"
+    "msd-volume-name": ["CPLAYBTBOOT"]
 }

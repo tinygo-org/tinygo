@@ -5,6 +5,6 @@
     "serial-port": ["2886:802f"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "Arduino",
+    "msd-volume-name": ["Arduino","Seeed XIAO"],
     "msd-firmware-name": "firmware.uf2"
 }

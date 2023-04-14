@@ -5,7 +5,7 @@
     "serial-port": ["2886:802d"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "Arduino",
+    "msd-volume-name": ["Arduino"],
     "msd-firmware-name": "firmware.uf2",
     "openocd-verify": true
 }

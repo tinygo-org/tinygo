@@ -945,28 +945,29 @@ func touchSerialPortAt1200bps(port string) (err error) {
 	return fmt.Errorf("opening port: %s", err)
 }
 
-func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) error {
+func flashUF2UsingMSD(volumes []string, tmppath string, options *compileopts.Options) error {
 	// find standard UF2 info path
-	var infoPath string
-	switch runtime.GOOS {
-	case "linux", "freebsd":
-		fi, err := os.Stat("/run/media")
-		if err != nil || !fi.IsDir() {
-			infoPath = "/media/*/" + volume + "/INFO_UF2.TXT"
-		} else {
-			infoPath = "/run/media/*/" + volume + "/INFO_UF2.TXT"
+	infoPaths := make([]string, 0, len(volumes))
+	for _, volume := range volumes {
+		switch runtime.GOOS {
+		case "linux", "freebsd":
+			fi, err := os.Stat("/run/media")
+			if err != nil || !fi.IsDir() {
+				infoPaths = append(infoPaths, "/media/*/"+volume+"/INFO_UF2.TXT")
+			} else {
+				infoPaths = append(infoPaths, "/run/media/*/"+volume+"/INFO_UF2.TXT")
+			}
+		case "darwin":
+			infoPaths = append(infoPaths, "/Volumes/"+volume+"/INFO_UF2.TXT")
+		case "windows":
+			path, err := windowsFindUSBDrive(volume, options)
+			if err == nil {
+				infoPaths = append(infoPaths, path+"/INFO_UF2.TXT")
+			}
 		}
-	case "darwin":
-		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
-	case "windows":
-		path, err := windowsFindUSBDrive(volume, options)
-		if err != nil {
-			return err
-		}
-		infoPath = path + "/INFO_UF2.TXT"
 	}
 
-	d, err := locateDevice(volume, infoPath, options.Timeout)
+	d, err := locateDevice(volumes, infoPaths, options.Timeout)
 	if err != nil {
 		return err
 	}
@@ -974,28 +975,29 @@ func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	return moveFile(tmppath, filepath.Dir(d)+"/flash.uf2")
 }
 
-func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) error {
+func flashHexUsingMSD(volumes []string, tmppath string, options *compileopts.Options) error {
 	// find expected volume path
-	var destPath string
-	switch runtime.GOOS {
-	case "linux", "freebsd":
-		fi, err := os.Stat("/run/media")
-		if err != nil || !fi.IsDir() {
-			destPath = "/media/*/" + volume
-		} else {
-			destPath = "/run/media/*/" + volume
+	destPaths := make([]string, 0, len(volumes))
+	for _, volume := range volumes {
+		switch runtime.GOOS {
+		case "linux", "freebsd":
+			fi, err := os.Stat("/run/media")
+			if err != nil || !fi.IsDir() {
+				destPaths = append(destPaths, "/media/*/"+volume)
+			} else {
+				destPaths = append(destPaths, "/run/media/*/"+volume)
+			}
+		case "darwin":
+			destPaths = append(destPaths, "/Volumes/"+volume)
+		case "windows":
+			path, err := windowsFindUSBDrive(volume, options)
+			if err == nil {
+				destPaths = append(destPaths, path+"/")
+			}
 		}
-	case "darwin":
-		destPath = "/Volumes/" + volume
-	case "windows":
-		path, err := windowsFindUSBDrive(volume, options)
-		if err != nil {
-			return err
-		}
-		destPath = path + "/"
 	}
 
-	d, err := locateDevice(volume, destPath, options.Timeout)
+	d, err := locateDevice(volumes, destPaths, options.Timeout)
 	if err != nil {
 		return err
 	}
@@ -1003,21 +1005,28 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	return moveFile(tmppath, d+"/flash.hex")
 }
 
-func locateDevice(volume, path string, timeout time.Duration) (string, error) {
+func locateDevice(volumes, paths []string, timeout time.Duration) (string, error) {
 	var d []string
 	var err error
 	for start := time.Now(); time.Since(start) < timeout; {
-		d, err = filepath.Glob(path)
-		if err != nil {
-			return "", err
+		for _, path := range paths {
+			d, err = filepath.Glob(path)
+			if err != nil {
+				return "", err
+			}
+			if d != nil {
+				break
+			}
 		}
+
 		if d != nil {
 			break
 		}
+
 		time.Sleep(500 * time.Millisecond)
 	}
 	if d == nil {
-		return "", errors.New("unable to locate device: " + volume)
+		return "", errors.New("unable to locate any volume: [" + strings.Join(volumes, ",") + "]")
 	}
 	return d[0], nil
 }
