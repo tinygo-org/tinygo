@@ -2,5 +2,5 @@
 	"inherits": ["nrf52840", "nrf52840-s140v7-uf2"],
 	"build-tags": ["xiao_ble"],
 	"serial-port": ["2886:8045"],
-	"msd-volume-name": "XIAO-SENSE"
+	"msd-volume-name": ["XIAO-SENSE"]
 }

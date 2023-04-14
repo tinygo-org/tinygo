@@ -5,6 +5,6 @@
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "serial-port": ["239a:8033"],
-    "msd-volume-name": "PYBADGEBOOT",
+    "msd-volume-name": ["PYBADGEBOOT"],
     "msd-firmware-name": "arcade.uf2"
 }

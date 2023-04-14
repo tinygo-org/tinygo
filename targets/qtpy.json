@@ -5,6 +5,6 @@
     "serial-port": ["239a:80cb"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "QTPY_BOOT",
+    "msd-volume-name": ["QTPY_BOOT"],
     "msd-firmware-name": "firmware.uf2"
 }
