@@ -4,11 +4,11 @@ import (
 	"flag"
 	"go/types"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"tinygo.org/x/go-llvm"
@@ -192,12 +192,7 @@ func fuzzyEqualIR(s1, s2 string) bool {
 // stripped out.
 func filterIrrelevantIRLines(lines []string) []string {
 	var out []string
-	llvmVersion, err := strconv.Atoi(strings.Split(llvm.Version, ".")[0])
-	if err != nil {
-		// Note: this should never happen and if it does, it will always happen
-		// for a particular build because llvm.Version is a constant.
-		panic(err)
-	}
+	llvmVersion := llvmutil.Major()
 	for _, line := range lines {
 		line = strings.Split(line, ";")[0]    // strip out comments/info
 		line = strings.TrimRight(line, "\r ") // drop '\r' on Windows and remove trailing spaces from comments
@@ -211,6 +206,12 @@ func filterIrrelevantIRLines(lines []string) []string {
 			// The datalayout string may vary betewen LLVM versions.
 			// Right now test outputs are for LLVM 14 and higher.
 			continue
+		}
+		if llvmVersion < 16 {
+			if strings.HasSuffix(line, "memory(argmem: readwrite) }") {
+				line = strings.Replace(line, "{ ", "{ argmemonly ", 1)
+				line = strings.Replace(line, "memory(argmem: readwrite) ", "", 1)
+			}
 		}
 		out = append(out, line)
 	}

@@ -43,14 +43,14 @@ entry:
   ret i32 %6
 }
 
-; Function Attrs: argmemonly nocallback nofree nosync nounwind willreturn
+; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture) #4
 
 declare void @runtime.memzero(ptr, i32, ptr) #1
 
 declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(40), ptr, ptr, i32, ptr) #1
 
-; Function Attrs: argmemonly nocallback nofree nosync nounwind willreturn
+; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture) #4
 
 ; Function Attrs: noinline nounwind
@@ -168,5 +168,5 @@ attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime
 attributes #1 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #2 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #3 = { noinline nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #4 = { argmemonly nocallback nofree nosync nounwind willreturn }
+attributes #4 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
 attributes #5 = { nounwind }
