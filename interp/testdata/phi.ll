@@ -25,7 +25,7 @@ for.loop:
   br i1 %icmp, label %for.done, label %for.loop
 
 for.done:
-  store i8 %a, i8* @main.phiNodesResultA
-  store i8 %b, i8* @main.phiNodesResultB
+  store i8 %a, ptr @main.phiNodesResultA
+  store i8 %b, ptr @main.phiNodesResultB
   ret void
 }
