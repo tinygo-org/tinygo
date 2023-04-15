@@ -5,7 +5,7 @@ target triple = "x86_64--linux"
 @main.nonConst1 = global [4 x i64] zeroinitializer
 @main.nonConst2 = global i64 0
 @main.someArray = global [8 x {i16, i32}] zeroinitializer
-@main.exportedValue = global [1 x i16*] [i16* @main.exposedValue1]
+@main.exportedValue = global [1 x ptr] [ptr @main.exposedValue1]
 @main.exportedConst = constant i64 42
 @main.exposedValue1 = global i16 0
 @main.exposedValue2 = global i16 0
@@ -24,7 +24,7 @@ entry:
 
 define void @main() unnamed_addr {
 entry:
-  %0 = load i64, i64* @main.v1
+  %0 = load i64, ptr @main.v1
   call void @runtime.printint64(i64 %0)
   call void @runtime.printnl()
   ret void
@@ -37,43 +37,43 @@ entry:
 
 define internal void @main.init() unnamed_addr {
 entry:
-  store i64 3, i64* @main.v1
+  store i64 3, ptr @main.v1
   call void @"main.init#1"()
 
   ; test the following pattern:
   ;     func someValue() int // extern function
   ;     var nonConst1 = [4]int{someValue(), 0, 0, 0}
   %value1 = call i64 @someValue()
-  %gep1 = getelementptr [4 x i64], [4 x i64]* @main.nonConst1, i32 0, i32 0
-  store i64 %value1, i64* %gep1
+  %gep1 = getelementptr [4 x i64], ptr @main.nonConst1, i32 0, i32 0
+  store i64 %value1, ptr %gep1
 
   ; Test that the global really is marked dirty:
   ;     var nonConst2 = nonConst1[0]
-  %gep2 = getelementptr [4 x i64], [4 x i64]* @main.nonConst1, i32 0, i32 0
-  %value2 = load i64, i64* %gep2
-  store i64 %value2, i64* @main.nonConst2
+  %gep2 = getelementptr [4 x i64], ptr @main.nonConst1, i32 0, i32 0
+  %value2 = load i64, ptr %gep2
+  store i64 %value2, ptr @main.nonConst2
 
   ; Test that the following GEP works:
   ;     var someArray
   ;     modifyExternal(&someArray[3].field1)
-  %gep3 = getelementptr [8 x {i16, i32}], [8 x {i16, i32}]* @main.someArray, i32 0, i32 3, i32 1
-  call void @modifyExternal(i32* %gep3)
+  %gep3 = getelementptr [8 x {i16, i32}], ptr @main.someArray, i32 0, i32 3, i32 1
+  call void @modifyExternal(ptr %gep3)
 
   ; Test that marking a value as external also marks all referenced values.
-  call void @modifyExternal(i32* bitcast ([1 x i16*]* @main.exportedValue to i32*))
-  store i16 5, i16* @main.exposedValue1
+  call void @modifyExternal(ptr @main.exportedValue)
+  store i16 5, ptr @main.exposedValue1
 
   ; Test that marking a constant as external still allows loading from it.
-  call void @readExternal(i32* bitcast (i64* @main.exportedConst to i32*))
-  %constLoad = load i64, i64 * @main.exportedConst
+  call void @readExternal(ptr @main.exportedConst)
+  %constLoad = load i64, ptr @main.exportedConst
   call void @runtime.printint64(i64 %constLoad)
 
   ; Test that this even propagates through functions.
-  call void @modifyExternal(i32* bitcast (void ()* @willModifyGlobal to i32*))
-  store i16 7, i16* @main.exposedValue2
+  call void @modifyExternal(ptr @willModifyGlobal)
+  store i16 7, ptr @main.exposedValue2
 
   ; Test that inline assembly is ignored.
-  call void @modifyExternal(i32* bitcast (void ()* @hasInlineAsm to i32*))
+  call void @modifyExternal(ptr @hasInlineAsm)
 
   ; Test switch statement.
   %switch1 = call i64 @testSwitch(i64 1) ; 1 returns 6
@@ -86,7 +86,7 @@ entry:
   %elt = extractvalue {i8, i32, {float, {i64, i16}}} %agg, 2, 1, 0
   call void @runtime.printint64(i64 %elt)
   %agg2 = insertvalue {i8, i32, {float, {i64, i16}}} %agg, i64 5, 2, 1, 0
-  store {i8, i32, {float, {i64, i16}}} %agg2, {i8, i32, {float, {i64, i16}}}* @main.insertedValue
+  store {i8, i32, {float, {i64, i16}}} %agg2, ptr @main.insertedValue
 
   ret void
 }
@@ -100,16 +100,16 @@ entry:
 
 declare i64 @someValue()
 
-declare void @modifyExternal(i32*)
+declare void @modifyExternal(ptr)
 
-declare void @readExternal(i32*)
+declare void @readExternal(ptr)
 
 ; This function will modify an external value. By passing this function as a
 ; function pointer to an external function, @main.exposedValue2 should be
 ; marked as external.
 define void @willModifyGlobal() {
 entry:
-  store i16 8, i16* @main.exposedValue2
+  store i16 8, ptr @main.exposedValue2
   ret void
 }
 

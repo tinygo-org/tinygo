@@ -3,14 +3,14 @@ target triple = "x86_64--linux"
 
 @main.v1 = global i1 0
 @main.v2 = global i1 0
-@"reflect/types.type:named:main.foo" = private constant { i8, i8*, i8* } { i8 34, i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:pointer:named:main.foo", i32 0, i32 0), i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:basic:int", i32 0, i32 0) }, align 4
-@"reflect/types.type:pointer:named:main.foo" = external constant { i8, i8* }
+@"reflect/types.type:named:main.foo" = private constant { i8, ptr, ptr } { i8 34, ptr @"reflect/types.type:pointer:named:main.foo", ptr @"reflect/types.type:basic:int" }, align 4
+@"reflect/types.type:pointer:named:main.foo" = external constant { i8, ptr }
 @"reflect/types.typeid:named:main.foo" = external constant i8
-@"reflect/types.type:basic:int" = private constant { i8, i8* } { i8 2, i8* getelementptr inbounds ({ i8, i8* }, { i8, i8* }* @"reflect/types.type:pointer:basic:int", i32 0, i32 0) }, align 4
-@"reflect/types.type:pointer:basic:int" = external constant { i8, i8* }
+@"reflect/types.type:basic:int" = private constant { i8, ptr } { i8 2, ptr @"reflect/types.type:pointer:basic:int" }, align 4
+@"reflect/types.type:pointer:basic:int" = external constant { i8, ptr }
 
 
-declare i1 @runtime.typeAssert(i8*, i8*, i8*, i8*)
+declare i1 @runtime.typeAssert(ptr, ptr, ptr, ptr)
 
 define void @runtime.initAll() unnamed_addr {
 entry:
@@ -21,9 +21,9 @@ entry:
 define internal void @main.init() unnamed_addr {
 entry:
   ; Test type asserts.
-  %typecode = call i1 @runtime.typeAssert(i8* getelementptr inbounds ({ i8, i8*, i8* }, { i8, i8*, i8* }* @"reflect/types.type:named:main.foo", i32 0, i32 0), i8* @"reflect/types.typeid:named:main.foo", i8* undef, i8* null)
-  store i1 %typecode, i1* @main.v1
-  %typecode2 = call i1 @runtime.typeAssert(i8* null, i8* @"reflect/types.typeid:named:main.foo", i8* undef, i8* null)
-  store i1 %typecode2, i1* @main.v2
+  %typecode = call i1 @runtime.typeAssert(ptr @"reflect/types.type:named:main.foo", ptr @"reflect/types.typeid:named:main.foo", ptr undef, ptr null)
+  store i1 %typecode, ptr @main.v1
+  %typecode2 = call i1 @runtime.typeAssert(ptr null, ptr @"reflect/types.typeid:named:main.foo", ptr undef, ptr null)
+  store i1 %typecode2, ptr @main.v2
   ret void
 }
