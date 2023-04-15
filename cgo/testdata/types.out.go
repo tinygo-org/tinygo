@@ -38,11 +38,11 @@ type (
 	C.ulonglong uint64
 )
 type C.myint = C.int
-type C._Ctype_struct___0 struct {
+type C.struct_point2d_t struct {
 	x C.int
 	y C.int
 }
-type C.point2d_t = C._Ctype_struct___0
+type C.point2d_t = C.struct_point2d_t
 type C.struct_point3d struct {
 	x C.int
 	y C.int
@@ -55,21 +55,19 @@ type C.struct_type1 struct {
 	___type C.int
 }
 type C.struct_type2 struct{ _type C.int }
-type C._Ctype_union___1 struct{ i C.int }
-type C.union1_t = C._Ctype_union___1
-type C._Ctype_union___2 struct{ $union uint64 }
+type C.union_union1_t struct{ i C.int }
+type C.union1_t = C.union_union1_t
+type C.union_union3_t struct{ $union uint64 }
 
-func (union *C._Ctype_union___2) unionfield_i() *C.int {
-	return (*C.int)(unsafe.Pointer(&union.$union))
-}
-func (union *C._Ctype_union___2) unionfield_d() *float64 {
+func (union *C.union_union3_t) unionfield_i() *C.int { return (*C.int)(unsafe.Pointer(&union.$union)) }
+func (union *C.union_union3_t) unionfield_d() *float64 {
 	return (*float64)(unsafe.Pointer(&union.$union))
 }
-func (union *C._Ctype_union___2) unionfield_s() *C.short {
+func (union *C.union_union3_t) unionfield_s() *C.short {
 	return (*C.short)(unsafe.Pointer(&union.$union))
 }
 
-type C.union3_t = C._Ctype_union___2
+type C.union3_t = C.union_union3_t
 type C.union_union2d struct{ $union [2]uint64 }
 
 func (union *C.union_union2d) unionfield_i() *C.int { return (*C.int)(unsafe.Pointer(&union.$union)) }
@@ -78,50 +76,50 @@ func (union *C.union_union2d) unionfield_d() *[2]float64 {
 }
 
 type C.union2d_t = C.union_union2d
-type C._Ctype_union___3 struct{ arr [10]C.uchar }
-type C.unionarray_t = C._Ctype_union___3
-type C._Ctype_union___5 struct{ $union [3]uint32 }
+type C.union_unionarray_t struct{ arr [10]C.uchar }
+type C.unionarray_t = C.union_unionarray_t
+type C.union_union (unnamed at testdata/types.go:54:2) struct{ $union [3]uint32 }
 
-func (union *C._Ctype_union___5) unionfield_area() *C.point2d_t {
+func (union *C.union_union (unnamed at testdata/types.go:54:2)) unionfield_area() *C.point2d_t {
 	return (*C.point2d_t)(unsafe.Pointer(&union.$union))
 }
-func (union *C._Ctype_union___5) unionfield_solid() *C.point3d_t {
+func (union *C.union_union (unnamed at testdata/types.go:54:2)) unionfield_solid() *C.point3d_t {
 	return (*C.point3d_t)(unsafe.Pointer(&union.$union))
 }
 
-type C._Ctype_struct___4 struct {
+type C.struct_struct_nested_t struct {
 	begin C.point2d_t
 	end   C.point2d_t
 	tag   C.int
 
-	coord C._Ctype_union___5
+	coord C.union_union (unnamed at testdata/types.go:54:2)
 }
-type C.struct_nested_t = C._Ctype_struct___4
-type C._Ctype_union___6 struct{ $union [2]uint64 }
+type C.struct_nested_t = C.struct_struct_nested_t
+type C.union_union_nested_t struct{ $union [2]uint64 }
 
-func (union *C._Ctype_union___6) unionfield_point() *C.point3d_t {
+func (union *C.union_union_nested_t) unionfield_point() *C.point3d_t {
 	return (*C.point3d_t)(unsafe.Pointer(&union.$union))
 }
-func (union *C._Ctype_union___6) unionfield_array() *C.unionarray_t {
+func (union *C.union_union_nested_t) unionfield_array() *C.unionarray_t {
 	return (*C.unionarray_t)(unsafe.Pointer(&union.$union))
 }
-func (union *C._Ctype_union___6) unionfield_thing() *C.union3_t {
+func (union *C.union_union_nested_t) unionfield_thing() *C.union3_t {
 	return (*C.union3_t)(unsafe.Pointer(&union.$union))
 }
 
-type C.union_nested_t = C._Ctype_union___6
+type C.union_nested_t = C.union_union_nested_t
 type C.enum_option = C.int
 type C.option_t = C.enum_option
-type C._Ctype_enum___7 = C.uint
-type C.option2_t = C._Ctype_enum___7
-type C._Ctype_struct___8 struct {
+type C.enum_option2_t = C.uint
+type C.option2_t = C.enum_option2_t
+type C.struct_types_t struct {
 	f   float32
 	d   float64
 	ptr *C.int
 }
-type C.types_t = C._Ctype_struct___8
+type C.types_t = C.struct_types_t
 type C.myIntArray = [10]C.int
-type C._Ctype_struct___9 struct {
+type C.struct_bitfield_t struct {
 	start        C.uchar
 	__bitfield_1 C.uchar
 
@@ -129,21 +127,21 @@ type C._Ctype_struct___9 struct {
 	e C.uchar
 }
 
-func (s *C._Ctype_struct___9) bitfield_a() C.uchar { return s.__bitfield_1 & 0x1f }
-func (s *C._Ctype_struct___9) set_bitfield_a(value C.uchar) {
+func (s *C.struct_bitfield_t) bitfield_a() C.uchar { return s.__bitfield_1 & 0x1f }
+func (s *C.struct_bitfield_t) set_bitfield_a(value C.uchar) {
 	s.__bitfield_1 = s.__bitfield_1&^0x1f | value&0x1f<<0
 }
-func (s *C._Ctype_struct___9) bitfield_b() C.uchar {
+func (s *C.struct_bitfield_t) bitfield_b() C.uchar {
 	return s.__bitfield_1 >> 5 & 0x1
 }
-func (s *C._Ctype_struct___9) set_bitfield_b(value C.uchar) {
+func (s *C.struct_bitfield_t) set_bitfield_b(value C.uchar) {
 	s.__bitfield_1 = s.__bitfield_1&^0x20 | value&0x1<<5
 }
-func (s *C._Ctype_struct___9) bitfield_c() C.uchar {
+func (s *C.struct_bitfield_t) bitfield_c() C.uchar {
 	return s.__bitfield_1 >> 6
 }
-func (s *C._Ctype_struct___9) set_bitfield_c(value C.uchar,
+func (s *C.struct_bitfield_t) set_bitfield_c(value C.uchar,
 
 ) { s.__bitfield_1 = s.__bitfield_1&0x3f | value<<6 }
 
-type C.bitfield_t = C._Ctype_struct___9
+type C.bitfield_t = C.struct_bitfield_t

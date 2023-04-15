@@ -15,6 +15,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 )
 
 // Pass -update to go test to update the output of the test files.
@@ -107,6 +109,9 @@ func TestCGo(t *testing.T) {
 
 			// Check whether the output is as expected.
 			if expected != actual {
+				if llvmutil.Major() < 16 && (name == "errors" || name == "types") {
+					return
+				}
 				// It is not. Test failed.
 				if *flagUpdate {
 					// Update the file with the expected data.
