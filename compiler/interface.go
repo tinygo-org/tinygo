@@ -205,6 +205,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "size", types.Typ[types.Uint32]),
 				types.NewVar(token.NoPos, nil, "numFields", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "fields", types.NewArray(c.getRuntimeType("structField"), int64(typ.NumFields()))),
 			)
@@ -306,16 +307,21 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 			pkgPathPtr := c.pkgPathPtr(pkgpath)
 
+			llvmStructType := c.getLLVMType(typ)
+			size := c.targetData.TypeStoreSize(llvmStructType)
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false), // numMethods
 				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
 				pkgPathPtr,
+				llvm.ConstInt(c.ctx.Int32Type(), uint64(size), false),            // size
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(typ.NumFields()), false), // numFields
 			}
 			structFieldType := c.getLLVMRuntimeType("structField")
+
 			var fields []llvm.Value
 			for i := 0; i < typ.NumFields(); i++ {
 				field := typ.Field(i)
+				offset := c.targetData.ElementOffset(llvmStructType, i)
 				var flags uint8
 				if field.Anonymous() {
 					flags |= structFieldFlagAnonymous
@@ -346,6 +352,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				fieldType := c.getTypeCode(field.Type())
 				fields = append(fields, llvm.ConstNamedStruct(structFieldType, []llvm.Value{
 					fieldType,
+					llvm.ConstInt(c.ctx.Int32Type(), uint64(offset), false),
 					llvm.ConstGEP(dataGlobal.GlobalValueType(), dataGlobal, []llvm.Value{
 						llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 						llvm.ConstInt(c.ctx.Int32Type(), 0, false),
