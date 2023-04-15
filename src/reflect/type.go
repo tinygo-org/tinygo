@@ -39,6 +39,7 @@
 //     meta         uint8
 //     nmethods     uint16
 //     ptrTo        *typeStruct
+//     size         uint32
 //     pkgpath      *byte       // package path; null terminated
 //     numField     uint16
 //     fields       [...]structField // the remaining fields are all of type structField
@@ -455,12 +456,14 @@ type structType struct {
 	numMethod uint16
 	ptrTo     *rawType
 	pkgpath   *byte
+	size      uint32
 	numField  uint16
 	fields    [1]structField // the remaining fields are all of type structField
 }
 
 type structField struct {
 	fieldType *rawType
+	offset    uint32
 	data      unsafe.Pointer // various bits of information, packed in a byte array
 }
 
@@ -669,18 +672,8 @@ func (t *rawType) rawField(n int) rawStructField {
 	// This offset could have been stored directly in the array (to make the
 	// lookup faster), but by calculating it on-the-fly a bit of storage can be
 	// saved.
-	field := &descriptor.fields[0]
-	var offset uintptr = 0
-	for i := 0; i < n; i++ {
-		offset += field.fieldType.Size()
-
-		// Increment pointer to the next field.
-		field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
-
-		// Align the offset for the next field.
-		offset = align(offset, uintptr(field.fieldType.Align()))
-	}
-
+	field := (*structField)(unsafe.Add(unsafe.Pointer(&descriptor.fields[0]), uintptr(n)*unsafe.Sizeof(structField{})))
+	offset := uintptr(field.offset)
 	data := field.data
 
 	// Read some flags of this field, like whether the field is an embedded
@@ -726,7 +719,6 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 			// Also calculate field offset.
 
 			descriptor := (*structType)(unsafe.Pointer(ll.t.underlying()))
-			var offset uintptr
 			field := &descriptor.fields[0]
 
 			for i := uint16(0); i < descriptor.numField; i++ {
@@ -740,6 +732,7 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 				name := readStringZ(data)
 				data = unsafe.Add(data, len(name))
 				if name == n {
+					offset := uintptr(field.offset)
 					found = append(found, result{
 						rawStructFieldFromPointer(descriptor, field.fieldType, data, flagsByte, name, offset),
 						append(ll.index, int(i)),
@@ -759,16 +752,10 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 					})
 				}
 
-				offset += field.fieldType.Size()
-
 				// update offset/field pointer if there *is* a next field
 				if i < descriptor.numField-1 {
-
 					// Increment pointer to the next field.
 					field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
-
-					// Align the offset for the next field.
-					offset = align(offset, uintptr(field.fieldType.Align()))
 				}
 			}
 		}
@@ -860,12 +847,8 @@ func (t *rawType) Size() uintptr {
 	case Array:
 		return t.elem().Size() * uintptr(t.Len())
 	case Struct:
-		numField := t.NumField()
-		if numField == 0 {
-			return 0
-		}
-		lastField := t.rawField(numField - 1)
-		return align(lastField.Offset+lastField.Type.Size(), uintptr(t.Align()))
+		u := t.underlying()
+		return uintptr((*structType)(unsafe.Pointer(u)).size)
 	default:
 		panic("unimplemented: size of type")
 	}
