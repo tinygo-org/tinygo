@@ -161,6 +161,15 @@ func (e *OpError) Error() string {
 	return s
 }
 
+type timeout interface {
+	Timeout() bool
+}
+
+func (e *OpError) Timeout() bool {
+	t, ok := e.Err.(timeout)
+	return ok && t.Timeout()
+}
+
 // A ParseError is the error type of literal network address parsers.
 type ParseError struct {
 	// Type is the type of string that was expected, such as

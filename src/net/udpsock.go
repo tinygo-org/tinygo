@@ -9,6 +9,7 @@ package net
 import (
 	"fmt"
 	"internal/itoa"
+	"io"
 	"net/netip"
 	"strconv"
 	"syscall"
@@ -116,6 +117,7 @@ func ResolveUDPAddr(network, address string) (*UDPAddr, error) {
 // for UDP network connections.
 type UDPConn struct {
 	fd            int
+	net           string
 	laddr         *UDPAddr
 	raddr         *UDPAddr
 	readDeadline  time.Time
@@ -187,6 +189,7 @@ func DialUDP(network string, laddr, raddr *UDPAddr) (*UDPConn, error) {
 
 	return &UDPConn{
 		fd:    fd,
+		net:   network,
 		laddr: laddr,
 		raddr: raddr,
 	}, nil
@@ -195,43 +198,25 @@ func DialUDP(network string, laddr, raddr *UDPAddr) (*UDPConn, error) {
 // TINYGO: Use netdev for Conn methods: Read = Recv, Write = Send, etc.
 
 func (c *UDPConn) Read(b []byte) (int, error) {
-	var timeout time.Duration
-
-	now := time.Now()
-
-	if !c.readDeadline.IsZero() {
-		if c.readDeadline.Before(now) {
-			return 0, fmt.Errorf("Read deadline expired")
-		} else {
-			timeout = c.readDeadline.Sub(now)
-		}
-	}
-
-	n, err := netdev.Recv(c.fd, b, 0, timeout)
+	n, err := netdev.Recv(c.fd, b, 0, c.readDeadline)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
+	}
+	if err != nil && err != io.EOF {
+		err = &OpError{Op: "read", Net: c.net, Source: c.laddr, Addr: c.raddr, Err: err}
 	}
 	return n, err
 }
 
 func (c *UDPConn) Write(b []byte) (int, error) {
-	var timeout time.Duration
-
-	now := time.Now()
-
-	if !c.writeDeadline.IsZero() {
-		if c.writeDeadline.Before(now) {
-			return 0, fmt.Errorf("Write deadline expired")
-		} else {
-			timeout = c.writeDeadline.Sub(now)
-		}
-	}
-
-	n, err := netdev.Send(c.fd, b, 0, timeout)
+	n, err := netdev.Send(c.fd, b, 0, c.writeDeadline)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
+	}
+	if err != nil {
+		err = &OpError{Op: "write", Net: c.net, Source: c.laddr, Addr: c.raddr, Err: err}
 	}
 	return n, err
 }

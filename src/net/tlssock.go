@@ -9,11 +9,38 @@
 package net
 
 import (
-	"fmt"
+	"internal/itoa"
+	"io"
 	"strconv"
 	"syscall"
 	"time"
 )
+
+// TLSAddr represents the address of a TLS end point.
+type TLSAddr struct {
+	Host string
+	Port int
+}
+
+func (a *TLSAddr) Network() string { return "tls" }
+
+func (a *TLSAddr) String() string {
+	if a == nil {
+		return "<nil>"
+	}
+	return JoinHostPort(a.Host, itoa.Itoa(a.Port))
+}
+
+// A TLSConn represents a secured connection.
+// It implements the net.Conn interface.
+type TLSConn struct {
+	fd            int
+	net           string
+	laddr         *TLSAddr
+	raddr         *TLSAddr
+	readDeadline  time.Time
+	writeDeadline time.Time
+}
 
 func DialTLS(addr string) (*TLSConn, error) {
 
@@ -42,102 +69,62 @@ func DialTLS(addr string) (*TLSConn, error) {
 	}
 
 	return &TLSConn{
-		fd: fd,
+		fd:    fd,
+		net:   "tls",
+		raddr: &TLSAddr{host, port},
 	}, nil
 }
 
-// A TLSConn represents a secured connection.
-// It implements the net.Conn interface.
-type TLSConn struct {
-	fd            int
-	readDeadline  time.Time
-	writeDeadline time.Time
-}
-
-// Access to net.Conn methods.
-// Cannot just embed net.Conn because that would
-// export the struct field too.
-
-// LocalAddr returns the local network address.
-func (c *TLSConn) LocalAddr() Addr {
-	// TODO
-	return nil
-}
-
-// RemoteAddr returns the remote network address.
-func (c *TLSConn) RemoteAddr() Addr {
-	// TODO
-	return nil
-}
-
-// SetDeadline sets the read and write deadlines associated with the connection.
-// A zero value for t means Read and Write will not time out.
-// After a Write has timed out, the TLS state is corrupt and all future writes will return the same error.
-func (c *TLSConn) SetDeadline(t time.Time) error {
-	c.readDeadline = t
-	c.writeDeadline = t
-	return nil
-}
-
-// SetReadDeadline sets the read deadline on the underlying connection.
-// A zero value for t means Read will not time out.
-func (c *TLSConn) SetReadDeadline(t time.Time) error {
-	c.readDeadline = t
-	return nil
-}
-
-// SetWriteDeadline sets the write deadline on the underlying connection.
-// A zero value for t means Write will not time out.
-// After a Write has timed out, the TLS state is corrupt and all future writes will return the same error.
-func (c *TLSConn) SetWriteDeadline(t time.Time) error {
-	c.writeDeadline = t
-	return nil
-}
-
 func (c *TLSConn) Read(b []byte) (int, error) {
-	var timeout time.Duration
-
-	now := time.Now()
-
-	if !c.readDeadline.IsZero() {
-		if c.readDeadline.Before(now) {
-			return 0, fmt.Errorf("Read deadline expired")
-		} else {
-			timeout = c.readDeadline.Sub(now)
-		}
-	}
-
-	n, err := netdev.Recv(c.fd, b, 0, timeout)
+	n, err := netdev.Recv(c.fd, b, 0, c.readDeadline)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
+	}
+	if err != nil && err != io.EOF {
+		err = &OpError{Op: "read", Net: c.net, Source: c.laddr, Addr: c.raddr, Err: err}
 	}
 	return n, err
 }
 
 func (c *TLSConn) Write(b []byte) (int, error) {
-	var timeout time.Duration
-
-	now := time.Now()
-
-	if !c.writeDeadline.IsZero() {
-		if c.writeDeadline.Before(now) {
-			return 0, fmt.Errorf("Write deadline expired")
-		} else {
-			timeout = c.writeDeadline.Sub(now)
-		}
-	}
-
-	n, err := netdev.Send(c.fd, b, 0, timeout)
+	n, err := netdev.Send(c.fd, b, 0, c.writeDeadline)
 	// Turn the -1 socket error into 0 and let err speak for error
 	if n < 0 {
 		n = 0
+	}
+	if err != nil {
+		err = &OpError{Op: "write", Net: c.net, Source: c.laddr, Addr: c.raddr, Err: err}
 	}
 	return n, err
 }
 
 func (c *TLSConn) Close() error {
 	return netdev.Close(c.fd)
+}
+
+func (c *TLSConn) LocalAddr() Addr {
+	return c.laddr
+}
+
+func (c *TLSConn) RemoteAddr() Addr {
+	return c.raddr
+}
+
+func (c *TLSConn) SetDeadline(t time.Time) error {
+	c.readDeadline = t
+	c.writeDeadline = t
+	return nil
+}
+
+func (c *TLSConn) SetReadDeadline(t time.Time) error {
+	c.readDeadline = t
+	return nil
+}
+
+func (c *TLSConn) SetWriteDeadline(t time.Time) error {
+	c.writeDeadline = t
+	return nil
 }
 
 // Handshake runs the client or server handshake

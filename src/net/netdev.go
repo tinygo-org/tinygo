@@ -45,8 +45,8 @@ type netdever interface {
 	Connect(sockfd int, host string, ip IP, port int) error
 	Listen(sockfd int, backlog int) error
 	Accept(sockfd int, ip IP, port int) (int, error)
-	Send(sockfd int, buf []byte, flags int, timeout time.Duration) (int, error)
-	Recv(sockfd int, buf []byte, flags int, timeout time.Duration) (int, error)
+	Send(sockfd int, buf []byte, flags int, deadline time.Time) (int, error)
+	Recv(sockfd int, buf []byte, flags int, deadline time.Time) (int, error)
 	Close(sockfd int) error
 	SetSockOpt(sockfd int, level int, opt int, value interface{}) error
 }
