@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"machine"
 	"machine/usb/midi"
+
+	"encoding/hex"
 	"time"
 )
 
@@ -20,7 +21,7 @@ func main() {
 	m := midi.Port()
 	m.SetHandler(func(b []byte) {
 		led.Set(!led.Get())
-		fmt.Printf("% X\r\n", b)
+		println(hex.EncodeToString(b))
 		m.Write(b)
 	})
 
