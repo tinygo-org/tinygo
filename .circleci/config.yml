@@ -65,6 +65,9 @@ commands:
                 lld-<<parameters.llvm>> \
                 cmake \
                 ninja-build
+            # Fix missing symlink (useless for LLVM 14, but harmless.)
+            cd /usr/lib/x86_64-linux-gnu/
+            ln -sf libclang-16.so.16.* libclang-16.so.16
       - hack-ninja-jobs
       - build-binaryen-linux
       - restore_cache:
@@ -105,6 +108,13 @@ jobs:
       - test-linux:
           llvm: "14"
     resource_class: large
+  test-llvm16-go118:
+    docker:
+      - image: golang:1.18-buster
+    steps:
+      - test-linux:
+          llvm: "16"
+    resource_class: large
 
 workflows:
   test-all:
@@ -112,3 +122,4 @@ workflows:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
       - test-llvm14-go118
+      - test-llvm16-go118
