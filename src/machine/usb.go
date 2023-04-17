@@ -302,7 +302,12 @@ func EnableMIDI(txHandler func(), rxHandler func([]byte), setupHandler func(usb.
 
 // EnableJoystick enables HID. This function must be executed from the init().
 func EnableJoystick(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool, hidDesc []byte) {
-	class := descriptor.FindClassHIDType(descriptor.CDCJoystick.Configuration, descriptor.ClassHIDJoystick.Bytes())
+	class, err := descriptor.FindClassHIDType(descriptor.CDCJoystick.Configuration, descriptor.ClassHIDJoystick.Bytes())
+	if err != nil {
+		// TODO: some way to notify about error
+		return
+	}
+
 	class.ClassLength(uint16(len(hidDesc)))
 	descriptor.CDCJoystick.HID[2] = hidDesc
 

@@ -30,7 +30,7 @@ func UseSettings(def Definitions, rxHandlerFunc func(b []byte), setupFunc func(s
 		State: def.NewState(),
 	}
 	if setupFunc == nil {
-		setupFunc = js.setupFunc
+		setupFunc = hid.DefaultSetupHandler
 	}
 	machine.EnableJoystick(js.handler, rxHandlerFunc, setupFunc, hidDesc)
 	Joystick = js
