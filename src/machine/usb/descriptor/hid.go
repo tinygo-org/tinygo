@@ -3,6 +3,7 @@ package descriptor
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 )
 
 var configurationCDCHID = [configurationTypeLen]byte{
@@ -76,10 +77,22 @@ func (d ClassHIDType) ClassLength(v uint16) {
 	binary.LittleEndian.PutUint16(d.data[7:9], v)
 }
 
-func FindClassHIDType(data, section []byte) ClassHIDType {
-	idx := bytes.Index(data, section)
+var errNoClassHIDFound = errors.New("no classHID found")
 
-	return ClassHIDType{data: data[idx : idx+ClassHIDTypeLen]}
+// FindClassHIDType tries to find the ClassHID class in the descriptor.
+func FindClassHIDType(des, class []byte) (ClassHIDType, error) {
+	if len(des) < ClassHIDTypeLen || len(class) == 0 {
+		return ClassHIDType{}, errNoClassHIDFound
+	}
+
+	// search only for ClassHIDType without the ClassLength,
+	// in case it has already been set.
+	idx := bytes.Index(des, class[:ClassHIDTypeLen-2])
+	if idx == -1 {
+		return ClassHIDType{}, errNoClassHIDFound
+	}
+
+	return ClassHIDType{data: des[idx : idx+ClassHIDTypeLen]}, nil
 }
 
 var classHID = [ClassHIDTypeLen]byte{
