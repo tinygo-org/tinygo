@@ -749,36 +749,10 @@ func (a ADC) Configure(config ADCConfig) {
 		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
 		} // wait for sync
 
-		adc.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
-		var resolution uint32
-		switch config.Resolution {
-		case 8:
-			resolution = sam.ADC_CTRLB_RESSEL_8BIT
-		case 10:
-			resolution = sam.ADC_CTRLB_RESSEL_10BIT
-		case 12:
-			resolution = sam.ADC_CTRLB_RESSEL_12BIT
-		case 16:
-			resolution = sam.ADC_CTRLB_RESSEL_16BIT
-		default:
-			resolution = sam.ADC_CTRLB_RESSEL_12BIT
-		}
-		adc.CTRLB.SetBits(uint16(resolution << sam.ADC_CTRLB_RESSEL_Pos))
-		adc.SAMPCTRL.Set(5) // sampling Time Length
-
-		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
-		} // wait for sync
-
-		// No Negative input (Internal Ground)
-		adc.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
-		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
-		} // wait for sync
-
 		// Averaging (see datasheet table in AVGCTRL register description)
+		var resolution uint32 = sam.ADC_CTRLB_RESSEL_16BIT
 		var samples uint32
 		switch config.Samples {
-		case 1:
-			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
 		case 2:
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_2
 		case 4:
@@ -800,10 +774,38 @@ func (a ADC) Configure(config ADCConfig) {
 		case 1024:
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_1024
 		default: // 1 sample only (no oversampling nor averaging), adjusting result by 0
+			// Resolutions less than 16 bits only make sense when sampling only
+			// once. Resulting ADC values become erratic when using both
+			// multi-sampling and less than 16 bits of resolution.
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
+			switch config.Resolution {
+			case 8:
+				resolution = sam.ADC_CTRLB_RESSEL_8BIT
+			case 10:
+				resolution = sam.ADC_CTRLB_RESSEL_10BIT
+			case 12:
+				resolution = sam.ADC_CTRLB_RESSEL_12BIT
+			case 16:
+				resolution = sam.ADC_CTRLB_RESSEL_16BIT
+			default:
+				resolution = sam.ADC_CTRLB_RESSEL_12BIT
+			}
 		}
+
 		adc.AVGCTRL.Set(uint8(samples<<sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
 			(0 << sam.ADC_AVGCTRL_ADJRES_Pos))
+
+		adc.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
+		adc.CTRLB.SetBits(uint16(resolution << sam.ADC_CTRLB_RESSEL_Pos))
+		adc.SAMPCTRL.Set(5) // sampling Time Length
+
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
+		} // wait for sync
+
+		// No Negative input (Internal Ground)
+		adc.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
+		} // wait for sync
 
 		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_AVGCTRL) {
 		} // wait for sync
@@ -871,10 +873,24 @@ func (a ADC) Get() uint16 {
 		val = val << 8
 	case sam.ADC_CTRLB_RESSEL_10BIT:
 		val = val << 6
-	case sam.ADC_CTRLB_RESSEL_16BIT:
-		val = val << 4
 	case sam.ADC_CTRLB_RESSEL_12BIT:
 		val = val << 4
+	case sam.ADC_CTRLB_RESSEL_16BIT:
+		// Adjust for multiple samples. This is only configured when the
+		// resolution is 16 bits.
+		switch (bus.AVGCTRL.Get() & sam.ADC_AVGCTRL_SAMPLENUM_Msk) >> sam.ADC_AVGCTRL_SAMPLENUM_Pos {
+		case sam.ADC_AVGCTRL_SAMPLENUM_1:
+			val <<= 4
+		case sam.ADC_AVGCTRL_SAMPLENUM_2:
+			val <<= 3
+		case sam.ADC_AVGCTRL_SAMPLENUM_4:
+			val <<= 2
+		case sam.ADC_AVGCTRL_SAMPLENUM_8:
+			val <<= 1
+		default:
+			// These values are all shifted by the hardware so they fit exactly
+			// in a 16-bit integer, so they don't need to be shifted here.
+		}
 	}
 	return val
 }
