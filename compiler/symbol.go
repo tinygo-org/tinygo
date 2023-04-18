@@ -379,7 +379,7 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	}
 }
 
-// addStandardAttribute adds all attributes added to defined functions.
+// addStandardAttributes adds all attributes added to defined functions.
 func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
 	c.addStandardDeclaredAttributes(llvmFn)
 	c.addStandardDefinedAttributes(llvmFn)
