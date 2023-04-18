@@ -229,7 +229,7 @@ func extractSubfield(t types.Type, field int) types.Type {
 	}
 }
 
-// flattenAggregateTypeOffset returns the offsets from the start of an object of
+// flattenAggregateTypeOffsets returns the offsets from the start of an object of
 // type t if this object were flattened like in flattenAggregate. Used together
 // with flattenAggregate to know the start indices of each value in the
 // non-flattened object.

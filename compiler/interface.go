@@ -724,7 +724,7 @@ func (c *compilerContext) getMethodsString(itf *types.Interface) string {
 	return strings.Join(methods, "; ")
 }
 
-// getInterfaceImplementsfunc returns a declared function that works as a type
+// getInterfaceImplementsFunc returns a declared function that works as a type
 // switch. The interface lowering pass will define this function.
 func (c *compilerContext) getInterfaceImplementsFunc(assertedType types.Type) llvm.Value {
 	s, _ := getTypeCodeName(assertedType.Underlying())
