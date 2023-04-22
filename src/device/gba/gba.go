@@ -51,19 +51,38 @@ var (
 	GRAPHICS = (*GRAPHICS_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x004C)))
 
 	// GBA Sound Channel 1 - Tone & Sweep
-	SOUND1 = (*SOUND_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0060)))
+	SOUND1 = (*SOUND1_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0060)))
 
 	// GBA Sound Channel 2 - Tone
-	SOUND2 = (*SOUND_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0068)))
+	SOUND2 = (*SOUND2_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0068)))
 
-	// TODO: Sound channel 3 and 4
+	// GBA Sound Channel 3 - Wave Output
+	SOUND3 = (*SOUND3_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0070)))
+
+	// GBA Sound Channel 4 - Noise
+	SOUND4 = (*SOUND4_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0078)))
+
+	// GBA Sound Control
+	SOUND = (*SOUND_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0080)))
+
+	DMA0 = (*DMA_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x00B0)))
+	DMA1 = (*DMA_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x00BC)))
+	DMA2 = (*DMA_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x00C8)))
+	DMA3 = (*DMA_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x00D4)))
 
 	TM0 = (*TIMER_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0100)))
 	TM1 = (*TIMER_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0104)))
 	TM2 = (*TIMER_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0108)))
 	TM3 = (*TIMER_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x010C)))
 
+	// Communication 1
+	SIODATA32 = (*SIODATA32_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0120)))
+	SIOMULTI  = (*SIOMULTI_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0120)))
+
 	KEY = (*KEY_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0130)))
+
+	// Communication 2
+	SIO = (*SIO_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0134)))
 
 	INTERRUPT = (*INTERRUPT_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0200)))
 )
@@ -119,8 +138,11 @@ const (
 	// Screenblock size
 	SBB_SIZE = 0x00800
 
+	// BG VRAM_MODE_0_2 size
+	VRAM_BG_SIZE_MODE_0_2 = 0x10000
+
 	// BG VRAM size
-	VRAM_BG_SIZE = 0x10000
+	VRAM_BG_SIZE_MODE_3_5 = 0x14000
 
 	// Object VRAM size
 	VRAM_OBJ_SIZE = 0x08000
@@ -154,8 +176,11 @@ var (
 	// Back page address
 	MEM_VRAM_BACK = MEM_VRAM + VRAM_PAGE_SIZE
 
-	// Object VRAM address
-	MEM_VRAM_OBJ = MEM_VRAM + VRAM_BG_SIZE
+	// Object VRAM address - BG Mode 0-2
+	MEM_VRAM_OBJ_MODE0_2 = MEM_VRAM + VRAM_BG_SIZE_MODE_0_2
+
+	// Object VRAM address - BG Mode 3-5
+	MEM_VRAM_OBJ_MODE_3_5 = MEM_VRAM + VRAM_BG_SIZE_MODE_3_5
 )
 
 // Display registers
@@ -221,7 +246,7 @@ type GRAPHICS_Type struct {
 	BLDY volatile.Register16
 }
 
-type SOUND_Type struct {
+type SOUND1_Type struct {
 	// Sweep register
 	CNT_L volatile.Register16
 
@@ -232,7 +257,59 @@ type SOUND_Type struct {
 	CNT_X volatile.Register16
 }
 
-// TODO: DMA
+type SOUND2_Type struct {
+	// Duty/Len/Envelope
+	CNT_L volatile.Register16
+
+	// not used
+	_ volatile.Register16
+
+	// Frequency/Control
+	CNT_H volatile.Register16
+}
+
+type SOUND3_Type struct {
+	// Stop/Wave RAM select
+	CNT_L volatile.Register16
+
+	// Length/Volume
+	CNT_H volatile.Register16
+
+	// Frequency/Control
+	CNT_X volatile.Register16
+}
+
+type SOUND4_Type struct {
+	// Length/Envelope
+	CNT_L volatile.Register16
+
+	// not used
+	_ volatile.Register16
+
+	// Frequency/Control
+	CNT_H volatile.Register16
+}
+
+type SOUND_Type struct {
+	// Control Stereo/Volume/Enable
+	CNT_L volatile.Register16
+
+	// Control Mixing/DMA Control
+	CNT_H volatile.Register16
+
+	// Control Sound on/off
+	CNT_X volatile.Register16
+}
+
+// DMA
+type DMA_Type struct {
+	SAD_L volatile.Register16
+	SAD_H volatile.Register16
+	DAD_L volatile.Register16
+	DAD_H volatile.Register16
+	CNT_L volatile.Register16
+	CNT_H volatile.Register16
+}
 
 // TIMER
 type TIMER_Type struct {
@@ -240,7 +317,28 @@ type TIMER_Type struct {
 	CNT  volatile.Register16
 }
 
-// TODO: serial
+// serial
+type SIODATA32_Type struct {
+	DATA32_L volatile.Register16
+	DATA32_H volatile.Register16
+	_        volatile.Register16
+	_        volatile.Register16
+	CNT      volatile.Register16
+	DATA8    volatile.Register16
+}
+
+type SIOMULTI_Type struct {
+	MULTI0   volatile.Register16
+	MULTI1   volatile.Register16
+	MULTI2   volatile.Register16
+	MULTI3   volatile.Register16
+	CNT      volatile.Register16
+	MLT_SEND volatile.Register16
+}
+
+type SIO_Type struct {
+	RCNT volatile.Register16
+}
 
 // Keypad registers
 type KEY_Type struct {
@@ -257,6 +355,34 @@ type INTERRUPT_Type struct {
 	WAITCNT volatile.Register16
 	IME     volatile.Register16
 	PAUSE   volatile.Register16
+}
+
+// LCD OBJ Attributes
+type OAMOBJ_Type struct {
+	ATT0 volatile.Register16
+	ATT1 volatile.Register16
+	ATT2 volatile.Register16
+	_    volatile.Register16
+}
+
+// OAM Rotation/Scaling Parameters
+type OAMROT_Type struct {
+	_  volatile.Register16
+	_  volatile.Register16
+	_  volatile.Register16
+	PA volatile.Register16
+	_  volatile.Register16
+	_  volatile.Register16
+	_  volatile.Register16
+	PB volatile.Register16
+	_  volatile.Register16
+	_  volatile.Register16
+	_  volatile.Register16
+	PC volatile.Register16
+	_  volatile.Register16
+	_  volatile.Register16
+	_  volatile.Register16
+	PD volatile.Register16
 }
 
 // Constants for DISP: display
@@ -372,6 +498,40 @@ const (
 	DISPSTAT_VCOUNT_SETTING_Pos = 0x8
 )
 
+const (
+	BGCNT_PRIORITY_Pos = 0x0
+	BGCNT_PRIORITY_Msk = 0x3
+
+	BGCNT_CHAR_BASE_Pos = 0x2
+	BGCNT_CHAR_BASE_Msk = 0x3
+
+	BGCNT_MOSAIC_Pos     = 0x6
+	BGCNT_MOSAIC_DISABLE = 0x0
+	BGCNT_MOSAIC_ENABLE  = 0x1
+
+	BGCNT_COLORS_Pos = 0x7
+	BGCNT_COLORS_16  = 0x0
+	BGCNT_COLORS_256 = 0x1
+
+	BGCNT_BASE_Pos = 0x8
+	BGCNT_BASE_Msk = 0x1F
+
+	BGCNT_OVERFLOW_Pos   = 0xD
+	BGCNT_OVERFLOW_TRANS = 0x0
+	BGCNT_OVERFLOW_WRAP  = 0x1
+
+	BGCNT_SIZE_Pos = 0xE
+	BGCNT_SIZE_Msk = 0x3
+)
+
+const (
+	BG_HOFS_Pos = 0x0
+	BG_HOFS_Msk = 0x1FF
+
+	BG_VOFS_Pos = 0x0
+	BG_VOFS_Msk = 0x1FF
+)
+
 // Constants for TIMER
 const (
 	// PRESCALER: Prescaler Selection (0=F/1, 1=F/64, 2=F/256, 3=F/1024)
@@ -403,6 +563,135 @@ const (
 	TIMERCNT_TIMER_STOP          = 0x0
 )
 
+const (
+	// normal mode
+	SIOCNT_NORMAL_SC_Pos      = 0x0
+	SIOCNT_NORMAL_SC_INTERNAL = 0x1
+	SIOCNT_NORMAL_SC_EXTERNAL = 0x0
+
+	SIOCNT_NORMAL_SCSPEED_Pos  = 0x1
+	SIOCNT_NORMAL_SCSPEED_256K = 0x0
+	SIOCNT_NORMAL_SCSPEED_2M   = 0x1
+
+	SIOCNT_NORMAL_SCSTATE_Pos  = 0x2
+	SIOCNT_NORMAL_SCSTATE_LOW  = 0x0
+	SIOCNT_NORMAL_SCSTATE_HIGH = 0x1
+
+	SIOCNT_NORMAL_SO_INACTIVE_Pos  = 0x3
+	SIOCNT_NORMAL_SO_INACTIVE_LOW  = 0x0
+	SIOCNT_NORMAL_SO_INACTIVE_HIGH = 0x1
+
+	SIOCNT_NORMAL_START_Pos    = 0x7
+	SIOCNT_NORMAL_START_READY  = 0x0
+	SIOCNT_NORMAL_START_ACTIVE = 0x1
+
+	SIOCNT_NORMAL_LEN_Pos = 0xC
+	SIOCNT_NORMAL_LEN8    = 0x0
+	SIOCNT_NORMAL_LEN32   = 0x1
+
+	SIOCNT_NORMAL_MODE_Pos = 0xD
+	SIOCNT_NORMAL_MODE     = 0x0
+
+	// multiplayer mode
+	SIOCNT_MULTI_BR_Pos    = 0x0
+	SIOCNT_MULTI_BR_Msk    = 0x3
+	SIOCNT_MULTI_BR_9600   = 0x0
+	SIOCNT_MULTI_BR_38400  = 0x1
+	SIOCNT_MULTI_BR_57600  = 0x2
+	SIOCNT_MULTI_BR_115200 = 0x3
+
+	SIOCNT_MULTI_SI_Pos    = 0x2
+	SIOCNT_MULTI_SI_PARENT = 0x0
+	SIOCNT_MULTI_SI_CHILD  = 0x1
+
+	SIOCNT_MULTI_SD_Pos   = 0x3
+	SIOCNT_MULTI_SD_BAD   = 0x0
+	SIOCNT_MULTI_SD_READY = 0x1
+
+	SIOCNT_MULTI_ID_Pos    = 0x4
+	SIOCNT_MULTI_ID_Msk    = 0x3
+	SIOCNT_MULTI_ID_PARENT = 0x0
+	SIOCNT_MULTI_ID_CHILD1 = 0x1
+	SIOCNT_MULTI_ID_CHILD2 = 0x2
+	SIOCNT_MULTI_ID_CHILD3 = 0x3
+
+	SIOCNT_MULTI_ERR_Pos    = 0x6
+	SIOCNT_MULTI_ERR_NORMAL = 0x0
+	SIOCNT_MULTI_ERR_ERROR  = 0x1
+
+	SIOCNT_MULTI_STARTBUSY_Pos       = 0x7
+	SIOCNT_MULTI_STARTBUSY_INACTIVE  = 0x0
+	SIOCNT_MULTI_STARTBUSY_STARTBUSY = 0x1
+
+	SIOCNT_MULTI_MODE_Pos = 0xC
+	SIOCNT_MULTI_MODE_Msk = 0x3
+	SIOCNT_MULTI_MODE     = 0x01
+
+	// uart mode
+	SIOCNT_UART_BR_Pos    = 0x0
+	SIOCNT_UART_BR_Msk    = 0x3
+	SIOCNT_UART_BR_9600   = 0x0
+	SIOCNT_UART_BR_38400  = 0x1
+	SIOCNT_UART_BR_57600  = 0x2
+	SIOCNT_UART_BR_115200 = 0x3
+
+	SIOCNT_UART_CTS_Pos     = 0x2
+	SIOCNT_UART_CTS_ALWAYS  = 0x0
+	SIOCNT_UART_CTS_SENDLOW = 0x1
+
+	SIOCNT_UART_PARITY_Pos  = 0x3
+	SIOCNT_UART_PARITY_EVEN = 0x0
+	SIOCNT_UART_PARITY_ODD  = 0x1
+
+	SIOCNT_UART_SEND_Pos     = 0x4
+	SIOCNT_UART_SEND_NOTFULL = 0x0
+	SIOCNT_UART_SEND_FULL    = 0x1
+
+	SIOCNT_UART_REC_Pos      = 0x5
+	SIOCNT_UART_REC_NOTEMPTY = 0x0
+	SIOCNT_UART_REC_EMPTY    = 0x1
+
+	SIOCNT_UART_ERR_Pos     = 0x6
+	SIOCNT_UART_ERR_NOERROR = 0x0
+	SIOCNT_UART_ERR_ERROR   = 0x1
+
+	SIOCNT_UART_DATALEN_Pos = 0x7
+	SIOCNT_UART_DATALEN_7   = 0x0
+	SIOCNT_UART_DATALEN_8   = 0x1
+
+	SIOCNT_UART_FIFO_Pos     = 0x8
+	SIOCNT_UART_FIFO_DISABLE = 0x0
+	SIOCNT_UART_FIFO_ENABLE  = 0x1
+
+	SIOCNT_UART_PARITY_ENABLE_Pos = 0x9
+	SIOCNT_UART_PARITY_DISABLE    = 0x0
+	SIOCNT_UART_PARITY_ENABLE     = 0x1
+
+	SIOCNT_UART_SEND_ENABLE_Pos = 0xA
+	SIOCNT_UART_SEND_DISABLE    = 0x0
+	SIOCNT_UART_SEND_ENABLE     = 0x1
+
+	SIOCNT_UART_REC_ENABLE_Pos = 0xB
+	SIOCNT_UART_REC_DISABLE    = 0x0
+	SIOCNT_UART_REC_ENABLE     = 0x1
+
+	SIOCNT_UART_MODE_Pos = 0xC
+	SIOCNT_UART_MODE_Msk = 0x3
+	SIOCNT_UART_MODE     = 0x11
+
+	// IRQs used by all
+	SIOCNT_IRQ_Pos     = 0xE
+	SIOCNT_IRQ_DISABLE = 0x0
+	SIOCNT_IRQ_ENABLE  = 0x1
+)
+
+const (
+	SIO_RCNT_MODE_Pos    = 0xF
+	SIO_RCNT_MODE_NORMAL = 0x0
+	SIO_RCNT_MODE_MULTI  = 0x0
+	SIO_RCNT_MODE_UART   = 0x0
+)
+
 // Constants for KEY
 const (
 	// KEYINPUT
@@ -420,18 +709,24 @@ const (
 	KEYINPUT_BUTTON_L_Pos      = 0x9
 
 	// KEYCNT
-	KEYCNT_IGNORE            = 0x0
-	KEYCNT_SELECT            = 0x1
-	KEYCNT_BUTTON_A_Pos      = 0x0
-	KEYCNT_BUTTON_B_Pos      = 0x1
-	KEYCNT_BUTTON_SELECT_Pos = 0x2
-	KEYCNT_BUTTON_START_Pos  = 0x3
-	KEYCNT_BUTTON_RIGHT_Pos  = 0x4
-	KEYCNT_BUTTON_LEFT_Pos   = 0x5
-	KEYCNT_BUTTON_UP_Pos     = 0x6
-	KEYCNT_BUTTON_DOWN_Pos   = 0x7
-	KEYCNT_BUTTON_R_Pos      = 0x8
-	KEYCNT_BUTTON_L_Pos      = 0x9
+	KEYCNT_IGNORE                = 0x0
+	KEYCNT_SELECT                = 0x1
+	KEYCNT_BUTTON_A_Pos          = 0x0
+	KEYCNT_BUTTON_B_Pos          = 0x1
+	KEYCNT_BUTTON_SELECT_Pos     = 0x2
+	KEYCNT_BUTTON_START_Pos      = 0x3
+	KEYCNT_BUTTON_RIGHT_Pos      = 0x4
+	KEYCNT_BUTTON_LEFT_Pos       = 0x5
+	KEYCNT_BUTTON_UP_Pos         = 0x6
+	KEYCNT_BUTTON_DOWN_Pos       = 0x7
+	KEYCNT_BUTTON_R_Pos          = 0x8
+	KEYCNT_BUTTON_L_Pos          = 0x9
+	KEYCNT_BUTTON_IRQ_DISABLE    = 0x0
+	KEYCNT_BUTTON_IRQ_ENABLE     = 0x1
+	KEYCNT_BUTTON_IRQ_ENABLE_Pos = 0xE
+	KEYCNT_BUTTON_IRQ_COND_OR    = 0x0
+	KEYCNT_BUTTON_IRQ_COND_AND   = 0x1
+	KEYCNT_BUTTON_IRQ_COND_Pos   = 0xF
 )
 
 // Constants for INTERRUPT
@@ -471,4 +766,62 @@ const (
 	INTERRUPT_IF_DMA3_Pos            = 0xB
 	INTERRUPT_IF_KEYPAD_Pos          = 0xC
 	INTERRUPT_IF_GAMPAK_Pos          = 0xD
+)
+
+const (
+	OAMOBJ_ATT0_Y_Pos = 0x0
+	OAMOBJ_ATT0_Y_Msk = 0xFF
+
+	OAMOBJ_ATT0_OM_Pos  = 0x8
+	OAMOBJ_ATT0_OM_Msk  = 0x3
+	OAMOBJ_ATT0_OM_REG  = 0x0
+	OAMOBJ_ATT0_OM_AFF  = 0x1
+	OAMOBJ_ATT0_OM_HIDE = 0x2
+	OAMOBJ_ATT0_OM_DBL  = 0x3
+
+	OAMOBJ_ATT0_GM_Pos   = 0xA
+	OAMOBJ_ATT0_GM_Msk   = 0x3
+	OAMOBJ_ATT0_GM_REG   = 0x0
+	OAMOBJ_ATT0_GM_BLEND = 0x1
+	OAMOBJ_ATT0_GM_WIN   = 0x2
+
+	OAMOBJ_ATT0_MOSAIC_Pos     = 0xC
+	OAMOBJ_ATT0_MOSAIC_DISABLE = 0x0
+	OAMOBJ_ATT0_MOSAIC_ENABLE  = 0x1
+
+	OAMOBJ_ATT0_COLOR_Pos  = 0xD
+	OAMOBJ_ATT0_COLOR_4BPP = 0x0
+	OAMOBJ_ATT0_COLOR_8BPP = 0x1
+
+	OAMOBJ_ATT0_SH_Pos    = 0xE
+	OAMOBJ_ATT0_SH_Msk    = 0x3
+	OAMOBJ_ATT0_SH_SQUARE = 0x0
+	OAMOBJ_ATT0_SH_WIDE   = 0x1
+	OAMOBJ_ATT0_SH_TALL   = 0x2
+
+	OAMOBJ_ATT1_X_Pos = 0x0
+	OAMOBJ_ATT1_X_Msk = 0xFF
+
+	OAMOBJ_ATT1_AID_Pos = 0x9
+	OAMOBJ_ATT1_AID_Msk = 0x1F
+
+	OAMOBJ_ATT1_HF_Pos    = 0xC
+	OAMOBJ_ATT1_HF_NOFLIP = 0x0
+	OAMOBJ_ATT1_HF_FLIP   = 0x1
+
+	OAMOBJ_ATT1_VF_Pos    = 0xD
+	OAMOBJ_ATT1_VF_NOFLIP = 0x0
+	OAMOBJ_ATT1_VF_FLIP   = 0x1
+
+	OAMOBJ_ATT1_SZ_Pos = 0xE
+	OAMOBJ_ATT1_SZ_Msk = 0x3
+
+	OAMOBJ_ATT2_TID_Pos = 0x0
+	OAMOBJ_ATT2_TID_Msk = 0xFF
+
+	OAMOBJ_ATT2_PR_Pos = 0xA
+	OAMOBJ_ATT2_PR_Msk = 0x3
+
+	OAMOBJ_ATT2_PB_Pos = 0xC
+	OAMOBJ_ATT2_PB_Msk = 0xF
 )
