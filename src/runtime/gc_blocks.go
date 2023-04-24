@@ -278,7 +278,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 
 	if interrupt.In() {
-		runtimePanic("alloc in interrupt")
+		runtimePanicAt(returnAddress(0), "alloc in interrupt")
 	}
 
 	gcTotalAlloc += uint64(size)
@@ -318,7 +318,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 					// Unfortunately the heap could not be increased. This
 					// happens on baremetal systems for example (where all
 					// available RAM has already been dedicated to the heap).
-					runtimePanic("out of memory")
+					runtimePanicAt(returnAddress(0), "out of memory")
 				}
 			}
 		}

@@ -9,6 +9,8 @@ const TargetBits = 32
 
 const deferExtraRegs = 0
 
+const callInstSize = 3 // "callx0 someFunction" (and similar) is 3 bytes
+
 // The largest alignment according to the Xtensa ABI is 8 (long long, double).
 func align(ptr uintptr) uintptr {
 	return (ptr + 7) &^ 7

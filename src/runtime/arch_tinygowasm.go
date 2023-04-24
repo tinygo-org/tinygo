@@ -13,6 +13,8 @@ const TargetBits = 32
 
 const deferExtraRegs = 0
 
+const callInstSize = 1 // unknown and irrelevant (llvm.returnaddress doesn't work), so make something up
+
 //go:extern __heap_base
 var heapStartSymbol [0]byte
 

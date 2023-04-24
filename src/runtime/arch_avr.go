@@ -11,6 +11,8 @@ const TargetBits = 8
 
 const deferExtraRegs = 1 // the frame pointer (Y register) also needs to be stored
 
+const callInstSize = 2 // "call" is 4 bytes, "rcall" is 2 bytes
+
 // Align on a word boundary.
 func align(ptr uintptr) uintptr {
 	// No alignment necessary on the AVR.
