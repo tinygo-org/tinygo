@@ -7,6 +7,8 @@ const TargetBits = 64
 
 const deferExtraRegs = 0
 
+const callInstSize = 5 // "call someFunction" is 5 bytes
+
 // Align a pointer.
 // Note that some amd64 instructions (like movaps) expect 16-byte aligned
 // memory, thus the result must be 16-byte aligned.

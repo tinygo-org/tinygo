@@ -54,7 +54,19 @@ func _panic(message interface{}) {
 
 // Cause a runtime panic, which is (currently) always a string.
 func runtimePanic(msg string) {
-	printstring("panic: runtime error: ")
+	// As long as this function is inined, llvm.returnaddress(0) will return
+	// something sensible.
+	runtimePanicAt(returnAddress(0), msg)
+}
+
+func runtimePanicAt(addr unsafe.Pointer, msg string) {
+	if hasReturnAddr {
+		printstring("panic: runtime error at ")
+		printptr(uintptr(addr) - callInstSize)
+		printstring(": ")
+	} else {
+		printstring("panic: runtime error: ")
+	}
 	println(msg)
 	abort()
 }
@@ -119,52 +131,52 @@ func _recover(useParentFrame bool) interface{} {
 
 // Panic when trying to dereference a nil pointer.
 func nilPanic() {
-	runtimePanic("nil pointer dereference")
+	runtimePanicAt(returnAddress(0), "nil pointer dereference")
 }
 
 // Panic when trying to add an entry to a nil map
 func nilMapPanic() {
-	runtimePanic("assignment to entry in nil map")
+	runtimePanicAt(returnAddress(0), "assignment to entry in nil map")
 }
 
 // Panic when trying to acces an array or slice out of bounds.
 func lookupPanic() {
-	runtimePanic("index out of range")
+	runtimePanicAt(returnAddress(0), "index out of range")
 }
 
 // Panic when trying to slice a slice out of bounds.
 func slicePanic() {
-	runtimePanic("slice out of range")
+	runtimePanicAt(returnAddress(0), "slice out of range")
 }
 
 // Panic when trying to convert a slice to an array pointer (Go 1.17+) and the
 // slice is shorter than the array.
 func sliceToArrayPointerPanic() {
-	runtimePanic("slice smaller than array")
+	runtimePanicAt(returnAddress(0), "slice smaller than array")
 }
 
 // Panic when calling unsafe.Slice() (Go 1.17+) or unsafe.String() (Go 1.20+)
 // with a len that's too large (which includes if the ptr is nil and len is
 // nonzero).
 func unsafeSlicePanic() {
-	runtimePanic("unsafe.Slice/String: len out of range")
+	runtimePanicAt(returnAddress(0), "unsafe.Slice/String: len out of range")
 }
 
 // Panic when trying to create a new channel that is too big.
 func chanMakePanic() {
-	runtimePanic("new channel is too big")
+	runtimePanicAt(returnAddress(0), "new channel is too big")
 }
 
 // Panic when a shift value is negative.
 func negativeShiftPanic() {
-	runtimePanic("negative shift")
+	runtimePanicAt(returnAddress(0), "negative shift")
 }
 
 // Panic when there is a divide by zero.
 func divideByZeroPanic() {
-	runtimePanic("divide by zero")
+	runtimePanicAt(returnAddress(0), "divide by zero")
 }
 
 func blockingPanic() {
-	runtimePanic("trying to do blocking operation in exported function")
+	runtimePanicAt(returnAddress(0), "trying to do blocking operation in exported function")
 }

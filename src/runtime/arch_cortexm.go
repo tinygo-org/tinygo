@@ -13,6 +13,8 @@ const TargetBits = 32
 
 const deferExtraRegs = 0
 
+const callInstSize = 4 // "bl someFunction" is 4 bytes
+
 // Align on word boundary.
 func align(ptr uintptr) uintptr {
 	return (ptr + 7) &^ 7
