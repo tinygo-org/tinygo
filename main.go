@@ -532,7 +532,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		return fmt.Errorf("unknown flash method: %s", flashMethod)
 	}
 	if options.Monitor {
-		return Monitor("", options)
+		return Monitor(result.Executable, "", options)
 	}
 	return nil
 }
@@ -1720,7 +1720,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "monitor":
-		err := Monitor(*port, options)
+		err := Monitor("", *port, options)
 		handleCompilerError(err)
 	case "targets":
 		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
