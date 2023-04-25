@@ -278,7 +278,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 
 	if interrupt.In() {
-		runtimePanicAt(returnAddress(0), "alloc in interrupt")
+		runtimePanicAt(returnAddress(0), "heap alloc in interrupt")
 	}
 
 	gcTotalAlloc += uint64(size)
