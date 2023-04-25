@@ -4,7 +4,7 @@ package machine
 
 import "device/arm"
 
-// SystemReset performs a hard system reset.
-func SystemReset() {
+// CPUReset performs a hard system reset.
+func CPUReset() {
 	arm.SystemReset()
 }
