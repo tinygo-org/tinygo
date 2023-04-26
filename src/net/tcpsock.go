@@ -88,6 +88,11 @@ func ResolveTCPAddr(network, address string) (*TCPAddr, error) {
 		return nil, fmt.Errorf("Network '%s' not supported", network)
 	}
 
+	switch address {
+	case ":http":
+		address = ":80"
+	}
+
 	// TINYGO: Use netdev resolver
 
 	host, sport, err := SplitHostPort(address)
