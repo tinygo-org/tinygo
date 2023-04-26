@@ -26,5 +26,5 @@
 		"src/internal/task/task_stack_cortexm.S",
 		"src/runtime/asm_arm.S"
 	],
-	"gdb": ["gdb-multiarch", "arm-none-eabi-gdb"]
+	"gdb": ["gdb-multiarch", "arm-none-eabi-gdb", "gdb"]
 }
