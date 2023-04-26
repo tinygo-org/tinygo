@@ -18,8 +18,13 @@ const (
 
 // See runtime_cortexm_hardfault.go
 //
-//go:export handleHardFault
-func handleHardFault(sp *interruptStack) {
+//export HardFault_Handler
+func HardFault_Handler() {
+	// Obtain the stack pointer as it was on entry to the HardFault. It contains
+	// the registers that were pushed by the NVIC and that we can now read back
+	// to print the PC value at the time of the hard fault, for example.
+	sp := (*interruptStack)(llvm_sponentry())
+
 	fault := GetFaultStatus()
 	spValid := !fault.Bus().ImpreciseDataBusError()
 

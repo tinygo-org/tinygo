@@ -48,6 +48,12 @@ func memzero(ptr unsafe.Pointer, size uintptr)
 //export llvm.stacksave
 func stacksave() unsafe.Pointer
 
+// Special LLVM intrinsic that returns the SP register on entry to the calling
+// function.
+//
+//export llvm.sponentry.p0
+func llvm_sponentry() unsafe.Pointer
+
 //export strlen
 func strlen(ptr unsafe.Pointer) uintptr
 
