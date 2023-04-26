@@ -1,0 +1,10 @@
+{
+	"inherits": [
+		"atsamd21e18a"
+	],
+	"build-tags": ["cryptoauth"],
+	"serial-port": ["03eb:2175"],
+	"serial": "usb",
+	"flash-method": "openocd",
+	"openocd-interface": "cmsis-dap"
+}

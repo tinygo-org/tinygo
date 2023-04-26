@@ -85,6 +85,7 @@ The following 94 microcontroller boards are currently supported:
 * [BBC micro:bit](https://microbit.org/)
 * [BBC micro:bit v2](https://microbit.org/new-microbit/)
 * [blues wireless Swan](https://blues.io/products/swan/)
+* [CryptoAuth Trust Platform](https://www.microchip.com/en-us/development-tool/DM320118)
 * [Digispark](http://digistump.com/products/1)
 * [Dragino LoRaWAN GPS Tracker LGT-92](http://www.dragino.com/products/lora-lorawan-end-node/item/142-lgt-92.html)
 * [ESP32 - Core board](https://www.espressif.com/en/products/socs/esp32)
