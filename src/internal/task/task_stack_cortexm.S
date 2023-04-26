@@ -114,9 +114,9 @@ tinygo_swapTask:
     pop {r4-r11, pc}
     #else
     pop {r4-r7}
-    .cfi_def_cfa_offset 5*9
+    .cfi_def_cfa_offset 5*4
     pop {r0-r3}
-    .cfi_def_cfa_offset 1*9
+    .cfi_def_cfa_offset 1*4
     mov r8, r0
     mov r9, r1
     mov r10, r2
