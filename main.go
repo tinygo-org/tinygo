@@ -370,7 +370,7 @@ func dirsToModuleRoot(maindir, modroot string) []string {
 }
 
 // Flash builds and flashes the built binary to the given serial port.
-func Flash(pkgName, port string, options *compileopts.Options) error {
+func Flash(pkgName, portFlag string, options *compileopts.Options) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
@@ -427,8 +427,9 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	}
 
 	// do we need port reset to put MCU into bootloader mode?
+	var port string
 	if config.Target.PortReset == "true" && flashMethod != "openocd" {
-		port, err := getDefaultPort(port, config.Target.SerialPort)
+		port, err := getTargetSerialPort(port, portFlag, config.Target.SerialPort, true)
 		if err == nil {
 			err = touchSerialPortAt1200bps(port)
 			if err != nil {
@@ -436,6 +437,8 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 			}
 			// give the target MCU a chance to restart into bootloader
 			time.Sleep(3 * time.Second)
+		} else {
+			println("info:", err.Error())
 		}
 	}
 
@@ -451,7 +454,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 
 		if strings.Contains(flashCmd, "{port}") {
 			var err error
-			port, err = getDefaultPort(port, config.Target.SerialPort)
+			port, err = getTargetSerialPort(port, portFlag, config.Target.SerialPort, true)
 			if err != nil {
 				return err
 			}
@@ -531,9 +534,11 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 	default:
 		return fmt.Errorf("unknown flash method: %s", flashMethod)
 	}
+
 	if options.Monitor {
-		return Monitor(result.Executable, "", options)
+		return Monitor(result.Executable, port, portFlag, options)
 	}
+
 	return nil
 }
 
@@ -1054,43 +1059,199 @@ func windowsFindUSBDrive(volume string, options *compileopts.Options) (string, e
 	return "", errors.New("unable to locate a USB device to be flashed")
 }
 
-// getDefaultPort returns the default serial port depending on the operating system.
-func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err error) {
-	portCandidates := strings.FieldsFunc(portFlag, func(c rune) bool { return c == ',' })
-	if len(portCandidates) == 1 {
-		return portCandidates[0], nil
+// getTargetSerialPort returns the most likely serial port
+// for the target, depending on the operating system.
+//
+// This function will consider these sources in priority order:
+//  1. If an existing port is selected, it is used in preference
+//     (if available) [defaultPort]
+//  2. If the user specified a single port, it is the only
+//     port considered [portFlag]
+//  3. The intersection of the user specified ports [portFlag]
+//     and those matching the USB VID:PID of the MCU [usbInterfaces]
+//  4. The intersection of the user specified ports [portFlag]
+//     and any available usb serial ports
+//
+// If retry is true, the function will wait for a match with the
+// highest priority source that is specified before falling back
+// to other sources.  In the case defaultPort is specified, but
+// no matching actual port is available (allowing for retries),
+// it is ignored and portFlag and usbInterface will be considered.
+//
+// retry is specified for situations where the MCU may be restarting
+// and time is needed for the OS to enumerate the MCUs serial port.
+func getTargetSerialPort(defaultPort string, portFlag string, usbInterfaces []string, retry bool) (port string, err error) {
+	// we've already identified a port previously, wait up to 3s for
+	// it to be available.  If not available after 3s, fall back to
+	// re-doing discovery with no further delays.
+	if defaultPort != "" {
+		if isPort(defaultPort, retry) {
+			return defaultPort, nil
+		}
+
+		// no more retry attempts since we've already waited 3s
+		retry = false
 	}
 
-	var ports []string
-	switch runtime.GOOS {
-	case "freebsd":
-		ports, err = filepath.Glob("/dev/cuaU*")
-	case "darwin", "linux", "windows":
-		var portsList []*enumerator.PortDetails
-		portsList, err = enumerator.GetDetailedPortsList()
+	// if the user specified a single port, then wait for up to 3s
+	// for it to be available, failing that abort since the user
+	// was unambiguous.
+	userPorts := strings.FieldsFunc(portFlag, func(c rune) bool { return c == ',' })
+	if len(userPorts) == 1 {
+		if isPort(userPorts[0], retry) {
+			return userPorts[0], nil
+		}
+
+		// if the user specifies a particular port, proceed no further
+		return "", fmt.Errorf("port %s is not available", userPorts[0])
+	}
+
+	// look ports in the intersection of user-specified ports and those matching
+	// one of the USB VID:PID pairs.  We save some vars outside the retry logic
+	// so we can generate more meaningful diagnostics based on the last loop
+	// iteration
+	var matchingPorts, otherPorts []string
+	var tooManyPorts bool
+	port, err = condSerialPortRetry(func() (string, error) {
+		matchingPorts, otherPorts, err = getOSSerialPorts(usbInterfaces)
 		if err != nil {
 			return "", err
 		}
 
+		// filter down the list of ports to only the subset of
+		// candidates the user provided.
+		ports := matchingPorts
+		if len(userPorts) > 0 {
+			ports = intersectSlices(ports, userPorts)
+		}
+
+		tooManyPorts = len(ports) > 1
+
+		if len(ports) == 1 {
+			// Only one candidate port remains
+			return ports[0], nil
+		} else if len(ports) > 1 {
+			// Too many candidate ports remain
+			return "", errors.New("multiple serial ports available - use -port flag, available ports are " + strings.Join(ports, ", "))
+		}
+
+		return "", errors.New("no available serial ports found - use -port flag to specify a port")
+	}, retry)
+	if err == nil || tooManyPorts {
+		return port, err
+	}
+
+	// look at the ports not matching the VID:PID.  We won't retry
+	// at this point, because we will have done retry delay looking
+	// at the matching ports
+
+	// filter down the list of ports to only the subset of
+	// candidates the user provided.
+	ports := otherPorts
+	if len(userPorts) > 0 {
+		ports = intersectSlices(ports, userPorts)
+	}
+
+	if len(ports) == 1 {
+		// Only 1 candidate port remains
+		return ports[0], nil
+	} else if len(ports) > 1 {
+		// Too many candidate ports remain
+		return "", errors.New("multiple serial ports available - use -port flag, available ports are " + strings.Join(ports, ", "))
+	}
+
+	// The error will include all possible ports to inform the user,
+	// sorted so the VID:PID matching ports are first.
+	availPorts := append(matchingPorts, otherPorts...)
+
+	// If we got here, no suitable serial port was found.  If the
+	// user provided a list, then inform them of available ports
+	if len(userPorts) == 1 {
+		return "", errors.New("the port specified '" + strings.Join(userPorts, ",") + "' does not exist, available ports are '" + strings.Join(availPorts, ", ") + "'")
+	} else if len(userPorts) > 0 {
+		return "", errors.New("the ports specified '" + strings.Join(userPorts, ",") + "' do not exist, available ports are '" + strings.Join(availPorts, ", ") + "'")
+	}
+
+	// the user did not specify any serial ports, suggest they use
+	// -port to override the detection logic
+	return "", errors.New("unable to locate a serial port, try using the -port flag")
+}
+
+// isPort determines if a port is available
+//
+// If retry is false, isPort will immediately return false if the
+// port is not available.  If retry is true, isPort will try for
+// up to 3s before returning false.
+func isPort(port string, retry bool) bool {
+	_, err := condSerialPortRetry(
+		func() (os.FileInfo, error) { return os.Stat(port) },
+		retry)
+	return err == nil
+}
+
+// condSerialPortRetry conditionally retries a function that performs an
+// operation on serial ports.
+//
+// This function performs retry logic to adapt to the case of targets
+// restarting, in which case it may take some time for the host OS to
+// enumerate and initialize the serial port.
+func condSerialPortRetry[T any](fn func() (T, error), retry bool) (T, error) {
+	var err error
+
+	for i := 0; i < 300; i++ {
+		var val T
+		val, err = fn()
+		if err == nil {
+			return val, nil
+		}
+
+		if !retry {
+			return *new(T), err
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	return *new(T), err
+}
+
+// getOSSerialPorts enumerates the available serial ports from the OS
+// on supported OSes it will filter the ports into two lists - those
+// which match one of multiple USB VID:PID pairs and those that dont
+func getOSSerialPorts(usbInterfaces []string) (matchingPorts []string, otherPorts []string, err error) {
+	switch runtime.GOOS {
+	case "freebsd":
+		// for now, on freebsd just assume all ports match the VID:PID
+		matchingPorts, err = filepath.Glob("/dev/cuaU*")
+		return
+	case "darwin", "linux", "windows":
+		var portsList []*enumerator.PortDetails
+		portsList, err = enumerator.GetDetailedPortsList()
+		if err != nil {
+			return
+		}
+
 		var preferredPortIDs [][2]uint16
 		for _, s := range usbInterfaces {
+			var vid, pid uint64
 			parts := strings.Split(s, ":")
 			if len(parts) != 2 {
-				return "", fmt.Errorf("could not parse USB VID/PID pair %q", s)
+				err = fmt.Errorf("could not parse USB VID/PID pair %q", s)
+				return
 			}
-			vid, err := strconv.ParseUint(parts[0], 16, 16)
+			vid, err = strconv.ParseUint(parts[0], 16, 16)
 			if err != nil {
-				return "", fmt.Errorf("could not parse USB vendor ID %q: %w", parts[1], err)
+				err = fmt.Errorf("could not parse USB vendor ID %q: %w", parts[1], err)
+				return
 			}
-			pid, err := strconv.ParseUint(parts[1], 16, 16)
+			pid, err = strconv.ParseUint(parts[1], 16, 16)
 			if err != nil {
-				return "", fmt.Errorf("could not parse USB product ID %q: %w", parts[1], err)
+				err = fmt.Errorf("could not parse USB product ID %q: %w", parts[1], err)
+				return
 			}
 			preferredPortIDs = append(preferredPortIDs, [2]uint16{uint16(vid), uint16(pid)})
 		}
 
-		var primaryPorts []string   // ports picked from preferred USB VID/PID
-		var secondaryPorts []string // other ports (as a fallback)
 		for _, p := range portsList {
 			if !p.IsUSB {
 				continue
@@ -1102,7 +1263,7 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 				if vidErr == nil && pidErr == nil {
 					for _, id := range preferredPortIDs {
 						if uint16(vid) == id[0] && uint16(pid) == id[1] {
-							primaryPorts = append(primaryPorts, p.Name)
+							matchingPorts = append(matchingPorts, p.Name)
 							foundPort = true
 							continue
 						}
@@ -1113,54 +1274,26 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 				}
 			}
 
-			secondaryPorts = append(secondaryPorts, p.Name)
+			otherPorts = append(otherPorts, p.Name)
 		}
-		if len(primaryPorts) == 1 {
-			// There is exactly one match in the set of preferred ports. Use
-			// this port, even if there may be others available. This allows
-			// flashing a specific board even if there are multiple available.
-			return primaryPorts[0], nil
-		} else if len(primaryPorts) > 1 {
-			// There are multiple preferred ports, probably because more than
-			// one device of the same type are connected (e.g. two Arduino
-			// Unos).
-			ports = primaryPorts
-		} else {
-			// No preferred ports found. Fall back to other serial ports
-			// available in the system.
-			ports = secondaryPorts
-		}
+		return
 	default:
-		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
+		err = errors.New("unable to search for a default USB serial port on this OS")
+		return
 	}
+}
 
-	if err != nil {
-		return "", err
-	} else if ports == nil {
-		return "", errors.New("unable to locate a serial port")
-	} else if len(ports) == 0 {
-		return "", errors.New("no serial ports available")
-	}
-
-	if len(portCandidates) == 0 {
-		if len(usbInterfaces) > 0 {
-			return "", errors.New("unable to search for a default USB device - use -port flag, available ports are " + strings.Join(ports, ", "))
-		} else if len(ports) == 1 {
-			return ports[0], nil
-		} else {
-			return "", errors.New("multiple serial ports available - use -port flag, available ports are " + strings.Join(ports, ", "))
-		}
-	}
-
-	for _, ps := range portCandidates {
-		for _, p := range ports {
-			if p == ps {
-				return p, nil
+func intersectSlices[T comparable](a []T, b []T) []T {
+	var result []T
+	for _, aItem := range a {
+		for _, bItem := range b {
+			if aItem == bItem {
+				result = append(result, bItem)
 			}
 		}
 	}
 
-	return "", errors.New("port you specified '" + strings.Join(portCandidates, ",") + "' does not exist, available ports are " + strings.Join(ports, ", "))
+	return result
 }
 
 // getBMPPorts returns BlackMagicProbe's serial ports if any
@@ -1720,7 +1853,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "monitor":
-		err := Monitor("", *port, options)
+		err := Monitor("", "", *port, options)
 		handleCompilerError(err)
 	case "targets":
 		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")

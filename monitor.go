@@ -13,7 +13,6 @@ import (
 	"os/signal"
 	"regexp"
 	"strconv"
-	"time"
 
 	"github.com/mattn/go-tty"
 	"github.com/tinygo-org/tinygo/builder"
@@ -22,23 +21,15 @@ import (
 )
 
 // Monitor connects to the given port and reads/writes the serial port.
-func Monitor(executable, port string, options *compileopts.Options) error {
+func Monitor(executable, port, portCandidates string, options *compileopts.Options) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
 	}
 
-	wait := 300
-	for i := 0; i <= wait; i++ {
-		port, err = getDefaultPort(port, config.Target.SerialPort)
-		if err != nil {
-			if i < wait {
-				time.Sleep(10 * time.Millisecond)
-				continue
-			}
-			return err
-		}
-		break
+	port, err = getTargetSerialPort(port, portCandidates, config.Target.SerialPort, true)
+	if err != nil {
+		return err
 	}
 
 	br := options.BaudRate
@@ -46,18 +37,13 @@ func Monitor(executable, port string, options *compileopts.Options) error {
 		br = 115200
 	}
 
-	wait = 300
-	var p serial.Port
-	for i := 0; i <= wait; i++ {
-		p, err = serial.Open(port, &serial.Mode{BaudRate: br})
-		if err != nil {
-			if i < wait {
-				time.Sleep(10 * time.Millisecond)
-				continue
-			}
-			return err
-		}
-		break
+	p, err := condSerialPortRetry(
+		func() (serial.Port, error) {
+			return serial.Open(port, &serial.Mode{BaudRate: br})
+		},
+		true)
+	if err != nil {
+		return err
 	}
 	defer p.Close()
 
