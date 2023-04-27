@@ -1,0 +1,92 @@
+name: Binary size difference
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sizediff:
+    runs-on: ubuntu-22.04
+    steps:
+      # Prepare, install tools
+      - name: Add GOBIN to $PATH
+        run: |
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # fetch all history (no sparse checkout)
+          submodules: true
+      - name: Install apt dependencies
+        run: |
+          echo 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-15 main' | sudo tee /etc/apt/sources.list.d/llvm.list
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+              llvm-15-dev \
+              clang-15 \
+              libclang-15-dev \
+              lld-15
+      - name: Restore LLVM source cache
+        uses: actions/cache@v3
+        id: cache-llvm-source
+        with:
+          key: llvm-source-15-sizediff-v1
+          path: |
+            llvm-project/compiler-rt
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Cache Go
+        uses: actions/cache@v3
+        with:
+          key: go-cache-linux-sizediff-v1-${{ hashFiles('go.mod') }}
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+      - run: make gen-device -j4
+      - name: Download drivers repo
+        run: git clone https://github.com/tinygo-org/drivers.git
+      - name: Save HEAD
+        run: git branch github-actions-saved-HEAD HEAD
+
+      # Compute sizes for the dev branch
+      - name: Checkout dev branch
+        run: git checkout --no-recurse-submodules `git merge-base HEAD origin/dev`
+      - name: Build tinygo binary for the dev branch
+        run: go install
+      - name: Determine binary sizes on the dev branch
+        run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-dev.txt)
+
+      # Compute sizes for the PR branch
+      - name: Checkout PR branch
+        run: git checkout --no-recurse-submodules github-actions-saved-HEAD
+      - name: Build tinygo binary for the PR branch
+        run: go install
+      - name: Determine binary sizes on the PR branch
+        run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-pr.txt)
+
+      # Create comment
+      # TODO: add a summary, something like:
+      #  - overall size difference (percent)
+      #  - number of binaries that grew / shrank / remained the same
+      #  - don't show the full diff when no binaries changed
+      - name: Calculate size diff
+        run: ./tools/sizediff drivers/sizes-dev.txt drivers/sizes-pr.txt | tee sizediff.txt
+      - name: Create comment
+        run: |
+          echo "Size difference with the dev branch:" > comment.txt
+          echo "<details><summary>Binary size difference</summary>" >> comment.txt
+          echo "<pre>" >> comment.txt
+          cat sizediff.txt >> comment.txt
+          echo "</pre></details>" >> comment.txt
+      - name: Comment contents
+        run: cat comment.txt
+      - name: Add comment
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: comment.txt
+          comment_tag: sizediff
