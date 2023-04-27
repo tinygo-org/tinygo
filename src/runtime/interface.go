@@ -96,8 +96,7 @@ func interfaceTypeAssert(ok bool) {
 
 type structField struct {
 	typecode unsafe.Pointer // type of this struct field
-	offset   uint32
-	data     *uint8 // pointer to byte array containing name, tag, and 'embedded' flag
+	data     *uint8         // pointer to byte array containing name, tag, and 'embedded' flag
 }
 
 // Pseudo function call used during a type assert. It is used during interface

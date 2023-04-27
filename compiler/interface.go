@@ -6,6 +6,7 @@ package compiler
 // interface-lowering.go for more details.
 
 import (
+	"encoding/binary"
 	"fmt"
 	"go/token"
 	"go/types"
@@ -335,7 +336,11 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				if field.Embedded() {
 					flags |= structFieldFlagIsEmbedded
 				}
-				data := string(flags) + field.Name() + "\x00"
+
+				var offsBytes [binary.MaxVarintLen32]byte
+				offLen := binary.PutUvarint(offsBytes[:], offset)
+
+				data := string(flags) + string(offsBytes[:offLen]) + field.Name() + "\x00"
 				if typ.Tag(i) != "" {
 					if len(typ.Tag(i)) > 0xff {
 						c.addError(field.Pos(), fmt.Sprintf("struct tag is %d bytes which is too long, max is 255", len(typ.Tag(i))))
@@ -352,7 +357,6 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				fieldType := c.getTypeCode(field.Type())
 				fields = append(fields, llvm.ConstNamedStruct(structFieldType, []llvm.Value{
 					fieldType,
-					llvm.ConstInt(c.ctx.Int32Type(), uint64(offset), false),
 					llvm.ConstGEP(dataGlobal.GlobalValueType(), dataGlobal, []llvm.Value{
 						llvm.ConstInt(c.ctx.Int32Type(), 0, false),
 						llvm.ConstInt(c.ctx.Int32Type(), 0, false),
