@@ -463,7 +463,6 @@ type structType struct {
 
 type structField struct {
 	fieldType *rawType
-	offset    uint32
 	data      unsafe.Pointer // various bits of information, packed in a byte array
 }
 
@@ -624,7 +623,7 @@ func (t *rawType) Field(i int) StructField {
 	}
 }
 
-func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data unsafe.Pointer, flagsByte uint8, name string, offset uintptr) rawStructField {
+func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data unsafe.Pointer, flagsByte uint8, name string, offset uint32) rawStructField {
 	// Read the field tag, if there is one.
 	var tag string
 	if flagsByte&structFieldFlagHasTag != 0 {
@@ -651,7 +650,7 @@ func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data 
 		Type:      fieldType,
 		Tag:       StructTag(tag),
 		Anonymous: flagsByte&structFieldFlagAnonymous != 0,
-		Offset:    offset,
+		Offset:    uintptr(offset),
 	}
 }
 
@@ -673,13 +672,14 @@ func (t *rawType) rawField(n int) rawStructField {
 	// lookup faster), but by calculating it on-the-fly a bit of storage can be
 	// saved.
 	field := (*structField)(unsafe.Add(unsafe.Pointer(&descriptor.fields[0]), uintptr(n)*unsafe.Sizeof(structField{})))
-	offset := uintptr(field.offset)
 	data := field.data
 
 	// Read some flags of this field, like whether the field is an embedded
 	// field. See structFieldFlagAnonymous and similar flags.
 	flagsByte := *(*byte)(data)
 	data = unsafe.Add(data, 1)
+	offset, lenOffs := uvarint32(unsafe.Slice((*byte)(data), maxVarintLen32))
+	data = unsafe.Add(data, lenOffs)
 
 	name := readStringZ(data)
 	data = unsafe.Add(data, len(name))
@@ -729,10 +729,12 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 				flagsByte := *(*byte)(data)
 				data = unsafe.Add(data, 1)
 
+				offset, lenOffs := uvarint32(unsafe.Slice((*byte)(data), maxVarintLen32))
+				data = unsafe.Add(data, lenOffs)
+
 				name := readStringZ(data)
 				data = unsafe.Add(data, len(name))
 				if name == n {
-					offset := uintptr(field.offset)
 					found = append(found, result{
 						rawStructFieldFromPointer(descriptor, field.fieldType, data, flagsByte, name, offset),
 						append(ll.index, int(i)),
@@ -1283,4 +1285,26 @@ func StructOf([]StructField) Type {
 
 func MapOf(key, value Type) Type {
 	panic("unimplemented: reflect.MapOf()")
+}
+
+const maxVarintLen32 = 5
+
+// encoding/binary.Uvarint, specialized for uint32
+func uvarint32(buf []byte) (uint32, int) {
+	var x uint32
+	var s uint
+	for i, b := range buf {
+		if i == maxVarintLen32 {
+			return 0, -(i + 1) // overflow
+		}
+		if b < 0x80 {
+			if i == maxVarintLen32-1 && b > 1 {
+				return 0, -(i + 1) // overflow
+			}
+			return x | uint32(b)<<s, i + 1
+		}
+		x |= uint32(b&0x7f) << s
+		s += 7
+	}
+	return 0, 0
 }
