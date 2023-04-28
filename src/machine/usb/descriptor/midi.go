@@ -220,7 +220,7 @@ var ConfigurationCDCMIDI = ConfigurationType{
 
 var CDCMIDI = Descriptor{
 	Device: DeviceCDC.Bytes(),
-	Configuration: appendSlices([][]byte{
+	Configuration: Append([][]byte{
 		ConfigurationCDCMIDI.Bytes(),
 		InterfaceAssociationCDC.Bytes(),
 		InterfaceCDCControl.Bytes(),

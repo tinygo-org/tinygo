@@ -113,7 +113,7 @@ var ClassHID = ClassHIDType{
 
 var CDCHID = Descriptor{
 	Device: DeviceCDC.Bytes(),
-	Configuration: appendSlices([][]byte{
+	Configuration: Append([][]byte{
 		ConfigurationCDCHID.Bytes(),
 		InterfaceAssociationCDC.Bytes(),
 		InterfaceCDCControl.Bytes(),
@@ -130,7 +130,7 @@ var CDCHID = Descriptor{
 		EndpointEP4IN.Bytes(),
 	}),
 	HID: map[uint16][]byte{
-		2: appendSlices([][]byte{
+		2: Append([][]byte{
 			HIDUsagePageGenericDesktop,
 			HIDUsageDesktopKeyboard,
 			HIDCollectionApplication,

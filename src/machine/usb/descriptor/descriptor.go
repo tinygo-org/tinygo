@@ -46,7 +46,7 @@ func (d *Descriptor) Configure(idVendor, idProduct uint16) {
 	conf.TotalLength(uint16(len(d.Configuration)))
 }
 
-func appendSlices[T any](slices [][]T) []T {
+func Append[T any](slices [][]T) []T {
 	var size, pos int
 
 	for _, s := range slices {

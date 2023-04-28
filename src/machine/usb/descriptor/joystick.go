@@ -68,7 +68,7 @@ var ClassHIDJoystick = ClassHIDType{
 	data: classHIDJoystick[:],
 }
 
-var JoystickDefaultHIDReport = appendSlices([][]byte{
+var JoystickDefaultHIDReport = Append([][]byte{
 	HIDUsagePageGenericDesktop,
 	HIDUsageDesktopJoystick,
 	HIDCollectionApplication,
@@ -136,7 +136,7 @@ var JoystickDefaultHIDReport = appendSlices([][]byte{
 // custom configurations.
 var CDCJoystick = Descriptor{
 	Device: DeviceJoystick.Bytes(),
-	Configuration: appendSlices([][]byte{
+	Configuration: Append([][]byte{
 		ConfigurationCDCJoystick.Bytes(),
 		InterfaceAssociationCDC.Bytes(),
 		InterfaceCDCControl.Bytes(),
