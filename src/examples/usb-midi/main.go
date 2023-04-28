@@ -2,9 +2,8 @@ package main
 
 import (
 	"machine"
-	"machine/usb/midi"
+	"machine/usb/adc/midi"
 
-	"encoding/hex"
 	"time"
 )
 
@@ -16,12 +15,11 @@ func main() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	button := machine.BUTTON
-	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	button.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 
 	m := midi.Port()
 	m.SetHandler(func(b []byte) {
 		led.Set(!led.Get())
-		println(hex.EncodeToString(b))
 		m.Write(b)
 	})
 
