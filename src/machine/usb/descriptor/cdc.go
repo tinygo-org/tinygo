@@ -152,7 +152,7 @@ var InterfaceCDCData = InterfaceType{
 
 var CDC = Descriptor{
 	Device: DeviceCDC.Bytes(),
-	Configuration: appendSlices([][]byte{
+	Configuration: Append([][]byte{
 		ConfigurationCDC.Bytes(),
 		InterfaceAssociationCDC.Bytes(),
 		InterfaceCDCControl.Bytes(),
