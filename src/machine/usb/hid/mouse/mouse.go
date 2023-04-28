@@ -13,6 +13,8 @@ const (
 	Left Button = 1 << iota
 	Right
 	Middle
+	Back
+	Forward
 )
 
 type mouse struct {
