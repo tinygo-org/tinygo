@@ -130,73 +130,78 @@ var CDCHID = Descriptor{
 		EndpointEP4IN.Bytes(),
 	}),
 	HID: map[uint16][]byte{
-		2: []byte{
-			0x05, 0x01, // Usage Page (Generic Desktop)
-			0x09, 0x06, // Usage (Keyboard)
-			0xa1, 0x01, // Collection (Application)
-			0x85, 0x02, // Report ID (2)
-			0x05, 0x07, // Usage Page (KeyCodes)
-			0x19, 0xe0, // Usage Minimum (224)
-			0x29, 0xe7, // Usage Maximum (231)
-			0x15, 0x00, // Logical Minimum (0)
-			0x25, 0x01, // Logical Maximum (1)
-			0x75, 0x01, // Report Size (1)
-			0x95, 0x08, // Report Count (8)
-			0x81, 0x02, // Input (Data, Variable, Absolute), Modifier byte
-			0x95, 0x01, // Report Count (1)
-			0x75, 0x08, // Report Size (8)
-			0x81, 0x03, //
-			0x95, 0x06, // Report Count (6)
-			0x75, 0x08, // Report Size (8)
-			0x15, 0x00, // Logical Minimum (0),
-			0x25, 0xFF, //
-			0x05, 0x07, // Usage Page (KeyCodes)
-			0x19, 0x00, // Usage Minimum (0)
-			0x29, 0xFF, // Usage Maximum (255)
-			0x81, 0x00, // Input (Data, Array), Key arrays (6 bytes)
-			0xc0, // End Collection
+		2: appendSlices([][]byte{
+			HIDUsagePageGenericDesktop,
+			HIDUsageDesktopKeyboard,
+			HIDCollectionApplication,
+			HIDReportID(2),
 
-			0x05, 0x01, // Usage Page (Generic Desktop)
-			0x09, 0x02, // Usage (Mouse)
-			0xa1, 0x01, // Collection (Application)
-			0x09, 0x01, // Usage (Pointer)
-			0xa1, 0x00, // Collection (Physical)
-			0x85, 0x01, // Report ID (1)
-			0x05, 0x09, // Usage Page (Buttons)
-			0x19, 0x01, // Usage Minimum (01)
-			0x29, 0x05, // Usage Maximun (05)
-			0x15, 0x00, // Logical Minimum (0)
-			0x25, 0x01, // Logical Maximum (1)
-			0x95, 0x05, // Report Count (5)
-			0x75, 0x01, // Report Size (1)
-			0x81, 0x02, // Input (Data, Variable, Absolute), ;3 button bits
-			0x95, 0x01, // Report Count (1)
-			0x75, 0x03, // Report Size (3)
-			0x81, 0x03, //
-			0x05, 0x01, // Usage Page (Generic Desktop)
-			0x09, 0x30, // Usage (X)
-			0x09, 0x31, // Usage (Y)
-			0x09, 0x38, //
-			0x15, 0x81, // Logical Minimum (-127)
-			0x25, 0x7f, // Logical Maximum (127)
-			0x75, 0x08, // Report Size (8)
-			0x95, 0x03, // Report Count (3)
-			0x81, 0x06, // Input (Data, Variable, Relative), 2 position bytes (X & Y)
-			0xc0, // End Collection
-			0xc0, // End Collection
+			HIDUsagePageKeyboard,
+			HIDUsageMinimum(224),
+			HIDUsageMaximum(231),
+			HIDLogicalMinimum(0),
+			HIDLogicalMaximum(1),
+			HIDReportSize(1),
+			HIDReportCount(8),
+			HIDInputDataVarAbs,
+			HIDReportCount(1),
+			HIDReportSize(8),
+			HIDInputConstVarAbs,
+			HIDReportCount(6),
+			HIDReportSize(8),
+			HIDLogicalMinimum(0),
+			HIDLogicalMaximum(255),
 
-			0x05, 0x0C, // Usage Page (Consumer)
-			0x09, 0x01, // Usage (Consumer Control)
-			0xA1, 0x01, // Collection (Application)
-			0x85, 0x03, // Report ID (3)
-			0x15, 0x00, // Logical Minimum (0)
-			0x26, 0xFF, 0x1F, // Logical Maximum (8191)
-			0x19, 0x00, // Usage Minimum (Unassigned)
-			0x2A, 0xFF, 0x1F, // Usage Maximum (0x1FFF)
-			0x75, 0x10, // Report Size (16)
-			0x95, 0x01, // Report Count (1)
-			0x81, 0x00, // Input (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
-			0xC0, // End Collection
-		},
+			HIDUsagePageKeyboard,
+			HIDUsageMinimum(0),
+			HIDUsageMaximum(255),
+			HIDInputDataAryAbs,
+			HIDEndCollection,
+
+			HIDUsagePageGenericDesktop,
+			HIDUsageDesktopMouse,
+			HIDCollectionApplication,
+			HIDUsageDesktopPointer,
+			HIDCollectionPhysical,
+			HIDReportID(1),
+
+			HIDUsagePageButton,
+			HIDUsageMinimum(1),
+			HIDUsageMaximum(5),
+			HIDLogicalMinimum(0),
+			HIDLogicalMaximum(1),
+			HIDReportCount(5),
+			HIDReportSize(1),
+			HIDInputDataVarAbs,
+			HIDReportCount(1),
+			HIDReportSize(3),
+			HIDInputConstVarAbs,
+
+			HIDUsagePageGenericDesktop,
+			HIDUsageDesktopX,
+			HIDUsageDesktopY,
+			HIDUsageDesktopWheel,
+			HIDLogicalMinimum(-127),
+			HIDLogicalMaximum(127),
+			HIDReportSize(8),
+			HIDReportCount(3),
+			HIDInputDataVarRel,
+			HIDEndCollection,
+			HIDEndCollection,
+
+			HIDUsagePageConsumer,
+			HIDUsageConsumerControl,
+			HIDCollectionApplication,
+			HIDReportID(3),
+			HIDLogicalMinimum(0),
+			[]byte{
+				0x26, 0xFF, 0x1F, // Logical Maximum (8191)
+				0x19, 0x00, // Usage Minimum (Unassigned)
+				0x2A, 0xFF, 0x1F, // Usage Maximum (0x1FFF)
+			},
+			HIDReportSize(16),
+			HIDReportCount(1),
+			HIDInputDataAryAbs,
+			HIDEndCollection}),
 	},
 }
