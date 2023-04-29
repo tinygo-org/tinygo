@@ -83,40 +83,32 @@ var JoystickDefaultHIDReport = Append([][]byte{
 	HIDInputDataVarAbs,
 	HIDReportCount(1),
 	HIDReportSize(3),
-	[]byte{
-		0x55, 0x00, // Unit Exponent (-16)
-		0x65, 0x00, // Unit (0x00)
-	},
+	HIDUnitExponent(-16),
+	HIDUnit(0),
 	HIDInputDataVarAbs,
 
 	HIDUsagePageGenericDesktop,
 	HIDUsageDesktopHatSwitch,
 	HIDLogicalMinimum(0),
 	HIDLogicalMaximum(7),
-	[]byte{
-		0x35, 0x00, // PHYSICAL_MINIMUM (0)
-		0x46, 0x3b, 0x01, // PHYSICAL_MAXIMUM(315)
-		0x65, 0x14, // UNIT (Eng Rot:Angular Pos)
-	},
+	HIDPhysicalMinimum(0),
+	HIDPhysicalMaximum(315),
+	HIDUnit(0x14),
 	HIDReportCount(1),
 	HIDReportSize(4),
 	HIDInputDataVarAbs,
 	HIDUsageDesktopHatSwitch,
 	HIDLogicalMinimum(0),
 	HIDLogicalMaximum(7),
-	[]byte{
-		0x35, 0x00, // PHYSICAL_MINIMUM (0)
-		0x46, 0x3b, 0x01, // PHYSICAL_MAXIMUM(315)
-		0x65, 0x14, // UNIT (Eng Rot:Angular Pos)
-	},
+	HIDPhysicalMinimum(0),
+	HIDPhysicalMaximum(315),
+	HIDUnit(0x14),
 	HIDReportCount(1),
 	HIDReportSize(4),
 	HIDInputDataVarAbs,
 	HIDUsageDesktopPointer,
-	[]byte{
-		0x16, 0x01, 0x80, // LOGICAL_MINIMUM (-32767)
-		0x26, 0xff, 0x7f, // LOGICAL_MAXIMUM (32767)
-	},
+	HIDLogicalMinimum(-32767),
+	HIDLogicalMaximum(32767),
 	HIDReportCount(6),
 	HIDReportSize(16),
 	HIDCollectionPhysical,
@@ -127,8 +119,8 @@ var JoystickDefaultHIDReport = Append([][]byte{
 	HIDUsageDesktopRy,
 	HIDUsageDesktopRz,
 	HIDInputDataVarAbs,
-	HIDEndCollection,
-	HIDEndCollection,
+	HIDCollectionEnd,
+	HIDCollectionEnd,
 })
 
 // CDCJoystick requires that you append the JoystickDescriptor
