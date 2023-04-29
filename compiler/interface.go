@@ -127,6 +127,18 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 	if _, ok := typ.Underlying().(*types.Interface); ok {
 		hasMethodSet = false
 	}
+
+	// Short-circuit all the global pointer logic here for pointers to pointers.
+	if typ, ok := typ.(*types.Pointer); ok {
+		if _, ok := typ.Elem().(*types.Pointer); ok {
+			// For a pointer to a pointer, we just increase the pointer by 1
+			ptr := c.getTypeCode(typ.Elem())
+			return llvm.ConstGEP(c.ctx.Int8Type(), ptr, []llvm.Value{
+				llvm.ConstInt(llvm.Int32Type(), 1, false),
+			})
+		}
+	}
+
 	typeCodeName, isLocal := getTypeCodeName(typ)
 	globalName := "reflect/types.type:" + typeCodeName
 	var global llvm.Value
@@ -381,6 +393,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}, typeFields...)
 		}
 		alignment := c.targetData.TypeAllocSize(c.i8ptrType)
+		if alignment < 4 {
+			alignment = 4
+		}
 		globalValue := c.ctx.ConstStruct(typeFields, false)
 		global.SetInitializer(globalValue)
 		if isLocal {

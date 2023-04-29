@@ -475,7 +475,15 @@ func (t *rawType) underlying() *rawType {
 	return t
 }
 
+func (t *rawType) ptrtag() uintptr {
+	return uintptr(unsafe.Pointer(t)) & 0b11
+}
+
 func (t *rawType) isNamed() bool {
+	if tag := t.ptrtag(); tag != 0 {
+		return false
+	}
+
 	return t.meta&flagNamed != 0
 }
 
@@ -500,9 +508,13 @@ func pointerTo(t *rawType) *rawType {
 
 	switch t.Kind() {
 	case Pointer:
+		if tag := t.ptrtag(); tag < 3 {
+			return (*rawType)(unsafe.Add(unsafe.Pointer(t), 1))
+		}
+
 		// TODO(dgryski): This is blocking https://github.com/tinygo-org/tinygo/issues/3131
 		// We need to be able to create types that match existing types to prevent typecode equality.
-		panic("reflect: cannot make **T type")
+		panic("reflect: cannot make *****T type")
 	case Struct:
 		return (*structType)(unsafe.Pointer(t)).ptrTo
 	default:
@@ -579,6 +591,11 @@ func (t *rawType) Kind() Kind {
 	if t == nil {
 		return Invalid
 	}
+
+	if tag := t.ptrtag(); tag != 0 {
+		return Pointer
+	}
+
 	return Kind(t.meta & kindMask)
 }
 
@@ -589,6 +606,10 @@ func (t *rawType) Elem() Type {
 }
 
 func (t *rawType) elem() *rawType {
+	if tag := t.ptrtag(); tag != 0 {
+		return (*rawType)(unsafe.Add(unsafe.Pointer(t), -1))
+	}
+
 	underlying := t.underlying()
 	switch underlying.Kind() {
 	case Pointer:
