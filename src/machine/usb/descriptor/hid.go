@@ -156,7 +156,7 @@ var CDCHID = Descriptor{
 			HIDUsageMinimum(0),
 			HIDUsageMaximum(255),
 			HIDInputDataAryAbs,
-			HIDEndCollection,
+			HIDCollectionEnd,
 
 			HIDUsagePageGenericDesktop,
 			HIDUsageDesktopMouse,
@@ -186,22 +186,20 @@ var CDCHID = Descriptor{
 			HIDReportSize(8),
 			HIDReportCount(3),
 			HIDInputDataVarRel,
-			HIDEndCollection,
-			HIDEndCollection,
+			HIDCollectionEnd,
+			HIDCollectionEnd,
 
 			HIDUsagePageConsumer,
 			HIDUsageConsumerControl,
 			HIDCollectionApplication,
 			HIDReportID(3),
 			HIDLogicalMinimum(0),
-			[]byte{
-				0x26, 0xFF, 0x1F, // Logical Maximum (8191)
-				0x19, 0x00, // Usage Minimum (Unassigned)
-				0x2A, 0xFF, 0x1F, // Usage Maximum (0x1FFF)
-			},
+			HIDLogicalMaximum(8191),
+			HIDUsageMinimum(0),
+			HIDUsageMaximum(0x1FFF),
 			HIDReportSize(16),
 			HIDReportCount(1),
 			HIDInputDataAryAbs,
-			HIDEndCollection}),
+			HIDCollectionEnd}),
 	},
 }
