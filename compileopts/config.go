@@ -493,11 +493,6 @@ func (c *Config) RelocationModel() string {
 	return "static"
 }
 
-// WasmAbi returns the WASM ABI which is specified in the target JSON file.
-func (c *Config) WasmAbi() string {
-	return c.Target.WasmAbi
-}
-
 // EmulatorName is a shorthand to get the command for this emulator, something
 // like qemu-system-arm or simavr.
 func (c *Config) EmulatorName() string {
