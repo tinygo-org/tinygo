@@ -71,6 +71,13 @@ func Open(path string, flag int, mode uint32) (fd int, err error) {
 	return
 }
 
+func Fsync(fd int) (err error) {
+	if libc_fsync(int32(fd)) < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Readlink(path string, p []byte) (n int, err error) {
 	data := cstring(path)
 	buf, count := splitSlice(p)
@@ -403,6 +410,11 @@ func libc_rename(from, to *byte) int32
 //
 //export symlink
 func libc_symlink(from, to *byte) int32
+
+// int fsync(int fd);
+//
+//export fsync
+func libc_fsync(fd int32) int32
 
 // ssize_t readlink(const char *path, void *buf, size_t count);
 //
