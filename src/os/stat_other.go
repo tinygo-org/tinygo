@@ -6,11 +6,6 @@
 
 package os
 
-// Sync is a stub, not yet implemented
-func (f *File) Sync() error {
-	return ErrNotImplemented
-}
-
 // Stat is a stub, not yet implemented
 func (f *File) Stat() (FileInfo, error) {
 	return nil, ErrNotImplemented

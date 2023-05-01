@@ -52,6 +52,9 @@ type FileHandle interface {
 	// Seek resets the file pointer relative to start, current position, or end
 	Seek(offset int64, whence int) (newoffset int64, err error)
 
+	// Sync blocks until buffered writes have been written to persistent storage
+	Sync() (err error)
+
 	// Write writes up to len(b) bytes to the file.
 	Write(b []byte) (n int, err error)
 
