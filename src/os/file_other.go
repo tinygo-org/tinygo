@@ -91,6 +91,10 @@ func (f stdioFileHandle) Seek(offset int64, whence int) (int64, error) {
 	return -1, ErrUnsupported
 }
 
+func (f stdioFileHandle) Sync() error {
+	return ErrUnsupported
+}
+
 func (f stdioFileHandle) Fd() uintptr {
 	return uintptr(f)
 }
