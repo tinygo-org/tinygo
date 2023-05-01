@@ -90,6 +90,10 @@ func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
 	return newoffset, handleSyscallError(err)
 }
 
+func (f unixFileHandle) Sync() error {
+	return ErrNotImplemented
+}
+
 // isWindowsNulName reports whether name is os.DevNull ('NUL') on Windows.
 // True is returned if name is 'NUL' whatever the case.
 func isWindowsNulName(name string) bool {

@@ -140,6 +140,9 @@ var closeTests = map[string]func(*File) error{
 		_, err := f.Seek(0, 0)
 		return err
 	},
+	"Sync": func(f *File) error {
+		return f.Sync()
+	},
 	"SyscallConn": func(f *File) error {
 		_, err := f.SyscallConn()
 		return err

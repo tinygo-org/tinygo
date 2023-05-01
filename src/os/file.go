@@ -247,6 +247,18 @@ func (f *File) Fd() uintptr {
 	return ^uintptr(0)
 }
 
+// Sync commits the current contents of the file to stable storage.
+// Typically, this means flushing the file system's in-memory copy of recently
+// written data to disk.
+func (f *File) Sync() (err error) {
+	if f.handle == nil {
+		err = ErrClosed
+	} else {
+		err = f.handle.Sync()
+	}
+	return
+}
+
 // Truncate is a stub, not yet implemented
 func (f *File) Truncate(size int64) (err error) {
 	if f.handle == nil {

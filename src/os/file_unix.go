@@ -130,6 +130,11 @@ func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
 	return newoffset, handleSyscallError(err)
 }
 
+func (f unixFileHandle) Sync() error {
+	err := syscall.Fsync(syscallFd(f))
+	return handleSyscallError(err)
+}
+
 type unixDirent struct {
 	parent string
 	name   string
