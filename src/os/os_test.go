@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 // localTmp returns a local temporary directory not on NFS.
@@ -25,6 +26,71 @@ func newFile(testName string, t *testing.T) (f *File) {
 		t.Fatalf("newFile %s: CreateTemp fails with %s", testName, err)
 	}
 	return
+}
+
+func newDir(testName string, t *testing.T) (name string) {
+	name, err := os.MkdirTemp(localTmp(), "_Go_"+testName)
+	if err != nil {
+		t.Fatalf("TempDir %s: %s", testName, err)
+	}
+	return
+}
+
+// Use TempDir (via newFile) to make sure we're on a local file system,
+// so that timings are not distorted by latency and caching.
+// On NFS, timings can be off due to caching of meta-data on
+// NFS servers (Issue 848).
+func TestChtimes(t *testing.T) {
+	f := newFile("TestChtimes", t)
+	defer Remove(f.Name())
+
+	f.Write([]byte("hello, world\n"))
+	f.Close()
+
+	testChtimes(t, f.Name())
+}
+
+// Use TempDir (via newDir) to make sure we're on a local file system,
+// so that timings are not distorted by latency and caching.
+// On NFS, timings can be off due to caching of meta-data on
+// NFS servers (Issue 848).
+func TestChtimesDir(t *testing.T) {
+	name := newDir("TestChtimes", t)
+	defer RemoveAll(name)
+
+	testChtimes(t, name)
+}
+
+func testChtimes(t *testing.T, name string) {
+	st, err := Stat(name)
+	if err != nil {
+		t.Fatalf("Stat %s: %s", name, err)
+	}
+	preStat := st
+
+	// Move access and modification time back a second
+	at := Atime(preStat)
+	mt := preStat.ModTime()
+	err = Chtimes(name, at.Add(-time.Second), mt.Add(-time.Second))
+	if err != nil {
+		t.Fatalf("Chtimes %s: %s", name, err)
+	}
+
+	st, err = Stat(name)
+	if err != nil {
+		t.Fatalf("second Stat %s: %s", name, err)
+	}
+	postStat := st
+
+	pat := Atime(postStat)
+	pmt := postStat.ModTime()
+
+	if !pat.Before(at) {
+		t.Errorf("Actime didn't go backwards; was=%v, after=%v", mt, pmt)
+	}
+	if !pmt.Before(mt) {
+		t.Errorf("ModTime didn't go backwards; was=%v, after=%v", mt, pmt)
+	}
 }
 
 // Read with length 0 should not return EOF.

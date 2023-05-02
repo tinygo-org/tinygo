@@ -9,6 +9,7 @@ package os
 import (
 	"io"
 	"syscall"
+	"time"
 )
 
 func init() {
@@ -34,6 +35,25 @@ const isOS = true
 func Chdir(dir string) error {
 	if e := syscall.Chdir(dir); e != nil {
 		return &PathError{Op: "chdir", Path: dir, Err: e}
+	}
+	return nil
+}
+
+// Chtimes changes the access and modification times of the named file,
+// similar to the Unix utime() or utimes() functions.
+//
+// The underlying filesystem may truncate or round the values to a less precise time unit.
+// If there is an error, it will be of type *PathError.
+func Chtimes(path string, atime, mtime time.Time) error {
+	// TODO: we could get nanosecond precision on linux/darwin by using
+	// syscall.UtimesNano (implemented by utimesenat). For now we keep it simple
+	// and portable by using syscall.Utimes with microsecond precision, which
+	// works on all platforms.
+	var utimes [2]syscall.Timeval
+	utimes[0] = syscall.NsecToTimeval(atime.UnixNano())
+	utimes[1] = syscall.NsecToTimeval(mtime.UnixNano())
+	if err := syscall.Utimes(path, utimes[:]); err != nil {
+		return &PathError{Op: "chtimes", Path: path, Err: err}
 	}
 	return nil
 }

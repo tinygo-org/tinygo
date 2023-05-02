@@ -7,3 +7,4 @@ package os
 // Export for testing.
 
 var ErrPatternHasSeparator = errPatternHasSeparator
+var Atime = atime

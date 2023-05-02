@@ -152,6 +152,40 @@ func Kill(pid int, sig Signal) (err error) {
 	return ENOSYS // TODO
 }
 
+func Utimes(path string, utimes []Timeval) (err error) {
+	data := cstring(path)
+	if libc_utimes(&data[0], (*[2]Timeval)(utimes)) < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+type Timeval struct {
+	Sec  int64
+	Usec int32
+	_    int32 // padding
+}
+
+func NsecToTimeval(nsec int64) Timeval {
+	nsec += 999 // round up to microsecond
+	usec := nsec % 1e9 / 1e3
+	sec := nsec / 1e9
+	if usec < 0 {
+		usec += 1e6
+		sec--
+	}
+	return Timeval{Sec: sec, Usec: int32(usec)}
+}
+
+func (tv *Timeval) Nano() int64 {
+	sec, nsec := tv.Unix()
+	return (sec * 1e9) + nsec
+}
+
+func (v *Timeval) Unix() (sec, nsec int64) {
+	return v.Sec, int64(v.Usec) * 1e3
+}
+
 type SysProcAttr struct{}
 
 // TODO
@@ -413,6 +447,11 @@ func libc_readlink(path *byte, buf *byte, count uint) int
 //
 //export unlink
 func libc_unlink(pathname *byte) int32
+
+// int utimes(const char *path, const struct timeval times[2]);
+//
+//export utimes
+func libc_utimes(path *byte, timeval *[2]Timeval) int32
 
 //go:extern environ
 var libc_environ *unsafe.Pointer
