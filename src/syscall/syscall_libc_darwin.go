@@ -53,6 +53,7 @@ const (
 	DT_UNKNOWN = 0x0
 	DT_WHT     = 0xe
 	F_GETFL    = 0x3
+	F_SETFL    = 0x4
 	O_NONBLOCK = 0x4
 )
 

@@ -32,16 +32,3 @@ type Conn interface {
 	// SyscallConn returns a raw network connection.
 	SyscallConn() (RawConn, error)
 }
-
-const (
-	AF_INET       = 0x2
-	SOCK_STREAM   = 0x1
-	SOCK_DGRAM    = 0x2
-	SOL_SOCKET    = 0x1
-	SO_KEEPALIVE  = 0x9
-	SOL_TCP       = 0x6
-	TCP_KEEPINTVL = 0x5
-	IPPROTO_TCP   = 0x6
-	IPPROTO_UDP   = 0x11
-	F_SETFL       = 0x4
-)
