@@ -5,9 +5,19 @@ import (
 )
 
 const (
+	AF_INET       = 0x2
+	SOCK_STREAM   = 0x1
+	SOCK_DGRAM    = 0x2
+	SOL_SOCKET    = 0x1
+	SO_KEEPALIVE  = 0x9
+	SOL_TCP       = 0x6
+	TCP_KEEPINTVL = 0x5
+	IPPROTO_TCP   = 0x6
+	IPPROTO_UDP   = 0x11
 	// Made up, not a real IP protocol number.  This is used to create a
 	// TLS socket on the device, assuming the device supports mbed TLS.
 	IPPROTO_TLS = 0xFE
+	F_SETFL     = 0x4
 )
 
 // netdev is the current netdev, set by the application with useNetdev()
@@ -31,7 +41,7 @@ func useNetdev(dev netdever) {
 //
 // NOTE: The netdever interface is mirrored in drivers/netdev.go.
 // NOTE: If making changes to this interface, mirror the changes in
-// NOTE: drivers/netdev.go, and visa-versa.
+// NOTE: drivers/netdev.go, and vice-versa.
 
 type netdever interface {
 

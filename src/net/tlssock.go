@@ -12,7 +12,6 @@ import (
 	"internal/itoa"
 	"io"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -58,7 +57,7 @@ func DialTLS(addr string) (*TLSConn, error) {
 		port = 443
 	}
 
-	fd, err := netdev.Socket(syscall.AF_INET, syscall.SOCK_STREAM, IPPROTO_TLS)
+	fd, err := netdev.Socket(AF_INET, SOCK_STREAM, IPPROTO_TLS)
 	if err != nil {
 		return nil, err
 	}

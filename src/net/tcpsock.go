@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/netip"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -154,7 +153,7 @@ func DialTCP(network string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 		return nil, fmt.Errorf("Sorry, localhost isn't available on Tinygo")
 	}
 
-	fd, err := netdev.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
+	fd, err := netdev.Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 	if err != nil {
 		return nil, err
 	}
@@ -217,12 +216,12 @@ func (c *TCPConn) SetDeadline(t time.Time) error {
 }
 
 func (c *TCPConn) SetKeepAlive(keepalive bool) error {
-	return netdev.SetSockOpt(c.fd, syscall.SOL_SOCKET, syscall.SO_KEEPALIVE, keepalive)
+	return netdev.SetSockOpt(c.fd, SOL_SOCKET, SO_KEEPALIVE, keepalive)
 }
 
 func (c *TCPConn) SetKeepAlivePeriod(d time.Duration) error {
 	// Units are 1/2 seconds
-	return netdev.SetSockOpt(c.fd, syscall.SOL_TCP, syscall.TCP_KEEPINTVL, 2*d.Seconds())
+	return netdev.SetSockOpt(c.fd, SOL_TCP, TCP_KEEPINTVL, 2*d.Seconds())
 }
 
 func (c *TCPConn) SetReadDeadline(t time.Time) error {
@@ -266,7 +265,7 @@ func (l *listener) Addr() Addr {
 }
 
 func listenTCP(laddr *TCPAddr) (Listener, error) {
-	fd, err := netdev.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
+	fd, err := netdev.Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 	if err != nil {
 		return nil, err
 	}

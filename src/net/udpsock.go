@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/netip"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -169,7 +168,7 @@ func DialUDP(network string, laddr, raddr *UDPAddr) (*UDPConn, error) {
 		laddr.Port = ephemeralPort()
 	}
 
-	fd, err := netdev.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_UDP)
+	fd, err := netdev.Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
 	if err != nil {
 		return nil, err
 	}
