@@ -6,4 +6,5 @@ package os
 
 // Export for testing.
 
+var ErrWriteAtInAppendMode = errWriteAtInAppendMode
 var ErrPatternHasSeparator = errPatternHasSeparator

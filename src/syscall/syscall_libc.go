@@ -54,6 +54,15 @@ func Pread(fd int, p []byte, offset int64) (n int, err error) {
 	return
 }
 
+func Pwrite(fd int, p []byte, offset int64) (n int, err error) {
+	buf, count := splitSlice(p)
+	n = libc_pwrite(int32(fd), buf, uint(count), offset)
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
 	newoffset = libc_lseek(int32(fd), offset, whence)
 	if newoffset < 0 {
@@ -341,6 +350,11 @@ func libc_read(fd int32, buf *byte, count uint) int
 //
 //export pread
 func libc_pread(fd int32, buf *byte, count uint, offset int64) int
+
+// ssize_t pwrite(int fd, void *buf, size_t count, off_t offset);
+//
+//export pwrite
+func libc_pwrite(fd int32, buf *byte, count uint, offset int64) int
 
 // ssize_t lseek(int fd, off_t offset, int whence);
 //
