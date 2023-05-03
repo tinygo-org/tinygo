@@ -61,4 +61,5 @@ func (p Pin) Low() {
 
 type ADC struct {
 	Pin Pin
+	Bus uint8
 }

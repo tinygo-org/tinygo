@@ -819,6 +819,18 @@ func (a ADC) Configure(config ADCConfig) {
 	}
 
 	a.Pin.Configure(PinConfig{Mode: PinAnalog})
+
+	switch config.Bus {
+	case AdcBusAuto:
+		bus := a.getADCBus()
+		if bus == sam.ADC0 {
+			a.Bus = 0
+		} else {
+			a.Bus = 1
+		}
+	default:
+		a.Bus = config.Bus
+	}
 }
 
 // Get returns the current value of a ADC pin, in the range 0..0xffff.
@@ -896,6 +908,12 @@ func (a ADC) Get() uint16 {
 }
 
 func (a ADC) getADCBus() *sam.ADC_Type {
+	if a.Bus == AdcBus0 {
+		return sam.ADC0
+	} else if a.Bus == AdcBus1 {
+		return sam.ADC1
+	}
+
 	if (a.Pin >= PB04 && a.Pin <= PB07) || (a.Pin >= PC00) {
 		return sam.ADC1
 	}
@@ -907,9 +925,17 @@ func (a ADC) getADCChannel() uint8 {
 	case PA02:
 		return 0
 	case PB08:
-		return 2
+		if a.Bus == AdcBus1 {
+			return 0
+		} else {
+			return 2
+		}
 	case PB09:
-		return 3
+		if a.Bus == AdcBus1 {
+			return 1
+		} else {
+			return 3
+		}
 	case PA04:
 		return 4
 	case PA05:
