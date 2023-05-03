@@ -187,7 +187,8 @@ func (f *File) Close() (err error) {
 	} else {
 		// Some platforms manage extra state other than the system handle which
 		// needs to be released when the file is closed. For example, darwin
-		// files have a DIR object holding a dup of the file descriptor.
+		// files have a DIR object holding a dup of the file descriptor, and
+		// linux files hold a buffer which needs to be released to a pool.
 		//
 		// These platform-specific logic is provided by the (*file).close method
 		// which is why we do not call the handle's Close method directly.
