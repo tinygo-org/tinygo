@@ -168,7 +168,7 @@ func DialUDP(network string, laddr, raddr *UDPAddr) (*UDPConn, error) {
 		laddr.Port = ephemeralPort()
 	}
 
-	fd, err := netdev.Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+	fd, err := netdev.Socket(_AF_INET, _SOCK_DGRAM, _IPPROTO_UDP)
 	if err != nil {
 		return nil, err
 	}

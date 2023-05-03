@@ -5,19 +5,19 @@ import (
 )
 
 const (
-	AF_INET       = 0x2
-	SOCK_STREAM   = 0x1
-	SOCK_DGRAM    = 0x2
-	SOL_SOCKET    = 0x1
-	SO_KEEPALIVE  = 0x9
-	SOL_TCP       = 0x6
-	TCP_KEEPINTVL = 0x5
-	IPPROTO_TCP   = 0x6
-	IPPROTO_UDP   = 0x11
+	_AF_INET       = 0x2
+	_SOCK_STREAM   = 0x1
+	_SOCK_DGRAM    = 0x2
+	_SOL_SOCKET    = 0x1
+	_SO_KEEPALIVE  = 0x9
+	_SOL_TCP       = 0x6
+	_TCP_KEEPINTVL = 0x5
+	_IPPROTO_TCP   = 0x6
+	_IPPROTO_UDP   = 0x11
 	// Made up, not a real IP protocol number.  This is used to create a
 	// TLS socket on the device, assuming the device supports mbed TLS.
-	IPPROTO_TLS = 0xFE
-	F_SETFL     = 0x4
+	_IPPROTO_TLS = 0xFE
+	_F_SETFL     = 0x4
 )
 
 // netdev is the current netdev, set by the application with useNetdev()

@@ -57,7 +57,7 @@ func DialTLS(addr string) (*TLSConn, error) {
 		port = 443
 	}
 
-	fd, err := netdev.Socket(AF_INET, SOCK_STREAM, IPPROTO_TLS)
+	fd, err := netdev.Socket(_AF_INET, _SOCK_STREAM, _IPPROTO_TLS)
 	if err != nil {
 		return nil, err
 	}
