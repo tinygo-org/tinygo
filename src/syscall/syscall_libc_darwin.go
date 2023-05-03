@@ -267,6 +267,15 @@ func Pipe2(fds []int, flags int) (err error) {
 	return
 }
 
+func Chmod(path string, mode uint32) (err error) {
+	data := cstring(path)
+	fail := int(libc_chmod(&data[0], mode))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func closedir(dir uintptr) (err error) {
 	e := libc_closedir(unsafe.Pointer(dir))
 	if e != 0 {

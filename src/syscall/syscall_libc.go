@@ -90,15 +90,6 @@ func Chdir(path string) (err error) {
 	return
 }
 
-func Chmod(path string, mode uint32) (err error) {
-	data := cstring(path)
-	fail := int(libc_chmod(&data[0], mode))
-	if fail < 0 {
-		err = getErrno()
-	}
-	return
-}
-
 func Mkdir(path string, mode uint32) (err error) {
 	data := cstring(path)
 	fail := int(libc_mkdir(&data[0], mode))
