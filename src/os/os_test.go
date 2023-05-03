@@ -140,6 +140,57 @@ func TestSeek(t *testing.T) {
 	}
 }
 
+func checkSize(t *testing.T, f *File, size int64) {
+	t.Helper()
+	dir, err := f.Stat()
+	if err != nil {
+		t.Fatalf("Stat %q (looking for size %d): %s", f.Name(), size, err)
+	}
+	if dir.Size() != size {
+		t.Errorf("Stat %q: size %d want %d", f.Name(), dir.Size(), size)
+	}
+}
+
+func TestFTruncate(t *testing.T) {
+	f := newFile("TestFTruncate", t)
+	defer Remove(f.Name())
+	defer f.Close()
+
+	checkSize(t, f, 0)
+	f.Write([]byte("hello, world\n"))
+	checkSize(t, f, 13)
+	f.Truncate(10)
+	checkSize(t, f, 10)
+	f.Truncate(1024)
+	checkSize(t, f, 1024)
+	f.Truncate(0)
+	checkSize(t, f, 0)
+	_, err := f.Write([]byte("surprise!"))
+	if err == nil {
+		checkSize(t, f, 13+9) // wrote at offset past where hello, world was.
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	f := newFile("TestTruncate", t)
+	defer Remove(f.Name())
+	defer f.Close()
+
+	checkSize(t, f, 0)
+	f.Write([]byte("hello, world\n"))
+	checkSize(t, f, 13)
+	Truncate(f.Name(), 10)
+	checkSize(t, f, 10)
+	Truncate(f.Name(), 1024)
+	checkSize(t, f, 1024)
+	Truncate(f.Name(), 0)
+	checkSize(t, f, 0)
+	_, err := f.Write([]byte("surprise!"))
+	if err == nil {
+		checkSize(t, f, 13+9) // wrote at offset past where hello, world was.
+	}
+}
+
 func TestReadAt(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Log("TODO: implement Pread for Windows")

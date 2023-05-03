@@ -135,6 +135,11 @@ func (f unixFileHandle) Sync() error {
 	return handleSyscallError(err)
 }
 
+func (f unixFileHandle) Truncate(size int64) error {
+	err := syscall.Ftruncate(syscallFd(f), size)
+	return handleSyscallError(err)
+}
+
 type unixDirent struct {
 	parent string
 	name   string

@@ -95,6 +95,10 @@ func (f stdioFileHandle) Sync() error {
 	return ErrUnsupported
 }
 
+func (f stdioFileHandle) Truncate(size int64) error {
+	return ErrUnsupported
+}
+
 func (f stdioFileHandle) Fd() uintptr {
 	return uintptr(f)
 }

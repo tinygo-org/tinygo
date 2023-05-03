@@ -9,12 +9,35 @@ package os
 import (
 	"internal/syscall/windows"
 	"syscall"
+	"time"
 	"unicode/utf16"
 )
 
 const DevNull = "NUL"
 
 type syscallFd = syscall.Handle
+
+// Chtimes is a stub, not yet implemented.
+func Chtimes(name string, atime time.Time, mtime time.Time) error {
+	return ErrNotImplemented
+}
+
+// Truncate changes the size of the named file.
+// If the file is a symbolic link, it changes the size of the link's target.
+// If there is an error, it will be of type *PathError.
+func Truncate(path string, size int64) error {
+	// Windows has syscall.Ftruncate but not syscall.Truncate, we need to open
+	// the file in order to truncate it.
+	f, err := OpenFile(path, O_WRONLY, 0)
+	if err != nil {
+		if e, _ := err.(*PathError); e != nil {
+			e.Op = "truncate"
+		}
+		return err
+	}
+	defer f.Close()
+	return f.Truncate(size)
+}
 
 // Symlink is a stub, it is not implemented.
 func Symlink(oldname, newname string) error {
@@ -91,6 +114,10 @@ func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (f unixFileHandle) Sync() error {
+	return ErrNotImplemented
+}
+
+func (f unixFileHandle) Truncate(size int64) (err error) {
 	return ErrNotImplemented
 }
 

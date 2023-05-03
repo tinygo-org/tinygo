@@ -55,6 +55,9 @@ type FileHandle interface {
 	// Sync blocks until buffered writes have been written to persistent storage
 	Sync() (err error)
 
+	// Truncate adjusts the file to the given size
+	Truncate(size int64) (err error)
+
 	// Write writes up to len(b) bytes to the file.
 	Write(b []byte) (n int, err error)
 

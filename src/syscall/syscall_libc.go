@@ -144,6 +144,22 @@ func Unlink(path string) (err error) {
 	return
 }
 
+func Truncate(path string, size int64) (err error) {
+	data := cstring(path)
+	fail := libc_truncate(&data[0], size)
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Ftruncate(fd int, size int64) (err error) {
+	if libc_ftruncate(int32(fd), size) < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Faccessat(dirfd int, path string, mode uint32, flags int) (err error)
 
 func Kill(pid int, sig Signal) (err error) {
@@ -346,6 +362,16 @@ func libc_pread(fd int32, buf *byte, count uint, offset int64) int
 //
 //export lseek
 func libc_lseek(fd int32, offset int64, whence int) int64
+
+// int ftruncate(int fd, off_t length)
+//
+//export ftruncate
+func libc_ftruncate(fd int32, size int64) int32
+
+// int truncate(const char *path, off_t length)
+//
+//export truncate
+func libc_truncate(path *byte, size int64) int32
 
 // int close(int fd)
 //
