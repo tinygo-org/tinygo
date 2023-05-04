@@ -180,13 +180,12 @@ var errWriteAtInAppendMode = errors.New("os: invalid use of WriteAt on file open
 //
 // If file was opened with the O_APPEND flag, WriteAt returns an error.
 func (f *File) WriteAt(b []byte, offset int64) (n int, err error) {
-	if offset < 0 {
+	switch {
+	case offset < 0:
 		return 0, &PathError{Op: "writeat", Path: f.name, Err: errNegativeOffset}
-	}
-	if f.handle == nil {
+	case f.handle == nil:
 		return 0, &PathError{Op: "writeat", Path: f.name, Err: ErrClosed}
-	}
-	if f.appendMode {
+	case f.appendMode:
 		// Go does not wrap this error but it would be more consistent
 		// if it did.
 		return 0, errWriteAtInAppendMode
