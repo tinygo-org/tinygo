@@ -108,6 +108,7 @@ var goodLinkerFlags = [][]string{
 	{"-Fbar"},
 	{"-lbar"},
 	{"-Lbar"},
+	{"--export=my_symbol"},
 	{"-fpic"},
 	{"-fno-pic"},
 	{"-fPIC"},
