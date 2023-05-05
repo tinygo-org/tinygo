@@ -101,8 +101,8 @@ func (fl *FlashBuffer) Write(p []byte) (n int, err error) {
 	// block 1 -> fl.start + pagesize
 	// block 2 -> fl.start + pagesize*2
 	// ...
-	currentPageBlock := (fl.start + fl.offset - FlashDataStart()) + (pagesize-1)/pagesize
-	lastPageBlockNeeded := (fl.start + fl.offset + uintptr(len(p)) - FlashDataStart()) + (pagesize-1)/pagesize
+	currentPageBlock := ((fl.start + fl.offset - FlashDataStart()) + (pagesize - 1)) / pagesize
+	lastPageBlockNeeded := ((fl.start + fl.offset + uintptr(len(p)) - FlashDataStart()) + (pagesize - 1)) / pagesize
 
 	// erase enough blocks to hold the data
 	if err := fl.b.EraseBlocks(int64(currentPageBlock), int64(lastPageBlockNeeded-currentPageBlock)); err != nil {
