@@ -2239,12 +2239,12 @@ func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 
 // pad data if needed so it is long enough for correct byte alignment on writes.
 func (f flashBlockDevice) pad(p []byte) []byte {
-	paddingNeeded := f.WriteBlockSize() - (int64(len(p)) % f.WriteBlockSize())
-	if paddingNeeded == 0 {
+	overflow := int64(len(p)) % f.WriteBlockSize()
+	if overflow == 0 {
 		return p
 	}
 
-	padding := bytes.Repeat([]byte{0xff}, int(paddingNeeded))
+	padding := bytes.Repeat([]byte{0xff}, int(f.WriteBlockSize()-overflow))
 	return append(p, padding...)
 }
 
