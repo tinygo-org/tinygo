@@ -90,7 +90,9 @@ func OpenFile(name string, flag int, perm FileMode) (*File, error) {
 	if err != nil {
 		return nil, &PathError{Op: "open", Path: name, Err: err}
 	}
-	return NewFile(handle, name), nil
+	f := NewFile(handle, name)
+	f.appendMode = (flag & O_APPEND) != 0
+	return f, nil
 }
 
 // Open opens the file named for reading.
@@ -170,13 +172,34 @@ func (f *File) WriteString(s string) (n int, err error) {
 	return f.Write([]byte(s))
 }
 
-func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		err = ErrNotImplemented
+var errWriteAtInAppendMode = errors.New("os: invalid use of WriteAt on file opened with O_APPEND")
+
+// WriteAt writes len(b) bytes to the File starting at byte offset off.
+// It returns the number of bytes written and an error, if any.
+// WriteAt returns a non-nil error when n != len(b).
+//
+// If file was opened with the O_APPEND flag, WriteAt returns an error.
+func (f *File) WriteAt(b []byte, offset int64) (n int, err error) {
+	switch {
+	case offset < 0:
+		return 0, &PathError{Op: "writeat", Path: f.name, Err: errNegativeOffset}
+	case f.handle == nil:
+		return 0, &PathError{Op: "writeat", Path: f.name, Err: ErrClosed}
+	case f.appendMode:
+		// Go does not wrap this error but it would be more consistent
+		// if it did.
+		return 0, errWriteAtInAppendMode
 	}
-	err = &PathError{Op: "writeat", Path: f.name, Err: err}
+	for len(b) > 0 {
+		m, e := f.handle.WriteAt(b, offset)
+		if e != nil {
+			err = &PathError{Op: "writeat", Path: f.name, Err: e}
+			break
+		}
+		n += m
+		b = b[m:]
+		offset += int64(m)
+	}
 	return
 }
 
