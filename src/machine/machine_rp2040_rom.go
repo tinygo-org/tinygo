@@ -195,7 +195,7 @@ func (f flashBlockDevice) Size() int64 {
 	return int64(FlashDataEnd() - FlashDataStart())
 }
 
-const writeBlockSize = 4
+const writeBlockSize = 1 << 8
 
 // WriteBlockSize returns the block size in which data can be written to
 // memory. It can be used by a client to optimize writes, non-aligned writes
