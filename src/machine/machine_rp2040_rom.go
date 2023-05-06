@@ -229,7 +229,7 @@ func (f flashBlockDevice) EraseBlocks(start, length int64) error {
 	state := interrupt.Disable()
 	defer interrupt.Restore(state)
 
-	C.flash_erase_blocks(C.uint32_t(address), C.ulong(length))
+	C.flash_erase_blocks(C.uint32_t(address), C.ulong(length*f.EraseBlockSize()))
 
 	return nil
 }
