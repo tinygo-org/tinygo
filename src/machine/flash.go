@@ -35,6 +35,7 @@ var (
 	errFlashCannotReadPastEOF   = errors.New("cannot read beyond end of flash data")
 	errFlashCannotWritePastEOF  = errors.New("cannot write beyond end of flash data")
 	errFlashCannotErasePastEOF  = errors.New("cannot erase beyond end of flash data")
+	errFlashInvalidSeekOffset   = errors.New("cannot seek outside address space of flash data")
 )
 
 // BlockDevice is the raw device that is meant to store flash data.
@@ -74,6 +75,9 @@ type FlashBuffer struct {
 
 	// offset is relative to start
 	offset uintptr
+
+	// erased is the last consecutive address to have been erased
+	erased uintptr
 }
 
 // OpenFlashBuffer opens a FlashBuffer.
@@ -89,38 +93,50 @@ func (fl *FlashBuffer) Read(p []byte) (n int, err error) {
 	return
 }
 
-// Write data to a FlashBuffer.
+// Write data to a FlashBuffer. You must pass in a slice containing a multiple
+// of the WriteBlockSize() for the target device, or the data written will be
+// padded to fill in any missing space.
 func (fl *FlashBuffer) Write(p []byte) (n int, err error) {
-	// any new pages needed?
+	// any new blocks needed?
 	// NOTE probably will not work as expected if you try to write over page boundary
 	// of pages with different sizes.
-	pagesize := uintptr(fl.b.EraseBlockSize())
+	blocksize := uintptr(fl.b.EraseBlockSize())
 
 	// calculate currentPageBlock relative to fl.start, meaning that
 	// block 0 -> fl.start
-	// block 1 -> fl.start + pagesize
-	// block 2 -> fl.start + pagesize*2
+	// block 1 -> fl.start + blocksize
+	// block 2 -> fl.start + blocksize*2
 	// ...
-	currentPageBlock := (fl.start + fl.offset - FlashDataStart()) + (pagesize-1)/pagesize
-	lastPageBlockNeeded := (fl.start + fl.offset + uintptr(len(p)) - FlashDataStart()) + (pagesize-1)/pagesize
+	currentPageBlock := (fl.offset + (blocksize - 1)) / blocksize
+	lastPageBlockNeeded := (fl.offset + uintptr(len(p)) + (blocksize - 1)) / blocksize
+
+	if fl.erased == 0 {
+		// since we are writing for the first time, we need to
+		// erase the first page e.g. page 0
+		currentPageBlock = 0
+		lastPageBlockNeeded = 1
+	}
 
 	// erase enough blocks to hold the data
-	if err := fl.b.EraseBlocks(int64(currentPageBlock), int64(lastPageBlockNeeded-currentPageBlock)); err != nil {
-		return 0, err
+	if lastPageBlockNeeded*blocksize > fl.erased {
+		if err := fl.b.EraseBlocks(int64(currentPageBlock), int64(lastPageBlockNeeded-currentPageBlock)); err != nil {
+			return 0, err
+		}
+		fl.erased = lastPageBlockNeeded * blocksize
 	}
 
 	// write the data
-	for i := 0; i < len(p); i += int(pagesize) {
-		var last int = i + int(pagesize)
-		if i+int(pagesize) > len(p) {
+	for i := 0; i < len(p); i += int(fl.b.WriteBlockSize()) {
+		var last int = i + int(fl.b.WriteBlockSize())
+		if last > len(p) {
 			last = len(p)
 		}
 
-		_, err := fl.b.WriteAt(p[i:last], int64(fl.offset))
+		n, err := fl.b.WriteAt(p[i:last], int64(fl.offset))
 		if err != nil {
 			return 0, err
 		}
-		fl.offset += uintptr(len(p[i:last]))
+		fl.offset += uintptr(n)
 	}
 
 	return len(p), nil
@@ -133,10 +149,14 @@ func (fl *FlashBuffer) Close() error {
 
 // Seek implements io.Seeker interface, but with limitations.
 // You can only seek relative to the start.
-// Also, you cannot use seek before write operations, only read.
+// Also, with write operations you can only seek back to the beginning.
 func (fl *FlashBuffer) Seek(offset int64, whence int) (int64, error) {
 	if whence != io.SeekStart {
 		panic("you can only Seek relative to Start")
+	}
+
+	if offset < 0 || uintptr(offset) >= FlashDataEnd() {
+		return -1, errFlashInvalidSeekOffset
 	}
 
 	fl.offset = uintptr(offset)
