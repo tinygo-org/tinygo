@@ -133,8 +133,8 @@ func HIDReportID(id int) []byte {
 }
 
 func HIDLogicalMinimum(min int) []byte {
-	if min < -255 {
-		result := []byte{hidLogicalMinimum, 0x0, 0x0}
+	if min > 255 {
+		result := []byte{hidLogicalMinimum + 1, 0x0, 0x0}
 		binary.LittleEndian.PutUint16(result[1:3], uint16(min))
 		return result
 	}
@@ -144,7 +144,7 @@ func HIDLogicalMinimum(min int) []byte {
 
 func HIDLogicalMaximum(max int) []byte {
 	if max > 255 {
-		result := []byte{hidLogicalMaximum, 0x0, 0x0}
+		result := []byte{hidLogicalMaximum + 1, 0x0, 0x0}
 		binary.LittleEndian.PutUint16(result[1:3], uint16(max))
 		return result
 	}
@@ -153,8 +153,8 @@ func HIDLogicalMaximum(max int) []byte {
 }
 
 func HIDUsageMinimum(min int) []byte {
-	if min < -255 {
-		result := []byte{hidUsageMinimum, 0x0, 0x0}
+	if min > 255 {
+		result := []byte{hidUsageMinimum + 1, 0x0, 0x0}
 		binary.LittleEndian.PutUint16(result[1:3], uint16(min))
 		return result
 	}
@@ -164,7 +164,7 @@ func HIDUsageMinimum(min int) []byte {
 
 func HIDUsageMaximum(max int) []byte {
 	if max > 255 {
-		result := []byte{hidUsageMaximum, 0x0, 0x0}
+		result := []byte{hidUsageMaximum + 1, 0x0, 0x0}
 		binary.LittleEndian.PutUint16(result[1:3], uint16(max))
 		return result
 	}
@@ -173,8 +173,8 @@ func HIDUsageMaximum(max int) []byte {
 }
 
 func HIDPhysicalMinimum(min int) []byte {
-	if min < -255 {
-		result := []byte{hidPhysicalMinimum, 0x0, 0x0}
+	if min > 255 {
+		result := []byte{hidPhysicalMinimum + 1, 0x0, 0x0}
 		binary.LittleEndian.PutUint16(result[1:3], uint16(min))
 		return result
 	}
@@ -184,7 +184,7 @@ func HIDPhysicalMinimum(min int) []byte {
 
 func HIDPhysicalMaximum(max int) []byte {
 	if max > 255 {
-		result := []byte{hidPhysicalMaximum, 0x0, 0x0}
+		result := []byte{hidPhysicalMaximum + 1, 0x0, 0x0}
 		binary.LittleEndian.PutUint16(result[1:3], uint16(max))
 		return result
 	}
