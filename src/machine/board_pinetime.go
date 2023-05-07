@@ -1,4 +1,4 @@
-//go:build pinetime_devkit0
+//go:build pinetime
 
 package machine
 
@@ -17,13 +17,10 @@ const (
 	LED  = LED1
 )
 
-var DefaultUART = UART0
-
-// UART pins for PineTime. Note that RX is set to NoPin as RXD is not listed in
-// the PineTime schematic 1.0:
-// http://files.pine64.org/doc/PineTime/PineTime%20Port%20Assignment%20rev1.0.pdf
+// The PineTime doesn't have a UART output.
+// Additionally, leaving the UART on results in a pretty big current drain.
 const (
-	UART_TX_PIN Pin = 11 // TP29 (TXD)
+	UART_TX_PIN Pin = NoPin
 	UART_RX_PIN Pin = NoPin
 )
 
