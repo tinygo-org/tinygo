@@ -564,7 +564,7 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=particle-xenon      examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=pinetime-devkit0    examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=pinetime            examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=x9pro               examples/blinky1
 	@$(MD5SUM) test.hex

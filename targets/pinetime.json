@@ -1,7 +1,7 @@
 {
 	"inherits": ["nrf52"],
-	"build-tags": ["pinetime_devkit0"],
-	"serial": "uart",
+	"build-tags": ["pinetime"],
+	"serial": "none",
 	"flash-method": "openocd",
 	"flash-command": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",
 	"openocd-interface": "jlink",
