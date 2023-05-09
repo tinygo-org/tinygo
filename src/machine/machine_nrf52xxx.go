@@ -30,7 +30,6 @@ func (a ADC) Configure(config ADCConfig) {
 	var configVal uint32 = nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESP_Pos |
 		nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESN_Pos |
 		nrf.SAADC_CH_CONFIG_REFSEL_Internal<<nrf.SAADC_CH_CONFIG_REFSEL_Pos |
-		nrf.SAADC_CH_CONFIG_TACQ_3us<<nrf.SAADC_CH_CONFIG_TACQ_Pos |
 		nrf.SAADC_CH_CONFIG_MODE_SE<<nrf.SAADC_CH_CONFIG_MODE_Pos
 
 	switch config.Reference {
@@ -52,6 +51,22 @@ func (a ADC) Configure(config ADCConfig) {
 		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain1_6 << nrf.SAADC_CH_CONFIG_GAIN_Pos
 	default:
 		// TODO: return an error
+	}
+
+	// Source resistance, according to table 89 on page 364 of the nrf52832 datasheet.
+	// https://infocenter.nordicsemi.com/pdf/nRF52832_PS_v1.4.pdf
+	if config.SampleTime <= 3 { // <= 10kΩ
+		configVal |= nrf.SAADC_CH_CONFIG_TACQ_3us << nrf.SAADC_CH_CONFIG_TACQ_Pos
+	} else if config.SampleTime <= 5 { // <= 40kΩ
+		configVal |= nrf.SAADC_CH_CONFIG_TACQ_5us << nrf.SAADC_CH_CONFIG_TACQ_Pos
+	} else if config.SampleTime <= 10 { // <= 100kΩ
+		configVal |= nrf.SAADC_CH_CONFIG_TACQ_10us << nrf.SAADC_CH_CONFIG_TACQ_Pos
+	} else if config.SampleTime <= 15 { // <= 200kΩ
+		configVal |= nrf.SAADC_CH_CONFIG_TACQ_15us << nrf.SAADC_CH_CONFIG_TACQ_Pos
+	} else if config.SampleTime <= 20 { // <= 400kΩ
+		configVal |= nrf.SAADC_CH_CONFIG_TACQ_20us << nrf.SAADC_CH_CONFIG_TACQ_Pos
+	} else { // <= 800kΩ
+		configVal |= nrf.SAADC_CH_CONFIG_TACQ_40us << nrf.SAADC_CH_CONFIG_TACQ_Pos
 	}
 
 	// Configure channel 0, which is the only channel we use.
