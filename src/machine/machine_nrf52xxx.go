@@ -19,7 +19,21 @@ func InitADC() {
 
 // Configure configures an ADC pin to be able to read analog data.
 func (a ADC) Configure(ADCConfig) {
-	return // no pin specific setup on nrf52 machine.
+	// Enable ADC.
+	// The ADC does not consume a noticeable amount of current simply by being
+	// enabled.
+	nrf.SAADC.ENABLE.Set(nrf.SAADC_ENABLE_ENABLE_Enabled << nrf.SAADC_ENABLE_ENABLE_Pos)
+
+	// Configure ADC.
+	nrf.SAADC.RESOLUTION.Set(nrf.SAADC_RESOLUTION_VAL_12bit)
+
+	// Configure channel 0, which is the only channel we use.
+	nrf.SAADC.CH[0].CONFIG.Set(nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESP_Pos |
+		nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESN_Pos |
+		nrf.SAADC_CH_CONFIG_GAIN_Gain1_5<<nrf.SAADC_CH_CONFIG_GAIN_Pos |
+		nrf.SAADC_CH_CONFIG_REFSEL_Internal<<nrf.SAADC_CH_CONFIG_REFSEL_Pos |
+		nrf.SAADC_CH_CONFIG_TACQ_3us<<nrf.SAADC_CH_CONFIG_TACQ_Pos |
+		nrf.SAADC_CH_CONFIG_MODE_SE<<nrf.SAADC_CH_CONFIG_MODE_Pos)
 }
 
 // Get returns the current value of a ADC pin in the range 0..0xffff.
@@ -56,23 +70,6 @@ func (a ADC) Get() uint16 {
 		return 0
 	}
 
-	nrf.SAADC.RESOLUTION.Set(nrf.SAADC_RESOLUTION_VAL_12bit)
-
-	// Enable ADC.
-	nrf.SAADC.ENABLE.Set(nrf.SAADC_ENABLE_ENABLE_Enabled << nrf.SAADC_ENABLE_ENABLE_Pos)
-	for i := 0; i < 8; i++ {
-		nrf.SAADC.CH[i].PSELN.Set(nrf.SAADC_CH_PSELP_PSELP_NC)
-		nrf.SAADC.CH[i].PSELP.Set(nrf.SAADC_CH_PSELP_PSELP_NC)
-	}
-
-	// Configure ADC.
-	nrf.SAADC.CH[0].CONFIG.Set(((nrf.SAADC_CH_CONFIG_RESP_Bypass << nrf.SAADC_CH_CONFIG_RESP_Pos) & nrf.SAADC_CH_CONFIG_RESP_Msk) |
-		((nrf.SAADC_CH_CONFIG_RESP_Bypass << nrf.SAADC_CH_CONFIG_RESN_Pos) & nrf.SAADC_CH_CONFIG_RESN_Msk) |
-		((nrf.SAADC_CH_CONFIG_GAIN_Gain1_5 << nrf.SAADC_CH_CONFIG_GAIN_Pos) & nrf.SAADC_CH_CONFIG_GAIN_Msk) |
-		((nrf.SAADC_CH_CONFIG_REFSEL_Internal << nrf.SAADC_CH_CONFIG_REFSEL_Pos) & nrf.SAADC_CH_CONFIG_REFSEL_Msk) |
-		((nrf.SAADC_CH_CONFIG_TACQ_3us << nrf.SAADC_CH_CONFIG_TACQ_Pos) & nrf.SAADC_CH_CONFIG_TACQ_Msk) |
-		((nrf.SAADC_CH_CONFIG_MODE_SE << nrf.SAADC_CH_CONFIG_MODE_Pos) & nrf.SAADC_CH_CONFIG_MODE_Msk))
-
 	// Set pin to read.
 	nrf.SAADC.CH[0].PSELN.Set(pwmPin)
 	nrf.SAADC.CH[0].PSELP.Set(pwmPin)
@@ -100,9 +97,6 @@ func (a ADC) Get() uint16 {
 	for nrf.SAADC.EVENTS_STOPPED.Get() == 0 {
 	}
 	nrf.SAADC.EVENTS_STOPPED.Set(0)
-
-	// Disable the ADC.
-	nrf.SAADC.ENABLE.Set(nrf.SAADC_ENABLE_ENABLE_Disabled << nrf.SAADC_ENABLE_ENABLE_Pos)
 
 	value := int16(rawValue.Get())
 	if value < 0 {
