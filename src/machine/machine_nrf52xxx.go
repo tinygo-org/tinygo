@@ -18,7 +18,7 @@ func InitADC() {
 }
 
 // Configure configures an ADC pin to be able to read analog data.
-func (a ADC) Configure(ADCConfig) {
+func (a ADC) Configure(config ADCConfig) {
 	// Enable ADC.
 	// The ADC does not consume a noticeable amount of current simply by being
 	// enabled.
@@ -27,13 +27,35 @@ func (a ADC) Configure(ADCConfig) {
 	// Configure ADC.
 	nrf.SAADC.RESOLUTION.Set(nrf.SAADC_RESOLUTION_VAL_12bit)
 
-	// Configure channel 0, which is the only channel we use.
-	nrf.SAADC.CH[0].CONFIG.Set(nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESP_Pos |
+	var configVal uint32 = nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESP_Pos |
 		nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESN_Pos |
-		nrf.SAADC_CH_CONFIG_GAIN_Gain1_5<<nrf.SAADC_CH_CONFIG_GAIN_Pos |
 		nrf.SAADC_CH_CONFIG_REFSEL_Internal<<nrf.SAADC_CH_CONFIG_REFSEL_Pos |
 		nrf.SAADC_CH_CONFIG_TACQ_3us<<nrf.SAADC_CH_CONFIG_TACQ_Pos |
-		nrf.SAADC_CH_CONFIG_MODE_SE<<nrf.SAADC_CH_CONFIG_MODE_Pos)
+		nrf.SAADC_CH_CONFIG_MODE_SE<<nrf.SAADC_CH_CONFIG_MODE_Pos
+
+	switch config.Reference {
+	case 150: // 0.15V
+		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain4 << nrf.SAADC_CH_CONFIG_GAIN_Pos
+	case 300: // 0.3V
+		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain2 << nrf.SAADC_CH_CONFIG_GAIN_Pos
+	case 600: // 0.6V
+		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain1 << nrf.SAADC_CH_CONFIG_GAIN_Pos
+	case 1200: // 1.2V
+		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain1_2 << nrf.SAADC_CH_CONFIG_GAIN_Pos
+	case 1800: // 1.8V
+		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain1_3 << nrf.SAADC_CH_CONFIG_GAIN_Pos
+	case 2400: // 2.4V
+		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain1_4 << nrf.SAADC_CH_CONFIG_GAIN_Pos
+	case 3000, 0: // 3.0V (default)
+		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain1_5 << nrf.SAADC_CH_CONFIG_GAIN_Pos
+	case 3600: // 3.6V
+		configVal |= nrf.SAADC_CH_CONFIG_GAIN_Gain1_6 << nrf.SAADC_CH_CONFIG_GAIN_Pos
+	default:
+		// TODO: return an error
+	}
+
+	// Configure channel 0, which is the only channel we use.
+	nrf.SAADC.CH[0].CONFIG.Set(configVal)
 }
 
 // Get returns the current value of a ADC pin in the range 0..0xffff.
