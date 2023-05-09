@@ -24,7 +24,8 @@ func (a ADC) Configure(config ADCConfig) {
 	// enabled.
 	nrf.SAADC.ENABLE.Set(nrf.SAADC_ENABLE_ENABLE_Enabled << nrf.SAADC_ENABLE_ENABLE_Pos)
 
-	// Configure ADC.
+	// Use fixed resolution of 12 bits.
+	// TODO: is it useful for users to change this?
 	nrf.SAADC.RESOLUTION.Set(nrf.SAADC_RESOLUTION_VAL_12bit)
 
 	var configVal uint32 = nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESP_Pos |
@@ -67,6 +68,34 @@ func (a ADC) Configure(config ADCConfig) {
 		configVal |= nrf.SAADC_CH_CONFIG_TACQ_20us << nrf.SAADC_CH_CONFIG_TACQ_Pos
 	} else { // <= 800kΩ
 		configVal |= nrf.SAADC_CH_CONFIG_TACQ_40us << nrf.SAADC_CH_CONFIG_TACQ_Pos
+	}
+
+	// Oversampling configuration.
+	burst := true
+	switch config.Samples {
+	default: // no oversampling
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Bypass)
+		burst = false
+	case 2:
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Over2x)
+	case 4:
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Over4x)
+	case 8:
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Over8x)
+	case 16:
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Over16x)
+	case 32:
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Over32x)
+	case 64:
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Over64x)
+	case 128:
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Over128x)
+	case 256:
+		nrf.SAADC.OVERSAMPLE.Set(nrf.SAADC_OVERSAMPLE_OVERSAMPLE_Over256x)
+	}
+	if burst {
+		// BURST=1 is needed when oversampling
+		configVal |= nrf.SAADC_CH_CONFIG_BURST
 	}
 
 	// Configure channel 0, which is the only channel we use.
