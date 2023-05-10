@@ -1,9 +1,5 @@
 package descriptor
 
-import (
-	"encoding/binary"
-)
-
 const (
 	hidUsagePage       = 0x05
 	hidUsage           = 0x09
@@ -134,9 +130,7 @@ func HIDReportID(id int) []byte {
 
 func HIDLogicalMinimum(min int) []byte {
 	if min > 255 {
-		result := []byte{hidLogicalMinimum + 1, 0x0, 0x0}
-		binary.LittleEndian.PutUint16(result[1:3], uint16(min))
-		return result
+		return []byte{hidLogicalMinimum + 1, uint8(min), uint8(min >> 8)}
 	}
 
 	return []byte{hidLogicalMinimum, byte(min)}
@@ -144,9 +138,7 @@ func HIDLogicalMinimum(min int) []byte {
 
 func HIDLogicalMaximum(max int) []byte {
 	if max > 255 {
-		result := []byte{hidLogicalMaximum + 1, 0x0, 0x0}
-		binary.LittleEndian.PutUint16(result[1:3], uint16(max))
-		return result
+		return []byte{hidLogicalMaximum + 1, uint8(max), uint8(max >> 8)}
 	}
 
 	return []byte{hidLogicalMaximum, byte(max)}
@@ -154,9 +146,7 @@ func HIDLogicalMaximum(max int) []byte {
 
 func HIDUsageMinimum(min int) []byte {
 	if min > 255 {
-		result := []byte{hidUsageMinimum + 1, 0x0, 0x0}
-		binary.LittleEndian.PutUint16(result[1:3], uint16(min))
-		return result
+		return []byte{hidUsageMinimum + 1, uint8(min), uint8(min >> 8)}
 	}
 
 	return []byte{hidUsageMinimum, byte(min)}
@@ -164,9 +154,7 @@ func HIDUsageMinimum(min int) []byte {
 
 func HIDUsageMaximum(max int) []byte {
 	if max > 255 {
-		result := []byte{hidUsageMaximum + 1, 0x0, 0x0}
-		binary.LittleEndian.PutUint16(result[1:3], uint16(max))
-		return result
+		return []byte{hidUsageMaximum + 1, uint8(max), uint8(max >> 8)}
 	}
 
 	return []byte{hidUsageMaximum, byte(max)}
@@ -174,9 +162,7 @@ func HIDUsageMaximum(max int) []byte {
 
 func HIDPhysicalMinimum(min int) []byte {
 	if min > 255 {
-		result := []byte{hidPhysicalMinimum + 1, 0x0, 0x0}
-		binary.LittleEndian.PutUint16(result[1:3], uint16(min))
-		return result
+		return []byte{hidPhysicalMinimum + 1, uint8(min), uint8(min >> 8)}
 	}
 
 	return []byte{hidPhysicalMinimum, byte(min)}
@@ -184,9 +170,7 @@ func HIDPhysicalMinimum(min int) []byte {
 
 func HIDPhysicalMaximum(max int) []byte {
 	if max > 255 {
-		result := []byte{hidPhysicalMaximum + 1, 0x0, 0x0}
-		binary.LittleEndian.PutUint16(result[1:3], uint16(max))
-		return result
+		return []byte{hidPhysicalMaximum + 1, uint8(max), uint8(max >> 8)}
 	}
 
 	return []byte{hidPhysicalMaximum, byte(max)}
