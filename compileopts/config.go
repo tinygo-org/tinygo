@@ -75,8 +75,7 @@ func (c *Config) GOARM() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	targetTags := filterTags(c.Target.BuildTags, c.Options.Tags)
-	tags := append(targetTags, []string{"tinygo", "math_big_pure_go", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
+	tags := append(c.Target.BuildTags, []string{"tinygo", "math_big_pure_go", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
@@ -551,28 +550,4 @@ type TestConfig struct {
 	BenchTime         string
 	BenchMem          bool
 	Shuffle           string
-}
-
-// filterTags removes predefined build tags for a target if a conflicting option
-// is provided by the user.
-func filterTags(targetTags []string, userTags []string) []string {
-	var filtered []string
-	for _, t := range targetTags {
-		switch {
-		case strings.HasPrefix(t, "runtime_memhash_"):
-			overridden := false
-			for _, ut := range userTags {
-				if strings.HasPrefix(ut, "runtime_memhash_") {
-					overridden = true
-					break
-				}
-			}
-			if !overridden {
-				filtered = append(filtered, t)
-			}
-		default:
-			filtered = append(filtered, t)
-		}
-	}
-	return filtered
 }

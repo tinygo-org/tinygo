@@ -1,4 +1,7 @@
-//go:build !runtime_memhash_tsip && !runtime_memhash_leveldb
+//go:build (!wasi && !runtime_memhash_tsip && !runtime_memhash_leveldb) || (wasi && runtime_memhash_fnv)
+
+// This is the default for all targets except WASI, unless a more specific build
+// tag is set.
 
 package runtime
 
