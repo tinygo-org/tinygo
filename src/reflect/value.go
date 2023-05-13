@@ -1486,7 +1486,8 @@ func init() {
 }
 
 func Zero(typ Type) Value {
-	if typ.Size() <= unsafe.Sizeof(uintptr(0)) {
+	size := typ.Size()
+	if size <= unsafe.Sizeof(uintptr(0)) {
 		return Value{
 			typecode: typ.(*rawType),
 			value:    nil,
@@ -1494,7 +1495,7 @@ func Zero(typ Type) Value {
 		}
 	}
 
-	if typ.Size() <= zerobufferLen {
+	if size <= zerobufferLen {
 		return Value{
 			typecode: typ.(*rawType),
 			value:    unsafe.Pointer(zerobuffer),
@@ -1504,7 +1505,7 @@ func Zero(typ Type) Value {
 
 	return Value{
 		typecode: typ.(*rawType),
-		value:    alloc(typ.Size(), nil),
+		value:    alloc(size, nil),
 		flags:    valueFlagExported | valueFlagRO,
 	}
 }
