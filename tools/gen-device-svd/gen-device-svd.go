@@ -18,7 +18,7 @@ import (
 )
 
 var validName = regexp.MustCompile("^[a-zA-Z0-9_]+$")
-var enumBitSpecifier = regexp.MustCompile("^#[x01]+$")
+var enumBitSpecifier = regexp.MustCompile("^#x*[01]+[01x]*$")
 
 type SVDFile struct {
 	XMLName     xml.Name `xml:"device"`
@@ -628,6 +628,11 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		}
 		for _, enumEl := range enumeratedValues.EnumeratedValue {
 			enumName := enumEl.Name
+			// Renesas has enum without actual values that we have to skip
+			if enumEl.Value == "" {
+				continue
+			}
+
 			if strings.EqualFold(enumName, "reserved") || !validName.MatchString(enumName) {
 				continue
 			}
@@ -645,7 +650,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			}
 			if err != nil {
 				if enumBitSpecifier.MatchString(enumEl.Value) {
-					// NXP SVDs use the form #xx1x, #x0xx, etc for values
+					// NXP and Renesas SVDs use the form #xx1x, #x0xx, etc for values
 					enumValue, err = strconv.ParseUint(strings.ReplaceAll(enumEl.Value[1:], "x", "0"), 2, 64)
 					if err != nil {
 						panic(err)
@@ -760,6 +765,14 @@ func (r *Register) dimIndex() []string {
 
 	t := strings.Split(*r.element.DimIndex, "-")
 	if len(t) == 2 {
+		// renesas uses hex letters e.g. A-B
+		if strings.Contains("ABCDEFabcdef", t[0]) {
+			t[0] = "0x" + t[0]
+		}
+		if strings.Contains("ABCDEFabcdef", t[1]) {
+			t[1] = "0x" + t[1]
+		}
+
 		x, err := strconv.ParseInt(t[0], 0, 32)
 		if err != nil {
 			panic(err)
