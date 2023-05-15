@@ -1294,13 +1294,7 @@ func uvarint32(buf []byte) (uint32, int) {
 	var x uint32
 	var s uint
 	for i, b := range buf {
-		if i == maxVarintLen32 {
-			return 0, -(i + 1) // overflow
-		}
 		if b < 0x80 {
-			if i == maxVarintLen32-1 && b > 1 {
-				return 0, -(i + 1) // overflow
-			}
 			return x | uint32(b)<<s, i + 1
 		}
 		x |= uint32(b&0x7f) << s
