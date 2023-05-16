@@ -70,13 +70,17 @@ def main():
     totalCode0 = 0
     totalCode1 = 0
     totalDiff = 0
+    totalProduct = 1
     print(' before   after   diff')
     for comparison in comparisons:
-        print('%7d %7d %6d %6.2f%%  %s' % (comparison.flash0, comparison.flash1, comparison.flashdiff, comparison.flashdiff / comparison.flash0 * 100, comparison.command))
+        diffPct = comparison.flashdiff / comparison.flash0
+        print('%7d %7d %6d %6.2f%%  %s' % (comparison.flash0, comparison.flash1, comparison.flashdiff, diffPct * 100, comparison.command))
         totalCode0 += comparison.flash0
         totalCode1 += comparison.flash1
         totalDiff += comparison.flashdiff
-    print('%7d %7d %6d %6.2f%%  sum' % (totalCode0, totalCode1, totalDiff, totalDiff / totalCode0 * 100))
+        totalProduct *= (1 + diffPct)
+    geomean = totalProduct ** (1.0 / float(len(comparisons)))
+    print('%7d %7d %6d %6.2f%%   sum' % (totalCode0, totalCode1, totalDiff, geomean - 1))
 
 
 if __name__ == '__main__':
