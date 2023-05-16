@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,7 +30,7 @@ type AVRToolsDeviceFile struct {
 				Size  string `xml:"size,attr"`
 			} `xml:"memory-segment"`
 		} `xml:"address-spaces>address-space"`
-		Interrupts []Interrupt `xml:"interrupts>interrupt"`
+		Interrupts []*XMLInterrupt `xml:"interrupts>interrupt"`
 	} `xml:"devices>device"`
 	Modules []struct {
 		Name          string `xml:"name,attr"`
@@ -50,6 +51,13 @@ type AVRToolsDeviceFile struct {
 			} `xml:"register"`
 		} `xml:"register-group"`
 	} `xml:"modules>module"`
+}
+
+type XMLInterrupt struct {
+	Index    int    `xml:"index,attr"`
+	Name     string `xml:"name,attr"`
+	Instance string `xml:"module-instance,attr"`
+	Caption  string `xml:"caption,attr"`
 }
 
 type Device struct {
@@ -81,9 +89,9 @@ type MemorySegment struct {
 }
 
 type Interrupt struct {
-	Index   int    `xml:"index,attr"`
-	Name    string `xml:"name,attr"`
-	Caption string `xml:"caption,attr"`
+	Index   int
+	Name    string
+	Caption string
 }
 
 type Peripheral struct {
@@ -247,6 +255,35 @@ func readATDF(path string) (*Device, error) {
 		return nil, err
 	}
 
+	// Process the interrupts to clean up inconsistencies between ATDF files.
+	var interrupts []Interrupt
+	hasResetInterrupt := false
+	for _, intr := range device.Interrupts {
+		name := intr.Name
+		if intr.Instance != "" {
+			// ATDF files for newer chips also have an instance name, which must
+			// be specified to make the interrupt name unique.
+			name = intr.Instance + "_" + name
+		}
+		if name == "RESET" {
+			hasResetInterrupt = true
+		}
+		interrupts = append(interrupts, Interrupt{
+			Index:   intr.Index,
+			Name:    name,
+			Caption: intr.Caption,
+		})
+	}
+	if !hasResetInterrupt {
+		interrupts = append(interrupts, Interrupt{
+			Index: 0,
+			Name:  "RESET",
+		})
+	}
+	sort.SliceStable(interrupts, func(i, j int) bool {
+		return interrupts[i].Index < interrupts[j].Index
+	})
+
 	return &Device{
 		metadata: map[string]interface{}{
 			"file":             filepath.Base(path),
@@ -261,7 +298,7 @@ func readATDF(path string) (*Device, error) {
 			"ramSize":          ramSize,
 			"numInterrupts":    len(device.Interrupts),
 		},
-		interrupts:  device.Interrupts,
+		interrupts:  interrupts,
 		peripherals: peripherals,
 	}, nil
 }
