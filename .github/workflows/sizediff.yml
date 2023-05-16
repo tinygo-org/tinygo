@@ -10,6 +10,8 @@ concurrency:
 jobs:
   sizediff:
     runs-on: ubuntu-22.04
+    permissions:
+      pull-requests: write
     steps:
       # Prepare, install tools
       - name: Add GOBIN to $PATH
