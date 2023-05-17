@@ -69,6 +69,7 @@ type PackageJSON struct {
 	// Dependency information
 	Imports   []string
 	ImportMap map[string]string
+	Deps      []string
 
 	// Error information
 	Error *struct {

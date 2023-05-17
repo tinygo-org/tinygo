@@ -251,10 +251,14 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
 // //export or //go:noinline.
 func (info *functionInfo) parsePragmas(f *ssa.Function) {
-	if f.Syntax() == nil {
+	syntax := f.Syntax()
+	if f.Origin() != nil {
+		syntax = f.Origin().Syntax()
+	}
+	if syntax == nil {
 		return
 	}
-	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
+	if decl, ok := syntax.(*ast.FuncDecl); ok && decl.Doc != nil {
 
 		// Our importName for a wasm module (if we are compiling to wasm), or llvm link name
 		var importName string

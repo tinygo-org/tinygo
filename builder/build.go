@@ -352,9 +352,25 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					return nil
 				}
 
-				// Compile AST to IR. The compiler.CompilePackage function will
-				// build the SSA as needed.
-				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, program.Package(pkg.Pkg), machine, compilerConfig, config.DumpSSA())
+				// Compile AST to SSA.
+				ssaPkg := program.Package(pkg.Pkg)
+				ssaPkg.Build()
+
+				// Also make sure the SSA for all dependencies has been built.
+				// This is necessary to be able to get the origin function for
+				// an instantiated function. For discussion, see:
+				// https://github.com/golang/go/issues/59427
+				//
+				// This is slightly inefficient if it ends up blocking, but we
+				// currently have no easy way to add a new dependency to a job
+				// at runtime. In practice, this shouldn't happen very often.
+				for _, imported := range pkg.Deps {
+					depSSAPkg := program.Package(lprogram.Packages[imported].Pkg)
+					depSSAPkg.Build()
+				}
+
+				// Compile SSA to IR.
+				mod, errs := compiler.CompilePackage(pkg.ImportPath, pkg, ssaPkg, machine, compilerConfig, config.DumpSSA())
 				defer mod.Context().Dispose()
 				defer mod.Dispose()
 				if errs != nil {

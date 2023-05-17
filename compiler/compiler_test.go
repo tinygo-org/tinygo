@@ -115,7 +115,9 @@ func TestCompiler(t *testing.T) {
 			// Compile AST to IR.
 			program := lprogram.LoadSSA()
 			pkg := lprogram.MainPkg()
-			mod, errs := CompilePackage(tc.file, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
+			ssaPkg := program.Package(pkg.Pkg)
+			ssaPkg.Build()
+			mod, errs := CompilePackage(tc.file, pkg, ssaPkg, machine, compilerConfig, false)
 			if errs != nil {
 				for _, err := range errs {
 					t.Error(err)
