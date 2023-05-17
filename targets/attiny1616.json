@@ -1,0 +1,14 @@
+{
+    "inherits": ["avrtiny"],
+    "cpu": "attiny1616",
+    "build-tags": ["attiny1616"],
+    "gc": "none",
+    "cflags": [
+        "-D__AVR_ARCH__=103"
+    ],
+    "linkerscript": "src/device/avr/attiny1616.ld",
+    "extra-files": [
+        "src/device/avr/attiny1616.s"
+    ],
+    "flash-command": "pymcuprog write -f {hex} --erase --verify -d attiny1616 -t uart -u {port}"
+}
