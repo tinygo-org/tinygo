@@ -82,6 +82,7 @@ type compilerContext struct {
 	uintptrType      llvm.Type
 	program          *ssa.Program
 	diagnostics      []error
+	functionInfos    map[*ssa.Function]functionInfo
 	astComments      map[string]*ast.CommentGroup
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
@@ -93,13 +94,14 @@ type compilerContext struct {
 // importantly with a newly created LLVM context and module.
 func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, dumpSSA bool) *compilerContext {
 	c := &compilerContext{
-		Config:      config,
-		DumpSSA:     dumpSSA,
-		difiles:     make(map[string]llvm.Metadata),
-		ditypes:     make(map[types.Type]llvm.Metadata),
-		machine:     machine,
-		targetData:  machine.CreateTargetData(),
-		astComments: map[string]*ast.CommentGroup{},
+		Config:        config,
+		DumpSSA:       dumpSSA,
+		difiles:       make(map[string]llvm.Metadata),
+		ditypes:       make(map[types.Type]llvm.Metadata),
+		machine:       machine,
+		targetData:    machine.CreateTargetData(),
+		functionInfos: map[*ssa.Function]functionInfo{},
+		astComments:   map[string]*ast.CommentGroup{},
 	}
 
 	c.ctx = llvm.NewContext()
