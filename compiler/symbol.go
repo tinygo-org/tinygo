@@ -239,12 +239,16 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 // present in *ssa.Function, such as the link name and whether it should be
 // exported.
 func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
+	if info, ok := c.functionInfos[f]; ok {
+		return info
+	}
 	info := functionInfo{
 		// Pick the default linkName.
 		linkName: f.RelString(nil),
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
 	info.parsePragmas(f)
+	c.functionInfos[f] = info
 	return info
 }
 
