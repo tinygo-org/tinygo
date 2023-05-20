@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       pull-requests: write
+      issues: write
     steps:
       # Prepare, install tools
       - name: Add GOBIN to $PATH
