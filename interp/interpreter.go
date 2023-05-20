@@ -346,16 +346,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					dstObj.buffer = dstBuf
 					mem.put(dst.index(), dstObj)
 				}
-				switch inst.llvmInst.Type().IntTypeWidth() {
-				case 16:
-					locals[inst.localIndex] = literalValue{uint16(n)}
-				case 32:
-					locals[inst.localIndex] = literalValue{uint32(n)}
-				case 64:
-					locals[inst.localIndex] = literalValue{uint64(n)}
-				default:
-					panic("unknown integer type width")
-				}
+				locals[inst.localIndex] = makeLiteralInt(n, inst.llvmInst.Type().IntTypeWidth())
 			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
 				// Copy a block of memory from one pointer to another.
 				dst, err := operands[1].asPointer(r)
@@ -647,16 +638,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 				// GEP on fixed pointer value (for example, memory-mapped I/O).
 				ptrValue := operands[0].Uint() + offset
-				switch operands[0].len(r) {
-				case 8:
-					locals[inst.localIndex] = literalValue{uint64(ptrValue)}
-				case 4:
-					locals[inst.localIndex] = literalValue{uint32(ptrValue)}
-				case 2:
-					locals[inst.localIndex] = literalValue{uint16(ptrValue)}
-				default:
-					panic("pointer operand is not of a known pointer size")
-				}
+				locals[inst.localIndex] = makeLiteralInt(ptrValue, int(operands[0].len(r)*8))
 				continue
 			}
 			ptr = ptr.addOffset(int64(offset))
@@ -810,18 +792,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			default:
 				panic("unreachable")
 			}
-			switch lhs.len(r) {
-			case 8:
-				locals[inst.localIndex] = literalValue{result}
-			case 4:
-				locals[inst.localIndex] = literalValue{uint32(result)}
-			case 2:
-				locals[inst.localIndex] = literalValue{uint16(result)}
-			case 1:
-				locals[inst.localIndex] = literalValue{uint8(result)}
-			default:
-				panic("unknown integer size")
-			}
+			locals[inst.localIndex] = makeLiteralInt(result, int(lhs.len(r)*8))
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", lhs, rhs, "->", result)
 			}
@@ -843,18 +814,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", value, bitwidth)
 			}
-			switch bitwidth {
-			case 64:
-				locals[inst.localIndex] = literalValue{value}
-			case 32:
-				locals[inst.localIndex] = literalValue{uint32(value)}
-			case 16:
-				locals[inst.localIndex] = literalValue{uint16(value)}
-			case 8:
-				locals[inst.localIndex] = literalValue{uint8(value)}
-			default:
-				panic("unknown integer size in sext/zext/trunc")
-			}
+			locals[inst.localIndex] = makeLiteralInt(value, int(bitwidth))
 		case llvm.SIToFP, llvm.UIToFP:
 			var value float64
 			switch inst.opcode {

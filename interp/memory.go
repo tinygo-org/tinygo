@@ -373,6 +373,22 @@ type literalValue struct {
 	value interface{}
 }
 
+// Make a literalValue given the number of bits.
+func makeLiteralInt(value uint64, bits int) literalValue {
+	switch bits {
+	case 64:
+		return literalValue{value}
+	case 32:
+		return literalValue{uint32(value)}
+	case 16:
+		return literalValue{uint16(value)}
+	case 8:
+		return literalValue{uint8(value)}
+	default:
+		panic("unknown integer size")
+	}
+}
+
 func (v literalValue) len(r *runner) uint32 {
 	switch v.value.(type) {
 	case uint64:
