@@ -746,6 +746,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					// src/strings/builder.go in the Go source tree. This is
 					// the identity operator, so we can return the input.
 					locals[inst.localIndex] = lhs
+				} else if inst.opcode == llvm.And && rhs.Uint() < 8 {
+					// This is probably part of a pattern to get the lower bits
+					// of a pointer for pointer tagging, like this:
+					//     uintptr(unsafe.Pointer(t)) & 0b11
+					// We can actually support this easily by ANDing with the
+					// pointer offset.
+					result := uint64(lhsPtr.offset()) & rhs.Uint()
+					locals[inst.localIndex] = makeLiteralInt(result, int(lhs.len(r)*8))
 				} else {
 					// Catch-all for weird operations that should just be done
 					// at runtime.
