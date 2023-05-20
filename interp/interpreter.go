@@ -736,30 +736,25 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err == nil {
 				// The lhs is a pointer. This sometimes happens for particular
 				// pointer tricks.
-				switch inst.opcode {
-				case llvm.Add:
+				if inst.opcode == llvm.Add {
 					// This likely means this is part of a
 					// unsafe.Pointer(uintptr(ptr) + offset) pattern.
 					lhsPtr = lhsPtr.addOffset(int64(rhs.Uint()))
 					locals[inst.localIndex] = lhsPtr
-					continue
-				case llvm.Xor:
-					if rhs.Uint() == 0 {
-						// Special workaround for strings.noescape, see
-						// src/strings/builder.go in the Go source tree. This is
-						// the identity operator, so we can return the input.
-						locals[inst.localIndex] = lhs
-						continue
-					}
-				default:
+				} else if inst.opcode == llvm.Xor && rhs.Uint() == 0 {
+					// Special workaround for strings.noescape, see
+					// src/strings/builder.go in the Go source tree. This is
+					// the identity operator, so we can return the input.
+					locals[inst.localIndex] = lhs
+				} else {
 					// Catch-all for weird operations that should just be done
 					// at runtime.
 					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 					if err != nil {
 						return nil, mem, err
 					}
-					continue
 				}
+				continue
 			}
 			var result uint64
 			switch inst.opcode {
