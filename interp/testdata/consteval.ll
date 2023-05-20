@@ -4,6 +4,7 @@ target triple = "x86_64--linux"
 @intToPtrResult = global i8 0
 @ptrToIntResult = global i8 0
 @icmpResult = global i8 0
+@pointerTagResult = global i64 0
 @someArray = internal global {i16, i8, i8} zeroinitializer
 @someArrayPointer = global ptr zeroinitializer
 
@@ -17,6 +18,7 @@ define internal void @main.init() {
   call void @testPtrToInt()
   call void @testConstGEP()
   call void @testICmp()
+  call void @testPointerTag()
   ret void
 }
 
@@ -61,5 +63,11 @@ unequal:
   ; should be reached
   store i8 2, ptr @icmpResult
   ret void
+  ret void
+}
+
+define internal void @testPointerTag() {
+  %val = and i64 ptrtoint (ptr getelementptr inbounds (i8, ptr @someArray, i32 2) to i64), 3
+  store i64 %val, ptr @pointerTagResult
   ret void
 }

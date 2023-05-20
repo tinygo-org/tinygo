@@ -4,6 +4,7 @@ target triple = "x86_64--linux"
 @intToPtrResult = local_unnamed_addr global i8 2
 @ptrToIntResult = local_unnamed_addr global i8 2
 @icmpResult = local_unnamed_addr global i8 2
+@pointerTagResult = local_unnamed_addr global i64 2
 @someArray = internal global { i16, i8, i8 } zeroinitializer
 @someArrayPointer = local_unnamed_addr global ptr getelementptr inbounds ({ i16, i8, i8 }, ptr @someArray, i64 0, i32 1)
 
