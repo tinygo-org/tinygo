@@ -2,7 +2,11 @@
 
 package machine
 
-import "device/avr"
+import (
+	"device/avr"
+	"runtime/volatile"
+	"unsafe"
+)
 
 const deviceName = avr.DEVICE
 
@@ -20,33 +24,31 @@ func (p Pin) Configure(config PinConfig) {
 		// set output bit
 		port.DIRSET.Set(mask)
 
-		// Note: if the pin was PinInputPullup before, it'll now be high.
-		// Otherwise it will be low.
+		// Note: the output state (high or low) is as it was before.
 	} else {
-		// configure input: clear output bit
-		port.DIRCLR.Set(mask)
-
-		if config.Mode == PinInput {
-			// No pullup (floating).
-			// The transition may be one of the following:
-			//   output high -> input pullup -> input (safe: output high and input pullup are similar)
-			//   output low  -> input        -> input (safe: no extra transition)
-			port.OUTCLR.Set(mask)
-		} else {
-			// Pullup.
-			// The transition may be one of the following:
-			//   output high -> input pullup -> input pullup (safe: no extra transition)
-			//   output low  -> input        -> input pullup (possibly problematic)
-			// For the last transition (output low -> input -> input pullup),
-			// the transition may be problematic in some cases because there is
-			// an intermediate floating state (which may cause irratic
-			// interrupts, for example). If this is a problem, the application
-			// should set the pin high before configuring it as PinInputPullup.
-			// We can't do that here because setting it to high as an
-			// intermediate state may have other problems.
-			port.OUTSET.Set(mask)
+		// Configure the pin as an input.
+		// First set up the configuration that will be used when it is an input.
+		pinctrl := uint8(0)
+		if config.Mode == PinInputPullup {
+			pinctrl |= avr.PORT_PIN0CTRL_PULLUPEN
 		}
+		// Find the PINxCTRL register for this pin.
+		ctrlAddress := (*volatile.Register8)(unsafe.Add(unsafe.Pointer(&port.PIN0CTRL), p%8))
+		ctrlAddress.Set(pinctrl)
+
+		// Configure the pin as input (if it wasn't an input pin before).
+		port.DIRCLR.Set(mask)
 	}
+}
+
+// Get returns the current value of a GPIO pin when the pin is configured as an
+// input or as an output.
+func (p Pin) Get() bool {
+	port, mask := p.getPortMask()
+	// As noted above, the PINx register is always two registers below the PORTx
+	// register, so we can find it simply by subtracting two from the PORTx
+	// register address.
+	return (port.IN.Get() & mask) > 0
 }
 
 // Set changes the value of the GPIO pin. The pin must be configured as output.
