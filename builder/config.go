@@ -1,7 +1,6 @@
 package builder
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -24,14 +23,9 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		spec.OpenOCDCommands = options.OpenOCDCommands
 	}
 
-	goroot := goenv.Get("GOROOT")
-	if goroot == "" {
-		return nil, errors.New("cannot locate $GOROOT, please set it manually")
-	}
-
-	major, minor, err := goenv.GetGorootVersion(goroot)
+	major, minor, err := goenv.GetGorootVersion()
 	if err != nil {
-		return nil, fmt.Errorf("could not read version from GOROOT (%v): %v", goroot, err)
+		return nil, err
 	}
 	if major != 1 || minor < 18 || minor > 20 {
 		// Note: when this gets updated, also update the Go compatibility matrix:
