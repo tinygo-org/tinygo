@@ -29,7 +29,7 @@ func TestCompiler(t *testing.T) {
 	t.Parallel()
 
 	// Determine Go minor version (e.g. 16 in go1.16.3).
-	_, goMinor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
+	_, goMinor, err := goenv.GetGorootVersion()
 	if err != nil {
 		t.Fatal("could not read Go version:", err)
 	}

@@ -4,9 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -22,8 +19,8 @@ var (
 
 // GetGorootVersion returns the major and minor version for a given GOROOT path.
 // If the goroot cannot be determined, (0, 0) is returned.
-func GetGorootVersion(goroot string) (major, minor int, err error) {
-	s, err := GorootVersionString(goroot)
+func GetGorootVersion() (major, minor int, err error) {
+	s, err := GorootVersionString()
 	if err != nil {
 		return 0, 0, err
 	}
@@ -51,24 +48,9 @@ func GetGorootVersion(goroot string) (major, minor int, err error) {
 }
 
 // GorootVersionString returns the version string as reported by the Go
-// toolchain for the given GOROOT path. It is usually of the form `go1.x.y` but
-// can have some variations (for beta releases, for example).
-func GorootVersionString(goroot string) (string, error) {
-	if data, err := os.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
-		return string(data), nil
-
-	} else if data, err := os.ReadFile(filepath.Join(
-		goroot, "src", "internal", "buildcfg", "zbootstrap.go")); err == nil {
-
-		r := regexp.MustCompile("const version = `(.*)`")
-		matches := r.FindSubmatch(data)
-		if len(matches) != 2 {
-			return "", errors.New("Invalid go version output:\n" + string(data))
-		}
-
-		return string(matches[1]), nil
-
-	} else {
-		return "", err
-	}
+// toolchain. It is usually of the form `go1.x.y` but can have some variations
+// (for beta releases, for example).
+func GorootVersionString() (string, error) {
+	err := readGoEnvVars()
+	return goEnvVars.GOVERSION, err
 }

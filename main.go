@@ -1871,7 +1871,7 @@ func main() {
 		usage(command)
 	case "version":
 		goversion := "<unknown>"
-		if s, err := goenv.GorootVersionString(goenv.Get("GOROOT")); err == nil {
+		if s, err := goenv.GorootVersionString(); err == nil {
 			goversion = s
 		}
 		version := goenv.Version
