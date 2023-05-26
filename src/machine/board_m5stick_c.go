@@ -1,0 +1,117 @@
+//go:build m5stick_c
+
+// This file contains the pin mapping for the M5STACK M5Stick-C device.
+// doc: https://docs.m5stack.com/en/core/m5stickc
+
+package machine
+
+const (
+	// HAT     | HY2.0-4P
+	//         |
+	// GND     | GND
+	// 5V OUT  | VOUT
+	// G26     | G32   SDA
+	// G36     | G33   SCL
+	// G0      |
+	// BAT     |
+	// 3V3     |
+	// 5V IN   |
+
+	IO0  = GPIO0 // CLK
+	IO1  = GPIO1 // U0TXD
+	IO2  = GPIO2
+	IO3  = GPIO3 // U0RXD
+	IO4  = GPIO4
+	IO5  = GPIO5 // TFT_CS LCD_SS SPI0_SS
+	IO6  = GPIO6
+	IO7  = GPIO7
+	IO8  = GPIO8
+	IO9  = GPIO9  // IR
+	IO10 = GPIO10 // LED
+	IO11 = GPIO11
+	IO12 = GPIO12
+	IO13 = GPIO13 // TFT_CLK  LCD_SCK  SPI0_SCK
+	IO14 = GPIO14
+	IO15 = GPIO15 // TFT_MOSI LCD_MOSI SPI0_MOSI
+	IO16 = GPIO16
+	IO17 = GPIO17
+	IO18 = GPIO18 // TFT_RST LCD_RST
+	IO19 = GPIO19
+	IO21 = GPIO21 // SDA0
+	IO22 = GPIO22 // SCL0
+	IO23 = GPIO23 // TFT_DC LCD_DC
+	IO25 = GPIO25 // -   DAC1
+	IO26 = GPIO26 // HAT DAC2
+	IO27 = GPIO27
+	IO32 = GPIO32 // SDA1 / PIN 32 / RXD2
+	IO33 = GPIO33 // SCL1 / PIN 33 / TXD2
+	IO34 = GPIO34 // MIC_DATA
+	IO35 = GPIO35 // IRQ0   ADC1
+	IO36 = GPIO36 // HAT    ADC2  LCD_MISO SPI0_MISO
+	IO37 = GPIO37 // BUTTON_A, BUTTON_HOME, BUTTON
+	IO38 = GPIO38
+	IO39 = GPIO39 // BUTTON_B, BUTTON_RST
+)
+
+const (
+	// Buttons
+	BUTTON_A    = IO37
+	BUTTON_B    = IO39
+	BUTTON_HOME = BUTTON_A
+	BUTTON_RST  = BUTTON_B
+	BUTTON      = BUTTON_A
+
+	// LED
+	IR  = IO9
+	LED = IO10
+)
+
+// SPI pins
+const (
+	SPI0_SCK_PIN = IO13
+	SPI0_SDO_PIN = IO15
+	SPI0_CS0_PIN = IO5
+
+	// LCD ()
+	LCD_SCK_PIN = SPI0_SCK_PIN
+	LCD_SDO_PIN = SPI0_SDO_PIN
+	LCD_SS_PIN  = SPI0_CS0_PIN
+	LCD_DC_PIN  = IO23
+	LCD_RST_PIN = IO18
+)
+
+// I2C pins
+const (
+	// Internal I2C (AXP192 / BM8563 / MPU6886)
+	SDA0_PIN = IO21
+	SCL0_PIN = IO22
+
+	// External I2C (GROOVE PORT)
+	SDA1_PIN = IO32
+	SCL1_PIN = IO33
+
+	SDA_PIN = SDA1_PIN
+	SCL_PIN = SCL1_PIN
+)
+
+// ADC pins
+const (
+	ADC1 Pin = IO35
+	ADC2 Pin = IO36
+)
+
+// DAC pins
+const (
+	DAC1 Pin = IO25
+	DAC2 Pin = IO26
+)
+
+// UART pins
+const (
+	// UART0 (CP2104)
+	UART0_TX_PIN = IO1
+	UART0_RX_PIN = IO3
+
+	UART_TX_PIN = UART0_TX_PIN
+	UART_RX_PIN = UART0_RX_PIN
+)
