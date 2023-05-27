@@ -83,7 +83,7 @@ func in_ram() uintptr {
 	return device.AsmFull("MOV {}, PC", nil)
 }
 
-// go:noinline used here to prevent function being 'inlined' into main()
+// 'go:noinline' used here to prevent function being 'inlined' into main()
 // so it appears in objdump output.  In normal use, go:inline is not
 // required for functions running from flash (flash is the default).
 //
