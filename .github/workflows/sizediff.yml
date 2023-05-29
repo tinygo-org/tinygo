@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       pull-requests: write
-      issues: write
     steps:
       # Prepare, install tools
       - name: Add GOBIN to $PATH
@@ -89,6 +88,7 @@ jobs:
       - name: Comment contents
         run: cat comment.txt
       - name: Add comment
+        if: github.repository == 'tinygo-org/tinygo'
         uses: thollander/actions-comment-pull-request@v2.3.1
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
