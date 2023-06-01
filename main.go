@@ -1431,6 +1431,12 @@ func main() {
 	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
 	dumpSSA := flag.Bool("internal-dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("internal-verifyir", false, "run extra verification steps on LLVM IR")
+	// Don't generate debug information in the IR, to make IR more readable.
+	// You generally want debug information in IR for various features, like
+	// stack size calculation and features like -size=short, -print-allocs=,
+	// etc. The -no-debug flag is used to strip it at link time. But for TinyGo
+	// development it can be useful to not emit debug information at all.
+	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, use -no-debug instead")
 
 	var flagJSON, flagDeps, flagTest bool
 	if command == "help" || command == "list" || command == "info" || command == "build" {
@@ -1508,6 +1514,7 @@ func main() {
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
+		SkipDWARF:       *skipDwarf,
 		Semaphore:       make(chan struct{}, *parallelism),
 		Debug:           !*nodebug,
 		PrintSizes:      *printSize,
