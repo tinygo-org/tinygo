@@ -175,7 +175,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		AutomaticStackSize: config.AutomaticStackSize(),
 		DefaultStackSize:   config.StackSize(),
 		NeedsStackObjects:  config.NeedsStackObjects(),
-		Debug:              true,
+		Debug:              !config.Options.SkipDWARF, // emit DWARF except when -internal-nodwarf is passed
 	}
 
 	// Load the target machine, which is the LLVM object that contains all

@@ -35,6 +35,7 @@ type Options struct {
 	PrintIR         bool
 	DumpSSA         bool
 	VerifyIR        bool
+	SkipDWARF       bool
 	PrintCommands   func(cmd string, args ...string) `json:"-"`
 	Semaphore       chan struct{}                    `json:"-"` // -p flag controls cap
 	Debug           bool
