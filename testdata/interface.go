@@ -113,6 +113,9 @@ func main() {
 	println("slept 1ms")
 	blockStatic(SleepBlocker(time.Millisecond))
 	println("slept 1ms")
+
+	// check that pointer-to-pointer type switches work
+	ptrptrswitch()
 }
 
 func printItf(val interface{}) {
@@ -311,4 +314,23 @@ func namedptr1() interface{} {
 func namedptr2() interface{} {
 	type Test byte
 	return (*Test)(nil)
+}
+
+func ptrptrswitch() {
+	identify(0)
+	identify(new(int))
+	identify(new(*int))
+}
+
+func identify(itf any) {
+	switch itf.(type) {
+	case int:
+		println("type is int")
+	case *int:
+		println("type is *int")
+	case **int:
+		println("type is **int")
+	default:
+		println("other type??")
+	}
 }

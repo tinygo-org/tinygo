@@ -673,11 +673,8 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		commaOk = b.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{actualTypeNum}, "")
 
 	} else {
-		assertedTypeGlobal := b.getTypeCode(expr.AssertedType)
-		if !assertedTypeGlobal.IsAConstantExpr().IsNil() {
-			assertedTypeGlobal = assertedTypeGlobal.Operand(0) // resolve the GEP operation
-		}
-		globalName := "reflect/types.typeid:" + strings.TrimPrefix(assertedTypeGlobal.Name(), "reflect/types.type:")
+		name, _ := getTypeCodeName(expr.AssertedType)
+		globalName := "reflect/types.typeid:" + name
 		assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
 		if assertedTypeCodeGlobal.IsNil() {
 			// Create a new typecode global.

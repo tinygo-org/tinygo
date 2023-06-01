@@ -24,3 +24,6 @@ Byte():  3
 non-blocking call on sometimes-blocking interface
 slept 1ms
 slept 1ms
+type is int
+type is *int
+type is **int
