@@ -1401,9 +1401,6 @@ func main() {
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb)")
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
 	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
-	printIR := flag.Bool("printir", false, "print LLVM IR")
-	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
-	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
 	var tags buildutil.TagsFlag
 	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
@@ -1429,6 +1426,11 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
+
+	// Internal flags, that are only intended for TinyGo development.
+	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
+	dumpSSA := flag.Bool("internal-dumpssa", false, "dump internal Go SSA")
+	verifyIR := flag.Bool("internal-verifyir", false, "run extra verification steps on LLVM IR")
 
 	var flagJSON, flagDeps, flagTest bool
 	if command == "help" || command == "list" || command == "info" || command == "build" {
