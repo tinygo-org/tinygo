@@ -721,6 +721,8 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5stack             examples/serial
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target m5stick-c           examples/serial
+	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target mch2022             examples/serial
 	@$(MD5SUM) test.bin
 endif
