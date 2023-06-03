@@ -88,7 +88,7 @@ jobs:
       - name: Comment contents
         run: cat comment.txt
       - name: Add comment
-        if: github.repository == 'tinygo-org/tinygo'
+        if: ${{ github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name }}
         uses: thollander/actions-comment-pull-request@v2.3.1
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
