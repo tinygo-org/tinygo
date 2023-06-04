@@ -52,10 +52,9 @@ type I2CConfig struct {
 }
 
 type I2C struct {
-	Bus           *rp.I2C0_Type
-	restartOnNext bool
-	mode          I2CMode
-	txInProgress  bool
+	Bus          *rp.I2C0_Type
+	mode         I2CMode
+	txInProgress bool
 }
 
 var (
@@ -236,7 +235,6 @@ func (i2c *I2C) init(config I2CConfig) error {
 	if err := i2c.disable(); err != nil {
 		return err
 	}
-	i2c.restartOnNext = false
 
 	i2c.mode = config.Mode
 
@@ -306,7 +304,8 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 	i2c.Bus.IC_TAR.Set(uint32(addr))
 	i2c.enable()
 	abort := false
-	var abortReason uint32
+	var abortReason i2cAbortError
+	txStop := rxlen == 0
 	for txCtr := 0; txCtr < txlen; txCtr++ {
 		if abort {
 			break
@@ -314,8 +313,8 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 		first := txCtr == 0
 		last := txCtr == txlen-1 && rxlen == 0
 		i2c.Bus.IC_DATA_CMD.Set(
-			(boolToBit(first && i2c.restartOnNext) << rp.I2C0_IC_DATA_CMD_RESTART_Pos) |
-				(boolToBit(last) << rp.I2C0_IC_DATA_CMD_STOP_Pos) |
+			(boolToBit(first) << rp.I2C0_IC_DATA_CMD_RESTART_Pos) |
+				(boolToBit(last && txStop) << rp.I2C0_IC_DATA_CMD_STOP_Pos) |
 				uint32(tx[txCtr]))
 
 		// Wait until the transmission of the address/data from the internal
@@ -356,6 +355,9 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 			// to take care of the abort.
 			for !i2c.interrupted(rp.I2C0_IC_RAW_INTR_STAT_STOP_DET) {
 				if ticks() > deadline {
+					if abort {
+						return abortReason
+					}
 					return errI2CWriteTimeout
 				}
 
@@ -365,6 +367,16 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 		}
 	}
 
+	// Midway check for abort. Related issue https://github.com/tinygo-org/tinygo/issues/3671.
+	// The root cause for an abort after writing registers was "tx data no ack" (abort code=8).
+	// If the abort code was not registered then the whole peripheral would remain in disabled state forever.
+	abortReason = i2c.getAbortReason()
+	if abortReason != 0 {
+		i2c.clearAbortReason()
+		abort = true
+	}
+
+	rxStart := txlen == 0
 	if rxlen > 0 && !abort {
 		for rxCtr := 0; rxCtr < rxlen; rxCtr++ {
 			first := rxCtr == 0
@@ -373,14 +385,14 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 				gosched()
 			}
 			i2c.Bus.IC_DATA_CMD.Set(
-				boolToBit(first && i2c.restartOnNext)<<rp.I2C0_IC_DATA_CMD_RESTART_Pos |
+				boolToBit(first && rxStart)<<rp.I2C0_IC_DATA_CMD_RESTART_Pos |
 					boolToBit(last)<<rp.I2C0_IC_DATA_CMD_STOP_Pos |
 					rp.I2C0_IC_DATA_CMD_CMD) // -> 1 for read
 
 			for !abort && i2c.readAvailable() == 0 {
 				abortReason = i2c.getAbortReason()
-				i2c.clearAbortReason()
 				if abortReason != 0 {
+					i2c.clearAbortReason()
 					abort = true
 				}
 				if ticks() > deadline {
@@ -407,7 +419,7 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 			// Address acknowledged, some data not acknowledged
 			fallthrough
 		default:
-			err = makeI2CAbortError(abortReason)
+			err = abortReason
 		}
 	}
 	return err
@@ -534,8 +546,8 @@ func (i2c *I2C) clearAbortReason() {
 // getAbortReason reads IC_TX_ABRT_SOURCE register.
 //
 //go:inline
-func (i2c *I2C) getAbortReason() uint32 {
-	return i2c.Bus.IC_TX_ABRT_SOURCE.Get()
+func (i2c *I2C) getAbortReason() i2cAbortError {
+	return i2cAbortError(i2c.Bus.IC_TX_ABRT_SOURCE.Get())
 }
 
 // returns true if RAW_INTR_STAT bits in mask are all set. performs:
@@ -554,9 +566,62 @@ func (b i2cAbortError) Error() string {
 	return "i2c abort, reason " + itoa.Uitoa(uint(b))
 }
 
-//go:inline
-func makeI2CAbortError(reason uint32) error {
-	return i2cAbortError(reason)
+func (b i2cAbortError) Reasons() (reasons []string) {
+	if b == 0 {
+		return nil
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_7B_ADDR_NOACK != 0 {
+		reasons = append(reasons, "7-bit address no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_10ADDR1_NOACK != 0 {
+		reasons = append(reasons, "10-bit address first byte no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_10ADDR2_NOACK != 0 {
+		reasons = append(reasons, "10-bit address second byte no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_TXDATA_NOACK != 0 {
+		reasons = append(reasons, "tx data no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_GCALL_NOACK != 0 {
+		reasons = append(reasons, "general call no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_GCALL_READ != 0 {
+		reasons = append(reasons, "general call read")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_HS_ACKDET != 0 {
+		reasons = append(reasons, "high speed ack detect")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SBYTE_ACKDET != 0 {
+		reasons = append(reasons, "start byte ack detect")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_HS_NORSTRT != 0 {
+		reasons = append(reasons, "high speed no restart")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SBYTE_NORSTRT != 0 {
+		reasons = append(reasons, "start byte no restart")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_10B_RD_NORSTRT != 0 {
+		reasons = append(reasons, "10-bit read no restart")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_MASTER_DIS != 0 {
+		reasons = append(reasons, "master disabled")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ARB_LOST != 0 {
+		reasons = append(reasons, "arbitration lost")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SLVFLUSH_TXFIFO != 0 {
+		reasons = append(reasons, "slave flush tx fifo")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SLV_ARBLOST != 0 {
+		reasons = append(reasons, "slave arbitration lost")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SLVRD_INTX != 0 {
+		reasons = append(reasons, "slave read while inactive")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_USER_ABRT != 0 {
+		reasons = append(reasons, "user abort")
+	}
+	return reasons
 }
 
 //go:inline
