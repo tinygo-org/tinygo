@@ -286,7 +286,6 @@ func (i2c *I2C) deinit() (resetVal uint32) {
 
 // tx performs blocking write followed by read to I2C bus.
 func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
-	println("tx called txlen=", len(tx), "rxlen=", len(rx), "addr=", addr)
 	deadline := ticks() + timeout_us
 	if addr >= 0x80 || isReservedI2CAddr(addr) {
 		return ErrInvalidTgtAddr
@@ -302,7 +301,6 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 	if err != nil {
 		return err
 	}
-	println("first disable succeed")
 	i2c.Bus.IC_TAR.Set(uint32(addr))
 	i2c.enable()
 	abort := false
@@ -369,9 +367,18 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 		}
 	}
 
+	// Midway check for abort. Related issue https://github.com/tinygo-org/tinygo/issues/3671.
+	// The root cause for an abort after writing registers was "tx data no ack" (abort code=8).
+	// If the abort code was not registered then the whole peripheral would remain in disabled state forever.
+	abortReason = i2c.getAbortReason()
+	if abortReason != 0 {
+		i2c.clearAbortReason()
+		abort = true
+	}
+
 	rxStart := txlen == 0
 	if rxlen > 0 && !abort {
-		for rxCtr := 0; !abort && rxCtr < rxlen; rxCtr++ {
+		for rxCtr := 0; rxCtr < rxlen; rxCtr++ {
 			first := rxCtr == 0
 			last := rxCtr == rxlen-1
 			for i2c.writeAvailable() == 0 {
