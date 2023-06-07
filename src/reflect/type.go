@@ -395,8 +395,10 @@ type Type interface {
 
 // Constants for the 'meta' byte.
 const (
-	kindMask  = 31 // mask to apply to the meta byte to get the Kind value
-	flagNamed = 32 // flag that is set if this is a named type
+	kindMask       = 31  // mask to apply to the meta byte to get the Kind value
+	flagNamed      = 32  // flag that is set if this is a named type
+	flagComparable = 64  // flag that is set if this type is comparable
+	flagIsBinary   = 128 // flag that is set if this type uses the hashmap binary algorithm
 )
 
 // The base type struct. All type structs start with this.
@@ -940,63 +942,12 @@ func (t *rawType) Implements(u Type) bool {
 
 // Comparable returns whether values of this type can be compared to each other.
 func (t *rawType) Comparable() bool {
-	switch t.Kind() {
-	case Invalid:
-		return false
-	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
-		return true
-	case Float32, Float64, Complex64, Complex128:
-		return true
-	case String:
-		return true
-	case UnsafePointer:
-		return true
-	case Chan:
-		return true
-	case Interface:
-		return true
-	case Pointer:
-		return true
-	case Slice:
-		return false
-	case Array:
-		return t.elem().Comparable()
-	case Func:
-		return false
-	case Map:
-		return false
-	case Struct:
-		numField := t.NumField()
-		for i := 0; i < numField; i++ {
-			if !t.rawField(i).Type.Comparable() {
-				return false
-			}
-		}
-		return true
-	default:
-		panic(TypeError{"Comparable"})
-	}
+	return (t.meta & flagComparable) == flagComparable
 }
 
 // isbinary() returns if the hashmapAlgorithmBinary functions can be used on this type
 func (t *rawType) isBinary() bool {
-	switch t.Kind() {
-	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
-		return true
-	case Pointer:
-		return true
-	case Array:
-		return t.elem().isBinary()
-	case Struct:
-		numField := t.NumField()
-		for i := 0; i < numField; i++ {
-			if !t.rawField(i).Type.isBinary() {
-				return false
-			}
-		}
-		return true
-	}
-	return false
+	return (t.meta & flagIsBinary) == flagIsBinary
 }
 
 func (t *rawType) ChanDir() ChanDir {

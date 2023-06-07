@@ -238,6 +238,16 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			c.interfaceTypes.Set(typ, global)
 		}
 		metabyte := getTypeKind(typ)
+
+		// Precompute these so we don't have to calculate them at runtime.
+		if types.Comparable(typ) {
+			metabyte |= 1 << 6
+		}
+
+		if hashmapIsBinaryKey(typ) {
+			metabyte |= 1 << 7
+		}
+
 		switch typ := typ.(type) {
 		case *types.Basic:
 			typeFields = []llvm.Value{c.getTypeCode(types.NewPointer(typ))}
