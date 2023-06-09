@@ -133,6 +133,10 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		if _, ok := typ.Elem().(*types.Pointer); ok {
 			// For a pointer to a pointer, we just increase the pointer by 1
 			ptr := c.getTypeCode(typ.Elem())
+			// if the type is already *****T or higher, we can't make it.
+			if typstr := typ.String(); strings.HasPrefix(typstr, "*****") {
+				c.addError(token.NoPos, fmt.Sprintf("too many levels of pointers for typecode: %s", typstr))
+			}
 			return llvm.ConstGEP(c.ctx.Int8Type(), ptr, []llvm.Value{
 				llvm.ConstInt(llvm.Int32Type(), 1, false),
 			})
