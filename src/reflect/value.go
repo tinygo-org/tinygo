@@ -913,7 +913,7 @@ func (v Value) MapKeys() []Value {
 	k := New(v.typecode.Key())
 	e := New(v.typecode.Elem())
 
-	keyType := v.typecode.Key().(*rawType)
+	keyType := v.typecode.key()
 	isKeyStoredAsInterface := keyType.Kind() != String && !keyType.isBinary()
 
 	for hashmapNext(v.pointer(), it, k.value, e.value) {
