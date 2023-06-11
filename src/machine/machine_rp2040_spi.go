@@ -368,6 +368,9 @@ func (spi SPI) rx(rx []byte, txrepeat byte) error {
 			continue
 		}
 	}
+	for spi.isBusy() {
+		gosched()
+	}
 	return nil
 }
 
@@ -397,6 +400,8 @@ func (spi SPI) txrx(tx, rx []byte) error {
 		// Transaction ended early due to timeout
 		return ErrSPITimeout
 	}
-
+	for spi.isBusy() {
+		gosched()
+	}
 	return nil
 }
