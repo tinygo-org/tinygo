@@ -108,7 +108,7 @@ jobs:
         # We're doing the former here, to keep artifact uploads fast.
         uses: actions/upload-artifact@v2
         with:
-          name: release-double-zipped
+          name: darwin-amd64-double-zipped
           path: build/tinygo.darwin-amd64.tar.gz
       - name: Smoke tests
         shell: bash

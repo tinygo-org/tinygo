@@ -118,7 +118,7 @@ jobs:
         # We're doing the former here, to keep artifact uploads fast.
         uses: actions/upload-artifact@v3
         with:
-          name: release-double-zipped
+          name: windows-amd64-double-zipped
           path: build/release/release.zip
 
   smoke-test-windows:
@@ -148,7 +148,7 @@ jobs:
       - name: Download TinyGo build
         uses: actions/download-artifact@v2
         with:
-          name: release-double-zipped
+          name: windows-amd64-double-zipped
           path: build/
       - name: Unzip TinyGo build
         shell: bash
@@ -178,7 +178,7 @@ jobs:
       - name: Download TinyGo build
         uses: actions/download-artifact@v2
         with:
-          name: release-double-zipped
+          name: windows-amd64-double-zipped
           path: build/
       - name: Unzip TinyGo build
         shell: bash
@@ -214,7 +214,7 @@ jobs:
       - name: Download TinyGo build
         uses: actions/download-artifact@v2
         with:
-          name: release-double-zipped
+          name: windows-amd64-double-zipped
           path: build/
       - name: Unzip TinyGo build
         shell: bash
