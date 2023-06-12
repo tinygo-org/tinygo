@@ -8,7 +8,6 @@ package main
 
 import (
 	"machine"
-	"runtime/volatile"
 	"time"
 )
 
@@ -18,8 +17,6 @@ const (
 )
 
 func main() {
-	var lightLed volatile.Register8
-	lightLed.Set(0)
 
 	// Configure the LED, defaulting to on (usually setting the pin to low will
 	// turn the LED on).
@@ -33,13 +30,7 @@ func main() {
 
 	// Set an interrupt on this pin.
 	err := button.SetInterrupt(buttonPinChange, func(machine.Pin) {
-		if lightLed.Get() != 0 {
-			lightLed.Set(0)
-			led.Low()
-		} else {
-			lightLed.Set(1)
-			led.High()
-		}
+		led.Set(!led.Get())
 	})
 	if err != nil {
 		println("could not configure pin interrupt:", err.Error())
