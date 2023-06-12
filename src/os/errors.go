@@ -32,6 +32,10 @@ var (
 // The following code is copied from the official implementation.
 // src/internal/poll/fd.go
 
+// ErrNoDeadline is returned when a request is made to set a deadline
+// on a file type that does not use the poller.
+var ErrNoDeadline = errors.New("file type does not support deadline")
+
 // ErrDeadlineExceeded is returned for an expired deadline.
 // This is exported by the os package as os.ErrDeadlineExceeded.
 var ErrDeadlineExceeded error = &DeadlineExceededError{}
