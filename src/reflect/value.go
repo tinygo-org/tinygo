@@ -914,10 +914,11 @@ func (v Value) MapKeys() []Value {
 	e := New(v.typecode.Elem())
 
 	keyType := v.typecode.key()
-	isKeyStoredAsInterface := keyType.Kind() != String && !keyType.isBinary()
+	keyTypeIsEmptyInterface := keyType.Kind() == Interface && keyType.NumMethod() == 0
+	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !keyType.isBinary()
 
 	for hashmapNext(v.pointer(), it, k.value, e.value) {
-		if isKeyStoredAsInterface {
+		if shouldUnpackInterface {
 			intf := *(*interface{})(k.value)
 			v := ValueOf(intf)
 			keys = append(keys, v)
@@ -992,12 +993,14 @@ func (v Value) MapRange() *MapIter {
 	}
 
 	keyType := v.typecode.key()
-	isKeyStoredAsInterface := keyType.Kind() != String && !keyType.isBinary()
+
+	keyTypeIsEmptyInterface := keyType.Kind() == Interface && keyType.NumMethod() == 0
+	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !keyType.isBinary()
 
 	return &MapIter{
-		m:            v,
-		it:           hashmapNewIterator(),
-		keyInterface: isKeyStoredAsInterface,
+		m:                  v,
+		it:                 hashmapNewIterator(),
+		unpackKeyInterface: shouldUnpackInterface,
 	}
 }
 
@@ -1007,8 +1010,8 @@ type MapIter struct {
 	key Value
 	val Value
 
-	valid        bool
-	keyInterface bool
+	valid              bool
+	unpackKeyInterface bool
 }
 
 func (it *MapIter) Key() Value {
@@ -1016,7 +1019,7 @@ func (it *MapIter) Key() Value {
 		panic("reflect.MapIter.Key called on invalid iterator")
 	}
 
-	if it.keyInterface {
+	if it.unpackKeyInterface {
 		intf := *(*interface{})(it.key.value)
 		v := ValueOf(intf)
 		return v
