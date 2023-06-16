@@ -191,6 +191,24 @@ func TestTinyMap(t *testing.T) {
 	if _, ok := utIterKey.Interface().(unmarshalerText); !ok {
 		t.Errorf("Map keys via MapIter() have wrong type: %v", utIterKey.Type().String())
 	}
+
+	{
+		m := map[any]any{1: 2}
+		rv := ValueOf(m)
+		iter := rv.MapRange()
+
+		iter.Next()
+		k := iter.Key()
+		if k.Kind().String() != "interface" {
+			t.Errorf("map[any]any MapRange has wrong key type: %v", k.Kind().String())
+		}
+
+		keys := rv.MapKeys()
+		if k := keys[0]; k.Kind().String() != "interface" {
+			t.Errorf("map[any]any MapRange has wrong key type: %v", k.Kind().String())
+		}
+
+	}
 }
 
 // For an interface type, it returns the number of exported and unexported methods.
