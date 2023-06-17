@@ -128,6 +128,15 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		hasMethodSet = false
 	}
 
+	var numMethods int
+	if hasMethodSet {
+		for i := 0; i < ms.Len(); i++ {
+			if ms.At(i).Obj().Exported() {
+				numMethods++
+			}
+		}
+	}
+
 	// Short-circuit all the global pointer logic here for pointers to pointers.
 	if typ, ok := typ.(*types.Pointer); ok {
 		if _, ok := typ.Elem().(*types.Pointer); ok {
@@ -277,11 +286,11 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 			pkgPathPtr := c.pkgPathPtr(pkgpath)
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false), // numMethods
-				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
-				c.getTypeCode(typ.Underlying()),                           // underlying
-				pkgPathPtr,                                                // pkgpath pointer
-				c.ctx.ConstString(pkgname+"."+name+"\x00", false),         // name
+				llvm.ConstInt(c.ctx.Int16Type(), uint64(numMethods), false), // numMethods
+				c.getTypeCode(types.NewPointer(typ)),                        // ptrTo
+				c.getTypeCode(typ.Underlying()),                             // underlying
+				pkgPathPtr,                                                  // pkgpath pointer
+				c.ctx.ConstString(pkgname+"."+name+"\x00", false),           // name
 			}
 			metabyte |= 1 << 5 // "named" flag
 		case *types.Chan:
@@ -308,7 +317,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 		case *types.Pointer:
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false), // numMethods
+				llvm.ConstInt(c.ctx.Int16Type(), uint64(numMethods), false), // numMethods
 				c.getTypeCode(typ.Elem()),
 			}
 		case *types.Array:
@@ -337,8 +346,8 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			llvmStructType := c.getLLVMType(typ)
 			size := c.targetData.TypeStoreSize(llvmStructType)
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false), // numMethods
-				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
+				llvm.ConstInt(c.ctx.Int16Type(), uint64(numMethods), false), // numMethods
+				c.getTypeCode(types.NewPointer(typ)),                        // ptrTo
 				pkgPathPtr,
 				llvm.ConstInt(c.ctx.Int32Type(), uint64(size), false),            // size
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(typ.NumFields()), false), // numFields
