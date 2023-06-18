@@ -673,7 +673,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 
 	actualTypeNum := b.CreateExtractValue(itf, 0, "interface.type")
 	commaOk := llvm.Value{}
-	if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+	if iface, ok := expr.AssertedType.Underlying().(*types.Interface); ok && iface.NumMethods() != 0 {
 		// Type assert on interface type.
 		// This is a call to an interface type assert function.
 		// The interface lowering pass will define this function by filling it
