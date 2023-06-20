@@ -129,48 +129,66 @@ func HIDReportID(id int) []byte {
 }
 
 func HIDLogicalMinimum(min int) []byte {
-	if min > 255 {
-		return []byte{hidLogicalMinimum + 1, uint8(min), uint8(min >> 8)}
+	m := uint32(min)
+	if 65535 < m {
+		return []byte{hidLogicalMinimum + 2, uint8(m), uint8(m >> 8), uint8(m >> 16), uint8(m >> 32)}
+	} else if 255 < m {
+		return []byte{hidLogicalMinimum + 1, uint8(m), uint8(m >> 8)}
 	}
 
 	return []byte{hidLogicalMinimum, byte(min)}
 }
 
 func HIDLogicalMaximum(max int) []byte {
-	if max > 255 {
-		return []byte{hidLogicalMaximum + 1, uint8(max), uint8(max >> 8)}
+	m := uint32(max)
+	if 65535 < m {
+		return []byte{hidLogicalMaximum + 2, uint8(m), uint8(m >> 8), uint8(m >> 16), uint8(m >> 24)}
+	} else if 255 < m {
+		return []byte{hidLogicalMaximum + 1, uint8(m), uint8(m >> 8)}
 	}
 
 	return []byte{hidLogicalMaximum, byte(max)}
 }
 
 func HIDUsageMinimum(min int) []byte {
-	if min > 255 {
-		return []byte{hidUsageMinimum + 1, uint8(min), uint8(min >> 8)}
+	m := uint32(min)
+	if 65535 < m {
+		return []byte{hidUsageMinimum + 2, uint8(m), uint8(m >> 8), uint8(m >> 16), uint8(m >> 24)}
+	} else if 255 < m {
+		return []byte{hidUsageMinimum + 1, uint8(m), uint8(m >> 8)}
 	}
 
 	return []byte{hidUsageMinimum, byte(min)}
 }
 
 func HIDUsageMaximum(max int) []byte {
-	if max > 255 {
-		return []byte{hidUsageMaximum + 1, uint8(max), uint8(max >> 8)}
+	m := uint32(max)
+	if 65535 < m {
+		return []byte{hidUsageMaximum + 2, uint8(m), uint8(m >> 8), uint8(m >> 16), uint8(m >> 24)}
+	} else if 255 < m {
+		return []byte{hidUsageMaximum + 1, uint8(m), uint8(m >> 8)}
 	}
 
 	return []byte{hidUsageMaximum, byte(max)}
 }
 
 func HIDPhysicalMinimum(min int) []byte {
-	if min > 255 {
-		return []byte{hidPhysicalMinimum + 1, uint8(min), uint8(min >> 8)}
+	m := uint32(min)
+	if 65535 < m {
+		return []byte{hidPhysicalMinimum + 2, uint8(m), uint8(m >> 8), uint8(m >> 16), uint8(m >> 24)}
+	} else if 255 < m {
+		return []byte{hidPhysicalMinimum + 1, uint8(m), uint8(m >> 8)}
 	}
 
 	return []byte{hidPhysicalMinimum, byte(min)}
 }
 
 func HIDPhysicalMaximum(max int) []byte {
-	if max > 255 {
-		return []byte{hidPhysicalMaximum + 1, uint8(max), uint8(max >> 8)}
+	m := uint32(max)
+	if 65535 < m {
+		return []byte{hidPhysicalMaximum + 2, uint8(m), uint8(m >> 8), uint8(m >> 16), uint8(m >> 24)}
+	} else if 255 < m {
+		return []byte{hidPhysicalMaximum + 1, uint8(m), uint8(m >> 8)}
 	}
 
 	return []byte{hidPhysicalMaximum, byte(max)}
