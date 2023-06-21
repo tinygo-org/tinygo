@@ -70,11 +70,16 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 		i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
 	}
 
-	// Stop explicitly when no reads were executed, stoping unconditionally would be a mistake.
-	// It may execute after I2C peripheral has already been stopped by the shortcut in the read block,
-	// so stop task will trigger first thing in a subsequent transaction, hanging it.
 	if len(r) == 0 {
+		// Stop the I2C transaction after the write.
 		i2c.signalStop()
+	} else {
+		// The last byte read has already stopped the transaction, via
+		// TWI_SHORTS_BB_STOP. But we still need to wait until we receive the
+		// STOPPED event.
+		for i2c.Bus.EVENTS_STOPPED.Get() == 0 {
+		}
+		i2c.Bus.EVENTS_STOPPED.Set(0)
 	}
 
 	return
