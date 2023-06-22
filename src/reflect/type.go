@@ -360,7 +360,7 @@ type Type interface {
 	// and FieldByNameFunc returns no match.
 	// This behavior mirrors Go's handling of name lookup in
 	// structs containing embedded fields.
-	//FieldByNameFunc(match func(string) bool) (StructField, bool)
+	FieldByNameFunc(match func(string) bool) (StructField, bool)
 
 	// In returns the type of a function type's i'th input parameter.
 	// It panics if the type's Kind is not Func.
@@ -722,11 +722,11 @@ func (t *rawType) rawField(n int) rawStructField {
 	return rawStructFieldFromPointer(descriptor, field.fieldType, data, flagsByte, name, offset)
 }
 
-// rawFieldByName returns nearly the same value as FieldByName but without converting the
+// rawFieldByNameFunc returns nearly the same value as FieldByNameFunc but without converting the
 // Type member to an interface.
 //
 // For internal use only.
-func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
+func (t *rawType) rawFieldByNameFunc(match func(string) bool) (rawStructField, []int, bool) {
 	if t.Kind() != Struct {
 		panic(errTypeField)
 	}
@@ -769,7 +769,7 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 
 				name := readStringZ(data)
 				data = unsafe.Add(data, len(name))
-				if name == n {
+				if match(name) {
 					found = append(found, result{
 						rawStructFieldFromPointer(descriptor, field.fieldType, data, flagsByte, name, offset),
 						append(ll.index, int(i)),
@@ -1099,7 +1099,28 @@ func (t *rawType) FieldByName(name string) (StructField, bool) {
 		panic(errTypeFieldByName)
 	}
 
-	field, index, ok := t.rawFieldByName(name)
+	field, index, ok := t.rawFieldByNameFunc(func(n string) bool { return n == name })
+	if !ok {
+		return StructField{}, false
+	}
+
+	return StructField{
+		Name:      field.Name,
+		PkgPath:   field.PkgPath,
+		Type:      field.Type, // note: converts rawType to Type
+		Tag:       field.Tag,
+		Anonymous: field.Anonymous,
+		Offset:    field.Offset,
+		Index:     index,
+	}, true
+}
+
+func (t *rawType) FieldByNameFunc(match func(string) bool) (StructField, bool) {
+	if t.Kind() != Struct {
+		panic(TypeError{"FieldByNameFunc"})
+	}
+
+	field, index, ok := t.rawFieldByNameFunc(match)
 	if !ok {
 		return StructField{}, false
 	}

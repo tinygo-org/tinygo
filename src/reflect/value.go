@@ -1846,6 +1846,17 @@ func (v Value) FieldByName(name string) Value {
 	return Value{}
 }
 
+func (v Value) FieldByNameFunc(match func(string) bool) Value {
+	if v.Kind() != Struct {
+		panic(&ValueError{"FieldByName", v.Kind()})
+	}
+
+	if field, ok := v.typecode.FieldByNameFunc(match); ok {
+		return v.FieldByIndex(field.Index)
+	}
+	return Value{}
+}
+
 //go:linkname hashmapMake runtime.hashmapMakeUnsafePointer
 func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
 
