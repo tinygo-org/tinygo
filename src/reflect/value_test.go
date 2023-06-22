@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	. "reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -452,9 +453,19 @@ func TestTinyStruct(t *testing.T) {
 		t.Errorf("StrucTag for Foo=%v, want %v", got, want)
 	}
 
+	q, ok = reffb.FieldByNameFunc(func(s string) bool { return strings.ToLower(s) == "bar" })
+	if q.Name != "Bar" || !ok {
+		t.Errorf("FieldByNameFunc(bar)=%v,%v, want Bar, true", q.Name, ok)
+	}
+
 	q, ok = reffb.FieldByName("Snorble")
 	if q.Name != "" || ok {
 		t.Errorf("FieldByName(Snorble)=%v,%v, want ``, false", q.Name, ok)
+	}
+
+	q, ok = reffb.FieldByNameFunc(func(s string) bool { return strings.ToLower(s) == "snorble" })
+	if q.Name != "" || ok {
+		t.Errorf("FieldByName(snorble)=%v,%v, want ``, false", q.Name, ok)
 	}
 }
 
