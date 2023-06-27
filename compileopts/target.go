@@ -3,10 +3,8 @@ package compileopts
 // This file loads a target specification from a JSON file.
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/goenv"
+	"muzzammil.xyz/jsonc"
 )
 
 // Target specification for a given target. Used for bare metal targets.
@@ -106,17 +105,6 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 	return nil
 }
 
-// load reads a target specification from the JSON in the given io.Reader. It
-// may load more targets specified using the "inherits" property.
-func (spec *TargetSpec) load(r io.Reader) error {
-	err := json.NewDecoder(r).Decode(spec)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // loadFromGivenStr loads the TargetSpec from the given string that could be:
 //   - targets/ directory inside the compiler sources
 //   - a relative or absolute path to custom (project specific) target specification .json file;
@@ -129,12 +117,11 @@ func (spec *TargetSpec) loadFromGivenStr(str string) error {
 	} else {
 		path = filepath.Join(goenv.Get("TINYGOROOT"), "targets", strings.ToLower(str)+".json")
 	}
-	fp, err := os.Open(path)
+	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	defer fp.Close()
-	return spec.load(fp)
+	return jsonc.Unmarshal(bytes, spec)
 }
 
 // resolveInherits loads inherited targets, recursively.

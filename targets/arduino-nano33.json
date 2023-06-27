@@ -1,3 +1,5 @@
+// Arduino Nano 33 IoT
+// https://store.arduino.cc/products/arduino-nano-33-iot
 {
     "inherits": ["atsamd21g18a"],
     "build-tags": ["arduino_nano33"],
