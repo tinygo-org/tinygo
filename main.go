@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -946,112 +947,130 @@ func touchSerialPortAt1200bps(port string) (err error) {
 }
 
 func flashUF2UsingMSD(volumes []string, tmppath string, options *compileopts.Options) error {
-	// find standard UF2 info path
-	infoPaths := make([]string, 0, len(volumes))
-	for _, volume := range volumes {
-		switch runtime.GOOS {
-		case "linux", "freebsd":
-			fi, err := os.Stat("/run/media")
-			if err != nil || !fi.IsDir() {
-				infoPaths = append(infoPaths, "/media/*/"+volume+"/INFO_UF2.TXT")
-			} else {
-				infoPaths = append(infoPaths, "/run/media/*/"+volume+"/INFO_UF2.TXT")
-			}
-		case "darwin":
-			infoPaths = append(infoPaths, "/Volumes/"+volume+"/INFO_UF2.TXT")
-		case "windows":
-			path, err := windowsFindUSBDrive(volume, options)
-			if err == nil {
-				infoPaths = append(infoPaths, path+"/INFO_UF2.TXT")
+	for start := time.Now(); time.Since(start) < options.Timeout; {
+		// Find a UF2 mount point.
+		mounts, err := findFATMounts(options)
+		if err != nil {
+			return err
+		}
+		for _, mount := range mounts {
+			for _, volume := range volumes {
+				if mount.name != volume {
+					continue
+				}
+				if _, err := os.Stat(filepath.Join(mount.path, "INFO_UF2.TXT")); err != nil {
+					// No INFO_UF2.TXT found, which is expected on a UF2
+					// filesystem.
+					continue
+				}
+				// Found the filesystem, so flash the device!
+				return moveFile(tmppath, filepath.Join(mount.path, "flash.uf2"))
 			}
 		}
+		time.Sleep(500 * time.Millisecond)
 	}
-
-	d, err := locateDevice(volumes, infoPaths, options.Timeout)
-	if err != nil {
-		return err
-	}
-
-	return moveFile(tmppath, filepath.Dir(d)+"/flash.uf2")
+	return errors.New("unable to locate any volume: [" + strings.Join(volumes, ",") + "]")
 }
 
 func flashHexUsingMSD(volumes []string, tmppath string, options *compileopts.Options) error {
-	// find expected volume path
-	destPaths := make([]string, 0, len(volumes))
-	for _, volume := range volumes {
-		switch runtime.GOOS {
-		case "linux", "freebsd":
-			fi, err := os.Stat("/run/media")
-			if err != nil || !fi.IsDir() {
-				destPaths = append(destPaths, "/media/*/"+volume)
-			} else {
-				destPaths = append(destPaths, "/run/media/*/"+volume)
-			}
-		case "darwin":
-			destPaths = append(destPaths, "/Volumes/"+volume)
-		case "windows":
-			path, err := windowsFindUSBDrive(volume, options)
-			if err == nil {
-				destPaths = append(destPaths, path+"/")
+	for start := time.Now(); time.Since(start) < options.Timeout; {
+		// Find all mount points.
+		mounts, err := findFATMounts(options)
+		if err != nil {
+			return err
+		}
+		for _, mount := range mounts {
+			for _, volume := range volumes {
+				if mount.name != volume {
+					continue
+				}
+				// Found the filesystem, so flash the device!
+				return moveFile(tmppath, filepath.Join(mount.path, "flash.hex"))
 			}
 		}
-	}
-
-	d, err := locateDevice(volumes, destPaths, options.Timeout)
-	if err != nil {
-		return err
-	}
-
-	return moveFile(tmppath, d+"/flash.hex")
-}
-
-func locateDevice(volumes, paths []string, timeout time.Duration) (string, error) {
-	var d []string
-	var err error
-	for start := time.Now(); time.Since(start) < timeout; {
-		for _, path := range paths {
-			d, err = filepath.Glob(path)
-			if err != nil {
-				return "", err
-			}
-			if d != nil {
-				break
-			}
-		}
-
-		if d != nil {
-			break
-		}
-
 		time.Sleep(500 * time.Millisecond)
 	}
-	if d == nil {
-		return "", errors.New("unable to locate any volume: [" + strings.Join(volumes, ",") + "]")
-	}
-	return d[0], nil
+	return errors.New("unable to locate any volume: [" + strings.Join(volumes, ",") + "]")
 }
 
-func windowsFindUSBDrive(volume string, options *compileopts.Options) (string, error) {
-	cmd := executeCommand(options, "wmic",
-		"PATH", "Win32_LogicalDisk", "WHERE", "VolumeName = '"+volume+"'",
-		"get", "DeviceID,VolumeName,FileSystem,DriveType")
+type mountPoint struct {
+	name string
+	path string
+}
 
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return "", err
-	}
-
-	for _, line := range strings.Split(out.String(), "\n") {
-		words := strings.Fields(line)
-		if len(words) >= 3 {
-			if words[1] == "2" && words[2] == "FAT" {
-				return words[0], nil
-			}
+// Find all the mount points on the system that use the FAT filesystem.
+func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
+	var points []mountPoint
+	switch runtime.GOOS {
+	case "darwin":
+		list, err := os.ReadDir("/Volumes")
+		if err != nil {
+			return nil, fmt.Errorf("could not list mount points: %w", err)
 		}
+		for _, elem := range list {
+			// TODO: find a way to check for the filesystem type.
+			// (Only return FAT filesystems).
+			points = append(points, mountPoint{
+				name: elem.Name(),
+				path: filepath.Join("/Volumes", elem.Name()),
+			})
+		}
+		sort.Slice(points, func(i, j int) bool {
+			return points[i].path < points[j].name
+		})
+		return points, nil
+	case "linux":
+		tab, err := os.ReadFile("/proc/mounts") // symlink to /proc/self/mounts on my system
+		if err != nil {
+			return nil, fmt.Errorf("could not list mount points: %w", err)
+		}
+		for _, line := range strings.Split(string(tab), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) <= 2 {
+				continue
+			}
+			fstype := fields[2]
+			if fstype != "vfat" {
+				continue
+			}
+			points = append(points, mountPoint{
+				name: filepath.Base(fields[1]),
+				path: fields[1],
+			})
+		}
+		return points, nil
+	case "windows":
+		// Obtain a list of all currently mounted volumes.
+		cmd := executeCommand(options, "wmic",
+			"PATH", "Win32_LogicalDisk",
+			"get", "DeviceID,VolumeName,FileSystem,DriveType")
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		err := cmd.Run()
+		if err != nil {
+			return nil, fmt.Errorf("could not list mount points: %w", err)
+		}
+
+		// Extract data to convert to a []mountPoint slice.
+		for _, line := range strings.Split(out.String(), "\n") {
+			words := strings.Fields(line)
+			if len(words) < 3 {
+				continue
+			}
+			if words[1] != "2" || words[2] != "FAT" {
+				// - DriveType 2 is removable (which we're looking for).
+				// - We only want to return FAT filesystems.
+				continue
+			}
+			points = append(points, mountPoint{
+				name: words[3],
+				path: words[0],
+			})
+		}
+		return points, nil
+	default:
+		return nil, fmt.Errorf("unknown GOOS for listing mount points: %s", runtime.GOOS)
 	}
-	return "", errors.New("unable to locate a USB device to be flashed")
 }
 
 // getDefaultPort returns the default serial port depending on the operating system.
