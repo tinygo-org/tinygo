@@ -80,10 +80,7 @@ var JoystickDefaultHIDReport = Append([][]byte{
 	HIDLogicalMaximum(1),
 	HIDReportSize(1),
 	HIDReportCount(16),
-	HIDInputDataVarAbs,
-	HIDReportCount(1),
-	HIDReportSize(3),
-	HIDUnitExponent(-16),
+	HIDUnitExponent(0),
 	HIDUnit(0),
 	HIDInputDataVarAbs,
 
