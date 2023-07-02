@@ -29,9 +29,7 @@ type Serialer interface {
 	RTS() bool
 }
 
-var usbDescriptor = descriptor.CDC
-
-var usbDescriptorConfig uint8 = usb.DescriptorConfigCDC
+var usbDescriptor descriptor.Descriptor
 
 func usbVendorID() uint16 {
 	if usb.VendorID != 0 {
@@ -138,18 +136,6 @@ func sendDescriptor(setup usb.Setup) {
 		sendUSBPacket(0, usbDescriptor.Configuration, setup.WLength)
 		return
 	case descriptor.TypeDevice:
-		// composite descriptor
-		switch {
-		case (usbDescriptorConfig & usb.DescriptorConfigHID) > 0:
-			usbDescriptor = descriptor.CDCHID
-		case (usbDescriptorConfig & usb.DescriptorConfigMIDI) > 0:
-			usbDescriptor = descriptor.CDCMIDI
-		case (usbDescriptorConfig & usb.DescriptorConfigJoystick) > 0:
-			usbDescriptor = descriptor.CDCJoystick
-		default:
-			usbDescriptor = descriptor.CDC
-		}
-
 		usbDescriptor.Configure(usbVendorID(), usbProductID())
 		sendUSBPacket(0, usbDescriptor.Device, setup.WLength)
 		return
@@ -273,7 +259,10 @@ func handleStandardSetup(setup usb.Setup) bool {
 }
 
 func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool) {
-	usbDescriptorConfig |= usb.DescriptorConfigCDC
+	if len(usbDescriptor.Device) == 0 {
+		usbDescriptor = descriptor.CDC
+	}
+	// Initialization of endpoints is required even for non-CDC
 	endPoints[usb.CDC_ENDPOINT_ACM] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn)
 	endPoints[usb.CDC_ENDPOINT_OUT] = (usb.ENDPOINT_TYPE_BULK | usb.EndpointOut)
 	endPoints[usb.CDC_ENDPOINT_IN] = (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn)
@@ -285,7 +274,7 @@ func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.S
 
 // EnableHID enables HID. This function must be executed from the init().
 func EnableHID(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool) {
-	usbDescriptorConfig |= usb.DescriptorConfigHID
+	usbDescriptor = descriptor.CDCHID
 	endPoints[usb.HID_ENDPOINT_IN] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn)
 	usbTxHandler[usb.HID_ENDPOINT_IN] = txHandler
 	usbSetupHandler[usb.HID_INTERFACE] = setupHandler // 0x03 (HID - Human Interface Device)
@@ -293,7 +282,7 @@ func EnableHID(txHandler func(), rxHandler func([]byte), setupHandler func(usb.S
 
 // EnableMIDI enables MIDI. This function must be executed from the init().
 func EnableMIDI(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool) {
-	usbDescriptorConfig |= usb.DescriptorConfigMIDI
+	usbDescriptor = descriptor.CDCMIDI
 	endPoints[usb.MIDI_ENDPOINT_OUT] = (usb.ENDPOINT_TYPE_BULK | usb.EndpointOut)
 	endPoints[usb.MIDI_ENDPOINT_IN] = (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn)
 	usbRxHandler[usb.MIDI_ENDPOINT_OUT] = rxHandler
@@ -311,7 +300,7 @@ func EnableJoystick(txHandler func(), rxHandler func([]byte), setupHandler func(
 	class.ClassLength(uint16(len(hidDesc)))
 	descriptor.CDCJoystick.HID[2] = hidDesc
 
-	usbDescriptorConfig |= usb.DescriptorConfigJoystick
+	usbDescriptor = descriptor.CDCJoystick
 	endPoints[usb.HID_ENDPOINT_OUT] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut)
 	usbRxHandler[usb.HID_ENDPOINT_OUT] = rxHandler
 	endPoints[usb.HID_ENDPOINT_IN] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn)
