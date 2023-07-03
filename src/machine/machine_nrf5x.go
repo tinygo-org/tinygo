@@ -28,6 +28,15 @@ func (i2c *I2C) disable() {
 	i2c.Bus.ENABLE.Set(0)
 }
 
+// SetBaudRate sets the I2C frequency. It has the side effect of also
+// enabling the I2C hardware if disabled beforehand.
+//
+//go:inline
+func (i2c *I2C) SetBaudRate(br uint32) error {
+	// TODO: implement
+	return nil
+}
+
 // Tx does a single I2C transaction at the specified address.
 // It clocks out the given address, writes the bytes in w, reads back len(r)
 // bytes and stores them in r, and generates a stop condition on the bus.

@@ -205,20 +205,6 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 
 const i2cTimeout = 0xffff // this is around 29ms on a nrf52
 
-// check for ensuring we fulfill interface
-var _ i2cController = (*I2C)(nil)
-
-// I2C on the NRF.
-type I2C struct {
-	Bus nrf.TWI_Type
-}
-
-// There are 2 I2C interfaces on the NRF.
-var (
-	I2C0 = (*I2C)(unsafe.Pointer(nrf.TWI0))
-	I2C1 = (*I2C)(unsafe.Pointer(nrf.TWI1))
-)
-
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
@@ -261,51 +247,6 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 	i2c.mode = config.Mode
 	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
-
-	return nil
-}
-
-// SetBaudRate sets the I2C frequency. It has the side effect of also
-// enabling the I2C hardware if disabled beforehand.
-//
-//go:inline
-func (i2c *I2C) SetBaudRate(br uint32) error {
-	// TODO: implement
-	return nil
-}
-
-// Tx does a single I2C transaction at the specified address.
-// It clocks out the given address, writes the bytes in w, reads back len(r)
-// bytes and stores them in r, and generates a stop condition on the bus.
-func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
-
-	// Tricky stop condition.
-	// After reads, the stop condition is generated implicitly with a shortcut.
-	// After writes not followed by reads and in the case of errors, stop must be generated explicitly.
-
-	i2c.Bus.ADDRESS.Set(uint32(addr))
-
-	if len(w) != 0 {
-		i2c.Bus.TASKS_STARTTX.Set(1) // start transmission for writing
-		for _, b := range w {
-			if err = i2c.writeByte(b); err != nil {
-				i2c.signalStop()
-				return
-			}
-		}
-	}
-
-	if i2c.mode == I2CModeController {
-		if config.Frequency >= 400*KHz {
-			i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
-		} else {
-			i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
-		}
-
-		i2c.enableAsController()
-	} else {
-		i2c.enableAsTarget()
-	}
 
 	return nil
 }
