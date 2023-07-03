@@ -24,6 +24,7 @@ const (
 
 type hidDevicer interface {
 	Handler() bool
+	RxHandler([]byte) bool
 }
 
 var devices [5]hidDevicer
@@ -60,6 +61,17 @@ func handler() {
 			continue
 		}
 		if done := d.Handler(); done {
+			return
+		}
+	}
+}
+
+func rxHandler(b []byte) {
+	for _, d := range devices {
+		if d == nil {
+			continue
+		}
+		if done := d.RxHandler(b); done {
 			return
 		}
 	}

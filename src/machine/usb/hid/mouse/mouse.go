@@ -57,6 +57,10 @@ func (m *mouse) Handler() bool {
 	return false
 }
 
+func (m *mouse) RxHandler(b []byte) bool {
+	return false
+}
+
 func (m *mouse) tx(b []byte) {
 	if machine.USBDev.InitEndpointComplete {
 		if m.waitTxc {
