@@ -91,6 +91,10 @@ func (kb *keyboard) Handler() bool {
 	return false
 }
 
+func (kb *keyboard) RxHandler(b []byte) bool {
+	return false
+}
+
 func (kb *keyboard) tx(b []byte) {
 	if machine.USBDev.InitEndpointComplete {
 		if kb.waitTxc {
