@@ -63,7 +63,7 @@
 // Expanded include files
 //
 #define CMD_WRITE_ENABLE 0x06
-#define CMD_READ_STATUS 0x05
+#define CMD_READ_STATUS1 0x05
 #define CMD_READ_STATUS2 0x35
 #define CMD_WRITE_STATUS1 0x01
 #define CMD_WRITE_STATUS2 0x31
@@ -301,7 +301,7 @@ program_sregs:
 # endif
     // Poll status register for write completion
 1:
-    movs r0, #CMD_READ_STATUS
+    movs r0, #CMD_READ_STATUS1
     bl read_flash_sreg
     movs r1, #1
     tst r0, r1
