@@ -3,6 +3,7 @@
 package machine
 
 import (
+	"device/arm"
 	"device/rp"
 )
 
@@ -87,6 +88,7 @@ func hw_enumeration_fix_force_ls_j() {
 	rp.USBCTRL_REGS.USB_MUXING.Set(rp.USBCTRL_REGS_USB_MUXING_TO_DIGITAL_PAD | rp.USBCTRL_REGS_USB_MUXING_SOFTCON)
 
 	// LS_J is now forced but while loop here just to check
+	waitCycles(125000)
 
 	// if timer pool disabled, or no timer available, have to busy wait.
 	hw_enumeration_fix_finish()
@@ -108,4 +110,11 @@ func hw_enumeration_fix_finish() {
 	ioBank0.io[dp].ctrl.Set(gpioCtrlPrev)
 	// Restore the pad ctrl value
 	padsBank0.io[dp].Set(padCtrlPrev)
+}
+
+func waitCycles(n int) {
+	for n > 0 {
+		arm.Asm("nop")
+		n--
+	}
 }
