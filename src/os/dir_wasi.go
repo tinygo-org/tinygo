@@ -53,9 +53,6 @@ func (f *File) readdir(n int, mode readdirMode) (names []string, dirents []DirEn
 		if dirent == nil { // EOF
 			break
 		}
-		if dirent.Ino == 0 {
-			continue
-		}
 		name := dirent.Name()
 		// Check for useless names before allocating a string.
 		if string(name) == "." || string(name) == ".." {
