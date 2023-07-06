@@ -1162,7 +1162,7 @@ const (
 	wireCmdStop        = 3
 )
 
-const i2cTimeout = 1000
+const i2cTimeout = 28000 // about 210us
 
 // Configure is intended to setup the I2C interface.
 func (i2c *I2C) Configure(config I2CConfig) error {
