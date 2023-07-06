@@ -1641,7 +1641,7 @@ func buflen(v Value) (unsafe.Pointer, uintptr) {
 func sliceGrow(buf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
 
 // extend slice to hold n new elements
-func (v *Value) extendSlice(n int) {
+func extendSlice(v Value, n int) sliceHeader {
 	if v.Kind() != Slice {
 		panic(&ValueError{Method: "extendSlice", Kind: v.Kind()})
 	}
@@ -1664,14 +1664,11 @@ func (v *Value) extendSlice(n int) {
 		ncap = old.cap
 	}
 
-	newslice := sliceHeader{
+	return sliceHeader{
 		data: nbuf,
 		len:  nlen + uintptr(n),
 		cap:  ncap,
 	}
-
-	v.flags = valueFlagExported
-	v.value = (unsafe.Pointer)(&newslice)
 }
 
 // Append appends the values x to a slice s and returns the resulting slice.
@@ -1681,7 +1678,9 @@ func Append(v Value, x ...Value) Value {
 		panic(&ValueError{Method: "Append", Kind: v.Kind()})
 	}
 	oldLen := v.Len()
-	v.extendSlice(len(x))
+	newslice := extendSlice(v, len(x))
+	v.flags = valueFlagExported
+	v.value = (unsafe.Pointer)(&newslice)
 	for i, xx := range x {
 		v.Index(oldLen + i).Set(xx)
 	}
@@ -1714,6 +1713,27 @@ func AppendSlice(s, t Value) Value {
 		value:    unsafe.Pointer(result),
 		flags:    valueFlagExported,
 	}
+}
+
+// Grow increases the slice's capacity, if necessary, to guarantee space for
+// another n elements. After Grow(n), at least n elements can be appended
+// to the slice without another allocation.
+//
+// It panics if v's Kind is not a Slice or if n is negative or too large to
+// allocate the memory.
+func (v Value) Grow(n int) {
+	v.checkAddressable()
+	if n < 0 {
+		panic("reflect.Grow: negative length")
+	}
+	if v.Kind() != Slice {
+		panic(&ValueError{Method: "Grow", Kind: v.Kind()})
+	}
+	slice := (*sliceHeader)(v.value)
+	newslice := extendSlice(v, n)
+	// Only copy the new data and cap: the len remains unchanged.
+	slice.data = newslice.data
+	slice.cap = newslice.cap
 }
 
 //go:linkname hashmapStringSet runtime.hashmapStringSetUnsafePointer
