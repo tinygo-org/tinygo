@@ -68,6 +68,7 @@ const (
 	EISDIR      Errno = 21
 	EINVAL      Errno = 22
 	EMFILE      Errno = 24
+	EROFS       Errno = 30
 	EPIPE       Errno = 32
 	EAGAIN      Errno = 35
 	ENOTCONN    Errno = 57

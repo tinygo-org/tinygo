@@ -5,11 +5,14 @@ type Frames struct {
 }
 
 type Frame struct {
+	PC uintptr
+
+	Func *Func
+
 	Function string
 
 	File string
 	Line int
-	PC   uintptr
 }
 
 func CallersFrames(callers []uintptr) *Frames {

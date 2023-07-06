@@ -284,7 +284,7 @@
 						return 0;
 					},
 				},
-				env: {
+				gojs: {
 					// func ticks() float64
 					"runtime.ticks": () => {
 						return timeOrigin + performance.now();
@@ -444,6 +444,10 @@
 					},
 				}
 			};
+
+			// Go 1.20 uses 'env'. Go 1.21 uses 'gojs'.
+			// For compatibility, we use both as long as Go 1.20 is supported.
+			this.importObject.env = this.importObject.gojs;
 		}
 
 		async run(instance) {

@@ -44,8 +44,8 @@ func nanosecondsToTicks(ns int64) timeUnit {
 // This function is called by the scheduler.
 // Schedule a call to runtime.scheduler, do not actually sleep.
 //
-//export runtime.sleepTicks
+//go:wasmimport gojs runtime.sleepTicks
 func sleepTicks(d timeUnit)
 
-//export runtime.ticks
+//go:wasmimport gojs runtime.ticks
 func ticks() timeUnit
