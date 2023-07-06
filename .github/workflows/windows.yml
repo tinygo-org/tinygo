@@ -35,7 +35,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21.0-rc.2'
           cache: true
       - name: Restore cached LLVM source
         uses: actions/cache/restore@v3
@@ -143,7 +143,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21.0-rc.2'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v2
@@ -173,7 +173,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21.0-rc.2'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v2
@@ -209,7 +209,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
+          go-version: '1.21.0-rc.2'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v2

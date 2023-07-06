@@ -100,3 +100,27 @@ func godebug_setUpdate(update func(string, string)) {
 	// variable changes (for example, via os.Setenv).
 	godebugUpdate = update
 }
+
+//go:linkname godebug_setNewIncNonDefault internal/godebug.setNewIncNonDefault
+func godebug_setNewIncNonDefault(newIncNonDefault func(string) func()) {
+	// Dummy function necessary in Go 1.21.
+}
+
+// Write to the given file descriptor.
+// This is called from internal/godebug starting with Go 1.21, and only seems to
+// be called with the stderr file descriptor.
+func write(fd uintptr, p unsafe.Pointer, n int32) int32 {
+	if fd == 2 { // stderr
+		// Convert to a string, because we know that p won't change during the
+		// call to printstring.
+		// TODO: use unsafe.String instead once we require Go 1.20.
+		s := _string{
+			ptr:    (*byte)(p),
+			length: uintptr(n),
+		}
+		str := *(*string)(unsafe.Pointer(&s))
+		printstring(str)
+		return n
+	}
+	return 0
+}
