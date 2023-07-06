@@ -54,6 +54,9 @@ func TestCompiler(t *testing.T) {
 	if goMinor >= 20 {
 		tests = append(tests, testCase{"go1.20.go", "", ""})
 	}
+	if goMinor >= 21 {
+		tests = append(tests, testCase{"go1.21.go", "", ""})
+	}
 
 	for _, tc := range tests {
 		name := tc.file
