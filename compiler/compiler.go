@@ -1637,6 +1637,24 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			llvmLen = b.CreateZExt(llvmLen, b.intType, "len.int")
 		}
 		return llvmLen, nil
+	case "min", "max":
+		// min and max builtins, added in Go 1.21.
+		// We can simply reuse the existing binop comparison code, which has all
+		// the edge cases figured out already.
+		tok := token.LSS
+		if callName == "max" {
+			tok = token.GTR
+		}
+		result := argValues[0]
+		typ := argTypes[0]
+		for _, arg := range argValues[1:] {
+			cmp, err := b.createBinOp(tok, typ, typ, result, arg, pos)
+			if err != nil {
+				return result, err
+			}
+			result = b.CreateSelect(cmp, result, arg, "")
+		}
+		return result, nil
 	case "print", "println":
 		for i, value := range argValues {
 			if i >= 1 && callName == "println" {
