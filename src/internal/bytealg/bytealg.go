@@ -251,3 +251,13 @@ func IndexRabinKarp(s, substr string) int {
 	}
 	return -1
 }
+
+// MakeNoZero makes a slice of length and capacity n without zeroing the bytes.
+// It is the caller's responsibility to ensure uninitialized bytes
+// do not leak to the end user.
+func MakeNoZero(n int) []byte {
+	// Note: this does zero the buffer even though that's not necessary.
+	// For performance reasons we might want to change this (similar to the
+	// malloc function implemented in the runtime).
+	return make([]byte, n)
+}

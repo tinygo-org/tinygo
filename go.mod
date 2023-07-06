@@ -31,3 +31,5 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
 )
+
+replace go.bug.st/serial => github.com/deadprogram/go-serial v0.0.0-20230717164825-4529b3232919

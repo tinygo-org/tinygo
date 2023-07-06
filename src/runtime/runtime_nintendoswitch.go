@@ -105,7 +105,7 @@ func abort() {
 }
 
 //export write
-func write(fd int32, buf *byte, count int) int {
+func libc_write(fd int32, buf *byte, count int) int {
 	// TODO: Proper handling write
 	for i := 0; i < count; i++ {
 		putchar(*buf)
