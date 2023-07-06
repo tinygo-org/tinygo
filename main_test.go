@@ -71,6 +71,16 @@ func TestBuild(t *testing.T) {
 		"zeroalloc.go",
 	}
 
+	// Go 1.21 made some changes to the language, which we can only test when
+	// we're actually on Go 1.21.
+	_, minor, err := goenv.GetGorootVersion()
+	if err != nil {
+		t.Fatal("could not get version:", minor)
+	}
+	if minor >= 21 {
+		tests = append(tests, "go1.21.go")
+	}
+
 	if *testTarget != "" {
 		// This makes it possible to run one specific test (instead of all),
 		// which is especially useful to quickly check whether some changes
