@@ -147,6 +147,15 @@ entry:
   ret void
 }
 
+; Function Attrs: nounwind
+define hidden void @main.clearMap(ptr dereferenceable_or_null(40) %m, ptr %context) unnamed_addr #2 {
+entry:
+  call void @runtime.hashmapClear(ptr %m, ptr undef) #5
+  ret void
+}
+
+declare void @runtime.hashmapClear(ptr dereferenceable_or_null(40), ptr) #1
+
 ; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
 declare i32 @llvm.smin.i32(i32, i32) #4
 

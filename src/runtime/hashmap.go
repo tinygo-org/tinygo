@@ -91,6 +91,35 @@ func hashmapMakeUnsafePointer(keySize, valueSize uintptr, sizeHint uintptr, alg 
 	return (unsafe.Pointer)(hashmapMake(keySize, valueSize, sizeHint, alg))
 }
 
+// Remove all entries from the map, without actually deallocating the space for
+// it. This is used for the clear builtin, and can be used to reuse a map (to
+// avoid extra heap allocations).
+func hashmapClear(m *hashmap) {
+	if m == nil {
+		// Nothing to do. According to the spec:
+		// > If the map or slice is nil, clear is a no-op.
+		return
+	}
+
+	m.count = 0
+	numBuckets := uintptr(1) << m.bucketBits
+	bucketSize := hashmapBucketSize(m)
+	for i := uintptr(0); i < numBuckets; i++ {
+		bucket := hashmapBucketAddr(m, m.buckets, i)
+		for bucket != nil {
+			// Clear the tophash, to mark these keys/values as removed.
+			bucket.tophash = [8]uint8{}
+
+			// Clear the keys and values in the bucket so that the GC won't pin
+			// these allocations.
+			memzero(unsafe.Add(unsafe.Pointer(bucket), unsafe.Sizeof(hashmapBucket{})), bucketSize-unsafe.Sizeof(hashmapBucket{}))
+
+			// Move on to the next bucket in the chain.
+			bucket = bucket.next
+		}
+	}
+}
+
 func hashmapKeyEqualAlg(alg hashmapAlgorithm) func(x, y unsafe.Pointer, n uintptr) bool {
 	switch alg {
 	case hashmapAlgorithmBinary:

@@ -1632,6 +1632,10 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			call.AddCallSiteAttribute(1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elementAlign)))
 
 			return llvm.Value{}, nil
+		case *types.Map:
+			m := argValues[0]
+			b.createMapClear(m)
+			return llvm.Value{}, nil
 		default:
 			return llvm.Value{}, b.makeError(pos, "unsupported type in clear builtin: "+typ.String())
 		}

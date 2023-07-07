@@ -185,6 +185,11 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 	}
 }
 
+// Clear the given map.
+func (b *builder) createMapClear(m llvm.Value) {
+	b.createRuntimeCall("hashmapClear", []llvm.Value{m}, "")
+}
+
 // createMapIteratorNext lowers the *ssa.Next instruction for iterating over a
 // map. It returns a tuple of {bool, key, value} with the result of the
 // iteration.
