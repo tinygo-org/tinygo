@@ -36,7 +36,11 @@ const (
 // createRuntimeCallCommon creates a runtime call. Use createRuntimeCall or
 // createRuntimeInvoke instead.
 func (b *builder) createRuntimeCallCommon(fnName string, args []llvm.Value, name string, isInvoke bool) llvm.Value {
-	fn := b.program.ImportedPackage("runtime").Members[fnName].(*ssa.Function)
+	member := b.program.ImportedPackage("runtime").Members[fnName]
+	if member == nil {
+		panic("unknown runtime call: " + fnName)
+	}
+	fn := member.(*ssa.Function)
 	fnType, llvmFn := b.getFunction(fn)
 	if llvmFn.IsNil() {
 		panic("trying to call non-existent function: " + fn.RelString(nil))
