@@ -59,3 +59,7 @@ func clearSlice(s []int) {
 func clearZeroSizedSlice(s []struct{}) {
 	clear(s)
 }
+
+func clearMap(m map[string]int) {
+	clear(m)
+}
