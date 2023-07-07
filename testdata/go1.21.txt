@@ -1,3 +1,5 @@
 min/max: -3 5
 min/max: -3.000000e+000 +5.000000e+000
 cleared s[:3]: 0 0 0 4 5
+cleared map:    0
+added to cleared map:    four 1

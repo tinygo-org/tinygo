@@ -15,4 +15,15 @@ func main() {
 	s := []int{1, 2, 3, 4, 5}
 	clear(s[:3])
 	println("cleared s[:3]:", s[0], s[1], s[2], s[3], s[4])
+
+	// The clear builtin, for maps.
+	m := map[int]string{
+		1: "one",
+		2: "two",
+		3: "three",
+	}
+	clear(m)
+	println("cleared map:", m[1], m[2], m[3], len(m))
+	m[4] = "four"
+	println("added to cleared map:", m[1], m[2], m[3], m[4], len(m))
 }
