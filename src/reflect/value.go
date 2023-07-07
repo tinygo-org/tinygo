@@ -1068,6 +1068,13 @@ func (v Value) Set(x Value) {
 	memcpy(v.value, xptr, size)
 }
 
+func (v Value) SetZero() {
+	v.checkAddressable()
+	v.checkRO()
+	size := v.typecode.Size()
+	memzero(v.value, size)
+}
+
 func (v Value) SetBool(x bool) {
 	v.checkAddressable()
 	v.checkRO()
@@ -1568,6 +1575,9 @@ func (e *ValueError) Error() string {
 
 //go:linkname memcpy runtime.memcpy
 func memcpy(dst, src unsafe.Pointer, size uintptr)
+
+//go:linkname memzero runtime.memzero
+func memzero(ptr unsafe.Pointer, size uintptr)
 
 //go:linkname alloc runtime.alloc
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
