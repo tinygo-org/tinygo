@@ -84,10 +84,10 @@ entry:
   %2 = insertvalue %runtime._string zeroinitializer, ptr %b.data, 0
   %3 = insertvalue %runtime._string %2, i32 %b.len, 1
   %stackalloc = alloca i8, align 1
-  %4 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #4
+  %4 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #5
   %5 = select i1 %4, %runtime._string %1, %runtime._string %3
   %6 = extractvalue %runtime._string %5, 0
-  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #5
   ret %runtime._string %5
 }
 
@@ -123,30 +123,48 @@ entry:
   %2 = insertvalue %runtime._string zeroinitializer, ptr %b.data, 0
   %3 = insertvalue %runtime._string %2, i32 %b.len, 1
   %stackalloc = alloca i8, align 1
-  %4 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #4
+  %4 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #5
   %5 = select i1 %4, %runtime._string %1, %runtime._string %3
   %6 = extractvalue %runtime._string %5, 0
-  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #5
   ret %runtime._string %5
 }
 
-; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
-declare i32 @llvm.smin.i32(i32, i32) #3
+; Function Attrs: nounwind
+define hidden void @main.clearSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
+entry:
+  %0 = shl i32 %s.len, 2
+  call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
+  ret void
+}
+
+; Function Attrs: argmemonly nocallback nofree nounwind willreturn writeonly
+declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #3
+
+; Function Attrs: nounwind
+define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
+entry:
+  ret void
+}
 
 ; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
-declare i8 @llvm.umin.i8(i8, i8) #3
+declare i32 @llvm.smin.i32(i32, i32) #4
 
 ; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
-declare i32 @llvm.umin.i32(i32, i32) #3
+declare i8 @llvm.umin.i8(i8, i8) #4
 
 ; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
-declare i32 @llvm.smax.i32(i32, i32) #3
+declare i32 @llvm.umin.i32(i32, i32) #4
 
 ; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
-declare i32 @llvm.umax.i32(i32, i32) #3
+declare i32 @llvm.smax.i32(i32, i32) #4
+
+; Function Attrs: nocallback nofree nosync nounwind readnone speculatable willreturn
+declare i32 @llvm.umax.i32(i32, i32) #4
 
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #1 = { "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
 attributes #2 = { nounwind "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }
-attributes #3 = { nocallback nofree nosync nounwind readnone speculatable willreturn }
-attributes #4 = { nounwind }
+attributes #3 = { argmemonly nocallback nofree nounwind willreturn writeonly }
+attributes #4 = { nocallback nofree nosync nounwind readnone speculatable willreturn }
+attributes #5 = { nounwind }

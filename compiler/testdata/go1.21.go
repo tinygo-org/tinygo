@@ -51,3 +51,11 @@ func maxFloat32(a, b float32) float32 {
 func maxString(a, b string) string {
 	return max(a, b)
 }
+
+func clearSlice(s []int) {
+	clear(s)
+}
+
+func clearZeroSizedSlice(s []struct{}) {
+	clear(s)
+}
