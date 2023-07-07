@@ -70,15 +70,7 @@ func (b *builder) createMemoryCopyImpl() {
 // regular libc memset calls if they aren't optimized out in a different way.
 func (b *builder) createMemoryZeroImpl() {
 	b.createFunctionStart(true)
-	fnName := "llvm.memset.p0.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
-	if llvmutil.Major() < 15 { // compatibility with LLVM 14
-		fnName = "llvm.memset.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
-	}
-	llvmFn := b.mod.NamedFunction(fnName)
-	if llvmFn.IsNil() {
-		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.i8ptrType, b.ctx.Int8Type(), b.uintptrType, b.ctx.Int1Type()}, false)
-		llvmFn = llvm.AddFunction(b.mod, fnName, fnType)
-	}
+	llvmFn := b.getMemsetFunc()
 	params := []llvm.Value{
 		b.getValue(b.fn.Params[0], getPos(b.fn)),
 		llvm.ConstInt(b.ctx.Int8Type(), 0, false),
@@ -87,6 +79,20 @@ func (b *builder) createMemoryZeroImpl() {
 	}
 	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
 	b.CreateRetVoid()
+}
+
+// Return the llvm.memset.p0.i8 function declaration.
+func (c *compilerContext) getMemsetFunc() llvm.Value {
+	fnName := "llvm.memset.p0.i" + strconv.Itoa(c.uintptrType.IntTypeWidth())
+	if llvmutil.Major() < 15 { // compatibility with LLVM 14
+		fnName = "llvm.memset.p0i8.i" + strconv.Itoa(c.uintptrType.IntTypeWidth())
+	}
+	llvmFn := c.mod.NamedFunction(fnName)
+	if llvmFn.IsNil() {
+		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.i8ptrType, c.ctx.Int8Type(), c.uintptrType, c.ctx.Int1Type()}, false)
+		llvmFn = llvm.AddFunction(c.mod, fnName, fnType)
+	}
+	return llvmFn
 }
 
 // createKeepAlive creates the runtime.KeepAlive function. It is implemented

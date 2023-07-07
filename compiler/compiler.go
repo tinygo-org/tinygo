@@ -1600,6 +1600,41 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		cplx = b.CreateInsertValue(cplx, r, 0, "")
 		cplx = b.CreateInsertValue(cplx, i, 1, "")
 		return cplx, nil
+	case "clear":
+		value := argValues[0]
+		switch typ := argTypes[0].Underlying().(type) {
+		case *types.Slice:
+			elementType := b.getLLVMType(typ.Elem())
+			elementSize := b.targetData.TypeAllocSize(elementType)
+			elementAlign := b.targetData.ABITypeAlignment(elementType)
+
+			// The pointer to the data to be cleared.
+			llvmBuf := b.CreateExtractValue(value, 0, "buf")
+			if llvmBuf.Type() != b.i8ptrType { // compatibility with LLVM 14
+				llvmBuf = b.CreateBitCast(llvmBuf, b.i8ptrType, "")
+			}
+
+			// The length (in bytes) to be cleared.
+			llvmLen := b.CreateExtractValue(value, 1, "len")
+			llvmLen = b.CreateMul(llvmLen, llvm.ConstInt(llvmLen.Type(), elementSize, false), "")
+
+			// Do the clear operation using the LLVM memset builtin.
+			// This is also correct for nil slices: in those cases, len will be
+			// 0 which means the memset call is a no-op (according to the LLVM
+			// LangRef).
+			memset := b.getMemsetFunc()
+			call := b.createCall(memset.GlobalValueType(), memset, []llvm.Value{
+				llvmBuf, // dest
+				llvm.ConstInt(b.ctx.Int8Type(), 0, false), // val
+				llvmLen, // len
+				llvm.ConstInt(b.ctx.Int1Type(), 0, false), // isVolatile
+			}, "")
+			call.AddCallSiteAttribute(1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elementAlign)))
+
+			return llvm.Value{}, nil
+		default:
+			return llvm.Value{}, b.makeError(pos, "unsupported type in clear builtin: "+typ.String())
+		}
 	case "copy":
 		dst := argValues[0]
 		src := argValues[1]
