@@ -1,5 +1,4 @@
 //go:build mimxrt1062
-// +build mimxrt1062
 
 package machine
 
@@ -159,8 +158,8 @@ func (uart *UART) Disable() {
 		uart.Bus.CTRL.ClearBits(nxp.LPUART_CTRL_TE | nxp.LPUART_CTRL_RE)
 
 		// put pins back into GPIO mode
-		uart.rx.Configure(PinConfig{Mode: PinInputPullUp})
-		uart.tx.Configure(PinConfig{Mode: PinInputPullUp})
+		uart.rx.Configure(PinConfig{Mode: PinInputPullup})
+		uart.tx.Configure(PinConfig{Mode: PinInputPullup})
 	}
 	uart.configured = false
 }
@@ -188,8 +187,10 @@ func (uart *UART) WriteByte(c byte) error {
 //
 // This is an integral (non-floating point) translation of the logic at the
 // beginning of:
-//       void HardwareSerial::begin(uint32_t baud, uint16_t format)
-//         (from Teensyduino: `cores/teensy4/HardwareSerial.cpp`)
+//
+//	void HardwareSerial::begin(uint32_t baud, uint16_t format)
+//
+// (from Teensyduino: cores/teensy4/HardwareSerial.cpp)
 //
 // We don't want to use floating point here in case it gets called from an ISR
 // or very early during system init.

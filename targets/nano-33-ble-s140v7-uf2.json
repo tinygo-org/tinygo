@@ -1,0 +1,6 @@
+{
+	"inherits": ["nrf52840", "nrf52840-s140v7-uf2"],
+	"build-tags": ["nano_33_ble"],
+	"serial-port": ["239a:8063", "239a:0063"],
+	"msd-volume-name": ["NANO33BOOT"]
+}

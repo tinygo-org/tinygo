@@ -1,5 +1,4 @@
 //go:build nintendoswitch
-// +build nintendoswitch
 
 package syscall
 
@@ -71,3 +70,25 @@ func Pipe2(p []int, flags int) (err error) {
 func Getpagesize() int {
 	return 4096 // TODO
 }
+
+type RawSockaddrInet4 struct {
+	// stub
+}
+
+type RawSockaddrInet6 struct {
+	// stub
+}
+
+func Chmod(path string, mode uint32) (err error) {
+	data := cstring(path)
+	fail := int(libc_chmod(&data[0], mode))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+// int open(const char *pathname, int flags, mode_t mode);
+//
+//export open
+func libc_open(pathname *byte, flags int32, mode uint32) int32

@@ -4,12 +4,14 @@ package compiler
 // pragmas, determines the link name, etc.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -51,13 +53,24 @@ const (
 	inlineNone
 )
 
+// Values for the allockind attribute. Source:
+// https://github.com/llvm/llvm-project/blob/release/16.x/llvm/include/llvm/IR/Attributes.h#L49
+const (
+	allocKindAlloc = 1 << iota
+	allocKindRealloc
+	allocKindFree
+	allocKindUninitialized
+	allocKindZeroed
+	allocKindAligned
+)
+
 // getFunction returns the LLVM function for the given *ssa.Function, creating
 // it if needed. It can later be filled with compilerContext.createFunction().
-func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
+func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 	info := c.getFunctionInfo(fn)
 	llvmFn := c.mod.NamedFunction(info.linkName)
 	if !llvmFn.IsNil() {
-		return llvmFn
+		return llvmFn.GlobalValueType(), llvmFn
 	}
 
 	var retType llvm.Type
@@ -83,7 +96,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 	// Add an extra parameter as the function context. This context is used in
 	// closures and bound methods, but should be optimized away when not used.
 	if !info.exported {
-		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "context", flags: 0})
+		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "context", elemSize: 0})
 	}
 
 	var paramTypes []llvm.Type
@@ -112,17 +125,8 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 
 	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
 	for i, info := range paramInfos {
-		if info.flags&paramIsDeferenceableOrNull == 0 {
-			continue
-		}
-		if info.llvmType.TypeKind() == llvm.PointerTypeKind {
-			el := info.llvmType.ElementType()
-			size := c.targetData.TypeAllocSize(el)
-			if size == 0 {
-				// dereferenceable_or_null(0) appears to be illegal in LLVM.
-				continue
-			}
-			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, size)
+		if info.elemSize != 0 {
+			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, info.elemSize)
 			llvmFn.AddAttributeAtIndex(i+1, dereferenceableOrNull)
 		}
 	}
@@ -141,6 +145,20 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		for _, attrName := range []string{"noalias", "nonnull"} {
 			llvmFn.AddAttributeAtIndex(0, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(attrName), 0))
 		}
+		if llvmutil.Major() >= 15 { // allockind etc are not available in LLVM 14
+			// Add attributes to signal to LLVM that this is an allocator
+			// function. This enables a number of optimizations.
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("allockind"), allocKindAlloc|allocKindZeroed))
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("alloc-family", "runtime.alloc"))
+			// Use a special value to indicate the first parameter:
+			// > allocsize has two integer arguments, but because they're both 32 bits, we can
+			// > pack them into one 64-bit value, at the cost of making said value
+			// > nonsensical.
+			// >
+			// > In order to do this, we need to reserve one value of the second (optional)
+			// > allocsize argument to signify "not present."
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("allocsize"), 0x0000_0000_ffff_ffff))
+		}
 	case "runtime.sliceAppend":
 		// Appending a slice will only read the to-be-appended slice, it won't
 		// be modified.
@@ -158,23 +176,38 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		// that the only thing we'll do is read the pointer.
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
+	case "__mulsi3", "__divmodsi4", "__udivmodsi4":
+		if strings.Split(c.Triple, "-")[0] == "avr" {
+			// These functions are compiler-rt/libgcc functions that are
+			// currently implemented in Go. Assembly versions should appear in
+			// LLVM 16 hopefully. Until then, they need to be made available to
+			// the linker and the best way to do that is llvm.compiler.used.
+			// I considered adding a pragma for this, but the LLVM language
+			// reference explicitly says that this feature should not be exposed
+			// to source languages:
+			// > This is a rare construct that should only be used in rare
+			// > circumstances, and should not be exposed to source languages.
+			llvmutil.AppendToGlobal(c.mod, "llvm.compiler.used", llvmFn)
+		}
 	}
 
 	// External/exported functions may not retain pointer values.
 	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
 	if info.exported {
-		// Set the wasm-import-module attribute if the function's module is set.
-		if info.module != "" {
-
+		if c.archFamily() == "wasm32" {
 			// We need to add the wasm-import-module and the wasm-import-name
-			wasmImportModuleAttr := c.ctx.CreateStringAttribute("wasm-import-module", info.module)
-			llvmFn.AddFunctionAttr(wasmImportModuleAttr)
-
-			// Add the Wasm Import Name, if we are a named wasm import
-			if info.importName != "" {
-				wasmImportNameAttr := c.ctx.CreateStringAttribute("wasm-import-name", info.importName)
-				llvmFn.AddFunctionAttr(wasmImportNameAttr)
+			// attributes.
+			module := info.module
+			if module == "" {
+				module = "env"
 			}
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-module", module))
+
+			name := info.importName
+			if name == "" {
+				name = info.linkName
+			}
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-name", name))
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
@@ -200,25 +233,29 @@ func (c *compilerContext) getFunction(fn *ssa.Function) llvm.Value {
 		llvmFn.SetUnnamedAddr(true)
 	}
 
-	return llvmFn
+	return fnType, llvmFn
 }
 
 // getFunctionInfo returns information about a function that is not directly
 // present in *ssa.Function, such as the link name and whether it should be
 // exported.
 func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
+	if info, ok := c.functionInfos[f]; ok {
+		return info
+	}
 	info := functionInfo{
 		// Pick the default linkName.
 		linkName: f.RelString(nil),
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
-	info.parsePragmas(f)
+	c.parsePragmas(&info, f)
+	c.functionInfos[f] = info
 	return info
 }
 
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
 // //export or //go:noinline.
-func (info *functionInfo) parsePragmas(f *ssa.Function) {
+func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 	if f.Syntax() == nil {
 		return
 	}
@@ -256,6 +293,17 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					continue
 				}
 				info.module = parts[1]
+			case "//go:wasmimport":
+				// Import a WebAssembly function, for example a WASI function.
+				// Original proposal: https://github.com/golang/go/issues/38248
+				// Allow globally: https://github.com/golang/go/issues/59149
+				if len(parts) != 3 {
+					continue
+				}
+				c.checkWasmImport(f, comment.Text)
+				info.exported = true
+				info.module = parts[1]
+				info.importName = parts[2]
 			case "//go:inline":
 				info.inline = inlineHint
 			case "//go:noinline":
@@ -272,8 +320,12 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 					info.linkName = parts[2]
 				}
 			case "//go:section":
+				// Only enable go:section when the package imports "unsafe".
+				// go:section also implies go:noinline since inlining could
+				// move the code to a different section than that requested.
 				if len(parts) == 2 && hasUnsafeImport(f.Pkg.Pkg) {
 					info.section = parts[1]
+					info.inline = inlineNone
 				}
 			case "//go:nobounds":
 				// Skip bounds checking in this function. Useful for some
@@ -307,6 +359,58 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 		}
 
 	}
+}
+
+// Check whether this function cannot be used in //go:wasmimport. It will add an
+// error if this is the case.
+//
+// The list of allowed types is based on this proposal:
+// https://github.com/golang/go/issues/59149
+func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
+	if c.pkg.Path() == "runtime" {
+		// The runtime is a special case. Allow all kinds of parameters
+		// (importantly, including pointers).
+		return
+	}
+	if f.Blocks != nil {
+		// Defined functions cannot be exported.
+		c.addError(f.Pos(), fmt.Sprintf("can only use //go:wasmimport on declarations"))
+		return
+	}
+	if f.Signature.Results().Len() > 1 {
+		c.addError(f.Signature.Results().At(1).Pos(), fmt.Sprintf("%s: too many return values", pragma))
+	} else if f.Signature.Results().Len() == 1 {
+		result := f.Signature.Results().At(0)
+		if !isValidWasmType(result.Type(), true) {
+			c.addError(result.Pos(), fmt.Sprintf("%s: unsupported result type %s", pragma, result.Type().String()))
+		}
+	}
+	for _, param := range f.Params {
+		// Check whether the type is allowed.
+		// Only a very limited number of types can be mapped to WebAssembly.
+		if !isValidWasmType(param.Type(), false) {
+			c.addError(param.Pos(), fmt.Sprintf("%s: unsupported parameter type %s", pragma, param.Type().String()))
+		}
+	}
+}
+
+// Check whether the type maps directly to a WebAssembly type, according to:
+// https://github.com/golang/go/issues/59149
+func isValidWasmType(typ types.Type, isReturn bool) bool {
+	switch typ := typ.Underlying().(type) {
+	case *types.Basic:
+		switch typ.Kind() {
+		case types.Int32, types.Uint32, types.Int64, types.Uint64:
+			return true
+		case types.Float32, types.Float64:
+			return true
+		case types.UnsafePointer:
+			if !isReturn {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // getParams returns the function parameters, including the receiver at the
@@ -360,11 +464,19 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
 	if strings.Split(c.Triple, "-")[0] == "x86_64" {
 		// Required by the ABI.
-		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
+		if llvmutil.Major() < 15 {
+			// Needed for LLVM 14 support.
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
+		} else {
+			// The uwtable has two possible values: sync (1) or async (2). We
+			// use sync because we currently don't use async unwind tables.
+			// For details, see: https://llvm.org/docs/LangRef.html#function-attributes
+			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 1))
+		}
 	}
 }
 
-// addStandardAttribute adds all attributes added to defined functions.
+// addStandardAttributes adds all attributes added to defined functions.
 func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
 	c.addStandardDeclaredAttributes(llvmFn)
 	c.addStandardDefinedAttributes(llvmFn)
@@ -418,7 +530,6 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 		llvmGlobal = llvm.AddGlobal(c.mod, llvmType, info.linkName)
 
 		// Set alignment from the //go:align comment.
-		var alignInBits uint32
 		alignment := c.targetData.ABITypeAlignment(llvmType)
 		if info.align > alignment {
 			alignment = info.align
@@ -429,7 +540,6 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 			c.addError(g.Pos(), "global variable alignment must be a positive power of two")
 		} else {
 			// Set the alignment only when it is a power of two.
-			alignInBits = uint32(alignment) ^ uint32(alignment-1)
 			llvmGlobal.SetAlignment(alignment)
 		}
 
@@ -444,7 +554,7 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 				Type:        c.getDIType(typ),
 				LocalToUnit: false,
 				Expr:        c.dibuilder.CreateExpression(nil),
-				AlignInBits: alignInBits,
+				AlignInBits: uint32(alignment) * 8,
 			})
 			llvmGlobal.AddMetadata(0, diglobal)
 		}

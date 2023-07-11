@@ -1,12 +1,10 @@
 //go:build xiao_rp2040
-// +build xiao_rp2040
 
 // This file contains the pin mappings for the Seeed XIAO RP2040 boards.
 //
 // XIAO RP2040 is a microcontroller using the Raspberry Pi RP2040 chip.
 //
 // - https://wiki.seeedstudio.com/XIAO-RP2040/
-//
 package machine
 
 import (
@@ -25,8 +23,8 @@ const (
 	D6  Pin = GPIO0
 	D7  Pin = GPIO1
 	D8  Pin = GPIO2
-	D9  Pin = GPIO3
-	D10 Pin = GPIO4
+	D9  Pin = GPIO4
+	D10 Pin = GPIO3
 )
 
 // Analog pins
@@ -39,7 +37,10 @@ const (
 
 // Onboard LEDs
 const (
-	NEOPIXEL = GPIO12
+	NEOPIXEL       = GPIO12
+	WS2812         = GPIO12
+	NEO_PWR        = GPIO11
+	NEOPIXEL_POWER = GPIO11
 
 	LED       = GPIO17
 	LED_RED   = GPIO17
@@ -49,18 +50,18 @@ const (
 
 // I2C pins
 const (
-	I2C0_SDA_PIN Pin = D4
-	I2C0_SCL_PIN Pin = D5
+	I2C0_SDA_PIN Pin = D2
+	I2C0_SCL_PIN Pin = D3
 
-	I2C1_SDA_PIN Pin = NoPin
-	I2C1_SCL_PIN Pin = NoPin
+	I2C1_SDA_PIN Pin = D4
+	I2C1_SCL_PIN Pin = D5
 )
 
 // SPI pins
 const (
 	SPI0_SCK_PIN Pin = D8
-	SPI0_SDO_PIN Pin = D9
-	SPI0_SDI_PIN Pin = D10
+	SPI0_SDO_PIN Pin = D10
+	SPI0_SDI_PIN Pin = D9
 
 	SPI1_SCK_PIN Pin = NoPin
 	SPI1_SDO_PIN Pin = NoPin

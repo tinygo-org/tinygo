@@ -16,30 +16,24 @@ jobs:
     name: build-macos
     runs-on: macos-11
     steps:
-      - name: Install Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.1'
       - name: Install Dependencies
         shell: bash
         run: |
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
-      - name: Install Xtensa toolchain
-        shell: bash
-        run: |
-          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
-          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
-          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
-          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-macos.tar.gz
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
-      - name: Cache LLVM source
-        uses: actions/cache@v2
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+          cache: true
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-14-macos-v1
+          key: llvm-source-15-macos-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -49,11 +43,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v2
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-14-macos-v1
+          key: llvm-build-15-macos-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -67,8 +72,14 @@ jobs:
           # build!
           make llvm-build
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache wasi-libc sysroot
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-v4
@@ -76,9 +87,11 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
+      - name: make gen-device
+        run: make -j3 gen-device
       - name: Test TinyGo
         shell: bash
-        run: make test GOTESTFLAGS="-v -short"
+        run: make test GOTESTFLAGS="-short"
       - name: Build TinyGo release tarball
         run: make release -j3
       - name: Test stdlib packages
@@ -99,4 +112,23 @@ jobs:
           path: build/tinygo.darwin-amd64.tar.gz
       - name: Smoke tests
         shell: bash
-        run: make smoketest TINYGO=$(PWD)/build/tinygo AVR=0
+        run: make smoketest TINYGO=$(PWD)/build/tinygo
+  test-macos-homebrew:
+    name: homebrew-install
+    runs-on: macos-latest
+    steps:
+      - name: Install LLVM
+        shell: bash
+        run: |
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@15
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+          cache: true
+      - name: Build TinyGo
+        run: go install
+      - name: Check binary
+        run: tinygo version

@@ -9,12 +9,12 @@ func Asm(asm string)
 // effects, as it would otherwise be optimized away. The inline assembly string
 // recognizes template values in the form {name}, like so:
 //
-//     arm.AsmFull(
-//         "st {value}, {result}",
-//         map[string]interface{}{
-//             "value":  1
-//             "result": &dest,
-//         })
+//	arm.AsmFull(
+//	    "st {value}, {result}",
+//	    map[string]interface{}{
+//	        "value":  1
+//	        "result": &dest,
+//	    })
 //
 // You can use {} in the asm string (which expands to a register) to set the
 // return value.

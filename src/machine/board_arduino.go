@@ -1,5 +1,4 @@
 //go:build arduino
-// +build arduino
 
 package machine
 

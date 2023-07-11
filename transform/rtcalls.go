@@ -12,7 +12,7 @@ import (
 // OptimizeStringToBytes transforms runtime.stringToBytes(...) calls into const
 // []byte slices whenever possible. This optimizes the following pattern:
 //
-//     w.Write([]byte("foo"))
+//	w.Write([]byte("foo"))
 //
 // where Write does not store to the slice.
 func OptimizeStringToBytes(mod llvm.Module) {
@@ -91,12 +91,12 @@ func OptimizeStringEqual(mod llvm.Module) {
 
 // OptimizeReflectImplements optimizes the following code:
 //
-//     implements := someType.Implements(someInterfaceType)
+//	implements := someType.Implements(someInterfaceType)
 //
 // where someType is an arbitrary reflect.Type and someInterfaceType is a
 // reflect.Type of interface kind, to the following code:
 //
-//     _, implements := someType.(interfaceType)
+//	_, implements := someType.(interfaceType)
 //
 // if the interface type is known at compile time (that is, someInterfaceType is
 // a LLVM constant aggregate). This optimization is especially important for the
@@ -112,11 +112,6 @@ func OptimizeReflectImplements(mod llvm.Module) {
 
 	builder := mod.Context().NewBuilder()
 	defer builder.Dispose()
-
-	// Get a few useful object for use later.
-	targetData := llvm.NewTargetData(mod.DataLayout())
-	defer targetData.Dispose()
-	uintptrType := mod.Context().IntType(targetData.PointerSize() * 8)
 
 	// Look up the (reflect.Value).Implements() method.
 	var implementsFunc llvm.Value
@@ -139,17 +134,15 @@ func OptimizeReflectImplements(mod llvm.Module) {
 		if call.IsACallInst().IsNil() {
 			continue
 		}
-		interfaceTypeBitCast := call.Operand(2)
-		if interfaceTypeBitCast.IsAConstantExpr().IsNil() || interfaceTypeBitCast.Opcode() != llvm.BitCast {
-			// The asserted interface is not constant, so can't optimize this
-			// code.
+		interfaceType := stripPointerCasts(call.Operand(2))
+		if interfaceType.IsAGlobalVariable().IsNil() {
+			// Interface is unknown at compile time. This can't be optimized.
 			continue
 		}
 
-		interfaceType := interfaceTypeBitCast.Operand(0)
 		if strings.HasPrefix(interfaceType.Name(), "reflect/types.type:named:") {
 			// Get the underlying type.
-			interfaceType = llvm.ConstExtractValue(interfaceType.Initializer(), []uint32{0})
+			interfaceType = stripPointerCasts(builder.CreateExtractValue(interfaceType.Initializer(), 3, ""))
 		}
 		if !strings.HasPrefix(interfaceType.Name(), "reflect/types.type:interface:") {
 			// This is an error. The Type passed to Implements should be of
@@ -157,16 +150,15 @@ func OptimizeReflectImplements(mod llvm.Module) {
 			// reported at runtime.
 			continue
 		}
-		if interfaceType.IsAGlobalVariable().IsNil() {
-			// Interface is unknown at compile time. This can't be optimized.
+		typeAssertFunction := mod.NamedFunction(strings.TrimPrefix(interfaceType.Name(), "reflect/types.type:") + ".$typeassert")
+		if typeAssertFunction.IsNil() {
 			continue
 		}
-		typeAssertFunction := llvm.ConstExtractValue(interfaceType.Initializer(), []uint32{4}).Operand(0)
 
 		// Replace Implements call with the type assert call.
 		builder.SetInsertPointBefore(call)
-		implements := builder.CreateCall(typeAssertFunction, []llvm.Value{
-			builder.CreatePtrToInt(call.Operand(0), uintptrType, ""), // typecode to check
+		implements := builder.CreateCall(typeAssertFunction.GlobalValueType(), typeAssertFunction, []llvm.Value{
+			call.Operand(0), // typecode to check
 		}, "")
 		call.ReplaceAllUsesWith(implements)
 		call.EraseFromParentAsInstruction()

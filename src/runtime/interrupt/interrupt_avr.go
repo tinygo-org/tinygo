@@ -1,5 +1,4 @@
 //go:build avr
-// +build avr
 
 package interrupt
 
@@ -11,9 +10,9 @@ type State uint8
 // Disable disables all interrupts and returns the previous interrupt state. It
 // can be used in a critical section like this:
 //
-//     state := interrupt.Disable()
-//     // critical section
-//     interrupt.Restore(state)
+//	state := interrupt.Disable()
+//	// critical section
+//	interrupt.Restore(state)
 //
 // Critical sections can be nested. Make sure to call Restore in the same order
 // as you called Disable (this happens naturally with the pattern above).
@@ -34,4 +33,13 @@ func Restore(state State) {
 	device.AsmFull("out 0x3f, {state}", map[string]interface{}{
 		"state": state,
 	})
+}
+
+// In returns whether the system is currently in an interrupt.
+//
+// Warning: this always returns false on AVR, as there does not appear to be a
+// reliable way to determine whether we're currently running inside an interrupt
+// handler.
+func In() bool {
+	return false
 }

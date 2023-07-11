@@ -14,7 +14,7 @@ import (
 // and returns the result as a single integer (the system call result). The
 // result is not further interpreted.
 func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
-	num := b.getValue(call.Args[0])
+	num := b.getValue(call.Args[0], getPos(call))
 	switch {
 	case b.GOARCH == "amd64" && b.GOOS == "linux":
 		// Sources:
@@ -37,14 +37,14 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{r12}",
 				"{r13}",
 			}[i]
-			llvmValue := b.getValue(arg)
+			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
 		constraints += ",~{rcx},~{r11}"
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "syscall", constraints, true, false, llvm.InlineAsmDialectIntel, false)
-		return b.CreateCall(target, args, ""), nil
+		return b.CreateCall(fnType, target, args, ""), nil
 	case b.GOARCH == "386" && b.GOOS == "linux":
 		// Sources:
 		//   syscall(2) man page
@@ -64,13 +64,13 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{edi}",
 				"{ebp}",
 			}[i]
-			llvmValue := b.getValue(arg)
+			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "int 0x80", constraints, true, false, llvm.InlineAsmDialectIntel, false)
-		return b.CreateCall(target, args, ""), nil
+		return b.CreateCall(fnType, target, args, ""), nil
 	case b.GOARCH == "arm" && b.GOOS == "linux":
 		// Implement the EABI system call convention for Linux.
 		// Source: syscall(2) man page.
@@ -89,7 +89,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{r5}",
 				"{r6}",
 			}[i]
-			llvmValue := b.getValue(arg)
+			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -102,7 +102,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		}
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
-		return b.CreateCall(target, args, ""), nil
+		return b.CreateCall(fnType, target, args, ""), nil
 	case b.GOARCH == "arm64" && b.GOOS == "linux":
 		// Source: syscall(2) man page.
 		args := []llvm.Value{}
@@ -119,7 +119,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{x4}",
 				"{x5}",
 			}[i]
-			llvmValue := b.getValue(arg)
+			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
@@ -134,7 +134,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		constraints += ",~{x16},~{x17}" // scratch registers
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
-		return b.CreateCall(target, args, ""), nil
+		return b.CreateCall(fnType, target, args, ""), nil
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)
 	}
@@ -177,12 +177,12 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		var paramTypes []llvm.Type
 		var params []llvm.Value
 		for _, val := range call.Args[2:] {
-			param := b.getValue(val)
+			param := b.getValue(val, getPos(call))
 			params = append(params, param)
 			paramTypes = append(paramTypes, param.Type())
 		}
 		llvmType := llvm.FunctionType(b.uintptrType, paramTypes, false)
-		fn := b.getValue(call.Args[0])
+		fn := b.getValue(call.Args[0], getPos(call))
 		fnPtr := b.CreateIntToPtr(fn, llvm.PointerType(llvmType, 0), "")
 
 		// Prepare some functions that will be called later.
@@ -205,9 +205,9 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// Note that SetLastError/GetLastError could be replaced with direct
 		// access to the thread control block, which is probably smaller and
 		// faster. The Go runtime does this in assembly.
-		b.CreateCall(setLastError, []llvm.Value{llvm.ConstNull(b.ctx.Int32Type())}, "")
-		syscallResult := b.CreateCall(fnPtr, params, "")
-		errResult := b.CreateCall(getLastError, nil, "err")
+		b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.ctx.Int32Type())}, "")
+		syscallResult := b.CreateCall(llvmType, fnPtr, params, "")
+		errResult := b.CreateCall(getLastError.GlobalValueType(), getLastError, nil, "err")
 		if b.uintptrType != b.ctx.Int32Type() {
 			errResult = b.CreateZExt(errResult, b.uintptrType, "err.uintptr")
 		}

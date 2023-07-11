@@ -1,11 +1,11 @@
 package interp
 
 import (
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"tinygo.org/x/go-llvm"
 )
@@ -53,7 +53,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	defer mod.Dispose()
 
 	// Perform the transform.
-	err = Run(mod, false)
+	err = Run(mod, 10*time.Minute, false)
 	if err != nil {
 		if err, match := err.(*Error); match {
 			println(err.Error())
@@ -87,7 +87,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	pm.Run(mod)
 
 	// Read the expected output IR.
-	out, err := ioutil.ReadFile(pathPrefix + ".out.ll")
+	out, err := os.ReadFile(pathPrefix + ".out.ll")
 	if err != nil {
 		t.Fatalf("could not read output file %s: %v", pathPrefix+".out.ll", err)
 	}

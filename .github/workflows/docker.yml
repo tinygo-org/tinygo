@@ -20,39 +20,40 @@ jobs:
       contents: read
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v4
         with:
           images: |
             tinygo/tinygo-dev
-            ghcr.io/${{ github.repository }}/tinygo-dev
+            ghcr.io/${{ github.repository_owner }}/tinygo-dev
           tags: |
             type=sha,format=long
             type=raw,value=latest
       - name: Log in to Docker Hub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
       - name: Log in to Github Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-contexts: tinygo-llvm-build=docker-image://tinygo/llvm-15
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Trigger Drivers repo build on Github Actions
@@ -69,21 +70,31 @@ jobs:
           -H "Accept: application/vnd.github.v3+json" \
           https://api.github.com/repos/tinygo-org/bluetooth/actions/workflows/linux.yml/dispatches \
           -d '{"ref": "dev"}'
-      - name: Trigger TinyFS repo build on CircleCI
+      - name: Trigger TinyFS repo build on Github Actions
         run: |
-          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinyfs/pipeline' \
-            --header 'Content-Type: application/json' \
-            -d '{"branch": "dev"}' \
-            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
-      - name: Trigger TinyFont repo build on CircleCI
+          curl -X POST \
+          -H "Authorization: Bearer ${{secrets.GHA_ACCESS_TOKEN}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/tinygo-org/tinyfs/actions/workflows/build.yml/dispatches \
+          -d '{"ref": "dev"}'
+      - name: Trigger TinyFont repo build on Github Actions
         run: |
-          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinyfont/pipeline' \
-            --header 'Content-Type: application/json' \
-            -d '{"branch": "dev"}' \
-            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
-      - name: Trigger TinyDraw repo build on CircleCI
+          curl -X POST \
+          -H "Authorization: Bearer ${{secrets.GHA_ACCESS_TOKEN}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/tinygo-org/tinyfont/actions/workflows/build.yml/dispatches \
+          -d '{"ref": "dev"}'
+      - name: Trigger TinyDraw repo build on Github Actions
         run: |
-          curl --location --request POST 'https://circleci.com/api/v2/project/github/tinygo-org/tinydraw/pipeline' \
-            --header 'Content-Type: application/json' \
-            -d '{"branch": "dev"}' \
-            -u "${{ secrets.CIRCLECI_API_TOKEN }}"
+          curl -X POST \
+          -H "Authorization: Bearer ${{secrets.GHA_ACCESS_TOKEN}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/tinygo-org/tinydraw/actions/workflows/build.yml/dispatches \
+          -d '{"ref": "dev"}'
+      - name: Trigger TinyTerm repo build on Github Actions
+        run: |
+          curl -X POST \
+          -H "Authorization: Bearer ${{secrets.GHA_ACCESS_TOKEN}}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/tinygo-org/tinyterm/actions/workflows/build.yml/dispatches \
+          -d '{"ref": "dev"}'

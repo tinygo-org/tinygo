@@ -32,7 +32,8 @@ func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context
 // global reference is not real, it is only used during func lowering to assign
 // signature types to functions and will then be removed.
 func (c *compilerContext) getFuncSignatureID(sig *types.Signature) llvm.Value {
-	sigGlobalName := "reflect/types.funcid:" + getTypeCodeName(sig)
+	s, _ := getTypeCodeName(sig)
+	sigGlobalName := "reflect/types.funcid:" + s
 	sigGlobal := c.mod.NamedGlobal(sigGlobalName)
 	if sigGlobal.IsNil() {
 		sigGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), sigGlobalName)
@@ -55,15 +56,17 @@ func (b *builder) extractFuncContext(funcValue llvm.Value) llvm.Value {
 
 // decodeFuncValue extracts the context and the function pointer from this func
 // value. This may be an expensive operation.
-func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcPtr, context llvm.Value) {
+func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcType llvm.Type, funcPtr, context llvm.Value) {
 	context = b.CreateExtractValue(funcValue, 0, "")
-	bitcast := b.CreateExtractValue(funcValue, 1, "")
-	if !bitcast.IsAConstantExpr().IsNil() && bitcast.Opcode() == llvm.BitCast {
-		funcPtr = bitcast.Operand(0)
-		return
+	funcPtr = b.CreateExtractValue(funcValue, 1, "")
+	if !funcPtr.IsAConstantExpr().IsNil() && funcPtr.Opcode() == llvm.BitCast {
+		funcPtr = funcPtr.Operand(0) // needed for LLVM 14 (no opaque pointers)
 	}
-	llvmSig := b.getRawFuncType(sig)
-	funcPtr = b.CreateBitCast(bitcast, llvmSig, "")
+	if sig != nil {
+		funcType = b.getRawFuncType(sig)
+		llvmSig := llvm.PointerType(funcType, b.funcPtrAddrSpace)
+		funcPtr = b.CreateBitCast(funcPtr, llvmSig, "")
+	}
 	return
 }
 
@@ -72,7 +75,7 @@ func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 	return c.ctx.StructType([]llvm.Type{c.i8ptrType, c.rawVoidFuncType}, false)
 }
 
-// getRawFuncType returns a LLVM function pointer type for a given signature.
+// getRawFuncType returns a LLVM function type for a given signature.
 func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 	// Get the return type.
 	var returnType llvm.Type
@@ -117,7 +120,7 @@ func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 	paramTypes = append(paramTypes, c.i8ptrType) // context
 
 	// Make a func type out of the signature.
-	return llvm.PointerType(llvm.FunctionType(returnType, paramTypes, false), c.funcPtrAddrSpace)
+	return llvm.FunctionType(returnType, paramTypes, false)
 }
 
 // parseMakeClosure makes a function value (with context) from the given
@@ -132,7 +135,7 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	boundVars := make([]llvm.Value, len(expr.Bindings))
 	for i, binding := range expr.Bindings {
 		// The context stores the bound variables.
-		llvmBoundVar := b.getValue(binding)
+		llvmBoundVar := b.getValue(binding, getPos(expr))
 		boundVars[i] = llvmBoundVar
 	}
 
@@ -141,5 +144,6 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	context := b.emitPointerPack(boundVars)
 
 	// Create the closure.
-	return b.createFuncValue(b.getFunction(f), context, f.Signature), nil
+	_, fn := b.getFunction(f)
+	return b.createFuncValue(fn, context, f.Signature), nil
 }

@@ -1,13 +1,15 @@
 package main
 
 import (
-	"io/ioutil"
+	"errors"
+	"io"
+	"io/fs"
 	"os"
 )
 
 func main() {
 	_, err := os.Open("non-exist")
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, fs.ErrNotExist) {
 		panic("should be non exist error")
 	}
 
@@ -28,7 +30,7 @@ func main() {
 		}
 	}()
 
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		panic(err)
 	}

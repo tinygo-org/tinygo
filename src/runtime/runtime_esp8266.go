@@ -1,5 +1,4 @@
 //go:build esp8266
-// +build esp8266
 
 package runtime
 
@@ -33,6 +32,7 @@ func buffered() int {
 // Write to the internal control bus (using I2C?).
 // Signature found here:
 // https://github.com/espressif/ESP8266_RTOS_SDK/blob/14171de0/components/esp8266/include/esp8266/rom_functions.h#L54
+//
 //export rom_i2c_writeReg
 func rom_i2c_writeReg(block, host_id, reg_add, data uint8)
 
@@ -76,7 +76,7 @@ func preinit() {
 	ptr := unsafe.Pointer(&_sbss)
 	for ptr != unsafe.Pointer(&_ebss) {
 		*(*uint32)(ptr) = 0
-		ptr = unsafe.Pointer(uintptr(ptr) + 4)
+		ptr = unsafe.Add(ptr, 4)
 	}
 }
 

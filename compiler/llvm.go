@@ -51,29 +51,175 @@ func (b *builder) emitLifetimeEnd(ptr, size llvm.Value) {
 // emitPointerPack packs the list of values into a single pointer value using
 // bitcasts, or else allocates a value on the heap if it cannot be packed in the
 // pointer value directly. It returns the pointer with the packed data.
+// If the values are all constants, they are be stored in a constant global and
+// deduplicated.
 func (b *builder) emitPointerPack(values []llvm.Value) llvm.Value {
-	return llvmutil.EmitPointerPack(b.Builder, b.mod, b.pkg.Path(), b.NeedsStackObjects, values)
+	valueTypes := make([]llvm.Type, len(values))
+	for i, value := range values {
+		valueTypes[i] = value.Type()
+	}
+	packedType := b.ctx.StructType(valueTypes, false)
+
+	// Allocate memory for the packed data.
+	size := b.targetData.TypeAllocSize(packedType)
+	if size == 0 {
+		return llvm.ConstPointerNull(b.i8ptrType)
+	} else if len(values) == 1 && values[0].Type().TypeKind() == llvm.PointerTypeKind {
+		return b.CreateBitCast(values[0], b.i8ptrType, "pack.ptr")
+	} else if size <= b.targetData.TypeAllocSize(b.i8ptrType) {
+		// Packed data fits in a pointer, so store it directly inside the
+		// pointer.
+		if len(values) == 1 && values[0].Type().TypeKind() == llvm.IntegerTypeKind {
+			// Try to keep this cast in SSA form.
+			return b.CreateIntToPtr(values[0], b.i8ptrType, "pack.int")
+		}
+
+		// Because packedType is a struct and we have to cast it to a *i8, store
+		// it in a *i8 alloca first and load the *i8 value from there. This is
+		// effectively a bitcast.
+		packedAlloc, _, _ := b.createTemporaryAlloca(b.i8ptrType, "")
+
+		if size < b.targetData.TypeAllocSize(b.i8ptrType) {
+			// The alloca is bigger than the value that will be stored in it.
+			// To avoid having some bits undefined, zero the alloca first.
+			// Hopefully this will get optimized away.
+			b.CreateStore(llvm.ConstNull(b.i8ptrType), packedAlloc)
+		}
+
+		// Store all values in the alloca.
+		packedAllocCast := b.CreateBitCast(packedAlloc, llvm.PointerType(packedType, 0), "")
+		for i, value := range values {
+			indices := []llvm.Value{
+				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+			}
+			gep := b.CreateInBoundsGEP(packedType, packedAllocCast, indices, "")
+			b.CreateStore(value, gep)
+		}
+
+		// Load value (the *i8) from the alloca.
+		result := b.CreateLoad(b.i8ptrType, packedAlloc, "")
+
+		// End the lifetime of the alloca, to help the optimizer.
+		packedPtr := b.CreateBitCast(packedAlloc, b.i8ptrType, "")
+		packedSize := llvm.ConstInt(b.ctx.Int64Type(), b.targetData.TypeAllocSize(packedAlloc.Type()), false)
+		b.emitLifetimeEnd(packedPtr, packedSize)
+
+		return result
+	} else {
+		// Check if the values are all constants.
+		constant := true
+		for _, v := range values {
+			if !v.IsConstant() {
+				constant = false
+				break
+			}
+		}
+
+		if constant {
+			// The data is known at compile time, so store it in a constant global.
+			// The global address is marked as unnamed, which allows LLVM to merge duplicates.
+			global := llvm.AddGlobal(b.mod, packedType, b.pkg.Path()+"$pack")
+			global.SetInitializer(b.ctx.ConstStruct(values, false))
+			global.SetGlobalConstant(true)
+			global.SetUnnamedAddr(true)
+			global.SetLinkage(llvm.InternalLinkage)
+			return llvm.ConstBitCast(global, b.i8ptrType)
+		}
+
+		// Packed data is bigger than a pointer, so allocate it on the heap.
+		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
+		alloc := b.mod.NamedFunction("runtime.alloc")
+		packedHeapAlloc := b.CreateCall(alloc.GlobalValueType(), alloc, []llvm.Value{
+			sizeValue,
+			llvm.ConstNull(b.i8ptrType),
+			llvm.Undef(b.i8ptrType), // unused context parameter
+		}, "")
+		if b.NeedsStackObjects {
+			b.trackPointer(packedHeapAlloc)
+		}
+		packedAlloc := b.CreateBitCast(packedHeapAlloc, llvm.PointerType(packedType, 0), "")
+
+		// Store all values in the heap pointer.
+		for i, value := range values {
+			indices := []llvm.Value{
+				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+			}
+			gep := b.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
+			b.CreateStore(value, gep)
+		}
+
+		// Return the original heap allocation pointer, which already is an *i8.
+		return packedHeapAlloc
+	}
 }
 
 // emitPointerUnpack extracts a list of values packed using emitPointerPack.
 func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []llvm.Value {
-	return llvmutil.EmitPointerUnpack(b.Builder, b.mod, ptr, valueTypes)
+	packedType := b.ctx.StructType(valueTypes, false)
+
+	// Get a correctly-typed pointer to the packed data.
+	var packedAlloc, packedRawAlloc llvm.Value
+	size := b.targetData.TypeAllocSize(packedType)
+	if size == 0 {
+		// No data to unpack.
+	} else if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.PointerTypeKind {
+		// A single pointer is always stored directly.
+		return []llvm.Value{b.CreateBitCast(ptr, valueTypes[0], "unpack.ptr")}
+	} else if size <= b.targetData.TypeAllocSize(b.i8ptrType) {
+		// Packed data stored directly in pointer.
+		if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.IntegerTypeKind {
+			// Keep this cast in SSA form.
+			return []llvm.Value{b.CreatePtrToInt(ptr, valueTypes[0], "unpack.int")}
+		}
+		// Fallback: load it using an alloca.
+		packedRawAlloc, _, _ = b.createTemporaryAlloca(llvm.PointerType(b.i8ptrType, 0), "unpack.raw.alloc")
+		packedRawValue := b.CreateBitCast(ptr, llvm.PointerType(b.i8ptrType, 0), "unpack.raw.value")
+		b.CreateStore(packedRawValue, packedRawAlloc)
+		packedAlloc = b.CreateBitCast(packedRawAlloc, llvm.PointerType(packedType, 0), "unpack.alloc")
+	} else {
+		// Packed data stored on the heap. Bitcast the passed-in pointer to the
+		// correct pointer type.
+		packedAlloc = b.CreateBitCast(ptr, llvm.PointerType(packedType, 0), "unpack.raw.ptr")
+	}
+	// Load each value from the packed data.
+	values := make([]llvm.Value, len(valueTypes))
+	for i, valueType := range valueTypes {
+		if b.targetData.TypeAllocSize(valueType) == 0 {
+			// This value has length zero, so there's nothing to load.
+			values[i] = llvm.ConstNull(valueType)
+			continue
+		}
+		indices := []llvm.Value{
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+		}
+		gep := b.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
+		values[i] = b.CreateLoad(valueType, gep, "")
+	}
+	if !packedRawAlloc.IsNil() {
+		allocPtr := b.CreateBitCast(packedRawAlloc, b.i8ptrType, "")
+		allocSize := llvm.ConstInt(b.ctx.Int64Type(), b.targetData.TypeAllocSize(b.uintptrType), false)
+		b.emitLifetimeEnd(allocPtr, allocSize)
+	}
+	return values
 }
 
 // makeGlobalArray creates a new LLVM global with the given name and integers as
-// contents, and returns the global.
+// contents, and returns the global and initializer type.
 // Note that it is left with the default linkage etc., you should set
 // linkage/constant/etc properties yourself.
-func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType llvm.Type) llvm.Value {
+func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
 	globalType := llvm.ArrayType(elementType, len(buf))
 	global := llvm.AddGlobal(c.mod, globalType, name)
 	value := llvm.Undef(globalType)
 	for i := 0; i < len(buf); i++ {
 		ch := uint64(buf[i])
-		value = llvm.ConstInsertValue(value, llvm.ConstInt(elementType, ch, false), []uint32{uint32(i)})
+		value = c.builder.CreateInsertValue(value, llvm.ConstInt(elementType, ch, false), i, "")
 	}
 	global.SetInitializer(value)
-	return global
+	return globalType, global
 }
 
 // createObjectLayout returns a LLVM value (of type i8*) that describes where
@@ -84,6 +230,8 @@ func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType l
 // which words contain a pointer (indicated by setting the given bit to 1). For
 // arrays, only the element is stored. This works because the GC knows the
 // object size and can therefore know how this value is repeated in the object.
+//
+// For details on what's in this value, see src/runtime/gc_precise.go.
 func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
 	// Use the element type for arrays. This works even for nested arrays.
 	for {
@@ -166,6 +314,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	// Create the global initializer.
 	bitmapBytes := make([]byte, int(objectSizeWords+7)/8)
 	bitmap.FillBytes(bitmapBytes)
+	reverseBytes(bitmapBytes) // big-endian to little-endian
 	var bitmapByteValues []llvm.Value
 	for _, b := range bitmapBytes {
 		bitmapByteValues = append(bitmapByteValues, llvm.ConstInt(c.ctx.Int8Type(), uint64(b), false))
@@ -312,5 +461,27 @@ func (b *builder) readStackPointer() llvm.Value {
 		fnType := llvm.FunctionType(b.i8ptrType, nil, false)
 		stacksave = llvm.AddFunction(b.mod, "llvm.stacksave", fnType)
 	}
-	return b.CreateCall(stacksave, nil, "")
+	return b.CreateCall(stacksave.GlobalValueType(), stacksave, nil, "")
+}
+
+// createZExtOrTrunc lets the input value fit in the output type bits, by zero
+// extending or truncating the integer.
+func (b *builder) createZExtOrTrunc(value llvm.Value, t llvm.Type) llvm.Value {
+	valueBits := value.Type().IntTypeWidth()
+	resultBits := t.IntTypeWidth()
+	if valueBits > resultBits {
+		value = b.CreateTrunc(value, t, "")
+	} else if valueBits < resultBits {
+		value = b.CreateZExt(value, t, "")
+	}
+	return value
+}
+
+// Reverse a slice of bytes. From the wiki:
+// https://github.com/golang/go/wiki/SliceTricks#reversing
+func reverseBytes(buf []byte) {
+	for i := len(buf)/2 - 1; i >= 0; i-- {
+		opp := len(buf) - 1 - i
+		buf[i], buf[opp] = buf[opp], buf[i]
+	}
 }

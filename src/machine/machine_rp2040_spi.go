@@ -1,11 +1,11 @@
 //go:build rp2040
-// +build rp2040
 
 package machine
 
 import (
 	"device/rp"
 	"errors"
+	"unsafe"
 )
 
 // SPI on the RP2040
@@ -27,8 +27,6 @@ type SPIConfig struct {
 	LSBFirst bool
 	// Mode's two most LSB are CPOL and CPHA. i.e. Mode==2 (0b10) is CPOL=1, CPHA=0
 	Mode uint8
-	// Number of data bits per transfer. Valid values 4..16. Default and recommended is 8.
-	DataBits uint8
 	// Serial clock pin
 	SCK Pin
 	// TX or Serial Data Out (MOSI if rp2040 is master)
@@ -38,18 +36,17 @@ type SPIConfig struct {
 }
 
 var (
-	ErrLSBNotSupported    = errors.New("SPI LSB unsupported on PL022")
-	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
-	ErrSPITimeout         = errors.New("SPI timeout")
-	ErrSPIBaud            = errors.New("SPI baud too low or above 66.5Mhz")
+	ErrLSBNotSupported = errors.New("SPI LSB unsupported on PL022")
+	ErrSPITimeout      = errors.New("SPI timeout")
+	ErrSPIBaud         = errors.New("SPI baud too low or above 66.5Mhz")
+	errSPIInvalidSDI   = errors.New("invalid SPI SDI pin")
+	errSPIInvalidSDO   = errors.New("invalid SPI SDO pin")
+	errSPIInvalidSCK   = errors.New("invalid SPI SCK pin")
 )
 
 type SPI struct {
 	Bus *rp.SPI0_Type
 }
-
-// time to wait on a transaction before dropping. Unit in Microseconds for compatibility with ticks().
-const _SPITimeout = 10 * 1000 // 10 ms
 
 // Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
@@ -58,21 +55,21 @@ const _SPITimeout = 10 * 1000 // 10 ms
 // This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
 // Note that the tx and rx buffers must be the same size:
 //
-// 		spi.Tx(tx, rx)
+//	spi.Tx(tx, rx)
 //
 // This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
 // until all the bytes in the command packet have been received:
 //
-// 		spi.Tx(tx, nil)
+//	spi.Tx(tx, nil)
 //
 // This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
 //
-// 		spi.Tx(nil, rx)
+//	spi.Tx(nil, rx)
 //
 // Remark: This implementation (RP2040) allows reading into buffer with a custom repeated
 // value on tx.
 //
-// 		spi.Tx([]byte{0xff}, rx) // may cause unwanted heap allocations.
+//	spi.Tx([]byte{0xff}, rx) // may cause unwanted heap allocations.
 //
 // This form sends 0xff and puts the result into rx buffer. Useful for reading from SD cards
 // which require 0xff input on SI.
@@ -96,19 +93,12 @@ func (spi SPI) Tx(w, r []byte) (err error) {
 
 // Write a single byte and read a single byte from TX/RX FIFO.
 func (spi SPI) Transfer(w byte) (byte, error) {
-	var deadline = ticks() + _SPITimeout
 	for !spi.isWritable() {
-		if ticks() > deadline {
-			return 0, ErrSPITimeout
-		}
 	}
 
 	spi.Bus.SSPDR.Set(uint32(w))
 
 	for !spi.isReadable() {
-		if ticks() > deadline {
-			return 0, ErrSPITimeout
-		}
 	}
 	return uint8(spi.Bus.SSPDR.Get()), nil
 }
@@ -147,20 +137,24 @@ func (spi SPI) GetBaudRate() uint32 {
 }
 
 // Configure is intended to setup/initialize the SPI interface.
-// Default baudrate of 115200 is used if Frequency == 0. Default
+// Default baudrate of 4MHz is used if Frequency == 0. Default
 // word length (data bits) is 8.
 // Below is a list of GPIO pins corresponding to SPI0 bus on the rp2040:
-//  SI : 0, 4, 17  a.k.a RX and MISO (if rp2040 is master)
-//  SO : 3, 7, 19  a.k.a TX and MOSI (if rp2040 is master)
-//  SCK: 2, 6, 18
+//
+//	SI : 0, 4, 17  a.k.a RX and MISO (if rp2040 is master)
+//	SO : 3, 7, 19  a.k.a TX and MOSI (if rp2040 is master)
+//	SCK: 2, 6, 18
+//
 // SPI1 bus GPIO pins:
-//  SI : 8, 12
-//  SO : 11, 15
-//  SCK: 10, 14
+//
+//	SI : 8, 12
+//	SO : 11, 15
+//	SCK: 10, 14
+//
 // No pin configuration is needed of SCK, SDO and SDI needed after calling Configure.
 func (spi SPI) Configure(config SPIConfig) error {
-	const defaultBaud uint32 = 115200
-	if config.SCK == 0 {
+	const defaultBaud uint32 = 4 * MHz
+	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		// set default pins if config zero valued or invalid clock pin supplied.
 		switch spi.Bus {
 		case rp.SPI0:
@@ -173,9 +167,27 @@ func (spi SPI) Configure(config SPIConfig) error {
 			config.SDI = SPI1_SDI_PIN
 		}
 	}
-	if config.DataBits < 4 || config.DataBits > 16 {
-		config.DataBits = 8
+	var okSDI, okSDO, okSCK bool
+	switch spi.Bus {
+	case rp.SPI0:
+		okSDI = config.SDI == 0 || config.SDI == 4 || config.SDI == 16 || config.SDI == 20
+		okSDO = config.SDO == 3 || config.SDO == 7 || config.SDO == 19 || config.SDO == 23
+		okSCK = config.SCK == 2 || config.SCK == 6 || config.SCK == 18 || config.SCK == 22
+	case rp.SPI1:
+		okSDI = config.SDI == 8 || config.SDI == 12 || config.SDI == 24 || config.SDI == 28
+		okSDO = config.SDO == 11 || config.SDO == 15 || config.SDO == 27
+		okSCK = config.SCK == 10 || config.SCK == 14 || config.SCK == 26
 	}
+
+	switch {
+	case !okSDI:
+		return errSPIInvalidSDI
+	case !okSDO:
+		return errSPIInvalidSDO
+	case !okSCK:
+		return errSPIInvalidSCK
+	}
+
 	if config.Frequency == 0 {
 		config.Frequency = defaultBaud
 	}
@@ -195,7 +207,7 @@ func (spi SPI) initSPI(config SPIConfig) (err error) {
 	}
 	err = spi.SetBaudRate(config.Frequency)
 	// Set SPI Format (CPHA and CPOL) and frame format (default is Motorola)
-	spi.setFormat(config.DataBits, config.Mode, rp.XIP_SSI_CTRLR0_SPI_FRF_STD)
+	spi.setFormat(config.Mode, rp.XIP_SSI_CTRLR0_SPI_FRF_STD)
 
 	// Always enable DREQ signals -- harmless if DMA is not listening
 	spi.Bus.SSPDMACR.SetBits(rp.SPI0_SSPDMACR_TXDMAE | rp.SPI0_SSPDMACR_RXDMAE)
@@ -205,18 +217,19 @@ func (spi SPI) initSPI(config SPIConfig) (err error) {
 }
 
 //go:inline
-func (spi SPI) setFormat(databits, mode uint8, frameFormat uint32) {
+func (spi SPI) setFormat(mode uint8, frameFormat uint32) {
 	cpha := uint32(mode) & 1
 	cpol := uint32(mode>>1) & 1
 	spi.Bus.SSPCR0.ReplaceBits(
 		(cpha<<rp.SPI0_SSPCR0_SPH_Pos)|
 			(cpol<<rp.SPI0_SSPCR0_SPO_Pos)|
-			(uint32(databits-1)<<rp.SPI0_SSPCR0_DSS_Pos)| // Set databits (SPI word length). Valid inputs are 4-16.
+			(uint32(7)<<rp.SPI0_SSPCR0_DSS_Pos)| // Set databits (SPI word length) to 8 bits.
 			(frameFormat&0b11)<<rp.SPI0_SSPCR0_FRF_Pos, // Frame format bits 4:5
 		rp.SPI0_SSPCR0_SPH_Msk|rp.SPI0_SSPCR0_SPO_Msk|rp.SPI0_SSPCR0_DSS_Msk|rp.SPI0_SSPCR0_FRF_Msk, 0)
 }
 
 // reset resets SPI and waits until reset is done.
+//
 //go:inline
 func (spi SPI) reset() {
 	resetVal := spi.deinit()
@@ -240,12 +253,14 @@ func (spi SPI) deinit() (resetVal uint32) {
 }
 
 // isWritable returns false if no space is available to write. True if a write is possible
+//
 //go:inline
 func (spi SPI) isWritable() bool {
 	return spi.Bus.SSPSR.HasBits(rp.SPI0_SSPSR_TNF)
 }
 
 // isReadable returns true if a read is possible i.e. data is present
+//
 //go:inline
 func (spi SPI) isReadable() bool {
 	return spi.Bus.SSPSR.HasBits(rp.SPI0_SSPSR_RNE)
@@ -274,27 +289,57 @@ func (spi SPI) isBusy() bool {
 
 // tx writes buffer to SPI ignoring Rx.
 func (spi SPI) tx(tx []byte) error {
-	var deadline = ticks() + _SPITimeout
-	// Write to TX FIFO whilst ignoring RX, then clean up afterward. When RX
-	// is full, PL022 inhibits RX pushes, and sets a sticky flag on
-	// push-on-full, but continues shifting. Safe if SSPIMSC_RORIM is not set.
-	for i := range tx {
-		for !spi.isWritable() {
-			if ticks() > deadline {
-				return ErrSPITimeout
-			}
-		}
-		spi.Bus.SSPDR.Set(uint32(tx[i]))
+	if len(tx) == 0 {
+		// We don't have to do anything.
+		// This avoids a panic in &tx[0] when len(tx) == 0.
+		return nil
 	}
+
+	// Pick the DMA channel reserved for this SPI peripheral.
+	var ch *dmaChannel
+	var dreq uint32
+	if spi.Bus == rp.SPI0 {
+		ch = &dmaChannels[spi0DMAChannel]
+		dreq = 16 // DREQ_SPI0_TX
+	} else { // SPI1
+		ch = &dmaChannels[spi1DMAChannel]
+		dreq = 18 // DREQ_SPI1_TX
+	}
+
+	// Configure the DMA peripheral as follows:
+	//   - set read address, write address, and number of transfer units (bytes)
+	//   - increment read address (in memory), don't increment write address (SSPDR)
+	//   - set data size to single bytes
+	//   - set the DREQ so that the DMA will fill the SPI FIFO as needed
+	//   - start the transfer
+	ch.READ_ADDR.Set(uint32(uintptr(unsafe.Pointer(&tx[0]))))
+	ch.WRITE_ADDR.Set(uint32(uintptr(unsafe.Pointer(&spi.Bus.SSPDR))))
+	ch.TRANS_COUNT.Set(uint32(len(tx)))
+	ch.CTRL_TRIG.Set(rp.DMA_CH0_CTRL_TRIG_INCR_READ |
+		rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_SIZE_BYTE<<rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_Pos |
+		dreq<<rp.DMA_CH0_CTRL_TRIG_TREQ_SEL_Pos |
+		rp.DMA_CH0_CTRL_TRIG_EN)
+
+	// Wait until the transfer is complete.
+	// TODO: do this more efficiently:
+	//   - Add a new API to start the transfer, without waiting for it to
+	//     complete. This way, the CPU can do something useful while the
+	//     transfer is in progress.
+	//   - If we have to wait, do so by waiting for an interrupt and blocking
+	//     this goroutine until finished (so that other goroutines can run or
+	//     the CPU can go to sleep).
+	for ch.CTRL_TRIG.Get()&rp.DMA_CH0_CTRL_TRIG_BUSY != 0 {
+	}
+
+	// We didn't read any result values, which means the RX FIFO has likely
+	// overflown. We have to clean up this mess now.
+
 	// Drain RX FIFO, then wait for shifting to finish (which may be *after*
 	// TX FIFO drains), then drain RX FIFO again
 	for spi.isReadable() {
 		spi.Bus.SSPDR.Get()
 	}
 	for spi.isBusy() {
-		if ticks() > deadline {
-			return ErrSPITimeout
-		}
 	}
 	for spi.isReadable() {
 		spi.Bus.SSPDR.Get()
@@ -309,7 +354,6 @@ func (spi SPI) tx(tx []byte) error {
 // Generally this can be 0, but some devices require a specific value here,
 // e.g. SD cards expect 0xff
 func (spi SPI) rx(rx []byte, txrepeat byte) error {
-	var deadline = ticks() + _SPITimeout
 	plen := len(rx)
 	const fifoDepth = 8 // see txrx
 	var rxleft, txleft = plen, plen
@@ -321,11 +365,11 @@ func (spi SPI) rx(rx []byte, txrepeat byte) error {
 		if rxleft != 0 && spi.isReadable() {
 			rx[plen-rxleft] = uint8(spi.Bus.SSPDR.Get())
 			rxleft--
-			continue // if reading succesfully in rx there is no need to check deadline.
+			continue
 		}
-		if ticks() > deadline {
-			return ErrSPITimeout
-		}
+	}
+	for spi.isBusy() {
+		gosched()
 	}
 	return nil
 }
@@ -333,7 +377,6 @@ func (spi SPI) rx(rx []byte, txrepeat byte) error {
 // Write len bytes from src to SPI. Simultaneously read len bytes from SPI to dst.
 // Note this function is guaranteed to exit in a known amount of time (bits sent * time per bit)
 func (spi SPI) txrx(tx, rx []byte) error {
-	var deadline = ticks() + _SPITimeout
 	plen := len(tx)
 	if plen != len(rx) {
 		return ErrTxInvalidSliceSize
@@ -342,7 +385,7 @@ func (spi SPI) txrx(tx, rx []byte) error {
 	// else FIFO will overflow if this code is heavily interrupted.
 	const fifoDepth = 8
 	var rxleft, txleft = plen, plen
-	for (txleft != 0 || rxleft != 0) && ticks() <= deadline {
+	for txleft != 0 || rxleft != 0 {
 		if txleft != 0 && spi.isWritable() && rxleft < txleft+fifoDepth {
 			spi.Bus.SSPDR.Set(uint32(tx[plen-txleft]))
 			txleft--
@@ -357,6 +400,8 @@ func (spi SPI) txrx(tx, rx []byte) error {
 		// Transaction ended early due to timeout
 		return ErrSPITimeout
 	}
-
+	for spi.isBusy() {
+		gosched()
+	}
 	return nil
 }

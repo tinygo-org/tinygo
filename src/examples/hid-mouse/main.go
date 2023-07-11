@@ -10,7 +10,7 @@ func main() {
 	button := machine.BUTTON
 	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
-	mouse := mouse.New()
+	mouse := mouse.Port()
 
 	for {
 		if !button.Get() {

@@ -1,4 +1,4 @@
-// +build byollvm
+//go:build byollvm
 
 #include <clang/Basic/DiagnosticOptions.h>
 #include <clang/CodeGen/CodeGenAction.h>

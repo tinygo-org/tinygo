@@ -1,10 +1,9 @@
 //go:build sam && atsamd21 && qtpy
-// +build sam,atsamd21,qtpy
 
 package machine
 
 // used to reset into bootloader
-const RESET_MAGIC_VALUE = 0xf01669ef
+const resetMagicValue = 0xf01669ef
 
 // GPIO Pins
 const (
@@ -30,7 +29,7 @@ const (
 
 // Analog pins
 const (
-	A0 = D1
+	A0 = D0
 	A1 = D1
 	A2 = D2
 	A3 = D3

@@ -55,5 +55,10 @@ func C.variadic2(x C.int, y C.int)
 
 var C.variadic2$funcaddr unsafe.Pointer
 
+//export _Cgo_static_173c95a79b6df1980521_staticfunc
+func C.staticfunc!symbols.go(x C.int)
+
+var C.staticfunc!symbols.go$funcaddr unsafe.Pointer
+
 //go:extern someValue
 var C.someValue C.int

@@ -1,7 +1,11 @@
 package transform
 
 import (
+	"path/filepath"
+
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/goenv"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -34,55 +38,80 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 		return nil
 	}
 
+	ctx := mod.Context()
+	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
+	uintptrType := ctx.IntType(targetData.PointerSize() * 8)
+
 	// Create the new global with stack sizes, that will be put in a new section
 	// just for itself.
 	stackSizesGlobalType := llvm.ArrayType(functions[0].Type(), len(functions))
 	stackSizesGlobal := llvm.AddGlobal(mod, stackSizesGlobalType, "internal/task.stackSizes")
 	stackSizesGlobal.SetSection(".tinygo_stacksizes")
 	defaultStackSizes := make([]llvm.Value, len(functions))
-	defaultStackSize := llvm.ConstInt(functions[0].Type(), config.Target.DefaultStackSize, false)
+	defaultStackSize := llvm.ConstInt(functions[0].Type(), config.StackSize(), false)
+	alignment := targetData.ABITypeAlignment(functions[0].Type())
 	for i := range defaultStackSizes {
 		defaultStackSizes[i] = defaultStackSize
 	}
 	stackSizesGlobal.SetInitializer(llvm.ConstArray(functions[0].Type(), defaultStackSizes))
+	stackSizesGlobal.SetAlignment(alignment)
+	// TODO: make this a constant. For some reason, that incrases code size though.
+	if config.Debug() {
+		dibuilder := llvm.NewDIBuilder(mod)
+		dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
+			File:      "<unknown>",
+			Dir:       "",
+			Producer:  "TinyGo",
+			Optimized: true,
+		})
+		ditype := dibuilder.CreateArrayType(llvm.DIArrayType{
+			SizeInBits:  targetData.TypeAllocSize(stackSizesGlobalType) * 8,
+			AlignInBits: uint32(alignment * 8),
+			ElementType: dibuilder.CreateBasicType(llvm.DIBasicType{
+				Name:       "uintptr",
+				SizeInBits: targetData.TypeAllocSize(functions[0].Type()) * 8,
+				Encoding:   llvm.DW_ATE_unsigned,
+			}),
+			Subscripts: []llvm.DISubrange{
+				{
+					Lo:    0,
+					Count: int64(len(functions)),
+				},
+			},
+		})
+		diglobal := dibuilder.CreateGlobalVariableExpression(llvm.Metadata{}, llvm.DIGlobalVariableExpression{
+			Name: "internal/task.stackSizes",
+			File: dibuilder.CreateFile("internal/task/task_stack.go", filepath.Join(goenv.Get("TINYGOROOT"), "src")),
+			Line: 1,
+			Type: ditype,
+			Expr: dibuilder.CreateExpression(nil),
+		})
+		stackSizesGlobal.AddMetadata(0, diglobal)
+
+		dibuilder.Finalize()
+		dibuilder.Destroy()
+	}
 
 	// Add all relevant values to llvm.used (for LTO).
-	appendToUsedGlobals(mod, append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
+	llvmutil.AppendToGlobal(mod, "llvm.used", append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
 
 	// Replace the calls with loads from the new global with stack sizes.
-	irbuilder := mod.Context().NewBuilder()
+	irbuilder := ctx.NewBuilder()
 	defer irbuilder.Dispose()
 	for i, function := range functions {
 		for _, use := range functionMap[function] {
-			ptr := llvm.ConstGEP(stackSizesGlobal, []llvm.Value{
-				llvm.ConstInt(mod.Context().Int32Type(), 0, false),
-				llvm.ConstInt(mod.Context().Int32Type(), uint64(i), false),
+			ptr := llvm.ConstGEP(stackSizesGlobalType, stackSizesGlobal, []llvm.Value{
+				llvm.ConstInt(ctx.Int32Type(), 0, false),
+				llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
 			})
 			irbuilder.SetInsertPointBefore(use)
-			stacksize := irbuilder.CreateLoad(ptr, "stacksize")
+			stacksize := irbuilder.CreateLoad(uintptrType, ptr, "stacksize")
 			use.ReplaceAllUsesWith(stacksize)
 			use.EraseFromParentAsInstruction()
 		}
 	}
 
 	return functionNames
-}
-
-// Append the given values to the llvm.used array. The values can be any pointer
-// type, they will be bitcast to i8*.
-func appendToUsedGlobals(mod llvm.Module, values ...llvm.Value) {
-	if !mod.NamedGlobal("llvm.used").IsNil() {
-		// Sanity check. TODO: we don't emit such a global at the moment, but
-		// when we do we should append to it instead.
-		panic("todo: append to existing llvm.used")
-	}
-	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-	var castValues []llvm.Value
-	for _, value := range values {
-		castValues = append(castValues, llvm.ConstBitCast(value, i8ptrType))
-	}
-	usedInitializer := llvm.ConstArray(i8ptrType, castValues)
-	used := llvm.AddGlobal(mod, usedInitializer.Type(), "llvm.used")
-	used.SetInitializer(usedInitializer)
-	used.SetLinkage(llvm.AppendingLinkage)
 }

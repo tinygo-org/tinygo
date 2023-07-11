@@ -1,5 +1,4 @@
 //go:build feather_nrf52840
-// +build feather_nrf52840
 
 package machine
 

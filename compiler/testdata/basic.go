@@ -75,14 +75,24 @@ func complexMul(x, y complex64) complex64 {
 // A type 'kv' also exists in function foo. Test that these two types don't
 // conflict with each other.
 type kv struct {
-	v float32
+	v       float32
+	x, y, z int
 }
 
-func foo(a *kv) {
+var kvGlobal kv
+
+func foo() {
 	// Define a new 'kv' type.
 	type kv struct {
-		v byte
+		v       byte
+		x, y, z int
 	}
 	// Use this type.
-	func(b *kv) {}(nil)
+	func(b kv) {}(kv{})
 }
+
+type T1 []T1
+type T2 [2]*T2
+
+var a T1
+var b T2

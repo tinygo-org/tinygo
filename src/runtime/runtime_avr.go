@@ -1,5 +1,4 @@
-//go:build avr
-// +build avr
+//go:build avr && !avrtiny
 
 package runtime
 
@@ -53,7 +52,7 @@ func preinit() {
 	ptr := unsafe.Pointer(&_sbss)
 	for ptr != unsafe.Pointer(&_ebss) {
 		*(*uint8)(ptr) = 0
-		ptr = unsafe.Pointer(uintptr(ptr) + 1)
+		ptr = unsafe.Add(ptr, 1)
 	}
 }
 

@@ -1,10 +1,9 @@
 //go:build matrixportal_m4
-// +build matrixportal_m4
 
 package machine
 
 // used to reset into bootloader
-const RESET_MAGIC_VALUE = 0xF01669EF
+const resetMagicValue = 0xF01669EF
 
 // Digital pins
 const (

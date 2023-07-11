@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -45,7 +46,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	}
 
 	// Find the overrides needed for the goroot.
-	overrides := pathsToOverride(needsSyscallPackage(config.BuildTags()))
+	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()))
 
 	// Resolve the merge links within the goroot.
 	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
@@ -83,7 +84,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	}
 
 	// Create a temporary directory to construct the goroot within.
-	tmpgoroot, err := ioutil.TempDir(goenv.Get("GOCACHE"), cachedGorootName+".tmp")
+	tmpgoroot, err := os.MkdirTemp(goenv.Get("GOCACHE"), cachedGorootName+".tmp")
 	if err != nil {
 		return "", err
 	}
@@ -122,13 +123,13 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	// Rename the new merged gorooot into place.
 	err = os.Rename(tmpgoroot, cachedgoroot)
 	if err != nil {
-		if os.IsExist(err) {
+		if errors.Is(err, fs.ErrExist) {
 			// Another invocation of TinyGo also seems to have created a GOROOT.
 			// Use that one instead. Our new GOROOT will be automatically
 			// deleted by the defer above.
 			return cachedgoroot, nil
 		}
-		if runtime.GOOS == "windows" && os.IsPermission(err) {
+		if runtime.GOOS == "windows" && errors.Is(err, fs.ErrPermission) {
 			// On Windows, a rename with a destination directory that already
 			// exists does not result in an IsExist error, but rather in an
 			// access denied error. To be sure, check for this case by checking
@@ -222,7 +223,7 @@ func needsSyscallPackage(buildTags []string) bool {
 
 // The boolean indicates whether to merge the subdirs. True means merge, false
 // means use the TinyGo version.
-func pathsToOverride(needsSyscallPackage bool) map[string]bool {
+func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 	paths := map[string]bool{
 		"":                      true,
 		"crypto/":               true,
@@ -230,11 +231,10 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"device/":               false,
 		"examples/":             false,
 		"internal/":             true,
-		"internal/fuzz/":        false,
 		"internal/bytealg/":     false,
+		"internal/fuzz/":        false,
 		"internal/reflectlite/": false,
 		"internal/task/":        false,
-		"internal/itoa/":        false, // TODO: Remove when we drop support for go 1.16
 		"machine/":              false,
 		"net/":                  true,
 		"os/":                   true,
@@ -243,6 +243,13 @@ func pathsToOverride(needsSyscallPackage bool) map[string]bool {
 		"sync/":                 true,
 		"testing/":              true,
 	}
+
+	if goMinor >= 19 {
+		paths["crypto/internal/"] = true
+		paths["crypto/internal/boring/"] = true
+		paths["crypto/internal/boring/sig/"] = false
+	}
+
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
 	}

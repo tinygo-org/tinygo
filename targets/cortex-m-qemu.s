@@ -23,6 +23,7 @@ Default_Handler:
 
 .section .isr_vector, "a", %progbits
 .global  __isr_vector
+__isr_vector:
     // Interrupt vector as defined by Cortex-M, starting with the stack top.
     // On reset, SP is initialized with *0x0 and PC is loaded with *0x4, loading
     // _stack_top and Reset_Handler.
@@ -54,3 +55,5 @@ Default_Handler:
     IRQ DebugMon_Handler
     IRQ PendSV_Handler
     IRQ SysTick_Handler
+
+.size __isr_vector, .-__isr_vector

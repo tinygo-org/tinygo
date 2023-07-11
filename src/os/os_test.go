@@ -5,8 +5,9 @@
 package os_test
 
 import (
+	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	. "os"
 	"runtime"
 	"strings"
@@ -129,7 +130,7 @@ func TestSeek(t *testing.T) {
 		off, err := f.Seek(tt.in, tt.whence)
 		if off != tt.out || err != nil {
 			if e, ok := err.(*PathError); ok && e.Err == syscall.EINVAL && tt.out > 1<<32 && runtime.GOOS == "linux" {
-				mounts, _ := ioutil.ReadFile("/proc/mounts")
+				mounts, _ := os.ReadFile("/proc/mounts")
 				if strings.Contains(string(mounts), "reiserfs") {
 					// Reiserfs rejects the big seeks.
 					t.Skipf("skipping test known to fail on reiserfs; https://golang.org/issue/91")
@@ -247,5 +248,68 @@ func TestReadAtEOF(t *testing.T) {
 		t.Fatalf("ReadAt succeeded")
 	default:
 		t.Fatalf("ReadAt failed: %s", err)
+	}
+}
+
+func TestWriteAt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Log("TODO: implement Pwrite for Windows")
+		return
+	}
+	f := newFile("TestWriteAt", t)
+	defer Remove(f.Name())
+	defer f.Close()
+
+	const data = "hello, world\n"
+	io.WriteString(f, data)
+
+	n, err := f.WriteAt([]byte("WORLD"), 7)
+	if err != nil || n != 5 {
+		t.Fatalf("WriteAt 7: %d, %v", n, err)
+	}
+
+	b, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("ReadFile %s: %v", f.Name(), err)
+	}
+	if string(b) != "hello, WORLD\n" {
+		t.Fatalf("after write: have %q want %q", string(b), "hello, WORLD\n")
+	}
+}
+
+// Verify that WriteAt doesn't allow negative offset.
+func TestWriteAtNegativeOffset(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Log("TODO: implement Pwrite for Windows")
+		return
+	}
+	f := newFile("TestWriteAtNegativeOffset", t)
+	defer Remove(f.Name())
+	defer f.Close()
+
+	n, err := f.WriteAt([]byte("WORLD"), -10)
+
+	const wantsub = "negative offset"
+	if !strings.Contains(fmt.Sprint(err), wantsub) || n != 0 {
+		t.Errorf("WriteAt(-10) = %v, %v; want 0, ...%q...", n, err, wantsub)
+	}
+}
+
+// Verify that WriteAt doesn't work in append mode.
+func TestWriteAtInAppendMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Log("TODO: implement Pwrite for Windows")
+		return
+	}
+	defer chtmpdir(t)()
+	f, err := OpenFile("write_at_in_append_mode.txt", O_APPEND|O_CREATE|O_WRONLY, 0666)
+	if err != nil {
+		t.Fatalf("OpenFile: %v", err)
+	}
+	defer f.Close()
+
+	_, err = f.WriteAt([]byte(""), 1)
+	if err != ErrWriteAtInAppendMode {
+		t.Fatalf("f.WriteAt returned %v, expected %v", err, ErrWriteAtInAppendMode)
 	}
 }

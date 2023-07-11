@@ -1,5 +1,4 @@
 //go:build cortexm
-// +build cortexm
 
 package interrupt
 
@@ -34,9 +33,9 @@ type State uintptr
 // Disable disables all interrupts and returns the previous interrupt state. It
 // can be used in a critical section like this:
 //
-//     state := interrupt.Disable()
-//     // critical section
-//     interrupt.Restore(state)
+//	state := interrupt.Disable()
+//	// critical section
+//	interrupt.Restore(state)
 //
 // Critical sections can be nested. Make sure to call Restore in the same order
 // as you called Disable (this happens naturally with the pattern above).
@@ -50,4 +49,14 @@ func Disable() (state State) {
 // cricital sections.
 func Restore(state State) {
 	arm.EnableInterrupts(uintptr(state))
+}
+
+// In returns whether the system is currently in an interrupt.
+func In() bool {
+	// The VECTACTIVE field gives the instruction vector that is currently
+	// active (in handler mode), or 0 if not in an interrupt.
+	// Documentation:
+	// https://developer.arm.com/documentation/dui0497/a/cortex-m0-peripherals/system-control-block/interrupt-control-and-state-register
+	vectactive := uint8(arm.SCB.ICSR.Get())
+	return vectactive != 0
 }

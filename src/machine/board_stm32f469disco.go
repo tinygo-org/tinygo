@@ -1,5 +1,4 @@
 //go:build stm32f469disco
-// +build stm32f469disco
 
 package machine
 

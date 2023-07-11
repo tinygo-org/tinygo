@@ -1,5 +1,4 @@
 //go:build thingplus_rp2040
-// +build thingplus_rp2040
 
 package machine
 

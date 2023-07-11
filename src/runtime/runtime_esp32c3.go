@@ -1,5 +1,4 @@
 //go:build esp32c3
-// +build esp32c3
 
 package runtime
 
@@ -12,6 +11,7 @@ import (
 
 // This is the function called on startup after the flash (IROM/DROM) is
 // initialized and the stack pointer has been set.
+//
 //export main
 func main() {
 	// This initialization configures the following things:
@@ -78,7 +78,7 @@ func interruptInit() {
 	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1
 	for i := 0; i < 31; i++ {
 		priReg.Set(0)
-		priReg = (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(priReg)) + uintptr(4)))
+		priReg = (*volatile.Register32)(unsafe.Add(unsafe.Pointer(priReg), 4))
 	}
 
 	// default threshold for interrupts is 5

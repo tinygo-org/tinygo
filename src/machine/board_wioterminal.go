@@ -1,10 +1,9 @@
 //go:build wioterminal
-// +build wioterminal
 
 package machine
 
 // used to reset into bootloader
-const RESET_MAGIC_VALUE = 0xf01669ef
+const resetMagicValue = 0xf01669ef
 
 const (
 	ADC0 = A0
@@ -91,7 +90,7 @@ const (
 	BCM10 = PB02 // SPI SDO
 	BCM11 = PB03 // SPI SCK
 	BCM12 = PB06
-	BCM13 = PA07
+	BCM13 = PA04
 	BCM14 = PB27 // UART Serial1
 	BCM15 = PB26 // UART Serial1
 	BCM16 = PB07
@@ -349,8 +348,11 @@ var (
 
 	UART1 = &sercomUSART2
 
-	// RTL8720D
+	// RTL8720D (tx: PC22, rx: PC23)
 	UART2 = &sercomUSART1
+
+	// RTL8720D (tx: PB24, rx: PC24)
+	UART3 = &sercomUSART0
 )
 
 // I2C pins

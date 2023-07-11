@@ -1,5 +1,4 @@
 //go:build sam && atsamd21
-// +build sam,atsamd21
 
 package machine
 
@@ -140,8 +139,9 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 		setup := usb.NewSetup(udd_ep_out_cache_buffer[0][:])
 
 		// Clear the Bank 0 ready flag on Control OUT
-		setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
+		usbEndpointDescriptors[0].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0]))))
 		usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+		setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 		ok := false
 		if (setup.BmRequestType & usb.REQUEST_TYPE) == usb.REQUEST_STANDARD {
@@ -344,15 +344,6 @@ func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
 
 func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	var b [cdcLineInfoSize]byte
-
-	// address
-	usbEndpointDescriptors[0].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[0]))))
-
-	// set byte count to zero
-	usbEndpointDescriptors[0].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
-
-	// set ready for next data
-	setEPSTATUSCLR(0, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	// Wait until OUT transfer is ready.
 	timeout := 300000

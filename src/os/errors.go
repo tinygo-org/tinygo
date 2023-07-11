@@ -70,6 +70,16 @@ func (e *SyscallError) Error() string { return e.Syscall + ": " + e.Err.Error() 
 
 func (e *SyscallError) Unwrap() error { return e.Err }
 
+type timeout interface {
+	Timeout() bool
+}
+
+// Timeout reports whether this error represents a timeout.
+func (e *SyscallError) Timeout() bool {
+	t, ok := e.Err.(timeout)
+	return ok && t.Timeout()
+}
+
 func IsExist(err error) bool {
 	return underlyingErrorIs(err, ErrExist)
 }
@@ -80,6 +90,11 @@ func IsNotExist(err error) bool {
 
 func IsPermission(err error) bool {
 	return underlyingErrorIs(err, ErrPermission)
+}
+
+func IsTimeout(err error) bool {
+	terr, ok := underlyingError(err).(timeout)
+	return ok && terr.Timeout()
 }
 
 func underlyingErrorIs(err, target error) bool {

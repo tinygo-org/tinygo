@@ -1,5 +1,4 @@
 //go:build stm32wlx
-// +build stm32wlx
 
 package runtime
 
@@ -22,12 +21,11 @@ func init() {
 	// Configure 48Mhz clock
 	initCLK()
 
-	// UART init
-	machine.InitSerial()
-
 	// Timers init
 	initTickTimer(&machine.TIM1)
 
+	// UART init
+	machine.InitSerial()
 }
 
 func initCLK() {

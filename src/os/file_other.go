@@ -1,5 +1,4 @@
 //go:build baremetal || (wasm && !wasi)
-// +build baremetal wasm,!wasi
 
 package os
 
@@ -30,12 +29,17 @@ type stdioFileHandle uint8
 // can overwrite this data, which could cause the finalizer
 // to close the wrong file descriptor.
 type file struct {
-	handle FileHandle
-	name   string
+	handle     FileHandle
+	name       string
+	appendMode bool
+}
+
+func (f *file) close() error {
+	return f.handle.Close()
 }
 
 func NewFile(fd uintptr, name string) *File {
-	return &File{&file{stdioFileHandle(fd), name}}
+	return &File{&file{handle: stdioFileHandle(fd), name: name}}
 }
 
 // Read reads up to len(b) bytes from machine.Serial.
@@ -64,6 +68,10 @@ func (f stdioFileHandle) ReadAt(b []byte, off int64) (n int, err error) {
 	return 0, ErrNotImplemented
 }
 
+func (f stdioFileHandle) WriteAt(b []byte, off int64) (n int, err error) {
+	return 0, ErrNotImplemented
+}
+
 // Write writes len(b) bytes to the output. It returns the number of bytes
 // written or an error if this file is not stdout or stderr.
 func (f stdioFileHandle) Write(b []byte) (n int, err error) {
@@ -86,6 +94,10 @@ func (f stdioFileHandle) Close() error {
 // Seek wraps syscall.Seek.
 func (f stdioFileHandle) Seek(offset int64, whence int) (int64, error) {
 	return -1, ErrUnsupported
+}
+
+func (f stdioFileHandle) Sync() error {
+	return ErrUnsupported
 }
 
 func (f stdioFileHandle) Fd() uintptr {

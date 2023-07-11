@@ -1,5 +1,4 @@
 //go:build stm32f4 || stm32f1
-// +build stm32f4 stm32f1
 
 package machine
 
@@ -137,7 +136,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 	// default to 100 kHz (Sm, standard mode) if no frequency is set
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100 * KHz
 	}
 
 	// configure I2C input clock

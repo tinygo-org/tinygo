@@ -12,6 +12,7 @@ package runtime
 
 import (
 	"internal/task"
+	"runtime/interrupt"
 )
 
 const schedulerDebug = false
@@ -27,6 +28,7 @@ var (
 	runqueue           task.Queue
 	sleepQueue         *task.Task
 	sleepQueueBaseTime timeUnit
+	timerQueue         *timerNode
 )
 
 // Simple logging, for debugging.
@@ -54,7 +56,8 @@ func scheduleLogChan(msg string, ch *channel, t *task.Task) {
 // not exited (so deferred calls won't run). This can happen for example in code
 // like this, that blocks forever:
 //
-//     select{}
+//	select{}
+//
 //go:noinline
 func deadlock() {
 	// call yield without requesting a wakeup
@@ -65,6 +68,7 @@ func deadlock() {
 // Goexit terminates the currently running goroutine. No other goroutines are affected.
 //
 // Unlike the main Go implementation, no deffered calls will be run.
+//
 //go:inline
 func Goexit() {
 	// its really just a deadlock
@@ -112,6 +116,46 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 	*q = t
 }
 
+// addTimer adds the given timer node to the timer queue. It must not be in the
+// queue already.
+// This function is very similar to addSleepTask but for timerQueue instead of
+// sleepQueue.
+func addTimer(tim *timerNode) {
+	mask := interrupt.Disable()
+
+	// Add to timer queue.
+	q := &timerQueue
+	for ; *q != nil; q = &(*q).next {
+		if tim.whenTicks() < (*q).whenTicks() {
+			// this will finish earlier than the next - insert here
+			break
+		}
+	}
+	tim.next = *q
+	*q = tim
+	interrupt.Restore(mask)
+}
+
+// removeTimer is the implementation of time.stopTimer. It removes a timer from
+// the timer queue, returning true if the timer is present in the timer queue.
+func removeTimer(tim *timer) bool {
+	removedTimer := false
+	mask := interrupt.Disable()
+	for t := &timerQueue; *t != nil; t = &(*t).next {
+		if (*t).timer == tim {
+			scheduleLog("removed timer")
+			*t = (*t).next
+			removedTimer = true
+			break
+		}
+	}
+	if !removedTimer {
+		scheduleLog("did not remove timer")
+	}
+	interrupt.Restore(mask)
+	return removedTimer
+}
+
 // Run the scheduler until all tasks have finished.
 func scheduler() {
 	// Main scheduler loop.
@@ -119,7 +163,7 @@ func scheduler() {
 	for !schedulerDone {
 		scheduleLog("")
 		scheduleLog("  schedule")
-		if sleepQueue != nil {
+		if sleepQueue != nil || timerQueue != nil {
 			now = ticks()
 		}
 
@@ -134,9 +178,20 @@ func scheduler() {
 			runqueue.Push(t)
 		}
 
+		// Check for expired timers to trigger.
+		if timerQueue != nil && now >= timerQueue.whenTicks() {
+			scheduleLog("--- timer awoke")
+			// Pop timer from queue.
+			tn := timerQueue
+			timerQueue = tn.next
+			tn.next = nil
+			// Run the callback stored in this timer node.
+			tn.callback(tn)
+		}
+
 		t := runqueue.Pop()
 		if t == nil {
-			if sleepQueue == nil {
+			if sleepQueue == nil && timerQueue == nil {
 				if asyncScheduler {
 					// JavaScript is treated specially, see below.
 					return
@@ -144,11 +199,25 @@ func scheduler() {
 				waitForEvents()
 				continue
 			}
-			timeLeft := timeUnit(sleepQueue.Data) - (now - sleepQueueBaseTime)
+
+			var timeLeft timeUnit
+			if sleepQueue != nil {
+				timeLeft = timeUnit(sleepQueue.Data) - (now - sleepQueueBaseTime)
+			}
+			if timerQueue != nil {
+				timeLeftForTimer := timerQueue.whenTicks() - now
+				if sleepQueue == nil || timeLeftForTimer < timeLeft {
+					timeLeft = timeLeftForTimer
+				}
+			}
+
 			if schedulerDebug {
 				println("  sleeping...", sleepQueue, uint(timeLeft))
 				for t := sleepQueue; t != nil; t = t.Next {
 					println("    task sleeping:", t, timeUnit(t.Data))
+				}
+				for tim := timerQueue; tim != nil; tim = tim.next {
+					println("---   timer waiting:", tim, tim.whenTicks())
 				}
 			}
 			sleepTicks(timeLeft)

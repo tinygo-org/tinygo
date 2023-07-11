@@ -1,14 +1,12 @@
 //go:build arduino_mkr1000
-// +build arduino_mkr1000
 
 // This contains the pin mappings for the Arduino MKR1000 board.
 //
 // For more information, see: https://store.arduino.cc/usa/arduino-mkr1000-with-headers-mounted
-//
 package machine
 
 // used to reset into bootloader
-const RESET_MAGIC_VALUE = 0x07738135
+const resetMagicValue = 0x07738135
 
 // GPIO Pins
 const (

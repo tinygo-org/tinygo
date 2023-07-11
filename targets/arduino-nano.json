@@ -2,8 +2,8 @@
 	"inherits": ["atmega328p"],
 	"build-tags": ["arduino_nano"],
 	"ldflags": [
-		"-Wl,--defsym=_bootloader_size=512",
-		"-Wl,--defsym=_stack_size=512"
+		"--defsym=_bootloader_size=512",
+		"--defsym=_stack_size=512"
 	],
 	"flash-command": "avrdude -c arduino -p atmega328p -b 57600 -P {port} -U flash:w:{hex}:i",
 	"emulator": "simavr -m atmega328p -f 16000000 {}"

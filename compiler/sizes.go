@@ -152,7 +152,7 @@ func (s *stdSizes) Sizeof(T types.Type) int64 {
 		return align(offsets[n-1]+s.Sizeof(fields[n-1].Type()), maxAlign)
 	case *types.Interface:
 		return s.PtrSize * 2
-	case *types.Pointer:
+	case *types.Pointer, *types.Chan, *types.Map:
 		return s.PtrSize
 	case *types.Signature:
 		// Func values in TinyGo are two words in size.

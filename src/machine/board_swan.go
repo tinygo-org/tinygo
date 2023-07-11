@@ -1,5 +1,4 @@
 //go:build swan
-// +build swan
 
 package machine
 

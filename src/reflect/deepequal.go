@@ -15,7 +15,7 @@ import "unsafe"
 type visit struct {
 	a1  unsafe.Pointer
 	a2  unsafe.Pointer
-	typ rawType
+	typ *rawType
 }
 
 // Tests for deep equality using reflected types. The map argument tracks
@@ -132,7 +132,7 @@ func deepValueEqual(v1, v2 Value, visited map[visit]struct{}) bool {
 	}
 }
 
-// DeepEqual reports whether x and y are ``deeply equal,'' defined as follows.
+// DeepEqual reports whether x and y are “deeply equal”, defined as follows.
 // Two values of identical type are deeply equal if one of the following cases applies.
 // Values of distinct types are never deeply equal.
 //

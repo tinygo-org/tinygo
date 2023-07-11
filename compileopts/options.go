@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
-	validGCOptions            = []string{"none", "leaking", "conservative"}
+	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise"}
 	validSchedulerOptions     = []string{"none", "tasks", "asyncify"}
 	validSerialOptions        = []string{"none", "uart", "usb"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
@@ -27,19 +28,21 @@ type Options struct {
 	GC              string
 	PanicStrategy   string
 	Scheduler       string
+	StackSize       uint64 // goroutine stack size (if none could be automatically determined)
 	Serial          string
 	Work            bool // -work flag to print temporary build directory
+	InterpTimeout   time.Duration
 	PrintIR         bool
 	DumpSSA         bool
 	VerifyIR        bool
+	SkipDWARF       bool
 	PrintCommands   func(cmd string, args ...string) `json:"-"`
 	Semaphore       chan struct{}                    `json:"-"` // -p flag controls cap
 	Debug           bool
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
 	PrintStacks     bool
-	Tags            string
-	WasmAbi         string
+	Tags            []string
 	GlobalValues    map[string]map[string]string // map[pkgpath]map[varname]value
 	TestConfig      TestConfig
 	Programmer      string
@@ -47,6 +50,9 @@ type Options struct {
 	LLVMFeatures    string
 	Directory       string
 	PrintJSON       bool
+	Monitor         bool
+	BaudRate        int
+	Timeout         time.Duration
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.

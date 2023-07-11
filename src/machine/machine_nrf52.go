@@ -1,5 +1,4 @@
 //go:build nrf52
-// +build nrf52
 
 package machine
 
@@ -64,3 +63,9 @@ var (
 	PWM1 = &PWM{PWM: nrf.PWM1}
 	PWM2 = &PWM{PWM: nrf.PWM2}
 )
+
+const eraseBlockSizeValue = 4096
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}

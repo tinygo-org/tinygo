@@ -26,6 +26,7 @@ type TargetSpec struct {
 	Inherits         []string `json:"inherits"`
 	Triple           string   `json:"llvm-target"`
 	CPU              string   `json:"cpu"`
+	ABI              string   `json:"target-abi"` // rougly equivalent to -mabi= flag
 	Features         string   `json:"features"`
 	GOOS             string   `json:"goos"`
 	GOARCH           string   `json:"goarch"`
@@ -47,9 +48,9 @@ type TargetSpec struct {
 	FlashCommand     string   `json:"flash-command"`
 	GDB              []string `json:"gdb"`
 	PortReset        string   `json:"flash-1200-bps-reset"`
-	SerialPort       []string `json:"serial-port"` // serial port IDs in the form "acm:vid:pid" or "usb:vid:pid"
+	SerialPort       []string `json:"serial-port"` // serial port IDs in the form "vid:pid"
 	FlashMethod      string   `json:"flash-method"`
-	FlashVolume      string   `json:"msd-volume-name"`
+	FlashVolume      []string `json:"msd-volume-name"`
 	FlashFilename    string   `json:"msd-firmware-name"`
 	UF2FamilyID      string   `json:"uf2-family-id"`
 	BinaryFormat     string   `json:"binary-format"`
@@ -65,7 +66,7 @@ type TargetSpec struct {
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
-func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
+func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 	specType := reflect.TypeOf(spec).Elem()
 	specValue := reflect.ValueOf(spec).Elem()
 	childValue := reflect.ValueOf(child).Elem()
@@ -88,12 +89,22 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) {
 			if !src.IsNil() {
 				dst.Set(src)
 			}
-		case reflect.Slice: // for slices, append the field
+		case reflect.Slice: // for slices, append the field and check for duplicates
 			dst.Set(reflect.AppendSlice(dst, src))
+			for i := 0; i < dst.Len(); i++ {
+				v := dst.Index(i).String()
+				for j := i + 1; j < dst.Len(); j++ {
+					w := dst.Index(j).String()
+					if v == w {
+						return fmt.Errorf("duplicate value '%s' in field %s", v, field.Name)
+					}
+				}
+			}
 		default:
-			panic("unknown field type : " + kind.String())
+			return fmt.Errorf("unknown field type: %s", kind)
 		}
 	}
+	return nil
 }
 
 // load reads a target specification from the JSON in the given io.Reader. It
@@ -108,10 +119,10 @@ func (spec *TargetSpec) load(r io.Reader) error {
 }
 
 // loadFromGivenStr loads the TargetSpec from the given string that could be:
-// - targets/ directory inside the compiler sources
-// - a relative or absolute path to custom (project specific) target specification .json file;
-//   the Inherits[] could contain the files from target folder (ex. stm32f4disco)
-//   as well as path to custom files (ex. myAwesomeProject.json)
+//   - targets/ directory inside the compiler sources
+//   - a relative or absolute path to custom (project specific) target specification .json file;
+//     the Inherits[] could contain the files from target folder (ex. stm32f4disco)
+//     as well as path to custom files (ex. myAwesomeProject.json)
 func (spec *TargetSpec) loadFromGivenStr(str string) error {
 	path := ""
 	if strings.HasSuffix(str, ".json") {
@@ -141,11 +152,17 @@ func (spec *TargetSpec) resolveInherits() error {
 		if err != nil {
 			return err
 		}
-		newSpec.overrideProperties(subtarget)
+		err = newSpec.overrideProperties(subtarget)
+		if err != nil {
+			return err
+		}
 	}
 
 	// When all properties are loaded, make sure they are properly inherited.
-	newSpec.overrideProperties(spec)
+	err := newSpec.overrideProperties(spec)
+	if err != nil {
+		return err
+	}
 	*spec = *newSpec
 
 	return nil
@@ -178,6 +195,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		default:
 			llvmarch = options.GOARCH
 		}
+		llvmvendor := "unknown"
 		llvmos := options.GOOS
 		if llvmos == "darwin" {
 			// Use macosx* instead of darwin, otherwise darwin/arm64 will refer
@@ -187,17 +205,18 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 				// Looks like Apple prefers to call this architecture ARM64
 				// instead of AArch64.
 				llvmarch = "arm64"
+				llvmos = "macosx11.0.0"
 			}
+			llvmvendor = "apple"
 		}
 		// Target triples (which actually have four components, but are called
 		// triples for historical reasons) have the form:
 		//   arch-vendor-os-environment
-		target := llvmarch + "-unknown-" + llvmos
-		if options.GOARCH == "arm" {
-			target += "-gnueabihf"
-		}
+		target := llvmarch + "-" + llvmvendor + "-" + llvmos
 		if options.GOOS == "windows" {
 			target += "-gnu"
+		} else if options.GOARCH == "arm" {
+			target += "-gnueabihf"
 		}
 		return defaultTarget(options.GOOS, options.GOARCH, target)
 	}
@@ -213,7 +232,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	// it includes all parents as specified in the "inherits" key.
 	err = spec.resolveInherits()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s : %w", options.Target, err)
 	}
 
 	if spec.Scheduler == "asyncify" {
@@ -231,6 +250,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GOOS:             goos,
 		GOARCH:           goarch,
 		BuildTags:        []string{goos, goarch},
+		GC:               "precise",
 		Scheduler:        "tasks",
 		Linker:           "cc",
 		DefaultStackSize: 1024 * 64, // 64kB
@@ -284,10 +304,19 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		// normally present in Go (without explicitly opting in).
 		// For more discussion:
 		// https://groups.google.com/g/Golang-nuts/c/Jd9tlNc6jUE/m/Zo-7zIP_m3MJ?pli=1
+		switch goarch {
+		case "amd64":
+			spec.LDFlags = append(spec.LDFlags,
+				"-m", "i386pep",
+				"--image-base", "0x400000",
+			)
+		case "arm64":
+			spec.LDFlags = append(spec.LDFlags,
+				"-m", "arm64pe",
+			)
+		}
 		spec.LDFlags = append(spec.LDFlags,
-			"-m", "i386pep",
 			"-Bdynamic",
-			"--image-base", "0x400000",
 			"--gc-sections",
 			"--no-insert-timestamp",
 			"--no-dynamicbase",
@@ -297,9 +326,9 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	}
 	if goarch != "wasm" {
 		suffix := ""
-		if goos == "windows" {
-			// Windows uses a different calling convention from other operating
-			// systems so we need separate assembly files.
+		if goos == "windows" && goarch == "amd64" {
+			// Windows uses a different calling convention on amd64 from other
+			// operating systems so we need separate assembly files.
 			suffix = "_windows"
 		}
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+goarch+suffix+".S")

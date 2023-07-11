@@ -5,6 +5,7 @@ type Keycode uint16
 
 // keycode returns the given Unicode codepoint translated to a Keycode sequence.
 // Unicode codepoints greater than U+FFFF are unsupported.
+//
 //go:inline
 func keycode(p uint16) Keycode {
 	if p < 0x80 {
@@ -76,6 +77,7 @@ const (
 	KeyModifierRightAlt   Keycode = 0x40 | 0xE000
 	KeyModifierRightGUI   Keycode = 0x80 | 0xE000
 
+	// KeySystemXXX is not supported now
 	KeySystemPowerDown Keycode = 0x81 | 0xE200
 	KeySystemSleep     Keycode = 0x82 | 0xE200
 	KeySystemWakeUp    Keycode = 0x83 | 0xE200

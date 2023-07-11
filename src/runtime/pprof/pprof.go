@@ -10,8 +10,7 @@ import (
 
 var ErrUnimplemented = errors.New("runtime/pprof: unimplemented")
 
-type Profile struct {
-}
+type Profile struct{}
 
 func StartCPUProfile(w io.Writer) error {
 	return nil
@@ -20,10 +19,26 @@ func StartCPUProfile(w io.Writer) error {
 func StopCPUProfile() {
 }
 
+func WriteHeapProfile(w io.Writer) error {
+	return nil
+}
+
 func Lookup(name string) *Profile {
 	return nil
 }
 
+func (p *Profile) Name() string {
+	return ""
+}
+
+func (p *Profile) Count() int {
+	return 0
+}
+
 func (p *Profile) WriteTo(w io.Writer, debug int) error {
 	return ErrUnimplemented
+}
+
+func Profiles() []*Profile {
+	return nil
 }

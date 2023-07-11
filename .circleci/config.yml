@@ -6,18 +6,6 @@ commands:
       - run:
           name: "Pull submodules"
           command: git submodule update --init
-  install-xtensa-toolchain:
-    parameters:
-      variant:
-        type: string
-    steps:
-      - run:
-          name: "Install Xtensa toolchain"
-          command: |
-            curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
-            sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
-            sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
-            rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-<<parameters.variant>>.tar.gz
   llvm-source-linux:
     steps:
       - restore_cache:
@@ -75,8 +63,6 @@ commands:
                 clang-<<parameters.llvm>> \
                 libclang-<<parameters.llvm>>-dev \
                 lld-<<parameters.llvm>> \
-                gcc-avr \
-                avr-libc \
                 cmake \
                 ninja-build
       - hack-ninja-jobs
@@ -112,26 +98,17 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm13-go116:
+  test-llvm14-go118:
     docker:
-      - image: golang:1.16-buster
-    steps:
-      - test-linux:
-          llvm: "13"
-  test-llvm14-go119:
-    docker:
-      - image: golang:1.19beta1-buster
+      - image: golang:1.18-buster
     steps:
       - test-linux:
           llvm: "14"
-          fmt-check: false
+    resource_class: large
 
 workflows:
   test-all:
     jobs:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
-      - test-llvm13-go116
-      # This tests a beta version of Go. It should be removed once regular
-      # release builds are built using this version.
-      - test-llvm14-go119
+      - test-llvm14-go118

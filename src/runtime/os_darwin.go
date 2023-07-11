@@ -1,9 +1,10 @@
 //go:build darwin
-// +build darwin
 
 package runtime
 
 import "unsafe"
+
+import "C" // dummy import so that os_darwin.c works
 
 const GOOS = "darwin"
 
@@ -49,6 +50,7 @@ type segmentLoadCommand struct {
 }
 
 // MachO header of the currently running process.
+//
 //go:extern _mh_execute_header
 var libc_mh_execute_header machHeader
 
@@ -107,6 +109,6 @@ func markGlobals() {
 
 		// Move on to the next load command (wich may or may not be a
 		// LC_SEGMENT_64).
-		cmd = (*segmentLoadCommand)(unsafe.Pointer(uintptr(unsafe.Pointer(cmd)) + uintptr(cmd.cmdsize)))
+		cmd = (*segmentLoadCommand)(unsafe.Add(unsafe.Pointer(cmd), cmd.cmdsize))
 	}
 }

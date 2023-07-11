@@ -1,0 +1,13 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "serial-port": ["2e8a:0003"],
+    "build-tags": ["tufty2040"],
+    "ldflags": [
+        "--defsym=__flash_size=1020K"
+    ],
+    "extra-files": [
+        "targets/pico-boot-stage2.S"
+    ]
+}

@@ -47,6 +47,12 @@ func (c *Config) Features() string {
 	return c.Target.Features + "," + c.Options.LLVMFeatures
 }
 
+// ABI returns the -mabi= flag for this target (like -mabi=lp64). A zero-length
+// string is returned if the target doesn't specify an ABI.
+func (c *Config) ABI() string {
+	return c.Target.ABI
+}
+
 // GOOS returns the GOOS of the target. This might not always be the actual OS:
 // for example, bare-metal targets will usually pretend to be linux to get the
 // standard library to compile.
@@ -73,9 +79,7 @@ func (c *Config) BuildTags() []string {
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
-	if extraTags := strings.Fields(c.Options.Tags); len(extraTags) != 0 {
-		tags = append(tags, extraTags...)
-	}
+	tags = append(tags, c.Options.Tags...)
 	return tags
 }
 
@@ -86,7 +90,7 @@ func (c *Config) CgoEnabled() bool {
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid
-// values are "none", "leaking", and "conservative".
+// values are "none", "leaking", "conservative" and "precise".
 func (c *Config) GC() string {
 	if c.Options.GC != "" {
 		return c.Options.GC
@@ -101,7 +105,7 @@ func (c *Config) GC() string {
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "conservative":
+	case "conservative", "custom", "precise":
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
 				return true
@@ -177,23 +181,13 @@ func (c *Config) AutomaticStackSize() bool {
 	return false
 }
 
-// UseThinLTO returns whether ThinLTO should be used for the given target. Some
-// targets (such as wasm) are not yet supported.
-// We should try and remove as many exceptions as possible in the future, so
-// that this optimization can be applied in more places.
-func (c *Config) UseThinLTO() bool {
-	parts := strings.Split(c.Triple(), "-")
-	if parts[0] == "wasm32" {
-		// wasm-ld doesn't seem to support ThinLTO yet.
-		return false
+// StackSize returns the default stack size to be used for goroutines, if the
+// stack size could not be determined automatically at compile time.
+func (c *Config) StackSize() uint64 {
+	if c.Options.StackSize != 0 {
+		return c.Options.StackSize
 	}
-	if parts[0] == "avr" || parts[0] == "xtensa" {
-		// These use external (GNU) linkers which might perhaps support ThinLTO
-		// through a plugin, but it's too much hassle to set up.
-		return false
-	}
-	// Other architectures support ThinLTO.
-	return true
+	return c.Target.DefaultStackSize
 }
 
 // RP2040BootPatch returns whether the RP2040 boot patch should be applied that
@@ -222,6 +216,9 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 	archname := c.Triple()
 	if c.CPU() != "" {
 		archname += "-" + c.CPU()
+	}
+	if c.ABI() != "" {
+		archname += "-" + c.ABI()
 	}
 
 	// Try to load a precompiled library.
@@ -313,7 +310,7 @@ func (c *Config) CFlags() []string {
 		panic("unknown libc: " + c.Target.Libc)
 	}
 	// Always emit debug information. It is optionally stripped at link time.
-	cflags = append(cflags, "-g")
+	cflags = append(cflags, "-gdwarf-4")
 	// Use the same optimization level as TinyGo.
 	cflags = append(cflags, "-O"+c.Options.Opt)
 	// Set the LLVM target triple.
@@ -330,6 +327,10 @@ func (c *Config) CFlags() []string {
 			// The rest just uses -mcpu.
 			cflags = append(cflags, "-mcpu="+c.Target.CPU)
 		}
+	}
+	// Set the -mabi flag, if needed.
+	if c.ABI() != "" {
+		cflags = append(cflags, "-mabi="+c.ABI())
 	}
 	return cflags
 }
@@ -370,8 +371,8 @@ func (c *Config) VerifyIR() bool {
 }
 
 // Debug returns whether debug (DWARF) information should be retained by the
-// linker. By default, debug information is retained but it can be removed with
-// the -no-debug flag.
+// linker. By default, debug information is retained, but it can be removed
+// with the -no-debug flag.
 func (c *Config) Debug() bool {
 	return c.Options.Debug
 }
@@ -442,13 +443,13 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 	if openocdInterface == "" {
 		return nil, errors.New("OpenOCD programmer not set")
 	}
-	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(openocdInterface) {
+	if !regexp.MustCompile(`^[\p{L}0-9_-]+$`).MatchString(openocdInterface) {
 		return nil, fmt.Errorf("OpenOCD programmer has an invalid name: %#v", openocdInterface)
 	}
 	if c.Target.OpenOCDTarget == "" {
 		return nil, errors.New("OpenOCD chip not set")
 	}
-	if !regexp.MustCompile("^[\\p{L}0-9_-]+$").MatchString(c.Target.OpenOCDTarget) {
+	if !regexp.MustCompile(`^[\p{L}0-9_-]+$`).MatchString(c.Target.OpenOCDTarget) {
 		return nil, fmt.Errorf("OpenOCD target has an invalid name: %#v", c.Target.OpenOCDTarget)
 	}
 	if c.Target.OpenOCDTransport != "" && c.Target.OpenOCDTransport != "swd" {
@@ -459,7 +460,14 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 		args = append(args, "-c", cmd)
 	}
 	if c.Target.OpenOCDTransport != "" {
-		args = append(args, "-c", "transport select "+c.Target.OpenOCDTransport)
+		transport := c.Target.OpenOCDTransport
+		if transport == "swd" {
+			switch openocdInterface {
+			case "stlink-dap":
+				transport = "dapdirect_swd"
+			}
+		}
+		args = append(args, "-c", "transport select "+transport)
 	}
 	args = append(args, "-f", "target/"+c.Target.OpenOCDTarget+".cfg")
 	return args, nil
@@ -484,12 +492,8 @@ func (c *Config) RelocationModel() string {
 	return "static"
 }
 
-// WasmAbi returns the WASM ABI which is specified in the target JSON file, and
-// the value is overridden by `-wasm-abi` flag if it is provided
+// WasmAbi returns the WASM ABI which is specified in the target JSON file.
 func (c *Config) WasmAbi() string {
-	if c.Options.WasmAbi != "" {
-		return c.Options.WasmAbi
-	}
 	return c.Target.WasmAbi
 }
 
@@ -526,6 +530,8 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 	var emulator []string
 	for _, s := range parts {
 		s = strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT"))
+		// Allow replacement of what's usually /tmp except notably Windows.
+		s = strings.ReplaceAll(s, "{tmpDir}", os.TempDir())
 		s = strings.ReplaceAll(s, "{"+format+"}", binary)
 		emulator = append(emulator, s)
 	}
@@ -534,5 +540,14 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 
 type TestConfig struct {
 	CompileTestBinary bool
-	// TODO: Filter the test functions to run, include verbose flag, etc
+	CompileOnly       bool
+	Verbose           bool
+	Short             bool
+	RunRegexp         string
+	SkipRegexp        string
+	Count             *int
+	BenchRegexp       string
+	BenchTime         string
+	BenchMem          bool
+	Shuffle           string
 }

@@ -10,7 +10,7 @@ package builder
 import (
 	"bytes"
 	"encoding/binary"
-	"io/ioutil"
+	"os"
 	"strconv"
 )
 
@@ -26,7 +26,7 @@ func convertELFFileToUF2File(infile, outfile string, uf2FamilyID string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(outfile, output, 0644)
+	return os.WriteFile(outfile, output, 0644)
 }
 
 // convertBinToUF2 converts the binary bytes in input to UF2 formatted data.

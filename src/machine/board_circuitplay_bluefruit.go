@@ -1,5 +1,4 @@
 //go:build circuitplay_bluefruit
-// +build circuitplay_bluefruit
 
 package machine
 
@@ -72,6 +71,12 @@ const (
 	SPI0_SCK_PIN = P0_19 // SCK
 	SPI0_SDO_PIN = P0_21 // SDO
 	SPI0_SDI_PIN = P0_23 // SDI
+)
+
+// PDM pins
+const (
+	PDM_CLK_PIN = P0_17 // CLK
+	PDM_DIN_PIN = P0_16 // DIN
 )
 
 // USB CDC identifiers

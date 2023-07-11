@@ -24,7 +24,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	// Note that bound functions are allowed if the function has a pointer
 	// receiver and is a global. This is rather strict but still allows for
 	// idiomatic Go code.
-	funcValue := b.getValue(instr.Args[1])
+	funcValue := b.getValue(instr.Args[1], getPos(instr))
 	if funcValue.IsAConstant().IsNil() {
 		// Try to determine the cause of the non-constantness for a nice error
 		// message.
@@ -36,7 +36,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 		// Fall back to a generic error.
 		return llvm.Value{}, b.makeError(instr.Pos(), "interrupt function must be constant")
 	}
-	funcRawPtr, funcContext := b.decodeFuncValue(funcValue, nil)
+	_, funcRawPtr, funcContext := b.decodeFuncValue(funcValue, nil)
 	funcPtr := llvm.ConstPtrToInt(funcRawPtr, b.uintptrType)
 
 	// Create a new global of type runtime/interrupt.handle. Globals of this
@@ -49,9 +49,11 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	global.SetGlobalConstant(true)
 	global.SetUnnamedAddr(true)
 	initializer := llvm.ConstNull(globalLLVMType)
-	initializer = llvm.ConstInsertValue(initializer, funcContext, []uint32{0})
-	initializer = llvm.ConstInsertValue(initializer, funcPtr, []uint32{1})
-	initializer = llvm.ConstInsertValue(initializer, llvm.ConstInt(b.intType, uint64(id.Int64()), true), []uint32{2, 0})
+	initializer = b.CreateInsertValue(initializer, funcContext, 0, "")
+	initializer = b.CreateInsertValue(initializer, funcPtr, 1, "")
+	initializer = b.CreateInsertValue(initializer, llvm.ConstNamedStruct(globalLLVMType.StructElementTypes()[2], []llvm.Value{
+		llvm.ConstInt(b.intType, uint64(id.Int64()), true),
+	}), 2, "")
 	global.SetInitializer(initializer)
 
 	// Add debug info to the interrupt global.
@@ -85,7 +87,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 			useFnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{interrupt.Type()}, false)
 			useFn = llvm.AddFunction(b.mod, "runtime/interrupt.use", useFnType)
 		}
-		b.CreateCall(useFn, []llvm.Value{interrupt}, "")
+		b.CreateCall(useFn.GlobalValueType(), useFn, []llvm.Value{interrupt}, "")
 	}
 
 	return interrupt, nil

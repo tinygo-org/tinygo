@@ -233,80 +233,91 @@ reflect type: struct
 reflect type: struct
   struct: 1
   field: 0 error
-  tag: 
+  pkg: main
+  tag: ""
   embedded: true
   exported: false
-  reflect type: interface
+  reflect type: interface caninterface=false
     interface
     nil: true
 reflect type: struct
   struct: 3
   field: 0 a
-  tag: 
+  pkg: main
+  tag: ""
   embedded: false
   exported: false
-  reflect type: uint8
+  reflect type: uint8 caninterface=false
     uint: 42
   field: 1 b
-  tag: 
+  pkg: main
+  tag: ""
   embedded: false
   exported: false
-  reflect type: int16
+  reflect type: int16 caninterface=false
     int: 321
   field: 2 c
-  tag: 
+  pkg: main
+  tag: ""
   embedded: false
   exported: false
-  reflect type: int8
+  reflect type: int8 caninterface=false
     int: 123
 reflect type: struct comparable=false
   struct: 5
   field: 0 n
-  tag: foo:"bar"
+  pkg: main
+  tag: "foo:\"bar\""
   embedded: false
   exported: false
-  reflect type: int
+  reflect type: int caninterface=false
     int: 5
   field: 1 some
-  tag: 
+  pkg: main
+  tag: "some\x00tag"
   embedded: false
   exported: false
-  reflect type: struct
+  reflect type: struct caninterface=false
     struct: 2
     field: 0 X
-    tag: 
+    pkg: 
+    tag: ""
     embedded: false
     exported: true
-    reflect type: int16
+    reflect type: int16 caninterface=false
       int: -5
     field: 1 Y
-    tag: 
+    pkg: 
+    tag: ""
     embedded: false
     exported: true
-    reflect type: int16
+    reflect type: int16 caninterface=false
       int: 3
   field: 2 zero
-  tag: 
+  pkg: main
+  tag: ""
   embedded: false
   exported: false
-  reflect type: struct
+  reflect type: struct caninterface=false
     struct: 0
   field: 3 buf
-  tag: 
+  pkg: main
+  tag: ""
   embedded: false
   exported: false
-  reflect type: slice comparable=false
+  reflect type: slice caninterface=false comparable=false
     slice: uint8 2 2
     pointer: true
     nil: false
     indexing: 0
-    reflect type: uint8 addrable=true
+    reflect type: uint8 addrable=true caninterface=false
       uint: 71
     indexing: 1
-    reflect type: uint8 addrable=true
+    reflect type: uint8 addrable=true caninterface=false
       uint: 111
   field: 4 Buf
-  tag: 
+  pkg: 
+  tag: ""
   embedded: false
   exported: true
   reflect type: slice comparable=false
@@ -322,18 +333,36 @@ reflect type: ptr
   reflect type: struct settable=true addrable=true
     struct: 2
     field: 0 next
-    tag: description:"chain"
+    pkg: main
+    tag: "description:\"chain\""
     embedded: false
     exported: false
-    reflect type: ptr addrable=true
+    reflect type: ptr addrable=true caninterface=false
       pointer: false struct
       nil: true
     field: 1 foo
-    tag: 
+    pkg: main
+    tag: ""
     embedded: false
     exported: false
-    reflect type: int addrable=true
+    reflect type: int addrable=true caninterface=false
       int: 42
+reflect type: struct
+  struct: 2
+  field: 0 A
+  pkg: 
+  tag: ""
+  embedded: false
+  exported: true
+  reflect type: uintptr
+    uint: 2
+  field: 1 B
+  pkg: 
+  tag: ""
+  embedded: false
+  exported: true
+  reflect type: uintptr
+    uint: 3
 reflect type: slice comparable=false
   slice: interface 3 3
   pointer: true

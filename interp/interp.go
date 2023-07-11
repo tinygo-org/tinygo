@@ -30,10 +30,11 @@ type runner struct {
 	objects       []object                 // slice of objects in memory
 	globals       map[llvm.Value]int       // map from global to index in objects slice
 	start         time.Time
+	timeout       time.Duration
 	callsExecuted uint64
 }
 
-func newRunner(mod llvm.Module, debug bool) *runner {
+func newRunner(mod llvm.Module, timeout time.Duration, debug bool) *runner {
 	r := runner{
 		mod:           mod,
 		targetData:    llvm.NewTargetData(mod.DataLayout()),
@@ -42,6 +43,7 @@ func newRunner(mod llvm.Module, debug bool) *runner {
 		objects:       []object{{}},
 		globals:       make(map[llvm.Value]int),
 		start:         time.Now(),
+		timeout:       timeout,
 	}
 	r.pointerSize = uint32(r.targetData.PointerSize())
 	r.i8ptrType = llvm.PointerType(mod.Context().Int8Type(), 0)
@@ -58,8 +60,8 @@ func (r *runner) dispose() {
 
 // Run evaluates runtime.initAll function as much as possible at compile time.
 // Set debug to true if it should print output while running.
-func Run(mod llvm.Module, debug bool) error {
-	r := newRunner(mod, debug)
+func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
+	r := newRunner(mod, timeout, debug)
 	defer r.dispose()
 
 	initAll := mod.NamedFunction("runtime.initAll")
@@ -125,7 +127,7 @@ func Run(mod llvm.Module, debug bool) error {
 				// Create a call to the package initializer (which was
 				// previously deleted).
 				i8undef := llvm.Undef(r.i8ptrType)
-				r.builder.CreateCall(fn, []llvm.Value{i8undef}, "")
+				r.builder.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{i8undef}, "")
 				// Make sure that any globals touched by the package
 				// initializer, won't be accessed by later package initializers.
 				err := r.markExternalLoad(fn)
@@ -154,7 +156,7 @@ func Run(mod llvm.Module, debug bool) error {
 		if obj.constant {
 			continue // constant buffers can't have been modified
 		}
-		initializer, err := obj.buffer.toLLVMValue(obj.llvmGlobal.Type().ElementType(), &mem)
+		initializer, err := obj.buffer.toLLVMValue(obj.llvmGlobal.GlobalValueType(), &mem)
 		if err == errInvalidPtrToIntSize {
 			// This can happen when a previous interp run did not have the
 			// correct LLVM type for a global and made something up. In that
@@ -188,7 +190,7 @@ func Run(mod llvm.Module, debug bool) error {
 		if err != nil {
 			return err
 		}
-		if checks && initializer.Type() != obj.llvmGlobal.Type().ElementType() {
+		if checks && initializer.Type() != obj.llvmGlobal.GlobalValueType() {
 			panic("initializer type mismatch")
 		}
 		obj.llvmGlobal.SetInitializer(initializer)
@@ -199,10 +201,10 @@ func Run(mod llvm.Module, debug bool) error {
 
 // RunFunc evaluates a single package initializer at compile time.
 // Set debug to true if it should print output while running.
-func RunFunc(fn llvm.Value, debug bool) error {
+func RunFunc(fn llvm.Value, timeout time.Duration, debug bool) error {
 	// Create and initialize *runner object.
 	mod := fn.GlobalParent()
-	r := newRunner(mod, debug)
+	r := newRunner(mod, timeout, debug)
 	defer r.dispose()
 	initName := fn.Name()
 	if !strings.HasSuffix(initName, ".init") {
@@ -211,7 +213,7 @@ func RunFunc(fn llvm.Value, debug bool) error {
 	r.pkgName = initName[:len(initName)-len(".init")]
 
 	// Create new function with the interp result.
-	newFn := llvm.AddFunction(mod, fn.Name()+".tmp", fn.Type().ElementType())
+	newFn := llvm.AddFunction(mod, fn.Name()+".tmp", fn.GlobalValueType())
 	newFn.SetLinkage(fn.Linkage())
 	newFn.SetVisibility(fn.Visibility())
 	entry := mod.Context().AddBasicBlock(newFn, "entry")
@@ -261,11 +263,11 @@ func RunFunc(fn llvm.Value, debug bool) error {
 		if obj.constant {
 			continue // constant, so can't have been modified
 		}
-		initializer, err := obj.buffer.toLLVMValue(obj.llvmGlobal.Type().ElementType(), &mem)
+		initializer, err := obj.buffer.toLLVMValue(obj.llvmGlobal.GlobalValueType(), &mem)
 		if err != nil {
 			return err
 		}
-		if checks && initializer.Type() != obj.llvmGlobal.Type().ElementType() {
+		if checks && initializer.Type() != obj.llvmGlobal.GlobalValueType() {
 			panic("initializer type mismatch")
 		}
 		obj.llvmGlobal.SetInitializer(initializer)

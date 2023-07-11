@@ -7,11 +7,13 @@ import (
 
 // trap is a compiler hint that this function cannot be executed. It is
 // translated into either a trap instruction or a call to abort().
+//
 //export llvm.trap
 func trap()
 
 // Inline assembly stub. It is essentially C longjmp but modified a bit for the
 // purposes of TinyGo. It restores the stack pointer and jumps to the given pc.
+//
 //export tinygo_longjmp
 func tinygo_longjmp(frame *deferFrame)
 
@@ -78,6 +80,7 @@ func wrapPanic(msg interface{}) {
 // It gets passed in the stack-allocated defer frame and configures it.
 // Note that the frame is not zeroed yet, so we need to initialize all values
 // that will be used.
+//
 //go:inline
 //go:nobounds
 func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
@@ -91,6 +94,7 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 // Called right before the return instruction. It pops the defer frame from the
 // linked list of defer frames. It also re-raises a panic if the goroutine is
 // still panicking.
+//
 //go:inline
 //go:nobounds
 func destroyDeferFrame(frame *deferFrame) {
@@ -132,51 +136,52 @@ func _recover(useParentFrame bool) interface{} {
 
 // Panic when trying to dereference a nil pointer.
 func nilPanic() {
-	runtimePanic("nil pointer dereference")
+	runtimePanicAt(returnAddress(0), "nil pointer dereference")
 }
 
 // Panic when trying to add an entry to a nil map
 func nilMapPanic() {
-	runtimePanic("assignment to entry in nil map")
+	runtimePanicAt(returnAddress(0), "assignment to entry in nil map")
 }
 
 // Panic when trying to acces an array or slice out of bounds.
 func lookupPanic() {
-	runtimePanic("index out of range")
+	runtimePanicAt(returnAddress(0), "index out of range")
 }
 
 // Panic when trying to slice a slice out of bounds.
 func slicePanic() {
-	runtimePanic("slice out of range")
+	runtimePanicAt(returnAddress(0), "slice out of range")
 }
 
 // Panic when trying to convert a slice to an array pointer (Go 1.17+) and the
 // slice is shorter than the array.
 func sliceToArrayPointerPanic() {
-	runtimePanic("slice smaller than array")
+	runtimePanicAt(returnAddress(0), "slice smaller than array")
 }
 
-// Panic when calling unsafe.Slice() (Go 1.17+) with a len that's too large
-// (which includes if the ptr is nil and len is nonzero).
+// Panic when calling unsafe.Slice() (Go 1.17+) or unsafe.String() (Go 1.20+)
+// with a len that's too large (which includes if the ptr is nil and len is
+// nonzero).
 func unsafeSlicePanic() {
-	runtimePanic("unsafe.Slice: len out of range")
+	runtimePanicAt(returnAddress(0), "unsafe.Slice/String: len out of range")
 }
 
 // Panic when trying to create a new channel that is too big.
 func chanMakePanic() {
-	runtimePanic("new channel is too big")
+	runtimePanicAt(returnAddress(0), "new channel is too big")
 }
 
 // Panic when a shift value is negative.
 func negativeShiftPanic() {
-	runtimePanic("negative shift")
+	runtimePanicAt(returnAddress(0), "negative shift")
 }
 
 // Panic when there is a divide by zero.
 func divideByZeroPanic() {
-	runtimePanic("divide by zero")
+	runtimePanicAt(returnAddress(0), "divide by zero")
 }
 
 func blockingPanic() {
-	runtimePanic("trying to do blocking operation in exported function")
+	runtimePanicAt(returnAddress(0), "trying to do blocking operation in exported function")
 }

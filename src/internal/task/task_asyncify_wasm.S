@@ -2,12 +2,16 @@
 
 .functype start_unwind (i32) -> ()
 .import_module start_unwind, asyncify
+.import_name start_unwind, start_unwind
 .functype stop_unwind () -> ()
 .import_module stop_unwind, asyncify
+.import_name stop_unwind, stop_unwind
 .functype start_rewind (i32) -> ()
 .import_module start_rewind, asyncify
+.import_name start_rewind, start_rewind
 .functype stop_rewind () -> ()
 .import_module stop_rewind, asyncify
+.import_name stop_rewind, stop_rewind
 
 .global  tinygo_unwind
 .hidden  tinygo_unwind

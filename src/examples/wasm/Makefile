@@ -24,7 +24,7 @@ main: clean wasm_exec
 	cp ./main/index.html ./html/
 
 wasm_exec:
-	cp ../../../targets/wasm_exec.js ./html/
+	cp `tinygo env TINYGOROOT`/targets/wasm_exec.js ./html/
 
 clean:
 	rm -rf ./html

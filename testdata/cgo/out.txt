@@ -16,6 +16,9 @@ callback 2: 600
 variadic0: 1
 variadic2: 15
 headerfunc: 6
+static headerfunc: 4
+static headerfunc 2: +4.000000e+000
+static headerfunc void: 3
 bool: true true
 float: +3.100000e+000
 double: +3.200000e+000
@@ -29,7 +32,8 @@ struct: true 256 -123456 +3.140000e+000
 array: 5 6 7
 union: true
 union s: 22
-union f: +3.140000e+000
+union f (C.float): +6.280000e+000
+union f (float32): +3.140000e+000
 union global data: 5 8 1
 union local data:  5 8 1
 union s: true

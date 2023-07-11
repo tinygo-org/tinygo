@@ -1,6 +1,9 @@
 package os
 
-import "syscall"
+import (
+	"errors"
+	"syscall"
+)
 
 type Signal interface {
 	String() string
@@ -23,6 +26,9 @@ type ProcAttr struct {
 	Files []*File
 	Sys   *syscall.SysProcAttr
 }
+
+// ErrProcessDone indicates a Process has finished.
+var ErrProcessDone = errors.New("os: process already finished")
 
 type ProcessState struct {
 }

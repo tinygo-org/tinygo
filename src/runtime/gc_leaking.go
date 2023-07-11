@@ -1,5 +1,4 @@
 //go:build gc.leaking
-// +build gc.leaking
 
 package runtime
 
@@ -11,13 +10,21 @@ import (
 	"unsafe"
 )
 
-const gcAsserts = false // perform sanity checks
-
 // Ever-incrementing pointer: no memory is freed.
 var heapptr = heapStart
 
+// Total amount allocated for runtime.MemStats
+var gcTotalAlloc uint64
+
+// Total number of calls to alloc()
+var gcMallocs uint64
+
+// Total number of objected freed; for leaking collector this stays 0
+const gcFrees = 0
+
 // Inlining alloc() speeds things up slightly but bloats the executable by 50%,
 // see https://github.com/tinygo-org/tinygo/issues/2674.  So don't.
+//
 //go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// TODO: this can be optimized by not casting between pointers and ints so
@@ -25,6 +32,8 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// systems).
 	size = align(size)
 	addr := heapptr
+	gcTotalAlloc += uint64(size)
+	gcMallocs++
 	heapptr += size
 	for heapptr >= heapEnd {
 		// Try to increase the heap and check again.
@@ -55,16 +64,29 @@ func free(ptr unsafe.Pointer) {
 	// Memory is never freed.
 }
 
+// ReadMemStats populates m with memory statistics.
+//
+// The returned memory statistics are up to date as of the
+// call to ReadMemStats. This would not do GC implicitly for you.
+func ReadMemStats(m *MemStats) {
+	m.HeapIdle = 0
+	m.HeapInuse = gcTotalAlloc
+	m.HeapReleased = 0 // always 0, we don't currently release memory back to the OS.
+
+	m.HeapSys = m.HeapInuse + m.HeapIdle
+	m.GCSys = 0
+	m.TotalAlloc = gcTotalAlloc
+	m.Mallocs = gcMallocs
+	m.Frees = gcFrees
+	m.Sys = uint64(heapEnd - heapStart)
+}
+
 func GC() {
 	// No-op.
 }
 
-func KeepAlive(x interface{}) {
-	// Unimplemented. Only required with SetFinalizer().
-}
-
 func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
+	// No-op.
 }
 
 func initHeap() {

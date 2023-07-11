@@ -1,11 +1,16 @@
 //go:build nrf51
-// +build nrf51
 
 package machine
 
 import (
 	"device/nrf"
 )
+
+const eraseBlockSizeValue = 1024
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
 
 // Get peripheral and pin number for this GPIO pin.
 func (p Pin) getPortPin() (*nrf.GPIO_Type, uint32) {
@@ -133,17 +138,16 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 // This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
 // Note that the tx and rx buffers must be the same size:
 //
-// 		spi.Tx(tx, rx)
+//	spi.Tx(tx, rx)
 //
 // This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
 // until all the bytes in the command packet have been received:
 //
-// 		spi.Tx(tx, nil)
+//	spi.Tx(tx, nil)
 //
 // This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
 //
-// 		spi.Tx(nil, rx)
-//
+//	spi.Tx(nil, rx)
 func (spi SPI) Tx(w, r []byte) error {
 	var err error
 
@@ -187,4 +191,86 @@ func (spi SPI) Tx(w, r []byte) error {
 	}
 
 	return nil
+}
+
+// InitADC initializes the registers needed for ADC.
+func InitADC() {
+	return // no specific setup on nrf51 machine.
+}
+
+// Configure configures an ADC pin to be able to read analog data.
+func (a ADC) Configure(ADCConfig) {
+	return // no pin specific setup on nrf51 machine.
+}
+
+// Get returns the current value of a ADC pin in the range 0..0xffff.
+func (a ADC) Get() uint16 {
+	var value uint32
+
+	adcPin := a.getADCPin()
+
+	// Enable ADC.
+	nrf.ADC.SetENABLE(nrf.ADC_ENABLE_ENABLE_Enabled)
+
+	// Set pin to read.
+	nrf.ADC.SetCONFIG_PSEL(adcPin)
+
+	// config ADC
+	nrf.ADC.SetCONFIG_RES(nrf.ADC_CONFIG_RES_10bit)
+	nrf.ADC.SetCONFIG_INPSEL(nrf.ADC_CONFIG_INPSEL_AnalogInputOneThirdPrescaling)
+	nrf.ADC.SetCONFIG_REFSEL(nrf.ADC_CONFIG_REFSEL_SupplyOneThirdPrescaling)
+
+	// Start tasks.
+	nrf.ADC.TASKS_START.Set(1)
+
+	// Wait until the sample task is done.
+	for nrf.ADC.EVENTS_END.Get() == 0 {
+	}
+	nrf.ADC.EVENTS_END.Set(0x00)
+
+	value = nrf.ADC.GetRESULT()
+
+	// Stop the ADC
+	nrf.ADC.TASKS_STOP.Set(1)
+
+	// Disable ADC.
+	nrf.ADC.SetENABLE(nrf.ADC_ENABLE_ENABLE_Disabled)
+
+	if value < 0 {
+		value = 0
+	}
+
+	// Return 16-bit result from 10-bit value.
+	return uint16(value << 6)
+}
+
+func (a ADC) getADCPin() uint32 {
+	switch a.Pin {
+	case 1:
+		return nrf.ADC_CONFIG_PSEL_AnalogInput2
+
+	case 2:
+		return nrf.ADC_CONFIG_PSEL_AnalogInput3
+
+	case 3:
+		return nrf.ADC_CONFIG_PSEL_AnalogInput4
+
+	case 4:
+		return nrf.ADC_CONFIG_PSEL_AnalogInput5
+
+	case 5:
+		return nrf.ADC_CONFIG_PSEL_AnalogInput6
+
+	case 6:
+		return nrf.ADC_CONFIG_PSEL_AnalogInput7
+
+	case 26:
+		return nrf.ADC_CONFIG_PSEL_AnalogInput0
+
+	case 27:
+		return nrf.ADC_CONFIG_PSEL_AnalogInput1
+
+	default:
+		return 0
+	}
 }

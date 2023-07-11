@@ -18,6 +18,7 @@ type stringIterator struct {
 }
 
 // Return true iff the strings match.
+//
 //go:nobounds
 func stringEqual(x, y string) bool {
 	if len(x) != len(y) {
@@ -32,6 +33,7 @@ func stringEqual(x, y string) bool {
 }
 
 // Return true iff x < y.
+//
 //go:nobounds
 func stringLess(x, y string) bool {
 	l := len(x)
@@ -59,7 +61,7 @@ func stringConcat(x, y _string) _string {
 		length := x.length + y.length
 		buf := alloc(length, nil)
 		memcpy(buf, unsafe.Pointer(x.ptr), x.length)
-		memcpy(unsafe.Pointer(uintptr(buf)+x.length), unsafe.Pointer(y.ptr), y.length)
+		memcpy(unsafe.Add(buf, x.length), unsafe.Pointer(y.ptr), y.length)
 		return _string{ptr: (*byte)(buf), length: length}
 	}
 }
@@ -105,7 +107,7 @@ func stringFromRunes(runeSlice []rune) (s _string) {
 	for _, r := range runeSlice {
 		array, numBytes := encodeUTF8(r)
 		for _, c := range array[:numBytes] {
-			*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(s.ptr)) + index)) = c
+			*(*byte)(unsafe.Add(unsafe.Pointer(s.ptr), index)) = c
 			index++
 		}
 	}
@@ -181,6 +183,7 @@ func encodeUTF8(x rune) ([4]byte, uintptr) {
 }
 
 // Decode a single UTF-8 character from a string.
+//
 //go:nobounds
 func decodeUTF8(s string, index uintptr) (rune, uintptr) {
 	remaining := uintptr(len(s)) - index // must be >= 1 before calling this function
@@ -240,7 +243,7 @@ func isContinuation(b byte) bool {
 func cgo_CString(s _string) unsafe.Pointer {
 	buf := malloc(s.length + 1)
 	memcpy(buf, unsafe.Pointer(s.ptr), s.length)
-	*(*byte)(unsafe.Pointer(uintptr(buf) + s.length)) = 0 // trailing 0 byte
+	*(*byte)(unsafe.Add(buf, s.length)) = 0 // trailing 0 byte
 	return buf
 }
 

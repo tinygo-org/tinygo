@@ -93,6 +93,12 @@ func main() {
 			a int
 			b int
 		}{3, 6}},
+		{true, named1(), named1()},
+		{true, named2(), named2()},
+		{false, named1(), named2()},
+		{false, named2(), named3()},
+		{true, namedptr1(), namedptr1()},
+		{false, namedptr1(), namedptr2()},
 	}
 	for i, tc := range interfaceEqualTests {
 		if (tc.lhs == tc.rhs) != tc.equal {
@@ -107,6 +113,9 @@ func main() {
 	println("slept 1ms")
 	blockStatic(SleepBlocker(time.Millisecond))
 	println("slept 1ms")
+
+	// check that pointer-to-pointer type switches work
+	ptrptrswitch()
 }
 
 func printItf(val interface{}) {
@@ -276,4 +285,52 @@ func (f FooByte) Byte() byte { return byte(f) }
 
 type Byter interface {
 	Byte() uint8
+}
+
+// Make sure that named types inside functions do not alias with any other named
+// functions.
+
+type named int
+
+func named1() any {
+	return named(0)
+}
+
+func named2() any {
+	type named int
+	return named(0)
+}
+
+func named3() any {
+	type named int
+	return named(0)
+}
+
+func namedptr1() interface{} {
+	type Test int
+	return (*Test)(nil)
+}
+
+func namedptr2() interface{} {
+	type Test byte
+	return (*Test)(nil)
+}
+
+func ptrptrswitch() {
+	identify(0)
+	identify(new(int))
+	identify(new(*int))
+}
+
+func identify(itf any) {
+	switch itf.(type) {
+	case int:
+		println("type is int")
+	case *int:
+		println("type is *int")
+	case **int:
+		println("type is **int")
+	default:
+		println("other type??")
+	}
 }

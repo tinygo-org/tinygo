@@ -209,7 +209,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 			case llvm.Alloca:
 				// Alloca allocates stack space for local variables.
 				numElements := r.getValue(inst.llvmInst.Operand(0)).(literalValue).value.(uint32)
-				elementSize := r.targetData.TypeAllocSize(inst.llvmInst.Type().ElementType())
+				elementSize := r.targetData.TypeAllocSize(inst.llvmInst.AllocatedType())
 				inst.operands = []value{
 					literalValue{elementSize * uint64(numElements)},
 				}
@@ -218,17 +218,17 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				inst.name = llvmInst.Name()
 				ptr := llvmInst.Operand(0)
 				n := llvmInst.OperandsCount()
-				elementType := ptr.Type().ElementType()
+				elementType := llvmInst.GEPSourceElementType()
 				// gep: [source ptr, dest value size, pairs of indices...]
 				inst.operands = []value{
 					r.getValue(ptr),
-					literalValue{r.targetData.TypeAllocSize(llvmInst.Type().ElementType())},
 					r.getValue(llvmInst.Operand(1)),
 					literalValue{r.targetData.TypeAllocSize(elementType)},
 				}
 				for i := 2; i < n; i++ {
 					operand := r.getValue(llvmInst.Operand(i))
-					if elementType.TypeKind() == llvm.StructTypeKind {
+					switch elementType.TypeKind() {
+					case llvm.StructTypeKind:
 						index := operand.(literalValue).value.(uint32)
 						elementOffset := r.targetData.ElementOffset(elementType, int(index))
 						// Encode operands in a special way. The elementOffset
@@ -242,16 +242,19 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 						// runtime.
 						inst.operands = append(inst.operands, literalValue{elementOffset}, literalValue{^uint64(index)})
 						elementType = elementType.StructElementTypes()[index]
-					} else {
+					case llvm.ArrayTypeKind:
 						elementType = elementType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(elementType)
 						elementSizeOperand := literalValue{elementSize}
 						// Add operand * elementSizeOperand bytes to the pointer.
 						inst.operands = append(inst.operands, operand, elementSizeOperand)
+					default:
+						// This should be unreachable.
+						panic("unknown type: " + elementType.String())
 					}
 				}
 			case llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt:
-				// Bitcasts are ususally used to cast a pointer from one type to
+				// Bitcasts are usually used to cast a pointer from one type to
 				// another leaving the pointer itself intact.
 				inst.name = llvmInst.Name()
 				inst.operands = []value{
@@ -267,10 +270,12 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					case llvm.StructTypeKind:
 						offset += r.targetData.ElementOffset(indexingType, int(index))
 						indexingType = indexingType.StructElementTypes()[index]
-					default: // ArrayTypeKind
+					case llvm.ArrayTypeKind:
 						indexingType = indexingType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(indexingType)
 						offset += elementSize * uint64(index)
+					default:
+						panic("unknown type kind") // unreachable
 					}
 				}
 				size := r.targetData.TypeAllocSize(inst.llvmInst.Type())
@@ -290,10 +295,12 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					case llvm.StructTypeKind:
 						offset += r.targetData.ElementOffset(indexingType, int(index))
 						indexingType = indexingType.StructElementTypes()[index]
-					default: // ArrayTypeKind
+					case llvm.ArrayTypeKind:
 						indexingType = indexingType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(indexingType)
 						offset += elementSize * uint64(index)
+					default:
+						panic("unknown type kind") // unreachable
 					}
 				}
 				// insertvalue [agg, elt, byteOffset]

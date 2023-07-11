@@ -1,12 +1,10 @@
 //go:build badger2040
-// +build badger2040
 
 // This contains the pin mappings for the Badger 2040 Connect board.
 //
 // For more information, see: https://shop.pimoroni.com/products/badger-2040
 // Also
 // - Badger 2040 schematic: https://cdn.shopify.com/s/files/1/0174/1800/files/badger_2040_schematic.pdf?v=1645702148
-//
 package machine
 
 import (
@@ -58,14 +56,15 @@ const (
 
 // QSPI pins¿?
 const (
-/* TODO
+/*
+	TODO
+
 SPI0_SD0_PIN Pin = QSPI_SD0
 SPI0_SD1_PIN Pin = QSPI_SD1
 SPI0_SD2_PIN Pin = QSPI_SD2
 SPI0_SD3_PIN Pin = QSPI_SD3
 SPI0_SCK_PIN Pin = QSPI_SCLKGPIO6
 SPI0_CS_PIN  Pin = QSPI_CS
-
 */
 )
 

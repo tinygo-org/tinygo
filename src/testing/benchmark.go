@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -18,11 +20,13 @@ import (
 
 func initBenchmarkFlags() {
 	matchBenchmarks = flag.String("test.bench", "", "run only benchmarks matching `regexp`")
+	benchmarkMemory = flag.Bool("test.benchmem", false, "print memory allocations for benchmarks")
 	flag.Var(&benchTime, "test.benchtime", "run each benchmark for duration `d`")
 }
 
 var (
 	matchBenchmarks *string
+	benchmarkMemory *bool
 	benchTime       = benchTimeFlag{d: 1 * time.Second} // changed during test of testing package
 )
 
@@ -85,6 +89,15 @@ type B struct {
 	benchTime    benchTimeFlag
 	timerOn      bool
 	result       BenchmarkResult
+
+	// report memory statistics
+	showAllocResult bool
+	// initial state of MemStats.Mallocs and MemStats.TotalAlloc
+	startAllocs uint64
+	startBytes  uint64
+	// net total after running benchmar
+	netAllocs uint64
+	netBytes  uint64
 }
 
 // StartTimer starts timing a test. This function is called automatically
@@ -94,6 +107,11 @@ func (b *B) StartTimer() {
 	if !b.timerOn {
 		b.start = time.Now()
 		b.timerOn = true
+
+		var mstats runtime.MemStats
+		runtime.ReadMemStats(&mstats)
+		b.startAllocs = mstats.Mallocs
+		b.startBytes = mstats.TotalAlloc
 	}
 }
 
@@ -104,6 +122,11 @@ func (b *B) StopTimer() {
 	if b.timerOn {
 		b.duration += time.Since(b.start)
 		b.timerOn = false
+
+		var mstats runtime.MemStats
+		runtime.ReadMemStats(&mstats)
+		b.netAllocs += mstats.Mallocs - b.startAllocs
+		b.netBytes += mstats.TotalAlloc - b.startBytes
 	}
 }
 
@@ -112,8 +135,15 @@ func (b *B) StopTimer() {
 func (b *B) ResetTimer() {
 	if b.timerOn {
 		b.start = time.Now()
+
+		var mstats runtime.MemStats
+		runtime.ReadMemStats(&mstats)
+		b.startAllocs = mstats.Mallocs
+		b.startBytes = mstats.TotalAlloc
 	}
 	b.duration = 0
+	b.netAllocs = 0
+	b.netBytes = 0
 }
 
 // SetBytes records the number of bytes processed in a single operation.
@@ -124,12 +154,13 @@ func (b *B) SetBytes(n int64) { b.bytes = n }
 // It is equivalent to setting -test.benchmem, but it only affects the
 // benchmark function that calls ReportAllocs.
 func (b *B) ReportAllocs() {
-	return // TODO: implement
+	b.showAllocResult = true
 }
 
 // runN runs a single benchmark for the specified number of iterations.
 func (b *B) runN(n int) {
 	b.N = n
+	runtime.GC()
 	b.ResetTimer()
 	b.StartTimer()
 	b.benchFunc(b)
@@ -189,6 +220,8 @@ func (b *B) launch() {
 		b.runN(b.benchTime.n)
 	} else {
 		d := b.benchTime.d
+		b.failed = false
+		b.duration = 0
 		for n := int64(1); !b.failed && b.duration < d && n < 1e9; {
 			last := n
 			// Predict required iterations.
@@ -216,7 +249,7 @@ func (b *B) launch() {
 			b.runN(int(n))
 		}
 	}
-	b.result = BenchmarkResult{b.N, b.duration, b.bytes}
+	b.result = BenchmarkResult{b.N, b.duration, b.bytes, b.netAllocs, b.netBytes}
 }
 
 // BenchmarkResult contains the results of a benchmark run.
@@ -224,6 +257,9 @@ type BenchmarkResult struct {
 	N     int           // The number of iterations.
 	T     time.Duration // The total time taken.
 	Bytes int64         // Bytes processed in one iteration.
+
+	MemAllocs uint64 // The total number of memory allocations.
+	MemBytes  uint64 // The total number of bytes allocated.
 }
 
 // NsPerOp returns the "ns/op" metric.
@@ -245,13 +281,19 @@ func (r BenchmarkResult) mbPerSec() float64 {
 // AllocsPerOp returns the "allocs/op" metric,
 // which is calculated as r.MemAllocs / r.N.
 func (r BenchmarkResult) AllocsPerOp() int64 {
-	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
+	if r.N <= 0 {
+		return 0
+	}
+	return int64(r.MemAllocs) / int64(r.N)
 }
 
 // AllocedBytesPerOp returns the "B/op" metric,
 // which is calculated as r.MemBytes / r.N.
 func (r BenchmarkResult) AllocedBytesPerOp() int64 {
-	return 0 // Dummy version to allow running e.g. golang.org/test/fibo.go
+	if r.N <= 0 {
+		return 0
+	}
+	return int64(r.MemBytes) / int64(r.N)
 }
 
 // String returns a summary of the benchmark results.
@@ -276,6 +318,12 @@ func (r BenchmarkResult) String() string {
 		fmt.Fprintf(buf, "\t%7.2f MB/s", mbs)
 	}
 	return buf.String()
+}
+
+// MemString returns r.AllocedBytesPerOp and r.AllocsPerOp in the same format as 'go test'.
+func (r BenchmarkResult) MemString() string {
+	return fmt.Sprintf("%8d B/op\t%8d allocs/op",
+		r.AllocedBytesPerOp(), r.AllocsPerOp())
 }
 
 func prettyPrint(w io.Writer, x float64, unit string) {
@@ -317,7 +365,7 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 		return true
 	}
 	ctx := &benchContext{
-		match: newMatcher(matchString, *matchBenchmarks, "-test.bench"),
+		match: newMatcher(matchString, *matchBenchmarks, "-test.bench", flagSkipRegexp),
 	}
 	var bs []InternalBenchmark
 	for _, Benchmark := range benchmarks {
@@ -331,7 +379,8 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 	}
 	main := &B{
 		common: common{
-			name: "Main",
+			output: &logger{},
+			name:   "Main",
 		},
 		benchTime: benchTime,
 		benchFunc: func(b *B) {
@@ -350,20 +399,32 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 func (b *B) processBench(ctx *benchContext) {
 	benchName := b.name
 
-	if ctx != nil {
-		fmt.Printf("%-*s\t", ctx.maxLen, benchName)
-	}
-	r := b.doBench()
-	if b.failed {
-		// The output could be very long here, but probably isn't.
-		// We print it all, regardless, because we don't want to trim the reason
-		// the benchmark failed.
-		fmt.Printf("--- FAIL: %s\n%s", benchName, "") // b.output)
-		return
-	}
-	if ctx != nil {
-		results := r.String()
-		fmt.Println(results)
+	for i := 0; i < flagCount; i++ {
+		if ctx != nil {
+			fmt.Printf("%-*s\t", ctx.maxLen, benchName)
+		}
+		r := b.doBench()
+		if b.failed {
+			// The output could be very long here, but probably isn't.
+			// We print it all, regardless, because we don't want to trim the reason
+			// the benchmark failed.
+			fmt.Printf("--- FAIL: %s\n%s", benchName, "") // b.output)
+			return
+		}
+		if ctx != nil {
+			results := r.String()
+
+			if *benchmarkMemory || b.showAllocResult {
+				results += "\t" + r.MemString()
+			}
+			fmt.Println(results)
+
+			// Print any benchmark output
+			if b.output.Len() > 0 {
+				fmt.Printf("--- BENCH: %s\n", benchName)
+				b.output.WriteTo(os.Stdout)
+			}
+		}
 	}
 }
 
@@ -383,8 +444,9 @@ func (b *B) Run(name string, f func(b *B)) bool {
 	b.hasSub = true
 	sub := &B{
 		common: common{
-			name:  benchName,
-			level: b.level + 1,
+			output: &logger{},
+			name:   benchName,
+			level:  b.level + 1,
 		},
 		benchFunc: f,
 		benchTime: b.benchTime,

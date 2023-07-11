@@ -1,16 +1,16 @@
 //go:build sam && atsamd21
-// +build sam,atsamd21
 
 // Peripheral abstraction layer for the atsamd21.
 //
 // Datasheet:
 // http://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-Family-DataSheet-DS40001882D.pdf
-//
 package machine
 
 import (
+	"bytes"
 	"device/arm"
 	"device/sam"
+	"encoding/binary"
 	"errors"
 	"runtime/interrupt"
 	"unsafe"
@@ -88,10 +88,11 @@ const (
 // SERCOM and SERCOM-ALT.
 //
 // Observations:
-//   * There are six SERCOMs. Those SERCOM numbers can be encoded in 3 bits.
-//   * Even pad numbers are always on even pins, and odd pad numbers are always on
+//   - There are six SERCOMs. Those SERCOM numbers can be encoded in 3 bits.
+//   - Even pad numbers are always on even pins, and odd pad numbers are always on
 //     odd pins.
-//   * Pin pads come in pairs. If PA00 has pad 0, then PA01 has pad 1.
+//   - Pin pads come in pairs. If PA00 has pad 0, then PA01 has pad 1.
+//
 // With this information, we can encode SERCOM pin/pad numbers much more
 // efficiently. First of all, due to pads coming in pairs, we can ignore half
 // the pins: the information for an odd pin can be calculated easily from the
@@ -677,7 +678,7 @@ const i2cTimeout = 1000
 func (i2c *I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100 * KHz
 	}
 	if config.SDA == 0 && config.SCL == 0 {
 		config.SDA = SDA_PIN
@@ -1274,10 +1275,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.DATA.Get()), nil
 }
 
-var (
-	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
-)
-
 // Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
 // The Tx method knows about this, and offers a few different ways of calling it.
@@ -1285,17 +1282,16 @@ var (
 // This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
 // Note that the tx and rx buffers must be the same size:
 //
-// 		spi.Tx(tx, rx)
+//	spi.Tx(tx, rx)
 //
 // This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
 // until all the bytes in the command packet have been received:
 //
-// 		spi.Tx(tx, nil)
+//	spi.Tx(tx, nil)
 //
 // This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
 //
-// 		spi.Tx(nil, rx)
-//
+//	spi.Tx(nil, rx)
 func (spi SPI) Tx(w, r []byte) error {
 	switch {
 	case w == nil:
@@ -1441,7 +1437,7 @@ func (tcc *TCC) Configure(config PWMConfig) error {
 // SetPeriod updates the period of this TCC peripheral.
 // To set a particular frequency, use the following formula:
 //
-//     period = 1e9 / frequency
+//	period = 1e9 / frequency
 //
 // If you use a period of 0, a period that works well for LEDs will be picked.
 //
@@ -1709,7 +1705,7 @@ func (tcc *TCC) SetInverting(channel uint8, inverting bool) {
 // cycle, in other words the fraction of time the channel output is high (or low
 // when inverted). For example, to set it to a 25% duty cycle, use:
 //
-//     tcc.Set(channel, tcc.Top() / 4)
+//	tcc.Set(channel, tcc.Top() / 4)
 //
 // tcc.Set(channel, 0) will set the output to low and tcc.Set(channel,
 // tcc.Top()) will set the output to high, assuming the output isn't inverted.
@@ -1741,7 +1737,7 @@ func EnterBootloader() {
 
 	// Perform magic reset into bootloader, as mentioned in
 	// https://github.com/arduino/ArduinoCore-samd/issues/197
-	*(*uint32)(unsafe.Pointer(uintptr(0x20007FFC))) = RESET_MAGIC_VALUE
+	*(*uint32)(unsafe.Pointer(uintptr(0x20007FFC))) = resetMagicValue
 
 	arm.SystemReset()
 }
@@ -1794,4 +1790,168 @@ func (dac DAC) Set(value uint16) error {
 func syncDAC() {
 	for sam.DAC.STATUS.HasBits(sam.DAC_STATUS_SYNCBUSY) {
 	}
+}
+
+// Flash related code
+const memoryStart = 0x0
+
+// compile-time check for ensuring we fulfill BlockDevice interface
+var _ BlockDevice = flashBlockDevice{}
+
+var Flash flashBlockDevice
+
+type flashBlockDevice struct {
+	initComplete bool
+}
+
+// ReadAt reads the given number of bytes from the block device.
+func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotReadPastEOF
+	}
+
+	f.ensureInitComplete()
+
+	waitWhileFlashBusy()
+
+	data := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(FlashDataStart()), uintptr(off))), len(p))
+	copy(p, data)
+
+	return len(p), nil
+}
+
+// WriteAt writes the given number of bytes to the block device.
+// Only word (32 bits) length data can be programmed.
+// See Atmel-42181G–SAM-D21_Datasheet–09/2015 page 359.
+// If the length of p is not long enough it will be padded with 0xFF bytes.
+// This method assumes that the destination is already erased.
+func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotWritePastEOF
+	}
+
+	f.ensureInitComplete()
+
+	address := FlashDataStart() + uintptr(off)
+	padded := f.pad(p)
+
+	waitWhileFlashBusy()
+
+	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
+		// write word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize())])
+
+		sam.NVMCTRL.SetADDR(uint32(address >> 1))
+		sam.NVMCTRL.CTRLA.Set(sam.NVMCTRL_CTRLA_CMD_WP | (sam.NVMCTRL_CTRLA_CMDEX_KEY << sam.NVMCTRL_CTRLA_CMDEX_Pos))
+
+		waitWhileFlashBusy()
+
+		if err := checkFlashError(); err != nil {
+			return j, err
+		}
+
+		address += uintptr(f.WriteBlockSize())
+	}
+
+	return len(padded), nil
+}
+
+// Size returns the number of bytes in this block device.
+func (f flashBlockDevice) Size() int64 {
+	return int64(FlashDataEnd() - FlashDataStart())
+}
+
+const writeBlockSize = 4
+
+// WriteBlockSize returns the block size in which data can be written to
+// memory. It can be used by a client to optimize writes, non-aligned writes
+// should always work correctly.
+func (f flashBlockDevice) WriteBlockSize() int64 {
+	return writeBlockSize
+}
+
+const eraseBlockSizeValue = 256
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
+
+// EraseBlockSize returns the smallest erasable area on this particular chip
+// in bytes. This is used for the block size in EraseBlocks.
+func (f flashBlockDevice) EraseBlockSize() int64 {
+	return eraseBlockSize()
+}
+
+// EraseBlocks erases the given number of blocks. An implementation may
+// transparently coalesce ranges of blocks into larger bundles if the chip
+// supports this. The start and len parameters are in block numbers, use
+// EraseBlockSize to map addresses to blocks.
+func (f flashBlockDevice) EraseBlocks(start, len int64) error {
+	f.ensureInitComplete()
+
+	address := FlashDataStart() + uintptr(start*f.EraseBlockSize())
+	waitWhileFlashBusy()
+
+	for i := start; i < start+len; i++ {
+		sam.NVMCTRL.SetADDR(uint32(address >> 1))
+		sam.NVMCTRL.CTRLA.Set(sam.NVMCTRL_CTRLA_CMD_ER | (sam.NVMCTRL_CTRLA_CMDEX_KEY << sam.NVMCTRL_CTRLA_CMDEX_Pos))
+
+		waitWhileFlashBusy()
+
+		if err := checkFlashError(); err != nil {
+			return err
+		}
+
+		address += uintptr(f.EraseBlockSize())
+	}
+
+	return nil
+}
+
+// pad data if needed so it is long enough for correct byte alignment on writes.
+func (f flashBlockDevice) pad(p []byte) []byte {
+	overflow := int64(len(p)) % f.WriteBlockSize()
+	if overflow == 0 {
+		return p
+	}
+
+	padding := bytes.Repeat([]byte{0xff}, int(f.WriteBlockSize()-overflow))
+	return append(p, padding...)
+}
+
+func (f flashBlockDevice) ensureInitComplete() {
+	if f.initComplete {
+		return
+	}
+
+	sam.NVMCTRL.SetCTRLB_READMODE(sam.NVMCTRL_CTRLB_READMODE_NO_MISS_PENALTY)
+	sam.NVMCTRL.SetCTRLB_SLEEPPRM(sam.NVMCTRL_CTRLB_SLEEPPRM_WAKEONACCESS)
+
+	waitWhileFlashBusy()
+
+	f.initComplete = true
+}
+
+func waitWhileFlashBusy() {
+	for sam.NVMCTRL.GetINTFLAG_READY() != sam.NVMCTRL_INTFLAG_READY {
+	}
+}
+
+var (
+	errFlashPROGE = errors.New("errFlashPROGE")
+	errFlashLOCKE = errors.New("errFlashLOCKE")
+	errFlashNVME  = errors.New("errFlashNVME")
+)
+
+func checkFlashError() error {
+	switch {
+	case sam.NVMCTRL.GetSTATUS_PROGE() != 0:
+		return errFlashPROGE
+	case sam.NVMCTRL.GetSTATUS_LOCKE() != 0:
+		return errFlashLOCKE
+	case sam.NVMCTRL.GetSTATUS_NVME() != 0:
+		return errFlashNVME
+	}
+
+	return nil
 }

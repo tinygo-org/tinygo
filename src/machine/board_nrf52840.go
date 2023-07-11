@@ -1,5 +1,4 @@
 //go:build nrf52840 || circuitplay_bluefruit || reelboard || clue || itsybitsy_nrf52840
-// +build nrf52840 circuitplay_bluefruit reelboard clue itsybitsy_nrf52840
 
 package machine
 

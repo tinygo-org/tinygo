@@ -3,210 +3,187 @@ source_filename = "goroutine.go"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-unknown-unknown-eabi"
 
-%runtime.channel = type { i32, i32, i8, %runtime.channelBlockedList*, i32, i32, i32, i8* }
-%runtime.channelBlockedList = type { %runtime.channelBlockedList*, %"internal/task.Task"*, %runtime.chanSelectState*, { %runtime.channelBlockedList*, i32, i32 } }
-%"internal/task.Task" = type { %"internal/task.Task"*, i8*, i64, %"internal/task.gcData", %"internal/task.state", i8* }
-%"internal/task.gcData" = type {}
-%"internal/task.state" = type { i32, i32* }
-%runtime.chanSelectState = type { %runtime.channel*, i8* }
+%runtime._string = type { ptr, i32 }
 
 @"main$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
 
-declare noalias nonnull i8* @runtime.alloc(i32, i8*, i8*) #0
+; Function Attrs: allockind("alloc,zeroed") allocsize(0)
+declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.init(i8* %context) unnamed_addr #1 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.regularFunctionGoroutine(i8* %context) unnamed_addr #1 {
+define hidden void @main.regularFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* undef) #8
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.regularFunction$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 %stacksize, i8* undef) #8
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"main.regularFunction$gowrapper" to i32), ptr undef) #9
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.regularFunction$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 %stacksize, ptr undef) #9
   ret void
 }
 
-declare void @main.regularFunction(i32, i8*) #0
+declare void @main.regularFunction(i32, ptr) #2
 
 ; Function Attrs: nounwind
-define linkonce_odr void @"main.regularFunction$gowrapper"(i8* %0) unnamed_addr #2 {
+define linkonce_odr void @"main.regularFunction$gowrapper"(ptr %0) unnamed_addr #3 {
 entry:
-  %unpack.int = ptrtoint i8* %0 to i32
-  call void @main.regularFunction(i32 %unpack.int, i8* undef) #8
+  %unpack.int = ptrtoint ptr %0 to i32
+  call void @main.regularFunction(i32 %unpack.int, ptr undef) #9
   ret void
 }
 
-declare i32 @"internal/task.getGoroutineStackSize"(i32, i8*) #0
+declare i32 @"internal/task.getGoroutineStackSize"(i32, ptr) #2
 
-declare void @"internal/task.start"(i32, i8*, i32, i8*) #0
-
-; Function Attrs: nounwind
-define hidden void @main.inlineFunctionGoroutine(i8* %context) unnamed_addr #1 {
-entry:
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* undef) #8
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.inlineFunctionGoroutine$1$gowrapper" to i32), i8* nonnull inttoptr (i32 5 to i8*), i32 %stacksize, i8* undef) #8
-  ret void
-}
+declare void @"internal/task.start"(i32, ptr, i32, ptr) #2
 
 ; Function Attrs: nounwind
-define internal void @"main.inlineFunctionGoroutine$1"(i32 %x, i8* %context) unnamed_addr #1 {
+define hidden void @main.inlineFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"main.inlineFunctionGoroutine$1$gowrapper" to i32), ptr undef) #9
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.inlineFunctionGoroutine$1$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 %stacksize, ptr undef) #9
   ret void
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(i8* %0) unnamed_addr #3 {
-entry:
-  %unpack.int = ptrtoint i8* %0 to i32
-  call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.int, i8* undef)
-  ret void
-}
-
-; Function Attrs: nounwind
-define hidden void @main.closureFunctionGoroutine(i8* %context) unnamed_addr #1 {
-entry:
-  %n = call i8* @runtime.alloc(i32 4, i8* nonnull inttoptr (i32 3 to i8*), i8* undef) #8
-  %0 = bitcast i8* %n to i32*
-  store i32 3, i32* %0, align 4
-  %1 = call i8* @runtime.alloc(i32 8, i8* null, i8* undef) #8
-  %2 = bitcast i8* %1 to i32*
-  store i32 5, i32* %2, align 4
-  %3 = getelementptr inbounds i8, i8* %1, i32 4
-  %4 = bitcast i8* %3 to i8**
-  store i8* %n, i8** %4, align 4
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"main.closureFunctionGoroutine$1$gowrapper" to i32), i8* undef) #8
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"main.closureFunctionGoroutine$1$gowrapper" to i32), i8* nonnull %1, i32 %stacksize, i8* undef) #8
-  %5 = load i32, i32* %0, align 4
-  call void @runtime.printint32(i32 %5, i8* undef) #8
-  ret void
-}
-
-; Function Attrs: nounwind
-define internal void @"main.closureFunctionGoroutine$1"(i32 %x, i8* %context) unnamed_addr #1 {
-entry:
-  %unpack.ptr = bitcast i8* %context to i32*
-  store i32 7, i32* %unpack.ptr, align 4
-  ret void
-}
-
-; Function Attrs: nounwind
-define linkonce_odr void @"main.closureFunctionGoroutine$1$gowrapper"(i8* %0) unnamed_addr #4 {
-entry:
-  %1 = bitcast i8* %0 to i32*
-  %2 = load i32, i32* %1, align 4
-  %3 = getelementptr inbounds i8, i8* %0, i32 4
-  %4 = bitcast i8* %3 to i8**
-  %5 = load i8*, i8** %4, align 4
-  call void @"main.closureFunctionGoroutine$1"(i32 %2, i8* %5)
-  ret void
-}
-
-declare void @runtime.printint32(i32, i8*) #0
-
-; Function Attrs: nounwind
-define hidden void @main.funcGoroutine(i8* %fn.context, void ()* %fn.funcptr, i8* %context) unnamed_addr #1 {
-entry:
-  %0 = call i8* @runtime.alloc(i32 12, i8* null, i8* undef) #8
-  %1 = bitcast i8* %0 to i32*
-  store i32 5, i32* %1, align 4
-  %2 = getelementptr inbounds i8, i8* %0, i32 4
-  %3 = bitcast i8* %2 to i8**
-  store i8* %fn.context, i8** %3, align 4
-  %4 = getelementptr inbounds i8, i8* %0, i32 8
-  %5 = bitcast i8* %4 to void ()**
-  store void ()* %fn.funcptr, void ()** %5, align 4
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* undef) #8
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @main.funcGoroutine.gowrapper to i32), i8* nonnull %0, i32 %stacksize, i8* undef) #8
-  ret void
-}
-
-; Function Attrs: nounwind
-define linkonce_odr void @main.funcGoroutine.gowrapper(i8* %0) unnamed_addr #5 {
-entry:
-  %1 = bitcast i8* %0 to i32*
-  %2 = load i32, i32* %1, align 4
-  %3 = getelementptr inbounds i8, i8* %0, i32 4
-  %4 = bitcast i8* %3 to i8**
-  %5 = load i8*, i8** %4, align 4
-  %6 = getelementptr inbounds i8, i8* %0, i32 8
-  %7 = bitcast i8* %6 to void (i32, i8*)**
-  %8 = load void (i32, i8*)*, void (i32, i8*)** %7, align 4
-  call void %8(i32 %2, i8* %5) #8
-  ret void
-}
-
-; Function Attrs: nounwind
-define hidden void @main.recoverBuiltinGoroutine(i8* %context) unnamed_addr #1 {
+define internal void @"main.inlineFunctionGoroutine$1"(i32 %x, ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.copyBuiltinGoroutine(i8* %dst.data, i32 %dst.len, i32 %dst.cap, i8* %src.data, i32 %src.len, i32 %src.cap, i8* %context) unnamed_addr #1 {
+define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(ptr %0) unnamed_addr #4 {
 entry:
-  %copy.n = call i32 @runtime.sliceCopy(i8* %dst.data, i8* %src.data, i32 %dst.len, i32 %src.len, i32 1, i8* undef) #8
+  %unpack.int = ptrtoint ptr %0 to i32
+  call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.int, ptr undef)
   ret void
 }
-
-declare i32 @runtime.sliceCopy(i8* nocapture writeonly, i8* nocapture readonly, i32, i32, i32, i8*) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.closeBuiltinGoroutine(%runtime.channel* dereferenceable_or_null(32) %ch, i8* %context) unnamed_addr #1 {
+define hidden void @main.closureFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
-  call void @runtime.chanClose(%runtime.channel* %ch, i8* undef) #8
+  %n = call dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #9
+  store i32 3, ptr %n, align 4
+  %0 = call dereferenceable(8) ptr @runtime.alloc(i32 8, ptr null, ptr undef) #9
+  store i32 5, ptr %0, align 4
+  %1 = getelementptr inbounds { i32, ptr }, ptr %0, i32 0, i32 1
+  store ptr %n, ptr %1, align 4
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr undef) #9
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #9
+  %2 = load i32, ptr %n, align 4
+  call void @runtime.printint32(i32 %2, ptr undef) #9
   ret void
 }
-
-declare void @runtime.chanClose(%runtime.channel* dereferenceable_or_null(32), i8*) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.startInterfaceMethod(i32 %itf.typecode, i8* %itf.value, i8* %context) unnamed_addr #1 {
+define internal void @"main.closureFunctionGoroutine$1"(i32 %x, ptr %context) unnamed_addr #1 {
 entry:
-  %0 = call i8* @runtime.alloc(i32 16, i8* null, i8* undef) #8
-  %1 = bitcast i8* %0 to i8**
-  store i8* %itf.value, i8** %1, align 4
-  %2 = getelementptr inbounds i8, i8* %0, i32 4
-  %.repack = bitcast i8* %2 to i8**
-  store i8* getelementptr inbounds ([4 x i8], [4 x i8]* @"main$string", i32 0, i32 0), i8** %.repack, align 4
-  %.repack1 = getelementptr inbounds i8, i8* %0, i32 8
-  %3 = bitcast i8* %.repack1 to i32*
-  store i32 4, i32* %3, align 4
-  %4 = getelementptr inbounds i8, i8* %0, i32 12
-  %5 = bitcast i8* %4 to i32*
-  store i32 %itf.typecode, i32* %5, align 4
-  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (void (i8*)* @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), i8* undef) #8
-  call void @"internal/task.start"(i32 ptrtoint (void (i8*)* @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), i8* nonnull %0, i32 %stacksize, i8* undef) #8
+  store i32 7, ptr %context, align 4
   ret void
 }
-
-declare void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(i8*, i8*, i32, i32, i8*) #6
 
 ; Function Attrs: nounwind
-define linkonce_odr void @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper"(i8* %0) unnamed_addr #7 {
+define linkonce_odr void @"main.closureFunctionGoroutine$1$gowrapper"(ptr %0) unnamed_addr #5 {
 entry:
-  %1 = bitcast i8* %0 to i8**
-  %2 = load i8*, i8** %1, align 4
-  %3 = getelementptr inbounds i8, i8* %0, i32 4
-  %4 = bitcast i8* %3 to i8**
-  %5 = load i8*, i8** %4, align 4
-  %6 = getelementptr inbounds i8, i8* %0, i32 8
-  %7 = bitcast i8* %6 to i32*
-  %8 = load i32, i32* %7, align 4
-  %9 = getelementptr inbounds i8, i8* %0, i32 12
-  %10 = bitcast i8* %9 to i32*
-  %11 = load i32, i32* %10, align 4
-  call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(i8* %2, i8* %5, i32 %8, i32 %11, i8* undef) #8
+  %1 = load i32, ptr %0, align 4
+  %2 = getelementptr inbounds { i32, ptr }, ptr %0, i32 0, i32 1
+  %3 = load ptr, ptr %2, align 4
+  call void @"main.closureFunctionGoroutine$1"(i32 %1, ptr %3)
   ret void
 }
 
-attributes #0 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
+declare void @runtime.printint32(i32, ptr) #2
+
+; Function Attrs: nounwind
+define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = call dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #9
+  store i32 5, ptr %0, align 4
+  %1 = getelementptr inbounds { i32, ptr, ptr }, ptr %0, i32 0, i32 1
+  store ptr %fn.context, ptr %1, align 4
+  %2 = getelementptr inbounds { i32, ptr, ptr }, ptr %0, i32 0, i32 2
+  store ptr %fn.funcptr, ptr %2, align 4
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr undef) #9
+  call void @"internal/task.start"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #9
+  ret void
+}
+
+; Function Attrs: nounwind
+define linkonce_odr void @main.funcGoroutine.gowrapper(ptr %0) unnamed_addr #6 {
+entry:
+  %1 = load i32, ptr %0, align 4
+  %2 = getelementptr inbounds { i32, ptr, ptr }, ptr %0, i32 0, i32 1
+  %3 = load ptr, ptr %2, align 4
+  %4 = getelementptr inbounds { i32, ptr, ptr }, ptr %0, i32 0, i32 2
+  %5 = load ptr, ptr %4, align 4
+  call void %5(i32 %1, ptr %3) #9
+  ret void
+}
+
+; Function Attrs: nounwind
+define hidden void @main.recoverBuiltinGoroutine(ptr %context) unnamed_addr #1 {
+entry:
+  ret void
+}
+
+; Function Attrs: nounwind
+define hidden void @main.copyBuiltinGoroutine(ptr %dst.data, i32 %dst.len, i32 %dst.cap, ptr %src.data, i32 %src.len, i32 %src.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %copy.n = call i32 @runtime.sliceCopy(ptr %dst.data, ptr %src.data, i32 %dst.len, i32 %src.len, i32 1, ptr undef) #9
+  ret void
+}
+
+declare i32 @runtime.sliceCopy(ptr nocapture writeonly, ptr nocapture readonly, i32, i32, i32, ptr) #2
+
+; Function Attrs: nounwind
+define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #1 {
+entry:
+  call void @runtime.chanClose(ptr %ch, ptr undef) #9
+  ret void
+}
+
+declare void @runtime.chanClose(ptr dereferenceable_or_null(32), ptr) #2
+
+; Function Attrs: nounwind
+define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = call dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #9
+  store ptr %itf.value, ptr %0, align 4
+  %1 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 1
+  store ptr @"main$string", ptr %1, align 4
+  %.repack1 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 1, i32 1
+  store i32 4, ptr %.repack1, align 4
+  %2 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 2
+  store ptr %itf.typecode, ptr %2, align 4
+  %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr undef) #9
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #9
+  ret void
+}
+
+declare void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr, ptr, i32, ptr, ptr) #7
+
+; Function Attrs: nounwind
+define linkonce_odr void @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper"(ptr %0) unnamed_addr #8 {
+entry:
+  %1 = load ptr, ptr %0, align 4
+  %2 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 1
+  %3 = load ptr, ptr %2, align 4
+  %4 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 2
+  %5 = load i32, ptr %4, align 4
+  %6 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 3
+  %7 = load ptr, ptr %6, align 4
+  call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr %1, ptr %3, i32 %5, ptr %7, ptr undef) #9
+  ret void
+}
+
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
 attributes #1 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
-attributes #2 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="main.regularFunction" }
-attributes #3 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
-attributes #4 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
-attributes #5 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper" }
-attributes #6 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-invoke"="reflect/methods.Print(string)" "tinygo-methods"="reflect/methods.Print(string)" }
-attributes #7 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="interface:{Print:func:{basic:string}{}}.Print$invoke" }
-attributes #8 = { nounwind }
+attributes #2 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
+attributes #3 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="main.regularFunction" }
+attributes #4 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
+attributes #5 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
+attributes #6 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper" }
+attributes #7 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-invoke"="reflect/methods.Print(string)" "tinygo-methods"="reflect/methods.Print(string)" }
+attributes #8 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="interface:{Print:func:{basic:string}{}}.Print$invoke" }
+attributes #9 = { nounwind }

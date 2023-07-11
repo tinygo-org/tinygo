@@ -1,5 +1,4 @@
 //go:build mimxrt1062
-// +build mimxrt1062
 
 package machine
 
@@ -204,7 +203,8 @@ func (spi *SPI) hasHardwareCSPin() bool {
 // getClockDivisor finds the SPI prescalar that minimizes the error between
 // requested frequency and possible frequencies available with the LPSPI clock.
 // this routine is based on Teensyduino (libraries/SPI/SPI.cpp):
-//     `void SPIClass::setClockDivider_noInline(uint32_t clk)`
+//
+//	void SPIClass::setClockDivider_noInline(uint32_t clk)
 func (spi *SPI) getClockDivisor(freq uint32) uint32 {
 	const clock = 132000000 // LPSPI root clock frequency (PLL2)
 	d := uint32(clock)

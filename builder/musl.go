@@ -3,14 +3,15 @@ package builder
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
+	"tinygo.org/x/go-llvm"
 )
 
 var Musl = Library{
@@ -35,7 +36,7 @@ var Musl = Library{
 			filepath.Join(muslDir, "include", "alltypes.h.in"),
 		}
 		for _, infile := range infiles {
-			data, err := ioutil.ReadFile(infile)
+			data, err := os.ReadFile(infile)
 			if err != nil {
 				return err
 			}
@@ -63,7 +64,7 @@ var Musl = Library{
 		if err != nil {
 			return err
 		}
-		data, err := ioutil.ReadFile(filepath.Join(muslDir, "arch", arch, "bits", "syscall.h.in"))
+		data, err := os.ReadFile(filepath.Join(muslDir, "arch", arch, "bits", "syscall.h.in"))
 		if err != nil {
 			return err
 		}
@@ -78,7 +79,7 @@ var Musl = Library{
 	cflags: func(target, headerPath string) []string {
 		arch := compileopts.MuslArchitecture(target)
 		muslDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl")
-		return []string{
+		cflags := []string{
 			"-std=c99",            // same as in musl
 			"-D_XOPEN_SOURCE=700", // same as in musl
 			// Musl triggers some warnings and we don't want to show any
@@ -90,6 +91,8 @@ var Musl = Library{
 			"-Wno-shift-op-parentheses",
 			"-Wno-ignored-attributes",
 			"-Wno-string-plus-int",
+			"-Wno-ignored-pragmas",
+			"-Wno-tautological-constant-out-of-range-compare",
 			"-Qunused-arguments",
 			// Select include dirs. Don't include standard library includes
 			// (that would introduce host dependencies and other complications),
@@ -103,9 +106,15 @@ var Musl = Library{
 			"-I" + muslDir + "/include",
 			"-fno-stack-protector",
 		}
+		llvmMajor, _ := strconv.Atoi(strings.SplitN(llvm.Version, ".", 2)[0])
+		if llvmMajor >= 15 {
+			// This flag was added in Clang 15. It is not present in LLVM 14.
+			cflags = append(cflags, "-Wno-deprecated-non-prototype")
+		}
+		return cflags
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl/src") },
-	librarySources: func(target string) []string {
+	librarySources: func(target string) ([]string, error) {
 		arch := compileopts.MuslArchitecture(target)
 		globs := []string{
 			"env/*.c",
@@ -117,15 +126,20 @@ var Musl = Library{
 			"internal/vdso.c",
 			"legacy/*.c",
 			"malloc/*.c",
+			"malloc/mallocng/*.c",
 			"mman/*.c",
+			"math/*.c",
 			"signal/*.c",
 			"stdio/*.c",
 			"string/*.c",
 			"thread/" + arch + "/*.s",
-			"thread/" + arch + "/*.c",
 			"thread/*.c",
 			"time/*.c",
 			"unistd/*.c",
+		}
+		if arch == "arm" {
+			// These files need to be added to the start for some reason.
+			globs = append([]string{"thread/arm/*.c"}, globs...)
 		}
 
 		var sources []string
@@ -140,13 +154,16 @@ var Musl = Library{
 				// > ErrBadPattern, when pattern is malformed.
 				// So the only possible error is when the (statically defined)
 				// pattern is wrong. In other words, a programming bug.
-				panic("could not glob source dirs: " + err.Error())
+				return nil, fmt.Errorf("musl: could not glob source dirs: %w", err)
+			}
+			if len(matches) == 0 {
+				return nil, fmt.Errorf("musl: did not find any files for pattern %#v", pattern)
 			}
 			for _, match := range matches {
 				relpath, err := filepath.Rel(basepath, match)
 				if err != nil {
 					// Not sure if this is even possible.
-					panic(err)
+					return nil, err
 				}
 				// Make sure architecture specific files override generic files.
 				id := strings.ReplaceAll(relpath, "/"+arch+"/", "/")
@@ -158,7 +175,7 @@ var Musl = Library{
 				sources = append(sources, relpath)
 			}
 		}
-		return sources
+		return sources, nil
 	},
 	crt1Source: "../crt/crt1.c", // lib/musl/crt/crt1.c
 }

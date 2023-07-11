@@ -1,5 +1,4 @@
 //go:build xtensa
-// +build xtensa
 
 package interrupt
 
@@ -11,9 +10,9 @@ type State uintptr
 // Disable disables all interrupts and returns the previous interrupt state. It
 // can be used in a critical section like this:
 //
-//     state := interrupt.Disable()
-//     // critical section
-//     interrupt.Restore(state)
+//	state := interrupt.Disable()
+//	// critical section
+//	interrupt.Restore(state)
 //
 // Critical sections can be nested. Make sure to call Restore in the same order
 // as you called Disable (this happens naturally with the pattern above).
@@ -29,4 +28,12 @@ func Restore(state State) {
 	device.AsmFull("wsr {state}, PS", map[string]interface{}{
 		"state": state,
 	})
+}
+
+// In returns whether the system is currently in an interrupt.
+//
+// Warning: interrupts have not been implemented for Xtensa yet so this always
+// returns false.
+func In() bool {
+	return false
 }

@@ -12,7 +12,7 @@ package interp
 //     done in interp and results in a revert.
 //
 // Right now the memory is assumed to be little endian. This will need an update
-// for big endian arcitectures, if TinyGo ever adds support for one.
+// for big endian architectures, if TinyGo ever adds support for one.
 
 import (
 	"encoding/binary"
@@ -37,7 +37,7 @@ import (
 // ability to roll back interpreting a function.
 type object struct {
 	llvmGlobal     llvm.Value
-	llvmType       llvm.Type // must match llvmGlobal.Type() if both are set, may be unset if llvmGlobal is set
+	llvmType       llvm.Type // must match llvmGlobal.GlobalValueType() if both are set, may be unset if llvmGlobal is set
 	llvmLayoutType llvm.Type // LLVM type based on runtime.alloc layout parameter, if available
 	globalName     string    // name, if not yet created (not guaranteed to be the final name)
 	buffer         value     // buffer with value as given by interp, nil if external
@@ -215,7 +215,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		case llvm.StructTypeKind:
 			numElements := llvmType.StructElementTypesCount()
 			for i := 0; i < numElements; i++ {
-				element := llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)})
+				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
 				err := mv.markExternal(element, mark)
 				if err != nil {
 					return err
@@ -224,7 +224,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
 			for i := 0; i < numElements; i++ {
-				element := llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)})
+				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
 				err := mv.markExternal(element, mark)
 				if err != nil {
 					return err
@@ -373,6 +373,22 @@ type literalValue struct {
 	value interface{}
 }
 
+// Make a literalValue given the number of bits.
+func makeLiteralInt(value uint64, bits int) literalValue {
+	switch bits {
+	case 64:
+		return literalValue{value}
+	case 32:
+		return literalValue{uint32(value)}
+	case 16:
+		return literalValue{uint16(value)}
+	case 8:
+		return literalValue{uint8(value)}
+	default:
+		panic("unknown integer size")
+	}
+}
+
 func (v literalValue) len(r *runner) uint32 {
 	switch v.value.(type) {
 	case uint64:
@@ -501,7 +517,7 @@ func (v pointerValue) offset() uint32 {
 // addOffset essentially does a GEP operation (pointer arithmetic): it adds the
 // offset to the pointer. It also checks that the offset doesn't overflow the
 // maximum offset size (which is 4GB).
-func (v pointerValue) addOffset(offset uint32) pointerValue {
+func (v pointerValue) addOffset(offset int64) pointerValue {
 	result := pointerValue{v.pointer + uint64(offset)}
 	if checks && v.index() != result.index() {
 		panic("interp: offset out of range")
@@ -594,7 +610,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 			var globalType llvm.Type
 			if !obj.llvmType.IsNil() {
 				// The exact type is known.
-				globalType = obj.llvmType.ElementType()
+				globalType = obj.llvmType
 			} else { // !obj.llvmLayoutType.IsNil()
 				// The exact type isn't known, but the object layout is known.
 				globalType = obj.llvmLayoutType
@@ -646,8 +662,8 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 		if llvmValue.Type() != mem.r.i8ptrType {
 			llvmValue = llvm.ConstBitCast(llvmValue, mem.r.i8ptrType)
 		}
-		llvmValue = llvm.ConstInBoundsGEP(llvmValue, []llvm.Value{
-			llvm.ConstInt(llvmValue.Type().Context().Int32Type(), uint64(v.offset()), false),
+		llvmValue = llvm.ConstInBoundsGEP(mem.r.mod.Context().Int8Type(), llvmValue, []llvm.Value{
+			llvm.ConstInt(mem.r.mod.Context().Int32Type(), uint64(v.offset()), false),
 		})
 	}
 
@@ -808,14 +824,17 @@ func (v rawValue) rawLLVMValue(mem *memoryView) (llvm.Value, error) {
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			elementType := field.Type().ElementType()
-			if elementType.TypeKind() == llvm.StructTypeKind {
-				// There are some special pointer types that should be used as a
-				// ptrtoint, so that they can be used in certain optimizations.
-				name := elementType.StructName()
-				if name == "runtime.typecodeID" || name == "runtime.funcValueWithSignature" {
-					uintptrType := ctx.IntType(int(mem.r.pointerSize) * 8)
-					field = llvm.ConstPtrToInt(field, uintptrType)
+			if !field.IsAGlobalVariable().IsNil() {
+				elementType := field.GlobalValueType()
+				if elementType.TypeKind() == llvm.StructTypeKind {
+					// There are some special pointer types that should be used
+					// as a ptrtoint, so that they can be used in certain
+					// optimizations.
+					name := elementType.StructName()
+					if name == "runtime.funcValueWithSignature" {
+						uintptrType := ctx.IntType(int(mem.r.pointerSize) * 8)
+						field = llvm.ConstPtrToInt(field, uintptrType)
+					}
 				}
 			}
 			structFields = append(structFields, field)
@@ -998,7 +1017,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			ptr := llvmValue.Operand(0)
 			index := llvmValue.Operand(1)
 			numOperands := llvmValue.OperandsCount()
-			elementType := ptr.Type().ElementType()
+			elementType := llvmValue.GEPSourceElementType()
 			totalOffset := r.targetData.TypeAllocSize(elementType) * index.ZExtValue()
 			for i := 2; i < numOperands; i++ {
 				indexValue := llvmValue.Operand(i)
@@ -1027,6 +1046,17 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			ptrValue.pointer += totalOffset
 			for i := uint32(0); i < ptrSize; i++ {
 				v.buf[i] = ptrValue.pointer
+			}
+		case llvm.ICmp:
+			size := r.targetData.TypeAllocSize(llvmValue.Operand(0).Type())
+			lhs := newRawValue(uint32(size))
+			rhs := newRawValue(uint32(size))
+			lhs.set(llvmValue.Operand(0), r)
+			rhs.set(llvmValue.Operand(1), r)
+			if r.interpretICmp(lhs, rhs, llvmValue.IntPredicate()) {
+				v.buf[0] = 1 // result is true
+			} else {
+				v.buf[0] = 0 // result is false
 			}
 		default:
 			llvmValue.Dump()
@@ -1074,7 +1104,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				field.set(llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)}), r)
+				field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r)
 			}
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
@@ -1085,7 +1115,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				field.set(llvm.ConstExtractValue(llvmValue, []uint32{uint32(i)}), r)
+				field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r)
 			}
 		case llvm.DoubleTypeKind:
 			f, _ := llvmValue.DoubleValue()
@@ -1173,7 +1203,7 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 			r.globals[llvmValue] = index
 			r.objects = append(r.objects, obj)
 			if !llvmValue.IsAGlobalVariable().IsNil() {
-				obj.size = uint32(r.targetData.TypeAllocSize(llvmValue.Type().ElementType()))
+				obj.size = uint32(r.targetData.TypeAllocSize(llvmValue.GlobalValueType()))
 				if initializer := llvmValue.Initializer(); !initializer.IsNil() {
 					obj.buffer = r.getValue(initializer)
 					obj.constant = llvmValue.IsGlobalConstant()
@@ -1222,6 +1252,8 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 
 // readObjectLayout reads the object layout as it is stored by the compiler. It
 // returns the size in the number of words and the bitmap.
+//
+// For details on this format, see src/runtime/gc_precise.go.
 func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 	pointerSize := layoutValue.len(r)
 	if checks && uint64(pointerSize) != r.targetData.TypeAllocSize(r.i8ptrType) {
@@ -1275,6 +1307,7 @@ func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 		}
 		rawBytes[i] = byte(v)
 	}
+	reverseBytes(rawBytes) // little-endian to big-endian
 	bitmap := new(big.Int).SetBytes(rawBytes)
 	return objectSizeWords, bitmap
 }
@@ -1323,4 +1356,13 @@ func (r *runner) getLLVMTypeFromLayout(layoutValue value) llvm.Type {
 		panic("unexpected size") // sanity check
 	}
 	return llvmLayoutType
+}
+
+// Reverse a slice of bytes. From the wiki:
+// https://github.com/golang/go/wiki/SliceTricks#reversing
+func reverseBytes(buf []byte) {
+	for i := len(buf)/2 - 1; i >= 0; i-- {
+		opp := len(buf) - 1 - i
+		buf[i], buf[opp] = buf[opp], buf[i]
+	}
 }

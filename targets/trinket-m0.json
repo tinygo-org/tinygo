@@ -2,9 +2,9 @@
     "inherits": ["atsamd21e18a"],
     "build-tags": ["trinket_m0"],
     "serial": "usb",
-    "serial-port": ["acm:239a:801e", "acm:239a:001e"],
+    "serial-port": ["239a:801e"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "TRINKETBOOT",
+    "msd-volume-name": ["TRINKETBOOT"],
     "msd-firmware-name": "firmware.uf2"
 }

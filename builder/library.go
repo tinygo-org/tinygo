@@ -1,7 +1,8 @@
 package builder
 
 import (
-	"io/ioutil"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,7 +29,7 @@ type Library struct {
 	sourceDir func() string
 
 	// The source files, relative to sourceDir.
-	librarySources func(target string) []string
+	librarySources func(target string) ([]string, error)
 
 	// The source code for the crt1.o file, relative to sourceDir.
 	crt1Source string
@@ -94,7 +95,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	target := config.Triple()
 	if l.makeHeaders != nil {
 		if _, err = os.Stat(headerPath); err != nil {
-			temporaryHeaderPath, err := ioutil.TempDir(outdir, "include.tmp*")
+			temporaryHeaderPath, err := os.MkdirTemp(outdir, "include.tmp*")
 			if err != nil {
 				return nil, nil, err
 			}
@@ -110,10 +111,10 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			err = os.Rename(temporaryHeaderPath, headerPath)
 			if err != nil {
 				switch {
-				case os.IsExist(err):
+				case errors.Is(err, fs.ErrExist):
 					// Another invocation of TinyGo also seems to have already created the headers.
 
-				case runtime.GOOS == "windows" && os.IsPermission(err):
+				case runtime.GOOS == "windows" && errors.Is(err, fs.ErrPermission):
 					// On Windows, a rename with a destination directory that already
 					// exists does not result in an IsExist error, but rather in an
 					// access denied error. To be sure, check for this case by checking
@@ -141,7 +142,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// Note: -fdebug-prefix-map is necessary to make the output archive
 	// reproducible. Otherwise the temporary directory is stored in the archive
 	// itself, which varies each run.
-	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-g", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
+	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
 	cpu := config.CPU()
 	if cpu != "" {
 		// X86 has deprecated the -mcpu flag, so we need to use -march instead.
@@ -154,8 +155,15 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			args = append(args, "-mcpu="+cpu)
 		}
 	}
+	if config.ABI() != "" {
+		args = append(args, "-mabi="+config.ABI())
+	}
 	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
-		args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
+		if strings.Split(target, "-")[2] == "linux" {
+			args = append(args, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
+		} else {
+			args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
+		}
 	}
 	if strings.HasPrefix(target, "avr") {
 		// AVR defaults to C float and double both being 32-bit. This deviates
@@ -165,10 +173,10 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		args = append(args, "-mdouble=64")
 	}
 	if strings.HasPrefix(target, "riscv32-") {
-		args = append(args, "-march=rv32imac", "-mabi=ilp32", "-fforce-enable-int128")
+		args = append(args, "-march=rv32imac", "-fforce-enable-int128")
 	}
 	if strings.HasPrefix(target, "riscv64-") {
-		args = append(args, "-march=rv64gc", "-mabi=lp64")
+		args = append(args, "-march=rv64gc")
 	}
 	if strings.HasPrefix(target, "xtensa") {
 		// Hack to work around an issue in the Xtensa port:
@@ -189,7 +197,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			defer once.Do(unlock)
 
 			// Create an archive of all object files.
-			f, err := ioutil.TempFile(outdir, "libc.a.tmp*")
+			f, err := os.CreateTemp(outdir, "libc.a.tmp*")
 			if err != nil {
 				return err
 			}
@@ -214,7 +222,11 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 
 	// Create jobs to compile all sources. These jobs are depended upon by the
 	// archive job above, so must be run first.
-	for _, path := range l.librarySources(target) {
+	paths, err := l.librarySources(target)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, path := range paths {
 		// Strip leading "../" parts off the path.
 		cleanpath := path
 		for strings.HasPrefix(cleanpath, "../") {
@@ -230,6 +242,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				var compileArgs []string
 				compileArgs = append(compileArgs, args...)
 				compileArgs = append(compileArgs, "-o", objpath, srcpath)
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands("clang", compileArgs...)
+				}
 				err := runCCompiler(compileArgs...)
 				if err != nil {
 					return &commandError{"failed to build", srcpath, err}
@@ -250,12 +265,15 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			run: func(*compileJob) error {
 				var compileArgs []string
 				compileArgs = append(compileArgs, args...)
-				tmpfile, err := ioutil.TempFile(outdir, "crt1.o.tmp*")
+				tmpfile, err := os.CreateTemp(outdir, "crt1.o.tmp*")
 				if err != nil {
 					return err
 				}
 				tmpfile.Close()
 				compileArgs = append(compileArgs, "-o", tmpfile.Name(), srcpath)
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands("clang", compileArgs...)
+				}
 				err = runCCompiler(compileArgs...)
 				if err != nil {
 					return &commandError{"failed to build", srcpath, err}

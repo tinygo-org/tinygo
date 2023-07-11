@@ -1,5 +1,4 @@
 //go:build rp2040
-// +build rp2040
 
 package machine
 
@@ -45,11 +44,13 @@ type pwmGroup struct {
 }
 
 // Equivalent of
-//  var pwmSlice []pwmGroup = (*[8]pwmGroup)(unsafe.Pointer(rp.PWM))[:]
-//  return &pwmSlice[index]
+//
+//	var pwmSlice []pwmGroup = (*[8]pwmGroup)(unsafe.Pointer(rp.PWM))[:]
+//	return &pwmSlice[index]
+//
 // 0x14 is the size of a pwmGroup.
 func getPWMGroup(index uintptr) *pwmGroup {
-	return (*pwmGroup)(unsafe.Pointer(uintptr(unsafe.Pointer(rp.PWM)) + 0x14*index))
+	return (*pwmGroup)(unsafe.Add(unsafe.Pointer(rp.PWM), 0x14*index))
 }
 
 // Hardware Pulse Width Modulation (PWM) API
@@ -112,7 +113,7 @@ func (pwm *pwmGroup) peripheral() uint8 {
 // SetPeriod updates the period of this PWM peripheral in nanoseconds.
 // To set a particular frequency, use the following formula:
 //
-//     period = 1e9 / frequency
+//	period = 1e9 / frequency
 //
 // Where frequency is in hertz. If you use a period of 0, a period
 // that works well for LEDs will be picked.
@@ -167,7 +168,7 @@ func (p *pwmGroup) SetInverting(channel uint8, inverting bool) {
 // cycle, in other words the fraction of time the channel output is high (or low
 // when inverted). For example, to set it to a 25% duty cycle, use:
 //
-//     pwm.Set(channel, pwm.Top() / 4)
+//	pwm.Set(channel, pwm.Top() / 4)
 //
 // pwm.Set(channel, 0) will set the output to low and pwm.Set(channel,
 // pwm.Top()) will set the output to high, assuming the output isn't inverted.
@@ -238,14 +239,17 @@ func (pwm *pwmGroup) setPhaseCorrect(correct bool) {
 }
 
 // Takes any of the following:
-//  rp.PWM_CH0_CSR_DIVMODE_DIV, rp.PWM_CH0_CSR_DIVMODE_FALL,
-//  rp.PWM_CH0_CSR_DIVMODE_LEVEL, rp.PWM_CH0_CSR_DIVMODE_RISE
+//
+//	rp.PWM_CH0_CSR_DIVMODE_DIV, rp.PWM_CH0_CSR_DIVMODE_FALL,
+//	rp.PWM_CH0_CSR_DIVMODE_LEVEL, rp.PWM_CH0_CSR_DIVMODE_RISE
 func (pwm *pwmGroup) setDivMode(mode uint32) {
 	pwm.CSR.ReplaceBits(mode<<rp.PWM_CH0_CSR_DIVMODE_Pos, rp.PWM_CH0_CSR_DIVMODE_Msk, 0)
 }
 
 // setPeriod sets the pwm peripheral period (frequency). Calculates DIV_INT,DIV_FRAC and sets it from following equation:
-//  cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
+//
+//	cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
+//
 // where cycles is amount of clock cycles per PWM period.
 func (pwm *pwmGroup) setPeriod(period uint64) error {
 	// This period calculation algorithm consists of
@@ -256,7 +260,9 @@ func (pwm *pwmGroup) setPeriod(period uint64) error {
 		maxTop = math.MaxUint16
 		// start algorithm at 95% Top. This allows us to undershoot period with prescale.
 		topStart     = 95 * maxTop / 100
-		milliseconds = 1_000_000_000
+		nanosecond   = 1                  // 1e-9 [s]
+		microsecond  = 1000 * nanosecond  // 1e-6 [s]
+		milliseconds = 1000 * microsecond // 1e-3 [s]
 		// Maximum Period is 268369920ns on rp2040, given by (16*255+15)*8*(1+0xffff)*(1+1)/16
 		// With no phase shift max period is half of this value.
 		maxPeriod = 268 * milliseconds
@@ -303,7 +309,7 @@ func (pwm *pwmGroup) setPeriod(period uint64) error {
 // frac's (DIV_FRAC) default value on reset is 0. Max value for frac is 15 (4 bits). This is known as a fixed-point
 // fractional number.
 //
-//  cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
+//	cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
 func (pwm *pwmGroup) setClockDiv(Int, frac uint8) {
 	pwm.DIV.ReplaceBits((uint32(frac)<<rp.PWM_CH0_DIV_FRAC_Pos)|
 		u32max(uint32(Int), 1)<<rp.PWM_CH0_DIV_INT_Pos, rp.PWM_CH0_DIV_FRAC_Msk|rp.PWM_CH0_DIV_INT_Msk, 0)

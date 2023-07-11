@@ -37,7 +37,7 @@ func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintp
 	}
 
 	// The slice fits (after possibly allocating a new one), append it in-place.
-	memmove(unsafe.Pointer(uintptr(srcBuf)+srcLen*elemSize), elemsBuf, elemsLen*elemSize)
+	memmove(unsafe.Add(srcBuf, srcLen*elemSize), elemsBuf, elemsLen*elemSize)
 	return srcBuf, srcLen + elemsLen, srcCap
 }
 
@@ -50,4 +50,33 @@ func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr
 	}
 	memmove(dst, src, n*elemSize)
 	return int(n)
+}
+
+// sliceGrow returns a new slice with space for at least newCap elements
+func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr) {
+
+	// TODO(dgryski): sliceGrow() and sliceAppend() should be refactored to share the base growth code.
+
+	if oldCap >= newCap {
+		// No need to grow, return the input slice.
+		return oldBuf, oldLen, oldCap
+	}
+
+	// allow nil slice
+	if oldCap == 0 {
+		oldCap++
+	}
+
+	// grow capacity
+	for oldCap < newCap {
+		oldCap *= 2
+	}
+
+	buf := alloc(oldCap*elemSize, nil)
+	if oldLen > 0 {
+		// copy any data to new slice
+		memmove(buf, oldBuf, oldLen*elemSize)
+	}
+
+	return buf, oldLen, oldCap
 }

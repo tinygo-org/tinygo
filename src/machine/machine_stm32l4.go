@@ -1,10 +1,11 @@
 //go:build stm32l4
-// +build stm32l4
 
 package machine
 
 import (
 	"device/stm32"
+	"encoding/binary"
+	"errors"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -543,4 +544,105 @@ func initRNG() {
 
 	stm32.RCC.AHB2ENR.SetBits(stm32.RCC_AHB2ENR_RNGEN)
 	stm32.RNG.CR.SetBits(stm32.RNG_CR_RNGEN)
+}
+
+//---------- Flash related code
+
+const eraseBlockSizeValue = 2048
+
+// see RM0394 page 83
+// eraseBlock of the passed in block number
+func eraseBlock(block uint32) error {
+	waitUntilFlashDone()
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0x3FA)
+
+	// page erase operation
+	stm32.FLASH.SetCR_PER(1)
+	defer stm32.FLASH.SetCR_PER(0)
+
+	// set the page to be erased
+	stm32.FLASH.SetCR_PNB(block)
+
+	// start the page erase
+	stm32.FLASH.SetCR_START(1)
+
+	waitUntilFlashDone()
+
+	if err := checkError(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+const writeBlockSize = 8
+
+// see RM0394 page 84
+// It is only possible to program double word (2 x 32-bit data).
+func writeFlashData(address uintptr, data []byte) (int, error) {
+	if len(data)%writeBlockSize != 0 {
+		return 0, errFlashInvalidWriteLength
+	}
+
+	waitUntilFlashDone()
+
+	// clear any previous errors
+	stm32.FLASH.SR.SetBits(0x3FA)
+
+	for j := 0; j < len(data); j += writeBlockSize {
+		// start page write operation
+		stm32.FLASH.SetCR_PG(1)
+
+		// write second word using double-word high order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(data[j : j+writeBlockSize/2])
+
+		address += writeBlockSize / 2
+
+		// write first word using double-word low order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(data[j+writeBlockSize/2 : j+writeBlockSize])
+
+		waitUntilFlashDone()
+
+		if err := checkError(); err != nil {
+			return j, err
+		}
+
+		// end flash write
+		stm32.FLASH.SetCR_PG(0)
+		address += writeBlockSize / 2
+	}
+
+	return len(data), nil
+}
+
+func waitUntilFlashDone() {
+	for stm32.FLASH.GetSR_BSY() != 0 {
+	}
+}
+
+var (
+	errFlashPGS  = errors.New("errFlashPGS")
+	errFlashSIZE = errors.New("errFlashSIZE")
+	errFlashPGA  = errors.New("errFlashPGA")
+	errFlashWRP  = errors.New("errFlashWRP")
+	errFlashPROG = errors.New("errFlashPROG")
+)
+
+func checkError() error {
+	switch {
+	case stm32.FLASH.GetSR_PGSERR() != 0:
+		return errFlashPGS
+	case stm32.FLASH.GetSR_SIZERR() != 0:
+		return errFlashSIZE
+	case stm32.FLASH.GetSR_PGAERR() != 0:
+		return errFlashPGA
+	case stm32.FLASH.GetSR_WRPERR() != 0:
+		return errFlashWRP
+	case stm32.FLASH.GetSR_PROGERR() != 0:
+		return errFlashPROG
+	}
+
+	return nil
 }

@@ -1,5 +1,4 @@
 //go:build fe310
-// +build fe310
 
 // This file implements target-specific things for the FE310 chip as used in the
 // HiFive1.
@@ -25,6 +24,12 @@ func main() {
 
 	// Zero the threshold value to allow all priorities of interrupts.
 	sifive.PLIC.THRESHOLD.Set(0)
+
+	// Zero MCAUSE, which is set to the reset reason on reset. It must be zeroed
+	// to make interrupt.In() work.
+	// This would also be a good time to save the reset reason, but that hasn't
+	// been implemented yet.
+	riscv.MCAUSE.Set(0)
 
 	// Set the interrupt address.
 	// Note that this address must be aligned specially, otherwise the MODE bits
@@ -74,6 +79,10 @@ func handleInterrupt() {
 		// misaligned loads). However, for now we'll just print a fatal error.
 		handleException(code)
 	}
+
+	// Zero MCAUSE so that it can later be used to see whether we're in an
+	// interrupt or not.
+	riscv.MCAUSE.Set(0)
 }
 
 // initPeripherals configures periperhals the way the runtime expects them.

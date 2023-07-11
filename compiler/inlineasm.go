@@ -5,6 +5,7 @@ package compiler
 import (
 	"fmt"
 	"go/constant"
+	"go/token"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,7 +18,7 @@ import (
 // operands or return values. It is useful for trivial instructions, like wfi in
 // ARM or sleep in AVR.
 //
-//     func Asm(asm string)
+//	func Asm(asm string)
 //
 // The provided assembly must be a constant.
 func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
@@ -25,23 +26,23 @@ func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
 	fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{}, false)
 	asm := constant.StringVal(args[0].(*ssa.Const).Value)
 	target := llvm.InlineAsm(fnType, asm, "", true, false, 0, false)
-	return b.CreateCall(target, nil, ""), nil
+	return b.CreateCall(fnType, target, nil, ""), nil
 }
 
 // This is a compiler builtin, which allows assembly to be called in a flexible
 // way.
 //
-//     func AsmFull(asm string, regs map[string]interface{}) uintptr
+//	func AsmFull(asm string, regs map[string]interface{}) uintptr
 //
 // The asm parameter must be a constant string. The regs parameter must be
 // provided immediately. For example:
 //
-//     arm.AsmFull(
-//         "str {value}, {result}",
-//         map[string]interface{}{
-//             "value":  1
-//             "result": &dest,
-//         })
+//	arm.AsmFull(
+//	    "str {value}, {result}",
+//	    map[string]interface{}{
+//	        "value":  1
+//	        "result": &dest,
+//	    })
 func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error) {
 	asmString := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
 	registers := map[string]llvm.Value{}
@@ -55,7 +56,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 					return llvm.Value{}, b.makeError(instr.Pos(), "register value map must be created in the same basic block")
 				}
 				key := constant.StringVal(r.Key.(*ssa.Const).Value)
-				registers[key] = b.getValue(r.Value.(*ssa.MakeInterface).X)
+				registers[key] = b.getValue(r.Value.(*ssa.MakeInterface).X, getPos(instr))
 			case *ssa.Call:
 				if r.Common() == instr {
 					break
@@ -120,7 +121,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 	}
 	fnType := llvm.FunctionType(outputType, argTypes, false)
 	target := llvm.InlineAsm(fnType, asmString, strings.Join(constraints, ","), true, false, 0, false)
-	result := b.CreateCall(target, args, "")
+	result := b.CreateCall(fnType, target, args, "")
 	if hasOutput {
 		return result, nil
 	} else {
@@ -132,15 +133,15 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 // This is a compiler builtin which emits an inline SVCall instruction. It can
 // be one of:
 //
-//     func SVCall0(num uintptr) uintptr
-//     func SVCall1(num uintptr, a1 interface{}) uintptr
-//     func SVCall2(num uintptr, a1, a2 interface{}) uintptr
-//     func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
-//     func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
+//	func SVCall0(num uintptr) uintptr
+//	func SVCall1(num uintptr, a1 interface{}) uintptr
+//	func SVCall2(num uintptr, a1, a2 interface{}) uintptr
+//	func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
+//	func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
 //
 // The num parameter must be a constant. All other parameters may be any scalar
 // value supported by LLVM inline assembly.
-func (b *builder) emitSVCall(args []ssa.Value) (llvm.Value, error) {
+func (b *builder) emitSVCall(args []ssa.Value, pos token.Pos) (llvm.Value, error) {
 	num, _ := constant.Uint64Val(args[0].(*ssa.Const).Value)
 	llvmArgs := []llvm.Value{}
 	argTypes := []llvm.Type{}
@@ -153,7 +154,7 @@ func (b *builder) emitSVCall(args []ssa.Value) (llvm.Value, error) {
 		} else {
 			constraints += ",{r" + strconv.Itoa(i) + "}"
 		}
-		llvmValue := b.getValue(arg)
+		llvmValue := b.getValue(arg, pos)
 		llvmArgs = append(llvmArgs, llvmValue)
 		argTypes = append(argTypes, llvmValue.Type())
 	}
@@ -163,22 +164,22 @@ func (b *builder) emitSVCall(args []ssa.Value) (llvm.Value, error) {
 	constraints += ",~{r1},~{r2},~{r3}"
 	fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 	target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0, false)
-	return b.CreateCall(target, llvmArgs, ""), nil
+	return b.CreateCall(fnType, target, llvmArgs, ""), nil
 }
 
 // This is a compiler builtin which emits an inline SVCall instruction. It can
 // be one of:
 //
-//     func SVCall0(num uintptr) uintptr
-//     func SVCall1(num uintptr, a1 interface{}) uintptr
-//     func SVCall2(num uintptr, a1, a2 interface{}) uintptr
-//     func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
-//     func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
+//	func SVCall0(num uintptr) uintptr
+//	func SVCall1(num uintptr, a1 interface{}) uintptr
+//	func SVCall2(num uintptr, a1, a2 interface{}) uintptr
+//	func SVCall3(num uintptr, a1, a2, a3 interface{}) uintptr
+//	func SVCall4(num uintptr, a1, a2, a3, a4 interface{}) uintptr
 //
 // The num parameter must be a constant. All other parameters may be any scalar
 // value supported by LLVM inline assembly.
 // Same as emitSVCall but for AArch64
-func (b *builder) emitSV64Call(args []ssa.Value) (llvm.Value, error) {
+func (b *builder) emitSV64Call(args []ssa.Value, pos token.Pos) (llvm.Value, error) {
 	num, _ := constant.Uint64Val(args[0].(*ssa.Const).Value)
 	llvmArgs := []llvm.Value{}
 	argTypes := []llvm.Type{}
@@ -191,7 +192,7 @@ func (b *builder) emitSV64Call(args []ssa.Value) (llvm.Value, error) {
 		} else {
 			constraints += ",{x" + strconv.Itoa(i) + "}"
 		}
-		llvmValue := b.getValue(arg)
+		llvmValue := b.getValue(arg, pos)
 		llvmArgs = append(llvmArgs, llvmValue)
 		argTypes = append(argTypes, llvmValue.Type())
 	}
@@ -201,15 +202,15 @@ func (b *builder) emitSV64Call(args []ssa.Value) (llvm.Value, error) {
 	constraints += ",~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7}"
 	fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 	target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0, false)
-	return b.CreateCall(target, llvmArgs, ""), nil
+	return b.CreateCall(fnType, target, llvmArgs, ""), nil
 }
 
 // This is a compiler builtin which emits CSR instructions. It can be one of:
 //
-//     func (csr CSR) Get() uintptr
-//     func (csr CSR) Set(uintptr)
-//     func (csr CSR) SetBits(uintptr) uintptr
-//     func (csr CSR) ClearBits(uintptr) uintptr
+//	func (csr CSR) Get() uintptr
+//	func (csr CSR) Set(uintptr)
+//	func (csr CSR) SetBits(uintptr) uintptr
+//	func (csr CSR) ClearBits(uintptr) uintptr
 //
 // The csr parameter (method receiver) must be a constant. Other parameter can
 // be any value.
@@ -226,24 +227,24 @@ func (b *builder) emitCSROperation(call *ssa.CallCommon) (llvm.Value, error) {
 		fnType := llvm.FunctionType(b.uintptrType, nil, false)
 		asm := fmt.Sprintf("csrr $0, %d", csr)
 		target := llvm.InlineAsm(fnType, asm, "=r", true, false, 0, false)
-		return b.CreateCall(target, nil, ""), nil
+		return b.CreateCall(fnType, target, nil, ""), nil
 	case "Set":
 		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrw %d, $0", csr)
 		target := llvm.InlineAsm(fnType, asm, "r", true, false, 0, false)
-		return b.CreateCall(target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
+		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1], getPos(call))}, ""), nil
 	case "SetBits":
 		// Note: it may be possible to optimize this to csrrsi in many cases.
 		fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrrs $0, %d, $1", csr)
 		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0, false)
-		return b.CreateCall(target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
+		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1], getPos(call))}, ""), nil
 	case "ClearBits":
 		// Note: it may be possible to optimize this to csrrci in many cases.
 		fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrrc $0, %d, $1", csr)
 		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0, false)
-		return b.CreateCall(target, []llvm.Value{b.getValue(call.Args[1])}, ""), nil
+		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1], getPos(call))}, ""), nil
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown CSR operation: "+name)
 	}

@@ -15,10 +15,12 @@ jobs:
   build-windows:
     runs-on: windows-2022
     steps:
-      - name: Install Go
-        uses: actions/setup-go@v2
+      - name: Configure pagefile
+        uses: al-cheb/configure-pagefile-action@v1.3
         with:
-          go-version: '1.18.1'
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: "C:"
       - uses: brechtm/setup-scoop@v2
         with:
           scoop_update: 'false'
@@ -27,21 +29,19 @@ jobs:
         run: |
           scoop install ninja binaryen
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
-      - name: Cache Go
-        uses: actions/cache@v2
+      - name: Install Go
+        uses: actions/setup-go@v3
         with:
-          key: go-cache-windows-v1-${{ hashFiles('go.mod') }}
-          path: |
-            ~/AppData/Local/go-build
-            ~/go/pkg/mod
-      - name: Cache LLVM source
-        uses: actions/cache@v2
+          go-version: '1.20'
+          cache: true
+      - name: Restore cached LLVM source
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-14-windows-v2
+          key: llvm-source-15-windows-v4
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -51,11 +51,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v2
+      - name: Save cached LLVM source
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore cached LLVM build
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-14-windows-v2
+          key: llvm-build-15-windows-v6
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -68,8 +79,14 @@ jobs:
           make llvm-build CCACHE=OFF
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save cached LLVM build
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache wasi-libc sysroot
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-v4
@@ -80,9 +97,11 @@ jobs:
       - name: Install wasmtime
         run: |
           scoop install wasmtime
+      - name: make gen-device
+        run: make -j3 gen-device
       - name: Test TinyGo
         shell: bash
-        run: make test GOTESTFLAGS="-v -short"
+        run: make test GOTESTFLAGS="-short"
       - name: Build TinyGo release tarball
         shell: bash
         run: make build/release -j4
@@ -97,14 +116,109 @@ jobs:
         # - have a dobule-zipped artifact when downloaded from the UI
         # - have a very slow artifact upload
         # We're doing the former here, to keep artifact uploads fast.
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: release-double-zipped
           path: build/release/release.zip
+
+  smoke-test-windows:
+    runs-on: windows-2022
+    needs: build-windows
+    steps:
+      - name: Configure pagefile
+        uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: "C:"
+      - uses: brechtm/setup-scoop@v2
+        with:
+          scoop_update: 'false'
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          scoop install binaryen
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v2
+        with:
+          name: release-double-zipped
+          path: build/
+      - name: Unzip TinyGo build
+        shell: bash
+        working-directory: build
+        run: 7z x release.zip -r
       - name: Smoke tests
         shell: bash
-        run: make smoketest TINYGO=$(PWD)/build/tinygo AVR=0 XTENSA=0
+        run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo
+
+  stdlib-test-windows:
+    runs-on: windows-2022
+    needs: build-windows
+    steps:
+      - name: Configure pagefile
+        uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: "C:"
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v2
+        with:
+          name: release-double-zipped
+          path: build/
+      - name: Unzip TinyGo build
+        shell: bash
+        working-directory: build
+        run: 7z x release.zip -r
       - name: Test stdlib packages
-        run: make tinygo-test
+        run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
+
+  stdlib-wasi-test-windows:
+    runs-on: windows-2022
+    needs: build-windows
+    steps:
+      - name: Configure pagefile
+        uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 8GB
+          maximum-size: 24GB
+          disk-root: "C:"
+      - uses: brechtm/setup-scoop@v2
+        with:
+          scoop_update: 'false'
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          scoop install binaryen wasmtime
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v2
+        with:
+          name: release-double-zipped
+          path: build/
+      - name: Unzip TinyGo build
+        shell: bash
+        working-directory: build
+        run: 7z x release.zip -r
       - name: Test stdlib packages on wasi
-        run: make tinygo-test-wasi-fast
+        run: make tinygo-test-wasi-fast TINYGO=$(PWD)/build/tinygo/bin/tinygo

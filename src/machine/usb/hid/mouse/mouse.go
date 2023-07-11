@@ -1,6 +1,7 @@
 package mouse
 
 import (
+	"machine"
 	"machine/usb/hid"
 )
 
@@ -12,6 +13,8 @@ const (
 	Left Button = 1 << iota
 	Right
 	Middle
+	Back
+	Forward
 )
 
 type mouse struct {
@@ -27,8 +30,14 @@ func init() {
 	}
 }
 
-// New returns hid-mouse.
+// New returns the USB hid-mouse port.
+// Deprecated, better to just use Port()
 func New() *mouse {
+	return Port()
+}
+
+// Port returns the USB hid-mouse port.
+func Port() *mouse {
 	return Mouse
 }
 
@@ -49,11 +58,13 @@ func (m *mouse) Handler() bool {
 }
 
 func (m *mouse) tx(b []byte) {
-	if m.waitTxc {
-		m.buf.Put(b)
-	} else {
-		m.waitTxc = true
-		hid.SendUSBPacket(b)
+	if machine.USBDev.InitEndpointComplete {
+		if m.waitTxc {
+			m.buf.Put(b)
+		} else {
+			m.waitTxc = true
+			hid.SendUSBPacket(b)
+		}
 	}
 }
 

@@ -1,5 +1,4 @@
 //go:build mdbt50qrx
-// +build mdbt50qrx
 
 package machine
 
@@ -18,15 +17,15 @@ const (
 
 // MDBT50Q-RX dongle does not have pins broken out for the peripherals below,
 // however the machine_nrf*.go implementations of I2C/SPI/etc expect the pin
-// constants to be defined, so we are defining them all as 0
+// constants to be defined, so we are defining them all as NoPin
 const (
-	UART_TX_PIN  = 0
-	UART_RX_PIN  = 0
-	SDA_PIN      = 0
-	SCL_PIN      = 0
-	SPI0_SCK_PIN = 0
-	SPI0_SDO_PIN = 0
-	SPI0_SDI_PIN = 0
+	UART_TX_PIN  = NoPin
+	UART_RX_PIN  = NoPin
+	SDA_PIN      = NoPin
+	SCL_PIN      = NoPin
+	SPI0_SCK_PIN = NoPin
+	SPI0_SDO_PIN = NoPin
+	SPI0_SDI_PIN = NoPin
 )
 
 // USB CDC identifiers

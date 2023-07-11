@@ -1,5 +1,4 @@
 //go:build esp32c3
-// +build esp32c3
 
 package machine
 
@@ -59,12 +58,9 @@ type PinChange uint8
 
 // Pin change interrupt constants for SetInterrupt.
 const (
-	PinNoInterrupt PinChange = iota
-	PinRising
+	PinRising PinChange = iota + 1
 	PinFalling
 	PinToggle
-	PinLowLevel
-	PinHighLevel
 )
 
 // Configure this pin with the given configuration.
@@ -112,24 +108,24 @@ func (p Pin) Configure(config PinConfig) {
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
 // output function selection.
 func (p Pin) outFunc() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.FUNC0_OUT_SEL_CFG)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.FUNC0_OUT_SEL_CFG), uintptr(p)*4))
 }
 
 // inFunc returns the FUNCy_IN_SEL_CFG register used for configuring the input
 // function selection.
 func inFunc(signal uint32) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.FUNC0_IN_SEL_CFG)) + uintptr(signal)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.FUNC0_IN_SEL_CFG), uintptr(signal)*4))
 }
 
 // mux returns the I/O mux configuration register corresponding to the given
 // GPIO pin.
 func (p Pin) mux() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.IO_MUX.GPIO0)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.IO_MUX.GPIO0), uintptr(p)*4))
 }
 
 // pin returns the PIN register corresponding to the given GPIO pin.
 func (p Pin) pin() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.PIN0)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.PIN0), uintptr(p)*4))
 }
 
 // Set the pin to high or low.
@@ -190,7 +186,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) (err error) {
 		return ErrInvalidInputPin
 	}
 
-	if callback == nil || change == PinNoInterrupt {
+	if callback == nil {
 		// Disable this pin interrupt
 		p.pin().ClearBits(esp.GPIO_PIN_PIN_INT_TYPE_Msk | esp.GPIO_PIN_PIN_INT_ENA_Msk)
 
@@ -263,15 +259,6 @@ type UART struct {
 	DataErrorDetected    bool // set when data corruption detected
 	DataOverflowDetected bool // set when data overflow detected in UART FIFO buffer or RingBuffer
 }
-
-type UARTStopBits int
-
-const (
-	UARTStopBits_Default UARTStopBits = iota
-	UARTStopBits_1
-	UARTStopBits_1_5
-	UARTStopBits_2
-)
 
 const (
 	defaultDataBits = 8

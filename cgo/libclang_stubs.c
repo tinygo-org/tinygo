@@ -17,6 +17,14 @@ CXString tinygo_clang_getCursorSpelling(CXCursor c) {
 	return clang_getCursorSpelling(c);
 }
 
+CXString tinygo_clang_getCursorPrettyPrinted(CXCursor c, CXPrintingPolicy policy) {
+	return clang_getCursorPrettyPrinted(c, policy);
+}
+
+CXPrintingPolicy tinygo_clang_getCursorPrintingPolicy(CXCursor c) {
+	return clang_getCursorPrintingPolicy(c);
+}
+
 enum CXCursorKind tinygo_clang_getCursorKind(CXCursor c) {
 	return clang_getCursorKind(c);
 }
@@ -43,6 +51,10 @@ int tinygo_clang_Cursor_getNumArguments(CXCursor c) {
 
 CXCursor tinygo_clang_Cursor_getArgument(CXCursor c, unsigned i) {
 	return clang_Cursor_getArgument(c, i);
+}
+
+enum CX_StorageClass tinygo_clang_Cursor_getStorageClass(CXCursor c) {
+	return clang_Cursor_getStorageClass(c);
 }
 
 CXSourceLocation tinygo_clang_getCursorLocation(CXCursor c) {

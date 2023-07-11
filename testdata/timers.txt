@@ -1,0 +1,16 @@
+waiting on ticker
+ - after 150ms
+ - after 200ms
+waited on ticker at 500ms
+ - after 300ms
+waited on ticker at 1000ms
+ticker was stopped (didn't send anything after 750ms)
+waiting on timer
+ - after 200ms
+ - after 400ms
+waited on timer at 750ms
+timer reset: false
+waiting on timer
+ - after 200ms
+ - after 400ms
+waited on timer at 750ms

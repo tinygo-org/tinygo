@@ -1,14 +1,12 @@
 //go:build arduino_mkrwifi1010
-// +build arduino_mkrwifi1010
 
 // This contains the pin mappings for the Arduino MKR WiFi 1010 board.
 //
 // For more information, see: https://store.arduino.cc/usa/mkr-wifi-1010
-//
 package machine
 
 // used to reset into bootloader
-const RESET_MAGIC_VALUE = 0x07738135
+const resetMagicValue = 0x07738135
 
 // GPIO Pins
 const (

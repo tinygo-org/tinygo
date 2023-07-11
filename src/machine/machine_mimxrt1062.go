@@ -1,5 +1,4 @@
 //go:build mimxrt1062
-// +build mimxrt1062
 
 package machine
 
@@ -21,8 +20,8 @@ func CPUFrequency() uint32 {
 const (
 	// GPIO
 	PinInput PinMode = iota
-	PinInputPullUp
-	PinInputPullDown
+	PinInputPullup
+	PinInputPulldown
 	PinOutput
 	PinOutputOpenDrain
 	PinDisable
@@ -45,12 +44,16 @@ const (
 	PinModeI2CSCL
 )
 
+// Deprecated: use PinInputPullup and PinInputPulldown instead.
+const (
+	PinInputPullUp   = PinInputPullup
+	PinInputPullDown = PinInputPulldown
+)
+
 type PinChange uint8
 
 const (
-	PinLow PinChange = iota
-	PinHigh
-	PinRising
+	PinRising PinChange = iota + 2
 	PinFalling
 	PinToggle
 )
@@ -259,11 +262,11 @@ func (p Pin) Configure(config PinConfig) {
 		gpio.GDIR.ClearBits(p.getMask())
 		pad.Set(dse(7))
 
-	case PinInputPullUp:
+	case PinInputPullup:
 		gpio.GDIR.ClearBits(p.getMask())
 		pad.Set(dse(7) | pke | pue | pup(3) | hys)
 
-	case PinInputPullDown:
+	case PinInputPulldown:
 		gpio.GDIR.ClearBits(p.getMask())
 		pad.Set(dse(7) | pke | pue | hys)
 
@@ -387,7 +390,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	mask := p.getMask()
 	if nil != callback {
 		switch change {
-		case PinLow, PinHigh, PinRising, PinFalling:
+		case PinRising, PinFalling:
 			gpio.EDGE_SEL.ClearBits(mask)
 			var reg *volatile.Register32
 			var pos uint8
@@ -726,7 +729,7 @@ func (p Pin) getPad() (pad *volatile.Register32, mux *volatile.Register32) {
 //
 // The reference manual refers to this functionality as a "Daisy Chain". The
 // associated docs are found in the i.MX RT1060 Processor Reference Manual:
-//   "Chapter 11.3.3 Daisy chain - multi pads driving same module input pin"
+// "Chapter 11.3.3 Daisy chain - multi pads driving same module input pin"
 type muxSelect struct {
 	mux uint8                // AF mux selection (NOT a Pin type)
 	sel *volatile.Register32 // AF selection register
@@ -746,7 +749,7 @@ func (p Pin) getMuxMode(config PinConfig) uint32 {
 	switch config.Mode {
 
 	// GPIO
-	case PinInput, PinInputPullUp, PinInputPullDown,
+	case PinInput, PinInputPullup, PinInputPulldown,
 		PinOutput, PinOutputOpenDrain, PinDisable:
 		mode := uint32(0x5) // GPIO is always alternate function 5
 		if forcePath {

@@ -28,7 +28,6 @@
 // SOFTWARE.
 
 //go:build nxp && mk66f18
-// +build nxp,mk66f18
 
 package runtime
 
@@ -50,10 +49,10 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns / 1000)
 }
 
-// cyclesPerMilli-1 is used for the systick reset value
-//   the systick current value will be decremented on every clock cycle
-//   an interrupt is generated when the current value reaches 0
-//   a value of freq/1000 generates a tick (irq) every millisecond (1/1000 s)
+// cyclesPerMilli-1 is used for the systick reset value.
+// The systick current value will be decremented on every clock cycle.
+// An interrupt is generated when the current value reaches 0.
+// A value of freq/1000 generates a tick (irq) every millisecond (1/1000 s).
 var cyclesPerMilli = machine.CPUFrequency() / 1000
 
 // number of systick irqs (milliseconds) since boot

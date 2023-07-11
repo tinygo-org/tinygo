@@ -147,7 +147,7 @@ func darwinOpenDir(fd syscallFd) (uintptr, string, error) {
 	return dir, "", nil
 }
 
-// Implemented in syscall/syscall_darwin.go.
+// Implemented in syscall/syscall_libc_darwin_*.go.
 
 //go:linkname closedir syscall.closedir
 func closedir(dir uintptr) (err error)

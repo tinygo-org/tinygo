@@ -22,6 +22,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+- repo: github.com/buger/jsonparser
 - repo: github.com/dgryski/go-bloomindex
   tags: purego noasm
 - repo: github.com/dgryski/go-arc
@@ -113,7 +114,6 @@
   - pkg: curve25519
   - pkg: ed25519
   - pkg: hkdf
-  - pkg: internal/subtle
   - pkg: md4
   - pkg: nacl/auth
   - pkg: nacl/box
@@ -205,7 +205,6 @@
 - repo: github.com/cespare/xxhash
   tags: appengine
 - repo: gonum.org/v1/gonum
-  tags: noasm
 - repo: gonum.org/v1/gonum
   tags: noasm appengine
   subdirs:
@@ -278,5 +277,8 @@
 #  subdirs:
 #  - pkg: go
 - repo: github.com/chewxy/math32
-  tags: noasm
   version: master
+- repo: github.com/russross/blackfriday
+  version: v2
+- repo: github.com/soypat/mu8
+- repo: github.com/brandondube/pctl

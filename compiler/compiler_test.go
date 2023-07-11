@@ -3,7 +3,7 @@ package compiler
 import (
 	"flag"
 	"go/types"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -28,12 +28,6 @@ type testCase struct {
 func TestCompiler(t *testing.T) {
 	t.Parallel()
 
-	// Determine LLVM version.
-	llvmMajor, err := strconv.Atoi(strings.SplitN(llvm.Version, ".", 2)[0])
-	if err != nil {
-		t.Fatal("could not parse LLVM version:", llvm.Version)
-	}
-
 	// Determine Go minor version (e.g. 16 in go1.16.3).
 	_, goMinor, err := goenv.GetGorootVersion(goenv.Get("GOROOT"))
 	if err != nil {
@@ -54,19 +48,11 @@ func TestCompiler(t *testing.T) {
 		{"goroutine.go", "wasm", "asyncify"},
 		{"goroutine.go", "cortex-m-qemu", "tasks"},
 		{"channel.go", "", ""},
-		{"intrinsics.go", "cortex-m-qemu", ""},
-		{"intrinsics.go", "wasm", ""},
 		{"gc.go", "", ""},
+		{"zeromap.go", "", ""},
 	}
-	if llvmMajor >= 12 {
-		tests = append(tests, testCase{"intrinsics.go", "cortex-m-qemu", ""})
-		tests = append(tests, testCase{"intrinsics.go", "wasm", ""})
-	}
-	if goMinor >= 17 {
-		tests = append(tests, testCase{"go1.17.go", "", ""})
-	}
-	if goMinor >= 18 {
-		tests = append(tests, testCase{"generics.go", "", ""})
+	if goMinor >= 20 {
+		tests = append(tests, testCase{"go1.20.go", "", ""})
 	}
 
 	for _, tc := range tests {
@@ -84,51 +70,11 @@ func TestCompiler(t *testing.T) {
 			options := &compileopts.Options{
 				Target: targetString,
 			}
-			target, err := compileopts.LoadTarget(options)
-			if err != nil {
-				t.Fatal("failed to load target:", err)
-			}
 			if tc.scheduler != "" {
 				options.Scheduler = tc.scheduler
 			}
-			config := &compileopts.Config{
-				Options: options,
-				Target:  target,
-			}
-			compilerConfig := &Config{
-				Triple:             config.Triple(),
-				Features:           config.Features(),
-				GOOS:               config.GOOS(),
-				GOARCH:             config.GOARCH(),
-				CodeModel:          config.CodeModel(),
-				RelocationModel:    config.RelocationModel(),
-				Scheduler:          config.Scheduler(),
-				AutomaticStackSize: config.AutomaticStackSize(),
-				DefaultStackSize:   config.Target.DefaultStackSize,
-				NeedsStackObjects:  config.NeedsStackObjects(),
-			}
-			machine, err := NewTargetMachine(compilerConfig)
-			if err != nil {
-				t.Fatal("failed to create target machine:", err)
-			}
-			defer machine.Dispose()
 
-			// Load entire program AST into memory.
-			lprogram, err := loader.Load(config, "./testdata/"+tc.file, config.ClangHeaders, types.Config{
-				Sizes: Sizes(machine),
-			})
-			if err != nil {
-				t.Fatal("failed to create target machine:", err)
-			}
-			err = lprogram.Parse()
-			if err != nil {
-				t.Fatalf("could not parse test case %s: %s", tc.file, err)
-			}
-
-			// Compile AST to IR.
-			program := lprogram.LoadSSA()
-			pkg := lprogram.MainPkg()
-			mod, errs := CompilePackage(tc.file, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
+			mod, errs := testCompilePackage(t, options, tc.file)
 			if errs != nil {
 				for _, err := range errs {
 					t.Error(err)
@@ -136,7 +82,7 @@ func TestCompiler(t *testing.T) {
 				return
 			}
 
-			err = llvm.VerifyModule(mod, llvm.PrintMessageAction)
+			err := llvm.VerifyModule(mod, llvm.PrintMessageAction)
 			if err != nil {
 				t.Error(err)
 			}
@@ -162,14 +108,14 @@ func TestCompiler(t *testing.T) {
 
 			// Update test if needed. Do not check the result.
 			if *flagUpdate {
-				err := ioutil.WriteFile(outPath, []byte(mod.String()), 0666)
+				err := os.WriteFile(outPath, []byte(mod.String()), 0666)
 				if err != nil {
 					t.Error("failed to write updated output file:", err)
 				}
 				return
 			}
 
-			expected, err := ioutil.ReadFile(outPath)
+			expected, err := os.ReadFile(outPath)
 			if err != nil {
 				t.Fatal("failed to read golden file:", err)
 			}
@@ -228,4 +174,87 @@ func filterIrrelevantIRLines(lines []string) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+func TestCompilerErrors(t *testing.T) {
+	t.Parallel()
+
+	// Read expected errors from the test file.
+	var expectedErrors []string
+	errorsFile, err := os.ReadFile("testdata/errors.go")
+	if err != nil {
+		t.Error(err)
+	}
+	errorsFileString := strings.ReplaceAll(string(errorsFile), "\r\n", "\n")
+	for _, line := range strings.Split(errorsFileString, "\n") {
+		if strings.HasPrefix(line, "// ERROR: ") {
+			expectedErrors = append(expectedErrors, strings.TrimPrefix(line, "// ERROR: "))
+		}
+	}
+
+	// Compile the Go file with errors.
+	options := &compileopts.Options{
+		Target: "wasm",
+	}
+	_, errs := testCompilePackage(t, options, "errors.go")
+
+	// Check whether the actual errors match the expected errors.
+	expectedErrorsIdx := 0
+	for _, err := range errs {
+		err := err.(types.Error)
+		position := err.Fset.Position(err.Pos)
+		position.Filename = "errors.go" // don't use a full path
+		if expectedErrorsIdx >= len(expectedErrors) || expectedErrors[expectedErrorsIdx] != err.Msg {
+			t.Errorf("unexpected compiler error: %s: %s", position.String(), err.Msg)
+			continue
+		}
+		expectedErrorsIdx++
+	}
+}
+
+// Build a package given a number of compiler options and a file.
+func testCompilePackage(t *testing.T, options *compileopts.Options, file string) (llvm.Module, []error) {
+	target, err := compileopts.LoadTarget(options)
+	if err != nil {
+		t.Fatal("failed to load target:", err)
+	}
+	config := &compileopts.Config{
+		Options: options,
+		Target:  target,
+	}
+	compilerConfig := &Config{
+		Triple:             config.Triple(),
+		Features:           config.Features(),
+		ABI:                config.ABI(),
+		GOOS:               config.GOOS(),
+		GOARCH:             config.GOARCH(),
+		CodeModel:          config.CodeModel(),
+		RelocationModel:    config.RelocationModel(),
+		Scheduler:          config.Scheduler(),
+		AutomaticStackSize: config.AutomaticStackSize(),
+		DefaultStackSize:   config.StackSize(),
+		NeedsStackObjects:  config.NeedsStackObjects(),
+	}
+	machine, err := NewTargetMachine(compilerConfig)
+	if err != nil {
+		t.Fatal("failed to create target machine:", err)
+	}
+	defer machine.Dispose()
+
+	// Load entire program AST into memory.
+	lprogram, err := loader.Load(config, "./testdata/"+file, config.ClangHeaders, types.Config{
+		Sizes: Sizes(machine),
+	})
+	if err != nil {
+		t.Fatal("failed to create target machine:", err)
+	}
+	err = lprogram.Parse()
+	if err != nil {
+		t.Fatalf("could not parse test case %s: %s", file, err)
+	}
+
+	// Compile AST to IR.
+	program := lprogram.LoadSSA()
+	pkg := lprogram.MainPkg()
+	return CompilePackage(file, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
 }

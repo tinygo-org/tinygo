@@ -28,7 +28,6 @@
 // SOFTWARE.
 
 //go:build nxp && mk66f18
-// +build nxp,mk66f18
 
 package machine
 
@@ -59,9 +58,6 @@ var (
 	ErrNotImplemented = errors.New("device has not been implemented")
 	ErrNotConfigured  = errors.New("device has not been configured")
 )
-
-//go:linkname gosched runtime.Gosched
-func gosched()
 
 // PutcharUART writes a byte to the UART synchronously, without using interrupts
 // or calling the scheduler
@@ -203,8 +199,8 @@ func (u *UART) Disable() {
 	u.C2.Set(0)
 
 	// reconfigure pin
-	u.DefaultRX.Configure(PinConfig{Mode: PinInputPullUp})
-	u.DefaultTX.Configure(PinConfig{Mode: PinInputPullUp})
+	u.DefaultRX.Configure(PinConfig{Mode: PinInputPullup})
+	u.DefaultTX.Configure(PinConfig{Mode: PinInputPullup})
 
 	// clear flags
 	u.S1.Get()

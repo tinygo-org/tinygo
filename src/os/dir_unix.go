@@ -3,49 +3,34 @@
 // license that can be found in the LICENSE file.
 
 //go:build linux && !baremetal && !wasi
-// +build linux,!baremetal,!wasi
 
 package os
 
 import (
 	"io"
-	"sync"
 	"syscall"
 	"unsafe"
 )
 
 // Auxiliary information if the File describes a directory
 type dirInfo struct {
-	buf  *[]byte // buffer for directory I/O
-	nbuf int     // length of buf; return value from Getdirentries
-	bufp int     // location of next record in buf.
+	nbuf int             // length of buf; return value from Getdirentries
+	bufp int             // location of next record in buf.
+	buf  [blockSize]byte // buffer for directory I/O
 }
 
 const (
 	// More than 5760 to work around https://golang.org/issue/24015.
-	blockSize = 8192
+	blockSize = 8192 - 2*unsafe.Sizeof(int(0))
 )
 
-var dirBufPool = sync.Pool{
-	New: func() interface{} {
-		// The buffer must be at least a block long.
-		buf := make([]byte, blockSize)
-		return &buf
-	},
-}
-
 func (d *dirInfo) close() {
-	if d.buf != nil {
-		dirBufPool.Put(d.buf)
-		d.buf = nil
-	}
 }
 
 func (f *File) readdir(n int, mode readdirMode) (names []string, dirents []DirEntry, infos []FileInfo, err error) {
 	// If this file has no dirinfo, create one.
 	if f.dirinfo == nil {
 		f.dirinfo = new(dirInfo)
-		f.dirinfo.buf = dirBufPool.Get().(*[]byte)
 	}
 	d := f.dirinfo
 
@@ -67,7 +52,7 @@ func (f *File) readdir(n int, mode readdirMode) (names []string, dirents []DirEn
 		if d.bufp >= d.nbuf {
 			d.bufp = 0
 			var errno error
-			d.nbuf, errno = syscall.ReadDirent(syscallFd(f.handle.(unixFileHandle)), *d.buf)
+			d.nbuf, errno = syscall.ReadDirent(syscallFd(f.handle.(unixFileHandle)), d.buf[:])
 			if d.nbuf < 0 {
 				errno = handleSyscallError(errno)
 			}
@@ -80,7 +65,7 @@ func (f *File) readdir(n int, mode readdirMode) (names []string, dirents []DirEn
 		}
 
 		// Drain the buffer
-		buf := (*d.buf)[d.bufp:d.nbuf]
+		buf := d.buf[d.bufp:d.nbuf]
 		reclen, ok := direntReclen(buf)
 		if !ok || reclen > uint64(len(buf)) {
 			break

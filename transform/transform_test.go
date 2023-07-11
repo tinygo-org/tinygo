@@ -6,7 +6,6 @@ import (
 	"flag"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,13 +57,13 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 	actual = actual[strings.Index(actual, "\ntarget datalayout = ")+1:]
 
 	if *update {
-		err := ioutil.WriteFile(pathPrefix+".out.ll", []byte(actual), 0666)
+		err := os.WriteFile(pathPrefix+".out.ll", []byte(actual), 0666)
 		if err != nil {
 			t.Error("failed to write out new output:", err)
 		}
 	} else {
 		// Read the expected output IR.
-		out, err := ioutil.ReadFile(pathPrefix + ".out.ll")
+		out, err := os.ReadFile(pathPrefix + ".out.ll")
 		if err != nil {
 			t.Fatalf("could not read output file %s: %v", pathPrefix+".out.ll", err)
 		}

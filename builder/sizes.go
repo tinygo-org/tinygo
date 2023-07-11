@@ -75,6 +75,7 @@ func (ps *packageSize) RAM() uint64 {
 type addressLine struct {
 	Address    uint64
 	Length     uint64 // length of this chunk
+	Align      uint64 // (maximum) alignment of this line
 	File       string // file path as stored in DWARF
 	IsVariable bool   // true if this is a variable (or constant), false if it is code
 }
@@ -86,6 +87,7 @@ type memorySection struct {
 	Type    memoryType
 	Address uint64
 	Size    uint64
+	Align   uint64
 }
 
 type memoryType int
@@ -117,17 +119,13 @@ var (
 	//   alloc:  heap allocations during init interpretation
 	//   pack:   data created when storing a constant in an interface for example
 	//   string: buffer behind strings
-	packageSymbolRegexp = regexp.MustCompile(`\$(alloc|embedfsfiles|embedfsslice|embedslice|pack|string)(\.[0-9]+)?$`)
-
-	// Reflect sidetables. Created by the reflect lowering pass.
-	// See src/reflect/sidetables.go.
-	reflectDataRegexp = regexp.MustCompile(`^reflect\.[a-zA-Z]+Sidetable$`)
+	packageSymbolRegexp = regexp.MustCompile(`\$(alloc|pack|string)(\.[0-9]+)?$`)
 )
 
 // readProgramSizeFromDWARF reads the source location for each line of code and
 // each variable in the program, as far as this is stored in the DWARF debug
 // information.
-func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone bool) ([]addressLine, error) {
+func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset, codeAlignment uint64, skipTombstone bool) ([]addressLine, error) {
 	r := data.Reader()
 	var lines []*dwarf.LineFile
 	var addresses []addressLine
@@ -199,6 +197,7 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone
 					line := addressLine{
 						Address: prevLineEntry.Address + codeOffset,
 						Length:  lineEntry.Address - prevLineEntry.Address,
+						Align:   codeAlignment,
 						File:    prevLineEntry.File.Name,
 					}
 					if line.Length != 0 {
@@ -223,20 +222,9 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone
 			// Try to parse the location. While this could in theory be a very
 			// complex expression, usually it's just a DW_OP_addr opcode
 			// followed by an address.
-			locationCode := location.Val.([]uint8)
-			if locationCode[0] != 3 { // DW_OP_addr
-				continue
-			}
-			var addr uint64
-			switch len(locationCode) {
-			case 1 + 2:
-				addr = uint64(binary.LittleEndian.Uint16(locationCode[1:]))
-			case 1 + 4:
-				addr = uint64(binary.LittleEndian.Uint32(locationCode[1:]))
-			case 1 + 8:
-				addr = binary.LittleEndian.Uint64(locationCode[1:])
-			default:
-				continue // unknown address
+			addr, err := readDWARFConstant(r.AddressSize(), location.Val.([]uint8))
+			if err != nil {
+				continue // ignore the error, we don't know what to do with it
 			}
 
 			// Parse the type of the global variable, which (importantly)
@@ -247,9 +235,16 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone
 				return nil, err
 			}
 
+			// Read alignment, if it's stored as part of the debug information.
+			var alignment uint64
+			if attr := e.AttrField(dwarf.AttrAlignment); attr != nil {
+				alignment = uint64(attr.Val.(int64))
+			}
+
 			addresses = append(addresses, addressLine{
 				Address:    addr,
 				Length:     uint64(typ.Size()),
+				Align:      alignment,
 				File:       lines[file.Val.(int64)].Name,
 				IsVariable: true,
 			})
@@ -258,6 +253,52 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset uint64, skipTombstone
 		}
 	}
 	return addresses, nil
+}
+
+// Parse a DWARF constant. For addresses, this is usually a very simple
+// expression.
+func readDWARFConstant(addressSize int, bytecode []byte) (uint64, error) {
+	var addr uint64
+	for len(bytecode) != 0 {
+		op := bytecode[0]
+		bytecode = bytecode[1:]
+		switch op {
+		case 0x03: // DW_OP_addr
+			switch addressSize {
+			case 2:
+				addr = uint64(binary.LittleEndian.Uint16(bytecode))
+			case 4:
+				addr = uint64(binary.LittleEndian.Uint32(bytecode))
+			case 8:
+				addr = binary.LittleEndian.Uint64(bytecode)
+			default:
+				panic("unexpected address size")
+			}
+			bytecode = bytecode[addressSize:]
+		case 0x23: // DW_OP_plus_uconst
+			offset, n := readULEB128(bytecode)
+			addr += offset
+			bytecode = bytecode[n:]
+		default:
+			return 0, fmt.Errorf("unknown DWARF opcode: 0x%x", op)
+		}
+	}
+	return addr, nil
+}
+
+// Source: https://en.wikipedia.org/wiki/LEB128#Decode_unsigned_integer
+func readULEB128(buf []byte) (result uint64, n int) {
+	var shift uint8
+	for {
+		b := buf[n]
+		n++
+		result |= uint64(b&0x7f) << shift
+		if b&0x80 == 0 {
+			break
+		}
+		shift += 7
+	}
+	return
 }
 
 // Read a MachO object file and return a line table.
@@ -281,7 +322,7 @@ func readMachOSymbolAddresses(path string) (map[string]int, []addressLine, error
 	if err != nil {
 		return nil, nil, err
 	}
-	lines, err := readProgramSizeFromDWARF(dwarf, 0, false)
+	lines, err := readProgramSizeFromDWARF(dwarf, 0, 0, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -338,10 +379,15 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 	// Load the binary file, which could be in a number of file formats.
 	var sections []memorySection
 	if file, err := elf.NewFile(f); err == nil {
+		var codeAlignment uint64
+		switch file.Machine {
+		case elf.EM_ARM:
+			codeAlignment = 4 // usually 2, but can be 4
+		}
 		// Read DWARF information. The error is intentionally ignored.
 		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, 0, true)
+			addresses, err = readProgramSizeFromDWARF(data, 0, codeAlignment, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
@@ -375,7 +421,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 			if section.Flags&elf.SHF_ALLOC == 0 {
 				continue
 			}
-			if packageSymbolRegexp.MatchString(symbol.Name) || reflectDataRegexp.MatchString(symbol.Name) {
+			if packageSymbolRegexp.MatchString(symbol.Name) || symbol.Name == "__isr_vector" {
 				addresses = append(addresses, addressLine{
 					Address:    symbol.Value,
 					Length:     symbol.Size,
@@ -399,6 +445,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 					sections = append(sections, memorySection{
 						Address: section.Addr,
 						Size:    section.Size,
+						Align:   section.Addralign,
 						Type:    memoryStack,
 					})
 				} else {
@@ -406,6 +453,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 					sections = append(sections, memorySection{
 						Address: section.Addr,
 						Size:    section.Size,
+						Align:   section.Addralign,
 						Type:    memoryBSS,
 					})
 				}
@@ -414,6 +462,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    section.Size,
+					Align:   section.Addralign,
 					Type:    memoryCode,
 				})
 			} else if section.Type == elf.SHT_PROGBITS && section.Flags&elf.SHF_WRITE != 0 {
@@ -421,6 +470,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    section.Size,
+					Align:   section.Addralign,
 					Type:    memoryData,
 				})
 			} else if section.Type == elf.SHT_PROGBITS {
@@ -428,6 +478,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    section.Size,
+					Align:   section.Addralign,
 					Type:    memoryROData,
 				})
 			}
@@ -454,6 +505,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    uint64(section.Size),
+					Align:   uint64(section.Align),
 					Type:    memoryCode,
 				})
 			} else if sectionType == 1 { // S_ZEROFILL
@@ -461,6 +513,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    uint64(section.Size),
+					Align:   uint64(section.Align),
 					Type:    memoryBSS,
 				})
 			} else if segment.Maxprot&0b011 == 0b001 { // --r (read-only data)
@@ -468,6 +521,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    uint64(section.Size),
+					Align:   uint64(section.Align),
 					Type:    memoryROData,
 				})
 			} else {
@@ -475,6 +529,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				sections = append(sections, memorySection{
 					Address: section.Addr,
 					Size:    uint64(section.Size),
+					Align:   uint64(section.Align),
 					Type:    memoryData,
 				})
 			}
@@ -558,7 +613,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 		// Read DWARF information. The error is intentionally ignored.
 		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, 0, true)
+			addresses, err = readProgramSizeFromDWARF(data, 0, 0, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
@@ -630,7 +685,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 		// Read DWARF information. The error is intentionally ignored.
 		data, _ := file.DWARF()
 		if data != nil {
-			addresses, err = readProgramSizeFromDWARF(data, codeOffset, true)
+			addresses, err = readProgramSizeFromDWARF(data, codeOffset, 0, true)
 			if err != nil {
 				// However, _do_ report an error here. Something must have gone
 				// wrong while trying to parse DWARF data.
@@ -790,10 +845,18 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 		if addr < line.Address {
 			// There is a gap: there is a space between the current and the
 			// previous line entry.
-			addSize("(unknown)", line.Address-addr, false)
-			if sizesDebug {
-				fmt.Printf("%08x..%08x %5d:  unknown (gap)\n", addr, line.Address, line.Address-addr)
+			// Check whether this is caused by alignment requirements.
+			addrAligned := (addr + line.Align - 1) &^ (line.Align - 1)
+			if line.Align > 1 && addrAligned >= line.Address {
+				// It is, assume that's what causes the gap.
+				addSize("(padding)", line.Address-addr, true)
+			} else {
+				addSize("(unknown)", line.Address-addr, false)
+				if sizesDebug {
+					fmt.Printf("%08x..%08x %5d:  unknown (gap), alignment=%d\n", addr, line.Address, line.Address-addr, line.Align)
+				}
 			}
+			addr = line.Address
 		}
 		if addr > line.Address+line.Length {
 			// The current line is already covered by a previous line entry.
@@ -815,9 +878,16 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 	}
 	if addr < sectionEnd {
 		// There is a gap at the end of the section.
-		addSize("(unknown)", sectionEnd-addr, false)
-		if sizesDebug {
-			fmt.Printf("%08x..%08x %5d:  unknown (end)\n", addr, sectionEnd, sectionEnd-addr)
+		addrAligned := (addr + section.Align - 1) &^ (section.Align - 1)
+		if section.Align > 1 && addrAligned >= sectionEnd {
+			// The gap is caused by the section alignment.
+			// For example, if a .rodata section ends with a non-aligned string.
+			addSize("(padding)", sectionEnd-addr, true)
+		} else {
+			addSize("(unknown)", sectionEnd-addr, false)
+			if sizesDebug {
+				fmt.Printf("%08x..%08x %5d:  unknown (end), alignment=%d\n", addr, sectionEnd, sectionEnd-addr, section.Align)
+			}
 		}
 	}
 }
@@ -833,12 +903,15 @@ func findPackagePath(path string, packagePathMap map[string]string) string {
 			// package, with a "C" prefix. For example: "C compiler-rt" for the
 			// compiler runtime library from LLVM.
 			packagePath = "C " + strings.Split(strings.TrimPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "lib")), string(os.PathSeparator))[1]
+		} else if strings.HasPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "llvm-project")) {
+			packagePath = "C compiler-rt"
 		} else if packageSymbolRegexp.MatchString(path) {
 			// Parse symbol names like main$alloc or runtime$string.
 			packagePath = path[:strings.LastIndex(path, "$")]
-		} else if reflectDataRegexp.MatchString(path) {
-			// Parse symbol names like reflect.structTypesSidetable.
-			packagePath = "Go reflect data"
+		} else if path == "__isr_vector" {
+			packagePath = "C interrupt vector"
+		} else if path == "<Go type>" {
+			packagePath = "Go types"
 		} else if path == "<Go interface assert>" {
 			// Interface type assert, generated by the interface lowering pass.
 			packagePath = "Go interface assert"

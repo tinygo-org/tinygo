@@ -9,6 +9,7 @@ const (
 	DescriptorConfigCDC = 1 << iota
 	DescriptorConfigHID
 	DescriptorConfigMIDI
+	DescriptorConfigJoystick
 )
 
 const (
@@ -22,20 +23,9 @@ const (
 	ENDPOINT_TYPE_BULK        = 0x02
 	ENDPOINT_TYPE_INTERRUPT   = 0x03
 
-	DEVICE_DESCRIPTOR_TYPE        = 1
-	CONFIGURATION_DESCRIPTOR_TYPE = 2
-	STRING_DESCRIPTOR_TYPE        = 3
-	INTERFACE_DESCRIPTOR_TYPE     = 4
-	ENDPOINT_DESCRIPTOR_TYPE      = 5
-	DEVICE_QUALIFIER              = 6
-	OTHER_SPEED_CONFIGURATION     = 7
-	SET_REPORT_TYPE               = 33
-	HID_REPORT_TYPE               = 34
-
 	EndpointOut = 0x00
 	EndpointIn  = 0x80
 
-	NumberOfEndpoints  = 8
 	EndpointPacketSize = 64 // 64 for Full Speed, EPT size max is 1024
 
 	// standard requests
@@ -51,7 +41,13 @@ const (
 	SET_INTERFACE     = 11
 
 	// non standard requests
-	SET_IDLE = 10
+	GET_REPORT      = 1
+	GET_IDLE        = 2
+	GET_PROTOCOL    = 3
+	SET_REPORT      = 9
+	SET_IDLE        = 10
+	SET_PROTOCOL    = 11
+	SET_REPORT_TYPE = 33
 
 	DEVICE_CLASS_COMMUNICATIONS  = 0x02
 	DEVICE_CLASS_HUMAN_INTERFACE = 0x03
@@ -75,9 +71,11 @@ const (
 	CDC_ENDPOINT_ACM  = 1
 	CDC_ENDPOINT_OUT  = 2
 	CDC_ENDPOINT_IN   = 3
-	HID_ENDPOINT_IN   = 4
-	MIDI_ENDPOINT_OUT = 5
-	MIDI_ENDPOINT_IN  = 6
+	HID_ENDPOINT_IN   = 4 // for Interrupt In
+	HID_ENDPOINT_OUT  = 5 // for Interrupt Out
+	MIDI_ENDPOINT_IN  = 6 // for Bulk In
+	MIDI_ENDPOINT_OUT = 7 // for Bulk Out
+	NumberOfEndpoints = 8
 
 	// bmRequestType
 	REQUEST_HOSTTODEVICE = 0x00
@@ -119,3 +117,21 @@ func NewSetup(data []byte) Setup {
 	u.WLength = uint16(data[6]) | (uint16(data[7]) << 8)
 	return u
 }
+
+var (
+	// VendorID aka VID is the officially assigned vendor number
+	// for this USB device. Only set this if you know what you are doing,
+	// since changing it can make it difficult to reflash some devices.
+	VendorID uint16
+
+	// ProductID aka PID is the product number associated with the officially assigned
+	// vendor number for this USB device. Only set this if you know what you are doing,
+	// since changing it can make it difficult to reflash some devices.
+	ProductID uint16
+
+	// Manufacturer is the manufacturer name displayed for this USB device.
+	Manufacturer string
+
+	// Product is the product name displayed for this USB device.
+	Product string
+)

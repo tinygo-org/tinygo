@@ -2,9 +2,9 @@
     "inherits": ["atsamd51j19a"],
     "build-tags": ["feather_m4"],
     "serial": "usb",
-    "serial-port": ["acm:239a:8022", "acm:239a:0022"],
+    "serial-port": ["239a:8022"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "FEATHERBOOT",
+    "msd-volume-name": ["FEATHERBOOT"],
     "msd-firmware-name": "firmware.uf2"
 }

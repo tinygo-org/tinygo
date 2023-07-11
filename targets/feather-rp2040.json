@@ -2,9 +2,11 @@
     "inherits": [
         "rp2040"
     ],
-    "serial-port": ["acm:239a:80f1"],
+    "serial-port": ["239a:80f1"],
     "build-tags": ["feather_rp2040"],
-    "linkerscript": "targets/feather-rp2040.ld",
+    "ldflags": [
+        "--defsym=__flash_size=8192K"
+    ],
     "extra-files": [
         "targets/feather-rp2040-boot-stage2.S"
     ]

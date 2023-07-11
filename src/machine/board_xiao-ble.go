@@ -1,5 +1,4 @@
 //go:build xiao_ble
-// +build xiao_ble
 
 // This file contains the pin mappings for the Seeed XIAO BLE nRF52840 [Sense] boards.
 //
@@ -17,7 +16,6 @@
 //
 // - https://wiki.seeedstudio.com/XIAO_BLE/
 // - https://github.com/Seeed-Studio/ArduinoCore-mbed/tree/master/variants/SEEED_XIAO_NRF52840_SENSE
-//
 package machine
 
 const HasLowFrequencyCrystal = true
@@ -105,7 +103,7 @@ const (
 
 var (
 	usb_VID uint16 = 0x2886
-	usb_PID uint16 = 0x0045
+	usb_PID uint16 = 0x8045
 )
 
 var (

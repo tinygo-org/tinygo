@@ -2,33 +2,34 @@
 //
 // Original copyright:
 //
-//     Copyright (c) 2009 - 2015 ARM LIMITED
+//	Copyright (c) 2009 - 2015 ARM LIMITED
 //
-//     All rights reserved.
-//     Redistribution and use in source and binary forms, with or without
-//     modification, are permitted provided that the following conditions are met:
-//     - Redistributions of source code must retain the above copyright
-//       notice, this list of conditions and the following disclaimer.
-//     - Redistributions in binary form must reproduce the above copyright
-//       notice, this list of conditions and the following disclaimer in the
-//       documentation and/or other materials provided with the distribution.
-//     - Neither the name of ARM nor the names of its contributors may be used
-//       to endorse or promote products derived from this software without
-//       specific prior written permission.
+//	All rights reserved.
+//	Redistribution and use in source and binary forms, with or without
+//	modification, are permitted provided that the following conditions are met:
+//	- Redistributions of source code must retain the above copyright
+//	  notice, this list of conditions and the following disclaimer.
+//	- Redistributions in binary form must reproduce the above copyright
+//	  notice, this list of conditions and the following disclaimer in the
+//	  documentation and/or other materials provided with the distribution.
+//	- Neither the name of ARM nor the names of its contributors may be used
+//	  to endorse or promote products derived from this software without
+//	  specific prior written permission.
 //
-//     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-//     AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-//     IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-//     ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
-//     LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-//     CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-//     SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-//     INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-//     CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-//     ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-//     POSSIBILITY OF SUCH DAMAGE.
+//	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+//	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+//	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+//	ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
+//	LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+//	CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+//	SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+//	INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+//	CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+//	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+//	POSSIBILITY OF SUCH DAMAGE.
 package arm
 
+import "C"
 import (
 	"errors"
 	"runtime/volatile"
@@ -46,12 +47,12 @@ func Asm(asm string)
 // effects, as it would otherwise be optimized away. The inline assembly string
 // recognizes template values in the form {name}, like so:
 //
-//     arm.AsmFull(
-//         "str {value}, {result}",
-//         map[string]interface{}{
-//             "value":  1
-//             "result": &dest,
-//         })
+//	arm.AsmFull(
+//	    "str {value}, {result}",
+//	    map[string]interface{}{
+//	        "value":  1
+//	        "result": &dest,
+//	    })
 //
 // You can use {} in the asm string (which expands to a register) to set the
 // return value.
@@ -174,20 +175,15 @@ func SetPriority(irq uint32, priority uint32) {
 
 // DisableInterrupts disables all interrupts, and returns the old interrupt
 // state.
-func DisableInterrupts() uintptr {
-	return AsmFull(`
-		mrs {}, PRIMASK
-		cpsid i
-	`, nil)
-}
+//
+//export DisableInterrupts
+func DisableInterrupts() uintptr
 
 // EnableInterrupts enables all interrupts again. The value passed in must be
 // the mask returned by DisableInterrupts.
-func EnableInterrupts(mask uintptr) {
-	AsmFull("msr PRIMASK, {mask}", map[string]interface{}{
-		"mask": mask,
-	})
-}
+//
+//export EnableInterrupts
+func EnableInterrupts(mask uintptr)
 
 // Set up the system timer to generate periodic tick events.
 // This will cause SysTick_Handler to fire once per tick.

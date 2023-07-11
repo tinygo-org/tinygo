@@ -1,3 +1,321 @@
+0.28.0
+---
+
+* **general**
+  - fix parallelism in the compiler on Windows by building LLVM with thread support
+  - support qemu-user debugging
+  - make target JSON msd-volume-name an array
+  - print source location when a panic happens in -monitor
+  - `test`: don't print `ok` for a successful compile-only
+* **compiler**
+  - `builder`: remove non-ThinLTO build mode
+  - `builder`: fail earlier if Go is not available
+  - `builder`: improve `-size=full` in a number of ways
+  - `builder`: implement Nordic DFU file writer in Go
+  - `cgo`: allow `LDFLAGS: --export=...`
+  - `compiler`: support recursive slice types
+  - `compiler`: zero struct padding during map operations
+  - `compiler`: add llvm.ident metadata
+  - `compiler`: remove `unsafe.Pointer(uintptr(v) + idx)` optimization (use `unsafe.Add` instead)
+  - `compiler`: add debug info to `//go:embed` data structures for better `-size` output
+  - `compiler`: add debug info to string constants
+  - `compiler`: fix a minor race condition
+  - `compiler`: emit correct alignment in debug info for global variables
+  - `compiler`: correctly generate reflect data for local named types
+  - `compiler`: add alloc attributes to `runtime.alloc`, reducing flash usage slightly
+  - `compiler`: for interface maps, use the original named type if available
+  - `compiler`: implement most math/bits functions as LLVM intrinsics
+  - `compiler`: ensure all defers have been seen before creating rundefers
+* **standard library**
+  - `internal/task`: disallow blocking inside an interrupt
+  - `machine`: add `CPUReset`
+  - `machine/usb/hid`: add MediaKey support
+  - `machine/usb/hid/joystick`: move joystick under HID
+  - `machine/usb/hid/joystick`: allow joystick settings override
+  - `machine/usb/hid/joystick`: handle case where we cannot find the correct HID descriptor
+  - `machine/usb/hid/mouse`: add support for mouse back and forward
+  - `machine/usb`: add ability to override default VID, PID, manufacturer name, and product name
+  - `net`: added missing `TCPAddr` and `UDPAddr` implementations
+  - `os`: add IsTimeout function
+  - `os`: fix resource leak in `(*File).Close`
+  - `os`: add `(*File).Sync`
+  - `os`: implement `(*File).ReadDir` for wasi
+  - `os`: implement `(*File).WriteAt`
+  - `reflect`: make sure null bytes are supported in tags
+  - `reflect`: refactor this package to enable many new features
+  - `reflect`: add map type methods: `Elem` and `Key`
+  - `reflect`: add map methods: `MapIndex`, `MapRange`/`MapIter`, `SetMapIndex`, `MakeMap`, `MapKeys`
+  - `reflect`: add slice methods: `Append`, `MakeSlice`, `Slice`, `Slice3`, `Copy`, `Bytes`, `SetLen`
+  - `reflect`: add misc methods: `Zero`, `Addr`, `UnsafeAddr`, `OverflowFloat`, `OverflowInt`, `OverflowUint`, `SetBytes`, `Convert`, `CanInt`, `CanFloat`, `CanComplex`, `Comparable`
+  - `reflect`: add type methods: `String`, `PkgPath`, `FieldByName`, `FieldByIndex`, `NumMethod`
+  - `reflect`: add stubs for `Type.Method`, `CanConvert`, `ArrayOf`, `StructOf`, `MapOf`
+  - `reflect`: add stubs for channel select routines/types
+  - `reflect`: allow nil rawType to call Kind()
+  - `reflect`: ensure all ValueError panics have Kind fields
+  - `reflect`: add support for named types
+  - `reflect`: improve `Value.String()`
+  - `reflect`: set `Index` and `PkgPath` field in `Type.Field`
+  - `reflect`: `Type.AssignableTo`: you can assign anything to `interface{}`
+  - `reflect`: add type check to `Value.Field`
+  - `reflect`: let `TypeOf(nil)` return nil
+  - `reflect`: move `StructField.Anonymous` field to match upstream location
+  - `reflect`: add `UnsafePointer` for Func types
+  - `reflect`: `MapIter.Next` needs to allocate new keys/values every time
+  - `reflect`: fix `IsNil` for interfaces
+  - `reflect`: fix `Type.Name` to return an empty string for non-named types
+  - `reflect`: add `VisibleFields`
+  - `reflect`: properly handle embedded structs
+  - `reflect`: make sure `PointerTo` works for named types
+  - `reflect`: `Set`: convert non-interface to interface
+  - `reflect`: `Set`: fix direction of assignment check
+  - `reflect`: support channel directions
+  - `reflect`: print struct tags in Type.String()
+  - `reflect`: properly handle read-only values
+  - `runtime`: allow custom-gc SetFinalizer and clarify KeepAlive
+  - `runtime`: implement KeepAlive using inline assembly
+  - `runtime`: check for heap allocations inside interrupts
+  - `runtime`: properly turn pointer into empty interface when hashing
+  - `runtime`: improve map size hint usage
+  - `runtime`: zero map key/value on deletion to so GC doesn't see them
+  - `runtime`: print the address where a panic happened
+  - `runtime/debug`: stub `SetGCPercent`, `BuildInfo.Settings`
+  - `runtime/metrics`: add this package as a stub
+  - `syscall`: `Stat_t` timespec fields are Atimespec on darwin
+  - `syscall`: add `Timespec.Unix()` for wasi
+  - `syscall`: add fsync using libc
+  - `testing`: support -test.count
+  - `testing`: make test output unbuffered when verbose
+  - `testing`: add -test.skip
+  - `testing`: move runtime.GC() call to runN to match upstream
+  - `testing`: add -test.shuffle to order randomize test and benchmark order
+* **targets**
+  - `arm64`: fix register save/restore to include vector registers
+  - `attiny1616`: add support for this chip
+  - `cortexm`: refactor EnableInterrupts and DisableInterrupts to avoid `arm.AsmFull`
+  - `cortexm`: enable functions in RAM for go & cgo
+  - `cortexm`: convert SystemStack from `AsmFull` to C inline assembly
+  - `cortexm`: fix crash due to wrong stack size offset
+  - `nrf`: samd21, stm32: add flash API
+  - `nrf`: fix memory issue in ADC read
+  - `nrf`: new peripheral type for nrf528xx chips
+  - `nrf`: implement target mode
+  - `nrf`: improve ADC and add oversampling, longer sample time, and reference voltage
+  - `rp2040`: change calling order for device enumeration fix to do first
+  - `rp2040`: rtc delayed interrupt
+  - `rp2040`: provide better errors for invalid pins on I2C and SPI
+  - `rp2040`: change uart to allow for a single pin
+  - `rp2040`: implement Flash interface
+  - `rp2040`: remove SPI `DataBits` property
+  - `rp2040`: unify all linker scripts using LDFLAGS
+  - `rp2040`: remove SPI deadline for improved performance
+  - `rp2040`: use 4MHz as default frequency for SPI
+  - `rp2040`: implement target mode
+  - `rp2040`: use DMA for send-only SPI transfers
+  - `samd21`: rearrange switch case for get pin cfg
+  - `samd21`: fix issue with WS2812 driver by making pin accesses faster
+  - `samd51`: enable CMCC cache for greatly improved performance
+  - `samd51`: remove extra BK0RDY clear
+  - `samd51`: implement Flash interface
+  - `samd51`: use correct SPI frequency
+  - `samd51`: remove extra BK0RDY clear
+  - `samd51`: fix ADC multisampling
+  - `wasi`: allow users to set the `runtime_memhash_tsip` or `runtime_memhash_fnv` build tags
+  - `wasi`: set `WASMTIME_BACKTRACE_DETAILS` when running in wasmtime.
+  - `wasm`: implement the `//go:wasmimport` directive
+* **boards**
+  - `gameboy-advance`: switch to use register definitions in device/gba
+  - `gameboy-advance`: rename display and make pointer receivers
+  - `gopher-badge`: Added Gopher Badge support
+  - `lorae5`: add needed definition for UART2
+  - `lorae5`: correct mapping for I2C bus, add pin mapping to enable power
+  - `pinetime`: update the target file (rename from pinetime-devkit0)
+  - `qtpy`: fix bad pin assignment
+  - `wioterminal`: fix pin definition of BCM13
+  - `xiao`: Pins D4 & D5 are I2C1. Use pins D2 & D3 for I2C0.
+  - `xiao`: add DefaultUART
+
+
+0.27.0
+---
+
+* **general**
+  - all: update musl
+  - all: remove "acm:"` prefix for USB vid/pid pair
+  - all: add support for LLVM 15
+  - all: use DWARF version 4
+  - all: add initial (incomplete) support for Go 1.20
+  - all: add `-gc=custom` option
+  - `main`: print ldflags including ThinLTO flags with -x
+  - `main`: fix error message when a serial port can't be accessed
+  - `main`: add `-timeout` flag to allow setting how long TinyGo will try looking for a MSD volume for flashing
+  - `test`: print PASS on pass when running standalone test binaries
+  - `test`: fix printing of benchmark output
+  - `test`: print package name when compilation failed (not just when the test failed)
+* **compiler**
+  - refactor to support LLVM 15
+  - `builder`: print compiler commands while building a library
+  - `compiler`: fix stack overflow when creating recursive pointer types (fix for LLVM 15+ only)
+  - `compiler`: allow map keys and values of ≥256 bytes
+  - `cgo`: add support for `C.float` and `C.double`
+  - `cgo`: support anonymous enums included in multiple Go files
+  - `cgo`: add support for bitwise operators
+  - `interp`: add support for constant icmp instructions
+  - `transform`: fix memory corruption issues
+* **standard library**
+  - `machine/usb`: remove allocs in USB ISR
+  - `machine/usb`: add `Port()` and deprecate `New()` to have the API better match the singleton that is actually being returned
+  - `machine/usb`: change HID usage-maximum to 0xFF
+  - `machine/usb`: add USB HID joystick support
+  - `machine/usb`: change to not send before endpoint initialization
+  - `net`: implement `Pipe`
+  - `os`: add stub for `os.Chtimes`
+  - `reflect`: stub out `Type.FieldByIndex`
+  - `reflect`: add `Value.IsZero` method
+  - `reflect`: fix bug in `.Field` method when the field fits in a pointer but the parent doesn't
+  - `runtime`: switch some `panic()` calls in the gc to `runtimePanic()` for consistency
+  - `runtime`: add xorshift-based fastrand64
+  - `runtime`: fix alignment for arm64, arm, xtensa, riscv
+  - `runtime`: implement precise GC
+  - `runtime/debug`: stub `PrintStack`
+  - `sync`: implement simple pooling in `sync.Pool`
+  - `syscall`: stubbed `Setuid`, Exec and friends
+  - `syscall`: add more stubs as needed for Go 1.20 support
+  - `testing`: implement `t.Setenv`
+  - `unsafe`: add support for Go 1.20 slice/string functions
+* **targets**
+  - `all`: do not set stack size per board
+  - `all`: update picolibc to v1.7.9
+  - `atsame5x`: fix CAN extendedID handling
+  - `atsame5x`: reduce heap allocation
+  - `avr`: drop GNU toolchain dependency
+  - `avr`: fix .data initialization for binaries over 64kB
+  - `avr`: support ThinLTO
+  - `baremetal`: implements calloc
+  - `darwin`: fix `syscall.Open` on darwin/arm64
+  - `darwin`: fix error with `tinygo lldb`
+  - `esp`: use LLVM Xtensa linker instead of Espressif toolchain
+  - `esp`: use ThinLTO for Xtensa
+  - `esp32c3`: add SPI support
+  - `linux`: include musl `getpagesize` function in release
+  - `nrf51`: add ADC implementation
+  - `nrf52840`: add PDM support
+  - `riscv`: add "target-abi" metadata flag
+  - `rp2040`: remove mem allocation in GPIO ISR
+  - `rp2040`: avoid allocating clock on heap
+  - `rp2040`: add basic GPIO support for PIO
+  - `rp2040`: fix USB interrupt issue
+  - `rp2040`: fix RP2040-E5 USB errata
+  - `stm32`: always set ADC pins to pullups floating
+  - `stm32f1`, `stm32f4`: fix ADC by clearing the correct bit for rank after each read
+  - `stm32wl`: Fix incomplete RNG initialisation
+  - `stm32wlx`: change order for init so clock speeds are set before peripheral start
+  - `wasi`: makes wasmtime "run" explicit
+  - `wasm`: fix GC scanning of allocas
+  - `wasm`: allow custom malloc implementation
+  - `wasm`: remove `-wasm-abi=` flag (use `-target` instead)
+  - `wasm`: fix scanning of the stack
+  - `wasm`: fix panic when allocating 0 bytes using malloc
+  - `wasm`: always run wasm-opt even with `-scheduler=none`
+  - `wasm`: avoid miscompile with ThinLTO
+  - `wasm`: allow the emulator to expand `{tmpDir}`
+  - `wasm`: support ThinLTO
+  - `windows`: update mingw-w64 version to avoid linker warning
+  - `windows`: add ARM64 support
+* **boards**
+  - Add Waveshare RP2040 Zero
+  - Add Arduino Leonardo support
+  - Add Adafruit KB2040
+  - Add Adafruit Feather M0 Express
+  - Add Makerfabs ESP32C3SPI35 TFT Touchscreen board
+  - Add Espressif ESP32-C3-DevKit-RUST-1 board
+  - `lgt92`: fix OpenOCD configuration
+  - `xiao-rp2040`: fix D9 and D10 constants
+  - `xiao-rp2040`: add pin definitions
+
+0.26.0
+---
+
+* **general**
+  - remove support for LLVM 13
+  - remove calls to deprecated ioutil package
+  - move from `os.IsFoo` to `errors.Is(err, ErrFoo)`
+  - fix for builds using an Android host
+  - make interp timeout configurable from command line
+  - ignore ports with VID/PID if there is no candidates
+  - drop support for Go 1.16 and Go 1.17
+  - update serial package to v1.3.5 for latest bugfixes
+  - remove GOARM from `tinygo info`
+  - add flag for setting the goroutine stack size
+  - add serial port monitoring functionality
+* **compiler**
+  - `cgo`: implement support for static functions
+  - `cgo`: fix panic when FuncType.Results is nil
+  - `compiler`: add aliases for `edwards25519/field.feMul` and `field.feSquare`
+  - `compiler`: fix incorrect DWARF type in some generic parameters
+  - `compiler`: use LLVM math builtins everywhere
+  - `compiler`: replace some math operation bodies with LLVM intrinsics
+  - `compiler`: replace math aliases with intrinsics
+  - `compiler`: fix `unsafe.Sizeof` for chan and map values
+  - `compileopts`: use tags parser from buildutil
+  - `compileopts`: use backticks for regexp to avoid extra escapes
+  - `compileopts`: fail fast on duplicate values in target field slices
+  - `compileopts`: fix windows/arm target triple
+  - `compileopts`: improve error handling when loading target/*.json
+  - `compileopts`: add support for stlink-dap programmer
+  - `compileopts`: do not complain about `-no-debug` on MacOS
+  - `goenv`: support `GOOS=android`
+  - `interp`: fix reading from external global
+  - `loader`: fix link error for `crypto/internal/boring/sig.StandardCrypto`
+* **standard library**
+  - rename assembly files to .S extension
+  - `machine`: add PWM peripheral comments to pins
+  - `machine`: improve UARTParity slightly
+  - `machine`: do not export DFU_MAGIC_* constants on nrf52840
+  - `machine`: rename `PinInputPullUp`/`PinInputPullDown`
+  - `machine`: add `KHz`, `MHz`, `GHz` constants, deprecate `TWI_FREQ_*` constants
+  - `machine`: remove level triggered pin interrupts
+  - `machine`: do not expose `RESET_MAGIC_VALUE`
+  - `machine`: use `NoPin` constant where appropriate (instead of `0` for example)
+  - `net`: sync net.go with Go 1.18 stdlib
+  - `os`: add `SyscallError.Timeout`
+  - `os`: add `ErrProcessDone` error
+  - `reflect`: implement `CanInterface` and fix string `Index`
+  - `runtime`: make `MemStats` available to leaking collector
+  - `runtime`: add `MemStats.TotalAlloc`
+  - `runtime`: add `MemStats.Mallocs` and `Frees`
+  - `runtime`: add support for `time.NewTimer` and `time.NewTicker`
+  - `runtime`: implement `resetTimer`
+  - `runtime`: ensure some headroom for the GC to run
+  - `runtime`: make gc and scheduler asserts settable with build tags
+  - `runtime/pprof`: add `WriteHeapProfile`
+  - `runtime/pprof`: `runtime/trace`: stub some additional functions
+  - `sync`: implement `Map.LoadAndDelete`
+  - `syscall`: group WASI consts by purpose
+  - `syscall`: add WASI `{D,R}SYNC`, `NONBLOCK` FD flags
+  - `syscall`: add ENOTCONN on darwin
+  - `testing`: add support for -benchmem
+* **targets**
+  - remove USB vid/pid pair of bootloader
+  - `esp32c3`: remove unused `UARTStopBits` constants
+  - `nrf`: implement `GetRNG` function
+  - `nrf`: `rp2040`: add `machine.ReadTemperature`
+  - `nrf52`: cleanup s140v6 and s140v7 uf2 targets
+  - `rp2040`: implement semi-random RNG based on ROSC based on pico-sdk
+  - `wasm`: add summary of wasm examples and fix callback bug
+  - `wasm`: do not allow undefined symbols (`--allow-undefined`)
+  - `wasm`: make sure buffers returned by `malloc` are kept until `free` is called
+  - `windows`: save and restore xmm registers when switching goroutines
+* **boards**
+  - add Pimoroni's Tufty2040
+  - add XIAO ESP32C3
+  - add Adafruit QT2040
+  - add Adafruit QT Py RP2040
+  - `esp32c3-12f`: `matrixportal-m4`: `p1am-100`: remove duplicate build tags
+  - `hifive1-qemu`: remove this emulated board
+  - `wioterminal`: add UART3 for RTL8720DN
+  - `xiao-ble`: fix usbpid
+
+
 0.25.0
 ---
 
@@ -235,7 +553,7 @@
   - `interp`: always run atomic and volatile loads/stores at runtime
   - `interp`: bump timeout to 180 seconds
   - `interp`: handle type assertions on nil interfaces
-  - `loader`: elminate goroot cache inconsistency
+  - `loader`: eliminate goroot cache inconsistency
   - `loader`: respect $GOROOT when running `go list`
   - `transform`: allocate the correct amount of bytes in an alloca
   - `transform`: remove switched func lowering
@@ -934,7 +1252,7 @@
   - `sync`: add WaitGroup
 * **targets**
   - `arm`: allow nesting in DisableInterrupts and EnableInterrupts
-  - `arm`: make FPU configuraton consistent
+  - `arm`: make FPU configuration consistent
   - `arm`: do not mask fault handlers in critical sections
   - `atmega2560`: fix pin mapping for pins D2, D5 and the L port
   - `atsamd`: return an error when an incorrect PWM pin is used
@@ -963,7 +1281,7 @@
   - `nrf`: add microbit-s110v8 target
   - `nrf`: fix bug in SPI.Tx
   - `nrf`: support debugging the PCA10056
-  - `pygamer`: add Adafruit PyGamer suport
+  - `pygamer`: add Adafruit PyGamer support
   - `riscv`: fix interrupt configuration bug
   - `riscv`: disable linker relaxations during gp init
   - `stm32f4disco`: add new target with ST-Link v2.1 debugger

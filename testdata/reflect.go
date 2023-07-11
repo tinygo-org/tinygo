@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"unsafe"
 )
 
@@ -17,8 +18,8 @@ type (
 		Y int16
 	}
 	mystruct struct {
-		n    int `foo:"bar"`
-		some point
+		n    int   `foo:"bar"`
+		some point "some\x00tag"
 		zero struct{}
 		buf  []byte
 		Buf  []byte
@@ -129,6 +130,7 @@ func main() {
 		&linkedList{
 			foo: 42,
 		},
+		struct{ A, B uintptr }{2, 3},
 		// interfaces
 		[]interface{}{3, "str", -4 + 2.5i},
 	} {
@@ -175,6 +177,8 @@ func main() {
 	assertSize(reflect.TypeOf("").Size() == unsafe.Sizeof(""), "string")
 	assertSize(reflect.TypeOf(new(int)).Size() == unsafe.Sizeof(new(int)), "*int")
 	assertSize(reflect.TypeOf(zeroFunc).Size() == unsafe.Sizeof(zeroFunc), "func()")
+	assertSize(reflect.TypeOf(zeroChan).Size() == unsafe.Sizeof(zeroChan), "chan int")
+	assertSize(reflect.TypeOf(zeroMap).Size() == unsafe.Sizeof(zeroMap), "map[string]int")
 
 	// make sure embedding a zero-sized "not comparable" struct does not add size to a struct
 	assertSize(reflect.TypeOf(doNotCompare{}).Size() == unsafe.Sizeof(doNotCompare{}), "[0]func()")
@@ -413,6 +417,9 @@ func showValue(rv reflect.Value, indent string) {
 	if rv.CanAddr() {
 		print(" addrable=true")
 	}
+	if !rv.CanInterface() {
+		print(" caninterface=false")
+	}
 	if !rt.Comparable() {
 		print(" comparable=false")
 	}
@@ -474,7 +481,8 @@ func showValue(rv reflect.Value, indent string) {
 		for i := 0; i < rv.NumField(); i++ {
 			field := rt.Field(i)
 			println(indent+"  field:", i, field.Name)
-			println(indent+"  tag:", field.Tag)
+			println(indent+"  pkg:", field.PkgPath)
+			println(indent+"  tag:", strconv.Quote(string(field.Tag)))
 			println(indent+"  embedded:", field.Anonymous)
 			println(indent+"  exported:", field.IsExported())
 			showValue(rv.Field(i), indent+"  ")

@@ -1,5 +1,4 @@
 //go:build avr && attiny85
-// +build avr,attiny85
 
 package avr
 

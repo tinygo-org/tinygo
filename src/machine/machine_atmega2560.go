@@ -1,5 +1,4 @@
 //go:build avr && atmega2560
-// +build avr,atmega2560
 
 package machine
 

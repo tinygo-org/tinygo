@@ -2,9 +2,9 @@
     "inherits": ["atsamd21g18a"],
     "build-tags": ["xiao"],
     "serial": "usb",
-    "serial-port": ["acm:2886:802f", "acm:2886:002f"],
+    "serial-port": ["2886:802f"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "Arduino",
+    "msd-volume-name": ["Arduino","Seeed XIAO"],
     "msd-firmware-name": "firmware.uf2"
 }

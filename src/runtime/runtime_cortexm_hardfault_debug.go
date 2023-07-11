@@ -1,5 +1,4 @@
 //go:build cortexm && !atsamd21 && !nrf51
-// +build cortexm,!atsamd21,!nrf51
 
 package runtime
 
@@ -18,6 +17,7 @@ const (
 )
 
 // See runtime_cortexm_hardfault.go
+//
 //go:export handleHardFault
 func handleHardFault(sp *interruptStack) {
 	fault := GetFaultStatus()

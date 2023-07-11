@@ -4,6 +4,8 @@ import "errors"
 
 var (
 	ErrTimeoutRNG         = errors.New("machine: RNG Timeout")
+	ErrClockRNG           = errors.New("machine: RNG Clock Error")
+	ErrSeedRNG            = errors.New("machine: RNG Seed Error")
 	ErrInvalidInputPin    = errors.New("machine: invalid input pin")
 	ErrInvalidOutputPin   = errors.New("machine: invalid output pin")
 	ErrInvalidClockPin    = errors.New("machine: invalid clock pin")
@@ -17,6 +19,13 @@ var (
 // The constant is some hardcoded default value if the program does not target a
 // particular chip but instead runs in WebAssembly for example.
 const Device = deviceName
+
+// Generic constants.
+const (
+	KHz = 1000
+	MHz = 1000_000
+	GHz = 1000_000_000
+)
 
 // PinMode sets the direction and pull mode of the pin. For example, PinOutput
 // sets the pin as an output and PinInputPullup sets the pin as an input with a

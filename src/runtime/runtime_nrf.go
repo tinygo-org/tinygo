@@ -1,5 +1,4 @@
 //go:build nrf && !nrf52840
-// +build nrf,!nrf52840
 
 package runtime
 

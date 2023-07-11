@@ -1,5 +1,4 @@
 //go:build m5stamp_c3
-// +build m5stamp_c3
 
 package machine
 

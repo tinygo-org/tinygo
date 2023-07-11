@@ -21,12 +21,14 @@ $ tinygo build -o ./wasm.wasm -target wasm ./main/main.go
 This creates a `wasm.wasm` file, which we can load in JavaScript and execute in
 a browser.
 
-This examples folder contains two examples that can be built using `make`:
+Next, choose which example you want to use:
+* [callback](callback): Defines and configures callbacks in Wasm.
+* [export](export): Defines callbacks in Wasm, but configures them in JavaScript.
+* [invoke](invoke): Invokes a function defined in JavaScript from Wasm.
+* [main](main): Prints a message to the JavaScript console from Wasm.
+* [slices](slices): Splits an Array defined in JavaScript from Wasm.
 
-```bash
-$ make export
-```
-
+Let's say you chose [main](main), you'd build it like so:
 ```bash
 $ make main
 ```
@@ -42,12 +44,8 @@ Serving ./html on http://localhost:8080
 
 Use your web browser to visit http://localhost:8080.
 
-* The wasm "export" example displays a simple math equation using HTML, with
-the result calculated dynamically using WebAssembly.  Changing any of the
-values on the left hand side triggers the exported wasm `update` function to
-recalculate the result.
-* The wasm "main" example uses `println` to write to your browser JavaScript
-console. You may need to open the browser development tools console to see it.
+* Tip: Open the browser development tools (e.g. Right-click, Inspect in
+  FireFox) to see console output.
 
 ## How it works
 

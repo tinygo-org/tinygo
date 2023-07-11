@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"machine"
-	"machine/usb/midi"
+	"machine/usb/adc/midi"
+
 	"time"
 )
 
@@ -15,12 +15,11 @@ func main() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	button := machine.BUTTON
-	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	button.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 
-	m := midi.New()
+	m := midi.Port()
 	m.SetHandler(func(b []byte) {
 		led.Set(!led.Get())
-		fmt.Printf("% X\r\n", b)
 		m.Write(b)
 	})
 

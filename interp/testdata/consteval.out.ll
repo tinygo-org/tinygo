@@ -3,8 +3,10 @@ target triple = "x86_64--linux"
 
 @intToPtrResult = local_unnamed_addr global i8 2
 @ptrToIntResult = local_unnamed_addr global i8 2
+@icmpResult = local_unnamed_addr global i8 2
+@pointerTagResult = local_unnamed_addr global i64 2
 @someArray = internal global { i16, i8, i8 } zeroinitializer
-@someArrayPointer = local_unnamed_addr global i8* getelementptr inbounds ({ i16, i8, i8 }, { i16, i8, i8 }* @someArray, i64 0, i32 1)
+@someArrayPointer = local_unnamed_addr global ptr getelementptr inbounds ({ i16, i8, i8 }, ptr @someArray, i64 0, i32 1)
 
 define void @runtime.initAll() local_unnamed_addr {
   ret void

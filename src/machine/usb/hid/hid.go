@@ -14,10 +14,11 @@ var (
 )
 
 const (
-	hidEndpoint = 4
+	hidEndpoint = usb.HID_ENDPOINT_IN
 
-	usb_SET_REPORT_TYPE = 33
-	usb_SET_IDLE        = 10
+	REPORT_TYPE_INPUT   = 1
+	REPORT_TYPE_OUTPUT  = 2
+	REPORT_TYPE_FEATURE = 3
 )
 
 type hidDevicer interface {
@@ -49,9 +50,11 @@ func handler() {
 	}
 }
 
+var DefaultSetupHandler = setupHandler
+
 func setupHandler(setup usb.Setup) bool {
 	ok := false
-	if setup.BmRequestType == usb_SET_REPORT_TYPE && setup.BRequest == usb_SET_IDLE {
+	if setup.BmRequestType == usb.SET_REPORT_TYPE && setup.BRequest == usb.SET_IDLE {
 		machine.SendZlp()
 		ok = true
 	}

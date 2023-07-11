@@ -1,5 +1,4 @@
 //go:build stm32
-// +build stm32
 
 package machine
 
@@ -115,7 +114,7 @@ func (t *TIM) SetMatchInterrupt(channel uint8, callback ChannelCallback) error {
 // SetPeriod updates the period of this PWM peripheral.
 // To set a particular frequency, use the following formula:
 //
-//     period = 1e9 / frequency
+//	period = 1e9 / frequency
 //
 // If you use a period of 0, a period that works well for LEDs will be picked.
 //
@@ -195,7 +194,7 @@ func (t *TIM) Channel(pin Pin) (uint8, error) {
 // Set updates the channel value. This is used to control the channel duty
 // cycle. For example, to set it to a 25% duty cycle, use:
 //
-//     t.Set(ch, t.Top() / 4)
+//	t.Set(ch, t.Top() / 4)
 //
 // ch.Set(0) will set the output to low and ch.Set(ch.Top()) will set the output
 // to high, assuming the output isn't inverted.

@@ -1,17 +1,13 @@
 //go:build nrf
-// +build nrf
 
 package machine
 
 import (
+	"bytes"
 	"device/nrf"
-	"errors"
+	"encoding/binary"
 	"runtime/interrupt"
 	"unsafe"
-)
-
-var (
-	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
 )
 
 const deviceName = nrf.Device
@@ -205,32 +201,22 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	}
 }
 
-// I2C on the NRF.
-type I2C struct {
-	Bus nrf.TWI_Type
-}
-
-// There are 2 I2C interfaces on the NRF.
-var (
-	I2C0 = (*I2C)(unsafe.Pointer(nrf.TWI0))
-	I2C1 = (*I2C)(unsafe.Pointer(nrf.TWI1))
-)
-
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
 	SCL       Pin
 	SDA       Pin
+	Mode      I2CMode
 }
 
 // Configure is intended to setup the I2C interface.
 func (i2c *I2C) Configure(config I2CConfig) error {
 
-	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Disabled)
+	i2c.disable()
 
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100 * KHz
 	}
 	// Default I2C pins if not set.
 	if config.SDA == 0 && config.SCL == 0 {
@@ -253,69 +239,23 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 		(nrf.GPIO_PIN_CNF_DRIVE_S0D1 << nrf.GPIO_PIN_CNF_DRIVE_Pos) |
 		(nrf.GPIO_PIN_CNF_SENSE_Disabled << nrf.GPIO_PIN_CNF_SENSE_Pos))
 
-	if config.Frequency == TWI_FREQ_400KHZ {
-		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
-	} else {
-		i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
-	}
-
 	i2c.setPins(config.SCL, config.SDA)
 
-	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
+	i2c.mode = config.Mode
+
+	if i2c.mode == I2CModeController {
+		if config.Frequency >= 400*KHz {
+			i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K400)
+		} else {
+			i2c.Bus.FREQUENCY.Set(nrf.TWI_FREQUENCY_FREQUENCY_K100)
+		}
+
+		i2c.enableAsController()
+	} else {
+		i2c.enableAsTarget()
+	}
 
 	return nil
-}
-
-// Tx does a single I2C transaction at the specified address.
-// It clocks out the given address, writes the bytes in w, reads back len(r)
-// bytes and stores them in r, and generates a stop condition on the bus.
-func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
-
-	// Tricky stop condition.
-	// After reads, the stop condition is generated implicitly with a shortcut.
-	// After writes not followed by reads and in the case of errors, stop must be generated explicitly.
-
-	i2c.Bus.ADDRESS.Set(uint32(addr))
-
-	if len(w) != 0 {
-		i2c.Bus.TASKS_STARTTX.Set(1) // start transmission for writing
-		for _, b := range w {
-			if err = i2c.writeByte(b); err != nil {
-				i2c.signalStop()
-				return
-			}
-		}
-	}
-
-	if len(r) != 0 {
-		// To trigger suspend task when a byte is received
-		i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND)
-		i2c.Bus.TASKS_STARTRX.Set(1) // re-start transmission for reading
-		for i := range r {           // read each char
-			if i+1 == len(r) {
-				// To trigger stop task when last byte is received, set before resume task.
-				i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_STOP)
-			}
-			if i > 0 {
-				i2c.Bus.TASKS_RESUME.Set(1) // re-start transmission for reading
-			}
-			if r[i], err = i2c.readByte(); err != nil {
-				i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
-				i2c.signalStop()
-				return
-			}
-		}
-		i2c.Bus.SHORTS.Set(nrf.TWI_SHORTS_BB_SUSPEND_Disabled)
-	}
-
-	// Stop explicitly when no reads were executed, stoping unconditionally would be a mistake.
-	// It may execute after I2C peripheral has already been stopped by the shortcut in the read block,
-	// so stop task will trigger first thing in a subsequent transaction, hanging it.
-	if len(r) == 0 {
-		i2c.signalStop()
-	}
-
-	return
 }
 
 // signalStop sends a stop signal to the I2C peripheral and waits for confirmation.
@@ -326,27 +266,146 @@ func (i2c *I2C) signalStop() {
 	i2c.Bus.EVENTS_STOPPED.Set(0)
 }
 
-// writeByte writes a single byte to the I2C bus and waits for confirmation.
-func (i2c *I2C) writeByte(data byte) error {
-	i2c.Bus.TXD.Set(uint32(data))
-	for i2c.Bus.EVENTS_TXDSENT.Get() == 0 {
-		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {
-			i2c.Bus.EVENTS_ERROR.Set(0)
-			return errI2CBusError
-		}
+var rngStarted = false
+
+// GetRNG returns 32 bits of non-deterministic random data based on internal thermal noise.
+// According to Nordic's documentation, the random output is suitable for cryptographic purposes.
+func GetRNG() (ret uint32, err error) {
+	// There's no apparent way to check the status of the RNG peripheral's task, so simply start it
+	// to avoid deadlocking while waiting for output.
+	if !rngStarted {
+		nrf.RNG.TASKS_START.Set(1)
+		nrf.RNG.SetCONFIG_DERCEN(nrf.RNG_CONFIG_DERCEN_Enabled)
+		rngStarted = true
 	}
-	i2c.Bus.EVENTS_TXDSENT.Set(0)
+
+	// The RNG returns one byte at a time, so stack up four bytes into a single uint32 for return.
+	for i := 0; i < 4; i++ {
+		// Wait for data to be ready.
+		for nrf.RNG.EVENTS_VALRDY.Get() == 0 {
+		}
+		// Append random byte to output.
+		ret = (ret << 8) ^ nrf.RNG.GetVALUE()
+		// Unset the EVENTS_VALRDY register to avoid reading the same random output twice.
+		nrf.RNG.EVENTS_VALRDY.Set(0)
+	}
+
+	return ret, nil
+}
+
+// ReadTemperature reads the silicon die temperature of the chip. The return
+// value is in milli-celsius.
+func ReadTemperature() int32 {
+	nrf.TEMP.TASKS_START.Set(1)
+	for nrf.TEMP.EVENTS_DATARDY.Get() == 0 {
+	}
+	temp := int32(nrf.TEMP.TEMP.Get()) * 250 // the returned value is in units of 0.25°C
+	nrf.TEMP.EVENTS_DATARDY.Set(0)
+	return temp
+}
+
+const memoryStart = 0x0
+
+// compile-time check for ensuring we fulfill BlockDevice interface
+var _ BlockDevice = flashBlockDevice{}
+
+var Flash flashBlockDevice
+
+type flashBlockDevice struct {
+}
+
+// ReadAt reads the given number of bytes from the block device.
+func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotReadPastEOF
+	}
+
+	data := unsafe.Slice((*byte)(unsafe.Pointer(FlashDataStart()+uintptr(off))), len(p))
+	copy(p, data)
+
+	return len(p), nil
+}
+
+// WriteAt writes the given number of bytes to the block device.
+// Only double-word (64 bits) length data can be programmed. See rm0461 page 78.
+// If the length of p is not long enough it will be padded with 0xFF bytes.
+// This method assumes that the destination is already erased.
+func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotWritePastEOF
+	}
+
+	address := FlashDataStart() + uintptr(off)
+	padded := f.pad(p)
+
+	waitWhileFlashBusy()
+
+	nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Wen)
+	defer nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Ren)
+
+	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
+		// write word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize())])
+		address += uintptr(f.WriteBlockSize())
+		waitWhileFlashBusy()
+	}
+
+	return len(padded), nil
+}
+
+// Size returns the number of bytes in this block device.
+func (f flashBlockDevice) Size() int64 {
+	return int64(FlashDataEnd() - FlashDataStart())
+}
+
+const writeBlockSize = 4
+
+// WriteBlockSize returns the block size in which data can be written to
+// memory. It can be used by a client to optimize writes, non-aligned writes
+// should always work correctly.
+func (f flashBlockDevice) WriteBlockSize() int64 {
+	return writeBlockSize
+}
+
+// EraseBlockSize returns the smallest erasable area on this particular chip
+// in bytes. This is used for the block size in EraseBlocks.
+// It must be a power of two, and may be as small as 1. A typical size is 4096.
+func (f flashBlockDevice) EraseBlockSize() int64 {
+	return eraseBlockSize()
+}
+
+// EraseBlocks erases the given number of blocks. An implementation may
+// transparently coalesce ranges of blocks into larger bundles if the chip
+// supports this. The start and len parameters are in block numbers, use
+// EraseBlockSize to map addresses to blocks.
+func (f flashBlockDevice) EraseBlocks(start, len int64) error {
+	address := FlashDataStart() + uintptr(start*f.EraseBlockSize())
+	waitWhileFlashBusy()
+
+	nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Een)
+	defer nrf.NVMC.SetCONFIG_WEN(nrf.NVMC_CONFIG_WEN_Ren)
+
+	for i := start; i < start+len; i++ {
+		nrf.NVMC.ERASEPAGE.Set(uint32(address))
+		waitWhileFlashBusy()
+		address += uintptr(f.EraseBlockSize())
+	}
+
 	return nil
 }
 
-// readByte reads a single byte from the I2C bus when it is ready.
-func (i2c *I2C) readByte() (byte, error) {
-	for i2c.Bus.EVENTS_RXDREADY.Get() == 0 {
-		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {
-			i2c.Bus.EVENTS_ERROR.Set(0)
-			return 0, errI2CBusError
-		}
+// pad data if needed so it is long enough for correct byte alignment on writes.
+func (f flashBlockDevice) pad(p []byte) []byte {
+	overflow := int64(len(p)) % f.WriteBlockSize()
+	if overflow == 0 {
+		return p
 	}
-	i2c.Bus.EVENTS_RXDREADY.Set(0)
-	return byte(i2c.Bus.RXD.Get()), nil
+
+	padding := bytes.Repeat([]byte{0xff}, int(f.WriteBlockSize()-overflow))
+	return append(p, padding...)
+}
+
+func waitWhileFlashBusy() {
+	for nrf.NVMC.GetREADY() != nrf.NVMC_READY_READY_Ready {
+	}
 }

@@ -13,6 +13,7 @@ func TestCreateStackSizeLoads(t *testing.T) {
 	testTransform(t, "testdata/stacksize", func(mod llvm.Module) {
 		// Run optimization pass.
 		transform.CreateStackSizeLoads(mod, &compileopts.Config{
+			Options: &compileopts.Options{},
 			Target: &compileopts.TargetSpec{
 				DefaultStackSize: 1024,
 			},

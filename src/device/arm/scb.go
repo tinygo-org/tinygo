@@ -2,7 +2,6 @@
 // Cortex-M System Control Block-related definitions.
 
 //go:build cortexm
-// +build cortexm
 
 package arm
 

@@ -1,5 +1,4 @@
 //go:build rp2040
-// +build rp2040
 
 package machine
 
@@ -122,14 +121,15 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			}
 		}
 
-		rp.USBCTRL_REGS.BUFF_STATUS.Set(0xFFFFFFFF)
+		rp.USBCTRL_REGS.BUFF_STATUS.Set(s2)
 	}
 
 	// Bus is reset
 	if (status & rp.USBCTRL_REGS_INTS_BUS_RESET) > 0 {
 		rp.USBCTRL_REGS.SIE_STATUS.Set(rp.USBCTRL_REGS_SIE_STATUS_BUS_RESET)
-		rp.USBCTRL_REGS.ADDR_ENDP.Set(0)
+		fixRP2040UsbDeviceEnumeration()
 
+		rp.USBCTRL_REGS.ADDR_ENDP.Set(0)
 		initEndpoint(0, usb.ENDPOINT_TYPE_CONTROL)
 	}
 }
@@ -151,7 +151,10 @@ func initEndpoint(ep, config uint32) {
 		usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlAvail)
 
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut:
-		// TODO: not really anything, seems like...
+		val |= usbEpControlEndpointTypeInterrupt
+		usbDPSRAM.EPxControl[ep].Out.Set(val)
+		usbDPSRAM.EPxBufferControl[ep].Out.Set(USBBufferLen & usbBuf0CtrlLenMask)
+		usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlAvail)
 
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointIn:
 		val |= usbEpControlEndpointTypeBulk
@@ -305,23 +308,26 @@ type USBBuffer struct {
 }
 
 var (
-	usbDPSRAM = (*USBDPSRAM)(unsafe.Pointer(uintptr(0x50100000)))
-	epXdata0  [16]bool
+	usbDPSRAM  = (*USBDPSRAM)(unsafe.Pointer(uintptr(0x50100000)))
+	epXdata0   [16]bool
+	setupBytes [8]byte
 )
 
 func (d *USBDPSRAM) setupBytes() []byte {
-	var buf [8]byte
 
-	buf[0] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In.Get())
-	buf[1] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In.Get() >> 8)
-	buf[2] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In.Get() >> 16)
-	buf[3] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].In.Get() >> 24)
-	buf[4] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get())
-	buf[5] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get() >> 8)
-	buf[6] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get() >> 16)
-	buf[7] = byte(d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get() >> 24)
+	data := d.EPxControl[usb.CONTROL_ENDPOINT].In.Get()
+	setupBytes[0] = byte(data)
+	setupBytes[1] = byte(data >> 8)
+	setupBytes[2] = byte(data >> 16)
+	setupBytes[3] = byte(data >> 24)
 
-	return buf[:]
+	data = d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get()
+	setupBytes[4] = byte(data)
+	setupBytes[5] = byte(data >> 8)
+	setupBytes[6] = byte(data >> 16)
+	setupBytes[7] = byte(data >> 24)
+
+	return setupBytes[:]
 }
 
 func (d *USBDPSRAM) clear() {

@@ -1,0 +1,13 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "serial-port": ["239a:8106"],
+    "build-tags": ["kb2040"],
+    "ldflags": [
+        "--defsym=__flash_size=8192K"
+    ],
+    "extra-files": [
+        "targets/qtpy-rp2040-boot-stage2.S"
+    ]
+}

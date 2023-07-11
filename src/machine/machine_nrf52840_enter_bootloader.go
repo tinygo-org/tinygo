@@ -1,5 +1,4 @@
 //go:build nrf52840
-// +build nrf52840
 
 package machine
 
@@ -9,16 +8,16 @@ import (
 )
 
 const (
-	DFU_MAGIC_SERIAL_ONLY_RESET = 0x4e
-	DFU_MAGIC_UF2_RESET         = 0x57
-	DFU_MAGIC_OTA_RESET         = 0xA8
+	dfuMagicSerialOnlyReset = 0x4e
+	dfuMagicUF2Reset        = 0x57
+	dfuMagicOTAReset        = 0xA8
 )
 
 // EnterSerialBootloader resets the chip into the serial bootloader. After
 // reset, it can be flashed using serial/nrfutil.
 func EnterSerialBootloader() {
 	arm.DisableInterrupts()
-	nrf.POWER.GPREGRET.Set(DFU_MAGIC_SERIAL_ONLY_RESET)
+	nrf.POWER.GPREGRET.Set(dfuMagicSerialOnlyReset)
 	arm.SystemReset()
 }
 
@@ -26,7 +25,7 @@ func EnterSerialBootloader() {
 // can be flashed via nrfutil or by copying a UF2 file to the mass storage device
 func EnterUF2Bootloader() {
 	arm.DisableInterrupts()
-	nrf.POWER.GPREGRET.Set(DFU_MAGIC_UF2_RESET)
+	nrf.POWER.GPREGRET.Set(dfuMagicUF2Reset)
 	arm.SystemReset()
 }
 
@@ -34,6 +33,6 @@ func EnterUF2Bootloader() {
 // flashed via an OTA update
 func EnterOTABootloader() {
 	arm.DisableInterrupts()
-	nrf.POWER.GPREGRET.Set(DFU_MAGIC_OTA_RESET)
+	nrf.POWER.GPREGRET.Set(dfuMagicOTAReset)
 	arm.SystemReset()
 }

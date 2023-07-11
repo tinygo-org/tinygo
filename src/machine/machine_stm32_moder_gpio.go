@@ -1,5 +1,4 @@
 //go:build stm32 && !stm32f103
-// +build stm32,!stm32f103
 
 package machine
 
@@ -8,7 +7,7 @@ import (
 )
 
 // GPIO for the stm32 families except the stm32f1xx which uses a simpler but
-//  less flexible mechanism. Extend the +build directive above to exclude other
+//  less flexible mechanism. Extend the go:build directive above to exclude other
 //  models in the stm32f1xx series as necessary
 
 const (
@@ -72,7 +71,8 @@ func (p Pin) Configure(config PinConfig) {
 }
 
 // Configure this pin with the given configuration including alternate
-//  function mapping if necessary.
+//
+//	function mapping if necessary.
 func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 	// Configure the GPIO pin.
 	p.enableClock()
@@ -147,6 +147,7 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 	// ADC
 	case PinInputAnalog:
 		port.MODER.ReplaceBits(gpioModeAnalog, gpioModeMask, pos)
+		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 	}
 }
 

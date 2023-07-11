@@ -1,5 +1,4 @@
 //go:build !windows
-// +build !windows
 
 // TODO: implement readdir for windows, then enable this file
 
@@ -10,6 +9,8 @@
 package testing_test
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +43,7 @@ func TestTempDirInCleanup(t *testing.T) {
 	if fi != nil {
 		t.Fatalf("Directory %q from user Cleanup still exists", dir)
 	}
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 }
@@ -85,7 +86,7 @@ func testTempDir(t *testing.T) {
 		select {
 		case dir := <-dirCh:
 			fi, err := os.Stat(dir)
-			if os.IsNotExist(err) {
+			if errors.Is(err, fs.ErrNotExist) {
 				// All good
 				return
 			}
@@ -135,5 +136,62 @@ func testTempDir(t *testing.T) {
 	err = os.Remove(dir)
 	if err != nil {
 		t.Errorf("unexpected files in TempDir")
+	}
+}
+
+func TestSetenv(t *testing.T) {
+	tests := []struct {
+		name               string
+		key                string
+		initialValueExists bool
+		initialValue       string
+		newValue           string
+	}{
+		{
+			name:               "initial value exists",
+			key:                "GO_TEST_KEY_1",
+			initialValueExists: true,
+			initialValue:       "111",
+			newValue:           "222",
+		},
+		{
+			name:               "initial value exists but empty",
+			key:                "GO_TEST_KEY_2",
+			initialValueExists: true,
+			initialValue:       "",
+			newValue:           "222",
+		},
+		{
+			name:               "initial value is not exists",
+			key:                "GO_TEST_KEY_3",
+			initialValueExists: false,
+			initialValue:       "",
+			newValue:           "222",
+		},
+	}
+
+	for _, test := range tests {
+		if test.initialValueExists {
+			if err := os.Setenv(test.key, test.initialValue); err != nil {
+				t.Fatalf("unable to set env: got %v", err)
+			}
+		} else {
+			os.Unsetenv(test.key)
+		}
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(test.key, test.newValue)
+			if os.Getenv(test.key) != test.newValue {
+				t.Fatalf("unexpected value after t.Setenv: got %s, want %s", os.Getenv(test.key), test.newValue)
+			}
+		})
+
+		got, exists := os.LookupEnv(test.key)
+		if got != test.initialValue {
+			t.Fatalf("unexpected value after t.Setenv cleanup: got %s, want %s", got, test.initialValue)
+		}
+		if exists != test.initialValueExists {
+			t.Fatalf("unexpected value after t.Setenv cleanup: got %t, want %t", exists, test.initialValueExists)
+		}
 	}
 }

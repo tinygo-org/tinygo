@@ -1,5 +1,4 @@
 //go:build darwin || (linux && !baremetal)
-// +build darwin linux,!baremetal
 
 // target wasi sets GOOS=linux and thus the +linux build tag,
 // even though it doesn't show up in "tinygo info target -wasi"
@@ -38,13 +37,22 @@ func rename(oldname, newname string) error {
 // can overwrite this data, which could cause the finalizer
 // to close the wrong file descriptor.
 type file struct {
-	handle  FileHandle
-	name    string
-	dirinfo *dirInfo // nil unless directory being read
+	handle     FileHandle
+	name       string
+	dirinfo    *dirInfo // nil unless directory being read
+	appendMode bool
+}
+
+func (f *file) close() (err error) {
+	if f.dirinfo != nil {
+		f.dirinfo.close()
+		f.dirinfo = nil
+	}
+	return f.handle.Close()
 }
 
 func NewFile(fd uintptr, name string) *File {
-	return &File{&file{unixFileHandle(fd), name, nil}}
+	return &File{&file{handle: unixFileHandle(fd), name: name}}
 }
 
 func Pipe() (r *File, w *File, err error) {
@@ -117,10 +125,27 @@ func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	return
 }
 
+// WriteAt writes len(b) bytes to the File starting at byte offset off.
+// It returns the number of bytes written and an error, if any.
+// WriteAt returns a non-nil error when n != len(b).
+//
+// If file was opened with the O_APPEND flag, WriteAt returns an error.
+//
+// TODO: move to file_anyos once WriteAt is implemented for windows.
+func (f unixFileHandle) WriteAt(b []byte, offset int64) (int, error) {
+	n, err := syscall.Pwrite(syscallFd(f), b, offset)
+	return n, handleSyscallError(err)
+}
+
 // Seek wraps syscall.Seek.
 func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
 	newoffset, err := syscall.Seek(syscallFd(f), offset, whence)
 	return newoffset, handleSyscallError(err)
+}
+
+func (f unixFileHandle) Sync() error {
+	err := syscall.Fsync(syscallFd(f))
+	return handleSyscallError(err)
 }
 
 type unixDirent struct {

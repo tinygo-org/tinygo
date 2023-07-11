@@ -18,37 +18,32 @@ jobs:
     # statically linked binary.
     runs-on: ubuntu-latest
     container:
-      image: alpine:3.16
+      image: golang:1.20-alpine
     steps:
       - name: Install apk dependencies
-        # tar: needed for actions/cache@v2
+        # tar: needed for actions/cache@v3
         # git+openssh: needed for checkout (I think?)
-        # gcompat: needed for go binary
         # ruby: needed to install fpm
-        run: apk add tar git openssh gcompat make g++ ruby
+        run: apk add tar git openssh make g++ ruby
       - name: Work around CVE-2022-24765
         # We're not on a multi-user machine, so this is safe.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
-      - name: Install Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.18.1'
       - name: Cache Go
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           key: go-cache-linux-alpine-v1-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-      - name: Cache LLVM source
-        uses: actions/cache@v2
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-14-linux-alpine-v1
+          key: llvm-source-15-linux-alpine-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -58,11 +53,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v2
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-14-linux-alpine-v1
+          key: llvm-build-15-linux-alpine-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -76,8 +82,14 @@ jobs:
           make llvm-build
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache Binaryen
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-binaryen
         with:
           key: binaryen-linux-alpine-v1
@@ -88,7 +100,7 @@ jobs:
           apk add cmake samurai python3
           make binaryen STATIC=1
       - name: Cache wasi-libc
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-linux-alpine-v1
@@ -98,6 +110,7 @@ jobs:
         run: make wasi-libc
       - name: Install fpm
         run: |
+          gem install --version 4.0.7 public_suffix
           gem install --version 2.7.6 dotenv
           gem install --no-document fpm
       - name: Build TinyGo release
@@ -106,7 +119,7 @@ jobs:
           cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_amd64.deb
       - name: Publish release artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: linux-amd64-double-zipped
           path: |
@@ -118,17 +131,20 @@ jobs:
     needs: build-linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: '1.18.1'
+          go-version: '1.20'
+          cache: true
       - name: Install wasmtime
         run: |
-          curl https://wasmtime.dev/install.sh -sSf | bash
+          mkdir -p $HOME/.wasmtime $HOME/.wasmtime/bin
+          curl https://github.com/bytecodealliance/wasmtime/releases/download/v5.0.0/wasmtime-v5.0.0-x86_64-linux.tar.xz -o wasmtime-v5.0.0-x86_64-linux.tar.xz -SfL
+          tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v5.0.0-x86_64-linux.tar.xz --strip-components=1 wasmtime-v5.0.0-x86_64-linux/*
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Download release artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: linux-amd64-double-zipped
       - name: Extract release tarball
@@ -136,17 +152,6 @@ jobs:
           mkdir -p ~/lib
           tar -C ~/lib -xf tinygo.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
-      - name: Install apt dependencies
-        run: |
-          sudo apt-get install --no-install-recommends \
-              gcc-avr \
-              avr-libc
-      - name: "Install Xtensa toolchain"
-        run: |
-          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
-          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
       - run: make tinygo-test-wasi-fast
       - run: make smoketest
   assert-test-linux:
@@ -155,7 +160,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
       - name: Install apt dependencies
@@ -167,34 +172,28 @@ jobs:
               qemu-system-arm \
               qemu-system-riscv32 \
               qemu-user \
-              gcc-avr \
-              avr-libc \
               simavr \
               ninja-build
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: '1.18.1'
+          go-version: '1.20'
+          cache: true
       - name: Install Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: '14'
       - name: Install wasmtime
         run: |
-          curl https://wasmtime.dev/install.sh -sSf | bash
+          mkdir -p $HOME/.wasmtime $HOME/.wasmtime/bin
+          curl -L https://github.com/bytecodealliance/wasmtime/releases/download/v5.0.0/wasmtime-v5.0.0-x86_64-linux.tar.xz -o wasmtime-v5.0.0-x86_64-linux.tar.xz -SfL
+          tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v5.0.0-x86_64-linux.tar.xz --strip-components=1 wasmtime-v5.0.0-x86_64-linux/*
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-      - name: Cache Go
-        uses: actions/cache@v2
-        with:
-          key: go-cache-linux-asserts-v1-${{ hashFiles('go.mod') }}
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-      - name: Cache LLVM source
-        uses: actions/cache@v2
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-14-linux-asserts-v2
+          key: llvm-source-15-linux-asserts-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -204,11 +203,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v2
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-14-linux-asserts-v1
+          key: llvm-build-15-linux-asserts-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -220,8 +230,14 @@ jobs:
           make llvm-build ASSERT=1
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache Binaryen
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-binaryen
         with:
           key: binaryen-linux-asserts-v1
@@ -230,7 +246,7 @@ jobs:
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
       - name: Cache wasi-libc
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-linux-asserts-v5
@@ -247,12 +263,6 @@ jobs:
           echo "$(pwd)/build" >> $GITHUB_PATH
       - name: Test stdlib packages
         run: make tinygo-test
-      - name: Install Xtensa toolchain
-        run: |
-          curl -L https://github.com/espressif/crosstool-NG/releases/download/esp-2020r2/xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz -o xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-          sudo tar -C /usr/local -xf xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
-          sudo ln -s /usr/local/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld /usr/local/bin/xtensa-esp32-elf-ld
-          rm xtensa-esp32-elf-gcc8_2_0-esp-2020r2-linux-amd64.tar.gz
       - run: make smoketest
       - run: make wasmtest
       - run: make tinygo-baremetal
@@ -265,11 +275,11 @@ jobs:
     # in that process to avoid doing lots of duplicate work and to avoid
     # complications around precompiled libraries such as compiler-rt shipped as
     # part of the release tarball.
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: build-linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install apt dependencies
         run: |
           sudo apt-get update
@@ -278,21 +288,15 @@ jobs:
               g++-arm-linux-gnueabihf \
               libc6-dev-armhf-cross
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: '1.18.1'
-      - name: Cache Go
-        uses: actions/cache@v2
-        with:
-          key: go-cache-linux-arm-v2-${{ hashFiles('go.mod') }}
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-      - name: Cache LLVM source
-        uses: actions/cache@v2
+          go-version: '1.20'
+          cache: true
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-14-linux-v2
+          key: llvm-source-15-linux-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -302,11 +306,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v2
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-14-linux-arm-v1
+          key: llvm-build-15-linux-arm-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -320,8 +335,14 @@ jobs:
           make llvm-build CROSS=arm-linux-gnueabihf
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache Binaryen
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-binaryen
         with:
           key: binaryen-linux-arm-v1
@@ -334,13 +355,14 @@ jobs:
           make CROSS=arm-linux-gnueabihf binaryen
       - name: Install fpm
         run: |
+          sudo gem install --version 4.0.7 public_suffix
           sudo gem install --version 2.7.6 dotenv
           sudo gem install --no-document fpm
       - name: Build TinyGo binary
         run: |
           make CROSS=arm-linux-gnueabihf
       - name: Download amd64 release
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: linux-amd64-double-zipped
       - name: Extract amd64 release
@@ -357,7 +379,7 @@ jobs:
           cp -p build/release.tar.gz /tmp/tinygo.linux-arm.tar.gz
           cp -p build/release.deb    /tmp/tinygo_armhf.deb
       - name: Publish release artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: linux-arm-double-zipped
           path: |
@@ -369,11 +391,11 @@ jobs:
     # in that process to avoid doing lots of duplicate work and to avoid
     # complications around precompiled libraries such as compiler-rt shipped as
     # part of the release tarball.
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: build-linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install apt dependencies
         run: |
           sudo apt-get update
@@ -383,21 +405,15 @@ jobs:
               libc6-dev-arm64-cross \
               ninja-build
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: '1.18.1'
-      - name: Cache Go
-        uses: actions/cache@v2
-        with:
-          key: go-cache-linux-arm64-v2-${{ hashFiles('go.mod') }}
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-      - name: Cache LLVM source
-        uses: actions/cache@v2
+          go-version: '1.20'
+          cache: true
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-14-linux-v1
+          key: llvm-source-15-linux-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -407,11 +423,22 @@ jobs:
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
-      - name: Cache LLVM build
-        uses: actions/cache@v2
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/clang/lib/Headers
+            llvm-project/clang/include
+            llvm-project/compiler-rt
+            llvm-project/lld/include
+            llvm-project/llvm/include
+      - name: Restore LLVM build cache
+        uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-14-linux-arm64-v1
+          key: llvm-build-15-linux-arm64-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -423,8 +450,14 @@ jobs:
           make llvm-build CROSS=aarch64-linux-gnu
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+      - name: Save LLVM build cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+          path: llvm-build
       - name: Cache Binaryen
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache-binaryen
         with:
           key: binaryen-linux-arm64-v1
@@ -436,13 +469,14 @@ jobs:
           make CROSS=aarch64-linux-gnu binaryen
       - name: Install fpm
         run: |
+          sudo gem install --version 4.0.7 public_suffix
           sudo gem install --version 2.7.6 dotenv
           sudo gem install --no-document fpm
       - name: Build TinyGo binary
         run: |
           make CROSS=aarch64-linux-gnu
       - name: Download amd64 release
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: linux-amd64-double-zipped
       - name: Extract amd64 release
@@ -459,7 +493,7 @@ jobs:
           cp -p build/release.tar.gz /tmp/tinygo.linux-arm64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_arm64.deb
       - name: Publish release artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: linux-arm64-double-zipped
           path: |

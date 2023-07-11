@@ -1,5 +1,4 @@
 //go:build nucleol552ze
-// +build nucleol552ze
 
 package machine
 

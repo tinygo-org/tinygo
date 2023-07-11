@@ -1,10 +1,9 @@
 //go:build sam && atsamd51 && pygamer
-// +build sam,atsamd51,pygamer
 
 package machine
 
 // used to reset into bootloader
-const RESET_MAGIC_VALUE = 0xf01669ef
+const resetMagicValue = 0xf01669ef
 
 // GPIO Pins
 const (

@@ -1,5 +1,4 @@
 //go:build (sam && atsamd51) || (sam && atsame5x)
-// +build sam,atsamd51 sam,atsame5x
 
 package runtime
 
@@ -28,6 +27,7 @@ func init() {
 	initSERCOMClocks()
 	initUSBClock()
 	initADCClock()
+	enableCache()
 
 	cdc.EnableUSBCDC()
 	machine.USBDev.Configure(machine.UARTConfig{})
@@ -187,6 +187,9 @@ func initClocks() {
 	// it's 32bit cycle counter for timing.
 	//CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
 	//DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+	// Disable automatic NVM write operations
+	sam.NVMCTRL.SetCTRLA_WMODE(sam.NVMCTRL_CTRLA_WMODE_MAN)
 }
 
 func initRTC() {
@@ -366,6 +369,10 @@ func initADCClock() {
 		sam.GCLK_PCHCTRL_CHEN)
 	sam.GCLK.PCHCTRL[sam.PCHCTRL_GCLK_ADC1].Set((sam.GCLK_PCHCTRL_GEN_GCLK1 << sam.GCLK_PCHCTRL_GEN_Pos) |
 		sam.GCLK_PCHCTRL_CHEN)
+}
+
+func enableCache() {
+	sam.CMCC.CTRL.SetBits(sam.CMCC_CTRL_CEN)
 }
 
 func waitForEvents() {

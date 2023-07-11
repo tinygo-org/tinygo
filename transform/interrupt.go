@@ -12,9 +12,9 @@ import (
 //
 // The operation is as follows. The compiler creates the following during IR
 // generation:
-//     * calls to runtime/interrupt.callHandlers with an interrupt number.
-//     * runtime/interrupt.handle objects that store the (constant) interrupt ID and
-//       interrupt handler func value.
+//   - calls to runtime/interrupt.callHandlers with an interrupt number.
+//   - runtime/interrupt.handle objects that store the (constant) interrupt ID and
+//     interrupt handler func value.
 //
 // This pass then replaces those callHandlers calls with calls to the actual
 // interrupt handlers. If there are no interrupt handlers for the given call,
@@ -36,15 +36,15 @@ func LowerInterrupts(mod llvm.Module) []error {
 	handleMap := map[int64][]llvm.Value{}
 	handleType := mod.GetTypeByName("runtime/interrupt.handle")
 	if !handleType.IsNil() {
-		handlePtrType := llvm.PointerType(handleType, 0)
 		for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
-			if global.Type() != handlePtrType {
+			if global.GlobalValueType() != handleType {
 				continue
 			}
 
 			// Get the interrupt number from the initializer
 			initializer := global.Initializer()
-			num := llvm.ConstExtractValue(initializer, []uint32{2, 0}).SExtValue()
+			interrupt := builder.CreateExtractValue(initializer, 2, "")
+			num := builder.CreateExtractValue(interrupt, 0, "").SExtValue()
 			pkg := packageFromInterruptHandle(global)
 
 			handles, exists := handleMap[num]
@@ -89,9 +89,9 @@ func LowerInterrupts(mod llvm.Module) []error {
 			builder.SetInsertPointBefore(call)
 			for _, handler := range handlers {
 				initializer := handler.Initializer()
-				context := llvm.ConstExtractValue(initializer, []uint32{0})
-				funcPtr := llvm.ConstExtractValue(initializer, []uint32{1}).Operand(0)
-				builder.CreateCall(funcPtr, []llvm.Value{
+				context := builder.CreateExtractValue(initializer, 0, "")
+				funcPtr := builder.CreateExtractValue(initializer, 1, "").Operand(0)
+				builder.CreateCall(funcPtr.GlobalValueType(), funcPtr, []llvm.Value{
 					num,
 					context,
 				}, "")

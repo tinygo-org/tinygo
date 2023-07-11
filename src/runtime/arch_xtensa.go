@@ -1,5 +1,4 @@
 //go:build xtensa
-// +build xtensa
 
 package runtime
 
@@ -10,9 +9,11 @@ const TargetBits = 32
 
 const deferExtraRegs = 0
 
-// Align on a word boundary.
+const callInstSize = 3 // "callx0 someFunction" (and similar) is 3 bytes
+
+// The largest alignment according to the Xtensa ABI is 8 (long long, double).
 func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
+	return (ptr + 7) &^ 7
 }
 
 func getCurrentStackPointer() uintptr {

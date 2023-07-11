@@ -1,5 +1,4 @@
 //go:build rp2040
-// +build rp2040
 
 package machine
 
@@ -10,7 +9,7 @@ import (
 	"unsafe"
 )
 
-type io struct {
+type ioType struct {
 	status volatile.Register32
 	ctrl   volatile.Register32
 }
@@ -22,7 +21,7 @@ type irqCtrl struct {
 }
 
 type ioBank0Type struct {
-	io                 [30]io
+	io                 [30]ioType
 	intR               [4]volatile.Register32
 	proc0IRQctrl       irqCtrl
 	proc1IRQctrl       irqCtrl
@@ -86,6 +85,8 @@ const (
 	PinPWM
 	PinI2C
 	PinSPI
+	PinPIO0
+	PinPIO1
 )
 
 func (p Pin) PortMaskSet() (*uint32, uint32) {
@@ -203,6 +204,10 @@ func (p Pin) Configure(config PinConfig) {
 		p.setSlew(false)
 	case PinSPI:
 		p.setFunc(fnSPI)
+	case PinPIO0:
+		p.setFunc(fnPIO0)
+	case PinPIO1:
+		p.setFunc(fnPIO1)
 	}
 }
 
@@ -226,12 +231,8 @@ type PinChange uint8
 
 // Pin change interrupt constants for SetInterrupt.
 const (
-	// PinLevelLow triggers whenever pin is at a low (around 0V) logic level.
-	PinLevelLow PinChange = 1 << iota
-	// PinLevelLow triggers whenever pin is at a high (around 3V) logic level.
-	PinLevelHigh
 	// Edge falling
-	PinFalling
+	PinFalling PinChange = 4 << iota
 	// Edge rising
 	PinRising
 )
@@ -292,8 +293,8 @@ func gpioHandleInterrupt(intr interrupt.Interrupt) {
 			base = &ioBank0.proc1IRQctrl
 		}
 
-		statreg := base.intS[gpio>>3]
-		change := getIntChange(gpio, statreg.Get())
+		statreg := base.intS[gpio>>3].Get()
+		change := getIntChange(gpio, statreg)
 		if change != 0 {
 			gpio.acknowledgeInterrupt(change)
 			callback := pinCallbacks[core][gpio]

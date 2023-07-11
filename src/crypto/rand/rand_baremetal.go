@@ -1,5 +1,4 @@
-//go:build stm32 || (sam && atsamd51) || (sam && atsame5x)
-// +build stm32 sam,atsamd51 sam,atsame5x
+//go:build nrf || stm32 || (sam && atsamd51) || (sam && atsame5x)
 
 package rand
 

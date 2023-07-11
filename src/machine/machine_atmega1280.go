@@ -1,5 +1,4 @@
 //go:build avr && atmega1280
-// +build avr,atmega1280
 
 package machine
 
@@ -38,10 +37,10 @@ const (
 	PB1 = portB + 1
 	PB2 = portB + 2
 	PB3 = portB + 3
-	PB4 = portB + 4
-	PB5 = portB + 5
-	PB6 = portB + 6
-	PB7 = portB + 7
+	PB4 = portB + 4 // peripherals: Timer2 channel A
+	PB5 = portB + 5 // peripherals: Timer1 channel A
+	PB6 = portB + 6 // peripherals: Timer1 channel B
+	PB7 = portB + 7 // peripherals: Timer0 channel A
 	PC0 = portC + 0
 	PC1 = portC + 1
 	PC2 = portC + 2
@@ -57,9 +56,9 @@ const (
 	PD7 = portD + 7
 	PE0 = portE + 0
 	PE1 = portE + 1
-	PE3 = portE + 3
-	PE4 = portE + 4
-	PE5 = portE + 5
+	PE3 = portE + 3 // peripherals: Timer3 channel A
+	PE4 = portE + 4 // peripherals: Timer3 channel B
+	PE5 = portE + 5 // peripherals: Timer3 channel C
 	PE6 = portE + 6
 	PF0 = portF + 0
 	PF1 = portF + 1
@@ -72,13 +71,13 @@ const (
 	PG0 = portG + 0
 	PG1 = portG + 1
 	PG2 = portG + 2
-	PG5 = portG + 5
+	PG5 = portG + 5 // peripherals: Timer0 channel B
 	PH0 = portH + 0
 	PH1 = portH + 1
-	PH3 = portH + 3
-	PH4 = portH + 4
-	PH5 = portH + 5
-	PH6 = portH + 6
+	PH3 = portH + 3 // peripherals: Timer4 channel A
+	PH4 = portH + 4 // peripherals: Timer4 channel B
+	PH5 = portH + 5 // peripherals: Timer4 channel C
+	PH6 = portH + 6 // peripherals: Timer0 channel B
 	PJ0 = portJ + 0
 	PJ1 = portJ + 1
 	PK0 = portK + 0
@@ -92,9 +91,9 @@ const (
 	PL0 = portL + 0
 	PL1 = portL + 1
 	PL2 = portL + 2
-	PL3 = portL + 3
-	PL4 = portL + 4
-	PL5 = portL + 5
+	PL3 = portL + 3 // peripherals: Timer5 channel A
+	PL4 = portL + 4 // peripherals: Timer5 channel B
+	PL5 = portL + 5 // peripherals: Timer5 channel C
 	PL6 = portL + 6
 	PL7 = portL + 7
 )
@@ -264,7 +263,7 @@ func (pwm PWM) Configure(config PWMConfig) error {
 // SetPeriod updates the period of this PWM peripheral.
 // To set a particular frequency, use the following formula:
 //
-//     period = 1e9 / frequency
+//	period = 1e9 / frequency
 //
 // If you use a period of 0, a period that works well for LEDs will be picked.
 //
@@ -694,7 +693,7 @@ func (pwm PWM) SetInverting(channel uint8, inverting bool) {
 // cycle, in other words the fraction of time the channel output is high (or low
 // when inverted). For example, to set it to a 25% duty cycle, use:
 //
-//     pwm.Set(channel, pwm.Top() / 4)
+//	pwm.Set(channel, pwm.Top() / 4)
 //
 // pwm.Set(channel, 0) will set the output to low and pwm.Set(channel,
 // pwm.Top()) will set the output to high, assuming the output isn't inverted.

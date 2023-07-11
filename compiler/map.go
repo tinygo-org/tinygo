@@ -41,12 +41,12 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 	}
 	keySize := b.targetData.TypeAllocSize(llvmKeyType)
 	valueSize := b.targetData.TypeAllocSize(llvmValueType)
-	llvmKeySize := llvm.ConstInt(b.ctx.Int8Type(), keySize, false)
-	llvmValueSize := llvm.ConstInt(b.ctx.Int8Type(), valueSize, false)
+	llvmKeySize := llvm.ConstInt(b.uintptrType, keySize, false)
+	llvmValueSize := llvm.ConstInt(b.uintptrType, valueSize, false)
 	sizeHint := llvm.ConstInt(b.uintptrType, 8, false)
 	algEnum := llvm.ConstInt(b.ctx.Int8Type(), alg, false)
 	if expr.Reserve != nil {
-		sizeHint = b.getValue(expr.Reserve)
+		sizeHint = b.getValue(expr.Reserve, getPos(expr))
 		var err error
 		sizeHint, err = b.createConvert(expr.Reserve.Type(), types.Typ[types.Uintptr], sizeHint, expr.Pos())
 		if err != nil {
@@ -78,6 +78,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 
 	// Do the lookup. How it is done depends on the key type.
 	var commaOkValue llvm.Value
+	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
@@ -89,6 +90,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 		// growth.
 		mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, mapKeyAlloca)
+		b.zeroUndefBytes(b.getLLVMType(keyType), mapKeyAlloca)
 		// Fetch the value from the hashmap.
 		params := []llvm.Value{m, mapKeyPtr, mapValuePtr, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapBinaryGet", params, "")
@@ -98,7 +100,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 		itfKey := key
 		if _, ok := keyType.(*types.Interface); !ok {
 			// Not already an interface, so convert it to an interface now.
-			itfKey = b.createMakeInterface(key, keyType, pos)
+			itfKey = b.createMakeInterface(key, origKeyType, pos)
 		}
 		params := []llvm.Value{m, itfKey, mapValuePtr, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapInterfaceGet", params, "")
@@ -106,7 +108,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 
 	// Load the resulting value from the hashmap. The value is set to the zero
 	// value if the key doesn't exist in the hashmap.
-	mapValue := b.CreateLoad(mapValueAlloca, "")
+	mapValue := b.CreateLoad(llvmValueType, mapValueAlloca, "")
 	b.emitLifetimeEnd(mapValuePtr, mapValueAllocaSize)
 
 	if commaOk {
@@ -124,6 +126,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) {
 	valueAlloca, valuePtr, valueSize := b.createTemporaryAlloca(value.Type(), "hashmap.value")
 	b.CreateStore(value, valueAlloca)
+	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
@@ -133,6 +136,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 		// key can be compared with runtime.memequal
 		keyAlloca, keyPtr, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
+		b.zeroUndefBytes(b.getLLVMType(keyType), keyAlloca)
 		params := []llvm.Value{m, keyPtr, valuePtr}
 		b.createRuntimeCall("hashmapBinarySet", params, "")
 		b.emitLifetimeEnd(keyPtr, keySize)
@@ -141,7 +145,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 		itfKey := key
 		if _, ok := keyType.(*types.Interface); !ok {
 			// Not already an interface, so convert it to an interface first.
-			itfKey = b.createMakeInterface(key, keyType, pos)
+			itfKey = b.createMakeInterface(key, origKeyType, pos)
 		}
 		params := []llvm.Value{m, itfKey, valuePtr}
 		b.createRuntimeCall("hashmapInterfaceSet", params, "")
@@ -152,6 +156,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 // createMapDelete deletes a key from a map by calling the appropriate runtime
 // function. It is the implementation of the Go delete() builtin.
 func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos token.Pos) error {
+	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
@@ -161,6 +166,7 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 	} else if hashmapIsBinaryKey(keyType) {
 		keyAlloca, keyPtr, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
+		b.zeroUndefBytes(b.getLLVMType(keyType), keyAlloca)
 		params := []llvm.Value{m, keyPtr}
 		b.createRuntimeCall("hashmapBinaryDelete", params, "")
 		b.emitLifetimeEnd(keyPtr, keySize)
@@ -171,7 +177,7 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 		itfKey := key
 		if _, ok := keyType.(*types.Interface); !ok {
 			// Not already an interface, so convert it to an interface first.
-			itfKey = b.createMakeInterface(key, keyType, pos)
+			itfKey = b.createMakeInterface(key, origKeyType, pos)
 		}
 		params := []llvm.Value{m, itfKey}
 		b.createRuntimeCall("hashmapInterfaceDelete", params, "")
@@ -217,8 +223,8 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 	mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(llvmStoredKeyType, "range.key")
 	mapValueAlloca, mapValuePtr, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
 	ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
-	mapKey := b.CreateLoad(mapKeyAlloca, "")
-	mapValue := b.CreateLoad(mapValueAlloca, "")
+	mapKey := b.CreateLoad(llvmStoredKeyType, mapKeyAlloca, "")
+	mapValue := b.CreateLoad(llvmValueType, mapValueAlloca, "")
 
 	if isKeyStoredAsInterface {
 		// The key is stored as an interface but it isn't of interface type.
@@ -240,7 +246,8 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 }
 
 // Returns true if this key type does not contain strings, interfaces etc., so
-// can be compared with runtime.memequal.
+// can be compared with runtime.memequal.  Note that padding bytes are undef
+// and can alter two "equal" structs being equal when compared with memequal.
 func hashmapIsBinaryKey(keyType types.Type) bool {
 	switch keyType := keyType.(type) {
 	case *types.Basic:
@@ -262,4 +269,77 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 	default:
 		return false
 	}
+}
+
+func (b *builder) zeroUndefBytes(llvmType llvm.Type, ptr llvm.Value) error {
+	// We know that hashmapIsBinaryKey is true, so we only have to handle those types that can show up there.
+	// To zero all undefined bytes, we iterate over all the fields in the type.  For each element, compute the
+	// offset of that element.  If it's Basic type, there are no internal padding bytes.  For compound types, we recurse to ensure
+	// we handle nested types.  Next, we determine if there are any padding bytes before the next
+	// element and zero those as well.
+
+	zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+
+	switch llvmType.TypeKind() {
+	case llvm.IntegerTypeKind:
+		// no padding bytes
+		return nil
+	case llvm.PointerTypeKind:
+		// mo padding bytes
+		return nil
+	case llvm.ArrayTypeKind:
+		llvmArrayType := llvmType
+		llvmElemType := llvmType.ElementType()
+
+		for i := 0; i < llvmArrayType.ArrayLength(); i++ {
+			idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
+			elemPtr := b.CreateInBoundsGEP(llvmArrayType, ptr, []llvm.Value{zero, idx}, "")
+
+			// zero any padding bytes in this element
+			b.zeroUndefBytes(llvmElemType, elemPtr)
+		}
+
+	case llvm.StructTypeKind:
+		llvmStructType := llvmType
+		numFields := llvmStructType.StructElementTypesCount()
+		llvmElementTypes := llvmStructType.StructElementTypes()
+
+		for i := 0; i < numFields; i++ {
+			idx := llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)
+			elemPtr := b.CreateInBoundsGEP(llvmStructType, ptr, []llvm.Value{zero, idx}, "")
+
+			// zero any padding bytes in this field
+			llvmElemType := llvmElementTypes[i]
+			b.zeroUndefBytes(llvmElemType, elemPtr)
+
+			// zero any padding bytes before the next field, if any
+			offset := b.targetData.ElementOffset(llvmStructType, i)
+			storeSize := b.targetData.TypeStoreSize(llvmElemType)
+			fieldEndOffset := offset + storeSize
+
+			var nextOffset uint64
+			if i < numFields-1 {
+				nextOffset = b.targetData.ElementOffset(llvmStructType, i+1)
+			} else {
+				// Last field?  Next offset is the total size of the allcoate struct.
+				nextOffset = b.targetData.TypeAllocSize(llvmStructType)
+			}
+
+			if fieldEndOffset != nextOffset {
+				n := llvm.ConstInt(b.uintptrType, nextOffset-fieldEndOffset, false)
+				llvmStoreSize := llvm.ConstInt(b.uintptrType, storeSize, false)
+				gepPtr := elemPtr
+				if gepPtr.Type() != b.i8ptrType {
+					gepPtr = b.CreateBitCast(gepPtr, b.i8ptrType, "") // LLVM 14
+				}
+				paddingStart := b.CreateInBoundsGEP(b.ctx.Int8Type(), gepPtr, []llvm.Value{llvmStoreSize}, "")
+				if paddingStart.Type() != b.i8ptrType {
+					paddingStart = b.CreateBitCast(paddingStart, b.i8ptrType, "") // LLVM 14
+				}
+				b.createRuntimeCall("memzero", []llvm.Value{paddingStart, n}, "")
+			}
+		}
+	}
+
+	return nil
 }

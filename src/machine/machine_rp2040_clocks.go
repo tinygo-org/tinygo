@@ -1,5 +1,4 @@
 //go:build rp2040
-// +build rp2040
 
 package machine
 
@@ -8,11 +7,6 @@ import (
 	"device/rp"
 	"runtime/volatile"
 	"unsafe"
-)
-
-const (
-	KHz = 1000
-	MHz = 1000000
 )
 
 func CPUFrequency() uint32 {
@@ -88,8 +82,8 @@ type clock struct {
 }
 
 // clock returns the clock identified by cix.
-func (clks *clocksType) clock(cix clockIndex) *clock {
-	return &clock{
+func (clks *clocksType) clock(cix clockIndex) clock {
+	return clock{
 		&clks.clk[cix],
 		cix,
 	}

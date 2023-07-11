@@ -46,7 +46,7 @@ type channelBlockedList struct {
 
 	// t is the task associated with this channel operation.
 	// If this channel operation is not part of a select, then the pointer field of the state holds the data buffer.
-	// If this channel operation is part of a select, then the pointer field of the state holds the recieve buffer.
+	// If this channel operation is part of a select, then the pointer field of the state holds the receive buffer.
 	// If this channel operation is a receive, then the data field should be set to zero when resuming due to channel closure.
 	t *task.Task
 
@@ -139,6 +139,7 @@ func chanMake(elementSize uintptr, bufSize uintptr) *channel {
 
 // Return the number of entries in this chan, called from the len builtin.
 // A nil chan is defined as having length 0.
+//
 //go:inline
 func chanLen(c *channel) int {
 	if c == nil {
@@ -155,6 +156,7 @@ func chanLenUnsafePointer(p unsafe.Pointer) int {
 
 // Return the capacity of this chan, called from the cap builtin.
 // A nil chan is defined as having capacity 0.
+//
 //go:inline
 func chanCap(c *channel) int {
 	if c == nil {
@@ -241,13 +243,8 @@ func (ch *channel) push(value unsafe.Pointer) bool {
 
 	// copy value to buffer
 	memcpy(
-		unsafe.Pointer( // pointer to the base of the buffer + offset = pointer to destination element
-			uintptr(ch.buf)+
-				uintptr( // element size * equivalent slice index = offset
-					ch.elementSize* // element size (bytes)
-						ch.bufHead, // index of first available buffer entry
-				),
-		),
+		unsafe.Add(ch.buf, // pointer to the base of the buffer + offset = pointer to destination element
+			ch.elementSize*ch.bufHead), // element size * equivalent slice index = offset
 		value,
 		ch.elementSize,
 	)
@@ -272,7 +269,7 @@ func (ch *channel) pop(value unsafe.Pointer) bool {
 	}
 
 	// compute address of source
-	addr := unsafe.Pointer(uintptr(ch.buf) + (ch.elementSize * ch.bufTail))
+	addr := unsafe.Add(ch.buf, (ch.elementSize * ch.bufTail))
 
 	// copy value from buffer
 	memcpy(
@@ -322,10 +319,10 @@ func (ch *channel) trySend(value unsafe.Pointer) bool {
 		interrupt.Restore(i)
 		return false
 	case chanStateRecv:
-		// unblock reciever
+		// unblock receiver
 		dst := ch.resumeRX(true)
 
-		// copy value to reciever
+		// copy value to receiver
 		memcpy(dst, value, ch.elementSize)
 
 		// change state to empty if there are no more receivers
@@ -351,12 +348,12 @@ func (ch *channel) trySend(value unsafe.Pointer) bool {
 	return false
 }
 
-// try to recieve a value from a channel, without really blocking
-// returns whether a value was recieved
+// try to receive a value from a channel, without really blocking
+// returns whether a value was received
 // second return is the comma-ok value
 func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 	if ch == nil {
-		// recieve from nil channel blocks forever
+		// receive from nil channel blocks forever
 		// this is non-blocking, so just say no
 		return false, false
 	}
@@ -405,7 +402,7 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 		interrupt.Restore(i)
 		return false, false
 	case chanStateRecv, chanStateEmpty:
-		// something else is already waiting to recieve
+		// something else is already waiting to receive
 		interrupt.Restore(i)
 		return false, false
 	case chanStateClosed:
@@ -414,7 +411,7 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 			return true, true
 		}
 
-		// channel closed - nothing to recieve
+		// channel closed - nothing to receive
 		memzero(value, ch.elementSize)
 		interrupt.Restore(i)
 		return true, false
@@ -429,8 +426,8 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (bool, bool) {
 type chanState uint8
 
 const (
-	chanStateEmpty  chanState = iota // nothing in channel, no senders/recievers
-	chanStateRecv                    // nothing in channel, recievers waiting
+	chanStateEmpty  chanState = iota // nothing in channel, no senders/receivers
+	chanStateRecv                    // nothing in channel, receivers waiting
 	chanStateSend                    // senders waiting, buffer full if present
 	chanStateBuf                     // buffer not empty, no senders waiting
 	chanStateClosed                  // channel closed
@@ -480,7 +477,7 @@ func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 		deadlock()
 	}
 
-	// wait for reciever
+	// wait for receiver
 	sender := task.Current()
 	ch.state = chanStateSend
 	sender.Ptr = value
@@ -496,8 +493,8 @@ func chanSend(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList
 }
 
 // chanRecv receives a single value over a channel.
-// It blocks if there is no available value to recieve.
-// The recieved value is copied into the value pointer.
+// It blocks if there is no available value to receive.
+// The received value is copied into the value pointer.
 // Returns the comma-ok value.
 func chanRecv(ch *channel, value unsafe.Pointer, blockedlist *channelBlockedList) bool {
 	i := interrupt.Disable()

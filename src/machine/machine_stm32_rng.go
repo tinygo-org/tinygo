@@ -1,5 +1,4 @@
 //go:build stm32 && !(stm32f103 || stm32l0x1)
-// +build stm32,!stm32f103,!stm32l0x1
 
 package machine
 
@@ -14,6 +13,13 @@ func GetRNG() (uint32, error) {
 	if !rngInitDone {
 		initRNG()
 		rngInitDone = true
+	}
+
+	if stm32.RNG.SR.HasBits(stm32.RNG_SR_CECS) {
+		return 0, ErrClockRNG
+	}
+	if stm32.RNG.SR.HasBits(stm32.RNG_SR_SECS) {
+		return 0, ErrSeedRNG
 	}
 
 	cnt := RNG_MAX_READ_RETRIES

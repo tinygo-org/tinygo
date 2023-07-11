@@ -1,5 +1,4 @@
 //go:build esp32
-// +build esp32
 
 package machine
 
@@ -144,13 +143,13 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
 // output function selection.
 func (p Pin) outFunc() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.FUNC0_OUT_SEL_CFG)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.FUNC0_OUT_SEL_CFG), uintptr(p)*4))
 }
 
 // inFunc returns the FUNCy_IN_SEL_CFG register used for configuring the input
 // function selection.
 func inFunc(signal uint32) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.FUNC0_IN_SEL_CFG)) + uintptr(signal)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.FUNC0_IN_SEL_CFG), uintptr(signal)*4))
 }
 
 // Set the pin to high or low.
@@ -462,7 +461,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 // interface, there must always be the same number of bytes written as bytes read.
 // This is accomplished by sending zero bits if r is bigger than w or discarding
 // the incoming data if w is bigger than r.
-//
 func (spi SPI) Tx(w, r []byte) error {
 	toTransfer := len(w)
 	if len(r) > toTransfer {

@@ -13,7 +13,7 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 )
@@ -23,7 +23,7 @@ type espImageSegment struct {
 	data []byte
 }
 
-// makeESPFirmare converts an input ELF file to an image file for an ESP32 or
+// makeESPFirmareImage converts an input ELF file to an image file for an ESP32 or
 // ESP8266 chip. This is a special purpose image format just for the ESP chip
 // family, and is parsed by the on-chip mask ROM bootloader.
 //
@@ -189,5 +189,5 @@ func makeESPFirmareImage(infile, outfile, format string) error {
 	}
 
 	// Write the image to the output file.
-	return ioutil.WriteFile(outfile, outf.Bytes(), 0666)
+	return os.WriteFile(outfile, outf.Bytes(), 0666)
 }

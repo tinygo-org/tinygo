@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"go/types"
 	"hash/crc32"
-	"io/ioutil"
+	"io/fs"
 	"math/bits"
 	"os"
 	"os/exec"
@@ -42,8 +42,8 @@ type BuildResult struct {
 	// information. Used for GDB for example.
 	Executable string
 
-	// A path to the output binary. It will be removed after Build returns, so
-	// if it should be kept it must be copied or moved away.
+	// A path to the output binary. It is stored in the tmpdir directory of the
+	// Build function, so if it should be kept it must be copied or moved away.
 	// It is often the same as Executable, but differs if the output format is
 	// .hex for example (instead of the usual ELF).
 	Binary string
@@ -94,23 +94,16 @@ type packageAction struct {
 //
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
-func Build(pkgName, outpath string, config *compileopts.Config, action func(BuildResult) error) error {
+func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildResult, error) {
 	// Read the build ID of the tinygo binary.
 	// Used as a cache key for package builds.
 	compilerBuildID, err := ReadBuildID()
 	if err != nil {
-		return err
+		return BuildResult{}, err
 	}
 
-	// Create a temporary directory for intermediary files.
-	dir, err := ioutil.TempDir("", "tinygo")
-	if err != nil {
-		return err
-	}
 	if config.Options.Work {
-		fmt.Printf("WORK=%s\n", dir)
-	} else {
-		defer os.RemoveAll(dir)
+		fmt.Printf("WORK=%s\n", tmpdir)
 	}
 
 	// Look up the build cache directory, which is used to speed up incremental
@@ -119,7 +112,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	if cacheDir == "off" {
 		// Use temporary build directory instead, effectively disabling the
 		// build cache.
-		cacheDir = dir
+		cacheDir = tmpdir
 	}
 
 	// Check for a libc dependency.
@@ -129,40 +122,40 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	var libcDependencies []*compileJob
 	switch config.Target.Libc {
 	case "darwin-libSystem":
-		job := makeDarwinLibSystemJob(config, dir)
+		job := makeDarwinLibSystemJob(config, tmpdir)
 		libcDependencies = append(libcDependencies, job)
 	case "musl":
-		job, unlock, err := Musl.load(config, dir)
+		job, unlock, err := Musl.load(config, tmpdir)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(job.result), "crt1.o")))
 		libcDependencies = append(libcDependencies, job)
 	case "picolibc":
-		libcJob, unlock, err := Picolibc.load(config, dir)
+		libcJob, unlock, err := Picolibc.load(config, tmpdir)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
 		path := filepath.Join(root, "lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a")
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
+		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+			return BuildResult{}, errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
 		}
 		libcDependencies = append(libcDependencies, dummyCompileJob(path))
 	case "mingw-w64":
-		_, unlock, err := MinGW.load(config, dir)
+		_, unlock, err := MinGW.load(config, tmpdir)
 		if err != nil {
-			return err
+			return BuildResult{}, err
 		}
 		unlock()
-		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(dir)...)
+		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(tmpdir, config.GOARCH())...)
 	case "":
 		// no library specified, so nothing to do
 	default:
-		return fmt.Errorf("unknown libc: %s", config.Target.Libc)
+		return BuildResult{}, fmt.Errorf("unknown libc: %s", config.Target.Libc)
 	}
 
 	optLevel, sizeLevel, _ := config.OptLevels()
@@ -170,17 +163,19 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		Triple:          config.Triple(),
 		CPU:             config.CPU(),
 		Features:        config.Features(),
+		ABI:             config.ABI(),
 		GOOS:            config.GOOS(),
 		GOARCH:          config.GOARCH(),
 		CodeModel:       config.CodeModel(),
 		RelocationModel: config.RelocationModel(),
 		SizeLevel:       sizeLevel,
+		TinyGoVersion:   goenv.Version,
 
 		Scheduler:          config.Scheduler(),
 		AutomaticStackSize: config.AutomaticStackSize(),
-		DefaultStackSize:   config.Target.DefaultStackSize,
+		DefaultStackSize:   config.StackSize(),
 		NeedsStackObjects:  config.NeedsStackObjects(),
-		Debug:              true,
+		Debug:              !config.Options.SkipDWARF, // emit DWARF except when -internal-nodwarf is passed
 	}
 
 	// Load the target machine, which is the LLVM object that contains all
@@ -188,7 +183,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// address spaces, etc).
 	machine, err := compiler.NewTargetMachine(compilerConfig)
 	if err != nil {
-		return err
+		return BuildResult{}, err
 	}
 	defer machine.Dispose()
 
@@ -197,11 +192,20 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		Sizes: compiler.Sizes(machine),
 	})
 	if err != nil {
-		return err
+		return BuildResult{}, err
+	}
+	result := BuildResult{
+		ModuleRoot: lprogram.MainPkg().Module.Dir,
+		MainDir:    lprogram.MainPkg().Dir,
+		ImportPath: lprogram.MainPkg().ImportPath,
+	}
+	if result.ModuleRoot == "" {
+		// If there is no module root, just the regular root.
+		result.ModuleRoot = lprogram.MainPkg().Root
 	}
 	err = lprogram.Parse()
 	if err != nil {
-		return err
+		return result, err
 	}
 
 	// Create the *ssa.Program. This does not yet build the entire SSA of the
@@ -270,7 +274,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 						}
 					}
 
-					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.OriginalDir(), dir, compilerConfig)
+					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.OriginalDir(), tmpdir, compilerConfig)
 					return err
 				},
 			}
@@ -284,7 +288,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		for _, imported := range pkg.Pkg.Imports() {
 			job, ok := packageActionIDJobs[imported.Path()]
 			if !ok {
-				return fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
+				return result, fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
 			}
 			importedPackages = append(importedPackages, job)
 			actionIDDependencies = append(actionIDDependencies, job)
@@ -302,7 +306,6 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				actionID := packageAction{
 					ImportPath:       pkg.ImportPath,
 					CompilerBuildID:  string(compilerBuildID),
-					TinyGoVersion:    goenv.Version,
 					LLVMVersion:      llvm.Version,
 					Config:           compilerConfig,
 					CFlags:           pkg.CFlags,
@@ -370,7 +373,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				// Packages are compiled independently anyway.
 				for _, cgoHeader := range pkg.CGoHeaders {
 					// Store the header text in a temporary file.
-					f, err := ioutil.TempFile(dir, "cgosnippet-*.c")
+					f, err := os.CreateTemp(tmpdir, "cgosnippet-*.c")
 					if err != nil {
 						return err
 					}
@@ -418,7 +421,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 						return errors.New("global not found: " + globalName)
 					}
 					name := global.Name()
-					newGlobal := llvm.AddGlobal(mod, global.Type().ElementType(), name+".tmp")
+					newGlobal := llvm.AddGlobal(mod, global.GlobalValueType(), name+".tmp")
 					global.ReplaceAllUsesWith(newGlobal)
 					global.EraseFromParentAsGlobal()
 					newGlobal.SetName(name)
@@ -431,7 +434,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				err := interp.RunFunc(pkgInit, config.DumpSSA())
+				err := interp.RunFunc(pkgInit, config.Options.InterpTimeout, config.DumpSSA())
 				if err != nil {
 					return err
 				}
@@ -445,7 +448,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				// Write to a temporary path that is renamed to the destination
 				// file to avoid race conditions with other TinyGo invocatiosn
 				// that might also be compiling this package at the same time.
-				f, err := ioutil.TempFile(filepath.Dir(job.result), filepath.Base(job.result))
+				f, err := os.CreateTemp(filepath.Dir(job.result), filepath.Base(job.result))
 				if err != nil {
 					return err
 				}
@@ -523,7 +526,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				irbuilder.CreateCall(pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
+				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
 			}
 			irbuilder.CreateRetVoid()
 
@@ -579,29 +582,24 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		// Run jobs to produce the LLVM module.
 		err := runJobs(programJob, config.Options.Semaphore)
 		if err != nil {
-			return err
+			return result, err
 		}
 		// Generate output.
 		switch outext {
 		case ".o":
 			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
 			if err != nil {
-				return err
+				return result, err
 			}
 			defer llvmBuf.Dispose()
-			return ioutil.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+			return result, os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
 		case ".bc":
-			var buf llvm.MemoryBuffer
-			if config.UseThinLTO() {
-				buf = llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
-			} else {
-				buf = llvm.WriteBitcodeToMemoryBuffer(mod)
-			}
+			buf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
 			defer buf.Dispose()
-			return ioutil.WriteFile(outpath, buf.Bytes(), 0666)
+			return result, os.WriteFile(outpath, buf.Bytes(), 0666)
 		case ".ll":
 			data := []byte(mod.String())
-			return ioutil.WriteFile(outpath, data, 0666)
+			return result, os.WriteFile(outpath, data, 0666)
 		default:
 			panic("unreachable")
 		}
@@ -612,42 +610,33 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// run all jobs in parallel as far as possible.
 
 	// Add job to write the output object file.
-	objfile := filepath.Join(dir, "main.o")
+	objfile := filepath.Join(tmpdir, "main.o")
 	outputObjectFileJob := &compileJob{
 		description:  "generate output file",
 		dependencies: []*compileJob{programJob},
 		result:       objfile,
 		run: func(*compileJob) error {
-			var llvmBuf llvm.MemoryBuffer
-			if config.UseThinLTO() {
-				llvmBuf = llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
-			} else {
-				var err error
-				llvmBuf, err = machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
-				if err != nil {
-					return err
-				}
-			}
+			llvmBuf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
 			defer llvmBuf.Dispose()
-			return ioutil.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+			return os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
 		},
 	}
 
 	// Prepare link command.
 	linkerDependencies := []*compileJob{outputObjectFileJob}
-	executable := filepath.Join(dir, "main")
+	result.Executable = filepath.Join(tmpdir, "main")
 	if config.GOOS() == "windows" {
-		executable += ".exe"
+		result.Executable += ".exe"
 	}
-	tmppath := executable // final file
-	ldflags := append(config.LDFlags(), "-o", executable)
+	result.Binary = result.Executable // final file
+	ldflags := append(config.LDFlags(), "-o", result.Executable)
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		job, unlock, err := CompilerRT.load(config, dir)
+		job, unlock, err := CompilerRT.load(config, tmpdir)
 		if err != nil {
-			return err
+			return result, err
 		}
 		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
@@ -661,7 +650,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
-				result, err := compileAndCacheCFile(abspath, dir, config.CFlags(), config.UseThinLTO(), config.Options.PrintCommands)
+				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(), config.Options.PrintCommands)
 				job.result = result
 				return err
 			},
@@ -679,7 +668,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			job := &compileJob{
 				description: "compile CGo file " + abspath,
 				run: func(job *compileJob) error {
-					result, err := compileAndCacheCFile(abspath, dir, pkg.CFlags, config.UseThinLTO(), config.Options.PrintCommands)
+					result, err := compileAndCacheCFile(abspath, tmpdir, pkg.CFlags, config.Options.PrintCommands)
 					job.result = result
 					return err
 				},
@@ -700,21 +689,18 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// Add embedded files.
 	linkerDependencies = append(linkerDependencies, embedFileObjects...)
 
+	// Determine whether the compilation configuration would result in debug
+	// (DWARF) information in the object files.
+	var hasDebug = true
+	if config.GOOS() == "darwin" {
+		// Debug information isn't stored in the binary itself on MacOS but
+		// is left in the object files by default. The binary does store the
+		// path to these object files though.
+		hasDebug = false
+	}
+
 	// Strip debug information with -no-debug.
-	if !config.Debug() {
-		for _, tag := range config.BuildTags() {
-			if tag == "baremetal" {
-				// Don't use -no-debug on baremetal targets. It makes no sense:
-				// the debug information isn't flashed to the device anyway.
-				return fmt.Errorf("stripping debug information is unnecessary for baremetal targets")
-			}
-		}
-		if config.GOOS() == "darwin" {
-			// Debug information isn't stored in the binary itself on MacOS but
-			// is left in the object files by default. The binary does store the
-			// path to these object files though.
-			return errors.New("cannot remove debug information: MacOS doesn't store debug info in the executable by default")
-		}
+	if hasDebug && !config.Debug() {
 		if config.Target.Linker == "wasm-ld" {
 			// Don't just strip debug information, also compress relocations
 			// while we're at it. Relocations can only be compressed when debug
@@ -725,7 +711,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			ldflags = append(ldflags, "--strip-debug")
 		} else {
 			// Other linkers may have different flags.
-			return errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
+			return result, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
 		}
 	}
 
@@ -741,43 +727,41 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				}
 				ldflags = append(ldflags, dependency.result)
 			}
+			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
+			if config.GOOS() == "windows" {
+				// Options for the MinGW wrapper for the lld COFF linker.
+				ldflags = append(ldflags,
+					"-Xlink=/opt:lldlto="+strconv.Itoa(optLevel),
+					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
+			} else if config.GOOS() == "darwin" {
+				// Options for the ld64-compatible lld linker.
+				ldflags = append(ldflags,
+					"--lto-O"+strconv.Itoa(optLevel),
+					"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
+			} else {
+				// Options for the ELF linker.
+				ldflags = append(ldflags,
+					"--lto-O"+strconv.Itoa(optLevel),
+					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
+				)
+			}
+			if config.CodeModel() != "default" {
+				ldflags = append(ldflags,
+					"-mllvm", "-code-model="+config.CodeModel())
+			}
+			if sizeLevel >= 2 {
+				// Workaround with roughly the same effect as
+				// https://reviews.llvm.org/D119342.
+				// Can hopefully be removed in LLVM 15.
+				ldflags = append(ldflags,
+					"-mllvm", "--rotation-max-header-size=0")
+			}
 			if config.Options.PrintCommands != nil {
 				config.Options.PrintCommands(config.Target.Linker, ldflags...)
 			}
-			if config.UseThinLTO() {
-				ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
-				if config.GOOS() == "windows" {
-					// Options for the MinGW wrapper for the lld COFF linker.
-					ldflags = append(ldflags,
-						"-Xlink=/opt:lldlto="+strconv.Itoa(optLevel),
-						"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
-				} else if config.GOOS() == "darwin" {
-					// Options for the ld64-compatible lld linker.
-					ldflags = append(ldflags,
-						"--lto-O"+strconv.Itoa(optLevel),
-						"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
-				} else {
-					// Options for the ELF linker.
-					ldflags = append(ldflags,
-						"--lto-O"+strconv.Itoa(optLevel),
-						"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
-					)
-				}
-				if config.CodeModel() != "default" {
-					ldflags = append(ldflags,
-						"-mllvm", "-code-model="+config.CodeModel())
-				}
-				if sizeLevel >= 2 {
-					// Workaround with roughly the same effect as
-					// https://reviews.llvm.org/D119342.
-					// Can hopefully be removed in LLVM 15.
-					ldflags = append(ldflags,
-						"-mllvm", "--rotation-max-header-size=0")
-				}
-			}
 			err = link(config.Target.Linker, ldflags...)
 			if err != nil {
-				return &commandError{"failed to link", executable, err}
+				return &commandError{"failed to link", result.Executable, err}
 			}
 
 			var calculatedStacks []string
@@ -786,7 +770,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				// Try to determine stack sizes at compile time.
 				// Don't do this by default as it usually doesn't work on
 				// unsupported architectures.
-				calculatedStacks, stackSizes, err = determineStackSizes(mod, executable)
+				calculatedStacks, stackSizes, err = determineStackSizes(mod, result.Executable)
 				if err != nil {
 					return err
 				}
@@ -796,41 +780,51 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 			if config.AutomaticStackSize() {
 				// Modify the .tinygo_stacksizes section that contains a stack size
 				// for each goroutine.
-				err = modifyStackSizes(executable, stackSizeLoads, stackSizes)
+				err = modifyStackSizes(result.Executable, stackSizeLoads, stackSizes)
 				if err != nil {
 					return fmt.Errorf("could not modify stack sizes: %w", err)
 				}
 			}
 			if config.RP2040BootPatch() {
 				// Patch the second stage bootloader CRC into the .boot2 section
-				err = patchRP2040BootCRC(executable)
+				err = patchRP2040BootCRC(result.Executable)
 				if err != nil {
 					return fmt.Errorf("could not patch RP2040 second stage boot loader: %w", err)
 				}
 			}
 
-			// Run wasm-opt if necessary.
-			if config.Scheduler() == "asyncify" {
-				var optLevel, shrinkLevel int
+			// Run wasm-opt for wasm binaries
+			if arch := strings.Split(config.Triple(), "-")[0]; arch == "wasm32" {
+				var opt string
 				switch config.Options.Opt {
 				case "none", "0":
+					opt = "-O0"
 				case "1":
-					optLevel = 1
+					opt = "-O1"
 				case "2":
-					optLevel = 2
+					opt = "-O2"
 				case "s":
-					optLevel = 2
-					shrinkLevel = 1
+					opt = "-Os"
 				case "z":
-					optLevel = 2
-					shrinkLevel = 2
+					opt = "-Oz"
 				default:
 					return fmt.Errorf("unknown opt level: %q", config.Options.Opt)
 				}
-				cmd := exec.Command(goenv.Get("WASMOPT"), "--asyncify", "-g",
-					"--optimize-level", strconv.Itoa(optLevel),
-					"--shrink-level", strconv.Itoa(shrinkLevel),
-					executable, "--output", executable)
+
+				var args []string
+
+				if config.Scheduler() == "asyncify" {
+					args = append(args, "--asyncify")
+				}
+
+				args = append(args,
+					opt,
+					"-g",
+					result.Executable,
+					"--output", result.Executable,
+				)
+
+				cmd := exec.Command(goenv.Get("WASMOPT"), args...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 
@@ -846,7 +840,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 				for _, pkg := range lprogram.Sorted() {
 					packagePathMap[pkg.OriginalDir()] = pkg.Pkg.Path()
 				}
-				sizes, err := loadProgramSize(executable, packagePathMap)
+				sizes, err := loadProgramSize(result.Executable, packagePathMap)
 				if err != nil {
 					return err
 				}
@@ -882,7 +876,7 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	// is simpler and cannot be parallelized.
 	err = runJobs(linkJob, config.Options.Semaphore)
 	if err != nil {
-		return err
+		return result, err
 	}
 
 	// Get an Intel .hex file or .bin file from the .elf file.
@@ -893,56 +887,38 @@ func Build(pkgName, outpath string, config *compileopts.Config, action func(Buil
 	case "hex", "bin":
 		// Extract raw binary, either encoding it as a hex file or as a raw
 		// firmware file.
-		tmppath = filepath.Join(dir, "main"+outext)
-		err := objcopy(executable, tmppath, outputBinaryFormat)
+		result.Binary = filepath.Join(tmpdir, "main"+outext)
+		err := objcopy(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
-			return err
+			return result, err
 		}
 	case "uf2":
 		// Get UF2 from the .elf file.
-		tmppath = filepath.Join(dir, "main"+outext)
-		err := convertELFFileToUF2File(executable, tmppath, config.Target.UF2FamilyID)
+		result.Binary = filepath.Join(tmpdir, "main"+outext)
+		err := convertELFFileToUF2File(result.Executable, result.Binary, config.Target.UF2FamilyID)
 		if err != nil {
-			return err
+			return result, err
 		}
 	case "esp32", "esp32-img", "esp32c3", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
-		tmppath = filepath.Join(dir, "main"+outext)
-		err := makeESPFirmareImage(executable, tmppath, outputBinaryFormat)
+		result.Binary = filepath.Join(tmpdir, "main"+outext)
+		err := makeESPFirmareImage(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
-			return err
+			return result, err
 		}
 	case "nrf-dfu":
 		// special format for nrfutil for Nordic chips
-		tmphexpath := filepath.Join(dir, "main.hex")
-		err := objcopy(executable, tmphexpath, "hex")
+		result.Binary = filepath.Join(tmpdir, "main"+outext)
+		err = makeDFUFirmwareImage(config.Options, result.Executable, result.Binary)
 		if err != nil {
-			return err
-		}
-		tmppath = filepath.Join(dir, "main"+outext)
-		err = makeDFUFirmwareImage(config.Options, tmphexpath, tmppath)
-		if err != nil {
-			return err
+			return result, err
 		}
 	default:
-		return fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
+		return result, fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
 
-	// If there's a module root, use that.
-	moduleroot := lprogram.MainPkg().Module.Dir
-	if moduleroot == "" {
-		// if not, just the regular root
-		moduleroot = lprogram.MainPkg().Root
-	}
-
-	return action(BuildResult{
-		Executable: executable,
-		Binary:     tmppath,
-		MainDir:    lprogram.MainPkg().Dir,
-		ModuleRoot: moduleroot,
-		ImportPath: lprogram.MainPkg().ImportPath,
-	})
+	return result, nil
 }
 
 // createEmbedObjectFile creates a new object file with the given contents, for
@@ -1055,7 +1031,7 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
-	err := interp.Run(mod, config.DumpSSA())
+	err := interp.Run(mod, config.Options.InterpTimeout, config.DumpSSA())
 	if err != nil {
 		return err
 	}
@@ -1072,10 +1048,6 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		}
 	}
 
-	if config.GOOS() != "darwin" && !config.UseThinLTO() {
-		transform.ApplyFunctionSections(mod) // -ffunction-sections
-	}
-
 	// Insert values from -ldflags="-X ..." into the IR.
 	err = setGlobalValues(mod, config.Options.GlobalValues)
 	if err != nil {
@@ -1086,7 +1058,6 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	// cannot be represented exactly in JavaScript (JS only has doubles). To
 	// keep functions interoperable, pass int64 types as pointers to
 	// stack-allocated values.
-	// Use -wasm-abi=generic to disable this behaviour.
 	if config.WasmAbi() == "js" {
 		err := transform.ExternalInt64AsPtr(mod, config)
 		if err != nil {
@@ -1137,7 +1108,7 @@ func setGlobalValues(mod llvm.Module, globals map[string]map[string]string) erro
 
 			// A strin is a {ptr, len} pair. We need these types to build the
 			// initializer.
-			initializerType := global.Type().ElementType()
+			initializerType := global.GlobalValueType()
 			if initializerType.TypeKind() != llvm.StructTypeKind || initializerType.StructName() == "" {
 				return fmt.Errorf("%s: not a string", globalName)
 			}
@@ -1156,7 +1127,7 @@ func setGlobalValues(mod llvm.Module, globals map[string]map[string]string) erro
 
 			// Create the string value, which is a {ptr, len} pair.
 			zero := llvm.ConstInt(mod.Context().Int32Type(), 0, false)
-			ptr := llvm.ConstGEP(buf, []llvm.Value{zero, zero})
+			ptr := llvm.ConstGEP(bufInitializer.Type(), buf, []llvm.Value{zero, zero})
 			if ptr.Type() != elementTypes[0] {
 				return fmt.Errorf("%s: not a string", globalName)
 			}
@@ -1367,10 +1338,10 @@ func modifyStackSizes(executable string, stackSizeLoads []string, stackSizes map
 //
 // It might print something like the following:
 //
-//     function                         stack usage (in bytes)
-//     Reset_Handler                    316
-//     examples/blinky2.led1            92
-//     runtime.run$1                    300
+//	function                         stack usage (in bytes)
+//	Reset_Handler                    316
+//	examples/blinky2.led1            92
+//	runtime.run$1                    300
 func printStacks(calculatedStacks []string, stackSizes map[string]functionStackSize) {
 	// Print the sizes of all stacks.
 	fmt.Printf("%-32s %s\n", "function", "stack usage (in bytes)")

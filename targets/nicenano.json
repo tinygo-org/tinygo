@@ -1,11 +1,5 @@
 {
-    "inherits": ["nrf52840"],
-    "build-tags": ["nicenano","nrf52840_reset_uf2", "softdevice", "s140v6"],
-    "serial": "usb",
-    "flash-1200-bps-reset": "true",
-    "flash-method": "msd",
-    "msd-volume-name": "NICENANO",
-    "msd-firmware-name": "firmware.uf2",
-    "uf2-family-id": "0xADA52840",
-    "linkerscript": "targets/circuitplay-bluefruit.ld"
+    "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
+    "build-tags": ["nicenano"],
+    "msd-volume-name": ["NICENANO"]
 }

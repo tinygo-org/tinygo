@@ -1,5 +1,4 @@
 //go:build scheduler.tasks && cortexm
-// +build scheduler.tasks,cortexm
 
 package task
 
@@ -9,8 +8,8 @@ package task
 // PSP, which is used for goroutines) so that goroutines do not need extra stack
 // space for interrupts.
 
+import "C"
 import (
-	"device/arm"
 	"unsafe"
 )
 
@@ -68,6 +67,6 @@ func (s *state) pause() {
 
 // SystemStack returns the system stack pointer. On Cortex-M, it is always
 // available.
-func SystemStack() uintptr {
-	return arm.AsmFull("mrs {}, MSP", nil)
-}
+//
+//export SystemStack
+func SystemStack() uintptr

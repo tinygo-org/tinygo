@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -12,7 +12,7 @@ import (
 
 // Version of TinyGo.
 // Update this value before release of new version of software.
-const Version = "0.25.0-polywrap-0.0.1"
+const Version = "0.28.1-polywrap-0.0.1"
 
 var (
 	// This variable is set at build time using -ldflags parameters.
@@ -54,10 +54,10 @@ func GetGorootVersion(goroot string) (major, minor int, err error) {
 // toolchain for the given GOROOT path. It is usually of the form `go1.x.y` but
 // can have some variations (for beta releases, for example).
 func GorootVersionString(goroot string) (string, error) {
-	if data, err := ioutil.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
+	if data, err := os.ReadFile(filepath.Join(goroot, "VERSION")); err == nil {
 		return string(data), nil
 
-	} else if data, err := ioutil.ReadFile(filepath.Join(
+	} else if data, err := os.ReadFile(filepath.Join(
 		goroot, "src", "internal", "buildcfg", "zbootstrap.go")); err == nil {
 
 		r := regexp.MustCompile("const version = `(.*)`")

@@ -1,5 +1,4 @@
 //go:build scheduler.tasks && avr
-// +build scheduler.tasks,avr
 
 package task
 
@@ -29,6 +28,7 @@ type calleeSavedRegs struct {
 
 // archInit runs architecture-specific setup for the goroutine startup.
 // Note: adding //go:noinline to work around an AVR backend bug.
+//
 //go:noinline
 func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 	// Store the initial sp for the startTask function (implemented in assembly).

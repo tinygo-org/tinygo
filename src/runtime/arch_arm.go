@@ -1,5 +1,4 @@
 //go:build (arm && !baremetal && !tinygo.wasm) || (arm && arm7tdmi)
-// +build arm,!baremetal,!tinygo.wasm arm,arm7tdmi
 
 package runtime
 
@@ -10,9 +9,11 @@ const TargetBits = 32
 
 const deferExtraRegs = 0
 
-// Align on word boundary.
+const callInstSize = 4 // "bl someFunction" is 4 bytes
+
+// Align on the maximum alignment for this platform (double).
 func align(ptr uintptr) uintptr {
-	return (ptr + 3) &^ 3
+	return (ptr + 7) &^ 7
 }
 
 func getCurrentStackPointer() uintptr {

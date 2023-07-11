@@ -1,5 +1,4 @@
 //go:build grandcentral_m4
-// +build grandcentral_m4
 
 package machine
 
@@ -245,7 +244,7 @@ const (
 
 // Other peripheral constants
 const (
-	RESET_MAGIC_VALUE = 0xF01669EF // Used to reset into bootloader
+	resetMagicValue = 0xF01669EF // Used to reset into bootloader
 )
 
 // USB CDC pins

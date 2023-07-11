@@ -1,5 +1,7 @@
-//go:build runtime_memhash_leveldb
-// +build runtime_memhash_leveldb
+//go:build runtime_memhash_leveldb || (wasi && !runtime_memhash_fnv && !runtime_memhash_tsip)
+
+// This is the default for WASI, but can also be used on other targets with the
+// right build tag.
 
 // This is the hash function from Google's leveldb key-value storage system. It
 // processes 4 bytes at a time making it faster than the FNV hash for buffer

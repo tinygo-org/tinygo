@@ -60,5 +60,6 @@ const (
 
 // Call a semihosting function.
 // TODO: implement it here using inline assembly.
+//
 //go:linkname SemihostingCall SemihostingCall
 func SemihostingCall(num int, arg uintptr) int

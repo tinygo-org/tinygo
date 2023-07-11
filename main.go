@@ -26,12 +26,14 @@ import (
 	"time"
 
 	"github.com/google/shlex"
+	"github.com/inhies/go-bytesize"
 	"github.com/mattn/go-colorable"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
+	"golang.org/x/tools/go/buildutil"
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
@@ -153,7 +155,27 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 		return nil
 	}
 
-	return builder.Build(pkgName, outpath, config, func(result builder.BuildResult) error {
+	// Create a temporary directory for intermediary files.
+	tmpdir, err := os.MkdirTemp("", "tinygo")
+	if err != nil {
+		return err
+	}
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
+
+	// Do the build.
+	result, err := builder.Build(pkgName, outpath, tmpdir, config)
+	if err != nil {
+		return err
+	}
+
+	if result.Binary != "" {
+		// If result.Binary is set, it means there is a build output (elf, hex,
+		// etc) that we need to move to the outpath. If it isn't set, it means
+		// the build output was a .ll, .bc or .o file that has already been
+		// written to outpath and so we don't need to do anything.
+
 		if outpath == "" {
 			if strings.HasSuffix(pkgName, ".go") {
 				// A Go file was specified directly on the command line.
@@ -185,43 +207,67 @@ func Build(pkgName, outpath string, options *compileopts.Options) error {
 
 			// Check whether file writing was successful.
 			return outf.Close()
-		} else {
-			// Move was successful.
-			return nil
 		}
-	})
+	}
+
+	// Move was successful.
+	return nil
 }
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, testCompileOnly, testVerbose, testShort bool, testRunRegexp string, testBenchRegexp string, testBenchTime string, outpath string) (bool, error) {
+func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return false, err
 	}
 
+	testConfig := &options.TestConfig
+
 	// Pass test flags to the test binary.
 	var flags []string
-	if testVerbose {
+	if testConfig.Verbose {
 		flags = append(flags, "-test.v")
 	}
-	if testShort {
+	if testConfig.Short {
 		flags = append(flags, "-test.short")
 	}
-	if testRunRegexp != "" {
-		flags = append(flags, "-test.run="+testRunRegexp)
+	if testConfig.RunRegexp != "" {
+		flags = append(flags, "-test.run="+testConfig.RunRegexp)
 	}
-	if testBenchRegexp != "" {
-		flags = append(flags, "-test.bench="+testBenchRegexp)
+	if testConfig.SkipRegexp != "" {
+		flags = append(flags, "-test.skip="+testConfig.SkipRegexp)
 	}
-	if testBenchTime != "" {
-		flags = append(flags, "-test.benchtime="+testBenchTime)
+	if testConfig.BenchRegexp != "" {
+		flags = append(flags, "-test.bench="+testConfig.BenchRegexp)
+	}
+	if testConfig.BenchTime != "" {
+		flags = append(flags, "-test.benchtime="+testConfig.BenchTime)
+	}
+	if testConfig.BenchMem {
+		flags = append(flags, "-test.benchmem")
+	}
+	if testConfig.Count != nil && *testConfig.Count != 1 {
+		flags = append(flags, "-test.count="+strconv.Itoa(*testConfig.Count))
+	}
+	if testConfig.Shuffle != "" {
+		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
+	}
+
+	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
+
+	var buf bytes.Buffer
+	var output io.Writer = &buf
+	// Send the test output to stdout if -v or -bench
+	if logToStdout {
+		output = os.Stdout
 	}
 
 	passed := false
-	err = buildAndRun(pkgName, config, os.Stdout, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
-		if testCompileOnly || outpath != "" {
+	var duration time.Duration
+	result, err := buildAndRun(pkgName, config, output, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		if testConfig.CompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
 				// No -o path was given, so create one now.
@@ -230,7 +276,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			}
 			copyFile(result.Binary, outpath)
 		}
-		if testCompileOnly {
+		if testConfig.CompileOnly {
 			// Do not run the test.
 			passed = true
 			return nil
@@ -239,26 +285,35 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// Tests are always run in the package directory.
 		cmd.Dir = result.MainDir
 
-		// Wasmtime needs a few extra flags to work.
+		// wasmtime is the default emulator used for `-target=wasi`. wasmtime
+		// is a WebAssembly runtime CLI with WASI enabled by default. However,
+		// only stdio are allowed by default. For example, while STDOUT routes
+		// to the host, other files don't. It also does not inherit environment
+		// variables from the host. Some tests read testdata files, often from
+		// outside the package directory. Other tests require temporary
+		// writeable directories. We allow this by adding wasmtime flags below.
 		if config.EmulatorName() == "wasmtime" {
-			// Add directories to the module root, but skip the current working
-			// directory which is already added by buildAndRun.
+			// At this point, The current working directory is at the package
+			// directory. Ex. $GOROOT/src/compress/flate for compress/flate.
+			// buildAndRun has already added arguments for wasmtime, that allow
+			// read-access to files such as "testdata/huffman-zero.in".
+			//
+			// Ex. main(.wasm) --dir=. -- -test.v
+
+			// Below adds additional wasmtime flags in case a test reads files
+			// outside its directory, like "../testdata/e.txt". This allows any
+			// relative directory up to the module root, even if the test never
+			// reads any files.
+			//
+			// Ex. run --dir=.. --dir=../.. --dir=../../..
 			dirs := dirsToModuleRoot(result.MainDir, result.ModuleRoot)
-			var args []string
+			args := []string{"run"}
 			for _, d := range dirs[1:] {
 				args = append(args, "--dir="+d)
 			}
 
-			// create a new temp directory just for this run, announce it to os.TempDir() via TMPDIR
-			tmpdir, err := ioutil.TempDir("", "tinygotmp")
-			if err != nil {
-				return fmt.Errorf("failed to create temporary directory: %w", err)
-			}
-			args = append(args, "--dir="+tmpdir, "--env=TMPDIR="+tmpdir)
-			// TODO: add option to not delete temp dir for debugging?
-			defer os.RemoveAll(tmpdir)
-
-			// Insert new argments at the front of the command line argments.
+			// The below re-organizes the arguments so that the current
+			// directory is added last.
 			args = append(args, cmd.Args[1:]...)
 			cmd.Args = append(cmd.Args[:1:1], args...)
 		}
@@ -266,27 +321,37 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// Run the test.
 		start := time.Now()
 		err = cmd.Run()
-		duration := time.Since(start)
-
-		// Print the result.
-		importPath := strings.TrimSuffix(result.ImportPath, ".test")
+		duration = time.Since(start)
 		passed = err == nil
-		if passed {
-			fmt.Fprintf(stdout, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
-		} else {
-			fmt.Fprintf(stdout, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
+
+		// if verbose or benchmarks, then output is already going to stdout
+		// However, if we failed and weren't printing to stdout, print the output we accumulated.
+		if !passed && !logToStdout {
+			buf.WriteTo(stdout)
 		}
+
 		if _, ok := err.(*exec.ExitError); ok {
 			// Binary exited with a non-zero exit code, which means the test
-			// failed.
+			// failed. Return nil to avoid printing a useless "exited with
+			// error" error message.
 			return nil
 		}
 		return err
 	})
+	importPath := strings.TrimSuffix(result.ImportPath, ".test")
+
+	var w io.Writer = stdout
+	if logToStdout {
+		w = os.Stdout
+	}
 	if err, ok := err.(loader.NoTestFilesError); ok {
-		fmt.Fprintf(stdout, "?   \t%s\t[no test files]\n", err.ImportPath)
+		fmt.Fprintf(w, "?   \t%s\t[no test files]\n", err.ImportPath)
 		// Pretend the test passed - it at least didn't fail.
 		return true, nil
+	} else if passed && !testConfig.CompileOnly {
+		fmt.Fprintf(w, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
+	} else {
+		fmt.Fprintf(w, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 	}
 	return passed, err
 }
@@ -346,117 +411,130 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		return errors.New("unknown flash method: " + flashMethod)
 	}
 
-	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
-		// do we need port reset to put MCU into bootloader mode?
-		if config.Target.PortReset == "true" && flashMethod != "openocd" {
-			port, err := getDefaultPort(port, config.Target.SerialPort)
-			if err == nil {
-				err = touchSerialPortAt1200bps(port)
-				if err != nil {
-					return &commandError{"failed to reset port", result.Binary, err}
-				}
-				// give the target MCU a chance to restart into bootloader
-				time.Sleep(3 * time.Second)
+	// Create a temporary directory for intermediary files.
+	tmpdir, err := os.MkdirTemp("", "tinygo")
+	if err != nil {
+		return err
+	}
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
+
+	// Build the binary.
+	result, err := builder.Build(pkgName, fileExt, tmpdir, config)
+	if err != nil {
+		return err
+	}
+
+	// do we need port reset to put MCU into bootloader mode?
+	if config.Target.PortReset == "true" && flashMethod != "openocd" {
+		port, err := getDefaultPort(port, config.Target.SerialPort)
+		if err == nil {
+			err = touchSerialPortAt1200bps(port)
+			if err != nil {
+				return &commandError{"failed to reset port", port, err}
+			}
+			// give the target MCU a chance to restart into bootloader
+			time.Sleep(3 * time.Second)
+		}
+	}
+
+	// Flash the binary to the MCU.
+	switch flashMethod {
+	case "", "command":
+		// Create the command.
+		flashCmd := config.Target.FlashCommand
+		flashCmdList, err := shlex.Split(flashCmd)
+		if err != nil {
+			return fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
+		}
+
+		if strings.Contains(flashCmd, "{port}") {
+			var err error
+			port, err = getDefaultPort(port, config.Target.SerialPort)
+			if err != nil {
+				return err
 			}
 		}
 
+		// Fill in fields in the command template.
+		fileToken := "{" + fileExt[1:] + "}"
+		for i, arg := range flashCmdList {
+			arg = strings.ReplaceAll(arg, fileToken, result.Binary)
+			arg = strings.ReplaceAll(arg, "{port}", port)
+			flashCmdList[i] = arg
+		}
+
+		// Execute the command.
+		if len(flashCmdList) < 2 {
+			return fmt.Errorf("invalid flash command: %#v", flashCmd)
+		}
+		cmd := executeCommand(config.Options, flashCmdList[0], flashCmdList[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Dir = goenv.Get("TINYGOROOT")
+		err = cmd.Run()
+		if err != nil {
+			return &commandError{"failed to flash", result.Binary, err}
+		}
+	case "msd":
 		// this flashing method copies the binary data to a Mass Storage Device (msd)
-		switch flashMethod {
-		case "", "command":
-			// Create the command.
-			flashCmd := config.Target.FlashCommand
-			flashCmdList, err := shlex.Split(flashCmd)
-			if err != nil {
-				return fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
-			}
-
-			if strings.Contains(flashCmd, "{port}") {
-				var err error
-				port, err = getDefaultPort(port, config.Target.SerialPort)
-				if err != nil {
-					return err
-				}
-			}
-
-			// Fill in fields in the command template.
-			fileToken := "{" + fileExt[1:] + "}"
-			for i, arg := range flashCmdList {
-				arg = strings.ReplaceAll(arg, fileToken, result.Binary)
-				arg = strings.ReplaceAll(arg, "{port}", port)
-				flashCmdList[i] = arg
-			}
-
-			// Execute the command.
-			if len(flashCmdList) < 2 {
-				return fmt.Errorf("invalid flash command: %#v", flashCmd)
-			}
-			cmd := executeCommand(config.Options, flashCmdList[0], flashCmdList[1:]...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Dir = goenv.Get("TINYGOROOT")
-			err = cmd.Run()
+		switch fileExt {
+		case ".uf2":
+			err := flashUF2UsingMSD(config.Target.FlashVolume, result.Binary, config.Options)
 			if err != nil {
 				return &commandError{"failed to flash", result.Binary, err}
 			}
-			return nil
-		case "msd":
-			switch fileExt {
-			case ".uf2":
-				err := flashUF2UsingMSD(config.Target.FlashVolume, result.Binary, config.Options)
-				if err != nil {
-					return &commandError{"failed to flash", result.Binary, err}
-				}
-				return nil
-			case ".hex":
-				err := flashHexUsingMSD(config.Target.FlashVolume, result.Binary, config.Options)
-				if err != nil {
-					return &commandError{"failed to flash", result.Binary, err}
-				}
-				return nil
-			default:
-				return errors.New("mass storage device flashing currently only supports uf2 and hex")
-			}
-		case "openocd":
-			args, err := config.OpenOCDConfiguration()
-			if err != nil {
-				return err
-			}
-			exit := " reset exit"
-			if config.Target.OpenOCDVerify != nil && *config.Target.OpenOCDVerify {
-				exit = " verify" + exit
-			}
-			args = append(args, "-c", "program "+filepath.ToSlash(result.Binary)+exit)
-			cmd := executeCommand(config.Options, "openocd", args...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err = cmd.Run()
+		case ".hex":
+			err := flashHexUsingMSD(config.Target.FlashVolume, result.Binary, config.Options)
 			if err != nil {
 				return &commandError{"failed to flash", result.Binary, err}
 			}
-			return nil
-		case "bmp":
-			gdb, err := config.Target.LookupGDB()
-			if err != nil {
-				return err
-			}
-			var bmpGDBPort string
-			bmpGDBPort, _, err = getBMPPorts()
-			if err != nil {
-				return err
-			}
-			args := []string{"-ex", "target extended-remote " + bmpGDBPort, "-ex", "monitor swdp_scan", "-ex", "attach 1", "-ex", "load", filepath.ToSlash(result.Binary)}
-			cmd := executeCommand(config.Options, gdb, args...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err = cmd.Run()
-			if err != nil {
-				return &commandError{"failed to flash", result.Binary, err}
-			}
-			return nil
 		default:
-			return fmt.Errorf("unknown flash method: %s", flashMethod)
+			return errors.New("mass storage device flashing currently only supports uf2 and hex")
 		}
-	})
+	case "openocd":
+		args, err := config.OpenOCDConfiguration()
+		if err != nil {
+			return err
+		}
+		exit := " reset exit"
+		if config.Target.OpenOCDVerify != nil && *config.Target.OpenOCDVerify {
+			exit = " verify" + exit
+		}
+		args = append(args, "-c", "program "+filepath.ToSlash(result.Binary)+exit)
+		cmd := executeCommand(config.Options, "openocd", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			return &commandError{"failed to flash", result.Binary, err}
+		}
+	case "bmp":
+		gdb, err := config.Target.LookupGDB()
+		if err != nil {
+			return err
+		}
+		var bmpGDBPort string
+		bmpGDBPort, _, err = getBMPPorts()
+		if err != nil {
+			return err
+		}
+		args := []string{"-ex", "target extended-remote " + bmpGDBPort, "-ex", "monitor swdp_scan", "-ex", "attach 1", "-ex", "load", filepath.ToSlash(result.Binary)}
+		cmd := executeCommand(config.Options, gdb, args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			return &commandError{"failed to flash", result.Binary, err}
+		}
+	default:
+		return fmt.Errorf("unknown flash method: %s", flashMethod)
+	}
+	if options.Monitor {
+		return Monitor(result.Executable, "", options)
+	}
+	return nil
 }
 
 // Debug compiles and flashes a program to a microcontroller (just like Flash)
@@ -482,195 +560,208 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		return err
 	}
 
-	format, fileExt := config.EmulatorFormat()
-	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
-		// Find a good way to run GDB.
-		gdbInterface, openocdInterface := config.Programmer()
-		switch gdbInterface {
-		case "msd", "command", "":
-			emulator := config.EmulatorName()
-			if emulator != "" {
-				if emulator == "mgba" {
-					gdbInterface = "mgba"
-				} else if emulator == "simavr" {
-					gdbInterface = "simavr"
-				} else if strings.HasPrefix(emulator, "qemu-system-") {
-					gdbInterface = "qemu"
-				} else {
-					// Assume QEMU as an emulator.
-					gdbInterface = "qemu-user"
-				}
-			} else if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
-				gdbInterface = "openocd"
-			} else if config.Target.JLinkDevice != "" {
-				gdbInterface = "jlink"
-			} else {
-				gdbInterface = "native"
-			}
-		}
+	// Create a temporary directory for intermediary files.
+	tmpdir, err := os.MkdirTemp("", "tinygo")
+	if err != nil {
+		return err
+	}
+	if !options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
 
-		// Run the GDB server, if necessary.
-		port := ""
-		var gdbCommands []string
-		var daemon *exec.Cmd
-		emulator, err := config.Emulator(format, result.Binary)
+	// Build the binary to debug.
+	format, fileExt := config.EmulatorFormat()
+	result, err := builder.Build(pkgName, fileExt, tmpdir, config)
+	if err != nil {
+		return err
+	}
+
+	// Find a good way to run GDB.
+	gdbInterface, openocdInterface := config.Programmer()
+	switch gdbInterface {
+	case "msd", "command", "":
+		emulator := config.EmulatorName()
+		if emulator != "" {
+			if emulator == "mgba" {
+				gdbInterface = "mgba"
+			} else if emulator == "simavr" {
+				gdbInterface = "simavr"
+			} else if strings.HasPrefix(emulator, "qemu-system-") {
+				gdbInterface = "qemu"
+			} else {
+				// Assume QEMU as an emulator.
+				gdbInterface = "qemu-user"
+			}
+		} else if openocdInterface != "" && config.Target.OpenOCDTarget != "" {
+			gdbInterface = "openocd"
+		} else if config.Target.JLinkDevice != "" {
+			gdbInterface = "jlink"
+		} else {
+			gdbInterface = "native"
+		}
+	}
+
+	// Run the GDB server, if necessary.
+	port := ""
+	var gdbCommands []string
+	var daemon *exec.Cmd
+	emulator, err := config.Emulator(format, result.Binary)
+	if err != nil {
+		return err
+	}
+	switch gdbInterface {
+	case "native":
+		// Run GDB directly.
+	case "bmp":
+		var bmpGDBPort string
+		bmpGDBPort, _, err = getBMPPorts()
 		if err != nil {
 			return err
 		}
-		switch gdbInterface {
-		case "native":
-			// Run GDB directly.
-		case "bmp":
-			var bmpGDBPort string
-			bmpGDBPort, _, err = getBMPPorts()
-			if err != nil {
-				return err
-			}
-			port = bmpGDBPort
-			gdbCommands = append(gdbCommands, "monitor swdp_scan", "compare-sections", "attach 1", "load")
-		case "openocd":
-			port = ":3333"
-			gdbCommands = append(gdbCommands, "monitor halt", "load", "monitor reset halt")
+		port = bmpGDBPort
+		gdbCommands = append(gdbCommands, "monitor swdp_scan", "compare-sections", "attach 1", "load")
+	case "openocd":
+		port = ":3333"
+		gdbCommands = append(gdbCommands, "monitor halt", "load", "monitor reset halt")
 
-			// We need a separate debugging daemon for on-chip debugging.
-			args, err := config.OpenOCDConfiguration()
-			if err != nil {
-				return err
-			}
-			daemon = executeCommand(config.Options, "openocd", args...)
-			if ocdOutput {
-				// Make it clear which output is from the daemon.
-				w := &ColorWriter{
-					Out:    colorable.NewColorableStderr(),
-					Prefix: "openocd: ",
-					Color:  TermColorYellow,
-				}
-				daemon.Stdout = w
-				daemon.Stderr = w
-			}
-		case "jlink":
-			port = ":2331"
-			gdbCommands = append(gdbCommands, "load", "monitor reset halt")
-
-			// We need a separate debugging daemon for on-chip debugging.
-			daemon = executeCommand(config.Options, "JLinkGDBServer", "-device", config.Target.JLinkDevice)
-			if ocdOutput {
-				// Make it clear which output is from the daemon.
-				w := &ColorWriter{
-					Out:    colorable.NewColorableStderr(),
-					Prefix: "jlink: ",
-					Color:  TermColorYellow,
-				}
-				daemon.Stdout = w
-				daemon.Stderr = w
-			}
-		case "qemu":
-			port = ":1234"
-			// Run in an emulator.
-			args := append(emulator[1:], "-s", "-S")
-			daemon = executeCommand(config.Options, emulator[0], args...)
-			daemon.Stdout = os.Stdout
-			daemon.Stderr = os.Stderr
-		case "qemu-user":
-			port = ":1234"
-			// Run in an emulator.
-			args := append(emulator[1:], "-g", "1234")
-			daemon = executeCommand(config.Options, emulator[0], args...)
-			daemon.Stdout = os.Stdout
-			daemon.Stderr = os.Stderr
-		case "mgba":
-			port = ":2345"
-			// Run in an emulator.
-			args := append(emulator[1:], "-g")
-			daemon = executeCommand(config.Options, emulator[0], args...)
-			daemon.Stdout = os.Stdout
-			daemon.Stderr = os.Stderr
-		case "simavr":
-			port = ":1234"
-			// Run in an emulator.
-			args := append(emulator[1:], "-g")
-			daemon = executeCommand(config.Options, emulator[0], args...)
-			daemon.Stdout = os.Stdout
-			daemon.Stderr = os.Stderr
-		case "msd":
-			return errors.New("gdb is not supported for drag-and-drop programmable devices")
-		default:
-			return fmt.Errorf("gdb is not supported with interface %#v", gdbInterface)
-		}
-
-		if daemon != nil {
-			// Make sure the daemon doesn't receive Ctrl-C that is intended for
-			// GDB (to break the currently executing program).
-			setCommandAsDaemon(daemon)
-
-			// Start now, and kill it on exit.
-			err = daemon.Start()
-			if err != nil {
-				return &commandError{"failed to run", daemon.Path, err}
-			}
-			defer func() {
-				daemon.Process.Signal(os.Interrupt)
-				var stopped uint32
-				go func() {
-					time.Sleep(time.Millisecond * 100)
-					if atomic.LoadUint32(&stopped) == 0 {
-						daemon.Process.Kill()
-					}
-				}()
-				daemon.Wait()
-				atomic.StoreUint32(&stopped, 1)
-			}()
-		}
-
-		// Ignore Ctrl-C, it must be passed on to GDB.
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		go func() {
-			for range c {
-			}
-		}()
-
-		// Construct and execute a gdb or lldb command.
-		// By default: gdb -ex run <binary>
-		// Exit the debugger with Ctrl-D.
-		params := []string{result.Executable}
-		switch debugger {
-		case "gdb":
-			if port != "" {
-				params = append(params, "-ex", "target extended-remote "+port)
-			}
-			for _, cmd := range gdbCommands {
-				params = append(params, "-ex", cmd)
-			}
-		case "lldb":
-			params = append(params, "--arch", config.Triple())
-			if port != "" {
-				if strings.HasPrefix(port, ":") {
-					params = append(params, "-o", "gdb-remote "+port[1:])
-				} else {
-					return fmt.Errorf("cannot use LLDB over a gdb-remote that isn't a TCP port: %s", port)
-				}
-			}
-			for _, cmd := range gdbCommands {
-				if strings.HasPrefix(cmd, "monitor ") {
-					params = append(params, "-o", "process plugin packet "+cmd)
-				} else if cmd == "load" {
-					params = append(params, "-o", "target modules load --load --slide 0")
-				} else {
-					return fmt.Errorf("don't know how to convert GDB command %#v to LLDB", cmd)
-				}
-			}
-		}
-		cmd := executeCommand(config.Options, cmdName, params...)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err = cmd.Run()
+		// We need a separate debugging daemon for on-chip debugging.
+		args, err := config.OpenOCDConfiguration()
 		if err != nil {
-			return &commandError{"failed to run " + cmdName + " with", result.Executable, err}
+			return err
 		}
-		return nil
-	})
+		daemon = executeCommand(config.Options, "openocd", args...)
+		if ocdOutput {
+			// Make it clear which output is from the daemon.
+			w := &ColorWriter{
+				Out:    colorable.NewColorableStderr(),
+				Prefix: "openocd: ",
+				Color:  TermColorYellow,
+			}
+			daemon.Stdout = w
+			daemon.Stderr = w
+		}
+	case "jlink":
+		port = ":2331"
+		gdbCommands = append(gdbCommands, "load", "monitor reset halt")
+
+		// We need a separate debugging daemon for on-chip debugging.
+		daemon = executeCommand(config.Options, "JLinkGDBServer", "-device", config.Target.JLinkDevice)
+		if ocdOutput {
+			// Make it clear which output is from the daemon.
+			w := &ColorWriter{
+				Out:    colorable.NewColorableStderr(),
+				Prefix: "jlink: ",
+				Color:  TermColorYellow,
+			}
+			daemon.Stdout = w
+			daemon.Stderr = w
+		}
+	case "qemu":
+		port = ":1234"
+		// Run in an emulator.
+		args := append(emulator[1:], "-s", "-S")
+		daemon = executeCommand(config.Options, emulator[0], args...)
+		daemon.Stdout = os.Stdout
+		daemon.Stderr = os.Stderr
+	case "qemu-user":
+		port = ":1234"
+		// Run in an emulator.
+		args := append([]string{"-g", "1234"}, emulator[1:]...)
+		daemon = executeCommand(config.Options, emulator[0], args...)
+		daemon.Stdout = os.Stdout
+		daemon.Stderr = os.Stderr
+	case "mgba":
+		port = ":2345"
+		// Run in an emulator.
+		args := append(emulator[1:], "-g")
+		daemon = executeCommand(config.Options, emulator[0], args...)
+		daemon.Stdout = os.Stdout
+		daemon.Stderr = os.Stderr
+	case "simavr":
+		port = ":1234"
+		// Run in an emulator.
+		args := append(emulator[1:], "-g")
+		daemon = executeCommand(config.Options, emulator[0], args...)
+		daemon.Stdout = os.Stdout
+		daemon.Stderr = os.Stderr
+	case "msd":
+		return errors.New("gdb is not supported for drag-and-drop programmable devices")
+	default:
+		return fmt.Errorf("gdb is not supported with interface %#v", gdbInterface)
+	}
+
+	if daemon != nil {
+		// Make sure the daemon doesn't receive Ctrl-C that is intended for
+		// GDB (to break the currently executing program).
+		setCommandAsDaemon(daemon)
+
+		// Start now, and kill it on exit.
+		err = daemon.Start()
+		if err != nil {
+			return &commandError{"failed to run", daemon.Path, err}
+		}
+		defer func() {
+			daemon.Process.Signal(os.Interrupt)
+			var stopped uint32
+			go func() {
+				time.Sleep(time.Millisecond * 100)
+				if atomic.LoadUint32(&stopped) == 0 {
+					daemon.Process.Kill()
+				}
+			}()
+			daemon.Wait()
+			atomic.StoreUint32(&stopped, 1)
+		}()
+	}
+
+	// Ignore Ctrl-C, it must be passed on to GDB.
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		for range c {
+		}
+	}()
+
+	// Construct and execute a gdb or lldb command.
+	// By default: gdb -ex run <binary>
+	// Exit the debugger with Ctrl-D.
+	params := []string{result.Executable}
+	switch debugger {
+	case "gdb":
+		if port != "" {
+			params = append(params, "-ex", "target extended-remote "+port)
+		}
+		for _, cmd := range gdbCommands {
+			params = append(params, "-ex", cmd)
+		}
+	case "lldb":
+		params = append(params, "--arch", config.Triple())
+		if port != "" {
+			if strings.HasPrefix(port, ":") {
+				params = append(params, "-o", "gdb-remote "+port[1:])
+			} else {
+				return fmt.Errorf("cannot use LLDB over a gdb-remote that isn't a TCP port: %s", port)
+			}
+		}
+		for _, cmd := range gdbCommands {
+			if strings.HasPrefix(cmd, "monitor ") {
+				params = append(params, "-o", "process plugin packet "+cmd)
+			} else if cmd == "load" {
+				params = append(params, "-o", "target modules load --load --slide 0")
+			} else {
+				return fmt.Errorf("don't know how to convert GDB command %#v to LLDB", cmd)
+			}
+		}
+	}
+	cmd := executeCommand(config.Options, cmdName, params...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		return &commandError{"failed to run " + cmdName + " with", result.Executable, err}
+	}
+	return nil
 }
 
 // Run compiles and runs the given program. Depending on the target provided in
@@ -683,16 +774,17 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 		return err
 	}
 
-	return buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
 		return cmd.Run()
 	})
+	return err
 }
 
 // buildAndRun builds and runs the given program, writing output to stdout and
 // errors to os.Stderr. It takes care of emulators (qemu, wasmtime, etc) and
 // passes command line arguments and evironment variables in a way appropriate
 // for the given emulator.
-func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) error {
+func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) (builder.BuildResult, error) {
 	// Determine whether we're on a system that supports environment variables
 	// and command line parameters (operating systems, WASI) or not (baremetal,
 	// WebAssembly in the browser). If we're on a system without an environment,
@@ -706,6 +798,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		}
 	}
 	var args, env []string
+	var extraCmdEnv []string
 	if needsEnvInVars {
 		runtimeGlobals := make(map[string]string)
 		if len(cmdArgs) != 0 {
@@ -736,6 +829,11 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			args = append(args, "--")
 			args = append(args, cmdArgs...)
 		}
+
+		// Set this for nicer backtraces during tests, but don't override the user.
+		if _, ok := os.LookupEnv("WASMTIME_BACKTRACE_DETAILS"); !ok {
+			extraCmdEnv = append(extraCmdEnv, "WASMTIME_BACKTRACE_DETAILS=1")
+		}
 	} else {
 		// Pass environment variables and command line parameters as usual.
 		// This also works on qemu-aarch64 etc.
@@ -743,69 +841,83 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		env = environmentVars
 	}
 
+	// Create a temporary directory for intermediary files.
+	tmpdir, err := os.MkdirTemp("", "tinygo")
+	if err != nil {
+		return builder.BuildResult{}, err
+	}
+	if !config.Options.Work {
+		defer os.RemoveAll(tmpdir)
+	}
+
+	// Build the binary to be run.
 	format, fileExt := config.EmulatorFormat()
-	return builder.Build(pkgName, fileExt, config, func(result builder.BuildResult) error {
-		// If needed, set a timeout on the command. This is done in tests so
-		// they don't waste resources on a stalled test.
-		var ctx context.Context
-		if timeout != 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-		}
+	result, err := builder.Build(pkgName, fileExt, tmpdir, config)
+	if err != nil {
+		return result, err
+	}
 
-		// Set up the command.
-		var name string
-		if config.Target.Emulator == "" {
-			name = result.Binary
-		} else {
-			emulator, err := config.Emulator(format, result.Binary)
-			if err != nil {
-				return err
-			}
-			name = emulator[0]
-			emuArgs := append([]string(nil), emulator[1:]...)
-			args = append(emuArgs, args...)
-		}
-		var cmd *exec.Cmd
-		if ctx != nil {
-			cmd = exec.CommandContext(ctx, name, args...)
-		} else {
-			cmd = exec.Command(name, args...)
-		}
-		cmd.Env = env
+	// If needed, set a timeout on the command. This is done in tests so
+	// they don't waste resources on a stalled test.
+	var ctx context.Context
+	if timeout != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+	}
 
-		// Configure stdout/stderr. The stdout may go to a buffer, not a real
-		// stdout.
-		cmd.Stdout = stdout
-		cmd.Stderr = os.Stderr
-		if config.EmulatorName() == "simavr" {
-			cmd.Stdout = nil // don't print initial load commands
-			cmd.Stderr = stdout
-		}
-
-		// If this is a test, reserve CPU time for it so that increased
-		// parallelism doesn't blow up memory usage. If this isn't a test but
-		// simply `tinygo run`, then it is practically a no-op.
-		config.Options.Semaphore <- struct{}{}
-		defer func() {
-			<-config.Options.Semaphore
-		}()
-
-		// Run binary.
-		if config.Options.PrintCommands != nil {
-			config.Options.PrintCommands(cmd.Path, cmd.Args...)
-		}
-		err := run(cmd, result)
+	// Set up the command.
+	var name string
+	if config.Target.Emulator == "" {
+		name = result.Binary
+	} else {
+		emulator, err := config.Emulator(format, result.Binary)
 		if err != nil {
-			if ctx != nil && ctx.Err() == context.DeadlineExceeded {
-				stdout.Write([]byte(fmt.Sprintf("--- timeout of %s exceeded, terminating...\n", timeout)))
-				err = ctx.Err()
-			}
-			return &commandError{"failed to run compiled binary", result.Binary, err}
+			return result, err
 		}
-		return nil
-	})
+		name = emulator[0]
+		emuArgs := append([]string(nil), emulator[1:]...)
+		args = append(emuArgs, args...)
+	}
+	var cmd *exec.Cmd
+	if ctx != nil {
+		cmd = exec.CommandContext(ctx, name, args...)
+	} else {
+		cmd = exec.Command(name, args...)
+	}
+	cmd.Env = append(cmd.Env, env...)
+	cmd.Env = append(cmd.Env, extraCmdEnv...)
+
+	// Configure stdout/stderr. The stdout may go to a buffer, not a real
+	// stdout.
+	cmd.Stdout = stdout
+	cmd.Stderr = os.Stderr
+	if config.EmulatorName() == "simavr" {
+		cmd.Stdout = nil // don't print initial load commands
+		cmd.Stderr = stdout
+	}
+
+	// If this is a test, reserve CPU time for it so that increased
+	// parallelism doesn't blow up memory usage. If this isn't a test but
+	// simply `tinygo run`, then it is practically a no-op.
+	config.Options.Semaphore <- struct{}{}
+	defer func() {
+		<-config.Options.Semaphore
+	}()
+
+	// Run binary.
+	if config.Options.PrintCommands != nil {
+		config.Options.PrintCommands(cmd.Path, cmd.Args...)
+	}
+	err = run(cmd, result)
+	if err != nil {
+		if ctx != nil && ctx.Err() == context.DeadlineExceeded {
+			stdout.Write([]byte(fmt.Sprintf("--- timeout of %s exceeded, terminating...\n", timeout)))
+			err = ctx.Err()
+		}
+		return result, &commandError{"failed to run compiled binary", result.Binary, err}
+	}
+	return result, nil
 }
 
 func touchSerialPortAt1200bps(port string) (err error) {
@@ -833,30 +945,29 @@ func touchSerialPortAt1200bps(port string) (err error) {
 	return fmt.Errorf("opening port: %s", err)
 }
 
-const maxMSDRetries = 10
-
-func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) error {
+func flashUF2UsingMSD(volumes []string, tmppath string, options *compileopts.Options) error {
 	// find standard UF2 info path
-	var infoPath string
-	switch runtime.GOOS {
-	case "linux", "freebsd":
-		fi, err := os.Stat("/run/media")
-		if err != nil || !fi.IsDir() {
-			infoPath = "/media/*/" + volume + "/INFO_UF2.TXT"
-		} else {
-			infoPath = "/run/media/*/" + volume + "/INFO_UF2.TXT"
+	infoPaths := make([]string, 0, len(volumes))
+	for _, volume := range volumes {
+		switch runtime.GOOS {
+		case "linux", "freebsd":
+			fi, err := os.Stat("/run/media")
+			if err != nil || !fi.IsDir() {
+				infoPaths = append(infoPaths, "/media/*/"+volume+"/INFO_UF2.TXT")
+			} else {
+				infoPaths = append(infoPaths, "/run/media/*/"+volume+"/INFO_UF2.TXT")
+			}
+		case "darwin":
+			infoPaths = append(infoPaths, "/Volumes/"+volume+"/INFO_UF2.TXT")
+		case "windows":
+			path, err := windowsFindUSBDrive(volume, options)
+			if err == nil {
+				infoPaths = append(infoPaths, path+"/INFO_UF2.TXT")
+			}
 		}
-	case "darwin":
-		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
-	case "windows":
-		path, err := windowsFindUSBDrive(volume, options)
-		if err != nil {
-			return err
-		}
-		infoPath = path + "/INFO_UF2.TXT"
 	}
 
-	d, err := locateDevice(volume, infoPath)
+	d, err := locateDevice(volumes, infoPaths, options.Timeout)
 	if err != nil {
 		return err
 	}
@@ -864,28 +975,29 @@ func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	return moveFile(tmppath, filepath.Dir(d)+"/flash.uf2")
 }
 
-func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) error {
+func flashHexUsingMSD(volumes []string, tmppath string, options *compileopts.Options) error {
 	// find expected volume path
-	var destPath string
-	switch runtime.GOOS {
-	case "linux", "freebsd":
-		fi, err := os.Stat("/run/media")
-		if err != nil || !fi.IsDir() {
-			destPath = "/media/*/" + volume
-		} else {
-			destPath = "/run/media/*/" + volume
+	destPaths := make([]string, 0, len(volumes))
+	for _, volume := range volumes {
+		switch runtime.GOOS {
+		case "linux", "freebsd":
+			fi, err := os.Stat("/run/media")
+			if err != nil || !fi.IsDir() {
+				destPaths = append(destPaths, "/media/*/"+volume)
+			} else {
+				destPaths = append(destPaths, "/run/media/*/"+volume)
+			}
+		case "darwin":
+			destPaths = append(destPaths, "/Volumes/"+volume)
+		case "windows":
+			path, err := windowsFindUSBDrive(volume, options)
+			if err == nil {
+				destPaths = append(destPaths, path+"/")
+			}
 		}
-	case "darwin":
-		destPath = "/Volumes/" + volume
-	case "windows":
-		path, err := windowsFindUSBDrive(volume, options)
-		if err != nil {
-			return err
-		}
-		destPath = path + "/"
 	}
 
-	d, err := locateDevice(volume, destPath)
+	d, err := locateDevice(volumes, destPaths, options.Timeout)
 	if err != nil {
 		return err
 	}
@@ -893,21 +1005,28 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	return moveFile(tmppath, d+"/flash.hex")
 }
 
-func locateDevice(volume, path string) (string, error) {
+func locateDevice(volumes, paths []string, timeout time.Duration) (string, error) {
 	var d []string
 	var err error
-	for i := 0; i < maxMSDRetries; i++ {
-		d, err = filepath.Glob(path)
-		if err != nil {
-			return "", err
+	for start := time.Now(); time.Since(start) < timeout; {
+		for _, path := range paths {
+			d, err = filepath.Glob(path)
+			if err != nil {
+				return "", err
+			}
+			if d != nil {
+				break
+			}
 		}
+
 		if d != nil {
 			break
 		}
+
 		time.Sleep(500 * time.Millisecond)
 	}
 	if d == nil {
-		return "", errors.New("unable to locate device: " + volume)
+		return "", errors.New("unable to locate any volume: [" + strings.Join(volumes, ",") + "]")
 	}
 	return d[0], nil
 }
@@ -956,18 +1075,14 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 		var preferredPortIDs [][2]uint16
 		for _, s := range usbInterfaces {
 			parts := strings.Split(s, ":")
-			if len(parts) != 3 || (parts[0] != "acm" && parts[0] == "usb") {
-				// acm and usb are the two types of serial ports recognized
-				// under Linux (ttyACM*, ttyUSB*). Other operating systems don't
-				// generally make this distinction. If this is not one of the
-				// given USB devices, don't try to parse the USB IDs.
-				continue
+			if len(parts) != 2 {
+				return "", fmt.Errorf("could not parse USB VID/PID pair %q", s)
 			}
-			vid, err := strconv.ParseUint(parts[1], 16, 16)
+			vid, err := strconv.ParseUint(parts[0], 16, 16)
 			if err != nil {
 				return "", fmt.Errorf("could not parse USB vendor ID %q: %w", parts[1], err)
 			}
-			pid, err := strconv.ParseUint(parts[2], 16, 16)
+			pid, err := strconv.ParseUint(parts[1], 16, 16)
 			if err != nil {
 				return "", fmt.Errorf("could not parse USB product ID %q: %w", parts[1], err)
 			}
@@ -1015,18 +1130,6 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 			// available in the system.
 			ports = secondaryPorts
 		}
-
-		if len(ports) == 0 {
-			// fallback
-			switch runtime.GOOS {
-			case "darwin":
-				ports, err = filepath.Glob("/dev/cu.usb*")
-			case "linux":
-				ports, err = filepath.Glob("/dev/ttyACM*")
-			case "windows":
-				ports, err = serial.GetPortsList()
-			}
-		}
 	default:
 		return "", errors.New("unable to search for a default USB device to be flashed on this OS")
 	}
@@ -1040,7 +1143,9 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 	}
 
 	if len(portCandidates) == 0 {
-		if len(ports) == 1 {
+		if len(usbInterfaces) > 0 {
+			return "", errors.New("unable to search for a default USB device - use -port flag, available ports are " + strings.Join(ports, ", "))
+		} else if len(ports) == 1 {
 			return ports[0], nil
 		} else {
 			return "", errors.New("multiple serial ports available - use -port flag, available ports are " + strings.Join(ports, ", "))
@@ -1105,6 +1210,7 @@ func usage(command string) {
 		fmt.Fprintln(os.Stderr, "  flash:   compile and flash to the device")
 		fmt.Fprintln(os.Stderr, "  gdb:     run/flash and immediately enter GDB")
 		fmt.Fprintln(os.Stderr, "  lldb:    run/flash and immediately enter LLDB")
+		fmt.Fprintln(os.Stderr, "  monitor: open communication port")
 		fmt.Fprintln(os.Stderr, "  env:     list environment variables used during build")
 		fmt.Fprintln(os.Stderr, "  list:    run go list using the TinyGo root")
 		fmt.Fprintln(os.Stderr, "  clean:   empty cache directory ("+goenv.Get("GOCACHE")+")")
@@ -1294,11 +1400,16 @@ func main() {
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, asyncify)")
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb)")
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
-	printIR := flag.Bool("printir", false, "print LLVM IR")
-	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
-	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
-	tags := flag.String("tags", "", "a space-separated list of extra build tags")
+	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
+	var tags buildutil.TagsFlag
+	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
+	var stackSize uint64
+	flag.Func("stack-size", "goroutine stack size (if unknown at compile time)", func(s string) error {
+		size, err := bytesize.Parse(s)
+		stackSize = uint64(size)
+		return err
+	})
 	printSize := flag.String("size", "", "print sizes (none, short, full)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
@@ -1308,11 +1419,24 @@ func main() {
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
+	timeout := flag.Duration("timeout", 20*time.Second, "the length of time to retry locating the MSD volume to be used for flashing")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
-	wasmAbi := flag.String("wasm-abi", "", "WebAssembly ABI conventions: js (no i64 params) or generic")
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
+	monitor := flag.Bool("monitor", false, "enable serial monitor")
+	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
+
+	// Internal flags, that are only intended for TinyGo development.
+	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
+	dumpSSA := flag.Bool("internal-dumpssa", false, "dump internal Go SSA")
+	verifyIR := flag.Bool("internal-verifyir", false, "run extra verification steps on LLVM IR")
+	// Don't generate debug information in the IR, to make IR more readable.
+	// You generally want debug information in IR for various features, like
+	// stack size calculation and features like -size=short, -print-allocs=,
+	// etc. The -no-debug flag is used to strip it at link time. But for TinyGo
+	// development it can be useful to not emit debug information at all.
+	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, use -no-debug instead")
 
 	var flagJSON, flagDeps, flagTest bool
 	if command == "help" || command == "list" || command == "info" || command == "build" {
@@ -1326,17 +1450,19 @@ func main() {
 	if command == "help" || command == "build" || command == "build-library" || command == "test" {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
-	var testCompileOnlyFlag, testVerboseFlag, testShortFlag *bool
-	var testBenchRegexp *string
-	var testBenchTime *string
-	var testRunRegexp *string
+
+	var testConfig compileopts.TestConfig
 	if command == "help" || command == "test" {
-		testCompileOnlyFlag = flag.Bool("c", false, "compile the test binary but do not run it")
-		testVerboseFlag = flag.Bool("v", false, "verbose: print additional output")
-		testShortFlag = flag.Bool("short", false, "short: run smaller test suite to save time")
-		testRunRegexp = flag.String("run", "", "run: regexp of tests to run")
-		testBenchRegexp = flag.String("bench", "", "run: regexp of benchmarks to run")
-		testBenchTime = flag.String("benchtime", "", "run each benchmark for duration `d`")
+		flag.BoolVar(&testConfig.CompileOnly, "c", false, "compile the test binary but do not run it")
+		flag.BoolVar(&testConfig.Verbose, "v", false, "verbose: print additional output")
+		flag.BoolVar(&testConfig.Short, "short", false, "short: run smaller test suite to save time")
+		flag.StringVar(&testConfig.RunRegexp, "run", "", "run: regexp of tests to run")
+		flag.StringVar(&testConfig.SkipRegexp, "skip", "", "skip: regexp of tests to skip")
+		testConfig.Count = flag.Int("count", 1, "count: number of times to run tests/benchmarks `count` times")
+		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "bench: regexp of benchmarks to run")
+		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
+		flag.BoolVar(&testConfig.BenchMem, "benchmem", false, "show memory stats for benchmarks")
+		flag.StringVar(&testConfig.Shuffle, "shuffle", "", "shuffle the order the tests and benchmarks run")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -1377,27 +1503,33 @@ func main() {
 		GOARCH:          goenv.Get("GOARCH"),
 		GOARM:           goenv.Get("GOARM"),
 		Target:          *target,
+		StackSize:       stackSize,
 		Opt:             *opt,
 		GC:              *gc,
 		PanicStrategy:   *panicStrategy,
 		Scheduler:       *scheduler,
 		Serial:          *serial,
 		Work:            *work,
+		InterpTimeout:   *interpTimeout,
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
+		SkipDWARF:       *skipDwarf,
 		Semaphore:       make(chan struct{}, *parallelism),
 		Debug:           !*nodebug,
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
 		PrintAllocs:     printAllocs,
-		Tags:            *tags,
+		Tags:            []string(tags),
+		TestConfig:      testConfig,
 		GlobalValues:    globalVarValues,
-		WasmAbi:         *wasmAbi,
 		Programmer:      *programmer,
 		OpenOCDCommands: ocdCommands,
 		LLVMFeatures:    *llvmFeatures,
 		PrintJSON:       flagJSON,
+		Monitor:         *monitor,
+		BaudRate:        *baudrate,
+		Timeout:         *timeout,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
@@ -1465,7 +1597,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Unknown library: %s\n", name)
 			os.Exit(1)
 		}
-		tmpdir, err := ioutil.TempDir("", "tinygo*")
+		tmpdir, err := os.MkdirTemp("", "tinygo*")
 		if err != nil {
 			handleCompilerError(err)
 		}
@@ -1566,7 +1698,7 @@ func main() {
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
 				stderr := (*testStderr)(buf)
-				passed, err := Test(pkgName, stdout, stderr, options, *testCompileOnlyFlag, *testVerboseFlag, *testShortFlag, *testRunRegexp, *testBenchRegexp, *testBenchTime, outpath)
+				passed, err := Test(pkgName, stdout, stderr, options, outpath)
 				if err != nil {
 					printCompilerError(func(args ...interface{}) {
 						fmt.Fprintln(stderr, args...)
@@ -1585,9 +1717,11 @@ func main() {
 		wg.Wait()
 		close(fail)
 		if _, fail := <-fail; fail {
-			fmt.Println("FAIL")
 			os.Exit(1)
 		}
+	case "monitor":
+		err := Monitor("", *port, options)
+		handleCompilerError(err)
 	case "targets":
 		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
 		entries, err := ioutil.ReadDir(dir)
@@ -1666,7 +1800,6 @@ func main() {
 			fmt.Printf("LLVM triple:       %s\n", config.Triple())
 			fmt.Printf("GOOS:              %s\n", config.GOOS())
 			fmt.Printf("GOARCH:            %s\n", config.GOARCH())
-			fmt.Printf("GOARM:             %s\n", config.GOARM())
 			fmt.Printf("build tags:        %s\n", strings.Join(config.BuildTags(), " "))
 			fmt.Printf("garbage collector: %s\n", config.GC())
 			fmt.Printf("scheduler:         %s\n", config.Scheduler())

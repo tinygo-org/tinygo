@@ -27,7 +27,7 @@ func ReplacePanicsWithTrap(mod llvm.Module) {
 				panic("expected use of a panic function to be a call")
 			}
 			builder.SetInsertPointBefore(use)
-			builder.CreateCall(trap, nil, "")
+			builder.CreateCall(trap.GlobalValueType(), trap, nil, "")
 		}
 	}
 }

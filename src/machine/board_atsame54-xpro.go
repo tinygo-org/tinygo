@@ -1,5 +1,4 @@
 //go:build atsame54_xpro
-// +build atsame54_xpro
 
 package machine
 
@@ -8,7 +7,7 @@ import (
 )
 
 // Definition for compatibility, but not used
-const RESET_MAGIC_VALUE = 0x00000000
+const resetMagicValue = 0x00000000
 
 const (
 	LED    = PC18

@@ -1,9 +1,9 @@
 //go:build !baremetal && !js
-// +build !baremetal,!js
 
 package os_test
 
 import (
+	"errors"
 	"io"
 	. "os"
 	"runtime"
@@ -30,12 +30,19 @@ func TestTempDir(t *testing.T) {
 }
 
 func TestChdir(t *testing.T) {
-	// create and cd into a new directory
+	// Save and restore the current working directory after the test, otherwise
+	// we might break other tests that depend on it.
+	//
+	// Note that it doesn't work if Chdir is broken, but then this test should
+	// fail and highlight the issue if that is the case.
 	oldDir, err := Getwd()
 	if err != nil {
 		t.Errorf("Getwd() returned %v", err)
 		return
 	}
+	defer Chdir(oldDir)
+
+	// create and cd into a new directory
 	dir := "_os_test_TestChDir"
 	Remove(dir)
 	err = Mkdir(dir, 0755)
@@ -60,9 +67,7 @@ func TestChdir(t *testing.T) {
 		t.Errorf("Close %s: %s", file, err)
 	}
 	// cd back to original directory
-	// TODO: emulate "cd .." in wasi-libc better?
-	//err = Chdir("..")
-	err = Chdir(oldDir)
+	err = Chdir("..")
 	if err != nil {
 		t.Errorf("Chdir ..: %s", err)
 	}
@@ -119,5 +124,64 @@ func TestFd(t *testing.T) {
 
 	if string(b) != data[:5] {
 		t.Errorf("File descriptor contents not equal to file contents.")
+	}
+}
+
+// closeTests is the list of tests used to validate that after calling Close,
+// calling any method of File returns ErrClosed.
+var closeTests = map[string]func(*File) error{
+	"Close": func(f *File) error {
+		return f.Close()
+	},
+	"Read": func(f *File) error {
+		_, err := f.Read(nil)
+		return err
+	},
+	"ReadAt": func(f *File) error {
+		_, err := f.ReadAt(nil, 0)
+		return err
+	},
+	"Seek": func(f *File) error {
+		_, err := f.Seek(0, 0)
+		return err
+	},
+	"Sync": func(f *File) error {
+		return f.Sync()
+	},
+	"SyscallConn": func(f *File) error {
+		_, err := f.SyscallConn()
+		return err
+	},
+	"Truncate": func(f *File) error {
+		return f.Truncate(0)
+	},
+	"Write": func(f *File) error {
+		_, err := f.Write(nil)
+		return err
+	},
+	"WriteAt": func(f *File) error {
+		_, err := f.WriteAt(nil, 0)
+		return err
+	},
+	"WriteString": func(f *File) error {
+		_, err := f.WriteString("")
+		return err
+	},
+}
+
+func TestClose(t *testing.T) {
+	f := newFile("TestClose.txt", t)
+
+	if err := f.Close(); err != nil {
+		t.Error("unexpected error closing the file:", err)
+	}
+	if fd := f.Fd(); fd != ^uintptr(0) {
+		t.Error("unexpected file handle after closing the file:", fd)
+	}
+
+	for name, test := range closeTests {
+		if err := test(f); !errors.Is(err, ErrClosed) {
+			t.Errorf("unexpected error returned by calling %s on a closed file: %v", name, err)
+		}
 	}
 }

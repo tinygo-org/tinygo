@@ -1,5 +1,4 @@
 //go:build baremetal || js
-// +build baremetal js
 
 package syscall
 
@@ -210,4 +209,12 @@ func Getpagesize() int {
 	// There is no right value to return here, but 4096 is a
 	// common assumption when pagesize is unknown
 	return 4096
+}
+
+type RawSockaddrInet4 struct {
+	// stub
+}
+
+type RawSockaddrInet6 struct {
+	// stub
 }

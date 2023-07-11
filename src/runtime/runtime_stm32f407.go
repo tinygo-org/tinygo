@@ -1,19 +1,19 @@
 //go:build stm32f4 && stm32f407
-// +build stm32f4,stm32f407
 
 package runtime
 
 import "device/stm32"
 
 /*
-   clock settings
-   +-------------+--------+
-   | HSE         | 8mhz   |
-   | SYSCLK      | 168mhz |
-   | HCLK        | 168mhz |
-   | APB2(PCLK2) | 84mhz  |
-   | APB1(PCLK1) | 42mhz  |
-   +-------------+--------+
+clock settings
+
+	+-------------+--------+
+	| HSE         | 8mhz   |
+	| SYSCLK      | 168mhz |
+	| HCLK        | 168mhz |
+	| APB2(PCLK2) | 84mhz  |
+	| APB1(PCLK1) | 42mhz  |
+	+-------------+--------+
 */
 const (
 	HSE_STARTUP_TIMEOUT = 0x0500

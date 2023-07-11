@@ -2,7 +2,7 @@ package transform_test
 
 import (
 	"go/token"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -62,7 +62,7 @@ func TestAllocs2(t *testing.T) {
 	}
 
 	// Load expected test output (the OUT: lines).
-	testInput, err := ioutil.ReadFile("./testdata/allocs2.go")
+	testInput, err := os.ReadFile("./testdata/allocs2.go")
 	if err != nil {
 		t.Fatal("could not read test input:", err)
 	}

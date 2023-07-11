@@ -1,16 +1,16 @@
 //go:build (sam && atsamd51) || (sam && atsame5x)
-// +build sam,atsamd51 sam,atsame5x
 
 // Peripheral abstraction layer for the atsamd51.
 //
 // Datasheet:
 // http://ww1.microchip.com/downloads/en/DeviceDoc/60001507C.pdf
-//
 package machine
 
 import (
+	"bytes"
 	"device/arm"
 	"device/sam"
+	"encoding/binary"
 	"errors"
 	"runtime/interrupt"
 	"unsafe"
@@ -79,86 +79,86 @@ const (
 	PA05 Pin = 5
 	PA06 Pin = 6
 	PA07 Pin = 7
-	PA08 Pin = 8
-	PA09 Pin = 9
-	PA10 Pin = 10
-	PA11 Pin = 11
-	PA12 Pin = 12
-	PA13 Pin = 13
-	PA14 Pin = 14
-	PA15 Pin = 15
-	PA16 Pin = 16
-	PA17 Pin = 17
-	PA18 Pin = 18
-	PA19 Pin = 19
-	PA20 Pin = 20
-	PA21 Pin = 21
-	PA22 Pin = 22
-	PA23 Pin = 23
-	PA24 Pin = 24
-	PA25 Pin = 25
+	PA08 Pin = 8  // peripherals: TCC0 channel 0, TCC1 channel 4
+	PA09 Pin = 9  // peripherals: TCC0 channel 1, TCC1 channel 5
+	PA10 Pin = 10 // peripherals: TCC0 channel 2, TCC1 channel 6
+	PA11 Pin = 11 // peripherals: TCC0 channel 3, TCC1 channel 7
+	PA12 Pin = 12 // peripherals: TCC0 channel 6, TCC1 channel 2
+	PA13 Pin = 13 // peripherals: TCC0 channel 7, TCC1 channel 3
+	PA14 Pin = 14 // peripherals: TCC2 channel 0, TCC1 channel 2
+	PA15 Pin = 15 // peripherals: TCC2 channel 1, TCC1 channel 3
+	PA16 Pin = 16 // peripherals: TCC1 channel 0, TCC0 channel 4
+	PA17 Pin = 17 // peripherals: TCC1 channel 1, TCC0 channel 5
+	PA18 Pin = 18 // peripherals: TCC1 channel 2, TCC0 channel 6
+	PA19 Pin = 19 // peripherals: TCC1 channel 3, TCC0 channel 7
+	PA20 Pin = 20 // peripherals: TCC1 channel 4, TCC0 channel 0
+	PA21 Pin = 21 // peripherals: TCC1 channel 5, TCC0 channel 1
+	PA22 Pin = 22 // peripherals: TCC1 channel 6, TCC0 channel 2
+	PA23 Pin = 23 // peripherals: TCC1 channel 7, TCC0 channel 3
+	PA24 Pin = 24 // peripherals: TCC2 channel 2
+	PA25 Pin = 25 // peripherals: TCC2 channel 3
 	PA26 Pin = 26
 	PA27 Pin = 27
 	PA28 Pin = 28
 	PA29 Pin = 29
-	PA30 Pin = 30
-	PA31 Pin = 31
+	PA30 Pin = 30 // peripherals: TCC2 channel 0
+	PA31 Pin = 31 // peripherals: TCC2 channel 1
 	PB00 Pin = 32
 	PB01 Pin = 33
-	PB02 Pin = 34
-	PB03 Pin = 35
+	PB02 Pin = 34 // peripherals: TCC2 channel 2
+	PB03 Pin = 35 // peripherals: TCC2 channel 3
 	PB04 Pin = 36
 	PB05 Pin = 37
 	PB06 Pin = 38
 	PB07 Pin = 39
 	PB08 Pin = 40
 	PB09 Pin = 41
-	PB10 Pin = 42
-	PB11 Pin = 43
-	PB12 Pin = 44
-	PB13 Pin = 45
-	PB14 Pin = 46
-	PB15 Pin = 47
-	PB16 Pin = 48
-	PB17 Pin = 49
-	PB18 Pin = 50
-	PB19 Pin = 51
-	PB20 Pin = 52
-	PB21 Pin = 53
+	PB10 Pin = 42 // peripherals: TCC0 channel 4, TCC1 channel 0
+	PB11 Pin = 43 // peripherals: TCC0 channel 5, TCC1 channel 1
+	PB12 Pin = 44 // peripherals: TCC3 channel 0, TCC0 channel 0
+	PB13 Pin = 45 // peripherals: TCC3 channel 1, TCC0 channel 1
+	PB14 Pin = 46 // peripherals: TCC4 channel 0, TCC0 channel 2
+	PB15 Pin = 47 // peripherals: TCC4 channel 1, TCC0 channel 3
+	PB16 Pin = 48 // peripherals: TCC3 channel 0, TCC0 channel 4
+	PB17 Pin = 49 // peripherals: TCC3 channel 1, TCC0 channel 5
+	PB18 Pin = 50 // peripherals: TCC1 channel 0
+	PB19 Pin = 51 // peripherals: TCC1 channel 1
+	PB20 Pin = 52 // peripherals: TCC1 channel 2
+	PB21 Pin = 53 // peripherals: TCC1 channel 3
 	PB22 Pin = 54
 	PB23 Pin = 55
 	PB24 Pin = 56
 	PB25 Pin = 57
-	PB26 Pin = 58
-	PB27 Pin = 59
-	PB28 Pin = 60
-	PB29 Pin = 61
-	PB30 Pin = 62
-	PB31 Pin = 63
+	PB26 Pin = 58 // peripherals: TCC1 channel 2
+	PB27 Pin = 59 // peripherals: TCC1 channel 3
+	PB28 Pin = 60 // peripherals: TCC1 channel 4
+	PB29 Pin = 61 // peripherals: TCC1 channel 5
+	PB30 Pin = 62 // peripherals: TCC4 channel 0, TCC0 channel 6
+	PB31 Pin = 63 // peripherals: TCC4 channel 1, TCC0 channel 7
 	PC00 Pin = 64
 	PC01 Pin = 65
 	PC02 Pin = 66
 	PC03 Pin = 67
-	PC04 Pin = 68
-	PC05 Pin = 69
+	PC04 Pin = 68 // peripherals: TCC0 channel 0
+	PC05 Pin = 69 // peripherals: TCC0 channel 1
 	PC06 Pin = 70
 	PC07 Pin = 71
 	PC08 Pin = 72
 	PC09 Pin = 73
-	PC10 Pin = 74
-	PC11 Pin = 75
-	PC12 Pin = 76
-	PC13 Pin = 77
-	PC14 Pin = 78
-	PC15 Pin = 79
-	PC16 Pin = 80
-	PC17 Pin = 81
-	PC18 Pin = 82
-	PC19 Pin = 83
-	PC20 Pin = 84
-	PC21 Pin = 85
-	PC22 Pin = 86
-	PC23 Pin = 87
+	PC10 Pin = 74 // peripherals: TCC0 channel 0, TCC1 channel 4
+	PC11 Pin = 75 // peripherals: TCC0 channel 1, TCC1 channel 5
+	PC12 Pin = 76 // peripherals: TCC0 channel 2, TCC1 channel 6
+	PC13 Pin = 77 // peripherals: TCC0 channel 3, TCC1 channel 7
+	PC14 Pin = 78 // peripherals: TCC0 channel 4, TCC1 channel 0
+	PC15 Pin = 79 // peripherals: TCC0 channel 5, TCC1 channel 1
+	PC16 Pin = 80 // peripherals: TCC0 channel 0
+	PC17 Pin = 81 // peripherals: TCC0 channel 1
+	PC18 Pin = 82 // peripherals: TCC0 channel 2
+	PC19 Pin = 83 // peripherals: TCC0 channel 3
+	PC20 Pin = 84 // peripherals: TCC0 channel 4
+	PC21 Pin = 85 // peripherals: TCC0 channel 5
+	PC22 Pin = 86 // peripherals: TCC0 channel 6
+	PC23 Pin = 87 // peripherals: TCC0 channel 7
 	PC24 Pin = 88
 	PC25 Pin = 89
 	PC26 Pin = 90
@@ -175,20 +175,20 @@ const (
 	PD05 Pin = 101
 	PD06 Pin = 102
 	PD07 Pin = 103
-	PD08 Pin = 104
-	PD09 Pin = 105
-	PD10 Pin = 106
-	PD11 Pin = 107
-	PD12 Pin = 108
-	PD13 Pin = 109
+	PD08 Pin = 104 // peripherals: TCC0 channel 1
+	PD09 Pin = 105 // peripherals: TCC0 channel 2
+	PD10 Pin = 106 // peripherals: TCC0 channel 3
+	PD11 Pin = 107 // peripherals: TCC0 channel 4
+	PD12 Pin = 108 // peripherals: TCC0 channel 5
+	PD13 Pin = 109 // peripherals: TCC0 channel 6
 	PD14 Pin = 110
 	PD15 Pin = 111
 	PD16 Pin = 112
 	PD17 Pin = 113
 	PD18 Pin = 114
 	PD19 Pin = 115
-	PD20 Pin = 116
-	PD21 Pin = 117
+	PD20 Pin = 116 // peripherals: TCC1 channel 0
+	PD21 Pin = 117 // peripherals: TCC1 channel 1
 	PD22 Pin = 118
 	PD23 Pin = 119
 	PD24 Pin = 120
@@ -250,12 +250,13 @@ const (
 // SERCOM and SERCOM-ALT.
 //
 // Observations:
-//   * There are eight SERCOMs. Those SERCOM numbers can be encoded in 4 bits.
-//   * Even pad numbers are usually on even pins, and odd pad numbers are usually
+//   - There are eight SERCOMs. Those SERCOM numbers can be encoded in 4 bits.
+//   - Even pad numbers are usually on even pins, and odd pad numbers are usually
 //     on odd pins. The exception is SERCOM-ALT, which sometimes swaps pad 0 and 1.
 //     With that, there is still an invariant that the pad number for an odd pin is
 //     the pad number for the corresponding even pin with the low bit toggled.
-//   * Pin pads come in pairs. If PA00 has pad 0, then PA01 has pad 1.
+//   - Pin pads come in pairs. If PA00 has pad 0, then PA01 has pad 1.
+//
 // With this information, we can encode SERCOM pin/pad numbers much more
 // efficiently. Due to pads coming in pairs, we can ignore half the pins: the
 // information for an odd pin can be calculated easily from the preceding even
@@ -748,36 +749,10 @@ func (a ADC) Configure(config ADCConfig) {
 		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
 		} // wait for sync
 
-		adc.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
-		var resolution uint32
-		switch config.Resolution {
-		case 8:
-			resolution = sam.ADC_CTRLB_RESSEL_8BIT
-		case 10:
-			resolution = sam.ADC_CTRLB_RESSEL_10BIT
-		case 12:
-			resolution = sam.ADC_CTRLB_RESSEL_12BIT
-		case 16:
-			resolution = sam.ADC_CTRLB_RESSEL_16BIT
-		default:
-			resolution = sam.ADC_CTRLB_RESSEL_12BIT
-		}
-		adc.CTRLB.SetBits(uint16(resolution << sam.ADC_CTRLB_RESSEL_Pos))
-		adc.SAMPCTRL.Set(5) // sampling Time Length
-
-		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
-		} // wait for sync
-
-		// No Negative input (Internal Ground)
-		adc.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
-		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
-		} // wait for sync
-
 		// Averaging (see datasheet table in AVGCTRL register description)
+		var resolution uint32 = sam.ADC_CTRLB_RESSEL_16BIT
 		var samples uint32
 		switch config.Samples {
-		case 1:
-			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
 		case 2:
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_2
 		case 4:
@@ -799,10 +774,38 @@ func (a ADC) Configure(config ADCConfig) {
 		case 1024:
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_1024
 		default: // 1 sample only (no oversampling nor averaging), adjusting result by 0
+			// Resolutions less than 16 bits only make sense when sampling only
+			// once. Resulting ADC values become erratic when using both
+			// multi-sampling and less than 16 bits of resolution.
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
+			switch config.Resolution {
+			case 8:
+				resolution = sam.ADC_CTRLB_RESSEL_8BIT
+			case 10:
+				resolution = sam.ADC_CTRLB_RESSEL_10BIT
+			case 12:
+				resolution = sam.ADC_CTRLB_RESSEL_12BIT
+			case 16:
+				resolution = sam.ADC_CTRLB_RESSEL_16BIT
+			default:
+				resolution = sam.ADC_CTRLB_RESSEL_12BIT
+			}
 		}
+
 		adc.AVGCTRL.Set(uint8(samples<<sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
 			(0 << sam.ADC_AVGCTRL_ADJRES_Pos))
+
+		adc.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
+		adc.CTRLB.SetBits(uint16(resolution << sam.ADC_CTRLB_RESSEL_Pos))
+		adc.SAMPCTRL.Set(5) // sampling Time Length
+
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
+		} // wait for sync
+
+		// No Negative input (Internal Ground)
+		adc.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
+		} // wait for sync
 
 		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_AVGCTRL) {
 		} // wait for sync
@@ -870,10 +873,24 @@ func (a ADC) Get() uint16 {
 		val = val << 8
 	case sam.ADC_CTRLB_RESSEL_10BIT:
 		val = val << 6
-	case sam.ADC_CTRLB_RESSEL_16BIT:
-		val = val << 4
 	case sam.ADC_CTRLB_RESSEL_12BIT:
 		val = val << 4
+	case sam.ADC_CTRLB_RESSEL_16BIT:
+		// Adjust for multiple samples. This is only configured when the
+		// resolution is 16 bits.
+		switch (bus.AVGCTRL.Get() & sam.ADC_AVGCTRL_SAMPLENUM_Msk) >> sam.ADC_AVGCTRL_SAMPLENUM_Pos {
+		case sam.ADC_AVGCTRL_SAMPLENUM_1:
+			val <<= 4
+		case sam.ADC_AVGCTRL_SAMPLENUM_2:
+			val <<= 3
+		case sam.ADC_AVGCTRL_SAMPLENUM_4:
+			val <<= 2
+		case sam.ADC_AVGCTRL_SAMPLENUM_8:
+			val <<= 1
+		default:
+			// These values are all shifted by the hardware so they fit exactly
+			// in a 16-bit integer, so they don't need to be shifted here.
+		}
 	}
 	return val
 }
@@ -1151,7 +1168,7 @@ const i2cTimeout = 1000
 func (i2c *I2C) Configure(config I2CConfig) error {
 	// Default I2C bus speed is 100 kHz.
 	if config.Frequency == 0 {
-		config.Frequency = TWI_FREQ_100KHZ
+		config.Frequency = 100 * KHz
 	}
 
 	// Use default I2C pins if not set.
@@ -1489,22 +1506,39 @@ func (spi SPI) Configure(config SPIConfig) error {
 		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPIM_CTRLA_CPOL)
 	}
 
-	// set clock
-	freqRef := uint32(0)
-	if config.Frequency > SERCOM_FREQ_REF/2 {
-		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK0)
-		freqRef = uint32(SERCOM_FREQ_REF_GCLK0)
-	} else {
-		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
-		freqRef = uint32(SERCOM_FREQ_REF)
-	}
+	// Set the clock frequency.
+	// There are two clocks we can use GCLK0 (120MHz) and GCLK1 (48MHz).
+	// We can use any even divisor for these clock, which means:
+	//   - for GCLK0 we can make 60MHz, 30MHz, 20MHz, 15MHz, 12MHz, 10MHz, etc
+	//   - for GCLK1 we can make 24MHz, 12MHz, 8MHz, 6MHz, 4.8MHz, 4MHz, etc
+	// This means that by trying both clocks, we can have a wider selection of
+	// available SPI clock frequencies.
 
-	// Set synch speed for SPI
-	baudRate := freqRef / (2 * config.Frequency)
-	if baudRate > 0 {
-		baudRate--
+	// Calculate the baudrate if we would use GCLK1 (48MHz), and the resulting
+	// frequency. The baud rate is rounded up, so that the resulting frequency
+	// is rounded down from the maximum value (meaning it will always be smaller
+	// than or equal to config.Frequency).
+	baudRateGCLK1 := (SERCOM_FREQ_REF/2 + config.Frequency - 1) / config.Frequency
+	freqGCLK1 := SERCOM_FREQ_REF / 2 / baudRateGCLK1
+
+	// Same for GCLK0 (120MHz).
+	baudRateGCLK0 := (SERCOM_FREQ_REF_GCLK0/2 + config.Frequency - 1) / config.Frequency
+	freqGCLK0 := SERCOM_FREQ_REF_GCLK0 / 2 / baudRateGCLK0
+
+	// Pick the clock source that is the closest to the maximum baud rate.
+	// Note: there may be reasons to prefer the lower frequency clock (like
+	// power consumption). If that's the case, we might want to always use the
+	// 48MHz clock at low frequencies (below 4MHz or so).
+	if freqGCLK0 > freqGCLK1 && uint32(uint8(baudRateGCLK0-1))+1 == baudRateGCLK0 {
+		// Pick this 120MHz clock if it results in a better frequency after
+		// division, and the baudRate value fits in the BAUD register.
+		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK0)
+		spi.Bus.BAUD.Set(uint8(baudRateGCLK0 - 1))
+	} else {
+		// Use the 48MHz clock in other cases.
+		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
+		spi.Bus.BAUD.Set(uint8(baudRateGCLK1 - 1))
 	}
-	spi.Bus.BAUD.Set(uint8(baudRate))
 
 	// Enable SPI port.
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
@@ -1527,10 +1561,6 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.DATA.Get()), nil
 }
 
-var (
-	ErrTxInvalidSliceSize = errors.New("SPI write and read slices must be same size")
-)
-
 // Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
 // The Tx method knows about this, and offers a few different ways of calling it.
@@ -1538,17 +1568,16 @@ var (
 // This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
 // Note that the tx and rx buffers must be the same size:
 //
-// 		spi.Tx(tx, rx)
+//	spi.Tx(tx, rx)
 //
 // This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
 // until all the bytes in the command packet have been received:
 //
-// 		spi.Tx(tx, nil)
+//	spi.Tx(tx, nil)
 //
 // This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
 //
-// 		spi.Tx(nil, rx)
-//
+//	spi.Tx(nil, rx)
 func (spi SPI) Tx(w, r []byte) error {
 	switch {
 	case w == nil:
@@ -1672,7 +1701,7 @@ func (tcc *TCC) Configure(config PWMConfig) error {
 // SetPeriod updates the period of this TCC peripheral.
 // To set a particular frequency, use the following formula:
 //
-//     period = 1e9 / frequency
+//	period = 1e9 / frequency
 //
 // If you use a period of 0, a period that works well for LEDs will be picked.
 //
@@ -1962,7 +1991,7 @@ func (tcc *TCC) SetInverting(channel uint8, inverting bool) {
 // cycle, in other words the fraction of time the channel output is high (or low
 // when inverted). For example, to set it to a 25% duty cycle, use:
 //
-//     tcc.Set(channel, tcc.Top() / 4)
+//	tcc.Set(channel, tcc.Top() / 4)
 //
 // tcc.Set(channel, 0) will set the output to low and tcc.Set(channel,
 // tcc.Top()) will set the output to high, assuming the output isn't inverted.
@@ -1981,7 +2010,7 @@ func EnterBootloader() {
 
 	// Perform magic reset into bootloader, as mentioned in
 	// https://github.com/arduino/ArduinoCore-samd/issues/197
-	*(*uint32)(unsafe.Pointer(uintptr(0x20000000 + HSRAM_SIZE - 4))) = RESET_MAGIC_VALUE
+	*(*uint32)(unsafe.Pointer(uintptr(0x20000000 + HSRAM_SIZE - 4))) = resetMagicValue
 
 	arm.SystemReset()
 }
@@ -2080,4 +2109,191 @@ func GetRNG() (uint32, error) {
 	}
 	ret := sam.TRNG.DATA.Get()
 	return ret, nil
+}
+
+// Flash related code
+const memoryStart = 0x0
+
+// compile-time check for ensuring we fulfill BlockDevice interface
+var _ BlockDevice = flashBlockDevice{}
+
+var Flash flashBlockDevice
+
+type flashBlockDevice struct {
+	initComplete bool
+}
+
+// ReadAt reads the given number of bytes from the block device.
+func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotReadPastEOF
+	}
+
+	waitWhileFlashBusy()
+
+	data := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(FlashDataStart()), uintptr(off))), len(p))
+	copy(p, data)
+
+	return len(p), nil
+}
+
+// WriteAt writes the given number of bytes to the block device.
+// Only word (32 bits) length data can be programmed.
+// See SAM-D5x-E5x-Family-Data-Sheet-DS60001507.pdf page 591-592.
+// If the length of p is not long enough it will be padded with 0xFF bytes.
+// This method assumes that the destination is already erased.
+func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
+	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
+		return 0, errFlashCannotWritePastEOF
+	}
+
+	address := FlashDataStart() + uintptr(off)
+	padded := f.pad(p)
+
+	settings := disableFlashCache()
+	defer restoreFlashCache(settings)
+
+	waitWhileFlashBusy()
+
+	sam.NVMCTRL.CTRLB.Set(sam.NVMCTRL_CTRLB_CMD_PBC | (sam.NVMCTRL_CTRLB_CMDEX_KEY << sam.NVMCTRL_CTRLB_CMDEX_Pos))
+
+	waitWhileFlashBusy()
+
+	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
+		// write first word using double-word low order word
+		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize()/2)])
+
+		// write second word using double-word high order word
+		*(*uint32)(unsafe.Add(unsafe.Pointer(address), uintptr(f.WriteBlockSize())/2)) = binary.LittleEndian.Uint32(padded[j+int(f.WriteBlockSize()/2) : j+int(f.WriteBlockSize())])
+
+		waitWhileFlashBusy()
+
+		sam.NVMCTRL.SetADDR(uint32(address))
+		sam.NVMCTRL.CTRLB.Set(sam.NVMCTRL_CTRLB_CMD_WQW | (sam.NVMCTRL_CTRLB_CMDEX_KEY << sam.NVMCTRL_CTRLB_CMDEX_Pos))
+
+		waitWhileFlashBusy()
+
+		if err := checkFlashError(); err != nil {
+			return j, err
+		}
+
+		address += uintptr(f.WriteBlockSize())
+	}
+
+	return len(padded), nil
+}
+
+// Size returns the number of bytes in this block device.
+func (f flashBlockDevice) Size() int64 {
+	return int64(FlashDataEnd() - FlashDataStart())
+}
+
+const writeBlockSize = 8
+
+// WriteBlockSize returns the block size in which data can be written to
+// memory. It can be used by a client to optimize writes, non-aligned writes
+// should always work correctly.
+func (f flashBlockDevice) WriteBlockSize() int64 {
+	return writeBlockSize
+}
+
+const eraseBlockSizeValue = 8192
+
+func eraseBlockSize() int64 {
+	return eraseBlockSizeValue
+}
+
+// EraseBlockSize returns the smallest erasable area on this particular chip
+// in bytes. This is used for the block size in EraseBlocks.
+func (f flashBlockDevice) EraseBlockSize() int64 {
+	return eraseBlockSize()
+}
+
+// EraseBlocks erases the given number of blocks. An implementation may
+// transparently coalesce ranges of blocks into larger bundles if the chip
+// supports this. The start and len parameters are in block numbers, use
+// EraseBlockSize to map addresses to blocks.
+func (f flashBlockDevice) EraseBlocks(start, len int64) error {
+	address := FlashDataStart() + uintptr(start*f.EraseBlockSize())
+
+	settings := disableFlashCache()
+	defer restoreFlashCache(settings)
+
+	waitWhileFlashBusy()
+
+	for i := start; i < start+len; i++ {
+		sam.NVMCTRL.SetADDR(uint32(address))
+		sam.NVMCTRL.CTRLB.Set(sam.NVMCTRL_CTRLB_CMD_EB | (sam.NVMCTRL_CTRLB_CMDEX_KEY << sam.NVMCTRL_CTRLB_CMDEX_Pos))
+
+		waitWhileFlashBusy()
+
+		if err := checkFlashError(); err != nil {
+			return err
+		}
+
+		address += uintptr(f.EraseBlockSize())
+	}
+
+	return nil
+}
+
+// pad data if needed so it is long enough for correct byte alignment on writes.
+func (f flashBlockDevice) pad(p []byte) []byte {
+	overflow := int64(len(p)) % f.WriteBlockSize()
+	if overflow == 0 {
+		return p
+	}
+
+	padding := bytes.Repeat([]byte{0xff}, int(f.WriteBlockSize()-overflow))
+	return append(p, padding...)
+}
+
+func disableFlashCache() uint16 {
+	settings := sam.NVMCTRL.CTRLA.Get()
+
+	// disable caches
+	sam.NVMCTRL.SetCTRLA_CACHEDIS0(1)
+	sam.NVMCTRL.SetCTRLA_CACHEDIS1(1)
+
+	waitWhileFlashBusy()
+
+	return settings
+}
+
+func restoreFlashCache(settings uint16) {
+	sam.NVMCTRL.CTRLA.Set(settings)
+	waitWhileFlashBusy()
+}
+
+func waitWhileFlashBusy() {
+	for sam.NVMCTRL.GetSTATUS_READY() != sam.NVMCTRL_STATUS_READY {
+	}
+}
+
+var (
+	errFlashADDRE   = errors.New("errFlashADDRE")
+	errFlashPROGE   = errors.New("errFlashPROGE")
+	errFlashLOCKE   = errors.New("errFlashLOCKE")
+	errFlashECCSE   = errors.New("errFlashECCSE")
+	errFlashNVME    = errors.New("errFlashNVME")
+	errFlashSEESOVF = errors.New("errFlashSEESOVF")
+)
+
+func checkFlashError() error {
+	switch {
+	case sam.NVMCTRL.GetINTENSET_ADDRE() != 0:
+		return errFlashADDRE
+	case sam.NVMCTRL.GetINTENSET_PROGE() != 0:
+		return errFlashPROGE
+	case sam.NVMCTRL.GetINTENSET_LOCKE() != 0:
+		return errFlashLOCKE
+	case sam.NVMCTRL.GetINTENSET_ECCSE() != 0:
+		return errFlashECCSE
+	case sam.NVMCTRL.GetINTENSET_NVME() != 0:
+		return errFlashNVME
+	case sam.NVMCTRL.GetINTENSET_SEESOVF() != 0:
+		return errFlashSEESOVF
+	}
+
+	return nil
 }

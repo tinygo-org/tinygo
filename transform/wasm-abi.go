@@ -14,8 +14,7 @@ import (
 // resolved, this pass may be avoided. For more details:
 // https://github.com/WebAssembly/design/issues/1172
 //
-// This pass can be enabled/disabled with the -wasm-abi flag, and is enabled by
-// default as of december 2019.
+// This pass is enabled via the wasm-abi JSON target key.
 func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 	ctx := mod.Context()
 	builder := ctx.NewBuilder()
@@ -50,7 +49,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 		paramTypes := []llvm.Type{}
 
 		// Check return type for 64-bit integer.
-		fnType := fn.Type().ElementType()
+		fnType := fn.GlobalValueType()
 		returnType := fnType.ReturnType()
 		if returnType == int64Type {
 			hasInt64 = true
@@ -88,8 +87,7 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 			// Update all users to call the external function.
 			// The old $i64wrapper function could be removed, but it may as well
 			// be left in place.
-			for use := fn.FirstUse(); !use.IsNil(); use = use.NextUse() {
-				call := use.User()
+			for _, call := range getUses(fn) {
 				entryBlockBuilder.SetInsertPointBefore(call.InstructionParent().Parent().EntryBasicBlock().FirstInstruction())
 				builder.SetInsertPointBefore(call)
 				callParams := []llvm.Value{}
@@ -124,12 +122,12 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 					// Pass a stack-allocated pointer as the first parameter
 					// where the return value should be stored, instead of using
 					// the regular return value.
-					builder.CreateCall(externalFn, callParams, callName)
-					returnValue := builder.CreateLoad(retvalAlloca, "retval")
+					builder.CreateCall(externalFnType, externalFn, callParams, callName)
+					returnValue := builder.CreateLoad(int64Type, retvalAlloca, "retval")
 					call.ReplaceAllUsesWith(returnValue)
 					call.EraseFromParentAsInstruction()
 				} else {
-					newCall := builder.CreateCall(externalFn, callParams, callName)
+					newCall := builder.CreateCall(externalFnType, externalFn, callParams, callName)
 					call.ReplaceAllUsesWith(newCall)
 					call.EraseFromParentAsInstruction()
 				}
@@ -146,17 +144,17 @@ func ExternalInt64AsPtr(mod llvm.Module, config *compileopts.Config) error {
 			builder.SetInsertPointAtEnd(entryBlock)
 			var callParams []llvm.Value
 			if fnType.ReturnType() == int64Type {
-				return errors.New("not yet implemented: exported function returns i64 with -wasm-abi=js; " +
+				return errors.New("not yet implemented: exported function returns i64 with the JS wasm-abi; " +
 					"see https://tinygo.org/compiler-internals/calling-convention/")
 			}
 			for i, origParam := range fn.Params() {
 				paramValue := externalFn.Param(i)
 				if origParam.Type() == int64Type {
-					paramValue = builder.CreateLoad(paramValue, "i64")
+					paramValue = builder.CreateLoad(int64Type, paramValue, "i64")
 				}
 				callParams = append(callParams, paramValue)
 			}
-			retval := builder.CreateCall(fn, callParams, "")
+			retval := builder.CreateCall(fn.GlobalValueType(), fn, callParams, "")
 			if retval.Type().TypeKind() == llvm.VoidTypeKind {
 				builder.CreateRetVoid()
 			} else {

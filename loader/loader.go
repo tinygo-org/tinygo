@@ -13,7 +13,6 @@ import (
 	"go/token"
 	"go/types"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -27,8 +26,6 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
-
-var addInstances func(*types.Info)
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
@@ -159,15 +156,13 @@ func Load(config *compileopts.Config, inputPkg string, clangHeaders string, type
 			EmbedGlobals: make(map[string][]*EmbedFile),
 			info: types.Info{
 				Types:      make(map[ast.Expr]types.TypeAndValue),
+				Instances:  make(map[*ast.Ident]types.Instance),
 				Defs:       make(map[*ast.Ident]types.Object),
 				Uses:       make(map[*ast.Ident]types.Object),
 				Implicits:  make(map[ast.Node]types.Object),
 				Scopes:     make(map[ast.Node]*types.Scope),
 				Selections: make(map[*ast.SelectorExpr]*types.Selection),
 			},
-		}
-		if addInstances != nil {
-			addInstances(&pkg.info)
 		}
 		err := decoder.Decode(&pkg.PackageJSON)
 		if err != nil {
@@ -269,7 +264,7 @@ func (p *Program) getOriginalPath(path string) string {
 			originalPath = realgorootPath
 		}
 		maybeInTinyGoRoot := false
-		for prefix := range pathsToOverride(needsSyscallPackage(p.config.BuildTags())) {
+		for prefix := range pathsToOverride(p.config.GoMinorVersion, needsSyscallPackage(p.config.BuildTags())) {
 			if runtime.GOOS == "windows" {
 				prefix = strings.ReplaceAll(prefix, "/", "\\")
 			}
@@ -335,7 +330,7 @@ func (p *Package) OriginalDir() string {
 // parseFile is a wrapper around parser.ParseFile.
 func (p *Package) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 	originalPath := p.program.getOriginalPath(path)
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +440,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags()...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
-		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.program.fset, initialCFlags, p.program.clangHeaders)
+		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags, p.program.clangHeaders)
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
 		for path, hash := range accessedFiles {

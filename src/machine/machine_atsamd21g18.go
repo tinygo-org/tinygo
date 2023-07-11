@@ -1,11 +1,9 @@
 //go:build sam && atsamd21 && atsamd21g18
-// +build sam,atsamd21,atsamd21g18
 
 // Peripheral abstraction layer for the atsamd21.
 //
 // Datasheet:
 // http://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-Family-DataSheet-DS40001882D.pdf
-//
 package machine
 
 import (
@@ -48,10 +46,14 @@ func init() {
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
 func (p Pin) PortMaskSet() (*uint32, uint32) {
+	// Note: using PORT_IOBUS for faster pin accesses.
+	// The regular PORT registers appear to take around 4 clock cycles to store,
+	// which is longer than the ws2812 driver expects. The IOBUS is is fast
+	// enough to avoid this issue.
 	if p < 32 {
-		return &sam.PORT.OUTSET0.Reg, 1 << uint8(p)
+		return &sam.PORT_IOBUS.OUTSET0.Reg, 1 << uint8(p)
 	} else {
-		return &sam.PORT.OUTSET1.Reg, 1 << uint8(p-32)
+		return &sam.PORT_IOBUS.OUTSET1.Reg, 1 << uint8(p-32)
 	}
 }
 
@@ -59,9 +61,9 @@ func (p Pin) PortMaskSet() (*uint32, uint32) {
 // implement bit-banged drivers.
 func (p Pin) PortMaskClear() (*uint32, uint32) {
 	if p < 32 {
-		return &sam.PORT.OUTCLR0.Reg, 1 << uint8(p)
+		return &sam.PORT_IOBUS.OUTCLR0.Reg, 1 << uint8(p)
 	} else {
-		return &sam.PORT.OUTCLR1.Reg, 1 << uint8(p-32)
+		return &sam.PORT_IOBUS.OUTCLR1.Reg, 1 << uint8(p-32)
 	}
 }
 
@@ -408,61 +410,61 @@ func (p Pin) getPinCfg() uint8 {
 		return uint8(sam.PORT.PINCFG1_0.Get()>>16) & 0xff
 	case 35: // PB03
 		return uint8(sam.PORT.PINCFG1_0.Get()>>24) & 0xff
-	case 37: // PB04
+	case 36: // PB04
 		return uint8(sam.PORT.PINCFG1_4.Get()>>0) & 0xff
-	case 38: // PB05
+	case 37: // PB05
 		return uint8(sam.PORT.PINCFG1_4.Get()>>8) & 0xff
-	case 39: // PB06
+	case 38: // PB06
 		return uint8(sam.PORT.PINCFG1_4.Get()>>16) & 0xff
-	case 40: // PB07
+	case 39: // PB07
 		return uint8(sam.PORT.PINCFG1_4.Get()>>24) & 0xff
-	case 41: // PB08
+	case 40: // PB08
 		return uint8(sam.PORT.PINCFG1_8.Get()>>0) & 0xff
-	case 42: // PB09
+	case 41: // PB09
 		return uint8(sam.PORT.PINCFG1_8.Get()>>8) & 0xff
-	case 43: // PB10
+	case 42: // PB10
 		return uint8(sam.PORT.PINCFG1_8.Get()>>16) & 0xff
-	case 44: // PB11
+	case 43: // PB11
 		return uint8(sam.PORT.PINCFG1_8.Get()>>24) & 0xff
-	case 45: // PB12
+	case 44: // PB12
 		return uint8(sam.PORT.PINCFG1_12.Get()>>0) & 0xff
-	case 46: // PB13
+	case 45: // PB13
 		return uint8(sam.PORT.PINCFG1_12.Get()>>8) & 0xff
-	case 47: // PB14
+	case 46: // PB14
 		return uint8(sam.PORT.PINCFG1_12.Get()>>16) & 0xff
-	case 48: // PB15
+	case 47: // PB15
 		return uint8(sam.PORT.PINCFG1_12.Get()>>24) & 0xff
-	case 49: // PB16
+	case 48: // PB16
 		return uint8(sam.PORT.PINCFG1_16.Get()>>0) & 0xff
-	case 50: // PB17
+	case 49: // PB17
 		return uint8(sam.PORT.PINCFG1_16.Get()>>8) & 0xff
-	case 51: // PB18
+	case 50: // PB18
 		return uint8(sam.PORT.PINCFG1_16.Get()>>16) & 0xff
-	case 52: // PB19
+	case 51: // PB19
 		return uint8(sam.PORT.PINCFG1_16.Get()>>24) & 0xff
-	case 53: // PB20
+	case 52: // PB20
 		return uint8(sam.PORT.PINCFG1_20.Get()>>0) & 0xff
-	case 54: // PB21
+	case 53: // PB21
 		return uint8(sam.PORT.PINCFG1_20.Get()>>8) & 0xff
-	case 55: // PB22
+	case 54: // PB22
 		return uint8(sam.PORT.PINCFG1_20.Get()>>16) & 0xff
-	case 56: // PB23
+	case 55: // PB23
 		return uint8(sam.PORT.PINCFG1_20.Get()>>24) & 0xff
-	case 57: // PB24
+	case 56: // PB24
 		return uint8(sam.PORT.PINCFG1_24.Get()>>0) & 0xff
-	case 58: // PB25
+	case 57: // PB25
 		return uint8(sam.PORT.PINCFG1_24.Get()>>8) & 0xff
-	case 59: // PB26
+	case 58: // PB26
 		return uint8(sam.PORT.PINCFG1_24.Get()>>16) & 0xff
-	case 60: // PB27
+	case 59: // PB27
 		return uint8(sam.PORT.PINCFG1_24.Get()>>24) & 0xff
-	case 61: // PB28
+	case 60: // PB28
 		return uint8(sam.PORT.PINCFG1_28.Get()>>0) & 0xff
-	case 62: // PB29
+	case 61: // PB29
 		return uint8(sam.PORT.PINCFG1_28.Get()>>8) & 0xff
-	case 63: // PB30
+	case 62: // PB30
 		return uint8(sam.PORT.PINCFG1_28.Get()>>16) & 0xff
-	case 64: // PB31
+	case 63: // PB31
 		return uint8(sam.PORT.PINCFG1_28.Get()>>24) & 0xff
 	default:
 		return 0

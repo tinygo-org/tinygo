@@ -1,6 +1,3 @@
-//go:build gc.conservative
-// +build gc.conservative
-
 package runtime
 
 // Memory statistics
@@ -38,6 +35,20 @@ type MemStats struct {
 	// HeapReleased is bytes of physical memory returned to the OS.
 	HeapReleased uint64
 
+	// TotalAlloc is cumulative bytes allocated for heap objects.
+	//
+	// TotalAlloc increases as heap objects are allocated, but
+	// unlike Alloc and HeapAlloc, it does not decrease when
+	// objects are freed.
+	TotalAlloc uint64
+
+	// Mallocs is the cumulative count of heap objects allocated.
+	// The number of live objects is Mallocs - Frees.
+	Mallocs uint64
+
+	// Frees is the cumulative count of heap objects freed.
+	Frees uint64
+
 	// Off-heap memory statistics.
 	//
 	// The following statistics measure runtime-internal
@@ -46,25 +57,4 @@ type MemStats struct {
 
 	// GCSys is bytes of memory in garbage collection metadata.
 	GCSys uint64
-}
-
-// ReadMemStats populates m with memory statistics.
-//
-// The returned memory statistics are up to date as of the
-// call to ReadMemStats. This would not do GC implicitly for you.
-func ReadMemStats(m *MemStats) {
-	m.HeapIdle = 0
-	m.HeapInuse = 0
-	for block := gcBlock(0); block < endBlock; block++ {
-		bstate := block.state()
-		if bstate == blockStateFree {
-			m.HeapIdle += uint64(bytesPerBlock)
-		} else {
-			m.HeapInuse += uint64(bytesPerBlock)
-		}
-	}
-	m.HeapReleased = 0 // always 0, we don't currently release memory back to the OS.
-	m.HeapSys = m.HeapInuse + m.HeapIdle
-	m.GCSys = uint64(heapEnd - uintptr(metadataStart))
-	m.Sys = uint64(heapEnd - heapStart)
 }

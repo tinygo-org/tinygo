@@ -1,5 +1,4 @@
 //go:build nano_rp2040
-// +build nano_rp2040
 
 // This contains the pin mappings for the Arduino Nano RP2040 Connect board.
 //
@@ -10,7 +9,6 @@
 // Also
 // - Datasheets: https://docs.arduino.cc/hardware/nano-rp2040-connect
 // - Nano RP2040 Connect technical reference: https://docs.arduino.cc/tutorials/nano-rp2040-connect/rp2040-01-technical-reference
-//
 package machine
 
 import (

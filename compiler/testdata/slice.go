@@ -1,5 +1,7 @@
 package main
 
+import "unsafe"
+
 func sliceLen(ints []int) int {
 	return len(ints)
 }
@@ -40,4 +42,37 @@ func makeArraySlice(len int) [][3]byte {
 
 func makeInt32Slice(len int) []int32 {
 	return make([]int32, len)
+}
+
+func Add32(p unsafe.Pointer, len int) unsafe.Pointer {
+	return unsafe.Add(p, len)
+}
+
+func Add64(p unsafe.Pointer, len int64) unsafe.Pointer {
+	return unsafe.Add(p, len)
+}
+
+func SliceToArray(s []int) *[4]int {
+	return (*[4]int)(s)
+}
+
+func SliceToArrayConst() *[4]int {
+	s := make([]int, 6)
+	return (*[4]int)(s)
+}
+
+func SliceInt(ptr *int, len int) []int {
+	return unsafe.Slice(ptr, len)
+}
+
+func SliceUint16(ptr *byte, len uint16) []byte {
+	return unsafe.Slice(ptr, len)
+}
+
+func SliceUint64(ptr *int, len uint64) []int {
+	return unsafe.Slice(ptr, len)
+}
+
+func SliceInt64(ptr *int, len int64) []int {
+	return unsafe.Slice(ptr, len)
 }

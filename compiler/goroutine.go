@@ -7,7 +7,6 @@ import (
 	"go/token"
 	"go/types"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -17,11 +16,12 @@ func (b *builder) createGo(instr *ssa.Go) {
 	// Get all function parameters to pass to the goroutine.
 	var params []llvm.Value
 	for _, param := range instr.Call.Args {
-		params = append(params, b.getValue(param))
+		params = append(params, b.getValue(param, getPos(instr)))
 	}
 
 	var prefix string
 	var funcPtr llvm.Value
+	var funcPtrType llvm.Type
 	hasContext := false
 	if callee := instr.Call.StaticCallee(); callee != nil {
 		// Static callee is known. This makes it easier to start a new
@@ -33,7 +33,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		case *ssa.MakeClosure:
 			// A goroutine call on a func value, but the callee is trivial to find. For
 			// example: immediately applied functions.
-			funcValue := b.getValue(value)
+			funcValue := b.getValue(value, getPos(instr))
 			context = b.extractFuncContext(funcValue)
 		default:
 			panic("StaticCallee returned an unexpected value")
@@ -42,7 +42,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 			params = append(params, context) // context parameter
 			hasContext = true
 		}
-		funcPtr = b.getFunction(callee)
+		funcPtrType, funcPtr = b.getFunction(callee)
 	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		// We cheat. None of the builtins do any long or blocking operation, so
 		// we might as well run these builtins right away without the program
@@ -70,16 +70,17 @@ func (b *builder) createGo(instr *ssa.Go) {
 		var argValues []llvm.Value
 		for _, arg := range instr.Call.Args {
 			argTypes = append(argTypes, arg.Type())
-			argValues = append(argValues, b.getValue(arg))
+			argValues = append(argValues, b.getValue(arg, getPos(instr)))
 		}
 		b.createBuiltin(argTypes, argValues, builtin.Name(), instr.Pos())
 		return
 	} else if instr.Call.IsInvoke() {
 		// This is a method call on an interface value.
-		itf := b.getValue(instr.Call.Value)
+		itf := b.getValue(instr.Call.Value, getPos(instr))
 		itfTypeCode := b.CreateExtractValue(itf, 0, "")
 		itfValue := b.CreateExtractValue(itf, 1, "")
 		funcPtr = b.getInvokeFunction(&instr.Call)
+		funcPtrType = funcPtr.GlobalValueType()
 		params = append([]llvm.Value{itfValue}, params...) // start with receiver
 		params = append(params, itfTypeCode)               // end with typecode
 	} else {
@@ -89,7 +90,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		//   * The function context, for closures.
 		//   * The function pointer (for tasks).
 		var context llvm.Value
-		funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value), instr.Call.Value.Type().Underlying().(*types.Signature))
+		funcPtrType, funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value, getPos(instr)), instr.Call.Value.Type().Underlying().(*types.Signature))
 		params = append(params, context, funcPtr)
 		hasContext = true
 		prefix = b.fn.RelString(nil)
@@ -97,14 +98,14 @@ func (b *builder) createGo(instr *ssa.Go) {
 
 	paramBundle := b.emitPointerPack(params)
 	var stackSize llvm.Value
-	callee := b.createGoroutineStartWrapper(funcPtr, prefix, hasContext, instr.Pos())
+	callee := b.createGoroutineStartWrapper(funcPtrType, funcPtr, prefix, hasContext, instr.Pos())
 	if b.AutomaticStackSize {
 		// The stack size is not known until after linking. Call a dummy
 		// function that will be replaced with a load from a special ELF
 		// section that contains the stack size (and is modified after
 		// linking).
-		stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
-		stackSize = b.createCall(stackSizeFn, []llvm.Value{callee, llvm.Undef(b.i8ptrType)}, "stacksize")
+		stackSizeFnType, stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
+		stackSize = b.createCall(stackSizeFnType, stackSizeFn, []llvm.Value{callee, llvm.Undef(b.i8ptrType)}, "stacksize")
 	} else {
 		// The stack size is fixed at compile time. By emitting it here as a
 		// constant, it can be optimized.
@@ -113,23 +114,23 @@ func (b *builder) createGo(instr *ssa.Go) {
 		}
 		stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
 	}
-	start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
-	b.createCall(start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.i8ptrType)}, "")
+	fnType, start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
+	b.createCall(fnType, start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.i8ptrType)}, "")
 }
 
 // createGoroutineStartWrapper creates a wrapper for the task-based
 // implementation of goroutines. For example, to call a function like this:
 //
-//     func add(x, y int) int { ... }
+//	func add(x, y int) int { ... }
 //
 // It creates a wrapper like this:
 //
-//     func add$gowrapper(ptr *unsafe.Pointer) {
-//         args := (*struct{
-//             x, y int
-//         })(ptr)
-//         add(args.x, args.y)
-//     }
+//	func add$gowrapper(ptr *unsafe.Pointer) {
+//	    args := (*struct{
+//	        x, y int
+//	    })(ptr)
+//	    add(args.x, args.y)
+//	}
 //
 // This is useful because the task-based goroutine start implementation only
 // allows a single (pointer) argument to the newly started goroutine. Also, it
@@ -140,15 +141,19 @@ func (b *builder) createGo(instr *ssa.Go) {
 // to last parameter of the function) is used for this wrapper. If hasContext is
 // false, the parameter bundle is assumed to have no context parameter and undef
 // is passed instead.
-func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix string, hasContext bool, pos token.Pos) llvm.Value {
+func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, prefix string, hasContext bool, pos token.Pos) llvm.Value {
 	var wrapper llvm.Value
 
-	builder := c.ctx.NewBuilder()
-	defer builder.Dispose()
+	b := &builder{
+		compilerContext: c,
+		Builder:         c.ctx.NewBuilder(),
+	}
+	defer b.Dispose()
 
 	var deadlock llvm.Value
+	var deadlockType llvm.Type
 	if c.Scheduler == "asyncify" {
-		deadlock = c.getFunction(c.program.ImportedPackage("runtime").Members["deadlock"].(*ssa.Function))
+		deadlockType, deadlock = c.getFunction(c.program.ImportedPackage("runtime").Members["deadlock"].(*ssa.Function))
 	}
 
 	if !fn.IsAFunction().IsNil() {
@@ -167,7 +172,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		wrapper.SetUnnamedAddr(true)
 		wrapper.AddAttributeAtIndex(-1, c.ctx.CreateStringAttribute("tinygo-gowrapper", name))
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
-		builder.SetInsertPointAtEnd(entry)
+		b.SetInsertPointAtEnd(entry)
 
 		if c.Debug {
 			pos := c.program.Fset.Position(pos)
@@ -188,24 +193,24 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 				Optimized:    true,
 			})
 			wrapper.SetSubprogram(difunc)
-			builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+			b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 		}
 
 		// Create the list of params for the call.
-		paramTypes := fn.Type().ElementType().ParamTypes()
+		paramTypes := fnType.ParamTypes()
 		if !hasContext {
 			paramTypes = paramTypes[:len(paramTypes)-1] // strip context parameter
 		}
-		params := llvmutil.EmitPointerUnpack(builder, c.mod, wrapper.Param(0), paramTypes)
+		params := b.emitPointerUnpack(wrapper.Param(0), paramTypes)
 		if !hasContext {
 			params = append(params, llvm.Undef(c.i8ptrType)) // add dummy context parameter
 		}
 
 		// Create the call.
-		builder.CreateCall(fn, params, "")
+		b.CreateCall(fnType, fn, params, "")
 
 		if c.Scheduler == "asyncify" {
-			builder.CreateCall(deadlock, []llvm.Value{
+			b.CreateCall(deadlockType, deadlock, []llvm.Value{
 				llvm.Undef(c.i8ptrType),
 			}, "")
 		}
@@ -236,7 +241,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 		wrapper.SetUnnamedAddr(true)
 		wrapper.AddAttributeAtIndex(-1, c.ctx.CreateStringAttribute("tinygo-gowrapper", ""))
 		entry := c.ctx.AddBasicBlock(wrapper, "entry")
-		builder.SetInsertPointAtEnd(entry)
+		b.SetInsertPointAtEnd(entry)
 
 		if c.Debug {
 			pos := c.program.Fset.Position(pos)
@@ -257,23 +262,23 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 				Optimized:    true,
 			})
 			wrapper.SetSubprogram(difunc)
-			builder.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+			b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 		}
 
 		// Get the list of parameters, with the extra parameters at the end.
-		paramTypes := fn.Type().ElementType().ParamTypes()
+		paramTypes := fnType.ParamTypes()
 		paramTypes = append(paramTypes, fn.Type()) // the last element is the function pointer
-		params := llvmutil.EmitPointerUnpack(builder, c.mod, wrapper.Param(0), paramTypes)
+		params := b.emitPointerUnpack(wrapper.Param(0), paramTypes)
 
 		// Get the function pointer.
 		fnPtr := params[len(params)-1]
 		params = params[:len(params)-1]
 
 		// Create the call.
-		builder.CreateCall(fnPtr, params, "")
+		b.CreateCall(fnType, fnPtr, params, "")
 
 		if c.Scheduler == "asyncify" {
-			builder.CreateCall(deadlock, []llvm.Value{
+			b.CreateCall(deadlockType, deadlock, []llvm.Value{
 				llvm.Undef(c.i8ptrType),
 			}, "")
 		}
@@ -281,13 +286,13 @@ func (c *compilerContext) createGoroutineStartWrapper(fn llvm.Value, prefix stri
 
 	if c.Scheduler == "asyncify" {
 		// The goroutine was terminated via deadlock.
-		builder.CreateUnreachable()
+		b.CreateUnreachable()
 	} else {
 		// Finish the function. Every basic block must end in a terminator, and
 		// because goroutines never return a value we can simply return void.
-		builder.CreateRetVoid()
+		b.CreateRetVoid()
 	}
 
 	// Return a ptrtoint of the wrapper, not the function itself.
-	return builder.CreatePtrToInt(wrapper, c.uintptrType, "")
+	return b.CreatePtrToInt(wrapper, c.uintptrType, "")
 }

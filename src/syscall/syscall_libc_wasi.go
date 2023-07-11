@@ -1,5 +1,4 @@
 //go:build wasi
-// +build wasi
 
 package syscall
 
@@ -50,21 +49,41 @@ const (
 )
 
 const (
-	__WASI_OFLAGS_CREAT   = 1
-	__WASI_FDFLAGS_APPEND = 1
-	__WASI_OFLAGS_EXCL    = 4
-	__WASI_OFLAGS_TRUNC   = 8
-	__WASI_FDFLAGS_SYNC   = 16
+	__WASI_OFLAGS_CREAT     = 1
+	__WASI_OFLAGS_DIRECTORY = 2
+	__WASI_OFLAGS_EXCL      = 4
+	__WASI_OFLAGS_TRUNC     = 8
 
+	__WASI_FDFLAGS_APPEND   = 1
+	__WASI_FDFLAGS_DSYNC    = 2
+	__WASI_FDFLAGS_NONBLOCK = 4
+	__WASI_FDFLAGS_RSYNC    = 8
+	__WASI_FDFLAGS_SYNC     = 16
+
+	__WASI_FILETYPE_UNKNOWN          = 0
+	__WASI_FILETYPE_BLOCK_DEVICE     = 1
+	__WASI_FILETYPE_CHARACTER_DEVICE = 2
+	__WASI_FILETYPE_DIRECTORY        = 3
+	__WASI_FILETYPE_REGULAR_FILE     = 4
+	__WASI_FILETYPE_SOCKET_DGRAM     = 5
+	__WASI_FILETYPE_SOCKET_STREAM    = 6
+	__WASI_FILETYPE_SYMBOLIC_LINK    = 7
+
+	// ../../lib/wasi-libc/libc-bottom-half/headers/public/__header_fcntl.h
 	O_RDONLY = 0x04000000
 	O_WRONLY = 0x10000000
 	O_RDWR   = O_RDONLY | O_WRONLY
 
-	O_CREAT  = __WASI_OFLAGS_CREAT << 12
-	O_TRUNC  = __WASI_OFLAGS_TRUNC << 12
-	O_APPEND = __WASI_FDFLAGS_APPEND
-	O_EXCL   = __WASI_OFLAGS_EXCL << 12
-	O_SYNC   = __WASI_FDFLAGS_SYNC
+	O_CREAT     = __WASI_OFLAGS_CREAT << 12
+	O_TRUNC     = __WASI_OFLAGS_TRUNC << 12
+	O_EXCL      = __WASI_OFLAGS_EXCL << 12
+	O_DIRECTORY = __WASI_OFLAGS_DIRECTORY << 12
+
+	O_APPEND   = __WASI_FDFLAGS_APPEND
+	O_DSYNC    = __WASI_FDFLAGS_DSYNC
+	O_NONBLOCK = __WASI_FDFLAGS_NONBLOCK
+	O_RSYNC    = __WASI_FDFLAGS_RSYNC
+	O_SYNC     = __WASI_FDFLAGS_SYNC
 
 	O_CLOEXEC = 0
 
@@ -80,6 +99,23 @@ const (
 	PROT_READ  = 1
 	PROT_WRITE = 2
 	PROT_EXEC  = 4
+
+	// ../../lib/wasi-libc/expected/wasm32-wasi/predefined-macros.txt
+	F_GETFL = 3
+	F_SETFL = 4
+)
+
+// These values are needed as a stub until Go supports WASI as a full target.
+// The constant values don't have a meaning and don't correspond to anything
+// real.
+const (
+	_ = iota
+	SYS_FCNTL
+	SYS_FCNTL64
+	SYS_FSTATAT64
+	SYS_OPENAT
+	SYS_UNLINKAT
+	PATH_MAX = 4096
 )
 
 //go:extern errno
@@ -187,10 +223,14 @@ type Timespec struct {
 	Nsec int64
 }
 
+// Unix returns the time stored in ts as seconds plus nanoseconds.
+func (ts *Timespec) Unix() (sec int64, nsec int64) {
+	return int64(ts.Sec), int64(ts.Nsec)
+}
+
 // https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__struct_stat.h
 // https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__typedef_ino_t.h
 // etc.
-// Go chose Linux's field names for Stat_t, see https://github.com/golang/go/issues/31735
 type Stat_t struct {
 	Dev       uint64
 	Ino       uint64
@@ -239,29 +279,80 @@ const (
 	S_IXUSR  = 0x40
 )
 
-// dummy
+// https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__header_dirent.h
 const (
-	DT_BLK     = 0x6
-	DT_CHR     = 0x2
-	DT_DIR     = 0x4
-	DT_FIFO    = 0x1
-	DT_LNK     = 0xa
-	DT_REG     = 0x8
-	DT_SOCK    = 0xc
-	DT_UNKNOWN = 0x0
-	DT_WHT     = 0xe
+	DT_BLK     = __WASI_FILETYPE_BLOCK_DEVICE
+	DT_CHR     = __WASI_FILETYPE_CHARACTER_DEVICE
+	DT_DIR     = __WASI_FILETYPE_DIRECTORY
+	DT_FIFO    = __WASI_FILETYPE_SOCKET_STREAM
+	DT_LNK     = __WASI_FILETYPE_SYMBOLIC_LINK
+	DT_REG     = __WASI_FILETYPE_REGULAR_FILE
+	DT_UNKNOWN = __WASI_FILETYPE_UNKNOWN
 )
 
-// dummy
+// Dirent is returned by pointer from Readdir to iterate over directory entries.
+//
+// The pointer is managed by wasi-libc and is only valid until the next call to
+// Readdir or Fdclosedir.
+//
+// https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__struct_dirent.h
 type Dirent struct {
-	Ino    uint64
-	Reclen uint16
-	Type   uint8
-	Name   [1024]int8
+	Ino  uint64
+	Type uint8
 }
 
-func ReadDirent(fd int, buf []byte) (n int, err error) {
-	return -1, ENOSYS
+func (dirent *Dirent) Name() []byte {
+	// The dirent C struct uses a flexible array member to indicate that the
+	// directory name is laid out in memory right after the struct data:
+	//
+	// struct dirent {
+	//   ino_t d_ino;
+	//   unsigned char d_type;
+	//   char d_name[];
+	// };
+	name := (*[PATH_MAX]byte)(unsafe.Add(unsafe.Pointer(dirent), 9))
+	for i, c := range name {
+		if c == 0 {
+			return name[:i:i]
+		}
+	}
+	return name[:]
+}
+
+func Fdopendir(fd int) (dir uintptr, err error) {
+	d := libc_fdopendir(int32(fd))
+
+	if d == nil {
+		err = getErrno()
+	}
+	return uintptr(d), err
+}
+
+func Fdclosedir(dir uintptr) (err error) {
+	// Unlike on other unix platform where only closedir exists, wasi-libc has
+	// fdclosedir which releases resources and returns the file descriptor but
+	// does not close it. This is useful for us since we want to be able to keep
+	// using it.
+	n := libc_fdclosedir(unsafe.Pointer(dir))
+
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Readdir(dir uintptr) (dirent *Dirent, err error) {
+	// There might be a leftover errno value in the global variable, so we have
+	// to clear it before calling readdir because we cannot know whether a nil
+	// return means that we reached EOF or that an error occured.
+	libcErrno = 0
+
+	dirent = libc_readdir(unsafe.Pointer(dir))
+
+	if dirent == nil && libcErrno != 0 {
+		err = getErrno()
+	}
+	return
 }
 
 func Stat(path string, p *Stat_t) (err error) {
@@ -296,19 +387,78 @@ func Pipe2(p []int, flags int) (err error) {
 	return ENOSYS // TODO
 }
 
+func Chmod(path string, mode uint32) (err error) {
+	// wasi does not have chmod, but there are tests that validate that calling
+	// os.Chmod does not error (e.g. io/fs.TestIssue51617).
+	//
+	// We make a call to Lstat instead so we detect conditions like the path not
+	// existing, but we don't honnor the request to modify the file permissions.
+	stat := Stat_t{}
+	return Lstat(path, &stat)
+}
+
 func Getpagesize() int {
 	// per upstream
 	return 65536
 }
 
+type Utsname struct {
+	Sysname    [65]int8
+	Nodename   [65]int8
+	Release    [65]int8
+	Version    [65]int8
+	Machine    [65]int8
+	Domainname [65]int8
+}
+
+// Stub Utsname, needed because WASI pretends to be linux/arm.
+func Uname(buf *Utsname) (err error)
+
+type RawSockaddrInet4 struct {
+	// stub
+}
+
+type RawSockaddrInet6 struct {
+	// stub
+}
+
+// This is a stub, it is not functional.
+func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err Errno)
+
+// This is a stub, it is not functional.
+func Syscall6(trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno)
+
 // int stat(const char *path, struct stat * buf);
+//
 //export stat
 func libc_stat(pathname *byte, ptr unsafe.Pointer) int32
 
-// int fstat(fd int, struct stat * buf);
+// int fstat(int fd, struct stat * buf);
+//
 //export fstat
 func libc_fstat(fd int32, ptr unsafe.Pointer) int32
 
 // int lstat(const char *path, struct stat * buf);
+//
 //export lstat
 func libc_lstat(pathname *byte, ptr unsafe.Pointer) int32
+
+// int open(const char *pathname, int flags, mode_t mode);
+//
+//export open
+func libc_open(pathname *byte, flags int32, mode uint32) int32
+
+// DIR *fdopendir(int);
+//
+//export fdopendir
+func libc_fdopendir(fd int32) unsafe.Pointer
+
+// int fdclosedir(DIR *);
+//
+//export fdclosedir
+func libc_fdclosedir(unsafe.Pointer) int32
+
+// struct dirent *readdir(DIR *);
+//
+//export readdir
+func libc_readdir(unsafe.Pointer) *Dirent

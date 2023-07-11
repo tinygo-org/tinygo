@@ -1,11 +1,9 @@
 //go:build sam && atsame51 && atsame51j19
-// +build sam,atsame51,atsame51j19
 
 // Peripheral abstraction layer for the atsame51.
 //
 // Datasheet:
 // http://ww1.microchip.com/downloads/en/DeviceDoc/SAM_D5xE5x_Family_Data_Sheet_DS60001507F.pdf
-//
 package machine
 
 import "device/sam"

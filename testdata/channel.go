@@ -158,16 +158,16 @@ func main() {
 	ch = make(chan int, 2)
 	ch <- 1
 	ch <- 2
-	println("non-concurrent channel recieve:", <-ch)
-	println("non-concurrent channel recieve:", <-ch)
+	println("non-concurrent channel receive:", <-ch)
+	println("non-concurrent channel receive:", <-ch)
 
 	// test closing channels with buffered data
 	ch <- 3
 	ch <- 4
 	close(ch)
-	println("closed buffered channel recieve:", <-ch)
-	println("closed buffered channel recieve:", <-ch)
-	println("closed buffered channel recieve:", <-ch)
+	println("closed buffered channel receive:", <-ch)
+	println("closed buffered channel receive:", <-ch)
+	println("closed buffered channel receive:", <-ch)
 
 	// test using buffered channels as regular channels with special properties
 	wg.Add(6)
@@ -184,7 +184,7 @@ func main() {
 	for range ch {
 		count++
 	}
-	println("hybrid buffered channel recieve:", count)
+	println("hybrid buffered channel receive:", count)
 
 	// test blocking selects
 	ch = make(chan int)

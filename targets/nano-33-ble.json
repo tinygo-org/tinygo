@@ -2,7 +2,7 @@
 	"inherits": ["nrf52840"],
 	"build-tags": ["nano_33_ble", "nrf52840_reset_bossa"],
 	"flash-command": "bossac_arduino2 -d -i -e -w -v -R --port={port} {bin}",
-	"serial-port": ["acm:2341:805a", "acm:2341:005a"],
+	"serial-port": ["2341:805a", "2341:005a"],
 	"serial": "usb",
 	"flash-1200-bps-reset": "true",
 	"linkerscript": "targets/nano-33-ble.ld"

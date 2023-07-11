@@ -2,7 +2,6 @@ package builder
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -60,6 +59,7 @@ func TestClangAttributes(t *testing.T) {
 		{GOOS: "darwin", GOARCH: "amd64"},
 		{GOOS: "darwin", GOARCH: "arm64"},
 		{GOOS: "windows", GOARCH: "amd64"},
+		{GOOS: "windows", GOARCH: "arm64"},
 	} {
 		name := "GOOS=" + options.GOOS + ",GOARCH=" + options.GOARCH
 		if options.GOARCH == "arm" {
@@ -90,7 +90,7 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 
 	// Create a very simple C input file.
 	srcpath := filepath.Join(testDir, "test.c")
-	err = ioutil.WriteFile(srcpath, []byte("int add(int a, int b) { return a + b; }"), 0o666)
+	err = os.WriteFile(srcpath, []byte("int add(int a, int b) { return a + b; }"), 0o666)
 	if err != nil {
 		t.Fatalf("could not write target file %s: %s", srcpath, err)
 	}
