@@ -35,8 +35,9 @@ func rename(oldname, newname string) error {
 }
 
 type file struct {
-	handle FileHandle
-	name   string
+	handle     FileHandle
+	name       string
+	appendMode bool
 }
 
 func (f *file) close() error {
@@ -44,7 +45,7 @@ func (f *file) close() error {
 }
 
 func NewFile(fd uintptr, name string) *File {
-	return &File{&file{unixFileHandle(fd), name}}
+	return &File{&file{handle: unixFileHandle(fd), name: name}}
 }
 
 func Pipe() (r *File, w *File, err error) {
@@ -84,10 +85,25 @@ func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	return -1, ErrNotImplemented
 }
 
+// WriteAt writes len(b) bytes to the File starting at byte offset off.
+// It returns the number of bytes written and an error, if any.
+// WriteAt returns a non-nil error when n != len(b).
+//
+// If file was opened with the O_APPEND flag, WriteAt returns an error.
+//
+// TODO: move to file_anyos once WriteAt is implemented for windows.
+func (f unixFileHandle) WriteAt(b []byte, offset int64) (n int, err error) {
+	return -1, ErrNotImplemented
+}
+
 // Seek wraps syscall.Seek.
 func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
 	newoffset, err := syscall.Seek(syscallFd(f), offset, whence)
 	return newoffset, handleSyscallError(err)
+}
+
+func (f unixFileHandle) Sync() error {
+	return ErrNotImplemented
 }
 
 // isWindowsNulName reports whether name is os.DevNull ('NUL') on Windows.

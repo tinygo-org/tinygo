@@ -236,6 +236,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	if testConfig.RunRegexp != "" {
 		flags = append(flags, "-test.run="+testConfig.RunRegexp)
 	}
+	if testConfig.SkipRegexp != "" {
+		flags = append(flags, "-test.skip="+testConfig.SkipRegexp)
+	}
 	if testConfig.BenchRegexp != "" {
 		flags = append(flags, "-test.bench="+testConfig.BenchRegexp)
 	}
@@ -247,6 +250,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	}
 	if testConfig.Count != nil && *testConfig.Count != 1 {
 		flags = append(flags, "-test.count="+strconv.Itoa(*testConfig.Count))
+	}
+	if testConfig.Shuffle != "" {
+		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
 	}
 
 	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
@@ -342,7 +348,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		fmt.Fprintf(w, "?   \t%s\t[no test files]\n", err.ImportPath)
 		// Pretend the test passed - it at least didn't fail.
 		return true, nil
-	} else if passed {
+	} else if passed && !testConfig.CompileOnly {
 		fmt.Fprintf(w, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
 	} else {
 		fmt.Fprintf(w, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
@@ -526,7 +532,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		return fmt.Errorf("unknown flash method: %s", flashMethod)
 	}
 	if options.Monitor {
-		return Monitor("", options)
+		return Monitor(result.Executable, "", options)
 	}
 	return nil
 }
@@ -939,28 +945,29 @@ func touchSerialPortAt1200bps(port string) (err error) {
 	return fmt.Errorf("opening port: %s", err)
 }
 
-func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) error {
+func flashUF2UsingMSD(volumes []string, tmppath string, options *compileopts.Options) error {
 	// find standard UF2 info path
-	var infoPath string
-	switch runtime.GOOS {
-	case "linux", "freebsd":
-		fi, err := os.Stat("/run/media")
-		if err != nil || !fi.IsDir() {
-			infoPath = "/media/*/" + volume + "/INFO_UF2.TXT"
-		} else {
-			infoPath = "/run/media/*/" + volume + "/INFO_UF2.TXT"
+	infoPaths := make([]string, 0, len(volumes))
+	for _, volume := range volumes {
+		switch runtime.GOOS {
+		case "linux", "freebsd":
+			fi, err := os.Stat("/run/media")
+			if err != nil || !fi.IsDir() {
+				infoPaths = append(infoPaths, "/media/*/"+volume+"/INFO_UF2.TXT")
+			} else {
+				infoPaths = append(infoPaths, "/run/media/*/"+volume+"/INFO_UF2.TXT")
+			}
+		case "darwin":
+			infoPaths = append(infoPaths, "/Volumes/"+volume+"/INFO_UF2.TXT")
+		case "windows":
+			path, err := windowsFindUSBDrive(volume, options)
+			if err == nil {
+				infoPaths = append(infoPaths, path+"/INFO_UF2.TXT")
+			}
 		}
-	case "darwin":
-		infoPath = "/Volumes/" + volume + "/INFO_UF2.TXT"
-	case "windows":
-		path, err := windowsFindUSBDrive(volume, options)
-		if err != nil {
-			return err
-		}
-		infoPath = path + "/INFO_UF2.TXT"
 	}
 
-	d, err := locateDevice(volume, infoPath, options.Timeout)
+	d, err := locateDevice(volumes, infoPaths, options.Timeout)
 	if err != nil {
 		return err
 	}
@@ -968,28 +975,29 @@ func flashUF2UsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	return moveFile(tmppath, filepath.Dir(d)+"/flash.uf2")
 }
 
-func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) error {
+func flashHexUsingMSD(volumes []string, tmppath string, options *compileopts.Options) error {
 	// find expected volume path
-	var destPath string
-	switch runtime.GOOS {
-	case "linux", "freebsd":
-		fi, err := os.Stat("/run/media")
-		if err != nil || !fi.IsDir() {
-			destPath = "/media/*/" + volume
-		} else {
-			destPath = "/run/media/*/" + volume
+	destPaths := make([]string, 0, len(volumes))
+	for _, volume := range volumes {
+		switch runtime.GOOS {
+		case "linux", "freebsd":
+			fi, err := os.Stat("/run/media")
+			if err != nil || !fi.IsDir() {
+				destPaths = append(destPaths, "/media/*/"+volume)
+			} else {
+				destPaths = append(destPaths, "/run/media/*/"+volume)
+			}
+		case "darwin":
+			destPaths = append(destPaths, "/Volumes/"+volume)
+		case "windows":
+			path, err := windowsFindUSBDrive(volume, options)
+			if err == nil {
+				destPaths = append(destPaths, path+"/")
+			}
 		}
-	case "darwin":
-		destPath = "/Volumes/" + volume
-	case "windows":
-		path, err := windowsFindUSBDrive(volume, options)
-		if err != nil {
-			return err
-		}
-		destPath = path + "/"
 	}
 
-	d, err := locateDevice(volume, destPath, options.Timeout)
+	d, err := locateDevice(volumes, destPaths, options.Timeout)
 	if err != nil {
 		return err
 	}
@@ -997,21 +1005,28 @@ func flashHexUsingMSD(volume, tmppath string, options *compileopts.Options) erro
 	return moveFile(tmppath, d+"/flash.hex")
 }
 
-func locateDevice(volume, path string, timeout time.Duration) (string, error) {
+func locateDevice(volumes, paths []string, timeout time.Duration) (string, error) {
 	var d []string
 	var err error
 	for start := time.Now(); time.Since(start) < timeout; {
-		d, err = filepath.Glob(path)
-		if err != nil {
-			return "", err
+		for _, path := range paths {
+			d, err = filepath.Glob(path)
+			if err != nil {
+				return "", err
+			}
+			if d != nil {
+				break
+			}
 		}
+
 		if d != nil {
 			break
 		}
+
 		time.Sleep(500 * time.Millisecond)
 	}
 	if d == nil {
-		return "", errors.New("unable to locate device: " + volume)
+		return "", errors.New("unable to locate any volume: [" + strings.Join(volumes, ",") + "]")
 	}
 	return d[0], nil
 }
@@ -1386,9 +1401,6 @@ func main() {
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb)")
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
 	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
-	printIR := flag.Bool("printir", false, "print LLVM IR")
-	dumpSSA := flag.Bool("dumpssa", false, "dump internal Go SSA")
-	verifyIR := flag.Bool("verifyir", false, "run extra verification steps on LLVM IR")
 	var tags buildutil.TagsFlag
 	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
@@ -1415,6 +1427,17 @@ func main() {
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
 
+	// Internal flags, that are only intended for TinyGo development.
+	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
+	dumpSSA := flag.Bool("internal-dumpssa", false, "dump internal Go SSA")
+	verifyIR := flag.Bool("internal-verifyir", false, "run extra verification steps on LLVM IR")
+	// Don't generate debug information in the IR, to make IR more readable.
+	// You generally want debug information in IR for various features, like
+	// stack size calculation and features like -size=short, -print-allocs=,
+	// etc. The -no-debug flag is used to strip it at link time. But for TinyGo
+	// development it can be useful to not emit debug information at all.
+	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, use -no-debug instead")
+
 	var flagJSON, flagDeps, flagTest bool
 	if command == "help" || command == "list" || command == "info" || command == "build" {
 		flag.BoolVar(&flagJSON, "json", false, "print data in JSON format")
@@ -1434,10 +1457,12 @@ func main() {
 		flag.BoolVar(&testConfig.Verbose, "v", false, "verbose: print additional output")
 		flag.BoolVar(&testConfig.Short, "short", false, "short: run smaller test suite to save time")
 		flag.StringVar(&testConfig.RunRegexp, "run", "", "run: regexp of tests to run")
+		flag.StringVar(&testConfig.SkipRegexp, "skip", "", "skip: regexp of tests to skip")
 		testConfig.Count = flag.Int("count", 1, "count: number of times to run tests/benchmarks `count` times")
-		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "run: regexp of benchmarks to run")
+		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "bench: regexp of benchmarks to run")
 		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
 		flag.BoolVar(&testConfig.BenchMem, "benchmem", false, "show memory stats for benchmarks")
+		flag.StringVar(&testConfig.Shuffle, "shuffle", "", "shuffle the order the tests and benchmarks run")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
@@ -1489,6 +1514,7 @@ func main() {
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
+		SkipDWARF:       *skipDwarf,
 		Semaphore:       make(chan struct{}, *parallelism),
 		Debug:           !*nodebug,
 		PrintSizes:      *printSize,
@@ -1528,15 +1554,6 @@ func main() {
 			os.Exit(1)
 		}
 		defer pprof.StopCPUProfile()
-	}
-
-	// Limit the number of threads to one.
-	// This is an attempted workaround for the crashes we're seeing in CI on
-	// Windows. If this change helps, it indicates there is a concurrency issue.
-	// If it doesn't, then there is something else going on. Either way, this
-	// should be removed once the test is done.
-	if runtime.GOOS == "windows" {
-		runtime.GOMAXPROCS(1)
 	}
 
 	switch command {
@@ -1703,7 +1720,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "monitor":
-		err := Monitor(*port, options)
+		err := Monitor("", *port, options)
 		handleCompilerError(err)
 	case "targets":
 		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")

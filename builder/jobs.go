@@ -134,7 +134,7 @@ func runJobs(job *compileJob, sema chan struct{}) error {
 		numRunningJobs--
 		<-sema
 		if jobRunnerDebug {
-			fmt.Println("## finished:", job.description, "(time "+job.duration.String()+")")
+			fmt.Println("## finished:", completed.description, "(time "+completed.duration.String()+")")
 		}
 		if completed.err != nil {
 			// Wait for any current jobs to finish.

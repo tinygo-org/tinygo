@@ -346,16 +346,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					dstObj.buffer = dstBuf
 					mem.put(dst.index(), dstObj)
 				}
-				switch inst.llvmInst.Type().IntTypeWidth() {
-				case 16:
-					locals[inst.localIndex] = literalValue{uint16(n)}
-				case 32:
-					locals[inst.localIndex] = literalValue{uint32(n)}
-				case 64:
-					locals[inst.localIndex] = literalValue{uint64(n)}
-				default:
-					panic("unknown integer type width")
-				}
+				locals[inst.localIndex] = makeLiteralInt(n, inst.llvmInst.Type().IntTypeWidth())
 			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
 				// Copy a block of memory from one pointer to another.
 				dst, err := operands[1].asPointer(r)
@@ -647,16 +638,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 				// GEP on fixed pointer value (for example, memory-mapped I/O).
 				ptrValue := operands[0].Uint() + offset
-				switch operands[0].len(r) {
-				case 8:
-					locals[inst.localIndex] = literalValue{uint64(ptrValue)}
-				case 4:
-					locals[inst.localIndex] = literalValue{uint32(ptrValue)}
-				case 2:
-					locals[inst.localIndex] = literalValue{uint16(ptrValue)}
-				default:
-					panic("pointer operand is not of a known pointer size")
-				}
+				locals[inst.localIndex] = makeLiteralInt(ptrValue, int(operands[0].len(r)*8))
 				continue
 			}
 			ptr = ptr.addOffset(int64(offset))
@@ -754,30 +736,33 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err == nil {
 				// The lhs is a pointer. This sometimes happens for particular
 				// pointer tricks.
-				switch inst.opcode {
-				case llvm.Add:
+				if inst.opcode == llvm.Add {
 					// This likely means this is part of a
 					// unsafe.Pointer(uintptr(ptr) + offset) pattern.
 					lhsPtr = lhsPtr.addOffset(int64(rhs.Uint()))
 					locals[inst.localIndex] = lhsPtr
-					continue
-				case llvm.Xor:
-					if rhs.Uint() == 0 {
-						// Special workaround for strings.noescape, see
-						// src/strings/builder.go in the Go source tree. This is
-						// the identity operator, so we can return the input.
-						locals[inst.localIndex] = lhs
-						continue
-					}
-				default:
+				} else if inst.opcode == llvm.Xor && rhs.Uint() == 0 {
+					// Special workaround for strings.noescape, see
+					// src/strings/builder.go in the Go source tree. This is
+					// the identity operator, so we can return the input.
+					locals[inst.localIndex] = lhs
+				} else if inst.opcode == llvm.And && rhs.Uint() < 8 {
+					// This is probably part of a pattern to get the lower bits
+					// of a pointer for pointer tagging, like this:
+					//     uintptr(unsafe.Pointer(t)) & 0b11
+					// We can actually support this easily by ANDing with the
+					// pointer offset.
+					result := uint64(lhsPtr.offset()) & rhs.Uint()
+					locals[inst.localIndex] = makeLiteralInt(result, int(lhs.len(r)*8))
+				} else {
 					// Catch-all for weird operations that should just be done
 					// at runtime.
 					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 					if err != nil {
 						return nil, mem, err
 					}
-					continue
 				}
+				continue
 			}
 			var result uint64
 			switch inst.opcode {
@@ -810,18 +795,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			default:
 				panic("unreachable")
 			}
-			switch lhs.len(r) {
-			case 8:
-				locals[inst.localIndex] = literalValue{result}
-			case 4:
-				locals[inst.localIndex] = literalValue{uint32(result)}
-			case 2:
-				locals[inst.localIndex] = literalValue{uint16(result)}
-			case 1:
-				locals[inst.localIndex] = literalValue{uint8(result)}
-			default:
-				panic("unknown integer size")
-			}
+			locals[inst.localIndex] = makeLiteralInt(result, int(lhs.len(r)*8))
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", lhs, rhs, "->", result)
 			}
@@ -843,18 +817,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", value, bitwidth)
 			}
-			switch bitwidth {
-			case 64:
-				locals[inst.localIndex] = literalValue{value}
-			case 32:
-				locals[inst.localIndex] = literalValue{uint32(value)}
-			case 16:
-				locals[inst.localIndex] = literalValue{uint16(value)}
-			case 8:
-				locals[inst.localIndex] = literalValue{uint8(value)}
-			default:
-				panic("unknown integer size in sext/zext/trunc")
-			}
+			locals[inst.localIndex] = makeLiteralInt(value, int(bitwidth))
 		case llvm.SIToFP, llvm.UIToFP:
 			var value float64
 			switch inst.opcode {

@@ -3,10 +3,10 @@
 package machine
 
 import (
-	"bytes"
-	"encoding/binary"
-	"errors"
 	"machine/usb"
+	"machine/usb/descriptor"
+
+	"errors"
 )
 
 type USBDevice struct {
@@ -29,7 +29,7 @@ type Serialer interface {
 	RTS() bool
 }
 
-var usbDescriptor = usb.DescriptorCDC
+var usbDescriptor = descriptor.CDC
 
 var usbDescriptorConfig uint8 = usb.DescriptorConfigCDC
 
@@ -72,7 +72,7 @@ func usbProduct() string {
 // binary.
 func strToUTF16LEDescriptor(in string, out []byte) {
 	out[0] = byte(len(out))
-	out[1] = usb.STRING_DESCRIPTOR_TYPE
+	out[1] = descriptor.TypeString
 	for i, rune := range in {
 		out[(i<<1)+2] = byte(rune)
 		out[(i<<1)+3] = 0
@@ -88,7 +88,7 @@ var (
 )
 
 var (
-	usbEndpointDescriptors [usb.NumberOfEndpoints]usb.DeviceDescriptor
+	usbEndpointDescriptors [usb.NumberOfEndpoints]descriptor.Device
 
 	isEndpointHalt        = false
 	isRemoteWakeUpEnabled = false
@@ -134,27 +134,27 @@ var (
 // can be requested by the host.
 func sendDescriptor(setup usb.Setup) {
 	switch setup.WValueH {
-	case usb.CONFIGURATION_DESCRIPTOR_TYPE:
+	case descriptor.TypeConfiguration:
 		sendUSBPacket(0, usbDescriptor.Configuration, setup.WLength)
 		return
-	case usb.DEVICE_DESCRIPTOR_TYPE:
+	case descriptor.TypeDevice:
 		// composite descriptor
 		switch {
 		case (usbDescriptorConfig & usb.DescriptorConfigHID) > 0:
-			usbDescriptor = usb.DescriptorCDCHID
+			usbDescriptor = descriptor.CDCHID
 		case (usbDescriptorConfig & usb.DescriptorConfigMIDI) > 0:
-			usbDescriptor = usb.DescriptorCDCMIDI
+			usbDescriptor = descriptor.CDCMIDI
 		case (usbDescriptorConfig & usb.DescriptorConfigJoystick) > 0:
-			usbDescriptor = usb.DescriptorCDCJoystick
+			usbDescriptor = descriptor.CDCJoystick
 		default:
-			usbDescriptor = usb.DescriptorCDC
+			usbDescriptor = descriptor.CDC
 		}
 
 		usbDescriptor.Configure(usbVendorID(), usbProductID())
 		sendUSBPacket(0, usbDescriptor.Device, setup.WLength)
 		return
 
-	case usb.STRING_DESCRIPTOR_TYPE:
+	case descriptor.TypeString:
 		switch setup.WValueL {
 		case 0:
 			usb_trans_buffer[0] = 0x04
@@ -178,12 +178,12 @@ func sendDescriptor(setup usb.Setup) {
 			SendZlp()
 		}
 		return
-	case usb.HID_REPORT_TYPE:
+	case descriptor.TypeHIDReport:
 		if h, ok := usbDescriptor.HID[setup.WIndex]; ok {
 			sendUSBPacket(0, h, setup.WLength)
 			return
 		}
-	case usb.DEVICE_QUALIFIER:
+	case descriptor.TypeDeviceQualifier:
 		// skip
 	default:
 	}
@@ -302,11 +302,15 @@ func EnableMIDI(txHandler func(), rxHandler func([]byte), setupHandler func(usb.
 
 // EnableJoystick enables HID. This function must be executed from the init().
 func EnableJoystick(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool, hidDesc []byte) {
-	idx := bytes.Index(usb.DescriptorCDCJoystick.Configuration, []byte{
-		0x09, 0x21, 0x11, 0x01, 0x00, 0x01, 0x22,
-	})
-	binary.LittleEndian.PutUint16(usb.DescriptorCDCJoystick.Configuration[idx+7:idx+9], uint16(len(hidDesc)))
-	usb.DescriptorCDCJoystick.HID[2] = hidDesc
+	class, err := descriptor.FindClassHIDType(descriptor.CDCJoystick.Configuration, descriptor.ClassHIDJoystick.Bytes())
+	if err != nil {
+		// TODO: some way to notify about error
+		return
+	}
+
+	class.ClassLength(uint16(len(hidDesc)))
+	descriptor.CDCJoystick.HID[2] = hidDesc
+
 	usbDescriptorConfig |= usb.DescriptorConfigJoystick
 	endPoints[usb.HID_ENDPOINT_OUT] = (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut)
 	usbRxHandler[usb.HID_ENDPOINT_OUT] = rxHandler

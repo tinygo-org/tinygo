@@ -6,6 +6,8 @@ import "device/riscv"
 
 const deferExtraRegs = 0
 
+const callInstSize = 4 // 8 without relaxation, maybe 4 with relaxation
+
 // RISC-V has a maximum alignment of 16 bytes (both for RV32 and for RV64).
 // Source: https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf
 func align(ptr uintptr) uintptr {

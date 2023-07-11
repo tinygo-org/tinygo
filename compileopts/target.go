@@ -50,7 +50,7 @@ type TargetSpec struct {
 	PortReset        string   `json:"flash-1200-bps-reset"`
 	SerialPort       []string `json:"serial-port"` // serial port IDs in the form "vid:pid"
 	FlashMethod      string   `json:"flash-method"`
-	FlashVolume      string   `json:"msd-volume-name"`
+	FlashVolume      []string `json:"msd-volume-name"`
 	FlashFilename    string   `json:"msd-firmware-name"`
 	UF2FamilyID      string   `json:"uf2-family-id"`
 	BinaryFormat     string   `json:"binary-format"`

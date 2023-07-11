@@ -4,6 +4,6 @@
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "serial-port": ["239a:8018"],
-    "msd-volume-name": "CPLAYBOOT",
+    "msd-volume-name": ["CPLAYBOOT"],
     "msd-firmware-name": "firmware.uf2"
 }

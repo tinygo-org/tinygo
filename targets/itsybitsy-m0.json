@@ -5,6 +5,6 @@
     "serial-port": ["239a:800f", "239a:8012"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "ITSYBOOT",
+    "msd-volume-name": ["ITSYBOOT"],
     "msd-firmware-name": "firmware.uf2"
 }

@@ -15,7 +15,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -24,10 +26,12 @@ import (
 
 // Testing flags.
 var (
-	flagVerbose   bool
-	flagShort     bool
-	flagRunRegexp string
-	flagCount     int
+	flagVerbose    bool
+	flagShort      bool
+	flagRunRegexp  string
+	flagSkipRegexp string
+	flagShuffle    string
+	flagCount      int
 )
 
 var initRan bool
@@ -42,6 +46,9 @@ func Init() {
 	flag.BoolVar(&flagVerbose, "test.v", false, "verbose: print additional output")
 	flag.BoolVar(&flagShort, "test.short", false, "short: run smaller test suite to save time")
 	flag.StringVar(&flagRunRegexp, "test.run", "", "run: regexp of tests to run")
+	flag.StringVar(&flagSkipRegexp, "test.skip", "", "skip: regexp of tests to run")
+	flag.StringVar(&flagShuffle, "test.shuffle", "off", "shuffle: off, on, <numeric-seed>")
+
 	flag.IntVar(&flagCount, "test.count", 1, "run each test or benchmark `count` times")
 
 	initBenchmarkFlags()
@@ -90,6 +97,10 @@ func (l *logger) WriteTo(w io.Writer) (int64, error) {
 	}
 	return l.b.WriteTo(w)
 
+}
+
+func (l *logger) Len() int {
+	return l.b.Len()
 }
 
 // Short reports whether the -test.short flag is set.
@@ -472,6 +483,27 @@ type testDeps interface {
 	MatchString(pat, str string) (bool, error)
 }
 
+func (m *M) shuffle() error {
+	var n int64
+
+	if flagShuffle == "on" {
+		n = time.Now().UnixNano()
+	} else {
+		var err error
+		n, err = strconv.ParseInt(flagShuffle, 10, 64)
+		if err != nil {
+			m.exitCode = 2
+			return fmt.Errorf(`testing: -shuffle should be "off", "on", or a valid integer: %v`, err)
+		}
+	}
+
+	fmt.Println("-test.shuffle", n)
+	rng := rand.New(rand.NewSource(n))
+	rng.Shuffle(len(m.Tests), func(i, j int) { m.Tests[i], m.Tests[j] = m.Tests[j], m.Tests[i] })
+	rng.Shuffle(len(m.Benchmarks), func(i, j int) { m.Benchmarks[i], m.Benchmarks[j] = m.Benchmarks[j], m.Benchmarks[i] })
+	return nil
+}
+
 // Run runs the tests. It returns an exit code to pass to os.Exit.
 func (m *M) Run() (code int) {
 	defer func() {
@@ -480,6 +512,13 @@ func (m *M) Run() (code int) {
 
 	if !flag.Parsed() {
 		flag.Parse()
+	}
+
+	if flagShuffle != "off" {
+		if err := m.shuffle(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
 	}
 
 	testRan, testOk := runTests(m.deps.MatchString, m.Tests)
@@ -499,7 +538,7 @@ func (m *M) Run() (code int) {
 func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
 	ok = true
 
-	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run"))
+	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp))
 	t := &T{
 		common: common{
 			output: &logger{logToStdout: flagVerbose},
@@ -566,4 +605,15 @@ func MainStart(deps interface{}, tests []InternalTest, benchmarks []InternalBenc
 		Benchmarks: benchmarks,
 		deps:       deps.(testDeps),
 	}
+}
+
+// A fake regexp matcher.
+// Inflexible, but saves 50KB of flash and 50KB of RAM per -size full,
+// and lets tests pass on cortex-m.
+func fakeMatchString(pat, str string) (bool, error) {
+	if pat == ".*" {
+		return true, nil
+	}
+	matched := strings.Contains(str, pat)
+	return matched, nil
 }

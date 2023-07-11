@@ -175,7 +175,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		AutomaticStackSize: config.AutomaticStackSize(),
 		DefaultStackSize:   config.StackSize(),
 		NeedsStackObjects:  config.NeedsStackObjects(),
-		Debug:              true,
+		Debug:              !config.Options.SkipDWARF, // emit DWARF except when -internal-nodwarf is passed
 	}
 
 	// Load the target machine, which is the LLVM object that contains all
@@ -909,13 +909,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		}
 	case "nrf-dfu":
 		// special format for nrfutil for Nordic chips
-		tmphexpath := filepath.Join(tmpdir, "main.hex")
-		err := objcopy(result.Executable, tmphexpath, "hex")
-		if err != nil {
-			return result, err
-		}
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
-		err = makeDFUFirmwareImage(config.Options, tmphexpath, result.Binary)
+		err = makeDFUFirmwareImage(config.Options, result.Executable, result.Binary)
 		if err != nil {
 			return result, err
 		}

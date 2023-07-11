@@ -33,9 +33,17 @@ func ReadBuildInfo() (info *BuildInfo, ok bool) {
 // BuildInfo represents the build information read from
 // the running binary.
 type BuildInfo struct {
-	Path string    // The main package path
-	Main Module    // The module containing the main package
-	Deps []*Module // Module dependencies
+	Path     string    // The main package path
+	Main     Module    // The module containing the main package
+	Deps     []*Module // Module dependencies
+	Settings []BuildSetting
+}
+
+type BuildSetting struct {
+	// Key and Value describe the build setting.
+	// Key must not contain an equals sign, space, tab, or newline.
+	// Value must not contain newlines ('\n').
+	Key, Value string
 }
 
 // Module represents a module.

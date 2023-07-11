@@ -1224,6 +1224,16 @@ func (v Value) Convert(t Type) Value {
 }
 
 func convertOp(src Value, typ Type) (Value, bool) {
+
+	// Easy check first.  Do we even need to do anything?
+	if src.typecode.underlying() == typ.(*rawType).underlying() {
+		return Value{
+			typecode: typ.(*rawType),
+			value:    src.value,
+			flags:    src.flags,
+		}, true
+	}
+
 	switch src.Kind() {
 	case Int, Int8, Int16, Int32, Int64:
 		switch rtype := typ.(*rawType); rtype.Kind() {
@@ -1289,7 +1299,6 @@ func convertOp(src Value, typ Type) (Value, bool) {
 
 	// TODO(dgryski): Unimplemented:
 	// Chan
-	// Identical underlying types
 	// Non-defined pointers types with same underlying base type
 	// Interface <-> Type conversions
 
@@ -1477,7 +1486,8 @@ func init() {
 }
 
 func Zero(typ Type) Value {
-	if typ.Size() <= unsafe.Sizeof(uintptr(0)) {
+	size := typ.Size()
+	if size <= unsafe.Sizeof(uintptr(0)) {
 		return Value{
 			typecode: typ.(*rawType),
 			value:    nil,
@@ -1485,7 +1495,7 @@ func Zero(typ Type) Value {
 		}
 	}
 
-	if typ.Size() <= zerobufferLen {
+	if size <= zerobufferLen {
 		return Value{
 			typecode: typ.(*rawType),
 			value:    unsafe.Pointer(zerobuffer),
@@ -1495,7 +1505,7 @@ func Zero(typ Type) Value {
 
 	return Value{
 		typecode: typ.(*rawType),
-		value:    alloc(typ.Size(), nil),
+		value:    alloc(size, nil),
 		flags:    valueFlagExported | valueFlagRO,
 	}
 }
@@ -1657,6 +1667,7 @@ func (v *Value) extendSlice(n int) {
 		cap:  ncap,
 	}
 
+	v.flags = valueFlagExported
 	v.value = (unsafe.Pointer)(&newslice)
 }
 

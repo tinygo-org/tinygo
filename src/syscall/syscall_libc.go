@@ -54,6 +54,15 @@ func Pread(fd int, p []byte, offset int64) (n int, err error) {
 	return
 }
 
+func Pwrite(fd int, p []byte, offset int64) (n int, err error) {
+	buf, count := splitSlice(p)
+	n = libc_pwrite(int32(fd), buf, uint(count), offset)
+	if n < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
 	newoffset = libc_lseek(int32(fd), offset, whence)
 	if newoffset < 0 {
@@ -66,6 +75,13 @@ func Open(path string, flag int, mode uint32) (fd int, err error) {
 	data := cstring(path)
 	fd = int(libc_open(&data[0], int32(flag), mode))
 	if fd < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Fsync(fd int) (err error) {
+	if libc_fsync(int32(fd)) < 0 {
 		err = getErrno()
 	}
 	return
@@ -84,15 +100,6 @@ func Readlink(path string, p []byte) (n int, err error) {
 func Chdir(path string) (err error) {
 	data := cstring(path)
 	fail := int(libc_chdir(&data[0]))
-	if fail < 0 {
-		err = getErrno()
-	}
-	return
-}
-
-func Chmod(path string, mode uint32) (err error) {
-	data := cstring(path)
-	fail := int(libc_chmod(&data[0], mode))
 	if fail < 0 {
 		err = getErrno()
 	}
@@ -344,6 +351,11 @@ func libc_read(fd int32, buf *byte, count uint) int
 //export pread
 func libc_pread(fd int32, buf *byte, count uint, offset int64) int
 
+// ssize_t pwrite(int fd, void *buf, size_t count, off_t offset);
+//
+//export pwrite
+func libc_pwrite(fd int32, buf *byte, count uint, offset int64) int
+
 // ssize_t lseek(int fd, off_t offset, int whence);
 //
 //export lseek
@@ -403,6 +415,11 @@ func libc_rename(from, to *byte) int32
 //
 //export symlink
 func libc_symlink(from, to *byte) int32
+
+// int fsync(int fd);
+//
+//export fsync
+func libc_fsync(fd int32) int32
 
 // ssize_t readlink(const char *path, void *buf, size_t count);
 //

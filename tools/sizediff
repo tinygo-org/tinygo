@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+
+# Small tool to compare code size between TinyGo runs (with the -size=short flag).
+
+import sys
+
+class Comparison:
+    def __init__(self, command, code0, data0, bss0, code1, data1, bss1):
+        self.command = command
+        self.code0 = code0
+        self.data0 = data0
+        self.bss0 = bss0
+        self.code1 = code1
+        self.data1 = data1
+        self.bss1 = bss1
+
+    @property
+    def flash0(self):
+        return self.code0 + self.data0
+
+    @property
+    def flash1(self):
+        return self.code1 + self.data1
+
+    @property
+    def codediff(self):
+        return self.code1 - self.code0
+
+    @property
+    def flashdiff(self):
+        return self.flash1 - self.flash0
+
+def readSizes(path):
+    sizes = []
+    lines = open(path).readlines()
+    for i in range(len(lines)):
+        if not lines[i].strip().startswith('code '):
+            continue
+        # found a size header
+        code, data, bss = map(int, lines[i+1].split()[:3])
+        command = lines[i-1].strip()
+        sizes.append({
+            'command': command,
+            'code':    code,
+            'data':    data,
+            'bss':     bss,
+        })
+    return sizes
+
+def main():
+    path0 = sys.argv[1]
+    path1 = sys.argv[2]
+    sizes0 = readSizes(path0)
+    sizes1 = readSizes(path1)
+    comparisons = []
+    for i in range(len(sizes0)):
+        if i >= len(sizes1):
+            print('%s has more commands than %s' % (path0, path1))
+            print('   ', sizes0[i]['command'])
+            break
+        if sizes0[i]['command'] != sizes1[i]['command']:
+            print('not the same command!')
+            print('   ', sizes0[i]['command'])
+            print('   ', sizes1[i]['command'])
+        comparisons.append(Comparison(sizes0[i]['command'], sizes0[i]['code'], sizes0[i]['data'], sizes0[i]['bss'], sizes1[i]['code'], sizes1[i]['data'], sizes1[i]['bss']))
+    if len(sizes0) < len(sizes1):
+        print('%s has more commands than %s' % (path1, path0))
+        print('   ', sizes1[len(sizes0)]['command'])
+    comparisons.sort(key=lambda x: x.flashdiff)
+    totalCode0 = 0
+    totalCode1 = 0
+    totalDiff = 0
+    totalProduct = 1
+    print(' before   after   diff')
+    for comparison in comparisons:
+        diffPct = comparison.flashdiff / comparison.flash0
+        print('%7d %7d %6d %6.2f%%  %s' % (comparison.flash0, comparison.flash1, comparison.flashdiff, diffPct * 100, comparison.command))
+        totalCode0 += comparison.flash0
+        totalCode1 += comparison.flash1
+        totalDiff += comparison.flashdiff
+        totalProduct *= (1 + diffPct)
+    geomean = totalProduct ** (1.0 / float(len(comparisons)))
+    print('%7d %7d %6d %6.2f%%   sum' % (totalCode0, totalCode1, totalDiff, geomean - 1))
+
+
+if __name__ == '__main__':
+    main()

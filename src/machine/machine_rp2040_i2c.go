@@ -20,10 +20,13 @@ var (
 	}
 )
 
+// The I2C target implementation is based on the C implementation from
+// here: https://github.com/vmilea/pico_i2c_slave
+
 // Features: Taken from datasheet.
-// Default master mode, with slave mode available (not simulataneously).
-// Default slave address of RP2040: 0x055
-// Supports 10-bit addressing in Master mode
+// Default controller mode, with target mode available (not simulataneously).
+// Default target address of RP2040: 0x055
+// Supports 10-bit addressing in controller mode
 // 16-element transmit buffer
 // 16-element receive buffer
 // Can be driven from DMA
@@ -45,20 +48,25 @@ type I2CConfig struct {
 	// SDA/SCL Serial Data and clock pins. Refer to datasheet to see
 	// which pins match the desired bus.
 	SDA, SCL Pin
+	Mode     I2CMode
 }
 
 type I2C struct {
-	Bus           *rp.I2C0_Type
-	restartOnNext bool
+	Bus          *rp.I2C0_Type
+	mode         I2CMode
+	txInProgress bool
 }
 
 var (
-	ErrInvalidI2CBaudrate = errors.New("invalid i2c baudrate")
-	ErrInvalidTgtAddr     = errors.New("invalid target i2c address not in 0..0x80 or is reserved")
-	ErrI2CGeneric         = errors.New("i2c error")
-	ErrRP2040I2CDisable   = errors.New("i2c rp2040 peripheral timeout in disable")
-	errInvalidI2CSDA      = errors.New("invalid I2C SDA pin")
-	errInvalidI2CSCL      = errors.New("invalid I2C SCL pin")
+	ErrInvalidI2CBaudrate  = errors.New("invalid i2c baudrate")
+	ErrInvalidTgtAddr      = errors.New("invalid target i2c address not in 0..0x80 or is reserved")
+	ErrI2CGeneric          = errors.New("i2c error")
+	ErrRP2040I2CDisable    = errors.New("i2c rp2040 peripheral timeout in disable")
+	errInvalidI2CSDA       = errors.New("invalid I2C SDA pin")
+	errInvalidI2CSCL       = errors.New("invalid I2C SCL pin")
+	ErrI2CAlreadyListening = errors.New("i2c already listening")
+	ErrI2CWrongMode        = errors.New("i2c wrong mode")
+	ErrI2CUnderflow        = errors.New("i2c underflow")
 )
 
 // Tx performs a write and then a read transfer placing the result in
@@ -75,9 +83,24 @@ var (
 //
 // Performs only a write transfer.
 func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
+	if i2c.mode != I2CModeController {
+		return ErrI2CWrongMode
+	}
+
 	// timeout in microseconds.
 	const timeout = 40 * 1000 // 40ms is a reasonable time for a real-time system.
 	return i2c.tx(uint8(addr), w, r, timeout)
+}
+
+// Listen starts listening for I2C requests sent to specified address
+//
+// addr is the address to listen to
+func (i2c *I2C) Listen(addr uint16) error {
+	if i2c.mode != I2CModeTarget {
+		return ErrI2CWrongMode
+	}
+
+	return i2c.listen(uint8(addr))
 }
 
 // Configure initializes i2c peripheral and configures I2C config's pins passed.
@@ -212,15 +235,22 @@ func (i2c *I2C) init(config I2CConfig) error {
 	if err := i2c.disable(); err != nil {
 		return err
 	}
-	i2c.restartOnNext = false
-	// Configure as a fast-mode master with RepStart support, 7-bit addresses
-	i2c.Bus.IC_CON.Set((rp.I2C0_IC_CON_SPEED_FAST << rp.I2C0_IC_CON_SPEED_Pos) |
-		rp.I2C0_IC_CON_MASTER_MODE | rp.I2C0_IC_CON_IC_SLAVE_DISABLE |
-		rp.I2C0_IC_CON_IC_RESTART_EN | rp.I2C0_IC_CON_TX_EMPTY_CTRL) // sets TX_EMPTY_CTRL to enable TX_EMPTY interrupt status
+
+	i2c.mode = config.Mode
+
+	// Configure as fast-mode with RepStart support, 7-bit addresses
+	mode := uint32(rp.I2C0_IC_CON_SPEED_FAST<<rp.I2C0_IC_CON_SPEED_Pos) |
+		rp.I2C0_IC_CON_IC_RESTART_EN | rp.I2C0_IC_CON_TX_EMPTY_CTRL // sets TX_EMPTY_CTRL to enable TX_EMPTY interrupt status
+	if config.Mode == I2CModeController {
+		mode |= rp.I2C0_IC_CON_MASTER_MODE | rp.I2C0_IC_CON_IC_SLAVE_DISABLE
+	}
+	i2c.Bus.IC_CON.Set(mode)
 
 	// Set FIFO watermarks to 1 to make things simpler. This is encoded by a register value of 0.
-	i2c.Bus.IC_TX_TL.Set(0)
-	i2c.Bus.IC_RX_TL.Set(0)
+	if config.Mode == I2CModeController {
+		i2c.Bus.IC_TX_TL.Set(0)
+		i2c.Bus.IC_RX_TL.Set(0)
+	}
 
 	// Always enable the DREQ signalling -- harmless if DMA isn't listening
 	i2c.Bus.IC_DMA_CR.Set(rp.I2C0_IC_DMA_CR_TDMAE | rp.I2C0_IC_DMA_CR_RDMAE)
@@ -274,7 +304,8 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 	i2c.Bus.IC_TAR.Set(uint32(addr))
 	i2c.enable()
 	abort := false
-	var abortReason uint32
+	var abortReason i2cAbortError
+	txStop := rxlen == 0
 	for txCtr := 0; txCtr < txlen; txCtr++ {
 		if abort {
 			break
@@ -282,8 +313,8 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 		first := txCtr == 0
 		last := txCtr == txlen-1 && rxlen == 0
 		i2c.Bus.IC_DATA_CMD.Set(
-			(boolToBit(first && i2c.restartOnNext) << rp.I2C0_IC_DATA_CMD_RESTART_Pos) |
-				(boolToBit(last) << rp.I2C0_IC_DATA_CMD_STOP_Pos) |
+			(boolToBit(first) << rp.I2C0_IC_DATA_CMD_RESTART_Pos) |
+				(boolToBit(last && txStop) << rp.I2C0_IC_DATA_CMD_STOP_Pos) |
 				uint32(tx[txCtr]))
 
 		// Wait until the transmission of the address/data from the internal
@@ -300,12 +331,14 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 		// IC_ENABLE[0] is set to 0, the TX FIFO is flushed and held
 		// in reset. There the TX FIFO looks like it has no data within
 		// it, so this bit is set to 1, provided there is activity in the
-		// master or slave state machines. When there is no longer
+		// controller or target state machines. When there is no longer
 		// any activity, then with ic_en=0, this bit is set to 0.
 		for !i2c.interrupted(rp.I2C0_IC_RAW_INTR_STAT_TX_EMPTY) {
 			if ticks() > deadline {
 				return errI2CWriteTimeout // If there was a timeout, don't attempt to do anything else.
 			}
+
+			gosched()
 		}
 
 		abortReason = i2c.getAbortReason()
@@ -322,33 +355,51 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 			// to take care of the abort.
 			for !i2c.interrupted(rp.I2C0_IC_RAW_INTR_STAT_STOP_DET) {
 				if ticks() > deadline {
+					if abort {
+						return abortReason
+					}
 					return errI2CWriteTimeout
 				}
+
+				gosched()
 			}
 			i2c.Bus.IC_CLR_STOP_DET.Get()
 		}
 	}
 
+	// Midway check for abort. Related issue https://github.com/tinygo-org/tinygo/issues/3671.
+	// The root cause for an abort after writing registers was "tx data no ack" (abort code=8).
+	// If the abort code was not registered then the whole peripheral would remain in disabled state forever.
+	abortReason = i2c.getAbortReason()
+	if abortReason != 0 {
+		i2c.clearAbortReason()
+		abort = true
+	}
+
+	rxStart := txlen == 0
 	if rxlen > 0 && !abort {
 		for rxCtr := 0; rxCtr < rxlen; rxCtr++ {
 			first := rxCtr == 0
 			last := rxCtr == rxlen-1
 			for i2c.writeAvailable() == 0 {
+				gosched()
 			}
 			i2c.Bus.IC_DATA_CMD.Set(
-				boolToBit(first && i2c.restartOnNext)<<rp.I2C0_IC_DATA_CMD_RESTART_Pos |
+				boolToBit(first && rxStart)<<rp.I2C0_IC_DATA_CMD_RESTART_Pos |
 					boolToBit(last)<<rp.I2C0_IC_DATA_CMD_STOP_Pos |
 					rp.I2C0_IC_DATA_CMD_CMD) // -> 1 for read
 
 			for !abort && i2c.readAvailable() == 0 {
 				abortReason = i2c.getAbortReason()
-				i2c.clearAbortReason()
 				if abortReason != 0 {
+					i2c.clearAbortReason()
 					abort = true
 				}
 				if ticks() > deadline {
 					return errI2CReadTimeout // If there was a timeout, don't attempt to do anything else.
 				}
+
+				gosched()
 			}
 			if abort {
 				break
@@ -368,10 +419,104 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 			// Address acknowledged, some data not acknowledged
 			fallthrough
 		default:
-			err = makeI2CAbortError(abortReason)
+			err = abortReason
 		}
 	}
 	return err
+}
+
+// listen sets up for async handling of requests on the I2C bus.
+func (i2c *I2C) listen(addr uint8) error {
+	if addr >= 0x80 || isReservedI2CAddr(addr) {
+		return ErrInvalidTgtAddr
+	}
+
+	err := i2c.disable()
+	if err != nil {
+		return err
+	}
+
+	i2c.Bus.IC_SAR.Set(uint32(addr))
+
+	i2c.enable()
+
+	return nil
+}
+
+func (i2c *I2C) WaitForEvent(buf []byte) (evt I2CTargetEvent, count int, err error) {
+	rxPtr := 0
+	for {
+		stat := i2c.Bus.IC_RAW_INTR_STAT.Get()
+
+		if stat&rp.I2C0_IC_INTR_MASK_M_RX_FULL != 0 {
+			b := uint8(i2c.Bus.IC_DATA_CMD.Get())
+			if rxPtr < len(buf) {
+				buf[rxPtr] = b
+				rxPtr++
+			}
+		}
+
+		// Stop
+		if stat&rp.I2C0_IC_INTR_MASK_M_STOP_DET != 0 {
+			if rxPtr > 0 {
+				return I2CReceive, rxPtr, nil
+			}
+
+			i2c.Bus.IC_CLR_STOP_DET.Get() // clear
+			return I2CFinish, 0, nil
+		}
+
+		// Start or restart - ignore start, return on restart
+		if stat&rp.I2C0_IC_INTR_MASK_M_START_DET != 0 {
+			i2c.Bus.IC_CLR_START_DET.Get() // clear restart
+
+			// Restart
+			if rxPtr > 0 {
+				return I2CReceive, rxPtr, nil
+			}
+		}
+
+		// Read request - leave flag set until we start to reply.
+		if stat&rp.I2C0_IC_INTR_MASK_M_RD_REQ != 0 {
+			return I2CRequest, 0, nil
+		}
+
+		gosched()
+	}
+}
+
+func (i2c *I2C) Reply(buf []byte) error {
+	txPtr := 0
+
+	stat := i2c.Bus.IC_RAW_INTR_STAT.Get()
+
+	if stat&rp.I2C0_IC_INTR_MASK_M_RD_REQ == 0 {
+		return ErrI2CWrongMode
+	}
+	i2c.Bus.IC_CLR_RD_REQ.Get() // clear restart
+
+	// Clear any dangling TX abort
+	if stat&rp.I2C0_IC_INTR_MASK_M_TX_ABRT != 0 {
+		i2c.Bus.IC_CLR_TX_ABRT.Get()
+	}
+
+	for txPtr < len(buf) {
+		if stat&rp.I2C0_IC_INTR_MASK_M_TX_EMPTY != 0 {
+			i2c.Bus.IC_DATA_CMD.Set(uint32(buf[txPtr]))
+			txPtr++
+		}
+
+		// This Tx abort is a normal case - we're sending more
+		// data than controller wants to receive
+		if stat&rp.I2C0_IC_INTR_MASK_M_TX_ABRT != 0 {
+			i2c.Bus.IC_CLR_TX_ABRT.Get()
+			return nil
+		}
+
+		gosched()
+	}
+
+	return nil
 }
 
 // writeAvailable determines non-blocking write space available
@@ -401,8 +546,8 @@ func (i2c *I2C) clearAbortReason() {
 // getAbortReason reads IC_TX_ABRT_SOURCE register.
 //
 //go:inline
-func (i2c *I2C) getAbortReason() uint32 {
-	return i2c.Bus.IC_TX_ABRT_SOURCE.Get()
+func (i2c *I2C) getAbortReason() i2cAbortError {
+	return i2cAbortError(i2c.Bus.IC_TX_ABRT_SOURCE.Get())
 }
 
 // returns true if RAW_INTR_STAT bits in mask are all set. performs:
@@ -421,9 +566,62 @@ func (b i2cAbortError) Error() string {
 	return "i2c abort, reason " + itoa.Uitoa(uint(b))
 }
 
-//go:inline
-func makeI2CAbortError(reason uint32) error {
-	return i2cAbortError(reason)
+func (b i2cAbortError) Reasons() (reasons []string) {
+	if b == 0 {
+		return nil
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_7B_ADDR_NOACK != 0 {
+		reasons = append(reasons, "7-bit address no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_10ADDR1_NOACK != 0 {
+		reasons = append(reasons, "10-bit address first byte no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_10ADDR2_NOACK != 0 {
+		reasons = append(reasons, "10-bit address second byte no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_TXDATA_NOACK != 0 {
+		reasons = append(reasons, "tx data no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_GCALL_NOACK != 0 {
+		reasons = append(reasons, "general call no ack")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_GCALL_READ != 0 {
+		reasons = append(reasons, "general call read")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_HS_ACKDET != 0 {
+		reasons = append(reasons, "high speed ack detect")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SBYTE_ACKDET != 0 {
+		reasons = append(reasons, "start byte ack detect")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_HS_NORSTRT != 0 {
+		reasons = append(reasons, "high speed no restart")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SBYTE_NORSTRT != 0 {
+		reasons = append(reasons, "start byte no restart")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_10B_RD_NORSTRT != 0 {
+		reasons = append(reasons, "10-bit read no restart")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_MASTER_DIS != 0 {
+		reasons = append(reasons, "master disabled")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ARB_LOST != 0 {
+		reasons = append(reasons, "arbitration lost")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SLVFLUSH_TXFIFO != 0 {
+		reasons = append(reasons, "slave flush tx fifo")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SLV_ARBLOST != 0 {
+		reasons = append(reasons, "slave arbitration lost")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_SLVRD_INTX != 0 {
+		reasons = append(reasons, "slave read while inactive")
+	}
+	if b&rp.I2C0_IC_TX_ABRT_SOURCE_ABRT_USER_ABRT != 0 {
+		reasons = append(reasons, "user abort")
+	}
+	return reasons
 }
 
 //go:inline

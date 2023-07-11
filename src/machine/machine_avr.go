@@ -1,4 +1,4 @@
-//go:build avr
+//go:build avr && !avrtiny
 
 package machine
 

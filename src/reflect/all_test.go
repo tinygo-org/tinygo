@@ -874,8 +874,6 @@ var appendTests = []struct {
 	{make([]int, 2, 4), []int{22, 33, 44}},
 }
 
-/*
-
 func TestAppend(t *testing.T) {
 	for i, test := range appendTests {
 		origLen, extraLen := len(test.orig), len(test.extra)
@@ -934,8 +932,6 @@ func TestAppend(t *testing.T) {
 		shouldPanic("using unexported field", func() { AppendSlice(ax, e1) })
 	}
 }
-
-*/
 
 func TestCopy(t *testing.T) {
 	a := []int{1, 2, 3, 4, 10, 9, 8, 7}
@@ -1454,8 +1450,6 @@ func TestIsNil(t *testing.T) {
 	NotNil(fi, t)
 }
 
-/*
-
 func TestIsZero(t *testing.T) {
 	for i, tt := range []struct {
 		x    any
@@ -1565,14 +1559,20 @@ func TestIsZero(t *testing.T) {
 			t.Errorf("%d: IsZero(Zero(TypeOf((%s)(%+v)))) is false", i, x.Kind(), tt.x)
 		}
 
+		/* // TODO(tinygo): missing SetZero support
+
 		p := New(x.Type()).Elem()
 		p.Set(x)
 		p.SetZero()
 		if !p.IsZero() {
 			t.Errorf("%d: IsZero((%s)(%+v)) is true after SetZero", i, p.Kind(), tt.x)
+
 		}
+		*/
+
 	}
 
+	/* // TODO(tinygo): panic/recover support
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
@@ -1581,8 +1581,10 @@ func TestIsZero(t *testing.T) {
 		}()
 		(Value{}).IsZero()
 	}()
+	*/
 }
 
+/*
 func TestInterfaceExtraction(t *testing.T) {
 	var s struct {
 		W io.Writer
@@ -1694,7 +1696,7 @@ func TestNilMap(t *testing.T) {
 	mv.SetMapIndex(ValueOf("hi"), Value{})
 }
 
-/*
+/* // TODO(tinygo): missing chan reflect support
 
 func TestChan(t *testing.T) {
 	for loop := 0; loop < 2; loop++ {
@@ -2164,6 +2166,8 @@ func fmtSelect(info []caseInfo) string {
 	return buf.String()
 }
 
+// TODO(tinygo): missing func/method/call support
+
 type two [2]uintptr
 
 // Difficult test for function call because of
@@ -2488,7 +2492,7 @@ func (p *Point) Int32Method(x int32) int32 {
 }
 
 /*
-
+// TODO(tinygo): missing method support
 func TestMethod(t *testing.T) {
 	// Non-curried method of type.
 	p := Point{3, 4}
@@ -2945,12 +2949,12 @@ func TestInterfaceSet(t *testing.T) {
 	}
 }
 
+*/
+
 type T1 struct {
 	a string
 	int
 }
-
-/*
 
 func TestAnonymousFields(t *testing.T) {
 	var field StructField
@@ -2964,8 +2968,6 @@ func TestAnonymousFields(t *testing.T) {
 		t.Error("field index should be 1; is", field.Index)
 	}
 }
-
-*/
 
 type FTest struct {
 	s     any

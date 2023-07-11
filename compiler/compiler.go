@@ -82,6 +82,7 @@ type compilerContext struct {
 	uintptrType      llvm.Type
 	program          *ssa.Program
 	diagnostics      []error
+	functionInfos    map[*ssa.Function]functionInfo
 	astComments      map[string]*ast.CommentGroup
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
@@ -93,13 +94,14 @@ type compilerContext struct {
 // importantly with a newly created LLVM context and module.
 func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, dumpSSA bool) *compilerContext {
 	c := &compilerContext{
-		Config:      config,
-		DumpSSA:     dumpSSA,
-		difiles:     make(map[string]llvm.Metadata),
-		ditypes:     make(map[types.Type]llvm.Metadata),
-		machine:     machine,
-		targetData:  machine.CreateTargetData(),
-		astComments: map[string]*ast.CommentGroup{},
+		Config:        config,
+		DumpSSA:       dumpSSA,
+		difiles:       make(map[string]llvm.Metadata),
+		ditypes:       make(map[types.Type]llvm.Metadata),
+		machine:       machine,
+		targetData:    machine.CreateTargetData(),
+		functionInfos: map[*ssa.Function]functionInfo{},
+		astComments:   map[string]*ast.CommentGroup{},
 	}
 
 	c.ctx = llvm.NewContext()
@@ -167,6 +169,8 @@ type builder struct {
 	deferExprFuncs    map[ssa.Value]int
 	selectRecvBuf     map[*ssa.Select]llvm.Value
 	deferBuiltinFuncs map[ssa.Value]deferBuiltin
+	runDefersBlock    []llvm.BasicBlock
+	afterDefersBlock  []llvm.BasicBlock
 }
 
 func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *builder {
@@ -1349,6 +1353,15 @@ func (b *builder) createFunction() {
 		}
 	}
 
+	// The rundefers instruction needs to be created after all defer
+	// instructions have been created. Otherwise it won't handle all defer
+	// cases.
+	for i, bb := range b.runDefersBlock {
+		b.SetInsertPointAtEnd(bb)
+		b.createRunDefers()
+		b.CreateBr(b.afterDefersBlock[i])
+	}
+
 	if b.hasDeferFrame() {
 		// Create the landing pad block, where execution continues after a
 		// panic.
@@ -1503,7 +1516,14 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			b.CreateRet(retVal)
 		}
 	case *ssa.RunDefers:
-		b.createRunDefers()
+		// Note where we're going to put the rundefers block
+		run := b.insertBasicBlock("rundefers.block")
+		b.CreateBr(run)
+		b.runDefersBlock = append(b.runDefersBlock, run)
+
+		after := b.insertBasicBlock("rundefers.after")
+		b.SetInsertPointAtEnd(after)
+		b.afterDefersBlock = append(b.afterDefersBlock, after)
 	case *ssa.Send:
 		b.createChanSend(instr)
 	case *ssa.Store:

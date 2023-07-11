@@ -4,6 +4,7 @@ package compiler
 // pragmas, determines the link name, etc.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -239,18 +240,22 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 // present in *ssa.Function, such as the link name and whether it should be
 // exported.
 func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
+	if info, ok := c.functionInfos[f]; ok {
+		return info
+	}
 	info := functionInfo{
 		// Pick the default linkName.
 		linkName: f.RelString(nil),
 	}
 	// Check for //go: pragmas, which may change the link name (among others).
-	info.parsePragmas(f)
+	c.parsePragmas(&info, f)
+	c.functionInfos[f] = info
 	return info
 }
 
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
 // //export or //go:noinline.
-func (info *functionInfo) parsePragmas(f *ssa.Function) {
+func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 	if f.Syntax() == nil {
 		return
 	}
@@ -290,10 +295,12 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 				info.module = parts[1]
 			case "//go:wasmimport":
 				// Import a WebAssembly function, for example a WASI function.
-				// For details, see: https://github.com/golang/go/issues/38248
-				if len(parts) != 3 || len(f.Blocks) != 0 {
+				// Original proposal: https://github.com/golang/go/issues/38248
+				// Allow globally: https://github.com/golang/go/issues/59149
+				if len(parts) != 3 {
 					continue
 				}
+				c.checkWasmImport(f, comment.Text)
 				info.exported = true
 				info.module = parts[1]
 				info.importName = parts[2]
@@ -352,6 +359,58 @@ func (info *functionInfo) parsePragmas(f *ssa.Function) {
 		}
 
 	}
+}
+
+// Check whether this function cannot be used in //go:wasmimport. It will add an
+// error if this is the case.
+//
+// The list of allowed types is based on this proposal:
+// https://github.com/golang/go/issues/59149
+func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
+	if c.pkg.Path() == "runtime" {
+		// The runtime is a special case. Allow all kinds of parameters
+		// (importantly, including pointers).
+		return
+	}
+	if f.Blocks != nil {
+		// Defined functions cannot be exported.
+		c.addError(f.Pos(), fmt.Sprintf("can only use //go:wasmimport on declarations"))
+		return
+	}
+	if f.Signature.Results().Len() > 1 {
+		c.addError(f.Signature.Results().At(1).Pos(), fmt.Sprintf("%s: too many return values", pragma))
+	} else if f.Signature.Results().Len() == 1 {
+		result := f.Signature.Results().At(0)
+		if !isValidWasmType(result.Type(), true) {
+			c.addError(result.Pos(), fmt.Sprintf("%s: unsupported result type %s", pragma, result.Type().String()))
+		}
+	}
+	for _, param := range f.Params {
+		// Check whether the type is allowed.
+		// Only a very limited number of types can be mapped to WebAssembly.
+		if !isValidWasmType(param.Type(), false) {
+			c.addError(param.Pos(), fmt.Sprintf("%s: unsupported parameter type %s", pragma, param.Type().String()))
+		}
+	}
+}
+
+// Check whether the type maps directly to a WebAssembly type, according to:
+// https://github.com/golang/go/issues/59149
+func isValidWasmType(typ types.Type, isReturn bool) bool {
+	switch typ := typ.Underlying().(type) {
+	case *types.Basic:
+		switch typ.Kind() {
+		case types.Int32, types.Uint32, types.Int64, types.Uint64:
+			return true
+		case types.Float32, types.Float64:
+			return true
+		case types.UnsafePointer:
+			if !isReturn {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // getParams returns the function parameters, including the receiver at the
@@ -417,7 +476,7 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	}
 }
 
-// addStandardAttribute adds all attributes added to defined functions.
+// addStandardAttributes adds all attributes added to defined functions.
 func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
 	c.addStandardDeclaredAttributes(llvmFn)
 	c.addStandardDefinedAttributes(llvmFn)

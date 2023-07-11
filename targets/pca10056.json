@@ -4,7 +4,7 @@
 	"serial": "uart",
 	"flash-method": "command",
 	"flash-command": "nrfjprog -f nrf52 --sectorerase --program {hex} --reset",
-	"msd-volume-name": "JLINK",
+	"msd-volume-name": ["JLINK"],
 	"msd-firmware-name": "firmware.hex",
 	"openocd-interface": "jlink",
 	"openocd-transport": "swd"

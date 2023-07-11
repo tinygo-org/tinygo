@@ -195,7 +195,7 @@ func (f flashBlockDevice) Size() int64 {
 	return int64(FlashDataEnd() - FlashDataStart())
 }
 
-const writeBlockSize = 4
+const writeBlockSize = 1 << 8
 
 // WriteBlockSize returns the block size in which data can be written to
 // memory. It can be used by a client to optimize writes, non-aligned writes
@@ -229,19 +229,19 @@ func (f flashBlockDevice) EraseBlocks(start, length int64) error {
 	state := interrupt.Disable()
 	defer interrupt.Restore(state)
 
-	C.flash_erase_blocks(C.uint32_t(address), C.ulong(length))
+	C.flash_erase_blocks(C.uint32_t(address), C.ulong(length*f.EraseBlockSize()))
 
 	return nil
 }
 
 // pad data if needed so it is long enough for correct byte alignment on writes.
 func (f flashBlockDevice) pad(p []byte) []byte {
-	paddingNeeded := f.WriteBlockSize() - (int64(len(p)) % f.WriteBlockSize())
-	if paddingNeeded == 0 {
+	overflow := int64(len(p)) % f.WriteBlockSize()
+	if overflow == 0 {
 		return p
 	}
 
-	padding := bytes.Repeat([]byte{0xff}, int(paddingNeeded))
+	padding := bytes.Repeat([]byte{0xff}, int(f.WriteBlockSize()-overflow))
 	return append(p, padding...)
 }
 

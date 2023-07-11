@@ -1,0 +1,25 @@
+{
+	"llvm-target": "avr",
+	"build-tags": ["avr", "avrtiny", "baremetal", "linux", "arm"],
+	"goos": "linux",
+	"goarch": "arm",
+	"gc": "conservative",
+	"linker": "ld.lld",
+	"scheduler": "none",
+	"rtlib": "compiler-rt",
+	"libc": "picolibc",
+	"default-stack-size": 256,
+	"cflags": [
+		"-Werror"
+	],
+	"ldflags": [
+		"-T", "targets/avrtiny.ld",
+		"--gc-sections"
+	],
+	"extra-files": [
+		"src/internal/task/task_stack_avr.S",
+		"src/runtime/asm_avr.S",
+		"targets/avrtiny.S"
+	],
+	"gdb": ["avr-gdb"]
+}

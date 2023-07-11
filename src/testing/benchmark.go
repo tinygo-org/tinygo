@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -27,7 +28,6 @@ var (
 	matchBenchmarks *string
 	benchmarkMemory *bool
 	benchTime       = benchTimeFlag{d: 1 * time.Second} // changed during test of testing package
-	testCount       *int
 )
 
 type benchTimeFlag struct {
@@ -160,6 +160,7 @@ func (b *B) ReportAllocs() {
 // runN runs a single benchmark for the specified number of iterations.
 func (b *B) runN(n int) {
 	b.N = n
+	runtime.GC()
 	b.ResetTimer()
 	b.StartTimer()
 	b.benchFunc(b)
@@ -214,7 +215,6 @@ func (b *B) doBench() BenchmarkResult {
 // of benchmark iterations until the benchmark runs for the requested benchtime.
 // run1 must have been called on b.
 func (b *B) launch() {
-	runtime.GC()
 	// Run the benchmark for at least the specified amount of time.
 	if b.benchTime.n > 0 {
 		b.runN(b.benchTime.n)
@@ -365,7 +365,7 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 		return true
 	}
 	ctx := &benchContext{
-		match: newMatcher(matchString, *matchBenchmarks, "-test.bench"),
+		match: newMatcher(matchString, *matchBenchmarks, "-test.bench", flagSkipRegexp),
 	}
 	var bs []InternalBenchmark
 	for _, Benchmark := range benchmarks {
@@ -379,7 +379,8 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 	}
 	main := &B{
 		common: common{
-			name: "Main",
+			output: &logger{},
+			name:   "Main",
 		},
 		benchTime: benchTime,
 		benchFunc: func(b *B) {
@@ -417,6 +418,12 @@ func (b *B) processBench(ctx *benchContext) {
 				results += "\t" + r.MemString()
 			}
 			fmt.Println(results)
+
+			// Print any benchmark output
+			if b.output.Len() > 0 {
+				fmt.Printf("--- BENCH: %s\n", benchName)
+				b.output.WriteTo(os.Stdout)
+			}
 		}
 	}
 }
@@ -437,8 +444,9 @@ func (b *B) Run(name string, f func(b *B)) bool {
 	b.hasSub = true
 	sub := &B{
 		common: common{
-			name:  benchName,
-			level: b.level + 1,
+			output: &logger{},
+			name:   benchName,
+			level:  b.level + 1,
 		},
 		benchFunc: f,
 		benchTime: b.benchTime,

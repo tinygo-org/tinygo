@@ -62,7 +62,7 @@ func (r *Register8) HasBits(value uint8) bool {
 //
 //	r.Reg = (r.Reg & ^(mask << pos)) | value << pos
 //
-// go:inline
+//go:inline
 func (r *Register8) ReplaceBits(value uint8, mask uint8, pos uint8) {
 	StoreUint8(&r.Reg, LoadUint8(&r.Reg)&^(mask<<pos)|value<<pos)
 }
@@ -124,7 +124,7 @@ func (r *Register16) HasBits(value uint16) bool {
 //
 //	r.Reg = (r.Reg & ^(mask << pos)) | value << pos
 //
-// go:inline
+//go:inline
 func (r *Register16) ReplaceBits(value uint16, mask uint16, pos uint8) {
 	StoreUint16(&r.Reg, LoadUint16(&r.Reg)&^(mask<<pos)|value<<pos)
 }
@@ -186,7 +186,7 @@ func (r *Register32) HasBits(value uint32) bool {
 //
 //	r.Reg = (r.Reg & ^(mask << pos)) | value << pos
 //
-// go:inline
+//go:inline
 func (r *Register32) ReplaceBits(value uint32, mask uint32, pos uint8) {
 	StoreUint32(&r.Reg, LoadUint32(&r.Reg)&^(mask<<pos)|value<<pos)
 }
@@ -248,7 +248,7 @@ func (r *Register64) HasBits(value uint64) bool {
 //
 //	r.Reg = (r.Reg & ^(mask << pos)) | value << pos
 //
-// go:inline
+//go:inline
 func (r *Register64) ReplaceBits(value uint64, mask uint64, pos uint8) {
 	StoreUint64(&r.Reg, LoadUint64(&r.Reg)&^(mask<<pos)|value<<pos)
 }

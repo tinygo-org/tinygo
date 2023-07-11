@@ -749,36 +749,10 @@ func (a ADC) Configure(config ADCConfig) {
 		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_CTRLB) {
 		} // wait for sync
 
-		adc.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
-		var resolution uint32
-		switch config.Resolution {
-		case 8:
-			resolution = sam.ADC_CTRLB_RESSEL_8BIT
-		case 10:
-			resolution = sam.ADC_CTRLB_RESSEL_10BIT
-		case 12:
-			resolution = sam.ADC_CTRLB_RESSEL_12BIT
-		case 16:
-			resolution = sam.ADC_CTRLB_RESSEL_16BIT
-		default:
-			resolution = sam.ADC_CTRLB_RESSEL_12BIT
-		}
-		adc.CTRLB.SetBits(uint16(resolution << sam.ADC_CTRLB_RESSEL_Pos))
-		adc.SAMPCTRL.Set(5) // sampling Time Length
-
-		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
-		} // wait for sync
-
-		// No Negative input (Internal Ground)
-		adc.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
-		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
-		} // wait for sync
-
 		// Averaging (see datasheet table in AVGCTRL register description)
+		var resolution uint32 = sam.ADC_CTRLB_RESSEL_16BIT
 		var samples uint32
 		switch config.Samples {
-		case 1:
-			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
 		case 2:
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_2
 		case 4:
@@ -800,10 +774,38 @@ func (a ADC) Configure(config ADCConfig) {
 		case 1024:
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_1024
 		default: // 1 sample only (no oversampling nor averaging), adjusting result by 0
+			// Resolutions less than 16 bits only make sense when sampling only
+			// once. Resulting ADC values become erratic when using both
+			// multi-sampling and less than 16 bits of resolution.
 			samples = sam.ADC_AVGCTRL_SAMPLENUM_1
+			switch config.Resolution {
+			case 8:
+				resolution = sam.ADC_CTRLB_RESSEL_8BIT
+			case 10:
+				resolution = sam.ADC_CTRLB_RESSEL_10BIT
+			case 12:
+				resolution = sam.ADC_CTRLB_RESSEL_12BIT
+			case 16:
+				resolution = sam.ADC_CTRLB_RESSEL_16BIT
+			default:
+				resolution = sam.ADC_CTRLB_RESSEL_12BIT
+			}
 		}
+
 		adc.AVGCTRL.Set(uint8(samples<<sam.ADC_AVGCTRL_SAMPLENUM_Pos) |
 			(0 << sam.ADC_AVGCTRL_ADJRES_Pos))
+
+		adc.CTRLA.SetBits(sam.ADC_CTRLA_PRESCALER_DIV32 << sam.ADC_CTRLA_PRESCALER_Pos)
+		adc.CTRLB.SetBits(uint16(resolution << sam.ADC_CTRLB_RESSEL_Pos))
+		adc.SAMPCTRL.Set(5) // sampling Time Length
+
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_SAMPCTRL) {
+		} // wait for sync
+
+		// No Negative input (Internal Ground)
+		adc.INPUTCTRL.Set(sam.ADC_INPUTCTRL_MUXNEG_GND << sam.ADC_INPUTCTRL_MUXNEG_Pos)
+		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_INPUTCTRL) {
+		} // wait for sync
 
 		for adc.SYNCBUSY.HasBits(sam.ADC_SYNCBUSY_AVGCTRL) {
 		} // wait for sync
@@ -871,10 +873,24 @@ func (a ADC) Get() uint16 {
 		val = val << 8
 	case sam.ADC_CTRLB_RESSEL_10BIT:
 		val = val << 6
-	case sam.ADC_CTRLB_RESSEL_16BIT:
-		val = val << 4
 	case sam.ADC_CTRLB_RESSEL_12BIT:
 		val = val << 4
+	case sam.ADC_CTRLB_RESSEL_16BIT:
+		// Adjust for multiple samples. This is only configured when the
+		// resolution is 16 bits.
+		switch (bus.AVGCTRL.Get() & sam.ADC_AVGCTRL_SAMPLENUM_Msk) >> sam.ADC_AVGCTRL_SAMPLENUM_Pos {
+		case sam.ADC_AVGCTRL_SAMPLENUM_1:
+			val <<= 4
+		case sam.ADC_AVGCTRL_SAMPLENUM_2:
+			val <<= 3
+		case sam.ADC_AVGCTRL_SAMPLENUM_4:
+			val <<= 2
+		case sam.ADC_AVGCTRL_SAMPLENUM_8:
+			val <<= 1
+		default:
+			// These values are all shifted by the hardware so they fit exactly
+			// in a 16-bit integer, so they don't need to be shifted here.
+		}
 	}
 	return val
 }
@@ -1490,22 +1506,39 @@ func (spi SPI) Configure(config SPIConfig) error {
 		spi.Bus.CTRLA.ClearBits(sam.SERCOM_SPIM_CTRLA_CPOL)
 	}
 
-	// set clock
-	freqRef := uint32(0)
-	if config.Frequency > SERCOM_FREQ_REF/2 {
-		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK0)
-		freqRef = uint32(SERCOM_FREQ_REF_GCLK0)
-	} else {
-		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
-		freqRef = uint32(SERCOM_FREQ_REF)
-	}
+	// Set the clock frequency.
+	// There are two clocks we can use GCLK0 (120MHz) and GCLK1 (48MHz).
+	// We can use any even divisor for these clock, which means:
+	//   - for GCLK0 we can make 60MHz, 30MHz, 20MHz, 15MHz, 12MHz, 10MHz, etc
+	//   - for GCLK1 we can make 24MHz, 12MHz, 8MHz, 6MHz, 4.8MHz, 4MHz, etc
+	// This means that by trying both clocks, we can have a wider selection of
+	// available SPI clock frequencies.
 
-	// Set synch speed for SPI
-	baudRate := freqRef / (2 * config.Frequency)
-	if baudRate > 0 {
-		baudRate--
+	// Calculate the baudrate if we would use GCLK1 (48MHz), and the resulting
+	// frequency. The baud rate is rounded up, so that the resulting frequency
+	// is rounded down from the maximum value (meaning it will always be smaller
+	// than or equal to config.Frequency).
+	baudRateGCLK1 := (SERCOM_FREQ_REF/2 + config.Frequency - 1) / config.Frequency
+	freqGCLK1 := SERCOM_FREQ_REF / 2 / baudRateGCLK1
+
+	// Same for GCLK0 (120MHz).
+	baudRateGCLK0 := (SERCOM_FREQ_REF_GCLK0/2 + config.Frequency - 1) / config.Frequency
+	freqGCLK0 := SERCOM_FREQ_REF_GCLK0 / 2 / baudRateGCLK0
+
+	// Pick the clock source that is the closest to the maximum baud rate.
+	// Note: there may be reasons to prefer the lower frequency clock (like
+	// power consumption). If that's the case, we might want to always use the
+	// 48MHz clock at low frequencies (below 4MHz or so).
+	if freqGCLK0 > freqGCLK1 && uint32(uint8(baudRateGCLK0-1))+1 == baudRateGCLK0 {
+		// Pick this 120MHz clock if it results in a better frequency after
+		// division, and the baudRate value fits in the BAUD register.
+		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK0)
+		spi.Bus.BAUD.Set(uint8(baudRateGCLK0 - 1))
+	} else {
+		// Use the 48MHz clock in other cases.
+		setSERCOMClockGenerator(spi.SERCOM, sam.GCLK_PCHCTRL_GEN_GCLK1)
+		spi.Bus.BAUD.Set(uint8(baudRateGCLK1 - 1))
 	}
-	spi.Bus.BAUD.Set(uint8(baudRate))
 
 	// Enable SPI port.
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPIM_CTRLA_ENABLE)
@@ -2206,12 +2239,12 @@ func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 
 // pad data if needed so it is long enough for correct byte alignment on writes.
 func (f flashBlockDevice) pad(p []byte) []byte {
-	paddingNeeded := f.WriteBlockSize() - (int64(len(p)) % f.WriteBlockSize())
-	if paddingNeeded == 0 {
+	overflow := int64(len(p)) % f.WriteBlockSize()
+	if overflow == 0 {
 		return p
 	}
 
-	padding := bytes.Repeat([]byte{0xff}, int(paddingNeeded))
+	padding := bytes.Repeat([]byte{0xff}, int(f.WriteBlockSize()-overflow))
 	return append(p, padding...)
 }
 

@@ -5,6 +5,6 @@
     "serial-port": ["239A:8037"],
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
-    "msd-volume-name": "METROM4BOOT",
+    "msd-volume-name": ["METROM4BOOT"],
     "msd-firmware-name": "firmware.uf2"
 }

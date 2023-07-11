@@ -30,12 +30,19 @@ func TestTempDir(t *testing.T) {
 }
 
 func TestChdir(t *testing.T) {
-	// create and cd into a new directory
+	// Save and restore the current working directory after the test, otherwise
+	// we might break other tests that depend on it.
+	//
+	// Note that it doesn't work if Chdir is broken, but then this test should
+	// fail and highlight the issue if that is the case.
 	oldDir, err := Getwd()
 	if err != nil {
 		t.Errorf("Getwd() returned %v", err)
 		return
 	}
+	defer Chdir(oldDir)
+
+	// create and cd into a new directory
 	dir := "_os_test_TestChDir"
 	Remove(dir)
 	err = Mkdir(dir, 0755)
@@ -60,9 +67,7 @@ func TestChdir(t *testing.T) {
 		t.Errorf("Close %s: %s", file, err)
 	}
 	// cd back to original directory
-	// TODO: emulate "cd .." in wasi-libc better?
-	//err = Chdir("..")
-	err = Chdir(oldDir)
+	err = Chdir("..")
 	if err != nil {
 		t.Errorf("Chdir ..: %s", err)
 	}
@@ -139,6 +144,9 @@ var closeTests = map[string]func(*File) error{
 	"Seek": func(f *File) error {
 		_, err := f.Seek(0, 0)
 		return err
+	},
+	"Sync": func(f *File) error {
+		return f.Sync()
 	},
 	"SyscallConn": func(f *File) error {
 		_, err := f.SyscallConn()

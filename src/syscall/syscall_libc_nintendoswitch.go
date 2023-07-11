@@ -79,6 +79,15 @@ type RawSockaddrInet6 struct {
 	// stub
 }
 
+func Chmod(path string, mode uint32) (err error) {
+	data := cstring(path)
+	fail := int(libc_chmod(&data[0], mode))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 // int open(const char *pathname, int flags, mode_t mode);
 //
 //export open

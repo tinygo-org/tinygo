@@ -50,6 +50,8 @@ func handler() {
 	}
 }
 
+var DefaultSetupHandler = setupHandler
+
 func setupHandler(setup usb.Setup) bool {
 	ok := false
 	if setup.BmRequestType == usb.SET_REPORT_TYPE && setup.BRequest == usb.SET_IDLE {

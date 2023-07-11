@@ -285,11 +285,27 @@ func (p *lowerInterfacesPass) run() error {
 	for _, use := range getUses(p.mod.NamedFunction("runtime.typeAssert")) {
 		actualType := use.Operand(0)
 		name := strings.TrimPrefix(use.Operand(1).Name(), "reflect/types.typeid:")
+		gepOffset := uint64(0)
+		for strings.HasPrefix(name, "pointer:pointer:") {
+			// This is a type like **int, which has the name pointer:pointer:int
+			// but is encoded using pointer tagging.
+			// Calculate the pointer tag, which is emitted as a GEP instruction.
+			name = name[len("pointer:"):]
+			gepOffset++
+		}
+
 		if t, ok := p.types[name]; ok {
 			// The type exists in the program, so lower to a regular pointer
 			// comparison.
 			p.builder.SetInsertPointBefore(use)
-			commaOk := p.builder.CreateICmp(llvm.IntEQ, t.typecodeGEP, actualType, "typeassert.ok")
+			typecodeGEP := t.typecodeGEP
+			if gepOffset != 0 {
+				// This is a tagged pointer.
+				typecodeGEP = llvm.ConstInBoundsGEP(p.ctx.Int8Type(), typecodeGEP, []llvm.Value{
+					llvm.ConstInt(p.ctx.Int64Type(), gepOffset, false),
+				})
+			}
+			commaOk := p.builder.CreateICmp(llvm.IntEQ, typecodeGEP, actualType, "typeassert.ok")
 			use.ReplaceAllUsesWith(commaOk)
 		} else {
 			// The type does not exist in the program, so lower to a constant

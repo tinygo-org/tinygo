@@ -39,6 +39,7 @@
 //     meta         uint8
 //     nmethods     uint16
 //     ptrTo        *typeStruct
+//     size         uint32
 //     pkgpath      *byte       // package path; null terminated
 //     numField     uint16
 //     fields       [...]structField // the remaining fields are all of type structField
@@ -394,8 +395,10 @@ type Type interface {
 
 // Constants for the 'meta' byte.
 const (
-	kindMask  = 31 // mask to apply to the meta byte to get the Kind value
-	flagNamed = 32 // flag that is set if this is a named type
+	kindMask       = 31  // mask to apply to the meta byte to get the Kind value
+	flagNamed      = 32  // flag that is set if this is a named type
+	flagComparable = 64  // flag that is set if this type is comparable
+	flagIsBinary   = 128 // flag that is set if this type uses the hashmap binary algorithm
 )
 
 // The base type struct. All type structs start with this.
@@ -455,6 +458,7 @@ type structType struct {
 	numMethod uint16
 	ptrTo     *rawType
 	pkgpath   *byte
+	size      uint32
 	numField  uint16
 	fields    [1]structField // the remaining fields are all of type structField
 }
@@ -473,7 +477,15 @@ func (t *rawType) underlying() *rawType {
 	return t
 }
 
+func (t *rawType) ptrtag() uintptr {
+	return uintptr(unsafe.Pointer(t)) & 0b11
+}
+
 func (t *rawType) isNamed() bool {
+	if tag := t.ptrtag(); tag != 0 {
+		return false
+	}
+
 	return t.meta&flagNamed != 0
 }
 
@@ -498,9 +510,13 @@ func pointerTo(t *rawType) *rawType {
 
 	switch t.Kind() {
 	case Pointer:
+		if tag := t.ptrtag(); tag < 3 {
+			return (*rawType)(unsafe.Add(unsafe.Pointer(t), 1))
+		}
+
 		// TODO(dgryski): This is blocking https://github.com/tinygo-org/tinygo/issues/3131
 		// We need to be able to create types that match existing types to prevent typecode equality.
-		panic("reflect: cannot make **T type")
+		panic("reflect: cannot make *****T type")
 	case Struct:
 		return (*structType)(unsafe.Pointer(t)).ptrTo
 	default:
@@ -577,6 +593,11 @@ func (t *rawType) Kind() Kind {
 	if t == nil {
 		return Invalid
 	}
+
+	if tag := t.ptrtag(); tag != 0 {
+		return Pointer
+	}
+
 	return Kind(t.meta & kindMask)
 }
 
@@ -587,6 +608,10 @@ func (t *rawType) Elem() Type {
 }
 
 func (t *rawType) elem() *rawType {
+	if tag := t.ptrtag(); tag != 0 {
+		return (*rawType)(unsafe.Add(unsafe.Pointer(t), -1))
+	}
+
 	underlying := t.underlying()
 	switch underlying.Kind() {
 	case Pointer:
@@ -621,7 +646,7 @@ func (t *rawType) Field(i int) StructField {
 	}
 }
 
-func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data unsafe.Pointer, flagsByte uint8, name string, offset uintptr) rawStructField {
+func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data unsafe.Pointer, flagsByte uint8, name string, offset uint32) rawStructField {
 	// Read the field tag, if there is one.
 	var tag string
 	if flagsByte&structFieldFlagHasTag != 0 {
@@ -648,7 +673,7 @@ func rawStructFieldFromPointer(descriptor *structType, fieldType *rawType, data 
 		Type:      fieldType,
 		Tag:       StructTag(tag),
 		Anonymous: flagsByte&structFieldFlagAnonymous != 0,
-		Offset:    offset,
+		Offset:    uintptr(offset),
 	}
 }
 
@@ -669,24 +694,15 @@ func (t *rawType) rawField(n int) rawStructField {
 	// This offset could have been stored directly in the array (to make the
 	// lookup faster), but by calculating it on-the-fly a bit of storage can be
 	// saved.
-	field := &descriptor.fields[0]
-	var offset uintptr = 0
-	for i := 0; i < n; i++ {
-		offset += field.fieldType.Size()
-
-		// Increment pointer to the next field.
-		field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
-
-		// Align the offset for the next field.
-		offset = align(offset, uintptr(field.fieldType.Align()))
-	}
-
+	field := (*structField)(unsafe.Add(unsafe.Pointer(&descriptor.fields[0]), uintptr(n)*unsafe.Sizeof(structField{})))
 	data := field.data
 
 	// Read some flags of this field, like whether the field is an embedded
 	// field. See structFieldFlagAnonymous and similar flags.
 	flagsByte := *(*byte)(data)
 	data = unsafe.Add(data, 1)
+	offset, lenOffs := uvarint32(unsafe.Slice((*byte)(data), maxVarintLen32))
+	data = unsafe.Add(data, lenOffs)
 
 	name := readStringZ(data)
 	data = unsafe.Add(data, len(name))
@@ -726,7 +742,6 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 			// Also calculate field offset.
 
 			descriptor := (*structType)(unsafe.Pointer(ll.t.underlying()))
-			var offset uintptr
 			field := &descriptor.fields[0]
 
 			for i := uint16(0); i < descriptor.numField; i++ {
@@ -736,6 +751,9 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 				// field. See structFieldFlagAnonymous and similar flags.
 				flagsByte := *(*byte)(data)
 				data = unsafe.Add(data, 1)
+
+				offset, lenOffs := uvarint32(unsafe.Slice((*byte)(data), maxVarintLen32))
+				data = unsafe.Add(data, lenOffs)
 
 				name := readStringZ(data)
 				data = unsafe.Add(data, len(name))
@@ -759,16 +777,10 @@ func (t *rawType) rawFieldByName(n string) (rawStructField, []int, bool) {
 					})
 				}
 
-				offset += field.fieldType.Size()
-
 				// update offset/field pointer if there *is* a next field
 				if i < descriptor.numField-1 {
-
 					// Increment pointer to the next field.
 					field = (*structField)(unsafe.Add(unsafe.Pointer(field), unsafe.Sizeof(structField{})))
-
-					// Align the offset for the next field.
-					offset = align(offset, uintptr(field.fieldType.Align()))
 				}
 			}
 		}
@@ -860,12 +872,8 @@ func (t *rawType) Size() uintptr {
 	case Array:
 		return t.elem().Size() * uintptr(t.Len())
 	case Struct:
-		numField := t.NumField()
-		if numField == 0 {
-			return 0
-		}
-		lastField := t.rawField(numField - 1)
-		return align(lastField.Offset+lastField.Type.Size(), uintptr(t.Align()))
+		u := t.underlying()
+		return uintptr((*structType)(unsafe.Pointer(u)).size)
 	default:
 		panic("unimplemented: size of type")
 	}
@@ -955,63 +963,12 @@ func (t *rawType) Implements(u Type) bool {
 
 // Comparable returns whether values of this type can be compared to each other.
 func (t *rawType) Comparable() bool {
-	switch t.Kind() {
-	case Invalid:
-		return false
-	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
-		return true
-	case Float32, Float64, Complex64, Complex128:
-		return true
-	case String:
-		return true
-	case UnsafePointer:
-		return true
-	case Chan:
-		return true
-	case Interface:
-		return true
-	case Pointer:
-		return true
-	case Slice:
-		return false
-	case Array:
-		return t.elem().Comparable()
-	case Func:
-		return false
-	case Map:
-		return false
-	case Struct:
-		numField := t.NumField()
-		for i := 0; i < numField; i++ {
-			if !t.rawField(i).Type.Comparable() {
-				return false
-			}
-		}
-		return true
-	default:
-		panic(TypeError{"Comparable"})
-	}
+	return (t.meta & flagComparable) == flagComparable
 }
 
 // isbinary() returns if the hashmapAlgorithmBinary functions can be used on this type
 func (t *rawType) isBinary() bool {
-	switch t.Kind() {
-	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
-		return true
-	case Pointer:
-		return true
-	case Array:
-		return t.elem().isBinary()
-	case Struct:
-		numField := t.NumField()
-		for i := 0; i < numField; i++ {
-			if !t.rawField(i).Type.isBinary() {
-				return false
-			}
-		}
-		return true
-	}
-	return false
+	return (t.meta & flagIsBinary) == flagIsBinary
 }
 
 func (t *rawType) ChanDir() ChanDir {
@@ -1300,4 +1257,20 @@ func StructOf([]StructField) Type {
 
 func MapOf(key, value Type) Type {
 	panic("unimplemented: reflect.MapOf()")
+}
+
+const maxVarintLen32 = 5
+
+// encoding/binary.Uvarint, specialized for uint32
+func uvarint32(buf []byte) (uint32, int) {
+	var x uint32
+	var s uint
+	for i, b := range buf {
+		if b < 0x80 {
+			return x | uint32(b)<<s, i + 1
+		}
+		x |= uint32(b&0x7f) << s
+		s += 7
+	}
+	return 0, 0
 }

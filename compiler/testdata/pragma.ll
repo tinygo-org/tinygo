@@ -62,12 +62,6 @@ entry:
 
 declare void @main.declaredImport() #7
 
-; Function Attrs: nounwind
-define hidden void @main.definedImport(ptr %context) unnamed_addr #2 {
-entry:
-  ret void
-}
-
 declare void @main.undefinedFunctionNotInSection(ptr) #1
 
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+nontrapping-fptoint,+sign-ext" }

@@ -46,10 +46,14 @@ func init() {
 // Return the register and mask to enable a given GPIO pin. This can be used to
 // implement bit-banged drivers.
 func (p Pin) PortMaskSet() (*uint32, uint32) {
+	// Note: using PORT_IOBUS for faster pin accesses.
+	// The regular PORT registers appear to take around 4 clock cycles to store,
+	// which is longer than the ws2812 driver expects. The IOBUS is is fast
+	// enough to avoid this issue.
 	if p < 32 {
-		return &sam.PORT.OUTSET0.Reg, 1 << uint8(p)
+		return &sam.PORT_IOBUS.OUTSET0.Reg, 1 << uint8(p)
 	} else {
-		return &sam.PORT.OUTSET1.Reg, 1 << uint8(p-32)
+		return &sam.PORT_IOBUS.OUTSET1.Reg, 1 << uint8(p-32)
 	}
 }
 
@@ -57,9 +61,9 @@ func (p Pin) PortMaskSet() (*uint32, uint32) {
 // implement bit-banged drivers.
 func (p Pin) PortMaskClear() (*uint32, uint32) {
 	if p < 32 {
-		return &sam.PORT.OUTCLR0.Reg, 1 << uint8(p)
+		return &sam.PORT_IOBUS.OUTCLR0.Reg, 1 << uint8(p)
 	} else {
-		return &sam.PORT.OUTCLR1.Reg, 1 << uint8(p-32)
+		return &sam.PORT_IOBUS.OUTCLR1.Reg, 1 << uint8(p-32)
 	}
 }
 

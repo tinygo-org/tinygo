@@ -10,11 +10,6 @@ import (
 	"unsafe"
 )
 
-// Sync is a stub, not yet implemented
-func (f *File) Sync() error {
-	return ErrNotImplemented
-}
-
 // Stat returns the FileInfo structure describing file.
 // If there is an error, it will be of type *PathError.
 func (file *File) Stat() (FileInfo, error) {

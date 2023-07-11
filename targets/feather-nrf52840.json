@@ -2,5 +2,5 @@
     "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
     "build-tags": ["feather_nrf52840"],
     "serial-port": ["239a:8029", "239a:802a"],
-    "msd-volume-name": "FTHR840BOOT"
+    "msd-volume-name": ["FTHR840BOOT"]
 }

@@ -37,9 +37,16 @@ entry:
 
 1:                                                ; preds = %entry
   call void @main.external(ptr undef) #4
+  br label %rundefers.block
+
+rundefers.after:                                  ; preds = %rundefers.end
+  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  ret void
+
+rundefers.block:                                  ; preds = %1
   br label %rundefers.loophead
 
-rundefers.loophead:                               ; preds = %3, %1
+rundefers.loophead:                               ; preds = %3, %rundefers.block
   %2 = load ptr, ptr %deferPtr, align 4
   %stackIsNil = icmp eq ptr %2, null
   br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
@@ -66,8 +73,7 @@ rundefers.default:                                ; preds = %rundefers.loop
   unreachable
 
 rundefers.end:                                    ; preds = %rundefers.loophead
-  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
-  ret void
+  br label %rundefers.after
 
 recover:                                          ; preds = %rundefers.end3
   call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
@@ -111,14 +117,14 @@ declare ptr @llvm.stacksave() #3
 
 declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(24), ptr, ptr) #2
 
+declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(24), ptr) #2
+
 ; Function Attrs: nounwind
 define internal void @"main.deferSimple$1"(ptr %context) unnamed_addr #1 {
 entry:
   call void @runtime.printint32(i32 3, ptr undef) #4
   ret void
 }
-
-declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(24), ptr) #2
 
 declare void @runtime.printint32(i32, ptr) #2
 
@@ -146,9 +152,16 @@ entry:
 
 1:                                                ; preds = %entry
   call void @main.external(ptr undef) #4
+  br label %rundefers.block
+
+rundefers.after:                                  ; preds = %rundefers.end
+  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  ret void
+
+rundefers.block:                                  ; preds = %1
   br label %rundefers.loophead
 
-rundefers.loophead:                               ; preds = %4, %3, %1
+rundefers.loophead:                               ; preds = %4, %3, %rundefers.block
   %2 = load ptr, ptr %deferPtr, align 4
   %stackIsNil = icmp eq ptr %2, null
   br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
@@ -185,8 +198,7 @@ rundefers.default:                                ; preds = %rundefers.loop
   unreachable
 
 rundefers.end:                                    ; preds = %rundefers.loophead
-  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
-  ret void
+  br label %rundefers.after
 
 recover:                                          ; preds = %rundefers.end7
   call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4

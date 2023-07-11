@@ -6,6 +6,7 @@ package compiler
 // interface-lowering.go for more details.
 
 import (
+	"encoding/binary"
 	"fmt"
 	"go/token"
 	"go/types"
@@ -126,6 +127,22 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 	if _, ok := typ.Underlying().(*types.Interface); ok {
 		hasMethodSet = false
 	}
+
+	// Short-circuit all the global pointer logic here for pointers to pointers.
+	if typ, ok := typ.(*types.Pointer); ok {
+		if _, ok := typ.Elem().(*types.Pointer); ok {
+			// For a pointer to a pointer, we just increase the pointer by 1
+			ptr := c.getTypeCode(typ.Elem())
+			// if the type is already *****T or higher, we can't make it.
+			if typstr := typ.String(); strings.HasPrefix(typstr, "*****") {
+				c.addError(token.NoPos, fmt.Sprintf("too many levels of pointers for typecode: %s", typstr))
+			}
+			return llvm.ConstGEP(c.ctx.Int8Type(), ptr, []llvm.Value{
+				llvm.ConstInt(llvm.Int32Type(), 1, false),
+			})
+		}
+	}
+
 	typeCodeName, isLocal := getTypeCodeName(typ)
 	globalName := "reflect/types.type:" + typeCodeName
 	var global llvm.Value
@@ -205,6 +222,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "size", types.Typ[types.Uint32]),
 				types.NewVar(token.NoPos, nil, "numFields", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "fields", types.NewArray(c.getRuntimeType("structField"), int64(typ.NumFields()))),
 			)
@@ -236,6 +254,16 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			c.interfaceTypes.Set(typ, global)
 		}
 		metabyte := getTypeKind(typ)
+
+		// Precompute these so we don't have to calculate them at runtime.
+		if types.Comparable(typ) {
+			metabyte |= 1 << 6
+		}
+
+		if hashmapIsBinaryKey(typ) {
+			metabyte |= 1 << 7
+		}
+
 		switch typ := typ.(type) {
 		case *types.Basic:
 			typeFields = []llvm.Value{c.getTypeCode(types.NewPointer(typ))}
@@ -306,16 +334,21 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 			pkgPathPtr := c.pkgPathPtr(pkgpath)
 
+			llvmStructType := c.getLLVMType(typ)
+			size := c.targetData.TypeStoreSize(llvmStructType)
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(ms.Len()), false), // numMethods
 				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
 				pkgPathPtr,
+				llvm.ConstInt(c.ctx.Int32Type(), uint64(size), false),            // size
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(typ.NumFields()), false), // numFields
 			}
 			structFieldType := c.getLLVMRuntimeType("structField")
+
 			var fields []llvm.Value
 			for i := 0; i < typ.NumFields(); i++ {
 				field := typ.Field(i)
+				offset := c.targetData.ElementOffset(llvmStructType, i)
 				var flags uint8
 				if field.Anonymous() {
 					flags |= structFieldFlagAnonymous
@@ -329,7 +362,11 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				if field.Embedded() {
 					flags |= structFieldFlagIsEmbedded
 				}
-				data := string(flags) + field.Name() + "\x00"
+
+				var offsBytes [binary.MaxVarintLen32]byte
+				offLen := binary.PutUvarint(offsBytes[:], offset)
+
+				data := string(flags) + string(offsBytes[:offLen]) + field.Name() + "\x00"
 				if typ.Tag(i) != "" {
 					if len(typ.Tag(i)) > 0xff {
 						c.addError(field.Pos(), fmt.Sprintf("struct tag is %d bytes which is too long, max is 255", len(typ.Tag(i))))
@@ -370,6 +407,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}, typeFields...)
 		}
 		alignment := c.targetData.TypeAllocSize(c.i8ptrType)
+		if alignment < 4 {
+			alignment = 4
+		}
 		globalValue := c.ctx.ConstStruct(typeFields, false)
 		global.SetInitializer(globalValue)
 		if isLocal {
@@ -647,11 +687,8 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		commaOk = b.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{actualTypeNum}, "")
 
 	} else {
-		assertedTypeGlobal := b.getTypeCode(expr.AssertedType)
-		if !assertedTypeGlobal.IsAConstantExpr().IsNil() {
-			assertedTypeGlobal = assertedTypeGlobal.Operand(0) // resolve the GEP operation
-		}
-		globalName := "reflect/types.typeid:" + strings.TrimPrefix(assertedTypeGlobal.Name(), "reflect/types.type:")
+		name, _ := getTypeCodeName(expr.AssertedType)
+		globalName := "reflect/types.typeid:" + name
 		assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
 		if assertedTypeCodeGlobal.IsNil() {
 			// Create a new typecode global.
@@ -724,7 +761,7 @@ func (c *compilerContext) getMethodsString(itf *types.Interface) string {
 	return strings.Join(methods, "; ")
 }
 
-// getInterfaceImplementsfunc returns a declared function that works as a type
+// getInterfaceImplementsFunc returns a declared function that works as a type
 // switch. The interface lowering pass will define this function.
 func (c *compilerContext) getInterfaceImplementsFunc(assertedType types.Type) llvm.Value {
 	s, _ := getTypeCodeName(assertedType.Underlying())
