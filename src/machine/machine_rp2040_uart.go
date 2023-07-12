@@ -89,10 +89,16 @@ func (uart *UART) SetBaudRate(br uint32) {
 func (uart *UART) WriteByte(c byte) error {
 	// wait until buffer is not full
 	for uart.Bus.UARTFR.HasBits(rp.UART0_UARTFR_TXFF) {
+		gosched()
 	}
 
 	// write data
 	uart.Bus.UARTDR.Set(uint32(c))
+
+	// wait until done transmitting.
+	for uart.Bus.UARTFR.HasBits(rp.UART0_UARTFR_BUSY) {
+		gosched()
+	}
 	return nil
 }
 
