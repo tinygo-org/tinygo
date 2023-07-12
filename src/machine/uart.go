@@ -64,7 +64,7 @@ func (uart *UART) Write(data []byte) (n int, err error) {
 	for _, v := range data {
 		uart.WriteByte(v)
 	}
-	uart.flush()
+	uart.flush() // flush() blocks until all data has been transmitted.
 	return len(data), nil
 }
 
