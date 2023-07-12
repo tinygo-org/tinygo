@@ -1122,6 +1122,8 @@ func (uart *UART) WriteByte(c byte) error {
 	return nil
 }
 
+func (uart *UART) flush() {}
+
 func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	// should reset IRQ
 	uart.Receive(byte((uart.Bus.DATA.Get() & 0xFF)))

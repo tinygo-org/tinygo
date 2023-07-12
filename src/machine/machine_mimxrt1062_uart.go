@@ -181,6 +181,8 @@ func (uart *UART) WriteByte(c byte) error {
 	return nil
 }
 
+func (uart *UART) flush() {}
+
 // getBaudRateDivisor finds the greatest over-sampling factor (4..32) and
 // corresponding baud rate divisor (1..8191) that best partition a given baud
 // rate into equal intervals.

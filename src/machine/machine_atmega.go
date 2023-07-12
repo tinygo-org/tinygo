@@ -198,6 +198,8 @@ func (uart *UART) WriteByte(c byte) error {
 	return nil
 }
 
+func (uart *UART) flush() {}
+
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32

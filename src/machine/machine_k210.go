@@ -399,6 +399,8 @@ func (uart *UART) WriteByte(c byte) {
 	uart.Bus.TXDATA.Set(uint32(c))
 }
 
+func (uart *UART) flush() {}
+
 type SPI struct {
 	Bus *kendryte.SPI_Type
 }

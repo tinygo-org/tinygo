@@ -81,3 +81,5 @@ func (uart *UART) WriteByte(c byte) error {
 	}
 	return nil
 }
+
+func (uart *UART) flush() {}

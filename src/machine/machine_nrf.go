@@ -194,6 +194,8 @@ func (uart *UART) WriteByte(c byte) error {
 	return nil
 }
 
+func (uart *UART) flush() {}
+
 func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	if nrf.UART0.EVENTS_RXDRDY.Get() != 0 {
 		uart.Receive(byte(nrf.UART0.RXD.Get()))

@@ -94,12 +94,13 @@ func (uart *UART) WriteByte(c byte) error {
 
 	// write data
 	uart.Bus.UARTDR.Set(uint32(c))
+	return nil
+}
 
-	// wait until done transmitting.
+func (uart *UART) flush() {
 	for uart.Bus.UARTFR.HasBits(rp.UART0_UARTFR_BUSY) {
 		gosched()
 	}
-	return nil
 }
 
 // SetFormat for number of data bits, stop bits, and parity for the UART.

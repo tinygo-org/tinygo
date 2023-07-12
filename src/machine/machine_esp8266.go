@@ -190,3 +190,5 @@ func (uart *UART) WriteByte(c byte) error {
 	esp.UART0.UART_FIFO.Set(uint32(c))
 	return nil
 }
+
+func (uart *UART) flush() {}

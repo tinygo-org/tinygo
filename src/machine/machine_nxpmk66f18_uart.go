@@ -305,3 +305,5 @@ func (u *UART) WriteByte(c byte) error {
 	u.C2.Set(uartC2TXActive)
 	return nil
 }
+
+func (uart *UART) flush() {}

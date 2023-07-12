@@ -634,6 +634,8 @@ func (uart *UART) WriteByte(c byte) error {
 	return nil
 }
 
+func (uart *UART) flush() {}
+
 // handleInterrupt should be called from the appropriate interrupt handler for
 // this UART instance.
 func (uart *UART) handleInterrupt(interrupt.Interrupt) {

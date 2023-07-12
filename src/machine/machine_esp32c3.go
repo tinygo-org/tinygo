@@ -502,3 +502,5 @@ func (uart *UART) WriteByte(b byte) error {
 	uart.Bus.FIFO.Set(uint32(b))
 	return nil
 }
+
+func (uart *UART) flush() {}
