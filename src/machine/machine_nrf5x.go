@@ -72,12 +72,17 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 
 	if len(r) == 0 {
 		// Stop the I2C transaction after the write.
-		i2c.signalStop()
+		err = i2c.signalStop()
 	} else {
 		// The last byte read has already stopped the transaction, via
 		// TWI_SHORTS_BB_STOP. But we still need to wait until we receive the
 		// STOPPED event.
+		tries := 0
 		for i2c.Bus.EVENTS_STOPPED.Get() == 0 {
+			tries++
+			if tries >= i2cTimeout {
+				return errI2CSignalStopTimeout
+			}
 		}
 		i2c.Bus.EVENTS_STOPPED.Set(0)
 	}
@@ -87,11 +92,16 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 
 // writeByte writes a single byte to the I2C bus and waits for confirmation.
 func (i2c *I2C) writeByte(data byte) error {
+	tries := 0
 	i2c.Bus.TXD.Set(uint32(data))
 	for i2c.Bus.EVENTS_TXDSENT.Get() == 0 {
 		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {
 			i2c.Bus.EVENTS_ERROR.Set(0)
 			return errI2CBusError
+		}
+		tries++
+		if tries >= i2cTimeout {
+			return errI2CWriteTimeout
 		}
 	}
 	i2c.Bus.EVENTS_TXDSENT.Set(0)
@@ -100,10 +110,15 @@ func (i2c *I2C) writeByte(data byte) error {
 
 // readByte reads a single byte from the I2C bus when it is ready.
 func (i2c *I2C) readByte() (byte, error) {
+	tries := 0
 	for i2c.Bus.EVENTS_RXDREADY.Get() == 0 {
 		if e := i2c.Bus.EVENTS_ERROR.Get(); e != 0 {
 			i2c.Bus.EVENTS_ERROR.Set(0)
 			return 0, errI2CBusError
+		}
+		tries++
+		if tries >= i2cTimeout {
+			return 0, errI2CReadTimeout
 		}
 	}
 	i2c.Bus.EVENTS_RXDREADY.Set(0)
