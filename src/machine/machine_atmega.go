@@ -190,7 +190,7 @@ func (uart *UART) handleInterrupt(intr interrupt.Interrupt) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	// Wait until UART buffer is not busy.
 	for !uart.statusRegA.HasBits(avr.UCSR0A_UDRE0) {
 	}

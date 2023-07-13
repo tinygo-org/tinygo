@@ -173,7 +173,7 @@ func (uart *UART) Sync() error {
 }
 
 // WriteByte writes a single byte of data to the UART interface.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	uart.startTransmitting()
 	for !uart.txBuffer.Put(c) {
 	}

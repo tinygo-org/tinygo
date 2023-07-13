@@ -181,9 +181,9 @@ func (uart *UART) Configure(config UARTConfig) {
 	esp.UART0.UART_CLKDIV.Set(CPUFrequency() / config.BaudRate)
 }
 
-// WriteByte writes a single byte to the output buffer. Note that the hardware
+// writeByte writes a single byte to the output buffer. Note that the hardware
 // includes a buffer of 128 bytes which will be used first.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	for (esp.UART0.UART_STATUS.Get()>>16)&0xff >= 128 {
 		// Wait until the TX buffer has room.
 	}

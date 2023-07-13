@@ -314,7 +314,7 @@ func (uart *UART) Configure(config UARTConfig) {
 	uart.Bus.CLKDIV.Set(peripheralClock / config.BaudRate)
 }
 
-func (uart *UART) WriteByte(b byte) error {
+func (uart *UART) writeByte(b byte) error {
 	for (uart.Bus.STATUS.Get()>>16)&0xff >= 128 {
 		// Read UART_TXFIFO_CNT from the status register, which indicates how
 		// many bytes there are in the transmit buffer. Wait until there are

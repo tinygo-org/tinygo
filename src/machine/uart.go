@@ -59,10 +59,20 @@ func (uart *UART) Read(data []byte) (n int, err error) {
 	return size, nil
 }
 
+// WriteByte writes a byte of data to the UART.
+func (uart *UART) WriteByte(c byte) error {
+	err := uart.writeByte(c)
+	if err != nil {
+		return err
+	}
+	uart.flush() // flush() blocks until all data has been transmitted.
+	return nil
+}
+
 // Write data to the UART.
 func (uart *UART) Write(data []byte) (n int, err error) {
 	for _, v := range data {
-		uart.WriteByte(v)
+		uart.writeByte(v)
 	}
 	uart.flush() // flush() blocks until all data has been transmitted.
 	return len(data), nil

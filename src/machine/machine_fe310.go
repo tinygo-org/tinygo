@@ -111,7 +111,7 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	uart.Receive(c)
 }
 
-func (uart *UART) WriteByte(c byte) {
+func (uart *UART) writeByte(c byte) {
 	for sifive.UART0.TXDATA.Get()&sifive.UART_TXDATA_FULL != 0 {
 	}
 

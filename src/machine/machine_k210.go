@@ -392,7 +392,7 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	uart.Receive(c)
 }
 
-func (uart *UART) WriteByte(c byte) {
+func (uart *UART) writeByte(c byte) {
 	for uart.Bus.TXDATA.Get()&kendryte.UARTHS_TXDATA_FULL != 0 {
 	}
 
