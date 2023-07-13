@@ -59,7 +59,8 @@ func (uart *UART) Read(data []byte) (n int, err error) {
 	return size, nil
 }
 
-// WriteByte writes a byte of data to the UART.
+// WriteByte writes a byte of data over the UART's Tx.
+// This function blocks until the data is finished being sent.
 func (uart *UART) WriteByte(c byte) error {
 	err := uart.writeByte(c)
 	if err != nil {
@@ -69,7 +70,8 @@ func (uart *UART) WriteByte(c byte) error {
 	return nil
 }
 
-// Write data to the UART.
+// Write data over the UART's Tx.
+// This function blocks until the data is finished being sent.
 func (uart *UART) Write(data []byte) (n int, err error) {
 	for _, v := range data {
 		uart.writeByte(v)

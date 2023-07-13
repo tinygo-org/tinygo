@@ -292,7 +292,7 @@ func (u *UART) handleStatusInterrupt(interrupt.Interrupt) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (u *UART) WriteByte(c byte) error {
+func (u *UART) writeByte(c byte) error {
 	if !u.Configured {
 		return ErrNotConfigured
 	}
