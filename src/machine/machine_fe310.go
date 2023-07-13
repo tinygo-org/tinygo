@@ -111,11 +111,12 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	uart.Receive(c)
 }
 
-func (uart *UART) writeByte(c byte) {
+func (uart *UART) writeByte(c byte) error {
 	for sifive.UART0.TXDATA.Get()&sifive.UART_TXDATA_FULL != 0 {
 	}
 
 	sifive.UART0.TXDATA.Set(uint32(c))
+	return nil
 }
 
 // SPI on the FE310. The normal SPI0 is actually a quad-SPI meant for flash, so it is best

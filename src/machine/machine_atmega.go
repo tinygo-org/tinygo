@@ -97,7 +97,7 @@ func (i2c *I2C) stop() {
 }
 
 // writeByte writes a single byte to the I2C bus.
-func (i2c *I2C) writeByte(data byte) {
+func (i2c *I2C) writeByte(data byte) error {
 	// Write data to register.
 	avr.TWDR.Set(data)
 
@@ -107,6 +107,7 @@ func (i2c *I2C) writeByte(data byte) {
 	// Wait till data is transmitted.
 	for !avr.TWCR.HasBits(avr.TWCR_TWINT) {
 	}
+	return nil
 }
 
 // readByte reads a single byte from the I2C bus.

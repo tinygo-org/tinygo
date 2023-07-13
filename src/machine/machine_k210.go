@@ -392,11 +392,12 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	uart.Receive(c)
 }
 
-func (uart *UART) writeByte(c byte) {
+func (uart *UART) writeByte(c byte) error {
 	for uart.Bus.TXDATA.Get()&kendryte.UARTHS_TXDATA_FULL != 0 {
 	}
 
 	uart.Bus.TXDATA.Set(uint32(c))
+	return nil
 }
 
 func (uart *UART) flush() {}
