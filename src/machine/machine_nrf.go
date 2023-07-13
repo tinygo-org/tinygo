@@ -201,6 +201,8 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	}
 }
 
+const i2cTimeout = 0xffff // this is around 29ms on a nrf52
+
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
 	Frequency uint32
@@ -259,11 +261,17 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 }
 
 // signalStop sends a stop signal to the I2C peripheral and waits for confirmation.
-func (i2c *I2C) signalStop() {
+func (i2c *I2C) signalStop() error {
+	tries := 0
 	i2c.Bus.TASKS_STOP.Set(1)
 	for i2c.Bus.EVENTS_STOPPED.Get() == 0 {
+		tries++
+		if tries >= i2cTimeout {
+			return errI2CSignalStopTimeout
+		}
 	}
 	i2c.Bus.EVENTS_STOPPED.Set(0)
+	return nil
 }
 
 var rngStarted = false
