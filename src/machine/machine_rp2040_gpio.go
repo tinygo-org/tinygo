@@ -174,6 +174,9 @@ func (p Pin) init() {
 
 // Configure configures the gpio pin as per mode.
 func (p Pin) Configure(config PinConfig) {
+	if p == NoPin {
+		return
+	}
 	p.init()
 	mask := uint32(1) << p
 	switch config.Mode {
@@ -213,6 +216,9 @@ func (p Pin) Configure(config PinConfig) {
 
 // Set drives the pin high if value is true else drives it low.
 func (p Pin) Set(value bool) {
+	if p == NoPin {
+		return
+	}
 	if value {
 		p.set()
 	} else {
@@ -251,6 +257,9 @@ var (
 // nil func to unset the pin change interrupt. If you do so, the change
 // parameter is ignored and can be set to any value (such as 0).
 func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
+	if p == NoPin {
+		return nil
+	}
 	if p > 31 || p < 0 {
 		return ErrInvalidInputPin
 	}
