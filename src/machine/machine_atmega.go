@@ -97,7 +97,7 @@ func (i2c *I2C) stop() {
 }
 
 // writeByte writes a single byte to the I2C bus.
-func (i2c *I2C) writeByte(data byte) {
+func (i2c *I2C) writeByte(data byte) error {
 	// Write data to register.
 	avr.TWDR.Set(data)
 
@@ -107,6 +107,7 @@ func (i2c *I2C) writeByte(data byte) {
 	// Wait till data is transmitted.
 	for !avr.TWCR.HasBits(avr.TWCR_TWINT) {
 	}
+	return nil
 }
 
 // readByte reads a single byte from the I2C bus.
@@ -190,13 +191,15 @@ func (uart *UART) handleInterrupt(intr interrupt.Interrupt) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	// Wait until UART buffer is not busy.
 	for !uart.statusRegA.HasBits(avr.UCSR0A_UDRE0) {
 	}
 	uart.dataReg.Set(c) // send char
 	return nil
 }
+
+func (uart *UART) flush() {}
 
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {

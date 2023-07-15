@@ -86,14 +86,21 @@ func (uart *UART) SetBaudRate(br uint32) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	// wait until buffer is not full
 	for uart.Bus.UARTFR.HasBits(rp.UART0_UARTFR_TXFF) {
+		gosched()
 	}
 
 	// write data
 	uart.Bus.UARTDR.Set(uint32(c))
 	return nil
+}
+
+func (uart *UART) flush() {
+	for uart.Bus.UARTFR.HasBits(rp.UART0_UARTFR_BUSY) {
+		gosched()
+	}
 }
 
 // SetFormat for number of data bits, stop bits, and parity for the UART.

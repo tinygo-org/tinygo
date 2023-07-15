@@ -74,10 +74,12 @@ func (uart *UART) SetBaudRate(br uint32) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	uart.txReg.Set(uint32(c))
 
 	for !uart.statusReg.HasBits(uart.txEmptyFlag) {
 	}
 	return nil
 }
+
+func (uart *UART) flush() {}

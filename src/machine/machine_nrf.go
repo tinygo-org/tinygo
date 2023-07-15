@@ -186,13 +186,15 @@ func (uart *UART) SetBaudRate(br uint32) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	nrf.UART0.EVENTS_TXDRDY.Set(0)
 	nrf.UART0.TXD.Set(uint32(c))
 	for nrf.UART0.EVENTS_TXDRDY.Get() == 0 {
 	}
 	return nil
 }
+
+func (uart *UART) flush() {}
 
 func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	if nrf.UART0.EVENTS_RXDRDY.Get() != 0 {

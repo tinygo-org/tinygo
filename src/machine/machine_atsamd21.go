@@ -626,13 +626,15 @@ func (uart *UART) SetBaudRate(br uint32) {
 }
 
 // WriteByte writes a byte of data to the UART.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	// wait until ready to receive
 	for !uart.Bus.INTFLAG.HasBits(sam.SERCOM_USART_INTFLAG_DRE) {
 	}
 	uart.Bus.DATA.Set(uint16(c))
 	return nil
 }
+
+func (uart *UART) flush() {}
 
 // handleInterrupt should be called from the appropriate interrupt handler for
 // this UART instance.

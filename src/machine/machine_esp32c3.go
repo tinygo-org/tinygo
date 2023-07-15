@@ -493,7 +493,7 @@ func (uart *UART) enableReceiver() {
 	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
 }
 
-func (uart *UART) WriteByte(b byte) error {
+func (uart *UART) writeByte(b byte) error {
 	for (uart.Bus.STATUS.Get()&esp.UART_STATUS_TXFIFO_CNT_Msk)>>esp.UART_STATUS_TXFIFO_CNT_Pos >= 128 {
 		// Read UART_TXFIFO_CNT from the status register, which indicates how
 		// many bytes there are in the transmit buffer. Wait until there are
@@ -502,3 +502,5 @@ func (uart *UART) WriteByte(b byte) error {
 	uart.Bus.FIFO.Set(uint32(b))
 	return nil
 }
+
+func (uart *UART) flush() {}
