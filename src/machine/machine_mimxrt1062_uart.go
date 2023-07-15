@@ -173,13 +173,15 @@ func (uart *UART) Sync() error {
 }
 
 // WriteByte writes a single byte of data to the UART interface.
-func (uart *UART) WriteByte(c byte) error {
+func (uart *UART) writeByte(c byte) error {
 	uart.startTransmitting()
 	for !uart.txBuffer.Put(c) {
 	}
 	uart.Bus.CTRL.SetBits(nxp.LPUART_CTRL_TIE)
 	return nil
 }
+
+func (uart *UART) flush() {}
 
 // getBaudRateDivisor finds the greatest over-sampling factor (4..32) and
 // corresponding baud rate divisor (1..8191) that best partition a given baud
