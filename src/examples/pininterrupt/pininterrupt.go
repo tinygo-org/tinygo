@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	button = machine.BUTTON
-	led    = machine.LED
+	led = machine.LED
 )
 
 func main() {

@@ -466,3 +466,107 @@ var SPI0 = SPI{
 	sdo:  PB3,
 	sdi:  PB4,
 	cs:   PB2}
+
+// Pin Change Interrupts
+type PinChange uint8
+
+const (
+	PinRising PinChange = 1 << iota
+	PinFalling
+	PinToggle = PinRising | PinFalling
+)
+
+func (pin Pin) SetInterrupt(pinChange PinChange, callback func(Pin)) (err error) {
+
+	switch {
+	case pin >= PB0 && pin <= PB7:
+		// PCMSK0 - PCINT0-7
+		pinStates[0] = avr.PINB.Get()
+		pinIndex := pin - PB0
+		if pinChange&PinRising > 0 {
+			pinCallbacks[0][pinIndex][0] = callback
+		}
+		if pinChange&PinFalling > 0 {
+			pinCallbacks[0][pinIndex][1] = callback
+		}
+		if callback != nil {
+			avr.PCMSK0.SetBits(1 << pinIndex)
+		} else {
+			avr.PCMSK0.ClearBits(1 << pinIndex)
+		}
+		avr.PCICR.SetBits(avr.PCICR_PCIE0)
+		interrupt.New(avr.IRQ_PCINT0, handlePCINT0Interrupts)
+	case pin >= PC0 && pin <= PC7:
+		// PCMSK1 - PCINT8-14
+		pinStates[1] = avr.PINC.Get()
+		pinIndex := pin - PC0
+		if pinChange&PinRising > 0 {
+			pinCallbacks[1][pinIndex][0] = callback
+		}
+		if pinChange&PinFalling > 0 {
+			pinCallbacks[1][pinIndex][1] = callback
+		}
+		if callback != nil {
+			avr.PCMSK1.SetBits(1 << pinIndex)
+		} else {
+			avr.PCMSK1.ClearBits(1 << pinIndex)
+		}
+		avr.PCICR.SetBits(avr.PCICR_PCIE1)
+		interrupt.New(avr.IRQ_PCINT1, handlePCINT1Interrupts)
+	case pin >= PD0 && pin <= PD7:
+		// PCMSK2 - PCINT16-23
+		pinStates[2] = avr.PIND.Get()
+		pinIndex := pin - PD0
+		if pinChange&PinRising > 0 {
+			pinCallbacks[2][pinIndex][0] = callback
+		}
+		if pinChange&PinFalling > 0 {
+			pinCallbacks[2][pinIndex][1] = callback
+		}
+		if callback != nil {
+			avr.PCMSK2.SetBits(1 << pinIndex)
+		} else {
+			avr.PCMSK2.ClearBits(1 << pinIndex)
+		}
+		avr.PCICR.SetBits(avr.PCICR_PCIE2)
+		interrupt.New(avr.IRQ_PCINT2, handlePCINT2Interrupts)
+	default:
+		return ErrInvalidInputPin
+	}
+
+	return nil
+}
+
+var pinCallbacks [3][8][2]func(Pin)
+var pinStates [3]uint8
+
+func handlePCINTInterrupts(intr uint8, port *volatile.Register8) {
+	current := port.Get()
+	change := pinStates[intr] ^ current
+	pinStates[intr] = current
+	for i := uint8(0); i < 8; i++ {
+		if (change>>i)&0x01 != 0x01 {
+			continue
+		}
+		pin := Pin(intr*8 + i)
+		value := pin.Get()
+		if value && pinCallbacks[intr][i][0] != nil {
+			pinCallbacks[intr][i][0](pin)
+		}
+		if !value && pinCallbacks[intr][i][1] != nil {
+			pinCallbacks[intr][i][1](pin)
+		}
+	}
+}
+
+func handlePCINT0Interrupts(intr interrupt.Interrupt) {
+	handlePCINTInterrupts(0, avr.PINB)
+}
+
+func handlePCINT1Interrupts(intr interrupt.Interrupt) {
+	handlePCINTInterrupts(1, avr.PINC)
+}
+
+func handlePCINT2Interrupts(intr interrupt.Interrupt) {
+	handlePCINTInterrupts(2, avr.PIND)
+}
