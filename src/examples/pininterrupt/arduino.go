@@ -1,11 +1,11 @@
-//go:build pca10040
+//go:build arduino
 
 package main
 
 import "machine"
 
 const (
-	button          = machine.BUTTON
+	button          = machine.D2
 	buttonMode      = machine.PinInputPullup
 	buttonPinChange = machine.PinRising
 )
