@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	wasm "github.com/aykevl/go-wasm"
 	"github.com/blakesmith/ar"
 )
 
@@ -74,8 +75,25 @@ func makeArchive(arfile *os.File, objs []string) error {
 					fileIndex int
 				}{symbol.Name, i})
 			}
+		} else if dbg, err := wasm.Parse(objfile); err == nil {
+			for _, s := range dbg.Sections {
+				switch section := s.(type) {
+				case *wasm.SectionImport:
+					for _, ln := range section.Entries {
+
+						if ln.Kind != wasm.ExtKindFunction {
+							// Not a function
+							continue
+						}
+						symbolTable = append(symbolTable, struct {
+							name      string
+							fileIndex int
+						}{ln.Field, i})
+					}
+				}
+			}
 		} else {
-			return fmt.Errorf("failed to open file %s as ELF or PE/COFF: %w", objpath, err)
+			return fmt.Errorf("failed to open file %s as WASM, ELF or PE/COFF: %w", objpath, err)
 		}
 
 		// Close file, to avoid issues with too many open files (especially on
