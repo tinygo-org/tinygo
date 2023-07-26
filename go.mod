@@ -7,6 +7,7 @@ require (
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2
 	github.com/chromedp/cdproto v0.0.0-20220113222801-0725d94bb6ee
 	github.com/chromedp/chromedp v0.7.6
+	github.com/cristalhq/jwt/v3 v3.1.0
 	github.com/gofrs/flock v0.8.1
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf
 	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf
@@ -14,8 +15,8 @@ require (
 	github.com/mattn/go-colorable v0.1.8
 	github.com/mattn/go-tty v0.0.4
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
-	go.bug.st/serial v1.3.5
-	golang.org/x/sys v0.4.0
+	go.bug.st/serial v1.5.0
+	golang.org/x/sys v0.10.0
 	golang.org/x/tools v0.5.1-0.20230114154351-e035d0c426c8
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20221028183034-8341240c0b32
@@ -31,3 +32,6 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
 )
+
+// remove once https://github.com/bugst/go-serial/pull/163 is merged
+replace go.bug.st/serial v1.5.0 => github.com/deadprogram/go-serial v1.5.1
