@@ -195,3 +195,9 @@ func TestSetenv(t *testing.T) {
 		}
 	}
 }
+
+func TestTesting(t *testing.T) {
+	if !testing.Testing() {
+		t.Error("Expected testing.Testing() to return true while in a test")
+	}
+}
