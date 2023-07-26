@@ -120,6 +120,15 @@ func Verbose() bool {
 	return flagVerbose
 }
 
+// String constant that is being set when running a test.
+var testBinary string
+
+// Testing returns whether the program was compiled as a test, using "tinygo
+// test". It returns false when built using "tinygo build", "tinygo flash", etc.
+func Testing() bool {
+	return testBinary == "1"
+}
+
 // flushToParent writes c.output to the parent after first writing the header
 // with the given format and arguments.
 func (c *common) flushToParent(testName, format string, args ...interface{}) {

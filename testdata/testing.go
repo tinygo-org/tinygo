@@ -73,6 +73,9 @@ func fakeMatchString(pat, str string) (bool, error) {
 }
 
 func main() {
+	if testing.Testing() {
+		println("not running a test at the moment, testing.Testing() should return false")
+	}
 	testing.Init()
 	flag.Set("test.run", ".*/B")
 	m := testing.MainStart(matchStringOnly(fakeMatchString /*regexp.MatchString*/), tests, benchmarks, fuzzes, examples)
