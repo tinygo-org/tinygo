@@ -23,9 +23,9 @@ import (
 // The linkName value contains a valid link name, even if //go:linkname is not
 // present.
 type functionInfo struct {
-	module     string     // go:wasm-module
-	importName string     // go:linkname, go:export - The name the developer assigns
-	linkName   string     // go:linkname, go:export - The name that we map for the particular module -> importName
+	wasmModule string     // go:wasm-module
+	wasmName   string     // wasm-export-name or wasm-import-name in the IR
+	linkName   string     // go:linkname, go:export - the IR function name
 	section    string     // go:section - object file section name
 	exported   bool       // go:export, CGo
 	interrupt  bool       // go:interrupt
@@ -194,20 +194,14 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	// External/exported functions may not retain pointer values.
 	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
 	if info.exported {
-		if c.archFamily() == "wasm32" {
+		if c.archFamily() == "wasm32" && len(fn.Blocks) == 0 {
 			// We need to add the wasm-import-module and the wasm-import-name
 			// attributes.
-			module := info.module
-			if module == "" {
-				module = "env"
+			if info.wasmModule != "" {
+				llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-module", info.wasmModule))
 			}
-			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-module", module))
 
-			name := info.importName
-			if name == "" {
-				name = info.linkName
-			}
-			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-name", name))
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-name", info.wasmName))
 		}
 		nocaptureKind := llvm.AttributeKindID("nocapture")
 		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
@@ -260,10 +254,6 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 		return
 	}
 	if decl, ok := f.Syntax().(*ast.FuncDecl); ok && decl.Doc != nil {
-
-		// Our importName for a wasm module (if we are compiling to wasm), or llvm link name
-		var importName string
-
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
 			if strings.HasPrefix(text, "//export ") {
@@ -281,7 +271,8 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 					continue
 				}
 
-				importName = parts[1]
+				info.linkName = parts[1]
+				info.wasmName = info.linkName
 				info.exported = true
 			case "//go:interrupt":
 				if hasUnsafeImport(f.Pkg.Pkg) {
@@ -289,10 +280,11 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 				}
 			case "//go:wasm-module":
 				// Alternative comment for setting the import module.
+				// This is deprecated, use //go:wasmimport instead.
 				if len(parts) != 2 {
 					continue
 				}
-				info.module = parts[1]
+				info.wasmModule = parts[1]
 			case "//go:wasmimport":
 				// Import a WebAssembly function, for example a WASI function.
 				// Original proposal: https://github.com/golang/go/issues/38248
@@ -302,8 +294,8 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 				}
 				c.checkWasmImport(f, comment.Text)
 				info.exported = true
-				info.module = parts[1]
-				info.importName = parts[2]
+				info.wasmModule = parts[1]
+				info.wasmName = parts[2]
 			case "//go:inline":
 				info.inline = inlineHint
 			case "//go:noinline":
@@ -347,17 +339,6 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 				}
 			}
 		}
-
-		// Set the importName for our exported function if we have one
-		if importName != "" {
-			if info.module == "" {
-				info.linkName = importName
-			} else {
-				// WebAssembly import
-				info.importName = importName
-			}
-		}
-
 	}
 }
 
