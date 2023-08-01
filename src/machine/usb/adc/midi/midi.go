@@ -3,6 +3,7 @@ package midi
 import (
 	"machine"
 	"machine/usb"
+	"machine/usb/descriptor"
 )
 
 const (
@@ -40,7 +41,23 @@ func newMidi() *midi {
 	m := &midi{
 		buf: NewRingBuffer(),
 	}
-	machine.EnableMIDI(m.Handler, m.RxHandler, nil)
+	machine.ConfigureUSBEndpoint(descriptor.CDCMIDI,
+		[]usb.EndpointConfig{
+			{
+				No:        usb.MIDI_ENDPOINT_OUT,
+				IsIn:      false,
+				Type:      usb.ENDPOINT_TYPE_BULK,
+				RxHandler: m.RxHandler,
+			},
+			{
+				No:        usb.MIDI_ENDPOINT_IN,
+				IsIn:      true,
+				Type:      usb.ENDPOINT_TYPE_BULK,
+				TxHandler: m.Handler,
+			},
+		},
+		[]usb.SetupConfig{},
+	)
 	return m
 }
 

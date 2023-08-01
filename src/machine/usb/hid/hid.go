@@ -4,6 +4,7 @@ import (
 	"errors"
 	"machine"
 	"machine/usb"
+	"machine/usb/descriptor"
 )
 
 // from usb-hid.go
@@ -32,7 +33,21 @@ var size int
 // calls machine.EnableHID for USB configuration
 func SetHandler(d hidDevicer) {
 	if size == 0 {
-		machine.EnableHID(handler, nil, setupHandler)
+		machine.ConfigureUSBEndpoint(descriptor.CDCHID,
+			[]usb.EndpointConfig{
+				{
+					No:        usb.HID_ENDPOINT_IN,
+					IsIn:      true,
+					Type:      usb.ENDPOINT_TYPE_INTERRUPT,
+					TxHandler: handler,
+				},
+			},
+			[]usb.SetupConfig{
+				{
+					No:      usb.HID_INTERFACE,
+					Handler: setupHandler,
+				},
+			})
 	}
 
 	devices[size] = d
