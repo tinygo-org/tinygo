@@ -1,7 +1,7 @@
 package usb
 
 type EndpointConfig struct {
-	No        uint8
+	Index     uint8
 	IsIn      bool
 	TxHandler func()
 	RxHandler func([]byte)
@@ -9,6 +9,6 @@ type EndpointConfig struct {
 }
 
 type SetupConfig struct {
-	No      uint8
+	Index   uint8
 	Handler func(Setup) bool
 }

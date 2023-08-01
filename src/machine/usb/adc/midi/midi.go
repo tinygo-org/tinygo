@@ -44,13 +44,13 @@ func newMidi() *midi {
 	machine.ConfigureUSBEndpoint(descriptor.CDCMIDI,
 		[]usb.EndpointConfig{
 			{
-				No:        usb.MIDI_ENDPOINT_OUT,
+				Index:     usb.MIDI_ENDPOINT_OUT,
 				IsIn:      false,
 				Type:      usb.ENDPOINT_TYPE_BULK,
 				RxHandler: m.RxHandler,
 			},
 			{
-				No:        usb.MIDI_ENDPOINT_IN,
+				Index:     usb.MIDI_ENDPOINT_IN,
 				IsIn:      true,
 				Type:      usb.ENDPOINT_TYPE_BULK,
 				TxHandler: m.Handler,

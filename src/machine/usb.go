@@ -266,18 +266,18 @@ func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.S
 	ConfigureUSBEndpoint(usbDescriptor,
 		[]usb.EndpointConfig{
 			{
-				No:   usb.CDC_ENDPOINT_ACM,
-				IsIn: true,
-				Type: usb.ENDPOINT_TYPE_INTERRUPT,
+				Index: usb.CDC_ENDPOINT_ACM,
+				IsIn:  true,
+				Type:  usb.ENDPOINT_TYPE_INTERRUPT,
 			},
 			{
-				No:        usb.CDC_ENDPOINT_OUT,
+				Index:     usb.CDC_ENDPOINT_OUT,
 				IsIn:      false,
 				Type:      usb.ENDPOINT_TYPE_BULK,
 				RxHandler: rxHandler,
 			},
 			{
-				No:        usb.CDC_ENDPOINT_IN,
+				Index:     usb.CDC_ENDPOINT_IN,
 				IsIn:      true,
 				Type:      usb.ENDPOINT_TYPE_BULK,
 				TxHandler: txHandler,
@@ -285,7 +285,7 @@ func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.S
 		},
 		[]usb.SetupConfig{
 			{
-				No:      usb.CDC_ACM_INTERFACE,
+				Index:   usb.CDC_ACM_INTERFACE,
 				Handler: setupHandler,
 			},
 		})
@@ -296,19 +296,19 @@ func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointC
 
 	for _, ep := range epSettings {
 		if ep.IsIn {
-			endPoints[ep.No] = uint32(ep.Type | usb.EndpointIn)
+			endPoints[ep.Index] = uint32(ep.Type | usb.EndpointIn)
 			if ep.TxHandler != nil {
-				usbTxHandler[ep.No] = ep.TxHandler
+				usbTxHandler[ep.Index] = ep.TxHandler
 			}
 		} else {
-			endPoints[ep.No] = uint32(ep.Type | usb.EndpointOut)
+			endPoints[ep.Index] = uint32(ep.Type | usb.EndpointOut)
 			if ep.RxHandler != nil {
-				usbRxHandler[ep.No] = ep.RxHandler
+				usbRxHandler[ep.Index] = ep.RxHandler
 			}
 		}
 	}
 
 	for _, s := range setup {
-		usbSetupHandler[s.No] = s.Handler
+		usbSetupHandler[s.Index] = s.Handler
 	}
 }
