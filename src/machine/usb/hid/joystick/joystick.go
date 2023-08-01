@@ -51,13 +51,13 @@ func UseSettings(def Definitions, rxHandlerFunc func(b []byte), setupFunc func(s
 	machine.ConfigureUSBEndpoint(descriptor.CDCJoystick,
 		[]usb.EndpointConfig{
 			{
-				No:        usb.HID_ENDPOINT_OUT,
+				Index:     usb.HID_ENDPOINT_OUT,
 				IsIn:      false,
 				Type:      usb.ENDPOINT_TYPE_INTERRUPT,
 				RxHandler: rxHandlerFunc,
 			},
 			{
-				No:        usb.HID_ENDPOINT_IN,
+				Index:     usb.HID_ENDPOINT_IN,
 				IsIn:      true,
 				Type:      usb.ENDPOINT_TYPE_INTERRUPT,
 				TxHandler: js.handler,
@@ -65,7 +65,7 @@ func UseSettings(def Definitions, rxHandlerFunc func(b []byte), setupFunc func(s
 		},
 		[]usb.SetupConfig{
 			{
-				No:      usb.HID_INTERFACE,
+				Index:   usb.HID_INTERFACE,
 				Handler: setupFunc,
 			},
 		},
