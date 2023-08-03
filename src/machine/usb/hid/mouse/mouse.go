@@ -47,7 +47,7 @@ func newMouse() *mouse {
 	}
 }
 
-func (m *mouse) Handler() bool {
+func (m *mouse) TxHandler() bool {
 	m.waitTxc = false
 	if b, ok := m.buf.Get(); ok {
 		m.waitTxc = true

@@ -23,7 +23,7 @@ const (
 )
 
 type hidDevicer interface {
-	Handler() bool
+	TxHandler() bool
 	RxHandler([]byte) bool
 }
 
@@ -40,7 +40,7 @@ func SetHandler(d hidDevicer) {
 					Index:     usb.HID_ENDPOINT_IN,
 					IsIn:      true,
 					Type:      usb.ENDPOINT_TYPE_INTERRUPT,
-					TxHandler: handler,
+					TxHandler: txHandler,
 				},
 			},
 			[]usb.SetupConfig{
@@ -55,12 +55,12 @@ func SetHandler(d hidDevicer) {
 	size++
 }
 
-func handler() {
+func txHandler() {
 	for _, d := range devices {
 		if d == nil {
 			continue
 		}
-		if done := d.Handler(); done {
+		if done := d.TxHandler(); done {
 			return
 		}
 	}
