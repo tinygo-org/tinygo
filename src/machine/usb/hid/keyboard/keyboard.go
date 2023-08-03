@@ -81,7 +81,7 @@ func newKeyboard() *keyboard {
 	}
 }
 
-func (kb *keyboard) Handler() bool {
+func (kb *keyboard) TxHandler() bool {
 	kb.waitTxc = false
 	if b, ok := kb.buf.Get(); ok {
 		kb.waitTxc = true
