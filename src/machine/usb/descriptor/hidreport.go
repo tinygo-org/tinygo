@@ -13,6 +13,7 @@ const (
 	hidUnit            = 0x65
 	hidCollection      = 0xa1
 	hidInput           = 0x81
+	hidOutput          = 0x91
 	hidReportSize      = 0x75
 	hidReportCount     = 0x95
 	hidReportID        = 0x85
@@ -121,6 +122,12 @@ var (
 
 	// Input (Data, Variable, Relative), 2 position bytes (X & Y)
 	HIDInputDataVarRel = []byte{hidInput, 0x06}
+
+	// Output (Data, Variable, Absolute), Modifier byte
+	HIDOutputDataVarAbs = []byte{hidOutput, 0x02}
+
+	// Output (Const, Variable, Absolute), Modifier byte
+	HIDOutputConstVarAbs = []byte{hidOutput, 0x03}
 )
 
 func HIDReportSize(size int) []byte {

@@ -26,7 +26,7 @@ var interfaceHID = [interfaceTypeLen]byte{
 	TypeInterface,
 	0x02, // InterfaceNumber
 	0x00, // AlternateSetting
-	0x01, // NumEndpoints
+	0x02, // NumEndpoints
 	0x03, // InterfaceClass
 	0x00, // InterfaceSubClass
 	0x00, // InterfaceProtocol
@@ -103,7 +103,7 @@ var classHID = [ClassHIDTypeLen]byte{
 	0x00, // CountryCode
 	0x01, // NumDescriptors
 	0x22, // ClassType
-	0x7E, // ClassLength L
+	0x90, // ClassLength L
 	0x00, // ClassLength H
 }
 
@@ -128,6 +128,7 @@ var CDCHID = Descriptor{
 		InterfaceHID.Bytes(),
 		ClassHID.Bytes(),
 		EndpointEP4IN.Bytes(),
+		EndpointEP5OUT.Bytes(),
 	}),
 	HID: map[uint16][]byte{
 		2: Append([][]byte{
@@ -147,6 +148,15 @@ var CDCHID = Descriptor{
 			HIDReportCount(1),
 			HIDReportSize(8),
 			HIDInputConstVarAbs,
+			HIDReportCount(3),
+			HIDReportSize(1),
+			HIDUsagePageLED,
+			HIDUsageMinimum(1),
+			HIDUsageMaximum(3),
+			HIDOutputDataVarAbs,
+			HIDReportCount(5),
+			HIDReportSize(1),
+			HIDOutputConstVarAbs,
 			HIDReportCount(6),
 			HIDReportSize(8),
 			HIDLogicalMinimum(0),
