@@ -37,6 +37,12 @@ func SetHandler(d hidDevicer) {
 		machine.ConfigureUSBEndpoint(descriptor.CDCHID,
 			[]usb.EndpointConfig{
 				{
+					Index:     usb.HID_ENDPOINT_OUT,
+					IsIn:      false,
+					Type:      usb.ENDPOINT_TYPE_INTERRUPT,
+					RxHandler: rxHandler,
+				},
+				{
 					Index:     usb.HID_ENDPOINT_IN,
 					IsIn:      true,
 					Type:      usb.ENDPOINT_TYPE_INTERRUPT,
