@@ -214,3 +214,46 @@ func twisError(val uint32) error {
 
 	return errI2CBusError
 }
+
+var (
+	Watchdog = &watchdogImpl{}
+)
+
+const (
+	// WatchdogMaxTimeout in milliseconds (approx 36h)
+	WatchdogMaxTimeout = (0xffffffff * 1000) / 32768
+)
+
+type watchdogImpl struct {
+}
+
+// Configure the watchdog.
+//
+// This method should not be called after the watchdog is started and on
+// some platforms attempting to reconfigure after starting the watchdog
+// is explicitly forbidden / will not work.
+func (wd *watchdogImpl) Configure(config WatchdogConfig) error {
+	// 32.768kHz counter
+	crv := int32((int64(config.TimeoutMillis) * 32768) / 1000)
+	nrf.WDT.CRV.Set(uint32(crv))
+
+	// One source
+	nrf.WDT.RREN.Set(0x1)
+
+	// Run during sleep
+	nrf.WDT.CONFIG.Set(nrf.WDT_CONFIG_SLEEP_Run)
+
+	return nil
+}
+
+// Starts the watchdog.
+func (wd *watchdogImpl) Start() error {
+	nrf.WDT.TASKS_START.Set(nrf.WDT_TASKS_START_TASKS_START)
+	return nil
+}
+
+// Update the watchdog, indicating that `source` is healthy.
+func (wd *watchdogImpl) Update() {
+	// 0x6E524635 = magic value from datasheet
+	nrf.WDT.RR[0].Set(0x6E524635)
+}

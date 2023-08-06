@@ -490,6 +490,8 @@ smoketest:
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-rp2040      examples/i2c-target
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=feather-rp2040      examples/watchdog
+	@$(MD5SUM) test.hex
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o test.wasm -tags=arduino              examples/blinky1
