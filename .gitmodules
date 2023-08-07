@@ -33,4 +33,4 @@
 	url = https://github.com/aykevl/macos-minimal-sdk.git
 [submodule "lib/renesas-svd"]
 	path = lib/renesas-svd
-	url = git@github.com:tinygo-org/renesas-svd.git
+	url = https://github.com/tinygo-org/renesas-svd.git
