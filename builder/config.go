@@ -30,7 +30,7 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	if major != 1 || minor < 18 || minor > 21 {
 		// Note: when this gets updated, also update the Go compatibility matrix:
 		// https://github.com/tinygo-org/tinygo-site/blob/dev/content/docs/reference/go-compat-matrix.md
-		return nil, fmt.Errorf("requires go version 1.18 through 1.20, got go%d.%d", major, minor)
+		return nil, fmt.Errorf("requires go version 1.18 through 1.21, got go%d.%d", major, minor)
 	}
 
 	clangHeaderPath := getClangHeaderPath(goenv.Get("TINYGOROOT"))
