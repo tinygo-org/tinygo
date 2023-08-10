@@ -417,8 +417,12 @@ tinygo-bench-fast:
 # Same thing, except for wasi rather than the current platform.
 tinygo-test-wasi:
 	$(TINYGO) test -target wasi $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW) ./tests/runtime_wasi
+tinygo-test-wasip1:
+	GOOS=wasip1 GOARCH=wasm $(TINYGO) test $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW) ./tests/runtime_wasi
 tinygo-test-wasi-fast:
 	$(TINYGO) test -target wasi $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
+tinygo-test-wasip1-fast:
+	GOOS=wasip1 GOARCH=wasm $(TINYGO) test $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
 tinygo-bench-wasi:
 	$(TINYGO) test -target wasi -bench . $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW)
 tinygo-bench-wasi-fast:

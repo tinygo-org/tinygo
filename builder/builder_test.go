@@ -60,6 +60,7 @@ func TestClangAttributes(t *testing.T) {
 		{GOOS: "darwin", GOARCH: "arm64"},
 		{GOOS: "windows", GOARCH: "amd64"},
 		{GOOS: "windows", GOARCH: "arm64"},
+		{GOOS: "wasip1", GOARCH: "wasm"},
 	} {
 		name := "GOOS=" + options.GOOS + ",GOARCH=" + options.GOARCH
 		if options.GOARCH == "arm" {

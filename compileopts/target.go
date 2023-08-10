@@ -191,12 +191,15 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 			default:
 				return nil, fmt.Errorf("invalid GOARM=%s, must be 5, 6, or 7", options.GOARM)
 			}
+		case "wasm":
+			llvmarch = "wasm32"
 		default:
 			llvmarch = options.GOARCH
 		}
 		llvmvendor := "unknown"
 		llvmos := options.GOOS
-		if llvmos == "darwin" {
+		switch llvmos {
+		case "darwin":
 			// Use macosx* instead of darwin, otherwise darwin/arm64 will refer
 			// to iOS!
 			llvmos = "macosx10.12.0"
@@ -207,6 +210,8 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 				llvmos = "macosx11.0.0"
 			}
 			llvmvendor = "apple"
+		case "wasip1":
+			llvmos = "wasi"
 		}
 		// Target triples (which actually have four components, but are called
 		// triples for historical reasons) have the form:
@@ -277,6 +282,15 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	case "arm64":
 		spec.CPU = "generic"
 		spec.Features = "+neon"
+	case "wasm":
+		spec.CPU = "generic"
+		spec.Features = "+bulk-memory,+nontrapping-fptoint,+sign-ext"
+		spec.BuildTags = append(spec.BuildTags, "tinygo.wasm")
+		spec.CFlags = append(spec.CFlags,
+			"-mbulk-memory",
+			"-mnontrapping-fptoint",
+			"-msign-ext",
+		)
 	}
 	if goos == "darwin" {
 		spec.Linker = "ld.lld"
@@ -319,6 +333,22 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			"--gc-sections",
 			"--no-insert-timestamp",
 			"--no-dynamicbase",
+		)
+	} else if goos == "wasip1" {
+		spec.GC = "" // use default GC
+		spec.Scheduler = "asyncify"
+		spec.Linker = "wasm-ld"
+		spec.RTLib = "compiler-rt"
+		spec.Libc = "wasi-libc"
+		spec.DefaultStackSize = 1024 * 16 // 16kB
+		spec.LDFlags = append(spec.LDFlags,
+			"--stack-first",
+			"--no-demangle",
+		)
+		spec.Emulator = "wasmtime --mapdir=/tmp::{tmpDir} {}"
+		spec.ExtraFiles = append(spec.ExtraFiles,
+			"src/runtime/asm_tinygowasm.S",
+			"src/internal/task/task_asyncify_wasm.S",
 		)
 	} else {
 		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie

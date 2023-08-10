@@ -1,4 +1,4 @@
-//go:build baremetal || wasm
+//go:build baremetal || (wasm && !wasip1)
 
 // This file emulates some file-related functions that are only available
 // under a real operating system.

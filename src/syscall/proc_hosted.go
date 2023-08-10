@@ -1,4 +1,4 @@
-//go:build !baremetal && !wasi && !wasm
+//go:build !baremetal && !tinygo.wasm
 
 // This file assumes there is a libc available that runs on a real operating
 // system.
