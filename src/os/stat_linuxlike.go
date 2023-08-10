@@ -1,8 +1,12 @@
-//go:build linux && !baremetal
+//go:build (linux && !baremetal) || wasip1
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+
+// Note: this file is used for both Linux and WASI.
+// Eventually it might be better to spit it up, and make the syscall constants
+// match the typical WASI constants instead of the Linux-equivalents used here.
 
 package os
 

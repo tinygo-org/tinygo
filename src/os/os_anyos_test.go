@@ -1,4 +1,4 @@
-//go:build windows || darwin || (linux && !baremetal)
+//go:build windows || darwin || (linux && !baremetal) || wasip1
 
 package os_test
 
@@ -23,7 +23,6 @@ var dot = []string{
 	"os_test.go",
 	"types.go",
 	"stat_darwin.go",
-	"stat_linux.go",
 }
 
 func randomName() string {

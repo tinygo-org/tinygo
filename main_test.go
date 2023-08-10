@@ -34,6 +34,16 @@ var supportedLinuxArches = map[string]string{
 	"X86Linux":   "linux/386",
 	"ARMLinux":   "linux/arm/6",
 	"ARM64Linux": "linux/arm64",
+	"WASIp1":     "wasip1/wasm",
+}
+
+func init() {
+	major, _, _ := goenv.GetGorootVersion()
+	if major < 21 {
+		// Go 1.20 backwards compatibility.
+		// Should be removed once we drop support for Go 1.20.
+		delete(supportedLinuxArches, "WASIp1")
+	}
 }
 
 var sema = make(chan struct{}, runtime.NumCPU())
@@ -176,6 +186,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Fatal("failed to load target spec:", err)
 	}
 
+	isWebAssembly := options.Target == "wasi" || options.Target == "wasm" || (options.Target == "" && options.GOARCH == "wasm")
+
 	for _, name := range tests {
 		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
 			switch name {
@@ -226,7 +238,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
 		})
 	}
-	if options.Target == "wasi" || options.Target == "wasm" {
+	if isWebAssembly {
 		t.Run("alias.go-scheduler-none", func(t *testing.T) {
 			t.Parallel()
 			options := compileopts.Options(options)
@@ -246,7 +258,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("rand.go", options, t, nil, nil)
 		})
 	}
-	if options.Target != "wasi" && options.Target != "wasm" {
+	if !isWebAssembly {
 		// The recover() builtin isn't supported yet on WebAssembly and Windows.
 		t.Run("recover.go", func(t *testing.T) {
 			t.Parallel()
