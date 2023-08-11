@@ -1796,15 +1796,17 @@ func main() {
 		}
 		if flagJSON {
 			json, _ := json.MarshalIndent(struct {
-				GOROOT     string   `json:"goroot"`
-				GOOS       string   `json:"goos"`
-				GOARCH     string   `json:"goarch"`
-				GOARM      string   `json:"goarm"`
-				BuildTags  []string `json:"build_tags"`
-				GC         string   `json:"garbage_collector"`
-				Scheduler  string   `json:"scheduler"`
-				LLVMTriple string   `json:"llvm_triple"`
+				Target     *compileopts.TargetSpec `json:"target"`
+				GOROOT     string                  `json:"goroot"`
+				GOOS       string                  `json:"goos"`
+				GOARCH     string                  `json:"goarch"`
+				GOARM      string                  `json:"goarm"`
+				BuildTags  []string                `json:"build_tags"`
+				GC         string                  `json:"garbage_collector"`
+				Scheduler  string                  `json:"scheduler"`
+				LLVMTriple string                  `json:"llvm_triple"`
 			}{
+				Target:     config.Target,
 				GOROOT:     cachedGOROOT,
 				GOOS:       config.GOOS(),
 				GOARCH:     config.GOARCH(),
