@@ -207,6 +207,11 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 		merges[dir] = filepath.Join(goroot, dir)
 	}
 
+	// Required starting in Go 1.21 due to https://github.com/golang/go/issues/61928
+	if _, err := os.Stat(filepath.Join(goroot, "go.env")); err == nil {
+		merges["go.env"] = filepath.Join(goroot, "go.env")
+	}
+
 	return merges, nil
 }
 
