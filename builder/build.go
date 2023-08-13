@@ -143,20 +143,22 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// the libc needs them.
 	root := goenv.Get("TINYGOROOT")
 	var libcDependencies []*compileJob
+	var libcJob *compileJob
 	switch config.Target.Libc {
 	case "darwin-libSystem":
 		job := makeDarwinLibSystemJob(config, tmpdir)
 		libcDependencies = append(libcDependencies, job)
 	case "musl":
-		job, unlock, err := libMusl.load(config, tmpdir)
+		var unlock func()
+		libcJob, unlock, err = libMusl.load(config, tmpdir, nil)
 		if err != nil {
 			return BuildResult{}, err
 		}
 		defer unlock()
-		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(job.result), "crt1.o")))
-		libcDependencies = append(libcDependencies, job)
+		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(libcJob.result), "crt1.o")))
+		libcDependencies = append(libcDependencies, libcJob)
 	case "picolibc":
-		libcJob, unlock, err := libPicolibc.load(config, tmpdir)
+		libcJob, unlock, err := libPicolibc.load(config, tmpdir, nil)
 		if err != nil {
 			return BuildResult{}, err
 		}
@@ -169,14 +171,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		}
 		libcDependencies = append(libcDependencies, dummyCompileJob(path))
 	case "wasmbuiltins":
-		libcJob, unlock, err := libWasmBuiltins.load(config, tmpdir)
+		libcJob, unlock, err := libWasmBuiltins.load(config, tmpdir, nil)
 		if err != nil {
 			return BuildResult{}, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "mingw-w64":
-		job, unlock, err := libMinGW.load(config, tmpdir)
+		job, unlock, err := libMinGW.load(config, tmpdir, nil)
 		if err != nil {
 			return BuildResult{}, err
 		}
@@ -652,9 +654,22 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
-		job, unlock, err := libCompilerRT.load(config, tmpdir)
+		job, unlock, err := libCompilerRT.load(config, tmpdir, nil)
 		if err != nil {
 			return result, err
+		}
+		defer unlock()
+		linkerDependencies = append(linkerDependencies, job)
+	}
+
+	// The Boehm collector is stored in a separate C library.
+	if config.GC() == "boehm" {
+		if libcJob == nil {
+			return BuildResult{}, fmt.Errorf("boehm GC isn't supported with libc %s", config.Target.Libc)
+		}
+		job, unlock, err := BoehmGC.load(config, tmpdir, libcJob)
+		if err != nil {
+			return BuildResult{}, err
 		}
 		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)

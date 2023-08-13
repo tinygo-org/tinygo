@@ -850,6 +850,7 @@ wasmtest:
 
 build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN)),,binaryen)
 	@mkdir -p build/release/tinygo/bin
+	@mkdir -p build/release/tinygo/lib/bdwgc
 	@mkdir -p build/release/tinygo/lib/clang/include
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
 	@mkdir -p build/release/tinygo/lib/macos-minimal-sdk
@@ -871,6 +872,7 @@ build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN
 ifneq ($(USE_SYSTEM_BINARYEN),1)
 	@cp -p  build/wasm-opt$(EXE)         build/release/tinygo/bin
 endif
+	@cp -rp lib/bdwgc/*                  build/release/tinygo/lib/bdwgc
 	@cp -p $(abspath $(CLANG_SRC))/lib/Headers/*.h build/release/tinygo/lib/clang/include
 	@cp -rp lib/CMSIS/CMSIS/Include      build/release/tinygo/lib/CMSIS/CMSIS
 	@cp -rp lib/CMSIS/README.md          build/release/tinygo/lib/CMSIS
@@ -884,9 +886,11 @@ endif
 	@cp -rp lib/musl/crt/crt1.c          build/release/tinygo/lib/musl/crt
 	@cp -rp lib/musl/COPYRIGHT           build/release/tinygo/lib/musl
 	@cp -rp lib/musl/include             build/release/tinygo/lib/musl
+	@cp -rp lib/musl/src/ctype           build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/env             build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/errno           build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/exit            build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/fcntl           build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/include         build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/internal        build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/legacy          build/release/tinygo/lib/musl/src
@@ -895,9 +899,12 @@ endif
 	@cp -rp lib/musl/src/malloc          build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/mman            build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/math            build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/misc            build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/multibyte       build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/sched           build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/signal          build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/stdio           build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/stdlib          build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/string          build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/thread          build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/time            build/release/tinygo/lib/musl/src

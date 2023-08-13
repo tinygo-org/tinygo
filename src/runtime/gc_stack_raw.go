@@ -1,4 +1,4 @@
-//go:build (gc.conservative || gc.precise) && !tinygo.wasm
+//go:build (gc.conservative || gc.precise || gc.boehm) && !tinygo.wasm
 
 package runtime
 
@@ -33,7 +33,6 @@ func scanstack(sp uintptr) {
 		markRoots(sp, stackTop)
 	} else {
 		// This is a goroutine stack.
-		// It is an allocation, so scan it as if it were a value in a global.
-		markRoot(0, sp)
+		markCurrentGoroutineStack(sp)
 	}
 }

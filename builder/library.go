@@ -43,7 +43,11 @@ type Library struct {
 // output archive file, it is expected to be removed after use.
 // As a side effect, this call creates the library header files if they didn't
 // exist yet.
-func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJob, abortLock func(), err error) {
+// The provided libc job (if not null) will cause this libc to be added as a
+// dependency for all C compiler jobs, and adds libc headers for the given
+// target config. In other words, pass this libc if the library needs a libc to
+// compile.
+func (l *Library) load(config *compileopts.Config, tmpdir string, libc *compileJob) (job *compileJob, abortLock func(), err error) {
 	outdir, precompiled := config.LibcPath(l.name)
 	archiveFilePath := filepath.Join(outdir, "lib.a")
 	if precompiled {
@@ -181,6 +185,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			args = append(args, "-mfpu=vfpv2")
 		}
 	}
+	if libc != nil {
+		args = append(args, config.LibcCFlags()...)
+	}
 
 	var once sync.Once
 
@@ -233,7 +240,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		objpath := filepath.Join(dir, cleanpath+".o")
 		os.MkdirAll(filepath.Dir(objpath), 0o777)
 		objs = append(objs, objpath)
-		job.dependencies = append(job.dependencies, &compileJob{
+		objfile := &compileJob{
 			description: "compile " + srcpath,
 			run: func(*compileJob) error {
 				var compileArgs []string
@@ -248,7 +255,11 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				}
 				return nil
 			},
-		})
+		}
+		if libc != nil {
+			objfile.dependencies = append(objfile.dependencies, libc)
+		}
+		job.dependencies = append(job.dependencies, objfile)
 	}
 
 	// Create crt1.o job, if needed.
@@ -257,7 +268,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// won't make much of a difference in speed).
 	if l.crt1Source != "" {
 		srcpath := filepath.Join(sourceDir, l.crt1Source)
-		job.dependencies = append(job.dependencies, &compileJob{
+		crt1Job := &compileJob{
 			description: "compile " + srcpath,
 			run: func(*compileJob) error {
 				var compileArgs []string
@@ -277,7 +288,11 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				}
 				return os.Rename(tmpfile.Name(), filepath.Join(outdir, "crt1.o"))
 			},
-		})
+		}
+		if libc != nil {
+			crt1Job.dependencies = append(crt1Job.dependencies, libc)
+		}
+		job.dependencies = append(job.dependencies, crt1Job)
 	}
 
 	ok = true
