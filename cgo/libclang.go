@@ -60,6 +60,7 @@ CXSourceRange tinygo_clang_getCursorExtent(GoCXCursor c);
 CXTranslationUnit tinygo_clang_Cursor_getTranslationUnit(GoCXCursor c);
 long long tinygo_clang_getEnumConstantDeclValue(GoCXCursor c);
 CXType tinygo_clang_getEnumDeclIntegerType(GoCXCursor c);
+unsigned tinygo_clang_Cursor_isAnonymous(GoCXCursor c);
 unsigned tinygo_clang_Cursor_isBitField(GoCXCursor c);
 
 int tinygo_clang_globals_visitor(GoCXCursor c, GoCXCursor parent, CXClientData client_data);
@@ -819,9 +820,8 @@ func (f *cgoFile) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 			// makeASTRecordType will create an appropriate error.
 			cgoRecordPrefix = "record_"
 		}
-		if name == "" {
+		if name == "" || C.tinygo_clang_Cursor_isAnonymous(cursor) != 0 {
 			// Anonymous record, probably inside a typedef.
-			// Not reachable anymore since LLVM 16.
 			location := f.getUniqueLocationID(pos, cursor)
 			name = f.getUnnamedDeclName("_Ctype_"+cgoRecordPrefix+"__", location)
 		} else {

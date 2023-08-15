@@ -78,12 +78,12 @@ func (union *C.union_union2d) unionfield_d() *[2]float64 {
 type C.union2d_t = C.union_union2d
 type C.union_unionarray_t struct{ arr [10]C.uchar }
 type C.unionarray_t = C.union_unionarray_t
-type C.union_union (unnamed at testdata/types.go:54:2) struct{ $union [3]uint32 }
+type C._Ctype_union___0 struct{ $union [3]uint32 }
 
-func (union *C.union_union (unnamed at testdata/types.go:54:2)) unionfield_area() *C.point2d_t {
+func (union *C._Ctype_union___0) unionfield_area() *C.point2d_t {
 	return (*C.point2d_t)(unsafe.Pointer(&union.$union))
 }
-func (union *C.union_union (unnamed at testdata/types.go:54:2)) unionfield_solid() *C.point3d_t {
+func (union *C._Ctype_union___0) unionfield_solid() *C.point3d_t {
 	return (*C.point3d_t)(unsafe.Pointer(&union.$union))
 }
 
@@ -92,7 +92,7 @@ type C.struct_struct_nested_t struct {
 	end   C.point2d_t
 	tag   C.int
 
-	coord C.union_union (unnamed at testdata/types.go:54:2)
+	coord C._Ctype_union___0
 }
 type C.struct_nested_t = C.struct_struct_nested_t
 type C.union_union_nested_t struct{ $union [2]uint64 }
