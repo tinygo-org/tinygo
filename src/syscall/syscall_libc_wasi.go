@@ -402,6 +402,15 @@ func Getpagesize() int {
 	return 65536
 }
 
+type Rlimit struct {
+        Cur uint64
+        Max uint64
+}
+
+func Setrlimit(resource int, rlim *Rlimit) error {
+	return nil
+}
+
 type Utsname struct {
 	Sysname    [65]int8
 	Nodename   [65]int8
