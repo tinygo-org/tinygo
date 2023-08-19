@@ -267,12 +267,22 @@ lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
 	cd lib/wasi-libc && make -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC=$(CLANG) AR=$(LLVM_AR) NM=$(LLVM_NM)
 
+# Check for Node.js used during WASM tests.
+NODEJS_VERSION := $(word 1,$(subst ., ,$(shell node -v | cut -c 2-)))
+MIN_NODEJS_VERSION=16
+
+.PHONY: check-nodejs-version
+check-nodejs-version:
+ifeq (, $(shell which node))
+	@echo "Install NodeJS version 16+ to run tests."; exit 1;
+endif
+	@if [ $(NODEJS_VERSION) -lt $(MIN_NODEJS_VERSION) ]; then echo "Install NodeJS version 16+ to run tests."; exit 1; fi
 
 # Build the Go compiler.
 tinygo:
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  make llvm-source"; echo "  make $(LLVM_BUILDDIR)"; exit 1; fi
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags "byollvm osusergo" -ldflags="-X github.com/tinygo-org/tinygo/goenv.GitSha1=`git rev-parse --short HEAD`" .
-test: wasi-libc
+test: wasi-libc check-nodejs-version
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags "byollvm osusergo" ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
 # Standard library packages that pass tests on darwin, linux, wasi, and windows, but take over a minute in wasi
