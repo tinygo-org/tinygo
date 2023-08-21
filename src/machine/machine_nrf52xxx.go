@@ -296,6 +296,8 @@ func (spi SPI) Tx(w, r []byte) error {
 			}
 			spi.Bus.RXD.MAXCNT.Set(n)
 			r = r[n:]
+		} else {
+			spi.Bus.RXD.MAXCNT.Set(0)
 		}
 		if len(w) != 0 {
 			spi.Bus.TXD.PTR.Set(uint32(uintptr(unsafe.Pointer(&w[0]))))
@@ -305,6 +307,8 @@ func (spi SPI) Tx(w, r []byte) error {
 			}
 			spi.Bus.TXD.MAXCNT.Set(n)
 			w = w[n:]
+		} else {
+			spi.Bus.TXD.MAXCNT.Set(0)
 		}
 
 		// Do the transfer.
