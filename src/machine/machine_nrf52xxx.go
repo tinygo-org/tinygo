@@ -288,28 +288,27 @@ func (spi SPI) Tx(w, r []byte) error {
 	// supported.
 	for len(r) != 0 || len(w) != 0 {
 		// Prepare the SPI transfer: set the DMA pointers and lengths.
-		if len(r) != 0 {
+		// read buffer
+		nr := uint32(len(r))
+		if nr > 0 {
+			if nr > 255 {
+				nr = 255
+			}
 			spi.Bus.RXD.PTR.Set(uint32(uintptr(unsafe.Pointer(&r[0]))))
-			n := uint32(len(r))
-			if n > 255 {
-				n = 255
-			}
-			spi.Bus.RXD.MAXCNT.Set(n)
-			r = r[n:]
-		} else {
-			spi.Bus.RXD.MAXCNT.Set(0)
+			r = r[nr:]
 		}
-		if len(w) != 0 {
+		spi.Bus.RXD.MAXCNT.Set(nr)
+
+		// write buffer
+		nw := uint32(len(w))
+		if nw > 0 {
+			if nw > 255 {
+				nw = 255
+			}
 			spi.Bus.TXD.PTR.Set(uint32(uintptr(unsafe.Pointer(&w[0]))))
-			n := uint32(len(w))
-			if n > 255 {
-				n = 255
-			}
-			spi.Bus.TXD.MAXCNT.Set(n)
-			w = w[n:]
-		} else {
-			spi.Bus.TXD.MAXCNT.Set(0)
+			w = w[nw:]
 		}
+		spi.Bus.TXD.MAXCNT.Set(nw)
 
 		// Do the transfer.
 		// Note: this can be improved by not waiting until the transfer is
