@@ -262,6 +262,8 @@ jobs:
         run: |
           make ASSERT=1
           echo "$(pwd)/build" >> $GITHUB_PATH
+      - name: Test machine package
+        run: make check-machine
       - name: Test stdlib packages
         run: make tinygo-test
       - run: make smoketest

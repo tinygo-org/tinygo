@@ -285,6 +285,18 @@ tinygo:
 test: wasi-libc check-nodejs-version
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=20m -buildmode exe -tags "byollvm osusergo" ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
+# Check whether the machine package matches the documentation.
+# TODO: improve `tinygo targets` so it doesn't return these invalid targets.
+CHECK_MACHINE_EXCULDE = \
+	cortex-m-qemu \
+	particle-3rd-gen \
+	riscv-qemu \
+	riscv64-qemu \
+	rp2040 \
+	$(nil)
+check-machine:
+	$(GO) run ./tools/machinecheck $(filter-out $(CHECK_MACHINE_EXCULDE),$(shell $(TINYGO) targets))
+
 # Standard library packages that pass tests on darwin, linux, wasi, and windows, but take over a minute in wasi
 TEST_PACKAGES_SLOW = \
 	compress/bzip2 \
