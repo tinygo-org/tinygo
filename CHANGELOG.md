@@ -1,3 +1,74 @@
+0.29.0
+---
+
+* **general**
+  - Go 1.21 support
+  - use https for renesas submodule #3856
+  - ci: rename release-double-zipped to something more useful
+  - ci: update Node.js from version 14 to version 16
+  - ci: switch GH actions builds to use Go 1.21 final release
+  - docker: update clang to version 15
+  - docker: use Go 1.21 for Docker dev container build
+  - `main`: add target JSON file in `tinygo info` output
+  - `main`: improve detection of filesystems
+  - `main`: use `go env` instead of doing all detection manually
+  - make: add make task to generate Renesas device wrappers
+  - make: add task to check NodeJS version before running tests
+  - add submodule for Renesas SVD file mirror repo
+  - update to go-serial package v1.6.0
+  - `testing`: add Testing function
+  - `tools/gen-device-svd`: small changes needed for Renesas MCUs
+* **compiler**
+  - `builder`: update message for max supported Go version
+  - `compiler,reflect`: NumMethods reports exported methods only
+  - `compiler`: add compiler-rt and wasm symbols to table
+  - `compiler`: add compiler-rt to wasm.json
+  - `compiler`: add min and max builtin support
+  - `compiler`: implement clear builtin for maps
+  - `compiler`: implement clear builtin for slices
+  - `compiler`: improve panic message when a runtime call is unavailable
+  - `compiler`: update .ll test output
+  - `loader`: merge go.env file which is now required starting in Go 1.21 to correctly get required packages
+* **standard library**
+  - `os`: define ErrNoDeadline
+  - `reflect`: Add FieldByNameFunc
+  - `reflect`: add SetZero
+  - `reflect`: fix iterating over maps with interface{} keys
+  - `reflect`: implement Value.Grow
+  - `reflect`: remove unecessary heap allocations
+  - `reflect`: use .key() instead of a type assert
+  - `sync`: add implementation from upstream Go for OnceFunc, OnceValue, and OnceValues
+* **targets**
+  - `machine`: UART refactor (#3832)
+  - `machine/avr`: pin change interrupt
+  - `machine/macropad_rp2040`: add machine.BUTTON
+  - `machine/nrf`: add I2C timeout
+  - `machine/nrf`: wait for stop condition after reading from the I2C bus
+  - `machine/nRF52`: set SPI TX/RX lengths even data is empty. Fixes #3868 (#3877)
+  - `machine/rp2040`: add missing suffix to CMD_READ_STATUS
+  - `machine/rp2040`: add NoPin support
+  - `machine/rp2040`: move flash related functions into separate file from C imports for correct  - LSP. Fixes #3852
+  - `machine/rp2040`: wait for 1000 us after flash reset to avoid issues with busy USB bus
+  - `machine/samd51,rp2040,nrf528xx,stm32`: implement watchdog
+  - `machine/samd51`: fix i2cTimeout was decreasing due to cache activation
+  - `machine/usb`: Add support for HID Keyboard LEDs
+  - `machine/usb`: allow USB Endpoint settings to be changed externally
+  - `machine/usb`: refactor endpoint configuration
+  - `machine/usb`: remove usbDescriptorConfig
+  - `machine/usb/hid,joystick`: fix hidreport (3) (#3802)
+  - `machine/usb/hid`: add RxHandler interface
+  - `machine/usb/hid`: rename Handler() to TxHandler()
+  - `wasi`: allow zero inodes when reading directories
+  - `wasm`: add support for GOOS=wasip1
+  - `wasm`: fix functions exported through //export
+  - `wasm`: remove i64 workaround, use BigInt instead
+  - `example`: adjust time offset
+  - `example`: simplify pininterrupt
+* **boards**
+  - `targets`: add AKIZUKI DENSHI AE-RP2040
+  - `targets`: adding new uf2 target for PCA10056 (#3765)
+
+
 0.28.0
 ---
 
