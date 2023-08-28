@@ -3005,6 +3005,11 @@ func (c *compilerContext) createConst(expr *ssa.Const, pos token.Pos) llvm.Value
 			panic("expected nil pointer constant")
 		}
 		return llvm.ConstPointerNull(c.getLLVMType(typ))
+	case *types.Array:
+		if expr.Value != nil {
+			panic("expected nil array constant")
+		}
+		return llvm.ConstNull(c.getLLVMType(expr.Type()))
 	case *types.Slice:
 		if expr.Value != nil {
 			panic("expected nil slice constant")
@@ -3018,6 +3023,11 @@ func (c *compilerContext) createConst(expr *ssa.Const, pos token.Pos) llvm.Value
 			llvmLen, // cap
 		}, false)
 		return slice
+	case *types.Struct:
+		if expr.Value != nil {
+			panic("expected nil struct constant")
+		}
+		return llvm.ConstNull(c.getLLVMType(expr.Type()))
 	case *types.Map:
 		if !expr.IsNil() {
 			// I believe this is not allowed by the Go spec.
