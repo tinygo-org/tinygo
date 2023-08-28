@@ -196,10 +196,6 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.foo(ptr %context) unnamed_addr #2 {
 entry:
-  %complit = alloca %main.kv.0, align 8
-  %stackalloc = alloca i8, align 1
-  store %main.kv.0 zeroinitializer, ptr %complit, align 8
-  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #3
   call void @"main.foo$1"(%main.kv.0 zeroinitializer, ptr undef)
   ret void
 }
@@ -207,11 +203,6 @@ entry:
 ; Function Attrs: nounwind
 define internal void @"main.foo$1"(%main.kv.0 %b, ptr %context) unnamed_addr #2 {
 entry:
-  %b1 = alloca %main.kv.0, align 8
-  %stackalloc = alloca i8, align 1
-  store %main.kv.0 zeroinitializer, ptr %b1, align 8
-  call void @runtime.trackPointer(ptr nonnull %b1, ptr nonnull %stackalloc, ptr undef) #3
-  store %main.kv.0 %b, ptr %b1, align 8
   ret void
 }
 
