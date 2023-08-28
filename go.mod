@@ -15,8 +15,8 @@ require (
 	github.com/mattn/go-tty v0.0.4
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
 	go.bug.st/serial v1.6.0
-	golang.org/x/sys v0.8.0
-	golang.org/x/tools v0.9.0
+	golang.org/x/sys v0.11.0
+	golang.org/x/tools v0.12.0
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20221028183034-8341240c0b32
 )
