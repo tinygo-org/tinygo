@@ -57,10 +57,7 @@ declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(32), ptr, ptr dereferen
 ; Function Attrs: nounwind
 define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #2 {
 entry:
-  %complit = alloca {}, align 8
   %chan.blockedList = alloca %runtime.channelBlockedList, align 8
-  %stackalloc = alloca i8, align 1
-  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #4
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %chan.blockedList)
   call void @runtime.chanSend(ptr %ch, ptr null, ptr nonnull %chan.blockedList, ptr undef) #4
   call void @llvm.lifetime.end.p0(i64 24, ptr nonnull %chan.blockedList)

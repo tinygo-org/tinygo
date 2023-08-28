@@ -21,14 +21,9 @@ define hidden i32 @main.testZeroGet(ptr dereferenceable_or_null(40) %m, i1 %s.b1
 entry:
   %hashmap.key = alloca %main.hasPadding, align 8
   %hashmap.value = alloca i32, align 4
-  %s = alloca %main.hasPadding, align 8
   %0 = insertvalue %main.hasPadding zeroinitializer, i1 %s.b1, 0
   %1 = insertvalue %main.hasPadding %0, i32 %s.i, 1
   %2 = insertvalue %main.hasPadding %1, i1 %s.b2, 2
-  %stackalloc = alloca i8, align 1
-  store %main.hasPadding zeroinitializer, ptr %s, align 8
-  call void @runtime.trackPointer(ptr nonnull %s, ptr nonnull %stackalloc, ptr undef) #5
-  store %main.hasPadding %2, ptr %s, align 8
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   call void @llvm.lifetime.start.p0(i64 12, ptr nonnull %hashmap.key)
   store %main.hasPadding %2, ptr %hashmap.key, align 8
@@ -58,14 +53,9 @@ define hidden void @main.testZeroSet(ptr dereferenceable_or_null(40) %m, i1 %s.b
 entry:
   %hashmap.key = alloca %main.hasPadding, align 8
   %hashmap.value = alloca i32, align 4
-  %s = alloca %main.hasPadding, align 8
   %0 = insertvalue %main.hasPadding zeroinitializer, i1 %s.b1, 0
   %1 = insertvalue %main.hasPadding %0, i32 %s.i, 1
   %2 = insertvalue %main.hasPadding %1, i1 %s.b2, 2
-  %stackalloc = alloca i8, align 1
-  store %main.hasPadding zeroinitializer, ptr %s, align 8
-  call void @runtime.trackPointer(ptr nonnull %s, ptr nonnull %stackalloc, ptr undef) #5
-  store %main.hasPadding %2, ptr %s, align 8
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   store i32 5, ptr %hashmap.value, align 4
   call void @llvm.lifetime.start.p0(i64 12, ptr nonnull %hashmap.key)
@@ -87,24 +77,13 @@ define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(40) %m, [2 
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
-  %s1 = alloca [2 x %main.hasPadding], align 8
-  %stackalloc = alloca i8, align 1
-  store %main.hasPadding zeroinitializer, ptr %s1, align 8
-  %s1.repack2 = getelementptr inbounds [2 x %main.hasPadding], ptr %s1, i32 0, i32 1
-  store %main.hasPadding zeroinitializer, ptr %s1.repack2, align 4
-  call void @runtime.trackPointer(ptr nonnull %s1, ptr nonnull %stackalloc, ptr undef) #5
-  %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
-  store %main.hasPadding %s.elt, ptr %s1, align 8
-  %s1.repack3 = getelementptr inbounds [2 x %main.hasPadding], ptr %s1, i32 0, i32 1
-  %s.elt4 = extractvalue [2 x %main.hasPadding] %s, 1
-  store %main.hasPadding %s.elt4, ptr %s1.repack3, align 4
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %hashmap.key)
-  %s.elt7 = extractvalue [2 x %main.hasPadding] %s, 0
-  store %main.hasPadding %s.elt7, ptr %hashmap.key, align 8
-  %hashmap.key.repack8 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
-  %s.elt9 = extractvalue [2 x %main.hasPadding] %s, 1
-  store %main.hasPadding %s.elt9, ptr %hashmap.key.repack8, align 4
+  %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
+  store %main.hasPadding %s.elt, ptr %hashmap.key, align 8
+  %hashmap.key.repack1 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
+  %s.elt2 = extractvalue [2 x %main.hasPadding] %s, 1
+  store %main.hasPadding %s.elt2, ptr %hashmap.key.repack1, align 4
   %0 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
   call void @runtime.memzero(ptr nonnull %0, i32 3, ptr undef) #5
   %1 = getelementptr inbounds i8, ptr %hashmap.key, i32 9
@@ -125,25 +104,14 @@ define hidden void @main.testZeroArraySet(ptr dereferenceable_or_null(40) %m, [2
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
-  %s1 = alloca [2 x %main.hasPadding], align 8
-  %stackalloc = alloca i8, align 1
-  store %main.hasPadding zeroinitializer, ptr %s1, align 8
-  %s1.repack2 = getelementptr inbounds [2 x %main.hasPadding], ptr %s1, i32 0, i32 1
-  store %main.hasPadding zeroinitializer, ptr %s1.repack2, align 4
-  call void @runtime.trackPointer(ptr nonnull %s1, ptr nonnull %stackalloc, ptr undef) #5
-  %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
-  store %main.hasPadding %s.elt, ptr %s1, align 8
-  %s1.repack3 = getelementptr inbounds [2 x %main.hasPadding], ptr %s1, i32 0, i32 1
-  %s.elt4 = extractvalue [2 x %main.hasPadding] %s, 1
-  store %main.hasPadding %s.elt4, ptr %s1.repack3, align 4
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   store i32 5, ptr %hashmap.value, align 4
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %hashmap.key)
-  %s.elt7 = extractvalue [2 x %main.hasPadding] %s, 0
-  store %main.hasPadding %s.elt7, ptr %hashmap.key, align 8
-  %hashmap.key.repack8 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
-  %s.elt9 = extractvalue [2 x %main.hasPadding] %s, 1
-  store %main.hasPadding %s.elt9, ptr %hashmap.key.repack8, align 4
+  %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
+  store %main.hasPadding %s.elt, ptr %hashmap.key, align 8
+  %hashmap.key.repack1 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
+  %s.elt2 = extractvalue [2 x %main.hasPadding] %s, 1
+  store %main.hasPadding %s.elt2, ptr %hashmap.key.repack1, align 4
   %0 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
   call void @runtime.memzero(ptr nonnull %0, i32 3, ptr undef) #5
   %1 = getelementptr inbounds i8, ptr %hashmap.key, i32 9
