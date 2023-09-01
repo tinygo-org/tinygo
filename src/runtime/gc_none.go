@@ -37,7 +37,3 @@ func initHeap() {
 func setHeapEnd(newHeapEnd uintptr) {
 	// Nothing to do here, this function is never actually called.
 }
-
-func markRoots(start, end uintptr) {
-	// dummy, so that markGlobals will compile
-}
