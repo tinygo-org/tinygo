@@ -100,7 +100,3 @@ func setHeapEnd(newHeapEnd uintptr) {
 	// enough.
 	heapEnd = newHeapEnd
 }
-
-func markRoots(start, end uintptr) {
-	// dummy, so that markGlobals will compile
-}

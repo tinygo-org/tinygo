@@ -245,17 +245,17 @@ var bssStartSymbol [0]byte
 //go:extern __bss_end
 var bssEndSymbol [0]byte
 
-// Mark global variables.
+// Find global variables.
 // The linker script provides __*_start and __*_end symbols that can be used to
 // scan the given sections. They are already aligned so don't need to be
 // manually aligned here.
-func markGlobals() {
+func findGlobals(found func(start, end uintptr)) {
 	dataStart := uintptr(unsafe.Pointer(&dataStartSymbol))
 	dataEnd := uintptr(unsafe.Pointer(&dataEndSymbol))
-	markRoots(dataStart, dataEnd)
+	found(dataStart, dataEnd)
 	bssStart := uintptr(unsafe.Pointer(&bssStartSymbol))
 	bssEnd := uintptr(unsafe.Pointer(&bssEndSymbol))
-	markRoots(bssStart, bssEnd)
+	found(bssStart, bssEnd)
 }
 
 // getContextPtr returns the hblauncher context
