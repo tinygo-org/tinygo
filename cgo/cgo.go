@@ -18,6 +18,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -42,6 +43,7 @@ type cgoPackage struct {
 	fset            *token.FileSet
 	tokenFiles      map[string]*token.File
 	definedGlobally map[string]ast.Node
+	noescapingFuncs map[string]*noescapingFunc // #cgo noescape lines
 	anonDecls       map[interface{}]string
 	cflags          []string // CFlags from #cgo lines
 	ldflags         []string // LDFlags from #cgo lines
@@ -78,6 +80,13 @@ type bitfieldInfo struct {
 	pos      token.Pos
 	startBit int64
 	endBit   int64 // may be 0 meaning "until the end of the field"
+}
+
+// Information about a #cgo noescape line in the source code.
+type noescapingFunc struct {
+	name string
+	pos  token.Pos
+	used bool // true if used somewhere in the source (for proper error reporting)
 }
 
 // cgoAliases list type aliases between Go and C, for types that are equivalent
@@ -179,6 +188,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 		fset:            fset,
 		tokenFiles:      map[string]*token.File{},
 		definedGlobally: map[string]ast.Node{},
+		noescapingFuncs: map[string]*noescapingFunc{},
 		anonDecls:       map[interface{}]string{},
 		visitedFiles:    map[string][]byte{},
 	}
@@ -337,6 +347,22 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 		})
 	}
 
+	// Show an error when a #cgo noescape line isn't used in practice.
+	// This matches upstream Go. I think the goal is to avoid issues with
+	// misspelled function names, which seems very useful.
+	var unusedNoescapeLines []*noescapingFunc
+	for _, value := range p.noescapingFuncs {
+		if !value.used {
+			unusedNoescapeLines = append(unusedNoescapeLines, value)
+		}
+	}
+	sort.SliceStable(unusedNoescapeLines, func(i, j int) bool {
+		return unusedNoescapeLines[i].pos < unusedNoescapeLines[j].pos
+	})
+	for _, value := range unusedNoescapeLines {
+		p.addError(value.pos, fmt.Sprintf("function %#v in #cgo noescape line is not used", value.name))
+	}
+
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
@@ -401,6 +427,33 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 			spaces[i] = ' '
 		}
 		text = text[:lineStart] + string(spaces) + text[lineEnd:]
+
+		allFields := strings.Fields(line[4:])
+		switch allFields[0] {
+		case "noescape":
+			// The code indicates that pointer parameters will not be captured
+			// by the called C function.
+			if len(allFields) < 2 {
+				p.addErrorAfter(pos, text[:lineStart], "missing function name in #cgo noescape line")
+				continue
+			}
+			if len(allFields) > 2 {
+				p.addErrorAfter(pos, text[:lineStart], "multiple function names in #cgo noescape line")
+				continue
+			}
+			name := allFields[1]
+			p.noescapingFuncs[name] = &noescapingFunc{
+				name: name,
+				pos:  pos,
+				used: false,
+			}
+			continue
+		case "nocallback":
+			// We don't do anything special when calling a C function, so there
+			// appears to be no optimization that we can do here.
+			// Accept, but ignore the parameter for compatibility.
+			continue
+		}
 
 		// Get the text before the colon in the #cgo directive.
 		colon := strings.IndexByte(line, ':')

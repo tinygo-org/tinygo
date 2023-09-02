@@ -1,9 +1,12 @@
 // CGo errors:
+//     testdata/errors.go:14:1: missing function name in #cgo noescape line
+//     testdata/errors.go:15:1: multiple function names in #cgo noescape line
 //     testdata/errors.go:4:2: warning: some warning
 //     testdata/errors.go:11:9: error: unknown type name 'someType'
-//     testdata/errors.go:22:5: warning: another warning
-//     testdata/errors.go:13:23: unexpected token ), expected end of expression
-//     testdata/errors.go:19:26: unexpected token ), expected end of expression
+//     testdata/errors.go:27:5: warning: another warning
+//     testdata/errors.go:18:23: unexpected token ), expected end of expression
+//     testdata/errors.go:24:26: unexpected token ), expected end of expression
+//     testdata/errors.go:3:1: function "unusedFunction" in #cgo noescape line is not used
 
 // Type checking errors after CGo processing:
 //     testdata/errors.go:102: cannot use 2 << 10 (untyped int constant 2048) as C.char value in variable declaration (overflows)
