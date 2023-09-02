@@ -19,8 +19,9 @@ const maxFieldsPerParam = 3
 // useful while declaring or defining a function.
 type paramInfo struct {
 	llvmType llvm.Type
-	name     string // name, possibly with suffixes for e.g. struct fields
-	elemSize uint64 // size of pointer element type, or 0 if this isn't a pointer
+	name     string     // name, possibly with suffixes for e.g. struct fields
+	elemSize uint64     // size of pointer element type, or 0 if this isn't a pointer
+	flags    paramFlags // extra flags for this parameter
 }
 
 // paramFlags identifies parameter attributes for flags. Most importantly, it
@@ -28,9 +29,9 @@ type paramInfo struct {
 type paramFlags uint8
 
 const (
-	// Parameter may have the deferenceable_or_null attribute. This attribute
-	// cannot be applied to unsafe.Pointer and to the data pointer of slices.
-	paramIsDeferenceableOrNull = 1 << iota
+	// Whether this is a full or partial Go parameter (int, slice, etc).
+	// The extra context parameter is not a Go parameter.
+	paramIsGoParam = 1 << iota
 )
 
 // createRuntimeCallCommon creates a runtime call. Use createRuntimeCall or
@@ -195,6 +196,7 @@ func (c *compilerContext) getParamInfo(t llvm.Type, name string, goType types.Ty
 	info := paramInfo{
 		llvmType: t,
 		name:     name,
+		flags:    paramIsGoParam,
 	}
 	if goType != nil {
 		switch underlying := goType.Underlying().(type) {
