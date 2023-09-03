@@ -10,47 +10,57 @@ import (
 // Try it easily by opening the following site in Chrome.
 // https://www.onlinemusictools.com/kb/
 
+const (
+	cable    = 0
+	channel  = 1
+	velocity = 0x40
+)
+
 func main() {
 	led := machine.LED
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	button := machine.BUTTON
-	button.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
+	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
 	m := midi.Port()
-	m.SetHandler(func(b []byte) {
+	m.SetRxHandler(func(b []byte) {
+		// blink when we receive a MIDI message
 		led.Set(!led.Get())
-		m.Write(b)
+	})
+
+	m.SetTxHandler(func() {
+		// blink when we send a MIDI message
+		led.Set(!led.Get())
 	})
 
 	prev := true
 	chords := []struct {
-		name string
-		keys []midi.Note
+		name  string
+		notes []midi.Note
 	}{
-		{name: "C ", keys: []midi.Note{midi.C4, midi.E4, midi.G4}},
-		{name: "G ", keys: []midi.Note{midi.G3, midi.B3, midi.D4}},
-		{name: "Am", keys: []midi.Note{midi.A3, midi.C4, midi.E4}},
-		{name: "F ", keys: []midi.Note{midi.F3, midi.A3, midi.C4}},
+		{name: "C ", notes: []midi.Note{midi.C4, midi.E4, midi.G4}},
+		{name: "G ", notes: []midi.Note{midi.G3, midi.B3, midi.D4}},
+		{name: "Am", notes: []midi.Note{midi.A3, midi.C4, midi.E4}},
+		{name: "F ", notes: []midi.Note{midi.F3, midi.A3, midi.C4}},
 	}
 	index := 0
 
 	for {
 		current := button.Get()
 		if prev != current {
-			led.Set(current)
 			if current {
-				for _, c := range chords[index].keys {
-					m.NoteOff(0, 0, c, 0x40)
+				for _, note := range chords[index].notes {
+					m.NoteOff(cable, channel, note, velocity)
 				}
 				index = (index + 1) % len(chords)
 			} else {
-				for _, c := range chords[index].keys {
-					m.NoteOn(0, 0, c, 0x40)
+				for _, note := range chords[index].notes {
+					m.NoteOn(cable, channel, note, velocity)
 				}
 			}
 			prev = current
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }

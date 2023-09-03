@@ -17,6 +17,7 @@ type midi struct {
 	msg       [4]byte
 	buf       *RingBuffer
 	rxHandler func([]byte)
+	txHandler func()
 	waitTxc   bool
 }
 
@@ -53,7 +54,7 @@ func newMidi() *midi {
 				Index:     usb.MIDI_ENDPOINT_IN,
 				IsIn:      true,
 				Type:      usb.ENDPOINT_TYPE_BULK,
-				TxHandler: m.Handler,
+				TxHandler: m.TxHandler,
 			},
 		},
 		[]usb.SetupConfig{},
@@ -61,16 +62,32 @@ func newMidi() *midi {
 	return m
 }
 
+// SetHandler is now deprecated, please use SetRxHandler().
 func (m *midi) SetHandler(rxHandler func([]byte)) {
+	m.SetRxHandler(rxHandler)
+}
+
+// SetRxHandler sets the handler function for incoming MIDI messages.
+func (m *midi) SetRxHandler(rxHandler func([]byte)) {
 	m.rxHandler = rxHandler
 }
 
+// SetTxHandler sets the handler function for outgoing MIDI messages.
+func (m *midi) SetTxHandler(txHandler func()) {
+	m.txHandler = txHandler
+}
+
 func (m *midi) Write(b []byte) (n int, err error) {
-	i := 0
-	for i = 0; i < len(b); i += 4 {
-		m.tx(b[i : i+4])
+	s, e := 0, 0
+	for s = 0; s < len(b); s += 4 {
+		e = s + 4
+		if e > len(b) {
+			e = len(b)
+		}
+
+		m.tx(b[s:e])
 	}
-	return i, nil
+	return e, nil
 }
 
 // sendUSBPacket sends a MIDIPacket.
@@ -79,7 +96,11 @@ func (m *midi) sendUSBPacket(b []byte) {
 }
 
 // from BulkIn
-func (m *midi) Handler() {
+func (m *midi) TxHandler() {
+	if m.txHandler != nil {
+		m.txHandler()
+	}
+
 	m.waitTxc = false
 	if b, ok := m.buf.Get(); ok {
 		m.waitTxc = true
