@@ -32,6 +32,7 @@ package runtime
 
 import (
 	"internal/task"
+	"math/bits"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -75,6 +76,11 @@ const (
 	blockStateMark blockState = 3 // 11
 	blockStateMask blockState = 3 // 11
 )
+
+// blockStateByteAllTails is a byte containing 4 times blockStateTail bits.
+// It assumes there are 2 state bits per block, otherwise it might have to be
+// turned into variable and assigned using inline function.
+const blockStateByteAllTails = uint8(blockStateTail<<(stateBits*3) | blockStateTail<<(stateBits*2) | blockStateTail<<(stateBits*1) | blockStateTail<<(stateBits*0))
 
 // String returns a human-readable version of the block state, for debugging.
 func (s blockState) String() string {
@@ -123,9 +129,32 @@ func (b gcBlock) address() uintptr {
 // points to an allocated object. It returns the same block if this block
 // already points to the head.
 func (b gcBlock) findHead() gcBlock {
-	for b.state() == blockStateTail {
-		b--
+	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
+
+	// XOR the stateByte with byte containing all tails to turn tail bits to 0
+	// and shift out the bits that are not part of the object
+	stateByte := ((*stateBytePtr) ^ blockStateByteAllTails) << ((blocksPerStateByte - (b%blocksPerStateByte + 1)) * stateBits)
+	// if stateByte is 0 that means all blocks are tails so we loop trough subsequent states,
+	// byte at a time to find the first byte that is not all tails
+	if stateByte == 0 {
+		// subtract the number of object blocks that were in the first byte
+		b -= (b%blocksPerStateByte + 1)
+		// skip to next byte
+		stateBytePtr = (*uint8)(unsafe.Add(unsafe.Pointer(stateBytePtr), -1))
+		// loop until state byte is not all tails
+		for (*stateBytePtr)^blockStateByteAllTails == 0 {
+			stateBytePtr = (*uint8)(unsafe.Add(unsafe.Pointer(stateBytePtr), -1))
+			b -= blocksPerStateByte
+		}
+		// set stateByte variable to the first byte that is not all tails and turn all tail bits to zeroes
+		stateByte = (*stateBytePtr) ^ blockStateByteAllTails
 	}
+
+	// at this point stateByte is set to the first state byte of the object that we encountered which is not all tails
+	// and all tail bits in it are turned to zero. We count number of bytes that are 0 (tail) using LeadingZeros8
+	// and divide it by stateBits to get the number of tail blocks in state bits.
+	b -= gcBlock(bits.LeadingZeros8(stateByte) / stateBits)
+
 	if gcAsserts {
 		if b.state() != blockStateHead && b.state() != blockStateMark {
 			runtimePanic("gc: found tail without head")
