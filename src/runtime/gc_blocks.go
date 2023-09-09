@@ -125,6 +125,9 @@ func (b gcBlock) address() uintptr {
 	return addr
 }
 
+// findHead returns the head (first block) of an object, assuming the block
+// points to an allocated object. It returns the same block if this block
+// already points to the head.
 func (b gcBlock) findHead() gcBlock {
 	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 
