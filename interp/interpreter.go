@@ -338,6 +338,20 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					if err != nil {
 						return nil, mem, r.errorAt(inst, err)
 					}
+					if mem.hasExternalStore(src) || mem.hasExternalLoadOrStore(dst) {
+						// These are the same checks as there are on llvm.Load
+						// and llvm.Store in the interpreter. Copying is
+						// essentially loading from the source array and storing
+						// to the destination array, hence why we need to do the
+						// same checks here.
+						// This fixes the following bug:
+						// https://github.com/tinygo-org/tinygo/issues/3890
+						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						if err != nil {
+							return nil, mem, err
+						}
+						continue
+					}
 					nBytes := uint32(n * elemSize)
 					dstObj := mem.getWritable(dst.index())
 					dstBuf := dstObj.buffer.asRawValue(r)

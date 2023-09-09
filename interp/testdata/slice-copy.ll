@@ -7,6 +7,10 @@ target triple = "x86_64--linux"
 @main.int16SliceSrc.buf = internal global [3 x i16] [i16 5, i16 123, i16 1024]
 @main.int16SliceSrc = internal unnamed_addr global { ptr, i64, i64 } { ptr @main.int16SliceSrc.buf, i64 3, i64 3 }
 @main.int16SliceDst = internal unnamed_addr global { ptr, i64, i64 } zeroinitializer
+@main.sliceSrcUntaint.buf = internal global [2 x i8] c"ab"
+@main.sliceDstUntaint.buf = internal global [2 x i8] zeroinitializer
+@main.sliceSrcTaint.buf = internal global [2 x i8] c"cd"
+@main.sliceDstTaint.buf = internal global [2 x i8] zeroinitializer
 
 declare i64 @runtime.sliceCopy(ptr %dst, ptr %src, i64 %dstLen, i64 %srcLen, i64 %elemSize) unnamed_addr
 
@@ -15,6 +19,8 @@ declare ptr @runtime.alloc(i64, ptr) unnamed_addr
 declare void @runtime.printuint8(i8)
 
 declare void @runtime.printint16(i16)
+
+declare void @use(ptr)
 
 define void @runtime.initAll() unnamed_addr {
 entry:
@@ -43,6 +49,15 @@ entry:
   %int16SliceDst.buf = load ptr, ptr @main.int16SliceDst
   %int16SliceDst.val = load i16, ptr %int16SliceDst.buf
   call void @runtime.printint16(i16 %int16SliceDst.val)
+
+  ; print(sliceDstUntaint[0])
+  %sliceDstUntaint.val = load i8, ptr getelementptr inbounds (i8, ptr @main.sliceDstUntaint.buf, i32 0)
+  call void @runtime.printuint8(i8 %sliceDstUntaint.val)
+
+  ; print(sliceDstTaint[0])
+  %sliceDstTaint.val = load i8, ptr getelementptr inbounds (i8, ptr @main.sliceDstTaint.buf, i32 0)
+  call void @runtime.printuint8(i8 %sliceDstTaint.val)
+
   ret void
 }
 
@@ -78,6 +93,14 @@ entry:
   ;     copy(int16SliceDst, int16SliceSrc)
   %int16SliceSrc.buf = extractvalue { ptr, i64, i64 } %int16SliceSrc, 0
   %copy.n2 = call i64 @runtime.sliceCopy(ptr %int16SliceDst.buf, ptr %int16SliceSrc.buf, i64 %int16SliceSrc.len, i64 %int16SliceSrc.len, i64 2)
+
+  ; Copy slice that has a known value.
+  %copy.n3 = call i64 @runtime.sliceCopy(ptr @main.sliceDstUntaint.buf, ptr @main.sliceSrcUntaint.buf, i64 2, i64 2, i64 1)
+
+  ; Copy slice that might have been modified by the external @use call.
+  ; This is a fix for https://github.com/tinygo-org/tinygo/issues/3890.
+  call void @use(ptr @main.sliceSrcTaint.buf)
+  %copy.n4 = call i64 @runtime.sliceCopy(ptr @main.sliceDstTaint.buf, ptr @main.sliceSrcTaint.buf, i64 2, i64 2, i64 1)
 
   ret void
 }
