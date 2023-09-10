@@ -558,6 +558,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=trinket-m0          examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=gemma-m0            examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-bluefruit examples/blinky1
