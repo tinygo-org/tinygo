@@ -32,6 +32,7 @@ type Options struct {
 	Serial          string
 	Work            bool // -work flag to print temporary build directory
 	InterpTimeout   time.Duration
+	InterpMaxDepth  int
 	PrintIR         bool
 	DumpSSA         bool
 	VerifyIR        bool
