@@ -1289,16 +1289,14 @@ func printCompilerError(logln func(...interface{}), err error) {
 	case *interp.Error:
 		logln("#", err.ImportPath)
 		logln(err.Error())
-		if !err.Inst.IsNil() {
-			err.Inst.Dump()
-			logln()
+		if len(err.Inst) != 0 {
+			logln(err.Inst)
 		}
 		if len(err.Traceback) > 0 {
 			logln("\ntraceback:")
 			for _, line := range err.Traceback {
 				logln(line.Pos.String() + ":")
-				line.Inst.Dump()
-				logln()
+				logln(line.Inst)
 			}
 		}
 	case loader.Errors:

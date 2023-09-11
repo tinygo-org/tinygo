@@ -57,16 +57,14 @@ func runTest(t *testing.T, pathPrefix string) {
 	if err != nil {
 		if err, match := err.(*Error); match {
 			println(err.Error())
-			if !err.Inst.IsNil() {
-				err.Inst.Dump()
-				println()
+			if len(err.Inst) != 0 {
+				println(err.Inst)
 			}
 			if len(err.Traceback) > 0 {
 				println("\ntraceback:")
 				for _, line := range err.Traceback {
 					println(line.Pos.String() + ":")
-					line.Inst.Dump()
-					println()
+					println(line.Inst)
 				}
 			}
 		}
