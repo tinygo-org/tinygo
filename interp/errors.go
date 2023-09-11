@@ -35,14 +35,14 @@ func isRecoverableError(err error) bool {
 // ErrorLine is one line in a traceback. The position may be missing.
 type ErrorLine struct {
 	Pos  token.Position
-	Inst llvm.Value
+	Inst string
 }
 
 // Error encapsulates compile-time interpretation errors with an associated
 // import path. The errors may not have a precise location attached.
 type Error struct {
 	ImportPath string
-	Inst       llvm.Value
+	Inst       string
 	Pos        token.Position
 	Err        error
 	Traceback  []ErrorLine
@@ -60,10 +60,10 @@ func (r *runner) errorAt(inst instruction, err error) *Error {
 	pos := getPosition(inst.llvmInst)
 	return &Error{
 		ImportPath: r.pkgName,
-		Inst:       inst.llvmInst,
+		Inst:       inst.String(),
 		Pos:        pos,
 		Err:        err,
-		Traceback:  []ErrorLine{{pos, inst.llvmInst}},
+		Traceback:  []ErrorLine{{pos, inst.String()}},
 	}
 }
 

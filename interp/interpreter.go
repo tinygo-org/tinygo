@@ -543,7 +543,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					// how this function got called.
 					callErr.Traceback = append(callErr.Traceback, ErrorLine{
 						Pos:  getPosition(inst.llvmInst),
-						Inst: inst.llvmInst,
+						Inst: inst.String(),
 					})
 					return nil, mem, callErr
 				}
