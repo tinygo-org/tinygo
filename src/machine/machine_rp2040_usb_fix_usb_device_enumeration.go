@@ -8,21 +8,21 @@ import (
 )
 
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/pico_fix/rp2040_usb_device_enumeration/rp2040_usb_device_enumeration.c
+// According to errata RP2040-E5:
+// "It is safe (and inexpensive) to enable the software workaround even when using versions of RP2040
+// which include the fix in hardware."
+// So let us always use the software fix.
 func fixRP2040UsbDeviceEnumeration() {
+	// After coming out of reset, the hardware expects 800us of LS_J (linestate J) time
+	// before it will move to the connected state. However on a hub that broadcasts packets
+	// for other devices this isn't the case. The plan here is to wait for the end of the bus
+	// reset, force an LS_J for 1ms and then switch control back to the USB phy. Unfortunately
+	// this requires us to use GPIO15 as there is no other way to force the input path.
+	// We only need to force DP as DM can be left at zero. It will be gated off by GPIO
+	// logic if it isn't func selected.
 
-	// Actually check for B0/B1 h/w
-	if ChipVersion() == 1 {
-		// After coming out of reset, the hardware expects 800us of LS_J (linestate J) time
-		// before it will move to the connected state. However on a hub that broadcasts packets
-		// for other devices this isn't the case. The plan here is to wait for the end of the bus
-		// reset, force an LS_J for 1ms and then switch control back to the USB phy. Unfortunately
-		// this requires us to use GPIO15 as there is no other way to force the input path.
-		// We only need to force DP as DM can be left at zero. It will be gated off by GPIO
-		// logic if it isn't func selected.
-
-		// Wait SE0 phase will call force ls_j phase which will call finish phase
-		hw_enumeration_fix_wait_se0()
-	}
+	// Wait SE0 phase will call force ls_j phase which will call finish phase
+	hw_enumeration_fix_wait_se0()
 }
 
 func hw_enumeration_fix_wait_se0() {
@@ -87,8 +87,8 @@ func hw_enumeration_fix_force_ls_j() {
 	// Switch to GPIO phy with LS_J forced
 	rp.USBCTRL_REGS.USB_MUXING.Set(rp.USBCTRL_REGS_USB_MUXING_TO_DIGITAL_PAD | rp.USBCTRL_REGS_USB_MUXING_SOFTCON)
 
-	// LS_J is now forced but while loop here just to check
-	waitCycles(125000)
+	// LS_J is now forced but while loop to wait ~800us here just to check
+	waitCycles(25000)
 
 	// if timer pool disabled, or no timer available, have to busy wait.
 	hw_enumeration_fix_finish()
