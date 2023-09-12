@@ -49,7 +49,10 @@ func (inst *instruction) String() string {
 		operands[i] = op.String()
 	}
 
-	name := instructionNameMap[inst.opcode]
+	name := ""
+	if int(inst.opcode) < len(instructionNameMap) {
+		name = instructionNameMap[inst.opcode]
+	}
 	if name == "" {
 		name = "<unknown op>"
 	}
