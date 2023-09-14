@@ -225,7 +225,23 @@ func initEndpoint(ep, config uint32) {
 		setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut:
-		// TODO: not really anything, seems like...
+		// set packet size
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.SetBits(epPacketSize(64) << usb_DEVICE_PCKSIZE_SIZE_Pos)
+
+		// set data buffer address
+		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
+
+		// set endpoint type
+		setEPCFG(ep, ((usb.ENDPOINT_TYPE_INTERRUPT + 1) << sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
+
+		// receive interrupts when current transfer complete
+		setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT0)
+
+		// set byte count to zero, we have not received anything yet
+		usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+
+		// ready for next transfer
+		setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK0RDY)
 
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointIn:
 		// set packet size
