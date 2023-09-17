@@ -340,7 +340,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.Linker = "wasm-ld"
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "wasi-libc"
-		spec.DefaultStackSize = 1024 * 16 // 16kB
+		spec.DefaultStackSize = 1024 * 32 // 32kB
 		spec.LDFlags = append(spec.LDFlags,
 			"--stack-first",
 			"--no-demangle",
