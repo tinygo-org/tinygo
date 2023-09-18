@@ -414,10 +414,10 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		}, typeFields...)
 		if hasMethodSet {
 			typeFields = append([]llvm.Value{
-				llvm.ConstBitCast(c.getTypeMethodSet(typ), c.i8ptrType),
+				c.getTypeMethodSet(typ),
 			}, typeFields...)
 		}
-		alignment := c.targetData.TypeAllocSize(c.i8ptrType)
+		alignment := c.targetData.TypeAllocSize(c.dataPtrType)
 		if alignment < 4 {
 			alignment = 4
 		}
@@ -628,7 +628,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 		// Construct global value.
 		globalValue := c.ctx.ConstStruct([]llvm.Value{
 			llvm.ConstInt(c.uintptrType, uint64(ms.Len()), false),
-			llvm.ConstArray(c.i8ptrType, signatures),
+			llvm.ConstArray(c.dataPtrType, signatures),
 			c.ctx.ConstStruct(wrappers, false),
 		}, false)
 		global = llvm.AddGlobal(c.mod, globalValue.Type(), globalName)
@@ -779,7 +779,7 @@ func (c *compilerContext) getInterfaceImplementsFunc(assertedType types.Type) ll
 	fnName := s + ".$typeassert"
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
-		llvmFnType := llvm.FunctionType(c.ctx.Int1Type(), []llvm.Type{c.i8ptrType}, false)
+		llvmFnType := llvm.FunctionType(c.ctx.Int1Type(), []llvm.Type{c.dataPtrType}, false)
 		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
 		c.addStandardDeclaredAttributes(llvmFn)
 		methods := c.getMethodsString(assertedType.Underlying().(*types.Interface))
@@ -802,7 +802,7 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 			paramTuple = append(paramTuple, sig.Params().At(i))
 		}
 		paramTuple = append(paramTuple, types.NewVar(token.NoPos, nil, "$typecode", types.Typ[types.UnsafePointer]))
-		llvmFnType := c.getRawFuncType(types.NewSignature(sig.Recv(), types.NewTuple(paramTuple...), sig.Results(), false))
+		llvmFnType := c.getLLVMFunctionType(types.NewSignature(sig.Recv(), types.NewTuple(paramTuple...), sig.Results(), false))
 		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
 		c.addStandardDeclaredAttributes(llvmFn)
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-invoke", c.getMethodSignatureName(instr.Method)))
@@ -842,7 +842,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	}
 
 	// create wrapper function
-	paramTypes := append([]llvm.Type{c.i8ptrType}, llvmFnType.ParamTypes()[len(expandedReceiverType):]...)
+	paramTypes := append([]llvm.Type{c.dataPtrType}, llvmFnType.ParamTypes()[len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(llvmFnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
 	c.addStandardAttributes(wrapper)

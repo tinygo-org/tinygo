@@ -92,7 +92,7 @@ type lowerInterfacesPass struct {
 	ctx         llvm.Context
 	uintptrType llvm.Type
 	targetData  llvm.TargetData
-	i8ptrType   llvm.Type
+	ptrType     llvm.Type
 	types       map[string]*typeInfo
 	signatures  map[string]*signatureInfo
 	interfaces  map[string]*interfaceInfo
@@ -113,7 +113,7 @@ func LowerInterfaces(mod llvm.Module, config *compileopts.Config) error {
 		ctx:         ctx,
 		targetData:  targetData,
 		uintptrType: mod.Context().IntType(targetData.PointerSize() * 8),
-		i8ptrType:   llvm.PointerType(ctx.Int8Type(), 0),
+		ptrType:     llvm.PointerType(ctx.Int8Type(), 0),
 		types:       make(map[string]*typeInfo),
 		signatures:  make(map[string]*signatureInfo),
 		interfaces:  make(map[string]*interfaceInfo),
@@ -356,11 +356,9 @@ func (p *lowerInterfacesPass) run() error {
 			}
 			// Fallback.
 			if hasUses(t.typecode) {
-				bitcast := llvm.ConstBitCast(newGlobal, p.i8ptrType)
-				negativeOffset := -int64(p.targetData.TypeAllocSize(p.i8ptrType))
-				gep := p.builder.CreateInBoundsGEP(p.ctx.Int8Type(), bitcast, []llvm.Value{llvm.ConstInt(p.ctx.Int32Type(), uint64(negativeOffset), true)}, "")
-				bitcast2 := llvm.ConstBitCast(gep, t.typecode.Type())
-				t.typecode.ReplaceAllUsesWith(bitcast2)
+				negativeOffset := -int64(p.targetData.TypeAllocSize(p.ptrType))
+				gep := p.builder.CreateInBoundsGEP(p.ctx.Int8Type(), newGlobal, []llvm.Value{llvm.ConstInt(p.ctx.Int32Type(), uint64(negativeOffset), true)}, "")
+				t.typecode.ReplaceAllUsesWith(gep)
 			}
 			t.typecode.EraseFromParentAsGlobal()
 			newGlobal.SetName(typecodeName)
@@ -514,7 +512,7 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 		params[i] = fn.Param(i + 1)
 	}
 	params = append(params,
-		llvm.Undef(p.i8ptrType),
+		llvm.Undef(p.ptrType),
 	)
 
 	// Start chain in the entry block.
@@ -554,27 +552,12 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 
 		p.builder.SetInsertPointAtEnd(bb)
 		receiver := fn.FirstParam()
-		if receiver.Type() != function.FirstParam().Type() {
-			// When the receiver is a pointer, it is not wrapped. This means the
-			// i8* has to be cast to the correct pointer type of the target
-			// function.
-			receiver = p.builder.CreateBitCast(receiver, function.FirstParam().Type(), "")
-		}
 
-		// Check whether the called function has the same signature as would be
-		// expected from the parameters. This can happen in rare cases when
-		// named struct types are renamed after merging multiple LLVM modules.
 		paramTypes := []llvm.Type{receiver.Type()}
 		for _, param := range params {
 			paramTypes = append(paramTypes, param.Type())
 		}
-		calledFunctionType := function.Type()
 		functionType := llvm.FunctionType(returnType, paramTypes, false)
-		sig := llvm.PointerType(functionType, calledFunctionType.PointerAddressSpace())
-		if sig != function.Type() {
-			function = p.builder.CreateBitCast(function, sig, "")
-		}
-
 		retval := p.builder.CreateCall(functionType, function, append([]llvm.Value{receiver}, params...), "")
 		if retval.Type().TypeKind() == llvm.VoidTypeKind {
 			p.builder.CreateRetVoid()
@@ -596,7 +579,7 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	// method on a nil interface.
 	nilPanic := p.mod.NamedFunction("runtime.nilPanic")
 	p.builder.CreateCall(nilPanic.GlobalValueType(), nilPanic, []llvm.Value{
-		llvm.Undef(p.i8ptrType),
+		llvm.Undef(p.ptrType),
 	}, "")
 	p.builder.CreateUnreachable()
 }

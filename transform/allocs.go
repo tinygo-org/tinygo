@@ -37,7 +37,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
-	i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
+	ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
 	builder := mod.Context().NewBuilder()
 	defer builder.Dispose()
 
@@ -110,7 +110,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 		} else {
 			alignment = 8
 		}
-		if pointerAlignment := targetData.ABITypeAlignment(i8ptrType); pointerAlignment < alignment {
+		if pointerAlignment := targetData.ABITypeAlignment(ptrType); pointerAlignment < alignment {
 			// Use min(alignment, alignof(void*)) as the alignment.
 			alignment = pointerAlignment
 		}
@@ -120,7 +120,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 		fn := bitcast.InstructionParent().Parent()
 		builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
 		allocaType := llvm.ArrayType(mod.Context().Int8Type(), int(size))
-		alloca := builder.CreateAlloca(allocaType, "stackalloc.alloca")
+		alloca := builder.CreateAlloca(allocaType, "stackalloc")
 		alloca.SetAlignment(alignment)
 
 		// Zero the allocation inside the block where the value was originally allocated.
@@ -130,8 +130,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 		store.SetAlignment(alignment)
 
 		// Replace heap alloc bitcast with stack alloc bitcast.
-		stackalloc := builder.CreateBitCast(alloca, bitcast.Type(), "stackalloc")
-		bitcast.ReplaceAllUsesWith(stackalloc)
+		bitcast.ReplaceAllUsesWith(alloca)
 		if heapalloc != bitcast {
 			bitcast.EraseFromParentAsInstruction()
 		}

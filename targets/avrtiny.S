@@ -1,4 +1,3 @@
-; TODO: remove these in LLVM 15
 #define __tmp_reg__ r16
 #define __zero_reg__ r17
 

@@ -36,7 +36,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 		// Fall back to a generic error.
 		return llvm.Value{}, b.makeError(instr.Pos(), "interrupt function must be constant")
 	}
-	_, funcRawPtr, funcContext := b.decodeFuncValue(funcValue, nil)
+	funcRawPtr, funcContext := b.decodeFuncValue(funcValue)
 	funcPtr := llvm.ConstPtrToInt(funcRawPtr, b.uintptrType)
 
 	// Create a new global of type runtime/interrupt.handle. Globals of this

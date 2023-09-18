@@ -225,8 +225,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 		}, "")
 		builder.CreateStore(parent, gep)
-		stackObjectCast := builder.CreateBitCast(stackObject, stackChainStartType, "")
-		builder.CreateStore(stackObjectCast, stackChainStart)
+		builder.CreateStore(stackObject, stackChainStart)
 
 		// Do a store to the stack object after each new pointer that is created.
 		pointerStores := make(map[llvm.Value]struct{})

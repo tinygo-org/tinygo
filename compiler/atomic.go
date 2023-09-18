@@ -35,17 +35,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 	case "SwapInt32", "SwapInt64", "SwapUint32", "SwapUint64", "SwapUintptr", "SwapPointer":
 		ptr := b.getValue(b.fn.Params[0], getPos(b.fn))
 		val := b.getValue(b.fn.Params[1], getPos(b.fn))
-		isPointer := val.Type().TypeKind() == llvm.PointerTypeKind
-		if isPointer {
-			// atomicrmw only supports integers, so cast to an integer.
-			// TODO: this is fixed in LLVM 15.
-			val = b.CreatePtrToInt(val, b.uintptrType, "")
-			ptr = b.CreateBitCast(ptr, llvm.PointerType(val.Type(), 0), "")
-		}
 		oldVal := b.CreateAtomicRMW(llvm.AtomicRMWBinOpXchg, ptr, val, llvm.AtomicOrderingSequentiallyConsistent, true)
-		if isPointer {
-			oldVal = b.CreateIntToPtr(oldVal, b.i8ptrType, "")
-		}
 		return oldVal
 	case "CompareAndSwapInt32", "CompareAndSwapInt64", "CompareAndSwapUint32", "CompareAndSwapUint64", "CompareAndSwapUintptr", "CompareAndSwapPointer":
 		ptr := b.getValue(b.fn.Params[0], getPos(b.fn))
@@ -63,24 +53,6 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 	case "StoreInt32", "StoreInt64", "StoreUint32", "StoreUint64", "StoreUintptr", "StorePointer":
 		ptr := b.getValue(b.fn.Params[0], getPos(b.fn))
 		val := b.getValue(b.fn.Params[1], getPos(b.fn))
-		if strings.HasPrefix(b.Triple, "avr") {
-			// SelectionDAGBuilder is currently missing the "are unaligned atomics allowed" check for stores.
-			vType := val.Type()
-			isPointer := vType.TypeKind() == llvm.PointerTypeKind
-			if isPointer {
-				// libcalls only supports integers, so cast to an integer.
-				vType = b.uintptrType
-				val = b.CreatePtrToInt(val, vType, "")
-				ptr = b.CreateBitCast(ptr, llvm.PointerType(vType, 0), "")
-			}
-			name := fmt.Sprintf("__atomic_store_%d", vType.IntTypeWidth()/8)
-			fn := b.mod.NamedFunction(name)
-			if fn.IsNil() {
-				fn = llvm.AddFunction(b.mod, name, llvm.FunctionType(vType, []llvm.Type{ptr.Type(), vType, b.uintptrType}, false))
-			}
-			b.createCall(fn.GlobalValueType(), fn, []llvm.Value{ptr, val, llvm.ConstInt(b.uintptrType, 5, false)}, "")
-			return llvm.Value{}
-		}
 		store := b.CreateStore(val, ptr)
 		store.SetOrdering(llvm.AtomicOrderingSequentiallyConsistent)
 		store.SetAlignment(b.targetData.PrefTypeAlignment(val.Type())) // required

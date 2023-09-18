@@ -178,12 +178,6 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	if strings.HasPrefix(target, "riscv64-") {
 		args = append(args, "-march=rv64gc")
 	}
-	if strings.HasPrefix(target, "xtensa") {
-		// Hack to work around an issue in the Xtensa port:
-		// https://github.com/espressif/llvm-project/issues/52
-		// Hopefully this will be fixed soon (LLVM 14).
-		args = append(args, "-D__ELF__")
-	}
 
 	var once sync.Once
 
