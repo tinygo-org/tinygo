@@ -147,7 +147,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.addError(token.NoPos, fmt.Sprintf("too many levels of pointers for typecode: %s", typstr))
 			}
 			return llvm.ConstGEP(c.ctx.Int8Type(), ptr, []llvm.Value{
-				llvm.ConstInt(llvm.Int32Type(), 1, false),
+				llvm.ConstInt(c.ctx.Int32Type(), 1, false),
 			})
 		}
 	}
@@ -452,8 +452,8 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		offset = 1
 	}
 	return llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
-		llvm.ConstInt(llvm.Int32Type(), 0, false),
-		llvm.ConstInt(llvm.Int32Type(), offset, false),
+		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		llvm.ConstInt(c.ctx.Int32Type(), offset, false),
 	})
 }
 
