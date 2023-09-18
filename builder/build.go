@@ -217,6 +217,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	var packageJobs []*compileJob
 	packageActionIDJobs := make(map[string]*compileJob)
 
+	// Keep track of the actual jobs to compile dependencies.  Actual builds
+	// must occur so that template instantiation can complete in dependencies.
+	actualCompileJobs := make(map[string]*compileJob)
+
 	if config.Options.GlobalValues == nil {
 		config.Options.GlobalValues = make(map[string]map[string]string)
 	}
@@ -293,6 +297,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		// Action ID jobs need to know the action ID of all the jobs the package
 		// imports.
 		var importedPackages []*compileJob
+		var actualCompileDeps []*compileJob
 		for _, imported := range pkg.Pkg.Imports() {
 			job, ok := packageActionIDJobs[imported.Path()]
 			if !ok {
@@ -300,6 +305,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			importedPackages = append(importedPackages, job)
 			actionIDDependencies = append(actionIDDependencies, job)
+			actualCompileDeps = append(actualCompileDeps, actualCompileJobs[imported.Path()])
+		}
+
+		// This is a placeholder to accumulate all of compilation
+		// dependencies into a single dependency.
+		actualCompileDepsJob := &compileJob{
+			description:  "compilation deps for package " + pkg.ImportPath,
+			dependencies: actualCompileDeps,
+			run:          func(j *compileJob) (err error) { return nil },
 		}
 
 		// Create a job that will calculate the action ID for a package compile
@@ -348,7 +362,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		// if the package is already compiled.
 		job := &compileJob{
 			description:  "compile package " + pkg.ImportPath,
-			dependencies: []*compileJob{packageActionIDJob},
+			dependencies: []*compileJob{packageActionIDJob, actualCompileDepsJob},
 			run: func(job *compileJob) error {
 				job.result = filepath.Join(cacheDir, "pkg-"+packageActionIDJob.result+".bc")
 				// Acquire a lock (if supported).
@@ -485,6 +499,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				return os.Rename(f.Name(), job.result)
 			},
 		}
+
+		// Store the actual compilation job so that packages dependant on this one
+		// can wait for it to finish building.
+		actualCompileJobs[pkg.Pkg.Path()] = job
+
 		packageJobs = append(packageJobs, job)
 	}
 
