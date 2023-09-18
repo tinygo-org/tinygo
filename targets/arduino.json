@@ -1,3 +1,5 @@
+// Arduino UNO
+// https://store.arduino.cc/products/arduino-uno-rev3
 {
 	"inherits": ["atmega328p"],
 	"build-tags": ["arduino"],

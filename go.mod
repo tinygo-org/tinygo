@@ -18,6 +18,7 @@ require (
 	golang.org/x/sys v0.11.0
 	golang.org/x/tools v0.12.0
 	gopkg.in/yaml.v2 v2.4.0
+	muzzammil.xyz/jsonc v1.0.0
 	tinygo.org/x/go-llvm v0.0.0-20221028183034-8341240c0b32
 )
 

@@ -1,3 +1,9 @@
+// Arduino Nano
+// https://store.arduino.cc/products/arduino-nano
+//
+// Since 2018, Arduino Nanos and clones are sold with a new bootloader, which
+// requires programming at 115200 baud instead of the 57600 baud.
+// Use this target to flash older boards.
 {
 	"inherits": ["atmega328p"],
 	"build-tags": ["arduino_nano"],
