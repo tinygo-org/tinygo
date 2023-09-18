@@ -183,7 +183,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		}
 		llvmType := llvm.FunctionType(b.uintptrType, paramTypes, false)
 		fn := b.getValue(call.Args[0], getPos(call))
-		fnPtr := b.CreateIntToPtr(fn, llvm.PointerType(llvmType, 0), "")
+		fnPtr := b.CreateIntToPtr(fn, b.dataPtrType, "")
 
 		// Prepare some functions that will be called later.
 		setLastError := b.mod.NamedFunction("SetLastError")

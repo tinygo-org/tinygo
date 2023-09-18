@@ -13,33 +13,12 @@ import (
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
 func (b *builder) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
-	return b.compilerContext.createFuncValue(b.Builder, funcPtr, context, sig)
-}
-
-// createFuncValue creates a function value from a raw function pointer with no
-// context.
-func (c *compilerContext) createFuncValue(builder llvm.Builder, funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
 	// Closure is: {context, function pointer}
-	funcValueScalar := llvm.ConstBitCast(funcPtr, c.rawVoidFuncType)
-	funcValueType := c.getFuncType(sig)
+	funcValueType := b.getFuncType(sig)
 	funcValue := llvm.Undef(funcValueType)
-	funcValue = builder.CreateInsertValue(funcValue, context, 0, "")
-	funcValue = builder.CreateInsertValue(funcValue, funcValueScalar, 1, "")
+	funcValue = b.CreateInsertValue(funcValue, context, 0, "")
+	funcValue = b.CreateInsertValue(funcValue, funcPtr, 1, "")
 	return funcValue
-}
-
-// getFuncSignatureID returns a new external global for a given signature. This
-// global reference is not real, it is only used during func lowering to assign
-// signature types to functions and will then be removed.
-func (c *compilerContext) getFuncSignatureID(sig *types.Signature) llvm.Value {
-	s, _ := getTypeCodeName(sig)
-	sigGlobalName := "reflect/types.funcid:" + s
-	sigGlobal := c.mod.NamedGlobal(sigGlobalName)
-	if sigGlobal.IsNil() {
-		sigGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), sigGlobalName)
-		sigGlobal.SetGlobalConstant(true)
-	}
-	return sigGlobal
 }
 
 // extractFuncScalar returns some scalar that can be used in comparisons. It is
@@ -55,28 +34,20 @@ func (b *builder) extractFuncContext(funcValue llvm.Value) llvm.Value {
 }
 
 // decodeFuncValue extracts the context and the function pointer from this func
-// value. This may be an expensive operation.
-func (b *builder) decodeFuncValue(funcValue llvm.Value, sig *types.Signature) (funcType llvm.Type, funcPtr, context llvm.Value) {
+// value.
+func (b *builder) decodeFuncValue(funcValue llvm.Value) (funcPtr, context llvm.Value) {
 	context = b.CreateExtractValue(funcValue, 0, "")
 	funcPtr = b.CreateExtractValue(funcValue, 1, "")
-	if !funcPtr.IsAConstantExpr().IsNil() && funcPtr.Opcode() == llvm.BitCast {
-		funcPtr = funcPtr.Operand(0) // needed for LLVM 14 (no opaque pointers)
-	}
-	if sig != nil {
-		funcType = b.getRawFuncType(sig)
-		llvmSig := llvm.PointerType(funcType, b.funcPtrAddrSpace)
-		funcPtr = b.CreateBitCast(funcPtr, llvmSig, "")
-	}
 	return
 }
 
 // getFuncType returns the type of a func value given a signature.
 func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
-	return c.ctx.StructType([]llvm.Type{c.i8ptrType, c.rawVoidFuncType}, false)
+	return c.ctx.StructType([]llvm.Type{c.dataPtrType, c.funcPtrType}, false)
 }
 
-// getRawFuncType returns a LLVM function type for a given signature.
-func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
+// getLLVMFunctionType returns a LLVM function type for a given signature.
+func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
 	// Get the return type.
 	var returnType llvm.Type
 	switch typ.Results().Len() {
@@ -104,7 +75,7 @@ func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 		if recv.StructName() == "runtime._interface" {
 			// This is a call on an interface, not a concrete type.
 			// The receiver is not an interface, but a i8* type.
-			recv = c.i8ptrType
+			recv = c.dataPtrType
 		}
 		for _, info := range c.expandFormalParamType(recv, "", nil) {
 			paramTypes = append(paramTypes, info.llvmType)
@@ -117,7 +88,7 @@ func (c *compilerContext) getRawFuncType(typ *types.Signature) llvm.Type {
 		}
 	}
 	// All functions take these parameters at the end.
-	paramTypes = append(paramTypes, c.i8ptrType) // context
+	paramTypes = append(paramTypes, c.dataPtrType) // context
 
 	// Make a func type out of the signature.
 	return llvm.FunctionType(returnType, paramTypes, false)

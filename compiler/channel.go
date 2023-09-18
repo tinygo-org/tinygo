@@ -33,28 +33,27 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	// store value-to-send
 	valueType := b.getLLVMType(instr.X.Type())
 	isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
-	var valueAlloca, valueAllocaCast, valueAllocaSize llvm.Value
+	var valueAlloca, valueAllocaSize llvm.Value
 	if isZeroSize {
-		valueAlloca = llvm.ConstNull(llvm.PointerType(valueType, 0))
-		valueAllocaCast = llvm.ConstNull(b.i8ptrType)
+		valueAlloca = llvm.ConstNull(b.dataPtrType)
 	} else {
-		valueAlloca, valueAllocaCast, valueAllocaSize = b.createTemporaryAlloca(valueType, "chan.value")
+		valueAlloca, valueAllocaSize = b.createTemporaryAlloca(valueType, "chan.value")
 		b.CreateStore(chanValue, valueAlloca)
 	}
 
 	// Allocate blockedlist buffer.
 	channelBlockedList := b.getLLVMRuntimeType("channelBlockedList")
-	channelBlockedListAlloca, channelBlockedListAllocaCast, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
+	channelBlockedListAlloca, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
 
 	// Do the send.
-	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAllocaCast, channelBlockedListAlloca}, "")
+	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAlloca, channelBlockedListAlloca}, "")
 
 	// End the lifetime of the allocas.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
 	// https://bugs.llvm.org/show_bug.cgi?id=41742
-	b.emitLifetimeEnd(channelBlockedListAllocaCast, channelBlockedListAllocaSize)
+	b.emitLifetimeEnd(channelBlockedListAlloca, channelBlockedListAllocaSize)
 	if !isZeroSize {
-		b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
+		b.emitLifetimeEnd(valueAlloca, valueAllocaSize)
 	}
 }
 
@@ -66,28 +65,27 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 
 	// Allocate memory to receive into.
 	isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
-	var valueAlloca, valueAllocaCast, valueAllocaSize llvm.Value
+	var valueAlloca, valueAllocaSize llvm.Value
 	if isZeroSize {
-		valueAlloca = llvm.ConstNull(llvm.PointerType(valueType, 0))
-		valueAllocaCast = llvm.ConstNull(b.i8ptrType)
+		valueAlloca = llvm.ConstNull(b.dataPtrType)
 	} else {
-		valueAlloca, valueAllocaCast, valueAllocaSize = b.createTemporaryAlloca(valueType, "chan.value")
+		valueAlloca, valueAllocaSize = b.createTemporaryAlloca(valueType, "chan.value")
 	}
 
 	// Allocate blockedlist buffer.
 	channelBlockedList := b.getLLVMRuntimeType("channelBlockedList")
-	channelBlockedListAlloca, channelBlockedListAllocaCast, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
+	channelBlockedListAlloca, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
 
 	// Do the receive.
-	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAllocaCast, channelBlockedListAlloca}, "")
+	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAlloca, channelBlockedListAlloca}, "")
 	var received llvm.Value
 	if isZeroSize {
 		received = llvm.ConstNull(valueType)
 	} else {
 		received = b.CreateLoad(valueType, valueAlloca, "chan.received")
-		b.emitLifetimeEnd(valueAllocaCast, valueAllocaSize)
+		b.emitLifetimeEnd(valueAlloca, valueAllocaSize)
 	}
-	b.emitLifetimeEnd(channelBlockedListAllocaCast, channelBlockedListAllocaSize)
+	b.emitLifetimeEnd(channelBlockedListAlloca, channelBlockedListAllocaSize)
 
 	if unop.CommaOk {
 		tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{valueType, b.ctx.Int1Type()}, false))
@@ -159,8 +157,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 			sendValue := b.getValue(state.Send, state.Pos)
 			alloca := llvmutil.CreateEntryBlockAlloca(b.Builder, sendValue.Type(), "select.send.value")
 			b.CreateStore(sendValue, alloca)
-			ptr := b.CreateBitCast(alloca, b.i8ptrType, "")
-			selectState = b.CreateInsertValue(selectState, ptr, 1, "")
+			selectState = b.CreateInsertValue(selectState, alloca, 1, "")
 		default:
 			panic("unreachable")
 		}
@@ -168,10 +165,10 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	}
 
 	// Create a receive buffer, where the received value will be stored.
-	recvbuf := llvm.Undef(b.i8ptrType)
+	recvbuf := llvm.Undef(b.dataPtrType)
 	if recvbufSize != 0 {
 		allocaType := llvm.ArrayType(b.ctx.Int8Type(), int(recvbufSize))
-		recvbufAlloca, _, _ := b.createTemporaryAlloca(allocaType, "select.recvbuf.alloca")
+		recvbufAlloca, _ := b.createTemporaryAlloca(allocaType, "select.recvbuf.alloca")
 		recvbufAlloca.SetAlignment(recvbufAlign)
 		recvbuf = b.CreateGEP(allocaType, recvbufAlloca, []llvm.Value{
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
@@ -181,7 +178,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 
 	// Create the states slice (allocated on the stack).
 	statesAllocaType := llvm.ArrayType(chanSelectStateType, len(selectStates))
-	statesAlloca, statesI8, statesSize := b.createTemporaryAlloca(statesAllocaType, "select.states.alloca")
+	statesAlloca, statesSize := b.createTemporaryAlloca(statesAllocaType, "select.states.alloca")
 	for i, state := range selectStates {
 		// Set each slice element to the appropriate channel.
 		gep := b.CreateGEP(statesAllocaType, statesAlloca, []llvm.Value{
@@ -202,7 +199,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		// Stack-allocate operation structures.
 		// If these were simply created as a slice, they would heap-allocate.
 		chBlockAllocaType := llvm.ArrayType(b.getLLVMRuntimeType("channelBlockedList"), len(selectStates))
-		chBlockAlloca, chBlockAllocaPtr, chBlockSize := b.createTemporaryAlloca(chBlockAllocaType, "select.block.alloca")
+		chBlockAlloca, chBlockSize := b.createTemporaryAlloca(chBlockAllocaType, "select.block.alloca")
 		chBlockLen := llvm.ConstInt(b.uintptrType, uint64(len(selectStates)), false)
 		chBlockPtr := b.CreateGEP(chBlockAllocaType, chBlockAlloca, []llvm.Value{
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
@@ -216,7 +213,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		}, "select.result")
 
 		// Terminate the lifetime of the operation structures.
-		b.emitLifetimeEnd(chBlockAllocaPtr, chBlockSize)
+		b.emitLifetimeEnd(chBlockAlloca, chBlockSize)
 	} else {
 		results = b.createRuntimeCall("tryChanSelect", []llvm.Value{
 			recvbuf,
@@ -225,7 +222,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	}
 
 	// Terminate the lifetime of the states alloca.
-	b.emitLifetimeEnd(statesI8, statesSize)
+	b.emitLifetimeEnd(statesAlloca, statesSize)
 
 	// The result value does not include all the possible received values,
 	// because we can't load them in advance. Instead, the *ssa.Extract
@@ -265,7 +262,6 @@ func (b *builder) getChanSelectResult(expr *ssa.Extract) llvm.Value {
 		// it to the correct type, and dereference it.
 		recvbuf := b.selectRecvBuf[expr.Tuple.(*ssa.Select)]
 		typ := b.getLLVMType(expr.Type())
-		ptr := b.CreateBitCast(recvbuf, llvm.PointerType(typ, 0), "")
-		return b.CreateLoad(typ, ptr, "")
+		return b.CreateLoad(typ, recvbuf, "")
 	}
 }

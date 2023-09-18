@@ -658,18 +658,9 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 	if v.offset() != 0 {
 		// If there is an offset, make sure to use a GEP to index into the
 		// pointer.
-		// Cast to an i8* first (if needed) for easy indexing.
-		if llvmValue.Type() != mem.r.i8ptrType {
-			llvmValue = llvm.ConstBitCast(llvmValue, mem.r.i8ptrType)
-		}
 		llvmValue = llvm.ConstInBoundsGEP(mem.r.mod.Context().Int8Type(), llvmValue, []llvm.Value{
 			llvm.ConstInt(mem.r.mod.Context().Int32Type(), uint64(v.offset()), false),
 		})
-	}
-
-	// If a particular LLVM pointer type is requested, cast to it.
-	if !llvmType.IsNil() && llvmType != llvmValue.Type() {
-		llvmValue = llvm.ConstBitCast(llvmValue, llvmType)
 	}
 
 	return llvmValue, nil
@@ -872,7 +863,7 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 			if err != nil {
 				panic(err)
 			}
-			if checks && mem.r.targetData.TypeAllocSize(llvmType) != mem.r.targetData.TypeAllocSize(mem.r.i8ptrType) {
+			if checks && mem.r.targetData.TypeAllocSize(llvmType) != mem.r.targetData.TypeAllocSize(mem.r.dataPtrType) {
 				// Probably trying to serialize a pointer to a byte array,
 				// perhaps as a result of rawLLVMValue() in a previous interp
 				// run.
@@ -954,8 +945,6 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 					// Because go-llvm doesn't have addrspacecast at the moment,
 					// do it indirectly with a ptrtoint/inttoptr pair.
 					llvmValue = llvm.ConstIntToPtr(llvm.ConstPtrToInt(llvmValue, mem.r.uintptrType), llvmType)
-				} else {
-					llvmValue = llvm.ConstBitCast(llvmValue, llvmType)
 				}
 			}
 			return llvmValue, nil
@@ -1256,7 +1245,7 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 // For details on this format, see src/runtime/gc_precise.go.
 func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 	pointerSize := layoutValue.len(r)
-	if checks && uint64(pointerSize) != r.targetData.TypeAllocSize(r.i8ptrType) {
+	if checks && uint64(pointerSize) != r.targetData.TypeAllocSize(r.dataPtrType) {
 		panic("inconsistent pointer size")
 	}
 
@@ -1331,12 +1320,12 @@ func (r *runner) getLLVMTypeFromLayout(layoutValue value) llvm.Type {
 
 	// Create the LLVM type.
 	pointerSize := layoutValue.len(r)
-	pointerAlignment := r.targetData.PrefTypeAlignment(r.i8ptrType)
+	pointerAlignment := r.targetData.PrefTypeAlignment(r.dataPtrType)
 	var fields []llvm.Type
 	for i := 0; i < int(objectSizeWords); {
 		if bitmap.Bit(i) != 0 {
 			// Pointer field.
-			fields = append(fields, r.i8ptrType)
+			fields = append(fields, r.dataPtrType)
 			i += int(pointerSize / uint32(pointerAlignment))
 		} else {
 			// Byte/word field.

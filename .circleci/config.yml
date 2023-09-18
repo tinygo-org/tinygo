@@ -98,12 +98,12 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm14-go118:
+  test-llvm15-go118:
     docker:
       - image: golang:1.18-buster
     steps:
       - test-linux:
-          llvm: "14"
+          llvm: "15"
     resource_class: large
 
 workflows:
@@ -111,4 +111,4 @@ workflows:
     jobs:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
-      - test-llvm14-go118
+      - test-llvm15-go118

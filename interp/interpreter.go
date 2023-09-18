@@ -1046,15 +1046,3 @@ func intPredicateString(predicate llvm.IntPredicate) string {
 		return "cmp?"
 	}
 }
-
-// Strip some pointer casts. This is probably unnecessary once support for
-// LLVM 14 (non-opaque pointers) is dropped.
-func stripPointerCasts(value llvm.Value) llvm.Value {
-	if !value.IsAConstantExpr().IsNil() {
-		switch value.Opcode() {
-		case llvm.GetElementPtr, llvm.BitCast:
-			return stripPointerCasts(value.Operand(0))
-		}
-	}
-	return value
-}

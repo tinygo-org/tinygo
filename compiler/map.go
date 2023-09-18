@@ -65,7 +65,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 	// Allocate the memory for the resulting type. Do not zero this memory: it
 	// will be zeroed by the hashmap get implementation if the key is not
 	// present in the map.
-	mapValueAlloca, mapValuePtr, mapValueAllocaSize := b.createTemporaryAlloca(llvmValueType, "hashmap.value")
+	mapValueAlloca, mapValueAllocaSize := b.createTemporaryAlloca(llvmValueType, "hashmap.value")
 
 	// We need the map size (with type uintptr) to pass to the hashmap*Get
 	// functions. This is necessary because those *Get functions are valid on
@@ -82,19 +82,19 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
-		params := []llvm.Value{m, key, mapValuePtr, mapValueSize}
+		params := []llvm.Value{m, key, mapValueAlloca, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapStringGet", params, "")
 	} else if hashmapIsBinaryKey(keyType) {
 		// key can be compared with runtime.memequal
 		// Store the key in an alloca, in the entry block to avoid dynamic stack
 		// growth.
-		mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
+		mapKeyAlloca, mapKeySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, mapKeyAlloca)
 		b.zeroUndefBytes(b.getLLVMType(keyType), mapKeyAlloca)
 		// Fetch the value from the hashmap.
-		params := []llvm.Value{m, mapKeyPtr, mapValuePtr, mapValueSize}
+		params := []llvm.Value{m, mapKeyAlloca, mapValueAlloca, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapBinaryGet", params, "")
-		b.emitLifetimeEnd(mapKeyPtr, mapKeySize)
+		b.emitLifetimeEnd(mapKeyAlloca, mapKeySize)
 	} else {
 		// Not trivially comparable using memcmp. Make it an interface instead.
 		itfKey := key
@@ -102,14 +102,14 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 			// Not already an interface, so convert it to an interface now.
 			itfKey = b.createMakeInterface(key, origKeyType, pos)
 		}
-		params := []llvm.Value{m, itfKey, mapValuePtr, mapValueSize}
+		params := []llvm.Value{m, itfKey, mapValueAlloca, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapInterfaceGet", params, "")
 	}
 
 	// Load the resulting value from the hashmap. The value is set to the zero
 	// value if the key doesn't exist in the hashmap.
 	mapValue := b.CreateLoad(llvmValueType, mapValueAlloca, "")
-	b.emitLifetimeEnd(mapValuePtr, mapValueAllocaSize)
+	b.emitLifetimeEnd(mapValueAlloca, mapValueAllocaSize)
 
 	if commaOk {
 		tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{llvmValueType, b.ctx.Int1Type()}, false))
@@ -124,22 +124,22 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 // createMapUpdate updates a map key to a given value, by creating an
 // appropriate runtime call.
 func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) {
-	valueAlloca, valuePtr, valueSize := b.createTemporaryAlloca(value.Type(), "hashmap.value")
+	valueAlloca, valueSize := b.createTemporaryAlloca(value.Type(), "hashmap.value")
 	b.CreateStore(value, valueAlloca)
 	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
-		params := []llvm.Value{m, key, valuePtr}
+		params := []llvm.Value{m, key, valueAlloca}
 		b.createRuntimeCall("hashmapStringSet", params, "")
 	} else if hashmapIsBinaryKey(keyType) {
 		// key can be compared with runtime.memequal
-		keyAlloca, keyPtr, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
+		keyAlloca, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
 		b.zeroUndefBytes(b.getLLVMType(keyType), keyAlloca)
-		params := []llvm.Value{m, keyPtr, valuePtr}
+		params := []llvm.Value{m, keyAlloca, valueAlloca}
 		b.createRuntimeCall("hashmapBinarySet", params, "")
-		b.emitLifetimeEnd(keyPtr, keySize)
+		b.emitLifetimeEnd(keyAlloca, keySize)
 	} else {
 		// Key is not trivially comparable, so compare it as an interface instead.
 		itfKey := key
@@ -147,10 +147,10 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 			// Not already an interface, so convert it to an interface first.
 			itfKey = b.createMakeInterface(key, origKeyType, pos)
 		}
-		params := []llvm.Value{m, itfKey, valuePtr}
+		params := []llvm.Value{m, itfKey, valueAlloca}
 		b.createRuntimeCall("hashmapInterfaceSet", params, "")
 	}
-	b.emitLifetimeEnd(valuePtr, valueSize)
+	b.emitLifetimeEnd(valueAlloca, valueSize)
 }
 
 // createMapDelete deletes a key from a map by calling the appropriate runtime
@@ -164,12 +164,12 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 		b.createRuntimeCall("hashmapStringDelete", params, "")
 		return nil
 	} else if hashmapIsBinaryKey(keyType) {
-		keyAlloca, keyPtr, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
+		keyAlloca, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
 		b.zeroUndefBytes(b.getLLVMType(keyType), keyAlloca)
-		params := []llvm.Value{m, keyPtr}
+		params := []llvm.Value{m, keyAlloca}
 		b.createRuntimeCall("hashmapBinaryDelete", params, "")
-		b.emitLifetimeEnd(keyPtr, keySize)
+		b.emitLifetimeEnd(keyAlloca, keySize)
 		return nil
 	} else {
 		// Key is not trivially comparable, so compare it as an interface
@@ -225,9 +225,9 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 	}
 
 	// Extract the key and value from the map.
-	mapKeyAlloca, mapKeyPtr, mapKeySize := b.createTemporaryAlloca(llvmStoredKeyType, "range.key")
-	mapValueAlloca, mapValuePtr, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
-	ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyPtr, mapValuePtr}, "range.next")
+	mapKeyAlloca, mapKeySize := b.createTemporaryAlloca(llvmStoredKeyType, "range.key")
+	mapValueAlloca, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
+	ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyAlloca, mapValueAlloca}, "range.next")
 	mapKey := b.CreateLoad(llvmStoredKeyType, mapKeyAlloca, "")
 	mapValue := b.CreateLoad(llvmValueType, mapValueAlloca, "")
 
@@ -238,8 +238,8 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 	}
 
 	// End the lifetimes of the allocas, because we're done with them.
-	b.emitLifetimeEnd(mapKeyPtr, mapKeySize)
-	b.emitLifetimeEnd(mapValuePtr, mapValueSize)
+	b.emitLifetimeEnd(mapKeyAlloca, mapKeySize)
+	b.emitLifetimeEnd(mapValueAlloca, mapValueSize)
 
 	// Construct the *ssa.Next return value: {ok, mapKey, mapValue}
 	tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
@@ -333,14 +333,7 @@ func (b *builder) zeroUndefBytes(llvmType llvm.Type, ptr llvm.Value) error {
 			if fieldEndOffset != nextOffset {
 				n := llvm.ConstInt(b.uintptrType, nextOffset-fieldEndOffset, false)
 				llvmStoreSize := llvm.ConstInt(b.uintptrType, storeSize, false)
-				gepPtr := elemPtr
-				if gepPtr.Type() != b.i8ptrType {
-					gepPtr = b.CreateBitCast(gepPtr, b.i8ptrType, "") // LLVM 14
-				}
-				paddingStart := b.CreateInBoundsGEP(b.ctx.Int8Type(), gepPtr, []llvm.Value{llvmStoreSize}, "")
-				if paddingStart.Type() != b.i8ptrType {
-					paddingStart = b.CreateBitCast(paddingStart, b.i8ptrType, "") // LLVM 14
-				}
+				paddingStart := b.CreateInBoundsGEP(b.ctx.Int8Type(), elemPtr, []llvm.Value{llvmStoreSize}, "")
 				b.createRuntimeCall("memzero", []llvm.Value{paddingStart, n}, "")
 			}
 		}

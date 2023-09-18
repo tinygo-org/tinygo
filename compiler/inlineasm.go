@@ -99,8 +99,8 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 			case llvm.IntegerTypeKind:
 				constraints = append(constraints, "r")
 			case llvm.PointerTypeKind:
-				// Memory references require a type in LLVM 14, probably as a
-				// preparation for opaque pointers.
+				// Memory references require a type starting with LLVM 14,
+				// probably as a preparation for opaque pointers.
 				err = b.makeError(instr.Pos(), "support for pointer operands was dropped in TinyGo 0.23")
 				return s
 			default:

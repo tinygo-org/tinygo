@@ -6,12 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
-	"tinygo.org/x/go-llvm"
 )
 
 var Musl = Library{
@@ -93,6 +91,7 @@ var Musl = Library{
 			"-Wno-string-plus-int",
 			"-Wno-ignored-pragmas",
 			"-Wno-tautological-constant-out-of-range-compare",
+			"-Wno-deprecated-non-prototype",
 			"-Qunused-arguments",
 			// Select include dirs. Don't include standard library includes
 			// (that would introduce host dependencies and other complications),
@@ -105,11 +104,6 @@ var Musl = Library{
 			"-I" + headerPath,
 			"-I" + muslDir + "/include",
 			"-fno-stack-protector",
-		}
-		llvmMajor, _ := strconv.Atoi(strings.SplitN(llvm.Version, ".", 2)[0])
-		if llvmMajor >= 15 {
-			// This flag was added in Clang 15. It is not present in LLVM 14.
-			cflags = append(cflags, "-Wno-deprecated-non-prototype")
 		}
 		return cflags
 	},

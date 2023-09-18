@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -48,12 +47,9 @@ func (b *builder) defineIntrinsicFunction() {
 func (b *builder) createMemoryCopyImpl() {
 	b.createFunctionStart(true)
 	fnName := "llvm." + b.fn.Name() + ".p0.p0.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
-	if llvmutil.Major() < 15 { // compatibility with LLVM 14
-		fnName = "llvm." + b.fn.Name() + ".p0i8.p0i8.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
-	}
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
-		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.i8ptrType, b.i8ptrType, b.uintptrType, b.ctx.Int1Type()}, false)
+		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType, b.dataPtrType, b.uintptrType, b.ctx.Int1Type()}, false)
 		llvmFn = llvm.AddFunction(b.mod, fnName, fnType)
 	}
 	var params []llvm.Value
@@ -84,12 +80,9 @@ func (b *builder) createMemoryZeroImpl() {
 // Return the llvm.memset.p0.i8 function declaration.
 func (c *compilerContext) getMemsetFunc() llvm.Value {
 	fnName := "llvm.memset.p0.i" + strconv.Itoa(c.uintptrType.IntTypeWidth())
-	if llvmutil.Major() < 15 { // compatibility with LLVM 14
-		fnName = "llvm.memset.p0i8.i" + strconv.Itoa(c.uintptrType.IntTypeWidth())
-	}
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
-		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.i8ptrType, c.ctx.Int8Type(), c.uintptrType, c.ctx.Int1Type()}, false)
+		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.dataPtrType, c.ctx.Int8Type(), c.uintptrType, c.ctx.Int1Type()}, false)
 		llvmFn = llvm.AddFunction(c.mod, fnName, fnType)
 	}
 	return llvmFn
@@ -111,7 +104,7 @@ func (b *builder) createKeepAliveImpl() {
 	//
 	// It should be portable to basically everything as the "r" register type
 	// exists basically everywhere.
-	asmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.i8ptrType}, false)
+	asmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType}, false)
 	asmFn := llvm.InlineAsm(asmType, "", "r", true, false, 0, false)
 	b.createCall(asmType, asmFn, []llvm.Value{pointerValue}, "")
 

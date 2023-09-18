@@ -96,7 +96,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	// Add an extra parameter as the function context. This context is used in
 	// closures and bound methods, but should be optimized away when not used.
 	if !info.exported {
-		paramInfos = append(paramInfos, paramInfo{llvmType: c.i8ptrType, name: "context", elemSize: 0})
+		paramInfos = append(paramInfos, paramInfo{llvmType: c.dataPtrType, name: "context", elemSize: 0})
 	}
 
 	var paramTypes []llvm.Type
@@ -145,20 +145,18 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		for _, attrName := range []string{"noalias", "nonnull"} {
 			llvmFn.AddAttributeAtIndex(0, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(attrName), 0))
 		}
-		if llvmutil.Major() >= 15 { // allockind etc are not available in LLVM 14
-			// Add attributes to signal to LLVM that this is an allocator
-			// function. This enables a number of optimizations.
-			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("allockind"), allocKindAlloc|allocKindZeroed))
-			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("alloc-family", "runtime.alloc"))
-			// Use a special value to indicate the first parameter:
-			// > allocsize has two integer arguments, but because they're both 32 bits, we can
-			// > pack them into one 64-bit value, at the cost of making said value
-			// > nonsensical.
-			// >
-			// > In order to do this, we need to reserve one value of the second (optional)
-			// > allocsize argument to signify "not present."
-			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("allocsize"), 0x0000_0000_ffff_ffff))
-		}
+		// Add attributes to signal to LLVM that this is an allocator function.
+		// This enables a number of optimizations.
+		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("allockind"), allocKindAlloc|allocKindZeroed))
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("alloc-family", "runtime.alloc"))
+		// Use a special value to indicate the first parameter:
+		// > allocsize has two integer arguments, but because they're both 32 bits, we can
+		// > pack them into one 64-bit value, at the cost of making said value
+		// > nonsensical.
+		// >
+		// > In order to do this, we need to reserve one value of the second (optional)
+		// > allocsize argument to signify "not present."
+		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("allocsize"), 0x0000_0000_ffff_ffff))
 	case "runtime.sliceAppend":
 		// Appending a slice will only read the to-be-appended slice, it won't
 		// be modified.
@@ -445,15 +443,10 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
 	if strings.Split(c.Triple, "-")[0] == "x86_64" {
 		// Required by the ABI.
-		if llvmutil.Major() < 15 {
-			// Needed for LLVM 14 support.
-			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 0))
-		} else {
-			// The uwtable has two possible values: sync (1) or async (2). We
-			// use sync because we currently don't use async unwind tables.
-			// For details, see: https://llvm.org/docs/LangRef.html#function-attributes
-			llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 1))
-		}
+		// The uwtable has two possible values: sync (1) or async (2). We use
+		// sync because we currently don't use async unwind tables.
+		// For details, see: https://llvm.org/docs/LangRef.html#function-attributes
+		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 1))
 	}
 }
 

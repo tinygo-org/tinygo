@@ -532,13 +532,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			irbuilder := mod.Context().NewBuilder()
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
-			i8ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
+			ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
 			for _, pkg := range lprogram.Sorted() {
 				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(i8ptrType)}, "")
+				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(ptrType)}, "")
 			}
 			irbuilder.CreateRetVoid()
 
@@ -764,7 +764,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			if sizeLevel >= 2 {
 				// Workaround with roughly the same effect as
 				// https://reviews.llvm.org/D119342.
-				// Can hopefully be removed in LLVM 15.
+				// Can hopefully be removed in LLVM 18.
 				ldflags = append(ldflags,
 					"-mllvm", "--rotation-max-header-size=0")
 			}
