@@ -91,14 +91,12 @@ func TestCompiler(t *testing.T) {
 			}
 
 			// Optimize IR a little.
-			funcPasses := llvm.NewFunctionPassManagerForModule(mod)
-			defer funcPasses.Dispose()
-			funcPasses.AddInstructionCombiningPass()
-			funcPasses.InitializeFunc()
-			for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-				funcPasses.RunFunc(fn)
+			passOptions := llvm.NewPassBuilderOptions()
+			defer passOptions.Dispose()
+			err = mod.RunPasses("instcombine", llvm.TargetMachine{}, passOptions)
+			if err != nil {
+				t.Error(err)
 			}
-			funcPasses.FinalizeFunc()
 
 			outFilePrefix := tc.file[:len(tc.file)-3]
 			if tc.target != "" {

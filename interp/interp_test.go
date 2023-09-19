@@ -77,12 +77,9 @@ func runTest(t *testing.T, pathPrefix string) {
 	}
 
 	// Run some cleanup passes to get easy-to-read outputs.
-	pm := llvm.NewPassManager()
-	defer pm.Dispose()
-	pm.AddGlobalOptimizerPass()
-	pm.AddDeadStoreEliminationPass()
-	pm.AddAggressiveDCEPass()
-	pm.Run(mod)
+	to := llvm.NewPassBuilderOptions()
+	defer to.Dispose()
+	mod.RunPasses("globalopt,dse,adce", llvm.TargetMachine{}, to)
 
 	// Read the expected output IR.
 	out, err := os.ReadFile(pathPrefix + ".out.ll")

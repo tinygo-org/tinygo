@@ -22,7 +22,7 @@ import (
 // the -opt= compiler flag.
 func AddStandardAttributes(fn llvm.Value, config *compileopts.Config) {
 	ctx := fn.Type().Context()
-	_, sizeLevel, _ := config.OptLevels()
+	_, _, sizeLevel := config.OptLevel()
 	if sizeLevel >= 1 {
 		fn.AddFunctionAttr(ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
 	}
