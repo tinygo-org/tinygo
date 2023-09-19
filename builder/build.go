@@ -83,8 +83,7 @@ type packageAction struct {
 	FileHashes       map[string]string // hash of every file that's part of the package
 	EmbeddedFiles    map[string]string // hash of all the //go:embed files in the package
 	Imports          map[string]string // map from imported package to action ID hash
-	OptLevel         int               // LLVM optimization level (0-3)
-	SizeLevel        int               // LLVM optimization for size level (0-2)
+	OptLevel         string            // LLVM optimization level (O0, O1, O2, Os, Oz)
 	UndefinedGlobals []string          // globals that are left as external globals (no initializer)
 }
 
@@ -158,7 +157,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		return BuildResult{}, fmt.Errorf("unknown libc: %s", config.Target.Libc)
 	}
 
-	optLevel, sizeLevel, _ := config.OptLevels()
+	optLevel, speedLevel, sizeLevel := config.OptLevel()
 	compilerConfig := &compiler.Config{
 		Triple:          config.Triple(),
 		CPU:             config.CPU(),
@@ -321,7 +320,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					EmbeddedFiles:    make(map[string]string, len(allFiles)),
 					Imports:          make(map[string]string, len(pkg.Pkg.Imports())),
 					OptLevel:         optLevel,
-					SizeLevel:        sizeLevel,
 					UndefinedGlobals: undefinedGlobals,
 				}
 				for filePath, hash := range pkg.FileHashes {
@@ -743,17 +741,17 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			if config.GOOS() == "windows" {
 				// Options for the MinGW wrapper for the lld COFF linker.
 				ldflags = append(ldflags,
-					"-Xlink=/opt:lldlto="+strconv.Itoa(optLevel),
+					"-Xlink=/opt:lldlto="+strconv.Itoa(speedLevel),
 					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
 			} else if config.GOOS() == "darwin" {
 				// Options for the ld64-compatible lld linker.
 				ldflags = append(ldflags,
-					"--lto-O"+strconv.Itoa(optLevel),
+					"--lto-O"+strconv.Itoa(speedLevel),
 					"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
 			} else {
 				// Options for the ELF linker.
 				ldflags = append(ldflags,
-					"--lto-O"+strconv.Itoa(optLevel),
+					"--lto-O"+strconv.Itoa(speedLevel),
 					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
 				)
 			}
@@ -1066,10 +1064,9 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		return err
 	}
 
-	// Optimization levels here are roughly the same as Clang, but probably not
-	// exactly.
-	optLevel, sizeLevel, inlinerThreshold := config.OptLevels()
-	errs := transform.Optimize(mod, config, optLevel, sizeLevel, inlinerThreshold)
+	// Run most of the whole-program optimizations (including the whole
+	// O0/O1/O2/Os/Oz optimization pipeline).
+	errs := transform.Optimize(mod, config)
 	if len(errs) > 0 {
 		return newMultiError(errs)
 	}

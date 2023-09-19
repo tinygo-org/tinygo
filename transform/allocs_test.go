@@ -38,11 +38,12 @@ func TestAllocs2(t *testing.T) {
 	mod := compileGoFileForTesting(t, "./testdata/allocs2.go")
 
 	// Run functionattrs pass, which is necessary for escape analysis.
-	pm := llvm.NewPassManager()
-	defer pm.Dispose()
-	pm.AddInstructionCombiningPass()
-	pm.AddFunctionAttrsPass()
-	pm.Run(mod)
+	po := llvm.NewPassBuilderOptions()
+	defer po.Dispose()
+	err := mod.RunPasses("function(instcombine),function-attrs", llvm.TargetMachine{}, po)
+	if err != nil {
+		t.Error("failed to run passes:", err)
+	}
 
 	// Run heap to stack transform.
 	var testOutputs []allocsTestOutput

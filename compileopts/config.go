@@ -145,18 +145,18 @@ func (c *Config) Serial() string {
 
 // OptLevels returns the optimization level (0-2), size level (0-2), and inliner
 // threshold as used in the LLVM optimization pipeline.
-func (c *Config) OptLevels() (optLevel, sizeLevel int, inlinerThreshold uint) {
+func (c *Config) OptLevel() (level string, speedLevel, sizeLevel int) {
 	switch c.Options.Opt {
 	case "none", "0":
-		return 0, 0, 0 // -O0
+		return "O0", 0, 0
 	case "1":
-		return 1, 0, 0 // -O1
+		return "O1", 1, 0
 	case "2":
-		return 2, 0, 225 // -O2
+		return "O2", 2, 0
 	case "s":
-		return 2, 1, 225 // -Os
+		return "Os", 2, 1
 	case "z":
-		return 2, 2, 5 // -Oz, default
+		return "Oz", 2, 2 // default
 	default:
 		// This is not shown to the user: valid choices are already checked as
 		// part of Options.Verify(). It is here as a sanity check.

@@ -15,10 +15,11 @@ func TestOptimizeMaps(t *testing.T) {
 
 		// Run an optimization pass, to clean up the result.
 		// This shows that all code related to the map is really eliminated.
-		pm := llvm.NewPassManager()
-		defer pm.Dispose()
-		pm.AddDeadStoreEliminationPass()
-		pm.AddAggressiveDCEPass()
-		pm.Run(mod)
+		po := llvm.NewPassBuilderOptions()
+		defer po.Dispose()
+		err := mod.RunPasses("dse,adce", llvm.TargetMachine{}, po)
+		if err != nil {
+			t.Error("failed to run passes:", err)
+		}
 	})
 }

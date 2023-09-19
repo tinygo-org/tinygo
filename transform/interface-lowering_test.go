@@ -15,9 +15,11 @@ func TestInterfaceLowering(t *testing.T) {
 			t.Error(err)
 		}
 
-		pm := llvm.NewPassManager()
-		defer pm.Dispose()
-		pm.AddGlobalDCEPass()
-		pm.Run(mod)
+		po := llvm.NewPassBuilderOptions()
+		defer po.Dispose()
+		err = mod.RunPasses("globaldce", llvm.TargetMachine{}, po)
+		if err != nil {
+			t.Error("failed to run passes:", err)
+		}
 	})
 }
