@@ -60,10 +60,10 @@ func (r *runner) errorAt(inst instruction, err error) *Error {
 	pos := getPosition(inst.llvmInst)
 	return &Error{
 		ImportPath: r.pkgName,
-		Inst:       inst.String(),
+		Inst:       inst.llvmInst.String(),
 		Pos:        pos,
 		Err:        err,
-		Traceback:  []ErrorLine{{pos, inst.String()}},
+		Traceback:  []ErrorLine{{pos, inst.llvmInst.String()}},
 	}
 }
 
