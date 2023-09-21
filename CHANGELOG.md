@@ -1,3 +1,25 @@
+0.30.0
+---
+
+* **general**
+  - add LLVM 16 support, use it by default
+* **compiler**
+  - `build`: work around a race condition by building Go SSA serially
+  - `compiler`: fix a crash by not using the LLVM global context types
+  - `interp`: don't copy unknown values in `runtime.sliceCopy` to fix miscompile
+  - `interp`: fix crash in error report by not returning raw LLVM values
+* **standard library**
+  - `machine/usb/adc/midi`: various improvements and API changes
+  - `reflect`: add support for `[...]T` → `[]T` in reflect
+* **targets**
+  - `atsamd21`, `atsamd51`: add support for USB INTERRUPT OUT
+  - `rp2040`: always use the USB device enumeration fix, even in chips that supposedly have the HW fix
+  - `wasm`: increase default stack size to 32k for wasi/wasm
+* **boards**
+  - `gobadge`: add GoBadge target as alias for PyBadge :)
+  - `gemma-m0`: add support for the Adafruit Gemma M0
+
+
 0.29.0
 ---
 
