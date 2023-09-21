@@ -32,10 +32,11 @@ type runner struct {
 	start         time.Time
 	timeout       time.Duration
 	maxDepth      int
+	maxInstr      int
 	callsExecuted uint64
 }
 
-func newRunner(mod llvm.Module, timeout time.Duration, maxDepth int, debug bool) *runner {
+func newRunner(mod llvm.Module, timeout time.Duration, maxDepth int, maxInstr int, debug bool) *runner {
 	r := runner{
 		mod:           mod,
 		targetData:    llvm.NewTargetData(mod.DataLayout()),
@@ -46,6 +47,7 @@ func newRunner(mod llvm.Module, timeout time.Duration, maxDepth int, debug bool)
 		start:         time.Now(),
 		timeout:       timeout,
 		maxDepth:      maxDepth,
+		maxInstr:      maxInstr,
 	}
 	r.pointerSize = uint32(r.targetData.PointerSize())
 	r.i8ptrType = llvm.PointerType(mod.Context().Int8Type(), 0)
@@ -62,8 +64,8 @@ func (r *runner) dispose() {
 
 // Run evaluates runtime.initAll function as much as possible at compile time.
 // Set debug to true if it should print output while running.
-func Run(mod llvm.Module, timeout time.Duration, maxDepth int, debug bool) error {
-	r := newRunner(mod, timeout, maxDepth, debug)
+func Run(mod llvm.Module, timeout time.Duration, maxDepth int, maxInstr int, debug bool) error {
+	r := newRunner(mod, timeout, maxDepth, maxInstr, debug)
 	defer r.dispose()
 
 	initAll := mod.NamedFunction("runtime.initAll")
@@ -203,10 +205,10 @@ func Run(mod llvm.Module, timeout time.Duration, maxDepth int, debug bool) error
 
 // RunFunc evaluates a single package initializer at compile time.
 // Set debug to true if it should print output while running.
-func RunFunc(fn llvm.Value, timeout time.Duration, maxDepth int, debug bool) error {
+func RunFunc(fn llvm.Value, timeout time.Duration, maxDepth int, maxInstr int, debug bool) error {
 	// Create and initialize *runner object.
 	mod := fn.GlobalParent()
-	r := newRunner(mod, timeout, maxDepth, debug)
+	r := newRunner(mod, timeout, maxDepth, maxInstr, debug)
 	defer r.dispose()
 	initName := fn.Name()
 	if !strings.HasSuffix(initName, ".init") {

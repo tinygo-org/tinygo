@@ -33,7 +33,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, depth 
 	lastBB := -1 // last basic block is undefined, only defined after a branch
 	var operands []value
 	startRTInsts := len(mem.instructions)
+	instCount := 0
 	for instIndex := 0; instIndex < len(bb.instructions); instIndex++ {
+		instCount++
+		if r.maxInstr > 0 && instCount > r.maxInstr {
+			fmt.Printf("interp: excess instructions evaluated in %v\n", fn.name)
+			return nil, mem, r.errorAt(fn.blocks[0].instructions[0], errDepthExceeded)
+		}
+
 		if instIndex == 0 {
 			if r.maxDepth > 0 && depth >= r.maxDepth {
 				fmt.Printf("interp: depth exceeded in %v\n", fn.name)

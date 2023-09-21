@@ -1419,6 +1419,7 @@ func main() {
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
 	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
 	interpMaxDepth := flag.Int("interp-maxdepth", 0, "interp optimization max depth (default 0=disabled)")
+	interpMaxInstr := flag.Int("interp-maxinstr", 100_000, "limit interp optimization max instructions (0=disabled)")
 	var tags buildutil.TagsFlag
 	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
@@ -1530,6 +1531,7 @@ func main() {
 		Work:            *work,
 		InterpTimeout:   *interpTimeout,
 		InterpMaxDepth:  *interpMaxDepth,
+		InterpMaxInstr:  *interpMaxInstr,
 		PrintIR:         *printIR,
 		DumpSSA:         *dumpSSA,
 		VerifyIR:        *verifyIR,
