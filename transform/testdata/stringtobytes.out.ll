@@ -22,3 +22,13 @@ entry:
   call fastcc void @writeToSlice(ptr %1, i64 6, i64 6)
   ret void
 }
+
+define void @testReadSome() {
+entry:
+  %s = call fastcc { ptr, i64, i64 } @runtime.stringToBytes(ptr @str, i64 6)
+  %s.ptr = extractvalue { ptr, i64, i64 } %s, 0
+  call fastcc void @writeToSlice(ptr %s.ptr, i64 6, i64 6)
+  %s.ptr2 = extractvalue { ptr, i64, i64 } %s, 0
+  call fastcc void @printSlice(ptr %s.ptr2, i64 6, i64 6)
+  ret void
+}
