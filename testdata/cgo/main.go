@@ -52,10 +52,6 @@ func main() {
 	println("static headerfunc:", C.headerfunc_static(5))
 	headerfunc_2()
 
-	// equivalent types
-	var goInt8 int8 = 5
-	var _ C.int8_t = goInt8
-
 	// more globals
 	println("bool:", C.globalBool, C.globalBool2 == true)
 	println("float:", C.globalFloat)

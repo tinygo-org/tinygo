@@ -11,6 +11,7 @@
 //     testdata/errors.go:108: undefined: C.SOME_CONST_1
 //     testdata/errors.go:110: cannot use C.SOME_CONST_3 (untyped int constant 1234) as byte value in variable declaration (overflows)
 //     testdata/errors.go:112: undefined: C.SOME_CONST_4
+//     testdata/errors.go:116: cannot use C.int8_t(5) (constant 5 of type C.schar) as int8 value in variable declaration
 
 package main
 
@@ -58,3 +59,5 @@ type C.struct_point_t struct {
 type C.point_t = C.struct_point_t
 
 const C.SOME_CONST_3 = 1234
+
+type C.int8_t = C.schar

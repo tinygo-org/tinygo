@@ -22,8 +22,12 @@ import "C"
 // #warning another warning
 import "C"
 
+// #include <stdint.h>
+import "C"
+
 // Make sure that errors for the following lines won't change with future
 // additions to the CGo preamble.
+//
 //line errors.go:100
 var (
 	// constant too large
@@ -38,4 +42,8 @@ var (
 	_ byte = C.SOME_CONST_3
 
 	_ = C.SOME_CONST_4
+
+	// This must result in a type error. Previously, TinyGo would allow this
+	// code (which is not allowed by upstream Go).
+	_ int8 = C.int8_t(5)
 )

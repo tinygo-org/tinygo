@@ -75,19 +75,10 @@ type bitfieldInfo struct {
 }
 
 // cgoAliases list type aliases between Go and C, for types that are equivalent
-// in both languages. See addTypeAliases.
+// in both languages.
 var cgoAliases = map[string]string{
-	"C.int8_t":    "int8",
-	"C.int16_t":   "int16",
-	"C.int32_t":   "int32",
-	"C.int64_t":   "int64",
-	"C.uint8_t":   "uint8",
-	"C.uint16_t":  "uint16",
-	"C.uint32_t":  "uint32",
-	"C.uint64_t":  "uint64",
-	"C.uintptr_t": "uintptr",
-	"C.float":     "float32",
-	"C.double":    "float64",
+	"float":  "float32",
+	"double": "float64",
 }
 
 // builtinAliases are handled specially because they only exist on the Go side
@@ -311,10 +302,11 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Process CGo imports for each file.
 	for i, f := range files {
 		cf := p.newCGoFile(f, i)
-		// Float and double are aliased, meaning that C.float is the same thing
-		// as float32 in Go.
-		cf.names["float"] = clangCursor{}
-		cf.names["double"] = clangCursor{}
+		// These types are aliased with the corresponding types in C. For
+		// example, float in C is always float32 in Go.
+		for name := range cgoAliases {
+			cf.names[name] = clangCursor{}
+		}
 		// Now read all the names (identifies) that C defines in the header
 		// snippet.
 		cf.readNames(p.cgoHeaders[i], cflagsForCGo, filepath.Base(fset.File(f.Pos()).Name()), func(names map[string]clangCursor) {
@@ -1129,9 +1121,7 @@ func (p *cgoPackage) getUnnamedDeclName(prefix string, itf interface{}) string {
 // getASTDeclName will declare the given C AST node (if not already defined) and
 // will return its name, in the form of C.foo.
 func (f *cgoFile) getASTDeclName(name string, found clangCursor, iscall bool) string {
-	// Some types are defined in stdint.h and map directly to a particular Go
-	// type.
-	if alias := cgoAliases["C."+name]; alias != "" {
+	if alias := cgoAliases[name]; alias != "" {
 		return alias
 	}
 	node := f.getASTDeclNode(name, found, iscall)
