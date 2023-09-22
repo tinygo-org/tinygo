@@ -9,6 +9,7 @@ int mul(int, int);
 #include <string.h>
 #cgo CFLAGS: -DSOME_CONSTANT=17
 #define someDefine -5 + 2 * 7
+bool someBool;
 */
 import "C"
 
@@ -55,6 +56,9 @@ func main() {
 	// equivalent types
 	var goInt8 int8 = 5
 	var _ C.int8_t = goInt8
+
+	var _ bool = C.someBool
+	var _ C._Bool = C.someBool
 
 	// more globals
 	println("bool:", C.globalBool, C.globalBool2 == true)
