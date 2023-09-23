@@ -301,10 +301,10 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	switch goarch {
 	case "386":
 		spec.CPU = "pentium4"
-		spec.Features = "+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
+		spec.Features = "+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "amd64":
 		spec.CPU = "x86-64"
-		spec.Features = "+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
+		spec.Features = "+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "arm":
 		spec.CPU = "generic"
 		spec.CFlags = append(spec.CFlags, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
@@ -320,8 +320,10 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.CPU = "generic"
 		if goos == "darwin" {
 			spec.Features = "+neon"
-		} else { // windows, linux
+		} else if goos == "windows" {
 			spec.Features = "+neon,-fmv"
+		} else { // linux
+			spec.Features = "+neon,-fmv,-outline-atomics"
 		}
 	case "wasm":
 		spec.CPU = "generic"
@@ -349,6 +351,20 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "musl"
 		spec.LDFlags = append(spec.LDFlags, "--gc-sections")
+		if goarch == "arm64" {
+			// Disable outline atomics. For details, see:
+			// https://cpufun.substack.com/p/atomics-in-aarch64
+			// A better way would be to fully support outline atomics, which
+			// makes atomics slightly more efficient on systems with many cores.
+			// But the instructions are only supported on newer aarch64 CPUs, so
+			// this feature is normally put in a system library which does
+			// feature detection for you.
+			// We take the lazy way out and simply disable this feature, instead
+			// of enabling it in compiler-rt (which is a bit more complicated).
+			// We don't really need this feature anyway as we don't even support
+			// proper threading.
+			spec.CFlags = append(spec.CFlags, "-mno-outline-atomics")
+		}
 	} else if goos == "windows" {
 		spec.Linker = "ld.lld"
 		spec.Libc = "mingw-w64"

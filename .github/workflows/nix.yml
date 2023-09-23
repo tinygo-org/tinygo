@@ -24,7 +24,7 @@ jobs:
         uses: actions/cache/restore@v3
         id: cache-llvm-source
         with:
-          key: llvm-source-16-linux-nix-v1
+          key: llvm-source-17-linux-nix-v1
           path: |
             llvm-project/compiler-rt
       - name: Download LLVM source
