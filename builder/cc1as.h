@@ -1,3 +1,6 @@
+// Source: https://github.com/llvm/llvm-project/blob/main/clang/tools/driver/cc1as_main.cpp
+// See cc1as.cpp for details.
+
 //===-- cc1as.h - Clang Assembler  ----------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -44,7 +47,7 @@ struct AssemblerInvocation {
   std::string DwarfDebugFlags;
   std::string DwarfDebugProducer;
   std::string DebugCompilationDir;
-  std::map<const std::string, const std::string> DebugPrefixMap;
+  llvm::SmallVector<std::pair<std::string, std::string>, 0> DebugPrefixMap;
   llvm::DebugCompressionType CompressDebugSections =
       llvm::DebugCompressionType::None;
   std::string MainFileName;
@@ -89,6 +92,10 @@ struct AssemblerInvocation {
   /// Whether to emit DWARF unwind info.
   EmitDwarfUnwindType EmitDwarfUnwind;
 
+  // Whether to emit compact-unwind for non-canonical entries.
+  // Note: maybe overriden by other constraints.
+  unsigned EmitCompactUnwindNonCanonical : 1;
+
   /// The name of the relocation model to use.
   std::string RelocationModel;
 
@@ -128,6 +135,7 @@ public:
     DwarfVersion = 0;
     EmbedBitcode = 0;
     EmitDwarfUnwind = EmitDwarfUnwindType::Default;
+    EmitCompactUnwindNonCanonical = false;
   }
 
   static bool CreateFromArgs(AssemblerInvocation &Res,

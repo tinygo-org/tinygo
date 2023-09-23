@@ -10,12 +10,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-16-v3
+            - llvm-source-17-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-16-v3
+          key: llvm-source-17-v1
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
