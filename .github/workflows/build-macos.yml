@@ -116,11 +116,15 @@ jobs:
   test-macos-homebrew:
     name: homebrew-install
     runs-on: macos-latest
+    strategy:
+      matrix:
+        version: [16, 17]
     steps:
+      - name: Update Homebrew
+        run: brew update
       - name: Install LLVM
-        shell: bash
         run: |
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@16
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@${{ matrix.version }}
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Go
@@ -128,7 +132,13 @@ jobs:
         with:
           go-version: '1.21'
           cache: true
-      - name: Build TinyGo
+      - name: Build TinyGo (LLVM ${{ matrix.version }})
+        run: go install -tags=llvm${{ matrix.version }}
+      - name: Check binary
+        run: tinygo version
+      - name: Build TinyGo (default LLVM)
+        if: matrix.version == 16
         run: go install
       - name: Check binary
+        if: matrix.version == 16
         run: tinygo version

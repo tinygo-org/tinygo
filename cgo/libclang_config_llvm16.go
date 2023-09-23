@@ -1,8 +1,8 @@
-//go:build !byollvm && !llvm15
+//go:build !byollvm && !llvm15 && !llvm17
 
 package cgo
 
-// As of 2023-05-05, there is a packaging issue on Debian:
+// As of 2023-05-05, there is a packaging issue with LLVM 16 on Debian:
 // https://github.com/llvm/llvm-project/issues/62199
 // A workaround is to fix this locally, using something like this:
 //
