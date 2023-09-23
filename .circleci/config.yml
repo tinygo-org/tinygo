@@ -75,10 +75,10 @@ commands:
       - run: go install -tags=llvm<<parameters.llvm>> .
       - restore_cache:
           keys:
-            - wasi-libc-sysroot-systemclang-v6
+            - wasi-libc-sysroot-systemclang-v7
       - run: make wasi-libc
       - save_cache:
-          key: wasi-libc-sysroot-systemclang-v6
+          key: wasi-libc-sysroot-systemclang-v7
           paths:
             - lib/wasi-libc/sysroot
       - when:
