@@ -398,8 +398,7 @@ func Chmod(path string, mode uint32) (err error) {
 }
 
 func Getpagesize() int {
-	// per upstream
-	return 65536
+	return libc_getpagesize()
 }
 
 type Utsname struct {
@@ -427,6 +426,11 @@ func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err Errno)
 
 // This is a stub, it is not functional.
 func Syscall6(trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno)
+
+// int getpagesize(void);
+//
+//export getpagesize
+func libc_getpagesize() int
 
 // int stat(const char *path, struct stat * buf);
 //
