@@ -114,6 +114,30 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		cacheDir = tmpdir
 	}
 
+	// Create default global values.
+	globalValues := map[string]map[string]string{
+		"runtime": {
+			"buildVersion": goenv.Version(),
+		},
+		"testing": {},
+	}
+	if config.TestConfig.CompileTestBinary {
+		// The testing.testBinary is set to "1" when in a test.
+		// This is needed for testing.Testing() to work correctly.
+		globalValues["testing"]["testBinary"] = "1"
+	}
+
+	// Copy over explicitly set global values, like
+	// -ldflags="-X main.Version="1.0"
+	for pkgPath, vals := range config.Options.GlobalValues {
+		if _, ok := globalValues[pkgPath]; !ok {
+			globalValues[pkgPath] = map[string]string{}
+		}
+		for k, v := range vals {
+			globalValues[pkgPath][k] = v
+		}
+	}
+
 	// Check for a libc dependency.
 	// As a side effect, this also creates the headers for the given libc, if
 	// the libc needs them.
@@ -216,30 +240,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	var packageJobs []*compileJob
 	packageActionIDJobs := make(map[string]*compileJob)
 
-	if config.Options.GlobalValues == nil {
-		config.Options.GlobalValues = make(map[string]map[string]string)
-	}
-	if config.Options.GlobalValues["runtime"]["buildVersion"] == "" {
-		if config.Options.GlobalValues["runtime"] == nil {
-			config.Options.GlobalValues["runtime"] = make(map[string]string)
-		}
-		config.Options.GlobalValues["runtime"]["buildVersion"] = goenv.Version()
-	}
-	if config.TestConfig.CompileTestBinary {
-		// The testing.testBinary is set to "1" when in a test.
-		// This is needed for testing.Testing() to work correctly.
-		if config.Options.GlobalValues["testing"] == nil {
-			config.Options.GlobalValues["testing"] = make(map[string]string)
-		}
-		config.Options.GlobalValues["testing"]["testBinary"] = "1"
-	}
-
 	var embedFileObjects []*compileJob
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
 
 		var undefinedGlobals []string
-		for name := range config.Options.GlobalValues[pkg.Pkg.Path()] {
+		for name := range globalValues[pkg.Pkg.Path()] {
 			undefinedGlobals = append(undefinedGlobals, name)
 		}
 		sort.Strings(undefinedGlobals)
@@ -567,7 +573,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 			// Run all optimization passes, which are much more effective now
 			// that the optimizer can see the whole program at once.
-			err := optimizeProgram(mod, config)
+			err := optimizeProgram(mod, config, globalValues)
 			if err != nil {
 				return err
 			}
@@ -1036,7 +1042,7 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // optimizeProgram runs a series of optimizations and transformations that are
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
-func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
+func optimizeProgram(mod llvm.Module, config *compileopts.Config, globalValues map[string]map[string]string) error {
 	err := interp.Run(mod, config.Options.InterpTimeout, config.DumpSSA())
 	if err != nil {
 		return err
@@ -1055,7 +1061,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	}
 
 	// Insert values from -ldflags="-X ..." into the IR.
-	err = setGlobalValues(mod, config.Options.GlobalValues)
+	err = setGlobalValues(mod, globalValues)
 	if err != nil {
 		return err
 	}
