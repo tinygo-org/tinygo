@@ -878,7 +878,7 @@ deb:
 	@mkdir -p build/release-deb/usr/local/lib
 	cp -ar build/release/tinygo build/release-deb/usr/local/lib/tinygo
 	ln -sf ../lib/tinygo/bin/tinygo build/release-deb/usr/local/bin/tinygo
-	fpm -f -s dir -t deb -n tinygo -a $(DEB_ARCH) -v $(shell grep "const Version = " goenv/version.go | awk '{print $$NF}') -m '@tinygo-org' --description='TinyGo is a Go compiler for small places.' --license='BSD 3-Clause' --url=https://tinygo.org/ --deb-changelog CHANGELOG.md -p build/release.deb -C ./build/release-deb
+	fpm -f -s dir -t deb -n tinygo -a $(DEB_ARCH) -v $(shell grep "const version = " goenv/version.go | awk '{print $$NF}') -m '@tinygo-org' --description='TinyGo is a Go compiler for small places.' --license='BSD 3-Clause' --url=https://tinygo.org/ --deb-changelog CHANGELOG.md -p build/release.deb -C ./build/release-deb
 
 ifneq ($(RELEASEONLY), 1)
 release: build/release

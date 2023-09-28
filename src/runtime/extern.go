@@ -10,8 +10,7 @@ func Callers(skip int, pc []uintptr) int {
 var buildVersion string
 
 // Version returns the Tinygo tree's version string.
-// It is the same as goenv.Version, or in case of a development build,
-// it will be the concatenation of goenv.Version and the git commit hash.
+// It is the same as goenv.Version().
 func Version() string {
 	return buildVersion
 }

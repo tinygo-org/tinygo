@@ -9,13 +9,23 @@ import (
 
 // Version of TinyGo.
 // Update this value before release of new version of software.
-const Version = "0.30.0"
+const version = "0.30.0"
 
 var (
 	// This variable is set at build time using -ldflags parameters.
 	// See: https://stackoverflow.com/a/11355611
 	GitSha1 string
 )
+
+// Return TinyGo version, either in the form 0.30.0 or as a development version
+// (like 0.30.0-dev-abcd012).
+func Version() string {
+	v := version
+	if strings.HasSuffix(version, "-dev") && GitSha1 != "" {
+		v += "-" + GitSha1
+	}
+	return v
+}
 
 // GetGorootVersion returns the major and minor version for a given GOROOT path.
 // If the goroot cannot be determined, (0, 0) is returned.

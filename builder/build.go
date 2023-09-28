@@ -168,7 +168,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		CodeModel:       config.CodeModel(),
 		RelocationModel: config.RelocationModel(),
 		SizeLevel:       sizeLevel,
-		TinyGoVersion:   goenv.Version,
+		TinyGoVersion:   goenv.Version(),
 
 		Scheduler:          config.Scheduler(),
 		AutomaticStackSize: config.AutomaticStackSize(),
@@ -220,14 +220,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		config.Options.GlobalValues = make(map[string]map[string]string)
 	}
 	if config.Options.GlobalValues["runtime"]["buildVersion"] == "" {
-		version := goenv.Version
-		if strings.HasSuffix(goenv.Version, "-dev") && goenv.GitSha1 != "" {
-			version += "-" + goenv.GitSha1
-		}
 		if config.Options.GlobalValues["runtime"] == nil {
 			config.Options.GlobalValues["runtime"] = make(map[string]string)
 		}
-		config.Options.GlobalValues["runtime"]["buildVersion"] = version
+		config.Options.GlobalValues["runtime"]["buildVersion"] = goenv.Version()
 	}
 	if config.TestConfig.CompileTestBinary {
 		// The testing.testBinary is set to "1" when in a test.
