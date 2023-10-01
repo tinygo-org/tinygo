@@ -19,6 +19,7 @@ var (
 	errUnsupportedRuntimeInst = errors.New("interp: unsupported instruction (to be emitted at runtime)")
 	errMapAlreadyCreated      = errors.New("interp: map already created")
 	errLoopUnrolled           = errors.New("interp: loop unrolled")
+	errDepthExceeded          = errors.New("interp: depth exceeded")
 )
 
 // This is one of the errors that can be returned from toLLVMValue when the
@@ -29,7 +30,7 @@ var errInvalidPtrToIntSize = errors.New("interp: ptrtoint integer size does not 
 func isRecoverableError(err error) bool {
 	return err == errIntegerAsPointer || err == errUnsupportedInst ||
 		err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated ||
-		err == errLoopUnrolled
+		err == errLoopUnrolled || err == errDepthExceeded
 }
 
 // ErrorLine is one line in a traceback. The position may be missing.

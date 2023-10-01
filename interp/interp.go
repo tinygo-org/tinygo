@@ -31,10 +31,12 @@ type runner struct {
 	globals       map[llvm.Value]int       // map from global to index in objects slice
 	start         time.Time
 	timeout       time.Duration
+	maxDepth      int
+	maxInstr      int
 	callsExecuted uint64
 }
 
-func newRunner(mod llvm.Module, timeout time.Duration, debug bool) *runner {
+func newRunner(mod llvm.Module, timeout time.Duration, maxDepth int, maxInstr int, debug bool) *runner {
 	r := runner{
 		mod:           mod,
 		targetData:    llvm.NewTargetData(mod.DataLayout()),
@@ -44,6 +46,8 @@ func newRunner(mod llvm.Module, timeout time.Duration, debug bool) *runner {
 		globals:       make(map[llvm.Value]int),
 		start:         time.Now(),
 		timeout:       timeout,
+		maxDepth:      maxDepth,
+		maxInstr:      maxInstr,
 	}
 	r.pointerSize = uint32(r.targetData.PointerSize())
 	r.dataPtrType = llvm.PointerType(mod.Context().Int8Type(), 0)
@@ -60,8 +64,8 @@ func (r *runner) dispose() {
 
 // Run evaluates runtime.initAll function as much as possible at compile time.
 // Set debug to true if it should print output while running.
-func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
-	r := newRunner(mod, timeout, debug)
+func Run(mod llvm.Module, timeout time.Duration, maxDepth int, maxInstr int, debug bool) error {
+	r := newRunner(mod, timeout, maxDepth, maxInstr, debug)
 	defer r.dispose()
 
 	initAll := mod.NamedFunction("runtime.initAll")
@@ -114,7 +118,7 @@ func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
 		if r.debug {
 			fmt.Fprintln(os.Stderr, "call:", fn.Name())
 		}
-		_, mem, callErr := r.run(r.getFunction(fn), nil, nil, "    ")
+		_, mem, callErr := r.run(r.getFunction(fn), nil, nil, 0, "    ")
 		call.EraseFromParentAsInstruction()
 		if callErr != nil {
 			if isRecoverableError(callErr.Err) {
@@ -200,10 +204,10 @@ func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
 
 // RunFunc evaluates a single package initializer at compile time.
 // Set debug to true if it should print output while running.
-func RunFunc(fn llvm.Value, timeout time.Duration, debug bool) error {
+func RunFunc(fn llvm.Value, timeout time.Duration, maxDepth int, maxInstr int, debug bool) error {
 	// Create and initialize *runner object.
 	mod := fn.GlobalParent()
-	r := newRunner(mod, timeout, debug)
+	r := newRunner(mod, timeout, maxDepth, maxInstr, debug)
 	defer r.dispose()
 	initName := fn.Name()
 	if !strings.HasSuffix(initName, ".init") {
@@ -234,7 +238,7 @@ func RunFunc(fn llvm.Value, timeout time.Duration, debug bool) error {
 	if r.debug {
 		fmt.Fprintln(os.Stderr, "interp:", fn.Name())
 	}
-	_, pkgMem, callErr := r.run(r.getFunction(fn), nil, nil, "    ")
+	_, pkgMem, callErr := r.run(r.getFunction(fn), nil, nil, 0, "    ")
 	if callErr != nil {
 		if isRecoverableError(callErr.Err) {
 			// Could not finish, but could recover from it.

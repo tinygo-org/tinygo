@@ -22,11 +22,12 @@ func TestTraceback(t *testing.T) {
 	// Build a small binary that only panics.
 	tmpdir := t.TempDir()
 	config, err := builder.NewConfig(&compileopts.Options{
-		GOOS:          runtime.GOOS,
-		GOARCH:        runtime.GOARCH,
-		Opt:           "z",
-		InterpTimeout: time.Minute,
-		Debug:         true,
+		GOOS:           runtime.GOOS,
+		GOARCH:         runtime.GOARCH,
+		Opt:            "z",
+		InterpTimeout:  time.Minute,
+		InterpMaxDepth: 10,
+		Debug:          true,
 	})
 	if err != nil {
 		t.Fatal(err)
