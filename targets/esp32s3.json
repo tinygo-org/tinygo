@@ -1,0 +1,21 @@
+{
+	"inherits": ["xtensa"],
+	"cpu": "esp32s3",
+	"features": "+atomctl,+bool,+coprocessor,+debug,+density,+dfpaccel,+div32,+exception,+fp,+highpriinterrupts,+interrupt,+loop,+mac16,+memctl,+miscsr,+mul32,+mul32high,+nsa,+prid,+regprotect,+rvector,+s32c1i,+sext,+threadptr,+timerint,+windowed",
+	"build-tags": ["esp32s3", "esp"],
+	"scheduler": "tasks",
+	"serial": "uart",
+	"linker": "ld.lld",
+	"default-stack-size": 2048,
+	"rtlib": "compiler-rt",
+	"libc": "picolibc",
+	"linkerscript": "targets/esp32s3.ld",
+	"extra-files": [
+		"src/device/esp/esp32s3.S",
+		"src/internal/task/task_stack_esp32.S"
+	],
+	"binary-format": "esp32s3",
+	"flash-command": "esptool.py --chip=esp32s3 --port {port} write_flash 0x1000 {bin} -ff 80m -fm dout",
+	"emulator": "qemu-system-xtensa -machine esp32 -nographic -drive file={img},if=mtd,format=raw",
+	"gdb": ["xtensa-esp32-elf-gdb"]
+}
