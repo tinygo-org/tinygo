@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"text/tabwriter"
 	"time"
 
 	"github.com/google/shlex"
@@ -1220,30 +1221,40 @@ func usage(command string) {
 	switch command {
 	default:
 		fmt.Fprintln(os.Stderr, "TinyGo is a Go compiler for small places.")
-		fmt.Fprintln(os.Stderr, "version:", version)
-		fmt.Fprintf(os.Stderr, "usage: %s <command> [arguments]\n", os.Args[0])
-		fmt.Fprintln(os.Stderr, "\ncommands:")
-		fmt.Fprintln(os.Stderr, "  build:   compile packages and dependencies")
-		fmt.Fprintln(os.Stderr, "  run:     compile and run immediately")
-		fmt.Fprintln(os.Stderr, "  test:    test packages")
-		fmt.Fprintln(os.Stderr, "  flash:   compile and flash to the device")
-		fmt.Fprintln(os.Stderr, "  gdb:     run/flash and immediately enter GDB")
-		fmt.Fprintln(os.Stderr, "  lldb:    run/flash and immediately enter LLDB")
-		fmt.Fprintln(os.Stderr, "  monitor: open communication port")
-		fmt.Fprintln(os.Stderr, "  env:     list environment variables used during build")
-		fmt.Fprintln(os.Stderr, "  list:    run go list using the TinyGo root")
-		fmt.Fprintln(os.Stderr, "  clean:   empty cache directory ("+goenv.Get("GOCACHE")+")")
-		fmt.Fprintln(os.Stderr, "  targets: list targets")
-		fmt.Fprintln(os.Stderr, "  info:    show info for specified target")
-		fmt.Fprintln(os.Stderr, "  version: show version")
-		fmt.Fprintln(os.Stderr, "  help:    print this help text")
+		fmt.Fprintf(os.Stderr, "version: %s\n\n", version)
 
-		if flag.Parsed() {
-			fmt.Fprintln(os.Stderr, "\nflags:")
-			flag.PrintDefaults()
-		}
+		fmt.Fprint(os.Stderr, "Usage:\n\n")
+		fmt.Fprint(os.Stderr, "\ttinygo <command> [arguments]\n\n")
+		fmt.Fprint(os.Stderr, "The commands are:\n\n")
 
-		fmt.Fprintln(os.Stderr, "\nfor more details, see https://tinygo.org/docs/reference/usage/")
+		tabw := tabwriter.NewWriter(os.Stderr, 0, 0, 8, ' ', 0)
+
+		fmt.Fprintln(tabw, "\tbuild\tcompile packages and dependencies")
+		fmt.Fprintln(tabw, "\tclean\tempty cache directory ("+goenv.Get("GOCACHE")+")")
+		fmt.Fprintln(tabw, "\tenv\tlist environment variables used during build")
+		fmt.Fprintln(tabw, "\tflash\tcompile and flash to the device")
+		fmt.Fprintln(tabw, "\tgdb\trun/flash and immediately enter GDB")
+		fmt.Fprintln(tabw, "\thelp\tprint this help text")
+		fmt.Fprintln(tabw, "\tlist\trun go list using the TinyGo root")
+		fmt.Fprintln(tabw, "\tlldb\trun/flash and immediately enter LLDB")
+		fmt.Fprintln(tabw, "\tmonitor\topen communication port")
+		fmt.Fprintln(tabw, "\trun\tcompile and run immediately")
+		fmt.Fprintln(tabw, "\ttest\ttest packages")
+		fmt.Fprintln(tabw, "\tversion\tshow version")
+
+		tabw.Flush()
+
+		fmt.Fprint(os.Stderr, "\nUse \"tinygo help <command>\" for more information about a command.\n\n")
+		fmt.Fprint(os.Stderr, "Additional help topics:\n\n")
+		fmt.Fprintln(tabw, "\tflags\tgeneral flags")
+		fmt.Fprintln(tabw, "\tinfo\tshow info for specified target")
+		fmt.Fprintln(tabw, "\ttargets\tlist targets")
+
+		tabw.Flush()
+
+		fmt.Fprint(os.Stderr, "\nUse \"tinygo help <topic>\" for more information about that topic.\n\n")
+
+		fmt.Fprint(os.Stderr, "For more details, see https://tinygo.org/docs/reference/usage/\n\n")
 	}
 }
 
@@ -1405,7 +1416,6 @@ func getListOfPackages(pkgs []string, options *compileopts.Options) ([]string, e
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "No command-line arguments supplied.")
 		usage("")
 		os.Exit(1)
 	}
@@ -1632,6 +1642,11 @@ func main() {
 		err = copyFile(path, outpath)
 		if err != nil {
 			handleCompilerError(err)
+		}
+	case "flags":
+		if flag.Parsed() {
+			fmt.Fprintln(os.Stderr, "Flags:")
+			flag.PrintDefaults()
 		}
 	case "flash", "gdb", "lldb":
 		pkgName := filepath.ToSlash(flag.Arg(0))
