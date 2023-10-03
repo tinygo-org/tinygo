@@ -267,7 +267,7 @@ jobs:
       - run: make smoketest
       - run: make wasmtest
       - run: make tinygo-baremetal
-  build-linux-arm:
+  build-linux-cross:
     # Build ARM Linux binaries, ready for release.
     # This intentionally uses an older Linux image, so that we compile against
     # an older glibc version and therefore are compatible with a wide range of
@@ -276,6 +276,16 @@ jobs:
     # in that process to avoid doing lots of duplicate work and to avoid
     # complications around precompiled libraries such as compiler-rt shipped as
     # part of the release tarball.
+    strategy:
+      matrix:
+        goarch: [ arm, arm64 ]
+        include:
+          - goarch: arm64
+            toolchain: aarch64-linux-gnu
+            libc: arm64
+          - goarch: arm
+            toolchain: arm-linux-gnueabihf
+            libc: armhf
     runs-on: ubuntu-20.04
     needs: build-linux
     steps:
@@ -286,8 +296,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends \
               qemu-user \
-              g++-arm-linux-gnueabihf \
-              libc6-dev-armhf-cross
+              g++-${{ matrix.toolchain }} \
+              libc6-dev-${{ matrix.libc }}-cross
       - name: Install Go
         uses: actions/setup-go@v3
         with:
@@ -322,7 +332,7 @@ jobs:
         uses: actions/cache/restore@v3
         id: cache-llvm-build
         with:
-          key: llvm-build-16-linux-arm-v1
+          key: llvm-build-16-linux-${{ matrix.goarch }}-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -333,7 +343,7 @@ jobs:
           # Install build dependencies.
           sudo apt-get install --no-install-recommends ninja-build
           # build!
-          make llvm-build CROSS=arm-linux-gnueabihf
+          make llvm-build CROSS=${{ matrix.toolchain }}
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
@@ -346,14 +356,14 @@ jobs:
         uses: actions/cache@v3
         id: cache-binaryen
         with:
-          key: binaryen-linux-arm-v1
+          key: binaryen-linux-${{ matrix.goarch }}-v1
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: |
           sudo apt-get install --no-install-recommends ninja-build
           git submodule update --init lib/binaryen
-          make CROSS=arm-linux-gnueabihf binaryen
+          make CROSS=${{ matrix.toolchain }} binaryen
       - name: Install fpm
         run: |
           sudo gem install --version 4.0.7 public_suffix
@@ -361,7 +371,7 @@ jobs:
           sudo gem install --no-document fpm
       - name: Build TinyGo binary
         run: |
-          make CROSS=arm-linux-gnueabihf
+          make CROSS=${{ matrix.toolchain }}
       - name: Download amd64 release
         uses: actions/download-artifact@v3
         with:
@@ -374,129 +384,15 @@ jobs:
         run: |
           cp -p build/tinygo   build/release/tinygo/bin
           cp -p build/wasm-opt build/release/tinygo/bin
-      - name: Create arm release
+      - name: Create ${{ matrix.goarch }} release
         run: |
-          make release deb RELEASEONLY=1 DEB_ARCH=armhf
-          cp -p build/release.tar.gz /tmp/tinygo.linux-arm.tar.gz
-          cp -p build/release.deb    /tmp/tinygo_armhf.deb
+          make release deb RELEASEONLY=1 DEB_ARCH=${{ matrix.libc }}
+          cp -p build/release.tar.gz /tmp/tinygo.linux-${{ matrix.goarch }}.tar.gz
+          cp -p build/release.deb    /tmp/tinygo_${{ matrix.libc }}.deb
       - name: Publish release artifact
         uses: actions/upload-artifact@v3
         with:
-          name: linux-arm-double-zipped
+          name: linux-${{ matrix.goarch }}-double-zipped
           path: |
-            /tmp/tinygo.linux-arm.tar.gz
-            /tmp/tinygo_armhf.deb
-  build-linux-arm64:
-    # Build ARM64 Linux binaries, ready for release.
-    # It is set to "needs: build-linux" because it modifies the release created
-    # in that process to avoid doing lots of duplicate work and to avoid
-    # complications around precompiled libraries such as compiler-rt shipped as
-    # part of the release tarball.
-    runs-on: ubuntu-20.04
-    needs: build-linux
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Install apt dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends \
-              qemu-user \
-              g++-aarch64-linux-gnu \
-              libc6-dev-arm64-cross \
-              ninja-build
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.21'
-          cache: true
-      - name: Restore LLVM source cache
-        uses: actions/cache/restore@v3
-        id: cache-llvm-source
-        with:
-          key: llvm-source-16-linux-v1
-          path: |
-            llvm-project/clang/lib/Headers
-            llvm-project/clang/include
-            llvm-project/compiler-rt
-            llvm-project/lld/include
-            llvm-project/llvm/include
-      - name: Download LLVM source
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
-      - name: Save LLVM source cache
-        uses: actions/cache/save@v3
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        with:
-          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
-          path: |
-            llvm-project/clang/lib/Headers
-            llvm-project/clang/include
-            llvm-project/compiler-rt
-            llvm-project/lld/include
-            llvm-project/llvm/include
-      - name: Restore LLVM build cache
-        uses: actions/cache/restore@v3
-        id: cache-llvm-build
-        with:
-          key: llvm-build-16-linux-arm64-v1
-          path: llvm-build
-      - name: Build LLVM
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
-        run: |
-          # fetch LLVM source
-          rm -rf llvm-project
-          make llvm-source
-          # build!
-          make llvm-build CROSS=aarch64-linux-gnu
-          # Remove unnecessary object files (to reduce cache size).
-          find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
-      - name: Save LLVM build cache
-        uses: actions/cache/save@v3
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
-        with:
-          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
-          path: llvm-build
-      - name: Cache Binaryen
-        uses: actions/cache@v3
-        id: cache-binaryen
-        with:
-          key: binaryen-linux-arm64-v1
-          path: build/wasm-opt
-      - name: Build Binaryen
-        if: steps.cache-binaryen.outputs.cache-hit != 'true'
-        run: |
-          git submodule update --init lib/binaryen
-          make CROSS=aarch64-linux-gnu binaryen
-      - name: Install fpm
-        run: |
-          sudo gem install --version 4.0.7 public_suffix
-          sudo gem install --version 2.7.6 dotenv
-          sudo gem install --no-document fpm
-      - name: Build TinyGo binary
-        run: |
-          make CROSS=aarch64-linux-gnu
-      - name: Download amd64 release
-        uses: actions/download-artifact@v3
-        with:
-          name: linux-amd64-double-zipped
-      - name: Extract amd64 release
-        run: |
-          mkdir -p build/release
-          tar -xf tinygo.linux-amd64.tar.gz -C build/release tinygo
-      - name: Modify release
-        run: |
-          cp -p build/tinygo   build/release/tinygo/bin
-          cp -p build/wasm-opt build/release/tinygo/bin
-      - name: Create arm64 release
-        run: |
-          make release deb RELEASEONLY=1 DEB_ARCH=arm64
-          cp -p build/release.tar.gz /tmp/tinygo.linux-arm64.tar.gz
-          cp -p build/release.deb    /tmp/tinygo_arm64.deb
-      - name: Publish release artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: linux-arm64-double-zipped
-          path: |
-            /tmp/tinygo.linux-arm64.tar.gz
-            /tmp/tinygo_arm64.deb
+            /tmp/tinygo.linux-${{ matrix.goarch }}.tar.gz
+            /tmp/tinygo_${{ matrix.libc }}.deb
