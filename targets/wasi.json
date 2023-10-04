@@ -9,7 +9,7 @@
 	"libc":          "wasi-libc",
 	"rtlib":         "compiler-rt",
 	"scheduler":     "asyncify",
-	"default-stack-size": 32768,
+	"default-stack-size": 65536,
 	"cflags": [
 		"-mbulk-memory",
 		"-mnontrapping-fptoint",
