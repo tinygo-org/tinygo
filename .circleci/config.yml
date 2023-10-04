@@ -89,7 +89,7 @@ commands:
               # formatting of generated files.
               name: Check Go code formatting
               command: make fmt-check
-      - run: make gen-device -j4
+      - run: make gen-device
       - run: make smoketest XTENSA=0
       - save_cache:
           key: go-cache-v3-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}

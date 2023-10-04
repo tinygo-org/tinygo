@@ -255,7 +255,7 @@ jobs:
       - name: Build wasi-libc
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
-      - run: make gen-device -j4
+      - run: make gen-device
       - name: Test TinyGo
         run: make ASSERT=1 test
       - name: Build TinyGo
