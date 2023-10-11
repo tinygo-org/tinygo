@@ -31,6 +31,11 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	// Activate internal pullups for twi.
 	avr.PORTC.SetBits((avr.DIDR0_ADC4D | avr.DIDR0_ADC5D))
 
+	return i2c.SetBaudRate(config.Frequency)
+}
+
+// SetBaudRate sets the communication speed for I2C.
+func (i2c *I2C) SetBaudRate(br uint32) error {
 	// Initialize twi prescaler and bit rate.
 	avr.TWSR.SetBits((avr.TWSR_TWPS0 | avr.TWSR_TWPS1))
 
@@ -38,17 +43,11 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	// SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
 	// NOTE: TWBR should be 10 or higher for controller mode.
 	// It is 72 for a 16mhz board with 100kHz TWI
-	avr.TWBR.Set(uint8(((CPUFrequency() / config.Frequency) - 16) / 2))
+	avr.TWBR.Set(uint8(((CPUFrequency() / br) - 16) / 2))
 
 	// Enable twi module.
 	avr.TWCR.Set(avr.TWCR_TWEN)
 
-	return nil
-}
-
-// SetBaudRate sets the communication speed for I2C.
-func (i2c *I2C) SetBaudRate(br uint32) error {
-	// TODO: implement
 	return nil
 }
 
