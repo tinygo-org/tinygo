@@ -229,9 +229,10 @@ type I2CConfig struct {
 	SDA       Pin
 }
 
+var i2cClockFrequency uint32 = 32000000
+
 // Configure is intended to setup the I2C interface.
 func (i2c *I2C) Configure(config I2CConfig) error {
-	var i2cClockFrequency uint32 = 32000000
 	if config.Frequency == 0 {
 		config.Frequency = 100 * KHz
 	}
@@ -241,7 +242,17 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 		config.SCL = I2C0_SCL_PIN
 	}
 
-	var prescaler = i2cClockFrequency/(5*config.Frequency) - 1
+	i2c.SetBaudRate(config.Frequency)
+
+	config.SDA.Configure(PinConfig{Mode: PinI2C})
+	config.SCL.Configure(PinConfig{Mode: PinI2C})
+
+	return nil
+}
+
+// SetBaudRate sets the communication speed for I2C.
+func (i2c *I2C) SetBaudRate(br uint32) error {
+	var prescaler = i2cClockFrequency/(5*br) - 1
 
 	// disable controller before setting the prescale registers
 	i2c.Bus.CTR.ClearBits(sifive.I2C_CTR_EN)
@@ -253,15 +264,6 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	// enable controller
 	i2c.Bus.CTR.SetBits(sifive.I2C_CTR_EN)
 
-	config.SDA.Configure(PinConfig{Mode: PinI2C})
-	config.SCL.Configure(PinConfig{Mode: PinI2C})
-
-	return nil
-}
-
-// SetBaudRate sets the communication speed for I2C.
-func (i2c *I2C) SetBaudRate(br uint32) error {
-	// TODO: implement
 	return nil
 }
 
