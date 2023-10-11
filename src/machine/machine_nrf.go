@@ -246,7 +246,30 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	i2c.setPins(config.SCL, config.SDA)
 
 	i2c.mode = config.Mode
-	i2c.Bus.ENABLE.Set(nrf.TWI_ENABLE_ENABLE_Enabled)
+	if i2c.mode == I2CModeController {
+		i2c.SetBaudRate(config.Frequency)
+
+		i2c.enableAsController()
+	} else {
+		i2c.enableAsTarget()
+	}
+
+	return nil
+}
+
+// SetBaudRate sets the I2C frequency. It has the side effect of also
+// enabling the I2C hardware if disabled beforehand.
+//
+//go:inline
+func (i2c *I2C) SetBaudRate(br uint32) error {
+	switch {
+	case br >= 400*KHz:
+		i2c.Bus.SetFREQUENCY(nrf.TWI_FREQUENCY_FREQUENCY_K400)
+	case br >= 250*KHz:
+		i2c.Bus.SetFREQUENCY(nrf.TWI_FREQUENCY_FREQUENCY_K250)
+	default:
+		i2c.Bus.SetFREQUENCY(nrf.TWI_FREQUENCY_FREQUENCY_K100)
+	}
 
 	return nil
 }
