@@ -211,7 +211,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	defer machine.Dispose()
 
 	// Load entire program AST into memory.
-	lprogram, err := loader.Load(config, pkgName, config.ClangHeaders, types.Config{
+	lprogram, err := loader.Load(config, pkgName, types.Config{
 		Sizes: compiler.Sizes(machine),
 	})
 	if err != nil {
@@ -662,7 +662,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
-				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(), config.Options.PrintCommands)
+				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(false), config.Options.PrintCommands)
 				job.result = result
 				return err
 			},

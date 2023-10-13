@@ -29,11 +29,10 @@ import (
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
-	config       *compileopts.Config
-	clangHeaders string
-	typeChecker  types.Config
-	goroot       string // synthetic GOROOT
-	workingDir   string
+	config      *compileopts.Config
+	typeChecker types.Config
+	goroot      string // synthetic GOROOT
+	workingDir  string
 
 	Packages map[string]*Package
 	sorted   []*Package
@@ -103,7 +102,7 @@ type EmbedFile struct {
 // Load loads the given package with all dependencies (including the runtime
 // package). Call .Parse() afterwards to parse all Go files (including CGo
 // processing, if necessary).
-func Load(config *compileopts.Config, inputPkg string, clangHeaders string, typeChecker types.Config) (*Program, error) {
+func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config) (*Program, error) {
 	goroot, err := GetCachedGoroot(config)
 	if err != nil {
 		return nil, err
@@ -118,13 +117,12 @@ func Load(config *compileopts.Config, inputPkg string, clangHeaders string, type
 		}
 	}
 	p := &Program{
-		config:       config,
-		clangHeaders: clangHeaders,
-		typeChecker:  typeChecker,
-		goroot:       goroot,
-		workingDir:   wd,
-		Packages:     make(map[string]*Package),
-		fset:         token.NewFileSet(),
+		config:      config,
+		typeChecker: typeChecker,
+		goroot:      goroot,
+		workingDir:  wd,
+		Packages:    make(map[string]*Package),
+		fset:        token.NewFileSet(),
 	}
 
 	// List the dependencies of this package, in raw JSON format.
@@ -438,9 +436,9 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	// to call cgo.Process in that case as it will only cause issues.
 	if len(p.CgoFiles) != 0 && len(files) != 0 {
 		var initialCFlags []string
-		initialCFlags = append(initialCFlags, p.program.config.CFlags()...)
+		initialCFlags = append(initialCFlags, p.program.config.CFlags(true)...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
-		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags, p.program.clangHeaders)
+		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags)
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
 		for path, hash := range accessedFiles {
