@@ -275,7 +275,8 @@ func (c *Config) CFlags(libclang bool) []string {
 	case "darwin-libSystem":
 		root := goenv.Get("TINYGOROOT")
 		cflags = append(cflags,
-			"--sysroot="+filepath.Join(root, "lib/macos-minimal-sdk/src"),
+			"-nostdlibinc",
+			"-isystem", filepath.Join(root, "lib/macos-minimal-sdk/src/usr/include"),
 		)
 	case "picolibc":
 		root := goenv.Get("TINYGOROOT")
@@ -304,7 +305,8 @@ func (c *Config) CFlags(libclang bool) []string {
 		root := goenv.Get("TINYGOROOT")
 		path, _ := c.LibcPath("mingw-w64")
 		cflags = append(cflags,
-			"--sysroot="+path,
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
 			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
 			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
 			"-D_UCRT",

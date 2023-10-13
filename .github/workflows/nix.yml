@@ -1,0 +1,43 @@
+name: Nix
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - release
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Pull musl
+        run: |
+            git submodule update --init lib/musl
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v3
+        id: cache-llvm-source
+        with:
+          key: llvm-source-16-linux-nix-v1
+          path: |
+            llvm-project/compiler-rt
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v3
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: |
+            llvm-project/compiler-rt
+      - uses: cachix/install-nix-action@v22
+      - name: Test
+        run: |
+          nix develop --ignore-environment --keep HOME --command bash -c "go install && ~/go/bin/tinygo version && ~/go/bin/tinygo build -o test ./testdata/cgo"
