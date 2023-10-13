@@ -33,13 +33,10 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		return nil, fmt.Errorf("requires go version 1.18 through 1.21, got go%d.%d", major, minor)
 	}
 
-	clangHeaderPath := getClangHeaderPath(goenv.Get("TINYGOROOT"))
-
 	return &compileopts.Config{
 		Options:        options,
 		Target:         spec,
 		GoMinorVersion: minor,
-		ClangHeaders:   clangHeaderPath,
 		TestConfig:     options.TestConfig,
 	}, nil
 }

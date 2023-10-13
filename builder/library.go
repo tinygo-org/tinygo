@@ -143,6 +143,10 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// reproducible. Otherwise the temporary directory is stored in the archive
 	// itself, which varies each run.
 	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
+	resourceDir := goenv.ClangResourceDir(false)
+	if resourceDir != "" {
+		args = append(args, "-resource-dir="+resourceDir)
+	}
 	cpu := config.CPU()
 	if cpu != "" {
 		// X86 has deprecated the -mcpu flag, so we need to use -march instead.

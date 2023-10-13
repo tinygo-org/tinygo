@@ -19,7 +19,6 @@ type Config struct {
 	Options        *Options
 	Target         *TargetSpec
 	GoMinorVersion int
-	ClangHeaders   string // Clang built-in header include path
 	TestConfig     TestConfig
 }
 
@@ -259,10 +258,18 @@ func (c *Config) DefaultBinaryExtension() string {
 
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo
 // preprocessing.
-func (c *Config) CFlags() []string {
+func (c *Config) CFlags(libclang bool) []string {
 	var cflags []string
 	for _, flag := range c.Target.CFlags {
 		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
+	}
+	resourceDir := goenv.ClangResourceDir(libclang)
+	if resourceDir != "" {
+		// The resoure directory contains the built-in clang headers like
+		// stdbool.h, stdint.h, float.h, etc.
+		// It is left empty if we're using an external compiler (that already
+		// knows these headers).
+		cflags = append(cflags, "-resource-dir="+resourceDir)
 	}
 	switch c.Target.Libc {
 	case "darwin-libSystem":
@@ -275,8 +282,8 @@ func (c *Config) CFlags() []string {
 		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
 		path, _ := c.LibcPath("picolibc")
 		cflags = append(cflags,
-			"--sysroot="+path,
-			"-isystem", filepath.Join(path, "include"), // necessary for Xtensa
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
 			"-isystem", filepath.Join(picolibcDir, "include"),
 			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
 		)
