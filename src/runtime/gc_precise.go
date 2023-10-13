@@ -17,11 +17,11 @@
 //
 // | object type | size | bitstring | note
 // |-------------|------|-----------|------
-// | int         | 1    | 0         | no pointers in this object
-// | string      | 2    | 10        | {pointer, len} pair so there is one pointer
-// | []int       | 3    | 100       | {pointer, len, cap}
-// | [4]*int     | 1    | 1         | even though it contains 4 pointers, an array repeats so it can be stored with size=1
-// | [30]byte    | 1    | 0         | there are no pointers so the layout is very simple
+// | int         | 1    |   0       | no pointers in this object
+// | string      | 2    |  01       | {pointer, len} pair so there is one pointer
+// | []int       | 3    | 001       | {pointer, len, cap}
+// | [4]*int     | 1    |   1       | even though it contains 4 pointers, an array repeats so it can be stored with size=1
+// | [30]byte    | 1    |   0       | there are no pointers so the layout is very simple
 //
 // The garbage collector scans objects by starting at the first word value in
 // the object. If the least significant bit of the bitstring is clear, it is
