@@ -43,6 +43,12 @@ var hasBuiltinTools = false
 // directory.
 var TINYGOROOT string
 
+// If a particular Clang resource dir must always be used and TinyGo can't
+// figure out the directory using heuristics, this global can be set using a
+// linker flag.
+// This is needed for Nix.
+var clangResourceDir string
+
 // Variables read from a `go env` command invocation.
 var goEnvVars struct {
 	GOPATH    string
@@ -298,6 +304,15 @@ func isSourceDir(root string) bool {
 // In that case, the resource dir is always returned (even when linking
 // dynamically against LLVM) because libclang always needs this directory.
 func ClangResourceDir(libclang bool) string {
+	if clangResourceDir != "" {
+		// The resource dir is forced to a particular value at build time.
+		// This is needed on Nix for example, where Clang and libclang don't
+		// know their own resource dir.
+		// Also see:
+		// https://discourse.nixos.org/t/why-is-the-clang-resource-dir-split-in-a-separate-package/34114
+		return clangResourceDir
+	}
+
 	if !hasBuiltinTools && !libclang {
 		// Using external tools, so the resource dir doesn't need to be
 		// specified. Clang knows where to find it.
