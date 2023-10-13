@@ -36,6 +36,7 @@ var (
 	errI2CBusError           = errors.New("I2C bus error")
 	errI2COverflow           = errors.New("I2C receive buffer overflow")
 	errI2COverread           = errors.New("I2C transmit buffer overflow")
+	errI2CNotImplemented     = errors.New("I2C operation not yet implemented")
 )
 
 // I2CTargetEvent reflects events on the I2C bus
