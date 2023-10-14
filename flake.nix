@@ -16,6 +16,17 @@
 #
 #   tinygo version
 #
+# But you'll need a bit more to make TinyGo actually able to compile code:
+#
+#   make llvm-source              # fetch compiler-rt
+#   git submodule update --init   # fetch lots of other libraries and SVD files
+#   make gen-device -j4           # build src/device/*/*.go files
+#   make wasi-libc                # build support for wasi/wasm
+#
+# With this, you should have an environment that can compile anything - except
+# for the Xtensa architecture (ESP8266/ESP32) because support for that lives in
+# a separate LLVM fork.
+#
 # You can also do many other things from this environment. Building and flashing
 # should work as you're used to: it's not a VM or container so there are no
 # access restrictions and you're running in the same host environment - just
@@ -55,7 +66,8 @@
           shellHook= ''
             # Ugly hack to make the Clang resources directory available.
             # Perhaps there is a cleaner way to do it, but this works.
-            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_16.clang.cc.lib}/lib/clang/16"\"
+            export CLANG_RESOURCE_DIR="${llvmPackages_16.clang.cc.lib}/lib/clang/16"
+            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$CLANG_RESOURCE_DIR"\"
           '';
         };
       }
