@@ -18,7 +18,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -157,7 +156,7 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 
 		// Add files from TinyGo.
 		tinygoDir := filepath.Join(tinygoSrc, dir)
-		tinygoEntries, err := ioutil.ReadDir(tinygoDir)
+		tinygoEntries, err := os.ReadDir(tinygoDir)
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +176,7 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 		// Add all directories from $GOROOT that are not part of the TinyGo
 		// overrides.
 		goDir := filepath.Join(goSrc, dir)
-		goEntries, err := ioutil.ReadDir(goDir)
+		goEntries, err := os.ReadDir(goDir)
 		if err != nil {
 			return nil, err
 		}

@@ -11,7 +11,6 @@ import (
 	"go/scanner"
 	"go/types"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -1736,14 +1735,20 @@ func main() {
 		handleCompilerError(err)
 	case "targets":
 		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
-		entries, err := ioutil.ReadDir(dir)
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "could not list targets:", err)
 			os.Exit(1)
 			return
 		}
 		for _, entry := range entries {
-			if !entry.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
+			entryInfo, err := entry.Info()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "could not get entry info:", err)
+				os.Exit(1)
+				return
+			}
+			if !entryInfo.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
 				// Only inspect JSON files.
 				continue
 			}
