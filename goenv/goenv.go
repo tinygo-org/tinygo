@@ -366,6 +366,22 @@ func findSystemClangResources(TINYGOROOT string) string {
 		if err == nil {
 			return path
 		}
+	case "darwin":
+		// This assumes a Homebrew installation, like in builder/commands.go.
+		var prefix string
+		switch runtime.GOARCH {
+		case "amd64":
+			prefix = "/usr/local/opt/llvm@" + llvmMajor
+		case "arm64":
+			prefix = "/opt/homebrew/opt/llvm@" + llvmMajor
+		default:
+			return "" // very unlikely for now
+		}
+		path := fmt.Sprintf("%s/lib/clang/%s", prefix, llvmMajor)
+		_, err := os.Stat(path + "/include/stdint.h")
+		if err == nil {
+			return path
+		}
 	}
 
 	// Could not find it.
