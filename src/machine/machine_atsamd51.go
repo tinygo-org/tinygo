@@ -1228,12 +1228,13 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	return nil
 }
 
-// SetBaudRate sets the communication speed for the I2C.
-func (i2c *I2C) SetBaudRate(br uint32) {
+// SetBaudRate sets the communication speed for I2C.
+func (i2c *I2C) SetBaudRate(br uint32) error {
 	// Synchronous arithmetic baudrate, via Adafruit SAMD51 implementation:
 	// sercom->I2CM.BAUD.bit.BAUD = SERCOM_FREQ_REF / ( 2 * baudrate) - 1 ;
 	baud := SERCOM_FREQ_REF/(2*br) - 1
 	i2c.Bus.BAUD.Set(baud)
+	return nil
 }
 
 // Tx does a single I2C transaction at the specified address.

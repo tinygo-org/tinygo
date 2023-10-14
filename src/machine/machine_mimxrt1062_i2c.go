@@ -6,19 +6,6 @@ package machine
 
 import (
 	"device/nxp"
-	"errors"
-)
-
-var (
-	errI2CWriteTimeout       = errors.New("I2C timeout during write")
-	errI2CReadTimeout        = errors.New("I2C timeout during read")
-	errI2CBusReadyTimeout    = errors.New("I2C timeout on bus ready")
-	errI2CSignalStartTimeout = errors.New("I2C timeout on signal start")
-	errI2CSignalReadTimeout  = errors.New("I2C timeout on signal read")
-	errI2CSignalStopTimeout  = errors.New("I2C timeout on signal stop")
-	errI2CAckExpected        = errors.New("I2C error: expected ACK not NACK")
-	errI2CBusError           = errors.New("I2C bus error")
-	errI2CNotConfigured      = errors.New("I2C interface is not yet configured")
 )
 
 // I2CConfig is used to store config info for I2C.
@@ -150,7 +137,7 @@ func (i2c *I2C) setPins(c I2CConfig) (sda, scl Pin) {
 }
 
 // Configure is intended to setup an I2C interface for transmit/receive.
-func (i2c *I2C) Configure(config I2CConfig) {
+func (i2c *I2C) Configure(config I2CConfig) error {
 	// init pins
 	sda, scl := i2c.setPins(config)
 
@@ -169,6 +156,14 @@ func (i2c *I2C) Configure(config I2CConfig) {
 
 	// reset clock and registers, and enable LPI2C module interface
 	i2c.reset(freq)
+
+	return nil
+}
+
+// SetBaudRate sets the communication speed for I2C.
+func (i2c I2C) SetBaudRate(br uint32) error {
+	// TODO: implement
+	return errI2CNotImplemented
 }
 
 func (i2c I2C) Tx(addr uint16, w, r []byte) error {
@@ -212,13 +207,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	return nil
 }
 
-// WriteRegister transmits first the register and then the data to the
+// WriteRegisterEx transmits first the register and then the data to the
 // peripheral device.
 //
 // Many I2C-compatible devices are organized in terms of registers. This method
 // is a shortcut to easily write to such registers. Also, it only works for
 // devices with 7-bit addresses, which is the vast majority.
-func (i2c I2C) WriteRegister(address uint8, register uint8, data []byte) error {
+func (i2c I2C) WriteRegisterEx(address uint8, register uint8, data []byte) error {
 	option := transferOption{
 		flags:          transferDefault,  // transfer options bit mask (0 = normal transfer)
 		peripheral:     uint16(address),  // 7-bit peripheral address
@@ -232,13 +227,13 @@ func (i2c I2C) WriteRegister(address uint8, register uint8, data []byte) error {
 	return nil
 }
 
-// ReadRegister transmits the register, restarts the connection as a read
+// ReadRegisterEx transmits the register, restarts the connection as a read
 // operation, and reads the response.
 //
 // Many I2C-compatible devices are organized in terms of registers. This method
 // is a shortcut to easily read such registers. Also, it only works for devices
 // with 7-bit addresses, which is the vast majority.
-func (i2c I2C) ReadRegister(address uint8, register uint8, data []byte) error {
+func (i2c I2C) ReadRegisterEx(address uint8, register uint8, data []byte) error {
 	option := transferOption{
 		flags:          transferDefault,  // transfer options bit mask (0 = normal transfer)
 		peripheral:     uint16(address),  // 7-bit peripheral address
@@ -560,7 +555,7 @@ func (i2c *I2C) controllerReceive(rxBuffer []byte) resultFlag {
 	return result
 }
 
-// controllerReceive performs a polling transmit transfer on the I2C bus.
+// controllerTransmit performs a polling transmit transfer on the I2C bus.
 func (i2c *I2C) controllerTransmit(txBuffer []byte) resultFlag {
 	txSize := len(txBuffer)
 	for txSize > 0 {

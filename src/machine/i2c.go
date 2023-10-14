@@ -1,10 +1,21 @@
-//go:build atmega || nrf || sam || stm32 || fe310 || k210 || rp2040
+//go:build atmega || nrf || sam || stm32 || fe310 || k210 || rp2040 || mimxrt1062
 
 package machine
 
 import (
 	"errors"
 )
+
+// If you are getting a compile error on this line please check to see you've
+// correctly implemented the methods on the I2C type. They must match
+// the i2cController interface method signatures type to type perfectly.
+// If not implementing the I2C type please remove your target from the build tags
+// at the top of this file.
+var _ interface { // 2
+	Configure(config I2CConfig) error
+	Tx(addr uint16, w, r []byte) error
+	SetBaudRate(br uint32) error
+} = (*I2C)(nil)
 
 // TWI_FREQ is the I2C bus speed. Normally either 100 kHz, or 400 kHz for high-speed bus.
 //
@@ -25,6 +36,7 @@ var (
 	errI2CBusError           = errors.New("I2C bus error")
 	errI2COverflow           = errors.New("I2C receive buffer overflow")
 	errI2COverread           = errors.New("I2C transmit buffer overflow")
+	errI2CNotImplemented     = errors.New("I2C operation not yet implemented")
 )
 
 // I2CTargetEvent reflects events on the I2C bus
