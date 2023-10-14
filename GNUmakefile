@@ -25,6 +25,11 @@ CLANG ?= $(call findLLVMTool,clang)
 LLVM_AR ?= $(call findLLVMTool,llvm-ar)
 LLVM_NM ?= $(call findLLVMTool,llvm-nm)
 
+# Patch up Clang for Nix.
+ifneq (, ${CLANG_RESOURCE_DIR})
+    CLANG := $(CLANG) -resource-dir ${CLANG_RESOURCE_DIR}
+endif
+
 # Go binary and GOROOT to select
 GO ?= go
 export GOROOT = $(shell $(GO) env GOROOT)
@@ -265,7 +270,7 @@ endif
 wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
 lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
-	cd lib/wasi-libc && $(MAKE) -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC=$(CLANG) AR=$(LLVM_AR) NM=$(LLVM_NM)
+	cd lib/wasi-libc && $(MAKE) -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC="$(CLANG)" AR=$(LLVM_AR) NM=$(LLVM_NM)
 
 # Check for Node.js used during WASM tests.
 NODEJS_VERSION := $(word 1,$(subst ., ,$(shell node -v | cut -c 2-)))
