@@ -32,9 +32,6 @@ export GOROOT = $(shell $(GO) env GOROOT)
 # Flags to pass to go test.
 GOTESTFLAGS ?=
 
-# md5sum binary
-MD5SUM = md5sum
-
 # tinygo binary for tests
 TINYGO ?= $(call detect,tinygo,tinygo $(CURDIR)/build/tinygo)
 
@@ -130,20 +127,23 @@ ifeq ($(OS),Windows_NT)
     USE_SYSTEM_BINARYEN ?= 1
 
 else ifeq ($(shell uname -s),Darwin)
-    MD5SUM = md5
+    MD5SUM ?= md5
 
     CGO_LDFLAGS += -lxar
 
     USE_SYSTEM_BINARYEN ?= 1
 
 else ifeq ($(shell uname -s),FreeBSD)
-    MD5SUM = md5
+    MD5SUM ?= md5
     START_GROUP = -Wl,--start-group
     END_GROUP = -Wl,--end-group
 else
     START_GROUP = -Wl,--start-group
     END_GROUP = -Wl,--end-group
 endif
+
+# md5sum binary default, can be overridden by an environment variable
+MD5SUM ?= md5sum
 
 # Libraries that should be linked in for the statically linked Clang.
 CLANG_LIB_NAMES = clangAnalysis clangAST clangASTMatchers clangBasic clangCodeGen clangCrossTU clangDriver clangDynamicASTMatchers clangEdit clangExtractAPI clangFormat clangFrontend clangFrontendTool clangHandleCXX clangHandleLLVM clangIndex clangLex clangParse clangRewrite clangRewriteFrontend clangSema clangSerialization clangSupport clangTooling clangToolingASTDiff clangToolingCore clangToolingInclusions
