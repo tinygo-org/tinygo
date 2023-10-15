@@ -72,6 +72,10 @@
             export LLVM_AR=llvm-ar
             export LLVM_NM=llvm-nm
 
+            # Make `make smoketest` work (the default is `md5`, while Nix only
+            # has `md5sum`).
+            export MD5SUM=md5sum
+
             # Ugly hack to make the Clang resources directory available.
             export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_16.clang.cc.lib}/lib/clang/16"\"
           '';
