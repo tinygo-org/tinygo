@@ -77,6 +77,15 @@ func ReadBuildID() ([]byte, error) {
 			}
 			return raw[4:], nil
 		}
+
+		// Normally we would have found a build ID by now. But not on Nix,
+		// unfortunately, because Nix adds -no_uuid for some reason:
+		// https://github.com/NixOS/nixpkgs/issues/178366
+		// Fall back to the same implementation that we use for Windows.
+		id, err := readRawGoBuildID(f, 32*1024)
+		if len(id) != 0 || err != nil {
+			return id, err
+		}
 	default:
 		// On other platforms (such as Windows) there isn't such a convenient
 		// build ID. Luckily, Go does have an equivalent of the build ID, which
@@ -88,16 +97,31 @@ func ReadBuildID() ([]byte, error) {
 		// directly. Luckily the build ID is always at the start of the file.
 		// For details, see:
 		// https://github.com/golang/go/blob/master/src/cmd/internal/buildid/buildid.go
-		fileStart := make([]byte, 4096)
-		_, err := io.ReadFull(f, fileStart)
-		index := bytes.Index(fileStart, []byte("\xff Go build ID: \""))
-		if index < 0 || index > len(fileStart)-103 {
-			return nil, fmt.Errorf("could not find build id in %s", err)
-		}
-		buf := fileStart[index : index+103]
-		if bytes.HasPrefix(buf, []byte("\xff Go build ID: \"")) && bytes.HasSuffix(buf, []byte("\"\n \xff")) {
-			return buf[len("\xff Go build ID: \"") : len(buf)-1], nil
+		id, err := readRawGoBuildID(f, 4096)
+		if len(id) != 0 || err != nil {
+			return id, err
 		}
 	}
-	return nil, fmt.Errorf("could not find build ID in %s", executable)
+	return nil, fmt.Errorf("could not find build ID in %v", executable)
+}
+
+// The Go toolchain stores a build ID in the binary that we can use, as a
+// fallback if binary file specific build IDs can't be obtained.
+// This function reads that build ID from the binary.
+func readRawGoBuildID(f *os.File, prefixSize int) ([]byte, error) {
+	fileStart := make([]byte, prefixSize)
+	_, err := io.ReadFull(f, fileStart)
+	if err != nil {
+		return nil, fmt.Errorf("could not read build id from %s: %v", f.Name(), err)
+	}
+	index := bytes.Index(fileStart, []byte("\xff Go build ID: \""))
+	if index < 0 || index > len(fileStart)-103 {
+		return nil, fmt.Errorf("could not find build id in %s", f.Name())
+	}
+	buf := fileStart[index : index+103]
+	if bytes.HasPrefix(buf, []byte("\xff Go build ID: \"")) && bytes.HasSuffix(buf, []byte("\"\n \xff")) {
+		return buf[len("\xff Go build ID: \"") : len(buf)-1], nil
+	}
+
+	return nil, nil
 }
