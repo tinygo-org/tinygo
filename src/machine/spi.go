@@ -16,3 +16,14 @@ var (
 	ErrTxInvalidSliceSize      = errors.New("SPI write and read slices must be same size")
 	errSPIInvalidMachineConfig = errors.New("SPI port was not configured properly by the machine")
 )
+
+// If you are getting a compile error on this line please check to see you've
+// correctly implemented the methods on the SPI type. They must match
+// the interface method signatures type to type perfectly.
+// If not implementing the SPI type please remove your target from the build tags
+// at the top of this file.
+var _ interface { // 2
+	Configure(config SPIConfig) error
+	Tx(w, r []byte) error
+	Transfer(w byte) (byte, error)
+} = (*SPI)(nil)
