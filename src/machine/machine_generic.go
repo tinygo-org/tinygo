@@ -57,8 +57,9 @@ type SPIConfig struct {
 	Mode      uint8
 }
 
-func (spi SPI) Configure(config SPIConfig) {
+func (spi SPI) Configure(config SPIConfig) error {
 	spiConfigure(spi.Bus, config.SCK, config.SDO, config.SDI)
+	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.

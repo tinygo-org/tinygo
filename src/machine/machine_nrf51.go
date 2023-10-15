@@ -49,7 +49,7 @@ type SPIConfig struct {
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) {
+func (spi SPI) Configure(config SPIConfig) error {
 	// Disable bus to configure it
 	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Disabled)
 
@@ -117,6 +117,8 @@ func (spi SPI) Configure(config SPIConfig) {
 
 	// Re-enable bus now that it is configured.
 	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Enabled)
+
+	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
