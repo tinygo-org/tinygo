@@ -25,11 +25,6 @@ CLANG ?= $(call findLLVMTool,clang)
 LLVM_AR ?= $(call findLLVMTool,llvm-ar)
 LLVM_NM ?= $(call findLLVMTool,llvm-nm)
 
-# Patch up Clang for Nix.
-ifneq (, ${CLANG_RESOURCE_DIR})
-    CLANG := $(CLANG) -resource-dir ${CLANG_RESOURCE_DIR}
-endif
-
 # Go binary and GOROOT to select
 GO ?= go
 export GOROOT = $(shell $(GO) env GOROOT)

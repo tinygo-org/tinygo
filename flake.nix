@@ -64,10 +64,16 @@
             #openocd
           ];
           shellHook= ''
+            # Configure CLANG, LLVM_AR, and LLVM_NM for `make wasi-libc`.
+            # Without setting these explicitly, Homebrew versions might be used
+            # or the default `ar` and `nm` tools might be used (which don't
+            # support wasi).
+            export CLANG="clang-16 -resource-dir ${llvmPackages_16.clang.cc.lib}/lib/clang/16"
+            export LLVM_AR=llvm-ar
+            export LLVM_NM=llvm-nm
+
             # Ugly hack to make the Clang resources directory available.
-            # Perhaps there is a cleaner way to do it, but this works.
-            export CLANG_RESOURCE_DIR="${llvmPackages_16.clang.cc.lib}/lib/clang/16"
-            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=$CLANG_RESOURCE_DIR"\"
+            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_16.clang.cc.lib}/lib/clang/16"\"
           '';
         };
       }
