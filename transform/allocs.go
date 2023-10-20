@@ -13,14 +13,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// maxStackAlloc is the maximum size of an object that will be allocated on the
-// stack. Bigger objects have increased risk of stack overflows and thus will
-// always be heap allocated.
-//
-// TODO: tune this, this is just a random value.
-// This value is also used in the compiler when translating ssa.Alloc nodes.
-const maxStackAlloc = 256
-
 // OptimizeAllocs tries to replace heap allocations with stack allocations
 // whenever possible. It relies on the LLVM 'nocapture' flag for interprocedural
 // escape analysis, and within a function looks whether an allocation can escape
@@ -28,7 +20,7 @@ const maxStackAlloc = 256
 // If printAllocs is non-nil, it indicates the regexp of functions for which a
 // heap allocation explanation should be printed (why the object can't be stack
 // allocated).
-func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(token.Position, string)) {
+func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc uint64, logger func(token.Position, string)) {
 	allocator := mod.NamedFunction("runtime.alloc")
 	if allocator.IsNil() {
 		// nothing to optimize

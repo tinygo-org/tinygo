@@ -197,6 +197,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		Scheduler:          config.Scheduler(),
 		AutomaticStackSize: config.AutomaticStackSize(),
 		DefaultStackSize:   config.StackSize(),
+		MaxStackAlloc:      config.MaxStackAlloc(),
 		NeedsStackObjects:  config.NeedsStackObjects(),
 		Debug:              !config.Options.SkipDWARF, // emit DWARF except when -internal-nodwarf is passed
 	}

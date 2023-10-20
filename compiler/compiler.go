@@ -53,6 +53,7 @@ type Config struct {
 	Scheduler          string
 	AutomaticStackSize bool
 	DefaultStackSize   uint64
+	MaxStackAlloc      uint64
 	NeedsStackObjects  bool
 	Debug              bool // Whether to emit debug information in the LLVM module.
 }
@@ -1997,8 +1998,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Alloc:
 		typ := b.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
 		size := b.targetData.TypeAllocSize(typ)
-		// Move all "large" allocations to the heap.  This value is also transform.maxStackAlloc.
-		if expr.Heap || size > 256 {
+		// Move all "large" allocations to the heap.
+		if expr.Heap || size > b.MaxStackAlloc {
 			// Calculate ^uintptr(0)
 			maxSize := llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)).ZExtValue()
 			if size > maxSize {
