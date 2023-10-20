@@ -18,6 +18,9 @@ import (
 
 const deviceName = sam.Device
 
+// DS60001507, Section 9.6: Serial Number
+var deviceIDAddr = []uintptr{0x008061FC, 0x00806010, 0x00806014, 0x00806018}
+
 func CPUFrequency() uint32 {
 	return 120000000
 }

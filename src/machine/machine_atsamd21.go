@@ -18,6 +18,9 @@ import (
 
 const deviceName = sam.Device
 
+// DS40001882F, Section 10.3.3: Serial Number
+var deviceIDAddr = []uintptr{0x0080A00C, 0x0080A040, 0x0080A044, 0x0080A048}
+
 const (
 	PinAnalog    PinMode = 1
 	PinSERCOM    PinMode = 2

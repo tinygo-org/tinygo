@@ -93,6 +93,33 @@ static ram_func void flash_enable_xip_via_boot2() {
 	((void (*)(void))boot2_copyout+1)();
 }
 
+#define IO_QSPI_BASE 0x40018000
+#define IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_BITS         0x00000300
+#define IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_MSB          9
+#define IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_LSB          8
+#define IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_VALUE_LOW    0x2
+#define IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_VALUE_HIGH   0x3
+
+#define XIP_SSI_BASE 0x18000000
+#define ssi_hw ((ssi_hw_t *)XIP_SSI_BASE)
+#define SSI_SR_OFFSET      0x00000028
+#define SSI_DR0_OFFSET     0x00000060
+#define SSI_SR_TFNF_BITS   0x00000002
+#define SSI_SR_RFNE_BITS   0x00000008
+
+void ram_func flash_cs_force(bool high) {
+    uint32_t field_val = high ?
+        IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_VALUE_HIGH :
+        IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_VALUE_LOW;
+
+	// &ioqspi_hw->io[1].ctrl
+	uint32_t *addr = (uint32_t*)(IO_QSPI_BASE + (1 * 8) + 4);
+
+	*addr = ((*addr) & !IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_BITS)
+		| (field_val << IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_LSB);
+
+}
+
 // See https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_flash/flash.c#L86
 void ram_func flash_range_write(uint32_t offset, const uint8_t *data, size_t count)
 {
@@ -132,11 +159,60 @@ void ram_func flash_erase_blocks(uint32_t offset, size_t count)
 	flash_enable_xip_via_boot2();
 }
 
+void ram_func flash_do_cmd(const uint8_t *txbuf, uint8_t *rxbuf, size_t count) {
+	flash_connect_internal_fn flash_connect_internal_func = (flash_connect_internal_fn) rom_func_lookup(ROM_FUNC_CONNECT_INTERNAL_FLASH);
+	flash_exit_xip_fn flash_exit_xip_func = (flash_exit_xip_fn) rom_func_lookup(ROM_FUNC_FLASH_EXIT_XIP);
+	flash_flush_cache_fn flash_flush_cache_func = (flash_flush_cache_fn) rom_func_lookup(ROM_FUNC_FLASH_FLUSH_CACHE);
+
+	flash_init_boot2_copyout();
+
+	__compiler_memory_barrier();
+
+	flash_connect_internal_func();
+	flash_exit_xip_func();
+
+	flash_cs_force(0);
+	size_t tx_remaining = count;
+	size_t rx_remaining = count;
+	// We may be interrupted -- don't want FIFO to overflow if we're distracted.
+	const size_t max_in_flight = 16 - 2;
+	while (tx_remaining || rx_remaining) {
+		uint32_t flags = *(uint32_t*)(XIP_SSI_BASE + SSI_SR_OFFSET);
+		bool can_put = !!(flags & SSI_SR_TFNF_BITS);
+		bool can_get = !!(flags & SSI_SR_RFNE_BITS);
+		if (can_put && tx_remaining && rx_remaining - tx_remaining < max_in_flight) {
+			*(uint32_t*)(XIP_SSI_BASE + SSI_DR0_OFFSET) = *txbuf++;
+			--tx_remaining;
+		}
+		if (can_get && rx_remaining) {
+			*rxbuf++ = (uint8_t)*(uint32_t*)(XIP_SSI_BASE + SSI_DR0_OFFSET);
+			--rx_remaining;
+		}
+	}
+	flash_cs_force(1);
+
+	flash_flush_cache_func();
+	flash_enable_xip_via_boot2();
+}
+
 */
 import "C"
 
 func enterBootloader() {
 	C.reset_usb_boot(0, 0)
+}
+
+func doFlashCommand(tx []byte, rx []byte) error {
+	if len(tx) != len(rx) {
+		return errFlashInvalidWriteLength
+	}
+
+	C.flash_do_cmd(
+		(*C.uint8_t)(unsafe.Pointer(&tx[0])),
+		(*C.uint8_t)(unsafe.Pointer(&rx[0])),
+		C.ulong(len(tx)))
+
+	return nil
 }
 
 // Flash related code

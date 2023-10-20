@@ -13,6 +13,32 @@ func EnterBootloader() {
 	enterBootloader()
 }
 
+// 13 = 1 + FLASH_RUID_DUMMY_BYTES(4) + FLASH_RUID_DATA_BYTES(8)
+var deviceIDBuf [13]byte
+
+// DeviceID returns an identifier that is unique within
+// a particular chipset.
+//
+// The identity is one burnt into the MCU itself, or the
+// flash chip at time of manufacture.
+//
+// It's possible that two different vendors may allocate
+// the same DeviceID, so callers should take this into
+// account if needing to generate a globally unique id.
+//
+// The length of the hardware ID is vendor-specific, but
+// 8 bytes (64 bits) is common.
+func DeviceID() []byte {
+	deviceIDBuf[0] = 0x4b // FLASH_RUID_CMD
+
+	err := doFlashCommand(deviceIDBuf[:], deviceIDBuf[:])
+	if err != nil {
+		panic(err)
+	}
+
+	return deviceIDBuf[5:13]
+}
+
 // compile-time check for ensuring we fulfill BlockDevice interface
 var _ BlockDevice = flashBlockDevice{}
 

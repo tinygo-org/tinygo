@@ -12,6 +12,34 @@ import (
 
 const deviceName = nrf.Device
 
+var deviceID [8]byte
+
+// DeviceID returns an identifier that is unique within
+// a particular chipset.
+//
+// The identity is one burnt into the MCU itself, or the
+// flash chip at time of manufacture.
+//
+// It's possible that two different vendors may allocate
+// the same DeviceID, so callers should take this into
+// account if needing to generate a globally unique id.
+//
+// The length of the hardware ID is vendor-specific, but
+// 8 bytes (64 bits) is common.
+func DeviceID() []byte {
+	words := make([]uint32, 2)
+	words[0] = nrf.FICR.DEVICEID[0].Get()
+	words[1] = nrf.FICR.DEVICEID[1].Get()
+
+	for i := 0; i < 8; i++ {
+		shift := (i % 4) * 8
+		w := i / 4
+		deviceID[i] = byte(words[w] >> shift)
+	}
+
+	return deviceID[:]
+}
+
 const (
 	PinInput         PinMode = (nrf.GPIO_PIN_CNF_DIR_Input << nrf.GPIO_PIN_CNF_DIR_Pos) | (nrf.GPIO_PIN_CNF_INPUT_Connect << nrf.GPIO_PIN_CNF_INPUT_Pos)
 	PinInputPullup   PinMode = PinInput | (nrf.GPIO_PIN_CNF_PULL_Pullup << nrf.GPIO_PIN_CNF_PULL_Pos)
