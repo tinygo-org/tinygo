@@ -189,6 +189,15 @@ func (c *Config) StackSize() uint64 {
 	return c.Target.DefaultStackSize
 }
 
+// MaxStackAlloc returns the size of the maximum allocation to put on the stack vs heap.
+func (c *Config) MaxStackAlloc() uint64 {
+	if c.StackSize() > 32*1024 {
+		return 1024
+	}
+
+	return 256
+}
+
 // RP2040BootPatch returns whether the RP2040 boot patch should be applied that
 // calculates and patches in the checksum for the 2nd stage bootloader.
 func (c *Config) RP2040BootPatch() bool {
