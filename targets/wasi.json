@@ -22,5 +22,5 @@
 	"extra-files": [
 		"src/runtime/asm_tinygowasm.S"
 	],
-	"emulator":      "wasmtime --mapdir=/tmp::{tmpDir} {}"
+	"emulator":      "wasmtime --dir={tmpDir}::/tmp {}"
 }
