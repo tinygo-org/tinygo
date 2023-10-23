@@ -265,11 +265,17 @@ func (c *Config) CFlags(libclang bool) []string {
 	}
 	resourceDir := goenv.ClangResourceDir(libclang)
 	if resourceDir != "" {
-		// The resoure directory contains the built-in clang headers like
+		// The resource directory contains the built-in clang headers like
 		// stdbool.h, stdint.h, float.h, etc.
 		// It is left empty if we're using an external compiler (that already
 		// knows these headers).
-		cflags = append(cflags, "-resource-dir="+resourceDir)
+		cflags = append(cflags,
+			"-resource-dir="+resourceDir,
+		)
+		if strings.HasPrefix(c.Triple(), "xtensa") {
+			// workaround needed in LLVM 16, see: https://github.com/espressif/llvm-project/issues/83
+			cflags = append(cflags, "-isystem", filepath.Join(resourceDir, "include"))
+		}
 	}
 	switch c.Target.Libc {
 	case "darwin-libSystem":
