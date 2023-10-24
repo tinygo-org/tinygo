@@ -203,7 +203,7 @@ jobs:
       - name: Install Dependencies
         shell: bash
         run: |
-          scoop install binaryen && scoop install wasmtime@13.0.0
+          scoop install binaryen && scoop install wasmtime@14.0.1
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Go
