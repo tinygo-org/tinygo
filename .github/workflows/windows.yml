@@ -96,7 +96,7 @@ jobs:
         run: make wasi-libc
       - name: Install wasmtime
         run: |
-          scoop install wasmtime@13.0.0
+          scoop install wasmtime@14.0.1
       - name: make gen-device
         run: make -j3 gen-device
       - name: Test TinyGo
