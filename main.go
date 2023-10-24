@@ -825,10 +825,9 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			emuArgs = append(emuArgs, "--env", v)
 		}
 		if len(cmdArgs) != 0 {
-			// Mark end of wasmtime arguments and start of program ones: --
-			// This should not be necessary as of Wasmtime v14:
+			// Use of '--' argument no longer necessary as of Wasmtime v14:
 			// https://github.com/bytecodealliance/wasmtime/pull/6946
-			args = append(args, "--")
+			// args = append(args, "--")
 			args = append(args, cmdArgs...)
 		}
 
