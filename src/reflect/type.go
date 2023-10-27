@@ -1294,6 +1294,10 @@ func MapOf(key, value Type) Type {
 	panic("unimplemented: reflect.MapOf()")
 }
 
+func FuncOf(in, out []Type, variadic bool) Type {
+	panic("unimplemented: reflect.FuncOf()")
+}
+
 const maxVarintLen32 = 5
 
 // encoding/binary.Uvarint, specialized for uint32
