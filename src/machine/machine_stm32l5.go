@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+var deviceIDAddr = []uintptr{0x0BFA0590, 0x0BFA0594, 0x0BFA0598}
+
 const (
 	AF0_SYSTEM                                = 0
 	AF1_TIM1_2_5_8_LPTIM1                     = 1

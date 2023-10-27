@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+var deviceIDAddr = []uintptr{0x1FF0F420, 0x1FF0F424, 0x1FF0F428}
+
 // Alternative peripheral pin functions
 const (
 	AF0_SYSTEM                               = 0

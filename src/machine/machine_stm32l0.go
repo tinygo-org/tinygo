@@ -13,6 +13,8 @@ func CPUFrequency() uint32 {
 	return 32000000
 }
 
+var deviceIDAddr = []uintptr{0x1FF80050, 0x1FF80054, 0x1FF80058}
+
 // Internal use: configured speed of the APB1 and APB2 timers, this should be kept
 // in sync with any changes to runtime package which configures the oscillators
 // and clock frequencies

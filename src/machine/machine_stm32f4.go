@@ -14,6 +14,8 @@ import (
 	"unsafe"
 )
 
+var deviceIDAddr = []uintptr{0x1FFF7A10, 0x1FFF7A14, 0x1FFF7A18}
+
 const (
 	PA0  = portA + 0
 	PA1  = portA + 1
