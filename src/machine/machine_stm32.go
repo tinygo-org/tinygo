@@ -2,7 +2,12 @@
 
 package machine
 
-import "device/stm32"
+import (
+	"device/stm32"
+
+	"runtime/volatile"
+	"unsafe"
+)
 
 const deviceName = stm32.Device
 
@@ -79,4 +84,21 @@ func (p Pin) PortMaskClear() (*uint32, uint32) {
 	port := p.getPort()
 	pin := uint8(p) % 16
 	return &port.BSRR.Reg, 1 << (pin + 16)
+}
+
+var deviceID [12]byte
+
+// DeviceID returns an identifier that is unique within
+// a particular chipset.
+//
+// The identity is one burnt into the MCU itself.
+//
+// The length of the device ID for STM32 is 12 bytes (96 bits).
+func DeviceID() []byte {
+	for i := 0; i < len(deviceID); i++ {
+		word := (*volatile.Register32)(unsafe.Pointer(deviceIDAddr[i/4])).Get()
+		deviceID[i] = byte(word >> ((i % 4) * 8))
+	}
+
+	return deviceID[:]
 }

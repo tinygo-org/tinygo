@@ -13,6 +13,8 @@ import (
 
 // Peripheral abstraction layer for the stm32l4
 
+var deviceIDAddr = []uintptr{0x1FFF7590, 0x1FFF7594, 0x1FFF7598}
+
 const (
 	AF0_SYSTEM             = 0
 	AF1_TIM1_2_LPTIM1      = 1
