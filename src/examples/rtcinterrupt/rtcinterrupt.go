@@ -24,7 +24,7 @@ func main() {
 
 	// Schedule and enable recurring interrupt.
 	// The callback function is executed in the context of an interrupt handler,
-	// so regular restructions for this sort of code apply: no blocking, no memory allocation, etc.
+	// so regular restrictions for this sort of code apply: no blocking, no memory allocation, etc.
 	delay := time.Minute + 12*time.Second
 	machine.RTC.SetInterrupt(uint32(delay.Seconds()), true, func() { println("Peekaboo!") })
 
