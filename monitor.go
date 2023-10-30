@@ -11,14 +11,19 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-tty"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/goenv"
+
 	"go.bug.st/serial"
+	"go.bug.st/serial/enumerator"
 )
 
 // Monitor connects to the given port and reads/writes the serial port.
@@ -126,6 +131,94 @@ func Monitor(executable, port string, options *compileopts.Options) error {
 	}()
 
 	return <-errCh
+}
+
+// SerialPortInfo is a structure that holds information about the port and its
+// associated TargetSpec.
+type SerialPortInfo struct {
+	Name   string
+	IsUSB  bool
+	VID    string
+	PID    string
+	Target string
+	Spec   *compileopts.TargetSpec
+}
+
+// ListSerialPort returns serial port information and any detected TinyGo
+// target
+func ListSerialPorts() ([]SerialPortInfo, error) {
+	maps, err := GetTargetSpecs()
+	if err != nil {
+		return nil, err
+	}
+
+	portsList, err := enumerator.GetDetailedPortsList()
+	if err != nil {
+		return nil, err
+	}
+
+	serialPortInfo := []SerialPortInfo{}
+	for _, p := range portsList {
+		info := SerialPortInfo{
+			Name:  p.Name,
+			IsUSB: p.IsUSB,
+			VID:   p.VID,
+			PID:   p.PID,
+		}
+		vid := strings.ToLower(p.VID)
+		pid := strings.ToLower(p.PID)
+		for k, v := range maps {
+			usbInterfaces := v.SerialPort
+			for _, s := range usbInterfaces {
+				parts := strings.Split(s, ":")
+				if len(parts) != 2 {
+					continue
+				}
+				if vid == strings.ToLower(parts[0]) && pid == strings.ToLower(parts[1]) {
+					info.Target = k
+					info.Spec = v
+				}
+			}
+		}
+		serialPortInfo = append(serialPortInfo, info)
+	}
+
+	return serialPortInfo, nil
+}
+
+func GetTargetSpecs() (map[string]*compileopts.TargetSpec, error) {
+	dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("could not list targets: %w", err)
+	}
+
+	maps := map[string]*compileopts.TargetSpec{}
+	for _, entry := range entries {
+		entryInfo, err := entry.Info()
+		if err != nil {
+			return nil, fmt.Errorf("could not get entry info: %w", err)
+		}
+		if !entryInfo.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
+			// Only inspect JSON files.
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		spec, err := compileopts.LoadTarget(&compileopts.Options{Target: path})
+		if err != nil {
+			return nil, fmt.Errorf("cnuld not list target: %w", err)
+		}
+		if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == "" {
+			// This doesn't look like a regular target file, but rather like
+			// a parent target (such as targets/cortex-m.json).
+			continue
+		}
+		name := entry.Name()
+		name = name[:len(name)-5]
+		//fmt.Println(name)
+		maps[name] = spec
+	}
+	return maps, nil
 }
 
 var addressMatch = regexp.MustCompile(`^panic: runtime error at 0x([0-9a-f]+): `)

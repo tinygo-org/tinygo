@@ -1436,6 +1436,7 @@ func main() {
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
+	info := flag.Bool("info", false, "print information")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
 
 	// Internal flags, that are only intended for TinyGo development.
@@ -1731,41 +1732,29 @@ func main() {
 			os.Exit(1)
 		}
 	case "monitor":
-		err := Monitor("", *port, options)
-		handleCompilerError(err)
+		if *info {
+			serialPortInfo, err := ListSerialPorts()
+			handleCompilerError(err)
+			for _, s := range serialPortInfo {
+				fmt.Printf("%s %4s %4s %s\n", s.Name, s.VID, s.PID, s.Target)
+			}
+		} else {
+			err := Monitor("", *port, options)
+			handleCompilerError(err)
+		}
 	case "targets":
-		dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
-		entries, err := os.ReadDir(dir)
+		specs, err := GetTargetSpecs()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "could not list targets:", err)
 			os.Exit(1)
 			return
 		}
-		for _, entry := range entries {
-			entryInfo, err := entry.Info()
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "could not get entry info:", err)
-				os.Exit(1)
-				return
-			}
-			if !entryInfo.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
-				// Only inspect JSON files.
-				continue
-			}
-			path := filepath.Join(dir, entry.Name())
-			spec, err := compileopts.LoadTarget(&compileopts.Options{Target: path})
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "could not list target:", err)
-				os.Exit(1)
-				return
-			}
-			if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == "" {
-				// This doesn't look like a regular target file, but rather like
-				// a parent target (such as targets/cortex-m.json).
-				continue
-			}
-			name := entry.Name()
-			name = name[:len(name)-5]
+		names := []string{}
+		for key := range specs {
+			names = append(names, key)
+		}
+		sort.Strings(names)
+		for _, name := range names {
 			fmt.Println(name)
 		}
 	case "info":
