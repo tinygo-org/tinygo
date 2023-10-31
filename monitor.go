@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,7 +19,6 @@ import (
 	"github.com/mattn/go-tty"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/goenv"
 
 	"go.bug.st/serial"
 	"go.bug.st/serial/enumerator"
@@ -145,9 +143,9 @@ type SerialPortInfo struct {
 }
 
 // ListSerialPort returns serial port information and any detected TinyGo
-// target
+// target.
 func ListSerialPorts() ([]SerialPortInfo, error) {
-	maps, err := GetTargetSpecs()
+	maps, err := compileopts.GetTargetSpecs()
 	if err != nil {
 		return nil, err
 	}
@@ -184,41 +182,6 @@ func ListSerialPorts() ([]SerialPortInfo, error) {
 	}
 
 	return serialPortInfo, nil
-}
-
-func GetTargetSpecs() (map[string]*compileopts.TargetSpec, error) {
-	dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("could not list targets: %w", err)
-	}
-
-	maps := map[string]*compileopts.TargetSpec{}
-	for _, entry := range entries {
-		entryInfo, err := entry.Info()
-		if err != nil {
-			return nil, fmt.Errorf("could not get entry info: %w", err)
-		}
-		if !entryInfo.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
-			// Only inspect JSON files.
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
-		spec, err := compileopts.LoadTarget(&compileopts.Options{Target: path})
-		if err != nil {
-			return nil, fmt.Errorf("cnuld not list target: %w", err)
-		}
-		if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == "" {
-			// This doesn't look like a regular target file, but rather like
-			// a parent target (such as targets/cortex-m.json).
-			continue
-		}
-		name := entry.Name()
-		name = name[:len(name)-5]
-		//fmt.Println(name)
-		maps[name] = spec
-	}
-	return maps, nil
 }
 
 var addressMatch = regexp.MustCompile(`^panic: runtime error at 0x([0-9a-f]+): `)

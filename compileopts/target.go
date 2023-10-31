@@ -246,6 +246,43 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	return spec, nil
 }
 
+// GetTargetSpecs retrieves target specifications from the TINYGOROOT targets
+// directory.  Only valid target JSON files are considered, and the function
+// returns a map of target names to their respective TargetSpec.
+func GetTargetSpecs() (map[string]*TargetSpec, error) {
+	dir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("could not list targets: %w", err)
+	}
+
+	maps := map[string]*TargetSpec{}
+	for _, entry := range entries {
+		entryInfo, err := entry.Info()
+		if err != nil {
+			return nil, fmt.Errorf("could not get entry info: %w", err)
+		}
+		if !entryInfo.Mode().IsRegular() || !strings.HasSuffix(entry.Name(), ".json") {
+			// Only inspect JSON files.
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		spec, err := LoadTarget(&Options{Target: path})
+		if err != nil {
+			return nil, fmt.Errorf("could not list target: %w", err)
+		}
+		if spec.FlashMethod == "" && spec.FlashCommand == "" && spec.Emulator == "" {
+			// This doesn't look like a regular target file, but rather like
+			// a parent target (such as targets/cortex-m.json).
+			continue
+		}
+		name := entry.Name()
+		name = name[:len(name)-5]
+		maps[name] = spec
+	}
+	return maps, nil
+}
+
 func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	// No target spec available. Use the default one, useful on most systems
 	// with a regular OS.
