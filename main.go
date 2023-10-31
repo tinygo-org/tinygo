@@ -1743,7 +1743,7 @@ func main() {
 			handleCompilerError(err)
 		}
 	case "targets":
-		specs, err := GetTargetSpecs()
+		specs, err := compileopts.GetTargetSpecs()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "could not list targets:", err)
 			os.Exit(1)
