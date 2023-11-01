@@ -140,8 +140,8 @@ jobs:
       - name: Install wasmtime
         run: |
           mkdir -p $HOME/.wasmtime $HOME/.wasmtime/bin
-          curl https://github.com/bytecodealliance/wasmtime/releases/download/v14.0.1/wasmtime-v14.0.1-x86_64-linux.tar.xz -o wasmtime-v14.0.1-x86_64-linux.tar.xz -SfL
-          tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v14.0.1-x86_64-linux.tar.xz --strip-components=1 wasmtime-v14.0.1-x86_64-linux/*
+          curl https://github.com/bytecodealliance/wasmtime/releases/download/v14.0.4/wasmtime-v14.0.4-x86_64-linux.tar.xz -o wasmtime-v14.0.4-x86_64-linux.tar.xz -SfL
+          tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v14.0.4-x86_64-linux.tar.xz --strip-components=1 wasmtime-v14.0.4-x86_64-linux/*
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Download release artifact
         uses: actions/download-artifact@v3
@@ -187,8 +187,8 @@ jobs:
       - name: Install wasmtime
         run: |
           mkdir -p $HOME/.wasmtime $HOME/.wasmtime/bin
-          curl -L https://github.com/bytecodealliance/wasmtime/releases/download/v14.0.1/wasmtime-v14.0.1-x86_64-linux.tar.xz -o wasmtime-v14.0.1-x86_64-linux.tar.xz -SfL
-          tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v14.0.1-x86_64-linux.tar.xz --strip-components=1 wasmtime-v14.0.1-x86_64-linux/*
+          curl -L https://github.com/bytecodealliance/wasmtime/releases/download/v14.0.4/wasmtime-v14.0.4-x86_64-linux.tar.xz -o wasmtime-v14.0.4-x86_64-linux.tar.xz -SfL
+          tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v14.0.4-x86_64-linux.tar.xz --strip-components=1 wasmtime-v14.0.4-x86_64-linux/*
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v3
