@@ -25,6 +25,8 @@ func main() {
 	// Schedule and enable recurring interrupt.
 	// The callback function is executed in the context of an interrupt handler,
 	// so regular restrictions for this sort of code apply: no blocking, no memory allocation, etc.
+	// Please check the online documentation for the details about interrupts:
+	// https://tinygo.org/docs/concepts/compiler-internals/interrupts/
 	delay := time.Minute + 12*time.Second
 	machine.RTC.SetInterrupt(uint32(delay.Seconds()), true, func() { println("Peekaboo!") })
 
