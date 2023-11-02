@@ -7,6 +7,42 @@ import (
 	"testing"
 )
 
+func HammerMutex(m *sync.Mutex, loops int, cdone chan bool) {
+	for i := 0; i < loops; i++ {
+		if i%3 == 0 {
+			if m.TryLock() {
+				m.Unlock()
+			}
+			continue
+		}
+		m.Lock()
+		m.Unlock()
+	}
+	cdone <- true
+}
+
+func TestMutex(t *testing.T) {
+	m := new(sync.Mutex)
+
+	m.Lock()
+	if m.TryLock() {
+		t.Fatalf("TryLock succeeded with mutex locked")
+	}
+	m.Unlock()
+	if !m.TryLock() {
+		t.Fatalf("TryLock failed with mutex unlocked")
+	}
+	m.Unlock()
+
+	c := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go HammerMutex(m, 1000, c)
+	}
+	for i := 0; i < 10; i++ {
+		<-c
+	}
+}
+
 // TestMutexUncontended tests locking and unlocking a Mutex that is not shared with any other goroutines.
 func TestMutexUncontended(t *testing.T) {
 	var mu sync.Mutex
