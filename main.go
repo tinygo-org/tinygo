@@ -797,7 +797,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			needsEnvInVars = true
 		}
 	}
-	var args, env []string
+	var args, emuArgs, env []string
 	var extraCmdEnv []string
 	if needsEnvInVars {
 		runtimeGlobals := make(map[string]string)
@@ -820,13 +820,14 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	} else if config.EmulatorName() == "wasmtime" {
 		// Wasmtime needs some special flags to pass environment variables
 		// and allow reading from the current directory.
-		args = append(args, "--dir=.")
+		emuArgs = append(emuArgs, "--dir=.")
 		for _, v := range environmentVars {
-			args = append(args, "--env", v)
+			emuArgs = append(emuArgs, "--env", v)
 		}
 		if len(cmdArgs) != 0 {
-			// mark end of wasmtime arguments and start of program ones: --
-			args = append(args, "--")
+			// Use of '--' argument no longer necessary as of Wasmtime v14:
+			// https://github.com/bytecodealliance/wasmtime/pull/6946
+			// args = append(args, "--")
 			args = append(args, cmdArgs...)
 		}
 
@@ -876,7 +877,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			return result, err
 		}
 		name = emulator[0]
-		emuArgs := append([]string(nil), emulator[1:]...)
+		emuArgs = append(emuArgs, emulator[1:]...)
 		args = append(emuArgs, args...)
 	}
 	var cmd *exec.Cmd

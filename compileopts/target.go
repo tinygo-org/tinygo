@@ -386,7 +386,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			"--stack-first",
 			"--no-demangle",
 		)
-		spec.Emulator = "wasmtime --mapdir=/tmp::{tmpDir} {}"
+		spec.Emulator = "wasmtime --dir={tmpDir}::/tmp {}"
 		spec.ExtraFiles = append(spec.ExtraFiles,
 			"src/runtime/asm_tinygowasm.S",
 			"src/internal/task/task_asyncify_wasm.S",
