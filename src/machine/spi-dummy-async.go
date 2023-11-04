@@ -1,4 +1,4 @@
-//go:build !baremetal || atmega || esp32 || fe310 || k210 || nrf || (nxp && !mk66f18) || rp2040 || sam || (stm32 && !stm32f7x2 && !stm32l5x2)
+//go:build !baremetal || atmega || esp32 || fe310 || k210 || nrf || (nxp && !mk66f18) || sam || (stm32 && !stm32f7x2 && !stm32l5x2)
 
 package machine
 
