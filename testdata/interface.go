@@ -116,6 +116,9 @@ func main() {
 
 	// check that pointer-to-pointer type switches work
 	ptrptrswitch()
+
+	// check that type asserts to interfaces with no methods work
+	emptyintfcrash()
 }
 
 func printItf(val interface{}) {
@@ -332,5 +335,11 @@ func identify(itf any) {
 		println("type is **int")
 	default:
 		println("other type??")
+	}
+}
+
+func emptyintfcrash() {
+	if x, ok := any(5).(any); ok {
+		println("x is", x.(int))
 	}
 }
