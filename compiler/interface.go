@@ -684,19 +684,25 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 
 	actualTypeNum := b.CreateExtractValue(itf, 0, "interface.type")
 	commaOk := llvm.Value{}
-	if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
-		// Type assert on interface type.
-		// This is a call to an interface type assert function.
-		// The interface lowering pass will define this function by filling it
-		// with a type switch over all concrete types that implement this
-		// interface, and returning whether it's one of the matched types.
-		// This is very different from how interface asserts are implemented in
-		// the main Go compiler, where the runtime checks whether the type
-		// implements each method of the interface. See:
-		// https://research.swtch.com/interfaces
-		fn := b.getInterfaceImplementsFunc(expr.AssertedType)
-		commaOk = b.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{actualTypeNum}, "")
 
+	if intf, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+		if intf.Empty() {
+			// intf is the empty interface => no methods
+			// This type assertion always succeeds, so we can just set commaOk to true.
+			commaOk = llvm.ConstInt(b.ctx.Int1Type(), 1, true)
+		} else {
+			// Type assert on interface type with methods.
+			// This is a call to an interface type assert function.
+			// The interface lowering pass will define this function by filling it
+			// with a type switch over all concrete types that implement this
+			// interface, and returning whether it's one of the matched types.
+			// This is very different from how interface asserts are implemented in
+			// the main Go compiler, where the runtime checks whether the type
+			// implements each method of the interface. See:
+			// https://research.swtch.com/interfaces
+			fn := b.getInterfaceImplementsFunc(expr.AssertedType)
+			commaOk = b.CreateCall(fn.GlobalValueType(), fn, []llvm.Value{actualTypeNum}, "")
+		}
 	} else {
 		name, _ := getTypeCodeName(expr.AssertedType)
 		globalName := "reflect/types.typeid:" + name

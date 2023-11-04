@@ -27,3 +27,4 @@ slept 1ms
 type is int
 type is *int
 type is **int
+x is 5
