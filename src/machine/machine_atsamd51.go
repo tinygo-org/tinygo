@@ -683,6 +683,56 @@ func (p Pin) getPinGrouping() (uint8, uint8) {
 	return group, pin_in_group
 }
 
+// Static DMA channel allocation.
+// If there are a lot of DMA using peripherals, we might need to switch to
+// dynamic allocation instead.
+const (
+	dmaChannelSERCOM0 = iota
+	dmaChannelSERCOM1
+	dmaChannelSERCOM2
+	dmaChannelSERCOM3
+	dmaChannelSERCOM4
+	dmaChannelSERCOM5
+	dmaChannelSERCOM6
+	dmaChannelSERCOM7
+	dmaNumChannels
+)
+
+// DMA descriptor structure. This structure is defined by the hardware, and is
+// described by "22.9 Register Summary - SRAM" in the datasheet.
+type dmaDescriptor struct {
+	btctrl   uint16
+	btcnt    uint16
+	srcaddr  unsafe.Pointer
+	dstaddr  unsafe.Pointer
+	descaddr unsafe.Pointer
+}
+
+//go:align 16
+var dmaDescriptorSection [dmaNumChannels]dmaDescriptor
+
+//go:align 16
+var dmaDescriptorWritebackSection [dmaNumChannels]dmaDescriptor
+
+// Enable and configure the DMAC peripheral if it hasn't been enabled already.
+func enableDMAC() {
+	if !sam.DMAC.CTRL.HasBits(sam.DMAC_CTRL_DMAENABLE) {
+		// Init DMAC.
+		// First configure the clocks, then configure the DMA descriptors. Those
+		// descriptors must live in SRAM and must be aligned on a 16-byte
+		// boundary.
+		// Some examples:
+		// http://www.lucadavidian.com/2018/03/08/wifi-controlled-neo-pixels-strips/
+		// https://svn.larosterna.com/oss/trunk/arduino/zerotimer/zerodma.cpp
+		sam.MCLK.AHBMASK.SetBits(sam.MCLK_AHBMASK_DMAC_)
+		sam.DMAC.BASEADDR.Set(uint32(uintptr(unsafe.Pointer(&dmaDescriptorSection))))
+		sam.DMAC.WRBADDR.Set(uint32(uintptr(unsafe.Pointer(&dmaDescriptorWritebackSection))))
+
+		// Enable peripheral with all priorities.
+		sam.DMAC.CTRL.SetBits(sam.DMAC_CTRL_DMAENABLE | sam.DMAC_CTRL_LVLEN0 | sam.DMAC_CTRL_LVLEN1 | sam.DMAC_CTRL_LVLEN2 | sam.DMAC_CTRL_LVLEN3)
+	}
+}
+
 // InitADC initializes the ADC.
 func InitADC() {
 	// ADC Bias Calibration
@@ -1650,6 +1700,101 @@ func (spi SPI) txrx(tx, rx []byte) {
 	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_RXC) {
 	}
 	rx[len(rx)-1] = byte(spi.Bus.DATA.Get())
+}
+
+// Channel to be used for SPI transfers.
+// These channels are currently statically allocated.
+func (spi SPI) dmaTxChannel() uint8 {
+	return dmaChannelSERCOM0 + spi.SERCOM
+}
+
+// IsAsync returns whether the SPI supports async operation (usually DMA).
+//
+// It returns true on the SAM D5x chips.
+func (spi SPI) IsAsync() bool {
+	return true
+}
+
+// Start a transfer in the background.
+//
+// After this, another StartTx() or Wait() must be called. The provided byte
+// slices (tx and rx) may only be accessed again after Wait() was called.
+func (s SPI) StartTx(tx, rx []byte) error {
+	// Check whether we support doing this transfer using DMA.
+	if len(rx) != 0 {
+		return s.Tx(tx, rx)
+	}
+	if len(tx) == 0 {
+		return nil // nothing to send/receive
+	}
+	if len(tx) != int(uint16(len(tx))) {
+		// The transfer size is a 16-bit field.
+		// TODO: chain multiple transfers in some way when encountering these
+		// large buffer sizes. They're not currently implemented because
+		// transferring 64kB of data is less commonly done.
+		return s.Tx(tx, rx)
+	}
+
+	// Enable DMAC (if not already enabled).
+	enableDMAC()
+
+	// Wait until a possible previous transfer has been completed.
+	s.Wait()
+
+	// Configure the DMA channel, if it hasn't been configured already.
+	dstaddr := unsafe.Pointer(&s.Bus.DATA.Reg)
+	if dmaDescriptorSection[s.dmaTxChannel()].dstaddr != dstaddr {
+		// Configure channel descriptor.
+		dmaDescriptorSection[s.dmaTxChannel()] = dmaDescriptor{
+			btctrl: (1 << 0) | // VALID: Descriptor Valid
+				(0 << 3) | // BLOCKACT=NOACT: Block Action
+				(1 << 10) | // SRCINC: Source Address Increment Enable
+				(0 << 11) | // DSTINC: Destination Address Increment Enable
+				(1 << 12) | // STEPSEL=SRC: Step Selection
+				(0 << 13), // STEPSIZE=X1: Address Increment Step Size
+			dstaddr: dstaddr,
+		}
+
+		// Reset channel.
+		sam.DMAC.CHANNEL[s.dmaTxChannel()].CHCTRLA.ClearBits(sam.DMAC_CHANNEL_CHCTRLA_ENABLE)
+		sam.DMAC.CHANNEL[s.dmaTxChannel()].CHCTRLA.SetBits(sam.DMAC_CHANNEL_CHCTRLA_SWRST)
+
+		// Configure channel.
+		sam.DMAC.CHANNEL[s.dmaTxChannel()].CHPRILVL.Set(0)
+		sam.DMAC.CHANNEL[s.dmaTxChannel()].CHCTRLA.Set((sam.DMAC_CHANNEL_CHCTRLA_TRIGACT_BURST << sam.DMAC_CHANNEL_CHCTRLA_TRIGACT_Pos) |
+			(s.triggerSource() << sam.DMAC_CHANNEL_CHCTRLA_TRIGSRC_Pos) |
+			(sam.DMAC_CHANNEL_CHCTRLA_BURSTLEN_SINGLE << sam.DMAC_CHANNEL_CHCTRLA_BURSTLEN_Pos))
+	}
+
+	// For some reason, you have to provide the address just past the end of the
+	// array instead of the address of the array.
+	descriptor := &dmaDescriptorSection[s.dmaTxChannel()]
+	descriptor.srcaddr = unsafe.Pointer(uintptr(unsafe.Pointer(&tx[0])) + uintptr(len(tx)))
+	descriptor.btcnt = uint16(len(tx)) // beat count
+
+	// Start the transfer.
+	sam.DMAC.CHANNEL[s.dmaTxChannel()].CHCTRLA.SetBits(sam.DMAC_CHANNEL_CHCTRLA_ENABLE)
+
+	return nil
+}
+
+// Wait until all active transactions (started by StartTx) have finished. The
+// buffers provided in StartTx will be available after this method returns.
+func (spi SPI) Wait() error {
+	// Wait until the previous SPI transfer completed.
+	// This is basically the same thing as in SPI.tx.
+
+	// TODO: maybe block (and sleep) until the transfer has completed?
+
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_TXC) {
+	}
+
+	// read to clear RXC register
+	for spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_RXC) {
+		spi.Bus.DATA.Get()
+	}
+
+	return nil
 }
 
 // The QSPI peripheral on ATSAMD51 is only available on the following pins
