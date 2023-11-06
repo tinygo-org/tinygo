@@ -134,4 +134,8 @@ var (
 
 	// Product is the product name displayed for this USB device.
 	Product string
+
+	// Serial is the serial value displayed for this USB device. Assign a value to
+	// transmit the serial to the host when requested.
+	Serial string
 )

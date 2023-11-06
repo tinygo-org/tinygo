@@ -1,6 +1,6 @@
 // to override the USB Manufacturer or Product names:
 //
-// tinygo flash -target circuitplay-express -ldflags="-X main.usbManufacturer='TinyGopher Labs' -X main.usbProduct='GopherKeyboard'" examples/hid-keyboard
+// tinygo flash -target circuitplay-express -ldflags="-X main.usbManufacturer='TinyGopher Labs' -X main.usbProduct='GopherKeyboard' -X main.usbSerial='XXXXX'" examples/hid-keyboard
 //
 // you can also override the VID/PID. however, only set this if you know what you are doing,
 // since changing it can make it difficult to reflash some devices.
@@ -15,7 +15,7 @@ import (
 )
 
 var usbVID, usbPID string
-var usbManufacturer, usbProduct string
+var usbManufacturer, usbProduct, usbSerial string
 
 func main() {
 	button := machine.BUTTON
@@ -48,5 +48,9 @@ func init() {
 
 	if usbProduct != "" {
 		usb.Product = usbProduct
+	}
+
+	if usbSerial != "" {
+		usb.Serial = usbSerial
 	}
 }
