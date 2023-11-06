@@ -63,6 +63,13 @@ func usbProduct() string {
 	return usb_STRING_PRODUCT
 }
 
+func usbSerial() string {
+	if usb.Serial != "" {
+		return usb.Serial
+	}
+	return ""
+}
+
 // strToUTF16LEDescriptor converts a utf8 string into a string descriptor
 // note: the following code only converts ascii characters to UTF16LE. In order
 // to do a "proper" conversion, we would need to pull in the 'unicode/utf16'
@@ -160,8 +167,14 @@ func sendDescriptor(setup usb.Setup) {
 			sendUSBPacket(0, b, setup.WLength)
 
 		case usb.ISERIAL:
-			// TODO: allow returning a product serial number
-			SendZlp()
+			sz := len(usbSerial())
+			if sz == 0 {
+				SendZlp()
+			} else {
+				b := usb_trans_buffer[:(sz<<1)+2]
+				strToUTF16LEDescriptor(usbSerial(), b)
+				sendUSBPacket(0, b, setup.WLength)
+			}
 		}
 		return
 	case descriptor.TypeHIDReport:
