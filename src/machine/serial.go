@@ -44,3 +44,13 @@ func (ns NullSerial) Buffered() int {
 func (ns NullSerial) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
+
+type Serialer interface {
+	WriteByte(c byte) error
+	Write(data []byte) (n int, err error)
+	Configure(config UARTConfig) error
+	Buffered() int
+	ReadByte() (byte, error)
+	DTR() bool
+	RTS() bool
+}
