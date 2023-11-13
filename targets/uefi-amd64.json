@@ -1,0 +1,39 @@
+{
+  "build-tags": ["uefi", "baremetal", "linux", "amd64"],
+  "llvm-target": "x86_64-unknown-windows-gnu",
+  "goos": "linux",
+  "goarch": "amd64",
+  "gc": "precise",
+  "linker": "ld.lld",
+  "libc": "picolibc",
+  "scheduler": "tasks",
+  "automatic-stack-size": false,
+  "default-stack-size": 65536,
+  "cflags": [
+    "-Werror",
+    "-fshort-enums",
+    "-fomit-frame-pointer",
+    "-fno-exceptions", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
+    "-ffunction-sections", "-fdata-sections",
+    "-ffreestanding",
+    "-fshort-wchar",
+    "-mno-red-zone"
+  ],
+  "ldflags": [
+    "-m", "i386pep",
+    "--image-base", "0x400000",
+    "--entry", "efi_main",
+    "--subsystem", "efi_application",
+    "-Bdynamic",
+    "--gc-sections",
+    "--no-insert-timestamp",
+    "--no-dynamicbase"
+  ],
+  "extra-files": [
+    "src/device/x86/cpu_amd64.S",
+    "src/machine/uefi/asm_amd64.S",
+    "src/internal/task/task_stack_amd64_windows.S",
+    "src/runtime/asm_amd64_windows.S"
+  ],
+  "gdb": ["gdb-multiarch", "gdb"]
+}
