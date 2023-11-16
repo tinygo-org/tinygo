@@ -160,13 +160,13 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 
 // UART on the NRF.
 type UART struct {
-	Buffer *RingBuffer
+	UARTCommon
 }
 
 // UART
 var (
 	// UART0 is the hardware UART on the NRF SoC.
-	_UART0 = UART{Buffer: NewRingBuffer()}
+	_UART0 = UART{UARTCommon: NewUARTCommon()}
 	UART0  = &_UART0
 )
 

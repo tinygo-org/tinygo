@@ -341,13 +341,13 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 }
 
 type UART struct {
-	Bus    *kendryte.UARTHS_Type
-	Buffer *RingBuffer
+	Bus *kendryte.UARTHS_Type
+	UARTCommon
 }
 
 var (
 	UART0  = &_UART0
-	_UART0 = UART{Bus: kendryte.UARTHS, Buffer: NewRingBuffer()}
+	_UART0 = UART{Bus: kendryte.UARTHS, UARTCommon: NewUARTCommon()}
 )
 
 func (uart *UART) Configure(config UARTConfig) {

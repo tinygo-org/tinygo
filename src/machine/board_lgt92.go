@@ -61,7 +61,7 @@ var (
 	// Console UART (LPUSART1)
 	UART0  = &_UART0
 	_UART0 = UART{
-		Buffer:            NewRingBuffer(),
+		UARTCommon:        NewUARTCommon(),
 		Bus:               stm32.LPUART1,
 		TxAltFuncSelector: 6,
 		RxAltFuncSelector: 6,
@@ -70,7 +70,7 @@ var (
 	// Gps UART
 	UART1  = &_UART1
 	_UART1 = UART{
-		Buffer:            NewRingBuffer(),
+		UARTCommon:        NewUARTCommon(),
 		Bus:               stm32.USART1,
 		TxAltFuncSelector: 0,
 		RxAltFuncSelector: 0,

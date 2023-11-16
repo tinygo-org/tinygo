@@ -295,16 +295,16 @@ var DefaultUART = UART0
 
 var (
 	UART0  = &_UART0
-	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}
+	_UART0 = UART{Bus: esp.UART0, UARTCommon: NewUARTCommon()}
 	UART1  = &_UART1
-	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
+	_UART1 = UART{Bus: esp.UART1, UARTCommon: NewUARTCommon()}
 	UART2  = &_UART2
-	_UART2 = UART{Bus: esp.UART2, Buffer: NewRingBuffer()}
+	_UART2 = UART{Bus: esp.UART2, UARTCommon: NewUARTCommon()}
 )
 
 type UART struct {
-	Bus    *esp.UART_Type
-	Buffer *RingBuffer
+	Bus *esp.UART_Type
+	UARTCommon
 }
 
 func (uart *UART) Configure(config UARTConfig) {

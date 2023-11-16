@@ -241,9 +241,9 @@ var (
 	DefaultUART = UART0
 
 	UART0  = &_UART0
-	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}
+	_UART0 = UART{Bus: esp.UART0, UARTCommon: NewUARTCommon()}
 	UART1  = &_UART1
-	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
+	_UART1 = UART{Bus: esp.UART1, UARTCommon: NewUARTCommon()}
 
 	onceUart            = sync.Once{}
 	errSamePins         = errors.New("UART: invalid pin combination")
@@ -253,8 +253,8 @@ var (
 )
 
 type UART struct {
-	Bus                  *esp.UART_Type
-	Buffer               *RingBuffer
+	Bus *esp.UART_Type
+	UARTCommon
 	ParityErrorDetected  bool // set when parity error detected
 	DataErrorDetected    bool // set when data corruption detected
 	DataOverflowDetected bool // set when data overflow detected in UART FIFO buffer or RingBuffer

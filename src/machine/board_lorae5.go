@@ -56,7 +56,7 @@ var (
 	// Console UART
 	UART0  = &_UART0
 	_UART0 = UART{
-		Buffer:            NewRingBuffer(),
+		UARTCommon:        NewUARTCommon(),
 		Bus:               stm32.USART1,
 		TxAltFuncSelector: AF7_USART1_2,
 		RxAltFuncSelector: AF7_USART1_2,
@@ -69,7 +69,7 @@ var (
 	// UART2
 	UART2  = &_UART2
 	_UART2 = UART{
-		Buffer:            NewRingBuffer(),
+		UARTCommon:        NewUARTCommon(),
 		Bus:               stm32.USART2,
 		TxAltFuncSelector: AF7_USART1_2,
 		RxAltFuncSelector: AF7_USART1_2,

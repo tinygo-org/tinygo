@@ -57,7 +57,7 @@ var (
 	// STM32 UART2 is connected to the embedded STLINKV3 Virtual Com Port
 	UART0  = &_UART0
 	_UART0 = UART{
-		Buffer:            NewRingBuffer(),
+		UARTCommon:        NewUARTCommon(),
 		Bus:               stm32.USART2,
 		TxAltFuncSelector: 7,
 		RxAltFuncSelector: 7,
