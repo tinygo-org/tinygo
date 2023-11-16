@@ -9,6 +9,11 @@ var errUARTBufferEmpty = errors.New("UART buffer empty")
 // UARTParity is the parity setting to be used for UART communication.
 type UARTParity uint8
 
+type UARTCommon struct {
+	Buffer *RingBuffer
+	RXChan chan bool
+}
+
 const (
 	// ParityNone means to not use any parity checking. This is
 	// the most common setting.
@@ -26,23 +31,24 @@ const (
 // To implement the UART interface for a board, you must declare a concrete type as follows:
 //
 // 		type UART struct {
-// 			Buffer *RingBuffer
+// 			UARTCommon
 // 		}
 //
-// You can also add additional members to this struct depending on your implementation,
-// but the *RingBuffer is required.
-// When you are declaring your UARTs for your board, make sure that you also declare the
-// RingBuffer using the NewRingBuffer() function when you declare your UART:
+// You can also add additional members to this struct depending on your
+// implementation. UARTCommon is required. When you are declaring your UARTs for
+// your board, make sure that you also initialize UARTCommon using the
+// NewUARTCommon() function:
 //
-//		UART{Buffer: NewRingBuffer()}
+//		UART{UARTCommon: NewUARTCommon()}
 //
 
 // Read from the RX buffer.
 func (uart *UART) Read(data []byte) (n int, err error) {
-	// check if RX buffer is empty
+	// If RX buffer is empty, block until data is available.
 	size := uart.Buffered()
 	if size == 0 {
-		return 0, nil
+		<-uart.RXChan
+		size = uart.Buffered()
 	}
 
 	// Make sure we do not read more from buffer than the data slice can hold.
@@ -103,4 +109,16 @@ func (uart *UART) Buffered() int {
 // Usually called by the IRQ handler for a machine.
 func (uart *UART) Receive(data byte) {
 	uart.Buffer.Put(data)
+
+	select {
+	case uart.RXChan <- true:
+	default:
+	}
+}
+
+func NewUARTCommon() UARTCommon {
+	return UARTCommon{
+		Buffer: NewRingBuffer(),
+		RXChan: make(chan bool),
+	}
 }

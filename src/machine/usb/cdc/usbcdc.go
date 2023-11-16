@@ -23,10 +23,11 @@ type cdcLineInfo struct {
 
 // Read from the RX buffer.
 func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
-	// check if RX buffer is empty
+	// If RX buffer is empty, block until data is available.
 	size := usbcdc.Buffered()
 	if size == 0 {
-		return 0, nil
+		<-usbcdc.RXChan
+		size = usbcdc.Buffered()
 	}
 
 	// Make sure we do not read more from buffer than the data slice can hold.
@@ -63,11 +64,17 @@ func (usbcdc *USBCDC) Buffered() int {
 // Usually called by the IRQ handler for a machine.
 func (usbcdc *USBCDC) Receive(data byte) {
 	usbcdc.rxBuffer.Put(data)
+
+	select {
+	case USB.RXChan <- true:
+	default:
+	}
 }
 
 // USBCDC is the USB CDC aka serial over USB interface.
 type USBCDC struct {
 	rxBuffer *rxRingBuffer
+	RXChan   chan bool
 	txBuffer *txRingBuffer
 	waitTxc  bool
 }
