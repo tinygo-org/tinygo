@@ -807,21 +807,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 			// Run wasm-opt for wasm binaries
 			if arch := strings.Split(config.Triple(), "-")[0]; arch == "wasm32" {
-				var opt string
-				switch config.Options.Opt {
-				case "none", "0":
-					opt = "-O0"
-				case "1":
-					opt = "-O1"
-				case "2":
-					opt = "-O2"
-				case "s":
-					opt = "-Os"
-				case "z":
-					opt = "-Oz"
-				default:
-					return fmt.Errorf("unknown opt level: %q", config.Options.Opt)
-				}
+				optLevel, _, _ := config.OptLevel()
+				opt := "-" + optLevel
 
 				var args []string
 
