@@ -141,6 +141,13 @@ type OpError struct {
 	Err error
 }
 
+// Timeout implements OpError.Timeout
+// The supporting infra does not exist yet,
+// so it always returns false.
+func (e *OpError) Timeout() bool {
+	return false
+}
+
 func (e *OpError) Unwrap() error { return e.Err }
 
 func (e *OpError) Error() string {
