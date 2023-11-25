@@ -21,11 +21,11 @@ jobs:
         run: |
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.21'
           cache: true
@@ -106,7 +106,7 @@ jobs:
         # - have a double-zipped artifact when downloaded from the UI
         # - have a very slow artifact upload
         # We're doing the former here, to keep artifact uploads fast.
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: darwin-amd64-double-zipped
           path: build/tinygo.darwin-amd64.tar.gz
@@ -132,9 +132,9 @@ jobs:
         run: |
           HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@${{ matrix.version }}
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.21'
           cache: true
