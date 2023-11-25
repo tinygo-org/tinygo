@@ -9,7 +9,8 @@
 	url = https://github.com/avr-rust/avr-mcu.git
 [submodule "lib/cmsis-svd"]
 	path = lib/cmsis-svd
-	url = https://github.com/tinygo-org/cmsis-svd
+	url = https://github.com/cmsis-svd/cmsis-svd.git
+	branch = main
 [submodule "lib/wasi-libc"]
 	path = lib/wasi-libc
 	url = https://github.com/WebAssembly/wasi-libc
