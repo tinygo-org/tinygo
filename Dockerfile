@@ -2,7 +2,12 @@
 FROM golang:1.21 AS tinygo-llvm
 
 RUN apt-get update && \
-    apt-get install -y apt-utils make cmake clang-15 ninja-build
+    apt-get install -y apt-utils make cmake clang-15 ninja-build && \
+    rm -rf \
+        /var/lib/apt/lists/* \
+        /var/log/* \
+        /var/tmp/* \
+        /tmp/*
 
 COPY ./Makefile /tinygo/Makefile
 
