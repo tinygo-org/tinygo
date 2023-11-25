@@ -10,6 +10,11 @@ import (
 
 const irq_USART0_RX = avr.IRQ_USART0_RX
 
+// Size returns the size of the EEPROM for this machine.
+func (e EEPROM) Size() int64 {
+	return 4096
+}
+
 const (
 	portA Pin = iota * 8
 	portB

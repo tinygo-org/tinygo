@@ -9,6 +9,11 @@ import (
 
 const irq_USART0_RX = avr.IRQ_USART0_RX
 
+// Size returns the size of the EEPROM for this machine.
+func (e EEPROM) Size() int64 {
+	return 4096
+}
+
 // Return the current CPU frequency in hertz.
 func CPUFrequency() uint32 {
 	return 20000000

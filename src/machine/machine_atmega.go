@@ -4,10 +4,94 @@ package machine
 
 import (
 	"device/avr"
+	"errors"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
+
+// EEPROM on ATMega
+type EEPROM struct {
+}
+
+var EEPROM0 = EEPROM{}
+
+// setAddress sets the address for a given read or write into the MCUs EEARH/L register.
+func (e EEPROM) setAddress(addr int16) error {
+	if addr < 0 || addr > int16(e.Size()) {
+		return errors.New("address provided is out of bounds")
+	}
+
+	avr.EEARH.Set(uint8(addr >> 8))
+	avr.EEARL.Set(uint8(addr & 0xFF))
+
+	return nil
+}
+
+// WriteAt writes len(data) bytes in the EEPROMs at the provided offset.
+func (e EEPROM) WriteAt(data []byte, off int64) (int, error) {
+	written := 0
+	for i, value := range data {
+		if err := e.WriteByteAt(value, off+int64(i)); err != nil {
+			return written, err
+		}
+		written++
+	}
+	return written, nil
+}
+
+// WriteByteAt performs the logic to writes a byte into the EEPROM at the given address.
+func (e EEPROM) WriteByteAt(value byte, addr int64) error {
+	for avr.EECR.HasBits(avr.EECR_EEPE) {
+	}
+
+	if err := e.setAddress(int16(addr)); err != nil {
+		return err
+	}
+
+	avr.EEDR.Set(value)
+
+	avr.EECR.SetBits(avr.EECR_EEMPE)
+	avr.EECR.SetBits(avr.EECR_EEPE)
+
+	return nil
+}
+
+// ReadAt reads exactly len(buf) into buf at the offset. It will return the amount of bytes copied or an error if one exists.
+// The buffer cannot be empty, and an an error is thrown if fewer bytes are read than the size of the buffer.
+func (e EEPROM) ReadAt(buf []byte, off int64) (int, error) {
+	if len(buf) == 0 {
+		return 0, nil
+	}
+
+	read := 0
+	for i := 0; i < len(buf); i++ {
+		val, err := e.ReadByteAt(off + int64(i))
+		if err != nil {
+			return read, err
+		}
+
+		buf[i] = val
+
+		read++
+	}
+
+	return len(buf), nil
+}
+
+// ReadByteAt reads and returns the byte at the specified address. An error is returned if there is a failure to read.
+func (e EEPROM) ReadByteAt(addr int64) (byte, error) {
+	for avr.EECR.HasBits(avr.EECR_EEPE) {
+	}
+
+	if err := e.setAddress(int16(addr)); err != nil {
+		return byte(0), err
+	}
+
+	avr.EECR.SetBits(avr.EECR_EERE)
+
+	return avr.EEDR.Get(), nil
+}
 
 // I2C on AVR.
 type I2C struct {

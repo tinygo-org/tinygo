@@ -9,6 +9,11 @@ import (
 
 const irq_USART0_RX = avr.IRQ_USART0_RX
 
+// Size returns the size of the EEPROM for this machine.
+func (e EEPROM) Size() int64 {
+	return 1024
+}
+
 // getPortMask returns the PORTx register and mask for the pin.
 func (p Pin) getPortMask() (*volatile.Register8, uint8) {
 	switch {
