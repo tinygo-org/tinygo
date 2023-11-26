@@ -1,6 +1,7 @@
 {
   "build-tags": ["uefi", "baremetal", "linux", "amd64"],
   "llvm-target": "x86_64-unknown-windows-gnu",
+  "cpu": "x86-64",
   "goos": "linux",
   "goarch": "amd64",
   "gc": "precise",
