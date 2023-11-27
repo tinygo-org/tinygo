@@ -5,6 +5,7 @@ package runtime
 import (
 	"device/esp"
 	"device/riscv"
+	"machine"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -52,6 +53,10 @@ func main() {
 
 	// Configure interrupt handler
 	interruptInit()
+
+	// Initialize UART.
+	machine.USBCDC.Configure(machine.UARTConfig{})
+	machine.InitSerial()
 
 	// Initialize main system timer used for time.Now.
 	initTimer()

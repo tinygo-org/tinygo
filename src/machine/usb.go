@@ -88,8 +88,9 @@ func strToUTF16LEDescriptor(in string, out []byte) {
 const cdcLineInfoSize = 7
 
 var (
-	ErrUSBReadTimeout = errors.New("USB read timeout")
-	ErrUSBBytesRead   = errors.New("USB invalid number of bytes read")
+	ErrUSBReadTimeout  = errors.New("USB read timeout")
+	ErrUSBBytesRead    = errors.New("USB invalid number of bytes read")
+	ErrUSBBytesWritten = errors.New("USB invalid number of bytes written")
 )
 
 var (
