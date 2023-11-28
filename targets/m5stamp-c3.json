@@ -1,6 +1,7 @@
 {
 	"inherits": ["esp32c3"],
 	"build-tags": ["m5stamp_c3"],
+	"serial": "uart",
 	"serial-port": ["1a86:55d4"]
 }
 
