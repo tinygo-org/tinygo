@@ -788,7 +788,7 @@ type i2cCommand struct {
 func nanotime() int64
 
 func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
-	const intMask = esp.I2C_INT_CLR_END_DETECT_INT_CLR_Msk | esp.I2C_INT_CLR_TRANS_COMPLETE_INT_CLR_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_NACK_INT_ST_Msk
+	const intMask = esp.I2C_INT_STATUS_END_DETECT_INT_ST_Msk | esp.I2C_INT_STATUS_TRANS_COMPLETE_INT_ST_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_NACK_INT_ST_Msk
 	esp.I2C.INT_CLR.SetBits(intMask)
 	esp.I2C.INT_ENA.SetBits(intMask)
 	esp.I2C.SetCTR_CONF_UPGATE(1)
@@ -801,6 +801,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 	timeoutNS := int64(timeoutMS) * 1000000
 	needAddress := true
 	needRestart := false
+	readLast := false
 	var readTo []byte
 	for cmdIdx, reg := 0, &esp.I2C.COMD0; cmdIdx < len(cmd); {
 		c := &cmd[cmdIdx]
@@ -808,7 +809,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 		switch c.cmd {
 		case i2cCMD_RSTART:
 			reg.Set(i2cCMD_RSTART)
-			reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+			reg = nextAddress(reg)
 			cmdIdx++
 
 		case i2cCMD_WRITE:
@@ -824,7 +825,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				esp.I2C.SetFIFO_DATA_FIFO_RDATA(uint32(c.data[c.head]))
 			}
 			reg.Set(i2cCMD_WRITE | uint32(32-count))
-			reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+			reg = nextAddress(reg)
 
 			if c.head < len(c.data) {
 				reg.Set(i2cCMD_END)
@@ -840,14 +841,16 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				esp.I2C.SetFIFO_DATA_FIFO_RDATA((uint32(addr)&0x7f)<<1 | 1)
 				esp.I2C.SLAVE_ADDR.Set(uint32(addr))
 				reg.Set(i2cCMD_WRITE | 1)
-				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+				reg = nextAddress(reg)
 			}
 			if needRestart {
 				// We need to send RESTART again after i2cCMD_WRITE.
 				reg.Set(i2cCMD_RSTART)
-				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+
+				reg = nextAddress(reg)
 				reg.Set(i2cCMD_WRITE | 1)
-				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+
+				reg = nextAddress(reg)
 				esp.I2C.SetFIFO_DATA_FIFO_RDATA((uint32(addr)&0x7f)<<1 | 1)
 				needRestart = false
 			}
@@ -862,11 +865,12 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				bytes = 32
 			}
 			reg.Set(i2cCMD_READ | uint32(bytes))
-			reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+			reg = nextAddress(reg)
 
 			if split {
+				readLast = true
 				reg.Set(i2cCMD_READLAST | 1)
-				reg = (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(reg)) + 4)))
+				reg = nextAddress(reg)
 				readTo = c.data[c.head : c.head+bytes+1] // read bytes + 1 last byte
 				cmdIdx++
 			} else {
@@ -894,7 +898,10 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 					return errI2CWriteTimeout
 				}
 			}
-			if mask == esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk {
+			switch {
+			case mask&esp.I2C_INT_STATUS_NACK_INT_ST_Msk != 0 && !readLast:
+				return errI2CAckExpected
+			case mask&esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk != 0:
 				if readTo != nil {
 					return errI2CReadTimeout
 				}
@@ -934,4 +941,8 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 
 func (i2c *I2C) SetBaudRate(br uint32) error {
 	return nil
+}
+
+func nextAddress(reg *volatile.Register32) *volatile.Register32 {
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(reg), 4))
 }
