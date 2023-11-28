@@ -626,6 +626,16 @@ const (
 )
 
 func (i2c *I2C) Configure(config I2CConfig) error {
+	if config.Frequency == 0 {
+		config.Frequency = 400 * KHz
+	}
+	if config.SCL == 0 {
+		config.SCL = SCL_PIN
+	}
+	if config.SDA == 0 {
+		config.SDA = SDA_PIN
+	}
+
 	i2c.initClock(config)
 	i2c.initNoiseFilter()
 	i2c.initPins(config)
@@ -634,7 +644,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	return nil
 }
 
-// go: inline
+//go:inline
 func (i2c *I2C) initClock(config I2CConfig) {
 	// reset I2C clock
 	esp.SYSTEM.SetPERIP_RST_EN0_EXT0_RST(1)
@@ -650,12 +660,12 @@ func (i2c *I2C) initClock(config I2CConfig) {
 	esp.I2C.SetCTR_CLK_EN(1)
 }
 
-// go: inline
+//go:inline
 func (i2c *I2C) initNoiseFilter() {
 	esp.I2C.FILTER_CFG.Set(0x377)
 }
 
-// go: inline
+//go:inline
 func (i2c *I2C) initPins(config I2CConfig) {
 	var muxConfig uint32
 	const function = 1 // function 1 is just GPIO
@@ -693,7 +703,7 @@ func (i2c *I2C) initPins(config I2CConfig) {
 	esp.I2C.SetCTR_SCL_FORCE_OUT(1)
 }
 
-// go: inline
+//go:inline
 func (i2c *I2C) initFrequency(config I2CConfig) {
 
 	clkmDiv := i2cClkSourceFrequency/(config.Frequency*1024) + 1
@@ -723,7 +733,7 @@ func (i2c *I2C) initFrequency(config I2CConfig) {
 	esp.I2C.SetSDA_HOLD_TIME(sdaHold)
 }
 
-// go: inline
+//go:inline
 func (i2c *I2C) startMaster() {
 	// FIFO mode for data
 	esp.I2C.SetFIFO_CONF_NONFIFO_EN(0)
@@ -740,7 +750,7 @@ func (i2c *I2C) startMaster() {
 	resetMaster()
 }
 
-// go: inline
+//go:inline
 func resetMaster() {
 	// reset FSM
 	esp.I2C.SetCTR_FSM_RST(1)
@@ -907,7 +917,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 // bytes and stores them in r, and generates a stop condition on the bus.
 func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 	// timeout in microseconds.
-	const timeout = 100 * 1000 // 40ms is a reasonable time for a real-time system.
+	const timeout = 40 // 40ms is a reasonable time for a real-time system.
 
 	cmd := make([]i2cCommand, 0, 8)
 	cmd = append(cmd, i2cCommand{cmd: i2cCMD_RSTART})
@@ -920,4 +930,8 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 	cmd = append(cmd, i2cCommand{cmd: i2cCMD_STOP})
 
 	return i2c.transmit(addr, cmd, timeout)
+}
+
+func (i2c *I2C) SetBaudRate(br uint32) error {
+	return nil
 }
