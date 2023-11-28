@@ -756,9 +756,7 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target mch2022             examples/serial
 	@$(MD5SUM) test.bin
 endif
-	$(TINYGO) build -size short -o test.bin -target=esp32c3             examples/serial
-	@$(MD5SUM) test.bin
-	$(TINYGO) build -size short -o test.bin -target=esp32c3-12f         examples/serial
+	$(TINYGO) build -size short -o test.bin -target=qtpy-esp32c3        examples/serial
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=m5stamp-c3          examples/serial
 	@$(MD5SUM) test.bin
