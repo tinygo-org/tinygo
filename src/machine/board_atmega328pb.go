@@ -1,4 +1,4 @@
-//go:build (avr && atmega328p) || arduino || arduino_nano
+//go:build avr && atmega328pb
 
 package machine
 
@@ -12,6 +12,7 @@ const (
 	portB Pin = iota * 8
 	portC
 	portD
+	portE
 )
 
 const (
@@ -39,4 +40,12 @@ const (
 	PD5 = portD + 5 // peripherals: Timer0 channel B
 	PD6 = portD + 6 // peripherals: Timer0 channel A
 	PD7 = portD + 7
+	PE0 = portE + 0
+	PE1 = portE + 1
+	PE2 = portE + 2
+	PE3 = portE + 3
+	PE4 = portE + 4
+	PE5 = portE + 5
+	PE6 = portE + 6
+	PE7 = portE + 7
 )
