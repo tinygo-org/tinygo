@@ -11,10 +11,19 @@ import (
 
 // I2C on AVR.
 type I2C struct {
-}
+	srReg *volatile.Register8
+	brReg *volatile.Register8
+	crReg *volatile.Register8
+	drReg *volatile.Register8
 
-// I2C0 is the only I2C interface on most AVRs.
-var I2C0 *I2C = nil
+	srPS0 byte
+	srPS1 byte
+	crEN  byte
+	crINT byte
+	crSTO byte
+	crEA  byte
+	crSTA byte
+}
 
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
@@ -37,16 +46,16 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 // SetBaudRate sets the communication speed for I2C.
 func (i2c *I2C) SetBaudRate(br uint32) error {
 	// Initialize twi prescaler and bit rate.
-	avr.TWSR.SetBits((avr.TWSR_TWPS0 | avr.TWSR_TWPS1))
+	i2c.srReg.SetBits((i2c.srPS0 | i2c.srPS1))
 
 	// twi bit rate formula from atmega128 manual pg. 204:
 	// SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
 	// NOTE: TWBR should be 10 or higher for controller mode.
 	// It is 72 for a 16mhz board with 100kHz TWI
-	avr.TWBR.Set(uint8(((CPUFrequency() / br) - 16) / 2))
+	i2c.brReg.Set(uint8(((CPUFrequency() / br) - 16) / 2))
 
 	// Enable twi module.
-	avr.TWCR.Set(avr.TWCR_TWEN)
+	i2c.crReg.Set(i2c.crEN)
 
 	return nil
 }
@@ -77,10 +86,10 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 // start starts an I2C communication session.
 func (i2c *I2C) start(address uint8, write bool) {
 	// Clear TWI interrupt flag, put start condition on SDA, and enable TWI.
-	avr.TWCR.Set((avr.TWCR_TWINT | avr.TWCR_TWSTA | avr.TWCR_TWEN))
+	i2c.crReg.Set((i2c.crINT | i2c.crSTA | i2c.crEN))
 
 	// Wait till start condition is transmitted.
-	for !avr.TWCR.HasBits(avr.TWCR_TWINT) {
+	for !i2c.crReg.HasBits(i2c.crINT) {
 	}
 
 	// Write 7-bit shifted peripheral address.
@@ -94,23 +103,23 @@ func (i2c *I2C) start(address uint8, write bool) {
 // stop ends an I2C communication session.
 func (i2c *I2C) stop() {
 	// Send stop condition.
-	avr.TWCR.Set(avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWSTO)
+	i2c.crReg.Set(i2c.crEN | i2c.crINT | i2c.crSTO)
 
 	// Wait for stop condition to be executed on bus.
-	for !avr.TWCR.HasBits(avr.TWCR_TWSTO) {
+	for !i2c.crReg.HasBits(i2c.crSTO) {
 	}
 }
 
 // writeByte writes a single byte to the I2C bus.
 func (i2c *I2C) writeByte(data byte) error {
 	// Write data to register.
-	avr.TWDR.Set(data)
+	i2c.drReg.Set(data)
 
 	// Clear TWI interrupt flag and enable TWI.
-	avr.TWCR.Set(avr.TWCR_TWEN | avr.TWCR_TWINT)
+	i2c.crReg.Set(i2c.crEN | i2c.crINT)
 
 	// Wait till data is transmitted.
-	for !avr.TWCR.HasBits(avr.TWCR_TWINT) {
+	for !i2c.crReg.HasBits(i2c.crINT) {
 	}
 	return nil
 }
@@ -118,13 +127,13 @@ func (i2c *I2C) writeByte(data byte) error {
 // readByte reads a single byte from the I2C bus.
 func (i2c *I2C) readByte() byte {
 	// Clear TWI interrupt flag and enable TWI.
-	avr.TWCR.Set(avr.TWCR_TWEN | avr.TWCR_TWINT | avr.TWCR_TWEA)
+	i2c.crReg.Set(i2c.crEN | i2c.crINT | i2c.crEA)
 
 	// Wait till read request is transmitted.
-	for !avr.TWCR.HasBits(avr.TWCR_TWINT) {
+	for !i2c.crReg.HasBits(i2c.crINT) {
 	}
 
-	return byte(avr.TWDR.Get())
+	return byte(i2c.drReg.Get())
 }
 
 // Always use UART0 as the serial output.
@@ -221,6 +230,17 @@ type SPI struct {
 	spdr *volatile.Register8
 	spsr *volatile.Register8
 
+	spcrR0   byte
+	spcrR1   byte
+	spcrCPHA byte
+	spcrCPOL byte
+	spcrDORD byte
+	spcrSPE  byte
+	spcrMSTR byte
+
+	spsrI2X  byte
+	spsrSPIF byte
+
 	// The io pins for the SPIx port set by the chip
 	sck Pin
 	sdi Pin
@@ -264,39 +284,39 @@ func (s SPI) Configure(config SPIConfig) error {
 
 	switch {
 	case frequencyDivider >= 128:
-		s.spcr.SetBits(avr.SPCR_SPR0 | avr.SPCR_SPR1)
+		s.spcr.SetBits(s.spcrR0 | s.spcrR1)
 	case frequencyDivider >= 64:
-		s.spcr.SetBits(avr.SPCR_SPR1)
+		s.spcr.SetBits(s.spcrR1)
 	case frequencyDivider >= 32:
-		s.spcr.SetBits(avr.SPCR_SPR1)
-		s.spsr.SetBits(avr.SPSR_SPI2X)
+		s.spcr.SetBits(s.spcrR1)
+		s.spsr.SetBits(s.spsrI2X)
 	case frequencyDivider >= 16:
-		s.spcr.SetBits(avr.SPCR_SPR0)
+		s.spcr.SetBits(s.spcrR0)
 	case frequencyDivider >= 8:
-		s.spcr.SetBits(avr.SPCR_SPR0)
-		s.spsr.SetBits(avr.SPSR_SPI2X)
+		s.spcr.SetBits(s.spcrR0)
+		s.spsr.SetBits(s.spsrI2X)
 	case frequencyDivider >= 4:
 		// The clock is already set to all 0's.
 	default: // defaults to fastest which is /2
-		s.spsr.SetBits(avr.SPSR_SPI2X)
+		s.spsr.SetBits(s.spsrI2X)
 	}
 
 	switch config.Mode {
 	case Mode1:
-		s.spcr.SetBits(avr.SPCR_CPHA)
+		s.spcr.SetBits(s.spcrCPHA)
 	case Mode2:
-		s.spcr.SetBits(avr.SPCR_CPOL)
+		s.spcr.SetBits(s.spcrCPHA)
 	case Mode3:
-		s.spcr.SetBits(avr.SPCR_CPHA | avr.SPCR_CPOL)
+		s.spcr.SetBits(s.spcrCPHA | s.spcrCPOL)
 	default: // default is mode 0
 	}
 
 	if config.LSBFirst {
-		s.spcr.SetBits(avr.SPCR_DORD)
+		s.spcr.SetBits(s.spcrDORD)
 	}
 
 	// enable SPI, set controller, set clock rate
-	s.spcr.SetBits(avr.SPCR_SPE | avr.SPCR_MSTR)
+	s.spcr.SetBits(s.spcrSPE | s.spcrMSTR)
 
 	return nil
 }
@@ -305,7 +325,7 @@ func (s SPI) Configure(config SPIConfig) error {
 func (s SPI) Transfer(b byte) (byte, error) {
 	s.spdr.Set(uint8(b))
 
-	for !s.spsr.HasBits(avr.SPSR_SPIF) {
+	for !s.spsr.HasBits(s.spsrSPIF) {
 	}
 
 	return byte(s.spdr.Get()), nil
