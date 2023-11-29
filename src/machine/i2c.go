@@ -1,4 +1,4 @@
-//go:build atmega || nrf || sam || stm32 || fe310 || k210 || rp2040 || mimxrt1062 || esp32c3
+//go:build atmega || nrf || sam || stm32 || fe310 || k210 || rp2040 || mimxrt1062 || (esp32c3 && !m5stamp_c3)
 
 package machine
 
