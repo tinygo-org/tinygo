@@ -1,4 +1,4 @@
-//go:build nrf || stm32 || (sam && atsamd51) || (sam && atsame5x)
+//go:build nrf || stm32 || (sam && atsamd51) || (sam && atsame5x) || esp32c3
 
 package rand
 
