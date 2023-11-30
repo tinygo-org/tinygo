@@ -600,3 +600,38 @@ func (usbdev *USB_DEVICE) flush() {
 	for usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
 	}
 }
+
+// GetRNG returns 32-bit random numbers using the ESP32-C3 true random number generator,
+// Random numbers are generated based on the thermal noise in the system and the
+// asynchronous clock mismatch.
+// For maximum entropy also make sure that the SAR_ADC is enabled.
+// See esp32-c3_technical_reference_manual_en.pdf p.524
+func GetRNG() (ret uint32, err error) {
+	// ensure ADC clock is initialized
+	initADCClock()
+
+	// ensure fast RTC clock is enabled
+	if esp.RTC_CNTL.GetRTC_CLK_CONF_DIG_CLK8M_EN() == 0 {
+		esp.RTC_CNTL.SetRTC_CLK_CONF_DIG_CLK8M_EN(1)
+	}
+
+	return esp.APB_CTRL.GetRND_DATA(), nil
+}
+
+func initADCClock() {
+	if esp.APB_SARADC.GetCLKM_CONF_CLK_EN() == 1 {
+		return
+	}
+
+	// only support ADC_CTRL_CLK set to 1
+	esp.APB_SARADC.SetCLKM_CONF_CLK_SEL(1)
+
+	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_GATED(1)
+
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_NUM(15)
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_B(1)
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_A(0)
+
+	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_DIV(1)
+	esp.APB_SARADC.SetCLKM_CONF_CLK_EN(1)
+}
