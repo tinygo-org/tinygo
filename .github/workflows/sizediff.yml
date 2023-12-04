@@ -55,21 +55,21 @@ jobs:
       - name: Save HEAD
         run: git branch github-actions-saved-HEAD HEAD
 
-      # Compute sizes for the dev branch
-      - name: Checkout dev branch
-        run: git checkout --no-recurse-submodules `git merge-base HEAD origin/dev`
-      - name: Build tinygo binary for the dev branch
-        run: go install
-      - name: Determine binary sizes on the dev branch
-        run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-dev.txt)
-
       # Compute sizes for the PR branch
-      - name: Checkout PR branch
-        run: git checkout --no-recurse-submodules github-actions-saved-HEAD
       - name: Build tinygo binary for the PR branch
         run: go install
       - name: Determine binary sizes on the PR branch
         run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-pr.txt)
+
+      # Compute sizes for the dev branch
+      - name: Checkout dev branch
+        run: |
+          git reset --hard origin/dev
+          git checkout --no-recurse-submodules `git merge-base HEAD origin/dev`
+      - name: Build tinygo binary for the dev branch
+        run: go install
+      - name: Determine binary sizes on the dev branch
+        run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-dev.txt)
 
       # Create comment
       # TODO: add a summary, something like:
