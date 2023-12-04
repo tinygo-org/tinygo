@@ -1,4 +1,4 @@
-//go:build !(baremetal || (wasm && !wasip1) || wasm_unknown)
+//go:build !(baremetal || (wasm && !wasip1 && !wasip2) || wasm_unknown)
 
 // This file assumes there is a libc available that runs on a real operating
 // system.

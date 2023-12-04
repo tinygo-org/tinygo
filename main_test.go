@@ -181,6 +181,10 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip1", sema), tests, t)
 		})
+		t.Run("WASIp2", func(t *testing.T) {
+			t.Parallel()
+			runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
+		})
 	}
 }
 
@@ -235,6 +239,14 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			default:
 			}
 		}
+		if options.Target == "wasip2" {
+			switch name {
+			case "cgo/":
+				// waisp2 use our own libc; cgo tests fail
+				continue
+			}
+		}
+
 		name := name // redefine to avoid race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

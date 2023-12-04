@@ -1,4 +1,4 @@
-//go:build windows || darwin || (linux && !baremetal) || wasip1
+//go:build windows || darwin || (linux && !baremetal) || wasip1 || wasip2
 
 package os_test
 
@@ -275,7 +275,7 @@ func TestDirFS(t *testing.T) {
 		t.Log("TODO: implement Readdir for Windows")
 		return
 	}
-	if runtime.GOOS == "wasip1" {
+	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
 		t.Log("TODO: allow foo/bar/. as synonym for path foo/bar on wasi?")
 		return
 	}
@@ -296,7 +296,7 @@ func TestDirFSPathsValid(t *testing.T) {
 		t.Log("skipping on Windows")
 		return
 	}
-	if runtime.GOOS == "wasip1" {
+	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
 		t.Log("skipping on wasi because it fails on wasi on windows")
 		return
 	}

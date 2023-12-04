@@ -241,6 +241,7 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"internal/fuzz/":        false,
 		"internal/reflectlite/": false,
 		"internal/task/":        false,
+		"internal/wasi/":        false,
 		"machine/":              false,
 		"net/":                  true,
 		"net/http/":             false,
@@ -250,6 +251,8 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"runtime/":              false,
 		"sync/":                 true,
 		"testing/":              true,
+		"vendor/":               true,
+		"vendor/github.com/":    false,
 	}
 
 	if goMinor >= 19 {

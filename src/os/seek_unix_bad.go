@@ -1,4 +1,4 @@
-//go:build (linux && !baremetal && 386) || (linux && !baremetal && arm && !wasi)
+//go:build (linux && !baremetal && 386) || (linux && !baremetal && arm && !wasip1 && !wasip2)
 
 package os
 
