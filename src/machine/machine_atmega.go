@@ -179,10 +179,18 @@ func (uart *UART) Configure(config UARTConfig) {
 		config.BaudRate = 9600
 	}
 
-	// Set baud rate based on prescale formula from
-	// https://www.microchip.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_wrong_baud_rate.html
-	// ((F_CPU + UART_BAUD_RATE * 8L) / (UART_BAUD_RATE * 16L) - 1)
-	ps := ((CPUFrequency()+config.BaudRate*8)/(config.BaudRate*16) - 1)
+	// Prescale formula for u2x mode from AVR MiniCore source code.
+	// Same as formula from specification but taking into account rounding error.
+	ps := (CPUFrequency()/4/config.BaudRate - 1) / 2
+	uart.statusRegA.SetBits(avr.UCSR0A_U2X0)
+
+	// Hardcoded exception for 57600 for compatibility with older bootloaders.
+	// Also, prescale cannot be > 4095, so switch back to non-u2x mode if the baud rate is too low.
+	if (CPUFrequency() == 16000000 && config.BaudRate == 57600) || ps > 0xfff {
+		ps = (CPUFrequency()/8/config.BaudRate - 1) / 2
+		uart.statusRegA.ClearBits(avr.UCSR0A_U2X0)
+	}
+
 	uart.baudRegH.Set(uint8(ps >> 8))
 	uart.baudRegL.Set(uint8(ps & 0xff))
 
