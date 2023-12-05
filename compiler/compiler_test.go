@@ -257,5 +257,7 @@ func testCompilePackage(t *testing.T, options *compileopts.Options, file string)
 	// Compile AST to IR.
 	program := lprogram.LoadSSA()
 	pkg := lprogram.MainPkg()
-	return CompilePackage(file, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
+	ssaPkg := program.Package(pkg.Pkg)
+	ssaPkg.Build()
+	return CompilePackage(file, pkg, ssaPkg, machine, compilerConfig, false)
 }

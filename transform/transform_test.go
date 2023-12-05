@@ -159,7 +159,9 @@ func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
 	// Compile AST to IR.
 	program := lprogram.LoadSSA()
 	pkg := lprogram.MainPkg()
-	mod, errs := compiler.CompilePackage(filename, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
+	ssaPkg := program.Package(pkg.Pkg)
+	ssaPkg.Build()
+	mod, errs := compiler.CompilePackage(filename, pkg, ssaPkg, machine, compilerConfig, false)
 	if errs != nil {
 		for _, err := range errs {
 			t.Error(err)
