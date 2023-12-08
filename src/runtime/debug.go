@@ -18,3 +18,8 @@ func NumCgoCall() int {
 func NumGoroutine() int {
 	return 1
 }
+
+// Stub for Breakpoint, does not do anything.
+func Breakpoint() {
+	panic("Breakpoint not supported")
+}
