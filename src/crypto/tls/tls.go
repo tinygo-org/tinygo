@@ -1,4 +1,4 @@
-// TINYGO: The following is copied and modified from Go 1.19.3 official implementation.
+// TINYGO: The following is copied and modified from Go 1.21.4 official implementation.
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -14,6 +14,8 @@ package tls
 // https://www.imperialviolet.org/2013/02/04/luckythirteen.html.
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 )
@@ -25,6 +27,23 @@ import (
 func Client(conn net.Conn, config *Config) *net.TLSConn {
 	panic("tls.Client() not implemented")
 	return nil
+}
+
+// A listener implements a network listener (net.Listener) for TLS connections.
+type listener struct {
+	net.Listener
+	config *Config
+}
+
+// NewListener creates a Listener which accepts connections from an inner
+// Listener and wraps each connection with Server.
+// The configuration config must be non-nil and must include
+// at least one certificate or else set GetCertificate.
+func NewListener(inner net.Listener, config *Config) net.Listener {
+	l := new(listener)
+	l.Listener = inner
+	l.config = config
+	return l
 }
 
 // DialWithDialer connects to the given network address using dialer.Dial and
@@ -57,7 +76,39 @@ func Dial(network, addr string, config *Config) (*net.TLSConn, error) {
 	return DialWithDialer(new(net.Dialer), network, addr, config)
 }
 
-// Config is a placeholder for future compatibility with
-// tls.Config.
-type Config struct {
+// Dialer dials TLS connections given a configuration and a Dialer for the
+// underlying connection.
+type Dialer struct {
+	// NetDialer is the optional dialer to use for the TLS connections'
+	// underlying TCP connections.
+	// A nil NetDialer is equivalent to the net.Dialer zero value.
+	NetDialer *net.Dialer
+
+	// Config is the TLS configuration to use for new connections.
+	// A nil configuration is equivalent to the zero
+	// configuration; see the documentation of Config for the
+	// defaults.
+	Config *Config
+}
+
+// DialContext connects to the given network address and initiates a TLS
+// handshake, returning the resulting TLS connection.
+//
+// The provided Context must be non-nil. If the context expires before
+// the connection is complete, an error is returned. Once successfully
+// connected, any expiration of the context will not affect the
+// connection.
+//
+// The returned Conn, if any, will always be of type *Conn.
+func (d *Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return nil, errors.New("tls:DialContext not implmented")
+}
+
+// LoadX509KeyPair reads and parses a public/private key pair from a pair
+// of files. The files must contain PEM encoded data. The certificate file
+// may contain intermediate certificates following the leaf certificate to
+// form a certificate chain. On successful return, Certificate.Leaf will
+// be nil because the parsed form of the certificate is not retained.
+func LoadX509KeyPair(certFile, keyFile string) (Certificate, error) {
+	return Certificate{}, errors.New("tls:LoadX509KeyPair not implemented")
 }
