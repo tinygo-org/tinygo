@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	MSG_DONTWAIT                     = 0x40
-	AF_INET                          = 0x2
-	AF_INET6                         = 0xa
+	MSG_DONTWAIT = 0x40
+	AF_INET      = 0x2
+	AF_INET6     = 0xa
 )
 
 func Exit(code int)
