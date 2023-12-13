@@ -1,17 +1,15 @@
-/* Linker script for the ESP32 */
+/* Linker script for the ESP32-S3 */
+
 
 MEMORY
 {
-    /* Data RAM. Allows byte access.
-     * There are various data RAM regions:
-     *   SRAM1: 0x3FC8_8000..0x3FCE_FFFF (416K)
-     *   SRAM2: 0x3FCF_0000..0x3FCF_FFFF (64K)
-     * This gives us 480k of contiguous RAM, which is the largest span possible.
-     */
-    DRAM  (rw) : ORIGIN = 0x3FC88000, LENGTH = 416K /* Internal SRAM 1 + 2 */
+    /* Note: DRAM and IRAM below are actually in the same 416K address space. */
+    DRAM (rw) : ORIGIN = 0x3FC88000, LENGTH = 416K /* Internal SRAM 1 (data bus) */
+    IRAM (x)  : ORIGIN = 0x40378000, LENGTH = 416K /* Internal SRAM 1 (instruction bus) */
 
-    /* Instruction RAM. */
-    IRAM  (x)  : ORIGIN = 0x40370000, LENGTH = 32K /* Internal SRAM 0 */
+    /* Note: DROM and IROM below are actually in the same 32M address space. */
+    DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 32M /* Data bus (read-only) */
+    IROM (rx) : ORIGIN = 0x42000000, LENGTH = 32M /* Instruction bus */
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be

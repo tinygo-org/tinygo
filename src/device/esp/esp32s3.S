@@ -2,7 +2,7 @@
 // The following definitions were copied from:
 // esp-idf/components/xtensa/include/xtensa/corebits.h
 #define PS_WOE_MASK                0x00040000
-#define PS_OWB_MASK                0x00000F00
+#define PS_OWB_MASK                0x00000F01
 #define PS_CALLINC_MASK            0x00030000
 #define PS_WOE                     PS_WOE_MASK
 
