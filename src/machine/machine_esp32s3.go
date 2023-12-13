@@ -11,12 +11,12 @@ import (
 
 const deviceName = esp.Device
 
-const peripheralClock = 80000000 // 80MHz
+const peripheralClock = 40_000000 // 80MHz
 
 // CPUFrequency returns the current CPU frequency of the chip.
 // Currently it is a fixed frequency but it may allow changing in the future.
 func CPUFrequency() uint32 {
-	return 160e6 // 160MHz
+	return 160e6 // 80 MHz
 }
 
 var (
@@ -71,6 +71,8 @@ const (
 	GPIO42 Pin = 42
 	GPIO43 Pin = 43
 	GPIO44 Pin = 44
+	GPIO45 Pin = 45
+	GPIO46 Pin = 46
 )
 
 // Configure this pin with the given configuration.
@@ -170,7 +172,7 @@ var DefaultUART = UART0
 
 var (
 	UART0  = &_UART0
-	_UART0 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
+	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}
 	UART1  = &_UART1
 	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
 	UART2  = &_UART2
