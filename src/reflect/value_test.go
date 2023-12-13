@@ -624,6 +624,28 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+func TestIssue4040(t *testing.T) {
+	var value interface{} = uint16(0)
+
+	// get the pointer to the interface value
+	inPtr := ValueOf(&value)
+
+	// dereference to get the actual value (an interface)
+	inElem := inPtr.Elem()
+
+	// create a new value of the same concrete type
+	uint16Type := TypeOf(uint16(0))
+	newUint16Value := New(uint16Type).Elem()
+	newUint16Value.Set(ValueOf(uint16(13)))
+
+	// set the new value to the interface
+	inElem.Set(newUint16Value)
+
+	if value.(uint16) != 13 {
+		t.Errorf("Failed to set interface value from uint16")
+	}
+}
+
 func equal[T comparable](a, b []T) bool {
 	if len(a) != len(b) {
 		return false

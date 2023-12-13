@@ -1086,6 +1086,13 @@ func (v Value) Set(x Value) {
 	}
 
 	if v.typecode.Kind() == Interface && x.typecode.Kind() != Interface {
+		// move the value of x back into the interface, if possible
+		if x.isIndirect() && x.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
+			var value uintptr
+			memcpy(unsafe.Pointer(&value), x.value, x.typecode.Size())
+			x.value = unsafe.Pointer(value)
+		}
+
 		intf := composeInterface(unsafe.Pointer(x.typecode), x.value)
 		x = Value{
 			typecode: v.typecode,
