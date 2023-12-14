@@ -49,7 +49,7 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-      - run: make gen-device -j4
+      - run: make gen-device
       - name: Download drivers repo
         run: git clone https://github.com/tinygo-org/drivers.git
       - name: Save HEAD
