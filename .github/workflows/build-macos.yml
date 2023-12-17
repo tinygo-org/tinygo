@@ -120,17 +120,19 @@ jobs:
       matrix:
         version: [16, 17]
     steps:
-      - name: Update Homebrew
-        run: brew update
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+        with:
+          cask: false # remove this if you need `brew install --cask`
+          test-bot: false # remove this if you need `brew test-bot`
       - name: Fix Python symlinks
         run: |
           # Github runners have broken symlinks, so relink
           # see: https://github.com/actions/setup-python/issues/577
-          brew unlink python
-          brew link --overwrite python
+          brew unlink python@3.11
       - name: Install LLVM
         run: |
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@${{ matrix.version }}
+          brew install llvm@${{ matrix.version }}
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Go
