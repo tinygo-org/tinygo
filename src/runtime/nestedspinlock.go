@@ -1,3 +1,6 @@
+//go:build multicore
+// +build multicore
+
 package runtime
 
 import (
