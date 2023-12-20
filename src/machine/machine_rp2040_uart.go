@@ -36,9 +36,18 @@ func (uart *UART) Configure(config UARTConfig) error {
 	uart.SetFormat(8, 1, ParityNone)
 
 	// Enable the UART, both TX and RX
-	uart.Bus.UARTCR.SetBits(rp.UART0_UARTCR_UARTEN |
+	settings := uint32(rp.UART0_UARTCR_UARTEN |
 		rp.UART0_UARTCR_RXE |
 		rp.UART0_UARTCR_TXE)
+
+	if config.RTS != 0 {
+		settings |= rp.UART0_UARTCR_RTSEN
+	}
+	if config.CTS != 0 {
+		settings |= rp.UART0_UARTCR_CTSEN
+	}
+
+	uart.Bus.UARTCR.SetBits(settings)
 
 	// set GPIO mux to UART for the pins
 	if config.TX != NoPin {
@@ -46,6 +55,12 @@ func (uart *UART) Configure(config UARTConfig) error {
 	}
 	if config.RX != NoPin {
 		config.RX.Configure(PinConfig{Mode: PinUART})
+	}
+	if config.RTS != 0 {
+		config.RTS.Configure(PinConfig{Mode: PinOutput})
+	}
+	if config.CTS != 0 {
+		config.CTS.Configure(PinConfig{Mode: PinInput})
 	}
 
 	// Enable RX IRQ.
