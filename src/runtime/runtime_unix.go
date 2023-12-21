@@ -253,3 +253,10 @@ func growHeap() bool {
 	setHeapEnd(heapStart + heapSize)
 	return true
 }
+
+//export gettid
+func gettid() int
+
+func currentMachineId() int {
+	return gettid()
+}

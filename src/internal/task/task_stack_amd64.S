@@ -74,6 +74,32 @@ tinygo_swapTask:
     ret
 
 #ifdef __MACH__ // Darwin
+.global  _tinygo_handoverTask
+_tinygo_handoverTask:
+#else // Linux etc
+.section .text.tinygo_handoverTask
+.global  tinygo_handoverTask
+tinygo_handoverTask:
+#endif
+    .cfi_startproc
+    movq %rdi, %rax
+    movq %rsi, %rdi
+    jmp  *%rax
+    .cfi_endproc
+
+#ifdef __MACH__ // Darwin
+.global  _tinygo_callMachineEntry
+_tinygo_callMachineEntry:
+#else // Linux etc
+.section .text.tinygo_callMachineEntry
+.global  tinygo_callMachineEntry
+tinygo_callMachineEntry:
+#endif
+    .cfi_startproc
+    jmp tinygo_machineEntry
+    .cfi_endproc
+
+#ifdef __MACH__ // Darwin
 // allow these symbols to stripped as dead code
 .subsections_via_symbols
 #endif
