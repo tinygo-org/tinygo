@@ -1,0 +1,9 @@
+{
+	"llvm-target": "mos",
+	"build-tags": ["mos", "baremetal", "linux"],
+	"goos": "linux",
+	"gc": "conservative",
+	"cflags": [
+		"-Werror"
+	]
+}

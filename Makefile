@@ -228,6 +228,10 @@ gen-device-stm32: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/tinygo-org/stm32-svd lib/stm32-svd/svd src/device/stm32/
 	GO111MODULE=off $(GO) fmt ./src/device/stm32
 
+gen-device-6502: build/gen-device-svd
+	./build/gen-device-svd lib/cmsis-svd/data/MOS src/device/mos/
+	GO111MODULE=off $(GO) fmt ./src/device/mos
+
 gen-device-rp: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/RaspberryPi lib/cmsis-svd/data/RaspberryPi/ src/device/rp/
 	GO111MODULE=off $(GO) fmt ./src/device/rp
