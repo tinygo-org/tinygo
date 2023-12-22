@@ -532,7 +532,7 @@ func Flash(pkgName, port string, options *compileopts.Options) error {
 		return fmt.Errorf("unknown flash method: %s", flashMethod)
 	}
 	if options.Monitor {
-		return Monitor(result.Executable, "", options)
+		return Monitor(result.Executable, "", config)
 	}
 	return nil
 }
@@ -1740,7 +1740,9 @@ func main() {
 				fmt.Printf("%s %4s %4s %s\n", s.Name, s.VID, s.PID, s.Target)
 			}
 		} else {
-			err := Monitor("", *port, options)
+			config, err := builder.NewConfig(options)
+			handleCompilerError(err)
+			err = Monitor("", *port, config)
 			handleCompilerError(err)
 		}
 	case "targets":
