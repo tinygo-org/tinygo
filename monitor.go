@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"debug/dwarf"
 	"debug/elf"
 	"debug/macho"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"go/token"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"regexp"
@@ -17,7 +19,6 @@ import (
 	"time"
 
 	"github.com/mattn/go-tty"
-	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
 
 	"go.bug.st/serial"
@@ -25,44 +26,151 @@ import (
 )
 
 // Monitor connects to the given port and reads/writes the serial port.
-func Monitor(executable, port string, options *compileopts.Options) error {
-	config, err := builder.NewConfig(options)
-	if err != nil {
-		return err
-	}
+func Monitor(executable, port string, config *compileopts.Config) error {
+	const timeout = time.Second * 3
+	var exit func() // function to be called before exiting
+	var serialConn io.ReadWriter
 
-	wait := 300
-	for i := 0; i <= wait; i++ {
-		port, err = getDefaultPort(port, config.Target.SerialPort)
+	if config.Options.Serial == "rtt" {
+		// Use the RTT interface, which is documented (in part) here:
+		// https://wiki.segger.com/RTT
+
+		// Try to find the "machine.rttSerialInstance" symbol, which is the RTT
+		// control block.
+		file, err := elf.Open(executable)
 		if err != nil {
-			if i < wait {
-				time.Sleep(10 * time.Millisecond)
-				continue
+			return fmt.Errorf("could not open ELF file to determine RTT control block: %w", err)
+		}
+		defer file.Close()
+		symbols, err := file.Symbols()
+		if err != nil {
+			return fmt.Errorf("could not read ELF symbol table to determine RTT control block: %w", err)
+		}
+		var address uint64
+		for _, symbol := range symbols {
+			if symbol.Name == "machine.rttSerialInstance" {
+				address = symbol.Value
+				break
 			}
+		}
+		if address == 0 {
+			return fmt.Errorf("could not find RTT control block in ELF file")
+		}
+
+		// Start an openocd process in the background.
+		args, err := config.OpenOCDConfiguration()
+		if err != nil {
 			return err
 		}
-		break
-	}
-
-	br := options.BaudRate
-	if br <= 0 {
-		br = 115200
-	}
-
-	wait = 300
-	var p serial.Port
-	for i := 0; i <= wait; i++ {
-		p, err = serial.Open(port, &serial.Mode{BaudRate: br})
+		args = append(args,
+			"-c", fmt.Sprintf("rtt setup 0x%x 16 \"SEGGER RTT\"", address),
+			"-c", "init",
+			"-c", "rtt server start 0 0")
+		cmd := executeCommand(config.Options, "openocd", args...)
+		stderr, err := cmd.StderrPipe()
 		if err != nil {
-			if i < wait {
-				time.Sleep(10 * time.Millisecond)
-				continue
-			}
 			return err
 		}
-		break
+		cmd.Stdout = os.Stdout
+		err = cmd.Start()
+		if err != nil {
+			return err
+		}
+		defer cmd.Process.Kill()
+		exit = func() {
+			// Make sure the openocd process is terminated at exit.
+			// This does not happen through the defer above when exiting through
+			// os.Exit.
+			cmd.Process.Kill()
+		}
+
+		// Read the stderr, which logs various important messages we need.
+		r := bufio.NewReader(stderr)
+		var telnet net.Conn
+		var timeoutAt time.Time
+		for {
+			// Read the next line from the openocd process.
+			lineBytes, err := r.ReadBytes('\n')
+			if err != nil {
+				return err
+			}
+			line := string(lineBytes)
+
+			if line == "Info : rtt: No control block found\n" {
+				// Message that is sent back when OpenOCD can't find the control
+				// block after a 'rtt start' message.
+				if time.Now().After(timeoutAt) {
+					return fmt.Errorf("RTT timeout (could not locate RTT control block at 0x%08x)", address)
+				}
+				time.Sleep(time.Millisecond * 100)
+				telnet.Write([]byte("rtt start\r\n"))
+			} else if strings.HasPrefix(line, "Info : Listening on port") {
+				// We need two different ports for controlling OpenOCD
+				// (typically port 4444) and the RTT channel 0 socket (arbitrary
+				// port).
+				var port int
+				var protocol string
+				fmt.Sscanf(line, "Info : Listening on port %d for %s connections\n", &port, &protocol)
+				if protocol == "telnet" && telnet == nil {
+					// Connect to the "telnet" command line interface.
+					telnet, err = net.Dial("tcp4", fmt.Sprintf("localhost:%d", port))
+					if err != nil {
+						return err
+					}
+					// Tell OpenOCD to start scanning for the RTT control block.
+					telnet.Write([]byte("rtt start\r\n"))
+					// Also make sure we will time out if the control block just
+					// can't be found.
+					timeoutAt = time.Now().Add(timeout)
+				} else if protocol == "rtt" {
+					// Connect to the RTT channel, for both stdin and stdout.
+					conn, err := net.Dial("tcp4", fmt.Sprintf("localhost:%d", port))
+					if err != nil {
+						return err
+					}
+					serialConn = conn
+				}
+			} else if strings.HasPrefix(line, "Info : rtt: Control block found at") {
+				// Connection established!
+				break
+			}
+		}
+	} else { // -serial=uart or -serial=usb
+		var err error
+		wait := 300
+		for i := 0; i <= wait; i++ {
+			port, err = getDefaultPort(port, config.Target.SerialPort)
+			if err != nil {
+				if i < wait {
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+				return err
+			}
+			break
+		}
+
+		br := config.Options.BaudRate
+		if br <= 0 {
+			br = 115200
+		}
+
+		wait = 300
+		var p serial.Port
+		for i := 0; i <= wait; i++ {
+			p, err = serial.Open(port, &serial.Mode{BaudRate: br})
+			if err != nil {
+				if i < wait {
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+				return err
+			}
+			serialConn = p
+			break
+		}
+		defer p.Close()
 	}
-	defer p.Close()
 
 	tty, err := tty.Open()
 	if err != nil {
@@ -77,6 +185,9 @@ func Monitor(executable, port string, options *compileopts.Options) error {
 	go func() {
 		<-sig
 		tty.Close()
+		if exit != nil {
+			exit()
+		}
 		os.Exit(0)
 	}()
 
@@ -88,7 +199,7 @@ func Monitor(executable, port string, options *compileopts.Options) error {
 		buf := make([]byte, 100*1024)
 		var line []byte
 		for {
-			n, err := p.Read(buf)
+			n, err := serialConn.Read(buf)
 			if err != nil {
 				errCh <- fmt.Errorf("read error: %w", err)
 				return
@@ -124,7 +235,7 @@ func Monitor(executable, port string, options *compileopts.Options) error {
 			if r == 0 {
 				continue
 			}
-			p.Write([]byte(string(r)))
+			serialConn.Write([]byte(string(r)))
 		}
 	}()
 

@@ -10,7 +10,7 @@ import (
 var (
 	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise"}
 	validSchedulerOptions     = []string{"none", "tasks", "asyncify"}
-	validSerialOptions        = []string{"none", "uart", "usb"}
+	validSerialOptions        = []string{"none", "uart", "usb", "rtt"}
 	validPrintSizeOptions     = []string{"none", "short", "full"}
 	validPanicStrategyOptions = []string{"print", "trap"}
 	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
