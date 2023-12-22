@@ -1,0 +1,10 @@
+{
+	"llvm-target": "mos",
+	"build-tags": ["mos", "baremetal", "6502", "linux"],
+	"goos": "linux",
+	"linker": "ld.lld",
+	"gc": "conservative",
+	"cflags": [
+		"-Werror"
+	]
+}
