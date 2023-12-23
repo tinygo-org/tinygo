@@ -35,7 +35,7 @@
   inputs = {
     # Use a recent stable release, but fix the version to make it reproducible.
     # This version should be updated from time to time.
-    nixpkgs.url = "nixpkgs/nixos-23.05";
+    nixpkgs.url = "nixpkgs/nixos-23.11";
     flake-utils.url = "github:numtide/flake-utils";
   };
   outputs = { self, nixpkgs, flake-utils }:
