@@ -353,6 +353,9 @@ var (
 
 	// RTL8720D (tx: PB24, rx: PC24)
 	UART3 = &sercomUSART0
+
+	// Right-hand grove port (tx: D0, rx: D1)
+	UART4 = &sercomUSART4
 )
 
 // I2C pins
