@@ -3,7 +3,7 @@
         "rp2040"
     ],
     "serial-port": ["2341:005e"],
-    "build-tags": ["nano_rp2040"],
+    "build-tags": ["nano_rp2040", "ninafw", "ninafw_reset_inverse"],
     "ldflags": [
         "--defsym=__flash_size=16M"
     ],
