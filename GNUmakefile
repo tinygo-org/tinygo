@@ -717,6 +717,8 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=swan                examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=mksnanov3           examples/blinky1
+	@$(MD5SUM) test.hex
 endif
 	$(TINYGO) build -size short -o test.hex -target=atmega328pb         examples/blinkm
 	@$(MD5SUM) test.hex
