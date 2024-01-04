@@ -54,7 +54,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push
+      - name: Build and push LLVM base image
+        uses: docker/build-push-action@v5
+        with:
+          target: tinygo-llvm-build
+          context: .
+          push: true
+          tags: |
+            tinygo/llvm-17
+            tinygo/llvm-17:latest
+            ghcr.io/tinygo-org/llvm-17
+            ghcr.io/tinygo-org/llvm-17:latest
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build and push tinygo-dev image
         uses: docker/build-push-action@v5
         with:
           context: .
