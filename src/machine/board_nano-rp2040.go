@@ -93,6 +93,12 @@ const (
 	NINA_RTS Pin = GPIO11
 )
 
+// NINA-W102 settings
+const (
+	NINA_BAUDRATE       = 115200
+	NINA_RESET_INVERTED = true
+)
+
 // Onboard crystal oscillator frequency, in MHz.
 const (
 	xoscFreq = 12 // MHz
@@ -131,6 +137,9 @@ var (
 		Buffer: NewRingBuffer(),
 		Bus:    rp.UART1,
 	}
+
+	// UART_NINA on the Arduino Nano RP2040 connects to the NINA HCI.
+	UART_NINA = UART1
 )
 
 var DefaultUART = UART0
