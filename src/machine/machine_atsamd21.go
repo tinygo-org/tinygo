@@ -534,16 +534,16 @@ func (uart *UART) Configure(config UARTConfig) error {
 	if !ok {
 		return ErrInvalidOutputPin
 	}
-	var txPinOut uint32
+	var txPadOut uint32
 	// See table 25-9 of the datasheet (page 459) for how pads are mapped to
 	// pinout values.
 	switch txPad {
 	case 0:
-		txPinOut = 0
+		txPadOut = 0
 	case 2:
-		txPinOut = 1
+		txPadOut = 1
 	default:
-		// TODO: flow control (RTS/CTS)
+		// this should be a flow control (RTS/CTS) pin
 		return ErrInvalidOutputPin
 	}
 
@@ -554,11 +554,34 @@ func (uart *UART) Configure(config UARTConfig) error {
 	}
 	// As you can see in table 25-8 on page 459 of the datasheet, input pins
 	// are mapped directly.
-	rxPinOut := rxPad
+	rxPadOut := rxPad
 
 	// configure pins
 	config.TX.Configure(PinConfig{Mode: txPinMode})
 	config.RX.Configure(PinConfig{Mode: rxPinMode})
+
+	// configure RTS/CTS pins if provided
+	if config.RTS != 0 && config.CTS != 0 {
+		rtsPinMode, _, ok := findPinPadMapping(uart.SERCOM, config.RTS)
+		if !ok {
+			return ErrInvalidOutputPin
+		}
+
+		ctsPinMode, _, ok := findPinPadMapping(uart.SERCOM, config.CTS)
+		if !ok {
+			return ErrInvalidInputPin
+		}
+
+		// See table 25-9 of the datasheet (page 459) for how pads are mapped to
+		// pinout values.
+		if txPadOut == 1 {
+			return ErrInvalidOutputPin
+		}
+		txPadOut = 2
+
+		config.RTS.Configure(PinConfig{Mode: rtsPinMode})
+		config.CTS.Configure(PinConfig{Mode: ctsPinMode})
+	}
 
 	// reset SERCOM0
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_CTRLA_SWRST)
@@ -592,8 +615,8 @@ func (uart *UART) Configure(config UARTConfig) error {
 	// set UART pads. This is not same as pins...
 	//  SERCOM_USART_CTRLA_TXPO(txPad) |
 	//   SERCOM_USART_CTRLA_RXPO(rxPad);
-	uart.Bus.CTRLA.SetBits((txPinOut << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
-		(rxPinOut << sam.SERCOM_USART_CTRLA_RXPO_Pos))
+	uart.Bus.CTRLA.SetBits((txPadOut << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
+		(rxPadOut << sam.SERCOM_USART_CTRLA_RXPO_Pos))
 
 	// Enable Transceiver and Receiver
 	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
