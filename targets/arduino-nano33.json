@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd21g18a"],
-    "build-tags": ["arduino_nano33"],
+    "build-tags": ["arduino_nano33", "ninafw"],
     "flash-command": "bossac -i -e -w -v -R -U --port={port} --offset=0x2000 {bin}",
     "serial-port": ["2341:8057", "2341:0057"],
     "flash-1200-bps-reset": "true"
