@@ -23,15 +23,7 @@ jobs:
           fetch-depth: 0 # fetch all history (no sparse checkout)
           submodules: true
       - name: Install apt dependencies
-        run: |
-          echo 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-16 main' | sudo tee /etc/apt/sources.list.d/llvm.list
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-              llvm-16-dev \
-              clang-16 \
-              libclang-16-dev \
-              lld-16
+        run: ./.github/workflows/sizediff-install-pkgs.sh
       - name: Restore LLVM source cache
         uses: actions/cache@v3
         id: cache-llvm-source
@@ -66,6 +58,9 @@ jobs:
         run: |
           git reset --hard origin/dev
           git checkout --no-recurse-submodules `git merge-base HEAD origin/dev`
+      - name: Install apt dependencies on the dev branch
+        # this is only needed on a PR that changes the LLVM version
+        run: ./.github/workflows/sizediff-install-pkgs.sh
       - name: Build tinygo binary for the dev branch
         run: go install
       - name: Determine binary sizes on the dev branch
