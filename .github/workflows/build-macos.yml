@@ -142,8 +142,8 @@ jobs:
       - name: Check binary
         run: tinygo version
       - name: Build TinyGo (default LLVM)
-        if: matrix.version == 16
+        if: matrix.version == 17
         run: go install
       - name: Check binary
-        if: matrix.version == 16
+        if: matrix.version == 17
         run: tinygo version

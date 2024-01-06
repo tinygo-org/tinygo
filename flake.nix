@@ -49,11 +49,11 @@
           buildInputs = [
             # These dependencies are required for building tinygo (go install).
             go
-            llvmPackages_16.llvm
-            llvmPackages_16.libclang
+            llvmPackages_17.llvm
+            llvmPackages_17.libclang
             # Additional dependencies needed at runtime, for building and/or
             # flashing.
-            llvmPackages_16.lld
+            llvmPackages_17.lld
             avrdude
             binaryen
             # Additional dependencies needed for on-chip debugging.
@@ -68,7 +68,7 @@
             # Without setting these explicitly, Homebrew versions might be used
             # or the default `ar` and `nm` tools might be used (which don't
             # support wasi).
-            export CLANG="clang-16 -resource-dir ${llvmPackages_16.clang.cc.lib}/lib/clang/16"
+            export CLANG="clang-17 -resource-dir ${llvmPackages_17.clang.cc.lib}/lib/clang/17"
             export LLVM_AR=llvm-ar
             export LLVM_NM=llvm-nm
 
@@ -77,7 +77,7 @@
             export MD5SUM=md5sum
 
             # Ugly hack to make the Clang resources directory available.
-            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_16.clang.cc.lib}/lib/clang/16"\"
+            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_17.clang.cc.lib}/lib/clang/17"\"
           '';
         };
       }
