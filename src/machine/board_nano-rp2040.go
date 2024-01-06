@@ -95,8 +95,9 @@ const (
 
 // NINA-W102 settings
 const (
-	NINA_BAUDRATE       = 115200
-	NINA_RESET_INVERTED = true
+	NINA_BAUDRATE         = 115200
+	NINA_RESET_INVERTED   = true
+	NINA_SOFT_FLOWCONTROL = false
 )
 
 // Onboard crystal oscillator frequency, in MHz.

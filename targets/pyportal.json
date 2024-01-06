@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd51j20a"],
-    "build-tags": ["pyportal"],
+    "build-tags": ["pyportal", "ninafw"],
     "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
