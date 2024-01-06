@@ -128,5 +128,5 @@ workflows:
       - test-llvm15-go118
       # This tests the upcoming Go 1.22 support.
       - test-llvm16-go122
-      # This tests the upcoming LLVM 17 support.
+      # This tests LLVM 17 support when linking against system libraries.
       - test-llvm17-go121
