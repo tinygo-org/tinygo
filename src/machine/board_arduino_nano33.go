@@ -110,8 +110,9 @@ const (
 
 // NINA-W102 settings
 const (
-	NINA_BAUDRATE       = 912600
-	NINA_RESET_INVERTED = true
+	NINA_BAUDRATE         = 912600
+	NINA_RESET_INVERTED   = true
+	NINA_SOFT_FLOWCONTROL = false
 )
 
 // I2S pins
