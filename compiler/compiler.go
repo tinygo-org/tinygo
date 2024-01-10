@@ -3261,7 +3261,11 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			// Instead of a load from the global, create a bitcast of the
 			// function pointer itself.
 			name := strings.TrimSuffix(unop.X.(*ssa.Global).Name(), "$funcaddr")
-			_, fn := b.getFunction(b.fn.Pkg.Members[name].(*ssa.Function))
+			pkg := b.fn.Pkg
+			if pkg == nil {
+				pkg = b.fn.Origin().Pkg
+			}
+			_, fn := b.getFunction(pkg.Members[name].(*ssa.Function))
 			if fn.IsNil() {
 				return llvm.Value{}, b.makeError(unop.Pos(), "cgo function not found: "+name)
 			}
