@@ -13,6 +13,7 @@ defined expr: 9
 25: 25
 callback 1: 50
 callback 2: 600
+callback inside generic function: 50
 variadic0: 1
 variadic2: 15
 headerfunc: 6

@@ -43,6 +43,7 @@ func main() {
 	println("callback 1:", C.doCallback(20, 30, cb))
 	cb = C.binop_t(C.mul)
 	println("callback 2:", C.doCallback(20, 30, cb))
+	genericCallbackCall[int]()
 
 	// variadic functions
 	println("variadic0:", C.variadic0())
@@ -196,4 +197,12 @@ func printBitfield(bitfield *C.bitfield_t) {
 	println("bitfield c:", bitfield.bitfield_c())
 	println("bitfield d:", bitfield.d)
 	println("bitfield e:", bitfield.e)
+}
+
+type Int interface {
+	int | uint
+}
+
+func genericCallbackCall[T Int]() {
+	println("callback inside generic function:", C.doCallback(20, 30, C.binop_t(C.add)))
 }
