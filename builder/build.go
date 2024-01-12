@@ -237,6 +237,24 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// program so it's pretty fast and doesn't need to be parallelized.
 	program := lprogram.LoadSSA()
 
+	// Determine if the program declares the main.main function.
+	var hasMain bool
+	for _, pkg := range program.AllPackages() {
+		if pkg.Pkg.Name() != "main" {
+			continue
+		}
+		if pkg.Func("main") != nil {
+			hasMain = true
+			break
+		} else {
+			// sig := types.NewSignatureType(nil, nil, nil, nil, nil, false)
+			// fn := pkg.Prog.NewFunction("main", sig, "fake main function")
+			// fn.Pkg = pkg
+			// pkg.Members["main"] = fn
+		}
+	}
+	println("hasMain =", hasMain)
+
 	// Add jobs to compile each package.
 	// Packages that have a cache hit will not be compiled again.
 	var packageJobs []*compileJob
@@ -523,6 +541,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 			}
 
+			// Create empty main.main if not present
+			if !hasMain {
+				llvm.AddFunction(mod, "main.main", ctx.VoidType())
+			}
+
 			// Create runtime.initAll function that calls the runtime
 			// initializer of each package.
 			llvmInitFn := mod.NamedFunction("runtime.initAll")
@@ -598,6 +621,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		if err != nil {
 			return result, err
 		}
+
 		// Generate output.
 		switch outext {
 		case ".o":
@@ -644,6 +668,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	}
 	result.Binary = result.Executable // final file
 	ldflags := append(config.LDFlags(), "-o", result.Executable)
+
+	// Enable WebAssembly reactor mode if main.main is not declared.
+	// This sets the entrypoint to _initialize instead of _start.
+	if !hasMain {
+		ldflags = append(ldflags, "--entry=_initialize")
+		fmt.Println("☢️ REACTOR MODE ☢️")
+	}
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.

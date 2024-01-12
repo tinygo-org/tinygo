@@ -17,7 +17,8 @@
 	],
 	"ldflags": [
 		"--stack-first",
-		"--no-demangle"
+		"--no-demangle",
+		"--entry=_initialize"
 	],
 	"extra-files": [
 		"src/runtime/asm_tinygowasm.S"

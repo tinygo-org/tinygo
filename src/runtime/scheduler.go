@@ -23,6 +23,10 @@ const asyncScheduler = GOOS == "js"
 
 var schedulerDone bool
 
+func setSchedulerDone(done bool) {
+	schedulerDone = done
+}
+
 // Queues used by the scheduler.
 var (
 	runqueue           task.Queue
