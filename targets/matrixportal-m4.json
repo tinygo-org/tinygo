@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd51j19a"],
-    "build-tags": ["matrixportal_m4"],
+    "build-tags": ["matrixportal_m4", "ninafw"],
     "serial": "usb",
     "serial-port": ["239a:80c9", "239a:80ca"],
     "flash-1200-bps-reset": "true",
