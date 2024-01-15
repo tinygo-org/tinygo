@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd51j19a"],
-    "build-tags": ["metro_m4_airlift"],
+    "build-tags": ["metro_m4_airlift", "ninafw"],
     "serial": "usb",
     "serial-port": ["239A:8037"],
     "flash-1200-bps-reset": "true",

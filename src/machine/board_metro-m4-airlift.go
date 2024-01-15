@@ -62,6 +62,15 @@ var (
 	UART2 = &sercomUSART0
 
 	DefaultUART = UART1
+
+	UART_NINA = UART2
+)
+
+// NINA-W102 settings
+const (
+	NINA_BAUDRATE         = 115200
+	NINA_RESET_INVERTED   = true
+	NINA_SOFT_FLOWCONTROL = true
 )
 
 const (
@@ -70,9 +79,12 @@ const (
 	NINA_GPIO0  = PB01
 	NINA_RESETN = PB05
 
+	// pins used for the ESP32 connection do not allow hardware
+	// flow control, which is required. have to emulate with software.
 	NINA_TX  = PA04
 	NINA_RX  = PA07
-	NINA_RTS = PB23
+	NINA_CTS = NINA_ACK
+	NINA_RTS = NINA_GPIO0
 )
 
 // I2C pins
