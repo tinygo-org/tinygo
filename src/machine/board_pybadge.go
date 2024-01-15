@@ -130,3 +130,33 @@ var (
 	usb_VID uint16 = 0x239A
 	usb_PID uint16 = 0x8033
 )
+
+// NINA-W102 settings when using AirLift WiFi FeatherWing
+const (
+	NINA_BAUDRATE         = 115200
+	NINA_RESET_INVERTED   = true
+	NINA_SOFT_FLOWCONTROL = true
+)
+
+const (
+	NINA_CS     = D13
+	NINA_ACK    = D11
+	NINA_GPIO0  = D10
+	NINA_RESETN = D12
+
+	// pins used for the ESP32 connection do not allow hardware
+	// flow control, which is required. have to emulate with software.
+	NINA_TX  = UART_TX_PIN
+	NINA_RX  = UART_RX_PIN
+	NINA_CTS = NINA_ACK
+	NINA_RTS = NINA_GPIO0
+
+	NINA_SDO = SPI0_SDO_PIN
+	NINA_SDI = SPI0_SDI_PIN
+	NINA_SCK = SPI0_SCK_PIN
+)
+
+var (
+	NINA_SPI  = SPI0
+	UART_NINA = UART1
+)
