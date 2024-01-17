@@ -1,0 +1,12 @@
+10
+9
+8
+7
+6
+5
+4
+3
+2
+1
+go1.22 has lift-off!
+behaves like Go 1.21
