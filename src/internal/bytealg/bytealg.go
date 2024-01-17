@@ -1,5 +1,14 @@
 package bytealg
 
+// Some code in this file has been copied from the Go source code, and has
+// copyright of their original authors:
+//
+// Copyright 2020 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+//
+// This is indicated specifically in the file.
+
 const (
 	// Index can search any valid length of string.
 
@@ -125,10 +134,6 @@ func IndexString(str, sub string) int {
 	return -1
 }
 
-// Copyright 2020 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 // The following code has been copied from the Go 1.15 release tree.
 
 // PrimeRK is the prime base used in Rabin-Karp algorithm.
@@ -136,6 +141,8 @@ const PrimeRK = 16777619
 
 // HashStrBytes returns the hash and the appropriate multiplicative
 // factor for use in Rabin-Karp algorithm.
+//
+// This function was removed in Go 1.22.
 func HashStrBytes(sep []byte) (uint32, uint32) {
 	hash := uint32(0)
 	for i := 0; i < len(sep); i++ {
@@ -153,7 +160,9 @@ func HashStrBytes(sep []byte) (uint32, uint32) {
 
 // HashStr returns the hash and the appropriate multiplicative
 // factor for use in Rabin-Karp algorithm.
-func HashStr(sep string) (uint32, uint32) {
+//
+// This function was removed in Go 1.22.
+func HashStr[T string | []byte](sep T) (uint32, uint32) {
 	hash := uint32(0)
 	for i := 0; i < len(sep); i++ {
 		hash = hash*PrimeRK + uint32(sep[i])
@@ -170,6 +179,8 @@ func HashStr(sep string) (uint32, uint32) {
 
 // HashStrRevBytes returns the hash of the reverse of sep and the
 // appropriate multiplicative factor for use in Rabin-Karp algorithm.
+//
+// This function was removed in Go 1.22.
 func HashStrRevBytes(sep []byte) (uint32, uint32) {
 	hash := uint32(0)
 	for i := len(sep) - 1; i >= 0; i-- {
@@ -187,7 +198,9 @@ func HashStrRevBytes(sep []byte) (uint32, uint32) {
 
 // HashStrRev returns the hash of the reverse of sep and the
 // appropriate multiplicative factor for use in Rabin-Karp algorithm.
-func HashStrRev(sep string) (uint32, uint32) {
+//
+// Copied from the Go 1.22rc1 source tree.
+func HashStrRev[T string | []byte](sep T) (uint32, uint32) {
 	hash := uint32(0)
 	for i := len(sep) - 1; i >= 0; i-- {
 		hash = hash*PrimeRK + uint32(sep[i])
@@ -204,6 +217,8 @@ func HashStrRev(sep string) (uint32, uint32) {
 
 // IndexRabinKarpBytes uses the Rabin-Karp search algorithm to return the index of the
 // first occurence of substr in s, or -1 if not present.
+//
+// This function was removed in Go 1.22.
 func IndexRabinKarpBytes(s, sep []byte) int {
 	// Rabin-Karp search
 	hashsep, pow := HashStrBytes(sep)
@@ -228,16 +243,18 @@ func IndexRabinKarpBytes(s, sep []byte) int {
 }
 
 // IndexRabinKarp uses the Rabin-Karp search algorithm to return the index of the
-// first occurence of substr in s, or -1 if not present.
-func IndexRabinKarp(s, substr string) int {
+// first occurrence of sep in s, or -1 if not present.
+//
+// Copied from the Go 1.22rc1 source tree.
+func IndexRabinKarp[T string | []byte](s, sep T) int {
 	// Rabin-Karp search
-	hashss, pow := HashStr(substr)
-	n := len(substr)
+	hashss, pow := HashStr(sep)
+	n := len(sep)
 	var h uint32
 	for i := 0; i < n; i++ {
 		h = h*PrimeRK + uint32(s[i])
 	}
-	if h == hashss && s[:n] == substr {
+	if h == hashss && string(s[:n]) == string(sep) {
 		return 0
 	}
 	for i := n; i < len(s); {
@@ -245,7 +262,7 @@ func IndexRabinKarp(s, substr string) int {
 		h += uint32(s[i])
 		h -= pow * uint32(s[i-n])
 		i++
-		if h == hashss && s[i-n:i] == substr {
+		if h == hashss && string(s[i-n:i]) == string(sep) {
 			return i - n
 		}
 	}
@@ -260,4 +277,51 @@ func MakeNoZero(n int) []byte {
 	// For performance reasons we might want to change this (similar to the
 	// malloc function implemented in the runtime).
 	return make([]byte, n)
+}
+
+// Copied from the Go 1.22rc1 source tree.
+func LastIndexByte(s []byte, c byte) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+// Copied from the Go 1.22rc1 source tree.
+func LastIndexByteString(s string, c byte) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+// LastIndexRabinKarp uses the Rabin-Karp search algorithm to return the last index of the
+// occurrence of sep in s, or -1 if not present.
+//
+// Copied from the Go 1.22rc1 source tree.
+func LastIndexRabinKarp[T string | []byte](s, sep T) int {
+	// Rabin-Karp search from the end of the string
+	hashss, pow := HashStrRev(sep)
+	n := len(sep)
+	last := len(s) - n
+	var h uint32
+	for i := len(s) - 1; i >= last; i-- {
+		h = h*PrimeRK + uint32(s[i])
+	}
+	if h == hashss && string(s[last:]) == string(sep) {
+		return last
+	}
+	for i := last - 1; i >= 0; i-- {
+		h *= PrimeRK
+		h += uint32(s[i])
+		h -= pow * uint32(s[i+n])
+		if h == hashss && string(s[i:i+n]) == string(sep) {
+			return i
+		}
+	}
+	return -1
 }
