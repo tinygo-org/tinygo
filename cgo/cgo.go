@@ -25,9 +25,15 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
+// Function that's only defined in Go 1.22.
+var setASTFileFields = func(f *ast.File, start, end token.Pos) {
+}
+
 // cgoPackage holds all CGo-related information of a package.
 type cgoPackage struct {
 	generated       *ast.File
+	packageName     string
+	cgoFiles        []*ast.File
 	generatedPos    token.Pos
 	errors          []error
 	currentDir      string // current working directory
@@ -165,8 +171,9 @@ func GoBytes(ptr unsafe.Pointer, length C.int) []byte {
 // functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
 // hashes of the accessed C header files. If there is one or more error, it
 // returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
+		packageName:     files[0].Name.Name,
 		currentDir:      dir,
 		importPath:      importPath,
 		fset:            fset,
@@ -202,6 +209,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 		// This is always a bug in the cgo package.
 		panic("unexpected error: " + err.Error())
 	}
+	p.cgoFiles = append(p.cgoFiles, p.generated)
 	// If the Comments field is not set to nil, the go/format package will get
 	// confused about where comments should go.
 	p.generated.Comments = nil
@@ -332,7 +340,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
+	return p.cgoFiles, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
 }
 
 func (p *cgoPackage) newCGoFile(file *ast.File, index int) *cgoFile {

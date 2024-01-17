@@ -447,7 +447,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 		}
-		files = append(files, generated)
+		files = append(files, generated...)
 		p.program.LDFlags = append(p.program.LDFlags, ldflags...)
 	}
 

@@ -55,7 +55,7 @@ func TestCGo(t *testing.T) {
 			}
 
 			// Process the AST with CGo.
-			cgoAST, _, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", "main", fset, cflags)
+			cgoFiles, _, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", "main", fset, cflags)
 
 			// Check the AST for type errors.
 			var typecheckErrors []error
@@ -66,7 +66,7 @@ func TestCGo(t *testing.T) {
 				Importer: simpleImporter{},
 				Sizes:    types.SizesFor("gccgo", "arm"),
 			}
-			_, err = config.Check("", fset, []*ast.File{f, cgoAST}, nil)
+			_, err = config.Check("", fset, append([]*ast.File{f}, cgoFiles...), nil)
 			if err != nil && len(typecheckErrors) == 0 {
 				// Only report errors when no type errors are found (an
 				// unexpected condition).
@@ -91,7 +91,7 @@ func TestCGo(t *testing.T) {
 				}
 				buf.WriteString("\n")
 			}
-			err = format.Node(buf, fset, cgoAST)
+			err = format.Node(buf, fset, cgoFiles[0])
 			if err != nil {
 				t.Errorf("could not write out CGo AST: %v", err)
 			}

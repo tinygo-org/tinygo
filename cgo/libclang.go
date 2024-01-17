@@ -589,6 +589,13 @@ func (p *cgoPackage) getClangLocationPosition(location C.CXSourceLocation, tu C.
 		f := p.fset.AddFile(filename, -1, int(size))
 		f.SetLines(lines)
 		p.tokenFiles[filename] = f
+		// Add dummy file AST, to satisfy the type checker.
+		astFile := &ast.File{
+			Package: f.Pos(0),
+			Name:    ast.NewIdent(p.packageName),
+		}
+		setASTFileFields(astFile, f.Pos(0), f.Pos(int(size)))
+		p.cgoFiles = append(p.cgoFiles, astFile)
 	}
 	positionFile := p.tokenFiles[filename]
 
