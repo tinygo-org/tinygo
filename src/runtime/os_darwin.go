@@ -112,3 +112,14 @@ func findGlobals(found func(start, end uintptr)) {
 		cmd = (*segmentLoadCommand)(unsafe.Add(unsafe.Pointer(cmd), cmd.cmdsize))
 	}
 }
+
+func hardwareRand() (n uint64, ok bool) {
+	n |= uint64(libc_arc4random())
+	n |= uint64(libc_arc4random()) << 32
+	return n, true
+}
+
+// uint32_t arc4random(void);
+//
+//export arc4random
+func libc_arc4random() uint32

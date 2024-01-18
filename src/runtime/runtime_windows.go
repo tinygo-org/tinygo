@@ -228,3 +228,19 @@ func procPin() {
 //go:linkname procUnpin sync/atomic.runtime_procUnpin
 func procUnpin() {
 }
+
+func hardwareRand() (n uint64, ok bool) {
+	var n1, n2 uint32
+	errCode1 := libc_rand_s(&n1)
+	errCode2 := libc_rand_s(&n2)
+	n = uint64(n1)<<32 | uint64(n2)
+	ok = errCode1 == 0 && errCode2 == 0
+	return
+}
+
+// Cryptographically secure random number generator.
+// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/rand-s?view=msvc-170
+// errno_t rand_s(unsigned int* randomValue);
+//
+//export rand_s
+func libc_rand_s(randomValue *uint32) int32

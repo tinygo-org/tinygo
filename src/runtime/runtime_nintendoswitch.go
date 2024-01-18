@@ -308,3 +308,8 @@ func svcOutputDebugString(str *uint8, size uint64) uint64
 //
 //export svcGetInfo
 func svcGetInfo(output *uint64, id0 uint32, handle uint32, id1 uint64) uint64
+
+func hardwareRand() (n uint64, ok bool) {
+	// TODO: see whether there is a RNG and use it.
+	return 0, false
+}

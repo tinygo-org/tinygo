@@ -16,6 +16,8 @@ func rand_fastrand64() uint64 {
 }
 
 // This function is used by hash/maphash.
+// This function isn't required anymore since Go 1.22, so should be removed once
+// that becomes the minimum requirement.
 func fastrand() uint32 {
 	xorshift32State = xorshift32(xorshift32State)
 	return xorshift32State
@@ -34,6 +36,8 @@ func xorshift32(x uint32) uint32 {
 }
 
 // This function is used by hash/maphash.
+// This function isn't required anymore since Go 1.22, so should be removed once
+// that becomes the minimum requirement.
 func fastrand64() uint64 {
 	xorshift64State = xorshiftMult64(xorshift64State)
 	return xorshift64State
@@ -55,4 +59,17 @@ func memhash(p unsafe.Pointer, seed, s uintptr) uintptr {
 		return uintptr(hash64(p, s, seed))
 	}
 	return uintptr(hash32(p, s, seed))
+}
+
+// Function that's called from various packages starting with Go 1.22.
+func rand() uint64 {
+	// Return a random number from hardware, falling back to software if
+	// unavailable.
+	n, ok := hardwareRand()
+	if !ok {
+		// Fallback to static random number.
+		// Not great, but we can't do much better than this.
+		n = fastrand64()
+	}
+	return n
 }

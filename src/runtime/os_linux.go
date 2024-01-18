@@ -120,3 +120,16 @@ func libc_getpagesize() int
 func syscall_Getpagesize() int {
 	return libc_getpagesize()
 }
+
+func hardwareRand() (n uint64, ok bool) {
+	read := libc_getrandom(unsafe.Pointer(&n), 8, 0)
+	if read != 8 {
+		return 0, false
+	}
+	return n, true
+}
+
+// ssize_t getrandom(void buf[.buflen], size_t buflen, unsigned int flags);
+//
+//export getrandom
+func libc_getrandom(buf unsafe.Pointer, buflen uintptr, flags uint32) uint32

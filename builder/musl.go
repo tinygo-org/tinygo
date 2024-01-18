@@ -119,6 +119,7 @@ var Musl = Library{
 			"internal/syscall_ret.c",
 			"internal/vdso.c",
 			"legacy/*.c",
+			"linux/*.c",
 			"malloc/*.c",
 			"malloc/mallocng/*.c",
 			"mman/*.c",
