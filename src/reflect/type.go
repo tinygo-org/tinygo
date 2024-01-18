@@ -1313,3 +1313,9 @@ func uvarint32(buf []byte) (uint32, int) {
 	}
 	return 0, 0
 }
+
+// TypeFor returns the [Type] that represents the type argument T.
+func TypeFor[T any]() Type {
+	// This function was copied from the Go 1.22 source tree.
+	return TypeOf((*T)(nil)).Elem()
+}
