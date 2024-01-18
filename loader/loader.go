@@ -378,6 +378,12 @@ func (p *Package) Check() error {
 		typeErrors = append(typeErrors, err)
 	}
 	checker.Importer = p
+	if p.Module.GoVersion != "" {
+		// Setting the Go version for a module makes sure the type checker
+		// errors out on language features not supported in that particular
+		// version.
+		checker.GoVersion = "go" + p.Module.GoVersion
+	}
 
 	// Do typechecking of the package.
 	packageName := p.ImportPath
