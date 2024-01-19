@@ -1450,6 +1450,11 @@ func TestIsNil(t *testing.T) {
 	NotNil(fi, t)
 }
 
+func setField[S, V any](in S, offset uintptr, value V) (out S) {
+	*(*V)(unsafe.Add(unsafe.Pointer(&in), offset)) = value
+	return in
+}
+
 func TestIsZero(t *testing.T) {
 	for i, tt := range []struct {
 		x    any
@@ -1483,14 +1488,14 @@ func TestIsZero(t *testing.T) {
 		{float32(1.2), false},
 		{float64(0), true},
 		{float64(1.2), false},
-		{math.Copysign(0, -1), false},
+		{math.Copysign(0, -1), true},
 		{complex64(0), true},
 		{complex64(1.2), false},
 		{complex128(0), true},
 		{complex128(1.2), false},
-		{complex(math.Copysign(0, -1), 0), false},
-		{complex(0, math.Copysign(0, -1)), false},
-		{complex(math.Copysign(0, -1), math.Copysign(0, -1)), false},
+		{complex(math.Copysign(0, -1), 0), true},
+		{complex(0, math.Copysign(0, -1)), true},
+		{complex(math.Copysign(0, -1), math.Copysign(0, -1)), true},
 		{uintptr(0), true},
 		{uintptr(128), false},
 		// Array
@@ -1503,6 +1508,8 @@ func TestIsZero(t *testing.T) {
 		{[3][]int{{1}}, false},                  // incomparable array
 		{[1 << 12]byte{}, true},
 		{[1 << 12]byte{1}, false},
+		{[1]struct{ p *int }{}, true},
+		{[1]struct{ p *int }{{new(int)}}, false},
 		{[3]Value{}, true},
 		{[3]Value{{}, ValueOf(0), {}}, false},
 		// Chan
@@ -1539,6 +1546,20 @@ func TestIsZero(t *testing.T) {
 		{struct{ s []int }{[]int{1}}, false},  // incomparable struct
 		{struct{ Value }{}, true},
 		{struct{ Value }{ValueOf(0)}, false},
+		{struct{ _, a, _ uintptr }{}, true}, // comparable struct with blank fields
+		{setField(struct{ _, a, _ uintptr }{}, 0*unsafe.Sizeof(uintptr(0)), 1), true},
+		{setField(struct{ _, a, _ uintptr }{}, 1*unsafe.Sizeof(uintptr(0)), 1), false},
+		{setField(struct{ _, a, _ uintptr }{}, 2*unsafe.Sizeof(uintptr(0)), 1), true},
+		{struct{ _, a, _ func() }{}, true}, // incomparable struct with blank fields
+		{setField(struct{ _, a, _ func() }{}, 0*unsafe.Sizeof((func())(nil)), func() {}), true},
+		{setField(struct{ _, a, _ func() }{}, 1*unsafe.Sizeof((func())(nil)), func() {}), false},
+		{setField(struct{ _, a, _ func() }{}, 2*unsafe.Sizeof((func())(nil)), func() {}), true},
+		{struct{ a [256]S }{}, true},
+		{struct{ a [256]S }{a: [256]S{2: {i1: 1}}}, false},
+		{struct{ a [256]float32 }{}, true},
+		{struct{ a [256]float32 }{a: [256]float32{2: 1.0}}, false},
+		{struct{ _, a [256]S }{}, true},
+		{setField(struct{ _, a [256]S }{}, 0*unsafe.Sizeof(int64(0)), int64(1)), true},
 		// UnsafePointer
 		{(unsafe.Pointer)(nil), true},
 		{(unsafe.Pointer)(new(int)), false},
@@ -1564,9 +1585,7 @@ func TestIsZero(t *testing.T) {
 		p.SetZero()
 		if !p.IsZero() {
 			t.Errorf("%d: IsZero((%s)(%+v)) is true after SetZero", i, p.Kind(), tt.x)
-
 		}
-
 	}
 
 	/* // TODO(tinygo): panic/recover support

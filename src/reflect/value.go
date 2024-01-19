@@ -124,10 +124,9 @@ func (v Value) IsZero() bool {
 	case Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
 		return v.Uint() == 0
 	case Float32, Float64:
-		return math.Float64bits(v.Float()) == 0
+		return v.Float() == 0
 	case Complex64, Complex128:
-		c := v.Complex()
-		return math.Float64bits(real(c)) == 0 && math.Float64bits(imag(c)) == 0
+		return v.Complex() == 0
 	case Array:
 		for i := 0; i < v.Len(); i++ {
 			if !v.Index(i).IsZero() {
@@ -141,7 +140,7 @@ func (v Value) IsZero() bool {
 		return v.Len() == 0
 	case Struct:
 		for i := 0; i < v.NumField(); i++ {
-			if !v.Field(i).IsZero() {
+			if !v.Field(i).IsZero() && v.Type().Field(i).Name != "_" {
 				return false
 			}
 		}
