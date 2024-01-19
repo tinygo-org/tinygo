@@ -23,6 +23,7 @@ type Options struct {
 	GOOS            string // environment variable
 	GOARCH          string // environment variable
 	GOARM           string // environment variable (only used with GOARCH=arm)
+	Directory       string // working dir, leave it unset to use the current working dir
 	Target          string
 	Opt             string
 	GC              string
@@ -48,7 +49,6 @@ type Options struct {
 	Programmer      string
 	OpenOCDCommands []string
 	LLVMFeatures    string
-	Directory       string
 	PrintJSON       bool
 	Monitor         bool
 	BaudRate        int

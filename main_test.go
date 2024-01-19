@@ -69,6 +69,7 @@ func TestBuild(t *testing.T) {
 		"json.go",
 		"map.go",
 		"math.go",
+		"oldgo/",
 		"print.go",
 		"reflect.go",
 		"slice.go",
@@ -91,7 +92,7 @@ func TestBuild(t *testing.T) {
 		tests = append(tests, "go1.21.go")
 	}
 	if minor >= 22 {
-		tests = append(tests, "go1.22.go")
+		tests = append(tests, "go1.22/")
 	}
 
 	if *testTarget != "" {
@@ -336,8 +337,11 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	path := TESTDATA + "/" + name
 	// Get the expected output for this test.
 	txtpath := path[:len(path)-3] + ".txt"
+	pkgName := "./" + path
 	if path[len(path)-1] == '/' {
 		txtpath = path + "out.txt"
+		options.Directory = path
+		pkgName = "."
 	}
 	expected, err := os.ReadFile(txtpath)
 	if err != nil {
@@ -351,7 +355,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 
 	// Build the test binary.
 	stdout := &bytes.Buffer{}
-	_, err = buildAndRun("./"+path, config, stdout, cmdArgs, environmentVars, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(pkgName, config, stdout, cmdArgs, environmentVars, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
 		return cmd.Run()
 	})
 	if err != nil {

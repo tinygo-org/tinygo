@@ -27,6 +27,8 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
+var initFileVersions = func(info *types.Info) {}
+
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
 	config      *compileopts.Config
@@ -383,7 +385,19 @@ func (p *Package) Check() error {
 		// errors out on language features not supported in that particular
 		// version.
 		checker.GoVersion = "go" + p.Module.GoVersion
+	} else {
+		// Version is not known, so use the currently installed Go version.
+		// This is needed for `tinygo run` for example.
+		// Normally we'd use goenv.GorootVersionString(), but for compatibility
+		// with Go 1.20 and below we need a version in the form of "go1.12" (no
+		// patch version).
+		major, minor, err := goenv.GetGorootVersion()
+		if err != nil {
+			return err
+		}
+		checker.GoVersion = fmt.Sprintf("go%d.%d", major, minor)
 	}
+	initFileVersions(&p.info)
 
 	// Do typechecking of the package.
 	packageName := p.ImportPath
