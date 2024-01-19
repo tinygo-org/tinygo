@@ -1,0 +1,1 @@
+loops behave like Go 1.21

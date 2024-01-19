@@ -9,4 +9,4 @@
 2
 1
 go1.22 has lift-off!
-behaves like Go 1.21
+loops behave like Go 1.22

@@ -19,15 +19,13 @@ func testLoopVar() {
 			f = func() int { return i }
 		}
 	}
-	// Prints 1 in Go 1.21, or 0 in Go 1.22.
-	// TODO: this still prints Go 1.21 even in Go 1.22. We probably need to
-	// specify the Go version somewhere.
+	// Variable n is 1 in Go 1.21, or 0 in Go 1.22.
 	n := f()
 	if n == 0 {
-		println("behaves like Go 1.22")
+		println("loops behave like Go 1.22")
 	} else if n == 1 {
-		println("behaves like Go 1.21")
+		println("loops behave like Go 1.21")
 	} else {
-		println("unknown behavior")
+		println("unknown loop behavior")
 	}
 }
