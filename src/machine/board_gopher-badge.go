@@ -73,7 +73,7 @@ const (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Gopher Badger"
+	usb_STRING_PRODUCT      = "Gopher Badge"
 	usb_STRING_MANUFACTURER = "TinyGo"
 )
 
