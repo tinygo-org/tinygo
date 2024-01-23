@@ -107,3 +107,36 @@ var (
 		AltFuncSelector: AF4_I2C1_2_3,
 	}
 )
+
+// Motor control pins.
+const (
+	X_ENABLE = PE4
+	X_STEP   = PE3
+	X_DIR    = PE2
+	X_DIAG   = PA15
+	X_UART   = PD5
+
+	Y_ENABLE = PE1
+	Y_STEP   = PE0
+	Y_DIR    = PB9
+	Y_DIAG   = PD2
+	Y_UART   = PD7
+
+	Z_ENABLE = PB8
+	Z_STEP   = PB5
+	Z_DIR    = PB4
+	Z_DIAG   = PC8
+	Z_UART   = PD4
+
+	E0_ENABLE = PB3
+	E0_STEP   = PD6
+	E0_DIR    = PD3
+	E0_DIAG   = PC4
+	E0_UART   = PD9
+
+	E1_ENABLE = PA3
+	E1_STEP   = PD15
+	E1_DIR    = PA1
+	E1_DIAG   = PE7
+	E1_UART   = PD8
+)
