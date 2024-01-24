@@ -466,8 +466,6 @@
 			this._idPool = [];      // unused ids that have been garbage collected
 			this.exited = false;    // whether the Go program has exited
 
-			const mem = new DataView(this._inst.exports.memory.buffer)
-
 			while (true) {
 				const callbackPromise = new Promise((resolve) => {
 					this._resolveCallbackPromise = () => {
