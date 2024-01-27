@@ -29,6 +29,7 @@ var libPicolibc = Library{
 			"-D_HAVE_ALIAS_ATTRIBUTE",
 			"-DTINY_STDIO",
 			"-DPOSIX_IO",
+			"-DFORMAT_DEFAULT_INTEGER", // use __i_vfprintf and __i_vfscanf by default
 			"-D_IEEE_LIBM",
 			"-D__OBSOLETE_MATH_FLOAT=1", // use old math code that doesn't expect a FPU
 			"-D__OBSOLETE_MATH_DOUBLE=0",

@@ -152,3 +152,5 @@ typedef int arraydecay_buf3[4][7][2];
 void arraydecay(int buf1[5], int buf2[3][8], arraydecay_buf3 buf3);
 
 double doSqrt(double);
+
+void printf_single_int(char *format, int arg);

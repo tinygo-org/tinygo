@@ -179,6 +179,10 @@ func main() {
 	// libc: test basic stdio functionality
 	putsBuf := []byte("line written using C puts\x00")
 	C.puts((*C.char)(unsafe.Pointer(&putsBuf[0])))
+
+	// libc: test whether printf works in C.
+	printfBuf := []byte("line written using C printf with value=%d\n\x00")
+	C.printf_single_int((*C.char)(unsafe.Pointer(&printfBuf[0])), -21)
 }
 
 func printUnion(union C.joined_t) C.joined_t {

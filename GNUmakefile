@@ -856,6 +856,7 @@ build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN
 	@mkdir -p build/release/tinygo/lib/CMSIS/CMSIS
 	@mkdir -p build/release/tinygo/lib/macos-minimal-sdk
 	@mkdir -p build/release/tinygo/lib/mingw-w64/mingw-w64-crt/lib-common
+	@mkdir -p build/release/tinygo/lib/mingw-w64/mingw-w64-crt/stdio
 	@mkdir -p build/release/tinygo/lib/mingw-w64/mingw-w64-headers/defaults
 	@mkdir -p build/release/tinygo/lib/musl/arch
 	@mkdir -p build/release/tinygo/lib/musl/crt
@@ -891,10 +892,12 @@ endif
 	@cp -rp lib/musl/src/include         build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/internal        build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/legacy          build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/locale          build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/linux           build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/malloc          build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/mman            build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/math            build/release/tinygo/lib/musl/src
+	@cp -rp lib/musl/src/multibyte       build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/signal          build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/stdio           build/release/tinygo/lib/musl/src
 	@cp -rp lib/musl/src/string          build/release/tinygo/lib/musl/src
@@ -904,6 +907,7 @@ endif
 	@cp -rp lib/mingw-w64/mingw-w64-crt/def-include                 build/release/tinygo/lib/mingw-w64/mingw-w64-crt
 	@cp -rp lib/mingw-w64/mingw-w64-crt/lib-common/api-ms-win-crt-* build/release/tinygo/lib/mingw-w64/mingw-w64-crt/lib-common
 	@cp -rp lib/mingw-w64/mingw-w64-crt/lib-common/kernel32.def.in  build/release/tinygo/lib/mingw-w64/mingw-w64-crt/lib-common
+	@cp -rp lib/mingw-w64/mingw-w64-crt/stdio/ucrt_*                build/release/tinygo/lib/mingw-w64/mingw-w64-crt/stdio
 	@cp -rp lib/mingw-w64/mingw-w64-headers/crt/                    build/release/tinygo/lib/mingw-w64/mingw-w64-headers
 	@cp -rp lib/mingw-w64/mingw-w64-headers/defaults/include        build/release/tinygo/lib/mingw-w64/mingw-w64-headers/defaults
 	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
