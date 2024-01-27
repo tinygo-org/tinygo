@@ -77,3 +77,4 @@ copied string: foobar
 CGo sqrt(3): +1.732051e+000
 C   sqrt(3): +1.732051e+000
 line written using C puts
+line written using C printf with value=-21

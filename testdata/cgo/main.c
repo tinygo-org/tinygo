@@ -1,5 +1,6 @@
 #include <math.h>
 #include "main.h"
+#include <stdio.h>
 
 int global = 3;
 bool globalBool = 1;
@@ -71,4 +72,8 @@ void arraydecay(int buf1[5], int buf2[3][8], int buf3[4][7][2]) {
 
 double doSqrt(double x) {
 	return sqrt(x);
+}
+
+void printf_single_int(char *format, int arg) {
+	printf(format, arg);
 }
