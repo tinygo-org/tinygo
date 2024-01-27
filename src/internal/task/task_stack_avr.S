@@ -1,3 +1,5 @@
+//go:build tinygo
+
 .section .bss.tinygo_systemStack
 .global tinygo_systemStack
 .type   tinygo_systemStack, %object
