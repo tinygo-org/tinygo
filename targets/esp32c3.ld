@@ -58,7 +58,7 @@ SECTIONS
      */
     .rodata : ALIGN(4)
     {
-        *(.rodata .rodata.*)
+        *(.rodata*)
         . = ALIGN (4);
     } >DROM
 
@@ -97,6 +97,7 @@ SECTIONS
         _sdata = ABSOLUTE(.);
         *(.sdata)
         *(.data .data.*)
+        *(.dram*)
         . = ALIGN (4);
         _edata = ABSOLUTE(.);
     } >DRAM
@@ -113,12 +114,22 @@ SECTIONS
         . += SIZEOF(.data);
     } > IRAM
 
-    /* Initialization code is loaded into IRAM. This memory area is also used by
-     * the heap, so no RAM is wasted.
+    /* IRAM segment. This contains some functions that always need to be loaded
+     * in IRAM, and contains initialization code.
+     * The initialization code is later reclaimed for the heap, so no RAM is
+     * wasted.
      */
-    .init : ALIGN(4)
+    .iram : ALIGN(4)
     {
+        *(.iram*)
+        *(.wifislprxiram*)
+        *(.wifiextrairam*)
+        *(.wifi0iram*)
+        *(.wifislpiram*)
+        *(.wifirxiram*)
+        __init_start = .;
         *(.init)
+        __init_end = .;
     } >IRAM
 
     /* Dummy section to put the IROM segment exactly behind the IRAM segment.
@@ -132,7 +143,7 @@ SECTIONS
         . += 0x18;                                                 /* esp_image_header_t */
         . += SIZEOF(.rodata) + ((SIZEOF(.rodata) != 0) ? 0x8 : 0); /* DROM segment (optional) */
         . += SIZEOF(.data)   + ((SIZEOF(.data)   != 0) ? 0x8 : 0); /* DRAM segment (optional) */
-        . += SIZEOF(.init)   + 0x8;                                /* IRAM segment */
+        . += SIZEOF(.iram)   + 0x8;                                /* IRAM segment */
         . += 0x8;                                                  /* IROM segment header */
     } > IROM
 
@@ -158,17 +169,17 @@ SECTIONS
      * The magic value comes from here:
      * https://github.com/espressif/esp-idf/blob/61299f879e/components/bootloader/subproject/main/ld/esp32c3/bootloader.ld#L191
      */
-    ASSERT((_edata + SIZEOF(.init)) < 0x3FCDE710, "the .init section overlaps with the stack used by the boot ROM, possibly causing corruption at startup")
+    ASSERT((_edata + SIZEOF(.iram)) < 0x3FCDE710, "the .iram section overlaps with the stack used by the boot ROM, possibly causing corruption at startup")
 }
 
 /* For the garbage collector.
- * Note that _heap_start starts after _edata (without caring for the .init
- * section), because the .init section isn't necessary anymore after startup and
- * can thus be overwritten by the heap.
+ * Note that _heap_start starts after _edata + most of the IRAM section.
+ * It starts just before the initialisation code, which isn't necessary anymore
+ * after startup and can thus be overwritten by the heap.
  */
 _globals_start = _sbss;
 _globals_end = _edata;
-_heap_start = _edata;
+_heap_start = _edata + SIZEOF(.iram) - (__init_end - __init_start);
 _heap_end = ORIGIN(DRAM) + LENGTH(DRAM);
 
 _stack_size = 4K;
