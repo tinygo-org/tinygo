@@ -1,3 +1,5 @@
+//go:build tinygo
+
 .section .text.tinygo_startTask
 .global  tinygo_startTask
 .type    tinygo_startTask, %function

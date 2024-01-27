@@ -1,3 +1,5 @@
+//go:build tinygo
+
 .section .text.tinygo_startTask,"ax",@progbits
 .global  tinygo_startTask
 .type    tinygo_startTask, %function

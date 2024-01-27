@@ -52,17 +52,17 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 }
 
 func (s *state) resume() {
-	switchToTask(s.sp)
+	tinygo_switchToTask(s.sp)
 }
 
 //export tinygo_switchToTask
-func switchToTask(uintptr)
+func tinygo_switchToTask(uintptr)
 
 //export tinygo_switchToScheduler
-func switchToScheduler(*uintptr)
+func tinygo_switchToScheduler(*uintptr)
 
 func (s *state) pause() {
-	switchToScheduler(&s.sp)
+	tinygo_switchToScheduler(&s.sp)
 }
 
 // SystemStack returns the system stack pointer. On Cortex-M, it is always

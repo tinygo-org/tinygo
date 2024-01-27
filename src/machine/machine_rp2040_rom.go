@@ -1,4 +1,4 @@
-//go:build rp2040
+//go:build tinygo && rp2040
 
 package machine
 

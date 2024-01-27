@@ -1,3 +1,5 @@
+//go:build tinygo
+
 // Only generate .debug_frame, don't generate .eh_frame.
 .cfi_sections .debug_frame
 
