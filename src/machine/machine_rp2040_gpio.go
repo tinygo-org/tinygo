@@ -241,6 +241,8 @@ const (
 	PinFalling PinChange = 4 << iota
 	// Edge rising
 	PinRising
+
+	PinToggle = PinFalling | PinRising
 )
 
 // Callbacks to be called for pins configured with SetInterrupt.
