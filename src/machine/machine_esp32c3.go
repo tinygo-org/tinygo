@@ -192,7 +192,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) (err error) {
 
 	if callback == nil {
 		// Disable this pin interrupt
-		p.pin().ClearBits(esp.GPIO_PIN_PIN_INT_TYPE_Msk | esp.GPIO_PIN_PIN_INT_ENA_Msk)
+		p.pin().ClearBits(esp.GPIO_PIN_INT_TYPE_Msk | esp.GPIO_PIN_INT_ENA_Msk)
 
 		if pinCallbacks[p] != nil {
 			pinCallbacks[p] = nil
@@ -216,8 +216,8 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) (err error) {
 	}
 
 	p.pin().Set(
-		(p.pin().Get() & ^uint32(esp.GPIO_PIN_PIN_INT_TYPE_Msk|esp.GPIO_PIN_PIN_INT_ENA_Msk)) |
-			uint32(change)<<esp.GPIO_PIN_PIN_INT_TYPE_Pos | uint32(1)<<esp.GPIO_PIN_PIN_INT_ENA_Pos)
+		(p.pin().Get() & ^uint32(esp.GPIO_PIN_INT_TYPE_Msk|esp.GPIO_PIN_INT_ENA_Msk)) |
+			uint32(change)<<esp.GPIO_PIN_INT_TYPE_Pos | uint32(1)<<esp.GPIO_PIN_INT_ENA_Pos)
 
 	return nil
 }
@@ -395,7 +395,7 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 	// synchronize core register
 	bus.SetID_REG_UPDATE(0)
 	// enable RTC clock
-	esp.RTC_CNTL.SetRTC_CLK_CONF_DIG_CLK8M_EN(1)
+	esp.RTC_CNTL.SetCLK_CONF_DIG_CLK8M_EN(1)
 	// wait for Core Clock to ready for configuration
 	for bus.GetID_REG_UPDATE() > 0 {
 		riscv.Asm("nop")
@@ -419,7 +419,7 @@ func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
 	// link TX with GPIO signal X (technical reference manual 5.10) (this is not interrupt signal!)
 	config.TX.outFunc().Set(regs.gpioMatrixSignal)
 	// link RX with GPIO signal X and route signals via GPIO matrix (GPIO_SIGn_IN_SEL 0x40)
-	inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SIG_IN_SEL | uint32(config.RX))
+	inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
 }
 
 func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) { // Disable all UART interrupts
@@ -611,8 +611,8 @@ func GetRNG() (ret uint32, err error) {
 	initADCClock()
 
 	// ensure fast RTC clock is enabled
-	if esp.RTC_CNTL.GetRTC_CLK_CONF_DIG_CLK8M_EN() == 0 {
-		esp.RTC_CNTL.SetRTC_CLK_CONF_DIG_CLK8M_EN(1)
+	if esp.RTC_CNTL.GetCLK_CONF_DIG_CLK8M_EN() == 0 {
+		esp.RTC_CNTL.SetCLK_CONF_DIG_CLK8M_EN(1)
 	}
 
 	return esp.APB_CTRL.GetRND_DATA(), nil
