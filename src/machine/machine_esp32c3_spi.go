@@ -201,7 +201,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// configure esp32c3 gpio pin matrix
 	config.SDI.Configure(PinConfig{Mode: PinInput})
-	inFunc(FSPIQ_IN_IDX).Set(esp.GPIO_FUNC_IN_SEL_CFG_SIG_IN_SEL | uint32(config.SDI))
+	inFunc(FSPIQ_IN_IDX).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDI))
 	config.SDO.Configure(PinConfig{Mode: PinOutput})
 	config.SDO.outFunc().Set(FSPID_OUT_IDX)
 	config.SCK.Configure(PinConfig{Mode: PinOutput})
