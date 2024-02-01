@@ -8,6 +8,11 @@ import (
 	"unsafe"
 )
 
+// On some boards, the XOSC can take longer than usual to stabilize. On such
+// boards, this is needed to avoid a hard fault on boot/reset. Refer to
+// PICO_XOSC_STARTUP_DELAY_MULTIPLIER in the Pico SDK for additional details.
+const XOSC_STARTUP_DELAY_MULTIPLIER = 64
+
 type xoscType struct {
 	ctrl     volatile.Register32
 	status   volatile.Register32
@@ -30,7 +35,7 @@ func (osc *xoscType) init() {
 	osc.ctrl.Set(rp.XOSC_CTRL_FREQ_RANGE_1_15MHZ)
 
 	// Set xosc startup delay
-	delay := (((xoscFreq * MHz) / 1000) + 128) / 256
+	delay := (((xoscFreq * MHz) / 1000) + 128) / 256 * XOSC_STARTUP_DELAY_MULTIPLIER
 	osc.startup.Set(uint32(delay))
 
 	// Set the enable bit now that we have set freq range and startup delay
