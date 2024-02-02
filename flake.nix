@@ -51,7 +51,6 @@
             go
             llvmPackages_17.llvm
             llvmPackages_17.libclang
-            llvmPackages_17.libcxx
             # Additional dependencies needed at runtime, for building and/or
             # flashing.
             llvmPackages_17.lld
