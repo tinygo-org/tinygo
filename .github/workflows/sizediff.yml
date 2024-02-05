@@ -25,7 +25,7 @@ jobs:
       - name: Install apt dependencies
         run: ./.github/workflows/sizediff-install-pkgs.sh
       - name: Restore LLVM source cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache-llvm-source
         with:
           key: llvm-source-17-sizediff-v1
@@ -35,7 +35,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache Go
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           key: go-cache-linux-sizediff-v1-${{ hashFiles('go.mod') }}
           path: |

@@ -21,7 +21,7 @@ jobs:
         run: |
             git submodule update --init lib/musl
       - name: Restore LLVM source cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-source
         with:
           key: llvm-source-17-linux-nix-v1
@@ -31,7 +31,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Save LLVM source cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
