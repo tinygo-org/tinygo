@@ -21,7 +21,7 @@ jobs:
       image: golang:1.21-alpine
     steps:
       - name: Install apk dependencies
-        # tar: needed for actions/cache@v3
+        # tar: needed for actions/cache@v4
         # git+openssh: needed for checkout (I think?)
         # ruby: needed to install fpm
         run: apk add tar git openssh make g++ ruby
@@ -33,14 +33,14 @@ jobs:
         with:
           submodules: true
       - name: Cache Go
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           key: go-cache-linux-alpine-v1-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
       - name: Restore LLVM source cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-source
         with:
           key: llvm-source-17-linux-alpine-v1
@@ -54,7 +54,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Save LLVM source cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
@@ -65,7 +65,7 @@ jobs:
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Restore LLVM build cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
           key: llvm-build-17-linux-alpine-v1
@@ -83,13 +83,13 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
       - name: Cache Binaryen
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache-binaryen
         with:
           key: binaryen-linux-alpine-v1
@@ -100,7 +100,7 @@ jobs:
           apk add cmake samurai python3
           make binaryen STATIC=1
       - name: Cache wasi-libc
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-linux-alpine-v2
@@ -119,7 +119,7 @@ jobs:
           cp -p build/release.tar.gz /tmp/tinygo.linux-amd64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_amd64.deb
       - name: Publish release artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-amd64-double-zipped
           path: |
@@ -133,7 +133,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
@@ -144,7 +144,7 @@ jobs:
           tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v14.0.4-x86_64-linux.tar.xz --strip-components=1 wasmtime-v14.0.4-x86_64-linux/*
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Download release artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: linux-amd64-double-zipped
       - name: Extract release tarball
@@ -176,14 +176,14 @@ jobs:
               simavr \
               ninja-build
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '18'
       - name: Install wasmtime
         run: |
           mkdir -p $HOME/.wasmtime $HOME/.wasmtime/bin
@@ -191,7 +191,7 @@ jobs:
           tar -C $HOME/.wasmtime/bin --wildcards -xf wasmtime-v14.0.4-x86_64-linux.tar.xz --strip-components=1 wasmtime-v14.0.4-x86_64-linux/*
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
       - name: Restore LLVM source cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-source
         with:
           key: llvm-source-17-linux-asserts-v1
@@ -205,7 +205,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Save LLVM source cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
@@ -216,7 +216,7 @@ jobs:
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Restore LLVM build cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
           key: llvm-build-17-linux-asserts-v1
@@ -232,13 +232,13 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
       - name: Cache Binaryen
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache-binaryen
         with:
           key: binaryen-linux-asserts-v1
@@ -247,7 +247,7 @@ jobs:
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
       - name: Cache wasi-libc
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-linux-asserts-v6
@@ -299,12 +299,12 @@ jobs:
               g++-${{ matrix.toolchain }} \
               libc6-dev-${{ matrix.libc }}-cross
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
       - name: Restore LLVM source cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-source
         with:
           key: llvm-source-17-linux-v1
@@ -318,7 +318,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Save LLVM source cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
@@ -329,7 +329,7 @@ jobs:
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Restore LLVM build cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
           key: llvm-build-17-linux-${{ matrix.goarch }}-v1
@@ -347,13 +347,13 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
       - name: Cache Binaryen
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache-binaryen
         with:
           key: binaryen-linux-${{ matrix.goarch }}-v3
@@ -373,7 +373,7 @@ jobs:
         run: |
           make CROSS=${{ matrix.toolchain }}
       - name: Download amd64 release
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: linux-amd64-double-zipped
       - name: Extract amd64 release
@@ -390,7 +390,7 @@ jobs:
           cp -p build/release.tar.gz /tmp/tinygo.linux-${{ matrix.goarch }}.tar.gz
           cp -p build/release.deb    /tmp/tinygo_${{ matrix.libc }}.deb
       - name: Publish release artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.goarch }}-double-zipped
           path: |

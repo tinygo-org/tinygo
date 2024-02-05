@@ -16,7 +16,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.3
+        uses: al-cheb/configure-pagefile-action@v1.4
         with:
           minimum-size: 8GB
           maximum-size: 24GB
@@ -33,12 +33,12 @@ jobs:
         with:
           submodules: true
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
       - name: Restore cached LLVM source
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-source
         with:
           key: llvm-source-17-windows-v1
@@ -52,7 +52,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Save cached LLVM source
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
@@ -63,7 +63,7 @@ jobs:
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Restore cached LLVM build
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
           key: llvm-build-17-windows-v1
@@ -80,13 +80,13 @@ jobs:
           # Remove unnecessary object files (to reduce cache size).
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save cached LLVM build
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
       - name: Cache wasi-libc sysroot
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache-wasi-libc
         with:
           key: wasi-libc-sysroot-v5
@@ -116,7 +116,7 @@ jobs:
         # - have a dobule-zipped artifact when downloaded from the UI
         # - have a very slow artifact upload
         # We're doing the former here, to keep artifact uploads fast.
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-amd64-double-zipped
           path: build/release/release.zip
@@ -126,7 +126,7 @@ jobs:
     needs: build-windows
     steps:
       - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.3
+        uses: al-cheb/configure-pagefile-action@v1.4
         with:
           minimum-size: 8GB
           maximum-size: 24GB
@@ -141,12 +141,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
       - name: Download TinyGo build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: windows-amd64-double-zipped
           path: build/
@@ -163,7 +163,7 @@ jobs:
     needs: build-windows
     steps:
       - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.3
+        uses: al-cheb/configure-pagefile-action@v1.4
         with:
           minimum-size: 8GB
           maximum-size: 24GB
@@ -171,12 +171,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
       - name: Download TinyGo build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: windows-amd64-double-zipped
           path: build/
@@ -192,7 +192,7 @@ jobs:
     needs: build-windows
     steps:
       - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.3
+        uses: al-cheb/configure-pagefile-action@v1.4
         with:
           minimum-size: 8GB
           maximum-size: 24GB
@@ -207,12 +207,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
       - name: Download TinyGo build
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: windows-amd64-double-zipped
           path: build/
