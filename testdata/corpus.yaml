@@ -24,12 +24,12 @@
 
 - repo: github.com/buger/jsonparser
 - repo: github.com/dgryski/go-bloomindex
-  tags: purego noasm
+  tags: noasm
 - repo: github.com/dgryski/go-arc
 - repo: github.com/dgryski/go-camellia
 - repo: github.com/dgryski/go-change
 - repo: github.com/dgryski/go-chaskey
-  tags: appengine purego noasm
+  tags: appengine noasm
   skipwasi: true # siphash has build tag issues
 - repo: github.com/dgryski/go-clefia
 - repo: github.com/dgryski/go-clockpro
@@ -40,7 +40,7 @@
 - repo: github.com/dgryski/go-expirecache
 - repo: github.com/dgryski/go-factor
 - repo: github.com/dgryski/go-farm
-  tags: purego noasm
+  tags: noasm
 - repo: github.com/dgryski/go-fuzzstr
 - repo: github.com/dgryski/go-hollow
 - repo: github.com/dgryski/go-idea
@@ -58,13 +58,12 @@
   tags: appengine # for dchest/siphash
   skipwasi: true
 - repo: github.com/dgryski/go-marvin32
-  tags: purego
 - repo: github.com/dgryski/go-md5crypt
 - repo: github.com/dgryski/go-metro
-  tags: purego noasm
+  tags: noasm
 - repo: github.com/dgryski/go-misty1
 - repo: github.com/dgryski/go-mph
-  tags: purego noasm
+  tags: noasm
 - repo: github.com/dgryski/go-mpchash
   tags: appengine # for dchest/siphash
   skipwasi: true
@@ -82,7 +81,7 @@
 - repo: github.com/dgryski/go-s4lru
 - repo: github.com/dgryski/go-sequitur
 - repo: github.com/dgryski/go-sip13
-  tags: purego noasm
+  tags: noasm
 - repo: github.com/dgryski/go-skinny
 - repo: github.com/dgryski/go-skip32
 - repo: github.com/dgryski/go-skipjack
@@ -97,9 +96,9 @@
 - repo: github.com/dgryski/go-xoshiro
 - repo: github.com/dgryski/go-zlatlong
 - repo: github.com/dgryski/go-postings
-  tags: purego noasm
+  tags: noasm
 - repo: golang.org/x/crypto
-  tags: purego noasm
+  tags: noasm
   subdirs:
   - pkg: argon2
   - pkg: bcrypt
