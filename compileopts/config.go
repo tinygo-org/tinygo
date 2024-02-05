@@ -74,7 +74,12 @@ func (c *Config) GOARM() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{"tinygo", "math_big_pure_go", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
+	tags := append(c.Target.BuildTags, []string{
+		"tinygo",                                     // that's the compiler
+		"purego",                                     // to get various crypto packages to work
+		"math_big_pure_go",                           // to get math/big to work
+		"gc." + c.GC(), "scheduler." + c.Scheduler(), // used inside the runtime package
+		"serial." + c.Serial()}...) // used inside the machine package
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
