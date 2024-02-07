@@ -18,7 +18,7 @@ jobs:
     # statically linked binary.
     runs-on: ubuntu-latest
     container:
-      image: golang:1.21-alpine
+      image: golang:1.22-alpine
     steps:
       - name: Install apk dependencies
         # tar: needed for actions/cache@v4
@@ -135,7 +135,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache: true
       - name: Install wasmtime
         run: |
@@ -178,7 +178,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -301,7 +301,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v4
