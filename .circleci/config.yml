@@ -105,16 +105,9 @@ jobs:
       - test-linux:
           llvm: "15"
     resource_class: large
-  test-llvm16-go122:
+  test-llvm17-go122:
     docker:
-      - image: golang:1.22-rc-bullseye
-    steps:
-      - test-linux:
-          llvm: "16"
-    resource_class: large
-  test-llvm17-go121:
-    docker:
-      - image: golang:1.21-bullseye
+      - image: golang:1.22-bullseye
     steps:
       - test-linux:
           llvm: "17"
@@ -126,7 +119,5 @@ workflows:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
       - test-llvm15-go118
-      # This tests the upcoming Go 1.22 support.
-      - test-llvm16-go122
       # This tests LLVM 17 support when linking against system libraries.
-      - test-llvm17-go121
+      - test-llvm17-go122
