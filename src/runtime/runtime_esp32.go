@@ -15,31 +15,31 @@ import (
 func main() {
 	// Disable the protection on the watchdog timer (needed when started from
 	// the bootloader).
-	esp.RTCCNTL.WDTWPROTECT.Set(0x050D83AA1)
+	esp.RTC_CNTL.WDTWPROTECT.Set(0x050D83AA1)
 
 	// Disable both watchdog timers that are enabled by default on startup.
 	// Note that these watchdogs can be protected, but the ROM bootloader
 	// doesn't seem to protect them.
-	esp.RTCCNTL.WDTCONFIG0.Set(0)
+	esp.RTC_CNTL.WDTCONFIG0.Set(0)
 	esp.TIMG0.WDTCONFIG0.Set(0)
 
 	// Switch SoC clock source to PLL (instead of the default which is XTAL).
 	// This switches the CPU (and APB) clock from 40MHz to 80MHz.
 	// Options:
-	//   RTCCNTL_CLK_CONF_SOC_CLK_SEL:       PLL    (default XTAL)
-	//   RTCCNTL_CLK_CONF_CK8M_DIV_SEL:      2      (default)
-	//   RTCCNTL_CLK_CONF_DIG_CLK8M_D256_EN: Enable (default)
-	//   RTCCNTL_CLK_CONF_CK8M_DIV:          DIV256 (default)
-	// The only real change made here is modifying RTCCNTL_CLK_CONF_SOC_CLK_SEL,
+	//   RTC_CNTL_CLK_CONF_SOC_CLK_SEL:       PLL (1)       (default XTAL)
+	//   RTC_CNTL_CLK_CONF_CK8M_DIV_SEL:      2             (default)
+	//   RTC_CNTL_CLK_CONF_DIG_CLK8M_D256_EN: Enable        (default)
+	//   RTC_CNTL_CLK_CONF_CK8M_DIV:          divide by 256 (default)
+	// The only real change made here is modifying RTC_CNTL_CLK_CONF_SOC_CLK_SEL,
 	// but setting a fixed value produces smaller code.
-	esp.RTCCNTL.CLK_CONF.Set((esp.RTCCNTL_CLK_CONF_SOC_CLK_SEL_PLL << esp.RTCCNTL_CLK_CONF_SOC_CLK_SEL_Pos) |
-		(2 << esp.RTCCNTL_CLK_CONF_CK8M_DIV_SEL_Pos) |
-		(esp.RTCCNTL_CLK_CONF_DIG_CLK8M_D256_EN_Enable << esp.RTCCNTL_CLK_CONF_DIG_CLK8M_D256_EN_Pos) |
-		(esp.RTCCNTL_CLK_CONF_CK8M_DIV_DIV256 << esp.RTCCNTL_CLK_CONF_CK8M_DIV_Pos))
+	esp.RTC_CNTL.CLK_CONF.Set((1 << esp.RTC_CNTL_CLK_CONF_SOC_CLK_SEL_Pos) |
+		(2 << esp.RTC_CNTL_CLK_CONF_CK8M_DIV_SEL_Pos) |
+		(1 << esp.RTC_CNTL_CLK_CONF_DIG_CLK8M_D256_EN_Pos) |
+		(1 << esp.RTC_CNTL_CLK_CONF_CK8M_DIV_Pos))
 
 	// Switch CPU from 80MHz to 160MHz. This doesn't affect the APB clock,
 	// which is still running at 80MHz.
-	esp.DPORT.CPU_PER_CONF.Set(esp.DPORT_CPU_PER_CONF_CPUPERIOD_SEL_SEL_160)
+	esp.DPORT.CPU_PER_CONF.Set(1) // PLL_CLK / 2, see table 3-3 in the reference manual
 
 	// Clear .bss section. .data has already been loaded by the ROM bootloader.
 	// Do this after increasing the CPU clock to possibly make startup slightly

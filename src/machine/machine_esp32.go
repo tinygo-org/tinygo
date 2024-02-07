@@ -237,13 +237,13 @@ func (p Pin) mux() *volatile.Register32 {
 	case 27:
 		return &esp.IO_MUX.GPIO27
 	case 14:
-		return &esp.IO_MUX.MTMS
+		return &esp.IO_MUX.GPIO14
 	case 12:
-		return &esp.IO_MUX.MTDI
+		return &esp.IO_MUX.GPIO12
 	case 13:
-		return &esp.IO_MUX.MTCK
+		return &esp.IO_MUX.GPIO13
 	case 15:
-		return &esp.IO_MUX.MTDO
+		return &esp.IO_MUX.GPIO15
 	case 2:
 		return &esp.IO_MUX.GPIO2
 	case 0:
@@ -255,17 +255,17 @@ func (p Pin) mux() *volatile.Register32 {
 	case 17:
 		return &esp.IO_MUX.GPIO17
 	case 9:
-		return &esp.IO_MUX.SD_DATA2
+		return &esp.IO_MUX.GPIO9
 	case 10:
-		return &esp.IO_MUX.SD_DATA3
+		return &esp.IO_MUX.GPIO10
 	case 11:
-		return &esp.IO_MUX.SD_CMD
+		return &esp.IO_MUX.GPIO11
 	case 6:
-		return &esp.IO_MUX.SD_CLK
+		return &esp.IO_MUX.GPIO6
 	case 7:
-		return &esp.IO_MUX.SD_DATA0
+		return &esp.IO_MUX.GPIO7
 	case 8:
-		return &esp.IO_MUX.SD_DATA1
+		return &esp.IO_MUX.GPIO8
 	case 5:
 		return &esp.IO_MUX.GPIO5
 	case 18:
@@ -279,9 +279,9 @@ func (p Pin) mux() *volatile.Register32 {
 	case 22:
 		return &esp.IO_MUX.GPIO22
 	case 3:
-		return &esp.IO_MUX.U0RXD
+		return &esp.IO_MUX.GPIO3
 	case 1:
-		return &esp.IO_MUX.U0TXD
+		return &esp.IO_MUX.GPIO1
 	case 23:
 		return &esp.IO_MUX.GPIO23
 	case 24:
@@ -320,7 +320,8 @@ func (uart *UART) writeByte(b byte) error {
 		// many bytes there are in the transmit buffer. Wait until there are
 		// less than 128 bytes in this buffer (the default buffer size).
 	}
-	uart.Bus.TX_FIFO.Set(b)
+	// Write to the TX_FIFO register.
+	(*volatile.Register8)(unsafe.Add(unsafe.Pointer(uart.Bus), 0x200C0000)).Set(b)
 	return nil
 }
 
