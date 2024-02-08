@@ -268,15 +268,20 @@ lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	cd lib/wasi-libc && $(MAKE) -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC="$(CLANG)" AR=$(LLVM_AR) NM=$(LLVM_NM)
 
 # Check for Node.js used during WASM tests.
-NODEJS_VERSION := $(word 1,$(subst ., ,$(shell node -v | cut -c 2-)))
 MIN_NODEJS_VERSION=16
 
 .PHONY: check-nodejs-version
 check-nodejs-version:
-ifeq (, $(shell which node))
-	@echo "Install NodeJS version 16+ to run tests."; exit 1;
-endif
-	@if [ $(NODEJS_VERSION) -lt $(MIN_NODEJS_VERSION) ]; then echo "Install NodeJS version 16+ to run tests."; exit 1; fi
+	@if ! command -v node &> /dev/null; then \
+	  echo "Install NodeJS version $(MIN_NODEJS_VERSION)+ to run tests."; \
+	  exit 1; \
+	else \
+	  export version=$(word 1,$(subst ., ,$(shell node -v | cut -c 2-))); \
+	  if [ $$version -lt $(MIN_NODEJS_VERSION) ]; then \
+	    echo "Install NodeJS version $(MIN_NODEJS_VERSION)+ to run tests."; \
+		exit 1; \
+	  fi \
+	fi
 
 # Build the Go compiler.
 tinygo:
