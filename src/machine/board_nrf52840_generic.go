@@ -2,8 +2,6 @@
 
 package machine
 
-const HasLowFrequencyCrystal = true
-
 var (
 	LED          = NoPin
 	SDA_PIN      = NoPin
