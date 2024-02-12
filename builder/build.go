@@ -741,7 +741,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				ldflags = append(ldflags, dependency.result)
 			}
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
-			if config.GOOS() == "windows" {
+			buildTags := config.BuildTags()
+			isWindowsLinker := config.GOOS() == "windows"
+			for _, tag := range buildTags {
+				if tag == "uefi" {
+					isWindowsLinker = true
+				}
+			}
+
+			if isWindowsLinker {
 				// Options for the MinGW wrapper for the lld COFF linker.
 				ldflags = append(ldflags,
 					"-Xlink=/opt:lldlto="+strconv.Itoa(speedLevel),

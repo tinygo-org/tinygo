@@ -774,6 +774,10 @@ ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/main
 endif
+	$(TINYGO) build -size short -o test.exe -target=uefi-amd64          examples/empty
+	@$(MD5SUM) test.exe
+	$(TINYGO) build -size short -o test.exe -target=uefi-amd64          examples/time-offset
+	@$(MD5SUM) test.exe
 	# test various compiler flags
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -gc=none -scheduler=none examples/blinky1
 	@$(MD5SUM) test.hex
@@ -792,6 +796,7 @@ endif
 	GOOS=windows GOARCH=arm64 $(TINYGO) build -size short -o test.exe   ./testdata/cgo
 	GOOS=darwin GOARCH=amd64 $(TINYGO) build  -size short -o test       ./testdata/cgo
 	GOOS=darwin GOARCH=arm64 $(TINYGO) build  -size short -o test       ./testdata/cgo
+	$(TINYGO) build -size short -o test.exe -target=uefi-amd64          ./testdata/cgo
 ifneq ($(OS),Windows_NT)
 	# TODO: this does not yet work on Windows. Somehow, unused functions are
 	# not garbage collected.
