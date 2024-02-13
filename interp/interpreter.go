@@ -427,6 +427,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
+				if typecodePtr.offset() == 0 {
+					locals[inst.localIndex] = literalValue{uint8(0)}
+					break
+				}
 				typecodePtrOffset, err := typecodePtr.addOffset(-int64(r.pointerSize))
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err) // unlikely
