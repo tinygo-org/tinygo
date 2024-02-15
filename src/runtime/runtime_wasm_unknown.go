@@ -2,9 +2,7 @@
 
 package runtime
 
-import (
-	"unsafe"
-)
+import "unsafe"
 
 type timeUnit int64
 
@@ -21,10 +19,6 @@ func _start() {
 	run()
 }
 
-// Read the command line arguments from WASI.
-// For example, they can be passed to a program with wasmtime like this:
-//
-//	wasmtime run ./program.wasm arg1 arg2
 func init() {
 	__wasm_call_ctors()
 }
@@ -39,7 +33,8 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns)
 }
 
-const timePrecisionNanoseconds = 1000 // TODO: how can we determine the appropriate `precision`?
+// with the wasm32-unknown-unknown target there is no way to determine any `precision`
+const timePrecisionNanoseconds = 1000
 
 func sleepTicks(d timeUnit) {
 }

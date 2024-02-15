@@ -31,10 +31,9 @@ func abort() {
 
 //go:linkname syscall_Exit syscall.Exit
 func syscall_Exit(code int) {
-	//proc_exit(uint32(code))
 }
 
-// TinyGo does not yet support any form of parallelism on WebAssembly, so these
+// There is not yet any support for any form of parallelism on WebAssembly, so these
 // can be left empty.
 
 //go:linkname procPin sync/atomic.runtime_procPin
