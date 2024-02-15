@@ -16,7 +16,7 @@ func _start() {
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
-	run()
+	initAll()
 }
 
 func init() {

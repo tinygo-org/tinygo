@@ -1,13 +1,14 @@
 {
 	"llvm-target":   "wasm32-unknown-unknown",
 	"cpu":           "generic",
-	"features":      "+mutable-globals,+nontrapping-fptoint,+sign-ext",
+	"features":      "+mutable-globals,+nontrapping-fptoint,+sign-ext,-bulk-memory",
 	"build-tags":    ["tinygo.wasm", "wasm_unknown"],
 	"goos":          "linux",
 	"goarch":        "arm",
 	"linker":        "wasm-ld",
 	"rtlib":         "compiler-rt",
 	"scheduler":     "none",
+	"gc":            "leaking",
 	"default-stack-size": 4096,
 	"cflags": [
 		"-mno-bulk-memory",
@@ -15,6 +16,7 @@
 		"-msign-ext"
 	],
 	"ldflags": [
+		"--stack-first",
 		"--no-demangle",
 		"--no-entry",
 		"--import-memory"
