@@ -773,7 +773,7 @@ endif
 ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/main
-	$(TINYGO) build -size short -o wasm.wasm -target=wasm-unknown -gc=leaking -no-debug examples/hello-wasm-unknown
+	$(TINYGO) build -size short -o wasm.wasm -target=wasm-unknown       examples/hello-wasm-unknown
 endif
 	# test various compiler flags
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -gc=none -scheduler=none examples/blinky1
