@@ -35,6 +35,7 @@ func TestClangAttributes(t *testing.T) {
 		"riscv-qemu",
 		"wasi",
 		"wasm",
+		"wasm-unknown",
 	}
 	if hasBuiltinTools {
 		// hasBuiltinTools is set when TinyGo is statically linked with LLVM,
