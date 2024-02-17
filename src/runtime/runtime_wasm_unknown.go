@@ -11,8 +11,8 @@ type timeUnit int64
 //export __wasm_call_ctors
 func __wasm_call_ctors()
 
-//export _start
-func _start() {
+//export _initialize
+func _initialize() {
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
