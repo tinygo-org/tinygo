@@ -280,10 +280,6 @@ func (c *Config) CFlags(libclang bool) []string {
 		cflags = append(cflags,
 			"-resource-dir="+resourceDir,
 		)
-		if strings.HasPrefix(c.Triple(), "xtensa") {
-			// workaround needed in LLVM 16, see: https://github.com/espressif/llvm-project/issues/83
-			cflags = append(cflags, "-isystem", filepath.Join(resourceDir, "include"))
-		}
 	}
 	switch c.Target.Libc {
 	case "darwin-libSystem":
