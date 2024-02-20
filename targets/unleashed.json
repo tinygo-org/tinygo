@@ -1,0 +1,7 @@
+{
+	"inherits": ["fu540"],
+	"build-tags": ["unleashed"],
+	"serial": "uart",
+	"linkerscript": "targets/unleashed.ld",
+	"flash-command": "false"
+}
