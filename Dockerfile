@@ -20,26 +20,24 @@ FROM tinygo-llvm AS tinygo-llvm-build
 RUN cd /tinygo/ && \
     make llvm-build
 
-# tinygo-compiler stage builds the compiler itself
-FROM tinygo-llvm-build AS tinygo-compiler
+# tinygo-compiler-build stage builds the compiler itself
+FROM tinygo-llvm-build AS tinygo-compiler-build
 
 COPY . /tinygo
 
-# update submodules
+# build the compiler and tools
 RUN cd /tinygo/ && \
-    rm -rf ./lib/*/ && \
-    git submodule sync && \
-    git submodule update --init --recursive --force
-
-RUN cd /tinygo/ && \
-    make
-
-# tinygo-tools stage installs the needed dependencies to compile TinyGo programs for all platforms.
-FROM tinygo-compiler AS tinygo-tools
-
-RUN cd /tinygo/ && \
-    make wasi-libc binaryen && \
+    git submodule update --init --recursive && \
     make gen-device -j4 && \
-    cp build/* $GOPATH/bin/
+    make build/release
 
+# tinygo-compiler copies the compiler build over to a base Go container (without
+# all the build tools etc).
+FROM golang:1.21 AS tinygo-compiler
+
+# Copy tinygo build.
+COPY --from=tinygo-compiler-build /tinygo/build/release/tinygo /tinygo
+
+# Configure the container.
+ENV PATH="${PATH}:/tinygo/bin"
 CMD ["tinygo"]
