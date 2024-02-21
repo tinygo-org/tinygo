@@ -1,4 +1,4 @@
-//go:build scheduler.tasks && cortexm && !fpu
+//go:build scheduler.tasks && cortexm && fpu
 
 package task
 
@@ -8,8 +8,8 @@ package task
 // PSP, which is used for goroutines) so that goroutines do not need extra stack
 // space for interrupts.
 
-import "C"
 import (
+	"device/arm"
 	"unsafe"
 )
 
@@ -25,8 +25,8 @@ type calleeSavedRegs struct {
 	r9  uintptr
 	r10 uintptr
 	r11 uintptr
-
-	pc uintptr
+	pc  uintptr
+	s   [32]uintptr
 }
 
 // archInit runs architecture-specific setup for the goroutine startup.
@@ -52,21 +52,21 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 }
 
 func (s *state) resume() {
-	tinygo_switchToTask(s.sp)
+	switchToTask(s.sp)
 }
 
 //export tinygo_switchToTask
-func tinygo_switchToTask(uintptr)
+func switchToTask(uintptr)
 
 //export tinygo_switchToScheduler
-func tinygo_switchToScheduler(*uintptr)
+func switchToScheduler(*uintptr)
 
 func (s *state) pause() {
-	tinygo_switchToScheduler(&s.sp)
+	switchToScheduler(&s.sp)
 }
 
 // SystemStack returns the system stack pointer. On Cortex-M, it is always
 // available.
-//
-//export SystemStack
-func SystemStack() uintptr
+func SystemStack() uintptr {
+	return arm.AsmFull("mrs {}, MSP", nil)
+}

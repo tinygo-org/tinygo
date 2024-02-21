@@ -13,7 +13,6 @@
 		"-Werror",
 		"-fshort-enums",
 		"-fomit-frame-pointer",
-		"-mfloat-abi=soft",
 		"-fno-exceptions", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
 		"-ffunction-sections", "-fdata-sections"
 	],
