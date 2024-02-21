@@ -1,7 +1,7 @@
 
 MEMORY
 {
-    RAM (xrw) : ORIGIN = 0x80000000, LENGTH = 6M
+    RAM (xrw) : ORIGIN = 0x82000000, LENGTH = 6M
 }
 
 _stack_size = 2K;

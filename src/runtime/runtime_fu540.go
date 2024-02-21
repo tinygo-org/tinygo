@@ -7,7 +7,7 @@ package runtime
 
 import (
 	"device/riscv"
-	_ "device/sifive"
+	"device/sifive"
 	"machine"
 	"runtime/volatile"
 	"unsafe"
@@ -135,23 +135,13 @@ func buffered() int {
 var timerWakeup volatile.Register8
 
 func ticks() timeUnit {
-	panic("ticks")
-	// highBits := uint32(sifive.CLINT.MTIME.Get() >> 32)
-	// for {
-	// 	lowBits := uint32(sifive.CLINT.MTIME.Get() & 0xffffffff)
-	// 	newHighBits := uint32(sifive.CLINT.MTIME.Get() >> 32)
-	// 	if newHighBits == highBits {
-	// 		return timeUnit(lowBits) | (timeUnit(highBits) << 32)
-	// 	}
-	// 	highBits = newHighBits
-	// }
+	return timeUnit(sifive.CLINT.MTIME.Get())
 }
 
 func sleepTicks(d timeUnit) {
-
-	panic("no sleep yet")
-	//target := uint64(ticks() + d)
-	//sifive.CLINT.MTIMECMP[0].Set(target)
+	hartID := riscv.MHARTID.Get()
+	target := uint64(ticks() + d)
+	sifive.CLINT.MTIMECMP[hartID].Set(target >> 32)
 	riscv.MIE.SetBits(1 << 7) // MTIE
 	for {
 		if timerWakeup.Get() != 0 {
