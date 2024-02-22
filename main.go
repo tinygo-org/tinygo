@@ -1225,6 +1225,7 @@ func usage(command string) {
 		fmt.Fprintln(os.Stderr, "  gdb:     run/flash and immediately enter GDB")
 		fmt.Fprintln(os.Stderr, "  lldb:    run/flash and immediately enter LLDB")
 		fmt.Fprintln(os.Stderr, "  monitor: open communication port")
+		fmt.Fprintln(os.Stderr, "  ports:   list available serial ports")
 		fmt.Fprintln(os.Stderr, "  env:     list environment variables used during build")
 		fmt.Fprintln(os.Stderr, "  list:    run go list using the TinyGo root")
 		fmt.Fprintln(os.Stderr, "  clean:   empty cache directory ("+goenv.Get("GOCACHE")+")")
@@ -1437,7 +1438,6 @@ func main() {
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
-	info := flag.Bool("info", false, "print information")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
 
 	// Internal flags, that are only intended for TinyGo development.
@@ -1733,17 +1733,15 @@ func main() {
 			os.Exit(1)
 		}
 	case "monitor":
-		if *info {
-			serialPortInfo, err := ListSerialPorts()
-			handleCompilerError(err)
-			for _, s := range serialPortInfo {
-				fmt.Printf("%s %4s %4s %s\n", s.Name, s.VID, s.PID, s.Target)
-			}
-		} else {
-			config, err := builder.NewConfig(options)
-			handleCompilerError(err)
-			err = Monitor("", *port, config)
-			handleCompilerError(err)
+		config, err := builder.NewConfig(options)
+		handleCompilerError(err)
+		err = Monitor("", *port, config)
+		handleCompilerError(err)
+	case "ports":
+		serialPortInfo, err := ListSerialPorts()
+		handleCompilerError(err)
+		for _, s := range serialPortInfo {
+			fmt.Printf("%s %4s %4s %s\n", s.Name, s.VID, s.PID, s.Target)
 		}
 	case "targets":
 		specs, err := compileopts.GetTargetSpecs()
