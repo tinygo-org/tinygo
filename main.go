@@ -1740,8 +1740,12 @@ func main() {
 	case "ports":
 		serialPortInfo, err := ListSerialPorts()
 		handleCompilerError(err)
+		if len(serialPortInfo) == 0 {
+			fmt.Println("No serial ports found.")
+		}
+		fmt.Printf("%-20s %-9s %s\n", "Port", "ID", "Boards")
 		for _, s := range serialPortInfo {
-			fmt.Printf("%s %4s %4s %s\n", s.Name, s.VID, s.PID, s.Target)
+			fmt.Printf("%-20s %4s:%4s %s\n", s.Name, s.VID, s.PID, s.Target)
 		}
 	case "targets":
 		specs, err := compileopts.GetTargetSpecs()
