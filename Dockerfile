@@ -2,12 +2,7 @@
 FROM golang:1.22 AS tinygo-llvm
 
 RUN apt-get update && \
-    apt-get install -y apt-utils make cmake clang-15 ninja-build && \
-    rm -rf \
-        /var/lib/apt/lists/* \
-        /var/log/* \
-        /var/tmp/* \
-        /tmp/*
+    apt-get install -y apt-utils make cmake clang-15 ninja-build
 
 COPY ./GNUmakefile /tinygo/GNUmakefile
 
