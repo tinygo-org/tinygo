@@ -2011,6 +2011,10 @@ func (v Value) Call(in []Value) []Value {
 	panic("unimplemented: (reflect.Value).Call()")
 }
 
+func (v Value) CallSlice(in []Value) []Value {
+	panic("unimplemented: (reflect.Value).CallSlice()")
+}
+
 func (v Value) Method(i int) Value {
 	panic("unimplemented: (reflect.Value).Method()")
 }
