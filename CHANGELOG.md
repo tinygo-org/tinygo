@@ -1,3 +1,78 @@
+0.31.0
+---
+
+* **general**
+  * remove LLVM 14 support
+  * add LLVM 17 support, and use it by default
+  * add Nix flake support
+  * update bundled Binaryen to version 116
+  * add `ports` subcommand that lists available serial ports for `-port` and `-monitor`
+  * support wasmtime version 14
+  * add `-serial=rtt` for serial output over SWD
+  * add Go 1.22 support and use it by default
+  * change minimum Node.js version from 16 to 18
+* **compiler**
+  * use the new LLVM pass manager
+  * allow systems with more stack space to allocate larger values on the stack
+  * `build`: fix a crash due to sharing GlobalValues between build instances
+  * `cgo`: add `C._Bool` type
+  * `cgo`: fix calling CGo callback inside generic function
+  * `compileopts`: set `purego` build tag by default so that more packages can be built
+  * `compileopts`: force-enable CGo to avoid build issues
+  * `compiler`: fix crash on type assert on interfaces with no methods
+  * `interp`: print LLVM instruction in traceback
+  * `interp`: support runtime times by running them at runtime
+  * `loader`: enforce Go language version in the type checker (this may break existing programs with an incorrect Go version in go.mod)
+  * `transform`: fix bug in StringToBytes optimization pass
+* **standard library**
+  * `crypto/tls`: stub out a lot of functions
+  * `internal/task`, `machine`: make TinyGo code usable with "big Go" CGo
+  * `machine`: implement `I2C.SetBaudRate` consistently across chips
+  * `machine`: implement `SPI.Configure` consistently across chips
+  * `machine`: add `DeviceID` for nrf, rp2040, sam, stm32
+  * `machine`: use smaller UART buffer size on atmega chips
+  * `machine/usb`: allow setting a serial number using a linker flag
+  * `math`: support more math functions on baremetal (picolibc) systems
+  * `net`: replace entire net package with a new one based on the netdev driver
+  * `os/user`: add bare-bones implementation of this package
+  * `reflect`: stub `CallSlice` and `FuncOf`
+  * `reflect`: add `TypeFor[T]`
+  * `reflect`: update `IsZero` to Go 1.22 semantics
+  * `reflect`: move indirect values into interface when setting interfaces
+  * `runtime`: stub `Breakpoint`
+  * `sync`: implement trylock
+* **targets**
+  * `atmega`: use UART double speed mode for fewer errors and higher throughput
+  * `atmega328pb`: refactor to enable extra uart
+  * `avr`: don't compile large parts of picolibc (math, stdio) for LLVM 17 support
+  * `esp32`: switch over to the official SVD file
+  * `esp32c3`: implement USB_SERIAL for USBCDC communication
+  * `esp32c3`: implement I2C
+  * `esp32c3`: implement RNG
+  * `esp32c3`: add more ROM functions and update linker script for the in-progress wifi support
+  * `esp32c3`: update to newer SVD files
+  * `rp2040`: add support for UART hardware flow control
+  * `rp2040`: add definition for `machine.PinToggle`
+  * `rp2040`: set XOSC startup delay multiplier
+  * `samd21`: add support for UART hardware flow control
+  * `samd51`: add support for UART hardware flow control
+  * `wasm`: increase default stack size to 64k for wasi/wasm targets
+  * `wasm`: bump wasi-libc version to SDK 20
+  * `wasm`: remove line of dead code in wasm_exec.js
+* **new targets/boards**
+  * `qtpy-esp32c3`: add Adafruit QT Py ESP32-C3 board
+  * `mksnanov3`: add support for the MKS Robin Nano V3.x
+  * `nrf52840-generic`: add generic nrf52840 chip support
+  * `thumby`: add support for Thumby
+  * `wasm`: add new `wasm-generic` target that doesn't depend on WASI or a browser
+* **boards**
+  * `arduino-mkrwifi1010`, `arduino-nano33`, `nano-rp2040`, `matrixportal-m4`, `metro-m4-airlift`, `pybadge`, `pyportal`: add `ninafw` build tag and some constants for BLE support
+  * `gopher-badge`: fix typo in USB product name
+  * `nano-rp2040`: add UART1 and correct mappings for NINA via UART
+  * `pico`: bump default stack size from 2kB to 8kB
+  * `wioterminal`: expose UART4
+
+
 0.30.0
 ---
 
