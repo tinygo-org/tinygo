@@ -23,6 +23,8 @@ const (
 	ParityOdd
 )
 
+var _ Serialer = (*UART)(nil)
+
 // To implement the UART interface for a board, you must declare a concrete type as follows:
 //
 // 		type UART struct {
@@ -103,4 +105,14 @@ func (uart *UART) Buffered() int {
 // Usually called by the IRQ handler for a machine.
 func (uart *UART) Receive(data byte) {
 	uart.Buffer.Put(data)
+}
+
+func (uart *UART) DTR() bool {
+	// Not Implemented ... part of machine.Serialer interface
+	return false
+}
+
+func (uart *UART) RTS() bool {
+	// Not Implemented ... part of machine.Serialer interface
+	return false
 }
