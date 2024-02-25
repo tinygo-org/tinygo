@@ -38,6 +38,13 @@ func C.GoBytes(ptr unsafe.Pointer, length C.int) []byte {
 	return C.__GoBytes(ptr, uintptr(length))
 }
 
+//go:linkname C.__CBytes runtime.cgo_CBytes
+func C.__CBytes([]byte) unsafe.Pointer
+
+func C.CBytes(b []byte) unsafe.Pointer {
+	return C.__CBytes(b)
+}
+
 type (
 	C.char      uint8
 	C.schar     int8
