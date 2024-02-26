@@ -43,6 +43,14 @@ type pwmGroup struct {
 	TOP volatile.Register32
 }
 
+type pwmBlock struct {
+	EN   volatile.Register32
+	INTR volatile.Register32
+	INTE volatile.Register32
+	INTF volatile.Register32
+	INTS volatile.Register32
+}
+
 // Equivalent of
 //
 //	var pwmSlice []pwmGroup = (*[8]pwmGroup)(unsafe.Pointer(rp.PWM))[:]
@@ -51,6 +59,11 @@ type pwmGroup struct {
 // 0x14 is the size of a pwmGroup.
 func getPWMGroup(index uintptr) *pwmGroup {
 	return (*pwmGroup)(unsafe.Add(unsafe.Pointer(rp.PWM), 0x14*index))
+}
+
+func getPWMHW() *pwmBlock {
+	const offset = 0xa0 // EN register offset
+	return (*pwmBlock)(unsafe.Pointer(uintptr(unsafe.Pointer(rp.PWM)) + offset))
 }
 
 // Hardware Pulse Width Modulation (PWM) API
@@ -69,14 +82,15 @@ func getPWMGroup(index uintptr) *pwmGroup {
 // immediately wrap to 0. PWM slices also offer a phase-correct mode, where the counter starts to count downward after
 // reaching TOP, until it reaches 0 again.
 var (
-	PWM0 = getPWMGroup(0)
-	PWM1 = getPWMGroup(1)
-	PWM2 = getPWMGroup(2)
-	PWM3 = getPWMGroup(3)
-	PWM4 = getPWMGroup(4)
-	PWM5 = getPWMGroup(5)
-	PWM6 = getPWMGroup(6)
-	PWM7 = getPWMGroup(7)
+	pwmHW = getPWMHW()
+	PWM0  = getPWMGroup(0)
+	PWM1  = getPWMGroup(1)
+	PWM2  = getPWMGroup(2)
+	PWM3  = getPWMGroup(3)
+	PWM4  = getPWMGroup(4)
+	PWM5  = getPWMGroup(5)
+	PWM6  = getPWMGroup(6)
+	PWM7  = getPWMGroup(7)
 )
 
 // Configure enables and configures this PWM.
@@ -395,6 +409,31 @@ func (pwm *pwmGroup) getPhaseCorrect() (phCorrect uint32) {
 func (pwm *pwmGroup) getClockDiv() (Int, frac uint8) {
 	div := pwm.DIV.Get()
 	return uint8((div & rp.PWM_CH0_DIV_INT_Msk) >> rp.PWM_CH0_DIV_INT_Pos), uint8((div & rp.PWM_CH0_DIV_FRAC_Msk) >> rp.PWM_CH0_DIV_FRAC_Pos)
+}
+
+// SetIRQ enables or disables PWM instance interrupt request functionality.
+func (pwm *pwmGroup) SetIRQ(enabled bool) {
+	p := pwm.peripheral()
+	if enabled {
+		pwmHW.INTE.SetBits(1 << p)
+	} else {
+		pwmHW.INTE.ClearBits(1 << p)
+	}
+}
+
+// ClearIRQ clears the current PWM's channel interrupt
+func (pwm *pwmGroup) ClearIRQ() {
+	pwmHW.INTR.Set(1 << pwm.peripheral())
+}
+
+// ForceIRQ forces an interrupt request for the given PWM.
+func (pwm *pwmGroup) ForceIRQ() {
+	pwmHW.INTF.Set(1 << pwm.peripheral())
+}
+
+// IRQStatus returns true if interrupt functionality is enabled for the pwmGroup.
+func (pwm *pwmGroup) IsIRQSet() bool {
+	return pwmHW.INTS.Get()&(1<<pwm.peripheral()) != 0
 }
 
 // pwmGPIOToSlice Determine the PWM channel that is attached to the specified GPIO.
