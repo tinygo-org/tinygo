@@ -356,13 +356,13 @@ jobs:
         uses: actions/cache@v4
         id: cache-binaryen
         with:
-          key: binaryen-linux-${{ matrix.goarch }}-v3
+          key: binaryen-linux-${{ matrix.goarch }}-v4
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: |
           sudo apt-get install --no-install-recommends ninja-build
-          git submodule update --init --recursive lib/binaryen
+          git submodule update --init lib/binaryen
           make CROSS=${{ matrix.toolchain }} binaryen
       - name: Install fpm
         run: |

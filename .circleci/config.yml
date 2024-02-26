@@ -5,7 +5,7 @@ commands:
     steps:
       - run:
           name: "Pull submodules"
-          command: git submodule update --init --recursive
+          command: git submodule update --init
   llvm-source-linux:
     steps:
       - restore_cache:
@@ -33,13 +33,13 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - binaryen-linux-v2
+            - binaryen-linux-v3
       - run:
           name: "Build Binaryen"
           command: |
             make binaryen
       - save_cache:
-          key: binaryen-linux-v2
+          key: binaryen-linux-v3
           paths:
             - build/wasm-opt
   test-linux:

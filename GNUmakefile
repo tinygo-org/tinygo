@@ -191,7 +191,7 @@ gen-device: gen-device-stm32
 endif
 
 gen-device-avr:
-	@if [ ! -e lib/avr/README.md ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init --recursive"; exit 1; fi
+	@if [ ! -e lib/avr/README.md ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
 	$(GO) build -o ./build/gen-device-avr ./tools/gen-device-avr/
 	./build/gen-device-avr lib/avr/packs/atmega src/device/avr/
 	./build/gen-device-avr lib/avr/packs/tiny src/device/avr/
@@ -265,7 +265,7 @@ endif
 .PHONY: wasi-libc
 wasi-libc: lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a
 lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
-	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init --recursive"; exit 1; fi
+	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
 	cd lib/wasi-libc && $(MAKE) -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC="$(CLANG)" AR=$(LLVM_AR) NM=$(LLVM_NM)
 
 # Check for Node.js used during WASM tests.
