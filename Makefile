@@ -242,7 +242,7 @@ gen-device-renesas: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
-	git clone https://github.com/llvm-mos/llvm-mos $(LLVM_PROJECTDIR) && cd $(LLVM_PROJECTDIR) && git checkout a6f990e5ae4e6e287997ee71928ea65b99a40fe0 && cd ..
+	git clone --depth=1 https://github.com/llvm-mos/llvm-mos $(LLVM_PROJECTDIR) && cd $(LLVM_PROJECTDIR) && git checkout a6f990e5ae4e6e287997ee71928ea65b99a40fe0 && cd ..
 llvm-source: $(LLVM_PROJECTDIR)/llvm
 
 # Configure LLVM.
