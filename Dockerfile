@@ -27,7 +27,7 @@ COPY . /tinygo
 
 # build the compiler and tools
 RUN cd /tinygo/ && \
-    git submodule update --init --recursive && \
+    git submodule update --init && \
     make gen-device -j4 && \
     make build/release
 
