@@ -256,7 +256,7 @@ ifneq ($(USE_SYSTEM_BINARYEN),1)
 binaryen: build/wasm-opt$(EXE)
 build/wasm-opt$(EXE):
 	mkdir -p build
-	cd lib/binaryen && cmake -G Ninja . -DBUILD_STATIC_LIB=ON $(BINARYEN_OPTION) && ninja bin/wasm-opt$(EXE)
+	cd lib/binaryen && cmake -G Ninja . -DBUILD_STATIC_LIB=ON -DBUILD_TESTS=OFF $(BINARYEN_OPTION) && ninja bin/wasm-opt$(EXE)
 	cp lib/binaryen/bin/wasm-opt$(EXE) build/wasm-opt$(EXE)
 endif
 
