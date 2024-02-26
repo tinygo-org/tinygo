@@ -1578,8 +1578,8 @@ type funcHeader struct {
 
 type SliceHeader struct {
 	Data uintptr
-	Len  uintptr
-	Cap  uintptr
+	Len  intw
+	Cap  intw
 }
 
 // Slice header that matches the underlying structure. Used for when we switch
@@ -1592,7 +1592,7 @@ type sliceHeader struct {
 
 type StringHeader struct {
 	Data uintptr
-	Len  uintptr
+	Len  intw
 }
 
 // Like sliceHeader, this type is used internally to make sure pointer and
