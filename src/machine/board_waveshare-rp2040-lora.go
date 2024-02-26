@@ -1,5 +1,4 @@
 //go:build waveshare_rp2040_lora
-// +build waveshare_rp2040_lora
 
 // This file contains the pin mappings for the Waveshare RP2040-LoRa boards.
 //
