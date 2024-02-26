@@ -239,7 +239,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// already be emitted in initAll.
 				continue
 			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" || callFn.name == "runtime.hashmapInterfaceHash" ||
-				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current":
+				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current" ||
+				callFn.name == "time.startTimer" || callFn.name == "time.stopTimer" || callFn.name == "time.resetTimer":
 				// These functions should be run at runtime. Specifically:
 				//   * Print and panic functions are best emitted directly without
 				//     interpreting them, otherwise we get a ton of putchar (etc.)
@@ -252,6 +253,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				//     at runtime.
 				//   * internal/task.start, internal/task.Current: start and read shcheduler state,
 				//     which is modified elsewhere.
+				//   * Timer functions access runtime internal state which may
+				//     not be initialized.
 				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 				if err != nil {
 					return nil, mem, err

@@ -142,11 +142,8 @@ func Get(name string) string {
 		}
 		return filepath.Join(dir, "tinygo")
 	case "CGO_ENABLED":
-		val := os.Getenv("CGO_ENABLED")
-		if val == "1" || val == "0" {
-			return val
-		}
-		// Default to enabling CGo.
+		// Always enable CGo. It is required by a number of targets, including
+		// macOS and the rp2040.
 		return "1"
 	case "TINYGOROOT":
 		return sourceDir()

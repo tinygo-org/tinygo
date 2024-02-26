@@ -87,12 +87,6 @@ func (c *Config) BuildTags() []string {
 	return tags
 }
 
-// CgoEnabled returns true if (and only if) CGo is enabled. It is true by
-// default and false if CGO_ENABLED is set to "0".
-func (c *Config) CgoEnabled() bool {
-	return goenv.Get("CGO_ENABLED") == "1"
-}
-
 // GC returns the garbage collection strategy in use on this platform. Valid
 // values are "none", "leaking", "conservative" and "precise".
 func (c *Config) GC() string {
@@ -286,10 +280,6 @@ func (c *Config) CFlags(libclang bool) []string {
 		cflags = append(cflags,
 			"-resource-dir="+resourceDir,
 		)
-		if strings.HasPrefix(c.Triple(), "xtensa") {
-			// workaround needed in LLVM 16, see: https://github.com/espressif/llvm-project/issues/83
-			cflags = append(cflags, "-isystem", filepath.Join(resourceDir, "include"))
-		}
 	}
 	switch c.Target.Libc {
 	case "darwin-libSystem":

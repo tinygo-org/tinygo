@@ -674,6 +674,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=waveshare-rp2040-plus examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=thumby              examples/echo
+	@$(MD5SUM) test.hex
 	# test pwm
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm
 	@$(MD5SUM) test.hex
@@ -777,6 +779,7 @@ endif
 ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/export
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/main
+	$(TINYGO) build -size short -o wasm.wasm -target=wasm-unknown       examples/hello-wasm-unknown
 endif
 	# test various compiler flags
 	$(TINYGO) build -size short -o test.hex -target=pca10040 -gc=none -scheduler=none examples/blinky1
