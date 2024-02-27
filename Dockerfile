@@ -33,7 +33,7 @@ RUN cd /tinygo/ && \
 
 # tinygo-compiler copies the compiler build over to a base Go container (without
 # all the build tools etc).
-FROM golang:1.21 AS tinygo-compiler
+FROM golang:1.22 AS tinygo-compiler
 
 # Copy tinygo build.
 COPY --from=tinygo-compiler-build /tinygo/build/release/tinygo /tinygo
