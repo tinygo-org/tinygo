@@ -427,7 +427,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
-				methodSetPtr, err := mem.load(typecodePtr.addOffset(-int64(r.pointerSize)), r.pointerSize).asPointer(r)
+				typecodePtrOffset, err := typecodePtr.addOffset(-int64(r.pointerSize))
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err) // unlikely
+				}
+				methodSetPtr, err := mem.load(typecodePtrOffset, r.pointerSize).asPointer(r)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
@@ -473,7 +477,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
-				methodSetPtr, err := mem.load(typecodePtr.addOffset(-int64(r.pointerSize)), r.pointerSize).asPointer(r)
+				typecodePtrOffset, err := typecodePtr.addOffset(-int64(r.pointerSize))
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				methodSetPtr, err := mem.load(typecodePtrOffset, r.pointerSize).asPointer(r)
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
@@ -658,7 +666,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				locals[inst.localIndex] = makeLiteralInt(ptrValue, int(operands[0].len(r)*8))
 				continue
 			}
-			ptr = ptr.addOffset(int64(offset))
+			ptr, err = ptr.addOffset(int64(offset))
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
 			locals[inst.localIndex] = ptr
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+"gep:", operands, "->", ptr)
@@ -756,7 +767,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if inst.opcode == llvm.Add {
 					// This likely means this is part of a
 					// unsafe.Pointer(uintptr(ptr) + offset) pattern.
-					lhsPtr = lhsPtr.addOffset(int64(rhs.Uint()))
+					lhsPtr, err = lhsPtr.addOffset(int64(rhs.Uint()))
+					if err != nil {
+						return nil, mem, r.errorAt(inst, err)
+					}
 					locals[inst.localIndex] = lhsPtr
 				} else if inst.opcode == llvm.Xor && rhs.Uint() == 0 {
 					// Special workaround for strings.noescape, see

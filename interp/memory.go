@@ -517,12 +517,12 @@ func (v pointerValue) offset() uint32 {
 // addOffset essentially does a GEP operation (pointer arithmetic): it adds the
 // offset to the pointer. It also checks that the offset doesn't overflow the
 // maximum offset size (which is 4GB).
-func (v pointerValue) addOffset(offset int64) pointerValue {
+func (v pointerValue) addOffset(offset int64) (pointerValue, error) {
 	result := pointerValue{v.pointer + uint64(offset)}
 	if checks && v.index() != result.index() {
-		panic("interp: offset out of range")
+		return result, fmt.Errorf("interp: offset %d out of range for object %v", offset, v)
 	}
-	return result
+	return result, nil
 }
 
 func (v pointerValue) len(r *runner) uint32 {
