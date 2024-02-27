@@ -1,3 +1,17 @@
+0.31.1
+---
+
+* **general**
+  * fix Binaryen build in make task
+  * update final build stage of Docker `dev` image to go1.22
+  * only use GHA cache for building Docker `dev` image
+  * update the `net` submodule to latest version
+
+* **compiler**
+  * `interp`: make getelementptr offsets signed
+  * `interp`: return a proper error message when indexing out of range
+
+
 0.31.0
 ---
 
@@ -64,7 +78,7 @@
   * `mksnanov3`: add support for the MKS Robin Nano V3.x
   * `nrf52840-generic`: add generic nrf52840 chip support
   * `thumby`: add support for Thumby
-  * `wasm`: add new `wasm-generic` target that doesn't depend on WASI or a browser
+  * `wasm`: add new `wasm-unknown` target that doesn't depend on WASI or a browser
 * **boards**
   * `arduino-mkrwifi1010`, `arduino-nano33`, `nano-rp2040`, `matrixportal-m4`, `metro-m4-airlift`, `pybadge`, `pyportal`: add `ninafw` build tag and some constants for BLE support
   * `gopher-badge`: fix typo in USB product name
