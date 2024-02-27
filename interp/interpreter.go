@@ -644,11 +644,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		case llvm.GetElementPtr:
 			// GetElementPtr does pointer arithmetic, changing the offset of the
 			// pointer into the underlying object.
-			var offset uint64
+			var offset int64
 			for i := 1; i < len(operands); i += 2 {
-				index := operands[i].Uint()
-				elementSize := operands[i+1].Uint()
-				if int64(elementSize) < 0 {
+				index := operands[i].Int()
+				elementSize := operands[i+1].Int()
+				if elementSize < 0 {
 					// This is a struct field.
 					offset += index
 				} else {
@@ -662,7 +662,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					return nil, mem, r.errorAt(inst, err)
 				}
 				// GEP on fixed pointer value (for example, memory-mapped I/O).
-				ptrValue := operands[0].Uint() + offset
+				ptrValue := operands[0].Uint() + uint64(offset)
 				locals[inst.localIndex] = makeLiteralInt(ptrValue, int(operands[0].len(r)*8))
 				continue
 			}
