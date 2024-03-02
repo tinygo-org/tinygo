@@ -830,7 +830,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			}
 			// Create the function definition.
 			b := newBuilder(c, irbuilder, member)
-			if _, ok := mathToLLVMMapping[member.RelString(nil)]; ok {
+			if intrinsic := b.mathToLLVMMapping(member.RelString(nil)); intrinsic != "" {
 				// The body of this function (if there is one) is ignored and
 				// replaced with a LLVM intrinsic call.
 				b.defineMathOp()
