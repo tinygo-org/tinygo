@@ -1,11 +1,10 @@
-// //go:build tinygo.wasm
-
 package math_test
 
 import (
 	"math"
 	"math/rand"
 	"testing"
+	_ "unsafe"
 )
 
 var tested float64
@@ -33,6 +32,7 @@ func BenchmarkMathCeil(b *testing.B) {
 	}
 	tested = f
 }
+
 func BenchmarkMathExp(b *testing.B) {
 	var f float64
 	for i := 0; i < b.N; i++ {
