@@ -27,8 +27,6 @@ func invalidparam(a int, b string, c []byte, d *int32)
 //go:wasmimport modulename validreturn
 func validreturn() int32
 
-// ERROR: //go:wasmimport modulename manyreturns: too many return values
-//
 //go:wasmimport modulename manyreturns
 func manyreturns() (int32, int32)
 
