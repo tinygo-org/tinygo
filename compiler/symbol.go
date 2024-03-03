@@ -356,10 +356,8 @@ func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
 		c.addError(f.Pos(), fmt.Sprintf("can only use //go:wasmimport on declarations"))
 		return
 	}
-	if f.Signature.Results().Len() > 1 {
-		c.addError(f.Signature.Results().At(1).Pos(), fmt.Sprintf("%s: too many return values", pragma))
-	} else if f.Signature.Results().Len() == 1 {
-		result := f.Signature.Results().At(0)
+	for i := 0; i < f.Signature.Results().Len(); i++ {
+		result := f.Signature.Results().At(i)
 		if !isValidWasmType(result.Type(), true) {
 			c.addError(result.Pos(), fmt.Sprintf("%s: unsupported result type %s", pragma, result.Type().String()))
 		}
