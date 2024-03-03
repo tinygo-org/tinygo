@@ -2,6 +2,7 @@ package main
 
 /*
 #include <stdio.h>
+#include <math.h>
 int fortytwo(void);
 #include "main.h"
 #include "test.h"
@@ -170,6 +171,10 @@ func main() {
 	buf2 := make([]byte, len(buf1))
 	C.strcpy((*C.char)(unsafe.Pointer(&buf2[0])), (*C.char)(unsafe.Pointer(&buf1[0])))
 	println("copied string:", string(buf2[:C.strlen((*C.char)(unsafe.Pointer(&buf2[0])))]))
+
+	// libc: test libm functions (normally bundled in libc)
+	println("CGo sqrt(3):", C.sqrt(3))
+	println("C   sqrt(3):", C.doSqrt(3))
 
 	// libc: test basic stdio functionality
 	putsBuf := []byte("line written using C puts\x00")
