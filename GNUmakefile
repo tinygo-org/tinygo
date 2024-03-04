@@ -821,7 +821,9 @@ build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN
 	@mkdir -p build/release/tinygo/lib/nrfx
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
 	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libm
-	@mkdir -p build/release/tinygo/lib/wasi-libc
+	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-bottom-half/headers
+	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/arch
+	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
 	@mkdir -p build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0
 	@mkdir -p build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus
 	@mkdir -p build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4
@@ -872,7 +874,15 @@ endif
 	@cp -rp lib/picolibc/newlib/libm/common      build/release/tinygo/lib/picolibc/newlib/libm
 	@cp -rp lib/picolibc/newlib/libm/math        build/release/tinygo/lib/picolibc/newlib/libm
 	@cp -rp lib/picolibc-stdio.c         build/release/tinygo/lib
-	@cp -rp lib/wasi-libc/sysroot        build/release/tinygo/lib/wasi-libc/sysroot
+	@cp -rp lib/wasi-libc/libc-bottom-half/headers/public           build/release/tinygo/lib/wasi-libc/libc-bottom-half/headers
+	@cp -rp lib/wasi-libc/libc-top-half/musl/arch/generic           build/release/tinygo/lib/wasi-libc/libc-top-half/musl/arch
+	@cp -rp lib/wasi-libc/libc-top-half/musl/arch/wasm32            build/release/tinygo/lib/wasi-libc/libc-top-half/musl/arch
+	@cp -rp lib/wasi-libc/libc-top-half/musl/src/include            build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
+	@cp -rp lib/wasi-libc/libc-top-half/musl/src/internal           build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
+	@cp -rp lib/wasi-libc/libc-top-half/musl/src/math               build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
+	@cp -rp lib/wasi-libc/libc-top-half/musl/src/string             build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
+	@cp -rp lib/wasi-libc/libc-top-half/musl/include                build/release/tinygo/lib/wasi-libc/libc-top-half/musl
+	@cp -rp lib/wasi-libc/sysroot                                   build/release/tinygo/lib/wasi-libc/sysroot
 	@cp -rp llvm-project/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp llvm-project/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp src                          build/release/tinygo/src

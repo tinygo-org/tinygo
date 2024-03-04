@@ -7,6 +7,7 @@
 	"goarch":        "arm",
 	"linker":        "wasm-ld",
 	"rtlib":         "compiler-rt",
+	"libc":          "wasmbuiltins",
 	"scheduler":     "none",
 	"gc":            "leaking",
 	"default-stack-size": 4096,
