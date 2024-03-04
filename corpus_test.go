@@ -114,15 +114,6 @@ func TestCorpus(t *testing.T) {
 				opts.Directory = dir
 				var tags buildutil.TagsFlag
 				tags.Set(repo.Tags)
-
-				// handle go 1.13+ style -tags flag with commas, buildutil.TagsFlag still only
-				// supports space separated tags as of go 1.21
-				commaTags := buildutil.TagsFlag{}
-				for _, tag := range tags {
-					commaTags = append(commaTags, strings.Split(tag, ",")...)
-				}
-				tags = commaTags
-
 				opts.Tags = []string(tags)
 				opts.TestConfig.Verbose = testing.Verbose()
 
