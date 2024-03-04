@@ -2,6 +2,8 @@
 
 package math_test
 
+import _ "unsafe"
+
 //go:export exp
 func exp(f float64) float64 {
 	return mathExp(f)
