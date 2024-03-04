@@ -1,4 +1,4 @@
-//go:build tinygo.wasm && (wasi || wasip1)
+//go:build wasip1
 
 package runtime
 

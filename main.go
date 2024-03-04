@@ -285,7 +285,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// Tests are always run in the package directory.
 		cmd.Dir = result.MainDir
 
-		// wasmtime is the default emulator used for `-target=wasi`. wasmtime
+		// wasmtime is the default emulator used for `-target=wasip1`. wasmtime
 		// is a WebAssembly runtime CLI with WASI enabled by default. However,
 		// only stdio are allowed by default. For example, while STDOUT routes
 		// to the host, other files don't. It also does not inherit environment
@@ -1546,6 +1546,11 @@ func main() {
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
+	}
+
+	// Compatibility with legacy -target=wasi
+	if options.Target == "wasi" {
+		options.Target = "wasip1"
 	}
 
 	err = options.Verify()

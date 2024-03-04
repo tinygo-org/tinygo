@@ -1,4 +1,4 @@
-//go:build wasi || wasip1
+//go:build wasip1
 
 package syscall
 
@@ -397,8 +397,16 @@ func Chmod(path string, mode uint32) (err error) {
 	return Lstat(path, &stat)
 }
 
+// wasmPageSize is the size of a page in WebAssembly's 32-bit memory. This
+// is also its only unit of change.
+//
+// See https://www.w3.org/TR/wasm-core-1/#page-size
+//
+// FIXME: this is also defined in package runtime.
+const wasmPageSize = 64 * 1024
+
 func Getpagesize() int {
-	return libc_getpagesize()
+	return wasmPageSize
 }
 
 type Utsname struct {
