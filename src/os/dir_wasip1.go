@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This file was derived from src/os/dir_darwin.go since the logic for wasi is
+// This file was derived from src/os/dir_darwin.go since the logic for WASI is
 // fairly similar: we use fdopendir, fdclosedir, and readdir from wasi-libc in
 // a similar way that the darwin code uses functions from libc.
 
-//go:build wasi || wasip1
+//go:build wasip1
 
 package os
 

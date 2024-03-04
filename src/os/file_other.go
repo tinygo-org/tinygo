@@ -1,4 +1,4 @@
-//go:build baremetal || (wasm && !wasi && !wasip1)
+//go:build baremetal || (wasm && !wasip1)
 
 package os
 

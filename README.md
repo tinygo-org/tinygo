@@ -41,7 +41,7 @@ tinygo flash -target arduino examples/blinky1
 
 TinyGo is very useful for compiling programs both for use in browsers (WASM) as well as for use on servers and other edge devices (WASI).
 
-TinyGo programs can run in Fastly Compute@Edge (https://developer.fastly.com/learning/compute/go/), Fermyon Spin (https://developer.fermyon.com/spin/go-components), wazero (https://wazero.io/languages/tinygo/) and many other WebAssembly runtimes.
+TinyGo programs can run in [Fastly Compute](https://www.fastly.com/documentation/guides/compute/go/), [Fermyon Spin](https://developer.fermyon.com/spin/go-components), [wazero](https://wazero.io/languages/tinygo/) and many other WebAssembly runtimes.
 
 Here is a small TinyGo program for use by a WASI host application:
 
@@ -54,14 +54,14 @@ func add(x, y uint32) uint32 {
 	return x + y
 }
 
-// main is required for the `wasi` target, even if it isn't used.
+// main is required for the `wasip1` target, even if it isn't used.
 func main() {}
 ```
 
 This compiles the above TinyGo program for use on any WASI runtime:
 
 ```shell
-tinygo build -o main.wasm -target=wasi main.go
+tinygo build -o main.wasm -target=wasip1 main.go
 ```
 
 ## Installation

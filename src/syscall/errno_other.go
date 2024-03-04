@@ -1,4 +1,4 @@
-//go:build !wasi && !wasip1 && !darwin
+//go:build !wasip1 && !darwin
 
 package syscall
 

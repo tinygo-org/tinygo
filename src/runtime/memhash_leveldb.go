@@ -1,4 +1,4 @@
-//go:build runtime_memhash_leveldb || (wasi && !runtime_memhash_fnv && !runtime_memhash_tsip)
+//go:build runtime_memhash_leveldb || (wasip1 && !runtime_memhash_fnv && !runtime_memhash_tsip)
 
 // This is the default for WASI, but can also be used on other targets with the
 // right build tag.
