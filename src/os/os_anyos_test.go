@@ -275,7 +275,7 @@ func TestDirFS(t *testing.T) {
 		t.Log("TODO: implement Readdir for Windows")
 		return
 	}
-	if isWASI {
+	if runtime.GOOS == "wasip1" {
 		t.Log("TODO: allow foo/bar/. as synonym for path foo/bar on wasi?")
 		return
 	}
@@ -296,7 +296,7 @@ func TestDirFSPathsValid(t *testing.T) {
 		t.Log("skipping on Windows")
 		return
 	}
-	if isWASI {
+	if runtime.GOOS == "wasip1" {
 		t.Log("skipping on wasi because it fails on wasi on windows")
 		return
 	}
