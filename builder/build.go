@@ -168,6 +168,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			return BuildResult{}, errors.New("could not find wasi-libc, perhaps you need to run `make wasi-libc`?")
 		}
 		libcDependencies = append(libcDependencies, dummyCompileJob(path))
+	case "wasmbuiltins":
+		libcJob, unlock, err := WasmBuiltins.load(config, tmpdir)
+		if err != nil {
+			return BuildResult{}, err
+		}
+		defer unlock()
+		libcDependencies = append(libcDependencies, libcJob)
 	case "mingw-w64":
 		_, unlock, err := MinGW.load(config, tmpdir)
 		if err != nil {
