@@ -1,13 +1,15 @@
 package math_test
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"testing"
-	_ "unsafe"
 )
 
-var tested float64
+func testDone(f float64) {
+	fmt.Sprintf("%f", f)
+}
 
 var data [1024]float64
 
@@ -21,38 +23,43 @@ func init() {
 func BenchmarkMathAbs(b *testing.B) {
 	var f float64
 	for i := 0; i < b.N; i++ {
-		f = math.Abs(data[i%len(data)])
+		f += math.Abs(data[i%len(data)])
 	}
-	tested = f
+	b.StopTimer()
+	testDone(f)
 }
 func BenchmarkMathCeil(b *testing.B) {
 	var f float64
 	for i := 0; i < b.N; i++ {
-		f = math.Ceil(data[i%len(data)])
+		f += math.Ceil(data[i%len(data)])
 	}
-	tested = f
+	b.StopTimer()
+	testDone(f)
 }
 
 func BenchmarkMathExp(b *testing.B) {
 	var f float64
 	for i := 0; i < b.N; i++ {
-		f = math.Exp(data[i%len(data)])
+		f += math.Exp(data[i%len(data)])
 	}
-	tested = f
+	b.StopTimer()
+	testDone(f)
 }
 
 func BenchmarkMathExp2(b *testing.B) {
 	var f float64
 	for i := 0; i < b.N; i++ {
-		f = math.Exp2(data[i%len(data)])
+		f += math.Exp2(data[i%len(data)])
 	}
-	tested = f
+	b.StopTimer()
+	testDone(f)
 }
 
 func BenchmarkMathLog(b *testing.B) {
 	var f float64
 	for i := 0; i < b.N; i++ {
-		f = math.Log(data[i%len(data)])
+		f += math.Log(data[i%len(data)])
 	}
-	tested = f
+	b.StopTimer()
+	testDone(f)
 }
