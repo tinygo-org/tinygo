@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -25,7 +26,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestTempDirInCleanup(t *testing.T) {
-	if isWASI {
+	if runtime.GOOS == "wasip1" {
 		t.Log("Skipping.  TODO: implement RemoveAll for wasi")
 		return
 	}
@@ -62,7 +63,7 @@ func TestTempDirInBenchmark(t *testing.T) {
 }
 
 func TestTempDir(t *testing.T) {
-	if isWASI {
+	if runtime.GOOS == "wasip1" {
 		t.Log("Skipping.  TODO: implement RemoveAll for wasi")
 		return
 	}
