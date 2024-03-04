@@ -397,16 +397,9 @@ func Chmod(path string, mode uint32) (err error) {
 	return Lstat(path, &stat)
 }
 
-// wasmPageSize is the size of a page in WebAssembly's 32-bit memory. This
-// is also its only unit of change.
-//
-// See https://www.w3.org/TR/wasm-core-1/#page-size
-//
-// FIXME: this is also defined in package runtime.
-const wasmPageSize = 64 * 1024
-
+// TODO: should this return runtime.wasmPageSize?
 func Getpagesize() int {
-	return wasmPageSize
+	return libc_getpagesize()
 }
 
 type Utsname struct {
