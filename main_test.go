@@ -179,7 +179,7 @@ func TestBuild(t *testing.T) {
 		})
 		t.Run("WASI", func(t *testing.T) {
 			t.Parallel()
-			runPlatTests(optionsFromTarget("wasi", sema), tests, t)
+			runPlatTests(optionsFromTarget("wasip1", sema), tests, t)
 		})
 	}
 }
@@ -192,7 +192,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Fatal("failed to load target spec:", err)
 	}
 
-	isWebAssembly := options.Target == "wasi" || options.Target == "wasm" || (options.Target == "" && options.GOARCH == "wasm")
+	// FIXME: this should really be:
+	// isWebAssembly := strings.HasPrefix(spec.Triple, "wasm")
+	isWASI := strings.HasPrefix(options.Target, "wasi")
+	isWebAssembly := isWASI || strings.HasPrefix(options.Target, "wasm") || (options.Target == "" && strings.HasPrefix(options.GOARCH, "wasm"))
 
 	for _, name := range tests {
 		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
@@ -252,13 +255,13 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("alias.go", options, t, nil, nil)
 		})
 	}
-	if options.Target == "" || options.Target == "wasi" {
+	if options.Target == "" || isWASI {
 		t.Run("filesystem.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("filesystem.go", options, t, nil, nil)
 		})
 	}
-	if options.Target == "" || options.Target == "wasi" || options.Target == "wasm" {
+	if options.Target == "" || options.Target == "wasm" || isWASI {
 		t.Run("rand.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("rand.go", options, t, nil, nil)
@@ -492,7 +495,7 @@ func TestTest(t *testing.T) {
 
 			// Node/Wasmtime
 			targ{"WASM", optionsFromTarget("wasm", sema)},
-			targ{"WASI", optionsFromTarget("wasi", sema)},
+			targ{"WASI", optionsFromTarget("wasip1", sema)},
 		)
 	}
 	for _, targ := range targs {
