@@ -1548,11 +1548,6 @@ func main() {
 		options.PrintCommands = printCommand
 	}
 
-	// Compatibility with legacy -target=wasi
-	if options.Target == "wasi" {
-		options.Target = "wasip1"
-	}
-
 	err = options.Verify()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
