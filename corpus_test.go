@@ -51,6 +51,7 @@ func TestCorpus(t *testing.T) {
 	if *testTarget != "" {
 		target = *testTarget
 	}
+	isWASI := strings.HasPrefix(target, "wasi")
 
 	repos, err := loadRepos(*corpus)
 	if err != nil {
@@ -69,7 +70,7 @@ func TestCorpus(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if target == "wasi" && repo.SkipWASI {
+			if isWASI && repo.SkipWASI {
 				t.Skip("skip wasi")
 			}
 			if repo.Slow && testing.Short() {
@@ -135,7 +136,7 @@ func TestCorpus(t *testing.T) {
 				t.Run(dir.Pkg, func(t *testing.T) {
 					t.Parallel()
 
-					if target == "wasi" && dir.SkipWASI {
+					if isWASI && dir.SkipWASI {
 						t.Skip("skip wasi")
 					}
 					if dir.Slow && testing.Short() {

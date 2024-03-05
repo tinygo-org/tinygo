@@ -33,7 +33,7 @@ func TestClangAttributes(t *testing.T) {
 		"k210",
 		"nintendoswitch",
 		"riscv-qemu",
-		"wasi",
+		"wasip1",
 		"wasm",
 		"wasm-unknown",
 	}
