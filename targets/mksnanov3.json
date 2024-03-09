@@ -7,6 +7,7 @@
     "src/device/stm32/stm32f407.s"
   ],
   "flash-method": "openocd",
-  "openocd-interface": "stlink-v2",
-  "openocd-target": "stm32f4x"
+  "openocd-interface": "stlink",
+  "openocd-target": "stm32f4x",
+  "openocd-commands": ["stm32f4x.cpu configure -event reset-init { adapter speed 1800 }"]
 }
