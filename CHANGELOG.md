@@ -1,3 +1,16 @@
+0.31.2
+---
+
+* **general**
+  * update the `net` submodule to updated version with `Buffers` implementation
+
+* **compiler**
+  * `syscall`: add wasm_unknown tag to some additional files so it can compile more code
+
+* **standard library**
+  * `runtime`: add Frame.Entry field
+
+
 0.31.1
 ---
 
