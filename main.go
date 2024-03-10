@@ -1415,7 +1415,7 @@ func main() {
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
 	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
 	var tags buildutil.TagsFlag
-	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
+	flag.Var(&tags, "tags", "a comma-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
 	var stackSize uint64
 	flag.Func("stack-size", "goroutine stack size (if unknown at compile time)", func(s string) error {

@@ -29,13 +29,13 @@
 - repo: github.com/dgryski/go-camellia
 - repo: github.com/dgryski/go-change
 - repo: github.com/dgryski/go-chaskey
-  tags: appengine noasm
+  tags: appengine,noasm
   skipwasi: true # siphash has build tag issues
 - repo: github.com/dgryski/go-clefia
 - repo: github.com/dgryski/go-clockpro
 - repo: github.com/dgryski/go-cobs
 - repo: github.com/dgryski/go-cuckoof
-  tags: pureno noasm
+  tags: pureno,noasm
 - repo: github.com/dgryski/go-discreterand
 - repo: github.com/dgryski/go-expirecache
 - repo: github.com/dgryski/go-factor
@@ -205,7 +205,7 @@
   tags: appengine
 - repo: gonum.org/v1/gonum
 - repo: gonum.org/v1/gonum
-  tags: noasm appengine
+  tags: noasm,appengine
   subdirs:
   - pkg: blas/blas32
   - pkg: blas/blas64
