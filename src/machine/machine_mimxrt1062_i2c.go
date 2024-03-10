@@ -207,13 +207,13 @@ func (i2c I2C) Tx(addr uint16, w, r []byte) error {
 	return nil
 }
 
-// WriteRegisterEx transmits first the register and then the data to the
+// WriteRegister transmits first the register and then the data to the
 // peripheral device.
 //
 // Many I2C-compatible devices are organized in terms of registers. This method
 // is a shortcut to easily write to such registers. Also, it only works for
 // devices with 7-bit addresses, which is the vast majority.
-func (i2c I2C) WriteRegisterEx(address uint8, register uint8, data []byte) error {
+func (i2c I2C) WriteRegister(address uint8, register uint8, data []byte) error {
 	option := transferOption{
 		flags:          transferDefault,  // transfer options bit mask (0 = normal transfer)
 		peripheral:     uint16(address),  // 7-bit peripheral address
@@ -227,13 +227,13 @@ func (i2c I2C) WriteRegisterEx(address uint8, register uint8, data []byte) error
 	return nil
 }
 
-// ReadRegisterEx transmits the register, restarts the connection as a read
+// ReadRegister transmits the register, restarts the connection as a read
 // operation, and reads the response.
 //
 // Many I2C-compatible devices are organized in terms of registers. This method
 // is a shortcut to easily read such registers. Also, it only works for devices
 // with 7-bit addresses, which is the vast majority.
-func (i2c I2C) ReadRegisterEx(address uint8, register uint8, data []byte) error {
+func (i2c I2C) ReadRegister(address uint8, register uint8, data []byte) error {
 	option := transferOption{
 		flags:          transferDefault,  // transfer options bit mask (0 = normal transfer)
 		peripheral:     uint16(address),  // 7-bit peripheral address
