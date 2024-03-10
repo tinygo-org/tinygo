@@ -21,6 +21,11 @@ func fd_write(id uint32, iovs *__wasi_iovec_t, iovs_len uint, nwritten *uint) (e
 //go:wasmimport wasi_snapshot_preview1 proc_exit
 func proc_exit(exitcode uint32)
 
+// Flush stdio on exit.
+//
+//export __stdio_exit
+func __stdio_exit()
+
 const (
 	putcharBufferSize = 120
 	stdout            = 1
@@ -72,6 +77,9 @@ func abort() {
 
 //go:linkname syscall_Exit syscall.Exit
 func syscall_Exit(code int) {
+	// TODO: should we call __stdio_exit here?
+	// It's a low-level exit (syscall.Exit) so doing any libc stuff seems
+	// unexpected, but then where else should stdio buffers be flushed?
 	proc_exit(uint32(code))
 }
 

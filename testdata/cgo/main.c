@@ -1,4 +1,5 @@
 #include "main.h"
+#include <stdio.h>
 
 int global = 3;
 bool globalBool = 1;
@@ -66,4 +67,8 @@ void unionSetData(short f0, short f1, short f2) {
 
 void arraydecay(int buf1[5], int buf2[3][8], int buf3[4][7][2]) {
 	// Do nothing.
+}
+
+void printf_single_int(char *format, int arg) {
+	printf(format, arg);
 }

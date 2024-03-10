@@ -27,14 +27,30 @@ var MinGW = Library{
 		_, err = io.Copy(outf, inf)
 		return err
 	},
-	sourceDir: func() string { return "" }, // unused
+	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/mingw-w64") },
 	cflags: func(target, headerPath string) []string {
-		// No flags necessary because there are no files to compile.
-		return nil
+		mingwDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/mingw-w64")
+		return []string{
+			"-nostdlibinc",
+			"-isystem", mingwDir + "/mingw-w64-headers/crt",
+			"-I", mingwDir + "/mingw-w64-headers/defaults/include",
+			"-I" + headerPath,
+		}
 	},
 	librarySources: func(target string) ([]string, error) {
-		// We only use the UCRT DLL file. No source files necessary.
-		return nil, nil
+		// These files are needed so that printf and the like are supported.
+		sources := []string{
+			"mingw-w64-crt/stdio/ucrt_fprintf.c",
+			"mingw-w64-crt/stdio/ucrt_fwprintf.c",
+			"mingw-w64-crt/stdio/ucrt_printf.c",
+			"mingw-w64-crt/stdio/ucrt_snprintf.c",
+			"mingw-w64-crt/stdio/ucrt_sprintf.c",
+			"mingw-w64-crt/stdio/ucrt_vfprintf.c",
+			"mingw-w64-crt/stdio/ucrt_vprintf.c",
+			"mingw-w64-crt/stdio/ucrt_vsnprintf.c",
+			"mingw-w64-crt/stdio/ucrt_vsprintf.c",
+		}
+		return sources, nil
 	},
 }
 

@@ -19,6 +19,7 @@ func _start() {
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
 	run()
+	__stdio_exit()
 }
 
 // Read the command line arguments from WASI.

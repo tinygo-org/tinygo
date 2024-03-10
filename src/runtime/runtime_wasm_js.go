@@ -18,6 +18,7 @@ func _start() {
 
 	wasmNested = true
 	run()
+	__stdio_exit()
 	wasmNested = false
 }
 
