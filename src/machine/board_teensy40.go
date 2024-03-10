@@ -143,9 +143,9 @@ const (
 var (
 	UART1  = &_UART1
 	_UART1 = UART{
-		Bus:      nxp.LPUART6,
-		Buffer:   NewRingBuffer(),
-		txBuffer: NewRingBuffer(),
+		Bus:        nxp.LPUART6,
+		UARTCommon: NewUARTCommon(),
+		txBuffer:   NewRingBuffer(),
 		muxRX: muxSelect{ // D0 (PA3 [AD_B0_03])
 			mux: nxp.IOMUXC_LPUART6_RX_SELECT_INPUT_DAISY_GPIO_AD_B0_03_ALT2,
 			sel: &nxp.IOMUXC.LPUART6_RX_SELECT_INPUT,
@@ -157,9 +157,9 @@ var (
 	}
 	UART2  = &_UART2
 	_UART2 = UART{
-		Bus:      nxp.LPUART4,
-		Buffer:   NewRingBuffer(),
-		txBuffer: NewRingBuffer(),
+		Bus:        nxp.LPUART4,
+		UARTCommon: NewUARTCommon(),
+		txBuffer:   NewRingBuffer(),
 		muxRX: muxSelect{ // D7 (PB17 [B1_01])
 			mux: nxp.IOMUXC_LPUART4_RX_SELECT_INPUT_DAISY_GPIO_B1_01_ALT2,
 			sel: &nxp.IOMUXC.LPUART4_RX_SELECT_INPUT,
@@ -171,9 +171,9 @@ var (
 	}
 	UART3  = &_UART3
 	_UART3 = UART{
-		Bus:      nxp.LPUART2,
-		Buffer:   NewRingBuffer(),
-		txBuffer: NewRingBuffer(),
+		Bus:        nxp.LPUART2,
+		UARTCommon: NewUARTCommon(),
+		txBuffer:   NewRingBuffer(),
 		muxRX: muxSelect{ // D15 (PA19 [AD_B1_03])
 			mux: nxp.IOMUXC_LPUART2_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_03_ALT2,
 			sel: &nxp.IOMUXC.LPUART2_RX_SELECT_INPUT,
@@ -185,9 +185,9 @@ var (
 	}
 	UART4  = &_UART4
 	_UART4 = UART{
-		Bus:      nxp.LPUART3,
-		Buffer:   NewRingBuffer(),
-		txBuffer: NewRingBuffer(),
+		Bus:        nxp.LPUART3,
+		UARTCommon: NewUARTCommon(),
+		txBuffer:   NewRingBuffer(),
 		muxRX: muxSelect{ // D16 (PA23 [AD_B1_07])
 			mux: nxp.IOMUXC_LPUART3_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_07_ALT2,
 			sel: &nxp.IOMUXC.LPUART3_RX_SELECT_INPUT,
@@ -199,9 +199,9 @@ var (
 	}
 	UART5  = &_UART5
 	_UART5 = UART{
-		Bus:      nxp.LPUART8,
-		Buffer:   NewRingBuffer(),
-		txBuffer: NewRingBuffer(),
+		Bus:        nxp.LPUART8,
+		UARTCommon: NewUARTCommon(),
+		txBuffer:   NewRingBuffer(),
 		muxRX: muxSelect{ // D21 (PA27 [AD_B1_11])
 			mux: nxp.IOMUXC_LPUART8_RX_SELECT_INPUT_DAISY_GPIO_AD_B1_11_ALT2,
 			sel: &nxp.IOMUXC.LPUART8_RX_SELECT_INPUT,
@@ -213,18 +213,18 @@ var (
 	}
 	UART6  = &_UART6
 	_UART6 = UART{
-		Bus:      nxp.LPUART1,
-		Buffer:   NewRingBuffer(),
-		txBuffer: NewRingBuffer(),
+		Bus:        nxp.LPUART1,
+		UARTCommon: NewUARTCommon(),
+		txBuffer:   NewRingBuffer(),
 		// LPUART1 not connected via IOMUXC
 		//   RX: D24 (PA12 [AD_B0_12])
 		//   TX: D25 (PA13 [AD_B0_13])
 	}
 	UART7  = &_UART7
 	_UART7 = UART{
-		Bus:      nxp.LPUART7,
-		Buffer:   NewRingBuffer(),
-		txBuffer: NewRingBuffer(),
+		Bus:        nxp.LPUART7,
+		UARTCommon: NewUARTCommon(),
+		txBuffer:   NewRingBuffer(),
 		muxRX: muxSelect{ // D28 (PC18 [EMC_32])
 			mux: nxp.IOMUXC_LPUART7_RX_SELECT_INPUT_DAISY_GPIO_EMC_32_ALT2,
 			sel: &nxp.IOMUXC.LPUART7_RX_SELECT_INPUT,

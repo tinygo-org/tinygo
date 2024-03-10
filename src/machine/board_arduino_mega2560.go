@@ -125,7 +125,7 @@ const (
 var (
 	UART1  = &_UART1
 	_UART1 = UART{
-		Buffer: NewRingBuffer(),
+		UARTCommon: NewUARTCommon(),
 
 		dataReg:    avr.UDR1,
 		baudRegH:   avr.UBRR1H,
@@ -136,7 +136,7 @@ var (
 	}
 	UART2  = &_UART2
 	_UART2 = UART{
-		Buffer: NewRingBuffer(),
+		UARTCommon: NewUARTCommon(),
 
 		dataReg:    avr.UDR2,
 		baudRegH:   avr.UBRR2H,
@@ -147,7 +147,7 @@ var (
 	}
 	UART3  = &_UART3
 	_UART3 = UART{
-		Buffer: NewRingBuffer(),
+		UARTCommon: NewUARTCommon(),
 
 		dataReg:    avr.UDR3,
 		baudRegH:   avr.UBRR3H,

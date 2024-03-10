@@ -81,13 +81,13 @@ var (
 	// USART1 is the first hardware serial port on the STM32.
 	UART1  = &_UART1
 	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    stm32.USART1,
+		UARTCommon: NewUARTCommon(),
+		Bus:        stm32.USART1,
 	}
 	UART2  = &_UART2
 	_UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    stm32.USART2,
+		UARTCommon: NewUARTCommon(),
+		Bus:        stm32.USART2,
 	}
 )
 

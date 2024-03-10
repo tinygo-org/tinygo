@@ -96,8 +96,8 @@ const (
 var (
 	UART1  = &_UART1
 	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART1,
+		UARTCommon: NewUARTCommon(),
+		Bus:        rp.UART1,
 	}
 )
 

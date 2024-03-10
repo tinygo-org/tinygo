@@ -166,10 +166,10 @@ var DefaultUART = UART0
 
 // UART0 is a hardware UART that supports both TX and RX.
 var UART0 = &_UART0
-var _UART0 = UART{Buffer: NewRingBuffer()}
+var _UART0 = UART{UARTCommon: NewUARTCommon()}
 
 type UART struct {
-	Buffer *RingBuffer
+	UARTCommon
 }
 
 // Configure the UART baud rate. TX and RX pins are fixed by the hardware so

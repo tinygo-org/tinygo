@@ -967,19 +967,19 @@ func (a ADC) getADCChannel() uint8 {
 
 // UART on the SAMD51.
 type UART struct {
-	Buffer    *RingBuffer
+	UARTCommon
 	Bus       *sam.SERCOM_USART_INT_Type
 	SERCOM    uint8
 	Interrupt interrupt.Interrupt // RXC interrupt
 }
 
 var (
-	sercomUSART0 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM0_USART_INT, SERCOM: 0}
-	sercomUSART1 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM1_USART_INT, SERCOM: 1}
-	sercomUSART2 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM2_USART_INT, SERCOM: 2}
-	sercomUSART3 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM3_USART_INT, SERCOM: 3}
-	sercomUSART4 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM4_USART_INT, SERCOM: 4}
-	sercomUSART5 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM5_USART_INT, SERCOM: 5}
+	sercomUSART0 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM0_USART_INT, SERCOM: 0}
+	sercomUSART1 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM1_USART_INT, SERCOM: 1}
+	sercomUSART2 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM2_USART_INT, SERCOM: 2}
+	sercomUSART3 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM3_USART_INT, SERCOM: 3}
+	sercomUSART4 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM4_USART_INT, SERCOM: 4}
+	sercomUSART5 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM5_USART_INT, SERCOM: 5}
 )
 
 func init() {

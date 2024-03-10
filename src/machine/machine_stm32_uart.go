@@ -13,7 +13,7 @@ import (
 
 // UART representation
 type UART struct {
-	Buffer            *RingBuffer
+	UARTCommon
 	Bus               *stm32.USART_Type
 	Interrupt         interrupt.Interrupt
 	TxAltFuncSelector uint8

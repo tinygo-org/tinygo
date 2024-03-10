@@ -144,7 +144,7 @@ var (
 	// UART0 is the hardware serial port on the AVR.
 	UART0  = &_UART0
 	_UART0 = UART{
-		Buffer: NewRingBuffer(),
+		UARTCommon: NewUARTCommon(),
 
 		dataReg:    avr.UDR0,
 		baudRegH:   avr.UBRR0H,
@@ -162,7 +162,7 @@ func init() {
 
 // UART on the AVR.
 type UART struct {
-	Buffer *RingBuffer
+	UARTCommon
 
 	dataReg  *volatile.Register8
 	baudRegH *volatile.Register8

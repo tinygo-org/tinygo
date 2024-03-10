@@ -504,7 +504,7 @@ func waitADCSync() {
 
 // UART on the SAMD21.
 type UART struct {
-	Buffer    *RingBuffer
+	UARTCommon
 	Bus       *sam.SERCOM_USART_Type
 	SERCOM    uint8
 	Interrupt interrupt.Interrupt

@@ -11,8 +11,8 @@ import (
 // UART peripheral abstraction layer for the MIMXRT1062
 
 type UART struct {
-	Bus       *nxp.LPUART_Type
-	Buffer    *RingBuffer
+	Bus *nxp.LPUART_Type
+	UARTCommon
 	Interrupt interrupt.Interrupt
 
 	// txBuffer should be allocated globally (such as when UART is created) to

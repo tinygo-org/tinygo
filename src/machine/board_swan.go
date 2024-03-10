@@ -35,7 +35,7 @@ var (
 	// USART1 is connected to the TX/RX pins
 	UART1  = &_UART1
 	_UART1 = UART{
-		Buffer:            NewRingBuffer(),
+		UARTCommon:        NewUARTCommon(),
 		Bus:               stm32.USART1,
 		TxAltFuncSelector: 7,
 		RxAltFuncSelector: 7,
