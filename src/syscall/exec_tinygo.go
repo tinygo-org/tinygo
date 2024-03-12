@@ -39,3 +39,6 @@ func SetNonblock(fd int, nonblocking bool) (err error) {
 	println("SetNonblock not implemented", fd, nonblocking)
 	return EOPNOTSUPP
 }
+
+type SysProcAttr struct {
+}

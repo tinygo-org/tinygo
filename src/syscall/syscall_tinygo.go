@@ -7,7 +7,10 @@ package syscall
 // for more than networking, for example, file system calls could interface
 // here also.
 
-import "unsafe"
+import (
+	"internal/itoa"
+	"unsafe"
+)
 
 func RawSyscall6(trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno) {
 	println("RawSyscall6 not implemented", trap, a1, a2, a3, a4, a5, a6)
@@ -61,6 +64,11 @@ func Pwrite(fd int, p []byte, offset int64) (n int, err error) {
 
 func Write(fd int, p []byte) (n int, err error) {
 	println("Write not implemented", fd, p)
+	return n, EOPNOTSUPP
+}
+
+func Read(fd int, p []byte) (n int, err error) {
+	println("Read not implemented", fd, p)
 	return n, EOPNOTSUPP
 }
 
@@ -315,6 +323,11 @@ func Socket(domain, typ, proto int) (fd int, err error) {
 	return fd, EOPNOTSUPP
 }
 
+func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err error) {
+	println("Sendfile not implemented", outfd, infd, offset, count)
+	return written, EOPNOTSUPP
+}
+
 func Bind(fd int, sa Sockaddr) (err error) {
 	println("Bind not implemented", fd, sa)
 	return EOPNOTSUPP
@@ -335,7 +348,57 @@ func Getsockname(fd int) (sa Sockaddr, err error) {
 	return sa, EOPNOTSUPP
 }
 
+func Pipe2(p []int, flags int) error {
+	println("Pipe2 not implemented", p, flags)
+	return EOPNOTSUPP
+}
+
 func Unlink(path string) error {
 	println("Unlink not implemented", path)
 	return EOPNOTSUPP
+}
+
+func Open(path string, mode int, perm uint32) (fd int, err error) {
+	println("Open not implemented", path, mode, perm)
+	return fd, EOPNOTSUPP
+}
+
+// Do the interface allocations only once for common
+// Errno values.
+var (
+	errEAGAIN error = EAGAIN
+	errEINVAL error = EINVAL
+	errENOENT error = ENOENT
+)
+
+// errnoErr returns common boxed Errno values, to prevent
+// allocations at runtime.
+func errnoErr(e Errno) error {
+	switch e {
+	case 0:
+		return nil
+	case EAGAIN:
+		return errEAGAIN
+	case EINVAL:
+		return errEINVAL
+	case ENOENT:
+		return errENOENT
+	}
+	return e
+}
+
+// A Signal is a number describing a process signal.
+// It implements the os.Signal interface.
+type Signal int
+
+func (s Signal) Signal() {}
+
+func (s Signal) String() string {
+	if 0 <= s && int(s) < len(signals) {
+		str := signals[s]
+		if str != "" {
+			return str
+		}
+	}
+	return "signal " + itoa.Itoa(int(s))
 }
