@@ -78,17 +78,27 @@ func makeArchive(arfile *os.File, objs []string) error {
 		} else if dbg, err := wasm.Parse(objfile); err == nil {
 			for _, s := range dbg.Sections {
 				switch section := s.(type) {
-				case *wasm.SectionImport:
-					for _, ln := range section.Entries {
-
-						if ln.Kind != wasm.ExtKindFunction {
-							// Not a function
+				case *wasm.SectionLinking:
+					for _, symbol := range section.Symbols {
+						if symbol.Flags&wasm.LinkingSymbolFlagUndefined != 0 {
+							// Don't list undefined functions.
 							continue
 						}
+						if symbol.Flags&wasm.LinkingSymbolFlagBindingLocal != 0 {
+							// Don't include local symbols.
+							continue
+						}
+						if symbol.Kind != wasm.LinkingSymbolKindFunction && symbol.Kind != wasm.LinkingSymbolKindData {
+							// Link functions and data symbols.
+							// Some data symbols need to be included, such as
+							// __log_data.
+							continue
+						}
+						// Include in the archive.
 						symbolTable = append(symbolTable, struct {
 							name      string
 							fileIndex int
-						}{ln.Field, i})
+						}{symbol.Name, i})
 					}
 				}
 			}

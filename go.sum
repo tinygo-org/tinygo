@@ -1,5 +1,5 @@
-github.com/aykevl/go-wasm v0.0.2-0.20220616010729-4a0a888aebdc h1:Yp49g+qqgQRPk/gcRSmAsXgnT16XPJ6Y5JM1poc6gYM=
-github.com/aykevl/go-wasm v0.0.2-0.20220616010729-4a0a888aebdc/go.mod h1:7sXyiaA0WtSogCu67R2252fQpVmJMh9JWJ9ddtGkpWw=
+github.com/aykevl/go-wasm v0.0.2-0.20240312204833-50275154210c h1:4T0Vj1UkGgcpkRrmn7SbokebnlfxJcMZPgWtOYACAAA=
+github.com/aykevl/go-wasm v0.0.2-0.20240312204833-50275154210c/go.mod h1:7sXyiaA0WtSogCu67R2252fQpVmJMh9JWJ9ddtGkpWw=
 github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2 h1:oMCHnXa6CCCafdPDbMh/lWRhRByN0VFLvv+g+ayx1SI=
 github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2/go.mod h1:PkYb9DJNAwrSvRx5DYA+gUcOIgTGVMNkfSCbZM8cWpI=
 github.com/chromedp/cdproto v0.0.0-20211126220118-81fa0469ad77/go.mod h1:At5TxYYdxkbQL0TSefRjhLE3Q0lgvqKKMSFUglJ7i1U=
