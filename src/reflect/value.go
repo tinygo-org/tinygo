@@ -1602,6 +1602,16 @@ type stringHeader struct {
 	len  uintptr
 }
 
+// Verify SliceHeader and StringHeader sizes.
+// See https://github.com/tinygo-org/tinygo/pull/4156
+// and https://github.com/tinygo-org/tinygo/issues/1284.
+var (
+	_ [unsafe.Sizeof([]byte{})]byte = [unsafe.Sizeof(SliceHeader{})]byte{}
+	_ [unsafe.Sizeof([]byte{})]byte = [unsafe.Sizeof(sliceHeader{})]byte{}
+	_ [unsafe.Sizeof("")]byte       = [unsafe.Sizeof(StringHeader{})]byte{}
+	_ [unsafe.Sizeof("")]byte       = [unsafe.Sizeof(stringHeader{})]byte{}
+)
+
 type ValueError struct {
 	Method string
 	Kind   Kind
