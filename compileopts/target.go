@@ -172,7 +172,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	if options.Target == "" {
 		// Configure based on GOOS/GOARCH environment variables (falling back to
 		// runtime.GOOS/runtime.GOARCH), and generate a LLVM target based on it.
-		var llvmarch string
+		var llvmarch, armabi string
 		switch options.GOARCH {
 		case "386":
 			llvmarch = "i386"
@@ -181,7 +181,11 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		case "arm64":
 			llvmarch = "aarch64"
 		case "arm":
-			switch options.GOARM {
+			armOpts := strings.Split(options.GOARM, ",")
+			if len(armOpts) > 2 {
+				return nil, fmt.Errorf("invalid GOARM=%s, must be of form <num>,[hardfloat|softfloat]", options.GOARM)
+			}
+			switch armOpts[0] {
 			case "5":
 				llvmarch = "armv5"
 			case "6":
@@ -190,6 +194,16 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 				llvmarch = "armv7"
 			default:
 				return nil, fmt.Errorf("invalid GOARM=%s, must be 5, 6, or 7", options.GOARM)
+			}
+			if len(armOpts) == 2 {
+				switch armOpts[1] {
+				case "softfloat":
+					armabi = ""
+				case "hardfloat":
+					armabi = "hf"
+				default:
+					return nil, fmt.Errorf("invalid extension GOARM=%s, must be softfloat or hardfloat", options.GOARM)
+				}
 			}
 		case "wasm":
 			llvmarch = "wasm32"
@@ -220,7 +234,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		if options.GOOS == "windows" {
 			target += "-gnu"
 		} else if options.GOARCH == "arm" {
-			target += "-gnueabihf"
+			target += fmt.Sprintf("-eabi%s", armabi)
 		}
 		return defaultTarget(options.GOOS, options.GOARCH, target)
 	}
@@ -308,13 +322,32 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 	case "arm":
 		spec.CPU = "generic"
 		spec.CFlags = append(spec.CFlags, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
+		hardfloat := strings.HasSuffix(triple, "hf")
 		switch strings.Split(triple, "-")[0] {
 		case "armv5":
-			spec.Features = "+armv5t,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			if hardfloat {
+				spec.CFlags = append(spec.CFlags, "-mfloat-abi=hard")
+				spec.Features = "+armv5t,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.CFlags = append(spec.CFlags, "-mfloat-abi=soft")
+				spec.Features = "+armv5t,+soft-float,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
 		case "armv6":
-			spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			if hardfloat {
+				spec.CFlags = append(spec.CFlags, "-mfloat-abi=hard")
+				spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.CFlags = append(spec.CFlags, "-mfloat-abi=soft")
+				spec.Features = "+armv6,+dsp,+soft-float,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
 		case "armv7":
-			spec.Features = "+armv7-a,+d32,+dsp,+fp64,+neon,+vfp2,+vfp2sp,+vfp3,+vfp3d16,+vfp3d16sp,+vfp3sp,-aes,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-sha2,-thumb-mode,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			if hardfloat {
+				spec.CFlags = append(spec.CFlags, "-mfloat-abi=hard")
+				spec.Features = "+armv7-a,+d32,+dsp,+fp64,+neon,+vfp2,+vfp2sp,+vfp3,+vfp3d16,+vfp3d16sp,+vfp3sp,-aes,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-sha2,-thumb-mode,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.CFlags = append(spec.CFlags, "-mfloat-abi=soft")
+				spec.Features = "+armv7-a,+dsp,+soft-float,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
 		}
 	case "arm64":
 		spec.CPU = "generic"
