@@ -1,0 +1,41 @@
+//go:build adafruit_esp32_feather_v2
+
+package machine
+
+const GPIO20 Pin = 20
+
+const (
+	IO0  = GPIO0
+	IO2  = GPIO2
+	IO4  = GPIO4
+	IO5  = GPIO5
+	IO7  = GPIO7
+	IO8  = GPIO8
+	IO12 = GPIO12
+	IO13 = GPIO13
+	IO14 = GPIO14
+	IO15 = GPIO15
+	IO19 = GPIO19
+	IO20 = GPIO20
+	IO21 = GPIO21
+	IO22 = GPIO22
+	IO25 = GPIO25
+	IO26 = GPIO26
+	IO27 = GPIO27
+	IO32 = GPIO32
+	IO33 = GPIO33
+	IO34 = GPIO34
+	IO35 = GPIO35
+	IO36 = GPIO36
+	IO37 = GPIO37
+	IO38 = GPIO38
+	IO39 = GPIO39
+)
+
+// Built-in LEDs and Button
+const (
+	NEOPIXEL           = IO0
+	NEOPIXEL_I2C_POWER = IO2
+	LED                = IO13
+	BUTTON             = IO38
+)
