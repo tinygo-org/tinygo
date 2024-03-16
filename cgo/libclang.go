@@ -254,10 +254,18 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 				},
 			},
 		}
+		var doc []string
 		if C.clang_isFunctionTypeVariadic(cursorType) != 0 {
+			doc = append(doc, "//go:variadic")
+		}
+		if _, ok := f.noescapingFuncs[name]; ok {
+			doc = append(doc, "//go:noescape")
+			f.noescapingFuncs[name].used = true
+		}
+		if len(doc) != 0 {
 			decl.Doc.List = append(decl.Doc.List, &ast.Comment{
 				Slash: pos - 1,
-				Text:  "//go:variadic",
+				Text:  strings.Join(doc, "\n"),
 			})
 		}
 		for i := 0; i < numArgs; i++ {

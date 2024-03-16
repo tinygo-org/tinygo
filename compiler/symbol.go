@@ -30,6 +30,7 @@ type functionInfo struct {
 	exported   bool       // go:export, CGo
 	interrupt  bool       // go:interrupt
 	nobounds   bool       // go:nobounds
+	noescape   bool       // go:noescape
 	variadic   bool       // go:variadic (CGo only)
 	inline     inlineType // go:inline
 }
@@ -124,10 +125,19 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	c.addStandardDeclaredAttributes(llvmFn)
 
 	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
-	for i, info := range paramInfos {
-		if info.elemSize != 0 {
-			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, info.elemSize)
+	for i, paramInfo := range paramInfos {
+		if paramInfo.elemSize != 0 {
+			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, paramInfo.elemSize)
 			llvmFn.AddAttributeAtIndex(i+1, dereferenceableOrNull)
+		}
+		if info.noescape && paramInfo.flags&paramIsGoParam != 0 && paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
+			// Parameters to functions with a //go:noescape parameter should get
+			// the nocapture attribute. However, the context parameter should
+			// not.
+			// (It may be safe to add the nocapture parameter to the context
+			// parameter, but I'd like to stay on the safe side here).
+			nocapture := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0)
+			llvmFn.AddAttributeAtIndex(i+1, nocapture)
 		}
 	}
 
@@ -324,6 +334,13 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 				// that import unsafe.
 				if hasUnsafeImport(f.Pkg.Pkg) {
 					info.nobounds = true
+				}
+			case "//go:noescape":
+				// Don't let pointer parameters escape.
+				// Following the upstream Go implementation, we only do this for
+				// declarations, not definitions.
+				if len(f.Blocks) == 0 {
+					info.noescape = true
 				}
 			case "//go:variadic":
 				// The //go:variadic pragma is emitted by the CGo preprocessing

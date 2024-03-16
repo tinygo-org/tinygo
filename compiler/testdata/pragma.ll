@@ -72,6 +72,14 @@ entry:
 
 declare void @main.undefinedFunctionNotInSection(ptr) #1
 
+declare void @main.doesNotEscapeParam(ptr nocapture dereferenceable_or_null(4), ptr nocapture, i32, i32, ptr nocapture dereferenceable_or_null(32), ptr nocapture, ptr) #1
+
+; Function Attrs: nounwind
+define hidden void @main.stillEscapes(ptr dereferenceable_or_null(4) %a, ptr %b.data, i32 %b.len, i32 %b.cap, ptr dereferenceable_or_null(32) %c, ptr %d, ptr %context) unnamed_addr #2 {
+entry:
+  ret void
+}
+
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
 attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
 attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }

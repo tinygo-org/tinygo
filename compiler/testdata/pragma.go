@@ -90,3 +90,12 @@ var undefinedGlobalNotInSection uint32
 //go:align 1024
 //go:section .global_section
 var multipleGlobalPragmas uint32
+
+//go:noescape
+func doesNotEscapeParam(a *int, b []int, c chan int, d *[0]byte)
+
+// The //go:noescape pragma only works on declarations, not definitions.
+//
+//go:noescape
+func stillEscapes(a *int, b []int, c chan int, d *[0]byte) {
+}

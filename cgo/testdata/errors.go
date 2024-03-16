@@ -10,6 +10,11 @@ typedef struct {
 
 typedef someType noType; // undefined type
 
+// Some invalid noescape lines
+#cgo noescape
+#cgo noescape foo bar
+#cgo noescape unusedFunction
+
 #define SOME_CONST_1 5) // invalid const syntax
 #define SOME_CONST_2 6) // const not used (so no error)
 #define SOME_CONST_3 1234 // const too large for byte
