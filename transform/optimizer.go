@@ -40,10 +40,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		fn.SetLinkage(llvm.ExternalLinkage)
 	}
 
-	if config.PanicStrategy() == "trap" {
-		ReplacePanicsWithTrap(mod) // -panic=trap
-	}
-
 	// run a check of all of our code
 	if config.VerifyIR() {
 		errs := ircheck.Module(mod)

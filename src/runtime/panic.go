@@ -21,6 +21,16 @@ func tinygo_longjmp(frame *deferFrame)
 // Returns whether recover is supported on the current architecture.
 func supportsRecover() bool
 
+const (
+	panicStrategyPrint = 1
+	panicStrategyTrap  = 2
+)
+
+// Compile intrinsic.
+// Returns which strategy is used. This is usually "print" but can be changed
+// using the -panic= compiler flag.
+func panicStrategy() uint8
+
 // DeferFrame is a stack allocated object that stores information for the
 // current "defer frame", which is used in functions that use the `defer`
 // keyword.
@@ -37,6 +47,9 @@ type deferFrame struct {
 
 // Builtin function panic(msg), used as a compiler intrinsic.
 func _panic(message interface{}) {
+	if panicStrategy() == panicStrategyTrap {
+		trap()
+	}
 	if supportsRecover() {
 		frame := (*deferFrame)(task.Current().DeferFrame)
 		if frame != nil {
@@ -60,6 +73,9 @@ func runtimePanic(msg string) {
 }
 
 func runtimePanicAt(addr unsafe.Pointer, msg string) {
+	if panicStrategy() == panicStrategyTrap {
+		trap()
+	}
 	if hasReturnAddr {
 		printstring("panic: runtime error at ")
 		printptr(uintptr(addr) - callInstSize)
