@@ -56,6 +56,7 @@ type Config struct {
 	MaxStackAlloc      uint64
 	NeedsStackObjects  bool
 	Debug              bool // Whether to emit debug information in the LLVM module.
+	PanicStrategy      string
 }
 
 // compilerContext contains function-independent data that should still be
@@ -1855,6 +1856,13 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 				supportsRecover = 1
 			}
 			return llvm.ConstInt(b.ctx.Int1Type(), supportsRecover, false), nil
+		case name == "runtime.panicStrategy":
+			// These constants are defined in src/runtime/panic.go.
+			panicStrategy := map[string]uint64{
+				"print": 1, // panicStrategyPrint
+				"trap":  2, // panicStrategyTrap
+			}[b.Config.PanicStrategy]
+			return llvm.ConstInt(b.ctx.Int8Type(), panicStrategy, false), nil
 		case name == "runtime/interrupt.New":
 			return b.createInterruptGlobal(instr)
 		}
