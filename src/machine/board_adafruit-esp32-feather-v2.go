@@ -32,10 +32,94 @@ const (
 	IO39 = GPIO39
 )
 
+// Digital pins
+const (
+	D12 = IO12
+	D13 = IO13
+	D14 = IO14
+	D15 = IO15
+	D27 = IO27
+	D32 = IO32
+	D33 = IO33
+	D37 = IO37
+)
+
+// Analog pins
+const (
+	A0 = IO26
+	A1 = IO25
+	A2 = IO34
+	A3 = IO39
+	A4 = IO36
+	A5 = IO4
+)
+
 // Built-in LEDs and Button
 const (
-	NEOPIXEL           = IO0
+	WS2812             = IO0
+	NEOPIXEL           = WS2812
 	NEOPIXEL_I2C_POWER = IO2
 	LED                = IO13
 	BUTTON             = IO38
+)
+
+// SPI pins
+const (
+	SPI_SCK_PIN  = IO5
+	SPI_MOSI_PIN = IO19
+	SPI_MISO_PIN = IO21
+
+	SPI_SDO_PIN = SPI_MOSI_PIN
+	SPI_SDI_PIN = SPI_MISO_PIN
+
+	// Silk labels
+	SCK = SPI_SCK_PIN
+	MO  = SPI_MOSI_PIN
+	MI  = SPI_MISO_PIN
+)
+
+// I2C pins
+const (
+	I2C_SCL_PIN = IO20
+	I2C_SDA_PIN = IO22
+
+	// Silk labels
+	SCL = I2C_SCL_PIN
+	SDA = I2C_SDA_PIN
+)
+
+// ADC pins
+const (
+	ADC1_0 = IO36
+	ADC1_1 = IO37
+	ADC1_2 = IO38
+	ADC1_3 = IO39
+	ADC1_4 = IO32
+	ADC1_5 = IO33
+	ADC1_6 = IO34
+	ADC1_7 = IO35
+
+	ADC2_0 = IO4
+	ADC2_1 = IO0
+	ADC2_2 = IO2
+	ADC2_3 = IO15
+	ADC2_4 = IO13
+	ADC2_5 = IO12
+	ADC2_6 = IO14
+	ADC2_7 = IO27
+	ADC2_8 = IO25
+	ADC2_9 = IO26
+)
+
+// UART pins
+const (
+	UART_TX_PIN = IO19
+	UART_RX_PIN = IO22
+
+	UART2_TX_PIN = IO8
+	UART2_RX_PIN = IO7
+
+	// Silk labels
+	RX = UART2_RX_PIN
+	TX = UART2_TX_PIN
 )
