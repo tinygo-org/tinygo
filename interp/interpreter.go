@@ -427,13 +427,20 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if err != nil {
 					return nil, mem, r.errorAt(inst, err)
 				}
+				// typecodePtr always point to the numMethod field in the type
+				// description struct. The methodSet, when present, comes right
+				// before the numMethod field (the compiler doesn't generate
+				// method sets for concrete types without methods).
+				// Considering that the compiler doesn't emit interface type
+				// asserts for interfaces with no methods (as the always succeed)
+				// then if the offset is zero, this assert must always fail.
 				if typecodePtr.offset() == 0 {
 					locals[inst.localIndex] = literalValue{uint8(0)}
 					break
 				}
 				typecodePtrOffset, err := typecodePtr.addOffset(-int64(r.pointerSize))
 				if err != nil {
-					return nil, mem, r.errorAt(inst, err) // unlikely
+					return nil, mem, r.errorAt(inst, err)
 				}
 				methodSetPtr, err := mem.load(typecodePtrOffset, r.pointerSize).asPointer(r)
 				if err != nil {
