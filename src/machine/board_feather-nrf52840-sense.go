@@ -2,7 +2,7 @@
 
 package machine
 
-const HasLowFrequencyCrystal = true
+const HasLowFrequencyCrystal = false
 
 // GPIO Pins
 const (
