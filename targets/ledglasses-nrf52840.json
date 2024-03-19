@@ -1,0 +1,6 @@
+{
+    "inherits": ["nrf52840", "nrf52840-s140v6-uf2"],
+    "build-tags": ["ledglasses_nrf52840"],
+    "serial-port": ["239a:810d", "239a:810e"],
+    "msd-volume-name": ["GLASSESBOOT"]
+}
