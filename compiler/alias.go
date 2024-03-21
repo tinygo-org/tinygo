@@ -16,8 +16,8 @@ import "tinygo.org/x/go-llvm"
 
 var stdlibAliases = map[string]string{
 	// crypto packages
-	"crypto/ed25519/internal/edwards25519/field.feMul":    "crypto/ed25519/internal/edwards25519/field.feMulGeneric",
-	"crypto/ed25519/internal/edwards25519/field.feSquare": "crypto/ed25519/internal/edwards25519/field.feSquareGeneric",
+	"crypto/ed25519/internal/edwards25519/field.feMul": "crypto/ed25519/internal/edwards25519/field.feMulGeneric",
+	"crypto/internal/edwards25519/field.feSquare":      "crypto/ed25519/internal/edwards25519/field.feSquareGeneric",
 	"crypto/md5.block":         "crypto/md5.blockGeneric",
 	"crypto/sha1.block":        "crypto/sha1.blockGeneric",
 	"crypto/sha1.blockAMD64":   "crypto/sha1.blockGeneric",
