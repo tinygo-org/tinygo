@@ -19,17 +19,23 @@ import (
 
 func run(t *testing.T, cmdline string) error {
 	args := strings.Fields(cmdline)
+	_, err := runargs(t, args...)
+	return err
+}
+
+func runout(t *testing.T, cmdline string) ([]byte, error) {
+	args := strings.Fields(cmdline)
 	return runargs(t, args...)
 }
 
-func runargs(t *testing.T, args ...string) error {
+func runargs(t *testing.T, args ...string) ([]byte, error) {
 	cmd := exec.Command(args[0], args[1:]...)
 	b, err := cmd.CombinedOutput()
 	t.Logf("Command: %s; err=%v; full output:\n%s", strings.Join(args, " "), err, b)
 	if err != nil {
-		return err
+		return b, err
 	}
-	return nil
+	return b, nil
 }
 
 func chromectx(t *testing.T) context.Context {
