@@ -134,6 +134,16 @@ func Rename(from, to string) (err error) {
 	return
 }
 
+func Link(oldname, newname string) (err error) {
+	fromdata := cstring(oldname)
+	todata := cstring(newname)
+	fail := int(libc_link(&fromdata[0], &todata[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Symlink(from, to string) (err error) {
 	fromdata := cstring(from)
 	todata := cstring(to)
@@ -415,6 +425,11 @@ func libc_rename(from, to *byte) int32
 //
 //export symlink
 func libc_symlink(from, to *byte) int32
+
+// int link(const char *oldname, *newname);
+//
+//export link
+func libc_link(oldname, newname *byte) int32
 
 // int fsync(int fd);
 //
