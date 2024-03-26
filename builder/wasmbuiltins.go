@@ -10,7 +10,9 @@ import (
 var WasmBuiltins = Library{
 	name: "wasmbuiltins",
 	makeHeaders: func(target, includeDir string) error {
-		os.Mkdir(includeDir+"/bits", 0o777)
+		if err := os.Mkdir(includeDir+"/bits", 0o777); err != nil {
+			return err
+		}
 		f, err := os.Create(includeDir + "/bits/alltypes.h")
 		if err != nil {
 			return err
