@@ -2,6 +2,7 @@ package main
 
 /*
 #include <stdio.h>
+#include <math.h>
 int fortytwo(void);
 #include "main.h"
 #include "test.h"
@@ -174,6 +175,10 @@ func main() {
 	// libc: test basic stdio functionality
 	putsBuf := []byte("line written using C puts\x00")
 	C.puts((*C.char)(unsafe.Pointer(&putsBuf[0])))
+
+	// libc: test libm functions (normally bundled in libc)
+	println("CGo sqrt(3):", C.sqrt(3))
+	println("C   sqrt(3):", C.doSqrt(3))
 }
 
 func printUnion(union C.joined_t) C.joined_t {
