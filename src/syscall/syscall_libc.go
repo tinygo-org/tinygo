@@ -203,6 +203,15 @@ func Execve(pathname string, argv []string, envv []string) (err error) {
 	return
 }
 
+func Truncate(path string, length int64) (err error) {
+	data := cstring(path)
+	fail := int(libc_truncate(&data[0], length))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Faccessat(dirfd int, path string, mode uint32, flags int) (err error)
 
 func Kill(pid int, sig Signal) (err error) {
@@ -442,6 +451,7 @@ func libc_readlink(path *byte, buf *byte, count uint) int
 //export unlink
 func libc_unlink(pathname *byte) int32
 
+<<<<<<< HEAD
 // pid_t fork(void);
 //
 //export fork
@@ -451,3 +461,12 @@ func libc_fork() int32
 //
 //export execve
 func libc_execve(filename *byte, argv **byte, envp **byte) int
+=======
+// int truncate(const char *path, off_t length);
+//
+//export truncate
+func libc_truncate(path *byte, length int64) int32
+
+//go:extern environ
+var libc_environ *unsafe.Pointer
+>>>>>>> 2bb9c18a (add file.Truncate)
