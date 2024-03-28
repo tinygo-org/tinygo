@@ -1,4 +1,4 @@
-//go:build linux && !baremetal && !wasip1
+//go:build linux && !baremetal && !wasip1 && !wasip2
 
 // This implementation of crypto/rand uses the /dev/urandom pseudo-file to
 // generate random numbers.

@@ -832,13 +832,91 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					"--output", result.Executable,
 				)
 
-				cmd := exec.Command(goenv.Get("WASMOPT"), args...)
+				wasmopt := goenv.Get("WASMOPT")
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands(wasmopt, args...)
+				}
+				cmd := exec.Command(wasmopt, args...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 
 				err := cmd.Run()
 				if err != nil {
 					return fmt.Errorf("wasm-opt failed: %w", err)
+				}
+			}
+
+			// Run wasm-tools for component-model binaries
+			witPackage := strings.ReplaceAll(config.Target.WitPackage, "{root}", goenv.Get("TINYGOROOT"))
+			if config.Options.WitPackage != "" {
+				witPackage = config.Options.WitPackage
+			}
+			witWorld := config.Target.WitWorld
+			if config.Options.WitWorld != "" {
+				witWorld = config.Options.WitWorld
+			}
+			if witPackage != "" && witWorld != "" {
+
+				// wasm-tools component embed -w wasi:cli/command
+				// 		$$(tinygo env TINYGOROOT)/lib/wasi-cli/wit/ main.wasm -o embedded.wasm
+				args := []string{
+					"component",
+					"embed",
+					"-w", witWorld,
+					witPackage,
+					result.Executable,
+					"-o", result.Executable,
+				}
+
+				wasmtools := goenv.Get("WASMTOOLS")
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands(wasmtools, args...)
+				}
+				cmd := exec.Command(wasmtools, args...)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+
+				err := cmd.Run()
+				if err != nil {
+					// Preserve a copy of the failure if -work option is used
+					if config.Options.Work {
+						dest := filepath.Join(
+							filepath.Dir(result.Executable),
+							fmt.Sprintf("%s.embed-fail.wasm", strings.Replace(pkgName, "/", "_", -1)),
+						)
+						copyCmd := exec.Command("cp", "-f", result.Executable, dest)
+						copyCmd.Run()
+					}
+					return fmt.Errorf("wasm-tools failed: %w", err)
+				}
+
+				// wasm-tools component new embedded.wasm -o component.wasm
+				args = []string{
+					"component",
+					"new",
+					result.Executable,
+					"-o", result.Executable,
+				}
+
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands(wasmtools, args...)
+				}
+				cmd = exec.Command(wasmtools, args...)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+
+				err = cmd.Run()
+				if err != nil {
+					// Preserve a copy of the failure if -work option is used
+					if config.Options.Work {
+						dest := filepath.Join(
+							filepath.Dir(result.Executable),
+							fmt.Sprintf("%s.comp-fail.wasm", strings.Replace(pkgName, "/", "_", -1)),
+						)
+						copyCmd := exec.Command("cp", "-f", result.Executable, dest)
+						copyCmd.Run()
+					}
+					return fmt.Errorf("wasm-tools failed: %w", err)
 				}
 			}
 

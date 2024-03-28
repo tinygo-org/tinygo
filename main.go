@@ -308,14 +308,14 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			// Ex. run --dir=.. --dir=../.. --dir=../../..
 			dirs := dirsToModuleRoot(result.MainDir, result.ModuleRoot)
 			args := []string{"run"}
-			for _, d := range dirs[1:] {
+			for _, d := range dirs {
 				args = append(args, "--dir="+d)
 			}
 
-			// The below re-organizes the arguments so that the current
-			// directory is added last.
+			args = append(args, "--env=PWD="+cmd.Dir)
+
 			args = append(args, cmd.Args[1:]...)
-			cmd.Args = append(cmd.Args[:1:1], args...)
+			cmd.Args = args
 		}
 
 		// Run the test.
@@ -357,8 +357,8 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 }
 
 func dirsToModuleRoot(maindir, modroot string) []string {
-	var dirs = []string{"."}
-	last := ".."
+	var dirs = []string{maindir}
+	last := filepath.Join(maindir, "..")
 	// strip off path elements until we hit the module root
 	// adding `..`, `../..`, `../../..` until we're done
 	for maindir != modroot {
@@ -820,7 +820,6 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	} else if config.EmulatorName() == "wasmtime" {
 		// Wasmtime needs some special flags to pass environment variables
 		// and allow reading from the current directory.
-		emuArgs = append(emuArgs, "--dir=.")
 		for _, v := range environmentVars {
 			emuArgs = append(emuArgs, "--env", v)
 		}
@@ -1464,6 +1463,12 @@ func main() {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
 
+	var witPackage, witWorld string
+	if command == "help" || command == "build" || command == "test" {
+		flag.StringVar(&witPackage, "wit-package", "", "wit package for wasm component embedding")
+		flag.StringVar(&witWorld, "wit-world", "", "wit world for wasm component embedding")
+	}
+
 	var testConfig compileopts.TestConfig
 	if command == "help" || command == "test" {
 		flag.BoolVar(&testConfig.CompileOnly, "c", false, "compile the test binary but do not run it")
@@ -1543,6 +1548,8 @@ func main() {
 		Monitor:         *monitor,
 		BaudRate:        *baudrate,
 		Timeout:         *timeout,
+		WitPackage:      witPackage,
+		WitWorld:        witWorld,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand

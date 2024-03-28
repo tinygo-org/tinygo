@@ -1,3 +1,6 @@
+go.work
+go.work.sum
+
 docs/_build
 src/device/avr/*.go
 src/device/avr/*.ld
@@ -17,7 +20,7 @@ src/device/kendryte/*.go
 src/device/kendryte/*.s
 src/device/rp/*.go
 src/device/rp/*.s
-vendor
+./vendor
 llvm-build
 llvm-project
 build/*

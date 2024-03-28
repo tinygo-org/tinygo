@@ -6,7 +6,7 @@
 // fairly similar: we use fdopendir, fdclosedir, and readdir from wasi-libc in
 // a similar way that the darwin code uses functions from libc.
 
-//go:build wasip1
+//go:build wasip1 || wasip2
 
 package os
 

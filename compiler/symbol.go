@@ -346,7 +346,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 // The list of allowed types is based on this proposal:
 // https://github.com/golang/go/issues/59149
 func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
-	if c.pkg.Path() == "runtime" || c.pkg.Path() == "syscall/js" {
+	if c.pkg.Path() == "runtime" || c.pkg.Path() == "syscall/js" || c.pkg.Path() == "syscall" {
 		// The runtime is a special case. Allow all kinds of parameters
 		// (importantly, including pointers).
 		return
@@ -375,19 +375,26 @@ func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
 
 // Check whether the type maps directly to a WebAssembly type, according to:
 // https://github.com/golang/go/issues/59149
+// TODO(ydnar): document why we relaxed this for WASI Preview 2.
 func isValidWasmType(typ types.Type, isReturn bool) bool {
 	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		switch typ.Kind() {
-		case types.Int32, types.Uint32, types.Int64, types.Uint64:
+		case types.Bool:
+			return true
+		case types.Int8, types.Uint8, types.Int16, types.Uint16, types.Int32, types.Uint32, types.Int64, types.Uint64:
 			return true
 		case types.Float32, types.Float64:
 			return true
-		case types.UnsafePointer:
-			if !isReturn {
-				return true
-			}
+		case types.Uintptr, types.UnsafePointer:
+			return true
+		case types.String:
+			return true
 		}
+	case *types.Struct:
+		return true
+	case *types.Pointer:
+		return isValidWasmType(typ.Elem(), isReturn)
 	}
 	return false
 }

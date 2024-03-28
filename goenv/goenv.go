@@ -159,6 +159,11 @@ func Get(name string) string {
 		}
 
 		return findWasmOpt()
+	case "WASMTOOLS":
+		if path := os.Getenv("WASMTOOLS"); path != "" {
+			return path
+		}
+		return "wasm-tools"
 	default:
 		return ""
 	}

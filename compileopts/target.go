@@ -62,6 +62,8 @@ type TargetSpec struct {
 	JLinkDevice      string   `json:"jlink-device,omitempty"`
 	CodeModel        string   `json:"code-model,omitempty"`
 	RelocationModel  string   `json:"relocation-model,omitempty"`
+	WitPackage       string   `json:"wit-package,omitempty"`
+	WitWorld         string   `json:"wit-world,omitempty"`
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
