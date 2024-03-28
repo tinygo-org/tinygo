@@ -11,10 +11,12 @@ package os_test
 import (
 	. "os"
 	"runtime"
+	"syscall"
 	"testing"
 )
 
 func TestChmod(t *testing.T) {
+	// Chmod
 	f := newFile("TestChmod", t)
 	defer Remove(f.Name())
 	defer f.Close()
@@ -28,4 +30,26 @@ func TestChmod(t *testing.T) {
 		t.Fatalf("chmod %s %#o: %s", f.Name(), fm, err)
 	}
 	checkMode(t, f.Name(), fm)
+
+}
+
+func TestChown(t *testing.T) {
+	f := newFile("TestChown", t)
+	defer Remove(f.Name())
+	defer f.Close()
+
+	if runtime.GOOS != "windows" {
+		if err := Chown(f.Name(), 0, 0); err != nil {
+			t.Fatalf("chown %s 0 0: %s", f.Name(), err)
+		}
+
+		fi, err := Stat(f.Name())
+		if err != nil {
+			t.Fatalf("stat %s: %s", f.Name(), err)
+		}
+
+		if fi.Sys().(*syscall.Stat_t).Uid != 0 || fi.Sys().(*syscall.Stat_t).Gid != 0 {
+			t.Fatalf("chown %s 0 0: uid=%d gid=%d", f.Name(), fi.Sys().(*syscall.Stat_t).Uid, fi.Sys().(*syscall.Stat_t).Gid)
+		}
+	}
 }
