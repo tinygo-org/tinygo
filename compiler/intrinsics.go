@@ -111,14 +111,32 @@ func (b *builder) createKeepAliveImpl() {
 	b.CreateRetVoid()
 }
 
-var mathToLLVMMapping = map[string]string{
+// mathToLLVMMapping maps a relative Go symbol to an LLVM intrinsic
+func (b *builder) mathToLLVMMapping(rel string) string {
+	i := mathToLLVM[rel]
+	if strings.HasPrefix(b.Triple, "wasm") && wasmMissingIntrinsics[i] {
+		return ""
+	}
+	return i
+}
+
+var mathToLLVM = map[string]string{
+	"math.Abs":   "llvm.fabs.f64",
 	"math.Ceil":  "llvm.ceil.f64",
-	"math.Exp":   "llvm.exp.f64",
-	"math.Exp2":  "llvm.exp2.f64",
+	"math.Exp":   "llvm.exp.f64",  // requires libc
+	"math.Exp2":  "llvm.exp2.f64", // requires libc
 	"math.Floor": "llvm.floor.f64",
-	"math.Log":   "llvm.log.f64",
+	"math.Log":   "llvm.log.f64", // requires libc
 	"math.Sqrt":  "llvm.sqrt.f64",
 	"math.Trunc": "llvm.trunc.f64",
+}
+
+// wasmMissingIntrinsics maps intrinsics not present in LLVM wasm
+// which require linking to libc
+var wasmMissingIntrinsics = map[string]bool{
+	"llvm.exp.f64":  true,
+	"llvm.exp2.f64": true,
+	"llvm.log.f64":  true,
 }
 
 // defineMathOp defines a math function body as a call to a LLVM intrinsic,
@@ -133,7 +151,7 @@ var mathToLLVMMapping = map[string]string{
 // more expensive than 32-bit ones.
 func (b *builder) defineMathOp() {
 	b.createFunctionStart(true)
-	llvmName := mathToLLVMMapping[b.fn.RelString(nil)]
+	llvmName := b.mathToLLVMMapping(b.fn.RelString(nil))
 	if llvmName == "" {
 		panic("unreachable: unknown math operation") // sanity check
 	}
