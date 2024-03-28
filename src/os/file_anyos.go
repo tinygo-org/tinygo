@@ -147,6 +147,23 @@ func Chmod(name string, mode FileMode) error {
 	return nil
 }
 
+// Chown changes the numeric uid and gid of the named file.
+// If the file is a symbolic link, it changes the uid and gid of the link's target.
+// A uid or gid of -1 means to not change that value.
+// If there is an error, it will be of type *PathError.
+//
+// On Windows or Plan 9, Chown always returns the syscall.EWINDOWS or
+// EPLAN9 error, wrapped in *PathError.
+func Chown(name string, uid, gid int) error {
+	e := ignoringEINTR(func() error {
+		return syscall.Chown(name, uid, gid)
+	})
+	if e != nil {
+		return &PathError{Op: "chown", Path: name, Err: e}
+	}
+	return nil
+}
+
 // ignoringEINTR makes a function call and repeats it if it returns an
 // EINTR error. This appears to be required even though we install all
 // signal handlers with SA_RESTART: see #22838, #38033, #38836, #40846.
