@@ -74,6 +74,19 @@ func tempDir() string {
 	return dir
 }
 
+// Link creates newname as a hard link to the oldname file.
+// If there is an error, it will be of type *LinkError.
+func Link(oldname, newname string) error {
+	e := ignoringEINTR(func() error {
+		return syscall.Link(oldname, newname)
+	})
+
+	if e != nil {
+		return &LinkError{"link", oldname, newname, e}
+	}
+	return nil
+}
+
 // Symlink creates newname as a symbolic link to oldname.
 // On Windows, a symlink to a non-existent oldname creates a file symlink;
 // if oldname is later created as a directory the symlink will not work.
