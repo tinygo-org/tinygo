@@ -310,7 +310,9 @@ func (c *Config) CFlags(libclang bool) []string {
 		)
 	case "wasi-libc":
 		root := goenv.Get("TINYGOROOT")
-		cflags = append(cflags, "--sysroot="+root+"/lib/wasi-libc/sysroot")
+		cflags = append(cflags,
+			"-nostdlibinc",
+			"-isystem", root+"/lib/wasi-libc/sysroot/include")
 	case "wasmbuiltins":
 		// nothing to add (library is purely for builtins)
 	case "mingw-w64":
