@@ -5,11 +5,6 @@
 // For more information, see: https://gopherbadge.com/
 package machine
 
-import (
-	"device/rp"
-	"runtime/interrupt"
-)
-
 const (
 	/*ADC0 Pin = GPIO26
 	ADC1 Pin = GPIO27
@@ -92,17 +87,4 @@ const (
 	UART_RX_PIN  = UART0_RX_PIN
 )
 
-// UART on the RP2040
-var (
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART1,
-	}
-)
-
 var DefaultUART = UART1
-
-func init() {
-	UART1.Interrupt = interrupt.New(rp.IRQ_UART1_IRQ, _UART1.handleInterrupt)
-}

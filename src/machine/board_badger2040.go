@@ -7,11 +7,6 @@
 // - Badger 2040 schematic: https://cdn.shopify.com/s/files/1/0174/1800/files/badger_2040_schematic.pdf?v=1645702148
 package machine
 
-import (
-	"device/rp"
-	"runtime/interrupt"
-)
-
 const (
 	LED Pin = GPIO25
 
@@ -92,17 +87,4 @@ const (
 	UART_RX_PIN  = UART0_RX_PIN
 )
 
-// UART on the RP2040
-var (
-	UART0  = &_UART0
-	_UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
-	}
-)
-
 var DefaultUART = UART0
-
-func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
-}

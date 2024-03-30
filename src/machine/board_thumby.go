@@ -5,11 +5,6 @@
 // https://thumby.us/
 package machine
 
-import (
-	"device/rp"
-	"runtime/interrupt"
-)
-
 const (
 	THUMBY_SCK_PIN = I2C1_SDA_PIN
 	THUMBY_SDA_PIN = I2C1_SCL_PIN
@@ -78,17 +73,4 @@ const (
 	UART_RX_PIN  = UART0_RX_PIN
 )
 
-// UART on the Thumby
-var (
-	UART0  = &_UART0
-	_UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
-	}
-)
-
 var DefaultUART = UART0
-
-func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
-}
