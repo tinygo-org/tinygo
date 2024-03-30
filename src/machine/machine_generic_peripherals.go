@@ -6,6 +6,9 @@ package machine
 // boards that define their peripherals in the board file (e.g. board_qtpy.go).
 
 var (
-	SPI0 = SPI{0}
-	I2C0 = &I2C{0}
+	UART0 = hardwareUART0
+	UART1 = hardwareUART1
+	SPI0  = SPI{0}
+	SPI1  = SPI{1}
+	I2C0  = &I2C{0}
 )

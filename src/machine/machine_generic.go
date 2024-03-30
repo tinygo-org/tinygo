@@ -7,15 +7,14 @@ package machine
 const deviceName = "generic"
 
 var (
-	UART0 = &UART{0}
-	USB   = &UART{100}
+	USB = &UART{100}
 )
 
 // The Serial port always points to the default UART in a simulated environment.
 //
 // TODO: perhaps this should be a special serial object that outputs via WASI
 // stdout calls.
-var Serial = UART0
+var Serial = hardwareUART0
 
 const (
 	PinInput PinMode = iota
@@ -175,6 +174,11 @@ func uartRead(bus uint8, buf *byte, bufLen int) int
 
 //export __tinygo_uart_write
 func uartWrite(bus uint8, buf *byte, bufLen int) int
+
+var (
+	hardwareUART0 = &UART{0}
+	hardwareUART1 = &UART{1}
+)
 
 // Some objects used by Atmel SAM D chips (samd21, samd51).
 // Defined here (without build tag) for convenience.
