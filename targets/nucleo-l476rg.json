@@ -1,0 +1,12 @@
+{
+    "inherits": ["cortex-m4"],
+    "build-tags": ["nucleol476rg", "stm32l476", "stm32l4x6", "stm32l4", "stm32"],
+    "serial": "uart",
+    "linkerscript": "targets/stm32l4x6.ld",
+    "extra-files": [
+      "src/device/stm32/stm32l4x6.s"
+    ],
+    "flash-method": "openocd",
+    "openocd-interface": "stlink-v2-1",
+    "openocd-target": "stm32l4x"
+  }
