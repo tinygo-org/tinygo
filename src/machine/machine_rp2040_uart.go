@@ -9,7 +9,8 @@ import (
 
 // UART on the RP2040.
 type UART struct {
-	Buffer    *RingBuffer
+	UARTCommon
+
 	Bus       *rp.UART0_Type
 	Interrupt interrupt.Interrupt
 }

@@ -11,6 +11,7 @@ func New() *USBCDC {
 	if USB == nil {
 		USB = &USBCDC{
 			rxBuffer: NewRxRingBuffer(),
+			RXChan:   make(chan bool),
 			txBuffer: NewTxRingBuffer(),
 		}
 	}

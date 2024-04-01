@@ -70,13 +70,13 @@ func (p Pin) PortMaskClear() (*uint32, uint32) {
 }
 
 type UART struct {
-	Bus    *sifive.UART_Type
-	Buffer *RingBuffer
+	Bus *sifive.UART_Type
+	UARTCommon
 }
 
 var (
 	UART0  = &_UART0
-	_UART0 = UART{Bus: sifive.UART0, Buffer: NewRingBuffer()}
+	_UART0 = UART{Bus: sifive.UART0, UARTCommon: NewUARTCommon()}
 )
 
 func (uart *UART) Configure(config UARTConfig) {

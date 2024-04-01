@@ -31,8 +31,8 @@ var (
 	// debugger to be exposed as virtual COM port over USB on Nucleo boards.
 	UART2  = &_UART2
 	_UART2 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    stm32.USART2,
+		UARTCommon: NewUARTCommon(),
+		Bus:        stm32.USART2,
 	}
 	DefaultUART = UART2
 )

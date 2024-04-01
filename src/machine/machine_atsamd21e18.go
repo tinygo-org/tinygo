@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	sercomUSART0 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM0_USART, SERCOM: 0}
-	sercomUSART1 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM1_USART, SERCOM: 1}
-	sercomUSART2 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM2_USART, SERCOM: 2}
-	sercomUSART3 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM3_USART, SERCOM: 3}
+	sercomUSART0 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM0_USART, SERCOM: 0}
+	sercomUSART1 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM1_USART, SERCOM: 1}
+	sercomUSART2 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM2_USART, SERCOM: 2}
+	sercomUSART3 = UART{UARTCommon: NewUARTCommon(), Bus: sam.SERCOM3_USART, SERCOM: 3}
 
 	sercomI2CM0 = &I2C{Bus: sam.SERCOM0_I2CM, SERCOM: 0}
 	sercomI2CM1 = &I2C{Bus: sam.SERCOM1_I2CM, SERCOM: 1}

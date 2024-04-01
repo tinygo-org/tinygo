@@ -14,7 +14,7 @@ const irq_USART1_RX = avr.IRQ_USART1_RX
 var (
 	UART1  = &_UART1
 	_UART1 = UART{
-		Buffer: NewRingBuffer(),
+		UARTCommon: NewUARTCommon(),
 
 		dataReg:    avr.UDR1,
 		baudRegH:   avr.UBRR1H,

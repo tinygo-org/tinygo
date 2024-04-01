@@ -53,7 +53,7 @@ const (
 var (
 	UART1  = &_UART1
 	_UART1 = UART{
-		Buffer:            NewRingBuffer(),
+		UARTCommon:        NewUARTCommon(),
 		Bus:               stm32.USART2,
 		TxAltFuncSelector: AF7_USART1_2_3,
 		RxAltFuncSelector: AF7_USART1_2_3,
