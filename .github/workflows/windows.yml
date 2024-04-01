@@ -98,7 +98,7 @@ jobs:
         run: |
           scoop install wasmtime@14.0.4
       - name: make gen-device
-        run: make -j3 gen-device
+        run: make gen-device
       - name: Test TinyGo
         shell: bash
         run: make test GOTESTFLAGS="-short"

@@ -10,9 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"unicode"
 )
@@ -1441,6 +1443,31 @@ __isr_vector:
 	return w.Flush()
 }
 
+// Process a single SVD file, synchronously.
+func processFile(infile, outdir, sourceURL, interruptSystem string) error {
+	device, err := readSVD(infile, sourceURL)
+	if err != nil {
+		return fmt.Errorf("failed to read: %w", err)
+	}
+	err = writeGo(outdir, device, interruptSystem)
+	if err != nil {
+		return fmt.Errorf("failed to write Go file: %w", err)
+	}
+	switch interruptSystem {
+	case "software":
+		// Nothing to do.
+	case "hardware":
+		err = writeAsm(outdir, device)
+		if err != nil {
+			return fmt.Errorf("failed to write assembly file: %w", err)
+		}
+	default:
+		return fmt.Errorf("unknown interrupt system: %s", interruptSystem)
+	}
+	return nil
+}
+
+// Process an entire directory, in parallel.
 func generate(indir, outdir, sourceURL, interruptSystem string) error {
 	if _, err := os.Stat(indir); errors.Is(err, fs.ErrNotExist) {
 		fmt.Fprintln(os.Stderr, "cannot find input directory:", indir)
@@ -1448,35 +1475,52 @@ func generate(indir, outdir, sourceURL, interruptSystem string) error {
 	}
 	os.MkdirAll(outdir, 0777)
 
+	// Read list of SVD files to process.
 	infiles, err := filepath.Glob(filepath.Join(indir, "*.svd"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "could not read .svd files:", err)
 		os.Exit(1)
 	}
 	sort.Strings(infiles)
-	for _, infile := range infiles {
-		fmt.Println(infile)
-		device, err := readSVD(infile, sourceURL)
-		if err != nil {
-			return fmt.Errorf("failed to read: %w", err)
-		}
-		err = writeGo(outdir, device, interruptSystem)
-		if err != nil {
-			return fmt.Errorf("failed to write Go file: %w", err)
-		}
-		switch interruptSystem {
-		case "software":
-			// Nothing to do.
-		case "hardware":
-			err = writeAsm(outdir, device)
-			if err != nil {
-				return fmt.Errorf("failed to write assembly file: %w", err)
+
+	// Start worker goroutines.
+	var wg sync.WaitGroup
+	workChan := make(chan string)
+	errChan := make(chan error, 1)
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go func() {
+			for infile := range workChan {
+				err := processFile(infile, outdir, sourceURL, interruptSystem)
+				if err != nil {
+					// Store error to errChan if no error was stored before.
+					select {
+					case errChan <- err:
+					default:
+					}
+				}
+				wg.Done()
 			}
-		default:
-			return fmt.Errorf("unknown interrupt system: %s", interruptSystem)
-		}
+		}()
 	}
-	return nil
+
+	// Submit all jobs to the goroutines.
+	wg.Add(len(infiles))
+	for _, filepath := range infiles {
+		fmt.Println(filepath)
+		workChan <- filepath
+	}
+	close(workChan)
+
+	// Wait until all workers have finished.
+	wg.Wait()
+
+	// Check for an error.
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		return nil
+	}
 }
 
 func main() {

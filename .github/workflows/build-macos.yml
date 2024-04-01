@@ -98,7 +98,7 @@ jobs:
         if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
         run: make wasi-libc
       - name: make gen-device
-        run: make -j3 gen-device
+        run: make gen-device
       - name: Test TinyGo
         shell: bash
         run: make test GOTESTFLAGS="-short"
