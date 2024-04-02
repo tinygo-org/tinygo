@@ -34,22 +34,56 @@ func TestChmod(t *testing.T) {
 }
 
 func TestChown(t *testing.T) {
-	f := newFile("TestChown", t)
-	defer Remove(f.Name())
-	defer f.Close()
+	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
+		t.Skip()
+	}
 
-	if runtime.GOOS != "windows" {
-		if err := Chown(f.Name(), 0, 0); err != nil {
-			t.Fatalf("chown %s 0 0: %s", f.Name(), err)
-		}
+	testCases := map[string]struct {
+		uid     int
+		gid     int
+		wantErr bool
+	}{
+		"root": {
+			uid:     0,
+			gid:     0,
+			wantErr: true,
+		},
+		"user-" + runtime.GOOS: {
+			uid:     1001,
+			gid:     127,
+			wantErr: false,
+		},
+	}
 
-		fi, err := Stat(f.Name())
-		if err != nil {
-			t.Fatalf("stat %s: %s", f.Name(), err)
-		}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			f := newFile("TestChown", t)
+			defer Remove(f.Name())
+			defer f.Close()
 
-		if fi.Sys().(*syscall.Stat_t).Uid != 0 || fi.Sys().(*syscall.Stat_t).Gid != 0 {
-			t.Fatalf("chown %s 0 0: uid=%d gid=%d", f.Name(), fi.Sys().(*syscall.Stat_t).Uid, fi.Sys().(*syscall.Stat_t).Gid)
-		}
+			err := Chown(f.Name(), tc.uid, tc.gid)
+			if (tc.wantErr && err == nil) || (!tc.wantErr && err != nil) {
+				t.Fatalf("chown(%s, uid=%v, gid=%v): got %v, want error: %v", f.Name(), tc.uid, tc.gid, err, tc.wantErr)
+			}
+
+			fi, err := Stat(f.Name())
+			if err != nil {
+				t.Fatalf("stat %s: got %v, want nil", f.Name(), err)
+			}
+
+			if fi.Sys() == nil {
+				t.Fatalf("stat %s: fi.Sys(): got nil", f.Name())
+			}
+
+			s, ok := fi.Sys().(*syscall.Stat_t)
+			if !ok {
+				t.Fatalf("stat %s: fi.Sys(): is not *syscall.Stat_t", f.Name())
+			}
+
+			uid, gid := s.Uid, s.Gid
+			if uid != uint32(tc.uid) || gid != uint32(tc.gid) {
+				t.Fatalf("chown(%s, %d, %d): want (%d,%d), got (%d, %d)", f.Name(), tc.uid, tc.gid, tc.uid, tc.gid, uid, gid)
+			}
+		})
 	}
 }
