@@ -34,56 +34,74 @@ func TestChmod(t *testing.T) {
 }
 
 func TestChown(t *testing.T) {
+	var (
+		TEST_UID_1           = 1001
+		TEST_GID_1           = 127
+		TEST_UID_2           = 0
+		TEST_GID_2           = 0
+		ERR_PERM_DENIED      = "permission denied"
+		ERR_OP_NOT_PERMITTED = "operation not permitted"
+	)
+
 	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
 		t.Skip()
 	}
 
-	testCases := map[string]struct {
-		uid     int
-		gid     int
-		wantErr bool
-	}{
-		"root": {
-			uid:     0,
-			gid:     0,
-			wantErr: true,
-		},
-		"user-" + runtime.GOOS: {
-			uid:     1001,
-			gid:     127,
-			wantErr: false,
-		},
+	f := newFile("TestChown", t)
+	defer Remove(f.Name())
+	defer f.Close()
+
+	// User with CI permissions run chown on owned file
+	// This test does not change the initial permissions of the file
+	// It only checks if the chown operation was successful and consistent
+	if err := Chown(f.Name(), TEST_UID_1, TEST_GID_1); err != nil {
+		if err.Error() != ERR_OP_NOT_PERMITTED {
+			t.Fatalf("chown(%s, uid=%v, gid=%v): got %v, want != nil", f.Name(), TEST_UID_1, TEST_GID_1, err)
+		}
+	}
+	fi, err := Stat(f.Name())
+	if err != nil {
+		t.Fatalf("stat %s: got %v, want nil", f.Name(), err)
 	}
 
-	for name, tc := range testCases {
-		t.Run(name, func(t *testing.T) {
-			f := newFile("TestChown", t)
-			defer Remove(f.Name())
-			defer f.Close()
+	if fi.Sys() == nil {
+		t.Fatalf("stat %s: fi.Sys(): got nil", f.Name())
+	}
 
-			err := Chown(f.Name(), tc.uid, tc.gid)
-			if (tc.wantErr && err == nil) || (!tc.wantErr && err != nil) {
-				t.Fatalf("chown(%s, uid=%v, gid=%v): got %v, want error: %v", f.Name(), tc.uid, tc.gid, err, tc.wantErr)
-			}
+	s, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatalf("stat %s: fi.Sys(): is not *syscall.Stat_t", f.Name())
+	}
 
-			fi, err := Stat(f.Name())
-			if err != nil {
-				t.Fatalf("stat %s: got %v, want nil", f.Name(), err)
-			}
+	uid, gid := s.Uid, s.Gid
+	if uid != uint32(TEST_UID_1) || gid != uint32(TEST_GID_1) {
+		t.Fatalf("chown(%s, %d, %d): want (%d,%d), got (%d, %d)", f.Name(), TEST_UID_1, TEST_GID_1, TEST_UID_1, TEST_GID_1, uid, gid)
+	}
 
-			if fi.Sys() == nil {
-				t.Fatalf("stat %s: fi.Sys(): got nil", f.Name())
-			}
+	// Root permission denied
+	if err = Chown(f.Name(), TEST_UID_2, TEST_GID_2); err.Error() != ERR_PERM_DENIED {
+		t.Fatalf("chown(%s, uid=%v, gid=%v): got %v, want != nil", f.Name(), TEST_UID_2, TEST_GID_2, err)
+	}
 
-			s, ok := fi.Sys().(*syscall.Stat_t)
-			if !ok {
-				t.Fatalf("stat %s: fi.Sys(): is not *syscall.Stat_t", f.Name())
-			}
+	fi, err = Stat(f.Name())
+	if err != nil {
+		t.Fatalf("stat %s: got %v, want nil", f.Name(), err)
+	}
 
-			uid, gid := s.Uid, s.Gid
-			if uid != uint32(tc.uid) || gid != uint32(tc.gid) {
-				t.Fatalf("chown(%s, %d, %d): want (%d,%d), got (%d, %d)", f.Name(), tc.uid, tc.gid, tc.uid, tc.gid, uid, gid)
-			}
-		})
+	if fi.Sys() == nil {
+		t.Fatalf("stat %s: fi.Sys(): got nil", f.Name())
+	}
+
+	s, ok = fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatalf("stat %s: fi.Sys(): is not *syscall.Stat_t", f.Name())
+	}
+
+	uid, gid = s.Uid, s.Gid
+	if uid != uint32(TEST_UID_2) || gid != uint32(TEST_GID_2) {
+		// Chown will fail due to permissions denied, so the UID and GID should stay the same
+		if uid != uint32(TEST_UID_1) && gid != uint32(TEST_GID_1) {
+			t.Fatalf("chown(%s, %d, %d): want (%d,%d), got (%d, %d)", f.Name(), TEST_UID_2, TEST_GID_2, TEST_UID_2, TEST_GID_2, uid, gid)
+		}
 	}
 }
