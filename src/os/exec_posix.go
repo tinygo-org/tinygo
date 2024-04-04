@@ -19,3 +19,8 @@ var (
 	Interrupt Signal = syscall.SIGINT
 	Kill      Signal = syscall.SIGKILL
 )
+
+// Keep compatible with golang and always succeed and return new proc with pid on Linux.
+func findProcess(pid int) (*Process, error) {
+	return &Process{Pid: pid}, nil
+}
