@@ -31,29 +31,27 @@ type User struct {
 	HomeDir string
 }
 
+// UnknownUserError is returned by Lookup when a user cannot be found.
+type UnknownUserError string
+
+func (e UnknownUserError) Error() string {
+	return "user: unknown user " + string(e)
+}
+
 // Current returns the current user.
 //
 // The first call will cache the current user information.
 // Subsequent calls will return the cached value and will not reflect
 // changes to the current user.
+// TODO: implement syscall.Getuid() and syscall.Getgid() to get the current user.
 func Current() (*User, error) {
 	return nil, errors.New("user: Current not implemented")
 }
 
-// Lookup always returns an error.
-func Lookup(username string) (*User, error) {
-	return nil, errors.New("user: Lookup not implemented")
-}
-
-// Group represents a grouping of users.
+// Lookup looks up a user by username.
 //
-// On POSIX systems Gid contains a decimal number representing the group ID.
-type Group struct {
-	Gid  string // group ID
-	Name string // group name
-}
-
-// LookupGroup always returns an error.
-func LookupGroup(name string) (*Group, error) {
-	return nil, errors.New("user: LookupGroup not implemented")
+// If the user cannot be found, the returned error is of type UnknownUserError.
+// NOTE: This implementation does not support caching as the golang implementation does.
+func Lookup(username string) (*User, error) {
+	return lookupUser(username)
 }
