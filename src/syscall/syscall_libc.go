@@ -451,7 +451,6 @@ func libc_readlink(path *byte, buf *byte, count uint) int
 //export unlink
 func libc_unlink(pathname *byte) int32
 
-<<<<<<< HEAD
 // pid_t fork(void);
 //
 //export fork
@@ -461,7 +460,7 @@ func libc_fork() int32
 //
 //export execve
 func libc_execve(filename *byte, argv **byte, envp **byte) int
-=======
+
 // int truncate(const char *path, off_t length);
 //
 //export truncate
@@ -469,4 +468,3 @@ func libc_truncate(path *byte, length int64) int32
 
 //go:extern environ
 var libc_environ *unsafe.Pointer
->>>>>>> 2bb9c18a (add file.Truncate)

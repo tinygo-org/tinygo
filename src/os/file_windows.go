@@ -59,6 +59,10 @@ func Pipe() (r *File, w *File, err error) {
 	return
 }
 
+func (f *unixFileHandle) Truncate(size int64) error {
+	return ErrNotImplemented
+}
+
 func tempDir() string {
 	n := uint32(syscall.MAX_PATH)
 	for {
@@ -104,6 +108,16 @@ func (f unixFileHandle) Seek(offset int64, whence int) (int64, error) {
 
 func (f unixFileHandle) Sync() error {
 	return ErrNotImplemented
+}
+
+func (f *File) Truncate(size int64) error {
+	var err error
+	if f.handle == nil {
+		err = ErrClosed
+	} else {
+		err = ErrNotImplemented
+	}
+	return &PathError{Op: "truncate", Path: f.name, Err: err}
 }
 
 // isWindowsNulName reports whether name is os.DevNull ('NUL') on Windows.
