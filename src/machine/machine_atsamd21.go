@@ -1657,7 +1657,7 @@ var pinTimerMapping = [...]uint8{
 	PB30 / 2: pinTCC0Ch0 | pinTCC1Ch2<<4,
 }
 
-// findPinPadMapping returns the pin mode (PinTCC or PinTCCAlt) and the channel
+// findPinTimerMapping returns the pin mode (PinTCC or PinTCCAlt) and the channel
 // number for a given timer and pin. A zero PinMode is returned if no mapping
 // could be found.
 func findPinTimerMapping(timer uint8, pin Pin) (PinMode, uint8) {
