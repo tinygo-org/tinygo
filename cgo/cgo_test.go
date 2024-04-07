@@ -216,7 +216,7 @@ func (i simpleImporter) Import(path string) (*types.Package, error) {
 	}
 }
 
-// formatDiagnostics formats the error message to be an indented comment. It
+// formatDiagnostic formats the error message to be an indented comment. It
 // also fixes Windows path name issues (backward slashes).
 func formatDiagnostic(err error) string {
 	msg := err.Error()

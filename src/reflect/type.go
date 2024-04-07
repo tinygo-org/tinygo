@@ -980,7 +980,7 @@ func (t *rawType) Comparable() bool {
 	return (t.meta & flagComparable) == flagComparable
 }
 
-// isbinary() returns if the hashmapAlgorithmBinary functions can be used on this type
+// isBinary returns if the hashmapAlgorithmBinary functions can be used on this type
 func (t *rawType) isBinary() bool {
 	return (t.meta & flagIsBinary) == flagIsBinary
 }

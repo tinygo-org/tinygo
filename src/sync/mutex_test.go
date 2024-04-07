@@ -196,7 +196,7 @@ func TestRWMutexWriteToRead(t *testing.T) {
 	}
 }
 
-// TestRWMutexWriteToRead tests the transition from a read lock to a write lock while contended.
+// TestRWMutexReadToWrite tests the transition from a read lock to a write lock while contended.
 func TestRWMutexReadToWrite(t *testing.T) {
 	// Create a new RWMutex and read-lock it several times.
 	const n = 3
