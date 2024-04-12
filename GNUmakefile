@@ -911,3 +911,9 @@ ifneq ($(RELEASEONLY), 1)
 release: build/release
 deb: build/release
 endif
+
+lint:
+	# Only run on compiler dir for now, expand as we clean up other dirs
+	# This obviously won't scale, but it's a start, and it's fast
+	go run github.com/mgechev/revive --version
+	go run github.com/mgechev/revive --config revive.toml compiler/...

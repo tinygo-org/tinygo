@@ -113,6 +113,8 @@ jobs:
           gem install --version 4.0.7 public_suffix
           gem install --version 2.7.6 dotenv
           gem install --no-document fpm
+      - name: Run linter
+        run: make lint
       - name: Build TinyGo release
         run: |
           make release deb -j3 STATIC=1
