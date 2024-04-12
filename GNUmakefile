@@ -896,3 +896,9 @@ ifneq ($(RELEASEONLY), 1)
 release: build/release
 deb: build/release
 endif
+
+lint:
+	# Only run on compiler dir for now, expand as we clean up other dirs
+	# Only check comments on exported symbols for now, expand regexp as we clean up other errors
+	# This obviously won't scale, but it's a start, and it's fast
+	if revive --config revive.toml compiler/... | egrep "comment on exported|your favorite error|your other favorite error"; then echo lint failed; exit 1; fi
