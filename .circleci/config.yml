@@ -88,7 +88,7 @@ commands:
               # Do this before gen-device so that it doesn't check the
               # formatting of generated files.
               name: Check Go code formatting
-              command: make fmt-check
+              command: make fmt-check lint
       - run: make gen-device -j4
       - run: make smoketest XTENSA=0
       - save_cache:

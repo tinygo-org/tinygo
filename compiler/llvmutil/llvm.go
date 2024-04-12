@@ -173,7 +173,7 @@ func SplitBasicBlock(builder llvm.Builder, afterInst llvm.Value, insertAfter llv
 	return newBlock
 }
 
-// Append the given values to a global array like llvm.used. The global might
+// AppendToGlobal appends the given values to a global array like llvm.used. The global might
 // not exist yet. The values can be any pointer type, they will be cast to i8*.
 func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
 	// Read the existing values in the llvm.used array (if it exists).
