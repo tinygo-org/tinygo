@@ -66,11 +66,46 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return spiTransfer(spi.Bus, w), nil
 }
 
+// Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
+// interface, there must always be the same number of bytes written as bytes read.
+// The Tx method knows about this, and offers a few different ways of calling it.
+//
+// This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
+// Note that the tx and rx buffers must be the same size:
+//
+//	spi.Tx(tx, rx)
+//
+// This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
+// until all the bytes in the command packet have been received:
+//
+//	spi.Tx(tx, nil)
+//
+// This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
+//
+//	spi.Tx(nil, rx)
+func (spi SPI) Tx(w, r []byte) error {
+	var wptr, rptr *byte
+	var wlen, rlen int
+	if len(w) != 0 {
+		wptr = &w[0]
+		wlen = len(w)
+	}
+	if len(r) != 0 {
+		rptr = &r[0]
+		rlen = len(r)
+	}
+	spiTX(spi.Bus, wptr, wlen, rptr, rlen)
+	return nil
+}
+
 //export __tinygo_spi_configure
 func spiConfigure(bus uint8, sck Pin, SDO Pin, SDI Pin)
 
 //export __tinygo_spi_transfer
 func spiTransfer(bus uint8, w uint8) uint8
+
+//export __tinygo_spi_tx
+func spiTX(bus uint8, wptr *byte, wlen int, rptr *byte, rlen int) uint8
 
 // InitADC enables support for ADC peripherals.
 func InitADC() {
