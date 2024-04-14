@@ -115,7 +115,7 @@ func sleepTicks(d timeUnit) {
 			// Sleep until the next interrupt happens.
 			avr.Asm("sei\nsleep\ncli")
 			if cmpMatch.Get() != 0 {
-				// The CMP interrupt occured, so we have slept long enough.
+				// The CMP interrupt occurred, so we have slept long enough.
 				cmpMatch.Set(0)
 				break
 			}

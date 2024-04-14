@@ -23,7 +23,7 @@ const APB2_TIM_FREQ = 110e6 // 110MHz
 // Configure the UART.
 func (uart *UART) configurePins(config UARTConfig) {
 	if config.RX.getPort() == stm32.GPIOG || config.TX.getPort() == stm32.GPIOG {
-		// Enable VDDIO2 power supply, which is an independant power supply for the PGx pins
+		// Enable VDDIO2 power supply, which is an independent power supply for the PGx pins
 		stm32.PWR.CR2.SetBits(stm32.PWR_CR2_IOSV)
 	}
 

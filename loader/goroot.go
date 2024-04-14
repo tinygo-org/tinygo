@@ -214,7 +214,7 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 	return merges, nil
 }
 
-// needsSyscallPackage returns whether the syscall package should be overriden
+// needsSyscallPackage returns whether the syscall package should be overridden
 // with the TinyGo version. This is the case on some targets.
 func needsSyscallPackage(buildTags []string) bool {
 	for _, tag := range buildTags {

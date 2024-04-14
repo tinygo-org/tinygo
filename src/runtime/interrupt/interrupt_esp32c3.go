@@ -169,7 +169,7 @@ func handleInterrupt() {
 		// save MSTATUS & MEPC, which could be overwritten by another CPU interrupt
 		mstatus := riscv.MSTATUS.Get()
 		mepc := riscv.MEPC.Get()
-		// Useing threshold to temporary disable this interrupts.
+		// Using threshold to temporary disable this interrupts.
 		// FYI: using CPU interrupt enable bit make runtime to loose interrupts.
 		reg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0), interruptNumber*4))
 		thresholdSave := reg.Get()

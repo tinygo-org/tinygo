@@ -430,7 +430,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	var files []*ast.File
 	var fileErrs []error
 
-	// Parse all files (incuding CgoFiles).
+	// Parse all files (including CgoFiles).
 	parseFile := func(file string) {
 		if !filepath.IsAbs(file) {
 			file = filepath.Join(p.Dir, file)

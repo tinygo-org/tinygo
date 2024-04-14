@@ -44,7 +44,7 @@ func Current() *Task {
 // This function may only be called when running on a goroutine stack, not when running on the system stack or in an interrupt.
 func Pause() {
 	// Check whether the canary (the lowest address of the stack) is still
-	// valid. If it is not, a stack overflow has occured.
+	// valid. If it is not, a stack overflow has occurred.
 	if *currentTask.state.canaryPtr != stackCanary {
 		runtimePanic("goroutine stack overflow")
 	}

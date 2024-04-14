@@ -27,7 +27,7 @@ func OptimizePackage(mod llvm.Module, config *compileopts.Config) {
 // passes.
 //
 // Please note that some optimizations are not optional, thus Optimize must
-// alwasy be run before emitting machine code.
+// always be run before emitting machine code.
 func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	optLevel, speedLevel, _ := config.OptLevel()
 

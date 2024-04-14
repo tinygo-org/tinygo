@@ -57,7 +57,7 @@ func Count(b []byte, c byte) int {
 // Count the number of instances of a byte in a string.
 func CountString(s string, c byte) int {
 	// Use a simple implementation, as there is no intrinsic that does this like we want.
-	// Currently, the compiler does not generate zero-copy byte-string conversions, so this needs to be seperate from Count.
+	// Currently, the compiler does not generate zero-copy byte-string conversions, so this needs to be separate from Count.
 	n := 0
 	for i := 0; i < len(s); i++ {
 		if s[i] == c {
@@ -216,7 +216,7 @@ func HashStrRev[T string | []byte](sep T) (uint32, uint32) {
 }
 
 // IndexRabinKarpBytes uses the Rabin-Karp search algorithm to return the index of the
-// first occurence of substr in s, or -1 if not present.
+// first occurrence of substr in s, or -1 if not present.
 //
 // This function was removed in Go 1.22.
 func IndexRabinKarpBytes(s, sep []byte) int {

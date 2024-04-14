@@ -224,7 +224,7 @@ func CallGraph(f *elf.File, callsIndirectFunction []string) (map[string][]*CallN
 		for name, size := range knownFrameSizes {
 			if sym, ok := symbolNames[name]; ok {
 				if len(sym) > 1 {
-					return nil, fmt.Errorf("expected zero or one occurence of the symbol %s, found %d", name, len(sym))
+					return nil, fmt.Errorf("expected zero or one occurrence of the symbol %s, found %d", name, len(sym))
 				}
 				sym[0].FrameSize = size
 				sym[0].FrameSizeType = Bounded

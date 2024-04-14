@@ -76,7 +76,7 @@ func (b *channelBlockedList) remove(old *channelBlockedList) *channelBlockedList
 	return b
 }
 
-// detatch removes all other channel operations that are part of the same select statement.
+// detach removes all other channel operations that are part of the same select statement.
 // If the input is not part of a select statement, this is a no-op.
 // This must be called before resuming any task blocked on a channel operation in order to ensure that it is not placed on the runqueue twice.
 func (b *channelBlockedList) detach() {
@@ -88,7 +88,7 @@ func (b *channelBlockedList) detach() {
 		// cancel all other channel operations that are part of this select statement
 		switch {
 		case &b.allSelectOps[i] == b:
-			// This entry is the one that was already detatched.
+			// This entry is the one that was already detached.
 			continue
 		case v.t == nil:
 			// This entry is not used (nil channel).

@@ -410,7 +410,7 @@ func GC() {
 	runGC()
 }
 
-// runGC performs a garbage colleciton cycle. It is the internal implementation
+// runGC performs a garbage collection cycle. It is the internal implementation
 // of the runtime.GC() function. The difference is that it returns the number of
 // free bytes in the heap after the GC is finished.
 func runGC() (freeBytes uintptr) {
@@ -424,7 +424,7 @@ func runGC() (freeBytes uintptr) {
 
 	if baremetal && hasScheduler {
 		// Channel operations in interrupts may move task pointers around while we are marking.
-		// Therefore we need to scan the runqueue seperately.
+		// Therefore we need to scan the runqueue separately.
 		var markedTaskQueue task.Queue
 	runqueueScan:
 		for !runqueue.Empty() {

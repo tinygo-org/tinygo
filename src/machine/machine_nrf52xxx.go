@@ -277,7 +277,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return buf[0], err
 }
 
-// Tx handles read/write operation for SPI interface. Since SPI is a syncronous
+// Tx handles read/write operation for SPI interface. Since SPI is a synchronous
 // write/read interface, there must always be the same number of bytes written
 // as bytes read. Therefore, if the number of bytes don't match it will be
 // padded until they fit: if len(w) > len(r) the extra bytes received will be

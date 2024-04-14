@@ -107,7 +107,7 @@ func findGlobals(found func(start, end uintptr)) {
 			}
 		}
 
-		// Move on to the next load command (wich may or may not be a
+		// Move on to the next load command (which may or may not be a
 		// LC_SEGMENT_64).
 		cmd = (*segmentLoadCommand)(unsafe.Add(unsafe.Pointer(cmd), cmd.cmdsize))
 	}
