@@ -5,8 +5,8 @@
 package os
 
 const (
-	PathSeparator     = '\\' // OS-specific path separator
-	PathListSeparator = ';'  // OS-specific path list separator
+	PathSeparator     = '\\' // PathSeparator is the OS-specific path separator
+	PathListSeparator = ';'  // PathListSeparator is the OS-specific path list separator
 )
 
 // IsPathSeparator reports whether c is a directory separator character.

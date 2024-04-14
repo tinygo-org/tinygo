@@ -489,7 +489,7 @@ func TestTinyStruct(t *testing.T) {
 
 func TestTinyZero(t *testing.T) {
 	s := "hello, world"
-	var sptr *string = &s
+	sptr := &s
 	v := ValueOf(&sptr).Elem()
 	v.Set(Zero(v.Type()))
 
@@ -535,7 +535,7 @@ func TestTinyAddr(t *testing.T) {
 }
 
 func TestTinyNilType(t *testing.T) {
-	var a any = nil
+	var a any
 	typ := TypeOf(a)
 	if typ != nil {
 		t.Errorf("Type of any{nil} is not nil")
