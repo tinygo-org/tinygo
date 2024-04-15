@@ -52,6 +52,7 @@ const (
 // Onboard LEDs
 const (
 	NEOPIXEL = GPIO16
+	WS2812   = GPIO16
 )
 
 // I2C pins

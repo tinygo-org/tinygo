@@ -46,7 +46,11 @@ const (
 	A3 = GPIO29
 )
 
-const LED = GPIO25
+// Onboard LEDs
+const (
+	LED    = GPIO25
+	WS2812 = GPIO8
+)
 
 // I2C Pins.
 const (
