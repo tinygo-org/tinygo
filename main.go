@@ -1033,9 +1033,10 @@ func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
 			if fstype != "vfat" {
 				continue
 			}
+			fspath := strings.ReplaceAll(fields[1], "\\040", " ")
 			points = append(points, mountPoint{
-				name: filepath.Base(fields[1]),
-				path: fields[1],
+				name: filepath.Base(fspath),
+				path: fspath,
 			})
 		}
 		return points, nil
