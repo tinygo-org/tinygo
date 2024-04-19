@@ -312,7 +312,7 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 
 	initUARTClock(uart.Bus, regs)
 
-	// - disbale TX/RX clock to make sure the UART transmitter or receiver is not at work during configuration
+	// - disable TX/RX clock to make sure the UART transmitter or receiver is not at work during configuration
 	uart.Bus.SetCLK_CONF_TX_SCLK_EN(0)
 	uart.Bus.SetCLK_CONF_RX_SCLK_EN(0)
 

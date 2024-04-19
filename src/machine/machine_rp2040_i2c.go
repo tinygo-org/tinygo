@@ -348,7 +348,7 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte, timeout_us uint64) (err error) {
 		}
 		if abort || last {
 			// If the transaction was aborted or if it completed
-			// successfully wait until the STOP condition has occured.
+			// successfully wait until the STOP condition has occurred.
 
 			// TODO Could there be an abort while waiting for the STOP
 			// condition here? If so, additional code would be needed here

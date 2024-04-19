@@ -1,5 +1,5 @@
 // Package llvmutil contains utility functions used across multiple compiler
-// packages. For example, they may be used by both the compiler pacakge and
+// packages. For example, they may be used by both the compiler package and
 // transformation packages.
 //
 // Normally, utility packages are avoided. However, in this case, the utility
@@ -28,7 +28,7 @@ func CreateEntryBlockAlloca(builder llvm.Builder, t llvm.Type, name string) llvm
 }
 
 // CreateTemporaryAlloca creates a new alloca in the entry block and adds
-// lifetime start infromation in the IR signalling that the alloca won't be used
+// lifetime start information in the IR signalling that the alloca won't be used
 // before this point.
 //
 // This is useful for creating temporary allocas for intrinsics. Don't forget to

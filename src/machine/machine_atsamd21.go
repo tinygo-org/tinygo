@@ -1304,7 +1304,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.DATA.Get()), nil
 }
 
-// Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
+// Tx handles read/write operation for SPI interface. Since SPI is a synchronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
 // The Tx method knows about this, and offers a few different ways of calling it.
 //
@@ -1459,7 +1459,7 @@ func (tcc *TCC) Configure(config PWMConfig) error {
 	for tcc.timer().SYNCBUSY.Get() != 0 {
 	}
 
-	// Return any error that might have occured in the tcc.setPeriod call.
+	// Return any error that might have occurred in the tcc.setPeriod call.
 	return err
 }
 
@@ -1606,7 +1606,7 @@ func (tcc *TCC) Counter() uint32 {
 	return tcc.timer().COUNT.Get()
 }
 
-// Some constans to make pinTimerMapping below easier to read.
+// Some constants to make pinTimerMapping below easier to read.
 const (
 	pinTCC0     = 1
 	pinTCC1     = 2
@@ -1759,7 +1759,7 @@ func (tcc *TCC) Set(channel uint8, value uint32) {
 	}
 }
 
-// EnterBootloader should perform a system reset in preperation
+// EnterBootloader should perform a system reset in preparation
 // to switch to the bootloader to flash new firmware.
 func EnterBootloader() {
 	arm.DisableInterrupts()

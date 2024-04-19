@@ -344,7 +344,7 @@ func Fdclosedir(dir uintptr) (err error) {
 func Readdir(dir uintptr) (dirent *Dirent, err error) {
 	// There might be a leftover errno value in the global variable, so we have
 	// to clear it before calling readdir because we cannot know whether a nil
-	// return means that we reached EOF or that an error occured.
+	// return means that we reached EOF or that an error occurred.
 	libcErrno = 0
 
 	dirent = libc_readdir(unsafe.Pointer(dir))

@@ -105,7 +105,7 @@ func handleInterrupt() {
 	riscv.MCAUSE.Set(0)
 }
 
-// initPeripherals configures periperhals the way the runtime expects them.
+// initPeripherals configures peripherals the way the runtime expects them.
 func initPeripherals() {
 	// Enable APB0 clock.
 	kendryte.SYSCTL.CLK_EN_CENT.SetBits(kendryte.SYSCTL_CLK_EN_CENT_APB0_CLK_EN)

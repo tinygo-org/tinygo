@@ -155,7 +155,7 @@ func (can *CAN) Configure(config CANConfig) error {
 }
 
 // Callbacks to be called for CAN.SetInterrupt(). Wre're using the magic
-// constant 2 and 32 here beacuse th SAM E51/E54 has 2 CAN and 32 interrupt
+// constant 2 and 32 here because the SAM E51/E54 has 2 CAN and 32 interrupt
 // sources.
 var (
 	canInstances [2]*CAN

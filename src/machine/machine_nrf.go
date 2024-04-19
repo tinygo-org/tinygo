@@ -108,7 +108,7 @@ func (p Pin) Get() bool {
 func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	// Some variables to easily check whether a channel was already configured
 	// as an event channel for the given pin.
-	// This is not just an optimization, this is requred: the datasheet says
+	// This is not just an optimization, this is required: the datasheet says
 	// that configuring more than one channel for a given pin results in
 	// unpredictable behavior.
 	expectedConfigMask := uint32(nrf.GPIOTE_CONFIG_MODE_Msk | nrf.GPIOTE_CONFIG_PSEL_Msk)

@@ -85,7 +85,7 @@ func handleInterrupt() {
 	riscv.MCAUSE.Set(0)
 }
 
-// initPeripherals configures periperhals the way the runtime expects them.
+// initPeripherals configures peripherals the way the runtime expects them.
 func initPeripherals() {
 	// Configure PLL to output 320MHz.
 	//   R=2:  divide 16MHz to 8MHz
