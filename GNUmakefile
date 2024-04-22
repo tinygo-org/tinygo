@@ -915,7 +915,9 @@ deb: build/release
 endif
 
 lint:
-	# Only run on compiler dir for now, expand as we clean up other dirs
-	# This obviously won't scale, but it's a start, and it's fast
-	go run github.com/mgechev/revive --version
-	go run github.com/mgechev/revive --config revive.toml compiler/...
+	go run github.com/mgechev/revive -version
+	# TODO: lint more directories!
+	# revive.toml isn't flexible enough to filter out just one kind of error from a checker, so do it with grep here.
+	# Can't use grep with friendly formatter.  Plain output isn't too bad, though.
+	# Use 'grep .' to get rid of stray blank line
+	go run github.com/mgechev/revive -config revive.toml compiler/... src/{os,reflect}/*.go | grep -v "should have comment or be unexported" | grep '.' | awk '{print}; END {exit NR>0}'

@@ -310,6 +310,7 @@ func (e *LinkError) Unwrap() error {
 	return e.Err
 }
 
+// OpenFile flag values.
 const (
 	O_RDONLY int = syscall.O_RDONLY
 	O_WRONLY int = syscall.O_WRONLY
