@@ -24,6 +24,10 @@ var stdlibAliases = map[string]string{
 	"crypto/sha256.block":      "crypto/sha256.blockGeneric",
 	"crypto/sha512.blockAMD64": "crypto/sha512.blockGeneric",
 
+	// AES
+	"crypto/aes.decryptBlockAsm": "crypto/aes.decryptBlock",
+	"crypto/aes.encryptBlockAsm": "crypto/aes.encryptBlock",
+
 	// math package
 	"math.archHypot": "math.hypot",
 	"math.archMax":   "math.max",
