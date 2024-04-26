@@ -31,7 +31,7 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 func sleepTicks(d timeUnit) {
-	if d == 0 {
+	if d <= 0 {
 		return
 	}
 
