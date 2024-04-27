@@ -74,7 +74,8 @@ func (c *Config) GOARM() string {
 
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{
+	tags := append([]string(nil), c.Target.BuildTags...) // copy slice (avoid a race)
+	tags = append(tags, []string{
 		"tinygo",                                     // that's the compiler
 		"purego",                                     // to get various crypto packages to work
 		"math_big_pure_go",                           // to get math/big to work
