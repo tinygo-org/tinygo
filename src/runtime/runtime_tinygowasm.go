@@ -65,8 +65,14 @@ func now() (sec int64, nsec int32, mono int64) {
 	return
 }
 
-// Abort executes the wasm 'unreachable' instruction.
+// Abort exits the program with an error code.
 func abort() {
+	// Call out to the WASI exit function.
+	// This matches upstream Go (wasip1/wasm).
+	proc_exit(2)
+
+	// Insert a trap instruction, just to be sure (even if it should not be
+	// necessary: the code here is unreachable).
 	trap()
 }
 

@@ -20,8 +20,14 @@ func usleep(usec uint) int
 //export mmap
 func mmap(addr unsafe.Pointer, length uintptr, prot, flags, fd int, offset int64) unsafe.Pointer
 
-//export abort
-func abort()
+func abort() {
+	// Exit the program with exit status 2. This matches upstream Go.
+	exit(2)
+
+	// Insert a trap instruction, just to be sure (even if it should not be
+	// necessary: the code here is unreachable).
+	trap()
+}
 
 //export exit
 func exit(code int)
