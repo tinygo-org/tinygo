@@ -2,6 +2,10 @@
 
 package machine
 
+import (
+	"crypto/rand"
+)
+
 // Dummy machine package that calls out to external functions.
 
 const deviceName = "generic"
@@ -243,3 +247,13 @@ var (
 	sercomSPIM6 = SPI{6}
 	sercomSPIM7 = SPI{7}
 )
+
+// GetRNG returns 32 bits of random data from the WASI random source.
+func GetRNG() (uint32, error) {
+	var buf [4]byte
+	_, err := rand.Read(buf[:])
+	if err != nil {
+		return 0, err
+	}
+	return uint32(buf[0])<<0 | uint32(buf[1])<<8 | uint32(buf[2])<<16 | uint32(buf[3])<<24, nil
+}
