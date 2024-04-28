@@ -921,3 +921,7 @@ lint:
 	# Can't use grep with friendly formatter.  Plain output isn't too bad, though.
 	# Use 'grep .' to get rid of stray blank line
 	go run github.com/mgechev/revive -config revive.toml compiler/... src/{os,reflect}/*.go | grep -v "should have comment or be unexported" | grep '.' | awk '{print}; END {exit NR>0}'
+
+spell:
+	# Check for typos in comments.  Skip git submodules etc.
+	go run github.com/client9/misspell/cmd/misspell -i 'ackward,devided,extint,inbetween,programmmer,rela' $$( find . -depth 1 -type d  | egrep -w -v 'lib|llvm|src/net' )
