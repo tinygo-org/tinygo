@@ -61,7 +61,7 @@ func getGlobalBytes(global llvm.Value, builder llvm.Builder) []byte {
 	return buf
 }
 
-// replaceGlobalByteWithArray replaces a global integer type in the module with
+// replaceGlobalIntWithArray replaces a global integer type in the module with
 // an integer array, using a GEP to make the types match. It is a convenience
 // function used for creating reflection sidetables, for example.
 func replaceGlobalIntWithArray(mod llvm.Module, name string, buf interface{}) llvm.Value {
