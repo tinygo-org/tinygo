@@ -150,7 +150,17 @@ func (i2c *I2C) SetBaudRate(br uint32) error {
 
 // Tx does a single I2C transaction at the specified address.
 func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
-	i2cTransfer(i2c.Bus, &w[0], len(w), &r[0], len(r))
+	var wptr, rptr *byte
+	var wlen, rlen int
+	if len(w) != 0 {
+		wptr = &w[0]
+		wlen = len(w)
+	}
+	if len(r) != 0 {
+		rptr = &r[0]
+		rlen = len(r)
+	}
+	i2cTransfer(i2c.Bus, wptr, wlen, rptr, rlen)
 	// TODO: do something with the returned error code.
 	return nil
 }
