@@ -78,7 +78,7 @@ tinygo_swapTask:
     // Switch to the new stack pointer (newStack).
     mov.n   sp, a2
 
-    // Load a0, which is the previous return addres from before the previous
+    // Load a0, which is the previous return address from before the previous
     // switch or the constructed return address to tinygo_startTask. This
     // register also stores the parent register window.
     l32i.n a0, sp, 0

@@ -93,7 +93,7 @@ struct AssemblerInvocation {
   EmitDwarfUnwindType EmitDwarfUnwind;
 
   // Whether to emit compact-unwind for non-canonical entries.
-  // Note: maybe overriden by other constraints.
+  // Note: may be overridden by other constraints.
   unsigned EmitCompactUnwindNonCanonical : 1;
 
   /// The name of the relocation model to use.
