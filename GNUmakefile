@@ -239,7 +239,7 @@ gen-device-renesas: build/gen-device-svd
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b xtensa_release_17.0.1 --depth=1 https://github.com/espressif/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b esp-17.0.1_20240419 --depth=1 https://github.com/espressif/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm
 
 # Configure LLVM.
