@@ -28,7 +28,7 @@ jobs:
         uses: actions/cache@v4
         id: cache-llvm-source
         with:
-          key: llvm-source-17-sizediff-v1
+          key: llvm-source-17-sizediff-v2
           path: |
             llvm-project/compiler-rt
       - name: Download LLVM source
@@ -37,7 +37,7 @@ jobs:
       - name: Cache Go
         uses: actions/cache@v4
         with:
-          key: go-cache-linux-sizediff-v1-${{ hashFiles('go.mod') }}
+          key: go-cache-linux-sizediff-v2-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
