@@ -166,7 +166,7 @@ LIB_NAMES = clang $(CLANG_LIB_NAMES) $(LLD_LIB_NAMES) $(EXTRA_LIB_NAMES)
 # library path (for ninja).
 # This list also includes a few tools that are necessary as part of the full
 # TinyGo build.
-NINJA_BUILD_TARGETS = clang llvm-config llvm-ar llvm-nm $(addprefix lib/lib,$(addsuffix .a,$(LIB_NAMES)))
+NINJA_BUILD_TARGETS = clang llvm-config llvm-ar llvm-nm lld $(addprefix lib/lib,$(addsuffix .a,$(LIB_NAMES)))
 
 # For static linking.
 ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
