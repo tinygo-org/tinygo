@@ -49,9 +49,20 @@ func (uart *UART) setRegisters() {
 //---------- I2C related code
 
 // Gets the value for TIMINGR register
-func (i2c *I2C) getFreqRange() uint32 {
+func (i2c *I2C) getFreqRange(br uint32) uint32 {
 	// This is a 'magic' value calculated by STM32CubeMX
 	// for 110MHz PCLK1.
 	// TODO: Do calculations based on PCLK1
-	return 0x40505681
+	switch br {
+	case 10 * KHz:
+		return 0x0 // does this even work? zero is weird here.
+	case 100 * KHz:
+		return 0x40505681
+	case 400 * KHz:
+		return 0x00A03AC8
+	case 500 * KHz:
+		return 0x005015B6
+	default:
+		return 0
+	}
 }

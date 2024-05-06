@@ -289,11 +289,22 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 //---------- I2C related code
 
 // Gets the value for TIMINGR register
-func (i2c *I2C) getFreqRange() uint32 {
+func (i2c *I2C) getFreqRange(br uint32) uint32 {
 	// This is a 'magic' value calculated by STM32CubeMX
 	// for 48Mhz PCLK1.
 	// TODO: Do calculations based on PCLK1
-	return 0x20303E5D
+	switch br {
+	case 10 * KHz:
+		return 0x9010DEFF
+	case 100 * KHz:
+		return 0x20303E5D
+	case 400 * KHz:
+		return 0x2010091A
+	case 500 * KHz:
+		return 0x00201441
+	default:
+		return 0
+	}
 }
 
 //---------- UART related code

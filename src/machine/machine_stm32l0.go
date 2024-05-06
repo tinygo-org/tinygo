@@ -298,9 +298,20 @@ func (spi SPI) configurePins(config SPIConfig) {
 //---------- I2C related types and code
 
 // Gets the value for TIMINGR register
-func (i2c I2C) getFreqRange() uint32 {
+func (i2c I2C) getFreqRange(br uint32) uint32 {
 	// This is a 'magic' value calculated by STM32CubeMX
-	// for 80MHz PCLK1.
+	// for 16MHz PCLK1.
 	// TODO: Do calculations based on PCLK1
-	return 0x00303D5B
+	switch br {
+	case 10 * KHz:
+		return 0x40003EFF
+	case 100 * KHz:
+		return 0x00303D5B
+	case 400 * KHz:
+		return 0x0010061A
+	case 500 * KHz:
+		return 0x00000117
+	default:
+		return 0
+	}
 }
