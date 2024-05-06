@@ -17,9 +17,20 @@ const APB2_TIM_FREQ = 80e6 // 80MHz
 //---------- I2C related code
 
 // Gets the value for TIMINGR register
-func (i2c *I2C) getFreqRange() uint32 {
+func (i2c *I2C) getFreqRange(br uint32) uint32 {
 	// This is a 'magic' value calculated by STM32CubeMX
 	// for 80MHz PCLK1.
 	// TODO: Do calculations based on PCLK1
-	return 0x10909CEC
+	switch br {
+	case 10 * KHz:
+		return 0xF010F3FE
+	case 100 * KHz:
+		return 0x10909CEC
+	case 400 * KHz:
+		return 0x00702991
+	case 500 * KHz:
+		return 0x00300E84
+	default:
+		return 0
+	}
 }
