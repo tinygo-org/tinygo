@@ -7,6 +7,7 @@
 package os
 
 import (
+	"runtime"
 	"syscall"
 )
 
@@ -23,4 +24,12 @@ var (
 // Keep compatible with golang and always succeed and return new proc with pid on Linux.
 func findProcess(pid int) (*Process, error) {
 	return &Process{Pid: pid}, nil
+}
+
+func (p *Process) release() error {
+	// NOOP for unix.
+	p.Pid = -1
+	// no need for a finalizer anymore
+	runtime.SetFinalizer(p, nil)
+	return nil
 }
