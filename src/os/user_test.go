@@ -54,6 +54,16 @@ func TestUserLookup(t *testing.T) {
 			if (err != nil && !tc.wantErr) || (err == nil && tc.wantErr) {
 				t.Fatalf("Lookup(%q) = %v; want %v, got error %v", tc.user.Username, user, tc.user, err)
 			}
+
+			userId, err := LookupId(tc.user.Uid)
+			if (err != nil && !tc.wantErr) || (err == nil && tc.wantErr) {
+				t.Fatalf("LookupId(%q) = %v; want %v, got error %v", tc.user.Username, userId, tc.user, err)
+			}
+
+			group, err := LookupGroupId(tc.user.Gid)
+			if (err != nil && !tc.wantErr) || (err == nil && tc.wantErr) {
+				t.Fatalf("LookupGroupId(%q) = %v; want %v, got error %v", tc.user.Gid, group, tc.user.Gid, err)
+			}
 		})
 	}
 }

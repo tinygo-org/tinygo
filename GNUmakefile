@@ -335,6 +335,7 @@ TEST_PACKAGES_FAST = \
 	unicode \
 	unicode/utf16 \
 	unicode/utf8 \
+	user \
 	$(nil)
 
 # Assume this will go away before Go2, so only check minor version.
