@@ -221,6 +221,11 @@ func (can *CAN) TxFifoIsFull() bool {
 	return (can.Bus.TXFQS.Get() & sam.CAN_TXFQS_TFQF_Msk) == sam.CAN_TXFQS_TFQF_Msk
 }
 
+// TxFifoFreeLevel returns how many messages can still be set in the TxFifo.
+func (can *CAN) TxFifoFreeLevel() int {
+	return int(can.Bus.GetTXFQS_TFFL())
+}
+
 // TxRaw sends a CAN Frame according to CANTxBufferElement.
 func (can *CAN) TxRaw(e *CANTxBufferElement) {
 	putIndex := (can.Bus.TXFQS.Get() & sam.CAN_TXFQS_TFQPI_Msk) >> sam.CAN_TXFQS_TFQPI_Pos
