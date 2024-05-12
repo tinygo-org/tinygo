@@ -47,7 +47,6 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 }
 
 func (i2c *I2C) initAll() {
-
 	i2c.initClock()
 	i2c.initNoiseFilter()
 	i2c.initPins()
@@ -120,7 +119,6 @@ func (i2c *I2C) initPins() {
 
 //go:inline
 func (i2c *I2C) initFrequency() {
-
 	clkmDiv := i2cClkSourceFrequency/(i2c.config.Frequency*1024) + 1
 	sclkFreq := i2cClkSourceFrequency / clkmDiv
 	halfCycle := sclkFreq / i2c.config.Frequency / 2
@@ -228,7 +226,6 @@ type i2cCommand struct {
 func nanotime() int64
 
 func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
-
 	if i2c.Bus.GetSR_BUS_BUSY() == 1 {
 		i2c.resetBus()
 	}
@@ -388,7 +385,7 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 }
 
 func (i2c *I2C) SetBaudRate(br uint32) error {
-	return nil
+	return errI2CNotImplemented
 }
 
 func (p Pin) pinReg() *volatile.Register32 {
