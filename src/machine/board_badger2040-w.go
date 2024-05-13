@@ -1,21 +1,21 @@
-//go:build badger2040
+//go:build badger2040_w
 
-// This contains the pin mappings for the Badger 2040 board.
+// This contains the pin mappings for the Badger 2040 W board.
 //
-// For more information, see: https://shop.pimoroni.com/products/badger-2040
+// For more information, see: https://shop.pimoroni.com/products/badger-2040-w
 // Also
-// - Badger 2040 schematic: https://cdn.shopify.com/s/files/1/0174/1800/files/badger_2040_schematic.pdf?v=1645702148
+// - Badger 2040 W schematic: https://cdn.shopify.com/s/files/1/0174/1800/files/badger_w_schematic.pdf?v=1675859004
 package machine
 
 const (
-	LED Pin = GPIO25
+	LED Pin = GPIO22
 
 	BUTTON_A    Pin = GPIO12
 	BUTTON_B    Pin = GPIO13
 	BUTTON_C    Pin = GPIO14
 	BUTTON_UP   Pin = GPIO15
 	BUTTON_DOWN Pin = GPIO11
-	BUTTON_USER Pin = GPIO23
+	BUTTON_USER Pin = NoPin // Not available on Badger 2040 W
 
 	EPD_BUSY_PIN  Pin = GPIO26
 	EPD_RESET_PIN Pin = GPIO21
@@ -30,7 +30,8 @@ const (
 	VBAT_SENSE  Pin = GPIO29
 	ENABLE_3V3  Pin = GPIO10
 
-	BATTERY = VBAT_SENSE
+	BATTERY   = VBAT_SENSE
+	RTC_ALARM = GPIO8
 )
 
 // I2C pins
@@ -74,7 +75,7 @@ const (
 
 // USB CDC identifiers
 const (
-	usb_STRING_PRODUCT      = "Badger 2040"
+	usb_STRING_PRODUCT      = "Badger 2040 W"
 	usb_STRING_MANUFACTURER = "Pimoroni"
 )
 
