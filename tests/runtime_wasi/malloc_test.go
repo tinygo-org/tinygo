@@ -67,7 +67,7 @@ func checkFilledBuffer(t *testing.T, ptr uintptr, content string) {
 	t.Helper()
 	buf := *(*string)(unsafe.Pointer(&reflect.StringHeader{
 		Data: ptr,
-		Len:  uintptr(len(content)),
+		Len:  len(content),
 	}))
 	if buf != content {
 		t.Errorf("expected %q, got %q", content, buf)
