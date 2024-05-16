@@ -24,7 +24,7 @@ jobs:
         # tar: needed for actions/cache@v4
         # git+openssh: needed for checkout (I think?)
         # ruby: needed to install fpm
-        run: apk add tar git openssh make g++ ruby
+        run: apk add tar git openssh make g++ ruby-dev
       - name: Work around CVE-2022-24765
         # We're not on a multi-user machine, so this is safe.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
