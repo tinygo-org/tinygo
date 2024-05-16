@@ -6,7 +6,6 @@ package os_test
 
 import (
 	. "os"
-	"runtime"
 	"testing"
 )
 
