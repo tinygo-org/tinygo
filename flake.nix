@@ -77,7 +77,7 @@
             export MD5SUM=md5sum
 
             # Ugly hack to make the Clang resources directory available.
-            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_17.clang.cc.lib}/lib/clang/17"\"
+            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_17.clang.cc.lib}/lib/clang/17\" -tags=llvm17"
           '';
         };
       }

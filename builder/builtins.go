@@ -8,14 +8,14 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-// These are the GENERIC_SOURCES according to CMakeList.txt.
+// These are the GENERIC_SOURCES according to CMakeList.txt except for
+// divmodsi4.c and udivmodsi4.c.
 var genericBuiltins = []string{
 	"absvdi2.c",
 	"absvsi2.c",
 	"absvti2.c",
 	"adddf3.c",
 	"addsf3.c",
-	"addtf3.c",
 	"addvdi3.c",
 	"addvsi3.c",
 	"addvti3.c",
@@ -40,12 +40,12 @@ var genericBuiltins = []string{
 	"divdf3.c",
 	"divdi3.c",
 	"divmoddi4.c",
+	//"divmodsi4.c",
+	"divmodti4.c",
 	"divsc3.c",
 	"divsf3.c",
 	"divsi3.c",
-	"divtc3.c",
 	"divti3.c",
-	"divtf3.c",
 	"extendsfdf2.c",
 	"extendhfsf2.c",
 	"ffsdi2.c",
@@ -91,7 +91,6 @@ var genericBuiltins = []string{
 	"mulsc3.c",
 	"mulsf3.c",
 	"multi3.c",
-	"multf3.c",
 	"mulvdi3.c",
 	"mulvsi3.c",
 	"mulvti3.c",
@@ -111,13 +110,11 @@ var genericBuiltins = []string{
 	"popcountti2.c",
 	"powidf2.c",
 	"powisf2.c",
-	"powitf2.c",
 	"subdf3.c",
 	"subsf3.c",
 	"subvdi3.c",
 	"subvsi3.c",
 	"subvti3.c",
-	"subtf3.c",
 	"trampoline_setup.c",
 	"truncdfhf2.c",
 	"truncdfsf2.c",
@@ -126,6 +123,7 @@ var genericBuiltins = []string{
 	"ucmpti2.c",
 	"udivdi3.c",
 	"udivmoddi4.c",
+	//"udivmodsi4.c",
 	"udivmodti4.c",
 	"udivsi3.c",
 	"udivti3.c",
