@@ -451,10 +451,14 @@ func (c *compilerContext) isThumb() bool {
 // readStackPointer emits a LLVM intrinsic call that returns the current stack
 // pointer as an *i8.
 func (b *builder) readStackPointer() llvm.Value {
-	stacksave := b.mod.NamedFunction("llvm.stacksave")
+	name := "llvm.stacksave.p0"
+	if llvmutil.Version() < 18 {
+		name = "llvm.stacksave" // backwards compatibility with LLVM 17 and below
+	}
+	stacksave := b.mod.NamedFunction(name)
 	if stacksave.IsNil() {
 		fnType := llvm.FunctionType(b.dataPtrType, nil, false)
-		stacksave = llvm.AddFunction(b.mod, "llvm.stacksave", fnType)
+		stacksave = llvm.AddFunction(b.mod, name, fnType)
 	}
 	return b.CreateCall(stacksave.GlobalValueType(), stacksave, nil, "")
 }

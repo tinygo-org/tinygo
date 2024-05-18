@@ -81,11 +81,11 @@ entry:
   %select.send.value = alloca i32, align 4
   store i32 1, ptr %select.send.value, align 4
   call void @llvm.lifetime.start.p0(i64 16, ptr nonnull %select.states.alloca)
-  store ptr %ch1, ptr %select.states.alloca, align 8
+  store ptr %ch1, ptr %select.states.alloca, align 4
   %select.states.alloca.repack1 = getelementptr inbounds %runtime.chanSelectState, ptr %select.states.alloca, i32 0, i32 1
   store ptr %select.send.value, ptr %select.states.alloca.repack1, align 4
   %0 = getelementptr inbounds [2 x %runtime.chanSelectState], ptr %select.states.alloca, i32 0, i32 1
-  store ptr %ch2, ptr %0, align 8
+  store ptr %ch2, ptr %0, align 4
   %.repack3 = getelementptr inbounds [2 x %runtime.chanSelectState], ptr %select.states.alloca, i32 0, i32 1, i32 1
   store ptr null, ptr %.repack3, align 4
   %select.result = call { i32, i1 } @runtime.tryChanSelect(ptr undef, ptr nonnull %select.states.alloca, i32 2, i32 2, ptr undef) #4

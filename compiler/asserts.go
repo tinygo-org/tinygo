@@ -135,7 +135,7 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 
 	// Calculate (^uintptr(0)) >> 1, which is the max value that fits in an
 	// uintptr if uintptrs were signed.
-	maxBufSize := llvm.ConstLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false))
+	maxBufSize := b.CreateLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false), "")
 	if elementSize > maxBufSize.ZExtValue() {
 		b.addError(pos, fmt.Sprintf("channel element type is too big (%v bytes)", elementSize))
 		return
@@ -150,7 +150,7 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 
 	// Make sure maxBufSize has the same type as bufSize.
 	if maxBufSize.Type() != bufSize.Type() {
-		maxBufSize = llvm.ConstZExt(maxBufSize, bufSize.Type())
+		maxBufSize = b.CreateZExt(maxBufSize, bufSize.Type(), "")
 	}
 
 	// Do the check for a too large (or negative) buffer size.

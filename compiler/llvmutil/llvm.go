@@ -8,6 +8,9 @@
 package llvmutil
 
 import (
+	"strconv"
+	"strings"
+
 	"tinygo.org/x/go-llvm"
 )
 
@@ -202,4 +205,14 @@ func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
 	used := llvm.AddGlobal(mod, usedInitializer.Type(), globalName)
 	used.SetInitializer(usedInitializer)
 	used.SetLinkage(llvm.AppendingLinkage)
+}
+
+// Return the LLVM major version.
+func Version() int {
+	majorStr := strings.Split(llvm.Version, ".")[0]
+	major, err := strconv.Atoi(majorStr)
+	if err != nil {
+		panic("unexpected error while parsing LLVM version: " + err.Error()) // should not happen
+	}
+	return major
 }

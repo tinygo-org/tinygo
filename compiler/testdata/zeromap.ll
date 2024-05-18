@@ -26,7 +26,7 @@ entry:
   %2 = insertvalue %main.hasPadding %1, i1 %s.b2, 2
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   call void @llvm.lifetime.start.p0(i64 12, ptr nonnull %hashmap.key)
-  store %main.hasPadding %2, ptr %hashmap.key, align 8
+  store %main.hasPadding %2, ptr %hashmap.key, align 4
   %3 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
   call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #5
   %4 = getelementptr inbounds i8, ptr %hashmap.key, i32 9
@@ -59,7 +59,7 @@ entry:
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   store i32 5, ptr %hashmap.value, align 4
   call void @llvm.lifetime.start.p0(i64 12, ptr nonnull %hashmap.key)
-  store %main.hasPadding %2, ptr %hashmap.key, align 8
+  store %main.hasPadding %2, ptr %hashmap.key, align 4
   %3 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
   call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #5
   %4 = getelementptr inbounds i8, ptr %hashmap.key, i32 9
@@ -80,7 +80,7 @@ entry:
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %hashmap.key)
   %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
-  store %main.hasPadding %s.elt, ptr %hashmap.key, align 8
+  store %main.hasPadding %s.elt, ptr %hashmap.key, align 4
   %hashmap.key.repack1 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
   %s.elt2 = extractvalue [2 x %main.hasPadding] %s, 1
   store %main.hasPadding %s.elt2, ptr %hashmap.key.repack1, align 4
@@ -108,7 +108,7 @@ entry:
   store i32 5, ptr %hashmap.value, align 4
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %hashmap.key)
   %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
-  store %main.hasPadding %s.elt, ptr %hashmap.key, align 8
+  store %main.hasPadding %s.elt, ptr %hashmap.key, align 4
   %hashmap.key.repack1 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
   %s.elt2 = extractvalue [2 x %main.hasPadding] %s, 1
   store %main.hasPadding %s.elt2, ptr %hashmap.key.repack1, align 4

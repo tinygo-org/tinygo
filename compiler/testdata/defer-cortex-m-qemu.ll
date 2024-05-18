@@ -25,7 +25,7 @@ entry:
   %deferPtr = alloca ptr, align 4
   store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
-  %0 = call ptr @llvm.stacksave()
+  %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   store i32 0, ptr %defer.alloca, align 4
   %defer.alloca.repack15 = getelementptr inbounds { i32, ptr }, ptr %defer.alloca, i32 0, i32 1
@@ -113,7 +113,7 @@ rundefers.end3:                                   ; preds = %rundefers.loophead6
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn
-declare ptr @llvm.stacksave() #3
+declare ptr @llvm.stacksave.p0() #3
 
 declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(24), ptr, ptr) #2
 
@@ -136,7 +136,7 @@ entry:
   %deferPtr = alloca ptr, align 4
   store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
-  %0 = call ptr @llvm.stacksave()
+  %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   store i32 0, ptr %defer.alloca, align 4
   %defer.alloca.repack22 = getelementptr inbounds { i32, ptr }, ptr %defer.alloca, i32 0, i32 1

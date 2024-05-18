@@ -773,7 +773,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			if sizeLevel >= 2 {
 				// Workaround with roughly the same effect as
 				// https://reviews.llvm.org/D119342.
-				// Can hopefully be removed in LLVM 18.
+				// Can hopefully be removed in LLVM 19.
 				ldflags = append(ldflags,
 					"-mllvm", "--rotation-max-header-size=0")
 			}

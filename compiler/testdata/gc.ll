@@ -16,9 +16,9 @@ target triple = "wasm32-unknown-wasi"
 @main.struct2 = hidden global ptr null, align 4
 @main.struct3 = hidden global ptr null, align 4
 @main.struct4 = hidden global ptr null, align 4
-@main.slice1 = hidden global { ptr, i32, i32 } zeroinitializer, align 8
-@main.slice2 = hidden global { ptr, i32, i32 } zeroinitializer, align 8
-@main.slice3 = hidden global { ptr, i32, i32 } zeroinitializer, align 8
+@main.slice1 = hidden global { ptr, i32, i32 } zeroinitializer, align 4
+@main.slice2 = hidden global { ptr, i32, i32 } zeroinitializer, align 4
+@main.slice3 = hidden global { ptr, i32, i32 } zeroinitializer, align 4
 @"runtime/gc.layout:62-2000000000000001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00 " }
 @"runtime/gc.layout:62-0001" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00\00" }
 @"reflect/types.type:basic:complex128" = linkonce_odr constant { i8, ptr } { i8 80, ptr @"reflect/types.type:pointer:basic:complex128" }, align 4
@@ -104,19 +104,19 @@ entry:
   %stackalloc = alloca i8, align 1
   %makeslice = call dereferenceable(5) ptr @runtime.alloc(i32 5, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %makeslice, ptr nonnull %stackalloc, ptr undef) #3
-  store ptr %makeslice, ptr @main.slice1, align 8
+  store ptr %makeslice, ptr @main.slice1, align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice1, i32 0, i32 1), align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice1, i32 0, i32 2), align 8
+  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice1, i32 0, i32 2), align 4
   %makeslice1 = call dereferenceable(20) ptr @runtime.alloc(i32 20, ptr nonnull inttoptr (i32 67 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %makeslice1, ptr nonnull %stackalloc, ptr undef) #3
-  store ptr %makeslice1, ptr @main.slice2, align 8
+  store ptr %makeslice1, ptr @main.slice2, align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice2, i32 0, i32 1), align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice2, i32 0, i32 2), align 8
+  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice2, i32 0, i32 2), align 4
   %makeslice3 = call dereferenceable(60) ptr @runtime.alloc(i32 60, ptr nonnull inttoptr (i32 71 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %makeslice3, ptr nonnull %stackalloc, ptr undef) #3
-  store ptr %makeslice3, ptr @main.slice3, align 8
+  store ptr %makeslice3, ptr @main.slice3, align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice3, i32 0, i32 1), align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice3, i32 0, i32 2), align 8
+  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice3, i32 0, i32 2), align 4
   ret void
 }
 
