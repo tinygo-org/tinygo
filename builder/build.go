@@ -243,6 +243,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// Create the *ssa.Program. This does not yet build the entire SSA of the
 	// program so it's pretty fast and doesn't need to be parallelized.
 	program := lprogram.LoadSSA()
+	program.Build()
 
 	// Add jobs to compile each package.
 	// Packages that have a cache hit will not be compiled again.
@@ -354,8 +355,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		packageActionIDJobs[pkg.ImportPath] = packageActionIDJob
 
 		// Build the SSA for the given package.
-		ssaPkg := program.Package(pkg.Pkg)
-		ssaPkg.Build()
+		//ssaPkg := program.Package(pkg.Pkg)
+		//ssaPkg.Build()
 
 		// Now create the job to actually build the package. It will exit early
 		// if the package is already compiled.
@@ -370,7 +371,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 				if _, err := os.Stat(job.result); err == nil {
 					// Already cached, don't recreate this package.
-					return nil
+					switch pkg.ImportPath {
+					case "context": // seems to be needed
+					case "time": // often crashes in this package, so probably needed
+					default:
+						return nil
+					}
 				}
 
 				// Compile AST to IR. The compiler.CompilePackage function will
@@ -517,6 +523,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		run: func(*compileJob) error {
 			// Load and link all the bitcode files. This does not yet optimize
 			// anything, it only links the bitcode files together.
+			println("exit")
+			os.Exit(0)
 			ctx := llvm.NewContext()
 			mod = ctx.NewModule("main")
 			for _, pkgJob := range packageJobs {
