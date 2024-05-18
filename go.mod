@@ -14,12 +14,12 @@ require (
 	github.com/marcinbor85/gohex v0.0.0-20200531091804-343a4b548892
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-tty v0.0.4
-	github.com/mgechev/revive v1.3.7
+	github.com/mgechev/revive v1.3.4
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
 	go.bug.st/serial v1.6.0
 	golang.org/x/net v0.20.0
 	golang.org/x/sys v0.16.0
-	golang.org/x/tools v0.17.0
+	golang.org/x/tools v0.14.1-0.20231101221057-75ff53bc6b14
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20240518103902-697964f2a9dc
 )
