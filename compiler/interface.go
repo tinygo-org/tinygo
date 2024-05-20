@@ -124,16 +124,19 @@ func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
 func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 	ms := c.program.MethodSets.MethodSet(typ)
 	hasMethodSet := ms.Len() != 0
-	if _, ok := typ.Underlying().(*types.Interface); ok {
+	_, isInterface := typ.Underlying().(*types.Interface)
+	if isInterface {
 		hasMethodSet = false
 	}
 
+	// As defined in https://pkg.go.dev/reflect#Type:
+	// NumMethod returns the number of methods accessible using Method.
+	// For a non-interface type, it returns the number of exported methods.
+	// For an interface type, it returns the number of exported and unexported methods.
 	var numMethods int
-	if hasMethodSet {
-		for i := 0; i < ms.Len(); i++ {
-			if ms.At(i).Obj().Exported() {
-				numMethods++
-			}
+	for i := 0; i < ms.Len(); i++ {
+		if isInterface || ms.At(i).Obj().Exported() {
+			numMethods++
 		}
 	}
 
