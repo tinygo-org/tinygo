@@ -5,10 +5,9 @@
 //go:build !baremetal && !js && !wasip1 && !windows
 // +build !baremetal,!js,!wasip1,!windows
 
-package os_test
+package user
 
 import (
-	. "os/user"
 	"runtime"
 	"testing"
 )
