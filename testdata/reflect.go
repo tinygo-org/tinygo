@@ -456,6 +456,7 @@ func showValue(rv reflect.Value, indent string) {
 	case reflect.Interface:
 		println(indent + "  interface")
 		println(indent+"  nil:", rv.IsNil())
+		println(indent+"  NumMethod:", rv.NumMethod())
 		if !rv.IsNil() {
 			showValue(rv.Elem(), indent+"  ")
 		}
