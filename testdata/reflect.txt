@@ -80,6 +80,7 @@ reflect type: ptr
   reflect type: interface settable=true addrable=true
     interface
     nil: true
+    NumMethod: 1
 reflect type: ptr
   pointer: true int
   nil: false
@@ -240,6 +241,7 @@ reflect type: struct
   reflect type: interface caninterface=false
     interface
     nil: true
+    NumMethod: 1
 reflect type: struct
   struct: 3
   field: 0 a
@@ -371,12 +373,14 @@ reflect type: slice comparable=false
   reflect type: interface settable=true addrable=true
     interface
     nil: false
+    NumMethod: 0
     reflect type: int
       int: 3
   indexing: 1
   reflect type: interface settable=true addrable=true
     interface
     nil: false
+    NumMethod: 0
     reflect type: string
       string: str 3
       reflect type: uint8
@@ -389,6 +393,7 @@ reflect type: slice comparable=false
   reflect type: interface settable=true addrable=true
     interface
     nil: false
+    NumMethod: 0
     reflect type: complex128
       complex: (-4.000000e+000+2.500000e+000i)
 reflect type: ptr
