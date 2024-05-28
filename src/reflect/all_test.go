@@ -698,8 +698,6 @@ func TestMapSetNil(t *testing.T) {
 	}
 }
 
-/*
-
 func TestAll(t *testing.T) {
 	testType(t, 1, TypeOf((int8)(0)), "int8")
 	testType(t, 2, TypeOf((*int8)(nil)).Elem(), "int8")
@@ -746,8 +744,6 @@ func TestAll(t *testing.T) {
 	}{}).Field(0).Type
 	testType(t, 14, typ, "[]uint32")
 }
-
-*/
 
 func TestInterfaceGet(t *testing.T) {
 	var inter struct {
@@ -1272,8 +1268,6 @@ func TestDeepEqualUnexportedMap(t *testing.T) {
 	}
 }
 
-/*
-
 var deepEqualPerfTests = []struct {
 	x, y any
 }{
@@ -1338,8 +1332,6 @@ func TestDeepEqualAllocs(t *testing.T) {
 		})
 	}
 }
-
-*/
 
 func check2ndField(x any, offs uintptr, t *testing.T) {
 	s := ValueOf(x)
@@ -1600,7 +1592,8 @@ func TestIsZero(t *testing.T) {
 	*/
 }
 
-/*
+// extra comment for gofmt
+
 func TestInterfaceExtraction(t *testing.T) {
 	var s struct {
 		W io.Writer
@@ -1612,9 +1605,6 @@ func TestInterfaceExtraction(t *testing.T) {
 		t.Error("Interface() on interface: ", v, s.W)
 	}
 }
-
-*/
-
 func TestNilPtrValueSub(t *testing.T) {
 	var pi *int
 	if pv := ValueOf(pi); pv.Elem().IsValid() {
@@ -3368,6 +3358,8 @@ func TestNestedMethods(t *testing.T) {
 	}
 }
 
+*/
+
 type unexp struct{}
 
 func (*unexp) f() (int32, int8) { return 7, 7 }
@@ -3379,8 +3371,6 @@ type unexpI interface {
 
 var unexpi unexpI = new(unexp)
 
-/*
-
 func TestUnexportedMethods(t *testing.T) {
 	typ := TypeOf(unexpi)
 
@@ -3388,8 +3378,6 @@ func TestUnexportedMethods(t *testing.T) {
 		t.Errorf("NumMethod=%d, want 0 satisfied methods", got)
 	}
 }
-
-*/
 
 type InnerInt struct {
 	X int
@@ -3432,6 +3420,8 @@ func TestEmbeddedMethods(t *testing.T) {
 	}
 }
 
+*/
+
 type FuncDDD func(...any) error
 
 func (f FuncDDD) M() {}
@@ -3443,6 +3433,7 @@ func TestNumMethodOnDDD(t *testing.T) {
 	}
 }
 
+/*
 func TestPtrTo(t *testing.T) {
 	// This block of code means that the ptrToThis field of the
 	// reflect data for *unsafe.Pointer is non zero, see
@@ -3488,6 +3479,8 @@ func TestPtrToGC(t *testing.T) {
 		}
 	}
 }
+
+*/
 
 func TestAddr(t *testing.T) {
 	var p struct {
@@ -3590,8 +3583,6 @@ func TestAllocations(t *testing.T) {
 		}
 	})
 }
-
-*/
 
 func TestSmallNegativeInt(t *testing.T) {
 	i := int16(-1)
