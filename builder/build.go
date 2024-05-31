@@ -840,6 +840,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					"--output", result.Executable,
 				)
 
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands(goenv.Get("WASMOPT"), args...)
+				}
+
 				cmd := exec.Command(goenv.Get("WASMOPT"), args...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
