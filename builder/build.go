@@ -825,10 +825,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					args = append(args, "--asyncify")
 				}
 
+				exeunopt := result.Executable
+
+				if config.Options.Work {
+					// Keep the work direction around => don't overwrite the .wasm binary with the optimized version
+					exeunopt += ".pre-wasm-opt"
+					os.Rename(result.Executable, exeunopt)
+				}
+
 				args = append(args,
 					opt,
 					"-g",
-					result.Executable,
+					exeunopt,
 					"--output", result.Executable,
 				)
 
