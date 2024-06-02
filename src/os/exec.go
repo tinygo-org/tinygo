@@ -72,3 +72,8 @@ func (p *Process) Kill() error {
 func (p *Process) Signal(sig Signal) error {
 	return ErrNotImplemented
 }
+
+func Ignore(sig ...Signal) {
+	// leave all the signals unaltered
+	return
+}
