@@ -62,6 +62,7 @@
             # these tools are available in the host environment.
             #gdb
             #openocd
+            nodejs_20
           ];
           shellHook= ''
             # Configure CLANG, LLVM_AR, and LLVM_NM for `make wasi-libc`.
