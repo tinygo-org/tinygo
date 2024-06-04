@@ -1204,7 +1204,14 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 			b.blockExits[block] = llvmBlock
 		}
 		// Normal functions have an entry block.
-		entryBlock = b.blockEntries[b.fn.Blocks[0]]
+		// If Blocks is nil, this indicates an external function for which no Go source code is available.
+		if b.fn.Blocks == nil {
+			errValue := "\n\tfunction is external, no go source code available"
+			b.addError(b.fn.Pos(), errValue)
+			return
+		} else {
+			entryBlock = b.blockEntries[b.fn.Blocks[0]]
+		}
 	}
 	b.SetInsertPointAtEnd(entryBlock)
 
