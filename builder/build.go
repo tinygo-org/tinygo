@@ -867,6 +867,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					"-o", resultWizer,
 				)
 
+				if config.Options.PrintCommands != nil {
+					config.Options.PrintCommands(goenv.Get("WIZER"), args...)
+				}
+
 				cmd := exec.Command(goenv.Get("WIZER"), args...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
