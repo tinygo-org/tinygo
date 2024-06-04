@@ -1078,7 +1078,7 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config, globalValues map[string]map[string]string) error {
-	if !config.Options.WizerInit {
+	if config.Options.InterpTimeout != 0 {
 		if err := interp.Run(mod, config.Options.InterpTimeout, config.DumpSSA()); err != nil {
 			return err
 		}
