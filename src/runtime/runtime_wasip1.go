@@ -19,7 +19,7 @@ func _start() {
 	run()
 }
 
-//export runtime.wizerInit
+//export runtime.initialize
 func runtimeInitialize() {
 	if runtimeInitialized {
 		// Second time initialization is happening. Refresh environment
@@ -32,10 +32,9 @@ func runtimeInitialize() {
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
 	initHeap()
+	initAll()
 	if hasScheduler {
-		go initAll()
-	} else {
-		initAll()
+		go func() {}()
 	}
 	runtimeInitialized = true
 }

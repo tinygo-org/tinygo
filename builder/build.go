@@ -854,37 +854,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 			}
 
-			if config.Options.WizerInit {
-				var args []string
-
-				resultWizer := result.Executable + "-wizer"
-
-				args = append(args,
-					"--allow-wasi",
-					"--wasm-bulk-memory=true",
-					"-f", "runtime.wizerInit",
-					result.Executable,
-					"-o", resultWizer,
-				)
-
-				if config.Options.PrintCommands != nil {
-					config.Options.PrintCommands(goenv.Get("WIZER"), args...)
-				}
-
-				cmd := exec.Command(goenv.Get("WIZER"), args...)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-
-				err := cmd.Run()
-				if err != nil {
-					return fmt.Errorf("wizer failed: %w", err)
-				}
-
-				if err := os.Rename(resultWizer, result.Executable); err != nil {
-					return fmt.Errorf("rename failed: %w", err)
-				}
-			}
-
 			// Print code size if requested.
 			if config.Options.PrintSizes == "short" || config.Options.PrintSizes == "full" {
 				packagePathMap := make(map[string]string, len(lprogram.Packages))

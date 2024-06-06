@@ -53,7 +53,6 @@ type Options struct {
 	Monitor         bool
 	BaudRate        int
 	Timeout         time.Duration
-	WizerInit       bool
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.

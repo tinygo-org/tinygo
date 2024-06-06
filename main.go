@@ -1440,7 +1440,6 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
-	wizerInit := flag.Bool("wizer-init", false, "use wizer for package initialization")
 
 	// Internal flags, that are only intended for TinyGo development.
 	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
@@ -1513,11 +1512,6 @@ func main() {
 		ocdCommands = strings.Split(*ocdCommandsString, ",")
 	}
 
-	if *wizerInit && *target != "wasip1" {
-		fmt.Fprintf(os.Stderr, "-wizer-init only makes sense with -target=wasip1, got -target=%q\n", *target)
-		os.Exit(1)
-	}
-
 	options := &compileopts.Options{
 		GOOS:            goenv.Get("GOOS"),
 		GOARCH:          goenv.Get("GOARCH"),
@@ -1550,9 +1544,7 @@ func main() {
 		Monitor:         *monitor,
 		BaudRate:        *baudrate,
 		Timeout:         *timeout,
-		WizerInit:       *wizerInit,
 	}
-
 	if *printCommands {
 		options.PrintCommands = printCommand
 	}
