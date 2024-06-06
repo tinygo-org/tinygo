@@ -17,6 +17,8 @@ var (
 		token.OR:  precedenceOr,
 		token.XOR: precedenceXor,
 		token.AND: precedenceAnd,
+		token.SHL: precedenceShift,
+		token.SHR: precedenceShift,
 		token.ADD: precedenceAdd,
 		token.SUB: precedenceAdd,
 		token.MUL: precedenceMul,
@@ -25,11 +27,13 @@ var (
 	}
 )
 
+// See: https://en.cppreference.com/w/c/language/operator_precedence
 const (
 	precedenceLowest = iota + 1
 	precedenceOr
 	precedenceXor
 	precedenceAnd
+	precedenceShift
 	precedenceAdd
 	precedenceMul
 	precedencePrefix
@@ -82,7 +86,7 @@ func parseConstExpr(t *tokenizer, precedence int) (ast.Expr, *scanner.Error) {
 
 	for t.peekToken != token.EOF && precedence < precedences[t.peekToken] {
 		switch t.peekToken {
-		case token.OR, token.XOR, token.AND, token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+		case token.OR, token.XOR, token.AND, token.SHL, token.SHR, token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
 			t.Next()
 			leftExpr, err = parseBinaryExpr(t, leftExpr)
 		}
@@ -205,13 +209,19 @@ func (t *tokenizer) Next() {
 			// https://en.cppreference.com/w/cpp/string/byte/isspace
 			t.peekPos++
 			t.buf = t.buf[1:]
-		case len(t.buf) >= 2 && (string(t.buf[:2]) == "||" || string(t.buf[:2]) == "&&"):
+		case len(t.buf) >= 2 && (string(t.buf[:2]) == "||" || string(t.buf[:2]) == "&&" || string(t.buf[:2]) == "<<" || string(t.buf[:2]) == ">>"):
 			// Two-character tokens.
 			switch c {
 			case '&':
 				t.peekToken = token.LAND
 			case '|':
 				t.peekToken = token.LOR
+			case '<':
+				t.peekToken = token.SHL
+			case '>':
+				t.peekToken = token.SHR
+			default:
+				panic("unreachable")
 			}
 			t.peekValue = t.buf[:2]
 			t.buf = t.buf[2:]
