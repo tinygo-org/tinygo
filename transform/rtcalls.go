@@ -34,7 +34,7 @@ func OptimizeStringToBytes(mod llvm.Module) {
 			if use.IsAExtractValueInst().IsNil() {
 				// Expected an extractvalue, but this is something else.
 				canConvertPointer = false
-				continue
+				break
 			}
 			switch use.Type().TypeKind() {
 			case llvm.IntegerTypeKind:
@@ -49,7 +49,7 @@ func OptimizeStringToBytes(mod llvm.Module) {
 					// There is a store to the byte slice. This means that none
 					// of the pointer uses can't be propagated.
 					canConvertPointer = false
-					continue
+					break
 				}
 				// It may be that the pointer value can be propagated, if all of
 				// the pointer uses are readonly.
