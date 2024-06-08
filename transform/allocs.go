@@ -136,7 +136,7 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 			panic("expected instruction use")
 		}
 		switch use.InstructionOpcode() {
-		case llvm.GetElementPtr:
+		case llvm.GetElementPtr, llvm.ExtractValue:
 			if at := valueEscapesAt(use); !at.IsNil() {
 				return at
 			}
