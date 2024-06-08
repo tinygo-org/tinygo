@@ -73,6 +73,52 @@ func OptimizeStringToBytes(mod llvm.Module) {
 	}
 }
 
+// OptimizeBytesToString transforms runtime.stringFromBytes(...) calls that do not
+// escape into non-alloc versions.  This is useful, for instance, when optimizing
+// "bytes.Equal()", which is implemented as:
+//
+//	func Equal(a, b []byte) bool { return string(a) == string(b) }
+func OptimizeBytesToString(mod llvm.Module) {
+	stringFromBytes := mod.NamedFunction("runtime.stringFromBytes")
+	if stringFromBytes.IsNil() {
+		// nothing to optimize
+		return
+	}
+
+	builder := mod.Context().NewBuilder()
+	defer builder.Dispose()
+
+	for _, call := range getUses(stringFromBytes) {
+		allUsesAreReadOnly := true
+		for _, use := range getUses(call) {
+			if !isReadOnly(use) {
+				allUsesAreReadOnly = false
+				break
+			}
+		}
+
+		if !allUsesAreReadOnly {
+			continue
+		}
+
+		if at := valueEscapesAt(call); at.IsNil() {
+			strptr := call.Operand(0)
+			strlen := call.Operand(1)
+
+			builder.SetInsertPointBefore(call)
+
+			str := mod.Context().ConstStruct([]llvm.Value{llvm.Undef(strptr.Type()), llvm.Undef(strlen.Type())}, false)
+			str = builder.CreateInsertValue(str, strptr, 0, "")
+			str = builder.CreateInsertValue(str, strlen, 1, "")
+
+			call.ReplaceAllUsesWith(str)
+			call.EraseFromParentAsInstruction()
+
+			continue
+		}
+	}
+}
+
 // OptimizeStringEqual transforms runtime.stringEqual(...) calls into simple
 // integer comparisons if at least one of the sides of the comparison is zero.
 // Ths converts str == "" into len(str) == 0 and "" == "" into false.
