@@ -3,7 +3,7 @@
         "rp2040"
     ],
     "serial-port": ["2e8a:0003"],
-    "build-tags": ["badger2040_w"],
+    "build-tags": ["badger2040_w", "cyw43439"],
     "ldflags": [
         "--defsym=__flash_size=1020K"
     ],
