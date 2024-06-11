@@ -33,23 +33,97 @@ func hasFlag(call, param llvm.Value, kind string) bool {
 	return true
 }
 
+type readOnlyHandling int
+
+const (
+	CheckReadOnlyFlag readOnlyHandling = iota
+	CheckUseOnly
+	CheckAllOperands
+)
+
+// Instructions in this map are all read-only.  The boolean value serves
+// a purpose inside isReadOnly() to determine how to calculate if a certain
+// use of a value is read-only.
+var readOnlyOpcodes = map[llvm.Opcode]readOnlyHandling{
+	llvm.Load:  CheckUseOnly,
+	llvm.Store: CheckAllOperands,
+
+	llvm.Call: CheckReadOnlyFlag,
+	llvm.Ret:  CheckUseOnly,
+
+	llvm.ICmp: CheckUseOnly,
+	llvm.FCmp: CheckUseOnly,
+
+	llvm.PHI: CheckUseOnly,
+
+	llvm.GetElementPtr:  CheckUseOnly,
+	llvm.ExtractValue:   CheckUseOnly,
+	llvm.InsertValue:    CheckUseOnly,
+	llvm.ExtractElement: CheckUseOnly,
+
+	llvm.Add:  CheckUseOnly,
+	llvm.FAdd: CheckUseOnly,
+	llvm.Sub:  CheckUseOnly,
+	llvm.FSub: CheckUseOnly,
+	llvm.Mul:  CheckUseOnly,
+	llvm.FMul: CheckUseOnly,
+	llvm.UDiv: CheckUseOnly,
+	llvm.SDiv: CheckUseOnly,
+	llvm.FDiv: CheckUseOnly,
+	llvm.URem: CheckUseOnly,
+	llvm.SRem: CheckUseOnly,
+	llvm.FRem: CheckUseOnly,
+
+	llvm.Shl:  CheckUseOnly,
+	llvm.LShr: CheckUseOnly,
+	llvm.AShr: CheckUseOnly,
+	llvm.And:  CheckUseOnly,
+	llvm.Or:   CheckUseOnly,
+	llvm.Xor:  CheckUseOnly,
+
+	llvm.ZExt: CheckUseOnly,
+	llvm.SExt: CheckUseOnly,
+
+	llvm.PtrToInt: CheckUseOnly,
+	llvm.IntToPtr: CheckUseOnly,
+	llvm.BitCast:  CheckUseOnly,
+}
+
 // isReadOnly returns true if the given value (which must be of pointer type) is
 // never stored to, and false if this cannot be proven.
 func isReadOnly(value llvm.Value) bool {
-	uses := getUses(value)
-	for _, use := range uses {
-		if !use.IsAGetElementPtrInst().IsNil() {
-			if !isReadOnly(use) {
+	visited := map[llvm.Value]bool{}
+	return isReadOnlyInternal(visited, value)
+}
+
+func isReadOnlyInternal(visited map[llvm.Value]bool, value llvm.Value) bool {
+	for _, use := range getUses(value) {
+		if _, ok := visited[value]; ok {
+			continue
+		}
+		visited[value] = true
+
+		handling, ok := readOnlyOpcodes[use.InstructionOpcode()]
+		if !ok {
+			return false
+		}
+		switch handling {
+		case CheckUseOnly:
+			if !isReadOnlyInternal(visited, use) {
 				return false
 			}
-		} else if !use.IsACallInst().IsNil() {
+		case CheckReadOnlyFlag:
 			if !hasFlag(use, value, "readonly") {
 				return false
 			}
-		} else {
-			// Unknown instruction, might not be readonly.
-			return false
+		case CheckAllOperands:
+			for i := 0; i < use.OperandsCount(); i++ {
+				if !isReadOnlyInternal(visited, use.Operand(i)) {
+					return false
+				}
+			}
 		}
 	}
+
 	return true
 }
