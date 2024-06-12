@@ -17,9 +17,9 @@ require (
 	github.com/mgechev/revive v1.3.7
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
 	go.bug.st/serial v1.6.0
-	golang.org/x/net v0.20.0
-	golang.org/x/sys v0.16.0
-	golang.org/x/tools v0.17.0
+	golang.org/x/net v0.26.0
+	golang.org/x/sys v0.21.0
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20240518103902-697964f2a9dc
 )
@@ -43,5 +43,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/text v0.16.0 // indirect
 )
+
+replace golang.org/x/tools => github.com/tinygo-org/tools v0.0.0-20240612102102-36af80766fc9
