@@ -514,8 +514,7 @@ var basicTypeNames = [...]string{
 func getTypeCodeName(t types.Type) (string, bool) {
 	switch t := t.(type) {
 	case *types.Named:
-		// Note: check for `t.Obj().Pkg() != nil` for Go 1.18 only.
-		if t.Obj().Pkg() != nil && t.Obj().Parent() != t.Obj().Pkg().Scope() {
+		if t.Obj().Parent() != t.Obj().Pkg().Scope() {
 			return "named:" + t.String() + "$local", true
 		}
 		return "named:" + t.String(), false
