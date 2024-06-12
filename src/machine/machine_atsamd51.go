@@ -1672,6 +1672,76 @@ func (spi SPI) txrx(tx, rx []byte) {
 	rx[len(rx)-1] = byte(spi.Bus.DATA.Get())
 }
 
+// TxN handles read/write operation for SPI interface. The difference with Tx() is that
+// it repeats the process n times.
+//
+func (spi SPI) TxN(w, r []byte, n int) error {
+	switch {
+	case w == nil:
+		// read only, so write zero and read a result.
+		spi.rxn(r, n)
+	case r == nil:
+		// write only
+		spi.txn(w, n)
+
+	default:
+		// write/read
+		if len(w) != len(r) {
+			return ErrTxInvalidSliceSize
+		}
+
+		spi.txrxn(w, r, n)
+	}
+	return nil
+}
+
+func (spi SPI) txn(tx []byte, n int) {
+	for i := 0; i < len(tx)*n; i++ {
+		for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_DRE) {
+		}
+		spi.Bus.DATA.Set(uint32(tx[i%len(tx)]))
+	}
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_TXC) {
+	}
+
+	// read to clear RXC register
+	for spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_RXC) {
+		spi.Bus.DATA.Get()
+	}
+}
+
+func (spi SPI) rxn(rx []byte, n int) {
+	spi.Bus.DATA.Set(0)
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_DRE) {
+	}
+
+	for i := 1; i < len(rx)*n; i++ {
+		spi.Bus.DATA.Set(0)
+		for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_RXC) {
+		}
+		rx[(i-1)%len(rx)] = byte(spi.Bus.DATA.Get())
+	}
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_RXC) {
+	}
+	rx[len(rx)-1] = byte(spi.Bus.DATA.Get())
+}
+
+func (spi SPI) txrxn(tx, rx []byte, n int) {
+	spi.Bus.DATA.Set(uint32(tx[0]))
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_DRE) {
+	}
+
+	for i := 1; i < len(rx)*n; i++ {
+		spi.Bus.DATA.Set(uint32(tx[i%len(rx)]))
+		for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_RXC) {
+		}
+		rx[(i-1)%len(rx)] = byte(spi.Bus.DATA.Get())
+	}
+	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPIM_INTFLAG_RXC) {
+	}
+	rx[len(rx)-1] = byte(spi.Bus.DATA.Get())
+}
+
 // The QSPI peripheral on ATSAMD51 is only available on the following pins
 const (
 	QSPI_SCK   = PB10
