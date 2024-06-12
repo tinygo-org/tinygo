@@ -1,6 +1,6 @@
 module github.com/tinygo-org/tinygo
 
-go 1.18
+go 1.19
 
 require (
 	github.com/aykevl/go-wasm v0.0.2-0.20240312204833-50275154210c

@@ -98,9 +98,9 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm15-go118:
+  test-llvm15-go119:
     docker:
-      - image: golang:1.18-bullseye
+      - image: golang:1.19-bullseye
     steps:
       - test-linux:
           llvm: "15"
@@ -118,6 +118,6 @@ workflows:
     jobs:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
-      - test-llvm15-go118
+      - test-llvm15-go119
       # This tests LLVM 18 support when linking against system libraries.
       - test-llvm18-go122
