@@ -1184,11 +1184,15 @@ func (spi SPI) Configure(config SPIConfig) error {
 	}
 
 	// Determine the input pinout (for SDI).
-	SDIPinMode, SDIPad, ok := findPinPadMapping(spi.SERCOM, config.SDI)
-	if !ok {
-		return ErrInvalidInputPin
+	var dataInPinout uint32
+	var SDIPinMode PinMode
+	if config.SDI != NoPin {
+		var ok bool
+		SDIPinMode, dataInPinout, ok = findPinPadMapping(spi.SERCOM, config.SDI)
+		if !ok {
+			return ErrInvalidInputPin
+		}
 	}
-	dataInPinout := SDIPad // mapped directly
 
 	// Determine the output pinout (for SDO/SCK).
 	// See table 26-7 on page 494 of the datasheet.
@@ -1232,7 +1236,9 @@ func (spi SPI) Configure(config SPIConfig) error {
 	// enable pins
 	config.SCK.Configure(PinConfig{Mode: sckPinMode})
 	config.SDO.Configure(PinConfig{Mode: SDOPinMode})
-	config.SDI.Configure(PinConfig{Mode: SDIPinMode})
+	if config.SDI != NoPin {
+		config.SDI.Configure(PinConfig{Mode: SDIPinMode})
+	}
 
 	// reset SERCOM
 	spi.Bus.CTRLA.SetBits(sam.SERCOM_SPI_CTRLA_SWRST)
