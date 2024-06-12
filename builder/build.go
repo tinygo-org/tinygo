@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gofrs/flock"
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -248,6 +249,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// Packages that have a cache hit will not be compiled again.
 	var packageJobs []*compileJob
 	packageActionIDJobs := make(map[string]*compileJob)
+	ssaJobs := make(map[string]*compileJob)
+	var ssaLock sync.Mutex
 
 	var embedFileObjects []*compileJob
 	for _, pkg := range lprogram.Sorted() {
@@ -302,7 +305,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 		// Action ID jobs need to know the action ID of all the jobs the package
 		// imports.
+		// Also, we need to know the Go SSA job dependencies for this package.
 		var importedPackages []*compileJob
+		var ssaJobDependencies []*compileJob
 		for _, imported := range pkg.Pkg.Imports() {
 			job, ok := packageActionIDJobs[imported.Path()]
 			if !ok {
@@ -310,6 +315,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			importedPackages = append(importedPackages, job)
 			actionIDDependencies = append(actionIDDependencies, job)
+			ssaJobDependencies = append(ssaJobDependencies, ssaJobs[imported.Path()])
 		}
 
 		// Create a job that will calculate the action ID for a package compile
@@ -353,15 +359,32 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		}
 		packageActionIDJobs[pkg.ImportPath] = packageActionIDJob
 
-		// Build the SSA for the given package.
+		// Build the Go SSA for the given package.
 		ssaPkg := program.Package(pkg.Pkg)
-		ssaPkg.Build()
+		ssaJob := &compileJob{
+			description:  "build Go SSA for package " + pkg.ImportPath,
+			dependencies: append([]*compileJob{packageActionIDJob}, ssaJobDependencies...),
+			run: func(job *compileJob) (err error) {
+				// Make sure only a single SSA build is running at a time. I
+				// believe this should not be required (I believe there is a
+				// race condition in the x/tools/go/ssa package), but for now
+				// this is needed to avoid race conditions.
+				ssaLock.Lock()
+				defer ssaLock.Unlock()
+
+				// Do the Go SSA build.
+				ssaPkg.Build()
+
+				return nil
+			},
+		}
+		ssaJobs[pkg.ImportPath] = ssaJob
 
 		// Now create the job to actually build the package. It will exit early
 		// if the package is already compiled.
 		job := &compileJob{
 			description:  "compile package " + pkg.ImportPath,
-			dependencies: []*compileJob{packageActionIDJob},
+			dependencies: []*compileJob{ssaJob, packageActionIDJob},
 			run: func(job *compileJob) error {
 				job.result = filepath.Join(cacheDir, "pkg-"+packageActionIDJob.result+".bc")
 				// Acquire a lock (if supported).
