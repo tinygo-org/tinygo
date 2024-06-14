@@ -1,3 +1,61 @@
+0.32.0
+---
+
+* **general**
+  - fix wasi-libc include headers on Nix
+  - apply OpenOCD commands after target configuration
+  - fix a minor race condition when determining the build tags
+  - support UF2 drives with a space in their name on Linux
+  - add LLVM 18 support
+  - drop support for Go 1.18 to be able to stay up to date
+
+* **compiler**
+  - move `-panic=trap` support to the compiler/runtime
+  - fix symbol table index for WebAssembly archives
+  - fix ed25519 build errors by adjusting the alias names
+  - add aliases to generic AES functions
+  - fix race condition by temporarily applying a proposed patch
+  - `builder`: keep un-wasm-opt'd .wasm if -work was passed
+  - `builder`: make sure wasm-opt command line is printed if asked
+  - `cgo`: implement shift operations in preprocessor macros
+  - `interp`: checking for methodset existance
+
+* **standard library**
+  - `machine`: add `__tinygo_spi_tx` function to simulator
+  - `machine`: fix simulator I2C support
+  - `machine`: add GetRNG support to simulator
+  - `machine`: add `TxFifoFreeLevel` for CAN
+  - `os`: add `Link`
+  - `os`: add `FindProcess` for posix
+  - `os`: add `Process.Release` for unix
+  - `os`: add `SetReadDeadline` stub
+  - `os`, `os/signal`: add signal stubs
+  - `os/user`: add stubs for `Lookup{,Group}` and `Group`
+  - `reflect`: use int in `StringHeader` and `SliceHeader` on non-AVR platforms
+  - `reflect`: fix `NumMethods` for Interface type
+  - `runtime`: skip negative sleep durations in sleepTicks
+
+* **targets**
+  - `esp32`: add I2C support
+  - `rp2040`: move UART0 and UART1 to common file
+  - `rp2040`: make all RP2040 boards available for simulation
+  - `rp2040`: fix timeUnit type
+  - `stm32`: add i2c `Frequency` and `SetBaudRate` function for chips that were missing implementation
+  - `wasm-unknown`: add math and memory builtins that LLVM needs
+  - `wasip1`: replace existing `-target=wasi` support with wasip1 as supported in Go 1.21+
+
+* **boards**
+  - `adafruit-esp32-feather-v2`: add the Adafruit ESP32 Feather V2
+  - `badger2040-w`: add support for the Badger2040 W
+  - `feather-nrf52840-sense`: fix lack of LXFO
+  - `m5paper`: add support for the M5 Paper
+  - `mksnanov3`: limit programming speed to 1800 kHz
+  - `nucleol476rg`: add stm32 nucleol476rg support
+  - `pico-w`: add the Pico W (which is near-idential to the pico target)
+  - `thingplus-rp2040`, `waveshare-rp2040-zero`: add WS2812 definition
+  - `pca10059-s140v7`: add this variant to the PCA10059 board
+
+
 0.31.2
 ---
 
