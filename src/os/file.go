@@ -23,6 +23,7 @@ import (
 	"io/fs"
 	"runtime"
 	"syscall"
+	"time"
 )
 
 // Seek whence values.
@@ -254,6 +255,12 @@ func (f *File) SyscallConn() (conn syscall.RawConn, err error) {
 		err = ErrNotImplemented
 	}
 	return
+}
+
+// SetReadDeadline sets the deadline for future Read calls and any
+// currently-blocked Read call.
+func (f *File) SetReadDeadline(t time.Time) error {
+	return f.setReadDeadline(t)
 }
 
 // fd is an internal interface that is used to try a type assertion in order to
