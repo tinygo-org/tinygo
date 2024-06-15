@@ -103,7 +103,6 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashm
 		keyHash:   hashmapKeyHashAlg(hashAlg),
 	}
 
-	bucketBufSize := hashmapBucketSize(ret)
 	var nBuckets uintptr
 	if sizeHint == 0 {
 		nBuckets = 1
@@ -111,13 +110,20 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashm
 		// Calculate the number of buckets by computing iceil(sizeHint / 8).
 		nBuckets = 1 + ((sizeHint - 1) >> 3)
 	}
-	for i := uintptr(0); i < nBuckets; i++ {
-		newBucket := (*hashmapBucket)(alloc(bucketBufSize, nil))
-		newBucket.next = ret.bucket
-		ret.bucket = newBucket
-	}
+
+	hashmapAllocBuckets(ret, nBuckets)
 
 	return ret
+}
+
+func hashmapAllocBuckets(m *hashmap, nBuckets uintptr) *hashmapBucket {
+	bucketBufSize := hashmapBucketSize(m)
+	for i := uintptr(0); i < nBuckets; i++ {
+		newBucket := (*hashmapBucket)(alloc(bucketBufSize, nil))
+		newBucket.next = m.bucket
+		m.bucket = newBucket
+	}
+	return m.bucket
 }
 
 func hashmapMakeUnsafePointer(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer {
@@ -258,11 +264,7 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 
 	if bucketWithEmptySlot == nil {
 		// No space for this item, so make another bucket.
-		newBucket := (*hashmapBucket)(alloc(hashmapBucketSize(m), nil))
-		newBucket.next = m.bucket
-		m.bucket = newBucket
-
-		bucketWithEmptySlot = newBucket
+		bucketWithEmptySlot = hashmapAllocBuckets(m, 1)
 		emptySlot = 0
 	}
 
