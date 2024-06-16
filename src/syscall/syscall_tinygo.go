@@ -1,3 +1,5 @@
+//go:build tinygo
+
 package syscall
 
 // Stub out Syscall() functions.  Args will be Posix/Unix encoded for the arch.
@@ -12,94 +14,144 @@ import (
 	"unsafe"
 )
 
+func Getrlimit(which int, lim *Rlimit) error {
+	println("syscall.Getrlimit not implemented", which, lim)
+	return ENOSYS
+}
+
+func (iov *Iovec) SetLen(length int) {
+	iov.Len = uint32(length)
+}
+
+func Splice(rfd int, roff *int64, wfd int, woff *int64, len int, flags int) (n int, err error) {
+	println("syscall.Splice not implemented")
+	return 0, ENOSYS
+}
+
+func Kill(pid int, signum Signal) error {
+	println("syscall.Kill not implemented", pid, signum)
+	return ENOSYS
+}
+
+func Uname(buf *Utsname) (err error) {
+	println("syscall.Uname not implemented", buf)
+	return ENOSYS
+}
+
+func Getuid() int {
+	return 1
+}
+
+func Getgid() int {
+	return 1
+}
+
+func Geteuid() int {
+	return 1
+}
+
+func Getegid() int {
+	return 1
+}
+
+func Getgroups() ([]int, error) {
+	return []int{1}, nil
+}
+
+func Getpid() int {
+	return 3
+}
+
+func Getppid() int {
+	return 2
+}
+
 func RawSyscall6(trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno) {
-	println("RawSyscall6 not implemented", trap, a1, a2, a3, a4, a5, a6)
-	return r1, r2, EOPNOTSUPP
+	println("syscall.RawSyscall6 not implemented", trap, a1, a2, a3, a4, a5, a6)
+	return r1, r2, ENOSYS
 }
 
 func RawSyscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err Errno) {
-	println("RawSyscall not implemented", trap, a1, a2, a3)
+	println("syscall.RawSyscall not implemented", trap, a1, a2, a3)
 	return RawSyscall6(trap, a1, a2, a3, 0, 0, 0)
 }
 
 func Syscall(trap, a1, a2, a3 uintptr) (r1, r2 uintptr, err Errno) {
-	println("Syscall not implemented", trap, a1, a2, a3)
-	return r1, r2, EOPNOTSUPP
+	println("syscall.Syscall not implemented", trap, a1, a2, a3)
+	return r1, r2, ENOSYS
 }
 
 func Syscall6(trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2 uintptr, err Errno) {
-	println("Syscall6 not implemented", trap, a1, a2, a3, a4, a5, a6)
-	return r1, r2, EOPNOTSUPP
+	println("syscall.Syscall6 not implemented", trap, a1, a2, a3, a4, a5, a6)
+	return r1, r2, ENOSYS
 }
 
 func rawSyscallNoError(trap, a1, a2, a3 uintptr) (r1, r2 uintptr) {
-	println("rawSyscallNoError not implemented", trap, a1, a2, a3)
+	println("syscall.rawSyscallNoError not implemented", trap, a1, a2, a3)
 	return r1, r2
 }
 
 func Faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
-	println("Faccesat not implemented", dirfd, path, mode, flags)
-	return EOPNOTSUPP
+	println("syscall.Faccesat not implemented", dirfd, path, mode, flags)
+	return ENOSYS
 }
 
 func Accept4(fd int, flags int) (nfd int, sa Sockaddr, err error) {
-	println("Accept4 not implemented", fd, flags)
-	return nfd, sa, EOPNOTSUPP
+	println("syscall.Accept4 not implemented", fd, flags)
+	return nfd, sa, ENOSYS
 }
 
 func prlimit(pid int, resource int, newlimit *Rlimit, old *Rlimit) (err error) {
-	println("prlimit not implemented", pid, resource, newlimit, old)
-	return EOPNOTSUPP
+	println("syscall.prlimit not implemented", pid, resource, newlimit, old)
+	return ENOSYS
 }
 
 func Pread(fd int, p []byte, offset int64) (n int, err error) {
-	println("Pread not implemented", fd, p, offset)
-	return n, EOPNOTSUPP
+	println("syscall.Pread not implemented", fd, p, offset)
+	return n, ENOSYS
 }
 
 func Pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	println("Pwrite not implemented", fd, p, offset)
-	return n, EOPNOTSUPP
+	println("syscall.Pwrite not implemented", fd, p, offset)
+	return n, ENOSYS
 }
 
 func Write(fd int, p []byte) (n int, err error) {
-	println("Write not implemented", fd, p)
-	return n, EOPNOTSUPP
+	return system.Write(fd, p)
 }
 
 func Read(fd int, p []byte) (n int, err error) {
-	println("Read not implemented", fd, p)
-	return n, EOPNOTSUPP
+	return system.Read(fd, p)
 }
 
 func GetsockoptInt(fd, level, opt int) (value int, err error) {
-	println("GetsockoptInt not implemented", fd, level, opt)
-	return value, EOPNOTSUPP
+	println("syscall.GetsockoptInt not implemented", fd, level, opt)
+	return value, ENOSYS
 }
 
 func Recvfrom(fd int, p []byte, flags int) (n int, from Sockaddr, err error) {
-	println("Recvfrom not implemented", fd, p, flags)
-	return n, from, EOPNOTSUPP
+	println("syscall.Recvfrom not implemented", fd, p, flags)
+	return n, from, ENOSYS
 }
 
 func Recvmsg(fd int, p, oob []byte, flags int) (n, oobn int, recvflags int, from Sockaddr, err error) {
-	println("Recvmsg not implemented", fd, p, oob, flags)
-	return n, oobn, recvflags, from, EOPNOTSUPP
+	println("syscall.Recvmsg not implemented", fd, p, oob, flags)
+	return n, oobn, recvflags, from, ENOSYS
 }
 
 func SendmsgN(fd int, p, oob []byte, to Sockaddr, flags int) (n int, err error) {
-	println("SendmsgN not implemented", fd, p, oob, to, flags)
-	return n, EOPNOTSUPP
+	println("syscall.SendmsgN not implemented", fd, p, oob, to, flags)
+	return n, ENOSYS
 }
 
 func Sendto(fd int, p []byte, flags int, to Sockaddr) (err error) {
-	println("Sendto not implemented", fd, p, flags)
-	return EOPNOTSUPP
+	println("syscall.Sendto not implemented", fd, p, flags)
+	return ENOSYS
 }
 
 func ReadDirent(fd int, buf []byte) (n int, err error) {
-	println("ReadDirent not implemented", fd, buf)
-	return n, EOPNOTSUPP
+	println("syscall.ReadDirent not implemented", fd, buf)
+	return n, ENOSYS
 }
 
 type Sockaddr interface {
@@ -283,84 +335,127 @@ func anyToSockaddr(rsa *RawSockaddrAny) (Sockaddr, error) {
 	return nil, EAFNOSUPPORT
 }
 
+func sockaddrToIpPort(sa Sockaddr) (ip []byte, port uint16, err error) {
+	switch v := sa.(type) {
+	case *SockaddrInet4:
+		ip = v.Addr[:]
+		port = uint16(v.Port)
+	case *SockaddrInet6:
+		ip = v.Addr[:]
+		port = uint16(v.Port)
+	default:
+		err = EAFNOSUPPORT
+	}
+	return
+}
+
+func ipPortToSockaddr(ip []byte, port uint16) (sa Sockaddr, err error) {
+	switch len(ip) {
+	case 4:
+		var addr [4]byte
+		copy(addr[:], ip)
+		sa = &SockaddrInet4{
+			Addr: addr,
+			Port: int(port),
+		}
+	case 16:
+		var addr [16]byte
+		copy(addr[:], ip)
+		sa = &SockaddrInet6{
+			Addr: addr,
+			Port: int(port),
+		}
+	default:
+		err = EAFNOSUPPORT
+	}
+	return
+}
+
 func SetsockoptByte(fd, level, opt int, value byte) (err error) {
-	println("SetsockoptByte not implemented", fd, level, opt, value)
-	return EOPNOTSUPP
+	println("syscall.SetsockoptByte not implemented", fd, level, opt, value)
+	return ENOSYS
 }
 
 func SetsockoptInt(fd, level, opt int, value int) (err error) {
-	println("SetsockoptInt not implemented", fd, level, opt, value)
-	return EOPNOTSUPP
+	return system.SetsockoptInt(fd, level, opt, value)
 }
 
 func SetsockoptInet4Addr(fd, level, opt int, value [4]byte) (err error) {
-	println("SetsockoptInet4Addr not implemented", fd, level, opt)
-	return EOPNOTSUPP
+	println("syscall.SetsockoptInet4Addr not implemented", fd, level, opt)
+	return ENOSYS
 }
 
 func SetsockoptIPMreq(fd, level, opt int, mreq *IPMreq) (err error) {
-	println("SetsockoptIPMreq not implemented", fd, level, opt, mreq)
-	return EOPNOTSUPP
+	println("syscall.SetsockoptIPMreq not implemented", fd, level, opt, mreq)
+	return ENOSYS
 }
 
 func SetsockoptIPv6Mreq(fd, level, opt int, mreq *IPv6Mreq) (err error) {
-	println("SetsockoptIPv6Mreq not implemented", fd, level, opt, mreq)
-	return EOPNOTSUPP
+	println("syscall.SetsockoptIPv6Mreq not implemented", fd, level, opt, mreq)
+	return ENOSYS
 }
 
 func SetsockoptLinger(fd, level, opt int, l *Linger) (err error) {
-	println("SetsockoptLinger not implemented", fd, level, opt, l)
-	return EOPNOTSUPP
+	println("syscall.SetsockoptLinger not implemented", fd, level, opt, l)
+	return ENOSYS
 }
 
 func SetsockoptIPMreqn(fd, level, opt int, mreq *IPMreqn) (err error) {
-	println("SetsockoptIPMreqn not implemented", fd, level, opt, mreq)
-	return EOPNOTSUPP
+	println("syscall.SetsockoptIPMreqn not implemented", fd, level, opt, mreq)
+	return ENOSYS
 }
 
 func Socket(domain, typ, proto int) (fd int, err error) {
-	println("Socket not implemented", domain, typ, proto)
-	return fd, EOPNOTSUPP
+	return system.Socket(domain, typ, proto)
 }
 
 func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err error) {
-	println("Sendfile not implemented", outfd, infd, offset, count)
-	return written, EOPNOTSUPP
+	println("syscall.Sendfile not implemented", outfd, infd, offset, count)
+	return written, ENOSYS
 }
 
 func Bind(fd int, sa Sockaddr) (err error) {
-	println("Bind not implemented", fd, sa)
-	return EOPNOTSUPP
+	println("syscall.Bind not implemented", fd, sa)
+	return ENOSYS
 }
 
 func Connect(fd int, sa Sockaddr) (err error) {
-	println("Connect not implemented", fd, sa)
-	return EOPNOTSUPP
+	ip, port, err := sockaddrToIpPort(sa)
+	if err != nil {
+		return
+	}
+	return system.Connect(fd, ip, port)
 }
 
 func Getpeername(fd int) (sa Sockaddr, err error) {
-	println("Getpeername not implemented", fd)
-	return sa, EOPNOTSUPP
+	ip, port, err := system.Getpeername(fd)
+	if err != nil {
+		return
+	}
+	return ipPortToSockaddr(ip, port)
 }
 
 func Getsockname(fd int) (sa Sockaddr, err error) {
-	println("Getsockname not implemented", fd)
-	return sa, EOPNOTSUPP
+	ip, port, err := system.Getsockname(fd)
+	if err != nil {
+		return
+	}
+	return ipPortToSockaddr(ip, port)
 }
 
 func Pipe2(p []int, flags int) error {
-	println("Pipe2 not implemented", p, flags)
-	return EOPNOTSUPP
+	println("syscall.Pipe2 not implemented", p, flags)
+	return ENOSYS
 }
 
 func Unlink(path string) error {
-	println("Unlink not implemented", path)
-	return EOPNOTSUPP
+	println("syscall.Unlink not implemented", path)
+	return ENOSYS
 }
 
 func Open(path string, mode int, perm uint32) (fd int, err error) {
-	println("Open not implemented", path, mode, perm)
-	return fd, EOPNOTSUPP
+	println("syscall.Open not implemented", path, mode, perm)
+	return fd, ENOSYS
 }
 
 // Do the interface allocations only once for common

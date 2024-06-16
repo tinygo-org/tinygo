@@ -1,3 +1,5 @@
+//go:build tinygo
+
 package syscall
 
 // This is the original ForkLock:
@@ -16,28 +18,21 @@ package syscall
 //        imports syscall
 //        imports sync: import cycle not allowed
 //
-// So for now, make our own ForkLock that doesn't use sync..
+// So for now, make our own stubbed-out ForkLock that doesn't use sync..
 
-type forklock struct {
-}
+type forklock struct{}
 
-func (f forklock) RLock() {
-	println("ForkLock.RLock not implemented")
-}
-
-func (f forklock) RUnlock() {
-	println("ForkLock.RUnlock not implemented")
-}
+func (f forklock) RLock()   {}
+func (f forklock) RUnlock() {}
 
 var ForkLock forklock
 
 func CloseOnExec(fd int) {
-	println("CloseOnExec not implemented")
+	system.CloseOnExec(fd)
 }
 
 func SetNonblock(fd int, nonblocking bool) (err error) {
-	println("SetNonblock not implemented", fd, nonblocking)
-	return EOPNOTSUPP
+	return system.SetNonblock(fd, nonblocking)
 }
 
 type SysProcAttr struct {

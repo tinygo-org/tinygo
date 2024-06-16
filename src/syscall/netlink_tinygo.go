@@ -1,3 +1,5 @@
+//go:build tinygo
+
 package syscall
 
 // This is (mostly) a copy of src/syscall/netlink_linux.go.  netlink_linux.go
@@ -30,14 +32,14 @@ type NetlinkRouteAttr struct {
 // NetlinkRIB returns routing information base, as known as RIB, which
 // consists of network facility information, states and parameters.
 func NetlinkRIB(proto, family int) ([]byte, error) {
-	println("NetlinkRIB not implemented", proto, family)
+	println("syscall.NetlinkRIB not implemented", proto, family)
 	return []byte{}, EOPNOTSUPP
 }
 
 // ParseNetlinkMessage parses b as an array of netlink messages and
 // returns the slice containing the NetlinkMessage structures.
 func ParseNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
-	println("ParseNetlinkMessage not implemented", b)
+	println("syscall.ParseNetlinkMessage not implemented", b)
 	return []NetlinkMessage{}, EOPNOTSUPP
 }
 
@@ -45,6 +47,6 @@ func ParseNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
 // route attributes and returns the slice containing the
 // NetlinkRouteAttr structures.
 func ParseNetlinkRouteAttr(m *NetlinkMessage) ([]NetlinkRouteAttr, error) {
-	println("ParseNetlinkRouteAttr not implemented", m)
+	println("syscall.ParseNetlinkRouteAttr not implemented", m)
 	return []NetlinkRouteAttr{}, EOPNOTSUPP
 }
