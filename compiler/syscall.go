@@ -33,18 +33,17 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{r10}",
 				"{r8}",
 				"{r9}",
-				"{r11}",
-				"{r12}",
-				"{r13}",
 			}[i]
 			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
+		// rcx and r11 are clobbered by the syscall, so make sure they are not used
 		constraints += ",~{rcx},~{r11}"
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "syscall", constraints, true, false, llvm.InlineAsmDialectIntel, false)
 		return b.CreateCall(fnType, target, args, ""), nil
+
 	case b.GOARCH == "386" && b.GOOS == "linux":
 		// Sources:
 		//   syscall(2) man page
@@ -71,6 +70,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "int 0x80", constraints, true, false, llvm.InlineAsmDialectIntel, false)
 		return b.CreateCall(fnType, target, args, ""), nil
+
 	case b.GOARCH == "arm" && b.GOOS == "linux":
 		// Implement the EABI system call convention for Linux.
 		// Source: syscall(2) man page.
@@ -103,6 +103,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
 		return b.CreateCall(fnType, target, args, ""), nil
+
 	case b.GOARCH == "arm64" && b.GOOS == "linux":
 		// Source: syscall(2) man page.
 		args := []llvm.Value{}
@@ -135,6 +136,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
 		return b.CreateCall(fnType, target, args, ""), nil
+
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)
 	}
@@ -217,6 +219,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		retval = b.CreateInsertValue(retval, syscallResult, 0, "")
 		retval = b.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil
+
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)
 	}
