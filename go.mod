@@ -19,7 +19,7 @@ require (
 	go.bug.st/serial v1.6.0
 	golang.org/x/net v0.26.0
 	golang.org/x/sys v0.21.0
-	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
+	golang.org/x/tools v0.22.1-0.20240621165957-db513b091504
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/go-llvm v0.0.0-20240518103902-697964f2a9dc
 )
@@ -45,5 +45,3 @@ require (
 	github.com/spf13/afero v1.11.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 )
-
-replace golang.org/x/tools => github.com/tinygo-org/tools v0.0.0-20240612102102-36af80766fc9
