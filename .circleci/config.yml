@@ -107,9 +107,9 @@ jobs:
           # "make lint" fails before go 1.21 because internal/tools/go.mod specifies packages that require go 1.21
           fmt-check: false
     resource_class: large
-  test-llvm18-go122:
+  test-llvm18-go123:
     docker:
-      - image: golang:1.22-bullseye
+      - image: golang:1.23-bullseye
     steps:
       - test-linux:
           llvm: "18"
@@ -122,4 +122,4 @@ workflows:
       # least the smoke tests still pass.
       - test-llvm15-go119
       # This tests LLVM 18 support when linking against system libraries.
-      - test-llvm18-go122
+      - test-llvm18-go123
