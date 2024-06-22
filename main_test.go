@@ -212,7 +212,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			}
 		}
 		if options.GOOS == "linux" && (options.GOARCH == "mips" || options.GOARCH == "mipsle") {
-			if name == "atomic.go" {
+			if name == "atomic.go" || name == "timers.go" {
 				// 64-bit atomic operations aren't currently supported on MIPS.
 				continue
 			}
@@ -241,6 +241,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			case "cgo/":
 				// CGo function pointers don't work on AVR (needs LLVM 16 and
 				// some compiler changes).
+				continue
+
+			case "timers.go":
+				// Crashes starting with Go 1.23.
+				// Bug: https://github.com/llvm/llvm-project/issues/104032
 				continue
 
 			default:
