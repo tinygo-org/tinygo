@@ -1,9 +1,6 @@
 package compiler
 
 import (
-	"fmt"
-	"strings"
-
 	"tinygo.org/x/go-llvm"
 )
 
@@ -15,20 +12,6 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 	case "AddInt32", "AddInt64", "AddUint32", "AddUint64", "AddUintptr":
 		ptr := b.getValue(b.fn.Params[0], getPos(b.fn))
 		val := b.getValue(b.fn.Params[1], getPos(b.fn))
-		if strings.HasPrefix(b.Triple, "avr") {
-			// AtomicRMW does not work on AVR as intended:
-			// - There are some register allocation issues (fixed by https://reviews.llvm.org/D97127 which is not yet in a usable LLVM release)
-			// - The result is the new value instead of the old value
-			vType := val.Type()
-			name := fmt.Sprintf("__sync_fetch_and_add_%d", vType.IntTypeWidth()/8)
-			fn := b.mod.NamedFunction(name)
-			if fn.IsNil() {
-				fn = llvm.AddFunction(b.mod, name, llvm.FunctionType(vType, []llvm.Type{ptr.Type(), vType}, false))
-			}
-			oldVal := b.createCall(fn.GlobalValueType(), fn, []llvm.Value{ptr, val}, "")
-			// Return the new value, not the original value returned.
-			return b.CreateAdd(oldVal, val, "")
-		}
 		oldVal := b.CreateAtomicRMW(llvm.AtomicRMWBinOpAdd, ptr, val, llvm.AtomicOrderingSequentiallyConsistent, true)
 		// Return the new value, not the original value returned by atomicrmw.
 		return b.CreateAdd(oldVal, val, "")
