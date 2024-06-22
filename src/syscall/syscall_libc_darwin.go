@@ -55,6 +55,7 @@ const (
 	F_GETFL    = 0x3
 	F_SETFL    = 0x4
 	O_NONBLOCK = 0x4
+	TIOCSPGRP  = 0x80047476
 )
 
 // Source: https://opensource.apple.com/source/xnu/xnu-7195.141.2/bsd/sys/errno.h.auto.html

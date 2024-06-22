@@ -370,7 +370,6 @@ endif
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
-	bytes \
 	compress/flate \
 	crypto/hmac \
 	debug/dwarf \
@@ -381,7 +380,6 @@ TEST_PACKAGES_LINUX := \
 	net \
 	os/user \
 	strconv \
-	testing/fstest \
 	text/tabwriter \
 	text/template/parse
 

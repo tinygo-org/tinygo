@@ -27,10 +27,10 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if major != 1 || minor < 19 || minor > 22 {
+	if major != 1 || minor < 19 || minor > 23 {
 		// Note: when this gets updated, also update the Go compatibility matrix:
 		// https://github.com/tinygo-org/tinygo-site/blob/dev/content/docs/reference/go-compat-matrix.md
-		return nil, fmt.Errorf("requires go version 1.19 through 1.22, got go%d.%d", major, minor)
+		return nil, fmt.Errorf("requires go version 1.19 through 1.23, got go%d.%d", major, minor)
 	}
 
 	return &compileopts.Config{

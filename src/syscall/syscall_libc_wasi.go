@@ -104,6 +104,9 @@ const (
 	// ../../lib/wasi-libc/expected/wasm32-wasi/predefined-macros.txt
 	F_GETFL = 3
 	F_SETFL = 4
+
+	// ../../lib/wasi-libc/libc-top-half/musl/arch/generic/bits/ioctl.h
+	TIOCSPGRP = 0x5410
 )
 
 // These values are needed as a stub until Go supports WASI as a full target.
@@ -114,6 +117,7 @@ const (
 	SYS_FCNTL
 	SYS_FCNTL64
 	SYS_FSTATAT64
+	SYS_IOCTL
 	SYS_OPENAT
 	SYS_UNLINKAT
 	PATH_MAX = 4096
