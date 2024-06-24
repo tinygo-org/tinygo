@@ -1,8 +1,12 @@
+//go:build !go1.23
+
 // Portions copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package runtime
+
+// Time functions for Go 1.22 and below.
 
 type puintptr uintptr
 
@@ -30,4 +34,32 @@ type timer struct {
 
 	// The status field holds one of the values below.
 	status uint32
+}
+
+func (tim *timer) callCallback(delta int64) {
+	tim.f(tim.arg, 0)
+}
+
+// Defined in the time package, implemented here in the runtime.
+//
+//go:linkname startTimer time.startTimer
+func startTimer(tim *timer) {
+	addTimer(&timerNode{
+		timer:    tim,
+		callback: timerCallback,
+	})
+	scheduleLog("adding timer")
+}
+
+//go:linkname stopTimer time.stopTimer
+func stopTimer(tim *timer) bool {
+	return removeTimer(tim)
+}
+
+//go:linkname resetTimer time.resetTimer
+func resetTimer(tim *timer, when int64) bool {
+	tim.when = when
+	removed := removeTimer(tim)
+	startTimer(tim)
+	return removed
 }
