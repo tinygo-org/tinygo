@@ -4,8 +4,8 @@ package machine
 
 import (
 	"device/stm32"
-	"encoding/binary"
 	"errors"
+	"internal/binary"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"

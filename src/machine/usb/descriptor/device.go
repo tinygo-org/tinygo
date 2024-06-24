@@ -1,7 +1,7 @@
 package descriptor
 
 import (
-	"encoding/binary"
+	"internal/binary"
 )
 
 const (

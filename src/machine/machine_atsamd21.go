@@ -10,8 +10,8 @@ import (
 	"bytes"
 	"device/arm"
 	"device/sam"
-	"encoding/binary"
 	"errors"
+	"internal/binary"
 	"runtime/interrupt"
 	"unsafe"
 )

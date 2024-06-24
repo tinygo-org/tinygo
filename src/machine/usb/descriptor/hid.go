@@ -2,8 +2,8 @@ package descriptor
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
+	"internal/binary"
 )
 
 var configurationCDCHID = [configurationTypeLen]byte{

@@ -5,7 +5,7 @@ package machine
 import (
 	"bytes"
 	"device/nrf"
-	"encoding/binary"
+	"internal/binary"
 	"runtime/interrupt"
 	"unsafe"
 )
