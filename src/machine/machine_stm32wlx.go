@@ -6,8 +6,8 @@ package machine
 
 import (
 	"device/stm32"
-	"encoding/binary"
 	"errors"
+	"internal/binary"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"

@@ -236,6 +236,7 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"device/":               false,
 		"examples/":             false,
 		"internal/":             true,
+		"internal/binary/":      false,
 		"internal/bytealg/":     false,
 		"internal/fuzz/":        false,
 		"internal/reflectlite/": false,
