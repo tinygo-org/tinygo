@@ -11,6 +11,8 @@ const deferExtraRegs = 0
 
 const callInstSize = 4 // "bl someFunction" is 4 bytes
 
+const linux_MAP_ANONYMOUS = 0x20
+
 // Align on the maximum alignment for this platform (double).
 func align(ptr uintptr) uintptr {
 	return (ptr + 7) &^ 7

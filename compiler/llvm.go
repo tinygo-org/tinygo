@@ -429,6 +429,9 @@ func (c *compilerContext) archFamily() string {
 	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
 		return "arm"
 	}
+	if arch == "mipsel" {
+		return "mips"
+	}
 	return arch
 }
 

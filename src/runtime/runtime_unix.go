@@ -229,6 +229,9 @@ func preinit() {
 			// heap size.
 			// This can happen on 32-bit systems.
 			heapMaxSize /= 2
+			if heapMaxSize < 4096 {
+				runtimePanic("cannot allocate heap memory")
+			}
 			continue
 		}
 		heapStart = uintptr(addr)

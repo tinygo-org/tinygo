@@ -57,6 +57,8 @@ func TestClangAttributes(t *testing.T) {
 		{GOOS: "linux", GOARCH: "arm", GOARM: "6"},
 		{GOOS: "linux", GOARCH: "arm", GOARM: "7"},
 		{GOOS: "linux", GOARCH: "arm64"},
+		{GOOS: "linux", GOARCH: "mips"},
+		{GOOS: "linux", GOARCH: "mipsle"},
 		{GOOS: "darwin", GOARCH: "amd64"},
 		{GOOS: "darwin", GOARCH: "arm64"},
 		{GOOS: "windows", GOARCH: "amd64"},
