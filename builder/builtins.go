@@ -3,8 +3,8 @@ package builder
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -132,6 +132,38 @@ var genericBuiltins = []string{
 	"umodti3.c",
 }
 
+// These are the GENERIC_TF_SOURCES as of LLVM 18.
+// They are not needed on all platforms (32-bit platforms usually don't need
+// these) but they seem to compile fine so it's easier to include them.
+var genericBuiltins128 = []string{
+	"addtf3.c",
+	"comparetf2.c",
+	"divtc3.c",
+	"divtf3.c",
+	"extenddftf2.c",
+	"extendhftf2.c",
+	"extendsftf2.c",
+	"fixtfdi.c",
+	"fixtfsi.c",
+	"fixtfti.c",
+	"fixunstfdi.c",
+	"fixunstfsi.c",
+	"fixunstfti.c",
+	"floatditf.c",
+	"floatsitf.c",
+	"floattitf.c",
+	"floatunditf.c",
+	"floatunsitf.c",
+	"floatuntitf.c",
+	"multc3.c",
+	"multf3.c",
+	"powitf2.c",
+	"subtf3.c",
+	"trunctfdf2.c",
+	"trunctfhf2.c",
+	"trunctfsf2.c",
+}
+
 var aeabiBuiltins = []string{
 	"arm/aeabi_cdcmp.S",
 	"arm/aeabi_cdcmpeq_check_nan.c",
@@ -190,11 +222,13 @@ var libCompilerRT = Library{
 	},
 	librarySources: func(target string) ([]string, error) {
 		builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
-		if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
+		switch compileopts.CanonicalArchName(target) {
+		case "arm":
 			builtins = append(builtins, aeabiBuiltins...)
-		}
-		if strings.HasPrefix(target, "avr") {
+		case "avr":
 			builtins = append(builtins, avrBuiltins...)
+		case "x86_64", "aarch64", "riscv64": // any 64-bit arch
+			builtins = append(builtins, genericBuiltins128...)
 		}
 		return builtins, nil
 	},
