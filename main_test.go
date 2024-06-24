@@ -36,6 +36,7 @@ var supportedLinuxArches = map[string]string{
 	"X86Linux":   "linux/386",
 	"ARMLinux":   "linux/arm/6",
 	"ARM64Linux": "linux/arm64",
+	"MIPSLinux":  "linux/mipsle",
 	"WASIp1":     "wasip1/wasm",
 }
 
@@ -207,6 +208,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			case "timers.go":
 				// Timer tests do not work because syscall.seek is implemented
 				// as Assembly in mainline Go and causes linker failure
+				continue
+			}
+		}
+		if options.GOOS == "linux" && (options.GOARCH == "mips" || options.GOARCH == "mipsle") {
+			if name == "atomic.go" {
+				// 64-bit atomic operations aren't currently supported on MIPS.
 				continue
 			}
 		}

@@ -182,6 +182,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	if strings.HasPrefix(target, "riscv64-") {
 		args = append(args, "-march=rv64gc")
 	}
+	if strings.HasPrefix(target, "mips") {
+		args = append(args, "-fno-pic")
+	}
 
 	var once sync.Once
 

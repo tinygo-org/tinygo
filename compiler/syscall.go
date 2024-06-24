@@ -12,7 +12,8 @@ import (
 
 // createRawSyscall creates a system call with the provided system call number
 // and returns the result as a single integer (the system call result). The
-// result is not further interpreted.
+// result is not further interpreted (with the exception of MIPS to use the same
+// return value everywhere).
 func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 	num := b.getValue(call.Args[0], getPos(call))
 	switch {
@@ -136,6 +137,97 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
 		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
 		return b.CreateCall(fnType, target, args, ""), nil
+
+	case (b.GOARCH == "mips" || b.GOARCH == "mipsle") && b.GOOS == "linux":
+		// Implement the system call convention for Linux.
+		// Source: syscall(2) man page and musl:
+		// https://git.musl-libc.org/cgit/musl/tree/arch/mips/syscall_arch.h
+		// Also useful:
+		// https://web.archive.org/web/20220529105937/https://www.linux-mips.org/wiki/Syscall
+		// The syscall number goes in r2, the result also in r2.
+		// Register r7 is both an input paramter and an output parameter: if it
+		// is non-zero, the system call failed and r2 is the error code.
+		// The code below implements the O32 syscall ABI, not the N32 ABI. It
+		// could implement both at the same time if needed (like what appears to
+		// be done in musl) by forcing arg5-arg7 into the right registers but
+		// letting the compiler decide the registers should result in _slightly_
+		// faster and smaller code.
+		args := []llvm.Value{num}
+		argTypes := []llvm.Type{b.uintptrType}
+		constraints := "={$2},={$7},0"
+		syscallParams := call.Args[1:]
+		if len(syscallParams) > 7 {
+			// There is one syscall that uses 7 parameters: sync_file_range.
+			// But only 7, not more. Go however only has Syscall6 and Syscall9.
+			// Therefore, we can ignore the remaining parameters.
+			syscallParams = syscallParams[:7]
+		}
+		for i, arg := range syscallParams {
+			constraints += "," + [...]string{
+				"{$4}", // arg1
+				"{$5}", // arg2
+				"{$6}", // arg3
+				"1",    // arg4, error return
+				"r",    // arg5 on the stack
+				"r",    // arg6 on the stack
+				"r",    // arg7 on the stack
+			}[i]
+			llvmValue := b.getValue(arg, getPos(call))
+			args = append(args, llvmValue)
+			argTypes = append(argTypes, llvmValue.Type())
+		}
+		// Create assembly code.
+		// Parameters beyond the first 4 are passed on the stack instead of in
+		// registers in the O32 syscall ABI.
+		// We need ".set noat" because LLVM might pick register $1 ($at) as the
+		// register for a parameter and apparently this is not allowed on MIPS
+		// unless you use this specific pragma.
+		asm := "syscall"
+		switch len(syscallParams) {
+		case 5:
+			asm = "" +
+				".set noat\n" +
+				"subu $$sp, $$sp, 32\n" +
+				"sw $7, 16($$sp)\n" + // arg5
+				"syscall\n" +
+				"addu $$sp, $$sp, 32\n" +
+				".set at\n"
+		case 6:
+			asm = "" +
+				".set noat\n" +
+				"subu $$sp, $$sp, 32\n" +
+				"sw $7, 16($$sp)\n" + // arg5
+				"sw $8, 20($$sp)\n" + // arg6
+				"syscall\n" +
+				"addu $$sp, $$sp, 32\n" +
+				".set at\n"
+		case 7:
+			asm = "" +
+				".set noat\n" +
+				"subu $$sp, $$sp, 32\n" +
+				"sw $7, 16($$sp)\n" + // arg5
+				"sw $8, 20($$sp)\n" + // arg6
+				"sw $9, 24($$sp)\n" + // arg7
+				"syscall\n" +
+				"addu $$sp, $$sp, 32\n" +
+				".set at\n"
+		}
+		constraints += ",~{$3},~{$4},~{$5},~{$6},~{$8},~{$9},~{$10},~{$11},~{$12},~{$13},~{$14},~{$15},~{$24},~{$25},~{hi},~{lo},~{memory}"
+		returnType := b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType}, false)
+		fnType := llvm.FunctionType(returnType, argTypes, false)
+		target := llvm.InlineAsm(fnType, asm, constraints, true, true, 0, false)
+		call := b.CreateCall(fnType, target, args, "")
+		resultCode := b.CreateExtractValue(call, 0, "") // r2
+		errorFlag := b.CreateExtractValue(call, 1, "")  // r7
+		// Pseudocode to return the result with the same convention as other
+		// archs:
+		//    return (errorFlag != 0) ? -resultCode : resultCode;
+		// At least on QEMU with the O32 ABI, the error code is always positive.
+		zero := llvm.ConstInt(b.uintptrType, 0, false)
+		isError := b.CreateICmp(llvm.IntNE, errorFlag, zero, "")
+		negativeResult := b.CreateSub(zero, resultCode, "")
+		result := b.CreateSelect(isError, negativeResult, resultCode, "")
+		return result, nil
 
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)

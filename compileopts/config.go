@@ -212,7 +212,10 @@ func (c *Config) RP2040BootPatch() bool {
 func MuslArchitecture(triple string) string {
 	arch := strings.Split(triple, "-")[0]
 	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
-		arch = "arm"
+		return "arm"
+	}
+	if arch == "mipsel" {
+		return "mips"
 	}
 	return arch
 }

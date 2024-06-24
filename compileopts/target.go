@@ -193,6 +193,10 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 			default:
 				return nil, fmt.Errorf("invalid GOARM=%s, must be 5, 6, or 7", options.GOARM)
 			}
+		case "mips":
+			llvmarch = "mips"
+		case "mipsle":
+			llvmarch = "mipsel"
 		case "wasm":
 			llvmarch = "wasm32"
 		default:
@@ -327,6 +331,10 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		} else { // linux
 			spec.Features = "+fp-armv8,+neon,-fmv,-outline-atomics"
 		}
+	case "mips", "mipsle":
+		spec.CPU = "mips32r2"
+		spec.Features = "+fpxx,+mips32r2,+nooddspreg,-noabicalls"
+		spec.CFlags = append(spec.CFlags, "-fno-pic")
 	case "wasm":
 		spec.CPU = "generic"
 		spec.Features = "+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext"
@@ -419,8 +427,12 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			// operating systems so we need separate assembly files.
 			suffix = "_windows"
 		}
-		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+goarch+suffix+".S")
-		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+goarch+suffix+".S")
+		asmGoarch := goarch
+		if goarch == "mips" || goarch == "mipsle" {
+			asmGoarch = "mipsx"
+		}
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+asmGoarch+suffix+".S")
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+asmGoarch+suffix+".S")
 	}
 	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
@@ -438,6 +450,10 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 				spec.Emulator = "qemu-arm {}"
 			case "arm64":
 				spec.Emulator = "qemu-aarch64 {}"
+			case "mips":
+				spec.Emulator = "qemu-mips {}"
+			case "mipsle":
+				spec.Emulator = "qemu-mipsel {}"
 			}
 		}
 	}
