@@ -392,6 +392,22 @@ type Type interface {
 	// It panics if the type's Kind is not Func.
 	// It panics if i is not in the range [0, NumOut()).
 	Out(i int) Type
+
+	// OverflowComplex reports whether the complex128 x cannot be represented by type t.
+	// It panics if t's Kind is not Complex64 or Complex128.
+	OverflowComplex(x complex128) bool
+
+	// OverflowFloat reports whether the float64 x cannot be represented by type t.
+	// It panics if t's Kind is not Float32 or Float64.
+	OverflowFloat(x float64) bool
+
+	// OverflowInt reports whether the int64 x cannot be represented by type t.
+	// It panics if t's Kind is not Int, Int8, Int16, Int32, or Int64.
+	OverflowInt(x int64) bool
+
+	// OverflowUint reports whether the uint64 x cannot be represented by type t.
+	// It panics if t's Kind is not Uint, Uintptr, Uint8, Uint16, Uint32, or Uint64.
+	OverflowUint(x uint64) bool
 }
 
 // Constants for the 'meta' byte.
@@ -1079,6 +1095,58 @@ func (t rawType) In(i int) Type {
 
 func (t rawType) Out(i int) Type {
 	panic("unimplemented: (reflect.Type).Out()")
+}
+
+// OverflowComplex reports whether the complex128 x cannot be represented by type t.
+// It panics if t's Kind is not Complex64 or Complex128.
+func (t rawType) OverflowComplex(x complex128) bool {
+	k := t.Kind()
+	switch k {
+	case Complex64:
+		return overflowFloat32(real(x)) || overflowFloat32(imag(x))
+	case Complex128:
+		return false
+	}
+	panic("reflect: OverflowComplex of non-complex type")
+}
+
+// OverflowFloat reports whether the float64 x cannot be represented by type t.
+// It panics if t's Kind is not Float32 or Float64.
+func (t rawType) OverflowFloat(x float64) bool {
+	k := t.Kind()
+	switch k {
+	case Float32:
+		return overflowFloat32(x)
+	case Float64:
+		return false
+	}
+	panic("reflect: OverflowFloat of non-float type")
+}
+
+// OverflowInt reports whether the int64 x cannot be represented by type t.
+// It panics if t's Kind is not Int, Int8, Int16, Int32, or Int64.
+func (t rawType) OverflowInt(x int64) bool {
+	k := t.Kind()
+	switch k {
+	case Int, Int8, Int16, Int32, Int64:
+		bitSize := t.Size() * 8
+		trunc := (x << (64 - bitSize)) >> (64 - bitSize)
+		return x != trunc
+	}
+	panic("reflect: OverflowInt of non-int type")
+}
+
+// OverflowUint reports whether the uint64 x cannot be represented by type t.
+// It panics if t's Kind is not Uint, Uintptr, Uint8, Uint16, Uint32, or Uint64.
+func (t rawType) OverflowUint(x uint64) bool {
+	k := t.Kind()
+	switch k {
+	case Uint, Uintptr, Uint8, Uint16, Uint32, Uint64:
+		bitSize := t.Size() * 8
+		trunc := (x << (64 - bitSize)) >> (64 - bitSize)
+		return x != trunc
+	}
+	panic("reflect: OverflowUint of non-uint type")
 }
 
 func (t rawType) Method(i int) Method {
