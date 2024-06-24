@@ -181,12 +181,13 @@ func scheduler() {
 		// Check for expired timers to trigger.
 		if timerQueue != nil && now >= timerQueue.whenTicks() {
 			scheduleLog("--- timer awoke")
+			delay := ticksToNanoseconds(now - timerQueue.whenTicks())
 			// Pop timer from queue.
 			tn := timerQueue
 			timerQueue = tn.next
 			tn.next = nil
 			// Run the callback stored in this timer node.
-			tn.callback(tn)
+			tn.callback(tn, delay)
 		}
 
 		t := runqueue.Pop()

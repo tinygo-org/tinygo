@@ -4,23 +4,12 @@ package runtime
 type timerNode struct {
 	next     *timerNode
 	timer    *timer
-	callback func(*timerNode)
+	callback func(node *timerNode, delta int64)
 }
 
 // whenTicks returns the (absolute) time when this timer should trigger next.
 func (t *timerNode) whenTicks() timeUnit {
 	return nanosecondsToTicks(t.timer.when)
-}
-
-// Defined in the time package, implemented here in the runtime.
-//
-//go:linkname startTimer time.startTimer
-func startTimer(tim *timer) {
-	addTimer(&timerNode{
-		timer:    tim,
-		callback: timerCallback,
-	})
-	scheduleLog("adding timer")
 }
 
 // timerCallback is called when a timer expires. It makes sure to call the
@@ -32,28 +21,15 @@ func startTimer(tim *timer) {
 // dependency causes timerQueue not to get optimized away.
 // If timerQueue doesn't get optimized away, small programs (that don't call
 // time.NewTimer etc) would still pay the cost of these timers.
-func timerCallback(tn *timerNode) {
+func timerCallback(tn *timerNode, delta int64) {
 	// Run timer function (implemented in the time package).
 	// The seq parameter to the f function is not used in the time
 	// package so is left zero.
-	tn.timer.f(tn.timer.arg, 0)
+	tn.timer.callCallback(delta)
 
 	// If this is a periodic timer (a ticker), re-add it to the queue.
 	if tn.timer.period != 0 {
 		tn.timer.when += tn.timer.period
 		addTimer(tn)
 	}
-}
-
-//go:linkname stopTimer time.stopTimer
-func stopTimer(tim *timer) bool {
-	return removeTimer(tim)
-}
-
-//go:linkname resetTimer time.resetTimer
-func resetTimer(tim *timer, when int64) bool {
-	tim.when = when
-	removed := removeTimer(tim)
-	startTimer(tim)
-	return removed
 }
