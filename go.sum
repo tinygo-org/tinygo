@@ -106,5 +106,5 @@ gopkg.in/yaml.v2 v2.4.0/go.mod h1:RDklbk79AGWmwhnvt/jBztapEOGDOx6ZbXqjP6csGnQ=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-tinygo.org/x/go-llvm v0.0.0-20240518103902-697964f2a9dc h1:TCzibFa4oLu+njEP3fnRUmZ+QQeb8BjtOwctgcjzL0k=
-tinygo.org/x/go-llvm v0.0.0-20240518103902-697964f2a9dc/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
+tinygo.org/x/go-llvm v0.0.0-20240627184919-3b50c76783a8 h1:bLsZXRUBavt++CJlMN7sppNziqu3LyamESLhFJcpqFQ=
+tinygo.org/x/go-llvm v0.0.0-20240627184919-3b50c76783a8/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
