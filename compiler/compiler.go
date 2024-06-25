@@ -1846,7 +1846,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.emitSV64Call(instr.Args, getPos(instr))
 		case strings.HasPrefix(name, "(device/riscv.CSR)."):
 			return b.emitCSROperation(instr)
-		case strings.HasPrefix(name, "syscall.Syscall") || strings.HasPrefix(name, "syscall.RawSyscall"):
+		case strings.HasPrefix(name, "syscall.Syscall") || strings.HasPrefix(name, "syscall.RawSyscall") || strings.HasPrefix(name, "Syscall") || strings.HasPrefix(name, "golang.org/x/sys/unix.Syscall"):
 			return b.createSyscall(instr)
 		case strings.HasPrefix(name, "syscall.rawSyscallNoError"):
 			return b.createRawSyscallNoError(instr)
