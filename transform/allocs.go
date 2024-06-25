@@ -29,9 +29,13 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
-	ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-	builder := mod.Context().NewBuilder()
+	ctx := mod.Context()
+	builder := ctx.NewBuilder()
 	defer builder.Dispose()
+
+	// Determine the maximum alignment on this platform.
+	complex128Type := ctx.StructType([]llvm.Type{ctx.DoubleType(), ctx.DoubleType()}, false)
+	maxAlign := int64(targetData.ABITypeAlignment(complex128Type))
 
 	for _, heapalloc := range getUses(allocator) {
 		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
@@ -90,21 +94,14 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		}
 		// The pointer value does not escape.
 
-		// Determine the appropriate alignment of the alloca. The size of the
-		// allocation gives us a hint what the alignment should be.
-		var alignment int
-		if size%2 != 0 {
-			alignment = 1
-		} else if size%4 != 0 {
-			alignment = 2
-		} else if size%8 != 0 {
-			alignment = 4
-		} else {
-			alignment = 8
-		}
-		if pointerAlignment := targetData.ABITypeAlignment(ptrType); pointerAlignment < alignment {
-			// Use min(alignment, alignof(void*)) as the alignment.
-			alignment = pointerAlignment
+		// Determine the appropriate alignment of the alloca.
+		attr := heapalloc.GetCallSiteEnumAttribute(0, llvm.AttributeKindID("align"))
+		alignment := int(maxAlign)
+		if !attr.IsNil() {
+			// 'align' return value attribute is set, so use it.
+			// This is basically always the case, but to be sure we'll default
+			// to maxAlign if it isn't.
+			alignment = int(attr.GetEnumValue())
 		}
 
 		// Insert alloca in the entry block. Do it here so that mem2reg can
