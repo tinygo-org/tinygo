@@ -29,9 +29,13 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
-	ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-	builder := mod.Context().NewBuilder()
+	ctx := mod.Context()
+	builder := ctx.NewBuilder()
 	defer builder.Dispose()
+
+	// Determine the maximum alignment on this platform.
+	complex128Type := ctx.StructType([]llvm.Type{ctx.DoubleType(), ctx.DoubleType()}, false)
+	maxAlign := int64(targetData.ABITypeAlignment(complex128Type))
 
 	for _, heapalloc := range getUses(allocator) {
 		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
@@ -102,9 +106,9 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		} else {
 			alignment = 8
 		}
-		if pointerAlignment := targetData.ABITypeAlignment(ptrType); pointerAlignment < alignment {
+		if alignment > int(maxAlign) {
 			// Use min(alignment, alignof(void*)) as the alignment.
-			alignment = pointerAlignment
+			alignment = int(maxAlign)
 		}
 
 		// Insert alloca in the entry block. Do it here so that mem2reg can
