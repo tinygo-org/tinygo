@@ -1051,9 +1051,10 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config, globalValues map[string]map[string]string) error {
-	err := interp.Run(mod, config.Options.InterpTimeout, config.DumpSSA())
-	if err != nil {
-		return err
+	if config.Options.InterpTimeout != 0 {
+		if err := interp.Run(mod, config.Options.InterpTimeout, config.DumpSSA()); err != nil {
+			return err
+		}
 	}
 	if config.VerifyIR() {
 		// Only verify if we really need it.
@@ -1069,7 +1070,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config, globalValues m
 	}
 
 	// Insert values from -ldflags="-X ..." into the IR.
-	err = setGlobalValues(mod, globalValues)
+	err := setGlobalValues(mod, globalValues)
 	if err != nil {
 		return err
 	}

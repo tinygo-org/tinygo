@@ -15,10 +15,28 @@ func __wasm_call_ctors()
 
 //export _start
 func _start() {
+	runtimeInitialize()
+	run()
+}
+
+//export runtime.initialize
+func runtimeInitialize() {
+	if runtimeInitialized {
+		// Second time initialization is happening. Refresh environment
+		// to whatever our current host gives us instead of whatever
+		// libc cached.
+		reset_libc_environment()
+		return
+	}
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
-	run()
+	initHeap()
+	initAll()
+	if hasScheduler {
+		go func() {}()
+	}
+	runtimeInitialized = true
 }
 
 // Read the command line arguments from WASI.
@@ -27,6 +45,17 @@ func _start() {
 //	wasmtime run ./program.wasm arg1 arg2
 func init() {
 	__wasm_call_ctors()
+}
+
+//export __wasilibc_deinitialize_environ
+func __wasilibc_deinitialize_environ()
+
+//export __wasilibc_initialize_environ
+func __wasilibc_initialize_environ()
+
+func reset_libc_environment() {
+	__wasilibc_deinitialize_environ()
+	__wasilibc_initialize_environ()
 }
 
 var args []string
@@ -39,7 +68,10 @@ func os_runtime_args() []string {
 		var argc, argv_buf_size uint32
 		args_sizes_get(&argc, &argv_buf_size)
 		if argc == 0 {
-			return nil
+			// Most things expect os.Args to have at least the
+			// program name.  We don't have one, but also don't
+			// return just a nil slice.
+			return []string{""}
 		}
 
 		// Obtain the command line arguments

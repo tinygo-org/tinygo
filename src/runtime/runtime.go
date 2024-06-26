@@ -12,6 +12,12 @@ const Compiler = "tinygo"
 // package.
 func initAll()
 
+var runtimeInitialized = false
+
+func runtime_is_initialized() bool {
+	return runtimeInitialized
+}
+
 //go:linkname callMain main.main
 func callMain()
 

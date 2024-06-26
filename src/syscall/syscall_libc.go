@@ -260,7 +260,13 @@ func Mprotect(b []byte, prot int) (err error) {
 	return
 }
 
+//go:linkname runtime_is_initialized runtime.runtime_is_initialized
+func runtime_is_initialized() bool
+
 func Environ() []string {
+	if panicOnEnvironDuringInitAll && !runtime_is_initialized() {
+		panic("syscall.Environ() called during runtime preinitialization")
+	}
 
 	// This function combines all the environment into a single allocation.
 	// While this optimizes for memory usage and garbage collector
