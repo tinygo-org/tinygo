@@ -297,6 +297,10 @@ func emuCheck(t *testing.T, options compileopts.Options) {
 }
 
 func optionsFromTarget(target string, sema chan struct{}) compileopts.Options {
+	separators := strings.Count(target, "/")
+	if (separators == 1 || separators == 2) && !strings.HasSuffix(target, ".json") {
+		return optionsFromOSARCH(target, sema)
+	}
 	return compileopts.Options{
 		// GOOS/GOARCH are only used if target == ""
 		GOOS:          goenv.Get("GOOS"),
