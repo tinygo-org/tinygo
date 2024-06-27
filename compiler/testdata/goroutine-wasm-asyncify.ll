@@ -66,12 +66,12 @@ entry:
 define hidden void @main.closureFunctionGoroutine(ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
-  %n = call dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #9
+  %n = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #9
   call void @runtime.trackPointer(ptr nonnull %n, ptr nonnull %stackalloc, ptr undef) #9
   store i32 3, ptr %n, align 4
   call void @runtime.trackPointer(ptr nonnull %n, ptr nonnull %stackalloc, ptr undef) #9
   call void @runtime.trackPointer(ptr nonnull @"main.closureFunctionGoroutine$1", ptr nonnull %stackalloc, ptr undef) #9
-  %0 = call dereferenceable(8) ptr @runtime.alloc(i32 8, ptr null, ptr undef) #9
+  %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr null, ptr undef) #9
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #9
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds { i32, ptr }, ptr %0, i32 0, i32 1
@@ -106,7 +106,7 @@ declare void @runtime.printint32(i32, ptr) #1
 define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #9
+  %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #9
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #9
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds { i32, ptr, ptr }, ptr %0, i32 0, i32 1
@@ -158,7 +158,7 @@ declare void @runtime.chanClose(ptr dereferenceable_or_null(32), ptr) #1
 define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #9
+  %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #9
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #9
   store ptr %itf.value, ptr %0, align 4
   %1 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 1
