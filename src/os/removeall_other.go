@@ -1,4 +1,4 @@
-//go:build baremetal || js || wasi || wasip1
+//go:build baremetal || js || wasi || wasip1 || wasm_unknown
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

@@ -1,4 +1,4 @@
-//go:build (linux && !baremetal) || wasip1
+//go:build (linux && !baremetal && !wasm_unknown) || wasip1
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

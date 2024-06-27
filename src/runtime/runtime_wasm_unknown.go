@@ -23,8 +23,6 @@ func init() {
 	__wasm_call_ctors()
 }
 
-var args []string
-
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	return int64(ticks)
 }

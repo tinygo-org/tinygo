@@ -1,4 +1,4 @@
-//go:build baremetal || (wasm && !wasip1)
+//go:build baremetal || (tinygo.wasm && !wasip1)
 
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
