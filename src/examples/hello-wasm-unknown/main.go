@@ -3,6 +3,10 @@
 // tinygo build -size short -o hello-unknown.wasm -target wasm-unknown -gc=leaking -no-debug ./src/examples/hello-wasm-unknown/
 package main
 
+// Smoke test: make sure the fmt package can be imported (even if it isn't
+// really useful for wasm-unknown).
+import _ "os"
+
 var x int32
 
 //go:wasmimport hosted echo_i32
