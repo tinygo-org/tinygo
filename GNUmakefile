@@ -335,6 +335,7 @@ TEST_PACKAGES_FAST = \
 	net/http/internal/ascii \
 	net/mail \
 	os \
+	os/signal \
 	path \
 	reflect \
 	sync \
