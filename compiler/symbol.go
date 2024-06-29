@@ -393,7 +393,7 @@ func isValidWasmType(typ types.Type, isPointerOrField bool) bool {
 		case types.Uintptr, types.UnsafePointer:
 			return true
 		case types.String:
-			return isPointerOrField
+			return true
 		}
 	case *types.Array:
 		return isPointerOrField && isValidWasmType(typ.Elem(), true)

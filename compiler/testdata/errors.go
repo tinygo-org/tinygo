@@ -22,7 +22,7 @@ type S struct {
 }
 
 //go:wasmimport modulename validparam
-func validparam(a int32, b uint64, c float64, d unsafe.Pointer, e Uint, f uintptr, g *int32, h *S)
+func validparam(a int32, b uint64, c float64, d unsafe.Pointer, e Uint, f uintptr, g string, h *int32, i *S)
 
 // ERROR: //go:wasmimport modulename invalidparam: unsupported parameter type [4]uint32
 // ERROR: //go:wasmimport modulename invalidparam: unsupported parameter type []byte
