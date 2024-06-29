@@ -360,14 +360,14 @@ func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
 		c.addError(f.Signature.Results().At(1).Pos(), fmt.Sprintf("%s: too many return values", pragma))
 	} else if f.Signature.Results().Len() == 1 {
 		result := f.Signature.Results().At(0)
-		if !isValidWasmType(result.Type(), false) {
+		if !isValidWasmType(result.Type(), true, false) {
 			c.addError(result.Pos(), fmt.Sprintf("%s: unsupported result type %s", pragma, result.Type().String()))
 		}
 	}
 	for _, param := range f.Params {
 		// Check whether the type is allowed.
 		// Only a very limited number of types can be mapped to WebAssembly.
-		if !isValidWasmType(param.Type(), false) {
+		if !isValidWasmType(param.Type(), false, false) {
 			c.addError(param.Pos(), fmt.Sprintf("%s: unsupported parameter type %s", pragma, param.Type().String()))
 		}
 	}
@@ -380,7 +380,7 @@ func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
 //
 // This previously reflected the additional restrictions documented here:
 // https://github.com/golang/go/issues/59149
-func isValidWasmType(typ types.Type, isPointerOrField bool) bool {
+func isValidWasmType(typ types.Type, isResult, isPointerOrField bool) bool {
 	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		switch typ.Kind() {
@@ -393,22 +393,22 @@ func isValidWasmType(typ types.Type, isPointerOrField bool) bool {
 		case types.Uintptr, types.UnsafePointer:
 			return true
 		case types.String:
-			return true
+			return !isResult // string flattens to two values, so disallowed as a result
 		}
 	case *types.Array:
-		return isPointerOrField && isValidWasmType(typ.Elem(), true)
+		return isPointerOrField && isValidWasmType(typ.Elem(), false, true)
 	case *types.Struct:
 		if !isPointerOrField {
 			return false
 		}
 		for i := 0; i < typ.NumFields(); i++ {
-			if !isValidWasmType(typ.Field(i).Type(), true) {
+			if !isValidWasmType(typ.Field(i).Type(), false, true) {
 				return false
 			}
 		}
 		return true
 	case *types.Pointer:
-		return isValidWasmType(typ.Elem(), true)
+		return isValidWasmType(typ.Elem(), false, true)
 	}
 	return false
 }

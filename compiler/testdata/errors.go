@@ -67,3 +67,8 @@ func invalidreturn2() []byte
 //
 //go:wasmimport modulename invalidreturn3
 func invalidreturn3() chan int
+
+// ERROR: //go:wasmimport modulename invalidreturn4: unsupported result type string
+//
+//go:wasmimport modulename invalidreturn4
+func invalidreturn4() string
