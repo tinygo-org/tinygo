@@ -1,3 +1,6 @@
+// We don't support RV32E at the moment.
+#if !defined(__riscv_32e)
+
 #ifdef __riscv_flen
 #define NREG 48
 #define LFREG flw
@@ -128,3 +131,5 @@ handleInterruptASM:
     LREG    ra, 0*REGSIZE(sp)
     addi    sp, sp, NREG*REGSIZE
     mret
+
+#endif

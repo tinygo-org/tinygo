@@ -1,3 +1,6 @@
+// We don't support RV32E at the moment.
+#if !defined(__riscv_32e)
+
 #if __riscv_xlen==64
 #define REGSIZE 8
 #define SREG sd
@@ -50,3 +53,5 @@ tinygo_longjmp:
     lw sp, 0(a0)       // jumpSP
     lw a1, REGSIZE(a0) // jumpPC
     jr a1
+
+#endif
