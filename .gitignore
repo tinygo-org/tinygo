@@ -17,6 +17,8 @@ src/device/kendryte/*.go
 src/device/kendryte/*.s
 src/device/rp/*.go
 src/device/rp/*.s
+src/device/wch/*.go
+src/device/wch/*.s
 vendor
 llvm-build
 llvm-project

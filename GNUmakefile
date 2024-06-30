@@ -185,7 +185,7 @@ fmt-check:
 	@unformatted=$$(gofmt -l $(FMT_PATHS)); [ -z "$$unformatted" ] && exit 0; echo "Unformatted:"; for fn in $$unformatted; do echo "  $$fn"; done; exit 1
 
 
-gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp
+gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp gen-device-wch
 ifneq ($(STM32), 0)
 gen-device: gen-device-stm32
 endif
@@ -236,6 +236,10 @@ gen-device-rp: build/gen-device-svd
 gen-device-renesas: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/tinygo-org/renesas-svd lib/renesas-svd/ src/device/renesas/
 	GO111MODULE=off $(GO) fmt ./src/device/renesas
+
+gen-device-wch: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/ch32-rs/ch32-rs/ lib/cmsis-svd/data/WCH-Community/ src/device/wch
+	GO111MODULE=off $(GO) fmt ./src/device/wch
 
 # Get LLVM sources.
 $(LLVM_PROJECTDIR)/llvm:
@@ -782,6 +786,8 @@ endif
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=maixbit             examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=nanoch32v003        examples/blinky1
 	@$(MD5SUM) test.hex
 ifneq ($(WASM), 0)
 	$(TINYGO) build -size short -o wasm.wasm -target=wasm               examples/wasm/export

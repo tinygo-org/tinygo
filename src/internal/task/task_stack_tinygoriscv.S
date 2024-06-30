@@ -1,5 +1,8 @@
 //go:build tinygo
 
+// We don't support RV32E at the moment.
+#if !defined(__riscv_32e)
+
 .section .text.tinygo_startTask
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
@@ -69,3 +72,5 @@ tinygo_swapTask:
 
     // Return into the task.
     ret
+
+#endif
