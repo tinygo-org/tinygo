@@ -346,7 +346,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 // The list of allowed types is based on this proposal:
 // https://github.com/golang/go/issues/59149
 func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
-	if c.pkg.Path() == "runtime" || c.pkg.Path() == "syscall/js" {
+	if c.pkg.Path() == "runtime" || c.pkg.Path() == "syscall/js" || c.pkg.Path() == "syscall" {
 		// The runtime is a special case. Allow all kinds of parameters
 		// (importantly, including pointers).
 		return
@@ -360,37 +360,67 @@ func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
 		c.addError(f.Signature.Results().At(1).Pos(), fmt.Sprintf("%s: too many return values", pragma))
 	} else if f.Signature.Results().Len() == 1 {
 		result := f.Signature.Results().At(0)
-		if !isValidWasmType(result.Type(), true) {
+		if !isValidWasmType(result.Type(), siteResult) {
 			c.addError(result.Pos(), fmt.Sprintf("%s: unsupported result type %s", pragma, result.Type().String()))
 		}
 	}
 	for _, param := range f.Params {
 		// Check whether the type is allowed.
 		// Only a very limited number of types can be mapped to WebAssembly.
-		if !isValidWasmType(param.Type(), false) {
+		if !isValidWasmType(param.Type(), siteParam) {
 			c.addError(param.Pos(), fmt.Sprintf("%s: unsupported parameter type %s", pragma, param.Type().String()))
 		}
 	}
 }
 
-// Check whether the type maps directly to a WebAssembly type, according to:
+// Check whether the type maps directly to a WebAssembly type.
+//
+// This reflects the relaxed type restrictions proposed here (except for structs.HostLayout):
+// https://github.com/golang/go/issues/66984
+//
+// This previously reflected the additional restrictions documented here:
 // https://github.com/golang/go/issues/59149
-func isValidWasmType(typ types.Type, isReturn bool) bool {
+func isValidWasmType(typ types.Type, site wasmSite) bool {
 	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		switch typ.Kind() {
-		case types.Int32, types.Uint32, types.Int64, types.Uint64:
+		case types.Bool:
+			return true
+		case types.Int, types.Uint, types.Int8, types.Uint8, types.Int16, types.Uint16, types.Int32, types.Uint32, types.Int64, types.Uint64:
 			return true
 		case types.Float32, types.Float64:
 			return true
-		case types.UnsafePointer:
-			if !isReturn {
-				return true
+		case types.Uintptr, types.UnsafePointer:
+			return true
+		case types.String:
+			// string flattens to two values, so disallowed as a result
+			return site == siteParam || site == siteIndirect
+		}
+	case *types.Array:
+		return site == siteIndirect && isValidWasmType(typ.Elem(), siteIndirect)
+	case *types.Struct:
+		if site != siteIndirect {
+			return false
+		}
+		for i := 0; i < typ.NumFields(); i++ {
+			if !isValidWasmType(typ.Field(i).Type(), siteIndirect) {
+				return false
 			}
 		}
+		return true
+	case *types.Pointer:
+		return isValidWasmType(typ.Elem(), siteIndirect)
 	}
 	return false
 }
+
+type wasmSite int
+
+const (
+	siteParam wasmSite = iota
+	siteResult
+	siteIndirect // pointer or field
+)
 
 // getParams returns the function parameters, including the receiver at the
 // start. This is an alternative to the Params member of *ssa.Function, which is

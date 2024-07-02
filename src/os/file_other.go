@@ -1,4 +1,4 @@
-//go:build baremetal || (tinygo.wasm && !wasip1)
+//go:build baremetal || (tinygo.wasm && !wasip1 && !wasip2)
 
 package os
 

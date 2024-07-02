@@ -34,6 +34,7 @@ func TestClangAttributes(t *testing.T) {
 		"nintendoswitch",
 		"riscv-qemu",
 		"wasip1",
+		"wasip2",
 		"wasm",
 		"wasm-unknown",
 	}
@@ -61,6 +62,7 @@ func TestClangAttributes(t *testing.T) {
 		{GOOS: "windows", GOARCH: "amd64"},
 		{GOOS: "windows", GOARCH: "arm64"},
 		{GOOS: "wasip1", GOARCH: "wasm"},
+		{GOOS: "wasip2", GOARCH: "wasm"},
 	} {
 		name := "GOOS=" + options.GOOS + ",GOARCH=" + options.GOARCH
 		if options.GOARCH == "arm" {

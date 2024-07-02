@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestTempDirInCleanup(t *testing.T) {
-	if runtime.GOOS == "wasip1" {
+	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
 		t.Log("Skipping.  TODO: implement RemoveAll for wasi")
 		return
 	}
@@ -63,7 +63,7 @@ func TestTempDirInBenchmark(t *testing.T) {
 }
 
 func TestTempDir(t *testing.T) {
-	if runtime.GOOS == "wasip1" {
+	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
 		t.Log("Skipping.  TODO: implement RemoveAll for wasi")
 		return
 	}

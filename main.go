@@ -306,16 +306,25 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			// reads any files.
 			//
 			// Ex. run --dir=.. --dir=../.. --dir=../../..
-			dirs := dirsToModuleRoot(result.MainDir, result.ModuleRoot)
+			var dirs []string
+			switch config.Options.Target {
+			case "wasip1":
+				dirs = dirsToModuleRootRel(result.MainDir, result.ModuleRoot)
+			case "wasip2":
+				dirs = dirsToModuleRootAbs(result.MainDir, result.ModuleRoot)
+			default:
+				return fmt.Errorf("unknown GOOS target: %v", config.Options.Target)
+			}
+
 			args := []string{"run"}
-			for _, d := range dirs[1:] {
+			for _, d := range dirs {
 				args = append(args, "--dir="+d)
 			}
 
-			// The below re-organizes the arguments so that the current
-			// directory is added last.
+			args = append(args, "--env=PWD="+cmd.Dir)
+
 			args = append(args, cmd.Args[1:]...)
-			cmd.Args = append(cmd.Args[:1:1], args...)
+			cmd.Args = args
 		}
 
 		// Run the test.
@@ -356,9 +365,23 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	return passed, err
 }
 
-func dirsToModuleRoot(maindir, modroot string) []string {
-	var dirs = []string{"."}
+func dirsToModuleRootRel(maindir, modroot string) []string {
+	var dirs []string
 	last := ".."
+	// strip off path elements until we hit the module root
+	// adding `..`, `../..`, `../../..` until we're done
+	for maindir != modroot {
+		dirs = append(dirs, last)
+		last = filepath.Join(last, "..")
+		maindir = filepath.Dir(maindir)
+	}
+	dirs = append(dirs, ".")
+	return dirs
+}
+
+func dirsToModuleRootAbs(maindir, modroot string) []string {
+	var dirs = []string{maindir}
+	last := filepath.Join(maindir, "..")
 	// strip off path elements until we hit the module root
 	// adding `..`, `../..`, `../../..` until we're done
 	for maindir != modroot {
@@ -785,6 +808,9 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 // passes command line arguments and evironment variables in a way appropriate
 // for the given emulator.
 func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) (builder.BuildResult, error) {
+
+	isSingleFile := strings.HasSuffix(pkgName, ".go")
+
 	// Determine whether we're on a system that supports environment variables
 	// and command line parameters (operating systems, WASI) or not (baremetal,
 	// WebAssembly in the browser). If we're on a system without an environment,
@@ -818,9 +844,6 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			}
 		}
 	} else if config.EmulatorName() == "wasmtime" {
-		// Wasmtime needs some special flags to pass environment variables
-		// and allow reading from the current directory.
-		emuArgs = append(emuArgs, "--dir=.")
 		for _, v := range environmentVars {
 			emuArgs = append(emuArgs, "--env", v)
 		}
@@ -876,7 +899,26 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		if err != nil {
 			return result, err
 		}
+
 		name = emulator[0]
+
+		if name == "wasmtime" {
+			// Wasmtime needs some special flags to pass environment variables
+			// and allow reading from the current directory.
+			switch config.Options.Target {
+			case "wasip1":
+				emuArgs = append(emuArgs, "--dir=.")
+			case "wasip2":
+				dir := result.MainDir
+				if isSingleFile {
+					cwd, _ := os.Getwd()
+					dir = cwd
+				}
+				emuArgs = append(emuArgs, "--dir="+dir)
+				emuArgs = append(emuArgs, "--env=PWD="+dir)
+			}
+		}
+
 		emuArgs = append(emuArgs, emulator[1:]...)
 		args = append(emuArgs, args...)
 	}
@@ -1465,6 +1507,12 @@ func main() {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
 
+	var witPackage, witWorld string
+	if command == "help" || command == "build" || command == "test" || command == "run" {
+		flag.StringVar(&witPackage, "wit-package", "", "wit package for wasm component embedding")
+		flag.StringVar(&witWorld, "wit-world", "", "wit world for wasm component embedding")
+	}
+
 	var testConfig compileopts.TestConfig
 	if command == "help" || command == "test" {
 		flag.BoolVar(&testConfig.CompileOnly, "c", false, "compile the test binary but do not run it")
@@ -1544,6 +1592,8 @@ func main() {
 		Monitor:         *monitor,
 		BaudRate:        *baudrate,
 		Timeout:         *timeout,
+		WITPackage:      witPackage,
+		WITWorld:        witWorld,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand

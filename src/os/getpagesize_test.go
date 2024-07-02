@@ -1,4 +1,4 @@
-//go:build windows || darwin || (linux && !baremetal) || wasip1
+//go:build windows || darwin || (linux && !baremetal) || wasip1 || wasip2
 
 package os_test
 

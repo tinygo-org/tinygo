@@ -268,6 +268,11 @@ lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	@if [ ! -e lib/wasi-libc/Makefile ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
 	cd lib/wasi-libc && $(MAKE) -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC="$(CLANG)" AR=$(LLVM_AR) NM=$(LLVM_NM)
 
+# Generate WASI syscall bindings
+.PHONY: wasi-syscall
+wasi-syscall:
+	wit-bindgen-go generate -o ./src/internal -p internal --versioned ./lib/wasi-cli/wit
+
 # Check for Node.js used during WASM tests.
 NODEJS_VERSION := $(word 1,$(subst ., ,$(shell node -v | cut -c 2-)))
 MIN_NODEJS_VERSION=18
@@ -430,14 +435,35 @@ tinygo-test-wasi:
 	$(TINYGO) test -target wasip1 $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW) ./tests/runtime_wasi
 tinygo-test-wasip1:
 	GOOS=wasip1 GOARCH=wasm $(TINYGO) test $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW) ./tests/runtime_wasi
-tinygo-test-wasi-fast:
-	$(TINYGO) test -target wasip1 $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
 tinygo-test-wasip1-fast:
-	GOOS=wasip1 GOARCH=wasm $(TINYGO) test $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
-tinygo-bench-wasi:
+	$(TINYGO) test -target=wasip1 $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
+
+tinygo-test-wasip2-slow:
+	$(TINYGO) test -target=wasip2 $(TEST_PACKAGES_SLOW)
+tinygo-test-wasip2-fast:
+	$(TINYGO) test -target=wasip2 $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
+
+tinygo-test-wasip2-sum-slow:
+	TINYGO=$(TINYGO) \
+	TARGET=wasip2 \
+	TESTOPTS="-x -work" \
+	PACKAGES="$(TEST_PACKAGES_SLOW)" \
+	gotestsum --raw-command -- ./tools/tgtestjson.sh
+tinygo-test-wasip2-sum-fast:
+	TINYGO=$(TINYGO) \
+	TARGET=wasip2 \
+	TESTOPTS="-x -work" \
+	PACKAGES="$(TEST_PACKAGES_FAST)" \
+	gotestsum --raw-command -- ./tools/tgtestjson.sh
+tinygo-bench-wasip1:
 	$(TINYGO) test -target wasip1 -bench . $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW)
-tinygo-bench-wasi-fast:
+tinygo-bench-wasip1-fast:
 	$(TINYGO) test -target wasip1 -bench . $(TEST_PACKAGES_FAST)
+
+tinygo-bench-wasip2:
+	$(TINYGO) test -target wasip2 -bench . $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW)
+tinygo-bench-wasip2-fast:
+	$(TINYGO) test -target wasip2 -bench . $(TEST_PACKAGES_FAST)
 
 # Test external packages in a large corpus.
 test-corpus:
@@ -832,6 +858,7 @@ build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-bottom-half/headers
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/arch
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
+	@mkdir -p build/release/tinygo/lib/wasi-cli/
 	@mkdir -p build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0
 	@mkdir -p build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus
 	@mkdir -p build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4
@@ -891,6 +918,7 @@ endif
 	@cp -rp lib/wasi-libc/libc-top-half/musl/src/string             build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
 	@cp -rp lib/wasi-libc/libc-top-half/musl/include                build/release/tinygo/lib/wasi-libc/libc-top-half/musl
 	@cp -rp lib/wasi-libc/sysroot                                   build/release/tinygo/lib/wasi-libc/sysroot
+	@cp -rp lib/wasi-cli/wit                                        build/release/tinygo/lib/wasi-cli/wit
 	@cp -rp llvm-project/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp llvm-project/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp src                          build/release/tinygo/src

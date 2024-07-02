@@ -53,6 +53,8 @@ type Options struct {
 	Monitor         bool
 	BaudRate        int
 	Timeout         time.Duration
+	WITPackage      string // pass through to wasm-tools component embed invocation
+	WITWorld        string // pass through to wasm-tools component embed -w option
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.

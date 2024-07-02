@@ -1,4 +1,4 @@
-//go:build wasip1
+//go:build wasip1 || wasip2
 
 package syscall
 
@@ -70,9 +70,10 @@ const (
 	__WASI_FILETYPE_SYMBOLIC_LINK    = 7
 
 	// ../../lib/wasi-libc/libc-bottom-half/headers/public/__header_fcntl.h
-	O_RDONLY = 0x04000000
-	O_WRONLY = 0x10000000
-	O_RDWR   = O_RDONLY | O_WRONLY
+	O_NOFOLLOW = 0x01000000
+	O_RDONLY   = 0x04000000
+	O_WRONLY   = 0x10000000
+	O_RDWR     = O_RDONLY | O_WRONLY
 
 	O_CREAT     = __WASI_OFLAGS_CREAT << 12
 	O_TRUNC     = __WASI_OFLAGS_TRUNC << 12
@@ -118,11 +119,9 @@ const (
 	PATH_MAX = 4096
 )
 
-//go:extern errno
-var libcErrno uintptr
-
 func getErrno() error {
-	return Errno(libcErrno)
+	// libcErrno is the errno from wasi-libc for wasip1 and the errno for libc_wasip2 for wasip2
+	return libcErrno
 }
 
 func (e Errno) Is(target error) bool {
@@ -195,6 +194,7 @@ const (
 	ENOTCONN        Errno = 53         /* Socket is not connected */
 	ENOTDIR         Errno = 54         /* Not a directory */
 	ENOTEMPTY       Errno = 55         /* Directory not empty */
+	ENOTRECOVERABLE Errno = 56         /* State not recoverable */
 	ENOTSOCK        Errno = 57         /* Socket operation on non-socket */
 	ESOCKTNOSUPPORT Errno = 58         /* Socket type not supported */
 	EOPNOTSUPP      Errno = 58         /* Operation not supported on transport endpoint */
@@ -213,10 +213,15 @@ const (
 	ESRCH           Errno = 71         /* No such process */
 	ESTALE          Errno = 72
 	ETIMEDOUT       Errno = 73 /* Connection timed out */
+	ETXTBSY         Errno = 74 /* Text file busy */
 	EXDEV           Errno = 75 /* Cross-device link */
 	ENOTCAPABLE     Errno = 76 /* Extension: Capabilities insufficient. */
+
+	EWASIERROR Errno = 255 /* Unknown WASI error */
 )
 
+// TODO(ydnar): remove Timespec for WASI Preview 2 (seconds is uint64).
+//
 // https://github.com/WebAssembly/wasi-libc/blob/main/libc-bottom-half/headers/public/__struct_timespec.h
 type Timespec struct {
 	Sec  int32
@@ -409,6 +414,11 @@ type Utsname struct {
 	Version    [65]int8
 	Machine    [65]int8
 	Domainname [65]int8
+}
+
+//go:linkname faccessat syscall.Faccessat
+func faccessat(dirfd int, path string, mode uint32, flags int) (err error) {
+	return ENOSYS
 }
 
 // Stub Utsname, needed because WASI pretends to be linux/arm.

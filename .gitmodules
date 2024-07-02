@@ -39,3 +39,9 @@
 	path = src/net
 	url = https://github.com/tinygo-org/net.git
 	branch = dev
+[submodule "lib/wasi-cli"]
+	path = lib/wasi-cli
+	url = https://github.com/WebAssembly/wasi-cli
+[submodule "src/vendor/github.com/ydnar/wasm-tools-go"]
+	path = src/vendor/github.com/ydnar/wasm-tools-go
+	url = https://github.com/ydnar/wasm-tools-go.git

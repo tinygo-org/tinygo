@@ -220,5 +220,5 @@ jobs:
         shell: bash
         working-directory: build
         run: 7z x release.zip -r
-      - name: Test stdlib packages on wasi
-        run: make tinygo-test-wasi-fast TINYGO=$(PWD)/build/tinygo/bin/tinygo
+      - name: Test stdlib packages on wasip1
+        run: make tinygo-test-wasip1-fast TINYGO=$(PWD)/build/tinygo/bin/tinygo
