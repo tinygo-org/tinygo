@@ -378,6 +378,7 @@ TEST_PACKAGES_LINUX := \
 	io/ioutil \
 	mime/quotedprintable \
 	net \
+	os/user \
 	strconv \
 	testing/fstest \
 	text/tabwriter \
@@ -388,6 +389,7 @@ TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 TEST_PACKAGES_WINDOWS := \
 	compress/flate \
 	crypto/hmac \
+	os/user \
 	strconv \
 	text/template/parse \
 	$(nil)

@@ -84,6 +84,7 @@ func (c *Config) BuildTags() []string {
 	tags = append(tags, []string{
 		"tinygo",                                     // that's the compiler
 		"purego",                                     // to get various crypto packages to work
+		"osusergo",                                   // to get os/user to work
 		"math_big_pure_go",                           // to get math/big to work
 		"gc." + c.GC(), "scheduler." + c.Scheduler(), // used inside the runtime package
 		"serial." + c.Serial()}...) // used inside the machine package
