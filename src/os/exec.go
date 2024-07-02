@@ -57,8 +57,10 @@ type Process struct {
 	Pid int
 }
 
+// Create a lightweight implementation of execve / syscall.StartProcess
+// Do not save all the proc info as golang does but make some sanity checks
 func StartProcess(name string, argv []string, attr *ProcAttr) (*Process, error) {
-	return nil, &PathError{Op: "fork/exec", Path: name, Err: ErrNotImplemented}
+	return startProcess(name, argv, attr)
 }
 
 func (p *Process) Wait() (*ProcessState, error) {
@@ -91,4 +93,8 @@ func (p *Process) Release() error {
 // Keep compatibility with golang and always succeed and return new proc with pid on Linux.
 func FindProcess(pid int) (*Process, error) {
 	return findProcess(pid)
+}
+
+func ForkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) {
+	return forkExec(argv0, argv, attr)
 }
