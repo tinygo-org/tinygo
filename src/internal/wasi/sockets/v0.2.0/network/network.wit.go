@@ -255,7 +255,7 @@ type IPv6SocketAddress struct {
 //		ipv4(ipv4-socket-address),
 //		ipv6(ipv6-socket-address),
 //	}
-type IPSocketAddress cm.Variant[uint8, IPv6SocketAddress, IPv6SocketAddress]
+type IPSocketAddress cm.Variant[uint8, IPv6SocketAddressShape, IPv6SocketAddress]
 
 // IPSocketAddressIPv4 returns a [IPSocketAddress] of case "ipv4".
 func IPSocketAddressIPv4(data IPv4SocketAddress) IPSocketAddress {

@@ -15,5 +15,5 @@ var Exports struct {
 	// Run the program.
 	//
 	//	run: func() -> result
-	Run func() (result cm.Result)
+	Run func() (result cm.BoolResult)
 }

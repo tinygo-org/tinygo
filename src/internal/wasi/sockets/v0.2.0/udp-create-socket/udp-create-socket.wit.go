@@ -43,7 +43,7 @@ import (
 //	error-code>
 //
 //go:nosplit
-func CreateUDPSocket(addressFamily network.IPAddressFamily) (result cm.OKResult[udp.UDPSocket, network.ErrorCode]) {
+func CreateUDPSocket(addressFamily network.IPAddressFamily) (result cm.Result[udp.UDPSocket, udp.UDPSocket, network.ErrorCode]) {
 	addressFamily0 := (uint32)(addressFamily)
 	wasmimport_CreateUDPSocket((uint32)(addressFamily0), &result)
 	return
@@ -51,4 +51,4 @@ func CreateUDPSocket(addressFamily network.IPAddressFamily) (result cm.OKResult[
 
 //go:wasmimport wasi:sockets/udp-create-socket@0.2.0 create-udp-socket
 //go:noescape
-func wasmimport_CreateUDPSocket(addressFamily0 uint32, result *cm.OKResult[udp.UDPSocket, network.ErrorCode])
+func wasmimport_CreateUDPSocket(addressFamily0 uint32, result *cm.Result[udp.UDPSocket, udp.UDPSocket, network.ErrorCode])

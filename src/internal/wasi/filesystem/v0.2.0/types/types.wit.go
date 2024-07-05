@@ -263,7 +263,7 @@ func NewTimestampNoChange() NewTimestamp {
 
 // NoChange returns true if [NewTimestamp] represents the variant case "no-change".
 func (self *NewTimestamp) NoChange() bool {
-	return cm.Tag(self) == 0
+	return self.Tag() == 0
 }
 
 // NewTimestampNow returns a [NewTimestamp] of case "now".
@@ -277,7 +277,7 @@ func NewTimestampNow() NewTimestamp {
 
 // Now returns true if [NewTimestamp] represents the variant case "now".
 func (self *NewTimestamp) Now() bool {
-	return cm.Tag(self) == 1
+	return self.Tag() == 1
 }
 
 // NewTimestampTimestamp returns a [NewTimestamp] of case "timestamp".
@@ -560,7 +560,7 @@ func wasmimport_DescriptorResourceDrop(self0 uint32)
 //	advise: func(offset: filesize, length: filesize, advice: advice) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) Advise(offset FileSize, length FileSize, advice Advice) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) Advise(offset FileSize, length FileSize, advice Advice) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	offset0 := (uint64)(offset)
 	length0 := (uint64)(length)
@@ -571,7 +571,7 @@ func (self Descriptor) Advise(offset FileSize, length FileSize, advice Advice) (
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.advise
 //go:noescape
-func wasmimport_DescriptorAdvise(self0 uint32, offset0 uint64, length0 uint64, advice0 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorAdvise(self0 uint32, offset0 uint64, length0 uint64, advice0 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // AppendViaStream represents the imported method "append-via-stream".
 //
@@ -585,7 +585,7 @@ func wasmimport_DescriptorAdvise(self0 uint32, offset0 uint64, length0 uint64, a
 //	append-via-stream: func() -> result<output-stream, error-code>
 //
 //go:nosplit
-func (self Descriptor) AppendViaStream() (result cm.OKResult[streams.OutputStream, ErrorCode]) {
+func (self Descriptor) AppendViaStream() (result cm.Result[streams.OutputStream, streams.OutputStream, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DescriptorAppendViaStream((uint32)(self0), &result)
 	return
@@ -593,7 +593,7 @@ func (self Descriptor) AppendViaStream() (result cm.OKResult[streams.OutputStrea
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.append-via-stream
 //go:noescape
-func wasmimport_DescriptorAppendViaStream(self0 uint32, result *cm.OKResult[streams.OutputStream, ErrorCode])
+func wasmimport_DescriptorAppendViaStream(self0 uint32, result *cm.Result[streams.OutputStream, streams.OutputStream, ErrorCode])
 
 // CreateDirectoryAt represents the imported method "create-directory-at".
 //
@@ -604,7 +604,7 @@ func wasmimport_DescriptorAppendViaStream(self0 uint32, result *cm.OKResult[stre
 //	create-directory-at: func(path: string) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) CreateDirectoryAt(path string) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) CreateDirectoryAt(path string) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	path0, path1 := cm.LowerString(path)
 	wasmimport_DescriptorCreateDirectoryAt((uint32)(self0), (*uint8)(path0), (uint32)(path1), &result)
@@ -613,7 +613,7 @@ func (self Descriptor) CreateDirectoryAt(path string) (result cm.ErrResult[struc
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.create-directory-at
 //go:noescape
-func wasmimport_DescriptorCreateDirectoryAt(self0 uint32, path0 *uint8, path1 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorCreateDirectoryAt(self0 uint32, path0 *uint8, path1 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // GetFlags represents the imported method "get-flags".
 //
@@ -627,7 +627,7 @@ func wasmimport_DescriptorCreateDirectoryAt(self0 uint32, path0 *uint8, path1 ui
 //	get-flags: func() -> result<descriptor-flags, error-code>
 //
 //go:nosplit
-func (self Descriptor) GetFlags() (result cm.OKResult[DescriptorFlags, ErrorCode]) {
+func (self Descriptor) GetFlags() (result cm.Result[DescriptorFlags, DescriptorFlags, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DescriptorGetFlags((uint32)(self0), &result)
 	return
@@ -635,7 +635,7 @@ func (self Descriptor) GetFlags() (result cm.OKResult[DescriptorFlags, ErrorCode
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.get-flags
 //go:noescape
-func wasmimport_DescriptorGetFlags(self0 uint32, result *cm.OKResult[DescriptorFlags, ErrorCode])
+func wasmimport_DescriptorGetFlags(self0 uint32, result *cm.Result[DescriptorFlags, DescriptorFlags, ErrorCode])
 
 // GetType represents the imported method "get-type".
 //
@@ -653,7 +653,7 @@ func wasmimport_DescriptorGetFlags(self0 uint32, result *cm.OKResult[DescriptorF
 //	get-type: func() -> result<descriptor-type, error-code>
 //
 //go:nosplit
-func (self Descriptor) GetType() (result cm.OKResult[DescriptorType, ErrorCode]) {
+func (self Descriptor) GetType() (result cm.Result[DescriptorType, DescriptorType, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DescriptorGetType((uint32)(self0), &result)
 	return
@@ -661,7 +661,7 @@ func (self Descriptor) GetType() (result cm.OKResult[DescriptorType, ErrorCode])
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.get-type
 //go:noescape
-func wasmimport_DescriptorGetType(self0 uint32, result *cm.OKResult[DescriptorType, ErrorCode])
+func wasmimport_DescriptorGetType(self0 uint32, result *cm.Result[DescriptorType, DescriptorType, ErrorCode])
 
 // IsSameObject represents the imported method "is-same-object".
 //
@@ -697,7 +697,7 @@ func wasmimport_DescriptorIsSameObject(self0 uint32, other0 uint32) (result0 uin
 //	new-path: string) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) LinkAt(oldPathFlags PathFlags, oldPath string, newDescriptor Descriptor, newPath string) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) LinkAt(oldPathFlags PathFlags, oldPath string, newDescriptor Descriptor, newPath string) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	oldPathFlags0 := (uint32)(oldPathFlags)
 	oldPath0, oldPath1 := cm.LowerString(oldPath)
@@ -709,7 +709,7 @@ func (self Descriptor) LinkAt(oldPathFlags PathFlags, oldPath string, newDescrip
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.link-at
 //go:noescape
-func wasmimport_DescriptorLinkAt(self0 uint32, oldPathFlags0 uint32, oldPath0 *uint8, oldPath1 uint32, newDescriptor0 uint32, newPath0 *uint8, newPath1 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorLinkAt(self0 uint32, oldPathFlags0 uint32, oldPath0 *uint8, oldPath1 uint32, newDescriptor0 uint32, newPath0 *uint8, newPath1 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // MetadataHash represents the imported method "metadata-hash".
 //
@@ -736,7 +736,7 @@ func wasmimport_DescriptorLinkAt(self0 uint32, oldPathFlags0 uint32, oldPath0 *u
 //	metadata-hash: func() -> result<metadata-hash-value, error-code>
 //
 //go:nosplit
-func (self Descriptor) MetadataHash() (result cm.OKResult[MetadataHashValue, ErrorCode]) {
+func (self Descriptor) MetadataHash() (result cm.Result[MetadataHashValueShape, MetadataHashValue, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DescriptorMetadataHash((uint32)(self0), &result)
 	return
@@ -744,7 +744,7 @@ func (self Descriptor) MetadataHash() (result cm.OKResult[MetadataHashValue, Err
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.metadata-hash
 //go:noescape
-func wasmimport_DescriptorMetadataHash(self0 uint32, result *cm.OKResult[MetadataHashValue, ErrorCode])
+func wasmimport_DescriptorMetadataHash(self0 uint32, result *cm.Result[MetadataHashValueShape, MetadataHashValue, ErrorCode])
 
 // MetadataHashAt represents the imported method "metadata-hash-at".
 //
@@ -757,7 +757,7 @@ func wasmimport_DescriptorMetadataHash(self0 uint32, result *cm.OKResult[Metadat
 //	error-code>
 //
 //go:nosplit
-func (self Descriptor) MetadataHashAt(pathFlags PathFlags, path string) (result cm.OKResult[MetadataHashValue, ErrorCode]) {
+func (self Descriptor) MetadataHashAt(pathFlags PathFlags, path string) (result cm.Result[MetadataHashValueShape, MetadataHashValue, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	pathFlags0 := (uint32)(pathFlags)
 	path0, path1 := cm.LowerString(path)
@@ -767,7 +767,7 @@ func (self Descriptor) MetadataHashAt(pathFlags PathFlags, path string) (result 
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.metadata-hash-at
 //go:noescape
-func wasmimport_DescriptorMetadataHashAt(self0 uint32, pathFlags0 uint32, path0 *uint8, path1 uint32, result *cm.OKResult[MetadataHashValue, ErrorCode])
+func wasmimport_DescriptorMetadataHashAt(self0 uint32, pathFlags0 uint32, path0 *uint8, path1 uint32, result *cm.Result[MetadataHashValueShape, MetadataHashValue, ErrorCode])
 
 // OpenAt represents the imported method "open-at".
 //
@@ -794,7 +794,7 @@ func wasmimport_DescriptorMetadataHashAt(self0 uint32, pathFlags0 uint32, path0 
 //	descriptor-flags) -> result<descriptor, error-code>
 //
 //go:nosplit
-func (self Descriptor) OpenAt(pathFlags PathFlags, path string, openFlags OpenFlags, flags DescriptorFlags) (result cm.OKResult[Descriptor, ErrorCode]) {
+func (self Descriptor) OpenAt(pathFlags PathFlags, path string, openFlags OpenFlags, flags DescriptorFlags) (result cm.Result[Descriptor, Descriptor, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	pathFlags0 := (uint32)(pathFlags)
 	path0, path1 := cm.LowerString(path)
@@ -806,7 +806,7 @@ func (self Descriptor) OpenAt(pathFlags PathFlags, path string, openFlags OpenFl
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.open-at
 //go:noescape
-func wasmimport_DescriptorOpenAt(self0 uint32, pathFlags0 uint32, path0 *uint8, path1 uint32, openFlags0 uint32, flags0 uint32, result *cm.OKResult[Descriptor, ErrorCode])
+func wasmimport_DescriptorOpenAt(self0 uint32, pathFlags0 uint32, path0 *uint8, path1 uint32, openFlags0 uint32, flags0 uint32, result *cm.Result[Descriptor, Descriptor, ErrorCode])
 
 // Read represents the imported method "read".
 //
@@ -826,7 +826,7 @@ func wasmimport_DescriptorOpenAt(self0 uint32, pathFlags0 uint32, path0 *uint8, 
 //	error-code>
 //
 //go:nosplit
-func (self Descriptor) Read(length FileSize, offset FileSize) (result cm.OKResult[cm.Tuple[cm.List[uint8], bool], ErrorCode]) {
+func (self Descriptor) Read(length FileSize, offset FileSize) (result cm.Result[TupleListU8BoolShape, cm.Tuple[cm.List[uint8], bool], ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	length0 := (uint64)(length)
 	offset0 := (uint64)(offset)
@@ -836,7 +836,7 @@ func (self Descriptor) Read(length FileSize, offset FileSize) (result cm.OKResul
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.read
 //go:noescape
-func wasmimport_DescriptorRead(self0 uint32, length0 uint64, offset0 uint64, result *cm.OKResult[cm.Tuple[cm.List[uint8], bool], ErrorCode])
+func wasmimport_DescriptorRead(self0 uint32, length0 uint64, offset0 uint64, result *cm.Result[TupleListU8BoolShape, cm.Tuple[cm.List[uint8], bool], ErrorCode])
 
 // ReadDirectory represents the imported method "read-directory".
 //
@@ -853,7 +853,7 @@ func wasmimport_DescriptorRead(self0 uint32, length0 uint64, offset0 uint64, res
 //	read-directory: func() -> result<directory-entry-stream, error-code>
 //
 //go:nosplit
-func (self Descriptor) ReadDirectory() (result cm.OKResult[DirectoryEntryStream, ErrorCode]) {
+func (self Descriptor) ReadDirectory() (result cm.Result[DirectoryEntryStream, DirectoryEntryStream, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DescriptorReadDirectory((uint32)(self0), &result)
 	return
@@ -861,7 +861,7 @@ func (self Descriptor) ReadDirectory() (result cm.OKResult[DirectoryEntryStream,
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.read-directory
 //go:noescape
-func wasmimport_DescriptorReadDirectory(self0 uint32, result *cm.OKResult[DirectoryEntryStream, ErrorCode])
+func wasmimport_DescriptorReadDirectory(self0 uint32, result *cm.Result[DirectoryEntryStream, DirectoryEntryStream, ErrorCode])
 
 // ReadViaStream represents the imported method "read-via-stream".
 //
@@ -877,7 +877,7 @@ func wasmimport_DescriptorReadDirectory(self0 uint32, result *cm.OKResult[Direct
 //	read-via-stream: func(offset: filesize) -> result<input-stream, error-code>
 //
 //go:nosplit
-func (self Descriptor) ReadViaStream(offset FileSize) (result cm.OKResult[streams.InputStream, ErrorCode]) {
+func (self Descriptor) ReadViaStream(offset FileSize) (result cm.Result[streams.InputStream, streams.InputStream, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	offset0 := (uint64)(offset)
 	wasmimport_DescriptorReadViaStream((uint32)(self0), (uint64)(offset0), &result)
@@ -886,7 +886,7 @@ func (self Descriptor) ReadViaStream(offset FileSize) (result cm.OKResult[stream
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.read-via-stream
 //go:noescape
-func wasmimport_DescriptorReadViaStream(self0 uint32, offset0 uint64, result *cm.OKResult[streams.InputStream, ErrorCode])
+func wasmimport_DescriptorReadViaStream(self0 uint32, offset0 uint64, result *cm.Result[streams.InputStream, streams.InputStream, ErrorCode])
 
 // ReadLinkAt represents the imported method "readlink-at".
 //
@@ -900,7 +900,7 @@ func wasmimport_DescriptorReadViaStream(self0 uint32, offset0 uint64, result *cm
 //	readlink-at: func(path: string) -> result<string, error-code>
 //
 //go:nosplit
-func (self Descriptor) ReadLinkAt(path string) (result cm.OKResult[string, ErrorCode]) {
+func (self Descriptor) ReadLinkAt(path string) (result cm.Result[string, string, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	path0, path1 := cm.LowerString(path)
 	wasmimport_DescriptorReadLinkAt((uint32)(self0), (*uint8)(path0), (uint32)(path1), &result)
@@ -909,7 +909,7 @@ func (self Descriptor) ReadLinkAt(path string) (result cm.OKResult[string, Error
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.readlink-at
 //go:noescape
-func wasmimport_DescriptorReadLinkAt(self0 uint32, path0 *uint8, path1 uint32, result *cm.OKResult[string, ErrorCode])
+func wasmimport_DescriptorReadLinkAt(self0 uint32, path0 *uint8, path1 uint32, result *cm.Result[string, string, ErrorCode])
 
 // RemoveDirectoryAt represents the imported method "remove-directory-at".
 //
@@ -922,7 +922,7 @@ func wasmimport_DescriptorReadLinkAt(self0 uint32, path0 *uint8, path1 uint32, r
 //	remove-directory-at: func(path: string) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) RemoveDirectoryAt(path string) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) RemoveDirectoryAt(path string) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	path0, path1 := cm.LowerString(path)
 	wasmimport_DescriptorRemoveDirectoryAt((uint32)(self0), (*uint8)(path0), (uint32)(path1), &result)
@@ -931,7 +931,7 @@ func (self Descriptor) RemoveDirectoryAt(path string) (result cm.ErrResult[struc
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.remove-directory-at
 //go:noescape
-func wasmimport_DescriptorRemoveDirectoryAt(self0 uint32, path0 *uint8, path1 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorRemoveDirectoryAt(self0 uint32, path0 *uint8, path1 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // RenameAt represents the imported method "rename-at".
 //
@@ -943,7 +943,7 @@ func wasmimport_DescriptorRemoveDirectoryAt(self0 uint32, path0 *uint8, path1 ui
 //	string) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) RenameAt(oldPath string, newDescriptor Descriptor, newPath string) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) RenameAt(oldPath string, newDescriptor Descriptor, newPath string) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	oldPath0, oldPath1 := cm.LowerString(oldPath)
 	newDescriptor0 := cm.Reinterpret[uint32](newDescriptor)
@@ -954,7 +954,7 @@ func (self Descriptor) RenameAt(oldPath string, newDescriptor Descriptor, newPat
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.rename-at
 //go:noescape
-func wasmimport_DescriptorRenameAt(self0 uint32, oldPath0 *uint8, oldPath1 uint32, newDescriptor0 uint32, newPath0 *uint8, newPath1 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorRenameAt(self0 uint32, oldPath0 *uint8, oldPath1 uint32, newDescriptor0 uint32, newPath0 *uint8, newPath1 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // SetSize represents the imported method "set-size".
 //
@@ -966,7 +966,7 @@ func wasmimport_DescriptorRenameAt(self0 uint32, oldPath0 *uint8, oldPath1 uint3
 //	set-size: func(size: filesize) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) SetSize(size FileSize) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) SetSize(size FileSize) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	size0 := (uint64)(size)
 	wasmimport_DescriptorSetSize((uint32)(self0), (uint64)(size0), &result)
@@ -975,7 +975,7 @@ func (self Descriptor) SetSize(size FileSize) (result cm.ErrResult[struct{}, Err
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.set-size
 //go:noescape
-func wasmimport_DescriptorSetSize(self0 uint32, size0 uint64, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorSetSize(self0 uint32, size0 uint64, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // SetTimes represents the imported method "set-times".
 //
@@ -989,7 +989,7 @@ func wasmimport_DescriptorSetSize(self0 uint32, size0 uint64, result *cm.ErrResu
 //	new-timestamp) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) SetTimes(dataAccessTimestamp NewTimestamp, dataModificationTimestamp NewTimestamp) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) SetTimes(dataAccessTimestamp NewTimestamp, dataModificationTimestamp NewTimestamp) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	dataAccessTimestamp0, dataAccessTimestamp1, dataAccessTimestamp2 := lower_NewTimestamp(dataAccessTimestamp)
 	dataModificationTimestamp0, dataModificationTimestamp1, dataModificationTimestamp2 := lower_NewTimestamp(dataModificationTimestamp)
@@ -999,7 +999,7 @@ func (self Descriptor) SetTimes(dataAccessTimestamp NewTimestamp, dataModificati
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.set-times
 //go:noescape
-func wasmimport_DescriptorSetTimes(self0 uint32, dataAccessTimestamp0 uint32, dataAccessTimestamp1 uint64, dataAccessTimestamp2 uint32, dataModificationTimestamp0 uint32, dataModificationTimestamp1 uint64, dataModificationTimestamp2 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorSetTimes(self0 uint32, dataAccessTimestamp0 uint32, dataAccessTimestamp1 uint64, dataAccessTimestamp2 uint32, dataModificationTimestamp0 uint32, dataModificationTimestamp1 uint64, dataModificationTimestamp2 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // SetTimesAt represents the imported method "set-times-at".
 //
@@ -1014,7 +1014,7 @@ func wasmimport_DescriptorSetTimes(self0 uint32, dataAccessTimestamp0 uint32, da
 //	new-timestamp, data-modification-timestamp: new-timestamp) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) SetTimesAt(pathFlags PathFlags, path string, dataAccessTimestamp NewTimestamp, dataModificationTimestamp NewTimestamp) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) SetTimesAt(pathFlags PathFlags, path string, dataAccessTimestamp NewTimestamp, dataModificationTimestamp NewTimestamp) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	pathFlags0 := (uint32)(pathFlags)
 	path0, path1 := cm.LowerString(path)
@@ -1026,7 +1026,7 @@ func (self Descriptor) SetTimesAt(pathFlags PathFlags, path string, dataAccessTi
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.set-times-at
 //go:noescape
-func wasmimport_DescriptorSetTimesAt(self0 uint32, pathFlags0 uint32, path0 *uint8, path1 uint32, dataAccessTimestamp0 uint32, dataAccessTimestamp1 uint64, dataAccessTimestamp2 uint32, dataModificationTimestamp0 uint32, dataModificationTimestamp1 uint64, dataModificationTimestamp2 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorSetTimesAt(self0 uint32, pathFlags0 uint32, path0 *uint8, path1 uint32, dataAccessTimestamp0 uint32, dataAccessTimestamp1 uint64, dataAccessTimestamp2 uint32, dataModificationTimestamp0 uint32, dataModificationTimestamp1 uint64, dataModificationTimestamp2 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // Stat represents the imported method "stat".
 //
@@ -1043,7 +1043,7 @@ func wasmimport_DescriptorSetTimesAt(self0 uint32, pathFlags0 uint32, path0 *uin
 //	stat: func() -> result<descriptor-stat, error-code>
 //
 //go:nosplit
-func (self Descriptor) Stat() (result cm.OKResult[DescriptorStat, ErrorCode]) {
+func (self Descriptor) Stat() (result cm.Result[DescriptorStatShape, DescriptorStat, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DescriptorStat((uint32)(self0), &result)
 	return
@@ -1051,7 +1051,7 @@ func (self Descriptor) Stat() (result cm.OKResult[DescriptorStat, ErrorCode]) {
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.stat
 //go:noescape
-func wasmimport_DescriptorStat(self0 uint32, result *cm.OKResult[DescriptorStat, ErrorCode])
+func wasmimport_DescriptorStat(self0 uint32, result *cm.Result[DescriptorStatShape, DescriptorStat, ErrorCode])
 
 // StatAt represents the imported method "stat-at".
 //
@@ -1067,7 +1067,7 @@ func wasmimport_DescriptorStat(self0 uint32, result *cm.OKResult[DescriptorStat,
 //	error-code>
 //
 //go:nosplit
-func (self Descriptor) StatAt(pathFlags PathFlags, path string) (result cm.OKResult[DescriptorStat, ErrorCode]) {
+func (self Descriptor) StatAt(pathFlags PathFlags, path string) (result cm.Result[DescriptorStatShape, DescriptorStat, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	pathFlags0 := (uint32)(pathFlags)
 	path0, path1 := cm.LowerString(path)
@@ -1077,7 +1077,7 @@ func (self Descriptor) StatAt(pathFlags PathFlags, path string) (result cm.OKRes
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.stat-at
 //go:noescape
-func wasmimport_DescriptorStatAt(self0 uint32, pathFlags0 uint32, path0 *uint8, path1 uint32, result *cm.OKResult[DescriptorStat, ErrorCode])
+func wasmimport_DescriptorStatAt(self0 uint32, pathFlags0 uint32, path0 *uint8, path1 uint32, result *cm.Result[DescriptorStatShape, DescriptorStat, ErrorCode])
 
 // SymlinkAt represents the imported method "symlink-at".
 //
@@ -1091,7 +1091,7 @@ func wasmimport_DescriptorStatAt(self0 uint32, pathFlags0 uint32, path0 *uint8, 
 //	symlink-at: func(old-path: string, new-path: string) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) SymlinkAt(oldPath string, newPath string) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) SymlinkAt(oldPath string, newPath string) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	oldPath0, oldPath1 := cm.LowerString(oldPath)
 	newPath0, newPath1 := cm.LowerString(newPath)
@@ -1101,7 +1101,7 @@ func (self Descriptor) SymlinkAt(oldPath string, newPath string) (result cm.ErrR
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.symlink-at
 //go:noescape
-func wasmimport_DescriptorSymlinkAt(self0 uint32, oldPath0 *uint8, oldPath1 uint32, newPath0 *uint8, newPath1 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorSymlinkAt(self0 uint32, oldPath0 *uint8, oldPath1 uint32, newPath0 *uint8, newPath1 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // Sync represents the imported method "sync".
 //
@@ -1115,7 +1115,7 @@ func wasmimport_DescriptorSymlinkAt(self0 uint32, oldPath0 *uint8, oldPath1 uint
 //	sync: func() -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) Sync() (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) Sync() (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DescriptorSync((uint32)(self0), &result)
 	return
@@ -1123,7 +1123,7 @@ func (self Descriptor) Sync() (result cm.ErrResult[struct{}, ErrorCode]) {
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.sync
 //go:noescape
-func wasmimport_DescriptorSync(self0 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorSync(self0 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // SyncData represents the imported method "sync-data".
 //
@@ -1137,7 +1137,7 @@ func wasmimport_DescriptorSync(self0 uint32, result *cm.ErrResult[struct{}, Erro
 //	sync-data: func() -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) SyncData() (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) SyncData() (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DescriptorSyncData((uint32)(self0), &result)
 	return
@@ -1145,7 +1145,7 @@ func (self Descriptor) SyncData() (result cm.ErrResult[struct{}, ErrorCode]) {
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.sync-data
 //go:noescape
-func wasmimport_DescriptorSyncData(self0 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorSyncData(self0 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // UnlinkFileAt represents the imported method "unlink-file-at".
 //
@@ -1157,7 +1157,7 @@ func wasmimport_DescriptorSyncData(self0 uint32, result *cm.ErrResult[struct{}, 
 //	unlink-file-at: func(path: string) -> result<_, error-code>
 //
 //go:nosplit
-func (self Descriptor) UnlinkFileAt(path string) (result cm.ErrResult[struct{}, ErrorCode]) {
+func (self Descriptor) UnlinkFileAt(path string) (result cm.Result[ErrorCode, struct{}, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	path0, path1 := cm.LowerString(path)
 	wasmimport_DescriptorUnlinkFileAt((uint32)(self0), (*uint8)(path0), (uint32)(path1), &result)
@@ -1166,7 +1166,7 @@ func (self Descriptor) UnlinkFileAt(path string) (result cm.ErrResult[struct{}, 
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.unlink-file-at
 //go:noescape
-func wasmimport_DescriptorUnlinkFileAt(self0 uint32, path0 *uint8, path1 uint32, result *cm.ErrResult[struct{}, ErrorCode])
+func wasmimport_DescriptorUnlinkFileAt(self0 uint32, path0 *uint8, path1 uint32, result *cm.Result[ErrorCode, struct{}, ErrorCode])
 
 // Write represents the imported method "write".
 //
@@ -1183,7 +1183,7 @@ func wasmimport_DescriptorUnlinkFileAt(self0 uint32, path0 *uint8, path1 uint32,
 //	write: func(buffer: list<u8>, offset: filesize) -> result<filesize, error-code>
 //
 //go:nosplit
-func (self Descriptor) Write(buffer cm.List[uint8], offset FileSize) (result cm.OKResult[FileSize, ErrorCode]) {
+func (self Descriptor) Write(buffer cm.List[uint8], offset FileSize) (result cm.Result[uint64, FileSize, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	buffer0, buffer1 := cm.LowerList(buffer)
 	offset0 := (uint64)(offset)
@@ -1193,7 +1193,7 @@ func (self Descriptor) Write(buffer cm.List[uint8], offset FileSize) (result cm.
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.write
 //go:noescape
-func wasmimport_DescriptorWrite(self0 uint32, buffer0 *uint8, buffer1 uint32, offset0 uint64, result *cm.OKResult[FileSize, ErrorCode])
+func wasmimport_DescriptorWrite(self0 uint32, buffer0 *uint8, buffer1 uint32, offset0 uint64, result *cm.Result[uint64, FileSize, ErrorCode])
 
 // WriteViaStream represents the imported method "write-via-stream".
 //
@@ -1207,7 +1207,7 @@ func wasmimport_DescriptorWrite(self0 uint32, buffer0 *uint8, buffer1 uint32, of
 //	write-via-stream: func(offset: filesize) -> result<output-stream, error-code>
 //
 //go:nosplit
-func (self Descriptor) WriteViaStream(offset FileSize) (result cm.OKResult[streams.OutputStream, ErrorCode]) {
+func (self Descriptor) WriteViaStream(offset FileSize) (result cm.Result[streams.OutputStream, streams.OutputStream, ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	offset0 := (uint64)(offset)
 	wasmimport_DescriptorWriteViaStream((uint32)(self0), (uint64)(offset0), &result)
@@ -1216,7 +1216,7 @@ func (self Descriptor) WriteViaStream(offset FileSize) (result cm.OKResult[strea
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]descriptor.write-via-stream
 //go:noescape
-func wasmimport_DescriptorWriteViaStream(self0 uint32, offset0 uint64, result *cm.OKResult[streams.OutputStream, ErrorCode])
+func wasmimport_DescriptorWriteViaStream(self0 uint32, offset0 uint64, result *cm.Result[streams.OutputStream, streams.OutputStream, ErrorCode])
 
 // DirectoryEntryStream represents the imported resource "wasi:filesystem/types@0.2.0#directory-entry-stream".
 //
@@ -1247,7 +1247,7 @@ func wasmimport_DirectoryEntryStreamResourceDrop(self0 uint32)
 //	read-directory-entry: func() -> result<option<directory-entry>, error-code>
 //
 //go:nosplit
-func (self DirectoryEntryStream) ReadDirectoryEntry() (result cm.OKResult[cm.Option[DirectoryEntry], ErrorCode]) {
+func (self DirectoryEntryStream) ReadDirectoryEntry() (result cm.Result[OptionDirectoryEntryShape, cm.Option[DirectoryEntry], ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_DirectoryEntryStreamReadDirectoryEntry((uint32)(self0), &result)
 	return
@@ -1255,7 +1255,7 @@ func (self DirectoryEntryStream) ReadDirectoryEntry() (result cm.OKResult[cm.Opt
 
 //go:wasmimport wasi:filesystem/types@0.2.0 [method]directory-entry-stream.read-directory-entry
 //go:noescape
-func wasmimport_DirectoryEntryStreamReadDirectoryEntry(self0 uint32, result *cm.OKResult[cm.Option[DirectoryEntry], ErrorCode])
+func wasmimport_DirectoryEntryStreamReadDirectoryEntry(self0 uint32, result *cm.Result[OptionDirectoryEntryShape, cm.Option[DirectoryEntry], ErrorCode])
 
 // FilesystemErrorCode represents the imported function "filesystem-error-code".
 //
