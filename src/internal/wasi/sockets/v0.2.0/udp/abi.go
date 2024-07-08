@@ -7,7 +7,13 @@ package udp
 import (
 	"github.com/ydnar/wasm-tools-go/cm"
 	"internal/wasi/sockets/v0.2.0/network"
+	"unsafe"
 )
+
+// IPSocketAddressShape is used for storage in variant or result types.
+type IPSocketAddressShape struct {
+	shape [unsafe.Sizeof(network.IPSocketAddress{})]byte
+}
 
 func lower_IPv4Address(v network.IPv4Address) (f0 uint32, f1 uint32, f2 uint32, f3 uint32) {
 	f0 = (uint32)(v[0])
@@ -44,7 +50,7 @@ func lower_IPv6SocketAddress(v network.IPv6SocketAddress) (f0 uint32, f1 uint32,
 }
 
 func lower_IPSocketAddress(v network.IPSocketAddress) (f0 uint32, f1 uint32, f2 uint32, f3 uint32, f4 uint32, f5 uint32, f6 uint32, f7 uint32, f8 uint32, f9 uint32, f10 uint32, f11 uint32) {
-	f0 = (uint32)(cm.Tag(&v))
+	f0 = (uint32)(v.Tag())
 	switch f0 {
 	case 0: // ipv4
 		v1, v2, v3, v4, v5 := lower_IPv4SocketAddress(*v.IPv4())
@@ -68,6 +74,11 @@ func lower_IPSocketAddress(v network.IPSocketAddress) (f0 uint32, f1 uint32, f2 
 		f11 = (uint32)(v11)
 	}
 	return
+}
+
+// TupleIncomingDatagramStreamOutgoingDatagramStreamShape is used for storage in variant or result types.
+type TupleIncomingDatagramStreamOutgoingDatagramStreamShape struct {
+	shape [unsafe.Sizeof(cm.Tuple[IncomingDatagramStream, OutgoingDatagramStream]{})]byte
 }
 
 func lower_OptionIPSocketAddress(v cm.Option[network.IPSocketAddress]) (f0 uint32, f1 uint32, f2 uint32, f3 uint32, f4 uint32, f5 uint32, f6 uint32, f7 uint32, f8 uint32, f9 uint32, f10 uint32, f11 uint32, f12 uint32) {

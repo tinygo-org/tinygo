@@ -53,7 +53,7 @@ func wasmimport_ResolveAddressStreamResourceDrop(self0 uint32)
 //	resolve-next-address: func() -> result<option<ip-address>, error-code>
 //
 //go:nosplit
-func (self ResolveAddressStream) ResolveNextAddress() (result cm.OKResult[cm.Option[network.IPAddress], network.ErrorCode]) {
+func (self ResolveAddressStream) ResolveNextAddress() (result cm.Result[OptionIPAddressShape, cm.Option[network.IPAddress], network.ErrorCode]) {
 	self0 := cm.Reinterpret[uint32](self)
 	wasmimport_ResolveAddressStreamResolveNextAddress((uint32)(self0), &result)
 	return
@@ -61,7 +61,7 @@ func (self ResolveAddressStream) ResolveNextAddress() (result cm.OKResult[cm.Opt
 
 //go:wasmimport wasi:sockets/ip-name-lookup@0.2.0 [method]resolve-address-stream.resolve-next-address
 //go:noescape
-func wasmimport_ResolveAddressStreamResolveNextAddress(self0 uint32, result *cm.OKResult[cm.Option[network.IPAddress], network.ErrorCode])
+func wasmimport_ResolveAddressStreamResolveNextAddress(self0 uint32, result *cm.Result[OptionIPAddressShape, cm.Option[network.IPAddress], network.ErrorCode])
 
 // Subscribe represents the imported method "subscribe".
 //
@@ -111,7 +111,7 @@ func wasmimport_ResolveAddressStreamSubscribe(self0 uint32) (result0 uint32)
 //	error-code>
 //
 //go:nosplit
-func ResolveAddresses(network_ network.Network, name string) (result cm.OKResult[ResolveAddressStream, network.ErrorCode]) {
+func ResolveAddresses(network_ network.Network, name string) (result cm.Result[ResolveAddressStream, ResolveAddressStream, network.ErrorCode]) {
 	network0 := cm.Reinterpret[uint32](network_)
 	name0, name1 := cm.LowerString(name)
 	wasmimport_ResolveAddresses((uint32)(network0), (*uint8)(name0), (uint32)(name1), &result)
@@ -120,4 +120,4 @@ func ResolveAddresses(network_ network.Network, name string) (result cm.OKResult
 
 //go:wasmimport wasi:sockets/ip-name-lookup@0.2.0 resolve-addresses
 //go:noescape
-func wasmimport_ResolveAddresses(network0 uint32, name0 *uint8, name1 uint32, result *cm.OKResult[ResolveAddressStream, network.ErrorCode])
+func wasmimport_ResolveAddresses(network0 uint32, name0 *uint8, name1 uint32, result *cm.Result[ResolveAddressStream, ResolveAddressStream, network.ErrorCode])
