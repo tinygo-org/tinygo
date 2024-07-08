@@ -44,7 +44,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		runtimePanic("out of memory")
 	}
 	pointer := unsafe.Pointer(addr)
-	memzero(pointer, size)
+	zero_new_alloc(pointer, size)
 	return pointer
 }
 
