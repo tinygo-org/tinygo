@@ -122,3 +122,8 @@ func write(fd uintptr, p unsafe.Pointer, n int32) int32 {
 	}
 	return 0
 }
+
+// getAuxv is linknamed from golang.org/x/sys/cpu.
+func getAuxv() []uintptr {
+	return nil
+}
