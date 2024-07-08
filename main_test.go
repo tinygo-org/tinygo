@@ -409,6 +409,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		fail = true
 	} else if !bytes.Equal(expected, actual) {
 		t.Logf("output did not match (expected %d bytes, got %d bytes):", len(expected), len(actual))
+		t.Logf(string(Diff("expected", expected, "actual", actual)))
 		fail = true
 	}
 
