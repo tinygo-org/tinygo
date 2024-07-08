@@ -159,6 +159,35 @@ const (
 	ErrorCodePermanentResolverFailure
 )
 
+var stringsErrorCode = [21]string{
+	"unknown",
+	"access-denied",
+	"not-supported",
+	"invalid-argument",
+	"out-of-memory",
+	"timeout",
+	"concurrency-conflict",
+	"not-in-progress",
+	"would-block",
+	"invalid-state",
+	"new-socket-limit",
+	"address-not-bindable",
+	"address-in-use",
+	"remote-unreachable",
+	"connection-refused",
+	"connection-reset",
+	"connection-aborted",
+	"datagram-too-large",
+	"name-unresolvable",
+	"temporary-resolver-failure",
+	"permanent-resolver-failure",
+}
+
+// String implements [fmt.Stringer], returning the enum case name of e.
+func (e ErrorCode) String() string {
+	return stringsErrorCode[e]
+}
+
 // IPAddressFamily represents the enum "wasi:sockets/network@0.2.0#ip-address-family".
 //
 //	enum ip-address-family {
@@ -174,6 +203,16 @@ const (
 	// Similar to `AF_INET6` in POSIX.
 	IPAddressFamilyIPv6
 )
+
+var stringsIPAddressFamily = [2]string{
+	"ipv4",
+	"ipv6",
+}
+
+// String implements [fmt.Stringer], returning the enum case name of e.
+func (e IPAddressFamily) String() string {
+	return stringsIPAddressFamily[e]
+}
 
 // IPv4Address represents the tuple "wasi:sockets/network@0.2.0#ipv4-address".
 //

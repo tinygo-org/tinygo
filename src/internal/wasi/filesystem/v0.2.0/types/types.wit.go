@@ -89,6 +89,22 @@ const (
 	DescriptorTypeSocket
 )
 
+var stringsDescriptorType = [8]string{
+	"unknown",
+	"block-device",
+	"character-device",
+	"directory",
+	"fifo",
+	"symbolic-link",
+	"regular-file",
+	"socket",
+}
+
+// String implements [fmt.Stringer], returning the enum case name of e.
+func (e DescriptorType) String() string {
+	return stringsDescriptorType[e]
+}
+
 // DescriptorFlags represents the flags "wasi:filesystem/types@0.2.0#descriptor-flags".
 //
 // Descriptor flags.
@@ -470,6 +486,51 @@ const (
 	ErrorCodeCrossDevice
 )
 
+var stringsErrorCode = [37]string{
+	"access",
+	"would-block",
+	"already",
+	"bad-descriptor",
+	"busy",
+	"deadlock",
+	"quota",
+	"exist",
+	"file-too-large",
+	"illegal-byte-sequence",
+	"in-progress",
+	"interrupted",
+	"invalid",
+	"io",
+	"is-directory",
+	"loop",
+	"too-many-links",
+	"message-size",
+	"name-too-long",
+	"no-device",
+	"no-entry",
+	"no-lock",
+	"insufficient-memory",
+	"insufficient-space",
+	"not-directory",
+	"not-empty",
+	"not-recoverable",
+	"unsupported",
+	"no-tty",
+	"no-such-device",
+	"overflow",
+	"not-permitted",
+	"pipe",
+	"read-only",
+	"invalid-seek",
+	"text-file-busy",
+	"cross-device",
+}
+
+// String implements [fmt.Stringer], returning the enum case name of e.
+func (e ErrorCode) String() string {
+	return stringsErrorCode[e]
+}
+
 // Advice represents the enum "wasi:filesystem/types@0.2.0#advice".
 //
 // File or memory access pattern advisory information.
@@ -509,6 +570,20 @@ const (
 	// not reuse it thereafter.
 	AdviceNoReuse
 )
+
+var stringsAdvice = [6]string{
+	"normal",
+	"sequential",
+	"random",
+	"will-need",
+	"dont-need",
+	"no-reuse",
+}
+
+// String implements [fmt.Stringer], returning the enum case name of e.
+func (e Advice) String() string {
+	return stringsAdvice[e]
+}
 
 // MetadataHashValue represents the record "wasi:filesystem/types@0.2.0#metadata-hash-value".
 //

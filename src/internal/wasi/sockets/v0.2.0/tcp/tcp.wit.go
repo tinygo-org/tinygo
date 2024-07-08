@@ -33,6 +33,17 @@ const (
 	ShutdownTypeBoth
 )
 
+var stringsShutdownType = [3]string{
+	"receive",
+	"send",
+	"both",
+}
+
+// String implements [fmt.Stringer], returning the enum case name of e.
+func (e ShutdownType) String() string {
+	return stringsShutdownType[e]
+}
+
 // TCPSocket represents the imported resource "wasi:sockets/tcp@0.2.0#tcp-socket".
 //
 // A TCP socket resource.
