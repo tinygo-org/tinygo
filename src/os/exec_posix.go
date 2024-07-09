@@ -35,13 +35,16 @@ func (p *Process) release() error {
 	return nil
 }
 
-// Combination of fork and exec, careful to be thread safe.
-
-// https://cs.opensource.google/go/go/+/master:src/syscall/exec_unix.go;l=143?q=forkExec&ss=go%2Fgo
-// losely inspired by the golang implementation
-// This is a hacky fire-and forget implementation without setting any attributes, using pipes or checking for errors
+// This function is a wrapper around the forkExec function, which is a wrapper around the fork and execve system calls.
+// The StartProcess function creates a new process by forking the current process and then calling execve to replace the current process with the new process.
+// It thereby replaces the newly created process with the specified command and arguments.
+// Differences to upstream golang implementation (https://cs.opensource.google/go/go/+/master:src/syscall/exec_unix.go;l=143):
+// * No setting of Process Attributes
+// * Ignoring Ctty
+// * No ForkLocking (might be introduced by #4273)
+// * No parent-child communication via pipes (TODO)
+// * No waiting for crashes child processes to prohibit zombie process accumulation / Wait status checking (TODO)
 func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) {
-	// Convert args to C form.
 	var (
 		ret uintptr
 	)
@@ -59,14 +62,16 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		return 0, err
 	}
 
-	// pid, _, _ = syscall.Syscall6(syscall.SYS_FORK, 0, 0, 0, 0, 0, 0)
-	// 1. fork
+	if (runtime.GOOS == "freebsd" || runtime.GOOS == "dragonfly") && len(argv) > 0 && len(argv[0]) > len(argv0) {
+		argvp[0] = argv0p
+	}
+
 	ret, _, _ = syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
 	if ret != 0 {
-		// parent
+		// if fd == 0 code runs in parent
 		return int(ret), nil
 	} else {
-		// 2. exec
+		// else code runs in child, which then should exec the new process
 		ret, _, _ = syscall.Syscall6(syscall.SYS_EXECVE, uintptr(unsafe.Pointer(argv0p)), uintptr(unsafe.Pointer(&argvp[0])), uintptr(unsafe.Pointer(&envvp[0])), 0, 0, 0)
 		if ret != 0 {
 			// exec failed
@@ -77,7 +82,11 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 	}
 }
 
-// in regular go this is where the forkExec thingy comes in play
+// In Golang, the idiomatic way to create a new process is to use the StartProcess function.
+// Since the Model of operating system processes in tinygo differs from the one in Golang, we need to implement the StartProcess function differently.
+// The startProcess function is a wrapper around the forkExec function, which is a wrapper around the fork and execve system calls.
+// The StartProcess function creates a new process by forking the current process and then calling execve to replace the current process with the new process.
+// It thereby replaces the newly created process with the specified command and arguments.
 func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err error) {
 	pid, err := ForkExec(name, argv, attr)
 	if err != nil {
