@@ -1340,15 +1340,31 @@ func printCompilerError(err error, logln func(...interface{}), wd string) {
 			}
 		}
 	case loader.Errors:
-		logln("#", err.Pkg.ImportPath)
+		// Parser errors, typechecking errors, or `go list` errors.
+		// err.Pkg is nil for `go list` errors.
+		if err.Pkg != nil {
+			logln("#", err.Pkg.ImportPath)
+		}
 		for _, err := range err.Errs {
 			printCompilerError(err, logln, wd)
 		}
 	case loader.Error:
-		logln(err.Err.Error())
-		logln("package", err.ImportStack[0])
-		for _, pkgPath := range err.ImportStack[1:] {
-			logln("\timports", pkgPath)
+		if err.Err.Pos.Filename != "" {
+			// Probably a syntax error in a dependency.
+			printCompilerError(err.Err, logln, wd)
+		} else {
+			// Probably an "import cycle not allowed" error.
+			logln("package", err.ImportStack[0])
+			for i := 1; i < len(err.ImportStack); i++ {
+				pkgPath := err.ImportStack[i]
+				if i == len(err.ImportStack)-1 {
+					// last package
+					logln("\timports", pkgPath+": "+err.Err.Error())
+				} else {
+					// not the last pacakge
+					logln("\timports", pkgPath)
+				}
+			}
 		}
 	case *builder.MultiError:
 		for _, err := range err.Errs {

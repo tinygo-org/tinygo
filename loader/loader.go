@@ -128,7 +128,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 	}
 
 	// List the dependencies of this package, in raw JSON format.
-	extraArgs := []string{"-json", "-deps"}
+	extraArgs := []string{"-json", "-deps", "-e"}
 	if config.TestConfig.CompileTestBinary {
 		extraArgs = append(extraArgs, "-test")
 	}
@@ -149,6 +149,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 
 	// Parse the returned json from `go list`.
 	decoder := json.NewDecoder(buf)
+	var pkgErrors []error
 	for {
 		pkg := &Package{
 			program:      p,
@@ -188,6 +189,12 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 					pos.Filename = strings.Join(fields[:len(fields)-1], ":")
 					pos.Line, _ = strconv.Atoi(fields[len(fields)-1])
 				}
+				if abs, err := filepath.Abs(pos.Filename); err == nil {
+					// Make the path absolute, so that error messages will be
+					// prettier (it will be turned back into a relative path
+					// when printing the error).
+					pos.Filename = abs
+				}
 				pos.Filename = p.getOriginalPath(pos.Filename)
 			}
 			err := scanner.Error{
@@ -195,10 +202,11 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 				Msg: pkg.Error.Err,
 			}
 			if len(pkg.Error.ImportStack) != 0 {
-				return nil, Error{
+				pkgErrors = append(pkgErrors, Error{
 					ImportStack: pkg.Error.ImportStack,
 					Err:         err,
-				}
+				})
+				continue
 			}
 			return nil, err
 		}
@@ -239,6 +247,13 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 		}
 		p.sorted = append(p.sorted, pkg)
 		p.Packages[pkg.ImportPath] = pkg
+	}
+
+	if len(pkgErrors) != 0 {
+		// TODO: use errors.Join in Go 1.20.
+		return nil, Errors{
+			Errs: pkgErrors,
+		}
 	}
 
 	if config.TestConfig.CompileTestBinary && !strings.HasSuffix(p.sorted[len(p.sorted)-1].ImportPath, ".test") {
