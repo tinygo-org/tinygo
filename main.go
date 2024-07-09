@@ -1288,10 +1288,9 @@ func usage(command string) {
 
 // try to make the path relative to the current working directory. If any error
 // occurs, this error is ignored and the absolute path is returned instead.
-func tryToMakePathRelative(dir string) string {
-	wd, err := os.Getwd()
-	if err != nil {
-		return dir
+func tryToMakePathRelative(dir, wd string) string {
+	if wd == "" {
+		return dir // working directory not found
 	}
 	relpath, err := filepath.Rel(wd, dir)
 	if err != nil {
@@ -1302,28 +1301,25 @@ func tryToMakePathRelative(dir string) string {
 
 // printCompilerError prints compiler errors using the provided logger function
 // (similar to fmt.Println).
-//
-// There is one exception: interp errors may print to stderr unconditionally due
-// to limitations in the LLVM bindings.
-func printCompilerError(logln func(...interface{}), err error) {
+func printCompilerError(err error, logln func(...interface{}), wd string) {
 	switch err := err.(type) {
 	case types.Error:
-		printCompilerError(logln, scanner.Error{
+		printCompilerError(scanner.Error{
 			Pos: err.Fset.Position(err.Pos),
 			Msg: err.Msg,
-		})
+		}, logln, wd)
 	case scanner.Error:
 		if !strings.HasPrefix(err.Pos.Filename, filepath.Join(goenv.Get("GOROOT"), "src")) && !strings.HasPrefix(err.Pos.Filename, filepath.Join(goenv.Get("TINYGOROOT"), "src")) {
 			// This file is not from the standard library (either the GOROOT or
 			// the TINYGOROOT). Make the path relative, for easier reading.
 			// Ignore any errors in the process (falling back to the absolute
 			// path).
-			err.Pos.Filename = tryToMakePathRelative(err.Pos.Filename)
+			err.Pos.Filename = tryToMakePathRelative(err.Pos.Filename, wd)
 		}
 		logln(err)
 	case scanner.ErrorList:
 		for _, scannerErr := range err {
-			printCompilerError(logln, *scannerErr)
+			printCompilerError(*scannerErr, logln, wd)
 		}
 	case *interp.Error:
 		logln("#", err.ImportPath)
@@ -1341,7 +1337,7 @@ func printCompilerError(logln func(...interface{}), err error) {
 	case loader.Errors:
 		logln("#", err.Pkg.ImportPath)
 		for _, err := range err.Errs {
-			printCompilerError(logln, err)
+			printCompilerError(err, logln, wd)
 		}
 	case loader.Error:
 		logln(err.Err.Error())
@@ -1351,7 +1347,7 @@ func printCompilerError(logln func(...interface{}), err error) {
 		}
 	case *builder.MultiError:
 		for _, err := range err.Errs {
-			printCompilerError(logln, err)
+			printCompilerError(err, logln, wd)
 		}
 	default:
 		logln("error:", err)
@@ -1359,10 +1355,14 @@ func printCompilerError(logln func(...interface{}), err error) {
 }
 
 func handleCompilerError(err error) {
+	wd, getwdErr := os.Getwd()
+	if getwdErr != nil {
+		wd = ""
+	}
 	if err != nil {
-		printCompilerError(func(args ...interface{}) {
+		printCompilerError(err, func(args ...interface{}) {
 			fmt.Fprintln(os.Stderr, args...)
-		}, err)
+		}, wd)
 		os.Exit(1)
 	}
 }
@@ -1764,9 +1764,13 @@ func main() {
 				stderr := (*testStderr)(buf)
 				passed, err := Test(pkgName, stdout, stderr, options, outpath)
 				if err != nil {
-					printCompilerError(func(args ...interface{}) {
+					wd, err := os.Getwd()
+					if err != nil {
+						wd = ""
+					}
+					printCompilerError(err, func(args ...interface{}) {
 						fmt.Fprintln(stderr, args...)
-					}, err)
+					}, wd)
 				}
 				if !passed {
 					select {
