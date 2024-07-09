@@ -642,13 +642,6 @@ func (p *cgoPackage) addErrorAfter(pos token.Pos, after, msg string) {
 
 // addErrorAt is a utility function to add an error to the list of errors.
 func (p *cgoPackage) addErrorAt(position token.Position, msg string) {
-	if filepath.IsAbs(position.Filename) {
-		// Relative paths for readability, like other Go parser errors.
-		relpath, err := filepath.Rel(p.currentDir, position.Filename)
-		if err == nil {
-			position.Filename = relpath
-		}
-	}
 	p.errors = append(p.errors, scanner.Error{
 		Pos: position,
 		Msg: msg,
