@@ -380,7 +380,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		return cmd.Run()
 	})
 	if err != nil {
-		printCompilerError(t.Log, err)
+		printCompilerError(err, t.Log, "")
 		t.Fail()
 		return
 	}
