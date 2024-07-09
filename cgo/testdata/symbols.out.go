@@ -60,5 +60,10 @@ func C.staticfunc!symbols.go(x C.int)
 
 var C.staticfunc!symbols.go$funcaddr unsafe.Pointer
 
+//export notEscapingFunction
+//go:noescape
+func C.notEscapingFunction(a *C.int)
+
+var C.notEscapingFunction$funcaddr unsafe.Pointer
 //go:extern someValue
 var C.someValue C.int
