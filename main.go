@@ -347,6 +347,11 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		}
 		return err
 	})
+
+	if testConfig.CompileOnly {
+		return true, nil
+	}
+
 	importPath := strings.TrimSuffix(result.ImportPath, ".test")
 
 	var w io.Writer = stdout
@@ -357,7 +362,7 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		fmt.Fprintf(w, "?   \t%s\t[no test files]\n", err.ImportPath)
 		// Pretend the test passed - it at least didn't fail.
 		return true, nil
-	} else if passed && !testConfig.CompileOnly {
+	} else if passed {
 		fmt.Fprintf(w, "ok  \t%s\t%.3fs\n", importPath, duration.Seconds())
 	} else {
 		fmt.Fprintf(w, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
