@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,10 @@ import (
 func TestErrors(t *testing.T) {
 	for _, name := range []string{
 		"cgo",
+		"loader-importcycle",
+		"loader-invaliddep",
+		"loader-invalidpackage",
+		"loader-nopackage",
 		"syntax",
 		"types",
 	} {
@@ -57,9 +62,20 @@ func testErrorMessages(t *testing.T, filename string) {
 	actual := strings.TrimRight(buf.String(), "\n")
 
 	// Check whether the error is as expected.
-	if actual != expected {
+	if canonicalizeErrors(actual) != canonicalizeErrors(expected) {
 		t.Errorf("expected error:\n%s\ngot:\n%s", indentText(expected, "> "), indentText(actual, "> "))
 	}
+}
+
+func canonicalizeErrors(text string) string {
+	// Fix for Windows: replace all backslashes with forward slashes so that
+	// paths will be the same as on POSIX systems.
+	// (It may also change some other backslashes, but since this is only for
+	// comparing text it should be fine).
+	if runtime.GOOS == "windows" {
+		text = strings.ReplaceAll(text, "\\", "/")
+	}
+	return text
 }
 
 // Indent the given text with a given indentation string.
