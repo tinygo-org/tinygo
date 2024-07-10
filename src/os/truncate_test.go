@@ -14,8 +14,10 @@ import (
 )
 
 func TestTruncate(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
+	// Truncate is not supported on Windows or wasi at the moment
+	if runtime.GOOS == "windows" || runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
+		t.Logf("skipping test on %s", runtime.GOOS)
+		return
 	}
 
 	tmpDir := t.TempDir()
@@ -25,6 +27,7 @@ func TestTruncate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create %q: got %v, want nil", file, err)
 	}
+	defer fd.Close()
 
 	// truncate up to 0x100
 	if err := fd.Truncate(0x100); err != nil {

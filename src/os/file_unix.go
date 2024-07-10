@@ -128,7 +128,6 @@ func Readlink(name string) (string, error) {
 // Truncate changes the size of the file.
 // It does not change the I/O offset.
 // If there is an error, it will be of type *PathError.
-
 // Alternatively just use 'raw' syscall by file name
 func (f *File) Truncate(size int64) (err error) {
 	if f.handle == nil {

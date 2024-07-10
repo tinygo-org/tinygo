@@ -465,6 +465,3 @@ func libc_execve(filename *byte, argv **byte, envp **byte) int
 //
 //export truncate
 func libc_truncate(path *byte, length int64) int32
-
-//go:extern environ
-var libc_environ *unsafe.Pointer
