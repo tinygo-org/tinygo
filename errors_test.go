@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
@@ -15,38 +14,55 @@ import (
 
 // Test the error messages of the TinyGo compiler.
 func TestErrors(t *testing.T) {
-	for _, name := range []string{
-		"cgo",
-		"compiler",
-		"interp",
-		"loader-importcycle",
-		"loader-invaliddep",
-		"loader-invalidpackage",
-		"loader-nopackage",
-		"optimizer",
-		"syntax",
-		"types",
+	// TODO: nicely formatted error messages for:
+	//   - duplicate symbols in ld.lld (currently only prints bitcode file)
+	type errorTest struct {
+		name   string
+		target string
+	}
+	for _, tc := range []errorTest{
+		{name: "cgo"},
+		{name: "compiler"},
+		{name: "interp"},
+		{name: "linker-flashoverflow", target: "cortex-m-qemu"},
+		{name: "linker-ramoverflow", target: "cortex-m-qemu"},
+		{name: "linker-undefined", target: "darwin/arm64"},
+		{name: "linker-undefined", target: "linux/amd64"},
+		//{name: "linker-undefined", target: "windows/amd64"}, // TODO: no source location
+		{name: "linker-undefined", target: "cortex-m-qemu"},
+		//{name: "linker-undefined", target: "wasip1"}, // TODO: no source location
+		{name: "loader-importcycle"},
+		{name: "loader-invaliddep"},
+		{name: "loader-invalidpackage"},
+		{name: "loader-nopackage"},
+		{name: "optimizer"},
+		{name: "syntax"},
+		{name: "types"},
 	} {
+		name := tc.name
+		if tc.target != "" {
+			name += "#" + tc.target
+		}
+		target := tc.target
+		if target == "" {
+			target = "wasip1"
+		}
 		t.Run(name, func(t *testing.T) {
-			testErrorMessages(t, "./testdata/errors/"+name+".go")
+			options := optionsFromTarget(target, sema)
+			testErrorMessages(t, "./testdata/errors/"+tc.name+".go", &options)
 		})
 	}
 }
 
-func testErrorMessages(t *testing.T, filename string) {
+func testErrorMessages(t *testing.T, filename string, options *compileopts.Options) {
+	t.Parallel()
+
 	// Parse expected error messages.
 	expected := readErrorMessages(t, filename)
 
 	// Try to build a binary (this should fail with an error).
 	tmpdir := t.TempDir()
-	err := Build(filename, tmpdir+"/out", &compileopts.Options{
-		Target:        "wasip1",
-		Semaphore:     sema,
-		InterpTimeout: 180 * time.Second,
-		Debug:         true,
-		VerifyIR:      true,
-		Opt:           "z",
-	})
+	err := Build(filename, tmpdir+"/out", options)
 	if err == nil {
 		t.Fatal("expected to get a compiler error")
 	}

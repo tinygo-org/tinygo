@@ -15,12 +15,12 @@ func (e *MultiError) Error() string {
 
 // newMultiError returns a *MultiError if there is more than one error, or
 // returns that error directly when there is only one. Passing an empty slice
-// will lead to a panic.
+// will return nil (because there is no error).
 // The importPath may be passed if this error is for a single package.
 func newMultiError(errs []error, importPath string) error {
 	switch len(errs) {
 	case 0:
-		panic("attempted to create empty MultiError")
+		return nil
 	case 1:
 		return errs[0]
 	default:
