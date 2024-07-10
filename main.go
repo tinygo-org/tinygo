@@ -1467,7 +1467,8 @@ func main() {
 	case "clang", "ld.lld", "wasm-ld":
 		err := builder.RunTool(command, os.Args[2:]...)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			// The tool should have printed an error message already.
+			// Don't print another error message here.
 			os.Exit(1)
 		}
 		os.Exit(0)

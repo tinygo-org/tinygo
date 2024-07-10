@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -696,7 +695,8 @@ func TestMain(m *testing.M) {
 			// Invoke a specific tool.
 			err := builder.RunTool(os.Args[1], os.Args[2:]...)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
+				// The tool should have printed an error message already.
+				// Don't print another error message here.
 				os.Exit(1)
 			}
 			os.Exit(0)

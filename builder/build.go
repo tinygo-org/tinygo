@@ -779,7 +779,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			err = link(config.Target.Linker, ldflags...)
 			if err != nil {
-				return &commandError{"failed to link", result.Executable, err}
+				return err
 			}
 
 			var calculatedStacks []string
