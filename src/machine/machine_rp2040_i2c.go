@@ -501,15 +501,23 @@ func (i2c *I2C) Reply(buf []byte) error {
 	}
 
 	for txPtr < len(buf) {
-		if stat&rp.I2C0_IC_INTR_MASK_M_TX_EMPTY != 0 {
-			i2c.Bus.IC_DATA_CMD.Set(uint32(buf[txPtr]))
+		if i2c.Bus.GetIC_RAW_INTR_STAT_TX_EMPTY() != 0 {
+			i2c.Bus.SetIC_DATA_CMD_DAT(uint32(buf[txPtr]))
 			txPtr++
+			// The DW_apb_i2c flushes/resets/empties the
+			// TX_FIFO and RX_FIFO whenever there is a transmit abort
+			// caused by any of the events tracked by the
+			// IC_TX_ABRT_SOURCE register.
+			// In other words, it's safe to block until TX FIFO is
+			// EMPTY--it will empty from being transmitted or on error.
+			for i2c.Bus.GetIC_RAW_INTR_STAT_TX_EMPTY() == 0 {
+			}
 		}
 
 		// This Tx abort is a normal case - we're sending more
 		// data than controller wants to receive
-		if stat&rp.I2C0_IC_INTR_MASK_M_TX_ABRT != 0 {
-			i2c.Bus.IC_CLR_TX_ABRT.Get()
+		if i2c.Bus.GetIC_RAW_INTR_STAT_TX_ABRT() != 0 {
+			i2c.Bus.GetIC_CLR_TX_ABRT_CLR_TX_ABRT()
 			return nil
 		}
 
