@@ -23,6 +23,7 @@ func TestErrors(t *testing.T) {
 		"loader-invaliddep",
 		"loader-invalidpackage",
 		"loader-nopackage",
+		"optimizer",
 		"syntax",
 		"types",
 	} {
