@@ -318,18 +318,34 @@ func (p *Program) MainPkg() *Package {
 func (p *Program) Parse() error {
 	// Parse all packages.
 	// TODO: do this in parallel.
+	var errors []error
 	for _, pkg := range p.sorted {
 		err := pkg.Parse()
 		if err != nil {
-			return err
+			errors = append(errors, err)
 		}
 	}
 
 	// Typecheck all packages.
 	for _, pkg := range p.sorted {
+		if !pkg.isParsed() || !pkg.allImportsChecked() {
+			if len(errors) == 0 {
+				// Sanity check.
+				// If there are no errors, all packages should have been parsed.
+				panic("unreachable")
+			}
+			continue
+		}
 		err := pkg.Check()
 		if err != nil {
-			return err
+			errors = append(errors, err)
+		}
+	}
+
+	if len(errors) != 0 {
+		// TODO: use errors.Join in Go 1.20.
+		return Errors{
+			Errs: errors,
 		}
 	}
 
@@ -354,12 +370,12 @@ func (p *Package) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 	return parser.ParseFile(p.program.fset, originalPath, data, mode)
 }
 
-// Parse parses and typechecks this package.
+// Parse parses this package.
 //
 // Idempotent.
 func (p *Package) Parse() error {
-	if len(p.Files) != 0 {
-		return nil // nothing to do (?)
+	if p.isParsed() {
+		return nil // nothing to do
 	}
 
 	// Load the AST.
@@ -377,6 +393,24 @@ func (p *Package) Parse() error {
 	p.Files = files
 
 	return nil
+}
+
+// isParsed returns whether this package has been parsed.
+func (p *Package) isParsed() bool {
+	// Special case: the unsafe package doesn't have files to parse but does
+	// have p.Pkg set once it is parsed.
+	return len(p.Files) != 0 || p.Pkg != nil
+}
+
+// allImportsChecked returns whether all imports of this package have been
+// type-checked.
+func (p *Package) allImportsChecked() bool {
+	for _, dep := range p.Imports {
+		if p.program.Packages[dep].Pkg == nil {
+			return false
+		}
+	}
+	return true
 }
 
 // Check runs the package through the typechecker. The package must already be
