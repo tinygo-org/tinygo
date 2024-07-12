@@ -10,6 +10,7 @@ import (
 	"go/types"
 	"io"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/builder"
@@ -59,6 +60,7 @@ func CreateDiagnostics(err error) ProgramDiagnostic {
 // Create diagnostics for a single package (though, in practice, it may also be
 // used for whole-program diagnostics in some cases).
 func createPackageDiagnostic(err error) PackageDiagnostic {
+	// Extract diagnostics for this package.
 	var pkgDiag PackageDiagnostic
 	switch err := err.(type) {
 	case loader.Errors:
@@ -89,7 +91,20 @@ func createPackageDiagnostic(err error) PackageDiagnostic {
 	default:
 		pkgDiag.Diagnostics = createDiagnostics(err)
 	}
-	// TODO: sort
+
+	// Sort these diagnostics by file/line/column.
+	sort.SliceStable(pkgDiag.Diagnostics, func(i, j int) bool {
+		posI := pkgDiag.Diagnostics[i].Pos
+		posJ := pkgDiag.Diagnostics[j].Pos
+		if posI.Filename != posJ.Filename {
+			return posI.Filename < posJ.Filename
+		}
+		if posI.Line != posJ.Line {
+			return posI.Line < posJ.Line
+		}
+		return posI.Column < posJ.Column
+	})
+
 	return pkgDiag
 }
 
