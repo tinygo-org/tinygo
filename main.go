@@ -8,8 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"go/scanner"
-	"go/types"
 	"io"
 	"os"
 	"os/exec"
@@ -30,8 +28,8 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
-	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/buildutil"
 	"tinygo.org/x/go-llvm"
@@ -1291,99 +1289,13 @@ func usage(command string) {
 	}
 }
 
-// try to make the path relative to the current working directory. If any error
-// occurs, this error is ignored and the absolute path is returned instead.
-func tryToMakePathRelative(dir, wd string) string {
-	if wd == "" {
-		return dir // working directory not found
-	}
-	relpath, err := filepath.Rel(wd, dir)
-	if err != nil {
-		return dir
-	}
-	return relpath
-}
-
-// printCompilerError prints compiler errors using the provided logger function
-// (similar to fmt.Println).
-func printCompilerError(err error, logln func(...interface{}), wd string) {
-	switch err := err.(type) {
-	case types.Error:
-		printCompilerError(scanner.Error{
-			Pos: err.Fset.Position(err.Pos),
-			Msg: err.Msg,
-		}, logln, wd)
-	case scanner.Error:
-		if !strings.HasPrefix(err.Pos.Filename, filepath.Join(goenv.Get("GOROOT"), "src")) && !strings.HasPrefix(err.Pos.Filename, filepath.Join(goenv.Get("TINYGOROOT"), "src")) {
-			// This file is not from the standard library (either the GOROOT or
-			// the TINYGOROOT). Make the path relative, for easier reading.
-			// Ignore any errors in the process (falling back to the absolute
-			// path).
-			err.Pos.Filename = tryToMakePathRelative(err.Pos.Filename, wd)
-		}
-		logln(err)
-	case scanner.ErrorList:
-		for _, scannerErr := range err {
-			printCompilerError(*scannerErr, logln, wd)
-		}
-	case *interp.Error:
-		logln("#", err.ImportPath)
-		logln(err.Error())
-		if len(err.Inst) != 0 {
-			logln(err.Inst)
-		}
-		if len(err.Traceback) > 0 {
-			logln("\ntraceback:")
-			for _, line := range err.Traceback {
-				logln(line.Pos.String() + ":")
-				logln(line.Inst)
-			}
-		}
-	case loader.Errors:
-		// Parser errors, typechecking errors, or `go list` errors.
-		// err.Pkg is nil for `go list` errors.
-		if err.Pkg != nil {
-			logln("#", err.Pkg.ImportPath)
-		}
-		for _, err := range err.Errs {
-			printCompilerError(err, logln, wd)
-		}
-	case loader.Error:
-		if err.Err.Pos.Filename != "" {
-			// Probably a syntax error in a dependency.
-			printCompilerError(err.Err, logln, wd)
-		} else {
-			// Probably an "import cycle not allowed" error.
-			logln("package", err.ImportStack[0])
-			for i := 1; i < len(err.ImportStack); i++ {
-				pkgPath := err.ImportStack[i]
-				if i == len(err.ImportStack)-1 {
-					// last package
-					logln("\timports", pkgPath+": "+err.Err.Error())
-				} else {
-					// not the last pacakge
-					logln("\timports", pkgPath)
-				}
-			}
-		}
-	case *builder.MultiError:
-		for _, err := range err.Errs {
-			printCompilerError(err, logln, wd)
-		}
-	default:
-		logln("error:", err)
-	}
-}
-
 func handleCompilerError(err error) {
 	if err != nil {
 		wd, getwdErr := os.Getwd()
 		if getwdErr != nil {
 			wd = ""
 		}
-		printCompilerError(err, func(args ...interface{}) {
-			fmt.Fprintln(os.Stderr, args...)
-		}, wd)
+		diagnostics.CreateDiagnostics(err).WriteTo(os.Stderr, wd)
 		os.Exit(1)
 	}
 }
@@ -1789,9 +1701,7 @@ func main() {
 					if getwdErr != nil {
 						wd = ""
 					}
-					printCompilerError(err, func(args ...interface{}) {
-						fmt.Fprintln(stderr, args...)
-					}, wd)
+					diagnostics.CreateDiagnostics(err).WriteTo(os.Stderr, wd)
 				}
 				if !passed {
 					select {

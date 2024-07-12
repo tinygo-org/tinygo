@@ -24,6 +24,7 @@ import (
 	"github.com/aykevl/go-wasm"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -380,7 +381,11 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		return cmd.Run()
 	})
 	if err != nil {
-		printCompilerError(err, t.Log, "")
+		w := &bytes.Buffer{}
+		diagnostics.CreateDiagnostics(err).WriteTo(w, "")
+		for _, line := range strings.Split(strings.TrimRight(w.String(), "\n"), "\n") {
+			t.Log(line)
+		}
 		t.Fail()
 		return
 	}

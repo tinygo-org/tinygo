@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/diagnostics"
 )
 
 // Test the error messages of the TinyGo compiler.
@@ -59,9 +59,7 @@ func testErrorMessages(t *testing.T, filename string) {
 
 	// Write error message out as plain text.
 	var buf bytes.Buffer
-	printCompilerError(err, func(v ...interface{}) {
-		fmt.Fprintln(&buf, v...)
-	}, wd)
+	diagnostics.CreateDiagnostics(err).WriteTo(&buf, wd)
 	actual := strings.TrimRight(buf.String(), "\n")
 
 	// Check whether the error is as expected.
