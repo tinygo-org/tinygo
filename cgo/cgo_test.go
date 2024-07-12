@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"go/types"
 	"os"
@@ -219,7 +220,13 @@ func (i simpleImporter) Import(path string) (*types.Package, error) {
 // formatDiagnostic formats the error message to be an indented comment. It
 // also fixes Windows path name issues (backward slashes).
 func formatDiagnostic(err error) string {
-	msg := err.Error()
+	var msg string
+	switch err := err.(type) {
+	case scanner.Error:
+		msg = err.Pos.String() + ": " + err.Msg
+	default:
+		msg = err.Error()
+	}
 	if runtime.GOOS == "windows" {
 		// Fix Windows path slashes.
 		msg = strings.ReplaceAll(msg, "testdata\\", "testdata/")

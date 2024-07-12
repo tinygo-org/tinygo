@@ -195,7 +195,9 @@ func (t *tokenizer) Next() {
 	t.curValue = t.peekValue
 
 	// Parse the next peek token.
-	t.peekPos += token.Pos(len(t.curValue))
+	if t.peekPos != token.NoPos {
+		t.peekPos += token.Pos(len(t.curValue))
+	}
 	for {
 		if len(t.buf) == 0 {
 			t.peekToken = token.EOF
@@ -207,7 +209,9 @@ func (t *tokenizer) Next() {
 			// Skip whitespace.
 			// Based on this source, not sure whether it represents C whitespace:
 			// https://en.cppreference.com/w/cpp/string/byte/isspace
-			t.peekPos++
+			if t.peekPos != token.NoPos {
+				t.peekPos++
+			}
 			t.buf = t.buf[1:]
 		case len(t.buf) >= 2 && (string(t.buf[:2]) == "||" || string(t.buf[:2]) == "&&" || string(t.buf[:2]) == "<<" || string(t.buf[:2]) == ">>"):
 			// Two-character tokens.

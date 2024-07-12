@@ -4,6 +4,7 @@ package cgo
 // modification. It does not touch the AST itself.
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
@@ -369,42 +370,45 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 		gen.Specs = append(gen.Specs, valueSpec)
 		return gen, nil
 	case C.CXCursor_MacroDefinition:
+		// Extract tokens from the Clang tokenizer.
+		// See: https://stackoverflow.com/a/19074846/559350
 		sourceRange := C.tinygo_clang_getCursorExtent(c)
-		start := C.clang_getRangeStart(sourceRange)
-		end := C.clang_getRangeEnd(sourceRange)
-		var file, endFile C.CXFile
-		var startOffset, endOffset C.unsigned
-		C.clang_getExpansionLocation(start, &file, nil, nil, &startOffset)
-		if file == nil {
-			f.addError(pos, "internal error: could not find file where macro is defined")
-			return nil, nil
-		}
-		C.clang_getExpansionLocation(end, &endFile, nil, nil, &endOffset)
-		if file != endFile {
-			f.addError(pos, "internal error: expected start and end location of a macro to be in the same file")
-			return nil, nil
-		}
-		if startOffset > endOffset {
-			f.addError(pos, "internal error: start offset of macro is after end offset")
-			return nil, nil
-		}
-
-		// read file contents and extract the relevant byte range
 		tu := C.tinygo_clang_Cursor_getTranslationUnit(c)
-		var size C.size_t
-		sourcePtr := C.clang_getFileContents(tu, file, &size)
-		if endOffset >= C.uint(size) {
-			f.addError(pos, "internal error: end offset of macro lies after end of file")
-			return nil, nil
+		var rawTokens *C.CXToken
+		var numTokens C.unsigned
+		C.clang_tokenize(tu, sourceRange, &rawTokens, &numTokens)
+		tokens := unsafe.Slice(rawTokens, numTokens)
+		// Convert this range of tokens back to source text.
+		// Ugly, but it works well enough.
+		sourceBuf := &bytes.Buffer{}
+		var startOffset int
+		for i, token := range tokens {
+			spelling := getString(C.clang_getTokenSpelling(tu, token))
+			location := C.clang_getTokenLocation(tu, token)
+			var tokenOffset C.unsigned
+			C.clang_getExpansionLocation(location, nil, nil, nil, &tokenOffset)
+			if i == 0 {
+				// The first token is the macro name itself.
+				// Skip it (after using its location).
+				startOffset = int(tokenOffset) + len(name)
+			} else {
+				// Later tokens are the macro contents.
+				for int(tokenOffset) > (startOffset + sourceBuf.Len()) {
+					// Pad the source text with whitespace (that must have been
+					// present in the original source as well).
+					sourceBuf.WriteByte(' ')
+				}
+				sourceBuf.WriteString(spelling)
+			}
 		}
-		source := string(((*[1 << 28]byte)(unsafe.Pointer(sourcePtr)))[startOffset:endOffset:endOffset])
-		if !strings.HasPrefix(source, name) {
-			f.addError(pos, fmt.Sprintf("internal error: expected macro value to start with %#v, got %#v", name, source))
-			return nil, nil
-		}
-		value := source[len(name):]
+		C.clang_disposeTokens(tu, rawTokens, numTokens)
+		value := sourceBuf.String()
 		// Try to convert this #define into a Go constant expression.
-		expr, scannerError := parseConst(pos+token.Pos(len(name)), f.fset, value)
+		tokenPos := token.NoPos
+		if pos != token.NoPos {
+			tokenPos = pos + token.Pos(len(name))
+		}
+		expr, scannerError := parseConst(tokenPos, f.fset, value)
 		if scannerError != nil {
 			f.errors = append(f.errors, *scannerError)
 			return nil, nil
