@@ -1,9 +1,12 @@
 // CGo errors:
 //     testdata/errors.go:4:2: warning: some warning
 //     testdata/errors.go:11:9: error: unknown type name 'someType'
-//     testdata/errors.go:22:5: warning: another warning
+//     testdata/errors.go:26:5: warning: another warning
 //     testdata/errors.go:13:23: unexpected token ), expected end of expression
-//     testdata/errors.go:19:26: unexpected token ), expected end of expression
+//     testdata/errors.go:21:26: unexpected token ), expected end of expression
+//     testdata/errors.go:16:33: unexpected token ), expected end of expression
+//     testdata/errors.go:17:34: unexpected token ), expected end of expression
+//     -: unexpected token INT, expected end of expression
 
 // Type checking errors after CGo processing:
 //     testdata/errors.go:102: cannot use 2 << 10 (untyped int constant 2048) as C.char value in variable declaration (overflows)
@@ -11,6 +14,9 @@
 //     testdata/errors.go:108: undefined: C.SOME_CONST_1
 //     testdata/errors.go:110: cannot use C.SOME_CONST_3 (untyped int constant 1234) as byte value in variable declaration (overflows)
 //     testdata/errors.go:112: undefined: C.SOME_CONST_4
+//     testdata/errors.go:114: undefined: C.SOME_CONST_b
+//     testdata/errors.go:116: undefined: C.SOME_CONST_startspace
+//     testdata/errors.go:119: undefined: C.SOME_PARAM_CONST_invalid
 
 package main
 
@@ -58,3 +64,4 @@ type C.struct_point_t struct {
 type C.point_t = C.struct_point_t
 
 const C.SOME_CONST_3 = 1234
+const C.SOME_PARAM_CONST_valid = 3 + 4
