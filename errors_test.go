@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -62,20 +62,40 @@ func testErrorMessages(t *testing.T, filename string) {
 	actual := strings.TrimRight(buf.String(), "\n")
 
 	// Check whether the error is as expected.
-	if canonicalizeErrors(actual) != canonicalizeErrors(expected) {
+	if !matchErrors(t, expected, actual) {
 		t.Errorf("expected error:\n%s\ngot:\n%s", indentText(expected, "> "), indentText(actual, "> "))
 	}
 }
 
-func canonicalizeErrors(text string) string {
-	// Fix for Windows: replace all backslashes with forward slashes so that
-	// paths will be the same as on POSIX systems.
-	// (It may also change some other backslashes, but since this is only for
-	// comparing text it should be fine).
-	if runtime.GOOS == "windows" {
-		text = strings.ReplaceAll(text, "\\", "/")
+func matchErrors(t *testing.T, pattern, actual string) bool {
+	patternLines := strings.Split(pattern, "\n")
+	actualLines := strings.Split(actual, "\n")
+	if len(patternLines) != len(actualLines) {
+		return false
 	}
-	return text
+	for i, patternLine := range patternLines {
+		indices := regexp.MustCompile(`\{\{.*?\}\}`).FindAllStringIndex(patternLine, -1)
+		patternParts := []string{"^"}
+		lastStop := 0
+		for _, startstop := range indices {
+			start := startstop[0]
+			stop := startstop[1]
+			patternParts = append(patternParts,
+				regexp.QuoteMeta(patternLine[lastStop:start]),
+				patternLine[start+2:stop-2])
+			lastStop = stop
+		}
+		patternParts = append(patternParts, regexp.QuoteMeta(patternLine[lastStop:]), "$")
+		pattern := strings.Join(patternParts, "")
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			t.Fatalf("could not compile regexp for %#v: %v", patternLine, err)
+		}
+		if !re.MatchString(actualLines[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // Indent the given text with a given indentation string.
