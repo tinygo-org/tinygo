@@ -353,10 +353,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		}
 		packageActionIDJobs[pkg.ImportPath] = packageActionIDJob
 
-		// Build the SSA for the given package.
-		ssaPkg := program.Package(pkg.Pkg)
-		ssaPkg.Build()
-
 		// Now create the job to actually build the package. It will exit early
 		// if the package is already compiled.
 		job := &compileJob{
