@@ -17,6 +17,7 @@ import (
 func TestErrors(t *testing.T) {
 	for _, name := range []string{
 		"cgo",
+		"interp",
 		"loader-importcycle",
 		"loader-invaliddep",
 		"loader-invalidpackage",

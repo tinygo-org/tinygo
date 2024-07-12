@@ -417,6 +417,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				} else {
 					locals[inst.localIndex] = literalValue{uint8(0)}
 				}
+			case callFn.name == "__tinygo_interp_raise_test_error":
+				// Special function that will trigger an error.
+				// This is used to test error reporting.
+				return nil, mem, r.errorAt(inst, errors.New("test error"))
 			case strings.HasSuffix(callFn.name, ".$typeassert"):
 				if r.debug {
 					fmt.Fprintln(os.Stderr, indent+"interface assert:", operands[1:])
