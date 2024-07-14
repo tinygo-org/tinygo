@@ -1077,7 +1077,8 @@ func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
 				continue
 			}
 			fstype := fields[2]
-			if fstype != "vfat" {
+			// chromeos bind mounts use 9p
+			if !(fstype == "vfat" || fstype == "9p") {
 				continue
 			}
 			fspath := strings.ReplaceAll(fields[1], "\\040", " ")
