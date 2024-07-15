@@ -2,14 +2,6 @@
 
 package machine
 
-// Reference 1:
-// https://docs.espressif.com/projects/esp-idf/en/stable/esp32/_images/esp32-devkitC-v4-pinout.png
-
-// Reference 2:
-// This is the board I have, but it's slightly different, so for now I'm going to avoid pins that
-// are missing/unlabeled
-// https://ae01.alicdn.com/kf/Sa74c2ababf3640c5b77022481509c13bi.jpg
-
 // Silkscreen Pins
 const (
 	VP  = GPIO36
@@ -55,10 +47,8 @@ const (
 const (
 	UART0_TX_PIN = GPIO1
 	UART0_RX_PIN = GPIO3
-	// Unsure of these as don't appear on Ref 1 but do on Ref 2
 	// UART1_TX_PIN = GPIO17
 	// UART1_RX_PIN = GPIO16
-
 	UART_TX_PIN = UART0_TX_PIN
 	UART_RX_PIN = UART0_RX_PIN
 )
