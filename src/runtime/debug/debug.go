@@ -1,6 +1,8 @@
 // Package debug is a dummy package that is not yet implemented.
 package debug
 
+import "runtime"
+
 // SetMaxStack sets the maximum amount of memory that can be used by a single
 // goroutine stack.
 //
@@ -27,16 +29,17 @@ func Stack() []byte {
 //
 // Not implemented.
 func ReadBuildInfo() (info *BuildInfo, ok bool) {
-	return nil, false
+	return &BuildInfo{GoVersion: "tinygo" + runtime.Version()}, true
 }
 
 // BuildInfo represents the build information read from
 // the running binary.
 type BuildInfo struct {
-	Path     string    // The main package path
-	Main     Module    // The module containing the main package
-	Deps     []*Module // Module dependencies
-	Settings []BuildSetting
+	GoVersion string    // version of the Go toolchain that built the binary, e.g. "go1.19.2"
+	Path      string    // The main package path
+	Main      Module    // The module containing the main package
+	Deps      []*Module // Module dependencies
+	Settings  []BuildSetting
 }
 
 type BuildSetting struct {
@@ -57,4 +60,11 @@ type Module struct {
 // Not implemented.
 func SetGCPercent(n int) int {
 	return n
+}
+
+// String implements Stringer for BuildInfo.
+//
+// Not implemented.
+func (bi *BuildInfo) String() string {
+	return "<build info placeholder>\n"
 }
