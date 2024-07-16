@@ -6,7 +6,7 @@
 package tcp
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 	monotonicclock "internal/wasi/clocks/v0.2.0/monotonic-clock"
 	"internal/wasi/io/v0.2.0/poll"
 	"internal/wasi/io/v0.2.0/streams"

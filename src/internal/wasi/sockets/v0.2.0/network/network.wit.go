@@ -6,7 +6,7 @@
 package network
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 )
 
 // Network represents the imported resource "wasi:sockets/network@0.2.0#network".

@@ -11,7 +11,7 @@
 package random
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 )
 
 // GetRandomBytes represents the imported function "get-random-bytes".

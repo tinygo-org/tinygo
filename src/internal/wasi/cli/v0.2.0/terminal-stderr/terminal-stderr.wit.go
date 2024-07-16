@@ -9,7 +9,7 @@
 package terminalstderr
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 	terminaloutput "internal/wasi/cli/v0.2.0/terminal-output"
 )
 

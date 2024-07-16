@@ -12,7 +12,7 @@
 package terminalinput
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 )
 
 // TerminalInput represents the imported resource "wasi:cli/terminal-input@0.2.0#terminal-input".

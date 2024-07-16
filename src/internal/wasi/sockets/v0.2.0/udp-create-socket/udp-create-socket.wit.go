@@ -6,7 +6,7 @@
 package udpcreatesocket
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 	"internal/wasi/sockets/v0.2.0/network"
 	"internal/wasi/sockets/v0.2.0/udp"
 )

@@ -7,6 +7,8 @@ package syscall
 import (
 	"unsafe"
 
+	"internal/cm"
+
 	"internal/wasi/cli/v0.2.0/environment"
 	"internal/wasi/cli/v0.2.0/stderr"
 	"internal/wasi/cli/v0.2.0/stdin"
@@ -17,8 +19,6 @@ import (
 	ioerror "internal/wasi/io/v0.2.0/error"
 	"internal/wasi/io/v0.2.0/streams"
 	"internal/wasi/random/v0.2.0/random"
-
-	"github.com/ydnar/wasm-tools-go/cm"
 )
 
 func goString(cstr *byte) string {

@@ -9,7 +9,7 @@
 package poll
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 )
 
 // Pollable represents the imported resource "wasi:io/poll@0.2.0#pollable".

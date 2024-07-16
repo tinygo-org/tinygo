@@ -11,7 +11,7 @@
 package insecure
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 )
 
 // GetInsecureRandomBytes represents the imported function "get-insecure-random-bytes".
