@@ -51,3 +51,22 @@ func ByteSliceFromString(s string) ([]byte, error) {
 	copy(a, s)
 	return a, nil
 }
+
+func SlicePtrFromStrings(ss []string) ([]*byte, error) {
+	n := 0
+	for _, s := range ss {
+		if IndexByteString(s, 0) != -1 {
+			return nil, EINVAL
+		}
+		n += len(s) + 1 // +1 for NUL
+	}
+	bb := make([]*byte, len(ss)+1)
+	b := make([]byte, n)
+	n = 0
+	for i, s := range ss {
+		bb[i] = &b[n]
+		copy(b[n:], s)
+		n += len(s) + 1
+	}
+	return bb, nil
+}
