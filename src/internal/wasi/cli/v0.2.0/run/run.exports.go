@@ -5,7 +5,7 @@
 package run
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 )
 
 // Exports represents the caller-defined exports from "wasi:cli/run@0.2.0".

@@ -6,7 +6,7 @@
 package ioerror
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 )
 
 // Error represents the imported resource "wasi:io/error@0.2.0#error".

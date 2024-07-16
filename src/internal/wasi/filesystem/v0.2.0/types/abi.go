@@ -5,7 +5,7 @@
 package types
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 	wallclock "internal/wasi/clocks/v0.2.0/wall-clock"
 	"unsafe"
 )

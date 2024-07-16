@@ -269,9 +269,16 @@ lib/wasi-libc/sysroot/lib/wasm32-wasi/libc.a:
 	cd lib/wasi-libc && $(MAKE) -j4 EXTRA_CFLAGS="-O2 -g -DNDEBUG -mnontrapping-fptoint -msign-ext" MALLOC_IMPL=none CC="$(CLANG)" AR=$(LLVM_AR) NM=$(LLVM_NM)
 
 # Generate WASI syscall bindings
+WASM_TOOLS_MODULE=github.com/ydnar/wasm-tools-go
 .PHONY: wasi-syscall
-wasi-syscall:
-	wit-bindgen-go generate -o ./src/internal -p internal --versioned ./lib/wasi-cli/wit
+wasi-syscall: wasi-cm
+	go run -modfile ./internal/wasm-tools/go.mod $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm ./lib/wasi-cli/wit
+
+# Copy package cm into src/internal/cm
+.PHONY: wasi-cm
+wasi-cm:
+	# rm -rf ./src/internal/cm
+	rsync -rv --delete --exclude '*_test.go' $(shell go list -modfile ./internal/wasm-tools/go.mod -m -f {{.Dir}} $(WASM_TOOLS_MODULE))/cm ./src/internal/
 
 # Check for Node.js used during WASM tests.
 NODEJS_VERSION := $(word 1,$(subst ., ,$(shell node -v | cut -c 2-)))
@@ -946,6 +953,11 @@ release: build/release
 deb: build/release
 endif
 
+.PHONY: tools
+tools:
+	go generate -C ./internal/tools -tags tools  ./
+
+.PHONY: lint
 lint:
 	go run github.com/mgechev/revive -version
 	# TODO: lint more directories!
@@ -954,6 +966,7 @@ lint:
 	# Use 'grep .' to get rid of stray blank line
 	go run github.com/mgechev/revive -config revive.toml compiler/... src/{os,reflect}/*.go | grep -v "should have comment or be unexported" | grep '.' | awk '{print}; END {exit NR>0}'
 
+.PHONY: spell
 spell:
-	# Check for typos in comments.  Skip git submodules etc.
+	# Check for typos in comments. Skip git submodules etc.
 	go run github.com/client9/misspell/cmd/misspell -i 'ackward,devided,extint,inbetween,programmmer,rela' $$( find . -depth 1 -type d  | egrep -w -v 'lib|llvm|src/net' )

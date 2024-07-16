@@ -12,7 +12,7 @@
 package streams
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 	ioerror "internal/wasi/io/v0.2.0/error"
 	"internal/wasi/io/v0.2.0/poll"
 )

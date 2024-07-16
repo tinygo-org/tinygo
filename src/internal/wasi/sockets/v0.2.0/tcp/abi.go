@@ -5,7 +5,7 @@
 package tcp
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 	"internal/wasi/io/v0.2.0/streams"
 	"internal/wasi/sockets/v0.2.0/network"
 	"unsafe"

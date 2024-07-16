@@ -6,7 +6,7 @@
 package run
 
 import (
-	"github.com/ydnar/wasm-tools-go/cm"
+	"internal/cm"
 )
 
 //go:wasmexport wasi:cli/run@0.2.0#run
