@@ -3,7 +3,7 @@ package syscall
 import (
 	"errors"
 
-	"github.com/tinygo-org/tinygo/src/internal/bytealg"
+	"internal/bytealg"
 )
 
 const (
