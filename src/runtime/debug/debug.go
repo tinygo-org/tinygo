@@ -1,7 +1,12 @@
 // Package debug is a dummy package that is not yet implemented.
 package debug
 
-import "runtime"
+import (
+	"fmt"
+	"runtime"
+	"strconv"
+	"strings"
+)
 
 // SetMaxStack sets the maximum amount of memory that can be used by a single
 // goroutine stack.
@@ -62,9 +67,59 @@ func SetGCPercent(n int) int {
 	return n
 }
 
-// String implements Stringer for BuildInfo.
-//
-// Not implemented.
+// Start of stolen from big go. TODO: import/reuse without copy pasta.
+
+// quoteKey reports whether key is required to be quoted.
+func quoteKey(key string) bool {
+	return len(key) == 0 || strings.ContainsAny(key, "= \t\r\n\"`")
+}
+
+// quoteValue reports whether value is required to be quoted.
+func quoteValue(value string) bool {
+	return strings.ContainsAny(value, " \t\r\n\"`")
+}
+
 func (bi *BuildInfo) String() string {
-	return "<build info placeholder>\n"
+	buf := new(strings.Builder)
+	if bi.GoVersion != "" {
+		fmt.Fprintf(buf, "go\t%s\n", bi.GoVersion)
+	}
+	if bi.Path != "" {
+		fmt.Fprintf(buf, "path\t%s\n", bi.Path)
+	}
+	var formatMod func(string, Module)
+	formatMod = func(word string, m Module) {
+		buf.WriteString(word)
+		buf.WriteByte('\t')
+		buf.WriteString(m.Path)
+		buf.WriteByte('\t')
+		buf.WriteString(m.Version)
+		if m.Replace == nil {
+			buf.WriteByte('\t')
+			buf.WriteString(m.Sum)
+		} else {
+			buf.WriteByte('\n')
+			formatMod("=>", *m.Replace)
+		}
+		buf.WriteByte('\n')
+	}
+	if bi.Main != (Module{}) {
+		formatMod("mod", bi.Main)
+	}
+	for _, dep := range bi.Deps {
+		formatMod("dep", *dep)
+	}
+	for _, s := range bi.Settings {
+		key := s.Key
+		if quoteKey(key) {
+			key = strconv.Quote(key)
+		}
+		value := s.Value
+		if quoteValue(value) {
+			value = strconv.Quote(value)
+		}
+		fmt.Fprintf(buf, "build\t%s=%s\n", key, value)
+	}
+
+	return buf.String()
 }
