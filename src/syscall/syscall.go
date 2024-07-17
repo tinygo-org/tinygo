@@ -2,7 +2,6 @@ package syscall
 
 import (
 	"errors"
-	"sync/atomic"
 )
 
 const (
@@ -17,11 +16,6 @@ type Rlimit struct {
 	Cur uint64
 	Max uint64
 }
-
-// origRlimitNofile, if not {0, 0}, is the original soft RLIMIT_NOFILE.
-// When we can assume that we are bootstrapping with Go 1.19,
-// this can be atomic.Pointer[Rlimit].
-var origRlimitNofile atomic.Value // of Rlimit
 
 func Setrlimit(resource int, rlim *Rlimit) error {
 	return errors.New("Setrlimit not implemented")
