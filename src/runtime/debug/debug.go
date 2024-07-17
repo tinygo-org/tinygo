@@ -29,7 +29,7 @@ func Stack() []byte {
 //
 // Not implemented.
 func ReadBuildInfo() (info *BuildInfo, ok bool) {
-	return &BuildInfo{GoVersion: "tinygo" + runtime.Version()}, true
+	return &BuildInfo{GoVersion: runtime.Compiler + runtime.Version()}, true
 }
 
 // BuildInfo represents the build information read from
