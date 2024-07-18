@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -23,9 +24,21 @@ import (
 // only supports Elliptic Curve based groups. See RFC 8446, Section 4.2.7.
 type CurveID uint16
 
+// CipherSuiteName returns the standard name for the passed cipher suite ID
+//
+// Not Implemented.
+func CipherSuiteName(id uint16) string {
+	return fmt.Sprintf("0x%04X", id)
+}
+
 // ConnectionState records basic TLS details about the connection.
 type ConnectionState struct {
-	// TINYGO: empty; TLS connection offloaded to device
+	// TINYGO: empty; TLS connection offloaded to device [?]
+	//
+	// Minimum (empty) fields for fortio.org/log http logging to
+	// compile:
+	PeerCertificates []*x509.Certificate
+	CipherSuite      uint16
 }
 
 // ClientAuthType declares the policy the server will follow for
