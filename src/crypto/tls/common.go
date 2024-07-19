@@ -33,10 +33,10 @@ func CipherSuiteName(id uint16) string {
 
 // ConnectionState records basic TLS details about the connection.
 type ConnectionState struct {
-	// TINYGO: empty; TLS connection offloaded to device [?]
+	// TINYGO: empty; TLS connection offloaded to device
 	//
-	// Minimum (empty) fields for fortio.org/log http logging to
-	// compile:
+	// Minimum (empty) fields for fortio.org/log http logging and others
+	// to compile and run.
 	PeerCertificates []*x509.Certificate
 	CipherSuite      uint16
 }
