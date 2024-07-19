@@ -9,9 +9,10 @@
 package os_test
 
 import (
+	"errors"
+	"io/fs"
 	. "os"
 	"runtime"
-	"syscall"
 	"testing"
 )
 
@@ -40,7 +41,8 @@ func TestChmod(t *testing.T) {
 // ENOTDIR is returned when the file is not a directory
 func TestChownErr(t *testing.T) {
 	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
-		t.Skip("skipping on " + runtime.GOOS)
+		t.Log("skipping on " + runtime.GOOS)
+		return
 	}
 
 	var (
@@ -49,25 +51,22 @@ func TestChownErr(t *testing.T) {
 	)
 
 	f := newFile("TestChown", t)
-	// technically, newFile should never return nil, but just in case
-	if f == nil {
-		t.Fatalf("newFile failed")
-	}
-
 	defer Remove(f.Name())
 	defer f.Close()
 
 	// EACCES
 	if err := Chown(f.Name(), TEST_UID_ROOT, TEST_GID_ROOT); err != nil {
-		if err.(syscall.Errno) != syscall.EPERM {
-			t.Fatalf("chown(%s, uid=%v, gid=%v): got '%v', want %v", f.Name(), TEST_UID_ROOT, TEST_GID_ROOT, err, syscall.EPERM)
+		errCmp := fs.PathError{Op: "chown", Path: f.Name(), Err: errors.New("operation not permitted")}
+		if errors.Is(err, &errCmp) {
+			t.Fatalf("chown(%s, uid=%v, gid=%v): got '%v', want 'operation not permitted'", f.Name(), TEST_UID_ROOT, TEST_GID_ROOT, err)
 		}
 	}
 
 	// ENOENT
 	if err := Chown("invalid", Geteuid(), Getgid()); err != nil {
-		if err.(syscall.Errno) != syscall.ENOENT {
-			t.Fatalf("chown(%s, uid=%v, gid=%v): got '%v', want %v", f.Name(), Geteuid(), Getegid(), err, syscall.ENOENT)
+		errCmp := fs.PathError{Op: "chown", Path: "invalid", Err: errors.New("no such file or directory")}
+		if errors.Is(err, &errCmp) {
+			t.Fatalf("chown(%s, uid=%v, gid=%v): got '%v', want 'no such file or directory'", f.Name(), Geteuid(), Getegid(), err)
 		}
 	}
 }
