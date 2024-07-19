@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build aix || dragonfly || freebsd || (js && wasm) || linux || netbsd || openbsd || solaris || wasip1 || windows
+//go:build darwin || (linux && !baremetal && !wasm_unknown) || wasip1 || wasip2
 
 package os
 
 import (
+	"errors"
 	"runtime"
 	"syscall"
-	"unsafe"
 )
 
 // The only signal values guaranteed to be present in the os package on all
@@ -49,6 +49,14 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		ret uintptr
 	)
 
+	if len(argv) == 0 {
+		return 0, errors.New("exec: no argv")
+	}
+
+	if attr == nil {
+		attr = new(ProcAttr)
+	}
+
 	argv0p, err := syscall.BytePtrFromString(argv0)
 	if err != nil {
 		return 0, err
@@ -57,7 +65,7 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 	if err != nil {
 		return 0, err
 	}
-	envvp, err := syscall.SlicePtrFromStrings(attr.Env)
+	envp, err := syscall.SlicePtrFromStrings(attr.Env)
 	if err != nil {
 		return 0, err
 	}
@@ -66,13 +74,13 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		argvp[0] = argv0p
 	}
 
-	ret, _, _ = syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
+	ret, _, _ = syscall.Fork()
 	if ret != 0 {
 		// if fd == 0 code runs in parent
 		return int(ret), nil
 	} else {
 		// else code runs in child, which then should exec the new process
-		ret, _, _ = syscall.Syscall6(syscall.SYS_EXECVE, uintptr(unsafe.Pointer(argv0p)), uintptr(unsafe.Pointer(&argvp[0])), uintptr(unsafe.Pointer(&envvp[0])), 0, 0, 0)
+		ret, _, _ = syscall.Execve(argv0, argv, envp)
 		if ret != 0 {
 			// exec failed
 			syscall.Exit(1)

@@ -180,21 +180,21 @@ func Fork() (err error) {
 	return
 }
 
-func Execve(pathname string, argv []string, envv []string) (err error) {
+func Execve(pathname string, argv []string, env []string) (err error) {
 	argv0 := cstring(pathname)
 
-	// transform argv and envv into the format expected by execve
+	// transform argv and env into the format expected by execve
 	argv1 := make([]*byte, len(argv)+1)
 	for i, arg := range argv {
 		argv1[i] = &cstring(arg)[0]
 	}
 	argv1[len(argv)] = nil
 
-	env1 := make([]*byte, len(envv)+1)
-	for i, env := range envv {
+	env1 := make([]*byte, len(env)+1)
+	for i, env := range env {
 		env1[i] = &cstring(env)[0]
 	}
-	env1[len(envv)] = nil
+	env1[len(env)] = nil
 
 	fail := int(libc_execve(&argv0[0], &argv1[0], &env1[0]))
 	if fail < 0 {
