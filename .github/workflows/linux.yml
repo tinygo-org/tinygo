@@ -16,7 +16,8 @@ jobs:
     # Build Linux binaries, ready for release.
     # This runs inside an Alpine Linux container so we can more easily create a
     # statically linked binary.
-    runs-on: ubuntu-latest
+    # ubuntu-latest is having some trouble, so try specific version to unbreak build
+    runs-on: ubuntu-24.04
     container:
       image: golang:1.22-alpine
     steps:
