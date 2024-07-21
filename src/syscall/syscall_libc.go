@@ -163,6 +163,15 @@ func Unlink(path string) (err error) {
 	return
 }
 
+func Chown(path string, uid, gid int) (err error) {
+	data := cstring(path)
+	fail := int(libc_chown(&data[0], uid, gid))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Faccessat(dirfd int, path string, mode uint32, flags int) (err error)
 
 func Kill(pid int, sig Signal) (err error) {
@@ -356,6 +365,11 @@ func libc_chdir(pathname *byte) int32
 //
 //export chmod
 func libc_chmod(pathname *byte, mode uint32) int32
+
+// int chown(const char *pathname, uid_t owner, gid_t group);
+//
+//export chown
+func libc_chown(pathname *byte, owner, group int) int32
 
 // int mkdir(const char *pathname, mode_t mode);
 //
