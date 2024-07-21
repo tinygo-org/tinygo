@@ -1083,8 +1083,10 @@ func (t rawType) Method(i int) Method {
 	panic("unimplemented: (reflect.Type).Method()")
 }
 
-func (t rawType) MethodByName(name string) (Method, bool) {
-	panic("unimplemented: (reflect.Type).MethodByName()")
+func (t rawType) MethodByName(name string) (m Method, ok bool) {
+	// Avoid panic in in go-cmp t.MethodByName("Equal")
+	// https://github.com/google/go-cmp/blob/v0.6.0/cmp/compare.go#L312-L314
+	return // false
 }
 
 func (t *rawType) PkgPath() string {
