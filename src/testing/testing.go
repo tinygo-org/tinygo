@@ -463,10 +463,23 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	return !sub.failed
 }
 
+// Deadline reports the time at which the test binary will have
+// exceeded the timeout specified by the -timeout flag.
+//
+// The ok result is false if the -timeout flag indicates “no timeout” (0).
+// For now tinygo always return 0, false.
+//
+// Not Implemented.
+func (t *T) Deadline() (deadline time.Time, ok bool) {
+	deadline = t.context.deadline
+	return deadline, !deadline.IsZero()
+}
+
 // testContext holds all fields that are common to all tests. This includes
 // synchronization primitives to run at most *parallel tests.
 type testContext struct {
-	match *matcher
+	match    *matcher
+	deadline time.Time
 }
 
 func newTestContext(m *matcher) *testContext {
