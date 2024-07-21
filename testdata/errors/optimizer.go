@@ -14,5 +14,6 @@ func main() {
 	})
 }
 
+// ERROR: # command-line-arguments
 // ERROR: optimizer.go:9:15: interrupt ID is not a constant
 // ERROR: optimizer.go:13:15: interrupt ID is not a constant

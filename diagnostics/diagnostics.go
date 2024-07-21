@@ -43,17 +43,10 @@ func CreateDiagnostics(err error) ProgramDiagnostic {
 	if err == nil {
 		return nil
 	}
-	switch err := err.(type) {
-	case *builder.MultiError:
-		var diags ProgramDiagnostic
-		for _, err := range err.Errs {
-			diags = append(diags, createPackageDiagnostic(err))
-		}
-		return diags
-	default:
-		return ProgramDiagnostic{
-			createPackageDiagnostic(err),
-		}
+	// Right now, the compiler will only show errors for the first pacakge that
+	// fails to build. This is likely to change in the future.
+	return ProgramDiagnostic{
+		createPackageDiagnostic(err),
 	}
 }
 
@@ -63,6 +56,14 @@ func createPackageDiagnostic(err error) PackageDiagnostic {
 	// Extract diagnostics for this package.
 	var pkgDiag PackageDiagnostic
 	switch err := err.(type) {
+	case *builder.MultiError:
+		if err.ImportPath != "" {
+			pkgDiag.ImportPath = err.ImportPath
+		}
+		for _, err := range err.Errs {
+			diags := createDiagnostics(err)
+			pkgDiag.Diagnostics = append(pkgDiag.Diagnostics, diags...)
+		}
 	case loader.Errors:
 		if err.Pkg != nil {
 			pkgDiag.ImportPath = err.Pkg.ImportPath

@@ -375,7 +375,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				defer mod.Context().Dispose()
 				defer mod.Dispose()
 				if errs != nil {
-					return newMultiError(errs)
+					return newMultiError(errs, pkg.ImportPath)
 				}
 				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 					return errors.New("verification error after compiling package " + pkg.ImportPath)
@@ -1130,7 +1130,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config, globalValues m
 	// O0/O1/O2/Os/Oz optimization pipeline).
 	errs := transform.Optimize(mod, config)
 	if len(errs) > 0 {
-		return newMultiError(errs)
+		return newMultiError(errs, "")
 	}
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 		return errors.New("verification failure after LLVM optimization passes")
