@@ -982,7 +982,9 @@ func (v Value) MapIndex(key Value) Value {
 	vkey := v.typecode.key()
 
 	// compare key type with actual key type of map
-	if !key.typecode.AssignableTo(vkey) {
+	// AssignableTo is not implemented for interfaces
+	// avoid: "reflect: unimplemented: AssignableTo with interface"
+	if vkey.Kind() != Interface && !key.typecode.AssignableTo(vkey) {
 		// type error?
 		panic("reflect.Value.MapIndex: incompatible types for key")
 	}
