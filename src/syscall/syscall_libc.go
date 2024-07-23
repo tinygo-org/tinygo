@@ -172,6 +172,37 @@ func Chown(path string, uid, gid int) (err error) {
 	return
 }
 
+func Fork() (err error) {
+	fail := int(libc_fork())
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Execve(pathname string, argv []string, envv []string) (err error) {
+	argv0 := cstring(pathname)
+
+	// transform argv and envv into the format expected by execve
+	argv1 := make([]*byte, len(argv)+1)
+	for i, arg := range argv {
+		argv1[i] = &cstring(arg)[0]
+	}
+	argv1[len(argv)] = nil
+
+	env1 := make([]*byte, len(envv)+1)
+	for i, env := range envv {
+		env1[i] = &cstring(env)[0]
+	}
+	env1[len(envv)] = nil
+
+	fail := int(libc_execve(&argv0[0], &argv1[0], &env1[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Faccessat(dirfd int, path string, mode uint32, flags int) (err error)
 
 func Kill(pid int, sig Signal) (err error) {
@@ -410,3 +441,13 @@ func libc_readlink(path *byte, buf *byte, count uint) int
 //
 //export unlink
 func libc_unlink(pathname *byte) int32
+
+// pid_t fork(void);
+//
+//export fork
+func libc_fork() int32
+
+// int execve(const char *filename, char *const argv[], char *const envp[]);
+//
+//export execve
+func libc_execve(filename *byte, argv **byte, envp **byte) int
