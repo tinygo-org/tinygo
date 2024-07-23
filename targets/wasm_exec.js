@@ -302,7 +302,6 @@
 						// for one specific case, by js.go:jsString. and can/might leak memory.
 						const id = mem().getUint32(unboxValue(v_ref), true);
 						// Note that this if is so far seemingly never true. Someone should investigate why.
-						// (ie we are silently, no log even, ignoring an unexpected case)
 						if (this._goRefCounts?.[id] !== undefined) {
 							this._goRefCounts[id]--;
 							if (this._goRefCounts[id] === 0) {
@@ -311,6 +310,9 @@
 								this._ids.delete(v);
 								this._idPool.push(id);
 							}
+						} else {
+							// Log as a hint and reminder that something is probably off.
+							console.log("syscall/js.finalizeRef: unknown id", id);
 						}
 					},
 
