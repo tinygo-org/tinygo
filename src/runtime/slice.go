@@ -11,15 +11,13 @@ import (
 // the modified (possibly expanded) slice.
 func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr) {
 	newLen := srcLen + elemsLen
-	if newLen > srcLen {
+	if elemsLen > 0 {
 		// Allocate a new slice with capacity for elemsLen more elements, if necessary;
 		// otherwise, reuse the passed slice.
 		srcBuf, _, srcCap = sliceGrow(srcBuf, srcLen, srcCap, newLen, elemSize)
 
-		if elemsLen > 0 {
-			// Append the new elements in-place.
-			memmove(unsafe.Add(srcBuf, srcLen*elemSize), elemsBuf, elemsLen*elemSize)
-		}
+		// Append the new elements in-place.
+		memmove(unsafe.Add(srcBuf, srcLen*elemSize), elemsBuf, elemsLen*elemSize)
 	}
 
 	return srcBuf, newLen, srcCap
