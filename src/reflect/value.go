@@ -1712,18 +1712,7 @@ func extendSlice(v Value, n int) sliceHeader {
 		old = *(*sliceHeader)(v.value)
 	}
 
-	var nbuf unsafe.Pointer
-	var nlen, ncap uintptr
-
-	if old.len+uintptr(n) > old.cap {
-		// we need to grow the slice
-		nbuf, nlen, ncap = sliceGrow(old.data, old.len, old.cap, old.cap+uintptr(n), v.typecode.elem().Size())
-	} else {
-		// we can reuse the slice we have
-		nbuf = old.data
-		nlen = old.len
-		ncap = old.cap
-	}
+	nbuf, nlen, ncap := sliceGrow(old.data, old.len, old.cap, old.len+uintptr(n), v.typecode.elem().Size())
 
 	return sliceHeader{
 		data: nbuf,
