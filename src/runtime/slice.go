@@ -27,13 +27,7 @@ func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintp
 			// programs).
 			srcCap *= 2
 		}
-		buf := alloc(srcCap*elemSize, nil)
-
-		// Copy the old slice to the new slice.
-		if srcLen != 0 {
-			memmove(buf, srcBuf, srcLen*elemSize)
-		}
-		srcBuf = buf
+		srcBuf = realloc(srcBuf, srcCap*elemSize)
 	}
 
 	// The slice fits (after possibly allocating a new one), append it in-place.
@@ -72,11 +66,6 @@ func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr) 
 		oldCap *= 2
 	}
 
-	buf := alloc(oldCap*elemSize, nil)
-	if oldLen > 0 {
-		// copy any data to new slice
-		memmove(buf, oldBuf, oldLen*elemSize)
-	}
-
-	return buf, oldLen, oldCap
+	oldBuf = realloc(oldBuf, oldCap*elemSize)
+	return oldBuf, oldLen, oldCap
 }

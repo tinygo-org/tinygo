@@ -19,6 +19,9 @@ var gcTotalAlloc uint64
 // Total number of calls to alloc()
 var gcMallocs uint64
 
+// The most recent allocation, for realloc()
+var gcLastAlloc unsafe.Pointer
+
 // Total number of objected freed; for leaking collector this stays 0
 const gcFrees = 0
 
@@ -45,14 +48,44 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 	pointer := unsafe.Pointer(addr)
 	zero_new_alloc(pointer, size)
+	gcLastAlloc = pointer
 	return pointer
 }
 
 func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
-	newAlloc := alloc(size, nil)
 	if ptr == nil {
-		return newAlloc
+		return alloc(size, nil)
 	}
+
+	if ptr == gcLastAlloc {
+		// realloc most recent allocation
+
+		lastSize := align(heapptr - uintptr(ptr))
+		size = align(size)
+
+		// maybe shrink
+		if lastSize <= size {
+			diff := size - lastSize
+			heapptr -= diff // will still be aligned
+			return ptr
+		}
+
+		// extend and grow as normal
+		heapptr += (size - lastSize)
+
+		for heapptr >= heapEnd {
+			// Try to increase the heap and check again.
+			if growHeap() {
+				continue
+			}
+			// Failed to make the heap bigger, so we must really be out of memory.
+			runtimePanic("out of memory")
+		}
+		return ptr
+	}
+
+	// Need to alloc + copy
+	newAlloc := alloc(size, nil)
 	// according to POSIX everything beyond the previous pointer's
 	// size will have indeterminate values so we can just copy garbage
 	memcpy(newAlloc, ptr, size)
