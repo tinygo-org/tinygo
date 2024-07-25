@@ -242,7 +242,7 @@ func NewTargetMachine(config *Config) (llvm.TargetMachine, error) {
 }
 
 // Sizes returns a types.Sizes appropriate for the given target machine. It
-// includes the correct int size and aligment as is necessary for the Go
+// includes the correct int size and alignment as is necessary for the Go
 // typechecker.
 func Sizes(machine llvm.TargetMachine) types.Sizes {
 	targetData := machine.CreateTargetData()

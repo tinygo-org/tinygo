@@ -416,7 +416,7 @@ func (c *compilerContext) getPointerBitmap(typ llvm.Type, pos token.Pos) *big.In
 	}
 }
 
-// archFamily returns the archtecture from the LLVM triple but with some
+// archFamily returns the architecture from the LLVM triple but with some
 // architecture names ("armv6", "thumbv7m", etc) merged into a single
 // architecture name ("arm").
 func (c *compilerContext) archFamily() string {

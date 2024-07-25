@@ -16,7 +16,7 @@ import (
 	"github.com/blakesmith/ar"
 )
 
-// makeArchive creates an arcive for static linking from a list of object files
+// makeArchive creates an archive for static linking from a list of object files
 // given as a parameter. It is equivalent to the following command:
 //
 //	ar -rcs <archivePath> <objs...>

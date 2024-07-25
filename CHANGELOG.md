@@ -217,7 +217,7 @@
   - `reflect`: add SetZero
   - `reflect`: fix iterating over maps with interface{} keys
   - `reflect`: implement Value.Grow
-  - `reflect`: remove unecessary heap allocations
+  - `reflect`: remove unnecessary heap allocations
   - `reflect`: use .key() instead of a type assert
   - `sync`: add implementation from upstream Go for OnceFunc, OnceValue, and OnceValues
 * **targets**

@@ -222,7 +222,7 @@ func handleException(mcause uintptr) {
 	println("*** Exception: mcause:", mcause)
 	switch uint32(mcause & 0x1f) {
 	case 1:
-		println("***    virtual addess:", riscv.MTVAL.Get())
+		println("***   virtual address:", riscv.MTVAL.Get())
 	case 2:
 		println("***            opcode:", riscv.MTVAL.Get())
 	case 5:

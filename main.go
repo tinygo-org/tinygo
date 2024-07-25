@@ -1689,7 +1689,7 @@ func main() {
 			for i := range bufs {
 				err := bufs[i].flush(os.Stdout, os.Stderr)
 				if err != nil {
-					// There was an error writing to stdout or stderr, so we probbably cannot print this.
+					// There was an error writing to stdout or stderr, so we probably cannot print this.
 					select {
 					case fail <- struct{}{}:
 					default:

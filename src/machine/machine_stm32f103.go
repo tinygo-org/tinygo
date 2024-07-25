@@ -399,7 +399,7 @@ func (i2c *I2C) getFreqRange(config I2CConfig) uint32 {
 	// pclk1 clock speed is main frequency divided by PCLK1 prescaler (div 2)
 	pclk1 := CPUFrequency() / 2
 
-	// set freqency range to PCLK1 clock speed in MHz
+	// set frequency range to PCLK1 clock speed in MHz
 	// aka setting the value 36 means to use 36 MHz clock
 	return pclk1 / 1000000
 }
