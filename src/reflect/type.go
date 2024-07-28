@@ -1060,8 +1060,10 @@ func (t *rawType) Name() string {
 		panic("corrupt name data")
 	}
 
-	if t.Kind() <= UnsafePointer {
+	if kind := t.Kind(); kind < UnsafePointer {
 		return t.Kind().String()
+	} else if kind == UnsafePointer {
+		return "Pointer"
 	}
 
 	return ""

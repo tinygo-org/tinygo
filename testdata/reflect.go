@@ -423,6 +423,9 @@ func showValue(rv reflect.Value, indent string) {
 	if !rt.Comparable() {
 		print(" comparable=false")
 	}
+	if name := rt.Name(); name != "" {
+		print(" name=", name)
+	}
 	println()
 	switch rt.Kind() {
 	case reflect.Bool:
