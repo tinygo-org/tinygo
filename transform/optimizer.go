@@ -142,11 +142,13 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		fn.SetLinkage(llvm.InternalLinkage)
 	}
 
-	// Run the default pass pipeline.
-	// TODO: set the PrepareForThinLTO flag somehow.
+	// Run the ThinLTO pre-link passes, meant to be run on each individual
+	// module. This saves compilation time compared to "default<#>" and is meant
+	// to better match the optimization passes that are happening during
+	// ThinLTO.
 	po := llvm.NewPassBuilderOptions()
 	defer po.Dispose()
-	passes := fmt.Sprintf("default<%s>", optLevel)
+	passes := fmt.Sprintf("thinlto-pre-link<%s>", optLevel)
 	err := mod.RunPasses(passes, llvm.TargetMachine{}, po)
 	if err != nil {
 		return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
