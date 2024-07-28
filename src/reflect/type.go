@@ -30,8 +30,9 @@
 //     elem         *typeStruct // element type of the array
 //     arrayLen     uintptr     // length of the array (this is part of the type)
 //     slicePtr     *typeStruct // pointer to []T type
-// - map types (this is still missing the key and element types)
+// - map types
 //     meta         uint8
+//     extraMeta    uint8
 //     nmethods     uint16 (0)
 //     ptrTo        *typeStruct
 //     elem         *typeStruct
@@ -396,10 +397,14 @@ type Type interface {
 
 // Constants for the 'meta' byte.
 const (
-	kindMask       = 31  // mask to apply to the meta byte to get the Kind value
-	flagNamed      = 32  // flag that is set if this is a named type
-	flagComparable = 64  // flag that is set if this type is comparable
-	flagIsBinary   = 128 // flag that is set if this type uses the hashmap binary algorithm
+	kindMask       = 31 // mask to apply to the meta byte to get the Kind value
+	flagNamed      = 32 // flag that is set if this is a named type
+	flagComparable = 64 // flag that is set if this type is comparable
+)
+
+// Constants for the 'extraFlags' byte in the map type.
+const (
+	extraFlagIsBinaryKey = 1 // flag that is set if this type uses the hashmap binary algorithm
 )
 
 // The base type struct. All type structs start with this.
@@ -433,10 +438,11 @@ type arrayType struct {
 
 type mapType struct {
 	rawType
-	numMethod uint16
-	ptrTo     *rawType
-	elem      *rawType
-	key       *rawType
+	extraFlags uint8
+	numMethod  uint16
+	ptrTo      *rawType
+	elem       *rawType
+	key        *rawType
 }
 
 type namedType struct {
@@ -980,9 +986,10 @@ func (t *rawType) Comparable() bool {
 	return (t.meta & flagComparable) == flagComparable
 }
 
-// isBinary returns if the hashmapAlgorithmBinary functions can be used on this type
-func (t *rawType) isBinary() bool {
-	return (t.meta & flagIsBinary) == flagIsBinary
+// isBinaryKey returns if the hashmapAlgorithmBinary functions can be used on
+// the key type of this map.
+func (t *mapType) isBinaryKey() bool {
+	return t.extraFlags&extraFlagIsBinaryKey != 0
 }
 
 func (t *rawType) ChanDir() ChanDir {

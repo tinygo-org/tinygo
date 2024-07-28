@@ -6,14 +6,14 @@ target triple = "wasm32-unknown-wasi"
 %runtime._interface = type { ptr, ptr }
 %runtime._string = type { ptr, i32 }
 
-@"reflect/types.type:basic:int" = linkonce_odr constant { i8, ptr } { i8 -62, ptr @"reflect/types.type:pointer:basic:int" }, align 4
-@"reflect/types.type:pointer:basic:int" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:int" }, align 4
-@"reflect/types.type:pointer:named:error" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:named:error" }, align 4
+@"reflect/types.type:basic:int" = linkonce_odr constant { i8, ptr } { i8 66, ptr @"reflect/types.type:pointer:basic:int" }, align 4
+@"reflect/types.type:pointer:basic:int" = linkonce_odr constant { i8, i16, ptr } { i8 85, i16 0, ptr @"reflect/types.type:basic:int" }, align 4
+@"reflect/types.type:pointer:named:error" = linkonce_odr constant { i8, i16, ptr } { i8 85, i16 0, ptr @"reflect/types.type:named:error" }, align 4
 @"reflect/types.type:named:error" = linkonce_odr constant { i8, i16, ptr, ptr, ptr, [7 x i8] } { i8 116, i16 1, ptr @"reflect/types.type:pointer:named:error", ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}", ptr @"reflect/types.type.pkgpath.empty", [7 x i8] c".error\00" }, align 4
 @"reflect/types.type.pkgpath.empty" = linkonce_odr unnamed_addr constant [1 x i8] zeroinitializer, align 1
 @"reflect/types.type:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant { i8, ptr } { i8 84, ptr @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" }, align 4
-@"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}" }, align 4
-@"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:interface:{String:func:{}{basic:string}}" }, align 4
+@"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant { i8, i16, ptr } { i8 85, i16 0, ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}" }, align 4
+@"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" = linkonce_odr constant { i8, i16, ptr } { i8 85, i16 0, ptr @"reflect/types.type:interface:{String:func:{}{basic:string}}" }, align 4
 @"reflect/types.type:interface:{String:func:{}{basic:string}}" = linkonce_odr constant { i8, ptr } { i8 84, ptr @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" }, align 4
 @"reflect/types.typeid:basic:int" = external constant i8
 
