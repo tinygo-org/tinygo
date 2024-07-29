@@ -16,10 +16,7 @@ target triple = "armv7m-none-eabi"
 declare i1 @runtime.typeAssert(ptr, ptr)
 declare void @runtime.printuint8(i8)
 declare void @runtime.printint16(i16)
-declare void @runtime.printint32(i32)
-declare void @runtime.printptr(i32)
 declare void @runtime.printnl()
-declare void @runtime.nilPanic(ptr)
 
 define void @printInterfaces() {
   call void @printInterface(ptr @"reflect/types.type:basic:int", ptr inttoptr (i32 5 to ptr))
@@ -30,25 +27,6 @@ define void @printInterfaces() {
 }
 
 define void @printInterface(ptr %typecode, ptr %value) {
-  %isUnmatched = call i1 @Unmatched$typeassert(ptr %typecode)
-  br i1 %isUnmatched, label %typeswitch.Unmatched, label %typeswitch.notUnmatched
-
-typeswitch.Unmatched:
-  %unmatched = ptrtoint ptr %value to i32
-  call void @runtime.printptr(i32 %unmatched)
-  call void @runtime.printnl()
-  ret void
-
-typeswitch.notUnmatched:
-  %isDoubler = call i1 @Doubler$typeassert(ptr %typecode)
-  br i1 %isDoubler, label %typeswitch.Doubler, label %typeswitch.notDoubler
-
-typeswitch.Doubler:
-  %doubler.result = call i32 @"Doubler.Double$invoke"(ptr %value, ptr %typecode, ptr undef)
-  call void @runtime.printint32(i32 %doubler.result)
-  ret void
-
-typeswitch.notDoubler:
   %isByte = call i1 @runtime.typeAssert(ptr %typecode, ptr nonnull @"reflect/types.typeid:basic:uint8")
   br i1 %isByte, label %typeswitch.byte, label %typeswitch.notByte
 
@@ -86,10 +64,4 @@ define i32 @"(Number).Double$invoke"(ptr %receiverPtr, ptr %context) {
 
 declare i32 @"Doubler.Double$invoke"(ptr %receiver, ptr %typecode, ptr %context) #0
 
-declare i1 @Doubler$typeassert(ptr %typecode) #1
-
-declare i1 @Unmatched$typeassert(ptr %typecode) #2
-
 attributes #0 = { "tinygo-invoke"="reflect/methods.Double() int" "tinygo-methods"="reflect/methods.Double() int" }
-attributes #1 = { "tinygo-methods"="reflect/methods.Double() int" }
-attributes #2 = { "tinygo-methods"="reflect/methods.NeverImplementedMethod()" }

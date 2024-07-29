@@ -22,6 +22,7 @@ func main() {
 	printItf(array)
 	printItf(ArrayStruct{3, array})
 	printItf(SmallPair{3, 5})
+	printItf(nil)
 	s := Stringer(thing)
 	println("Stringer.String():", s.String())
 	var itf interface{} = s
@@ -150,6 +151,8 @@ func printItf(val interface{}) {
 		println("is struct{n int `foo:\"bar\"`}")
 	case Foo:
 		println("is Foo:", val)
+	case nil:
+		println("is nil")
 	default:
 		println("is ?")
 	}

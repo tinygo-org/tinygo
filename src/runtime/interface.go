@@ -82,6 +82,9 @@ func reflectValueEqual(x, y reflect.Value) bool {
 	}
 }
 
+// Implemented in the reflect package.
+func typeImplementsMethodSet(actualTypeNum, assertedMethodSet unsafe.Pointer) bool
+
 // interfaceTypeAssert is called when a type assert without comma-ok still
 // returns false.
 func interfaceTypeAssert(ok bool) {
