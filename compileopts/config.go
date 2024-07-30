@@ -72,6 +72,12 @@ func (c *Config) GOARM() string {
 	return c.Options.GOARM
 }
 
+// GOMIPS will return the GOMIPS environment variable given to the compiler when
+// building a program.
+func (c *Config) GOMIPS() string {
+	return c.Options.GOMIPS
+}
+
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
 	tags := append([]string(nil), c.Target.BuildTags...) // copy slice (avoid a race)
@@ -230,6 +236,9 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 	}
 	if c.ABI() != "" {
 		archname += "-" + c.ABI()
+	}
+	if c.Target.SoftFloat {
+		archname += "-softfloat"
 	}
 
 	// Try to load a precompiled library.

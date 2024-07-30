@@ -57,8 +57,10 @@ func TestClangAttributes(t *testing.T) {
 		{GOOS: "linux", GOARCH: "arm", GOARM: "6"},
 		{GOOS: "linux", GOARCH: "arm", GOARM: "7"},
 		{GOOS: "linux", GOARCH: "arm64"},
-		{GOOS: "linux", GOARCH: "mips"},
-		{GOOS: "linux", GOARCH: "mipsle"},
+		{GOOS: "linux", GOARCH: "mips", GOMIPS: "hardfloat"},
+		{GOOS: "linux", GOARCH: "mipsle", GOMIPS: "hardfloat"},
+		{GOOS: "linux", GOARCH: "mips", GOMIPS: "softfloat"},
+		{GOOS: "linux", GOARCH: "mipsle", GOMIPS: "softfloat"},
 		{GOOS: "darwin", GOARCH: "amd64"},
 		{GOOS: "darwin", GOARCH: "arm64"},
 		{GOOS: "windows", GOARCH: "amd64"},
@@ -68,6 +70,9 @@ func TestClangAttributes(t *testing.T) {
 		name := "GOOS=" + options.GOOS + ",GOARCH=" + options.GOARCH
 		if options.GOARCH == "arm" {
 			name += ",GOARM=" + options.GOARM
+		}
+		if options.GOARCH == "mips" || options.GOARCH == "mipsle" {
+			name += ",GOMIPS=" + options.GOMIPS
 		}
 		t.Run(name, func(t *testing.T) {
 			testClangAttributes(t, options)
