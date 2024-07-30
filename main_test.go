@@ -36,7 +36,7 @@ var supportedLinuxArches = map[string]string{
 	"X86Linux":   "linux/386",
 	"ARMLinux":   "linux/arm/6",
 	"ARM64Linux": "linux/arm64",
-	"MIPSLinux":  "linux/mipsle",
+	"MIPSLinux":  "linux/mipsle/hardfloat",
 	"WASIp1":     "wasip1/wasm",
 }
 
@@ -325,6 +325,7 @@ func optionsFromTarget(target string, sema chan struct{}) compileopts.Options {
 		GOOS:          goenv.Get("GOOS"),
 		GOARCH:        goenv.Get("GOARCH"),
 		GOARM:         goenv.Get("GOARM"),
+		GOMIPS:        goenv.Get("GOMIPS"),
 		Target:        target,
 		Semaphore:     sema,
 		InterpTimeout: 180 * time.Second,
@@ -348,8 +349,11 @@ func optionsFromOSARCH(osarch string, sema chan struct{}) compileopts.Options {
 		VerifyIR:      true,
 		Opt:           "z",
 	}
-	if options.GOARCH == "arm" {
+	switch options.GOARCH {
+	case "arm":
 		options.GOARM = parts[2]
+	case "mips", "mipsle":
+		options.GOMIPS = parts[2]
 	}
 	return options
 }

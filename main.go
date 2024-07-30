@@ -1499,6 +1499,7 @@ func main() {
 		GOOS:            goenv.Get("GOOS"),
 		GOARCH:          goenv.Get("GOARCH"),
 		GOARM:           goenv.Get("GOARM"),
+		GOMIPS:          goenv.Get("GOMIPS"),
 		Target:          *target,
 		StackSize:       stackSize,
 		Opt:             *opt,
@@ -1737,6 +1738,7 @@ func main() {
 				GOOS       string                  `json:"goos"`
 				GOARCH     string                  `json:"goarch"`
 				GOARM      string                  `json:"goarm"`
+				GOMIPS     string                  `json:"gomips"`
 				BuildTags  []string                `json:"build_tags"`
 				GC         string                  `json:"garbage_collector"`
 				Scheduler  string                  `json:"scheduler"`
@@ -1747,6 +1749,7 @@ func main() {
 				GOOS:       config.GOOS(),
 				GOARCH:     config.GOARCH(),
 				GOARM:      config.GOARM(),
+				GOMIPS:     config.GOMIPS(),
 				BuildTags:  config.BuildTags(),
 				GC:         config.GC(),
 				Scheduler:  config.Scheduler(),

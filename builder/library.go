@@ -169,6 +169,11 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	case "mips":
 		args = append(args, "-fno-pic")
 	}
+	if config.Target.SoftFloat {
+		// Use softfloat instead of floating point instructions. This is
+		// supported on many architectures.
+		args = append(args, "-msoft-float")
+	}
 
 	var once sync.Once
 

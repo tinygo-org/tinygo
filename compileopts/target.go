@@ -30,6 +30,7 @@ type TargetSpec struct {
 	Features         string   `json:"features,omitempty"`
 	GOOS             string   `json:"goos,omitempty"`
 	GOARCH           string   `json:"goarch,omitempty"`
+	SoftFloat        bool     // used for non-baremetal systems (GOMIPS=softfloat etc)
 	BuildTags        []string `json:"build-tags,omitempty"`
 	GC               string   `json:"gc,omitempty"`
 	Scheduler        string   `json:"scheduler,omitempty"`
@@ -84,6 +85,10 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 			}
 		case reflect.Uint, reflect.Uint32, reflect.Uint64: // for Uint, copy if not zero
 			if src.Uint() != 0 {
+				dst.Set(src)
+			}
+		case reflect.Bool:
+			if src.Bool() {
 				dst.Set(src)
 			}
 		case reflect.Ptr: // for pointers, copy if not nil
@@ -290,12 +295,21 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		}
 	case "mips", "mipsle":
 		spec.CPU = "mips32r2"
-		spec.Features = "+fpxx,+mips32r2,+nooddspreg,-noabicalls"
 		spec.CFlags = append(spec.CFlags, "-fno-pic")
 		if options.GOOS == "mips" {
 			llvmarch = "mips" // big endian
 		} else {
 			llvmarch = "mipsel" // little endian
+		}
+		switch options.GOMIPS {
+		case "hardfloat":
+			spec.Features = "+fpxx,+mips32r2,+nooddspreg,-noabicalls"
+		case "softfloat":
+			spec.SoftFloat = true
+			spec.Features = "+mips32r2,+soft-float,-noabicalls"
+			spec.CFlags = append(spec.CFlags, "-msoft-float")
+		default:
+			return nil, fmt.Errorf("invalid GOMIPS=%s: must be hardfloat or softfloat", options.GOMIPS)
 		}
 	case "wasm":
 		llvmarch = "wasm32"
