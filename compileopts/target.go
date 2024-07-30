@@ -172,63 +172,7 @@ func (spec *TargetSpec) resolveInherits() error {
 // Load a target specification.
 func LoadTarget(options *Options) (*TargetSpec, error) {
 	if options.Target == "" {
-		// Configure based on GOOS/GOARCH environment variables (falling back to
-		// runtime.GOOS/runtime.GOARCH), and generate a LLVM target based on it.
-		var llvmarch string
-		switch options.GOARCH {
-		case "386":
-			llvmarch = "i386"
-		case "amd64":
-			llvmarch = "x86_64"
-		case "arm64":
-			llvmarch = "aarch64"
-		case "arm":
-			switch options.GOARM {
-			case "5":
-				llvmarch = "armv5"
-			case "6":
-				llvmarch = "armv6"
-			case "7":
-				llvmarch = "armv7"
-			default:
-				return nil, fmt.Errorf("invalid GOARM=%s, must be 5, 6, or 7", options.GOARM)
-			}
-		case "mips":
-			llvmarch = "mips"
-		case "mipsle":
-			llvmarch = "mipsel"
-		case "wasm":
-			llvmarch = "wasm32"
-		default:
-			llvmarch = options.GOARCH
-		}
-		llvmvendor := "unknown"
-		llvmos := options.GOOS
-		switch llvmos {
-		case "darwin":
-			// Use macosx* instead of darwin, otherwise darwin/arm64 will refer
-			// to iOS!
-			llvmos = "macosx10.12.0"
-			if llvmarch == "aarch64" {
-				// Looks like Apple prefers to call this architecture ARM64
-				// instead of AArch64.
-				llvmarch = "arm64"
-				llvmos = "macosx11.0.0"
-			}
-			llvmvendor = "apple"
-		case "wasip1":
-			llvmos = "wasi"
-		}
-		// Target triples (which actually have four components, but are called
-		// triples for historical reasons) have the form:
-		//   arch-vendor-os-environment
-		target := llvmarch + "-" + llvmvendor + "-" + llvmos
-		if options.GOOS == "windows" {
-			target += "-gnu"
-		} else if options.GOARCH == "arm" {
-			target += "-gnueabihf"
-		}
-		return defaultTarget(options.GOOS, options.GOARCH, target)
+		return defaultTarget(options)
 	}
 
 	// See whether there is a target specification for this target (e.g.
@@ -289,14 +233,13 @@ func GetTargetSpecs() (map[string]*TargetSpec, error) {
 	return maps, nil
 }
 
-func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
-	// No target spec available. Use the default one, useful on most systems
-	// with a regular OS.
+// Load a target from environment variables (which default to
+// runtime.GOOS/runtime.GOARCH).
+func defaultTarget(options *Options) (*TargetSpec, error) {
 	spec := TargetSpec{
-		Triple:           triple,
-		GOOS:             goos,
-		GOARCH:           goarch,
-		BuildTags:        []string{goos, goarch},
+		GOOS:             options.GOOS,
+		GOARCH:           options.GOARCH,
+		BuildTags:        []string{options.GOOS, options.GOARCH},
 		GC:               "precise",
 		Scheduler:        "tasks",
 		Linker:           "cc",
@@ -304,29 +247,43 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		GDB:              []string{"gdb"},
 		PortReset:        "false",
 	}
-	switch goarch {
+
+	// Configure target based on GOARCH.
+	var llvmarch string
+	switch options.GOARCH {
 	case "386":
+		llvmarch = "i386"
 		spec.CPU = "pentium4"
 		spec.Features = "+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "amd64":
+		llvmarch = "x86_64"
 		spec.CPU = "x86-64"
 		spec.Features = "+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "arm":
 		spec.CPU = "generic"
 		spec.CFlags = append(spec.CFlags, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
-		switch strings.Split(triple, "-")[0] {
-		case "armv5":
+		switch options.GOARM {
+		case "5":
+			llvmarch = "armv5"
 			spec.Features = "+armv5t,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
-		case "armv6":
+		case "6":
+			llvmarch = "armv6"
 			spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
-		case "armv7":
+		case "7":
+			llvmarch = "armv7"
 			spec.Features = "+armv7-a,+d32,+dsp,+fp64,+neon,+vfp2,+vfp2sp,+vfp3,+vfp3d16,+vfp3d16sp,+vfp3sp,-aes,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-sha2,-thumb-mode,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+		default:
+			return nil, fmt.Errorf("invalid GOARM=%s, must be 5, 6, or 7", options.GOARM)
 		}
 	case "arm64":
 		spec.CPU = "generic"
-		if goos == "darwin" {
+		llvmarch = "aarch64"
+		if options.GOOS == "darwin" {
 			spec.Features = "+fp-armv8,+neon"
-		} else if goos == "windows" {
+			// Looks like Apple prefers to call this architecture ARM64
+			// instead of AArch64.
+			llvmarch = "arm64"
+		} else if options.GOOS == "windows" {
 			spec.Features = "+fp-armv8,+neon,-fmv"
 		} else { // linux
 			spec.Features = "+fp-armv8,+neon,-fmv,-outline-atomics"
@@ -335,7 +292,13 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		spec.CPU = "mips32r2"
 		spec.Features = "+fpxx,+mips32r2,+nooddspreg,-noabicalls"
 		spec.CFlags = append(spec.CFlags, "-fno-pic")
+		if options.GOOS == "mips" {
+			llvmarch = "mips" // big endian
+		} else {
+			llvmarch = "mipsel" // little endian
+		}
 	case "wasm":
+		llvmarch = "wasm32"
 		spec.CPU = "generic"
 		spec.Features = "+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext"
 		spec.BuildTags = append(spec.BuildTags, "tinygo.wasm")
@@ -344,24 +307,37 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			"-mnontrapping-fptoint",
 			"-msign-ext",
 		)
+	default:
+		return nil, fmt.Errorf("unknown GOARCH=%s", options.GOARCH)
 	}
-	if goos == "darwin" {
+
+	// Configure target based on GOOS.
+	llvmos := options.GOOS
+	llvmvendor := "unknown"
+	switch options.GOOS {
+	case "darwin":
+		platformVersion := "10.12.0"
+		if options.GOARCH == "arm64" {
+			platformVersion = "11.0.0" // first macosx platform with arm64 support
+		}
+		llvmvendor = "apple"
 		spec.Linker = "ld.lld"
 		spec.Libc = "darwin-libSystem"
-		arch := strings.Split(triple, "-")[0]
-		platformVersion := strings.TrimPrefix(strings.Split(triple, "-")[2], "macosx")
+		// Use macosx* instead of darwin, otherwise darwin/arm64 will refer to
+		// iOS!
+		llvmos = "macosx" + platformVersion
 		spec.LDFlags = append(spec.LDFlags,
 			"-flavor", "darwin",
 			"-dead_strip",
-			"-arch", arch,
+			"-arch", llvmarch,
 			"-platform_version", "macos", platformVersion, platformVersion,
 		)
-	} else if goos == "linux" {
+	case "linux":
 		spec.Linker = "ld.lld"
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "musl"
 		spec.LDFlags = append(spec.LDFlags, "--gc-sections")
-		if goarch == "arm64" {
+		if options.GOARCH == "arm64" {
 			// Disable outline atomics. For details, see:
 			// https://cpufun.substack.com/p/atomics-in-aarch64
 			// A better way would be to fully support outline atomics, which
@@ -375,7 +351,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			// proper threading.
 			spec.CFlags = append(spec.CFlags, "-mno-outline-atomics")
 		}
-	} else if goos == "windows" {
+	case "windows":
 		spec.Linker = "ld.lld"
 		spec.Libc = "mingw-w64"
 		// Note: using a medium code model, low image base and no ASLR
@@ -384,7 +360,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 		// normally present in Go (without explicitly opting in).
 		// For more discussion:
 		// https://groups.google.com/g/Golang-nuts/c/Jd9tlNc6jUE/m/Zo-7zIP_m3MJ?pli=1
-		switch goarch {
+		switch options.GOARCH {
 		case "amd64":
 			spec.LDFlags = append(spec.LDFlags,
 				"-m", "i386pep",
@@ -401,7 +377,7 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			"--no-insert-timestamp",
 			"--no-dynamicbase",
 		)
-	} else if goos == "wasip1" {
+	case "wasip1":
 		spec.GC = "" // use default GC
 		spec.Scheduler = "asyncify"
 		spec.Linker = "wasm-ld"
@@ -417,28 +393,43 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			"src/runtime/asm_tinygowasm.S",
 			"src/internal/task/task_asyncify_wasm.S",
 		)
-	} else {
-		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie
+		llvmos = "wasi"
+	default:
+		return nil, fmt.Errorf("unknown GOOS=%s", options.GOOS)
 	}
-	if goarch != "wasm" {
+
+	// Target triples (which actually have four components, but are called
+	// triples for historical reasons) have the form:
+	//   arch-vendor-os-environment
+	spec.Triple = llvmarch + "-" + llvmvendor + "-" + llvmos
+	if options.GOOS == "windows" {
+		spec.Triple += "-gnu"
+	} else if options.GOARCH == "arm" {
+		spec.Triple += "-gnueabihf"
+	}
+
+	// Add extra assembly files (needed for the scheduler etc).
+	if options.GOARCH != "wasm" {
 		suffix := ""
-		if goos == "windows" && goarch == "amd64" {
+		if options.GOOS == "windows" && options.GOARCH == "amd64" {
 			// Windows uses a different calling convention on amd64 from other
 			// operating systems so we need separate assembly files.
 			suffix = "_windows"
 		}
-		asmGoarch := goarch
-		if goarch == "mips" || goarch == "mipsle" {
+		asmGoarch := options.GOARCH
+		if options.GOARCH == "mips" || options.GOARCH == "mipsle" {
 			asmGoarch = "mipsx"
 		}
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+asmGoarch+suffix+".S")
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+asmGoarch+suffix+".S")
 	}
-	if goarch != runtime.GOARCH {
+
+	// Configure the emulator.
+	if options.GOARCH != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
 		spec.GDB = []string{"gdb-multiarch"}
-		if goos == "linux" {
-			switch goarch {
+		if options.GOOS == "linux" {
+			switch options.GOARCH {
 			case "386":
 				// amd64 can _usually_ run 32-bit programs, so skip the emulator in that case.
 				if runtime.GOARCH != "amd64" {
@@ -457,11 +448,12 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			}
 		}
 	}
-	if goos != runtime.GOOS {
-		if goos == "windows" {
+	if options.GOOS != runtime.GOOS {
+		if options.GOOS == "windows" {
 			spec.Emulator = "wine {}"
 		}
 	}
+
 	return &spec, nil
 }
 
