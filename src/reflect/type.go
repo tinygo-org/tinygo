@@ -972,17 +972,52 @@ func (t *rawType) FieldAlign() int {
 // AssignableTo returns whether a value of type t can be assigned to a variable
 // of type u.
 func (t *rawType) AssignableTo(u Type) bool {
-	if t == u.(*rawType) {
-		return true
-	}
-
-	if u.Kind() == Interface && u.NumMethod() == 0 {
+	// Quotes come from the language spec:
+	// https://go.dev/ref/spec#Assignability
+	// > A value x of type V is assignable to a variable of type T ("x is
+	// > assignable to T") if one of the following conditions applies:
+	//   [...]
+	// (Replace T with t, and x with u).
+	u_raw := u.(*rawType)
+	if t == u_raw {
+		// > V and T are identical.
 		return true
 	}
 
 	if u.Kind() == Interface {
-		panic("reflect: unimplemented: AssignableTo with interface")
+		// > T is an interface type, but not a type parameter, and x implements
+		// > T.
+		u_itf := (*interfaceType)(unsafe.Pointer(u_raw.underlying()))
+		res := typeImplementsMethodSet(unsafe.Pointer(t), unsafe.Pointer(&u_itf.methods))
+		return res
 	}
+
+	t_named := t.isNamed()
+	u_named := u_raw.isNamed()
+	if t_named && u_named {
+		return false
+	}
+	if t.underlying() == u_raw.underlying() {
+		// > V and T have identical underlying types but are not type parameters
+		// > and at least one of V or T is not a named type.
+		return true
+	}
+
+	if t.Kind() == Chan && u_raw.Kind() == Chan {
+		// > V and T are channel types with identical element types, V is a
+		// > bidirectional channel, and at least one of V or T is not a named
+		// > type.
+		t_chan := (*elemType)(unsafe.Pointer(t.underlying()))
+		u_chan := (*elemType)(unsafe.Pointer(u_raw.underlying()))
+		if t_chan.elem != u_chan.elem {
+			return false
+		}
+		if t_chan.ChanDir() != BothDir {
+			return false
+		}
+		return true
+	}
+
 	return false
 }
 

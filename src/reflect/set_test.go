@@ -196,34 +196,30 @@ func TestImplements(t *testing.T) {
 	}
 }
 
-// TODO: AssignableTo should be possible to implement now that Implements()
-// mostly works.
+var assignableTests = []struct {
+	x any
+	t any
+	b bool
+}{
+	{new(chan int), new(<-chan int), true},
+	{new(<-chan int), new(chan int), false},
+	{new(*int), new(IntPtr), true},
+	{new(IntPtr), new(*int), true},
+	{new(IntPtr), new(IntPtr1), false},
+	{new(Ch), new(<-chan any), true},
+	// test runs implementsTests too
+}
 
-//var assignableTests = []struct {
-//	x any
-//	t any
-//	b bool
-//}{
-//	{new(chan int), new(<-chan int), true},
-//	{new(<-chan int), new(chan int), false},
-//	{new(*int), new(IntPtr), true},
-//	{new(IntPtr), new(*int), true},
-//	{new(IntPtr), new(IntPtr1), false},
-//	{new(Ch), new(<-chan any), true},
-//	// test runs implementsTests too
-//}
-//
-//type IntPtr *int
-//type IntPtr1 *int
-//type Ch <-chan any
-//
-//func TestAssignableTo(t *testing.T) {
-//	for _, tt := range append(assignableTests, implementsTests...) {
-//		xv := TypeOf(tt.x).Elem()
-//		xt := TypeOf(tt.t).Elem()
-//		if b := xv.AssignableTo(xt); b != tt.b {
-//			t.Errorf("(%s).AssignableTo(%s) = %v, want %v", xv.String(), xt.String(), b, tt.b)
-//		}
-//	}
-//}
-//
+type IntPtr *int
+type IntPtr1 *int
+type Ch <-chan any
+
+func TestAssignableTo(t *testing.T) {
+	for _, tt := range append(assignableTests, implementsTests...) {
+		xv := TypeOf(tt.x).Elem()
+		xt := TypeOf(tt.t).Elem()
+		if b := xv.AssignableTo(xt); b != tt.b {
+			t.Errorf("(%s).AssignableTo(%s) = %v, want %v", xv.String(), xt.String(), b, tt.b)
+		}
+	}
+}
