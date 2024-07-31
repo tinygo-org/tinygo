@@ -173,6 +173,13 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		// Use softfloat instead of floating point instructions. This is
 		// supported on many architectures.
 		args = append(args, "-msoft-float")
+	} else {
+		if strings.HasPrefix(target, "armv5") {
+			// On ARMv5 we need to explicitly enable hardware floating point
+			// instructions: Clang appears to assume the hardware doesn't have a
+			// FPU otherwise.
+			args = append(args, "-mfpu=vfpv2")
+		}
 	}
 
 	var once sync.Once

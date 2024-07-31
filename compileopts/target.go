@@ -267,18 +267,60 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	case "arm":
 		spec.CPU = "generic"
 		spec.CFlags = append(spec.CFlags, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
-		switch options.GOARM {
+		subarch := strings.Split(options.GOARM, ",")
+		if len(subarch) > 2 {
+			return nil, fmt.Errorf("invalid GOARM=%s, must be of form <num>,[hardfloat|softfloat]", options.GOARM)
+		}
+		archLevel := subarch[0]
+		var fpu string
+		if len(subarch) >= 2 {
+			fpu = subarch[1]
+		} else {
+			// Pick the default fpu value: softfloat for armv5 and hardfloat
+			// above that.
+			if archLevel == "5" {
+				fpu = "softfloat"
+			} else {
+				fpu = "hardfloat"
+			}
+		}
+		switch fpu {
+		case "softfloat":
+			spec.CFlags = append(spec.CFlags, "-msoft-float")
+			spec.SoftFloat = true
+		case "hardfloat":
+			// Hardware floating point support is the default everywhere except
+			// on ARMv5 where it needs to be enabled explicitly.
+			if archLevel == "5" {
+				spec.CFlags = append(spec.CFlags, "-mfpu=vfpv2")
+			}
+		default:
+			return nil, fmt.Errorf("invalid extension GOARM=%s, must be softfloat or hardfloat", options.GOARM)
+		}
+		switch archLevel {
 		case "5":
 			llvmarch = "armv5"
-			spec.Features = "+armv5t,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			if spec.SoftFloat {
+				spec.Features = "+armv5t,+soft-float,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.Features = "+armv5t,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
 		case "6":
 			llvmarch = "armv6"
-			spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			if spec.SoftFloat {
+				spec.Features = "+armv6,+dsp,+soft-float,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
 		case "7":
 			llvmarch = "armv7"
-			spec.Features = "+armv7-a,+d32,+dsp,+fp64,+neon,+vfp2,+vfp2sp,+vfp3,+vfp3d16,+vfp3d16sp,+vfp3sp,-aes,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-sha2,-thumb-mode,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			if spec.SoftFloat {
+				spec.Features = "+armv7-a,+dsp,+soft-float,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.Features = "+armv7-a,+d32,+dsp,+fp64,+neon,+vfp2,+vfp2sp,+vfp3,+vfp3d16,+vfp3d16sp,+vfp3sp,-aes,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-sha2,-thumb-mode,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
 		default:
-			return nil, fmt.Errorf("invalid GOARM=%s, must be 5, 6, or 7", options.GOARM)
+			return nil, fmt.Errorf("invalid GOARM=%s, must be of form <num>,[hardfloat|softfloat] where num is 5, 6, or 7", options.GOARM)
 		}
 	case "arm64":
 		spec.CPU = "generic"
