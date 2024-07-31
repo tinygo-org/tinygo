@@ -418,8 +418,15 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	spec.Triple = llvmarch + "-" + llvmvendor + "-" + llvmos
 	if options.GOOS == "windows" {
 		spec.Triple += "-gnu"
-	} else if options.GOARCH == "arm" {
-		spec.Triple += "-gnueabihf"
+	} else if options.GOOS == "linux" {
+		// We use musl on Linux (not glibc) so we should use -musleabi* instead
+		// of -gnueabi*.
+		// The *hf suffix selects between soft/hard floating point ABI.
+		if spec.SoftFloat {
+			spec.Triple += "-musleabi"
+		} else {
+			spec.Triple += "-musleabihf"
+		}
 	}
 
 	// Add extra assembly files (needed for the scheduler etc).
