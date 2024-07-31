@@ -1,3 +1,6 @@
+//go:build linux || unix
+// +build linux unix
+
 package syscall
 
 import "errors"
