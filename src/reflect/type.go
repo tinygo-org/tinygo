@@ -774,7 +774,7 @@ func (t *rawType) rawFieldByNameFunc(match func(string) bool) (rawStructField, [
 				if match(name) {
 					found = append(found, result{
 						rawStructFieldFromPointer(descriptor, field.fieldType, data, flagsByte, name, offset),
-						append(ll.index, int(i)),
+						append(ll.index[:len(ll.index):len(ll.index)], int(i)),
 					})
 				}
 
@@ -787,7 +787,7 @@ func (t *rawType) rawFieldByNameFunc(match func(string) bool) (rawStructField, [
 
 					nextlevel = append(nextlevel, fieldWalker{
 						t:     embedded,
-						index: append(ll.index, int(i)),
+						index: append(ll.index[:len(ll.index):len(ll.index)], int(i)),
 					})
 				}
 

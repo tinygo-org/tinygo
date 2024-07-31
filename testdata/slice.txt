@@ -7,12 +7,12 @@ copy foo -> bar: 3
 bar: len=3 cap=5 data: 1 2 4
 slice is nil? true true
 grow: len=0 cap=0 data:
-grow: len=1 cap=1 data: 42
+grow: len=1 cap=2 data: 42
 grow: len=3 cap=4 data: 42 -1 -2
 grow: len=7 cap=8 data: 42 -1 -2 1 2 4 5
 grow: len=7 cap=8 data: 42 -1 -2 1 2 4 5
 grow: len=14 cap=16 data: 42 -1 -2 1 2 4 5 42 -1 -2 1 2 4 5
-bytes: len=6 cap=6 data: 1 2 3 102 111 111
+bytes: len=6 cap=8 data: 1 2 3 102 111 111
 slice to array pointer: 1 -2 20 4
 unsafe.Add array: 1 5 8 4
 unsafe.Slice array: 3 3 9 15 4
