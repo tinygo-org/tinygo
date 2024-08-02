@@ -46,10 +46,6 @@ func (p *Process) release() error {
 // * No parent-child communication via pipes (TODO)
 // * No waiting for crashes child processes to prohibit zombie process accumulation / Wait status checking (TODO)
 func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) {
-	var (
-		ret uintptr
-	)
-
 	if len(argv) == 0 {
 		return 0, errors.New("exec: no argv")
 	}
@@ -58,40 +54,18 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		attr = new(ProcAttr)
 	}
 
-	argv0p, err := syscall.BytePtrFromString(argv0)
+	pid, err = Fork()
 	if err != nil {
 		return 0, err
-	}
-	argvp, err := syscall.SlicePtrFromStrings(argv)
-	if err != nil {
-		return 0, err
-	}
-	envp, err := syscall.SlicePtrFromStrings(attr.Env)
-	if err != nil {
-		return 0, err
-	}
-
-	if (runtime.GOOS == "freebsd" || runtime.GOOS == "dragonfly") && len(argv) > 0 && len(argv[0]) > len(argv0) {
-		argvp[0] = argv0p
-	}
-
-	ret = syscall.Fork()
-	if int(ret) < 0 {
-		return 0, errors.New("fork failed")
-	}
-
-	if int(ret) != 0 {
-		// if fd == 0 code runs in parent
-		return int(ret), nil
 	} else {
 		// else code runs in child, which then should exec the new process
-		ret = syscall.Execve(argv0, argv, envp)
-		if int(ret) != 0 {
+		err = Execve(argv0, argv, attr.Env)
+		if err != nil {
 			// exec failed
-			return int(ret), errors.New("exec failed")
+			return 0, err
 		}
 		// 3. TODO: use pipes to communicate back child status
-		return int(ret), nil
+		return pid, nil
 	}
 }
 
