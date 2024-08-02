@@ -62,7 +62,7 @@ type Process struct {
 }
 
 func StartProcess(name string, argv []string, attr *ProcAttr) (*Process, error) {
-	return nil, &PathError{Op: "fork/exec", Path: name, Err: ErrNotImplemented}
+	return startProcess(name, argv, attr)
 }
 
 func (p *Process) Wait() (*ProcessState, error) {

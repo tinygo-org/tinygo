@@ -75,20 +75,20 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		argvp[0] = argv0p
 	}
 
-	pid = syscall.Fork()
-	if ret < 0 {
+	ret = syscall.Fork()
+	if int(ret) < 0 {
 		return 0, errors.New("fork failed")
 	}
 
-	if ret != 0 {
+	if int(ret) != 0 {
 		// if fd == 0 code runs in parent
 		return int(ret), nil
 	} else {
 		// else code runs in child, which then should exec the new process
 		ret = syscall.Execve(argv0, argv, envp)
-		if ret != 0 {
+		if int(ret) != 0 {
 			// exec failed
-			syscall.Exit(1)
+			return int(ret), errors.New("exec failed")
 		}
 		// 3. TODO: use pipes to communicate back child status
 		return int(ret), nil
@@ -101,7 +101,7 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 // The StartProcess function creates a new process by forking the current process and then calling execve to replace the current process with the new process.
 // It thereby replaces the newly created process with the specified command and arguments.
 func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err error) {
-	pid, err := ForkExec(name, argv, attr)
+	pid, err := forkExec(name, argv, attr)
 	if err != nil {
 		return nil, err
 	}
