@@ -432,7 +432,6 @@ func chmod(pathname *byte, mode uint32) int32 {
 //
 //export mkdir
 func mkdir(pathname *byte, mode uint32) int32 {
-
 	path := goString(pathname)
 	dir, relPath := findPreopenForPath(path)
 	if dir.d == cm.ResourceNone {
@@ -773,7 +772,6 @@ var libcCWD wasiDir
 var wasiPreopens map[string]types.Descriptor
 
 func populatePreopens() {
-
 	var cwd string
 
 	// find CWD
@@ -1353,4 +1351,12 @@ func getcwd(buf *byte, size uint) *byte {
 	s[size-1] = 0 // Enforce NULL termination
 	copy(s, cwd)
 	return buf
+}
+
+// int truncate(const char *path, off_t length);
+//
+//export truncate
+func truncate(path *byte, length int64) int32 {
+	libcErrno = ENOSYS
+	return -1
 }

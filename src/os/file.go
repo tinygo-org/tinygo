@@ -290,16 +290,6 @@ func (f *File) Sync() (err error) {
 	return
 }
 
-// Truncate is a stub, not yet implemented
-func (f *File) Truncate(size int64) (err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		err = ErrNotImplemented
-	}
-	return &PathError{Op: "truncate", Path: f.name, Err: err}
-}
-
 // LinkError records an error during a link or symlink or rename system call and
 // the paths that caused it.
 type LinkError struct {

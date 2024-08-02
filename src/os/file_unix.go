@@ -125,6 +125,25 @@ func Readlink(name string) (string, error) {
 	}
 }
 
+// Truncate changes the size of the file.
+// It does not change the I/O offset.
+// If there is an error, it will be of type *PathError.
+// Alternatively just use 'raw' syscall by file name
+func (f *File) Truncate(size int64) (err error) {
+	if f.handle == nil {
+		return ErrClosed
+	}
+
+	e := ignoringEINTR(func() error {
+		return syscall.Truncate(f.name, size)
+	})
+
+	if e != nil {
+		return &PathError{Op: "truncate", Path: f.name, Err: e}
+	}
+	return
+}
+
 // ReadAt reads up to len(b) bytes from the File starting at the given absolute offset.
 // It returns the number of bytes read and any error encountered, possibly io.EOF.
 // At end of file, Pread returns 0, io.EOF.
