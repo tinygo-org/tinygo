@@ -307,3 +307,41 @@ func growHeap() bool {
 	setHeapEnd(heapStart + heapSize)
 	return true
 }
+
+func init() {
+	// Set up a channel to receive signals into.
+	// A channel size of 1 should be sufficient in most cases, but using 4 just
+	// to be sure.
+	signalChan = make(chan uint32, 4)
+}
+
+var signalChan chan uint32
+
+//go:linkname signal_enable os/signal.signal_enable
+func signal_enable(s uint32) {
+	// It's easier to implement this function in C.
+	tinygo_signal_enable(s)
+}
+
+//export tinygo_signal_enable
+func tinygo_signal_enable(s uint32)
+
+// void tinygo_signal_handler(int sig);
+//
+//export tinygo_signal_handler
+func tinygo_signal_handler(s int32) {
+	select {
+	case signalChan <- uint32(s):
+	default:
+		// TODO: we should handle this in a better way somehow.
+		// Maybe just ignore the signal, assuming that nothing is reading from
+		// the notify channel?
+		runtimePanic("could not deliver signal: runtime internal channel is full")
+	}
+}
+
+//go:linkname signal_recv os/signal.signal_recv
+func signal_recv() uint32 {
+	// Function called from os/signal to get the next received signal.
+	return <-signalChan
+}

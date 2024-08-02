@@ -75,6 +75,7 @@ func TestBuild(t *testing.T) {
 		"oldgo/",
 		"print.go",
 		"reflect.go",
+		"signal/",
 		"slice.go",
 		"sort.go",
 		"stdlib.go",
@@ -212,6 +213,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	// isWebAssembly := strings.HasPrefix(spec.Triple, "wasm")
 	isWASI := strings.HasPrefix(options.Target, "wasi")
 	isWebAssembly := isWASI || strings.HasPrefix(options.Target, "wasm") || (options.Target == "" && strings.HasPrefix(options.GOARCH, "wasm"))
+	isBaremetal := options.Target == "simavr" || options.Target == "cortex-m-qemu" || options.Target == "riscv-qemu"
 
 	for _, name := range tests {
 		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
@@ -266,6 +268,13 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			switch name {
 			case "cgo/":
 				// waisp2 use our own libc; cgo tests fail
+				continue
+			}
+		}
+		if isWebAssembly || isBaremetal || options.GOOS == "windows" {
+			switch name {
+			case "signal/":
+				// Signals only work on POSIX-like systems.
 				continue
 			}
 		}

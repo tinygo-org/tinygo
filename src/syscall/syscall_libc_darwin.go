@@ -186,6 +186,8 @@ const (
 	SIGPIPE Signal = 13 /* write on a pipe with no one to read it */
 	SIGTERM Signal = 15 /* software termination signal from kill */
 	SIGCHLD Signal = 20 /* to parent on child stop or exit */
+	SIGUSR1 Signal = 30 /* user defined signal 1 */
+	SIGUSR2 Signal = 31 /* user defined signal 2 */
 )
 
 func (s Signal) Signal() {}
