@@ -247,12 +247,12 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"net/":                  true,
 		"net/http/":             false,
 		"os/":                   true,
-		// "os/signal":             false,
-		"os/user/": false,
-		"reflect/": false,
-		"runtime/": false,
-		"sync/":    true,
-		"testing/": true,
+		"os/signal":             false,
+		"os/user/":              false,
+		"reflect/":              false,
+		"runtime/":              false,
+		"sync/":                 true,
+		"testing/":              true,
 	}
 
 	if goMinor >= 19 {
