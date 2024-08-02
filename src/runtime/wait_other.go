@@ -1,4 +1,4 @@
-//go:build !tinygo.riscv && !cortexm
+//go:build !tinygo.riscv && !cortexm && !(linux && !baremetal && !tinygo.wasm && !nintendoswitch) && !darwin
 
 package runtime
 

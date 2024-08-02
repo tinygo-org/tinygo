@@ -3,6 +3,8 @@
 package runtime
 
 import (
+	"math/bits"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -11,6 +13,9 @@ func libc_write(fd int32, buf unsafe.Pointer, count uint) int
 
 //export usleep
 func usleep(usec uint) int
+
+//export pause
+func pause() int32
 
 // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 // Note: off_t is defined as int64 because:
@@ -217,8 +222,22 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 func sleepTicks(d timeUnit) {
+	// Check for incoming signals.
+	if checkSignals() {
+		// Received a signal, so there's probably at least one goroutine that's
+		// runnable again.
+		return
+	}
+
+	// TODO: there is a race condition here. If a signal arrives between
+	// checkSignals() and usleep(), the usleep() call will not exit early so the
+	// signal is delayed until usleep finishes or another signal arrives.
+
 	// timeUnit is in nanoseconds, so need to convert to microseconds here.
-	usleep(uint(d) / 1000)
+	result := usleep(uint(d) / 1000)
+	if result != 0 {
+		checkSignals()
+	}
 }
 
 func getTime(clock int32) uint64 {
@@ -306,4 +325,165 @@ func growHeap() bool {
 	}
 	setHeapEnd(heapStart + heapSize)
 	return true
+}
+
+func init() {
+	// Set up a channel to receive signals into.
+	signalChan = make(chan uint32, 1)
+}
+
+var signalChan chan uint32
+
+// Simple boolean that's true when any signals have been registered.
+var hasSignals uint32
+
+// Mask of signals that have been received. The signal handler atomically ORs
+// signals into this value.
+var receivedSignals uint32
+
+//go:linkname signal_enable os/signal.signal_enable
+func signal_enable(s uint32) {
+	if s >= 32 {
+		// TODO: to support higher signal numbers, we need to turn
+		// receivedSignals into a uint32 array.
+		runtimePanicAt(returnAddress(0), "unsupported signal number")
+	}
+	atomic.StoreUint32(&hasSignals, 1)
+	// It's easier to implement this function in C.
+	tinygo_signal_enable(s)
+}
+
+//go:linkname signal_ignore os/signal.signal_ignore
+func signal_ignore(s uint32) {
+	if s >= 32 {
+		// TODO: to support higher signal numbers, we need to turn
+		// receivedSignals into a uint32 array.
+		runtimePanicAt(returnAddress(0), "unsupported signal number")
+	}
+	tinygo_signal_ignore(s)
+}
+
+//go:linkname signal_disable os/signal.signal_disable
+func signal_disable(s uint32) {
+	if s >= 32 {
+		// TODO: to support higher signal numbers, we need to turn
+		// receivedSignals into a uint32 array.
+		runtimePanicAt(returnAddress(0), "unsupported signal number")
+	}
+	tinygo_signal_disable(s)
+}
+
+//go:linkname signal_waitUntilIdle os/signal.signalWaitUntilIdle
+func signal_waitUntilIdle() {
+	// Make sure all signals are sent on the channel.
+	for atomic.LoadUint32(&receivedSignals) != 0 {
+		checkSignals()
+		Gosched()
+	}
+
+	// Make sure all signals are processed.
+	for len(signalChan) != 0 {
+		Gosched()
+	}
+}
+
+//export tinygo_signal_enable
+func tinygo_signal_enable(s uint32)
+
+//export tinygo_signal_ignore
+func tinygo_signal_ignore(s uint32)
+
+//export tinygo_signal_disable
+func tinygo_signal_disable(s uint32)
+
+// void tinygo_signal_handler(int sig);
+//
+//export tinygo_signal_handler
+func tinygo_signal_handler(s int32) {
+	// This loop is essentially the atomic equivalent of the following:
+	//
+	//   receivedSignals |= 1 << s
+	//
+	// TODO: use atomic.Uint32.And once we drop support for Go 1.22 instead of
+	// this loop.
+	for {
+		mask := uint32(1) << uint32(s)
+		val := atomic.LoadUint32(&receivedSignals)
+		swapped := atomic.CompareAndSwapUint32(&receivedSignals, val, val|mask)
+		if swapped {
+			break
+		}
+	}
+}
+
+//go:linkname signal_recv os/signal.signal_recv
+func signal_recv() uint32 {
+	// Function called from os/signal to get the next received signal.
+	val := <-signalChan
+	checkSignals()
+	return val
+}
+
+// Atomically find a signal that previously occured and send it into the
+// signalChan channel. Return true if at least one signal was delivered this
+// way, false otherwise.
+func checkSignals() bool {
+	gotSignals := false
+	for {
+		// Extract the lowest numbered signal number from receivedSignals.
+		val := atomic.LoadUint32(&receivedSignals)
+		if val == 0 {
+			// There is no signal ready to be received by the program (common
+			// case).
+			return gotSignals
+		}
+		num := uint32(bits.TrailingZeros32(val))
+
+		// Do a non-blocking send on signalChan.
+		select {
+		case signalChan <- num:
+			// There was room free in the channel, so remove the signal number
+			// from the receivedSignals mask.
+			gotSignals = true
+		default:
+			// Could not send the signal number on the channel. This means
+			// there's still a signal pending. In that case, let it be received
+			// at which point checkSignals is called again to put the next one
+			// in the channel buffer.
+			return gotSignals
+		}
+
+		// Atomically clear the signal number from receivedSignals.
+		// TODO: use atomic.Uint32.Or once we drop support for Go 1.22 instead
+		// of this loop.
+		for {
+			newVal := val &^ (1 << num)
+			swapped := atomic.CompareAndSwapUint32(&receivedSignals, val, newVal)
+			if swapped {
+				break
+			}
+			val = atomic.LoadUint32(&receivedSignals)
+		}
+	}
+}
+
+func waitForEvents() {
+	if atomic.LoadUint32(&hasSignals) != 0 {
+		// TODO: there is a race condition here. If a signal arrives between
+		// checkSignals() and pause(), pause() will not exit early but instead
+		// be delayed until the next signal arrives.
+		// We should use something like this instead to avoid it:
+		//   - mask all active signals
+		//   - run checkSignals()
+		//   - run sigsuspend() with all active signals
+		//   - unmask all active signals
+		// For a longer explanation of the problem, see:
+		// https://www.cipht.net/2023/11/30/perils-of-pause.html
+		checkSignals()
+		pause()
+		checkSignals()
+	} else {
+		// The program doesn't use signals, so this is a deadlock.
+		runtimePanic("deadlocked: no event source")
+	}
 }
