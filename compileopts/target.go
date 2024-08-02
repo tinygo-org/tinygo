@@ -390,7 +390,8 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		)
 		spec.ExtraFiles = append(spec.ExtraFiles,
 			"src/runtime/os_darwin.c",
-			"src/runtime/runtime_unix.c")
+			"src/runtime/runtime_unix.c",
+			"src/runtime/signal.c")
 	case "linux":
 		spec.Linker = "ld.lld"
 		spec.RTLib = "compiler-rt"
@@ -411,7 +412,8 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			spec.CFlags = append(spec.CFlags, "-mno-outline-atomics")
 		}
 		spec.ExtraFiles = append(spec.ExtraFiles,
-			"src/runtime/runtime_unix.c")
+			"src/runtime/runtime_unix.c",
+			"src/runtime/signal.c")
 	case "windows":
 		spec.Linker = "ld.lld"
 		spec.Libc = "mingw-w64"
