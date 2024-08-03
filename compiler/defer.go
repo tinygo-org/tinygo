@@ -16,34 +16,54 @@ package compiler
 import (
 	"go/types"
 	"strconv"
+	"strings"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
+type recoverType uint8
+
+const (
+	// Note: this matches recoverSupport in src/runtime/panic.go
+	recoverNone recoverType = iota
+	recoverInlineAsm
+	recoverWasmEH // WebAssembly exception handling
+)
+
 // supportsRecover returns whether the compiler supports the recover() builtin
 // for the current architecture.
-func (b *builder) supportsRecover() bool {
-	switch b.archFamily() {
+func (c *compilerContext) supportsRecover() recoverType {
+	switch c.archFamily() {
 	case "wasm32":
-		// Probably needs to be implemented using the exception handling
-		// proposal of WebAssembly:
-		// https://github.com/WebAssembly/exception-handling
-		return false
+		if !strings.Contains(c.Features, "+exception-handling") {
+			// No support for the exception handling proposal.
+			return recoverNone
+		}
+		if c.Scheduler == "asyncify" {
+			// Asyncify does not support WebAssembly exception handling.
+			// It exits with the following message:
+			//     unexpected expression type
+			//     UNREACHABLE executed at $TINYGOROOT/lib/binaryen/src/passes/Asyncify.cpp:1142!
+			// See: https://github.com/WebAssembly/binaryen/issues/4470
+			return recoverNone
+		}
+		// Use WebAssembly exception handling.
+		return recoverWasmEH
 	case "riscv64", "xtensa":
 		// TODO: add support for these architectures
-		return false
+		return recoverNone
 	default:
-		return true
+		return recoverInlineAsm
 	}
 }
 
-// hasDeferFrame returns whether the current function needs to catch panics and
-// run defers.
-func (b *builder) hasDeferFrame() bool {
+// deferFrameType returns the defer type for this function. It is always
+// recoverNone for functions without defer.
+func (b *builder) deferFrameType() recoverType {
 	if b.fn.Recover == nil {
-		return false
+		return recoverNone
 	}
 	return b.supportsRecover()
 }
@@ -63,21 +83,40 @@ func (b *builder) deferInitFunc() {
 	b.deferPtr = b.CreateAlloca(b.dataPtrType, "deferPtr")
 	b.CreateStore(llvm.ConstPointerNull(b.dataPtrType), b.deferPtr)
 
-	if b.hasDeferFrame() {
+	switch b.deferFrameType() {
+	case recoverInlineAsm:
 		// Set up the defer frame with the current stack pointer.
 		// This assumes that the stack pointer doesn't move outside of the
 		// function prologue/epilogue (an invariant maintained by TinyGo but
 		// possibly broken by the C alloca function).
 		// The frame pointer is _not_ saved, because it is marked as clobbered
 		// in the setjmp-like inline assembly.
-		deferFrameType := b.getLLVMRuntimeType("deferFrame")
+		deferFrameType := b.getLLVMRuntimeType("deferFrameInlineAsm")
 		b.deferFrame = b.CreateAlloca(deferFrameType, "deferframe.buf")
 		stackPointer := b.readStackPointer()
-		b.createRuntimeCall("setupDeferFrame", []llvm.Value{b.deferFrame, stackPointer}, "")
+		b.createRuntimeCall("setupDeferFrameInlineAsm", []llvm.Value{b.deferFrame, stackPointer}, "")
 
 		// Create the landing pad block, which is where control transfers after
 		// a panic.
 		b.landingpad = b.ctx.AddBasicBlock(b.llvmFn, "lpad")
+	case recoverWasmEH:
+		// Set a personality function, which is required by LLVM but not
+		// actually called. __gxx_wasm_personality_v0 is the only one that is
+		// acceptable to the WebAssembly backend it seems.
+		personality := b.mod.NamedFunction("__gxx_wasm_personality_v0")
+		if personality.IsNil() {
+			fnType := llvm.FunctionType(b.ctx.Int32Type(), nil, true)
+			personality = llvm.AddFunction(b.mod, "__gxx_wasm_personality_v0", fnType)
+		}
+		b.llvmFn.SetPersonality(personality)
+
+		// Set up the defer frame.
+		deferFrameType := b.getLLVMRuntimeType("deferFrameWasmEH")
+		b.deferFrame = b.CreateAlloca(deferFrameType, "deferframe.buf")
+		b.createRuntimeCall("setupDeferFrameWasmEH", []llvm.Value{b.deferFrame}, "")
+
+		// Create the landing pad where the 'throw' instruction will jump to.
+		b.landingpad = b.ctx.AddBasicBlock(b.llvmFn, "catch.dispatch")
 	}
 }
 
@@ -93,6 +132,43 @@ func (b *builder) createLandingPad() {
 	if b.Debug {
 		pos := b.program.Fset.Position(b.fn.Syntax().End())
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), b.difunc, llvm.Metadata{})
+	}
+
+	if b.supportsRecover() == recoverWasmEH {
+		// Insert exception handling instructions.
+		// This emulates C++ exceptions, as if every function is wrapped like
+		// this:
+		//
+		//     try {
+		//         function body
+		//     } catch (...) {
+		//         run all defers
+		//     }
+		//     if deferFrame.Panicking {
+		//         // re-raise the same panic message
+		//         panic(previousPanic)
+		//     }
+		//
+		// This means that if there is a C++ exception in the program, it will
+		// get eaten by the Go code. This is fixable if needed (by checking
+		// whether it's actually a TinyGo exception and re-raising the same
+		// exception if it isn't after running deferred functions).
+		// For more information about C++ exception support in WebAssembly:
+		// https://github.com/WebAssembly/tool-conventions/blob/main/EHScheme.md
+
+		// basic block: catch.dispatch
+		catchStartBB := b.insertBasicBlock("catch.start")
+		catchswitch := b.CreateCatchSwitch(llvm.Value{}, llvm.BasicBlock{}, 1, "")
+		catchswitch.AddHandler(catchStartBB)
+
+		// basic block: catch.start
+		b.SetInsertPointAtEnd(catchStartBB)
+		catchpad := b.CreateCatchPad(catchswitch, []llvm.Value{llvm.ConstNull(b.dataPtrType)}, "")
+		rundefersBB := b.insertBasicBlock("rundefers")
+		b.CreateCatchRet(catchpad, rundefersBB)
+
+		// basic block: rundefers
+		b.SetInsertPointAtEnd(rundefersBB)
 	}
 
 	b.createRunDefers()
@@ -432,11 +508,25 @@ func (b *builder) createRunDefers() {
 	//         }
 	//     }
 
-	// Create loop, in the order: loophead, loop, callback0, callback1, ..., unreachable, end.
+	// Create loop, in the order:
+	//   - loophead
+	//   - loop
+	//   - callback0
+	//   - callback1
+	//   - callback*
+	//   - unreachable
+	//   - catch.dispatch (if wasm EH)
+	//   - catch.start (if wasm EH)
+	//   - end
+	var catchDispatch, catchStart llvm.BasicBlock
 	end := b.insertBasicBlock("rundefers.end")
 	unreachable := b.ctx.InsertBasicBlock(end, "rundefers.default")
 	loop := b.ctx.InsertBasicBlock(unreachable, "rundefers.loop")
 	loophead := b.ctx.InsertBasicBlock(loop, "rundefers.loophead")
+	if b.supportsRecover() == recoverWasmEH {
+		catchDispatch = b.ctx.InsertBasicBlock(end, "rundefers.catch.dispatch")
+		catchStart = b.ctx.InsertBasicBlock(end, "rundefers.catch.start")
+	}
 	b.CreateBr(loophead)
 
 	// Create loop head:
@@ -471,6 +561,9 @@ func (b *builder) createRunDefers() {
 		block := b.insertBasicBlock("rundefers.callback" + strconv.Itoa(i))
 		sw.AddCase(llvm.ConstInt(b.uintptrType, uint64(i), false), block)
 		b.SetInsertPointAtEnd(block)
+		var fnType llvm.Type
+		var llvmFn llvm.Value
+		var forwardParams []llvm.Value
 		switch callback := callback.(type) {
 		case *ssa.CallCommon:
 			// Call on an value or interface value.
@@ -491,7 +584,6 @@ func (b *builder) createRunDefers() {
 			}
 
 			// Extract the params from the struct (including receiver).
-			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 			for i := 2; i < len(valueTypes); i++ {
@@ -500,9 +592,6 @@ func (b *builder) createRunDefers() {
 				forwardParams = append(forwardParams, forwardParam)
 			}
 
-			var fnPtr llvm.Value
-			var fnType llvm.Type
-
 			if !callback.IsInvoke() {
 				// Isolate the func value.
 				funcValue := forwardParams[0]
@@ -510,7 +599,7 @@ func (b *builder) createRunDefers() {
 
 				//Get function pointer and context
 				var context llvm.Value
-				fnPtr, context = b.decodeFuncValue(funcValue)
+				llvmFn, context = b.decodeFuncValue(funcValue)
 				fnType = b.getLLVMFunctionType(callback.Signature())
 
 				//Pass context
@@ -519,16 +608,14 @@ func (b *builder) createRunDefers() {
 				// Move typecode from the start to the end of the list of
 				// parameters.
 				forwardParams = append(forwardParams[1:], forwardParams[0])
-				fnPtr = b.getInvokeFunction(callback)
-				fnType = fnPtr.GlobalValueType()
+				llvmFn = b.getInvokeFunction(callback)
+				fnType = llvmFn.GlobalValueType()
 
 				// Add the context parameter. An interface call cannot also be a
 				// closure but we have to supply the parameter anyway for platforms
 				// with a strict calling convention.
 				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
 			}
-
-			b.createInvoke(fnType, fnPtr, forwardParams, "")
 
 		case *ssa.Function:
 			// Direct call.
@@ -541,7 +628,6 @@ func (b *builder) createRunDefers() {
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 
 			// Extract the params from the struct.
-			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			for i := range getParams(callback.Signature) {
 				gep := b.CreateInBoundsGEP(deferredCallType, deferData, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
@@ -557,9 +643,7 @@ func (b *builder) createRunDefers() {
 				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
 			}
 
-			// Call real function.
-			fnType, fn := b.getFunction(callback)
-			b.createInvoke(fnType, fn, forwardParams, "")
+			fnType, llvmFn = b.getFunction(callback)
 
 		case *ssa.MakeClosure:
 			// Get the real defer struct type and cast to it.
@@ -573,7 +657,6 @@ func (b *builder) createRunDefers() {
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 
 			// Extract the params from the struct.
-			forwardParams := []llvm.Value{}
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			for i := 2; i < len(valueTypes); i++ {
 				gep := b.CreateInBoundsGEP(deferredCallType, deferData, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
@@ -582,8 +665,7 @@ func (b *builder) createRunDefers() {
 			}
 
 			// Call deferred function.
-			fnType, llvmFn := b.getFunction(fn)
-			b.createInvoke(fnType, llvmFn, forwardParams, "")
+			fnType, llvmFn = b.getFunction(fn)
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]
 
@@ -611,12 +693,20 @@ func (b *builder) createRunDefers() {
 			if err != nil {
 				b.diagnostics = append(b.diagnostics, err)
 			}
+			b.CreateBr(loophead)
+			continue
 		default:
 			panic("unknown deferred function type")
 		}
 
-		// Branch back to the start of the loop.
-		b.CreateBr(loophead)
+		// Call the deferred function.
+		if b.supportsRecover() == recoverWasmEH {
+			b.CreateInvoke(fnType, llvmFn, b.expandFormalParams(forwardParams), loophead, catchDispatch, "")
+		} else {
+			b.createInvoke(fnType, llvmFn, forwardParams, "")
+			// Branch back to the start of the loop.
+			b.CreateBr(loophead)
+		}
 	}
 
 	// Create default unreachable block:
@@ -625,6 +715,19 @@ func (b *builder) createRunDefers() {
 	//     }
 	b.SetInsertPointAtEnd(unreachable)
 	b.CreateUnreachable()
+
+	// Ignore any exception that might have occured while running the deferred
+	// functions. The compiler will insert a check whether the function is still
+	// panicking before return, so no panic gets lost.
+	if b.supportsRecover() == recoverWasmEH {
+		b.SetInsertPointAtEnd(catchDispatch)
+		catchswitch := b.CreateCatchSwitch(llvm.Value{}, llvm.BasicBlock{}, 1, "")
+		catchswitch.AddHandler(catchStart)
+
+		b.SetInsertPointAtEnd(catchStart)
+		catchpad := b.CreateCatchPad(catchswitch, []llvm.Value{llvm.ConstNull(b.dataPtrType)}, "")
+		b.CreateCatchRet(catchpad, loophead)
+	}
 
 	// End of loop.
 	b.SetInsertPointAtEnd(end)

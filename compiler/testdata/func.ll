@@ -6,16 +6,17 @@ target triple = "wasm32-unknown-wasi"
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
+; Function Attrs: nounwind
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.foo(ptr %callback.context, ptr %callback.funcptr, ptr %context) unnamed_addr #2 {
+define hidden void @main.foo(ptr %callback.context, ptr %callback.funcptr, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq ptr %callback.funcptr, null
   br i1 %0, label %fpcall.throw, label %fpcall.next
@@ -29,22 +30,22 @@ fpcall.throw:                                     ; preds = %entry
   unreachable
 }
 
-declare void @runtime.nilPanic(ptr) #1
+declare void @runtime.nilPanic(ptr) #2
 
 ; Function Attrs: nounwind
-define hidden void @main.bar(ptr %context) unnamed_addr #2 {
+define hidden void @main.bar(ptr %context) unnamed_addr #1 {
 entry:
   call void @main.foo(ptr undef, ptr nonnull @main.someFunc, ptr undef)
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.someFunc(i32 %arg0, ptr %context) unnamed_addr #2 {
+define hidden void @main.someFunc(i32 %arg0, ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
 attributes #3 = { nounwind }

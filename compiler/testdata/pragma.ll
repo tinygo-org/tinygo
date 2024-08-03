@@ -14,27 +14,28 @@ target triple = "wasm32-unknown-wasi"
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
+; Function Attrs: nounwind
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define void @extern_func() #3 {
+define void @extern_func() #2 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @somepkg.someFunction1(ptr %context) unnamed_addr #2 {
+define hidden void @somepkg.someFunction1(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
-declare void @somepkg.someFunction2(ptr) #1
+declare void @somepkg.someFunction2(ptr) #3
 
 ; Function Attrs: inlinehint nounwind
 define hidden void @main.inlineFunc(ptr %context) unnamed_addr #4 {
@@ -70,15 +71,15 @@ entry:
   ret void
 }
 
-declare void @main.undefinedFunctionNotInSection(ptr) #1
+declare void @main.undefinedFunctionNotInSection(ptr) #3
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #3 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="extern_func" }
-attributes #4 = { inlinehint nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #6 = { noinline nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exportedFunctionInSection" }
-attributes #7 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-import-module"="modulename" "wasm-import-name"="import1" }
-attributes #8 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-import-module"="foobar" "wasm-import-name"="imported" }
-attributes #9 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exported" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="extern_func" }
+attributes #3 = { "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #4 = { inlinehint nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #6 = { noinline nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exportedFunctionInSection" }
+attributes #7 = { "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-import-module"="modulename" "wasm-import-name"="import1" }
+attributes #8 = { "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-import-module"="foobar" "wasm-import-name"="imported" }
+attributes #9 = { nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exported" }

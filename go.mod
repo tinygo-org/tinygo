@@ -19,7 +19,7 @@ require (
 	golang.org/x/sys v0.21.0
 	golang.org/x/tools v0.22.1-0.20240621165957-db513b091504
 	gopkg.in/yaml.v2 v2.4.0
-	tinygo.org/x/go-llvm v0.0.0-20240627184919-3b50c76783a8
+	tinygo.org/x/go-llvm v0.0.0-20240804145059-aaff3eb751f0
 )
 
 require (

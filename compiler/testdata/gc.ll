@@ -27,93 +27,94 @@ target triple = "wasm32-unknown-wasi"
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
+; Function Attrs: nounwind
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.newScalar(ptr %context) unnamed_addr #2 {
+define hidden void @main.newScalar(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %new = call align 1 dereferenceable(1) ptr @runtime.alloc(i32 1, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef) #3
+  %new = call align 1 dereferenceable(1) ptr @runtime.alloc(i32 1, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef)
   store ptr %new, ptr @main.scalar1, align 4
-  %new1 = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new1, ptr nonnull %stackalloc, ptr undef) #3
+  %new1 = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new1, ptr nonnull %stackalloc, ptr undef)
   store ptr %new1, ptr @main.scalar2, align 4
-  %new2 = call align 8 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new2, ptr nonnull %stackalloc, ptr undef) #3
+  %new2 = call align 8 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new2, ptr nonnull %stackalloc, ptr undef)
   store ptr %new2, ptr @main.scalar3, align 4
-  %new3 = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new3, ptr nonnull %stackalloc, ptr undef) #3
+  %new3 = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new3, ptr nonnull %stackalloc, ptr undef)
   store ptr %new3, ptr @main.scalar4, align 4
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.newArray(ptr %context) unnamed_addr #2 {
+define hidden void @main.newArray(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %new = call align 1 dereferenceable(3) ptr @runtime.alloc(i32 3, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef) #3
+  %new = call align 1 dereferenceable(3) ptr @runtime.alloc(i32 3, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef)
   store ptr %new, ptr @main.array1, align 4
-  %new1 = call align 1 dereferenceable(71) ptr @runtime.alloc(i32 71, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new1, ptr nonnull %stackalloc, ptr undef) #3
+  %new1 = call align 1 dereferenceable(71) ptr @runtime.alloc(i32 71, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new1, ptr nonnull %stackalloc, ptr undef)
   store ptr %new1, ptr @main.array2, align 4
-  %new2 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 67 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new2, ptr nonnull %stackalloc, ptr undef) #3
+  %new2 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 67 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new2, ptr nonnull %stackalloc, ptr undef)
   store ptr %new2, ptr @main.array3, align 4
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.newStruct(ptr %context) unnamed_addr #2 {
+define hidden void @main.newStruct(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %new = call align 1 ptr @runtime.alloc(i32 0, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef) #3
+  %new = call align 1 ptr @runtime.alloc(i32 0, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef)
   store ptr %new, ptr @main.struct1, align 4
-  %new1 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new1, ptr nonnull %stackalloc, ptr undef) #3
+  %new1 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new1, ptr nonnull %stackalloc, ptr undef)
   store ptr %new1, ptr @main.struct2, align 4
-  %new2 = call align 4 dereferenceable(248) ptr @runtime.alloc(i32 248, ptr nonnull @"runtime/gc.layout:62-2000000000000001", ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new2, ptr nonnull %stackalloc, ptr undef) #3
+  %new2 = call align 4 dereferenceable(248) ptr @runtime.alloc(i32 248, ptr nonnull @"runtime/gc.layout:62-2000000000000001", ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new2, ptr nonnull %stackalloc, ptr undef)
   store ptr %new2, ptr @main.struct3, align 4
-  %new3 = call align 4 dereferenceable(248) ptr @runtime.alloc(i32 248, ptr nonnull @"runtime/gc.layout:62-0001", ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new3, ptr nonnull %stackalloc, ptr undef) #3
+  %new3 = call align 4 dereferenceable(248) ptr @runtime.alloc(i32 248, ptr nonnull @"runtime/gc.layout:62-0001", ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new3, ptr nonnull %stackalloc, ptr undef)
   store ptr %new3, ptr @main.struct4, align 4
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden ptr @main.newFuncValue(ptr %context) unnamed_addr #2 {
+define hidden ptr @main.newFuncValue(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %new = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 197 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef) #3
+  %new = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 197 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef)
   ret ptr %new
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.makeSlice(ptr %context) unnamed_addr #2 {
+define hidden void @main.makeSlice(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %makeslice = call align 1 dereferenceable(5) ptr @runtime.alloc(i32 5, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %makeslice, ptr nonnull %stackalloc, ptr undef) #3
+  %makeslice = call align 1 dereferenceable(5) ptr @runtime.alloc(i32 5, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %makeslice, ptr nonnull %stackalloc, ptr undef)
   store ptr %makeslice, ptr @main.slice1, align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice1, i32 0, i32 1), align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice1, i32 0, i32 2), align 4
-  %makeslice1 = call align 4 dereferenceable(20) ptr @runtime.alloc(i32 20, ptr nonnull inttoptr (i32 67 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %makeslice1, ptr nonnull %stackalloc, ptr undef) #3
+  %makeslice1 = call align 4 dereferenceable(20) ptr @runtime.alloc(i32 20, ptr nonnull inttoptr (i32 67 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %makeslice1, ptr nonnull %stackalloc, ptr undef)
   store ptr %makeslice1, ptr @main.slice2, align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice2, i32 0, i32 1), align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice2, i32 0, i32 2), align 4
-  %makeslice3 = call align 4 dereferenceable(60) ptr @runtime.alloc(i32 60, ptr nonnull inttoptr (i32 71 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %makeslice3, ptr nonnull %stackalloc, ptr undef) #3
+  %makeslice3 = call align 4 dereferenceable(60) ptr @runtime.alloc(i32 60, ptr nonnull inttoptr (i32 71 to ptr), ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %makeslice3, ptr nonnull %stackalloc, ptr undef)
   store ptr %makeslice3, ptr @main.slice3, align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice3, i32 0, i32 1), align 4
   store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice3, i32 0, i32 2), align 4
@@ -121,21 +122,20 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._interface @main.makeInterface(double %v.r, double %v.i, ptr %context) unnamed_addr #2 {
+define hidden %runtime._interface @main.makeInterface(double %v.r, double %v.i, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call align 8 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #3
+  %0 = call align 8 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #2
+  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef)
   store double %v.r, ptr %0, align 8
   %.repack1 = getelementptr inbounds { double, double }, ptr %0, i32 0, i32 1
   store double %v.i, ptr %.repack1, align 8
   %1 = insertvalue %runtime._interface { ptr @"reflect/types.type:basic:complex128", ptr undef }, ptr %0, 1
-  call void @runtime.trackPointer(ptr nonnull @"reflect/types.type:basic:complex128", ptr nonnull %stackalloc, ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #3
+  call void @runtime.trackPointer(ptr nonnull @"reflect/types.type:basic:complex128", ptr nonnull %stackalloc, ptr undef)
+  call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef)
   ret %runtime._interface %1
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #3 = { nounwind }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { nounwind }

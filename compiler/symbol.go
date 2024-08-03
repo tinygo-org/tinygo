@@ -174,6 +174,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		// that the only thing we'll do is read the pointer.
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
+		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
 	case "__mulsi3", "__divmodsi4", "__udivmodsi4":
 		if strings.Split(c.Triple, "-")[0] == "avr" {
 			// These functions are compiler-rt/libgcc functions that are
@@ -470,7 +471,9 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	// This behavior matches Clang when compiling C source files.
 	// It reduces binary size on Linux a little bit on non-x86_64 targets by
 	// eliminating exception tables for these functions.
-	llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
+	if c.supportsRecover() != recoverWasmEH {
+		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nounwind"), 0))
+	}
 	if strings.Split(c.Triple, "-")[0] == "x86_64" {
 		// Required by the ABI.
 		// The uwtable has two possible values: sync (1) or async (2). We use

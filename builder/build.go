@@ -747,6 +747,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
 			ldflags = append(ldflags, "-mllvm", "-mattr="+config.Features()) // needed for MIPS softfloat
+			ldflags = append(ldflags, "-mllvm", "-wasm-enable-eh")
 			if config.GOOS() == "windows" {
 				// Options for the MinGW wrapper for the lld COFF linker.
 				ldflags = append(ldflags,

@@ -286,10 +286,18 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("rand.go", options, t, nil, nil)
 		})
 	}
-	if !isWebAssembly {
-		// The recover() builtin isn't supported yet on WebAssembly and Windows.
+	if !isWASI {
+		// On WebAssembly, recover() needs the exception handling proposal which
+		// isn't (as of 2024) implemented in wasmtime so this test is skipped on
+		// WASI.
 		t.Run("recover.go", func(t *testing.T) {
 			t.Parallel()
+			options := options
+			if isWebAssembly {
+				// Hack: Asyncify doesn't support exception handling
+				// instructions.
+				options.Scheduler = "none"
+			}
 			runTest("recover.go", options, t, nil, nil)
 		})
 	}

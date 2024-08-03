@@ -177,7 +177,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 				// now.
 				// With more analysis, it should be possible to optimize a
 				// significant chunk of these away.
-			case llvm.Call, llvm.Load, llvm.IntToPtr:
+			case llvm.Call, llvm.Invoke, llvm.Load, llvm.IntToPtr:
 				// These create new values so must be stored locally. But
 				// perhaps some of these can be fused when they actually refer
 				// to the same value.

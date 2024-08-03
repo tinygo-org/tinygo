@@ -355,7 +355,10 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 }
 
 func (c *compilerContext) getRuntimeType(name string) types.Type {
-	return c.runtimePkg.Scope().Lookup(name).(*types.TypeName).Type()
+	if typ, ok := c.runtimePkg.Scope().Lookup(name).(*types.TypeName); ok {
+		return typ.Type()
+	}
+	panic("runtime type not found: " + name)
 }
 
 // getLLVMRuntimeType obtains a named type from the runtime package and returns
@@ -1350,7 +1353,7 @@ func (b *builder) createFunction() {
 		b.CreateBr(b.afterDefersBlock[i])
 	}
 
-	if b.hasDeferFrame() {
+	if b.deferFrameType() != recoverNone {
 		// Create the landing pad block, where execution continues after a
 		// panic.
 		b.createLandingPad()
@@ -1487,8 +1490,11 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		b.createRuntimeInvoke("_panic", []llvm.Value{value}, "")
 		b.CreateUnreachable()
 	case *ssa.Return:
-		if b.hasDeferFrame() {
-			b.createRuntimeCall("destroyDeferFrame", []llvm.Value{b.deferFrame}, "")
+		switch b.deferFrameType() {
+		case recoverInlineAsm:
+			b.createRuntimeCall("destroyDeferFrameInlineAsm", []llvm.Value{b.deferFrame}, "")
+		case recoverWasmEH:
+			b.createRuntimeCall("destroyDeferFrameWasmEH", []llvm.Value{b.deferFrame}, "")
 		}
 		if len(instr.Results) == 0 {
 			b.CreateRetVoid()
@@ -1741,7 +1747,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		return b.CreateExtractValue(cplx, 0, "real"), nil
 	case "recover":
 		useParentFrame := uint64(0)
-		if b.hasDeferFrame() {
+		if b.fn.Recover != nil {
 			// recover() should return the panic value of the parent function,
 			// not of the current function.
 			useParentFrame = 1
@@ -1851,11 +1857,8 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		case strings.HasPrefix(name, "syscall.rawSyscallNoError") || strings.HasPrefix(name, "golang.org/x/sys/unix.RawSyscallNoError"):
 			return b.createRawSyscallNoError(instr)
 		case name == "runtime.supportsRecover":
-			supportsRecover := uint64(0)
-			if b.supportsRecover() {
-				supportsRecover = 1
-			}
-			return llvm.ConstInt(b.ctx.Int1Type(), supportsRecover, false), nil
+			supportsRecover := uint64(b.supportsRecover())
+			return llvm.ConstInt(b.ctx.Int8Type(), supportsRecover, false), nil
 		case name == "runtime.panicStrategy":
 			// These constants are defined in src/runtime/panic.go.
 			panicStrategy := map[string]uint64{

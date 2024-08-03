@@ -15,11 +15,20 @@ func trap()
 // purposes of TinyGo. It restores the stack pointer and jumps to the given pc.
 //
 //export tinygo_longjmp
-func tinygo_longjmp(frame *deferFrame)
+func tinygo_longjmp(frame *deferFrameInlineAsm)
 
 // Compiler intrinsic.
 // Returns whether recover is supported on the current architecture.
-func supportsRecover() bool
+func supportsRecover() recoverType
+
+type recoverType uint8
+
+const (
+	// Note: these contants match recoverSupport in compiler/defer.go
+	recoverNone recoverType = iota
+	recoverInlineAsm
+	recoverWasmEH
+)
 
 const (
 	panicStrategyPrint = 1
@@ -31,18 +40,31 @@ const (
 // using the -panic= compiler flag.
 func panicStrategy() uint8
 
-// DeferFrame is a stack allocated object that stores information for the
-// current "defer frame", which is used in functions that use the `defer`
+// LLVM compiler intrinsic: this inserts a wasm 'throw' instruction.
+//
+//export llvm.wasm.throw
+func wasm_throw(uint32, unsafe.Pointer)
+
+// DeferFrameInlineAsm is a stack allocated object that stores information for
+// the current "defer frame", which is used in functions that use the `defer`
 // keyword.
 // The compiler knows about the JumpPC struct offset, so it should not be moved
 // without also updating compiler/defer.go.
-type deferFrame struct {
+type deferFrameInlineAsm struct {
 	JumpSP     unsafe.Pointer                 // stack pointer to return to
 	JumpPC     unsafe.Pointer                 // pc to return to
 	ExtraRegs  [deferExtraRegs]unsafe.Pointer // extra registers (depending on the architecture)
-	Previous   *deferFrame                    // previous recover buffer pointer
+	Previous   *deferFrameInlineAsm           // previous recover buffer pointer
 	Panicking  bool                           // true iff this defer frame is panicking
 	PanicValue interface{}                    // panic value, might be nil for panic(nil) for example
+}
+
+// DeferFrameWasmEH is like deferFrameInlineAsm but for WebAssembly exception
+// handling.
+type deferFrameWasmEH struct {
+	Previous   *deferFrameWasmEH // previous recover buffer pointer
+	Panicking  bool              // true iff this defer frame is panicking
+	PanicValue interface{}       // panic value, might be nil for panic(nil) for example
 }
 
 // Builtin function panic(msg), used as a compiler intrinsic.
@@ -50,12 +72,21 @@ func _panic(message interface{}) {
 	if panicStrategy() == panicStrategyTrap {
 		trap()
 	}
-	if supportsRecover() {
-		frame := (*deferFrame)(task.Current().DeferFrame)
+	switch supportsRecover() {
+	case recoverInlineAsm:
+		frame := (*deferFrameInlineAsm)(task.Current().DeferFrame)
 		if frame != nil {
 			frame.PanicValue = message
 			frame.Panicking = true
 			tinygo_longjmp(frame)
+			// unreachable
+		}
+	case recoverWasmEH:
+		frame := (*deferFrameWasmEH)(task.Current().DeferFrame)
+		if frame != nil {
+			frame.PanicValue = message
+			frame.Panicking = true
+			wasm_throw(0, nil)
 			// unreachable
 		}
 	}
@@ -94,10 +125,19 @@ func runtimePanicAt(addr unsafe.Pointer, msg string) {
 //
 //go:inline
 //go:nobounds
-func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
+func setupDeferFrameInlineAsm(frame *deferFrameInlineAsm, jumpSP unsafe.Pointer) {
 	currentTask := task.Current()
-	frame.Previous = (*deferFrame)(currentTask.DeferFrame)
+	frame.Previous = (*deferFrameInlineAsm)(currentTask.DeferFrame)
 	frame.JumpSP = jumpSP
+	frame.Panicking = false
+	currentTask.DeferFrame = unsafe.Pointer(frame)
+}
+
+//go:inline
+//go:nobounds
+func setupDeferFrameWasmEH(frame *deferFrameWasmEH) {
+	currentTask := task.Current()
+	frame.Previous = (*deferFrameWasmEH)(currentTask.DeferFrame)
 	frame.Panicking = false
 	currentTask.DeferFrame = unsafe.Pointer(frame)
 }
@@ -108,7 +148,20 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 //
 //go:inline
 //go:nobounds
-func destroyDeferFrame(frame *deferFrame) {
+func destroyDeferFrameInlineAsm(frame *deferFrameInlineAsm) {
+	task.Current().DeferFrame = unsafe.Pointer(frame.Previous)
+	if frame.Panicking {
+		// We're still panicking!
+		// Re-raise the panic now.
+		_panic(frame.PanicValue)
+	}
+}
+
+// Like destroyDeferFrameInlineAsm but for wasm.
+//
+//go:inline
+//go:nobounds
+func destroyDeferFrameWasmEH(frame *deferFrameWasmEH) {
 	task.Current().DeferFrame = unsafe.Pointer(frame.Previous)
 	if frame.Panicking {
 		// We're still panicking!
@@ -122,27 +175,44 @@ func destroyDeferFrame(frame *deferFrame) {
 // useParentFrame is set when the caller of runtime._recover has a defer frame
 // itself. In that case, recover() shouldn't check that frame but one frame up.
 func _recover(useParentFrame bool) interface{} {
-	if !supportsRecover() {
-		// Compiling without stack unwinding support, so make this a no-op.
-		return nil
-	}
 	// TODO: somehow check that recover() is called directly by a deferred
 	// function in a panicking goroutine. Maybe this can be done by comparing
 	// the frame pointer?
-	frame := (*deferFrame)(task.Current().DeferFrame)
-	if useParentFrame {
-		// Don't recover panic from the current frame (which can't be panicking
-		// already), but instead from the previous frame.
-		frame = frame.Previous
+	switch supportsRecover() {
+	case recoverInlineAsm:
+		frame := (*deferFrameInlineAsm)(task.Current().DeferFrame)
+		if useParentFrame {
+			// Don't recover panic from the current frame (which can't be
+			// panicking already), but instead from the previous frame.
+			frame = frame.Previous
+		}
+		if frame != nil && frame.Panicking {
+			// Only the first call to recover returns the panic value. It also
+			// stops the panicking sequence, hence setting panicking to false.
+			frame.Panicking = false
+			return frame.PanicValue
+		}
+		// Not panicking, so return a nil interface.
+		return nil
+	case recoverWasmEH:
+		frame := (*deferFrameWasmEH)(task.Current().DeferFrame)
+		if useParentFrame {
+			// Don't recover panic from the current frame (which can't be
+			// panicking already), but instead from the previous frame.
+			frame = frame.Previous
+		}
+		if frame != nil && frame.Panicking {
+			// Only the first call to recover returns the panic value. It also
+			// stops the panicking sequence, hence setting panicking to false.
+			frame.Panicking = false
+			return frame.PanicValue
+		}
+		// Not panicking, so return a nil interface.
+		return nil
+	default:
+		// Compiling without stack unwinding support, so make this a no-op.
+		return nil
 	}
-	if frame != nil && frame.Panicking {
-		// Only the first call to recover returns the panic value. It also stops
-		// the panicking sequence, hence setting panicking to false.
-		frame.Panicking = false
-		return frame.PanicValue
-	}
-	// Not panicking, so return a nil interface.
-	return nil
 }
 
 // Panic when trying to dereference a nil pointer.
