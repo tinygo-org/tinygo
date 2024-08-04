@@ -35,19 +35,6 @@ type Library struct {
 	crt1Source string
 }
 
-// Load the library archive, possibly generating and caching it if needed.
-// The resulting directory may be stored in the provided tmpdir, which is
-// expected to be removed after the Load call.
-func (l *Library) Load(config *compileopts.Config, tmpdir string) (dir string, err error) {
-	job, unlock, err := l.load(config, tmpdir)
-	if err != nil {
-		return "", err
-	}
-	defer unlock()
-	err = runJobs(job, config.Options.Semaphore)
-	return filepath.Dir(job.result), err
-}
-
 // load returns a compile job to build this library file for the given target
 // and CPU. It may return a dummy compileJob if the library build is already
 // cached. The path is stored as job.result but is only valid after the job has

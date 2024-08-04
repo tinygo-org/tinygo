@@ -867,9 +867,6 @@ build/release: tinygo gen-device wasi-libc $(if $(filter 1,$(USE_SYSTEM_BINARYEN
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/arch
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
 	@mkdir -p build/release/tinygo/lib/wasi-cli/
-	@mkdir -p build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0
-	@mkdir -p build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus
-	@mkdir -p build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4
 	@echo copying source files
 	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
 ifneq ($(USE_SYSTEM_BINARYEN),1)
@@ -932,12 +929,6 @@ endif
 	@cp -rp llvm-project/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
-	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/compiler-rt     compiler-rt
-	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/compiler-rt compiler-rt
-	./build/release/tinygo/bin/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/compiler-rt    compiler-rt
-	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0     -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0/picolibc     picolibc
-	./build/release/tinygo/bin/tinygo build-library -target=cortex-m0plus -o build/release/tinygo/pkg/thumbv6m-unknown-unknown-eabi-cortex-m0plus/picolibc picolibc
-	./build/release/tinygo/bin/tinygo build-library -target=cortex-m4     -o build/release/tinygo/pkg/thumbv7em-unknown-unknown-eabi-cortex-m4/picolibc    picolibc
 
 release:
 	tar -czf build/release.tar.gz -C build/release tinygo

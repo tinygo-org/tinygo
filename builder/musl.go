@@ -12,7 +12,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-var Musl = Library{
+var libMusl = Library{
 	name: "musl",
 	makeHeaders: func(target, includeDir string) error {
 		bits := filepath.Join(includeDir, "bits")

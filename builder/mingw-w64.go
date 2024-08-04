@@ -10,7 +10,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-var MinGW = Library{
+var libMinGW = Library{
 	name: "mingw-w64",
 	makeHeaders: func(target, includeDir string) error {
 		// copy _mingw.h
