@@ -169,12 +169,12 @@ var avrBuiltins = []string{
 	"avr/udivmodqi4.S",
 }
 
-// CompilerRT is a library with symbols required by programs compiled with LLVM.
-// These symbols are for operations that cannot be emitted with a single
+// libCompilerRT is a library with symbols required by programs compiled with
+// LLVM. These symbols are for operations that cannot be emitted with a single
 // instruction or a short sequence of instructions for that target.
 //
 // For more information, see: https://compiler-rt.llvm.org/
-var CompilerRT = Library{
+var libCompilerRT = Library{
 	name: "compiler-rt",
 	cflags: func(target, headerPath string) []string {
 		return []string{"-Werror", "-Wall", "-std=c11", "-nostdlibinc"}

@@ -1437,7 +1437,7 @@ func main() {
 		flag.BoolVar(&flagTest, "test", false, "supply -test flag to go list")
 	}
 	var outpath string
-	if command == "help" || command == "build" || command == "build-library" || command == "test" {
+	if command == "help" || command == "build" || command == "test" {
 		flag.StringVar(&outpath, "o", "", "output filename")
 	}
 
@@ -1570,50 +1570,6 @@ func main() {
 
 		err := Build(pkgName, outpath, options)
 		handleCompilerError(err)
-	case "build-library":
-		// Note: this command is only meant to be used while making a release!
-		if outpath == "" {
-			fmt.Fprintln(os.Stderr, "No output filename supplied (-o).")
-			usage(command)
-			os.Exit(1)
-		}
-		if *target == "" {
-			fmt.Fprintln(os.Stderr, "No target (-target).")
-		}
-		if flag.NArg() != 1 {
-			fmt.Fprintf(os.Stderr, "Build-library only accepts exactly one library name as argument, %d given\n", flag.NArg())
-			usage(command)
-			os.Exit(1)
-		}
-		var lib *builder.Library
-		switch name := flag.Arg(0); name {
-		case "compiler-rt":
-			lib = &builder.CompilerRT
-		case "picolibc":
-			lib = &builder.Picolibc
-		default:
-			fmt.Fprintf(os.Stderr, "Unknown library: %s\n", name)
-			os.Exit(1)
-		}
-		tmpdir, err := os.MkdirTemp("", "tinygo*")
-		if err != nil {
-			handleCompilerError(err)
-		}
-		defer os.RemoveAll(tmpdir)
-		spec, err := compileopts.LoadTarget(options)
-		if err != nil {
-			handleCompilerError(err)
-		}
-		config := &compileopts.Config{
-			Options: options,
-			Target:  spec,
-		}
-		path, err := lib.Load(config, tmpdir)
-		handleCompilerError(err)
-		err = copyFile(path, outpath)
-		if err != nil {
-			handleCompilerError(err)
-		}
 	case "flash", "gdb", "lldb":
 		pkgName := filepath.ToSlash(flag.Arg(0))
 		if command == "flash" {

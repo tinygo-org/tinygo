@@ -7,7 +7,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-var WasmBuiltins = Library{
+var libWasmBuiltins = Library{
 	name: "wasmbuiltins",
 	makeHeaders: func(target, includeDir string) error {
 		if err := os.Mkdir(includeDir+"/bits", 0o777); err != nil {
