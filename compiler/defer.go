@@ -528,7 +528,7 @@ func (b *builder) createRunDefers() {
 				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
 			}
 
-			b.createCall(fnType, fnPtr, forwardParams, "")
+			b.createInvoke(fnType, fnPtr, forwardParams, "")
 
 		case *ssa.Function:
 			// Direct call.
@@ -583,7 +583,7 @@ func (b *builder) createRunDefers() {
 
 			// Call deferred function.
 			fnType, llvmFn := b.getFunction(fn)
-			b.createCall(fnType, llvmFn, forwardParams, "")
+			b.createInvoke(fnType, llvmFn, forwardParams, "")
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]
 

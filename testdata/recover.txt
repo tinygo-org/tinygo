@@ -19,6 +19,12 @@ recovered 2: foo
 # panic inside defer
 recovered: panic
 
+# panic inside indirect defer
+recovered: panic
+
+# panic inside closure
+recovered: panic
+
 # panic replace
 panic 1
 panic 2
