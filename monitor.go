@@ -197,31 +197,14 @@ func Monitor(executable, port string, config *compileopts.Config) error {
 
 	go func() {
 		buf := make([]byte, 100*1024)
-		var line []byte
+		writer := newOutputWriter(os.Stdout, executable)
 		for {
 			n, err := serialConn.Read(buf)
 			if err != nil {
 				errCh <- fmt.Errorf("read error: %w", err)
 				return
 			}
-			start := 0
-			for i, c := range buf[:n] {
-				if c == '\n' {
-					os.Stdout.Write(buf[start : i+1])
-					start = i + 1
-					address := extractPanicAddress(line)
-					if address != 0 {
-						loc, err := addressToLine(executable, address)
-						if err == nil && loc.IsValid() {
-							fmt.Printf("[tinygo: panic at %s]\n", loc.String())
-						}
-					}
-					line = line[:0]
-				} else {
-					line = append(line, c)
-				}
-			}
-			os.Stdout.Write(buf[start:n])
+			writer.Write(buf[:n])
 		}
 	}()
 
@@ -399,4 +382,43 @@ func readDWARF(executable string) (*dwarf.Data, error) {
 	} else {
 		return nil, errors.New("unknown binary format")
 	}
+}
+
+type outputWriter struct {
+	out        io.Writer
+	executable string
+	line       []byte
+}
+
+// newOutputWriter returns an io.Writer that will intercept panic addresses and
+// will try to insert a source location in the output if the source location can
+// be found in the executable.
+func newOutputWriter(out io.Writer, executable string) *outputWriter {
+	return &outputWriter{
+		out:        out,
+		executable: executable,
+	}
+}
+
+func (w *outputWriter) Write(p []byte) (n int, err error) {
+	start := 0
+	for i, c := range p {
+		if c == '\n' {
+			w.out.Write(p[start : i+1])
+			start = i + 1
+			address := extractPanicAddress(w.line)
+			if address != 0 {
+				loc, err := addressToLine(w.executable, address)
+				if err == nil && loc.Filename != "" {
+					fmt.Printf("[tinygo: panic at %s]\n", loc.String())
+				}
+			}
+			w.line = w.line[:0]
+		} else {
+			w.line = append(w.line, c)
+		}
+	}
+	w.out.Write(p[start:])
+	n = len(p)
+	return
 }
