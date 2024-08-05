@@ -1,5 +1,7 @@
 package descriptor
 
+import "math"
+
 const (
 	hidUsagePage       = 0x05
 	hidUsage           = 0x09
@@ -130,6 +132,28 @@ var (
 	HIDOutputConstVarAbs = []byte{hidOutput, 0x03}
 )
 
+func hidShortItem(tag byte, value uint32) []byte {
+	switch {
+	case value <= math.MaxUint8:
+		return []byte{tag | hidSizeValue1, byte(value)}
+	case value <= math.MaxUint16:
+		return []byte{tag | hidSizeValue2, byte(value), byte(value >> 8)}
+	default:
+		return []byte{tag | hidSizeValue4, byte(value), byte(value >> 8), byte(value >> 16), byte(value >> 24)}
+	}
+}
+
+func hidShortItemSigned(tag byte, value int32) []byte {
+	switch {
+	case math.MinInt8 <= value && value <= math.MaxInt8:
+		return []byte{tag | hidSizeValue1, byte(value)}
+	case math.MinInt16 <= value && value <= math.MaxInt16:
+		return []byte{tag | hidSizeValue2, byte(value), byte(value >> 8)}
+	default:
+		return []byte{tag | hidSizeValue4, byte(value), byte(value >> 8), byte(value >> 16), byte(value >> 24)}
+	}
+}
+
 func HIDReportSize(size int) []byte {
 	return []byte{hidReportSize, byte(size)}
 }
@@ -143,69 +167,27 @@ func HIDReportID(id int) []byte {
 }
 
 func HIDLogicalMinimum(min int) []byte {
-	switch {
-	case min < -32767 || 65535 < min:
-		return []byte{hidLogicalMinimum + hidSizeValue4, uint8(min), uint8(min >> 8), uint8(min >> 16), uint8(min >> 24)}
-	case min < -127 || 255 < min:
-		return []byte{hidLogicalMinimum + hidSizeValue2, uint8(min), uint8(min >> 8)}
-	default:
-		return []byte{hidLogicalMinimum + hidSizeValue1, byte(min)}
-	}
+	return hidShortItemSigned(hidLogicalMinimum, int32(min))
 }
 
 func HIDLogicalMaximum(max int) []byte {
-	switch {
-	case max < -32767 || 65535 < max:
-		return []byte{hidLogicalMaximum + hidSizeValue4, uint8(max), uint8(max >> 8), uint8(max >> 16), uint8(max >> 24)}
-	case max < -127 || 255 < max:
-		return []byte{hidLogicalMaximum + hidSizeValue2, uint8(max), uint8(max >> 8)}
-	default:
-		return []byte{hidLogicalMaximum + hidSizeValue1, byte(max)}
-	}
+	return hidShortItemSigned(hidLogicalMaximum, int32(max))
 }
 
 func HIDUsageMinimum(min int) []byte {
-	switch {
-	case min < -32767 || 65535 < min:
-		return []byte{hidUsageMinimum + hidSizeValue4, uint8(min), uint8(min >> 8), uint8(min >> 16), uint8(min >> 24)}
-	case min < -127 || 255 < min:
-		return []byte{hidUsageMinimum + hidSizeValue2, uint8(min), uint8(min >> 8)}
-	default:
-		return []byte{hidUsageMinimum + hidSizeValue1, byte(min)}
-	}
+	return hidShortItem(hidUsageMinimum, uint32(min))
 }
 
 func HIDUsageMaximum(max int) []byte {
-	switch {
-	case max < -32767 || 65535 < max:
-		return []byte{hidUsageMaximum + hidSizeValue4, uint8(max), uint8(max >> 8), uint8(max >> 16), uint8(max >> 24)}
-	case max < -127 || 255 < max:
-		return []byte{hidUsageMaximum + hidSizeValue2, uint8(max), uint8(max >> 8)}
-	default:
-		return []byte{hidUsageMaximum + hidSizeValue1, byte(max)}
-	}
+	return hidShortItem(hidUsageMaximum, uint32(max))
 }
 
 func HIDPhysicalMinimum(min int) []byte {
-	switch {
-	case min < -32767 || 65535 < min:
-		return []byte{hidPhysicalMinimum + hidSizeValue4, uint8(min), uint8(min >> 8), uint8(min >> 16), uint8(min >> 24)}
-	case min < -127 || 255 < min:
-		return []byte{hidPhysicalMinimum + hidSizeValue2, uint8(min), uint8(min >> 8)}
-	default:
-		return []byte{hidPhysicalMinimum + hidSizeValue1, byte(min)}
-	}
+	return hidShortItemSigned(hidPhysicalMinimum, int32(min))
 }
 
 func HIDPhysicalMaximum(max int) []byte {
-	switch {
-	case max < -32767 || 65535 < max:
-		return []byte{hidPhysicalMaximum + hidSizeValue4, uint8(max), uint8(max >> 8), uint8(max >> 16), uint8(max >> 24)}
-	case max < -127 || 255 < max:
-		return []byte{hidPhysicalMaximum + hidSizeValue2, uint8(max), uint8(max >> 8)}
-	default:
-		return []byte{hidPhysicalMaximum + hidSizeValue1, byte(max)}
-	}
+	return hidShortItemSigned(hidPhysicalMaximum, int32(max))
 }
 
 func HIDUnitExponent(exp int) []byte {
