@@ -3,22 +3,22 @@ package descriptor
 import "math"
 
 const (
-	hidUsagePage       = 0x05
-	hidUsage           = 0x09
+	hidUsagePage       = 0x04
+	hidUsage           = 0x08
 	hidLogicalMinimum  = 0x14
 	hidLogicalMaximum  = 0x24
 	hidUsageMinimum    = 0x18
 	hidUsageMaximum    = 0x28
 	hidPhysicalMinimum = 0x34
 	hidPhysicalMaximum = 0x44
-	hidUnitExponent    = 0x55
-	hidUnit            = 0x65
-	hidCollection      = 0xa1
-	hidInput           = 0x81
-	hidOutput          = 0x91
-	hidReportSize      = 0x75
-	hidReportCount     = 0x95
-	hidReportID        = 0x85
+	hidUnitExponent    = 0x54
+	hidUnit            = 0x64
+	hidCollection      = 0xA0
+	hidInput           = 0x80
+	hidOutput          = 0x90
+	hidReportSize      = 0x74
+	hidReportCount     = 0x94
+	hidReportID        = 0x84
 )
 
 const (
@@ -29,107 +29,107 @@ const (
 )
 
 var (
-	HIDUsagePageGenericDesktop     = []byte{hidUsagePage, 0x01}
-	HIDUsagePageSimulationControls = []byte{hidUsagePage, 0x02}
-	HIDUsagePageVRControls         = []byte{hidUsagePage, 0x03}
-	HIDUsagePageSportControls      = []byte{hidUsagePage, 0x04}
-	HIDUsagePageGameControls       = []byte{hidUsagePage, 0x05}
-	HIDUsagePageGenericControls    = []byte{hidUsagePage, 0x06}
-	HIDUsagePageKeyboard           = []byte{hidUsagePage, 0x07}
-	HIDUsagePageLED                = []byte{hidUsagePage, 0x08}
-	HIDUsagePageButton             = []byte{hidUsagePage, 0x09}
-	HIDUsagePageOrdinal            = []byte{hidUsagePage, 0x0A}
-	HIDUsagePageTelephony          = []byte{hidUsagePage, 0x0B}
-	HIDUsagePageConsumer           = []byte{hidUsagePage, 0x0C}
-	HIDUsagePageDigitizers         = []byte{hidUsagePage, 0x0D}
-	HIDUsagePageHaptics            = []byte{hidUsagePage, 0x0E}
-	HIDUsagePagePhysicalInput      = []byte{hidUsagePage, 0x0F}
-	HIDUsagePageUnicode            = []byte{hidUsagePage, 0x10}
-	HIDUsagePageSoC                = []byte{hidUsagePage, 0x11}
-	HIDUsagePageEyeHeadTrackers    = []byte{hidUsagePage, 0x12}
-	HIDUsagePageAuxDisplay         = []byte{hidUsagePage, 0x14}
-	HIDUsagePageSensors            = []byte{hidUsagePage, 0x20}
-	HIDUsagePageMedicalInstrument  = []byte{hidUsagePage, 0x40}
-	HIDUsagePageBrailleDisplay     = []byte{hidUsagePage, 0x41}
-	HIDUsagePageLighting           = []byte{hidUsagePage, 0x59}
-	HIDUsagePageMonitor            = []byte{hidUsagePage, 0x80}
-	HIDUsagePageMonitorEnum        = []byte{hidUsagePage, 0x81}
-	HIDUsagePageVESA               = []byte{hidUsagePage, 0x82}
-	HIDUsagePagePower              = []byte{hidUsagePage, 0x84}
-	HIDUsagePageBatterySystem      = []byte{hidUsagePage, 0x85}
-	HIDUsagePageBarcodeScanner     = []byte{hidUsagePage, 0x8C}
-	HIDUsagePageScales             = []byte{hidUsagePage, 0x8D}
-	HIDUsagePageMagneticStripe     = []byte{hidUsagePage, 0x8E}
-	HIDUsagePageCameraControl      = []byte{hidUsagePage, 0x90}
-	HIDUsagePageArcade             = []byte{hidUsagePage, 0x91}
-	HIDUsagePageGaming             = []byte{hidUsagePage, 0x92}
+	HIDUsagePageGenericDesktop     = HIDUsagePage(0x01)
+	HIDUsagePageSimulationControls = HIDUsagePage(0x02)
+	HIDUsagePageVRControls         = HIDUsagePage(0x03)
+	HIDUsagePageSportControls      = HIDUsagePage(0x04)
+	HIDUsagePageGameControls       = HIDUsagePage(0x05)
+	HIDUsagePageGenericControls    = HIDUsagePage(0x06)
+	HIDUsagePageKeyboard           = HIDUsagePage(0x07)
+	HIDUsagePageLED                = HIDUsagePage(0x08)
+	HIDUsagePageButton             = HIDUsagePage(0x09)
+	HIDUsagePageOrdinal            = HIDUsagePage(0x0A)
+	HIDUsagePageTelephony          = HIDUsagePage(0x0B)
+	HIDUsagePageConsumer           = HIDUsagePage(0x0C)
+	HIDUsagePageDigitizers         = HIDUsagePage(0x0D)
+	HIDUsagePageHaptics            = HIDUsagePage(0x0E)
+	HIDUsagePagePhysicalInput      = HIDUsagePage(0x0F)
+	HIDUsagePageUnicode            = HIDUsagePage(0x10)
+	HIDUsagePageSoC                = HIDUsagePage(0x11)
+	HIDUsagePageEyeHeadTrackers    = HIDUsagePage(0x12)
+	HIDUsagePageAuxDisplay         = HIDUsagePage(0x14)
+	HIDUsagePageSensors            = HIDUsagePage(0x20)
+	HIDUsagePageMedicalInstrument  = HIDUsagePage(0x40)
+	HIDUsagePageBrailleDisplay     = HIDUsagePage(0x41)
+	HIDUsagePageLighting           = HIDUsagePage(0x59)
+	HIDUsagePageMonitor            = HIDUsagePage(0x80)
+	HIDUsagePageMonitorEnum        = HIDUsagePage(0x81)
+	HIDUsagePageVESA               = HIDUsagePage(0x82)
+	HIDUsagePagePower              = HIDUsagePage(0x84)
+	HIDUsagePageBatterySystem      = HIDUsagePage(0x85)
+	HIDUsagePageBarcodeScanner     = HIDUsagePage(0x8C)
+	HIDUsagePageScales             = HIDUsagePage(0x8D)
+	HIDUsagePageMagneticStripe     = HIDUsagePage(0x8E)
+	HIDUsagePageCameraControl      = HIDUsagePage(0x90)
+	HIDUsagePageArcade             = HIDUsagePage(0x91)
+	HIDUsagePageGaming             = HIDUsagePage(0x92)
 )
 
 var (
-	HIDUsageDesktopPointer         = []byte{hidUsage, 0x01}
-	HIDUsageDesktopMouse           = []byte{hidUsage, 0x02}
-	HIDUsageDesktopJoystick        = []byte{hidUsage, 0x04}
-	HIDUsageDesktopGamepad         = []byte{hidUsage, 0x05}
-	HIDUsageDesktopKeyboard        = []byte{hidUsage, 0x06}
-	HIDUsageDesktopKeypad          = []byte{hidUsage, 0x07}
-	HIDUsageDesktopMultiaxis       = []byte{hidUsage, 0x08}
-	HIDUsageDesktopTablet          = []byte{hidUsage, 0x09}
-	HIDUsageDesktopWaterCooling    = []byte{hidUsage, 0x0A}
-	HIDUsageDesktopChassis         = []byte{hidUsage, 0x0B}
-	HIDUsageDesktopWireless        = []byte{hidUsage, 0x0C}
-	HIDUsageDesktopPortable        = []byte{hidUsage, 0x0D}
-	HIDUsageDesktopSystemMultiaxis = []byte{hidUsage, 0x0E}
-	HIDUsageDesktopSpatial         = []byte{hidUsage, 0x0F}
-	HIDUsageDesktopAssistive       = []byte{hidUsage, 0x10}
-	HIDUsageDesktopDock            = []byte{hidUsage, 0x11}
-	HIDUsageDesktopDockable        = []byte{hidUsage, 0x12}
-	HIDUsageDesktopCallState       = []byte{hidUsage, 0x13}
-	HIDUsageDesktopX               = []byte{hidUsage, 0x30}
-	HIDUsageDesktopY               = []byte{hidUsage, 0x31}
-	HIDUsageDesktopZ               = []byte{hidUsage, 0x32}
-	HIDUsageDesktopRx              = []byte{hidUsage, 0x33}
-	HIDUsageDesktopRy              = []byte{hidUsage, 0x34}
-	HIDUsageDesktopRz              = []byte{hidUsage, 0x35}
-	HIDUsageDesktopSlider          = []byte{hidUsage, 0x36}
-	HIDUsageDesktopDial            = []byte{hidUsage, 0x37}
-	HIDUsageDesktopWheel           = []byte{hidUsage, 0x38}
-	HIDUsageDesktopHatSwitch       = []byte{hidUsage, 0x39}
-	HIDUsageDesktopCountedBuffer   = []byte{hidUsage, 0x3A}
+	HIDUsageDesktopPointer         = HIDUsage(0x01)
+	HIDUsageDesktopMouse           = HIDUsage(0x02)
+	HIDUsageDesktopJoystick        = HIDUsage(0x04)
+	HIDUsageDesktopGamepad         = HIDUsage(0x05)
+	HIDUsageDesktopKeyboard        = HIDUsage(0x06)
+	HIDUsageDesktopKeypad          = HIDUsage(0x07)
+	HIDUsageDesktopMultiaxis       = HIDUsage(0x08)
+	HIDUsageDesktopTablet          = HIDUsage(0x09)
+	HIDUsageDesktopWaterCooling    = HIDUsage(0x0A)
+	HIDUsageDesktopChassis         = HIDUsage(0x0B)
+	HIDUsageDesktopWireless        = HIDUsage(0x0C)
+	HIDUsageDesktopPortable        = HIDUsage(0x0D)
+	HIDUsageDesktopSystemMultiaxis = HIDUsage(0x0E)
+	HIDUsageDesktopSpatial         = HIDUsage(0x0F)
+	HIDUsageDesktopAssistive       = HIDUsage(0x10)
+	HIDUsageDesktopDock            = HIDUsage(0x11)
+	HIDUsageDesktopDockable        = HIDUsage(0x12)
+	HIDUsageDesktopCallState       = HIDUsage(0x13)
+	HIDUsageDesktopX               = HIDUsage(0x30)
+	HIDUsageDesktopY               = HIDUsage(0x31)
+	HIDUsageDesktopZ               = HIDUsage(0x32)
+	HIDUsageDesktopRx              = HIDUsage(0x33)
+	HIDUsageDesktopRy              = HIDUsage(0x34)
+	HIDUsageDesktopRz              = HIDUsage(0x35)
+	HIDUsageDesktopSlider          = HIDUsage(0x36)
+	HIDUsageDesktopDial            = HIDUsage(0x37)
+	HIDUsageDesktopWheel           = HIDUsage(0x38)
+	HIDUsageDesktopHatSwitch       = HIDUsage(0x39)
+	HIDUsageDesktopCountedBuffer   = HIDUsage(0x3A)
 )
 
 var (
-	HIDUsageConsumerControl             = []byte{hidUsage, 0x01}
-	HIDUsageConsumerNumericKeypad       = []byte{hidUsage, 0x02}
-	HIDUsageConsumerProgrammableButtons = []byte{hidUsage, 0x03}
-	HIDUsageConsumerMicrophone          = []byte{hidUsage, 0x04}
-	HIDUsageConsumerHeadphone           = []byte{hidUsage, 0x05}
-	HIDUsageConsumerGraphicEqualizer    = []byte{hidUsage, 0x06}
+	HIDUsageConsumerControl             = HIDUsage(0x01)
+	HIDUsageConsumerNumericKeypad       = HIDUsage(0x02)
+	HIDUsageConsumerProgrammableButtons = HIDUsage(0x03)
+	HIDUsageConsumerMicrophone          = HIDUsage(0x04)
+	HIDUsageConsumerHeadphone           = HIDUsage(0x05)
+	HIDUsageConsumerGraphicEqualizer    = HIDUsage(0x06)
 )
 
 var (
-	HIDCollectionPhysical    = []byte{hidCollection, 0x00}
-	HIDCollectionApplication = []byte{hidCollection, 0x01}
-	HIDCollectionEnd         = []byte{0xc0}
+	HIDCollectionPhysical    = HIDCollection(0x00)
+	HIDCollectionApplication = HIDCollection(0x01)
+	HIDCollectionEnd         = []byte{0xC0}
 )
 
 var (
 	// Input (Data,Ary,Abs), Key arrays (6 bytes)
-	HIDInputDataAryAbs = []byte{hidInput, 0x00}
+	HIDInputDataAryAbs = HIDInput(0x00)
 
 	// Input (Data, Variable, Absolute), Modifier byte
-	HIDInputDataVarAbs = []byte{hidInput, 0x02}
+	HIDInputDataVarAbs = HIDInput(0x02)
 
 	// Input (Const,Var,Abs), Modifier byte
-	HIDInputConstVarAbs = []byte{hidInput, 0x03}
+	HIDInputConstVarAbs = HIDInput(0x03)
 
 	// Input (Data, Variable, Relative), 2 position bytes (X & Y)
-	HIDInputDataVarRel = []byte{hidInput, 0x06}
+	HIDInputDataVarRel = HIDInput(0x06)
 
 	// Output (Data, Variable, Absolute), Modifier byte
-	HIDOutputDataVarAbs = []byte{hidOutput, 0x02}
+	HIDOutputDataVarAbs = HIDOutput(0x02)
 
 	// Output (Const, Variable, Absolute), Modifier byte
-	HIDOutputConstVarAbs = []byte{hidOutput, 0x03}
+	HIDOutputConstVarAbs = HIDOutput(0x03)
 )
 
 func hidShortItem(tag byte, value uint32) []byte {
@@ -155,15 +155,15 @@ func hidShortItemSigned(tag byte, value int32) []byte {
 }
 
 func HIDReportSize(size int) []byte {
-	return []byte{hidReportSize, byte(size)}
+	return hidShortItem(hidReportSize, uint32(size))
 }
 
 func HIDReportCount(count int) []byte {
-	return []byte{hidReportCount, byte(count)}
+	return hidShortItem(hidReportCount, uint32(count))
 }
 
 func HIDReportID(id int) []byte {
-	return []byte{hidReportID, byte(id)}
+	return hidShortItem(hidReportID, uint32(id))
 }
 
 func HIDLogicalMinimum(min int) []byte {
@@ -191,9 +191,30 @@ func HIDPhysicalMaximum(max int) []byte {
 }
 
 func HIDUnitExponent(exp int) []byte {
-	return []byte{hidUnitExponent, byte(exp)}
+	// 4 Bit two's complement
+	return hidShortItem(hidUnitExponent, uint32(exp&0xF))
 }
 
-func HIDUnit(unit int) []byte {
-	return []byte{hidUnit, byte(unit)}
+func HIDUnit(unit uint32) []byte {
+	return hidShortItem(hidUnit, unit)
+}
+
+func HIDUsagePage(id uint16) []byte {
+	return hidShortItem(hidUsagePage, uint32(id))
+}
+
+func HIDUsage(id uint32) []byte {
+	return hidShortItem(hidUsage, id)
+}
+
+func HIDCollection(id uint32) []byte {
+	return hidShortItem(hidCollection, id)
+}
+
+func HIDInput(flags uint32) []byte {
+	return hidShortItem(hidInput, flags)
+}
+
+func HIDOutput(flags uint32) []byte {
+	return hidShortItem(hidOutput, flags)
 }
