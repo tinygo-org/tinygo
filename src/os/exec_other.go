@@ -3,6 +3,13 @@
 
 package os
 
+import "syscall"
+
+var (
+	Interrupt Signal = syscall.SIGINT
+	Kill      Signal = syscall.SIGKILL
+)
+
 func findProcess(pid int) (*Process, error) {
 	return &Process{Pid: pid}, nil
 }

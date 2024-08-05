@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 package os
 
@@ -9,7 +8,7 @@ import (
 	"unsafe"
 )
 
-func Fork() (pid int, err error) {
+func fork() (pid int, err error) {
 	// ret := libc_fork()
 	// ret, _, _ := syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
 	ret, _, _ := syscall.Syscall(57, 0, 0, 0)
@@ -21,7 +20,7 @@ func Fork() (pid int, err error) {
 }
 
 // the golang standard library does not expose interfaces for execve and fork, so we define them here the same way via the libc wrapper
-func Execve(pathname string, argv []string, envv []string) (err error) {
+func execve(pathname string, argv []string, envv []string) (err error) {
 	argv0 := cstring(pathname)
 
 	// transform argv and envv into the format expected by execve
