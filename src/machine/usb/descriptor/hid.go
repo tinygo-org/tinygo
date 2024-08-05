@@ -103,7 +103,7 @@ var classHID = [ClassHIDTypeLen]byte{
 	0x00, // CountryCode
 	0x01, // NumDescriptors
 	0x22, // ClassType
-	0x90, // ClassLength L
+	0x91, // ClassLength L
 	0x00, // ClassLength H
 }
 
@@ -131,7 +131,7 @@ var CDCHID = Descriptor{
 		EndpointEP5OUT.Bytes(),
 	}),
 	HID: map[uint16][]byte{
-		2: Append([][]byte{
+		2: Append([][]byte{ // Update ClassLength in classHID whenever the array length is modified!
 			HIDUsagePageGenericDesktop,
 			HIDUsageDesktopKeyboard,
 			HIDCollectionApplication,
@@ -210,6 +210,7 @@ var CDCHID = Descriptor{
 			HIDReportSize(16),
 			HIDReportCount(1),
 			HIDInputDataAryAbs,
-			HIDCollectionEnd}),
+			HIDCollectionEnd,
+		}),
 	},
 }
