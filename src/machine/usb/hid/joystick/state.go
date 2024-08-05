@@ -67,6 +67,10 @@ func (c Definitions) Descriptor() []byte {
 
 func (c Definitions) NewState() State {
 	bufSize := 1
+	hatSwitches := make([]HatDirection, c.HatSwitchCnt)
+	for i := range hatSwitches {
+		hatSwitches[i] = HatCenter
+	}
 	axises := make([]*AxisValue, 0, len(c.AxisDefs))
 	for _, v := range c.AxisDefs {
 
@@ -77,16 +81,14 @@ func (c Definitions) NewState() State {
 	}
 	btnSize := (c.ButtonCnt + 7) / 8
 	bufSize += btnSize
-	if c.HatSwitchCnt > 0 {
-		bufSize++
-	}
+	bufSize += (len(hatSwitches) + 1) / 2
 	bufSize += len(axises) * 2
 	initBuf := make([]byte, bufSize)
 	initBuf[0] = c.ReportID
 	return State{
 		buf:         initBuf,
 		Buttons:     make([]byte, btnSize),
-		HatSwitches: make([]HatDirection, c.HatSwitchCnt),
+		HatSwitches: hatSwitches,
 		Axises:      axises,
 	}
 }
@@ -103,7 +105,11 @@ func (s State) MarshalBinary() ([]byte, error) {
 	s.buf = append(s.buf, s.Buttons...)
 	if len(s.HatSwitches) > 0 {
 		hat := byte(0)
-		for _, v := range s.HatSwitches {
+		for i, v := range s.HatSwitches {
+			if i != 0 && i%2 == 0 {
+				s.buf = append(s.buf, hat)
+				hat = 0
+			}
 			hat <<= 4
 			hat |= byte(v & 0xf)
 		}
