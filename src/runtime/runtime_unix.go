@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"syscall"
 	"unsafe"
 )
 
@@ -313,23 +314,45 @@ func init() {
 	// A channel size of 1 should be sufficient in most cases, but using 4 just
 	// to be sure.
 	signalChan = make(chan uint32, 4)
+	signalIgnored = make([]bool, 65) // 65 is the highest signal number we support
 }
 
 var signalChan chan uint32
+var signalIgnored []bool // TODO: replace with more efficient bitmap?
 
 //go:linkname signal_enable os/signal.signal_enable
-func signal_enable(s uint32) {
+func signal_enable(sig uint32) {
 	// It's easier to implement this function in C.
-	tinygo_signal_enable(s)
+	tinygo_signal_enable(sig)
 }
 
 //export tinygo_signal_enable
 func tinygo_signal_enable(s uint32)
 
+func signal_disable(sig uint32) {
+	tinygo_signal_disable(sig)
+}
+
+//export tinygo_signal_disable
+func tinygo_signal_disable(sig uint32)
+
+// Ignore the given signal by adding it into the signalIgnored array.
+// If the signal is received, it will be ignored in the tinygo_signal_handler.
+// The signals SIGKILL and SIGSTOP cannot be caught or ignored. man (2) signal
+func tinygo_signal_ignore(sig uint32) {
+	if syscall.Signal(sig) != syscall.SIGKILL && syscall.Signal(sig) != syscall.SIGSTOP {
+		signalIgnored[sig] = true
+	}
+}
+
 // void tinygo_signal_handler(int sig);
 //
 //export tinygo_signal_handler
 func tinygo_signal_handler(s int32) {
+	if signalIgnored[s] {
+		return
+	}
+
 	select {
 	case signalChan <- uint32(s):
 	default:
