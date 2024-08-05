@@ -37,6 +37,7 @@ import (
 )
 
 const gcDebug = false
+const needsStaticHeap = true
 
 // Some globals + constants for the entire GC.
 
