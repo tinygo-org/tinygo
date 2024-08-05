@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build posix || aix || linux || dragonfly || freebsd || (js && wasm) || netbsd || openbsd || solaris || wasip1
-// +build posix aix linux dragonfly freebsd js,wasm netbsd openbsd solaris wasip1
+//go:build linux
 
 package os
 
@@ -54,12 +53,12 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		attr = new(ProcAttr)
 	}
 
-	pid, err = Fork()
+	pid, err = fork()
 	if err != nil {
 		return 0, err
 	} else {
 		// else code runs in child, which then should exec the new process
-		err = Execve(argv0, argv, attr.Env)
+		err = execve(argv0, argv, attr.Env)
 		if err != nil {
 			// exec failed
 			return 0, err
