@@ -936,7 +936,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 
 	// Configure stdout/stderr. The stdout may go to a buffer, not a real
 	// stdout.
-	cmd.Stdout = stdout
+	cmd.Stdout = newOutputWriter(stdout, result.Executable)
 	cmd.Stderr = os.Stderr
 	if config.EmulatorName() == "simavr" {
 		cmd.Stdout = nil // don't print initial load commands
