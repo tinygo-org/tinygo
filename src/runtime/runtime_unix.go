@@ -3,7 +3,6 @@
 package runtime
 
 import (
-	"syscall"
 	"unsafe"
 )
 
@@ -318,7 +317,17 @@ func init() {
 }
 
 var signalChan chan uint32
-var signalIgnored []bool // TODO: replace with more efficient bitmap?
+var signalIgnored []bool
+
+// SignalIgnored returns the signalIgnored array.
+// Do not expose signalIgnored directly, as it is mutable.
+//
+//export SignalIgnored
+func SignalIgnored() []bool {
+	sigs := make([]bool, len(signalIgnored))
+	copy(sigs, signalIgnored)
+	return sigs
+}
 
 //go:linkname signal_enable os/signal.signal_enable
 func signal_enable(sig uint32) {
@@ -329,6 +338,7 @@ func signal_enable(sig uint32) {
 //export tinygo_signal_enable
 func tinygo_signal_enable(s uint32)
 
+// go: link signal_disable os/signal.signal_disable
 func signal_disable(sig uint32) {
 	tinygo_signal_disable(sig)
 }
@@ -339,10 +349,22 @@ func tinygo_signal_disable(sig uint32)
 // Ignore the given signal by adding it into the signalIgnored array.
 // If the signal is received, it will be ignored in the tinygo_signal_handler.
 // The signals SIGKILL and SIGSTOP cannot be caught or ignored. man (2) signal
-func tinygo_signal_ignore(sig uint32) {
-	if syscall.Signal(sig) != syscall.SIGKILL && syscall.Signal(sig) != syscall.SIGSTOP {
-		signalIgnored[sig] = true
-	}
+//
+//	func tinygo_signal_ignore(sig uint32) {
+//		if syscall.Signal(sig) != syscall.SIGKILL && syscall.Signal(sig) != syscall.SIGSTOP {
+//			signalIgnored[sig] = true
+//		}
+//	}
+
+//export tinygo_signal_ignore
+func tinygo_signal_ignore(sig uint32)
+
+// go: link signal_ignore os/signal.signal_ignore
+func signal_ignore(sig uint32) {
+	// keep track of ignored signal for Ignore(sig os.Signal)
+	// the ignore logic itself is tracked by the kernel https://elixir.bootlin.com/linux/v6.10/source/kernel/signal.c#L4142
+	signalIgnored[sig] = true
+	tinygo_signal_ignore(sig)
 }
 
 // void tinygo_signal_handler(int sig);

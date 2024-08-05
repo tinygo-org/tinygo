@@ -1,4 +1,4 @@
-// go:build none
+//go:build none
 
 // Ignore the //go:build above. This file is manually included on Linux and
 // MacOS to provide os/signal support.
@@ -29,5 +29,13 @@ void tinygo_signal_disable(uint32_t sig)
 {
     struct sigaction act = {0};
     act.sa_handler = SIG_DFL;
+    sigaction(sig, &act, NULL);
+}
+
+// Ignore a signal from the runtime.
+void tinygo_signal_ignore(uint32_t sig)
+{
+    struct sigaction act = {0};
+    act.sa_handler = SIG_IGN;
     sigaction(sig, &act, NULL);
 }

@@ -25,10 +25,23 @@ func main() {
 			}
 		}
 	}()
+	// test signal_enable
 
-	// Send the signal.
+	// test signal_disable
+
+	// test signal_ignore
+	signal.Ignore(syscall.SIGUSR1)
+	if signal.Ignored(syscall.SIGUSR1) {
+		println("SIGUSR1 is ignored")
+	} else {
+		println("SIGUSR1 is not ignored")
+	}
+
+	// test signal_ignore SIGKILL and SIGSTOP that cannot be caught or ignored
+	signal.Ignore()
+
+	// send the signal.
 	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
-
 	time.Sleep(time.Millisecond * 100)
 	println("exiting signal program")
 }
