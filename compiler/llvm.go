@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
@@ -422,17 +423,7 @@ func (c *compilerContext) getPointerBitmap(typ llvm.Type, pos token.Pos) *big.In
 // architecture names ("armv6", "thumbv7m", etc) merged into a single
 // architecture name ("arm").
 func (c *compilerContext) archFamily() string {
-	arch := strings.Split(c.Triple, "-")[0]
-	if strings.HasPrefix(arch, "arm64") {
-		return "aarch64"
-	}
-	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
-		return "arm"
-	}
-	if arch == "mipsel" {
-		return "mips"
-	}
-	return arch
+	return compileopts.CanonicalArchName(c.Triple)
 }
 
 // isThumb returns whether we're in ARM or in Thumb mode. It panics if the
