@@ -5,7 +5,7 @@
 package tools
 
 import (
-	_ "github.com/client9/misspell"
+	_ "github.com/golangci/misspell"
 	_ "github.com/mgechev/revive"
 )
 

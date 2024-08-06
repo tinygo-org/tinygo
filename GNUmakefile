@@ -960,9 +960,14 @@ lint: ## Lint source tree
 	# Use 'grep .' to get rid of stray blank line
 	go run github.com/mgechev/revive -config revive.toml compiler/... src/{os,reflect}/*.go | grep -v "should have comment or be unexported" | grep '.' | awk '{print}; END {exit NR>0}'
 
+SPELLDIRSCMD=find . -depth 1 -type d  | egrep -wv '.git|lib|llvm|src'; find src -depth 1 | egrep -wv 'device|internal|net|vendor'; find src/internal -depth 1 -type d | egrep -wv src/internal/wasi
 .PHONY: spell
 spell: ## Spellcheck source tree
-	go run github.com/client9/misspell/cmd/misspell -i 'ackward,devided,extint,rela' $$( find . -depth 1 -type d  | egrep -w -v 'lib|llvm|src/net' )
+	go run github.com/golangci/misspell/cmd/misspell --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) )
+
+.PHONY: spellfix
+spellfix: ## Same as spell, but fixes what it finds
+	go run github.com/golangci/misspell/cmd/misspell -w --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) )
 
 # https://www.client9.com/self-documenting-makefiles/
 .PHONY: help

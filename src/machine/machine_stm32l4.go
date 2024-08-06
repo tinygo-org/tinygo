@@ -327,10 +327,10 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	localFrequency := config.Frequency
 
 	// set frequency dependent on PCLK prescaler. Since these are rather weird
-	// speeds due to the CPU freqency, pick a range up to that frquency for
+	// speeds due to the CPU frequency, pick a range up to that frequency for
 	// clients to use more human-understandable numbers, e.g. nearest 100KHz
 
-	// These are based on 80MHz peripheral clock frquency
+	// These are based on 80MHz peripheral clock frequency
 	switch {
 	case localFrequency < 312500:
 		conf = stm32.SPI_CR1_BR_Div256

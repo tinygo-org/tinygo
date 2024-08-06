@@ -56,7 +56,7 @@ func TestStatBadDir(t *testing.T) {
 	badDir := filepath.Join(dir, "not-exist/really-not-exist")
 	_, err := Stat(badDir)
 	if pe, ok := err.(*fs.PathError); !ok || !IsNotExist(err) || pe.Path != badDir {
-		t.Errorf("Mkdir error = %#v; want PathError for path %q satisifying IsNotExist", err, badDir)
+		t.Errorf("Mkdir error = %#v; want PathError for path %q satisfying IsNotExist", err, badDir)
 	}
 }
 

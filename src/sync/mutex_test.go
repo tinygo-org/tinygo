@@ -120,7 +120,7 @@ func TestRWMutexUncontended(t *testing.T) {
 	mu.Lock()
 	mu.Unlock()
 
-	// Acuire several read locks.
+	// Acquire several read locks.
 	const n = 5
 	for i := 0; i < n; i++ {
 		mu.RLock()

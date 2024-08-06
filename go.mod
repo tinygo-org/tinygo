@@ -7,8 +7,8 @@ require (
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2
 	github.com/chromedp/cdproto v0.0.0-20220113222801-0725d94bb6ee
 	github.com/chromedp/chromedp v0.7.6
-	github.com/client9/misspell v0.3.4
 	github.com/gofrs/flock v0.8.1
+	github.com/golangci/misspell v0.6.0
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf
 	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf
 	github.com/marcinbor85/gohex v0.0.0-20200531091804-343a4b548892
@@ -17,7 +17,6 @@ require (
 	github.com/mgechev/revive v1.3.7
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
 	go.bug.st/serial v1.6.0
-	golang.org/x/net v0.26.0
 	golang.org/x/sys v0.21.0
 	golang.org/x/tools v0.22.1-0.20240621165957-db513b091504
 	gopkg.in/yaml.v2 v2.4.0

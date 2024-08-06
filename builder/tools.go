@@ -49,7 +49,7 @@ func link(linker string, flags ...string) error {
 	err := cmd.Run()
 	if err != nil {
 		if buf.Len() == 0 {
-			// The linker failed but ther was no output.
+			// The linker failed but there was no output.
 			// Therefore, show some output anyway.
 			return fmt.Errorf("failed to run linker: %w", err)
 		}

@@ -3,7 +3,7 @@
 // This implementation of crypto/rand uses the arc4random_buf function
 // (available on both MacOS and WASI) to generate random numbers.
 //
-// Note: arc4random_buf (unlike what the name suggets) does not use the insecure
+// Note: arc4random_buf (unlike what the name suggests) does not use the insecure
 // RC4 cipher. Instead, it uses a high-quality cipher, varying by the libc
 // implementation.
 

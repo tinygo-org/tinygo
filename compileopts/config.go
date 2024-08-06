@@ -60,7 +60,7 @@ func (c *Config) GOOS() string {
 }
 
 // GOARCH returns the GOARCH of the target. This might not always be the actual
-// archtecture: for example, the AVR target is not supported by the Go standard
+// architecture: for example, the AVR target is not supported by the Go standard
 // library so such targets will usually pretend to be linux/arm.
 func (c *Config) GOARCH() string {
 	return c.Target.GOARCH

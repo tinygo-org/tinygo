@@ -43,7 +43,7 @@ func CreateDiagnostics(err error) ProgramDiagnostic {
 	if err == nil {
 		return nil
 	}
-	// Right now, the compiler will only show errors for the first pacakge that
+	// Right now, the compiler will only show errors for the first package that
 	// fails to build. This is likely to change in the future.
 	return ProgramDiagnostic{
 		createPackageDiagnostic(err),
@@ -147,7 +147,7 @@ func createDiagnostics(err error) []Diagnostic {
 					// last package
 					fmt.Fprintln(buf, "\timports", pkgPath+": "+err.Err.Error())
 				} else {
-					// not the last pacakge
+					// not the last package
 					fmt.Fprintln(buf, "\timports", pkgPath)
 				}
 			}

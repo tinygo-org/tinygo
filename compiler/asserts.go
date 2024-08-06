@@ -99,7 +99,7 @@ func (b *builder) createUnsafeSliceStringCheck(name string, ptr, len llvm.Value,
 	// However, in practice, it is also necessary to check that the length is
 	// not too big that a GEP wouldn't be possible without wrapping the pointer.
 	// These two checks (non-negative and not too big) can be merged into one
-	// using an unsiged greater than.
+	// using an unsigned greater than.
 
 	// Make sure the len value is at least as big as a uintptr.
 	len = b.extendInteger(len, lenType, b.uintptrType)

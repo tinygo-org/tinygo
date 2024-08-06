@@ -92,7 +92,7 @@ func Disable() (state State) {
 // Restore restores interrupts to what they were before. Give the previous state
 // returned by Disable as a parameter. If interrupts were disabled before
 // calling Disable, this will not re-enable interrupts, allowing for nested
-// cricital sections.
+// critical sections.
 func Restore(state State) {
 	// Restore interrupts to the previous state.
 	gba.INTERRUPT.PAUSE.Set(uint16(state))

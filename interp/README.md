@@ -28,7 +28,7 @@ All in all, this design provides several benefits:
     it should be a whole lot faster for loops as it doesn't have to call into
     LLVM (via CGo) for every operation.
 
-As mentioned, this partial evaulator comes in three parts: a compiler, an
+As mentioned, this partial evaluator comes in three parts: a compiler, an
 interpreter, and a memory manager.
 
 ## Compiler

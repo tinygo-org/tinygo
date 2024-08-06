@@ -164,7 +164,7 @@ func TestTinyMap(t *testing.T) {
 	// make sure we can get it out
 	v2 := refut.MapIndex(ValueOf(unmarshalerText{"x", "y"}))
 	if !v2.IsValid() || !v2.Bool() {
-		t.Errorf("Failed to look up map struct key with refection")
+		t.Errorf("Failed to look up map struct key with reflection")
 	}
 
 	// put in a key with reflection

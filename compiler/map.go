@@ -326,7 +326,7 @@ func (b *builder) zeroUndefBytes(llvmType llvm.Type, ptr llvm.Value) error {
 			if i < numFields-1 {
 				nextOffset = b.targetData.ElementOffset(llvmStructType, i+1)
 			} else {
-				// Last field?  Next offset is the total size of the allcoate struct.
+				// Last field?  Next offset is the total size of the allocate struct.
 				nextOffset = b.targetData.TypeAllocSize(llvmStructType)
 			}
 
