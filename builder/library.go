@@ -149,27 +149,24 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	if config.ABI() != "" {
 		args = append(args, "-mabi="+config.ABI())
 	}
-	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
+	switch compileopts.CanonicalArchName(target) {
+	case "arm":
 		if strings.Split(target, "-")[2] == "linux" {
 			args = append(args, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
 		} else {
 			args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
 		}
-	}
-	if strings.HasPrefix(target, "avr") {
+	case "avr":
 		// AVR defaults to C float and double both being 32-bit. This deviates
 		// from what most code (and certainly compiler-rt) expects. So we need
 		// to force the compiler to use 64-bit floating point numbers for
 		// double.
 		args = append(args, "-mdouble=64")
-	}
-	if strings.HasPrefix(target, "riscv32-") {
+	case "riscv32":
 		args = append(args, "-march=rv32imac", "-fforce-enable-int128")
-	}
-	if strings.HasPrefix(target, "riscv64-") {
+	case "riscv64":
 		args = append(args, "-march=rv64gc")
-	}
-	if strings.HasPrefix(target, "mips") {
+	case "mips":
 		args = append(args, "-fno-pic")
 	}
 

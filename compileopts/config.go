@@ -207,10 +207,13 @@ func (c *Config) RP2040BootPatch() bool {
 	return false
 }
 
-// MuslArchitecture returns the architecture name as used in musl libc. It is
-// usually the same as the first part of the LLVM triple, but not always.
-func MuslArchitecture(triple string) string {
+// Return a canonicalized architecture name, so we don't have to deal with arm*
+// vs thumb* vs arm64.
+func CanonicalArchName(triple string) string {
 	arch := strings.Split(triple, "-")[0]
+	if arch == "arm64" {
+		return "aarch64"
+	}
 	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
 		return "arm"
 	}
@@ -218,6 +221,12 @@ func MuslArchitecture(triple string) string {
 		return "mips"
 	}
 	return arch
+}
+
+// MuslArchitecture returns the architecture name as used in musl libc. It is
+// usually the same as the first part of the LLVM triple, but not always.
+func MuslArchitecture(triple string) string {
+	return CanonicalArchName(triple)
 }
 
 // LibcPath returns the path to the libc directory. The libc path will be either
