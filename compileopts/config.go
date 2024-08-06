@@ -461,7 +461,7 @@ func (c *Config) BinaryFormat(ext string) string {
 
 // Programmer returns the flash method and OpenOCD interface name given a
 // particular configuration. It may either be all configured in the target JSON
-// file or be modified using the -programmmer command-line option.
+// file or be modified using the -programmer command-line option.
 func (c *Config) Programmer() (method, openocdInterface string) {
 	switch c.Options.Programmer {
 	case "":
