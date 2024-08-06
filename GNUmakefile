@@ -962,7 +962,7 @@ lint: ## Lint source tree
 
 .PHONY: spell
 spell: ## Spellcheck source tree
-	go run github.com/client9/misspell/cmd/misspell -i 'ackward,devided,extint,inbetween,programmmer,rela' $$( find . -depth 1 -type d  | egrep -w -v 'lib|llvm|src/net' )
+	go run github.com/client9/misspell/cmd/misspell -i 'ackward,devided,extint,programmmer,rela' $$( find . -depth 1 -type d  | egrep -w -v 'lib|llvm|src/net' )
 
 # https://www.client9.com/self-documenting-makefiles/
 .PHONY: help

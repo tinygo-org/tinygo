@@ -26,7 +26,7 @@ type stackChainObject struct {
 //
 // Therefore, we only need to scan the system stack.
 // It is relatively easy to scan the system stack while we're on it: we can
-// simply read __stack_pointer and __global_base and scan the area inbetween.
+// simply read __stack_pointer and __global_base and scan the area in between.
 // Unfortunately, it's hard to get the system stack pointer while we're on a
 // goroutine stack. But when we're on a goroutine stack, the system stack is in
 // the scheduler which means there shouldn't be anything on the system stack
