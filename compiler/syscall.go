@@ -145,7 +145,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// Also useful:
 		// https://web.archive.org/web/20220529105937/https://www.linux-mips.org/wiki/Syscall
 		// The syscall number goes in r2, the result also in r2.
-		// Register r7 is both an input paramter and an output parameter: if it
+		// Register r7 is both an input parameter and an output parameter: if it
 		// is non-zero, the system call failed and r2 is the error code.
 		// The code below implements the O32 syscall ABI, not the N32 ABI. It
 		// could implement both at the same time if needed (like what appears to
@@ -156,6 +156,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		argTypes := []llvm.Type{b.uintptrType}
 		constraints := "={$2},={$7},0"
 		syscallParams := call.Args[1:]
+
 		if len(syscallParams) > 7 {
 			// There is one syscall that uses 7 parameters: sync_file_range.
 			// But only 7, not more. Go however only has Syscall6 and Syscall9.
@@ -228,6 +229,56 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		negativeResult := b.CreateSub(zero, resultCode, "")
 		result := b.CreateSelect(isError, negativeResult, resultCode, "")
 		return result, nil
+
+	case (b.GOARCH == "riscv" || b.GOARCH == "riscv64") && b.GOOS == "linux":
+		// https://stackoverflow.com/questions/59800430/risc-v-ecall-syscall-calling-convention-on-pk-linux
+		// https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/tree/man2/syscall.2?h=man-pages-5.04#n200
+		// https://pdos.csail.mit.edu/6.S081/2021/slides/6s081-lec-syscall.pdf
+		// https://git.musl-libc.org/cgit/musl/tree/arch/riscv64/syscall_arch.h
+		// https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf
+		args := []llvm.Value{num}
+		argTypes := []llvm.Type{}
+		constraints := "={a7}" // syscall number
+		for i, arg := range call.Args[1:] {
+			constraints += "," + [...]string{
+				"{a0}",
+				"{a1}",
+				"{a2}",
+				"{a3}",
+				"{a4}",
+				"{a5}",
+			}[i]
+			llvmValue := b.getValue(arg, getPos(call))
+			args = append(args, llvmValue)
+			argTypes = append(argTypes, llvmValue.Type())
+		}
+		args = append(args, num)
+		argTypes = append(argTypes, b.uintptrType)
+
+		// constrain registers used for syscall/ecall
+		for i := len(call.Args) - 1; i < 4; i++ {
+			constraints += ",~{a" + strconv.Itoa(i) + "}"
+		}
+
+		// constrain caller responsible registers
+		// See Table 18.2: RISC-V calling convention register usage
+		// TODO: does llvm take their stack usage into account?
+		// TODO: are only the registers needed saved here or all? can llvm determine this itself?
+
+		// temporary integer registers
+		for i := 0; i < 8; i++ {
+			constraints += ",~{t" + strconv.Itoa(i) + "}"
+		}
+
+		// temporary floating-point registers
+		for i := 0; i < 12; i++ {
+			constraints += ",~{ft" + strconv.Itoa(i) + "}"
+		}
+
+		// generate function
+		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
+		target := llvm.InlineAsm(fnType, "ecall", constraints, true, false, 0, false)
+		return b.CreateCall(fnType, target, args, ""), nil
 
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)
