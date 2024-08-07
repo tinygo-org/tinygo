@@ -38,5 +38,9 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		Target:         spec,
 		GoMinorVersion: minor,
 		TestConfig:     options.TestConfig,
+
+		// tinygo version
+		VersionMajor:   goenv.VersionMajor,
+		VersionMinor:   goenv.VersionMinor,
 	}, nil
 }

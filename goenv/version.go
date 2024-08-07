@@ -8,8 +8,11 @@ import (
 )
 
 // Version of TinyGo.
-// Update this value before release of new version of software.
-const version = "0.33.0-dev"
+// Update these value before release of new version of software.
+const VersionMajor = 0
+const VersionMinor = 33
+const VersionPatch = 0
+const VersionDev = "-dev" // "" for release
 
 var (
 	// This variable is set at build time using -ldflags parameters.
@@ -20,10 +23,13 @@ var (
 // Return TinyGo version, either in the form 0.30.0 or as a development version
 // (like 0.30.0-dev-abcd012).
 func Version() string {
-	v := version
-	if strings.HasSuffix(version, "-dev") && GitSha1 != "" {
+
+	v := fmt.Sprintf("%v.%v.%v%v", VersionMajor, VersionMinor, VersionPatch, VersionDev)
+
+	if strings.HasSuffix(v, "-dev") && GitSha1 != "" {
 		v += "-" + GitSha1
 	}
+
 	return v
 }
 

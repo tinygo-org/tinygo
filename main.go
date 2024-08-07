@@ -1428,7 +1428,7 @@ func main() {
 	// development it can be useful to not emit debug information at all.
 	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, use -no-debug instead")
 
-	var flagJSON, flagDeps, flagTest bool
+	var flagJSON, flagDeps, flagTest, flagFull bool
 	if command == "help" || command == "list" || command == "info" || command == "build" {
 		flag.BoolVar(&flagJSON, "json", false, "print data in JSON format")
 	}
@@ -1439,6 +1439,9 @@ func main() {
 	var outpath string
 	if command == "help" || command == "build" || command == "test" {
 		flag.StringVar(&outpath, "o", "", "output filename")
+	}
+	if command == "info" {
+		flag.BoolVar(&flagFull, "full", false, "output all tinygo version build-tags")
 	}
 
 	var witPackage, witWorld string
@@ -1720,6 +1723,12 @@ func main() {
 			os.Exit(1)
 		}
 		config.GoMinorVersion = 0 // this avoids creating the list of Go1.x build tags.
+		if !flagFull {
+			// avoid creating tinygoX.X build tags
+			config.VersionMinor = 0
+			config.VersionMajor = 0
+		}
+
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)

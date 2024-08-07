@@ -20,6 +20,10 @@ type Config struct {
 	Target         *TargetSpec
 	GoMinorVersion int
 	TestConfig     TestConfig
+
+	// tinygo versions
+	VersionMajor int
+	VersionMinor int
 }
 
 // Triple returns the LLVM target triple, like armv6m-unknown-unknown-eabi.
@@ -81,9 +85,19 @@ func (c *Config) BuildTags() []string {
 		"math_big_pure_go",                           // to get math/big to work
 		"gc." + c.GC(), "scheduler." + c.Scheduler(), // used inside the runtime package
 		"serial." + c.Serial()}...) // used inside the machine package
+
+	// Go Version tags
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
+
+	// tinygo Version tags
+	for i := 0; i <= c.VersionMajor; i++ {
+		for j := 1; j <= c.VersionMinor; j++ {
+			tags = append(tags, fmt.Sprintf("tinygo%d.%d", i, j))
+		}
+	}
+
 	tags = append(tags, c.Options.Tags...)
 	return tags
 }
