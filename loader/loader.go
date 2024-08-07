@@ -250,10 +250,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 	}
 
 	if len(pkgErrors) != 0 {
-		// TODO: use errors.Join in Go 1.20.
-		return nil, Errors{
-			Errs: pkgErrors,
-		}
+		return nil, errors.Join(pkgErrors...)
 	}
 
 	if config.TestConfig.CompileTestBinary && !strings.HasSuffix(p.sorted[len(p.sorted)-1].ImportPath, ".test") {

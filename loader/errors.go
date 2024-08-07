@@ -1,6 +1,9 @@
 package loader
 
-import "go/scanner"
+import (
+	"fmt"
+	"go/scanner"
+)
 
 // Errors contains a list of parser errors or a list of typechecker errors for
 // the given package.
@@ -21,6 +24,9 @@ type Error struct {
 }
 
 func (e Error) Error() string {
+	if 0 < len(e.ImportStack) {
+		return fmt.Sprintf("package %v: %v", e.ImportStack[0], e.Err.Error())
+	}
 	return e.Err.Error()
 }
 
