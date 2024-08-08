@@ -378,6 +378,10 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			if nextAlloc > maxBlock {
 				maxBlock = nextAlloc - 1
 			}
+			if heapScanCount == 2 {
+				// if we had to do a GC to find this allocation, reset nextAlloc to the start of the heap
+				nextAlloc = 0
+			}
 			return pointer
 		}
 	}
