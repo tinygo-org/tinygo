@@ -33,14 +33,15 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		return nil, fmt.Errorf("requires go version 1.19 through 1.22, got go%d.%d", major, minor)
 	}
 
+	// tinygo major / minor version
+	tgMajor, tgMinor := goenv.GetVersion()
+
 	return &compileopts.Config{
 		Options:        options,
 		Target:         spec,
 		GoMinorVersion: minor,
 		TestConfig:     options.TestConfig,
-
-		// tinygo version
-		VersionMajor:   goenv.VersionMajor,
-		VersionMinor:   goenv.VersionMinor,
+		VersionMajor:   tgMajor,
+		VersionMinor:   tgMinor,
 	}, nil
 }
