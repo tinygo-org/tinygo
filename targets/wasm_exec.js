@@ -29,7 +29,7 @@
 	}
 
 	if (!global.fs && global.require) {
-		global.fs = require("fs");
+		global.fs = require("node:fs");
 	}
 
 	const enosys = () => {
@@ -101,7 +101,7 @@
 	}
 
 	if (!global.crypto) {
-		const nodeCrypto = require("crypto");
+		const nodeCrypto = require("node:crypto");
 		global.crypto = {
 			getRandomValues(b) {
 				nodeCrypto.randomFillSync(b);
@@ -119,11 +119,11 @@
 	}
 
 	if (!global.TextEncoder) {
-		global.TextEncoder = require("util").TextEncoder;
+		global.TextEncoder = require("node:util").TextEncoder;
 	}
 
 	if (!global.TextDecoder) {
-		global.TextDecoder = require("util").TextDecoder;
+		global.TextDecoder = require("node:util").TextDecoder;
 	}
 
 	// End of polyfills for common API.
