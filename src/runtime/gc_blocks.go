@@ -45,7 +45,7 @@ const (
 	bytesPerBlock      = wordsPerBlock * unsafe.Sizeof(heapStart)
 	stateBits          = 2 // how many bits a block state takes (see blockState type)
 	blocksPerStateByte = 8 / stateBits
-	markStackSize      = 4 * unsafe.Sizeof((*int)(nil)) // number of to-be-marked blocks to queue before forcing a rescan
+	markStackSize      = 8 * unsafe.Sizeof((*int)(nil)) // number of to-be-marked blocks to queue before forcing a rescan
 )
 
 var (
