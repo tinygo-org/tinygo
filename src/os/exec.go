@@ -1,5 +1,3 @@
-//go:build !baremetal
-
 package os
 
 import (

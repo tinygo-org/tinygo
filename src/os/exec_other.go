@@ -1,5 +1,5 @@
-//go:build !aix && !android && !freebsd && !linux && !netbsd && !openbsd && !plan9 && !solaris
-// +build !aix,!android,!freebsd,!linux,!netbsd,!openbsd,!plan9,!solaris
+//go:build (!aix && !android && !freebsd && !linux && !netbsd && !openbsd && !plan9 && !solaris) || baremetal || tinygo.wasm
+// +build !aix,!android,!freebsd,!linux,!netbsd,!openbsd,!plan9,!solaris baremetal tinygo.wasm
 
 package os
 

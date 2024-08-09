@@ -1,3 +1,5 @@
+//go: build linux && !baremetal && !tinygo.wasm
+
 package os_test
 
 import (
