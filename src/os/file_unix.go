@@ -55,6 +55,19 @@ func NewFile(fd uintptr, name string) *File {
 	return &File{&file{handle: unixFileHandle(fd), name: name}}
 }
 
+// Truncate changes the size of the named file.
+// If the file is a symbolic link, it changes the size of the link's target.
+// If there is an error, it will be of type *PathError.
+func Truncate(name string, size int64) error {
+	e := ignoringEINTR(func() error {
+		return syscall.Truncate(name, size)
+	})
+	if e != nil {
+		return &PathError{Op: "truncate", Path: name, Err: e}
+	}
+	return nil
+}
+
 func Pipe() (r *File, w *File, err error) {
 	var p [2]int
 	err = handleSyscallError(syscall.Pipe2(p[:], syscall.O_CLOEXEC))
@@ -134,14 +147,7 @@ func (f *File) Truncate(size int64) (err error) {
 		return ErrClosed
 	}
 
-	e := ignoringEINTR(func() error {
-		return syscall.Truncate(f.name, size)
-	})
-
-	if e != nil {
-		return &PathError{Op: "truncate", Path: f.name, Err: e}
-	}
-	return
+	return Truncate(f.name, size)
 }
 
 // ReadAt reads up to len(b) bytes from the File starting at the given absolute offset.
