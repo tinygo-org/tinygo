@@ -199,6 +199,8 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 			llvmarch = "mipsel"
 		case "wasm":
 			llvmarch = "wasm32"
+		case "riscv":
+			llvmarch = "riscv64"
 		default:
 			llvmarch = options.GOARCH
 		}
@@ -344,6 +346,11 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			"-mnontrapping-fptoint",
 			"-msign-ext",
 		)
+	case "riscv64":
+		// TODO: are these the features we really need? What does SiFive use? what does qemu support?
+		spec.CPU = "generic-rv64"
+		spec.Features = "+a,+c,+d,+f,+m,+q,+rvc,+zbb,+zbp"
+		spec.CFlags = append(spec.CFlags, "-march=rv64gc")
 	}
 	if goos == "darwin" {
 		spec.Linker = "ld.lld"

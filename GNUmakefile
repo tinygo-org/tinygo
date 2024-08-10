@@ -881,6 +881,8 @@ endif
 	@cp -rp lib/musl/arch/generic        build/release/tinygo/lib/musl/arch
 	@cp -rp lib/musl/arch/i386           build/release/tinygo/lib/musl/arch
 	@cp -rp lib/musl/arch/mips           build/release/tinygo/lib/musl/arch
+	@cp -rp lib/musl/arch/riscv32        build/release/tinygo/lib/musl/arch
+	@cp -rp lib/musl/arch/riscv64        build/release/tinygo/lib/musl/arch
 	@cp -rp lib/musl/arch/x86_64         build/release/tinygo/lib/musl/arch
 	@cp -rp lib/musl/crt/crt1.c          build/release/tinygo/lib/musl/crt
 	@cp -rp lib/musl/COPYRIGHT           build/release/tinygo/lib/musl

@@ -220,6 +220,11 @@ func CanonicalArchName(triple string) string {
 	if arch == "mipsel" {
 		return "mips"
 	}
+
+	if arch == "riscv32" {
+		return "riscv"
+	}
+
 	return arch
 }
 
