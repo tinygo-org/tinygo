@@ -145,7 +145,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// Also useful:
 		// https://web.archive.org/web/20220529105937/https://www.linux-mips.org/wiki/Syscall
 		// The syscall number goes in r2, the result also in r2.
-		// Register r7 is both an input paramter and an output parameter: if it
+		// Register r7 is both an input parameter and an output parameter: if it
 		// is non-zero, the system call failed and r2 is the error code.
 		// The code below implements the O32 syscall ABI, not the N32 ABI. It
 		// could implement both at the same time if needed (like what appears to

@@ -86,7 +86,7 @@ func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.
 
 // extractValueFromInterface extract the value from an interface value
 // (runtime._interface) under the assumption that it is of the type given in
-// llvmType. The behavior is undefied if the interface is nil or llvmType
+// llvmType. The behavior is undefined if the interface is nil or llvmType
 // doesn't match the underlying type of the interface.
 func (b *builder) extractValueFromInterface(itf llvm.Value, llvmType llvm.Type) llvm.Value {
 	valuePtr := b.CreateExtractValue(itf, 1, "typeassert.value.ptr")

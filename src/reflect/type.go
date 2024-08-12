@@ -404,7 +404,7 @@ const (
 
 // The base type struct. All type structs start with this.
 type rawType struct {
-	meta uint8 // metadata byte, contains kind and flags (see contants above)
+	meta uint8 // metadata byte, contains kind and flags (see constants above)
 }
 
 // All types that have an element type: named, chan, slice, array, map (but not

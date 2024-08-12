@@ -88,6 +88,7 @@ func (p *Process) Release() error {
 	return p.release()
 }
 
+// FindProcess looks for a running process by its pid.
 // Keep compatibility with golang and always succeed and return new proc with pid on Linux.
 func FindProcess(pid int) (*Process, error) {
 	return findProcess(pid)

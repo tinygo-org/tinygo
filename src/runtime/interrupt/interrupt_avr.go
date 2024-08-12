@@ -27,7 +27,7 @@ func Disable() (state State) {
 // Restore restores interrupts to what they were before. Give the previous state
 // returned by Disable as a parameter. If interrupts were disabled before
 // calling Disable, this will not re-enable interrupts, allowing for nested
-// cricital sections.
+// critical sections.
 func Restore(state State) {
 	// SREG is at I/O address 0x3f.
 	device.AsmFull("out 0x3f, {state}", map[string]interface{}{

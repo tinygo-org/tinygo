@@ -115,6 +115,8 @@ jobs:
           gem install --no-document fpm
       - name: Run linter
         run: make lint
+      - name: Run spellcheck
+        run: make spell
       - name: Build TinyGo release
         run: |
           make release deb -j3 STATIC=1

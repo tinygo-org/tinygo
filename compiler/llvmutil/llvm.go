@@ -207,7 +207,7 @@ func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
 	used.SetLinkage(llvm.AppendingLinkage)
 }
 
-// Return the LLVM major version.
+// Version returns the LLVM major version.
 func Version() int {
 	majorStr := strings.Split(llvm.Version, ".")[0]
 	major, err := strconv.Atoi(majorStr)

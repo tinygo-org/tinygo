@@ -24,7 +24,7 @@ var (
 // here: https://github.com/vmilea/pico_i2c_slave
 
 // Features: Taken from datasheet.
-// Default controller mode, with target mode available (not simulataneously).
+// Default controller mode, with target mode available (not simultaneously).
 // Default target address of RP2040: 0x055
 // Supports 10-bit addressing in controller mode
 // 16-element transmit buffer

@@ -60,7 +60,7 @@ func (c *Config) GOOS() string {
 }
 
 // GOARCH returns the GOARCH of the target. This might not always be the actual
-// archtecture: for example, the AVR target is not supported by the Go standard
+// architecture: for example, the AVR target is not supported by the Go standard
 // library so such targets will usually pretend to be linux/arm.
 func (c *Config) GOARCH() string {
 	return c.Target.GOARCH
@@ -461,7 +461,7 @@ func (c *Config) BinaryFormat(ext string) string {
 
 // Programmer returns the flash method and OpenOCD interface name given a
 // particular configuration. It may either be all configured in the target JSON
-// file or be modified using the -programmmer command-line option.
+// file or be modified using the -programmer command-line option.
 func (c *Config) Programmer() (method, openocdInterface string) {
 	switch c.Options.Programmer {
 	case "":
