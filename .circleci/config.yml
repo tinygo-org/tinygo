@@ -104,6 +104,8 @@ jobs:
     steps:
       - test-linux:
           llvm: "15"
+          # "make lint" fails before go 1.21 because internal/tools/go.mod specifies packages that require go 1.21
+          fmt-check: false
     resource_class: large
   test-llvm18-go122:
     docker:
