@@ -9,5 +9,5 @@ import (
 	_ "github.com/mgechev/revive"
 )
 
-//go:generate go install github.com/client9/misspell/cmd/misspell
+//go:generate go install github.com/golangci/misspell/cmd/misspell
 //go:generate go install github.com/mgechev/revive
