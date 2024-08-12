@@ -3,7 +3,7 @@
 
 module tools
 
-go 1.21.13
+go 1.21
 
 require (
 	github.com/golangci/misspell v0.6.0
