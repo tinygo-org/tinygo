@@ -23,6 +23,12 @@ const (
 	clock_MONOTONIC_RAW = 4
 )
 
+const (
+	sig_SIGBUS  = linux_SIGBUS
+	sig_SIGILL  = linux_SIGILL
+	sig_SIGSEGV = linux_SIGSEGV
+)
+
 // For the definition of the various header structs, see:
 // https://refspecs.linuxfoundation.org/elf/elf.pdf
 // Also useful:
