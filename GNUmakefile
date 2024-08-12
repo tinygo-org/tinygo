@@ -289,7 +289,7 @@ ifeq (, $(shell which node))
 endif
 	@if [ $(NODEJS_VERSION) -lt $(MIN_NODEJS_VERSION) ]; then echo "Install NodeJS version 18+ to run tests."; exit 1; fi
 
-tinygo: ## Build the Go compiler
+tinygo: ## Build the TinyGo compiler
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  $(MAKE) llvm-source"; echo "  $(MAKE) $(LLVM_BUILDDIR)"; exit 1; fi
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags "byollvm osusergo" -ldflags="-X github.com/tinygo-org/tinygo/goenv.GitSha1=`git rev-parse --short HEAD`" .
 test: wasi-libc check-nodejs-version

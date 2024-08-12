@@ -28,6 +28,21 @@ build tools to be built. Go is of course necessary to build TinyGo itself.
 The rest of this guide assumes you're running Linux, but it should be equivalent
 on a different system like Mac.
 
+## Using GNU Make
+
+The static build of TinyGo is driven by GNUmakefile, which provides a help target for quick reference:
+
+    % make help
+    clean                           Remove build directory
+    fmt                             Reformat source
+    fmt-check                       Warn if any source needs reformatting
+    gen-device                      Generate microcontroller-specific sources
+    llvm-source                     Get LLVM sources
+    llvm-build                      Build LLVM
+    tinygo                          Build the TinyGo compiler
+    lint                            Lint source tree
+    spell                           Spellcheck source tree
+
 ## Download the source
 
 The first step is to download the TinyGo sources (use `--recursive` if you clone
