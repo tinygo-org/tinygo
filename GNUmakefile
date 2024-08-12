@@ -949,7 +949,7 @@ endif
 
 .PHONY: tools
 tools:
-	go generate -C ./internal/tools -tags tools  ./
+	cd internal/tools && go generate -tags tools ./
 
 .PHONY: lint
 lint: tools ## Lint source tree
