@@ -26,6 +26,9 @@ func abort()
 //export exit
 func exit(code int)
 
+//export raise
+func raise(sig int32)
+
 //export clock_gettime
 func libc_clock_gettime(clk_id int32, ts *timespec)
 
@@ -74,6 +77,10 @@ func main(argc int32, argv *unsafe.Pointer) int {
 	main_argc = argc
 	main_argv = argv
 
+	// Register some fatal signals, so that we can print slightly better error
+	// messages.
+	tinygo_register_fatal_signals()
+
 	// Obtain the initial stack pointer right before calling the run() function.
 	// The run function has been moved to a separate (non-inlined) function so
 	// that the correct stack pointer is read.
@@ -117,6 +124,50 @@ func os_runtime_args() []string {
 //go:noinline
 func runMain() {
 	run()
+}
+
+//export tinygo_register_fatal_signals
+func tinygo_register_fatal_signals()
+
+// Print fatal errors when they happen, including the instruction location.
+// With the particular formatting below, `tinygo run` can extract the location
+// where the signal happened and try to show the source location based on DWARF
+// information.
+//
+//export tinygo_handle_fatal_signal
+func tinygo_handle_fatal_signal(sig int32, addr uintptr) {
+	if panicStrategy() == panicStrategyTrap {
+		trap()
+	}
+
+	// Print signal including the faulting instruction.
+	if addr != 0 {
+		printstring("panic: runtime error at ")
+		printptr(addr)
+	} else {
+		printstring("panic: runtime error")
+	}
+	printstring(": caught signal ")
+	switch sig {
+	case sig_SIGBUS:
+		println("SIGBUS")
+	case sig_SIGILL:
+		println("SIGILL")
+	case sig_SIGSEGV:
+		println("SIGSEGV")
+	default:
+		println(sig)
+	}
+
+	// TODO: it might be interesting to also print the invalid address for
+	// SIGSEGV and SIGBUS.
+
+	// Do *not* abort here, instead raise the same signal again. The signal is
+	// registered with SA_RESETHAND which means it executes only once. So when
+	// we raise the signal again below, the signal isn't handled specially but
+	// is handled in the default way (probably exiting the process, maybe with a
+	// core dump).
+	raise(sig)
 }
 
 //go:extern environ

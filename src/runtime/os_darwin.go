@@ -22,6 +22,14 @@ const (
 	clock_MONOTONIC_RAW = 4
 )
 
+// Source:
+// https://opensource.apple.com/source/xnu/xnu-7195.141.2/bsd/sys/signal.h.auto.html
+const (
+	sig_SIGBUS  = 10
+	sig_SIGILL  = 4
+	sig_SIGSEGV = 11
+)
+
 // https://opensource.apple.com/source/xnu/xnu-7195.141.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html
 type machHeader struct {
 	magic      uint32
