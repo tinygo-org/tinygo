@@ -646,10 +646,10 @@ func (v Value) Slice3(i, j, k int) Value {
 	panic("unimplemented: (reflect.Value).Slice3()")
 }
 
-//go:linkname maplen runtime.hashmapLenUnsafePointer
+//go:linkname maplen runtime.hashmapLen
 func maplen(p unsafe.Pointer) int
 
-//go:linkname chanlen runtime.chanLenUnsafePointer
+//go:linkname chanlen runtime.chanLen
 func chanlen(p unsafe.Pointer) int
 
 // Len returns the length of this value for slices, strings, arrays, channels,
@@ -671,7 +671,7 @@ func (v Value) Len() int {
 	}
 }
 
-//go:linkname chancap runtime.chanCapUnsafePointer
+//go:linkname chancap runtime.chanCap
 func chancap(p unsafe.Pointer) int
 
 // Cap returns the capacity of this value for arrays, channels and slices.
@@ -965,13 +965,13 @@ func (v Value) MapKeys() []Value {
 	return keys
 }
 
-//go:linkname hashmapStringGet runtime.hashmapStringGetUnsafePointer
+//go:linkname hashmapStringGet runtime.hashmapStringGet
 func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueSize uintptr) bool
 
-//go:linkname hashmapBinaryGet runtime.hashmapBinaryGetUnsafePointer
+//go:linkname hashmapBinaryGet runtime.hashmapBinaryGet
 func hashmapBinaryGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
 
-//go:linkname hashmapInterfaceGet runtime.hashmapInterfaceGetUnsafePointer
+//go:linkname hashmapInterfaceGet runtime.hashmapInterfaceGet
 func hashmapInterfaceGet(m unsafe.Pointer, key interface{}, value unsafe.Pointer, valueSize uintptr) bool
 
 func (v Value) MapIndex(key Value) Value {
@@ -1018,7 +1018,7 @@ func (v Value) MapIndex(key Value) Value {
 //go:linkname hashmapNewIterator runtime.hashmapNewIterator
 func hashmapNewIterator() unsafe.Pointer
 
-//go:linkname hashmapNext runtime.hashmapNextUnsafePointer
+//go:linkname hashmapNext runtime.hashmapNext
 func hashmapNext(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool
 
 func (v Value) MapRange() *MapIter {
@@ -1786,22 +1786,22 @@ func (v Value) Grow(n int) {
 	slice.cap = newslice.cap
 }
 
-//go:linkname hashmapStringSet runtime.hashmapStringSetUnsafePointer
+//go:linkname hashmapStringSet runtime.hashmapStringSet
 func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
 
-//go:linkname hashmapBinarySet runtime.hashmapBinarySetUnsafePointer
+//go:linkname hashmapBinarySet runtime.hashmapBinarySet
 func hashmapBinarySet(m unsafe.Pointer, key, value unsafe.Pointer)
 
-//go:linkname hashmapInterfaceSet runtime.hashmapInterfaceSetUnsafePointer
+//go:linkname hashmapInterfaceSet runtime.hashmapInterfaceSet
 func hashmapInterfaceSet(m unsafe.Pointer, key interface{}, value unsafe.Pointer)
 
-//go:linkname hashmapStringDelete runtime.hashmapStringDeleteUnsafePointer
+//go:linkname hashmapStringDelete runtime.hashmapStringDelete
 func hashmapStringDelete(m unsafe.Pointer, key string)
 
-//go:linkname hashmapBinaryDelete runtime.hashmapBinaryDeleteUnsafePointer
+//go:linkname hashmapBinaryDelete runtime.hashmapBinaryDelete
 func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
 
-//go:linkname hashmapInterfaceDelete runtime.hashmapInterfaceDeleteUnsafePointer
+//go:linkname hashmapInterfaceDelete runtime.hashmapInterfaceDelete
 func hashmapInterfaceDelete(m unsafe.Pointer, key interface{})
 
 func (v Value) SetMapIndex(key, elem Value) {
@@ -1930,7 +1930,7 @@ func (v Value) FieldByNameFunc(match func(string) bool) Value {
 	return Value{}
 }
 
-//go:linkname hashmapMake runtime.hashmapMakeUnsafePointer
+//go:linkname hashmapMake runtime.hashmapMake
 func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
 
 // MakeMapWithSize creates a new map with the specified type and initial space
