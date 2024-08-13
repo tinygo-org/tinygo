@@ -36,7 +36,7 @@ var (
 // GPIO config
 // Each controller must connect its clock SCL and data SDA to one pair of GPIOs.
 // The I2C standard requires that drivers drivea signal low, or when not driven the signal will be pulled high.
-// This applies to SCL and SDA. The GPIO pads should beconfigured for:
+// This applies to SCL and SDA. The GPIO pads should be configured for:
 //  Pull-up enabled
 //  Slew rate limited
 //  Schmitt trigger enabled

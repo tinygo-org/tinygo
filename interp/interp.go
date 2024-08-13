@@ -52,7 +52,7 @@ func newRunner(mod llvm.Module, timeout time.Duration, debug bool) *runner {
 	return &r
 }
 
-// Dispose deallocates all alloated LLVM resources.
+// Dispose deallocates all allocated LLVM resources.
 func (r *runner) dispose() {
 	r.targetData.Dispose()
 	r.targetData = llvm.TargetData{}

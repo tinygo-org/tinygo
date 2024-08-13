@@ -963,11 +963,11 @@ lint: tools ## Lint source tree
 SPELLDIRSCMD=find . -depth 1 -type d  | egrep -wv '.git|lib|llvm|src'; find src -depth 1 | egrep -wv 'device|internal|net|vendor'; find src/internal -depth 1 -type d | egrep -wv src/internal/wasi
 .PHONY: spell
 spell: tools ## Spellcheck source tree
-	misspell -error --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) )
+	misspell -error --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.md
 
 .PHONY: spellfix
 spellfix: tools ## Same as spell, but fixes what it finds
-	misspell -w --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) )
+	misspell -w --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.md
 
 # https://www.client9.com/self-documenting-makefiles/
 .PHONY: help
