@@ -97,7 +97,7 @@ func read(fd int32, buf *byte, count uint) int {
 
 type wasiFile struct {
 	d      types.Descriptor
-	oflag  int32 // orignal open flags: O_RDONLY, O_WRONLY, O_RDWR
+	oflag  int32 // original open flags: O_RDONLY, O_WRONLY, O_RDWR
 	offset int64 // current fd offset; updated with each read/write
 	refs   int
 }

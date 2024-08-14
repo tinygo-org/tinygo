@@ -1896,7 +1896,7 @@
   - allow packages like github.com/tinygo-org/tinygo/src/\* by aliasing it
   - remove `//go:volatile` support  
     It has been replaced with the runtime/volatile package.
-  - allow poiners in map keys
+  - allow pointers in map keys
   - support non-constant syscall numbers
   - implement non-blocking selects
   - add support for the `-tags` flag

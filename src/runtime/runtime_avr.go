@@ -104,7 +104,7 @@ func exit(code int) {
 
 func abort() {
 	// Disable interrupts and go to sleep.
-	// This can never be awoken except for reset, and is recogized as termination by simavr.
+	// This can never be awoken except for reset, and is recognized as termination by simavr.
 	avr.Asm("cli")
 	for {
 		avr.Asm("sleep")

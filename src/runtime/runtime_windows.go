@@ -129,7 +129,7 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 func sleepTicks(d timeUnit) {
-	// Calcluate milliseconds from ticks (which have a resolution of 100ns),
+	// Calculate milliseconds from ticks (which have a resolution of 100ns),
 	// rounding up.
 	milliseconds := int64(d+9_999) / 10_000
 	for milliseconds != 0 {

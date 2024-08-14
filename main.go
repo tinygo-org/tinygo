@@ -808,7 +808,7 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 
 // buildAndRun builds and runs the given program, writing output to stdout and
 // errors to os.Stderr. It takes care of emulators (qemu, wasmtime, etc) and
-// passes command line arguments and evironment variables in a way appropriate
+// passes command line arguments and environment variables in a way appropriate
 // for the given emulator.
 func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) (builder.BuildResult, error) {
 
@@ -1631,7 +1631,7 @@ func main() {
 			for i := range bufs {
 				err := bufs[i].flush(os.Stdout, os.Stderr)
 				if err != nil {
-					// There was an error writing to stdout or stderr, so we probbably cannot print this.
+					// There was an error writing to stdout or stderr, so we probably cannot print this.
 					select {
 					case fail <- struct{}{}:
 					default:

@@ -362,7 +362,7 @@ endif
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
 # mime/quotedprintable requires syscall.Faccessat
 # strconv requires recover() which is not yet supported on wasi
-# text/tabwriter requries recover(), which is not  yet supported on wasi
+# text/tabwriter requires recover(), which is not  yet supported on wasi
 # text/template/parse requires recover(), which is not yet supported on wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
 

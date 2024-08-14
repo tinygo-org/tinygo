@@ -180,7 +180,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 			if len(fields) >= 2 {
 				// There is some file/line/column information.
 				if n, err := strconv.Atoi(fields[len(fields)-2]); err == nil {
-					// Format: filename.go:line:colum
+					// Format: filename.go:line:column
 					pos.Filename = strings.Join(fields[:len(fields)-2], ":")
 					pos.Line = n
 					pos.Column, _ = strconv.Atoi(fields[len(fields)-1])
