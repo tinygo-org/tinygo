@@ -150,7 +150,7 @@ func makeArchive(arfile *os.File, objs []string) error {
 	}
 
 	// Keep track of the start of the symbol table.
-	symbolTableStart, err := arfile.Seek(0, os.SEEK_CUR)
+	symbolTableStart, err := arfile.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func makeArchive(arfile *os.File, objs []string) error {
 
 		// Store the start index, for when we'll update the symbol table with
 		// the correct file start indices.
-		offset, err := arfile.Seek(0, os.SEEK_CUR)
+		offset, err := arfile.Seek(0, io.SeekCurrent)
 		if err != nil {
 			return err
 		}
