@@ -958,7 +958,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	err = run(cmd, result)
 	if err != nil {
 		if ctx != nil && ctx.Err() == context.DeadlineExceeded {
-			stdout.Write([]byte(fmt.Sprintf("--- timeout of %s exceeded, terminating...\n", timeout)))
+			fmt.Fprintf(stdout, "--- timeout of %s exceeded, terminating...\n", timeout)
 			err = ctx.Err()
 		}
 		return result, &commandError{"failed to run compiled binary", result.Binary, err}

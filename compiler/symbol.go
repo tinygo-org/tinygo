@@ -353,7 +353,7 @@ func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
 	}
 	if f.Blocks != nil {
 		// Defined functions cannot be exported.
-		c.addError(f.Pos(), fmt.Sprintf("can only use //go:wasmimport on declarations"))
+		c.addError(f.Pos(), "can only use //go:wasmimport on declarations")
 		return
 	}
 	if f.Signature.Results().Len() > 1 {
