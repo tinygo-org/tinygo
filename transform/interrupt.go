@@ -137,7 +137,7 @@ func LowerInterrupts(mod llvm.Module) []error {
 				user.ReplaceAllUsesWith(llvm.ConstInt(user.Type(), uint64(num), true))
 			}
 
-			// The runtime/interrput.handle struct can finally be removed.
+			// The runtime/interrupt.handle struct can finally be removed.
 			// It would probably be eliminated anyway by a globaldce pass but it's
 			// better to do it now to be sure.
 			handler.EraseFromParentAsGlobal()
