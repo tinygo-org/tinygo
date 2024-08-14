@@ -1,10 +1,18 @@
-// Copyright 2016 The Go Authors. All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+/*
+Package user allows user account lookups by name or id.
+
+tinygo: Largely copied from go1.22.6
+This is merged to "cached GOROOT/src/os/user" for baremetal systems
+*/
 package user
 
-import "errors"
+import (
+	"strconv"
+)
 
 // User represents a user account.
 type User struct {
@@ -31,20 +39,6 @@ type User struct {
 	HomeDir string
 }
 
-// Current returns the current user.
-//
-// The first call will cache the current user information.
-// Subsequent calls will return the cached value and will not reflect
-// changes to the current user.
-func Current() (*User, error) {
-	return nil, errors.New("user: Current not implemented")
-}
-
-// Lookup always returns an error.
-func Lookup(username string) (*User, error) {
-	return nil, errors.New("user: Lookup not implemented")
-}
-
 // Group represents a grouping of users.
 //
 // On POSIX systems Gid contains a decimal number representing the group ID.
@@ -53,7 +47,33 @@ type Group struct {
 	Name string // group name
 }
 
-// LookupGroup always returns an error.
-func LookupGroup(name string) (*Group, error) {
-	return nil, errors.New("user: LookupGroup not implemented")
+// UnknownUserIdError is returned by LookupId when a user cannot be found.
+type UnknownUserIdError int
+
+func (e UnknownUserIdError) Error() string {
+	return "user: unknown userid " + strconv.Itoa(int(e))
+}
+
+// UnknownUserError is returned by Lookup when
+// a user cannot be found.
+type UnknownUserError string
+
+func (e UnknownUserError) Error() string {
+	return "user: unknown user " + string(e)
+}
+
+// UnknownGroupIdError is returned by LookupGroupId when
+// a group cannot be found.
+type UnknownGroupIdError string
+
+func (e UnknownGroupIdError) Error() string {
+	return "group: unknown groupid " + string(e)
+}
+
+// UnknownGroupError is returned by LookupGroup when
+// a group cannot be found.
+type UnknownGroupError string
+
+func (e UnknownGroupError) Error() string {
+	return "group: unknown group " + string(e)
 }

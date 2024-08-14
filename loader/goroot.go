@@ -45,7 +45,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	}
 
 	// Find the overrides needed for the goroot.
-	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()))
+	overrides := pathsToOverride(config)
 
 	// Resolve the merge links within the goroot.
 	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
@@ -225,9 +225,22 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
+func needsOsUserPackage(buildTags []string) bool {
+	for _, tag := range buildTags {
+		if tag == "baremetal" {
+			return true
+		}
+	}
+	return false
+}
+
 // The boolean indicates whether to merge the subdirs. True means merge, false
 // means use the TinyGo version.
-func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+func pathsToOverride(config *compileopts.Config) map[string]bool {
+
+	goMinor := config.GoMinorVersion
+	buildTags := config.BuildTags()
+
 	paths := map[string]bool{
 		"":                      true,
 		"crypto/":               true,
@@ -247,7 +260,6 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"net/":                  true,
 		"net/http/":             false,
 		"os/":                   true,
-		"os/user/":              false,
 		"reflect/":              false,
 		"runtime/":              false,
 		"sync/":                 true,
@@ -260,9 +272,14 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		paths["crypto/internal/boring/sig/"] = false
 	}
 
-	if needsSyscallPackage {
+	if needsSyscallPackage(buildTags) {
 		paths["syscall/"] = true // include syscall/js
 	}
+
+	if needsOsUserPackage(buildTags) {
+		paths["os/user/"] = true
+	}
+
 	return paths
 }
 
