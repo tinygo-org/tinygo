@@ -358,11 +358,11 @@ endif
 # compress/flate appears to hang on wasi
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
-# image requires recover(), which is not  yet supported on wasi
+# image requires recover(), which is not yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
 # mime/quotedprintable requires syscall.Faccessat
 # strconv requires recover() which is not yet supported on wasi
-# text/tabwriter requries recover(), which is not  yet supported on wasi
+# text/tabwriter requires recover(), which is not yet supported on wasi
 # text/template/parse requires recover(), which is not yet supported on wasi
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
 
@@ -963,11 +963,11 @@ lint: tools ## Lint source tree
 SPELLDIRSCMD=find . -depth 1 -type d  | egrep -wv '.git|lib|llvm|src'; find src -depth 1 | egrep -wv 'device|internal|net|vendor'; find src/internal -depth 1 -type d | egrep -wv src/internal/wasi
 .PHONY: spell
 spell: tools ## Spellcheck source tree
-	misspell -error --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.md
+	misspell -error --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.go *.md
 
 .PHONY: spellfix
 spellfix: tools ## Same as spell, but fixes what it finds
-	misspell -w --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.md
+	misspell -w --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.go *.md
 
 # https://www.client9.com/self-documenting-makefiles/
 .PHONY: help
