@@ -1259,7 +1259,7 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 	}
 
 	// Goroutines need to be started and finished and take up some stack space
-	// that way. This can be measured by measuing the stack size of
+	// that way. This can be measured by measuring the stack size of
 	// tinygo_startTask.
 	if numFuncs := len(functions["tinygo_startTask"]); numFuncs != 1 {
 		return nil, nil, fmt.Errorf("expected exactly one definition of tinygo_startTask, got %d", numFuncs)

@@ -172,9 +172,9 @@ func setupEnv() {
 func setupHeap() {
 	if heapStart != 0 {
 		if debugInit {
-			print("Heap already overrided by hblauncher")
+			print("Heap already overridden by hblauncher")
 		}
-		// Already overrided
+		// Already overridden
 		return
 	}
 
