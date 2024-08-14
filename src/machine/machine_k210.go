@@ -49,7 +49,7 @@ const (
 
 var (
 	errUnsupportedSPIController = errors.New("SPI controller not supported. Use SPI0 or SPI1.")
-	errI2CTxAbort               = errors.New("I2C transmition has been aborted.")
+	errI2CTxAbort               = errors.New("I2C transmission has been aborted.")
 )
 
 func (p Pin) setFPIOAIOPull(pull fpioaPullMode) {
@@ -619,7 +619,7 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
 			dataLen -= fifoLen
 		}
 
-		// Wait for transmition to complete.
+		// Wait for transmission to complete.
 		for i2c.Bus.STATUS.HasBits(kendryte.I2C_STATUS_ACTIVITY) || !i2c.Bus.STATUS.HasBits(kendryte.I2C_STATUS_TFE) {
 		}
 
