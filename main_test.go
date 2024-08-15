@@ -97,6 +97,9 @@ func TestBuild(t *testing.T) {
 	if minor >= 22 {
 		tests = append(tests, "go1.22/")
 	}
+	if minor >= 23 {
+		tests = append(tests, "go1.23/")
+	}
 
 	if *testTarget != "" {
 		// This makes it possible to run one specific test (instead of all),
