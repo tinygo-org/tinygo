@@ -218,7 +218,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	// should be created right away.
 	// The exception is the package initializer, which does appear in the
 	// *ssa.Package members and so shouldn't be created here.
-	if fn.Synthetic != "" && fn.Synthetic != "package initializer" && fn.Synthetic != "generic function" {
+	if fn.Synthetic != "" && fn.Synthetic != "package initializer" && fn.Synthetic != "generic function" && fn.Synthetic != "range-over-func yield" {
 		irbuilder := c.ctx.NewBuilder()
 		b := newBuilder(c, irbuilder, fn)
 		b.createFunction()

@@ -1963,7 +1963,7 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 			return value
 		} else {
 			// indicates a compiler bug
-			panic("local has not been parsed: " + expr.String())
+			panic("SSA value not previously found in function: " + expr.String())
 		}
 	}
 }
