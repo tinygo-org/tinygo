@@ -32,9 +32,6 @@
 [submodule "lib/macos-minimal-sdk"]
 	path = lib/macos-minimal-sdk
 	url = https://github.com/aykevl/macos-minimal-sdk.git
-[submodule "lib/renesas-svd"]
-	path = lib/renesas-svd
-	url = https://github.com/tinygo-org/renesas-svd.git
 [submodule "src/net"]
 	path = src/net
 	url = https://github.com/tinygo-org/net.git
