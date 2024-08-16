@@ -5,6 +5,10 @@ package abi
 // implementation, in part because TinyGo doesn't use ABI0 or ABIInternal (it
 // uses a C-like calling convention).
 
-func FuncPCABI0(f interface{}) uintptr
+func FuncPCABI0(f interface{}) uintptr {
+	panic("unimplemented: internal/abi.FuncPCABI0")
+}
 
-func FuncPCABIInternal(f interface{}) uintptr
+func FuncPCABIInternal(f interface{}) uintptr {
+	panic("unimplemented: internal/abi.FuncPCABIInternal")
+}
