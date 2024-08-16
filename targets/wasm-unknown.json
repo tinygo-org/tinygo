@@ -19,8 +19,7 @@
 	"ldflags": [
 		"--stack-first",
 		"--no-demangle",
-		"--no-entry",
-		"--import-memory"
+		"--no-entry"
 	],
 	"extra-files": [
 		"src/runtime/asm_tinygowasm.S"
