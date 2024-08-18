@@ -5,6 +5,7 @@ package compiler
 
 import (
 	"strconv"
+	"strings"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -328,4 +329,65 @@ func (b *builder) createRawSyscallNoError(call *ssa.CallCommon) (llvm.Value, err
 	retval = b.CreateInsertValue(retval, syscallResult, 0, "")
 	retval = b.CreateInsertValue(retval, llvm.ConstInt(b.uintptrType, 0, false), 1, "")
 	return retval, nil
+}
+
+// Lower a call to internal/abi.FuncPCABI0 on MacOS.
+// This function is called like this:
+//
+//	syscall(abi.FuncPCABI0(libc_mkdir_trampoline), uintptr(unsafe.Pointer(_p0)), uintptr(mode), 0)
+//
+// So we'll want to return a function pointer (as uintptr) that points to the
+// libc function. Specifically, we _don't_ want to point to the trampoline
+// function (which is implemented in Go assembly which we can't read), but
+// rather to the actually intended function. For this we're going to assume that
+// all the functions follow a specific pattern: libc_<functionname>_trampoline.
+//
+// The return value is the function pointer as an uintptr, or a nil value if
+// this isn't possible (and a regular call should be made as fallback).
+func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
+	if b.GOOS != "darwin" {
+		// This has only been tested on MacOS (and only seems to be used there).
+		return llvm.Value{}
+	}
+
+	// Check that it uses a function call like syscall.libc_*_trampoline
+	itf := instr.Args[0].(*ssa.MakeInterface)
+	calledFn := itf.X.(*ssa.Function)
+	if pkgName := calledFn.Pkg.Pkg.Path(); pkgName != "syscall" && pkgName != "internal/syscall/unix" {
+		return llvm.Value{}
+	}
+	if !strings.HasPrefix(calledFn.Name(), "libc_") || !strings.HasSuffix(calledFn.Name(), "_trampoline") {
+
+		return llvm.Value{}
+	}
+
+	// Extract the libc function name.
+	name := strings.TrimPrefix(strings.TrimSuffix(calledFn.Name(), "_trampoline"), "libc_")
+	if name == "open" {
+		// Special case: open() is a variadic function and can't be called like
+		// a regular function. Therefore, we need to use a wrapper implemented
+		// in C.
+		name = "syscall_libc_open"
+	}
+	if b.GOARCH == "amd64" {
+		if name == "fdopendir" || name == "readdir_r" {
+			// Hack to support amd64, which needs the $INODE64 suffix.
+			// This is also done in upstream Go:
+			// https://github.com/golang/go/commit/096ab3c21b88ccc7d411379d09fe6274e3159467
+			name += "$INODE64"
+		}
+	}
+
+	// Obtain the C function.
+	// Use a simple function (no parameters or return value) because all we need
+	// is the address of the function.
+	llvmFn := b.mod.NamedFunction(name)
+	if llvmFn.IsNil() {
+		llvmFnType := llvm.FunctionType(b.ctx.VoidType(), nil, false)
+		llvmFn = llvm.AddFunction(b.mod, name, llvmFnType)
+	}
+
+	// Cast the function pointer to a uintptr (because that's what
+	// abi.FuncPCABI0 returns).
+	return b.CreatePtrToInt(llvmFn, b.uintptrType, "")
 }

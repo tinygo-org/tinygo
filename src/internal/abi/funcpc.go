@@ -4,11 +4,9 @@ package abi
 // (in particular internal/syscall/unix on MacOS). They do not currently have an
 // implementation, in part because TinyGo doesn't use ABI0 or ABIInternal (it
 // uses a C-like calling convention).
+// Calls to FuncPCABI0 however are treated specially by the compiler when
+// compiling for MacOS.
 
-func FuncPCABI0(f interface{}) uintptr {
-	panic("unimplemented: internal/abi.FuncPCABI0")
-}
+func FuncPCABI0(f interface{}) uintptr
 
-func FuncPCABIInternal(f interface{}) uintptr {
-	panic("unimplemented: internal/abi.FuncPCABIInternal")
-}
+func FuncPCABIInternal(f interface{}) uintptr

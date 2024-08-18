@@ -389,6 +389,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			"-platform_version", "macos", platformVersion, platformVersion,
 		)
 		spec.ExtraFiles = append(spec.ExtraFiles,
+			"src/runtime/os_darwin.c",
 			"src/runtime/runtime_unix.c")
 	case "linux":
 		spec.Linker = "ld.lld"

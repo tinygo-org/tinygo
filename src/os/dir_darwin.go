@@ -135,7 +135,7 @@ func darwinOpenDir(fd syscallFd) (uintptr, string, error) {
 	}
 	var dir uintptr
 	for {
-		dir, err = syscall.Fdopendir(fd2)
+		dir, err = fdopendir(fd2)
 		if err != syscall.EINTR {
 			break
 		}
@@ -148,6 +148,9 @@ func darwinOpenDir(fd syscallFd) (uintptr, string, error) {
 }
 
 // Implemented in syscall/syscall_libc_darwin_*.go.
+
+//go:linkname fdopendir syscall.fdopendir
+func fdopendir(fd int) (dir uintptr, err error)
 
 //go:linkname closedir syscall.closedir
 func closedir(dir uintptr) (err error)
