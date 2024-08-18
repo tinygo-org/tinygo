@@ -218,7 +218,7 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 // with the TinyGo version. This is the case on some targets.
 func needsSyscallPackage(buildTags []string) bool {
 	for _, tag := range buildTags {
-		if tag == "baremetal" || tag == "darwin" || tag == "nintendoswitch" || tag == "tinygo.wasm" {
+		if tag == "baremetal" || tag == "nintendoswitch" || tag == "tinygo.wasm" {
 			return true
 		}
 	}

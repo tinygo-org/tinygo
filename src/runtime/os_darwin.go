@@ -4,8 +4,6 @@ package runtime
 
 import "unsafe"
 
-import "C" // dummy import so that os_darwin.c works
-
 const GOOS = "darwin"
 
 const (
@@ -127,7 +125,107 @@ func hardwareRand() (n uint64, ok bool) {
 	return n, true
 }
 
+//go:linkname syscall_Getpagesize syscall.Getpagesize
+func syscall_Getpagesize() int {
+	return int(libc_getpagesize())
+}
+
+// Call "system calls" (actually: libc functions) in a special way.
+//   - Most calls calls return a C int (which is 32-bits), and -1 on failure.
+//   - syscallX* is for functions that return a 64-bit integer (and also return
+//     -1 on failure).
+//   - syscallPtr is for functions that return a pointer on success or NULL on
+//     failure.
+//   - rawSyscall seems to avoid some stack modifications, which isn't relevant
+//     to TinyGo.
+
+//go:linkname syscall_syscall syscall.syscall
+func syscall_syscall(fn, a1, a2, a3 uintptr) (r1, r2, err uintptr) {
+	// For TinyGo we don't need to do anything special to call C functions.
+	return syscall_rawSyscall(fn, a1, a2, a3)
+}
+
+//go:linkname syscall_rawSyscall syscall.rawSyscall
+func syscall_rawSyscall(fn, a1, a2, a3 uintptr) (r1, r2, err uintptr) {
+	result := call_syscall(fn, a1, a2, a3)
+	r1 = uintptr(result)
+	if result == -1 {
+		// Syscall returns -1 on failure.
+		err = uintptr(*libc___error())
+	}
+	return
+}
+
+//go:linkname syscall_syscallX syscall.syscallX
+func syscall_syscallX(fn, a1, a2, a3 uintptr) (r1, r2, err uintptr) {
+	r1 = call_syscallX(fn, a1, a2, a3)
+	if int64(r1) == -1 {
+		// Syscall returns -1 on failure.
+		err = uintptr(*libc___error())
+	}
+	return
+}
+
+//go:linkname syscall_syscallPtr syscall.syscallPtr
+func syscall_syscallPtr(fn, a1, a2, a3 uintptr) (r1, r2, err uintptr) {
+	r1 = call_syscallX(fn, a1, a2, a3)
+	if r1 == 0 {
+		// Syscall returns a pointer on success, or NULL on failure.
+		err = uintptr(*libc___error())
+	}
+	return
+}
+
+//go:linkname syscall_syscall6 syscall.syscall6
+func syscall_syscall6(fn, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2, err uintptr) {
+	result := call_syscall6(fn, a1, a2, a3, a4, a5, a6)
+	r1 = uintptr(result)
+	if result == -1 {
+		// Syscall returns -1 on failure.
+		err = uintptr(*libc___error())
+	}
+	return
+}
+
+//go:linkname syscall_syscall6X syscall.syscall6X
+func syscall_syscall6X(fn, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2, err uintptr) {
+	r1 = call_syscall6X(fn, a1, a2, a3, a4, a5, a6)
+	if int64(r1) == -1 {
+		// Syscall returns -1 on failure.
+		err = uintptr(*libc___error())
+	}
+	return
+}
+
 // uint32_t arc4random(void);
 //
 //export arc4random
 func libc_arc4random() uint32
+
+// int getpagesize(void);
+//
+//export getpagesize
+func libc_getpagesize() int32
+
+// This function returns the error location in the darwin ABI.
+// Discovered by compiling the following code using Clang:
+//
+//	#include <errno.h>
+//	int getErrno() {
+//	    return errno;
+//	}
+//
+//export __error
+func libc___error() *int32
+
+//export tinygo_syscall
+func call_syscall(fn, a1, a2, a3 uintptr) int32
+
+//export tinygo_syscallX
+func call_syscallX(fn, a1, a2, a3 uintptr) uintptr
+
+//export tinygo_syscall6
+func call_syscall6(fn, a1, a2, a3, a4, a5, a6 uintptr) int32
+
+//export tinygo_syscall6X
+func call_syscall6X(fn, a1, a2, a3, a4, a5, a6 uintptr) uintptr

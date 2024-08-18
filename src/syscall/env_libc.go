@@ -1,4 +1,4 @@
-//go:build darwin || nintendoswitch || wasip1
+//go:build nintendoswitch || wasip1
 
 package syscall
 

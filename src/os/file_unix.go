@@ -70,7 +70,7 @@ func Truncate(name string, size int64) error {
 
 func Pipe() (r *File, w *File, err error) {
 	var p [2]int
-	err = handleSyscallError(syscall.Pipe2(p[:], syscall.O_CLOEXEC))
+	err = handleSyscallError(pipe(p[:]))
 	if err != nil {
 		return
 	}
