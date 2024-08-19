@@ -1,3 +1,63 @@
+0.33.0
+---
+
+* **general**
+  - use latest version of x/tools
+  - add chromeos 9p support for flashing
+  - sort compiler error messages by source position in a package
+  - don't include prebuilt libraries in the release to simplify packaging and reduce the release tarball size
+  - show runtime panic addresses for `tinygo run`
+  - support Go 1.23 (including all new language features)
+  - `test`: support GOOS/GOARCH pairs in the `-target` flag
+  - `test`: remove message after test binary built
+* **compiler**
+  - remove unused registers for x86_64 linux syscalls
+  - remove old atomics workaround for AVR (not necessary in modern LLVM versions)
+  - support `golang.org/x/sys/unix` syscalls
+  - `builder`: remove workaround for generics race condition
+  - `builder`: add package ID to compiler and optimization error messages
+  - `builder`: show better error messages for some common linker errors
+  - `cgo`: support preprocessor macros passed on the command line
+  - `cgo`: use absolute paths for error messages
+  - `cgo`: add support for printf
+  - `loader`: handle `go list` errors inside TinyGo (for better error messages)
+  - `transform`: fix incorrect alignment of heap-to-stack transform
+  - `transform`: use thinlto-pre-link passes (instead of the full pipeline) to speed up compilation speed slightly
+* **standard library**
+  - `crypto/tls`: add CipherSuiteName and some extra fields to ConnectionSTate
+  - `internal/abi`: implement initial version of this package
+  - `machine`: use new `internal/binary` package
+  - `machine`: rewrite Reply() to fix sending long replies in I2C Target Mode
+  - `machine/usb/descriptor`: Reset joystick physical
+  - `machine/usb/descriptor`: Drop second joystick hat
+  - `machine/usb/descriptor`: Add more HID... functions
+  - `machine/usb/descriptor`: Fix encoding of values
+  - `machine/usb/hid/joystick`: Allow more hat switches
+  - `os`: add `Chown`, `Truncate`
+  - `os/user`: use stdlib version of this package
+  - `reflect`: return correct name for the `unsafe.Pointer` type
+  - `reflect`: implement `Type.Overflow*` functions
+  - `runtime`: implement dummy `getAuxv` to satisfy golang.org/x/sys/
+  - `runtime`: don't zero out new allocations for `-gc=leaking` when they are already zeroed
+  - `runtime`: simplify slice growing/appending code
+  - `runtime`: print a message when a fatal signal like SIGSEGV happens
+  - `runtime/debug`: add `GoVersion` to `debug.BuildInfo`
+  - `sync`: add `Map.Clear()`
+  - `sync/atomic`: add And* and Or* compiler intrinsics needed for Go 1.23
+  - `syscall`: add `Fork` and `Execve`
+  - `syscall`: add all MacOS errno values
+  - `testing`: stub out `T.Deadline`
+  - `unique`: implement custom (naive) version of the unique package
+* **targets**
+  - `arm`: support `GOARM=*,softfloat` (softfloat support for ARM v5, v6, and v7)
+  - `mips`: add linux/mipsle (and experimental linux/mips) support
+  - `mips`: add `GOMIPS=softfloat` support
+  - `wasip2`: add WASI preview 2 support
+  - `wasm/js`: add `node:` prefix in `require()` call of wasm_exec.js
+  - `wasm-unknown`: make sure the `os` package can be imported
+  - `wasm-unknown`: remove import-memory flag
+
+
 0.32.0
 ---
 
