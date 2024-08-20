@@ -16,7 +16,6 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1961,6 +1960,7 @@ type outputEntry struct {
 //
 //  2. A toolchain switch later on reinvokes the new go command with the same arguments.
 //     The parent toolchain has already done the chdir; the child must not try to do it again.
+
 func handleChdirFlag() {
 	used := 2 // b.c. command at os.Args[1]
 	if used >= len(os.Args) {
@@ -1977,15 +1977,26 @@ func handleChdirFlag() {
 			return
 		}
 		dir = os.Args[used+1]
-		os.Args = slices.Delete(os.Args, used, used+2)
+		os.Args = slicesDelete(os.Args, used, used+2)
 
 	case strings.HasPrefix(a, "-C="), strings.HasPrefix(a, "--C="):
 		_, dir, _ = strings.Cut(a, "=")
-		os.Args = slices.Delete(os.Args, used, used+1)
+		os.Args = slicesDelete(os.Args, used, used+1)
 	}
 
 	if err := os.Chdir(dir); err != nil {
 		fmt.Fprintln(os.Stderr, "cannot chdir:", err)
 		os.Exit(1)
 	}
+}
+
+// go1.19 compatibility: lacks slices package
+func slicesDelete[S ~[]E, E any](s S, i, j int) S {
+	_ = s[i:j:len(s)] // bounds check
+
+	if i == j {
+		return s
+	}
+
+	return append(s[:i], s[j:]...)
 }
