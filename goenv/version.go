@@ -9,7 +9,7 @@ import (
 
 // Version of TinyGo.
 // Update this value before release of new version of software.
-const version = "0.33.0"
+const version = "0.34.0-dev"
 
 var (
 	// This variable is set at build time using -ldflags parameters.
