@@ -305,13 +305,11 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 			//
 			// Ex. run --dir=.. --dir=../.. --dir=../../..
 			var dirs []string
-			switch config.Options.Target {
+			switch config.Target.GOOS {
 			case "wasip1":
 				dirs = dirsToModuleRootRel(result.MainDir, result.ModuleRoot)
-			case "wasip2":
-				dirs = dirsToModuleRootAbs(result.MainDir, result.ModuleRoot)
 			default:
-				return fmt.Errorf("unknown GOOS target: %v", config.Options.Target)
+				dirs = dirsToModuleRootAbs(result.MainDir, result.ModuleRoot)
 			}
 
 			args := []string{"run"}
