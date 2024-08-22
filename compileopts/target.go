@@ -338,7 +338,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	case "mips", "mipsle":
 		spec.CPU = "mips32r2"
 		spec.CFlags = append(spec.CFlags, "-fno-pic")
-		if options.GOOS == "mips" {
+		if options.GOARCH == "mips" {
 			llvmarch = "mips" // big endian
 		} else {
 			llvmarch = "mipsel" // little endian
