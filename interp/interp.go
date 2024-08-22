@@ -3,11 +3,13 @@
 package interp
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -24,6 +26,7 @@ type runner struct {
 	dataPtrType   llvm.Type                // often used type so created in advance
 	uintptrType   llvm.Type                // equivalent to uintptr in Go
 	maxAlign      int                      // maximum alignment of an object, alignment of runtime.alloc() result
+	byteOrder     binary.ByteOrder         // big-endian or little-endian
 	debug         bool                     // log debug messages
 	pkgName       string                   // package name of the currently executing package
 	functionCache map[llvm.Value]*function // cache of compiled functions
@@ -38,6 +41,7 @@ func newRunner(mod llvm.Module, timeout time.Duration, debug bool) *runner {
 	r := runner{
 		mod:           mod,
 		targetData:    llvm.NewTargetData(mod.DataLayout()),
+		byteOrder:     llvmutil.ByteOrder(mod.Target()),
 		debug:         debug,
 		functionCache: make(map[llvm.Value]*function),
 		objects:       []object{{}},
