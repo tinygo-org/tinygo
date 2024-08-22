@@ -177,6 +177,14 @@ func TestBuild(t *testing.T) {
 				})
 			}
 		}
+		t.Run("MIPS big-endian", func(t *testing.T) {
+			// Run a single test for GOARCH=mips to see whether it works at all.
+			// Big-endian MIPS isn't fully supported yet, but simple examples
+			// should work.
+			t.Parallel()
+			options := optionsFromOSARCH("linux/mips/softfloat", sema)
+			runTest("alias.go", options, t, nil, nil)
+		})
 		t.Run("WebAssembly", func(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
