@@ -336,7 +336,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			spec.Features = "+fp-armv8,+neon,-fmv,-outline-atomics"
 		}
 	case "mips", "mipsle":
-		spec.CPU = "mips32r2"
+		spec.CPU = "mips32"
 		spec.CFlags = append(spec.CFlags, "-fno-pic")
 		if options.GOOS == "mips" {
 			llvmarch = "mips" // big endian
@@ -345,10 +345,10 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		}
 		switch options.GOMIPS {
 		case "hardfloat":
-			spec.Features = "+fpxx,+mips32r2,+nooddspreg,-noabicalls"
+			spec.Features = "+fpxx,+mips32,+nooddspreg,-noabicalls"
 		case "softfloat":
 			spec.SoftFloat = true
-			spec.Features = "+mips32r2,+soft-float,-noabicalls"
+			spec.Features = "+mips32,+soft-float,-noabicalls"
 			spec.CFlags = append(spec.CFlags, "-msoft-float")
 		default:
 			return nil, fmt.Errorf("invalid GOMIPS=%s: must be hardfloat or softfloat", options.GOMIPS)
