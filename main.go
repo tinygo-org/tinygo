@@ -283,46 +283,6 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		// Tests are always run in the package directory.
 		cmd.Dir = result.MainDir
 
-		// wasmtime is the default emulator used for `-target=wasip1`. wasmtime
-		// is a WebAssembly runtime CLI with WASI enabled by default. However,
-		// only stdio are allowed by default. For example, while STDOUT routes
-		// to the host, other files don't. It also does not inherit environment
-		// variables from the host. Some tests read testdata files, often from
-		// outside the package directory. Other tests require temporary
-		// writeable directories. We allow this by adding wasmtime flags below.
-		if config.EmulatorName() == "wasmtime" {
-			// At this point, The current working directory is at the package
-			// directory. Ex. $GOROOT/src/compress/flate for compress/flate.
-			// buildAndRun has already added arguments for wasmtime, that allow
-			// read-access to files such as "testdata/huffman-zero.in".
-			//
-			// Ex. main(.wasm) --dir=. -- -test.v
-
-			// Below adds additional wasmtime flags in case a test reads files
-			// outside its directory, like "../testdata/e.txt". This allows any
-			// relative directory up to the module root, even if the test never
-			// reads any files.
-			//
-			// Ex. run --dir=.. --dir=../.. --dir=../../..
-			var dirs []string
-			switch config.Target.GOOS {
-			case "wasip1":
-				dirs = dirsToModuleRootRel(result.MainDir, result.ModuleRoot)
-			default:
-				dirs = dirsToModuleRootAbs(result.MainDir, result.ModuleRoot)
-			}
-
-			args := []string{"run"}
-			for _, d := range dirs {
-				args = append(args, "--dir="+d)
-			}
-
-			args = append(args, "--env=PWD="+cmd.Dir)
-
-			args = append(args, cmd.Args[1:]...)
-			cmd.Args = args
-		}
-
 		// Run the test.
 		start := time.Now()
 		err = cmd.Run()
@@ -848,12 +808,11 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		for _, v := range environmentVars {
 			emuArgs = append(emuArgs, "--env", v)
 		}
-		if len(cmdArgs) != 0 {
-			// Use of '--' argument no longer necessary as of Wasmtime v14:
-			// https://github.com/bytecodealliance/wasmtime/pull/6946
-			// args = append(args, "--")
-			args = append(args, cmdArgs...)
-		}
+
+		// Use of '--' argument no longer necessary as of Wasmtime v14:
+		// https://github.com/bytecodealliance/wasmtime/pull/6946
+		// args = append(args, "--")
+		args = append(args, cmdArgs...)
 
 		// Set this for nicer backtraces during tests, but don't override the user.
 		if _, ok := os.LookupEnv("WASMTIME_BACKTRACE_DETAILS"); !ok {
@@ -903,21 +862,35 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 
 		name = emulator[0]
 
+		// wasmtime is a WebAssembly runtime CLI with WASI enabled by default.
+		// By default, only stdio is allowed. For example, while STDOUT routes
+		// to the host, other files don't. It also does not inherit environment
+		// variables from the host. Some tests read testdata files, often from
+		// outside the package directory. Other tests require temporary
+		// writeable directories. We allow this by adding wasmtime flags below.
 		if name == "wasmtime" {
-			// Wasmtime needs some special flags to pass environment variables
-			// and allow reading from the current directory.
-			switch config.Options.Target {
-			case "wasip1":
-				emuArgs = append(emuArgs, "--dir=.")
-			case "wasip2":
-				dir := result.MainDir
-				if isSingleFile {
-					cwd, _ := os.Getwd()
-					dir = cwd
-				}
-				emuArgs = append(emuArgs, "--dir="+dir)
-				emuArgs = append(emuArgs, "--env=PWD="+dir)
+			// Below adds additional wasmtime flags in case a test reads files
+			// outside its directory, like "../testdata/e.txt". This allows any
+			// relative directory up to the module root, even if the test never
+			// reads any files.
+			//
+			// Ex. run --dir=.. --dir=../.. --dir=../../..
+
+			mainDir := result.MainDir
+			if isSingleFile {
+				mainDir, _ = os.Getwd()
 			}
+
+			// Add relative dirs (../, ../..) up to module root (for wasip1)
+			dirs := dirsToModuleRootRel(mainDir, result.ModuleRoot)
+
+			// Add absolute dirs up to module root (for wasip2)
+			dirs = append(dirs, dirsToModuleRootAbs(mainDir, result.ModuleRoot)...)
+
+			for _, d := range dirs {
+				emuArgs = append(emuArgs, "--dir="+d)
+			}
+			emuArgs = append(emuArgs, "--env=PWD="+mainDir)
 		}
 
 		emuArgs = append(emuArgs, emulator[1:]...)
