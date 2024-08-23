@@ -135,3 +135,17 @@ func Readlink(name string) (string, error) {
 func tempDir() string {
 	return "/tmp"
 }
+
+// Truncate is unsupported on this system.
+func Truncate(filename string, size int64) (err error) {
+	return ErrUnsupported
+}
+
+// Truncate is unsupported on this system.
+func (f *File) Truncate(size int64) (err error) {
+	if f.handle == nil {
+		return ErrClosed
+	}
+
+	return Truncate(f.name, size)
+}
