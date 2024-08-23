@@ -887,26 +887,6 @@ func (v Value) Index(i int) Value {
 	}
 }
 
-// loadValue loads a value that may or may not be word-aligned. The number of
-// bytes given in size are loaded. The biggest possible size it can load is that
-// of an uintptr.
-func loadValue(ptr unsafe.Pointer, size uintptr) uintptr {
-	loadedValue := uintptr(0)
-	shift := uintptr(0)
-	for i := uintptr(0); i < size; i++ {
-		loadedValue |= uintptr(*(*byte)(ptr)) << shift
-		shift += 8
-		ptr = unsafe.Add(ptr, 1)
-	}
-	return loadedValue
-}
-
-// maskAndShift cuts out a part of a uintptr. Note that the offset may not be 0.
-func maskAndShift(value, offset, size uintptr) uintptr {
-	mask := ^uintptr(0) >> ((unsafe.Sizeof(uintptr(0)) - size) * 8)
-	return (uintptr(value) >> (offset * 8)) & mask
-}
-
 func (v Value) NumMethod() int {
 	return v.typecode.NumMethod()
 }
@@ -1088,9 +1068,7 @@ func (v Value) Set(x Value) {
 	if v.typecode.Kind() == Interface && x.typecode.Kind() != Interface {
 		// move the value of x back into the interface, if possible
 		if x.isIndirect() && x.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
-			var value uintptr
-			memcpy(unsafe.Pointer(&value), x.value, x.typecode.Size())
-			x.value = unsafe.Pointer(value)
+			x.value = unsafe.Pointer(loadValue(x.value, x.typecode.Size()))
 		}
 
 		intf := composeInterface(unsafe.Pointer(x.typecode), x.value)
@@ -1101,12 +1079,11 @@ func (v Value) Set(x Value) {
 	}
 
 	size := v.typecode.Size()
-	xptr := x.value
 	if size <= unsafe.Sizeof(uintptr(0)) && !x.isIndirect() {
-		value := x.value
-		xptr = unsafe.Pointer(&value)
+		storeValue(v.value, size, uintptr(x.value))
+	} else {
+		memcpy(v.value, x.value, size)
 	}
-	memcpy(v.value, xptr, size)
 }
 
 func (v Value) SetZero() {
