@@ -36,7 +36,7 @@ var supportedLinuxArches = map[string]string{
 	"X86Linux":   "linux/386",
 	"ARMLinux":   "linux/arm/6",
 	"ARM64Linux": "linux/arm64",
-	"MIPSLinux":  "linux/mipsle/hardfloat",
+	"MIPSLinux":  "linux/mips/hardfloat",
 	"WASIp1":     "wasip1/wasm",
 }
 
@@ -177,17 +177,14 @@ func TestBuild(t *testing.T) {
 				})
 			}
 		}
-		t.Run("MIPS big-endian", func(t *testing.T) {
-			// Run a single test for GOARCH=mips to see whether it works at all.
-			// Big-endian MIPS isn't fully supported yet, but simple examples
-			// should work.
-			// Once big-endian is fully supported, we can probably flip this
-			// around and do full testing of MIPS big-endian support and only do
-			// limited testing of MIPS little-endian (because the two are some
-			// similar).
+		t.Run("MIPS little-endian", func(t *testing.T) {
+			// Run a single test for GOARCH=mipsle to see whether it works at
+			// all. It is already mostly tested because GOARCH=mips and
+			// GOARCH=mipsle are so similar, but it's good to have an extra test
+			// to be sure.
 			t.Parallel()
-			options := optionsFromOSARCH("linux/mips/softfloat", sema)
-			runTest("map.go", options, t, nil, nil)
+			options := optionsFromOSARCH("linux/mipsle/softfloat", sema)
+			runTest("cgo/", options, t, nil, nil)
 		})
 		t.Run("WebAssembly", func(t *testing.T) {
 			t.Parallel()
@@ -229,6 +226,13 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		if options.GOOS == "linux" && (options.GOARCH == "mips" || options.GOARCH == "mipsle") {
 			if name == "atomic.go" || name == "timers.go" {
 				// 64-bit atomic operations aren't currently supported on MIPS.
+				continue
+			}
+		}
+		if options.GOOS == "linux" && options.GOARCH == "mips" {
+			if name == "cgo/" {
+				// CGo isn't supported yet on big-endian systems (needs updates
+				// to bitfield access methods).
 				continue
 			}
 		}
