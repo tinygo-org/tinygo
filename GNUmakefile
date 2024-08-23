@@ -299,30 +299,39 @@ test: wasi-libc check-nodejs-version
 TEST_PACKAGES_SLOW = \
 	compress/bzip2 \
 	crypto/dsa \
+	crypto/ecdsa \
 	index/suffixarray \
 
 # Standard library packages that pass tests quickly on darwin, linux, wasi, and windows
 TEST_PACKAGES_FAST = \
+	cmp \
 	compress/lzw \
 	compress/zlib \
 	container/heap \
 	container/list \
 	container/ring \
 	crypto/des \
+	crypto/elliptic \
 	crypto/md5 \
 	crypto/rc4 \
 	crypto/sha1 \
 	crypto/sha256 \
 	crypto/sha512 \
+	database/sql/driver \
 	debug/macho \
+	embed \
 	embed/internal/embedtest \
 	encoding \
 	encoding/ascii85 \
+	encoding/asn1 \
 	encoding/base32 \
 	encoding/base64 \
 	encoding/csv \
 	encoding/hex \
+	go/ast \
+	go/format \
 	go/scanner \
+	go/version \
 	hash \
 	hash/adler32 \
 	hash/crc64 \
@@ -334,6 +343,7 @@ TEST_PACKAGES_FAST = \
 	math/cmplx \
 	net/http/internal/ascii \
 	net/mail \
+	net/textproto \
 	os \
 	path \
 	reflect \
@@ -357,11 +367,17 @@ endif
 # archive/zip requires os.ReadAt, which is not yet supported on windows
 # bytes requires mmap
 # compress/flate appears to hang on wasi
+# context requires recover(), which is not yet supported on wasi
+# crypto/aes requires recover(), which is not yet supported on wasi
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
+# go/build/constraint requires recover(), which is not yet supported on wasi
 # image requires recover(), which is not yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
+# mime exits with "bufio.Scanner: Read returned impossible count" on wasi
+# mime/multipart has a nil pointer dereference (stack overflow?)
 # mime/quotedprintable requires syscall.Faccessat
+# regexp/syntax requires recover() which is not yet supported on wasi
 # strconv requires recover() which is not yet supported on wasi
 # text/tabwriter requires recover(), which is not yet supported on wasi
 # text/template/parse requires recover(), which is not yet supported on wasi
@@ -371,14 +387,20 @@ endif
 TEST_PACKAGES_LINUX := \
 	archive/zip \
 	compress/flate \
+	context \
+	crypto/aes \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
+	go/build/constraint \
 	image \
 	io/ioutil \
+	mime \
+	mime/multipart \
 	mime/quotedprintable \
 	net \
 	os/user \
+	regexp/syntax \
 	strconv \
 	text/tabwriter \
 	text/template/parse
@@ -387,8 +409,14 @@ TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 
 TEST_PACKAGES_WINDOWS := \
 	compress/flate \
+	context \
+	crypto/aes \
 	crypto/hmac \
+	go/build/constraint \
+	mime \
+	mime/multipart \
 	os/user \
+	regexp/syntax \
 	strconv \
 	text/template/parse \
 	$(nil)
