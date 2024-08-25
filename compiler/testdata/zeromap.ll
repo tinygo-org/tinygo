@@ -81,7 +81,7 @@ entry:
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %hashmap.key)
   %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
   store %main.hasPadding %s.elt, ptr %hashmap.key, align 4
-  %hashmap.key.repack1 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
+  %hashmap.key.repack1 = getelementptr inbounds i8, ptr %hashmap.key, i32 12
   %s.elt2 = extractvalue [2 x %main.hasPadding] %s, 1
   store %main.hasPadding %s.elt2, ptr %hashmap.key.repack1, align 4
   %0 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
@@ -109,7 +109,7 @@ entry:
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %hashmap.key)
   %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
   store %main.hasPadding %s.elt, ptr %hashmap.key, align 4
-  %hashmap.key.repack1 = getelementptr inbounds [2 x %main.hasPadding], ptr %hashmap.key, i32 0, i32 1
+  %hashmap.key.repack1 = getelementptr inbounds i8, ptr %hashmap.key, i32 12
   %s.elt2 = extractvalue [2 x %main.hasPadding] %s, 1
   store %main.hasPadding %s.elt2, ptr %hashmap.key.repack1, align 4
   %0 = getelementptr inbounds i8, ptr %hashmap.key, i32 1
@@ -132,9 +132,9 @@ entry:
   ret void
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #3 = { noinline nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #3 = { noinline nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #4 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
 attributes #5 = { nounwind }

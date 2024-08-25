@@ -35,8 +35,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            tinygo/llvm-18
-            ghcr.io/${{ github.repository_owner }}/llvm-18
+            tinygo/llvm-19
+            ghcr.io/${{ github.repository_owner }}/llvm-19
           tags: |
             type=sha,format=long
             type=raw,value=latest

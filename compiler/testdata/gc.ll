@@ -105,18 +105,18 @@ entry:
   %makeslice = call align 1 dereferenceable(5) ptr @runtime.alloc(i32 5, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %makeslice, ptr nonnull %stackalloc, ptr undef) #3
   store ptr %makeslice, ptr @main.slice1, align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice1, i32 0, i32 1), align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice1, i32 0, i32 2), align 4
+  store i32 5, ptr getelementptr inbounds (i8, ptr @main.slice1, i32 4), align 4
+  store i32 5, ptr getelementptr inbounds (i8, ptr @main.slice1, i32 8), align 4
   %makeslice1 = call align 4 dereferenceable(20) ptr @runtime.alloc(i32 20, ptr nonnull inttoptr (i32 67 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %makeslice1, ptr nonnull %stackalloc, ptr undef) #3
   store ptr %makeslice1, ptr @main.slice2, align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice2, i32 0, i32 1), align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice2, i32 0, i32 2), align 4
+  store i32 5, ptr getelementptr inbounds (i8, ptr @main.slice2, i32 4), align 4
+  store i32 5, ptr getelementptr inbounds (i8, ptr @main.slice2, i32 8), align 4
   %makeslice3 = call align 4 dereferenceable(60) ptr @runtime.alloc(i32 60, ptr nonnull inttoptr (i32 71 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %makeslice3, ptr nonnull %stackalloc, ptr undef) #3
   store ptr %makeslice3, ptr @main.slice3, align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice3, i32 0, i32 1), align 4
-  store i32 5, ptr getelementptr inbounds ({ ptr, i32, i32 }, ptr @main.slice3, i32 0, i32 2), align 4
+  store i32 5, ptr getelementptr inbounds (i8, ptr @main.slice3, i32 4), align 4
+  store i32 5, ptr getelementptr inbounds (i8, ptr @main.slice3, i32 8), align 4
   ret void
 }
 
@@ -127,7 +127,7 @@ entry:
   %0 = call align 8 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #3
   store double %v.r, ptr %0, align 8
-  %.repack1 = getelementptr inbounds { double, double }, ptr %0, i32 0, i32 1
+  %.repack1 = getelementptr inbounds i8, ptr %0, i32 8
   store double %v.i, ptr %.repack1, align 8
   %1 = insertvalue %runtime._interface { ptr @"reflect/types.type:basic:complex128", ptr undef }, ptr %0, 1
   call void @runtime.trackPointer(ptr nonnull @"reflect/types.type:basic:complex128", ptr nonnull %stackalloc, ptr undef) #3
@@ -135,7 +135,7 @@ entry:
   ret %runtime._interface %1
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #3 = { nounwind }

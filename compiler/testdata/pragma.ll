@@ -72,13 +72,13 @@ entry:
 
 declare void @main.undefinedFunctionNotInSection(ptr) #1
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #3 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="extern_func" }
-attributes #4 = { inlinehint nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #6 = { noinline nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exportedFunctionInSection" }
-attributes #7 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-import-module"="modulename" "wasm-import-name"="import1" }
-attributes #8 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-import-module"="foobar" "wasm-import-name"="imported" }
-attributes #9 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" "wasm-export-name"="exported" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #3 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="extern_func" }
+attributes #4 = { inlinehint nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #6 = { noinline nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exportedFunctionInSection" }
+attributes #7 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="modulename" "wasm-import-name"="import1" }
+attributes #8 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="foobar" "wasm-import-name"="imported" }
+attributes #9 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exported" }

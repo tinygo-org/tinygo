@@ -145,6 +145,7 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   }
 
   Opts.RelaxELFRelocations = !Args.hasArg(OPT_mrelax_relocations_no);
+  Opts.SSE2AVX = Args.hasArg(OPT_msse2avx);
   if (auto *DwarfFormatArg = Args.getLastArg(OPT_gdwarf64, OPT_gdwarf32))
     Opts.Dwarf64 = DwarfFormatArg->getOption().matches(OPT_gdwarf64);
   Opts.DwarfVersion = getLastArgIntValue(Args, OPT_dwarf_version_EQ, 2, Diags);
@@ -234,6 +235,7 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
 
   Opts.EmitCompactUnwindNonCanonical =
       Args.hasArg(OPT_femit_compact_unwind_non_canonical);
+  Opts.Crel = Args.hasArg(OPT_crel);
 
   Opts.AsSecureLogFile = Args.getLastArgValue(OPT_as_secure_log_file);
 
@@ -287,8 +289,14 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   assert(MRI && "Unable to create target register info!");
 
   MCTargetOptions MCOptions;
+  MCOptions.MCRelaxAll = Opts.RelaxAll;
   MCOptions.EmitDwarfUnwind = Opts.EmitDwarfUnwind;
   MCOptions.EmitCompactUnwindNonCanonical = Opts.EmitCompactUnwindNonCanonical;
+  MCOptions.MCSaveTempLabels = Opts.SaveTemporaryLabels;
+  MCOptions.Crel = Opts.Crel;
+  MCOptions.X86RelaxRelocations = Opts.RelaxELFRelocations;
+  MCOptions.X86Sse2Avx = Opts.SSE2AVX;
+  MCOptions.CompressDebugSections = Opts.CompressDebugSections;
   MCOptions.AsSecureLogFile = Opts.AsSecureLogFile;
 
   std::unique_ptr<MCAsmInfo> MAI(
@@ -297,9 +305,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
 
   // Ensure MCAsmInfo initialization occurs before any use, otherwise sections
   // may be created with a combination of default and explicit settings.
-  MAI->setCompressDebugSections(Opts.CompressDebugSections);
 
-  MAI->setRelaxELFRelocations(Opts.RelaxELFRelocations);
 
   bool IsBinary = Opts.OutputType == AssemblerInvocation::FT_Obj;
   if (Opts.OutputPath.empty())
@@ -343,8 +349,6 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
     MOFI->setDarwinTargetVariantSDKVersion(Opts.DarwinTargetVariantSDKVersion);
   Ctx.setObjectFileInfo(MOFI.get());
 
-  if (Opts.SaveTemporaryLabels)
-    Ctx.setAllowTemporaryLabels(false);
   if (Opts.GenDwarfForAssembly)
     Ctx.setGenDwarfForAssembly(true);
   if (!Opts.DwarfDebugFlags.empty())
@@ -381,6 +385,9 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   MCOptions.MCNoWarn = Opts.NoWarn;
   MCOptions.MCFatalWarnings = Opts.FatalWarnings;
   MCOptions.MCNoTypeCheck = Opts.NoTypeCheck;
+  MCOptions.ShowMCInst = Opts.ShowInst;
+  MCOptions.AsmVerbose = true;
+  MCOptions.MCUseDwarfDirectory = MCTargetOptions::EnableDwarfDirectory;
   MCOptions.ABIName = Opts.TargetABI;
 
   // FIXME: There is a bit of code duplication with addPassesToEmitFile.
@@ -395,10 +402,8 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
         TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions));
 
     auto FOut = std::make_unique<formatted_raw_ostream>(*Out);
-    Str.reset(TheTarget->createAsmStreamer(
-        Ctx, std::move(FOut), /*asmverbose*/ true,
-        /*useDwarfDirectory*/ true, IP, std::move(CE), std::move(MAB),
-        Opts.ShowInst));
+    Str.reset(TheTarget->createAsmStreamer(Ctx, std::move(FOut), IP,
+                                           std::move(CE), std::move(MAB)));
   } else if (Opts.OutputType == AssemblerInvocation::FT_Null) {
     Str.reset(createNullStreamer(Ctx));
   } else {
@@ -421,9 +426,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
 
     Triple T(Opts.Triple);
     Str.reset(TheTarget->createMCObjectStreamer(
-        T, Ctx, std::move(MAB), std::move(OW), std::move(CE), *STI,
-        Opts.RelaxAll, Opts.IncrementalLinkerCompatible,
-        /*DWARFMustBeAtTheEnd*/ true));
+        T, Ctx, std::move(MAB), std::move(OW), std::move(CE), *STI));
     Str.get()->initSections(Opts.NoExecStack, *STI);
   }
 
@@ -435,9 +438,6 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
     Str.get()->switchSection(AsmLabel);
     Str.get()->emitZeros(1);
   }
-
-  // Assembly to object compilation should leverage assembly info.
-  Str->setUseAssemblerInfoForParsing(true);
 
   bool Failed = false;
 

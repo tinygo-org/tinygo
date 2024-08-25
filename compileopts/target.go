@@ -326,14 +326,14 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		spec.CPU = "generic"
 		llvmarch = "aarch64"
 		if options.GOOS == "darwin" {
-			spec.Features = "+fp-armv8,+neon"
+			spec.Features = "+ete,+fp-armv8,+neon,+trbe,+v8a"
 			// Looks like Apple prefers to call this architecture ARM64
 			// instead of AArch64.
 			llvmarch = "arm64"
 		} else if options.GOOS == "windows" {
-			spec.Features = "+fp-armv8,+neon,-fmv"
+			spec.Features = "+ete,+fp-armv8,+neon,+trbe,+v8a,-fmv"
 		} else { // linux
-			spec.Features = "+fp-armv8,+neon,-fmv,-outline-atomics"
+			spec.Features = "+ete,+fp-armv8,+neon,+trbe,+v8a,-fmv,-outline-atomics"
 		}
 	case "mips", "mipsle":
 		spec.CPU = "mips32r2"
@@ -356,11 +356,13 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	case "wasm":
 		llvmarch = "wasm32"
 		spec.CPU = "generic"
-		spec.Features = "+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext"
+		spec.Features = "+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types"
 		spec.BuildTags = append(spec.BuildTags, "tinygo.wasm")
 		spec.CFlags = append(spec.CFlags,
 			"-mbulk-memory",
 			"-mnontrapping-fptoint",
+			"-mno-multivalue",
+			"-mno-reference-types",
 			"-msign-ext",
 		)
 	default:
