@@ -51,9 +51,9 @@ entry:
   %varargs = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %varargs, ptr nonnull %stackalloc, ptr undef) #3
   store i32 1, ptr %varargs, align 4
-  %0 = getelementptr inbounds [3 x i32], ptr %varargs, i32 0, i32 1
+  %0 = getelementptr inbounds i8, ptr %varargs, i32 4
   store i32 2, ptr %0, align 4
-  %1 = getelementptr inbounds [3 x i32], ptr %varargs, i32 0, i32 2
+  %1 = getelementptr inbounds i8, ptr %varargs, i32 8
   store i32 3, ptr %1, align 4
   %append.new = call { ptr, i32, i32 } @runtime.sliceAppend(ptr %ints.data, ptr nonnull %varargs, i32 %ints.len, i32 %ints.cap, i32 3, i32 4, ptr undef) #3
   %append.newPtr = extractvalue { ptr, i32, i32 } %append.new, 0
@@ -286,7 +286,7 @@ entry:
   br i1 %4, label %unsafe.Slice.throw, label %unsafe.Slice.next
 
 unsafe.Slice.next:                                ; preds = %entry
-  %5 = trunc i64 %len to i32
+  %5 = trunc nuw i64 %len to i32
   %6 = insertvalue { ptr, i32, i32 } undef, ptr %ptr, 0
   %7 = insertvalue { ptr, i32, i32 } %6, i32 %5, 1
   %8 = insertvalue { ptr, i32, i32 } %7, i32 %5, 2
@@ -310,7 +310,7 @@ entry:
   br i1 %4, label %unsafe.Slice.throw, label %unsafe.Slice.next
 
 unsafe.Slice.next:                                ; preds = %entry
-  %5 = trunc i64 %len to i32
+  %5 = trunc nuw i64 %len to i32
   %6 = insertvalue { ptr, i32, i32 } undef, ptr %ptr, 0
   %7 = insertvalue { ptr, i32, i32 } %6, i32 %5, 1
   %8 = insertvalue { ptr, i32, i32 } %7, i32 %5, 2
@@ -322,7 +322,7 @@ unsafe.Slice.throw:                               ; preds = %entry
   unreachable
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #3 = { nounwind }

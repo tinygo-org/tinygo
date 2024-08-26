@@ -10,12 +10,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-18-v1
+            - llvm-source-19-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-18-v1
+          key: llvm-source-19-v1
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -107,12 +107,15 @@ jobs:
           # "make lint" fails before go 1.21 because internal/tools/go.mod specifies packages that require go 1.21
           fmt-check: false
     resource_class: large
-  test-llvm18-go123:
+  test-llvm19-go123:
     docker:
       - image: golang:1.23-bullseye
     steps:
       - test-linux:
-          llvm: "18"
+          llvm: "19"
+    environment:
+      # Hack to work around https://github.com/llvm/llvm-project/issues/105987
+      LD_LIBRARY_PATH: /usr/lib/llvm-19/lib
     resource_class: large
 
 workflows:
@@ -121,5 +124,5 @@ workflows:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
       - test-llvm15-go119
-      # This tests LLVM 18 support when linking against system libraries.
-      - test-llvm18-go123
+      # This tests LLVM 19 support when linking against system libraries.
+      - test-llvm19-go123

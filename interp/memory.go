@@ -1037,6 +1037,8 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				v.buf[i] = ptrValue.pointer
 			}
 		case llvm.ICmp:
+			// Note: constant icmp isn't supported anymore in LLVM 19.
+			// Once we drop support for LLVM 18, this can be removed.
 			size := r.targetData.TypeAllocSize(llvmValue.Operand(0).Type())
 			lhs := newRawValue(uint32(size))
 			rhs := newRawValue(uint32(size))

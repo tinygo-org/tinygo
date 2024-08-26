@@ -82,11 +82,11 @@ entry:
   store i32 1, ptr %select.send.value, align 4
   call void @llvm.lifetime.start.p0(i64 16, ptr nonnull %select.states.alloca)
   store ptr %ch1, ptr %select.states.alloca, align 4
-  %select.states.alloca.repack1 = getelementptr inbounds %runtime.chanSelectState, ptr %select.states.alloca, i32 0, i32 1
+  %select.states.alloca.repack1 = getelementptr inbounds i8, ptr %select.states.alloca, i32 4
   store ptr %select.send.value, ptr %select.states.alloca.repack1, align 4
-  %0 = getelementptr inbounds [2 x %runtime.chanSelectState], ptr %select.states.alloca, i32 0, i32 1
+  %0 = getelementptr inbounds i8, ptr %select.states.alloca, i32 8
   store ptr %ch2, ptr %0, align 4
-  %.repack3 = getelementptr inbounds [2 x %runtime.chanSelectState], ptr %select.states.alloca, i32 0, i32 1, i32 1
+  %.repack3 = getelementptr inbounds i8, ptr %select.states.alloca, i32 12
   store ptr null, ptr %.repack3, align 4
   %select.result = call { i32, i1 } @runtime.tryChanSelect(ptr undef, ptr nonnull %select.states.alloca, i32 2, i32 2, ptr undef) #4
   call void @llvm.lifetime.end.p0(i64 16, ptr nonnull %select.states.alloca)
@@ -107,8 +107,8 @@ select.body:                                      ; preds = %select.next
 
 declare { i32, i1 } @runtime.tryChanSelect(ptr, ptr, i32, i32, ptr) #1
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #3 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
 attributes #4 = { nounwind }

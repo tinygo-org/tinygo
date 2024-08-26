@@ -1,7 +1,7 @@
 {
 	"llvm-target":   "wasm32-unknown-wasi",
 	"cpu":           "generic",
-	"features":      "+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext",
+	"features":      "+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types",
 	"build-tags":    ["tinygo.wasm"],
 	"goos":          "wasip1",
 	"goarch":        "wasm",
@@ -13,6 +13,8 @@
 	"cflags": [
 		"-mbulk-memory",
 		"-mnontrapping-fptoint",
+		"-mno-multivalue",
+		"-mno-reference-types",
 		"-msign-ext"
 	],
 	"ldflags": [

@@ -38,7 +38,8 @@ func TestClangAttributes(t *testing.T) {
 		"wasm",
 		"wasm-unknown",
 	}
-	if hasBuiltinTools {
+	// TODO: remove this version check.
+	if hasBuiltinTools && llvm.Version != "19.1.0-rc3" {
 		// hasBuiltinTools is set when TinyGo is statically linked with LLVM,
 		// which also implies it was built with Xtensa support.
 		targetNames = append(targetNames, "esp32", "esp8266")
