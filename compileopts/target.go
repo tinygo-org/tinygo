@@ -176,8 +176,14 @@ func (spec *TargetSpec) resolveInherits() error {
 
 // Load a target specification.
 func LoadTarget(options *Options) (*TargetSpec, error) {
-	if options.Target == "" {
-		return defaultTarget(options)
+	switch options.Target {
+	case "":
+		// No target given, use GOOS/GOARCH env variables.
+		return defaultTarget(options, options.GOOS, options.GOARCH)
+	case "wasip1", "wasi":
+		// Special case: support both -target=wasip1 and the GOOS/GOARCH pair.
+		// They should both have the same effect.
+		return defaultTarget(options, "wasip1", "wasm")
 	}
 
 	// See whether there is a target specification for this target (e.g.
@@ -240,11 +246,11 @@ func GetTargetSpecs() (map[string]*TargetSpec, error) {
 
 // Load a target from environment variables (which default to
 // runtime.GOOS/runtime.GOARCH).
-func defaultTarget(options *Options) (*TargetSpec, error) {
+func defaultTarget(options *Options, goos, goarch string) (*TargetSpec, error) {
 	spec := TargetSpec{
-		GOOS:             options.GOOS,
-		GOARCH:           options.GOARCH,
-		BuildTags:        []string{options.GOOS, options.GOARCH},
+		GOOS:             goos,
+		GOARCH:           goarch,
+		BuildTags:        []string{goos, goarch},
 		GC:               "precise",
 		Scheduler:        "tasks",
 		Linker:           "cc",
@@ -255,7 +261,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 
 	// Configure target based on GOARCH.
 	var llvmarch string
-	switch options.GOARCH {
+	switch goarch {
 	case "386":
 		llvmarch = "i386"
 		spec.CPU = "pentium4"
@@ -325,12 +331,12 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	case "arm64":
 		spec.CPU = "generic"
 		llvmarch = "aarch64"
-		if options.GOOS == "darwin" {
+		if goos == "darwin" {
 			spec.Features = "+fp-armv8,+neon"
 			// Looks like Apple prefers to call this architecture ARM64
 			// instead of AArch64.
 			llvmarch = "arm64"
-		} else if options.GOOS == "windows" {
+		} else if goos == "windows" {
 			spec.Features = "+fp-armv8,+neon,-fmv"
 		} else { // linux
 			spec.Features = "+fp-armv8,+neon,-fmv,-outline-atomics"
@@ -338,7 +344,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	case "mips", "mipsle":
 		spec.CPU = "mips32r2"
 		spec.CFlags = append(spec.CFlags, "-fno-pic")
-		if options.GOARCH == "mips" {
+		if goarch == "mips" {
 			llvmarch = "mips" // big endian
 		} else {
 			llvmarch = "mipsel" // little endian
@@ -364,16 +370,16 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			"-msign-ext",
 		)
 	default:
-		return nil, fmt.Errorf("unknown GOARCH=%s", options.GOARCH)
+		return nil, fmt.Errorf("unknown GOARCH=%s", goarch)
 	}
 
 	// Configure target based on GOOS.
-	llvmos := options.GOOS
+	llvmos := goos
 	llvmvendor := "unknown"
-	switch options.GOOS {
+	switch goos {
 	case "darwin":
 		platformVersion := "10.12.0"
-		if options.GOARCH == "arm64" {
+		if goarch == "arm64" {
 			platformVersion = "11.0.0" // first macosx platform with arm64 support
 		}
 		llvmvendor = "apple"
@@ -395,7 +401,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "musl"
 		spec.LDFlags = append(spec.LDFlags, "--gc-sections")
-		if options.GOARCH == "arm64" {
+		if goarch == "arm64" {
 			// Disable outline atomics. For details, see:
 			// https://cpufun.substack.com/p/atomics-in-aarch64
 			// A better way would be to fully support outline atomics, which
@@ -420,7 +426,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		// normally present in Go (without explicitly opting in).
 		// For more discussion:
 		// https://groups.google.com/g/Golang-nuts/c/Jd9tlNc6jUE/m/Zo-7zIP_m3MJ?pli=1
-		switch options.GOARCH {
+		switch goarch {
 		case "amd64":
 			spec.LDFlags = append(spec.LDFlags,
 				"-m", "i386pep",
@@ -455,16 +461,16 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		)
 		llvmos = "wasi"
 	default:
-		return nil, fmt.Errorf("unknown GOOS=%s", options.GOOS)
+		return nil, fmt.Errorf("unknown GOOS=%s", goos)
 	}
 
 	// Target triples (which actually have four components, but are called
 	// triples for historical reasons) have the form:
 	//   arch-vendor-os-environment
 	spec.Triple = llvmarch + "-" + llvmvendor + "-" + llvmos
-	if options.GOOS == "windows" {
+	if goos == "windows" {
 		spec.Triple += "-gnu"
-	} else if options.GOOS == "linux" {
+	} else if goos == "linux" {
 		// We use musl on Linux (not glibc) so we should use -musleabi* instead
 		// of -gnueabi*.
 		// The *hf suffix selects between soft/hard floating point ABI.
@@ -476,15 +482,15 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	}
 
 	// Add extra assembly files (needed for the scheduler etc).
-	if options.GOARCH != "wasm" {
+	if goarch != "wasm" {
 		suffix := ""
-		if options.GOOS == "windows" && options.GOARCH == "amd64" {
+		if goos == "windows" && goarch == "amd64" {
 			// Windows uses a different calling convention on amd64 from other
 			// operating systems so we need separate assembly files.
 			suffix = "_windows"
 		}
-		asmGoarch := options.GOARCH
-		if options.GOARCH == "mips" || options.GOARCH == "mipsle" {
+		asmGoarch := goarch
+		if goarch == "mips" || goarch == "mipsle" {
 			asmGoarch = "mipsx"
 		}
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+asmGoarch+suffix+".S")
@@ -492,11 +498,11 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	}
 
 	// Configure the emulator.
-	if options.GOARCH != runtime.GOARCH {
+	if goarch != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
 		spec.GDB = []string{"gdb-multiarch"}
-		if options.GOOS == "linux" {
-			switch options.GOARCH {
+		if goos == "linux" {
+			switch goarch {
 			case "386":
 				// amd64 can _usually_ run 32-bit programs, so skip the emulator in that case.
 				if runtime.GOARCH != "amd64" {
@@ -515,8 +521,8 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			}
 		}
 	}
-	if options.GOOS != runtime.GOOS {
-		if options.GOOS == "windows" {
+	if goos != runtime.GOOS {
+		if goos == "windows" {
 			spec.Emulator = "wine {}"
 		}
 	}
