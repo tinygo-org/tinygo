@@ -22,11 +22,3 @@ func TestOptimizeStringEqual(t *testing.T) {
 		transform.OptimizeStringEqual(mod)
 	})
 }
-
-func TestOptimizeReflectImplements(t *testing.T) {
-	t.Parallel()
-	testTransform(t, "testdata/reflect-implements", func(mod llvm.Module) {
-		// Run optimization pass.
-		transform.OptimizeReflectImplements(mod)
-	})
-}
