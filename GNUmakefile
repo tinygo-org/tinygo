@@ -2,6 +2,8 @@
 # aliases
 all: tinygo
 
+#SHELL := /usr/bin/env bash
+
 # Default build and source directories, as created by `make llvm-build`.
 LLVM_BUILDDIR ?= llvm-build
 LLVM_PROJECTDIR ?= llvm-project
@@ -35,6 +37,10 @@ GOTESTPKGS ?= ./builder ./cgo ./compileopts ./compiler ./interp ./transform .
 
 # tinygo binary for tests
 TINYGO ?= $(call detect,tinygo,tinygo $(CURDIR)/build/tinygo)
+
+# isntalltion location defaults
+INSTALL_LOCAL_DIR ?= $(HOME)/go/bin/
+INSTALL_SYSTEM_DIR ?= /usr/bin/
 
 # Check for ccache if the user hasn't set it to on or off.
 ifeq (, $(CCACHE))
@@ -969,6 +975,17 @@ spell: tools ## Spellcheck source tree
 .PHONY: spellfix
 spellfix: tools ## Same as spell, but fixes what it finds
 	misspell -w --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.go *.md
+
+install: tinygo build/tinygo$(EXE) ## Install TinyGo
+ifeq ($(OS),Windows_NT)
+	$(error Windows install not supported)
+	exit 1
+else
+ifeq ($(INSTALL_LOCAL),)
+	@if [ -d $(INSTALL_SYSTEM_DIR) ]; then cp build/tinygo $(INSTALL_SYSTEM_DIR); else echo "unable to find local installation directory $(INSTALL_SYSTEM_DIR). Specify custom directory by setting 'INSTALL_SYSTEM_DIR'"; exit 1; fi
+else
+	@if [ -d $(INSTALL_LOCAL_DIR) ]; then cp build/tinygo $(INSTALL_LOCAL_DIR); else echo "unable to find local installation directory $(INSTALL_LOCAL_DIR). Specify custom directory by setting 'INSTALL_LOCAL_DIR'"; exit 1; fi
+endif
 
 # https://www.client9.com/self-documenting-makefiles/
 .PHONY: help
