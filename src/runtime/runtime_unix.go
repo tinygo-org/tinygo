@@ -338,7 +338,7 @@ func signal_enable(sig uint32) {
 //export tinygo_signal_enable
 func tinygo_signal_enable(s uint32)
 
-// go: link signal_disable os/signal.signal_disable
+//go:linkname signal_disable os/signal.signal_disable
 func signal_disable(sig uint32) {
 	tinygo_signal_disable(sig)
 }
@@ -359,7 +359,7 @@ func tinygo_signal_disable(sig uint32)
 //export tinygo_signal_ignore
 func tinygo_signal_ignore(sig uint32)
 
-// go: link signal_ignore os/signal.signal_ignore
+//go:linkname signal_ignore os/signal.signal_ignore
 func signal_ignore(sig uint32) {
 	// keep track of ignored signal for Ignore(sig os.Signal)
 	// the ignore logic itself is tracked by the kernel https://elixir.bootlin.com/linux/v6.10/source/kernel/signal.c#L4142
