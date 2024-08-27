@@ -13,19 +13,11 @@ type timeUnit int64
 
 //export wasi:cli/run@0.2.0#run
 func __wasi_cli_run_run() uint32 {
-	_start()
-	return 0
-}
-
-//export _start
-func _start() {
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
 	run()
-}
-
-func init() {
+	return 0
 }
 
 var args []string
