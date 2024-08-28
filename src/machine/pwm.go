@@ -19,3 +19,19 @@ type PWMConfig struct {
 	//
 	Period uint64
 }
+
+type pwmer interface {
+	Configure(config PWMConfig) error
+	Channel(pin Pin) (uint8, error)
+	SetPeriod(period uint64) error
+	Top() uint32
+	Counter() uint32
+	Period() uint64
+	SetInverting(channel uint8, inverting bool)
+	Set(channel uint8, value uint32)
+	Get(channel uint8) uint32
+	SetTop(top uint32)
+	SetCounter(ctr uint32)
+	Enable(enable bool)
+	IsEnabled() bool
+}
