@@ -1,44 +1,40 @@
 [submodule "lib/nrfx"]
-	path = lib/nrfx
-	url = https://github.com/NordicSemiconductor/nrfx.git
+path = lib/nrfx
+url = https://github.com/NordicSemiconductor/nrfx.git
 [submodule "lib/CMSIS"]
-	path = lib/CMSIS
-	url = https://github.com/ARM-software/CMSIS.git
+path = lib/CMSIS
+url = https://github.com/ARM-software/CMSIS.git
 [submodule "lib/avr"]
-	path = lib/avr
-	url = https://github.com/avr-rust/avr-mcu.git
+path = lib/avr
+url = https://github.com/avr-rust/avr-mcu.git
 [submodule "lib/cmsis-svd"]
-	path = lib/cmsis-svd
-	url = https://github.com/cmsis-svd/cmsis-svd-data.git
-	branch = main
+path = lib/cmsis-svd
+url = https://github.com/cmsis-svd/cmsis-svd-data.git
+branch = main
 [submodule "lib/wasi-libc"]
-	path = lib/wasi-libc
-	url = https://github.com/WebAssembly/wasi-libc
+path = lib/wasi-libc
+url = https://github.com/WebAssembly/wasi-libc
 [submodule "lib/picolibc"]
-	path = lib/picolibc
-	url = https://github.com/keith-packard/picolibc.git
+path = lib/picolibc
+url = https://github.com/keith-packard/picolibc.git
 [submodule "lib/stm32-svd"]
-	path = lib/stm32-svd
-	url = https://github.com/tinygo-org/stm32-svd
+path = lib/stm32-svd
+url = https://github.com/tinygo-org/stm32-svd
 [submodule "lib/musl"]
-	path = lib/musl
-	url = git://git.musl-libc.org/musl
+path = lib/musl
+url = git://git.musl-libc.org/musl
 [submodule "lib/binaryen"]
-	path = lib/binaryen
-	url = https://github.com/WebAssembly/binaryen.git
+path = lib/binaryen
+url = https://github.com/WebAssembly/binaryen.git
 [submodule "lib/mingw-w64"]
-	path = lib/mingw-w64
-	url = https://github.com/mingw-w64/mingw-w64.git
+path = lib/mingw-w64
+url = https://github.com/mingw-w64/mingw-w64.git
 [submodule "lib/macos-minimal-sdk"]
-	path = lib/macos-minimal-sdk
-	url = https://github.com/aykevl/macos-minimal-sdk.git
+path = lib/macos-minimal-sdk
+url = https://github.com/aykevl/macos-minimal-sdk.git
 [submodule "lib/renesas-svd"]
-	path = lib/renesas-svd
-	url = https://github.com/tinygo-org/renesas-svd.git
-[submodule "src/net"]
-	path = src/net
-	url = https://github.com/tinygo-org/net.git
-	branch = dev
+path = lib/renesas-svd
+url = https://github.com/tinygo-org/renesas-svd.git
 [submodule "lib/wasi-cli"]
-	path = lib/wasi-cli
-	url = https://github.com/WebAssembly/wasi-cli
+path = lib/wasi-cli
+url = https://github.com/WebAssembly/wasi-cli

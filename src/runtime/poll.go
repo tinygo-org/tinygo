@@ -4,12 +4,15 @@ package runtime
 
 //go:linkname poll_runtime_pollServerInit internal/poll.runtime_pollServerInit
 func poll_runtime_pollServerInit() {
-	panic("todo: runtime_pollServerInit")
+	// TODO the "net" pkg calls this, so panic() isn't an option.  Right
+	// now, just ignore the call.
 }
 
 //go:linkname poll_runtime_pollOpen internal/poll.runtime_pollOpen
 func poll_runtime_pollOpen(fd uintptr) (uintptr, int) {
-	panic("todo: runtime_pollOpen")
+	// TODO the "net" pkg calls this, so panic() isn't an option.  Right
+	// now, just ignore the call.
+	return 0, 0
 }
 
 //go:linkname poll_runtime_pollClose internal/poll.runtime_pollClose
