@@ -421,64 +421,6 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Special function that will trigger an error.
 				// This is used to test error reporting.
 				return nil, mem, r.errorAt(inst, errors.New("test error"))
-			case strings.HasSuffix(callFn.name, ".$typeassert"):
-				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"interface assert:", operands[1:])
-				}
-
-				// Load various values for the interface implements check below.
-				typecodePtr, err := operands[1].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				// typecodePtr always point to the numMethod field in the type
-				// description struct. The methodSet, when present, comes right
-				// before the numMethod field (the compiler doesn't generate
-				// method sets for concrete types without methods).
-				// Considering that the compiler doesn't emit interface type
-				// asserts for interfaces with no methods (as the always succeed)
-				// then if the offset is zero, this assert must always fail.
-				if typecodePtr.offset() == 0 {
-					locals[inst.localIndex] = literalValue{uint8(0)}
-					break
-				}
-				typecodePtrOffset, err := typecodePtr.addOffset(-int64(r.pointerSize))
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				methodSetPtr, err := mem.load(typecodePtrOffset, r.pointerSize).asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				methodSet := mem.get(methodSetPtr.index()).llvmGlobal.Initializer()
-				numMethods := int(r.builder.CreateExtractValue(methodSet, 0, "").ZExtValue())
-				llvmFn := inst.llvmInst.CalledValue()
-				methodSetAttr := llvmFn.GetStringAttributeAtIndex(-1, "tinygo-methods")
-				methodSetString := methodSetAttr.GetStringValue()
-
-				// Make a set of all the methods on the concrete type, for
-				// easier checking in the next step.
-				concreteTypeMethods := map[string]struct{}{}
-				for i := 0; i < numMethods; i++ {
-					methodInfo := r.builder.CreateExtractValue(methodSet, 1, "")
-					name := r.builder.CreateExtractValue(methodInfo, i, "").Name()
-					concreteTypeMethods[name] = struct{}{}
-				}
-
-				// Check whether all interface methods are also in the list
-				// of defined methods calculated above. This is the interface
-				// assert itself.
-				assertOk := uint8(1) // i1 true
-				for _, name := range strings.Split(methodSetString, "; ") {
-					if _, ok := concreteTypeMethods[name]; !ok {
-						// There is a method on the interface that is not
-						// implemented by the type. The assertion will fail.
-						assertOk = 0 // i1 false
-						break
-					}
-				}
-				// If assertOk is still 1, the assertion succeeded.
-				locals[inst.localIndex] = literalValue{assertOk}
 			case strings.HasSuffix(callFn.name, "$invoke"):
 				// This thunk is the interface method dispatcher: it is called
 				// with all regular parameters and a type code. It will then

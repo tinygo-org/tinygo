@@ -16,6 +16,7 @@ is Tuple: 1 7 11 13
 ArrayStruct.Print: 4 3
 is Tuple: 0 8 16 24
 SmallPair.Print: 3 5
+is nil
 Stringer.String(): foo
 Stringer.(*Thing).String(): foo
 s has String() method: foo

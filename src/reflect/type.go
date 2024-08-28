@@ -23,6 +23,7 @@
 //     meta         uint8
 //     nmethods     uint16
 //     elementType  *typeStruct
+//     methods      methodSet
 // - array types (see arrayType)
 //     meta         uint8
 //     nmethods     uint16 (0)
@@ -44,7 +45,8 @@
 //     pkgpath      *byte       // package path; null terminated
 //     numField     uint16
 //     fields       [...]structField // the remaining fields are all of type structField
-// - interface types (this is missing the interface methods):
+//     methods      methodSet
+// - interface types:
 //     meta         uint8
 //     ptrTo        *typeStruct
 // - signature types (this is missing input and output parameters):
@@ -56,6 +58,7 @@
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // underlying type
 //     pkgpath      *byte       // pkgpath; null terminated
+//     methods      methodSet
 //     name         [1]byte     // actual name; null terminated
 //
 // The type struct is essentially a union of all the above types. Which it is,
@@ -436,6 +439,7 @@ type ptrType struct {
 	rawType
 	numMethod uint16
 	elem      *rawType
+	methods   methodSet
 }
 
 type arrayType struct {
@@ -461,6 +465,7 @@ type namedType struct {
 	ptrTo     *rawType
 	elem      *rawType
 	pkg       *byte
+	methods   methodSet
 	name      [1]byte
 }
 
@@ -479,11 +484,24 @@ type structType struct {
 	size      uint32
 	numField  uint16
 	fields    [1]structField // the remaining fields are all of type structField
+	methods   methodSet
 }
 
 type structField struct {
 	fieldType *rawType
 	data      unsafe.Pointer // various bits of information, packed in a byte array
+}
+
+type interfaceType struct {
+	rawType
+	ptrTo   *rawType
+	methods methodSet
+}
+
+// Method set, as emitted by the compiler.
+type methodSet struct {
+	length  uintptr
+	methods [0]*byte // variable number of methods
 }
 
 // Equivalent to (go/types.Type).Underlying(): if this is a named type return
@@ -970,17 +988,52 @@ func (t *rawType) FieldAlign() int {
 // AssignableTo returns whether a value of type t can be assigned to a variable
 // of type u.
 func (t *rawType) AssignableTo(u Type) bool {
-	if t == u.(*rawType) {
-		return true
-	}
-
-	if u.Kind() == Interface && u.NumMethod() == 0 {
+	// Quotes come from the language spec:
+	// https://go.dev/ref/spec#Assignability
+	// > A value x of type V is assignable to a variable of type T ("x is
+	// > assignable to T") if one of the following conditions applies:
+	//   [...]
+	// (Replace T with t, and x with u).
+	u_raw := u.(*rawType)
+	if t == u_raw {
+		// > V and T are identical.
 		return true
 	}
 
 	if u.Kind() == Interface {
-		panic("reflect: unimplemented: AssignableTo with interface")
+		// > T is an interface type, but not a type parameter, and x implements
+		// > T.
+		u_itf := (*interfaceType)(unsafe.Pointer(u_raw.underlying()))
+		res := typeImplementsMethodSet(unsafe.Pointer(t), unsafe.Pointer(&u_itf.methods))
+		return res
 	}
+
+	t_named := t.isNamed()
+	u_named := u_raw.isNamed()
+	if t_named && u_named {
+		return false
+	}
+	if t.underlying() == u_raw.underlying() {
+		// > V and T have identical underlying types but are not type parameters
+		// > and at least one of V or T is not a named type.
+		return true
+	}
+
+	if t.Kind() == Chan && u_raw.Kind() == Chan {
+		// > V and T are channel types with identical element types, V is a
+		// > bidirectional channel, and at least one of V or T is not a named
+		// > type.
+		t_chan := (*elemType)(unsafe.Pointer(t.underlying()))
+		u_chan := (*elemType)(unsafe.Pointer(u_raw.underlying()))
+		if t_chan.elem != u_chan.elem {
+			return false
+		}
+		if t_chan.ChanDir() != BothDir {
+			return false
+		}
+		return true
+	}
+
 	return false
 }
 
@@ -988,7 +1041,8 @@ func (t *rawType) Implements(u Type) bool {
 	if u.Kind() != Interface {
 		panic("reflect: non-interface type passed to Type.Implements")
 	}
-	return t.AssignableTo(u)
+	u_itf := (*interfaceType)(unsafe.Pointer(u.(*rawType).underlying()))
+	return typeImplementsMethodSet(unsafe.Pointer(t), unsafe.Pointer(&u_itf.methods))
 }
 
 // Comparable returns whether values of this type can be compared to each other.
@@ -1062,7 +1116,9 @@ func readStringZ(data unsafe.Pointer) string {
 
 func (t *rawType) name() string {
 	ntype := (*namedType)(unsafe.Pointer(t))
-	return readStringZ(unsafe.Pointer(&ntype.name[0]))
+	ptr := unsafe.Pointer(&ntype.name[0])
+	ptr = unsafe.Add(ptr, uintptr(ntype.methods.length)*unsafe.Sizeof(unsafe.Pointer(nil)))
+	return readStringZ(ptr)
 }
 
 func (t *rawType) Name() string {

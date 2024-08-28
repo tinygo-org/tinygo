@@ -4,8 +4,6 @@ package transform
 // calls.
 
 import (
-	"strings"
-
 	"tinygo.org/x/go-llvm"
 )
 
@@ -98,81 +96,5 @@ func OptimizeStringEqual(mod llvm.Module) {
 			call.EraseFromParentAsInstruction()
 			continue
 		}
-	}
-}
-
-// OptimizeReflectImplements optimizes the following code:
-//
-//	implements := someType.Implements(someInterfaceType)
-//
-// where someType is an arbitrary reflect.Type and someInterfaceType is a
-// reflect.Type of interface kind, to the following code:
-//
-//	_, implements := someType.(interfaceType)
-//
-// if the interface type is known at compile time (that is, someInterfaceType is
-// a LLVM constant aggregate). This optimization is especially important for the
-// encoding/json package, which uses this method.
-//
-// As of this writing, the (reflect.Type).Interface method has not yet been
-// implemented so this optimization is critical for the encoding/json package.
-func OptimizeReflectImplements(mod llvm.Module) {
-	implementsSignature := mod.NamedGlobal("reflect/methods.Implements(reflect.Type) bool")
-	if implementsSignature.IsNil() {
-		return
-	}
-
-	builder := mod.Context().NewBuilder()
-	defer builder.Dispose()
-
-	// Look up the (reflect.Value).Implements() method.
-	var implementsFunc llvm.Value
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
-		if attr.IsNil() {
-			continue
-		}
-		if attr.GetStringValue() == "reflect/methods.Implements(reflect.Type) bool" {
-			implementsFunc = fn
-			break
-		}
-	}
-	if implementsFunc.IsNil() {
-		// Doesn't exist in the program, so nothing to do.
-		return
-	}
-
-	for _, call := range getUses(implementsFunc) {
-		if call.IsACallInst().IsNil() {
-			continue
-		}
-		interfaceType := stripPointerCasts(call.Operand(2))
-		if interfaceType.IsAGlobalVariable().IsNil() {
-			// Interface is unknown at compile time. This can't be optimized.
-			continue
-		}
-
-		if strings.HasPrefix(interfaceType.Name(), "reflect/types.type:named:") {
-			// Get the underlying type.
-			interfaceType = stripPointerCasts(builder.CreateExtractValue(interfaceType.Initializer(), 3, ""))
-		}
-		if !strings.HasPrefix(interfaceType.Name(), "reflect/types.type:interface:") {
-			// This is an error. The Type passed to Implements should be of
-			// interface type. Ignore it here (don't report it), it will be
-			// reported at runtime.
-			continue
-		}
-		typeAssertFunction := mod.NamedFunction(strings.TrimPrefix(interfaceType.Name(), "reflect/types.type:") + ".$typeassert")
-		if typeAssertFunction.IsNil() {
-			continue
-		}
-
-		// Replace Implements call with the type assert call.
-		builder.SetInsertPointBefore(call)
-		implements := builder.CreateCall(typeAssertFunction.GlobalValueType(), typeAssertFunction, []llvm.Value{
-			call.Operand(0), // typecode to check
-		}, "")
-		call.ReplaceAllUsesWith(implements)
-		call.EraseFromParentAsInstruction()
 	}
 }

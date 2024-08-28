@@ -592,15 +592,6 @@ func TestTinyNumMethods(t *testing.T) {
 	}
 }
 
-func TestAssignableTo(t *testing.T) {
-	var a any
-	refa := ValueOf(&a).Elem()
-	refa.Set(ValueOf(4))
-	if got, want := refa.Interface().(int), 4; got != want {
-		t.Errorf("AssignableTo / Set failed, got %v, want %v", got, want)
-	}
-}
-
 func TestConvert(t *testing.T) {
 	v := ValueOf(int64(3))
 	c := v.Convert(TypeOf(byte(0)))
