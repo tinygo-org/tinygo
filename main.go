@@ -1564,9 +1564,6 @@ func main() {
 			usage(command)
 			os.Exit(1)
 		}
-		if options.Target == "" && filepath.Ext(outpath) == ".wasm" {
-			options.Target = "wasm"
-		}
 
 		err := Build(pkgName, outpath, options)
 		handleCompilerError(err)
