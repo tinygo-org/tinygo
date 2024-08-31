@@ -86,6 +86,10 @@ func main() {
 	testCond()
 
 	testIssue1790()
+
+	done := make(chan int)
+	go testPaddedParameters(paddedStruct{x: 5, y: 7}, done)
+	<-done
 }
 
 func acquire(m *sync.Mutex) {
@@ -242,4 +246,16 @@ func (f Foo) Wait() {
 	println("called: Foo.Wait")
 	time.Sleep(time.Microsecond)
 	println("  ...waited")
+}
+
+type paddedStruct struct {
+	x uint8
+	_ [0]int64
+	y uint8
+}
+
+// Structs with interesting padding used to crash.
+func testPaddedParameters(s paddedStruct, done chan int) {
+	println("paddedStruct:", s.x, s.y)
+	close(done)
 }

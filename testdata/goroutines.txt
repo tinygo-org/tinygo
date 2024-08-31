@@ -26,3 +26,4 @@ called: Foo.Nowait
 called: Foo.Wait
   ...waited
 done with 'go on interface'
+paddedStruct: 5 7

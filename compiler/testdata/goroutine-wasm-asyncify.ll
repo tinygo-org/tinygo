@@ -3,8 +3,6 @@ source_filename = "goroutine.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
-%runtime._string = type { ptr, i32 }
-
 @"main$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
 
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
@@ -161,12 +159,12 @@ entry:
   %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #9
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #9
   store ptr %itf.value, ptr %0, align 4
-  %1 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 1
+  %1 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 1
   store ptr @"main$string", ptr %1, align 4
-  %.repack1 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 1, i32 1
-  store i32 4, ptr %.repack1, align 4
-  %2 = getelementptr inbounds { ptr, %runtime._string, ptr }, ptr %0, i32 0, i32 2
-  store ptr %itf.typecode, ptr %2, align 4
+  %2 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 2
+  store i32 4, ptr %2, align 4
+  %3 = getelementptr inbounds { ptr, ptr, i32, ptr }, ptr %0, i32 0, i32 3
+  store ptr %itf.typecode, ptr %3, align 4
   call void @"internal/task.start"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr nonnull %0, i32 65536, ptr undef) #9
   ret void
 }
