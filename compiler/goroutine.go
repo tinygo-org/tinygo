@@ -13,37 +13,7 @@ import (
 
 // createGo emits code to start a new goroutine.
 func (b *builder) createGo(instr *ssa.Go) {
-	// Get all function parameters to pass to the goroutine.
-	var params []llvm.Value
-	for _, param := range instr.Call.Args {
-		params = append(params, b.getValue(param, getPos(instr)))
-	}
-
-	var prefix string
-	var funcPtr llvm.Value
-	var funcType llvm.Type
-	hasContext := false
-	if callee := instr.Call.StaticCallee(); callee != nil {
-		// Static callee is known. This makes it easier to start a new
-		// goroutine.
-		var context llvm.Value
-		switch value := instr.Call.Value.(type) {
-		case *ssa.Function:
-			// Goroutine call is regular function call. No context is necessary.
-		case *ssa.MakeClosure:
-			// A goroutine call on a func value, but the callee is trivial to find. For
-			// example: immediately applied functions.
-			funcValue := b.getValue(value, getPos(instr))
-			context = b.extractFuncContext(funcValue)
-		default:
-			panic("StaticCallee returned an unexpected value")
-		}
-		if !context.IsNil() {
-			params = append(params, context) // context parameter
-			hasContext = true
-		}
-		funcType, funcPtr = b.getFunction(callee)
-	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
+	if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		// We cheat. None of the builtins do any long or blocking operation, so
 		// we might as well run these builtins right away without the program
 		// noticing the difference.
@@ -74,6 +44,38 @@ func (b *builder) createGo(instr *ssa.Go) {
 		}
 		b.createBuiltin(argTypes, argValues, builtin.Name(), instr.Pos())
 		return
+	}
+
+	// Get all function parameters to pass to the goroutine.
+	var params []llvm.Value
+	for _, param := range instr.Call.Args {
+		params = append(params, b.getValue(param, getPos(instr)))
+	}
+
+	var prefix string
+	var funcPtr llvm.Value
+	var funcType llvm.Type
+	hasContext := false
+	if callee := instr.Call.StaticCallee(); callee != nil {
+		// Static callee is known. This makes it easier to start a new
+		// goroutine.
+		var context llvm.Value
+		switch value := instr.Call.Value.(type) {
+		case *ssa.Function:
+			// Goroutine call is regular function call. No context is necessary.
+		case *ssa.MakeClosure:
+			// A goroutine call on a func value, but the callee is trivial to find. For
+			// example: immediately applied functions.
+			funcValue := b.getValue(value, getPos(instr))
+			context = b.extractFuncContext(funcValue)
+		default:
+			panic("StaticCallee returned an unexpected value")
+		}
+		if !context.IsNil() {
+			params = append(params, context) // context parameter
+			hasContext = true
+		}
+		funcType, funcPtr = b.getFunction(callee)
 	} else if instr.Call.IsInvoke() {
 		// This is a method call on an interface value.
 		itf := b.getValue(instr.Call.Value, getPos(instr))
