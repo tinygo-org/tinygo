@@ -32,6 +32,7 @@ type TargetSpec struct {
 	GOARCH           string   `json:"goarch,omitempty"`
 	SoftFloat        bool     // used for non-baremetal systems (GOMIPS=softfloat etc)
 	BuildTags        []string `json:"build-tags,omitempty"`
+	BuildMode        string   `json:"buildmode,omitempty"` // default build mode (if nothing specified)
 	GC               string   `json:"gc,omitempty"`
 	Scheduler        string   `json:"scheduler,omitempty"`
 	Serial           string   `json:"serial,omitempty"` // which serial output to use (uart, usb, none)

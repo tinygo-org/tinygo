@@ -2,7 +2,8 @@
 
 package runtime
 
-import "unsafe"
+// TODO: this is essentially reactor mode wasm. So we might want to support
+// -buildmode=c-shared (and default to it).
 
 type timeUnit int64
 
@@ -10,14 +11,6 @@ type timeUnit int64
 //
 //export __wasm_call_ctors
 func __wasm_call_ctors()
-
-//export _initialize
-func _initialize() {
-	// These need to be initialized early so that the heap can be initialized.
-	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
-	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
-	initAll()
-}
 
 func init() {
 	__wasm_call_ctors()
@@ -39,4 +32,7 @@ func sleepTicks(d timeUnit) {
 
 func ticks() timeUnit {
 	return timeUnit(0)
+}
+
+func beforeExit() {
 }

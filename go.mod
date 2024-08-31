@@ -14,6 +14,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-tty v0.0.4
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
+	github.com/tetratelabs/wazero v1.6.0
 	go.bug.st/serial v1.6.0
 	golang.org/x/net v0.26.0
 	golang.org/x/sys v0.21.0

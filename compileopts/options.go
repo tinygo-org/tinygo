@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	validBuildModeOptions     = []string{"default", "c-shared"}
 	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise"}
 	validSchedulerOptions     = []string{"none", "tasks", "asyncify"}
 	validSerialOptions        = []string{"none", "uart", "usb", "rtt"}
@@ -26,6 +27,7 @@ type Options struct {
 	GOMIPS          string // environment variable (only used with GOARCH=mips and GOARCH=mipsle)
 	Directory       string // working dir, leave it unset to use the current working dir
 	Target          string
+	BuildMode       string // -buildmode flag
 	Opt             string
 	GC              string
 	PanicStrategy   string
@@ -61,6 +63,14 @@ type Options struct {
 
 // Verify performs a validation on the given options, raising an error if options are not valid.
 func (o *Options) Verify() error {
+	if o.BuildMode != "" {
+		valid := isInArray(validBuildModeOptions, o.BuildMode)
+		if !valid {
+			return fmt.Errorf(`invalid buildmode option '%s': valid values are %s`,
+				o.BuildMode,
+				strings.Join(validBuildModeOptions, ", "))
+		}
+	}
 	if o.GC != "" {
 		valid := isInArray(validGCOptions, o.GC)
 		if !valid {

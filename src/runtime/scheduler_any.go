@@ -25,7 +25,7 @@ func run() {
 		callMain()
 		schedulerDone = true
 	}()
-	scheduler()
+	scheduler(false)
 }
 
 const hasScheduler = true

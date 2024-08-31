@@ -1,5 +1,8 @@
 //go:build tinygo.wasm && !wasm_unknown && !wasip2
 
+// This file is for wasm/wasip1 and for wasm/js, which both use much of the
+// WASIp1 API.
+
 package runtime
 
 import (

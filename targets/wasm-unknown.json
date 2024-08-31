@@ -3,6 +3,7 @@
 	"cpu":           "generic",
 	"features":      "+mutable-globals,+nontrapping-fptoint,+sign-ext,-bulk-memory",
 	"build-tags":    ["tinygo.wasm", "wasm_unknown"],
+	"buildmode":    "c-shared",
 	"goos":          "linux",
 	"goarch":        "arm",
 	"linker":        "wasm-ld",

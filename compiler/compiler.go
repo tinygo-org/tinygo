@@ -44,6 +44,7 @@ type Config struct {
 	ABI             string
 	GOOS            string
 	GOARCH          string
+	BuildMode       string
 	CodeModel       string
 	RelocationModel string
 	SizeLevel       int
@@ -1383,6 +1384,11 @@ func (b *builder) createFunction() {
 		b := newBuilder(b.compilerContext, b.Builder, sub)
 		b.llvmFn.SetLinkage(llvm.InternalLinkage)
 		b.createFunction()
+	}
+
+	// Create wrapper function that can be called externally.
+	if b.info.wasmExport != "" {
+		b.createWasmExport()
 	}
 }
 

@@ -14,7 +14,7 @@ func resume() {
 	}
 
 	wasmNested = true
-	scheduler()
+	scheduler(false)
 	wasmNested = false
 }
 
@@ -26,6 +26,6 @@ func go_scheduler() {
 	}
 
 	wasmNested = true
-	scheduler()
+	scheduler(false)
 	wasmNested = false
 }

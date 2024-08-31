@@ -197,6 +197,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		ABI:             config.ABI(),
 		GOOS:            config.GOOS(),
 		GOARCH:          config.GOARCH(),
+		BuildMode:       config.BuildMode(),
 		CodeModel:       config.CodeModel(),
 		RelocationModel: config.RelocationModel(),
 		SizeLevel:       sizeLevel,
@@ -649,6 +650,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	result.Binary = result.Executable // final file
 	ldflags := append(config.LDFlags(), "-o", result.Executable)
 
+	if config.Options.BuildMode == "c-shared" {
+		if !strings.HasPrefix(config.Triple(), "wasm32-") {
+			return result, fmt.Errorf("buildmode c-shared is only supported on wasm at the moment")
+		}
+		ldflags = append(ldflags, "--no-entry")
+	}
+
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
 	if config.Target.RTLib == "compiler-rt" {
@@ -884,7 +892,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 				err := cmd.Run()
 				if err != nil {
-					return fmt.Errorf("wasm-tools failed: %w", err)
+					return fmt.Errorf("`wasm-tools component embed` failed: %w", err)
 				}
 
 				// wasm-tools component new embedded.wasm -o component.wasm
@@ -904,7 +912,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 				err = cmd.Run()
 				if err != nil {
-					return fmt.Errorf("wasm-tools failed: %w", err)
+					return fmt.Errorf("`wasm-tools component new` failed: %w", err)
 				}
 			}
 
