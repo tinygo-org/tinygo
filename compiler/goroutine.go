@@ -49,7 +49,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	// Get all function parameters to pass to the goroutine.
 	var params []llvm.Value
 	for _, param := range instr.Call.Args {
-		params = append(params, b.getValue(param, getPos(instr)))
+		params = append(params, b.expandFormalParam(b.getValue(param, getPos(instr)))...)
 	}
 
 	var prefix string
