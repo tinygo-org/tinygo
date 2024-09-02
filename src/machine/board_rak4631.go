@@ -67,6 +67,7 @@ const (
 	LORA_BUSY   = P1_14
 	LORA_DIO1   = P1_15
 	LORA_NRESET = P1_06
+	LORA_POWER  = P1_05
 )
 
 // USB CDC identifiers
@@ -81,5 +82,5 @@ var (
 )
 
 var (
-	DefaultUART = UART1
+	DefaultUART = UART0
 )
