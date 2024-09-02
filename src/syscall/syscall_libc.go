@@ -215,7 +215,11 @@ func Truncate(path string, length int64) (err error) {
 func Faccessat(dirfd int, path string, mode uint32, flags int) (err error)
 
 func Kill(pid int, sig Signal) (err error) {
-	return ENOSYS // TODO
+	result := libc_kill(int32(pid), int32(sig))
+	if result < 0 {
+		err = getErrno()
+	}
+	return
 }
 
 type SysProcAttr struct{}
@@ -465,3 +469,8 @@ func libc_execve(filename *byte, argv **byte, envp **byte) int
 //
 //export truncate
 func libc_truncate(path *byte, length int64) int32
+
+// int kill(pid_t pid, int sig);
+//
+//export kill
+func libc_kill(pid, sig int32) int32
