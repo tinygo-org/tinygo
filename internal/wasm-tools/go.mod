@@ -2,7 +2,7 @@ module github.com/tinygo-org/tinygo/internal/tools
 
 go 1.22.4
 
-require github.com/ydnar/wasm-tools-go v0.1.5
+require github.com/bytecodealliance/wasm-tools-go v0.2.0
 
 require (
 	github.com/coreos/go-semver v0.3.1 // indirect
