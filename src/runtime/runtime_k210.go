@@ -151,12 +151,17 @@ func sleepTicks(d timeUnit) {
 	kendryte.CLINT.MTIMECMP[0].Set(target)
 	riscv.MIE.SetBits(1 << 7) // MTIE
 	for {
+		riscv.Asm("wfi")
 		if timerWakeup.Get() != 0 {
 			timerWakeup.Set(0)
 			// Disable timer.
 			break
 		}
-		riscv.Asm("wfi")
+		if hasScheduler {
+			// Disable timer and return to scheduler.
+			riscv.MIE.ClearBits(1 << 7) // MTIE bit
+			break
+		}
 	}
 }
 
