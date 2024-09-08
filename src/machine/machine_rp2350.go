@@ -75,6 +75,9 @@ func ticks() uint64 {
 	return 0
 }
 
+//go:linkname machineLightSleep runtime.machineLightSleep
+func machineLightSleep(uint64) {}
+
 func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns / 1000)
 }
