@@ -1,0 +1,19 @@
+{
+    "inherits": ["cortex-m33"],
+    "build-tags": ["rp2350", "rp"],
+    "flash-1200-bps-reset": "true",
+    "flash-method": "msd",
+    "serial": "usb",
+    "msd-volume-name": ["RP2350"],
+    "msd-firmware-name": "firmware.uf2",
+    "binary-format": "uf2",
+    "uf2-family-id": "0xe48bff59","comment":"See page 393 of RP2350 datasheet: RP2350 Arm Secure image (i.e. one intended to be booted directly by the bootrom)",
+    "rp2040-boot-patch": true,
+    "extra-files": [
+        "src/device/rp/rp2040.s"
+    ],
+    "linkerscript": "targets/rp2350.ld",
+    "openocd-interface": "picoprobe",
+    "openocd-transport": "swd",
+    "openocd-target": "rp2350"
+}
