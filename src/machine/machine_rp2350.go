@@ -2,6 +2,16 @@
 
 package machine
 
+import (
+	"device/rp"
+)
+
+const deviceName = rp.Device
+
+//go:linkname machineInit runtime.machineInit
+func machineInit() {
+}
+
 // GPIO pins
 const (
 	GPIO0  Pin = 0
@@ -34,76 +44,41 @@ const (
 	GPIO27 Pin = 27
 	GPIO28 Pin = 28
 	GPIO29 Pin = 29
+
+	LED = GPIO26
 )
 
-/* memory.x
-MEMORY {
-    /*
-     * The RP2350 has either external or internal flash.
-     *
-     * 2 MiB is a safe default here, although a Pico 2 has 4 MiB.
-     * /
-	 FLASH : ORIGIN = 0x10000000, LENGTH = 2048K
-	 /*
-	  * RAM consists of 8 banks, SRAM0-SRAM7, with a striped mapping.
-	  * This is usually good for performance, as it distributes load on
-	  * those banks evenly.
-	  * /
-	 RAM : ORIGIN = 0x20000000, LENGTH = 512K
-	 /*
-	  * RAM banks 8 and 9 use a direct mapping. They can be used to have
-	  * memory areas dedicated for some specific job, improving predictability
-	  * of access times.
-	  * Example: Separate stacks for core0 and core1.
-	  * /
-	 SRAM4 : ORIGIN = 0x20080000, LENGTH = 4K
-	 SRAM5 : ORIGIN = 0x20081000, LENGTH = 4K
- }
+const (
+	PinOutput PinMode = iota
+)
 
- SECTIONS {
-	 /* ### Boot ROM info
-	  *
-	  * Goes after .vector_table, to keep it in the first 4K of flash
-	  * where the Boot ROM (and picotool) can find it
-	  * /
-	 .start_block : ALIGN(4)
-	 {
-		 KEEP(*(.start_block));
-	 } > FLASH
+// PinMode sets the direction and pull mode of the pin. For example, PinOutput
+// sets the pin as an output and PinInputPullup sets the pin as an input with a
+// pull-up.
+// type PinMode uint8
 
- } INSERT AFTER .vector_table;
+// type PinConfig struct {
+// 	Mode PinMode
+// }
 
- /* move .text to start /after/ the boot info * /
- _stext = ADDR(.start_block) + SIZEOF(.start_block);
+func (p Pin) Set(b bool)          {}
+func (p Pin) Get() bool           { return false }
+func (p Pin) Configure(PinConfig) {}
+func putchar(b byte)              {}
 
- SECTIONS {
-	 /* ### Picotool 'Binary Info' Entries
-	  *
-	  * Picotool looks through this block (as we have pointers to it in our
-	  * header) to find interesting information.
-	  * /
-	 .bi_entries : ALIGN(4)
-	 {
-		 /* We put this in the header * /
-		 __bi_entries_start = .;
-		 /* Here are the entries * /
-		 KEEP(*(.bi_entries));
-		 /* Keep this block a nice round size * /
-		 . = ALIGN(4);
-		 /* We put this in the header * /
-		 __bi_entries_end = .;
-	 } > FLASH
- } INSERT AFTER .text;
+type timeUnit int64
 
- SECTIONS {
-	 /* ### Boot ROM extra info
-	  *
-	  * Goes after everything in our program, so it can contain a signature.
-	  * /
-	 .end_block : ALIGN(4)
-	 {
-		 KEEP(*(.end_block));
-	 } > FLASH
+// ticks returns the number of ticks (microseconds) elapsed since power up.
+//
+//go:linkname ticks runtime.machineTicks
+func ticks() uint64 {
+	return 0
+}
 
- } INSERT AFTER .bss;
-*/
+func nanosecondsToTicks(ns int64) timeUnit {
+	return timeUnit(ns / 1000)
+}
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	return int64(ticks) * 1000
+}
