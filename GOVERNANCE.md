@@ -16,13 +16,17 @@ The team of humans who maintain TinyGo.
 ## Members
 
 * Ayke van Laethem (@aykevl)
+* Daniel Esteban (@conejoninja)
 * Ron Evans (@deadprogram)
-
+* Damian Gryski (@dgryski)
+* Masaaki Takasago (@sago35)
+* Patricio Whittingslow (@soypat)
+* Yurii Soldak (@ysoldak)
 
 ## Experimental
 
 *   **Monthly Meeting**: A monthly meeting for the team and any other interested participants.  
     Duration: 1 hour  
     Facilitation: @deadprogram
-    Schedule: TBD
+    Schedule: See https://github.com/tinygo-org/tinygo/wiki/Meetings for more information
 
