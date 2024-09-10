@@ -267,6 +267,12 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
 	}
+
+	// to enable network support for linux systems, reuse the Go version of the net package
+	// and the according runtime functions
+	// if runtime.GOOS == "linux" {
+	// 	paths["runtime/netpoll/"] = true
+	// }
 	return paths
 }
 
