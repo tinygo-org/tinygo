@@ -483,8 +483,17 @@ tinygo-baremetal:
 	# regression test for #2666: e.g. encoding/hex must pass on baremetal
 	$(TINYGO) test -target cortex-m-qemu encoding/hex
 
+.PHONY: testchdir
+testchdir:
+	# test 'build' command with{,out} -C argument
+	$(TINYGO) build -C tests/testing/chdir chdir.go && rm tests/testing/chdir/chdir
+	$(TINYGO) build ./tests/testing/chdir/chdir.go && rm chdir
+	# test 'run' command with{,out} -C argument
+	EXPECT_DIR=$(PWD)/tests/testing/chdir $(TINYGO) run -C tests/testing/chdir chdir.go
+	EXPECT_DIR=$(PWD) $(TINYGO) run ./tests/testing/chdir/chdir.go
+
 .PHONY: smoketest
-smoketest:
+smoketest: testchdir
 	$(TINYGO) version
 	$(TINYGO) targets > /dev/null
 	# regression test for #2892
