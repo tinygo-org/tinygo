@@ -229,10 +229,10 @@ func needsSyscallPackage(buildTags []string) bool {
 // means use the TinyGo version.
 func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 	paths := map[string]bool{
-		"":                      true,
-		"crypto/":               true,
-		"crypto/rand/":          false,
-		"crypto/tls/":           false,
+		"":             true,
+		"crypto/":      true,
+		"crypto/rand/": false,
+		// "crypto/tls/":           false,
 		"device/":               false,
 		"examples/":             false,
 		"internal/":             true,
@@ -245,14 +245,14 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"internal/task/":        false,
 		"internal/wasi/":        false,
 		"machine/":              false,
-		"net/":                  true,
-		"net/http/":             false,
-		"os/":                   true,
-		"reflect/":              false,
-		"runtime/":              false,
-		"sync/":                 true,
-		"testing/":              true,
-		"unique/":               false,
+		"net/":                  false,
+		// "net/http/":             false,
+		"os/":      true,
+		"reflect/": false,
+		"runtime/": false,
+		"sync/":    true,
+		"testing/": true,
+		"unique/":  false,
 	}
 
 	if goMinor >= 19 {
@@ -264,6 +264,12 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
 	}
+
+	// to enable network support for linux systems, reuse the Go version of the net package
+	// and the according runtime functions
+	// if runtime.GOOS == "linux" {
+	// 	paths["runtime/netpoll/"] = true
+	// }
 	return paths
 }
 
