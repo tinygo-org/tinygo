@@ -61,7 +61,8 @@ type Process struct {
 	Pid int
 }
 
-// Wrapper for the forkExec function, which is a wrapper around the fork and execve system calls.
+// StartProcess starts a new process with the program, arguments and attributes specified by name, argv and attr.
+// Arguments to the process (os.Args) are passed via argv.
 func StartProcess(name string, argv []string, attr *ProcAttr) (*Process, error) {
 	return startProcess(name, argv, attr)
 }

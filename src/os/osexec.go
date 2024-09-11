@@ -9,8 +9,7 @@ import (
 )
 
 func fork() (pid int, err error) {
-	// ret, _, _ := syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
-	ret, _, _ := syscall.Syscall(57, 0, 0, 0)
+	ret, _, _ := syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
 	if ret < 0 {
 		// TODO: parse the syscall return codes
 		return 0, errors.New("fork failed")
@@ -35,8 +34,7 @@ func execve(pathname string, argv []string, envv []string) (err error) {
 	}
 	env1[len(envv)] = nil
 
-	// fail, _, _ := syscall.Syscall(syscall.SYS_EXECVE, uintptr(unsafe.Pointer(&argv0[0])), uintptr(unsafe.Pointer(&argv1[0])), uintptr(unsafe.Pointer(&env1[0])))
-	fail, _, _ := syscall.Syscall(59, uintptr(unsafe.Pointer(&argv0[0])), uintptr(unsafe.Pointer(&argv1[0])), uintptr(unsafe.Pointer(&env1[0])))
+	fail, _, _ := syscall.Syscall(syscall.SYS_EXECVE, uintptr(unsafe.Pointer(&argv0[0])), uintptr(unsafe.Pointer(&argv1[0])), uintptr(unsafe.Pointer(&env1[0])))
 	if fail < 0 {
 		// TODO: parse the syscall return codes
 		return errors.New("execve failed")
