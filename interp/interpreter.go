@@ -239,7 +239,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// already be emitted in initAll.
 				continue
 			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" || callFn.name == "runtime.hashmapInterfaceHash" ||
-				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current" ||
+				callFn.name == "os.runtime_args" || callFn.name == "syscall.runtime_envs" ||
+				callFn.name == "internal/task.start" || callFn.name == "internal/task.Current" ||
 				callFn.name == "time.startTimer" || callFn.name == "time.stopTimer" || callFn.name == "time.resetTimer":
 				// These functions should be run at runtime. Specifically:
 				//   * Print and panic functions are best emitted directly without
