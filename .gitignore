@@ -35,5 +35,6 @@ test.exe
 test.gba
 test.hex
 test.nro
+test.uf2
 test.wasm
 wasm.wasm

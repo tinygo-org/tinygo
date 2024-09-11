@@ -1,4 +1,4 @@
-//go:build rp2040
+//go:build rp2040 || rp2350
 
 package machine
 
@@ -18,7 +18,7 @@ type xoscType struct {
 	status   volatile.Register32
 	dormant  volatile.Register32
 	startup  volatile.Register32
-	reserved [3]volatile.Register32
+	reserved [3 - 3*rp2350ExtraReg]volatile.Register32
 	count    volatile.Register32
 }
 

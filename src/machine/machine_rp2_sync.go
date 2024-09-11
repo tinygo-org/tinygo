@@ -1,23 +1,10 @@
-//go:build rp2040
+//go:build rp2040 || rp2350
 
 package machine
-
-import (
-	"device/rp"
-)
 
 // machine_rp2040_sync.go contains interrupt and
 // lock primitives similar to those found in Pico SDK's
 // irq.c
-
-const (
-	// Number of spin locks available
-	_NUMSPINLOCKS = 32
-	// Number of interrupt handlers available
-	_NUMIRQ               = 32
-	_PICO_SPINLOCK_ID_IRQ = 9
-	_NUMBANK0_GPIOS       = 30
-)
 
 // Clears interrupt flag on a pin
 func (p Pin) acknowledgeInterrupt(change PinChange) {
@@ -48,25 +35,5 @@ func (p Pin) ctrlSetInterrupt(change PinChange, enabled bool, base *irqCtrl) {
 		enReg.SetBits(p.ioIntBit(change))
 	} else {
 		enReg.ClearBits(p.ioIntBit(change))
-	}
-}
-
-// Enable or disable a specific interrupt on the executing core.
-// num is the interrupt number which must be in [0,31].
-func irqSet(num uint32, enabled bool) {
-	if num >= _NUMIRQ {
-		return
-	}
-	irqSetMask(1<<num, enabled)
-}
-
-func irqSetMask(mask uint32, enabled bool) {
-	if enabled {
-		// Clear pending before enable
-		// (if IRQ is actually asserted, it will immediately re-pend)
-		rp.PPB.NVIC_ICPR.Set(mask)
-		rp.PPB.NVIC_ISER.Set(mask)
-	} else {
-		rp.PPB.NVIC_ICER.Set(mask)
 	}
 }

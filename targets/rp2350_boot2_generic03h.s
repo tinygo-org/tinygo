@@ -285,6 +285,7 @@ __pre_init_with_offset func, 0, priority_string1
 #define QMI_M0_RFMT_OFFSET _u(0x00000010)
 #define QMI_M0_RFMT_BITS   _u(0x1007d3ff)
 #define QMI_M0_RFMT_RESET  _u(0x00001000)
+
 // ----------------------------------------------------------------------------
 // Config section
 // ----------------------------------------------------------------------------
