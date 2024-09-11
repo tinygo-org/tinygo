@@ -1,5 +1,4 @@
 //go:build linux || unix
-// +build linux unix
 
 package syscall
 
@@ -19,8 +18,3 @@ type SockaddrInet6 struct {
 	Addr   [16]byte
 	raw    RawSockaddrInet6
 }
-
-const (
-	SYS_FORK   = 57
-	SYS_EXECVE = 59
-)

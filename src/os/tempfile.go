@@ -17,8 +17,7 @@ var minrandMutex sync.Mutex
 func init() {
 	// Avoid getting same results on every run
 	now := time.Now()
-	// seed := uint32(Getpid()) ^ uint32(now.Nanosecond()) ^ uint32(now.Unix())
-	seed := uint32(now.Nanosecond()) ^ uint32(now.Unix())
+	seed := uint32(Getpid()) ^ uint32(now.Nanosecond()) ^ uint32(now.Unix())
 	// initial state must be odd
 	minrandPreviousValue = seed | 1
 }
