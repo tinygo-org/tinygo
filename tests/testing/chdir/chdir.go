@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
-	"strings"
 )
 
 /*
@@ -19,9 +19,9 @@ func main() {
 		log.Fatal(err)
 	}
 	if runtime.GOOS == "windows" {
-		strings.Replace(cwd, "\\", "/", -1)
+		cwd = filepath.ToSlash(cwd)
 	}
 	if cwd != expectDir {
-		log.Fatal("expected:\"%v\" != os.Getwd():\"%v\"", expectDir, cwd)
+		log.Fatalf("expected:\"%v\" != os.Getwd():\"%v\"", expectDir, cwd)
 	}
 }
