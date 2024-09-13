@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"go/types"
 
+	co "github.com/tinygo-org/tinygo/compileopts"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -112,7 +113,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	} else {
 		// The stack size is fixed at compile time. By emitting it here as a
 		// constant, it can be optimized.
-		if (b.Scheduler == "tasks" || b.Scheduler == "asyncify") && b.DefaultStackSize == 0 {
+		if (b.Scheduler == co.SchedulerTasks || b.Scheduler == co.SchedulerAsyncify) && b.DefaultStackSize == 0 {
 			b.addError(instr.Pos(), "default stack size for goroutines is not set")
 		}
 		stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
@@ -155,7 +156,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 
 	var deadlock llvm.Value
 	var deadlockType llvm.Type
-	if c.Scheduler == "asyncify" {
+	if c.Scheduler == co.SchedulerAsyncify {
 		deadlockType, deadlock = c.getFunction(c.program.ImportedPackage("runtime").Members["deadlock"].(*ssa.Function))
 	}
 
@@ -212,7 +213,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 		// Create the call.
 		b.CreateCall(fnType, fn, params, "")
 
-		if c.Scheduler == "asyncify" {
+		if c.Scheduler == co.SchedulerAsyncify {
 			b.CreateCall(deadlockType, deadlock, []llvm.Value{
 				llvm.Undef(c.dataPtrType),
 			}, "")
@@ -280,14 +281,14 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 		// Create the call.
 		b.CreateCall(fnType, fnPtr, params, "")
 
-		if c.Scheduler == "asyncify" {
+		if c.Scheduler == co.SchedulerAsyncify {
 			b.CreateCall(deadlockType, deadlock, []llvm.Value{
 				llvm.Undef(c.dataPtrType),
 			}, "")
 		}
 	}
 
-	if c.Scheduler == "asyncify" {
+	if c.Scheduler == co.SchedulerAsyncify {
 		// The goroutine was terminated via deadlock.
 		b.CreateUnreachable()
 	} else {

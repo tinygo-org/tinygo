@@ -194,7 +194,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		return nil, fmt.Errorf("%s : %w", options.Target, err)
 	}
 
-	if spec.Scheduler == "asyncify" {
+	if spec.Scheduler == SchedulerAsyncify {
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_asyncify_wasm.S")
 	}
 
@@ -246,7 +246,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		GOARCH:           options.GOARCH,
 		BuildTags:        []string{options.GOOS, options.GOARCH},
 		GC:               "precise",
-		Scheduler:        "tasks",
+		Scheduler:        SchedulerTasks,
 		Linker:           "cc",
 		DefaultStackSize: 1024 * 64, // 64kB
 		GDB:              []string{"gdb"},
@@ -440,7 +440,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		)
 	case "wasip1":
 		spec.GC = "" // use default GC
-		spec.Scheduler = "asyncify"
+		spec.Scheduler = SchedulerAsyncify
 		spec.Linker = "wasm-ld"
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "wasi-libc"
