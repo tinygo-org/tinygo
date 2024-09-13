@@ -327,26 +327,13 @@ __pre_init_with_offset func, 0, priority_string1
 // deassertion, or page boundary burst breaks.
 
 
-#define INIT_M0_TIMING (\
-    1                      << QMI_M0_TIMING_COOLDOWN_LSB |\
-    PICO_FLASH_SPI_RXDELAY << QMI_M0_TIMING_RXDELAY_LSB |\
-    PICO_FLASH_SPI_CLKDIV  << QMI_M0_TIMING_CLKDIV_LSB |\
-0)
+#define INIT_M0_TIMING (1  << QMI_M0_TIMING_COOLDOWN_LSB |PICO_FLASH_SPI_RXDELAY << QMI_M0_TIMING_RXDELAY_LSB |PICO_FLASH_SPI_CLKDIV  << QMI_M0_TIMING_CLKDIV_LSB |0)
 
 // Set command constants
-#define INIT_M0_RCMD (\
-    CMD_READ             << QMI_M0_RCMD_PREFIX_LSB |\
-0)
+#define INIT_M0_RCMD (CMD_READ << QMI_M0_RCMD_PREFIX_LSB | 0)
 
 // Set read format to all-serial with a command prefix
-#define INIT_M0_RFMT (\
-    QMI_M0_RFMT_PREFIX_WIDTH_VALUE_S << QMI_M0_RFMT_PREFIX_WIDTH_LSB |\
-    QMI_M0_RFMT_ADDR_WIDTH_VALUE_S   << QMI_M0_RFMT_ADDR_WIDTH_LSB |\
-    QMI_M0_RFMT_SUFFIX_WIDTH_VALUE_S << QMI_M0_RFMT_SUFFIX_WIDTH_LSB |\
-    QMI_M0_RFMT_DUMMY_WIDTH_VALUE_S  << QMI_M0_RFMT_DUMMY_WIDTH_LSB |\
-    QMI_M0_RFMT_DATA_WIDTH_VALUE_S   << QMI_M0_RFMT_DATA_WIDTH_LSB |\
-    QMI_M0_RFMT_PREFIX_LEN_VALUE_8   << QMI_M0_RFMT_PREFIX_LEN_LSB |\
-0)
+#define INIT_M0_RFMT ((QMI_M0_RFMT_PREFIX_WIDTH_VALUE_S << QMI_M0_RFMT_PREFIX_WIDTH_LSB) | (QMI_M0_RFMT_ADDR_WIDTH_VALUE_S   << QMI_M0_RFMT_ADDR_WIDTH_LSB) | (QMI_M0_RFMT_SUFFIX_WIDTH_VALUE_S << QMI_M0_RFMT_SUFFIX_WIDTH_LSB) | (QMI_M0_RFMT_DUMMY_WIDTH_VALUE_S  << QMI_M0_RFMT_DUMMY_WIDTH_LSB) | (QMI_M0_RFMT_DATA_WIDTH_VALUE_S   << QMI_M0_RFMT_DATA_WIDTH_LSB) | (QMI_M0_RFMT_PREFIX_LEN_VALUE_8   << QMI_M0_RFMT_PREFIX_LEN_LSB) | 0)
 
 // ----------------------------------------------------------------------------
 // Start of 2nd Stage Boot Code
@@ -358,7 +345,7 @@ pico_default_asm_setup
 
 // On RP2350 boot stage2 is always called as a regular function, and should return normally
 regular_func _stage2_boot
-#ifdef __riscv
+.ifdef __riscv
     mv t0, ra
     li a3, XIP_QMI_BASE
     li a0, INIT_M0_TIMING
@@ -367,7 +354,7 @@ regular_func _stage2_boot
     sw a0, QMI_M0_RCMD_OFFSET(a3)
     li a0, INIT_M0_RFMT
     sw a0, QMI_M0_RFMT_OFFSET(a3)
-#else
+.else
     push {lr}
     ldr r3, =XIP_QMI_BASE
     ldr r0, =INIT_M0_TIMING
@@ -376,18 +363,18 @@ regular_func _stage2_boot
     str r0, [r3, #QMI_M0_RCMD_OFFSET]
     ldr r0, =INIT_M0_RFMT
     str r0, [r3, #QMI_M0_RFMT_OFFSET]
-#endif
+.endif
 
 // Pull in standard exit routine
 // #include "boot2_helpers/exit_from_boot2.S" // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2350/boot_stage2/asminclude/boot2_helpers/exit_from_boot2.S
-#ifdef __riscv
+.ifdef __riscv
     jr t0
-#else
+.else
     pop {pc}
-#endif
+.endif
 
-#ifndef __riscv
+.ifndef __riscv
 .global literals
 literals:
 .ltorg
-#endif
+.endif
