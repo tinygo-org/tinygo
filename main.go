@@ -1461,6 +1461,7 @@ func main() {
 
 	// Early command processing, before commands are interpreted by the Go flag
 	// library.
+	handleChdirFlag()
 	switch command {
 	case "clang", "ld.lld", "wasm-ld":
 		err := builder.RunTool(command, os.Args[2:]...)
@@ -1945,4 +1946,57 @@ func (out *testStderr) Write(data []byte) (int, error) {
 type outputEntry struct {
 	stderr bool
 	data   []byte
+}
+
+// handleChdirFlag handles the -C flag before doing anything else.
+// The -C flag must be the first flag on the command line, to make it easy to find
+// even with commands that have custom flag parsing.
+// handleChdirFlag handles the flag by chdir'ing to the directory
+// and then removing that flag from the command line entirely.
+//
+// We have to handle the -C flag this way for two reasons:
+//
+//  1. Toolchain selection needs to be in the right directory to look for go.mod and go.work.
+//
+//  2. A toolchain switch later on reinvokes the new go command with the same arguments.
+//     The parent toolchain has already done the chdir; the child must not try to do it again.
+
+func handleChdirFlag() {
+	used := 2 // b.c. command at os.Args[1]
+	if used >= len(os.Args) {
+		return
+	}
+
+	var dir string
+	switch a := os.Args[used]; {
+	default:
+		return
+
+	case a == "-C", a == "--C":
+		if used+1 >= len(os.Args) {
+			return
+		}
+		dir = os.Args[used+1]
+		os.Args = slicesDelete(os.Args, used, used+2)
+
+	case strings.HasPrefix(a, "-C="), strings.HasPrefix(a, "--C="):
+		_, dir, _ = strings.Cut(a, "=")
+		os.Args = slicesDelete(os.Args, used, used+1)
+	}
+
+	if err := os.Chdir(dir); err != nil {
+		fmt.Fprintln(os.Stderr, "cannot chdir:", err)
+		os.Exit(1)
+	}
+}
+
+// go1.19 compatibility: lacks slices package
+func slicesDelete[S ~[]E, E any](s S, i, j int) S {
+	_ = s[i:j:len(s)] // bounds check
+
+	if i == j {
+		return s
+	}
+
+	return append(s[:i], s[j:]...)
 }
