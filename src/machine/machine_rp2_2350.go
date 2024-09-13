@@ -22,6 +22,16 @@ const (
 		rp.RESETS_RESET_USBCTRL
 )
 
+// UART pins
+const (
+	UART0_TX_PIN = GPIO0
+	UART0_RX_PIN = GPIO1
+	UART1_TX_PIN = GPIO8
+	UART1_RX_PIN = GPIO9
+	UART_TX_PIN  = UART0_TX_PIN
+	UART_RX_PIN  = UART0_RX_PIN
+)
+
 const (
 	PinOutput PinMode = iota
 	PinInput
