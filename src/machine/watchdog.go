@@ -1,4 +1,4 @@
-//go:build nrf52840 || nrf52833 || rp2040 || atsamd51 || atsame5x || stm32
+//go:build nrf52840 || nrf52833 || rp2040 || rp2350 || atsamd51 || atsame5x || stm32
 
 package machine
 

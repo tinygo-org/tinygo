@@ -235,12 +235,7 @@ func (clks *clocksType) init() {
 		48*MHz,
 		48*MHz)
 
-	// clkRTC = pllUSB (48MHz) / 1024 = 46875Hz
-	clkrtc := clks.clock(clkRTC)
-	clkrtc.configure(0, // No GLMUX
-		rp.CLOCKS_CLK_RTC_CTRL_AUXSRC_CLKSRC_PLL_USB,
-		48*MHz,
-		46875)
+	clks.initRTC()
 
 	// clkPeri = clkSys. Used as reference clock for Peripherals.
 	// No dividers so just select and enable.
