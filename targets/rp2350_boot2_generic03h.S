@@ -314,7 +314,56 @@
     bne     1b             // Conditionally branch if Z flag set. BNE: Branch if Not Equal -> Will branch if Z set, so if r0&bitmask == 0.
 .endm
 
-.macro uart_init
+#define USESIO SIO_BASE
+#define SIO_GPIOOUTSET_OFFSET _u(0x18)
+#define SIO_GPIOOUTCLR_OFFSET _u(0x20)
+#define pinfnSIO _u(1<<5)
+#define pinfnUART _u(1<<2)
+.macro pin_init pin, pinfn
+    #define pinmask (1<<\pin)
+    #define SIO_GPIOOECLR_OFFSET _u(0x40)
+    #define SIO_GPIOOESET_OFFSET _u(0x38)
+    #define pdtctrl_replace_bits _u(0x40|)
+    #define PADSBNK_IOPIN_OFFSET _u(4+4*\pin)
+    #define IOCTLREG _u(IO_BANK0_BASE+8*\pin+4)
+    #define padinputenablemsk _u(0x40)
+    #define padoutuptdisablemsk _u(0x80)
+    // First load in padbank io reg and replace bits in it.
+    ldr r3, =PADS_BANK0_BASE
+    ldr r0, [r3, PADSBNK_IOPIN_OFFSET]
+    bic r0, r0, (padinputenablemsk|padoutuptdisablemsk) // r0 &^= mask
+    orr r0, r0, padinputenablemsk
+    str r0, [r3, PADSBNK_IOPIN_OFFSET]
+    // Set the pin function in IO_BANK0.
+    ldr r3, =IOCTLREG
+    ldr r0, =\pinfn
+    str r0, [r3]
+    // Clear pinstate. 
+    ldr r3, =USESIO
+    ldr r0, =pinmask
+    str r0, [r3, SIO_GPIOOECLR_OFFSET]  // GPIO Output enable 
+    str r0, [r3, SIO_GPIOOUTCLR_OFFSET] // Set pin to low.
+    .if \pinfn == pinfnSIO
+    str r0, [r3, SIO_GPIOOESET_OFFSET] // Assume pin is output: enable output.
+    .endif
+.endm
+
+.macro pinout_init pin
+    pin_init \pin, pinfnSIO
+.endm
+
+.macro pin_set pin, value
+    #define pinmsk _u(1<<\pin)
+    ldr r1, =pinmsk
+    ldr r0, =USESIO
+    .if \value == 0
+        str r1, [r0, SIO_GPIOOUTCLR_OFFSET]
+    .else
+        str r1, [r0, SIO_GPIOOUTSET_OFFSET]
+    .endif
+.endm
+
+.macro uart_init txpin
     #define RESET_UART0 _u(0x4000000)
     ldr r3, =RESETS_BASE
     ldr r0, [r3]                   // Load value @r3 into r0.
@@ -347,34 +396,7 @@
     orr r0, r0, r1         // Cannot use UARTSETTINGS as literal here, exceeds size of 255.
     str r0, [r3, UART_CR_OFFSET]
     // Configure pin 0 as UART (is Tx pin).
-    #define txpin 0
-    #define pinmask (1<<txpin)
-    #define SIO_GPIOOECLR_OFFSET _u(0x40)
-    #define SIO_GPIOOUTCLR_OFFSET _u(0x20)
-    #define pdtctrl_replace_bits _u(0x40|)
-    #define PADSBNK_IOPIN_OFFSET _u(4+4*txpin)
-    #define IOCTLREG _u(IO_BANK0_BASE+8*txpin+4)
-    #define pinfnUART _u(1<<2)
-    #define pinfnSIO _u(1<<5)
-    #define padinputenablemsk _u(0x40)
-    #define padoutuptdisablemsk _u(0x80)
-    // First load in padbank io reg and replace bits in it.
-    ldr r3, =PADS_BANK0_BASE
-    ldr r0, [r3, PADSBNK_IOPIN_OFFSET]
-    bic r0, r0, (padinputenablemsk|padoutuptdisablemsk) // r0 &^= mask
-    orr r0, r0, padinputenablemsk
-    str r0, [r3, PADSBNK_IOPIN_OFFSET]
-
-    // Set the pin function in IO_BANK0.
-    ldr r3, =IOCTLREG
-    ldr r0, =pinfnUART
-    str r0, [r3]
-    // Clear pinstate. 
-    ldr r3, =SIO_BASE
-    ldr r0, =pinmask
-    str r0, [r3, SIO_GPIOOECLR_OFFSET]  // GPIO Output enable 
-    str r0, [r3, SIO_GPIOOUTCLR_OFFSET] // Set pin to low.
-    
+    pin_init \txpin, pinfnUART
 .endm
 
 .macro uart_write value
@@ -410,8 +432,10 @@ regular_func _stage2_boot
     // to resume execution after the bootloader ends.
     // The bootloader uses r0..r1 as scratch and r3 holds the current register-of-interest base address. No other GPRs are used.
     push {lr}
-    uart_init
-    uart_write '1'
+    #define LED _u(25)
+    #define txpin _u(0)
+    pinout_init LED
+    pin_set LED, 1
     ldr r3, =XIP_QMI_BASE
     // Note: STORE_OFF_R3 steps on r0.
     // Here we configure/initialize QMI.
