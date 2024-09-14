@@ -28,78 +28,28 @@
 # setup to the pico_default_asm macro for inline assembly in C code.
 .macro pico_default_asm_setup
 #ifndef __riscv
-.syntax unified
-.cpu cortex-m33
-.fpu fpv5-sp-d16
-.thumb
-.section .boot2, "ax"
+.syntax unified         // Selects Unified Assembly Language (UAL) syntax for assembler. Unifies ARM and thumb into single syntax.
+.cpu cortex-m33         // Specify target CPU architecture.
+.fpu fpv5-sp-d16        // Specify the type of FPU available on CPU. Supports SP (single precision) operations with 16 double precision registers.
+.thumb                  // Assemble subsequent code with Thumb instruction set, the compact 16-bit encoding of the most frequently used 32-bit ARM instructions.
+.section .boot2, "ax"   // Defines a new section named .boot2 with attributes 'a': Allocatable-This section occupies space in memory image, and 'x': This section contains executable code.
+// Code and data assembled after this point will be placed in .boot2 section. The Linker script can specify where this section should be located in memory, such as at a specific address.
+// We need to ensure this code is placed at the very start of flash. See rp2350.ld, .boot2 is placed at 0x10000000 and has max length 256.
+// The compiled code cannot exceed 256 bytes!
+// One can check contents by compiling and using objdump to visualize the code:
+//  tinygo build -target=rp2350 -o=rp2350.elf -serial=none examples/blinky1
+//  objdump -s -j .boot2 rp2350.elf
 #endif
 .endm
 
-// do not put align in here as it is used mid function sometimes
-.macro regular_func x
-.global \x
-.type \x,%function
+.macro regular_func fnname
+.global \fnname             // Declares fnname as a global symbol.
+.type \fnname,%function     // Specifies fnname is a type of function. Helps tools understand fnname is executable code, not data.
 #ifndef __riscv
-.thumb_func
+.thumb_func                 // Indicate fnname is a thumb function. 
 #endif
-\x:
+\fnname:                    // Mark point of entry for function.
 .endm
-
-.macro weak_func x
-.weak \x
-.type \x,%function
-#ifndef __riscv
-.thumb_func
-#endif
-\x:
-.endm
-
-.macro regular_func_with_section x
-.section .text.\x
-regular_func \x
-.endm
-
-// do not put align in here as it is used mid function sometimes
-.macro wrapper_func x
-regular_func WRAPPER_FUNC_NAME(\x)
-.endm
-
-.macro weak_wrapper_func x
-weak_func WRAPPER_FUNC_NAME(\x)
-.endm
-
-.macro __pre_init_with_offset func, offset, priority_string1
-.section .preinit_array.\priority_string1
-.p2align 2
-.word \func + \offset
-.endm
-
-# backwards compatibility
-.macro __pre_init func, priority_string1
-__pre_init_with_offset func, 0, priority_string1
-.endm
-
-#ifdef __riscv
-// rd = (rs1 >> rs2[4:0]) & ~(-1 << nbits)
-.macro h3.bextm rd rs1 rs2 nbits
-.if (\nbits < 1) || (\nbits > 8)
-.err
-.endif
-    .insn r 0x0b, 0x4, (((\nbits - 1) & 0x7 ) << 1), \rd, \rs1, \rs2
-.endm
-
-// rd = (rs1 >> shamt) & ~(-1 << nbits)
-.macro h3.bextmi rd rs1 shamt nbits
-.if (\nbits < 1) || (\nbits > 8)
-.err
-.endif
-.if (\shamt < 0) || (\shamt > 31)
-.err
-.endif
-    .insn i 0x0b, 0x4, \rd, \rs1, (\shamt & 0x1f) | (((\nbits - 1) & 0x7 ) << 6)
-.endm
-#endif
 
 
 // #include "hardware/platform_defs.h" // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2350/hardware_regs/include/hardware/platform_defs.h
@@ -336,6 +286,104 @@ __pre_init_with_offset func, 0, priority_string1
 // Set read format to all-serial with a command prefix
 #define INIT_M0_RFMT ((QMI_M0_RFMT_PREFIX_WIDTH_VALUE_S << QMI_M0_RFMT_PREFIX_WIDTH_LSB) | (QMI_M0_RFMT_ADDR_WIDTH_VALUE_S << QMI_M0_RFMT_ADDR_WIDTH_LSB) | (QMI_M0_RFMT_SUFFIX_WIDTH_VALUE_S << QMI_M0_RFMT_SUFFIX_WIDTH_LSB) | (QMI_M0_RFMT_DUMMY_WIDTH_VALUE_S  << QMI_M0_RFMT_DUMMY_WIDTH_LSB) | (QMI_M0_RFMT_DATA_WIDTH_VALUE_S << QMI_M0_RFMT_DATA_WIDTH_LSB) | (QMI_M0_RFMT_PREFIX_LEN_VALUE_8 << QMI_M0_RFMT_PREFIX_LEN_LSB) | 0)
 
+
+// load_r0 loads the register's value at address regaddr into R0 by stepping on r1 with the regaddr.
+.macro load_r0 regaddr
+    ldr   r1, =\regaddr // Load immediate value of regaddr with = pseudoinstr. May translate into several instructions depending on size of integer.
+    ldr   r0, [r1]      // Load memory at addr described by a register.
+.endm
+
+
+// fload_r0 loads the register's value at address regaddr into R0 and leaves rest of registers in same state.
+.macro fload_r0 regaddr
+    push {r1}  // Pushes contents of r1 onto stack. Stack grows downward in Cortex arch.
+    load_r0 regaddr
+    pop {r1}   // Pops stack onto register r1. Braces can contain a range of addresses.
+.endm
+
+// store_off_r3 is a helper that stores value into a register at address given by r3+off. Uses r0.
+.macro store_off_r3 value, off
+    ldr r0, =\value       // Store literal value we want to store at address r3+off into r0.
+    str r0, [r3, #\off]   // Store value r0 into register at r3+off.
+.endm
+
+// wait_bitclr checks value at address specified by register rx against bitmask until the AND between them yields 0. Steps on r0.
+.macro wait_bitclr rx, bitmask
+1:
+    tst     \rx, #\bitmask  // Perform bitwise AND between register and operand (register or immediate value) updating condition flags. Z flag set if AND yields zero.
+    bne     1b             // Conditionally branch if Z flag set. BNE: Branch if Not Equal -> Will branch if Z set, so if r0&bitmask == 0.
+.endm
+
+.macro uart_init
+    #define RESET_UART0 _u(0x4000000)
+    ldr r3, =RESETS_BASE
+    ldr r0, [r3]                   // Load value @r3 into r0.
+    orr r0, r0, #RESET_UART0        // Set reset bit for UART0.
+    str r0, [r3]                   // Storing the reset bit resets UART.
+    bic r0, r0, #RESET_UART0        // Unset the reset bit
+    str r0, [r3]                   // Clear the UART0 reset bit.
+    wait_bitclr r3, RESET_UART0    // Wait until peripheral is fully reset.
+    
+    // baud supported between ~200..6452000 
+    #define baud 115200
+    #define div (8*125000000/baud)
+    #define ibrd _u(div>>7)
+    #define fbrd _u(((div&0x7f)+1)/2)
+    #define UART_IBRD_OFFSET _u(0x24)
+    #define UART_FBRD_OFFSET _u(0x28)
+    #define UART_LCRH_OFFSET _u(0x2C)
+    ldr r3, =UART0_BASE
+    // Start setting baud.
+    store_off_r3 ibrd, UART_IBRD_OFFSET
+    store_off_r3 fbrd, UART_FBRD_OFFSET
+    ldr r0, [r3, UART_LCRH_OFFSET] // Needs dummy write with contents in LCR.
+    str r0, [r3, UART_LCRH_OFFSET] // write back what we read.
+    #define uartenable (0x1)
+    #define uarttxenable (0x100)
+    #define UARTSETTINGS _u(uartenable|uarttxenable)
+    #define UART_CR_OFFSET _u(0x30)
+    ldr r0, [r3, UART_CR_OFFSET]
+    ldr r1, =UARTSETTINGS 
+    orr r0, r0, r1         // Cannot use UARTSETTINGS as literal here, exceeds size of 255.
+    str r0, [r3, UART_CR_OFFSET]
+    // Configure pin 0 as UART (is Tx pin).
+    #define txpin 0
+    #define pinmask (1<<txpin)
+    #define SIO_GPIOOECLR_OFFSET _u(0x40)
+    #define SIO_GPIOOUTCLR_OFFSET _u(0x20)
+    #define pdtctrl_replace_bits _u(0x40|)
+    #define PADSBNK_IOPIN_OFFSET _u(4+4*txpin)
+    #define IOCTLREG _u(IO_BANK0_BASE+8*txpin+4)
+    #define pinfnUART _u(1<<2)
+    #define pinfnSIO _u(1<<5)
+    #define padinputenablemsk _u(0x40)
+    #define padoutuptdisablemsk _u(0x80)
+    // First load in padbank io reg and replace bits in it.
+    ldr r3, =PADS_BANK0_BASE
+    ldr r0, [r3, PADSBNK_IOPIN_OFFSET]
+    bic r0, r0, (padinputenablemsk|padoutuptdisablemsk) // r0 &^= mask
+    orr r0, r0, padinputenablemsk
+    str r0, [r3, PADSBNK_IOPIN_OFFSET]
+
+    // Set the pin function in IO_BANK0.
+    ldr r3, =IOCTLREG
+    ldr r0, =pinfnUART
+    str r0, [r3]
+    // Clear pinstate. 
+    ldr r3, =SIO_BASE
+    ldr r0, =pinmask
+    str r0, [r3, SIO_GPIOOECLR_OFFSET]  // GPIO Output enable 
+    str r0, [r3, SIO_GPIOOUTCLR_OFFSET] // Set pin to low.
+    
+.endm
+
+.macro uart_write value
+    #define UART_FR_OFFSET _u(0x18)
+    ldr r0, =\value // Mark as immediate value, needs to be constant at compile time.
+    ldr r1, =UART0_BASE
+    str r0, [r1, UART_FR_OFFSET] // Write value in r0 to tx fifo.
+.endm
+
 // ----------------------------------------------------------------------------
 // Start of 2nd Stage Boot Code
 // ----------------------------------------------------------------------------
@@ -353,27 +401,37 @@ regular_func _stage2_boot
     sw a0, QMI_M0_RCMD_OFFSET(a3)
     li a0, INIT_M0_RFMT
     sw a0, QMI_M0_RFMT_OFFSET(a3)
-.else
-    push {lr}
-    ldr r3, =XIP_QMI_BASE
-    ldr r0, =INIT_M0_TIMING
-    str r0, [r3, #QMI_M0_TIMING_OFFSET]
-    ldr r0, =INIT_M0_RCMD
-    str r0, [r3, #QMI_M0_RCMD_OFFSET]
-    ldr r0, =INIT_M0_RFMT
-    str r0, [r3, #QMI_M0_RFMT_OFFSET]
-.endif
-
-// Pull in standard exit routine
-// #include "boot2_helpers/exit_from_boot2.S" // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2350/boot_stage2/asminclude/boot2_helpers/exit_from_boot2.S
-.ifdef __riscv
+    // Exit routine.
     jr t0
 .else
+    // Save link register for exit. lr hold the return address when a function call is made (bl or blx).
+    // We save it because we entered this bootload from the boot ROM, thus lr will contain the flash address 
+    // immediately after this second-stage bootloader code. If bootloader is called by user lr will contain return address
+    // to resume execution after the bootloader ends.
+    // The bootloader uses r0..r1 as scratch and r3 holds the current register-of-interest base address. No other GPRs are used.
+    push {lr}
+    uart_init
+    uart_write '1'
+    ldr r3, =XIP_QMI_BASE
+    // Note: STORE_OFF_R3 steps on r0.
+    // Here we configure/initialize QMI.
+    store_off_r3 INIT_M0_TIMING, QMI_M0_TIMING_OFFSET
+    store_off_r3 INIT_M0_RCMD, QMI_M0_RCMD_OFFSET
+    store_off_r3 INIT_M0_RFMT, QMI_M0_RFMT_OFFSET
+    // We pop the link value we saved in push {lr} above and set the program counter to it. This effectively returns from the function
+    // and returns to the calling function, this is because loading into pc causes the execution to jump to that address.
     pop {pc}
+    // Declares the local symbol literals as a global symbol, making it accessible to the linker and other object files.
+    // ltorg instructs assembler to emit the literal pool at this point in the code.
+    // Places all pending literals (constants that cannot be encoded directly into instructions) at this point.    //
+    // This ensures any ldr pseudo-instructions that reference literals have the corresponding data placed here.
+    // For example, when using the Thumb1 instruction set (16bit encoding) the ldr instruction offset range is limited to 0 to 1020 bytes (increments of 4 bytes),
+    // this is because it encodes offset as an 8 bit integer. If using Thumb2 (32bit) offset has range 0..4095, with 1 byte increment.
+    //  
+    // We need to specify where we place the literals since we also need to have tight control of our bootloader size, limited to 256 bytes including 4 byte checksum.
+    // At the time of writing this bootloader literals section is empty, all instructions are fully encoded above.
+    .global literals
+    literals:
+    .ltorg
 .endif
 
-.ifndef __riscv
-.global literals
-literals:
-.ltorg
-.endif
