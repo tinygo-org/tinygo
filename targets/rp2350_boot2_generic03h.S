@@ -32,6 +32,7 @@
 .cpu cortex-m33
 .fpu fpv5-sp-d16
 .thumb
+.section .boot2, "ax"
 #endif
 .endm
 
@@ -327,21 +328,19 @@ __pre_init_with_offset func, 0, priority_string1
 // deassertion, or page boundary burst breaks.
 
 
-#define INIT_M0_TIMING (1  << QMI_M0_TIMING_COOLDOWN_LSB |PICO_FLASH_SPI_RXDELAY << QMI_M0_TIMING_RXDELAY_LSB |PICO_FLASH_SPI_CLKDIV  << QMI_M0_TIMING_CLKDIV_LSB |0)
+#define INIT_M0_TIMING ((1  << QMI_M0_TIMING_COOLDOWN_LSB) |(PICO_FLASH_SPI_RXDELAY << QMI_M0_TIMING_RXDELAY_LSB) |(PICO_FLASH_SPI_CLKDIV << QMI_M0_TIMING_CLKDIV_LSB) |0)
 
 // Set command constants
 #define INIT_M0_RCMD (CMD_READ << QMI_M0_RCMD_PREFIX_LSB | 0)
 
 // Set read format to all-serial with a command prefix
-#define INIT_M0_RFMT ((QMI_M0_RFMT_PREFIX_WIDTH_VALUE_S << QMI_M0_RFMT_PREFIX_WIDTH_LSB) | (QMI_M0_RFMT_ADDR_WIDTH_VALUE_S   << QMI_M0_RFMT_ADDR_WIDTH_LSB) | (QMI_M0_RFMT_SUFFIX_WIDTH_VALUE_S << QMI_M0_RFMT_SUFFIX_WIDTH_LSB) | (QMI_M0_RFMT_DUMMY_WIDTH_VALUE_S  << QMI_M0_RFMT_DUMMY_WIDTH_LSB) | (QMI_M0_RFMT_DATA_WIDTH_VALUE_S   << QMI_M0_RFMT_DATA_WIDTH_LSB) | (QMI_M0_RFMT_PREFIX_LEN_VALUE_8   << QMI_M0_RFMT_PREFIX_LEN_LSB) | 0)
+#define INIT_M0_RFMT ((QMI_M0_RFMT_PREFIX_WIDTH_VALUE_S << QMI_M0_RFMT_PREFIX_WIDTH_LSB) | (QMI_M0_RFMT_ADDR_WIDTH_VALUE_S << QMI_M0_RFMT_ADDR_WIDTH_LSB) | (QMI_M0_RFMT_SUFFIX_WIDTH_VALUE_S << QMI_M0_RFMT_SUFFIX_WIDTH_LSB) | (QMI_M0_RFMT_DUMMY_WIDTH_VALUE_S  << QMI_M0_RFMT_DUMMY_WIDTH_LSB) | (QMI_M0_RFMT_DATA_WIDTH_VALUE_S << QMI_M0_RFMT_DATA_WIDTH_LSB) | (QMI_M0_RFMT_PREFIX_LEN_VALUE_8 << QMI_M0_RFMT_PREFIX_LEN_LSB) | 0)
 
 // ----------------------------------------------------------------------------
 // Start of 2nd Stage Boot Code
 // ----------------------------------------------------------------------------
 
 pico_default_asm_setup
-
-.section .text
 
 // On RP2350 boot stage2 is always called as a regular function, and should return normally
 regular_func _stage2_boot

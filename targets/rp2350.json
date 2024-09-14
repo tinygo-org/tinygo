@@ -10,7 +10,7 @@
     "uf2-family-id": "0xe48bff59","comment":"See page 393 of RP2350 datasheet: RP2350 Arm Secure image (i.e. one intended to be booted directly by the bootrom)",
     "rp2040-boot-patch": true,
     "extra-files": [
-        "targets/rp2350_boot2_generic03h.s"
+        "targets/rp2350_boot2_generic03h.S"
     ],
     "linkerscript": "targets/rp2350.ld",
     "openocd-interface": "picoprobe",
