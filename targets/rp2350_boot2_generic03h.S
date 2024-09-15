@@ -434,8 +434,8 @@ regular_func _stage2_boot
     push {lr}
     #define LED _u(25)
     #define txpin _u(0)
-    pinout_init LED
-    pin_set LED, 1
+    // pinout_init LED
+    // pin_set LED, 1
     ldr r3, =XIP_QMI_BASE
     // Note: STORE_OFF_R3 steps on r0.
     // Here we configure/initialize QMI.
