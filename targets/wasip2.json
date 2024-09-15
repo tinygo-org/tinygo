@@ -23,7 +23,7 @@
 	"extra-files": [
 		"src/runtime/asm_tinygowasm.S"
 	],
-	"emulator": "wasmtime --wasm component-model --dir={tmpDir}::/tmp {}",
+	"emulator": "wasmtime --wasm component-model -Sinherit-network -Sallow-ip-name-lookup --dir={tmpDir}::/tmp {}",
 	"wit-package": "{root}/lib/wasi-cli/wit/",
 	"wit-world": "wasi:cli/command"
 }
