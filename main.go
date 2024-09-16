@@ -873,24 +873,25 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			// outside its directory, like "../testdata/e.txt". This allows any
 			// relative directory up to the module root, even if the test never
 			// reads any files.
-			//
-			// Ex. run --dir=.. --dir=../.. --dir=../../..
+			if config.TestConfig.CompileTestBinary {
+				// Add relative dirs (../, ../..) up to module root (for wasip1)
+				dirs := dirsToModuleRootRel(result.MainDir, result.ModuleRoot)
 
-			mainDir := result.MainDir
+				// Add absolute dirs up to module root (for wasip2)
+				dirs = append(dirs, dirsToModuleRootAbs(result.MainDir, result.ModuleRoot)...)
+
+				for _, d := range dirs {
+					emuArgs = append(emuArgs, "--dir="+d)
+				}
+			}
+
+			dir := result.MainDir
 			if isSingleFile {
-				mainDir, _ = os.Getwd()
+				dir, _ = os.Getwd()
 			}
-
-			// Add relative dirs (../, ../..) up to module root (for wasip1)
-			dirs := dirsToModuleRootRel(mainDir, result.ModuleRoot)
-
-			// Add absolute dirs up to module root (for wasip2)
-			dirs = append(dirs, dirsToModuleRootAbs(mainDir, result.ModuleRoot)...)
-
-			for _, d := range dirs {
-				emuArgs = append(emuArgs, "--dir="+d)
-			}
-			emuArgs = append(emuArgs, "--env=PWD="+mainDir)
+			emuArgs = append(emuArgs, "--dir=.")
+			emuArgs = append(emuArgs, "--dir="+dir)
+			emuArgs = append(emuArgs, "--env=PWD="+dir)
 		}
 
 		emuArgs = append(emuArgs, emulator[1:]...)
