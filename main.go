@@ -1388,6 +1388,7 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
+	extLDFlags := flag.String("extldflags", "", "additional flags to pass to external linker")
 
 	// Internal flags, that are only intended for TinyGo development.
 	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
@@ -1503,6 +1504,7 @@ func main() {
 		Timeout:         *timeout,
 		WITPackage:      witPackage,
 		WITWorld:        witWorld,
+		ExtLDFlags:      *extLDFlags,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
