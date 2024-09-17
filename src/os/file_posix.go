@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+//TODO: re-implement the ErrNoDeadline error in the correct code path
+
 // Chtimes is a stub, not yet implemented
 func Chtimes(name string, atime time.Time, mtime time.Time) error {
 	return ErrNotImplemented
