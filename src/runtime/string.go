@@ -286,7 +286,7 @@ func cgo_GoBytes(ptr unsafe.Pointer, length uintptr) []byte {
 
 func cgo_CBytes(b []byte) unsafe.Pointer {
 	p := malloc(uintptr(len(b)))
-    s := unsafe.Slice((*byte)(p), len(b))
+	s := unsafe.Slice((*byte)(p), len(b))
 	copy(s, b)
 	return p
 }
