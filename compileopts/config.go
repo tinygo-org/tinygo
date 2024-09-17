@@ -395,6 +395,16 @@ func (c *Config) LDFlags() []string {
 	if c.Target.LinkerScript != "" {
 		ldflags = append(ldflags, "-T", c.Target.LinkerScript)
 	}
+
+	if c.Options.ExtLDFlags != "" {
+		ext, err := shlex.Split(c.Options.ExtLDFlags)
+		if err != nil {
+			// if shlex can't split it, pass it as-is and let the external linker complain
+			ext = []string{c.Options.ExtLDFlags}
+		}
+		ldflags = append(ldflags, ext...)
+	}
+
 	return ldflags
 }
 
