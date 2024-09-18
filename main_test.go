@@ -470,20 +470,21 @@ func TestWebAssembly(t *testing.T) {
 	t.Parallel()
 	type testCase struct {
 		name          string
+		target        string
 		panicStrategy string
 		imports       []string
 	}
 	for _, tc := range []testCase{
 		// Test whether there really are no imports when using -panic=trap. This
 		// tests the bugfix for https://github.com/tinygo-org/tinygo/issues/4161.
-		{name: "panic-default", imports: []string{"wasi_snapshot_preview1.fd_write"}},
-		{name: "panic-trap", panicStrategy: "trap", imports: []string{}},
+		{name: "panic-default", target: "wasip1", imports: []string{"wasi_snapshot_preview1.fd_write", "wasi_snapshot_preview1.random_get"}},
+		{name: "panic-trap", target: "wasm-unknown", panicStrategy: "trap", imports: []string{}},
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			tmpdir := t.TempDir()
-			options := optionsFromTarget("wasi", sema)
+			options := optionsFromTarget(tc.target, sema)
 			options.PanicStrategy = tc.panicStrategy
 			config, err := builder.NewConfig(&options)
 			if err != nil {
