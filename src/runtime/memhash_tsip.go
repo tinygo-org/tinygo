@@ -10,7 +10,7 @@
 package runtime
 
 import (
-	"encoding/binary"
+	"internal/binary"
 	"math/bits"
 	"unsafe"
 )
