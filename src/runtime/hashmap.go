@@ -281,13 +281,26 @@ func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash u
 }
 
 func hashmapGrow(m *hashmap) {
+	// allocate our new buckets twice as big
+	n := hashmapCopy(m, m.bucketBits+1)
+	*m = n
+}
+
+//go:linkname hashmapClone maps.clone
+func hashmapClone(intf _interface) _interface {
+	typ, val := decomposeInterface(intf)
+	m := (*hashmap)(val)
+	n := hashmapCopy(m, m.bucketBits)
+	return composeInterface(typ, unsafe.Pointer(&n))
+}
+
+func hashmapCopy(m *hashmap, sizeBits uint8) hashmap {
 	// clone map as empty
 	n := *m
 	n.count = 0
 	n.seed = uintptr(fastrand())
 
-	// allocate our new buckets twice as big
-	n.bucketBits = m.bucketBits + 1
+	n.bucketBits = sizeBits
 	numBuckets := uintptr(1) << n.bucketBits
 	bucketBufSize := hashmapBucketSize(m)
 	n.buckets = alloc(bucketBufSize*numBuckets, nil)
@@ -303,7 +316,7 @@ func hashmapGrow(m *hashmap) {
 		hashmapSet(&n, key, value, h)
 	}
 
-	*m = n
+	return n
 }
 
 // Get the value of a specified key, or zero the value if not found.
