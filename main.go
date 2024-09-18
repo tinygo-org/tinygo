@@ -1304,19 +1304,20 @@ func (m globalValuesFlag) Set(value string) error {
 
 // parseGoLinkFlag parses the -ldflags parameter. Its primary purpose right now
 // is the -X flag, for setting the value of global string variables.
-func parseGoLinkFlag(flagsString string) (map[string]map[string]string, error) {
+func parseGoLinkFlag(flagsString string) (map[string]map[string]string, string, error) {
 	set := flag.NewFlagSet("link", flag.ExitOnError)
 	globalVarValues := make(globalValuesFlag)
 	set.Var(globalVarValues, "X", "Set the value of the string variable to the given value.")
+	extLDFlags := set.String("extldflags", "", "additional flags to pass to external linker")
 	flags, err := shlex.Split(flagsString)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	err = set.Parse(flags)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return map[string]map[string]string(globalVarValues), nil
+	return map[string]map[string]string(globalVarValues), *extLDFlags, nil
 }
 
 // getListOfPackages returns a standard list of packages for a given list that might
@@ -1388,7 +1389,6 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
-	extLDFlags := flag.String("extldflags", "", "additional flags to pass to external linker")
 
 	// Internal flags, that are only intended for TinyGo development.
 	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
@@ -1449,7 +1449,7 @@ func main() {
 	}
 
 	flag.CommandLine.Parse(os.Args[2:])
-	globalVarValues, err := parseGoLinkFlag(*ldflags)
+	globalVarValues, extLDFlags, err := parseGoLinkFlag(*ldflags)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -1504,7 +1504,7 @@ func main() {
 		Timeout:         *timeout,
 		WITPackage:      witPackage,
 		WITWorld:        witWorld,
-		ExtLDFlags:      *extLDFlags,
+		ExtLDFlags:      extLDFlags,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
