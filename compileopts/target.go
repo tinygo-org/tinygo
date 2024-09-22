@@ -45,6 +45,7 @@ type TargetSpec struct {
 	LinkerScript     string   `json:"linkerscript,omitempty"`
 	ExtraFiles       []string `json:"extra-files,omitempty"`
 	RP2040BootPatch  *bool    `json:"rp2040-boot-patch,omitempty"` // Patch RP2040 2nd stage bootloader checksum
+	BootPatches      []string `json:"boot-patches,omitempty"`      // Bootloader patches to be applied in the order they appear.
 	Emulator         string   `json:"emulator,omitempty"`
 	FlashCommand     string   `json:"flash-command,omitempty"`
 	GDB              []string `json:"gdb,omitempty"`

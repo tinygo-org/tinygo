@@ -31,6 +31,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/soypat/tinyboot v0.0.0-20240922191516-a0ab175013d3 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	golang.org/x/text v0.16.0 // indirect
 )

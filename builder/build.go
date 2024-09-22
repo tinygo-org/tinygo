@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/gofrs/flock"
+	"github.com/soypat/tinyboot/boot/picobin"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -804,6 +805,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					return fmt.Errorf("could not modify stack sizes: %w", err)
 				}
 			}
+
+			// Apply patches of bootloader in the order they appear.
+			if len(config.Target.BootPatches) > 0 {
+				err = applyPatches(result.Executable, config.Target.BootPatches)
+			}
+
 			if config.RP2040BootPatch() {
 				// Patch the second stage bootloader CRC into the .boot2 section
 				err = patchRP2040BootCRC(result.Executable)
@@ -1422,6 +1429,23 @@ func printStacks(calculatedStacks []string, stackSizes map[string]functionStackS
 	}
 }
 
+func applyPatches(executable string, bootPatches []string) (err error) {
+	for _, patch := range bootPatches {
+		switch patch {
+		case "rp2040":
+			err = patchRP2040BootCRC(executable)
+		case "rp2350":
+			err = patchRP2350BootIMAGE_DEF(executable)
+		default:
+			err = errors.New("undefined boot patch name")
+		}
+		if err != nil {
+			return fmt.Errorf("apply boot patch %q: %w", patch, err)
+		}
+	}
+	return nil
+}
+
 // RP2040 second stage bootloader CRC32 calculation
 //
 // Spec: https://datasheets.raspberrypi.org/rp2040/rp2040-datasheet.pdf
@@ -1433,7 +1457,7 @@ func patchRP2040BootCRC(executable string) error {
 	}
 
 	if len(bytes) != 256 {
-		return fmt.Errorf("rp2040 .boot2 section must be exactly 256 bytes")
+		return fmt.Errorf("rp2040 .boot2 section must be exactly 256 bytes, got %d", len(bytes))
 	}
 
 	// From the 'official' RP2040 checksum script:
@@ -1462,70 +1486,17 @@ func patchRP2040BootCRC(executable string) error {
 
 // RP2350 block patching.
 func patchRP2350BootIMAGE_DEF(executable string) error {
-	const (
-		picobinBlockMarkerStart      = 0xffffded3
-		picobinBlockMarkerEnd        = 0xab123579
-		picobinBlockItem1BSImageType = 3
-	)
-	bytes, _, err := getElfSectionData(executable, ".boot2")
+	boot2, _, err := getElfSectionData(executable, ".boot2")
 	if err != nil {
 		return err
 	}
-	type item struct {
-		head   uint8  // [0:1]:size_flag(0 means 1 byte size, 1 means 2 byte size) [1:7]: item type.
-		s0mod  uint8  // s0%256
-		s0div  uint8  // s0/256 if size_flag==1, or is type specific data for blocks that are never >256 words.
-		tpdata uint8  // Type specific data.
-		data   []byte // item data.
-	}
-	type block struct {
-		items []item
-	}
-	makeIMAGE_DEF := func(imgType, exeSec, exeCPU, exeChip uint8, exeTBYB bool) item {
-		return item{
-			head: 0x42, s0mod: 1, s0div: 0b111&imgType | (0b11 & exeSec << 4),
-			tpdata: 0b111&exeCPU | ((0b111 & exeChip) << 4) | b2u8(exeTBYB)<<7,
-		}
-	}
-	appendItem := func(dst []byte, it item) []byte {
-		dst = append(dst, it.head, it.s0mod, it.s0div, it.tpdata)
-		return append(dst, it.data...)
-	}
-	appendBlock := func(dst []byte, blk block) []byte {
-		dst = binary.LittleEndian.AppendUint32(dst, picobinBlockMarkerStart)
-		startSize := len(dst)
-		for _, item := range blk.items {
-			dst = appendItem(dst, item)
-		}
-		itemsSize := len(dst) - startSize
-		// Last item append:
-		dst = append(dst,
-			0xff, // size_flag=1, item_type==blockItemLast
-			uint8((itemsSize/4)%256),
-			uint8((itemsSize/4)/256),
-			0, // Pad.
-		)
-		// Relative position in bytes to next block HEADER relative to this blocks HEADER.
-		// Use 0 to denote a loop to this same block.
-		dst = binary.LittleEndian.AppendUint32(dst, 0)
-		dst = binary.LittleEndian.AppendUint32(dst, picobinBlockMarkerEnd) // Footer.
-		return nil
-	}
-	boot2IMGDEF := makeIMAGE_DEF(
-		1,     // 1:Executable; 2: Data.
-		2,     // 0:Non-Secure; 1:Run in secure mode.
-		0,     // 0:ARM arch;   1:RISCV arch
-		1,     // 0:RP2040;     1:RP2350
-		false, // true: Image is flagged for "Try Before You Buy"
-	)
-
-	if len(bytes) != 256 {
-		return fmt.Errorf("rp2040 .boot2 section must be exactly 256 bytes")
-	}
-	_ = appendBlock
-	_ = boot2IMGDEF
+	item0 := picobin.MakeImageDef(picobin.ImageTypeExecutable, picobin.ExeSecSecure, picobin.ExeCPUARM, picobin.ExeChipRP2350, false)
+	newBoot := make([]byte, 256)
+	newBoot, _, err = picobin.AppendBlockFromItems(newBoot[:0], []picobin.Item{item0.Item}, boot2, 0)
+	off := len(newBoot)
+	newBoot, _, err = picobin.AppendFinalBlock(newBoot, -off)
 	// Update the .boot2 section to included the CRC
-	return replaceElfSection(executable, ".boot2", bytes)
+	return replaceElfSection(executable, ".boot2", newBoot)
 }
 
 // lock may acquire a lock at the specified path.
