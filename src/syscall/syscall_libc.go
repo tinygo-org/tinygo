@@ -212,7 +212,7 @@ func Truncate(path string, length int64) (err error) {
 	return
 }
 
-//go:linkname syscall_fcntl runtime.fcntl
+//go:linkname syscall_fcntl runtime/runtime.fcntl
 func syscall_fcntl(fd, cmd, arg int32) (ret int32, errno int32) {
 	// https://cs.opensource.google/go/go/+/master:src/runtime/os_linux.go;l=452?q=runtime.fcntl&ss=go%2Fgo
 	r, _, err := Syscall6(SYS_FCNTL, uintptr(fd), uintptr(cmd), uintptr(arg), 0, 0, 0)

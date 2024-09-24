@@ -142,6 +142,6 @@ func hardwareRand() (n uint64, ok bool) {
 //export getrandom
 func libc_getrandom(buf unsafe.Pointer, buflen uintptr, flags uint32) uint32
 
-//go:linknam runtime_fcntl syscall/syscall_fcntl
-//go:export
-func runtime_fcntl(fd, cmd, arg int32) (ret int32, errno int32)
+func fcntl(fd, cmd, arg int32) (ret int32, errno int32){
+    return 0, 0
+}
