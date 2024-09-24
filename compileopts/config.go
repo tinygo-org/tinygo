@@ -104,14 +104,14 @@ func (c *Config) GC() string {
 	if c.Target.GC != "" {
 		return c.Target.GC
 	}
-	return "conservative"
+	return GCConservative
 }
 
 // NeedsStackObjects returns true if the compiler should insert stack objects
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "conservative", "custom", "precise":
+	case GCConservative, GCCustom, GCPrecise:
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
 				return true
@@ -134,7 +134,7 @@ func (c *Config) Scheduler() string {
 		return c.Target.Scheduler
 	}
 	// Fall back to none.
-	return "none"
+	return SchedulerNone
 }
 
 // Serial returns the serial implementation for this build configuration: uart,
@@ -146,22 +146,22 @@ func (c *Config) Serial() string {
 	if c.Target.Serial != "" {
 		return c.Target.Serial
 	}
-	return "none"
+	return SerialNone
 }
 
 // OptLevels returns the optimization level (0-2), size level (0-2), and inliner
 // threshold as used in the LLVM optimization pipeline.
 func (c *Config) OptLevel() (level string, speedLevel, sizeLevel int) {
 	switch c.Options.Opt {
-	case "none", "0":
+	case OptNone, "0":
 		return "O0", 0, 0
-	case "1":
+	case Opt1:
 		return "O1", 1, 0
-	case "2":
+	case Opt2:
 		return "O2", 2, 0
-	case "s":
+	case Opts:
 		return "Os", 2, 1
-	case "z":
+	case Optz:
 		return "Oz", 2, 2 // default
 	default:
 		// This is not shown to the user: valid choices are already checked as
@@ -181,7 +181,7 @@ func (c *Config) PanicStrategy() string {
 // automatically at compile time, if possible. If it is false, no attempt is
 // made.
 func (c *Config) AutomaticStackSize() bool {
-	if c.Target.AutoStackSize != nil && c.Scheduler() == "tasks" {
+	if c.Target.AutoStackSize != nil && c.Scheduler() == SchedulerTasks {
 		return *c.Target.AutoStackSize
 	}
 	return false
@@ -218,10 +218,10 @@ func (c *Config) RP2040BootPatch() bool {
 // vs thumb* vs arm64.
 func CanonicalArchName(triple string) string {
 	arch := strings.Split(triple, "-")[0]
-	if arch == "arm64" {
+	if arch == ArchArm64 {
 		return "aarch64"
 	}
-	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
+	if strings.HasPrefix(arch, ArchArm) || strings.HasPrefix(arch, "thumb") {
 		return "arm"
 	}
 	if arch == "mipsel" {
@@ -252,7 +252,7 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 	}
 
 	// Try to load a precompiled library.
-	precompiledDir := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", archname, name)
+	precompiledDir := filepath.Join(goenv.Get(TinyGoRoot), "pkg", archname, name)
 	if _, err := os.Stat(precompiledDir); err == nil {
 		// Found a precompiled library for this OS/architecture. Return the path
 		// directly.
@@ -261,30 +261,30 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 
 	// No precompiled library found. Determine the path name that will be used
 	// in the build cache.
-	return filepath.Join(goenv.Get("GOCACHE"), name+"-"+archname), false
+	return filepath.Join(goenv.Get(GolangCache), name+"-"+archname), false
 }
 
 // DefaultBinaryExtension returns the default extension for binaries, such as
-// .exe, .wasm, or no extension (depending on the target).
+// .exe, .wasm, .elf or no extension (depending on the target).
 func (c *Config) DefaultBinaryExtension() string {
 	parts := strings.Split(c.Triple(), "-")
 	if parts[0] == "wasm32" {
 		// WebAssembly files always have the .wasm file extension.
-		return ".wasm"
+		return "." + BinExtWasm
 	}
-	if len(parts) >= 3 && parts[2] == "windows" {
+	if len(parts) >= 3 && parts[2] == OsWindows {
 		// Windows uses .exe.
-		return ".exe"
+		return "." + BinExtExe
 	}
 	if len(parts) >= 3 && parts[2] == "unknown" {
 		// There appears to be a convention to use the .elf file extension for
 		// ELF files intended for microcontrollers. I'm not aware of the origin
 		// of this, it's just something that is used by many projects.
 		// I think it's a good tradition, so let's keep it.
-		return ".elf"
+		return "." + BinExtElf
 	}
 	// Linux, MacOS, etc, don't use a file extension. Use it as a fallback.
-	return ""
+	return BinExtNone
 }
 
 // CFlags returns the flags to pass to the C compiler. This is necessary for CGo
@@ -292,7 +292,7 @@ func (c *Config) DefaultBinaryExtension() string {
 func (c *Config) CFlags(libclang bool) []string {
 	var cflags []string
 	for _, flag := range c.Target.CFlags {
-		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
+		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get(TinyGoRoot)))
 	}
 	resourceDir := goenv.ClangResourceDir(libclang)
 	if resourceDir != "" {
@@ -306,13 +306,13 @@ func (c *Config) CFlags(libclang bool) []string {
 	}
 	switch c.Target.Libc {
 	case "darwin-libSystem":
-		root := goenv.Get("TINYGOROOT")
+		root := goenv.Get(TinyGoRoot)
 		cflags = append(cflags,
 			"-nostdlibinc",
 			"-isystem", filepath.Join(root, "lib/macos-minimal-sdk/src/usr/include"),
 		)
 	case "picolibc":
-		root := goenv.Get("TINYGOROOT")
+		root := goenv.Get(TinyGoRoot)
 		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
 		path, _ := c.LibcPath("picolibc")
 		cflags = append(cflags,
@@ -322,7 +322,7 @@ func (c *Config) CFlags(libclang bool) []string {
 			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
 		)
 	case "musl":
-		root := goenv.Get("TINYGOROOT")
+		root := goenv.Get(TinyGoRoot)
 		path, _ := c.LibcPath("musl")
 		arch := MuslArchitecture(c.Triple())
 		cflags = append(cflags,
@@ -332,14 +332,14 @@ func (c *Config) CFlags(libclang bool) []string {
 			"-isystem", filepath.Join(root, "lib", "musl", "include"),
 		)
 	case "wasi-libc":
-		root := goenv.Get("TINYGOROOT")
+		root := goenv.Get(TinyGoRoot)
 		cflags = append(cflags,
 			"-nostdlibinc",
 			"-isystem", root+"/lib/wasi-libc/sysroot/include")
 	case "wasmbuiltins":
 		// nothing to add (library is purely for builtins)
 	case "mingw-w64":
-		root := goenv.Get("TINYGOROOT")
+		root := goenv.Get(TinyGoRoot)
 		path, _ := c.LibcPath("mingw-w64")
 		cflags = append(cflags,
 			"-nostdlibinc",
@@ -385,7 +385,7 @@ func (c *Config) CFlags(libclang bool) []string {
 // (like the one for the compiler runtime), but this represents the majority of
 // the flags.
 func (c *Config) LDFlags() []string {
-	root := goenv.Get("TINYGOROOT")
+	root := goenv.Get(TinyGoRoot)
 	// Merge and adjust LDFlags.
 	var ldflags []string
 	for _, flag := range c.Target.LDFlags {
@@ -436,37 +436,41 @@ func (c *Config) Debug() bool {
 // BinaryFormat returns an appropriate binary format, based on the file
 // extension and the configured binary format in the target JSON file.
 func (c *Config) BinaryFormat(ext string) string {
+	if len(ext) > 1 {
+		ext = ext[1:] // remove leading '.'
+	}
+
 	switch ext {
-	case ".bin", ".gba", ".nro":
+	case BinFormatBin, BinFormatGba, BinFormatNro:
 		// The simplest format possible: dump everything in a raw binary file.
 		if c.Target.BinaryFormat != "" {
 			return c.Target.BinaryFormat
 		}
-		return "bin"
-	case ".img":
+		return BinFormatBin
+	case BinFormatImg:
 		// Image file. Only defined for the ESP32 at the moment, where it is a
 		// full (runnable) image that can be used in the Espressif QEMU fork.
 		if c.Target.BinaryFormat != "" {
-			return c.Target.BinaryFormat + "-img"
+			return c.Target.BinaryFormat + "-" + BinFormatImg
 		}
-		return "bin"
-	case ".hex":
+		return BinFormatBin
+	case BinFormatHex:
 		// Similar to bin, but includes the start address and is thus usually a
 		// better format.
-		return "hex"
-	case ".uf2":
+		return BinFormatHex
+	case BinFormatUf2:
 		// Special purpose firmware format, mainly used on Adafruit boards.
 		// More information:
 		// https://github.com/Microsoft/uf2
-		return "uf2"
-	case ".zip":
+		return BinFormatUf2
+	case BinFormatZip:
 		if c.Target.BinaryFormat != "" {
 			return c.Target.BinaryFormat
 		}
-		return "zip"
+		return BinFormatZip
 	default:
 		// Use the ELF format for unrecognized file formats.
-		return "elf"
+		return BinExtElf
 	}
 }
 
@@ -478,16 +482,16 @@ func (c *Config) Programmer() (method, openocdInterface string) {
 	case "":
 		// No configuration supplied.
 		return c.Target.FlashMethod, c.Target.OpenOCDInterface
-	case "openocd", "msd", "command":
+	case ProgOpenOCD, ProgMSD, ProgCommand:
 		// The -programmer flag only specifies the flash method.
 		return c.Options.Programmer, c.Target.OpenOCDInterface
-	case "bmp":
+	case ProgBMP:
 		// The -programmer flag only specifies the flash method.
 		return c.Options.Programmer, ""
 	default:
 		// The -programmer flag specifies something else, assume it specifies
 		// the OpenOCD interface name.
-		return "openocd", c.Options.Programmer
+		return ProgOpenOCD, c.Options.Programmer
 	}
 }
 
@@ -580,7 +584,7 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 	}
 	var emulator []string
 	for _, s := range parts {
-		s = strings.ReplaceAll(s, "{root}", goenv.Get("TINYGOROOT"))
+		s = strings.ReplaceAll(s, "{root}", goenv.Get(TinyGoRoot))
 		// Allow replacement of what's usually /tmp except notably Windows.
 		s = strings.ReplaceAll(s, "{tmpDir}", os.TempDir())
 		s = strings.ReplaceAll(s, "{"+format+"}", binary)

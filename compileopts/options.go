@@ -8,12 +8,12 @@ import (
 )
 
 var (
-	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise"}
-	validSchedulerOptions     = []string{"none", "tasks", "asyncify"}
-	validSerialOptions        = []string{"none", "uart", "usb", "rtt"}
-	validPrintSizeOptions     = []string{"none", "short", "full"}
-	validPanicStrategyOptions = []string{"print", "trap"}
-	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
+	validGCOptions            = []string{GCNone, GCLeaking, GCConservative, GCCustom, GCPrecise}
+	validSchedulerOptions     = []string{SchedulerNone, SchedulerTasks, SchedulerAsyncify}
+	validSerialOptions        = []string{SerialNone, SerialUART, SerialUSB, SerialRTT}
+	validPrintSizeOptions     = []string{SizeNone, SizeShort, SizeFull}
+	validPanicStrategyOptions = []string{PanicPrint, PanicTrap}
+	validOptOptions           = []string{OptNone, Opt1, Opt2, Opt3, Opts, Optz}
 )
 
 // Options contains extra options to give to the compiler. These options are
@@ -26,18 +26,18 @@ type Options struct {
 	GOMIPS          string // environment variable (only used with GOARCH=mips and GOARCH=mipsle)
 	Directory       string // working dir, leave it unset to use the current working dir
 	Target          string
-	Opt             string
-	GC              string
-	PanicStrategy   string
+	Opt             string // optimization level. may be O0, O1, O2, O3, Os, or Oz
+	GC              string // garbage collection strategy. may be
+	PanicStrategy   string // panic strategy. may be print, or trap
 	Scheduler       string
 	StackSize       uint64 // goroutine stack size (if none could be automatically determined)
 	Serial          string
 	Work            bool // -work flag to print temporary build directory
 	InterpTimeout   time.Duration
-	PrintIR         bool
-	DumpSSA         bool
-	VerifyIR        bool
-	SkipDWARF       bool
+	PrintIR         bool                             // provide the build in llvm intermediate representation (LLVM-IR)
+	DumpSSA         bool                             // provide the build in single static assignment (ssa)
+	VerifyIR        bool                             // verify the generate IR via llvm.VerifyModule
+	SkipDWARF       bool                             // do not generate DWARF debug information
 	PrintCommands   func(cmd string, args ...string) `json:"-"`
 	Semaphore       chan struct{}                    `json:"-"` // -p flag controls cap
 	Debug           bool

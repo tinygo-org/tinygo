@@ -64,13 +64,13 @@ func TestVerifyOptions(t *testing.T) {
 		{
 			name: "SchedulerOptionNone",
 			opts: compileopts.Options{
-				Scheduler: "none",
+				Scheduler: compileopts.SchedulerNone,
 			},
 		},
 		{
 			name: "SchedulerOptionTasks",
 			opts: compileopts.Options{
-				Scheduler: "tasks",
+				Scheduler: compileopts.SchedulerTasks,
 			},
 		},
 		{
