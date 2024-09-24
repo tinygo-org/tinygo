@@ -37,6 +37,7 @@ import (
 )
 
 const gcDebug = false
+const needsStaticHeap = true
 
 // Some globals + constants for the entire GC.
 
@@ -493,6 +494,12 @@ func markRoots(start, end uintptr) {
 		root := *(*uintptr)(unsafe.Pointer(addr))
 		markRoot(addr, root)
 	}
+}
+
+func markCurrentGoroutineStack(sp uintptr) {
+	// This could be optimized by only marking the stack area that's currently
+	// in use.
+	markRoot(0, sp)
 }
 
 // stackOverflow is a flag which is set when the GC scans too deep while marking.

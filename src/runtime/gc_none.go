@@ -10,6 +10,8 @@ import (
 	"unsafe"
 )
 
+const needsStaticHeap = false
+
 var gcTotalAlloc uint64 // for runtime.MemStats
 var gcMallocs uint64
 var gcFrees uint64

@@ -71,7 +71,10 @@ var stackTop uintptr
 //
 //export main
 func main(argc int32, argv *unsafe.Pointer) int {
-	preinit()
+	if needsStaticHeap {
+		// Allocate area for the heap if the GC needs it.
+		allocateHeap()
+	}
 
 	// Store argc and argv for later use.
 	main_argc = argc
@@ -267,7 +270,7 @@ var heapMaxSize uintptr
 
 var heapStart, heapEnd uintptr
 
-func preinit() {
+func allocateHeap() {
 	// Allocate a large chunk of virtual memory. Because it is virtual, it won't
 	// really be allocated in RAM. Memory will only be allocated when it is
 	// first touched.

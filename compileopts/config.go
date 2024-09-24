@@ -250,6 +250,10 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 	if c.Target.SoftFloat {
 		archname += "-softfloat"
 	}
+	if name == "bdwgc" {
+		// Boehm GC is compiled against a particular libc.
+		archname += "-" + c.Target.Libc
+	}
 
 	// Try to load a precompiled library.
 	precompiledDir := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", archname, name)
@@ -304,57 +308,7 @@ func (c *Config) CFlags(libclang bool) []string {
 			"-resource-dir="+resourceDir,
 		)
 	}
-	switch c.Target.Libc {
-	case "darwin-libSystem":
-		root := goenv.Get("TINYGOROOT")
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", filepath.Join(root, "lib/macos-minimal-sdk/src/usr/include"),
-		)
-	case "picolibc":
-		root := goenv.Get("TINYGOROOT")
-		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
-		path, _ := c.LibcPath("picolibc")
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
-			"-isystem", filepath.Join(picolibcDir, "include"),
-			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
-		)
-	case "musl":
-		root := goenv.Get("TINYGOROOT")
-		path, _ := c.LibcPath("musl")
-		arch := MuslArchitecture(c.Triple())
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
-			"-isystem", filepath.Join(root, "lib", "musl", "arch", arch),
-			"-isystem", filepath.Join(root, "lib", "musl", "include"),
-		)
-	case "wasi-libc":
-		root := goenv.Get("TINYGOROOT")
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", root+"/lib/wasi-libc/sysroot/include")
-	case "wasmbuiltins":
-		// nothing to add (library is purely for builtins)
-	case "mingw-w64":
-		root := goenv.Get("TINYGOROOT")
-		path, _ := c.LibcPath("mingw-w64")
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
-			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
-			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
-			"-D_UCRT",
-		)
-	case "":
-		// No libc specified, nothing to add.
-	default:
-		// Incorrect configuration. This could be handled in a better way, but
-		// usually this will be found by developers (not by TinyGo users).
-		panic("unknown libc: " + c.Target.Libc)
-	}
+	cflags = append(cflags, c.LibcCFlags()...)
 	// Always emit debug information. It is optionally stripped at link time.
 	cflags = append(cflags, "-gdwarf-4")
 	// Use the same optimization level as TinyGo.
@@ -379,6 +333,67 @@ func (c *Config) CFlags(libclang bool) []string {
 		cflags = append(cflags, "-mabi="+c.ABI())
 	}
 	return cflags
+}
+
+// LibcCFlags returns the C compiler flags for the configured libc.
+// It only uses flags that are part of the libc path (triple, cpu, abi, libc
+// name) so it can safely be used to compile another C library.
+func (c *Config) LibcCFlags() []string {
+	switch c.Target.Libc {
+	case "darwin-libSystem":
+		root := goenv.Get("TINYGOROOT")
+		return []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(root, "lib/macos-minimal-sdk/src/usr/include"),
+		}
+	case "picolibc":
+		root := goenv.Get("TINYGOROOT")
+		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
+		path, _ := c.LibcPath("picolibc")
+		return []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+			"-isystem", filepath.Join(picolibcDir, "include"),
+			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
+		}
+	case "musl":
+		root := goenv.Get("TINYGOROOT")
+		path, _ := c.LibcPath("musl")
+		arch := MuslArchitecture(c.Triple())
+		return []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+			"-isystem", filepath.Join(root, "lib", "musl", "arch", arch),
+			"-isystem", filepath.Join(root, "lib", "musl", "arch", "generic"),
+			"-isystem", filepath.Join(root, "lib", "musl", "include"),
+		}
+	case "wasi-libc":
+		root := goenv.Get("TINYGOROOT")
+		return []string{
+			"-nostdlibinc",
+			"-isystem", root + "/lib/wasi-libc/sysroot/include",
+		}
+	case "wasmbuiltins":
+		// nothing to add (library is purely for builtins)
+		return nil
+	case "mingw-w64":
+		root := goenv.Get("TINYGOROOT")
+		path, _ := c.LibcPath("mingw-w64")
+		return []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
+			"-D_UCRT",
+		}
+	case "":
+		// No libc specified, nothing to add.
+		return nil
+	default:
+		// Incorrect configuration. This could be handled in a better way, but
+		// usually this will be found by developers (not by TinyGo users).
+		panic("unknown libc: " + c.Target.Libc)
+	}
 }
 
 // LDFlags returns the flags to pass to the linker. A few more flags are needed
