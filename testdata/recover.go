@@ -17,6 +17,12 @@ func main() {
 	println("\n# panic inside defer")
 	panicInsideDefer()
 
+	println("\n# panic inside indirect defer")
+	panicInsideIndirectDefer(callPanic)
+
+	println("\n# panic inside closure")
+	panicInsideClosure()
+
 	println("\n# panic replace")
 	panicReplace()
 }
@@ -74,6 +80,27 @@ func panicInsideDefer() {
 	}()
 	defer func() {
 		panic("panic")
+	}()
+}
+
+func panicInsideIndirectDefer(callback func()) {
+	defer func() {
+		printitf("recovered:", recover())
+	}()
+	defer callback()
+}
+
+func callPanic() {
+	panic("panic")
+}
+
+func panicInsideClosure() {
+	msg := "panic"
+	defer func() {
+		printitf("recovered:", recover())
+	}()
+	defer func() {
+		panic(msg)
 	}()
 }
 

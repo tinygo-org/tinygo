@@ -70,21 +70,25 @@ func (b *builder) createRuntimeInvoke(fnName string, args []llvm.Value, name str
 // createCall creates a call to the given function with the arguments possibly
 // expanded.
 func (b *builder) createCall(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string) llvm.Value {
-	expanded := make([]llvm.Value, 0, len(args))
-	for _, arg := range args {
-		fragments := b.expandFormalParam(arg)
-		expanded = append(expanded, fragments...)
-	}
-	return b.CreateCall(fnType, fn, expanded, name)
+	return b.CreateCall(fnType, fn, b.expandFormalParams(args), name)
 }
 
 // createInvoke is like createCall but continues execution at the landing pad if
 // the call resulted in a panic.
 func (b *builder) createInvoke(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string) llvm.Value {
-	if b.hasDeferFrame() {
+	switch b.deferFrameType() {
+	case recoverInlineAsm:
 		b.createInvokeCheckpoint()
+		return b.createCall(fnType, fn, args, name)
+	case recoverWasmEH:
+		continueBB := b.insertBasicBlock("invoke.cont")
+		call := b.CreateInvoke(fnType, fn, b.expandFormalParams(args), continueBB, b.landingpad, name)
+		b.SetInsertPointAtEnd(continueBB)
+		b.blockExits[b.currentBlock] = continueBB
+		return call
+	default:
+		return b.createCall(fnType, fn, args, name)
 	}
-	return b.createCall(fnType, fn, args, name)
 }
 
 // Expand an argument type to a list that can be used in a function call
@@ -121,6 +125,17 @@ func (b *builder) expandFormalParamOffsets(t llvm.Type) []uint64 {
 		// TODO: split small arrays
 		return []uint64{0}
 	}
+}
+
+// expandFormalParams expands every param in the params slice like
+// expandFormalParam.
+func (b *builder) expandFormalParams(params []llvm.Value) []llvm.Value {
+	expanded := make([]llvm.Value, 0, len(params))
+	for _, arg := range params {
+		fragments := b.expandFormalParam(arg)
+		expanded = append(expanded, fragments...)
+	}
+	return expanded
 }
 
 // expandFormalParam splits a formal param value into pieces, so it can be

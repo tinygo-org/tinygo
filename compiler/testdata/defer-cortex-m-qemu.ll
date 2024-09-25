@@ -3,7 +3,7 @@ source_filename = "defer.go"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-unknown-unknown-eabi"
 
-%runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i1, %runtime._interface }
+%runtime.deferFrameInlineAsm = type { ptr, ptr, [0 x ptr], ptr, i1, %runtime._interface }
 %runtime._interface = type { ptr, ptr }
 %runtime._defer = type { i32, ptr }
 
@@ -24,9 +24,9 @@ entry:
   %defer.alloca = alloca { i32, ptr }, align 4
   %deferPtr = alloca ptr, align 4
   store ptr null, ptr %deferPtr, align 4
-  %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferframe.buf = alloca %runtime.deferFrameInlineAsm, align 4
   %0 = call ptr @llvm.stacksave.p0()
-  call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  call void @runtime.setupDeferFrameInlineAsm(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   store i32 0, ptr %defer.alloca, align 4
   %defer.alloca.repack15 = getelementptr inbounds { i32, ptr }, ptr %defer.alloca, i32 0, i32 1
   store ptr null, ptr %defer.alloca.repack15, align 4
@@ -40,7 +40,7 @@ entry:
   br label %rundefers.block
 
 rundefers.after:                                  ; preds = %rundefers.end
-  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  call void @runtime.destroyDeferFrameInlineAsm(ptr nonnull %deferframe.buf, ptr undef) #4
   ret void
 
 rundefers.block:                                  ; preds = %1
@@ -76,7 +76,7 @@ rundefers.end:                                    ; preds = %rundefers.loophead
   br label %rundefers.after
 
 recover:                                          ; preds = %rundefers.end3
-  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  call void @runtime.destroyDeferFrameInlineAsm(ptr nonnull %deferframe.buf, ptr undef) #4
   ret void
 
 lpad:                                             ; preds = %rundefers.callback012, %rundefers.callback0, %entry
@@ -115,9 +115,9 @@ rundefers.end3:                                   ; preds = %rundefers.loophead6
 ; Function Attrs: nocallback nofree nosync nounwind willreturn
 declare ptr @llvm.stacksave.p0() #3
 
-declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(24), ptr, ptr) #2
+declare void @runtime.setupDeferFrameInlineAsm(ptr dereferenceable_or_null(24), ptr, ptr) #2
 
-declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(24), ptr) #2
+declare void @runtime.destroyDeferFrameInlineAsm(ptr dereferenceable_or_null(24), ptr) #2
 
 ; Function Attrs: nounwind
 define internal void @"main.deferSimple$1"(ptr %context) unnamed_addr #1 {
@@ -135,9 +135,9 @@ entry:
   %defer.alloca = alloca { i32, ptr }, align 4
   %deferPtr = alloca ptr, align 4
   store ptr null, ptr %deferPtr, align 4
-  %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferframe.buf = alloca %runtime.deferFrameInlineAsm, align 4
   %0 = call ptr @llvm.stacksave.p0()
-  call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  call void @runtime.setupDeferFrameInlineAsm(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   store i32 0, ptr %defer.alloca, align 4
   %defer.alloca.repack22 = getelementptr inbounds { i32, ptr }, ptr %defer.alloca, i32 0, i32 1
   store ptr null, ptr %defer.alloca.repack22, align 4
@@ -155,7 +155,7 @@ entry:
   br label %rundefers.block
 
 rundefers.after:                                  ; preds = %rundefers.end
-  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  call void @runtime.destroyDeferFrameInlineAsm(ptr nonnull %deferframe.buf, ptr undef) #4
   ret void
 
 rundefers.block:                                  ; preds = %1
@@ -201,7 +201,7 @@ rundefers.end:                                    ; preds = %rundefers.loophead
   br label %rundefers.after
 
 recover:                                          ; preds = %rundefers.end7
-  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  call void @runtime.destroyDeferFrameInlineAsm(ptr nonnull %deferframe.buf, ptr undef) #4
   ret void
 
 lpad:                                             ; preds = %rundefers.callback119, %rundefers.callback016, %rundefers.callback1, %rundefers.callback0, %entry

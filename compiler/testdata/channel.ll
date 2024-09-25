@@ -9,16 +9,17 @@ target triple = "wasm32-unknown-wasi"
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
+; Function Attrs: nounwind
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.chanIntSend(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #2 {
+define hidden void @main.chanIntSend(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.blockedList = alloca %runtime.channelBlockedList, align 8
   %chan.value = alloca i32, align 4
@@ -32,15 +33,15 @@ entry:
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture) #3
+declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture) #2
 
-declare void @runtime.chanSend(ptr dereferenceable_or_null(32), ptr, ptr dereferenceable_or_null(24), ptr) #1
+declare void @runtime.chanSend(ptr dereferenceable_or_null(32), ptr, ptr dereferenceable_or_null(24), ptr) #3
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture) #3
+declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture) #2
 
 ; Function Attrs: nounwind
-define hidden void @main.chanIntRecv(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #2 {
+define hidden void @main.chanIntRecv(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.blockedList = alloca %runtime.channelBlockedList, align 8
   %chan.value = alloca i32, align 4
@@ -52,10 +53,10 @@ entry:
   ret void
 }
 
-declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(32), ptr, ptr dereferenceable_or_null(24), ptr) #1
+declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(32), ptr, ptr dereferenceable_or_null(24), ptr) #3
 
 ; Function Attrs: nounwind
-define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #2 {
+define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.blockedList = alloca %runtime.channelBlockedList, align 8
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %chan.blockedList)
@@ -65,7 +66,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.chanZeroRecv(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #2 {
+define hidden void @main.chanZeroRecv(ptr dereferenceable_or_null(32) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.blockedList = alloca %runtime.channelBlockedList, align 8
   call void @llvm.lifetime.start.p0(i64 24, ptr nonnull %chan.blockedList)
@@ -75,7 +76,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.selectZeroRecv(ptr dereferenceable_or_null(32) %ch1, ptr dereferenceable_or_null(32) %ch2, ptr %context) unnamed_addr #2 {
+define hidden void @main.selectZeroRecv(ptr dereferenceable_or_null(32) %ch1, ptr dereferenceable_or_null(32) %ch2, ptr %context) unnamed_addr #1 {
 entry:
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
   %select.send.value = alloca i32, align 4
@@ -105,10 +106,10 @@ select.body:                                      ; preds = %select.next
   br label %select.done
 }
 
-declare { i32, i1 } @runtime.tryChanSelect(ptr, ptr, i32, i32, ptr) #1
+declare { i32, i1 } @runtime.tryChanSelect(ptr, ptr, i32, i32, ptr) #3
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #3 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
+attributes #3 = { "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
 attributes #4 = { nounwind }

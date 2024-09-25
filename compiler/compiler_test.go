@@ -44,6 +44,7 @@ func TestCompiler(t *testing.T) {
 		{"interface.go", "", ""},
 		{"func.go", "", ""},
 		{"defer.go", "cortex-m-qemu", ""},
+		{"defer.go", "wasm", "none"},
 		{"pragma.go", "", ""},
 		{"goroutine.go", "wasm", "asyncify"},
 		{"goroutine.go", "cortex-m-qemu", "tasks"},

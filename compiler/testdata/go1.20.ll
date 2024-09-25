@@ -8,24 +8,25 @@ target triple = "wasm32-unknown-wasi"
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
+; Function Attrs: nounwind
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
+define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #3
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef)
   ret ptr %s.data
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.unsafeString(ptr dereferenceable_or_null(1) %ptr, i16 %len, ptr %context) unnamed_addr #2 {
+define hidden %runtime._string @main.unsafeString(ptr dereferenceable_or_null(1) %ptr, i16 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %0 = icmp slt i16 %len, 0
@@ -39,7 +40,7 @@ unsafe.String.next:                               ; preds = %entry
   %5 = zext i16 %len to i32
   %6 = insertvalue %runtime._string undef, ptr %ptr, 0
   %7 = insertvalue %runtime._string %6, i32 %5, 1
-  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #3
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef)
   ret %runtime._string %7
 
 unsafe.String.throw:                              ; preds = %entry
@@ -47,17 +48,17 @@ unsafe.String.throw:                              ; preds = %entry
   unreachable
 }
 
-declare void @runtime.unsafeSlicePanic(ptr) #1
+declare void @runtime.unsafeSlicePanic(ptr) #2
 
 ; Function Attrs: nounwind
-define hidden ptr @main.unsafeStringData(ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #2 {
+define hidden ptr @main.unsafeStringData(ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #3
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef)
   ret ptr %s.data
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
 attributes #3 = { nounwind }

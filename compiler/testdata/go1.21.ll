@@ -8,29 +8,30 @@ target triple = "wasm32-unknown-wasi"
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
 
+; Function Attrs: nounwind
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.min1(i32 %a, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.min1(i32 %a, ptr %context) unnamed_addr #1 {
 entry:
   ret i32 %a
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.min2(i32 %a, i32 %b, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.min2(i32 %a, i32 %b, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call i32 @llvm.smin.i32(i32 %a, i32 %b)
   ret i32 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.min3(i32 %a, i32 %b, i32 %c, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.min3(i32 %a, i32 %b, i32 %c, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call i32 @llvm.smin.i32(i32 %a, i32 %b)
   %1 = call i32 @llvm.smin.i32(i32 %0, i32 %c)
@@ -38,7 +39,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.min4(i32 %a, i32 %b, i32 %c, i32 %d, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.min4(i32 %a, i32 %b, i32 %c, i32 %d, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call i32 @llvm.smin.i32(i32 %a, i32 %b)
   %1 = call i32 @llvm.smin.i32(i32 %0, i32 %c)
@@ -47,21 +48,21 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i8 @main.minUint8(i8 %a, i8 %b, ptr %context) unnamed_addr #2 {
+define hidden i8 @main.minUint8(i8 %a, i8 %b, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call i8 @llvm.umin.i8(i8 %a, i8 %b)
   ret i8 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.minUnsigned(i32 %a, i32 %b, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.minUnsigned(i32 %a, i32 %b, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call i32 @llvm.umin.i32(i32 %a, i32 %b)
   ret i32 %0
 }
 
 ; Function Attrs: nounwind
-define hidden float @main.minFloat32(float %a, float %b, ptr %context) unnamed_addr #2 {
+define hidden float @main.minFloat32(float %a, float %b, ptr %context) unnamed_addr #1 {
 entry:
   %0 = fcmp olt float %a, %b
   %1 = select i1 %0, float %a, float %b
@@ -69,7 +70,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden double @main.minFloat64(double %a, double %b, ptr %context) unnamed_addr #2 {
+define hidden double @main.minFloat64(double %a, double %b, ptr %context) unnamed_addr #1 {
 entry:
   %0 = fcmp olt double %a, %b
   %1 = select i1 %0, double %a, double %b
@@ -77,7 +78,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.minString(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr %context) unnamed_addr #2 {
+define hidden %runtime._string @main.minString(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr %context) unnamed_addr #1 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -87,28 +88,28 @@ entry:
   %4 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #5
   %5 = select i1 %4, %runtime._string %1, %runtime._string %3
   %6 = extractvalue %runtime._string %5, 0
-  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #5
+  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef)
   ret %runtime._string %5
 }
 
-declare i1 @runtime.stringLess(ptr, i32, ptr, i32, ptr) #1
+declare i1 @runtime.stringLess(ptr, i32, ptr, i32, ptr) #2
 
 ; Function Attrs: nounwind
-define hidden i32 @main.maxInt(i32 %a, i32 %b, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.maxInt(i32 %a, i32 %b, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call i32 @llvm.smax.i32(i32 %a, i32 %b)
   ret i32 %0
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.maxUint(i32 %a, i32 %b, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.maxUint(i32 %a, i32 %b, ptr %context) unnamed_addr #1 {
 entry:
   %0 = call i32 @llvm.umax.i32(i32 %a, i32 %b)
   ret i32 %0
 }
 
 ; Function Attrs: nounwind
-define hidden float @main.maxFloat32(float %a, float %b, ptr %context) unnamed_addr #2 {
+define hidden float @main.maxFloat32(float %a, float %b, ptr %context) unnamed_addr #1 {
 entry:
   %0 = fcmp ogt float %a, %b
   %1 = select i1 %0, float %a, float %b
@@ -116,7 +117,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.maxString(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr %context) unnamed_addr #2 {
+define hidden %runtime._string @main.maxString(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr %context) unnamed_addr #1 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -126,12 +127,12 @@ entry:
   %4 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #5
   %5 = select i1 %4, %runtime._string %1, %runtime._string %3
   %6 = extractvalue %runtime._string %5, 0
-  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #5
+  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef)
   ret %runtime._string %5
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.clearSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
+define hidden void @main.clearSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   %0 = shl i32 %s.len, 2
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
@@ -142,19 +143,19 @@ entry:
 declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #3
 
 ; Function Attrs: nounwind
-define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
+define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.clearMap(ptr dereferenceable_or_null(40) %m, ptr %context) unnamed_addr #2 {
+define hidden void @main.clearMap(ptr dereferenceable_or_null(40) %m, ptr %context) unnamed_addr #1 {
 entry:
   call void @runtime.hashmapClear(ptr %m, ptr undef) #5
   ret void
 }
 
-declare void @runtime.hashmapClear(ptr dereferenceable_or_null(40), ptr) #1
+declare void @runtime.hashmapClear(ptr dereferenceable_or_null(40), ptr) #2
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.smin.i32(i32, i32) #4
@@ -171,9 +172,9 @@ declare i32 @llvm.smax.i32(i32, i32) #4
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umax.i32(i32, i32) #4
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #2 = { "target-features"="+bulk-memory,+exception-handling,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
 attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: write) }
 attributes #4 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #5 = { nounwind }
