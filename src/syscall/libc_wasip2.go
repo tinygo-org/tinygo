@@ -22,6 +22,12 @@ import (
 	"internal/wasi/random/v0.2.0/random"
 )
 
+func init() {
+	libc_envs()
+	wasiPreopens()
+	wasiStreams()
+}
+
 func goString(cstr *byte) string {
 	return unsafe.String(cstr, strlen(cstr))
 }
