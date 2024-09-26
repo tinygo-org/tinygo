@@ -5,6 +5,7 @@
 package syscall
 
 import (
+	"sync"
 	"unsafe"
 
 	"internal/cm"
@@ -42,7 +43,7 @@ func strlen(cstr *byte) uintptr {
 //
 //export write
 func write(fd int32, buf *byte, count uint) int {
-	if stream, ok := wasiStreams[fd]; ok {
+	if stream, ok := wasiStreams()[fd]; ok {
 		return writeStream(stream, buf, count, 0)
 	}
 
@@ -68,7 +69,7 @@ func write(fd int32, buf *byte, count uint) int {
 //
 //export read
 func read(fd int32, buf *byte, count uint) int {
-	if stream, ok := wasiStreams[fd]; ok {
+	if stream, ok := wasiStreams()[fd]; ok {
 		return readStream(stream, buf, count, 0)
 	}
 
@@ -111,7 +112,7 @@ var wasiFiles map[int32]*wasiFile = make(map[int32]*wasiFile)
 
 func findFreeFD() int32 {
 	var newfd int32
-	for wasiStreams[newfd] != nil || wasiFiles[newfd] != nil {
+	for wasiStreams()[newfd] != nil || wasiFiles[newfd] != nil {
 		newfd++
 	}
 	return newfd
@@ -127,27 +128,25 @@ type wasiStream struct {
 
 // This holds entries for stdin/stdout/stderr.
 
-var wasiStreams map[int32]*wasiStream
-
-func init() {
+var wasiStreams = sync.OnceValue(func() map[int32]*wasiStream {
 	sin := stdin.GetStdin()
 	sout := stdout.GetStdout()
 	serr := stderr.GetStderr()
-	wasiStreams = map[int32]*wasiStream{
-		0: &wasiStream{
+	return map[int32]*wasiStream{
+		0: {
 			in:   &sin,
 			refs: 1,
 		},
-		1: &wasiStream{
+		1: {
 			out:  &sout,
 			refs: 1,
 		},
-		2: &wasiStream{
+		2: {
 			out:  &serr,
 			refs: 1,
 		},
 	}
-}
+})
 
 func readStream(stream *wasiStream, buf *byte, count uint, offset int64) int {
 	if stream.in == nil {
@@ -228,9 +227,8 @@ func memcpy(dst, src unsafe.Pointer, size uintptr)
 func pread(fd int32, buf *byte, count uint, offset int64) int {
 	// TODO(dgryski): Need to be consistent about all these checks; EBADF/EINVAL/... ?
 
-	if stream, ok := wasiStreams[fd]; ok {
+	if stream, ok := wasiStreams()[fd]; ok {
 		return readStream(stream, buf, count, offset)
-
 	}
 
 	streams, ok := wasiFiles[fd]
@@ -266,7 +264,7 @@ func pread(fd int32, buf *byte, count uint, offset int64) int {
 //export pwrite
 func pwrite(fd int32, buf *byte, count uint, offset int64) int {
 	// TODO(dgryski): Need to be consistent about all these checks; EBADF/EINVAL/... ?
-	if stream, ok := wasiStreams[fd]; ok {
+	if stream, ok := wasiStreams()[fd]; ok {
 		return writeStream(stream, buf, count, 0)
 	}
 
@@ -299,7 +297,7 @@ func pwrite(fd int32, buf *byte, count uint, offset int64) int {
 //
 //export lseek
 func lseek(fd int32, offset int64, whence int) int64 {
-	if _, ok := wasiStreams[fd]; ok {
+	if _, ok := wasiStreams()[fd]; ok {
 		// can't lseek a stream
 		libcErrno = EBADF
 		return -1
@@ -336,7 +334,7 @@ func lseek(fd int32, offset int64, whence int) int64 {
 //
 //export close
 func close(fd int32) int32 {
-	if streams, ok := wasiStreams[fd]; ok {
+	if streams, ok := wasiStreams()[fd]; ok {
 		if streams.out != nil {
 			// ignore any error
 			streams.out.BlockingFlush()
@@ -353,7 +351,7 @@ func close(fd int32) int32 {
 			}
 		}
 
-		delete(wasiStreams, fd)
+		delete(wasiStreams(), fd)
 		return 0
 	}
 
@@ -376,10 +374,10 @@ func close(fd int32) int32 {
 //export dup
 func dup(fd int32) int32 {
 	// is fd a stream?
-	if stream, ok := wasiStreams[fd]; ok {
+	if stream, ok := wasiStreams()[fd]; ok {
 		newfd := findFreeFD()
 		stream.refs++
-		wasiStreams[newfd] = stream
+		wasiStreams()[newfd] = stream
 		return newfd
 	}
 
@@ -567,7 +565,7 @@ func link(from, to *byte) int32 {
 //
 //export fsync
 func fsync(fd int32) int32 {
-	if _, ok := wasiStreams[fd]; ok {
+	if _, ok := wasiStreams()[fd]; ok {
 		// can't sync a stream
 		libcErrno = EBADF
 		return -1
@@ -676,7 +674,7 @@ func stat(pathname *byte, dst *Stat_t) int32 {
 //
 //export fstat
 func fstat(fd int32, dst *Stat_t) int32 {
-	if _, ok := wasiStreams[fd]; ok {
+	if _, ok := wasiStreams()[fd]; ok {
 		// TODO(dgryski): fill in stat buffer for stdin etc
 		return -1
 	}
@@ -756,11 +754,6 @@ func lstat(pathname *byte, dst *Stat_t) int32 {
 	return 0
 }
 
-func init() {
-	populateEnvironment()
-	populatePreopens()
-}
-
 type wasiDir struct {
 	d    types.Descriptor // wasip2 descriptor
 	root string           // root path for this descriptor
@@ -769,9 +762,7 @@ type wasiDir struct {
 
 var libcCWD wasiDir
 
-var wasiPreopens map[string]types.Descriptor
-
-func populatePreopens() {
+var wasiPreopens = sync.OnceValue(func() map[string]types.Descriptor {
 	var cwd string
 
 	// find CWD
@@ -793,8 +784,8 @@ func populatePreopens() {
 		}
 		preopens[path] = desc
 	}
-	wasiPreopens = preopens
-}
+	return preopens
+})
 
 // -- BEGIN fs_wasip1.go --
 // The following section has been taken from upstream Go with the following copyright:
@@ -919,7 +910,7 @@ func findPreopenForPath(path string) (wasiDir, string) {
 	path = joinPath(dir, path)
 
 	var best string
-	for k, v := range wasiPreopens {
+	for k, v := range wasiPreopens() {
 		if len(k) > len(best) && hasPrefix(path, k) {
 			wasidir = wasiDir{d: v, root: k}
 			best = wasidir.root
@@ -1097,7 +1088,7 @@ type libc_DIR struct {
 //
 //export fdopendir
 func fdopendir(fd int32) unsafe.Pointer {
-	if _, ok := wasiStreams[fd]; ok {
+	if _, ok := wasiStreams()[fd]; ok {
 		libcErrno = EBADF
 		return nil
 	}
@@ -1230,14 +1221,14 @@ func p2fileTypeToStatType(t types.DescriptorType) uint32 {
 	return 0
 }
 
-var libc_envs map[string]string
-
-func populateEnvironment() {
-	libc_envs = make(map[string]string)
-	for _, kv := range environment.GetEnvironment().Slice() {
-		libc_envs[kv[0]] = kv[1]
+var libc_envs = sync.OnceValue(func() map[string]string {
+	kvs := environment.GetEnvironment().Slice()
+	envs := make(map[string]string, len(kvs))
+	for _, kv := range kvs {
+		envs[kv[0]] = kv[1]
 	}
-}
+	return envs
+})
 
 // char * getenv(const char *name);
 //
@@ -1245,7 +1236,7 @@ func populateEnvironment() {
 func getenv(key *byte) *byte {
 	k := goString(key)
 
-	v, ok := libc_envs[k]
+	v, ok := libc_envs()[k]
 	if !ok {
 		return nil
 	}
@@ -1263,12 +1254,12 @@ func getenv(key *byte) *byte {
 //export setenv
 func setenv(key, value *byte, overwrite int) int {
 	k := goString(key)
-	if _, ok := libc_envs[k]; ok && overwrite == 0 {
+	if _, ok := libc_envs()[k]; ok && overwrite == 0 {
 		return 0
 	}
 
 	v := goString(value)
-	libc_envs[k] = v
+	libc_envs()[k] = v
 
 	return 0
 }
@@ -1278,7 +1269,7 @@ func setenv(key, value *byte, overwrite int) int {
 //export unsetenv
 func unsetenv(key *byte) int {
 	k := goString(key)
-	delete(libc_envs, k)
+	delete(libc_envs(), k)
 	return 0
 }
 
