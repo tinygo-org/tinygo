@@ -45,13 +45,14 @@ const (
 	bytesPerBlock      = wordsPerBlock * unsafe.Sizeof(heapStart)
 	stateBits          = 2 // how many bits a block state takes (see blockState type)
 	blocksPerStateByte = 8 / stateBits
-	markStackSize      = 4 * unsafe.Sizeof((*int)(nil)) // number of to-be-marked blocks to queue before forcing a rescan
+	markStackSize      = 8 * unsafe.Sizeof((*int)(nil)) // number of to-be-marked blocks to queue before forcing a rescan
 )
 
 var (
 	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
 	nextAlloc     gcBlock        // the next block that should be tried by the allocator
 	endBlock      gcBlock        // the block just past the end of the available space
+	maxBlock      gcBlock        // maximum block that has been allocated
 	gcTotalAlloc  uint64         // total number of bytes allocated
 	gcMallocs     uint64         // total number of allocations
 	gcFrees       uint64         // total number of objects freed
@@ -374,6 +375,13 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 				size -= add
 			}
 			memzero(pointer, size)
+			if nextAlloc > maxBlock {
+				maxBlock = nextAlloc - 1
+			}
+			if heapScanCount == 2 {
+				// if we had to do a GC to find this allocation, reset nextAlloc to the start of the heap
+				nextAlloc = 0
+			}
 			return pointer
 		}
 	}
@@ -583,7 +591,7 @@ func finishMark() {
 	for stackOverflow {
 		// Re-mark all blocks.
 		stackOverflow = false
-		for block := gcBlock(0); block < endBlock; block++ {
+		for block := gcBlock(0); block <= maxBlock; block++ {
 			if block.state() != blockStateMark {
 				// Block is not marked, so we do not need to rescan it.
 				continue
@@ -618,8 +626,9 @@ func markRoot(addr, root uintptr) {
 // Sweep goes through all memory and frees unmarked memory.
 // It returns how many bytes are free in the heap after the sweep.
 func sweep() (freeBytes uintptr) {
+	var lastBlock gcBlock
 	freeCurrentObject := false
-	for block := gcBlock(0); block < endBlock; block++ {
+	for block := gcBlock(0); block <= maxBlock; block++ {
 		switch block.state() {
 		case blockStateHead:
 			// Unmarked head. Free it, including all tail blocks following it.
@@ -633,6 +642,8 @@ func sweep() (freeBytes uintptr) {
 				// Free it now.
 				block.markFree()
 				freeBytes += bytesPerBlock
+			} else {
+				lastBlock = block
 			}
 		case blockStateMark:
 			// This is a marked object. The next tail blocks must not be freed,
@@ -640,10 +651,15 @@ func sweep() (freeBytes uintptr) {
 			// collect this object if it is unreferenced then.
 			block.unmark()
 			freeCurrentObject = false
+			lastBlock = block
 		case blockStateFree:
 			freeBytes += bytesPerBlock
 		}
 	}
+	if gcAsserts && lastBlock > maxBlock {
+		runtimePanic("gc: lastblock > maxBlock")
+	}
+	maxBlock = lastBlock
 	return
 }
 
