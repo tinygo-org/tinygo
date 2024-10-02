@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"sync"
 	"unsafe"
 
 	"internal/wasi/cli/v0.2.0/environment"
@@ -11,12 +12,34 @@ import (
 
 type timeUnit int64
 
-//export wasi:cli/run@0.2.0#run
-func __wasi_cli_run_run() uint32 {
+var callInitAll = sync.OnceFunc(initAll)
+
+var initialize = sync.OnceFunc(func() {
 	// These need to be initialized early so that the heap can be initialized.
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
-	run()
+	initHeap()
+})
+
+//export _initialize
+func _initialize() {
+	initialize()
+	callInitAll()
+}
+
+//export wasi:cli/run@0.2.0#run
+func __wasi_cli_run_run() uint32 {
+	initialize()
+	if hasScheduler {
+		go func() {
+			callInitAll()
+			callMain()
+			schedulerDone = true
+		}()
+		scheduler()
+	} else {
+		callMain()
+	}
 	return 0
 }
 
