@@ -823,19 +823,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					args = append(args, "--asyncify")
 				}
 
-				exeunopt := result.Executable
-
-				if config.Options.Work {
-					// Keep the work direction around => don't overwrite the .wasm binary with the optimized version
-					exeunopt += ".pre-wasm-opt"
-					os.Rename(result.Executable, exeunopt)
-				}
-
+				inputFile := result.Binary
+				result.Binary = result.Executable + ".wasmopt"
 				args = append(args,
 					opt,
 					"-g",
-					exeunopt,
-					"--output", result.Executable,
+					inputFile,
+					"--output", result.Binary,
 				)
 
 				wasmopt := goenv.Get("WASMOPT")
@@ -865,13 +859,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 				// wasm-tools component embed -w wasi:cli/command
 				// 		$$(tinygo env TINYGOROOT)/lib/wasi-cli/wit/ main.wasm -o embedded.wasm
+				componentEmbedInputFile := result.Binary
+				result.Binary = result.Executable + ".wasm-component-embed"
 				args := []string{
 					"component",
 					"embed",
 					"-w", witWorld,
 					witPackage,
-					result.Executable,
-					"-o", result.Executable,
+					componentEmbedInputFile,
+					"-o", result.Binary,
 				}
 
 				wasmtools := goenv.Get("WASMTOOLS")
@@ -888,11 +884,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 
 				// wasm-tools component new embedded.wasm -o component.wasm
+				componentNewInputFile := result.Binary
+				result.Binary = result.Executable + ".wasm-component-new"
 				args = []string{
 					"component",
 					"new",
-					result.Executable,
-					"-o", result.Executable,
+					componentNewInputFile,
+					"-o", result.Binary,
 				}
 
 				if config.Options.PrintCommands != nil {
