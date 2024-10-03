@@ -1479,7 +1479,8 @@ func MakeSlice(typ Type, len, cap int) Value {
 	ulen := uint(len)
 	ucap := uint(cap)
 	maxSize := (^uintptr(0)) / 2
-	elementSize := rtype.elem().Size()
+	elem := rtype.elem()
+	elementSize := elem.Size()
 	if elementSize > 1 {
 		maxSize /= uintptr(elementSize)
 	}
@@ -1493,7 +1494,9 @@ func MakeSlice(typ Type, len, cap int) Value {
 	var slice sliceHeader
 	slice.cap = uintptr(ucap)
 	slice.len = uintptr(ulen)
-	slice.data = alloc(size, nil)
+	layout := elem.gcLayout()
+
+	slice.data = alloc(size, layout)
 
 	return Value{
 		typecode: rtype,

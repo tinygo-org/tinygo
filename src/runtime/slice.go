@@ -3,6 +3,7 @@ package runtime
 // This file implements compiler builtins for slices: append() and copy().
 
 import (
+	"internal/gclayout"
 	"math/bits"
 	"unsafe"
 )
@@ -47,7 +48,13 @@ func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr) 
 	// memory allocators, this causes some difficult to debug issues.
 	newCap = 1 << bits.Len(uint(newCap))
 
-	buf := alloc(newCap*elemSize, nil)
+	var layout unsafe.Pointer
+	// less type info here; can only go off element size
+	if elemSize < unsafe.Sizeof(uintptr(0)) {
+		layout = gclayout.NoPtrs
+	}
+
+	buf := alloc(newCap*elemSize, layout)
 	if oldLen > 0 {
 		// copy any data to new slice
 		memmove(buf, oldBuf, oldLen*elemSize)
