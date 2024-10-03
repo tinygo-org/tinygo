@@ -64,6 +64,7 @@
 package reflect
 
 import (
+	"internal/gclayout"
 	"internal/itoa"
 	"unsafe"
 )
@@ -959,6 +960,26 @@ func (t *rawType) Align() int {
 	default:
 		panic("unimplemented: alignment of type")
 	}
+}
+
+func (r *rawType) gcLayout() unsafe.Pointer {
+	kind := r.Kind()
+
+	if kind < String {
+		return gclayout.NoPtrs
+	}
+
+	switch kind {
+	case Pointer, UnsafePointer, Chan, Map:
+		return gclayout.Pointer
+	case String:
+		return gclayout.String
+	case Slice:
+		return gclayout.Slice
+	}
+
+	// Unknown (for now); let the conservative pointer scanning handle it
+	return nil
 }
 
 // FieldAlign returns the alignment if this type is used in a struct field. It
