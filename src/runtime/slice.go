@@ -47,7 +47,13 @@ func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr) 
 	// memory allocators, this causes some difficult to debug issues.
 	newCap = 1 << bits.Len(uint(newCap))
 
-	buf := alloc(newCap*elemSize, nil)
+	var layout unsafe.Pointer
+	if elemSize == 1 {
+		// []byte
+		layout = gcLayoutNoPtrs
+	}
+
+	buf := alloc(newCap*elemSize, layout)
 	if oldLen > 0 {
 		// copy any data to new slice
 		memmove(buf, oldBuf, oldLen*elemSize)
