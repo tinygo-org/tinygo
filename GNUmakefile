@@ -309,6 +309,7 @@ TEST_PACKAGES_FAST = \
 	container/list \
 	container/ring \
 	crypto/des \
+	crypto/elliptic \
 	crypto/md5 \
 	crypto/rc4 \
 	crypto/sha1 \
@@ -322,6 +323,8 @@ TEST_PACKAGES_FAST = \
 	encoding/base64 \
 	encoding/csv \
 	encoding/hex \
+	go/ast \
+	go/format \
 	go/scanner \
 	hash \
 	hash/adler32 \
@@ -357,11 +360,17 @@ endif
 # archive/zip requires os.ReadAt, which is not yet supported on windows
 # bytes requires mmap
 # compress/flate appears to hang on wasi
+# crypto/aes fails on wasi, needs panic()/recover()
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # image requires recover(), which is not yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
+# mime: fail on wasi; neds panic()/recover()
+# mime/multipart: needs wasip1 syscall.FDFLAG_NONBLOCK
 # mime/quotedprintable requires syscall.Faccessat
+# net/mail: needs wasip1  syscall.FDFLAG_NONBLOCK
+# net/ntextproto: needs wasip1 syscall.FDFLAG_NONBLOCK
+# regexp/syntax: fails on wasip1; needs panic()/recover()
 # strconv requires recover() which is not yet supported on wasi
 # text/tabwriter requires recover(), which is not yet supported on wasi
 # text/template/parse requires recover(), which is not yet supported on wasi
@@ -371,14 +380,20 @@ endif
 TEST_PACKAGES_LINUX := \
 	archive/zip \
 	compress/flate \
+	crypto/aes \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
 	image \
 	io/ioutil \
+	mime \
+	mime/multipart \
 	mime/quotedprintable \
 	net \
+	net/mail \
+	net/textproto \
 	os/user \
+	regexp/syntax \
 	strconv \
 	text/tabwriter \
 	text/template/parse
