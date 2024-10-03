@@ -389,6 +389,13 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			}
 		}
 	}
+
+	// If both //go:wasmexport and //go:export or //export are declared,
+	// only honor go:wasmexport.
+	if info.wasmExport != "" {
+		// TODO: log warning?
+		info.exported = false
+	}
 }
 
 // Check whether this function can be used in //go:wasmimport or
