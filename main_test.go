@@ -690,6 +690,46 @@ func TestWasmExport(t *testing.T) {
 	}
 }
 
+// Test //go:wasmexport in JavaScript (using NodeJS).
+func TestWasmExportJS(t *testing.T) {
+	type testCase struct {
+		name      string
+		buildMode string
+	}
+
+	tests := []testCase{
+		{name: "default"},
+		{name: "c-shared", buildMode: "c-shared"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build the wasm binary.
+			tmpdir := t.TempDir()
+			options := optionsFromTarget("wasm", sema)
+			options.BuildMode = tc.buildMode
+			buildConfig, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := builder.Build("testdata/wasmexport-noscheduler.go", ".wasm", tmpdir, buildConfig)
+			if err != nil {
+				t.Fatal("failed to build binary:", err)
+			}
+
+			// Test the resulting binary using NodeJS.
+			output := &bytes.Buffer{}
+			cmd := exec.Command("node", "testdata/wasmexport.js", result.Binary, buildConfig.BuildMode())
+			cmd.Stdout = output
+			cmd.Stderr = output
+			err = cmd.Run()
+			if err != nil {
+				t.Error("failed to run node:", err)
+			}
+			checkOutput(t, "testdata/wasmexport.txt", output.Bytes())
+		})
+	}
+}
+
 // Check whether the output of a test equals the expected output.
 func checkOutput(t *testing.T, filename string, actual []byte) {
 	expectedOutput, err := os.ReadFile(filename)

@@ -466,20 +466,13 @@
 			this._idPool = [];      // unused ids that have been garbage collected
 			this.exited = false;    // whether the Go program has exited
 
-			while (true) {
-				const callbackPromise = new Promise((resolve) => {
-					this._resolveCallbackPromise = () => {
-						if (this.exited) {
-							throw new Error("bad callback: Go program has already exited");
-						}
-						setTimeout(resolve, 0); // make sure it is asynchronous
-					};
-				});
+			if (this._inst.exports._start) {
 				this._inst.exports._start();
-				if (this.exited) {
-					break;
-				}
-				await callbackPromise;
+
+				// TODO: wait until the program exists.
+				await new Promise(() => {});
+			} else {
+				this._inst.exports._initialize();
 			}
 		}
 
