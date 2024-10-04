@@ -303,6 +303,7 @@ TEST_PACKAGES_SLOW = \
 
 # Standard library packages that pass tests quickly on darwin, linux, wasi, and windows
 TEST_PACKAGES_FAST = \
+	cmp \
 	compress/lzw \
 	compress/zlib \
 	container/heap \
@@ -315,10 +316,12 @@ TEST_PACKAGES_FAST = \
 	crypto/sha1 \
 	crypto/sha256 \
 	crypto/sha512 \
+	database/sql/driver \
 	debug/macho \
 	embed/internal/embedtest \
 	encoding \
 	encoding/ascii85 \
+	encoding/asn1 \
 	encoding/base32 \
 	encoding/base64 \
 	encoding/csv \
@@ -326,6 +329,7 @@ TEST_PACKAGES_FAST = \
 	go/ast \
 	go/format \
 	go/scanner \
+	go/version \
 	hash \
 	hash/adler32 \
 	hash/crc64 \
