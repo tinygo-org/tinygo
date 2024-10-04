@@ -236,8 +236,10 @@ func linuxNetworking(buildTags []string) bool {
 	return false
 }
 
-// The boolean indicates whether to merge the subdirs. True means merge, false
-// means use the TinyGo version.
+// The boolean indicates whether to merge the subdirs.
+//
+// True: Merge the golang and tinygo source directories.
+// False: Uses the TinyGo version exclusively.
 func pathsToOverride(goMinor int, buildTags []string) map[string]bool {
 	paths := map[string]bool{
 		"":                            true,
@@ -259,7 +261,7 @@ func pathsToOverride(goMinor int, buildTags []string) map[string]bool {
 		"internal/task/":              false,
 		"internal/wasi/":              false,
 		"machine/":                    false,
-		"net/":                        true,
+		"net/":                        true, // this is important if the GOOS != linux
 		"net/http/":                   false,
 		"os/":                         true,
 		"reflect/":                    false,
@@ -279,6 +281,8 @@ func pathsToOverride(goMinor int, buildTags []string) map[string]bool {
 		paths["syscall/"] = true // include syscall/js
 	}
 
+	// To make sure the correct version of the net package is used, it is advised
+	// to clean the go cache before building
 	if linuxNetworking(buildTags) {
 		for _, v := range []string{"crypto/tls/", "net/http/", "net/"} {
 			delete(paths, v) // remote entries so go stdlib is used

@@ -35,3 +35,6 @@
 [submodule "lib/wasi-cli"]
     path = lib/wasi-cli
     url = https://github.com/WebAssembly/wasi-cli
+[submodule "src/net"]
+	path = src/net
+	url = https://github.com/tinygo-org/net
