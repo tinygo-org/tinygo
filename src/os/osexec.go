@@ -1,4 +1,7 @@
-//go:build linux && !baremetal && !darwin && !tinygo.wasm
+//go:build linux && !baremetal && !darwin && !tinygo.wasm && !arm64
+
+// arm64 does not have a fork syscall, so ignore it for now
+// TODO: add support for arm64 with clone or use musl implementation
 
 package os
 
