@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build linux
+
 package runtime
 
 // For debugging purposes this is used for all target architectures, but this is only valid for linux systems.
@@ -41,5 +43,5 @@ func poll_runtime_pollSetDeadline(pd *pollDesc, d int64, mode int) {
 //go:linkname poll_runtime_pollOpen internal/poll.runtime_pollOpen
 func poll_runtime_pollOpen(fd uintptr) (*pollDesc, int) {
 	// println("poll_runtime_pollOpen not implemented", fd)
-	return &pollDesc{runtimeCtx: 0x13371337}, pollNoError
+	return &pollDesc{runtimeCtx: uintptr(0xdeadbeef)}, pollNoError
 }

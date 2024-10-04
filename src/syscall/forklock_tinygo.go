@@ -1,4 +1,4 @@
-//go:build tinygo
+//go:build tinygo && linux && !wasip1 && !wasip2 && !darwin
 
 package syscall
 
@@ -35,4 +35,4 @@ func SetNonblock(fd int, nonblocking bool) (err error) {
 	return system.SetNonblock(fd, nonblocking)
 }
 
-type SysProcAttr struct{}
+// type SysProcAttr struct{}
