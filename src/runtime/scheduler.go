@@ -157,7 +157,13 @@ func removeTimer(tim *timer) bool {
 }
 
 // Run the scheduler until all tasks have finished.
-func scheduler() {
+// There are a few special cases:
+//   - When returnAtDeadlock is true, it also returns when there are no more
+//     runnable goroutines.
+//   - When using the asyncify scheduler, it returns when it has to wait
+//     (JavaScript uses setTimeout so the scheduler must return to the JS
+//     environment).
+func scheduler(returnAtDeadlock bool) {
 	// Main scheduler loop.
 	var now timeUnit
 	for !schedulerDone {
@@ -193,6 +199,9 @@ func scheduler() {
 		t := runqueue.Pop()
 		if t == nil {
 			if sleepQueue == nil && timerQueue == nil {
+				if returnAtDeadlock {
+					return
+				}
 				if asyncScheduler {
 					// JavaScript is treated specially, see below.
 					return

@@ -23,15 +23,17 @@ import (
 // The linkName value contains a valid link name, even if //go:linkname is not
 // present.
 type functionInfo struct {
-	wasmModule string     // go:wasm-module
-	wasmName   string     // wasm-export-name or wasm-import-name in the IR
-	linkName   string     // go:linkname, go:export - the IR function name
-	section    string     // go:section - object file section name
-	exported   bool       // go:export, CGo
-	interrupt  bool       // go:interrupt
-	nobounds   bool       // go:nobounds
-	variadic   bool       // go:variadic (CGo only)
-	inline     inlineType // go:inline
+	wasmModule    string     // go:wasm-module
+	wasmName      string     // wasm-export-name or wasm-import-name in the IR
+	wasmExport    string     // go:wasmexport is defined (export is unset, this adds an exported wrapper)
+	wasmExportPos token.Pos  // position of //go:wasmexport comment
+	linkName      string     // go:linkname, go:export - the IR function name
+	section       string     // go:section - object file section name
+	exported      bool       // go:export, CGo
+	interrupt     bool       // go:interrupt
+	nobounds      bool       // go:nobounds
+	variadic      bool       // go:variadic (CGo only)
+	inline        inlineType // go:inline
 }
 
 type inlineType int
@@ -241,8 +243,22 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 		// Pick the default linkName.
 		linkName: f.RelString(nil),
 	}
+
+	// Check for a few runtime functions that are treated specially.
+	if info.linkName == "runtime.wasmEntryReactor" && c.BuildMode == "c-shared" {
+		info.linkName = "_initialize"
+		info.wasmName = "_initialize"
+		info.exported = true
+	}
+	if info.linkName == "runtime.wasmEntryCommand" && c.BuildMode == "default" {
+		info.linkName = "_start"
+		info.wasmName = "_start"
+		info.exported = true
+	}
+
 	// Check for //go: pragmas, which may change the link name (among others).
 	c.parsePragmas(&info, f)
+
 	c.functionInfos[f] = info
 	return info
 }
@@ -296,10 +312,39 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 				if len(parts) != 3 {
 					continue
 				}
-				c.checkWasmImport(f, comment.Text)
+				if f.Blocks != nil {
+					// Defined functions cannot be exported.
+					c.addError(f.Pos(), "can only use //go:wasmimport on declarations")
+					continue
+				}
+				c.checkWasmImportExport(f, comment.Text)
 				info.exported = true
 				info.wasmModule = parts[1]
 				info.wasmName = parts[2]
+			case "//go:wasmexport":
+				if f.Blocks == nil {
+					c.addError(f.Pos(), "can only use //go:wasmexport on definitions")
+					continue
+				}
+				if len(parts) != 2 {
+					c.addError(f.Pos(), fmt.Sprintf("expected one parameter to //go:wasmimport, not %d", len(parts)-1))
+					continue
+				}
+				name := parts[1]
+				if name == "_start" || name == "_initialize" {
+					c.addError(f.Pos(), fmt.Sprintf("//go:wasmexport does not allow %#v", name))
+					continue
+				}
+				if c.BuildMode != "c-shared" && f.RelString(nil) == "main.main" {
+					c.addError(f.Pos(), fmt.Sprintf("//go:wasmexport does not allow main.main to be exported with -buildmode=%s", c.BuildMode))
+					continue
+				}
+				if c.archFamily() != "wasm32" {
+					c.addError(f.Pos(), "//go:wasmexport is only supported on wasm")
+				}
+				c.checkWasmImportExport(f, comment.Text)
+				info.wasmExport = name
+				info.wasmExportPos = comment.Slash
 			case "//go:inline":
 				info.inline = inlineHint
 			case "//go:noinline":
@@ -346,20 +391,15 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 	}
 }
 
-// Check whether this function cannot be used in //go:wasmimport. It will add an
-// error if this is the case.
+// Check whether this function can be used in //go:wasmimport or
+// //go:wasmexport. It will add an error if this is not the case.
 //
 // The list of allowed types is based on this proposal:
 // https://github.com/golang/go/issues/59149
-func (c *compilerContext) checkWasmImport(f *ssa.Function, pragma string) {
+func (c *compilerContext) checkWasmImportExport(f *ssa.Function, pragma string) {
 	if c.pkg.Path() == "runtime" || c.pkg.Path() == "syscall/js" || c.pkg.Path() == "syscall" {
 		// The runtime is a special case. Allow all kinds of parameters
 		// (importantly, including pointers).
-		return
-	}
-	if f.Blocks != nil {
-		// Defined functions cannot be exported.
-		c.addError(f.Pos(), "can only use //go:wasmimport on declarations")
 		return
 	}
 	if f.Signature.Results().Len() > 1 {

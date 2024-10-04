@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"io"
@@ -21,6 +22,9 @@ import (
 	"time"
 
 	"github.com/aykevl/go-wasm"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
@@ -518,6 +522,189 @@ func TestWebAssembly(t *testing.T) {
 				}
 				if !slices.Equal(imports, tc.imports) {
 					t.Errorf("import list not as expected!\nexpected: %v\nactual:   %v", tc.imports, imports)
+				}
+			}
+		})
+	}
+}
+
+func TestWasmExport(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name      string
+		target    string
+		buildMode string
+		scheduler string
+		file      string
+		noOutput  bool
+		command   bool // call _start (command mode) instead of _initialize
+	}
+
+	tests := []testCase{
+		// "command mode" WASI
+		{
+			name:    "WASIp1-command",
+			target:  "wasip1",
+			command: true,
+		},
+		// "reactor mode" WASI (with -buildmode=c-shared)
+		{
+			name:      "WASIp1-reactor",
+			target:    "wasip1",
+			buildMode: "c-shared",
+		},
+		// Make sure reactor mode also works without a scheduler.
+		{
+			name:      "WASIp1-reactor-noscheduler",
+			target:    "wasip1",
+			buildMode: "c-shared",
+			scheduler: "none",
+			file:      "wasmexport-noscheduler.go",
+		},
+		// Test -target=wasm-unknown with the default build mode (which is
+		// c-shared).
+		{
+			name:     "wasm-unknown-reactor",
+			target:   "wasm-unknown",
+			file:     "wasmexport-noscheduler.go",
+			noOutput: true, // wasm-unknown cannot produce output
+		},
+		// Test -target=wasm-unknown with -buildmode=default, which makes it run
+		// in command mode.
+		{
+			name:      "wasm-unknown-command",
+			target:    "wasm-unknown",
+			buildMode: "default",
+			file:      "wasmexport-noscheduler.go",
+			noOutput:  true, // wasm-unknown cannot produce output
+			command:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Build the wasm binary.
+			tmpdir := t.TempDir()
+			options := optionsFromTarget(tc.target, sema)
+			options.BuildMode = tc.buildMode
+			options.Scheduler = tc.scheduler
+			buildConfig, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			filename := "wasmexport.go"
+			if tc.file != "" {
+				filename = tc.file
+			}
+			result, err := builder.Build("testdata/"+filename, ".wasm", tmpdir, buildConfig)
+			if err != nil {
+				t.Fatal("failed to build binary:", err)
+			}
+
+			// Read the wasm binary back into memory.
+			data, err := os.ReadFile(result.Binary)
+			if err != nil {
+				t.Fatal("could not read wasm binary: ", err)
+			}
+
+			// Set up the wazero runtime.
+			output := &bytes.Buffer{}
+			ctx := context.Background()
+			r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+			defer r.Close(ctx)
+			config := wazero.NewModuleConfig().
+				WithStdout(output).WithStderr(output).
+				WithStartFunctions()
+
+			// Prepare for testing.
+			var mod api.Module
+			mustCall := func(results []uint64, err error) []uint64 {
+				if err != nil {
+					t.Error("failed to run function:", err)
+				}
+				return results
+			}
+			checkResult := func(name string, results []uint64, expected []uint64) {
+				if len(results) != len(expected) {
+					t.Errorf("%s: expected %v but got %v", name, expected, results)
+				}
+				for i, result := range results {
+					if result != expected[i] {
+						t.Errorf("%s: expected %v but got %v", name, expected, results)
+						break
+					}
+				}
+			}
+			runTests := func() {
+				// Test an exported function without params or return value.
+				checkResult("hello()", mustCall(mod.ExportedFunction("hello").Call(ctx)), nil)
+
+				// Test that we can call an exported function more than once.
+				checkResult("add(3, 5)", mustCall(mod.ExportedFunction("add").Call(ctx, 3, 5)), []uint64{8})
+				checkResult("add(7, 9)", mustCall(mod.ExportedFunction("add").Call(ctx, 7, 9)), []uint64{16})
+				checkResult("add(6, 1)", mustCall(mod.ExportedFunction("add").Call(ctx, 6, 1)), []uint64{7})
+
+				// Test that imported functions can call exported functions
+				// again.
+				checkResult("reentrantCall(2, 3)", mustCall(mod.ExportedFunction("reentrantCall").Call(ctx, 2, 3)), []uint64{5})
+				checkResult("reentrantCall(1, 8)", mustCall(mod.ExportedFunction("reentrantCall").Call(ctx, 1, 8)), []uint64{9})
+			}
+
+			// Add wasip1 module.
+			wasi_snapshot_preview1.MustInstantiate(ctx, r)
+
+			// Add custom "tester" module.
+			callOutside := func(a, b int32) int32 {
+				results, err := mod.ExportedFunction("add").Call(ctx, uint64(a), uint64(b))
+				if err != nil {
+					t.Error("could not call exported add function:", err)
+				}
+				return int32(results[0])
+			}
+			callTestMain := func() {
+				runTests()
+			}
+			builder := r.NewHostModuleBuilder("tester")
+			builder.NewFunctionBuilder().WithFunc(callOutside).Export("callOutside")
+			builder.NewFunctionBuilder().WithFunc(callTestMain).Export("callTestMain")
+			_, err = builder.Instantiate(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Parse and instantiate the wasm.
+			mod, err = r.InstantiateWithConfig(ctx, data, config)
+			if err != nil {
+				t.Fatal("could not instantiate wasm module:", err)
+			}
+
+			// Initialize the module and run the tests.
+			if tc.command {
+				// Call _start (the entry point), which calls
+				// tester.callTestMain, which then runs all the tests.
+				mustCall(mod.ExportedFunction("_start").Call(ctx))
+			} else {
+				// Run the _initialize call, because this is reactor mode wasm.
+				mustCall(mod.ExportedFunction("_initialize").Call(ctx))
+				runTests()
+			}
+
+			// Check that the output matches the expected output.
+			// (Skip this for wasm-unknown because it can't produce output).
+			if !tc.noOutput {
+				expectedOutput, err := os.ReadFile("testdata/wasmexport.txt")
+				if err != nil {
+					t.Fatal("could not read output file:", err)
+				}
+				actual := output.Bytes()
+				expectedOutput = bytes.ReplaceAll(expectedOutput, []byte("\r\n"), []byte("\n"))
+				actual = bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n"))
+				if !bytes.Equal(actual, expectedOutput) {
+					t.Error(string(Diff("expected", expectedOutput, "actual", actual)))
 				}
 			}
 		})

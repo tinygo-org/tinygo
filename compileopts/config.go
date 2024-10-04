@@ -33,6 +33,17 @@ func (c *Config) CPU() string {
 	return c.Target.CPU
 }
 
+// The current build mode (like the `-buildmode` command line flag).
+func (c *Config) BuildMode() string {
+	if c.Options.BuildMode != "" {
+		return c.Options.BuildMode
+	}
+	if c.Target.BuildMode != "" {
+		return c.Target.BuildMode
+	}
+	return "default"
+}
+
 // Features returns a list of features this CPU supports. For example, for a
 // RISC-V processor, that could be "+a,+c,+m". For many targets, an empty list
 // will be returned.

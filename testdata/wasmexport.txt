@@ -1,0 +1,11 @@
+called init
+hello!
+called add: 3 5
+called add: 7 9
+called add: 6 1
+reentrantCall: 2 3
+called add: 2 3
+reentrantCall result: 5
+reentrantCall: 1 8
+called add: 1 8
+reentrantCall result: 9
