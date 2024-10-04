@@ -6,7 +6,7 @@ import (
 	"unsafe"
 
 	"internal/wasi/cli/v0.2.0/environment"
-	wasi_run "internal/wasi/cli/v0.2.0/run"
+	wasiclirun "internal/wasi/cli/v0.2.0/run"
 	monotonicclock "internal/wasi/clocks/v0.2.0/monotonic-clock"
 
 	"internal/cm"
@@ -15,7 +15,7 @@ import (
 type timeUnit int64
 
 func init() {
-	wasi_run.Exports.Run = func() cm.BoolResult {
+	wasiclirun.Exports.Run = func() cm.BoolResult {
 		callMain()
 		return false
 	}
