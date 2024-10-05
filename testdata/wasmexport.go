@@ -21,15 +21,15 @@ func hello() {
 }
 
 //go:wasmexport add
-func add(a, b int) int {
+func add(a, b int32) int32 {
 	println("called add:", a, b)
 	addInputs <- a
 	addInputs <- b
 	return <-addOutput
 }
 
-var addInputs = make(chan int)
-var addOutput = make(chan int)
+var addInputs = make(chan int32)
+var addOutput = make(chan int32)
 
 func adder() {
 	for {
@@ -41,10 +41,10 @@ func adder() {
 }
 
 //go:wasmimport tester callOutside
-func callOutside(a, b int) int
+func callOutside(a, b int32) int32
 
 //go:wasmexport reentrantCall
-func reentrantCall(a, b int) int {
+func reentrantCall(a, b int32) int32 {
 	println("reentrantCall:", a, b)
 	result := callOutside(a, b)
 	println("reentrantCall result:", result)
