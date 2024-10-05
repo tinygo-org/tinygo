@@ -276,11 +276,15 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 
 	// Read all pragmas of this function.
 	var pragmas []*ast.Comment
+	hasWasmExport := false
 	if decl, ok := syntax.(*ast.FuncDecl); ok && decl.Doc != nil {
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
 			if strings.HasPrefix(text, "//go:") || strings.HasPrefix(text, "//export ") {
 				pragmas = append(pragmas, comment)
+				if strings.HasPrefix(comment.Text, "//go:wasmexport ") {
+					hasWasmExport = true
+				}
 			}
 		}
 	}
@@ -291,6 +295,10 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 		switch parts[0] {
 		case "//export", "//go:export":
 			if len(parts) != 2 {
+				continue
+			}
+			if hasWasmExport {
+				// //go:wasmexport overrides //export.
 				continue
 			}
 
@@ -390,13 +398,6 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 				info.variadic = true
 			}
 		}
-	}
-
-	// If both //go:wasmexport and //go:export or //export are declared,
-	// only honor go:wasmexport.
-	if info.wasmExport != "" {
-		// TODO: log warning?
-		info.exported = false
 	}
 }
 
