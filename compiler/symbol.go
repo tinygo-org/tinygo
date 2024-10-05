@@ -273,119 +273,121 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 	if syntax == nil {
 		return
 	}
+
+	// Read all pragmas of this function.
+	var pragmas []*ast.Comment
 	if decl, ok := syntax.(*ast.FuncDecl); ok && decl.Doc != nil {
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
-			if strings.HasPrefix(text, "//export ") {
-				// Rewrite '//export' to '//go:export' for compatibility with
-				// gc.
-				text = "//go:" + text[2:]
+			if strings.HasPrefix(text, "//go:") || strings.HasPrefix(text, "//export ") {
+				pragmas = append(pragmas, comment)
 			}
-			if !strings.HasPrefix(text, "//go:") {
+		}
+	}
+
+	// Parse each pragma.
+	for _, comment := range pragmas {
+		parts := strings.Fields(comment.Text)
+		switch parts[0] {
+		case "//export", "//go:export":
+			if len(parts) != 2 {
 				continue
 			}
-			parts := strings.Fields(text)
-			switch parts[0] {
-			case "//go:export":
-				if len(parts) != 2 {
-					continue
-				}
 
-				info.linkName = parts[1]
-				info.wasmName = info.linkName
-				info.exported = true
-			case "//go:interrupt":
-				if hasUnsafeImport(f.Pkg.Pkg) {
-					info.interrupt = true
-				}
-			case "//go:wasm-module":
-				// Alternative comment for setting the import module.
-				// This is deprecated, use //go:wasmimport instead.
-				if len(parts) != 2 {
-					continue
-				}
-				info.wasmModule = parts[1]
-			case "//go:wasmimport":
-				// Import a WebAssembly function, for example a WASI function.
-				// Original proposal: https://github.com/golang/go/issues/38248
-				// Allow globally: https://github.com/golang/go/issues/59149
-				if len(parts) != 3 {
-					continue
-				}
-				if f.Blocks != nil {
-					// Defined functions cannot be exported.
-					c.addError(f.Pos(), "can only use //go:wasmimport on declarations")
-					continue
-				}
-				c.checkWasmImportExport(f, comment.Text)
-				info.exported = true
-				info.wasmModule = parts[1]
-				info.wasmName = parts[2]
-			case "//go:wasmexport":
-				if f.Blocks == nil {
-					c.addError(f.Pos(), "can only use //go:wasmexport on definitions")
-					continue
-				}
-				if len(parts) != 2 {
-					c.addError(f.Pos(), fmt.Sprintf("expected one parameter to //go:wasmimport, not %d", len(parts)-1))
-					continue
-				}
-				name := parts[1]
-				if name == "_start" || name == "_initialize" {
-					c.addError(f.Pos(), fmt.Sprintf("//go:wasmexport does not allow %#v", name))
-					continue
-				}
-				if c.BuildMode != "c-shared" && f.RelString(nil) == "main.main" {
-					c.addError(f.Pos(), fmt.Sprintf("//go:wasmexport does not allow main.main to be exported with -buildmode=%s", c.BuildMode))
-					continue
-				}
-				if c.archFamily() != "wasm32" {
-					c.addError(f.Pos(), "//go:wasmexport is only supported on wasm")
-				}
-				c.checkWasmImportExport(f, comment.Text)
-				info.wasmExport = name
-				info.wasmExportPos = comment.Slash
-			case "//go:inline":
-				info.inline = inlineHint
-			case "//go:noinline":
+			info.linkName = parts[1]
+			info.wasmName = info.linkName
+			info.exported = true
+		case "//go:interrupt":
+			if hasUnsafeImport(f.Pkg.Pkg) {
+				info.interrupt = true
+			}
+		case "//go:wasm-module":
+			// Alternative comment for setting the import module.
+			// This is deprecated, use //go:wasmimport instead.
+			if len(parts) != 2 {
+				continue
+			}
+			info.wasmModule = parts[1]
+		case "//go:wasmimport":
+			// Import a WebAssembly function, for example a WASI function.
+			// Original proposal: https://github.com/golang/go/issues/38248
+			// Allow globally: https://github.com/golang/go/issues/59149
+			if len(parts) != 3 {
+				continue
+			}
+			if f.Blocks != nil {
+				// Defined functions cannot be exported.
+				c.addError(f.Pos(), "can only use //go:wasmimport on declarations")
+				continue
+			}
+			c.checkWasmImportExport(f, comment.Text)
+			info.exported = true
+			info.wasmModule = parts[1]
+			info.wasmName = parts[2]
+		case "//go:wasmexport":
+			if f.Blocks == nil {
+				c.addError(f.Pos(), "can only use //go:wasmexport on definitions")
+				continue
+			}
+			if len(parts) != 2 {
+				c.addError(f.Pos(), fmt.Sprintf("expected one parameter to //go:wasmimport, not %d", len(parts)-1))
+				continue
+			}
+			name := parts[1]
+			if name == "_start" || name == "_initialize" {
+				c.addError(f.Pos(), fmt.Sprintf("//go:wasmexport does not allow %#v", name))
+				continue
+			}
+			if c.BuildMode != "c-shared" && f.RelString(nil) == "main.main" {
+				c.addError(f.Pos(), fmt.Sprintf("//go:wasmexport does not allow main.main to be exported with -buildmode=%s", c.BuildMode))
+				continue
+			}
+			if c.archFamily() != "wasm32" {
+				c.addError(f.Pos(), "//go:wasmexport is only supported on wasm")
+			}
+			c.checkWasmImportExport(f, comment.Text)
+			info.wasmExport = name
+			info.wasmExportPos = comment.Slash
+		case "//go:inline":
+			info.inline = inlineHint
+		case "//go:noinline":
+			info.inline = inlineNone
+		case "//go:linkname":
+			if len(parts) != 3 || parts[1] != f.Name() {
+				continue
+			}
+			// Only enable go:linkname when the package imports "unsafe".
+			// This is a slightly looser requirement than what gc uses: gc
+			// requires the file to import "unsafe", not the package as a
+			// whole.
+			if hasUnsafeImport(f.Pkg.Pkg) {
+				info.linkName = parts[2]
+			}
+		case "//go:section":
+			// Only enable go:section when the package imports "unsafe".
+			// go:section also implies go:noinline since inlining could
+			// move the code to a different section than that requested.
+			if len(parts) == 2 && hasUnsafeImport(f.Pkg.Pkg) {
+				info.section = parts[1]
 				info.inline = inlineNone
-			case "//go:linkname":
-				if len(parts) != 3 || parts[1] != f.Name() {
-					continue
-				}
-				// Only enable go:linkname when the package imports "unsafe".
-				// This is a slightly looser requirement than what gc uses: gc
-				// requires the file to import "unsafe", not the package as a
-				// whole.
-				if hasUnsafeImport(f.Pkg.Pkg) {
-					info.linkName = parts[2]
-				}
-			case "//go:section":
-				// Only enable go:section when the package imports "unsafe".
-				// go:section also implies go:noinline since inlining could
-				// move the code to a different section than that requested.
-				if len(parts) == 2 && hasUnsafeImport(f.Pkg.Pkg) {
-					info.section = parts[1]
-					info.inline = inlineNone
-				}
-			case "//go:nobounds":
-				// Skip bounds checking in this function. Useful for some
-				// runtime functions.
-				// This is somewhat dangerous and thus only imported in packages
-				// that import unsafe.
-				if hasUnsafeImport(f.Pkg.Pkg) {
-					info.nobounds = true
-				}
-			case "//go:variadic":
-				// The //go:variadic pragma is emitted by the CGo preprocessing
-				// pass for C variadic functions. This includes both explicit
-				// (with ...) and implicit (no parameters in signature)
-				// functions.
-				if strings.HasPrefix(f.Name(), "C.") {
-					// This prefix cannot naturally be created, it must have
-					// been created as a result of CGo preprocessing.
-					info.variadic = true
-				}
+			}
+		case "//go:nobounds":
+			// Skip bounds checking in this function. Useful for some
+			// runtime functions.
+			// This is somewhat dangerous and thus only imported in packages
+			// that import unsafe.
+			if hasUnsafeImport(f.Pkg.Pkg) {
+				info.nobounds = true
+			}
+		case "//go:variadic":
+			// The //go:variadic pragma is emitted by the CGo preprocessing
+			// pass for C variadic functions. This includes both explicit
+			// (with ...) and implicit (no parameters in signature)
+			// functions.
+			if strings.HasPrefix(f.Name(), "C.") {
+				// This prefix cannot naturally be created, it must have
+				// been created as a result of CGo preprocessing.
+				info.variadic = true
 			}
 		}
 	}
