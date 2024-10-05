@@ -448,7 +448,9 @@ func isValidWasmType(typ types.Type, site wasmSite) bool {
 		switch typ.Kind() {
 		case types.Bool:
 			return true
-		case types.Int, types.Uint, types.Int8, types.Uint8, types.Int16, types.Uint16, types.Int32, types.Uint32, types.Int64, types.Uint64:
+		case types.Int8, types.Uint8, types.Int16, types.Uint16:
+			return site == siteIndirect
+		case types.Int32, types.Uint32, types.Int64, types.Uint64:
 			return true
 		case types.Float32, types.Float64:
 			return true
