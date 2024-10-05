@@ -1,4 +1,4 @@
-//go:build tinygo.wasm && !wasip2 && !js
+//go:build tinygo.wasm && !js
 
 package runtime
 
