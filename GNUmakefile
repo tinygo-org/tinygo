@@ -310,6 +310,7 @@ TEST_PACKAGES_FAST = \
 	container/list \
 	container/ring \
 	crypto/des \
+	crypto/ecdsa \
 	crypto/elliptic \
 	crypto/md5 \
 	crypto/rc4 \
