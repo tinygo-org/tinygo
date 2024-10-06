@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -416,14 +417,14 @@ func (c *compilerContext) checkWasmImportExport(f *ssa.Function, pragma string) 
 		c.addError(f.Signature.Results().At(1).Pos(), fmt.Sprintf("%s: too many return values", pragma))
 	} else if f.Signature.Results().Len() == 1 {
 		result := f.Signature.Results().At(0)
-		if !isValidWasmType(result.Type(), siteResult) {
+		if !c.isValidWasmType(result.Type(), siteResult) {
 			c.addError(result.Pos(), fmt.Sprintf("%s: unsupported result type %s", pragma, result.Type().String()))
 		}
 	}
 	for _, param := range f.Params {
 		// Check whether the type is allowed.
 		// Only a very limited number of types can be mapped to WebAssembly.
-		if !isValidWasmType(param.Type(), siteParam) {
+		if !c.isValidWasmType(param.Type(), siteParam) {
 			c.addError(param.Pos(), fmt.Sprintf("%s: unsupported parameter type %s", pragma, param.Type().String()))
 		}
 	}
@@ -436,7 +437,7 @@ func (c *compilerContext) checkWasmImportExport(f *ssa.Function, pragma string) 
 //
 // This previously reflected the additional restrictions documented here:
 // https://github.com/golang/go/issues/59149
-func isValidWasmType(typ types.Type, site wasmSite) bool {
+func (c *compilerContext) isValidWasmType(typ types.Type, site wasmSite) bool {
 	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		switch typ.Kind() {
@@ -455,19 +456,32 @@ func isValidWasmType(typ types.Type, site wasmSite) bool {
 			return site == siteParam || site == siteIndirect
 		}
 	case *types.Array:
-		return site == siteIndirect && isValidWasmType(typ.Elem(), siteIndirect)
+		return site == siteIndirect && c.isValidWasmType(typ.Elem(), siteIndirect)
 	case *types.Struct:
 		if site != siteIndirect {
 			return false
 		}
+		// Structs with no fields do not need structs.HostLayout
+		if typ.NumFields() == 0 {
+			return true
+		}
+		var hasHostLayout bool
+		if !goenv.WantGoVersion(c.pkg.GoVersion(), 1, 23) {
+			hasHostLayout = true // package structs does not exist before go1.23
+		}
 		for i := 0; i < typ.NumFields(); i++ {
-			if !isValidWasmType(typ.Field(i).Type(), siteIndirect) {
+			ftyp := typ.Field(i).Type()
+			if ftyp.String() == "structs.HostLayout" {
+				hasHostLayout = true
+				continue
+			}
+			if !c.isValidWasmType(ftyp, siteIndirect) {
 				return false
 			}
 		}
-		return true
+		return hasHostLayout
 	case *types.Pointer:
-		return isValidWasmType(typ.Elem(), siteIndirect)
+		return c.isValidWasmType(typ.Elem(), siteIndirect)
 	}
 	return false
 }
