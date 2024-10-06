@@ -1,14 +1,29 @@
 package main
 
+import "iter"
+
 func main() {
 	testFuncRange(counter)
+	testIterPull(counter)
+	println("go1.23 has lift-off!")
 }
 
-func testFuncRange(f func(yield func(int) bool)) {
-	for i := range f {
+func testFuncRange(it iter.Seq[int]) {
+	for i := range it {
 		println(i)
 	}
-	println("go1.23 has lift-off!")
+}
+
+func testIterPull(it iter.Seq[int]) {
+	next, stop := iter.Pull(it)
+	defer stop()
+	for {
+		i, ok := next()
+		if !ok {
+			break
+		}
+		println(i)
+	}
 }
 
 func counter(yield func(int) bool) {
