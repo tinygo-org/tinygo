@@ -34,7 +34,12 @@ func GetGorootVersion() (major, minor int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
+	return ParseGoVersion(s)
+}
 
+// ParseGoVersion returns the major and minor version for a given Go version.
+// The input must be in the form of "go$MAJOR.$MINOR$TRAILING", e.g. "go1.23" or "go1.24.0-rc2".
+func ParseGoVersion(s string) (major, minor int, err error) {
 	if s == "" || s[:2] != "go" {
 		return 0, 0, errors.New("could not parse Go version: version does not start with 'go' prefix")
 	}
@@ -54,7 +59,18 @@ func GetGorootVersion() (major, minor int, err error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to parse version: %s", err)
 	}
-	return
+
+	return major, minor, nil
+}
+
+// WantGoVersion returns true if Go version s is >= major and minor.
+// Returns false if s is not a valid Go version string. See [ParseGoVersion] for more information.
+func WantGoVersion(s string, major, minor int) bool {
+	ma, mi, err := ParseGoVersion(s)
+	if err != nil {
+		return false
+	}
+	return ma >= major && mi >= minor
 }
 
 // GorootVersionString returns the version string as reported by the Go
