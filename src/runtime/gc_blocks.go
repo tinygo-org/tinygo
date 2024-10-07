@@ -53,8 +53,10 @@ var (
 	nextAlloc     gcBlock        // the next block that should be tried by the allocator
 	endBlock      gcBlock        // the block just past the end of the available space
 	gcTotalAlloc  uint64         // total number of bytes allocated
+	gcTotalBlocks uint64         // total number of allocated blocks
 	gcMallocs     uint64         // total number of allocations
 	gcFrees       uint64         // total number of objects freed
+	gcFreedBlocks uint64         // total number of freed blocks
 )
 
 // zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
@@ -285,6 +287,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcMallocs++
 
 	neededBlocks := (size + (bytesPerBlock - 1)) / bytesPerBlock
+	gcTotalBlocks += uint64(neededBlocks)
 
 	// Continue looping until a run of free blocks has been found that fits the
 	// requested size.
@@ -619,6 +622,7 @@ func markRoot(addr, root uintptr) {
 // It returns how many bytes are free in the heap after the sweep.
 func sweep() (freeBytes uintptr) {
 	freeCurrentObject := false
+	var freed uint64
 	for block := gcBlock(0); block < endBlock; block++ {
 		switch block.state() {
 		case blockStateHead:
@@ -626,13 +630,13 @@ func sweep() (freeBytes uintptr) {
 			block.markFree()
 			freeCurrentObject = true
 			gcFrees++
-			freeBytes += bytesPerBlock
+			freed++
 		case blockStateTail:
 			if freeCurrentObject {
 				// This is a tail object following an unmarked head.
 				// Free it now.
 				block.markFree()
-				freeBytes += bytesPerBlock
+				freed++
 			}
 		case blockStateMark:
 			// This is a marked object. The next tail blocks must not be freed,
@@ -644,6 +648,8 @@ func sweep() (freeBytes uintptr) {
 			freeBytes += bytesPerBlock
 		}
 	}
+	gcFreedBlocks += freed
+	freeBytes += uintptr(freed) * bytesPerBlock
 	return
 }
 
@@ -690,6 +696,8 @@ func ReadMemStats(m *MemStats) {
 	m.Mallocs = gcMallocs
 	m.Frees = gcFrees
 	m.Sys = uint64(heapEnd - heapStart)
+	m.HeapAlloc = (gcTotalBlocks - gcFreedBlocks) * uint64(bytesPerBlock)
+	m.Alloc = m.HeapAlloc
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {
