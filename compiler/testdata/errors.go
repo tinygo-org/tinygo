@@ -1,6 +1,9 @@
 package main
 
-import "unsafe"
+import (
+	"structs"
+	"unsafe"
+)
 
 //go:wasmimport modulename empty
 func empty()
@@ -14,6 +17,7 @@ func implementation() {
 type Uint uint32
 
 type S struct {
+	_ structs.HostLayout
 	a [4]uint32
 	b uintptr
 	d float32
@@ -21,7 +25,7 @@ type S struct {
 }
 
 //go:wasmimport modulename validparam
-func validparam(a int32, b uint64, c float64, d unsafe.Pointer, e Uint, f uintptr, g string, h *int32, i *S, j *[8]uint8)
+func validparam(a int32, b uint64, c float64, d unsafe.Pointer, e Uint, f uintptr, g string, h *int32, i *S, j *struct{}, k *[8]uint8)
 
 // ERROR: //go:wasmimport modulename invalidparam: unsupported parameter type [4]uint32
 // ERROR: //go:wasmimport modulename invalidparam: unsupported parameter type []byte
@@ -35,6 +39,12 @@ func validparam(a int32, b uint64, c float64, d unsafe.Pointer, e Uint, f uintpt
 //go:wasmimport modulename invalidparam
 func invalidparam(a [4]uint32, b []byte, c struct{ a int }, d chan struct{}, e func(), f int, g uint, h [8]int)
 
+// ERROR: //go:wasmimport modulename invalidparam_no_hostlayout: unsupported parameter type *struct{int}
+// ERROR: //go:wasmimport modulename invalidparam_no_hostlayout: unsupported parameter type *struct{string}
+//
+//go:wasmimport modulename invalidparam_no_hostlayout
+func invalidparam_no_hostlayout(a *struct{ int }, b *struct{ string })
+
 //go:wasmimport modulename validreturn_int32
 func validreturn_int32() int32
 
@@ -46,6 +56,9 @@ func validreturn_ptr_string() *string
 
 //go:wasmimport modulename validreturn_ptr_struct
 func validreturn_ptr_struct() *S
+
+//go:wasmimport modulename validreturn_ptr_struct
+func validreturn_ptr_empty_struct() *struct{}
 
 //go:wasmimport modulename validreturn_ptr_array
 func validreturn_ptr_array() *[8]uint8
