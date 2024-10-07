@@ -60,7 +60,18 @@ func Parse(version string) (major, minor int, err error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to parse version: %s", err)
 	}
-	return
+
+	return major, minor, nil
+}
+
+// WantGoVersion returns true if Go version s is >= major and minor.
+// Returns false if s is not a valid Go version string. See [Parse] for more information.
+func WantGoVersion(s string, major, minor int) bool {
+	ma, mi, err := Parse(s)
+	if err != nil {
+		return false
+	}
+	return ma >= major && mi >= minor
 }
 
 // GorootVersionString returns the version string as reported by the Go
