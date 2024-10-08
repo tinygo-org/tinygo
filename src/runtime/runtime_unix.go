@@ -17,6 +17,11 @@ func usleep(usec uint) int
 //export pause
 func pause() int32
 
+// int sigsuspend(const sigset_t *mask);
+//
+//export sigsuspend
+func sigsuspend(sigset_t unsafe.Pointer) int32
+
 // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 // Note: off_t is defined as int64 because:
 //   - musl (used on Linux) always defines it as int64
@@ -341,6 +346,12 @@ var hasSignals uint32
 // signals into this value.
 var receivedSignals uint32
 
+// Bitmap keeping track of enabled signals.
+var activeSignals uint32
+
+// Bitmap keeping track of masked/disabled signals.
+var maskedSignals uint32
+
 //go:linkname signal_enable os/signal.signal_enable
 func signal_enable(s uint32) {
 	if s >= 32 {
@@ -349,6 +360,10 @@ func signal_enable(s uint32) {
 		runtimePanicAt(returnAddress(0), "unsupported signal number")
 	}
 	atomic.StoreUint32(&hasSignals, 1)
+
+	// update the enabled signals bitmap
+	val := atomic.LoadUint32(&activeSignals)
+	atomic.CompareAndSwapUint32(&receivedSignals, val, val|(1<<s))
 	// It's easier to implement this function in C.
 	tinygo_signal_enable(s)
 }
@@ -396,6 +411,15 @@ func tinygo_signal_ignore(s uint32)
 //export tinygo_signal_disable
 func tinygo_signal_disable(s uint32)
 
+//export tinygo_mask_signals
+func tinygo_mask_signals(mask uint32)
+
+//export tinygo_unmask_signals
+func tinygo_unmask_signals(mask uint32)
+
+//export tinygo_sigsuspend
+func tinygo_sigsuspend(mask uint32)
+
 // void tinygo_signal_handler(int sig);
 //
 //export tinygo_signal_handler
@@ -424,7 +448,7 @@ func signal_recv() uint32 {
 	return val
 }
 
-// Atomically find a signal that previously occured and send it into the
+// Atomically find a signal that previously occurred and send it into the
 // signalChan channel. Return true if at least one signal was delivered this
 // way, false otherwise.
 func checkSignals() bool {
@@ -467,6 +491,24 @@ func checkSignals() bool {
 	}
 }
 
+func sigSuspend() {
+	signals := atomic.LoadUint32(&activeSignals)
+	tinygo_sigsuspend(signals)
+}
+
+// mask a set of signals defined by the activeSignals bitmap (32bit)
+// returns the C style sigset_t pointer.
+func maskActiveSignals() {
+	signals := atomic.LoadUint32(&activeSignals)
+	tinygo_mask_signals(signals)
+}
+
+// unmask a set of signals defined by the activeSignals bitmap (32bit)
+func unmaskActiveSignals() {
+	signals := atomic.LoadUint32(&activeSignals)
+	tinygo_unmask_signals(signals)
+}
+
 func waitForEvents() {
 	if atomic.LoadUint32(&hasSignals) != 0 {
 		// TODO: there is a race condition here. If a signal arrives between
@@ -479,9 +521,17 @@ func waitForEvents() {
 		//   - unmask all active signals
 		// For a longer explanation of the problem, see:
 		// https://www.cipht.net/2023/11/30/perils-of-pause.html
+
+		// When a signal arrives while masked by the process, it remains pending
+		// until the process unmasks it.
+		maskActiveSignals()
+
 		checkSignals()
-		pause()
+		sigSuspend()
+
 		checkSignals()
+		unmaskActiveSignals()
+
 	} else {
 		// The program doesn't use signals, so this is a deadlock.
 		runtimePanic("deadlocked: no event source")
