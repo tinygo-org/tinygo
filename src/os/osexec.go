@@ -6,22 +6,21 @@
 package os
 
 import (
-	"errors"
 	"syscall"
 	"unsafe"
 )
 
 func fork() (pid int, err error) {
-	ret, _, _ := syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
-	if ret < 0 {
-		// TODO: parse the syscall return codes
-		return 0, errors.New("fork failed")
+	ret, _, err := syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
+	if int(ret) != 0 {
+		errno := err.(syscall.Errno)
+		return 0, errno
 	}
 	return int(ret), nil
 }
 
 // the golang standard library does not expose interfaces for execve and fork, so we define them here the same way via the libc wrapper
-func execve(pathname string, argv []string, envv []string) (err error) {
+func execve(pathname string, argv []string, envv []string) error {
 	argv0 := cstring(pathname)
 
 	// transform argv and envv into the format expected by execve
@@ -37,10 +36,11 @@ func execve(pathname string, argv []string, envv []string) (err error) {
 	}
 	env1[len(envv)] = nil
 
-	fail, _, _ := syscall.Syscall(syscall.SYS_EXECVE, uintptr(unsafe.Pointer(&argv0[0])), uintptr(unsafe.Pointer(&argv1[0])), uintptr(unsafe.Pointer(&env1[0])))
-	if fail < 0 {
-		// TODO: parse the syscall return codes
-		return errors.New("execve failed")
+	ret, _, err := syscall.Syscall(syscall.SYS_EXECVE, uintptr(unsafe.Pointer(&argv0[0])), uintptr(unsafe.Pointer(&argv1[0])), uintptr(unsafe.Pointer(&env1[0])))
+	if int(ret) != 0 {
+		// errno := err.(syscall.Errno)
+		// return errno
+		return err
 	}
 
 	return nil
