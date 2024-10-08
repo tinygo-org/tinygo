@@ -79,6 +79,9 @@ func ReadMemStats(m *MemStats) {
 	m.Mallocs = gcMallocs
 	m.Frees = gcFrees
 	m.Sys = uint64(heapEnd - heapStart)
+	// no free -- current in use heap is the total allocated
+	m.HeapAlloc = gcTotalAlloc
+	m.Alloc = m.HeapAlloc
 }
 
 func GC() {
