@@ -3,6 +3,7 @@
 package os_test
 
 import (
+	"errors"
 	. "os"
 	"runtime"
 	"testing"
@@ -17,8 +18,8 @@ func TestForkExec(t *testing.T) {
 		return
 	}
 
-	proc, err := StartProcess("echo", []string{"echo", "hello", "world"}, &ProcAttr{})
-	if err != nil {
+	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{})
+	if !errors.Is(err, nil) {
 		t.Fatalf("forkExec failed: %v", err)
 		return
 	}
