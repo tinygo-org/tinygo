@@ -14,7 +14,9 @@ func fork() (pid int, err error) {
 	ret, _, err := syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
 	if int(ret) != 0 {
 		errno := err.(syscall.Errno)
-		return 0, errno
+		if int(errno) != 0 {
+			return -1, errno
+		}
 	}
 	return int(ret), nil
 }
