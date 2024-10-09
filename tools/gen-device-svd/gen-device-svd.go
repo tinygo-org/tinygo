@@ -902,8 +902,9 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 
 //go:build {{.pkgName}} && {{.device.Metadata.NameLower}}
 
-// {{.device.Metadata.Description}}
-//
+/*
+{{.device.Metadata.Description}}
+*/
 {{.device.Metadata.LicenseBlock}}
 package {{.pkgName}}
 
