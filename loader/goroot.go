@@ -227,13 +227,19 @@ func needsSyscallPackage(buildTags []string) bool {
 
 // linuxNetworking returns whether the unmodified go linux net stack should be used
 // until the full rework of the net package is done.
+// To ensure the correct build target, check for the following tags:
+// linux && !baremetal && !nintendoswitch && !tinygo.wasm
 func linuxNetworking(buildTags []string) bool {
+	targetLinux := false
 	for _, tag := range buildTags {
 		if tag == "linux" {
-			return true
+			targetLinux = true
+		}
+		if tag == "baremetal" || tag == "nintendoswitch" || tag == "tinygo.wasm" {
+			return false
 		}
 	}
-	return false
+	return targetLinux
 }
 
 // The boolean indicates whether to merge the subdirs.
