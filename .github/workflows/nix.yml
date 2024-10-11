@@ -15,6 +15,11 @@ jobs:
   nix-test:
     runs-on: ubuntu-latest
     steps:
+      - name: Uninstall system LLVM
+        # Hack to work around issue where we still include system headers for
+        # some reason.
+        # See: https://github.com/tinygo-org/tinygo/pull/4516#issuecomment-2416363668
+        run: sudo apt-get remove llvm-18
       - name: Checkout
         uses: actions/checkout@v4
       - name: Pull musl
