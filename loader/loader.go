@@ -418,8 +418,12 @@ func (p *Package) Check() error {
 	packageName := p.ImportPath
 	if p == p.program.MainPkg() {
 		if p.Name != "main" {
-			// Sanity check. Should not ever trigger.
-			panic("expected main package to have name 'main'")
+			return Errors{p, []error{
+				scanner.Error{
+					Pos: p.program.fset.Position(p.Files[0].Name.Pos()),
+					Msg: fmt.Sprintf("expected main package to have name \"main\", not %#v", p.Name),
+				},
+			}}
 		}
 		packageName = "main"
 	}
