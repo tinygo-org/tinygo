@@ -38,15 +38,18 @@ func hasFlag(call, param llvm.Value, kind string) bool {
 func isReadOnly(value llvm.Value) bool {
 	uses := getUses(value)
 	for _, use := range uses {
-		if !use.IsAGetElementPtrInst().IsNil() {
+		switch {
+		case !use.IsAGetElementPtrInst().IsNil():
 			if !isReadOnly(use) {
 				return false
 			}
-		} else if !use.IsACallInst().IsNil() {
+		case !use.IsACallInst().IsNil():
 			if !hasFlag(use, value, "readonly") {
 				return false
 			}
-		} else {
+		case !use.IsALoadInst().IsNil():
+			// Loads are read-only.
+		default:
 			// Unknown instruction, might not be readonly.
 			return false
 		}
