@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"internal/task"
+	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -50,7 +51,9 @@ func _panic(message interface{}) {
 	if panicStrategy() == panicStrategyTrap {
 		trap()
 	}
-	if supportsRecover() {
+	// Note: recover is not supported inside interrupts.
+	// (This could be supported, like defer, but we currently don't).
+	if supportsRecover() && !interrupt.In() {
 		frame := (*deferFrame)(task.Current().DeferFrame)
 		if frame != nil {
 			frame.PanicValue = message
@@ -95,6 +98,12 @@ func runtimePanicAt(addr unsafe.Pointer, msg string) {
 //go:inline
 //go:nobounds
 func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
+	if interrupt.In() {
+		// Defer is not currently allowed in interrupts.
+		// We could add support for this, but since defer might also allocate
+		// (especially in loops) it might not be a good idea anyway.
+		runtimePanicAt(returnAddress(0), "defer in interrupt")
+	}
 	currentTask := task.Current()
 	frame.Previous = (*deferFrame)(currentTask.DeferFrame)
 	frame.JumpSP = jumpSP
@@ -122,8 +131,11 @@ func destroyDeferFrame(frame *deferFrame) {
 // useParentFrame is set when the caller of runtime._recover has a defer frame
 // itself. In that case, recover() shouldn't check that frame but one frame up.
 func _recover(useParentFrame bool) interface{} {
-	if !supportsRecover() {
-		// Compiling without stack unwinding support, so make this a no-op.
+	if !supportsRecover() || interrupt.In() {
+		// Either we're compiling without stack unwinding support, or we're
+		// inside an interrupt where panic/recover is not supported. Either way,
+		// make this a no-op since panic() won't do any long jumps to a deferred
+		// function.
 		return nil
 	}
 	// TODO: somehow check that recover() is called directly by a deferred
