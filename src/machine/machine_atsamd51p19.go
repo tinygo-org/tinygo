@@ -76,6 +76,31 @@ func setSERCOMClockGenerator(sercom uint8, gclk uint32) {
 	}
 }
 
+// DMA trigger source
+func (spi SPI) triggerSource() (tx uint32) {
+	// See TRIGSRC field of CHCTRLA register for description of these constants.
+	switch spi.Bus {
+	case sam.SERCOM0_SPIM:
+		return 0x05
+	case sam.SERCOM1_SPIM:
+		return 0x07
+	case sam.SERCOM2_SPIM:
+		return 0x09
+	case sam.SERCOM3_SPIM:
+		return 0x0A
+	case sam.SERCOM4_SPIM:
+		return 0x0C
+	case sam.SERCOM5_SPIM:
+		return 0x0E
+	case sam.SERCOM6_SPIM:
+		return 0x10
+	case sam.SERCOM7_SPIM:
+		return 0x12
+	default:
+		return 0 // should be unreachable
+	}
+}
+
 // This chip has five TCC peripherals, which have PWM as one feature.
 var (
 	TCC0 = (*TCC)(sam.TCC0)

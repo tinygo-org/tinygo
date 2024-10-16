@@ -26,4 +26,7 @@ var _ interface { // 2
 	Configure(config SPIConfig) error
 	Tx(w, r []byte) error
 	Transfer(w byte) (byte, error)
+	IsAsync() bool
+	StartTx(tx, rx []byte) error
+	Wait() error
 } = (*SPI)(nil)

@@ -289,7 +289,26 @@ func (spi SPI) isBusy() bool {
 
 // tx writes buffer to SPI ignoring Rx.
 func (spi SPI) tx(tx []byte) error {
-	if len(tx) == 0 {
+	err := spi.StartTx(tx, nil)
+	if err != nil {
+		return err
+	}
+	return spi.Wait()
+}
+
+// IsAsync returns whether the SPI supports async operation (usually DMA).
+//
+// It returns true on the rp2040.
+func (spi SPI) IsAsync() bool {
+	return true
+}
+
+// Start a transfer in the background.
+//
+// After this, another StartTx() or Wait() must be called. The provided byte
+// slices (tx and rx) may only be accessed again after Wait() was called.
+func (spi SPI) StartTx(tx, rx []byte) error {
+	if len(tx) == 0 && len(rx) == 0 {
 		// We don't have to do anything.
 		// This avoids a panic in &tx[0] when len(tx) == 0.
 		return nil
@@ -306,6 +325,15 @@ func (spi SPI) tx(tx []byte) error {
 		dreq = 18 // DREQ_SPI1_TX
 	}
 
+	// Wait for the previous transmission to complete.
+	for ch.CTRL_TRIG.Get()&rp.DMA_CH0_CTRL_TRIG_BUSY != 0 {
+	}
+
+	if len(rx) != 0 {
+		// Fallback. We don't support receiving data using DMA yet.
+		return spi.Tx(tx, rx)
+	}
+
 	// Configure the DMA peripheral as follows:
 	//   - set read address, write address, and number of transfer units (bytes)
 	//   - increment read address (in memory), don't increment write address (SSPDR)
@@ -319,6 +347,19 @@ func (spi SPI) tx(tx []byte) error {
 		rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_SIZE_BYTE<<rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_Pos |
 		dreq<<rp.DMA_CH0_CTRL_TRIG_TREQ_SEL_Pos |
 		rp.DMA_CH0_CTRL_TRIG_EN)
+	return nil
+}
+
+// Wait until all active transactions (started by StartTx) have finished. The
+// buffers provided in StartTx will be available after this method returns.
+func (spi SPI) Wait() error {
+	// Pick the DMA channel reserved for this SPI peripheral.
+	var ch *dmaChannel
+	if spi.Bus == rp.SPI0 {
+		ch = &dmaChannels[spi0DMAChannel]
+	} else { // SPI1
+		ch = &dmaChannels[spi1DMAChannel]
+	}
 
 	// Wait until the transfer is complete.
 	// TODO: do this more efficiently:
