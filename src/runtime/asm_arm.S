@@ -8,8 +8,16 @@ tinygo_scanCurrentStack:
     .cfi_startproc
     // Save callee-saved registers onto the stack.
     #if defined(__thumb2__)
-    push {r4-r11, lr}
-    .cfi_def_cfa_offset 9*4
+        #if defined(FPU_ENABLED)
+            vpush {s0-s31}              // Push the floating-point registers to the stack
+            .cfi_def_cfa_offset 32*4
+        #endif
+        push {r4-r11, lr}
+        #if defined(FPU_ENABLED)
+            .cfi_def_cfa_offset 41*4
+        #else
+            .cfi_def_cfa_offset 9*4
+        #endif
     #else
     mov r0, r8
     mov r1, r9

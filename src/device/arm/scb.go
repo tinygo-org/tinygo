@@ -66,6 +66,43 @@ const (
 	SCB_CPUID_IMPLEMENTER_Pos  = 0x18       // Position of IMPLEMENTER field.
 	SCB_CPUID_IMPLEMENTER_Msk  = 0xff000000 // Bit mask of IMPLEMENTER field.
 
+	SCB_CPACR_CP_ACCESS_DENIED = 0x00
+	SCB_CPACR_CP_PRIVILEGED    = 0x01
+	SCB_CPACR_CP_FULL_ACCESS   = 0xFF
+
+	SCB_CPACR_CP0_Pos    = 0x0
+	SCB_CPACR_CP0_Msk    = 0x3
+	SCB_CPACR_CP1_Pos    = 0x2
+	SCB_CPACR_CP1_Msk    = 0xc
+	SCB_CPACR_CP2_Pos    = 0x4
+	SCB_CPACR_CP2_Msk    = 0x30
+	SCB_CPACR_CP3_Pos    = 0x6
+	SCB_CPACR_CP3_Msk    = 0xc0
+	SCB_CPACR_CP4_Pos    = 0x8
+	SCB_CPACR_CP4_Msk    = 0x300
+	SCB_CPACR_CP5_Pos    = 0xa
+	SCB_CPACR_CP5_Msk    = 0xc00
+	SCB_CPACR_CP6_Pos    = 0xc
+	SCB_CPACR_CP6_Msk    = 0x3000
+	SCB_CPACR_CP7_Pos    = 0xe
+	SCB_CPACR_CP7_Msk    = 0xc000
+	SCB_CPACR_CP8_Pos    = 0x10
+	SCB_CPACR_CP8_Msk    = 0x30000
+	SCB_CPACR_CP9_Pos    = 0x12
+	SCB_CPACR_CP9_Msk    = 0xc0000
+	SCB_CPACR_CP10_Pos   = 0x14
+	SCB_CPACR_CP10_Msk   = 0x300000
+	SCB_CPACR_CP11_Pos   = 0x16
+	SCB_CPACR_CP11_Msk   = 0xc00000
+	SCB_CPACR_CP12_Pos   = 0x18
+	SCB_CPACR_CP12_Msk   = 0x3000000
+	SCB_CPACR_CP13_Pos   = 0x1a
+	SCB_CPACR_CP13_Msk   = 0xc000000
+	SCB_CPACR_D32DIS_Pos = 0x1c
+	SCB_CPACR_D32DIS_Msk = 0x30000000
+	SCB_CPACR_ASEDIS_Pos = 0x1e
+	SCB_CPACR_ASEDIS_Msk = 0xc0000000
+
 	// ICSR: Interrupt Control and State Register
 	SCB_ICSR_VECTACTIVE_Pos          = 0x0        // Position of VECTACTIVE field.
 	SCB_ICSR_VECTACTIVE_Msk          = 0x1ff      // Bit mask of VECTACTIVE field.
