@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"internal/itoa"
 	"unsafe"
 )
 
@@ -59,8 +60,30 @@ func runtime_putchar(c byte) {
 	putchar(c)
 }
 
+// ErrExitPanic implements error
+type ErrExitPanic int
+
+func (e ErrExitPanic) Error() string {
+	return "errno " + itoa.Itoa(int(e))
+}
+
+var panicOnExit bool
+
+// PanicOnExit enables panic when syscall.Exit is called,
+// as opposed to halting. It can be set by, e.g., a u-root
+// shell to regain control when commands exit.
+// This in turn makes it easier for building unmodified
+// commands into u-root, for bare metal environments.
+func PanicOnExit() {
+	panicOnExit = true
+}
+
 //go:linkname syscall_Exit syscall.Exit
 func syscall_Exit(code int) {
+	if panicOnExit {
+		panic(ErrExitPanic(code))
+	}
+
 	exit(code)
 }
 
