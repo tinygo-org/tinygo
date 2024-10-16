@@ -19,16 +19,6 @@ var (
 	USBCDC Serialer
 )
 
-type Serialer interface {
-	WriteByte(c byte) error
-	Write(data []byte) (n int, err error)
-	Configure(config UARTConfig) error
-	Buffered() int
-	ReadByte() (byte, error)
-	DTR() bool
-	RTS() bool
-}
-
 var usbDescriptor descriptor.Descriptor
 
 func usbVendorID() uint16 {
