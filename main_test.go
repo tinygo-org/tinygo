@@ -396,16 +396,12 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	// of the path.
 	path := TESTDATA + "/" + name
 	// Get the expected output for this test.
-	txtpath := path[:len(path)-3] + ".txt"
+	expectedOutputPath := path[:len(path)-3] + ".txt"
 	pkgName := "./" + path
 	if path[len(path)-1] == '/' {
-		txtpath = path + "out.txt"
+		expectedOutputPath = path + "out.txt"
 		options.Directory = path
 		pkgName = "."
-	}
-	expected, err := os.ReadFile(txtpath)
-	if err != nil {
-		t.Fatal("could not read expected output file:", err)
 	}
 
 	config, err := builder.NewConfig(&options)
@@ -428,10 +424,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		return
 	}
 
-	// putchar() prints CRLF, convert it to LF.
-	actual := bytes.Replace(stdout.Bytes(), []byte{'\r', '\n'}, []byte{'\n'}, -1)
-	expected = bytes.Replace(expected, []byte{'\r', '\n'}, []byte{'\n'}, -1) // for Windows
-
+	actual := stdout.Bytes()
 	if config.EmulatorName() == "simavr" {
 		// Strip simavr log formatting.
 		actual = bytes.Replace(actual, []byte{0x1b, '[', '3', '2', 'm'}, nil, -1)
@@ -446,17 +439,12 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	}
 
 	// Check whether the command ran successfully.
-	fail := false
 	if err != nil {
-		t.Log("failed to run:", err)
-		fail = true
-	} else if !bytes.Equal(expected, actual) {
-		t.Logf("output did not match (expected %d bytes, got %d bytes):", len(expected), len(actual))
-		t.Logf(string(Diff("expected", expected, "actual", actual)))
-		fail = true
+		t.Error("failed to run:", err)
 	}
+	checkOutput(t, expectedOutputPath, actual)
 
-	if fail {
+	if t.Failed() {
 		r := bufio.NewReader(bytes.NewReader(actual))
 		for {
 			line, err := r.ReadString('\n')
@@ -696,18 +684,64 @@ func TestWasmExport(t *testing.T) {
 			// Check that the output matches the expected output.
 			// (Skip this for wasm-unknown because it can't produce output).
 			if !tc.noOutput {
-				expectedOutput, err := os.ReadFile("testdata/wasmexport.txt")
-				if err != nil {
-					t.Fatal("could not read output file:", err)
-				}
-				actual := output.Bytes()
-				expectedOutput = bytes.ReplaceAll(expectedOutput, []byte("\r\n"), []byte("\n"))
-				actual = bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n"))
-				if !bytes.Equal(actual, expectedOutput) {
-					t.Error(string(Diff("expected", expectedOutput, "actual", actual)))
-				}
+				checkOutput(t, "testdata/wasmexport.txt", output.Bytes())
 			}
 		})
+	}
+}
+
+// Test //go:wasmexport in JavaScript (using NodeJS).
+func TestWasmExportJS(t *testing.T) {
+	type testCase struct {
+		name      string
+		buildMode string
+	}
+
+	tests := []testCase{
+		{name: "default"},
+		{name: "c-shared", buildMode: "c-shared"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build the wasm binary.
+			tmpdir := t.TempDir()
+			options := optionsFromTarget("wasm", sema)
+			options.BuildMode = tc.buildMode
+			buildConfig, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := builder.Build("testdata/wasmexport-noscheduler.go", ".wasm", tmpdir, buildConfig)
+			if err != nil {
+				t.Fatal("failed to build binary:", err)
+			}
+
+			// Test the resulting binary using NodeJS.
+			output := &bytes.Buffer{}
+			cmd := exec.Command("node", "testdata/wasmexport.js", result.Binary, buildConfig.BuildMode())
+			cmd.Stdout = output
+			cmd.Stderr = output
+			err = cmd.Run()
+			if err != nil {
+				t.Error("failed to run node:", err)
+			}
+			checkOutput(t, "testdata/wasmexport.txt", output.Bytes())
+		})
+	}
+}
+
+// Check whether the output of a test equals the expected output.
+func checkOutput(t *testing.T, filename string, actual []byte) {
+	expectedOutput, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal("could not read output file:", err)
+	}
+	expectedOutput = bytes.ReplaceAll(expectedOutput, []byte("\r\n"), []byte("\n"))
+	actual = bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n"))
+
+	if !bytes.Equal(actual, expectedOutput) {
+		t.Errorf("output did not match (expected %d bytes, got %d bytes):", len(expectedOutput), len(actual))
+		t.Error(string(Diff("expected", expectedOutput, "actual", actual)))
 	}
 }
 

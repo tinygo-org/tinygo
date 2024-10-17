@@ -2,25 +2,14 @@
 
 package runtime
 
-import "unsafe"
-
 type timeUnit float64 // time in milliseconds, just like Date.now() in JavaScript
 
 // wasmNested is used to detect scheduler nesting (WASM calls into JS calls back into WASM).
 // When this happens, we need to use a reduced version of the scheduler.
+//
+// TODO: this variable can probably be removed once //go:wasmexport is the only
+// allowed way to export a wasm function (currently, //export also works).
 var wasmNested bool
-
-//export _start
-func _start() {
-	// These need to be initialized early so that the heap can be initialized.
-	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
-	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
-
-	wasmNested = true
-	run()
-	__stdio_exit()
-	wasmNested = false
-}
 
 var handleEvent func()
 
@@ -50,3 +39,7 @@ func sleepTicks(d timeUnit)
 
 //go:wasmimport gojs runtime.ticks
 func ticks() timeUnit
+
+func beforeExit() {
+	__stdio_exit()
+}
