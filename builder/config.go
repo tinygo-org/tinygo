@@ -2,6 +2,7 @@ package builder
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -23,20 +24,37 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		spec.OpenOCDCommands = options.OpenOCDCommands
 	}
 
-	major, minor, err := goenv.GetGorootVersion()
+	// Version range supported by TinyGo.
+	const minorMin = 19
+	const minorMax = 23
+
+	// Check that we support this Go toolchain version.
+	gorootMajor, gorootMinor, err := goenv.GetGorootVersion()
 	if err != nil {
 		return nil, err
 	}
-	if major != 1 || minor < 19 || minor > 23 {
+	if gorootMajor != 1 || gorootMinor < minorMin || gorootMinor > minorMax {
 		// Note: when this gets updated, also update the Go compatibility matrix:
 		// https://github.com/tinygo-org/tinygo-site/blob/dev/content/docs/reference/go-compat-matrix.md
-		return nil, fmt.Errorf("requires go version 1.19 through 1.23, got go%d.%d", major, minor)
+		return nil, fmt.Errorf("requires go version 1.19 through 1.23, got go%d.%d", gorootMajor, gorootMinor)
+	}
+
+	// Check that the Go toolchain version isn't too new, if we haven't been
+	// compiled with the latest Go version.
+	// This may be a bit too aggressive: if the newer version doesn't change the
+	// Go language we will most likely be able to compile it.
+	buildMajor, buildMinor, err := goenv.Parse(runtime.Version())
+	if err != nil {
+		return nil, err
+	}
+	if buildMajor != 1 || buildMinor < gorootMinor {
+		return nil, fmt.Errorf("cannot compile with Go toolchain version go%d.%d (TinyGo was built using toolchain version %s)", gorootMajor, gorootMinor, runtime.Version())
 	}
 
 	return &compileopts.Config{
 		Options:        options,
 		Target:         spec,
-		GoMinorVersion: minor,
+		GoMinorVersion: gorootMinor,
 		TestConfig:     options.TestConfig,
 	}, nil
 }

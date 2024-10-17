@@ -24,6 +24,8 @@ func TestErrors(t *testing.T) {
 		{name: "cgo"},
 		{name: "compiler"},
 		{name: "interp"},
+		{name: "invalidmain"},
+		{name: "invalidname"},
 		{name: "linker-flashoverflow", target: "cortex-m-qemu"},
 		{name: "linker-ramoverflow", target: "cortex-m-qemu"},
 		{name: "linker-undefined", target: "darwin/arm64"},

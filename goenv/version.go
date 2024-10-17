@@ -34,19 +34,25 @@ func GetGorootVersion() (major, minor int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
+	return Parse(s)
+}
 
-	if s == "" || s[:2] != "go" {
+// Parse parses the Go version (like "go1.3.2") in the parameter and return the
+// major and minor version: 1 and 3 in this example. If there is an error, (0,
+// 0) and an error will be returned.
+func Parse(version string) (major, minor int, err error) {
+	if version == "" || version[:2] != "go" {
 		return 0, 0, errors.New("could not parse Go version: version does not start with 'go' prefix")
 	}
 
-	parts := strings.Split(s[2:], ".")
+	parts := strings.Split(version[2:], ".")
 	if len(parts) < 2 {
 		return 0, 0, errors.New("could not parse Go version: version has less than two parts")
 	}
 
 	// Ignore the errors, we don't really handle errors here anyway.
 	var trailing string
-	n, err := fmt.Sscanf(s, "go%d.%d%s", &major, &minor, &trailing)
+	n, err := fmt.Sscanf(version, "go%d.%d%s", &major, &minor, &trailing)
 	if n == 2 && err == io.EOF {
 		// Means there were no trailing characters (i.e., not an alpha/beta)
 		err = nil
