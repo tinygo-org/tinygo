@@ -1,0 +1,4 @@
+{
+  "inherits": ["esp32c3"],
+  "build-tags": ["esp32c3_supermini"]
+}
