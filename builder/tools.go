@@ -14,16 +14,29 @@ import (
 
 // runCCompiler invokes a C compiler with the given arguments.
 func runCCompiler(flags ...string) error {
+	// Find the right command to run Clang.
+	var cmd *exec.Cmd
 	if hasBuiltinTools {
 		// Compile this with the internal Clang compiler.
-		cmd := exec.Command(os.Args[0], append([]string{"clang"}, flags...)...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		cmd = exec.Command(os.Args[0], append([]string{"clang"}, flags...)...)
+	} else {
+		// Compile this with an external invocation of the Clang compiler.
+		name, err := LookupCommand("clang")
+		if err != nil {
+			return err
+		}
+		cmd = exec.Command(name, flags...)
 	}
 
-	// Compile this with an external invocation of the Clang compiler.
-	return execCommand("clang", flags...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Make sure the command doesn't use any environmental variables.
+	// Most importantly, it should not use C_INCLUDE_PATH and the like. But
+	// removing all environmental variables also works.
+	cmd.Env = []string{}
+
+	return cmd.Run()
 }
 
 // link invokes a linker with the given name and flags.
