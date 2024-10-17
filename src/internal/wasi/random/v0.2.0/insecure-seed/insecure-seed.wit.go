@@ -35,7 +35,3 @@ func InsecureSeed() (result [2]uint64) {
 	wasmimport_InsecureSeed(&result)
 	return
 }
-
-//go:wasmimport wasi:random/insecure-seed@0.2.0 insecure-seed
-//go:noescape
-func wasmimport_InsecureSeed(result *[2]uint64)

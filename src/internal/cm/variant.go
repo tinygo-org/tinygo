@@ -12,7 +12,18 @@ type Discriminant interface {
 // Variant represents a loosely-typed Component Model variant.
 // Shape and Align must be non-zero sized types. To create a variant with no associated
 // types, use an enum.
-type Variant[Tag Discriminant, Shape, Align any] struct{ variant[Tag, Shape, Align] }
+type Variant[Tag Discriminant, Shape, Align any] struct {
+	_ HostLayout
+	variant[Tag, Shape, Align]
+}
+
+// AnyVariant is a type constraint for generic functions that accept any [Variant] type.
+type AnyVariant[Tag Discriminant, Shape, Align any] interface {
+	~struct {
+		_ HostLayout
+		variant[Tag, Shape, Align]
+	}
+}
 
 // NewVariant returns a [Variant] with tag of type Disc, storage and GC shape of type Shape,
 // aligned to type Align, with a value of type T.
@@ -26,7 +37,7 @@ func NewVariant[Tag Discriminant, Shape, Align any, T any](tag Tag, data T) Vari
 
 // New returns a [Variant] with tag of type Disc, storage and GC shape of type Shape,
 // aligned to type Align, with a value of type T.
-func New[V ~struct{ variant[Tag, Shape, Align] }, Tag Discriminant, Shape, Align any, T any](tag Tag, data T) V {
+func New[V AnyVariant[Tag, Shape, Align], Tag Discriminant, Shape, Align any, T any](tag Tag, data T) V {
 	validateVariant[Tag, Shape, Align, T]()
 	var v variant[Tag, Shape, Align]
 	v.tag = tag
@@ -35,7 +46,7 @@ func New[V ~struct{ variant[Tag, Shape, Align] }, Tag Discriminant, Shape, Align
 }
 
 // Case returns a non-nil *T if the [Variant] case is equal to tag, otherwise it returns nil.
-func Case[T any, V ~struct{ variant[Tag, Shape, Align] }, Tag Discriminant, Shape, Align any](v *V, tag Tag) *T {
+func Case[T any, V AnyVariant[Tag, Shape, Align], Tag Discriminant, Shape, Align any](v *V, tag Tag) *T {
 	validateVariant[Tag, Shape, Align, T]()
 	v2 := (*variant[Tag, Shape, Align])(unsafe.Pointer(v))
 	if v2.tag == tag {
@@ -47,6 +58,7 @@ func Case[T any, V ~struct{ variant[Tag, Shape, Align] }, Tag Discriminant, Shap
 // variant is the internal representation of a Component Model variant.
 // Shape and Align must be non-zero sized types.
 type variant[Tag Discriminant, Shape, Align any] struct {
+	_    HostLayout
 	tag  Tag
 	_    [0]Align
 	data Shape // [unsafe.Sizeof(*(*Shape)(unsafe.Pointer(nil)))]byte

@@ -19,6 +19,11 @@ import (
 	"internal/wasi/io/v0.2.0/poll"
 )
 
+// Pollable represents the imported type alias "wasi:clocks/monotonic-clock@0.2.0#pollable".
+//
+// See [poll.Pollable] for more information.
+type Pollable = poll.Pollable
+
 // Instant represents the u64 "wasi:clocks/monotonic-clock@0.2.0#instant".
 //
 // An instant in time, in nanoseconds. An instant is relative to an
@@ -51,10 +56,6 @@ func Now() (result Instant) {
 	return
 }
 
-//go:wasmimport wasi:clocks/monotonic-clock@0.2.0 now
-//go:noescape
-func wasmimport_Now() (result0 uint64)
-
 // Resolution represents the imported function "resolution".
 //
 // Query the resolution of the clock. Returns the duration of time
@@ -69,10 +70,6 @@ func Resolution() (result Duration) {
 	return
 }
 
-//go:wasmimport wasi:clocks/monotonic-clock@0.2.0 resolution
-//go:noescape
-func wasmimport_Resolution() (result0 uint64)
-
 // SubscribeInstant represents the imported function "subscribe-instant".
 //
 // Create a `pollable` which will resolve once the specified instant
@@ -81,16 +78,12 @@ func wasmimport_Resolution() (result0 uint64)
 //	subscribe-instant: func(when: instant) -> pollable
 //
 //go:nosplit
-func SubscribeInstant(when Instant) (result poll.Pollable) {
+func SubscribeInstant(when Instant) (result Pollable) {
 	when0 := (uint64)(when)
 	result0 := wasmimport_SubscribeInstant((uint64)(when0))
-	result = cm.Reinterpret[poll.Pollable]((uint32)(result0))
+	result = cm.Reinterpret[Pollable]((uint32)(result0))
 	return
 }
-
-//go:wasmimport wasi:clocks/monotonic-clock@0.2.0 subscribe-instant
-//go:noescape
-func wasmimport_SubscribeInstant(when0 uint64) (result0 uint32)
 
 // SubscribeDuration represents the imported function "subscribe-duration".
 //
@@ -101,13 +94,9 @@ func wasmimport_SubscribeInstant(when0 uint64) (result0 uint32)
 //	subscribe-duration: func(when: duration) -> pollable
 //
 //go:nosplit
-func SubscribeDuration(when Duration) (result poll.Pollable) {
+func SubscribeDuration(when Duration) (result Pollable) {
 	when0 := (uint64)(when)
 	result0 := wasmimport_SubscribeDuration((uint64)(when0))
-	result = cm.Reinterpret[poll.Pollable]((uint32)(result0))
+	result = cm.Reinterpret[Pollable]((uint32)(result0))
 	return
 }
-
-//go:wasmimport wasi:clocks/monotonic-clock@0.2.0 subscribe-duration
-//go:noescape
-func wasmimport_SubscribeDuration(when0 uint64) (result0 uint32)
