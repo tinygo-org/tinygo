@@ -2,6 +2,11 @@ package cm
 
 import "unsafe"
 
+// AnyInteger is a type constraint for any integer type.
+type AnyInteger interface {
+	~int | ~uint | ~uintptr | ~int8 | ~uint8 | ~int16 | ~uint16 | ~int32 | ~uint32 | ~int64 | ~uint64
+}
+
 // Reinterpret reinterprets the bits of type From into type T.
 // Will panic if the size of From is smaller than the size of To.
 func Reinterpret[T, From any](from From) (to T) {
@@ -19,19 +24,19 @@ func LowerString[S ~string](s S) (*byte, uint32) {
 }
 
 // LiftString lifts Core WebAssembly types into a [string].
-func LiftString[T ~string, Data unsafe.Pointer | uintptr | *uint8, Len uint | uintptr | uint32 | uint64](data Data, len Len) T {
+func LiftString[T ~string, Data unsafe.Pointer | uintptr | *uint8, Len AnyInteger](data Data, len Len) T {
 	return T(unsafe.String((*uint8)(unsafe.Pointer(data)), int(len)))
 }
 
 // LowerList lowers a [List] into a pair of Core WebAssembly types.
-func LowerList[L ~struct{ list[T] }, T any](list L) (*T, uint32) {
+func LowerList[L AnyList[T], T any](list L) (*T, uint32) {
 	l := (*List[T])(unsafe.Pointer(&list))
 	return l.data, uint32(l.len)
 }
 
 // LiftList lifts Core WebAssembly types into a [List].
-func LiftList[L List[T], T any, Data unsafe.Pointer | uintptr | *T, Len uint | uintptr | uint32 | uint64](data Data, len Len) L {
-	return L(NewList((*T)(unsafe.Pointer(data)), uint(len)))
+func LiftList[L AnyList[T], T any, Data unsafe.Pointer | uintptr | *T, Len AnyInteger](data Data, len Len) L {
+	return L(NewList((*T)(unsafe.Pointer(data)), len))
 }
 
 // BoolToU32 converts a value whose underlying type is [bool] into a [uint32].
@@ -83,6 +88,25 @@ func F64ToU64(v float64) uint64 { return *(*uint64)(unsafe.Pointer(&v)) }
 // [float64]: https://pkg.go.dev/builtin#float64
 // [Canonical ABI]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md
 func U64ToF64(v uint64) float64 { return *(*float64)(unsafe.Pointer(&v)) }
+
+// F32ToU64 maps the bits of a [float32] into a [uint64].
+// Used to lower a [float32] into a Core WebAssembly i64 when required by the [Canonical ABI].
+//
+// [float32]: https://pkg.go.dev/builtin#float32
+// [uint64]: https://pkg.go.dev/builtin#uint64
+// [Canonical ABI]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md
+func F32ToU64(v float32) uint64 { return uint64(*(*uint32)(unsafe.Pointer(&v))) }
+
+// U64ToF32 maps the bits of a [uint64] into a [float32].
+// Used to lift a Core WebAssembly i64 into a [float32] when required by the [Canonical ABI].
+//
+// [uint64]: https://pkg.go.dev/builtin#uint64
+// [float32]: https://pkg.go.dev/builtin#float32
+// [Canonical ABI]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md
+func U64ToF32(v uint64) float32 {
+	truncated := uint32(v)
+	return *(*float32)(unsafe.Pointer(&truncated))
+}
 
 // PointerToU32 converts a pointer of type *T into a [uint32].
 // Used to lower a pointer into a Core WebAssembly i32 as specified in the [Canonical ABI].

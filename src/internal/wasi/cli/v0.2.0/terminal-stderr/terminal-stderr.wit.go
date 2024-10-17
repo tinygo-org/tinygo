@@ -11,6 +11,11 @@ import (
 	terminaloutput "internal/wasi/cli/v0.2.0/terminal-output"
 )
 
+// TerminalOutput represents the imported type alias "wasi:cli/terminal-stderr@0.2.0#terminal-output".
+//
+// See [terminaloutput.TerminalOutput] for more information.
+type TerminalOutput = terminaloutput.TerminalOutput
+
 // GetTerminalStderr represents the imported function "get-terminal-stderr".
 //
 // If stderr is connected to a terminal, return a `terminal-output` handle
@@ -19,11 +24,7 @@ import (
 //	get-terminal-stderr: func() -> option<terminal-output>
 //
 //go:nosplit
-func GetTerminalStderr() (result cm.Option[terminaloutput.TerminalOutput]) {
+func GetTerminalStderr() (result cm.Option[TerminalOutput]) {
 	wasmimport_GetTerminalStderr(&result)
 	return
 }
-
-//go:wasmimport wasi:cli/terminal-stderr@0.2.0 get-terminal-stderr
-//go:noescape
-func wasmimport_GetTerminalStderr(result *cm.Option[terminaloutput.TerminalOutput])

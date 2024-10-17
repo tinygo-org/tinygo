@@ -3,10 +3,12 @@
 package network
 
 import (
+	"internal/cm"
 	"unsafe"
 )
 
 // IPv6SocketAddressShape is used for storage in variant or result types.
 type IPv6SocketAddressShape struct {
+	_     cm.HostLayout
 	shape [unsafe.Sizeof(IPv6SocketAddress{})]byte
 }

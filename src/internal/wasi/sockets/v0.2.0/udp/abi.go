@@ -10,6 +10,7 @@ import (
 
 // IPSocketAddressShape is used for storage in variant or result types.
 type IPSocketAddressShape struct {
+	_     cm.HostLayout
 	shape [unsafe.Sizeof(network.IPSocketAddress{})]byte
 }
 
@@ -76,10 +77,11 @@ func lower_IPSocketAddress(v network.IPSocketAddress) (f0 uint32, f1 uint32, f2 
 
 // TupleIncomingDatagramStreamOutgoingDatagramStreamShape is used for storage in variant or result types.
 type TupleIncomingDatagramStreamOutgoingDatagramStreamShape struct {
+	_     cm.HostLayout
 	shape [unsafe.Sizeof(cm.Tuple[IncomingDatagramStream, OutgoingDatagramStream]{})]byte
 }
 
-func lower_OptionIPSocketAddress(v cm.Option[network.IPSocketAddress]) (f0 uint32, f1 uint32, f2 uint32, f3 uint32, f4 uint32, f5 uint32, f6 uint32, f7 uint32, f8 uint32, f9 uint32, f10 uint32, f11 uint32, f12 uint32) {
+func lower_OptionIPSocketAddress(v cm.Option[IPSocketAddress]) (f0 uint32, f1 uint32, f2 uint32, f3 uint32, f4 uint32, f5 uint32, f6 uint32, f7 uint32, f8 uint32, f9 uint32, f10 uint32, f11 uint32, f12 uint32) {
 	some := v.Some()
 	if some != nil {
 		f0 = 1

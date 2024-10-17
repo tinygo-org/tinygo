@@ -43,10 +43,6 @@ func (self Error) ResourceDrop() {
 	return
 }
 
-//go:wasmimport wasi:io/error@0.2.0 [resource-drop]error
-//go:noescape
-func wasmimport_ErrorResourceDrop(self0 uint32)
-
 // ToDebugString represents the imported method "to-debug-string".
 //
 // Returns a string that is suitable to assist humans in debugging
@@ -65,7 +61,3 @@ func (self Error) ToDebugString() (result string) {
 	wasmimport_ErrorToDebugString((uint32)(self0), &result)
 	return
 }
-
-//go:wasmimport wasi:io/error@0.2.0 [method]error.to-debug-string
-//go:noescape
-func wasmimport_ErrorToDebugString(self0 uint32, result *string)

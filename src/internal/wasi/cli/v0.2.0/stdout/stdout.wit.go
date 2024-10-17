@@ -8,17 +8,18 @@ import (
 	"internal/wasi/io/v0.2.0/streams"
 )
 
+// OutputStream represents the imported type alias "wasi:cli/stdout@0.2.0#output-stream".
+//
+// See [streams.OutputStream] for more information.
+type OutputStream = streams.OutputStream
+
 // GetStdout represents the imported function "get-stdout".
 //
 //	get-stdout: func() -> output-stream
 //
 //go:nosplit
-func GetStdout() (result streams.OutputStream) {
+func GetStdout() (result OutputStream) {
 	result0 := wasmimport_GetStdout()
-	result = cm.Reinterpret[streams.OutputStream]((uint32)(result0))
+	result = cm.Reinterpret[OutputStream]((uint32)(result0))
 	return
 }
-
-//go:wasmimport wasi:cli/stdout@0.2.0 get-stdout
-//go:noescape
-func wasmimport_GetStdout() (result0 uint32)

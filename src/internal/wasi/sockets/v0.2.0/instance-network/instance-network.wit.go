@@ -10,6 +10,11 @@ import (
 	"internal/wasi/sockets/v0.2.0/network"
 )
 
+// Network represents the imported type alias "wasi:sockets/instance-network@0.2.0#network".
+//
+// See [network.Network] for more information.
+type Network = network.Network
+
 // InstanceNetwork represents the imported function "instance-network".
 //
 // Get a handle to the default network.
@@ -17,12 +22,8 @@ import (
 //	instance-network: func() -> network
 //
 //go:nosplit
-func InstanceNetwork() (result network.Network) {
+func InstanceNetwork() (result Network) {
 	result0 := wasmimport_InstanceNetwork()
-	result = cm.Reinterpret[network.Network]((uint32)(result0))
+	result = cm.Reinterpret[Network]((uint32)(result0))
 	return
 }
-
-//go:wasmimport wasi:sockets/instance-network@0.2.0 instance-network
-//go:noescape
-func wasmimport_InstanceNetwork() (result0 uint32)

@@ -32,10 +32,6 @@ func GetInsecureRandomBytes(len_ uint64) (result cm.List[uint8]) {
 	return
 }
 
-//go:wasmimport wasi:random/insecure@0.2.0 get-insecure-random-bytes
-//go:noescape
-func wasmimport_GetInsecureRandomBytes(len0 uint64, result *cm.List[uint8])
-
 // GetInsecureRandomU64 represents the imported function "get-insecure-random-u64".
 //
 // Return an insecure pseudo-random `u64` value.
@@ -51,7 +47,3 @@ func GetInsecureRandomU64() (result uint64) {
 	result = (uint64)((uint64)(result0))
 	return
 }
-
-//go:wasmimport wasi:random/insecure@0.2.0 get-insecure-random-u64
-//go:noescape
-func wasmimport_GetInsecureRandomU64() (result0 uint64)

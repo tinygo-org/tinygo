@@ -8,18 +8,15 @@ import (
 	"unsafe"
 )
 
-// DateTimeShape is used for storage in variant or result types.
-type DateTimeShape struct {
-	shape [unsafe.Sizeof(wallclock.DateTime{})]byte
-}
-
 // MetadataHashValueShape is used for storage in variant or result types.
 type MetadataHashValueShape struct {
+	_     cm.HostLayout
 	shape [unsafe.Sizeof(MetadataHashValue{})]byte
 }
 
 // TupleListU8BoolShape is used for storage in variant or result types.
 type TupleListU8BoolShape struct {
+	_     cm.HostLayout
 	shape [unsafe.Sizeof(cm.Tuple[cm.List[uint8], bool]{})]byte
 }
 
@@ -42,10 +39,12 @@ func lower_NewTimestamp(v NewTimestamp) (f0 uint32, f1 uint64, f2 uint32) {
 
 // DescriptorStatShape is used for storage in variant or result types.
 type DescriptorStatShape struct {
+	_     cm.HostLayout
 	shape [unsafe.Sizeof(DescriptorStat{})]byte
 }
 
 // OptionDirectoryEntryShape is used for storage in variant or result types.
 type OptionDirectoryEntryShape struct {
+	_     cm.HostLayout
 	shape [unsafe.Sizeof(cm.Option[DirectoryEntry]{})]byte
 }
