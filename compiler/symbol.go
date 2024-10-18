@@ -468,7 +468,7 @@ func (c *compilerContext) isValidWasmType(typ types.Type, site wasmSite) bool {
 		hasHostLayout := true // default to true before detecting Go version
 		// (*types.Package).GoVersion added in go1.21
 		if gv, ok := any(c.pkg).(interface{ GoVersion() string }); ok {
-			if goenv.WantGoVersion(gv.GoVersion(), 1, 23) {
+			if goenv.Compare(gv.GoVersion(), "go1.23") >= 0 {
 				hasHostLayout = false // package structs added in go1.23
 			}
 		}
