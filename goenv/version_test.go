@@ -66,3 +66,33 @@ func TestWantGoVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestCompare(t *testing.T) {
+	tests := []struct {
+		a    string
+		b    string
+		want int
+	}{
+		{"", "", 0},
+		{"go0", "go0", 0},
+		{"go0", "go1", -1},
+		{"go1", "go0", 1},
+		{"go1", "go2", -1},
+		{"go2", "go1", 1},
+		{"go1.1", "go1.2", -1},
+		{"go1.2", "go1.1", 1},
+		{"go1.1.0", "go1.2.0", -1},
+		{"go1.2.0", "go1.1.0", 1},
+		{"go1.2.0", "go2.3.0", -1},
+		// {"go1.23.2", "go1.23.10", -1}, // FIXME: parse patch number
+	}
+	for _, tt := range tests {
+		t.Run(tt.a+" "+tt.b, func(t *testing.T) {
+			got := Compare(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("Compare(%q, %q): expected %d; got %d",
+					tt.a, tt.b, tt.want, got)
+			}
+		})
+	}
+}

@@ -74,6 +74,28 @@ func WantGoVersion(s string, major, minor int) bool {
 	return ma > major || (ma == major && mi >= minor)
 }
 
+// Compare compares two Go version strings.
+// The result will be 0 if a == b, -1 if a < b, and +1 if a > b.
+// If either a or b is not a valid Go version, it is treated as "go0.0"
+// and compared lexicographically.
+// See [Parse] for more information.
+func Compare(a, b string) int {
+	aMajor, aMinor, _ := Parse(a)
+	bMajor, bMinor, _ := Parse(b)
+	switch {
+	case aMajor < bMajor:
+		return -1
+	case aMajor > bMajor:
+		return +1
+	case aMinor < bMinor:
+		return -1
+	case aMinor > bMinor:
+		return +1
+	default:
+		return strings.Compare(a, b)
+	}
+}
+
 // GorootVersionString returns the version string as reported by the Go
 // toolchain. It is usually of the form `go1.x.y` but can have some variations
 // (for beta releases, for example).
