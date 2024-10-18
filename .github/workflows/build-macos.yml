@@ -16,11 +16,11 @@ jobs:
     name: build-macos
     strategy:
       matrix:
-        # macos-12: amd64 (oldest supported version as of 05-02-2024)
+        # macos-13: amd64 (oldest supported version as of 18-10-2024)
         # macos-14: arm64 (oldest arm64 version)
-        os: [macos-12, macos-14]
+        os: [macos-13, macos-14]
         include:
-          - os: macos-12
+          - os: macos-13
             goarch: amd64
           - os: macos-14
             goarch: arm64
