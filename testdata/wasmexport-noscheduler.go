@@ -18,16 +18,16 @@ func hello() {
 }
 
 //go:wasmexport add
-func add(a, b int) int {
+func add(a, b int32) int32 {
 	println("called add:", a, b)
 	return a + b
 }
 
 //go:wasmimport tester callOutside
-func callOutside(a, b int) int
+func callOutside(a, b int32) int32
 
 //go:wasmexport reentrantCall
-func reentrantCall(a, b int) int {
+func reentrantCall(a, b int32) int32 {
 	println("reentrantCall:", a, b)
 	result := callOutside(a, b)
 	println("reentrantCall result:", result)
