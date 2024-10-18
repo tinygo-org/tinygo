@@ -4,13 +4,6 @@ package runtime
 
 type timeUnit float64 // time in milliseconds, just like Date.now() in JavaScript
 
-// wasmNested is used to detect scheduler nesting (WASM calls into JS calls back into WASM).
-// When this happens, we need to use a reduced version of the scheduler.
-//
-// TODO: this variable can probably be removed once //go:wasmexport is the only
-// allowed way to export a wasm function (currently, //export also works).
-var wasmNested bool
-
 var handleEvent func()
 
 //go:linkname setEventHandler syscall/js.setEventHandler

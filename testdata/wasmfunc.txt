@@ -1,0 +1,7 @@
+calling callback!
+inside callback! parameters:
+  parameter: 1
+  parameter: 2
+  parameter: 3
+  parameter: 4
+result from callback: 10
