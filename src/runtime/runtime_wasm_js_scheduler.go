@@ -8,24 +8,10 @@ func resume() {
 		handleEvent()
 	}()
 
-	if wasmNested {
-		minSched()
-		return
-	}
-
-	wasmNested = true
 	scheduler(false)
-	wasmNested = false
 }
 
 //export go_scheduler
 func go_scheduler() {
-	if wasmNested {
-		minSched()
-		return
-	}
-
-	wasmNested = true
 	scheduler(false)
-	wasmNested = false
 }
