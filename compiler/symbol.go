@@ -465,9 +465,12 @@ func (c *compilerContext) isValidWasmType(typ types.Type, site wasmSite) bool {
 		if typ.NumFields() == 0 {
 			return true
 		}
-		var hasHostLayout bool
-		if !goenv.WantGoVersion(c.pkg.GoVersion(), 1, 23) {
-			hasHostLayout = true // package structs does not exist before go1.23
+		hasHostLayout := true // default to true before detecting Go version
+		// (*types.Package).GoVersion added in go1.21
+		if gv, ok := any(c.pkg).(interface{ GoVersion() string }); ok {
+			if goenv.WantGoVersion(gv.GoVersion(), 1, 23) {
+				hasHostLayout = false // package structs added in go1.23
+			}
 		}
 		for i := 0; i < typ.NumFields(); i++ {
 			ftyp := typ.Field(i).Type()
