@@ -128,6 +128,7 @@ var libMusl = Library{
 			"mman/*.c",
 			"math/*.c",
 			"multibyte/*.c",
+			"signal/" + arch + "/*.s",
 			"signal/*.c",
 			"stdio/*.c",
 			"string/*.c",
