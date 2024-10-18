@@ -690,6 +690,33 @@ func TestWasmExport(t *testing.T) {
 	}
 }
 
+// Test js.FuncOf (for syscall/js).
+// This test might be extended in the future to cover more cases in syscall/js.
+func TestWasmFuncOf(t *testing.T) {
+	// Build the wasm binary.
+	tmpdir := t.TempDir()
+	options := optionsFromTarget("wasm", sema)
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/wasmfunc.go", ".wasm", tmpdir, buildConfig)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+
+	// Test the resulting binary using NodeJS.
+	output := &bytes.Buffer{}
+	cmd := exec.Command("node", "testdata/wasmfunc.js", result.Binary, buildConfig.BuildMode())
+	cmd.Stdout = output
+	cmd.Stderr = output
+	err = cmd.Run()
+	if err != nil {
+		t.Error("failed to run node:", err)
+	}
+	checkOutput(t, "testdata/wasmfunc.txt", output.Bytes())
+}
+
 // Test //go:wasmexport in JavaScript (using NodeJS).
 func TestWasmExportJS(t *testing.T) {
 	type testCase struct {
