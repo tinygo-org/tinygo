@@ -68,16 +68,6 @@ func Parse(version string) (major, minor, patch int, err error) {
 	return major, minor, patch, nil
 }
 
-// WantGoVersion returns true if Go version s is >= major and minor.
-// Returns false if s is not a valid Go version string. See [Parse] for more information.
-func WantGoVersion(s string, major, minor int) bool {
-	ma, mi, _, err := Parse(s)
-	if err != nil {
-		return false
-	}
-	return ma > major || (ma == major && mi >= minor)
-}
-
 // Compare compares two Go version strings.
 // The result will be 0 if a == b, -1 if a < b, and +1 if a > b.
 // If either a or b is not a valid Go version, it is treated as "go0.0"
