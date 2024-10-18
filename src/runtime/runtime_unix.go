@@ -307,3 +307,22 @@ func growHeap() bool {
 	setHeapEnd(heapStart + heapSize)
 	return true
 }
+
+//go:linkname signal_enable os/signal.signal_enable
+func signal_enable(s uint32) {}
+
+//go:linkname signal_disable os/signal.signal_disable
+func signal_disable(s uint32) {}
+
+//go:linkname signal_ignore os/signal.signal_ignore
+func signal_ignore(s uint32) {}
+
+//go:linkname signal_ignored os/signal.signal_ignored
+func signal_ignored(s uint32) bool {
+	return false
+}
+
+//go:linkname signal_recv os/signal.signal_recv
+func signal_recv() uint32 {
+	return 0
+}
