@@ -54,6 +54,10 @@ func main() {
 	var buf [32]byte
 	s := string(buf[:])
 	println(len(s))
+
+	var rbuf [5]rune
+	s = string(rbuf[:])
+	println(s)
 }
 
 func derefInt(x *int) int {
