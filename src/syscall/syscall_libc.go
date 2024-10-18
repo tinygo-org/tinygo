@@ -233,6 +233,11 @@ func (w WaitStatus) Continued() bool    { return false }
 func (w WaitStatus) StopSignal() Signal { return 0 }
 func (w WaitStatus) TrapCause() int     { return 0 }
 
+// since rusage is quite a big struct and we stub it out anyway no need to define it here
+func Wait4(pid int, wstatus *WaitStatus, options int, rusage uintptr) (wpid int, err error) {
+	return 0, ENOSYS // TODO
+}
+
 func Getenv(key string) (value string, found bool) {
 	data := cstring(key)
 	raw := libc_getenv(&data[0])
