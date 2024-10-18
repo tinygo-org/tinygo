@@ -34,40 +34,44 @@ func GetGorootVersion() (major, minor int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	return Parse(s)
+	major, minor, _, err = Parse(s)
+	return major, minor, err
 }
 
 // Parse parses the Go version (like "go1.3.2") in the parameter and return the
-// major and minor version: 1 and 3 in this example. If there is an error, (0,
-// 0) and an error will be returned.
-func Parse(version string) (major, minor int, err error) {
+// major, minor, and patch version: 1, 3, and 2 in this example.
+// If there is an error, (0, 0, 0) and an error will be returned.
+func Parse(version string) (major, minor, patch int, err error) {
 	if version == "" || version[:2] != "go" {
-		return 0, 0, errors.New("could not parse Go version: version does not start with 'go' prefix")
+		return 0, 0, 0, errors.New("could not parse Go version: version does not start with 'go' prefix")
 	}
 
 	parts := strings.Split(version[2:], ".")
 	if len(parts) < 2 {
-		return 0, 0, errors.New("could not parse Go version: version has less than two parts")
+		return 0, 0, 0, errors.New("could not parse Go version: version has less than two parts")
 	}
 
 	// Ignore the errors, we don't really handle errors here anyway.
 	var trailing string
-	n, err := fmt.Sscanf(version, "go%d.%d%s", &major, &minor, &trailing)
-	if n == 2 && err == io.EOF {
+	n, err := fmt.Sscanf(version, "go%d.%d.%d%s", &major, &minor, &patch, &trailing)
+	if n == 2 {
+		n, err = fmt.Sscanf(version, "go%d.%d%s", &major, &minor, &trailing)
+	}
+	if n >= 2 && err == io.EOF {
 		// Means there were no trailing characters (i.e., not an alpha/beta)
 		err = nil
 	}
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to parse version: %s", err)
+		return 0, 0, 0, fmt.Errorf("failed to parse version: %s", err)
 	}
 
-	return major, minor, nil
+	return major, minor, patch, nil
 }
 
 // WantGoVersion returns true if Go version s is >= major and minor.
 // Returns false if s is not a valid Go version string. See [Parse] for more information.
 func WantGoVersion(s string, major, minor int) bool {
-	ma, mi, err := Parse(s)
+	ma, mi, _, err := Parse(s)
 	if err != nil {
 		return false
 	}
@@ -80,8 +84,8 @@ func WantGoVersion(s string, major, minor int) bool {
 // and compared lexicographically.
 // See [Parse] for more information.
 func Compare(a, b string) int {
-	aMajor, aMinor, _ := Parse(a)
-	bMajor, bMinor, _ := Parse(b)
+	aMajor, aMinor, aPatch, _ := Parse(a)
+	bMajor, bMinor, bPatch, _ := Parse(b)
 	switch {
 	case aMajor < bMajor:
 		return -1
@@ -90,6 +94,10 @@ func Compare(a, b string) int {
 	case aMinor < bMinor:
 		return -1
 	case aMinor > bMinor:
+		return +1
+	case aPatch < bPatch:
+		return -1
+	case aPatch > bPatch:
 		return +1
 	default:
 		return strings.Compare(a, b)
