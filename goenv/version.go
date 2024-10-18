@@ -71,7 +71,7 @@ func WantGoVersion(s string, major, minor int) bool {
 	if err != nil {
 		return false
 	}
-	return ma >= major && mi >= minor
+	return ma > major || (ma == major && mi >= minor)
 }
 
 // GorootVersionString returns the version string as reported by the Go

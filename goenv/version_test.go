@@ -36,3 +36,33 @@ func TestParse(t *testing.T) {
 		})
 	}
 }
+
+func TestWantGoVersion(t *testing.T) {
+	tests := []struct {
+		v     string
+		major int
+		minor int
+		want  bool
+	}{
+		{"", 0, 0, false},
+		{"go", 0, 0, false},
+		{"go1", 0, 0, false},
+		{"go.0", 0, 0, false},
+		{"go1.0", 1, 0, true},
+		{"go1.1", 1, 1, true},
+		{"go1.23", 1, 23, true},
+		{"go1.23.5", 1, 23, true},
+		{"go1.23.5-rc6", 1, 23, true},
+		{"go2.0", 1, 23, true},
+		{"go2.0", 2, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.v, func(t *testing.T) {
+			got := WantGoVersion(tt.v, tt.major, tt.minor)
+			if got != tt.want {
+				t.Errorf("WantGoVersion(%q, %d, %d): expected %t; got %t",
+					tt.v, tt.major, tt.minor, tt.want, got)
+			}
+		})
+	}
+}
