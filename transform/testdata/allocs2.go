@@ -49,6 +49,11 @@ func main() {
 		n4 = n5
 	}()
 	println(n4, n5)
+
+	// This shouldn't escape.
+	var buf [32]byte
+	s := string(buf[:])
+	println(len(s))
 }
 
 func derefInt(x *int) int {
