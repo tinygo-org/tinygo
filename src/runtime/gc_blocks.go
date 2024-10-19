@@ -32,6 +32,7 @@ package runtime
 
 import (
 	"internal/task"
+	"math/bits"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -75,6 +76,11 @@ const (
 	blockStateMark blockState = 3 // 11
 	blockStateMask blockState = 3 // 11
 )
+
+// blockStateByteAllTails is a byte containing 4 times blockStateTail bits.
+// It assumes there are 2 state bits per block, otherwise it might have to be
+// turned into variable and assigned using inline function.
+const blockStateByteAllTails = uint8(blockStateTail<<(stateBits*3) | blockStateTail<<(stateBits*2) | blockStateTail<<(stateBits*1) | blockStateTail<<(stateBits*0))
 
 // String returns a human-readable version of the block state, for debugging.
 func (s blockState) String() string {
@@ -123,9 +129,25 @@ func (b gcBlock) address() uintptr {
 // points to an allocated object. It returns the same block if this block
 // already points to the head.
 func (b gcBlock) findHead() gcBlock {
-	for b.state() == blockStateTail {
-		b--
+	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
+
+	// XOR the stateByte with byte containing all tails to turn tail bits to 0 and
+	// mask out the bits that are not part of the object
+	otherObjectBlocks := int(blocksPerStateByte - (b%blocksPerStateByte + 1))
+	stateByte := ((*stateBytePtr) ^ blockStateByteAllTails) & (uint8(1<<(8-(otherObjectBlocks*stateBits))) - 1)
+
+	// loop until state byte is not all tails
+	for stateByte == 0 {
+		stateBytePtr = (*uint8)(unsafe.Add(unsafe.Pointer(stateBytePtr), -1))
+		stateByte = (*stateBytePtr) ^ blockStateByteAllTails
+		b -= blocksPerStateByte
 	}
+
+	// in the first state byte which is not all tails, count the number of leading bits that are 0 and
+	// divide it by stateBits to get the number of tail blocks. Subtract otherObjectBlocks to exclude
+	// blocks that are not part of the object
+	b -= gcBlock((bits.LeadingZeros8(stateByte) / stateBits) - otherObjectBlocks)
+
 	if gcAsserts {
 		if b.state() != blockStateHead && b.state() != blockStateMark {
 			runtimePanic("gc: found tail without head")
