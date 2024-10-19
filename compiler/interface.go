@@ -225,6 +225,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			)
 		case *types.Map:
 			typeFieldTypes = append(typeFieldTypes,
+				types.NewVar(token.NoPos, nil, "extraFlags", types.Typ[types.Uint8]),
 				types.NewVar(token.NoPos, nil, "numMethods", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "elementType", types.Typ[types.UnsafePointer]),
@@ -271,10 +272,6 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		// Precompute these so we don't have to calculate them at runtime.
 		if types.Comparable(typ) {
 			metabyte |= 1 << 6
-		}
-
-		if hashmapIsBinaryKey(typ) {
-			metabyte |= 1 << 7
 		}
 
 		switch typ := typ.(type) {
@@ -333,7 +330,12 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeCode(types.NewSlice(typ.Elem())),              // slicePtr
 			}
 		case *types.Map:
+			var extraFlags uint8
+			if hashmapIsBinaryKey(typ.Key()) {
+				extraFlags |= 1 // extraFlagIsBinaryKey
+			}
 			typeFields = []llvm.Value{
+				llvm.ConstInt(c.ctx.Int8Type(), uint64(extraFlags), false),
 				llvm.ConstInt(c.ctx.Int16Type(), 0, false), // numMethods
 				c.getTypeCode(types.NewPointer(typ)),       // ptrTo
 				c.getTypeCode(typ.Elem()),                  // elem

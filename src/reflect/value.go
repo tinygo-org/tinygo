@@ -927,9 +927,10 @@ func (v Value) MapKeys() []Value {
 	k := New(v.typecode.Key())
 	e := New(v.typecode.Elem())
 
+	typecode := (*mapType)(unsafe.Pointer((v.typecode.underlying())))
 	keyType := v.typecode.key()
 	keyTypeIsEmptyInterface := keyType.Kind() == Interface && keyType.NumMethod() == 0
-	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !keyType.isBinary()
+	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !typecode.isBinaryKey()
 
 	for hashmapNext(v.pointer(), it, k.value, e.value) {
 		if shouldUnpackInterface {
@@ -959,6 +960,7 @@ func (v Value) MapIndex(key Value) Value {
 		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
 	}
 
+	typecode := (*mapType)(unsafe.Pointer(v.typecode.underlying()))
 	vkey := v.typecode.key()
 
 	// compare key type with actual key type of map
@@ -975,7 +977,7 @@ func (v Value) MapIndex(key Value) Value {
 			return Value{}
 		}
 		return elem.Elem()
-	} else if vkey.isBinary() {
+	} else if typecode.isBinaryKey() {
 		var keyptr unsafe.Pointer
 		if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
 			keyptr = key.value
@@ -1006,10 +1008,11 @@ func (v Value) MapRange() *MapIter {
 		panic(&ValueError{Method: "MapRange", Kind: v.Kind()})
 	}
 
+	typecode := (*mapType)(unsafe.Pointer(v.typecode.underlying()))
 	keyType := v.typecode.key()
 
 	keyTypeIsEmptyInterface := keyType.Kind() == Interface && keyType.NumMethod() == 0
-	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !keyType.isBinary()
+	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !typecode.isBinaryKey()
 
 	return &MapIter{
 		m:                  v,
@@ -1788,6 +1791,7 @@ func (v Value) SetMapIndex(key, elem Value) {
 	}
 
 	vkey := v.typecode.key()
+	typecode := (*mapType)(unsafe.Pointer(v.typecode.underlying()))
 
 	// compare key type with actual key type of map
 	if !key.typecode.AssignableTo(vkey) {
@@ -1823,7 +1827,7 @@ func (v Value) SetMapIndex(key, elem Value) {
 			hashmapStringSet(v.pointer(), *(*string)(key.value), elemptr)
 		}
 
-	} else if key.typecode.isBinary() {
+	} else if typecode.isBinaryKey() {
 		var keyptr unsafe.Pointer
 		if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
 			keyptr = key.value
@@ -1929,14 +1933,15 @@ func MakeMapWithSize(typ Type, n int) Value {
 		panic("reflect.MakeMapWithSize: negative size hint")
 	}
 
-	key := typ.Key().(*rawType)
-	val := typ.Elem().(*rawType)
+	typecode := (*mapType)(unsafe.Pointer(typ.(*rawType).underlying()))
+	key := typecode.rawType.key()
+	val := typecode.rawType.elem()
 
 	var alg uint8
 
 	if key.Kind() == String {
 		alg = hashmapAlgorithmString
-	} else if key.isBinary() {
+	} else if typecode.isBinaryKey() {
 		alg = hashmapAlgorithmBinary
 	} else {
 		alg = hashmapAlgorithmInterface
