@@ -135,6 +135,7 @@ var libMusl = Library{
 			"thread/*.c",
 			"time/*.c",
 			"unistd/*.c",
+			"fcntl/*.c",
 		}
 		if arch == "arm" {
 			// These files need to be added to the start for some reason.
