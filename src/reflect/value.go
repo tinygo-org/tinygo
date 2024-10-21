@@ -1493,7 +1493,11 @@ func MakeSlice(typ Type, len, cap int) Value {
 	var slice sliceHeader
 	slice.cap = uintptr(ucap)
 	slice.len = uintptr(ulen)
-	slice.data = alloc(size, nil)
+	var layout unsafe.Pointer
+	if elementSize == 1 {
+		layout = unsafe.Pointer(uintptr(0x3))
+	}
+	slice.data = alloc(size, layout)
 
 	return Value{
 		typecode: rtype,
