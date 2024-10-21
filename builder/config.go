@@ -43,7 +43,7 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	// compiled with the latest Go version.
 	// This may be a bit too aggressive: if the newer version doesn't change the
 	// Go language we will most likely be able to compile it.
-	buildMajor, buildMinor, err := goenv.Parse(runtime.Version())
+	buildMajor, buildMinor, _, err := goenv.Parse(runtime.Version())
 	if err != nil {
 		return nil, err
 	}
