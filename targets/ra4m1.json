@@ -1,0 +1,10 @@
+{
+	"inherits": ["cortex-m4"],
+	"build-tags": ["ra4m1", "renesas"],
+	"linkerscript": "targets/ra4m1.ld",
+	"extra-files": [
+		"src/device/renesas/r7fa4m2ad.s"
+	],
+	"openocd-transport": "swd",
+	"openocd-target": "atsame5x"
+}
