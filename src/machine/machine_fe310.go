@@ -26,6 +26,8 @@ const (
 func (p Pin) Configure(config PinConfig) {
 	sifive.GPIO0.INPUT_EN.SetBits(1 << uint8(p))
 	switch config.Mode {
+	case PinInput:
+		sifive.GPIO0.OUTPUT_EN.ClearBits(1 << uint8(p))
 	case PinOutput:
 		sifive.GPIO0.OUTPUT_EN.SetBits(1 << uint8(p))
 	case PinPWM:
