@@ -46,3 +46,9 @@ const (
 	UART_TX_PIN = TXD
 	UART_RX_PIN = RXD
 )
+
+// I2C pins
+const (
+	SCL_PIN = NoPin
+	SDA_PIN = NoPin
+)
