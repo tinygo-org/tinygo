@@ -64,8 +64,8 @@ const (
 
 // I2C pins
 const (
-	I2C_SCL_PIN = D8
-	I2C_SDA_PIN = D10
+	SCL_PIN = D8
+	SDA_PIN = D10
 )
 
 // USBCDC pins

@@ -841,6 +841,12 @@ endif
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=xiao-esp32c3        examples/machinetest
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32-c3-devkit-rust-1 examples/blinky1
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32c3-12f         examples/blinky1
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=makerfabs-esp32c3spi35 examples/machinetest
+	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.hex -target=hifive1b            examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=maixbit             examples/blinky1

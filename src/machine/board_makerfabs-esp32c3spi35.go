@@ -64,8 +64,8 @@ const (
 // Touchscreen pins
 const (
 	TS_CS_PIN  = D0
-	TS_SDA_PIN = I2C_SDA_PIN
-	TS_SCL_PIN = I2C_SCL_PIN
+	TS_SDA_PIN = SDA_PIN
+	TS_SCL_PIN = SCL_PIN
 )
 
 // MicroSD pins
@@ -90,8 +90,8 @@ const (
 
 // I2C pins
 const (
-	I2C_SDA_PIN = D2
-	I2C_SCL_PIN = D3
+	SDA_PIN = D2
+	SCL_PIN = D3
 )
 
 // SPI pins
