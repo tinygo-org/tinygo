@@ -35,11 +35,16 @@ type state struct {
 type stackState struct {
 	// asyncify is the stack pointer of the asyncify stack.
 	// This starts from the bottom and grows upwards.
-	asyncifysp uintptr
+	asyncifysp unsafe.Pointer
 
 	// asyncify is stack pointer of the C stack.
 	// This starts from the top and grows downwards.
-	csp uintptr
+	csp unsafe.Pointer
+
+	// Pointer to the first (lowest address) of the stack. It must never be
+	// overwritten. It can be checked from time to time to see whether a stack
+	// overflow happened in the past.
+	canaryPtr *uintptr
 }
 
 // start creates and starts a new goroutine with the given function and arguments.
@@ -63,12 +68,18 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	s.args = args
 
 	// Create a stack.
-	stack := make([]uintptr, stackSize/unsafe.Sizeof(uintptr(0)))
+	stack := runtime_alloc(stackSize, nil)
+
+	// Set up the stack canary, a random number that should be checked when
+	// switching from the task back to the scheduler. The stack canary pointer
+	// points to the first word of the stack. If it has changed between now and
+	// the next stack switch, there was a stack overflow.
+	s.canaryPtr = (*uintptr)(stack)
+	*s.canaryPtr = stackCanary
 
 	// Calculate stack base addresses.
-	s.asyncifysp = uintptr(unsafe.Pointer(&stack[0]))
-	s.csp = uintptr(unsafe.Pointer(&stack[0])) + uintptr(len(stack))*unsafe.Sizeof(uintptr(0))
-	stack[0] = stackCanary
+	s.asyncifysp = unsafe.Add(stack, unsafe.Sizeof(uintptr(0)))
+	s.csp = unsafe.Add(stack, stackSize)
 }
 
 //go:linkname runqueuePushBack runtime.runqueuePushBack
@@ -85,14 +96,11 @@ func Current() *Task {
 // Pause suspends the current task and returns to the scheduler.
 // This function may only be called when running on a goroutine stack, not when running on the system stack.
 func Pause() {
-	// This is mildly unsafe but this is also the only place we can do this.
-	if *(*uintptr)(unsafe.Pointer(currentTask.state.asyncifysp)) != stackCanary {
+	if *currentTask.state.canaryPtr != stackCanary {
 		runtimePanic("stack overflow")
 	}
 
 	currentTask.state.unwind()
-
-	*(*uintptr)(unsafe.Pointer(currentTask.state.asyncifysp)) = stackCanary
 }
 
 //export tinygo_unwind
@@ -113,7 +121,7 @@ func (t *Task) Resume() {
 	}
 	currentTask = prevTask
 	t.gcData.swap()
-	if t.state.asyncifysp > t.state.csp {
+	if uintptr(t.state.asyncifysp) > uintptr(t.state.csp) {
 		runtimePanic("stack overflow")
 	}
 }
