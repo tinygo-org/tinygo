@@ -30,3 +30,6 @@ type Task struct {
 // the given function and falls back to the default stack size. It is replaced
 // with a load from a special section just before codegen.
 func getGoroutineStackSize(fn uintptr) uintptr
+
+//go:linkname runtime_alloc runtime.alloc
+func runtime_alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer

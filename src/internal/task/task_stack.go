@@ -104,9 +104,6 @@ var startTask [0]uint8
 //go:linkname runqueuePushBack runtime.runqueuePushBack
 func runqueuePushBack(*Task)
 
-//go:linkname runtime_alloc runtime.alloc
-func runtime_alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
-
 // start creates and starts a new goroutine with the given function and arguments.
 // The new goroutine is scheduled to run later.
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
