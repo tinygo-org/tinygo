@@ -1,13 +1,11 @@
-//go:build rp2040
+//go:build rp2040 || rp2350
 
 package machine
 
 import (
 	"device/arm"
-	"device/rp"
 	"runtime/interrupt"
 	"runtime/volatile"
-	"unsafe"
 )
 
 const numTimers = 4
@@ -31,13 +29,13 @@ type timerType struct {
 	timeRawL volatile.Register32
 	dbgPause volatile.Register32
 	pause    volatile.Register32
+	locked   [rp2350ExtraReg]volatile.Register32
+	source   [rp2350ExtraReg]volatile.Register32
 	intR     volatile.Register32
 	intE     volatile.Register32
 	intF     volatile.Register32
 	intS     volatile.Register32
 }
-
-var timer = (*timerType)(unsafe.Pointer(rp.TIMER))
 
 // TimeElapsed returns time elapsed since power up, in microseconds.
 func (tmr *timerType) timeElapsed() (us uint64) {

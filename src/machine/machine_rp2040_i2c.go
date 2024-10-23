@@ -631,24 +631,3 @@ func (b i2cAbortError) Reasons() (reasons []string) {
 	}
 	return reasons
 }
-
-//go:inline
-func boolToBit(a bool) uint32 {
-	if a {
-		return 1
-	}
-	return 0
-}
-
-//go:inline
-func u32max(a, b uint32) uint32 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-//go:inline
-func isReservedI2CAddr(addr uint8) bool {
-	return (addr&0x78) == 0 || (addr&0x78) == 0x78
-}

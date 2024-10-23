@@ -2,11 +2,11 @@ package builder
 
 import (
 	"debug/elf"
-	"io"
+	"fmt"
 	"os"
-	"sort"
 
 	"github.com/marcinbor85/gohex"
+	"github.com/soypat/tinyboot/build/elfutil"
 )
 
 // maxPadBytes is the maximum allowed bytes to be padded in a rom extraction
@@ -26,18 +26,12 @@ func (e objcopyError) Error() string {
 	return e.Op + ": " + e.Err.Error()
 }
 
-type progSlice []*elf.Prog
-
-func (s progSlice) Len() int           { return len(s) }
-func (s progSlice) Less(i, j int) bool { return s[i].Paddr < s[j].Paddr }
-func (s progSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
 // extractROM extracts a firmware image and the first load address from the
 // given ELF file. It tries to emulate the behavior of objcopy.
 func extractROM(path string) (uint64, []byte, error) {
 	f, err := elf.Open(path)
 	if err != nil {
-		return 0, nil, objcopyError{"failed to open ELF file to extract text segment", err}
+		return 0, nil, objcopyError{Op: "failed to open ELF file to extract text segment", Err: err}
 	}
 	defer f.Close()
 
@@ -47,62 +41,33 @@ func extractROM(path string) (uint64, []byte, error) {
 	// > memory dump of the contents of the input object file. All symbols and
 	// > relocation information will be discarded. The memory dump will start at
 	// > the load address of the lowest section copied into the output file.
-
-	// Find the lowest section address.
-	startAddr := ^uint64(0)
-	for _, section := range f.Sections {
-		if section.Type != elf.SHT_PROGBITS || section.Flags&elf.SHF_ALLOC == 0 {
-			continue
-		}
-		if section.Addr < startAddr {
-			startAddr = section.Addr
-		}
+	start, end, err := elfutil.ROMAddr(f)
+	if err != nil {
+		return 0, nil, objcopyError{Op: "failed to calculate ELF ROM addresses", Err: err}
+	}
+	err = elfutil.EnsureROMContiguous(f, start, end, maxPadBytes)
+	if err != nil {
+		return 0, nil, objcopyError{Op: "checking if ELF ROM contiguous", Err: err}
+	}
+	const (
+		_ = 1 << (iota * 10)
+		kB
+		MB
+		GB
+	)
+	const maxSize = 1 * GB
+	if end-start > maxSize {
+		return 0, nil, objcopyError{Op: fmt.Sprintf("obj size exceeds max %d/%d, bad ELF address calculation?", end-start, maxSize)}
 	}
 
-	progs := make(progSlice, 0, 2)
-	for _, prog := range f.Progs {
-		if prog.Type != elf.PT_LOAD || prog.Filesz == 0 || prog.Off == 0 {
-			continue
-		}
-		progs = append(progs, prog)
+	ROM := make([]byte, end-start)
+	n, err := elfutil.ReadROMAt(f, ROM, start)
+	if err != nil {
+		return 0, nil, objcopyError{Op: "reading ELF ROM", Err: err}
+	} else if n != len(ROM) {
+		return 0, nil, objcopyError{Op: "short ELF ROM read"}
 	}
-	if len(progs) == 0 {
-		return 0, nil, objcopyError{"file does not contain ROM segments: " + path, nil}
-	}
-	sort.Sort(progs)
-
-	var rom []byte
-	for _, prog := range progs {
-		romEnd := progs[0].Paddr + uint64(len(rom))
-		if prog.Paddr > romEnd && prog.Paddr < romEnd+16 {
-			// Sometimes, the linker seems to insert a bit of padding between
-			// segments. Simply zero-fill these parts.
-			rom = append(rom, make([]byte, prog.Paddr-romEnd)...)
-		}
-		if prog.Paddr != progs[0].Paddr+uint64(len(rom)) {
-			diff := prog.Paddr - (progs[0].Paddr + uint64(len(rom)))
-			if diff > maxPadBytes {
-				return 0, nil, objcopyError{"ROM segments are non-contiguous: " + path, nil}
-			}
-			// Pad the difference
-			rom = append(rom, make([]byte, diff)...)
-		}
-		data, err := io.ReadAll(prog.Open())
-		if err != nil {
-			return 0, nil, objcopyError{"failed to extract segment from ELF file: " + path, err}
-		}
-		rom = append(rom, data...)
-	}
-	if progs[0].Paddr < startAddr {
-		// The lowest memory address is before the first section. This means
-		// that there is some extra data loaded at the start of the image that
-		// should be discarded.
-		// Example: ELF files where .text doesn't start at address 0 because
-		// there is a bootloader at the start.
-		return startAddr, rom[startAddr-progs[0].Paddr:], nil
-	} else {
-		return progs[0].Paddr, rom, nil
-	}
+	return start, ROM, nil
 }
 
 // objcopy converts an ELF file to a different (simpler) output file format:

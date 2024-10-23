@@ -1,4 +1,4 @@
-//go:build rp2040 || ae_rp2040 || badger2040 || challenger_rp2040 || feather_rp2040 || gopher_badge || kb2040 || macropad_rp2040 || nano_rp2040 || pico || qtpy_rp2040 || thingplus_rp2040 || thumby || tufty2040 || waveshare_rp2040_zero || xiao_rp2040
+//go:build rp2040 || rp2350 || ae_rp2040 || badger2040 || challenger_rp2040 || feather_rp2040 || gopher_badge || kb2040 || macropad_rp2040 || nano_rp2040 || pico || qtpy_rp2040 || thingplus_rp2040 || thumby || tufty2040 || waveshare_rp2040_zero || xiao_rp2040
 
 package machine
 

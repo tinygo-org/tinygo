@@ -1,4 +1,4 @@
-//go:build rp2040
+//go:build rp2040 || rp2350
 
 package machine
 
@@ -59,12 +59,4 @@ func (wd *watchdogImpl) Start() error {
 // Update the watchdog, indicating that the app is healthy.
 func (wd *watchdogImpl) Update() {
 	rp.WATCHDOG.LOAD.Set(wd.loadValue)
-}
-
-// startTick starts the watchdog tick.
-// cycles needs to be a divider that when applied to the xosc input,
-// produces a 1MHz clock. So if the xosc frequency is 12MHz,
-// this will need to be 12.
-func (wd *watchdogImpl) startTick(cycles uint32) {
-	rp.WATCHDOG.TICK.Set(cycles | rp.WATCHDOG_TICK_ENABLE)
 }

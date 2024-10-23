@@ -1,4 +1,4 @@
-//go:build rp2040
+//go:build rp2040 || rp2350
 
 package machine
 
@@ -15,14 +15,26 @@ type ioType struct {
 }
 
 type irqCtrl struct {
-	intE [4]volatile.Register32
-	intF [4]volatile.Register32
-	intS [4]volatile.Register32
+	intE [_NUMBANK0_IRQS]volatile.Register32
+	intF [_NUMBANK0_IRQS]volatile.Register32
+	intS [_NUMBANK0_IRQS]volatile.Register32
+}
+
+type irqSummary struct {
+	proc [2]struct {
+		secure    [2]volatile.Register32
+		nonsecure [2]volatile.Register32
+	}
+	comaWake struct {
+		secure    [2]volatile.Register32
+		nonsecure [2]volatile.Register32
+	}
 }
 
 type ioBank0Type struct {
-	io                 [30]ioType
-	intR               [4]volatile.Register32
+	io                 [_NUMBANK0_GPIOS]ioType
+	irqsum             [rp2350ExtraReg]irqSummary
+	intR               [_NUMBANK0_IRQS]volatile.Register32
 	proc0IRQctrl       irqCtrl
 	proc1IRQctrl       irqCtrl
 	dormantWakeIRQctrl irqCtrl
@@ -32,7 +44,7 @@ var ioBank0 = (*ioBank0Type)(unsafe.Pointer(rp.IO_BANK0))
 
 type padsBank0Type struct {
 	voltageSelect volatile.Register32
-	io            [30]volatile.Register32
+	io            [_NUMBANK0_GPIOS]volatile.Register32
 }
 
 var padsBank0 = (*padsBank0Type)(unsafe.Pointer(rp.PADS_BANK0))
@@ -44,50 +56,6 @@ var padsBank0 = (*padsBank0Type)(unsafe.Pointer(rp.PADS_BANK0))
 // on one GPIO at a time. If the same peripheral input is connected to multiple GPIOs,
 // the peripheral sees the logical OR of these GPIO inputs.
 type pinFunc uint8
-
-// GPIO function selectors
-const (
-	fnJTAG pinFunc = 0
-	fnSPI  pinFunc = 1 // Connect one of the internal PL022 SPI peripherals to GPIO
-	fnUART pinFunc = 2
-	fnI2C  pinFunc = 3
-	// Connect a PWM slice to GPIO. There are eight PWM slices,
-	// each with two outputchannels (A/B). The B pin can also be used as an input,
-	// for frequency and duty cyclemeasurement
-	fnPWM pinFunc = 4
-	// Software control of GPIO, from the single-cycle IO (SIO) block.
-	// The SIO function (F5)must be selected for the processors to drive a GPIO,
-	// but the input is always connected,so software can check the state of GPIOs at any time.
-	fnSIO pinFunc = 5
-	// Connect one of the programmable IO blocks (PIO) to GPIO. PIO can implement a widevariety of interfaces,
-	// and has its own internal pin mapping hardware, allowing flexibleplacement of digital interfaces on bank 0 GPIOs.
-	// The PIO function (F6, F7) must beselected for PIO to drive a GPIO, but the input is always connected,
-	// so the PIOs canalways see the state of all pins.
-	fnPIO0, fnPIO1 pinFunc = 6, 7
-	// General purpose clock inputs/outputs. Can be routed to a number of internal clock domains onRP2040,
-	// e.g. Input: to provide a 1 Hz clock for the RTC, or can be connected to an internalfrequency counter.
-	// e.g. Output: optional integer divide
-	fnGPCK pinFunc = 8
-	// USB power control signals to/from the internal USB controller
-	fnUSB  pinFunc = 9
-	fnNULL pinFunc = 0x1f
-
-	fnXIP pinFunc = 0
-)
-
-const (
-	PinOutput PinMode = iota
-	PinInput
-	PinInputPulldown
-	PinInputPullup
-	PinAnalog
-	PinUART
-	PinPWM
-	PinI2C
-	PinSPI
-	PinPIO0
-	PinPIO1
-)
 
 func (p Pin) PortMaskSet() (*uint32, uint32) {
 	return (*uint32)(unsafe.Pointer(&rp.SIO.GPIO_OUT_SET)), 1 << p
@@ -170,48 +138,6 @@ func (p Pin) init() {
 	mask := uint32(1) << p
 	rp.SIO.GPIO_OE_CLR.Set(mask)
 	p.clr()
-}
-
-// Configure configures the gpio pin as per mode.
-func (p Pin) Configure(config PinConfig) {
-	if p == NoPin {
-		return
-	}
-	p.init()
-	mask := uint32(1) << p
-	switch config.Mode {
-	case PinOutput:
-		p.setFunc(fnSIO)
-		rp.SIO.GPIO_OE_SET.Set(mask)
-	case PinInput:
-		p.setFunc(fnSIO)
-		p.pulloff()
-	case PinInputPulldown:
-		p.setFunc(fnSIO)
-		p.pulldown()
-	case PinInputPullup:
-		p.setFunc(fnSIO)
-		p.pullup()
-	case PinAnalog:
-		p.setFunc(fnNULL)
-		p.pulloff()
-	case PinUART:
-		p.setFunc(fnUART)
-	case PinPWM:
-		p.setFunc(fnPWM)
-	case PinI2C:
-		// IO config according to 4.3.1.3 of rp2040 datasheet.
-		p.setFunc(fnI2C)
-		p.pullup()
-		p.setSchmitt(true)
-		p.setSlew(false)
-	case PinSPI:
-		p.setFunc(fnSPI)
-	case PinPIO0:
-		p.setFunc(fnPIO0)
-	case PinPIO1:
-		p.setFunc(fnPIO1)
-	}
 }
 
 // Set drives the pin high if value is true else drives it low.
@@ -330,24 +256,4 @@ func (p Pin) ioIntBit(change PinChange) uint32 {
 // Acquire interrupt data from a INT status register.
 func getIntChange(p Pin, status uint32) PinChange {
 	return PinChange(status>>(4*(p%8))) & 0xf
-}
-
-// UART on the RP2040
-var (
-	UART0  = &_UART0
-	_UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
-	}
-
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART1,
-	}
-)
-
-func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
-	UART1.Interrupt = interrupt.New(rp.IRQ_UART1_IRQ, _UART1.handleInterrupt)
 }

@@ -1,14 +1,43 @@
-//go:build rp2040
+//go:build rp2040 || rp2350
 
 package machine
 
 import (
 	"device/rp"
+	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
 
 const deviceName = rp.Device
+
+const (
+	// Number of spin locks available
+	_NUMSPINLOCKS = 32
+	// Number of interrupt handlers available
+	_NUMIRQ               = 32
+	_PICO_SPINLOCK_ID_IRQ = 9
+)
+
+// UART on the RP2040
+var (
+	UART0  = &_UART0
+	_UART0 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    rp.UART0,
+	}
+
+	UART1  = &_UART1
+	_UART1 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    rp.UART1,
+	}
+)
+
+func init() {
+	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
+	UART1.Interrupt = interrupt.New(rp.IRQ_UART1_IRQ, _UART1.handleInterrupt)
+}
 
 //go:linkname machineInit runtime.machineInit
 func machineInit() {
@@ -26,13 +55,7 @@ func machineInit() {
 
 	// Remove reset from peripherals which are clocked only by clkSys and
 	// clkRef. Other peripherals stay in reset until we've configured clocks.
-	bits = ^uint32(rp.RESETS_RESET_ADC |
-		rp.RESETS_RESET_RTC |
-		rp.RESETS_RESET_SPI0 |
-		rp.RESETS_RESET_SPI1 |
-		rp.RESETS_RESET_UART0 |
-		rp.RESETS_RESET_UART1 |
-		rp.RESETS_RESET_USBCTRL)
+	bits = ^uint32(initUnreset)
 	unresetBlockWait(bits)
 
 	clocks.init()
@@ -94,4 +117,25 @@ const (
 )
 
 // DMA channels usable on the RP2040.
-var dmaChannels = (*[12]dmaChannel)(unsafe.Pointer(rp.DMA))
+var dmaChannels = (*[12 + 4*rp2350ExtraReg]dmaChannel)(unsafe.Pointer(rp.DMA))
+
+//go:inline
+func boolToBit(a bool) uint32 {
+	if a {
+		return 1
+	}
+	return 0
+}
+
+//go:inline
+func u32max(a, b uint32) uint32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+//go:inline
+func isReservedI2CAddr(addr uint8) bool {
+	return (addr&0x78) == 0 || (addr&0x78) == 0x78
+}

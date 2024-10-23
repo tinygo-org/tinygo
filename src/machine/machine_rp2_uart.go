@@ -1,4 +1,4 @@
-//go:build rp2040
+//go:build rp2040 || rp2350
 
 package machine
 
@@ -39,7 +39,7 @@ func (uart *UART) Configure(config UARTConfig) error {
 	settings := uint32(rp.UART0_UARTCR_UARTEN |
 		rp.UART0_UARTCR_RXE |
 		rp.UART0_UARTCR_TXE)
-
+	const bits = rp.UART0_UARTCR_UARTEN | rp.UART0_UARTCR_TXE
 	if config.RTS != 0 {
 		settings |= rp.UART0_UARTCR_RTSEN
 	}
