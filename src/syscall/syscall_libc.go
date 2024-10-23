@@ -212,6 +212,24 @@ func Truncate(path string, length int64) (err error) {
 	return
 }
 
+/*
+//go:linkname syscall_fcntl runtime/runtime.fcntl
+func syscall_fcntl(fd, cmd, arg int32) (ret int32, errno int32) {
+	// https://cs.opensource.google/go/go/+/master:src/runtime/os_linux.go;l=452?q=runtime.fcntl&ss=go%2Fgo
+	r, _, err := Syscall6(SYS_FCNTL, uintptr(fd), uintptr(cmd), uintptr(arg), 0, 0, 0)
+	return int32(r), int32(err)
+}
+*/
+
+//go:linkname Fcntl runtime/runtime.fcntl
+func Fcntl(fd int, cmd int, args ...int) (int, error) {
+	ret := libc_fcntl(fd, cmd, args...)
+	if ret < 0 {
+		return 0, getErrno()
+	}
+	return ret, nil
+}
+
 func Faccessat(dirfd int, path string, mode uint32, flags int) (err error)
 
 func Kill(pid int, sig Signal) (err error) {
@@ -465,3 +483,8 @@ func libc_execve(filename *byte, argv **byte, envp **byte) int
 //
 //export truncate
 func libc_truncate(path *byte, length int64) int32
+
+// int fcntl(int, int, ...);
+//
+// export fcntl
+func libc_fcntl(fd int, cmd int, args ...int) int
