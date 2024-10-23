@@ -47,6 +47,10 @@ func (p *ProcessState) Sys() interface{} {
 	return nil // TODO
 }
 
+func (p *ProcessState) Exited() bool {
+	return false // TODO
+}
+
 // ExitCode returns the exit code of the exited process, or -1
 // if the process hasn't exited or was terminated by a signal.
 func (p *ProcessState) ExitCode() int {
@@ -58,7 +62,7 @@ type Process struct {
 }
 
 func StartProcess(name string, argv []string, attr *ProcAttr) (*Process, error) {
-	return nil, &PathError{Op: "fork/exec", Path: name, Err: ErrNotImplemented}
+	return startProcess(name, argv, attr)
 }
 
 func (p *Process) Wait() (*ProcessState, error) {
