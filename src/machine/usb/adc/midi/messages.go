@@ -177,7 +177,7 @@ func (m *midi) PitchBend(cable, channel uint8, bend uint16) error {
 		return errInvalidMIDIPitchBend
 	}
 
-	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = ((cable&0xf)<<4)|CINPitchBendChange, MsgPitchBend|((channel-1)&0xf), byte(bend&0x7f), byte(bend>>8)&0x7f
+	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = ((cable&0xf)<<4)|CINPitchBendChange, MsgPitchBend|((channel-1)&0xf), byte(bend&0x7f), byte(bend>>7)&0x7f
 	_, err := m.Write(m.msg[:])
 	return err
 }
