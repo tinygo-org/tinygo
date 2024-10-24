@@ -2,20 +2,16 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build aix || darwin || dragonfly || freebsd || (js && wasm) || linux || netbsd || openbsd || solaris || wasip1 || wasip2 || windows
+//go:build linux && !baremetal && !tinygo.wasm && arm64
 
 package os
 
 import (
+	"errors"
 	"runtime"
 	"syscall"
 )
 
-// The only signal values guaranteed to be present in the os package on all
-// systems are os.Interrupt (send the process an interrupt) and os.Kill (force
-// the process to exit). On Windows, sending os.Interrupt to a process with
-// os.Process.Signal is not implemented; it will return an error instead of
-// sending a signal.
 var (
 	Interrupt Signal = syscall.SIGINT
 	Kill      Signal = syscall.SIGKILL
@@ -32,4 +28,10 @@ func (p *Process) release() error {
 	// no need for a finalizer anymore
 	runtime.SetFinalizer(p, nil)
 	return nil
+}
+
+// On the aarch64 architecture, the fork system call is not available.
+// Therefore, the fork function is implemented to return an error.
+func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err error) {
+	return nil, errors.New("fork not yet supported on aarch64")
 }
