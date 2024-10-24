@@ -45,7 +45,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	}
 
 	// Find the overrides needed for the goroot.
-	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()))
+	overrides := pathsToOverride(config.GoMinorVersion, config.BuildTags())
 
 	// Resolve the merge links within the goroot.
 	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
@@ -225,9 +225,28 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
-// The boolean indicates whether to merge the subdirs. True means merge, false
-// means use the TinyGo version.
-func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+// linuxNetworking returns whether the unmodified go linux net stack should be used
+// until the full rework of the net package is done.
+// To ensure the correct build target, check for the following tags:
+// linux && !baremetal && !nintendoswitch && !tinygo.wasm
+func linuxNetworking(buildTags []string) bool {
+	targetLinux := false
+	for _, tag := range buildTags {
+		if tag == "linux" {
+			targetLinux = true
+		}
+		if tag == "baremetal" || tag == "nintendoswitch" || tag == "tinygo.wasm" {
+			return false
+		}
+	}
+	return targetLinux
+}
+
+// The boolean indicates whether to merge the subdirs.
+//
+// True: Merge the golang and tinygo source directories.
+// False: Uses the TinyGo version exclusively.
+func pathsToOverride(goMinor int, buildTags []string) map[string]bool {
 	paths := map[string]bool{
 		"":                            true,
 		"crypto/":                     true,
@@ -249,7 +268,7 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"internal/task/":              false,
 		"internal/wasi/":              false,
 		"machine/":                    false,
-		"net/":                        true,
+		"net/":                        true, // this is important if the GOOS != linux
 		"net/http/":                   false,
 		"os/":                         true,
 		"reflect/":                    false,
@@ -265,9 +284,18 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		paths["crypto/internal/boring/sig/"] = false
 	}
 
-	if needsSyscallPackage {
+	if needsSyscallPackage(buildTags) {
 		paths["syscall/"] = true // include syscall/js
 	}
+
+	// To make sure the correct version of the net package is used, it is advised
+	// to clean the go cache before building
+	if linuxNetworking(buildTags) {
+		for _, v := range []string{"crypto/tls/", "net/http/", "net/"} {
+			delete(paths, v) // remote entries so go stdlib is used
+		}
+	}
+
 	return paths
 }
 
