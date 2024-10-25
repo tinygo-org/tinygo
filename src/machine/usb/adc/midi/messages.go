@@ -97,7 +97,7 @@ func (m *midi) NoteOn(cable, channel uint8, note Note, velocity uint8) error {
 		return errInvalidMIDIVelocity
 	}
 
-	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = (cable&0xf<<4)|CINNoteOn, MsgNoteOn|(channel-1&0xf), byte(note)&0x7f, velocity&0x7f
+	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = ((cable&0xf)<<4)|CINNoteOn, MsgNoteOn|((channel-1)&0xf), byte(note)&0x7f, velocity&0x7f
 	_, err := m.Write(m.msg[:])
 	return err
 }
@@ -115,7 +115,7 @@ func (m *midi) NoteOff(cable, channel uint8, note Note, velocity uint8) error {
 		return errInvalidMIDIVelocity
 	}
 
-	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = (cable&0xf<<4)|CINNoteOff, MsgNoteOff|(channel-1&0xf), byte(note)&0x7f, velocity&0x7f
+	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = ((cable&0xf)<<4)|CINNoteOff, MsgNoteOff|((channel-1)&0xf), byte(note)&0x7f, velocity&0x7f
 	_, err := m.Write(m.msg[:])
 	return err
 }
@@ -137,7 +137,7 @@ func (m *midi) ControlChange(cable, channel, control, value uint8) error {
 		return errInvalidMIDIControlValue
 	}
 
-	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = (cable&0xf<<4)|CINControlChange, MsgControlChange|(channel-1&0xf), control&0x7f, value&0x7f
+	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = ((cable&0xf)<<4)|CINControlChange, MsgControlChange|((channel-1)&0xf), control&0x7f, value&0x7f
 	_, err := m.Write(m.msg[:])
 	return err
 }
@@ -156,7 +156,7 @@ func (m *midi) ProgramChange(cable, channel uint8, patch uint8) error {
 		return errInvalidMIDIPatch
 	}
 
-	m.msg[0], m.msg[1], m.msg[2] = (cable&0xf<<4)|CINProgramChange, MsgProgramChange|(channel-1&0xf), patch&0x7f
+	m.msg[0], m.msg[1], m.msg[2] = ((cable&0xf)<<4)|CINProgramChange, MsgProgramChange|((channel-1)&0xf), patch&0x7f
 	_, err := m.Write(m.msg[:3])
 	return err
 }
@@ -177,7 +177,7 @@ func (m *midi) PitchBend(cable, channel uint8, bend uint16) error {
 		return errInvalidMIDIPitchBend
 	}
 
-	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = (cable&0xf<<4)|CINPitchBendChange, MsgPitchBend|(channel-1&0xf), byte(bend&0x7f), byte(bend>>8)&0x7f
+	m.msg[0], m.msg[1], m.msg[2], m.msg[3] = ((cable&0xf)<<4)|CINPitchBendChange, MsgPitchBend|((channel-1)&0xf), byte(bend&0x7f), byte(bend>>7)&0x7f
 	_, err := m.Write(m.msg[:])
 	return err
 }
@@ -198,7 +198,7 @@ func (m *midi) SysEx(cable uint8, data []byte) error {
 	}
 
 	// write start
-	m.msg[0], m.msg[1] = (cable&0xf<<4)|CINSysExStart, MsgSysExStart
+	m.msg[0], m.msg[1] = ((cable&0xf)<<4)|CINSysExStart, MsgSysExStart
 	m.msg[2], m.msg[3] = data[0], data[1]
 	if _, err := m.Write(m.msg[:]); err != nil {
 		return err
@@ -207,7 +207,7 @@ func (m *midi) SysEx(cable uint8, data []byte) error {
 	// write middle
 	i := 2
 	for ; i < len(data)-2; i += 3 {
-		m.msg[0], m.msg[1] = (cable&0xf<<4)|CINSysExStart, data[i]
+		m.msg[0], m.msg[1] = ((cable&0xf)<<4)|CINSysExStart, data[i]
 		m.msg[2], m.msg[3] = data[i+1], data[i+2]
 		if _, err := m.Write(m.msg[:]); err != nil {
 			return err
@@ -216,13 +216,13 @@ func (m *midi) SysEx(cable uint8, data []byte) error {
 	// write end
 	switch len(data) - i {
 	case 2:
-		m.msg[0], m.msg[1] = (cable&0xf<<4)|CINSysExEnd3, data[i]
+		m.msg[0], m.msg[1] = ((cable&0xf)<<4)|CINSysExEnd3, data[i]
 		m.msg[2], m.msg[3] = data[i+1], MsgSysExEnd
 	case 1:
-		m.msg[0], m.msg[1] = (cable&0xf<<4)|CINSysExEnd2, data[i]
+		m.msg[0], m.msg[1] = ((cable&0xf)<<4)|CINSysExEnd2, data[i]
 		m.msg[2], m.msg[3] = MsgSysExEnd, 0
 	case 0:
-		m.msg[0], m.msg[1] = (cable&0xf<<4)|CINSysExEnd1, MsgSysExEnd
+		m.msg[0], m.msg[1] = ((cable&0xf)<<4)|CINSysExEnd1, MsgSysExEnd
 		m.msg[2], m.msg[3] = 0, 0
 	}
 	if _, err := m.Write(m.msg[:]); err != nil {
