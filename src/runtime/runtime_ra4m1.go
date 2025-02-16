@@ -1,4 +1,4 @@
-//go:build renasas
+//go:build ra4m1
 
 package runtime
 
