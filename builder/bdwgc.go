@@ -30,7 +30,10 @@ var BoehmGC = Library{
 			// Use a minimal environment.
 			"-DNO_MSGBOX_ON_ERROR", // don't call MessageBoxA on Windows
 			"-DDONT_USE_ATEXIT",
-			"-DNO_GETENV",
+			"-DNO_GETENV",          // smaller binary, more predictable configuration
+			"-DNO_CLOCK",           // don't use system clock
+			"-DNO_DEBUGGING",       // reduce code size
+			"-DGC_NO_FINALIZATION", // finalization is not used at the moment
 
 			// Special flag to work around the lack of __data_start in ld.lld.
 			// TODO: try to fix this in LLVM/lld directly so we don't have to
@@ -39,6 +42,8 @@ var BoehmGC = Library{
 
 			// Do not scan the stack. We have our own mechanism to do this.
 			"-DSTACK_NOT_SCANNED",
+			"-DNO_PROC_STAT",  // we scan the stack manually (don't read /proc/self/stat on Linux)
+			"-DSTACKBOTTOM=0", // dummy value, we scan the stack manually
 
 			// Assertions can be enabled while debugging GC issues.
 			//"-DGC_ASSERTIONS",
@@ -63,7 +68,6 @@ var BoehmGC = Library{
 			"blacklst.c",
 			"dbg_mlc.c",
 			"dyn_load.c",
-			"finalize.c",
 			"headers.c",
 			"mach_dep.c",
 			"malloc.c",
@@ -71,7 +75,6 @@ var BoehmGC = Library{
 			"mark_rts.c",
 			"misc.c",
 			"new_hblk.c",
-			"obj_map.c",
 			"os_dep.c",
 			"reclaim.c",
 		}
