@@ -24,9 +24,9 @@ func main() {
 	// esp_cpu_configure_region_protection in ESP-IDF.
 
 	// Disable RTC watchdog.
-	esp.RTC_CNTL.RTC_WDTWPROTECT.Set(0x50D83AA1)
-	esp.RTC_CNTL.RTC_WDTCONFIG0.Set(0)
-	esp.RTC_CNTL.RTC_WDTWPROTECT.Set(0x0) // Re-enable write protect
+	esp.RTC_CNTL.WDTWPROTECT.Set(0x50D83AA1)
+	esp.RTC_CNTL.WDTCONFIG0.Set(0)
+	esp.RTC_CNTL.WDTWPROTECT.Set(0x0) // Re-enable write protect
 
 	// Disable Timer 0 watchdog.
 	esp.TIMG1.WDTWPROTECT.Set(0x50D83AA1) // write protect
@@ -38,9 +38,9 @@ func main() {
 	esp.TIMG0.WDTWPROTECT.Set(0x0)        // Re-enable write protect
 
 	// Disable super watchdog.
-	esp.RTC_CNTL.RTC_SWD_WPROTECT.Set(0x8F1D312A)
-	esp.RTC_CNTL.RTC_SWD_CONF.Set(esp.RTC_CNTL_RTC_SWD_CONF_SWD_DISABLE)
-	esp.RTC_CNTL.RTC_SWD_WPROTECT.Set(0x0) // Re-enable write protect
+	esp.RTC_CNTL.SWD_WPROTECT.Set(0x8F1D312A)
+	esp.RTC_CNTL.SWD_CONF.Set(esp.RTC_CNTL_SWD_CONF_SWD_DISABLE)
+	esp.RTC_CNTL.SWD_WPROTECT.Set(0x0) // Re-enable write protect
 
 	// // Change CPU frequency from 20MHz to 80MHz, by switching from the XTAL to
 	// // the PLL clock source (see table "CPU Clock Frequency" in the reference
