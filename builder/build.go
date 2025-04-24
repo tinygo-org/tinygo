@@ -1042,7 +1042,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		if err != nil {
 			return result, err
 		}
-	case "esp32", "esp32-img", "esp32c3", "esp8266":
+	case "esp32", "esp32-img", "esp32c3", "esp32s3", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
 		result.Binary = filepath.Join(tmpdir, "main"+outext)

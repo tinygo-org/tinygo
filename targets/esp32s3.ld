@@ -23,13 +23,20 @@ SECTIONS
      * code should be executed directly from flash.
      * Note that literals must be before code for the l32r instruction to work.
      */
-    .text : ALIGN(4)
-    {
-        *(.literal.text.call_start_cpu0)
-        *(.text.call_start_cpu0)
-        *(.literal .text)
-        *(.literal.* .text.*)
-    } >IRAM
+.text.call_start_cpu0 : ALIGN(4)
+{
+    *(.literal.call_start_cpu0)
+    *(.text.call_start_cpu0)
+} >IRAM
+
+/* All other code and literals */
+.text : ALIGN(4)
+{
+    *(.literal .text)
+    *(.literal.* .text.*)
+    *(.text)
+    *(.text.*)
+} >IRAM
 
     /* Put the stack at the bottom of DRAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.

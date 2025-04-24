@@ -100,11 +100,12 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 	chip_id := map[string]uint16{
 		"esp32":   0x0000,
 		"esp32c3": 0x0005,
+		"esp32s3": 0x0009,
 	}[chip]
 
 	// Image header.
 	switch chip {
-	case "esp32", "esp32c3":
+	case "esp32", "esp32c3", "esp32s3":
 		// Header format:
 		// https://github.com/espressif/esp-idf/blob/v4.3/components/bootloader_support/include/esp_app_format.h#L71
 		// Note: not adding a SHA256 hash as the binary is modified by
