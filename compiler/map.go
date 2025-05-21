@@ -250,6 +250,9 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 func hashmapIsBinaryKey(keyType types.Type) bool {
 	switch keyType := keyType.Underlying().(type) {
 	case *types.Basic:
+		// TODO: unsafe.Pointer is also a binary key, but to support that we
+		// need to fix an issue with interp first (see
+		// https://github.com/tinygo-org/tinygo/pull/4898).
 		return keyType.Info()&(types.IsBoolean|types.IsInteger) != 0
 	case *types.Pointer:
 		return true
