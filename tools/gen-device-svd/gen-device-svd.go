@@ -759,38 +759,57 @@ func (r *Register) address() uint64 {
 }
 
 func (r *Register) dim() int {
-	if r.element.Dim == nil {
+	return decodeDim(r.element.Dim)
+}
+
+func decodeDim(s *string) int {
+	if s == nil {
 		return -1 // no dim elements
 	}
-	dim, err := strconv.ParseInt(*r.element.Dim, 0, 32)
+	dim, err := strconv.ParseInt(*s, 0, 32)
 	if err != nil {
 		panic(err)
 	}
 	return int(dim)
 }
 
-func (r *Register) dimIndex() []string {
+type dimArray struct {
+	dim  int
+	idx  []string
+	incr uint32
+}
+
+func decodeDimArray(dimSpec, dimIndex *string, dimIncr, elType, elName string) *dimArray {
+	dim := decodeDim(dimSpec)
+	if dim <= 0 {
+		return nil
+	}
+	a := new(dimArray)
+	a.dim = dim
+
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("register", r.name())
+			fmt.Println(elType, elName)
 			panic(err)
 		}
 	}()
 
-	dim := r.dim()
-	if r.element.DimIndex == nil {
-		if dim <= 0 {
-			return nil
-		}
+	incr, err := strconv.ParseUint(dimIncr, 0, 32)
+	if err != nil {
+		panic(err)
+	}
+	a.incr = uint32(incr)
 
+	if dimIndex == nil {
 		idx := make([]string, dim)
 		for i := range idx {
 			idx[i] = strconv.FormatInt(int64(i), 10)
 		}
-		return idx
+		a.idx = idx
+		return a
 	}
 
-	t := strings.Split(*r.element.DimIndex, "-")
+	t := strings.Split(*dimIndex, "-")
 	if len(t) == 2 {
 		// renesas uses hex letters e.g. A-B
 		if strings.Contains("ABCDEFabcdef", t[0]) {
@@ -817,17 +836,29 @@ func (r *Register) dimIndex() []string {
 		for i := x; i <= y; i++ {
 			idx[i-x] = strconv.FormatInt(i, 10)
 		}
-		return idx
+		a.idx = idx
+		return a
 	} else if len(t) > 2 {
 		panic("invalid dimIndex")
 	}
 
-	s := strings.Split(*r.element.DimIndex, ",")
+	s := strings.Split(*dimIndex, ",")
 	if len(s) != dim {
 		panic("invalid dimIndex")
 	}
+	a.idx = s
+	return a
+}
 
-	return s
+func (da *dimArray) replace(s string, i int) string {
+	if da == nil {
+		return s
+	}
+	if i >= len(da.idx) {
+		return s
+	}
+	return strings.ReplaceAll(s, "%s", da.idx[i])
+
 }
 
 func (r *Register) size() int {
@@ -843,37 +874,32 @@ func (r *Register) size() int {
 
 func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bitfieldPrefix string) []*PeripheralField {
 	reg := NewRegister(regEl, baseAddress)
-
-	if reg.dim() != -1 {
-		dimIncrement, err := strconv.ParseUint(regEl.DimIncrement, 0, 32)
-		if err != nil {
-			panic(err)
+	name := reg.name()
+	da := decodeDimArray(regEl.Dim, regEl.DimIndex, regEl.DimIncrement, "register", name)
+	if da != nil && strings.Contains(name, "%s") {
+		// a "spaced array" of registers, special processing required
+		// we need to generate a separate register for each "element"
+		var results []*PeripheralField
+		shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(name, "_%s", ""), "%s", ""))
+		for i := range da.idx {
+			regAddress := reg.address() + (uint64(i) * uint64(da.incr))
+			results = append(results, &PeripheralField{
+				Name:        strings.ToUpper(da.replace(name, i)),
+				Address:     regAddress,
+				Description: reg.description(),
+				Array:       -1,
+				ElementSize: reg.size(),
+				ShortName:   shortName,
+			})
 		}
-		if strings.Contains(reg.name(), "%s") {
-			// a "spaced array" of registers, special processing required
-			// we need to generate a separate register for each "element"
-			var results []*PeripheralField
-			shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(reg.name(), "_%s", ""), "%s", ""))
-			for i, j := range reg.dimIndex() {
-				regAddress := reg.address() + (uint64(i) * dimIncrement)
-				results = append(results, &PeripheralField{
-					Name:        strings.ToUpper(strings.ReplaceAll(reg.name(), "%s", j)),
-					Address:     regAddress,
-					Description: reg.description(),
-					Array:       -1,
-					ElementSize: reg.size(),
-					ShortName:   shortName,
-				})
-			}
-			// set first result bitfield
-			results[0].Constants, results[0].Bitfields = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
-			results[0].HasBitfields = len(results[0].Bitfields) > 0
-			for i := 1; i < len(results); i++ {
-				results[i].Bitfields = results[0].Bitfields
-				results[i].HasBitfields = results[0].HasBitfields
-			}
-			return results
+		// set first result bitfield
+		results[0].Constants, results[0].Bitfields = parseBitfields(groupName, shortName, regEl.Fields, bitfieldPrefix)
+		results[0].HasBitfields = len(results[0].Bitfields) > 0
+		for i := 1; i < len(results); i++ {
+			results[i].Bitfields = results[0].Bitfields
+			results[i].HasBitfields = results[0].HasBitfields
 		}
+		return results
 	}
 	regName := reg.name()
 	if !unicode.IsUpper(rune(regName[0])) && !unicode.IsDigit(rune(regName[0])) {
