@@ -490,8 +490,8 @@ func orderPeripherals(input []SVDPeripheral) []*SVDPeripheral {
 	var sortedPeripherals []*SVDPeripheral
 	var missingBasePeripherals []*SVDPeripheral
 	knownBasePeripherals := map[string]struct{}{}
-	for i := range input {
-		p := &input[i]
+
+	tryProcess := func(p *SVDPeripheral) {
 		groupName := p.GroupName
 		if groupName != "" {
 			knownBasePeripherals[groupName] = struct{}{}
@@ -500,10 +500,30 @@ func orderPeripherals(input []SVDPeripheral) []*SVDPeripheral {
 		if p.DerivedFrom != "" {
 			if _, ok := knownBasePeripherals[p.DerivedFrom]; !ok {
 				missingBasePeripherals = append(missingBasePeripherals, p)
-				continue
+				return
 			}
 		}
 		sortedPeripherals = append(sortedPeripherals, p)
+	}
+	for i := range input {
+		tryProcess(&input[i])
+	}
+
+	// missingBasePeripherals may still contain unordered entries;
+	// repeat the process until missingBasePeripheral does not change anymore.
+	prevNumPending := 0
+	for {
+		pending := missingBasePeripherals
+		if len(pending) == prevNumPending {
+			break
+		}
+		// reuse the same slice as input and for keeping track of
+		// missing base periphal
+		missingBasePeripherals = missingBasePeripherals[:0]
+		for _, p := range pending {
+			tryProcess(p)
+		}
+		prevNumPending = len(pending)
 	}
 
 	// Let's hope all base peripherals are now included.
