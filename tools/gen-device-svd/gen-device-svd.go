@@ -493,10 +493,10 @@ func orderPeripherals(input []SVDPeripheral) []*SVDPeripheral {
 	for i := range input {
 		p := &input[i]
 		groupName := p.GroupName
-		if groupName == "" {
-			groupName = p.Name
+		if groupName != "" {
+			knownBasePeripherals[groupName] = struct{}{}
 		}
-		knownBasePeripherals[groupName] = struct{}{}
+		knownBasePeripherals[p.Name] = struct{}{}
 		if p.DerivedFrom != "" {
 			if _, ok := knownBasePeripherals[p.DerivedFrom]; !ok {
 				missingBasePeripherals = append(missingBasePeripherals, p)
