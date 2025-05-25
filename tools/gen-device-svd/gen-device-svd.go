@@ -527,6 +527,7 @@ func orderPeripherals(input []SVDPeripheral) []*SVDPeripheral {
 	for i := range input {
 		tryProcess(&input[i])
 	}
+	orderPeripheralsByNumBitfields(sortedPeripherals)
 
 	// missingBasePeripherals may still contain unordered entries;
 	// repeat the process until missingBasePeripheral does not change anymore.
@@ -549,6 +550,51 @@ func orderPeripherals(input []SVDPeripheral) []*SVDPeripheral {
 	sortedPeripherals = append(sortedPeripherals, missingBasePeripherals...)
 
 	return sortedPeripherals
+}
+
+func orderPeripheralsByNumBitfields(list []*SVDPeripheral) {
+	seenGroup := make(map[string]struct{})
+	for i, p := range list {
+		groupName := p.GroupName
+		if groupName == "" || p.DerivedFrom != "" {
+			continue
+		}
+		if _, ok := seenGroup[groupName]; ok {
+			continue
+		}
+		iMax, nMax := -1, p.bitfieldCount()
+		for j, p2 := range list[i+1:] {
+			if p2.GroupName != groupName || p2.DerivedFrom != "" {
+				continue
+			}
+			if n2 := p2.bitfieldCount(); n2 > nMax {
+				iMax = i + 1 + j
+				nMax = n2
+			}
+		}
+		if iMax != -1 {
+			pMax := list[iMax]
+			// swap peripherals
+			copy(list[i+1:iMax+1], list[i:iMax])
+			list[i] = pMax
+			seenGroup[groupName] = struct{}{}
+		}
+	}
+}
+
+func (p *SVDPeripheral) bitfieldCount() int {
+	n := 0
+	for _, r := range p.Registers {
+		for _, f := range r.Fields {
+			dim := decodeDim(f.Dim)
+			if dim > 0 {
+				n += dim
+			} else {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 func addInterrupt(interrupts map[string]*Interrupt, name, interruptName string, index int, description string) {
