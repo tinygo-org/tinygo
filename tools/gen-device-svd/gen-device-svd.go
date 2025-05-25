@@ -18,6 +18,7 @@ import (
 )
 
 var validName = regexp.MustCompile("^[a-zA-Z0-9_]+$")
+var validDimableName = regexp.MustCompile(`^((%s)|(%s)[_A-Za-z]{1}[_A-Za-z0-9]*)|([_A-Za-z]{1}[_A-Za-z0-9]*(\[%s\])?)|([_A-Za-z]{1}[_A-Za-z0-9]*(%s)?[_A-Za-z0-9]*)$`)
 var enumBitSpecifier = regexp.MustCompile("^#x*[01]+[01x]*$")
 
 type SVDFile struct {
@@ -62,6 +63,9 @@ type SVDRegister struct {
 type SVDField struct {
 	Name             string  `xml:"name"`
 	Description      string  `xml:"description"`
+	Dim              *string `xml:"dim"`
+	DimIndex         *string `xml:"dimIndex"`
+	DimIncrement     string  `xml:"dimIncrement"`
 	Lsb              *uint32 `xml:"lsb"`
 	Msb              *uint32 `xml:"msb"`
 	BitOffset        *uint32 `xml:"bitOffset"`
@@ -173,23 +177,36 @@ func splitLine(s string) []string {
 // Replace characters that are not allowed in a symbol name with a '_'. This is
 // useful to be able to process SVD files with errors.
 func cleanName(text string) string {
-	if !validName.MatchString(text) {
-		result := make([]rune, 0, len(text))
-		for _, c := range text {
-			if validName.MatchString(string(c)) {
-				result = append(result, c)
-			} else {
-				result = append(result, '_')
-			}
-		}
-		text = string(result)
-	}
+	return cleanIdentifier(text, validName)
+}
+
+func cleanDimableName(text string) string {
+	return cleanIdentifier(text, validDimableName)
+}
+
+func cleanIdentifier(text string, valid *regexp.Regexp) string {
+	text = cleanString(text, valid)
 	if len(text) != 0 && (text[0] >= '0' && text[0] <= '9') {
 		// Identifiers may not start with a number.
 		// Add an underscore instead.
 		text = "_" + text
 	}
 	return text
+}
+
+func cleanString(s string, valid *regexp.Regexp) string {
+	if !valid.MatchString(s) {
+		result := make([]rune, 0, len(s))
+		for _, c := range s {
+			if validName.MatchString(string(c)) {
+				result = append(result, c)
+			} else {
+				result = append(result, '_')
+			}
+		}
+		s = string(result)
+	}
+	return s
 }
 
 func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64, clusterName string, peripheralDict map[string]*Peripheral) []*Peripheral {
@@ -569,9 +586,9 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		// Some bitfields (like the STM32H7x7) contain invalid bitfield
 		// names like "CNT[31]". Replace invalid characters with "_" when
 		// needed.
-		fieldName := cleanName(fieldEl.Name)
-		if !unicode.IsUpper(rune(fieldName[0])) && !unicode.IsDigit(rune(fieldName[0])) {
-			fieldName = strings.ToUpper(fieldName)
+		fieldNameTpl := cleanDimableName(fieldEl.Name)
+		if !unicode.IsUpper(rune(fieldNameTpl[0])) && !unicode.IsDigit(rune(fieldNameTpl[0])) {
+			fieldNameTpl = strings.ReplaceAll(strings.ToUpper(fieldNameTpl), "%S", "%s")
 		}
 
 		// Find the lsb/msb that is encoded in various ways.
@@ -601,127 +618,138 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			msb = uint32(m)
 		} else {
 			// this is an error. what to do?
-			fmt.Fprintln(os.Stderr, "unable to find lsb/msb in field:", fieldName)
+			fmt.Fprintln(os.Stderr, "unable to find lsb/msb in field:", fieldNameTpl)
 			continue
 		}
 
-		// The enumerated values can be the same as another field, so to avoid
-		// duplication SVD files can simply refer to another set of enumerated
-		// values in the same register.
-		// See: https://www.keil.com/pack/doc/CMSIS/SVD/html/elem_registers.html#elem_enumeratedValues
-		enumeratedValues := fieldEl.EnumeratedValues
-		if enumeratedValues.DerivedFrom != "" {
-			parts := strings.Split(enumeratedValues.DerivedFrom, ".")
-			if len(parts) == 1 {
-				found := false
-				for _, otherFieldEl := range fieldEls {
-					if otherFieldEl.EnumeratedValues.Name == parts[0] {
-						found = true
-						enumeratedValues = otherFieldEl.EnumeratedValues
-					}
-				}
-				if !found {
-					fmt.Fprintf(os.Stderr, "Warning: could not find enumeratedValue.derivedFrom of %s for register field %s\n", enumeratedValues.DerivedFrom, fieldName)
-				}
-			} else {
-				// The derivedFrom attribute may also point to enumerated values
-				// in other registers and even peripherals, but this feature
-				// isn't often used in SVD files.
-				fmt.Fprintf(os.Stderr, "TODO: enumeratedValue.derivedFrom to a different register: %s\n", enumeratedValues.DerivedFrom)
+		da := decodeDimArray(fieldEl.Dim, fieldEl.DimIndex, fieldEl.DimIncrement, "field", fieldNameTpl)
+		da.rangeElems(func(ia int, _ uint32) bool {
+			if da != nil {
+				lsb += da.incr
+				msb += da.incr
 			}
-		}
+			fieldName := da.replace(fieldNameTpl, ia)
 
-		bitfields = append(bitfields, Bitfield{
-			Name:   fieldName,
-			Offset: lsb,
-			Mask:   (0xffffffff >> (31 - (msb - lsb))) << lsb,
-		})
-		fields = append(fields, Constant{
-			Name:        fmt.Sprintf("%s_%s%s_%s_Pos", groupName, bitfieldPrefix, regName, fieldName),
-			Description: fmt.Sprintf("Position of %s field.", fieldName),
-			Value:       uint64(lsb),
-		})
-		fields = append(fields, Constant{
-			Name:        fmt.Sprintf("%s_%s%s_%s_Msk", groupName, bitfieldPrefix, regName, fieldName),
-			Description: fmt.Sprintf("Bit mask of %s field.", fieldName),
-			Value:       (0xffffffffffffffff >> (63 - (msb - lsb))) << lsb,
-		})
-		if lsb == msb { // single bit
-			fields = append(fields, Constant{
-				Name:        fmt.Sprintf("%s_%s%s_%s", groupName, bitfieldPrefix, regName, fieldName),
-				Description: fmt.Sprintf("Bit %s.", fieldName),
-				Value:       1 << lsb,
-			})
-		}
-		for _, enumEl := range enumeratedValues.EnumeratedValue {
-			enumName := enumEl.Name
-			// Renesas has enum without actual values that we have to skip
-			if enumEl.Value == "" {
-				continue
-			}
-
-			if strings.EqualFold(enumName, "reserved") || !validName.MatchString(enumName) {
-				continue
-			}
-			if !unicode.IsUpper(rune(enumName[0])) && !unicode.IsDigit(rune(enumName[0])) {
-				enumName = strings.ToUpper(enumName)
-			}
-			enumDescription := formatText(enumEl.Description)
-			var enumValue uint64
-			var err error
-			if strings.HasPrefix(enumEl.Value, "0b") {
-				val := strings.TrimPrefix(enumEl.Value, "0b")
-				enumValue, err = strconv.ParseUint(val, 2, 64)
-			} else {
-				enumValue, err = strconv.ParseUint(enumEl.Value, 0, 64)
-			}
-			if err != nil {
-				if enumBitSpecifier.MatchString(enumEl.Value) {
-					// NXP and Renesas SVDs use the form #xx1x, #x0xx, etc for values
-					enumValue, err = strconv.ParseUint(strings.ReplaceAll(enumEl.Value[1:], "x", "0"), 2, 64)
-					if err != nil {
-						panic(err)
-					}
-				} else {
-					panic(err)
-				}
-			}
-			enumName = fmt.Sprintf("%s_%s%s_%s_%s", groupName, bitfieldPrefix, regName, fieldName, enumName)
-
-			// Avoid duplicate values. Duplicate names with the same value are
-			// allowed, but the same name with a different value is not. Instead
-			// of trying to work around those cases, remove the value entirely
-			// as there is probably not one correct answer in such a case.
-			// For example, SVD files from NXP have enums limited to 20
-			// characters, leading to lots of duplicates when these enum names
-			// are long. Nothing here can really fix those cases.
-			previousEnumValue, seenBefore := enumSeen[enumName]
-			if seenBefore {
-				if previousEnumValue < 0 {
-					// There was a mismatch before, ignore all equally named fields.
-					continue
-				}
-				if int64(enumValue) != previousEnumValue {
-					// There is a mismatch. Mark it as such, and remove the
-					// existing enum bitfield value.
-					enumSeen[enumName] = -1
-					for i, field := range fields {
-						if field.Name == enumName {
-							fields = append(fields[:i], fields[i+1:]...)
-							break
+			// The enumerated values can be the same as another field, so to avoid
+			// duplication SVD files can simply refer to another set of enumerated
+			// values in the same register.
+			// See: https://www.keil.com/pack/doc/CMSIS/SVD/html/elem_registers.html#elem_enumeratedValues
+			enumeratedValues := fieldEl.EnumeratedValues
+			if enumeratedValues.DerivedFrom != "" {
+				parts := strings.Split(enumeratedValues.DerivedFrom, ".")
+				if len(parts) == 1 {
+					found := false
+					for _, otherFieldEl := range fieldEls {
+						if otherFieldEl.EnumeratedValues.Name == parts[0] {
+							found = true
+							enumeratedValues = otherFieldEl.EnumeratedValues
 						}
 					}
+					if !found {
+						fmt.Fprintf(os.Stderr, "Warning: could not find enumeratedValue.derivedFrom of %s for register field %s\n", enumeratedValues.DerivedFrom, fieldName)
+					}
+				} else {
+					// The derivedFrom attribute may also point to enumerated values
+					// in other registers and even peripherals, but this feature
+					// isn't often used in SVD files.
+					fmt.Fprintf(os.Stderr, "TODO: enumeratedValue.derivedFrom to a different register: %s\n", enumeratedValues.DerivedFrom)
 				}
-				continue
 			}
-			enumSeen[enumName] = int64(enumValue)
 
-			fields = append(fields, Constant{
-				Name:        enumName,
-				Description: enumDescription,
-				Value:       enumValue,
+			bitfields = append(bitfields, Bitfield{
+				Name:   fieldName,
+				Offset: lsb,
+				Mask:   (0xffffffff >> (31 - (msb - lsb))) << lsb,
 			})
-		}
+			fields = append(fields, Constant{
+				Name:        fmt.Sprintf("%s_%s%s_%s_Pos", groupName, bitfieldPrefix, regName, fieldName),
+				Description: fmt.Sprintf("Position of %s field.", fieldName),
+				Value:       uint64(lsb),
+			})
+			fields = append(fields, Constant{
+				Name:        fmt.Sprintf("%s_%s%s_%s_Msk", groupName, bitfieldPrefix, regName, fieldName),
+				Description: fmt.Sprintf("Bit mask of %s field.", fieldName),
+				Value:       (0xffffffffffffffff >> (63 - (msb - lsb))) << lsb,
+			})
+			if lsb == msb { // single bit
+				fields = append(fields, Constant{
+					Name:        fmt.Sprintf("%s_%s%s_%s", groupName, bitfieldPrefix, regName, fieldName),
+					Description: fmt.Sprintf("Bit %s.", fieldName),
+					Value:       1 << lsb,
+				})
+			}
+			for _, enumEl := range enumeratedValues.EnumeratedValue {
+				enumName := enumEl.Name
+				// Renesas has enum without actual values that we have to skip
+				if enumEl.Value == "" {
+					continue
+				}
+
+				if strings.EqualFold(enumName, "reserved") || !validName.MatchString(enumName) {
+					continue
+				}
+				if !unicode.IsUpper(rune(enumName[0])) && !unicode.IsDigit(rune(enumName[0])) {
+					enumName = strings.ToUpper(enumName)
+				}
+				enumDescription := formatText(enumEl.Description)
+				var enumValue uint64
+				var err error
+				if strings.HasPrefix(enumEl.Value, "0b") {
+					val := strings.TrimPrefix(enumEl.Value, "0b")
+					enumValue, err = strconv.ParseUint(val, 2, 64)
+				} else {
+					enumValue, err = strconv.ParseUint(enumEl.Value, 0, 64)
+				}
+				if err != nil {
+					if enumBitSpecifier.MatchString(enumEl.Value) {
+						// NXP and Renesas SVDs use the form #xx1x, #x0xx, etc for values
+						enumValue, err = strconv.ParseUint(strings.ReplaceAll(enumEl.Value[1:], "x", "0"), 2, 64)
+						if err != nil {
+							panic(err)
+						}
+					} else {
+						panic(err)
+					}
+				}
+				enumName = fmt.Sprintf("%s_%s%s_%s_%s", groupName, bitfieldPrefix, regName, fieldName, enumName)
+
+				// Avoid duplicate values. Duplicate names with the same value are
+				// allowed, but the same name with a different value is not. Instead
+				// of trying to work around those cases, remove the value entirely
+				// as there is probably not one correct answer in such a case.
+				// For example, SVD files from NXP have enums limited to 20
+				// characters, leading to lots of duplicates when these enum names
+				// are long. Nothing here can really fix those cases.
+				previousEnumValue, seenBefore := enumSeen[enumName]
+				if seenBefore {
+					if previousEnumValue < 0 {
+						// There was a mismatch before, ignore all equally named fields.
+						continue
+					}
+					if int64(enumValue) != previousEnumValue {
+						// There is a mismatch. Mark it as such, and remove the
+						// existing enum bitfield value.
+						enumSeen[enumName] = -1
+						for i, field := range fields {
+							if field.Name == enumName {
+								fields = append(fields[:i], fields[i+1:]...)
+								break
+							}
+						}
+					}
+					continue
+				}
+				enumSeen[enumName] = int64(enumValue)
+
+				fields = append(fields, Constant{
+					Name:        enumName,
+					Description: enumDescription,
+					Value:       enumValue,
+				})
+			}
+
+			return true
+		})
 	}
 	return fields, bitfields
 }
@@ -858,7 +886,18 @@ func (da *dimArray) replace(s string, i int) string {
 		return s
 	}
 	return strings.ReplaceAll(s, "%s", da.idx[i])
+}
 
+func (da *dimArray) rangeElems(yield func(i int, incr uint32) bool) {
+	if da == nil {
+		yield(0, 0)
+		return
+	}
+	for i := range da.dim {
+		if !yield(i, uint32(i)*da.incr) {
+			return
+		}
+	}
 }
 
 func (r *Register) size() int {
