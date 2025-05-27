@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -92,6 +93,7 @@ type SVDEnumeration struct {
 		Name        string `xml:"name"`
 		Description string `xml:"description"`
 		Value       string `xml:"value"`
+		IsDefault   bool   `xml:"isDefault"`
 	} `xml:"enumeratedValue"`
 }
 
@@ -629,6 +631,7 @@ func addInterrupt(interrupts map[string]*Interrupt, name, interruptName string, 
 func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPrefix string) ([]Constant, []Bitfield) {
 	var fields []Constant
 	var bitfields []Bitfield
+	var enumDefault enumDefaultResolver
 	enumSeen := map[string]int64{}
 	for _, fieldEl := range fieldEls {
 		// Some bitfields (like the STM32H7x7) contain invalid bitfield
@@ -732,12 +735,10 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 				})
 			}
 			for i := range fieldEl.EnumeratedValues {
+				enumDefault.reset(1<<(msb+1-lsb) - 1)
+				fields0Pos := len(fields)
 				for _, enumEl := range fieldEl.EnumeratedValues[i].EnumeratedValue {
 					enumName := enumEl.Name
-					// Renesas has enum without actual values that we have to skip
-					if enumEl.Value == "" {
-						continue
-					}
 
 					if strings.EqualFold(enumName, "reserved") || !validName.MatchString(enumName) {
 						continue
@@ -745,7 +746,27 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 					if !unicode.IsUpper(rune(enumName[0])) && !unicode.IsDigit(rune(enumName[0])) {
 						enumName = strings.ToUpper(enumName)
 					}
+					enumName = fmt.Sprintf("%s_%s%s_%s_%s", groupName, bitfieldPrefix, regName, fieldName, enumName)
 					enumDescription := formatText(enumEl.Description)
+
+					if enumEl.IsDefault {
+						enumDefault.setDefaultAction(func(value uint64) {
+							if value == 0 {
+								// put zero value in front of other constants
+								fields = slices.Insert(fields, fields0Pos, Constant{})
+								appendConstant(fields[:fields0Pos], enumName, enumDescription, value, enumSeen)
+							} else {
+								fields = appendConstant(fields, enumName, enumDescription, value, enumSeen)
+							}
+						})
+						continue
+					}
+
+					// Renesas has enum without actual values that we have to skip
+					if enumEl.Value == "" {
+						continue
+					}
+
 					var enumValue uint64
 					var err error
 					if strings.HasPrefix(enumEl.Value, "0b") {
@@ -765,47 +786,120 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 							panic(err)
 						}
 					}
-					enumName = fmt.Sprintf("%s_%s%s_%s_%s", groupName, bitfieldPrefix, regName, fieldName, enumName)
-
-					// Avoid duplicate values. Duplicate names with the same value are
-					// allowed, but the same name with a different value is not. Instead
-					// of trying to work around those cases, remove the value entirely
-					// as there is probably not one correct answer in such a case.
-					// For example, SVD files from NXP have enums limited to 20
-					// characters, leading to lots of duplicates when these enum names
-					// are long. Nothing here can really fix those cases.
-					previousEnumValue, seenBefore := enumSeen[enumName]
-					if seenBefore {
-						if previousEnumValue < 0 {
-							// There was a mismatch before, ignore all equally named fields.
-							continue
-						}
-						if int64(enumValue) != previousEnumValue {
-							// There is a mismatch. Mark it as such, and remove the
-							// existing enum bitfield value.
-							enumSeen[enumName] = -1
-							for i, field := range fields {
-								if field.Name == enumName {
-									fields = append(fields[:i], fields[i+1:]...)
-									break
-								}
-							}
-						}
-						continue
-					}
-					enumSeen[enumName] = int64(enumValue)
-
-					fields = append(fields, Constant{
-						Name:        enumName,
-						Description: enumDescription,
-						Value:       enumValue,
-					})
+					enumDefault.collectValue(enumValue)
+					fields = appendConstant(fields, enumName, enumDescription, enumValue, enumSeen)
 				}
+				enumDefault.resolve()
 			}
 			return true
 		})
 	}
 	return fields, bitfields
+}
+
+func appendConstant(fields []Constant, enumName, enumDescription string, enumValue uint64, enumSeen map[string]int64) []Constant {
+	// Avoid duplicate values. Duplicate names with the same value are
+	// allowed, but the same name with a different value is not. Instead
+	// of trying to work around those cases, remove the value entirely
+	// as there is probably not one correct answer in such a case.
+	// For example, SVD files from NXP have enums limited to 20
+	// characters, leading to lots of duplicates when these enum names
+	// are long. Nothing here can really fix those cases.
+	previousEnumValue, seenBefore := enumSeen[enumName]
+	if seenBefore {
+		if previousEnumValue < 0 {
+			// There was a mismatch before, ignore all equally named fields.
+			return fields
+		}
+		if int64(enumValue) != previousEnumValue {
+			// There is a mismatch. Mark it as such, and remove the
+			// existing enum bitfield value.
+			enumSeen[enumName] = -1
+			for i, field := range fields {
+				if field.Name == enumName {
+					fields = append(fields[:i], fields[i+1:]...)
+					break
+				}
+			}
+		}
+		return fields
+	}
+	enumSeen[enumName] = int64(enumValue)
+
+	fields = append(fields, Constant{
+		Name:        enumName,
+		Description: enumDescription,
+		Value:       enumValue,
+	})
+	return fields
+}
+
+// enumDefaultResolver helps determine the actual numeric value for an
+// enumeratedValue marked as the default (i.e., where "isDefault" is set).
+//
+// Some SVD files use "isDefault" to indicate a fallback value (e.g., Div1 in
+// clock prescaler registers) without specifying the exact value when it's not
+// critical. This type is used to collect all defined enumValues, and once
+// collection is complete, derive a sensible default value that does not conflict
+// with any explicitly defined ones.
+//
+// Typically, it prefers zero as a default if available; otherwise, it will
+// choose a suitable unused value below the field's maximum.
+type enumDefaultResolver struct {
+	values        []uint64
+	maxValue      uint64
+	handleDefault func(value uint64)
+}
+
+func (dr *enumDefaultResolver) reset(maxValue uint64) {
+	dr.values = dr.values[:0]
+	dr.maxValue = maxValue
+	dr.handleDefault = nil
+}
+
+func (dr *enumDefaultResolver) setDefaultAction(action func(v uint64)) {
+	dr.handleDefault = action
+}
+
+func (dr *enumDefaultResolver) collectValue(value uint64) {
+	dr.values = append(dr.values, value)
+}
+
+// resolve tries to find an actual value for the enumerated Value
+// marked as default.
+func (dr *enumDefaultResolver) resolve() {
+	if dr.handleDefault == nil {
+		return
+	}
+	list := dr.values
+	n := len(list)
+	if n == 0 {
+		return
+	}
+	slices.Sort(list)
+
+	var value uint64
+	// try to use zero as default value
+	if list[0] == 0 {
+		// not available, now try the highest value +1
+		largest := list[n-1]
+		if largest < dr.maxValue {
+			value = largest + 1
+		} else {
+			value = 1
+			// not available, now lookup the first free value
+			for _, enumValue := range list[1:] {
+				if value < enumValue {
+					break
+				}
+				value = enumValue + 1
+				if value == dr.maxValue {
+					return
+				}
+			}
+		}
+	}
+	dr.handleDefault(value)
 }
 
 type Register struct {
