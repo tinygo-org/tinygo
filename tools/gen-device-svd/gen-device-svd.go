@@ -62,6 +62,7 @@ type SVDRegister struct {
 }
 
 type SVDField struct {
+	DerivedFrom      string           `xml:"derivedFrom,attr"`
 	Name             string           `xml:"name"`
 	Description      string           `xml:"description"`
 	Dim              *string          `xml:"dim"`
@@ -374,6 +375,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 	// comes later in the file. To make sure this works, sort the peripherals if
 	// needed.
 	orderedPeripherals := orderPeripherals(device.Peripherals)
+	globalDerivationCtx.peripherals = orderedPeripherals
 
 	for _, periphEl := range orderedPeripherals {
 		description := formatText(periphEl.Description)
@@ -634,6 +636,14 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 	var enumDefault enumDefaultResolver
 	enumSeen := map[string]int64{}
 	for _, fieldEl := range fieldEls {
+
+		if fieldEl.DerivedFrom != "" {
+			err := globalDerivationCtx.deriveField(fieldEl, fieldEls)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "unable to derive field %q from %q: %v\n", fieldEl.Name, fieldEl.DerivedFrom, err.Error())
+			}
+		}
+
 		// Some bitfields (like the STM32H7x7) contain invalid bitfield
 		// names like "CNT[31]". Replace invalid characters with "_" when
 		// needed.
@@ -795,6 +805,101 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		})
 	}
 	return fields, bitfields
+}
+
+var globalDerivationCtx derivationContext
+
+type derivationContext struct {
+	peripherals []*SVDPeripheral
+}
+
+func (ctx *derivationContext) deriveField(fieldEl *SVDField, localFieldEls []*SVDField) error {
+	from := fieldEl.DerivedFrom
+	parts := strings.Split(from, ".")
+	srcName := parts[0]
+	var srcFieldEl *SVDField
+	switch len(parts) {
+	case 3, 4:
+		src, err := ctx.lookupGlobal(parts)
+		if err != nil {
+			return err
+		}
+		srcFieldEl = src
+	case 1:
+		// resolve locally, in current register
+		for _, f := range localFieldEls {
+			if f == fieldEl {
+				continue
+			}
+			if f.Name == srcName {
+				srcFieldEl = f
+				break
+			}
+		}
+		if srcFieldEl == nil {
+			return fmt.Errorf("not found")
+		}
+	default:
+		return fmt.Errorf("cannot decode source path")
+	}
+
+	// copy enumeratedValues from source to current field
+	if fieldEl.DimIndex == nil && strings.Contains(fieldEl.Name, "%s") {
+		fieldEl.DimIndex = srcFieldEl.DimIndex
+		fieldEl.DimIncrement = srcFieldEl.DimIncrement
+		fieldEl.Dim = srcFieldEl.Dim
+	}
+	if fieldEl.Description == "" {
+		fieldEl.Description = srcFieldEl.Description
+	}
+	if fieldEl.BitWidth == nil {
+		fieldEl.BitWidth = srcFieldEl.BitWidth
+	}
+	if fieldEl.BitOffset == nil {
+		fieldEl.BitOffset = srcFieldEl.BitOffset
+	}
+	if fieldEl.BitRange == nil {
+		fieldEl.BitRange = srcFieldEl.BitRange
+	}
+
+	fieldEl.EnumeratedValues = srcFieldEl.EnumeratedValues
+	return nil
+}
+
+func (ctx *derivationContext) lookupGlobal(path []string) (*SVDField, error) {
+	curPath := path[:1]
+	for _, p := range ctx.peripherals {
+		if p.Name == path[0] {
+			if len(path) == 4 {
+				curPath = path[:2]
+				for _, c := range p.Clusters {
+					if c.Name == path[1] {
+						return ctx.lookupFieldInRegs(path[2:], c.Registers, curPath)
+					}
+				}
+				return nil, fmt.Errorf("cluster not found: %q", path[2])
+
+			}
+			return ctx.lookupFieldInRegs(path[1:], p.Registers, curPath)
+		}
+	}
+	return nil, fmt.Errorf("peripheral not found: %s", path[0])
+}
+
+func (ctx *derivationContext) lookupFieldInRegs(path []string, registers []*SVDRegister, curPath []string) (*SVDField, error) {
+	curPath = curPath[:len(curPath)+1]
+	for _, r := range registers {
+		if r.Name == path[0] {
+			curPath = curPath[:len(curPath)+1]
+			for _, f := range r.Fields {
+				if f.Name == path[1] {
+					return f, nil
+				}
+			}
+			return nil, fmt.Errorf("field not found: %q", strings.Join(curPath, "."))
+		}
+	}
+	return nil, fmt.Errorf("register not found: %q", strings.Join(curPath, "."))
 }
 
 func appendConstant(fields []Constant, enumName, enumDescription string, enumValue uint64, enumSeen map[string]int64) []Constant {
