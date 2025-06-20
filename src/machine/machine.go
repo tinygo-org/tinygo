@@ -1,6 +1,9 @@
 package machine
 
-import "errors"
+import (
+	"errors"
+	"unsafe"
+)
 
 var (
 	ErrTimeoutRNG         = errors.New("machine: RNG Timeout")
@@ -62,3 +65,30 @@ func (p Pin) Low() {
 type ADC struct {
 	Pin Pin
 }
+
+// Convert the pointer to a uintptr, to be used for memory I/O (DMA for
+// example). It also means the pointer is "gone" as far as the compiler is
+// concerned, and a GC cycle might deallocate the object. To prevent this from
+// happening, also call keepAliveNoEscape at a point after the address isn't
+// accessed anymore by the hardware.
+// The only exception is if the pointer is accessed later in a volatile way
+// (volatile read/write), which also forces the value to stay alive until that
+// point.
+//
+// This function is treated specially by the compiler to mark the 'ptr'
+// parameter as not escaping.
+//
+// TODO: this function should eventually be replaced with the proposed ptrtoaddr
+// instruction in LLVM. See:
+// https://discourse.llvm.org/t/clarifiying-the-semantics-of-ptrtoint/83987/10
+// https://github.com/llvm/llvm-project/pull/139357
+func unsafeNoEscape(ptr unsafe.Pointer) uintptr {
+	return uintptr(ptr)
+}
+
+// Make sure the given pointer stays alive until this point. This is similar to
+// runtime.KeepAlive, with the difference that it won't let the pointer escape.
+// This is typically used together with unsafeNoEscape.
+//
+// This is a compiler intrinsic.
+func keepAliveNoEscape(ptr unsafe.Pointer)

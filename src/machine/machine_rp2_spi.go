@@ -291,7 +291,7 @@ func (spi *SPI) tx(tx []byte) error {
 	//   - set data size to single bytes
 	//   - set the DREQ so that the DMA will fill the SPI FIFO as needed
 	//   - start the transfer
-	ch.READ_ADDR.Set(uint32(uintptr(unsafe.Pointer(&tx[0]))))
+	ch.READ_ADDR.Set(uint32(unsafeNoEscape(unsafe.Pointer(unsafe.SliceData(tx)))))
 	ch.WRITE_ADDR.Set(uint32(uintptr(unsafe.Pointer(&spi.Bus.SSPDR))))
 	ch.TRANS_COUNT.Set(uint32(len(tx)))
 	ch.CTRL_TRIG.Set(rp.DMA_CH0_CTRL_TRIG_INCR_READ |
@@ -309,6 +309,11 @@ func (spi *SPI) tx(tx []byte) error {
 	//     the CPU can go to sleep).
 	for ch.CTRL_TRIG.Get()&rp.DMA_CH0_CTRL_TRIG_BUSY != 0 {
 	}
+
+	// Make sure the read buffer stays alive until this point (in the unlikely
+	// case the tx slice wasn't read after this function returns and a GC cycle
+	// happened inbetween).
+	keepAliveNoEscape(unsafe.Pointer(unsafe.SliceData(tx)))
 
 	// We didn't read any result values, which means the RX FIFO has likely
 	// overflown. We have to clean up this mess now.
