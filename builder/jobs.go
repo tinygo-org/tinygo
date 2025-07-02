@@ -17,14 +17,6 @@ import (
 // concurrency or performance issues.
 const jobRunnerDebug = false
 
-type jobState uint8
-
-const (
-	jobStateQueued   jobState = iota // not yet running
-	jobStateRunning                  // running
-	jobStateFinished                 // finished running
-)
-
 // compileJob is a single compiler job, comparable to a single Makefile target.
 // It is used to orchestrate various compiler tasks that can be run in parallel
 // but that have dependencies and thus have limitations in how they can be run.
@@ -55,12 +47,11 @@ func dummyCompileJob(result string) *compileJob {
 // ordered as such in the job dependencies.
 func runJobs(job *compileJob, sema chan struct{}) error {
 	if sema == nil {
-		// Have a default, if the semaphore isn't set. This is useful for
-		// tests.
+		// Have a default, if the semaphore isn't set. This is useful for tests.
 		sema = make(chan struct{}, runtime.NumCPU())
 	}
 	if cap(sema) == 0 {
-		return errors.New("cannot 0 jobs at a time")
+		return errors.New("cannot run 0 jobs at a time")
 	}
 
 	// Create a slice of jobs to run, where all dependencies are run in order.
@@ -81,10 +72,10 @@ func runJobs(job *compileJob, sema chan struct{}) error {
 
 	waiting := make(map[*compileJob]map[*compileJob]struct{}, len(jobs))
 	dependents := make(map[*compileJob][]*compileJob, len(jobs))
-	jidx := make(map[*compileJob]int)
+	compileJobs := make(map[*compileJob]int)
 	var ready intHeap
 	for i, job := range jobs {
-		jidx[job] = i
+		compileJobs[job] = i
 		if len(job.dependencies) == 0 {
 			// This job is ready to run.
 			ready.Push(i)
@@ -105,8 +96,7 @@ func runJobs(job *compileJob, sema chan struct{}) error {
 	// Create a channel to accept notifications of completion.
 	doneChan := make(chan *compileJob)
 
-	// Send each job in the jobs slice to a worker, taking care of job
-	// dependencies.
+	// Send each job in the jobs slice to a worker, taking care of job dependencies.
 	numRunningJobs := 0
 	var totalTime time.Duration
 	start := time.Now()
@@ -156,7 +146,7 @@ func runJobs(job *compileJob, sema chan struct{}) error {
 			delete(wait, completed)
 			if len(wait) == 0 {
 				// This job is now ready to run.
-				ready.Push(jidx[j])
+				ready.Push(compileJobs[j])
 				delete(waiting, j)
 			}
 		}

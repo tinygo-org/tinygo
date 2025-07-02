@@ -27,6 +27,8 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
+var initFileVersions = func(info *types.Info) {}
+
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
 	config      *compileopts.Config
@@ -126,7 +128,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 	}
 
 	// List the dependencies of this package, in raw JSON format.
-	extraArgs := []string{"-json", "-deps"}
+	extraArgs := []string{"-json", "-deps", "-e"}
 	if config.TestConfig.CompileTestBinary {
 		extraArgs = append(extraArgs, "-test")
 	}
@@ -147,6 +149,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 
 	// Parse the returned json from `go list`.
 	decoder := json.NewDecoder(buf)
+	var pkgErrors []error
 	for {
 		pkg := &Package{
 			program:      p,
@@ -177,7 +180,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 			if len(fields) >= 2 {
 				// There is some file/line/column information.
 				if n, err := strconv.Atoi(fields[len(fields)-2]); err == nil {
-					// Format: filename.go:line:colum
+					// Format: filename.go:line:column
 					pos.Filename = strings.Join(fields[:len(fields)-2], ":")
 					pos.Line = n
 					pos.Column, _ = strconv.Atoi(fields[len(fields)-1])
@@ -186,6 +189,12 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 					pos.Filename = strings.Join(fields[:len(fields)-1], ":")
 					pos.Line, _ = strconv.Atoi(fields[len(fields)-1])
 				}
+				if abs, err := filepath.Abs(pos.Filename); err == nil {
+					// Make the path absolute, so that error messages will be
+					// prettier (it will be turned back into a relative path
+					// when printing the error).
+					pos.Filename = abs
+				}
 				pos.Filename = p.getOriginalPath(pos.Filename)
 			}
 			err := scanner.Error{
@@ -193,10 +202,11 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 				Msg: pkg.Error.Err,
 			}
 			if len(pkg.Error.ImportStack) != 0 {
-				return nil, Error{
+				pkgErrors = append(pkgErrors, Error{
 					ImportStack: pkg.Error.ImportStack,
 					Err:         err,
-				}
+				})
+				continue
 			}
 			return nil, err
 		}
@@ -237,6 +247,13 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 		}
 		p.sorted = append(p.sorted, pkg)
 		p.Packages[pkg.ImportPath] = pkg
+	}
+
+	if len(pkgErrors) != 0 {
+		// TODO: use errors.Join in Go 1.20.
+		return nil, Errors{
+			Errs: pkgErrors,
+		}
 	}
 
 	if config.TestConfig.CompileTestBinary && !strings.HasSuffix(p.sorted[len(p.sorted)-1].ImportPath, ".test") {
@@ -378,13 +395,35 @@ func (p *Package) Check() error {
 		typeErrors = append(typeErrors, err)
 	}
 	checker.Importer = p
+	if p.Module.GoVersion != "" {
+		// Setting the Go version for a module makes sure the type checker
+		// errors out on language features not supported in that particular
+		// version.
+		checker.GoVersion = "go" + p.Module.GoVersion
+	} else {
+		// Version is not known, so use the currently installed Go version.
+		// This is needed for `tinygo run` for example.
+		// Normally we'd use goenv.GorootVersionString(), but for compatibility
+		// with Go 1.20 and below we need a version in the form of "go1.12" (no
+		// patch version).
+		major, minor, err := goenv.GetGorootVersion()
+		if err != nil {
+			return err
+		}
+		checker.GoVersion = fmt.Sprintf("go%d.%d", major, minor)
+	}
+	initFileVersions(&p.info)
 
 	// Do typechecking of the package.
 	packageName := p.ImportPath
 	if p == p.program.MainPkg() {
 		if p.Name != "main" {
-			// Sanity check. Should not ever trigger.
-			panic("expected main package to have name 'main'")
+			return Errors{p, []error{
+				scanner.Error{
+					Pos: p.program.fset.Position(p.Files[0].Name.Pos()),
+					Msg: fmt.Sprintf("expected main package to have name \"main\", not %#v", p.Name),
+				},
+			}}
 		}
 		packageName = "main"
 	}
@@ -393,7 +432,15 @@ func (p *Package) Check() error {
 		if err, ok := err.(Errors); ok {
 			return err
 		}
-		return Errors{p, typeErrors}
+		if len(typeErrors) != 0 {
+			// Got type errors, so return them.
+			return Errors{p, typeErrors}
+		}
+		// This can happen in some weird cases.
+		// The only case I know is when compiling a Go 1.23 program, with a
+		// TinyGo version that supports Go 1.23 but is compiled using Go 1.22.
+		// So this should be pretty rare.
+		return Errors{p, []error{err}}
 	}
 	p.Pkg = typesPkg
 
@@ -410,7 +457,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	var files []*ast.File
 	var fileErrs []error
 
-	// Parse all files (incuding CgoFiles).
+	// Parse all files (including CgoFiles).
 	parseFile := func(file string) {
 		if !filepath.IsAbs(file) {
 			file = filepath.Join(p.Dir, file)
@@ -438,7 +485,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags(true)...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
-		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags)
+		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags, p.program.config.GOOS())
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
 		for path, hash := range accessedFiles {
@@ -447,7 +494,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 		}
-		files = append(files, generated)
+		files = append(files, generated...)
 		p.program.LDFlags = append(p.program.LDFlags, ldflags...)
 	}
 

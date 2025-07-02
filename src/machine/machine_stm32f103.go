@@ -221,14 +221,19 @@ func (p Pin) enableClock() {
 
 // Enable peripheral clock. Expand to include all the desired peripherals
 func enableAltFuncClock(bus unsafe.Pointer) {
-	if bus == unsafe.Pointer(stm32.USART1) {
+	switch bus {
+	case unsafe.Pointer(stm32.USART1):
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
-	} else if bus == unsafe.Pointer(stm32.USART2) {
+	case unsafe.Pointer(stm32.USART2):
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_USART2EN)
-	} else if bus == unsafe.Pointer(stm32.I2C1) {
+	case unsafe.Pointer(stm32.I2C1):
 		stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_I2C1EN)
-	} else if bus == unsafe.Pointer(stm32.SPI1) {
+	case unsafe.Pointer(stm32.SPI1):
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_SPI1EN)
+	case unsafe.Pointer(stm32.ADC1):
+		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_ADC1EN)
+	default:
+		panic("machine: unknown peripheral")
 	}
 }
 
@@ -328,16 +333,16 @@ type SPI struct {
 // Since the first interface is named SPI1, both SPI0 and SPI1 refer to SPI1.
 // TODO: implement SPI2 and SPI3.
 var (
-	SPI1 = SPI{Bus: stm32.SPI1}
+	SPI1 = &SPI{Bus: stm32.SPI1}
 	SPI0 = SPI1
 )
 
-func (spi SPI) config8Bits() {
+func (spi *SPI) config8Bits() {
 	// no-op on this series
 }
 
 // Set baud rate for SPI
-func (spi SPI) getBaudRate(config SPIConfig) uint32 {
+func (spi *SPI) getBaudRate(config SPIConfig) uint32 {
 	var conf uint32
 
 	// set frequency dependent on PCLK2 prescaler (div 1)
@@ -363,7 +368,7 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 }
 
 // Configure SPI pins for input output and clock
-func (spi SPI) configurePins(config SPIConfig) {
+func (spi *SPI) configurePins(config SPIConfig) {
 	config.SCK.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
 	config.SDO.Configure(PinConfig{Mode: PinOutput50MHz + PinOutputModeAltPushPull})
 	config.SDI.Configure(PinConfig{Mode: PinInputModeFloating})
@@ -399,7 +404,7 @@ func (i2c *I2C) getFreqRange(config I2CConfig) uint32 {
 	// pclk1 clock speed is main frequency divided by PCLK1 prescaler (div 2)
 	pclk1 := CPUFrequency() / 2
 
-	// set freqency range to PCLK1 clock speed in MHz
+	// set frequency range to PCLK1 clock speed in MHz
 	// aka setting the value 36 means to use 36 MHz clock
 	return pclk1 / 1000000
 }

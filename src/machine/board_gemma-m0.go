@@ -76,7 +76,8 @@ var (
 // I2S (not connected, needed for atsamd21).
 const (
 	I2S_SCK_PIN = NoPin
-	I2S_SD_PIN  = NoPin
+	I2S_SDO_PIN = NoPin
+	I2S_SDI_PIN = NoPin
 	I2S_WS_PIN  = NoPin
 )
 

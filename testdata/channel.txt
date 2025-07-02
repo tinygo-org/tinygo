@@ -12,9 +12,7 @@ received num: 8
 recv from closed channel: 0 false
 complex128: (+7.000000e+000+1.050000e+001i)
 sum of n: 149
-sum: 25
-sum: 29
-sum: 33
+sum of sums: 87
 sum(100): 4950
 deadlocking
 select no-op

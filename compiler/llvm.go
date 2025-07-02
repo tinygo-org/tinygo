@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
@@ -127,12 +128,14 @@ func (b *builder) emitPointerPack(values []llvm.Value) llvm.Value {
 
 		// Packed data is bigger than a pointer, so allocate it on the heap.
 		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
+		align := b.targetData.ABITypeAlignment(packedType)
 		alloc := b.mod.NamedFunction("runtime.alloc")
 		packedAlloc := b.CreateCall(alloc.GlobalValueType(), alloc, []llvm.Value{
 			sizeValue,
 			llvm.ConstNull(b.dataPtrType),
 			llvm.Undef(b.dataPtrType), // unused context parameter
 		}, "")
+		packedAlloc.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
 		if b.NeedsStackObjects {
 			b.trackPointer(packedAlloc)
 		}
@@ -368,13 +371,6 @@ func (c *compilerContext) getPointerBitmap(typ llvm.Type, pos token.Pos) *big.In
 		return big.NewInt(1)
 	case llvm.StructTypeKind:
 		ptrs := big.NewInt(0)
-		if typ.StructName() == "runtime.funcValue" {
-			// Hack: the type runtime.funcValue contains an 'id' field which is
-			// of type uintptr, but before the LowerFuncValues pass it actually
-			// contains a pointer (ptrtoint) to a global. This trips up the
-			// interp package. Therefore, make the id field a pointer for now.
-			typ = c.ctx.StructType([]llvm.Type{c.dataPtrType, c.dataPtrType}, false)
-		}
 		for i, subtyp := range typ.StructElementTypes() {
 			subptrs := c.getPointerBitmap(subtyp, pos)
 			if subptrs.BitLen() == 0 {
@@ -416,18 +412,11 @@ func (c *compilerContext) getPointerBitmap(typ llvm.Type, pos token.Pos) *big.In
 	}
 }
 
-// archFamily returns the archtecture from the LLVM triple but with some
+// archFamily returns the architecture from the LLVM triple but with some
 // architecture names ("armv6", "thumbv7m", etc) merged into a single
 // architecture name ("arm").
 func (c *compilerContext) archFamily() string {
-	arch := strings.Split(c.Triple, "-")[0]
-	if strings.HasPrefix(arch, "arm64") {
-		return "aarch64"
-	}
-	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
-		return "arm"
-	}
-	return arch
+	return compileopts.CanonicalArchName(c.Triple)
 }
 
 // isThumb returns whether we're in ARM or in Thumb mode. It panics if the
@@ -451,12 +440,31 @@ func (c *compilerContext) isThumb() bool {
 // readStackPointer emits a LLVM intrinsic call that returns the current stack
 // pointer as an *i8.
 func (b *builder) readStackPointer() llvm.Value {
-	stacksave := b.mod.NamedFunction("llvm.stacksave")
+	name := "llvm.stacksave.p0"
+	if llvmutil.Version() < 18 {
+		name = "llvm.stacksave" // backwards compatibility with LLVM 17 and below
+	}
+	stacksave := b.mod.NamedFunction(name)
 	if stacksave.IsNil() {
 		fnType := llvm.FunctionType(b.dataPtrType, nil, false)
-		stacksave = llvm.AddFunction(b.mod, "llvm.stacksave", fnType)
+		stacksave = llvm.AddFunction(b.mod, name, fnType)
 	}
 	return b.CreateCall(stacksave.GlobalValueType(), stacksave, nil, "")
+}
+
+// writeStackPointer emits a LLVM intrinsic call that updates the current stack
+// pointer.
+func (b *builder) writeStackPointer(sp llvm.Value) {
+	name := "llvm.stackrestore.p0"
+	if llvmutil.Version() < 18 {
+		name = "llvm.stackrestore" // backwards compatibility with LLVM 17 and below
+	}
+	stackrestore := b.mod.NamedFunction(name)
+	if stackrestore.IsNil() {
+		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType}, false)
+		stackrestore = llvm.AddFunction(b.mod, name, fnType)
+	}
+	b.CreateCall(stackrestore.GlobalValueType(), stackrestore, []llvm.Value{sp}, "")
 }
 
 // createZExtOrTrunc lets the input value fit in the output type bits, by zero

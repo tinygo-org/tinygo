@@ -13,11 +13,11 @@ func main() {
 		Stereo:      true,
 	})
 
-	data := make([]uint32, 64)
+	data := make([]uint16, 64)
 
 	for {
 		// get the next group of samples
-		machine.I2S0.Read(data)
+		machine.I2S0.ReadMono(data)
 
 		println("data", data[0], data[1], data[2], data[4], "...")
 	}

@@ -3,6 +3,7 @@ package builder
 import (
 	"bytes"
 	"debug/elf"
+	"debug/macho"
 	"debug/pe"
 	"encoding/binary"
 	"errors"
@@ -16,7 +17,7 @@ import (
 	"github.com/blakesmith/ar"
 )
 
-// makeArchive creates an arcive for static linking from a list of object files
+// makeArchive creates an archive for static linking from a list of object files
 // given as a parameter. It is equivalent to the following command:
 //
 //	ar -rcs <archivePath> <objs...>
@@ -62,6 +63,20 @@ func makeArchive(arfile *os.File, objs []string) error {
 					fileIndex int
 				}{symbol.Name, i})
 			}
+		} else if dbg, err := macho.NewFile(objfile); err == nil {
+			for _, symbol := range dbg.Symtab.Syms {
+				// See mach-o/nlist.h
+				if symbol.Type&0x0e != 0xe { // (symbol.Type & N_TYPE) != N_SECT
+					continue // undefined symbol
+				}
+				if symbol.Type&0x01 == 0 { // (symbol.Type & N_EXT) == 0
+					continue // internal symbol (static, etc)
+				}
+				symbolTable = append(symbolTable, struct {
+					name      string
+					fileIndex int
+				}{symbol.Name, i})
+			}
 		} else if dbg, err := pe.NewFile(objfile); err == nil {
 			for _, symbol := range dbg.Symbols {
 				if symbol.StorageClass != 2 {
@@ -78,17 +93,27 @@ func makeArchive(arfile *os.File, objs []string) error {
 		} else if dbg, err := wasm.Parse(objfile); err == nil {
 			for _, s := range dbg.Sections {
 				switch section := s.(type) {
-				case *wasm.SectionImport:
-					for _, ln := range section.Entries {
-
-						if ln.Kind != wasm.ExtKindFunction {
-							// Not a function
+				case *wasm.SectionLinking:
+					for _, symbol := range section.Symbols {
+						if symbol.Flags&wasm.LinkingSymbolFlagUndefined != 0 {
+							// Don't list undefined functions.
 							continue
 						}
+						if symbol.Flags&wasm.LinkingSymbolFlagBindingLocal != 0 {
+							// Don't include local symbols.
+							continue
+						}
+						if symbol.Kind != wasm.LinkingSymbolKindFunction && symbol.Kind != wasm.LinkingSymbolKindData {
+							// Link functions and data symbols.
+							// Some data symbols need to be included, such as
+							// __log_data.
+							continue
+						}
+						// Include in the archive.
 						symbolTable = append(symbolTable, struct {
 							name      string
 							fileIndex int
-						}{ln.Field, i})
+						}{symbol.Name, i})
 					}
 				}
 			}
@@ -140,7 +165,7 @@ func makeArchive(arfile *os.File, objs []string) error {
 	}
 
 	// Keep track of the start of the symbol table.
-	symbolTableStart, err := arfile.Seek(0, os.SEEK_CUR)
+	symbolTableStart, err := arfile.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err
 	}
@@ -162,7 +187,7 @@ func makeArchive(arfile *os.File, objs []string) error {
 
 		// Store the start index, for when we'll update the symbol table with
 		// the correct file start indices.
-		offset, err := arfile.Seek(0, os.SEEK_CUR)
+		offset, err := arfile.Seek(0, io.SeekCurrent)
 		if err != nil {
 			return err
 		}

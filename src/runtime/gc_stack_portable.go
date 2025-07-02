@@ -1,4 +1,4 @@
-//go:build (gc.conservative || gc.custom || gc.precise) && tinygo.wasm
+//go:build (gc.conservative || gc.custom || gc.precise || gc.boehm) && tinygo.wasm
 
 package runtime
 
@@ -7,6 +7,11 @@ import (
 	"runtime/volatile"
 	"unsafe"
 )
+
+func gcMarkReachable() {
+	markStack()
+	findGlobals(markRoots)
+}
 
 //go:extern runtime.stackChainStart
 var stackChainStart *stackChainObject
@@ -26,7 +31,7 @@ type stackChainObject struct {
 //
 // Therefore, we only need to scan the system stack.
 // It is relatively easy to scan the system stack while we're on it: we can
-// simply read __stack_pointer and __global_base and scan the area inbetween.
+// simply read __stack_pointer and __global_base and scan the area in between.
 // Unfortunately, it's hard to get the system stack pointer while we're on a
 // goroutine stack. But when we're on a goroutine stack, the system stack is in
 // the scheduler which means there shouldn't be anything on the system stack
@@ -59,4 +64,8 @@ func trackPointer(ptr, alloca unsafe.Pointer)
 // This is called from internal/task when switching goroutines.
 func swapStackChain(dst **stackChainObject) {
 	*dst, stackChainStart = stackChainStart, *dst
+}
+
+func gcResumeWorld() {
+	// Nothing to do here (single threaded).
 }

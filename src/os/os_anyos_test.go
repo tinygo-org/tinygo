@@ -1,4 +1,4 @@
-//go:build windows || darwin || (linux && !baremetal) || wasip1
+//go:build windows || darwin || (linux && !baremetal) || wasip1 || wasip2
 
 package os_test
 
@@ -56,7 +56,7 @@ func TestStatBadDir(t *testing.T) {
 	badDir := filepath.Join(dir, "not-exist/really-not-exist")
 	_, err := Stat(badDir)
 	if pe, ok := err.(*fs.PathError); !ok || !IsNotExist(err) || pe.Path != badDir {
-		t.Errorf("Mkdir error = %#v; want PathError for path %q satisifying IsNotExist", err, badDir)
+		t.Errorf("Mkdir error = %#v; want PathError for path %q satisfying IsNotExist", err, badDir)
 	}
 }
 
@@ -275,7 +275,7 @@ func TestDirFS(t *testing.T) {
 		t.Log("TODO: implement Readdir for Windows")
 		return
 	}
-	if isWASI {
+	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
 		t.Log("TODO: allow foo/bar/. as synonym for path foo/bar on wasi?")
 		return
 	}
@@ -296,7 +296,7 @@ func TestDirFSPathsValid(t *testing.T) {
 		t.Log("skipping on Windows")
 		return
 	}
-	if isWASI {
+	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
 		t.Log("skipping on wasi because it fails on wasi on windows")
 		return
 	}

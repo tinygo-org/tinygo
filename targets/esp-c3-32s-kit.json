@@ -1,0 +1,5 @@
+{
+	"inherits": ["esp32c3"],
+	"build-tags": ["esp_c3_32s_kit"],
+	"serial-port": ["1a86:7523"]
+}

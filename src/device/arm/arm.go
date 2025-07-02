@@ -146,6 +146,11 @@ const (
 	SYST_CALIB_NOREF     = 0x80000000 // Bit NOREF.
 )
 
+// ClearPendingIRQ clears the pending status of the interrupt.
+func ClearPendingIRQ(irq uint32) {
+	NVIC.ICPR[irq>>5].Set(1 << (irq & 0x1F))
+}
+
 // Enable the given interrupt number.
 func EnableIRQ(irq uint32) {
 	NVIC.ISER[irq>>5].Set(1 << (irq & 0x1F))

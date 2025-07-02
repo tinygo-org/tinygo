@@ -16,6 +16,7 @@ package compiler
 import (
 	"go/types"
 	"strconv"
+	"strings"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
@@ -102,10 +103,11 @@ func (b *builder) createLandingPad() {
 	b.CreateBr(b.blockEntries[b.fn.Recover])
 }
 
-// createInvokeCheckpoint saves the function state at the given point, to
-// continue at the landing pad if a panic happened. This is implemented using a
-// setjmp-like construct.
-func (b *builder) createInvokeCheckpoint() {
+// Create a checkpoint (similar to setjmp). This emits inline assembly that
+// stores the current program counter inside the ptr address (actually
+// ptr+sizeof(ptr)) and then returns a boolean indicating whether this is the
+// normal flow (false) or we jumped here from somewhere else (true).
+func (b *builder) createCheckpoint(ptr llvm.Value) llvm.Value {
 	// Construct inline assembly equivalents of setjmp.
 	// The assembly works as follows:
 	//   * All registers (both callee-saved and caller saved) are clobbered
@@ -160,7 +162,7 @@ str x2, [x1, #8]
 mov x0, #0
 1:
 `
-		constraints = "={x0},{x1},~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{q16},~{q17},~{q18},~{q19},~{q20},~{q21},~{q22},~{q23},~{q24},~{q25},~{q26},~{q27},~{q28},~{q29},~{q30},~{nzcv},~{ffr},~{vg},~{memory}"
+		constraints = "={x0},{x1},~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{q16},~{q17},~{q18},~{q19},~{q20},~{q21},~{q22},~{q23},~{q24},~{q25},~{q26},~{q27},~{q28},~{q29},~{q30},~{nzcv},~{ffr},~{memory}"
 		if b.GOOS != "darwin" && b.GOOS != "windows" {
 			// These registers cause the following warning when compiling for
 			// MacOS and Windows:
@@ -187,6 +189,24 @@ std z+5, r29
 ldi r24, 0
 1:`
 		constraints = "={r24},z,~{r0},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{r13},~{r14},~{r15},~{r16},~{r17},~{r18},~{r19},~{r20},~{r21},~{r22},~{r23},~{r25},~{r26},~{r27}"
+	case "mips":
+		// $4 flag (zero or non-zero)
+		// $5 defer frame
+		asmString = `
+.set noat
+move $$4, $$zero
+jal 1f
+1:
+addiu $$ra, 8
+sw $$ra, 4($$5)
+.set at`
+		constraints = "={$4},{$5},~{$1},~{$2},~{$3},~{$5},~{$6},~{$7},~{$8},~{$9},~{$10},~{$11},~{$12},~{$13},~{$14},~{$15},~{$16},~{$17},~{$18},~{$19},~{$20},~{$21},~{$22},~{$23},~{$24},~{$25},~{$26},~{$27},~{$28},~{$29},~{$30},~{$31},~{memory}"
+		if !strings.Contains(b.Features, "+soft-float") {
+			// Using floating point registers together with GOMIPS=softfloat
+			// results in a crash: "This value type is not natively supported!"
+			// So only add them when using hardfloat.
+			constraints += ",~{$f0},~{$f1},~{$f2},~{$f3},~{$f4},~{$f5},~{$f6},~{$f7},~{$f8},~{$f9},~{$f10},~{$f11},~{$f12},~{$f13},~{$f14},~{$f15},~{$f16},~{$f17},~{$f18},~{$f19},~{$f20},~{$f21},~{$f22},~{$f23},~{$f24},~{$f25},~{$f26},~{$f27},~{$f28},~{$f29},~{$f30},~{$f31}"
+		}
 	case "riscv32":
 		asmString = `
 la a2, 1f
@@ -198,11 +218,19 @@ li a0, 0
 		// This case should have been handled by b.supportsRecover().
 		b.addError(b.fn.Pos(), "unknown architecture for defer: "+b.archFamily())
 	}
-	asmType := llvm.FunctionType(resultType, []llvm.Type{b.deferFrame.Type()}, false)
+	asmType := llvm.FunctionType(resultType, []llvm.Type{b.dataPtrType}, false)
 	asm := llvm.InlineAsm(asmType, asmString, constraints, false, false, 0, false)
-	result := b.CreateCall(asmType, asm, []llvm.Value{b.deferFrame}, "setjmp")
+	result := b.CreateCall(asmType, asm, []llvm.Value{ptr}, "setjmp")
 	result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("returns_twice"), 0))
 	isZero := b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(resultType, 0, false), "setjmp.result")
+	return isZero
+}
+
+// createInvokeCheckpoint saves the function state at the given point, to
+// continue at the landing pad if a panic happened. This is implemented using a
+// setjmp-like construct.
+func (b *builder) createInvokeCheckpoint() {
+	isZero := b.createCheckpoint(b.deferFrame)
 	continueBB := b.insertBasicBlock("")
 	b.CreateCondBr(isZero, continueBB, b.landingpad)
 	b.SetInsertPointAtEnd(continueBB)

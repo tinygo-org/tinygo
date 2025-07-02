@@ -10,8 +10,6 @@ import (
 	"runtime/volatile"
 )
 
-type timeUnit int64
-
 //go:linkname systemInit SystemInit
 func systemInit()
 
@@ -103,7 +101,7 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns * 64 / 1953125)
 }
 
-// Monotonically increasing numer of ticks since start.
+// Monotonically increasing number of ticks since start.
 func ticks() timeUnit {
 	// For some ways of capturing the time atomically, see this thread:
 	// https://www.eevblog.com/forum/microcontrollers/correct-timing-by-timer-overflow-count/msg749617/#msg749617

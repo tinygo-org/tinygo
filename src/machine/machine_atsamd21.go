@@ -7,11 +7,10 @@
 package machine
 
 import (
-	"bytes"
 	"device/arm"
 	"device/sam"
-	"encoding/binary"
 	"errors"
+	"internal/binary"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -534,16 +533,16 @@ func (uart *UART) Configure(config UARTConfig) error {
 	if !ok {
 		return ErrInvalidOutputPin
 	}
-	var txPinOut uint32
+	var txPadOut uint32
 	// See table 25-9 of the datasheet (page 459) for how pads are mapped to
 	// pinout values.
 	switch txPad {
 	case 0:
-		txPinOut = 0
+		txPadOut = 0
 	case 2:
-		txPinOut = 1
+		txPadOut = 1
 	default:
-		// TODO: flow control (RTS/CTS)
+		// this should be a flow control (RTS/CTS) pin
 		return ErrInvalidOutputPin
 	}
 
@@ -554,11 +553,34 @@ func (uart *UART) Configure(config UARTConfig) error {
 	}
 	// As you can see in table 25-8 on page 459 of the datasheet, input pins
 	// are mapped directly.
-	rxPinOut := rxPad
+	rxPadOut := rxPad
 
 	// configure pins
 	config.TX.Configure(PinConfig{Mode: txPinMode})
 	config.RX.Configure(PinConfig{Mode: rxPinMode})
+
+	// configure RTS/CTS pins if provided
+	if config.RTS != 0 && config.CTS != 0 {
+		rtsPinMode, _, ok := findPinPadMapping(uart.SERCOM, config.RTS)
+		if !ok {
+			return ErrInvalidOutputPin
+		}
+
+		ctsPinMode, _, ok := findPinPadMapping(uart.SERCOM, config.CTS)
+		if !ok {
+			return ErrInvalidInputPin
+		}
+
+		// See table 25-9 of the datasheet (page 459) for how pads are mapped to
+		// pinout values.
+		if txPadOut == 1 {
+			return ErrInvalidOutputPin
+		}
+		txPadOut = 2
+
+		config.RTS.Configure(PinConfig{Mode: rtsPinMode})
+		config.CTS.Configure(PinConfig{Mode: ctsPinMode})
+	}
 
 	// reset SERCOM0
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_CTRLA_SWRST)
@@ -592,8 +614,8 @@ func (uart *UART) Configure(config UARTConfig) error {
 	// set UART pads. This is not same as pins...
 	//  SERCOM_USART_CTRLA_TXPO(txPad) |
 	//   SERCOM_USART_CTRLA_RXPO(rxPad);
-	uart.Bus.CTRLA.SetBits((txPinOut << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
-		(rxPinOut << sam.SERCOM_USART_CTRLA_RXPO_Pos))
+	uart.Bus.CTRLA.SetBits((txPadOut << sam.SERCOM_USART_CTRLA_TXPO_Pos) |
+		(rxPadOut << sam.SERCOM_USART_CTRLA_RXPO_Pos))
 
 	// Enable Transceiver and Receiver
 	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
@@ -903,23 +925,26 @@ func (i2c *I2C) readByte() byte {
 
 // I2S
 type I2S struct {
-	Bus *sam.I2S_Type
+	Bus        *sam.I2S_Type
+	Frequency  uint32
+	DataFormat I2SDataFormat
 }
 
 var I2S0 = I2S{Bus: sam.I2S}
 
 // Configure is used to configure the I2S interface. You must call this
 // before you can use the I2S bus.
-func (i2s I2S) Configure(config I2SConfig) {
+func (i2s *I2S) Configure(config I2SConfig) error {
 	// handle defaults
 	if config.SCK == 0 {
 		config.SCK = I2S_SCK_PIN
 		config.WS = I2S_WS_PIN
-		config.SD = I2S_SD_PIN
+		config.SDO = I2S_SDO_PIN
+		config.SDI = I2S_SDI_PIN
 	}
 
 	if config.AudioFrequency == 0 {
-		config.AudioFrequency = 48000
+		config.AudioFrequency = 44100
 	}
 
 	if config.DataFormat == I2SDataFormatDefault {
@@ -929,39 +954,17 @@ func (i2s I2S) Configure(config I2SConfig) {
 			config.DataFormat = I2SDataFormat32bit
 		}
 	}
+	i2s.DataFormat = config.DataFormat
 
 	// Turn on clock for I2S
 	sam.PM.APBCMASK.SetBits(sam.PM_APBCMASK_I2S_)
 
-	// setting clock rate for sample.
-	division_factor := CPUFrequency() / (config.AudioFrequency * uint32(config.DataFormat))
-
-	// Switch Generic Clock Generator 3 to DFLL48M.
-	sam.GCLK.GENDIV.Set((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENDIV_ID_Pos) |
-		(division_factor << sam.GCLK_GENDIV_DIV_Pos))
-	waitForSync()
-
-	sam.GCLK.GENCTRL.Set((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENCTRL_ID_Pos) |
-		(sam.GCLK_GENCTRL_SRC_DFLL48M << sam.GCLK_GENCTRL_SRC_Pos) |
-		sam.GCLK_GENCTRL_IDC |
-		sam.GCLK_GENCTRL_GENEN)
-	waitForSync()
-
-	// Use Generic Clock Generator 3 as source for I2S.
-	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_I2S_0 << sam.GCLK_CLKCTRL_ID_Pos) |
-		(sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_CLKCTRL_GEN_Pos) |
-		sam.GCLK_CLKCTRL_CLKEN)
-	waitForSync()
-
-	// reset the device
-	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_SWRST)
-	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_SWRST) {
+	if err := i2s.SetSampleFrequency(config.AudioFrequency); err != nil {
+		return err
 	}
 
 	// disable device before continuing
-	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_ENABLE) {
-	}
-	i2s.Bus.CTRLA.ClearBits(sam.I2S_CTRLA_ENABLE)
+	i2s.Enable(false)
 
 	// setup clock
 	if config.ClockSource == I2SClockSourceInternal {
@@ -1044,19 +1047,25 @@ func (i2s I2S) Configure(config I2SConfig) {
 	}
 
 	// set serializer mode.
-	if config.Mode == I2SModePDM {
+	switch config.Mode {
+	case I2SModePDM:
 		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_SERMODE_PDM2)
-	} else {
+	case I2SModeSource:
+		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_SERMODE_TX)
+	case I2SModeReceiver:
 		i2s.Bus.SERCTRL1.SetBits(sam.I2S_SERCTRL_SERMODE_RX)
 	}
 
-	// configure data pin
-	config.SD.Configure(PinConfig{Mode: PinCom})
+	// configure data pins
+	if config.SDO != NoPin {
+		config.SDO.Configure(PinConfig{Mode: PinCom})
+	}
+	if config.SDI != NoPin {
+		config.SDI.Configure(PinConfig{Mode: PinCom})
+	}
 
 	// re-enable
-	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_ENABLE)
-	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_ENABLE) {
-	}
+	i2s.Enable(true)
 
 	// enable i2s clock
 	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_CKEN0)
@@ -1067,11 +1076,23 @@ func (i2s I2S) Configure(config I2SConfig) {
 	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_SEREN1)
 	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_SEREN1) {
 	}
+
+	return nil
 }
 
-// Read data from the I2S bus into the provided slice.
+// Read mono data from the I2S bus into the provided slice.
 // The I2S bus must already have been configured correctly.
-func (i2s I2S) Read(p []uint32) (n int, err error) {
+func (i2s *I2S) ReadMono(p []uint16) (n int, err error) {
+	return i2sRead(i2s, p)
+}
+
+// Read stereo data from the I2S bus into the provided slice.
+// The I2S bus must already have been configured correctly.
+func (i2s *I2S) ReadStereo(p []uint32) (n int, err error) {
+	return i2sRead(i2s, p)
+}
+
+func i2sRead[T uint16 | uint32](i2s *I2S, p []T) (int, error) {
 	i := 0
 	for i = 0; i < len(p); i++ {
 		// Wait until ready
@@ -1082,7 +1103,7 @@ func (i2s I2S) Read(p []uint32) (n int, err error) {
 		}
 
 		// read data
-		p[i] = i2s.Bus.DATA1.Get()
+		p[i] = T(i2s.Bus.DATA1.Get())
 
 		// indicate read complete
 		i2s.Bus.INTFLAG.Set(sam.I2S_INTFLAG_RXRDY1)
@@ -1091,9 +1112,19 @@ func (i2s I2S) Read(p []uint32) (n int, err error) {
 	return i, nil
 }
 
-// Write data to the I2S bus from the provided slice.
+// Write mono data to the I2S bus from the provided slice.
 // The I2S bus must already have been configured correctly.
-func (i2s I2S) Write(p []uint32) (n int, err error) {
+func (i2s *I2S) WriteMono(p []uint16) (n int, err error) {
+	return i2sWrite(i2s, p)
+}
+
+// Write stereo data to the I2S bus from the provided slice.
+// The I2S bus must already have been configured correctly.
+func (i2s *I2S) WriteStereo(p []uint32) (n int, err error) {
+	return i2sWrite(i2s, p)
+}
+
+func i2sWrite[T uint16 | uint32](i2s *I2S, p []T) (int, error) {
 	i := 0
 	for i = 0; i < len(p); i++ {
 		// Wait until ready
@@ -1104,7 +1135,7 @@ func (i2s I2S) Write(p []uint32) (n int, err error) {
 		}
 
 		// write data
-		i2s.Bus.DATA1.Set(p[i])
+		i2s.Bus.DATA1.Set(uint32(p[i]))
 
 		// indicate write complete
 		i2s.Bus.INTFLAG.Set(sam.I2S_INTFLAG_TXRDY1)
@@ -1113,16 +1144,62 @@ func (i2s I2S) Write(p []uint32) (n int, err error) {
 	return i, nil
 }
 
-// Close the I2S bus.
-func (i2s I2S) Close() error {
-	// Sync wait
-	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_ENABLE) {
+// SetSampleFrequency is used to set the sample frequency for the I2S bus.
+func (i2s *I2S) SetSampleFrequency(freq uint32) error {
+	if freq == 0 {
+		return ErrInvalidSampleFrequency
 	}
 
-	// disable I2S
-	i2s.Bus.CTRLA.ClearBits(sam.I2S_CTRLA_ENABLE)
+	if i2s.Frequency == freq {
+		return nil
+	}
+
+	i2s.Frequency = freq
+
+	// setting clock rate for sample.
+	division_factor := CPUFrequency() / (i2s.Frequency * uint32(i2s.DataFormat))
+
+	// Switch Generic Clock Generator 3 to DFLL48M.
+	sam.GCLK.GENDIV.Set((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENDIV_ID_Pos) |
+		(division_factor << sam.GCLK_GENDIV_DIV_Pos))
+	waitForSync()
+
+	sam.GCLK.GENCTRL.Set((sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_GENCTRL_ID_Pos) |
+		(sam.GCLK_GENCTRL_SRC_DFLL48M << sam.GCLK_GENCTRL_SRC_Pos) |
+		sam.GCLK_GENCTRL_IDC |
+		sam.GCLK_GENCTRL_GENEN)
+	waitForSync()
+
+	// Use Generic Clock Generator 3 as source for I2S.
+	sam.GCLK.CLKCTRL.Set((sam.GCLK_CLKCTRL_ID_I2S_0 << sam.GCLK_CLKCTRL_ID_Pos) |
+		(sam.GCLK_CLKCTRL_GEN_GCLK3 << sam.GCLK_CLKCTRL_GEN_Pos) |
+		sam.GCLK_CLKCTRL_CLKEN)
+	waitForSync()
+
+	// reset the device
+	i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_SWRST)
+	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_SWRST) {
+	}
 
 	return nil
+}
+
+// Enabled is used to enable or disable the I2S bus.
+func (i2s *I2S) Enable(enabled bool) {
+	if enabled {
+		i2s.Bus.CTRLA.SetBits(sam.I2S_CTRLA_ENABLE)
+		for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_ENABLE) {
+		}
+
+		return
+	}
+
+	// disable
+	for i2s.Bus.SYNCBUSY.HasBits(sam.I2S_SYNCBUSY_ENABLE) {
+	}
+	i2s.Bus.CTRLA.ClearBits(sam.I2S_CTRLA_ENABLE)
+
+	return
 }
 
 func waitForSync() {
@@ -1147,7 +1224,7 @@ type SPIConfig struct {
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) error {
+func (spi *SPI) Configure(config SPIConfig) error {
 	// Use default pins if not set.
 	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		config.SCK = SPI0_SCK_PIN
@@ -1269,7 +1346,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
-func (spi SPI) Transfer(w byte) (byte, error) {
+func (spi *SPI) Transfer(w byte) (byte, error) {
 	// write data
 	spi.Bus.DATA.Set(uint32(w))
 
@@ -1281,7 +1358,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.DATA.Get()), nil
 }
 
-// Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
+// Tx handles read/write operation for SPI interface. Since SPI is a synchronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
 // The Tx method knows about this, and offers a few different ways of calling it.
 //
@@ -1298,7 +1375,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 // This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
 //
 //	spi.Tx(nil, rx)
-func (spi SPI) Tx(w, r []byte) error {
+func (spi *SPI) Tx(w, r []byte) error {
 	switch {
 	case w == nil:
 		// read only, so write zero and read a result.
@@ -1319,7 +1396,7 @@ func (spi SPI) Tx(w, r []byte) error {
 	return nil
 }
 
-func (spi SPI) tx(tx []byte) {
+func (spi *SPI) tx(tx []byte) {
 	for i := 0; i < len(tx); i++ {
 		for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_DRE) {
 		}
@@ -1334,7 +1411,7 @@ func (spi SPI) tx(tx []byte) {
 	}
 }
 
-func (spi SPI) rx(rx []byte) {
+func (spi *SPI) rx(rx []byte) {
 	spi.Bus.DATA.Set(0)
 	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_DRE) {
 	}
@@ -1350,7 +1427,7 @@ func (spi SPI) rx(rx []byte) {
 	rx[len(rx)-1] = byte(spi.Bus.DATA.Get())
 }
 
-func (spi SPI) txrx(tx, rx []byte) {
+func (spi *SPI) txrx(tx, rx []byte) {
 	spi.Bus.DATA.Set(uint32(tx[0]))
 	for !spi.Bus.INTFLAG.HasBits(sam.SERCOM_SPI_INTFLAG_DRE) {
 	}
@@ -1436,7 +1513,7 @@ func (tcc *TCC) Configure(config PWMConfig) error {
 	for tcc.timer().SYNCBUSY.Get() != 0 {
 	}
 
-	// Return any error that might have occured in the tcc.setPeriod call.
+	// Return any error that might have occurred in the tcc.setPeriod call.
 	return err
 }
 
@@ -1583,7 +1660,7 @@ func (tcc *TCC) Counter() uint32 {
 	return tcc.timer().COUNT.Get()
 }
 
-// Some constans to make pinTimerMapping below easier to read.
+// Some constants to make pinTimerMapping below easier to read.
 const (
 	pinTCC0     = 1
 	pinTCC1     = 2
@@ -1634,7 +1711,7 @@ var pinTimerMapping = [...]uint8{
 	PB30 / 2: pinTCC0Ch0 | pinTCC1Ch2<<4,
 }
 
-// findPinPadMapping returns the pin mode (PinTCC or PinTCCAlt) and the channel
+// findPinTimerMapping returns the pin mode (PinTCC or PinTCCAlt) and the channel
 // number for a given timer and pin. A zero PinMode is returned if no mapping
 // could be found.
 func findPinTimerMapping(timer uint8, pin Pin) (PinMode, uint8) {
@@ -1736,7 +1813,7 @@ func (tcc *TCC) Set(channel uint8, value uint32) {
 	}
 }
 
-// EnterBootloader should perform a system reset in preperation
+// EnterBootloader should perform a system reset in preparation
 // to switch to the bootloader to flash new firmware.
 func EnterBootloader() {
 	arm.DisableInterrupts()
@@ -1827,7 +1904,7 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 // WriteAt writes the given number of bytes to the block device.
-// Only word (32 bits) length data can be programmed.
+// Data is written to the page buffer in 4-byte chunks, then saved to flash memory.
 // See Atmel-42181G–SAM-D21_Datasheet–09/2015 page 359.
 // If the length of p is not long enough it will be padded with 0xFF bytes.
 // This method assumes that the destination is already erased.
@@ -1839,13 +1916,15 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	f.ensureInitComplete()
 
 	address := FlashDataStart() + uintptr(off)
-	padded := f.pad(p)
+	padded := flashPad(p, int(f.WriteBlockSize()))
 
 	waitWhileFlashBusy()
 
 	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
-		// write word
-		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize())])
+		// page buffer is 64 bytes long, but only 4 bytes can be written at once
+		for k := 0; k < int(f.WriteBlockSize()); k += 4 {
+			*(*uint32)(unsafe.Pointer(address + uintptr(k))) = binary.LittleEndian.Uint32(padded[j+k : j+k+4])
+		}
 
 		sam.NVMCTRL.SetADDR(uint32(address >> 1))
 		sam.NVMCTRL.CTRLA.Set(sam.NVMCTRL_CTRLA_CMD_WP | (sam.NVMCTRL_CTRLA_CMDEX_KEY << sam.NVMCTRL_CTRLA_CMDEX_Pos))
@@ -1867,7 +1946,7 @@ func (f flashBlockDevice) Size() int64 {
 	return int64(FlashDataEnd() - FlashDataStart())
 }
 
-const writeBlockSize = 4
+const writeBlockSize = 64
 
 // WriteBlockSize returns the block size in which data can be written to
 // memory. It can be used by a client to optimize writes, non-aligned writes
@@ -1914,17 +1993,6 @@ func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 	return nil
 }
 
-// pad data if needed so it is long enough for correct byte alignment on writes.
-func (f flashBlockDevice) pad(p []byte) []byte {
-	overflow := int64(len(p)) % f.WriteBlockSize()
-	if overflow == 0 {
-		return p
-	}
-
-	padding := bytes.Repeat([]byte{0xff}, int(f.WriteBlockSize()-overflow))
-	return append(p, padding...)
-}
-
 func (f flashBlockDevice) ensureInitComplete() {
 	if f.initComplete {
 		return
@@ -1960,4 +2028,63 @@ func checkFlashError() error {
 	}
 
 	return nil
+}
+
+// Watchdog provides access to the hardware watchdog available
+// in the SAMD21.
+var Watchdog = &watchdogImpl{}
+
+const (
+	// WatchdogMaxTimeout in milliseconds (16s)
+	WatchdogMaxTimeout = (16384 * 1000) / 1024
+)
+
+type watchdogImpl struct{}
+
+// Configure the watchdog.
+//
+// This method should not be called after the watchdog is started and on
+// some platforms attempting to reconfigure after starting the watchdog
+// is explicitly forbidden / will not work.
+func (wd *watchdogImpl) Configure(config WatchdogConfig) error {
+	// Use OSCULP32K as source for Generic Clock Generator 8, divided by 32 to get 1.024kHz
+	sam.GCLK.GENDIV.Set(sam.GCLK_CLKCTRL_GEN_GCLK8 | (32 << sam.GCLK_GENDIV_DIV_Pos))
+	sam.GCLK.GENCTRL.Set(sam.GCLK_CLKCTRL_GEN_GCLK8 | (sam.GCLK_GENCTRL_SRC_OSCULP32K << sam.GCLK_GENCTRL_SRC_Pos) | sam.GCLK_GENCTRL_GENEN)
+	waitForSync()
+
+	// Use GCLK8 for watchdog
+	sam.GCLK.CLKCTRL.Set(sam.GCLK_CLKCTRL_ID_WDT | (sam.GCLK_CLKCTRL_GEN_GCLK8 << sam.GCLK_CLKCTRL_GEN_Pos) | sam.GCLK_CLKCTRL_CLKEN)
+
+	// Power on the watchdog peripheral
+	sam.PM.APBAMASK.SetBits(sam.PM_APBAMASK_WDT_)
+
+	// 1.024kHz clock
+	cycles := int((int64(config.TimeoutMillis) * 1024) / 1000)
+
+	// period is expressed as a power-of-two, starting at 8 / 1024ths of a second
+	period := uint8(0)
+	cfgCycles := 8
+	for cfgCycles < cycles {
+		period++
+		cfgCycles <<= 1
+
+		if period >= 0xB {
+			break
+		}
+	}
+
+	sam.WDT.CONFIG.Set(period << sam.WDT_CONFIG_PER_Pos)
+
+	return nil
+}
+
+// Starts the watchdog.
+func (wd *watchdogImpl) Start() error {
+	sam.WDT.CTRL.SetBits(sam.WDT_CTRL_ENABLE)
+	return nil
+}
+
+// Update the watchdog, indicating that `source` is healthy.
+func (wd *watchdogImpl) Update() {
+	sam.WDT.CLEAR.Set(sam.WDT_CLEAR_CLEAR_KEY)
 }

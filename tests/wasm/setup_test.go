@@ -33,8 +33,16 @@ func runargs(t *testing.T, args ...string) error {
 }
 
 func chromectx(t *testing.T) context.Context {
+	// see https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.NoSandbox,
+	)
+
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	t.Cleanup(cancel)
+
 	// looks for locally installed Chrome
-	ctx, ccancel := chromedp.NewContext(context.Background(), chromedp.WithErrorf(t.Errorf), chromedp.WithDebugf(t.Logf), chromedp.WithLogf(t.Logf))
+	ctx, ccancel := chromedp.NewContext(allocCtx, chromedp.WithErrorf(t.Errorf), chromedp.WithDebugf(t.Logf), chromedp.WithLogf(t.Logf))
 	t.Cleanup(ccancel)
 
 	// Wait for browser to be ready.

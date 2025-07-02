@@ -18,10 +18,9 @@
 #
 # But you'll need a bit more to make TinyGo actually able to compile code:
 #
-#   make llvm-source                        # fetch compiler-rt
-#   git submodule update --init --recursive # fetch lots of other libraries and SVD files
-#   make gen-device -j4                     # build src/device/*/*.go files
-#   make wasi-libc                          # build support for wasi/wasm
+#   make llvm-source            # fetch compiler-rt
+#   git submodule update --init # fetch lots of other libraries and SVD files
+#   make gen-device -j4         # build src/device/*/*.go files
 #
 # With this, you should have an environment that can compile anything - except
 # for the Xtensa architecture (ESP8266/ESP32) because support for that lives in
@@ -35,7 +34,7 @@
   inputs = {
     # Use a recent stable release, but fix the version to make it reproducible.
     # This version should be updated from time to time.
-    nixpkgs.url = "nixpkgs/nixos-23.05";
+    nixpkgs.url = "nixpkgs/nixos-25.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
   outputs = { self, nixpkgs, flake-utils }:
@@ -49,11 +48,11 @@
           buildInputs = [
             # These dependencies are required for building tinygo (go install).
             go
-            llvmPackages_16.llvm
-            llvmPackages_16.libclang
+            llvmPackages_20.llvm
+            llvmPackages_20.libclang
             # Additional dependencies needed at runtime, for building and/or
             # flashing.
-            llvmPackages_16.lld
+            llvmPackages_20.lld
             avrdude
             binaryen
             # Additional dependencies needed for on-chip debugging.
@@ -64,20 +63,12 @@
             #openocd
           ];
           shellHook= ''
-            # Configure CLANG, LLVM_AR, and LLVM_NM for `make wasi-libc`.
-            # Without setting these explicitly, Homebrew versions might be used
-            # or the default `ar` and `nm` tools might be used (which don't
-            # support wasi).
-            export CLANG="clang-16 -resource-dir ${llvmPackages_16.clang.cc.lib}/lib/clang/16"
-            export LLVM_AR=llvm-ar
-            export LLVM_NM=llvm-nm
-
             # Make `make smoketest` work (the default is `md5`, while Nix only
             # has `md5sum`).
             export MD5SUM=md5sum
 
             # Ugly hack to make the Clang resources directory available.
-            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_16.clang.cc.lib}/lib/clang/16"\"
+            export GOFLAGS="\"-ldflags=-X github.com/tinygo-org/tinygo/goenv.clangResourceDir=${llvmPackages_20.clang.cc.lib}/lib/clang/20\" -tags=llvm20"
           '';
         };
       }

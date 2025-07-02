@@ -21,7 +21,7 @@ type SPIConfig struct {
 }
 
 // Configure is intended to setup the STM32 SPI1 interface.
-func (spi SPI) Configure(config SPIConfig) error {
+func (spi *SPI) Configure(config SPIConfig) error {
 
 	// -- CONFIGURING THE SPI IN MASTER MODE --
 	//
@@ -98,7 +98,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
-func (spi SPI) Transfer(w byte) (byte, error) {
+func (spi *SPI) Transfer(w byte) (byte, error) {
 
 	// 1. Enable the SPI by setting the SPE bit to 1.
 	// 2. Write the first data item to be transmitted into the SPI_DR register

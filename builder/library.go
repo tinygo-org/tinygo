@@ -15,6 +15,9 @@ import (
 
 // Library is a container for information about a single C library, such as a
 // compiler runtime or libc.
+//
+// Note: whenever a library gets changed, the version in compileopts/config.go
+// probably also needs to be incremented.
 type Library struct {
 	// The library name, such as compiler-rt or picolibc.
 	name string
@@ -25,27 +28,20 @@ type Library struct {
 	// cflags returns the C flags specific to this library
 	cflags func(target, headerPath string) []string
 
+	// cflagsForFile returns additional C flags for a particular source file.
+	cflagsForFile func(path string) []string
+
+	// needsLibc is set to true if this library needs libc headers.
+	needsLibc bool
+
 	// The source directory.
 	sourceDir func() string
 
 	// The source files, relative to sourceDir.
-	librarySources func(target string) ([]string, error)
+	librarySources func(target string, libcNeedsMalloc bool) ([]string, error)
 
 	// The source code for the crt1.o file, relative to sourceDir.
 	crt1Source string
-}
-
-// Load the library archive, possibly generating and caching it if needed.
-// The resulting directory may be stored in the provided tmpdir, which is
-// expected to be removed after the Load call.
-func (l *Library) Load(config *compileopts.Config, tmpdir string) (dir string, err error) {
-	job, unlock, err := l.load(config, tmpdir)
-	if err != nil {
-		return "", err
-	}
-	defer unlock()
-	err = runJobs(job, config.Options.Semaphore)
-	return filepath.Dir(job.result), err
 }
 
 // load returns a compile job to build this library file for the given target
@@ -57,13 +53,8 @@ func (l *Library) Load(config *compileopts.Config, tmpdir string) (dir string, e
 // As a side effect, this call creates the library header files if they didn't
 // exist yet.
 func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJob, abortLock func(), err error) {
-	outdir, precompiled := config.LibcPath(l.name)
+	outdir := config.LibraryPath(l.name)
 	archiveFilePath := filepath.Join(outdir, "lib.a")
-	if precompiled {
-		// Found a precompiled library for this OS/architecture. Return the path
-		// directly.
-		return dummyCompileJob(archiveFilePath), func() {}, nil
-	}
 
 	// Create a lock on the output (if supported).
 	// This is a bit messy, but avoids a deadlock because it is ordered consistently with other library loads within a build.
@@ -162,25 +153,40 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	if config.ABI() != "" {
 		args = append(args, "-mabi="+config.ABI())
 	}
-	if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
+	switch compileopts.CanonicalArchName(target) {
+	case "arm":
 		if strings.Split(target, "-")[2] == "linux" {
 			args = append(args, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
 		} else {
 			args = append(args, "-fshort-enums", "-fomit-frame-pointer", "-mfloat-abi=soft", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
 		}
-	}
-	if strings.HasPrefix(target, "avr") {
+	case "avr":
 		// AVR defaults to C float and double both being 32-bit. This deviates
 		// from what most code (and certainly compiler-rt) expects. So we need
 		// to force the compiler to use 64-bit floating point numbers for
 		// double.
 		args = append(args, "-mdouble=64")
-	}
-	if strings.HasPrefix(target, "riscv32-") {
+	case "riscv32":
 		args = append(args, "-march=rv32imac", "-fforce-enable-int128")
-	}
-	if strings.HasPrefix(target, "riscv64-") {
+	case "riscv64":
 		args = append(args, "-march=rv64gc")
+	case "mips":
+		args = append(args, "-fno-pic")
+	}
+	if config.Target.SoftFloat {
+		// Use softfloat instead of floating point instructions. This is
+		// supported on many architectures.
+		args = append(args, "-msoft-float")
+	} else {
+		if strings.HasPrefix(target, "armv5") {
+			// On ARMv5 we need to explicitly enable hardware floating point
+			// instructions: Clang appears to assume the hardware doesn't have a
+			// FPU otherwise.
+			args = append(args, "-mfpu=vfpv2")
+		}
+	}
+	if l.needsLibc {
+		args = append(args, config.LibcCFlags()...)
 	}
 
 	var once sync.Once
@@ -220,12 +226,13 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 
 	// Create jobs to compile all sources. These jobs are depended upon by the
 	// archive job above, so must be run first.
-	paths, err := l.librarySources(target)
+	paths, err := l.librarySources(target, config.LibcNeedsMalloc())
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, path := range paths {
 		// Strip leading "../" parts off the path.
+		path := path
 		cleanpath := path
 		for strings.HasPrefix(cleanpath, "../") {
 			cleanpath = cleanpath[3:]
@@ -234,11 +241,14 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		objpath := filepath.Join(dir, cleanpath+".o")
 		os.MkdirAll(filepath.Dir(objpath), 0o777)
 		objs = append(objs, objpath)
-		job.dependencies = append(job.dependencies, &compileJob{
+		objfile := &compileJob{
 			description: "compile " + srcpath,
 			run: func(*compileJob) error {
 				var compileArgs []string
 				compileArgs = append(compileArgs, args...)
+				if l.cflagsForFile != nil {
+					compileArgs = append(compileArgs, l.cflagsForFile(path)...)
+				}
 				compileArgs = append(compileArgs, "-o", objpath, srcpath)
 				if config.Options.PrintCommands != nil {
 					config.Options.PrintCommands("clang", compileArgs...)
@@ -249,7 +259,8 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				}
 				return nil
 			},
-		})
+		}
+		job.dependencies = append(job.dependencies, objfile)
 	}
 
 	// Create crt1.o job, if needed.
@@ -258,7 +269,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// won't make much of a difference in speed).
 	if l.crt1Source != "" {
 		srcpath := filepath.Join(sourceDir, l.crt1Source)
-		job.dependencies = append(job.dependencies, &compileJob{
+		crt1Job := &compileJob{
 			description: "compile " + srcpath,
 			run: func(*compileJob) error {
 				var compileArgs []string
@@ -278,7 +289,8 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				}
 				return os.Rename(tmpfile.Name(), filepath.Join(outdir, "crt1.o"))
 			},
-		})
+		}
+		job.dependencies = append(job.dependencies, crt1Job)
 	}
 
 	ok = true

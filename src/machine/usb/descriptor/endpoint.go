@@ -1,7 +1,18 @@
 package descriptor
 
 import (
-	"encoding/binary"
+	"internal/binary"
+)
+
+/* Endpoint Descriptor
+USB 2.0 Specification: 9.6.6 Endpoint
+*/
+
+const (
+	TransferTypeControl uint8 = iota
+	TransferTypeIsochronous
+	TransferTypeBulk
+	TransferTypeInterrupt
 )
 
 var endpointEP1IN = [endpointTypeLen]byte{
@@ -74,6 +85,36 @@ var EndpointEP5OUT = EndpointType{
 	data: endpointEP5OUT[:],
 }
 
+// Mass Storage Class bulk in endpoint
+var endpointMSCIN = [endpointTypeLen]byte{
+	endpointTypeLen,
+	TypeEndpoint,
+	0x86,             // EndpointAddress
+	TransferTypeBulk, // Attributes
+	0x40,             // MaxPacketSizeL (64 bytes)
+	0x00,             // MaxPacketSizeH
+	0x00,             // Interval
+}
+
+var EndpointMSCIN = EndpointType{
+	data: endpointMSCIN[:],
+}
+
+// Mass Storage Class bulk out endpoint
+var endpointMSCOUT = [endpointTypeLen]byte{
+	endpointTypeLen,
+	TypeEndpoint,
+	0x07,             // EndpointAddress
+	TransferTypeBulk, // Attributes
+	0x40,             // MaxPacketSizeL (64 bytes)
+	0x00,             // MaxPacketSizeH
+	0x00,             // Interval
+}
+
+var EndpointMSCOUT = EndpointType{
+	data: endpointMSCOUT[:],
+}
+
 const (
 	endpointTypeLen = 7
 )
@@ -108,4 +149,8 @@ func (d EndpointType) MaxPacketSize(v uint16) {
 
 func (d EndpointType) Interval(v uint8) {
 	d.data[6] = byte(v)
+}
+
+func (d EndpointType) GetMaxPacketSize() uint16 {
+	return binary.LittleEndian.Uint16(d.data[4:6])
 }

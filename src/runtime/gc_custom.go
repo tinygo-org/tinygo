@@ -36,6 +36,8 @@ import (
 	"unsafe"
 )
 
+const needsStaticHeap = false
+
 // initHeap is called when the heap is first initialized at program start.
 func initHeap()
 

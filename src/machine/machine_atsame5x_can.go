@@ -155,7 +155,7 @@ func (can *CAN) Configure(config CANConfig) error {
 }
 
 // Callbacks to be called for CAN.SetInterrupt(). Wre're using the magic
-// constant 2 and 32 here beacuse th SAM E51/E54 has 2 CAN and 32 interrupt
+// constant 2 and 32 here because the SAM E51/E54 has 2 CAN and 32 interrupt
 // sources.
 var (
 	canInstances [2]*CAN
@@ -219,6 +219,11 @@ func (can *CAN) SetInterrupt(ie uint32, callback func(*CAN)) error {
 // TxFifoIsFull returns whether TxFifo is full or not.
 func (can *CAN) TxFifoIsFull() bool {
 	return (can.Bus.TXFQS.Get() & sam.CAN_TXFQS_TFQF_Msk) == sam.CAN_TXFQS_TFQF_Msk
+}
+
+// TxFifoFreeLevel returns how many messages can still be set in the TxFifo.
+func (can *CAN) TxFifoFreeLevel() int {
+	return int(can.Bus.GetTXFQS_TFFL())
 }
 
 // TxRaw sends a CAN Frame according to CANTxBufferElement.

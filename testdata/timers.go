@@ -2,6 +2,8 @@ package main
 
 import "time"
 
+var timer = time.NewTimer(time.Millisecond)
+
 func main() {
 	// Test ticker.
 	ticker := time.NewTicker(time.Millisecond * 500)

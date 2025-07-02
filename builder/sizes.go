@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -24,7 +25,7 @@ const sizesDebug = false
 
 // programSize contains size statistics per package of a compiled program.
 type programSize struct {
-	Packages map[string]packageSize
+	Packages map[string]*packageSize
 	Code     uint64
 	ROData   uint64
 	Data     uint64
@@ -52,13 +53,29 @@ func (ps *programSize) RAM() uint64 {
 	return ps.Data + ps.BSS
 }
 
+// Return the package size information for a given package path, creating it if
+// it doesn't exist yet.
+func (ps *programSize) getPackage(path string) *packageSize {
+	if field, ok := ps.Packages[path]; ok {
+		return field
+	}
+	field := &packageSize{
+		Program: ps,
+		Sub:     map[string]*packageSize{},
+	}
+	ps.Packages[path] = field
+	return field
+}
+
 // packageSize contains the size of a package, calculated from the linked object
 // file.
 type packageSize struct {
-	Code   uint64
-	ROData uint64
-	Data   uint64
-	BSS    uint64
+	Program *programSize
+	Code    uint64
+	ROData  uint64
+	Data    uint64
+	BSS     uint64
+	Sub     map[string]*packageSize
 }
 
 // Flash usage in regular microcontrollers.
@@ -69,6 +86,31 @@ func (ps *packageSize) Flash() uint64 {
 // Static RAM usage in regular microcontrollers.
 func (ps *packageSize) RAM() uint64 {
 	return ps.Data + ps.BSS
+}
+
+// Flash usage in regular microcontrollers, as a percentage of the total flash
+// usage of the program.
+func (ps *packageSize) FlashPercent() float64 {
+	return float64(ps.Flash()) / float64(ps.Program.Flash()) * 100
+}
+
+// Add a single size data point to this package.
+// This must only be called while calculating package size, not afterwards.
+func (ps *packageSize) addSize(getField func(*packageSize, bool) *uint64, filename string, size uint64, isVariable bool) {
+	if size == 0 {
+		return
+	}
+
+	// Add size for the package.
+	*getField(ps, isVariable) += size
+
+	// Add size for file inside package.
+	sub, ok := ps.Sub[filename]
+	if !ok {
+		sub = &packageSize{Program: ps.Program}
+		ps.Sub[filename] = sub
+	}
+	*getField(sub, isVariable) += size
 }
 
 // A mapping of a single chunk of code or data to a file path.
@@ -194,11 +236,22 @@ func readProgramSizeFromDWARF(data *dwarf.Data, codeOffset, codeAlignment uint64
 				if !prevLineEntry.EndSequence {
 					// The chunk describes the code from prevLineEntry to
 					// lineEntry.
+					path := prevLineEntry.File.Name
+					if runtime.GOOS == "windows" {
+						// Work around a Clang bug on Windows:
+						// https://github.com/llvm/llvm-project/issues/117317
+						path = strings.ReplaceAll(path, "\\\\", "\\")
+
+						// wasi-libc likes to use forward slashes, but we
+						// canonicalize everything to use backwards slashes as
+						// is common on Windows.
+						path = strings.ReplaceAll(path, "/", "\\")
+					}
 					line := addressLine{
 						Address: prevLineEntry.Address + codeOffset,
 						Length:  lineEntry.Address - prevLineEntry.Address,
 						Align:   codeAlignment,
-						File:    prevLineEntry.File.Name,
+						File:    path,
 					}
 					if line.Length != 0 {
 						addresses = append(addresses, line)
@@ -437,7 +490,7 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 				continue
 			}
 			if section.Type == elf.SHT_NOBITS {
-				if section.Name == ".stack" {
+				if strings.HasPrefix(section.Name, ".stack") {
 					// TinyGo emits stack sections on microcontroller using the
 					// ".stack" name.
 					// This is a bit ugly, but I don't think there is a way to
@@ -773,49 +826,40 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 
 	// Now finally determine the binary/RAM size usage per package by going
 	// through each allocated section.
-	sizes := make(map[string]packageSize)
+	sizes := make(map[string]*packageSize)
+	program := &programSize{
+		Packages: sizes,
+	}
 	for _, section := range sections {
 		switch section.Type {
 		case memoryCode:
-			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
-				field := sizes[path]
+			readSection(section, addresses, program, func(ps *packageSize, isVariable bool) *uint64 {
 				if isVariable {
-					field.ROData += size
-				} else {
-					field.Code += size
+					return &ps.ROData
 				}
-				sizes[path] = field
+				return &ps.Code
 			}, packagePathMap)
 		case memoryROData:
-			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
-				field := sizes[path]
-				field.ROData += size
-				sizes[path] = field
+			readSection(section, addresses, program, func(ps *packageSize, isVariable bool) *uint64 {
+				return &ps.ROData
 			}, packagePathMap)
 		case memoryData:
-			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
-				field := sizes[path]
-				field.Data += size
-				sizes[path] = field
+			readSection(section, addresses, program, func(ps *packageSize, isVariable bool) *uint64 {
+				return &ps.Data
 			}, packagePathMap)
 		case memoryBSS:
-			readSection(section, addresses, func(path string, size uint64, isVariable bool) {
-				field := sizes[path]
-				field.BSS += size
-				sizes[path] = field
+			readSection(section, addresses, program, func(ps *packageSize, isVariable bool) *uint64 {
+				return &ps.BSS
 			}, packagePathMap)
 		case memoryStack:
 			// We store the C stack as a pseudo-package.
-			sizes["C stack"] = packageSize{
-				BSS: section.Size,
-			}
+			program.getPackage("C stack").addSize(func(ps *packageSize, isVariable bool) *uint64 {
+				return &ps.BSS
+			}, "", section.Size, false)
 		}
 	}
 
 	// ...and summarize the results.
-	program := &programSize{
-		Packages: sizes,
-	}
 	for _, pkg := range sizes {
 		program.Code += pkg.Code
 		program.ROData += pkg.ROData
@@ -826,8 +870,8 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 }
 
 // readSection determines for each byte in this section to which package it
-// belongs. It reports this usage through the addSize callback.
-func readSection(section memorySection, addresses []addressLine, addSize func(string, uint64, bool), packagePathMap map[string]string) {
+// belongs.
+func readSection(section memorySection, addresses []addressLine, program *programSize, getField func(*packageSize, bool) *uint64, packagePathMap map[string]string) {
 	// The addr variable tracks at which address we are while going through this
 	// section. We start at the beginning.
 	addr := section.Address
@@ -849,9 +893,9 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 			addrAligned := (addr + line.Align - 1) &^ (line.Align - 1)
 			if line.Align > 1 && addrAligned >= line.Address {
 				// It is, assume that's what causes the gap.
-				addSize("(padding)", line.Address-addr, true)
+				program.getPackage("(padding)").addSize(getField, "", line.Address-addr, true)
 			} else {
-				addSize("(unknown)", line.Address-addr, false)
+				program.getPackage("(unknown)").addSize(getField, "", line.Address-addr, false)
 				if sizesDebug {
 					fmt.Printf("%08x..%08x %5d:  unknown (gap), alignment=%d\n", addr, line.Address, line.Address-addr, line.Align)
 				}
@@ -873,7 +917,8 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 			length = line.Length - (addr - line.Address)
 		}
 		// Finally, mark this chunk of memory as used by the given package.
-		addSize(findPackagePath(line.File, packagePathMap), length, line.IsVariable)
+		packagePath, filename := findPackagePath(line.File, packagePathMap)
+		program.getPackage(packagePath).addSize(getField, filename, length, line.IsVariable)
 		addr = line.Address + line.Length
 	}
 	if addr < sectionEnd {
@@ -882,9 +927,9 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 		if section.Align > 1 && addrAligned >= sectionEnd {
 			// The gap is caused by the section alignment.
 			// For example, if a .rodata section ends with a non-aligned string.
-			addSize("(padding)", sectionEnd-addr, true)
+			program.getPackage("(padding)").addSize(getField, "", sectionEnd-addr, true)
 		} else {
-			addSize("(unknown)", sectionEnd-addr, false)
+			program.getPackage("(unknown)").addSize(getField, "", sectionEnd-addr, false)
 			if sizesDebug {
 				fmt.Printf("%08x..%08x %5d:  unknown (end), alignment=%d\n", addr, sectionEnd, sectionEnd-addr, section.Align)
 			}
@@ -894,17 +939,25 @@ func readSection(section memorySection, addresses []addressLine, addSize func(st
 
 // findPackagePath returns the Go package (or a pseudo package) for the given
 // path. It uses some heuristics, for example for some C libraries.
-func findPackagePath(path string, packagePathMap map[string]string) string {
+func findPackagePath(path string, packagePathMap map[string]string) (packagePath, filename string) {
 	// Check whether this path is part of one of the compiled packages.
 	packagePath, ok := packagePathMap[filepath.Dir(path)]
-	if !ok {
+	if ok {
+		// Directory is known as a Go package.
+		// Add the file itself as well.
+		filename = filepath.Base(path)
+	} else {
 		if strings.HasPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "lib")) {
 			// Emit C libraries (in the lib subdirectory of TinyGo) as a single
-			// package, with a "C" prefix. For example: "C compiler-rt" for the
-			// compiler runtime library from LLVM.
-			packagePath = "C " + strings.Split(strings.TrimPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "lib")), string(os.PathSeparator))[1]
-		} else if strings.HasPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "llvm-project")) {
+			// package, with a "C" prefix. For example: "C picolibc" for the
+			// baremetal libc.
+			libPath := strings.TrimPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "lib")+string(os.PathSeparator))
+			parts := strings.SplitN(libPath, string(os.PathSeparator), 2)
+			packagePath = "C " + parts[0]
+			filename = parts[1]
+		} else if prefix := filepath.Join(goenv.Get("TINYGOROOT"), "llvm-project", "compiler-rt"); strings.HasPrefix(path, prefix) {
 			packagePath = "C compiler-rt"
+			filename = strings.TrimPrefix(path, prefix+string(os.PathSeparator))
 		} else if packageSymbolRegexp.MatchString(path) {
 			// Parse symbol names like main$alloc or runtime$string.
 			packagePath = path[:strings.LastIndex(path, "$")]
@@ -927,9 +980,11 @@ func findPackagePath(path string, packagePathMap map[string]string) string {
 			// fixed in the compiler.
 			packagePath = "-"
 		} else {
-			// This is some other path. Not sure what it is, so just emit its directory.
-			packagePath = filepath.Dir(path) // fallback
+			// This is some other path. Not sure what it is, so just emit its
+			// directory as a fallback.
+			packagePath = filepath.Dir(path)
+			filename = filepath.Base(path)
 		}
 	}
-	return packagePath
+	return
 }

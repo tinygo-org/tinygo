@@ -6,8 +6,8 @@ package machine
 
 import (
 	"device/stm32"
-	"encoding/binary"
 	"errors"
+	"internal/binary"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -235,19 +235,19 @@ type SPI struct {
 	AltFuncSelector uint8
 }
 
-func (spi SPI) config8Bits() {
+func (spi *SPI) config8Bits() {
 	// Set rx threshold to 8-bits, so RXNE flag is set for 1 byte
 	// (common STM32 SPI implementation does 8-bit transfers only)
 	spi.Bus.CR2.SetBits(stm32.SPI_CR2_FRXTH)
 }
 
-func (spi SPI) configurePins(config SPIConfig) {
+func (spi *SPI) configurePins(config SPIConfig) {
 	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
 	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
 	config.SDI.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDI}, spi.AltFuncSelector)
 }
 
-func (spi SPI) getBaudRate(config SPIConfig) uint32 {
+func (spi *SPI) getBaudRate(config SPIConfig) uint32 {
 	var clock uint32
 
 	// We keep this switch and separate management of SPI Clocks
@@ -289,11 +289,22 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 //---------- I2C related code
 
 // Gets the value for TIMINGR register
-func (i2c *I2C) getFreqRange() uint32 {
+func (i2c *I2C) getFreqRange(br uint32) uint32 {
 	// This is a 'magic' value calculated by STM32CubeMX
 	// for 48Mhz PCLK1.
 	// TODO: Do calculations based on PCLK1
-	return 0x20303E5D
+	switch br {
+	case 10 * KHz:
+		return 0x9010DEFF
+	case 100 * KHz:
+		return 0x20303E5D
+	case 400 * KHz:
+		return 0x2010091A
+	case 500 * KHz:
+		return 0x00201441
+	default:
+		return 0
+	}
 }
 
 //---------- UART related code

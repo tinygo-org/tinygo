@@ -8,7 +8,7 @@ import (
 
 // This function is called at HardFault.
 // Before this function is called, the stack pointer is reset to the initial
-// stack pointer (loaded from addres 0x0) and the previous stack pointer is
+// stack pointer (loaded from address 0x0) and the previous stack pointer is
 // passed as an argument to this function. This allows for easy inspection of
 // the stack the moment a HardFault occurs, but it means that the stack will be
 // corrupted by this function and thus this handler must not attempt to recover.

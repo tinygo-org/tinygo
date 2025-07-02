@@ -293,67 +293,84 @@ func printnl() {
 func printitf(msg interface{}) {
 	switch msg := msg.(type) {
 	case bool:
-		print(msg)
+		printbool(msg)
 	case int:
-		print(msg)
+		switch unsafe.Sizeof(msg) {
+		case 8:
+			printint64(int64(msg))
+		case 4:
+			printint32(int32(msg))
+		}
 	case int8:
-		print(msg)
+		printint8(msg)
 	case int16:
-		print(msg)
+		printint16(msg)
 	case int32:
-		print(msg)
+		printint32(msg)
 	case int64:
-		print(msg)
+		printint64(msg)
 	case uint:
-		print(msg)
+		switch unsafe.Sizeof(msg) {
+		case 8:
+			printuint64(uint64(msg))
+		case 4:
+			printuint32(uint32(msg))
+		}
 	case uint8:
-		print(msg)
+		printuint8(msg)
 	case uint16:
-		print(msg)
+		printuint16(msg)
 	case uint32:
-		print(msg)
+		printuint32(msg)
 	case uint64:
-		print(msg)
+		printuint64(msg)
 	case uintptr:
-		print(msg)
+		printuintptr(msg)
 	case float32:
-		print(msg)
+		printfloat32(msg)
 	case float64:
-		print(msg)
+		printfloat64(msg)
 	case complex64:
-		print(msg)
+		printcomplex64(msg)
 	case complex128:
-		print(msg)
+		printcomplex128(msg)
 	case string:
-		print(msg)
+		printstring(msg)
 	case error:
-		print(msg.Error())
+		printstring(msg.Error())
 	case stringer:
-		print(msg.String())
+		printstring(msg.String())
 	default:
 		// cast to underlying type
 		itf := *(*_interface)(unsafe.Pointer(&msg))
 		putchar('(')
 		printuintptr(uintptr(itf.typecode))
 		putchar(':')
-		print(itf.value)
+		printptr(uintptr(itf.value))
 		putchar(')')
 	}
 }
 
 func printmap(m *hashmap) {
-	print("map[")
+	printstring("map[")
 	if m == nil {
-		print("nil")
+		printstring("nil")
 	} else {
-		print(uint(m.count))
+		switch unsafe.Sizeof(m.count) {
+		case 8:
+			printuint64(uint64(m.count))
+		case 4:
+			printuint32(uint32(m.count))
+		case 2:
+			printuint16(uint16(m.count))
+		}
 	}
 	putchar(']')
 }
 
 func printptr(ptr uintptr) {
 	if ptr == 0 {
-		print("nil")
+		printstring("nil")
 		return
 	}
 	putchar('0')

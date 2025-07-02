@@ -34,7 +34,7 @@ func OptimizeStringToBytes(mod llvm.Module) {
 			if use.IsAExtractValueInst().IsNil() {
 				// Expected an extractvalue, but this is something else.
 				canConvertPointer = false
-				continue
+				break
 			}
 			switch use.Type().TypeKind() {
 			case llvm.IntegerTypeKind:
@@ -49,7 +49,7 @@ func OptimizeStringToBytes(mod llvm.Module) {
 					// There is a store to the byte slice. This means that none
 					// of the pointer uses can't be propagated.
 					canConvertPointer = false
-					continue
+					break
 				}
 				// It may be that the pointer value can be propagated, if all of
 				// the pointer uses are readonly.
@@ -117,8 +117,9 @@ func OptimizeStringEqual(mod llvm.Module) {
 // As of this writing, the (reflect.Type).Interface method has not yet been
 // implemented so this optimization is critical for the encoding/json package.
 func OptimizeReflectImplements(mod llvm.Module) {
-	implementsSignature := mod.NamedGlobal("reflect/methods.Implements(reflect.Type) bool")
-	if implementsSignature.IsNil() {
+	implementsSignature1 := mod.NamedGlobal("reflect/methods.Implements(reflect.Type) bool")
+	implementsSignature2 := mod.NamedGlobal("reflect/methods.Implements(internal/reflectlite.Type) bool")
+	if implementsSignature1.IsNil() && implementsSignature2.IsNil() {
 		return
 	}
 
@@ -132,7 +133,8 @@ func OptimizeReflectImplements(mod llvm.Module) {
 		if attr.IsNil() {
 			continue
 		}
-		if attr.GetStringValue() == "reflect/methods.Implements(reflect.Type) bool" {
+		val := attr.GetStringValue()
+		if val == "reflect/methods.Implements(reflect.Type) bool" || val == "reflect/methods.Implements(internal/reflectlite.Type) bool" {
 			implementsFunc = fn
 			break
 		}

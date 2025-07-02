@@ -1,8 +1,10 @@
 package reflect_test
 
 import (
+	"bytes"
 	"encoding/base64"
 	. "reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -164,7 +166,7 @@ func TestTinyMap(t *testing.T) {
 	// make sure we can get it out
 	v2 := refut.MapIndex(ValueOf(unmarshalerText{"x", "y"}))
 	if !v2.IsValid() || !v2.Bool() {
-		t.Errorf("Failed to look up map struct key with refection")
+		t.Errorf("Failed to look up map struct key with reflection")
 	}
 
 	// put in a key with reflection
@@ -489,7 +491,7 @@ func TestTinyStruct(t *testing.T) {
 
 func TestTinyZero(t *testing.T) {
 	s := "hello, world"
-	var sptr *string = &s
+	sptr := &s
 	v := ValueOf(&sptr).Elem()
 	v.Set(Zero(v.Type()))
 
@@ -535,7 +537,7 @@ func TestTinyAddr(t *testing.T) {
 }
 
 func TestTinyNilType(t *testing.T) {
-	var a any = nil
+	var a any
 	typ := TypeOf(a)
 	if typ != nil {
 		t.Errorf("Type of any{nil} is not nil")
@@ -599,6 +601,29 @@ func TestAssignableTo(t *testing.T) {
 	if got, want := refa.Interface().(int), 4; got != want {
 		t.Errorf("AssignableTo / Set failed, got %v, want %v", got, want)
 	}
+
+	b := []byte{0x01, 0x02}
+	refb := ValueOf(&b).Elem()
+	refb.Set(ValueOf([]byte{0x02, 0x03}))
+	if got, want := refb.Interface().([]byte), []byte{0x02, 0x03}; !bytes.Equal(got, want) {
+		t.Errorf("AssignableTo / Set failed, got %v, want %v", got, want)
+	}
+
+	type bstr []byte
+
+	c := bstr{0x01, 0x02}
+	refc := ValueOf(&c).Elem()
+	refc.Set(ValueOf([]byte{0x02, 0x03}))
+	if got, want := refb.Interface().([]byte), []byte{0x02, 0x03}; !bytes.Equal(got, want) {
+		t.Errorf("AssignableTo / Set failed, got %v, want %v", got, want)
+	}
+
+	d := []byte{0x01, 0x02}
+	refd := ValueOf(&d).Elem()
+	refd.Set(ValueOf(bstr{0x02, 0x03}))
+	if got, want := refb.Interface().([]byte), []byte{0x02, 0x03}; !bytes.Equal(got, want) {
+		t.Errorf("AssignableTo / Set failed, got %v, want %v", got, want)
+	}
 }
 
 func TestConvert(t *testing.T) {
@@ -621,6 +646,214 @@ func TestConvert(t *testing.T) {
 	c = v.Convert(TypeOf(namedString("")))
 	if c.Type().Kind() != String || c.Type().Name() != "namedString" {
 		t.Errorf("Convert(string -> namedString")
+	}
+}
+
+func TestConvertSliceToArrayOrArrayPointer(t *testing.T) {
+	s := make([]byte, 2, 4)
+	// a0 := [0]byte(s)
+	// a1 := [1]byte(s[1:])     // a1[0] == s[1]
+	// a2 := [2]byte(s)         // a2[0] == s[0]
+	// a4 := [4]byte(s)         // panics: len([4]byte) > len(s)
+
+	v := ValueOf(s).Convert(TypeFor[[0]byte]())
+	if v.Kind() != Array || v.Type().Len() != 0 {
+		t.Error("Convert([]byte -> [0]byte)")
+	}
+	v = ValueOf(s[1:]).Convert(TypeFor[[1]byte]())
+	if v.Kind() != Array || v.Type().Len() != 1 {
+		t.Error("Convert([]byte -> [1]byte)")
+	}
+	v = ValueOf(s).Convert(TypeFor[[2]byte]())
+	if v.Kind() != Array || v.Type().Len() != 2 {
+		t.Error("Convert([]byte -> [2]byte)")
+	}
+	if ValueOf(s).CanConvert(TypeFor[[4]byte]()) {
+		t.Error("Converting a slice with len smaller than array to array should fail")
+	}
+
+	// s0 := (*[0]byte)(s)      // s0 != nil
+	// s1 := (*[1]byte)(s[1:])  // &s1[0] == &s[1]
+	// s2 := (*[2]byte)(s)      // &s2[0] == &s[0]
+	// s4 := (*[4]byte)(s)      // panics: len([4]byte) > len(s)
+	v = ValueOf(s).Convert(TypeFor[*[0]byte]())
+	if v.Kind() != Pointer || v.Elem().Kind() != Array || v.Elem().Type().Len() != 0 {
+		t.Error("Convert([]byte -> *[0]byte)")
+	}
+	v = ValueOf(s[1:]).Convert(TypeFor[*[1]byte]())
+	if v.Kind() != Pointer || v.Elem().Kind() != Array || v.Elem().Type().Len() != 1 {
+		t.Error("Convert([]byte -> *[1]byte)")
+	}
+	v = ValueOf(s).Convert(TypeFor[*[2]byte]())
+	if v.Kind() != Pointer || v.Elem().Kind() != Array || v.Elem().Type().Len() != 2 {
+		t.Error("Convert([]byte -> *[2]byte)")
+	}
+	if ValueOf(s).CanConvert(TypeFor[*[4]byte]()) {
+		t.Error("Converting a slice with len smaller than array to array pointer should fail")
+	}
+
+	// Test converting slices with backing arrays <= and >64bits
+	slice64 := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	array64 := ValueOf(slice64).Convert(TypeFor[[8]byte]()).Interface().([8]byte)
+	if !bytes.Equal(slice64, array64[:]) {
+		t.Errorf("converted array %x does not match backing array of slice %x", array64, slice64)
+	}
+
+	slice72 := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09}
+	array72 := ValueOf(slice72).Convert(TypeFor[[9]byte]()).Interface().([9]byte)
+	if !bytes.Equal(slice72, array72[:]) {
+		t.Errorf("converted array %x does not match backing array of slice %x", array72, slice72)
+	}
+}
+
+func TestConvertToEmptyInterface(t *testing.T) {
+	anyType := TypeFor[interface{}]()
+
+	v := ValueOf(false).Convert(anyType)
+	if v.Kind() != Interface || v.NumMethod() > 0 {
+		t.Error("Convert(bool -> interface{})")
+	}
+	_ = v.Interface().(interface{}).(bool)
+
+	v = ValueOf(int64(3)).Convert(anyType)
+	if v.Kind() != Interface || v.NumMethod() > 0 {
+		t.Error("Convert(int64 -> interface{})")
+	}
+	_ = v.Interface().(interface{}).(int64)
+
+	v = ValueOf(struct{}{}).Convert(anyType)
+	if v.Kind() != Interface || v.NumMethod() > 0 {
+		t.Error("Convert(struct -> interface{})")
+	}
+	_ = v.Interface().(interface{}).(struct{})
+
+	v = ValueOf([]struct{}{}).Convert(anyType)
+	if v.Kind() != Interface || v.NumMethod() > 0 {
+		t.Error("Convert(slice -> interface{})")
+	}
+	_ = v.Interface().(interface{}).([]struct{})
+
+	v = ValueOf(map[string]string{"A": "B"}).Convert(anyType)
+	if v.Kind() != Interface || v.NumMethod() > 0 {
+		t.Error("Convert(map -> interface{})")
+	}
+	_ = v.Interface().(interface{}).(map[string]string)
+}
+
+func TestClearSlice(t *testing.T) {
+	type stringSlice []string
+	for _, test := range []struct {
+		slice  any
+		expect any
+	}{
+		{
+			slice:  []bool{true, false, true},
+			expect: []bool{false, false, false},
+		},
+		{
+			slice:  []byte{0x00, 0x01, 0x02, 0x03},
+			expect: []byte{0x00, 0x00, 0x00, 0x00},
+		},
+		{
+			slice:  [][]int{[]int{2, 1}, []int{3}, []int{}},
+			expect: [][]int{nil, nil, nil},
+		},
+		{
+			slice:  []stringSlice{stringSlice{"hello", "world"}, stringSlice{}, stringSlice{"goodbye"}},
+			expect: []stringSlice{nil, nil, nil},
+		},
+	} {
+		v := ValueOf(test.slice)
+		expectLen, expectCap := v.Len(), v.Cap()
+
+		v.Clear()
+		if len := v.Len(); len != expectLen {
+			t.Errorf("Clear(slice) altered len, got %d, expected %d", len, expectLen)
+		}
+		if cap := v.Cap(); cap != expectCap {
+			t.Errorf("Clear(slice) altered cap, got %d, expected %d", cap, expectCap)
+		}
+		if !DeepEqual(test.slice, test.expect) {
+			t.Errorf("Clear(slice) got %v, expected %v", test.slice, test.expect)
+		}
+	}
+}
+
+func TestClearMap(t *testing.T) {
+	for _, test := range []struct {
+		m      any
+		expect any
+	}{
+		{
+			m:      map[int]bool{1: true, 2: false, 3: true},
+			expect: map[int]bool{},
+		},
+		{
+			m:      map[string][]byte{"hello": []byte("world")},
+			expect: map[string][]byte{},
+		},
+	} {
+		v := ValueOf(test.m)
+
+		v.Clear()
+		if len := v.Len(); len != 0 {
+			t.Errorf("Clear(map) should set len to 0, got %d", len)
+		}
+		if !DeepEqual(test.m, test.expect) {
+			t.Errorf("Clear(map) got %v, expected %v", test.m, test.expect)
+		}
+	}
+}
+
+func TestCopyArrayToSlice(t *testing.T) {
+	// Test copying array <=64 bits and >64bits
+	// See issue #4554
+	a1 := [1]int64{1}
+	s1 := make([]int64, 1)
+	a2 := [2]int64{1, 2}
+	s2 := make([]int64, 2)
+	a8 := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	s8 := make([]byte, 8)
+	a9 := [9]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09}
+	s9 := make([]byte, 9)
+
+	Copy(ValueOf(s1), ValueOf(a1))
+	if !slices.Equal(s1, a1[:]) {
+		t.Errorf("copied slice %x does not match input array %x", s1, a1[:])
+	}
+	Copy(ValueOf(s2), ValueOf(a2))
+	if !slices.Equal(s2, a2[:]) {
+		t.Errorf("copied slice %x does not match input array %x", s2, a2[:])
+	}
+	Copy(ValueOf(s8), ValueOf(a8))
+	if !bytes.Equal(s8, a8[:]) {
+		t.Errorf("copied slice %x does not match input array %x", s8, a8[:])
+	}
+	Copy(ValueOf(s9), ValueOf(a9))
+	if !bytes.Equal(s9, a9[:]) {
+		t.Errorf("copied slice %x does not match input array %x", s9, a9[:])
+	}
+}
+
+func TestIssue4040(t *testing.T) {
+	var value interface{} = uint16(0)
+
+	// get the pointer to the interface value
+	inPtr := ValueOf(&value)
+
+	// dereference to get the actual value (an interface)
+	inElem := inPtr.Elem()
+
+	// create a new value of the same concrete type
+	uint16Type := TypeOf(uint16(0))
+	newUint16Value := New(uint16Type).Elem()
+	newUint16Value.Set(ValueOf(uint16(13)))
+
+	// set the new value to the interface
+	inElem.Set(newUint16Value)
+
+	if value.(uint16) != 13 {
+		t.Errorf("Failed to set interface value from uint16")
 	}
 }
 

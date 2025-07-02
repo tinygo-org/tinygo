@@ -5,6 +5,12 @@ import (
 	"syscall"
 )
 
+var (
+	ErrNotImplementedDir   = errors.New("directory setting not implemented")
+	ErrNotImplementedSys   = errors.New("sys setting not implemented")
+	ErrNotImplementedFiles = errors.New("files setting not implemented")
+)
+
 type Signal interface {
 	String() string
 	Signal() // to distinguish from other Stringers
@@ -47,6 +53,10 @@ func (p *ProcessState) Sys() interface{} {
 	return nil // TODO
 }
 
+func (p *ProcessState) Exited() bool {
+	return false // TODO
+}
+
 // ExitCode returns the exit code of the exited process, or -1
 // if the process hasn't exited or was terminated by a signal.
 func (p *ProcessState) ExitCode() int {
@@ -57,11 +67,16 @@ type Process struct {
 	Pid int
 }
 
+// StartProcess starts a new process with the program, arguments and attributes specified by name, argv and attr.
+// Arguments to the process (os.Args) are passed via argv.
 func StartProcess(name string, argv []string, attr *ProcAttr) (*Process, error) {
-	return nil, &PathError{"fork/exec", name, ErrNotImplemented}
+	return startProcess(name, argv, attr)
 }
 
 func (p *Process) Wait() (*ProcessState, error) {
+	if p.Pid == -1 {
+		return nil, syscall.EINVAL
+	}
 	return nil, ErrNotImplemented
 }
 
@@ -71,4 +86,22 @@ func (p *Process) Kill() error {
 
 func (p *Process) Signal(sig Signal) error {
 	return ErrNotImplemented
+}
+
+func Ignore(sig ...Signal) {
+	// leave all the signals unaltered
+	return
+}
+
+// Release releases any resources associated with the Process p,
+// rendering it unusable in the future.
+// Release only needs to be called if Wait is not.
+func (p *Process) Release() error {
+	return p.release()
+}
+
+// FindProcess looks for a running process by its pid.
+// Keep compatibility with golang and always succeed and return new proc with pid on Linux.
+func FindProcess(pid int) (*Process, error) {
+	return findProcess(pid)
 }

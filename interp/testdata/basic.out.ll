@@ -9,6 +9,8 @@ target triple = "x86_64--linux"
 @main.exposedValue1 = global i16 0
 @main.exposedValue2 = local_unnamed_addr global i16 0
 @main.insertedValue = local_unnamed_addr global { i8, i32, { float, { i64, i16 } } } zeroinitializer
+@main.gepArray = local_unnamed_addr global [8 x i8] zeroinitializer
+@main.negativeGEP = global ptr getelementptr inbounds (i8, ptr @main.negativeGEP, i64 2)
 
 declare void @runtime.printint64(i64) unnamed_addr
 

@@ -3,9 +3,8 @@ source_filename = "defer.go"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-unknown-unknown-eabi"
 
-%runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i1, %runtime._interface }
+%runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i8, %runtime._interface }
 %runtime._interface = type { ptr, ptr }
-%runtime._defer = type { i32, ptr }
 
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
@@ -25,10 +24,10 @@ entry:
   %deferPtr = alloca ptr, align 4
   store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
-  %0 = call ptr @llvm.stacksave()
+  %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   store i32 0, ptr %defer.alloca, align 4
-  %defer.alloca.repack15 = getelementptr inbounds { i32, ptr }, ptr %defer.alloca, i32 0, i32 1
+  %defer.alloca.repack15 = getelementptr inbounds i8, ptr %defer.alloca, i32 4
   store ptr null, ptr %defer.alloca.repack15, align 4
   store ptr %defer.alloca, ptr %deferPtr, align 4
   %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(ptr nonnull %deferframe.buf) #5
@@ -52,7 +51,7 @@ rundefers.loophead:                               ; preds = %3, %rundefers.block
   br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
 
 rundefers.loop:                                   ; preds = %rundefers.loophead
-  %stack.next.gep = getelementptr inbounds %runtime._defer, ptr %2, i32 0, i32 1
+  %stack.next.gep = getelementptr inbounds i8, ptr %2, i32 4
   %stack.next = load ptr, ptr %stack.next.gep, align 4
   store ptr %stack.next, ptr %deferPtr, align 4
   %callback = load i32, ptr %2, align 4
@@ -88,7 +87,7 @@ rundefers.loophead6:                              ; preds = %5, %lpad
   br i1 %stackIsNil7, label %rundefers.end3, label %rundefers.loop5
 
 rundefers.loop5:                                  ; preds = %rundefers.loophead6
-  %stack.next.gep8 = getelementptr inbounds %runtime._defer, ptr %4, i32 0, i32 1
+  %stack.next.gep8 = getelementptr inbounds i8, ptr %4, i32 4
   %stack.next9 = load ptr, ptr %stack.next.gep8, align 4
   store ptr %stack.next9, ptr %deferPtr, align 4
   %callback11 = load i32, ptr %4, align 4
@@ -113,7 +112,7 @@ rundefers.end3:                                   ; preds = %rundefers.loophead6
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn
-declare ptr @llvm.stacksave() #3
+declare ptr @llvm.stacksave.p0() #3
 
 declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(24), ptr, ptr) #2
 
@@ -122,11 +121,17 @@ declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(24), ptr) #2
 ; Function Attrs: nounwind
 define internal void @"main.deferSimple$1"(ptr %context) unnamed_addr #1 {
 entry:
+  call void @runtime.printlock(ptr undef) #4
   call void @runtime.printint32(i32 3, ptr undef) #4
+  call void @runtime.printunlock(ptr undef) #4
   ret void
 }
 
+declare void @runtime.printlock(ptr) #2
+
 declare void @runtime.printint32(i32, ptr) #2
+
+declare void @runtime.printunlock(ptr) #2
 
 ; Function Attrs: nounwind
 define hidden void @main.deferMultiple(ptr %context) unnamed_addr #1 {
@@ -136,14 +141,14 @@ entry:
   %deferPtr = alloca ptr, align 4
   store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
-  %0 = call ptr @llvm.stacksave()
+  %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   store i32 0, ptr %defer.alloca, align 4
-  %defer.alloca.repack22 = getelementptr inbounds { i32, ptr }, ptr %defer.alloca, i32 0, i32 1
+  %defer.alloca.repack22 = getelementptr inbounds i8, ptr %defer.alloca, i32 4
   store ptr null, ptr %defer.alloca.repack22, align 4
   store ptr %defer.alloca, ptr %deferPtr, align 4
   store i32 1, ptr %defer.alloca2, align 4
-  %defer.alloca2.repack23 = getelementptr inbounds { i32, ptr }, ptr %defer.alloca2, i32 0, i32 1
+  %defer.alloca2.repack23 = getelementptr inbounds i8, ptr %defer.alloca2, i32 4
   store ptr %defer.alloca, ptr %defer.alloca2.repack23, align 4
   store ptr %defer.alloca2, ptr %deferPtr, align 4
   %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(ptr nonnull %deferframe.buf) #5
@@ -167,7 +172,7 @@ rundefers.loophead:                               ; preds = %4, %3, %rundefers.b
   br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
 
 rundefers.loop:                                   ; preds = %rundefers.loophead
-  %stack.next.gep = getelementptr inbounds %runtime._defer, ptr %2, i32 0, i32 1
+  %stack.next.gep = getelementptr inbounds i8, ptr %2, i32 4
   %stack.next = load ptr, ptr %stack.next.gep, align 4
   store ptr %stack.next, ptr %deferPtr, align 4
   %callback = load i32, ptr %2, align 4
@@ -213,7 +218,7 @@ rundefers.loophead10:                             ; preds = %7, %6, %lpad
   br i1 %stackIsNil11, label %rundefers.end7, label %rundefers.loop9
 
 rundefers.loop9:                                  ; preds = %rundefers.loophead10
-  %stack.next.gep12 = getelementptr inbounds %runtime._defer, ptr %5, i32 0, i32 1
+  %stack.next.gep12 = getelementptr inbounds i8, ptr %5, i32 4
   %stack.next13 = load ptr, ptr %stack.next.gep12, align 4
   store ptr %stack.next13, ptr %deferPtr, align 4
   %callback15 = load i32, ptr %5, align 4
@@ -250,20 +255,24 @@ rundefers.end7:                                   ; preds = %rundefers.loophead1
 ; Function Attrs: nounwind
 define internal void @"main.deferMultiple$1"(ptr %context) unnamed_addr #1 {
 entry:
+  call void @runtime.printlock(ptr undef) #4
   call void @runtime.printint32(i32 3, ptr undef) #4
+  call void @runtime.printunlock(ptr undef) #4
   ret void
 }
 
 ; Function Attrs: nounwind
 define internal void @"main.deferMultiple$2"(ptr %context) unnamed_addr #1 {
 entry:
+  call void @runtime.printlock(ptr undef) #4
   call void @runtime.printint32(i32 5, ptr undef) #4
+  call void @runtime.printunlock(ptr undef) #4
   ret void
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
-attributes #1 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
-attributes #2 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+strict-align,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
+attributes #1 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
+attributes #2 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
 attributes #3 = { nocallback nofree nosync nounwind willreturn }
 attributes #4 = { nounwind }
 attributes #5 = { nounwind returns_twice }

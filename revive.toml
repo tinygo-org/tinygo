@@ -1,0 +1,35 @@
+ignoreGeneratedHeader = false
+severity = "warning"
+confidence = 0.8
+errorCode = 0
+warningCode = 0
+
+# Enable these as we fix them
+[rule.blank-imports]
+  Exclude=["src/os/file_other.go"]
+[rule.context-as-argument]
+[rule.context-keys-type]
+[rule.dot-imports]
+  Exclude=["**/*_test.go"]
+[rule.error-return]
+[rule.error-strings]
+[rule.error-naming]
+[rule.exported]
+  Exclude=["src/reflect/*.go"]
+[rule.increment-decrement]
+[rule.var-naming]
+  Exclude=["src/os/*.go"]
+[rule.var-declaration]
+#[rule.package-comments]
+[rule.range]
+[rule.receiver-naming]
+[rule.time-naming]
+[rule.unexported-return]
+#[rule.indent-error-flow]
+[rule.errorf]
+#[rule.empty-block]
+[rule.superfluous-else]
+#[rule.unused-parameter]
+[rule.unreachable-code]
+  Exclude=["src/reflect/visiblefields_test.go", "src/reflect/all_test.go"]
+#[rule.redefines-builtin-id]

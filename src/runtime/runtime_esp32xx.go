@@ -8,24 +8,6 @@ import (
 	"unsafe"
 )
 
-type timeUnit int64
-
-func putchar(c byte) {
-	machine.Serial.WriteByte(c)
-}
-
-func getchar() byte {
-	for machine.Serial.Buffered() == 0 {
-		Gosched()
-	}
-	v, _ := machine.Serial.ReadByte()
-	return v
-}
-
-func buffered() int {
-	return machine.Serial.Buffered()
-}
-
 // Initialize .bss: zero-initialized global variables.
 // The .data section has already been loaded by the ROM bootloader.
 func clearbss() {
@@ -43,7 +25,7 @@ func initTimer() {
 	//   DIVIDER:  16-bit prescaler, set to 2 for dividing the APB clock by two
 	//             (40MHz).
 	// esp.TIMG0.T0CONFIG.Set(0 << esp.TIMG_T0CONFIG_T0_EN_Pos)
-	esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_T0_EN | esp.TIMG_T0CONFIG_T0_INCREASE | 2<<esp.TIMG_T0CONFIG_T0_DIVIDER_Pos)
+	esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_EN | esp.TIMG_T0CONFIG_INCREASE | 2<<esp.TIMG_T0CONFIG_DIVIDER_Pos)
 	// esp.TIMG0.T0CONFIG.Set(1 << esp.TIMG_T0CONFIG_T0_DIVCNT_RST_Pos)
 	// esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_T0_EN)
 
@@ -83,4 +65,20 @@ func sleepTicks(d timeUnit) {
 
 func exit(code int) {
 	abort()
+}
+
+func putchar(c byte) {
+	machine.Serial.WriteByte(c)
+}
+
+func getchar() byte {
+	for machine.Serial.Buffered() == 0 {
+		Gosched()
+	}
+	v, _ := machine.Serial.ReadByte()
+	return v
+}
+
+func buffered() int {
+	return machine.Serial.Buffered()
 }

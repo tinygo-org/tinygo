@@ -6,7 +6,7 @@ import "device/sifive"
 
 // SPI on the HiFive1.
 var (
-	SPI1 = SPI{
+	SPI1 = &SPI{
 		Bus: sifive.QSPI1,
 	}
 )

@@ -9,6 +9,9 @@ import (
 // Enable enables this interrupt. Right after calling this function, the
 // interrupt may be invoked if it was already pending.
 func (irq Interrupt) Enable() {
+	// Clear the ARM pending bit, an asserting device may still
+	// trigger the interrupt once enabled.
+	arm.ClearPendingIRQ(uint32(irq.num))
 	arm.EnableIRQ(uint32(irq.num))
 }
 
@@ -46,7 +49,7 @@ func Disable() (state State) {
 // Restore restores interrupts to what they were before. Give the previous state
 // returned by Disable as a parameter. If interrupts were disabled before
 // calling Disable, this will not re-enable interrupts, allowing for nested
-// cricital sections.
+// critical sections.
 func Restore(state State) {
 	arm.EnableInterrupts(uintptr(state))
 }

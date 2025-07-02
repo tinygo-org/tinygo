@@ -1,64 +1,84 @@
 package main
 
+import "syscall"
 import "unsafe"
 
 var _ unsafe.Pointer
 
-//go:linkname C.CString runtime.cgo_CString
-func C.CString(string) *C.char
+//go:linkname _Cgo_CString runtime.cgo_CString
+func _Cgo_CString(string) *_Cgo_char
 
-//go:linkname C.GoString runtime.cgo_GoString
-func C.GoString(*C.char) string
+//go:linkname _Cgo_GoString runtime.cgo_GoString
+func _Cgo_GoString(*_Cgo_char) string
 
-//go:linkname C.__GoStringN runtime.cgo_GoStringN
-func C.__GoStringN(*C.char, uintptr) string
+//go:linkname _Cgo___GoStringN runtime.cgo_GoStringN
+func _Cgo___GoStringN(*_Cgo_char, uintptr) string
 
-func C.GoStringN(cstr *C.char, length C.int) string {
-	return C.__GoStringN(cstr, uintptr(length))
+func _Cgo_GoStringN(cstr *_Cgo_char, length _Cgo_int) string {
+	return _Cgo___GoStringN(cstr, uintptr(length))
 }
 
-//go:linkname C.__GoBytes runtime.cgo_GoBytes
-func C.__GoBytes(unsafe.Pointer, uintptr) []byte
+//go:linkname _Cgo___GoBytes runtime.cgo_GoBytes
+func _Cgo___GoBytes(unsafe.Pointer, uintptr) []byte
 
-func C.GoBytes(ptr unsafe.Pointer, length C.int) []byte {
-	return C.__GoBytes(ptr, uintptr(length))
+func _Cgo_GoBytes(ptr unsafe.Pointer, length _Cgo_int) []byte {
+	return _Cgo___GoBytes(ptr, uintptr(length))
+}
+
+//go:linkname _Cgo___CBytes runtime.cgo_CBytes
+func _Cgo___CBytes([]byte) unsafe.Pointer
+
+func _Cgo_CBytes(b []byte) unsafe.Pointer {
+	return _Cgo___CBytes(b)
+}
+
+//go:linkname _Cgo___get_errno_num runtime.cgo_errno
+func _Cgo___get_errno_num() uintptr
+
+func _Cgo___get_errno() error {
+	return syscall.Errno(_Cgo___get_errno_num())
 }
 
 type (
-	C.char      uint8
-	C.schar     int8
-	C.uchar     uint8
-	C.short     int16
-	C.ushort    uint16
-	C.int       int32
-	C.uint      uint32
-	C.long      int32
-	C.ulong     uint32
-	C.longlong  int64
-	C.ulonglong uint64
+	_Cgo_char      uint8
+	_Cgo_schar     int8
+	_Cgo_uchar     uint8
+	_Cgo_short     int16
+	_Cgo_ushort    uint16
+	_Cgo_int       int32
+	_Cgo_uint      uint32
+	_Cgo_long      int32
+	_Cgo_ulong     uint32
+	_Cgo_longlong  int64
+	_Cgo_ulonglong uint64
 )
 
 //export foo
-func C.foo(a C.int, b C.int) C.int
+func _Cgo_foo(a _Cgo_int, b _Cgo_int) _Cgo_int
 
-var C.foo$funcaddr unsafe.Pointer
+var _Cgo_foo$funcaddr unsafe.Pointer
 
 //export variadic0
 //go:variadic
-func C.variadic0()
+func _Cgo_variadic0()
 
-var C.variadic0$funcaddr unsafe.Pointer
+var _Cgo_variadic0$funcaddr unsafe.Pointer
 
 //export variadic2
 //go:variadic
-func C.variadic2(x C.int, y C.int)
+func _Cgo_variadic2(x _Cgo_int, y _Cgo_int)
 
-var C.variadic2$funcaddr unsafe.Pointer
+var _Cgo_variadic2$funcaddr unsafe.Pointer
 
 //export _Cgo_static_173c95a79b6df1980521_staticfunc
-func C.staticfunc!symbols.go(x C.int)
+func _Cgo_staticfunc!symbols.go(x _Cgo_int)
 
-var C.staticfunc!symbols.go$funcaddr unsafe.Pointer
+var _Cgo_staticfunc!symbols.go$funcaddr unsafe.Pointer
 
+//export notEscapingFunction
+//go:noescape
+func _Cgo_notEscapingFunction(a *_Cgo_int)
+
+var _Cgo_notEscapingFunction$funcaddr unsafe.Pointer
 //go:extern someValue
-var C.someValue C.int
+var _Cgo_someValue _Cgo_int

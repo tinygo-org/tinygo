@@ -11,11 +11,6 @@
 // - Nano RP2040 Connect technical reference: https://docs.arduino.cc/tutorials/nano-rp2040-connect/rp2040-01-technical-reference
 package machine
 
-import (
-	"device/rp"
-	"runtime/interrupt"
-)
-
 // Digital Pins
 const (
 	D2  Pin = GPIO25
@@ -87,8 +82,17 @@ const (
 	NINA_GPIO0  Pin = GPIO2
 	NINA_RESETN Pin = GPIO3
 
-	NINA_TX Pin = GPIO9
-	NINA_RX Pin = GPIO8
+	NINA_TX  Pin = GPIO8
+	NINA_RX  Pin = GPIO9
+	NINA_CTS Pin = GPIO10
+	NINA_RTS Pin = GPIO11
+)
+
+// NINA-W102 settings
+const (
+	NINA_BAUDRATE         = 115200
+	NINA_RESET_INVERTED   = true
+	NINA_SOFT_FLOWCONTROL = false
 )
 
 // Onboard crystal oscillator frequency, in MHz.
@@ -116,17 +120,7 @@ const (
 	UART_RX_PIN  = UART0_RX_PIN
 )
 
-// UART on the RP2040
-var (
-	UART0  = &_UART0
-	_UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
-	}
-)
+// UART_NINA on the Arduino Nano RP2040 connects to the NINA HCI.
+var UART_NINA = UART1
 
 var DefaultUART = UART0
-
-func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
-}

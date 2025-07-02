@@ -14,26 +14,38 @@ concurrency:
 jobs:
   build-macos:
     name: build-macos
-    runs-on: macos-11
+    strategy:
+      matrix:
+        # macos-13: amd64 (oldest supported version as of 18-10-2024)
+        # macos-14: arm64 (oldest arm64 version)
+        os: [macos-13, macos-14]
+        include:
+          - os: macos-13
+            goarch: amd64
+          - os: macos-14
+            goarch: arm64
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Install Dependencies
-        shell: bash
         run: |
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Extract TinyGo version
+        id: version
+        run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
           cache: true
       - name: Restore LLVM source cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-source
         with:
-          key: llvm-source-16-macos-v1
+          key: llvm-source-19-${{ matrix.os }}-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -44,7 +56,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Save LLVM source cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
@@ -55,14 +67,13 @@ jobs:
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Restore LLVM build cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
-          key: llvm-build-16-macos-v1
+          key: llvm-build-19-${{ matrix.os }}-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
-        shell: bash
         run: |
           # fetch LLVM source
           rm -rf llvm-project
@@ -73,32 +84,21 @@ jobs:
           make llvm-build
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
-      - name: Cache wasi-libc sysroot
-        uses: actions/cache@v3
-        id: cache-wasi-libc
-        with:
-          key: wasi-libc-sysroot-v5
-          path: lib/wasi-libc/sysroot
-      - name: Build wasi-libc
-        if: steps.cache-wasi-libc.outputs.cache-hit != 'true'
-        run: make wasi-libc
       - name: make gen-device
         run: make -j3 gen-device
       - name: Test TinyGo
-        shell: bash
-        run: make test GOTESTFLAGS="-short"
+        run: make test GOTESTFLAGS="-only-current-os"
       - name: Build TinyGo release tarball
         run: make release -j3
       - name: Test stdlib packages
         run: make tinygo-test
       - name: Make release artifact
-        shell: bash
-        run: cp -p build/release.tar.gz build/tinygo.darwin-amd64.tar.gz 
+        run: cp -p build/release.tar.gz build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
       - name: Publish release artifact
         # Note: this release artifact is double-zipped, see:
         # https://github.com/actions/upload-artifact/issues/39
@@ -106,45 +106,43 @@ jobs:
         # - have a double-zipped artifact when downloaded from the UI
         # - have a very slow artifact upload
         # We're doing the former here, to keep artifact uploads fast.
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
-          name: darwin-amd64-double-zipped
-          path: build/tinygo.darwin-amd64.tar.gz
+          name: darwin-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
+          path: build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
       - name: Smoke tests
-        shell: bash
         run: make smoketest TINYGO=$(PWD)/build/tinygo
   test-macos-homebrew:
     name: homebrew-install
     runs-on: macos-latest
     strategy:
       matrix:
-        version: [16, 17]
+        version: [16, 17, 18, 19, 20]
     steps:
-      - name: Update Homebrew
-        run: brew update
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
       - name: Fix Python symlinks
         run: |
           # Github runners have broken symlinks, so relink
           # see: https://github.com/actions/setup-python/issues/577
-          brew unlink python
-          brew link --overwrite python
+          brew list -1 | grep python | while read formula; do brew unlink $formula; brew link --overwrite $formula; done
       - name: Install LLVM
         run: |
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@${{ matrix.version }}
+          brew install llvm@${{ matrix.version }}
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
           cache: true
       - name: Build TinyGo (LLVM ${{ matrix.version }})
         run: go install -tags=llvm${{ matrix.version }}
       - name: Check binary
         run: tinygo version
       - name: Build TinyGo (default LLVM)
-        if: matrix.version == 16
+        if: matrix.version == 20
         run: go install
       - name: Check binary
-        if: matrix.version == 16
+        if: matrix.version == 20
         run: tinygo version

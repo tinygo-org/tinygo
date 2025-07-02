@@ -5,7 +5,6 @@ package machine
 import (
 	"device/stm32"
 
-	"bytes"
 	"unsafe"
 )
 
@@ -41,7 +40,8 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	unlockFlash()
 	defer lockFlash()
 
-	return writeFlashData(FlashDataStart()+uintptr(off), f.pad(p))
+	p = flashPad(p, int(f.WriteBlockSize()))
+	return writeFlashData(FlashDataStart()+uintptr(off), p)
 }
 
 // Size returns the number of bytes in this block device.
@@ -88,17 +88,6 @@ func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 	}
 
 	return nil
-}
-
-// pad data if needed so it is long enough for correct byte alignment on writes.
-func (f flashBlockDevice) pad(p []byte) []byte {
-	overflow := int64(len(p)) % f.WriteBlockSize()
-	if overflow == 0 {
-		return p
-	}
-
-	padding := bytes.Repeat([]byte{0xff}, int(f.WriteBlockSize()-overflow))
-	return append(p, padding...)
 }
 
 const memoryStart = 0x08000000

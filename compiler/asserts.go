@@ -99,7 +99,7 @@ func (b *builder) createUnsafeSliceStringCheck(name string, ptr, len llvm.Value,
 	// However, in practice, it is also necessary to check that the length is
 	// not too big that a GEP wouldn't be possible without wrapping the pointer.
 	// These two checks (non-negative and not too big) can be merged into one
-	// using an unsiged greater than.
+	// using an unsigned greater than.
 
 	// Make sure the len value is at least as big as a uintptr.
 	len = b.extendInteger(len, lenType, b.uintptrType)
@@ -135,7 +135,7 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 
 	// Calculate (^uintptr(0)) >> 1, which is the max value that fits in an
 	// uintptr if uintptrs were signed.
-	maxBufSize := llvm.ConstLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false))
+	maxBufSize := b.CreateLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false), "")
 	if elementSize > maxBufSize.ZExtValue() {
 		b.addError(pos, fmt.Sprintf("channel element type is too big (%v bytes)", elementSize))
 		return
@@ -150,7 +150,7 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 
 	// Make sure maxBufSize has the same type as bufSize.
 	if maxBufSize.Type() != bufSize.Type() {
-		maxBufSize = llvm.ConstZExt(maxBufSize, bufSize.Type())
+		maxBufSize = b.CreateZExt(maxBufSize, bufSize.Type(), "")
 	}
 
 	// Do the check for a too large (or negative) buffer size.

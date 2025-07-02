@@ -8,11 +8,23 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/goenv"
 )
+
+// Library versions. Whenever an existing library is changed, this number should
+// be added/increased so that existing caches are invalidated.
+//
+// (This is a bit of a layering violation, this should really be part of the
+// builder.Library struct but that's hard to do since we want to know the
+// library path in advance in several places).
+var libVersions = map[string]int{
+	"musl":  3,
+	"bdwgc": 2,
+}
 
 // Config keeps all configuration affecting the build in a single struct.
 type Config struct {
@@ -31,6 +43,17 @@ func (c *Config) Triple() string {
 // empty string if the CPU name is not known.
 func (c *Config) CPU() string {
 	return c.Target.CPU
+}
+
+// The current build mode (like the `-buildmode` command line flag).
+func (c *Config) BuildMode() string {
+	if c.Options.BuildMode != "" {
+		return c.Options.BuildMode
+	}
+	if c.Target.BuildMode != "" {
+		return c.Target.BuildMode
+	}
+	return "default"
 }
 
 // Features returns a list of features this CPU supports. For example, for a
@@ -60,7 +83,7 @@ func (c *Config) GOOS() string {
 }
 
 // GOARCH returns the GOARCH of the target. This might not always be the actual
-// archtecture: for example, the AVR target is not supported by the Go standard
+// architecture: for example, the AVR target is not supported by the Go standard
 // library so such targets will usually pretend to be linux/arm.
 func (c *Config) GOARCH() string {
 	return c.Target.GOARCH
@@ -72,20 +95,32 @@ func (c *Config) GOARM() string {
 	return c.Options.GOARM
 }
 
+// GOMIPS will return the GOMIPS environment variable given to the compiler when
+// building a program.
+func (c *Config) GOMIPS() string {
+	return c.Options.GOMIPS
+}
+
 // BuildTags returns the complete list of build tags used during this build.
 func (c *Config) BuildTags() []string {
-	tags := append(c.Target.BuildTags, []string{"tinygo", "math_big_pure_go", "gc." + c.GC(), "scheduler." + c.Scheduler(), "serial." + c.Serial()}...)
+	tags := append([]string(nil), c.Target.BuildTags...) // copy slice (avoid a race)
+	tags = append(tags, []string{
+		"tinygo",                                     // that's the compiler
+		"purego",                                     // to get various crypto packages to work
+		"osusergo",                                   // to get os/user to work
+		"math_big_pure_go",                           // to get math/big to work
+		"gc." + c.GC(), "scheduler." + c.Scheduler(), // used inside the runtime package
+		"serial." + c.Serial()}...) // used inside the machine package
+	switch c.Scheduler() {
+	case "threads", "cores":
+	default:
+		tags = append(tags, "tinygo.unicore")
+	}
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
 	tags = append(tags, c.Options.Tags...)
 	return tags
-}
-
-// CgoEnabled returns true if (and only if) CGo is enabled. It is true by
-// default and false if CGO_ENABLED is set to "0".
-func (c *Config) CgoEnabled() bool {
-	return goenv.Get("CGO_ENABLED") == "1"
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid
@@ -104,7 +139,7 @@ func (c *Config) GC() string {
 // that can be traced by the garbage collector.
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
-	case "conservative", "custom", "precise":
+	case "conservative", "custom", "precise", "boehm":
 		for _, tag := range c.BuildTags() {
 			if tag == "tinygo.wasm" {
 				return true
@@ -189,6 +224,15 @@ func (c *Config) StackSize() uint64 {
 	return c.Target.DefaultStackSize
 }
 
+// MaxStackAlloc returns the size of the maximum allocation to put on the stack vs heap.
+func (c *Config) MaxStackAlloc() uint64 {
+	if c.StackSize() > 32*1024 {
+		return 1024
+	}
+
+	return 256
+}
+
 // RP2040BootPatch returns whether the RP2040 boot patch should be applied that
 // calculates and patches in the checksum for the 2nd stage bootloader.
 func (c *Config) RP2040BootPatch() bool {
@@ -198,20 +242,40 @@ func (c *Config) RP2040BootPatch() bool {
 	return false
 }
 
-// MuslArchitecture returns the architecture name as used in musl libc. It is
-// usually the same as the first part of the LLVM triple, but not always.
-func MuslArchitecture(triple string) string {
+// Return a canonicalized architecture name, so we don't have to deal with arm*
+// vs thumb* vs arm64.
+func CanonicalArchName(triple string) string {
 	arch := strings.Split(triple, "-")[0]
+	if arch == "arm64" {
+		return "aarch64"
+	}
 	if strings.HasPrefix(arch, "arm") || strings.HasPrefix(arch, "thumb") {
-		arch = "arm"
+		return "arm"
+	}
+	if arch == "mipsel" {
+		return "mips"
 	}
 	return arch
 }
 
-// LibcPath returns the path to the libc directory. The libc path will be either
-// a precompiled libc shipped with a TinyGo build, or a libc path in the cache
-// directory (which might not yet be built).
-func (c *Config) LibcPath(name string) (path string, precompiled bool) {
+// MuslArchitecture returns the architecture name as used in musl libc. It is
+// usually the same as the first part of the LLVM triple, but not always.
+func MuslArchitecture(triple string) string {
+	return CanonicalArchName(triple)
+}
+
+// Returns true if the libc needs to include malloc, for the libcs where this
+// matters.
+func (c *Config) LibcNeedsMalloc() bool {
+	if c.GC() == "boehm" && c.Target.Libc == "wasi-libc" {
+		return true
+	}
+	return false
+}
+
+// LibraryPath returns the path to the library build directory. The path will be
+// a library path in the cache directory (which might not yet be built).
+func (c *Config) LibraryPath(name string) string {
 	archname := c.Triple()
 	if c.CPU() != "" {
 		archname += "-" + c.CPU()
@@ -219,18 +283,27 @@ func (c *Config) LibcPath(name string) (path string, precompiled bool) {
 	if c.ABI() != "" {
 		archname += "-" + c.ABI()
 	}
+	if c.Target.SoftFloat {
+		archname += "-softfloat"
+	}
+	if name == "bdwgc" {
+		// Boehm GC is compiled against a particular libc.
+		archname += "-" + c.Target.Libc
+	}
 
-	// Try to load a precompiled library.
-	precompiledDir := filepath.Join(goenv.Get("TINYGOROOT"), "pkg", archname, name)
-	if _, err := os.Stat(precompiledDir); err == nil {
-		// Found a precompiled library for this OS/architecture. Return the path
-		// directly.
-		return precompiledDir, true
+	// Append a version string, if this library has a version.
+	if v, ok := libVersions[name]; ok {
+		archname += "-v" + strconv.Itoa(v)
+	}
+
+	options := ""
+	if c.LibcNeedsMalloc() {
+		options += "+malloc"
 	}
 
 	// No precompiled library found. Determine the path name that will be used
 	// in the build cache.
-	return filepath.Join(goenv.Get("GOCACHE"), name+"-"+archname), false
+	return filepath.Join(goenv.Get("GOCACHE"), name+options+"-"+archname)
 }
 
 // DefaultBinaryExtension returns the default extension for binaries, such as
@@ -272,58 +345,8 @@ func (c *Config) CFlags(libclang bool) []string {
 		cflags = append(cflags,
 			"-resource-dir="+resourceDir,
 		)
-		if strings.HasPrefix(c.Triple(), "xtensa") {
-			// workaround needed in LLVM 16, see: https://github.com/espressif/llvm-project/issues/83
-			cflags = append(cflags, "-isystem", filepath.Join(resourceDir, "include"))
-		}
 	}
-	switch c.Target.Libc {
-	case "darwin-libSystem":
-		root := goenv.Get("TINYGOROOT")
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", filepath.Join(root, "lib/macos-minimal-sdk/src/usr/include"),
-		)
-	case "picolibc":
-		root := goenv.Get("TINYGOROOT")
-		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
-		path, _ := c.LibcPath("picolibc")
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
-			"-isystem", filepath.Join(picolibcDir, "include"),
-			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
-		)
-	case "musl":
-		root := goenv.Get("TINYGOROOT")
-		path, _ := c.LibcPath("musl")
-		arch := MuslArchitecture(c.Triple())
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
-			"-isystem", filepath.Join(root, "lib", "musl", "arch", arch),
-			"-isystem", filepath.Join(root, "lib", "musl", "include"),
-		)
-	case "wasi-libc":
-		root := goenv.Get("TINYGOROOT")
-		cflags = append(cflags, "--sysroot="+root+"/lib/wasi-libc/sysroot")
-	case "mingw-w64":
-		root := goenv.Get("TINYGOROOT")
-		path, _ := c.LibcPath("mingw-w64")
-		cflags = append(cflags,
-			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
-			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
-			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
-			"-D_UCRT",
-		)
-	case "":
-		// No libc specified, nothing to add.
-	default:
-		// Incorrect configuration. This could be handled in a better way, but
-		// usually this will be found by developers (not by TinyGo users).
-		panic("unknown libc: " + c.Target.Libc)
-	}
+	cflags = append(cflags, c.LibcCFlags()...)
 	// Always emit debug information. It is optionally stripped at link time.
 	cflags = append(cflags, "-gdwarf-4")
 	// Use the same optimization level as TinyGo.
@@ -350,6 +373,80 @@ func (c *Config) CFlags(libclang bool) []string {
 	return cflags
 }
 
+// LibcCFlags returns the C compiler flags for the configured libc.
+// It only uses flags that are part of the libc path (triple, cpu, abi, libc
+// name) so it can safely be used to compile another C library.
+func (c *Config) LibcCFlags() []string {
+	switch c.Target.Libc {
+	case "darwin-libSystem":
+		root := goenv.Get("TINYGOROOT")
+		return []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(root, "lib/macos-minimal-sdk/src/usr/include"),
+		}
+	case "picolibc":
+		root := goenv.Get("TINYGOROOT")
+		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
+		path := c.LibraryPath("picolibc")
+		return []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+			"-isystem", filepath.Join(picolibcDir, "include"),
+			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
+			"-D__PICOLIBC_ERRNO_FUNCTION=__errno_location",
+		}
+	case "musl":
+		root := goenv.Get("TINYGOROOT")
+		path := c.LibraryPath("musl")
+		arch := MuslArchitecture(c.Triple())
+		return []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+			"-isystem", filepath.Join(root, "lib", "musl", "arch", arch),
+			"-isystem", filepath.Join(root, "lib", "musl", "arch", "generic"),
+			"-isystem", filepath.Join(root, "lib", "musl", "include"),
+		}
+	case "wasi-libc":
+		path := c.LibraryPath("wasi-libc")
+		return []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+		}
+	case "wasmbuiltins":
+		// nothing to add (library is purely for builtins)
+		return nil
+	case "mingw-w64":
+		root := goenv.Get("TINYGOROOT")
+		path := c.LibraryPath("mingw-w64")
+		cflags := []string{
+			"-nostdlibinc",
+			"-isystem", filepath.Join(path, "include"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "include"),
+			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),
+		}
+		if c.GOARCH() == "386" {
+			cflags = append(cflags,
+				"-D__MSVCRT_VERSION__=0x700", // Microsoft Visual C++ .NET 2002
+				"-D_WIN32_WINNT=0x0501",      // target Windows XP
+			)
+		} else {
+			cflags = append(cflags,
+				"-D_UCRT",
+				"-D_WIN32_WINNT=0x0a00", // target Windows 10
+			)
+		}
+		return cflags
+	case "":
+		// No libc specified, nothing to add.
+		return nil
+	default:
+		// Incorrect configuration. This could be handled in a better way, but
+		// usually this will be found by developers (not by TinyGo users).
+		panic("unknown libc: " + c.Target.Libc)
+	}
+}
+
 // LDFlags returns the flags to pass to the linker. A few more flags are needed
 // (like the one for the compiler runtime), but this represents the majority of
 // the flags.
@@ -364,6 +461,8 @@ func (c *Config) LDFlags() []string {
 	if c.Target.LinkerScript != "" {
 		ldflags = append(ldflags, "-T", c.Target.LinkerScript)
 	}
+	ldflags = append(ldflags, c.Options.ExtLDFlags...)
+
 	return ldflags
 }
 
@@ -431,7 +530,7 @@ func (c *Config) BinaryFormat(ext string) string {
 
 // Programmer returns the flash method and OpenOCD interface name given a
 // particular configuration. It may either be all configured in the target JSON
-// file or be modified using the -programmmer command-line option.
+// file or be modified using the -programmer command-line option.
 func (c *Config) Programmer() (method, openocdInterface string) {
 	switch c.Options.Programmer {
 	case "":
@@ -471,9 +570,6 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 		return nil, fmt.Errorf("unknown OpenOCD transport: %#v", c.Target.OpenOCDTransport)
 	}
 	args = []string{"-f", "interface/" + openocdInterface + ".cfg"}
-	for _, cmd := range c.Target.OpenOCDCommands {
-		args = append(args, "-c", cmd)
-	}
 	if c.Target.OpenOCDTransport != "" {
 		transport := c.Target.OpenOCDTransport
 		if transport == "swd" {
@@ -485,6 +581,9 @@ func (c *Config) OpenOCDConfiguration() (args []string, err error) {
 		args = append(args, "-c", "transport select "+transport)
 	}
 	args = append(args, "-f", "target/"+c.Target.OpenOCDTarget+".cfg")
+	for _, cmd := range c.Target.OpenOCDCommands {
+		args = append(args, "-c", cmd)
+	}
 	return args, nil
 }
 

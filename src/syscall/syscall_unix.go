@@ -1,3 +1,5 @@
+//go:build linux || unix
+
 package syscall
 
 func Exec(argv0 string, argv []string, envv []string) (err error)

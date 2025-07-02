@@ -30,7 +30,7 @@ type Filesystem interface {
 	// OpenFile opens the named file.
 	OpenFile(name string, flag int, perm FileMode) (uintptr, error)
 
-	// Mkdir creates a new directoy with the specified permission (before
+	// Mkdir creates a new directory with the specified permission (before
 	// umask). Some filesystems may not support directories or permissions.
 	Mkdir(name string, perm FileMode) error
 

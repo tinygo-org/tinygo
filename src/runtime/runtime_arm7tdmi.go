@@ -7,8 +7,6 @@ import (
 	"unsafe"
 )
 
-type timeUnit int64
-
 func putchar(c byte) {
 	// dummy, TODO
 }

@@ -1,4 +1,4 @@
-//go:build darwin || nintendoswitch || wasi || wasip1
+//go:build js || nintendoswitch || wasip1 || wasip2
 
 package syscall
 
@@ -134,6 +134,16 @@ func Rename(from, to string) (err error) {
 	return
 }
 
+func Link(oldname, newname string) (err error) {
+	fromdata := cstring(oldname)
+	todata := cstring(newname)
+	fail := int(libc_link(&fromdata[0], &todata[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
 func Symlink(from, to string) (err error) {
 	fromdata := cstring(from)
 	todata := cstring(to)
@@ -147,6 +157,55 @@ func Symlink(from, to string) (err error) {
 func Unlink(path string) (err error) {
 	data := cstring(path)
 	fail := int(libc_unlink(&data[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Chown(path string, uid, gid int) (err error) {
+	data := cstring(path)
+	fail := int(libc_chown(&data[0], uid, gid))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Fork() (err error) {
+	fail := int(libc_fork())
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Execve(pathname string, argv []string, envv []string) (err error) {
+	argv0 := cstring(pathname)
+
+	// transform argv and envv into the format expected by execve
+	argv1 := make([]*byte, len(argv)+1)
+	for i, arg := range argv {
+		argv1[i] = &cstring(arg)[0]
+	}
+	argv1[len(argv)] = nil
+
+	env1 := make([]*byte, len(envv)+1)
+	for i, env := range envv {
+		env1[i] = &cstring(env)[0]
+	}
+	env1[len(envv)] = nil
+
+	fail := int(libc_execve(&argv0[0], &argv1[0], &env1[0]))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Truncate(path string, length int64) (err error) {
+	data := cstring(path)
+	fail := int(libc_truncate(&data[0], length))
 	if fail < 0 {
 		err = getErrno()
 	}
@@ -174,56 +233,13 @@ func (w WaitStatus) Continued() bool    { return false }
 func (w WaitStatus) StopSignal() Signal { return 0 }
 func (w WaitStatus) TrapCause() int     { return 0 }
 
-func Getenv(key string) (value string, found bool) {
-	data := cstring(key)
-	raw := libc_getenv(&data[0])
-	if raw == nil {
-		return "", false
-	}
-
-	ptr := uintptr(unsafe.Pointer(raw))
-	for size := uintptr(0); ; size++ {
-		v := *(*byte)(unsafe.Pointer(ptr))
-		if v == 0 {
-			src := *(*[]byte)(unsafe.Pointer(&sliceHeader{buf: raw, len: size, cap: size}))
-			return string(src), true
-		}
-		ptr += unsafe.Sizeof(byte(0))
-	}
+// Purely here for compatibility.
+type Rusage struct {
 }
 
-func Setenv(key, val string) (err error) {
-	if len(key) == 0 {
-		return EINVAL
-	}
-	for i := 0; i < len(key); i++ {
-		if key[i] == '=' || key[i] == 0 {
-			return EINVAL
-		}
-	}
-	for i := 0; i < len(val); i++ {
-		if val[i] == 0 {
-			return EINVAL
-		}
-	}
-	runtimeSetenv(key, val)
-	return
-}
-
-func Unsetenv(key string) (err error) {
-	runtimeUnsetenv(key)
-	return
-}
-
-func Clearenv() {
-	for _, s := range Environ() {
-		for j := 0; j < len(s); j++ {
-			if s[j] == '=' {
-				Unsetenv(s[0:j])
-				break
-			}
-		}
-	}
+// since rusage is quite a big struct and we stub it out anyway no need to define it here
+func Wait4(pid int, wstatus *WaitStatus, options int, rusage uintptr) (wpid int, err error) {
+	return 0, ENOSYS // TODO
 }
 
 func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, err error) {
@@ -248,55 +264,6 @@ func Mprotect(b []byte, prot int) (err error) {
 		err = getErrno()
 	}
 	return
-}
-
-func Environ() []string {
-
-	// This function combines all the environment into a single allocation.
-	// While this optimizes for memory usage and garbage collector
-	// overhead, it does run the risk of potentially pinning a "large"
-	// allocation if a user holds onto a single environment variable or
-	// value.  Having each variable be its own allocation would make the
-	// trade-off in the other direction.
-
-	// calculate total memory required
-	var length uintptr
-	var vars int
-	for environ := libc_environ; *environ != nil; {
-		length += libc_strlen(*environ)
-		vars++
-		environ = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(environ), unsafe.Sizeof(environ)))
-	}
-
-	// allocate our backing slice for the strings
-	b := make([]byte, length)
-	// and the slice we're going to return
-	envs := make([]string, 0, vars)
-
-	// loop over the environment again, this time copying over the data to the backing slice
-	for environ := libc_environ; *environ != nil; {
-		length = libc_strlen(*environ)
-		// construct a Go string pointing at the libc-allocated environment variable data
-		var envVar string
-		rawEnvVar := (*struct {
-			ptr    unsafe.Pointer
-			length uintptr
-		})(unsafe.Pointer(&envVar))
-		rawEnvVar.ptr = *environ
-		rawEnvVar.length = length
-		// pull off the number of bytes we need for this environment variable
-		var bs []byte
-		bs, b = b[:length], b[length:]
-		// copy over the bytes to the Go heap
-		copy(bs, envVar)
-		// convert trimmed slice to string
-		s := *(*string)(unsafe.Pointer(&bs))
-		// add s to our list of environment variables
-		envs = append(envs, s)
-		// environ++
-		environ = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(environ), unsafe.Sizeof(environ)))
-	}
-	return envs
 }
 
 // BytePtrFromString returns a pointer to a NUL-terminated array of
@@ -396,6 +363,11 @@ func libc_chdir(pathname *byte) int32
 //export chmod
 func libc_chmod(pathname *byte, mode uint32) int32
 
+// int chown(const char *pathname, uid_t owner, gid_t group);
+//
+//export chown
+func libc_chown(pathname *byte, owner, group int) int32
+
 // int mkdir(const char *pathname, mode_t mode);
 //
 //export mkdir
@@ -416,6 +388,11 @@ func libc_rename(from, to *byte) int32
 //export symlink
 func libc_symlink(from, to *byte) int32
 
+// int link(const char *oldname, *newname);
+//
+//export link
+func libc_link(oldname, newname *byte) int32
+
 // int fsync(int fd);
 //
 //export fsync
@@ -431,5 +408,17 @@ func libc_readlink(path *byte, buf *byte, count uint) int
 //export unlink
 func libc_unlink(pathname *byte) int32
 
-//go:extern environ
-var libc_environ *unsafe.Pointer
+// pid_t fork(void);
+//
+//export fork
+func libc_fork() int32
+
+// int execve(const char *filename, char *const argv[], char *const envp[]);
+//
+//export execve
+func libc_execve(filename *byte, argv **byte, envp **byte) int
+
+// int truncate(const char *path, off_t length);
+//
+//export truncate
+func libc_truncate(path *byte, length int64) int32

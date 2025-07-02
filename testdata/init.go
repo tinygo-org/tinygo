@@ -109,3 +109,14 @@ func sliceString(s string, start, end int) string {
 func sliceSlice(s []int, start, end int) []int {
 	return s[start:end]
 }
+
+type outside struct{}
+
+func init() {
+	_, _ = any(0).(interface{ DoesNotExist() })
+	_, _ = any("").(interface{ DoesNotExist() })
+	_, _ = any(outside{}).(interface{ DoesNotExist() })
+
+	type inside struct{}
+	_, _ = any(inside{}).(interface{ DoesNotExist() })
+}

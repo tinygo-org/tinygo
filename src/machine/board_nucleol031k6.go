@@ -86,11 +86,11 @@ var (
 	I2C0 = I2C1
 
 	// SPI
-	SPI0 = SPI{
+	SPI0 = &SPI{
 		Bus:             stm32.SPI1,
 		AltFuncSelector: 0,
 	}
-	SPI1 = &SPI0
+	SPI1 = SPI0
 )
 
 func init() {

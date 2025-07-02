@@ -37,6 +37,7 @@ import (
 )
 
 const gcDebug = false
+const needsStaticHeap = true
 
 // Some globals + constants for the entire GC.
 
@@ -45,7 +46,7 @@ const (
 	bytesPerBlock      = wordsPerBlock * unsafe.Sizeof(heapStart)
 	stateBits          = 2 // how many bits a block state takes (see blockState type)
 	blocksPerStateByte = 8 / stateBits
-	markStackSize      = 4 * unsafe.Sizeof((*int)(nil)) // number of to-be-marked blocks to queue before forcing a rescan
+	markStackSize      = 8 * unsafe.Sizeof((*int)(nil)) // number of to-be-marked blocks to queue before forcing a rescan
 )
 
 var (
@@ -53,8 +54,11 @@ var (
 	nextAlloc     gcBlock        // the next block that should be tried by the allocator
 	endBlock      gcBlock        // the block just past the end of the available space
 	gcTotalAlloc  uint64         // total number of bytes allocated
+	gcTotalBlocks uint64         // total number of allocated blocks
 	gcMallocs     uint64         // total number of allocations
 	gcFrees       uint64         // total number of objects freed
+	gcFreedBlocks uint64         // total number of freed blocks
+	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
 )
 
 // zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
@@ -73,6 +77,13 @@ const (
 	blockStateMark blockState = 3 // 11
 	blockStateMask blockState = 3 // 11
 )
+
+// The byte value of a block where every block is a 'tail' block.
+const blockStateByteAllTails = 0 |
+	uint8(blockStateTail<<(stateBits*3)) |
+	uint8(blockStateTail<<(stateBits*2)) |
+	uint8(blockStateTail<<(stateBits*1)) |
+	uint8(blockStateTail<<(stateBits*0))
 
 // String returns a human-readable version of the block state, for debugging.
 func (s blockState) String() string {
@@ -121,7 +132,25 @@ func (b gcBlock) address() uintptr {
 // points to an allocated object. It returns the same block if this block
 // already points to the head.
 func (b gcBlock) findHead() gcBlock {
-	for b.state() == blockStateTail {
+	for {
+		// Optimization: check whether the current block state byte (which
+		// contains the state of multiple blocks) is composed entirely of tail
+		// blocks. If so, we can skip back to the last block in the previous
+		// state byte.
+		// This optimization speeds up findHead for pointers that point into a
+		// large allocation.
+		stateByte := b.stateByte()
+		if stateByte == blockStateByteAllTails {
+			b -= (b % blocksPerStateByte) + 1
+			continue
+		}
+
+		// Check whether we've found a non-tail block, which means we found the
+		// head.
+		state := b.stateFromByte(stateByte)
+		if state != blockStateTail {
+			break
+		}
 		b--
 	}
 	if gcAsserts {
@@ -144,10 +173,19 @@ func (b gcBlock) findNext() gcBlock {
 	return b
 }
 
+func (b gcBlock) stateByte() byte {
+	return *(*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
+}
+
+// Return the block state given a state byte. The state byte must have been
+// obtained using b.stateByte(), otherwise the result is incorrect.
+func (b gcBlock) stateFromByte(stateByte byte) blockState {
+	return blockState(stateByte>>((b%blocksPerStateByte)*stateBits)) & blockStateMask
+}
+
 // State returns the current block state.
 func (b gcBlock) state() blockState {
-	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
-	return blockState(*stateBytePtr>>((b%blocksPerStateByte)*stateBits)) & blockStateMask
+	return b.stateFromByte(b.stateByte())
 }
 
 // setState sets the current block to the given state, which must contain more
@@ -281,10 +319,15 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		runtimePanicAt(returnAddress(0), "heap alloc in interrupt")
 	}
 
+	// Make sure there are no concurrent allocations. The heap is not currently
+	// designed for concurrent alloc/GC.
+	gcLock.Lock()
+
 	gcTotalAlloc += uint64(size)
 	gcMallocs++
 
 	neededBlocks := (size + (bytesPerBlock - 1)) / bytesPerBlock
+	gcTotalBlocks += uint64(neededBlocks)
 
 	// Continue looping until a run of free blocks has been found that fits the
 	// requested size.
@@ -362,6 +405,9 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 				i.setState(blockStateTail)
 			}
 
+			// We've claimed this allocation, now we can unlock the heap.
+			gcLock.Unlock()
+
 			// Return a pointer to this allocation.
 			pointer := thisAlloc.pointer()
 			if preciseHeap {
@@ -407,10 +453,12 @@ func free(ptr unsafe.Pointer) {
 
 // GC performs a garbage collection cycle.
 func GC() {
+	gcLock.Lock()
 	runGC()
+	gcLock.Unlock()
 }
 
-// runGC performs a garbage colleciton cycle. It is the internal implementation
+// runGC performs a garbage collection cycle. It is the internal implementation
 // of the runtime.GC() function. The difference is that it returns the number of
 // free bytes in the heap after the GC is finished.
 func runGC() (freeBytes uintptr) {
@@ -419,20 +467,20 @@ func runGC() (freeBytes uintptr) {
 	}
 
 	// Mark phase: mark all reachable objects, recursively.
-	markStack()
-	findGlobals(markRoots)
+	gcMarkReachable()
 
 	if baremetal && hasScheduler {
 		// Channel operations in interrupts may move task pointers around while we are marking.
-		// Therefore we need to scan the runqueue seperately.
+		// Therefore we need to scan the runqueue separately.
 		var markedTaskQueue task.Queue
 	runqueueScan:
+		runqueue := schedulerRunQueue()
 		for !runqueue.Empty() {
 			// Pop the next task off of the runqueue.
 			t := runqueue.Pop()
 
 			// Mark the task if it has not already been marked.
-			markRoot(uintptr(unsafe.Pointer(&runqueue)), uintptr(unsafe.Pointer(t)))
+			markRoot(uintptr(unsafe.Pointer(runqueue)), uintptr(unsafe.Pointer(t)))
 
 			// Push the task onto our temporary queue.
 			markedTaskQueue.Push(t)
@@ -447,11 +495,15 @@ func runGC() (freeBytes uintptr) {
 			interrupt.Restore(i)
 			goto runqueueScan
 		}
-		runqueue = markedTaskQueue
+		*runqueue = markedTaskQueue
 		interrupt.Restore(i)
 	} else {
 		finishMark()
 	}
+
+	// If we're using threads, resume all other threads before starting the
+	// sweep.
+	gcResumeWorld()
 
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle.
@@ -493,6 +545,12 @@ func markRoots(start, end uintptr) {
 		root := *(*uintptr)(unsafe.Pointer(addr))
 		markRoot(addr, root)
 	}
+}
+
+func markCurrentGoroutineStack(sp uintptr) {
+	// This could be optimized by only marking the stack area that's currently
+	// in use.
+	markRoot(0, sp)
 }
 
 // stackOverflow is a flag which is set when the GC scans too deep while marking.
@@ -619,6 +677,7 @@ func markRoot(addr, root uintptr) {
 // It returns how many bytes are free in the heap after the sweep.
 func sweep() (freeBytes uintptr) {
 	freeCurrentObject := false
+	var freed uint64
 	for block := gcBlock(0); block < endBlock; block++ {
 		switch block.state() {
 		case blockStateHead:
@@ -626,13 +685,13 @@ func sweep() (freeBytes uintptr) {
 			block.markFree()
 			freeCurrentObject = true
 			gcFrees++
-			freeBytes += bytesPerBlock
+			freed++
 		case blockStateTail:
 			if freeCurrentObject {
 				// This is a tail object following an unmarked head.
 				// Free it now.
 				block.markFree()
-				freeBytes += bytesPerBlock
+				freed++
 			}
 		case blockStateMark:
 			// This is a marked object. The next tail blocks must not be freed,
@@ -644,6 +703,8 @@ func sweep() (freeBytes uintptr) {
 			freeBytes += bytesPerBlock
 		}
 	}
+	gcFreedBlocks += freed
+	freeBytes += uintptr(freed) * bytesPerBlock
 	return
 }
 
@@ -673,6 +734,7 @@ func dumpHeap() {
 // The returned memory statistics are up to date as of the
 // call to ReadMemStats. This would not do GC implicitly for you.
 func ReadMemStats(m *MemStats) {
+	gcLock.Lock()
 	m.HeapIdle = 0
 	m.HeapInuse = 0
 	for block := gcBlock(0); block < endBlock; block++ {
@@ -690,6 +752,9 @@ func ReadMemStats(m *MemStats) {
 	m.Mallocs = gcMallocs
 	m.Frees = gcFrees
 	m.Sys = uint64(heapEnd - heapStart)
+	m.HeapAlloc = (gcTotalBlocks - gcFreedBlocks) * uint64(bytesPerBlock)
+	m.Alloc = m.HeapAlloc
+	gcLock.Unlock()
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {

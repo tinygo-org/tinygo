@@ -29,7 +29,7 @@ SECTIONS
      */
     .text : ALIGN(4)
     {
-        *(.literal.text.call_start_cpu0)
+        *(.literal.call_start_cpu0)
         *(.text.call_start_cpu0)
         *(.literal .text)
         *(.literal.* .text.*)

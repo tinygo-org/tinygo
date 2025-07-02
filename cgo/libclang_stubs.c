@@ -84,3 +84,7 @@ unsigned tinygo_clang_Cursor_isAnonymous(CXCursor c) {
 unsigned tinygo_clang_Cursor_isBitField(CXCursor c) {
 	return clang_Cursor_isBitField(c);
 }
+
+unsigned tinygo_clang_Cursor_isMacroFunctionLike(CXCursor c) {
+	return clang_Cursor_isMacroFunctionLike(c);
+}

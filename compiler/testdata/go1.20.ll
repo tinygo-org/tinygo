@@ -36,7 +36,7 @@ entry:
   br i1 %4, label %unsafe.String.throw, label %unsafe.String.next
 
 unsafe.String.next:                               ; preds = %entry
-  %5 = zext i16 %len to i32
+  %5 = zext nneg i16 %len to i32
   %6 = insertvalue %runtime._string undef, ptr %ptr, 0
   %7 = insertvalue %runtime._string %6, i32 %5, 1
   call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #3
@@ -57,7 +57,7 @@ entry:
   ret ptr %s.data
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #3 = { nounwind }

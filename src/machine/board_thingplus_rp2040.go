@@ -2,11 +2,6 @@
 
 package machine
 
-import (
-	"device/rp"
-	"runtime/interrupt"
-)
-
 // Onboard crystal oscillator frequency, in MHz.
 const xoscFreq = 12 // MHz
 
@@ -51,7 +46,11 @@ const (
 	A3 = GPIO29
 )
 
-const LED = GPIO25
+// Onboard LEDs
+const (
+	LED    = GPIO25
+	WS2812 = GPIO8
+)
 
 // I2C Pins.
 const (
@@ -90,20 +89,7 @@ const (
 	UART_RX_PIN  = UART0_RX_PIN
 )
 
-// UART on the RP2040
-var (
-	UART0  = &_UART0
-	_UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
-	}
-)
-
 var DefaultUART = UART0
-
-func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
-}
 
 // USB identifiers
 const (

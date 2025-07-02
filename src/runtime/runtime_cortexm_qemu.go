@@ -11,8 +11,6 @@ import (
 	"unsafe"
 )
 
-type timeUnit int64
-
 var timestamp timeUnit
 
 //export Reset_Handler

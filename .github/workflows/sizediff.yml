@@ -9,7 +9,9 @@ concurrency:
 
 jobs:
   sizediff:
-    runs-on: ubuntu-22.04
+    # Note: when updating the Ubuntu version, also update the Ubuntu version in
+    # sizediff-install-pkgs.sh
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: write
     steps:
@@ -18,34 +20,26 @@ jobs:
         run: |
           echo "$HOME/go/bin" >> $GITHUB_PATH
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0 # fetch all history (no sparse checkout)
           submodules: true
       - name: Install apt dependencies
-        run: |
-          echo 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-16 main' | sudo tee /etc/apt/sources.list.d/llvm.list
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-              llvm-16-dev \
-              clang-16 \
-              libclang-16-dev \
-              lld-16
+        run: ./.github/workflows/sizediff-install-pkgs.sh
       - name: Restore LLVM source cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache-llvm-source
         with:
-          key: llvm-source-16-sizediff-v1
+          key: llvm-source-19-sizediff-v1
           path: |
             llvm-project/compiler-rt
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache Go
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
-          key: go-cache-linux-sizediff-v1-${{ hashFiles('go.mod') }}
+          key: go-cache-linux-sizediff-v2-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
@@ -55,21 +49,24 @@ jobs:
       - name: Save HEAD
         run: git branch github-actions-saved-HEAD HEAD
 
-      # Compute sizes for the dev branch
-      - name: Checkout dev branch
-        run: git checkout --no-recurse-submodules `git merge-base HEAD origin/dev`
-      - name: Build tinygo binary for the dev branch
-        run: go install
-      - name: Determine binary sizes on the dev branch
-        run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-dev.txt)
-
       # Compute sizes for the PR branch
-      - name: Checkout PR branch
-        run: git checkout --no-recurse-submodules github-actions-saved-HEAD
       - name: Build tinygo binary for the PR branch
         run: go install
       - name: Determine binary sizes on the PR branch
         run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-pr.txt)
+
+      # Compute sizes for the dev branch
+      - name: Checkout dev branch
+        run: |
+          git reset --hard origin/dev
+          git checkout --no-recurse-submodules `git merge-base HEAD origin/dev`
+      - name: Install apt dependencies on the dev branch
+        # this is only needed on a PR that changes the LLVM version
+        run: ./.github/workflows/sizediff-install-pkgs.sh
+      - name: Build tinygo binary for the dev branch
+        run: go install
+      - name: Determine binary sizes on the dev branch
+        run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-dev.txt)
 
       # Create comment
       # TODO: add a summary, something like:

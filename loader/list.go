@@ -22,12 +22,8 @@ func List(config *compileopts.Config, extraArgs, pkgs []string) (*exec.Cmd, erro
 		args = append(args, "-tags", strings.Join(config.BuildTags(), " "))
 	}
 	args = append(args, pkgs...)
-	cgoEnabled := "0"
-	if config.CgoEnabled() {
-		cgoEnabled = "1"
-	}
 	cmd := exec.Command(filepath.Join(goenv.Get("GOROOT"), "bin", "go"), args...)
-	cmd.Env = append(os.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED="+cgoEnabled)
+	cmd.Env = append(os.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED=1")
 	if config.Options.Directory != "" {
 		cmd.Dir = config.Options.Directory
 	}

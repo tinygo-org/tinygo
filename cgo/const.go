@@ -17,6 +17,8 @@ var (
 		token.OR:  precedenceOr,
 		token.XOR: precedenceXor,
 		token.AND: precedenceAnd,
+		token.SHL: precedenceShift,
+		token.SHR: precedenceShift,
 		token.ADD: precedenceAdd,
 		token.SUB: precedenceAdd,
 		token.MUL: precedenceMul,
@@ -25,11 +27,13 @@ var (
 	}
 )
 
+// See: https://en.cppreference.com/w/c/language/operator_precedence
 const (
 	precedenceLowest = iota + 1
 	precedenceOr
 	precedenceXor
 	precedenceAnd
+	precedenceShift
 	precedenceAdd
 	precedenceMul
 	precedencePrefix
@@ -50,8 +54,72 @@ func init() {
 }
 
 // parseConst parses the given string as a C constant.
-func parseConst(pos token.Pos, fset *token.FileSet, value string) (ast.Expr, *scanner.Error) {
-	t := newTokenizer(pos, fset, value)
+func parseConst(pos token.Pos, fset *token.FileSet, value string, params []ast.Expr, callerPos token.Pos, f *cgoFile) (ast.Expr, *scanner.Error) {
+	t := newTokenizer(pos, fset, value, f)
+
+	// If params is non-nil (could be a zero length slice), this const is
+	// actually a function-call like expression from another macro.
+	// This means we have to parse a string like "(a, b) (a+b)".
+	// We do this by parsing the parameters at the start and then treating the
+	// following like a normal constant expression.
+	if params != nil {
+		// Parse opening paren.
+		if t.curToken != token.LPAREN {
+			return nil, unexpectedToken(t, token.LPAREN)
+		}
+		t.Next()
+
+		// Parse parameters (identifiers) and closing paren.
+		var paramIdents []string
+		for i := 0; ; i++ {
+			if i == 0 && t.curToken == token.RPAREN {
+				// No parameters, break early.
+				t.Next()
+				break
+			}
+
+			// Read the parameter name.
+			if t.curToken != token.IDENT {
+				return nil, unexpectedToken(t, token.IDENT)
+			}
+			paramIdents = append(paramIdents, t.curValue)
+			t.Next()
+
+			// Read the next token: either a continuation (comma) or end of list
+			// (rparen).
+			if t.curToken == token.RPAREN {
+				// End of parameter list.
+				t.Next()
+				break
+			} else if t.curToken == token.COMMA {
+				// Comma, so there will be another parameter name.
+				t.Next()
+			} else {
+				return nil, &scanner.Error{
+					Pos: t.fset.Position(t.curPos),
+					Msg: "unexpected token " + t.curToken.String() + " inside macro parameters, expected ',' or ')'",
+				}
+			}
+		}
+
+		// Report an error if there is a mismatch in parameter length.
+		// The error is reported at the location of the closing paren from the
+		// caller location.
+		if len(params) != len(paramIdents) {
+			return nil, &scanner.Error{
+				Pos: t.fset.Position(callerPos),
+				Msg: fmt.Sprintf("unexpected number of parameters: expected %d, got %d", len(paramIdents), len(params)),
+			}
+		}
+
+		// Assign values to the parameters.
+		// These parameter names are closer in 'scope' than other identifiers so
+		// will be used first when parsing an identifier.
+		for i, name := range paramIdents {
+			t.params[name] = params[i]
+		}
+	}
+
 	expr, err := parseConstExpr(t, precedenceLowest)
 	t.Next()
 	if t.curToken != token.EOF {
@@ -82,7 +150,7 @@ func parseConstExpr(t *tokenizer, precedence int) (ast.Expr, *scanner.Error) {
 
 	for t.peekToken != token.EOF && precedence < precedences[t.peekToken] {
 		switch t.peekToken {
-		case token.OR, token.XOR, token.AND, token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+		case token.OR, token.XOR, token.AND, token.SHL, token.SHR, token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
 			t.Next()
 			leftExpr, err = parseBinaryExpr(t, leftExpr)
 		}
@@ -92,6 +160,68 @@ func parseConstExpr(t *tokenizer, precedence int) (ast.Expr, *scanner.Error) {
 }
 
 func parseIdent(t *tokenizer) (ast.Expr, *scanner.Error) {
+	// If the identifier is one of the parameters of this function-like macro,
+	// use the parameter value.
+	if val, ok := t.params[t.curValue]; ok {
+		return val, nil
+	}
+
+	if t.f != nil {
+		// Check whether this identifier is actually a macro "call" with
+		// parameters. In that case, we should parse the parameters and pass it
+		// on to a new invocation of parseConst.
+		if t.peekToken == token.LPAREN {
+			if cursor, ok := t.f.names[t.curValue]; ok && t.f.isFunctionLikeMacro(cursor) {
+				// We know the current and peek tokens (the peek one is the '('
+				// token). So skip ahead until the current token is the first
+				// unknown token.
+				t.Next()
+				t.Next()
+
+				// Parse the list of parameters until ')' (rparen) is found.
+				params := []ast.Expr{}
+				for i := 0; ; i++ {
+					if i == 0 && t.curToken == token.RPAREN {
+						break
+					}
+					x, err := parseConstExpr(t, precedenceLowest)
+					if err != nil {
+						return nil, err
+					}
+					params = append(params, x)
+					t.Next()
+					if t.curToken == token.COMMA {
+						t.Next()
+					} else if t.curToken == token.RPAREN {
+						break
+					} else {
+						return nil, &scanner.Error{
+							Pos: t.fset.Position(t.curPos),
+							Msg: "unexpected token " + t.curToken.String() + ", ',' or ')'",
+						}
+					}
+				}
+
+				// Evaluate the macro value and use it as the identifier value.
+				rparen := t.curPos
+				pos, text := t.f.getMacro(cursor)
+				return parseConst(pos, t.fset, text, params, rparen, t.f)
+			}
+		}
+
+		// Normally the name is something defined in the file (like another
+		// macro) which we get the declaration from using getASTDeclName.
+		// This ensures that names that are only referenced inside a macro are
+		// still getting defined.
+		if cursor, ok := t.f.names[t.curValue]; ok {
+			return &ast.Ident{
+				NamePos: t.curPos,
+				Name:    t.f.getASTDeclName(t.curValue, cursor, false),
+			}, nil
+		}
+	}
+
+	// t.f is nil during testing. This is a fallback.
 	return &ast.Ident{
 		NamePos: t.curPos,
 		Name:    "C." + t.curValue,
@@ -160,21 +290,25 @@ func unexpectedToken(t *tokenizer, expected token.Token) *scanner.Error {
 
 // tokenizer reads C source code and converts it to Go tokens.
 type tokenizer struct {
+	f                   *cgoFile
 	curPos, peekPos     token.Pos
 	fset                *token.FileSet
 	curToken, peekToken token.Token
 	curValue, peekValue string
 	buf                 string
+	params              map[string]ast.Expr
 }
 
 // newTokenizer initializes a new tokenizer, positioned at the first token in
 // the string.
-func newTokenizer(start token.Pos, fset *token.FileSet, buf string) *tokenizer {
+func newTokenizer(start token.Pos, fset *token.FileSet, buf string, f *cgoFile) *tokenizer {
 	t := &tokenizer{
+		f:         f,
 		peekPos:   start,
 		fset:      fset,
 		buf:       buf,
 		peekToken: token.ILLEGAL,
+		params:    make(map[string]ast.Expr),
 	}
 	// Parse the first two tokens (cur and peek).
 	t.Next()
@@ -191,7 +325,9 @@ func (t *tokenizer) Next() {
 	t.curValue = t.peekValue
 
 	// Parse the next peek token.
-	t.peekPos += token.Pos(len(t.curValue))
+	if t.peekPos != token.NoPos {
+		t.peekPos += token.Pos(len(t.curValue))
+	}
 	for {
 		if len(t.buf) == 0 {
 			t.peekToken = token.EOF
@@ -203,20 +339,28 @@ func (t *tokenizer) Next() {
 			// Skip whitespace.
 			// Based on this source, not sure whether it represents C whitespace:
 			// https://en.cppreference.com/w/cpp/string/byte/isspace
-			t.peekPos++
+			if t.peekPos != token.NoPos {
+				t.peekPos++
+			}
 			t.buf = t.buf[1:]
-		case len(t.buf) >= 2 && (string(t.buf[:2]) == "||" || string(t.buf[:2]) == "&&"):
+		case len(t.buf) >= 2 && (string(t.buf[:2]) == "||" || string(t.buf[:2]) == "&&" || string(t.buf[:2]) == "<<" || string(t.buf[:2]) == ">>"):
 			// Two-character tokens.
 			switch c {
 			case '&':
 				t.peekToken = token.LAND
 			case '|':
 				t.peekToken = token.LOR
+			case '<':
+				t.peekToken = token.SHL
+			case '>':
+				t.peekToken = token.SHR
+			default:
+				panic("unreachable")
 			}
 			t.peekValue = t.buf[:2]
 			t.buf = t.buf[2:]
 			return
-		case c == '(' || c == ')' || c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '&' || c == '|' || c == '^':
+		case c == '(' || c == ')' || c == ',' || c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '&' || c == '|' || c == '^':
 			// Single-character tokens.
 			// TODO: ++ (increment) and -- (decrement) operators.
 			switch c {
@@ -224,6 +368,8 @@ func (t *tokenizer) Next() {
 				t.peekToken = token.LPAREN
 			case ')':
 				t.peekToken = token.RPAREN
+			case ',':
+				t.peekToken = token.COMMA
 			case '+':
 				t.peekToken = token.ADD
 			case '-':

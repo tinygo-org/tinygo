@@ -1,4 +1,4 @@
-//go:build !linux || baremetal
+//go:build (!linux && !darwin) || baremetal
 
 package os
 

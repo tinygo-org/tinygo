@@ -6,15 +6,9 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/tinygo-org/tinygo/src/tinygo"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
-)
-
-// constants for hashmap algorithms; must match src/runtime/hashmap.go
-const (
-	hashmapAlgorithmBinary = iota
-	hashmapAlgorithmString
-	hashmapAlgorithmInterface
 )
 
 // createMakeMap creates a new map object (runtime.hashmap) by allocating and
@@ -24,20 +18,20 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 	keyType := mapType.Key().Underlying()
 	llvmValueType := b.getLLVMType(mapType.Elem().Underlying())
 	var llvmKeyType llvm.Type
-	var alg uint64 // must match values in src/runtime/hashmap.go
+	var alg uint64
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// String keys.
 		llvmKeyType = b.getLLVMType(keyType)
-		alg = hashmapAlgorithmString
+		alg = uint64(tinygo.HashmapAlgorithmString)
 	} else if hashmapIsBinaryKey(keyType) {
 		// Trivially comparable keys.
 		llvmKeyType = b.getLLVMType(keyType)
-		alg = hashmapAlgorithmBinary
+		alg = uint64(tinygo.HashmapAlgorithmBinary)
 	} else {
 		// All other keys. Implemented as map[interface{}]valueType for ease of
 		// implementation.
 		llvmKeyType = b.getLLVMRuntimeType("_interface")
-		alg = hashmapAlgorithmInterface
+		alg = uint64(tinygo.HashmapAlgorithmInterface)
 	}
 	keySize := b.targetData.TypeAllocSize(llvmKeyType)
 	valueSize := b.targetData.TypeAllocSize(llvmValueType)
@@ -254,7 +248,7 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 // can be compared with runtime.memequal.  Note that padding bytes are undef
 // and can alter two "equal" structs being equal when compared with memequal.
 func hashmapIsBinaryKey(keyType types.Type) bool {
-	switch keyType := keyType.(type) {
+	switch keyType := keyType.Underlying().(type) {
 	case *types.Basic:
 		return keyType.Info()&(types.IsBoolean|types.IsInteger) != 0
 	case *types.Pointer:
@@ -269,8 +263,6 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 		return true
 	case *types.Array:
 		return hashmapIsBinaryKey(keyType.Elem())
-	case *types.Named:
-		return hashmapIsBinaryKey(keyType.Underlying())
 	default:
 		return false
 	}
@@ -326,7 +318,7 @@ func (b *builder) zeroUndefBytes(llvmType llvm.Type, ptr llvm.Value) error {
 			if i < numFields-1 {
 				nextOffset = b.targetData.ElementOffset(llvmStructType, i+1)
 			} else {
-				// Last field?  Next offset is the total size of the allcoate struct.
+				// Last field?  Next offset is the total size of the allocate struct.
 				nextOffset = b.targetData.TypeAllocSize(llvmStructType)
 			}
 

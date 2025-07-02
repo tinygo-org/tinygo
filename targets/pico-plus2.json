@@ -1,0 +1,11 @@
+{
+    "inherits": [
+        "rp2350b"
+    ],
+    "build-tags": ["pico_plus2"],
+    "ldflags": [
+        "--defsym=__flash_size=16M"
+    ],
+    "serial-port": ["2e8a:000F"],
+    "default-stack-size": 8192
+}

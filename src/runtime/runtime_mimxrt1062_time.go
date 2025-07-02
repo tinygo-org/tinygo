@@ -10,8 +10,6 @@ import (
 	"unsafe"
 )
 
-type timeUnit int64
-
 const (
 	lastCycle      = SYSTICK_FREQ/1000 - 1
 	cyclesPerMicro = CORE_FREQ / 1000000
@@ -119,19 +117,17 @@ func ticks() timeUnit {
 }
 
 func sleepTicks(duration timeUnit) {
-	if duration >= 0 {
-		curr := ticks()
-		last := curr + duration // 64-bit overflow unlikely
-		for curr < last {
-			cycles := timeUnit((last - curr) / pitCyclesPerMicro)
-			if cycles > 0xFFFFFFFF {
-				cycles = 0xFFFFFFFF
-			}
-			if !timerSleep(uint32(cycles)) {
-				return // return early due to interrupt
-			}
-			curr = ticks()
+	curr := ticks()
+	last := curr + duration // 64-bit overflow unlikely
+	for curr < last {
+		cycles := timeUnit((last - curr) / pitCyclesPerMicro)
+		if cycles > 0xFFFFFFFF {
+			cycles = 0xFFFFFFFF
 		}
+		if !timerSleep(uint32(cycles)) {
+			return // return early due to interrupt
+		}
+		curr = ticks()
 	}
 }
 

@@ -30,9 +30,9 @@ tinygo_startTask:
 
     // After return, exit this goroutine. This is a tail call.
     #ifdef __MACH__
-    jmp _tinygo_pause
+    jmp _tinygo_task_exit
     #else
-    jmp tinygo_pause
+    jmp tinygo_task_exit
     #endif
     .cfi_endproc
 

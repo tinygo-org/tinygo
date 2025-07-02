@@ -5,17 +5,17 @@ commands:
     steps:
       - run:
           name: "Pull submodules"
-          command: git submodule update --init --recursive
+          command: git submodule update --init
   llvm-source-linux:
     steps:
       - restore_cache:
           keys:
-            - llvm-source-16-v3
+            - llvm-source-19-v1
       - run:
           name: "Fetch LLVM source"
           command: make llvm-source
       - save_cache:
-          key: llvm-source-16-v3
+          key: llvm-source-19-v1
           paths:
             - llvm-project/clang/lib/Headers
             - llvm-project/clang/include
@@ -33,13 +33,13 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - binaryen-linux-v2
+            - binaryen-linux-v3
       - run:
           name: "Build Binaryen"
           command: |
             make binaryen
       - save_cache:
-          key: binaryen-linux-v2
+          key: binaryen-linux-v3
           paths:
             - build/wasm-opt
   test-linux:
@@ -73,14 +73,6 @@ commands:
             - go-cache-v4-{{ checksum "go.mod" }}
       - llvm-source-linux
       - run: go install -tags=llvm<<parameters.llvm>> .
-      - restore_cache:
-          keys:
-            - wasi-libc-sysroot-systemclang-v7
-      - run: make wasi-libc
-      - save_cache:
-          key: wasi-libc-sysroot-systemclang-v7
-          paths:
-            - lib/wasi-libc/sysroot
       - when:
           condition: <<parameters.fmt-check>>
           steps:
@@ -88,8 +80,10 @@ commands:
               # Do this before gen-device so that it doesn't check the
               # formatting of generated files.
               name: Check Go code formatting
-              command: make fmt-check
+              command: make fmt-check lint
       - run: make gen-device -j4
+      # TODO: change this to -skip='TestErrors|TestWasm' with Go 1.20
+      - run: go test -tags=llvm<<parameters.llvm>> -short -run='TestBuild|TestTest|TestGetList|TestTraceback'
       - run: make smoketest XTENSA=0
       - save_cache:
           key: go-cache-v4-{{ checksum "go.mod" }}-{{ .Environment.CIRCLE_BUILD_NUM }}
@@ -98,19 +92,19 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm15-go118:
+  test-llvm15-go122:
     docker:
-      - image: golang:1.18-bullseye
+      - image: golang:1.22-bullseye
     steps:
       - test-linux:
           llvm: "15"
     resource_class: large
-  test-llvm17-go121:
+  test-llvm20-go124:
     docker:
-      - image: golang:1.21-bullseye
+      - image: golang:1.24-bullseye
     steps:
       - test-linux:
-          llvm: "17"
+          llvm: "20"
     resource_class: large
 
 workflows:
@@ -118,6 +112,6 @@ workflows:
     jobs:
       # This tests our lowest supported versions of Go and LLVM, to make sure at
       # least the smoke tests still pass.
-      - test-llvm15-go118
-      # This tests the upcoming LLVM 17 support.
-      - test-llvm17-go121
+      - test-llvm15-go122
+      # This tests LLVM 20 support when linking against system libraries.
+      - test-llvm20-go124

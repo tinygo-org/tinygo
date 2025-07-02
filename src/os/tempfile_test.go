@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !baremetal && !js && !wasi && !wasip1
+//go:build !baremetal && !js && !wasip1 && !wasip2
 
 package os_test
 
@@ -158,7 +158,7 @@ func TestMkdirTempBadDir(t *testing.T) {
 	badDir := filepath.Join(dir, "not-exist")
 	_, err = MkdirTemp(badDir, "foo")
 	if pe, ok := err.(*fs.PathError); !ok || !IsNotExist(err) || pe.Path != badDir {
-		t.Errorf("TempDir error = %#v; want PathError for path %q satisifying IsNotExist", err, badDir)
+		t.Errorf("TempDir error = %#v; want PathError for path %q satisfying IsNotExist", err, badDir)
 	}
 }
 

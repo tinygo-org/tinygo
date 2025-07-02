@@ -1,0 +1,7 @@
+{
+    "inherits": ["rp2350b"],
+    "build-tags": ["pga2350"],
+    "ldflags": [
+        "--defsym=__flash_size=16M"
+    ]
+}

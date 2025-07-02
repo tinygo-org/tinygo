@@ -13,6 +13,8 @@ type Frame struct {
 
 	File string
 	Line int
+
+	Entry uintptr
 }
 
 func CallersFrames(callers []uintptr) *Frames {

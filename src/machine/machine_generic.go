@@ -2,20 +2,23 @@
 
 package machine
 
+import (
+	"crypto/rand"
+)
+
 // Dummy machine package that calls out to external functions.
 
 const deviceName = "generic"
 
 var (
-	UART0 = &UART{0}
-	USB   = &UART{100}
+	USB = &UART{100}
 )
 
 // The Serial port always points to the default UART in a simulated environment.
 //
 // TODO: perhaps this should be a special serial object that outputs via WASI
 // stdout calls.
-var Serial = UART0
+var Serial = hardwareUART0
 
 const (
 	PinInput PinMode = iota
@@ -45,6 +48,103 @@ func gpioSet(pin Pin, value bool)
 //export __tinygo_gpio_get
 func gpioGet(pin Pin) bool
 
+// Generic PWM/timer peripheral. Properties can be configured depending on the
+// hardware.
+type timerType struct {
+	// Static properties.
+	instance    int32
+	frequency   uint64
+	bits        int
+	prescalers  []int
+	channelPins [][]Pin
+
+	// Configured 'top' value.
+	top uint32
+}
+
+// Configure the PWM/timer peripheral.
+func (t *timerType) Configure(config PWMConfig) error {
+	// Note: for very large period values, this multiplication will overflow.
+	top := config.Period * t.frequency / 1e9
+	if config.Period == 0 {
+		top = 0xffff // default for LEDs
+	}
+
+	// The maximum value that can be stored with the given number of bits in
+	// this timer.
+	maxTop := uint64(1)<<uint64(t.bits) - 1
+
+	// Look for an appropriate prescaler value.
+	var prescaler int
+	for _, div := range t.prescalers {
+		if top/uint64(div) <= maxTop {
+			prescaler = div
+			top = top / uint64(div)
+			break
+		}
+	}
+	if prescaler == 0 {
+		return ErrPWMPeriodTooLong
+	}
+
+	// Set these values as the configuration.
+	t.top = uint32(top)
+	pwmConfigure(t.instance, float64(t.frequency)/float64(prescaler), uint32(top))
+
+	return nil
+}
+
+// Channel returns a PWM channel for the given pin. Note that one channel may be
+// shared between multiple pins, and so will have the same duty cycle. If this
+// is not desirable, look for a different PWM/timer peripheral or consider using
+// a different pin.
+func (t *timerType) Channel(pin Pin) (uint8, error) {
+	for ch, pins := range t.channelPins {
+		// For nrf52xxx chips specifically we can assign any channel to any pin.
+		// We use a similar (identical?) logic to the hardware implementation,
+		// and pick the first empty channel.
+		if pins == nil {
+			t.channelPins[ch] = []Pin{pin}
+			pwmChannelConfigure(t.instance, int32(ch), pin)
+			return uint8(ch), nil
+		}
+
+		// Check whether the pin can be used on this channel.
+		for _, p := range pins {
+			if p == pin {
+				pwmChannelConfigure(t.instance, int32(ch), pin)
+				return uint8(ch), nil
+			}
+		}
+	}
+
+	return 0, ErrInvalidOutputPin
+}
+
+func (t *timerType) Set(channel uint8, value uint32) {
+	pwmChannelSet(t.instance, channel, value)
+}
+
+// Top returns the current counter top, for use in duty cycle calculation. It
+// will only change with a call to Configure or SetPeriod, otherwise it is
+// constant.
+//
+// The value returned here is hardware dependent. In general, it's best to treat
+// it as an opaque value that can be divided by some number and passed to Set
+// (see Set documentation for more information).
+func (t *timerType) Top() uint32 {
+	return t.top
+}
+
+//export __tinygo_pwm_configure
+func pwmConfigure(instance int32, frequency float64, top uint32)
+
+//export __tinygo_pwm_channel_configure
+func pwmChannelConfigure(instance, channel int32, pin Pin)
+
+//export __tinygo_pwm_channel_set
+func pwmChannelSet(instance int32, channel uint8, value uint32)
+
 type SPI struct {
 	Bus uint8
 }
@@ -57,14 +157,46 @@ type SPIConfig struct {
 	Mode      uint8
 }
 
-func (spi SPI) Configure(config SPIConfig) error {
+func (spi *SPI) Configure(config SPIConfig) error {
 	spiConfigure(spi.Bus, config.SCK, config.SDO, config.SDI)
 	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
-func (spi SPI) Transfer(w byte) (byte, error) {
+func (spi *SPI) Transfer(w byte) (byte, error) {
 	return spiTransfer(spi.Bus, w), nil
+}
+
+// Tx handles read/write operation for SPI interface. Since SPI is a synchronous write/read
+// interface, there must always be the same number of bytes written as bytes read.
+// The Tx method knows about this, and offers a few different ways of calling it.
+//
+// This form sends the bytes in tx buffer, putting the resulting bytes read into the rx buffer.
+// Note that the tx and rx buffers must be the same size:
+//
+//	spi.Tx(tx, rx)
+//
+// This form sends the tx buffer, ignoring the result. Useful for sending "commands" that return zeros
+// until all the bytes in the command packet have been received:
+//
+//	spi.Tx(tx, nil)
+//
+// This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
+//
+//	spi.Tx(nil, rx)
+func (spi *SPI) Tx(w, r []byte) error {
+	var wptr, rptr *byte
+	var wlen, rlen int
+	if len(w) != 0 {
+		wptr = &w[0]
+		wlen = len(w)
+	}
+	if len(r) != 0 {
+		rptr = &r[0]
+		rlen = len(r)
+	}
+	spiTX(spi.Bus, wptr, wlen, rptr, rlen)
+	return nil
 }
 
 //export __tinygo_spi_configure
@@ -72,6 +204,9 @@ func spiConfigure(bus uint8, sck Pin, SDO Pin, SDI Pin)
 
 //export __tinygo_spi_transfer
 func spiTransfer(bus uint8, w uint8) uint8
+
+//export __tinygo_spi_tx
+func spiTX(bus uint8, wptr *byte, wlen int, rptr *byte, rlen int) uint8
 
 // InitADC enables support for ADC peripherals.
 func InitADC() {
@@ -116,7 +251,17 @@ func (i2c *I2C) SetBaudRate(br uint32) error {
 
 // Tx does a single I2C transaction at the specified address.
 func (i2c *I2C) Tx(addr uint16, w, r []byte) error {
-	i2cTransfer(i2c.Bus, &w[0], len(w), &r[0], len(r))
+	var wptr, rptr *byte
+	var wlen, rlen int
+	if len(w) != 0 {
+		wptr = &w[0]
+		wlen = len(w)
+	}
+	if len(r) != 0 {
+		rptr = &r[0]
+		rlen = len(r)
+	}
+	i2cTransfer(i2c.Bus, wptr, wlen, rptr, rlen)
 	// TODO: do something with the returned error code.
 	return nil
 }
@@ -176,6 +321,11 @@ func uartRead(bus uint8, buf *byte, bufLen int) int
 //export __tinygo_uart_write
 func uartWrite(bus uint8, buf *byte, bufLen int) int
 
+var (
+	hardwareUART0 = &UART{0}
+	hardwareUART1 = &UART{1}
+)
+
 // Some objects used by Atmel SAM D chips (samd21, samd51).
 // Defined here (without build tag) for convenience.
 var (
@@ -195,12 +345,22 @@ var (
 	sercomI2CM6 = &I2C{6}
 	sercomI2CM7 = &I2C{7}
 
-	sercomSPIM0 = SPI{0}
-	sercomSPIM1 = SPI{1}
-	sercomSPIM2 = SPI{2}
-	sercomSPIM3 = SPI{3}
-	sercomSPIM4 = SPI{4}
-	sercomSPIM5 = SPI{5}
-	sercomSPIM6 = SPI{6}
-	sercomSPIM7 = SPI{7}
+	sercomSPIM0 = &SPI{0}
+	sercomSPIM1 = &SPI{1}
+	sercomSPIM2 = &SPI{2}
+	sercomSPIM3 = &SPI{3}
+	sercomSPIM4 = &SPI{4}
+	sercomSPIM5 = &SPI{5}
+	sercomSPIM6 = &SPI{6}
+	sercomSPIM7 = &SPI{7}
 )
+
+// GetRNG returns 32 bits of random data from the WASI random source.
+func GetRNG() (uint32, error) {
+	var buf [4]byte
+	_, err := rand.Read(buf[:])
+	if err != nil {
+		return 0, err
+	}
+	return uint32(buf[0])<<0 | uint32(buf[1])<<8 | uint32(buf[2])<<16 | uint32(buf[3])<<24, nil
+}

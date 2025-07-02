@@ -12,9 +12,6 @@ import (
 
 const BOARD = "arduino"
 
-// timeUnit in nanoseconds
-type timeUnit int64
-
 // Watchdog timer periods. These can be off by a large margin (hence the jump
 // between 64ms and 125ms which is not an exact double), so don't rely on this
 // for accurate time keeping.
@@ -104,7 +101,7 @@ func exit(code int) {
 
 func abort() {
 	// Disable interrupts and go to sleep.
-	// This can never be awoken except for reset, and is recogized as termination by simavr.
+	// This can never be awoken except for reset, and is recognized as termination by simavr.
 	avr.Asm("cli")
 	for {
 		avr.Asm("sleep")

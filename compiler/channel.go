@@ -4,7 +4,9 @@ package compiler
 // or pseudo-operations that are lowered during goroutine lowering.
 
 import (
+	"fmt"
 	"go/types"
+	"math"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
@@ -41,17 +43,17 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 		b.CreateStore(chanValue, valueAlloca)
 	}
 
-	// Allocate blockedlist buffer.
-	channelBlockedList := b.getLLVMRuntimeType("channelBlockedList")
-	channelBlockedListAlloca, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
+	// Allocate buffer for the channel operation.
+	channelOp := b.getLLVMRuntimeType("channelOp")
+	channelOpAlloca, channelOpAllocaSize := b.createTemporaryAlloca(channelOp, "chan.op")
 
 	// Do the send.
-	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAlloca, channelBlockedListAlloca}, "")
+	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAlloca, channelOpAlloca}, "")
 
 	// End the lifetime of the allocas.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
 	// https://bugs.llvm.org/show_bug.cgi?id=41742
-	b.emitLifetimeEnd(channelBlockedListAlloca, channelBlockedListAllocaSize)
+	b.emitLifetimeEnd(channelOpAlloca, channelOpAllocaSize)
 	if !isZeroSize {
 		b.emitLifetimeEnd(valueAlloca, valueAllocaSize)
 	}
@@ -72,12 +74,12 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 		valueAlloca, valueAllocaSize = b.createTemporaryAlloca(valueType, "chan.value")
 	}
 
-	// Allocate blockedlist buffer.
-	channelBlockedList := b.getLLVMRuntimeType("channelBlockedList")
-	channelBlockedListAlloca, channelBlockedListAllocaSize := b.createTemporaryAlloca(channelBlockedList, "chan.blockedList")
+	// Allocate buffer for the channel operation.
+	channelOp := b.getLLVMRuntimeType("channelOp")
+	channelOpAlloca, channelOpAllocaSize := b.createTemporaryAlloca(channelOp, "chan.op")
 
 	// Do the receive.
-	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAlloca, channelBlockedListAlloca}, "")
+	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAlloca, channelOpAlloca}, "")
 	var received llvm.Value
 	if isZeroSize {
 		received = llvm.ConstNull(valueType)
@@ -85,7 +87,7 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 		received = b.CreateLoad(valueType, valueAlloca, "chan.received")
 		b.emitLifetimeEnd(valueAlloca, valueAllocaSize)
 	}
-	b.emitLifetimeEnd(channelBlockedListAlloca, channelBlockedListAllocaSize)
+	b.emitLifetimeEnd(channelOpAlloca, channelOpAllocaSize)
 
 	if unop.CommaOk {
 		tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{valueType, b.ctx.Int1Type()}, false))
@@ -122,6 +124,20 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 			retval = b.CreateInsertValue(retval, llvm.ConstInt(b.intType, 0xffffffffffffffff, true), 0, "")
 			return retval // {-1, false}
 		}
+	}
+
+	const maxSelectStates = math.MaxUint32 >> 2
+	if len(expr.States) > maxSelectStates {
+		// The runtime code assumes that the number of state must fit in 30 bits
+		// (so the select index can be stored in a uint32 with two bits reserved
+		// for other purposes). It seems unlikely that a real program would have
+		// that many states, but we check for this case anyway to be sure.
+		// We use a uint32 (and not a uintptr or uint64) to avoid 64-bit atomic
+		// operations which aren't available everywhere.
+		b.addError(expr.Pos(), fmt.Sprintf("too many select states: got %d but the maximum supported number is %d", len(expr.States), maxSelectStates))
+
+		// Continue as usual (we'll generate broken code but the error will
+		// prevent the compilation to complete).
 	}
 
 	// This code create a (stack-allocated) slice containing all the select
@@ -198,10 +214,10 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	if expr.Blocking {
 		// Stack-allocate operation structures.
 		// If these were simply created as a slice, they would heap-allocate.
-		chBlockAllocaType := llvm.ArrayType(b.getLLVMRuntimeType("channelBlockedList"), len(selectStates))
-		chBlockAlloca, chBlockSize := b.createTemporaryAlloca(chBlockAllocaType, "select.block.alloca")
-		chBlockLen := llvm.ConstInt(b.uintptrType, uint64(len(selectStates)), false)
-		chBlockPtr := b.CreateGEP(chBlockAllocaType, chBlockAlloca, []llvm.Value{
+		opsAllocaType := llvm.ArrayType(b.getLLVMRuntimeType("channelOp"), len(selectStates))
+		opsAlloca, opsSize := b.createTemporaryAlloca(opsAllocaType, "select.block.alloca")
+		opsLen := llvm.ConstInt(b.uintptrType, uint64(len(selectStates)), false)
+		opsPtr := b.CreateGEP(opsAllocaType, opsAlloca, []llvm.Value{
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		}, "select.block")
@@ -209,15 +225,18 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		results = b.createRuntimeCall("chanSelect", []llvm.Value{
 			recvbuf,
 			statesPtr, statesLen, statesLen, // []chanSelectState
-			chBlockPtr, chBlockLen, chBlockLen, // []channelBlockList
+			opsPtr, opsLen, opsLen, // []channelOp
 		}, "select.result")
 
 		// Terminate the lifetime of the operation structures.
-		b.emitLifetimeEnd(chBlockAlloca, chBlockSize)
+		b.emitLifetimeEnd(opsAlloca, opsSize)
 	} else {
-		results = b.createRuntimeCall("tryChanSelect", []llvm.Value{
+		opsPtr := llvm.ConstNull(b.dataPtrType)
+		opsLen := llvm.ConstInt(b.uintptrType, 0, false)
+		results = b.createRuntimeCall("chanSelect", []llvm.Value{
 			recvbuf,
 			statesPtr, statesLen, statesLen, // []chanSelectState
+			opsPtr, opsLen, opsLen, // []channelOp (nil slice)
 		}, "select.result")
 	}
 

@@ -18,6 +18,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -25,9 +26,15 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
+// Function that's only defined in Go 1.22.
+var setASTFileFields = func(f *ast.File, start, end token.Pos) {
+}
+
 // cgoPackage holds all CGo-related information of a package.
 type cgoPackage struct {
 	generated       *ast.File
+	packageName     string
+	cgoFiles        []*ast.File
 	generatedPos    token.Pos
 	errors          []error
 	currentDir      string // current working directory
@@ -36,6 +43,7 @@ type cgoPackage struct {
 	fset            *token.FileSet
 	tokenFiles      map[string]*token.File
 	definedGlobally map[string]ast.Node
+	noescapingFuncs map[string]*noescapingFunc // #cgo noescape lines
 	anonDecls       map[interface{}]string
 	cflags          []string // CFlags from #cgo lines
 	ldflags         []string // LDFlags from #cgo lines
@@ -74,21 +82,28 @@ type bitfieldInfo struct {
 	endBit   int64 // may be 0 meaning "until the end of the field"
 }
 
+// Information about a #cgo noescape line in the source code.
+type noescapingFunc struct {
+	name string
+	pos  token.Pos
+	used bool // true if used somewhere in the source (for proper error reporting)
+}
+
 // cgoAliases list type aliases between Go and C, for types that are equivalent
 // in both languages. See addTypeAliases.
 var cgoAliases = map[string]string{
-	"C.int8_t":    "int8",
-	"C.int16_t":   "int16",
-	"C.int32_t":   "int32",
-	"C.int64_t":   "int64",
-	"C.uint8_t":   "uint8",
-	"C.uint16_t":  "uint16",
-	"C.uint32_t":  "uint32",
-	"C.uint64_t":  "uint64",
-	"C.uintptr_t": "uintptr",
-	"C.float":     "float32",
-	"C.double":    "float64",
-	"C._Bool":     "bool",
+	"_Cgo_int8_t":    "int8",
+	"_Cgo_int16_t":   "int16",
+	"_Cgo_int32_t":   "int32",
+	"_Cgo_int64_t":   "int64",
+	"_Cgo_uint8_t":   "uint8",
+	"_Cgo_uint16_t":  "uint16",
+	"_Cgo_uint32_t":  "uint32",
+	"_Cgo_uint64_t":  "uint64",
+	"_Cgo_uintptr_t": "uintptr",
+	"_Cgo_float":     "float32",
+	"_Cgo_double":    "float64",
+	"_Cgo__Bool":     "bool",
 }
 
 // builtinAliases are handled specially because they only exist on the Go side
@@ -130,31 +145,105 @@ typedef unsigned long long  _Cgo_ulonglong;
 // The string/bytes functions below implement C.CString etc. To make sure the
 // runtime doesn't need to know the C int type, lengths are converted to uintptr
 // first.
-// These functions will be modified to get a "C." prefix, so the source below
-// doesn't reflect the final AST.
-const generatedGoFilePrefix = `
+const generatedGoFilePrefixBase = `
+import "syscall"
 import "unsafe"
 
 var _ unsafe.Pointer
 
-//go:linkname C.CString runtime.cgo_CString
-func CString(string) *C.char
+//go:linkname _Cgo_CString runtime.cgo_CString
+func _Cgo_CString(string) *_Cgo_char
 
-//go:linkname C.GoString runtime.cgo_GoString
-func GoString(*C.char) string
+//go:linkname _Cgo_GoString runtime.cgo_GoString
+func _Cgo_GoString(*_Cgo_char) string
 
-//go:linkname C.__GoStringN runtime.cgo_GoStringN
-func __GoStringN(*C.char, uintptr) string
+//go:linkname _Cgo___GoStringN runtime.cgo_GoStringN
+func _Cgo___GoStringN(*_Cgo_char, uintptr) string
 
-func GoStringN(cstr *C.char, length C.int) string {
-	return C.__GoStringN(cstr, uintptr(length))
+func _Cgo_GoStringN(cstr *_Cgo_char, length _Cgo_int) string {
+	return _Cgo___GoStringN(cstr, uintptr(length))
 }
 
-//go:linkname C.__GoBytes runtime.cgo_GoBytes
-func __GoBytes(unsafe.Pointer, uintptr) []byte
+//go:linkname _Cgo___GoBytes runtime.cgo_GoBytes
+func _Cgo___GoBytes(unsafe.Pointer, uintptr) []byte
 
-func GoBytes(ptr unsafe.Pointer, length C.int) []byte {
-	return C.__GoBytes(ptr, uintptr(length))
+func _Cgo_GoBytes(ptr unsafe.Pointer, length _Cgo_int) []byte {
+	return _Cgo___GoBytes(ptr, uintptr(length))
+}
+
+//go:linkname _Cgo___CBytes runtime.cgo_CBytes
+func _Cgo___CBytes([]byte) unsafe.Pointer
+
+func _Cgo_CBytes(b []byte) unsafe.Pointer {
+	return _Cgo___CBytes(b)
+}
+
+//go:linkname _Cgo___get_errno_num runtime.cgo_errno
+func _Cgo___get_errno_num() uintptr
+`
+
+const generatedGoFilePrefixOther = generatedGoFilePrefixBase + `
+func _Cgo___get_errno() error {
+	return syscall.Errno(_Cgo___get_errno_num())
+}
+`
+
+// Windows uses fake errno values in the syscall package.
+// See for example: https://github.com/golang/go/issues/23468
+// TinyGo uses mingw-w64 though, which does have defined errno values. Since the
+// syscall package is the standard library one we can't change it, but we can
+// map the errno values to match the values in the syscall package.
+// Source of the errno values: lib/mingw-w64/mingw-w64-headers/crt/errno.h
+const generatedGoFilePrefixWindows = generatedGoFilePrefixBase + `
+var _Cgo___errno_mapping = [...]syscall.Errno{
+	1:  syscall.EPERM,
+	2:  syscall.ENOENT,
+	3:  syscall.ESRCH,
+	4:  syscall.EINTR,
+	5:  syscall.EIO,
+	6:  syscall.ENXIO,
+	7:  syscall.E2BIG,
+	8:  syscall.ENOEXEC,
+	9:  syscall.EBADF,
+	10: syscall.ECHILD,
+	11: syscall.EAGAIN,
+	12: syscall.ENOMEM,
+	13: syscall.EACCES,
+	14: syscall.EFAULT,
+	16: syscall.EBUSY,
+	17: syscall.EEXIST,
+	18: syscall.EXDEV,
+	19: syscall.ENODEV,
+	20: syscall.ENOTDIR,
+	21: syscall.EISDIR,
+	22: syscall.EINVAL,
+	23: syscall.ENFILE,
+	24: syscall.EMFILE,
+	25: syscall.ENOTTY,
+	27: syscall.EFBIG,
+	28: syscall.ENOSPC,
+	29: syscall.ESPIPE,
+	30: syscall.EROFS,
+	31: syscall.EMLINK,
+	32: syscall.EPIPE,
+	33: syscall.EDOM,
+	34: syscall.ERANGE,
+	36: syscall.EDEADLK,
+	38: syscall.ENAMETOOLONG,
+	39: syscall.ENOLCK,
+	40: syscall.ENOSYS,
+	41: syscall.ENOTEMPTY,
+	42: syscall.EILSEQ,
+}
+
+func _Cgo___get_errno() error {
+	num := _Cgo___get_errno_num()
+	if num < uintptr(len(_Cgo___errno_mapping)) {
+		if mapped := _Cgo___errno_mapping[num]; mapped != 0 {
+			return mapped
+		}
+	}
+	return syscall.Errno(num)
 }
 `
 
@@ -165,13 +254,15 @@ func GoBytes(ptr unsafe.Pointer, length C.int) []byte {
 // functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
 // hashes of the accessed C header files. If there is one or more error, it
 // returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string) (*ast.File, []string, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
+		packageName:     files[0].Name.Name,
 		currentDir:      dir,
 		importPath:      importPath,
 		fset:            fset,
 		tokenFiles:      map[string]*token.File{},
 		definedGlobally: map[string]ast.Node{},
+		noescapingFuncs: map[string]*noescapingFunc{},
 		anonDecls:       map[interface{}]string{},
 		visitedFiles:    map[string][]byte{},
 	}
@@ -196,32 +287,21 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Construct a new in-memory AST for CGo declarations of this package.
 	// The first part is written as Go code that is then parsed, but more code
 	// is added later to the AST to declare functions, globals, etc.
-	goCode := "package " + files[0].Name.Name + "\n\n" + generatedGoFilePrefix
+	goCode := "package " + files[0].Name.Name + "\n\n"
+	if goos == "windows" {
+		goCode += generatedGoFilePrefixWindows
+	} else {
+		goCode += generatedGoFilePrefixOther
+	}
 	p.generated, err = parser.ParseFile(fset, dir+"/!cgo.go", goCode, parser.ParseComments)
 	if err != nil {
 		// This is always a bug in the cgo package.
 		panic("unexpected error: " + err.Error())
 	}
+	p.cgoFiles = append(p.cgoFiles, p.generated)
 	// If the Comments field is not set to nil, the go/format package will get
 	// confused about where comments should go.
 	p.generated.Comments = nil
-	// Adjust some of the functions in there.
-	for _, decl := range p.generated.Decls {
-		switch decl := decl.(type) {
-		case *ast.FuncDecl:
-			switch decl.Name.Name {
-			case "CString", "GoString", "GoStringN", "__GoStringN", "GoBytes", "__GoBytes":
-				// Adjust the name to have a "C." prefix so it is correctly
-				// resolved.
-				decl.Name.Name = "C." + decl.Name.Name
-			}
-		}
-	}
-	// Patch some types, for example *C.char in C.CString.
-	cf := p.newCGoFile(nil, -1) // dummy *cgoFile for the walker
-	astutil.Apply(p.generated, func(cursor *astutil.Cursor) bool {
-		return cf.walker(cursor, nil)
-	}, nil)
 
 	// Find `import "C"` C fragments in the file.
 	p.cgoHeaders = make([]string, len(files)) // combined CGo header fragment for each file
@@ -300,7 +380,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 			Tok:    token.TYPE,
 		}
 		for _, name := range builtinAliases {
-			typeSpec := p.getIntegerType("C."+name, names["_Cgo_"+name])
+			typeSpec := p.getIntegerType("_Cgo_"+name, names["_Cgo_"+name])
 			gen.Specs = append(gen.Specs, typeSpec)
 		}
 		p.generated.Decls = append(p.generated.Decls, gen)
@@ -329,10 +409,26 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 		})
 	}
 
+	// Show an error when a #cgo noescape line isn't used in practice.
+	// This matches upstream Go. I think the goal is to avoid issues with
+	// misspelled function names, which seems very useful.
+	var unusedNoescapeLines []*noescapingFunc
+	for _, value := range p.noescapingFuncs {
+		if !value.used {
+			unusedNoescapeLines = append(unusedNoescapeLines, value)
+		}
+	}
+	sort.SliceStable(unusedNoescapeLines, func(i, j int) bool {
+		return unusedNoescapeLines[i].pos < unusedNoescapeLines[j].pos
+	})
+	for _, value := range unusedNoescapeLines {
+		p.addError(value.pos, fmt.Sprintf("function %#v in #cgo noescape line is not used", value.name))
+	}
+
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.generated, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
+	return p.cgoFiles, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
 }
 
 func (p *cgoPackage) newCGoFile(file *ast.File, index int) *cgoFile {
@@ -393,6 +489,33 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 			spaces[i] = ' '
 		}
 		text = text[:lineStart] + string(spaces) + text[lineEnd:]
+
+		allFields := strings.Fields(line[4:])
+		switch allFields[0] {
+		case "noescape":
+			// The code indicates that pointer parameters will not be captured
+			// by the called C function.
+			if len(allFields) < 2 {
+				p.addErrorAfter(pos, text[:lineStart], "missing function name in #cgo noescape line")
+				continue
+			}
+			if len(allFields) > 2 {
+				p.addErrorAfter(pos, text[:lineStart], "multiple function names in #cgo noescape line")
+				continue
+			}
+			name := allFields[1]
+			p.noescapingFuncs[name] = &noescapingFunc{
+				name: name,
+				pos:  pos,
+				used: false,
+			}
+			continue
+		case "nocallback":
+			// We don't do anything special when calling a C function, so there
+			// appears to be no optimization that we can do here.
+			// Accept, but ignore the parameter for compatibility.
+			continue
+		}
 
 		// Get the text before the colon in the #cgo directive.
 		colon := strings.IndexByte(line, ':')
@@ -1130,22 +1253,22 @@ func (p *cgoPackage) getUnnamedDeclName(prefix string, itf interface{}) string {
 func (f *cgoFile) getASTDeclName(name string, found clangCursor, iscall bool) string {
 	// Some types are defined in stdint.h and map directly to a particular Go
 	// type.
-	if alias := cgoAliases["C."+name]; alias != "" {
+	if alias := cgoAliases["_Cgo_"+name]; alias != "" {
 		return alias
 	}
-	node := f.getASTDeclNode(name, found, iscall)
+	node := f.getASTDeclNode(name, found)
 	if node, ok := node.(*ast.FuncDecl); ok {
 		if !iscall {
 			return node.Name.Name + "$funcaddr"
 		}
 		return node.Name.Name
 	}
-	return "C." + name
+	return "_Cgo_" + name
 }
 
 // getASTDeclNode will declare the given C AST node (if not already defined) and
 // returns it.
-func (f *cgoFile) getASTDeclNode(name string, found clangCursor, iscall bool) ast.Node {
+func (f *cgoFile) getASTDeclNode(name string, found clangCursor) ast.Node {
 	if node, ok := f.defined[name]; ok {
 		// Declaration was found in the current file, so return it immediately.
 		return node
@@ -1240,8 +1363,8 @@ extern __typeof(%s) %s __attribute__((alias(%#v)));
 	case *elaboratedTypeInfo:
 		// Add struct bitfields.
 		for _, bitfield := range elaboratedType.bitfields {
-			f.createBitfieldGetter(bitfield, "C."+name)
-			f.createBitfieldSetter(bitfield, "C."+name)
+			f.createBitfieldGetter(bitfield, "_Cgo_"+name)
+			f.createBitfieldSetter(bitfield, "_Cgo_"+name)
 		}
 		if elaboratedType.unionSize != 0 {
 			// Create union getters/setters.
@@ -1250,7 +1373,7 @@ extern __typeof(%s) %s __attribute__((alias(%#v)));
 					f.addError(elaboratedType.pos, fmt.Sprintf("union must have field with a single name, it has %d names", len(field.Names)))
 					continue
 				}
-				f.createUnionAccessor(field, "C."+name)
+				f.createUnionAccessor(field, "_Cgo_"+name)
 			}
 		}
 	}
@@ -1264,6 +1387,45 @@ extern __typeof(%s) %s __attribute__((alias(%#v)));
 // separate namespace (no _Cgo_ hacks like in gc).
 func (f *cgoFile) walker(cursor *astutil.Cursor, names map[string]clangCursor) bool {
 	switch node := cursor.Node().(type) {
+	case *ast.AssignStmt:
+		// An assign statement could be something like this:
+		//
+		//   val, errno := C.some_func()
+		//
+		// Check whether it looks like that, and if so, read the errno value and
+		// return it as the second return value. The call will be transformed
+		// into something like this:
+		//
+		//   val, errno := C.some_func(), C.__get_errno()
+		if len(node.Lhs) != 2 || len(node.Rhs) != 1 {
+			return true
+		}
+		rhs, ok := node.Rhs[0].(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		fun, ok := rhs.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		x, ok := fun.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if found, ok := names[fun.Sel.Name]; ok && x.Name == "C" {
+			// Replace "C"."some_func" into "C.somefunc".
+			rhs.Fun = &ast.Ident{
+				NamePos: x.NamePos,
+				Name:    f.getASTDeclName(fun.Sel.Name, found, true),
+			}
+			// Add the errno value as the second value in the statement.
+			node.Rhs = append(node.Rhs, &ast.CallExpr{
+				Fun: &ast.Ident{
+					NamePos: node.Lhs[1].End(),
+					Name:    "_Cgo___get_errno",
+				},
+			})
+		}
 	case *ast.CallExpr:
 		fun, ok := node.Fun.(*ast.SelectorExpr)
 		if !ok {
@@ -1285,7 +1447,7 @@ func (f *cgoFile) walker(cursor *astutil.Cursor, names map[string]clangCursor) b
 			return true
 		}
 		if x.Name == "C" {
-			name := "C." + node.Sel.Name
+			name := "_Cgo_" + node.Sel.Name
 			if found, ok := names[node.Sel.Name]; ok {
 				name = f.getASTDeclName(node.Sel.Name, found, false)
 			}

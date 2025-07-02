@@ -123,7 +123,8 @@ var (
 // I2S pins
 const (
 	I2S_SCK_PIN Pin = D2
-	I2S_SD_PIN  Pin = A6
+	I2S_SDO_PIN Pin = A6
+	I2S_SDI_PIN     = NoPin
 	I2S_WS_PIN      = D3
 )
 

@@ -1,5 +1,5 @@
 // Package llvmutil contains utility functions used across multiple compiler
-// packages. For example, they may be used by both the compiler pacakge and
+// packages. For example, they may be used by both the compiler package and
 // transformation packages.
 //
 // Normally, utility packages are avoided. However, in this case, the utility
@@ -8,6 +8,10 @@
 package llvmutil
 
 import (
+	"encoding/binary"
+	"strconv"
+	"strings"
+
 	"tinygo.org/x/go-llvm"
 )
 
@@ -28,7 +32,7 @@ func CreateEntryBlockAlloca(builder llvm.Builder, t llvm.Type, name string) llvm
 }
 
 // CreateTemporaryAlloca creates a new alloca in the entry block and adds
-// lifetime start infromation in the IR signalling that the alloca won't be used
+// lifetime start information in the IR signalling that the alloca won't be used
 // before this point.
 //
 // This is useful for creating temporary allocas for intrinsics. Don't forget to
@@ -173,7 +177,7 @@ func SplitBasicBlock(builder llvm.Builder, afterInst llvm.Value, insertAfter llv
 	return newBlock
 }
 
-// Append the given values to a global array like llvm.used. The global might
+// AppendToGlobal appends the given values to a global array like llvm.used. The global might
 // not exist yet. The values can be any pointer type, they will be cast to i8*.
 func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
 	// Read the existing values in the llvm.used array (if it exists).
@@ -202,4 +206,24 @@ func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
 	used := llvm.AddGlobal(mod, usedInitializer.Type(), globalName)
 	used.SetInitializer(usedInitializer)
 	used.SetLinkage(llvm.AppendingLinkage)
+}
+
+// Version returns the LLVM major version.
+func Version() int {
+	majorStr := strings.Split(llvm.Version, ".")[0]
+	major, err := strconv.Atoi(majorStr)
+	if err != nil {
+		panic("unexpected error while parsing LLVM version: " + err.Error()) // should not happen
+	}
+	return major
+}
+
+// Return the byte order for the given target triple. Most targets are little
+// endian, but for example MIPS can be big-endian.
+func ByteOrder(target string) binary.ByteOrder {
+	if strings.HasPrefix(target, "mips-") {
+		return binary.BigEndian
+	} else {
+		return binary.LittleEndian
+	}
 }

@@ -11,8 +11,6 @@ import (
 	"runtime/volatile"
 )
 
-type timeUnit int64
-
 //export Reset_Handler
 func main() {
 	arm.SCB.CPACR.Set(0) // disable FPU if it is enabled
@@ -307,7 +305,7 @@ func readRTC() uint32 {
 
 // ticks are in microseconds
 // Returns true if the timer completed.
-// Returns false if another interrupt occured which requires an early return to scheduler.
+// Returns false if another interrupt occurred which requires an early return to scheduler.
 func timerSleep(ticks uint32) bool {
 	timerWakeup.Set(0)
 	if ticks < 8 {

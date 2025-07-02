@@ -3,7 +3,6 @@ package builder
 import (
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -75,15 +74,4 @@ func LookupCommand(name string) (string, error) {
 		return cmdName, nil
 	}
 	return "", errors.New("none of these commands were found in your $PATH: " + strings.Join(commands[name], " "))
-}
-
-func execCommand(name string, args ...string) error {
-	name, err := LookupCommand(name)
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command(name, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }

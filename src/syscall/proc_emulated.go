@@ -1,4 +1,4 @@
-//go:build baremetal || tinygo.wasm
+//go:build baremetal || tinygo.wasm || nintendoswitch
 
 // This file emulates some process-related functions that are only available
 // under a real operating system.

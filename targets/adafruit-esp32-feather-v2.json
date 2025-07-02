@@ -1,0 +1,4 @@
+{
+	"inherits": ["esp32"],
+	"build-tags": ["adafruit_esp32_feather_v2"]
+}

@@ -1,3 +1,6 @@
+// Source: https://github.com/llvm/llvm-project/blob/main/clang/tools/driver/cc1as_main.cpp
+// See cc1as.cpp for details.
+
 //===-- cc1as.h - Clang Assembler  ----------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -35,16 +38,23 @@ struct AssemblerInvocation {
   /// @{
 
   std::vector<std::string> IncludePaths;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned NoInitialTextSection : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned SaveTemporaryLabels : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned GenDwarfForAssembly : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned RelaxELFRelocations : 1;
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned SSE2AVX : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned Dwarf64 : 1;
   unsigned DwarfVersion;
   std::string DwarfDebugFlags;
   std::string DwarfDebugProducer;
   std::string DebugCompilationDir;
-  std::map<const std::string, const std::string> DebugPrefixMap;
+  llvm::SmallVector<std::pair<std::string, std::string>, 0> DebugPrefixMap;
   llvm::DebugCompressionType CompressDebugSections =
       llvm::DebugCompressionType::None;
   std::string MainFileName;
@@ -63,7 +73,9 @@ struct AssemblerInvocation {
     FT_Obj   ///< Object file output.
   };
   FileType OutputType;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned ShowHelp : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned ShowVersion : 1;
 
   /// @}
@@ -71,23 +83,40 @@ struct AssemblerInvocation {
   /// @{
 
   unsigned OutputAsmVariant;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned ShowEncoding : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned ShowInst : 1;
 
   /// @}
   /// @name Assembler Options
   /// @{
 
+  LLVM_PREFERRED_TYPE(bool)
   unsigned RelaxAll : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned NoExecStack : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned FatalWarnings : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned NoWarn : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned NoTypeCheck : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned IncrementalLinkerCompatible : 1;
+  LLVM_PREFERRED_TYPE(bool)
   unsigned EmbedBitcode : 1;
 
   /// Whether to emit DWARF unwind info.
   EmitDwarfUnwindType EmitDwarfUnwind;
+
+  // Whether to emit compact-unwind for non-canonical entries.
+  // Note: maybe overriden by other constraints.
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned EmitCompactUnwindNonCanonical : 1;
+
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned Crel : 1;
 
   /// The name of the relocation model to use.
   std::string RelocationModel;
@@ -119,6 +148,7 @@ public:
     ShowInst = 0;
     ShowEncoding = 0;
     RelaxAll = 0;
+    SSE2AVX = 0;
     NoExecStack = 0;
     FatalWarnings = 0;
     NoWarn = 0;
@@ -128,6 +158,8 @@ public:
     DwarfVersion = 0;
     EmbedBitcode = 0;
     EmitDwarfUnwind = EmitDwarfUnwindType::Default;
+    EmitCompactUnwindNonCanonical = false;
+    Crel = false;
   }
 
   static bool CreateFromArgs(AssemblerInvocation &Res,

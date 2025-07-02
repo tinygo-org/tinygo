@@ -5,17 +5,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-// These are the GENERIC_SOURCES according to CMakeList.txt.
+// These are the GENERIC_SOURCES according to CMakeList.txt except for
+// divmodsi4.c and udivmodsi4.c.
 var genericBuiltins = []string{
 	"absvdi2.c",
 	"absvsi2.c",
 	"absvti2.c",
 	"adddf3.c",
 	"addsf3.c",
-	"addtf3.c",
 	"addvdi3.c",
 	"addvsi3.c",
 	"addvti3.c",
@@ -40,12 +41,12 @@ var genericBuiltins = []string{
 	"divdf3.c",
 	"divdi3.c",
 	"divmoddi4.c",
+	//"divmodsi4.c",
+	"divmodti4.c",
 	"divsc3.c",
 	"divsf3.c",
 	"divsi3.c",
-	"divtc3.c",
 	"divti3.c",
-	"divtf3.c",
 	"extendsfdf2.c",
 	"extendhfsf2.c",
 	"ffsdi2.c",
@@ -91,7 +92,6 @@ var genericBuiltins = []string{
 	"mulsc3.c",
 	"mulsf3.c",
 	"multi3.c",
-	"multf3.c",
 	"mulvdi3.c",
 	"mulvsi3.c",
 	"mulvti3.c",
@@ -111,13 +111,11 @@ var genericBuiltins = []string{
 	"popcountti2.c",
 	"powidf2.c",
 	"powisf2.c",
-	"powitf2.c",
 	"subdf3.c",
 	"subsf3.c",
 	"subvdi3.c",
 	"subvsi3.c",
 	"subvti3.c",
-	"subtf3.c",
 	"trampoline_setup.c",
 	"truncdfhf2.c",
 	"truncdfsf2.c",
@@ -126,12 +124,45 @@ var genericBuiltins = []string{
 	"ucmpti2.c",
 	"udivdi3.c",
 	"udivmoddi4.c",
+	//"udivmodsi4.c",
 	"udivmodti4.c",
 	"udivsi3.c",
 	"udivti3.c",
 	"umoddi3.c",
 	"umodsi3.c",
 	"umodti3.c",
+}
+
+// These are the GENERIC_TF_SOURCES as of LLVM 18.
+// They are not needed on all platforms (32-bit platforms usually don't need
+// these) but they seem to compile fine so it's easier to include them.
+var genericBuiltins128 = []string{
+	"addtf3.c",
+	"comparetf2.c",
+	"divtc3.c",
+	"divtf3.c",
+	"extenddftf2.c",
+	"extendhftf2.c",
+	"extendsftf2.c",
+	"fixtfdi.c",
+	"fixtfsi.c",
+	"fixtfti.c",
+	"fixunstfdi.c",
+	"fixunstfsi.c",
+	"fixunstfti.c",
+	"floatditf.c",
+	"floatsitf.c",
+	"floattitf.c",
+	"floatunditf.c",
+	"floatunsitf.c",
+	"floatuntitf.c",
+	"multc3.c",
+	"multf3.c",
+	"powitf2.c",
+	"subtf3.c",
+	"trunctfdf2.c",
+	"trunctfhf2.c",
+	"trunctfsf2.c",
 }
 
 var aeabiBuiltins = []string{
@@ -171,12 +202,17 @@ var avrBuiltins = []string{
 	"avr/udivmodqi4.S",
 }
 
-// CompilerRT is a library with symbols required by programs compiled with LLVM.
-// These symbols are for operations that cannot be emitted with a single
+// Builtins needed specifically for windows/386.
+var windowsI386Builtins = []string{
+	"i386/chkstk.S", // also _alloca
+}
+
+// libCompilerRT is a library with symbols required by programs compiled with
+// LLVM. These symbols are for operations that cannot be emitted with a single
 // instruction or a short sequence of instructions for that target.
 //
 // For more information, see: https://compiler-rt.llvm.org/
-var CompilerRT = Library{
+var libCompilerRT = Library{
 	name: "compiler-rt",
 	cflags: func(target, headerPath string) []string {
 		return []string{"-Werror", "-Wall", "-std=c11", "-nostdlibinc"}
@@ -190,13 +226,19 @@ var CompilerRT = Library{
 		// Development build.
 		return filepath.Join(goenv.Get("TINYGOROOT"), "lib/compiler-rt-builtins")
 	},
-	librarySources: func(target string) ([]string, error) {
+	librarySources: func(target string, _ bool) ([]string, error) {
 		builtins := append([]string{}, genericBuiltins...) // copy genericBuiltins
-		if strings.HasPrefix(target, "arm") || strings.HasPrefix(target, "thumb") {
+		switch compileopts.CanonicalArchName(target) {
+		case "arm":
 			builtins = append(builtins, aeabiBuiltins...)
-		}
-		if strings.HasPrefix(target, "avr") {
+		case "avr":
 			builtins = append(builtins, avrBuiltins...)
+		case "x86_64", "aarch64", "riscv64": // any 64-bit arch
+			builtins = append(builtins, genericBuiltins128...)
+		case "i386":
+			if strings.Split(target, "-")[2] == "windows" {
+				builtins = append(builtins, windowsI386Builtins...)
+			}
 		}
 		return builtins, nil
 	},

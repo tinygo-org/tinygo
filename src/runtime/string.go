@@ -3,6 +3,7 @@ package runtime
 // This file implements functions related to Go strings.
 
 import (
+	"internal/gclayout"
 	"unsafe"
 )
 
@@ -59,7 +60,7 @@ func stringConcat(x, y _string) _string {
 		return x
 	} else {
 		length := x.length + y.length
-		buf := alloc(length, nil)
+		buf := alloc(length, gclayout.NoPtrs)
 		memcpy(buf, unsafe.Pointer(x.ptr), x.length)
 		memcpy(unsafe.Add(buf, x.length), unsafe.Pointer(y.ptr), y.length)
 		return _string{ptr: (*byte)(buf), length: length}
@@ -72,7 +73,7 @@ func stringFromBytes(x struct {
 	len uintptr
 	cap uintptr
 }) _string {
-	buf := alloc(x.len, nil)
+	buf := alloc(x.len, gclayout.NoPtrs)
 	memcpy(buf, unsafe.Pointer(x.ptr), x.len)
 	return _string{ptr: (*byte)(buf), length: x.len}
 }
@@ -83,7 +84,7 @@ func stringToBytes(x _string) (slice struct {
 	len uintptr
 	cap uintptr
 }) {
-	buf := alloc(x.length, nil)
+	buf := alloc(x.length, gclayout.NoPtrs)
 	memcpy(buf, unsafe.Pointer(x.ptr), x.length)
 	slice.ptr = (*byte)(buf)
 	slice.len = x.length
@@ -100,7 +101,7 @@ func stringFromRunes(runeSlice []rune) (s _string) {
 	}
 
 	// Allocate memory for the string.
-	s.ptr = (*byte)(alloc(s.length, nil))
+	s.ptr = (*byte)(alloc(s.length, gclayout.NoPtrs))
 
 	// Encode runes to UTF-8 and store the resulting bytes in the string.
 	index := uintptr(0)
@@ -282,4 +283,11 @@ func cgo_GoBytes(ptr unsafe.Pointer, length uintptr) []byte {
 		memcpy(unsafe.Pointer(&buf[0]), ptr, uintptr(length))
 	}
 	return buf
+}
+
+func cgo_CBytes(b []byte) unsafe.Pointer {
+	p := malloc(uintptr(len(b)))
+	s := unsafe.Slice((*byte)(p), len(b))
+	copy(s, b)
+	return p
 }

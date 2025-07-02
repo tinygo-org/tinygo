@@ -7,17 +7,23 @@ package runtime
 // may be the only memory allocator possible.
 
 import (
+	"internal/task"
 	"unsafe"
 )
 
+const needsStaticHeap = true
+
 // Ever-incrementing pointer: no memory is freed.
-var heapptr = heapStart
+var heapptr uintptr
 
 // Total amount allocated for runtime.MemStats
 var gcTotalAlloc uint64
 
 // Total number of calls to alloc()
 var gcMallocs uint64
+
+// Heap lock for parallel goroutines. No-op when single threaded.
+var gcLock task.PMutex
 
 // Total number of objected freed; for leaking collector this stays 0
 const gcFrees = 0
@@ -30,6 +36,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// TODO: this can be optimized by not casting between pointers and ints so
 	// much. And by using platform-native data types (e.g. *uint8 for 8-bit
 	// systems).
+	gcLock.Lock()
 	size = align(size)
 	addr := heapptr
 	gcTotalAlloc += uint64(size)
@@ -43,8 +50,10 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		// Failed to make the heap bigger, so we must really be out of memory.
 		runtimePanic("out of memory")
 	}
+	gcLock.Unlock()
+
 	pointer := unsafe.Pointer(addr)
-	memzero(pointer, size)
+	zero_new_alloc(pointer, size)
 	return pointer
 }
 
@@ -64,11 +73,17 @@ func free(ptr unsafe.Pointer) {
 	// Memory is never freed.
 }
 
+func markRoots(start, end uintptr) {
+	runtimePanic("unreachable: markRoots")
+}
+
 // ReadMemStats populates m with memory statistics.
 //
 // The returned memory statistics are up to date as of the
 // call to ReadMemStats. This would not do GC implicitly for you.
 func ReadMemStats(m *MemStats) {
+	gcLock.Lock()
+
 	m.HeapIdle = 0
 	m.HeapInuse = gcTotalAlloc
 	m.HeapReleased = 0 // always 0, we don't currently release memory back to the OS.
@@ -79,6 +94,11 @@ func ReadMemStats(m *MemStats) {
 	m.Mallocs = gcMallocs
 	m.Frees = gcFrees
 	m.Sys = uint64(heapEnd - heapStart)
+	// no free -- current in use heap is the total allocated
+	m.HeapAlloc = gcTotalAlloc
+	m.Alloc = m.HeapAlloc
+
+	gcLock.Unlock()
 }
 
 func GC() {
@@ -90,7 +110,8 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 }
 
 func initHeap() {
-	// preinit() may have moved heapStart; reset heapptr
+	// Initialize this bump-pointer allocator to the start of the heap.
+	// Needed here because heapStart may not be a compile-time constant.
 	heapptr = heapStart
 }
 

@@ -28,7 +28,7 @@ const (
 
 	EndpointPacketSize = 64 // 64 for Full Speed, EPT size max is 1024
 
-	// standard requests
+	// bRequest - standard requests
 	GET_STATUS        = 0
 	CLEAR_FEATURE     = 1
 	SET_FEATURE       = 3
@@ -40,7 +40,7 @@ const (
 	GET_INTERFACE     = 10
 	SET_INTERFACE     = 11
 
-	// non standard requests
+	// bRequest - HID class-specific requests
 	GET_REPORT      = 1
 	GET_IDLE        = 2
 	GET_PROTOCOL    = 3
@@ -48,6 +48,10 @@ const (
 	SET_IDLE        = 10
 	SET_PROTOCOL    = 11
 	SET_REPORT_TYPE = 33
+
+	// bRequest - MSC class-specific requests
+	GET_MAX_LUN = 0xFE
+	MSC_RESET   = 0xFF
 
 	DEVICE_CLASS_COMMUNICATIONS  = 0x02
 	DEVICE_CLASS_HUMAN_INTERFACE = 0x03
@@ -75,7 +79,8 @@ const (
 	HID_ENDPOINT_OUT  = 5 // for Interrupt Out
 	MIDI_ENDPOINT_IN  = 6 // for Bulk In
 	MIDI_ENDPOINT_OUT = 7 // for Bulk Out
-	NumberOfEndpoints = 8
+	MSC_ENDPOINT_IN   = 6 // for Bulk In
+	MSC_ENDPOINT_OUT  = 7 // for Bulk Out
 
 	// bmRequestType
 	REQUEST_HOSTTODEVICE = 0x00

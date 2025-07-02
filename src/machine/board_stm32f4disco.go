@@ -86,11 +86,11 @@ const (
 // Since the first interface is named SPI1, both SPI0 and SPI1 refer to SPI1.
 // TODO: implement SPI2 and SPI3.
 var (
-	SPI0 = SPI{
+	SPI0 = &SPI{
 		Bus:             stm32.SPI1,
 		AltFuncSelector: AF5_SPI1_SPI2,
 	}
-	SPI1 = &SPI0
+	SPI1 = SPI0
 )
 
 const (

@@ -1,0 +1,14 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "serial-port": ["2e8a:0005"],
+    "build-tags": ["thumby"],
+    "default-stack-size": 8192,
+    "ldflags": [
+        "--defsym=__flash_size=2048K"
+    ],
+    "extra-files": [
+        "targets/pico-boot-stage2.S"
+    ]
+}

@@ -1,3 +1,5 @@
+//go:build tinygo
+
 .section .text.tinygo_startTask,"ax",@progbits
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
@@ -16,7 +18,7 @@ tinygo_startTask:
     callx0 a12
 
     // After return, exit this goroutine. This is a tail call.
-    call0  tinygo_pause
+    call0  tinygo_task_exit
 .size tinygo_startTask, .-tinygo_startTask
 
 .global tinygo_swapTask

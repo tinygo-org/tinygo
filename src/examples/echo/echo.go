@@ -7,15 +7,13 @@ import (
 	"time"
 )
 
-// change these to test a different UART or pins if available
 var (
 	uart = machine.Serial
-	tx   = machine.UART_TX_PIN
-	rx   = machine.UART_RX_PIN
 )
 
 func main() {
-	uart.Configure(machine.UARTConfig{TX: tx, RX: rx})
+	// use default settings for UART
+	uart.Configure(machine.UARTConfig{})
 	uart.Write([]byte("Echo console enabled. Type something then press enter:\r\n"))
 
 	input := make([]byte, 64)

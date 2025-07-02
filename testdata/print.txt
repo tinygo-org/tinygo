@@ -19,6 +19,12 @@ a b c
 +3.140000e+000
 (+5.000000e+000+1.234500e+000i)
 (0:nil)
+true
+foobar
+-3
+3
+-3
+3
 map[2]
 true false
 [0/0]nil

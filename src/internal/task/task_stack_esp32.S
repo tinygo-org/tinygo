@@ -1,3 +1,5 @@
+//go:build tinygo
+
 .section .text.tinygo_startTask,"ax",@progbits
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
@@ -25,7 +27,7 @@ tinygo_startTask:
     callx4 a3
 
     // After return, exit this goroutine. This call never returns.
-    call4  tinygo_pause
+    call4  tinygo_task_exit
 
 .section .text.tinygo_swapTask,"ax",@progbits
 .global tinygo_swapTask
@@ -76,7 +78,7 @@ tinygo_swapTask:
     // Switch to the new stack pointer (newStack).
     mov.n   sp, a2
 
-    // Load a0, which is the previous return addres from before the previous
+    // Load a0, which is the previous return address from before the previous
     // switch or the constructed return address to tinygo_startTask. This
     // register also stores the parent register window.
     l32i.n a0, sp, 0

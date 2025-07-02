@@ -26,11 +26,13 @@ type TargetSpec struct {
 	Inherits         []string `json:"inherits,omitempty"`
 	Triple           string   `json:"llvm-target,omitempty"`
 	CPU              string   `json:"cpu,omitempty"`
-	ABI              string   `json:"target-abi,omitempty"` // rougly equivalent to -mabi= flag
+	ABI              string   `json:"target-abi,omitempty"` // roughly equivalent to -mabi= flag
 	Features         string   `json:"features,omitempty"`
 	GOOS             string   `json:"goos,omitempty"`
 	GOARCH           string   `json:"goarch,omitempty"`
+	SoftFloat        bool     // used for non-baremetal systems (GOMIPS=softfloat etc)
 	BuildTags        []string `json:"build-tags,omitempty"`
+	BuildMode        string   `json:"buildmode,omitempty"` // default build mode (if nothing specified)
 	GC               string   `json:"gc,omitempty"`
 	Scheduler        string   `json:"scheduler,omitempty"`
 	Serial           string   `json:"serial,omitempty"` // which serial output to use (uart, usb, none)
@@ -44,6 +46,7 @@ type TargetSpec struct {
 	LinkerScript     string   `json:"linkerscript,omitempty"`
 	ExtraFiles       []string `json:"extra-files,omitempty"`
 	RP2040BootPatch  *bool    `json:"rp2040-boot-patch,omitempty"` // Patch RP2040 2nd stage bootloader checksum
+	BootPatches      []string `json:"boot-patches,omitempty"`      // Bootloader patches to be applied in the order they appear.
 	Emulator         string   `json:"emulator,omitempty"`
 	FlashCommand     string   `json:"flash-command,omitempty"`
 	GDB              []string `json:"gdb,omitempty"`
@@ -62,6 +65,8 @@ type TargetSpec struct {
 	JLinkDevice      string   `json:"jlink-device,omitempty"`
 	CodeModel        string   `json:"code-model,omitempty"`
 	RelocationModel  string   `json:"relocation-model,omitempty"`
+	WITPackage       string   `json:"wit-package,omitempty"`
+	WITWorld         string   `json:"wit-world,omitempty"`
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
@@ -82,6 +87,10 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 			}
 		case reflect.Uint, reflect.Uint32, reflect.Uint64: // for Uint, copy if not zero
 			if src.Uint() != 0 {
+				dst.Set(src)
+			}
+		case reflect.Bool:
+			if src.Bool() {
 				dst.Set(src)
 			}
 		case reflect.Ptr: // for pointers, copy if not nil
@@ -169,60 +178,23 @@ func (spec *TargetSpec) resolveInherits() error {
 
 // Load a target specification.
 func LoadTarget(options *Options) (*TargetSpec, error) {
-	if options.Target == "" {
-		// Configure based on GOOS/GOARCH environment variables (falling back to
-		// runtime.GOOS/runtime.GOARCH), and generate a LLVM target based on it.
-		var llvmarch string
-		switch options.GOARCH {
-		case "386":
-			llvmarch = "i386"
-		case "amd64":
-			llvmarch = "x86_64"
-		case "arm64":
-			llvmarch = "aarch64"
-		case "arm":
-			switch options.GOARM {
-			case "5":
-				llvmarch = "armv5"
-			case "6":
-				llvmarch = "armv6"
-			case "7":
-				llvmarch = "armv7"
-			default:
-				return nil, fmt.Errorf("invalid GOARM=%s, must be 5, 6, or 7", options.GOARM)
-			}
-		case "wasm":
-			llvmarch = "wasm32"
-		default:
-			llvmarch = options.GOARCH
-		}
-		llvmvendor := "unknown"
-		llvmos := options.GOOS
-		switch llvmos {
-		case "darwin":
-			// Use macosx* instead of darwin, otherwise darwin/arm64 will refer
-			// to iOS!
-			llvmos = "macosx10.12.0"
-			if llvmarch == "aarch64" {
-				// Looks like Apple prefers to call this architecture ARM64
-				// instead of AArch64.
-				llvmarch = "arm64"
-				llvmos = "macosx11.0.0"
-			}
-			llvmvendor = "apple"
+	if options.Target == "" && options.GOARCH == "wasm" {
+		// Set a specific target if we're building from a known GOOS/GOARCH
+		// combination that is defined in a target JSON file.
+		switch options.GOOS {
+		case "js":
+			options.Target = "wasm"
 		case "wasip1":
-			llvmos = "wasi"
+			options.Target = "wasip1"
+		case "wasip2":
+			options.Target = "wasip2"
+		default:
+			return nil, errors.New("GOARCH=wasm but GOOS is not set correctly. Please set GOOS to wasm, wasip1, or wasip2.")
 		}
-		// Target triples (which actually have four components, but are called
-		// triples for historical reasons) have the form:
-		//   arch-vendor-os-environment
-		target := llvmarch + "-" + llvmvendor + "-" + llvmos
-		if options.GOOS == "windows" {
-			target += "-gnu"
-		} else if options.GOARCH == "arm" {
-			target += "-gnueabihf"
-		}
-		return defaultTarget(options.GOOS, options.GOARCH, target)
+	}
+
+	if options.Target == "" {
+		return defaultTarget(options)
 	}
 
 	// See whether there is a target specification for this target (e.g.
@@ -283,83 +255,200 @@ func GetTargetSpecs() (map[string]*TargetSpec, error) {
 	return maps, nil
 }
 
-func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
-	// No target spec available. Use the default one, useful on most systems
-	// with a regular OS.
+// Load a target from environment variables (which default to
+// runtime.GOOS/runtime.GOARCH).
+func defaultTarget(options *Options) (*TargetSpec, error) {
 	spec := TargetSpec{
-		Triple:           triple,
-		GOOS:             goos,
-		GOARCH:           goarch,
-		BuildTags:        []string{goos, goarch},
-		GC:               "precise",
-		Scheduler:        "tasks",
+		GOOS:             options.GOOS,
+		GOARCH:           options.GOARCH,
+		BuildTags:        []string{options.GOOS, options.GOARCH},
 		Linker:           "cc",
 		DefaultStackSize: 1024 * 64, // 64kB
 		GDB:              []string{"gdb"},
 		PortReset:        "false",
 	}
-	switch goarch {
+
+	// Configure target based on GOARCH.
+	var llvmarch string
+	switch options.GOARCH {
 	case "386":
+		llvmarch = "i386"
 		spec.CPU = "pentium4"
-		spec.Features = "+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
+		spec.Features = "+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "amd64":
+		llvmarch = "x86_64"
 		spec.CPU = "x86-64"
-		spec.Features = "+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
+		spec.Features = "+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87"
 	case "arm":
 		spec.CPU = "generic"
 		spec.CFlags = append(spec.CFlags, "-fno-unwind-tables", "-fno-asynchronous-unwind-tables")
-		switch strings.Split(triple, "-")[0] {
-		case "armv5":
-			spec.Features = "+armv5t,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
-		case "armv6":
-			spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
-		case "armv7":
-			spec.Features = "+armv7-a,+d32,+dsp,+fp64,+neon,+vfp2,+vfp2sp,+vfp3,+vfp3d16,+vfp3d16sp,+vfp3sp,-aes,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-sha2,-thumb-mode,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+		subarch := strings.Split(options.GOARM, ",")
+		if len(subarch) > 2 {
+			return nil, fmt.Errorf("invalid GOARM=%s, must be of form <num>,[hardfloat|softfloat]", options.GOARM)
+		}
+		archLevel := subarch[0]
+		var fpu string
+		if len(subarch) >= 2 {
+			fpu = subarch[1]
+		} else {
+			// Pick the default fpu value: softfloat for armv5 and hardfloat
+			// above that.
+			if archLevel == "5" {
+				fpu = "softfloat"
+			} else {
+				fpu = "hardfloat"
+			}
+		}
+		switch fpu {
+		case "softfloat":
+			spec.CFlags = append(spec.CFlags, "-msoft-float")
+			spec.SoftFloat = true
+		case "hardfloat":
+			// Hardware floating point support is the default everywhere except
+			// on ARMv5 where it needs to be enabled explicitly.
+			if archLevel == "5" {
+				spec.CFlags = append(spec.CFlags, "-mfpu=vfpv2")
+			}
+		default:
+			return nil, fmt.Errorf("invalid extension GOARM=%s, must be softfloat or hardfloat", options.GOARM)
+		}
+		switch archLevel {
+		case "5":
+			llvmarch = "armv5"
+			if spec.SoftFloat {
+				spec.Features = "+armv5t,+soft-float,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.Features = "+armv5t,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
+		case "6":
+			llvmarch = "armv6"
+			if spec.SoftFloat {
+				spec.Features = "+armv6,+dsp,+soft-float,+strict-align,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.Features = "+armv6,+dsp,+fp64,+strict-align,+vfp2,+vfp2sp,-aes,-d32,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-neon,-sha2,-thumb-mode,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
+		case "7":
+			llvmarch = "armv7"
+			if spec.SoftFloat {
+				spec.Features = "+armv7-a,+dsp,+soft-float,-aes,-bf16,-d32,-dotprod,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-mve,-mve.fp,-neon,-sha2,-thumb-mode,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			} else {
+				spec.Features = "+armv7-a,+d32,+dsp,+fp64,+neon,+vfp2,+vfp2sp,+vfp3,+vfp3d16,+vfp3d16sp,+vfp3sp,-aes,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fullfp16,-sha2,-thumb-mode,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp"
+			}
+		default:
+			return nil, fmt.Errorf("invalid GOARM=%s, must be of form <num>,[hardfloat|softfloat] where num is 5, 6, or 7", options.GOARM)
 		}
 	case "arm64":
 		spec.CPU = "generic"
-		if goos == "darwin" {
-			spec.Features = "+neon"
-		} else { // windows, linux
-			spec.Features = "+neon,-fmv"
+		llvmarch = "aarch64"
+		if options.GOOS == "darwin" {
+			spec.Features = "+ete,+fp-armv8,+neon,+trbe,+v8a"
+			// Looks like Apple prefers to call this architecture ARM64
+			// instead of AArch64.
+			llvmarch = "arm64"
+		} else if options.GOOS == "windows" {
+			spec.Features = "+ete,+fp-armv8,+neon,+trbe,+v8a,-fmv"
+		} else { // linux
+			spec.Features = "+ete,+fp-armv8,+neon,+trbe,+v8a,-fmv,-outline-atomics"
+		}
+	case "mips", "mipsle":
+		spec.CPU = "mips32"
+		spec.CFlags = append(spec.CFlags, "-fno-pic")
+		if options.GOARCH == "mips" {
+			llvmarch = "mips" // big endian
+		} else {
+			llvmarch = "mipsel" // little endian
+		}
+		switch options.GOMIPS {
+		case "hardfloat":
+			spec.Features = "+fpxx,+mips32,+nooddspreg,-noabicalls"
+		case "softfloat":
+			spec.SoftFloat = true
+			spec.Features = "+mips32,+soft-float,-noabicalls"
+			spec.CFlags = append(spec.CFlags, "-msoft-float")
+		default:
+			return nil, fmt.Errorf("invalid GOMIPS=%s: must be hardfloat or softfloat", options.GOMIPS)
 		}
 	case "wasm":
-		spec.CPU = "generic"
-		spec.Features = "+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext"
-		spec.BuildTags = append(spec.BuildTags, "tinygo.wasm")
-		spec.CFlags = append(spec.CFlags,
-			"-mbulk-memory",
-			"-mnontrapping-fptoint",
-			"-msign-ext",
-		)
+		return nil, fmt.Errorf("GOARCH=wasm but GOOS is unset. Please set GOOS to wasm, wasip1, or wasip2.")
+	default:
+		return nil, fmt.Errorf("unknown GOARCH=%s", options.GOARCH)
 	}
-	if goos == "darwin" {
+
+	// Configure target based on GOOS.
+	llvmos := options.GOOS
+	llvmvendor := "unknown"
+	switch options.GOOS {
+	case "darwin":
+		spec.GC = "boehm"
+		platformVersion := "10.12.0"
+		if options.GOARCH == "arm64" {
+			platformVersion = "11.0.0" // first macosx platform with arm64 support
+		}
+		llvmvendor = "apple"
+		spec.Scheduler = "tasks"
 		spec.Linker = "ld.lld"
 		spec.Libc = "darwin-libSystem"
-		arch := strings.Split(triple, "-")[0]
-		platformVersion := strings.TrimPrefix(strings.Split(triple, "-")[2], "macosx")
+		// Use macosx* instead of darwin, otherwise darwin/arm64 will refer to
+		// iOS!
+		llvmos = "macosx" + platformVersion
 		spec.LDFlags = append(spec.LDFlags,
 			"-flavor", "darwin",
 			"-dead_strip",
-			"-arch", arch,
+			"-arch", llvmarch,
 			"-platform_version", "macos", platformVersion, platformVersion,
 		)
-	} else if goos == "linux" {
+		spec.ExtraFiles = append(spec.ExtraFiles,
+			"src/internal/futex/futex_darwin.c",
+			"src/runtime/os_darwin.c",
+			"src/runtime/runtime_unix.c",
+			"src/runtime/signal.c")
+	case "linux":
+		spec.GC = "boehm"
+		spec.Scheduler = "threads"
 		spec.Linker = "ld.lld"
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "musl"
 		spec.LDFlags = append(spec.LDFlags, "--gc-sections")
-	} else if goos == "windows" {
+		if options.GOARCH == "arm64" {
+			// Disable outline atomics. For details, see:
+			// https://cpufun.substack.com/p/atomics-in-aarch64
+			// A better way would be to fully support outline atomics, which
+			// makes atomics slightly more efficient on systems with many cores.
+			// But the instructions are only supported on newer aarch64 CPUs, so
+			// this feature is normally put in a system library which does
+			// feature detection for you.
+			// We take the lazy way out and simply disable this feature, instead
+			// of enabling it in compiler-rt (which is a bit more complicated).
+			// We don't really need this feature anyway as we don't even support
+			// proper threading.
+			spec.CFlags = append(spec.CFlags, "-mno-outline-atomics")
+		}
+		spec.ExtraFiles = append(spec.ExtraFiles,
+			"src/internal/futex/futex_linux.c",
+			"src/internal/task/task_threads.c",
+			"src/runtime/runtime_unix.c",
+			"src/runtime/signal.c")
+	case "windows":
+		spec.GC = "boehm"
+		spec.Scheduler = "tasks"
 		spec.Linker = "ld.lld"
 		spec.Libc = "mingw-w64"
-		// Note: using a medium code model, low image base and no ASLR
-		// because Go doesn't really need those features. ASLR patches
-		// around issues for unsafe languages like C/C++ that are not
-		// normally present in Go (without explicitly opting in).
-		// For more discussion:
-		// https://groups.google.com/g/Golang-nuts/c/Jd9tlNc6jUE/m/Zo-7zIP_m3MJ?pli=1
-		switch goarch {
+		switch options.GOARCH {
+		case "386":
+			spec.LDFlags = append(spec.LDFlags,
+				"-m", "i386pe",
+				"--major-os-version", "4",
+				"--major-subsystem-version", "4",
+			)
+			// __udivdi3 is not present in ucrt it seems.
+			spec.RTLib = "compiler-rt"
 		case "amd64":
+			// Note: using a medium code model, low image base and no ASLR
+			// because Go doesn't really need those features. ASLR patches
+			// around issues for unsafe languages like C/C++ that are not
+			// normally present in Go (without explicitly opting in).
+			// For more discussion:
+			// https://groups.google.com/g/Golang-nuts/c/Jd9tlNc6jUE/m/Zo-7zIP_m3MJ?pli=1
 			spec.LDFlags = append(spec.LDFlags,
 				"-m", "i386pep",
 				"--image-base", "0x400000",
@@ -375,40 +464,57 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 			"--no-insert-timestamp",
 			"--no-dynamicbase",
 		)
-	} else if goos == "wasip1" {
-		spec.GC = "" // use default GC
-		spec.Scheduler = "asyncify"
-		spec.Linker = "wasm-ld"
-		spec.RTLib = "compiler-rt"
-		spec.Libc = "wasi-libc"
-		spec.DefaultStackSize = 1024 * 64 // 64kB
-		spec.LDFlags = append(spec.LDFlags,
-			"--stack-first",
-			"--no-demangle",
-		)
-		spec.Emulator = "wasmtime --dir={tmpDir}::/tmp {}"
-		spec.ExtraFiles = append(spec.ExtraFiles,
-			"src/runtime/asm_tinygowasm.S",
-			"src/internal/task/task_asyncify_wasm.S",
-		)
-	} else {
-		spec.LDFlags = append(spec.LDFlags, "-no-pie", "-Wl,--gc-sections") // WARNING: clang < 5.0 requires -nopie
+	case "wasm", "wasip1", "wasip2":
+		return nil, fmt.Errorf("GOOS=%s but GOARCH is unset. Please set GOARCH to wasm", options.GOOS)
+	default:
+		return nil, fmt.Errorf("unknown GOOS=%s", options.GOOS)
 	}
-	if goarch != "wasm" {
+
+	if spec.GC == "boehm" {
+		// Add this file only when needed. This fixes a build failure on
+		// Windows.
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/gc_boehm.c")
+	}
+
+	// Target triples (which actually have four components, but are called
+	// triples for historical reasons) have the form:
+	//   arch-vendor-os-environment
+	spec.Triple = llvmarch + "-" + llvmvendor + "-" + llvmos
+	if options.GOOS == "windows" {
+		spec.Triple += "-gnu"
+	} else if options.GOOS == "linux" {
+		// We use musl on Linux (not glibc) so we should use -musleabi* instead
+		// of -gnueabi*.
+		// The *hf suffix selects between soft/hard floating point ABI.
+		if spec.SoftFloat {
+			spec.Triple += "-musleabi"
+		} else {
+			spec.Triple += "-musleabihf"
+		}
+	}
+
+	// Add extra assembly files (needed for the scheduler etc).
+	if options.GOARCH != "wasm" {
 		suffix := ""
-		if goos == "windows" && goarch == "amd64" {
+		if options.GOOS == "windows" && options.GOARCH == "amd64" {
 			// Windows uses a different calling convention on amd64 from other
 			// operating systems so we need separate assembly files.
 			suffix = "_windows"
 		}
-		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+goarch+suffix+".S")
-		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+goarch+suffix+".S")
+		asmGoarch := options.GOARCH
+		if options.GOARCH == "mips" || options.GOARCH == "mipsle" {
+			asmGoarch = "mipsx"
+		}
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/asm_"+asmGoarch+suffix+".S")
+		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_stack_"+asmGoarch+suffix+".S")
 	}
-	if goarch != runtime.GOARCH {
+
+	// Configure the emulator.
+	if options.GOARCH != runtime.GOARCH {
 		// Some educated guesses as to how to invoke helper programs.
 		spec.GDB = []string{"gdb-multiarch"}
-		if goos == "linux" {
-			switch goarch {
+		if options.GOOS == "linux" {
+			switch options.GOARCH {
 			case "386":
 				// amd64 can _usually_ run 32-bit programs, so skip the emulator in that case.
 				if runtime.GOARCH != "amd64" {
@@ -420,14 +526,19 @@ func defaultTarget(goos, goarch, triple string) (*TargetSpec, error) {
 				spec.Emulator = "qemu-arm {}"
 			case "arm64":
 				spec.Emulator = "qemu-aarch64 {}"
+			case "mips":
+				spec.Emulator = "qemu-mips {}"
+			case "mipsle":
+				spec.Emulator = "qemu-mipsel {}"
 			}
 		}
 	}
-	if goos != runtime.GOOS {
-		if goos == "windows" {
+	if options.GOOS != runtime.GOOS {
+		if options.GOOS == "windows" {
 			spec.Emulator = "wine {}"
 		}
 	}
+
 	return &spec, nil
 }
 

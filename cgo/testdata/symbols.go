@@ -9,6 +9,10 @@ static void staticfunc(int x);
 
 // Global variable signatures.
 extern int someValue;
+
+void notEscapingFunction(int *a);
+
+#cgo noescape notEscapingFunction
 */
 import "C"
 
@@ -18,6 +22,7 @@ func accessFunctions() {
 	C.variadic0()
 	C.variadic2(3, 5)
 	C.staticfunc(3)
+	C.notEscapingFunction(nil)
 }
 
 func accessGlobals() {

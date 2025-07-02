@@ -451,7 +451,7 @@ func (p Pin) getGPIO() (norm *nxp.GPIO_Type, fast *nxp.GPIO_Type) {
 	}
 }
 
-// getPad returns both the pad and mux configration registers for a given Pin.
+// getPad returns both the pad and mux configuration registers for a given Pin.
 func (p Pin) getPad() (pad *volatile.Register32, mux *volatile.Register32) {
 	switch p.getPort() {
 	case portA:

@@ -5,6 +5,8 @@ target triple = "x86_64--linux"
 
 declare { ptr, i64, i64 } @runtime.stringToBytes(ptr, i64)
 
+declare void @printByte(i8)
+
 declare void @printSlice(ptr nocapture readonly, i64, i64)
 
 declare void @writeToSlice(ptr nocapture, i64, i64)
@@ -17,6 +19,12 @@ entry:
   %2 = extractvalue { ptr, i64, i64 } %0, 1
   %3 = extractvalue { ptr, i64, i64 } %0, 2
   call fastcc void @printSlice(ptr %1, i64 %2, i64 %3)
+
+  ; print(slice[0])
+  %indexaddr.ptr1 = extractvalue { ptr, i64, i64 } %0, 0
+  %4 = getelementptr inbounds i8, ptr %indexaddr.ptr1, i64 0
+  %5 = load i8, ptr %4, align 1
+  call fastcc void @printByte(i8 %5)
   ret void
 }
 

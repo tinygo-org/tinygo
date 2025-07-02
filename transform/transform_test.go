@@ -137,6 +137,7 @@ func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
 		Scheduler:          config.Scheduler(),
 		AutomaticStackSize: config.AutomaticStackSize(),
 		Debug:              true,
+		PanicStrategy:      config.PanicStrategy(),
 	}
 	machine, err := compiler.NewTargetMachine(compilerConfig)
 	if err != nil {

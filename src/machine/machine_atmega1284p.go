@@ -71,7 +71,7 @@ func (p Pin) getPortMask() (*volatile.Register8, uint8) {
 }
 
 // SPI configuration
-var SPI0 = SPI{
+var SPI0 = &SPI{
 	spcr: avr.SPCR,
 	spsr: avr.SPSR,
 	spdr: avr.SPDR,

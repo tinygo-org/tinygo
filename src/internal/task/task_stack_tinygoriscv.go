@@ -1,10 +1,16 @@
-//go:build scheduler.tasks && tinygo.riscv
+//go:build (scheduler.tasks || scheduler.cores) && tinygo.riscv
 
 package task
 
 import "unsafe"
 
-var systemStack uintptr
+// Returns a pointer where the system stack can be stored.
+// This is a layering violation! We should probably refactor this so that we
+// don't need such gymnastics to store the system stack pointer. (It should
+// probably be moved to the runtime).
+//
+//go:linkname runtime_systemStackPtr runtime.systemStackPtr
+func runtime_systemStackPtr() *uintptr
 
 // calleeSavedRegs is the list of registers that must be saved and restored when
 // switching between tasks. Also see scheduler_riscv.S that relies on the
@@ -50,17 +56,18 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 }
 
 func (s *state) resume() {
-	swapTask(s.sp, &systemStack)
+	swapTask(s.sp, runtime_systemStackPtr())
 }
 
 func (s *state) pause() {
-	newStack := systemStack
-	systemStack = 0
+	systemStackPtr := runtime_systemStackPtr()
+	newStack := *systemStackPtr
+	*systemStackPtr = 0
 	swapTask(newStack, &s.sp)
 }
 
 // SystemStack returns the system stack pointer when called from a task stack.
 // When called from the system stack, it returns 0.
 func SystemStack() uintptr {
-	return systemStack
+	return *runtime_systemStackPtr()
 }

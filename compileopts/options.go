@@ -8,10 +8,11 @@ import (
 )
 
 var (
-	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise"}
-	validSchedulerOptions     = []string{"none", "tasks", "asyncify"}
-	validSerialOptions        = []string{"none", "uart", "usb"}
-	validPrintSizeOptions     = []string{"none", "short", "full"}
+	validBuildModeOptions     = []string{"default", "c-shared", "wasi-legacy"}
+	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise", "boehm"}
+	validSchedulerOptions     = []string{"none", "tasks", "asyncify", "threads", "cores"}
+	validSerialOptions        = []string{"none", "uart", "usb", "rtt"}
+	validPrintSizeOptions     = []string{"none", "short", "full", "html"}
 	validPanicStrategyOptions = []string{"print", "trap"}
 	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
 )
@@ -23,7 +24,10 @@ type Options struct {
 	GOOS            string // environment variable
 	GOARCH          string // environment variable
 	GOARM           string // environment variable (only used with GOARCH=arm)
+	GOMIPS          string // environment variable (only used with GOARCH=mips and GOARCH=mipsle)
+	Directory       string // working dir, leave it unset to use the current working dir
 	Target          string
+	BuildMode       string // -buildmode flag
 	Opt             string
 	GC              string
 	PanicStrategy   string
@@ -39,6 +43,7 @@ type Options struct {
 	PrintCommands   func(cmd string, args ...string) `json:"-"`
 	Semaphore       chan struct{}                    `json:"-"` // -p flag controls cap
 	Debug           bool
+	Nobounds        bool
 	PrintSizes      string
 	PrintAllocs     *regexp.Regexp // regexp string
 	PrintStacks     bool
@@ -48,15 +53,24 @@ type Options struct {
 	Programmer      string
 	OpenOCDCommands []string
 	LLVMFeatures    string
-	Directory       string
-	PrintJSON       bool
 	Monitor         bool
 	BaudRate        int
 	Timeout         time.Duration
+	WITPackage      string // pass through to wasm-tools component embed invocation
+	WITWorld        string // pass through to wasm-tools component embed -w option
+	ExtLDFlags      []string
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.
 func (o *Options) Verify() error {
+	if o.BuildMode != "" {
+		valid := isInArray(validBuildModeOptions, o.BuildMode)
+		if !valid {
+			return fmt.Errorf(`invalid buildmode option '%s': valid values are %s`,
+				o.BuildMode,
+				strings.Join(validBuildModeOptions, ", "))
+		}
+	}
 	if o.GC != "" {
 		valid := isInArray(validGCOptions, o.GC)
 		if !valid {

@@ -34,8 +34,8 @@ type SPI struct {
 
 // There are 2 SPI interfaces on the NRF51.
 var (
-	SPI0 = SPI{Bus: nrf.SPI0}
-	SPI1 = SPI{Bus: nrf.SPI1}
+	SPI0 = &SPI{Bus: nrf.SPI0}
+	SPI1 = &SPI{Bus: nrf.SPI1}
 )
 
 // SPIConfig is used to store config info for SPI.
@@ -49,7 +49,7 @@ type SPIConfig struct {
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) error {
+func (spi *SPI) Configure(config SPIConfig) error {
 	// Disable bus to configure it
 	spi.Bus.ENABLE.Set(nrf.SPI_ENABLE_ENABLE_Disabled)
 
@@ -122,7 +122,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
-func (spi SPI) Transfer(w byte) (byte, error) {
+func (spi *SPI) Transfer(w byte) (byte, error) {
 	spi.Bus.TXD.Set(uint32(w))
 	for spi.Bus.EVENTS_READY.Get() == 0 {
 	}
@@ -133,7 +133,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(r), nil
 }
 
-// Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
+// Tx handles read/write operation for SPI interface. Since SPI is a synchronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
 // The Tx method knows about this, and offers a few different ways of calling it.
 //
@@ -150,7 +150,7 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 // This form sends zeros, putting the result into the rx buffer. Good for reading a "result packet":
 //
 //	spi.Tx(nil, rx)
-func (spi SPI) Tx(w, r []byte) error {
+func (spi *SPI) Tx(w, r []byte) error {
 	var err error
 
 	switch {

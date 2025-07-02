@@ -39,8 +39,6 @@ import (
 	"runtime/volatile"
 )
 
-type timeUnit int64
-
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	return int64(ticks) * 1000
 }

@@ -42,6 +42,7 @@ type object struct {
 	globalName     string    // name, if not yet created (not guaranteed to be the final name)
 	buffer         value     // buffer with value as given by interp, nil if external
 	size           uint32    // must match buffer.len(), if available
+	align          int       // alignment of the object (may be 0 if unknown)
 	constant       bool      // true if this is a constant global
 	marked         uint8     // 0 means unmarked, 1 means external read, 2 means external write
 }
@@ -361,8 +362,8 @@ type value interface {
 	clone() value
 	asPointer(*runner) (pointerValue, error)
 	asRawValue(*runner) rawValue
-	Uint() uint64
-	Int() int64
+	Uint(*runner) uint64
+	Int(*runner) int64
 	toLLVMValue(llvm.Type, *memoryView) (llvm.Value, error)
 	String() string
 }
@@ -405,7 +406,8 @@ func (v literalValue) len(r *runner) uint32 {
 }
 
 func (v literalValue) String() string {
-	return strconv.FormatInt(v.Int(), 10)
+	// Note: passing a nil *runner to v.Int because we know it won't use it.
+	return strconv.FormatInt(v.Int(nil), 10)
 }
 
 func (v literalValue) clone() value {
@@ -421,13 +423,13 @@ func (v literalValue) asRawValue(r *runner) rawValue {
 	switch value := v.value.(type) {
 	case uint64:
 		buf = make([]byte, 8)
-		binary.LittleEndian.PutUint64(buf, value)
+		r.byteOrder.PutUint64(buf, value)
 	case uint32:
 		buf = make([]byte, 4)
-		binary.LittleEndian.PutUint32(buf, uint32(value))
+		r.byteOrder.PutUint32(buf, uint32(value))
 	case uint16:
 		buf = make([]byte, 2)
-		binary.LittleEndian.PutUint16(buf, uint16(value))
+		r.byteOrder.PutUint16(buf, uint16(value))
 	case uint8:
 		buf = []byte{uint8(value)}
 	default:
@@ -440,7 +442,7 @@ func (v literalValue) asRawValue(r *runner) rawValue {
 	return raw
 }
 
-func (v literalValue) Uint() uint64 {
+func (v literalValue) Uint(r *runner) uint64 {
 	switch value := v.value.(type) {
 	case uint64:
 		return value
@@ -455,7 +457,7 @@ func (v literalValue) Uint() uint64 {
 	}
 }
 
-func (v literalValue) Int() int64 {
+func (v literalValue) Int(r *runner) int64 {
 	switch value := v.value.(type) {
 	case uint64:
 		return int64(value)
@@ -517,12 +519,12 @@ func (v pointerValue) offset() uint32 {
 // addOffset essentially does a GEP operation (pointer arithmetic): it adds the
 // offset to the pointer. It also checks that the offset doesn't overflow the
 // maximum offset size (which is 4GB).
-func (v pointerValue) addOffset(offset int64) pointerValue {
+func (v pointerValue) addOffset(offset int64) (pointerValue, error) {
 	result := pointerValue{v.pointer + uint64(offset)}
 	if checks && v.index() != result.index() {
-		panic("interp: offset out of range")
+		return result, fmt.Errorf("interp: offset %d out of range for object %v", offset, v)
 	}
-	return result
+	return result, nil
 }
 
 func (v pointerValue) len(r *runner) uint32 {
@@ -553,11 +555,11 @@ func (v pointerValue) asRawValue(r *runner) rawValue {
 	return rv
 }
 
-func (v pointerValue) Uint() uint64 {
+func (v pointerValue) Uint(r *runner) uint64 {
 	panic("cannot convert pointer to integer")
 }
 
-func (v pointerValue) Int() int64 {
+func (v pointerValue) Int(r *runner) int64 {
 	panic("cannot convert pointer to integer")
 }
 
@@ -592,6 +594,12 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 		// runtime.alloc.
 		// First allocate a new global for this object.
 		obj := mem.get(v.index())
+		alignment := obj.align
+		if alignment == 0 {
+			// Unknown alignment, perhaps from a direct call to runtime.alloc in
+			// the runtime. Use a conservative default instead.
+			alignment = mem.r.maxAlign
+		}
 		if obj.llvmType.IsNil() && obj.llvmLayoutType.IsNil() {
 			// Create an initializer without knowing the global type.
 			// This is probably the result of a runtime.alloc call.
@@ -602,7 +610,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 			globalType := initializer.Type()
 			llvmValue = llvm.AddGlobal(mem.r.mod, globalType, obj.globalName)
 			llvmValue.SetInitializer(initializer)
-			llvmValue.SetAlignment(mem.r.maxAlign)
+			llvmValue.SetAlignment(alignment)
 			obj.llvmGlobal = llvmValue
 			mem.put(v.index(), obj)
 		} else {
@@ -641,11 +649,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 				return llvm.Value{}, errors.New("interp: allocated value does not match allocated type")
 			}
 			llvmValue.SetInitializer(initializer)
-			if obj.llvmType.IsNil() {
-				// The exact type isn't known (only the layout), so use the
-				// alignment that would normally be expected from runtime.alloc.
-				llvmValue.SetAlignment(mem.r.maxAlign)
-			}
+			llvmValue.SetAlignment(alignment)
 		}
 
 		// It should be included in r.globals because otherwise markExternal
@@ -702,7 +706,12 @@ func (v rawValue) String() string {
 		}
 		// Format as number if none of the buf is a pointer.
 		if !v.hasPointer() {
-			return strconv.FormatInt(v.Int(), 10)
+			// Construct a fake runner, which is little endian.
+			// We only use String() for debugging, so this is is good enough
+			// (the printed value will just be slightly wrong when debugging the
+			// interp package with GOOS=mips for example).
+			r := &runner{byteOrder: binary.LittleEndian}
+			return strconv.FormatInt(v.Int(r), 10)
 		}
 	}
 	return "<[…" + strconv.Itoa(len(v.buf)) + "]>"
@@ -738,33 +747,33 @@ func (v rawValue) bytes() []byte {
 	return buf
 }
 
-func (v rawValue) Uint() uint64 {
+func (v rawValue) Uint(r *runner) uint64 {
 	buf := v.bytes()
 
 	switch len(v.buf) {
 	case 1:
 		return uint64(buf[0])
 	case 2:
-		return uint64(binary.LittleEndian.Uint16(buf))
+		return uint64(r.byteOrder.Uint16(buf))
 	case 4:
-		return uint64(binary.LittleEndian.Uint32(buf))
+		return uint64(r.byteOrder.Uint32(buf))
 	case 8:
-		return binary.LittleEndian.Uint64(buf)
+		return r.byteOrder.Uint64(buf)
 	default:
 		panic("unknown integer size")
 	}
 }
 
-func (v rawValue) Int() int64 {
+func (v rawValue) Int(r *runner) int64 {
 	switch len(v.buf) {
 	case 1:
-		return int64(int8(v.Uint()))
+		return int64(int8(v.Uint(r)))
 	case 2:
-		return int64(int16(v.Uint()))
+		return int64(int16(v.Uint(r)))
 	case 4:
-		return int64(int32(v.Uint()))
+		return int64(int32(v.Uint(r)))
 	case 8:
-		return int64(int64(v.Uint()))
+		return int64(int64(v.Uint(r)))
 	default:
 		panic("unknown integer size")
 	}
@@ -814,19 +823,6 @@ func (v rawValue) rawLLVMValue(mem *memoryView) (llvm.Value, error) {
 			field, err := pointerValue{v.buf[i]}.toLLVMValue(llvm.Type{}, mem)
 			if err != nil {
 				return llvm.Value{}, err
-			}
-			if !field.IsAGlobalVariable().IsNil() {
-				elementType := field.GlobalValueType()
-				if elementType.TypeKind() == llvm.StructTypeKind {
-					// There are some special pointer types that should be used
-					// as a ptrtoint, so that they can be used in certain
-					// optimizations.
-					name := elementType.StructName()
-					if name == "runtime.funcValueWithSignature" {
-						uintptrType := ctx.IntType(int(mem.r.pointerSize) * 8)
-						field = llvm.ConstPtrToInt(field, uintptrType)
-					}
-				}
 			}
 			structFields = append(structFields, field)
 			i += mem.r.pointerSize
@@ -878,11 +874,11 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 		var n uint64
 		switch llvmType.IntTypeWidth() {
 		case 64:
-			n = rawValue{v.buf[:8]}.Uint()
+			n = rawValue{v.buf[:8]}.Uint(mem.r)
 		case 32:
-			n = rawValue{v.buf[:4]}.Uint()
+			n = rawValue{v.buf[:4]}.Uint(mem.r)
 		case 16:
-			n = rawValue{v.buf[:2]}.Uint()
+			n = rawValue{v.buf[:2]}.Uint(mem.r)
 		case 8:
 			n = uint64(v.buf[0])
 		case 1:
@@ -951,7 +947,7 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 		}
 		// This is either a null pointer or a raw pointer for memory-mapped I/O
 		// (such as 0xe000ed00).
-		ptr := rawValue{v.buf[:mem.r.pointerSize]}.Uint()
+		ptr := rawValue{v.buf[:mem.r.pointerSize]}.Uint(mem.r)
 		if ptr == 0 {
 			// Null pointer.
 			return llvm.ConstNull(llvmType), nil
@@ -969,11 +965,11 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 		}
 		return llvm.ConstIntToPtr(ptrValue, llvmType), nil
 	case llvm.DoubleTypeKind:
-		b := rawValue{v.buf[:8]}.Uint()
+		b := rawValue{v.buf[:8]}.Uint(mem.r)
 		f := math.Float64frombits(b)
 		return llvm.ConstFloat(llvmType, f), nil
 	case llvm.FloatTypeKind:
-		b := uint32(rawValue{v.buf[:4]}.Uint())
+		b := uint32(rawValue{v.buf[:4]}.Uint(mem.r))
 		f := math.Float32frombits(b)
 		return llvm.ConstFloat(llvmType, float64(f)), nil
 	default:
@@ -1037,6 +1033,8 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				v.buf[i] = ptrValue.pointer
 			}
 		case llvm.ICmp:
+			// Note: constant icmp isn't supported anymore in LLVM 19.
+			// Once we drop support for LLVM 18, this can be removed.
 			size := r.targetData.TypeAllocSize(llvmValue.Operand(0).Type())
 			lhs := newRawValue(uint32(size))
 			rhs := newRawValue(uint32(size))
@@ -1065,19 +1063,19 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			switch llvmValue.Type().IntTypeWidth() {
 			case 64:
 				var buf [8]byte
-				binary.LittleEndian.PutUint64(buf[:], n)
+				r.byteOrder.PutUint64(buf[:], n)
 				for i, b := range buf {
 					v.buf[i] = uint64(b)
 				}
 			case 32:
 				var buf [4]byte
-				binary.LittleEndian.PutUint32(buf[:], uint32(n))
+				r.byteOrder.PutUint32(buf[:], uint32(n))
 				for i, b := range buf {
 					v.buf[i] = uint64(b)
 				}
 			case 16:
 				var buf [2]byte
-				binary.LittleEndian.PutUint16(buf[:], uint16(n))
+				r.byteOrder.PutUint16(buf[:], uint16(n))
 				for i, b := range buf {
 					v.buf[i] = uint64(b)
 				}
@@ -1109,14 +1107,14 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 		case llvm.DoubleTypeKind:
 			f, _ := llvmValue.DoubleValue()
 			var buf [8]byte
-			binary.LittleEndian.PutUint64(buf[:], math.Float64bits(f))
+			r.byteOrder.PutUint64(buf[:], math.Float64bits(f))
 			for i, b := range buf {
 				v.buf[i] = uint64(b)
 			}
 		case llvm.FloatTypeKind:
 			f, _ := llvmValue.DoubleValue()
 			var buf [4]byte
-			binary.LittleEndian.PutUint32(buf[:], math.Float32bits(float32(f)))
+			r.byteOrder.PutUint32(buf[:], math.Float32bits(float32(f)))
 			for i, b := range buf {
 				v.buf[i] = uint64(b)
 			}
@@ -1166,11 +1164,11 @@ func (v localValue) asRawValue(r *runner) rawValue {
 	panic("interp: localValue.asRawValue")
 }
 
-func (v localValue) Uint() uint64 {
+func (v localValue) Uint(r *runner) uint64 {
 	panic("interp: localValue.Uint")
 }
 
-func (v localValue) Int() int64 {
+func (v localValue) Int(r *runner) int64 {
 	panic("interp: localValue.Int")
 }
 
@@ -1254,7 +1252,7 @@ func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 	ptr, err := layoutValue.asPointer(r)
 	if err == errIntegerAsPointer {
 		// It's an integer, which means it's a small object or unknown.
-		layout := layoutValue.Uint()
+		layout := layoutValue.Uint(r)
 		if layout == 0 {
 			// Nil pointer, which means the layout is unknown.
 			return 0, nil
@@ -1287,7 +1285,7 @@ func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 
 	// Read the object size in words and the bitmap from the global.
 	buf := r.objects[ptr.index()].buffer.(rawValue)
-	objectSizeWords := rawValue{buf: buf.buf[:r.pointerSize]}.Uint()
+	objectSizeWords := rawValue{buf: buf.buf[:r.pointerSize]}.Uint(r)
 	rawByteValues := buf.buf[r.pointerSize:]
 	rawBytes := make([]byte, len(rawByteValues))
 	for i, v := range rawByteValues {

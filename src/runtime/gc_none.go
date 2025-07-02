@@ -10,6 +10,8 @@ import (
 	"unsafe"
 )
 
+const needsStaticHeap = false
+
 var gcTotalAlloc uint64 // for runtime.MemStats
 var gcMallocs uint64
 var gcFrees uint64
@@ -24,6 +26,10 @@ func free(ptr unsafe.Pointer) {
 
 func GC() {
 	// Unimplemented.
+}
+
+func markRoots(start, end uintptr) {
+	runtimePanic("unreachable: markRoots")
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {

@@ -52,7 +52,7 @@ type SPI struct {
 
 var (
 	// SPI0 and SPI1 are reserved for use by the caching system etc.
-	SPI2 = SPI{esp.SPI2}
+	SPI2 = &SPI{esp.SPI2}
 )
 
 // SPIConfig is used to store config info for SPI.
@@ -114,7 +114,7 @@ func freqToClockDiv(hz uint32) uint32 {
 }
 
 // Configure and make the SPI peripheral ready to use.
-func (spi SPI) Configure(config SPIConfig) error {
+func (spi *SPI) Configure(config SPIConfig) error {
 	// right now this is only setup to work for the esp32c3 spi2 bus
 	if spi.Bus != esp.SPI2 {
 		return ErrInvalidSPIBus
@@ -201,7 +201,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 	// configure esp32c3 gpio pin matrix
 	config.SDI.Configure(PinConfig{Mode: PinInput})
-	inFunc(FSPIQ_IN_IDX).Set(esp.GPIO_FUNC_IN_SEL_CFG_SIG_IN_SEL | uint32(config.SDI))
+	inFunc(FSPIQ_IN_IDX).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDI))
 	config.SDO.Configure(PinConfig{Mode: PinOutput})
 	config.SDO.outFunc().Set(FSPID_OUT_IDX)
 	config.SCK.Configure(PinConfig{Mode: PinOutput})
@@ -216,7 +216,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 // Transfer writes/reads a single byte using the SPI interface. If you need to
 // transfer larger amounts of data, Tx will be faster.
-func (spi SPI) Transfer(w byte) (byte, error) {
+func (spi *SPI) Transfer(w byte) (byte, error) {
 	spi.Bus.SetMS_DLEN_MS_DATA_BITLEN(7)
 
 	spi.Bus.SetW0(uint32(w))
@@ -234,11 +234,11 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.GetW0()), nil
 }
 
-// Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
+// Tx handles read/write operation for SPI interface. Since SPI is a synchronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
 // This is accomplished by sending zero bits if r is bigger than w or discarding
 // the incoming data if w is bigger than r.
-func (spi SPI) Tx(w, r []byte) error {
+func (spi *SPI) Tx(w, r []byte) error {
 	toTransfer := len(w)
 	if len(r) > toTransfer {
 		toTransfer = len(r)

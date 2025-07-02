@@ -1,6 +1,9 @@
 package rand
 
-import "errors"
+import (
+	"errors"
+	"unsafe"
+)
 
 func init() {
 	Reader = &reader{}
@@ -16,28 +19,22 @@ func (r *reader) Read(b []byte) (n int, err error) {
 		return
 	}
 
-	var randomByte uint32
-	for i := range b {
-		// Call rand_s every four bytes because it's a C int (always 32-bit in
-		// Windows).
-		if i%4 == 0 {
-			errCode := libc_rand_s(&randomByte)
-			if errCode != 0 {
-				// According to the documentation, it can return an error.
-				return n, errRandom
-			}
-		} else {
-			randomByte >>= 8
-		}
-		b[i] = byte(randomByte)
+	// Use the old RtlGenRandom, introduced in Windows XP.
+	// Even though the documentation says it is deprecated, it is widely used
+	// and probably won't go away anytime soon.
+	// See for example: https://github.com/golang/go/issues/33542
+	// For Windows 7 and newer, we might switch to ProcessPrng in the future
+	// (which is a documented function and might be a tiny bit faster).
+	ok := libc_RtlGenRandom(unsafe.Pointer(&b[0]), len(b))
+	if !ok {
+		return 0, errRandom
 	}
-
 	return len(b), nil
 }
 
-// Cryptographically secure random number generator.
-// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/rand-s?view=msvc-170
-// errno_t rand_s(unsigned int* randomValue);
+// This function is part of advapi32.dll, and is called SystemFunction036 for
+// some reason. It's available on Windows XP and newer.
+// See: https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-rtlgenrandom
 //
-//export rand_s
-func libc_rand_s(randomValue *uint32) int32
+//export SystemFunction036
+func libc_RtlGenRandom(buf unsafe.Pointer, len int) bool

@@ -33,10 +33,11 @@ func buffered() int {
 
 // initCLK sets clock to 72MHz using HSE 8MHz crystal w/ PLL X 9 (8MHz x 9 = 72MHz).
 func initCLK() {
-	stm32.FLASH.ACR.SetBits(stm32.FLASH_ACR_LATENCY_WS2)                          // Two wait states, per datasheet
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_Div2 << stm32.RCC_CFGR_PPRE1_Pos) // prescale PCLK1 = HCLK/2
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE2_Div1 << stm32.RCC_CFGR_PPRE2_Pos) // prescale PCLK2 = HCLK/1
-	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSEON)                                      // enable HSE clock
+	stm32.FLASH.ACR.SetBits(stm32.FLASH_ACR_LATENCY_WS2)                            // Two wait states, per datasheet
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_Div2 << stm32.RCC_CFGR_PPRE1_Pos)   // prescale PCLK1 = HCLK/2
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE2_Div1 << stm32.RCC_CFGR_PPRE2_Pos)   // prescale PCLK2 = HCLK/1
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_ADCPRE_Div6 << stm32.RCC_CFGR_ADCPRE_Pos) // prescale ADCCLK = PCLK2/6
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSEON)                                        // enable HSE clock
 
 	// wait for the HSEREADY flag
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSERDY) {

@@ -10,6 +10,8 @@ target triple = "x86_64--linux"
 @main.exposedValue1 = global i16 0
 @main.exposedValue2 = global i16 0
 @main.insertedValue = global {i8, i32, {float, {i64, i16}}} zeroinitializer
+@main.gepArray = global [8 x i8] zeroinitializer
+@main.negativeGEP = global ptr null
 
 declare void @runtime.printint64(i64) unnamed_addr
 
@@ -87,6 +89,11 @@ entry:
   call void @runtime.printint64(i64 %elt)
   %agg2 = insertvalue {i8, i32, {float, {i64, i16}}} %agg, i64 5, 2, 1, 0
   store {i8, i32, {float, {i64, i16}}} %agg2, ptr @main.insertedValue
+
+  ; negative GEP instruction
+  %ngep1 = getelementptr [8 x i8], ptr @main.negativeGEP, i32 0, i32 5
+  %ngep2 = getelementptr [8 x i8], ptr %ngep1, i32 0, i32 -3
+  store ptr %ngep2, ptr @main.negativeGEP
 
   ret void
 }

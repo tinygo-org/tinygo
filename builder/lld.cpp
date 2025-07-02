@@ -5,7 +5,11 @@
 #include <lld/Common/Driver.h>
 #include <llvm/Support/Parallel.h>
 
-extern "C" {
+LLD_HAS_DRIVER(coff)
+LLD_HAS_DRIVER(elf)
+LLD_HAS_DRIVER(mingw)
+LLD_HAS_DRIVER(macho)
+LLD_HAS_DRIVER(wasm)
 
 static void configure() {
 #if _WIN64
@@ -16,28 +20,13 @@ static void configure() {
 #endif
 }
 
-bool tinygo_link_elf(int argc, char **argv) {
-	configure();
-	std::vector<const char*> args(argv, argv + argc);
-	return lld::elf::link(args, llvm::outs(), llvm::errs(), false, false);
-}
+extern "C" {
 
-bool tinygo_link_macho(int argc, char **argv) {
+bool tinygo_link(int argc, char **argv) {
 	configure();
 	std::vector<const char*> args(argv, argv + argc);
-	return lld::macho::link(args, llvm::outs(), llvm::errs(), false, false);
-}
-
-bool tinygo_link_mingw(int argc, char **argv) {
-	configure();
-	std::vector<const char*> args(argv, argv + argc);
-	return lld::mingw::link(args, llvm::outs(), llvm::errs(), false, false);
-}
-
-bool tinygo_link_wasm(int argc, char **argv) {
-	configure();
-	std::vector<const char*> args(argv, argv + argc);
-	return lld::wasm::link(args, llvm::outs(), llvm::errs(), false, false);
+	lld::Result r = lld::lldMain(args, llvm::outs(), llvm::errs(), LLD_ALL_DRIVERS);
+	return !r.retCode;
 }
 
 } // external "C"

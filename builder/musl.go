@@ -12,7 +12,46 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-var Musl = Library{
+// Create the alltypes.h file from the appropriate alltypes.h.in files.
+func buildMuslAllTypes(arch, muslDir, outputBitsDir string) error {
+	// Create the file alltypes.h.
+	f, err := os.Create(filepath.Join(outputBitsDir, "alltypes.h"))
+	if err != nil {
+		return err
+	}
+	infiles := []string{
+		filepath.Join(muslDir, "arch", arch, "bits", "alltypes.h.in"),
+		filepath.Join(muslDir, "include", "alltypes.h.in"),
+	}
+	for _, infile := range infiles {
+		data, err := os.ReadFile(infile)
+		if err != nil {
+			return err
+		}
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "TYPEDEF ") {
+				matches := regexp.MustCompile(`TYPEDEF (.*) ([^ ]*);`).FindStringSubmatch(line)
+				value := matches[1]
+				name := matches[2]
+				line = fmt.Sprintf("#if defined(__NEED_%s) && !defined(__DEFINED_%s)\ntypedef %s %s;\n#define __DEFINED_%s\n#endif\n", name, name, value, name, name)
+			}
+			if strings.HasPrefix(line, "STRUCT ") {
+				matches := regexp.MustCompile(`STRUCT * ([^ ]*) (.*);`).FindStringSubmatch(line)
+				name := matches[1]
+				value := matches[2]
+				line = fmt.Sprintf("#if defined(__NEED_struct_%s) && !defined(__DEFINED_struct_%s)\nstruct %s %s;\n#define __DEFINED_struct_%s\n#endif\n", name, name, name, value, name)
+			}
+			_, err := f.WriteString(line + "\n")
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return f.Close()
+}
+
+var libMusl = Library{
 	name: "musl",
 	makeHeaders: func(target, includeDir string) error {
 		bits := filepath.Join(includeDir, "bits")
@@ -24,41 +63,13 @@ var Musl = Library{
 		arch := compileopts.MuslArchitecture(target)
 		muslDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib", "musl")
 
-		// Create the file alltypes.h.
-		f, err := os.Create(filepath.Join(bits, "alltypes.h"))
+		err = buildMuslAllTypes(arch, muslDir, bits)
 		if err != nil {
 			return err
 		}
-		infiles := []string{
-			filepath.Join(muslDir, "arch", arch, "bits", "alltypes.h.in"),
-			filepath.Join(muslDir, "include", "alltypes.h.in"),
-		}
-		for _, infile := range infiles {
-			data, err := os.ReadFile(infile)
-			if err != nil {
-				return err
-			}
-			lines := strings.Split(string(data), "\n")
-			for _, line := range lines {
-				if strings.HasPrefix(line, "TYPEDEF ") {
-					matches := regexp.MustCompile(`TYPEDEF (.*) ([^ ]*);`).FindStringSubmatch(line)
-					value := matches[1]
-					name := matches[2]
-					line = fmt.Sprintf("#if defined(__NEED_%s) && !defined(__DEFINED_%s)\ntypedef %s %s;\n#define __DEFINED_%s\n#endif\n", name, name, value, name, name)
-				}
-				if strings.HasPrefix(line, "STRUCT ") {
-					matches := regexp.MustCompile(`STRUCT * ([^ ]*) (.*);`).FindStringSubmatch(line)
-					name := matches[1]
-					value := matches[2]
-					line = fmt.Sprintf("#if defined(__NEED_struct_%s) && !defined(__DEFINED_struct_%s)\nstruct %s %s;\n#define __DEFINED_struct_%s\n#endif\n", name, name, name, value, name)
-				}
-				f.WriteString(line + "\n")
-			}
-		}
-		f.Close()
 
 		// Create the file syscall.h.
-		f, err = os.Create(filepath.Join(bits, "syscall.h"))
+		f, err := os.Create(filepath.Join(bits, "syscall.h"))
 		if err != nil {
 			return err
 		}
@@ -92,6 +103,8 @@ var Musl = Library{
 			"-Wno-ignored-pragmas",
 			"-Wno-tautological-constant-out-of-range-compare",
 			"-Wno-deprecated-non-prototype",
+			"-Wno-format",
+			"-Wno-parentheses",
 			"-Qunused-arguments",
 			// Select include dirs. Don't include standard library includes
 			// (that would introduce host dependencies and other complications),
@@ -108,32 +121,53 @@ var Musl = Library{
 		return cflags
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl/src") },
-	librarySources: func(target string) ([]string, error) {
+	librarySources: func(target string, _ bool) ([]string, error) {
 		arch := compileopts.MuslArchitecture(target)
 		globs := []string{
+			"conf/*.c",
+			"ctype/*.c",
 			"env/*.c",
 			"errno/*.c",
 			"exit/*.c",
+			"fcntl/*.c",
 			"internal/defsysinfo.c",
+			"internal/intscan.c",
 			"internal/libc.c",
+			"internal/shgetc.c",
 			"internal/syscall_ret.c",
 			"internal/vdso.c",
 			"legacy/*.c",
+			"locale/*.c",
+			"linux/*.c",
+			"locale/*.c",
 			"malloc/*.c",
 			"malloc/mallocng/*.c",
 			"mman/*.c",
 			"math/*.c",
+			"misc/*.c",
+			"multibyte/*.c",
+			"sched/*.c",
+			"signal/" + arch + "/*.s",
 			"signal/*.c",
 			"stdio/*.c",
+			"stdlib/*.c",
 			"string/*.c",
 			"thread/" + arch + "/*.s",
 			"thread/*.c",
 			"time/*.c",
 			"unistd/*.c",
+			"process/*.c",
 		}
+
 		if arch == "arm" {
 			// These files need to be added to the start for some reason.
 			globs = append([]string{"thread/arm/*.c"}, globs...)
+		}
+
+		if arch != "aarch64" && arch != "mips" {
+			//aarch64 and mips have no architecture specific code, either they
+			// are not supported or don't need any?
+			globs = append([]string{"process/" + arch + "/*.s"}, globs...)
 		}
 
 		var sources []string

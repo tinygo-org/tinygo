@@ -1,4 +1,7 @@
-//go:build nrf || stm32 || (sam && atsamd51) || (sam && atsame5x)
+//go:build nrf || (stm32 && !(stm32f103 || stm32l0x1)) || (sam && atsamd51) || (sam && atsame5x) || esp32c3 || tkey || (tinygo.riscv32 && virt)
+
+// If you update the above build constraint, you'll probably also need to update
+// src/runtime/rand_hwrng.go.
 
 package rand
 

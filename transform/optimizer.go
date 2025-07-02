@@ -8,6 +8,7 @@ import (
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/ircheck"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -27,7 +28,7 @@ func OptimizePackage(mod llvm.Module, config *compileopts.Config) {
 // passes.
 //
 // Please note that some optimizations are not optional, thus Optimize must
-// alwasy be run before emitting machine code.
+// always be run before emitting machine code.
 func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	optLevel, speedLevel, _ := config.OptLevel()
 
@@ -38,10 +39,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 			panic(fmt.Errorf("missing core function %q", name))
 		}
 		fn.SetLinkage(llvm.ExternalLinkage)
-	}
-
-	if config.PanicStrategy() == "trap" {
-		ReplacePanicsWithTrap(mod) // -panic=trap
 	}
 
 	// run a check of all of our code
@@ -56,7 +53,12 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		// Run some preparatory passes for the Go optimizer.
 		po := llvm.NewPassBuilderOptions()
 		defer po.Dispose()
-		err := mod.RunPasses("globaldce,globalopt,ipsccp,instcombine,adce,function-attrs", llvm.TargetMachine{}, po)
+		optPasses := "globaldce,globalopt,ipsccp,instcombine<no-verify-fixpoint>,adce,function-attrs"
+		if llvmutil.Version() < 18 {
+			// LLVM 17 doesn't have the no-verify-fixpoint flag.
+			optPasses = "globaldce,globalopt,ipsccp,instcombine,adce,function-attrs"
+		}
+		err := mod.RunPasses(optPasses, llvm.TargetMachine{}, po)
 		if err != nil {
 			return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
 		}
@@ -64,7 +66,8 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		// Run TinyGo-specific optimization passes.
 		OptimizeStringToBytes(mod)
 		OptimizeReflectImplements(mod)
-		OptimizeAllocs(mod, nil, nil)
+		maxStackSize := config.MaxStackAlloc()
+		OptimizeAllocs(mod, nil, maxStackSize, nil)
 		err = LowerInterfaces(mod, config)
 		if err != nil {
 			return []error{err}
@@ -78,13 +81,13 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		// After interfaces are lowered, there are many more opportunities for
 		// interprocedural optimizations. To get them to work, function
 		// attributes have to be updated first.
-		err = mod.RunPasses("globaldce,globalopt,ipsccp,instcombine,adce,function-attrs", llvm.TargetMachine{}, po)
+		err = mod.RunPasses(optPasses, llvm.TargetMachine{}, po)
 		if err != nil {
 			return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
 		}
 
 		// Run TinyGo-specific interprocedural optimizations.
-		OptimizeAllocs(mod, config.Options.PrintAllocs, func(pos token.Position, msg string) {
+		OptimizeAllocs(mod, config.Options.PrintAllocs, maxStackSize, func(pos token.Position, msg string) {
 			fmt.Fprintln(os.Stderr, pos.String()+": "+msg)
 		})
 		OptimizeStringToBytes(mod)
@@ -139,11 +142,13 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		fn.SetLinkage(llvm.InternalLinkage)
 	}
 
-	// Run the default pass pipeline.
-	// TODO: set the PrepareForThinLTO flag somehow.
+	// Run the ThinLTO pre-link passes, meant to be run on each individual
+	// module. This saves compilation time compared to "default<#>" and is meant
+	// to better match the optimization passes that are happening during
+	// ThinLTO.
 	po := llvm.NewPassBuilderOptions()
 	defer po.Dispose()
-	passes := fmt.Sprintf("default<%s>", optLevel)
+	passes := fmt.Sprintf("thinlto-pre-link<%s>", optLevel)
 	err := mod.RunPasses(passes, llvm.TargetMachine{}, po)
 	if err != nil {
 		return []error{fmt.Errorf("could not build pass pipeline: %w", err)}

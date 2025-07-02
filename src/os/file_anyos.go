@@ -1,6 +1,6 @@
-//go:build !baremetal && !js
+//go:build !baremetal && !js && !wasm_unknown && !nintendoswitch
 
-// Portions copyright 2009 The Go Authors. All rights reserved.
+// Portions copyright 2009-2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -97,6 +97,11 @@ type unixFileHandle uintptr
 // read and any error encountered. At end of file, Read returns 0, io.EOF.
 func (f unixFileHandle) Read(b []byte) (n int, err error) {
 	n, err = syscall.Read(syscallFd(f), b)
+	// In case of EISDIR, n == -1.
+	// This breaks the assumption that n always represent the number of read bytes.
+	if err == syscall.EISDIR {
+		n = 0
+	}
 	err = handleSyscallError(err)
 	if n == 0 && len(b) > 0 && err == nil {
 		err = io.EOF
@@ -143,6 +148,20 @@ func Chmod(name string, mode FileMode) error {
 	})
 	if e != nil {
 		return &PathError{Op: "chmod", Path: name, Err: e}
+	}
+	return nil
+}
+
+// Chown changes the numeric uid and gid of the named file.
+// If the file is a symbolic link, it changes the uid and gid of the link's target.
+// A uid or gid of -1 means to not change that value.
+// If there is an error, it will be of type *PathError.
+func Chown(name string, uid, gid int) error {
+	e := ignoringEINTR(func() error {
+		return syscall.Chown(name, uid, gid)
+	})
+	if e != nil {
+		return &PathError{Op: "chown", Path: name, Err: e}
 	}
 	return nil
 }

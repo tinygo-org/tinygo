@@ -1,0 +1,4 @@
+{
+	"inherits": ["microbit-v2", "nrf52833-s140v7"],
+	"flash-method": "openocd"
+}

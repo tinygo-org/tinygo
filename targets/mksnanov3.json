@@ -1,0 +1,13 @@
+{
+  "inherits": ["cortex-m4"],
+  "build-tags": ["mksnanov3", "stm32f407", "stm32f4", "stm32"],
+  "serial": "uart",
+  "linkerscript": "targets/stm32f407.ld",
+  "extra-files": [
+    "src/device/stm32/stm32f407.s"
+  ],
+  "flash-method": "openocd",
+  "openocd-interface": "stlink",
+  "openocd-target": "stm32f4x",
+  "openocd-commands": ["stm32f4x.cpu configure -event reset-init { adapter speed 1800 }"]
+}

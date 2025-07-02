@@ -2,7 +2,6 @@
 .global _tinygo_scanCurrentStack
 _tinygo_scanCurrentStack:
 #else
-.section .text.tinygo_scanCurrentStack
 .global tinygo_scanCurrentStack
 tinygo_scanCurrentStack:
 #endif
@@ -39,7 +38,6 @@ tinygo_scanCurrentStack:
 .global _tinygo_longjmp
 _tinygo_longjmp:
 #else
-.section .text.tinygo_longjmp
 .global tinygo_longjmp
 tinygo_longjmp:
 #endif

@@ -9,8 +9,6 @@ import (
 	"unsafe"
 )
 
-type timeUnit int64
-
 var currentTime timeUnit = 0
 
 func putchar(c byte) {

@@ -111,6 +111,10 @@ func (p Pin) outFunc() *volatile.Register32 {
 	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.FUNC0_OUT_SEL_CFG), uintptr(p)*4))
 }
 
+func (p Pin) pinReg() *volatile.Register32 {
+	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.PIN0)) + uintptr(p)*4)))
+}
+
 // inFunc returns the FUNCy_IN_SEL_CFG register used for configuring the input
 // function selection.
 func inFunc(signal uint32) *volatile.Register32 {
@@ -188,7 +192,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) (err error) {
 
 	if callback == nil {
 		// Disable this pin interrupt
-		p.pin().ClearBits(esp.GPIO_PIN_PIN_INT_TYPE_Msk | esp.GPIO_PIN_PIN_INT_ENA_Msk)
+		p.pin().ClearBits(esp.GPIO_PIN_INT_TYPE_Msk | esp.GPIO_PIN_INT_ENA_Msk)
 
 		if pinCallbacks[p] != nil {
 			pinCallbacks[p] = nil
@@ -212,8 +216,8 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) (err error) {
 	}
 
 	p.pin().Set(
-		(p.pin().Get() & ^uint32(esp.GPIO_PIN_PIN_INT_TYPE_Msk|esp.GPIO_PIN_PIN_INT_ENA_Msk)) |
-			uint32(change)<<esp.GPIO_PIN_PIN_INT_TYPE_Pos | uint32(1)<<esp.GPIO_PIN_PIN_INT_ENA_Pos)
+		(p.pin().Get() & ^uint32(esp.GPIO_PIN_INT_TYPE_Msk|esp.GPIO_PIN_INT_ENA_Msk)) |
+			uint32(change)<<esp.GPIO_PIN_INT_TYPE_Pos | uint32(1)<<esp.GPIO_PIN_INT_ENA_Pos)
 
 	return nil
 }
@@ -308,7 +312,7 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 
 	initUARTClock(uart.Bus, regs)
 
-	// - disbale TX/RX clock to make sure the UART transmitter or receiver is not at work during configuration
+	// - disable TX/RX clock to make sure the UART transmitter or receiver is not at work during configuration
 	uart.Bus.SetCLK_CONF_TX_SCLK_EN(0)
 	uart.Bus.SetCLK_CONF_RX_SCLK_EN(0)
 
@@ -391,7 +395,7 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 	// synchronize core register
 	bus.SetID_REG_UPDATE(0)
 	// enable RTC clock
-	esp.RTC_CNTL.SetRTC_CLK_CONF_DIG_CLK8M_EN(1)
+	esp.RTC_CNTL.SetCLK_CONF_DIG_CLK8M_EN(1)
 	// wait for Core Clock to ready for configuration
 	for bus.GetID_REG_UPDATE() > 0 {
 		riscv.Asm("nop")
@@ -415,7 +419,7 @@ func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
 	// link TX with GPIO signal X (technical reference manual 5.10) (this is not interrupt signal!)
 	config.TX.outFunc().Set(regs.gpioMatrixSignal)
 	// link RX with GPIO signal X and route signals via GPIO matrix (GPIO_SIGn_IN_SEL 0x40)
-	inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SIG_IN_SEL | uint32(config.RX))
+	inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
 }
 
 func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) { // Disable all UART interrupts
@@ -476,7 +480,7 @@ func (uart *UART) enableTransmitter() {
 	uart.Bus.SetCONF0_TXFIFO_RST(0)
 	// TXINFO empty threshold is when txfifo_empty_int interrupt produced after the amount of data in Tx-FIFO is less than this register value.
 	uart.Bus.SetCONF1_TXFIFO_EMPTY_THRHD(uart_empty_thresh_default)
-	// we are not using interrut on TX since write we are waiting for FIFO to have space.
+	// we are not using interrupt on TX since write we are waiting for FIFO to have space.
 	// uart.Bus.INT_ENA.SetBits(esp.UART_INT_ENA_TXFIFO_EMPTY_INT_ENA)
 }
 
@@ -504,3 +508,130 @@ func (uart *UART) writeByte(b byte) error {
 }
 
 func (uart *UART) flush() {}
+
+type Serialer interface {
+	WriteByte(c byte) error
+	Write(data []byte) (n int, err error)
+	Configure(config UARTConfig) error
+	Buffered() int
+	ReadByte() (byte, error)
+	DTR() bool
+	RTS() bool
+}
+
+// USB Serial/JTAG Controller
+// See esp32-c3_technical_reference_manual_en.pdf
+// pg. 736
+type USB_DEVICE struct {
+	Bus *esp.USB_DEVICE_Type
+}
+
+var (
+	_USBCDC = &USB_DEVICE{
+		Bus: esp.USB_DEVICE,
+	}
+
+	USBCDC Serialer = _USBCDC
+)
+
+var (
+	errUSBWrongSize            = errors.New("USB: invalid write size")
+	errUSBCouldNotWriteAllData = errors.New("USB: could not write all data")
+	errUSBBufferEmpty          = errors.New("USB: read buffer empty")
+)
+
+func (usbdev *USB_DEVICE) Configure(config UARTConfig) error {
+	return nil
+}
+
+func (usbdev *USB_DEVICE) WriteByte(c byte) error {
+	if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
+		return errUSBCouldNotWriteAllData
+	}
+
+	usbdev.Bus.SetEP1_RDWR_BYTE(uint32(c))
+	usbdev.flush()
+
+	return nil
+}
+
+func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
+	if len(data) == 0 || len(data) > 64 {
+		return 0, errUSBWrongSize
+	}
+
+	for i, c := range data {
+		if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
+			if i > 0 {
+				usbdev.flush()
+			}
+
+			return i, errUSBCouldNotWriteAllData
+		}
+		usbdev.Bus.SetEP1_RDWR_BYTE(uint32(c))
+	}
+
+	usbdev.flush()
+	return len(data), nil
+}
+
+func (usbdev *USB_DEVICE) Buffered() int {
+	return int(usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL())
+}
+
+func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
+	if usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL() != 0 {
+		return byte(usbdev.Bus.GetEP1_RDWR_BYTE()), nil
+	}
+
+	return 0, nil
+}
+
+func (usbdev *USB_DEVICE) DTR() bool {
+	return false
+}
+
+func (usbdev *USB_DEVICE) RTS() bool {
+	return false
+}
+
+func (usbdev *USB_DEVICE) flush() {
+	usbdev.Bus.SetEP1_CONF_WR_DONE(1)
+	for usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
+	}
+}
+
+// GetRNG returns 32-bit random numbers using the ESP32-C3 true random number generator,
+// Random numbers are generated based on the thermal noise in the system and the
+// asynchronous clock mismatch.
+// For maximum entropy also make sure that the SAR_ADC is enabled.
+// See esp32-c3_technical_reference_manual_en.pdf p.524
+func GetRNG() (ret uint32, err error) {
+	// ensure ADC clock is initialized
+	initADCClock()
+
+	// ensure fast RTC clock is enabled
+	if esp.RTC_CNTL.GetCLK_CONF_DIG_CLK8M_EN() == 0 {
+		esp.RTC_CNTL.SetCLK_CONF_DIG_CLK8M_EN(1)
+	}
+
+	return esp.APB_CTRL.GetRND_DATA(), nil
+}
+
+func initADCClock() {
+	if esp.APB_SARADC.GetCLKM_CONF_CLK_EN() == 1 {
+		return
+	}
+
+	// only support ADC_CTRL_CLK set to 1
+	esp.APB_SARADC.SetCLKM_CONF_CLK_SEL(1)
+
+	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_GATED(1)
+
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_NUM(15)
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_B(1)
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_A(0)
+
+	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_DIV(1)
+	esp.APB_SARADC.SetCLKM_CONF_CLK_EN(1)
+}

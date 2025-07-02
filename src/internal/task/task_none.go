@@ -36,3 +36,9 @@ func OnSystemStack() bool {
 	// This scheduler does not do any stack switching.
 	return true
 }
+
+func SystemStack() uintptr {
+	// System stack is the current stack, so this shouldn't be called.
+	runtimePanic("scheduler is disabled")
+	return 0 // unreachable
+}

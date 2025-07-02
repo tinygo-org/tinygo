@@ -23,17 +23,8 @@ func InitADC() {
 	// Enable ADC clock
 	enableAltFuncClock(unsafe.Pointer(stm32.ADC1))
 
-	// set scan mode
-	stm32.ADC1.CR1.SetBits(stm32.ADC_CR1_SCAN)
-
-	// clear CONT, ALIGN, EXTRIG and EXTSEL bits from CR2
-	stm32.ADC1.CR2.ClearBits(stm32.ADC_CR2_CONT | stm32.ADC_CR2_ALIGN | stm32.ADC_CR2_EXTTRIG_Msk | stm32.ADC_CR2_EXTSEL_Msk)
-
-	stm32.ADC1.SQR1.ClearBits(stm32.ADC_SQR1_L_Msk)
-	stm32.ADC1.SQR1.SetBits(2 << stm32.ADC_SQR1_L_Pos) // 2 means 3 conversions
-
 	// enable
-	stm32.ADC1.CR2.SetBits(stm32.ADC_CR2_ADON)
+	stm32.ADC1.CR2.SetBits(stm32.ADC_CR2_ADON | stm32.ADC_CR2_ALIGN)
 
 	return
 }
@@ -58,25 +49,17 @@ func (a ADC) Configure(ADCConfig) {
 func (a ADC) Get() uint16 {
 	// set rank
 	ch := uint32(a.getChannel())
-	stm32.ADC1.SQR3.SetBits(ch)
+	stm32.ADC1.SetSQR3_SQ1(ch)
 
 	// start conversion
-	stm32.ADC1.CR2.SetBits(stm32.ADC_CR2_SWSTART)
+	stm32.ADC1.CR2.SetBits(stm32.ADC_CR2_ADON)
 
 	// wait for conversion to complete
 	for !stm32.ADC1.SR.HasBits(stm32.ADC_SR_EOC) {
 	}
 
 	// read result as 16 bit value
-	result := uint16(stm32.ADC1.DR.Get()) << 4
-
-	// clear flag
-	stm32.ADC1.SR.ClearBits(stm32.ADC_SR_EOC)
-
-	// clear rank
-	stm32.ADC1.SQR3.ClearBits(ch)
-
-	return result
+	return uint16(stm32.ADC1.DR.Get())
 }
 
 func (a ADC) getChannel() uint8 {

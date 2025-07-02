@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+const NumberOfUSBEndpoints = 8
+
 var (
 	sendOnEP0DATADONE struct {
 		ptr    *byte
@@ -20,6 +22,17 @@ var (
 	epinen      uint32
 	epouten     uint32
 	easyDMABusy volatile.Register8
+
+	endPoints = []uint32{
+		usb.CONTROL_ENDPOINT:  usb.ENDPOINT_TYPE_CONTROL,
+		usb.CDC_ENDPOINT_ACM:  (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn),
+		usb.CDC_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_BULK | usb.EndpointOut),
+		usb.CDC_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn),
+		usb.HID_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_DISABLE), // Interrupt In
+		usb.HID_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_DISABLE), // Interrupt Out
+		usb.MIDI_ENDPOINT_IN:  (usb.ENDPOINT_TYPE_DISABLE), // Bulk In
+		usb.MIDI_ENDPOINT_OUT: (usb.ENDPOINT_TYPE_DISABLE), // Bulk Out
+	}
 )
 
 // enterCriticalSection is used to protect access to easyDMA - only one thing
@@ -193,10 +206,9 @@ func handleUSBIRQ(interrupt.Interrupt) {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
 			buf := handleEndpointRx(uint32(i))
-			if usbRxHandler[i] != nil {
-				usbRxHandler[i](buf)
+			if usbRxHandler[i] == nil || usbRxHandler[i](buf) {
+				AckUsbOutTransfer(uint32(i))
 			}
-			handleEndpointRxComplete(uint32(i))
 			exitCriticalSection()
 		}
 	}
@@ -252,6 +264,8 @@ func SendUSBInPacket(ep uint32, data []byte) bool {
 	return true
 }
 
+// Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
+//
 //go:noinline
 func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
 	count := len(data)
@@ -289,7 +303,8 @@ func handleEndpointRx(ep uint32) []byte {
 	return udd_ep_out_cache_buffer[ep][:count]
 }
 
-func handleEndpointRxComplete(ep uint32) {
+// AckUsbOutTransfer is called to acknowledge the completion of a USB OUT transfer.
+func AckUsbOutTransfer(ep uint32) {
 	// set ready for next data
 	nrf.USBD.SIZE.EPOUT[ep].Set(0)
 }

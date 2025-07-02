@@ -5,26 +5,16 @@
 import sys
 
 class Comparison:
-    def __init__(self, command, code0, data0, bss0, code1, data1, bss1):
+    def __init__(self, command, flash0, ram0, flash1, ram1):
         self.command = command
-        self.code0 = code0
-        self.data0 = data0
-        self.bss0 = bss0
-        self.code1 = code1
-        self.data1 = data1
-        self.bss1 = bss1
+        self.flash0 = flash0
+        self.ram0 = ram0
+        self.flash1 = flash1
+        self.ram1 = ram1
 
     @property
-    def flash0(self):
-        return self.code0 + self.data0
-
-    @property
-    def flash1(self):
-        return self.code1 + self.data1
-
-    @property
-    def codediff(self):
-        return self.code1 - self.code0
+    def ramdiff(self):
+        return self.ram1 - self.ram0
 
     @property
     def flashdiff(self):
@@ -37,13 +27,12 @@ def readSizes(path):
         if not lines[i].strip().startswith('code '):
             continue
         # found a size header
-        code, data, bss = map(int, lines[i+1].split()[:3])
+        code, data, bss, flash, ram = map(int, lines[i+1].replace("|", "").split())
         command = lines[i-1].strip()
         sizes.append({
             'command': command,
-            'code':    code,
-            'data':    data,
-            'bss':     bss,
+            'flash':   flash,
+            'ram':     ram
         })
     return sizes
 
@@ -62,25 +51,36 @@ def main():
             print('not the same command!')
             print('   ', sizes0[i]['command'])
             print('   ', sizes1[i]['command'])
-        comparisons.append(Comparison(sizes0[i]['command'], sizes0[i]['code'], sizes0[i]['data'], sizes0[i]['bss'], sizes1[i]['code'], sizes1[i]['data'], sizes1[i]['bss']))
+        comparisons.append(Comparison(sizes0[i]['command'], sizes0[i]['flash'], sizes0[i]['ram'], sizes1[i]['flash'], sizes1[i]['ram']))
     if len(sizes0) < len(sizes1):
         print('%s has more commands than %s' % (path1, path0))
         print('   ', sizes1[len(sizes0)]['command'])
     comparisons.sort(key=lambda x: x.flashdiff)
-    totalCode0 = 0
-    totalCode1 = 0
+    totalFlash0 = 0
+    totalFlash1 = 0
+    totalRam0 = 0
+    totalRam1 = 0
     totalDiff = 0
+    totalRamDiff = 0
     totalProduct = 1
-    print(' before   after   diff')
+    totalRamProduct = 1
+    print(' flash                          ram')
+    print(' before   after   diff          before   after   diff')
     for comparison in comparisons:
         diffPct = comparison.flashdiff / comparison.flash0
-        print('%7d %7d %6d %6.2f%%  %s' % (comparison.flash0, comparison.flash1, comparison.flashdiff, diffPct * 100, comparison.command))
-        totalCode0 += comparison.flash0
-        totalCode1 += comparison.flash1
+        diffRamPct = comparison.ramdiff / comparison.ram0
+        print('%7d %7d %6d %6.2f%% %7d %7d %6d %6.2f%% %s' % (comparison.flash0, comparison.flash1, comparison.flashdiff, diffPct * 100, comparison.ram0, comparison.ram1, comparison.ramdiff, diffRamPct * 100, comparison.command))
+        totalFlash0 += comparison.flash0
+        totalFlash1 += comparison.flash1
         totalDiff += comparison.flashdiff
         totalProduct *= (1 + diffPct)
+        totalRam0 += comparison.ram0
+        totalRam1 += comparison.ram1
+        totalRamDiff += comparison.ramdiff
+        totalRamProduct *= (1 + diffRamPct)
     geomean = totalProduct ** (1.0 / float(len(comparisons)))
-    print('%7d %7d %6d %6.2f%%   sum' % (totalCode0, totalCode1, totalDiff, geomean - 1))
+    geomeanRam = totalRamProduct ** (1.0 / float(len(comparisons)))
+    print('%7d %7d %6d %6.2f%% %7d %7d %6d %6.2f%%' % (totalFlash0, totalFlash1, totalDiff, geomean - 1, totalRam0, totalRam1, totalRamDiff, geomeanRam - 1))
 
 
 if __name__ == '__main__':

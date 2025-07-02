@@ -23,3 +23,10 @@ recovered: panic
 panic 1
 panic 2
 recovered: panic 2
+
+# defer panic
+defer panic
+recovered from deferred call: deferred panic
+
+# runtime.Goexit
+Goexit deferred function, recover is nil: true

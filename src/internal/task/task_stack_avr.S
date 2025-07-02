@@ -1,3 +1,5 @@
+//go:build tinygo
+
 .section .bss.tinygo_systemStack
 .global tinygo_systemStack
 .type   tinygo_systemStack, %object
@@ -26,14 +28,14 @@ tinygo_startTask:
     // After return, exit this goroutine. This is a tail call.
 #if __AVR_ARCH__ == 2 || __AVR_ARCH__ == 25
     // Small memory devices (≤8kB flash) that do not have the long call
-    // instruction availble will need to use rcall instead.
+    // instruction available will need to use rcall instead.
     // Note that they will probably not be able to run more than the main
     // goroutine anyway, but this file is compiled for all AVRs so it needs to
     // compile at least.
-    rcall  tinygo_pause
+    rcall  tinygo_task_exit
 #else
     // Other devices can (and must) use the regular call instruction.
-    call tinygo_pause
+    call tinygo_task_exit
 #endif
 
 .global tinygo_swapTask

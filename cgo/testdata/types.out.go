@@ -1,147 +1,166 @@
 package main
 
+import "syscall"
 import "unsafe"
 
 var _ unsafe.Pointer
 
-//go:linkname C.CString runtime.cgo_CString
-func C.CString(string) *C.char
+//go:linkname _Cgo_CString runtime.cgo_CString
+func _Cgo_CString(string) *_Cgo_char
 
-//go:linkname C.GoString runtime.cgo_GoString
-func C.GoString(*C.char) string
+//go:linkname _Cgo_GoString runtime.cgo_GoString
+func _Cgo_GoString(*_Cgo_char) string
 
-//go:linkname C.__GoStringN runtime.cgo_GoStringN
-func C.__GoStringN(*C.char, uintptr) string
+//go:linkname _Cgo___GoStringN runtime.cgo_GoStringN
+func _Cgo___GoStringN(*_Cgo_char, uintptr) string
 
-func C.GoStringN(cstr *C.char, length C.int) string {
-	return C.__GoStringN(cstr, uintptr(length))
+func _Cgo_GoStringN(cstr *_Cgo_char, length _Cgo_int) string {
+	return _Cgo___GoStringN(cstr, uintptr(length))
 }
 
-//go:linkname C.__GoBytes runtime.cgo_GoBytes
-func C.__GoBytes(unsafe.Pointer, uintptr) []byte
+//go:linkname _Cgo___GoBytes runtime.cgo_GoBytes
+func _Cgo___GoBytes(unsafe.Pointer, uintptr) []byte
 
-func C.GoBytes(ptr unsafe.Pointer, length C.int) []byte {
-	return C.__GoBytes(ptr, uintptr(length))
+func _Cgo_GoBytes(ptr unsafe.Pointer, length _Cgo_int) []byte {
+	return _Cgo___GoBytes(ptr, uintptr(length))
+}
+
+//go:linkname _Cgo___CBytes runtime.cgo_CBytes
+func _Cgo___CBytes([]byte) unsafe.Pointer
+
+func _Cgo_CBytes(b []byte) unsafe.Pointer {
+	return _Cgo___CBytes(b)
+}
+
+//go:linkname _Cgo___get_errno_num runtime.cgo_errno
+func _Cgo___get_errno_num() uintptr
+
+func _Cgo___get_errno() error {
+	return syscall.Errno(_Cgo___get_errno_num())
 }
 
 type (
-	C.char      uint8
-	C.schar     int8
-	C.uchar     uint8
-	C.short     int16
-	C.ushort    uint16
-	C.int       int32
-	C.uint      uint32
-	C.long      int32
-	C.ulong     uint32
-	C.longlong  int64
-	C.ulonglong uint64
+	_Cgo_char      uint8
+	_Cgo_schar     int8
+	_Cgo_uchar     uint8
+	_Cgo_short     int16
+	_Cgo_ushort    uint16
+	_Cgo_int       int32
+	_Cgo_uint      uint32
+	_Cgo_long      int32
+	_Cgo_ulong     uint32
+	_Cgo_longlong  int64
+	_Cgo_ulonglong uint64
 )
-type C.myint = C.int
-type C.struct_point2d_t struct {
-	x C.int
-	y C.int
+type _Cgo_myint = _Cgo_int
+type _Cgo_struct_point2d_t struct {
+	x _Cgo_int
+	y _Cgo_int
 }
-type C.point2d_t = C.struct_point2d_t
-type C.struct_point3d struct {
-	x C.int
-	y C.int
-	z C.int
+type _Cgo_point2d_t = _Cgo_struct_point2d_t
+type _Cgo_struct_point3d struct {
+	x _Cgo_int
+	y _Cgo_int
+	z _Cgo_int
 }
-type C.point3d_t = C.struct_point3d
-type C.struct_type1 struct {
-	_type   C.int
-	__type  C.int
-	___type C.int
+type _Cgo_point3d_t = _Cgo_struct_point3d
+type _Cgo_struct_type1 struct {
+	_type   _Cgo_int
+	__type  _Cgo_int
+	___type _Cgo_int
 }
-type C.struct_type2 struct{ _type C.int }
-type C.union_union1_t struct{ i C.int }
-type C.union1_t = C.union_union1_t
-type C.union_union3_t struct{ $union uint64 }
+type _Cgo_struct_type2 struct{ _type _Cgo_int }
+type _Cgo_union_union1_t struct{ i _Cgo_int }
+type _Cgo_union1_t = _Cgo_union_union1_t
+type _Cgo_union_union3_t struct{ $union uint64 }
 
-func (union *C.union_union3_t) unionfield_i() *C.int { return (*C.int)(unsafe.Pointer(&union.$union)) }
-func (union *C.union_union3_t) unionfield_d() *float64 {
+func (union *_Cgo_union_union3_t) unionfield_i() *_Cgo_int {
+	return (*_Cgo_int)(unsafe.Pointer(&union.$union))
+}
+func (union *_Cgo_union_union3_t) unionfield_d() *float64 {
 	return (*float64)(unsafe.Pointer(&union.$union))
 }
-func (union *C.union_union3_t) unionfield_s() *C.short {
-	return (*C.short)(unsafe.Pointer(&union.$union))
+func (union *_Cgo_union_union3_t) unionfield_s() *_Cgo_short {
+	return (*_Cgo_short)(unsafe.Pointer(&union.$union))
 }
 
-type C.union3_t = C.union_union3_t
-type C.union_union2d struct{ $union [2]uint64 }
+type _Cgo_union3_t = _Cgo_union_union3_t
+type _Cgo_union_union2d struct{ $union [2]uint64 }
 
-func (union *C.union_union2d) unionfield_i() *C.int { return (*C.int)(unsafe.Pointer(&union.$union)) }
-func (union *C.union_union2d) unionfield_d() *[2]float64 {
+func (union *_Cgo_union_union2d) unionfield_i() *_Cgo_int {
+	return (*_Cgo_int)(unsafe.Pointer(&union.$union))
+}
+func (union *_Cgo_union_union2d) unionfield_d() *[2]float64 {
 	return (*[2]float64)(unsafe.Pointer(&union.$union))
 }
 
-type C.union2d_t = C.union_union2d
-type C.union_unionarray_t struct{ arr [10]C.uchar }
-type C.unionarray_t = C.union_unionarray_t
-type C._Ctype_union___0 struct{ $union [3]uint32 }
+type _Cgo_union2d_t = _Cgo_union_union2d
+type _Cgo_union_unionarray_t struct{ arr [10]_Cgo_uchar }
+type _Cgo_unionarray_t = _Cgo_union_unionarray_t
+type _Cgo__Ctype_union___0 struct{ $union [3]uint32 }
 
-func (union *C._Ctype_union___0) unionfield_area() *C.point2d_t {
-	return (*C.point2d_t)(unsafe.Pointer(&union.$union))
+func (union *_Cgo__Ctype_union___0) unionfield_area() *_Cgo_point2d_t {
+	return (*_Cgo_point2d_t)(unsafe.Pointer(&union.$union))
 }
-func (union *C._Ctype_union___0) unionfield_solid() *C.point3d_t {
-	return (*C.point3d_t)(unsafe.Pointer(&union.$union))
-}
-
-type C.struct_struct_nested_t struct {
-	begin C.point2d_t
-	end   C.point2d_t
-	tag   C.int
-
-	coord C._Ctype_union___0
-}
-type C.struct_nested_t = C.struct_struct_nested_t
-type C.union_union_nested_t struct{ $union [2]uint64 }
-
-func (union *C.union_union_nested_t) unionfield_point() *C.point3d_t {
-	return (*C.point3d_t)(unsafe.Pointer(&union.$union))
-}
-func (union *C.union_union_nested_t) unionfield_array() *C.unionarray_t {
-	return (*C.unionarray_t)(unsafe.Pointer(&union.$union))
-}
-func (union *C.union_union_nested_t) unionfield_thing() *C.union3_t {
-	return (*C.union3_t)(unsafe.Pointer(&union.$union))
+func (union *_Cgo__Ctype_union___0) unionfield_solid() *_Cgo_point3d_t {
+	return (*_Cgo_point3d_t)(unsafe.Pointer(&union.$union))
 }
 
-type C.union_nested_t = C.union_union_nested_t
-type C.enum_option = C.int
-type C.option_t = C.enum_option
-type C.enum_option2_t = C.uint
-type C.option2_t = C.enum_option2_t
-type C.struct_types_t struct {
+type _Cgo_struct_struct_nested_t struct {
+	begin _Cgo_point2d_t
+	end   _Cgo_point2d_t
+	tag   _Cgo_int
+
+	coord _Cgo__Ctype_union___0
+}
+type _Cgo_struct_nested_t = _Cgo_struct_struct_nested_t
+type _Cgo_union_union_nested_t struct{ $union [2]uint64 }
+
+func (union *_Cgo_union_union_nested_t) unionfield_point() *_Cgo_point3d_t {
+	return (*_Cgo_point3d_t)(unsafe.Pointer(&union.$union))
+}
+func (union *_Cgo_union_union_nested_t) unionfield_array() *_Cgo_unionarray_t {
+	return (*_Cgo_unionarray_t)(unsafe.Pointer(&union.$union))
+}
+func (union *_Cgo_union_union_nested_t) unionfield_thing() *_Cgo_union3_t {
+	return (*_Cgo_union3_t)(unsafe.Pointer(&union.$union))
+}
+
+type _Cgo_union_nested_t = _Cgo_union_union_nested_t
+type _Cgo_enum_option = _Cgo_int
+type _Cgo_option_t = _Cgo_enum_option
+type _Cgo_enum_option2_t = _Cgo_uint
+type _Cgo_option2_t = _Cgo_enum_option2_t
+type _Cgo_struct_types_t struct {
 	f   float32
 	d   float64
-	ptr *C.int
+	ptr *_Cgo_int
 }
-type C.types_t = C.struct_types_t
-type C.myIntArray = [10]C.int
-type C.struct_bitfield_t struct {
-	start        C.uchar
-	__bitfield_1 C.uchar
+type _Cgo_types_t = _Cgo_struct_types_t
+type _Cgo_myIntArray = [10]_Cgo_int
+type _Cgo_struct_bitfield_t struct {
+	start        _Cgo_uchar
+	__bitfield_1 _Cgo_uchar
 
-	d C.uchar
-	e C.uchar
+	d _Cgo_uchar
+	e _Cgo_uchar
 }
 
-func (s *C.struct_bitfield_t) bitfield_a() C.uchar { return s.__bitfield_1 & 0x1f }
-func (s *C.struct_bitfield_t) set_bitfield_a(value C.uchar) {
+func (s *_Cgo_struct_bitfield_t) bitfield_a() _Cgo_uchar { return s.__bitfield_1 & 0x1f }
+func (s *_Cgo_struct_bitfield_t) set_bitfield_a(value _Cgo_uchar) {
 	s.__bitfield_1 = s.__bitfield_1&^0x1f | value&0x1f<<0
 }
-func (s *C.struct_bitfield_t) bitfield_b() C.uchar {
+func (s *_Cgo_struct_bitfield_t) bitfield_b() _Cgo_uchar {
 	return s.__bitfield_1 >> 5 & 0x1
 }
-func (s *C.struct_bitfield_t) set_bitfield_b(value C.uchar) {
+func (s *_Cgo_struct_bitfield_t) set_bitfield_b(value _Cgo_uchar) {
 	s.__bitfield_1 = s.__bitfield_1&^0x20 | value&0x1<<5
 }
-func (s *C.struct_bitfield_t) bitfield_c() C.uchar {
+func (s *_Cgo_struct_bitfield_t) bitfield_c() _Cgo_uchar {
 	return s.__bitfield_1 >> 6
 }
-func (s *C.struct_bitfield_t) set_bitfield_c(value C.uchar,
+func (s *_Cgo_struct_bitfield_t) set_bitfield_c(value _Cgo_uchar,
 
 ) { s.__bitfield_1 = s.__bitfield_1&0x3f | value<<6 }
 
-type C.bitfield_t = C.struct_bitfield_t
+type _Cgo_bitfield_t = _Cgo_struct_bitfield_t

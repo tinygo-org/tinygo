@@ -22,7 +22,7 @@ tinygo_startTask:
 
     // After return, exit this goroutine.
     // This has to be a call, not a jump, to keep the stack correctly aligned.
-    callq tinygo_pause
+    callq tinygo_task_exit
 
 .global tinygo_swapTask
 .section .text.tinygo_swapTask,"ax"

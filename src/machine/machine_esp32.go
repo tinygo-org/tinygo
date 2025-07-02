@@ -237,13 +237,13 @@ func (p Pin) mux() *volatile.Register32 {
 	case 27:
 		return &esp.IO_MUX.GPIO27
 	case 14:
-		return &esp.IO_MUX.MTMS
+		return &esp.IO_MUX.GPIO14
 	case 12:
-		return &esp.IO_MUX.MTDI
+		return &esp.IO_MUX.GPIO12
 	case 13:
-		return &esp.IO_MUX.MTCK
+		return &esp.IO_MUX.GPIO13
 	case 15:
-		return &esp.IO_MUX.MTDO
+		return &esp.IO_MUX.GPIO15
 	case 2:
 		return &esp.IO_MUX.GPIO2
 	case 0:
@@ -255,17 +255,17 @@ func (p Pin) mux() *volatile.Register32 {
 	case 17:
 		return &esp.IO_MUX.GPIO17
 	case 9:
-		return &esp.IO_MUX.SD_DATA2
+		return &esp.IO_MUX.GPIO9
 	case 10:
-		return &esp.IO_MUX.SD_DATA3
+		return &esp.IO_MUX.GPIO10
 	case 11:
-		return &esp.IO_MUX.SD_CMD
+		return &esp.IO_MUX.GPIO11
 	case 6:
-		return &esp.IO_MUX.SD_CLK
+		return &esp.IO_MUX.GPIO6
 	case 7:
-		return &esp.IO_MUX.SD_DATA0
+		return &esp.IO_MUX.GPIO7
 	case 8:
-		return &esp.IO_MUX.SD_DATA1
+		return &esp.IO_MUX.GPIO8
 	case 5:
 		return &esp.IO_MUX.GPIO5
 	case 18:
@@ -279,9 +279,9 @@ func (p Pin) mux() *volatile.Register32 {
 	case 22:
 		return &esp.IO_MUX.GPIO22
 	case 3:
-		return &esp.IO_MUX.U0RXD
+		return &esp.IO_MUX.GPIO3
 	case 1:
-		return &esp.IO_MUX.U0TXD
+		return &esp.IO_MUX.GPIO1
 	case 23:
 		return &esp.IO_MUX.GPIO23
 	case 24:
@@ -320,7 +320,8 @@ func (uart *UART) writeByte(b byte) error {
 		// many bytes there are in the transmit buffer. Wait until there are
 		// less than 128 bytes in this buffer (the default buffer size).
 	}
-	uart.Bus.TX_FIFO.Set(b)
+	// Write to the TX_FIFO register.
+	(*volatile.Register8)(unsafe.Add(unsafe.Pointer(uart.Bus), 0x200C0000)).Set(b)
 	return nil
 }
 
@@ -333,8 +334,8 @@ type SPI struct {
 
 var (
 	// SPI0 and SPI1 are reserved for use by the caching system etc.
-	SPI2 = SPI{esp.SPI2}
-	SPI3 = SPI{esp.SPI3}
+	SPI2 = &SPI{esp.SPI2}
+	SPI3 = &SPI{esp.SPI3}
 )
 
 // SPIConfig configures a SPI peripheral on the ESP32. Make sure to set at least
@@ -353,7 +354,7 @@ type SPIConfig struct {
 }
 
 // Configure and make the SPI peripheral ready to use.
-func (spi SPI) Configure(config SPIConfig) error {
+func (spi *SPI) Configure(config SPIConfig) error {
 	if config.Frequency == 0 {
 		config.Frequency = 4e6 // default to 4MHz
 	}
@@ -444,7 +445,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 
 // Transfer writes/reads a single byte using the SPI interface. If you need to
 // transfer larger amounts of data, Tx will be faster.
-func (spi SPI) Transfer(w byte) (byte, error) {
+func (spi *SPI) Transfer(w byte) (byte, error) {
 	spi.Bus.MISO_DLEN.Set(7 << esp.SPI_MISO_DLEN_USR_MISO_DBITLEN_Pos)
 	spi.Bus.MOSI_DLEN.Set(7 << esp.SPI_MOSI_DLEN_USR_MOSI_DBITLEN_Pos)
 
@@ -459,11 +460,11 @@ func (spi SPI) Transfer(w byte) (byte, error) {
 	return byte(spi.Bus.W0.Get()), nil
 }
 
-// Tx handles read/write operation for SPI interface. Since SPI is a syncronous write/read
+// Tx handles read/write operation for SPI interface. Since SPI is a synchronous write/read
 // interface, there must always be the same number of bytes written as bytes read.
 // This is accomplished by sending zero bits if r is bigger than w or discarding
 // the incoming data if w is bigger than r.
-func (spi SPI) Tx(w, r []byte) error {
+func (spi *SPI) Tx(w, r []byte) error {
 	toTransfer := len(w)
 	if len(r) > toTransfer {
 		toTransfer = len(r)

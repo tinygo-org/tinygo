@@ -56,3 +56,16 @@ func AdjustTimeOffset(offset int64) {
 	// TODO: do this atomically?
 	timeOffset += offset
 }
+
+// Picolibc is not configured to define its own errno value, instead it calls
+// __errno_location.
+// TODO: a global works well enough for now (same as errno on Linux with
+// -scheduler=tasks), but this should ideally be a thread-local variable stored
+// in task.Task.
+// Especially when we add multicore support for microcontrollers.
+var errno int32
+
+//export __errno_location
+func libc_errno_location() *int32 {
+	return &errno
+}

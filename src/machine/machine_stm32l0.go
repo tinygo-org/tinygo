@@ -234,12 +234,12 @@ type SPI struct {
 	AltFuncSelector uint8
 }
 
-func (spi SPI) config8Bits() {
+func (spi *SPI) config8Bits() {
 	// no-op on this series
 }
 
 // Set baud rate for SPI
-func (spi SPI) getBaudRate(config SPIConfig) uint32 {
+func (spi *SPI) getBaudRate(config SPIConfig) uint32 {
 	var conf uint32
 
 	localFrequency := config.Frequency
@@ -256,10 +256,10 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	}
 
 	// set frequency dependent on PCLK prescaler. Since these are rather weird
-	// speeds due to the CPU freqency, pick a range up to that frquency for
+	// speeds due to the CPU frequency, pick a range up to that frequency for
 	// clients to use more human-understandable numbers, e.g. nearest 100KHz
 
-	// These are based on APB2 clock frquency (84MHz on the discovery board)
+	// These are based on APB2 clock frequency (84MHz on the discovery board)
 	// TODO: also include the MCU/APB clock setting in the equation
 	switch {
 	case localFrequency < 328125:
@@ -289,7 +289,7 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 }
 
 // Configure SPI pins for input output and clock
-func (spi SPI) configurePins(config SPIConfig) {
+func (spi *SPI) configurePins(config SPIConfig) {
 	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
 	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
 	config.SDI.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDI}, spi.AltFuncSelector)
@@ -298,9 +298,20 @@ func (spi SPI) configurePins(config SPIConfig) {
 //---------- I2C related types and code
 
 // Gets the value for TIMINGR register
-func (i2c I2C) getFreqRange() uint32 {
+func (i2c I2C) getFreqRange(br uint32) uint32 {
 	// This is a 'magic' value calculated by STM32CubeMX
-	// for 80MHz PCLK1.
+	// for 16MHz PCLK1.
 	// TODO: Do calculations based on PCLK1
-	return 0x00303D5B
+	switch br {
+	case 10 * KHz:
+		return 0x40003EFF
+	case 100 * KHz:
+		return 0x00303D5B
+	case 400 * KHz:
+		return 0x0010061A
+	case 500 * KHz:
+		return 0x00000117
+	default:
+		return 0
+	}
 }

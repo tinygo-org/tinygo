@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"regexp"
 	"runtime"
 	"testing"
 	"time"
@@ -41,9 +42,9 @@ func TestBinarySize(t *testing.T) {
 	// This is a small number of very diverse targets that we want to test.
 	tests := []sizeTest{
 		// microcontrollers
-		{"hifive1b", "examples/echo", 4484, 280, 0, 2252},
-		{"microbit", "examples/serial", 2724, 388, 8, 2256},
-		{"wioterminal", "examples/pininterrupt", 6000, 1484, 116, 6816},
+		{"hifive1b", "examples/echo", 4556, 280, 0, 2264},
+		{"microbit", "examples/serial", 2920, 388, 8, 2272},
+		{"wioterminal", "examples/pininterrupt", 7379, 1489, 116, 6912},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
@@ -55,26 +56,7 @@ func TestBinarySize(t *testing.T) {
 			t.Parallel()
 
 			// Build the binary.
-			options := compileopts.Options{
-				Target:        tc.target,
-				Opt:           "z",
-				Semaphore:     sema,
-				InterpTimeout: 60 * time.Second,
-				Debug:         true,
-				VerifyIR:      true,
-			}
-			target, err := compileopts.LoadTarget(&options)
-			if err != nil {
-				t.Fatal("could not load target:", err)
-			}
-			config := &compileopts.Config{
-				Options: &options,
-				Target:  target,
-			}
-			result, err := Build(tc.path, "", t.TempDir(), config)
-			if err != nil {
-				t.Fatal("could not build:", err)
-			}
+			result := buildBinary(t, tc.target, tc.path)
 
 			// Check whether the size of the binary matches the expected size.
 			sizes, err := loadProgramSize(result.Executable, nil)
@@ -89,4 +71,70 @@ func TestBinarySize(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Check that the -size=full flag attributes binary size to the correct package
+// without filesystem paths and things like that.
+func TestSizeFull(t *testing.T) {
+	tests := []string{
+		"microbit",
+		"wasip1",
+	}
+
+	libMatch := regexp.MustCompile(`^C [a-z -]+$`) // example: "C interrupt vector"
+	pkgMatch := regexp.MustCompile(`^[a-z/]+$`)    // example: "internal/task"
+
+	for _, target := range tests {
+		target := target
+		t.Run(target, func(t *testing.T) {
+			t.Parallel()
+
+			// Build the binary.
+			result := buildBinary(t, target, "examples/serial")
+
+			// Check whether the binary doesn't contain any unexpected package
+			// names.
+			sizes, err := loadProgramSize(result.Executable, result.PackagePathMap)
+			if err != nil {
+				t.Fatal("could not read program size:", err)
+			}
+			for _, pkg := range sizes.sortedPackageNames() {
+				if pkg == "(padding)" || pkg == "(unknown)" {
+					// TODO: correctly attribute all unknown binary size.
+					continue
+				}
+				if libMatch.MatchString(pkg) {
+					continue
+				}
+				if pkgMatch.MatchString(pkg) {
+					continue
+				}
+				t.Error("unexpected package name in size output:", pkg)
+			}
+		})
+	}
+}
+
+func buildBinary(t *testing.T, targetString, pkgName string) BuildResult {
+	options := compileopts.Options{
+		Target:        targetString,
+		Opt:           "z",
+		Semaphore:     sema,
+		InterpTimeout: 60 * time.Second,
+		Debug:         true,
+		VerifyIR:      true,
+	}
+	target, err := compileopts.LoadTarget(&options)
+	if err != nil {
+		t.Fatal("could not load target:", err)
+	}
+	config := &compileopts.Config{
+		Options: &options,
+		Target:  target,
+	}
+	result, err := Build(pkgName, "", t.TempDir(), config)
+	if err != nil {
+		t.Fatal("could not build:", err)
+	}
+	return result
 }

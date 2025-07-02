@@ -1,0 +1,66 @@
+// Hand created file. DO NOT DELETE.
+// Definitions that are missing in src/device/rp/rp2350.go generated from SVDs
+
+//go:build rp && rp2350
+
+package rp
+
+// DMA: 12.6.4.1. System DREQ Table from RP2350 Datasheet
+// https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf
+const (
+	DREQ_PIO0_TX0   = 0
+	DREQ_PIO0_TX1   = 1
+	DREQ_PIO0_TX2   = 2
+	DREQ_PIO0_TX3   = 3
+	DREQ_PIO0_RX0   = 4
+	DREQ_PIO0_RX1   = 5
+	DREQ_PIO0_RX2   = 6
+	DREQ_PIO0_RX3   = 7
+	DREQ_PIO1_TX0   = 8
+	DREQ_PIO1_TX1   = 9
+	DREQ_PIO1_TX2   = 10
+	DREQ_PIO1_TX3   = 11
+	DREQ_PIO1_RX0   = 12
+	DREQ_PIO1_RX1   = 13
+	DREQ_PIO1_RX2   = 14
+	DREQ_PIO1_RX3   = 15
+	DREQ_PIO2_TX0   = 16
+	DREQ_PIO2_TX1   = 17
+	DREQ_PIO2_TX2   = 18
+	DREQ_PIO2_TX3   = 19
+	DREQ_PIO2_RX0   = 20
+	DREQ_PIO2_RX1   = 21
+	DREQ_PIO2_RX2   = 22
+	DREQ_PIO2_RX3   = 23
+	DREQ_SPI0_TX    = 24
+	DREQ_SPI0_RX    = 25
+	DREQ_SPI1_TX    = 26
+	DREQ_SPI1_RX    = 27
+	DREQ_UART0_TX   = 28
+	DREQ_UART0_RX   = 29
+	DREQ_UART1_TX   = 30
+	DREQ_UART1_RX   = 31
+	DREQ_PWM_WRAP0  = 32
+	DREQ_PWM_WRAP1  = 33
+	DREQ_PWM_WRAP2  = 34
+	DREQ_PWM_WRAP3  = 35
+	DREQ_PWM_WRAP4  = 36
+	DREQ_PWM_WRAP5  = 37
+	DREQ_PWM_WRAP6  = 38
+	DREQ_PWM_WRAP7  = 39
+	DREQ_PWM_WRAP8  = 40
+	DREQ_PWM_WRAP9  = 41
+	DREQ_PWM_WRAP10 = 42
+	DREQ_PWM_WRAP11 = 43
+	DREQ_I2C0_TX    = 44
+	DREQ_I2C0_RX    = 45
+	DREQ_I2C1_TX    = 46
+	DREQ_I2C1_RX    = 47
+	DREQ_ADC        = 48
+	DREQ_XIP_STREAM = 49
+	DREQ_XIP_QMITX  = 50
+	DREQ_XIP_QMIRX  = 51
+	DREQ_HSTX       = 52
+	DREQ_CORESIGHT  = 53
+	DREQ_SHA256     = 54
+)

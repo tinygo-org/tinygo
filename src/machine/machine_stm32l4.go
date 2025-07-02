@@ -4,8 +4,8 @@ package machine
 
 import (
 	"device/stm32"
-	"encoding/binary"
 	"errors"
+	"internal/binary"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -309,14 +309,14 @@ type SPI struct {
 	AltFuncSelector uint8
 }
 
-func (spi SPI) config8Bits() {
+func (spi *SPI) config8Bits() {
 	// Set rx threshold to 8-bits, so RXNE flag is set for 1 byte
 	// (common STM32 SPI implementation does 8-bit transfers only)
 	spi.Bus.CR2.SetBits(stm32.SPI_CR2_FRXTH)
 }
 
 // Set baud rate for SPI
-func (spi SPI) getBaudRate(config SPIConfig) uint32 {
+func (spi *SPI) getBaudRate(config SPIConfig) uint32 {
 	var conf uint32
 
 	// Default
@@ -327,10 +327,10 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 	localFrequency := config.Frequency
 
 	// set frequency dependent on PCLK prescaler. Since these are rather weird
-	// speeds due to the CPU freqency, pick a range up to that frquency for
+	// speeds due to the CPU frequency, pick a range up to that frequency for
 	// clients to use more human-understandable numbers, e.g. nearest 100KHz
 
-	// These are based on 80MHz peripheral clock frquency
+	// These are based on 80MHz peripheral clock frequency
 	switch {
 	case localFrequency < 312500:
 		conf = stm32.SPI_CR1_BR_Div256
@@ -359,7 +359,7 @@ func (spi SPI) getBaudRate(config SPIConfig) uint32 {
 }
 
 // Configure SPI pins for input output and clock
-func (spi SPI) configurePins(config SPIConfig) {
+func (spi *SPI) configurePins(config SPIConfig) {
 	config.SCK.ConfigureAltFunc(PinConfig{Mode: PinModeSPICLK}, spi.AltFuncSelector)
 	config.SDO.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDO}, spi.AltFuncSelector)
 	config.SDI.ConfigureAltFunc(PinConfig{Mode: PinModeSPISDI}, spi.AltFuncSelector)

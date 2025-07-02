@@ -14,7 +14,7 @@ const (
 
 // Note from Teensyduino (cores/teensy4/startup.c):
 //
-// |  ARM SysTick is used for most Ardiuno timing functions, delay(), millis(),
+// |  ARM SysTick is used for most Arduino timing functions, delay(), millis(),
 // |  micros().  SysTick can run from either the ARM core clock, or from an
 // |  "external" clock.  NXP documents it as "24 MHz XTALOSC can be the external
 // |  clock source of SYSTICK" (RT1052 ref manual, rev 1, page 411).  However,

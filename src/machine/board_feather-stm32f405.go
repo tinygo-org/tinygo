@@ -186,15 +186,15 @@ const (
 )
 
 var (
-	SPI1 = SPI{
+	SPI1 = &SPI{
 		Bus:             stm32.SPI2,
 		AltFuncSelector: AF5_SPI1_SPI2,
 	}
-	SPI2 = SPI{
+	SPI2 = &SPI{
 		Bus:             stm32.SPI3,
 		AltFuncSelector: AF6_SPI3,
 	}
-	SPI3 = SPI{
+	SPI3 = &SPI{
 		Bus:             stm32.SPI1,
 		AltFuncSelector: AF5_SPI1_SPI2,
 	}

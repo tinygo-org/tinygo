@@ -3,7 +3,7 @@ package main
 // This example demonstrates how to use pin change interrupts.
 //
 // This is only an example and should not be copied directly in any serious
-// circuit, because it lacks an important feature: debouncing.
+// circuit, because it only naively implements an important feature: debouncing.
 // See: https://en.wikipedia.org/wiki/Switch#Contact_bounce
 
 import (
@@ -14,6 +14,8 @@ import (
 const (
 	led = machine.LED
 )
+
+var lastPress time.Time
 
 func main() {
 
@@ -29,6 +31,13 @@ func main() {
 
 	// Set an interrupt on this pin.
 	err := button.SetInterrupt(buttonPinChange, func(machine.Pin) {
+
+		// Ignore events that are too close to the last registered press (debouncing)
+		if time.Since(lastPress) < 100*time.Millisecond {
+			return
+		}
+		lastPress = time.Now()
+
 		led.Set(!led.Get())
 	})
 	if err != nil {

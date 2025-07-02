@@ -45,11 +45,21 @@ type I2C struct {
 
 // I2CConfig is used to store config info for I2C.
 type I2CConfig struct {
-	SCL Pin
-	SDA Pin
+	Frequency uint32
+	SCL       Pin
+	SDA       Pin
 }
 
 func (i2c *I2C) Configure(config I2CConfig) error {
+	// Frequency range
+	switch config.Frequency {
+	case 0:
+		config.Frequency = 100 * KHz
+	case 10 * KHz, 100 * KHz, 400 * KHz, 500 * KHz:
+	default:
+		return errI2CNotImplemented
+	}
+
 	// disable I2C interface before any configuration changes
 	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
 
@@ -63,8 +73,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	}
 	i2c.configurePins(config)
 
-	// Frequency range
-	i2c.Bus.TIMINGR.Set(i2c.getFreqRange())
+	i2c.Bus.TIMINGR.Set(i2c.getFreqRange(config.Frequency))
 
 	// Disable Own Address1 before set the Own Address1 configuration
 	i2c.Bus.OAR1.ClearBits(stm32.I2C_OAR1_OA1EN)
@@ -86,8 +95,21 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 // SetBaudRate sets the communication speed for I2C.
 func (i2c *I2C) SetBaudRate(br uint32) error {
-	// TODO: implement
-	return errI2CNotImplemented
+	switch br {
+	case 10 * KHz, 100 * KHz, 400 * KHz, 500 * KHz:
+	default:
+		return errI2CNotImplemented
+	}
+
+	// disable I2C interface before any configuration changes
+	i2c.Bus.CR1.ClearBits(stm32.I2C_CR1_PE)
+
+	i2c.Bus.TIMINGR.Set(i2c.getFreqRange(br))
+
+	// Disable Generalcall and NoStretch, Enable peripheral
+	i2c.Bus.CR1.Set(stm32.I2C_CR1_PE)
+
+	return nil
 }
 
 func (i2c *I2C) Tx(addr uint16, w, r []byte) error {

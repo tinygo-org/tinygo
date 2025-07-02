@@ -26,7 +26,6 @@ package runtime
 
 import (
 	_ "unsafe"
-	"runtime/interrupt"
 )
 
 // Documentation:
@@ -41,29 +40,29 @@ import (
 func __atomic_load_{{.}}(ptr *uint{{$bits}}, ordering uintptr) uint{{$bits}} {
 	// The LLVM docs for this say that there is a val argument after the pointer.
 	// That is a typo, and the GCC docs omit it.
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	val := *ptr
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return val
 }
 {{end}}
 {{- define "store"}}{{$bits := mul . 8 -}}
 //export __atomic_store_{{.}}
 func __atomic_store_{{.}}(ptr *uint{{$bits}}, val uint{{$bits}}, ordering uintptr) {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	*ptr = val
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 }
 {{end}}
 {{- define "cas"}}{{$bits := mul . 8 -}}
 //go:inline
 func doAtomicCAS{{$bits}}(ptr *uint{{$bits}}, expected, desired uint{{$bits}}) uint{{$bits}} {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old := *ptr
 	if old == expected {
 		*ptr = desired
 	}
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old
 }
 
@@ -82,10 +81,10 @@ func __atomic_compare_exchange_{{.}}(ptr, expected *uint{{$bits}}, desired uint{
 {{- define "swap"}}{{$bits := mul . 8 -}}
 //go:inline
 func doAtomicSwap{{$bits}}(ptr *uint{{$bits}}, new uint{{$bits}}) uint{{$bits}} {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old := *ptr
 	*ptr = new
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old
 }
 
@@ -111,11 +110,11 @@ func __atomic_exchange_{{.}}(ptr *uint{{$bits}}, new uint{{$bits}}, ordering uin
 
 //go:inline
 func {{$opfn}}(ptr *{{$type}}, value {{$type}}) (old, new {{$type}}) {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old = *ptr
 	{{$opdef}}
 	*ptr = new
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old, new
 }
 

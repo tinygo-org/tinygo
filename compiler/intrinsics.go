@@ -23,6 +23,8 @@ func (b *builder) defineIntrinsicFunction() {
 		b.createMemoryCopyImpl()
 	case name == "runtime.memzero":
 		b.createMemoryZeroImpl()
+	case name == "runtime.stacksave":
+		b.createStackSaveImpl()
 	case name == "runtime.KeepAlive":
 		b.createKeepAliveImpl()
 	case strings.HasPrefix(name, "runtime/volatile.Load"):
@@ -75,6 +77,14 @@ func (b *builder) createMemoryZeroImpl() {
 	}
 	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
 	b.CreateRetVoid()
+}
+
+// createStackSaveImpl creates a call to llvm.stacksave.p0 to read the current
+// stack pointer.
+func (b *builder) createStackSaveImpl() {
+	b.createFunctionStart(true)
+	sp := b.readStackPointer()
+	b.CreateRet(sp)
 }
 
 // Return the llvm.memset.p0.i8 function declaration.

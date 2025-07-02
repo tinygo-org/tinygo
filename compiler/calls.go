@@ -19,8 +19,9 @@ const maxFieldsPerParam = 3
 // useful while declaring or defining a function.
 type paramInfo struct {
 	llvmType llvm.Type
-	name     string // name, possibly with suffixes for e.g. struct fields
-	elemSize uint64 // size of pointer element type, or 0 if this isn't a pointer
+	name     string     // name, possibly with suffixes for e.g. struct fields
+	elemSize uint64     // size of pointer element type, or 0 if this isn't a pointer
+	flags    paramFlags // extra flags for this parameter
 }
 
 // paramFlags identifies parameter attributes for flags. Most importantly, it
@@ -28,9 +29,9 @@ type paramInfo struct {
 type paramFlags uint8
 
 const (
-	// Parameter may have the deferenceable_or_null attribute. This attribute
-	// cannot be applied to unsafe.Pointer and to the data pointer of slices.
-	paramIsDeferenceableOrNull = 1 << iota
+	// Whether this is a full or partial Go parameter (int, slice, etc).
+	// The extra context parameter is not a Go parameter.
+	paramIsGoParam = 1 << iota
 )
 
 // createRuntimeCallCommon creates a runtime call. Use createRuntimeCall or
@@ -75,7 +76,15 @@ func (b *builder) createCall(fnType llvm.Type, fn llvm.Value, args []llvm.Value,
 		fragments := b.expandFormalParam(arg)
 		expanded = append(expanded, fragments...)
 	}
-	return b.CreateCall(fnType, fn, expanded, name)
+	call := b.CreateCall(fnType, fn, expanded, name)
+	if !fn.IsAFunction().IsNil() {
+		if cc := fn.FunctionCallConv(); cc != llvm.CCallConv {
+			// Set a different calling convention if needed.
+			// This is needed for GetModuleHandleExA on Windows, for example.
+			call.SetInstructionCallConv(cc)
+		}
+	}
+	return call
 }
 
 // createInvoke is like createCall but continues execution at the landing pad if
@@ -195,6 +204,7 @@ func (c *compilerContext) getParamInfo(t llvm.Type, name string, goType types.Ty
 	info := paramInfo{
 		llvmType: t,
 		name:     name,
+		flags:    paramIsGoParam,
 	}
 	if goType != nil {
 		switch underlying := goType.Underlying().(type) {

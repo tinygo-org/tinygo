@@ -67,7 +67,7 @@ func checkFilledBuffer(t *testing.T, ptr uintptr, content string) {
 	t.Helper()
 	buf := *(*string)(unsafe.Pointer(&reflect.StringHeader{
 		Data: ptr,
-		Len:  uintptr(len(content)),
+		Len:  len(content),
 	}))
 	if buf != content {
 		t.Errorf("expected %q, got %q", content, buf)
@@ -122,34 +122,5 @@ func TestMallocFree(t *testing.T) {
 
 			libc_free(unsafe.Pointer(bufPtr))
 		})
-	}
-}
-
-func TestMallocEmpty(t *testing.T) {
-	ptr := libc_malloc(0)
-	if ptr != nil {
-		t.Errorf("expected nil pointer, got %p", ptr)
-	}
-}
-
-func TestCallocEmpty(t *testing.T) {
-	ptr := libc_calloc(0, 1)
-	if ptr != nil {
-		t.Errorf("expected nil pointer, got %p", ptr)
-	}
-	ptr = libc_calloc(1, 0)
-	if ptr != nil {
-		t.Errorf("expected nil pointer, got %p", ptr)
-	}
-}
-
-func TestReallocEmpty(t *testing.T) {
-	ptr := libc_malloc(1)
-	if ptr == nil {
-		t.Error("expected pointer but was nil")
-	}
-	ptr = libc_realloc(ptr, 0)
-	if ptr != nil {
-		t.Errorf("expected nil pointer, got %p", ptr)
 	}
 }

@@ -1,4 +1,4 @@
-//go:build baremetal || (wasm && !wasi && !wasip1)
+//go:build baremetal || (tinygo.wasm && !wasip1 && !wasip2) || nintendoswitch
 
 package os
 
@@ -40,6 +40,20 @@ func (f *file) close() error {
 
 func NewFile(fd uintptr, name string) *File {
 	return &File{&file{handle: stdioFileHandle(fd), name: name}}
+}
+
+// Chdir changes the current working directory to the named directory.
+// If there is an error, it will be of type *PathError.
+func Chdir(dir string) error {
+	return ErrNotImplemented
+}
+
+// Rename renames (moves) oldpath to newpath.
+// If newpath already exists and is not a directory, Rename replaces it.
+// OS-specific restrictions may apply when oldpath and newpath are in different directories.
+// If there is an error, it will be of type *LinkError.
+func Rename(oldpath, newpath string) error {
+	return ErrNotImplemented
 }
 
 // Read reads up to len(b) bytes from machine.Serial.
@@ -120,10 +134,36 @@ func Pipe() (r *File, w *File, err error) {
 	return nil, nil, ErrNotImplemented
 }
 
+func Symlink(oldname, newname string) error {
+	return ErrNotImplemented
+}
+
 func Readlink(name string) (string, error) {
 	return "", ErrNotImplemented
 }
 
 func tempDir() string {
 	return "/tmp"
+}
+
+// Truncate is unsupported on this system.
+func Truncate(filename string, size int64) (err error) {
+	return ErrUnsupported
+}
+
+// Truncate is unsupported on this system.
+func (f *File) Truncate(size int64) (err error) {
+	if f.handle == nil {
+		return ErrClosed
+	}
+
+	return Truncate(f.name, size)
+}
+
+func (f *File) chmod(mode FileMode) error {
+	return ErrUnsupported
+}
+
+func (f *File) chdir() error {
+	return ErrNotImplemented
 }

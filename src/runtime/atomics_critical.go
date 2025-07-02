@@ -6,7 +6,6 @@
 package runtime
 
 import (
-	"runtime/interrupt"
 	_ "unsafe"
 )
 
@@ -23,27 +22,27 @@ import (
 func __atomic_load_2(ptr *uint16, ordering uintptr) uint16 {
 	// The LLVM docs for this say that there is a val argument after the pointer.
 	// That is a typo, and the GCC docs omit it.
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	val := *ptr
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return val
 }
 
 //export __atomic_store_2
 func __atomic_store_2(ptr *uint16, val uint16, ordering uintptr) {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	*ptr = val
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 }
 
 //go:inline
 func doAtomicCAS16(ptr *uint16, expected, desired uint16) uint16 {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old := *ptr
 	if old == expected {
 		*ptr = desired
 	}
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old
 }
 
@@ -61,10 +60,10 @@ func __atomic_compare_exchange_2(ptr, expected *uint16, desired uint16, successO
 
 //go:inline
 func doAtomicSwap16(ptr *uint16, new uint16) uint16 {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old := *ptr
 	*ptr = new
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old
 }
 
@@ -80,11 +79,11 @@ func __atomic_exchange_2(ptr *uint16, new uint16, ordering uintptr) uint16 {
 
 //go:inline
 func doAtomicAdd16(ptr *uint16, value uint16) (old, new uint16) {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old = *ptr
 	new = old + value
 	*ptr = new
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old, new
 }
 
@@ -112,27 +111,27 @@ func __atomic_add_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
 func __atomic_load_4(ptr *uint32, ordering uintptr) uint32 {
 	// The LLVM docs for this say that there is a val argument after the pointer.
 	// That is a typo, and the GCC docs omit it.
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	val := *ptr
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return val
 }
 
 //export __atomic_store_4
 func __atomic_store_4(ptr *uint32, val uint32, ordering uintptr) {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	*ptr = val
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 }
 
 //go:inline
 func doAtomicCAS32(ptr *uint32, expected, desired uint32) uint32 {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old := *ptr
 	if old == expected {
 		*ptr = desired
 	}
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old
 }
 
@@ -150,10 +149,10 @@ func __atomic_compare_exchange_4(ptr, expected *uint32, desired uint32, successO
 
 //go:inline
 func doAtomicSwap32(ptr *uint32, new uint32) uint32 {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old := *ptr
 	*ptr = new
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old
 }
 
@@ -169,11 +168,11 @@ func __atomic_exchange_4(ptr *uint32, new uint32, ordering uintptr) uint32 {
 
 //go:inline
 func doAtomicAdd32(ptr *uint32, value uint32) (old, new uint32) {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old = *ptr
 	new = old + value
 	*ptr = new
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old, new
 }
 
@@ -201,27 +200,27 @@ func __atomic_add_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
 func __atomic_load_8(ptr *uint64, ordering uintptr) uint64 {
 	// The LLVM docs for this say that there is a val argument after the pointer.
 	// That is a typo, and the GCC docs omit it.
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	val := *ptr
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return val
 }
 
 //export __atomic_store_8
 func __atomic_store_8(ptr *uint64, val uint64, ordering uintptr) {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	*ptr = val
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 }
 
 //go:inline
 func doAtomicCAS64(ptr *uint64, expected, desired uint64) uint64 {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old := *ptr
 	if old == expected {
 		*ptr = desired
 	}
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old
 }
 
@@ -239,10 +238,10 @@ func __atomic_compare_exchange_8(ptr, expected *uint64, desired uint64, successO
 
 //go:inline
 func doAtomicSwap64(ptr *uint64, new uint64) uint64 {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old := *ptr
 	*ptr = new
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old
 }
 
@@ -258,11 +257,11 @@ func __atomic_exchange_8(ptr *uint64, new uint64, ordering uintptr) uint64 {
 
 //go:inline
 func doAtomicAdd64(ptr *uint64, value uint64) (old, new uint64) {
-	mask := interrupt.Disable()
+	mask := lockAtomics()
 	old = *ptr
 	new = old + value
 	*ptr = new
-	interrupt.Restore(mask)
+	unlockAtomics(mask)
 	return old, new
 }
 

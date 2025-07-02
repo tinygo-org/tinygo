@@ -10,27 +10,10 @@
 package runtime
 
 import (
-	"encoding/binary"
+	"internal/binary"
 	"math/bits"
 	"unsafe"
 )
-
-func ptrToSlice(ptr unsafe.Pointer, n uintptr) []byte {
-	var p []byte
-
-	type _bslice struct {
-		ptr *byte
-		len uintptr
-		cap uintptr
-	}
-
-	pslice := (*_bslice)(unsafe.Pointer(&p))
-	pslice.ptr = (*byte)(ptr)
-	pslice.cap = n
-	pslice.len = n
-
-	return p
-}
 
 type sip struct {
 	v0, v1 uint64
@@ -45,8 +28,7 @@ func (s *sip) round() {
 }
 
 func hash64(ptr unsafe.Pointer, n uintptr, seed uintptr) uint64 {
-
-	p := ptrToSlice(ptr, n)
+	p := unsafe.Slice((*byte)(ptr), n)
 
 	k0 := uint64(seed)
 	k1 := uint64(0)
@@ -117,9 +99,7 @@ func (s *sip32) round() {
 }
 
 func hash32(ptr unsafe.Pointer, n uintptr, seed uintptr) uint32 {
-	// TODO(dgryski): replace this messiness with unsafe.Slice when we can use 1.17 features
-
-	p := ptrToSlice(ptr, n)
+	p := unsafe.Slice((*byte)(ptr), n)
 
 	k0 := uint32(seed)
 	k1 := uint32(seed >> 32)

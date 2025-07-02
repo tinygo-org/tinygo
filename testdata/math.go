@@ -39,6 +39,7 @@ func main() {
 		println("  remainder:", math.Remainder(n, n+0.2))
 		println("  sin:      ", math.Sin(n))
 		println("  sinh:     ", math.Sinh(n))
+		println("  sqrt:     ", float32(math.Sqrt(float64(n))))
 		println("  tan:      ", math.Tan(n))
 		println("  tanh:     ", math.Tanh(n))
 		println("  trunc:    ", math.Trunc(n))

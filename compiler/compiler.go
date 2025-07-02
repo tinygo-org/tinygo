@@ -17,6 +17,7 @@ import (
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
+	"github.com/tinygo-org/tinygo/src/tinygo"
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/types/typeutil"
 	"tinygo.org/x/go-llvm"
@@ -44,6 +45,7 @@ type Config struct {
 	ABI             string
 	GOOS            string
 	GOARCH          string
+	BuildMode       string
 	CodeModel       string
 	RelocationModel string
 	SizeLevel       int
@@ -53,8 +55,11 @@ type Config struct {
 	Scheduler          string
 	AutomaticStackSize bool
 	DefaultStackSize   uint64
+	MaxStackAlloc      uint64
 	NeedsStackObjects  bool
 	Debug              bool // Whether to emit debug information in the LLVM module.
+	Nobounds           bool // Whether to skip bounds checks
+	PanicStrategy      string
 }
 
 // compilerContext contains function-independent data that should still be
@@ -240,7 +245,7 @@ func NewTargetMachine(config *Config) (llvm.TargetMachine, error) {
 }
 
 // Sizes returns a types.Sizes appropriate for the given target machine. It
-// includes the correct int size and aligment as is necessary for the Go
+// includes the correct int size and alignment as is necessary for the Go
 // typechecker.
 func Sizes(machine llvm.TargetMachine) types.Sizes {
 	targetData := machine.CreateTargetData()
@@ -384,7 +389,7 @@ func (c *compilerContext) getLLVMType(goType types.Type) llvm.Type {
 // makeLLVMType creates a LLVM type for a Go type. Don't call this, use
 // getLLVMType instead.
 func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
-	switch typ := goType.(type) {
+	switch typ := types.Unalias(goType).(type) {
 	case *types.Array:
 		elemType := c.getLLVMType(typ.Elem())
 		return llvm.ArrayType(elemType, int(typ.Len()))
@@ -492,6 +497,21 @@ func (c *compilerContext) createDIType(typ types.Type) llvm.Metadata {
 	llvmType := c.getLLVMType(typ)
 	sizeInBytes := c.targetData.TypeAllocSize(llvmType)
 	switch typ := typ.(type) {
+	case *types.Alias:
+		// Implement types.Alias just like types.Named: by treating them like a
+		// C typedef.
+		temporaryMDNode := c.dibuilder.CreateReplaceableCompositeType(llvm.Metadata{}, llvm.DIReplaceableCompositeType{
+			Tag:         dwarf.TagTypedef,
+			SizeInBits:  sizeInBytes * 8,
+			AlignInBits: uint32(c.targetData.ABITypeAlignment(llvmType)) * 8,
+		})
+		c.ditypes[typ] = temporaryMDNode
+		md := c.dibuilder.CreateTypedef(llvm.DITypedef{
+			Type: c.getDIType(types.Unalias(typ)), // TODO: use typ.Rhs in Go 1.23
+			Name: typ.String(),
+		})
+		temporaryMDNode.ReplaceAllUsesWith(md)
+		return md
 	case *types.Array:
 		return c.dibuilder.CreateArrayType(llvm.DIArrayType{
 			SizeInBits:  sizeInBytes * 8,
@@ -852,6 +872,11 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 		case *ssa.Type:
 			if types.IsInterface(member.Type()) {
 				// Interfaces don't have concrete methods.
+				continue
+			}
+			if _, isalias := member.Type().(*types.Alias); isalias {
+				// Aliases don't need to be redefined, since they just refer to
+				// an already existing type whose methods will be defined.
 				continue
 			}
 
@@ -1382,6 +1407,11 @@ func (b *builder) createFunction() {
 		b.llvmFn.SetLinkage(llvm.InternalLinkage)
 		b.createFunction()
 	}
+
+	// Create wrapper function that can be called externally.
+	if b.info.wasmExport != "" {
+		b.createWasmExport()
+	}
 }
 
 // posser is an interface that's implemented by both ssa.Value and
@@ -1672,7 +1702,12 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			result = b.CreateSelect(cmp, result, arg, "")
 		}
 		return result, nil
+	case "panic":
+		// This is rare, but happens in "defer panic()".
+		b.createRuntimeInvoke("_panic", argValues, "")
+		return llvm.Value{}, nil
 	case "print", "println":
+		b.createRuntimeCall("printlock", nil, "")
 		for i, value := range argValues {
 			if i >= 1 && callName == "println" {
 				b.createRuntimeCall("printspace", nil, "")
@@ -1733,6 +1768,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		if callName == "println" {
 			b.createRuntimeCall("printnl", nil, "")
 		}
+		b.createRuntimeCall("printunlock", nil, "")
 		return llvm.Value{}, nil // print() or println() returns void
 	case "real":
 		cplx := argValues[0]
@@ -1820,15 +1856,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 //
 // This is also where compiler intrinsics are implemented.
 func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) {
-	var params []llvm.Value
-	for _, param := range instr.Args {
-		params = append(params, b.getValue(param, getPos(instr)))
-	}
-
-	// Try to call the function directly for trivially static calls.
-	var callee, context llvm.Value
-	var calleeType llvm.Type
-	exported := false
+	// See if this is an intrinsic function that is handled specially.
 	if fn := instr.StaticCallee(); fn != nil {
 		// Direct function call, either to a named or anonymous (directly
 		// applied) function call. If it is anonymous, it may be a closure.
@@ -1844,9 +1872,11 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.emitSV64Call(instr.Args, getPos(instr))
 		case strings.HasPrefix(name, "(device/riscv.CSR)."):
 			return b.emitCSROperation(instr)
-		case strings.HasPrefix(name, "syscall.Syscall") || strings.HasPrefix(name, "syscall.RawSyscall"):
-			return b.createSyscall(instr)
-		case strings.HasPrefix(name, "syscall.rawSyscallNoError"):
+		case strings.HasPrefix(name, "syscall.Syscall") || strings.HasPrefix(name, "syscall.RawSyscall") || strings.HasPrefix(name, "golang.org/x/sys/unix.Syscall") || strings.HasPrefix(name, "golang.org/x/sys/unix.RawSyscall"):
+			if b.GOOS != "darwin" {
+				return b.createSyscall(instr)
+			}
+		case strings.HasPrefix(name, "syscall.rawSyscallNoError") || strings.HasPrefix(name, "golang.org/x/sys/unix.RawSyscallNoError"):
 			return b.createRawSyscallNoError(instr)
 		case name == "runtime.supportsRecover":
 			supportsRecover := uint64(0)
@@ -1854,10 +1884,37 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 				supportsRecover = 1
 			}
 			return llvm.ConstInt(b.ctx.Int1Type(), supportsRecover, false), nil
+		case name == "runtime.panicStrategy":
+			panicStrategy := map[string]uint64{
+				"print": tinygo.PanicStrategyPrint,
+				"trap":  tinygo.PanicStrategyTrap,
+			}[b.Config.PanicStrategy]
+			return llvm.ConstInt(b.ctx.Int8Type(), panicStrategy, false), nil
 		case name == "runtime/interrupt.New":
 			return b.createInterruptGlobal(instr)
+		case name == "runtime.exportedFuncPtr":
+			_, ptr := b.getFunction(instr.Args[0].(*ssa.Function))
+			return b.CreatePtrToInt(ptr, b.uintptrType, ""), nil
+		case name == "(*runtime/interrupt.Checkpoint).Save":
+			return b.createInterruptCheckpoint(instr.Args[0]), nil
+		case name == "internal/abi.FuncPCABI0":
+			retval := b.createDarwinFuncPCABI0Call(instr)
+			if !retval.IsNil() {
+				return retval, nil
+			}
 		}
+	}
 
+	var params []llvm.Value
+	for _, param := range instr.Args {
+		params = append(params, b.getValue(param, getPos(instr)))
+	}
+
+	// Try to call the function directly for trivially static calls.
+	var callee, context llvm.Value
+	var calleeType llvm.Type
+	exported := false
+	if fn := instr.StaticCallee(); fn != nil {
 		calleeType, callee = b.getFunction(fn)
 		info := b.getFunctionInfo(fn)
 		if callee.IsNil() {
@@ -1954,7 +2011,7 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 			return value
 		} else {
 			// indicates a compiler bug
-			panic("local has not been parsed: " + expr.String())
+			panic("SSA value not previously found in function: " + expr.String())
 		}
 	}
 }
@@ -1997,8 +2054,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Alloc:
 		typ := b.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
 		size := b.targetData.TypeAllocSize(typ)
-		// Move all "large" allocations to the heap.  This value is also transform.maxStackAlloc.
-		if expr.Heap || size > 256 {
+		// Move all "large" allocations to the heap.
+		if expr.Heap || size > b.MaxStackAlloc {
 			// Calculate ^uintptr(0)
 			maxSize := llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)).ZExtValue()
 			if size > maxSize {
@@ -2008,6 +2065,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			sizeValue := llvm.ConstInt(b.uintptrType, size, false)
 			layoutValue := b.createObjectLayout(typ, expr.Pos())
 			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue, layoutValue}, expr.Comment)
+			align := b.targetData.ABITypeAlignment(typ)
+			buf.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
 			return buf, nil
 		} else {
 			buf := llvmutil.CreateEntryBlockAlloca(b.Builder, typ, expr.Comment)
@@ -2172,7 +2231,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return llvm.Value{}, b.makeError(expr.Pos(), "todo: indexaddr: "+ptrTyp.String())
 		}
 
-		// Make sure index is at least the size of uintptr becuase getelementptr
+		// Make sure index is at least the size of uintptr because getelementptr
 		// assumes index is a signed integer.
 		index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
 
@@ -2214,6 +2273,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		sliceType := expr.Type().Underlying().(*types.Slice)
 		llvmElemType := b.getLLVMType(sliceType.Elem())
 		elemSize := b.targetData.TypeAllocSize(llvmElemType)
+		elemAlign := b.targetData.ABITypeAlignment(llvmElemType)
 		elemSizeValue := llvm.ConstInt(b.uintptrType, elemSize, false)
 
 		maxSize := b.maxSliceSize(llvmElemType)
@@ -2237,6 +2297,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
 		layoutValue := b.createObjectLayout(llvmElemType, expr.Pos())
 		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize, layoutValue}, "makeslice.buf")
+		slicePtr.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elemAlign)))
 
 		// Extend or truncate if necessary. This is safe as we've already done
 		// the bounds check.
@@ -2548,7 +2609,7 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 				sizeY := b.targetData.TypeAllocSize(y.Type())
 
 				// Check if the shift is bigger than the bit-width of the shifted value.
-				// This is UB in LLVM, so it needs to be handled seperately.
+				// This is UB in LLVM, so it needs to be handled separately.
 				// The Go spec indirectly defines the result as 0.
 				// Negative shifts are handled earlier, so we can treat y as unsigned.
 				overshifted := b.CreateICmp(llvm.IntUGE, y, llvm.ConstInt(y.Type(), 8*sizeX, false), "shift.overflow")
@@ -3261,7 +3322,11 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			// Instead of a load from the global, create a bitcast of the
 			// function pointer itself.
 			name := strings.TrimSuffix(unop.X.(*ssa.Global).Name(), "$funcaddr")
-			_, fn := b.getFunction(b.fn.Pkg.Members[name].(*ssa.Function))
+			pkg := b.fn.Pkg
+			if pkg == nil {
+				pkg = b.fn.Origin().Pkg
+			}
+			_, fn := b.getFunction(pkg.Members[name].(*ssa.Function))
 			if fn.IsNil() {
 				return llvm.Value{}, b.makeError(unop.Pos(), "cgo function not found: "+name)
 			}

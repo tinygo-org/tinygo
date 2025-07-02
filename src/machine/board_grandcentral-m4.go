@@ -224,7 +224,8 @@ const (
 
 	I2S_SCK_PIN = I2S0_SCK_PIN // default pins
 	I2S_WS_PIN  = I2S0_FS_PIN  //
-	I2S_SD_PIN  = I2S0_SDO_PIN //
+	I2S_SDO_PIN = I2S0_SDO_PIN
+	I2S_SDI_PIN = NoPin
 )
 
 // SD card pins

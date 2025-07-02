@@ -1,4 +1,4 @@
-//go:build runtime_memhash_leveldb || (wasi && !runtime_memhash_fnv && !runtime_memhash_tsip)
+//go:build runtime_memhash_leveldb || (wasip1 && !runtime_memhash_fnv && !runtime_memhash_tsip)
 
 // This is the default for WASI, but can also be used on other targets with the
 // right build tag.
@@ -16,23 +16,6 @@ import (
 	"unsafe"
 )
 
-func ptrToSlice(ptr unsafe.Pointer, n uintptr) []byte {
-	var p []byte
-
-	type _bslice struct {
-		ptr *byte
-		len uintptr
-		cap uintptr
-	}
-
-	pslice := (*_bslice)(unsafe.Pointer(&p))
-	pslice.ptr = (*byte)(ptr)
-	pslice.cap = n
-	pslice.len = n
-
-	return p
-}
-
 // leveldb hash
 func hash32(ptr unsafe.Pointer, n, seed uintptr) uint32 {
 
@@ -41,7 +24,7 @@ func hash32(ptr unsafe.Pointer, n, seed uintptr) uint32 {
 		m     = 0xc6a4a793
 	)
 
-	b := ptrToSlice(ptr, n)
+	b := unsafe.Slice((*byte)(ptr), n)
 
 	h := uint32(lseed^seed) ^ uint32(uint(len(b))*uint(m))
 

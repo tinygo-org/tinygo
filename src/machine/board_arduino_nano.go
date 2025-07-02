@@ -2,11 +2,6 @@
 
 package machine
 
-// Return the current CPU frequency in hertz.
-func CPUFrequency() uint32 {
-	return 16000000
-}
-
 // Digital pins.
 const (
 	D0  = PD0 // RX0

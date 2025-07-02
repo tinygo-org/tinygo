@@ -8,9 +8,9 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-// Picolibc is a C library for bare metal embedded devices. It was originally
+// libPicolibc is a C library for bare metal embedded devices. It was originally
 // based on newlib.
-var Picolibc = Library{
+var libPicolibc = Library{
 	name: "picolibc",
 	makeHeaders: func(target, includeDir string) error {
 		f, err := os.Create(filepath.Join(includeDir, "picolibc.h"))
@@ -29,10 +29,12 @@ var Picolibc = Library{
 			"-D_HAVE_ALIAS_ATTRIBUTE",
 			"-DTINY_STDIO",
 			"-DPOSIX_IO",
+			"-DFORMAT_DEFAULT_INTEGER", // use __i_vfprintf and __i_vfscanf by default
 			"-D_IEEE_LIBM",
 			"-D__OBSOLETE_MATH_FLOAT=1", // use old math code that doesn't expect a FPU
 			"-D__OBSOLETE_MATH_DOUBLE=0",
 			"-D_WANT_IO_C99_FORMATS",
+			"-D__PICOLIBC_ERRNO_FUNCTION=__errno_location",
 			"-nostdlibinc",
 			"-isystem", newlibDir + "/libc/include",
 			"-I" + newlibDir + "/libc/tinystdio",
@@ -41,7 +43,7 @@ var Picolibc = Library{
 		}
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc/newlib") },
-	librarySources: func(target string) ([]string, error) {
+	librarySources: func(target string, _ bool) ([]string, error) {
 		sources := append([]string(nil), picolibcSources...)
 		if !strings.HasPrefix(target, "avr") {
 			// Small chips without long jumps can't compile many files (printf,
@@ -337,6 +339,12 @@ var picolibcSourcesLarge = []string{
 	"libm/common/math_err_may_uflow.c",
 	"libm/common/math_err_check_uflow.c",
 	"libm/common/math_err_check_oflow.c",
+	"libm/common/math_errf_divzerof.c",
+	"libm/common/math_errf_invalidf.c",
+	"libm/common/math_errf_may_uflowf.c",
+	"libm/common/math_errf_oflowf.c",
+	"libm/common/math_errf_uflowf.c",
+	"libm/common/math_errf_with_errnof.c",
 	"libm/common/math_inexact.c",
 	"libm/common/math_inexactf.c",
 	"libm/common/log.c",

@@ -22,14 +22,33 @@ define i16 @testArray() {
   ret i16 %val
 }
 
+define void @testUnknownAlign() {
+  %stackalloc4 = alloca [32 x i8], align 8
+  %stackalloc3 = alloca [24 x i8], align 8
+  %stackalloc2 = alloca [12 x i8], align 8
+  %stackalloc1 = alloca [6 x i8], align 8
+  %stackalloc = alloca [3 x i8], align 8
+  store [32 x i8] zeroinitializer, ptr %stackalloc4, align 8
+  store i8 5, ptr %stackalloc4, align 1
+  store [24 x i8] zeroinitializer, ptr %stackalloc3, align 8
+  store i16 5, ptr %stackalloc3, align 2
+  store [12 x i8] zeroinitializer, ptr %stackalloc2, align 8
+  store i16 5, ptr %stackalloc2, align 2
+  store [6 x i8] zeroinitializer, ptr %stackalloc1, align 8
+  store i16 5, ptr %stackalloc1, align 2
+  store [3 x i8] zeroinitializer, ptr %stackalloc, align 8
+  store i16 5, ptr %stackalloc, align 2
+  ret void
+}
+
 define void @testEscapingCall() {
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   %val = call ptr @escapeIntPtr(ptr %alloc)
   ret void
 }
 
 define void @testEscapingCall2() {
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   %val = call ptr @escapeIntPtrSometimes(ptr %alloc, ptr %alloc)
   ret void
 }
@@ -42,7 +61,7 @@ define void @testNonEscapingCall() {
 }
 
 define ptr @testEscapingReturn() {
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   ret ptr %alloc
 }
 

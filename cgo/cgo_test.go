@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"go/types"
 	"os"
@@ -55,7 +56,7 @@ func TestCGo(t *testing.T) {
 			}
 
 			// Process the AST with CGo.
-			cgoAST, _, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", "main", fset, cflags)
+			cgoFiles, _, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", "main", fset, cflags, "linux")
 
 			// Check the AST for type errors.
 			var typecheckErrors []error
@@ -63,10 +64,10 @@ func TestCGo(t *testing.T) {
 				Error: func(err error) {
 					typecheckErrors = append(typecheckErrors, err)
 				},
-				Importer: simpleImporter{},
+				Importer: newSimpleImporter(),
 				Sizes:    types.SizesFor("gccgo", "arm"),
 			}
-			_, err = config.Check("", fset, []*ast.File{f, cgoAST}, nil)
+			_, err = config.Check("", fset, append([]*ast.File{f}, cgoFiles...), nil)
 			if err != nil && len(typecheckErrors) == 0 {
 				// Only report errors when no type errors are found (an
 				// unexpected condition).
@@ -91,7 +92,7 @@ func TestCGo(t *testing.T) {
 				}
 				buf.WriteString("\n")
 			}
-			err = format.Node(buf, fset, cgoAST)
+			err = format.Node(buf, fset, cgoFiles[0])
 			if err != nil {
 				t.Errorf("could not write out CGo AST: %v", err)
 			}
@@ -201,14 +202,33 @@ func Test_cgoPackage_isEquivalentAST(t *testing.T) {
 }
 
 // simpleImporter implements the types.Importer interface, but only allows
-// importing the unsafe package.
+// importing the syscall and unsafe packages.
 type simpleImporter struct {
+	syscallPkg *types.Package
+}
+
+func newSimpleImporter() *simpleImporter {
+	i := &simpleImporter{}
+
+	// Implement a dummy syscall package with the Errno type.
+	i.syscallPkg = types.NewPackage("syscall", "syscall")
+	obj := types.NewTypeName(token.NoPos, i.syscallPkg, "Errno", nil)
+	named := types.NewNamed(obj, nil, nil)
+	i.syscallPkg.Scope().Insert(obj)
+	named.SetUnderlying(types.Typ[types.Uintptr])
+	sig := types.NewSignatureType(nil, nil, nil, types.NewTuple(), types.NewTuple(types.NewParam(token.NoPos, i.syscallPkg, "", types.Typ[types.String])), false)
+	named.AddMethod(types.NewFunc(token.NoPos, i.syscallPkg, "Error", sig))
+	i.syscallPkg.MarkComplete()
+
+	return i
 }
 
 // Import implements the Importer interface. For testing usage only: it only
 // supports importing the unsafe package.
-func (i simpleImporter) Import(path string) (*types.Package, error) {
+func (i *simpleImporter) Import(path string) (*types.Package, error) {
 	switch path {
+	case "syscall":
+		return i.syscallPkg, nil
 	case "unsafe":
 		return types.Unsafe, nil
 	default:
@@ -216,10 +236,16 @@ func (i simpleImporter) Import(path string) (*types.Package, error) {
 	}
 }
 
-// formatDiagnostics formats the error message to be an indented comment. It
+// formatDiagnostic formats the error message to be an indented comment. It
 // also fixes Windows path name issues (backward slashes).
 func formatDiagnostic(err error) string {
-	msg := err.Error()
+	var msg string
+	switch err := err.(type) {
+	case scanner.Error:
+		msg = err.Pos.String() + ": " + err.Msg
+	default:
+		msg = err.Error()
+	}
 	if runtime.GOOS == "windows" {
 		// Fix Windows path slashes.
 		msg = strings.ReplaceAll(msg, "testdata\\", "testdata/")

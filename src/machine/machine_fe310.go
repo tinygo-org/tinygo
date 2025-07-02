@@ -26,6 +26,8 @@ const (
 func (p Pin) Configure(config PinConfig) {
 	sifive.GPIO0.INPUT_EN.SetBits(1 << uint8(p))
 	switch config.Mode {
+	case PinInput:
+		sifive.GPIO0.OUTPUT_EN.ClearBits(1 << uint8(p))
 	case PinOutput:
 		sifive.GPIO0.OUTPUT_EN.SetBits(1 << uint8(p))
 	case PinPWM:
@@ -138,7 +140,7 @@ type SPIConfig struct {
 }
 
 // Configure is intended to setup the SPI interface.
-func (spi SPI) Configure(config SPIConfig) error {
+func (spi *SPI) Configure(config SPIConfig) error {
 	// Use default pins if not set.
 	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
 		config.SCK = SPI0_SCK_PIN
@@ -195,7 +197,7 @@ func (spi SPI) Configure(config SPIConfig) error {
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
-func (spi SPI) Transfer(w byte) (byte, error) {
+func (spi *SPI) Transfer(w byte) (byte, error) {
 	// wait for tx ready
 	for spi.Bus.TXDATA.HasBits(sifive.QSPI_TXDATA_FULL) {
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -70,11 +71,13 @@ func main() {
 	// Test multi-receiver.
 	ch = make(chan int)
 	wg.Add(3)
-	go fastreceiver(ch)
-	go fastreceiver(ch)
-	go fastreceiver(ch)
+	var result atomic.Uint32
+	go fastreceiveradd(ch, &result)
+	go fastreceiveradd(ch, &result)
+	go fastreceiveradd(ch, &result)
 	slowsender(ch)
 	wg.Wait()
+	println("sum of sums:", result.Load())
 
 	// Test iterator style channel.
 	ch = make(chan int)
@@ -88,7 +91,10 @@ func main() {
 	println("sum(100):", sum)
 
 	// Test simple selects.
-	go selectDeadlock() // cannot use waitGroup here - never terminates
+	wg.Add(1)
+	go selectDeadlock()
+	wg.Wait()
+
 	wg.Add(1)
 	go selectNoOp()
 	wg.Wait()
@@ -244,7 +250,7 @@ func receive(ch <-chan int) {
 func sender(ch chan int) {
 	for i := 1; i <= 8; i++ {
 		if i == 4 {
-			time.Sleep(time.Microsecond)
+			time.Sleep(time.Millisecond)
 			println("slept")
 		}
 		ch <- i
@@ -290,6 +296,16 @@ func fastreceiver(ch chan int) {
 	wg.Done()
 }
 
+func fastreceiveradd(ch chan int, result *atomic.Uint32) {
+	sum := 0
+	for i := 0; i < 2; i++ {
+		n := <-ch
+		sum += n
+	}
+	result.Add(uint32(sum))
+	wg.Done()
+}
+
 func iterator(ch chan int, top int) {
 	for i := 0; i < top; i++ {
 		ch <- i
@@ -300,6 +316,7 @@ func iterator(ch chan int, top int) {
 
 func selectDeadlock() {
 	println("deadlocking")
+	wg.Done()
 	select {}
 	println("unreachable")
 }

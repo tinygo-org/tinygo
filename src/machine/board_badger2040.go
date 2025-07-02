@@ -1,16 +1,11 @@
 //go:build badger2040
 
-// This contains the pin mappings for the Badger 2040 Connect board.
+// This contains the pin mappings for the Badger 2040 board.
 //
 // For more information, see: https://shop.pimoroni.com/products/badger-2040
 // Also
 // - Badger 2040 schematic: https://cdn.shopify.com/s/files/1/0174/1800/files/badger_2040_schematic.pdf?v=1645702148
 package machine
-
-import (
-	"device/rp"
-	"runtime/interrupt"
-)
 
 const (
 	LED Pin = GPIO25
@@ -30,8 +25,12 @@ const (
 	EPD_SDO_PIN   Pin = GPIO19
 
 	VBUS_DETECT Pin = GPIO24
-	BATTERY     Pin = GPIO29
+	VREF_POWER  Pin = GPIO27
+	VREF_1V24   Pin = GPIO28
+	VBAT_SENSE  Pin = GPIO29
 	ENABLE_3V3  Pin = GPIO10
+
+	BATTERY = VBAT_SENSE
 )
 
 // I2C pins
@@ -92,17 +91,4 @@ const (
 	UART_RX_PIN  = UART0_RX_PIN
 )
 
-// UART on the RP2040
-var (
-	UART0  = &_UART0
-	_UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
-	}
-)
-
 var DefaultUART = UART0
-
-func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
-}

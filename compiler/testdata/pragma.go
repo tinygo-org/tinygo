@@ -48,6 +48,22 @@ func inlineFunc() {
 func noinlineFunc() {
 }
 
+type Int interface {
+	int8 | int16
+}
+
+// Same for generic functions (but the compiler may miss the pragma due to it
+// being generic).
+//
+//go:noinline
+func noinlineGenericFunc[T Int]() {
+}
+
+func useGeneric() {
+	// Make sure the generic function above is instantiated.
+	noinlineGenericFunc[int8]()
+}
+
 // This function should have the specified section.
 //
 //go:section .special_function_section
@@ -90,3 +106,12 @@ var undefinedGlobalNotInSection uint32
 //go:align 1024
 //go:section .global_section
 var multipleGlobalPragmas uint32
+
+//go:noescape
+func doesNotEscapeParam(a *int, b []int, c chan int, d *[0]byte)
+
+// The //go:noescape pragma only works on declarations, not definitions.
+//
+//go:noescape
+func stillEscapes(a *int, b []int, c chan int, d *[0]byte) {
+}

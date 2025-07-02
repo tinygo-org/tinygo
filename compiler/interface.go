@@ -86,7 +86,7 @@ func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.
 
 // extractValueFromInterface extract the value from an interface value
 // (runtime._interface) under the assumption that it is of the type given in
-// llvmType. The behavior is undefied if the interface is nil or llvmType
+// llvmType. The behavior is undefined if the interface is nil or llvmType
 // doesn't match the underlying type of the interface.
 func (b *builder) extractValueFromInterface(itf llvm.Value, llvmType llvm.Type) llvm.Value {
 	valuePtr := b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
@@ -122,18 +122,24 @@ func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
 // This function returns a pointer to the 'kind' field (which might not be the
 // first field in the struct).
 func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
+	// Resolve alias types: alias types are resolved at compile time.
+	typ = types.Unalias(typ)
+
 	ms := c.program.MethodSets.MethodSet(typ)
 	hasMethodSet := ms.Len() != 0
-	if _, ok := typ.Underlying().(*types.Interface); ok {
+	_, isInterface := typ.Underlying().(*types.Interface)
+	if isInterface {
 		hasMethodSet = false
 	}
 
+	// As defined in https://pkg.go.dev/reflect#Type:
+	// NumMethod returns the number of methods accessible using Method.
+	// For a non-interface type, it returns the number of exported methods.
+	// For an interface type, it returns the number of exported and unexported methods.
 	var numMethods int
-	if hasMethodSet {
-		for i := 0; i < ms.Len(); i++ {
-			if ms.At(i).Obj().Exported() {
-				numMethods++
-			}
+	for i := 0; i < ms.Len(); i++ {
+		if isInterface || ms.At(i).Obj().Exported() {
+			numMethods++
 		}
 	}
 
@@ -509,10 +515,9 @@ var basicTypeNames = [...]string{
 // interface lowering pass to assign type codes as expected by the reflect
 // package. See getTypeCodeNum.
 func getTypeCodeName(t types.Type) (string, bool) {
-	switch t := t.(type) {
+	switch t := types.Unalias(t).(type) {
 	case *types.Named:
-		// Note: check for `t.Obj().Pkg() != nil` for Go 1.18 only.
-		if t.Obj().Pkg() != nil && t.Obj().Parent() != t.Obj().Pkg().Scope() {
+		if t.Obj().Parent() != t.Obj().Pkg().Scope() {
 			return "named:" + t.String() + "$local", true
 		}
 		return "named:" + t.String(), false
@@ -940,7 +945,7 @@ func signature(sig *types.Signature) string {
 // normalization around `byte` vs `uint8` for example.
 func typestring(t types.Type) string {
 	// See: https://github.com/golang/go/blob/master/src/go/types/typestring.go
-	switch t := t.(type) {
+	switch t := types.Unalias(t).(type) {
 	case *types.Array:
 		return "[" + strconv.FormatInt(t.Len(), 10) + "]" + typestring(t.Elem())
 	case *types.Basic:

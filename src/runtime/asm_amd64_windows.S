@@ -12,8 +12,8 @@ tinygo_scanCurrentStack:
     pushq %r15
 
     // Scan the stack.
-    subq $8, %rsp // adjust the stack before the call to maintain 16-byte alignment
-    movq %rsp, %rdi
+    subq $8, %rsp   // adjust the stack before the call to maintain 16-byte alignment
+    movq %rsp, %rcx // pass the stack pointer as the first parameter
     callq tinygo_scanstack
 
     // Restore the stack pointer. Registers do not need to be restored as they

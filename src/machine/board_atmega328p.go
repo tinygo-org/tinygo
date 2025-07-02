@@ -2,6 +2,11 @@
 
 package machine
 
+// Return the current CPU frequency in hertz.
+func CPUFrequency() uint32 {
+	return 16000000
+}
+
 const (
 	// Note: start at port B because there is no port A.
 	portB Pin = iota * 8

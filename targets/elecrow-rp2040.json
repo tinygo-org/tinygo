@@ -1,0 +1,12 @@
+{
+    "inherits": ["rp2040"],
+    "build-tags": ["elecrow_rp2040", "comboat_fw"],
+    "serial-port": ["2e8a:000a"],
+    "default-stack-size": 8192,
+    "ldflags": [
+        "--defsym=__flash_size=8M"
+    ],
+    "extra-files": [
+        "targets/pico-boot-stage2.S"
+    ]
+}

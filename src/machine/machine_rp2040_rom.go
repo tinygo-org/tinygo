@@ -1,4 +1,4 @@
-//go:build rp2040
+//go:build tinygo && rp2040
 
 package machine
 
@@ -230,7 +230,7 @@ func (f flashBlockDevice) writeAt(p []byte, off int64) (n int, err error) {
 	// e.g. real address 0x10003000 is written to at
 	// 0x00003000
 	address := writeAddress(off)
-	padded := f.pad(p)
+	padded := flashPad(p, int(f.WriteBlockSize()))
 
 	C.flash_range_write(C.uint32_t(address),
 		(*C.uint8_t)(unsafe.Pointer(&padded[0])),

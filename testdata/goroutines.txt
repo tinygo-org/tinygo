@@ -19,10 +19,11 @@ closure go call result: 1
 pre-acquired mutex
 releasing mutex
 acquired mutex from goroutine
-released mutex from goroutine
+releasing mutex from goroutine
 re-acquired mutex
 done
 called: Foo.Nowait
 called: Foo.Wait
   ...waited
 done with 'go on interface'
+paddedStruct: 5 7

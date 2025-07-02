@@ -78,7 +78,7 @@ func (b *builder) trackValue(value llvm.Value) {
 	}
 }
 
-// trackPointer creates a call to runtime.trackPointer, bitcasting the poitner
+// trackPointer creates a call to runtime.trackPointer, bitcasting the pointer
 // first if needed. The input value must be of LLVM pointer type.
 func (b *builder) trackPointer(value llvm.Value) {
 	b.createRuntimeCall("trackPointer", []llvm.Value{value, b.stackChainAlloca}, "")

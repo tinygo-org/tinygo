@@ -185,3 +185,22 @@ func TestClose(t *testing.T) {
 		}
 	}
 }
+
+func TestReadOnDir(t *testing.T) {
+	name := TempDir() + "/_os_test_TestReadOnDir"
+	defer Remove(name)
+	f, err := OpenFile(name, O_RDWR|O_CREATE, 0644)
+	if err != nil {
+		t.Errorf("OpenFile %s: %s", name, err)
+		return
+	}
+	var buf [32]byte
+	n, err := f.Read(buf[:])
+	if err == nil {
+		t.Errorf("Error expected")
+		return
+	}
+	if n != 0 {
+		t.Errorf("Wrong read bytes: %s", err)
+	}
+}

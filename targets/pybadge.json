@@ -1,6 +1,6 @@
 {
     "inherits": ["atsamd51j19a"],
-    "build-tags": ["pybadge"],
+    "build-tags": ["pybadge", "ninafw"],
     "serial": "usb",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",

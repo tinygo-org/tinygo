@@ -12,5 +12,8 @@
 	"ldflags": [
 		"-melf32lriscv"
 	],
-	"gdb": ["gdb-multiarch"]
+	"gdb": [
+		"gdb-multiarch",
+		"gdb"
+	]
 }

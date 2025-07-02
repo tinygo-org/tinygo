@@ -13,8 +13,6 @@ import (
 	"unsafe"
 )
 
-type timeUnit int64
-
 //export main
 func main() {
 
@@ -44,10 +42,10 @@ func main() {
 
 	// Reset the MIE register and enable external interrupts.
 	// It must be reset here because it not zeroed at startup.
-	riscv.MIE.Set(1 << 11) // bit 11 is for machine external interrupts
+	riscv.MIE.Set(riscv.MIE_MEIE) // MEIE is for machine external interrupts
 
 	// Enable global interrupts now that they've been set up.
-	riscv.MSTATUS.SetBits(1 << 3) // MIE
+	riscv.MSTATUS.SetBits(riscv.MSTATUS_MIE)
 
 	preinit()
 	initPeripherals()
@@ -77,13 +75,13 @@ func handleInterrupt() {
 	if cause&(1<<63) != 0 {
 		// Topmost bit is set, which means that it is an interrupt.
 		switch code {
-		case 7: // Machine timer interrupt
+		case riscv.MachineTimerInterrupt:
 			// Signal timeout.
 			timerWakeup.Set(1)
 			// Disable the timer, to avoid triggering the interrupt right after
 			// this interrupt returns.
-			riscv.MIE.ClearBits(1 << 7) // MTIE bit
-		case 11: // Machine external interrupt
+			riscv.MIE.ClearBits(riscv.MIE_MTIE)
+		case riscv.MachineExternalInterrupt:
 			hartId := riscv.MHARTID.Get()
 
 			// Claim this interrupt.
@@ -105,7 +103,7 @@ func handleInterrupt() {
 	riscv.MCAUSE.Set(0)
 }
 
-// initPeripherals configures periperhals the way the runtime expects them.
+// initPeripherals configures peripherals the way the runtime expects them.
 func initPeripherals() {
 	// Enable APB0 clock.
 	kendryte.SYSCTL.CLK_EN_CENT.SetBits(kendryte.SYSCTL_CLK_EN_CENT_APB0_CLK_EN)
@@ -149,7 +147,7 @@ func ticks() timeUnit {
 func sleepTicks(d timeUnit) {
 	target := uint64(ticks() + d)
 	kendryte.CLINT.MTIMECMP[0].Set(target)
-	riscv.MIE.SetBits(1 << 7) // MTIE
+	riscv.MIE.SetBits(riscv.MIE_MTIE)
 	for {
 		if timerWakeup.Get() != 0 {
 			timerWakeup.Set(0)

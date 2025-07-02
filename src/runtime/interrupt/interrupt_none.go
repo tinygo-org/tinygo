@@ -1,4 +1,4 @@
-//go:build !baremetal || uefi
+//go:build !baremetal || tkey || uefi
 
 package interrupt
 
@@ -21,7 +21,7 @@ func Disable() (state State) {
 // Restore restores interrupts to what they were before. Give the previous state
 // returned by Disable as a parameter. If interrupts were disabled before
 // calling Disable, this will not re-enable interrupts, allowing for nested
-// cricital sections.
+// critical sections.
 func Restore(state State) {}
 
 // In returns whether the system is currently in an interrupt.

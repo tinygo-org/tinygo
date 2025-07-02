@@ -18,7 +18,7 @@ tarball. If you want to help with development of TinyGo itself, you should follo
 LLVM, Clang and LLD are quite light on dependencies, requiring only standard
 build tools to be built. Go is of course necessary to build TinyGo itself.
 
-  * Go (1.18+)
+  * Go (1.19+)
   * GNU Make
   * Standard build tools (gcc/clang)
   * git
@@ -27,6 +27,21 @@ build tools to be built. Go is of course necessary to build TinyGo itself.
 
 The rest of this guide assumes you're running Linux, but it should be equivalent
 on a different system like Mac.
+
+## Using GNU Make
+
+The static build of TinyGo is driven by GNUmakefile, which provides a help target for quick reference:
+
+    % make help
+    clean                           Remove build directory
+    fmt                             Reformat source
+    fmt-check                       Warn if any source needs reformatting
+    gen-device                      Generate microcontroller-specific sources
+    llvm-source                     Get LLVM sources
+    llvm-build                      Build LLVM
+    tinygo                          Build the TinyGo compiler
+    lint                            Lint source tree
+    spell                           Spellcheck source tree
 
 ## Download the source
 
@@ -85,7 +100,7 @@ Now that we have a working static build, it's time to make a release tarball:
 
 If you did not clone the repository with the `--recursive` option, you will get errors until you initialize the project submodules:
 
-    git submodule update --init --recursive
+    git submodule update --init
 
 The release tarball is stored in build/release.tar.gz, and can be extracted with
 the following command (for example in ~/lib):

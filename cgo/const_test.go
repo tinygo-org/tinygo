@@ -40,6 +40,10 @@ func TestParseConst(t *testing.T) {
 		{`5&5`, `5 & 5`},
 		{`5|5`, `5 | 5`},
 		{`5^5`, `5 ^ 5`},
+		{`5<<5`, `5 << 5`},
+		{`5>>5`, `5 >> 5`},
+		{`5>>5 + 3`, `5 >> (5 + 3)`},
+		{`5>>5 ^ 3`, `5>>5 ^ 3`},
 		{`5||5`, `error: 1:2: unexpected token ||, expected end of expression`}, // logical binops aren't supported yet
 		{`(5/5)`, `(5 / 5)`},
 		{`1 - 2`, `1 - 2`},
@@ -55,7 +59,7 @@ func TestParseConst(t *testing.T) {
 	} {
 		fset := token.NewFileSet()
 		startPos := fset.AddFile("", -1, 1000).Pos(0)
-		expr, err := parseConst(startPos, fset, tc.C)
+		expr, err := parseConst(startPos, fset, tc.C, nil, token.NoPos, nil)
 		s := "<invalid>"
 		if err != nil {
 			if !strings.HasPrefix(tc.Go, "error: ") {

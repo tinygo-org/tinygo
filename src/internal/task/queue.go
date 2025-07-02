@@ -12,9 +12,9 @@ type Queue struct {
 
 // Push a task onto the queue.
 func (q *Queue) Push(t *Task) {
-	i := interrupt.Disable()
+	mask := lockAtomics()
 	if asserts && t.Next != nil {
-		interrupt.Restore(i)
+		unlockAtomics(mask)
 		panic("runtime: pushing a task to a queue with a non-nil Next pointer")
 	}
 	if q.tail != nil {
@@ -25,15 +25,15 @@ func (q *Queue) Push(t *Task) {
 	if q.head == nil {
 		q.head = t
 	}
-	interrupt.Restore(i)
+	unlockAtomics(mask)
 }
 
 // Pop a task off of the queue.
 func (q *Queue) Pop() *Task {
-	i := interrupt.Disable()
+	mask := lockAtomics()
 	t := q.head
 	if t == nil {
-		interrupt.Restore(i)
+		unlockAtomics(mask)
 		return nil
 	}
 	q.head = t.Next
@@ -41,13 +41,13 @@ func (q *Queue) Pop() *Task {
 		q.tail = nil
 	}
 	t.Next = nil
-	interrupt.Restore(i)
+	unlockAtomics(mask)
 	return t
 }
 
 // Append pops the contents of another queue and pushes them onto the end of this queue.
 func (q *Queue) Append(other *Queue) {
-	i := interrupt.Disable()
+	mask := lockAtomics()
 	if q.head == nil {
 		q.head = other.head
 	} else {
@@ -55,14 +55,14 @@ func (q *Queue) Append(other *Queue) {
 	}
 	q.tail = other.tail
 	other.head, other.tail = nil, nil
-	interrupt.Restore(i)
+	unlockAtomics(mask)
 }
 
 // Empty checks if the queue is empty.
 func (q *Queue) Empty() bool {
-	i := interrupt.Disable()
+	mask := lockAtomics()
 	empty := q.head == nil
-	interrupt.Restore(i)
+	unlockAtomics(mask)
 	return empty
 }
 
@@ -75,24 +75,24 @@ type Stack struct {
 
 // Push a task onto the stack.
 func (s *Stack) Push(t *Task) {
-	i := interrupt.Disable()
+	mask := lockAtomics()
 	if asserts && t.Next != nil {
-		interrupt.Restore(i)
+		unlockAtomics(mask)
 		panic("runtime: pushing a task to a stack with a non-nil Next pointer")
 	}
 	s.top, t.Next = t, s.top
-	interrupt.Restore(i)
+	unlockAtomics(mask)
 }
 
 // Pop a task off of the stack.
 func (s *Stack) Pop() *Task {
-	i := interrupt.Disable()
+	mask := lockAtomics()
 	t := s.top
 	if t != nil {
 		s.top = t.Next
 		t.Next = nil
 	}
-	interrupt.Restore(i)
+	unlockAtomics(mask)
 	return t
 }
 
@@ -112,13 +112,26 @@ func (t *Task) tail() *Task {
 // Queue moves the contents of the stack into a queue.
 // Elements can be popped from the queue in the same order that they would be popped from the stack.
 func (s *Stack) Queue() Queue {
-	i := interrupt.Disable()
+	mask := lockAtomics()
 	head := s.top
 	s.top = nil
 	q := Queue{
 		head: head,
 		tail: head.tail(),
 	}
-	interrupt.Restore(i)
+	unlockAtomics(mask)
 	return q
 }
+
+// Use runtime.lockAtomics and runtime.unlockAtomics so that Queue and Stack
+// work correctly even on multicore systems. These functions are normally used
+// to implement atomic operations, but the same spinlock can also be used for
+// Queue/Stack operations which are very fast.
+// These functions are just plain old interrupt disable/restore on non-multicore
+// systems.
+
+//go:linkname lockAtomics runtime.lockAtomics
+func lockAtomics() interrupt.State
+
+//go:linkname unlockAtomics runtime.unlockAtomics
+func unlockAtomics(mask interrupt.State)

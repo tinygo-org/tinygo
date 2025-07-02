@@ -63,6 +63,9 @@ var UART1 = &sercomUSART3
 // UART2 on the Arduino Nano 33 connects to the normal TX/RX pins.
 var UART2 = &sercomUSART5
 
+// UART_NINA on the Arduino Nano 33 connects to the NINA HCI.
+var UART_NINA = &sercomUSART2
+
 // I2C pins
 const (
 	SDA_PIN Pin = A4 // SDA: SERCOM4/PAD[1]
@@ -99,14 +102,24 @@ const (
 	NINA_GPIO0  Pin = PA27
 	NINA_RESETN Pin = PA08
 	NINA_ACK    Pin = PA28
-	NINA_TX     Pin = PA22
-	NINA_RX     Pin = PA23
+	NINA_TX     Pin = PA12
+	NINA_RX     Pin = PA13
+	NINA_RTS    Pin = PA14
+	NINA_CTS    Pin = PA15
+)
+
+// NINA-W102 settings
+const (
+	NINA_BAUDRATE         = 912600
+	NINA_RESET_INVERTED   = true
+	NINA_SOFT_FLOWCONTROL = false
 )
 
 // I2S pins
 const (
 	I2S_SCK_PIN Pin = PA10
-	I2S_SD_PIN  Pin = PA08
+	I2S_SDO_PIN Pin = PA08
+	I2S_SDI_PIN     = NoPin
 	I2S_WS_PIN      = NoPin // TODO: figure out what this is on Arduino Nano 33.
 )
 

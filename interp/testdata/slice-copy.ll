@@ -11,6 +11,10 @@ target triple = "x86_64--linux"
 @main.sliceDstUntaint.buf = internal global [2 x i8] zeroinitializer
 @main.sliceSrcTaint.buf = internal global [2 x i8] c"cd"
 @main.sliceDstTaint.buf = internal global [2 x i8] zeroinitializer
+@main.sliceSrcExternal1.buf = external global [2 x i8]
+@main.sliceDstExternal1.buf = internal global [2 x i8] zeroinitializer
+@main.sliceSrcExternal2.buf = internal global [2 x i8] zeroinitializer
+@main.sliceDstExternal2.buf = external global [2 x i8]
 
 declare i64 @runtime.sliceCopy(ptr %dst, ptr %src, i64 %dstLen, i64 %srcLen, i64 %elemSize) unnamed_addr
 
@@ -58,6 +62,14 @@ entry:
   %sliceDstTaint.val = load i8, ptr getelementptr inbounds (i8, ptr @main.sliceDstTaint.buf, i32 0)
   call void @runtime.printuint8(i8 %sliceDstTaint.val)
 
+  ; print(sliceDstExternal1[0])
+  %sliceDstExternal1.val = load i8, ptr getelementptr inbounds (i8, ptr @main.sliceDstExternal1.buf, i32 0)
+  call void @runtime.printuint8(i8 %sliceDstExternal1.val)
+
+  ; print(sliceDstExternal2[0])
+  %sliceDstExternal2.val = load i8, ptr getelementptr inbounds (i8, ptr @main.sliceDstExternal2.buf, i32 0)
+  call void @runtime.printuint8(i8 %sliceDstExternal2.val)
+
   ret void
 }
 
@@ -101,6 +113,12 @@ entry:
   ; This is a fix for https://github.com/tinygo-org/tinygo/issues/3890.
   call void @use(ptr @main.sliceSrcTaint.buf)
   %copy.n4 = call i64 @runtime.sliceCopy(ptr @main.sliceDstTaint.buf, ptr @main.sliceSrcTaint.buf, i64 2, i64 2, i64 1)
+
+  ; Test that copying from or into external buffers works correctly.
+  ; These copy operations must be done at runtime.
+  ; https://github.com/tinygo-org/tinygo/issues/4895
+  %copy.n5 = call i64 @runtime.sliceCopy(ptr @main.sliceDstExternal1.buf, ptr @main.sliceSrcExternal1.buf, i64 2, i64 2, i64 1)
+  %copy.n6 = call i64 @runtime.sliceCopy(ptr @main.sliceDstExternal2.buf, ptr @main.sliceSrcExternal2.buf, i64 2, i64 2, i64 1)
 
   ret void
 }

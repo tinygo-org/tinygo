@@ -1,0 +1,7 @@
+{
+	"inherits": ["nrf51"],
+	"build-tags": ["hw_651"],
+	"serial": "uart",
+	"flash-method": "openocd",
+	"openocd-interface": "cmsis-dap"
+}

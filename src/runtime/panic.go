@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"internal/task"
+	"runtime/interrupt"
+	"tinygo"
 	"unsafe"
 )
 
@@ -21,6 +23,11 @@ func tinygo_longjmp(frame *deferFrame)
 // Returns whether recover is supported on the current architecture.
 func supportsRecover() bool
 
+// Compile intrinsic.
+// Returns which strategy is used. This is usually "print" but can be changed
+// using the -panic= compiler flag.
+func panicStrategy() uint8
+
 // DeferFrame is a stack allocated object that stores information for the
 // current "defer frame", which is used in functions that use the `defer`
 // keyword.
@@ -31,20 +38,42 @@ type deferFrame struct {
 	JumpPC     unsafe.Pointer                 // pc to return to
 	ExtraRegs  [deferExtraRegs]unsafe.Pointer // extra registers (depending on the architecture)
 	Previous   *deferFrame                    // previous recover buffer pointer
-	Panicking  bool                           // true iff this defer frame is panicking
+	Panicking  panicState                     // not panicking, panicking, or in Goexit
 	PanicValue interface{}                    // panic value, might be nil for panic(nil) for example
 }
 
+type panicState uint8
+
+const (
+	panicFalse panicState = iota
+	panicTrue
+	panicGoexit
+)
+
 // Builtin function panic(msg), used as a compiler intrinsic.
 func _panic(message interface{}) {
-	if supportsRecover() {
+	panicOrGoexit(message, panicTrue)
+}
+
+func panicOrGoexit(message interface{}, panicking panicState) {
+	if panicStrategy() == tinygo.PanicStrategyTrap {
+		trap()
+	}
+	// Note: recover is not supported inside interrupts.
+	// (This could be supported, like defer, but we currently don't).
+	if supportsRecover() && !interrupt.In() {
 		frame := (*deferFrame)(task.Current().DeferFrame)
 		if frame != nil {
 			frame.PanicValue = message
-			frame.Panicking = true
+			frame.Panicking = panicking
 			tinygo_longjmp(frame)
 			// unreachable
 		}
+	}
+	if panicking == panicGoexit {
+		// Call to Goexit() instead of a panic.
+		// Exit the goroutine instead of printing a panic message.
+		deadlock()
 	}
 	printstring("panic: ")
 	printitf(message)
@@ -60,6 +89,9 @@ func runtimePanic(msg string) {
 }
 
 func runtimePanicAt(addr unsafe.Pointer, msg string) {
+	if panicStrategy() == tinygo.PanicStrategyTrap {
+		trap()
+	}
 	if hasReturnAddr {
 		printstring("panic: runtime error at ")
 		printptr(uintptr(addr) - callInstSize)
@@ -67,7 +99,8 @@ func runtimePanicAt(addr unsafe.Pointer, msg string) {
 	} else {
 		printstring("panic: runtime error: ")
 	}
-	println(msg)
+	printstring(msg)
+	printnl()
 	abort()
 }
 
@@ -79,10 +112,16 @@ func runtimePanicAt(addr unsafe.Pointer, msg string) {
 //go:inline
 //go:nobounds
 func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
+	if interrupt.In() {
+		// Defer is not currently allowed in interrupts.
+		// We could add support for this, but since defer might also allocate
+		// (especially in loops) it might not be a good idea anyway.
+		runtimePanicAt(returnAddress(0), "defer in interrupt")
+	}
 	currentTask := task.Current()
 	frame.Previous = (*deferFrame)(currentTask.DeferFrame)
 	frame.JumpSP = jumpSP
-	frame.Panicking = false
+	frame.Panicking = panicFalse
 	currentTask.DeferFrame = unsafe.Pointer(frame)
 }
 
@@ -94,10 +133,10 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 //go:nobounds
 func destroyDeferFrame(frame *deferFrame) {
 	task.Current().DeferFrame = unsafe.Pointer(frame.Previous)
-	if frame.Panicking {
+	if frame.Panicking != panicFalse {
 		// We're still panicking!
 		// Re-raise the panic now.
-		_panic(frame.PanicValue)
+		panicOrGoexit(frame.PanicValue, frame.Panicking)
 	}
 }
 
@@ -106,8 +145,11 @@ func destroyDeferFrame(frame *deferFrame) {
 // useParentFrame is set when the caller of runtime._recover has a defer frame
 // itself. In that case, recover() shouldn't check that frame but one frame up.
 func _recover(useParentFrame bool) interface{} {
-	if !supportsRecover() {
-		// Compiling without stack unwinding support, so make this a no-op.
+	if !supportsRecover() || interrupt.In() {
+		// Either we're compiling without stack unwinding support, or we're
+		// inside an interrupt where panic/recover is not supported. Either way,
+		// make this a no-op since panic() won't do any long jumps to a deferred
+		// function.
 		return nil
 	}
 	// TODO: somehow check that recover() is called directly by a deferred
@@ -119,10 +161,15 @@ func _recover(useParentFrame bool) interface{} {
 		// already), but instead from the previous frame.
 		frame = frame.Previous
 	}
-	if frame != nil && frame.Panicking {
+	if frame != nil && frame.Panicking != panicFalse {
+		if frame.Panicking == panicGoexit {
+			// Special value that indicates we're exiting the goroutine using
+			// Goexit(). Therefore, make this recover call a no-op.
+			return nil
+		}
 		// Only the first call to recover returns the panic value. It also stops
 		// the panicking sequence, hence setting panicking to false.
-		frame.Panicking = false
+		frame.Panicking = panicFalse
 		return frame.PanicValue
 	}
 	// Not panicking, so return a nil interface.
@@ -139,7 +186,7 @@ func nilMapPanic() {
 	runtimePanicAt(returnAddress(0), "assignment to entry in nil map")
 }
 
-// Panic when trying to acces an array or slice out of bounds.
+// Panic when trying to access an array or slice out of bounds.
 func lookupPanic() {
 	runtimePanicAt(returnAddress(0), "index out of range")
 }
@@ -179,4 +226,9 @@ func divideByZeroPanic() {
 
 func blockingPanic() {
 	runtimePanicAt(returnAddress(0), "trying to do blocking operation in exported function")
+}
+
+//go:linkname fips_fatal crypto/internal/fips140.fatal
+func fips_fatal(msg string) {
+	runtimePanic(msg)
 }

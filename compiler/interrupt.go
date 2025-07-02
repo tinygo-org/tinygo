@@ -41,6 +41,8 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 
 	// Create a new global of type runtime/interrupt.handle. Globals of this
 	// type are lowered in the interrupt lowering pass.
+	// It must have an alignment of 1, otherwise LLVM thinks a ptrtoint of the
+	// global has the lower bits unset.
 	globalType := b.program.ImportedPackage("runtime/interrupt").Type("handle").Type()
 	globalLLVMType := b.getLLVMType(globalType)
 	globalName := b.fn.Package().Pkg.Path() + "$interrupt" + strconv.FormatInt(id.Int64(), 10)
@@ -48,6 +50,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	global.SetVisibility(llvm.HiddenVisibility)
 	global.SetGlobalConstant(true)
 	global.SetUnnamedAddr(true)
+	global.SetAlignment(1)
 	initializer := llvm.ConstNull(globalLLVMType)
 	initializer = b.CreateInsertValue(initializer, funcContext, 0, "")
 	initializer = b.CreateInsertValue(initializer, funcPtr, 1, "")

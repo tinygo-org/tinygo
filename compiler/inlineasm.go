@@ -249,3 +249,15 @@ func (b *builder) emitCSROperation(call *ssa.CallCommon) (llvm.Value, error) {
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown CSR operation: "+name)
 	}
 }
+
+// Implement runtime/interrupt.Checkpoint.Save. It needs to be implemented
+// directly at the call site. If it isn't implemented directly at the call site
+// (but instead through a function call), it might result in an overwritten
+// stack in the non-jump return case.
+func (b *builder) createInterruptCheckpoint(ptr ssa.Value) llvm.Value {
+	addr := b.getValue(ptr, ptr.Pos())
+	b.createNilCheck(ptr, addr, "deref")
+	stackPointer := b.readStackPointer()
+	b.CreateStore(stackPointer, addr)
+	return b.createCheckpoint(addr)
+}

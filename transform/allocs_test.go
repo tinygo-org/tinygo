@@ -17,7 +17,7 @@ import (
 func TestAllocs(t *testing.T) {
 	t.Parallel()
 	testTransform(t, "testdata/allocs", func(mod llvm.Module) {
-		transform.OptimizeAllocs(mod, nil, nil)
+		transform.OptimizeAllocs(mod, nil, 256, nil)
 	})
 }
 
@@ -47,7 +47,7 @@ func TestAllocs2(t *testing.T) {
 
 	// Run heap to stack transform.
 	var testOutputs []allocsTestOutput
-	transform.OptimizeAllocs(mod, regexp.MustCompile("."), func(pos token.Position, msg string) {
+	transform.OptimizeAllocs(mod, regexp.MustCompile("."), 256, func(pos token.Position, msg string) {
 		testOutputs = append(testOutputs, allocsTestOutput{
 			filename: filepath.Base(pos.Filename),
 			line:     pos.Line,

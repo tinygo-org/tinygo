@@ -353,6 +353,9 @@ var (
 
 	// RTL8720D (tx: PB24, rx: PC24)
 	UART3 = &sercomUSART0
+
+	// Right-hand grove port (tx: D0, rx: D1)
+	UART4 = &sercomUSART4
 )
 
 // I2C pins
@@ -371,6 +374,14 @@ const (
 var (
 	I2C0 = sercomI2CM4
 	I2C1 = sercomI2CM3
+)
+
+// I2S pins
+const (
+	I2S_SCK_PIN = BCM18
+	I2S_SDO_PIN = BCM21
+	I2S_SDI_PIN = BCM20
+	I2S_WS_PIN  = BCM19
 )
 
 // SPI pins

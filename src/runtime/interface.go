@@ -6,7 +6,7 @@ package runtime
 // anything (including non-pointers).
 
 import (
-	"reflect"
+	"internal/reflectlite"
 	"unsafe"
 )
 
@@ -27,12 +27,12 @@ func decomposeInterface(i _interface) (unsafe.Pointer, unsafe.Pointer) {
 
 // Return true iff both interfaces are equal.
 func interfaceEqual(x, y interface{}) bool {
-	return reflectValueEqual(reflect.ValueOf(x), reflect.ValueOf(y))
+	return reflectValueEqual(reflectlite.ValueOf(x), reflectlite.ValueOf(y))
 }
 
-func reflectValueEqual(x, y reflect.Value) bool {
+func reflectValueEqual(x, y reflectlite.Value) bool {
 	// Note: doing a x.Type() == y.Type() comparison would not work here as that
-	// would introduce an infinite recursion: comparing two reflect.Type values
+	// would introduce an infinite recursion: comparing two reflectlite.Type values
 	// is done with this reflectValueEqual runtime call.
 	if x.RawType() == nil || y.RawType() == nil {
 		// One of them is nil.
@@ -46,35 +46,35 @@ func reflectValueEqual(x, y reflect.Value) bool {
 	}
 
 	switch x.RawType().Kind() {
-	case reflect.Bool:
+	case reflectlite.Bool:
 		return x.Bool() == y.Bool()
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	case reflectlite.Int, reflectlite.Int8, reflectlite.Int16, reflectlite.Int32, reflectlite.Int64:
 		return x.Int() == y.Int()
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+	case reflectlite.Uint, reflectlite.Uint8, reflectlite.Uint16, reflectlite.Uint32, reflectlite.Uint64, reflectlite.Uintptr:
 		return x.Uint() == y.Uint()
-	case reflect.Float32, reflect.Float64:
+	case reflectlite.Float32, reflectlite.Float64:
 		return x.Float() == y.Float()
-	case reflect.Complex64, reflect.Complex128:
+	case reflectlite.Complex64, reflectlite.Complex128:
 		return x.Complex() == y.Complex()
-	case reflect.String:
+	case reflectlite.String:
 		return x.String() == y.String()
-	case reflect.Chan, reflect.Ptr, reflect.UnsafePointer:
+	case reflectlite.Chan, reflectlite.Ptr, reflectlite.UnsafePointer:
 		return x.UnsafePointer() == y.UnsafePointer()
-	case reflect.Array:
+	case reflectlite.Array:
 		for i := 0; i < x.Len(); i++ {
 			if !reflectValueEqual(x.Index(i), y.Index(i)) {
 				return false
 			}
 		}
 		return true
-	case reflect.Struct:
+	case reflectlite.Struct:
 		for i := 0; i < x.NumField(); i++ {
 			if !reflectValueEqual(x.Field(i), y.Field(i)) {
 				return false
 			}
 		}
 		return true
-	case reflect.Interface:
+	case reflectlite.Interface:
 		return reflectValueEqual(x.Elem(), y.Elem())
 	default:
 		runtimePanic("comparing un-comparable type")

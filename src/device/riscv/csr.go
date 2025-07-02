@@ -275,3 +275,61 @@ const (
 	DPC      CSR = 0x7B1 // Debug PC.
 	DSCRATCH CSR = 0x7B2 // Debug scratch register.
 )
+
+// Bitfields for the CSR registers above.
+const (
+	// MSTATUS (common bits between RV32 and RV64)
+	MSTATUS_SIE  = 1 << 1
+	MSTATUS_MIE  = 1 << 3
+	MSTATUS_SPIE = 1 << 5
+	MSTATUS_UBE  = 1 << 6
+	MSTATUS_MPIE = 1 << 7
+	MSTATUS_SPP  = 1 << 8
+	MSTATUS_MPRV = 1 << 17
+	MSTATUS_SUM  = 1 << 18
+	MSTATUS_MXR  = 1 << 19
+	MSTATUS_TVM  = 1 << 20
+	MSTATUS_TW   = 1 << 21
+	MSTATUS_TSR  = 1 << 22
+
+	MIE_SSIE = 1 << 1
+	MIE_MSIE = 1 << 3
+	MIE_STIE = 1 << 5
+	MIE_MTIE = 1 << 7
+	MIE_SEIE = 1 << 9
+	MIE_MEIE = 1 << 11
+
+	MIP_SSIP = 1 << 1
+	MIP_MSIP = 1 << 3
+	MIP_STIP = 1 << 5
+	MIP_MTIP = 1 << 7
+	MIP_SEIP = 1 << 9
+	MIP_MEIP = 1 << 11
+)
+
+// Interrupt constants
+const (
+	// MCAUSE values with the topmost bit (interrupt bit) set.
+	SupervisorSoftwareInterrupt = 1
+	MachineSoftwareInterrupt    = 3
+	SupervisorTimerInterrupt    = 5
+	MachineTimerInterrupt       = 7
+	SupervisorExternalInterrupt = 9
+	MachineExternalInterrupt    = 11
+
+	// MCAUSE values with the topmost bit (interrupt bit) clear.
+	InstructionAddressMisaligned = 0
+	InstructionAccessFault       = 1
+	IllegalInstruction           = 2
+	Breakpoint                   = 3
+	LoadAddressMisaligned        = 4
+	LoadAccessFault              = 5
+	StoreOrAMOAddressMisaligned  = 6
+	StoreOrAMOAccessFault        = 7
+	EnvironmentCallFromUMode     = 8
+	EnvironmentCallFromSMode     = 9
+	EnvironmentCallFromMMode     = 11
+	InstructionPageFault         = 12
+	LoadPageFault                = 13
+	StoreOrAMOPageFault          = 15
+)

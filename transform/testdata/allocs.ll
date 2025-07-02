@@ -7,7 +7,7 @@ declare nonnull ptr @runtime.alloc(i32, ptr)
 
 ; Test allocating a single int (i32) that should be allocated on the stack.
 define void @testInt() {
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   store i32 5, ptr %alloc
   ret void
 }
@@ -15,7 +15,7 @@ define void @testInt() {
 ; Test allocating an array of 3 i16 values that should be allocated on the
 ; stack.
 define i16 @testArray() {
-  %alloc = call ptr @runtime.alloc(i32 6, ptr null)
+  %alloc = call align 2 ptr @runtime.alloc(i32 6, ptr null)
   %alloc.1 = getelementptr i16, ptr %alloc, i32 1
   store i16 5, ptr %alloc.1
   %alloc.2 = getelementptr i16, ptr %alloc, i32 2
@@ -23,30 +23,45 @@ define i16 @testArray() {
   ret i16 %val
 }
 
+; Test allocating objects with an unknown alignment.
+define void @testUnknownAlign() {
+  %alloc32 = call ptr @runtime.alloc(i32 32, ptr null)
+  store i8 5, ptr %alloc32
+  %alloc24 = call ptr @runtime.alloc(i32 24, ptr null)
+  store i16 5, ptr %alloc24
+  %alloc12 = call ptr @runtime.alloc(i32 12, ptr null)
+  store i16 5, ptr %alloc12
+  %alloc6 = call ptr @runtime.alloc(i32 6, ptr null)
+  store i16 5, ptr %alloc6
+  %alloc3 = call ptr @runtime.alloc(i32 3, ptr null)
+  store i16 5, ptr %alloc3
+  ret void
+}
+
 ; Call a function that will let the pointer escape, so the heap-to-stack
 ; transform shouldn't be applied.
 define void @testEscapingCall() {
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   %val = call ptr @escapeIntPtr(ptr %alloc)
   ret void
 }
 
 define void @testEscapingCall2() {
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   %val = call ptr @escapeIntPtrSometimes(ptr %alloc, ptr %alloc)
   ret void
 }
 
 ; Call a function that doesn't let the pointer escape.
 define void @testNonEscapingCall() {
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   %val = call ptr @noescapeIntPtr(ptr %alloc)
   ret void
 }
 
 ; Return the allocated value, which lets it escape.
 define ptr @testEscapingReturn() {
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   ret ptr %alloc
 }
 
@@ -55,7 +70,7 @@ define void @testNonEscapingLoop() {
 entry:
   br label %loop
 loop:
-  %alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
   %ptr = call ptr @noescapeIntPtr(ptr %alloc)
   %result = icmp eq ptr null, %ptr
   br i1 %result, label %loop, label %end
@@ -65,7 +80,7 @@ end:
 
 ; Test a zero-sized allocation.
 define void @testZeroSizedAlloc() {
-  %alloc = call ptr @runtime.alloc(i32 0, ptr null)
+  %alloc = call align 1 ptr @runtime.alloc(i32 0, ptr null)
   %ptr = call ptr @noescapeIntPtr(ptr %alloc)
   ret void
 }

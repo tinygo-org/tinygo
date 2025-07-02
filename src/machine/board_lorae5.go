@@ -85,7 +85,7 @@ var (
 	I2C0 = I2C2
 
 	// SPI
-	SPI3 = SPI{
+	SPI3 = &SPI{
 		Bus: stm32.SPI3,
 	}
 )

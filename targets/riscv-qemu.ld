@@ -1,15 +1,15 @@
 
 /* Memory map:
  * https://github.com/qemu/qemu/blob/master/hw/riscv/virt.c
- * RAM and flash are set to 1MB each. That should be enough for the foreseeable
- * future. QEMU does not seem to limit the flash/RAM size and in fact doesn't
- * seem to differentiate between it.
+ * Looks like we can use any address starting from 0x80000000 (so 2GB of space).
+ * However, using a large space slows down tests.
  */
 MEMORY
 {
-    FLASH_TEXT (rw) : ORIGIN = 0x80000000, LENGTH = 0x100000
-    RAM (xrw)       : ORIGIN = 0x80100000, LENGTH = 0x100000
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 100M
 }
+
+REGION_ALIAS("FLASH_TEXT", RAM)
 
 _stack_size = 2K;
 

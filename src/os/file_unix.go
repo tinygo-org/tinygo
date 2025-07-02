@@ -1,4 +1,4 @@
-//go:build darwin || (linux && !baremetal) || wasip1
+//go:build darwin || (linux && !baremetal && !wasm_unknown && !nintendoswitch) || wasip1 || wasip2
 
 // target wasi sets GOOS=linux and thus the +linux build tag,
 // even though it doesn't show up in "tinygo info target -wasi"
@@ -12,6 +12,7 @@ package os
 import (
 	"io"
 	"syscall"
+	_ "unsafe"
 )
 
 const DevNull = "/dev/null"
@@ -55,9 +56,22 @@ func NewFile(fd uintptr, name string) *File {
 	return &File{&file{handle: unixFileHandle(fd), name: name}}
 }
 
+// Truncate changes the size of the named file.
+// If the file is a symbolic link, it changes the size of the link's target.
+// If there is an error, it will be of type *PathError.
+func Truncate(name string, size int64) error {
+	e := ignoringEINTR(func() error {
+		return syscall.Truncate(name, size)
+	})
+	if e != nil {
+		return &PathError{Op: "truncate", Path: name, Err: e}
+	}
+	return nil
+}
+
 func Pipe() (r *File, w *File, err error) {
 	var p [2]int
-	err = handleSyscallError(syscall.Pipe2(p[:], syscall.O_CLOEXEC))
+	err = handleSyscallError(pipe(p[:]))
 	if err != nil {
 		return
 	}
@@ -72,6 +86,19 @@ func tempDir() string {
 		dir = "/tmp"
 	}
 	return dir
+}
+
+// Link creates newname as a hard link to the oldname file.
+// If there is an error, it will be of type *LinkError.
+func Link(oldname, newname string) error {
+	e := ignoringEINTR(func() error {
+		return syscall.Link(oldname, newname)
+	})
+
+	if e != nil {
+		return &LinkError{"link", oldname, newname, e}
+	}
+	return nil
 }
 
 // Symlink creates newname as a symbolic link to oldname.
@@ -110,6 +137,49 @@ func Readlink(name string) (string, error) {
 			return string(b[0:n]), nil
 		}
 	}
+}
+
+// Truncate changes the size of the file.
+// It does not change the I/O offset.
+// If there is an error, it will be of type *PathError.
+// Alternatively just use 'raw' syscall by file name
+func (f *File) Truncate(size int64) (err error) {
+	if f.handle == nil {
+		return ErrClosed
+	}
+
+	return Truncate(f.name, size)
+}
+
+func (f *File) chmod(mode FileMode) error {
+	if f.handle == nil {
+		return ErrClosed
+	}
+
+	longName := fixLongPath(f.name)
+	e := ignoringEINTR(func() error {
+		return syscall.Chmod(longName, syscallMode(mode))
+	})
+	if e != nil {
+		return &PathError{Op: "chmod", Path: f.name, Err: e}
+	}
+	return nil
+}
+
+func (f *File) chdir() error {
+	if f.handle == nil {
+		return ErrClosed
+	}
+
+	// TODO: use syscall.Fchdir instead
+	longName := fixLongPath(f.name)
+	e := ignoringEINTR(func() error {
+		return syscall.Chdir(longName)
+	})
+	if e != nil {
+		return &PathError{Op: "chdir", Path: f.name, Err: e}
+	}
+	return nil
 }
 
 // ReadAt reads up to len(b) bytes from the File starting at the given absolute offset.
@@ -184,4 +254,18 @@ func newUnixDirent(parent, name string, typ FileMode) (DirEntry, error) {
 	ude.typ = info.Mode().Type()
 	ude.info = info
 	return ude, nil
+}
+
+// Since internal/poll is not available, we need to stub this out.
+// Big go requires the option to add the fd to the polling system.
+//
+//go:linkname net_newUnixFile net.newUnixFile
+func net_newUnixFile(fd int, name string) *File {
+	if fd < 0 {
+		panic("invalid FD")
+	}
+
+	// see src/os/file_unix.go:162 newFile for the original implementation.
+	// return newFile(fd, name, kindSock, true)
+	return NewFile(uintptr(fd), name)
 }

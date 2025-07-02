@@ -1,9 +1,8 @@
-//go:build scheduler.tasks
+//go:build scheduler.tasks || scheduler.cores
 
 package task
 
 import (
-	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -32,41 +31,10 @@ type state struct {
 	canaryPtr *uintptr
 }
 
-// currentTask is the current running task, or nil if currently in the scheduler.
-var currentTask *Task
-
-// Current returns the current active task.
-func Current() *Task {
-	return currentTask
-}
-
-// Pause suspends the current task and returns to the scheduler.
-// This function may only be called when running on a goroutine stack, not when running on the system stack or in an interrupt.
-func Pause() {
-	// Check whether the canary (the lowest address of the stack) is still
-	// valid. If it is not, a stack overflow has occured.
-	if *currentTask.state.canaryPtr != stackCanary {
-		runtimePanic("goroutine stack overflow")
-	}
-	if interrupt.In() {
-		runtimePanic("blocked inside interrupt")
-	}
-	currentTask.state.pause()
-}
-
-//export tinygo_pause
-func pause() {
+//export tinygo_task_exit
+func taskExit() {
+	// TODO: explicitly free the stack after switching back to the scheduler.
 	Pause()
-}
-
-// Resume the task until it pauses or completes.
-// This may only be called from the scheduler.
-func (t *Task) Resume() {
-	currentTask = t
-	t.gcData.swap()
-	t.state.resume()
-	t.gcData.swap()
-	currentTask = nil
 }
 
 // initialize the state and prepare to call the specified function with the specified argument bundle.
@@ -101,18 +69,12 @@ func swapTask(oldStack uintptr, newStack *uintptr)
 //go:extern tinygo_startTask
 var startTask [0]uint8
 
-//go:linkname runqueuePushBack runtime.runqueuePushBack
-func runqueuePushBack(*Task)
-
-//go:linkname runtime_alloc runtime.alloc
-func runtime_alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
-
 // start creates and starts a new goroutine with the given function and arguments.
 // The new goroutine is scheduled to run later.
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	t := &Task{}
 	t.state.initialize(fn, args, stackSize)
-	runqueuePushBack(t)
+	scheduleTask(t)
 }
 
 // OnSystemStack returns whether the caller is running on the system stack.

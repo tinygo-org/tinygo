@@ -13,14 +13,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// maxStackAlloc is the maximum size of an object that will be allocated on the
-// stack. Bigger objects have increased risk of stack overflows and thus will
-// always be heap allocated.
-//
-// TODO: tune this, this is just a random value.
-// This value is also used in the compiler when translating ssa.Alloc nodes.
-const maxStackAlloc = 256
-
 // OptimizeAllocs tries to replace heap allocations with stack allocations
 // whenever possible. It relies on the LLVM 'nocapture' flag for interprocedural
 // escape analysis, and within a function looks whether an allocation can escape
@@ -28,7 +20,7 @@ const maxStackAlloc = 256
 // If printAllocs is non-nil, it indicates the regexp of functions for which a
 // heap allocation explanation should be printed (why the object can't be stack
 // allocated).
-func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(token.Position, string)) {
+func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc uint64, logger func(token.Position, string)) {
 	allocator := mod.NamedFunction("runtime.alloc")
 	if allocator.IsNil() {
 		// nothing to optimize
@@ -37,9 +29,13 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
-	ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-	builder := mod.Context().NewBuilder()
+	ctx := mod.Context()
+	builder := ctx.NewBuilder()
 	defer builder.Dispose()
+
+	// Determine the maximum alignment on this platform.
+	complex128Type := ctx.StructType([]llvm.Type{ctx.DoubleType(), ctx.DoubleType()}, false)
+	maxAlign := int64(targetData.ABITypeAlignment(complex128Type))
 
 	for _, heapalloc := range getUses(allocator) {
 		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
@@ -98,21 +94,14 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, logger func(tok
 		}
 		// The pointer value does not escape.
 
-		// Determine the appropriate alignment of the alloca. The size of the
-		// allocation gives us a hint what the alignment should be.
-		var alignment int
-		if size%2 != 0 {
-			alignment = 1
-		} else if size%4 != 0 {
-			alignment = 2
-		} else if size%8 != 0 {
-			alignment = 4
-		} else {
-			alignment = 8
-		}
-		if pointerAlignment := targetData.ABITypeAlignment(ptrType); pointerAlignment < alignment {
-			// Use min(alignment, alignof(void*)) as the alignment.
-			alignment = pointerAlignment
+		// Determine the appropriate alignment of the alloca.
+		attr := heapalloc.GetCallSiteEnumAttribute(0, llvm.AttributeKindID("align"))
+		alignment := int(maxAlign)
+		if !attr.IsNil() {
+			// 'align' return value attribute is set, so use it.
+			// This is basically always the case, but to be sure we'll default
+			// to maxAlign if it isn't.
+			alignment = int(attr.GetEnumValue())
 		}
 
 		// Insert alloca in the entry block. Do it here so that mem2reg can

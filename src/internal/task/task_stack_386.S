@@ -1,7 +1,12 @@
+#ifdef _WIN32
+.global  _tinygo_startTask
+_tinygo_startTask:
+#else // Linux etc
 .section .text.tinygo_startTask
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
 tinygo_startTask:
+#endif
     .cfi_startproc
     // Small assembly stub for starting a goroutine. This is already run on the
     // new stack, with the callee-saved registers already loaded.
@@ -24,12 +29,21 @@ tinygo_startTask:
     addl $4, %esp
 
     // After return, exit this goroutine. This is a tail call.
-    jmp tinygo_pause
+    #ifdef _WIN32
+    jmp _tinygo_task_exit
+    #else
+    jmp tinygo_task_exit
+    #endif
     .cfi_endproc
 
+#ifdef _WIN32
+.global _tinygo_swapTask
+_tinygo_swapTask:
+#else
 .global tinygo_swapTask
 .type tinygo_swapTask, %function
 tinygo_swapTask:
+#endif
     // This function gets the following parameters:
     movl 4(%esp), %eax // newStack uintptr
     movl 8(%esp), %ecx // oldStack *uintptr

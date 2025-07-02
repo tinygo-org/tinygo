@@ -9,6 +9,13 @@ const deferExtraRegs = 0
 
 const callInstSize = 5 // "call someFunction" is 5 bytes
 
+const (
+	linux_MAP_ANONYMOUS = 0x20
+	linux_SIGBUS        = 7
+	linux_SIGILL        = 4
+	linux_SIGSEGV       = 11
+)
+
 // Align on word boundary.
 func align(ptr uintptr) uintptr {
 	return (ptr + 15) &^ 15
