@@ -8,8 +8,6 @@ import (
 
 type WaitForEvents func()
 
-type timeUnit int64
-
 // ticks returns the number of ticks (microseconds) elapsed since power up.
 func ticks() timeUnit {
 	t := uefi.Ticks()
