@@ -27,3 +27,7 @@ func UefiCall5(fn uintptr, a uintptr, b uintptr, c uintptr, d uintptr, e uintptr
 //go:nosplit
 //go:export uefiCall6
 func UefiCall6(fn uintptr, a uintptr, b uintptr, c uintptr, d uintptr, e uintptr, f uintptr) EFI_STATUS
+
+//go:nosplit
+//go:export uefiCall10
+func UefiCall10(fn uintptr, a uintptr, b uintptr, c uintptr, d uintptr, e uintptr, f uintptr, g uintptr, h uintptr, i uintptr, j uintptr) EFI_STATUS

@@ -96,3 +96,44 @@ uefiCall6:
     movq   %rbp, %rsp
     popq   %rbp
     ret
+
+.global uefiCall10
+uefiCall10:
+    pushq   %rbp
+    movq    %rsp, %rbp
+    subq    $0x50, %rsp            // 0x20 shadow + 6*8 spill = 0x50
+
+    movq    %rcx, %rax             // RAX ← fn ptr
+    movq    %rdx, %rcx             // RCX ← a
+    movq    %r8,  %rdx             // RDX ← b
+    movq    %r9,  %r8              // R8  ← c
+    movq    0x30(%rbp), %r9        // R9  ← d
+
+    movq    0x38(%rbp), %r10       // e
+    movq    %r10, 0x20(%rsp)
+
+    movq    0x40(%rbp), %r10       // f
+    movq    %r10, 0x28(%rsp)
+
+    movq    0x48(%rbp), %r10       // g
+    movq    %r10, 0x30(%rsp)
+
+    movq    0x50(%rbp), %r10       // h
+    movq    %r10, 0x38(%rsp)
+
+    movq    0x58(%rbp), %r10       // i
+    movq    %r10, 0x40(%rsp)
+
+    movq    0x60(%rbp), %r10       // j
+    movq    %r10, 0x48(%rsp)
+
+    callq   *%rax                  // jump into firmware
+
+    movq    %rbp, %rsp             // tear-down
+    popq    %rbp
+    ret
+
+// check stack stub
+.global ___chkstk_ms
+___chkstk_ms:
+        retq
