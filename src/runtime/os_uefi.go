@@ -7,6 +7,22 @@ import (
 	"unsafe"
 )
 
+// loadedImageBase is a cache for the ImageBase so we don't risk an allocation while
+// running GC. Prevents crashes with gc.precise and scheduler.tasks.
+var loadedImageBase uintptr
+
+func init() {
+	var img *uefi.EFI_LOADED_IMAGE_PROTOCOL
+	if uefi.BS().HandleProtocol(
+		uefi.GetImageHandle(),
+		&uefi.EFI_LOADED_IMAGE_GUID,
+		unsafe.Pointer(&img),
+	) == uefi.EFI_SUCCESS {
+		loadedImageBase = uintptr(unsafe.Pointer(img.ImageBase))
+	}
+	module = (*exeHeader)(unsafe.Pointer(loadedImageBase))
+}
+
 // Mark global variables.
 // Unfortunately, the linker doesn't provide symbols for the start and end of
 // the data/bss sections. Therefore these addresses need to be determined at
@@ -15,16 +31,8 @@ import (
 // Most of this function is based on the documentation in
 // https://docs.microsoft.com/en-us/windows/win32/debug/pe-format.
 func findGlobals(found func(start, end uintptr)) {
-	if module == nil {
-		var loadedImage *uefi.EFI_LOADED_IMAGE_PROTOCOL
-
-		status := uefi.BS().HandleProtocol(uefi.GetImageHandle(), &uefi.EFI_LOADED_IMAGE_GUID, unsafe.Pointer(&loadedImage))
-		if status != uefi.EFI_SUCCESS {
-			uefi.DebugPrint("EFI_LOADED_IMAGE_GUID failed", uint64(status))
-			return
-		}
-
-		module = (*exeHeader)(unsafe.Pointer(loadedImage.ImageBase))
+	if loadedImageBase == 0 {
+		return // header not available; skip globals
 	}
 
 	findGlobalsForPE(found)

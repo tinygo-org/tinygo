@@ -367,7 +367,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		}
 
 		// Wrap around the end of the heap.
-		if index == endBlock {
+		if index >= endBlock {
 			index = 0
 			// Reset numFreeBlocks as allocations cannot wrap.
 			numFreeBlocks = 0
