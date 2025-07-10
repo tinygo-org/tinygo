@@ -82,6 +82,22 @@ type EFI_GRAPHICS_OUTPUT_PROTOCOL struct {
 	Mode      *EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE
 }
 
+func GraphicsOutputProtocol() (*EFI_GRAPHICS_OUTPUT_PROTOCOL, error) {
+	st := ST()
+	var iFace unsafe.Pointer
+	status := (*st).BootServices.LocateProtocol(
+		&GraphicsOutputProtocolGUID,
+		nil,
+		unsafe.Pointer(&iFace))
+
+	if status == EFI_SUCCESS {
+		gop := (*EFI_GRAPHICS_OUTPUT_PROTOCOL)(iFace)
+		return gop, nil
+	}
+
+	return nil, StatusError(status)
+}
+
 // QueryMode – returns a filled-in MODE_INFORMATION for ModeNumber.
 func (p *EFI_GRAPHICS_OUTPUT_PROTOCOL) QueryMode(
 	ModeNumber uint32,
@@ -118,8 +134,6 @@ func (p *EFI_GRAPHICS_OUTPUT_PROTOCOL) Blt(
 	Width, Height,
 	Delta UINTN,
 ) EFI_STATUS {
-	// Requires a variadic trampoline (UefiCall10) just like the text wrapper
-	// used UefiCall4.  Implement it next to your other call-site helpers.
 	return UefiCall10(
 		p.blt,
 		uintptr(unsafe.Pointer(p)),
