@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"machine/uefi"
+	"unsafe"
 )
 
 type WaitForEvents func()
@@ -184,7 +185,14 @@ func main(imageHandle uintptr, systemTable uintptr) uintptr {
 	// The run function has been moved to a separate (non-inlined) function so
 	// that the correct stack pointer is read.
 	stackTop = getCurrentStackPointer()
+
 	runMain()
+
+	if heapStart != 0 {
+		uefi.ST().BootServices.FreePool((*uefi.VOID)(unsafe.Pointer(heapStart)))
+	}
+
+	uefi.BS().Exit(uefi.GetImageHandle(), 0, 0, nil)
 
 	// For libc compatibility.
 	return 0
