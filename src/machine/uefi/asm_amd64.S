@@ -231,8 +231,8 @@ uefiCall10:
 // MSVC-compatible __chkstk implementation for x86_64
 // This touches each page on the stack to ensure it is committed.
 
-.global __chkstk
-__chkstk:
+.global ___chkstk_ms
+___chkstk_ms:
     mov    %rcx, %r10              // Save the stack allocation size
     mov    %rsp, %rax              // Current stack pointer
     sub    %r10, %rax              // Target stack pointer
