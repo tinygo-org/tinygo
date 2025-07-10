@@ -233,6 +233,7 @@ uefiCall10:
 
 .global ___chkstk_ms
 ___chkstk_ms:
+	ret    // Rather than protect the stack, this seems to cause a fault 🤷
     mov    %rcx, %r10              // Save the stack allocation size
     mov    %rsp, %rax              // Current stack pointer
     sub    %r10, %rax              // Target stack pointer
@@ -241,7 +242,7 @@ ___chkstk_ms:
 
 .Lloop:
     sub    $0x1000, %rsp           // Page size (4KB)
-    test   %rsp, (%rsp)            // Touch page
+    movb   $0, (%rsp)              // Touch page
     cmp    %rsp, %rax              // Reached target?
     jne    .Lloop
 
