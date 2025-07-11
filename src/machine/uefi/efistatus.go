@@ -104,5 +104,9 @@ func StatusError(status EFI_STATUS) *Error {
 	if status == 0 {
 		return nil
 	}
-	return errMap[status]
+	err, ok := errMap[status]
+	if !ok {
+		return newError(status, "unknown EFI error")
+	}
+	return err
 }
