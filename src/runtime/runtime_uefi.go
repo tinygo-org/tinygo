@@ -197,3 +197,21 @@ func main(imageHandle uintptr, systemTable uintptr) uintptr {
 	// For libc compatibility.
 	return 0
 }
+
+//export runtime.buffered
+func runtime_buffered() bool { return true }
+
+//export runtime.getchar
+func runtime_getchar() byte {
+	conIn := uefi.ST().ConIn
+	var key uefi.EFI_INPUT_KEY
+	for {
+		if conIn.ReadKeyStroke(&key) == uefi.EFI_SUCCESS {
+			if key.UnicodeChar != 0 {
+				return byte(key.UnicodeChar)
+			}
+		}
+		// uefi.Stall(1_000) // 1 ms, avoid burning CPU
+		Gosched()
+	}
+}
