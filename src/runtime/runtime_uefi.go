@@ -198,11 +198,11 @@ func main(imageHandle uintptr, systemTable uintptr) uintptr {
 	return 0
 }
 
-//export runtime.buffered
-func runtime_buffered() bool { return true }
+// lie and say we have a byte ready
+func buffered() int { return 1 }
 
-//export runtime.getchar
-func runtime_getchar() byte {
+// getchar blocks trying to get a KeyStroke event
+func getchar() byte {
 	conIn := uefi.ST().ConIn
 	var key uefi.EFI_INPUT_KEY
 	for {
@@ -211,7 +211,6 @@ func runtime_getchar() byte {
 				return byte(key.UnicodeChar)
 			}
 		}
-		// uefi.Stall(1_000) // 1 ms, avoid burning CPU
 		Gosched()
 	}
 }
