@@ -146,3 +146,67 @@ func (p *EFI_SERIAL_IO_PROTOCOL) Read(bufSize *UINTN, buffer unsafe.Pointer) EFI
 		uintptr(buffer),
 	)
 }
+
+func SerialIOProtocol() (*EFI_SERIAL_IO_PROTOCOL, error) {
+	st := ST()
+	var iFace unsafe.Pointer
+	status := (*st).BootServices.LocateProtocol(
+		&EFI_SERIAL_IO_PROTOCOL_GUID,
+		nil,
+		unsafe.Pointer(&iFace))
+
+	if status == EFI_SUCCESS {
+		siop := (*EFI_SERIAL_IO_PROTOCOL)(iFace)
+		return siop, nil
+	}
+
+	return nil, StatusError(status)
+}
+
+// TODO: make serial ports implement os.File
+type SerialPort struct {
+	*EFI_SERIAL_IO_PROTOCOL
+}
+
+func (sp *SerialPort) Read(buf []byte) (n int, err error) {
+	bufLen := UINTN(len(buf))
+	status := sp.EFI_SERIAL_IO_PROTOCOL.Read(&bufLen, unsafe.Pointer(&buf[0]))
+	if status != EFI_SUCCESS {
+		return int(bufLen), StatusError(status)
+	}
+	return int(bufLen), nil
+}
+
+func (sp *SerialPort) Write(buf []byte) (n int, err error) {
+	bufLen := UINTN(len(buf))
+	status := sp.EFI_SERIAL_IO_PROTOCOL.Write(&bufLen, unsafe.Pointer(&buf[0]))
+	if status != EFI_SUCCESS {
+		return int(bufLen), StatusError(status)
+	}
+	return int(bufLen), nil
+}
+
+// EnumerateSerialPorts uses UEFI's handle walking API to discover
+// serial ports.
+func EnumerateSerialPorts() ([]*SerialPort, error) {
+	var (
+		handleCount  UINTN
+		handleBuffer *EFI_HANDLE
+	)
+	status := BS().LocateHandleBuffer(ByProtocol, &EFI_SERIAL_IO_PROTOCOL_GUID, nil, &handleCount, &handleBuffer)
+	if status != EFI_SUCCESS {
+		return nil, StatusError(status)
+	}
+	// if none were found, we should have gotten EFI_NOT_FOUND
+
+	//turn handleBuffer into a slice of EFI_HANDLEs
+	handleSlice := unsafe.Slice((*EFI_HANDLE)(unsafe.Pointer(handleBuffer)), int(handleCount))
+
+	ports := make([]*SerialPort, int(handleCount))
+	for i := range int(handleCount) {
+		ports[i] = &SerialPort{}
+		BS().HandleProtocol(handleSlice[i], &EFI_SERIAL_IO_PROTOCOL_GUID, unsafe.Pointer(ports[i].EFI_SERIAL_IO_PROTOCOL))
+	}
+
+	return ports, nil
+}
