@@ -145,3 +145,38 @@ func GraphicsOutputProtocol() (*EFI_GRAPHICS_OUTPUT_PROTOCOL, error) {
 
 	return nil, StatusError(status)
 }
+
+// Init finds the highest resolution mode and uses it as the
+// current mode. This is not strictly necessary, but it can help
+// make some poorly behaved firmware work better.
+//
+// Highest resolution is calculated by total number of pixels.
+func (p *EFI_GRAPHICS_OUTPUT_PROTOCOL) Init() (info *EFI_GRAPHICS_OUTPUT_MODE_INFORMATION) {
+	var (
+		highestModeInfo EFI_GRAPHICS_OUTPUT_MODE_INFORMATION
+		highestMode     uint32
+		pixelMax        uint32
+	)
+
+	info = new(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION)
+	for i := uint32(0); i < p.Mode.MaxMode; i++ {
+		var size UINTN
+		status := p.QueryMode(i, &size, &info)
+		if status != EFI_SUCCESS {
+			// silently skip
+			continue
+		}
+		if pixelCnt := info.HorizontalResolution * info.VerticalResolution; pixelCnt > pixelMax {
+			highestMode = i
+			highestModeInfo = *info
+			pixelMax = pixelCnt
+		}
+	}
+
+	// set the mode we found
+	//if p.Mode.Mode != highestMode { // on the fence if this is better or not
+	p.SetMode(highestMode)
+	//}
+
+	return &highestModeInfo
+}
