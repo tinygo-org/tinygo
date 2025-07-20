@@ -2,6 +2,30 @@ package uefi
 
 import "unsafe"
 
+type EFI_KEY_TOGGLE_STATE uint8
+
+const (
+	EFI_SCROLL_LOCK_ACTIVE = 0x01
+	EFI_NUM_LOCK_ACTIVE    = 0x02
+	EFI_CAPS_LOCK_ACTIVE   = 0x04
+	EFI_KEY_STATE_EXPOSED  = 0x40
+	EFI_TOGGLE_STATE_VALID = 0x80
+)
+
+const (
+	EFI_SHIFT_STATE_VALID     = 0x80000000
+	EFI_RIGHT_SHIFT_PRESSED   = 0x00000001
+	EFI_LEFT_SHIFT_PRESSED    = 0x00000002
+	EFI_RIGHT_CONTROL_PRESSED = 0x00000004
+	EFI_LEFT_CONTROL_PRESSED  = 0x00000008
+	EFI_RIGHT_ALT_PRESSED     = 0x00000010
+	EFI_LEFT_ALT_PRESSED      = 0x00000020
+	EFI_RIGHT_LOGO_PRESSED    = 0x00000040
+	EFI_LEFT_LOGO_PRESSED     = 0x00000080
+	EFI_MENU_KEY_PRESSED      = 0x00000100
+	EFI_SYS_REQ_PRESSED       = 0x00000200
+)
+
 // EFI_INPUT_KEY
 // The keystroke information for the key that was pressed.
 type EFI_INPUT_KEY struct {
@@ -40,4 +64,51 @@ func (p *EFI_SIMPLE_TEXT_INPUT_PROTOCOL) Reset(ExtendedVerification BOOLEAN) EFI
 // .........................hardware errors.
 func (p *EFI_SIMPLE_TEXT_INPUT_PROTOCOL) ReadKeyStroke(Key *EFI_INPUT_KEY) EFI_STATUS {
 	return UefiCall2(p.readKeyStroke, uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(Key)))
+}
+
+// var EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL_GUID = EFI_GUID{
+var SimpleTextInputExProtocolGUID = EFI_GUID{
+	0xdd9e7534, 0x7762, 0x4698,
+	[...]byte{0x8c, 0x14, 0xf5, 0x85, 0x17, 0xa6, 0x25, 0xaa}}
+
+type EFI_KEY_DATA struct {
+	Key      EFI_INPUT_KEY
+	KeyState EFI_KEY_STATE
+}
+
+type EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL struct {
+	resetEx                   uintptr
+	readKeyStrokeEx           uintptr
+	WaitForKeyEx              EFI_EVENT
+	setState                  uintptr
+	registerKeystrokeNotify   uintptr
+	unregisterKeystrokeNotify uintptr
+}
+
+type EFI_KEY_STATE struct {
+	KeyShiftState  uint32
+	KeyToggleState EFI_KEY_TOGGLE_STATE
+}
+
+func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) Reset(ExtendedVerification BOOLEAN) EFI_STATUS {
+	return UefiCall2(p.resetEx, uintptr(unsafe.Pointer(p)), convertBoolean(ExtendedVerification))
+}
+
+func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) ReadKeyStroke(Key *EFI_KEY_STATE) EFI_STATUS {
+	return UefiCall2(p.readKeyStrokeEx, uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(Key)))
+}
+
+func SimpleTextInExProtocol() (*EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL, error) {
+	st := ST()
+	var iFace unsafe.Pointer
+	status := (*st).BootServices.LocateProtocol(
+		&SimpleTextInputExProtocolGUID,
+		nil,
+		unsafe.Pointer(&iFace))
+	if status == EFI_SUCCESS {
+		stiep := (*EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL)(iFace)
+		return stiep, nil
+	}
+
+	return nil, StatusError(status)
 }
