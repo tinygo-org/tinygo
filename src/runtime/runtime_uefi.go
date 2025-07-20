@@ -95,7 +95,7 @@ func procPin() {
 func procUnpin() {
 }
 
-var heapSize uintptr = 128 * 1024 // small amount to start
+var heapSize uintptr = 1024 * 1024 // small amount to start
 var heapMaxSize uintptr
 
 var heapStart, heapEnd uintptr
@@ -105,14 +105,21 @@ var stackTop uintptr
 var allocatePagesAddress uefi.EFI_PHYSICAL_ADDRESS
 
 func preinit() {
+	// always disable watchdog; if the user wants it they can turn it back on
+	uefi.ST().BootServices.SetWatchdogTimer(0, 0, 0, nil)
+
 	// status is must be register
 	var status uefi.EFI_STATUS
 
-	heapMaxSize = 1024 * 1024 * 1024 // 1G for the entire heap
-
+	heapMaxSize = 1024 * 1024 * 1024 // Try for 1 GiB
 	bs := uefi.BS()
 	for heapMaxSize > 16*1024*1024 {
-		status = bs.AllocatePages(uefi.AllocateAnyPages, uefi.EfiLoaderData, uefi.UINTN(heapMaxSize)/4096, &allocatePagesAddress)
+		pages := heapMaxSize / 4096
+		status = bs.AllocatePages(
+			uefi.AllocateAnyPages,
+			uefi.EfiLoaderData,
+			uefi.UINTN(pages),
+			&allocatePagesAddress)
 		if status != uefi.EFI_OUT_OF_RESOURCES {
 			heapStart = uintptr(allocatePagesAddress)
 			break
@@ -120,10 +127,11 @@ func preinit() {
 		heapMaxSize /= 2
 	}
 	if status != 0 {
-		uefi.DebugPrint("AllocatePool failed", uint64(status))
+		uefi.DebugPrint("AllocatePages failed", uint64(status))
 		return
 	}
-	heapEnd = heapStart + heapSize
+	heapSize = heapMaxSize
+	setHeapEnd(heapStart + heapSize)
 }
 
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
