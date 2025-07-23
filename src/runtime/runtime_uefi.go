@@ -95,8 +95,10 @@ func procPin() {
 func procUnpin() {
 }
 
-var heapSize uintptr = 1024 * 1024 // small amount to start
-var heapMaxSize uintptr
+// Try for 256MiB, which should be reasonable for an amd64 system running UEFI
+// We use growHeap() to do the initial allocation which tries for
+// heapSize*4/3, thus 192 * 4 / 3 = 256.
+var heapSize uintptr = 192 * 1024 * 1024
 
 var heapStart, heapEnd uintptr
 
@@ -108,47 +110,49 @@ func preinit() {
 	// always disable watchdog; if the user wants it they can turn it back on
 	uefi.ST().BootServices.SetWatchdogTimer(0, 0, 0, nil)
 
-	// status is must be register
-	var status uefi.EFI_STATUS
+	// first time allocating heap
+	if !growHeap() {
+		panic("couldn't allocate heap")
+	}
+}
 
-	heapMaxSize = 1024 * 1024 * 1024 // Try for 1 GiB
+// growHeap tries to grow the heap size. It returns true if it succeeds, false
+// otherwise.
+//
+// Current implementation is flawed in that once we've allocated more than half the memory
+// we cannot grow any farther as a big enough contiguous chunk is no longer available.
+// Additionally, UEFI on real hardware, in contrast to a qemu virtual machine running
+// EDK2 Tiano, seems to have much more memory fragmentation. In some cases, allocating
+// just a quarter of total available RAM will fail.
+//
+// TODO: Consider using GetMemoryMap to locate the largest chunk of EfiConventionalMemory.
+func growHeap() bool {
+	// try a 33% bigger heap, page aligned
+	newHeapSize := ((heapSize * 4) / 3) &^ 4095
+
 	bs := uefi.BS()
-	for heapMaxSize > 16*1024*1024 {
-		pages := heapMaxSize / 4096
+	var status uefi.EFI_STATUS
+	for newHeapSize >= heapSize {
+		pages := newHeapSize / 4096
 		status = bs.AllocatePages(
 			uefi.AllocateAnyPages,
 			uefi.EfiLoaderData,
 			uefi.UINTN(pages),
 			&allocatePagesAddress)
-		if status != uefi.EFI_OUT_OF_RESOURCES {
+		if status == uefi.EFI_SUCCESS {
 			heapStart = uintptr(allocatePagesAddress)
-			break
+			heapSize = newHeapSize
+			setHeapEnd(heapStart + heapSize)
+			return true
 		}
-		heapMaxSize /= 2
+		if status != uefi.EFI_OUT_OF_RESOURCES {
+			uefi.DebugPrint("AllocatePages failed", uint64(status))
+			return false
+		}
+		newHeapSize /= 2
 	}
-	if status != 0 {
-		uefi.DebugPrint("AllocatePages failed", uint64(status))
-		return
-	}
-	heapSize = heapMaxSize
-	setHeapEnd(heapStart + heapSize)
-}
 
-// growHeap tries to grow the heap size. It returns true if it succeeds, false
-// otherwise.
-func growHeap() bool {
-	if heapSize == heapMaxSize {
-		// Already at the max. If we run out of memory, we should consider
-		// increasing heapMaxSize on 64-bit systems.
-		return false
-	}
-	// Grow the heap size used by the program.
-	heapSize = (heapSize * 4 / 3) &^ 4095 // grow by around 33%
-	if heapSize > heapMaxSize {
-		heapSize = heapMaxSize
-	}
-	setHeapEnd(heapStart + heapSize)
-	return true
+	return false
 }
 
 func init() {
