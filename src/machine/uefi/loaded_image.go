@@ -1,5 +1,11 @@
 package uefi
 
+import "unsafe"
+
+var EFI_LOADED_IMAGE_PROTOCOL_GUID = EFI_GUID{
+	0x5B1B31A1, 0x9562, 0x11d2,
+	[...]byte{0x8E, 0x3F, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B}}
+
 // EFI_LOADED_IMAGE_PROTOCOL
 // Can be used on any image handle to obtain information about the loaded image.
 type EFI_LOADED_IMAGE_PROTOCOL struct {
@@ -25,4 +31,19 @@ type EFI_LOADED_IMAGE_PROTOCOL struct {
 // @retval EFI_INVALID_PARAMETER ImageHandle is not a valid image handle.
 func (p *EFI_LOADED_IMAGE_PROTOCOL) Unload(ImageHandle EFI_HANDLE) EFI_STATUS {
 	return UefiCall1(p.unload, uintptr(imageHandle))
+}
+
+func GetLoadedImageProtocol() (*EFI_LOADED_IMAGE_PROTOCOL, error) {
+	var lip *EFI_LOADED_IMAGE_PROTOCOL
+	status := BS().HandleProtocol(
+		GetImageHandle(),
+		&EFI_LOADED_IMAGE_PROTOCOL_GUID,
+		unsafe.Pointer(&lip),
+	)
+
+	if status == EFI_SUCCESS {
+		return lip, nil
+	}
+
+	return nil, StatusError(status)
 }

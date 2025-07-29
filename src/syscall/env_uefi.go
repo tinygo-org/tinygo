@@ -125,7 +125,9 @@ func runtime_envs() (env []string) {
 	// You supply the last returned variable to GetNextVariableName
 	// to get the next variable. status is set to
 	// uefi.EFI_NOT_FOUND when there are no more variables
-	// to return.
+	// to return. No filtering happens via vendorGUID, despite
+	// the spec saying this is both IN and OUT, it is only
+	// OUT.
 
 	var (
 		varKey     = make([]uefi.CHAR16, 1)

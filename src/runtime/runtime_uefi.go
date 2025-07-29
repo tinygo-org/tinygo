@@ -114,7 +114,24 @@ func preinit() {
 	if !growHeap() {
 		panic("couldn't allocate heap")
 	}
+
+	// parse and setup any command-line arguments
+	lip, err := uefi.GetLoadedImageProtocol()
+	if err != nil {
+		return
+	}
+
+	if lip.LoadOptionsSize > 0 {
+		//naïve splitting: TODO: something that honors quotes
+		args = strings_fields(
+			uefi.UTF16PtrLenToString(
+				(*uefi.CHAR16)(unsafe.Pointer(lip.LoadOptions)),
+				int(lip.LoadOptionsSize/2)-1))
+	}
 }
+
+//go:linkname strings_fields strings.Fields
+func strings_fields(string) []string
 
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
 // otherwise.
