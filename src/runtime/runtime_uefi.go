@@ -215,14 +215,22 @@ func buffered() int { return 1 }
 
 // getchar blocks trying to get a KeyStroke event
 func getchar() byte {
-	conIn := uefi.ST().ConIn
-	var key uefi.EFI_INPUT_KEY
-	for {
-		if conIn.ReadKeyStroke(&key) == uefi.EFI_SUCCESS {
-			if key.UnicodeChar != 0 {
-				return byte(key.UnicodeChar)
-			}
-		}
-		Gosched()
-	}
+	conIn, _ := uefi.SimpleTextInExProtocol()
+	// GetKey uses Simple Text Input Ex Protocol.
+	// We probably shouldn't assume STIEP is implemented,
+	// but it was added in version 2.0 of the spec which
+	// came out in 2006.
+	k := conIn.GetKey()
+	return byte(k.Key.UnicodeChar)
 }
+
+// This is the default set of arguments, if nothing else has been set.
+var args = []string{"/proc/self/exe"}
+
+//go:linkname os_runtime_args os.runtime_args
+func os_runtime_args() []string {
+	return args
+}
+
+var osArgs string
+var osEnv string

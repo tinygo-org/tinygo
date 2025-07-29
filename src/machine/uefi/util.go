@@ -29,6 +29,16 @@ func GetImageHandle() EFI_HANDLE {
 	return EFI_HANDLE(imageHandle)
 }
 
+func StringToUTF16(s string) []CHAR16 {
+	rs := []rune(s)
+	c16 := make([]CHAR16, len(rs))
+	for i, r := range rs {
+		c16[i] = CHAR16(r)
+	}
+	c16 = append(c16, 0)
+	return c16
+}
+
 func UTF16ToString(input []CHAR16) string {
 	return UTF16PtrLenToString(&input[0], len(input))
 }

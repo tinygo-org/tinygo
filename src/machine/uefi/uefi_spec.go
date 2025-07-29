@@ -100,6 +100,13 @@ const (
 
 const EFI_MEMORY_DESCRIPTOR_VERSION = 1
 
+// Variable Service attribute bits
+const (
+	EFI_VARIABLE_NON_VOLATILE       uint32 = 0x00000001
+	EFI_VARIABLE_BOOTSERVICE_ACCESS        = 0x00000002
+	EFI_VARIABLE_RUNTIME_ACCESS            = 0x00000004
+)
+
 // EFI_MEMORY_DESCRIPTOR
 // Definition of an EFI memory descriptor.
 type EFI_MEMORY_DESCRIPTOR struct {

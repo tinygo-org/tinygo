@@ -1,4 +1,4 @@
-//go:build baremetal || js || wasm_unknown
+//go:build (baremetal || js || wasm_unknown) && !uefi
 
 package syscall
 
