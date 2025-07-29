@@ -1,15 +1,17 @@
 package uefi
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 type EFI_KEY_TOGGLE_STATE uint8
 
 const (
-	EFI_SCROLL_LOCK_ACTIVE = 0x01
-	EFI_NUM_LOCK_ACTIVE    = 0x02
-	EFI_CAPS_LOCK_ACTIVE   = 0x04
-	EFI_KEY_STATE_EXPOSED  = 0x40
-	EFI_TOGGLE_STATE_VALID = 0x80
+	EFI_SCROLL_LOCK_ACTIVE EFI_KEY_TOGGLE_STATE = 0x01
+	EFI_NUM_LOCK_ACTIVE                         = 0x02
+	EFI_CAPS_LOCK_ACTIVE                        = 0x04
+	EFI_KEY_STATE_EXPOSED                       = 0x40
+	EFI_TOGGLE_STATE_VALID                      = 0x80
 )
 
 const (
@@ -94,7 +96,7 @@ func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) Reset(ExtendedVerification BOOLEAN) 
 	return UefiCall2(p.resetEx, uintptr(unsafe.Pointer(p)), convertBoolean(ExtendedVerification))
 }
 
-func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) ReadKeyStroke(Key *EFI_KEY_STATE) EFI_STATUS {
+func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) ReadKeyStroke(Key *EFI_KEY_DATA) EFI_STATUS {
 	return UefiCall2(p.readKeyStrokeEx, uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(Key)))
 }
 
@@ -111,4 +113,23 @@ func SimpleTextInExProtocol() (*EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL, error) {
 	}
 
 	return nil, StatusError(status)
+}
+
+func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) GetKey() EFI_KEY_DATA {
+	var key EFI_KEY_DATA
+
+	// Wait for key event
+	index := UINTN(0)
+	status := BS().WaitForEvent(1, &p.WaitForKeyEx, &index)
+	if status != EFI_SUCCESS {
+		return key
+	}
+
+	// Read key stroke
+	status = p.ReadKeyStroke(&key)
+	if status != EFI_SUCCESS {
+		return key
+	}
+
+	return key
 }
