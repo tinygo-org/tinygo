@@ -2,6 +2,7 @@
 package uefi
 
 import (
+	"io"
 	"unsafe"
 )
 
@@ -11,8 +12,8 @@ import (
 
 // {BB25CF6F-F1A1-4F11-9E5A-AE8C109A771F}
 var EFI_SERIAL_IO_PROTOCOL_GUID = EFI_GUID{
-	0xbb25cf6f, 0xf1a1, 0x4f11,
-	[8]uint8{0x9e, 0x5a, 0xae, 0x8c, 0x10, 0x9a, 0x77, 0x1f},
+	0xBB25CF6F, 0xF1D4, 0x11D2,
+	[8]uint8{0x9a, 0x0c, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0xfd},
 }
 
 //---------------------------------------------------------------------------
@@ -39,17 +40,17 @@ const (
 
 // Control-bit masks – §13.4.2 Table 13-5
 const (
-	SERIAL_CLEAR_TO_SEND = 1 << iota
-	SERIAL_DATA_SET_READY
-	SERIAL_RING_INDICATE
-	SERIAL_CARRIER_DETECT
-	SERIAL_INPUT_BUFFER_EMPTY
-	SERIAL_OUTPUT_BUFFER_EMPTY
-	SERIAL_HARDWARE_LOOPBACK_ENABLE
-	SERIAL_SOFTWARE_LOOPBACK_ENABLE
-	SERIAL_HARDWARE_FLOW_CONTROL
-	SERIAL_SOFTWARE_FLOW_CONTROL
-	SERIAL_DEVICE_ENABLE
+	EFI_SERIAL_DATA_TERMINAL_READY          = 0x0001
+	EFI_SERIAL_REQUEST_TO_SEND              = 0x0002
+	EFI_SERIAL_CLEAR_TO_SEND                = 0x0010
+	EFI_SERIAL_DATA_SET_READY               = 0x0020
+	EFI_SERIAL_RING_INDICATE                = 0x0040
+	EFI_SERIAL_CARRIER_DETECT               = 0x0080
+	EFI_SERIAL_INPUT_BUFFER_EMPTY           = 0x0100
+	EFI_SERIAL_OUTPUT_BUFFER_EMPTY          = 0x0200
+	EFI_SERIAL_HARDWARE_LOOPBACK_ENABLE     = 0x1000
+	EFI_SERIAL_SOFTWARE_LOOPBACK_ENABLE     = 0x2000
+	EFI_SERIAL_HARDWARE_FLOW_CONTROL_ENABLE = 0x4000
 )
 
 //---------------------------------------------------------------------------
@@ -147,34 +148,76 @@ func (p *EFI_SERIAL_IO_PROTOCOL) Read(bufSize *UINTN, buffer unsafe.Pointer) EFI
 	)
 }
 
-func SerialIOProtocol() (*EFI_SERIAL_IO_PROTOCOL, error) {
-	st := ST()
-	var iFace unsafe.Pointer
-	status := (*st).BootServices.LocateProtocol(
-		&EFI_SERIAL_IO_PROTOCOL_GUID,
-		nil,
-		unsafe.Pointer(&iFace))
-
-	if status == EFI_SUCCESS {
-		siop := (*EFI_SERIAL_IO_PROTOCOL)(iFace)
-		return siop, nil
-	}
-
-	return nil, StatusError(status)
-}
-
 // TODO: make serial ports implement os.File
 type SerialPort struct {
 	*EFI_SERIAL_IO_PROTOCOL
+	readQueue  chan byte
+	writeQueue chan byte
 }
+
+// Init configures sp to use 115200 baud, 8N1.
+// Read/Write timeout and Receive FIFO depth
+// are left ot the serial driver's discretion.
+func (sp *SerialPort) Init() error {
+	// can't hurt, can it?
+	status := sp.Reset(true)
+	if status != EFI_SUCCESS {
+		return StatusError(status)
+	}
+	status = sp.SetAttributes(
+		115200,     // BaudRate
+		1,          // ReceiveFifoDepth (0 = default)
+		1,          // Timeout (0 = default, but maybe try 1?)
+		ParityNone, // EFI_PARITY_TYPE (1 = none)
+		8,          // DataBits
+		StopBits1,  // StopBits (1)
+	)
+	if status != EFI_SUCCESS {
+		return StatusError(status)
+	}
+
+	return nil
+}
+
+//go:linkname gosched runtime.Gosched
+func gosched()
 
 func (sp *SerialPort) Read(buf []byte) (n int, err error) {
 	bufLen := UINTN(len(buf))
-	status := sp.EFI_SERIAL_IO_PROTOCOL.Read(&bufLen, unsafe.Pointer(&buf[0]))
-	if status != EFI_SUCCESS {
-		return int(bufLen), StatusError(status)
+	for {
+		status := sp.EFI_SERIAL_IO_PROTOCOL.Read(&bufLen, unsafe.Pointer(&buf[0]))
+		switch status {
+		case EFI_SUCCESS:
+			return int(bufLen), nil
+		case EFI_TIMEOUT, EFI_NO_RESPONSE:
+			gosched() // let other stuff run
+			continue
+		default:
+			return 0, StatusError(status)
+		}
 	}
-	return int(bufLen), nil
+}
+
+func (sp *SerialPort) WriteTo(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 1)
+	for {
+		bufLen := UINTN(len(buf))
+		status := sp.EFI_SERIAL_IO_PROTOCOL.Read(&bufLen, unsafe.Pointer(&buf[0]))
+		switch status {
+		case EFI_SUCCESS:
+			println("!")
+			nw, err := w.Write(buf[:bufLen])
+			n += int64(nw)
+			if err != nil {
+				return n, err
+			}
+		case EFI_TIMEOUT, EFI_NO_RESPONSE:
+			gosched() // let other stuff run
+			continue
+		default:
+			return 0, StatusError(status)
+		}
+	}
 }
 
 func (sp *SerialPort) Write(buf []byte) (n int, err error) {
@@ -201,11 +244,22 @@ func EnumerateSerialPorts() ([]*SerialPort, error) {
 
 	//turn handleBuffer into a slice of EFI_HANDLEs
 	handleSlice := unsafe.Slice((*EFI_HANDLE)(unsafe.Pointer(handleBuffer)), int(handleCount))
-
 	ports := make([]*SerialPort, int(handleCount))
+
 	for i := range int(handleCount) {
-		ports[i] = &SerialPort{}
-		BS().HandleProtocol(handleSlice[i], &EFI_SERIAL_IO_PROTOCOL_GUID, unsafe.Pointer(ports[i].EFI_SERIAL_IO_PROTOCOL))
+		var serial *EFI_SERIAL_IO_PROTOCOL
+		status := BS().HandleProtocol(
+			handleSlice[i],
+			&EFI_SERIAL_IO_PROTOCOL_GUID,
+			unsafe.Pointer(&serial),
+		)
+		if status != EFI_SUCCESS {
+			return nil, StatusError(status)
+		}
+		ports[i] = &SerialPort{EFI_SERIAL_IO_PROTOCOL: serial}
+
+		// arm each port with sane default
+		ports[i].Init()
 	}
 
 	return ports, nil
