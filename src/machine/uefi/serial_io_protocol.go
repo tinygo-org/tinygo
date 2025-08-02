@@ -151,8 +151,6 @@ func (p *EFI_SERIAL_IO_PROTOCOL) Read(bufSize *UINTN, buffer unsafe.Pointer) EFI
 // TODO: make serial ports implement os.File
 type SerialPort struct {
 	*EFI_SERIAL_IO_PROTOCOL
-	readQueue  chan byte
-	writeQueue chan byte
 }
 
 // Init configures sp to use 115200 baud, 8N1.
@@ -166,8 +164,8 @@ func (sp *SerialPort) Init() error {
 	}
 	status = sp.SetAttributes(
 		115200,     // BaudRate
-		1,          // ReceiveFifoDepth (0 = default)
-		1,          // Timeout (0 = default, but maybe try 1?)
+		0,          // ReceiveFifoDepth (0 = default)
+		0,          // Timeout (0 = default, but maybe try 1?)
 		ParityNone, // EFI_PARITY_TYPE (1 = none)
 		8,          // DataBits
 		StopBits1,  // StopBits (1)
@@ -178,9 +176,6 @@ func (sp *SerialPort) Init() error {
 
 	return nil
 }
-
-//go:linkname gosched runtime.Gosched
-func gosched()
 
 func (sp *SerialPort) Read(buf []byte) (n int, err error) {
 	bufLen := UINTN(len(buf))
@@ -199,13 +194,12 @@ func (sp *SerialPort) Read(buf []byte) (n int, err error) {
 }
 
 func (sp *SerialPort) WriteTo(w io.Writer) (n int64, err error) {
-	buf := make([]byte, 1)
+	buf := make([]byte, 1024)
 	for {
 		bufLen := UINTN(len(buf))
 		status := sp.EFI_SERIAL_IO_PROTOCOL.Read(&bufLen, unsafe.Pointer(&buf[0]))
 		switch status {
 		case EFI_SUCCESS:
-			println("!")
 			nw, err := w.Write(buf[:bufLen])
 			n += int64(nw)
 			if err != nil {

@@ -118,15 +118,11 @@ func SimpleTextInExProtocol() (*EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL, error) {
 func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) GetKey() EFI_KEY_DATA {
 	var key EFI_KEY_DATA
 
-	// Wait for key event
-	index := UINTN(0)
-	status := BS().WaitForEvent(1, &p.WaitForKeyEx, &index)
-	if status != EFI_SUCCESS {
-		return key
-	}
+	// Wait for key event, while yielding to other routines
+	WaitForEvent(p.WaitForKeyEx)
 
 	// Read key stroke
-	status = p.ReadKeyStroke(&key)
+	status := p.ReadKeyStroke(&key)
 	if status != EFI_SUCCESS {
 		return key
 	}
