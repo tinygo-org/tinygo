@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@v4
         id: cache-llvm-source
         with:
-          key: llvm-source-19-sizediff-v1
+          key: llvm-source-20-sizediff-v1
           path: |
             llvm-project/compiler-rt
       - name: Download LLVM source

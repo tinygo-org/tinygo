@@ -1,6 +1,6 @@
 ; ModuleID = 'channel.go'
 source_filename = "channel.go"
-target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-n32:64-S128-ni:1:10:20"
+target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
 %runtime.channelOp = type { ptr, ptr, i32, ptr }
@@ -82,11 +82,11 @@ entry:
   store i32 1, ptr %select.send.value, align 4
   call void @llvm.lifetime.start.p0(i64 16, ptr nonnull %select.states.alloca)
   store ptr %ch1, ptr %select.states.alloca, align 4
-  %select.states.alloca.repack1 = getelementptr inbounds i8, ptr %select.states.alloca, i32 4
+  %select.states.alloca.repack1 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 4
   store ptr %select.send.value, ptr %select.states.alloca.repack1, align 4
-  %0 = getelementptr inbounds i8, ptr %select.states.alloca, i32 8
+  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
   store ptr %ch2, ptr %0, align 4
-  %.repack3 = getelementptr inbounds i8, ptr %select.states.alloca, i32 12
+  %.repack3 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
   store ptr null, ptr %.repack3, align 4
   %select.result = call { i32, i1 } @runtime.chanSelect(ptr undef, ptr nonnull %select.states.alloca, i32 2, i32 2, ptr null, i32 0, i32 0, ptr undef) #4
   call void @llvm.lifetime.end.p0(i64 16, ptr nonnull %select.states.alloca)
@@ -107,8 +107,8 @@ select.body:                                      ; preds = %select.next
 
 declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32, i32, ptr, i32, i32, ptr) #1
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #3 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
 attributes #4 = { nounwind }

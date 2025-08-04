@@ -65,7 +65,7 @@ entry:
   store i32 3, ptr %n, align 4
   %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr null, ptr undef) #9
   store i32 5, ptr %0, align 4
-  %1 = getelementptr inbounds i8, ptr %0, i32 4
+  %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr %n, ptr %1, align 4
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr undef) #9
   call void @"internal/task.start"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #9
@@ -87,7 +87,7 @@ entry:
 define linkonce_odr void @"main.closureFunctionGoroutine$1$gowrapper"(ptr %0) unnamed_addr #5 {
 entry:
   %1 = load i32, ptr %0, align 4
-  %2 = getelementptr inbounds i8, ptr %0, i32 4
+  %2 = getelementptr inbounds nuw i8, ptr %0, i32 4
   %3 = load ptr, ptr %2, align 4
   call void @"main.closureFunctionGoroutine$1"(i32 %1, ptr %3)
   ret void
@@ -104,9 +104,9 @@ define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %co
 entry:
   %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #9
   store i32 5, ptr %0, align 4
-  %1 = getelementptr inbounds i8, ptr %0, i32 4
+  %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr %fn.context, ptr %1, align 4
-  %2 = getelementptr inbounds i8, ptr %0, i32 8
+  %2 = getelementptr inbounds nuw i8, ptr %0, i32 8
   store ptr %fn.funcptr, ptr %2, align 4
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr undef) #9
   call void @"internal/task.start"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #9
@@ -117,9 +117,9 @@ entry:
 define linkonce_odr void @main.funcGoroutine.gowrapper(ptr %0) unnamed_addr #6 {
 entry:
   %1 = load i32, ptr %0, align 4
-  %2 = getelementptr inbounds i8, ptr %0, i32 4
+  %2 = getelementptr inbounds nuw i8, ptr %0, i32 4
   %3 = load ptr, ptr %2, align 4
-  %4 = getelementptr inbounds i8, ptr %0, i32 8
+  %4 = getelementptr inbounds nuw i8, ptr %0, i32 8
   %5 = load ptr, ptr %4, align 4
   call void %5(i32 %1, ptr %3) #9
   ret void
@@ -154,11 +154,11 @@ define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value,
 entry:
   %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #9
   store ptr %itf.value, ptr %0, align 4
-  %1 = getelementptr inbounds i8, ptr %0, i32 4
+  %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr @"main$string", ptr %1, align 4
-  %2 = getelementptr inbounds i8, ptr %0, i32 8
+  %2 = getelementptr inbounds nuw i8, ptr %0, i32 8
   store i32 4, ptr %2, align 4
-  %3 = getelementptr inbounds i8, ptr %0, i32 12
+  %3 = getelementptr inbounds nuw i8, ptr %0, i32 12
   store ptr %itf.typecode, ptr %3, align 4
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr undef) #9
   call void @"internal/task.start"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #9
@@ -171,11 +171,11 @@ declare void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr, ptr, i
 define linkonce_odr void @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper"(ptr %0) unnamed_addr #8 {
 entry:
   %1 = load ptr, ptr %0, align 4
-  %2 = getelementptr inbounds i8, ptr %0, i32 4
+  %2 = getelementptr inbounds nuw i8, ptr %0, i32 4
   %3 = load ptr, ptr %2, align 4
-  %4 = getelementptr inbounds i8, ptr %0, i32 8
+  %4 = getelementptr inbounds nuw i8, ptr %0, i32 8
   %5 = load i32, ptr %4, align 4
-  %6 = getelementptr inbounds i8, ptr %0, i32 12
+  %6 = getelementptr inbounds nuw i8, ptr %0, i32 12
   %7 = load ptr, ptr %6, align 4
   call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr %1, ptr %3, i32 %5, ptr %7, ptr undef) #9
   ret void

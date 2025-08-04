@@ -1,6 +1,6 @@
 ; ModuleID = 'slice.go'
 source_filename = "slice.go"
-target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-n32:64-S128-ni:1:10:20"
+target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
@@ -51,9 +51,9 @@ entry:
   %varargs = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %varargs, ptr nonnull %stackalloc, ptr undef) #3
   store i32 1, ptr %varargs, align 4
-  %0 = getelementptr inbounds i8, ptr %varargs, i32 4
+  %0 = getelementptr inbounds nuw i8, ptr %varargs, i32 4
   store i32 2, ptr %0, align 4
-  %1 = getelementptr inbounds i8, ptr %varargs, i32 8
+  %1 = getelementptr inbounds nuw i8, ptr %varargs, i32 8
   store i32 3, ptr %1, align 4
   %append.new = call { ptr, i32, i32 } @runtime.sliceAppend(ptr %ints.data, ptr nonnull %varargs, i32 %ints.len, i32 %ints.cap, i32 3, i32 4, ptr undef) #3
   %append.newPtr = extractvalue { ptr, i32, i32 } %append.new, 0
@@ -322,7 +322,7 @@ unsafe.Slice.throw:                               ; preds = %entry
   unreachable
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #1 = { "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #3 = { nounwind }

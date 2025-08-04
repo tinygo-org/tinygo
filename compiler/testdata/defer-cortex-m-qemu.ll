@@ -27,7 +27,7 @@ entry:
   %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   store i32 0, ptr %defer.alloca, align 4
-  %defer.alloca.repack15 = getelementptr inbounds i8, ptr %defer.alloca, i32 4
+  %defer.alloca.repack15 = getelementptr inbounds nuw i8, ptr %defer.alloca, i32 4
   store ptr null, ptr %defer.alloca.repack15, align 4
   store ptr %defer.alloca, ptr %deferPtr, align 4
   %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(ptr nonnull %deferframe.buf) #5
@@ -51,7 +51,7 @@ rundefers.loophead:                               ; preds = %3, %rundefers.block
   br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
 
 rundefers.loop:                                   ; preds = %rundefers.loophead
-  %stack.next.gep = getelementptr inbounds i8, ptr %2, i32 4
+  %stack.next.gep = getelementptr inbounds nuw i8, ptr %2, i32 4
   %stack.next = load ptr, ptr %stack.next.gep, align 4
   store ptr %stack.next, ptr %deferPtr, align 4
   %callback = load i32, ptr %2, align 4
@@ -87,7 +87,7 @@ rundefers.loophead6:                              ; preds = %5, %lpad
   br i1 %stackIsNil7, label %rundefers.end3, label %rundefers.loop5
 
 rundefers.loop5:                                  ; preds = %rundefers.loophead6
-  %stack.next.gep8 = getelementptr inbounds i8, ptr %4, i32 4
+  %stack.next.gep8 = getelementptr inbounds nuw i8, ptr %4, i32 4
   %stack.next9 = load ptr, ptr %stack.next.gep8, align 4
   store ptr %stack.next9, ptr %deferPtr, align 4
   %callback11 = load i32, ptr %4, align 4
@@ -144,11 +144,11 @@ entry:
   %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   store i32 0, ptr %defer.alloca, align 4
-  %defer.alloca.repack22 = getelementptr inbounds i8, ptr %defer.alloca, i32 4
+  %defer.alloca.repack22 = getelementptr inbounds nuw i8, ptr %defer.alloca, i32 4
   store ptr null, ptr %defer.alloca.repack22, align 4
   store ptr %defer.alloca, ptr %deferPtr, align 4
   store i32 1, ptr %defer.alloca2, align 4
-  %defer.alloca2.repack23 = getelementptr inbounds i8, ptr %defer.alloca2, i32 4
+  %defer.alloca2.repack23 = getelementptr inbounds nuw i8, ptr %defer.alloca2, i32 4
   store ptr %defer.alloca, ptr %defer.alloca2.repack23, align 4
   store ptr %defer.alloca2, ptr %deferPtr, align 4
   %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(ptr nonnull %deferframe.buf) #5
@@ -172,7 +172,7 @@ rundefers.loophead:                               ; preds = %4, %3, %rundefers.b
   br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
 
 rundefers.loop:                                   ; preds = %rundefers.loophead
-  %stack.next.gep = getelementptr inbounds i8, ptr %2, i32 4
+  %stack.next.gep = getelementptr inbounds nuw i8, ptr %2, i32 4
   %stack.next = load ptr, ptr %stack.next.gep, align 4
   store ptr %stack.next, ptr %deferPtr, align 4
   %callback = load i32, ptr %2, align 4
@@ -218,7 +218,7 @@ rundefers.loophead10:                             ; preds = %7, %6, %lpad
   br i1 %stackIsNil11, label %rundefers.end7, label %rundefers.loop9
 
 rundefers.loop9:                                  ; preds = %rundefers.loophead10
-  %stack.next.gep12 = getelementptr inbounds i8, ptr %5, i32 4
+  %stack.next.gep12 = getelementptr inbounds nuw i8, ptr %5, i32 4
   %stack.next13 = load ptr, ptr %stack.next.gep12, align 4
   store ptr %stack.next13, ptr %deferPtr, align 4
   %callback15 = load i32, ptr %5, align 4

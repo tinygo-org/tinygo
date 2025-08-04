@@ -10,7 +10,8 @@
 		"-march=rv32imac"
 	],
 	"ldflags": [
-		"-melf32lriscv"
+		"-melf32lriscv",
+		"-mllvm", "-enable-machine-outliner=never"
 	],
 	"gdb": [
 		"gdb-multiarch",

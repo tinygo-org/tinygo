@@ -45,10 +45,6 @@ struct AssemblerInvocation {
   LLVM_PREFERRED_TYPE(bool)
   unsigned GenDwarfForAssembly : 1;
   LLVM_PREFERRED_TYPE(bool)
-  unsigned RelaxELFRelocations : 1;
-  LLVM_PREFERRED_TYPE(bool)
-  unsigned SSE2AVX : 1;
-  LLVM_PREFERRED_TYPE(bool)
   unsigned Dwarf64 : 1;
   unsigned DwarfVersion;
   std::string DwarfDebugFlags;
@@ -117,6 +113,13 @@ struct AssemblerInvocation {
 
   LLVM_PREFERRED_TYPE(bool)
   unsigned Crel : 1;
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned ImplicitMapsyms : 1;
+
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned X86RelaxRelocations : 1;
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned X86Sse2Avx : 1;
 
   /// The name of the relocation model to use.
   std::string RelocationModel;
@@ -148,7 +151,6 @@ public:
     ShowInst = 0;
     ShowEncoding = 0;
     RelaxAll = 0;
-    SSE2AVX = 0;
     NoExecStack = 0;
     FatalWarnings = 0;
     NoWarn = 0;
@@ -160,6 +162,9 @@ public:
     EmitDwarfUnwind = EmitDwarfUnwindType::Default;
     EmitCompactUnwindNonCanonical = false;
     Crel = false;
+    ImplicitMapsyms = 0;
+    X86RelaxRelocations = 0;
+    X86Sse2Avx = 0;
   }
 
   static bool CreateFromArgs(AssemblerInvocation &Res,

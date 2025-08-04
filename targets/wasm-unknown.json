@@ -1,7 +1,7 @@
 {
 	"llvm-target":   "wasm32-unknown-unknown",
-	"cpu":           "generic",
-	"features":      "+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types",
+	"cpu":           "mvp",
+	"features":      "+nontrapping-fptoint,+sign-ext,-bulk-memory,-multivalue,-reference-types",
 	"build-tags":    ["tinygo.wasm", "wasm_unknown"],
 	"buildmode":    "c-shared",
 	"goos":          "linux",
@@ -14,6 +14,7 @@
 	"default-stack-size": 4096,
 	"cflags": [
 		"-mnontrapping-fptoint",
+		"-mno-bulk-memory",
 		"-mno-multivalue",
 		"-mno-reference-types",
 		"-msign-ext"
