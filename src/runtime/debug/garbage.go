@@ -30,7 +30,9 @@ func SetPanicOnFault(enabled bool) bool {
 
 func WriteHeapDump(fd uintptr)
 
-func SetTraceback(level string)
+// Unimplemented.
+func SetTraceback(level string) {
+}
 
 func SetMemoryLimit(limit int64) int64 {
 	return limit

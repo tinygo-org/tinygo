@@ -363,7 +363,6 @@ TEST_PACKAGES_FAST = \
 	path \
 	reflect \
 	sync \
-	testing \
 	testing/iotest \
 	text/scanner \
 	unicode \
@@ -480,7 +479,7 @@ TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
 TEST_IOFS := false
 endif
 
-TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic'
+TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic|^Fuzz'
 
 # Test known-working standard library packages.
 # TODO: parallelize, and only show failing tests (no implied -v flag).

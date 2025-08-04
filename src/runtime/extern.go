@@ -1,6 +1,11 @@
 package runtime
 
 func Callers(skip int, pc []uintptr) int {
+	if len(pc) > 0 {
+		// The testing package expects at least one caller in all cases.
+		pc[0] = 0
+		return 1
+	}
 	return 0
 }
 
