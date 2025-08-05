@@ -100,6 +100,8 @@ func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) ReadKeyStroke(Key *EFI_KEY_DATA) EFI
 	return UefiCall2(p.readKeyStrokeEx, uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(Key)))
 }
 
+// SimpleTextInExProtocol finds and returns the first handle implementing this protocol
+// and returns it. Usually there will only be one or multiple get multiplexed together.
 func SimpleTextInExProtocol() (*EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL, error) {
 	st := ST()
 	var iFace unsafe.Pointer
@@ -115,6 +117,8 @@ func SimpleTextInExProtocol() (*EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL, error) {
 	return nil, StatusError(status)
 }
 
+// GetKey blocks while waiting to receive a key. It yields to the scheduler
+// so other goroutines may continue to work while waiting for a key press.
 func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) GetKey() EFI_KEY_DATA {
 	var key EFI_KEY_DATA
 
