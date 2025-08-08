@@ -31,6 +31,9 @@ type RWMutex struct {
 
 const rwMutexMaxReaders = 1 << 30
 
+// Lock locks rw for writing.
+// If the lock is already locked for reading or writing,
+// Lock blocks until the lock is available.
 func (rw *RWMutex) Lock() {
 	// Exclusive lock for writers.
 	rw.writerLock.Lock()
@@ -56,6 +59,12 @@ func (rw *RWMutex) Lock() {
 	rw.writer.Store(0)
 }
 
+// Unlock unlocks rw for writing. It is a run-time error if rw is
+// not locked for writing on entry to Unlock.
+//
+// As with Mutexes, a locked [RWMutex] is not associated with a particular
+// goroutine. One goroutine may [RWMutex.RLock] ([RWMutex.Lock]) a RWMutex and then
+// arrange for another goroutine to [RWMutex.RUnlock] ([RWMutex.Unlock]) it.
 func (rw *RWMutex) Unlock() {
 	// Signal that new readers can lock this mutex.
 	waiting := rw.readers.Add(rwMutexMaxReaders)
@@ -68,6 +77,31 @@ func (rw *RWMutex) Unlock() {
 	rw.writerLock.Unlock()
 }
 
+// TryLock tries to lock m and reports whether it succeeded.
+//
+// Note that while correct uses of TryLock do exist, they are rare,
+// and use of TryLock is often a sign of a deeper problem
+// in a particular use of mutexes.
+func (rw *RWMutex) TryLock() bool {
+	// Check for active writers
+	if !rw.writerLock.TryLock() {
+		return false
+	}
+	// Have write lock, now check for active readers
+	n := uint32(rwMutexMaxReaders)
+	if !rw.readers.CompareAndSwap(0, -n) {
+		// Active readers, give up write lock
+		rw.writerLock.Unlock()
+		return false
+	}
+	return true
+}
+
+// RLock locks rw for reading.
+//
+// It should not be used for recursive read locking; a blocked Lock
+// call excludes new readers from acquiring the lock. See the
+// documentation on the [RWMutex] type.
 func (rw *RWMutex) RLock() {
 	// Add us as a reader.
 	newVal := rw.readers.Add(1)
@@ -79,6 +113,10 @@ func (rw *RWMutex) RLock() {
 	}
 }
 
+// RUnlock undoes a single [RWMutex.RLock] call;
+// it does not affect other simultaneous readers.
+// It is a run-time error if rw is not locked for reading
+// on entry to RUnlock.
 func (rw *RWMutex) RUnlock() {
 	// Remove us as a reader.
 	one := uint32(1)
@@ -94,6 +132,25 @@ func (rw *RWMutex) RUnlock() {
 		// lock.
 		if rw.writer.CompareAndSwap(1, 2) {
 			rw.writer.Wake()
+		}
+	}
+}
+
+// TryRLock tries to lock rw for reading and reports whether it succeeded.
+//
+// Note that while correct uses of TryRLock do exist, they are rare,
+// and use of TryRLock is often a sign of a deeper problem
+// in a particular use of mutexes.
+func (rw *RWMutex) TryRLock() bool {
+	for {
+		c := rw.readers.Load()
+		if c < 0 {
+			// There is a writer waiting or writing.
+			return false
+		}
+		if rw.readers.CompareAndSwap(c, c+1) {
+			// Read lock obtained.
+			return true
 		}
 	}
 }

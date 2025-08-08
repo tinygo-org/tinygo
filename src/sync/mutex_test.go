@@ -7,7 +7,13 @@ import (
 	"testing"
 )
 
-func HammerMutex(m *sync.Mutex, loops int, cdone chan bool) {
+type mutex interface {
+	Lock()
+	Unlock()
+	TryLock() bool
+}
+
+func HammerMutex(m mutex, loops int, cdone chan bool) {
 	for i := 0; i < loops; i++ {
 		if i%3 == 0 {
 			if m.TryLock() {
@@ -238,5 +244,27 @@ func TestRWMutexReadToWrite(t *testing.T) {
 	}
 	if res != 0 {
 		t.Errorf("write lock acquired while %d readers were active", res)
+	}
+}
+
+func TestRWMutex(t *testing.T) {
+	m := new(sync.RWMutex)
+
+	m.Lock()
+	if m.TryLock() {
+		t.Fatalf("TryLock succeeded with mutex locked")
+	}
+	m.Unlock()
+	if !m.TryLock() {
+		t.Fatalf("TryLock failed with mutex unlocked")
+	}
+	m.Unlock()
+
+	c := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go HammerMutex(m, 1000, c)
+	}
+	for i := 0; i < 10; i++ {
+		<-c
 	}
 }
