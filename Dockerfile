@@ -2,7 +2,7 @@
 FROM golang:1.25 AS tinygo-llvm
 
 RUN apt-get update && \
-    apt-get install -y apt-utils make cmake clang-15 ninja-build && \
+    apt-get install -y apt-utils make cmake clang-17 ninja-build && \
     rm -rf \
         /var/lib/apt/lists/* \
         /var/log/* \
