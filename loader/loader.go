@@ -279,7 +279,7 @@ func (p *Program) getOriginalPath(path string) string {
 			originalPath = realgorootPath
 		}
 		maybeInTinyGoRoot := false
-		for prefix := range pathsToOverride(p.config.GoMinorVersion, needsSyscallPackage(p.config.BuildTags())) {
+		for prefix := range pathsToOverride(p.config.GoMinorVersion, needsSyscallPackage(p.config.BuildTags()), p.config.Target.Board) {
 			if runtime.GOOS == "windows" {
 				prefix = strings.ReplaceAll(prefix, "/", "\\")
 			}

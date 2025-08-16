@@ -23,9 +23,11 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"sync"
 
+	"github.com/tinygo-org/tinygo/boardgen"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
@@ -43,12 +45,13 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	if tinygoroot == "" {
 		return "", errors.New("could not determine TINYGOROOT")
 	}
+	board := config.Target.Board
 
 	// Find the overrides needed for the goroot.
-	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()))
+	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()), board)
 
 	// Resolve the merge links within the goroot.
-	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
+	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides, board)
 	if err != nil {
 		return "", err
 	}
@@ -113,10 +116,26 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 
 	// Create all symlinks.
 	for dst, src := range merge {
+		if src == "." {
+			// Merges with a src of "." will be copied instead of linked.
+			continue
+		}
 		err := symlink(src, filepath.Join(tmpgoroot, dst))
 		if err != nil {
 			return "", err
 		}
+	}
+
+	// Inject board-specific files into the cache.
+	for dst, src := range board.Files() {
+		err := fileCopy(src, filepath.Join(tmpgoroot, "src", dst))
+		if err != nil {
+			return "", err
+		}
+	}
+	// Try not too hard to clean up temp dirs used to generate board files.
+	for _, dir := range board.TempDirs() {
+		os.RemoveAll(dir)
 	}
 
 	// Rename the new merged gorooot into place.
@@ -143,15 +162,30 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 }
 
 // listGorootMergeLinks searches goroot and tinygoroot for all symlinks that must be created within the merged goroot.
-func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) (map[string]string, error) {
+func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool, board *boardgen.Board) (map[string]string, error) {
 	goSrc := filepath.Join(goroot, "src")
 	tinygoSrc := filepath.Join(tinygoroot, "src")
 	merges := make(map[string]string)
+	boardDirs := board.DirsFromFiles()
 	for dir, merge := range overrides {
 		if !merge {
 			// Use the TinyGo version.
 			merges[filepath.Join("src", dir)] = filepath.Join(tinygoSrc, dir)
 			continue
+		}
+
+		// Use the override to individually symlink files in a directory with
+		// board-specific files rather than the directory itself, so generated
+		// files can be injected into the cache.
+		// e.g. src/machine -> tinygo/src/machine becomes:
+		// src/machine/machine.go -> tinygo/src/machine/machine.go
+		// Otherwise, adding a generated file to src/machine/ just adds it to
+		// tinygo/src/machine/ and the intent is to avoid requiring write
+		// access to TINYGOROOT.
+		var tinyGoMerge bool
+		if slices.Contains(boardDirs, dir) {
+			// Don't try to insert non-existent BigGo files.
+			tinyGoMerge = true
 		}
 
 		// Add files from TinyGo.
@@ -162,7 +196,7 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 		}
 		var hasTinyGoFiles bool
 		for _, e := range tinygoEntries {
-			if e.IsDir() {
+			if e.IsDir() && !tinyGoMerge {
 				continue
 			}
 
@@ -171,6 +205,10 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 			merges[filepath.Join("src", dir, name)] = filepath.Join(tinygoDir, name)
 
 			hasTinyGoFiles = true
+		}
+
+		if tinyGoMerge {
+			continue
 		}
 
 		// Add all directories from $GOROOT that are not part of the TinyGo
@@ -201,6 +239,11 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 		}
 	}
 
+	// Insert board-specific file merge placeholders
+	for dst := range board.Files() {
+		merges[filepath.Join("src", dst)] = "."
+	}
+
 	// Merge the special directories from goroot.
 	for _, dir := range []string{"bin", "lib", "pkg"} {
 		merges[dir] = filepath.Join(goroot, dir)
@@ -227,7 +270,7 @@ func needsSyscallPackage(buildTags []string) bool {
 
 // The boolean indicates whether to merge the subdirs. True means merge, false
 // means use the TinyGo version.
-func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+func pathsToOverride(goMinor int, needsSyscallPackage bool, board *boardgen.Board) map[string]bool {
 	paths := map[string]bool{
 		"":                            true,
 		"crypto/":                     true,
@@ -271,6 +314,13 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		paths["syscall/"] = true // include syscall/js
 		paths["internal/syscall/"] = true
 		paths["internal/syscall/unix/"] = false
+	}
+
+	// Add board-specific directories to the override merges.
+	for _, dir := range board.DirsFromFiles() {
+		if _, ok := paths[dir]; ok {
+			paths[dir] = true
+		}
 	}
 	return paths
 }
@@ -333,4 +383,30 @@ func symlink(oldname, newname string) error {
 		return nil // success
 	}
 	return symlinkErr
+}
+
+func fileCopy(src, dst string) error {
+	// Make sure we're not overwriting an existing file.
+	if _, err := os.Lstat(dst); err == nil {
+		return errors.New("destination file already exists: " + dst)
+	}
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
