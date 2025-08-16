@@ -218,7 +218,7 @@ func Version() int {
 	return major
 }
 
-// Return the byte order for the given target triple. Most targets are little
+// ByteOrder returns the byte order for the given target triple. Most targets are little
 // endian, but for example MIPS can be big-endian.
 func ByteOrder(target string) binary.ByteOrder {
 	if strings.HasPrefix(target, "mips-") {

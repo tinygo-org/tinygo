@@ -81,8 +81,8 @@ func (it *MapIter) Next() bool {
 	return ((*reflectlite.MapIter)(it)).Next()
 }
 
-func (iter *MapIter) Reset(v Value) {
-	(*reflectlite.MapIter)(iter).Reset(v.Value)
+func (it *MapIter) Reset(v Value) {
+	(*reflectlite.MapIter)(it).Reset(v.Value)
 }
 
 func (v Value) Set(x Value) {

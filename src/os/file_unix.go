@@ -12,7 +12,6 @@ package os
 import (
 	"io"
 	"syscall"
-	_ "unsafe"
 )
 
 const DevNull = "/dev/null"
