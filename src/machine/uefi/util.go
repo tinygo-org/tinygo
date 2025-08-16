@@ -98,3 +98,10 @@ func convertBoolean(b BOOLEAN) uintptr {
 	}
 	return 0
 }
+
+func convertBool(b bool) uintptr {
+	if b {
+		return 1
+	}
+	return 0
+}
