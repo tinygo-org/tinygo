@@ -205,7 +205,7 @@ func (sp *SerialPort) Init() error {
 	status = sp.SetAttributes(
 		115200,     // BaudRate
 		0,          // ReceiveFifoDepth (0 = default)
-		0,          // Timeout (0 = default)
+		1,          // Timeout (0 = default)
 		ParityNone, // EFI_PARITY_TYPE (1 = none)
 		8,          // DataBits
 		StopBits1,  // StopBits (1)
@@ -223,8 +223,8 @@ func (sp *SerialPort) Init() error {
 // flow control, RTS is set and cleared accordingly.
 func (sp *SerialPort) Read(buf []byte) (n int, err error) {
 	var controlBits uint32
-	sp.GetControl(&controlBits)
 	for {
+		sp.GetControl(&controlBits)
 		bufLen := UINTN(len(buf))
 		// assert RTS and DTR; should be no harm to set/clear these even if hardware flow control
 		// is not in use.
