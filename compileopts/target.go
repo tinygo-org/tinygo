@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/boardgen"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -23,50 +24,51 @@ import (
 // https://doc.rust-lang.org/nightly/nightly-rustc/rustc_target/spec/struct.TargetOptions.html
 // https://github.com/shepmaster/rust-arduino-blink-led-no-core-with-cargo/blob/master/blink/arduino.json
 type TargetSpec struct {
-	Inherits         []string `json:"inherits,omitempty"`
-	Triple           string   `json:"llvm-target,omitempty"`
-	CPU              string   `json:"cpu,omitempty"`
-	ABI              string   `json:"target-abi,omitempty"` // roughly equivalent to -mabi= flag
-	Features         string   `json:"features,omitempty"`
-	GOOS             string   `json:"goos,omitempty"`
-	GOARCH           string   `json:"goarch,omitempty"`
-	SoftFloat        bool     // used for non-baremetal systems (GOMIPS=softfloat etc)
-	BuildTags        []string `json:"build-tags,omitempty"`
-	BuildMode        string   `json:"buildmode,omitempty"` // default build mode (if nothing specified)
-	GC               string   `json:"gc,omitempty"`
-	Scheduler        string   `json:"scheduler,omitempty"`
-	Serial           string   `json:"serial,omitempty"` // which serial output to use (uart, usb, none)
-	Linker           string   `json:"linker,omitempty"`
-	RTLib            string   `json:"rtlib,omitempty"` // compiler runtime library (libgcc, compiler-rt)
-	Libc             string   `json:"libc,omitempty"`
-	AutoStackSize    *bool    `json:"automatic-stack-size,omitempty"` // Determine stack size automatically at compile time.
-	DefaultStackSize uint64   `json:"default-stack-size,omitempty"`   // Default stack size if the size couldn't be determined at compile time.
-	CFlags           []string `json:"cflags,omitempty"`
-	LDFlags          []string `json:"ldflags,omitempty"`
-	LinkerScript     string   `json:"linkerscript,omitempty"`
-	ExtraFiles       []string `json:"extra-files,omitempty"`
-	RP2040BootPatch  *bool    `json:"rp2040-boot-patch,omitempty"` // Patch RP2040 2nd stage bootloader checksum
-	BootPatches      []string `json:"boot-patches,omitempty"`      // Bootloader patches to be applied in the order they appear.
-	Emulator         string   `json:"emulator,omitempty"`
-	FlashCommand     string   `json:"flash-command,omitempty"`
-	GDB              []string `json:"gdb,omitempty"`
-	PortReset        string   `json:"flash-1200-bps-reset,omitempty"`
-	SerialPort       []string `json:"serial-port,omitempty"` // serial port IDs in the form "vid:pid"
-	FlashMethod      string   `json:"flash-method,omitempty"`
-	FlashVolume      []string `json:"msd-volume-name,omitempty"`
-	FlashFilename    string   `json:"msd-firmware-name,omitempty"`
-	UF2FamilyID      string   `json:"uf2-family-id,omitempty"`
-	BinaryFormat     string   `json:"binary-format,omitempty"`
-	OpenOCDInterface string   `json:"openocd-interface,omitempty"`
-	OpenOCDTarget    string   `json:"openocd-target,omitempty"`
-	OpenOCDTransport string   `json:"openocd-transport,omitempty"`
-	OpenOCDCommands  []string `json:"openocd-commands,omitempty"`
-	OpenOCDVerify    *bool    `json:"openocd-verify,omitempty"` // enable verify when flashing with openocd
-	JLinkDevice      string   `json:"jlink-device,omitempty"`
-	CodeModel        string   `json:"code-model,omitempty"`
-	RelocationModel  string   `json:"relocation-model,omitempty"`
-	WITPackage       string   `json:"wit-package,omitempty"`
-	WITWorld         string   `json:"wit-world,omitempty"`
+	Inherits         []string        `json:"inherits,omitempty"`
+	Triple           string          `json:"llvm-target,omitempty"`
+	CPU              string          `json:"cpu,omitempty"`
+	ABI              string          `json:"target-abi,omitempty"` // roughly equivalent to -mabi= flag
+	Features         string          `json:"features,omitempty"`
+	GOOS             string          `json:"goos,omitempty"`
+	GOARCH           string          `json:"goarch,omitempty"`
+	SoftFloat        bool            // used for non-baremetal systems (GOMIPS=softfloat etc)
+	BuildTags        []string        `json:"build-tags,omitempty"`
+	BuildMode        string          `json:"buildmode,omitempty"` // default build mode (if nothing specified)
+	GC               string          `json:"gc,omitempty"`
+	Scheduler        string          `json:"scheduler,omitempty"`
+	Serial           string          `json:"serial,omitempty"` // which serial output to use (uart, usb, none)
+	Linker           string          `json:"linker,omitempty"`
+	RTLib            string          `json:"rtlib,omitempty"` // compiler runtime library (libgcc, compiler-rt)
+	Libc             string          `json:"libc,omitempty"`
+	AutoStackSize    *bool           `json:"automatic-stack-size,omitempty"` // Determine stack size automatically at compile time.
+	DefaultStackSize uint64          `json:"default-stack-size,omitempty"`   // Default stack size if the size couldn't be determined at compile time.
+	CFlags           []string        `json:"cflags,omitempty"`
+	LDFlags          []string        `json:"ldflags,omitempty"`
+	LinkerScript     string          `json:"linkerscript,omitempty"`
+	ExtraFiles       []string        `json:"extra-files,omitempty"`
+	RP2040BootPatch  *bool           `json:"rp2040-boot-patch,omitempty"` // Patch RP2040 2nd stage bootloader checksum
+	BootPatches      []string        `json:"boot-patches,omitempty"`      // Bootloader patches to be applied in the order they appear.
+	Emulator         string          `json:"emulator,omitempty"`
+	FlashCommand     string          `json:"flash-command,omitempty"`
+	GDB              []string        `json:"gdb,omitempty"`
+	PortReset        string          `json:"flash-1200-bps-reset,omitempty"`
+	SerialPort       []string        `json:"serial-port,omitempty"` // serial port IDs in the form "vid:pid"
+	FlashMethod      string          `json:"flash-method,omitempty"`
+	FlashVolume      []string        `json:"msd-volume-name,omitempty"`
+	FlashFilename    string          `json:"msd-firmware-name,omitempty"`
+	UF2FamilyID      string          `json:"uf2-family-id,omitempty"`
+	BinaryFormat     string          `json:"binary-format,omitempty"`
+	OpenOCDInterface string          `json:"openocd-interface,omitempty"`
+	OpenOCDTarget    string          `json:"openocd-target,omitempty"`
+	OpenOCDTransport string          `json:"openocd-transport,omitempty"`
+	OpenOCDCommands  []string        `json:"openocd-commands,omitempty"`
+	OpenOCDVerify    *bool           `json:"openocd-verify,omitempty"` // enable verify when flashing with openocd
+	JLinkDevice      string          `json:"jlink-device,omitempty"`
+	CodeModel        string          `json:"code-model,omitempty"`
+	RelocationModel  string          `json:"relocation-model,omitempty"`
+	WITPackage       string          `json:"wit-package,omitempty"`
+	WITWorld         string          `json:"wit-world,omitempty"`
+	Board            *boardgen.Board `json:"board,omitempty"`
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
@@ -214,6 +216,9 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	if spec.Scheduler == "asyncify" {
 		spec.ExtraFiles = append(spec.ExtraFiles, "src/internal/task/task_asyncify_wasm.S")
 	}
+
+	// Template out board-specific files
+	spec.Board.Generate(options.Target, spec.BuildTags)
 
 	return spec, nil
 }
