@@ -3,6 +3,7 @@
         "rp2040"
     ],
     "serial-port": ["239a:8109"],
+    "default-stack-size": 8192,
     "build-tags": ["trinkey_qt2040"],
     "ldflags": [
         "--defsym=__flash_size=8192K"
