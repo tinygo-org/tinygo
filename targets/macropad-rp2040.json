@@ -3,6 +3,7 @@
         "rp2040"
     ],
     "build-tags": ["macropad_rp2040"],
+    "default-stack-size": 8192,
     "serial-port": ["239a:8107"],
     "ldflags": [
         "--defsym=__flash_size=8M"

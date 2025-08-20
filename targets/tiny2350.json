@@ -6,5 +6,6 @@
     "ldflags": [
         "--defsym=__flash_size=4M"
     ],
-    "serial-port": ["2e8a:000f"]
+    "serial-port": ["2e8a:000f"],
+    "default-stack-size": 8192
 }

@@ -2,16 +2,28 @@
 
 #define _GNU_SOURCE
 #include <pthread.h>
-#include <semaphore.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 
-// BDWGC also uses SIGRTMIN+6 on Linux, which seems like a reasonable choice.
 #ifdef __linux__
+#include <semaphore.h>
+
+// BDWGC also uses SIGRTMIN+6 on Linux, which seems like a reasonable choice.
 #define taskPauseSignal (SIGRTMIN + 6)
-#endif
+
+#elif __APPLE__
+#include <dispatch/dispatch.h>
+// SIGIO is for interrupt-driven I/O.
+// I don't think anybody should be using this nowadays, so I think we can
+// repurpose it as a signal for GC.
+// BDWGC uses a special way to pause/resume other threads on MacOS, which may be
+// better but needs more work. Using signal keeps the code similar between Linux
+// and MacOS.
+#define taskPauseSignal SIGIO
+
+#endif // __linux__, __APPLE__
 
 // Pointer to the current task.Task structure.
 // Ideally the entire task.Task structure would be a thread-local variable but
@@ -23,7 +35,11 @@ struct state_pass {
     void      *args;
     void      *task;
     uintptr_t *stackTop;
+    #if __APPLE__
+    dispatch_semaphore_t startlock;
+    #else
     sem_t     startlock;
+    #endif
 };
 
 // Handle the GC pause in Go.
@@ -41,8 +57,8 @@ void tinygo_task_init(void *mainTask, pthread_t *thread, int *numCPU, void *cont
     // Register the "GC pause" signal for the entire process.
     // Using pthread_kill, we can still send the signal to a specific thread.
     struct sigaction act = { 0 };
-    act.sa_flags = SA_SIGINFO;
-    act.sa_handler = &tinygo_task_gc_pause;
+    act.sa_handler = tinygo_task_gc_pause;
+    act.sa_flags = SA_RESTART;
     sigaction(taskPauseSignal, &act, NULL);
 
     // Obtain the number of CPUs available on program start (for NumCPU).
@@ -69,7 +85,11 @@ static void* start_wrapper(void *arg) {
 
     // Notify the caller that the thread has successfully started and
     // initialized.
+    #if __APPLE__
+    dispatch_semaphore_signal(state->startlock);
+    #else
     sem_post(&state->startlock);
+    #endif
 
     // Run the goroutine function.
     start(args);
@@ -81,7 +101,7 @@ static void* start_wrapper(void *arg) {
 };
 
 // Start a new goroutine in an OS thread.
-int tinygo_task_start(uintptr_t fn, void *args, void *task, pthread_t *thread, uintptr_t *stackTop, void *context) {
+int tinygo_task_start(uintptr_t fn, void *args, void *task, pthread_t *thread, uintptr_t *stackTop, uintptr_t stackSize, void *context) {
     // Sanity check. Should get optimized away.
     if (sizeof(pthread_t) != sizeof(void*)) {
         __builtin_trap();
@@ -93,11 +113,23 @@ int tinygo_task_start(uintptr_t fn, void *args, void *task, pthread_t *thread, u
         .task      = task,
         .stackTop  = stackTop,
     };
+    #if __APPLE__
+    state.startlock = dispatch_semaphore_create(0);
+    #else
     sem_init(&state.startlock, 0, 0);
-    int result = pthread_create(thread, NULL, &start_wrapper, &state);
+    #endif
+    pthread_attr_t attrs;
+    pthread_attr_init(&attrs);
+    pthread_attr_setstacksize(&attrs, stackSize);
+    int result = pthread_create(thread, &attrs, &start_wrapper, &state);
+    pthread_attr_destroy(&attrs);
 
     // Wait until the thread has been created and read all state_pass variables.
+    #if __APPLE__
+    dispatch_semaphore_wait(state.startlock, DISPATCH_TIME_FOREVER);
+    #else
     sem_wait(&state.startlock);
+    #endif
 
     return result;
 }

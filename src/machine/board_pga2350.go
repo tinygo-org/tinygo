@@ -31,25 +31,24 @@ const (
 	GP27 = GPIO27
 	GP28 = GPIO28
 	GP29 = GPIO29
-	GP30 = GPIO30 // peripherals: PWM7 channel A
-	GP31 = GPIO31 // peripherals: PWM7 channel B
-	GP32 = GPIO32 // peripherals: PWM8 channel A
-	GP33 = GPIO33 // peripherals: PWM8 channel B
-	GP34 = GPIO34 // peripherals: PWM9 channel A
-	GP35 = GPIO35 // peripherals: PWM9 channel B
-	GP36 = GPIO36 // peripherals: PWM10 channel A
-	GP37 = GPIO37 // peripherals: PWM10 channel B
-	GP38 = GPIO38 // peripherals: PWM11 channel A
-	GP39 = GPIO39 // peripherals: PWM11 channel B
-	GP40 = GPIO40 // peripherals: PWM8 channel A
-	GP41 = GPIO41 // peripherals: PWM8 channel B
-	GP42 = GPIO42 // peripherals: PWM9 channel A
-	GP43 = GPIO43 // peripherals: PWM9 channel B
-	GP44 = GPIO44 // peripherals: PWM10 channel A
-	GP45 = GPIO45 // peripherals: PWM10 channel B
-	GP46 = GPIO46 // peripherals: PWM11 channel A
-	GP47 = GPIO47 // peripherals: PWM11 channel B
-
+	GP30 = GPIO30
+	GP31 = GPIO31
+	GP32 = GPIO32
+	GP33 = GPIO33
+	GP34 = GPIO34
+	GP35 = GPIO35
+	GP36 = GPIO36
+	GP37 = GPIO37
+	GP38 = GPIO38
+	GP39 = GPIO39
+	GP40 = GPIO40
+	GP41 = GPIO41
+	GP42 = GPIO42
+	GP43 = GPIO43
+	GP44 = GPIO44
+	GP45 = GPIO45
+	GP46 = GPIO46
+	GP47 = GPIO47
 )
 
 var DefaultUART = UART0

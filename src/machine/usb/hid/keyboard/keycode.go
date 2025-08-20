@@ -209,6 +209,21 @@ const (
 	KeyF23         Keycode = 114 | 0xF000
 	KeyF24         Keycode = 115 | 0xF000
 
+	// International keys for Japanese and other language keyboards
+	KeyInternational1 Keycode = 0x87 | 0xF000 // JIS "\" and "_"
+	KeyInternational2 Keycode = 0x88 | 0xF000 // JIS Katakana/Hiragana
+	KeyInternational3 Keycode = 0x89 | 0xF000 // JIS "¥" and "|"
+	KeyInternational4 Keycode = 0x8A | 0xF000 // JIS Henkan
+	KeyInternational5 Keycode = 0x8B | 0xF000 // JIS Muhenkan
+	KeyInternational6 Keycode = 0x8C | 0xF000 // JIS Numpad ","
+
+	// Language keys for input method switching
+	KeyLanguage1 Keycode = 0x90 | 0xF000 // Hangul/English
+	KeyLanguage2 Keycode = 0x91 | 0xF000 // Hanja
+	KeyLanguage3 Keycode = 0x92 | 0xF000 // JIS Katakana
+	KeyLanguage4 Keycode = 0x93 | 0xF000 // JIS Hiragana
+	KeyLanguage5 Keycode = 0x94 | 0xF000 // JIS Zenkaku/Hankaku
+
 	KeyUpArrow    Keycode = KeyUp
 	KeyDownArrow  Keycode = KeyDown
 	KeyLeftArrow  Keycode = KeyLeft
@@ -222,6 +237,34 @@ const (
 	KeyRightShift Keycode = KeyModifierRightShift
 	KeyRightAlt   Keycode = KeyModifierRightAlt
 	KeyRightGUI   Keycode = KeyModifierRightGUI
+
+	// QMK compatibility aliases for international keys
+	KeyInt1 Keycode = KeyInternational1
+	KeyInt2 Keycode = KeyInternational2
+	KeyInt3 Keycode = KeyInternational3
+	KeyInt4 Keycode = KeyInternational4
+	KeyInt5 Keycode = KeyInternational5
+	KeyInt6 Keycode = KeyInternational6
+
+	// QMK compatibility aliases for language keys
+	KeyLng1 Keycode = KeyLanguage1
+	KeyLng2 Keycode = KeyLanguage2
+	KeyLng3 Keycode = KeyLanguage3
+	KeyLng4 Keycode = KeyLanguage4
+	KeyLng5 Keycode = KeyLanguage5
+
+	// Common keyboard layout aliases
+	KeyRo               Keycode = KeyInternational1 // Japanese "ろ"
+	KeyKatakanaHiragana Keycode = KeyInternational2 // Japanese Katakana/Hiragana
+	KeyYen              Keycode = KeyInternational3 // Japanese "¥"
+	KeyHenkan           Keycode = KeyInternational4 // Japanese Henkan
+	KeyMuhenkan         Keycode = KeyInternational5 // Japanese Muhenkan
+	KeyKpJpComma        Keycode = KeyInternational6 // Japanese Numpad ","
+	KeyHangeul          Keycode = KeyLanguage1      // Korean Hangul/English
+	KeyHanja            Keycode = KeyLanguage2      // Korean Hanja
+	KeyKatakana         Keycode = KeyLanguage3      // Japanese Katakana
+	KeyHiragana         Keycode = KeyLanguage4      // Japanese Hiragana
+	KeyZenkakuHankaku   Keycode = KeyLanguage5      // Japanese Zenkaku/Hankaku
 )
 
 // Keycodes for layout US English (0x0904)

@@ -85,10 +85,16 @@ Try running TinyGo:
 
     ./build/tinygo help
 
-Also, make sure the `tinygo` binary really is statically linked. Check this
-using `ldd` (not to be confused with `lld`):
+Also, make sure the `tinygo` binary really is statically linked. The command to check for 
+dynamic dependencies differs depending on your operating system.
+
+On Linux, use `ldd` (not to be confused with `lld`):
 
     ldd ./build/tinygo
+
+On macOS, use otool -L:
+
+    otool -L ./build/tinygo
 
 The result should not contain libclang or libLLVM.
 

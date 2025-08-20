@@ -500,6 +500,10 @@ func (b *B) RunParallel(body func(*PB)) {
 	return
 }
 
+func (b *B) Loop() bool {
+	panic("unimplemented: testing.B.Loop")
+}
+
 // Benchmark benchmarks a single function. It is useful for creating
 // custom benchmarks that do not use the "go test" command.
 //

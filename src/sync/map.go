@@ -70,3 +70,15 @@ func (m *Map) Range(f func(key, value interface{}) bool) {
 		}
 	}
 }
+
+// Swap replaces the value for the given key, and returns the old value if any.
+func (m *Map) Swap(key, value any) (previous any, loaded bool) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if m.m == nil {
+		m.m = make(map[interface{}]interface{})
+	}
+	previous, loaded = m.m[key]
+	m.m[key] = value
+	return
+}

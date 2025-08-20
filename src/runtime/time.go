@@ -46,3 +46,9 @@ func timerCallback(tn *timerNode, delta int64) {
 		addTimer(tn)
 	}
 }
+
+//go:linkname time_runtimeIsBubbled time.runtimeIsBubbled
+func time_runtimeIsBubbled() bool {
+	// We don't currently support bubbles.
+	return false
+}

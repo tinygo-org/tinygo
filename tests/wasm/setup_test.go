@@ -36,6 +36,13 @@ func chromectx(t *testing.T) context.Context {
 	// see https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.NoSandbox,
+		chromedp.Flag("disable-web-security", true),
+		chromedp.Flag("safebrowsing-disable-auto-update", true),
+		chromedp.IgnoreCertErrors,
+		chromedp.Flag("disable-sync", true),
+		chromedp.Flag("disable-default-apps", true),
+		chromedp.NoFirstRun,
+		chromedp.Headless,
 	)
 
 	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)

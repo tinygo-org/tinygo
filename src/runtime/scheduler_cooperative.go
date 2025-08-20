@@ -77,7 +77,6 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 			panic("runtime: addSleepTask: expected next task to be nil")
 		}
 	}
-	t.Data = uint64(duration)
 	now := ticks()
 	if sleepQueue == nil {
 		scheduleLog("  -> sleep new queue")
@@ -85,6 +84,7 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 		// set new base time
 		sleepQueueBaseTime = now
 	}
+	t.Data = uint64(duration + (now - sleepQueueBaseTime))
 
 	// Add to sleep queue.
 	q := &sleepQueue

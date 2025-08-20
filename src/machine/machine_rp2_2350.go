@@ -150,6 +150,8 @@ func (p Pin) Configure(config PinConfig) {
 	case PinAnalog:
 		p.setFunc(fnNULL)
 		p.pulloff()
+		// Disable digital input.
+		p.padCtrl().ClearBits(rp.PADS_BANK0_GPIO0_IE)
 	case PinUART:
 		p.setFunc(fnUART)
 	case PinPWM:

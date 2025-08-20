@@ -94,3 +94,15 @@ var PWM7 = &timerType{
 		{GPIO15}, // channel B (1)
 	},
 }
+
+var I2C0 = &I2C{
+	Bus:     0,
+	PinsSCL: []Pin{GPIO1, GPIO5, GPIO9, GPIO13, GPIO17, GPIO21},
+	PinsSDA: []Pin{GPIO0, GPIO4, GPIO8, GPIO12, GPIO16, GPIO20},
+}
+
+var I2C1 = &I2C{
+	Bus:     0,
+	PinsSCL: []Pin{GPIO3, GPIO7, GPIO11, GPIO15, GPIO19, GPIO27},
+	PinsSDA: []Pin{GPIO2, GPIO6, GPIO10, GPIO14, GPIO18, GPIO26},
+}

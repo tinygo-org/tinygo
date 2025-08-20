@@ -43,3 +43,21 @@ var TCC2 = &timerType{
 		{PA01, PA13, PA17}, // channel 1
 	},
 }
+
+var (
+	// According to the datasheet, only some pins have I2C support. However it
+	// looks like many boards just use any SERCOM I2C instance, even if the
+	// datasheet says those don't support I2C. I guess they do work in practice,
+	// then.
+	// These are:
+	//   * PA00/PA01 for the Adafruit Circuit Playground Express (I2C1, SERCOM1).
+	//   * PB02/PB03 for the Adafruit Circuit Playground Express (I2C0, SERCOM5).
+	//   * PB08/PB09 for the Arduino Nano 33 IoT (I2C0, SERCOM4).
+	// https://cdn.sparkfun.com/datasheets/Dev/Arduino/Boards/Atmel-42181-SAM-D21_Datasheet.pdf
+	sercomI2CM0 = &I2C{Bus: 0, PinsSDA: []Pin{PA08}, PinsSCL: []Pin{PA09}}
+	sercomI2CM1 = &I2C{Bus: 1, PinsSDA: []Pin{PA00, PA16}, PinsSCL: []Pin{PA01, PA17}}
+	sercomI2CM2 = &I2C{Bus: 2, PinsSDA: []Pin{PA08, PA12}, PinsSCL: []Pin{PA09, PA13}}
+	sercomI2CM3 = &I2C{Bus: 3, PinsSDA: []Pin{PA16, PA22}, PinsSCL: []Pin{PA17, PA23}}
+	sercomI2CM4 = &I2C{Bus: 4, PinsSDA: []Pin{PA12, PB08, PB12}, PinsSCL: []Pin{PA13, PB09, PB13}}
+	sercomI2CM5 = &I2C{Bus: 5, PinsSDA: []Pin{PA22, PB02, PB16, PB30}, PinsSCL: []Pin{PA23, PB03, PB17, PB31}}
+)

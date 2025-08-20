@@ -121,6 +121,29 @@ func (b *builder) createKeepAliveImpl() {
 	b.CreateRetVoid()
 }
 
+// createAbiEscapeImpl implements the generic internal/abi.Escape function. It
+// currently only supports pointer types.
+func (b *builder) createAbiEscapeImpl() {
+	b.createFunctionStart(true)
+
+	// The first parameter is assumed to be a pointer. This is checked at the
+	// call site of createAbiEscapeImpl.
+	pointerValue := b.getValue(b.fn.Params[0], getPos(b.fn))
+
+	// Create an equivalent of the following C code, which is basically just a
+	// nop but ensures the pointerValue is kept alive:
+	//
+	//     __asm__ __volatile__("" : : "r"(pointerValue))
+	//
+	// It should be portable to basically everything as the "r" register type
+	// exists basically everywhere.
+	asmType := llvm.FunctionType(b.dataPtrType, []llvm.Type{b.dataPtrType}, false)
+	asmFn := llvm.InlineAsm(asmType, "", "=r,0", true, false, 0, false)
+	result := b.createCall(asmType, asmFn, []llvm.Value{pointerValue}, "")
+
+	b.CreateRet(result)
+}
+
 var mathToLLVMMapping = map[string]string{
 	"math.Ceil":  "llvm.ceil.f64",
 	"math.Exp":   "llvm.exp.f64",

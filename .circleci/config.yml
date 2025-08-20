@@ -92,16 +92,20 @@ commands:
             - /go/pkg/mod
 
 jobs:
-  test-llvm15-go122:
+  test-oldest:
+    # This tests our lowest supported versions of Go and LLVM, to make sure at
+    # least the smoke tests still pass.
     docker:
       - image: golang:1.22-bullseye
     steps:
       - test-linux:
           llvm: "15"
     resource_class: large
-  test-llvm20-go124:
+  test-newest:
+    # This tests the latest supported LLVM version when linking against system
+    # libraries.
     docker:
-      - image: golang:1.24-bullseye
+      - image: golang:1.25-bullseye
     steps:
       - test-linux:
           llvm: "20"
@@ -110,8 +114,6 @@ jobs:
 workflows:
   test-all:
     jobs:
-      # This tests our lowest supported versions of Go and LLVM, to make sure at
-      # least the smoke tests still pass.
-      - test-llvm15-go122
-      # This tests LLVM 20 support when linking against system libraries.
-      - test-llvm20-go124
+      - test-oldest
+      # disable this test, since CircleCI seems unable to download due to rate-limits on Dockerhub.
+      # - test-newest

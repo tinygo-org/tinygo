@@ -58,3 +58,6 @@ var PWM3 = &timerType{
 		nil, // channel 3
 	},
 }
+
+var I2C0 = &I2C{Bus: 0}
+var I2C1 = &I2C{Bus: 1}

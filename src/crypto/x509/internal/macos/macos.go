@@ -63,6 +63,10 @@ func SecCertificateCopyData(cert CFRef) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
+func SecTrustCopyCertificateChain(trustObj CFRef) (CFRef, error) {
+	return 0, errors.New("not implemented")
+}
+
 func SecTrustEvaluateWithError(trustObj CFRef) (int, error) {
 	return 0, errors.New("not implemented")
 }

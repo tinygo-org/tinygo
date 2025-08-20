@@ -10,5 +10,4 @@ var (
 	UART1 = hardwareUART1
 	SPI0  = &SPI{0}
 	SPI1  = &SPI{1}
-	I2C0  = &I2C{0}
 )

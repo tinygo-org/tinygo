@@ -26,17 +26,20 @@ const (
 )
 
 var (
-	errI2CWriteTimeout       = errors.New("I2C timeout during write")
-	errI2CReadTimeout        = errors.New("I2C timeout during read")
-	errI2CBusReadyTimeout    = errors.New("I2C timeout on bus ready")
-	errI2CSignalStartTimeout = errors.New("I2C timeout on signal start")
-	errI2CSignalReadTimeout  = errors.New("I2C timeout on signal read")
-	errI2CSignalStopTimeout  = errors.New("I2C timeout on signal stop")
-	errI2CAckExpected        = errors.New("I2C error: expected ACK not NACK")
-	errI2CBusError           = errors.New("I2C bus error")
-	errI2COverflow           = errors.New("I2C receive buffer overflow")
-	errI2COverread           = errors.New("I2C transmit buffer overflow")
-	errI2CNotImplemented     = errors.New("I2C operation not yet implemented")
+	errI2CWriteTimeout       = errors.New("i2c: timeout during write")
+	errI2CReadTimeout        = errors.New("i2c: timeout during read")
+	errI2CBusReadyTimeout    = errors.New("i2c: timeout on bus ready")
+	errI2CSignalStartTimeout = errors.New("i2c: timeout on signal start")
+	errI2CSignalReadTimeout  = errors.New("i2c: timeout on signal read")
+	errI2CSignalStopTimeout  = errors.New("i2c: timeout on signal stop")
+	errI2CAckExpected        = errors.New("i2c: error: expected ACK not NACK")
+	errI2CBusError           = errors.New("i2c: bus error")
+	errI2COverflow           = errors.New("i2c: receive buffer overflow")
+	errI2COverread           = errors.New("i2c: transmit buffer overflow")
+	errI2CNotImplemented     = errors.New("i2c: operation not yet implemented")
+	errI2CNoDevices          = errors.New("i2c: bus has no devices")                         // simulator only
+	errI2CMultipleDevices    = errors.New("i2c: bus has address conflict")                   // simulator only
+	errI2CWrongAddress       = errors.New("i2c: bus has devices but none with this address") // simulator only
 )
 
 // I2CTargetEvent reflects events on the I2C bus

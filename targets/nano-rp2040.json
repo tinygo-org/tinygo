@@ -3,6 +3,7 @@
         "rp2040"
     ],
     "serial-port": ["2341:005e"],
+    "default-stack-size": 8192,
     "build-tags": ["nano_rp2040", "ninafw", "ninafw_machine_init"],
     "ldflags": [
         "--defsym=__flash_size=16M"

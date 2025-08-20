@@ -253,6 +253,23 @@ func (c *compilerContext) maybeCreateSyntheticFunction(fn *ssa.Function, llvmFn 
 	// The exception is the package initializer, which does appear in the
 	// *ssa.Package members and so shouldn't be created here.
 	if fn.Synthetic != "" && fn.Synthetic != "package initializer" && fn.Synthetic != "generic function" && fn.Synthetic != "range-over-func yield" {
+		if origin := fn.Origin(); origin != nil && origin.RelString(nil) == "internal/abi.Escape" {
+			// This is a special implementation or internal/abi.Escape, which
+			// can only really be implemented in the compiler.
+			// For simplicity we'll only implement pointer parameters for now.
+			if _, ok := fn.Params[0].Type().Underlying().(*types.Pointer); ok {
+				irbuilder := c.ctx.NewBuilder()
+				defer irbuilder.Dispose()
+				b := newBuilder(c, irbuilder, fn)
+				b.createAbiEscapeImpl()
+				llvmFn.SetLinkage(llvm.LinkOnceODRLinkage)
+				llvmFn.SetUnnamedAddr(true)
+			}
+			// If the parameter is not of a pointer type, it will be left
+			// unimplemented. This will result in a linker error if the function
+			// is really called, making it clear it needs to be implemented.
+			return
+		}
 		if len(fn.Blocks) == 0 {
 			c.addError(fn.Pos(), "missing function body")
 			return

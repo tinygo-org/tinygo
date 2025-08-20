@@ -28,8 +28,8 @@ const (
 	PC1 = portC + 1
 	PC2 = portC + 2
 	PC3 = portC + 3
-	PC4 = portC + 4
-	PC5 = portC + 5
+	PC4 = portC + 4 // peripherals: I2C0 SDA
+	PC5 = portC + 5 // peripherals: I2C0 SCL
 	PC6 = portC + 6
 	PC7 = portC + 7
 	PD0 = portD + 0
@@ -40,8 +40,8 @@ const (
 	PD5 = portD + 5 // peripherals: Timer0 channel B
 	PD6 = portD + 6 // peripherals: Timer0 channel A
 	PD7 = portD + 7
-	PE0 = portE + 0
-	PE1 = portE + 1
+	PE0 = portE + 0 // peripherals: I2C1 SDA
+	PE1 = portE + 1 // peripherals: I2C1 SCL
 	PE2 = portE + 2
 	PE3 = portE + 3
 	PE4 = portE + 4

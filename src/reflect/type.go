@@ -127,6 +127,11 @@ type Method struct {
 	Index int   // index for Type.Method
 }
 
+// IsExported reports whether the method is exported.
+func (m Method) IsExported() bool {
+	return m.PkgPath == ""
+}
+
 // The following Type type has been copied almost entirely from
 // https://github.com/golang/go/blob/go1.15/src/reflect/type.go#L27-L212.
 // Some methods have been commented out as they haven't yet been implemented.

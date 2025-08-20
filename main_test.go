@@ -424,10 +424,12 @@ func optionsFromOSARCH(osarch string, sema chan struct{}) compileopts.Options {
 }
 
 func runTest(name string, options compileopts.Options, t *testing.T, cmdArgs, environmentVars []string) {
+	t.Helper()
 	runTestWithConfig(name, t, options, cmdArgs, environmentVars)
 }
 
 func runTestWithConfig(name string, t *testing.T, options compileopts.Options, cmdArgs, environmentVars []string) {
+	t.Helper()
 	// Get the expected output for this test.
 	// Note: not using filepath.Join as it strips the path separator at the end
 	// of the path.
@@ -876,6 +878,7 @@ func TestWasmExit(t *testing.T) {
 
 // Check whether the output of a test equals the expected output.
 func checkOutput(t *testing.T, filename string, actual []byte) {
+	t.Helper()
 	expectedOutput, err := os.ReadFile(filename)
 	if err != nil {
 		t.Fatal("could not read output file:", err)
@@ -884,6 +887,7 @@ func checkOutput(t *testing.T, filename string, actual []byte) {
 }
 
 func checkOutputData(t *testing.T, expectedOutput, actual []byte) {
+	t.Helper()
 	expectedOutput = bytes.ReplaceAll(expectedOutput, []byte("\r\n"), []byte("\n"))
 	actual = bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n"))
 

@@ -51,7 +51,7 @@ func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr) 
 	var layout unsafe.Pointer
 	// less type info here; can only go off element size
 	if elemSize < unsafe.Sizeof(uintptr(0)) {
-		layout = gclayout.NoPtrs
+		layout = gclayout.NoPtrs.AsPtr()
 	}
 
 	buf := alloc(newCap*elemSize, layout)

@@ -106,6 +106,33 @@ func UnlockOSThread() {
 // point of the call.
 func KeepAlive(x interface{})
 
+// AddCleanup is a dummy cleanup implementation. It doesn't do any cleaning up.
+//
+// We base this on the following loophole in the official runtime.AddCleanup
+// documentation:
+//
+// > The cleanup(arg) call is not always guaranteed to run; in particular it is
+// > not guaranteed to run before program exit.
+//
+// So it's technically correct (the best kind of correct) to not run any
+// cleanups. But of course, this can lead to resource leaks so cleanups may need
+// to be implemented eventually.
+func AddCleanup[T, S any](ptr *T, cleanup func(S), arg S) Cleanup {
+	return Cleanup{}
+}
+
+type Cleanup struct{}
+
+func (c Cleanup) Stop() {}
+
+//go:linkname registerWeakPointer weak.runtime_registerWeakPointer
+func registerWeakPointer(ptr unsafe.Pointer) unsafe.Pointer {
+	// TODO: unimplemented.
+	// I hope not implementing this won't break anything, like packages that
+	// expect weak pointers to be GC'd before they actually are.
+	return ptr
+}
+
 var godebugUpdate func(string, string)
 
 //go:linkname godebug_setUpdate internal/godebug.setUpdate

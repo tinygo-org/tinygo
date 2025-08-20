@@ -89,7 +89,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcLock.Lock()
 	needsResumeWorld = false
 	var ptr unsafe.Pointer
-	if layout == gclayout.NoPtrs {
+	if layout == gclayout.NoPtrs.AsPtr() {
 		// This object is entirely pointer free, for example make([]int, ...).
 		// Make sure the GC knows this so it doesn't scan the object
 		// unnecessarily to improve performance.

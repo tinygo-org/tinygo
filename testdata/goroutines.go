@@ -14,9 +14,9 @@ func init() {
 func main() {
 	println("main 1")
 	go sub()
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	println("main 2")
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	println("main 3")
 
 	// Await a blocking call.
@@ -103,7 +103,7 @@ func acquire(m *sync.Mutex, wg *sync.WaitGroup) {
 
 func sub() {
 	println("sub 1")
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	println("sub 2")
 }
 
@@ -175,10 +175,13 @@ func testGoOnBuiltins() {
 
 var once sync.Once
 
+var waitChan = make(chan struct{})
+
 func testGoOnInterface(f Itf) {
 	go f.Nowait()
 	time.Sleep(time.Millisecond)
 	go f.Wait()
+	<-waitChan
 	time.Sleep(time.Millisecond * 2)
 	println("done with 'go on interface'")
 }
@@ -204,6 +207,7 @@ func (f Foo) Nowait() {
 
 func (f Foo) Wait() {
 	println("called: Foo.Wait")
+	close(waitChan)
 	time.Sleep(time.Microsecond)
 	println("  ...waited")
 }

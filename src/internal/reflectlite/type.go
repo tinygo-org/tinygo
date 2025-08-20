@@ -708,16 +708,16 @@ func (r *RawType) gcLayout() unsafe.Pointer {
 	kind := r.Kind()
 
 	if kind < String {
-		return gclayout.NoPtrs
+		return gclayout.NoPtrs.AsPtr()
 	}
 
 	switch kind {
 	case Pointer, UnsafePointer, Chan, Map:
-		return gclayout.Pointer
+		return gclayout.Pointer.AsPtr()
 	case String:
-		return gclayout.String
+		return gclayout.String.AsPtr()
 	case Slice:
-		return gclayout.Slice
+		return gclayout.Slice.AsPtr()
 	}
 
 	// Unknown (for now); let the conservative pointer scanning handle it

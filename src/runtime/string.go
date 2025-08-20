@@ -60,7 +60,7 @@ func stringConcat(x, y _string) _string {
 		return x
 	} else {
 		length := x.length + y.length
-		buf := alloc(length, gclayout.NoPtrs)
+		buf := alloc(length, gclayout.NoPtrs.AsPtr())
 		memcpy(buf, unsafe.Pointer(x.ptr), x.length)
 		memcpy(unsafe.Add(buf, x.length), unsafe.Pointer(y.ptr), y.length)
 		return _string{ptr: (*byte)(buf), length: length}
@@ -73,7 +73,7 @@ func stringFromBytes(x struct {
 	len uintptr
 	cap uintptr
 }) _string {
-	buf := alloc(x.len, gclayout.NoPtrs)
+	buf := alloc(x.len, gclayout.NoPtrs.AsPtr())
 	memcpy(buf, unsafe.Pointer(x.ptr), x.len)
 	return _string{ptr: (*byte)(buf), length: x.len}
 }
@@ -84,7 +84,7 @@ func stringToBytes(x _string) (slice struct {
 	len uintptr
 	cap uintptr
 }) {
-	buf := alloc(x.length, gclayout.NoPtrs)
+	buf := alloc(x.length, gclayout.NoPtrs.AsPtr())
 	memcpy(buf, unsafe.Pointer(x.ptr), x.length)
 	slice.ptr = (*byte)(buf)
 	slice.len = x.length
@@ -101,7 +101,7 @@ func stringFromRunes(runeSlice []rune) (s _string) {
 	}
 
 	// Allocate memory for the string.
-	s.ptr = (*byte)(alloc(s.length, gclayout.NoPtrs))
+	s.ptr = (*byte)(alloc(s.length, gclayout.NoPtrs.AsPtr()))
 
 	// Encode runes to UTF-8 and store the resulting bytes in the string.
 	index := uintptr(0)

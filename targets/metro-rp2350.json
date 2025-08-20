@@ -1,0 +1,11 @@
+{
+    "inherits": [
+        "rp2350b"
+    ],
+    "build-tags": ["metro_rp2350"],
+    "serial-port": ["239a:814e"],
+    "default-stack-size": 8192,
+    "ldflags": [
+        "--defsym=__flash_size=16M"
+    ]
+}

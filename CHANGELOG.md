@@ -1,3 +1,55 @@
+0.39.0
+---
+* **general**
+  - all: add Go 1.25 support
+  - net: update to latest tinygo net package
+  - docs: clarify build verification step for macOS users
+  - Add flag to skip Renesas SVD builds
+* **build**
+  - Makefile: install missing dlmalloc files
+  - flash: add -o flag support to save built binary (Fixes #4937) (#4942)
+  - fix: update version of clang to 17 to accommodate latest Go 1.25 docker base image
+* **ci**
+  - chore: update all CI builds to test Go 1.25 release
+  - fix: disable test-newest since CircleCI seems unable to download due to rate-limits on Dockerhub
+  - ci: rename some jobs to avoid churn on every Go/LLVM version bump
+  - ci: make the goroutines test less racy
+  - tests: de-flake goroutines test
+* **compiler**
+  - compiler: implement internal/abi.Escape
+* **main**
+  - main: show the compiler error (if any) for `tinygo test -c`
+  - chore: correct GOOS=js name in error messages for WASM
+* **machine**
+  - machine: add international keys
+  - machine: remove some unnecessary "// peripherals:" comments
+  - machine: add I2C pin comments
+  - machine: standardize I2C errors with "i2c:" prefix
+  - machine: make I2C usable in the simulator
+  - fix: add SPI and I2C to teensy 4.1 (#4943)
+  - `rp2`: use the correct channel mask for rp2350 ADC; hold lock during read (#4938)
+  - `rp2`: disable digital input for analog inputs
+* **runtime**
+  - runtime: ensure time.Sleep(d) sleeps at least d
+  - runtime: stub out weak pointer support
+  - runtime: implement dummy AddCleanup
+  - runtime: enable multi-core scheduler for rp2350
+  - `internal/task`: use -stack-size flag when starting a new thread
+  - `internal/task`: add SA_RESTART flag to GC interrupts
+  - `internal/task`: a few small correctness fixes
+  - `internal/gclayout`: make gclayout values constants
+  - darwin: add threading support and use it by default
+* **standard library**
+  - `sync`: implement sync.Swap
+  - `reflect`: implement Method.IsExported
+* **testing**
+  - testing: stub out testing.B.Loop
+* **targets**
+  - `stm32`: add support for the STM32L031G6U6
+  - add metro-rp2350 board definition (#4989)
+  - `rp2040/rp2350`: set the default stack size to 8k for rp2040/rp2350 based boards where this was not already the case
+
+
 0.38.0
 ---
 * **general**

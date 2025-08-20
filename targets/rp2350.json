@@ -1,6 +1,7 @@
 {
     "inherits": ["cortex-m33"],
     "build-tags": ["rp2350", "rp"],
+    "scheduler": "cores",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "serial": "usb",
@@ -13,7 +14,8 @@
         "targets/rp2350_embedded_block.s"
     ],
     "ldflags": [
-        "--defsym=__flash_size=2M"
+        "--defsym=__flash_size=2M",
+        "--defsym=__num_stacks=2"
     ],
     "linkerscript": "targets/rp2350.ld",
     "openocd-interface": "picoprobe",

@@ -1,8 +1,8 @@
 # tinygo-llvm stage obtains the llvm source for TinyGo
-FROM golang:1.24 AS tinygo-llvm
+FROM golang:1.25 AS tinygo-llvm
 
 RUN apt-get update && \
-    apt-get install -y apt-utils make cmake clang-15 ninja-build && \
+    apt-get install -y apt-utils make cmake clang-17 ninja-build && \
     rm -rf \
         /var/lib/apt/lists/* \
         /var/log/* \
@@ -33,7 +33,7 @@ RUN cd /tinygo/ && \
 
 # tinygo-compiler copies the compiler build over to a base Go container (without
 # all the build tools etc).
-FROM golang:1.24 AS tinygo-compiler
+FROM golang:1.25 AS tinygo-compiler
 
 # Copy tinygo build.
 COPY --from=tinygo-compiler-build /tinygo/build/release/tinygo /tinygo
