@@ -48,10 +48,10 @@ func Asm(asm string)
 // recognizes template values in the form {name}, like so:
 //
 //	arm.AsmFull(
-//	    "str {value}, {result}",
+//	    "str {value}, [{result}]",
 //	    map[string]interface{}{
-//	        "value":  1
-//	        "result": &dest,
+//	        "value":  1,
+//	        "result": uintptr(unsafe.Pointer(&dest)),
 //	    })
 //
 // You can use {} in the asm string (which expands to a register) to set the
