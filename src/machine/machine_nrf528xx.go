@@ -78,14 +78,14 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 		// Allow scheduler to run
 		gosched()
 
-		// Handle errors by ensuring STOP sent on bus
-		if i2c.Bus.EVENTS_ERROR.Get() != 0 {
+		// Handle first occurrence of error by ensuring STOP sent on bus
+		if err == nil && i2c.Bus.EVENTS_ERROR.Get() != 0 {
+			err = twiCError(i2c.Bus.ERRORSRC.Get())
 			if i2c.Bus.EVENTS_STOPPED.Get() == 0 {
 				// STOP cannot be sent during SUSPEND
 				i2c.Bus.TASKS_RESUME.Set(1)
 				i2c.Bus.TASKS_STOP.Set(1)
 			}
-			err = twiCError(i2c.Bus.ERRORSRC.Get())
 		}
 	}
 
