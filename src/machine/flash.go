@@ -43,6 +43,11 @@ type BlockDevice interface {
 	io.ReaderAt
 
 	// WriteAt writes the given number of bytes to the block device.
+	//
+	// This interface directly writes data to the underlying block device.
+	// Different kinds of devices have different requirements: most can only
+	// write data after the page has been erased, and many can only write data
+	// with specific alignment (such as 4-byte alignment).
 	io.WriterAt
 
 	// Size returns the number of bytes in this block device.
