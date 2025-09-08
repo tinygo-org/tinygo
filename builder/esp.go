@@ -23,7 +23,7 @@ type espImageSegment struct {
 	data []byte
 }
 
-// makeESPFirmareImage converts an input ELF file to an image file for an ESP32 or
+// makeESPFirmwareImage converts an input ELF file to an image file for an ESP32 or
 // ESP8266 chip. This is a special purpose image format just for the ESP chip
 // family, and is parsed by the on-chip mask ROM bootloader.
 //
@@ -31,7 +31,7 @@ type espImageSegment struct {
 // https://github.com/espressif/esptool/wiki/Firmware-Image-Format
 // https://github.com/espressif/esp-idf/blob/8fbb63c2a701c22ccf4ce249f43aded73e134a34/components/bootloader_support/include/esp_image_format.h#L58
 // https://github.com/espressif/esptool/blob/master/esptool.py
-func makeESPFirmareImage(infile, outfile, format string) error {
+func makeESPFirmwareImage(infile, outfile, format string) error {
 	inf, err := elf.Open(infile)
 	if err != nil {
 		return err

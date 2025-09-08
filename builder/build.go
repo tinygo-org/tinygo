@@ -1046,7 +1046,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
-		err := makeESPFirmareImage(result.Executable, result.Binary, outputBinaryFormat)
+		err := makeESPFirmwareImage(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
 			return result, err
 		}
