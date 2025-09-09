@@ -79,6 +79,26 @@ ifeq (1, $(STATIC))
     BINARYEN_OPTION += -DCMAKE_CXX_FLAGS="-static" -DCMAKE_C_FLAGS="-static"
 endif
 
+# Optimize the binary size for Linux.
+# These flags may work on other platforms, but have only been tested on Linux.
+ifeq ($(uname),Linux)
+    HAS_MOLD := $(shell command -v ld.mold 2> /dev/null)
+    HAS_LLD := $(shell command -v ld.lld 2> /dev/null)
+    LLVM_CFLAGS := -ffunction-sections -fdata-sections -fvisibility=hidden
+    LLVM_LDFLAGS := -Wl,--gc-sections
+    ifneq ($(HAS_MOLD),)
+        # Mold might be slightly faster.
+        LLVM_LDFLAGS += -fuse-ld=mold -Wl,--icf=all
+    else ifneq ($(HAS_LLD),)
+        # LLD is more commonly available.
+        LLVM_LDFLAGS += -fuse-ld=lld -Wl,--icf=all
+    endif
+    LLVM_OPTION += \
+        -DCMAKE_C_FLAGS="$(LLVM_CFLAGS)" \
+        -DCMAKE_CXX_FLAGS="$(LLVM_CFLAGS)"
+    CGO_LDFLAGS += $(LLVM_LDFLAGS)
+endif
+
 # Cross compiling support.
 ifneq ($(CROSS),)
     CC = $(CROSS)-gcc

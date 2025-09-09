@@ -26,7 +26,7 @@ jobs:
         # tar: needed for actions/cache@v4
         # git+openssh: needed for checkout (I think?)
         # ruby: needed to install fpm
-        run: apk add tar git openssh make g++ ruby-dev
+        run: apk add tar git openssh make g++ ruby-dev mold
       - name: Work around CVE-2022-24765
         # We're not on a multi-user machine, so this is safe.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -73,7 +73,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
-          key: llvm-build-19-linux-alpine-v1
+          key: llvm-build-19-linux-alpine-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -222,7 +222,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
-          key: llvm-build-19-linux-asserts-v1
+          key: llvm-build-19-linux-asserts-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -329,7 +329,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
-          key: llvm-build-19-linux-${{ matrix.goarch }}-v3
+          key: llvm-build-19-linux-${{ matrix.goarch }}-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
