@@ -79,7 +79,7 @@ jobs:
           rm -rf llvm-project
           make llvm-source
           # install dependencies
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
           # build!
           make llvm-build
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
