@@ -81,6 +81,7 @@ func startServer(t *testing.T) (string, *httptest.Server) {
 <head>
 <title>Test</title>
 <meta charset="utf-8"/>
+<link rel="icon" href="data:,">
 </head>
 <body>
 <div id="main"></div>
