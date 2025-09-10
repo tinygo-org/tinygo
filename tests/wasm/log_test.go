@@ -33,6 +33,7 @@ $`),
 	)
 	t.Logf("log1: %s", log1)
 	if err != nil {
+		t.Logf("test error: %s", err.Error())
 		t.Fatal(err)
 	}
 

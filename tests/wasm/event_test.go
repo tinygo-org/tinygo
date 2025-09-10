@@ -35,6 +35,7 @@ true`),
 	t.Logf("log1: %s", log1)
 	t.Logf("log2: %s", log2)
 	if err != nil {
+		t.Logf("test error: %s", err.Error())
 		t.Fatal(err)
 	}
 

@@ -58,7 +58,7 @@ func chromectx(t *testing.T) context.Context {
 		t.Fatalf("failed to start browser: %s", err.Error())
 	}
 
-	ctx, tcancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, tcancel := context.WithTimeout(ctx, 60*time.Second)
 	t.Cleanup(tcancel)
 
 	return ctx

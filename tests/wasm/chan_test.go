@@ -26,6 +26,7 @@ func TestChan(t *testing.T) {
 true`),
 	)
 	if err != nil {
+		t.Logf("test error: %s", err.Error())
 		t.Fatal(err)
 	}
 }

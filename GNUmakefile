@@ -951,7 +951,7 @@ endif
 
 
 wasmtest:
-	$(GO) test ./tests/wasm
+	$(GO) test ./tests/wasm -v
 
 build/release: tinygo gen-device $(if $(filter 1,$(USE_SYSTEM_BINARYEN)),,binaryen)
 	@mkdir -p build/release/tinygo/bin
