@@ -5,8 +5,6 @@ go 1.22.0
 require (
 	github.com/aykevl/go-wasm v0.0.2-0.20250317121156-42b86c494139
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2
-	github.com/chromedp/cdproto v0.0.0-20220113222801-0725d94bb6ee
-	github.com/chromedp/chromedp v0.7.6
 	github.com/gofrs/flock v0.8.1
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf
 	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf
@@ -24,13 +22,7 @@ require (
 )
 
 require (
-	github.com/chromedp/sysutil v1.0.0 // indirect
 	github.com/creack/goselect v0.1.2 // indirect
-	github.com/gobwas/httphead v0.1.0 // indirect
-	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/gobwas/ws v1.1.0 // indirect
-	github.com/josharian/intern v1.0.0 // indirect
-	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	golang.org/x/text v0.22.0 // indirect
