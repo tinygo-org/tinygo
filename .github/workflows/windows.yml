@@ -13,9 +13,17 @@ concurrency:
 
 jobs:
   build-windows:
-    runs-on: windows-2022
+    runs-on: ${{ matrix.image }}
     outputs:
       version: ${{ steps.version.outputs.version }}
+    strategy:
+      matrix:
+        goarch: [ amd64, arm64 ]
+        include:
+          - goarch: amd64
+            image: windows-2022
+          - goarch: arm64
+            image: windows-11-arm
     steps:
       - name: Configure pagefile
         uses: al-cheb/configure-pagefile-action@v1.4
@@ -72,7 +80,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
-          key: llvm-build-19-windows-v1
+          key: llvm-build-19-windows-${{ matrix.goarch }}-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -94,7 +102,7 @@ jobs:
       - name: Cache Go cache
         uses: actions/cache@v4
         with:
-          key: go-cache-windows-v1-${{ hashFiles('go.mod') }}
+          key: go-cache-windows-${{ matrix.goarch }}-v1-${{ hashFiles('go.mod') }}
           path: |
             C:/Users/runneradmin/AppData/Local/go-build
             C:/Users/runneradmin/go/pkg/mod
@@ -105,6 +113,7 @@ jobs:
         run: make -j3 gen-device
       - name: Test TinyGo
         shell: bash
+        if: matrix.goarch == 'amd64' # skip on ARM64 to speed up build
         run: make test GOTESTFLAGS="-only-current-os"
       - name: Build TinyGo release tarball
         shell: bash
@@ -112,7 +121,7 @@ jobs:
       - name: Make release artifact
         shell: bash
         working-directory: build/release
-        run: 7z -tzip a tinygo${{ steps.version.outputs.version }}.windows-amd64.zip tinygo
+        run: 7z -tzip a tinygo${{ steps.version.outputs.version }}.windows-${{ matrix.goarch }}.zip tinygo
       - name: Publish release artifact
         # Note: this release artifact is double-zipped, see:
         # https://github.com/actions/upload-artifact/issues/39
@@ -122,8 +131,8 @@ jobs:
         # We're doing the former here, to keep artifact uploads fast.
         uses: actions/upload-artifact@v4
         with:
-          name: windows-amd64-double-zipped-${{ steps.version.outputs.version }}
-          path: build/release/tinygo${{ steps.version.outputs.version }}.windows-amd64.zip
+          name: windows-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
+          path: build/release/tinygo${{ steps.version.outputs.version }}.windows-${{ matrix.goarch }}.zip
 
   smoke-test-windows:
     runs-on: windows-2022
