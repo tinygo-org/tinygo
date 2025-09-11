@@ -43,6 +43,7 @@ func chromectx(t *testing.T) context.Context {
 		chromedp.Flag("disable-default-apps", true),
 		chromedp.NoFirstRun,
 		chromedp.Headless,
+		chromedp.WSURLReadTimeout(45*time.Second),
 	)
 
 	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
@@ -81,6 +82,7 @@ func startServer(t *testing.T) (string, *httptest.Server) {
 <head>
 <title>Test</title>
 <meta charset="utf-8"/>
+<link rel="icon" href="data:,">
 </head>
 <body>
 <div id="main"></div>
