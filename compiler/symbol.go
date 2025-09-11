@@ -715,20 +715,25 @@ func (c *compilerContext) getGlobalInfo(g *ssa.Global) globalInfo {
 	// Check for //go: pragmas, which may change the link name (among others).
 	doc := c.astComments[info.linkName]
 	if doc != nil {
-		info.parsePragmas(doc)
+		info.parsePragmas(doc, g)
 	}
 	return info
 }
 
 // Parse //go: pragma comments from the source. In particular, it parses the
 // //go:extern pragma on globals.
-func (info *globalInfo) parsePragmas(doc *ast.CommentGroup) {
+func (info *globalInfo) parsePragmas(doc *ast.CommentGroup, g *ssa.Global) {
 	for _, comment := range doc.List {
 		if !strings.HasPrefix(comment.Text, "//go:") {
 			continue
 		}
 		parts := strings.Fields(comment.Text)
 		switch parts[0] {
+		case "//go:linkname":
+			if len(parts) == 3 && g.Name() == parts[1] {
+				info.linkName = parts[2]
+				info.extern = true
+			}
 		case "//go:extern":
 			info.extern = true
 			if len(parts) == 2 {

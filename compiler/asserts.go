@@ -31,7 +31,7 @@ func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value) {
 
 	// Now do the bounds check: index >= arrayLen
 	outOfBounds := b.CreateICmp(llvm.IntUGE, index, arrayLen, "")
-	b.createRuntimeAssert(outOfBounds, "lookup", "lookupPanic")
+	b.createRuntimeAssert(outOfBounds, "lookup", "lookupPanic", true)
 }
 
 // createSliceBoundsCheck emits a bounds check before a slicing operation to make
@@ -74,7 +74,7 @@ func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lo
 	outOfBounds3 := b.CreateICmp(llvm.IntUGT, max, capacity, "slice.maxcap")
 	outOfBounds := b.CreateOr(outOfBounds1, outOfBounds2, "slice.lowmax")
 	outOfBounds = b.CreateOr(outOfBounds, outOfBounds3, "slice.lowcap")
-	b.createRuntimeAssert(outOfBounds, "slice", "slicePanic")
+	b.createRuntimeAssert(outOfBounds, "slice", "slicePanic", false)
 }
 
 // createSliceToArrayPointerCheck adds a check for slice-to-array pointer
@@ -86,7 +86,7 @@ func (b *builder) createSliceToArrayPointerCheck(sliceLen llvm.Value, arrayLen i
 	// > run-time panic occurs.
 	arrayLenValue := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
 	isLess := b.CreateICmp(llvm.IntULT, sliceLen, arrayLenValue, "")
-	b.createRuntimeAssert(isLess, "slicetoarray", "sliceToArrayPointerPanic")
+	b.createRuntimeAssert(isLess, "slicetoarray", "sliceToArrayPointerPanic", false)
 }
 
 // createUnsafeSliceStringCheck inserts a runtime check used for unsafe.Slice
@@ -118,7 +118,7 @@ func (b *builder) createUnsafeSliceStringCheck(name string, ptr, len llvm.Value,
 	lenIsNotZero := b.CreateICmp(llvm.IntNE, len, zero, "")
 	assert := b.CreateAnd(ptrIsNil, lenIsNotZero, "")
 	assert = b.CreateOr(assert, lenOutOfBounds, "")
-	b.createRuntimeAssert(assert, name, "unsafeSlicePanic")
+	b.createRuntimeAssert(assert, name, "unsafeSlicePanic", false)
 }
 
 // createChanBoundsCheck creates a bounds check before creating a new channel to
@@ -155,7 +155,7 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 
 	// Do the check for a too large (or negative) buffer size.
 	bufSizeTooBig := b.CreateICmp(llvm.IntUGE, bufSize, maxBufSize, "")
-	b.createRuntimeAssert(bufSizeTooBig, "chan", "chanMakePanic")
+	b.createRuntimeAssert(bufSizeTooBig, "chan", "chanMakePanic", false)
 }
 
 // createNilCheck checks whether the given pointer is nil, and panics if it is.
@@ -199,7 +199,7 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 	isnil := b.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
 
 	// Emit the nil check in IR.
-	b.createRuntimeAssert(isnil, blockPrefix, "nilPanic")
+	b.createRuntimeAssert(isnil, blockPrefix, "nilPanic", false)
 }
 
 // createNegativeShiftCheck creates an assertion that panics if the given shift value is negative.
@@ -212,7 +212,7 @@ func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
 
 	// isNegative = shift < 0
 	isNegative := b.CreateICmp(llvm.IntSLT, shift, llvm.ConstInt(shift.Type(), 0, false), "")
-	b.createRuntimeAssert(isNegative, "shift", "negativeShiftPanic")
+	b.createRuntimeAssert(isNegative, "shift", "negativeShiftPanic", false)
 }
 
 // createDivideByZeroCheck asserts that y is not zero. If it is, a runtime panic
@@ -225,12 +225,12 @@ func (b *builder) createDivideByZeroCheck(y llvm.Value) {
 
 	// isZero = y == 0
 	isZero := b.CreateICmp(llvm.IntEQ, y, llvm.ConstInt(y.Type(), 0, false), "")
-	b.createRuntimeAssert(isZero, "divbyzero", "divideByZeroPanic")
+	b.createRuntimeAssert(isZero, "divbyzero", "divideByZeroPanic", true)
 }
 
 // createRuntimeAssert is a common function to create a new branch on an assert
 // bool, calling an assert func if the assert value is true (1).
-func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc string) {
+func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc string, isInvoke bool) {
 	// Check whether we can resolve this check at compile time.
 	if !assert.IsAConstantInt().IsNil() {
 		val := assert.ZExtValue()
@@ -245,17 +245,17 @@ func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc
 	// current insert position.
 	faultBlock := b.ctx.AddBasicBlock(b.llvmFn, blockPrefix+".throw")
 	nextBlock := b.insertBasicBlock(blockPrefix + ".next")
-	b.blockExits[b.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 
 	// Now branch to the out-of-bounds or the regular block.
 	b.CreateCondBr(assert, faultBlock, nextBlock)
 
 	// Fail: the assert triggered so panic.
 	b.SetInsertPointAtEnd(faultBlock)
-	b.createRuntimeCall(assertFunc, nil, "")
+	b.createRuntimeCallCommon(assertFunc, nil, "", isInvoke)
 	b.CreateUnreachable()
 
 	// Ok: assert didn't trigger so continue normally.
+	b.blockExits[b.currentBlock] = nextBlock // adjust outgoing block for phi nodes
 	b.SetInsertPointAtEnd(nextBlock)
 }
 

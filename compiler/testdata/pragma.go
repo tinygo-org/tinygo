@@ -2,6 +2,12 @@ package main
 
 import _ "unsafe"
 
+// Use the go:linkname mechanism to link this global to a different package.
+// This is used in math/bits.
+//
+//go:linkname linknamedGlobal runtime.testLinknamedGlobal
+var linknamedGlobal int
+
 // Creates an external global with name extern_global.
 //
 //go:extern extern_global

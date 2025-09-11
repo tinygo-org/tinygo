@@ -188,7 +188,7 @@ func nilMapPanic() {
 
 // Panic when trying to access an array or slice out of bounds.
 func lookupPanic() {
-	runtimePanicAt(returnAddress(0), "index out of range")
+	_panic(lookupError)
 }
 
 // Panic when trying to slice a slice out of bounds.
@@ -221,7 +221,7 @@ func negativeShiftPanic() {
 
 // Panic when there is a divide by zero.
 func divideByZeroPanic() {
-	runtimePanicAt(returnAddress(0), "divide by zero")
+	_panic(divideError)
 }
 
 func blockingPanic() {

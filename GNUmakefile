@@ -361,6 +361,7 @@ TEST_PACKAGES_FAST = \
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # image requires recover(), which is not yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
+# math/bits: needs panic()/recover()
 # mime: fail on wasi; neds panic()/recover()
 # mime/multipart: needs wasip1 syscall.FDFLAG_NONBLOCK
 # mime/quotedprintable requires syscall.Faccessat
@@ -381,8 +382,11 @@ TEST_PACKAGES_LINUX := \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
+	encoding/binary \
+	go/constant \
 	image \
 	io/ioutil \
+	math/bits \
 	mime \
 	mime/multipart \
 	mime/quotedprintable \
@@ -402,6 +406,9 @@ TEST_PACKAGES_WINDOWS := \
 	compress/flate \
 	crypto/des \
 	crypto/hmac \
+	encoding/binary \
+	go/constant \
+	math/bits \
 	strconv \
 	text/template/parse \
 	$(nil)

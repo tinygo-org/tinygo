@@ -30,6 +30,10 @@ func main() {
 	println("\n# defer panic")
 	deferPanic()
 
+	println("\n# runtime panics")
+	runtimePanicDivByZero(1, 0)
+	runtimePanicLookup([]int{1, 2, 3}, 10)
+
 	println("\n# runtime.Goexit")
 	runtimeGoexit()
 }
@@ -112,6 +116,26 @@ func deferPanic() {
 
 	defer panic("deferred panic")
 	println("defer panic")
+}
+
+func runtimePanicDivByZero(a, b int) int {
+	defer func() {
+		if err := recover(); err != nil {
+			println("recovered:", err)
+		}
+	}()
+
+	return a / b
+}
+
+func runtimePanicLookup(slice []int, index int) int {
+	defer func() {
+		if err := recover(); err != nil {
+			println("recovered:", err)
+		}
+	}()
+
+	return slice[index]
 }
 
 func runtimeGoexit() {
