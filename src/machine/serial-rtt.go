@@ -16,6 +16,8 @@ import (
 )
 
 // This symbol name is known by the compiler, see monitor.go.
+//
+//go:linkname rttSerialInstance _SEGGER_RTT
 var rttSerialInstance rttSerial
 
 var Serial = &rttSerialInstance

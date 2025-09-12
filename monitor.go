@@ -35,8 +35,8 @@ func Monitor(executable, port string, config *compileopts.Config) error {
 		// Use the RTT interface, which is documented (in part) here:
 		// https://wiki.segger.com/RTT
 
-		// Try to find the "machine.rttSerialInstance" symbol, which is the RTT
-		// control block.
+		// Try to find the "_SEGGER_RTT" symbol (machine.rttSerialInstance)
+		// symbol, which is the RTT control block.
 		file, err := elf.Open(executable)
 		if err != nil {
 			return fmt.Errorf("could not open ELF file to determine RTT control block: %w", err)
@@ -48,7 +48,7 @@ func Monitor(executable, port string, config *compileopts.Config) error {
 		}
 		var address uint64
 		for _, symbol := range symbols {
-			if symbol.Name == "machine.rttSerialInstance" {
+			if symbol.Name == "_SEGGER_RTT" {
 				address = symbol.Value
 				break
 			}
