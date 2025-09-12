@@ -630,7 +630,7 @@ func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
 // linkName is equal to .RelString(nil) on a global and extern is false, but for
 // some symbols this is different (due to //go:extern for example).
 type globalInfo struct {
-	linkName string // go:extern
+	linkName string // go:extern, go:linkname
 	extern   bool   // go:extern
 	align    int    // go:align
 	section  string // go:section
@@ -715,14 +715,14 @@ func (c *compilerContext) getGlobalInfo(g *ssa.Global) globalInfo {
 	// Check for //go: pragmas, which may change the link name (among others).
 	doc := c.astComments[info.linkName]
 	if doc != nil {
-		info.parsePragmas(doc)
+		info.parsePragmas(doc, c, g)
 	}
 	return info
 }
 
 // Parse //go: pragma comments from the source. In particular, it parses the
-// //go:extern pragma on globals.
-func (info *globalInfo) parsePragmas(doc *ast.CommentGroup) {
+// //go:extern and //go:linkname pragmas on globals.
+func (info *globalInfo) parsePragmas(doc *ast.CommentGroup, c *compilerContext, g *ssa.Global) {
 	for _, comment := range doc.List {
 		if !strings.HasPrefix(comment.Text, "//go:") {
 			continue
@@ -742,6 +742,17 @@ func (info *globalInfo) parsePragmas(doc *ast.CommentGroup) {
 		case "//go:section":
 			if len(parts) == 2 {
 				info.section = parts[1]
+			}
+		case "//go:linkname":
+			if len(parts) != 3 || parts[1] != g.Name() {
+				continue
+			}
+			// Only enable go:linkname when the package imports "unsafe".
+			// This is a slightly looser requirement than what gc uses: gc
+			// requires the file to import "unsafe", not the package as a
+			// whole.
+			if hasUnsafeImport(g.Pkg.Pkg) {
+				info.linkName = parts[2]
 			}
 		}
 	}
