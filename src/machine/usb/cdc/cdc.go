@@ -2,8 +2,8 @@ package cdc
 
 const (
 	cdcEndpointACM = 1
-	cdcEndpointOut = 2
-	cdcEndpointIn  = 3
+	cdcEndpointOut = 1
+	cdcEndpointIn  = 2
 )
 
 // New returns USBCDC struct.

@@ -19,21 +19,6 @@ const (
 
 	usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos  = 14
 	usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask = 0x3FFF
-
-	NumberOfUSBEndpoints = 8
-)
-
-var (
-	endPoints = []uint32{
-		usb.CONTROL_ENDPOINT:  usb.ENDPOINT_TYPE_CONTROL,
-		usb.CDC_ENDPOINT_ACM:  (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn),
-		usb.CDC_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_BULK | usb.EndpointOut),
-		usb.CDC_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn),
-		usb.HID_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_DISABLE), // Interrupt In
-		usb.HID_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_DISABLE), // Interrupt Out
-		usb.MIDI_ENDPOINT_IN:  (usb.ENDPOINT_TYPE_DISABLE), // Bulk In
-		usb.MIDI_ENDPOINT_OUT: (usb.ENDPOINT_TYPE_DISABLE), // Bulk Out
-	}
 )
 
 // Configure the USB peripheral. The config is here for compatibility with the UART interface.
@@ -191,7 +176,7 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 
 	// Now the actual transfer handlers, ignore endpoint number 0 (setup)
 	var i uint32
-	for i = 1; i < uint32(len(endPoints)); i++ {
+	for i = 1; i < uint32(NumberOfUSBEndpoints); i++ {
 		// Check if endpoint has a pending interrupt
 		epFlags := getEPINTFLAG(i)
 		setEPINTFLAG(i, epFlags)
@@ -200,7 +185,8 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			if usbRxHandler[i] == nil || usbRxHandler[i](buf) {
 				AckUsbOutTransfer(i)
 			}
-		} else if (epFlags & sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1) > 0 {
+		}
+		if (epFlags & sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1) > 0 {
 			if usbTxHandler[i] != nil {
 				usbTxHandler[i]()
 			}
@@ -218,8 +204,9 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, ((usb.ENDPOINT_TYPE_INTERRUPT + 1) << sam.USB_DEVICE_ENDPOINT_EPCFG_EPTYPE1_Pos))
+		setEPCFGEPType1(ep, (usb.ENDPOINT_TYPE_INTERRUPT + 1))
 
+		// Set interrupt enable
 		setEPINTENSET(ep, sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT1)
 
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointOut:
@@ -230,7 +217,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, ((usb.ENDPOINT_TYPE_BULK + 1) << sam.USB_DEVICE_ENDPOINT_EPCFG_EPTYPE0_Pos))
+		setEPCFGEPType0(ep, (usb.ENDPOINT_TYPE_BULK + 1))
 
 		// receive interrupts when current transfer complete
 		setEPINTENSET(ep, sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT0)
@@ -249,7 +236,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, ((usb.ENDPOINT_TYPE_INTERRUPT + 1) << sam.USB_DEVICE_ENDPOINT_EPCFG_EPTYPE0_Pos))
+		setEPCFGEPType0(ep, (usb.ENDPOINT_TYPE_INTERRUPT + 1))
 
 		// receive interrupts when current transfer complete
 		setEPINTENSET(ep, sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT0)
@@ -268,11 +255,12 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, ((usb.ENDPOINT_TYPE_BULK + 1) << sam.USB_DEVICE_ENDPOINT_EPCFG_EPTYPE1_Pos))
+		setEPCFGEPType1(ep, (usb.ENDPOINT_TYPE_BULK + 1))
 
 		// NAK on endpoint IN, the bank is not yet filled in.
 		setEPSTATUSCLR(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_BK1RDY)
 
+		// Set interrupt enable
 		setEPINTENSET(ep, sam.USB_DEVICE_ENDPOINT_EPINTENSET_TRCPT1)
 
 	case usb.ENDPOINT_TYPE_CONTROL:
@@ -284,7 +272,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, getEPCFG(ep)|((usb.ENDPOINT_TYPE_CONTROL+1)<<sam.USB_DEVICE_ENDPOINT_EPCFG_EPTYPE0_Pos))
+		setEPCFGEPType0(ep, (usb.ENDPOINT_TYPE_CONTROL + 1))
 
 		// Control IN
 		// set packet size
@@ -294,7 +282,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, getEPCFG(ep)|((usb.ENDPOINT_TYPE_CONTROL+1)<<sam.USB_DEVICE_ENDPOINT_EPCFG_EPTYPE1_Pos))
+		setEPCFGEPType1(ep, (usb.ENDPOINT_TYPE_CONTROL + 1))
 
 		// Prepare OUT endpoint for receive
 		// set multi packet size for expected number of receive bytes on control OUT
@@ -462,8 +450,14 @@ func getEPCFG(ep uint32) uint8 {
 	return sam.USB_DEVICE.DEVICE_ENDPOINT[ep].EPCFG.Get()
 }
 
-func setEPCFG(ep uint32, val uint8) {
-	sam.USB_DEVICE.DEVICE_ENDPOINT[ep].EPCFG.Set(val)
+// Configure output endpoint in EPCFG
+func setEPCFGEPType0(ep uint32, val uint8) {
+	sam.USB_DEVICE.DEVICE_ENDPOINT[ep].SetEPCFG_EPTYPE0(val)
+}
+
+// Configure input endpoint in EPCFG
+func setEPCFGEPType1(ep uint32, val uint8) {
+	sam.USB_DEVICE.DEVICE_ENDPOINT[ep].SetEPCFG_EPTYPE1(val)
 }
 
 func setEPSTATUSCLR(ep uint32, val uint8) {

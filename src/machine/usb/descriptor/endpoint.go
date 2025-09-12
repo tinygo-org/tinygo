@@ -29,14 +29,42 @@ var EndpointEP1IN = EndpointType{
 	data: endpointEP1IN[:],
 }
 
-var endpointEP2OUT = [endpointTypeLen]byte{
+var endpointEP1OUT = [endpointTypeLen]byte{
 	endpointTypeLen,
 	TypeEndpoint,
-	0x02, // EndpointAddress
+	0x01, // EndpointAddress
 	0x02, // Attributes
 	0x40, // MaxPacketSizeL
 	0x00, // MaxPacketSizeH
 	0x00, // Interval
+}
+
+var EndpointEP1OUT = EndpointType{
+	data: endpointEP1OUT[:],
+}
+
+var endpointEP2IN = [endpointTypeLen]byte{
+	endpointTypeLen,
+	TypeEndpoint,
+	0x82, // EndpointAddress
+	0x02, // Attributes
+	0x40, // MaxPacketSizeL
+	0x00, // MaxPacketSizeH
+	0x00, // Interval
+}
+
+var EndpointEP2IN = EndpointType{
+	data: endpointEP2IN[:],
+}
+
+var endpointEP2OUT = [endpointTypeLen]byte{
+	endpointTypeLen,
+	TypeEndpoint,
+	0x02, // EndpointAddress
+	0x03, // Attributes
+	0x40, // MaxPacketSizeL
+	0x00, // MaxPacketSizeH
+	0x01, // Interval
 }
 
 var EndpointEP2OUT = EndpointType{
@@ -47,73 +75,56 @@ var endpointEP3IN = [endpointTypeLen]byte{
 	endpointTypeLen,
 	TypeEndpoint,
 	0x83, // EndpointAddress
-	0x02, // Attributes
+	0x03, // Attributes
 	0x40, // MaxPacketSizeL
 	0x00, // MaxPacketSizeH
-	0x00, // Interval
+	0x01, // Interval
 }
 
 var EndpointEP3IN = EndpointType{
 	data: endpointEP3IN[:],
 }
 
-var endpointEP4IN = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x84, // EndpointAddress
-	0x03, // Attributes
-	0x40, // MaxPacketSizeL
-	0x00, // MaxPacketSizeH
-	0x01, // Interval
-}
-
-var EndpointEP4IN = EndpointType{
-	data: endpointEP4IN[:],
-}
-
-var endpointEP5OUT = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x05, // EndpointAddress
-	0x03, // Attributes
-	0x40, // MaxPacketSizeL
-	0x00, // MaxPacketSizeH
-	0x01, // Interval
-}
-
-var EndpointEP5OUT = EndpointType{
-	data: endpointEP5OUT[:],
-}
-
 // Mass Storage Class bulk in endpoint
-var endpointMSCIN = [endpointTypeLen]byte{
+var endpointEP5IN = [endpointTypeLen]byte{
 	endpointTypeLen,
 	TypeEndpoint,
-	0x86,             // EndpointAddress
+	0x85,             // EndpointAddress
 	TransferTypeBulk, // Attributes
 	0x40,             // MaxPacketSizeL (64 bytes)
 	0x00,             // MaxPacketSizeH
 	0x00,             // Interval
 }
 
-var EndpointMSCIN = EndpointType{
-	data: endpointMSCIN[:],
+var EndpointEP5IN = EndpointType{
+	data: endpointEP5IN[:],
 }
 
 // Mass Storage Class bulk out endpoint
-var endpointMSCOUT = [endpointTypeLen]byte{
+var endpointEP4OUT = [endpointTypeLen]byte{
 	endpointTypeLen,
 	TypeEndpoint,
-	0x07,             // EndpointAddress
+	0x04,             // EndpointAddress
 	TransferTypeBulk, // Attributes
 	0x40,             // MaxPacketSizeL (64 bytes)
 	0x00,             // MaxPacketSizeH
 	0x00,             // Interval
 }
 
-var EndpointMSCOUT = EndpointType{
-	data: endpointMSCOUT[:],
+var EndpointEP4OUT = EndpointType{
+	data: endpointEP4OUT[:],
 }
+
+// Aliases for easier reuse
+var (
+	EndpointCDCACMIN = &EndpointEP1IN
+	EndpointCDCOUT   = &EndpointEP1OUT
+	EndpointCDCIN    = &EndpointEP2IN
+	EndpointHIDOUT   = &EndpointEP2OUT
+	EndpointHIDIN    = &EndpointEP3IN
+	EndpointMSCOUT   = &EndpointEP4OUT
+	EndpointMSCIN    = &EndpointEP5IN
+)
 
 const (
 	endpointTypeLen = 7

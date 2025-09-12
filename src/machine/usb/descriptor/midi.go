@@ -3,7 +3,7 @@ package descriptor
 var interfaceAssociationMIDI = [interfaceAssociationTypeLen]byte{
 	interfaceAssociationTypeLen,
 	TypeInterfaceAssociation,
-	0x02, // EndpointAddress
+	0x01, // EndpointAddress
 	0x02, // Attributes
 	0x01, // MaxPacketSizeL
 	0x01, // MaxPacketSizeH
@@ -171,10 +171,10 @@ var ClassSpecificMIDIInEndpoint = ClassSpecificType{
 
 const endpointMIDITypeLen = 9
 
-var endpointEP6IN = [endpointMIDITypeLen]byte{
+var endpointEP4IN = [endpointMIDITypeLen]byte{
 	endpointMIDITypeLen,
 	TypeEndpoint,
-	0x86, // EndpointAddress
+	0x84, // EndpointAddress
 	0x02, // Attributes
 	0x40, // MaxPacketSizeL
 	0x00, // MaxPacketSizeH
@@ -183,14 +183,14 @@ var endpointEP6IN = [endpointMIDITypeLen]byte{
 	0x00, // sync address
 }
 
-var EndpointEP6IN = EndpointType{
-	data: endpointEP6IN[:],
+var EndpointEP4IN = EndpointType{
+	data: endpointEP4IN[:],
 }
 
-var endpointEP7OUT = [endpointMIDITypeLen]byte{
+var endpointEP3OUT = [endpointMIDITypeLen]byte{
 	endpointMIDITypeLen,
 	TypeEndpoint,
-	0x07, // EndpointAddress
+	0x03, // EndpointAddress
 	0x02, // Attributes
 	0x40, // MaxPacketSizeL
 	0x00, // MaxPacketSizeH
@@ -199,9 +199,14 @@ var endpointEP7OUT = [endpointMIDITypeLen]byte{
 	0x00, // sync address
 }
 
-var EndpointEP7OUT = EndpointType{
-	data: endpointEP7OUT[:],
+var EndpointEP3OUT = EndpointType{
+	data: endpointEP3OUT[:],
 }
+
+var (
+	EndpointMIDIIN  = &EndpointEP4IN
+	EndpointMIDIOUT = &EndpointEP3OUT
+)
 
 var configurationCDCMIDI = [configurationTypeLen]byte{
 	configurationTypeLen,
@@ -228,10 +233,10 @@ var CDCMIDI = Descriptor{
 		ClassSpecificCDCACM.Bytes(),
 		ClassSpecificCDCUnion.Bytes(),
 		ClassSpecificCDCCallManagement.Bytes(),
-		EndpointEP1IN.Bytes(),
+		EndpointCDCACMIN.Bytes(),
 		InterfaceCDCData.Bytes(),
-		EndpointEP2OUT.Bytes(),
-		EndpointEP3IN.Bytes(),
+		EndpointCDCOUT.Bytes(),
+		EndpointCDCIN.Bytes(),
 		InterfaceAssociationMIDI.Bytes(),
 		InterfaceAudio.Bytes(),
 		ClassSpecificAudioInterface.Bytes(),
@@ -241,9 +246,9 @@ var CDCMIDI = Descriptor{
 		ClassSpecificMIDIInJack2.Bytes(),
 		ClassSpecificMIDIOutJack1.Bytes(),
 		ClassSpecificMIDIOutJack2.Bytes(),
-		EndpointEP7OUT.Bytes(),
+		EndpointMIDIOUT.Bytes(),
 		ClassSpecificMIDIOutEndpoint.Bytes(),
-		EndpointEP6IN.Bytes(),
+		EndpointMIDIIN.Bytes(),
 		ClassSpecificMIDIInEndpoint.Bytes(),
 	}),
 }
