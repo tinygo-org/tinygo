@@ -160,9 +160,9 @@ var CDC = Descriptor{
 		ClassSpecificCDCCallManagement.Bytes(),
 		ClassSpecificCDCACM.Bytes(),
 		ClassSpecificCDCUnion.Bytes(),
-		EndpointEP1IN.Bytes(),
+		EndpointCDCACMIN.Bytes(),
 		InterfaceCDCData.Bytes(),
-		EndpointEP2OUT.Bytes(),
-		EndpointEP3IN.Bytes(),
+		EndpointCDCOUT.Bytes(),
+		EndpointCDCIN.Bytes(),
 	}),
 }

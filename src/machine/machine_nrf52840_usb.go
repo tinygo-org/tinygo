@@ -11,8 +11,6 @@ import (
 	"unsafe"
 )
 
-const NumberOfUSBEndpoints = 8
-
 var (
 	sendOnEP0DATADONE struct {
 		ptr    *byte
@@ -22,17 +20,6 @@ var (
 	epinen      uint32
 	epouten     uint32
 	easyDMABusy volatile.Register8
-
-	endPoints = []uint32{
-		usb.CONTROL_ENDPOINT:  usb.ENDPOINT_TYPE_CONTROL,
-		usb.CDC_ENDPOINT_ACM:  (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn),
-		usb.CDC_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_BULK | usb.EndpointOut),
-		usb.CDC_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn),
-		usb.HID_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_DISABLE), // Interrupt In
-		usb.HID_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_DISABLE), // Interrupt Out
-		usb.MIDI_ENDPOINT_IN:  (usb.ENDPOINT_TYPE_DISABLE), // Bulk In
-		usb.MIDI_ENDPOINT_OUT: (usb.ENDPOINT_TYPE_DISABLE), // Bulk Out
-	}
 )
 
 // enterCriticalSection is used to protect access to easyDMA - only one thing
@@ -183,7 +170,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 		epDataStatus := nrf.USBD.EPDATASTATUS.Get()
 		nrf.USBD.EPDATASTATUS.Set(epDataStatus)
 		var i uint32
-		for i = 1; i < uint32(len(endPoints)); i++ {
+		for i = 1; i < uint32(NumberOfUSBEndpoints); i++ {
 			// Check if endpoint has a pending interrupt
 			inDataDone := epDataStatus&(nrf.USBD_EPDATASTATUS_EPIN1<<(i-1)) > 0
 			outDataDone := epDataStatus&(nrf.USBD_EPDATASTATUS_EPOUT1<<(i-1)) > 0
@@ -191,7 +178,8 @@ func handleUSBIRQ(interrupt.Interrupt) {
 				if usbTxHandler[i] != nil {
 					usbTxHandler[i]()
 				}
-			} else if outDataDone {
+			}
+			if outDataDone {
 				enterCriticalSection()
 				nrf.USBD.EPOUT[i].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[i]))))
 				count := nrf.USBD.SIZE.EPOUT[i].Get()
@@ -202,7 +190,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 	}
 
 	// ENDEPOUT[n] events
-	for i := 0; i < len(endPoints); i++ {
+	for i := 0; i < len(outEndpoints); i++ {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
 			buf := handleEndpointRx(uint32(i))
