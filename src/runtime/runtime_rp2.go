@@ -291,10 +291,10 @@ func coreStackTop(core uint32) uintptr {
 
 // These spinlocks are needed by the runtime.
 var (
-	printLock     = spinLock{id: 0}
-	schedulerLock = spinLock{id: 1}
-	atomicsLock   = spinLock{id: 2}
-	futexLock     = spinLock{id: 3}
+	printLock     = spinLock{id: 20}
+	schedulerLock = spinLock{id: 21}
+	atomicsLock   = spinLock{id: 22}
+	futexLock     = spinLock{id: 23}
 )
 
 // A hardware spinlock, one of the 32 spinlocks defined in the SIO peripheral.
