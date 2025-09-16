@@ -101,3 +101,15 @@ func (tmr *timerType) lightSleep(us uint64) {
 	// Disable interrupt
 	intr.Disable()
 }
+
+// setDbgPause sets whether this timer is paused when a debugger is connected.
+func (tmr *timerType) setDbgPause(enable bool) {
+	const bitPos = 1
+	const bitMask = 0b11
+	val := uint32(0b00)
+	if enable {
+		// Disable timer when debugger is connected to either core.
+		val = 0b11
+	}
+	tmr.dbgPause.ReplaceBits(val, bitMask, bitPos)
+}
