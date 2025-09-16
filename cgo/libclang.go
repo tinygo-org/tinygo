@@ -21,6 +21,10 @@ import (
 )
 
 /*
+// Hide a warning in LLVM 21 that doesn't apply to us (appears to be a side
+// effect of how CGo processes C header files).
+#cgo CFLAGS: -Wno-deprecated-declarations
+
 #include <clang-c/Index.h> // If this fails, libclang headers aren't available. Please take a look here: https://tinygo.org/docs/guides/build/
 #include <llvm/Config/llvm-config.h>
 #include <stdlib.h>

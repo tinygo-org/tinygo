@@ -117,7 +117,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        version: [16, 17, 18, 19, 20]
+        version: [16, 17, 18, 19, 20, 21]
     steps:
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@master
@@ -141,8 +141,8 @@ jobs:
       - name: Check binary
         run: tinygo version
       - name: Build TinyGo (default LLVM)
-        if: matrix.version == 20
+        if: matrix.version == 21
         run: go install
       - name: Check binary
-        if: matrix.version == 20
+        if: matrix.version == 21
         run: tinygo version

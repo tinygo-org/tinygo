@@ -84,6 +84,7 @@ type compilerContext struct {
 	funcPtrType      llvm.Type // pointer in function address space (1 for AVR, 0 elsewhere)
 	funcPtrAddrSpace int
 	uintptrType      llvm.Type
+	nocaptureAttr    llvm.Attribute
 	program          *ssa.Program
 	diagnostics      []error
 	functionInfos    map[*ssa.Function]functionInfo
@@ -134,6 +135,13 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
 	c.funcPtrType = dummyFunc.Type()
 	dummyFunc.EraseFromParentAsFunction()
+
+	// The attribute "nocapture" changed to "captures(none)" in LLVM 21.
+	if llvmutil.Version() < 21 {
+		c.nocaptureAttr = c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0)
+	} else {
+		c.nocaptureAttr = c.ctx.CreateEnumAttribute(llvm.AttributeKindID("captures"), 0)
+	}
 
 	return c
 }

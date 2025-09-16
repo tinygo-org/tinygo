@@ -108,7 +108,7 @@ jobs:
       - image: golang:1.25-bullseye
     steps:
       - test-linux:
-          llvm: "20"
+          llvm: "21"
     resource_class: large
 
 workflows:
