@@ -311,15 +311,13 @@ func (l *spinLock) Lock() {
 	// Wait for the lock to be available.
 	spinlock := l.spinlock()
 	for spinlock.Get() == 0 {
-		// TODO: use wfe and send an event when unlocking so the CPU can go to
-		// sleep while waiting for the lock.
-		// Unfortunately when doing that, time.Sleep() seems to hang somewhere.
-		// This needs some debugging to figure out.
+		arm.Asm("wfe")
 	}
 }
 
 func (l *spinLock) Unlock() {
 	l.spinlock().Set(0)
+	arm.Asm("sev")
 }
 
 // Wait until a signal is received, indicating that it can resume from the
