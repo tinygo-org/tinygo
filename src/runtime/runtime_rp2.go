@@ -14,6 +14,7 @@ import (
 )
 
 const numCPU = 2
+const numSpinlocks = 32
 
 // machineTicks is provided by package machine.
 func machineTicks() uint64
@@ -297,6 +298,13 @@ var (
 	futexLock     = spinLock{id: 23}
 )
 
+func resetSpinLocks() {
+	for i := uint8(0); i < numSpinlocks; i++ {
+		l := &spinLock{id: i}
+		l.spinlock().Set(0)
+	}
+}
+
 // A hardware spinlock, one of the 32 spinlocks defined in the SIO peripheral.
 type spinLock struct {
 	id uint8
@@ -357,9 +365,16 @@ func init() {
 	machine.InitSerial()
 }
 
+func prerun() {
+	// Reset spinlocks before the full machineInit() so the scheduler doesn't
+	// hang waiting for schedulerLock after a soft reset.
+	resetSpinLocks()
+}
+
 //export Reset_Handler
 func main() {
 	preinit()
+	prerun()
 	run()
 	exit(0)
 }
