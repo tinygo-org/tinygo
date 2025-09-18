@@ -18,11 +18,13 @@ jobs:
       matrix:
         # macos-13: amd64 (oldest supported version as of 18-10-2024)
         # macos-14: arm64 (oldest arm64 version)
-        os: [macos-13, macos-14]
+        os: [macos-13, macos-14, macos-15]
         include:
           - os: macos-13
             goarch: amd64
           - os: macos-14
+            goarch: arm64
+          - os: macos-15
             goarch: arm64
     runs-on: ${{ matrix.os }}
     steps:
@@ -30,16 +32,16 @@ jobs:
         run: |
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
       - name: Extract TinyGo version
         id: version
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.1'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v4
@@ -79,8 +81,7 @@ jobs:
           rm -rf llvm-project
           make llvm-source
           # install dependencies
-          brew uninstall cmake || true
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
           # build!
           make llvm-build
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
@@ -131,11 +132,11 @@ jobs:
         run: |
           brew install llvm@${{ matrix.version }}
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.1'
           cache: true
       - name: Build TinyGo (LLVM ${{ matrix.version }})
         run: go install -tags=llvm${{ matrix.version }}
