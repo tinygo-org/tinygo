@@ -22,7 +22,7 @@
 	url = https://github.com/tinygo-org/stm32-svd
 [submodule "lib/musl"]
 	path = lib/musl
-	url = git://git.musl-libc.org/musl
+	url = https://github.com/tinygo-org/musl-libc.git
 [submodule "lib/binaryen"]
 	path = lib/binaryen
 	url = https://github.com/WebAssembly/binaryen.git
