@@ -100,7 +100,8 @@ func ReadTemperature() (millicelsius int32) {
 	rp.ADC.CS.SetBits(rp.ADC_CS_TS_EN)
 
 	// T = 27 - (ADC_voltage - 0.706)/0.001721
-	return (27000<<16 - (int32(thermChan.getVoltage())-706<<16)*581) >> 16
+	// 1/0.001721 ≈ 581
+	return int32(((int64(27000) << 16) - ((int64(thermChan.getVoltage()) - (int64(706) << 16)) * 581)) >> 16)
 }
 
 // waitForReady spins waiting for the ADC peripheral to become ready.
