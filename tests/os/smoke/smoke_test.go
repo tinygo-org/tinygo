@@ -4,6 +4,8 @@ package os_smoke_test
 // Intended to catch build tag mistakes affecting bare metal targets.
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -23,5 +25,12 @@ func TestFmt(t *testing.T) {
 		t.Errorf("printf returned error %s", err)
 	} else if n != 14 {
 		t.Errorf("printf returned %d, expected 14", n)
+	}
+}
+
+// Regression test for https://github.com/tinygo-org/tinygo/issues/4921
+func TestRand(t *testing.T) {
+	if _, err := rsa.GenerateKey(rand.Reader, 2048); err != nil {
+		t.Error(err)
 	}
 }
