@@ -795,6 +795,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=gopher-badge      examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=gopher-arcade      examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=ae-rp2040           examples/echo
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=thumby              examples/echo

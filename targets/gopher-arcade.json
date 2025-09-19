@@ -1,0 +1,10 @@
+{
+	"inherits": ["attiny85"],
+	"build-tags": ["gopher_arcade"],
+	"ldflags": [
+		"--defsym=_bootloader_size=2180",
+		"--defsym=_stack_size=128"
+	],
+	"flash-command": "avrdude -c usbasp -p t85 -B 10 -U flash:w:{hex}:i",
+	"emulator": "simavr -m attiny85 -f 16000000 {}"
+}
