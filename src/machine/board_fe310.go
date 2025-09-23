@@ -15,8 +15,8 @@ const (
 	P09 Pin = 9
 	P10 Pin = 10
 	P11 Pin = 11
-	P12 Pin = 12
-	P13 Pin = 13
+	P12 Pin = 12 // peripherals: I2C0 SDA
+	P13 Pin = 13 // peripherals: I2C0 SCL
 	P14 Pin = 14
 	P15 Pin = 15
 	P16 Pin = 16
