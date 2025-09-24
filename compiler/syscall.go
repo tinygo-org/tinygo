@@ -74,6 +74,14 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		return b.CreateCall(fnType, target, args, ""), nil
 
 	case b.GOARCH == "arm" && b.GOOS == "linux":
+		if arch := b.archFamily(); arch != "arm" {
+			// Some targets pretend to be linux/arm for compatibility but aren't
+			// actually such a system. Make sure we emit an error instead of
+			// creating inline assembly that will fail to compile.
+			// See: https://github.com/tinygo-org/tinygo/issues/4959
+			return llvm.Value{}, b.makeError(call.Pos(), "system calls are not supported: target emulates a linux/arm system on "+arch)
+		}
+
 		// Implement the EABI system call convention for Linux.
 		// Source: syscall(2) man page.
 		args := []llvm.Value{}
