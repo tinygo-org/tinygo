@@ -10,6 +10,7 @@ package testing
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -78,6 +79,9 @@ type common struct {
 	tempDir    string
 	tempDirErr error
 	tempDirSeq int32
+
+	ctx       context.Context
+	cancelCtx context.CancelFunc
 }
 
 type logger struct {
@@ -152,6 +156,7 @@ func fmtDuration(d time.Duration) string {
 // TB is the interface common to T and B.
 type TB interface {
 	Cleanup(func())
+	Context() context.Context
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	Fail()
@@ -307,6 +312,15 @@ func (c *common) Cleanup(f func()) {
 	c.cleanups = append(c.cleanups, f)
 }
 
+// Context returns a context that is canceled just before
+// Cleanup-registered functions are called.
+//
+// Cleanup functions can wait for any resources
+// that shut down on [context.Context.Done] before the test or benchmark completes.
+func (c *common) Context() context.Context {
+	return c.ctx
+}
+
 // TempDir returns a temporary directory for the test to use.
 // The directory is automatically removed by Cleanup when the test and
 // all its subtests complete.
@@ -447,6 +461,9 @@ func (c *common) runCleanup() {
 		if cleanup == nil {
 			return
 		}
+		if c.cancelCtx != nil {
+			c.cancelCtx()
+		}
 		cleanup()
 	}
 }
@@ -488,12 +505,15 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	}
 
 	// Create a subtest.
+	ctx, cancelCtx := context.WithCancel(context.Background())
 	sub := T{
 		common: common{
-			output: &logger{logToStdout: flagVerbose},
-			name:   testName,
-			parent: &t.common,
-			level:  t.level + 1,
+			output:    &logger{logToStdout: flagVerbose},
+			name:      testName,
+			parent:    &t.common,
+			level:     t.level + 1,
+			ctx:       ctx,
+			cancelCtx: cancelCtx,
 		},
 		context: t.context,
 	}
@@ -606,9 +626,12 @@ func runTests(matchString func(pat, str string) (bool, error), tests []InternalT
 	ok = true
 
 	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp))
+	runCtx, cancelCtx := context.WithCancel(context.Background())
 	t := &T{
 		common: common{
-			output: &logger{logToStdout: flagVerbose},
+			output:    &logger{logToStdout: flagVerbose},
+			ctx:       runCtx,
+			cancelCtx: cancelCtx,
 		},
 		context: ctx,
 	}
