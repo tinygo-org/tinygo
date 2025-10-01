@@ -81,6 +81,9 @@ func buffered() int {
 func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks := uint32(d) & 0x7fffff // 23 bits (to be on the safe side)
+		if d > 0x7fffff {
+			ticks = 0x7fffff
+		}
 		rtc_sleep(ticks)
 		d -= timeUnit(ticks)
 	}

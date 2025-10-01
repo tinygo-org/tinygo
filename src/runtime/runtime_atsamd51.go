@@ -266,6 +266,9 @@ func nanosecondsToTicks(ns int64) timeUnit {
 func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks := uint32(d)
+		if d > 0xffff_ffff {
+			ticks = 0xffff_ffff
+		}
 		if !timerSleep(ticks) {
 			return
 		}
