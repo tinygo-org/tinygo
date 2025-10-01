@@ -577,7 +577,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						// runtime instead of at compile time. But we need to
 						// revert any changes made by the call first.
 						if r.debug {
-							fmt.Fprintln(os.Stderr, indent+"!! revert because of error:", callErr.Err)
+							fmt.Fprintln(os.Stderr, indent+"!! revert because of error:", callErr.Error())
 						}
 						callMem.revert()
 						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
