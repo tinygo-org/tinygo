@@ -96,8 +96,15 @@ func wasmExportExit() {
 	// //go:wasmexport function has exited.
 	schedulerExit = true
 
+	// Clear wasm allocations.
+	wasmAllocs = nil
+
 	task.Pause()
 
 	// TODO: we could cache the allocated stack so we don't have to keep
 	// allocating a new stack on every //go:wasmexport call.
 }
+
+// wasmAllocs holds memory allocated by the host in guest memory.
+// See func cabi_realloc for more information.
+var wasmAllocs []unsafe.Pointer
