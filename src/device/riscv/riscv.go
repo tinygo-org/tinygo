@@ -10,7 +10,7 @@ func Asm(asm string)
 // recognizes template values in the form {name}, like so:
 //
 //	arm.AsmFull(
-//	    "str {value}, [{result}]",
+//	    "st {value}, [{result}]",
 //	    map[string]interface{}{
 //	        "value":  1,
 //	        "result": uintptr(unsafe.Pointer(&dest)),
