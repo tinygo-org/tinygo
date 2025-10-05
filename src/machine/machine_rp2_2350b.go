@@ -2,6 +2,8 @@
 
 package machine
 
+import "device/rp"
+
 // RP2350B has additional pins.
 
 const (
@@ -46,3 +48,28 @@ var (
 	PWM10 = getPWMGroup(10)
 	PWM11 = getPWMGroup(11)
 )
+
+// validPins confirms that the SPI pin selection is a legitimate one
+// for the the 2350b chip.
+func (spi *SPI) validPins(config SPIConfig) error {
+	var okSDI, okSDO, okSCK bool
+	switch spi.Bus {
+	case rp.SPI0:
+		okSDI = config.SDI == 0 || config.SDI == 4 || config.SDI == 16 || config.SDI == 20 || config.SDI == 32 || config.SDI == 36
+		okSDO = config.SDO == 3 || config.SDO == 7 || config.SDO == 19 || config.SDO == 23 || config.SDO == 35 || config.SDO == 39
+		okSCK = config.SCK == 2 || config.SCK == 6 || config.SCK == 18 || config.SCK == 22 || config.SCK == 34 || config.SCK == 38
+	case rp.SPI1:
+		okSDI = config.SDI == 8 || config.SDI == 12 || config.SDI == 24 || config.SDI == 28 || config.SDI == 40 || config.SDI == 44
+		okSDO = config.SDO == 11 || config.SDO == 15 || config.SDO == 27 || config.SDO == 31 || config.SDO == 43 || config.SDO == 47
+		okSCK = config.SCK == 10 || config.SCK == 14 || config.SCK == 26 || config.SCK == 30 || config.SCK == 42 || config.SCK == 46
+	}
+	switch {
+	case !okSDI:
+		return errSPIInvalidSDI
+	case !okSDO:
+		return errSPIInvalidSDO
+	case !okSCK:
+		return errSPIInvalidSCK
+	}
+	return nil
+}
