@@ -108,7 +108,7 @@ func (spi *SPI) SetBaudRate(br uint32) error {
 	var prescale, postdiv uint32
 	freq := CPUFrequency()
 	for prescale = 2; prescale < 255; prescale += 2 {
-		if freq < (prescale+2)*256*br {
+		if uint64(freq) < uint64((prescale+2)*256)*uint64(br) {
 			break
 		}
 	}
