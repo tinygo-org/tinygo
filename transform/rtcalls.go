@@ -178,3 +178,108 @@ func OptimizeReflectImplements(mod llvm.Module) {
 		call.EraseFromParentAsInstruction()
 	}
 }
+
+// OptimizeStringFromBytes removes allocations for byte slice equality
+// checks that use temporary strings. In particular, `bytes.Equal` allocates
+// two such strings:
+//
+//	func Equal(a, b []byte) bool {
+//	  return string(a) == string(b)
+//	}
+func OptimizeStringFromBytes(mod llvm.Module) {
+	stringFromBytes := mod.NamedFunction("runtime.stringFromBytes")
+	if stringFromBytes.IsNil() {
+		return
+	}
+	stringEqual := mod.NamedFunction("runtime.stringEqual")
+	if stringEqual.IsNil() {
+		return
+	}
+
+uses:
+	for _, call := range getUses(stringFromBytes) {
+		sliceptr := call.Operand(0)
+		slicelen := call.Operand(1)
+		// Collect all uses of the slice pointer while replacing
+		// uses of the string length.
+		uses := make(map[llvm.Value]bool)
+		if !collectStringFromBytesUses(uses, slicelen, call) {
+			continue
+		}
+		inst := call
+		found := 0
+		// Scan instructions that follow the stringFromBytes call to
+		// account for all uses. Bail if any instruction may mutate the
+		// slice storage.
+		for len(uses) > found {
+			inst = llvm.NextInstruction(inst)
+			if inst.IsNil() {
+				// There are uses beyond this basic block.
+				continue uses
+			}
+			switch {
+			case !inst.IsACallInst().IsNil():
+				if inst.CalledValue() != stringEqual {
+					// The called function is not runtime.stringEqual
+					// and may mutate the slice.
+					continue uses
+				}
+			case !inst.IsAGetElementPtrInst().IsNil(),
+				!inst.IsALoadInst().IsNil(),
+				!inst.IsAExtractValueInst().IsNil():
+				// Read-only instructions.
+			default:
+				// Instruction may perform a store on the slice.
+				continue uses
+			}
+			if _, ok := uses[inst]; ok {
+				found++
+			}
+		}
+		// At this point, all instructions between the stringFromBytes call
+		// and its uses are known not to mutate the slice storage. Replace
+		// all string pointer uses with the slice pointer and get rid of
+		// the call.
+		for use, repl := range uses {
+			if repl {
+				use.ReplaceAllUsesWith(sliceptr)
+				use.EraseFromParentAsInstruction()
+			}
+		}
+		call.EraseFromParentAsInstruction()
+	}
+}
+
+// collectStringFromBytesUses collects the string pointer uses, while replacing string
+// length uses with the equivalent slice length.
+func collectStringFromBytesUses(uses map[llvm.Value]bool, slicelen, v llvm.Value) bool {
+	if v.IsNil() {
+		return true
+	}
+	for _, use := range getUses(v) {
+		switch {
+		case !use.IsAExtractValueInst().IsNil():
+			switch use.Type().TypeKind() {
+			case llvm.IntegerTypeKind:
+				// String length can always safely be replaced with slice length.
+				use.ReplaceAllUsesWith(slicelen)
+				use.EraseFromParentAsInstruction()
+			case llvm.PointerTypeKind:
+				if !collectStringFromBytesUses(uses, slicelen, use) {
+					return false
+				}
+				// Record the use as replaceable with the slice pointer.
+				uses[use] = true
+			default:
+				return false
+			}
+		case !use.IsACallInst().IsNil():
+			// Record the use, but don't replace it.
+			uses[use] = false
+		default:
+			// Give up.
+			return false
+		}
+	}
+	return true
+}

@@ -30,3 +30,11 @@ func TestOptimizeReflectImplements(t *testing.T) {
 		transform.OptimizeReflectImplements(mod)
 	})
 }
+
+func TestOptimizeBytesFromString(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/stringfrombytes", func(mod llvm.Module) {
+		// Run optimization pass.
+		transform.OptimizeStringFromBytes(mod)
+	})
+}
