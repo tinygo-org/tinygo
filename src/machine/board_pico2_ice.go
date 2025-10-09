@@ -59,7 +59,8 @@ const (
 	GP46 Pin = 46
 	GP47 Pin = 47
 
-	// RPi pins shared with ICE
+	// RPi pins shared with ICE. The ICE number is what appears on
+	// the board silkscreen.
 	ICE9  = GP28
 	ICE11 = GP29
 	ICE14 = GP7
@@ -79,13 +80,33 @@ const (
 	ICE35_G0 = GP21
 
 	// Silkscreen & Pinout names
-	ICE_SSN   = ICE16
-	ICE_SO    = ICE14
-	ICE_SI    = ICE17
-	ICE_CK    = ICE15
+	ICE_SSN = ICE16
+	ICE_SO  = ICE14
+	ICE_SI  = ICE17
+	ICE_CK  = ICE15
+	SD      = GP2
+	SC      = GP3
+
 	FPGA_RSTN = GP31
-	ICE_DONE  = GP40
-	USB_BOOT  = GP42
+	A3        = GP32
+	A1        = GP33
+	A4        = GP34
+	A2        = GP35
+	B3        = GP36
+	B1        = GP37
+	B4        = GP38
+	B2        = GP39
+	N0        = GP40 // On the board these are labeled "~0"
+	N1        = GP41
+	N2        = GP42
+	N3        = GP43
+	N4        = GP44
+	N5        = GP45
+	N6        = GP46
+
+	// Functions from Schematic.
+	ICE_DONE = GP40
+	USB_BOOT = GP42
 
 	// Button
 	SW1     = GP42
