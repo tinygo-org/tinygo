@@ -226,7 +226,7 @@ func (c *Config) StackSize() uint64 {
 
 // MaxStackAlloc returns the size of the maximum allocation to put on the stack vs heap.
 func (c *Config) MaxStackAlloc() uint64 {
-	if c.StackSize() > 32*1024 {
+	if c.StackSize() >= 16*1024 {
 		return 1024
 	}
 
