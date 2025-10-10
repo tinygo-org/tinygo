@@ -50,7 +50,7 @@ unsafe.String.throw:                              ; preds = %entry
 declare void @runtime.unsafeSlicePanic(ptr) #1
 
 ; Function Attrs: nounwind
-define hidden ptr @main.unsafeStringData(ptr %s.data, i32 %s.len, ptr %context) unnamed_addr #2 {
+define hidden ptr @main.unsafeStringData(ptr readonly %s.data, i32 %s.len, ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #3

@@ -77,7 +77,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.minString(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr %context) unnamed_addr #2 {
+define hidden %runtime._string @main.minString(ptr readonly %a.data, i32 %a.len, ptr readonly %b.data, i32 %b.len, ptr %context) unnamed_addr #2 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -91,7 +91,7 @@ entry:
   ret %runtime._string %5
 }
 
-declare i1 @runtime.stringLess(ptr, i32, ptr, i32, ptr) #1
+declare i1 @runtime.stringLess(ptr readonly, i32, ptr readonly, i32, ptr) #1
 
 ; Function Attrs: nounwind
 define hidden i32 @main.maxInt(i32 %a, i32 %b, ptr %context) unnamed_addr #2 {
@@ -116,7 +116,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.maxString(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr %context) unnamed_addr #2 {
+define hidden %runtime._string @main.maxString(ptr readonly %a.data, i32 %a.len, ptr readonly %b.data, i32 %b.len, ptr %context) unnamed_addr #2 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1

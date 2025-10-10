@@ -142,6 +142,11 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 			nocapture := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0)
 			llvmFn.AddAttributeAtIndex(i+1, nocapture)
 		}
+		if paramInfo.flags&paramIsReadonly != 0 && paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
+			// Readonly pointer parameters (like strings) benefit from being marked as readonly.
+			readonly := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0)
+			llvmFn.AddAttributeAtIndex(i+1, readonly)
+		}
 	}
 
 	// Set a number of function or parameter attributes, depending on the

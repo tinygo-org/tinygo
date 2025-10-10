@@ -32,6 +32,9 @@ const (
 	// Whether this is a full or partial Go parameter (int, slice, etc).
 	// The extra context parameter is not a Go parameter.
 	paramIsGoParam = 1 << iota
+
+	// Whether this is a readonly parameter (for example, a string pointer).
+	paramIsReadonly
 )
 
 // createRuntimeCallCommon creates a runtime call. Use createRuntimeCall or
@@ -167,6 +170,7 @@ func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType 
 				continue
 			}
 			suffix := strconv.Itoa(i)
+			isString := false
 			if goType != nil {
 				// Try to come up with a good suffix for this struct field,
 				// depending on which Go type it's based on.
@@ -183,12 +187,16 @@ func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType 
 						suffix = []string{"r", "i"}[i]
 					case types.String:
 						suffix = []string{"data", "len"}[i]
+						isString = true
 					}
 				case *types.Signature:
 					suffix = []string{"context", "funcptr"}[i]
 				}
 			}
 			subInfos := c.flattenAggregateType(subfield, name+"."+suffix, extractSubfield(goType, i))
+			if isString {
+				subInfos[0].flags |= paramIsReadonly
+			}
 			paramInfos = append(paramInfos, subInfos...)
 		}
 		return paramInfos
