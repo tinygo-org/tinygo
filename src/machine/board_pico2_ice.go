@@ -10,54 +10,54 @@ package machine
 
 // GPIO pins
 const (
-	GP0  Pin = GPIO0
-	GP1  Pin = GPIO1
-	GP2  Pin = GPIO2
-	GP3  Pin = GPIO3
-	GP4  Pin = GPIO4
-	GP5  Pin = GPIO5
-	GP6  Pin = GPIO6
-	GP7  Pin = GPIO7
-	GP8  Pin = GPIO8
-	GP9  Pin = GPIO9
-	GP10 Pin = GPIO10
-	GP11 Pin = GPIO11
-	GP12 Pin = GPIO12
-	GP13 Pin = GPIO13
-	GP14 Pin = GPIO14
-	GP15 Pin = GPIO15
-	GP16 Pin = GPIO16
-	GP17 Pin = GPIO17
-	GP18 Pin = GPIO18
-	GP19 Pin = GPIO19
-	GP20 Pin = GPIO20
-	GP21 Pin = GPIO21
-	GP22 Pin = GPIO22
-	GP23 Pin = GPIO23
-	GP24 Pin = GPIO24
-	GP25 Pin = GPIO25
-	GP26 Pin = GPIO26
-	GP27 Pin = GPIO27
-	GP28 Pin = GPIO28
-	GP29 Pin = GPIO29
-	GP30 Pin = 30
-	GP31 Pin = 31
-	GP32 Pin = 32
-	GP33 Pin = 33
-	GP34 Pin = 34
-	GP35 Pin = 35
-	GP36 Pin = 36
-	GP37 Pin = 37
-	GP38 Pin = 38
-	GP39 Pin = 39
-	GP40 Pin = 40
-	GP41 Pin = 41
-	GP42 Pin = 42
-	GP43 Pin = 43
-	GP44 Pin = 44
-	GP45 Pin = 45
-	GP46 Pin = 46
-	GP47 Pin = 47
+	GP0  = GPIO0
+	GP1  = GPIO1
+	GP2  = GPIO2
+	GP3  = GPIO3
+	GP4  = GPIO4
+	GP5  = GPIO5
+	GP6  = GPIO6
+	GP7  = GPIO7
+	GP8  = GPIO8
+	GP9  = GPIO9
+	GP10 = GPIO10
+	GP11 = GPIO11
+	GP12 = GPIO12
+	GP13 = GPIO13
+	GP14 = GPIO14
+	GP15 = GPIO15
+	GP16 = GPIO16
+	GP17 = GPIO17
+	GP18 = GPIO18
+	GP19 = GPIO19
+	GP20 = GPIO20
+	GP21 = GPIO21
+	GP22 = GPIO22
+	GP23 = GPIO23
+	GP24 = GPIO24
+	GP25 = GPIO25
+	GP26 = GPIO26
+	GP27 = GPIO27
+	GP28 = GPIO28
+	GP29 = GPIO29
+	GP30 = GPIO30
+	GP31 = GPIO31
+	GP32 = GPIO32
+	GP33 = GPIO33
+	GP34 = GPIO34
+	GP35 = GPIO35
+	GP36 = GPIO36
+	GP37 = GPIO37
+	GP38 = GPIO38
+	GP39 = GPIO39
+	GP40 = GPIO40
+	GP41 = GPIO41
+	GP42 = GPIO42
+	GP43 = GPIO43
+	GP44 = GPIO44
+	GP45 = GPIO45
+	GP46 = GPIO46
+	GP47 = GPIO47
 
 	// RPi pins shared with ICE. The ICE number is what appears on
 	// the board silkscreen.
@@ -113,12 +113,12 @@ const (
 	BOOTSEL = GP42
 
 	// Tricolor LEDs
-	RED   Pin = GP1
-	GREEN Pin = GP0
-	BLUE  Pin = GP9
+	LED_RED   = GP1
+	LED_GREEN = GP0
+	LED_BLUE  = GP9
 
 	// Onboard LED
-	LED Pin = GREEN
+	LED = LED_GREEN
 
 	// Onboard crystal oscillator frequency, in MHz.
 	xoscFreq = 12 // MHz
@@ -126,10 +126,10 @@ const (
 
 // This board does not define default i2c pins.
 const (
-	I2C0_SDA_PIN Pin = 0
-	I2C0_SCL_PIN Pin = 0
-	I2C1_SDA_PIN Pin = 0
-	I2C1_SCL_PIN Pin = 0
+	I2C0_SDA_PIN = NoPin
+	I2C0_SCL_PIN = NoPin
+	I2C1_SDA_PIN = NoPin
+	I2C1_SCL_PIN = NoPin
 )
 
 // SPI default pins
