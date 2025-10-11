@@ -621,7 +621,7 @@ smoketest: testchdir
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=feather-rp2040      examples/device-id
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=pico2-ice	    examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=pico2-ice	        examples/blinky1
 	@$(MD5SUM) test.hex
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
