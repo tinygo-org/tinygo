@@ -21,7 +21,7 @@ jobs:
         # See: https://github.com/tinygo-org/tinygo/pull/4516#issuecomment-2416363668
         run: sudo apt-get remove llvm-18
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Pull musl, bdwgc
         run: |
             git submodule update --init lib/musl lib/bdwgc

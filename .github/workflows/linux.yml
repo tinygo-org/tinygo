@@ -31,7 +31,7 @@ jobs:
         # We're not on a multi-user machine, so this is safe.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
       - name: Extract TinyGo version
@@ -131,13 +131,13 @@ jobs:
     needs: build-linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.3'
           cache: true
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
@@ -164,7 +164,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
       - name: Install apt dependencies
@@ -179,9 +179,9 @@ jobs:
               simavr \
               ninja-build
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.3'
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -284,7 +284,7 @@ jobs:
     needs: build-linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Get TinyGo version
         id: version
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
@@ -296,9 +296,9 @@ jobs:
               g++-${{ matrix.toolchain }} \
               libc6-dev-${{ matrix.libc }}-cross
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.3'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v4

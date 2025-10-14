@@ -31,7 +31,7 @@ jobs:
         run: |
           scoop install ninja binaryen
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
       - name: Extract TinyGo version
@@ -39,9 +39,9 @@ jobs:
         shell: bash
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.3'
           cache: true
       - name: Restore cached LLVM source
         uses: actions/cache/restore@v4
@@ -143,11 +143,11 @@ jobs:
         run: |
           scoop install binaryen
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.3'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v4
@@ -173,11 +173,11 @@ jobs:
           maximum-size: 24GB
           disk-root: "C:"
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.3'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v4
@@ -209,11 +209,11 @@ jobs:
         run: |
           scoop install binaryen && scoop install wasmtime@29.0.1
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.3'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v4
