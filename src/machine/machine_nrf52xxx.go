@@ -301,18 +301,16 @@ func (spi *SPI) Transfer(w byte) (byte, error) {
 // padded until they fit: if len(w) > len(r) the extra bytes received will be
 // dropped and if len(w) < len(r) extra 0 bytes will be sent.
 func (spi *SPI) Tx(w, r []byte) error {
-	// Unfortunately the hardware (on the nrf52832) only supports up to 255
-	// bytes in the buffers, so if either w or r is longer than that the
-	// transfer needs to be broken up in pieces.
-	// The nrf52840 supports far larger buffers however, which isn't yet
-	// supported.
+	// Unfortunately the hardware (on the nrf52832) only supports a limited
+	// amount of bytes in the buffers (depending on the chip), so if either w or
+	// r is longer than that the transfer needs to be broken up in pieces.
 	for len(r) != 0 || len(w) != 0 {
 		// Prepare the SPI transfer: set the DMA pointers and lengths.
 		// read buffer
 		nr := uint32(len(r))
 		if nr > 0 {
-			if nr > 255 {
-				nr = 255
+			if nr > spiMaxBufferSize {
+				nr = spiMaxBufferSize
 			}
 			spi.Bus.RXD.PTR.Set(uint32(uintptr(unsafe.Pointer(&r[0]))))
 			r = r[nr:]
@@ -322,8 +320,8 @@ func (spi *SPI) Tx(w, r []byte) error {
 		// write buffer
 		nw := uint32(len(w))
 		if nw > 0 {
-			if nw > 255 {
-				nw = 255
+			if nw > spiMaxBufferSize {
+				nw = spiMaxBufferSize
 			}
 			spi.Bus.TXD.PTR.Set(uint32(uintptr(unsafe.Pointer(&w[0]))))
 			w = w[nw:]

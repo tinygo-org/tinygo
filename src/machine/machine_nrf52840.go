@@ -108,3 +108,5 @@ const eraseBlockSizeValue = 4096
 func eraseBlockSize() int64 {
 	return eraseBlockSizeValue
 }
+
+const spiMaxBufferSize = 0xffff // from the datasheet: TXD.MAXCNT and RXD.MAXCNT
