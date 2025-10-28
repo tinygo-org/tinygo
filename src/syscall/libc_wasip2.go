@@ -212,6 +212,7 @@ func writeStream(stream *wasiStream, buf *byte, count uint, offset int64) int {
 			return -1
 		}
 		remaining -= len
+		src = src[len:]
 	}
 
 	return int(count)
