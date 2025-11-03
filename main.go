@@ -1635,6 +1635,7 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
+	gocompatibility := flag.Bool("go-compatibility", true, "enable to check for Go versions compatibility, you can also configure this by setting the TINYGOGOCOMPATIBILITY environment variable")
 
 	// Internal flags, that are only intended for TinyGo development.
 	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
@@ -1712,6 +1713,16 @@ func main() {
 		ocdCommands = strings.Split(*ocdCommandsString, ",")
 	}
 
+	val, ok := os.LookupEnv("TINYGOGOCOMPATIBILITY")
+	if ok {
+		b, err := strconv.ParseBool(val)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "could not parse TINYGOGOCOMPATIBILITY value %q: %v\n", val, err)
+			os.Exit(1)
+		}
+		*gocompatibility = b
+	}
+
 	options := &compileopts.Options{
 		GOOS:            goenv.Get("GOOS"),
 		GOARCH:          goenv.Get("GOARCH"),
@@ -1748,6 +1759,7 @@ func main() {
 		Timeout:         *timeout,
 		WITPackage:      witPackage,
 		WITWorld:        witWorld,
+		GoCompatibility: *gocompatibility,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand

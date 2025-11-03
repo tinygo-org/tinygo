@@ -33,10 +33,13 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if gorootMajor != 1 || gorootMinor < minorMin || gorootMinor > minorMax {
-		// Note: when this gets updated, also update the Go compatibility matrix:
-		// https://github.com/tinygo-org/tinygo-site/blob/dev/content/docs/reference/go-compat-matrix.md
-		return nil, fmt.Errorf("requires go version 1.%d through 1.%d, got go%d.%d", minorMin, minorMax, gorootMajor, gorootMinor)
+
+	if options.GoCompatibility {
+		if gorootMajor != 1 || gorootMinor < minorMin || gorootMinor > minorMax {
+			// Note: when this gets updated, also update the Go compatibility matrix:
+			// https://github.com/tinygo-org/tinygo-site/blob/dev/content/docs/reference/go-compat-matrix.md
+			return nil, fmt.Errorf("requires go version 1.%d through 1.%d, got go%d.%d", minorMin, minorMax, gorootMajor, gorootMinor)
+		}
 	}
 
 	// Check that the Go toolchain version isn't too new, if we haven't been
