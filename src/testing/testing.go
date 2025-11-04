@@ -34,6 +34,7 @@ var (
 	flagSkipRegexp string
 	flagShuffle    string
 	flagCount      int
+	flagTimeout    time.Duration
 )
 
 var initRan bool
@@ -52,6 +53,7 @@ func Init() {
 	flag.StringVar(&flagShuffle, "test.shuffle", "off", "shuffle: off, on, <numeric-seed>")
 
 	flag.IntVar(&flagCount, "test.count", 1, "run each test or benchmark `count` times")
+	flag.DurationVar(&flagTimeout, "test.timeout", 0, "panic test binary after duration d (default 0, timeout disabled)")
 
 	initBenchmarkFlags()
 }
@@ -513,8 +515,6 @@ func (t *T) Run(name string, f func(t *T)) bool {
 //
 // The ok result is false if the -timeout flag indicates “no timeout” (0).
 // For now tinygo always return 0, false.
-//
-// Not Implemented.
 func (t *T) Deadline() (deadline time.Time, ok bool) {
 	deadline = t.context.deadline
 	return deadline, !deadline.IsZero()
@@ -527,7 +527,7 @@ type testContext struct {
 	deadline time.Time
 }
 
-func newTestContext(m *matcher) *testContext {
+func newTestContext(deadline time.Time, m *matcher) *testContext {
 	return &testContext{
 		match: m,
 	}
@@ -544,6 +544,8 @@ type M struct {
 	// value to pass to os.Exit, the outer test func main
 	// harness calls os.Exit with this code. See #34129.
 	exitCode int
+
+	timer *time.Timer
 }
 
 type testDeps interface {
@@ -588,7 +590,8 @@ func (m *M) Run() (code int) {
 		}
 	}
 
-	testRan, testOk := runTests(m.deps.MatchString, m.Tests)
+	deadline := m.startAlarm()
+	testRan, testOk := runTests(deadline, m.deps.MatchString, m.Tests)
 	if !testRan && *matchBenchmarks == "" {
 		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
 	}
@@ -599,13 +602,34 @@ func (m *M) Run() (code int) {
 		fmt.Println("PASS")
 		m.exitCode = 0
 	}
+	m.stopAlarm()
 	return
 }
 
-func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
+// startAlarm starts an alarm if requested.
+func (m *M) startAlarm() time.Time {
+	if flagTimeout <= 0 {
+		return time.Time{}
+	}
+
+	deadline := time.Now().Add(flagTimeout)
+	m.timer = time.AfterFunc(flagTimeout, func() {
+		panic(fmt.Sprintf("test timed out after %v", flagTimeout))
+	})
+	return deadline
+}
+
+// stopAlarm turns off the alarm.
+func (m *M) stopAlarm() {
+	if flagTimeout > 0 {
+		m.timer.Stop()
+	}
+}
+
+func runTests(deadline time.Time, matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
 	ok = true
 
-	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp))
+	ctx := newTestContext(deadline, newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp))
 	t := &T{
 		common: common{
 			output: &logger{logToStdout: flagVerbose},

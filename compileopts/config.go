@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -659,4 +660,5 @@ type TestConfig struct {
 	BenchTime         string
 	BenchMem          bool
 	Shuffle           string
+	Timeout           time.Duration
 }

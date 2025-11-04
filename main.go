@@ -238,6 +238,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	if testConfig.Shuffle != "" {
 		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
 	}
+	if t := testConfig.Timeout; t != 0 {
+		flags = append(flags, "-test.timeout="+t.String())
+	}
 
 	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
 
@@ -1628,7 +1631,7 @@ func main() {
 	ocdCommandsString := flag.String("ocd-commands", "", "OpenOCD commands, overriding target spec (can specify multiple separated by commas)")
 	ocdOutput := flag.Bool("ocd-output", false, "print OCD daemon output during debug")
 	port := flag.String("port", "", "flash port (can specify multiple candidates separated by commas)")
-	timeout := flag.Duration("timeout", 20*time.Second, "the length of time to retry locating the MSD volume to be used for flashing")
+	timeout := flag.Duration("volume-timeout", 20*time.Second, "the length of time to retry locating the MSD volume to be used for flashing")
 	programmer := flag.String("programmer", "", "which hardware programmer to use")
 	ldflags := flag.String("ldflags", "", "Go link tool compatible ldflags")
 	llvmFeatures := flag.String("llvm-features", "", "comma separated LLVM features to enable")
@@ -1675,6 +1678,7 @@ func main() {
 		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
 		flag.BoolVar(&testConfig.BenchMem, "benchmem", false, "show memory stats for benchmarks")
 		flag.StringVar(&testConfig.Shuffle, "shuffle", "", "shuffle the order the tests and benchmarks run")
+		flag.DurationVar(&testConfig.Timeout, "timeout", 10*time.Minute, "panic test binary after duration `d`")
 	}
 
 	// Early command processing, before commands are interpreted by the Go flag
