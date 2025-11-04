@@ -181,3 +181,19 @@ func getAuxv() []uintptr {
 func cgo_errno() uintptr {
 	return uintptr(*libc_errno_location())
 }
+
+// Unimplemented.
+var MemProfileRate int = 0
+
+// Unimplemented.
+func SetBlockProfileRate(rate int) {
+}
+
+var mutexProfileFraction int
+
+// Unimplemented.
+func SetMutexProfileFraction(rate int) int {
+	previous := mutexProfileFraction
+	mutexProfileFraction = rate
+	return previous
+}
