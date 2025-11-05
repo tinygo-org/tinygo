@@ -1713,11 +1713,11 @@ func main() {
 		ocdCommands = strings.Split(*ocdCommandsString, ",")
 	}
 
-	val, ok := os.LookupEnv("TINYGOGOCOMPATIBILITY")
+	val, ok := os.LookupEnv("TINYGO_GOCOMPATIBILITY")
 	if ok {
 		b, err := strconv.ParseBool(val)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "could not parse TINYGOGOCOMPATIBILITY value %q: %v\n", val, err)
+			fmt.Fprintf(os.Stderr, "could not parse TINYGO_GOCOMPATIBILITY value %q: %v\n", val, err)
 			os.Exit(1)
 		}
 		*gocompatibility = b
