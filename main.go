@@ -1635,7 +1635,7 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "cpuprofile output")
 	monitor := flag.Bool("monitor", false, "enable serial monitor")
 	baudrate := flag.Int("baudrate", 115200, "baudrate of serial monitor")
-	gocompatibility := flag.Bool("go-compatibility", true, "enable to check for Go versions compatibility, you can also configure this by setting the TINYGOGOCOMPATIBILITY environment variable")
+	gocompatibility := flag.Bool("go-compatibility", true, "enable to check for Go versions compatibility, you can also configure this by setting the TINYGO_GOCOMPATIBILITY environment variable")
 
 	// Internal flags, that are only intended for TinyGo development.
 	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
