@@ -157,7 +157,7 @@
   - pkg: encoding/ianaindex
   - pkg: encoding/japanese
   - pkg: encoding/korean
-  - pkg: encoding/simplifiedchinese
+  # - pkg: encoding/simplifiedchinese -- causes Linux to hang
   - pkg: encoding/traditionalchinese
   - pkg: encoding/unicode
   - pkg: encoding/unicode/utf32
@@ -234,7 +234,7 @@
     slow: true
   - pkg: mathext
   - pkg: mathext/prng
-  - pkg: optimize/convex/lp
+  # - pkg: optimize/convex/lp --  causes Linux to hang.
     skipwasi: true # takes too long
   - pkg: optimize/functions
   - pkg: spatial/r2
