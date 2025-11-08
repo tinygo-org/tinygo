@@ -245,7 +245,7 @@ func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc
 	// current insert position.
 	faultBlock := b.ctx.AddBasicBlock(b.llvmFn, blockPrefix+".throw")
 	nextBlock := b.insertBasicBlock(blockPrefix + ".next")
-	b.blockExits[b.currentBlock] = nextBlock // adjust outgoing block for phi nodes
+	b.currentBlockInfo.exit = nextBlock // adjust outgoing block for phi nodes
 
 	// Now branch to the out-of-bounds or the regular block.
 	b.CreateCondBr(assert, faultBlock, nextBlock)

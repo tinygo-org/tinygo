@@ -737,7 +737,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	prevBlock := b.GetInsertBlock()
 	okBlock := b.insertBasicBlock("typeassert.ok")
 	nextBlock := b.insertBasicBlock("typeassert.next")
-	b.blockExits[b.currentBlock] = nextBlock // adjust outgoing block for phi nodes
+	b.currentBlockInfo.exit = nextBlock // adjust outgoing block for phi nodes
 	b.CreateCondBr(commaOk, okBlock, nextBlock)
 
 	// Retrieve the value from the interface if the type assert was

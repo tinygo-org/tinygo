@@ -100,7 +100,7 @@ func (b *builder) createLandingPad() {
 
 	// Continue at the 'recover' block, which returns to the parent in an
 	// appropriate way.
-	b.CreateBr(b.blockEntries[b.fn.Recover])
+	b.CreateBr(b.blockInfo[b.fn.Recover.Index].entry)
 }
 
 // Create a checkpoint (similar to setjmp). This emits inline assembly that
@@ -234,41 +234,108 @@ func (b *builder) createInvokeCheckpoint() {
 	continueBB := b.insertBasicBlock("")
 	b.CreateCondBr(isZero, continueBB, b.landingpad)
 	b.SetInsertPointAtEnd(continueBB)
-	b.blockExits[b.currentBlock] = continueBB
+	b.currentBlockInfo.exit = continueBB
 }
 
-// isInLoop checks if there is a path from a basic block to itself.
-func isInLoop(start *ssa.BasicBlock) bool {
-	// Use a breadth-first search to scan backwards through the block graph.
-	queue := []*ssa.BasicBlock{start}
-	checked := map[*ssa.BasicBlock]struct{}{}
+// isInLoop checks if there is a path from the current block to itself.
+// Use Tarjan's strongly connected components algorithm to search for cycles.
+// A one-node SCC is a cycle iff there is an edge from the node to itself.
+// A multi-node SCC is always a cycle.
+// https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
+func (b *builder) isInLoop() bool {
+	if b.currentBlockInfo.tarjan.lowLink == 0 {
+		b.strongConnect(b.currentBlock)
+	}
+	return b.currentBlockInfo.tarjan.cyclic
+}
 
-	for len(queue) > 0 {
-		// pop a block off of the queue
-		block := queue[len(queue)-1]
-		queue = queue[:len(queue)-1]
+func (b *builder) strongConnect(block *ssa.BasicBlock) {
+	// Assign a new index.
+	// Indices start from 1 so that 0 can be used as a sentinel.
+	assignedIndex := b.tarjanIndex + 1
+	b.tarjanIndex = assignedIndex
 
-		// Search through predecessors.
-		// Searching backwards means that this is pretty fast when the block is close to the start of the function.
-		// Defers are often placed near the start of the function.
-		for _, pred := range block.Preds {
-			if pred == start {
-				// cycle found
-				return true
-			}
+	// Apply the new index.
+	blockIndex := block.Index
+	node := &b.blockInfo[blockIndex].tarjan
+	node.lowLink = assignedIndex
 
-			if _, ok := checked[pred]; ok {
-				// block already checked
-				continue
-			}
+	// Push the node onto the stack.
+	node.onStack = true
+	b.tarjanStack = append(b.tarjanStack, uint(blockIndex))
 
-			// add to queue and checked map
-			queue = append(queue, pred)
-			checked[pred] = struct{}{}
+	// Process the successors.
+	for _, successor := range block.Succs {
+		// Look up the successor's state.
+		successorIndex := successor.Index
+		if successorIndex == blockIndex {
+			// Handle a self-cycle specially.
+			node.cyclic = true
+			continue
+		}
+		successorNode := &b.blockInfo[successorIndex].tarjan
+
+		switch {
+		case successorNode.lowLink == 0:
+			// This node has not yet been visisted.
+			b.strongConnect(successor)
+
+		case !successorNode.onStack:
+			// This node has been visited, but is in a different SCC.
+			// Ignore it, and do not update lowLink.
+			continue
+		}
+
+		// Update the lowLink index.
+		// This always uses the min-of-lowlink instead of using index in the on-stack case.
+		// This is done for two reasons:
+		// 1. The lowLink update can be shared between the new-node and on-stack cases.
+		// 2. The assigned index does not need to be saved - it is only needed for root node detection.
+		if successorNode.lowLink < node.lowLink {
+			node.lowLink = successorNode.lowLink
 		}
 	}
 
-	return false
+	if node.lowLink == assignedIndex {
+		// This is a root node.
+		// Pop the SCC off the stack.
+		stack := b.tarjanStack
+		top := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		blocks := b.blockInfo
+		topNode := &blocks[top].tarjan
+		topNode.onStack = false
+
+		if top != uint(blockIndex) {
+			// The root node is not the only node in the SCC.
+			// Mark all nodes in this SCC as cyclic.
+			topNode.cyclic = true
+			for top != uint(blockIndex) {
+				top = stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				topNode = &blocks[top].tarjan
+				topNode.onStack = false
+				topNode.cyclic = true
+			}
+		}
+
+		b.tarjanStack = stack
+	}
+}
+
+// tarjanNode holds per-block state for isInLoop and strongConnect.
+type tarjanNode struct {
+	// lowLink is the index of the first visited node that is reachable from this block.
+	// The lowLink indices are assigned by the SCC search, and do not correspond to b.Index.
+	// A lowLink of 0 is used as a sentinel to mark a node which has not yet been visited.
+	lowLink uint
+
+	// onStack tracks whether this node is currently on the SCC search stack.
+	onStack bool
+
+	// cyclic indicates whether this block is in a loop.
+	// If lowLink is 0, strongConnect must be called before reading this field.
+	cyclic bool
 }
 
 // createDefer emits a single defer instruction, to be run when this function
@@ -410,7 +477,10 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 	// Put this struct in an allocation.
 	var alloca llvm.Value
-	if !isInLoop(instr.Block()) {
+	if instr.Block() != b.currentBlock {
+		panic("block mismatch")
+	}
+	if !b.isInLoop() {
 		// This can safely use a stack allocation.
 		alloca = llvmutil.CreateEntryBlockAlloca(b.Builder, deferredCallType, "defer.alloca")
 	} else {

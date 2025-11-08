@@ -270,6 +270,241 @@ entry:
   ret void
 }
 
+; Function Attrs: nounwind
+define hidden void @main.deferInfiniteLoop(ptr %context) unnamed_addr #1 {
+entry:
+  %deferPtr = alloca ptr, align 4
+  store ptr null, ptr %deferPtr, align 4
+  %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %0 = call ptr @llvm.stacksave.p0()
+  call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  br label %for.body
+
+for.body:                                         ; preds = %for.body, %entry
+  %defer.next = load ptr, ptr %deferPtr, align 4
+  %defer.alloc.call = call dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #4
+  store i32 0, ptr %defer.alloc.call, align 4
+  %defer.alloc.call.repack1 = getelementptr inbounds nuw i8, ptr %defer.alloc.call, i32 4
+  store ptr %defer.next, ptr %defer.alloc.call.repack1, align 4
+  %defer.alloc.call.repack3 = getelementptr inbounds nuw i8, ptr %defer.alloc.call, i32 8
+  store i32 8, ptr %defer.alloc.call.repack3, align 4
+  store ptr %defer.alloc.call, ptr %deferPtr, align 4
+  br label %for.body
+
+recover:                                          ; preds = %rundefers.end
+  ret void
+
+lpad:                                             ; No predecessors!
+  br label %rundefers.loophead
+
+rundefers.loophead:                               ; preds = %rundefers.callback0, %lpad
+  br i1 poison, label %rundefers.end, label %rundefers.loop
+
+rundefers.loop:                                   ; preds = %rundefers.loophead
+  switch i32 poison, label %rundefers.default [
+    i32 0, label %rundefers.callback0
+  ]
+
+rundefers.callback0:                              ; preds = %rundefers.loop
+  br label %rundefers.loophead
+
+rundefers.default:                                ; preds = %rundefers.loop
+  unreachable
+
+rundefers.end:                                    ; preds = %rundefers.loophead
+  br label %recover
+}
+
+; Function Attrs: nounwind
+define hidden void @main.deferLoop(ptr %context) unnamed_addr #1 {
+entry:
+  %deferPtr = alloca ptr, align 4
+  store ptr null, ptr %deferPtr, align 4
+  %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %0 = call ptr @llvm.stacksave.p0()
+  call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  br label %for.loop
+
+for.loop:                                         ; preds = %for.body, %entry
+  %1 = phi i32 [ 0, %entry ], [ %3, %for.body ]
+  %2 = icmp slt i32 %1, 10
+  br i1 %2, label %for.body, label %for.done
+
+for.body:                                         ; preds = %for.loop
+  %defer.next = load ptr, ptr %deferPtr, align 4
+  %defer.alloc.call = call dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #4
+  store i32 0, ptr %defer.alloc.call, align 4
+  %defer.alloc.call.repack13 = getelementptr inbounds nuw i8, ptr %defer.alloc.call, i32 4
+  store ptr %defer.next, ptr %defer.alloc.call.repack13, align 4
+  %defer.alloc.call.repack15 = getelementptr inbounds nuw i8, ptr %defer.alloc.call, i32 8
+  store i32 %1, ptr %defer.alloc.call.repack15, align 4
+  store ptr %defer.alloc.call, ptr %deferPtr, align 4
+  %3 = add i32 %1, 1
+  br label %for.loop
+
+for.done:                                         ; preds = %for.loop
+  br label %rundefers.block
+
+rundefers.after:                                  ; preds = %rundefers.end
+  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  ret void
+
+rundefers.block:                                  ; preds = %for.done
+  br label %rundefers.loophead
+
+rundefers.loophead:                               ; preds = %rundefers.callback0, %rundefers.block
+  %4 = load ptr, ptr %deferPtr, align 4
+  %stackIsNil = icmp eq ptr %4, null
+  br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
+
+rundefers.loop:                                   ; preds = %rundefers.loophead
+  %stack.next.gep = getelementptr inbounds nuw i8, ptr %4, i32 4
+  %stack.next = load ptr, ptr %stack.next.gep, align 4
+  store ptr %stack.next, ptr %deferPtr, align 4
+  %callback = load i32, ptr %4, align 4
+  switch i32 %callback, label %rundefers.default [
+    i32 0, label %rundefers.callback0
+  ]
+
+rundefers.callback0:                              ; preds = %rundefers.loop
+  %gep = getelementptr inbounds nuw i8, ptr %4, i32 8
+  %param = load i32, ptr %gep, align 4
+  call void @runtime.printlock(ptr undef) #4
+  call void @runtime.printint32(i32 %param, ptr undef) #4
+  call void @runtime.printunlock(ptr undef) #4
+  br label %rundefers.loophead
+
+rundefers.default:                                ; preds = %rundefers.loop
+  unreachable
+
+rundefers.end:                                    ; preds = %rundefers.loophead
+  br label %rundefers.after
+
+recover:                                          ; preds = %rundefers.end1
+  ret void
+
+lpad:                                             ; No predecessors!
+  br label %rundefers.loophead4
+
+rundefers.loophead4:                              ; preds = %rundefers.callback010, %lpad
+  br i1 poison, label %rundefers.end1, label %rundefers.loop3
+
+rundefers.loop3:                                  ; preds = %rundefers.loophead4
+  switch i32 poison, label %rundefers.default2 [
+    i32 0, label %rundefers.callback010
+  ]
+
+rundefers.callback010:                            ; preds = %rundefers.loop3
+  br label %rundefers.loophead4
+
+rundefers.default2:                               ; preds = %rundefers.loop3
+  unreachable
+
+rundefers.end1:                                   ; preds = %rundefers.loophead4
+  br label %recover
+}
+
+; Function Attrs: nounwind
+define hidden void @main.deferBetweenLoops(ptr %context) unnamed_addr #1 {
+entry:
+  %defer.alloca = alloca { i32, ptr, i32 }, align 4
+  %deferPtr = alloca ptr, align 4
+  store ptr null, ptr %deferPtr, align 4
+  %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %0 = call ptr @llvm.stacksave.p0()
+  call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  br label %for.loop
+
+for.loop:                                         ; preds = %for.body, %entry
+  %1 = phi i32 [ 0, %entry ], [ %3, %for.body ]
+  %2 = icmp slt i32 %1, 10
+  br i1 %2, label %for.body, label %for.done
+
+for.body:                                         ; preds = %for.loop
+  %3 = add i32 %1, 1
+  br label %for.loop
+
+for.done:                                         ; preds = %for.loop
+  %defer.next = load ptr, ptr %deferPtr, align 4
+  store i32 0, ptr %defer.alloca, align 4
+  %defer.alloca.repack16 = getelementptr inbounds nuw i8, ptr %defer.alloca, i32 4
+  store ptr %defer.next, ptr %defer.alloca.repack16, align 4
+  %defer.alloca.repack18 = getelementptr inbounds nuw i8, ptr %defer.alloca, i32 8
+  store i32 1, ptr %defer.alloca.repack18, align 4
+  store ptr %defer.alloca, ptr %deferPtr, align 4
+  br label %for.loop1
+
+for.loop1:                                        ; preds = %for.body2, %for.done
+  %4 = phi i32 [ 0, %for.done ], [ %6, %for.body2 ]
+  %5 = icmp slt i32 %4, 10
+  br i1 %5, label %for.body2, label %for.done3
+
+for.body2:                                        ; preds = %for.loop1
+  %6 = add i32 %4, 1
+  br label %for.loop1
+
+for.done3:                                        ; preds = %for.loop1
+  br label %rundefers.block
+
+rundefers.after:                                  ; preds = %rundefers.end
+  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  ret void
+
+rundefers.block:                                  ; preds = %for.done3
+  br label %rundefers.loophead
+
+rundefers.loophead:                               ; preds = %rundefers.callback0, %rundefers.block
+  %7 = load ptr, ptr %deferPtr, align 4
+  %stackIsNil = icmp eq ptr %7, null
+  br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
+
+rundefers.loop:                                   ; preds = %rundefers.loophead
+  %stack.next.gep = getelementptr inbounds nuw i8, ptr %7, i32 4
+  %stack.next = load ptr, ptr %stack.next.gep, align 4
+  store ptr %stack.next, ptr %deferPtr, align 4
+  %callback = load i32, ptr %7, align 4
+  switch i32 %callback, label %rundefers.default [
+    i32 0, label %rundefers.callback0
+  ]
+
+rundefers.callback0:                              ; preds = %rundefers.loop
+  %gep = getelementptr inbounds nuw i8, ptr %7, i32 8
+  %param = load i32, ptr %gep, align 4
+  call void @runtime.printlock(ptr undef) #4
+  call void @runtime.printint32(i32 %param, ptr undef) #4
+  call void @runtime.printunlock(ptr undef) #4
+  br label %rundefers.loophead
+
+rundefers.default:                                ; preds = %rundefers.loop
+  unreachable
+
+rundefers.end:                                    ; preds = %rundefers.loophead
+  br label %rundefers.after
+
+recover:                                          ; preds = %rundefers.end4
+  ret void
+
+lpad:                                             ; No predecessors!
+  br label %rundefers.loophead7
+
+rundefers.loophead7:                              ; preds = %rundefers.callback013, %lpad
+  br i1 poison, label %rundefers.end4, label %rundefers.loop6
+
+rundefers.loop6:                                  ; preds = %rundefers.loophead7
+  switch i32 poison, label %rundefers.default5 [
+    i32 0, label %rundefers.callback013
+  ]
+
+rundefers.callback013:                            ; preds = %rundefers.loop6
+  br label %rundefers.loophead7
+
+rundefers.default5:                               ; preds = %rundefers.loop6
+  unreachable
+
+rundefers.end4:                                   ; preds = %rundefers.loophead7
+  br label %recover
+}
+
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
 attributes #1 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
 attributes #2 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }

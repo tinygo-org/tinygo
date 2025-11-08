@@ -18,3 +18,23 @@ func deferMultiple() {
 	}()
 	external()
 }
+
+func deferInfiniteLoop() {
+	for {
+		defer print(8)
+	}
+}
+
+func deferLoop() {
+	for i := 0; i < 10; i++ {
+		defer print(i)
+	}
+}
+
+func deferBetweenLoops() {
+	for i := 0; i < 10; i++ {
+	}
+	defer print(1)
+	for i := 0; i < 10; i++ {
+	}
+}

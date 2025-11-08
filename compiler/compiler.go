@@ -152,10 +152,12 @@ type builder struct {
 	llvmFnType        llvm.Type
 	llvmFn            llvm.Value
 	info              functionInfo
-	locals            map[ssa.Value]llvm.Value            // local variables
-	blockEntries      map[*ssa.BasicBlock]llvm.BasicBlock // a *ssa.BasicBlock may be split up
-	blockExits        map[*ssa.BasicBlock]llvm.BasicBlock // these are the exit blocks
+	locals            map[ssa.Value]llvm.Value // local variables
+	blockInfo         []blockInfo
 	currentBlock      *ssa.BasicBlock
+	currentBlockInfo  *blockInfo
+	tarjanStack       []uint
+	tarjanIndex       uint
 	phis              []phiNode
 	deferPtr          llvm.Value
 	deferFrame        llvm.Value
@@ -187,9 +189,20 @@ func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *bu
 		info:            c.getFunctionInfo(f),
 		locals:          make(map[ssa.Value]llvm.Value),
 		dilocals:        make(map[*types.Var]llvm.Metadata),
-		blockEntries:    make(map[*ssa.BasicBlock]llvm.BasicBlock),
-		blockExits:      make(map[*ssa.BasicBlock]llvm.BasicBlock),
 	}
+}
+
+type blockInfo struct {
+	// entry is the LLVM basic block corresponding to the start of this *ssa.Block.
+	entry llvm.BasicBlock
+
+	// exit is the LLVM basic block corresponding to the end of this *ssa.Block.
+	// It will be different than entry if any of the block's instructions contain internal branches.
+	exit llvm.BasicBlock
+
+	// tarjan holds state for applying Tarjan's strongly connected components algorithm to the CFG.
+	// This is used by defer.go to determine whether to stack- or heap-allocate defer data.
+	tarjan tarjanNode
 }
 
 type deferBuiltin struct {
@@ -1220,14 +1233,29 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// intrinsic (like an atomic operation). Create the entry block
 		// manually.
 		entryBlock = b.ctx.AddBasicBlock(b.llvmFn, "entry")
-	} else {
-		for _, block := range b.fn.DomPreorder() {
-			llvmBlock := b.ctx.AddBasicBlock(b.llvmFn, block.Comment)
-			b.blockEntries[block] = llvmBlock
-			b.blockExits[block] = llvmBlock
+		// Intrinsics may create internal branches (e.g. nil checks).
+		// They will attempt to access b.currentBlockInfo to update the exit block.
+		// Create some fake block info for them to access.
+		blockInfo := []blockInfo{
+			{
+				entry: entryBlock,
+				exit:  entryBlock,
+			},
 		}
+		b.blockInfo = blockInfo
+		b.currentBlockInfo = &blockInfo[0]
+	} else {
+		blocks := b.fn.Blocks
+		blockInfo := make([]blockInfo, len(blocks))
+		for _, block := range b.fn.DomPreorder() {
+			info := &blockInfo[block.Index]
+			llvmBlock := b.ctx.AddBasicBlock(b.llvmFn, block.Comment)
+			info.entry = llvmBlock
+			info.exit = llvmBlock
+		}
+		b.blockInfo = blockInfo
 		// Normal functions have an entry block.
-		entryBlock = b.blockEntries[b.fn.Blocks[0]]
+		entryBlock = blockInfo[0].entry
 	}
 	b.SetInsertPointAtEnd(entryBlock)
 
@@ -1323,8 +1351,9 @@ func (b *builder) createFunction() {
 		if b.DumpSSA {
 			fmt.Printf("%d: %s:\n", block.Index, block.Comment)
 		}
-		b.SetInsertPointAtEnd(b.blockEntries[block])
 		b.currentBlock = block
+		b.currentBlockInfo = &b.blockInfo[block.Index]
+		b.SetInsertPointAtEnd(b.currentBlockInfo.entry)
 		for _, instr := range block.Instrs {
 			if instr, ok := instr.(*ssa.DebugRef); ok {
 				if !b.Debug {
@@ -1384,7 +1413,7 @@ func (b *builder) createFunction() {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
 			llvmVal := b.getValue(edge, getPos(phi.ssa))
-			llvmBlock := b.blockExits[block.Preds[i]]
+			llvmBlock := b.blockInfo[block.Preds[i].Index].exit
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
 	}
@@ -1498,11 +1527,11 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	case *ssa.If:
 		cond := b.getValue(instr.Cond, getPos(instr))
 		block := instr.Block()
-		blockThen := b.blockEntries[block.Succs[0]]
-		blockElse := b.blockEntries[block.Succs[1]]
+		blockThen := b.blockInfo[block.Succs[0].Index].entry
+		blockElse := b.blockInfo[block.Succs[1].Index].entry
 		b.CreateCondBr(cond, blockThen, blockElse)
 	case *ssa.Jump:
-		blockJump := b.blockEntries[instr.Block().Succs[0]]
+		blockJump := b.blockInfo[instr.Block().Succs[0].Index].entry
 		b.CreateBr(blockJump)
 	case *ssa.MapUpdate:
 		m := b.getValue(instr.Map, getPos(instr))
