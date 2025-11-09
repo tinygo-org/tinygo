@@ -120,9 +120,13 @@ int tinygo_task_start(uintptr_t fn, void *args, void *task, pthread_t *thread, u
     #endif
     pthread_attr_t attrs;
     pthread_attr_init(&attrs);
+	pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED);
     pthread_attr_setstacksize(&attrs, stackSize);
     int result = pthread_create(thread, &attrs, &start_wrapper, &state);
     pthread_attr_destroy(&attrs);
+	if (result != 0) {
+		return result;
+	}
 
     // Wait until the thread has been created and read all state_pass variables.
     #if __APPLE__
