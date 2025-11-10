@@ -48,17 +48,17 @@ func gcInit()
 
 //export tinygo_runtime_bdwgc_callback
 func gcCallback() {
+	if hasParallelism && needsResumeWorld {
+		// Should never happen, check for it anyway.
+		runtimePanic("gc: world already stopped")
+	}
+
 	// Mark globals and all stacks, and stop the world if we're using threading.
 	gcMarkReachable()
 
 	// If we use a scheduler with parallelism (the threads scheduler for
 	// example), we need to call gcResumeWorld() after scanning has finished.
 	if hasParallelism {
-		if needsResumeWorld {
-			// Should never happen, check for it anyway.
-			runtimePanic("gc: world already stopped")
-		}
-
 		// Note that we need to resume the world after finishing the GC call.
 		needsResumeWorld = true
 	}
