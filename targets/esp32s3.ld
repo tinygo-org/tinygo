@@ -19,25 +19,6 @@ ENTRY(call_start_cpu0)
 
 SECTIONS
 {
-    /* Constant literals and code. Loaded into IRAM for now. Eventually, most
-     * code should be executed directly from flash.
-     * Note that literals must be before code for the l32r instruction to work.
-     */
-.text.call_start_cpu0 : ALIGN(4)
-{
-    *(.literal.call_start_cpu0)
-    *(.text.call_start_cpu0)
-} >IRAM
-
-/* All other code and literals */
-.text : ALIGN(4)
-{
-    *(.literal .text)
-    *(.literal.* .text.*)
-    *(.text)
-    *(.text.*)
-} >IRAM
-
     /* Put the stack at the bottom of DRAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      * See: http://blog.japaric.io/stack-overflow-protection/ */
@@ -47,6 +28,25 @@ SECTIONS
         . += _stack_size;
         _stack_top = .;
     } >DRAM
+
+    /* Constant literals and code. Loaded into IRAM for now. Eventually, most
+     * code should be executed directly from flash.
+     * Note that literals must be before code for the l32r instruction to work.
+     */
+.text.call_start_cpu0 : ALIGN(4)
+{
+    *(.literal.call_start_cpu0)
+    *(.text.call_start_cpu0)
+} >IRAM AT >DRAM
+
+/* All other code and literals */
+.text : ALIGN(4)
+{
+    *(.literal .text)
+    *(.literal.* .text.*)
+    *(.text)
+    *(.text.*)
+} >IRAM AT >DRAM
 
     /* Constant global variables.
      * They are loaded in DRAM for ease of use. Eventually they should be stored
