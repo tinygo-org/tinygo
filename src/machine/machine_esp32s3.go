@@ -11,12 +11,54 @@ import (
 
 const deviceName = esp.Device
 
-const peripheralClock = 40_000000 // 80MHz
+const xtalClock = 40_000000       // 40MHz
+const apbClock = 80_000000        // 80MHz
+const cryptoPWMClock = 160_000000 // 160MHz
 
-// CPUFrequency returns the current CPU frequency of the chip.
-// Currently it is a fixed frequency but it may allow changing in the future.
-func CPUFrequency() uint32 {
-	return 160e6 // 80 MHz
+// GetCPUFrequency returns the current CPU frequency of the chip.
+func GetCPUFrequency() (uint32, error) {
+	switch esp.SYSTEM.GetSYSCLK_CONF_SOC_CLK_SEL() {
+	case 0:
+		return xtalClock / (esp.SYSTEM.GetSYSCLK_CONF_PRE_DIV_CNT() + 1), nil
+	case 1:
+		switch esp.SYSTEM.GetCPU_PER_CONF_CPUPERIOD_SEL() {
+		case 0:
+			return 80e6, nil
+		case 1:
+			return 160e6, nil
+		case 2:
+			// If esp.SYSTEM.GetCPU_PER_CONF_PLL_FREQ_SEL() == 1, this is undefined
+			return 240e6, nil
+		}
+	case 2:
+		//RC Fast Clock
+		return (175e5) / (esp.SYSTEM.GetSYSCLK_CONF_PRE_DIV_CNT() + 1), nil
+	}
+	return 0, errors.New("machine: Unable to determine current cpu frequency")
+}
+
+// SetCPUFrequency sets the frequency of the CPU to one of several targets
+func SetCPUFrequency(frequency uint32) error {
+	// Always assume we are on PLL. Lower frequencies can be set with a different
+	// clock source, but this will change the behavior of APB clock and Crypto PWM
+	// clock
+	//esp.SYSTEM.SetSYSCLK_CONF_SOC_CLK_SEL(1)
+	
+	switch frequency {
+	case 80_000000:
+		esp.SYSTEM.SetCPU_PER_CONF_CPUPERIOD_SEL(0)
+		esp.SYSTEM.SetCPU_PER_CONF_PLL_FREQ_SEL(0) // Reduce PLL freq when possible
+		return nil
+	case 160_000000:
+		esp.SYSTEM.SetCPU_PER_CONF_CPUPERIOD_SEL(1)
+		esp.SYSTEM.SetCPU_PER_CONF_PLL_FREQ_SEL(0)
+		return nil
+	case 240_000000:
+		esp.SYSTEM.SetCPU_PER_CONF_PLL_FREQ_SEL(1) // Increase PLL freq when needed
+		esp.SYSTEM.SetCPU_PER_CONF_CPUPERIOD_SEL(2)
+		return nil
+	}
+	return errors.New("machine: Unsupported CPU frequency selected. Supported: 80, 160, 240 MHz")
 }
 
 var (
@@ -188,7 +230,8 @@ func (uart *UART) Configure(config UARTConfig) {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
-	uart.Bus.CLKDIV.Set(peripheralClock / config.BaudRate)
+	// Crystal clock source is selected by default
+	uart.Bus.CLKDIV.Set(xtalClock / config.BaudRate)
 }
 
 func (uart *UART) writeByte(b byte) error {
