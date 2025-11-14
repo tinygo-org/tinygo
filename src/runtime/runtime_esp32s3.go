@@ -52,7 +52,10 @@ func main() {
 	esp.SYSTEM.SetCPU_PER_CONF_PLL_FREQ_SEL(1)
 	esp.SYSTEM.SetCPU_PER_CONF_CPUPERIOD_SEL(2)
 
-	clearbss()
+	// Clear bss. Repeat many times while we wait for cpu/clock to stabilize
+	for x := 0; x < 30; x++ {
+		clearbss()
+	}
 
 	// Initialize main system timer used for time.Now.
 	initTimer()
