@@ -43,7 +43,7 @@ func SetCPUFrequency(frequency uint32) error {
 	// clock source, but this will change the behavior of APB clock and Crypto PWM
 	// clock
 	//esp.SYSTEM.SetSYSCLK_CONF_SOC_CLK_SEL(1)
-	
+
 	switch frequency {
 	case 80_000000:
 		esp.SYSTEM.SetCPU_PER_CONF_CPUPERIOD_SEL(0)
@@ -94,12 +94,14 @@ const (
 	GPIO17 Pin = 17
 	GPIO18 Pin = 18
 	GPIO19 Pin = 19
+	GPIO20 Pin = 20
 	GPIO21 Pin = 21
-	GPIO22 Pin = 22
-	GPIO23 Pin = 23
-	GPIO25 Pin = 25
 	GPIO26 Pin = 26
 	GPIO27 Pin = 27
+	GPIO28 Pin = 28
+	GPIO29 Pin = 29
+	GPIO30 Pin = 30
+	GPIO31 Pin = 31
 	GPIO32 Pin = 32
 	GPIO33 Pin = 33
 	GPIO34 Pin = 34
@@ -115,6 +117,8 @@ const (
 	GPIO44 Pin = 44
 	GPIO45 Pin = 45
 	GPIO46 Pin = 46
+	GPIO47 Pin = 47
+	GPIO48 Pin = 48
 )
 
 // Configure this pin with the given configuration.
@@ -137,7 +141,68 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 		return
 	}
 
-	// TODO: Mux config
+	ioConfig := uint32(0)
+
+	// MCU_SEL: Function 1 is always GPIO
+	ioConfig |= (1 << esp.IO_MUX_GPIO_MCU_SEL_Pos)
+
+	// FUN_IE: Make this pin an input pin (always set for GPIO operation)
+	ioConfig |= esp.IO_MUX_GPIO_FUN_IE
+
+	// DRV: Set drive strength to 20 mA as a default. Pins 17 and 18 are special
+	var drive uint32
+	if p == GPIO17 || p == GPIO18 {
+		drive = 1 // 20 mA
+	} else {
+		drive = 2 // 20 mA
+	}
+	ioConfig |= (drive << esp.IO_MUX_GPIO_FUN_DRV_Pos)
+
+	// WPU/WPD: Select pull mode.
+	if config.Mode == PinInputPullup {
+		ioConfig |= esp.IO_MUX_GPIO_FUN_WPU
+	} else if config.Mode == PinInputPulldown {
+		ioConfig |= esp.IO_MUX_GPIO_FUN_WPD
+	}
+
+	// Set configuration
+	ioRegister := p.ioMuxReg()
+	ioRegister.Set(ioConfig)
+
+	switch config.Mode {
+	case PinOutput:
+		// Set the 'output enable' bit.
+		if p < 32 {
+			esp.GPIO.ENABLE_W1TS.Set(1 << p)
+		} else {
+			esp.GPIO.ENABLE1_W1TS.Set(1 << (p - 32))
+		}
+		// Set the signal to read the output value from. It can be a peripheral
+		// output signal, or the special value 256 which indicates regular GPIO
+		// usage.
+		p.outFunc().Set(signal)
+	case PinInput, PinInputPullup, PinInputPulldown:
+		// Clear the 'output enable' bit.
+		if p < 32 {
+			esp.GPIO.ENABLE_W1TC.Set(1 << p)
+		} else {
+			esp.GPIO.ENABLE1_W1TC.Set(1 << (p - 32))
+		}
+		if signal != 256 {
+			// Signal is a peripheral function (not a simple GPIO). Connect this
+			// signal to the pin.
+			// Note that outFunc and inFunc work in the opposite direction.
+			// outFunc configures a pin to use a given output signal, while
+			// inFunc specifies a pin to use to read the signal from.
+			inFunc(signal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(p)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
+		}
+	}
+}
+
+// ioMuxReg returns the IO_MUX_n_REG register used for configuring the io mux for
+// this pin
+func (p Pin) ioMuxReg() *volatile.Register32 {
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.IO_MUX.GPIO0), uintptr(p)*4))
 }
 
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
@@ -207,8 +272,6 @@ func (p Pin) Get() bool {
 		return esp.GPIO.IN1.Get()&(1<<(p-32)) != 0
 	}
 }
-
-// TODO: Mux
 
 var DefaultUART = UART0
 
