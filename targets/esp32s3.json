@@ -11,7 +11,7 @@
 	"libc": "picolibc",
 	"linkerscript": "targets/esp32s3.ld",
 	"extra-files": [
-		"src/device/esp/esp32s3.S",
+		"src/device/esp/esp32.S",
 		"src/internal/task/task_stack_esp32.S"
 	],
 	"binary-format": "esp32s3",
