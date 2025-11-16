@@ -335,6 +335,7 @@ func (spi *SPI) Tx(w, r []byte) error {
 		// finished if the transfer is send-only (a common case).
 		spi.Bus.TASKS_START.Set(1)
 		for spi.Bus.EVENTS_END.Get() == 0 {
+			gosched()
 		}
 		spi.Bus.EVENTS_END.Set(0)
 	}
