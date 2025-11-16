@@ -7,3 +7,7 @@ package machine
 func GetRNG() (ret uint32, err error) {
 	return getRNG()
 }
+
+func isSoftDeviceEnabled() bool {
+	return false
+}

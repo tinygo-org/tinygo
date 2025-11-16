@@ -11,9 +11,8 @@ import (
 
 // avoid a heap allocation in GetRNG.
 var (
-	softdeviceEnabled uint8
-	bytesAvailable    uint8
-	buf               [4]uint8
+	bytesAvailable uint8
+	buf            [4]uint8
 
 	errNoSoftDeviceSupport = errors.New("rng: softdevice not supported on this device")
 	errNotEnoughRandomData = errors.New("rng: not enough random data available")
@@ -24,9 +23,7 @@ var (
 func GetRNG() (ret uint32, err error) {
 	// First check whether the SoftDevice is enabled.
 	// sd_rand_application_bytes_available_get cannot be called when the SoftDevice is not enabled.
-	arm.SVCall1(0x12, &softdeviceEnabled) // sd_softdevice_is_enabled
-
-	if softdeviceEnabled == 0 {
+	if !isSoftDeviceEnabled() {
 		return getRNG()
 	}
 
@@ -57,3 +54,8 @@ func GetRNG() (ret uint32, err error) {
 
 	return uint32(buf[0]) | uint32(buf[1])<<8 | uint32(buf[2])<<16 | uint32(buf[3])<<24, nil
 }
+
+// This function is defined in the runtime, but we need it too.
+//
+//go:linkname isSoftDeviceEnabled runtime.isSoftDeviceEnabled
+func isSoftDeviceEnabled() bool
