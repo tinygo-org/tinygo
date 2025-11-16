@@ -3,7 +3,9 @@
 package machine
 
 import (
+	"device/arm"
 	"device/nrf"
+	"errors"
 	"internal/binary"
 	"runtime/interrupt"
 	"unsafe"
@@ -380,12 +382,44 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 // If the length of p is not long enough it will be padded with 0xFF bytes.
 // This method assumes that the destination is already erased.
 func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
+	if len(p) == 0 {
+		return 0, nil // nothing to do (and it would fail in sd_flash_write)
+	}
+
 	if FlashDataStart()+uintptr(off)+uintptr(len(p)) > FlashDataEnd() {
 		return 0, errFlashCannotWritePastEOF
 	}
 
 	address := FlashDataStart() + uintptr(off)
 	padded := flashPad(p, int(f.WriteBlockSize()))
+
+	// When the SoftDevice is enabled, access to the flash is restricted and
+	// must go through the SoftDevice API.
+	if isSoftDeviceEnabled() {
+		// Call sd_flash_write, which is SVC_SOC_BASE + 9 in all the
+		// SoftDevices I've checked.
+		// Documentation:
+		// https://docs.nordicsemi.com/bundle/s140_v6.0.0_api/page/group_n_r_f_s_o_c_f_u_n_c_t_i_o_n_s.html
+		result := arm.SVCall3(0x20+9, address, &p[0], uint32(len(p)))
+		if result != 0 {
+			// Could not queue flash operation? Not sure when this can
+			// happen.
+			return 0, flashError
+		}
+
+		// Wait until the SoftDevice is finished.
+		flashStatus = flashStatusBusy
+		for flashStatus == flashStatusBusy {
+			handleSoftDeviceEvents()
+		}
+
+		// Check whether the operation was successful.
+		if flashStatus != flashStatusOk {
+			flashStatus = flashStatusOk
+			return 0, flashError
+		}
+		return len(p), nil
+	}
 
 	waitWhileFlashBusy()
 
@@ -428,6 +462,40 @@ func (f flashBlockDevice) EraseBlockSize() int64 {
 // supports this. The start and len parameters are in block numbers, use
 // EraseBlockSize to map addresses to blocks.
 func (f flashBlockDevice) EraseBlocks(start, len int64) error {
+	// When the SoftDevice is enabled, access to the flash is restricted and
+	// must go through the SoftDevice API.
+	if isSoftDeviceEnabled() {
+		for i := range uint32(len) {
+			flashPage := uint32(FlashDataStart())/eraseBlockSizeValue + uint32(start) + i
+
+			// Call sd_flash_page_erase, which is SVC_SOC_BASE + 8 in all the
+			// SoftDevices I've checked.
+			// Documentation:
+			// https://docs.nordicsemi.com/bundle/s140_v6.0.0_api/page/group_n_r_f_s_o_c_f_u_n_c_t_i_o_n_s.html#ga9c93dd94a138ad8b5ed3693ea38ffb3e
+			result := arm.SVCall1(0x20+8, flashPage)
+			if result != 0 {
+				// Could not queue flash operation? Not sure when this can
+				// happen.
+				return flashError
+			}
+
+			// Wait until the SoftDevice is finished.
+			flashStatus = flashStatusBusy
+			for flashStatus == flashStatusBusy {
+				handleSoftDeviceEvents()
+			}
+
+			// Check whether the operation was successful.
+			if flashStatus != flashStatusOk {
+				flashStatus = flashStatusOk
+				return flashError
+			}
+		}
+		return nil
+	}
+
+	// SoftDevice is not used or enabled. Use NVIC directly.
+
 	address := FlashDataStart() + uintptr(start*f.EraseBlockSize())
 	waitWhileFlashBusy()
 
@@ -445,5 +513,54 @@ func (f flashBlockDevice) EraseBlocks(start, len int64) error {
 
 func waitWhileFlashBusy() {
 	for nrf.NVMC.GetREADY() != nrf.NVMC_READY_READY_Ready {
+	}
+}
+
+var flashError = errors.New("machine: flash operation failed")
+
+const (
+	flashStatusOk = iota
+	flashStatusError
+	flashStatusBusy
+)
+
+var flashStatus uint8 = flashStatusOk
+
+var sdEvent uint32
+
+// Process all queued SoftDevice events. May only be called when the SoftDevice is enabled.
+//
+// Normally these are handled in the same interrupt where Bluetooth events are
+// handled. But in TinyGo, that's complicated. One option would be to put it in
+// the tinygo.org/x/bluetooth package, but that would cause a circular
+// dependency between the machine and the bluetooth package. Another would be to
+// put it here, but let the bluetooth package call handleSoftDeviceEvents, but
+// that relies on updating the bluetooth package at the same time. As a
+// compromise, these events are handled directly where they are expected (here
+// in the machine package). This works in practice since there are only very few
+// of such events (at the moment, only flash-related ones which is in the
+// machine package anyway).
+func handleSoftDeviceEvents() {
+	for {
+		var result uintptr
+		if nrf.Device == "nrf52" || nrf.Device == "nrf52840" || nrf.Device == "nrf52833" {
+			// sd_evt_get: SOC_SVC_BASE_NOT_AVAILABLE + 31
+			result = arm.SVCall1(0x2C+31, &sdEvent)
+		} else {
+			return // TODO: nrf51 etc
+		}
+		if result != 0 {
+			// Some error occured. The only possible error is
+			// NRF_ERROR_NOT_FOUND, which means there are no more events.
+			return
+		}
+
+		// The following events are the same numbers in all SoftDevices I've checked.
+		switch sdEvent {
+		case 2: // NRF_EVT_FLASH_OPERATION_SUCCESS
+			flashStatus = flashStatusOk
+		case 3: // NRF_EVT_FLASH_OPERATION_ERROR
+			flashStatus = flashStatusError
+		}
 	}
 }
