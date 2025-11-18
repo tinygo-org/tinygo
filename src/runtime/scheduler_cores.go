@@ -110,21 +110,18 @@ func NumCPU() int {
 	return numCPU
 }
 
-// CurrentCPU returns the current CPU core number.
-// On RP2040/RP2350, this returns 0 or 1.
-func CurrentCPU() int {
-	return int(currentCPU())
-}
+//
+// Warning: Pinning goroutines can lead to load imbalance. The goroutine will
+// wait in the specified core's queue even if other cores are idle. Use this
+// feature carefully and only when you need explicit core affinity.
+//
+// Valid core values are 0 and 1. Panics if core is out of range.
+//
 
-// LockToCore pins the current goroutine to the specified CPU core.
-// Use core = -1 to unpin (allow running on any core).
-// Use core = 0 or 1 to pin to a specific core.
-// Panics if core is invalid (not -1, 0, or 1 on RP2040/RP2350).
-func LockToCore(core int) {
-	if core < -1 || core >= numCPU {
-		panic("runtime: invalid core number")
-	}
-
+// machineLockCore pins the current goroutine to the specified CPU core.
+// This is called by machine.LockCore() on RP2040/RP2350.
+// It does not validate the core number - validation is done in machine package.
+func machineLockCore(core int) {
 	schedulerLock.Lock()
 	t := task.Current()
 	if t != nil {
@@ -133,9 +130,9 @@ func LockToCore(core int) {
 	schedulerLock.Unlock()
 }
 
-// UnlockFromCore unpins the current goroutine, allowing it to run on any core.
-// This is equivalent to LockToCore(-1).
-func UnlockFromCore() {
+// machineUnlockCore unpins the current goroutine.
+// This is called by machine.UnlockCore() on RP2040/RP2350.
+func machineUnlockCore() {
 	schedulerLock.Lock()
 	t := task.Current()
 	if t != nil {
@@ -144,17 +141,16 @@ func UnlockFromCore() {
 	schedulerLock.Unlock()
 }
 
-// GetAffinity returns the CPU core affinity of the current goroutine.
-// Returns -1 if not pinned, or 0/1 if pinned to a specific core.
-func GetAffinity() int {
-	schedulerLock.Lock()
-	t := task.Current()
-	affinity := -1
-	if t != nil {
-		affinity = int(t.Affinity)
-	}
-	schedulerLock.Unlock()
-	return affinity
+// lockOSThreadImpl implements LockOSThread for the cores scheduler.
+// It pins the current goroutine to whichever core it's currently running on.
+func lockOSThreadImpl() {
+	core := int(currentCPU())
+	machineLockCore(core)
+}
+
+// unlockOSThreadImpl implements UnlockOSThread for the cores scheduler.
+func unlockOSThreadImpl() {
+	machineUnlockCore()
 }
 
 func addTimer(tn *timerNode) {
