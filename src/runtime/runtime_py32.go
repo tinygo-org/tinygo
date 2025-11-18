@@ -1,0 +1,19 @@
+//go:build py32
+
+package runtime
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	return 0
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	return 0
+}
+
+//go:linkname ticks runtime.ticks
+func ticks() timeUnit {
+	return 0
+}
+
+func sleepTicks(d timeUnit) {
+}
