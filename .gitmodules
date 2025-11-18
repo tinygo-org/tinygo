@@ -41,3 +41,6 @@
 [submodule "lib/bdwgc"]
 	path = lib/bdwgc
 	url = https://github.com/ivmai/bdwgc.git
+[submodule "lib/py32-svd"]
+	path = lib/py32-svd
+	url = https://github.com/burgrp/py32-svd.git
