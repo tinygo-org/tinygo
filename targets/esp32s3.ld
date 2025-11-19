@@ -5,7 +5,7 @@ MEMORY
 {
     /* Note: DRAM and IRAM below are actually in the same 416K address space. */
     DRAM (rw) : ORIGIN = 0x3FC88000, LENGTH = 416K /* Internal SRAM 1 (data bus) */
-    IRAM (x)  : ORIGIN = 0x40378000, LENGTH = 416K /* Internal SRAM 1 (instruction bus) */
+    IRAM (x)  : ORIGIN = 0x40370000, LENGTH = 416K /* Internal SRAM 1 (instruction bus) */
 
     /* Note: DROM and IROM below are actually in the same 32M address space. */
     DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 32M /* Data bus (read-only) */
