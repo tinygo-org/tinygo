@@ -1,0 +1,12 @@
+{
+    "inherits": [
+        "py32"
+    ],
+    "build-tags": [
+        "py32f002axx"
+    ],
+    "linkerscript": "targets/py32f002a.ld",
+    "extra-files": [
+        "src/device/py32/py32f002axx.s"
+    ]
+}

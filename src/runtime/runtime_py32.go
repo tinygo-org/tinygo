@@ -2,6 +2,16 @@
 
 package runtime
 
+//export Reset_Handler
+func main() {
+	// initSystem()
+	// arm.Asm("CPSIE i")
+	// initInternal()
+
+	run()
+	exit(0)
+}
+
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	return 0
 }
@@ -16,4 +26,7 @@ func ticks() timeUnit {
 }
 
 func sleepTicks(d timeUnit) {
+}
+
+func putchar(c byte) {
 }

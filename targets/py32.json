@@ -1,0 +1,10 @@
+{
+    "inherits": [
+        "cortex-m0plus"
+    ],
+    "scheduler": "none",
+    "gc": "none",
+    "build-tags": [
+        "py32"
+    ]
+}
