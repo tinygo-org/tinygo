@@ -2,6 +2,8 @@
 
 package runtime
 
+import "device/py32"
+
 //export Reset_Handler
 func main() {
 	// initSystem()
@@ -29,4 +31,6 @@ func sleepTicks(d timeUnit) {
 }
 
 func putchar(c byte) {
+	// jenom aby tady něco bylo
+	py32.GPIOA.SetMODER_MODE0(py32.GPIO_MODER_MODE0_Output)
 }

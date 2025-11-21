@@ -1,4 +1,4 @@
-//go:build cortexm && !atsamd21 && !nrf51
+//go:build cortexm && !atsamd21 && !nrf51 && !py32
 
 package runtime
 
