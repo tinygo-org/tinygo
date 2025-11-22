@@ -128,6 +128,7 @@ func machineLockCore(core int) {
 		t.Affinity = int8(core)
 	}
 	schedulerLock.Unlock()
+	Gosched()
 }
 
 // machineUnlockCore unpins the current goroutine.

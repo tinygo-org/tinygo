@@ -28,7 +28,6 @@ func LockCore(core int) {
 		panic("machine: core out of range")
 	}
 	machineLockCore(core)
-	runtime.Gosched()
 }
 
 // UnlockCore unpins the calling goroutine, allowing it to run on any available core.
