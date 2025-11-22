@@ -2,6 +2,8 @@
 
 package machine
 
+import "runtime"
+
 const numCPU = 2 // RP2040 and RP2350 both have 2 cores
 
 // LockCore sets the affinity for the current goroutine to the specified core.
@@ -35,6 +37,7 @@ func LockCore(core int) {
 		panic("machine: core out of range")
 	}
 	machineLockCore(core)
+	runtime.Gosched()
 }
 
 // UnlockCore unpins the calling goroutine, allowing it to run on any available core.
