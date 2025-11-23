@@ -2,8 +2,6 @@
 
 package machine
 
-import "runtime"
-
 const numCPU = 2 // RP2040 and RP2350 both have 2 cores
 
 // LockCore sets the affinity for the current goroutine to the specified core.
