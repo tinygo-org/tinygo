@@ -1,0 +1,4 @@
+{
+	"inherits": ["esp32s3"],
+	"build-tags": ["xiao_esp32s3"]
+}
