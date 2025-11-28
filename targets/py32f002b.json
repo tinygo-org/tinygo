@@ -3,9 +3,9 @@
         "py32"
     ],
     "build-tags": [
-        "py32f002axx"
+        "py32f002bxx"
     ],
-    "linkerscript": "targets/py32f002a.ld",
+    "linkerscript": "targets/py32f002b.ld",
     "extra-files": [
         "src/device/py32/py32f002axx.s"
     ]

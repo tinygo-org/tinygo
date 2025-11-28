@@ -2,7 +2,9 @@
 
 package runtime
 
-import "device/py32"
+import (
+	"device/py32"
+)
 
 //export Reset_Handler
 func main() {
@@ -10,8 +12,12 @@ func main() {
 	// arm.Asm("CPSIE i")
 	// initInternal()
 
-	run()
-	exit(0)
+	for {
+		putchar('A')
+	}
+
+	// run()
+	// exit(0)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
