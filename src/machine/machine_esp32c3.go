@@ -519,6 +519,10 @@ type Serialer interface {
 	RTS() bool
 }
 
+func initUSB() {
+	// nothing to do here
+}
+
 // USB Serial/JTAG Controller
 // See esp32-c3_technical_reference_manual_en.pdf
 // pg. 736

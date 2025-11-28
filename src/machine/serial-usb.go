@@ -6,5 +6,6 @@ package machine
 var Serial Serialer
 
 func InitSerial() {
+	initUSB()
 	Serial = USBCDC
 }

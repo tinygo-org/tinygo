@@ -7,7 +7,7 @@ import (
 	"device/rp"
 	"internal/task"
 	"machine"
-	"machine/usb/cdc"
+	_ "machine/usb/cdc"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -360,8 +360,6 @@ func machineInit()
 func init() {
 	machineInit()
 
-	cdc.EnableUSBCDC()
-	machine.USBDev.Configure(machine.UARTConfig{})
 	machine.InitSerial()
 }
 

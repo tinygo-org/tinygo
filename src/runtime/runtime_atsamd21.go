@@ -6,7 +6,7 @@ import (
 	"device/arm"
 	"device/sam"
 	"machine"
-	"machine/usb/cdc"
+	_ "machine/usb/cdc"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -26,8 +26,6 @@ func init() {
 	initUSBClock()
 	initADCClock()
 
-	cdc.EnableUSBCDC()
-	machine.USBDev.Configure(machine.UARTConfig{})
 	machine.InitSerial()
 }
 

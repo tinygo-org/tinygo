@@ -19,6 +19,17 @@ var (
 	USBCDC Serialer
 )
 
+func initUSB() {
+	enableUSBCDC()
+	USBDev.Configure(UARTConfig{})
+}
+
+// Using go:linkname here because there's a circular dependency between the
+// machine package and the machine/usb/cdc package.
+//
+//go:linkname enableUSBCDC machine/usb/cdc.EnableUSBCDC
+func enableUSBCDC()
+
 type Serialer interface {
 	WriteByte(c byte) error
 	Write(data []byte) (n int, err error)
