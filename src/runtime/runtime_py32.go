@@ -27,11 +27,11 @@ func ConfigureSystemTimer(systemFrequencyHz uint32) {
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks * 10_000_000)
+	return int64(ticks * 1_000_000)
 }
 
 func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / 10_000_000)
+	return timeUnit(ns / 1_000_000)
 }
 
 var tickCounter uint64
