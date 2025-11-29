@@ -1,6 +1,7 @@
 {
 	"inherits": ["py32f002b"],
-	"flash-command": "pyocd load -t py32f002bx5 {bin}"
+	"flash-command": "pyocd load -t py32f002bx5 {bin}",
+  "build-tags": ["embedfire_py32f002b"]
 }
 
 /*
@@ -13,17 +14,16 @@ title: "embedfire-py32f002b"
 width: 8
 height: 11
 
-
 # images can be URLs, use adjustments to fit the pins
 image:
   front:
-    src: "https://i.ibb.co/5X0J6D3Y/fg.png"
+    src: "https://img.sanishtech.com/u/8f427259002707501b471ef06a77134c.png"
     top: -450
     left: -90
     right: -90
     bottom: -450
   back:
-    src: "https://i.ibb.co/ycSZp21x/bg.png"
+    src: "https://img.sanishtech.com/u/3650f247f0b77ef5efbcfca3d75f29aa.png"
     top: -450
     left: -90
     right: -90

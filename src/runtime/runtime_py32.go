@@ -8,16 +8,9 @@ import (
 
 //export Reset_Handler
 func main() {
-	// initSystem()
-	// arm.Asm("CPSIE i")
-	// initInternal()
-
-	for {
-		putchar('A')
-	}
-
-	// run()
-	// exit(0)
+	preinit()
+	run()
+	exit(0)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
