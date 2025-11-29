@@ -6,6 +6,8 @@ import (
 	"device/arm"
 
 	"machine"
+
+	"device/py32"
 )
 
 //export Reset_Handler
@@ -14,24 +16,24 @@ func main() {
 
 	machine.LED4.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
-	ConfigureSystemTimer(8e6)
+	py32.RCC.SetICSCR_HSI_FS(py32.RCC_ICSCR_HSI_FS_Freq24MHz)
+
+	ConfigureSystemTimer(24e6)
 
 	run()
 	exit(0)
 }
-
-const shift = 15
 
 func ConfigureSystemTimer(systemFrequencyHz uint32) {
 	arm.SetupSystemTimer(systemFrequencyHz / 1000)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks * 1_000_000)
+	return int64(ticks * 1000_000)
 }
 
 func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / 1_000_000)
+	return timeUnit(ns / 1000_000)
 }
 
 var tickCounter uint64
