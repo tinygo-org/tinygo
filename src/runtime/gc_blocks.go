@@ -311,22 +311,31 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		return unsafe.Pointer(&zeroSizedAlloc)
 	}
 
-	if preciseHeap {
-		size += align(unsafe.Sizeof(layout))
-	}
-
 	if interrupt.In() {
 		runtimePanicAt(returnAddress(0), "heap alloc in interrupt")
 	}
+
+	// Round the size up to a multiple of blocks.
+	rawSize := size
+	size += bytesPerBlock - 1
+	if preciseHeap {
+		// Add space for the layout.
+		size += align(unsafe.Sizeof(layout))
+	}
+	if size < rawSize {
+		// The size overflowed.
+		runtimePanicAt(returnAddress(0), "out of memory")
+	}
+	neededBlocks := size / bytesPerBlock
+	size = neededBlocks * bytesPerBlock
 
 	// Make sure there are no concurrent allocations. The heap is not currently
 	// designed for concurrent alloc/GC.
 	gcLock.Lock()
 
-	gcTotalAlloc += uint64(size)
+	// Update the total allocation counters.
+	gcTotalAlloc += uint64(rawSize)
 	gcMallocs++
-
-	neededBlocks := (size + (bytesPerBlock - 1)) / bytesPerBlock
 	gcTotalBlocks += uint64(neededBlocks)
 
 	// Continue looping until a run of free blocks has been found that fits the
