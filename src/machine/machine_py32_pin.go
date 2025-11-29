@@ -16,6 +16,9 @@ const (
 	portA Pin = iota * 16
 	portB
 	portC
+	portD
+	portE
+	portF
 )
 
 // Port A pins.
@@ -52,6 +55,42 @@ const (
 	PC5
 	PC6
 	PC7
+)
+
+// Port D pins.
+const (
+	PD0 Pin = portD + iota
+	PD1
+	PD2
+	PD3
+	PD4
+	PD5
+	PD6
+	PD7
+)
+
+// Port E pins.
+const (
+	PE0 Pin = portE + iota
+	PE1
+	PE2
+	PE3
+	PE4
+	PE5
+	PE6
+	PE7
+)
+
+// Port F pins.
+const (
+	PF0 Pin = portF + iota
+	PF1
+	PF2
+	PF3
+	PF4
+	PF5
+	PF6
+	PF7
 )
 
 // PinMode values specific to PY32: only GPIO direction and pull configuration.
