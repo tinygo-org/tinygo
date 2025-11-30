@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"device/arm"
+	"machine"
 
 	"device/py32"
 )
@@ -15,6 +16,7 @@ func main() {
 	py32.RCC.SetICSCR_HSI_FS(py32.RCC_ICSCR_HSI_FS_Freq24MHz)
 
 	ConfigureSystemTimer(24e6)
+	machine.InitSerial()
 
 	run()
 	exit(0)
@@ -53,7 +55,15 @@ func sleepTicks(d timeUnit) {
 }
 
 func putchar(c byte) {
+	machine.Serial.WriteByte(c)
+}
 
+func getchar() byte {
+	for machine.Serial.Buffered() == 0 {
+		Gosched()
+	}
+	v, _ := machine.Serial.ReadByte()
+	return v
 }
 
 //export SysTick_Handler
