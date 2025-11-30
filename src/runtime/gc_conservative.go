@@ -6,13 +6,25 @@
 
 package runtime
 
-const preciseHeap = false
+import "unsafe"
 
-type gcObjectScanner struct {
+// gcLayout tracks pointer locations in a heap object.
+// The conservative GC treats all locations as potential pointers, so this doesn't need to store anything.
+type gcLayout struct {
 }
 
-func newGCObjectScanner(block gcBlock) gcObjectScanner {
+// parseGCLayout stores the layout information passed to alloc into a gcLayout value.
+// The conservative GC discards this information.
+func parseGCLayout(layout unsafe.Pointer) gcLayout {
+	return gcLayout{}
+}
+
+// scanner creates a gcObjectScanner with this layout.
+func (l gcLayout) scanner() gcObjectScanner {
 	return gcObjectScanner{}
+}
+
+type gcObjectScanner struct {
 }
 
 func (scanner *gcObjectScanner) pointerFree() bool {

@@ -46,11 +46,11 @@ const (
 	bytesPerBlock      = wordsPerBlock * unsafe.Sizeof(heapStart)
 	stateBits          = 2 // how many bits a block state takes (see blockState type)
 	blocksPerStateByte = 8 / stateBits
-	markStackSize      = 8 * unsafe.Sizeof((*int)(nil)) // number of to-be-marked blocks to queue before forcing a rescan
 )
 
 var (
 	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
+	scanList      *objHeader     // scanList is a singly linked list of heap objects that have been marked but not scanned
 	nextAlloc     gcBlock        // the next block that should be tried by the allocator
 	endBlock      gcBlock        // the block just past the end of the available space
 	gcTotalAlloc  uint64         // total number of bytes allocated
@@ -225,6 +225,15 @@ func (b gcBlock) unmark() {
 	}
 }
 
+// objHeader is a structure prepended to every heap object to hold metadata.
+type objHeader struct {
+	// next is the next object to scan after this.
+	next *objHeader
+
+	// layout holds the layout bitmap used to find pointers in the object.
+	layout gcLayout
+}
+
 func isOnHeap(ptr uintptr) bool {
 	return ptr >= heapStart && ptr < uintptr(metadataStart)
 }
@@ -315,13 +324,10 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		runtimePanicAt(returnAddress(0), "heap alloc in interrupt")
 	}
 
-	// Round the size up to a multiple of blocks.
+	// Round the size up to a multiple of blocks, adding space for the header.
 	rawSize := size
+	size += align(unsafe.Sizeof(objHeader{}))
 	size += bytesPerBlock - 1
-	if preciseHeap {
-		// Add space for the layout.
-		size += align(unsafe.Sizeof(layout))
-	}
 	if size < rawSize {
 		// The size overflowed.
 		runtimePanicAt(returnAddress(0), "out of memory")
@@ -414,20 +420,18 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 				i.setState(blockStateTail)
 			}
 
+			// Create the object header.
+			pointer := thisAlloc.pointer()
+			header := (*objHeader)(pointer)
+			header.layout = parseGCLayout(layout)
+
 			// We've claimed this allocation, now we can unlock the heap.
 			gcLock.Unlock()
 
 			// Return a pointer to this allocation.
-			pointer := thisAlloc.pointer()
-			if preciseHeap {
-				// Store the object layout at the start of the object.
-				// TODO: this wastes a little bit of space on systems with
-				// larger-than-pointer alignment requirements.
-				*(*unsafe.Pointer)(pointer) = layout
-				add := align(unsafe.Sizeof(layout))
-				pointer = unsafe.Add(pointer, add)
-				size -= add
-			}
+			add := align(unsafe.Sizeof(objHeader{}))
+			pointer = unsafe.Add(pointer, add)
+			size -= add
 			memzero(pointer, size)
 			return pointer
 		}
@@ -562,42 +566,33 @@ func markCurrentGoroutineStack(sp uintptr) {
 	markRoot(0, sp)
 }
 
-// stackOverflow is a flag which is set when the GC scans too deep while marking.
-// After it is set, all marked allocations must be re-scanned.
-var stackOverflow bool
-
-// startMark starts the marking process on a root and all of its children.
-func startMark(root gcBlock) {
-	var stack [markStackSize]gcBlock
-	stack[0] = root
-	root.setState(blockStateMark)
-	stackLen := 1
-	for stackLen > 0 {
-		// Pop a block off of the stack.
-		stackLen--
-		block := stack[stackLen]
-		if gcDebug {
-			println("stack popped, remaining stack:", stackLen)
+// finishMark finishes the marking process by scanning all heap objects on scanList.
+func finishMark() {
+	for {
+		// Remove an object from the scan list.
+		obj := scanList
+		if obj == nil {
+			return
 		}
+		scanList = obj.next
 
-		// Scan all pointers inside the block.
-		scanner := newGCObjectScanner(block)
+		// Create a scanner with the object layout.
+		scanner := obj.layout.scanner()
 		if scanner.pointerFree() {
 			// This object doesn't contain any pointers.
 			// This is a fast path for objects like make([]int, 4096).
 			continue
 		}
-		start, end := block.address(), block.findNext().address()
-		if preciseHeap {
-			// The first word of the object is just the pointer layout value.
-			// Skip it.
-			start += align(unsafe.Sizeof(uintptr(0)))
-		}
+
+		// Scan all pointers in the object.
+		start := uintptr(unsafe.Pointer(obj)) + align(unsafe.Sizeof(objHeader{}))
+		end := blockFromAddr(uintptr(unsafe.Pointer(obj))).findNext().address()
+
 		for addr := start; addr != end; addr += unsafe.Alignof(addr) {
 			// Load the word.
 			word := *(*uintptr)(unsafe.Pointer(addr))
 
-			if !scanner.nextIsPointer(word, root.address(), addr) {
+			if !scanner.nextIsPointer(word, uintptr(unsafe.Pointer(obj)), addr) {
 				// Not a heap pointer.
 				continue
 			}
@@ -628,58 +623,46 @@ func startMark(root gcBlock) {
 			}
 			referencedBlock.setState(blockStateMark)
 
-			if stackLen == len(stack) {
-				// The stack is full.
-				// It is necessary to rescan all marked blocks once we are done.
-				stackOverflow = true
-				if gcDebug {
-					println("gc stack overflowed")
-				}
-				continue
-			}
-
-			// Push the pointer onto the stack to be scanned later.
-			stack[stackLen] = referencedBlock
-			stackLen++
-		}
-	}
-}
-
-// finishMark finishes the marking process by processing all stack overflows.
-func finishMark() {
-	for stackOverflow {
-		// Re-mark all blocks.
-		stackOverflow = false
-		for block := gcBlock(0); block < endBlock; block++ {
-			if block.state() != blockStateMark {
-				// Block is not marked, so we do not need to rescan it.
-				continue
-			}
-
-			// Re-mark the block.
-			startMark(block)
+			// Add the object to the scan list.
+			header := (*objHeader)(referencedBlock.pointer())
+			header.next = scanList
+			scanList = header
 		}
 	}
 }
 
 // mark a GC root at the address addr.
 func markRoot(addr, root uintptr) {
-	if isOnHeap(root) {
-		block := blockFromAddr(root)
-		if block.state() == blockStateFree {
-			// The to-be-marked object doesn't actually exist.
-			// This could either be a dangling pointer (oops!) but most likely
-			// just a false positive.
-			return
-		}
-		head := block.findHead()
-		if head.state() != blockStateMark {
-			if gcDebug {
-				println("found unmarked pointer", root, "at address", addr)
-			}
-			startMark(head)
-		}
+	// Find the heap block corresponding to the root.
+	if !isOnHeap(root) {
+		// This is not a heap pointer.
+		return
 	}
+	block := blockFromAddr(root)
+
+	// Find the head of the corresponding object.
+	if block.state() == blockStateFree {
+		// The to-be-marked object doesn't actually exist.
+		// This could either be a dangling pointer (oops!) but most likely
+		// just a false positive.
+		return
+	}
+	head := block.findHead()
+
+	// Mark the object.
+	if head.state() == blockStateMark {
+		// This object is already marked.
+		return
+	}
+	if gcDebug {
+		println("found unmarked pointer", root, "at address", addr)
+	}
+	head.setState(blockStateMark)
+
+	// Add the object to the scan list.
+	header := (*objHeader)(head.pointer())
+	header.next = scanList
+	scanList = header
 }
 
 // Sweep goes through all memory and frees unmarked memory.

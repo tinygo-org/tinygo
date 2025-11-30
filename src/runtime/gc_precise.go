@@ -59,19 +59,19 @@ import "unsafe"
 
 const preciseHeap = true
 
-type gcObjectScanner struct {
-	index      uintptr
-	size       uintptr
-	bitmap     uintptr
-	bitmapAddr unsafe.Pointer
+// parseGCLayout stores the layout information passed to alloc into a gcLayout value.
+func parseGCLayout(layout unsafe.Pointer) gcLayout {
+	return gcLayout{layout: uintptr(layout)}
 }
 
-func newGCObjectScanner(block gcBlock) gcObjectScanner {
-	if gcAsserts && block != block.findHead() {
-		runtimePanic("gc: object scanner must start at head")
-	}
-	scanner := gcObjectScanner{}
-	layout := *(*uintptr)(unsafe.Pointer(block.address()))
+// gcLayout tracks pointer locations in a heap object.
+type gcLayout struct {
+	layout uintptr
+}
+
+// scanner creates a gcObjectScanner with this layout.
+func (l gcLayout) scanner() (scanner gcObjectScanner) {
+	layout := l.layout
 	if layout == 0 {
 		// Unknown layout. Assume all words in the object could be pointers.
 		// This layout value below corresponds to a slice of pointers like:
@@ -104,7 +104,14 @@ func newGCObjectScanner(block gcBlock) gcObjectScanner {
 		scanner.size = *(*uintptr)(layoutAddr)
 		scanner.bitmapAddr = unsafe.Add(layoutAddr, unsafe.Sizeof(uintptr(0)))
 	}
-	return scanner
+	return
+}
+
+type gcObjectScanner struct {
+	index      uintptr
+	size       uintptr
+	bitmap     uintptr
+	bitmapAddr unsafe.Pointer
 }
 
 func (scanner *gcObjectScanner) pointerFree() bool {
