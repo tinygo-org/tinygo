@@ -26,7 +26,7 @@ func InitADC() {
 // Samples can be 1(default), 2, 4, 8, 16, 32, 64, 128, 256 samples
 func (a *ADC) Configure(config ADCConfig) {
 	var configVal uint32 = nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESP_Pos |
-		nrf.SAADC_CH_CONFIG_RESP_Bypass<<nrf.SAADC_CH_CONFIG_RESN_Pos |
+		nrf.SAADC_CH_CONFIG_RESN_Bypass<<nrf.SAADC_CH_CONFIG_RESN_Pos |
 		nrf.SAADC_CH_CONFIG_REFSEL_Internal<<nrf.SAADC_CH_CONFIG_REFSEL_Pos |
 		nrf.SAADC_CH_CONFIG_MODE_SE<<nrf.SAADC_CH_CONFIG_MODE_Pos
 
