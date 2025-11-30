@@ -141,7 +141,6 @@ func (a *ADC) Get() uint16 {
 	}
 
 	// Set pin to read.
-	nrf.SAADC.CH[0].PSELN.Set(pwmPin)
 	nrf.SAADC.CH[0].PSELP.Set(pwmPin)
 
 	// Destination for sample result.
