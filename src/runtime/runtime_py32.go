@@ -5,16 +5,12 @@ package runtime
 import (
 	"device/arm"
 
-	"machine"
-
 	"device/py32"
 )
 
 //export Reset_Handler
 func main() {
 	preinit()
-
-	machine.LED4.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	py32.RCC.SetICSCR_HSI_FS(py32.RCC_ICSCR_HSI_FS_Freq24MHz)
 
@@ -24,6 +20,8 @@ func main() {
 	exit(0)
 }
 
+// Configure SysTick to fire every 1ms on given system frequency.
+// This should be called after any changes to the system clock frequency.
 func ConfigureSystemTimer(systemFrequencyHz uint32) {
 	arm.SetupSystemTimer(systemFrequencyHz / 1000)
 }
@@ -61,10 +59,4 @@ func putchar(c byte) {
 //export SysTick_Handler
 func handleSysTick() {
 	tickCounter = tickCounter + 1
-	//machine.LED4.Set(!machine.LED4.Get())
-	machine.LED4.High()
-	for i := 0; i < 100; i++ {
-		arm.Asm("nop")
-	}
-	machine.LED4.Low()
 }
