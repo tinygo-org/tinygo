@@ -15,7 +15,7 @@ func main() {
 
 	py32.RCC.SetICSCR_HSI_FS(py32.RCC_ICSCR_HSI_FS_Freq24MHz)
 
-	ConfigureSystemTimer(24e6)
+	ConfigureSystemTimer(24_000_000)
 	machine.InitSerial()
 
 	run()
