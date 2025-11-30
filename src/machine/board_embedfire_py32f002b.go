@@ -7,9 +7,9 @@ package machine
 
 // LEDs
 const (
-	LED2 = PA1
-	LED3 = PA5
-	LED4 = PA4
+	LED1 = PA1
+	LED2 = PA5
+	LED3 = PA4
 	LED  = LED2
 )
 

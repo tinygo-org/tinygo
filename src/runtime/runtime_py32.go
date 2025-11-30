@@ -7,7 +7,11 @@ import (
 	"machine"
 
 	"device/py32"
+
+	"runtime/volatile"
 )
+
+var tickCounter volatile.Register64
 
 //export Reset_Handler
 func main() {
@@ -36,11 +40,9 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns / 1000_000)
 }
 
-var tickCounter uint64
-
 //go:linkname ticks runtime.ticks
 func ticks() timeUnit {
-	return timeUnit(tickCounter)
+	return timeUnit(tickCounter.Get())
 }
 
 func sleepTicks(d timeUnit) {
@@ -72,5 +74,5 @@ func getchar() byte {
 
 //export SysTick_Handler
 func handleSysTick() {
-	tickCounter = tickCounter + 1
+	tickCounter.Set(tickCounter.Get() + 1)
 }
