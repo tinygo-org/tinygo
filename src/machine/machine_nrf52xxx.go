@@ -116,32 +116,32 @@ func (a *ADC) Configure(config ADCConfig) {
 
 // Get returns the current value of an ADC pin in the range 0..0xffff.
 func (a *ADC) Get() uint16 {
-	var pwmPin uint32
+	var adcPin uint32
 	var rawValue volatile.Register16
 
 	switch a.Pin {
 	case 2:
-		pwmPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput0
+		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput0
 	case 3:
-		pwmPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput1
+		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput1
 	case 4:
-		pwmPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput2
+		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput2
 	case 5:
-		pwmPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput3
+		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput3
 	case 28:
-		pwmPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput4
+		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput4
 	case 29:
-		pwmPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput5
+		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput5
 	case 30:
-		pwmPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput6
+		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput6
 	case 31:
-		pwmPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput7
+		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput7
 	default:
 		return 0
 	}
 
 	// Set pin to read.
-	nrf.SAADC.CH[0].PSELP.Set(pwmPin)
+	nrf.SAADC.CH[0].PSELP.Set(adcPin)
 
 	// Destination for sample result.
 	// Note: rawValue doesn't need to be kept alive for the GC, since the
