@@ -54,10 +54,7 @@ var (
 	freeRanges    *freeRange     // freeRanges is a linked list of free block ranges
 	endBlock      gcBlock        // the block just past the end of the available space
 	gcTotalAlloc  uint64         // total number of bytes allocated
-	gcTotalBlocks uint64         // total number of allocated blocks
 	gcMallocs     uint64         // total number of allocations
-	gcFrees       uint64         // total number of objects freed
-	gcFreedBlocks uint64         // total number of freed blocks
 	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
 )
 
@@ -66,24 +63,28 @@ var zeroSizedAlloc uint8
 
 // Provide some abstraction over heap blocks.
 
-// blockState stores the four states in which a block can be. It is two bits in
-// size.
+// blockState stores the four states in which a block can be.
+// It holds 1 bit in each nibble.
+// When stored into a state byte, each bit in a nibble corresponds to a different block.
+// For blocks A-D, a state byte would be laid out as 0bDCBA_DCBA.
 type blockState uint8
 
 const (
-	blockStateFree blockState = 0 // 00
-	blockStateHead blockState = 1 // 01
-	blockStateTail blockState = 2 // 10
-	blockStateMark blockState = 3 // 11
-	blockStateMask blockState = 3 // 11
+	blockStateLow  blockState = 1
+	blockStateHigh blockState = 1 << blocksPerStateByte
+
+	blockStateFree blockState = 0
+	blockStateHead blockState = blockStateLow
+	blockStateTail blockState = blockStateHigh
+	blockStateMark blockState = blockStateLow | blockStateHigh
+	blockStateMask blockState = blockStateLow | blockStateHigh
 )
 
+// blockStateEach is a mask that can be used to extract a nibble from the block state.
+const blockStateEach = 1<<blocksPerStateByte - 1
+
 // The byte value of a block where every block is a 'tail' block.
-const blockStateByteAllTails = 0 |
-	uint8(blockStateTail<<(stateBits*3)) |
-	uint8(blockStateTail<<(stateBits*2)) |
-	uint8(blockStateTail<<(stateBits*1)) |
-	uint8(blockStateTail<<(stateBits*0))
+const blockStateByteAllTails = byte(blockStateTail) * blockStateEach
 
 // String returns a human-readable version of the block state, for debugging.
 func (s blockState) String() string {
@@ -180,7 +181,7 @@ func (b gcBlock) stateByte() byte {
 // Return the block state given a state byte. The state byte must have been
 // obtained using b.stateByte(), otherwise the result is incorrect.
 func (b gcBlock) stateFromByte(stateByte byte) blockState {
-	return blockState(stateByte>>((b%blocksPerStateByte)*stateBits)) & blockStateMask
+	return blockState(stateByte>>(b%blocksPerStateByte)) & blockStateMask
 }
 
 // State returns the current block state.
@@ -193,35 +194,9 @@ func (b gcBlock) state() blockState {
 // from head to mark.
 func (b gcBlock) setState(newState blockState) {
 	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
-	*stateBytePtr |= uint8(newState << ((b % blocksPerStateByte) * stateBits))
+	*stateBytePtr |= uint8(newState << (b % blocksPerStateByte))
 	if gcAsserts && b.state() != newState {
 		runtimePanic("gc: setState() was not successful")
-	}
-}
-
-// markFree sets the block state to free, no matter what state it was in before.
-func (b gcBlock) markFree() {
-	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
-	*stateBytePtr &^= uint8(blockStateMask << ((b % blocksPerStateByte) * stateBits))
-	if gcAsserts && b.state() != blockStateFree {
-		runtimePanic("gc: markFree() was not successful")
-	}
-	if gcAsserts {
-		*(*[wordsPerBlock]uintptr)(unsafe.Pointer(b.address())) = [wordsPerBlock]uintptr{}
-	}
-}
-
-// unmark changes the state of the block from mark to head. It must be marked
-// before calling this function.
-func (b gcBlock) unmark() {
-	if gcAsserts && b.state() != blockStateMark {
-		runtimePanic("gc: unmark() on a block that is not marked")
-	}
-	clearMask := blockStateMask ^ blockStateHead // the bits to clear from the state
-	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
-	*stateBytePtr &^= uint8(clearMask << ((b % blocksPerStateByte) * stateBits))
-	if gcAsserts && b.state() != blockStateHead {
-		runtimePanic("gc: unmark() was not successful")
 	}
 }
 
@@ -441,7 +416,6 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// Update the total allocation counters.
 	gcTotalAlloc += uint64(rawSize)
 	gcMallocs++
-	gcTotalBlocks += uint64(neededBlocks)
 
 	// Acquire a range of free blocks.
 	var ranGC bool
@@ -586,10 +560,10 @@ func runGC() (freeBytes uintptr) {
 
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle.
-	freeBytes = sweep()
+	sweep()
 
 	// Rebuild the free ranges list.
-	buildFreeRanges()
+	freeBytes = buildFreeRanges()
 
 	// Show how much has been sweeped, for debugging.
 	if gcDebug {
@@ -700,45 +674,64 @@ func markRoot(addr, root uintptr) {
 }
 
 // Sweep goes through all memory and frees unmarked memory.
-// It returns how many bytes are free in the heap after the sweep.
-func sweep() (freeBytes uintptr) {
-	freeCurrentObject := false
-	var freed uint64
-	for block := gcBlock(0); block < endBlock; block++ {
-		switch block.state() {
-		case blockStateHead:
-			// Unmarked head. Free it, including all tail blocks following it.
-			block.markFree()
-			freeCurrentObject = true
-			gcFrees++
-			freed++
-		case blockStateTail:
-			if freeCurrentObject {
-				// This is a tail object following an unmarked head.
-				// Free it now.
-				block.markFree()
-				freed++
-			}
-		case blockStateMark:
-			// This is a marked object. The next tail blocks must not be freed,
-			// but the mark bit must be removed so the next GC cycle will
-			// collect this object if it is unreferenced then.
-			block.unmark()
-			freeCurrentObject = false
-		case blockStateFree:
-			freeBytes += bytesPerBlock
-		}
+func sweep() {
+	metadataEnd := unsafe.Add(metadataStart, (endBlock+(blocksPerStateByte-1))/blocksPerStateByte)
+	var carry byte
+	for meta := metadataStart; meta != metadataEnd; meta = unsafe.Add(meta, 1) {
+		// Fetch the state byte.
+		stateBytePtr := (*byte)(unsafe.Pointer(meta))
+		stateByte := *stateBytePtr
+
+		// Separate blocks by type.
+		// Split the nibbles.
+		// Each nibble is a mask of blocks.
+		high := stateByte >> blocksPerStateByte
+		low := stateByte & blockStateEach
+		// Marked heads are in both nibbles.
+		markedHeads := low & high
+		// Unmarked heads are in the low nibble but not the high nibble.
+		unmarkedHeads := low &^ high
+		// Tails are in the high nibble but not the low nibble.
+		tails := high &^ low
+
+		// Clear all tail runs after unmarked (freed) heads.
+		//
+		// Adding 1 to the start of a bit run will clear the run and set the next bit:
+		//   (2^k - 1) + 1 = 2^k
+		//   e.g. 0b0011 + 1 = 0b0100
+		// Bitwise-and with the original mask to clear the newly set bit.
+		//   e.g. (0b0011 + 1) & 0b0011 = 0b0100 & 0b0011 = 0b0000
+		// This will not clear bits after the run because the gap stops the carry:
+		//   e.g. (0b1011 + 1) & 0b1011 = 0b1100 & 0b1011 = 0b1000
+		// This can clear multiple runs in a single addition:
+		//   e.g. (0b1101 + 0b0101) & 0b1101 = 0b10010 & 0b1101 = 0b0000
+		//
+		// In order to find tail run starts after unmarked heads we could use tails & (unmarkedHeads << 1).
+		// It is possible omit the bitwise-and because the clear still works if the next block is not a tail.
+		// A head is not a tail, so corresponding missing tail bit will stop the carry from a previous tail run.
+		// As such it will set the next bit which will be cleared back away later.
+		// e.g. HHTH: (0b0010 + (0b1101 << 1)) & 0b0010 = 0b11100 & 0b0010 = 0b0000
+		//
+		// Treat the whole heap as a single pair of integer masks.
+		// This is accomplished for addition by carrying the overflow to the next state byte.
+		// The unmarkedHeads << 1 is equivalent to unmarkedHeads + unmarkedHeads, so it can be merged with the sum.
+		// This does not require any special work for the bitwise-and because it operates bitwise.
+		tailClear := tails + (unmarkedHeads << 1) + carry
+		carry = tailClear >> blocksPerStateByte
+		tails &= tailClear
+
+		// Construct the new state byte.
+		*stateBytePtr = markedHeads | (tails << blocksPerStateByte)
 	}
-	gcFreedBlocks += freed
-	freeBytes += uintptr(freed) * bytesPerBlock
-	return
 }
 
 // buildFreeRanges rebuilds the freeRanges list.
 // This must be called after a GC sweep or heap grow.
-func buildFreeRanges() {
+// It returns how many bytes are free in the heap.
+func buildFreeRanges() uintptr {
 	freeRanges = nil
 	block := endBlock
+	var totalBlocks uintptr
 	for {
 		// Skip backwards over occupied blocks.
 		for block > 0 && (block-1).state() != blockStateFree {
@@ -755,13 +748,17 @@ func buildFreeRanges() {
 		}
 
 		// Insert the free range.
-		insertFreeRange(block.pointer(), uintptr(end-block))
+		len := uintptr(end - block)
+		totalBlocks += len
+		insertFreeRange(block.pointer(), len)
 	}
 
 	if gcDebug {
 		println("free ranges after rebuild:")
 		dumpFreeRangeCounts()
 	}
+
+	return totalBlocks * bytesPerBlock
 }
 
 func dumpFreeRangeCounts() {
@@ -801,26 +798,73 @@ func dumpHeap() {
 // call to ReadMemStats. This would not do GC implicitly for you.
 func ReadMemStats(m *MemStats) {
 	gcLock.Lock()
-	m.HeapIdle = 0
-	m.HeapInuse = 0
-	for block := gcBlock(0); block < endBlock; block++ {
-		bstate := block.state()
-		if bstate == blockStateFree {
-			m.HeapIdle += uint64(bytesPerBlock)
-		} else {
-			m.HeapInuse += uint64(bytesPerBlock)
-		}
-	}
-	m.HeapReleased = 0 // always 0, we don't currently release memory back to the OS.
-	m.HeapSys = m.HeapInuse + m.HeapIdle
-	m.GCSys = uint64(heapEnd - uintptr(metadataStart))
-	m.TotalAlloc = gcTotalAlloc
-	m.Mallocs = gcMallocs
-	m.Frees = gcFrees
+
+	// Calculate the raw size of the heap.
+	heapEnd := heapEnd
+	heapStart := heapStart
 	m.Sys = uint64(heapEnd - heapStart)
-	m.HeapAlloc = (gcTotalBlocks - gcFreedBlocks) * uint64(bytesPerBlock)
-	m.Alloc = m.HeapAlloc
+	m.HeapSys = uint64(uintptr(metadataStart) - heapStart)
+	metadataStart := metadataStart
+	// TODO: should GCSys include objHeaders?
+	m.GCSys = uint64(heapEnd - uintptr(metadataStart))
+	m.HeapReleased = 0 // always 0, we don't currently release memory back to the OS.
+
+	// Count live heads and tails.
+	var liveHeads, liveTails uintptr
+	endBlock := endBlock
+	metadataEnd := unsafe.Add(metadataStart, (endBlock+(blocksPerStateByte-1))/blocksPerStateByte)
+	for meta := metadataStart; meta != metadataEnd; meta = unsafe.Add(meta, 1) {
+		// Since we are outside of a GC, nothing is marked.
+		// A bit in the low nibble implies a head.
+		// A bit in the high nibble implies a tail.
+		stateByte := *(*byte)(unsafe.Pointer(meta))
+		liveHeads += uintptr(count4LUT[stateByte&blockStateEach])
+		liveTails += uintptr(count4LUT[stateByte>>blocksPerStateByte])
+	}
+
+	// Add heads and tails to count live blocks.
+	liveBlocks := liveHeads + liveTails
+	liveBytes := uint64(liveBlocks * bytesPerBlock)
+	m.HeapInuse = liveBytes
+	m.HeapAlloc = liveBytes
+	m.Alloc = liveBytes
+
+	// Subtract live blocks from total blocks to count free blocks.
+	freeBlocks := uintptr(endBlock) - liveBlocks
+	m.HeapIdle = uint64(freeBlocks * bytesPerBlock)
+
+	// Record the number of allocated objects.
+	gcMallocs := gcMallocs
+	m.Mallocs = gcMallocs
+
+	// Subtract live objects from allocated objects to count freed objects.
+	m.Frees = gcMallocs - uint64(liveHeads)
+
+	// Record the total allocated bytes.
+	m.TotalAlloc = gcTotalAlloc
+
 	gcLock.Unlock()
+}
+
+// count4LUT is a lookup table used to count set bits in a 4-bit mask.
+// TODO: replace with popcnt when available
+var count4LUT = [16]uint8{
+	0b0000: 0,
+	0b0001: 1,
+	0b0010: 1,
+	0b0011: 2,
+	0b0100: 1,
+	0b0101: 2,
+	0b0110: 2,
+	0b0111: 3,
+	0b1000: 1,
+	0b1001: 2,
+	0b1010: 2,
+	0b1011: 3,
+	0b1100: 2,
+	0b1101: 3,
+	0b1110: 3,
+	0b1111: 4,
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {
