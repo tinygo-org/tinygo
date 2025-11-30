@@ -110,3 +110,7 @@ func eraseBlockSize() int64 {
 }
 
 const spiMaxBufferSize = 0xffff // from the datasheet: TXD.MAXCNT and RXD.MAXCNT
+
+// ADC instance for the VDDH input pin. This pin is typically connected to USB
+// input voltage (~5V) or directly to a battery.
+var ADC_VDDH = ADC{adcVDDHPin}

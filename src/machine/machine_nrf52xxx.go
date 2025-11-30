@@ -12,6 +12,8 @@ func CPUFrequency() uint32 {
 	return 64000000
 }
 
+var adcVDDHPin = Pin(254) // special pin number for VDDH on the nrf52840
+
 // InitADC initializes the registers needed for ADC.
 func InitADC() {
 	// Enable ADC.
@@ -136,6 +138,12 @@ func (a *ADC) Get() uint16 {
 		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput6
 	case 31:
 		adcPin = nrf.SAADC_CH_PSELP_PSELP_AnalogInput7
+	case adcVDDHPin:
+		if Device == "nrf52840" {
+			adcPin = 0x0D // VDDHDIV5 on the nrf52840
+		} else {
+			return 0
+		}
 	default:
 		return 0
 	}
