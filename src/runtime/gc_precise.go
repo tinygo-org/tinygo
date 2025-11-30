@@ -57,98 +57,96 @@ package runtime
 
 import "unsafe"
 
-const preciseHeap = true
+const sizeFieldBits = 4 + (unsafe.Sizeof(uintptr(0)) / 4)
 
 // parseGCLayout stores the layout information passed to alloc into a gcLayout value.
 func parseGCLayout(layout unsafe.Pointer) gcLayout {
-	return gcLayout{layout: uintptr(layout)}
+	return gcLayout(layout)
 }
 
 // gcLayout tracks pointer locations in a heap object.
-type gcLayout struct {
-	layout uintptr
+type gcLayout uintptr
+
+func (layout gcLayout) pointerFree() bool {
+	return layout&1 != 0 && layout>>(sizeFieldBits+1) == 0
 }
 
-// scanner creates a gcObjectScanner with this layout.
-func (l gcLayout) scanner() (scanner gcObjectScanner) {
-	layout := l.layout
-	if layout == 0 {
-		// Unknown layout. Assume all words in the object could be pointers.
-		// This layout value below corresponds to a slice of pointers like:
-		//     make(*byte, N)
-		scanner.size = 1
-		scanner.bitmap = 1
-	} else if layout&1 != 0 {
-		// Layout is stored directly in the integer value.
-		// Determine format of bitfields in the integer.
-		const layoutBits = uint64(unsafe.Sizeof(layout) * 8)
-		var sizeFieldBits uint64
-		switch layoutBits { // note: this switch should be resolved at compile time
-		case 16:
-			sizeFieldBits = 4
-		case 32:
-			sizeFieldBits = 5
-		case 64:
-			sizeFieldBits = 6
-		default:
-			runtimePanic("unknown pointer size")
-		}
+// scan an object with this element layout.
+// The starting address must be valid and pointer-aligned.
+// The length is rounded down to a multiple of the element size.
+func (layout gcLayout) scan(start, len uintptr) {
+	switch {
+	case layout == 0:
+		// This is an unknown layout.
+		// Scan conservatively.
+		// NOTE: This is *NOT* equivalent to a slice of pointers on AVR.
+		scanConservative(start, len)
 
-		// Extract values from the bitfields.
-		// See comment at the top of this file for more information.
-		scanner.size = (layout >> 1) & (1<<sizeFieldBits - 1)
-		scanner.bitmap = layout >> (1 + sizeFieldBits)
-	} else {
-		// Layout is stored separately in a global object.
+	case layout&1 != 0:
+		// The layout is stored directly in the integer value.
+		// Extract the bitfields.
+		size := uintptr(layout>>1) & (1<<sizeFieldBits - 1)
+		mask := uintptr(layout) >> (1 + sizeFieldBits)
+
+		// Scan with the extracted mask.
+		scanSimple(start, len, size*unsafe.Alignof(start), mask)
+
+	default:
+		// The layout is stored seperately in a global object.
+		// Extract the size and bitmap.
 		layoutAddr := unsafe.Pointer(layout)
-		scanner.size = *(*uintptr)(layoutAddr)
-		scanner.bitmapAddr = unsafe.Add(layoutAddr, unsafe.Sizeof(uintptr(0)))
+		size := *(*uintptr)(layoutAddr)
+		bitmapPtr := unsafe.Add(layoutAddr, unsafe.Sizeof(uintptr(0)))
+		bitmapLen := (size + 7) / 8
+		bitmap := unsafe.Slice((*byte)(bitmapPtr), bitmapLen)
+
+		// Scan with the bitmap.
+		scanComplex(start, len, size*unsafe.Alignof(start), bitmap)
 	}
-	return
 }
 
-type gcObjectScanner struct {
-	index      uintptr
-	size       uintptr
-	bitmap     uintptr
-	bitmapAddr unsafe.Pointer
+// scanSimple scans an object with an integer bitmask of pointer locations.
+// The starting address must be valid and pointer-aligned.
+func scanSimple(start, len, size, mask uintptr) {
+	for len >= size {
+		// Scan this element.
+		scanWithMask(start, mask)
+
+		// Move to the next element.
+		start += size
+		len -= size
+	}
 }
 
-func (scanner *gcObjectScanner) pointerFree() bool {
-	if scanner.bitmapAddr != nil {
-		// While the format allows for large objects without pointers, this is
-		// optimized by the compiler so if bitmapAddr is set, we know that there
-		// are at least some pointers in the object.
-		return false
-	}
-	// If the bitmap is zero, there are definitely no pointers in the object.
-	return scanner.bitmap == 0
-}
-
-func (scanner *gcObjectScanner) nextIsPointer(word, parent, addrOfWord uintptr) bool {
-	index := scanner.index
-	scanner.index++
-	if scanner.index == scanner.size {
-		scanner.index = 0
-	}
-
-	if !isOnHeap(word) {
-		// Definitely isn't a pointer.
-		return false
-	}
-
-	// Might be a pointer. Now look at the object layout to know for sure.
-	if scanner.bitmapAddr != nil {
-		if (*(*uint8)(unsafe.Add(scanner.bitmapAddr, index/8))>>(index%8))&1 == 0 {
-			return false
+// scanComplex scans an object with a bitmap of pointer locations.
+// The starting address must be valid and pointer-aligned.
+func scanComplex(start, len, size uintptr, bitmap []byte) {
+	for len >= size {
+		// Scan this element.
+		for i, mask := range bitmap {
+			addr := start + 8*unsafe.Alignof(start)*uintptr(i)
+			scanWithMask(addr, uintptr(mask))
 		}
-		return true
-	}
-	if (scanner.bitmap>>index)&1 == 0 {
-		// not a pointer!
-		return false
-	}
 
-	// Probably a pointer.
-	return true
+		// Move to the next element.
+		start += size
+		len -= size
+	}
+}
+
+// scanWithMask scans a portion of an object with a mask of pointer locations.
+// The address must be valid and pointer-aligned.
+func scanWithMask(addr, mask uintptr) {
+	// TODO: use ctz when available
+	for mask != 0 {
+		if mask&1 != 0 {
+			// Load and mark this pointer.
+			root := *(*uintptr)(unsafe.Pointer(addr))
+			markRoot(addr, root)
+		}
+
+		// Move to the next offset.
+		mask >>= 1
+		addr += unsafe.Alignof(addr)
+	}
 }

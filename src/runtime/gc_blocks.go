@@ -532,8 +532,7 @@ func runGC() (freeBytes uintptr) {
 
 // markRoots reads all pointers from start to end (exclusive) and if they look
 // like a heap pointer and are unmarked, marks them and scans that object as
-// well (recursively). The start and end parameters must be valid pointers and
-// must be aligned.
+// well (recursively). The starting address must be valid and aligned.
 func markRoots(start, end uintptr) {
 	if gcDebug {
 		println("mark from", start, "to", end, int(end-start))
@@ -545,18 +544,21 @@ func markRoots(start, end uintptr) {
 		if start%unsafe.Alignof(start) != 0 {
 			runtimePanic("gc: unaligned start pointer")
 		}
-		if end%unsafe.Alignof(end) != 0 {
-			runtimePanic("gc: unaligned end pointer")
-		}
 	}
 
-	// Reduce the end bound to avoid reading too far on platforms where pointer alignment is smaller than pointer size.
-	// If the size of the range is 0, then end will be slightly below start after this.
-	end -= unsafe.Sizeof(end) - unsafe.Alignof(end)
+	// Scan the range conservatively.
+	scanConservative(start, end-start)
+}
 
-	for addr := start; addr < end; addr += unsafe.Alignof(addr) {
+// scanConservative scans all possible pointer locations in a range and marks referenced heap allocations.
+// The starting address must be valid and pointer-aligned.
+func scanConservative(addr, len uintptr) {
+	for len >= unsafe.Sizeof(addr) {
 		root := *(*uintptr)(unsafe.Pointer(addr))
 		markRoot(addr, root)
+
+		addr += unsafe.Alignof(addr)
+		len -= unsafe.Alignof(addr)
 	}
 }
 
@@ -576,58 +578,21 @@ func finishMark() {
 		}
 		scanList = obj.next
 
-		// Create a scanner with the object layout.
-		scanner := obj.layout.scanner()
-		if scanner.pointerFree() {
+		// Check if the object may contain pointers.
+		if obj.layout.pointerFree() {
 			// This object doesn't contain any pointers.
 			// This is a fast path for objects like make([]int, 4096).
+			// It skips the length calculation.
 			continue
 		}
 
-		// Scan all pointers in the object.
-		start := uintptr(unsafe.Pointer(obj)) + align(unsafe.Sizeof(objHeader{}))
-		end := blockFromAddr(uintptr(unsafe.Pointer(obj))).findNext().address()
+		// Compute the scan bounds.
+		objAddr := uintptr(unsafe.Pointer(obj))
+		start := objAddr + align(unsafe.Sizeof(objHeader{}))
+		end := blockFromAddr(objAddr).findNext().address()
 
-		for addr := start; addr != end; addr += unsafe.Alignof(addr) {
-			// Load the word.
-			word := *(*uintptr)(unsafe.Pointer(addr))
-
-			if !scanner.nextIsPointer(word, uintptr(unsafe.Pointer(obj)), addr) {
-				// Not a heap pointer.
-				continue
-			}
-
-			// Find the corresponding memory block.
-			referencedBlock := blockFromAddr(word)
-
-			if referencedBlock.state() == blockStateFree {
-				// The to-be-marked object doesn't actually exist.
-				// This is probably a false positive.
-				if gcDebug {
-					println("found reference to free memory:", word, "at:", addr)
-				}
-				continue
-			}
-
-			// Move to the block's head.
-			referencedBlock = referencedBlock.findHead()
-
-			if referencedBlock.state() == blockStateMark {
-				// The block has already been marked by something else.
-				continue
-			}
-
-			// Mark block.
-			if gcDebug {
-				println("marking block:", referencedBlock)
-			}
-			referencedBlock.setState(blockStateMark)
-
-			// Add the object to the scan list.
-			header := (*objHeader)(referencedBlock.pointer())
-			header.next = scanList
-			scanList = header
-		}
+		// Scan the object.
+		obj.layout.scan(start, end-start)
 	}
 }
 
