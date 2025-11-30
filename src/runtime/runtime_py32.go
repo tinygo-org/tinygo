@@ -50,8 +50,12 @@ func sleepTicks(d timeUnit) {
 	start := ticks()
 	stop := start + d
 	for ticks() < stop {
-		arm.Asm("wfe")
+		waitForEvents()
 	}
+}
+
+func waitForEvents() {
+	arm.Asm("wfe")
 }
 
 func putchar(c byte) {
