@@ -51,7 +51,7 @@ const (
 var (
 	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
 	scanList      *objHeader     // scanList is a singly linked list of heap objects that have been marked but not scanned
-	nextAlloc     gcBlock        // the next block that should be tried by the allocator
+	freeRanges    *freeRange     // freeRanges is a linked list of free block ranges
 	endBlock      gcBlock        // the block just past the end of the available space
 	gcTotalAlloc  uint64         // total number of bytes allocated
 	gcTotalBlocks uint64         // total number of allocated blocks
@@ -234,6 +234,99 @@ type objHeader struct {
 	layout gcLayout
 }
 
+// freeRange is a node on the outer list of range lengths.
+// The free ranges are structured as two nested singly-linked lists:
+// - The outer level (freeRange) has one entry for each unique range length.
+// - The inner level (freeRangeMore) has one entry for each additional range of the same length.
+// This two-level structure ensures that insertion/removal times are proportional to the requested length.
+type freeRange struct {
+	// len is the length of this free range.
+	len uintptr
+
+	// nextLen is the next longer free range.
+	nextLen *freeRange
+
+	// nextWithLen is the next free range with this length.
+	nextWithLen *freeRangeMore
+}
+
+// freeRangeMore is a node on the inner list of equal-length ranges.
+type freeRangeMore struct {
+	next *freeRangeMore
+}
+
+// insertFreeRange inserts a range of len blocks starting at ptr into the free list.
+func insertFreeRange(ptr unsafe.Pointer, len uintptr) {
+	if gcAsserts && len == 0 {
+		runtimePanic("gc: insert 0-length free range")
+	}
+
+	// Find the insertion point by length.
+	// Skip until the next range is at least the target length.
+	insDst := &freeRanges
+	for *insDst != nil && (*insDst).len < len {
+		insDst = &(*insDst).nextLen
+	}
+
+	// Create the new free range.
+	next := *insDst
+	if next != nil && next.len == len {
+		// Insert into the list with this length.
+		newRange := (*freeRangeMore)(ptr)
+		newRange.next = next.nextWithLen
+		next.nextWithLen = newRange
+	} else {
+		// Insert into the list of lengths.
+		newRange := (*freeRange)(ptr)
+		*newRange = freeRange{
+			len:         len,
+			nextLen:     next,
+			nextWithLen: nil,
+		}
+		*insDst = newRange
+	}
+}
+
+// popFreeRange removes a range of len blocks from the freeRanges list.
+// It returns nil if there are no sufficiently long ranges.
+func popFreeRange(len uintptr) unsafe.Pointer {
+	if gcAsserts && len == 0 {
+		runtimePanic("gc: pop 0-length free range")
+	}
+
+	// Find the removal point by length.
+	// Skip until the next range is at least the target length.
+	remDst := &freeRanges
+	for *remDst != nil && (*remDst).len < len {
+		remDst = &(*remDst).nextLen
+	}
+
+	rangeWithLength := *remDst
+	if rangeWithLength == nil {
+		// No ranges are long enough.
+		return nil
+	}
+	removedLen := rangeWithLength.len
+
+	// Remove the range.
+	var ptr unsafe.Pointer
+	if nextWithLen := rangeWithLength.nextWithLen; nextWithLen != nil {
+		// Remove from the list with this length.
+		rangeWithLength.nextWithLen = nextWithLen.next
+		ptr = unsafe.Pointer(nextWithLen)
+	} else {
+		// Remove from the list of lengths.
+		*remDst = rangeWithLength.nextLen
+		ptr = unsafe.Pointer(rangeWithLength)
+	}
+
+	if removedLen > len {
+		// Insert the leftover range.
+		insertFreeRange(unsafe.Add(ptr, len*bytesPerBlock), removedLen-len)
+	}
+	return ptr
+}
+
 func isOnHeap(ptr uintptr) bool {
 	return ptr >= heapStart && ptr < uintptr(metadataStart)
 }
@@ -248,6 +341,9 @@ func initHeap() {
 	// Set all block states to 'free'.
 	metadataSize := heapEnd - uintptr(metadataStart)
 	memzero(unsafe.Pointer(metadataStart), metadataSize)
+
+	// Rebuild the free ranges list.
+	buildFreeRanges()
 }
 
 // setHeapEnd is called to expand the heap. The heap can only grow, not shrink.
@@ -279,6 +375,9 @@ func setHeapEnd(newHeapEnd uintptr) {
 	if gcAsserts && uintptr(metadataStart) < uintptr(oldMetadataStart)+oldMetadataSize {
 		runtimePanic("gc: heap did not grow enough at once")
 	}
+
+	// Rebuild the free ranges list.
+	buildFreeRanges()
 }
 
 // calculateHeapAddresses initializes variables such as metadataStart and
@@ -344,98 +443,65 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcMallocs++
 	gcTotalBlocks += uint64(neededBlocks)
 
-	// Continue looping until a run of free blocks has been found that fits the
-	// requested size.
-	index := nextAlloc
-	numFreeBlocks := uintptr(0)
-	heapScanCount := uint8(0)
+	// Acquire a range of free blocks.
+	var ranGC bool
+	var grewHeap bool
+	var pointer unsafe.Pointer
 	for {
-		if index == nextAlloc {
-			if heapScanCount == 0 {
-				heapScanCount = 1
-			} else if heapScanCount == 1 {
-				// The entire heap has been searched for free memory, but none
-				// could be found. Run a garbage collection cycle to reclaim
-				// free memory and try again.
-				heapScanCount = 2
-				freeBytes := runGC()
-				heapSize := uintptr(metadataStart) - heapStart
-				if freeBytes < heapSize/3 {
-					// Ensure there is at least 33% headroom.
-					// This percentage was arbitrarily chosen, and may need to
-					// be tuned in the future.
-					growHeap()
-				}
-			} else {
-				// Even after garbage collection, no free memory could be found.
-				// Try to increase heap size.
-				if growHeap() {
-					// Success, the heap was increased in size. Try again with a
-					// larger heap.
-				} else {
-					// Unfortunately the heap could not be increased. This
-					// happens on baremetal systems for example (where all
-					// available RAM has already been dedicated to the heap).
-					runtimePanicAt(returnAddress(0), "out of memory")
-				}
-			}
+		pointer = popFreeRange(neededBlocks)
+		if pointer != nil {
+			break
 		}
 
-		// Wrap around the end of the heap.
-		if index == endBlock {
-			index = 0
-			// Reset numFreeBlocks as allocations cannot wrap.
-			numFreeBlocks = 0
-			// In rare cases, the initial heap might be so small that there are
-			// no blocks at all. In this case, it's better to jump back to the
-			// start of the loop and try again, until the GC realizes there is
-			// no memory and grows the heap.
-			// This can sometimes happen on WebAssembly, where the initial heap
-			// is created by whatever is left on the last memory page.
+		if !ranGC {
+			// Run the collector and try again.
+			freeBytes := runGC()
+			ranGC = true
+			heapSize := uintptr(metadataStart) - heapStart
+			if freeBytes < heapSize/3 {
+				// Ensure there is at least 33% headroom.
+				// This percentage was arbitrarily chosen, and may need to
+				// be tuned in the future.
+				growHeap()
+			}
 			continue
 		}
 
-		// Is the block we're looking at free?
-		if index.state() != blockStateFree {
-			// This block is in use. Try again from this point.
-			numFreeBlocks = 0
-			index++
+		if gcDebug && !grewHeap {
+			println("grow heap for request:", uint(neededBlocks))
+			dumpFreeRangeCounts()
+		}
+		if growHeap() {
+			grewHeap = true
 			continue
 		}
-		numFreeBlocks++
-		index++
 
-		// Are we finished?
-		if numFreeBlocks == neededBlocks {
-			// Found a big enough range of free blocks!
-			nextAlloc = index
-			thisAlloc := index - gcBlock(neededBlocks)
-			if gcDebug {
-				println("found memory:", thisAlloc.pointer(), int(size))
-			}
-
-			// Set the following blocks as being allocated.
-			thisAlloc.setState(blockStateHead)
-			for i := thisAlloc + 1; i != nextAlloc; i++ {
-				i.setState(blockStateTail)
-			}
-
-			// Create the object header.
-			pointer := thisAlloc.pointer()
-			header := (*objHeader)(pointer)
-			header.layout = parseGCLayout(layout)
-
-			// We've claimed this allocation, now we can unlock the heap.
-			gcLock.Unlock()
-
-			// Return a pointer to this allocation.
-			add := align(unsafe.Sizeof(objHeader{}))
-			pointer = unsafe.Add(pointer, add)
-			size -= add
-			memzero(pointer, size)
-			return pointer
-		}
+		// Unfortunately the heap could not be increased. This
+		// happens on baremetal systems for example (where all
+		// available RAM has already been dedicated to the heap).
+		runtimePanicAt(returnAddress(0), "out of memory")
 	}
+
+	// Set the backing blocks as being allocated.
+	block := blockFromAddr(uintptr(pointer))
+	block.setState(blockStateHead)
+	for i := block + 1; i != block+gcBlock(neededBlocks); i++ {
+		i.setState(blockStateTail)
+	}
+
+	// Create the object header.
+	header := (*objHeader)(pointer)
+	header.layout = parseGCLayout(layout)
+
+	// We've claimed this allocation, now we can unlock the heap.
+	gcLock.Unlock()
+
+	// Return a pointer to this allocation.
+	add := align(unsafe.Sizeof(objHeader{}))
+	pointer = unsafe.Add(pointer, add)
+	size -= add
+	memzero(pointer, size)
+	return pointer
 }
 
 func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
@@ -521,6 +587,9 @@ func runGC() (freeBytes uintptr) {
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle.
 	freeBytes = sweep()
+
+	// Rebuild the free ranges list.
+	buildFreeRanges()
 
 	// Show how much has been sweeped, for debugging.
 	if gcDebug {
@@ -663,6 +732,46 @@ func sweep() (freeBytes uintptr) {
 	gcFreedBlocks += freed
 	freeBytes += uintptr(freed) * bytesPerBlock
 	return
+}
+
+// buildFreeRanges rebuilds the freeRanges list.
+// This must be called after a GC sweep or heap grow.
+func buildFreeRanges() {
+	freeRanges = nil
+	block := endBlock
+	for {
+		// Skip backwards over occupied blocks.
+		for block > 0 && (block-1).state() != blockStateFree {
+			block--
+		}
+		if block == 0 {
+			break
+		}
+
+		// Find the start of the free range.
+		end := block
+		for block > 0 && (block-1).state() == blockStateFree {
+			block--
+		}
+
+		// Insert the free range.
+		insertFreeRange(block.pointer(), uintptr(end-block))
+	}
+
+	if gcDebug {
+		println("free ranges after rebuild:")
+		dumpFreeRangeCounts()
+	}
+}
+
+func dumpFreeRangeCounts() {
+	for rangeWithLength := freeRanges; rangeWithLength != nil; rangeWithLength = rangeWithLength.nextLen {
+		totalRanges := uintptr(1)
+		for nextWithLen := rangeWithLength.nextWithLen; nextWithLen != nil; nextWithLen = nextWithLen.next {
+			totalRanges++
+		}
+		println("-", uint(rangeWithLength.len), "x", uint(totalRanges))
+	}
 }
 
 // dumpHeap can be used for debugging purposes. It dumps the state of each heap
