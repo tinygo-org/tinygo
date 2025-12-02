@@ -22,6 +22,15 @@ var (
 	epinen      uint32
 	epouten     uint32
 	easyDMABusy volatile.Register8
+	// epOutFlowControl contains the flow control state of the USB OUT endpoints.
+	epOutFlowControl [NumberOfUSBEndpoints]struct {
+		// nak indicates that we are NAKing any further OUT packets because the rxHandler isn't ready yet.
+		// When this is true, we do not restart the DMA for the endpoint, effectively pausing it.
+		nak bool
+		// dataPending indicates that we have data in the hardware buffer that hasn't been handled yet.
+		// Having one in the buffer is what generates the NAK responses, this is a signal to handle it.
+		dataPending bool
+	}
 )
 
 // enterCriticalSection is used to protect access to easyDMA - only one thing
@@ -185,7 +194,16 @@ func handleUSBIRQ(interrupt.Interrupt) {
 				nrf.USBD.EPOUT[i].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[i]))))
 				count := nrf.USBD.SIZE.EPOUT[i].Get()
 				nrf.USBD.EPOUT[i].MAXCNT.Set(count)
-				nrf.USBD.TASKS_STARTEPOUT[i].Set(1)
+				if !epOutFlowControl[i].nak {
+					// Normal case: We want data, so start DMA immediately
+					nrf.USBD.TASKS_STARTEPOUT[i].Set(1)
+					epOutFlowControl[i].dataPending = false
+				} else {
+					// NAK case: We want to NAK, so DO NOT start DMA.
+					// The data stays in HW buffer. Host receives NAKs.
+					// Mark that we have data waiting so we can fetch it later.
+					epOutFlowControl[i].dataPending = true
+				}
 			}
 		}
 	}
@@ -197,6 +215,10 @@ func handleUSBIRQ(interrupt.Interrupt) {
 			buf := handleEndpointRx(uint32(i))
 			if usbRxHandler[i] == nil || usbRxHandler[i](buf) {
 				AckUsbOutTransfer(uint32(i))
+			} else {
+				// usbRxHandler returned false, so NAK further OUT packets until we're ready
+				epOutFlowControl[i].nak = true
+				nrf.USBD.SIZE.EPOUT[i].Set(0)
 			}
 			exitCriticalSection()
 		}
@@ -218,19 +240,23 @@ func initEndpoint(ep, config uint32) {
 	switch config {
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn:
 		enableEPIn(ep)
+		setEPDataPID(ep|usb.EndpointIn, false)
 
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointOut:
 		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << ep)
 		nrf.USBD.SIZE.EPOUT[ep].Set(0)
 		enableEPOut(ep)
+		setEPDataPID(ep, false)
 
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointOut:
 		nrf.USBD.INTENSET.Set(nrf.USBD_INTENSET_ENDEPOUT0 << ep)
 		nrf.USBD.SIZE.EPOUT[ep].Set(0)
 		enableEPOut(ep)
+		setEPDataPID(ep, false)
 
 	case usb.ENDPOINT_TYPE_BULK | usb.EndpointIn:
 		enableEPIn(ep)
+		setEPDataPID(ep|usb.EndpointIn, false)
 
 	case usb.ENDPOINT_TYPE_CONTROL:
 		enableEPIn(0)
@@ -248,7 +274,7 @@ func SendUSBInPacket(ep uint32, data []byte) bool {
 	sendUSBPacket(ep, data)
 
 	// clear transfer complete flag
-	nrf.USBD.INTENCLR.Set(nrf.USBD_INTENCLR_ENDEPOUT0 << 4)
+	nrf.USBD.INTENCLR.Set(nrf.USBD_INTENCLR_ENDEPOUT0 << ep)
 
 	return true
 }
@@ -292,8 +318,26 @@ func handleEndpointRx(ep uint32) []byte {
 }
 
 // AckUsbOutTransfer is called to acknowledge the completion of a USB OUT transfer.
+// It also clears the NAK state and resumes data flow if it was paused.
 func AckUsbOutTransfer(ep uint32) {
-	// set ready for next data
+	epOutFlowControl[ep].nak = false
+
+	// If we ignored a packet earlier (Buffer Full strategy), we must manually
+	// trigger the DMA now to pull it from the HW buffer.
+	if epOutFlowControl[ep].dataPending {
+		epOutFlowControl[ep].dataPending = false
+
+		// Prepare DMA to move data from HW Buffer -> RAM
+		nrf.USBD.EPOUT[ep].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
+		count := nrf.USBD.SIZE.EPOUT[ep].Get()
+		nrf.USBD.EPOUT[ep].MAXCNT.Set(count)
+
+		// Kick the DMA
+		nrf.USBD.TASKS_STARTEPOUT[ep].Set(1)
+		return
+	}
+
+	// Otherwise, just re-arm the endpoint to accept the NEXT packet
 	nrf.USBD.SIZE.EPOUT[ep].Set(0)
 }
 
@@ -368,18 +412,68 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	return b, nil
 }
 
+// Set the USB endpoint Packet ID to DATA0 or DATA1.
+// In endpoints must have bit 7 (0x80) set.
+func setEPDataPID(ep uint32, dataOne bool) {
+	val := ep
+	if dataOne {
+		val |= nrf.USBD_DTOGGLE_VALUE_Data1 << nrf.USBD_DTOGGLE_VALUE_Pos
+	} else {
+		val |= nrf.USBD_DTOGGLE_VALUE_Data0 << nrf.USBD_DTOGGLE_VALUE_Pos
+	}
+	nrf.USBD.DTOGGLE.Set(val)
+}
+
+// Set ENDPOINT_HALT/stall status on a USB IN endpoint.
 func (dev *USBDevice) SetStallEPIn(ep uint32) {
-	nrf.USBD.EPSTALL.Set(ep | nrf.USBD_EPSTALL_IO | nrf.USBD_EPSTALL_STALL)
+	if ep&0x7F == 0 {
+		nrf.USBD.TASKS_EP0STALL.Set(1)
+	} else if ep&0x7F < NumberOfUSBEndpoints {
+		//     Stall   In     Endpoint
+		val := 0x100 | 0x80 | ep
+		nrf.USBD.EPSTALL.Set(val)
+	}
 }
 
+// Set ENDPOINT_HALT/stall status on a USB OUT endpoint.
 func (dev *USBDevice) SetStallEPOut(ep uint32) {
-	nrf.USBD.EPSTALL.Set(ep | nrf.USBD_EPSTALL_STALL)
+	if ep == 0 {
+		nrf.USBD.TASKS_EP0STALL.Set(1)
+	} else if ep < NumberOfUSBEndpoints {
+		//     Stall   Out    Endpoint
+		val := 0x100 | 0x00 | ep
+		nrf.USBD.EPSTALL.Set(val)
+	}
 }
 
+// Clear the ENDPOINT_HALT/stall on a USB IN endpoint.
 func (dev *USBDevice) ClearStallEPIn(ep uint32) {
-	nrf.USBD.EPSTALL.Set(ep | nrf.USBD_EPSTALL_IO)
+	if ep&0x7F == 0 {
+		nrf.USBD.TASKS_EP0STALL.Set(0)
+	} else if ep&0x7F < NumberOfUSBEndpoints {
+		// Reset the endpoint data PID to DATA0
+		ep |= 0x80 // Set endpoint direction bit
+		setEPDataPID(ep, false)
+
+		//  No-stall   In     Endpoint
+		val := 0x000 | 0x80 | ep
+		nrf.USBD.EPSTALL.Set(val)
+	}
 }
 
+// Clear the ENDPOINT_HALT/stall on a USB OUT endpoint.
 func (dev *USBDevice) ClearStallEPOut(ep uint32) {
-	nrf.USBD.EPSTALL.Set(ep)
+	if ep == 0 {
+		nrf.USBD.TASKS_EP0STALL.Set(0)
+	} else if ep < NumberOfUSBEndpoints {
+		// Reset the endpoint data PID to DATA0
+		setEPDataPID(ep, false)
+
+		//  No-stall   Out    Endpoint
+		val := 0x000 | 0x00 | ep
+		nrf.USBD.EPSTALL.Set(val)
+
+		// Write a value to the SIZE register to allow nRF to ACK/accept data
+		nrf.USBD.SIZE.EPOUT[ep].Set(0)
+	}
 }
