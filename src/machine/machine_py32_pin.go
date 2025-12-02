@@ -9,9 +9,9 @@ import (
 
 const deviceName = py32.Device
 
-// Peripheral port offsets. Keep the same spacing used on other MCUs so helpers
-// like Pin.getPort can keep using simple division by 16 even though PY32 ports
-// only expose 8 pins each.
+// Peripheral port offsets.
+// Keep the same spacing used on other MCUs so helpers like Pin.getPortNumber
+// can keep using simple division by 16.
 const (
 	portA Pin = iota * 16
 	portB
@@ -21,7 +21,6 @@ const (
 	portF
 )
 
-// Port A pins.
 const (
 	PA0 Pin = portA + iota
 	PA1
@@ -41,7 +40,6 @@ const (
 	PA15
 )
 
-// Port B pins.
 const (
 	PB0 Pin = portB + iota
 	PB1
@@ -61,7 +59,6 @@ const (
 	PB15
 )
 
-// Port C pins.
 const (
 	PC0 Pin = portC + iota
 	PC1
@@ -81,7 +78,6 @@ const (
 	PC15
 )
 
-// Port D pins.
 const (
 	PD0 Pin = portD + iota
 	PD1
@@ -101,7 +97,6 @@ const (
 	PD15
 )
 
-// Port E pins.
 const (
 	PE0 Pin = portE + iota
 	PE1
@@ -121,7 +116,6 @@ const (
 	PE15
 )
 
-// Port F pins.
 const (
 	PF0 Pin = portF + iota
 	PF1
@@ -141,7 +135,6 @@ const (
 	PF15
 )
 
-// PinMode values specific to PY32: only GPIO direction and pull configuration.
 const (
 	PinOutput PinMode = iota
 	PinInputFloating
@@ -151,7 +144,6 @@ const (
 )
 const PinInput PinMode = PinInputFloating
 
-// Internal helpers for GPIO configuration.
 const (
 	gpioModeInput  = 0
 	gpioModeOutput = 1
@@ -166,11 +158,6 @@ const (
 	gpioOutputSpeedHigh = 2
 	gpioOutputSpeedMask = 0x3
 )
-
-// // CPUFrequency returns the core clock frequency.
-// func CPUFrequency() uint32 {
-// 	return 48_000_000
-// }
 
 func (p Pin) getPortNumber() uint8 {
 	return uint8(p) >> 4

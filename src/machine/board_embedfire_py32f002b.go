@@ -1,7 +1,6 @@
 //go:build embedfire_py32f002b
 
 // Pin mappings for the Embedfire PY32F002B board.
-// Only LED and button aliases are provided.
 
 package machine
 
