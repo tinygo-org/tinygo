@@ -72,6 +72,7 @@ func (m *msc) scsiCmdBegin() {
 			if m.cbw.transferLength() < uint32(len(m.buf)) {
 				m.buf = m.buf[:m.cbw.transferLength()]
 			}
+			m.queuedBytes = uint32(len(m.buf))
 			m.sendUSBPacket(m.buf)
 		}
 	}
