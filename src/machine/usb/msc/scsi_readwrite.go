@@ -12,7 +12,7 @@ func (m *msc) scsiCmdReadWrite(cmd scsi.Cmd) {
 	status := m.validateScsiReadWrite(cmd)
 	if status != csw.StatusPassed {
 		m.sendScsiError(status, scsi.SenseIllegalRequest, scsi.SenseCodeInvalidCmdOpCode)
-	} else if m.totalBytes > 0 {
+	} else if m.transferBytes > 0 {
 		if cmd.CmdType() == scsi.CmdRead {
 			m.scsiRead(cmd)
 		} else {
@@ -28,7 +28,7 @@ func (m *msc) scsiCmdReadWrite(cmd scsi.Cmd) {
 func (m *msc) validateScsiReadWrite(cmd scsi.Cmd) csw.Status {
 	blockCount := cmd.BlockCount()
 	// CBW wrapper transfer length
-	if m.totalBytes == 0 {
+	if m.transferBytes == 0 {
 		// If the SCSI command's block count doesn't loosely match the wrapper's transfer length something's wrong
 		if blockCount > 0 {
 			return csw.StatusPhaseError
@@ -50,7 +50,7 @@ func (m *msc) validateScsiReadWrite(cmd scsi.Cmd) csw.Status {
 		// https://usb.org/sites/default/files/usbmassbulk_10.pdf
 		return csw.StatusFailed
 	}
-	if m.totalBytes/blockCount == 0 {
+	if m.transferBytes/blockCount == 0 {
 		// Block size shouldn't be small enough to round to zero
 		// 6.7.2 The Thirteen Cases - Case 7 (Hi < Di) READ(10) or
 		// 6.7.3 The Thirteen Cases - Case 13 (Ho < Do) WRITE(10)
@@ -103,7 +103,7 @@ func (m *msc) writeBlock(b []byte, lba, offset uint32) (n int, err error) {
 
 func (m *msc) scsiRead(cmd scsi.Cmd) {
 	// Make sure we don't exceed the buffer size
-	readEnd := m.totalBytes - m.sentBytes
+	readEnd := m.transferBytes - m.sentBytes
 	if readEnd > m.maxPacketSize {
 		readEnd = m.maxPacketSize
 	}
@@ -136,7 +136,7 @@ func (m *msc) scsiWrite(cmd scsi.Cmd, b []byte) {
 		m.sentBytes += uint32(len(b))
 	}
 
-	if m.sentBytes >= m.totalBytes {
+	if m.sentBytes >= m.transferBytes {
 		// Data transfer is complete, send CSW
 		m.state = mscStateStatus
 		m.run([]byte{}, true)

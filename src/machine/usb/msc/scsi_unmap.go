@@ -60,7 +60,7 @@ func (m *msc) scsiUnmap(b []byte) {
 	// FIXME: We need to handle erase block alignment
 
 	m.sentBytes += uint32(len(b))
-	if m.sentBytes >= m.totalBytes {
+	if m.sentBytes >= m.transferBytes {
 		// Order 66 complete, send CSW to establish galactic empire
 		m.state = mscStateStatus
 		m.run([]byte{}, true)

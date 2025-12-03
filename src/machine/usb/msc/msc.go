@@ -35,12 +35,12 @@ type msc struct {
 	respStatus    csw.Status // Response status for the last command
 	sendZLP       bool       // Flag to indicate if a zero-length packet should be sent before sending CSW
 
-	cbw         *CBW   // Last received Command Block Wrapper
-	queuedBytes uint32 // Number of bytes queued for sending
-	sentBytes   uint32 // Number of bytes sent
-	totalBytes  uint32 // Total bytes to send
-	cswBuf      []byte // CSW response buffer
-	state       mscState
+	cbw           *CBW   // Last received Command Block Wrapper
+	queuedBytes   uint32 // Number of bytes queued for sending
+	sentBytes     uint32 // Number of bytes sent
+	transferBytes uint32 // Total bytes to send
+	cswBuf        []byte // CSW response buffer
+	state         mscState
 
 	maxLUN       uint8 // Maximum Logical Unit Number (n-1 for n LUNs)
 	dev          machine.BlockDevice
@@ -160,8 +160,9 @@ func (m *msc) sendUSBPacket(b []byte) {
 func (m *msc) sendCSW(status csw.Status) {
 	// Generate CSW packet into m.cswBuf and send it
 	residue := uint32(0)
-	if m.totalBytes >= m.sentBytes {
-		residue = m.totalBytes - m.sentBytes
+	expected := m.cbw.transferLength()
+	if expected >= m.sentBytes {
+		residue = expected - m.sentBytes
 	}
 	m.cbw.CSW(status, residue, m.cswBuf)
 	m.state = mscStateStatusSent
@@ -245,7 +246,7 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 
 		// Move on to the data transfer phase next go around (after sending the first message)
 		m.state = mscStateData
-		m.totalBytes = cbw.transferLength()
+		m.transferBytes = cbw.transferLength()
 		m.queuedBytes = 0
 		m.sentBytes = 0
 		m.respStatus = csw.StatusPassed
@@ -281,7 +282,7 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 	// to cycle back through this block, e.g. with TEST UNIT READY which sends only a CSW after
 	// setting the sense key/add'l code/qualifier internally
 	if m.state == mscStateStatus && !m.txStalled {
-		if m.totalBytes > m.sentBytes && m.cbw.isIn() {
+		if m.cbw.transferLength() > m.sentBytes && m.cbw.isIn() {
 			// 6.7.2 The Thirteen Cases - Case 5 (Hi > Di): STALL before status
 			m.stallEndpoint(usb.MSC_ENDPOINT_IN)
 		} else if m.sendZLP {

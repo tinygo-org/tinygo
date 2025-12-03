@@ -136,13 +136,13 @@ func (m *msc) scsiEvpdInquiry(cmd scsi.Cmd, pageCode uint8) {
 
 	// Set total bytes to the length of our response
 	m.queuedBytes = uint32(len(m.buf))
-	m.totalBytes = uint32(len(m.buf))
+	m.transferBytes = uint32(len(m.buf))
 }
 
 func (m *msc) scsiStdInquiry(cmd scsi.Cmd) {
 	m.resetBuffer(scsi.InquiryRespLen)
 	m.queuedBytes = scsi.InquiryRespLen
-	m.totalBytes = scsi.InquiryRespLen
+	m.transferBytes = scsi.InquiryRespLen
 
 	// byte 0 - Device Type (0x00 for direct access block device)
 	// byte 1 - Removable media bit
