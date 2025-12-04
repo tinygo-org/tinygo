@@ -3,7 +3,6 @@ package msc
 import (
 	"machine"
 	"machine/usb"
-	"machine/usb/msc/csw"
 )
 
 func setupPacketHandler(setup usb.Setup) bool {
@@ -18,11 +17,17 @@ func (m *msc) setupPacketHandler(setup usb.Setup) bool {
 	wValue := (uint16(setup.WValueH) << 8) | uint16(setup.WValueL)
 	switch setup.BRequest {
 	case usb.CLEAR_FEATURE:
-		ok = m.handleClearFeature(setup, wValue)
+		if setup.BmRequestType == 0x02 { // Host-to-Device | Standard | Endpoint
+			ok = m.handleClearFeature(setup, wValue)
+		}
 	case usb.GET_MAX_LUN:
-		ok = m.handleGetMaxLun(setup, wValue)
+		if setup.BmRequestType == 0xA1 { // Device-to-Host | Class | Interface
+			ok = m.handleGetMaxLun(setup, wValue)
+		}
 	case usb.MSC_RESET:
-		ok = m.handleReset(setup, wValue)
+		if setup.BmRequestType == 0x21 { // Host-to-Device | Class | Interface
+			ok = m.handleReset(setup, wValue)
+		}
 	}
 	return ok
 }
@@ -53,24 +58,25 @@ func (m *msc) handleClearFeature(setup usb.Setup, wValue uint16) bool {
 		} else if wIndex == usb.MSC_ENDPOINT_OUT {
 			m.stallEndpoint(usb.MSC_ENDPOINT_OUT)
 		}
-		return ok
+		machine.SendZlp()
+		return true
 	}
 
 	// Clear the direction bit from the endpoint address for comparison
 	wIndex := setup.WIndex & 0x7F
 
-	// Clear the IN/OUT stalls if addressed to the endpoint, or both if addressed to the interface
-	if wIndex == usb.MSC_ENDPOINT_IN || wIndex == mscInterface {
+	// Clear the IN/OUT stalls if addressed to the endpoint
+	if wIndex == usb.MSC_ENDPOINT_IN {
 		m.clearStallEndpoint(usb.MSC_ENDPOINT_IN)
 		ok = true
 	}
-	if wIndex == usb.MSC_ENDPOINT_OUT || wIndex == mscInterface {
+	if wIndex == usb.MSC_ENDPOINT_OUT {
 		m.clearStallEndpoint(usb.MSC_ENDPOINT_OUT)
 		ok = true
 	}
 	// Send a CSW if needed to resume after the IN endpoint stall is cleared
 	if m.state == mscStateStatus && wIndex == usb.MSC_ENDPOINT_IN {
-		m.sendCSW(csw.StatusPassed)
+		m.sendCSW(m.respStatus)
 		ok = true
 	}
 
