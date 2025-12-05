@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"machine"
 	"time"
 )
 
@@ -13,7 +12,7 @@ var (
 )
 
 // RegisterBlockDevice registers a BlockDevice provider with the MSC driver
-func (m *msc) RegisterBlockDevice(dev machine.BlockDevice) {
+func (m *msc) RegisterBlockDevice(dev BlockDevice) {
 	m.dev = dev
 
 	if cap(m.blockCache) != int(dev.WriteBlockSize()) {
@@ -56,11 +55,11 @@ func (m *msc) RegisterBlockDevice(dev machine.BlockDevice) {
 	}
 }
 
-var _ machine.BlockDevice = (*RecorderDisk)(nil)
+var _ BlockDevice = (*RecorderDisk)(nil)
 
 // RecorderDisk is a block device that records actions taken on it
 type RecorderDisk struct {
-	dev  machine.BlockDevice
+	dev  BlockDevice
 	log  []RecorderRecord
 	last time.Time
 	time time.Time
@@ -84,7 +83,7 @@ const (
 )
 
 // NewRecorderDisk creates a new RecorderDisk instance
-func NewRecorderDisk(dev machine.BlockDevice, count int) *RecorderDisk {
+func NewRecorderDisk(dev BlockDevice, count int) *RecorderDisk {
 	d := &RecorderDisk{
 		dev:  dev,
 		log:  make([]RecorderRecord, 0, count),

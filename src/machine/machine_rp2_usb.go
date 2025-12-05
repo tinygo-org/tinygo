@@ -71,9 +71,13 @@ func initEndpoint(ep, config uint32) {
 }
 
 // SendUSBInPacket sends a packet for USB (interrupt in / bulk in).
-func SendUSBInPacket(ep uint32, data []byte) bool {
+func (dev *USBDevice) SendUSBInPacket(ep uint32, data []byte) bool {
 	sendUSBPacket(ep, data, 0)
 	return true
+}
+
+func SendUSBInPacket(ep uint32, data []byte) bool {
+	return USBDev.SendUSBInPacket(ep, data)
 }
 
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
@@ -129,9 +133,13 @@ func handleEndpointRx(ep uint32) []byte {
 }
 
 // AckUsbOutTransfer is called to acknowledge the completion of a USB OUT transfer.
-func AckUsbOutTransfer(ep uint32) {
+func (dev *USBDevice) AckUsbOutTransfer(ep uint32) {
 	ep = ep & 0x7F
 	setEPDataPID(ep, !epXdata0[ep])
+}
+
+func AckUsbOutTransfer(ep uint32) {
+	USBDev.AckUsbOutTransfer(ep)
 }
 
 // Set the USB endpoint Packet ID to DATA0 or DATA1.
@@ -144,8 +152,12 @@ func setEPDataPID(ep uint32, dataOne bool) {
 	_usbDPSRAM.EPxBufferControl[ep].Out.SetBits(usbBuf0CtrlAvail)
 }
 
-func SendZlp() {
+func (dev *USBDevice) SendZlp() {
 	sendUSBPacket(0, []byte{}, 0)
+}
+
+func SendZlp() {
+	USBDev.SendZlp()
 }
 
 func sendViaEPIn(ep uint32, data []byte, count int) {

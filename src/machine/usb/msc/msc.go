@@ -1,7 +1,6 @@
 package msc
 
 import (
-	"machine"
 	"machine/usb"
 	"machine/usb/descriptor"
 	"machine/usb/msc/csw"
@@ -43,7 +42,8 @@ type msc struct {
 	state         mscState
 
 	maxLUN       uint8 // Maximum Logical Unit Number (n-1 for n LUNs)
-	dev          machine.BlockDevice
+	dev          BlockDevice
+	usb          usb.Controller
 	blockCount   uint32 // Number of blocks in the device
 	blockOffset  uint32 // Byte offset of the first block in the device for aligned writes
 	blockSizeUSB uint32 // Write block size as presented to the host over USB
@@ -60,14 +60,14 @@ type msc struct {
 }
 
 // Port returns the USB Mass Storage port
-func Port(dev machine.BlockDevice) *msc {
+func Port(dev BlockDevice) *msc {
 	if MSC == nil {
-		MSC = newMSC(dev)
+		MSC = newMSC(dev, usb.DefaultController)
 	}
 	return MSC
 }
 
-func newMSC(dev machine.BlockDevice) *msc {
+func newMSC(dev BlockDevice, usbCtrl usb.Controller) *msc {
 	// Size our buffer to match the maximum packet size of the IN endpoint
 	maxPacketSize := descriptor.EndpointMSCIN.GetMaxPacketSize()
 	m := &msc{
@@ -78,6 +78,7 @@ func newMSC(dev machine.BlockDevice) *msc {
 		cswBuf:        make([]byte, csw.MsgLen),
 		cbw:           &CBW{Data: make([]byte, 31)},
 		maxPacketSize: uint32(maxPacketSize),
+		usb:           usbCtrl,
 	}
 	m.RegisterBlockDevice(dev)
 
@@ -87,7 +88,7 @@ func newMSC(dev machine.BlockDevice) *msc {
 	m.SetProductRev("1.0")
 
 	// Initialize the USB Mass Storage Class (MSC) port
-	machine.ConfigureUSBEndpoint(descriptor.MSC,
+	m.usb.ConfigureUSBEndpoint(descriptor.MSC,
 		[]usb.EndpointConfig{
 			{
 				Index:        usb.MSC_ENDPOINT_IN,
@@ -132,7 +133,7 @@ func (m *msc) processTasks() {
 			// Acknowledge the received data from the host
 			m.queuedBytes = 0
 			m.taskQueued = false
-			machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
+			m.usb.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
 		}
 		time.Sleep(100 * time.Microsecond)
 	}
@@ -151,9 +152,9 @@ func (m *msc) resetBuffer(length int) {
 }
 
 func (m *msc) sendUSBPacket(b []byte) {
-	if machine.USBDev.InitEndpointComplete {
+	if m.usb.IsInitEndpointComplete() {
 		// Send the USB packet
-		machine.SendUSBInPacket(usb.MSC_ENDPOINT_IN, b)
+		m.usb.SendUSBInPacket(usb.MSC_ENDPOINT_IN, b)
 	}
 }
 
@@ -161,8 +162,8 @@ func (m *msc) sendCSW(status csw.Status) {
 	// Generate CSW packet into m.cswBuf and send it
 	residue := uint32(0)
 	expected := m.cbw.transferLength()
-	if expected >= m.sentBytes {
-		residue = expected - m.sentBytes
+	if expected >= m.sentBytes+m.queuedBytes {
+		residue = expected - (m.sentBytes + m.queuedBytes)
 	}
 	m.cbw.CSW(status, residue, m.cswBuf)
 	m.state = mscStateStatusSent

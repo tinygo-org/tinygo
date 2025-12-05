@@ -22,6 +22,8 @@ var (
 func initUSB() {
 	enableUSBCDC()
 	USBDev.Configure(UARTConfig{})
+
+	usb.DefaultController = USBDev
 }
 
 // Using go:linkname here because there's a circular dependency between the
@@ -285,6 +287,10 @@ func handleStandardSetup(setup usb.Setup) bool {
 	}
 }
 
+func (d *USBDevice) IsInitEndpointComplete() bool {
+	return d.InitEndpointComplete
+}
+
 func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool) {
 	if len(usbDescriptor.Device) == 0 {
 		usbDescriptor = descriptor.CDC
@@ -319,6 +325,10 @@ func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.S
 }
 
 func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointConfig, setup []usb.SetupConfig) {
+	USBDev.ConfigureUSBEndpoint(desc, epSettings, setup)
+}
+
+func (d *USBDevice) ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointConfig, setup []usb.SetupConfig) {
 	usbDescriptor = desc
 
 	for _, ep := range epSettings {

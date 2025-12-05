@@ -1,7 +1,6 @@
 package msc
 
 import (
-	"machine"
 	"machine/usb"
 )
 
@@ -58,7 +57,7 @@ func (m *msc) handleClearFeature(setup usb.Setup, wValue uint16) bool {
 		} else if wIndex == usb.MSC_ENDPOINT_OUT {
 			m.stallEndpoint(usb.MSC_ENDPOINT_OUT)
 		}
-		machine.SendZlp()
+		m.usb.SendZlp()
 		return true
 	}
 
@@ -81,7 +80,7 @@ func (m *msc) handleClearFeature(setup usb.Setup, wValue uint16) bool {
 	}
 
 	if ok {
-		machine.SendZlp()
+		m.usb.SendZlp()
 	}
 	return ok
 }
@@ -95,7 +94,7 @@ func (m *msc) handleGetMaxLun(setup usb.Setup, wValue uint16) bool {
 	// Send the maximum LUN ID number (zero-indexed, so n-1) supported by the device
 	m.resetBuffer(1) // Shrink buffer to 1 byte
 	m.buf[0] = m.maxLUN
-	return machine.SendUSBInPacket(usb.CONTROL_ENDPOINT, m.buf)
+	return m.usb.SendUSBInPacket(usb.CONTROL_ENDPOINT, m.buf)
 }
 
 // 3.1 Bulk-Only Mass Storage Reset
@@ -114,7 +113,7 @@ func (m *msc) handleReset(setup usb.Setup, wValue uint16) bool {
 	m.addlSenseQualifier = 0
 
 	// Send a zero-length packet (ZLP) to indicate the reset is complete
-	machine.SendZlp()
+	m.usb.SendZlp()
 
 	// Return true to indicate successful reset
 	return true
@@ -123,21 +122,21 @@ func (m *msc) handleReset(setup usb.Setup, wValue uint16) bool {
 func (m *msc) stallEndpoint(ep uint8) {
 	if ep == usb.MSC_ENDPOINT_IN {
 		m.txStalled = true
-		machine.USBDev.SetStallEPIn(usb.MSC_ENDPOINT_IN)
+		m.usb.SetStallEPIn(usb.MSC_ENDPOINT_IN)
 	} else if ep == usb.MSC_ENDPOINT_OUT {
 		m.rxStalled = true
-		machine.USBDev.SetStallEPOut(usb.MSC_ENDPOINT_OUT)
+		m.usb.SetStallEPOut(usb.MSC_ENDPOINT_OUT)
 	} else if ep == usb.CONTROL_ENDPOINT {
-		machine.USBDev.SetStallEPIn(usb.CONTROL_ENDPOINT)
+		m.usb.SetStallEPIn(usb.CONTROL_ENDPOINT)
 	}
 }
 
 func (m *msc) clearStallEndpoint(ep uint8) {
 	if ep == usb.MSC_ENDPOINT_IN {
-		machine.USBDev.ClearStallEPIn(usb.MSC_ENDPOINT_IN)
+		m.usb.ClearStallEPIn(usb.MSC_ENDPOINT_IN)
 		m.txStalled = false
 	} else if ep == usb.MSC_ENDPOINT_OUT {
-		machine.USBDev.ClearStallEPOut(usb.MSC_ENDPOINT_OUT)
+		m.usb.ClearStallEPOut(usb.MSC_ENDPOINT_OUT)
 		m.rxStalled = false
 	}
 }

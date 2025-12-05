@@ -339,7 +339,7 @@ func handleUSBSetAddress(setup usb.Setup) bool {
 }
 
 // SendUSBInPacket sends a packet for USB (interrupt in / bulk in).
-func SendUSBInPacket(ep uint32, data []byte) bool {
+func (dev *USBDevice) SendUSBInPacket(ep uint32, data []byte) bool {
 	sendUSBPacket(ep, data, 0)
 
 	// clear transfer complete flag
@@ -349,6 +349,10 @@ func SendUSBInPacket(ep uint32, data []byte) bool {
 	setEPSTATUSSET(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSSET_BK1RDY)
 
 	return true
+}
+
+func SendUSBInPacket(ep uint32, data []byte) bool {
+	return USBDev.SendUSBInPacket(ep, data)
 }
 
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
@@ -420,7 +424,7 @@ func handleEndpointRx(ep uint32) []byte {
 }
 
 // AckUsbOutTransfer is called to acknowledge the completion of a USB OUT transfer.
-func AckUsbOutTransfer(ep uint32) {
+func (dev *USBDevice) AckUsbOutTransfer(ep uint32) {
 	// set byte count to zero
 	usbEndpointDescriptors[ep].DeviceDescBank[0].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 
@@ -431,8 +435,16 @@ func AckUsbOutTransfer(ep uint32) {
 	setEPSTATUSCLR(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_BK0RDY)
 }
 
-func SendZlp() {
+func AckUsbOutTransfer(ep uint32) {
+	USBDev.AckUsbOutTransfer(ep)
+}
+
+func (dev *USBDevice) SendZlp() {
 	usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+}
+
+func SendZlp() {
+	USBDev.SendZlp()
 }
 
 func epPacketSize(size uint16) uint32 {
@@ -492,4 +504,24 @@ func setEPINTENCLR(ep uint32, val uint8) {
 
 func setEPINTENSET(ep uint32, val uint8) {
 	sam.USB_DEVICE.DEVICE_ENDPOINT[ep].EPINTENSET.Set(val)
+}
+
+// Set ENDPOINT_HALT/stall status on a USB IN endpoint.
+func (dev *USBDevice) SetStallEPIn(ep uint32) {
+	setEPSTATUSSET(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSSET_STALLRQ1)
+}
+
+// Set ENDPOINT_HALT/stall status on a USB OUT endpoint.
+func (dev *USBDevice) SetStallEPOut(ep uint32) {
+	setEPSTATUSSET(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSSET_STALLRQ0)
+}
+
+// Clear the ENDPOINT_HALT/stall on a USB IN endpoint.
+func (dev *USBDevice) ClearStallEPIn(ep uint32) {
+	setEPSTATUSCLR(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_STALLRQ1)
+}
+
+// Clear the ENDPOINT_HALT/stall on a USB OUT endpoint.
+func (dev *USBDevice) ClearStallEPOut(ep uint32) {
+	setEPSTATUSCLR(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_STALLRQ0)
 }

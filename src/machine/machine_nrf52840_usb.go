@@ -255,13 +255,17 @@ func initEndpoint(ep, config uint32) {
 }
 
 // SendUSBInPacket sends a packet for USBHID (interrupt in / bulk in).
-func SendUSBInPacket(ep uint32, data []byte) bool {
+func (dev *USBDevice) SendUSBInPacket(ep uint32, data []byte) bool {
 	sendUSBPacket(ep, data, 0)
 
 	// clear transfer complete flag
 	nrf.USBD.INTENCLR.Set(nrf.USBD_INTENCLR_ENDEPOUT0 << 4)
 
 	return true
+}
+
+func SendUSBInPacket(ep uint32, data []byte) bool {
+	return USBDev.SendUSBInPacket(ep, data)
 }
 
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
@@ -304,13 +308,45 @@ func handleEndpointRx(ep uint32) []byte {
 }
 
 // AckUsbOutTransfer is called to acknowledge the completion of a USB OUT transfer.
-func AckUsbOutTransfer(ep uint32) {
+func (dev *USBDevice) AckUsbOutTransfer(ep uint32) {
 	// set ready for next data
 	nrf.USBD.SIZE.EPOUT[ep].Set(0)
 }
 
-func SendZlp() {
+func AckUsbOutTransfer(ep uint32) {
+	USBDev.AckUsbOutTransfer(ep)
+}
+
+func (dev *USBDevice) SendZlp() {
 	nrf.USBD.TASKS_EP0STATUS.Set(1)
+}
+
+func SendZlp() {
+	USBDev.SendZlp()
+}
+
+// Set ENDPOINT_HALT/stall status on a USB IN endpoint.
+func (dev *USBDevice) SetStallEPIn(ep uint32) {
+	// Bit 8 is STALL, Bit 7 is IO (1 for IN), Bits 0-2 are EP number.
+	nrf.USBD.EPSTALL.Set((1 << 8) | (1 << 7) | (ep & 0x7))
+}
+
+// Set ENDPOINT_HALT/stall status on a USB OUT endpoint.
+func (dev *USBDevice) SetStallEPOut(ep uint32) {
+	// Bit 8 is STALL, Bit 7 is IO (0 for OUT), Bits 0-2 are EP number.
+	nrf.USBD.EPSTALL.Set((1 << 8) | (0 << 7) | (ep & 0x7))
+}
+
+// Clear the ENDPOINT_HALT/stall on a USB IN endpoint.
+func (dev *USBDevice) ClearStallEPIn(ep uint32) {
+	// Bit 8 is STALL (0 for UnStall), Bit 7 is IO (1 for IN), Bits 0-2 are EP number.
+	nrf.USBD.EPSTALL.Set((0 << 8) | (1 << 7) | (ep & 0x7))
+}
+
+// Clear the ENDPOINT_HALT/stall on a USB OUT endpoint.
+func (dev *USBDevice) ClearStallEPOut(ep uint32) {
+	// Bit 8 is STALL (0 for UnStall), Bit 7 is IO (0 for OUT), Bits 0-2 are EP number.
+	nrf.USBD.EPSTALL.Set((0 << 8) | (0 << 7) | (ep & 0x7))
 }
 
 func sendViaEPIn(ep uint32, ptr *byte, count int) {
