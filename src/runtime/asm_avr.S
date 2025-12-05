@@ -78,5 +78,8 @@ tinygo_longjmp:
     ld r28, X+
     ld r29, X+
 
+	; Mark that we returned from a longjmp.
+	ldi r24, 1
+
     ; Jump to the PC (stored in the Z register)
     icall
