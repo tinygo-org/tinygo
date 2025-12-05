@@ -73,6 +73,14 @@ func align(ptr uintptr) uintptr {
 //export tinygo_getCurrentStackPointer
 func getCurrentStackPointer() uintptr
 
+// savedStackPointer is used to save the system stack pointer while in a goroutine.
+var savedStackPointer uintptr
+
+// saveStackPointer is called by internal/task.state.Resume() to save the stack pointer before entering a goroutine from the system stack.
+func saveStackPointer() {
+	savedStackPointer = getCurrentStackPointer()
+}
+
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
 // otherwise.
 func growHeap() bool {

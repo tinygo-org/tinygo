@@ -108,6 +108,10 @@ func (*stackState) unwind()
 func (t *Task) Resume() {
 	// The current task must be saved and restored because this can nest on WASM with JS.
 	prevTask := currentTask
+	if prevTask == nil {
+		// Save the system stack pointer.
+		saveStackPointer()
+	}
 	t.gcData.swap()
 	currentTask = t
 	if !t.state.launched {
@@ -122,6 +126,9 @@ func (t *Task) Resume() {
 		runtimePanic("stack overflow")
 	}
 }
+
+//go:linkname saveStackPointer runtime.saveStackPointer
+func saveStackPointer()
 
 //export tinygo_rewind
 func (*state) rewind()

@@ -29,16 +29,6 @@ type stackChainObject struct {
 //   - The system stack (aka startup stack) is not heap allocated, so even
 //     though it may be referenced it will not be scanned by default.
 //
-// Therefore, we only need to scan the system stack.
-// It is relatively easy to scan the system stack while we're on it: we can
-// simply read __stack_pointer and __global_base and scan the area in between.
-// Unfortunately, it's hard to get the system stack pointer while we're on a
-// goroutine stack. But when we're on a goroutine stack, the system stack is in
-// the scheduler which means there shouldn't be anything on the system stack
-// anyway.
-// ...I hope this assumption holds, otherwise we will need to store the system
-// stack in a global or something.
-//
 // The compiler also inserts code to store all globals in a chain via
 // stackChainStart. Luckily we don't need to scan these, as these globals are
 // stored on the goroutine stack and are therefore already getting scanned.
@@ -50,9 +40,18 @@ func markStack() {
 	// live.
 	volatile.LoadUint32((*uint32)(unsafe.Pointer(&stackChainStart)))
 
+	// Scan the system stack.
+	var sysSP uintptr
 	if task.OnSystemStack() {
-		markRoots(getCurrentStackPointer(), stackTop)
+		// We are on the system stack.
+		// Use the current stack pointer.
+		sysSP = getCurrentStackPointer()
+	} else {
+		// We are in a goroutine.
+		// Use the saved stack pointer.
+		sysSP = savedStackPointer
 	}
+	markRoots(sysSP, stackTop)
 }
 
 // trackPointer is a stub function call inserted by the compiler during IR
