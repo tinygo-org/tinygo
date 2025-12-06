@@ -20,7 +20,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 		val := b.getValue(b.fn.Params[1], getPos(b.fn))
 		oldVal := b.CreateAtomicRMW(llvm.AtomicRMWBinOpAnd, ptr, val, llvm.AtomicOrderingSequentiallyConsistent, true)
 		return oldVal
-	case "OrInt32", "OrInt64", "OrUint32", "OrUint64", "OrUintptr":
+	case "atomicOr8", "OrInt32", "OrInt64", "OrUint32", "OrUint64", "OrUintptr":
 		ptr := b.getValue(b.fn.Params[0], getPos(b.fn))
 		val := b.getValue(b.fn.Params[1], getPos(b.fn))
 		oldVal := b.CreateAtomicRMW(llvm.AtomicRMWBinOpOr, ptr, val, llvm.AtomicOrderingSequentiallyConsistent, true)
@@ -37,7 +37,7 @@ func (b *builder) createAtomicOp(name string) llvm.Value {
 		tuple := b.CreateAtomicCmpXchg(ptr, old, newVal, llvm.AtomicOrderingSequentiallyConsistent, llvm.AtomicOrderingSequentiallyConsistent, true)
 		swapped := b.CreateExtractValue(tuple, 1, "")
 		return swapped
-	case "LoadInt32", "LoadInt64", "LoadUint32", "LoadUint64", "LoadUintptr", "LoadPointer":
+	case "atomicLoad8", "LoadInt32", "LoadInt64", "LoadUint32", "LoadUint64", "LoadUintptr", "LoadPointer":
 		ptr := b.getValue(b.fn.Params[0], getPos(b.fn))
 		val := b.CreateLoad(b.getLLVMType(b.fn.Signature.Results().At(0).Type()), ptr, "")
 		val.SetOrdering(llvm.AtomicOrderingSequentiallyConsistent)

@@ -147,3 +147,10 @@ void* tinygo_task_current(void) {
 void tinygo_task_send_gc_signal(pthread_t thread) {
     pthread_kill(thread, taskPauseSignal);
 }
+
+// The local gc scan list.
+static __thread void *gcScanList;
+
+void* tinygo_scan_list(void) {
+	return &gcScanList;
+}

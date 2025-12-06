@@ -50,7 +50,6 @@ const (
 
 var (
 	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
-	scanList      *objHeader     // scanList is a singly linked list of heap objects that have been marked but not scanned
 	nextAlloc     gcBlock        // the next block that should be tried by the allocator
 	endBlock      gcBlock        // the block just past the end of the available space
 	gcTotalAlloc  uint64         // total number of bytes allocated
@@ -139,7 +138,7 @@ func (b gcBlock) findHead() gcBlock {
 		// state byte.
 		// This optimization speeds up findHead for pointers that point into a
 		// large allocation.
-		stateByte := b.stateByte()
+		stateByte := b.stateByteAtomic()
 		if stateByte == blockStateByteAllTails {
 			b -= (b % blocksPerStateByte) + 1
 			continue
@@ -154,7 +153,9 @@ func (b gcBlock) findHead() gcBlock {
 		b--
 	}
 	if gcAsserts {
-		if b.state() != blockStateHead && b.state() != blockStateMark {
+		switch b.stateAtomic() {
+		case blockStateHead, blockStateMark:
+		default:
 			runtimePanic("gc: found tail without head")
 		}
 	}
@@ -164,10 +165,11 @@ func (b gcBlock) findHead() gcBlock {
 // findNext returns the first block just past the end of the tail. This may or
 // may not be the head of an object.
 func (b gcBlock) findNext() gcBlock {
-	if b.state() == blockStateHead || b.state() == blockStateMark {
+	switch b.stateAtomic() {
+	case blockStateHead, blockStateMark:
 		b++
 	}
-	for b.address() < uintptr(metadataStart) && b.state() == blockStateTail {
+	for b.address() < uintptr(metadataStart) && b.stateAtomic() == blockStateTail {
 		b++
 	}
 	return b
@@ -572,19 +574,12 @@ func markCurrentGoroutineStack(sp uintptr) {
 func finishMark() {
 	for {
 		// Remove an object from the scan list.
-		obj := scanList
+		scanList := getScanList()
+		obj := *scanList
 		if obj == nil {
 			return
 		}
-		scanList = obj.next
-
-		// Check if the object may contain pointers.
-		if obj.layout.pointerFree() {
-			// This object doesn't contain any pointers.
-			// This is a fast path for objects like make([]int, 4096).
-			// It skips the length calculation.
-			continue
-		}
+		*scanList = obj.next
 
 		// Compute the scan bounds.
 		objAddr := uintptr(unsafe.Pointer(obj))
@@ -615,19 +610,26 @@ func markRoot(addr, root uintptr) {
 	head := block.findHead()
 
 	// Mark the object.
-	if head.state() == blockStateMark {
+	if !head.mark() {
 		// This object is already marked.
 		return
 	}
 	if gcDebug {
 		println("found unmarked pointer", root, "at address", addr)
 	}
-	head.setState(blockStateMark)
+
+	// Check if the object may contain pointers.
+	obj := (*objHeader)(head.pointer())
+	if obj.layout.pointerFree() {
+		// This object doesn't contain any pointers.
+		// This is a fast path for objects like make([]int, 4096).
+		return
+	}
 
 	// Add the object to the scan list.
-	header := (*objHeader)(head.pointer())
-	header.next = scanList
-	scanList = header
+	scanList := getScanList()
+	obj.next = *scanList
+	*scanList = obj
 }
 
 // Sweep goes through all memory and frees unmarked memory.
