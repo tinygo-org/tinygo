@@ -381,7 +381,7 @@ func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
 	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.SetBits((uint32(l) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 }
 
-func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
+func (dev *USBDevice) ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	var b [cdcLineInfoSize]byte
 
 	// Wait until OUT transfer is ready.

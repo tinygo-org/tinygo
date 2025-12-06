@@ -54,3 +54,10 @@ func (m *MockUSBDevice) ClearStallEPIn(ep uint32) {
 func (m *MockUSBDevice) ClearStallEPOut(ep uint32) {
 	m.StallOut = false
 }
+
+func (m *MockUSBDevice) Enable() {
+}
+
+func (m *MockUSBDevice) ReceiveUSBControlPacket() ([7]byte, error) {
+	return [7]byte{}, nil
+}

@@ -1,5 +1,7 @@
 package cdc
 
+import "machine/usb"
+
 const (
 	cdcEndpointACM = 1
 	cdcEndpointOut = 2
@@ -12,6 +14,7 @@ func New() *USBCDC {
 		USB = &USBCDC{
 			rxBuffer: NewRxRingBuffer(),
 			txBuffer: NewTxRingBuffer(),
+			dev:      usb.DefaultController,
 		}
 	}
 	return USB

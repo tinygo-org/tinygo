@@ -372,7 +372,7 @@ func handleUSBSetAddress(setup usb.Setup) bool {
 	return true
 }
 
-func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
+func (dev *USBDevice) ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	var b [cdcLineInfoSize]byte
 
 	nrf.USBD.TASKS_EP0RCVOUT.Set(1)

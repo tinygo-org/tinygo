@@ -19,11 +19,12 @@ var (
 	USBCDC Serialer
 )
 
-func initUSB() {
-	enableUSBCDC()
-	USBDev.Configure(UARTConfig{})
-
+func init() {
 	usb.DefaultController = USBDev
+}
+
+func initUSB() {
+	USBDev.Enable()
 }
 
 // Using go:linkname here because there's a circular dependency between the
@@ -31,6 +32,10 @@ func initUSB() {
 //
 //go:linkname enableUSBCDC machine/usb/cdc.EnableUSBCDC
 func enableUSBCDC()
+
+func ReceiveUSBControlPacket() ([7]byte, error) {
+	return USBDev.ReceiveUSBControlPacket()
+}
 
 type Serialer interface {
 	WriteByte(c byte) error
@@ -285,6 +290,15 @@ func handleStandardSetup(setup usb.Setup) bool {
 	default:
 		return true
 	}
+}
+
+func (d *USBDevice) Enable() {
+	if d.initcomplete {
+		return
+	}
+	enableUSBCDC()
+	d.Configure(UARTConfig{})
+	d.initcomplete = true
 }
 
 func (d *USBDevice) IsInitEndpointComplete() bool {

@@ -80,6 +80,7 @@ func newMSC(dev BlockDevice, usbCtrl usb.Controller) *msc {
 		maxPacketSize: uint32(maxPacketSize),
 		usb:           usbCtrl,
 	}
+	m.usb.Enable()
 	m.RegisterBlockDevice(dev)
 
 	// Set default inquiry data fields

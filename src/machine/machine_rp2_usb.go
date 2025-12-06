@@ -104,7 +104,7 @@ func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
 	sendViaEPIn(ep, data, count)
 }
 
-func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
+func (dev *USBDevice) ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	var b [cdcLineInfoSize]byte
 	ep := 0
 
