@@ -76,10 +76,6 @@ func (dev *USBDevice) SendUSBInPacket(ep uint32, data []byte) bool {
 	return true
 }
 
-func SendUSBInPacket(ep uint32, data []byte) bool {
-	return USBDev.SendUSBInPacket(ep, data)
-}
-
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
 //
 //go:noinline
@@ -138,10 +134,6 @@ func (dev *USBDevice) AckUsbOutTransfer(ep uint32) {
 	setEPDataPID(ep, !epXdata0[ep])
 }
 
-func AckUsbOutTransfer(ep uint32) {
-	USBDev.AckUsbOutTransfer(ep)
-}
-
 // Set the USB endpoint Packet ID to DATA0 or DATA1.
 func setEPDataPID(ep uint32, dataOne bool) {
 	epXdata0[ep] = dataOne
@@ -154,10 +146,6 @@ func setEPDataPID(ep uint32, dataOne bool) {
 
 func (dev *USBDevice) SendZlp() {
 	sendUSBPacket(0, []byte{}, 0)
-}
-
-func SendZlp() {
-	USBDev.SendZlp()
 }
 
 func sendViaEPIn(ep uint32, data []byte, count int) {

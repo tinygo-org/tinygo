@@ -264,10 +264,6 @@ func (dev *USBDevice) SendUSBInPacket(ep uint32, data []byte) bool {
 	return true
 }
 
-func SendUSBInPacket(ep uint32, data []byte) bool {
-	return USBDev.SendUSBInPacket(ep, data)
-}
-
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
 //
 //go:noinline
@@ -313,16 +309,8 @@ func (dev *USBDevice) AckUsbOutTransfer(ep uint32) {
 	nrf.USBD.SIZE.EPOUT[ep].Set(0)
 }
 
-func AckUsbOutTransfer(ep uint32) {
-	USBDev.AckUsbOutTransfer(ep)
-}
-
 func (dev *USBDevice) SendZlp() {
 	nrf.USBD.TASKS_EP0STATUS.Set(1)
-}
-
-func SendZlp() {
-	USBDev.SendZlp()
 }
 
 // Set ENDPOINT_HALT/stall status on a USB IN endpoint.

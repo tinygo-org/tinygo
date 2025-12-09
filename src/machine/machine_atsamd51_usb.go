@@ -351,10 +351,6 @@ func (dev *USBDevice) SendUSBInPacket(ep uint32, data []byte) bool {
 	return true
 }
 
-func SendUSBInPacket(ep uint32, data []byte) bool {
-	return USBDev.SendUSBInPacket(ep, data)
-}
-
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
 //
 //go:noinline
@@ -435,16 +431,8 @@ func (dev *USBDevice) AckUsbOutTransfer(ep uint32) {
 	setEPSTATUSCLR(ep, sam.USB_DEVICE_ENDPOINT_EPSTATUSCLR_BK0RDY)
 }
 
-func AckUsbOutTransfer(ep uint32) {
-	USBDev.AckUsbOutTransfer(ep)
-}
-
 func (dev *USBDevice) SendZlp() {
 	usbEndpointDescriptors[0].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
-}
-
-func SendZlp() {
-	USBDev.SendZlp()
 }
 
 func epPacketSize(size uint16) uint32 {

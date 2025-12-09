@@ -371,3 +371,16 @@ func (d *USBDevice) ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings 
 		usbSetupHandler[s.Index] = s.Handler
 	}
 }
+
+// Old usb functions kept for compatibility
+func AckUsbOutTransfer(ep uint32) {
+	USBDev.AckUsbOutTransfer(ep)
+}
+
+func SendUSBInPacket(ep uint32, data []byte) bool {
+	return USBDev.SendUSBInPacket(ep, data)
+}
+
+func SendZlp() {
+	USBDev.SendZlp()
+}
