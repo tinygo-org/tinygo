@@ -168,6 +168,7 @@ func (m *msc) sendCSW(status csw.Status) {
 	}
 	m.cbw.CSW(status, residue, m.cswBuf)
 	m.state = mscStateStatusSent
+	m.queuedBytes = csw.MsgLen
 	m.sendUSBPacket(m.cswBuf)
 }
 
