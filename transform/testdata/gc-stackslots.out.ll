@@ -4,6 +4,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 @runtime.stackChainStart = internal global ptr null
 @someGlobal = global i8 3
 @ptrGlobal = global ptr null
+@arrGlobal = global [8 x i8] zeroinitializer
 
 declare void @runtime.trackPointer(ptr nocapture readonly)
 
@@ -166,3 +167,61 @@ define void @allocAndSave(ptr %x) {
   store ptr %1, ptr @runtime.stackChainStart, align 4
   ret void
 }
+
+declare void @"(internal/task).Pause"()
+
+define ptr @getAndPause() {
+  %gc.stackobject = alloca { ptr, i32, ptr }, align 8
+  store { ptr, i32, ptr } { ptr null, i32 1, ptr null }, ptr %gc.stackobject, align 4
+  %1 = load ptr, ptr @runtime.stackChainStart, align 4
+  %2 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 0
+  store ptr %1, ptr %2, align 4
+  store ptr %gc.stackobject, ptr @runtime.stackChainStart, align 4
+  %ptr = call ptr @getPointer()
+  %3 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 2
+  store ptr %ptr, ptr %3, align 4
+  call void @"(internal/task).Pause"()
+  store ptr %1, ptr @runtime.stackChainStart, align 4
+  ret ptr %ptr
+}
+
+; Function Attrs: memory(readwrite)
+declare void @externCallWithMemAttr() #0
+
+define ptr @getAndCallWithMemAttr() {
+  %gc.stackobject = alloca { ptr, i32, ptr }, align 8
+  store { ptr, i32, ptr } { ptr null, i32 1, ptr null }, ptr %gc.stackobject, align 4
+  %1 = load ptr, ptr @runtime.stackChainStart, align 4
+  %2 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 0
+  store ptr %1, ptr %2, align 4
+  store ptr %gc.stackobject, ptr @runtime.stackChainStart, align 4
+  %ptr = call ptr @getPointer()
+  %3 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 2
+  store ptr %ptr, ptr %3, align 4
+  call void @externCallWithMemAttr()
+  store ptr %1, ptr @runtime.stackChainStart, align 4
+  ret ptr %ptr
+}
+
+define { ptr, i32, i32 } @getSlice() {
+  ret { ptr, i32, i32 } { ptr @someGlobal, i32 8, i32 8 }
+}
+
+define i32 @copyToSlice(ptr %src.ptr, i32 %src.len, i32 %src.cap) {
+  %dst = call { ptr, i32, i32 } @getSlice()
+  %dst.ptr = extractvalue { ptr, i32, i32 } %dst, 0
+  %dst.len = extractvalue { ptr, i32, i32 } %dst, 1
+  %minLen = call i32 @llvm.umin.i32(i32 %dst.len, i32 %src.len)
+  call void @llvm.memmove.p0.p0.i32(ptr %dst.ptr, ptr %src.ptr, i32 %minLen, i1 false)
+  ret i32 %minLen
+}
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare i32 @llvm.umin.i32(i32, i32) #1
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture readonly, i32, i1 immarg) #2
+
+attributes #0 = { memory(readwrite) }
+attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }

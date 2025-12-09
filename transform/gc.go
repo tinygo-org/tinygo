@@ -4,6 +4,11 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// This is somewhat ugly to access through the API.
+// https://github.com/llvm/llvm-project/blob/94ebcfd16dac67486bae624f74e1c5c789448bae/llvm/include/llvm/Support/ModRef.h#L62
+// https://github.com/llvm/llvm-project/blob/94ebcfd16dac67486bae624f74e1c5c789448bae/llvm/include/llvm/Support/ModRef.h#L87
+const shiftExcludeArgMem = 2
+
 // MakeGCStackSlots converts all calls to runtime.trackPointer to explicit
 // stores to stack slots that are scannable by the GC.
 func MakeGCStackSlots(mod llvm.Module) bool {
@@ -36,20 +41,49 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	defer targetData.Dispose()
 	uintptrType := ctx.IntType(targetData.PointerSize() * 8)
 
-	// Look at *all* functions to see whether they are free of function pointer
+	// All functions that call runtime.alloc needs stack objects.
+	trackFuncs := map[llvm.Value]struct{}{}
+	markParentFunctions(trackFuncs, alloc)
+
+	// External functions may indirectly suspend the goroutine or perform a heap allocation.
+	// Their callers should get stack objects.
+	memAttr := llvm.AttributeKindID("memory")
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		if _, ok := trackFuncs[fn]; ok {
+			continue // already found
+		}
+		if !fn.FirstBasicBlock().IsNil() {
+			// This is not an external function.
+			continue
+		}
+		if fn == trackPointer {
+			// Manually exclude trackPointer.
+			continue
+		}
+
+		mem := fn.GetEnumFunctionAttribute(memAttr)
+		if !mem.IsNil() && mem.GetEnumValue()>>shiftExcludeArgMem == 0 {
+			// This does not access non-argument memory.
+			// Exclude it.
+			continue
+		}
+
+		// The callers need stack objects.
+		markParentFunctions(trackFuncs, fn)
+	}
+
+	// Look at all other functions to see whether they contain function pointer
 	// calls.
 	// This takes less than 5ms for ~100kB of WebAssembly but would perhaps be
 	// faster when written in C++ (to avoid the CGo overhead).
-	funcsWithFPCall := map[llvm.Value]struct{}{}
-	n := 0
 	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-		n++
-		if _, ok := funcsWithFPCall[fn]; ok {
+		if _, ok := trackFuncs[fn]; ok {
 			continue // already found
 		}
-		done := false
-		for bb := fn.FirstBasicBlock(); !bb.IsNil() && !done; bb = llvm.NextBasicBlock(bb) {
-			for call := bb.FirstInstruction(); !call.IsNil() && !done; call = llvm.NextInstruction(call) {
+
+	scanBody:
+		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for call := bb.FirstInstruction(); !call.IsNil(); call = llvm.NextInstruction(call) {
 				if call.IsACallInst().IsNil() {
 					continue // only looking at calls
 				}
@@ -57,31 +91,11 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 				if !called.IsAFunction().IsNil() {
 					continue // only looking for function pointers
 				}
-				funcsWithFPCall[fn] = struct{}{}
-				markParentFunctions(funcsWithFPCall, fn)
-				done = true
+				trackFuncs[fn] = struct{}{}
+				markParentFunctions(trackFuncs, fn)
+				break scanBody
 			}
 		}
-	}
-
-	// Determine which functions need stack objects. Many leaf functions don't
-	// need it: it only causes overhead for them.
-	// Actually, in one test it was only able to eliminate stack object from 12%
-	// of functions that had a call to runtime.trackPointer (8 out of 68
-	// functions), so this optimization is not as big as it may seem.
-	allocatingFunctions := map[llvm.Value]struct{}{} // set of allocating functions
-
-	// Work from runtime.alloc and trace all parents to check which functions do
-	// a heap allocation (and thus which functions do not).
-	markParentFunctions(allocatingFunctions, alloc)
-
-	// Also trace all functions that call a function pointer.
-	for fn := range funcsWithFPCall {
-		// Assume that functions that call a function pointer do a heap
-		// allocation as a conservative guess because the called function might
-		// do a heap allocation.
-		allocatingFunctions[fn] = struct{}{}
-		markParentFunctions(allocatingFunctions, fn)
 	}
 
 	// Collect some variables used below in the loop.
@@ -110,7 +124,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		// Pick the parent function.
 		fn := call.InstructionParent().Parent()
 
-		if _, ok := allocatingFunctions[fn]; !ok {
+		if _, ok := trackFuncs[fn]; !ok {
 			// This function nor any of the functions it calls (recursively)
 			// allocate anything from the heap, so it will not trigger a garbage
 			// collection cycle. Thus, it does not need to track local pointer

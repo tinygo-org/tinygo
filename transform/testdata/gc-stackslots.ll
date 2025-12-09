@@ -4,6 +4,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 @runtime.stackChainStart = external global ptr
 @someGlobal = global i8 3
 @ptrGlobal = global ptr null
+@arrGlobal = global [8 x i8] zeroinitializer
 
 declare void @runtime.trackPointer(ptr nocapture readonly)
 
@@ -116,3 +117,51 @@ define void @allocAndSave(ptr %x) {
   store ptr %x, ptr @ptrGlobal
   ret void
 }
+
+declare void @"(internal/task).Pause"()
+
+define ptr @getAndPause() {
+	%ptr = call ptr @getPointer()
+	call void @runtime.trackPointer(ptr %ptr)
+	; Calling a function with unknown memory access forces stack slot creation.
+	call void @"(internal/task).Pause"()
+	ret ptr %ptr
+}
+
+; Function Attrs: memory(readwrite)
+declare void @externCallWithMemAttr() #0
+
+define ptr @getAndCallWithMemAttr() {
+	%ptr = call ptr @getPointer()
+	call void @runtime.trackPointer(ptr %ptr)
+	; Calling an external function which may access non-arg memory forces stack slot creation.
+	call void @externCallWithMemAttr()
+	ret ptr %ptr
+}
+
+; Generic function that returns a slice (that must be tracked).
+define {ptr, i32, i32} @getSlice() {
+  ret {ptr, i32, i32} {ptr @someGlobal, i32 8, i32 8}
+}
+
+define i32 @copyToSlice(ptr %src.ptr, i32 %src.len, i32 %src.cap) {
+  %dst = call {ptr, i32, i32} @getSlice()
+  %dst.ptr = extractvalue {ptr, i32, i32} %dst, 0
+  call void @runtime.trackPointer(ptr %dst.ptr)
+  %dst.len = extractvalue {ptr, i32, i32} %dst, 1
+  ; Math intrinsics do not need stack slots.
+  %minLen = call i32 @llvm.umin.i32(i32 %dst.len, i32 %src.len)
+  ; Intrinsics which only access argument memory do not need stack slots.
+  call void @llvm.memmove.p0.p0.i32(ptr %dst.ptr, ptr %src.ptr, i32 %minLen, i1 false)
+  ret i32 %minLen
+}
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare i32 @llvm.umin.i32(i32, i32) #1
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture readonly, i32, i1 immarg) #2
+
+attributes #0 = { memory(readwrite) }
+attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
