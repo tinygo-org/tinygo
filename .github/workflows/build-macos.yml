@@ -97,7 +97,7 @@ jobs:
       - name: Build TinyGo release tarball
         run: make release -j3
       - name: Test stdlib packages
-        run: make tinygo-test TEST_ADDITIONAL_FLAGS="-scheduler=tasks"
+        run: make tinygo-test
       - name: Make release artifact
         run: cp -p build/release.tar.gz build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
       - name: Publish release artifact
