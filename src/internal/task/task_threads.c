@@ -131,8 +131,10 @@ int tinygo_task_start(uintptr_t fn, void *args, void *task, pthread_t *thread, u
     // Wait until the thread has been created and read all state_pass variables.
     #if __APPLE__
     dispatch_semaphore_wait(state.startlock, DISPATCH_TIME_FOREVER);
+    dispatch_release(state.startlock);
     #else
     sem_wait(&state.startlock);
+    sem_destroy(&state.startlock);
     #endif
 
     return result;
