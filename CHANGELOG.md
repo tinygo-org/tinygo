@@ -1,3 +1,92 @@
+0.40.0
+---
+* **general**
+  - all: add full LLVM 20 support
+  - core: feat: enable //go:linkname pragma for globals
+  - core: feature: Add flag to ignore go compatibility matrix (#5078)
+  - chore: update version for 0.40 development cycle
+* **compiler**
+  - emit an error when the actual arch doesn't match GOARCH
+  - mark string parameters as readonly
+  - use Tarjan's SCC algorithm to detect loops for defer
+  - lower "large stack" limit to 16kb
+* **core**
+  - shrink bdwgc library
+  - Fix linker errors for runtime.vgetrandom and crypto/internal/sysrand.fatal
+  - fix: add TryLock to sync.RWMutex
+  - fix: correct linter issues exposed by the fix in #4679
+  - fix: don't hardcode success return state
+  - fix: expand RTT debugger compatibility
+  - internal/task (threads): save stack bounds instead of scanning under a lock
+  - internal/task: create detached threads and fix error handling
+  - interp: better errors when debugging interp
+  - transform (gc): create stack slots in callers of external functions
+  - internal/task: prevent semaphore resource leak for threads scheduler
+* **machine**
+  - cortexm: optimize code size for the HardFault_Handler
+  - fe310: add I2C pins for the HiFive1b
+  - clarify WriteAt semantics of BlockDevice
+  - fix deprecated AsmFull comment (#5005)
+  - make sure DMA buffers do not escape unnecessarily
+  - only enable USB-CDC when needed
+  - use larger SPI MAXCNT on nrf52833 and nrf52840
+  - fix: update m.queuedBytes when clamping output to avoid corrupting sentBytes
+  - fix: use int64 in ReadTemperature to avoid overflow
+  - fix(rp2): disable DBGPAUSE on startup
+  - fix(rp2): possible integer overflow while computing factors for SPI baudrate
+  - fix(rp2): reset spinlocks at startup
+  - fix(rp2): switch spinlock busy loop to wfe
+  - fix(rp2): use side-effect-free spinlocks
+  - nrf: add ADC_VDDH which is an ADC pin for VDDH
+  - nrf: don't block SPI transfer
+  - nrf: don't set PSELN, it's ignored in single ended mode anyway
+  - nrf: fix typo in ADC configuration
+  - nrf: refactor SoftDevice enabled check
+  - nrf: rename pwmPin to adcPin
+  - nrf: support flash operations while the SoftDevice is enabled
+  - rp2040: allow writing to the UART inside interrupts
+  - machine,nrf528: stop the bus only once on I2C bus error and ensures the first error is returned
+* **net**
+  - update submodule to latest commits
+* **runtime**
+  - (avr): fix infinite longjmp loop if stack is aligned to 256 bytes
+  - (gc_blocks.go): clear full size of allocation
+  - (gc_blocks.go): make sweep branchless
+  - (gc_blocks.go): simplify scanning logic
+  - (gc_blocks.go): use a linked stack to scan marked objects
+  - (gc_blocks.go): use best-fit allocation
+  - (gc_boehm.go): fix world already stopped check
+  - (wasm): scan the system stack
+  - fix sleep duration for long sleeps
+  - remove copied code for nrf52840
+  - src/syscall: update src buffer after write
+  - wasm: fix C realloc and optimize it a bit
+* **targets**
+  - add xiao-esp32s3 board target
+  - Add ESP32-S3 support (#5091)
+  - Added Gopher ARCADE board
+  - Create "pico2-ice" target board (#5062)
+* **build/test**
+  - Add testing.T.Context() and testing.B.Context()
+  - create separate go.mod file for testing dependencies for wasm tests that use Chromium headless browser to avoid use of older incompatible version.
+  - go back to normal scheduler instead of tasks scheduler for macos CI
+  - update CI to use Go 1.25.5
+  - update macOS GH actions builds to handle sunset of macOS 13
+  - use task scheduler on macOS builds to avoid test race condition lockups
+  - update all CI builds to use latest stable Go release. Also update some of the actions to their latest releases.
+  - update GH actions builds to use Go 1.25.4
+  - uninstall cmake before install
+  - fix: point the submodule for musl-lib to a mirror in the TinyGo GitHub org
+  - fix: remove macOS 15 from CI build matrix (conflicts with macOS 14 build)
+  - fix: separate host expected bytes from device intended bytes
+  - fix/typo: makeESPFirmwareImage
+  - make: GNUmakefile: shrink TinyGo binaries on Linux
+  - move the directory list into a variable
+  - several improvements to the macOS GH actions build
+  - Fix for #4678: top-level 'make lint' wasn't working
+  - fix: increase the timeout for chromedp to connect to the headless browser used for running the wasm tests.
+  - testdata: some more packages for the test corpus
+
 0.39.0
 ---
 * **general**
