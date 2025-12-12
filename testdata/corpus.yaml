@@ -281,3 +281,7 @@
   version: v2
 - repo: github.com/soypat/mu8
 - repo: github.com/brandondube/pctl
+- repo: github.com/tetratelabs/wazero
+  subdirs:
+  - pkg: examples/basic
+  - pkg: examples/allocation
