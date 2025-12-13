@@ -89,6 +89,7 @@
 - repo: github.com/dgryski/go-spooky
 - repo: github.com/dgryski/go-spritz
 - repo: github.com/dgryski/go-timewindow
+- repo: github.com/dgryski/go-tinylz
 - repo: github.com/dgryski/go-tinymap
 - repo: github.com/dgryski/go-trigram
 - repo: github.com/dgryski/go-twine
@@ -269,7 +270,7 @@
 - repo: github.com/cloudflare/bm
 - repo: github.com/cloudflare/bn256
   tags: generic
-#- repo: cloudflare/ahocorasick # interp timeout building regexps in test
+- repo: github.com/cloudflare/ahocorasick
 #- repo: github.com/google/open-location-code # unfortunately, Go discards the test files
 #  version: master
 #  skipwasi: true # needs file access
@@ -281,3 +282,6 @@
   version: v2
 - repo: github.com/soypat/mu8
 - repo: github.com/brandondube/pctl
+- repo: github.com/julienschmidt/httprouter
+- repo: github.com/openhistogram/circonusllhist
+  skipwasi: true #  math.MaxInt64 (untyped int constant 9223372036854775807) overflows int
