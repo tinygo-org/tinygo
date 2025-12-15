@@ -1,0 +1,63 @@
+# https://splitbrain.github.io/pinoutleaf
+
+title: "embedfire-py32f002b"
+
+# dimensions counted in pins
+width: 8
+height: 11
+
+# images can be URLs, use adjustments to fit the pins
+image:
+  front:
+    src: "https://img.sanishtech.com/u/8f427259002707501b471ef06a77134c.png"
+    top: -450
+    left: -90
+    right: -90
+    bottom: -450
+  back:
+    src: "https://img.sanishtech.com/u/3650f247f0b77ef5efbcfca3d75f29aa.png"
+    top: -450
+    left: -90
+    right: -90
+    bottom: -450
+
+# Define the pins (label:type), use empty entries when offsets are needed
+pins:
+  left:
+    - [ "5V:power" ]
+    - [ "PB2:gpio" ]
+    - [ "PB1:gpio" ]
+    - [ "PB0:gpio" ]
+    - [ "KEY2:button", "PA0:gpio" ]
+    - [ "LED2:led", "PA1:gpio" ]
+    - [ "SWCLK:prog", "PA2:gpio" ]
+    - [ "KEY1:button", "PA3:gpio" ]
+    - [ "LED4:led", "PA4:gpio"]
+    - [ "RESET:button", "PC0:gpio"]
+    - [ "GND:gnd"]
+  right:
+    - [ "3V3:power" ]
+    - [ "PB5:gpio" ]
+    - [ "PB4:gpio" ]
+    - [ "PB3:gpio" ]
+    - [ "SWDIO:prog", "PB6:gpio" ]
+    - [ "PB7:gpio" ]
+    - [ "PC1:gpio" ]
+    - [ "LED3:led", "PA5:gpio" ]
+    - [ "PA7:gpio"]
+    - [ "PA6:gpio"]
+    - [ "GND:gnd"]
+
+types:
+  gpio:
+    label: 'GPIO'
+    bgcolor: '#00A060'
+  prog:
+    label: 'SWD'
+    bgcolor: '#FFCC00'
+  led:
+    label: 'LED'
+    bgcolor: '#0099FF'
+  button:
+    label: 'Button'
+    bgcolor: '#B0B0B0'

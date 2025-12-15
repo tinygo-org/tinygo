@@ -3,7 +3,8 @@
         "py32"
     ],
     "build-tags": [
-        "py32f002bxx", "no_gpio_afrh"
+        "py32f002bxx",
+        "no_gpio_afrh"
     ],
     "linkerscript": "targets/py32f002b.ld",
     "extra-files": [
