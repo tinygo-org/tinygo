@@ -110,6 +110,10 @@ func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
 	// finished, the call to the package initializer can be removed.
 	for _, call := range initCalls {
 		initName := call.CalledValue().Name()
+		if strings.HasSuffix(initName, "runtime.printstring") {
+			continue
+
+		}
 		if !strings.HasSuffix(initName, ".init") {
 			return errorAt(call, "interp: expected all instructions in "+initAll.Name()+" to be *.init() calls")
 		}

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"go/types"
 	"hash/crc32"
+	"log"
 	"math/bits"
 	"os"
 	"os/exec"
@@ -568,10 +569,41 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
 			ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
+
+			targetData := llvm.NewTargetData(mod.DataLayout())
+			uintptrType := mod.Context().IntType(targetData.PointerSize() * 8)
+			int32Type := mod.Context().Int32Type()
+
+			printstrFn := mod.NamedFunction("runtime.printstring")
+
+			if config.PrintInit() {
+				log.Println("creating runtime.initAll")
+			}
+
 			for _, pkg := range lprogram.Sorted() {
-				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
+				pkgpathName := pkg.Pkg.Path() + ".init"
+				pkgInit := mod.NamedFunction(pkgpathName)
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
+				}
+
+				if config.PrintInit() {
+					log.Println("\t", pkgpathName)
+
+					pkgpathLen := llvm.ConstInt(uintptrType, uint64(len(pkgpathName+"\n")), false)
+					pkgpathInitializer := mod.Context().ConstString(pkgpathName+"\n", false)
+					pkgpathGlobal := llvm.AddGlobal(mod, pkgpathInitializer.Type(), pkgpathName)
+					pkgpathGlobal.SetInitializer(pkgpathInitializer)
+					pkgpathGlobal.SetAlignment(1)
+					pkgpathGlobal.SetUnnamedAddr(true)
+					pkgpathGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
+					pkgpathGlobal.SetGlobalConstant(true)
+					pkgpathPtr := llvm.ConstGEP(pkgpathGlobal.GlobalValueType(), pkgpathGlobal, []llvm.Value{
+						llvm.ConstInt(int32Type, 0, false),
+						llvm.ConstInt(int32Type, 0, false),
+					})
+
+					irbuilder.CreateCall(printstrFn.GlobalValueType(), printstrFn, []llvm.Value{pkgpathPtr, pkgpathLen, llvm.Undef(ptrType)}, "")
 				}
 				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(ptrType)}, "")
 			}

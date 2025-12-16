@@ -478,6 +478,11 @@ func (c *Config) DumpSSA() bool {
 	return c.Options.DumpSSA
 }
 
+// PrintInit returns whether to debug init function creation
+func (c *Config) PrintInit() bool {
+	return c.Options.PrintInit
+}
+
 // VerifyIR returns whether to run extra checks on the IR. This is normally
 // disabled but enabled during testing.
 func (c *Config) VerifyIR() bool {
