@@ -1,4 +1,4 @@
-//go:build rp2040 || rand_rp2350
+//go:build rp2040 || rp2350
 
 package runtime
 
