@@ -190,6 +190,7 @@
   - pkg: tiff
 - repo: github.com/golang/geo
   subdirs:
+  - pkg: earth
   - pkg: r1
   - pkg: r2
   - pkg: r3
@@ -285,3 +286,6 @@
 - repo: github.com/julienschmidt/httprouter
 - repo: github.com/openhistogram/circonusllhist
   skipwasi: true #  math.MaxInt64 (untyped int constant 9223372036854775807) overflows int
+- repo: github.com/philhofer/fwd
+- repo: github.com/blevesearch/sear
+- repo: github.com/steveyen/gtreap
