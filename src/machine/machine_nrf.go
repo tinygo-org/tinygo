@@ -400,7 +400,8 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 		// SoftDevices I've checked.
 		// Documentation:
 		// https://docs.nordicsemi.com/bundle/s140_v6.0.0_api/page/group_n_r_f_s_o_c_f_u_n_c_t_i_o_n_s.html
-		result := arm.SVCall3(0x20+9, address, &p[0], uint32(len(p)))
+		numberOfWords := len(padded) / 4 // flash access goes in 32-bit words
+		result := arm.SVCall3(0x20+9, address, &padded[0], uint32(numberOfWords))
 		if result != 0 {
 			// Could not queue flash operation? Not sure when this can
 			// happen.
