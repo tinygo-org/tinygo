@@ -129,10 +129,107 @@ func (b gcBlock) address() uintptr {
 	return addr
 }
 
+type headCacheEntry struct {
+	start, end gcBlock
+}
+
+const headCacheSize = 8
+
+type headCache struct {
+	valid   int
+	entries [headCacheSize]headCacheEntry
+}
+
+func (c *headCache) bsearch(b gcBlock) int {
+	low, high := 0, c.valid
+	for low < high {
+		mid := low + (high-low)/2
+		if c.entries[mid].end < b {
+			low = mid + 1
+		} else {
+			high = mid
+		}
+	}
+	return low
+}
+
+func (c *headCache) insert(b, end gcBlock) {
+
+	e := headCacheEntry{b, end}
+	n := c.bsearch(e.start)
+
+	if n < c.valid && c.entries[n].start <= e.start && e.start <= c.entries[n].end {
+		// our allocation has same start, but later end
+		if c.entries[n].end < e.end {
+			c.entries[n].end = e.end
+		}
+		return
+	}
+
+	// If the new element needs to be the new last element, reset the insert position.
+	if n == headCacheSize {
+		n--
+	}
+
+	// entry needs to be inserted at slot `n`; we have space to expand.
+	if c.valid < headCacheSize {
+		if n == c.valid {
+			c.entries[n] = e
+		} else {
+			// shift everything along and insert
+			copy(c.entries[n+1:], c.entries[n:c.valid])
+			c.entries[n] = e
+		}
+		c.valid++
+		return
+	}
+
+	// randomly evict something
+	remove := int(fastrand() % headCacheSize)
+
+	if n == remove {
+		// luckily evicting the spot we need to go
+		c.entries[n] = e
+		return
+	}
+
+	// Two cases: remove < n or n < remove. We only need to move the elements in between
+	if remove < n {
+		// 0 ..... remove .... n .... size <-- shift down to make space, overwriting `remove`
+		copy(c.entries[remove:n], c.entries[remove+1:n+1])
+	} else {
+		// 0 ..... n .... remove .... size <-- shift up to make space, overwriting `remove`
+		copy(c.entries[n+1:remove+1], c.entries[n:remove])
+	}
+	c.entries[n] = e
+}
+
+var headCacheCalls int
+var headCacheHits int
+
+func (c *headCache) lookup(b gcBlock) (entry *headCacheEntry, ok bool) {
+	n := c.bsearch(b)
+
+	headCacheCalls++
+
+	if n < c.valid && c.entries[n].start <= b && b <= c.entries[n].end {
+		headCacheHits++
+		return &c.entries[n], true
+	}
+
+	return nil, false
+}
+
+var findHeadCache headCache
+
+const useHeadCache = false
+
 // findHead returns the head (first block) of an object, assuming the block
 // points to an allocated object. It returns the same block if this block
 // already points to the head.
 func (b gcBlock) findHead() gcBlock {
+	end := b
+
 	for {
 		// Optimization: check whether the current block state byte (which
 		// contains the state of multiple blocks) is composed entirely of tail
@@ -153,6 +250,23 @@ func (b gcBlock) findHead() gcBlock {
 			break
 		}
 		b--
+		if useHeadCache && (end-b) > 16 {
+			// didn't find head; large alloc; check cache
+			if entry, ok := findHeadCache.lookup(b); ok {
+				b = entry.start
+				if entry.end < end {
+					entry.end = end
+				}
+			} else {
+				// not in cache; find head
+				for b.state() == blockStateTail {
+					b--
+				}
+				// insert into cache
+				findHeadCache.insert(b, end)
+			}
+
+		}
 	}
 	if gcAsserts {
 		if b.state() != blockStateHead && b.state() != blockStateMark {
