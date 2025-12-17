@@ -1,3 +1,15 @@
+0.40.1
+---
+* **machine**
+  - nrf: fix flash writes when SoftDevice is enabled
+* **runtime**
+  - runtime: avoid fixed math/rand sequence on RP2040/RP2350 (#5124)
+  - runtime: add calls to initRand() during run() for all schedulers
+  - runtime: call initRand() before initHeap() during initialization
+  - runtime: use rand_hwrng hardwareRand for RP2040/RP2350 (#5135)
+* **libs**
+  - picolibc: use updated location for git repo
+
 0.40.0
 ---
 * **general**
