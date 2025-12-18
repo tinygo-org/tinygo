@@ -2,6 +2,11 @@
 
 // If you update the above build constraint, you'll probably also need to update
 // src/crypto/rand/rand_baremetal.go.
+//
+// The rp2040 and rp2350 are not included in src/crypto/rand/rand_baremetal.go
+// due to not being sufficiently random for the Go crypto libs.
+// However since the randomness here does not provide those same guarantees,
+// they are included in the list for hardwareRand() implementations.
 
 package runtime
 
