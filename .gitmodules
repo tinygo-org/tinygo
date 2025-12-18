@@ -16,7 +16,7 @@
 	url = https://github.com/WebAssembly/wasi-libc
 [submodule "lib/picolibc"]
 	path = lib/picolibc
-	url = https://github.com/keith-packard/picolibc.git
+	url = https://github.com/picolibc/picolibc.git
 [submodule "lib/stm32-svd"]
 	path = lib/stm32-svd
 	url = https://github.com/tinygo-org/stm32-svd
