@@ -22,6 +22,7 @@ var (
 // can just initialize everything and run main.main on the main thread.
 func run() {
 	initHeap()
+	initRand()
 	task.Init(stackTop)
 	initAll()
 	callMain()

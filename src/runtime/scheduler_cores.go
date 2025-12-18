@@ -136,6 +136,7 @@ func sleep(duration int64) {
 // other cores when ready.
 func run() {
 	initHeap()
+	initRand()
 
 	go func() {
 		// Package initializers are currently run single-threaded.
