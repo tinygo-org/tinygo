@@ -141,6 +141,7 @@ func run() {
 		// Package initializers are currently run single-threaded.
 		// This might help with registering interrupts and such.
 		initAll()
+		initRand()
 
 		// After package initializers have finished, start all the other cores.
 		startSecondaryCores()
