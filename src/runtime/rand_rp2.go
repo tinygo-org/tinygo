@@ -11,10 +11,11 @@ func hardwareRand() (n uint64, ok bool) {
 		n1, _ := machine.GetRNG()
 		n2, _ := machine.GetRNG()
 		hardwareRandValue = uint64(n1)<<32 | uint64(n2)
+		initRand() // seeding for fastrand64()
 	}
 
 	// Return ok=false to keep using fastrand64(),
-	// with hardwareRandVal used only as its initial random state.
+	// with hardwareRandValue used only as its initial random state via initRand().
 
 	return hardwareRandValue, false
 }
