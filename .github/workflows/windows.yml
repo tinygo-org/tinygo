@@ -41,7 +41,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.7'
+          go-version: '1.26.0-rc.1'
           cache: true
       - name: Restore cached LLVM source
         uses: actions/cache/restore@v4
@@ -94,7 +94,7 @@ jobs:
       - name: Cache Go cache
         uses: actions/cache@v4
         with:
-          key: go-cache-windows-v1-${{ hashFiles('go.mod') }}
+          key: go-cache-windows-v2-${{ hashFiles('go.mod') }}
           path: |
             C:/Users/runneradmin/AppData/Local/go-build
             C:/Users/runneradmin/go/pkg/mod
@@ -147,7 +147,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.7'
+          go-version: '1.26.0-rc.1'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v4
@@ -177,7 +177,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.7'
+          go-version: '1.26.0-rc.1'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v4
@@ -213,7 +213,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.7'
+          go-version: '1.26.0-rc.1'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v4
