@@ -105,7 +105,7 @@ jobs:
     # This tests the latest supported LLVM version when linking against system
     # libraries.
     docker:
-      - image: golang:1.25-bullseye
+      - image: golang:1.26-bookworm
     steps:
       - test-linux:
           llvm: "20"
