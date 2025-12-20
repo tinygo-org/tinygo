@@ -18,7 +18,7 @@ jobs:
     # statically linked binary.
     runs-on: ubuntu-latest
     container:
-      image: golang:1.25-alpine
+      image: golang:1.26rc1-alpine
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -40,7 +40,7 @@ jobs:
       - name: Cache Go
         uses: actions/cache@v4
         with:
-          key: go-cache-linux-alpine-v1-${{ hashFiles('go.mod') }}
+          key: go-cache-linux-alpine-v2-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: cache-llvm-source
         with:
-          key: llvm-source-20-linux-alpine-v1
+          key: llvm-source-20-linux-alpine-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -73,7 +73,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: cache-llvm-build
         with:
-          key: llvm-build-20-linux-alpine-v1
+          key: llvm-build-20-linux-alpine-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -97,7 +97,7 @@ jobs:
         uses: actions/cache@v4
         id: cache-binaryen
         with:
-          key: binaryen-linux-alpine-v1
+          key: binaryen-linux-alpine-v2
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -137,7 +137,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.7'
+          go-version: '1.26.0-rc.1'
           cache: true
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
@@ -181,7 +181,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.7'
+          go-version: '1.26.0-rc.1'
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -298,7 +298,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.7'
+          go-version: '1.26.0-rc.1'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v4
