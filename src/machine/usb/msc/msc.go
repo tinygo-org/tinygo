@@ -121,19 +121,22 @@ func (m *msc) processTasks() {
 	for {
 		if m.taskQueued {
 			cmd := m.cbw.SCSICmd()
+			ack := true
 			switch cmd.CmdType() {
 			case scsi.CmdWrite:
-				m.scsiWrite(cmd, m.buf)
+				ack = m.scsiWrite(cmd, m.buf)
 			case scsi.CmdUnmap:
 				m.scsiUnmap(m.buf)
 			}
 
-			// Acknowledge the received data from the host
-			m.queuedBytes = 0
 			m.taskQueued = false
-			machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
+			if ack {
+				// Acknowledge the received data from the host
+				m.queuedBytes = 0
+				machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
+			}
 		}
-		time.Sleep(100 * time.Microsecond)
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
@@ -160,8 +163,8 @@ func (m *msc) sendCSW(status csw.Status) {
 	// Generate CSW packet into m.cswBuf and send it
 	residue := uint32(0)
 	expected := m.cbw.transferLength()
-	if expected >= m.sentBytes {
-		residue = expected - m.sentBytes
+	if expected >= m.sentBytes+m.queuedBytes {
+		residue = expected - (m.sentBytes + m.queuedBytes)
 	}
 	m.cbw.CSW(status, residue, m.cswBuf)
 	m.queuedBytes = csw.MsgLen
@@ -251,6 +254,7 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 		m.queuedBytes = 0
 		m.sentBytes = 0
 		m.respStatus = csw.StatusPassed
+		m.sendZLP = false
 
 		m.scsiCmdBegin()
 
@@ -293,7 +297,6 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 			m.sendUSBPacket(m.buf[:0])
 		} else {
 			m.sendCSW(m.respStatus)
-			m.state = mscStateCmd
 		}
 	}
 

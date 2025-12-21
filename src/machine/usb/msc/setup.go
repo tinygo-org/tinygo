@@ -66,22 +66,25 @@ func (m *msc) handleClearFeature(setup usb.Setup, wValue uint16) bool {
 	}
 
 	wIndex := uint8(setup.WIndex & 0x7F)
+	isIn := (setup.WIndex & 0x80) != 0
 	if wIndex == usb.MSC_ENDPOINT_IN {
-		if (setup.WIndex & 0x80) != 0 {
+		if isIn {
 			m.clearStallEndpointIn(wIndex)
-			ok = true
-			if m.state == mscStateStatus {
-				m.sendCSW(m.respStatus)
-			}
 		} else {
 			m.clearStallEndpointOut(wIndex)
-			ok = true
 		}
+		ok = true
 	}
 
 	if ok {
 		machine.SendZlp()
 	}
+
+	// Send a CSW if needed to resume after the IN endpoint stall is cleared
+	if m.state == mscStateStatus && isIn && wIndex == usb.MSC_ENDPOINT_IN {
+		m.sendCSW(m.respStatus)
+	}
+
 	return ok
 }
 
