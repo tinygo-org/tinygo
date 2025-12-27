@@ -2,7 +2,6 @@ package interp
 
 import (
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -11,25 +10,17 @@ import (
 )
 
 func TestInterp(t *testing.T) {
-	llvmVersion, err := strconv.Atoi(strings.Split(llvm.Version, ".")[0])
-	if err != nil {
-		// Note: this should never happen and if it does, it will always happen
-		// for a particular build because llvm.Version is a constant.
-		panic(err)
-	}
 	for _, name := range []string{
 		"basic",
 		"phi",
-		"slice-copy",
 		"consteval",
+		"intrinsics",
+		"copy",
 		"interface",
 		"revert",
 		"alloc",
 	} {
 		name := name // make local to this closure
-		if name == "slice-copy" && llvmVersion < 14 {
-			continue
-		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			runTest(t, "testdata/"+name)
