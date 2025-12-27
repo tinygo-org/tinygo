@@ -312,33 +312,28 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					fmt.Fprintln(os.Stderr, indent+"runtime.alloc:", size, "->", ptr)
 				}
 				locals[inst.localIndex] = ptr
-			case callFn.name == "runtime.sliceCopy":
-				// sliceCopy implements the built-in copy function for slices.
-				// It is implemented here so that it can be used even if the
-				// runtime implementation is not available. Doing it this way
-				// may also be faster.
-				// Code:
-				// func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr) int {
-				//     n := srcLen
-				//     if n > dstLen {
-				//         n = dstLen
-				//     }
-				//     memmove(dst, src, n*elemSize)
-				//     return int(n)
-				// }
-				dstLen := operands[3].Uint(r)
-				srcLen := operands[4].Uint(r)
-				elemSize := operands[5].Uint(r)
-				n := srcLen
-				if n > dstLen {
-					n = dstLen
+			case strings.HasPrefix(callFn.name, "llvm.umin."):
+				locals[inst.localIndex] = makeLiteralInt(min(operands[1].Uint(r), operands[2].Uint(r)), inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.smin."):
+				locals[inst.localIndex] = makeLiteralInt(uint64(min(operands[1].Int(r), operands[2].Int(r))), inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.umax."):
+				locals[inst.localIndex] = makeLiteralInt(max(operands[1].Uint(r), operands[2].Uint(r)), inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.smax."):
+				locals[inst.localIndex] = makeLiteralInt(uint64(max(operands[1].Int(r), operands[2].Int(r))), inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
+				// Copy a block of memory from one pointer to another.
+				if operands[4].Uint(r) != 0 {
+					// This is a volatile copy/move.
+					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+					if err != nil {
+						return nil, mem, err
+					}
+					continue
 				}
-				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"copy:", operands[1], operands[2], n)
-				}
-				if n != 0 {
+				nBytes := operands[3].Uint(r)
+				if nBytes != 0 {
 					// Only try to copy bytes when there are any bytes to copy.
-					// This is not just an optimization. If one of the slices
+					// This is not just an optimization. If one of the pointers
 					// (or both) are nil, the asPointer method call will fail
 					// even though copying a nil slice is allowed.
 					dst, err := operands[1].asPointer(r)
@@ -363,11 +358,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						}
 						continue
 					}
-					nBytes := uint32(n * elemSize)
 					srcObj := mem.get(src.index())
 					dstObj := mem.getWritable(dst.index())
 					if srcObj.buffer == nil || dstObj.buffer == nil {
-						// If the buffer is nil, it means the slice is external.
+						// If the buffer is nil, it means the memory is external.
 						// This can happen for example when copying data out of
 						// a //go:embed slice, which is not available at interp
 						// time.
@@ -380,33 +374,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					}
 					dstBuf := dstObj.buffer.asRawValue(r)
 					srcBuf := srcObj.buffer.asRawValue(r)
-					copy(dstBuf.buf[dst.offset():dst.offset()+nBytes], srcBuf.buf[src.offset():])
+					copy(dstBuf.buf[dst.offset():][:nBytes], srcBuf.buf[src.offset():][:nBytes])
 					dstObj.buffer = dstBuf
 					mem.put(dst.index(), dstObj)
 				}
-				locals[inst.localIndex] = makeLiteralInt(n, inst.llvmInst.Type().IntTypeWidth())
-			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
-				// Copy a block of memory from one pointer to another.
-				dst, err := operands[1].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				src, err := operands[2].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				nBytes := uint32(operands[3].Uint(r))
-				dstObj := mem.getWritable(dst.index())
-				dstBuf := dstObj.buffer.asRawValue(r)
-				if mem.get(src.index()).buffer == nil {
-					// Looks like the source buffer is not defined.
-					// This can happen with //extern or //go:embed.
-					return nil, mem, r.errorAt(inst, errUnsupportedRuntimeInst)
-				}
-				srcBuf := mem.get(src.index()).buffer.asRawValue(r)
-				copy(dstBuf.buf[dst.offset():dst.offset()+nBytes], srcBuf.buf[src.offset():])
-				dstObj.buffer = dstBuf
-				mem.put(dst.index(), dstObj)
 			case callFn.name == "runtime.typeAssert":
 				// This function must be implemented manually as it is normally
 				// implemented by the interface lowering pass.

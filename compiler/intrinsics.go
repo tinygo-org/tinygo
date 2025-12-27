@@ -50,19 +50,24 @@ func (b *builder) defineIntrinsicFunction() {
 // and will otherwise be lowered to regular libc memcpy/memmove calls.
 func (b *builder) createMemoryCopyImpl() {
 	b.createFunctionStart(true)
-	fnName := "llvm." + b.fn.Name() + ".p0.p0.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+	params := b.fn.Params[0:3]
+	b.createMemCopy(
+		b.fn.Name(),
+		b.getValue(params[0], getPos(b.fn)),
+		b.getValue(params[1], getPos(b.fn)),
+		b.getValue(params[2], getPos(b.fn)),
+	)
+	b.CreateRetVoid()
+}
+
+func (b *builder) createMemCopy(kind string, dst, src, len llvm.Value) llvm.Value {
+	fnName := "llvm." + kind + ".p0.p0.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
 		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType, b.dataPtrType, b.uintptrType, b.ctx.Int1Type()}, false)
 		llvmFn = llvm.AddFunction(b.mod, fnName, fnType)
 	}
-	var params []llvm.Value
-	for _, param := range b.fn.Params {
-		params = append(params, b.getValue(param, getPos(b.fn)))
-	}
-	params = append(params, llvm.ConstInt(b.ctx.Int1Type(), 0, false))
-	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
-	b.CreateRetVoid()
+	return b.CreateCall(llvmFn.GlobalValueType(), llvmFn, []llvm.Value{dst, src, len, llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
 }
 
 // createMemoryZeroImpl creates calls to llvm.memset.* to zero a block of

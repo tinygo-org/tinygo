@@ -1682,13 +1682,41 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 	case "copy":
 		dst := argValues[0]
 		src := argValues[1]
+		// Fetch the lengths.
 		dstLen := b.CreateExtractValue(dst, 1, "copy.dstLen")
 		srcLen := b.CreateExtractValue(src, 1, "copy.srcLen")
-		dstBuf := b.CreateExtractValue(dst, 0, "copy.dstArray")
-		srcBuf := b.CreateExtractValue(src, 0, "copy.srcArray")
+		// Find the minimum of the lengths.
+		minFuncName := "llvm.umin.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+		minFunc := b.mod.NamedFunction(minFuncName)
+		if minFunc.IsNil() {
+			fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.uintptrType, b.uintptrType}, false)
+			minFunc = llvm.AddFunction(b.mod, minFuncName, fnType)
+		}
+		minLen := b.CreateCall(minFunc.GlobalValueType(), minFunc, []llvm.Value{dstLen, srcLen}, "copy.n")
+		// Multiply the length by the element size.
 		elemType := b.getLLVMType(argTypes[0].Underlying().(*types.Slice).Elem())
 		elemSize := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(elemType), false)
-		return b.createRuntimeCall("sliceCopy", []llvm.Value{dstBuf, srcBuf, dstLen, srcLen, elemSize}, "copy.n"), nil
+		// NOTE: This is also NSW when uintptr is int, but we can only choose one through the C API?
+		size := b.CreateNUWMul(minLen, elemSize, "copy.size")
+		// Fetch the pointers.
+		dstBuf := b.CreateExtractValue(dst, 0, "copy.dstPtr")
+		srcBuf := b.CreateExtractValue(src, 0, "copy.srcPtr")
+		// Create a memcpy.
+		call := b.createMemCopy("memmove", dstBuf, srcBuf, size)
+		align := b.targetData.ABITypeAlignment(elemType)
+		if align > 1 {
+			// Apply the type's alignment to the arguments.
+			// LLVM sometimes turns constant-length moves into loads and stores.
+			// It may use this alignment for the created loads and stores.
+			alignAttr := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align))
+			call.AddCallSiteAttribute(1, alignAttr)
+			call.AddCallSiteAttribute(2, alignAttr)
+		}
+		// Extend and return the copied length.
+		if b.targetData.TypeAllocSize(minLen.Type()) < b.targetData.TypeAllocSize(b.intType) {
+			minLen = b.CreateZExt(minLen, b.intType, "copy.n.zext")
+		}
+		return minLen, nil
 	case "delete":
 		m := argValues[0]
 		key := argValues[1]

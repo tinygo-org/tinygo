@@ -1738,6 +1738,9 @@ func (e *ValueError) Error() string {
 //go:linkname memcpy runtime.memcpy
 func memcpy(dst, src unsafe.Pointer, size uintptr)
 
+//go:linkname memmove runtime.memmove
+func memmove(dst, src unsafe.Pointer, size uintptr)
+
 //go:linkname memzero runtime.memzero
 func memzero(ptr unsafe.Pointer, size uintptr)
 
@@ -1746,9 +1749,6 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 //go:linkname sliceAppend runtime.sliceAppend
 func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr, layout unsafe.Pointer) (unsafe.Pointer, uintptr, uintptr)
-
-//go:linkname sliceCopy runtime.sliceCopy
-func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr) int
 
 // Copy copies the contents of src into dst until either
 // dst has been filled or src has been exhausted.
@@ -1779,7 +1779,10 @@ func Copy(dst, src Value) int {
 		dst.checkRO()
 	}
 
-	return sliceCopy(dstbuf, srcbuf, dstlen, srclen, dst.typecode.elem().Size())
+	minLen := min(dstlen, srclen)
+	elemSize := dst.typecode.elem().Size()
+	memmove(dstbuf, srcbuf, minLen*elemSize)
+	return int(minLen)
 }
 
 func buflen(v Value) (unsafe.Pointer, uintptr) {
