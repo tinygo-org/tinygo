@@ -63,12 +63,9 @@ var (
 	stackTop = uintptr(unsafe.Pointer(&globalsStartSymbol))
 )
 
-func align(ptr uintptr) uintptr {
-	// Align to 16, which is the alignment of max_align_t:
-	// https://godbolt.org/z/dYqTsWrGq
-	const heapAlign = 16
-	return (ptr + heapAlign - 1) &^ (heapAlign - 1)
-}
+// maxAlign is the maximum alignment required from the memory allocator.
+// The ABI requires 16-byte alignment for the stack and vectors.
+const maxAlign = 16
 
 //export tinygo_getCurrentStackPointer
 func getCurrentStackPointer() uintptr

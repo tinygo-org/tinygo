@@ -21,7 +21,7 @@ package runtime
 //
 // Metadata is stored in a special area at the end of the heap, in the area
 // metadataStart..heapEnd. The actual blocks are stored in
-// heapStart..metadataStart.
+// getHeapBase()..metadataStart.
 //
 // More information:
 // https://aykevl.nl/2020/09/gc-tinygo
@@ -47,6 +47,18 @@ const (
 	stateBits          = 2 // how many bits a block state takes (see blockState type)
 	blocksPerStateByte = 8 / stateBits
 )
+
+// objHeaderSize is the amount of space occupied by the objHeader at the start of an allocation.
+const objHeaderSize = unsafe.Sizeof(objHeader{})
+
+// reverseAlignHeap is the amount to shift the heap forwards by.
+// If the object header size is not aligned, shifting the whole heap forwards will ensure that the end of each object header is properly aligned.
+const reverseAlignHeap = maxAlign - objHeaderSize%maxAlign
+
+// getHeapBase returns the starting address of the heap after reverse-alignment.
+func getHeapBase() uintptr {
+	return heapStart + reverseAlignHeap
+}
 
 var (
 	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
@@ -109,10 +121,10 @@ type gcBlock uintptr
 // blockFromAddr returns a block given an address somewhere in the heap (which
 // might not be heap-aligned).
 func blockFromAddr(addr uintptr) gcBlock {
-	if gcAsserts && (addr < heapStart || addr >= uintptr(metadataStart)) {
+	if gcAsserts && (addr < getHeapBase() || addr >= uintptr(metadataStart)) {
 		runtimePanic("gc: trying to get block from invalid address")
 	}
-	return gcBlock((addr - heapStart) / bytesPerBlock)
+	return gcBlock((addr - getHeapBase()) / bytesPerBlock)
 }
 
 // Return a pointer to the start of the allocated object.
@@ -122,7 +134,7 @@ func (b gcBlock) pointer() unsafe.Pointer {
 
 // Return the address of the start of the allocated object.
 func (b gcBlock) address() uintptr {
-	addr := heapStart + uintptr(b)*bytesPerBlock
+	addr := getHeapBase() + uintptr(b)*bytesPerBlock
 	if gcAsserts && addr > uintptr(metadataStart) {
 		runtimePanic("gc: block pointing inside metadata")
 	}
@@ -303,7 +315,7 @@ func popFreeRange(len uintptr) unsafe.Pointer {
 }
 
 func isOnHeap(ptr uintptr) bool {
-	return ptr >= heapStart && ptr < uintptr(metadataStart)
+	return ptr >= getHeapBase() && ptr < uintptr(metadataStart)
 }
 
 // Initialize the memory allocator.
@@ -356,22 +368,22 @@ func setHeapEnd(newHeapEnd uintptr) {
 }
 
 // calculateHeapAddresses initializes variables such as metadataStart and
-// numBlock based on heapStart and heapEnd.
+// numBlock based on getHeapBase() and heapEnd.
 //
 // This function can be called again when the heap size increases. The caller is
 // responsible for copying the metadata to the new location.
 func calculateHeapAddresses() {
-	totalSize := heapEnd - heapStart
+	totalSize := heapEnd - getHeapBase()
 
 	// Allocate some memory to keep 2 bits of information about every block.
 	metadataSize := (totalSize + blocksPerStateByte*bytesPerBlock) / (1 + blocksPerStateByte*bytesPerBlock)
 	metadataStart = unsafe.Pointer(heapEnd - metadataSize)
 
 	// Use the rest of the available memory as heap.
-	numBlocks := (uintptr(metadataStart) - heapStart) / bytesPerBlock
+	numBlocks := (uintptr(metadataStart) - getHeapBase()) / bytesPerBlock
 	endBlock = gcBlock(numBlocks)
 	if gcDebug {
-		println("heapStart:        ", heapStart)
+		println("heapBase:        ", getHeapBase())
 		println("heapEnd:          ", heapEnd)
 		println("total size:       ", totalSize)
 		println("metadata size:    ", metadataSize)
@@ -400,7 +412,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 
 	// Round the size up to a multiple of blocks, adding space for the header.
 	rawSize := size
-	size += align(unsafe.Sizeof(objHeader{}))
+	size += objHeaderSize
 	size += bytesPerBlock - 1
 	if size < rawSize {
 		// The size overflowed.
@@ -431,7 +443,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			// Run the collector and try again.
 			freeBytes := runGC()
 			ranGC = true
-			heapSize := uintptr(metadataStart) - heapStart
+			heapSize := uintptr(metadataStart) - getHeapBase()
 			if freeBytes < heapSize/3 {
 				// Ensure there is at least 33% headroom.
 				// This percentage was arbitrarily chosen, and may need to
@@ -471,9 +483,8 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcLock.Unlock()
 
 	// Return a pointer to this allocation.
-	add := align(unsafe.Sizeof(objHeader{}))
-	pointer = unsafe.Add(pointer, add)
-	size -= add
+	pointer = unsafe.Add(pointer, objHeaderSize)
+	size -= objHeaderSize
 	memzero(pointer, size)
 	return pointer
 }
@@ -631,7 +642,7 @@ func finishMark() {
 
 		// Compute the scan bounds.
 		objAddr := uintptr(unsafe.Pointer(obj))
-		start := objAddr + align(unsafe.Sizeof(objHeader{}))
+		start := objAddr + objHeaderSize
 		end := blockFromAddr(objAddr).findNext().address()
 
 		// Scan the object.
@@ -801,9 +812,9 @@ func ReadMemStats(m *MemStats) {
 
 	// Calculate the raw size of the heap.
 	heapEnd := heapEnd
-	heapStart := heapStart
-	m.Sys = uint64(heapEnd - heapStart)
-	m.HeapSys = uint64(uintptr(metadataStart) - heapStart)
+	heapBase := getHeapBase()
+	m.Sys = uint64(heapEnd - heapBase)
+	m.HeapSys = uint64(uintptr(metadataStart) - heapBase)
 	metadataStart := metadataStart
 	// TODO: should GCSys include objHeaders?
 	m.GCSys = uint64(heapEnd - uintptr(metadataStart))

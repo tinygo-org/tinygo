@@ -16,10 +16,9 @@ const (
 	linux_SIGSEGV       = 11
 )
 
-// It appears that MIPS has a maximum alignment of 8 bytes.
-func align(ptr uintptr) uintptr {
-	return (ptr + 7) &^ 7
-}
+// maxAlign is the maximum alignment required from the memory allocator.
+// The o32 ABI requires 8-byte alignment for the stack and float64.
+const maxAlign = 8
 
 func getCurrentStackPointer() uintptr {
 	return uintptr(stacksave())

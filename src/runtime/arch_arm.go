@@ -18,10 +18,9 @@ const (
 	linux_SIGSEGV       = 11
 )
 
-// Align on the maximum alignment for this platform (double).
-func align(ptr uintptr) uintptr {
-	return (ptr + 7) &^ 7
-}
+// maxAlign is the maximum alignment required from the memory allocator.
+// EABI requires 8-byte alignment for the stack and 64-bit values.
+const maxAlign = 8
 
 func getCurrentStackPointer() uintptr {
 	return uintptr(stacksave())

@@ -13,11 +13,9 @@ const deferExtraRegs = 1 // the frame pointer (Y register) also needs to be stor
 
 const callInstSize = 2 // "call" is 4 bytes, "rcall" is 2 bytes
 
-// Align on a word boundary.
-func align(ptr uintptr) uintptr {
-	// No alignment necessary on the AVR.
-	return ptr
-}
+// maxAlign is the maximum alignment required from the memory allocator.
+// The ABI never requires alignment.
+const maxAlign = 1
 
 func getCurrentStackPointer() uintptr {
 	return uintptr(stacksave())

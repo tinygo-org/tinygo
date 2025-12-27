@@ -58,9 +58,6 @@ func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 //export tinygo_launch
 func (*state) launch()
 
-//go:linkname align runtime.align
-func align(p uintptr) uintptr
-
 // initialize the state and prepare to call the specified function with the specified argument bundle.
 func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// Save the entry call.

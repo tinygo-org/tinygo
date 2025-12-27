@@ -37,7 +37,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// much. And by using platform-native data types (e.g. *uint8 for 8-bit
 	// systems).
 	gcLock.Lock()
-	size = align(size)
+	size = (size + maxAlign - 1) &^ (maxAlign - 1)
 	addr := heapptr
 	gcTotalAlloc += uint64(size)
 	gcMallocs++

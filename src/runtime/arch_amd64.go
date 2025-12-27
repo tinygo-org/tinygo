@@ -16,12 +16,9 @@ const (
 	linux_SIGSEGV       = 11
 )
 
-// Align a pointer.
-// Note that some amd64 instructions (like movaps) expect 16-byte aligned
-// memory, thus the result must be 16-byte aligned.
-func align(ptr uintptr) uintptr {
-	return (ptr + 15) &^ 15
-}
+// maxAlign is the maximum alignment required from the memory allocator.
+// The ABI requires 16-byte alignment for the stack and vectors.
+const maxAlign = 16
 
 func getCurrentStackPointer() uintptr {
 	return uintptr(stacksave())

@@ -8,11 +8,10 @@ const deferExtraRegs = 0
 
 const callInstSize = 4 // 8 without relaxation, maybe 4 with relaxation
 
-// RISC-V has a maximum alignment of 16 bytes (both for RV32 and for RV64).
+// maxAlign is the maximum alignment required from the memory allocator.
+// The RISC-V ABI requires 16-byte alignment for the stack and 128-bit floats.
 // Source: https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf
-func align(ptr uintptr) uintptr {
-	return (ptr + 15) &^ 15
-}
+const maxAlign = 16
 
 func getCurrentStackPointer() uintptr {
 	return uintptr(stacksave())
