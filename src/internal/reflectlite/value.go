@@ -1745,7 +1745,7 @@ func memzero(ptr unsafe.Pointer, size uintptr)
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
 //go:linkname sliceAppend runtime.sliceAppend
-func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
+func sliceAppend(srcBuf, elemsBuf unsafe.Pointer, srcLen, srcCap, elemsLen uintptr, elemSize uintptr, layout unsafe.Pointer) (unsafe.Pointer, uintptr, uintptr)
 
 //go:linkname sliceCopy runtime.sliceCopy
 func sliceCopy(dst, src unsafe.Pointer, dstLen, srcLen uintptr, elemSize uintptr) int
@@ -1810,7 +1810,7 @@ func buflen(v Value) (unsafe.Pointer, uintptr) {
 }
 
 //go:linkname sliceGrow runtime.sliceGrow
-func sliceGrow(buf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr) (unsafe.Pointer, uintptr, uintptr)
+func sliceGrow(buf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr, layout unsafe.Pointer) (unsafe.Pointer, uintptr, uintptr)
 
 // extend slice to hold n new elements
 func extendSlice(v Value, n int) sliceHeader {
@@ -1823,7 +1823,10 @@ func extendSlice(v Value, n int) sliceHeader {
 		old = *(*sliceHeader)(v.value)
 	}
 
-	nbuf, nlen, ncap := sliceGrow(old.data, old.len, old.cap, old.len+uintptr(n), v.typecode.elem().Size())
+	elem := v.typecode.elem()
+	elemSize := elem.Size()
+	elemLayout := elem.gcLayout()
+	nbuf, nlen, ncap := sliceGrow(old.data, old.len, old.cap, old.len+uintptr(n), elemSize, elemLayout)
 
 	return sliceHeader{
 		data: nbuf,
@@ -1862,8 +1865,10 @@ func AppendSlice(s, t Value) Value {
 	}
 	sSlice := (*sliceHeader)(s.value)
 	tSlice := (*sliceHeader)(t.value)
-	elemSize := s.typecode.elem().Size()
-	ptr, len, cap := sliceAppend(sSlice.data, tSlice.data, sSlice.len, sSlice.cap, tSlice.len, elemSize)
+	elem := s.typecode.elem()
+	elemSize := elem.Size()
+	elemLayout := elem.gcLayout()
+	ptr, len, cap := sliceAppend(sSlice.data, tSlice.data, sSlice.len, sSlice.cap, tSlice.len, elemSize, elemLayout)
 	result := &sliceHeader{
 		data: ptr,
 		len:  len,
