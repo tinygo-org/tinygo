@@ -55,7 +55,7 @@ entry:
   store i32 2, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %varargs, i32 8
   store i32 3, ptr %1, align 4
-  %append.new = call { ptr, i32, i32 } @runtime.sliceAppend(ptr %ints.data, ptr nonnull %varargs, i32 %ints.len, i32 %ints.cap, i32 3, i32 4, ptr undef) #3
+  %append.new = call { ptr, i32, i32 } @runtime.sliceAppend(ptr %ints.data, ptr nonnull %varargs, i32 %ints.len, i32 %ints.cap, i32 3, i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
   %append.newPtr = extractvalue { ptr, i32, i32 } %append.new, 0
   %append.newLen = extractvalue { ptr, i32, i32 } %append.new, 1
   %append.newCap = extractvalue { ptr, i32, i32 } %append.new, 2
@@ -66,13 +66,13 @@ entry:
   ret { ptr, i32, i32 } %4
 }
 
-declare { ptr, i32, i32 } @runtime.sliceAppend(ptr, ptr nocapture readonly, i32, i32, i32, i32, ptr) #1
+declare { ptr, i32, i32 } @runtime.sliceAppend(ptr, ptr nocapture readonly, i32, i32, i32, i32, ptr, ptr) #1
 
 ; Function Attrs: nounwind
 define hidden { ptr, i32, i32 } @main.sliceAppendSlice(ptr %ints.data, i32 %ints.len, i32 %ints.cap, ptr %added.data, i32 %added.len, i32 %added.cap, ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
-  %append.new = call { ptr, i32, i32 } @runtime.sliceAppend(ptr %ints.data, ptr %added.data, i32 %ints.len, i32 %ints.cap, i32 %added.len, i32 4, ptr undef) #3
+  %append.new = call { ptr, i32, i32 } @runtime.sliceAppend(ptr %ints.data, ptr %added.data, i32 %ints.len, i32 %ints.cap, i32 %added.len, i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
   %append.newPtr = extractvalue { ptr, i32, i32 } %append.new, 0
   %append.newLen = extractvalue { ptr, i32, i32 } %append.new, 1
   %append.newCap = extractvalue { ptr, i32, i32 } %append.new, 2
