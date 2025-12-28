@@ -1716,20 +1716,66 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		return llvmLen, nil
 	case "min", "max":
 		// min and max builtins, added in Go 1.21.
-		// We can simply reuse the existing binop comparison code, which has all
-		// the edge cases figured out already.
-		tok := token.LSS
-		if callName == "max" {
-			tok = token.GTR
-		}
-		result := argValues[0]
-		typ := argTypes[0]
-		for _, arg := range argValues[1:] {
-			cmp, err := b.createBinOp(tok, typ, typ, result, arg, pos)
-			if err != nil {
-				return result, err
+		// Find the corresponding intrinsic name.
+		ty := argTypes[0].Underlying().(*types.Basic)
+		llvmType := b.getLLVMType(ty)
+		info := ty.Info()
+		var prefix, delimeter, typeName string
+		if info&types.IsInteger != 0 {
+			// This is an integer value.
+			// Use the LLVM int min/max intrinsics.
+			prefix = "llvm.s"
+			if info&types.IsUnsigned != 0 {
+				prefix = "llvm.u"
 			}
-			result = b.CreateSelect(cmp, result, arg, "")
+			delimeter = ".i"
+			typeName = strconv.Itoa(llvmType.IntTypeWidth())
+		} else {
+			switch ty.Kind() {
+			case types.String:
+				// Strings do not have an equivalent intrinsic.
+				// Implement with compares and selects.
+				tok := token.LSS
+				if callName == "max" {
+					tok = token.GTR
+				}
+				result := argValues[0]
+				typ := argTypes[0]
+				for _, arg := range argValues[1:] {
+					cmp, err := b.createBinOp(tok, typ, typ, result, arg, pos)
+					if err != nil {
+						return result, err
+					}
+					result = b.CreateSelect(cmp, result, arg, "")
+				}
+				return result, nil
+			case types.Float32:
+				typeName = "f32"
+			case types.Float64:
+				typeName = "f64"
+			default:
+				return llvm.Value{}, b.makeError(pos, "todo: min/max: unknown type")
+			}
+			// There are a few edge cases with floating point min/max:
+			// min(-0.0, +0.0) = -0.0
+			// min(NaN, number) = NaN
+			// The llvm.minimum.*/llvm.maximum.* intrinsics match this behavior.
+			// Neither Go nor LLVM defines the bit representation of resulting NaNs.
+			prefix = "llvm."
+			delimeter = "imum."
+		}
+		intrinsicName := prefix + callName + delimeter + typeName
+		// Find or create the intrinsic.
+		llvmFn := b.mod.NamedFunction(intrinsicName)
+		if llvmFn.IsNil() {
+			fnType := llvm.FunctionType(llvmType, []llvm.Type{llvmType, llvmType}, false)
+			llvmFn = llvm.AddFunction(b.mod, intrinsicName, fnType)
+		}
+		// Call the intrinsic repeatedly to merge the arguments.
+		callType := llvmFn.GlobalValueType()
+		result := argValues[0]
+		for _, arg := range argValues[1:] {
+			result = b.CreateCall(callType, llvmFn, []llvm.Value{result, arg}, "")
 		}
 		return result, nil
 	case "panic":
