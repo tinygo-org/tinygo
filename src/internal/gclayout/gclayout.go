@@ -13,12 +13,14 @@ const (
 	// 64-bit int => bits = 6
 	sizeBits = 4 + unsafe.Sizeof(uintptr(0))/4
 
+	ptrAlign = unsafe.Alignof(uintptr(0))
+
 	sizeShift = sizeBits + 1
 
-	NoPtrs  = Layout(uintptr(0b0<<sizeShift) | uintptr(0b1<<1) | uintptr(1))
-	Pointer = Layout(uintptr(0b1<<sizeShift) | uintptr(0b1<<1) | uintptr(1))
-	String  = Layout(uintptr(0b01<<sizeShift) | uintptr(0b10<<1) | uintptr(1))
-	Slice   = Layout(uintptr(0b001<<sizeShift) | uintptr(0b11<<1) | uintptr(1))
+	NoPtrs  = Layout((0 << sizeShift) | (1 << 1) | 1)
+	Pointer = Layout((1 << sizeShift) | ((unsafe.Sizeof(unsafe.Pointer(nil)) / ptrAlign) << 1) | 1)
+	String  = Layout((1 << sizeShift) | ((unsafe.Sizeof("") / ptrAlign) << 1) | 1)
+	Slice   = Layout((1 << sizeShift) | ((unsafe.Sizeof([]byte{}) / ptrAlign) << 1) | 1)
 )
 
 func (l Layout) AsPtr() unsafe.Pointer { return unsafe.Pointer(l) }
