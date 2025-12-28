@@ -99,6 +99,9 @@ func typeHasPointers(t llvm.Type) bool {
 		}
 		return false
 	case llvm.ArrayTypeKind:
+		if t.ArrayLength() == 0 {
+			return false
+		}
 		if typeHasPointers(t.ElementType()) {
 			return true
 		}
