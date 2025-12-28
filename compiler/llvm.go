@@ -1,10 +1,10 @@
 package compiler
 
 import (
+	"encoding/binary"
 	"fmt"
 	"go/token"
 	"go/types"
-	"math/big"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -231,6 +231,12 @@ func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType l
 //
 // For details on what's in this value, see src/runtime/gc_precise.go.
 func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
+	if !typeHasPointers(t) {
+		// There are no pointers in this type, so we can simplify the layout.
+		layout := (uint64(1) << 1) | 1
+		return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, layout, false), c.dataPtrType)
+	}
+
 	// Use the element type for arrays. This works even for nested arrays.
 	for {
 		kind := t.TypeKind()
@@ -248,54 +254,29 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 		break
 	}
 
-	// Do a few checks to see whether we need to generate any object layout
-	// information at all.
+	// Create the pointer bitmap.
 	objectSizeBytes := c.targetData.TypeAllocSize(t)
+	pointerAlignment := uint64(c.targetData.PrefTypeAlignment(c.dataPtrType))
+	bitmapLen := objectSizeBytes / pointerAlignment
+	bitmapBytes := (bitmapLen + 7) / 8
+	bitmap := make([]byte, bitmapBytes, max(bitmapBytes, 8))
+	c.buildPointerBitmap(bitmap, pointerAlignment, pos, t, 0)
+
+	// Try to encode the layout inline.
 	pointerSize := c.targetData.TypeAllocSize(c.dataPtrType)
-	pointerAlignment := c.targetData.PrefTypeAlignment(c.dataPtrType)
-	if objectSizeBytes < pointerSize {
-		// Too small to contain a pointer.
-		layout := (uint64(1) << 1) | 1
-		return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, layout, false), c.dataPtrType)
-	}
-	bitmap := c.getPointerBitmap(t, pos)
-	if bitmap.BitLen() == 0 {
-		// There are no pointers in this type, so we can simplify the layout.
-		// TODO: this can be done in many other cases, e.g. when allocating an
-		// array (like [4][]byte, which repeats a slice 4 times).
-		layout := (uint64(1) << 1) | 1
-		return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, layout, false), c.dataPtrType)
-	}
-	if objectSizeBytes%uint64(pointerAlignment) != 0 {
-		// This shouldn't happen except for packed structs, which aren't
-		// currently used.
-		c.addError(pos, "internal error: unexpected object size for object with pointer field")
-		return llvm.ConstNull(c.dataPtrType)
-	}
-	objectSizeWords := objectSizeBytes / uint64(pointerAlignment)
-
 	pointerBits := pointerSize * 8
-	var sizeFieldBits uint64
-	switch pointerBits {
-	case 16:
-		sizeFieldBits = 4
-	case 32:
-		sizeFieldBits = 5
-	case 64:
-		sizeFieldBits = 6
-	default:
-		panic("unknown pointer size")
-	}
-	layoutFieldBits := pointerBits - 1 - sizeFieldBits
+	if bitmapLen < pointerBits {
+		rawMask := binary.LittleEndian.Uint64(bitmap[0:8])
+		layout := rawMask*pointerBits + bitmapLen
+		layout <<= 1
+		layout |= 1
 
-	// Try to emit the value as an inline integer. This is possible in most
-	// cases.
-	if objectSizeWords < layoutFieldBits {
-		// If it can be stored directly in the pointer value, do so.
-		// The runtime knows that if the least significant bit of the pointer is
-		// set, the pointer contains the value itself.
-		layout := bitmap.Uint64()<<(sizeFieldBits+1) | (objectSizeWords << 1) | 1
-		return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, layout, false), c.dataPtrType)
+		// Check if the layout fits.
+		layout &= 1<<pointerBits - 1
+		if (layout>>1)/pointerBits == rawMask {
+			// No set bits were shifted off.
+			return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, layout, false), c.dataPtrType)
+		}
 	}
 
 	// Unfortunately, the object layout is too big to fit in a pointer-sized
@@ -303,25 +284,24 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 
 	// Try first whether the global already exists. All objects with a
 	// particular name have the same type, so this is possible.
-	globalName := "runtime/gc.layout:" + fmt.Sprintf("%d-%0*x", objectSizeWords, (objectSizeWords+15)/16, bitmap)
+	globalName := "runtime/gc.layout:" + fmt.Sprintf("%d-%0*x", bitmapLen, (bitmapLen+15)/16, bitmap)
 	global := c.mod.NamedGlobal(globalName)
 	if !global.IsNil() {
 		return global
 	}
 
 	// Create the global initializer.
-	bitmapBytes := make([]byte, int(objectSizeWords+7)/8)
-	bitmap.FillBytes(bitmapBytes)
-	reverseBytes(bitmapBytes) // big-endian to little-endian
-	var bitmapByteValues []llvm.Value
-	for _, b := range bitmapBytes {
-		bitmapByteValues = append(bitmapByteValues, llvm.ConstInt(c.ctx.Int8Type(), uint64(b), false))
+	bitmapByteValues := make([]llvm.Value, bitmapBytes)
+	i8 := c.ctx.Int8Type()
+	for i, b := range bitmap {
+		bitmapByteValues[i] = llvm.ConstInt(i8, uint64(b), false)
 	}
 	initializer := c.ctx.ConstStruct([]llvm.Value{
-		llvm.ConstInt(c.uintptrType, objectSizeWords, false),
-		llvm.ConstArray(c.ctx.Int8Type(), bitmapByteValues),
+		llvm.ConstInt(c.uintptrType, bitmapLen, false),
+		llvm.ConstArray(i8, bitmapByteValues),
 	}, false)
 
+	// Create the actual global.
 	global = llvm.AddGlobal(c.mod, initializer.Type(), globalName)
 	global.SetInitializer(initializer)
 	global.SetUnnamedAddr(true)
@@ -329,6 +309,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	global.SetLinkage(llvm.LinkOnceODRLinkage)
 	if c.targetData.PrefTypeAlignment(c.uintptrType) < 2 {
 		// AVR doesn't have alignment by default.
+		// The lowest bit must be unset to distinguish this from an inline layout.
 		global.SetAlignment(2)
 	}
 	if c.Debug && pos != token.NoPos {
@@ -360,52 +341,71 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	return global
 }
 
-// getPointerBitmap scans the given LLVM type for pointers and sets bits in a
-// bigint at the word offset that contains a pointer. This scan is recursive.
-func (c *compilerContext) getPointerBitmap(typ llvm.Type, pos token.Pos) *big.Int {
-	alignment := c.targetData.PrefTypeAlignment(c.dataPtrType)
-	switch typ.TypeKind() {
+// buildPointerBitmap scans the given LLVM type for pointers and sets bits in a
+// bitmap at the word offset that contains a pointer. This scan is recursive.
+func (c *compilerContext) buildPointerBitmap(
+	dst []byte,
+	ptrAlign uint64,
+	pos token.Pos,
+	t llvm.Type,
+	offset uint64,
+) {
+	switch t.TypeKind() {
 	case llvm.IntegerTypeKind, llvm.FloatTypeKind, llvm.DoubleTypeKind:
-		return big.NewInt(0)
+		// These types do not contain pointers.
+
 	case llvm.PointerTypeKind:
-		return big.NewInt(1)
+		// Set the corresponding position in the bitmap.
+		dst[offset/8] |= 1 << (offset % 8)
+
 	case llvm.StructTypeKind:
-		ptrs := big.NewInt(0)
-		for i, subtyp := range typ.StructElementTypes() {
-			subptrs := c.getPointerBitmap(subtyp, pos)
-			if subptrs.BitLen() == 0 {
+		// Recurse over struct elements.
+		for i, et := range t.StructElementTypes() {
+			eo := c.targetData.ElementOffset(t, i)
+			if eo%uint64(ptrAlign) != 0 {
+				if typeHasPointers(et) {
+					// This error will let the compilation fail, but by continuing
+					// the error can still easily be shown.
+					c.addError(pos, "internal error: allocated struct contains unaligned pointer")
+				}
 				continue
 			}
-			offset := c.targetData.ElementOffset(typ, i)
-			if offset%uint64(alignment) != 0 {
-				// This error will let the compilation fail, but by continuing
-				// the error can still easily be shown.
-				c.addError(pos, "internal error: allocated struct contains unaligned pointer")
-				continue
-			}
-			subptrs.Lsh(subptrs, uint(offset)/uint(alignment))
-			ptrs.Or(ptrs, subptrs)
+			c.buildPointerBitmap(
+				dst,
+				ptrAlign,
+				pos,
+				et,
+				offset+(eo/ptrAlign),
+			)
 		}
-		return ptrs
+
 	case llvm.ArrayTypeKind:
-		subtyp := typ.ElementType()
-		subptrs := c.getPointerBitmap(subtyp, pos)
-		ptrs := big.NewInt(0)
-		if subptrs.BitLen() == 0 {
-			return ptrs
+		// Recurse over array elements.
+		len := t.ArrayLength()
+		if len <= 0 {
+			return
 		}
-		elementSize := c.targetData.TypeAllocSize(subtyp)
-		if elementSize%uint64(alignment) != 0 {
-			// This error will let the compilation fail (but continues so that
-			// other errors can be shown).
-			c.addError(pos, "internal error: allocated array contains unaligned pointer")
-			return ptrs
+		et := t.ElementType()
+		elementSize := c.targetData.TypeAllocSize(et)
+		if elementSize%ptrAlign != 0 {
+			if typeHasPointers(et) {
+				// This error will let the compilation fail (but continues so that
+				// other errors can be shown).
+				c.addError(pos, "internal error: allocated array contains unaligned pointer")
+			}
+			return
 		}
-		for i := 0; i < typ.ArrayLength(); i++ {
-			ptrs.Lsh(ptrs, uint(elementSize)/uint(alignment))
-			ptrs.Or(ptrs, subptrs)
+		elementSize /= ptrAlign
+		for i := 0; i < len; i++ {
+			c.buildPointerBitmap(
+				dst,
+				ptrAlign,
+				pos,
+				et,
+				offset+uint64(i)*elementSize,
+			)
 		}
-		return ptrs
+
 	default:
 		// Should not happen.
 		panic("unknown LLVM type")
