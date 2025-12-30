@@ -256,7 +256,7 @@ func initEndpoint(ep, config uint32) {
 
 // SendUSBInPacket sends a packet for USBHID (interrupt in / bulk in).
 func SendUSBInPacket(ep uint32, data []byte) bool {
-	sendUSBPacket(ep, data, 0)
+	sendUSBPacket(ep, data)
 
 	// clear transfer complete flag
 	nrf.USBD.INTENCLR.Set(nrf.USBD_INTENCLR_ENDEPOUT0 << 4)
@@ -267,33 +267,32 @@ func SendUSBInPacket(ep uint32, data []byte) bool {
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
 //
 //go:noinline
-func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
+func sendUSBPacket(ep uint32, data []byte) {
+	// Select the corresponding buffer.
 	count := len(data)
-	if 0 < int(maxsize) && int(maxsize) < count {
-		count = int(maxsize)
-	}
-
+	var buffer []byte
 	if ep == 0 {
-		copy(udd_ep_control_cache_buffer[:], data[:count])
+		buffer = udd_ep_control_cache_buffer[:]
 		if count > usb.EndpointPacketSize {
+			// The packet must be sent in chunks.
 			sendOnEP0DATADONE.offset = usb.EndpointPacketSize
-			sendOnEP0DATADONE.ptr = &udd_ep_control_cache_buffer[sendOnEP0DATADONE.offset]
+			sendOnEP0DATADONE.ptr = &udd_ep_control_cache_buffer[usb.EndpointPacketSize]
 			sendOnEP0DATADONE.count = count - usb.EndpointPacketSize
 			count = usb.EndpointPacketSize
 		}
-		sendViaEPIn(
-			ep,
-			&udd_ep_control_cache_buffer[0],
-			count,
-		)
 	} else {
-		copy(udd_ep_in_cache_buffer[ep][:], data[:count])
-		sendViaEPIn(
-			ep,
-			&udd_ep_in_cache_buffer[ep][0],
-			count,
-		)
+		buffer = udd_ep_in_cache_buffer[ep][:]
 	}
+
+	// Copy the packet to the buffer.
+	copy(buffer[:len(data)], data)
+
+	// Send the first chunk of the packet.
+	sendViaEPIn(
+		ep,
+		&buffer[0],
+		count,
+	)
 }
 
 func handleEndpointRx(ep uint32) []byte {

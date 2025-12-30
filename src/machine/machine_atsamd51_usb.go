@@ -340,7 +340,7 @@ func handleUSBSetAddress(setup usb.Setup) bool {
 
 // SendUSBInPacket sends a packet for USB (interrupt in / bulk in).
 func SendUSBInPacket(ep uint32, data []byte) bool {
-	sendUSBPacket(ep, data, 0)
+	sendUSBPacket(ep, data)
 
 	// clear transfer complete flag
 	setEPINTFLAG(ep, sam.USB_DEVICE_ENDPOINT_EPINTFLAG_TRCPT1)
@@ -354,27 +354,28 @@ func SendUSBInPacket(ep uint32, data []byte) bool {
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
 //
 //go:noinline
-func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
-	l := uint16(len(data))
-	if 0 < maxsize && maxsize < l {
-		l = maxsize
+func sendUSBPacket(ep uint32, data []byte) {
+	// Select the corresponding buffer.
+	buffer := udd_ep_control_cache_buffer[:]
+	if ep != 0 {
+		buffer = udd_ep_in_cache_buffer[ep][:]
 	}
 
-	// Set endpoint address for sending data
-	if ep == 0 {
-		copy(udd_ep_control_cache_buffer[:], data[:l])
-		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_control_cache_buffer))))
-	} else {
-		copy(udd_ep_in_cache_buffer[ep][:], data[:l])
-		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
-	}
+	// Copy the packet to the buffer.
+	copy(buffer[:len(data)], data)
+
+	// Select the corresponding endpoint descriptor.
+	endpoint := &usbEndpointDescriptors[ep].DeviceDescBank[1]
+
+	// Set the endpoint address.
+	endpoint.ADDR.Set(uint32(uintptr(unsafe.Pointer(unsafe.SliceData(buffer)))))
 
 	// clear multi-packet size which is total bytes already sent
-	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
+	endpoint.PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Mask << usb_DEVICE_PCKSIZE_MULTI_PACKET_SIZE_Pos)
 
 	// set byte count, which is total number of bytes to be sent
-	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
-	usbEndpointDescriptors[ep].DeviceDescBank[1].PCKSIZE.SetBits((uint32(l) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+	endpoint.PCKSIZE.ClearBits(usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
+	endpoint.PCKSIZE.SetBits((uint32(len(data)) & usb_DEVICE_PCKSIZE_BYTE_COUNT_Mask) << usb_DEVICE_PCKSIZE_BYTE_COUNT_Pos)
 }
 
 func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {

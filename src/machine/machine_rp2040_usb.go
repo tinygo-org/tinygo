@@ -128,7 +128,7 @@ func handleUSBSetAddress(setup usb.Setup) bool {
 	const ackTimeout = 570
 
 	rp.USBCTRL_REGS.SIE_STATUS.Set(rp.USBCTRL_REGS_SIE_STATUS_ACK_REC)
-	sendUSBPacket(0, []byte{}, 0)
+	sendUSBPacket(0, []byte{})
 
 	// Wait for transfer to complete with a timeout.
 	t := timer.timeElapsed()
