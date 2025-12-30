@@ -81,21 +81,6 @@ func usbSerial() string {
 	return ""
 }
 
-// strToUTF16LEDescriptor converts a utf8 string into a string descriptor
-// note: the following code only converts ascii characters to UTF16LE. In order
-// to do a "proper" conversion, we would need to pull in the 'unicode/utf16'
-// package, which at the time this was written added 512 bytes to the compiled
-// binary.
-func strToUTF16LEDescriptor(in string, out []byte) {
-	out[0] = byte(len(out))
-	out[1] = descriptor.TypeString
-	for i, rune := range in {
-		out[(i<<1)+2] = byte(rune)
-		out[(i<<1)+3] = 0
-	}
-	return
-}
-
 const cdcLineInfoSize = 7
 
 var (
@@ -137,51 +122,53 @@ var (
 	usbStallHandler [NumberOfUSBEndpoints]func(usb.Setup) bool
 )
 
+var usbLangInfo = [4]byte{
+	// length = 4 bytes
+	0x04,
+	// descriptor type = string
+	0x03,
+	// language codes
+	// 0x0409 = English (United States)
+	0x09, 0x04,
+}
+
 // sendDescriptor creates and sends the various USB descriptor types that
 // can be requested by the host.
 func sendDescriptor(setup usb.Setup) {
 	switch setup.WValueH {
 	case descriptor.TypeConfiguration:
-		sendUSBPacket(0, usbDescriptor.Configuration, setup.WLength)
+		sendDescriptorData(usbDescriptor.Configuration, setup.WLength)
 		return
+
 	case descriptor.TypeDevice:
 		usbDescriptor.Configure(usbVendorID(), usbProductID())
-		sendUSBPacket(0, usbDescriptor.Device, setup.WLength)
+		sendDescriptorData(usbDescriptor.Device, setup.WLength)
 		return
 
 	case descriptor.TypeString:
 		switch setup.WValueL {
 		case 0:
-			usb_trans_buffer[0] = 0x04
-			usb_trans_buffer[1] = 0x03
-			usb_trans_buffer[2] = 0x09
-			usb_trans_buffer[3] = 0x04
-			sendUSBPacket(0, usb_trans_buffer[:4], setup.WLength)
+			sendDescriptorData(usbLangInfo[:], setup.WLength)
 
 		case usb.IPRODUCT:
-			b := usb_trans_buffer[:(len(usbProduct())<<1)+2]
-			strToUTF16LEDescriptor(usbProduct(), b)
-			sendUSBPacket(0, b, setup.WLength)
+			sendDescriptorString(usbProduct(), setup.WLength)
 
 		case usb.IMANUFACTURER:
-			b := usb_trans_buffer[:(len(usbManufacturer())<<1)+2]
-			strToUTF16LEDescriptor(usbManufacturer(), b)
-			sendUSBPacket(0, b, setup.WLength)
+			sendDescriptorString(usbManufacturer(), setup.WLength)
 
 		case usb.ISERIAL:
-			sz := len(usbSerial())
-			if sz == 0 {
+			serial := usbSerial()
+			if len(serial) == 0 {
 				SendZlp()
 			} else {
-				b := usb_trans_buffer[:(sz<<1)+2]
-				strToUTF16LEDescriptor(usbSerial(), b)
-				sendUSBPacket(0, b, setup.WLength)
+				sendDescriptorString(serial, setup.WLength)
 			}
 		}
+		// TODO: why do we do this when WValueL is unknown?
 		return
 	case descriptor.TypeHIDReport:
 		if h, ok := usbDescriptor.HID[setup.WIndex]; ok {
-			sendUSBPacket(0, h, setup.WLength)
+			sendDescriptorData(h, setup.WLength)
 			return
 		}
 	case descriptor.TypeDeviceQualifier:
@@ -192,6 +179,39 @@ func sendDescriptor(setup usb.Setup) {
 	// do not know how to handle this message, so return zero
 	SendZlp()
 	return
+}
+
+// sendDescriptorString sends a string descriptor, truncating it to fit maxLen or the buffer size.
+// note: the following code only converts ascii characters to UTF16LE. In order
+// to do a "proper" conversion, we would need to pull in the 'unicode/utf16'
+// package, which at the time this was written added 512 bytes to the compiled
+// binary.
+// TODO: old comment, re-evaluate
+func sendDescriptorString(data string, maxLen uint16) {
+	if maxLen < 2 {
+		// Something has gone horribly wrong.
+		SendZlp()
+		return
+	}
+
+	// Clamp the length.
+	maxEncBytes := min(len(usb_trans_buffer), len(udd_ep_control_cache_buffer), int(maxLen))
+	data = data[:min(len(data), (maxEncBytes-2)/2)]
+
+	// Write the header.
+	buf := usb_trans_buffer[:2*len(data)+2]
+	hdr, body := buf[:2], buf[2:]
+	hdr[0] = byte(len(buf))
+	hdr[1] = descriptor.TypeString
+
+	// Convert the string to UTF16.
+	// NOTE: Using range here would cause the length to disagree when multibyte codepoints are present.
+	for i := 0; i < len(data); i++ {
+		body[2*i] = byte(data[i])
+		body[2*i+1] = 0
+	}
+
+	sendUSBPacket(0, buf)
 }
 
 func handleStandardSetup(setup usb.Setup) bool {
@@ -206,7 +226,7 @@ func handleStandardSetup(setup usb.Setup) bool {
 			}
 		}
 
-		sendUSBPacket(0, usb_trans_buffer[:2], setup.WLength)
+		sendDescriptorData(usb_trans_buffer[:2], setup.WLength)
 		return true
 
 	case usb.CLEAR_FEATURE:
@@ -251,7 +271,7 @@ func handleStandardSetup(setup usb.Setup) bool {
 
 	case usb.GET_CONFIGURATION:
 		usb_trans_buffer[0] = usbConfiguration
-		sendUSBPacket(0, usb_trans_buffer[:1], setup.WLength)
+		sendDescriptorData(usb_trans_buffer[:1], setup.WLength)
 		return true
 
 	case usb.SET_CONFIGURATION:
@@ -271,7 +291,7 @@ func handleStandardSetup(setup usb.Setup) bool {
 
 	case usb.GET_INTERFACE:
 		usb_trans_buffer[0] = usbSetInterface
-		sendUSBPacket(0, usb_trans_buffer[:1], setup.WLength)
+		sendDescriptorData(usb_trans_buffer[:1], setup.WLength)
 		return true
 
 	case usb.SET_INTERFACE:
@@ -283,6 +303,21 @@ func handleStandardSetup(setup usb.Setup) bool {
 	default:
 		return true
 	}
+}
+
+// sendDescriptorData sends a descriptor, truncating it to fit maxLen or the buffer size.
+func sendDescriptorData(data []byte, maxLen uint16) {
+	data = lenToCap(data)
+	data = data[:min(len(data), len(udd_ep_control_cache_buffer), int(maxLen))]
+	sendUSBPacket(0, data)
+}
+
+// Set the cap of the slice to the length.
+// This is safe, but cannot be proven by the compiler.
+//
+//go:nobounds
+func lenToCap(b []byte) []byte {
+	return b[:len(b):len(b)]
 }
 
 func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool) {

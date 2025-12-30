@@ -72,19 +72,15 @@ func initEndpoint(ep, config uint32) {
 
 // SendUSBInPacket sends a packet for USB (interrupt in / bulk in).
 func SendUSBInPacket(ep uint32, data []byte) bool {
-	sendUSBPacket(ep, data, 0)
+	sendUSBPacket(ep, data)
 	return true
 }
 
 // Prevent file size increases: https://github.com/tinygo-org/tinygo/pull/998
 //
 //go:noinline
-func sendUSBPacket(ep uint32, data []byte, maxsize uint16) {
+func sendUSBPacket(ep uint32, data []byte) {
 	count := len(data)
-	if 0 < int(maxsize) && int(maxsize) < count {
-		count = int(maxsize)
-	}
-
 	if ep == 0 {
 		if count > usb.EndpointPacketSize {
 			count = usb.EndpointPacketSize
@@ -145,7 +141,7 @@ func setEPDataPID(ep uint32, dataOne bool) {
 }
 
 func SendZlp() {
-	sendUSBPacket(0, []byte{}, 0)
+	sendUSBPacket(0, []byte{})
 }
 
 func sendViaEPIn(ep uint32, data []byte, count int) {
