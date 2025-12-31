@@ -578,6 +578,45 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					dstObj.buffer = dstBuf
 					mem.put(dst.index(), dstObj)
 				}
+			case callFn.name == "memcmp":
+				// Compare two byte strings.
+				nBytes, err := operands[3].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				var cmp uint64
+				if nBytes != 0 {
+					lhs, err := operands[1].asPointer(r)
+					if err != nil {
+						return nil, mem, r.errorAt(inst, err)
+					}
+					rhs, err := operands[2].asPointer(r)
+					if err != nil {
+						return nil, mem, r.errorAt(inst, err)
+					}
+					lhsData := mem.get(lhs.index()).buffer.asRawValue(r).buf[lhs.offset():][:nBytes]
+					rhsData := mem.get(rhs.index()).buffer.asRawValue(r).buf[rhs.offset():][:nBytes]
+					for i, left := range lhsData {
+						right := rhsData[i]
+						if left >= 256 || right >= 256 {
+							// Do not attempt to compare pointers.
+							err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+							if err != nil {
+								return nil, mem, err
+							}
+							continue
+						}
+						if left != right {
+							if left < right {
+								cmp = ^uint64(0)
+							} else {
+								cmp = 1
+							}
+							break
+						}
+					}
+				}
+				locals[inst.localIndex] = makeLiteralInt(cmp, inst.llvmInst.Type().IntTypeWidth())
 			case callFn.name == "runtime.typeAssert":
 				// This function must be implemented manually as it is normally
 				// implemented by the interface lowering pass.

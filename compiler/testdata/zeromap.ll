@@ -38,12 +38,12 @@ entry:
   ret i32 %4
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr nocapture) #3
 
 declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, i32, ptr) #0
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr nocapture) #3
 
 ; Function Attrs: noinline nounwind
@@ -129,27 +129,45 @@ declare i32 @runtime.hashmapStringPtrHash(ptr, i32, i32, ptr) #0
 ; Function Attrs: nounwind
 define linkonce_odr i1 @"hashmapKeyEqual.struct{string; string}"(ptr %0, ptr %1, i32 %2, ptr %3) unnamed_addr #1 {
 entry:
-  %x.str.unpack = load ptr, ptr %0, align 4
-  %x.str.elt4 = getelementptr inbounds nuw i8, ptr %0, i32 4
-  %x.str.unpack5 = load i32, ptr %x.str.elt4, align 4
+  %x.str.elt12 = getelementptr inbounds nuw i8, ptr %0, i32 4
+  %x.str.unpack13 = load i32, ptr %x.str.elt12, align 4
+  %y.str.elt15 = getelementptr inbounds nuw i8, ptr %1, i32 4
+  %y.str.unpack16 = load i32, ptr %y.str.elt15, align 4
+  %streq.len.eq = icmp eq i32 %x.str.unpack13, %y.str.unpack16
+  br i1 %streq.len.eq, label %streq.body, label %streq.next
+
+streq.body:                                       ; preds = %entry
   %y.str.unpack = load ptr, ptr %1, align 4
-  %y.str.elt7 = getelementptr inbounds nuw i8, ptr %1, i32 4
-  %y.str.unpack8 = load i32, ptr %y.str.elt7, align 4
-  %eq = call i1 @runtime.stringEqual(ptr %x.str.unpack, i32 %x.str.unpack5, ptr %y.str.unpack, i32 %y.str.unpack8, ptr undef) #4
-  %4 = getelementptr inbounds nuw i8, ptr %0, i32 8
+  %x.str.unpack = load ptr, ptr %0, align 4
+  %streq.memcmp = call i32 @memcmp(ptr %x.str.unpack, ptr %y.str.unpack, i32 %x.str.unpack13) #4
+  %streq.memcmp.eq = icmp eq i32 %streq.memcmp, 0
+  br label %streq.next
+
+streq.next:                                       ; preds = %streq.body, %entry
+  %4 = phi i1 [ false, %entry ], [ %streq.memcmp.eq, %streq.body ]
+  %x.str1.elt18 = getelementptr inbounds nuw i8, ptr %0, i32 12
+  %x.str1.unpack19 = load i32, ptr %x.str1.elt18, align 4
+  %y.str2.elt21 = getelementptr inbounds nuw i8, ptr %1, i32 12
+  %y.str2.unpack22 = load i32, ptr %y.str2.elt21, align 4
+  %streq.len.eq5 = icmp eq i32 %x.str1.unpack19, %y.str2.unpack22
+  br i1 %streq.len.eq5, label %streq.body6, label %streq.next7
+
+streq.body6:                                      ; preds = %streq.next
   %5 = getelementptr inbounds nuw i8, ptr %1, i32 8
-  %x.str1.unpack = load ptr, ptr %4, align 4
-  %x.str1.elt10 = getelementptr inbounds nuw i8, ptr %0, i32 12
-  %x.str1.unpack11 = load i32, ptr %x.str1.elt10, align 4
   %y.str2.unpack = load ptr, ptr %5, align 4
-  %y.str2.elt13 = getelementptr inbounds nuw i8, ptr %1, i32 12
-  %y.str2.unpack14 = load i32, ptr %y.str2.elt13, align 4
-  %eq3 = call i1 @runtime.stringEqual(ptr %x.str1.unpack, i32 %x.str1.unpack11, ptr %y.str2.unpack, i32 %y.str2.unpack14, ptr undef) #4
-  %6 = and i1 %eq, %eq3
-  ret i1 %6
+  %6 = getelementptr inbounds nuw i8, ptr %0, i32 8
+  %x.str1.unpack = load ptr, ptr %6, align 4
+  %streq.memcmp10 = call i32 @memcmp(ptr %x.str1.unpack, ptr %y.str2.unpack, i32 %x.str1.unpack19) #4
+  %streq.memcmp.eq11 = icmp eq i32 %streq.memcmp10, 0
+  br label %streq.next7
+
+streq.next7:                                      ; preds = %streq.body6, %streq.next
+  %7 = phi i1 [ false, %streq.next ], [ %streq.memcmp.eq11, %streq.body6 ]
+  %8 = and i1 %4, %7
+  ret i1 %8
 }
 
-declare i1 @runtime.stringEqual(ptr readonly, i32, ptr readonly, i32, ptr) #0
+declare i32 @memcmp(ptr nocapture readonly, ptr nocapture readonly, i32)
 
 declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr) #0
 
@@ -176,24 +194,42 @@ entry:
 ; Function Attrs: nounwind
 define linkonce_odr i1 @"hashmapKeyEqual.[2]string"(ptr %0, ptr %1, i32 %2, ptr %3) unnamed_addr #1 {
 entry:
-  %x.str.unpack = load ptr, ptr %0, align 4
-  %x.str.elt4 = getelementptr inbounds nuw i8, ptr %0, i32 4
-  %x.str.unpack5 = load i32, ptr %x.str.elt4, align 4
+  %x.str.elt12 = getelementptr inbounds nuw i8, ptr %0, i32 4
+  %x.str.unpack13 = load i32, ptr %x.str.elt12, align 4
+  %y.str.elt15 = getelementptr inbounds nuw i8, ptr %1, i32 4
+  %y.str.unpack16 = load i32, ptr %y.str.elt15, align 4
+  %streq.len.eq = icmp eq i32 %x.str.unpack13, %y.str.unpack16
+  br i1 %streq.len.eq, label %streq.body, label %streq.next
+
+streq.body:                                       ; preds = %entry
   %y.str.unpack = load ptr, ptr %1, align 4
-  %y.str.elt7 = getelementptr inbounds nuw i8, ptr %1, i32 4
-  %y.str.unpack8 = load i32, ptr %y.str.elt7, align 4
-  %eq = call i1 @runtime.stringEqual(ptr %x.str.unpack, i32 %x.str.unpack5, ptr %y.str.unpack, i32 %y.str.unpack8, ptr undef) #4
-  %4 = getelementptr inbounds nuw i8, ptr %0, i32 8
+  %x.str.unpack = load ptr, ptr %0, align 4
+  %streq.memcmp = call i32 @memcmp(ptr %x.str.unpack, ptr %y.str.unpack, i32 %x.str.unpack13) #4
+  %streq.memcmp.eq = icmp eq i32 %streq.memcmp, 0
+  br label %streq.next
+
+streq.next:                                       ; preds = %streq.body, %entry
+  %4 = phi i1 [ false, %entry ], [ %streq.memcmp.eq, %streq.body ]
+  %x.str1.elt18 = getelementptr inbounds nuw i8, ptr %0, i32 12
+  %x.str1.unpack19 = load i32, ptr %x.str1.elt18, align 4
+  %y.str2.elt21 = getelementptr inbounds nuw i8, ptr %1, i32 12
+  %y.str2.unpack22 = load i32, ptr %y.str2.elt21, align 4
+  %streq.len.eq5 = icmp eq i32 %x.str1.unpack19, %y.str2.unpack22
+  br i1 %streq.len.eq5, label %streq.body6, label %streq.next7
+
+streq.body6:                                      ; preds = %streq.next
   %5 = getelementptr inbounds nuw i8, ptr %1, i32 8
-  %x.str1.unpack = load ptr, ptr %4, align 4
-  %x.str1.elt10 = getelementptr inbounds nuw i8, ptr %0, i32 12
-  %x.str1.unpack11 = load i32, ptr %x.str1.elt10, align 4
   %y.str2.unpack = load ptr, ptr %5, align 4
-  %y.str2.elt13 = getelementptr inbounds nuw i8, ptr %1, i32 12
-  %y.str2.unpack14 = load i32, ptr %y.str2.elt13, align 4
-  %eq3 = call i1 @runtime.stringEqual(ptr %x.str1.unpack, i32 %x.str1.unpack11, ptr %y.str2.unpack, i32 %y.str2.unpack14, ptr undef) #4
-  %6 = and i1 %eq, %eq3
-  ret i1 %6
+  %6 = getelementptr inbounds nuw i8, ptr %0, i32 8
+  %x.str1.unpack = load ptr, ptr %6, align 4
+  %streq.memcmp10 = call i32 @memcmp(ptr %x.str1.unpack, ptr %y.str2.unpack, i32 %x.str1.unpack19) #4
+  %streq.memcmp.eq11 = icmp eq i32 %streq.memcmp10, 0
+  br label %streq.next7
+
+streq.next7:                                      ; preds = %streq.body6, %streq.next
+  %7 = phi i1 [ false, %streq.next ], [ %streq.memcmp.eq11, %streq.body6 ]
+  %8 = and i1 %4, %7
+  ret i1 %8
 }
 
 ; Function Attrs: noinline nounwind
@@ -230,24 +266,33 @@ define linkonce_odr i1 @"hashmapKeyEqual.[5]string"(ptr %0, ptr %1, i32 %2, ptr 
 entry:
   br label %eq.array.body
 
-eq.array.body:                                    ; preds = %eq.array.body, %entry
-  %i = phi i32 [ 0, %entry ], [ %6, %eq.array.body ]
+eq.array.body:                                    ; preds = %streq.next, %entry
+  %i = phi i32 [ 0, %entry ], [ %7, %streq.next ]
   %4 = getelementptr inbounds %runtime._string, ptr %0, i32 %i
   %5 = getelementptr inbounds %runtime._string, ptr %1, i32 %i
-  %x.str.unpack = load ptr, ptr %4, align 4
   %x.str.elt1 = getelementptr inbounds nuw i8, ptr %4, i32 4
   %x.str.unpack2 = load i32, ptr %x.str.elt1, align 4
-  %y.str.unpack = load ptr, ptr %5, align 4
   %y.str.elt4 = getelementptr inbounds nuw i8, ptr %5, i32 4
   %y.str.unpack5 = load i32, ptr %y.str.elt4, align 4
-  %eq = call i1 @runtime.stringEqual(ptr %x.str.unpack, i32 %x.str.unpack2, ptr %y.str.unpack, i32 %y.str.unpack5, ptr undef) #4
-  %6 = add i32 %i, 1
-  %7 = icmp ult i32 %6, 5
-  %.not7 = and i1 %7, %eq
+  %streq.len.eq = icmp eq i32 %x.str.unpack2, %y.str.unpack5
+  br i1 %streq.len.eq, label %streq.body, label %streq.next
+
+streq.body:                                       ; preds = %eq.array.body
+  %y.str.unpack = load ptr, ptr %5, align 4
+  %x.str.unpack = load ptr, ptr %4, align 4
+  %streq.memcmp = call i32 @memcmp(ptr %x.str.unpack, ptr %y.str.unpack, i32 %x.str.unpack2) #4
+  %streq.memcmp.eq = icmp eq i32 %streq.memcmp, 0
+  br label %streq.next
+
+streq.next:                                       ; preds = %streq.body, %eq.array.body
+  %6 = phi i1 [ false, %eq.array.body ], [ %streq.memcmp.eq, %streq.body ]
+  %7 = add i32 %i, 1
+  %8 = icmp ult i32 %7, 5
+  %.not7 = and i1 %8, %6
   br i1 %.not7, label %eq.array.body, label %eq.array.done
 
-eq.array.done:                                    ; preds = %eq.array.body
-  ret i1 %eq
+eq.array.done:                                    ; preds = %streq.next
+  ret i1 %6
 }
 
 ; Function Attrs: nounwind
@@ -259,5 +304,5 @@ entry:
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { noinline nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
+attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #4 = { nounwind }
