@@ -255,11 +255,8 @@ func initEndpoint(ep, config uint32) {
 }
 
 // SendUSBInPacket sends a packet for USBHID (interrupt in / bulk in).
-func SendUSBInPacket(ep uint32, data []byte) bool {
+func (dev *USBDevice) SendUSBInPacket(ep uint32, data []byte) bool {
 	sendUSBPacket(ep, data, 0)
-
-	// clear transfer complete flag
-	nrf.USBD.INTENCLR.Set(nrf.USBD_INTENCLR_ENDEPOUT0 << 4)
 
 	return true
 }
@@ -304,13 +301,62 @@ func handleEndpointRx(ep uint32) []byte {
 }
 
 // AckUsbOutTransfer is called to acknowledge the completion of a USB OUT transfer.
-func AckUsbOutTransfer(ep uint32) {
+func (dev *USBDevice) AckUsbOutTransfer(ep uint32) {
 	// set ready for next data
 	nrf.USBD.SIZE.EPOUT[ep].Set(0)
 }
 
-func SendZlp() {
+func (dev *USBDevice) SendZlp() {
 	nrf.USBD.TASKS_EP0STATUS.Set(1)
+}
+
+// Set the USB endpoint Packet ID to DATA0 or DATA1.
+// In endpoints must have bit 7 (0x80) set.
+func setEPDataPID(ep uint32, dataOne bool) {
+	// nrf52840 DTOGGLE requires a "Select" write first (Value=Nop=0),
+	// then a "Set" write (Value=Data0/Data1).
+
+	// Select Endpoint (Value=Nop=0)
+	nrf.USBD.DTOGGLE.Set(ep)
+
+	// Now write the value
+	val := ep
+	if dataOne {
+		val |= nrf.USBD_DTOGGLE_VALUE_Data1 << nrf.USBD_DTOGGLE_VALUE_Pos
+	} else {
+		val |= nrf.USBD_DTOGGLE_VALUE_Data0 << nrf.USBD_DTOGGLE_VALUE_Pos
+	}
+	nrf.USBD.DTOGGLE.Set(val)
+}
+
+// Set ENDPOINT_HALT/stall status on a USB IN endpoint.
+func (dev *USBDevice) SetStallEPIn(ep uint32) {
+	// Bit 8 is STALL, Bit 7 is IO (1 for IN), Bits 0-2 are EP number.
+	nrf.USBD.EPSTALL.Set((1 << 8) | (1 << 7) | (ep & 0x7))
+}
+
+// Set ENDPOINT_HALT/stall status on a USB OUT endpoint.
+func (dev *USBDevice) SetStallEPOut(ep uint32) {
+	// Bit 8 is STALL, Bit 7 is IO (0 for OUT), Bits 0-2 are EP number.
+	nrf.USBD.EPSTALL.Set((1 << 8) | (0 << 7) | (ep & 0x7))
+}
+
+// Clear the ENDPOINT_HALT/stall on a USB IN endpoint.
+func (dev *USBDevice) ClearStallEPIn(ep uint32) {
+	// Reset Data Toggle to DATA0 when unstalling.
+	setEPDataPID(ep|usb.EndpointIn, false)
+
+	// Bit 8 is STALL (0 for UnStall), Bit 7 is IO (1 for IN), Bits 0-2 are EP number.
+	nrf.USBD.EPSTALL.Set((0 << 8) | (1 << 7) | (ep & 0x7))
+}
+
+// Clear the ENDPOINT_HALT/stall on a USB OUT endpoint.
+func (dev *USBDevice) ClearStallEPOut(ep uint32) {
+	// Reset Data Toggle to DATA0 when unstalling.
+	setEPDataPID(ep, false)
+
+	// Bit 8 is STALL (0 for UnStall), Bit 7 is IO (0 for OUT), Bits 0-2 are EP number.
+	nrf.USBD.EPSTALL.Set((0 << 8) | (0 << 7) | (ep & 0x7))
 }
 
 func sendViaEPIn(ep uint32, ptr *byte, count int) {
@@ -336,7 +382,7 @@ func handleUSBSetAddress(setup usb.Setup) bool {
 	return true
 }
 
-func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
+func (dev *USBDevice) ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	var b [cdcLineInfoSize]byte
 
 	nrf.USBD.TASKS_EP0RCVOUT.Set(1)

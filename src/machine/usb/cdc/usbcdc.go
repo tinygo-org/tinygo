@@ -70,6 +70,7 @@ type USBCDC struct {
 	rxBuffer *rxRingBuffer
 	txBuffer *txRingBuffer
 	waitTxc  bool
+	dev      usb.Controller
 }
 
 var (
@@ -88,7 +89,7 @@ func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 func (usbcdc *USBCDC) Flush() {
 	mask := interrupt.Disable()
 	if b, ok := usbcdc.txBuffer.Get(); ok {
-		machine.SendUSBInPacket(cdcEndpointIn, b)
+		usbcdc.dev.SendUSBInPacket(cdcEndpointIn, b)
 	} else {
 		usbcdc.waitTxc = false
 	}
@@ -123,15 +124,15 @@ func (usbcdc *USBCDC) RTS() bool {
 	return (usbLineInfo.lineState & usb_CDC_LINESTATE_RTS) > 0
 }
 
-func cdcCallbackRx(b []byte) {
+func (usbcdc *USBCDC) Rx(b []byte) {
 	for i := range b {
-		USB.Receive(b[i])
+		usbcdc.Receive(b[i])
 	}
 }
 
 var cdcSetupBuff [cdcLineInfoSize]byte
 
-func cdcSetup(setup usb.Setup) bool {
+func (usbcdc *USBCDC) Setup(setup usb.Setup) bool {
 	if setup.BmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.BRequest == usb_CDC_GET_LINE_CODING {
 			cdcSetupBuff[0] = byte(usbLineInfo.dwDTERate)
@@ -142,14 +143,14 @@ func cdcSetup(setup usb.Setup) bool {
 			cdcSetupBuff[5] = byte(usbLineInfo.bParityType)
 			cdcSetupBuff[6] = byte(usbLineInfo.bDataBits)
 
-			machine.SendUSBInPacket(0, cdcSetupBuff[:])
+			usbcdc.dev.SendUSBInPacket(0, cdcSetupBuff[:])
 			return true
 		}
 	}
 
 	if setup.BmRequestType == usb_REQUEST_HOSTTODEVICE_CLASS_INTERFACE {
 		if setup.BRequest == usb_CDC_SET_LINE_CODING {
-			b, err := machine.ReceiveUSBControlPacket()
+			b, err := usbcdc.dev.ReceiveUSBControlPacket()
 			if err != nil {
 				return false
 			}
@@ -171,14 +172,14 @@ func cdcSetup(setup usb.Setup) bool {
 			} else {
 				// TODO: cancel any reset
 			}
-			machine.SendZlp()
+			usbcdc.dev.SendZlp()
 		}
 
 		if setup.BRequest == usb_CDC_SEND_BREAK {
 			// TODO: something with this value?
 			// breakValue = ((uint16_t)setup.wValueH << 8) | setup.wValueL;
 			// return false;
-			machine.SendZlp()
+			usbcdc.dev.SendZlp()
 		}
 		return true
 	}
@@ -186,6 +187,7 @@ func cdcSetup(setup usb.Setup) bool {
 }
 
 func EnableUSBCDC() {
-	machine.USBCDC = New()
-	machine.EnableCDC(USB.Flush, cdcCallbackRx, cdcSetup)
+	c := New()
+	machine.USBCDC = c
+	machine.EnableCDC(c.Flush, c.Rx, c.Setup)
 }

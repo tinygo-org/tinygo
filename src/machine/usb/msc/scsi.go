@@ -93,6 +93,7 @@ func (m *msc) scsiDataTransfer(b []byte) bool {
 
 	// Update our sent bytes count to include the just-confirmed bytes
 	m.sentBytes += m.queuedBytes
+	m.queuedBytes = 0
 
 	if m.sentBytes >= m.transferBytes {
 		// Transfer complete, send CSW after transfer confirmed

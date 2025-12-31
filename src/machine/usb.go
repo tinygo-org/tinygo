@@ -19,9 +19,12 @@ var (
 	USBCDC Serialer
 )
 
+func init() {
+	usb.DefaultController = USBDev
+}
+
 func initUSB() {
-	enableUSBCDC()
-	USBDev.Configure(UARTConfig{})
+	USBDev.Enable()
 }
 
 // Using go:linkname here because there's a circular dependency between the
@@ -29,6 +32,10 @@ func initUSB() {
 //
 //go:linkname enableUSBCDC machine/usb/cdc.EnableUSBCDC
 func enableUSBCDC()
+
+func ReceiveUSBControlPacket() ([7]byte, error) {
+	return USBDev.ReceiveUSBControlPacket()
+}
 
 type Serialer interface {
 	WriteByte(c byte) error
@@ -285,6 +292,19 @@ func handleStandardSetup(setup usb.Setup) bool {
 	}
 }
 
+func (d *USBDevice) Enable() {
+	if d.initcomplete {
+		return
+	}
+	enableUSBCDC()
+	d.Configure(UARTConfig{})
+	d.initcomplete = true
+}
+
+func (d *USBDevice) IsInitEndpointComplete() bool {
+	return d.InitEndpointComplete
+}
+
 func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.Setup) bool) {
 	if len(usbDescriptor.Device) == 0 {
 		usbDescriptor = descriptor.CDC
@@ -319,6 +339,10 @@ func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.S
 }
 
 func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointConfig, setup []usb.SetupConfig) {
+	USBDev.ConfigureUSBEndpoint(desc, epSettings, setup)
+}
+
+func (d *USBDevice) ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointConfig, setup []usb.SetupConfig) {
 	usbDescriptor = desc
 
 	for _, ep := range epSettings {
@@ -346,4 +370,17 @@ func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointC
 	for _, s := range setup {
 		usbSetupHandler[s.Index] = s.Handler
 	}
+}
+
+// Old usb functions kept for compatibility
+func AckUsbOutTransfer(ep uint32) {
+	USBDev.AckUsbOutTransfer(ep)
+}
+
+func SendUSBInPacket(ep uint32, data []byte) bool {
+	return USBDev.SendUSBInPacket(ep, data)
+}
+
+func SendZlp() {
+	USBDev.SendZlp()
 }
