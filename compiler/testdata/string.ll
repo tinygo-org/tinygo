@@ -48,7 +48,7 @@ lookup.next:                                      ; preds = %entry
   ret i8 %1
 
 lookup.throw:                                     ; preds = %entry
-  call void @runtime.lookupPanic(ptr undef) #3
+  call void @runtime.lookupPanic(ptr undef) #4
   unreachable
 }
 
@@ -57,28 +57,51 @@ declare void @runtime.lookupPanic(ptr) #1
 ; Function Attrs: nounwind
 define hidden i1 @main.stringCompareEqual(ptr readonly %s1.data, i32 %s1.len, ptr readonly %s2.data, i32 %s2.len, ptr %context) unnamed_addr #2 {
 entry:
-  %0 = call i1 @runtime.stringEqual(ptr %s1.data, i32 %s1.len, ptr %s2.data, i32 %s2.len, ptr undef) #3
+  %streq.len.eq = icmp eq i32 %s1.len, %s2.len
+  br i1 %streq.len.eq, label %streq.body, label %streq.next
+
+streq.body:                                       ; preds = %entry
+  %streq.memcmp = call i32 @memcmp(ptr %s1.data, ptr %s2.data, i32 %s1.len) #4
+  %streq.memcmp.eq = icmp eq i32 %streq.memcmp, 0
+  br label %streq.next
+
+streq.next:                                       ; preds = %streq.body, %entry
+  %0 = phi i1 [ false, %entry ], [ %streq.memcmp.eq, %streq.body ]
   ret i1 %0
 }
 
-declare i1 @runtime.stringEqual(ptr readonly, i32, ptr readonly, i32, ptr) #1
+declare i32 @memcmp(ptr nocapture readonly, ptr nocapture readonly, i32)
 
 ; Function Attrs: nounwind
 define hidden i1 @main.stringCompareUnequal(ptr readonly %s1.data, i32 %s1.len, ptr readonly %s2.data, i32 %s2.len, ptr %context) unnamed_addr #2 {
 entry:
-  %0 = call i1 @runtime.stringEqual(ptr %s1.data, i32 %s1.len, ptr %s2.data, i32 %s2.len, ptr undef) #3
-  %1 = xor i1 %0, true
-  ret i1 %1
+  %streq.len.eq = icmp eq i32 %s1.len, %s2.len
+  br i1 %streq.len.eq, label %streq.body, label %streq.next
+
+streq.body:                                       ; preds = %entry
+  %streq.memcmp = call i32 @memcmp(ptr %s1.data, ptr %s2.data, i32 %s1.len) #4
+  %streq.memcmp.eq = icmp ne i32 %streq.memcmp, 0
+  br label %streq.next
+
+streq.next:                                       ; preds = %streq.body, %entry
+  %streq.not = phi i1 [ true, %entry ], [ %streq.memcmp.eq, %streq.body ]
+  ret i1 %streq.not
 }
 
 ; Function Attrs: nounwind
 define hidden i1 @main.stringCompareLarger(ptr readonly %s1.data, i32 %s1.len, ptr readonly %s2.data, i32 %s2.len, ptr %context) unnamed_addr #2 {
 entry:
-  %0 = call i1 @runtime.stringLess(ptr %s2.data, i32 %s2.len, ptr %s1.data, i32 %s1.len, ptr undef) #3
-  ret i1 %0
+  %strlt.min.len = call i32 @llvm.umin.i32(i32 %s2.len, i32 %s1.len)
+  %strlt.memcmp = call i32 @memcmp(ptr %s2.data, ptr %s1.data, i32 %strlt.min.len) #4
+  %strlt.memcmp.eq = icmp eq i32 %strlt.memcmp, 0
+  %strlt.len.lt = icmp ult i32 %s2.len, %s1.len
+  %strlt.memcmp.lt = icmp slt i32 %strlt.memcmp, 0
+  %strlt.result = select i1 %strlt.memcmp.eq, i1 %strlt.len.lt, i1 %strlt.memcmp.lt
+  ret i1 %strlt.result
 }
 
-declare i1 @runtime.stringLess(ptr readonly, i32, ptr readonly, i32, ptr) #1
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare i32 @llvm.umin.i32(i32, i32) #3
 
 ; Function Attrs: nounwind
 define hidden i8 @main.stringLookup(ptr readonly %s.data, i32 %s.len, i8 %x, ptr %context) unnamed_addr #2 {
@@ -93,11 +116,12 @@ lookup.next:                                      ; preds = %entry
   ret i8 %2
 
 lookup.throw:                                     ; preds = %entry
-  call void @runtime.lookupPanic(ptr undef) #3
+  call void @runtime.lookupPanic(ptr undef) #4
   unreachable
 }
 
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nounwind }
+attributes #3 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #4 = { nounwind }
