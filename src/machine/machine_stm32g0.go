@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	// Default CPU frequency for STM32G0 (running from HSI16 at 16MHz)
-	cpuFreq = 16000000
+	// CPU frequency for STM32G0 (64MHz via PLL: HSI16 / 1 * 8 / 2)
+	cpuFreq = 64000000
 )
 
 func CPUFrequency() uint32 {
@@ -25,8 +25,8 @@ var deviceIDAddr = []uintptr{0x1FFF7590, 0x1FFF7594, 0x1FFF7598}
 // Internal use: configured speed of the APB1 and APB2 timers, this should be kept
 // in sync with any changes to runtime package which configures the oscillators
 // and clock frequencies
-const APB1_TIM_FREQ = 16e6 // 16MHz (HSI16, no PLL)
-const APB2_TIM_FREQ = 16e6 // 16MHz (HSI16, no PLL)
+const APB1_TIM_FREQ = 64e6 // 64MHz (PLL: HSI16 / 1 * 8 / 2)
+const APB2_TIM_FREQ = 64e6 // 64MHz (PLL: HSI16 / 1 * 8 / 2)
 
 const (
 	PA0  = portA + 0
@@ -296,17 +296,17 @@ func (spi *SPI) configurePins(config SPIConfig) {
 // Gets the value for TIMINGR register
 func (i2c *I2C) getFreqRange(br uint32) uint32 {
 	// These are 'magic' values calculated by STM32CubeMX
-	// for 16MHz PCLK1 (HSI16, no PLL).
+	// for 64MHz PCLK1 (PLL: HSI16 / 1 * 8 / 2).
 	// TODO: Do calculations based on PCLK1
 	switch br {
 	case 10 * KHz:
-		return 0x00303D5B // 16MHz, 10kHz I2C
+		return 0xF010F3FE // 64MHz, 10kHz I2C
 	case 100 * KHz:
-		return 0x00303D5B // 16MHz, 100kHz I2C (Standard mode)
+		return 0x30A0A7FB // 64MHz, 100kHz I2C (Standard mode)
 	case 400 * KHz:
-		return 0x0010061A // 16MHz, 400kHz I2C (Fast mode)
+		return 0x10802D9B // 64MHz, 400kHz I2C (Fast mode)
 	case 500 * KHz:
-		return 0x00100413 // 16MHz, 500kHz I2C
+		return 0x00802172 // 64MHz, 500kHz I2C
 	default:
 		return 0
 	}

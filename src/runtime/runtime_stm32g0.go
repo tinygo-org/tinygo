@@ -24,8 +24,8 @@ func buffered() int {
 }
 
 func initCLK() {
-	// Initialize clock to use HSI16 at 16MHz (matching proven HAL configuration)
-	// The STM32G0 starts up with HSI16 (16MHz internal RC) as the system clock
+	// Initialize clock to 64MHz using PLL with HSI16 as source
+	// PLL configuration: HSI16 (16MHz) / PLLM(1) * PLLN(8) / PLLR(2) = 64MHz
 
 	// Enable PWR clock
 	stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_PWREN)
@@ -40,7 +40,7 @@ func initCLK() {
 	for stm32.PWR.SR2.HasBits(stm32.PWR_SR2_VOSF) {
 	}
 
-	// Enable HSI16 (should already be on after reset, but ensure it)
+	// Enable HSI16
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSION)
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSIRDY) {
 	}
@@ -48,20 +48,52 @@ func initCLK() {
 	// Set HSI16 division factor to 1 (no division) - HSIDIV = 000
 	stm32.RCC.CR.ClearBits(stm32.RCC_CR_HSIDIV_Msk)
 
-	// For 16 MHz operation, flash latency can be 0 wait states (up to 24 MHz in Range 1)
-	stm32.FLASH.ACR.ReplaceBits(0, stm32.Flash_ACR_LATENCY_Msk, 0)
-	for (stm32.FLASH.ACR.Get() & stm32.Flash_ACR_LATENCY_Msk) != 0 {
+	// Disable PLL before configuration
+	stm32.RCC.CR.ClearBits(stm32.RCC_CR_PLLON)
+	for stm32.RCC.CR.HasBits(stm32.RCC_CR_PLLRDY) {
 	}
 
-	// Set AHB prescaler to 1 (no division) - HPRE = 0xxx
+	// Configure PLL: HSI16 / 1 * 8 / 2 = 64 MHz
+	// PLLSRC = HSI16 (2)
+	// PLLM = 0 (divide by 1)
+	// PLLN = 8 (multiply by 8) -> VCO = 16 * 8 = 128 MHz
+	// PLLR = 0 (divide by 2) -> SYSCLK = 128 / 2 = 64 MHz
+	// PLLREN = 1 (enable R output for SYSCLK)
+	const (
+		PLLSRC_HSI16 = 2 // HSI16 as PLL source
+		PLLM_DIV1    = 0 // /1
+		PLLN_MUL8    = 8 // *8
+		PLLR_DIV2    = 0 // /2 (0 = divide by 2)
+	)
+	stm32.RCC.PLLCFGR.Set(
+		(PLLSRC_HSI16 << stm32.RCC_PLLCFGR_PLLSRC_Pos) |
+			(PLLM_DIV1 << stm32.RCC_PLLCFGR_PLLM_Pos) |
+			(PLLN_MUL8 << stm32.RCC_PLLCFGR_PLLN_Pos) |
+			(PLLR_DIV2 << stm32.RCC_PLLCFGR_PLLR_Pos) |
+			stm32.RCC_PLLCFGR_PLLREN) // Enable PLLR output
+
+	// Enable PLL
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)
+	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_PLLRDY) {
+	}
+
+	// Set flash latency to 2 wait states (required for 64MHz in Range 1)
+	// Must be set BEFORE switching to higher frequency clock
+	const FLASH_LATENCY_2 = 2
+	stm32.FLASH.ACR.ReplaceBits(FLASH_LATENCY_2, stm32.Flash_ACR_LATENCY_Msk, 0)
+	for (stm32.FLASH.ACR.Get() & stm32.Flash_ACR_LATENCY_Msk) != FLASH_LATENCY_2 {
+	}
+
+	// Set AHB prescaler to 1 (no division)
 	stm32.RCC.CFGR.ReplaceBits(0, stm32.RCC_CFGR_HPRE_Msk, 0)
 
-	// Set APB prescaler to 1 (no division) - PPRE = 0xx
+	// Set APB prescaler to 1 (no division)
 	stm32.RCC.CFGR.ReplaceBits(0, stm32.RCC_CFGR_PPRE_Msk, 0)
 
-	// Select HSI16 as system clock source (SW = 000)
-	// Note: After reset, HSI16 should already be the system clock source
-	stm32.RCC.CFGR.ReplaceBits(0, stm32.RCC_CFGR_SW_Msk, 0)
-	for (stm32.RCC.CFGR.Get() & stm32.RCC_CFGR_SWS_Msk) != 0 {
+	// Switch system clock to PLL (SW = 010)
+	const RCC_CFGR_SW_PLL = 2
+	stm32.RCC.CFGR.ReplaceBits(RCC_CFGR_SW_PLL<<stm32.RCC_CFGR_SW_Pos, stm32.RCC_CFGR_SW_Msk, 0)
+	// Wait for PLL to be used as system clock (SWS = 010)
+	for (stm32.RCC.CFGR.Get() & stm32.RCC_CFGR_SWS_Msk) != (RCC_CFGR_SW_PLL << stm32.RCC_CFGR_SWS_Pos) {
 	}
 }
