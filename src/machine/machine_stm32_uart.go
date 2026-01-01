@@ -53,7 +53,7 @@ func (uart *UART) Configure(config UARTConfig) {
 	uart.SetBaudRate(config.BaudRate)
 
 	// Enable USART port, tx, rx and rx interrupts
-	uart.Bus.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
+	uart.Bus.CR1_FIFO_ENABLED.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
 
 	// Enable RX IRQ
 	uart.Interrupt.SetPriority(0xc0)

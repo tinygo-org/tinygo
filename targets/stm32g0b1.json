@@ -1,0 +1,16 @@
+{
+  "inherits": [
+    "cortex-m0plus"
+  ],
+  "build-tags": [
+    "stm32g0b1",
+    "stm32g0",
+    "stm32"
+  ],
+  "extra-files": [
+    "src/device/stm32/stm32g0b1.s"
+  ],
+  "linkerscript": "targets/stm32g0b1.ld",
+  "flash-method": "openocd",
+  "openocd-target": "stm32g0x"
+}
