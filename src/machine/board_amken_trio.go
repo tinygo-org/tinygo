@@ -1,4 +1,4 @@
-//go:build rabbitpnp_toolhead
+//go:build amken_trio
 
 // RabbitPNP Toolhead Board
 // MCU: STM32G0B1CBTx (LQFP48, 128KB Flash, 144KB RAM)

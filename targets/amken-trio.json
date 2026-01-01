@@ -1,6 +1,6 @@
 {
   "inherits": ["stm32g0b1"],
-  "build-tags": ["rabbitpnp_toolhead"],
+  "build-tags": ["amken_trio"],
   "linkerscript": "targets/stm32g0b1cb.ld",
   "openocd-interface": "stlink",
   "openocd-commands": ["reset_config srst_only connect_assert_srst"]
