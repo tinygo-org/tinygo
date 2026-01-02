@@ -1,8 +1,8 @@
-//go:build stm32 && !stm32g0
+//go:build stm32g0
 
 package machine
 
-// Peripheral abstraction layer for UARTs on the stm32 family (except stm32g0).
+// Peripheral abstraction layer for UARTs on the stm32g0 family.
 
 import (
 	"device/stm32"
@@ -53,7 +53,8 @@ func (uart *UART) Configure(config UARTConfig) {
 	uart.SetBaudRate(config.BaudRate)
 
 	// Enable USART port, tx, rx and rx interrupts
-	uart.Bus.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
+	// STM32G0 uses CR1_FIFO_ENABLED register
+	uart.Bus.CR1_FIFO_ENABLED.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
 
 	// Enable RX IRQ
 	uart.Interrupt.SetPriority(0xc0)
