@@ -91,7 +91,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 			fmt.Fprintln(os.Stderr, pos.String()+": "+msg)
 		})
 		OptimizeStringToBytes(mod)
-		OptimizeStringEqual(mod)
 
 	} else {
 		// Must be run at any optimization level.

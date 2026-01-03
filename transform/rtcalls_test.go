@@ -15,14 +15,6 @@ func TestOptimizeStringToBytes(t *testing.T) {
 	})
 }
 
-func TestOptimizeStringEqual(t *testing.T) {
-	t.Parallel()
-	testTransform(t, "testdata/stringequal", func(mod llvm.Module) {
-		// Run optimization pass.
-		transform.OptimizeStringEqual(mod)
-	})
-}
-
 func TestOptimizeReflectImplements(t *testing.T) {
 	t.Parallel()
 	testTransform(t, "testdata/reflect-implements", func(mod llvm.Module) {

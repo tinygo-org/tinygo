@@ -84,14 +84,22 @@ entry:
   %2 = insertvalue %runtime._string zeroinitializer, ptr %b.data, 0
   %3 = insertvalue %runtime._string %2, i32 %b.len, 1
   %stackalloc = alloca i8, align 1
-  %4 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #5
-  %5 = select i1 %4, %runtime._string %1, %runtime._string %3
-  %6 = select i1 %4, ptr %a.data, ptr %b.data
-  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #5
-  ret %runtime._string %5
+  %strlt.min.len = call i32 @llvm.umin.i32(i32 %a.len, i32 %b.len)
+  %strlt.memcmp = call i32 @memcmp(ptr %a.data, ptr %b.data, i32 %strlt.min.len) #5
+  %strlt.memcmp.eq = icmp eq i32 %strlt.memcmp, 0
+  %strlt.len.lt = icmp ult i32 %a.len, %b.len
+  %strlt.memcmp.lt = icmp slt i32 %strlt.memcmp, 0
+  %strlt.result = select i1 %strlt.memcmp.eq, i1 %strlt.len.lt, i1 %strlt.memcmp.lt
+  %4 = select i1 %strlt.result, %runtime._string %1, %runtime._string %3
+  %5 = select i1 %strlt.result, ptr %a.data, ptr %b.data
+  call void @runtime.trackPointer(ptr %5, ptr nonnull %stackalloc, ptr undef) #5
+  ret %runtime._string %4
 }
 
-declare i1 @runtime.stringLess(ptr readonly, i32, ptr readonly, i32, ptr) #1
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare i32 @llvm.umin.i32(i32, i32) #3
+
+declare i32 @memcmp(ptr nocapture readonly, ptr nocapture readonly, i32)
 
 ; Function Attrs: nounwind
 define hidden i32 @main.maxInt(i32 %a, i32 %b, ptr %context) unnamed_addr #2 {
@@ -123,11 +131,16 @@ entry:
   %2 = insertvalue %runtime._string zeroinitializer, ptr %b.data, 0
   %3 = insertvalue %runtime._string %2, i32 %b.len, 1
   %stackalloc = alloca i8, align 1
-  %4 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #5
-  %5 = select i1 %4, %runtime._string %1, %runtime._string %3
-  %6 = select i1 %4, ptr %a.data, ptr %b.data
-  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #5
-  ret %runtime._string %5
+  %strlt.min.len = call i32 @llvm.umin.i32(i32 %b.len, i32 %a.len)
+  %strlt.memcmp = call i32 @memcmp(ptr %b.data, ptr %a.data, i32 %strlt.min.len) #5
+  %strlt.memcmp.eq = icmp eq i32 %strlt.memcmp, 0
+  %strlt.len.lt = icmp ult i32 %b.len, %a.len
+  %strlt.memcmp.lt = icmp slt i32 %strlt.memcmp, 0
+  %strlt.result = select i1 %strlt.memcmp.eq, i1 %strlt.len.lt, i1 %strlt.memcmp.lt
+  %4 = select i1 %strlt.result, %runtime._string %1, %runtime._string %3
+  %5 = select i1 %strlt.result, ptr %a.data, ptr %b.data
+  call void @runtime.trackPointer(ptr %5, ptr nonnull %stackalloc, ptr undef) #5
+  ret %runtime._string %4
 }
 
 ; Function Attrs: nounwind
@@ -139,7 +152,7 @@ entry:
 }
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
-declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #3
+declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #4
 
 ; Function Attrs: nounwind
 define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
@@ -157,23 +170,20 @@ entry:
 declare void @runtime.hashmapClear(ptr dereferenceable_or_null(40), ptr) #1
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare i32 @llvm.smin.i32(i32, i32) #4
+declare i32 @llvm.smin.i32(i32, i32) #3
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare i8 @llvm.umin.i8(i8, i8) #4
+declare i8 @llvm.umin.i8(i8, i8) #3
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare i32 @llvm.umin.i32(i32, i32) #4
+declare i32 @llvm.smax.i32(i32, i32) #3
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare i32 @llvm.smax.i32(i32, i32) #4
-
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare i32 @llvm.umax.i32(i32, i32) #4
+declare i32 @llvm.umax.i32(i32, i32) #3
 
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: write) }
-attributes #4 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #3 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #4 = { nocallback nofree nounwind willreturn memory(argmem: write) }
 attributes #5 = { nounwind }

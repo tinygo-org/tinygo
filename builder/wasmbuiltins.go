@@ -49,6 +49,9 @@ var libWasmBuiltins = Library{
 			"libc-top-half/musl/src/string/memmove.c",
 			"libc-top-half/musl/src/string/memset.c",
 
+			// memcmp is used for string comparisons
+			"libc-top-half/musl/src/string/memcmp.c",
+
 			// exp, exp2, and log are needed for LLVM math builtin functions
 			// like llvm.exp.*.
 			"libc-top-half/musl/src/math/__math_divzero.c",

@@ -80,6 +80,7 @@ type compilerContext struct {
 	machine          llvm.TargetMachine
 	targetData       llvm.TargetData
 	intType          llvm.Type
+	cIntType         llvm.Type
 	dataPtrType      llvm.Type // pointer in address space 0
 	funcPtrType      llvm.Type // pointer in function address space (1 for AVR, 0 elsewhere)
 	funcPtrAddrSpace int
@@ -117,15 +118,21 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		c.dibuilder = llvm.NewDIBuilder(c.mod)
 	}
 
-	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
-	if c.targetData.PointerSize() <= 4 {
+	ptrSize := c.targetData.PointerSize()
+	c.uintptrType = c.ctx.IntType(ptrSize * 8)
+	if ptrSize <= 4 {
 		// 8, 16, 32 bits targets
 		c.intType = c.ctx.Int32Type()
-	} else if c.targetData.PointerSize() == 8 {
+	} else if ptrSize == 8 {
 		// 64 bits target
 		c.intType = c.ctx.Int64Type()
 	} else {
 		panic("unknown pointer size")
+	}
+	if ptrSize < 4 {
+		c.cIntType = c.ctx.Int16Type()
+	} else {
+		c.cIntType = c.ctx.Int32Type()
 	}
 	c.dataPtrType = llvm.PointerType(c.ctx.Int8Type(), 0)
 
@@ -2825,20 +2832,20 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			case token.ADD: // +
 				return b.createRuntimeCall("stringConcat", []llvm.Value{x, y}, ""), nil
 			case token.EQL: // ==
-				return b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, ""), nil
+				return b.createStringEqual(x, y), nil
 			case token.NEQ: // !=
-				result := b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, "")
-				return b.CreateNot(result, ""), nil
+				result := b.createStringEqual(x, y)
+				return b.CreateNot(result, "streq.not"), nil
 			case token.LSS: // x < y
-				return b.createRuntimeCall("stringLess", []llvm.Value{x, y}, ""), nil
+				return b.createStringLess(x, y), nil
 			case token.LEQ: // x <= y becomes NOT (y < x)
-				result := b.createRuntimeCall("stringLess", []llvm.Value{y, x}, "")
-				return b.CreateNot(result, ""), nil
+				result := b.createStringLess(y, x)
+				return b.CreateNot(result, "strlt.not"), nil
 			case token.GTR: // x > y becomes y < x
-				return b.createRuntimeCall("stringLess", []llvm.Value{y, x}, ""), nil
+				return b.createStringLess(y, x), nil
 			case token.GEQ: // x >= y becomes NOT (x < y)
-				result := b.createRuntimeCall("stringLess", []llvm.Value{x, y}, "")
-				return b.CreateNot(result, ""), nil
+				result := b.createStringLess(x, y)
+				return b.CreateNot(result, "strlt.not"), nil
 			default:
 				panic("binop on string: " + op.String())
 			}

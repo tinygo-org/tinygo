@@ -25,6 +25,7 @@ func TestInterp(t *testing.T) {
 		"interface",
 		"revert",
 		"alloc",
+		"memcmp",
 	} {
 		name := name // make local to this closure
 		if name == "slice-copy" && llvmVersion < 14 {

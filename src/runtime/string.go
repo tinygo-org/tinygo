@@ -18,40 +18,6 @@ type stringIterator struct {
 	byteindex uintptr
 }
 
-// Return true iff the strings match.
-//
-//go:nobounds
-func stringEqual(x, y string) bool {
-	if len(x) != len(y) {
-		return false
-	}
-	for i := 0; i < len(x); i++ {
-		if x[i] != y[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// Return true iff x < y.
-//
-//go:nobounds
-func stringLess(x, y string) bool {
-	l := len(x)
-	if m := len(y); m < l {
-		l = m
-	}
-	for i := 0; i < l; i++ {
-		if x[i] < y[i] {
-			return true
-		}
-		if x[i] > y[i] {
-			return false
-		}
-	}
-	return len(x) < len(y)
-}
-
 // Add two strings together.
 func stringConcat(x, y _string) _string {
 	if x.length == 0 {
