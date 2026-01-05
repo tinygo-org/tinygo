@@ -155,17 +155,17 @@ func (p Pin) getPort() *stm32.GPIO_Type {
 func (p Pin) enableClock() {
 	switch p / 16 {
 	case 0:
-		stm32.RCC.IOPENR.SetBits(stm32.RCC_IOPENR_GPIOAEN)
+		stm32.RCC.SetIOPENR_GPIOAEN(1)
 	case 1:
-		stm32.RCC.IOPENR.SetBits(stm32.RCC_IOPENR_GPIOBEN)
+		stm32.RCC.SetIOPENR_GPIOBEN(1)
 	case 2:
-		stm32.RCC.IOPENR.SetBits(stm32.RCC_IOPENR_GPIOCEN)
+		stm32.RCC.SetIOPENR_GPIOCEN(1)
 	case 3:
-		stm32.RCC.IOPENR.SetBits(stm32.RCC_IOPENR_GPIODEN)
+		stm32.RCC.SetIOPENR_GPIODEN(1)
 	case 4:
-		stm32.RCC.IOPENR.SetBits(stm32.RCC_IOPENR_GPIOEEN)
+		stm32.RCC.SetIOPENR_GPIOEEN(1)
 	case 5:
-		stm32.RCC.IOPENR.SetBits(stm32.RCC_IOPENR_GPIOFEN)
+		stm32.RCC.SetIOPENR_GPIOFEN(1)
 	default:
 		panic("machine: unknown port")
 	}
@@ -244,7 +244,7 @@ type SPI struct {
 
 func (spi *SPI) config8Bits() {
 	// Set rx threshold to 8-bits, so RXNE flag is set for 1 byte
-	spi.Bus.CR2.SetBits(stm32.SPI_CR2_FRXTH)
+	spi.Bus.SetCR2_FRXTH(1)
 }
 
 // Set baud rate for SPI
@@ -316,47 +316,49 @@ func (i2c *I2C) getFreqRange(br uint32) uint32 {
 func enableAltFuncClock(bus unsafe.Pointer) {
 	switch bus {
 	case unsafe.Pointer(stm32.PWR): // Power interface clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_PWREN)
+		//stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_PWREN)
+		stm32.RCC.SetAPBENR1_PWREN(1)
 	case unsafe.Pointer(stm32.I2C1): // I2C1 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_I2C1EN)
+		//stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_I2C1EN)
+		stm32.RCC.SetAPBENR1_I2C1EN(1)
 	case unsafe.Pointer(stm32.I2C2): // I2C2 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_I2C2EN)
+		stm32.RCC.SetAPBENR1_I2C2EN(1)
 	case unsafe.Pointer(stm32.USART2): // USART2 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_USART2EN)
+		stm32.RCC.SetAPBENR1_USART2EN(1)
 	case unsafe.Pointer(stm32.USART3): // USART3 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_USART3EN)
+		stm32.RCC.SetAPBENR1_USART3EN(1)
 	case unsafe.Pointer(stm32.USART4): // USART4 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_USART4EN)
+		stm32.RCC.SetAPBENR1_USART4EN(1)
 	case unsafe.Pointer(stm32.SPI2): // SPI2 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_SPI2EN)
+		stm32.RCC.SetAPBENR1_SPI2EN(1)
 	case unsafe.Pointer(stm32.WWDG): // Window watchdog clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_WWDGEN)
+		stm32.RCC.SetAPBENR1_WWDGEN(1)
 	case unsafe.Pointer(stm32.TIM2): // TIM2 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_TIM2EN)
+		stm32.RCC.SetAPBENR1_TIM2EN(1)
 	case unsafe.Pointer(stm32.TIM3): // TIM3 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_TIM3EN)
+		stm32.RCC.SetAPBENR1_TIM3EN(1)
 	case unsafe.Pointer(stm32.TIM6): // TIM6 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_TIM6EN)
+		stm32.RCC.SetAPBENR1_TIM6EN(1)
 	case unsafe.Pointer(stm32.TIM7): // TIM7 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_TIM7EN)
+		stm32.RCC.SetAPBENR1_TIM7EN(1)
 	case unsafe.Pointer(stm32.LPUART1): // LPUART1 clock enable
-		stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_LPUART1EN)
+		stm32.RCC.SetAPBENR1_LPUART1EN(1)
 	case unsafe.Pointer(stm32.TIM1): // TIM1 clock enable
-		stm32.RCC.APBENR2.SetBits(stm32.RCC_APBENR2_TIM1EN)
+		stm32.RCC.SetAPBENR2_TIM1EN(1)
 	case unsafe.Pointer(stm32.SPI1): // SPI1 clock enable
-		stm32.RCC.APBENR2.SetBits(stm32.RCC_APBENR2_SPI1EN)
+		stm32.RCC.SetAPBENR2_SPI1EN(1)
 	case unsafe.Pointer(stm32.USART1): // USART1 clock enable
-		stm32.RCC.APBENR2.SetBits(stm32.RCC_APBENR2_USART1EN)
+		stm32.RCC.SetAPBENR2_USART1EN(1)
 	case unsafe.Pointer(stm32.TIM14): // TIM14 clock enable
-		stm32.RCC.APBENR2.SetBits(stm32.RCC_APBENR2_TIM14EN)
+		stm32.RCC.SetAPBENR2_TIM14EN(1)
 	case unsafe.Pointer(stm32.TIM15): // TIM15 clock enable
-		stm32.RCC.APBENR2.SetBits(stm32.RCC_APBENR2_TIM15EN)
+		stm32.RCC.SetAPBENR2_TIM15EN(1)
 	case unsafe.Pointer(stm32.TIM16): // TIM16 clock enable
-		stm32.RCC.APBENR2.SetBits(stm32.RCC_APBENR2_TIM16EN)
+		stm32.RCC.SetAPBENR2_TIM16EN(1)
 	case unsafe.Pointer(stm32.TIM17): // TIM17 clock enable
-		stm32.RCC.APBENR2.SetBits(stm32.RCC_APBENR2_TIM17EN)
+		stm32.RCC.SetAPBENR2_TIM17EN(1)
 	case unsafe.Pointer(stm32.ADC): // ADC clock enable
-		stm32.RCC.APBENR2.SetBits(stm32.RCC_APBENR2_ADCEN)
+		stm32.RCC.SetAPBENR2_ADCEN(1)
 	}
 }
 
@@ -382,10 +384,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR2_TIM1EN,
 		Device:         stm32.TIM1,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{{PA8, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
-			TimerChannel{Pins: []PinFunction{{PA9, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
-			TimerChannel{Pins: []PinFunction{{PA10, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
-			TimerChannel{Pins: []PinFunction{{PA11, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{{PA8, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{{PA9, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{{PA10, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{{PA11, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
 		},
 		busFreq: APB2_TIM_FREQ,
 	}
@@ -395,10 +397,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR1_TIM2EN,
 		Device:         stm32.TIM2,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{{PA0, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PA5, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PA15, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
-			TimerChannel{Pins: []PinFunction{{PA1, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PB3, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
-			TimerChannel{Pins: []PinFunction{{PA2, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PB10, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
-			TimerChannel{Pins: []PinFunction{{PA3, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PB11, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{{PA0, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PA5, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PA15, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{{PA1, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PB3, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{{PA2, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PB10, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{{PA3, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}, {PB11, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
 		},
 		busFreq: APB1_TIM_FREQ,
 	}
@@ -408,10 +410,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR1_TIM3EN,
 		Device:         stm32.TIM3,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{{PA6, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PB4, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PC6, AF1_TIM1_TIM2_TIM3_LPTIM1}}},
-			TimerChannel{Pins: []PinFunction{{PA7, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PB5, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PC7, AF1_TIM1_TIM2_TIM3_LPTIM1}}},
-			TimerChannel{Pins: []PinFunction{{PB0, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PC8, AF1_TIM1_TIM2_TIM3_LPTIM1}}},
-			TimerChannel{Pins: []PinFunction{{PB1, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PC9, AF1_TIM1_TIM2_TIM3_LPTIM1}}},
+			{Pins: []PinFunction{{PA6, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PB4, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PC6, AF1_TIM1_TIM2_TIM3_LPTIM1}}},
+			{Pins: []PinFunction{{PA7, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PB5, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PC7, AF1_TIM1_TIM2_TIM3_LPTIM1}}},
+			{Pins: []PinFunction{{PB0, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PC8, AF1_TIM1_TIM2_TIM3_LPTIM1}}},
+			{Pins: []PinFunction{{PB1, AF1_TIM1_TIM2_TIM3_LPTIM1}, {PC9, AF1_TIM1_TIM2_TIM3_LPTIM1}}},
 		},
 		busFreq: APB1_TIM_FREQ,
 	}
@@ -421,10 +423,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR1_TIM6EN,
 		Device:         stm32.TIM6,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
 		},
 		busFreq: APB1_TIM_FREQ,
 	}
@@ -434,10 +436,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR1_TIM7EN,
 		Device:         stm32.TIM7,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
 		},
 		busFreq: APB1_TIM_FREQ,
 	}
@@ -447,10 +449,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR2_TIM14EN,
 		Device:         stm32.TIM14,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{{PA4, AF4_USART1_USART2_TIM14}, {PA7, AF4_USART1_USART2_TIM14}, {PB1, AF0_SYSTEM}}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
+			{Pins: []PinFunction{{PA4, AF4_USART1_USART2_TIM14}, {PA7, AF4_USART1_USART2_TIM14}, {PB1, AF0_SYSTEM}}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
 		},
 		busFreq: APB2_TIM_FREQ,
 	}
@@ -460,10 +462,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR2_TIM15EN,
 		Device:         stm32.TIM15,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{{PA2, AF5_SPI1_SPI2_TIM16_TIM17}, {PB14, AF5_SPI1_SPI2_TIM16_TIM17}}},
-			TimerChannel{Pins: []PinFunction{{PA3, AF5_SPI1_SPI2_TIM16_TIM17}, {PB15, AF5_SPI1_SPI2_TIM16_TIM17}}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
+			{Pins: []PinFunction{{PA2, AF5_SPI1_SPI2_TIM16_TIM17}, {PB14, AF5_SPI1_SPI2_TIM16_TIM17}}},
+			{Pins: []PinFunction{{PA3, AF5_SPI1_SPI2_TIM16_TIM17}, {PB15, AF5_SPI1_SPI2_TIM16_TIM17}}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
 		},
 		busFreq: APB2_TIM_FREQ,
 	}
@@ -473,10 +475,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR2_TIM16EN,
 		Device:         stm32.TIM16,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{{PA6, AF5_SPI1_SPI2_TIM16_TIM17}, {PB8, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
+			{Pins: []PinFunction{{PA6, AF5_SPI1_SPI2_TIM16_TIM17}, {PB8, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
 		},
 		busFreq: APB2_TIM_FREQ,
 	}
@@ -486,10 +488,10 @@ var (
 		EnableFlag:     stm32.RCC_APBENR2_TIM17EN,
 		Device:         stm32.TIM17,
 		Channels: [4]TimerChannel{
-			TimerChannel{Pins: []PinFunction{{PA7, AF5_SPI1_SPI2_TIM16_TIM17}, {PB9, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
-			TimerChannel{Pins: []PinFunction{}},
+			{Pins: []PinFunction{{PA7, AF5_SPI1_SPI2_TIM16_TIM17}, {PB9, AF2_TIM1_TIM2_TIM3_TIM14_I2C2}}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
+			{Pins: []PinFunction{}},
 		},
 		busFreq: APB2_TIM_FREQ,
 	}
@@ -546,7 +548,7 @@ func (t *TIM) registerOCInterrupt() interrupt.Interrupt {
 }
 
 func (t *TIM) enableMainOutput() {
-	t.Device.BDTR.SetBits(stm32.TIM_BDTR_MOE)
+	t.Device.SetBDTR_MOE(1)
 }
 
 type arrtype = uint32
