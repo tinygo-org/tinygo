@@ -2,6 +2,9 @@
 
 package machine
 
+// Flash support for STM32 chips, except for STM32L0 which have a different type
+// of flash.
+
 import (
 	"device/stm32"
 
