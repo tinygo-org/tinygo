@@ -23,17 +23,9 @@ var DefaultUART = &UART{Bus: py32.USART1, Buffer: NewRingBuffer()}
 // ConfigureWithClock initializes the UART using the provided peripheral clock
 // frequency (in Hz). This avoids assuming a fixed MCU clock.
 func (uart *UART) ConfigureWithClock(config UARTConfig, clockHz uint32) error {
+
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
-	}
-
-	// Configure default pins if they weren't provided.
-	if config.TX == 0 {
-		ConfigureUARTPin(DEFAULT_UART_TX_PIN, DEFAULT_UART_TX_PIN_AF)
-	}
-
-	if config.RX == 0 {
-		ConfigureUARTPin(DEFAULT_UART_RX_PIN, DEFAULT_UART_RX_PIN_AF)
 	}
 
 	// Enable peripheral clock.
@@ -55,6 +47,8 @@ func (uart *UART) ConfigureWithClock(config UARTConfig, clockHz uint32) error {
 	uart.irq = interrupt.New(py32.IRQ_USART1, handleUartInterrupt)
 	uart.irq.SetPriority(0xc0)
 	uart.irq.Enable()
+
+	configureDefaultUARTPins()
 
 	return nil
 }

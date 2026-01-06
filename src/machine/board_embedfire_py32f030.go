@@ -18,10 +18,7 @@ const (
 	KEY2 = PA6
 )
 
-// UART
-const (
-	DEFAULT_UART_TX_PIN    = PA7
-	DEFAULT_UART_RX_PIN    = PA8
-	DEFAULT_UART_TX_PIN_AF = 8
-	DEFAULT_UART_RX_PIN_AF = 8
-)
+func configureDefaultUARTPins() {
+	ConfigureUARTPin(PA7, 8) // TX
+	ConfigureUARTPin(PA8, 8) // RX
+}
