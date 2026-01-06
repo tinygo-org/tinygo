@@ -316,10 +316,8 @@ func (i2c *I2C) getFreqRange(br uint32) uint32 {
 func enableAltFuncClock(bus unsafe.Pointer) {
 	switch bus {
 	case unsafe.Pointer(stm32.PWR): // Power interface clock enable
-		//stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_PWREN)
 		stm32.RCC.SetAPBENR1_PWREN(1)
 	case unsafe.Pointer(stm32.I2C1): // I2C1 clock enable
-		//stm32.RCC.APBENR1.SetBits(stm32.RCC_APBENR1_I2C1EN)
 		stm32.RCC.SetAPBENR1_I2C1EN(1)
 	case unsafe.Pointer(stm32.I2C2): // I2C2 clock enable
 		stm32.RCC.SetAPBENR1_I2C2EN(1)
