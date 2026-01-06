@@ -1,4 +1,4 @@
-//go:build stm32 && !stm32l4 && !stm32l5 && !stm32wlx && !stm32g0
+//go:build stm32g0
 
 package machine
 
@@ -7,19 +7,8 @@ import (
 )
 
 // This variant of the GPIO input interrupt logic is for
-// chips with a smaller number of interrupt channels
-// (that fits in a single register).
-
-//
-// STM32 allows one interrupt source per pin number, with
-// the same pin number in different ports sharing a single
-// interrupt source (so PA0, PB0, PC0 all share).  Only a
-// single physical pin can be connected to each interrupt
-// line.
-//
-// To call interrupt callbacks, we record here for each
-// pin number the callback and the actual associated pin.
-//
+// STM32G0 chips which use a different EXTI register structure
+// with IMR1, RTSR1, FTSR1, and separate RPR1/FPR1 pending registers.
 
 // Callbacks for pin interrupt events
 var pinCallbacks [16]func(Pin)
@@ -42,7 +31,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	enableEXTIConfigRegisters()
 
 	if callback == nil {
-		stm32.EXTI.IMR.ClearBits(1 << pin)
+		stm32.EXTI.IMR1.ClearBits(1 << pin)
 		pinCallbacks[pin] = nil
 		return nil
 	}
@@ -64,12 +53,12 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	crReg.ReplaceBits(port, 0xf, shift)
 
 	if (change & PinRising) != 0 {
-		stm32.EXTI.RTSR.SetBits(1 << pin)
+		stm32.EXTI.RTSR1.SetBits(1 << pin)
 	}
 	if (change & PinFalling) != 0 {
-		stm32.EXTI.FTSR.SetBits(1 << pin)
+		stm32.EXTI.FTSR1.SetBits(1 << pin)
 	}
-	stm32.EXTI.IMR.SetBits(1 << pin)
+	stm32.EXTI.IMR1.SetBits(1 << pin)
 
 	intr := p.registerInterrupt()
 	intr.SetPriority(0)
@@ -79,10 +68,21 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 }
 
 func handlePinInterrupt(pin uint8) {
-	if stm32.EXTI.PR.HasBits(1 << pin) {
-		// Writing 1 to the pending register clears the
-		// pending flag for that bit
-		stm32.EXTI.PR.Set(1 << pin)
+	// STM32G0 has separate rising and falling pending registers
+	// Check both and clear the appropriate one
+	mask := uint32(1 << pin)
+	if stm32.EXTI.RPR1.HasBits(mask) {
+		// Writing 1 to the pending register clears the pending flag
+		stm32.EXTI.RPR1.Set(mask)
+
+		callback := pinCallbacks[pin]
+		if callback != nil {
+			callback(interruptPins[pin])
+		}
+	}
+	if stm32.EXTI.FPR1.HasBits(mask) {
+		// Writing 1 to the pending register clears the pending flag
+		stm32.EXTI.FPR1.Set(mask)
 
 		callback := pinCallbacks[pin]
 		if callback != nil {
