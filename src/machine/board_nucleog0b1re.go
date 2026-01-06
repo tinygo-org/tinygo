@@ -69,6 +69,14 @@ const (
 	SPI0_SCK_PIN = SPI1_SCK_PIN
 	SPI0_SDI_PIN = SPI1_SDI_PIN
 	SPI0_SDO_PIN = SPI1_SDO_PIN
+
+	// CAN pins (directly accessible on Nucleo-G0B1RE board)
+	// FDCAN1: PA11 (TX) / PA12 (RX) using AF9
+	// FDCAN2: PD12 (TX) / PD13 (RX) using AF3
+	CAN1_TX_PIN = PA11
+	CAN1_RX_PIN = PA12
+	CAN2_TX_PIN = PD12
+	CAN2_RX_PIN = PD13
 )
 
 var (
@@ -96,8 +104,28 @@ var (
 		AltFuncSelector: AF0_SYSTEM,
 	}
 	SPI0 = SPI1
+
+	// FDCAN1 on PA11 (TX) / PA12 (RX)
+	CAN1  = &_CAN1
+	_CAN1 = FDCAN{
+		Bus:             stm32.FDCAN1,
+		TxAltFuncSelect: AF9_FDCAN1_FDCAN2,
+		RxAltFuncSelect: AF9_FDCAN1_FDCAN2,
+		instance:        0,
+	}
+
+	// FDCAN2 on PD12 (TX) / PD13 (RX)
+	CAN2  = &_CAN2
+	_CAN2 = FDCAN{
+		Bus:             stm32.FDCAN2,
+		TxAltFuncSelect: AF3_FDCAN1_FDCAN2,
+		RxAltFuncSelect: AF3_FDCAN1_FDCAN2,
+		instance:        1,
+	}
 )
 
 func init() {
 	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2_LPUART2, _UART1.handleInterrupt)
+	// Note: FDCAN interrupts share with USB (IRQ_UCPD1_UCPD2_USB = 8)
+	// User should configure interrupts via SetInterrupt method if needed
 }

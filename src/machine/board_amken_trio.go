@@ -7,6 +7,7 @@ package machine
 
 import (
 	"device/stm32"
+	"runtime/interrupt"
 )
 
 // Vacuum sensors (PWM input via TIM2)
@@ -131,7 +132,21 @@ var (
 		AltFuncSelector: AF6_SPI2_USART3_USART4_I2C1,
 	}
 	I2C0 = I2C2
+
+	// FDCAN1 on PD0 (RX) / PD1 (TX) with onboard transceiver
+	CAN1  = &_CAN1
+	_CAN1 = FDCAN{
+		Bus:             stm32.FDCAN1,
+		TxAltFuncSelect: AF3_FDCAN1_FDCAN2,
+		RxAltFuncSelect: AF3_FDCAN1_FDCAN2,
+		instance:        0,
+	}
+	// Alias for convenience
+	CAN0 = CAN1
 )
+
+// Suppress unused import warning for interrupt package
+var _ = interrupt.New
 
 func init() {
 	// No UART configured on this board - uses USB or CAN for communication

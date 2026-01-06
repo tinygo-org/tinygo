@@ -357,6 +357,8 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.SetAPBENR2_TIM17EN(1)
 	case unsafe.Pointer(stm32.ADC): // ADC clock enable
 		stm32.RCC.SetAPBENR2_ADCEN(1)
+	case unsafe.Pointer(stm32.FDCAN1), unsafe.Pointer(stm32.FDCAN2): // FDCAN clock enable
+		stm32.RCC.SetAPBENR1_FDCANEN(1)
 	}
 }
 
@@ -368,12 +370,14 @@ const (
 	AF1_TIM1_TIM2_TIM3_LPTIM1     = 1
 	AF2_TIM1_TIM2_TIM3_TIM14_I2C2 = 2
 	AF3_USART5_USART6_LPUART2     = 3
+	AF3_FDCAN1_FDCAN2             = 3 // FDCAN on PC2/PC3/PC4/PC5, PD12/PD13/PD14/PD15
 	AF4_USART1_USART2_TIM14       = 4
 	AF5_SPI1_SPI2_TIM16_TIM17     = 5
 	AF6_SPI2_USART3_USART4_I2C1   = 6
 	AF7_USART1_USART2_COMP1_COMP2 = 7
 	AF8_I2C1_I2C2_UCPD1_UCPD2     = 8
 	AF9_SPI2_TIM14_TIM15          = 9
+	AF9_FDCAN1_FDCAN2             = 9 // FDCAN on PA11/PA12, PB8/PB9
 )
 
 var (
