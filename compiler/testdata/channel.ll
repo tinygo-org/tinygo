@@ -105,7 +105,7 @@ select.body:                                      ; preds = %select.next
   br label %select.done
 }
 
-declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32, i32, ptr, i32, i32, ptr) #1
+declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr, i32 range(i32 0, 134217728), i32 range(i32 0, 134217728), ptr) #1
 
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }

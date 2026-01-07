@@ -21,6 +21,7 @@ type paramInfo struct {
 	llvmType llvm.Type
 	name     string     // name, possibly with suffixes for e.g. struct fields
 	elemSize uint64     // size of pointer element type, or 0 if this isn't a pointer
+	max      uint64     // maximum value (for len/cap)
 	flags    paramFlags // extra flags for this parameter
 }
 
@@ -171,6 +172,8 @@ func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType 
 			}
 			suffix := strconv.Itoa(i)
 			isString := false
+			hasLengths := false
+			var maxLen uint64
 			if goType != nil {
 				// Try to come up with a good suffix for this struct field,
 				// depending on which Go type it's based on.
@@ -179,6 +182,9 @@ func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType 
 					suffix = []string{"typecode", "value"}[i]
 				case *types.Slice:
 					suffix = []string{"data", "len", "cap"}[i]
+					maxLen = c.maxLen
+					maxLen /= max(c.targetData.TypeAllocSize(c.getLLVMType(goType.Elem())), 1)
+					hasLengths = true
 				case *types.Struct:
 					suffix = goType.Field(i).Name()
 				case *types.Basic:
@@ -188,6 +194,8 @@ func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType 
 					case types.String:
 						suffix = []string{"data", "len"}[i]
 						isString = true
+						hasLengths = true
+						maxLen = c.maxLen
 					}
 				case *types.Signature:
 					suffix = []string{"context", "funcptr"}[i]
@@ -196,6 +204,10 @@ func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType 
 			subInfos := c.flattenAggregateType(subfield, name+"."+suffix, extractSubfield(goType, i))
 			if isString {
 				subInfos[0].flags |= paramIsReadonly
+			}
+			if hasLengths && i > 0 {
+				// Add the max to a len/cap
+				subInfos[0].max = maxLen
 			}
 			paramInfos = append(paramInfos, subInfos...)
 		}

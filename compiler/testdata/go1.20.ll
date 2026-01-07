@@ -17,7 +17,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
+define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #3
@@ -50,7 +50,7 @@ unsafe.String.throw:                              ; preds = %entry
 declare void @runtime.unsafeSlicePanic(ptr) #1
 
 ; Function Attrs: nounwind
-define hidden ptr @main.unsafeStringData(ptr readonly %s.data, i32 %s.len, ptr %context) unnamed_addr #2 {
+define hidden ptr @main.unsafeStringData(ptr readonly %s.data, i32 range(i32 0, -2147483648) %s.len, ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #3

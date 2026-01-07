@@ -84,6 +84,7 @@ type compilerContext struct {
 	funcPtrType      llvm.Type // pointer in function address space (1 for AVR, 0 elsewhere)
 	funcPtrAddrSpace int
 	uintptrType      llvm.Type
+	maxLen           uint64
 	program          *ssa.Program
 	diagnostics      []error
 	functionInfos    map[*ssa.Function]functionInfo
@@ -128,6 +129,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		panic("unknown pointer size")
 	}
 	c.dataPtrType = llvm.PointerType(c.ctx.Int8Type(), 0)
+	c.maxLen = (uint64(1) << (c.uintptrType.IntTypeWidth() - 1)) - 1
 
 	dummyFuncType := llvm.FunctionType(c.ctx.VoidType(), nil, false)
 	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)

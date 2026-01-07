@@ -60,3 +60,7 @@ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 tinygo.org/x/go-llvm v0.0.0-20250422114502-b8f170971e74 h1:ovavgTdIBWCH8YWlcfq9gkpoyT1+IxMKSn+Df27QwE8=
 tinygo.org/x/go-llvm v0.0.0-20250422114502-b8f170971e74/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
+tinygo.org/x/go-llvm v0.0.0-20260107115532-8bd5473cfa70 h1:ERUdTqps/hemakjNJN7fB9K3jCLsPP1h7YAdifdHuIc=
+tinygo.org/x/go-llvm v0.0.0-20260107115532-8bd5473cfa70/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
+tinygo.org/x/go-llvm v0.0.0-20260107134614-6418b7937619 h1:JKG6n6Yr0SB1JDzN0yiwJBKQoz+ZNMjahDej3XpV+pw=
+tinygo.org/x/go-llvm v0.0.0-20260107134614-6418b7937619/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
