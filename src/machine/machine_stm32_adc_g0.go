@@ -81,27 +81,28 @@ func (a ADC) Configure(config ADCConfig) {
 	ch := a.getChannel()
 	if ch <= 18 {
 		// Select sampling time based on config (using SMP2 for per-channel control)
-		smpTime := ADC_SMPR_79_5 // Default to 79.5 cycles for good accuracy
-		if config.SampleTime > 0 {
-			// Map microseconds to sample cycles (at ~16MHz ADC clock after /2 prescaler)
-			// Each cycle = 1/16MHz = 62.5ns
-			if config.SampleTime <= 1 {
-				smpTime = ADC_SMPR_1_5
-			} else if config.SampleTime <= 2 {
-				smpTime = ADC_SMPR_3_5
-			} else if config.SampleTime <= 3 {
-				smpTime = ADC_SMPR_7_5
-			} else if config.SampleTime <= 4 {
-				smpTime = ADC_SMPR_12_5
-			} else if config.SampleTime <= 5 {
-				smpTime = ADC_SMPR_19_5
-			} else if config.SampleTime <= 10 {
-				smpTime = ADC_SMPR_39_5
-			} else if config.SampleTime <= 20 {
-				smpTime = ADC_SMPR_79_5
-			} else {
-				smpTime = ADC_SMPR_160_5
-			}
+		// Map microseconds to sample cycles (at ~32MHz ADC clock after /2 prescaler)
+		// Each cycle = 1/32MHz = 31.25ns
+		var smpTime int
+		switch {
+		case config.SampleTime == 0:
+			smpTime = ADC_SMPR_79_5 // Default to 79.5 cycles for good accuracy
+		case config.SampleTime <= 1:
+			smpTime = ADC_SMPR_1_5
+		case config.SampleTime <= 2:
+			smpTime = ADC_SMPR_3_5
+		case config.SampleTime <= 3:
+			smpTime = ADC_SMPR_7_5
+		case config.SampleTime <= 4:
+			smpTime = ADC_SMPR_12_5
+		case config.SampleTime <= 5:
+			smpTime = ADC_SMPR_19_5
+		case config.SampleTime <= 10:
+			smpTime = ADC_SMPR_39_5
+		case config.SampleTime <= 20:
+			smpTime = ADC_SMPR_79_5
+		default:
+			smpTime = ADC_SMPR_160_5
 		}
 		stm32.ADC.SetSMPR_SMP2(uint32(smpTime))
 
