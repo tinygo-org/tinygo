@@ -14,10 +14,10 @@ import (
 var WindowWatchdog = &windowWatchdogImpl{}
 
 // WindowWatchdogConfig holds configuration for the window watchdog timer.
+// The timeout (in microseconds) before the watchdog fires.
+// The valid range depends on System frequency.
+// At 64MHz: ~64µs to ~524ms
 type WindowWatchdogConfig struct {
-	// The timeout (in microseconds) before the watchdog fires.
-	// Valid range depends on PCLK frequency.
-	// At 64MHz PCLK: ~64µs to ~524ms
 	TimeoutMicros uint32
 
 	// The window value as a percentage of timeout (0-100).
@@ -67,7 +67,7 @@ func (wd *windowWatchdogImpl) Configure(config WindowWatchdogConfig) error {
 	// With prescaler: tick = PCLK / (4096 * 2^prescaler)
 	// Timeout = tick * (counter - 0x3F)
 
-	pclk := uint32(CPUFrequency())      // Assuming PCLK = CPU frequency (no APB prescaler)
+	pclk := CPUFrequency()              // Assuming PCLK = CPU frequency (no APB prescaler)
 	baseTick := (4096 * 1000000) / pclk // Base tick in nanoseconds * 1000 for precision
 
 	timeout := config.TimeoutMicros
@@ -113,9 +113,6 @@ func (wd *windowWatchdogImpl) Configure(config WindowWatchdogConfig) error {
 		windowOffset := (counterRange * uint16(config.WindowPercent)) / 100
 		windowVal = uint8(wwdgCounterMin + windowOffset)
 	}
-
-	// Configure prescaler and window in CFR register
-	// Must be done before enabling WWDG
 	stm32.WWDG.CFR.Set((uint32(bestPrescaler) << stm32.WWDG_CFR_WDGTB_Pos) | uint32(windowVal))
 
 	return nil
@@ -124,9 +121,7 @@ func (wd *windowWatchdogImpl) Configure(config WindowWatchdogConfig) error {
 // Start enables the window watchdog.
 // Once started, the WWDG cannot be disabled except by a system reset.
 func (wd *windowWatchdogImpl) Start() error {
-	// Set counter value and enable WWDG (WDGA bit)
-	// T6 bit (0x40) must be set to prevent immediate reset
-	stm32.WWDG.CR.Set(uint32(wd.counter) | (1 << 7)) // WDGA = bit 7
+	stm32.WWDG.CR.Set(uint32(wd.counter) | (1 << 7))
 	return nil
 }
 
@@ -134,8 +129,6 @@ func (wd *windowWatchdogImpl) Start() error {
 // This must be called within the configured window to prevent a reset.
 // Calling too early (counter > window) or too late (counter <= 0x3F) causes reset.
 func (wd *windowWatchdogImpl) Update() {
-	// Reload the counter value
-	// The WDGA bit is preserved, only T[6:0] is written
 	stm32.WWDG.CR.Set(uint32(wd.counter) | (1 << 7))
 }
 
@@ -164,17 +157,17 @@ func (wd *windowWatchdogImpl) IsEarlyWakeupFlagSet() bool {
 }
 
 // GetMaxTimeout returns the maximum timeout in microseconds for the current PCLK.
+// Max timeout = (1/PCLK) × 4096 × 128 × 64
+// At 64MHz: ~524ms = 524288µs
 func (wd *windowWatchdogImpl) GetMaxTimeout() uint32 {
-	// Max timeout = (1/PCLK) × 4096 × 128 × 64
-	// At 64MHz: ~524ms = 524288µs
 	pclk := uint64(CPUFrequency())
 	return uint32((uint64(4096) * 128 * 64 * 1000000) / pclk)
 }
 
 // GetMinTimeout returns the minimum timeout in microseconds for the current PCLK.
+// Min timeout = (1/PCLK) × 4096 × 1 × 1
+// At 64MHz: ~64µs
 func (wd *windowWatchdogImpl) GetMinTimeout() uint32 {
-	// Min timeout = (1/PCLK) × 4096 × 1 × 1
-	// At 64MHz: ~64µs
 	pclk := uint64(CPUFrequency())
 	return uint32((uint64(4096) * 1000000) / pclk)
 }
