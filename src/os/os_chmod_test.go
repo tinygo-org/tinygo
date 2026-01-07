@@ -12,8 +12,11 @@ import (
 	"errors"
 	"io/fs"
 	. "os"
+	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/tinygo-org/tinygo/src/os"
 )
 
 func TestChmod(t *testing.T) {
@@ -67,6 +70,41 @@ func TestChownErr(t *testing.T) {
 		errCmp := fs.PathError{Op: "chown", Path: "invalid", Err: errors.New("no such file or directory")}
 		if errors.Is(err, &errCmp) {
 			t.Fatalf("chown(%s, uid=%v, gid=%v): got '%v', want 'no such file or directory'", f.Name(), Geteuid(), Getegid(), err)
+		}
+	}
+}
+
+func TestLchownErr(t *testing.T) {
+	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
+		t.Log("skipping on " + runtime.GOOS)
+		return
+	}
+
+	var (
+		TEST_UID_ROOT = 0
+		TEST_GID_ROOT = 0
+	)
+
+	f := newFile("TestLchown", t)
+	defer Remove(f.Name())
+	defer f.Close()
+	link := filepath.Join(os.TempDir(), "TestLchownLink")
+	_ = os.Symlink(f.Name(), link)
+	defer Remove(link)
+
+	// EACCES
+	if err := Lchown(link, TEST_UID_ROOT, TEST_GID_ROOT); err != nil {
+		errCmp := fs.PathError{Op: "lchown", Path: link, Err: errors.New("operation not permitted")}
+		if errors.Is(err, &errCmp) {
+			t.Fatalf("lchown(%s, uid=%v, gid=%v): got '%v', want 'operation not permitted'", link, TEST_UID_ROOT, TEST_GID_ROOT, err)
+		}
+	}
+
+	// ENOENT
+	if err := Chown("invalid", Geteuid(), Getgid()); err != nil {
+		errCmp := fs.PathError{Op: "lchown", Path: "invalid", Err: errors.New("no such file or directory")}
+		if errors.Is(err, &errCmp) {
+			t.Fatalf("chown(%s, uid=%v, gid=%v): got '%v', want 'no such file or directory'", link, Geteuid(), Getegid(), err)
 		}
 	}
 }

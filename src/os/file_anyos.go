@@ -166,6 +166,19 @@ func Chown(name string, uid, gid int) error {
 	return nil
 }
 
+// Lchown changes the numeric uid and gid of the named file.
+// If the file is a symbolic link, it changes the uid and gid of the link itself.
+// If there is an error, it will be of type [*PathError].
+//
+// If there is an error, it will be of type *PathError.
+func Lchown(name string, uid, gid int) error {
+	e := ignoringEINTR(func() error { return syscall.Lchown(name, uid, gid) })
+	if e != nil {
+		return &PathError{Op: "lchown", Path: name, Err: e}
+	}
+	return nil
+}
+
 // ignoringEINTR makes a function call and repeats it if it returns an
 // EINTR error. This appears to be required even though we install all
 // signal handlers with SA_RESTART: see #22838, #38033, #38836, #40846.
