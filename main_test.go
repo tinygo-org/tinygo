@@ -222,6 +222,7 @@ func TestBuild(t *testing.T) {
 			// to be sure.
 			t.Parallel()
 			options := optionsFromOSARCH("linux/mipsle/softfloat", sema)
+			emuCheck(t, options)
 			runTest("cgo/", options, t, nil, nil)
 		})
 	} else if runtime.GOOS == "windows" {
