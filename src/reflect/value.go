@@ -17,6 +17,10 @@ func ValueOf(i interface{}) Value {
 	return Value{reflectlite.ValueOf(i)}
 }
 
+func TypeAssert[T any](v Value) (T, bool) {
+	return reflectlite.TypeAssert[T](v.Value)
+}
+
 func (v Value) Type() Type {
 	return toType(v.Value.Type())
 }
