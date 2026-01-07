@@ -86,6 +86,64 @@ func (v Value) Interface() interface{} {
 	return valueInterfaceUnsafe(v)
 }
 
+func TypeAssert[T any](v Value) (T, bool) {
+	if v.typecode == nil {
+		panic("reflect.TypeAssert: zero Value")
+	}
+	if !v.isExported() {
+		// Do not allow access to unexported values via TypeAssert,
+		// because they might be pointers that should not be
+		// writable or methods or function that should not be callable.
+		panic("reflect.TypeAssert: cannot return value obtained from unexported field or method")
+	}
+
+	typ := TypeFor[T]()
+
+	// If v is an interface, return the element inside the interface.
+	//
+	// T is a concrete type and v is an interface. For example:
+	//
+	//	var v any = int(1)
+	//	val := ValueOf(&v).Elem()
+	//	TypeAssert[int](val) == val.Interface().(int)
+	//
+	// T is a interface and v is a non-nil interface value. For example:
+	//
+	//	var v any = &someError{}
+	//	val := ValueOf(&v).Elem()
+	//	TypeAssert[error](val) == val.Interface().(error)
+	//
+	// T is a interface and v is a nil interface value. For example:
+	//
+	//	var v error = nil
+	//	val := ValueOf(&v).Elem()
+	//	TypeAssert[error](val) == val.Interface().(error)
+	if v.Kind() == Interface {
+		val, ok := valueInterfaceUnsafe(v).(T)
+		return val, ok
+	}
+
+	// If T is an interface and v is a concrete type. For example:
+	//
+	//	TypeAssert[any](ValueOf(1)) == ValueOf(1).Interface().(any)
+	//	TypeAssert[error](ValueOf(&someError{})) == ValueOf(&someError{}).Interface().(error)
+	if typ.Kind() == Interface {
+		val, ok := valueInterfaceUnsafe(v).(T)
+		return val, ok
+	}
+
+	// Both v and T must be concrete types.
+	// The only way for an type-assertion to match is if the types are equal.
+	if typ != v.typecode {
+		var zero T
+		return zero, false
+	}
+	if !v.isIndirect() {
+		return *(*T)(unsafe.Pointer(&v.value)), true
+	}
+	return *(*T)(v.value), true
+}
+
 // valueInterfaceUnsafe is used by the runtime to hash map keys. It should not
 // be subject to the isExported check.
 func valueInterfaceUnsafe(v Value) interface{} {
