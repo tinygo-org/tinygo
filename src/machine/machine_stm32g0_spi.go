@@ -6,6 +6,7 @@ package machine
 
 import (
 	"device/stm32"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -21,8 +22,19 @@ type SPIConfig struct {
 
 // Configure is intended to setup the STM32 SPI peripheral
 func (spi *SPI) Configure(config SPIConfig) error {
+	// disable SPI interface before any configuration changes
+	spi.Bus.CR1.ClearBits(stm32.SPI_CR1_SPE)
+
 	// enable clock for SPI
 	enableAltFuncClock(unsafe.Pointer(spi.Bus))
+
+	// init pins - use defaults if not specified
+	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
+		config.SCK = SPI0_SCK_PIN
+		config.SDO = SPI0_SDO_PIN
+		config.SDI = SPI0_SDI_PIN
+	}
+	spi.configurePins(config)
 
 	// Get SPI baud rate divisor
 	conf := spi.getBaudRate(config)
@@ -45,28 +57,30 @@ func (spi *SPI) Configure(config SPIConfig) error {
 	// set SPI master
 	conf |= stm32.SPI_CR1_MSTR | stm32.SPI_CR1_SSI
 
-	// enable the SPI interface
-	conf |= stm32.SPI_CR1_SPE
-
 	// use software CS (GPIO) by default
 	conf |= stm32.SPI_CR1_SSM
 
-	// now set the configuration (note: STM32G0 uses 16-bit SPI registers)
+	// Set CR1 configuration WITHOUT enabling SPE yet
+	// (STM32G0 requires CR2 DS bits to be set before SPE is enabled)
 	spi.Bus.CR1.Set(uint16(conf))
 
-	// Series-specific configuration to set 8-bit transfer mode
+	// Series-specific configuration to set 8-bit transfer mode (must be done before SPE)
 	spi.config8Bits()
 
-	// enable SPI
-	spi.Bus.CR1.SetBits(stm32.SPI_CR1_SPE)
+	// Now enable SPI
+	spi.Bus.SetCR1_SPE(1)
 
 	return nil
 }
 
 // Transfer writes/reads a single byte using the SPI interface.
 func (spi *SPI) Transfer(w byte) (byte, error) {
-	// Write data to be transmitted to the SPI data register
-	spi.Bus.DR.Set(uint16(w))
+	// STM32G0 requires 8-bit access to DR for 8-bit transfers
+	// Using 16-bit access causes data packing issues
+	dr := (*volatile.Register8)(unsafe.Pointer(&spi.Bus.DR))
+
+	// Write data to be transmitted to the SPI data register (8-bit access)
+	dr.Set(w)
 
 	// Wait until transmit complete
 	for !spi.Bus.SR.HasBits(stm32.SPI_SR_TXE) {
@@ -80,6 +94,6 @@ func (spi *SPI) Transfer(w byte) (byte, error) {
 	for spi.Bus.SR.HasBits(stm32.SPI_SR_BSY) {
 	}
 
-	// Return received data from SPI data register
-	return byte(spi.Bus.DR.Get()), nil
+	// Return received data from SPI data register (8-bit access)
+	return dr.Get(), nil
 }
