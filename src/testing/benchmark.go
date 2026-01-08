@@ -13,9 +13,11 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 func initBenchmarkFlags() {
@@ -98,6 +100,7 @@ type B struct {
 	// net total after running benchmar
 	netAllocs uint64
 	netBytes  uint64
+	extra     map[string]float64
 }
 
 // StartTimer starts timing a test. This function is called automatically
@@ -249,7 +252,7 @@ func (b *B) launch() {
 			b.runN(int(n))
 		}
 	}
-	b.result = BenchmarkResult{b.N, b.duration, b.bytes, b.netAllocs, b.netBytes}
+	b.result = BenchmarkResult{b.N, b.duration, b.bytes, b.netAllocs, b.netBytes, b.extra}
 }
 
 // BenchmarkResult contains the results of a benchmark run.
@@ -260,10 +263,35 @@ type BenchmarkResult struct {
 
 	MemAllocs uint64 // The total number of memory allocations.
 	MemBytes  uint64 // The total number of bytes allocated.
+
+	// Extra records additional metrics reported by ReportMetric.
+	Extra map[string]float64
+}
+
+// ReportMetric adds "n unit" to the reported benchmark results.
+// If the metric is per-iteration, the caller should divide by b.N,
+// and by convention units should end in "/op".
+// ReportMetric overrides any previously reported value for the same unit.
+// ReportMetric panics if unit is the empty string or if unit contains
+// any whitespace.
+// If unit is a unit normally reported by the benchmark framework itself
+// (such as "allocs/op"), ReportMetric will override that metric.
+// Setting "ns/op" to 0 will suppress that built-in metric.
+func (b *B) ReportMetric(n float64, unit string) {
+	if unit == "" {
+		panic("metric unit must not be empty")
+	}
+	if strings.IndexFunc(unit, unicode.IsSpace) >= 0 {
+		panic("metric unit must not contain whitespace")
+	}
+	b.extra[unit] = n
 }
 
 // NsPerOp returns the "ns/op" metric.
 func (r BenchmarkResult) NsPerOp() int64 {
+	if v, ok := r.Extra["ns/op"]; ok {
+		return int64(v)
+	}
 	if r.N <= 0 {
 		return 0
 	}
@@ -272,6 +300,9 @@ func (r BenchmarkResult) NsPerOp() int64 {
 
 // mbPerSec returns the "MB/s" metric.
 func (r BenchmarkResult) mbPerSec() float64 {
+	if v, ok := r.Extra["MB/s"]; ok {
+		return v
+	}
 	if r.Bytes <= 0 || r.T <= 0 || r.N <= 0 {
 		return 0
 	}
@@ -281,6 +312,9 @@ func (r BenchmarkResult) mbPerSec() float64 {
 // AllocsPerOp returns the "allocs/op" metric,
 // which is calculated as r.MemAllocs / r.N.
 func (r BenchmarkResult) AllocsPerOp() int64 {
+	if v, ok := r.Extra["allocs/op"]; ok {
+		return int64(v)
+	}
 	if r.N <= 0 {
 		return 0
 	}
@@ -290,6 +324,9 @@ func (r BenchmarkResult) AllocsPerOp() int64 {
 // AllocedBytesPerOp returns the "B/op" metric,
 // which is calculated as r.MemBytes / r.N.
 func (r BenchmarkResult) AllocedBytesPerOp() int64 {
+	if v, ok := r.Extra["B/op"]; ok {
+		return int64(v)
+	}
 	if r.N <= 0 {
 		return 0
 	}
@@ -308,7 +345,10 @@ func (r BenchmarkResult) String() string {
 	fmt.Fprintf(buf, "%8d", r.N)
 
 	// Get ns/op as a float.
-	ns := float64(r.T.Nanoseconds()) / float64(r.N)
+	ns, ok := r.Extra["ns/op"]
+	if !ok {
+		ns = float64(r.T.Nanoseconds()) / float64(r.N)
+	}
 	if ns != 0 {
 		buf.WriteByte('\t')
 		prettyPrint(buf, ns, "ns/op")
@@ -316,6 +356,23 @@ func (r BenchmarkResult) String() string {
 
 	if mbs := r.mbPerSec(); mbs != 0 {
 		fmt.Fprintf(buf, "\t%7.2f MB/s", mbs)
+	}
+
+	// Print extra metrics that aren't represented in the standard
+	// metrics.
+	var extraKeys []string
+	for k := range r.Extra {
+		switch k {
+		case "ns/op", "MB/s", "B/op", "allocs/op":
+			// Built-in metrics reported elsewhere.
+			continue
+		}
+		extraKeys = append(extraKeys, k)
+	}
+	slices.Sort(extraKeys)
+	for _, k := range extraKeys {
+		buf.WriteByte('\t')
+		prettyPrint(buf, r.Extra[k], k)
 	}
 	return buf.String()
 }
