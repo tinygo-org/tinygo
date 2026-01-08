@@ -153,7 +153,7 @@ func (p *pwmGroup) Period() uint64 {
 	top := p.getWrap()
 	phc := p.getPhaseCorrect()
 	Int, frac := p.getClockDiv()
-	return (16*uint64(Int) + uint64(frac)) * uint64((top+1)*(phc+1)*1e9) / (16 * freq) // cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
+	return (16*uint64(Int) + uint64(frac)) * uint64((top+1)*(phc+1)) * uint64(1e9) / (16 * freq) // cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
 }
 
 // SetInverting sets whether to invert the output of this channel.
