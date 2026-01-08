@@ -96,6 +96,7 @@ func ReadMemStats(m *MemStats) {
 	m.Sys = uint64(heapEnd - heapStart)
 	// no free -- current in use heap is the total allocated
 	m.HeapAlloc = gcTotalAlloc
+	m.HeapObjects = gcMallocs
 	m.Alloc = m.HeapAlloc
 
 	gcLock.Unlock()

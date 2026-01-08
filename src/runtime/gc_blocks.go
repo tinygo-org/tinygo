@@ -827,6 +827,7 @@ func ReadMemStats(m *MemStats) {
 	liveBytes := uint64(liveBlocks * bytesPerBlock)
 	m.HeapInuse = liveBytes
 	m.HeapAlloc = liveBytes
+	m.HeapObjects = uint64(liveHeads)
 	m.Alloc = liveBytes
 
 	// Subtract live blocks from total blocks to count free blocks.
