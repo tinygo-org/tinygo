@@ -368,7 +368,8 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		}
 
 		for _, interrupt := range periphEl.Interrupts {
-			addInterrupt(interrupts, interrupt.Name, interrupt.Name, interrupt.Index, description)
+			interruptName := cleanName(strings.TrimSpace(interrupt.Name))
+			addInterrupt(interrupts, interruptName, interruptName, interrupt.Index, description)
 			// As a convenience, also use the peripheral name as the interrupt
 			// name. Only do that for the nrf for now, as the stm32 .svd files
 			// don't always put interrupts in the correct peripheral...
@@ -381,6 +382,9 @@ func readSVD(path, sourceURL string) (*Device, error) {
 			var derivedFrom *Peripheral
 			if periphEl.DerivedFrom != "" {
 				derivedFrom = peripheralDict[periphEl.DerivedFrom]
+				if derivedFrom == nil {
+					return nil, fmt.Errorf("peripheral %s derivedFrom %s not found", periphEl.Name, periphEl.DerivedFrom)
+				}
 			} else {
 				derivedFrom = groups[groupName]
 			}
@@ -489,16 +493,13 @@ func readSVD(path, sourceURL string) (*Device, error) {
 func orderPeripherals(input []SVDPeripheral) []*SVDPeripheral {
 	var sortedPeripherals []*SVDPeripheral
 	var missingBasePeripherals []*SVDPeripheral
-	knownBasePeripherals := map[string]struct{}{}
+	knownPeripherals := map[string]struct{}{}
 	for i := range input {
 		p := &input[i]
-		groupName := p.GroupName
-		if groupName == "" {
-			groupName = p.Name
-		}
-		knownBasePeripherals[groupName] = struct{}{}
+		// Track by peripheral name since derivedFrom references names, not group names
+		knownPeripherals[p.Name] = struct{}{}
 		if p.DerivedFrom != "" {
-			if _, ok := knownBasePeripherals[p.DerivedFrom]; !ok {
+			if _, ok := knownPeripherals[p.DerivedFrom]; !ok {
 				missingBasePeripherals = append(missingBasePeripherals, p)
 				continue
 			}
