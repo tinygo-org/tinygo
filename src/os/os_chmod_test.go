@@ -15,8 +15,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-
-	"github.com/tinygo-org/tinygo/src/os"
 )
 
 func TestChmod(t *testing.T) {
@@ -88,8 +86,8 @@ func TestLchownErr(t *testing.T) {
 	f := newFile("TestLchown", t)
 	defer Remove(f.Name())
 	defer f.Close()
-	link := filepath.Join(os.TempDir(), "TestLchownLink")
-	_ = os.Symlink(f.Name(), link)
+	link := filepath.Join(TempDir(), "TestLchownLink")
+	_ = Symlink(f.Name(), link)
 	defer Remove(link)
 
 	// EACCES
