@@ -1,0 +1,14 @@
+{
+    "inherits": [
+        "rp2040"
+    ],
+    "serial-port": ["2e8a:0003"],
+    "default-stack-size": 8192,
+    "build-tags": ["vicharak_shrike_lite"],
+    "ldflags": [
+        "--defsym=__flash_size=4M"
+    ],
+    "extra-files": [
+        "targets/pico-boot-stage2.S"
+    ]
+}
