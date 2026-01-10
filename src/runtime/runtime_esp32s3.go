@@ -49,8 +49,22 @@ func main() {
 	// Change CPU frequency from 80MHz to 240MHz by setting SYSTEM_PLL_FREQ_SEL to
 	// 1 and SYSTEM_CPUPERIOD_SEL to 2 (see table "CPU Clock Frequency" in the
 	// reference manual).
+	// We do this gradually to allow PLL and system to stabilize.
 	esp.SYSTEM.SetCPU_PER_CONF_PLL_FREQ_SEL(1)
+
+	// First switch to 160MHz (intermediate step)
+	esp.SYSTEM.SetCPU_PER_CONF_CPUPERIOD_SEL(1)
+	// Small delay to let PLL stabilize at 160MHz
+	for i := 0; i < 1000; i++ {
+		_ = esp.SYSTEM.CPU_PER_CONF.Get()
+	}
+
+	// Now switch to 240MHz
 	esp.SYSTEM.SetCPU_PER_CONF_CPUPERIOD_SEL(2)
+	// Small delay to let PLL stabilize at 240MHz
+	for i := 0; i < 1000; i++ {
+		_ = esp.SYSTEM.CPU_PER_CONF.Get()
+	}
 
 	// Clear bss. Repeat many times while we wait for cpu/clock to stabilize
 	for x := 0; x < 30; x++ {
