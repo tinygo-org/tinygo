@@ -179,37 +179,10 @@ func (pwm PWM) SetPeriod(period uint64) error {
 
 	// Get current prescaler
 	prescaler := avr.TCCR1.Get() & 0x0f
-	switch prescaler {
-	case 1:
-		// no change
-	case 2:
-		top /= 2
-	case 3:
-		top /= 4
-	case 4:
-		top /= 8
-	case 5:
-		top /= 16
-	case 6:
-		top /= 32
-	case 7:
-		top /= 64
-	case 8:
-		top /= 128
-	case 9:
-		top /= 256
-	case 10:
-		top /= 512
-	case 11:
-		top /= 1024
-	case 12:
-		top /= 2048
-	case 13:
-		top /= 4096
-	case 14:
-		top /= 8192
-	case 15:
-		top /= 16384
+	// Timer1 prescaler values follow a power-of-2 pattern:
+	// prescaler n maps to divisor 2^(n-1), so we can use a simple shift
+	if prescaler > 0 && prescaler <= 15 {
+		top >>= (prescaler - 1)
 	}
 
 	if top > 256 {
@@ -250,6 +223,13 @@ func (pwm PWM) Counter() uint32 {
 	return 0
 }
 
+// Prescaler lookup tables using uint16 (more efficient than uint64 on AVR)
+// Timer0 prescaler lookup table (index 0-7 maps to prescaler bits)
+var timer0Prescalers = [8]uint16{0, 1, 8, 64, 256, 1024, 0, 0}
+
+// Timer1 prescaler lookup table (index 0-15 maps to prescaler bits)
+var timer1Prescalers = [16]uint16{0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384}
+
 // Period returns the used PWM period in nanoseconds. It might deviate slightly
 // from the configured period due to rounding.
 func (pwm PWM) Period() uint64 {
@@ -257,54 +237,14 @@ func (pwm PWM) Period() uint64 {
 	switch pwm.num {
 	case 0:
 		prescalerBits := avr.TCCR0B.Get() & 0x7
-		switch prescalerBits {
-		case 1:
-			prescaler = 1
-		case 2:
-			prescaler = 8
-		case 3:
-			prescaler = 64
-		case 4:
-			prescaler = 256
-		case 5:
-			prescaler = 1024
-		default:
+		prescaler = uint64(timer0Prescalers[prescalerBits])
+		if prescaler == 0 {
 			return 0
 		}
 	case 1:
 		prescalerBits := avr.TCCR1.Get() & 0x0f
-		switch prescalerBits {
-		case 1:
-			prescaler = 1
-		case 2:
-			prescaler = 2
-		case 3:
-			prescaler = 4
-		case 4:
-			prescaler = 8
-		case 5:
-			prescaler = 16
-		case 6:
-			prescaler = 32
-		case 7:
-			prescaler = 64
-		case 8:
-			prescaler = 128
-		case 9:
-			prescaler = 256
-		case 10:
-			prescaler = 512
-		case 11:
-			prescaler = 1024
-		case 12:
-			prescaler = 2048
-		case 13:
-			prescaler = 4096
-		case 14:
-			prescaler = 8192
-		case 15:
-			prescaler = 16384
-		default:
+		prescaler = uint64(timer1Prescalers[prescalerBits])
+		if prescaler == 0 {
 			return 0
 		}
 	}
