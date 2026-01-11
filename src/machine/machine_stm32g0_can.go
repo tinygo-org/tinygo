@@ -87,6 +87,7 @@ type FDCAN struct {
 type FDCANTransferRate uint32
 
 const (
+	FDCANTransferRate100kbps  FDCANTransferRate = 100000
 	FDCANTransferRate125kbps  FDCANTransferRate = 125000
 	FDCANTransferRate250kbps  FDCANTransferRate = 250000
 	FDCANTransferRate500kbps  FDCANTransferRate = 500000
@@ -112,7 +113,8 @@ type FDCANConfig struct {
 	Mode           FDCANMode
 	Tx             Pin
 	Rx             Pin
-	Standby        Pin // Optional standby pin for CAN transceiver (set to NoPin if not used)
+	Standby        Pin  // Optional standby pin for CAN transceiver (set to NoPin if not used)
+	EnableFD       bool // Enable FD mode for larger payloads (up to 64 bytes) and higher data rates
 }
 
 // FDCANTxBufferElement represents a transmit buffer element
@@ -178,9 +180,10 @@ func (can *FDCAN) Configure(config FDCANConfig) error {
 	// Enable FDCAN clock
 	enableFDCANClock()
 
-	// Configure TX and RX pins
-	config.Tx.ConfigureAltFunc(PinConfig{Mode: PinOutput}, can.TxAltFuncSelect)
-	config.Rx.ConfigureAltFunc(PinConfig{Mode: PinInputFloating}, can.RxAltFuncSelect)
+	// Configure TX and RX pins in Alternate Function Push-Pull mode (matches HAL GPIO_MODE_AF_PP)
+	// Use PinModePWMOutput which sets MODER to alternate function mode and calls SetAltFunc
+	config.Tx.ConfigureAltFunc(PinConfig{Mode: PinModePWMOutput}, can.TxAltFuncSelect)
+	config.Rx.ConfigureAltFunc(PinConfig{Mode: PinModePWMOutput}, can.RxAltFuncSelect)
 
 	// Exit from sleep mode
 	can.Bus.SetCCCR_CSR(0)
@@ -215,18 +218,26 @@ func (can *FDCAN) Configure(config FDCANConfig) error {
 		//can.Bus.CKDIV.Set(0) // No division
 	}
 
-	// Enable automatic retransmission
-	can.Bus.SetCCCR_DAR(0)
+	// Disable automatic retransmission (matches HAL behavior)
+	// DAR=1 means retransmission is disabled
+	can.Bus.SetCCCR_DAR(1)
 
 	// Disable transmit pause
 	can.Bus.SetCCCR_TXP(0)
 
-	// Enable protocol exception handling
-	can.Bus.SetCCCR_PXHD(0)
+	// Disable protocol exception handling (matches HAL PXHD=DISABLE)
+	can.Bus.SetCCCR_PXHD(1)
 
-	// Enable FD mode with bit rate switching
-	can.Bus.SetCCCR_FDOE(1)
-	can.Bus.SetCCCR_BRSE(1)
+	// Configure FD mode
+	if config.EnableFD {
+		// Enable FD mode for larger payloads (up to 64 bytes) and bit rate switching
+		can.Bus.SetCCCR_FDOE(1) // Enable FD operation
+		can.Bus.SetCCCR_BRSE(1) // Enable bit rate switching for data phase
+	} else {
+		// Classic CAN frame format (matches HAL FDCAN_FRAME_CLASSIC)
+		can.Bus.SetCCCR_FDOE(0)
+		can.Bus.SetCCCR_BRSE(0)
+	}
 
 	// Configure operating mode
 	can.Bus.SetCCCR_TEST(0)
@@ -577,32 +588,40 @@ func (can *FDCAN) configureMessageRAM() {
 		*(*uint32)(unsafe.Pointer(addr)) = 0
 	}
 
-	// Configure filter counts (using RXGFC register)
-	// LSS = number of standard filters, LSE = number of extended filters
-	rxgfc := can.Bus.RXGFC.Get()
-	rxgfc &= ^uint32(0xFF000000)            // Clear LSS and LSE
-	rxgfc |= (sramcanFLSNbr << 24)          // Standard filters
-	rxgfc |= (sramcanFLENbr << 24) & 0xFF00 // Extended filters (shifted)
+	// Configure RXGFC register (matches HAL)
+	// LSS[4:0] at bits 20:16 = number of standard filters (use 1 like HAL)
+	// LSE[3:0] at bits 27:24 = number of extended filters (use 0 like HAL)
+	// ANFS[1:0] at bits 5:4 = Accept Non-matching Frames Standard (0 = accept to RxFIFO0)
+	// ANFE[1:0] at bits 3:2 = Accept Non-matching Frames Extended (0 = accept to RxFIFO0)
+	rxgfc := uint32(1 << 16) // LSS = 1 standard filter
 	can.Bus.RXGFC.Set(rxgfc)
+
+	// Configure TX buffer for FIFO mode (matches HAL: FDCAN_TX_FIFO_OPERATION)
+	// TFQM bit 24 = 0 for FIFO mode
+	can.Bus.TXBC.Set(0)
 }
 
 func (can *FDCAN) calculateNominalBitTiming(rate FDCANTransferRate) (brp, tseg1, tseg2, sjw uint32, err error) {
 	// STM32G0 FDCAN clock = 64MHz
 	// Target: 80% sample point
 	// Bit time = (1 + TSEG1 + TSEG2) time quanta
+	// SJW = 1 to match HAL configuration
 	switch rate {
+	case FDCANTransferRate100kbps:
+		// 64MHz / 40 = 1.6MHz, 16 tq per bit = 100kbps
+		return 40, 13, 2, 1, nil
 	case FDCANTransferRate125kbps:
 		// 64MHz / 32 = 2MHz, 16 tq per bit = 125kbps
-		return 32, 13, 2, 4, nil
+		return 32, 13, 2, 1, nil
 	case FDCANTransferRate250kbps:
 		// 64MHz / 16 = 4MHz, 16 tq per bit = 250kbps
-		return 16, 13, 2, 4, nil
+		return 16, 13, 2, 1, nil
 	case FDCANTransferRate500kbps:
 		// 64MHz / 8 = 8MHz, 16 tq per bit = 500kbps
-		return 8, 13, 2, 4, nil
+		return 8, 13, 2, 1, nil
 	case FDCANTransferRate1000kbps:
 		// 64MHz / 4 = 16MHz, 16 tq per bit = 1Mbps
-		return 4, 13, 2, 4, nil
+		return 4, 13, 2, 1, nil
 	default:
 		return 0, 0, 0, 0, errFDCANInvalidTransferRate
 	}
@@ -612,6 +631,8 @@ func (can *FDCAN) calculateDataBitTiming(rate FDCANTransferRate) (brp, tseg1, ts
 	// STM32G0 FDCAN clock = 64MHz
 	// For data phase, we need higher bit rates
 	switch rate {
+	case FDCANTransferRate100kbps:
+		return 40, 13, 2, 4, nil
 	case FDCANTransferRate125kbps:
 		return 32, 13, 2, 4, nil
 	case FDCANTransferRate250kbps:
@@ -706,6 +727,12 @@ func (e *FDCANRxBufferElement) Length() byte {
 
 // enableFDCANClock enables the FDCAN peripheral clock
 func enableFDCANClock() {
-	// FDCAN clock is on APB1
+	// Select PCLK1 as FDCAN clock source (matches HAL: RCC_FDCANCLKSOURCE_PCLK1)
+	// FDCANSEL[1:0] = 00 in RCC_CCIPR2
+	ccipr2 := stm32.RCC.CCIPR2.Get()
+	ccipr2 &= ^uint32(0x3 << 8) // Clear FDCANSEL bits
+	stm32.RCC.CCIPR2.Set(ccipr2)
+
+	// Enable FDCAN peripheral clock on APB1
 	stm32.RCC.SetAPBENR1_FDCANEN(1)
 }

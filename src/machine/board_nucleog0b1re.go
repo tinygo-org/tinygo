@@ -71,10 +71,10 @@ const (
 	SPI0_SDO_PIN = SPI1_SDO_PIN
 
 	// CAN pins (directly accessible on Nucleo-G0B1RE board)
-	// FDCAN1: PA11 (TX) / PA12 (RX) using AF9
+	// FDCAN1: PA12 (TX) / PA11 (RX) using AF3
 	// FDCAN2: PD12 (TX) / PD13 (RX) using AF3
-	CAN1_TX_PIN = PA11
-	CAN1_RX_PIN = PA12
+	CAN1_TX_PIN = PA12
+	CAN1_RX_PIN = PA11
 	CAN2_TX_PIN = PD12
 	CAN2_RX_PIN = PD13
 )
@@ -105,12 +105,12 @@ var (
 	}
 	SPI0 = SPI1
 
-	// FDCAN1 on PA11 (TX) / PA12 (RX)
+	// FDCAN1 on PA12 (TX) / PA11 (RX)
 	CAN1  = &_CAN1
 	_CAN1 = FDCAN{
 		Bus:             stm32.FDCAN1,
-		TxAltFuncSelect: AF9_FDCAN1_FDCAN2,
-		RxAltFuncSelect: AF9_FDCAN1_FDCAN2,
+		TxAltFuncSelect: AF3_FDCAN1_FDCAN2,
+		RxAltFuncSelect: AF3_FDCAN1_FDCAN2,
 		instance:        0,
 	}
 
