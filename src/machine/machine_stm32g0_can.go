@@ -197,7 +197,7 @@ var dlcToBytes = [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64}
 func (can *FDCAN) Configure(config FDCANConfig) error {
 	// Configure standby pin if specified (for CAN transceivers with standby control)
 	// Setting it low enables the transceiver
-	if config.Standby != NoPin {
+	if config.Standby != NoPin && config.Standby != 0 {
 		config.Standby.Configure(PinConfig{Mode: PinOutput})
 		config.Standby.Low()
 	}
