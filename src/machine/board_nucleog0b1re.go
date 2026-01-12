@@ -126,6 +126,16 @@ var (
 
 func init() {
 	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2_LPUART2, _UART1.handleInterrupt)
-	// Note: FDCAN interrupts share with USB (IRQ_UCPD1_UCPD2_USB = 8)
-	// User should configure interrupts via SetInterrupt method if needed
+
+	// FDCAN interrupts - TIM16 is shared with FDCAN IT0, TIM17 with FDCAN IT1
+	CAN1.Interrupt = interrupt.New(stm32.IRQ_TIM16, fdcan1HandleInterrupt)
+	CAN2.Interrupt = interrupt.New(stm32.IRQ_TIM16, fdcan1HandleInterrupt) // Both share IT0
+}
+
+func fdcan1HandleInterrupt(interrupt.Interrupt) {
+	fdcanHandleInterrupt(0)
+}
+
+func fdcan2HandleInterrupt(interrupt.Interrupt) {
+	fdcanHandleInterrupt(1)
 }
