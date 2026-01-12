@@ -259,10 +259,7 @@ func (i2c *I2C) init(config I2CConfig) error {
 //go:inline
 func (i2c *I2C) reset() {
 	resetVal := i2c.deinit()
-	rp.RESETS.RESET.ClearBits(resetVal)
-	// Wait until reset is done.
-	for !rp.RESETS.RESET_DONE.HasBits(resetVal) {
-	}
+	unresetBlockWait(resetVal)
 }
 
 // deinit sets reset bit for I2C. Must call reset to reenable I2C after deinit.
@@ -276,7 +273,7 @@ func (i2c *I2C) deinit() (resetVal uint32) {
 		resetVal = rp.RESETS_RESET_I2C1
 	}
 	// Perform I2C reset.
-	rp.RESETS.RESET.SetBits(resetVal)
+	resetBlock(resetVal)
 
 	return resetVal
 }

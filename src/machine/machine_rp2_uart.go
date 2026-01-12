@@ -148,10 +148,8 @@ func initUART(uart *UART) {
 	}
 
 	// reset UART
-	rp.RESETS.RESET.SetBits(resetVal)
-	rp.RESETS.RESET.ClearBits(resetVal)
-	for !rp.RESETS.RESET_DONE.HasBits(resetVal) {
-	}
+	resetBlock(resetVal)
+	unresetBlockWait(resetVal)
 }
 
 // handleInterrupt should be called from the appropriate interrupt handler for

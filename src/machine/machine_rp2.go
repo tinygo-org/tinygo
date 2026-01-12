@@ -49,15 +49,10 @@ func machineInit() {
 	bits := ^uint32(initDontReset)
 	resetBlock(bits)
 
-	// Remove reset from peripherals which are clocked only by clkSys and
-	// clkRef. Other peripherals stay in reset until we've configured clocks.
-	bits = ^uint32(initUnreset)
-	unresetBlockWait(bits)
-
 	clocks.init()
 
 	// Peripheral clocks should now all be running
-	unresetBlockWait(RESETS_RESET_Msk)
+	unresetBlockWait(initUnreset)
 
 	// DBGPAUSE pauses the timer when a debugger is connected. This prevents
 	// sleep functions from ever returning, so disable it.

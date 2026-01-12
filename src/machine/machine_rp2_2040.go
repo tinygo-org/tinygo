@@ -15,13 +15,8 @@ const (
 	_NUMIRQ          = 32
 	rp2350ExtraReg   = 0
 	RESETS_RESET_Msk = 0x01ffffff
-	initUnreset      = rp.RESETS_RESET_ADC |
-		rp.RESETS_RESET_RTC |
-		rp.RESETS_RESET_SPI0 |
-		rp.RESETS_RESET_SPI1 |
-		rp.RESETS_RESET_UART0 |
-		rp.RESETS_RESET_UART1 |
-		rp.RESETS_RESET_USBCTRL
+	initUnreset      = rp.RESETS_RESET_IO_BANK0 |
+		rp.RESETS_RESET_TIMER
 	initDontReset = rp.RESETS_RESET_IO_QSPI |
 		rp.RESETS_RESET_PADS_QSPI |
 		rp.RESETS_RESET_PLL_USB |

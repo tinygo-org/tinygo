@@ -16,12 +16,8 @@ const (
 	_NUMIRQ          = 51
 	notimpl          = "rp2350: not implemented"
 	RESETS_RESET_Msk = 0x1fffffff
-	initUnreset      = rp.RESETS_RESET_ADC |
-		rp.RESETS_RESET_SPI0 |
-		rp.RESETS_RESET_SPI1 |
-		rp.RESETS_RESET_UART0 |
-		rp.RESETS_RESET_UART1 |
-		rp.RESETS_RESET_USBCTRL
+	initUnreset      = rp.RESETS_RESET_IO_BANK0 |
+		rp.RESETS_RESET_TIMER0
 	initDontReset = rp.RESETS_RESET_USBCTRL |
 		rp.RESETS_RESET_SYSCFG |
 		rp.RESETS_RESET_PLL_USB |

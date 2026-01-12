@@ -19,10 +19,10 @@ var adcAref uint32
 
 // InitADC resets the ADC peripheral.
 func InitADC() {
-	rp.RESETS.RESET.SetBits(rp.RESETS_RESET_ADC)
-	rp.RESETS.RESET.ClearBits(rp.RESETS_RESET_ADC)
-	for !rp.RESETS.RESET_DONE.HasBits(rp.RESETS_RESET_ADC) {
-	}
+	// reset ADC controller
+	resetBlock(rp.RESETS_RESET_ADC)
+	unresetBlockWait(rp.RESETS_RESET_ADC)
+
 	// enable ADC
 	rp.ADC.CS.Set(rp.ADC_CS_EN)
 	adcAref = 3300
