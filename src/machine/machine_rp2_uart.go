@@ -73,6 +73,27 @@ func (uart *UART) Configure(config UARTConfig) error {
 	return nil
 }
 
+// Close the UART and disable its interrupt/power use.
+func (uart *UART) Close() error {
+	uart.Interrupt.Disable()
+
+	// Disable UART.
+	uart.Bus.UARTCR.ClearBits(rp.UART0_UARTCR_UARTEN)
+
+	var resetVal uint32
+	switch {
+	case uart.Bus == rp.UART0:
+		resetVal = rp.RESETS_RESET_UART0
+	case uart.Bus == rp.UART1:
+		resetVal = rp.RESETS_RESET_UART1
+	}
+
+	// reset UART
+	resetBlock(resetVal)
+
+	return nil
+}
+
 // SetBaudRate sets the baudrate to be used for the UART.
 func (uart *UART) SetBaudRate(br uint32) {
 	div := 8 * CPUFrequency() / br
