@@ -212,10 +212,7 @@ func (spi *SPI) setFormat(mode uint8) {
 //go:inline
 func (spi *SPI) reset() {
 	resetVal := spi.deinit()
-	rp.RESETS.RESET.ClearBits(resetVal)
-	// Wait until reset is done.
-	for !rp.RESETS.RESET_DONE.HasBits(resetVal) {
-	}
+	unresetBlockWait(resetVal)
 }
 
 //go:inline
@@ -227,7 +224,7 @@ func (spi *SPI) deinit() (resetVal uint32) {
 		resetVal = rp.RESETS_RESET_SPI1
 	}
 	// Perform SPI reset.
-	rp.RESETS.RESET.SetBits(resetVal)
+	resetBlock(resetVal)
 	return resetVal
 }
 
