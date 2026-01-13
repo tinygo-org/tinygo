@@ -5,6 +5,7 @@ package machine
 import (
 	"device/avr"
 	"runtime/volatile"
+	"unsafe"
 )
 
 const (
@@ -374,4 +375,114 @@ func (pwm PWM) Set(channel uint8, value uint32) {
 			}
 		}
 	}
+}
+
+// SPIConfig is used to store config info for SPI.
+type SPIConfig struct {
+	Frequency uint32
+	LSBFirst  bool
+	Mode      uint8
+}
+
+// SPI is the USI-based SPI implementation for ATTiny85
+// The ATTiny85 doesn't have dedicated SPI hardware, but uses the USI (Universal Serial Interface)
+// which can be configured to work as SPI in "Three-wire mode"
+type SPI struct {
+	// USI registers
+	usidr *volatile.Register8 // Data Register
+	usisr *volatile.Register8 // Status Register
+	usicr *volatile.Register8 // Control Register
+
+	// The io pins for the USI-SPI
+	// Note: Pin mapping is different from ISP programming pins
+	sck Pin // PB2 (USCK) - Clock
+	sdo Pin // PB1 (DO) - MOSI (Master Out Slave In)
+	sdi Pin // PB0 (DI) - MISO (Master In Slave Out)
+	cs  Pin // User-defined CS pin (USI doesn't manage CS)
+}
+
+// SPI0 is the USI-based SPI interface on the ATTiny85
+var SPI0 = &SPI{
+	usidr: avr.USIDR,
+	usisr: avr.USISR,
+	usicr: avr.USICR,
+
+	sck: PB2, // USCK
+	sdo: PB1, // DO (MOSI)
+	sdi: PB0, // DI (MISO)
+	cs:  PB3, // Default CS pin (can be any available pin)
+}
+
+// Configure sets up the USI for SPI communication
+func (s *SPI) Configure(config SPIConfig) error {
+	// Validate configuration - check that USI registers are set
+	if s.usicr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) ||
+		s.usisr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) ||
+		s.usidr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) {
+		return errSPIInvalidMachineConfig
+	}
+
+	// Configure pins
+	// PB1 (DO/MOSI) -> OUTPUT
+	// PB2 (USCK/SCK) -> OUTPUT
+	// PB0 (DI/MISO) -> INPUT with pull-up
+	s.sdo.Configure(PinConfig{Mode: PinOutput})
+	s.sck.Configure(PinConfig{Mode: PinOutput})
+	s.sdi.Configure(PinConfig{Mode: PinInput})
+
+	// Enable pull-up on MISO (PB0) for better signal integrity
+	avr.PORTB.SetBits(1 << uint8(s.sdi))
+
+	// Configure CS pin - prevent glitches by setting HIGH first
+	s.cs.High()
+	s.cs.Configure(PinConfig{Mode: PinOutput})
+
+	// Reset USI data register
+	s.usidr.Set(0)
+	s.usisr.Set(0)
+
+	// Configure USI for SPI mode:
+	// - USIWM0: Three-wire mode (SPI)
+	// - USICS1: External clock source (software controlled via USITC)
+	// - USICLK: Clock strobe - enables counter increment on USITC toggle
+	//
+	// Note: ATTiny85 USI doesn't have configurable frequency dividers like dedicated SPI hardware
+	// The SPI clock speed is determined by how fast the software toggles the clock
+	// For now, we'll ignore the Frequency parameter as it runs at maximum software speed
+	//
+	// Note: LSBFirst and Mode configurations are not directly supported by USI
+	// These would need to be implemented in software if required
+	// For now, we use the standard MSB-first, Mode 0 (CPOL=0, CPHA=0)
+	s.usicr.Set(avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK)
+
+	return nil
+}
+
+// Transfer performs a single byte SPI transfer (send and receive simultaneously)
+// This implements the USI-based SPI transfer using the "clock strobing" technique
+func (s *SPI) Transfer(b byte) (byte, error) {
+	// Load the byte to transmit into the USI Data Register
+	s.usidr.Set(b)
+
+	// Clear the counter overflow flag by writing 1 to it (AVR quirk)
+	// This also resets the 4-bit counter to 0
+	s.usisr.Set(avr.USISR_USIOIF)
+
+	// Clock the data out/in
+	// We need 16 clock toggles (8 bits × 2 edges per bit)
+	// The USI counter counts each clock edge, so it overflows at 16
+	//
+	// IMPORTANT: Only toggle USITC here, not USICLK!
+	// - USITC toggles the clock pin
+	// - With USICS1 set (software clock strobe mode), the data shifts on clock edges
+	// - USICLK is a separate strobe that would cause extra shifts if set here
+	//
+	// The USICR register was configured in Configure() with USIWM0 | USICS1 | USICLK.
+	// We use SetBits to preserve that configuration and only toggle USITC.
+	for !s.usisr.HasBits(avr.USISR_USIOIF) {
+		s.usicr.SetBits(avr.USICR_USITC)
+	}
+
+	// After 8 bits are transferred, return the received byte
+	return s.usidr.Get(), nil
 }
