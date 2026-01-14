@@ -380,14 +380,18 @@ func (spi *SPI) Tx(w, r []byte) error {
 	return nil
 }
 
-// Compute the SPI bus frequency from the CPU frequency.
+// Compute the SPI bus frequency from the APB clock frequency.
+// Note: APB clock is always 80MHz on ESP32-S3, independent of CPU frequency.
 // Ported from ESP32-C3 implementation for better accuracy.
 func freqToClockDiv(hz uint32) uint32 {
-	fcpu, _ := GetCPUFrequency()
-	if hz >= fcpu { // maximum frequency
+	// Use APB clock frequency (80MHz), not CPU frequency!
+	// SPI peripheral is connected to APB bus which stays at 80MHz
+	const apbFreq = pplClockFreq // 80MHz
+	
+	if hz >= apbFreq { // maximum frequency
 		return 1 << 31
 	}
-	if hz < (fcpu / (16 * 64)) { // minimum frequency
+	if hz < (apbFreq / (16 * 64)) { // minimum frequency
 		return 15<<18 | 63<<12 | 31<<6 | 63 // pre=15, n=63
 	}
 
@@ -397,7 +401,7 @@ func freqToClockDiv(hz uint32) uint32 {
 	var bestPre, bestN, bestErr uint32
 	bestN = 1
 	bestErr = 0xffffffff
-	q := uint32(float32(pplClockFreq)/float32(hz) + float32(0.5))
+	q := uint32(float32(apbFreq)/float32(hz) + float32(0.5))
 	for p := uint32(0); p < 16; p++ {
 		n := q/(p+1) - 1
 		if n < 1 { // prescaler became too large, stop enum
@@ -407,7 +411,7 @@ func freqToClockDiv(hz uint32) uint32 {
 			continue
 		}
 
-		freq := fcpu / ((p + 1) * (n + 1))
+		freq := apbFreq / ((p + 1) * (n + 1))
 		if freq == hz { // exact match
 			return p<<18 | n<<12 | (n/2)<<6 | n
 		}
