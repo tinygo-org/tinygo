@@ -577,14 +577,38 @@ var basicTypeNames = [...]string{
 	types.UnsafePointer: "unsafe.Pointer",
 }
 
+// return an integer representing this scope in a package.
+func scopeID(pkg *types.Scope, scope *types.Scope) string {
+	var ids []int
+	for scope != pkg {
+		parent := scope.Parent()
+		for i := range parent.NumChildren() {
+			if parent.Child(i) == scope {
+				ids = append(ids, i)
+				scope = scope.Parent()
+				break
+			}
+		}
+	}
+
+	var buf []byte
+	for _, v := range ids {
+		buf = strconv.AppendInt(buf, int64(v), 10)
+		buf = append(buf, ':')
+	}
+
+	return string(buf)
+}
+
 // getTypeCodeName returns a name for this type that can be used in the
 // interface lowering pass to assign type codes as expected by the reflect
 // package. See getTypeCodeNum.
 func getTypeCodeName(t types.Type) (string, bool) {
 	switch t := types.Unalias(t).(type) {
 	case *types.Named:
-		if t.Obj().Parent() != t.Obj().Pkg().Scope() {
-			return "named:" + t.String() + "$local", true
+		parent, pkg := t.Obj().Parent(), t.Obj().Pkg().Scope()
+		if parent != pkg {
+			return fmt.Sprintf("named:%s$local:%s", t.String(), scopeID(pkg, parent)), true
 		}
 		return "named:" + t.String(), false
 	case *types.Array:

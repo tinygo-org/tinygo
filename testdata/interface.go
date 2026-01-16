@@ -119,6 +119,10 @@ func main() {
 
 	// check that type asserts to interfaces with no methods work
 	emptyintfcrash()
+
+	// These are part of a test that checks that `main.Foo` can refer to 2+ different entities without getting them confused.
+	namedFoo()
+	namedFoo2Nested()
 }
 
 func printItf(val interface{}) {
@@ -342,4 +346,38 @@ func emptyintfcrash() {
 	if x, ok := any(5).(any); ok {
 		println("x is", x.(int))
 	}
+}
+
+func namedFoo() {
+	type Foo struct {
+		A int
+	}
+	f1 := &Foo{}
+	fcopy := copyOf(f1)
+	f2 := fcopy.(*Foo)
+	println(f2.A)
+}
+
+func namedFoo2Nested() {
+	type Foo struct {
+		A *int
+	}
+	f1 := &Foo{}
+	fcopy := copyOf(f1)
+	f2 := fcopy.(*Foo)
+	println(f2.A == nil)
+
+	if f2.A == nil {
+		type Foo struct {
+			A *byte
+		}
+		nestedf1 := &Foo{}
+		fcopy := copyOf(nestedf1)
+		nestedf2 := fcopy.(*Foo)
+		println(nestedf2.A == nil)
+	}
+}
+
+func copyOf(src interface{}) (dst interface{}) {
+	return src
 }
