@@ -402,6 +402,9 @@ type SPI struct {
 
 	// Delay cycles for frequency control (0 = max speed)
 	delayCycles uint16
+
+	// USICR value configured for the selected SPI mode
+	usicrValue uint8
 }
 
 // SPI0 is the USI-based SPI interface on the ATTiny85
@@ -448,7 +451,35 @@ func (s *SPI) Configure(config SPIConfig) error {
 	// - USIWM0: Three-wire mode (SPI)
 	// - USICS1: External clock source (software controlled via USITC)
 	// - USICLK: Clock strobe - enables counter increment on USITC toggle
-	s.usicr.Set(avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK)
+	// - USICS0: Controls clock phase (CPHA)
+	//
+	// SPI Modes:
+	//   Mode 0 (CPOL=0, CPHA=0): Clock idle low, sample on rising edge
+	//   Mode 1 (CPOL=0, CPHA=1): Clock idle low, sample on falling edge
+	//   Mode 2 (CPOL=1, CPHA=0): Clock idle high, sample on falling edge
+	//   Mode 3 (CPOL=1, CPHA=1): Clock idle high, sample on rising edge
+	//
+	// For USI, USICS0 controls the sampling edge when USICS1=1:
+	//   USICS0=0: Positive edge (rising)
+	//   USICS0=1: Negative edge (falling)
+	switch config.Mode {
+	case Mode0: // CPOL=0, CPHA=0: idle low, sample rising
+		s.sck.Low()
+		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK
+	case Mode1: // CPOL=0, CPHA=1: idle low, sample falling
+		s.sck.Low()
+		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICS0 | avr.USICR_USICLK
+	case Mode2: // CPOL=1, CPHA=0: idle high, sample falling
+		s.sck.High()
+		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICS0 | avr.USICR_USICLK
+	case Mode3: // CPOL=1, CPHA=1: idle high, sample rising
+		s.sck.High()
+		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK
+	default: // Default to Mode 0
+		s.sck.Low()
+		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK
+	}
+	s.usicr.Set(s.usicrValue)
 
 	// Calculate delay cycles for frequency control
 	// Each bit transfer requires 2 clock toggles (rising + falling edge)
@@ -469,9 +500,8 @@ func (s *SPI) Configure(config SPIConfig) error {
 		s.delayCycles = 0
 	}
 
-	// Note: LSBFirst and Mode configurations are not directly supported by USI
-	// These would need to be implemented in software if required
-	// For now, we use the standard MSB-first, Mode 0 (CPOL=0, CPHA=0)
+	// Note: LSBFirst is not directly supported by USI hardware
+	// It would need to be implemented in software if required
 
 	return nil
 }
@@ -489,14 +519,12 @@ func (s *SPI) Transfer(b byte) (byte, error) {
 	// Clock the data out/in
 	// We need 16 clock toggles (8 bits × 2 edges per bit)
 	// The USI counter counts each clock edge, so it overflows at 16
+	// After 16 toggles, the clock returns to its idle state (set by CPOL in Configure)
 	//
-	// IMPORTANT: Only toggle USITC here, not USICLK!
+	// IMPORTANT: Only toggle USITC here!
 	// - USITC toggles the clock pin
-	// - With USICS1 set (software clock strobe mode), the data shifts on clock edges
-	// - USICLK is a separate strobe that would cause extra shifts if set here
-	//
-	// The USICR register was configured in Configure() with USIWM0 | USICS1 | USICLK.
-	// We use SetBits to preserve that configuration and only toggle USITC.
+	// - The USICR mode bits (USIWM0, USICS1, USICS0, USICLK) were set in Configure()
+	// - SetBits preserves those bits and only sets USITC
 	if s.delayCycles == 0 {
 		// Fast path: no delay, run at maximum speed
 		for !s.usisr.HasBits(avr.USISR_USIOIF) {
