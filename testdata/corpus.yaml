@@ -289,3 +289,6 @@
 - repo: github.com/philhofer/fwd
 - repo: github.com/blevesearch/sear
 - repo: github.com/steveyen/gtreap
+- repo: github.com/orsinium-labs/tinymath
+- repo: github.com/orsinium-labs/jsony
+- repo: github.com/tidwall/gjson
