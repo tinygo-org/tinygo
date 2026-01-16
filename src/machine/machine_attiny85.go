@@ -405,6 +405,9 @@ type SPI struct {
 
 	// USICR value configured for the selected SPI mode
 	usicrValue uint8
+
+	// LSB-first mode (requires software bit reversal)
+	lsbFirst bool
 }
 
 // SPI0 is the USI-based SPI interface on the ATTiny85
@@ -500,15 +503,30 @@ func (s *SPI) Configure(config SPIConfig) error {
 		s.delayCycles = 0
 	}
 
-	// Note: LSBFirst is not directly supported by USI hardware
-	// It would need to be implemented in software if required
+	// Store LSBFirst setting for use in Transfer
+	s.lsbFirst = config.LSBFirst
 
 	return nil
+}
+
+// reverseByte reverses the bit order of a byte (MSB <-> LSB)
+// Used for LSB-first SPI mode since USI hardware only supports MSB-first
+func reverseByte(b byte) byte {
+	b = (b&0xF0)>>4 | (b&0x0F)<<4
+	b = (b&0xCC)>>2 | (b&0x33)<<2
+	b = (b&0xAA)>>1 | (b&0x55)<<1
+	return b
 }
 
 // Transfer performs a single byte SPI transfer (send and receive simultaneously)
 // This implements the USI-based SPI transfer using the "clock strobing" technique
 func (s *SPI) Transfer(b byte) (byte, error) {
+	// For LSB-first mode, reverse the bits before sending
+	// USI hardware only supports MSB-first, so we do it in software
+	if s.lsbFirst {
+		b = reverseByte(b)
+	}
+
 	// Load the byte to transmit into the USI Data Register
 	s.usidr.Set(b)
 
@@ -542,6 +560,13 @@ func (s *SPI) Transfer(b byte) (byte, error) {
 		}
 	}
 
-	// After 8 bits are transferred, return the received byte
-	return s.usidr.Get(), nil
+	// Get the received byte
+	result := s.usidr.Get()
+
+	// For LSB-first mode, reverse the received bits
+	if s.lsbFirst {
+		result = reverseByte(result)
+	}
+
+	return result, nil
 }
