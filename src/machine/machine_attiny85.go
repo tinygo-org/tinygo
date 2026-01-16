@@ -399,6 +399,9 @@ type SPI struct {
 	sdo Pin // PB1 (DO) - MOSI (Master Out Slave In)
 	sdi Pin // PB0 (DI) - MISO (Master In Slave Out)
 	cs  Pin // User-defined CS pin (USI doesn't manage CS)
+
+	// Delay cycles for frequency control (0 = max speed)
+	delayCycles uint16
 }
 
 // SPI0 is the USI-based SPI interface on the ATTiny85
@@ -445,15 +448,30 @@ func (s *SPI) Configure(config SPIConfig) error {
 	// - USIWM0: Three-wire mode (SPI)
 	// - USICS1: External clock source (software controlled via USITC)
 	// - USICLK: Clock strobe - enables counter increment on USITC toggle
-	//
-	// Note: ATTiny85 USI doesn't have configurable frequency dividers like dedicated SPI hardware
-	// The SPI clock speed is determined by how fast the software toggles the clock
-	// For now, we'll ignore the Frequency parameter as it runs at maximum software speed
-	//
+	s.usicr.Set(avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK)
+
+	// Calculate delay cycles for frequency control
+	// Each bit transfer requires 2 clock toggles (rising + falling edge)
+	// The loop overhead is approximately 10-15 cycles per toggle on AVR
+	// We calculate additional delay cycles needed to achieve the target frequency
+	if config.Frequency > 0 && config.Frequency < CPUFrequency()/2 {
+		// Cycles per half-period = CPUFrequency / (2 * Frequency)
+		// Subtract loop overhead (~15 cycles) to get delay cycles
+		cyclesPerHalfPeriod := CPUFrequency() / (2 * config.Frequency)
+		const loopOverhead = 15
+		if cyclesPerHalfPeriod > loopOverhead {
+			s.delayCycles = uint16(cyclesPerHalfPeriod - loopOverhead)
+		} else {
+			s.delayCycles = 0
+		}
+	} else {
+		// Max speed - no delay
+		s.delayCycles = 0
+	}
+
 	// Note: LSBFirst and Mode configurations are not directly supported by USI
 	// These would need to be implemented in software if required
 	// For now, we use the standard MSB-first, Mode 0 (CPOL=0, CPHA=0)
-	s.usicr.Set(avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK)
 
 	return nil
 }
@@ -479,8 +497,21 @@ func (s *SPI) Transfer(b byte) (byte, error) {
 	//
 	// The USICR register was configured in Configure() with USIWM0 | USICS1 | USICLK.
 	// We use SetBits to preserve that configuration and only toggle USITC.
-	for !s.usisr.HasBits(avr.USISR_USIOIF) {
-		s.usicr.SetBits(avr.USICR_USITC)
+	if s.delayCycles == 0 {
+		// Fast path: no delay, run at maximum speed
+		for !s.usisr.HasBits(avr.USISR_USIOIF) {
+			s.usicr.SetBits(avr.USICR_USITC)
+		}
+	} else {
+		// Frequency-controlled path: add delay between clock toggles
+		for !s.usisr.HasBits(avr.USISR_USIOIF) {
+			s.usicr.SetBits(avr.USICR_USITC)
+			// Delay loop for frequency control
+			// Each iteration is approximately 3 cycles on AVR (dec, brne)
+			for i := s.delayCycles; i > 0; i-- {
+				avr.Asm("nop")
+			}
+		}
 	}
 
 	// After 8 bits are transferred, return the received byte
