@@ -387,7 +387,7 @@ func freqToClockDiv(hz uint32) uint32 {
 	// Use APB clock frequency (80MHz), not CPU frequency!
 	// SPI peripheral is connected to APB bus which stays at 80MHz
 	const apbFreq = pplClockFreq // 80MHz
-	
+
 	if hz >= apbFreq { // maximum frequency
 		return 1 << 31
 	}
