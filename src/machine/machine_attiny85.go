@@ -5,7 +5,6 @@ package machine
 import (
 	"device/avr"
 	"runtime/volatile"
-	"unsafe"
 )
 
 const (
@@ -384,189 +383,75 @@ type SPIConfig struct {
 	Mode      uint8
 }
 
-// SPI is the USI-based SPI implementation for ATTiny85
-// The ATTiny85 doesn't have dedicated SPI hardware, but uses the USI (Universal Serial Interface)
-// which can be configured to work as SPI in "Three-wire mode"
+// SPI is the USI-based SPI implementation for ATTiny85.
+// The ATTiny85 doesn't have dedicated SPI hardware, but uses the USI
+// (Universal Serial Interface) in three-wire mode.
+//
+// Fixed pin mapping (directly controlled by USI hardware):
+//   - PB2: SCK (clock)
+//   - PB1: DO/MOSI (data out)
+//   - PB0: DI/MISO (data in)
+//
+// Note: CS pin must be managed by the user.
 type SPI struct {
-	// USI registers
-	usidr *volatile.Register8 // Data Register
-	usisr *volatile.Register8 // Status Register
-	usicr *volatile.Register8 // Control Register
-
-	// The io pins for the USI-SPI
-	// Note: Pin mapping is different from ISP programming pins
-	sck Pin // PB2 (USCK) - Clock
-	sdo Pin // PB1 (DO) - MOSI (Master Out Slave In)
-	sdi Pin // PB0 (DI) - MISO (Master In Slave Out)
-	cs  Pin // User-defined CS pin (USI doesn't manage CS)
-
-	// Delay cycles for frequency control (0 = max speed)
-	delayCycles uint16
-
-	// USICR value configured for the selected SPI mode
+	// Single byte stores USICR configuration value
 	usicrValue uint8
-
-	// LSB-first mode (requires software bit reversal)
-	lsbFirst bool
 }
 
 // SPI0 is the USI-based SPI interface on the ATTiny85
-var SPI0 = &SPI{
-	usidr: avr.USIDR,
-	usisr: avr.USISR,
-	usicr: avr.USICR,
+var SPI0 = SPI{}
 
-	sck: PB2, // USCK
-	sdo: PB1, // DO (MOSI)
-	sdi: PB0, // DI (MISO)
-	cs:  PB3, // Default CS pin (can be any available pin)
-}
-
-// Configure sets up the USI for SPI communication
-func (s *SPI) Configure(config SPIConfig) error {
-	// Validate configuration - check that USI registers are set
-	if s.usicr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) ||
-		s.usisr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) ||
-		s.usidr == (*volatile.Register8)(unsafe.Pointer(uintptr(0))) {
-		return errSPIInvalidMachineConfig
-	}
-
-	// Configure pins
+// Configure sets up the USI for SPI communication.
+// Note: The user must configure and control the CS pin separately.
+func (spi *SPI) Configure(config SPIConfig) error {
+	// Configure USI pins (directly, not via struct fields)
 	// PB1 (DO/MOSI) -> OUTPUT
 	// PB2 (USCK/SCK) -> OUTPUT
-	// PB0 (DI/MISO) -> INPUT with pull-up
-	s.sdo.Configure(PinConfig{Mode: PinOutput})
-	s.sck.Configure(PinConfig{Mode: PinOutput})
-	s.sdi.Configure(PinConfig{Mode: PinInput})
+	// PB0 (DI/MISO) -> INPUT
+	PB1.Configure(PinConfig{Mode: PinOutput})
+	PB2.Configure(PinConfig{Mode: PinOutput})
+	PB0.Configure(PinConfig{Mode: PinInput})
 
-	// Enable pull-up on MISO (PB0) for better signal integrity
-	avr.PORTB.SetBits(1 << uint8(s.sdi))
-
-	// Configure CS pin - prevent glitches by setting HIGH first
-	s.cs.High()
-	s.cs.Configure(PinConfig{Mode: PinOutput})
-
-	// Reset USI data register
-	s.usidr.Set(0)
-	s.usisr.Set(0)
+	// Reset USI registers
+	avr.USIDR.Set(0)
+	avr.USISR.Set(0)
 
 	// Configure USI for SPI mode:
 	// - USIWM0: Three-wire mode (SPI)
 	// - USICS1: External clock source (software controlled via USITC)
-	// - USICLK: Clock strobe - enables counter increment on USITC toggle
+	// - USICLK: Clock strobe
 	// - USICS0: Controls clock phase (CPHA)
-	//
-	// SPI Modes:
-	//   Mode 0 (CPOL=0, CPHA=0): Clock idle low, sample on rising edge
-	//   Mode 1 (CPOL=0, CPHA=1): Clock idle low, sample on falling edge
-	//   Mode 2 (CPOL=1, CPHA=0): Clock idle high, sample on falling edge
-	//   Mode 3 (CPOL=1, CPHA=1): Clock idle high, sample on rising edge
-	//
-	// For USI, USICS0 controls the sampling edge when USICS1=1:
-	//   USICS0=0: Positive edge (rising)
-	//   USICS0=1: Negative edge (falling)
 	switch config.Mode {
-	case Mode0: // CPOL=0, CPHA=0: idle low, sample rising
-		s.sck.Low()
-		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK
-	case Mode1: // CPOL=0, CPHA=1: idle low, sample falling
-		s.sck.Low()
-		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICS0 | avr.USICR_USICLK
-	case Mode2: // CPOL=1, CPHA=0: idle high, sample falling
-		s.sck.High()
-		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICS0 | avr.USICR_USICLK
-	case Mode3: // CPOL=1, CPHA=1: idle high, sample rising
-		s.sck.High()
-		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK
-	default: // Default to Mode 0
-		s.sck.Low()
-		s.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK
+	case Mode1: // CPOL=0, CPHA=1
+		PB2.Low()
+		spi.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICS0 | avr.USICR_USICLK
+	case Mode2: // CPOL=1, CPHA=0
+		PB2.High()
+		spi.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICS0 | avr.USICR_USICLK
+	case Mode3: // CPOL=1, CPHA=1
+		PB2.High()
+		spi.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK
+	default: // Mode0: CPOL=0, CPHA=0
+		PB2.Low()
+		spi.usicrValue = avr.USICR_USIWM0 | avr.USICR_USICS1 | avr.USICR_USICLK
 	}
-	s.usicr.Set(s.usicrValue)
-
-	// Calculate delay cycles for frequency control
-	// Each bit transfer requires 2 clock toggles (rising + falling edge)
-	// The loop overhead is approximately 10-15 cycles per toggle on AVR
-	// We calculate additional delay cycles needed to achieve the target frequency
-	if config.Frequency > 0 && config.Frequency < CPUFrequency()/2 {
-		// Cycles per half-period = CPUFrequency / (2 * Frequency)
-		// Subtract loop overhead (~15 cycles) to get delay cycles
-		cyclesPerHalfPeriod := CPUFrequency() / (2 * config.Frequency)
-		const loopOverhead = 15
-		if cyclesPerHalfPeriod > loopOverhead {
-			s.delayCycles = uint16(cyclesPerHalfPeriod - loopOverhead)
-		} else {
-			s.delayCycles = 0
-		}
-	} else {
-		// Max speed - no delay
-		s.delayCycles = 0
-	}
-
-	// Store LSBFirst setting for use in Transfer
-	s.lsbFirst = config.LSBFirst
+	avr.USICR.Set(spi.usicrValue)
 
 	return nil
 }
 
-// reverseByte reverses the bit order of a byte (MSB <-> LSB)
-// Used for LSB-first SPI mode since USI hardware only supports MSB-first
-func reverseByte(b byte) byte {
-	b = (b&0xF0)>>4 | (b&0x0F)<<4
-	b = (b&0xCC)>>2 | (b&0x33)<<2
-	b = (b&0xAA)>>1 | (b&0x55)<<1
-	return b
-}
+// Transfer performs a single byte SPI transfer (send and receive simultaneously).
+func (spi *SPI) Transfer(b byte) (byte, error) {
+	// Load byte to transmit
+	avr.USIDR.Set(b)
 
-// Transfer performs a single byte SPI transfer (send and receive simultaneously)
-// This implements the USI-based SPI transfer using the "clock strobing" technique
-func (s *SPI) Transfer(b byte) (byte, error) {
-	// For LSB-first mode, reverse the bits before sending
-	// USI hardware only supports MSB-first, so we do it in software
-	if s.lsbFirst {
-		b = reverseByte(b)
+	// Clear counter overflow flag and reset counter
+	avr.USISR.Set(avr.USISR_USIOIF)
+
+	// Clock 8 bits (16 toggles)
+	for !avr.USISR.HasBits(avr.USISR_USIOIF) {
+		avr.USICR.SetBits(avr.USICR_USITC)
 	}
 
-	// Load the byte to transmit into the USI Data Register
-	s.usidr.Set(b)
-
-	// Clear the counter overflow flag by writing 1 to it (AVR quirk)
-	// This also resets the 4-bit counter to 0
-	s.usisr.Set(avr.USISR_USIOIF)
-
-	// Clock the data out/in
-	// We need 16 clock toggles (8 bits × 2 edges per bit)
-	// The USI counter counts each clock edge, so it overflows at 16
-	// After 16 toggles, the clock returns to its idle state (set by CPOL in Configure)
-	//
-	// IMPORTANT: Only toggle USITC here!
-	// - USITC toggles the clock pin
-	// - The USICR mode bits (USIWM0, USICS1, USICS0, USICLK) were set in Configure()
-	// - SetBits preserves those bits and only sets USITC
-	if s.delayCycles == 0 {
-		// Fast path: no delay, run at maximum speed
-		for !s.usisr.HasBits(avr.USISR_USIOIF) {
-			s.usicr.SetBits(avr.USICR_USITC)
-		}
-	} else {
-		// Frequency-controlled path: add delay between clock toggles
-		for !s.usisr.HasBits(avr.USISR_USIOIF) {
-			s.usicr.SetBits(avr.USICR_USITC)
-			// Delay loop for frequency control
-			// Each iteration is approximately 3 cycles on AVR (dec, brne)
-			for i := s.delayCycles; i > 0; i-- {
-				avr.Asm("nop")
-			}
-		}
-	}
-
-	// Get the received byte
-	result := s.usidr.Get()
-
-	// For LSB-first mode, reverse the received bits
-	if s.lsbFirst {
-		result = reverseByte(result)
-	}
-
-	return result, nil
+	return avr.USIDR.Get(), nil
 }
