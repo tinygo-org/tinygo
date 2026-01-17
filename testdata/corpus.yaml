@@ -29,8 +29,7 @@
 - repo: github.com/dgryski/go-camellia
 - repo: github.com/dgryski/go-change
 - repo: github.com/dgryski/go-chaskey
-  tags: appengine noasm
-  skipwasi: true # siphash has build tag issues
+  tags: appengine noasm # for dchest/siphash
 - repo: github.com/dgryski/go-clefia
 - repo: github.com/dgryski/go-clockpro
 - repo: github.com/dgryski/go-cobs
@@ -56,7 +55,6 @@
 - repo: github.com/dgryski/go-linlog
 - repo: github.com/dgryski/go-maglev
   tags: appengine # for dchest/siphash
-  skipwasi: true
 - repo: github.com/dgryski/go-marvin32
 - repo: github.com/dgryski/go-md5crypt
 - repo: github.com/dgryski/go-metro
@@ -66,7 +64,6 @@
   tags: noasm
 - repo: github.com/dgryski/go-mpchash
   tags: appengine # for dchest/siphash
-  skipwasi: true
 - repo: github.com/dgryski/go-neeva
 - repo: github.com/dgryski/go-nibz
 - repo: github.com/dgryski/go-nibblesort
@@ -289,3 +286,8 @@
 - repo: github.com/philhofer/fwd
 - repo: github.com/blevesearch/sear
 - repo: github.com/steveyen/gtreap
+- repo: github.com/orsinium-labs/tinymath
+- repo: github.com/orsinium-labs/jsony
+- repo: github.com/tidwall/gjson
+- repo: github.com/dchest/siphash
+  tags: appengine
