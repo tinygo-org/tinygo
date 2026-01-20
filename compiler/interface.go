@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -577,8 +578,25 @@ var basicTypeNames = [...]string{
 	types.UnsafePointer: "unsafe.Pointer",
 }
 
+var scopeIDCache = struct {
+	sync.Mutex
+	scopeid map[*types.Scope]string
+}{
+	sync.Mutex{},
+	make(map[*types.Scope]string),
+}
+
 // return an integer representing this scope in a package.
 func scopeID(pkg *types.Scope, scope *types.Scope) string {
+	scopeIDCache.Lock()
+	defer scopeIDCache.Unlock()
+
+	if id := scopeIDCache.scopeid[scope]; id != "" {
+		return id
+	}
+
+	entry := scope
+
 	var ids []int
 	for scope != pkg {
 		parent := scope.Parent()
@@ -597,7 +615,9 @@ func scopeID(pkg *types.Scope, scope *types.Scope) string {
 		buf = append(buf, ':')
 	}
 
-	return string(buf)
+	id := string(buf)
+	scopeIDCache.scopeid[entry] = id
+	return id
 }
 
 // getTypeCodeName returns a name for this type that can be used in the
