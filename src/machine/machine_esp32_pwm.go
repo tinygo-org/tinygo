@@ -50,10 +50,15 @@ const (
 	// APB clock frequency (used by high-speed LEDC)
 	apbClockFreq = 80000000 // 80 MHz
 
+	// Clock divider has 8 fractional bits
+	// So divider register value = actual_divider * 256
+	dividerFractionalBits = 8
+
 	// Maximum values
-	maxDivider    = 0x3FFFF // 18-bit divider
-	maxResolution = 20      // Maximum duty resolution in bits
-	minResolution = 1       // Minimum duty resolution in bits
+	maxDivider    = 0x3FFFF                    // 18-bit divider register value (actual max divider ~1024)
+	minDivider    = 1 << dividerFractionalBits // Minimum divider = 256 (represents 1.0)
+	maxResolution = 20                         // Maximum duty resolution in bits
+	minResolution = 1                          // Minimum duty resolution in bits
 )
 
 // LEDC register bit positions and masks for timer configuration
@@ -117,6 +122,9 @@ func (pwm *PWM) Configure(config PWMConfig) error {
 	// Clear reset bit
 	esp.DPORT.PERIP_RST_EN.ClearBits(ledcClockEnable)
 
+	// Select APB clock (80MHz) for LEDC
+	esp.LEDC.CONF.Set(1) // APB_CLK_SEL = 1
+
 	// Calculate timer configuration
 	divider, resolution, err := pwm.calculateConfig(config.Period)
 	if err != nil {
@@ -147,7 +155,7 @@ func (pwm *PWM) Configure(config PWMConfig) error {
 }
 
 // calculateConfig determines the optimal divider and resolution for a given period.
-// Returns divider, resolution, and any error.
+// Returns divider (with 8 fractional bits), resolution, and any error.
 func (pwm *PWM) calculateConfig(period uint64) (uint32, uint8, error) {
 	if period == 0 {
 		// Default: ~1kHz with 13-bit resolution (good for LEDs)
@@ -156,25 +164,30 @@ func (pwm *PWM) calculateConfig(period uint64) (uint32, uint8, error) {
 	}
 
 	// Formula: period_ns = (2^resolution * divider) / 80MHz * 1e9
-	//          period_ns = (2^resolution * divider) * 12.5
-	//          divider = period_ns / (2^resolution * 12.5)
-	//          divider = period_ns * 80 / (2^resolution * 1000)
+	// Where divider is the actual divider (not the register value)
+	// Register value = actual_divider * 256 (8 fractional bits)
+	//
+	// period_ns = (2^resolution * divider_reg / 256) / 80MHz * 1e9
+	// divider_reg = period_ns * 80MHz * 256 / (2^resolution * 1e9)
+	// divider_reg = period_ns * 80 * 256 / (2^resolution * 1000)
+	// divider_reg = period_ns * 20480 / (2^resolution * 1000)
+	// divider_reg = period_ns * 256 * 80 / (2^resolution * 1000)
 
 	// Try to find the highest resolution that gives a valid divider
 	for resolution := uint8(maxResolution); resolution >= minResolution; resolution-- {
-		// Calculate divider for this resolution
-		// divider = period * 80MHz / (2^resolution * 1e9)
-		// To avoid overflow: divider = period * 80 / (2^resolution * 1000)
 		resolutionValue := uint64(1) << resolution
-		divider := (period * 80) / (resolutionValue * 1000)
 
-		if divider == 0 {
+		// Calculate divider register value (includes 8 fractional bits)
+		// divider_reg = period_ns * 80 * 256 / (2^resolution * 1000)
+		dividerReg := (period * 80 * 256) / (resolutionValue * 1000)
+
+		if dividerReg < minDivider {
 			// Period too short for this resolution, try lower resolution
 			continue
 		}
 
-		if divider <= maxDivider {
-			return uint32(divider), resolution, nil
+		if dividerReg <= maxDivider {
+			return uint32(dividerReg), resolution, nil
 		}
 	}
 
@@ -353,13 +366,13 @@ func (pwm *PWM) Counter() uint32 {
 // Period returns the current period in nanoseconds.
 func (pwm *PWM) Period() uint64 {
 	conf := pwm.timerConf().Get()
-	divider := (conf & timerDivNumMask) >> timerDivNumPos
+	dividerReg := (conf & timerDivNumMask) >> timerDivNumPos
 	resolution := (conf & timerLimMask) + 1
 
-	// period_ns = (2^resolution * divider) * 12.5
-	// period_ns = (2^resolution * divider) * 1000 / 80
+	// period_ns = (2^resolution * divider_reg / 256) / 80MHz * 1e9
+	// period_ns = (2^resolution * divider_reg * 1000) / (80 * 256)
 	resolutionValue := uint64(1) << resolution
-	return resolutionValue * uint64(divider) * 1000 / 80
+	return resolutionValue * uint64(dividerReg) * 1000 / (80 * 256)
 }
 
 // SetInverting sets whether to invert the output of this channel.
