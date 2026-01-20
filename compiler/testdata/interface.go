@@ -61,3 +61,37 @@ func callFooMethod(itf fooInterface) uint8 {
 func callErrorMethod(itf error) string {
 	return itf.Error()
 }
+
+func namedFoo() {
+	type Foo struct {
+		A int
+	}
+	f1 := &Foo{}
+	fcopy := copyOf(f1)
+	f2 := fcopy.(*Foo)
+	println(f2.A)
+}
+
+func namedFoo2Nested() {
+	type Foo struct {
+		A *int
+	}
+	f1 := &Foo{}
+	fcopy := copyOf(f1)
+	f2 := fcopy.(*Foo)
+	println(f2.A == nil)
+
+	if f2.A == nil {
+		type Foo struct {
+			A *byte
+		}
+		nestedf1 := &Foo{}
+		fcopy := copyOf(nestedf1)
+		nestedf2 := fcopy.(*Foo)
+		println(nestedf2.A == nil)
+	}
+}
+
+func copyOf(src interface{}) (dst interface{}) {
+	return src
+}
