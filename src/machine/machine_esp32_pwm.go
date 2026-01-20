@@ -11,7 +11,7 @@ import (
 
 // PWM is one PWM peripheral, which consists of a timer and the associated
 // channels. There are 4 high-speed timers available (PWM0-PWM3), each can
-// drive up to 8 channels total (shared across all timers).
+// use any of the 8 high-speed channels.
 //
 // The ESP32 LEDC peripheral is used for PWM generation. It provides flexible
 // frequency and duty cycle control with configurable resolution (1-20 bits).
@@ -19,9 +19,15 @@ type PWM struct {
 	num uint8 // Timer number (0-3 for high-speed)
 }
 
-// pwmChannelPins tracks which pin is assigned to each channel (0-7)
-// Initialized to NoPin (0xff) to indicate unused channels
-var pwmChannelPins [8]Pin
+// pwmChannelInfo tracks the state of each LEDC channel
+type pwmChannelInfo struct {
+	pin   Pin   // The pin assigned to this channel (NoPin if unused)
+	timer uint8 // The timer this channel is bound to
+	inUse bool  // Whether this channel is currently in use
+}
+
+// pwmChannels tracks which pin and timer is assigned to each channel (0-7)
+var pwmChannels [8]pwmChannelInfo
 
 // Hardware PWM peripherals available on ESP32.
 // These use the high-speed LEDC timers for glitch-free PWM updates.
@@ -38,17 +44,7 @@ const (
 	ledcClockEnable = 1 << 11
 
 	// GPIO matrix output signal numbers for LEDC high-speed channels
-	ledcHSSignalOut0 = 71
-	ledcHSSignalOut1 = 72
-	ledcHSSignalOut2 = 73
-	ledcHSSignalOut3 = 74
-	ledcHSSignalOut4 = 75
-	ledcHSSignalOut5 = 76
-	ledcHSSignalOut6 = 77
-	ledcHSSignalOut7 = 78
-
-	// APB clock frequency (used by high-speed LEDC)
-	apbClockFreq = 80000000 // 80 MHz
+	ledcHSSignalBase = 71 // LEDC_HS_SIG_OUT0, channels are consecutive (71-78)
 
 	// Clock divider has 8 fractional bits
 	// So divider register value = actual_divider * 256
@@ -59,6 +55,10 @@ const (
 	minDivider    = 1 << dividerFractionalBits // Minimum divider = 256 (represents 1.0)
 	maxResolution = 20                         // Maximum duty resolution in bits
 	minResolution = 1                          // Minimum duty resolution in bits
+
+	// Default values
+	defaultPeriodNs   = 1_000_000 // 1ms = 1kHz, good for LEDs
+	defaultResolution = 13        // 13-bit resolution for default period
 )
 
 // LEDC register bit positions and masks for timer configuration
@@ -66,39 +66,25 @@ const (
 	// HSTIMER_CONF register
 	timerDivNumPos   = 5 // DIV_NUM position (bits 5-22)
 	timerDivNumMask  = 0x3FFFF << timerDivNumPos
-	timerLimPos      = 0 // duty_resolution position (bits 0-4), stores bit width directly
-	timerLimMask     = 0x1F
-	timerPausePos    = 23 // PAUSE bit
-	timerPauseMask   = 1 << timerPausePos
-	timerRstPos      = 24 // RST bit
-	timerRstMask     = 1 << timerRstPos
-	timerTickSelPos  = 25 // TICK_SEL bit (0=REF_TICK, 1=APB_CLK)
-	timerTickSelMask = 1 << timerTickSelPos
+	timerLimMask     = 0x1F // duty_resolution (bits 0-4), stores bit width directly
+	timerPauseMask   = 1 << 23
+	timerRstMask     = 1 << 24
+	timerTickSelMask = 1 << 25 // TICK_SEL bit (0=REF_TICK, 1=APB_CLK)
 )
 
 // LEDC register bit positions and masks for channel configuration
 const (
 	// HSCH_CONF0 register
-	chanTimerSelPos  = 0 // TIMER_SEL position (bits 0-1)
-	chanTimerSelMask = 0x3
-	chanSigOutEnPos  = 2 // SIG_OUT_EN bit
-	chanSigOutEnMask = 1 << chanSigOutEnPos
-	chanIdleLvPos    = 3 // IDLE_LV bit
-	chanIdleLvMask   = 1 << chanIdleLvPos
-	chanClkEnPos     = 31 // CLK_EN bit
-	chanClkEnMask    = 1 << chanClkEnPos
+	chanTimerSelMask = 0x3     // TIMER_SEL (bits 0-1)
+	chanSigOutEnMask = 1 << 2  // SIG_OUT_EN bit
+	chanIdleLvMask   = 1 << 3  // IDLE_LV bit
+	chanClkEnMask    = 1 << 31 // CLK_EN bit
 
 	// HSCH_CONF1 register
-	chanDutyScalePos  = 0 // DUTY_SCALE position (bits 0-9)
-	chanDutyScaleMask = 0x3FF
 	chanDutyCyclePos  = 10 // DUTY_CYCLE position (bits 10-19)
-	chanDutyCycleMask = 0x3FF << chanDutyCyclePos
 	chanDutyNumPos    = 20 // DUTY_NUM position (bits 20-29)
-	chanDutyNumMask   = 0x3FF << chanDutyNumPos
-	chanDutyIncPos    = 30 // DUTY_INC bit
-	chanDutyIncMask   = 1 << chanDutyIncPos
-	chanDutyStartPos  = 31 // DUTY_START bit
-	chanDutyStartMask = 1 << chanDutyStartPos
+	chanDutyIncMask   = 1 << 30
+	chanDutyStartMask = 1 << 31
 
 	// HSCH_DUTY register - duty value uses bits 0-24 (25 bits total)
 	// The lower 4 bits are fractional, upper 20 bits are integer
@@ -158,9 +144,7 @@ func (pwm *PWM) Configure(config PWMConfig) error {
 // Returns divider (with 8 fractional bits), resolution, and any error.
 func (pwm *PWM) calculateConfig(period uint64) (uint32, uint8, error) {
 	if period == 0 {
-		// Default: ~1kHz with 13-bit resolution (good for LEDs)
-		// period = 1e9 / 1000 = 1,000,000 ns
-		period = 1000000
+		period = defaultPeriodNs
 	}
 
 	// Formula: period_ns = (2^resolution * divider) / 80MHz * 1e9
@@ -168,17 +152,13 @@ func (pwm *PWM) calculateConfig(period uint64) (uint32, uint8, error) {
 	// Register value = actual_divider * 256 (8 fractional bits)
 	//
 	// period_ns = (2^resolution * divider_reg / 256) / 80MHz * 1e9
-	// divider_reg = period_ns * 80MHz * 256 / (2^resolution * 1e9)
 	// divider_reg = period_ns * 80 * 256 / (2^resolution * 1000)
-	// divider_reg = period_ns * 20480 / (2^resolution * 1000)
-	// divider_reg = period_ns * 256 * 80 / (2^resolution * 1000)
 
 	// Try to find the highest resolution that gives a valid divider
 	for resolution := uint8(maxResolution); resolution >= minResolution; resolution-- {
 		resolutionValue := uint64(1) << resolution
 
 		// Calculate divider register value (includes 8 fractional bits)
-		// divider_reg = period_ns * 80 * 256 / (2^resolution * 1000)
 		dividerReg := (period * 80 * 256) / (resolutionValue * 1000)
 
 		if dividerReg < minDivider {
@@ -205,21 +185,35 @@ func (pwm *PWM) Channel(pin Pin) (uint8, error) {
 		}
 	}
 
-	// Check if this pin is already assigned to a channel
+	// Check if this pin is already assigned to a channel on THIS timer
 	for ch := uint8(0); ch < 8; ch++ {
-		if pwmChannelPins[ch] == pin {
+		if pwmChannels[ch].inUse &&
+			pwmChannels[ch].pin == pin &&
+			pwmChannels[ch].timer == pwm.num {
 			return ch, nil
+		}
+	}
+
+	// Check if pin is used by a different timer (error case)
+	for ch := uint8(0); ch < 8; ch++ {
+		if pwmChannels[ch].inUse && pwmChannels[ch].pin == pin {
+			// Pin is already used by a different timer
+			return 0, ErrInvalidOutputPin
 		}
 	}
 
 	// Find an available channel
 	for ch := uint8(0); ch < 8; ch++ {
-		if pwmChannelPins[ch] == NoPin || pwmChannelPins[ch] == 0 {
+		if !pwmChannels[ch].inUse {
 			// Found an available channel
-			pwmChannelPins[ch] = pin
+			pwmChannels[ch] = pwmChannelInfo{
+				pin:   pin,
+				timer: pwm.num,
+				inUse: true,
+			}
 
 			// Configure the GPIO for PWM output through GPIO matrix
-			signal := uint32(ledcHSSignalOut0 + ch)
+			signal := uint32(ledcHSSignalBase + ch)
 			pin.configure(PinConfig{Mode: PinOutput}, signal)
 
 			// Configure the channel
@@ -258,6 +252,27 @@ func (pwm *PWM) Channel(pin Pin) (uint8, error) {
 	return 0, ErrInvalidOutputPin
 }
 
+// ReleaseChannel releases a PWM channel, making it available for other uses.
+// The pin is not reconfigured; call pin.Configure() to change its function.
+func (pwm *PWM) ReleaseChannel(channel uint8) error {
+	if channel >= 8 {
+		return ErrInvalidOutputPin
+	}
+
+	if !pwmChannels[channel].inUse || pwmChannels[channel].timer != pwm.num {
+		// Channel not in use or belongs to different timer
+		return ErrInvalidOutputPin
+	}
+
+	// Disable signal output
+	pwm.channelConf0(channel).ClearBits(chanSigOutEnMask)
+
+	// Clear channel tracking
+	pwmChannels[channel] = pwmChannelInfo{}
+
+	return nil
+}
+
 // Set updates the channel value. This is used to control the channel duty
 // cycle. For example, to set it to a 25% duty cycle, use:
 //
@@ -288,7 +303,6 @@ func (pwm *PWM) Set(channel uint8, value uint32) {
 	// Configure CONF1 and trigger duty update
 	// For non-fading operation: duty_scale=0, duty_cycle=1, duty_num=1, duty_inc=1
 	// Then set duty_start=1 to apply the new duty value
-	// We write the full register value each time to ensure consistent state
 	var conf1 uint32
 	conf1 |= 1 << chanDutyCyclePos // duty_cycle = 1
 	conf1 |= 1 << chanDutyNumPos   // duty_num = 1
@@ -296,8 +310,18 @@ func (pwm *PWM) Set(channel uint8, value uint32) {
 	conf1 |= chanDutyStartMask     // duty_start = 1
 	pwm.channelConf1(channel).Set(conf1)
 
-	// Ensure signal output is enabled (as ESP-IDF does in _ledc_update_duty)
+	// Ensure signal output is enabled
 	pwm.channelConf0(channel).SetBits(chanSigOutEnMask)
+}
+
+// Get returns the current duty cycle value for the given channel.
+func (pwm *PWM) Get(channel uint8) uint32 {
+	if channel >= 8 {
+		return 0
+	}
+
+	// Read from the duty read register and remove fractional bits
+	return pwm.channelDutyR(channel).Get() >> chanDutyFracBits
 }
 
 // SetPeriod updates the period of this PWM peripheral in nanoseconds.
@@ -306,7 +330,7 @@ func (pwm *PWM) Set(channel uint8, value uint32) {
 //	period = 1e9 / frequency
 //
 // SetPeriod will try to maintain the current duty cycle ratio when changing
-// the period.
+// the period for channels bound to this timer.
 func (pwm *PWM) SetPeriod(period uint64) error {
 	// Calculate new configuration
 	divider, resolution, err := pwm.calculateConfig(period)
@@ -324,14 +348,13 @@ func (pwm *PWM) SetPeriod(period uint64) error {
 	conf := timerConf.Get()
 	conf &^= timerDivNumMask | timerLimMask
 	conf |= (divider << timerDivNumPos) & timerDivNumMask
-	conf |= uint32(resolution-1) & timerLimMask
+	conf |= uint32(resolution) & timerLimMask
 	timerConf.Set(conf)
 
-	// If resolution changed, we may need to scale duty values
+	// If resolution changed, scale duty values for channels bound to THIS timer
 	if resolution != oldResolution {
-		// Scale all active channel duty values
 		for ch := uint8(0); ch < 8; ch++ {
-			if pwmChannelPins[ch] != NoPin && pwmChannelPins[ch] != 0 {
+			if pwmChannels[ch].inUse && pwmChannels[ch].timer == pwm.num {
 				// Read current duty (includes fractional bits)
 				currentDuty := pwm.channelDuty(ch).Get() >> chanDutyFracBits
 
@@ -357,7 +380,7 @@ func (pwm *PWM) SetPeriod(period uint64) error {
 func (pwm *PWM) Top() uint32 {
 	resolution := pwmStates[pwm.num].resolution
 	if resolution == 0 {
-		resolution = 13 // Default resolution
+		resolution = defaultResolution
 	}
 	return (1 << resolution) - 1
 }
@@ -372,7 +395,11 @@ func (pwm *PWM) Counter() uint32 {
 func (pwm *PWM) Period() uint64 {
 	conf := pwm.timerConf().Get()
 	dividerReg := (conf & timerDivNumMask) >> timerDivNumPos
-	resolution := conf & timerLimMask // duty_resolution stores bit width directly
+	resolution := conf & timerLimMask
+
+	if resolution == 0 || dividerReg == 0 {
+		return 0
+	}
 
 	// period_ns = (2^resolution * divider_reg / 256) / 80MHz * 1e9
 	// period_ns = (2^resolution * divider_reg * 1000) / (80 * 256)
@@ -390,11 +417,26 @@ func (pwm *PWM) SetInverting(channel uint8, inverting bool) {
 		return
 	}
 
-	chanConf0 := pwm.channelConf0(channel)
+	// Get the pin for this channel to configure GPIO matrix inversion
+	if !pwmChannels[channel].inUse || pwmChannels[channel].timer != pwm.num {
+		return
+	}
+
+	pin := pwmChannels[channel].pin
+
+	// Reconfigure the GPIO with inversion setting through GPIO matrix
+	// The GPIO matrix FUNC_OUT_SEL_CFG register has an inversion bit
+	signal := uint32(ledcHSSignalBase + channel)
+
+	// Get the GPIO function output select register
+	outFunc := pin.outFunc()
+
 	if inverting {
-		chanConf0.SetBits(chanIdleLvMask)
+		// Set signal with inversion enabled (bit 9 is the invert bit)
+		outFunc.Set(signal | (1 << 9))
 	} else {
-		chanConf0.ClearBits(chanIdleLvMask)
+		// Set signal without inversion
+		outFunc.Set(signal)
 	}
 }
 
@@ -449,5 +491,12 @@ func (pwm *PWM) channelDuty(ch uint8) *volatile.Register32 {
 func (pwm *PWM) channelConf1(ch uint8) *volatile.Register32 {
 	// HSCH0_CONF1 is at offset 0xC, each channel is 0x14 bytes apart
 	base := uintptr(unsafe.Pointer(&esp.LEDC.HSCH0_CONF1))
+	return (*volatile.Register32)(unsafe.Pointer(base + uintptr(ch)*0x14))
+}
+
+// channelDutyR returns the DUTY_R (read) register for the given channel.
+func (pwm *PWM) channelDutyR(ch uint8) *volatile.Register32 {
+	// HSCH0_DUTY_R is at offset 0x10, each channel is 0x14 bytes apart
+	base := uintptr(unsafe.Pointer(&esp.LEDC.HSCH0_DUTY_R))
 	return (*volatile.Register32)(unsafe.Pointer(base + uintptr(ch)*0x14))
 }
