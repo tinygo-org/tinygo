@@ -84,6 +84,14 @@ const (
 	chanClkEnMask    = 1 << chanClkEnPos
 
 	// HSCH_CONF1 register
+	chanDutyScalePos  = 0 // DUTY_SCALE position (bits 0-9)
+	chanDutyScaleMask = 0x3FF
+	chanDutyCyclePos  = 10 // DUTY_CYCLE position (bits 10-19)
+	chanDutyCycleMask = 0x3FF << chanDutyCyclePos
+	chanDutyNumPos    = 20 // DUTY_NUM position (bits 20-29)
+	chanDutyNumMask   = 0x3FF << chanDutyNumPos
+	chanDutyIncPos    = 30 // DUTY_INC bit
+	chanDutyIncMask   = 1 << chanDutyIncPos
 	chanDutyStartPos  = 31 // DUTY_START bit
 	chanDutyStartMask = 1 << chanDutyStartPos
 
@@ -122,9 +130,6 @@ func (pwm *PWM) Configure(config PWMConfig) error {
 	// Get timer configuration register
 	timerConf := pwm.timerConf()
 
-	// Reset the timer first
-	timerConf.SetBits(timerRstMask)
-
 	// Configure timer:
 	// - Use APB_CLK (80MHz) as clock source
 	// - Set divider
@@ -133,6 +138,9 @@ func (pwm *PWM) Configure(config PWMConfig) error {
 	conf |= timerTickSelMask                              // APB_CLK
 	conf |= (divider << timerDivNumPos) & timerDivNumMask // Divider
 	conf |= uint32(resolution-1) & timerLimMask           // Resolution
+
+	// Reset the timer (set rst=1, then rst=0)
+	timerConf.Set(conf | timerRstMask)
 	timerConf.Set(conf)
 
 	return nil
@@ -221,8 +229,14 @@ func (pwm *PWM) Channel(pin Pin) (uint8, error) {
 			// Set HPOINT to 0 (start of cycle)
 			pwm.channelHpoint(ch).Set(0)
 
-			// Trigger duty update
-			pwm.channelConf1(ch).SetBits(chanDutyStartMask)
+			// Configure CONF1 for non-fading operation and trigger duty update
+			// duty_scale=0, duty_cycle=1, duty_num=1, duty_inc=1, duty_start=1
+			var conf1 uint32
+			conf1 |= 1 << chanDutyCyclePos // duty_cycle = 1
+			conf1 |= 1 << chanDutyNumPos   // duty_num = 1
+			conf1 |= chanDutyIncMask       // duty_inc = 1
+			conf1 |= chanDutyStartMask     // duty_start = 1
+			pwm.channelConf1(ch).Set(conf1)
 
 			return ch, nil
 		}
@@ -258,8 +272,14 @@ func (pwm *PWM) Set(channel uint8, value uint32) {
 	// Set the duty value
 	pwm.channelDuty(channel).Set(dutyValue)
 
-	// Trigger duty update by setting DUTY_START bit
-	pwm.channelConf1(channel).SetBits(chanDutyStartMask)
+	// Configure CONF1 for non-fading operation and trigger duty update
+	// duty_scale=0, duty_cycle=1, duty_num=1, duty_inc=1, duty_start=1
+	var conf1 uint32
+	conf1 |= 1 << chanDutyCyclePos // duty_cycle = 1
+	conf1 |= 1 << chanDutyNumPos   // duty_num = 1
+	conf1 |= chanDutyIncMask       // duty_inc = 1
+	conf1 |= chanDutyStartMask     // duty_start = 1
+	pwm.channelConf1(channel).Set(conf1)
 }
 
 // SetPeriod updates the period of this PWM peripheral in nanoseconds.
