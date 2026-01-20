@@ -5,8 +5,14 @@ package machine
 
 import (
 	"device/esp"
+	"errors"
 	"runtime/volatile"
 	"unsafe"
+)
+
+// PWM peripheral errors
+var (
+	errPWMPeriodTooShort = errors.New("pwm: period too short")
 )
 
 // PWM is one PWM peripheral, which consists of a timer and the associated
@@ -38,6 +44,9 @@ var (
 	PWM3 = &PWM{num: 3}
 )
 
+// Number of available PWM channels
+const pwmChannelCount = 8
+
 // LEDC peripheral constants
 const (
 	// Clock enable bit in DPORT.PERIP_CLK_EN for LEDC
@@ -46,15 +55,17 @@ const (
 	// GPIO matrix output signal numbers for LEDC high-speed channels
 	ledcHSSignalBase = 71 // LEDC_HS_SIG_OUT0, channels are consecutive (71-78)
 
-	// Clock divider has 8 fractional bits
-	// So divider register value = actual_divider * 256
-	dividerFractionalBits = 8
+	// GPIO matrix output inversion bit
+	gpioMatrixInvertBit = 1 << 9
+
+	// Clock divider fractional bits (register value = actual_divider * 256)
+	dividerFracBits = 8
 
 	// Maximum values
-	maxDivider    = 0x3FFFF                    // 18-bit divider register value (actual max divider ~1024)
-	minDivider    = 1 << dividerFractionalBits // Minimum divider = 256 (represents 1.0)
-	maxResolution = 20                         // Maximum duty resolution in bits
-	minResolution = 1                          // Minimum duty resolution in bits
+	maxDivider    = 0x3FFFF              // 18-bit divider register value
+	minDivider    = 1 << dividerFracBits // Minimum divider = 256 (represents 1.0)
+	maxResolution = 20                   // Maximum duty resolution in bits
+	minResolution = 1                    // Minimum duty resolution in bits
 
 	// Default values
 	defaultPeriodNs   = 1_000_000 // 1ms = 1kHz, good for LEDs
@@ -77,7 +88,6 @@ const (
 	// HSCH_CONF0 register
 	chanTimerSelMask = 0x3     // TIMER_SEL (bits 0-1)
 	chanSigOutEnMask = 1 << 2  // SIG_OUT_EN bit
-	chanIdleLvMask   = 1 << 3  // IDLE_LV bit
 	chanClkEnMask    = 1 << 31 // CLK_EN bit
 
 	// HSCH_CONF1 register
@@ -154,12 +164,15 @@ func (pwm *PWM) calculateConfig(period uint64) (uint32, uint8, error) {
 	// period_ns = (2^resolution * divider_reg / 256) / 80MHz * 1e9
 	// divider_reg = period_ns * 80 * 256 / (2^resolution * 1000)
 
+	var lastDividerReg uint64
+
 	// Try to find the highest resolution that gives a valid divider
 	for resolution := uint8(maxResolution); resolution >= minResolution; resolution-- {
 		resolutionValue := uint64(1) << resolution
 
 		// Calculate divider register value (includes 8 fractional bits)
-		dividerReg := (period * 80 * 256) / (resolutionValue * 1000)
+		dividerReg := (period * 80 * (1 << dividerFracBits)) / (resolutionValue * 1000)
+		lastDividerReg = dividerReg
 
 		if dividerReg < minDivider {
 			// Period too short for this resolution, try lower resolution
@@ -171,6 +184,10 @@ func (pwm *PWM) calculateConfig(period uint64) (uint32, uint8, error) {
 		}
 	}
 
+	// Determine which error to return
+	if lastDividerReg < minDivider {
+		return 0, 0, errPWMPeriodTooShort
+	}
 	return 0, 0, ErrPWMPeriodTooLong
 }
 
@@ -186,7 +203,7 @@ func (pwm *PWM) Channel(pin Pin) (uint8, error) {
 	}
 
 	// Check if this pin is already assigned to a channel on THIS timer
-	for ch := uint8(0); ch < 8; ch++ {
+	for ch := uint8(0); ch < pwmChannelCount; ch++ {
 		if pwmChannels[ch].inUse &&
 			pwmChannels[ch].pin == pin &&
 			pwmChannels[ch].timer == pwm.num {
@@ -195,7 +212,7 @@ func (pwm *PWM) Channel(pin Pin) (uint8, error) {
 	}
 
 	// Check if pin is used by a different timer (error case)
-	for ch := uint8(0); ch < 8; ch++ {
+	for ch := uint8(0); ch < pwmChannelCount; ch++ {
 		if pwmChannels[ch].inUse && pwmChannels[ch].pin == pin {
 			// Pin is already used by a different timer
 			return 0, ErrInvalidOutputPin
@@ -203,7 +220,7 @@ func (pwm *PWM) Channel(pin Pin) (uint8, error) {
 	}
 
 	// Find an available channel
-	for ch := uint8(0); ch < 8; ch++ {
+	for ch := uint8(0); ch < pwmChannelCount; ch++ {
 		if !pwmChannels[ch].inUse {
 			// Found an available channel
 			pwmChannels[ch] = pwmChannelInfo{
@@ -255,7 +272,7 @@ func (pwm *PWM) Channel(pin Pin) (uint8, error) {
 // ReleaseChannel releases a PWM channel, making it available for other uses.
 // The pin is not reconfigured; call pin.Configure() to change its function.
 func (pwm *PWM) ReleaseChannel(channel uint8) error {
-	if channel >= 8 {
+	if !pwm.isValidChannel(channel) {
 		return ErrInvalidOutputPin
 	}
 
@@ -273,6 +290,19 @@ func (pwm *PWM) ReleaseChannel(channel uint8) error {
 	return nil
 }
 
+// IsConnected returns true if the given channel is in use by this PWM peripheral.
+func (pwm *PWM) IsConnected(channel uint8) bool {
+	if !pwm.isValidChannel(channel) {
+		return false
+	}
+	return pwmChannels[channel].inUse && pwmChannels[channel].timer == pwm.num
+}
+
+// isValidChannel returns true if the channel number is valid.
+func (pwm *PWM) isValidChannel(channel uint8) bool {
+	return channel < pwmChannelCount
+}
+
 // Set updates the channel value. This is used to control the channel duty
 // cycle. For example, to set it to a 25% duty cycle, use:
 //
@@ -281,11 +311,14 @@ func (pwm *PWM) ReleaseChannel(channel uint8) error {
 // pwm.Set(channel, 0) will set the output to low and pwm.Set(channel,
 // pwm.Top()) will set the output to high, assuming the output isn't inverted.
 func (pwm *PWM) Set(channel uint8, value uint32) {
-	if channel >= 8 {
+	if !pwm.isValidChannel(channel) {
 		return
 	}
 
 	resolution := pwmStates[pwm.num].resolution
+	if resolution == 0 {
+		resolution = defaultResolution
+	}
 	maxValue := uint32((1 << resolution) - 1)
 
 	// Clamp value to valid range
@@ -316,7 +349,7 @@ func (pwm *PWM) Set(channel uint8, value uint32) {
 
 // Get returns the current duty cycle value for the given channel.
 func (pwm *PWM) Get(channel uint8) uint32 {
-	if channel >= 8 {
+	if !pwm.isValidChannel(channel) {
 		return 0
 	}
 
@@ -353,7 +386,7 @@ func (pwm *PWM) SetPeriod(period uint64) error {
 
 	// If resolution changed, scale duty values for channels bound to THIS timer
 	if resolution != oldResolution {
-		for ch := uint8(0); ch < 8; ch++ {
+		for ch := uint8(0); ch < pwmChannelCount; ch++ {
 			if pwmChannels[ch].inUse && pwmChannels[ch].timer == pwm.num {
 				// Read current duty (includes fractional bits)
 				currentDuty := pwm.channelDuty(ch).Get() >> chanDutyFracBits
@@ -413,7 +446,7 @@ func (pwm *PWM) Period() uint64 {
 // was placed at the output, meaning that the output would be 25% low and 75%
 // high with a duty cycle of 25%.
 func (pwm *PWM) SetInverting(channel uint8, inverting bool) {
-	if channel >= 8 {
+	if !pwm.isValidChannel(channel) {
 		return
 	}
 
@@ -425,22 +458,21 @@ func (pwm *PWM) SetInverting(channel uint8, inverting bool) {
 	pin := pwmChannels[channel].pin
 
 	// Reconfigure the GPIO with inversion setting through GPIO matrix
-	// The GPIO matrix FUNC_OUT_SEL_CFG register has an inversion bit
+	// The GPIO matrix FUNC_OUT_SEL_CFG register has an inversion bit (bit 9)
 	signal := uint32(ledcHSSignalBase + channel)
 
 	// Get the GPIO function output select register
 	outFunc := pin.outFunc()
 
 	if inverting {
-		// Set signal with inversion enabled (bit 9 is the invert bit)
-		outFunc.Set(signal | (1 << 9))
+		outFunc.Set(signal | gpioMatrixInvertBit)
 	} else {
-		// Set signal without inversion
 		outFunc.Set(signal)
 	}
 }
 
-// Enable enables or disables the PWM output for all channels on this timer.
+// Enable enables or disables this PWM timer. When disabled (paused), the timer
+// stops counting and all channels using this timer will hold their current state.
 func (pwm *PWM) Enable(enable bool) {
 	timerConf := pwm.timerConf()
 	if enable {
@@ -448,6 +480,18 @@ func (pwm *PWM) Enable(enable bool) {
 	} else {
 		timerConf.SetBits(timerPauseMask)
 	}
+}
+
+// SetCounter sets the counter value of this PWM timer. This can be used to
+// synchronize multiple PWM timers.
+func (pwm *PWM) SetCounter(value uint32) {
+	// The counter is reset by setting the RST bit, then writing the value
+	// Note: ESP32 LEDC doesn't support directly writing counter value,
+	// so we reset to 0 instead. This method is provided for API compatibility.
+	timerConf := pwm.timerConf()
+	conf := timerConf.Get()
+	timerConf.Set(conf | timerRstMask)
+	timerConf.Set(conf)
 }
 
 // Register access helpers
