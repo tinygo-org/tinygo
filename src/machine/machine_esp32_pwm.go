@@ -285,14 +285,19 @@ func (pwm *PWM) Set(channel uint8, value uint32) {
 	// Set the duty value
 	pwm.channelDuty(channel).Set(dutyValue)
 
-	// Configure CONF1 for non-fading operation and trigger duty update
-	// duty_scale=0, duty_cycle=1, duty_num=1, duty_inc=1, duty_start=1
+	// Configure CONF1 and trigger duty update
+	// For non-fading operation: duty_scale=0, duty_cycle=1, duty_num=1, duty_inc=1
+	// Then set duty_start=1 to apply the new duty value
+	// We write the full register value each time to ensure consistent state
 	var conf1 uint32
 	conf1 |= 1 << chanDutyCyclePos // duty_cycle = 1
 	conf1 |= 1 << chanDutyNumPos   // duty_num = 1
 	conf1 |= chanDutyIncMask       // duty_inc = 1
 	conf1 |= chanDutyStartMask     // duty_start = 1
 	pwm.channelConf1(channel).Set(conf1)
+
+	// Ensure signal output is enabled (as ESP-IDF does in _ledc_update_duty)
+	pwm.channelConf0(channel).SetBits(chanSigOutEnMask)
 }
 
 // SetPeriod updates the period of this PWM peripheral in nanoseconds.
