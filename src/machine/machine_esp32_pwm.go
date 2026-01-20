@@ -32,8 +32,14 @@ type pwmChannelInfo struct {
 	inUse bool  // Whether this channel is currently in use
 }
 
+// Number of PWM timers and channels
+const (
+	pwmTimerCount   = 4 // Number of high-speed timers (0-3)
+	pwmChannelCount = 8 // Number of high-speed channels (0-7)
+)
+
 // pwmChannels tracks which pin and timer is assigned to each channel (0-7)
-var pwmChannels [8]pwmChannelInfo
+var pwmChannels [pwmChannelCount]pwmChannelInfo
 
 // Hardware PWM peripherals available on ESP32.
 // These use the high-speed LEDC timers for glitch-free PWM updates.
@@ -43,9 +49,6 @@ var (
 	PWM2 = &PWM{num: 2}
 	PWM3 = &PWM{num: 3}
 )
-
-// Number of available PWM channels
-const pwmChannelCount = 8
 
 // LEDC peripheral constants
 const (
@@ -107,7 +110,7 @@ type pwmState struct {
 	configured bool  // Whether the timer has been configured
 }
 
-var pwmStates [4]pwmState
+var pwmStates [pwmTimerCount]pwmState
 
 // Configure enables and configures this PWM peripheral.
 // The period is specified in nanoseconds. A period of 0 will select a default
@@ -240,7 +243,6 @@ func (pwm *PWM) Channel(pin Pin) (uint8, error) {
 			// - Enable clock
 			// - Select this timer
 			// - Enable signal output
-			// - Idle level low
 			var conf uint32
 			conf |= chanClkEnMask                      // Enable clock
 			conf |= uint32(pwm.num) & chanTimerSelMask // Select timer
@@ -435,9 +437,27 @@ func (pwm *PWM) Period() uint64 {
 	}
 
 	// period_ns = (2^resolution * divider_reg / 256) / 80MHz * 1e9
-	// period_ns = (2^resolution * divider_reg * 1000) / (80 * 256)
+	// period_ns = (2^resolution * divider_reg * 1000) / (80 * (1 << dividerFracBits))
 	resolutionValue := uint64(1) << resolution
-	return resolutionValue * uint64(dividerReg) * 1000 / (80 * 256)
+	return resolutionValue * uint64(dividerReg) * 1000 / (80 << dividerFracBits)
+}
+
+// Frequency returns the current PWM frequency in Hz.
+func (pwm *PWM) Frequency() uint32 {
+	period := pwm.Period()
+	if period == 0 {
+		return 0
+	}
+	return uint32(1_000_000_000 / period)
+}
+
+// Resolution returns the current duty cycle resolution in bits.
+func (pwm *PWM) Resolution() uint8 {
+	resolution := pwmStates[pwm.num].resolution
+	if resolution == 0 {
+		return defaultResolution
+	}
+	return resolution
 }
 
 // SetInverting sets whether to invert the output of this channel.
@@ -482,16 +502,30 @@ func (pwm *PWM) Enable(enable bool) {
 	}
 }
 
-// SetCounter sets the counter value of this PWM timer. This can be used to
+// IsEnabled returns true if this PWM timer is running (not paused).
+func (pwm *PWM) IsEnabled() bool {
+	return (pwm.timerConf().Get() & timerPauseMask) == 0
+}
+
+// ResetCounter resets the timer counter to 0. This can be used to
 // synchronize multiple PWM timers.
-func (pwm *PWM) SetCounter(value uint32) {
-	// The counter is reset by setting the RST bit, then writing the value
-	// Note: ESP32 LEDC doesn't support directly writing counter value,
-	// so we reset to 0 instead. This method is provided for API compatibility.
+func (pwm *PWM) ResetCounter() {
 	timerConf := pwm.timerConf()
 	conf := timerConf.Get()
 	timerConf.Set(conf | timerRstMask)
 	timerConf.Set(conf)
+}
+
+// GetPin returns the pin assigned to the given channel, or NoPin if the
+// channel is not in use by this PWM peripheral.
+func (pwm *PWM) GetPin(channel uint8) Pin {
+	if !pwm.isValidChannel(channel) {
+		return NoPin
+	}
+	if !pwmChannels[channel].inUse || pwmChannels[channel].timer != pwm.num {
+		return NoPin
+	}
+	return pwmChannels[channel].pin
 }
 
 // Register access helpers
