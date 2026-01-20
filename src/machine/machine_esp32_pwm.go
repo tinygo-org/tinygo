@@ -66,7 +66,7 @@ const (
 	// HSTIMER_CONF register
 	timerDivNumPos   = 5 // DIV_NUM position (bits 5-22)
 	timerDivNumMask  = 0x3FFFF << timerDivNumPos
-	timerLimPos      = 0 // LIM position (bits 0-4), resolution = LIM + 1
+	timerLimPos      = 0 // duty_resolution position (bits 0-4), stores bit width directly
 	timerLimMask     = 0x1F
 	timerPausePos    = 23 // PAUSE bit
 	timerPauseMask   = 1 << timerPausePos
@@ -141,11 +141,11 @@ func (pwm *PWM) Configure(config PWMConfig) error {
 	// Configure timer:
 	// - Use APB_CLK (80MHz) as clock source
 	// - Set divider
-	// - Set resolution (LIM = resolution - 1)
+	// - Set resolution (duty_resolution field stores the bit width directly)
 	var conf uint32
 	conf |= timerTickSelMask                              // APB_CLK
 	conf |= (divider << timerDivNumPos) & timerDivNumMask // Divider
-	conf |= uint32(resolution-1) & timerLimMask           // Resolution
+	conf |= uint32(resolution) & timerLimMask             // Resolution (bit width)
 
 	// Reset the timer (set rst=1, then rst=0)
 	timerConf.Set(conf | timerRstMask)
@@ -372,7 +372,7 @@ func (pwm *PWM) Counter() uint32 {
 func (pwm *PWM) Period() uint64 {
 	conf := pwm.timerConf().Get()
 	dividerReg := (conf & timerDivNumMask) >> timerDivNumPos
-	resolution := (conf & timerLimMask) + 1
+	resolution := conf & timerLimMask // duty_resolution stores bit width directly
 
 	// period_ns = (2^resolution * divider_reg / 256) / 80MHz * 1e9
 	// period_ns = (2^resolution * divider_reg * 1000) / (80 * 256)
