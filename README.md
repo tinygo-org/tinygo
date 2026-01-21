@@ -63,7 +63,7 @@ tinygo build -buildmode=c-shared -o add.wasm -target=wasip1 add.go
 You can also use the same syntax as Go 1.24+:
 
 ```shell
-GOARCH=wasip1 GOOS=wasm tinygo build -buildmode=c-shared -o add.wasm add.go
+GOOS=wasip1 GOARCH=wasm tinygo build -buildmode=c-shared -o add.wasm add.go
 ```
 
 ## Installation
