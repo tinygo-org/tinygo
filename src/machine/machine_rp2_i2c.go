@@ -292,7 +292,7 @@ func (i2c *I2C) tx(addr uint8, tx, rx []byte) (err error) {
 
 	// Base 4ms for small register pokes.
 	// Add per-byte budget. 100us/byte is conservative at 400kHz and still ok at 100kHz for modest sizes.
-	timeout_us := uint64(4_000) + uint64(txlen+rxlen) * 100
+	timeout_us := uint64(4_000) + uint64(txlen+rxlen)*100
 	// Cap so it doesn't go insane:
 	timeout_us = min(timeout_us, 500_000)
 
