@@ -163,7 +163,6 @@ const (
 
 func (p Pin) getPortNumber() uint8 {
 	return uint8(p) >> 4
-
 }
 
 func (p Pin) getPinNumber() uint8 {
