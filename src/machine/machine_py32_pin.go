@@ -141,14 +141,16 @@ const (
 	PinInputPulldown
 	PinInputPullup
 	PinInputAnalog
+	PinAlternate
 )
 const PinInput PinMode = PinInputFloating
 
 const (
-	gpioModeInput  = 0
-	gpioModeOutput = 1
-	gpioModeAnalog = 3
-	gpioModeMask   = 0x3
+	gpioModeInput     = 0
+	gpioModeOutput    = 1
+	gpioModeAlternate = 2
+	gpioModeAnalog    = 3
+	gpioModeMask      = 0x3
 
 	gpioPullFloating = 0
 	gpioPullUp       = 1
@@ -211,6 +213,9 @@ func (p Pin) Configure(config PinConfig) {
 	case PinInputAnalog:
 		port.MODER.ReplaceBits(gpioModeAnalog, gpioModeMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
+	case PinAlternate:
+		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
+		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
 	}
 }
 
