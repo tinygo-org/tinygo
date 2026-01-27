@@ -9,5 +9,6 @@
     "linkerscript": "targets/py32f002b.ld",
     "extra-files": [
         "src/device/py32/py32f002axx.s"
-    ]
+    ],
+    "flash-command": "pyocd load -t py32f002bx5 {bin}"
 }

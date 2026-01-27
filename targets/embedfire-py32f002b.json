@@ -2,7 +2,6 @@
   "inherits": [
     "py32f002b"
   ],
-  "flash-command": "pyocd load -t py32f002bx5 {bin}",
   "build-tags": [
     "embedfire_py32f002b",
 		"default_uart_pins"

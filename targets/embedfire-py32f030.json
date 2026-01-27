@@ -2,7 +2,6 @@
 	"inherits": [
 		"py32f030_64k_8k"
 	],
-	"flash-command": "pyocd load -t py32f003x8 {bin}",
 	"build-tags": [
 		"embedfire_py32f030",
 		"default_uart_pins"
