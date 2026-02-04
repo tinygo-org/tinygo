@@ -1,4 +1,4 @@
-//go:build !baremetal || tkey
+//go:build !baremetal || tkey || uefi
 
 package interrupt
 

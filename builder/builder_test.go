@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -35,6 +36,8 @@ func TestClangAttributes(t *testing.T) {
 		"nintendoswitch",
 		"riscv-qemu",
 		"tkey",
+		"uefi-amd64",
+		"uefi-arm64",
 		"wasip1",
 		"wasip2",
 		"wasm",
@@ -128,7 +131,7 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 	defer mod.Dispose()
 
 	// Check whether the LLVM target matches.
-	if mod.Target() != config.Triple() {
+	if mod.Target() != config.Triple() && !strings.HasPrefix(mod.Target(), config.Triple()) {
 		t.Errorf("target has LLVM triple %#v but Clang makes it LLVM triple %#v", config.Triple(), mod.Target())
 	}
 

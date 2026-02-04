@@ -813,7 +813,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
 			ldflags = append(ldflags, "-mllvm", "-mattr="+config.Features()) // needed for MIPS softfloat
-			if config.GOOS() == "windows" {
+			if config.GOOS() == "windows" || slices.Contains(config.Target.BuildTags, "uefi") {
 				// Options for the MinGW wrapper for the lld COFF linker.
 				ldflags = append(ldflags,
 					"-Xlink=/opt:lldlto="+strconv.Itoa(speedLevel),
