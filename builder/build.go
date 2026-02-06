@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -281,9 +282,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				allFiles[file.Name] = append(allFiles[file.Name], file)
 			}
 		}
-		for name, files := range allFiles {
-			name := name
-			files := files
+		// Sort embedded files by name to maintain output determinism.
+		embedNames := make([]string, 0, len(allFiles))
+		for _, files := range allFiles {
+			embedNames = append(embedNames, files[0].Name)
+		}
+		slices.Sort(embedNames)
+		for _, name := range embedNames {
 			job := &compileJob{
 				description: "make object file for " + name,
 				run: func(job *compileJob) error {
@@ -298,7 +303,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					sum := sha256.Sum256(data)
 					hexSum := hex.EncodeToString(sum[:16])
 
-					for _, file := range files {
+					for _, file := range allFiles[name] {
 						file.Size = uint64(len(data))
 						file.Hash = hexSum
 						if file.NeedsData {
