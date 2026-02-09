@@ -52,3 +52,130 @@ func float64bits(f float64) uint64 {
 func float64frombits(b uint64) float64 {
 	return *(*float64)(unsafe.Pointer(&b))
 }
+
+// The fmimimum/fmaximum are missing from most libm implementations.
+// Just define them ourselves.
+
+//export fminimum
+func fminimum(x, y float64) float64 {
+	return minimumFloat64(x, y)
+}
+
+//export fminimumf
+func fminimumf(x, y float32) float32 {
+	return minimumFloat32(x, y)
+}
+
+//export fmaximum
+func fmaximum(x, y float64) float64 {
+	return maximumFloat64(x, y)
+}
+
+//export fmaximumf
+func fmaximumf(x, y float32) float32 {
+	return maximumFloat32(x, y)
+}
+
+// Create seperate copies of the function that are not exported.
+// This is necessary so that LLVM does not recognize them as builtins.
+// If tests called the builtins, LLVM would just override them on most platforms.
+
+func minimumFloat32(x, y float32) float32 {
+	return minimumFloat[float32, int32](x, y, minPosNaN32, magMask32)
+}
+
+func minimumFloat64(x, y float64) float64 {
+	return minimumFloat[float64, int64](x, y, minPosNaN64, magMask64)
+}
+
+func maximumFloat32(x, y float32) float32 {
+	return maximumFloat[float32, int32](x, y, minPosNaN32, magMask32)
+}
+
+func maximumFloat64(x, y float64) float64 {
+	return maximumFloat[float64, int64](x, y, minPosNaN64, magMask64)
+}
+
+// minimumFloat is a generic implementation of the floating-point minimum operation.
+// This implementation uses integer operations because this is mainly used for platforms without an FPU.
+func minimumFloat[T float, I floatInt](x, y T, minPosNaN, magMask I) T {
+	xBits := *(*I)(unsafe.Pointer(&x))
+	yBits := *(*I)(unsafe.Pointer(&y))
+
+	// Handle the special case of a positive NaN value.
+	switch {
+	case xBits >= minPosNaN:
+		return x
+	case yBits >= minPosNaN:
+		return y
+	}
+
+	// The exponent-mantissa portion of the float is comparable via unsigned comparison (excluding the NaN case).
+	// We can turn a float into a signed-comparable value by reversing the comparison order of negative values.
+	// We can reverse the order by inverting the bits.
+	// This also ensures that positive zero compares greater than negative zero (as required by the spec).
+	// Negative NaN values will compare less than any other value, so they require no special handling to propogate.
+	if xBits < 0 {
+		xBits ^= magMask
+	}
+	if yBits < 0 {
+		yBits ^= magMask
+	}
+	if xBits <= yBits {
+		return x
+	} else {
+		return y
+	}
+}
+
+// maximumFloat is a generic implementation of the floating-point maximum operation.
+// This implementation uses integer operations because this is mainly used for platforms without an FPU.
+func maximumFloat[T float, I floatInt](x, y T, minPosNaN, magMask I) T {
+	xBits := *(*I)(unsafe.Pointer(&x))
+	yBits := *(*I)(unsafe.Pointer(&y))
+
+	// The exponent-mantissa portion of the float is comparable via unsigned comparison (excluding the NaN case).
+	// We can turn a float into a signed-comparable value by reversing the comparison order of negative values.
+	// We can reverse the order by inverting the bits.
+	// This also ensures that positive zero compares greater than negative zero (as required by the spec).
+	// Positive NaN values will compare greater than any other value, so they require no special handling to propogate.
+	if xBits < 0 {
+		xBits ^= magMask
+	}
+	if yBits < 0 {
+		yBits ^= magMask
+	}
+	// Handle the special case of a negative NaN value.
+	maxNegNaN := ^minPosNaN
+	switch {
+	case xBits <= maxNegNaN:
+		return x
+	case yBits <= maxNegNaN:
+		return y
+	}
+	if xBits >= yBits {
+		return x
+	} else {
+		return y
+	}
+}
+
+const (
+	signPos64     = 63
+	exponentPos64 = 52
+	minPosNaN64   = ((1 << signPos64) - (1 << exponentPos64)) + 1
+	magMask64     = 1<<signPos64 - 1
+
+	signPos32     = 31
+	exponentPos32 = 23
+	minPosNaN32   = ((1 << signPos32) - (1 << exponentPos32)) + 1
+	magMask32     = 1<<signPos32 - 1
+)
+
+type float interface {
+	float32 | float64
+}
+
+type floatInt interface {
+	int32 | int64
+}
