@@ -6,6 +6,9 @@ TinyGo is a Go compiler intended for use in small places such as microcontroller
 
 It reuses libraries used by the [Go language tools](https://golang.org/pkg/go/) alongside [LLVM](http://llvm.org) to provide an alternative way to compile programs written in the Go programming language.
 
+> [!IMPORTANT]
+> You can help TinyGo with a financial contribution using OpenCollective. Please see https://opencollective.com/tinygo for more information. Thank you!
+
 ## Embedded
 
 Here is an example program that blinks the built-in LED when run directly on any supported board with onboard LED:
