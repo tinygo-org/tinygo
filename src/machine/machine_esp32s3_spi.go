@@ -79,10 +79,33 @@ type SPIConfig struct {
 // Configure and make the SPI peripheral ready to use.
 // Implementation following ESP-IDF HAL with GPIO Matrix routing
 func (spi *SPI) Configure(config SPIConfig) error {
-
-	// Set default frequency if not specified
+	// Set default
 	if config.Frequency == 0 {
-		config.Frequency = SPI_DEFAULT_FREQUENCY // Default to maximum safe speed
+		config.Frequency = SPI_DEFAULT_FREQUENCY
+	}
+
+	switch spi.busID {
+	case 2: // SPI2 (FSPI)
+		if config.SCK == 0 {
+			config.SCK = SPI1_SCK_PIN
+		}
+		if config.SDO == 0 {
+			config.SDO = SPI1_MOSI_PIN
+		}
+		if config.SDI == 0 {
+			config.SDI = SPI1_MISO_PIN
+		}
+	case 3: // SPI3 (HSPI)
+		if config.SCK == 0 {
+			config.SCK = SPI2_SCK_PIN
+		}
+		if config.SDO == 0 {
+			config.SDO = SPI2_MOSI_PIN
+		}
+		if config.SDI == 0 {
+			config.SDI = SPI2_MISO_PIN
+		}
+	default:
 	}
 
 	// Get GPIO Matrix signal indices for this SPI bus
