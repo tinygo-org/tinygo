@@ -47,9 +47,15 @@ const (
 
 // SPI pins
 const (
-	SPI_SCK_PIN = GPIO7
-	SPI_SDI_PIN = GPIO9
-	SPI_SDO_PIN = GPIO8
+	SPI1_SCK_PIN  = GPIO7
+	SPI1_MISO_PIN = GPIO8
+	SPI1_MOSI_PIN = GPIO9
+	SPI1_CS_PIN   = NoPin
+
+	SPI2_SCK_PIN  = NoPin
+	SPI2_MOSI_PIN = NoPin
+	SPI2_MISO_PIN = NoPin
+	SPI2_CS_PIN   = NoPin
 )
 
 // Onboard LEDs

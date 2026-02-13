@@ -27,20 +27,7 @@ const (
 	SPI_DEFAULT_FREQUENCY = 80e6 // 80MHz
 )
 
-// ESP32-S3 default SPI pins that support IO MUX direct connection
 const (
-	// SPI2 (FSPI) default pins - support IO MUX function 4
-	SPI2_DEFAULT_SCK  = GPIO12 // SCK
-	SPI2_DEFAULT_MOSI = GPIO11 // SDO (MOSI)
-	SPI2_DEFAULT_MISO = GPIO13 // SDI (MISO)
-	SPI2_DEFAULT_CS   = GPIO10 // CS
-
-	// SPI3 (HSPI) default pins - support IO MUX function 4
-	SPI3_DEFAULT_SCK  = GPIO36 // SCK
-	SPI3_DEFAULT_MOSI = GPIO35 // SDO (MOSI)
-	SPI3_DEFAULT_MISO = GPIO37 // SDI (MISO)
-	SPI3_DEFAULT_CS   = GPIO34 // CS
-
 	// IO MUX function number for SPI direct connection
 	SPI_IOMUX_FUNC = 4
 )
@@ -437,15 +424,15 @@ func freqToClockDiv(hz uint32) uint32 {
 func isDefaultSPIPins(busID uint8, config SPIConfig) bool {
 	switch busID {
 	case 2: // SPI2 (FSPI)
-		return config.SCK == SPI2_DEFAULT_SCK &&
-			config.SDO == SPI2_DEFAULT_MOSI &&
-			config.SDI == SPI2_DEFAULT_MISO &&
-			(config.CS == SPI2_DEFAULT_CS || config.CS == NoPin)
+		return config.SCK == SPI1_SCK_PIN &&
+			config.SDO == SPI1_MOSI_PIN &&
+			config.SDI == SPI1_MISO_PIN &&
+			(config.CS == SPI1_CS_PIN || config.CS == NoPin)
 	case 3: // SPI3 (HSPI)
-		return config.SCK == SPI3_DEFAULT_SCK &&
-			config.SDO == SPI3_DEFAULT_MOSI &&
-			config.SDI == SPI3_DEFAULT_MISO &&
-			(config.CS == SPI3_DEFAULT_CS || config.CS == NoPin)
+		return config.SCK == SPI2_SCK_PIN &&
+			config.SDO == SPI2_MOSI_PIN &&
+			config.SDI == SPI2_MISO_PIN &&
+			(config.CS == SPI2_CS_PIN || config.CS == NoPin)
 	default:
 		return false
 	}
