@@ -27,7 +27,7 @@ func main() {
 }
 
 // Configure SysTick to fire every 1ms on given system frequency.
-// This should be called after any changes to the system clock frequency.
+// This should be called after any change to the system clock frequency.
 func ConfigureSystemTimer(systemFrequencyHz uint32) {
 	arm.SetupSystemTimer(systemFrequencyHz / 1000)
 }
