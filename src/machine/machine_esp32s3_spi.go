@@ -54,7 +54,6 @@ const (
 	SPI3_CS0_OUT_IDX = uint32(71) // Line 146: SPI3_CS0_OUT_IDX
 )
 
-// Serial Peripheral Interface on the ESP32-S3.
 type SPI struct {
 	Bus   interface{}
 	busID uint8
@@ -65,7 +64,6 @@ var (
 	SPI1 = &SPI{Bus: esp.SPI3, busID: 3} // Secondary SPI (HSPI)
 )
 
-// SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
 	SCK       Pin   // Serial Clock
