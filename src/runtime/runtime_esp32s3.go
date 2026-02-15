@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"device/esp"
+	"machine"
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
@@ -70,6 +71,9 @@ func main() {
 	for x := 0; x < 30; x++ {
 		clearbss()
 	}
+
+	// Initialize UART.
+	machine.InitSerial()
 
 	// Initialize main system timer used for time.Now.
 	initTimer()
