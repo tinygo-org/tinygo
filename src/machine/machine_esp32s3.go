@@ -309,4 +309,90 @@ func (uart *UART) writeByte(b byte) error {
 
 func (uart *UART) flush() {}
 
-// TODO: SPI
+// USB Serial/JTAG Controller for ESP32-S3
+type USB_DEVICE struct {
+	Bus *esp.USB_DEVICE_Type
+}
+
+var (
+	_USBCDC = &USB_DEVICE{
+		Bus: esp.USB_DEVICE,
+	}
+
+	USBCDC Serialer = _USBCDC
+)
+
+func initUSB() {
+	USBCDC.Configure(UARTConfig{BaudRate: 115200})
+}
+
+type Serialer interface {
+	WriteByte(c byte) error
+	Write(data []byte) (n int, err error)
+	Configure(config UARTConfig) error
+	Buffered() int
+	ReadByte() (byte, error)
+	DTR() bool
+	RTS() bool
+}
+
+func (usbdev *USB_DEVICE) Configure(config UARTConfig) error {
+	return nil
+}
+
+func (usbdev *USB_DEVICE) WriteByte(c byte) error {
+	// Host is connected - wait for TX FIFO space with reasonable timeout
+	timeout := 10000 // Generous timeout for connected host
+	for usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 && timeout > 0 {
+		timeout--
+	}
+
+	// Even with host connected, don't hang forever
+	if timeout == 0 {
+		return nil
+	}
+
+	// Write byte to USB Serial/JTAG endpoint
+	usbdev.Bus.SetEP1_RDWR_BYTE(uint32(c))
+
+	// Trigger transmission
+	usbdev.Bus.SetEP1_CONF_WR_DONE(1)
+
+	return nil
+}
+
+func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
+	for _, c := range data {
+		err = usbdev.WriteByte(c)
+		if err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
+	// TODO: Implement USB Serial/JTAG input reading
+	return 0, errors.New("ReadByte not implemented")
+}
+
+func (usbdev *USB_DEVICE) Buffered() int {
+	// Return number of bytes available to read
+	return int(usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL())
+}
+
+func (usbdev *USB_DEVICE) DTR() bool {
+	// Data Terminal Ready - not applicable for USB Serial/JTAG
+	return false
+}
+
+func (usbdev *USB_DEVICE) RTS() bool {
+	// Request To Send - not applicable for USB Serial/JTAG
+	return false
+}
+
+func (usbdev *USB_DEVICE) flush() {
+	// Force transmission of any buffered data
+	usbdev.Bus.SetEP1_CONF_WR_DONE(1)
+}

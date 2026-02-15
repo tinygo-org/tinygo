@@ -4,7 +4,7 @@
 	"features": "+atomctl,+bool,+clamps,+coprocessor,+debug,+density,+div32,+esp32s3,+exception,+fp,+highpriinterrupts,+interrupt,+loop,+mac16,+memctl,+minmax,+miscsr,+mul32,+mul32high,+nsa,+prid,+regprotect,+rvector,+s32c1i,+sext,+threadptr,+timerint,+windowed",
 	"build-tags": ["esp32s3", "esp"],
 	"scheduler": "tasks",
-	"serial": "uart",
+	"serial": "usb",
 	"linker": "ld.lld",
 	"default-stack-size": 2048,
 	"rtlib": "compiler-rt",
