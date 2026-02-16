@@ -1,4 +1,4 @@
-//go:build esp32s3 && !xiao_esp32s3
+//go:build esp32s3_wroom1
 
 package machine
 
