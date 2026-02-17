@@ -43,6 +43,15 @@ const (
 	USBCDC_DP_PIN = PA25
 )
 
+// UART0 pins
+const (
+	UART0_TX_PIN = D1
+	UART0_RX_PIN = D0
+)
+
+// UART0 on the Feather M0.
+var UART0 = &sercomUSART0
+
 // UART1 pins
 const (
 	UART_TX_PIN = D10
