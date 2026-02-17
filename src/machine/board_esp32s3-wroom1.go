@@ -3,6 +3,9 @@
 package machine
 
 const (
+	SCL_PIN = GPIO17
+	SDA_PIN = GPIO18
+
 	SPI1_SCK_PIN  = GPIO12 // SCK
 	SPI1_MOSI_PIN = GPIO11 // SDO (MOSI)
 	SPI1_MISO_PIN = GPIO13 // SDI (MISO)

@@ -105,6 +105,21 @@ func (p Pin) Configure(config PinConfig) {
 	}
 }
 
+// configure is the same as Configure, but allows setting a specific GPIO matrix signal.
+func (p Pin) configure(config PinConfig, signal uint32) {
+	p.Configure(config)
+	if signal == 256 {
+		return
+	}
+	if config.Mode == PinOutput {
+		p.outFunc().Set(signal)
+	} else {
+		inFunc(signal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(p))
+	}
+}
+
+func initI2CExt1Clock() {}
+
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
 // output function selection.
 func (p Pin) outFunc() *volatile.Register32 {
