@@ -54,10 +54,6 @@ func main() {
 	// Configure interrupt handler
 	interruptInit()
 
-	// Initialize UART.
-	machine.USBCDC.Configure(machine.UARTConfig{})
-	machine.InitSerial()
-
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
@@ -66,6 +62,11 @@ func main() {
 
 	// Fallback: if main ever returns, hang the CPU.
 	exit(0)
+}
+
+func init() {
+	// Initialize UART.
+	machine.InitSerial()
 }
 
 func abort() {
