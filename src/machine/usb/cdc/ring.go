@@ -40,23 +40,22 @@ func (r *ring512) Used() uint32 {
 	return r.head.Load() - r.tail.Load()
 }
 
-// Peek returns a contiguous view into the readable portion of the buffer
+// Peek returns a contiguous view into the readable portions of the buffer
 // without advancing the read position. When data wraps around the end of
-// the internal buffer, only the first contiguous segment is returned;
-// the caller must Discard that segment and Peek again to get the rest.
-// Returns nil when empty.
-func (r *ring512) Peek() []byte {
+// the internal buffer, two segments are returned. Second data2 is nil on fully contiguous buffer.
+// Returns nil,nil when empty.
+func (r *ring512) Peek() (data1, data2 []byte) {
 	head, tail := r.lims()
 	used := head - tail
 	if used == 0 {
-		return nil
+		return nil, nil
 	}
 	pos := tail & ringMask
-	contig := uint32(ringBufLen) - pos
-	if contig > used {
-		contig = used
+	contig := ringBufLen - pos
+	if contig >= used {
+		return r.buf[pos : pos+used], nil
 	}
-	return r.buf[pos : pos+contig]
+	return r.buf[pos:], r.buf[:used-contig]
 }
 
 // Discard marks numBytes as read, advancing the read position.

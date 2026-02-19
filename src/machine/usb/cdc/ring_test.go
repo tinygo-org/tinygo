@@ -8,6 +8,33 @@ import (
 	"testing"
 )
 
+// peekAll returns all readable data by concatenating both Peek segments.
+func peekAll(r *ring512) []byte {
+	d1, d2 := r.Peek()
+	if len(d2) == 0 {
+		return d1
+	}
+	out := make([]byte, len(d1)+len(d2))
+	copy(out, d1)
+	copy(out[len(d1):], d2)
+	return out
+}
+
+// drain reads all data from the ring, verifying Peek length matches Used.
+func drain(t *testing.T, r *ring512) []byte {
+	t.Helper()
+	d1, d2 := r.Peek()
+	n := uint32(len(d1) + len(d2))
+	if n != r.Used() {
+		t.Fatalf("Peek returned %d bytes but Used()=%d", n, r.Used())
+	}
+	var out []byte
+	out = append(out, d1...)
+	out = append(out, d2...)
+	r.Discard(n)
+	return out
+}
+
 // --- Basic Functionality ---
 
 func TestRing512_PutPeekDiscard(t *testing.T) {
@@ -16,7 +43,7 @@ func TestRing512_PutPeekDiscard(t *testing.T) {
 	if !r.Put(data) {
 		t.Fatal("Put failed on empty buffer")
 	}
-	got := r.Peek()
+	got := peekAll(&r)
 	if !bytes.Equal(got, data) {
 		t.Fatalf("Peek = %q, want %q", got, data)
 	}
@@ -27,8 +54,9 @@ func TestRing512_PutPeekDiscard(t *testing.T) {
 	if r.Used() != 0 {
 		t.Fatalf("Used after full discard = %d, want 0", r.Used())
 	}
-	if r.Peek() != nil {
-		t.Fatalf("Peek after full discard = %v, want nil", r.Peek())
+	d1, d2 := r.Peek()
+	if d1 != nil || d2 != nil {
+		t.Fatalf("Peek after full discard = (%v, %v), want (nil, nil)", d1, d2)
 	}
 }
 
@@ -72,7 +100,7 @@ func TestRing512_PutFull(t *testing.T) {
 	if r.Put([]byte{0x42}) {
 		t.Fatal("Put on full buffer should fail")
 	}
-	got := r.Peek()
+	got := peekAll(&r)
 	if !bytes.Equal(got, data) {
 		t.Fatalf("Peek full buffer: got len %d, want 512", len(got))
 	}
@@ -96,16 +124,14 @@ func TestRing512_PutExactFit(t *testing.T) {
 	}
 }
 
-// --- Full buffer with off != 0 (was the critical bug in sentinel design) ---
+// --- Full buffer with wrapped position ---
 
 func TestRing512_FullBufferWrapped(t *testing.T) {
 	var r ring512
 
-	// Advance tail to non-zero position.
 	r.Put(make([]byte, 200))
 	r.Discard(100) // tail=100, head=200, used=100
 
-	// Fill remaining space exactly.
 	free := r.Free()
 	if free != 412 {
 		t.Fatalf("Free = %d, want 412", free)
@@ -117,25 +143,14 @@ func TestRing512_FullBufferWrapped(t *testing.T) {
 	if !r.Put(fill) {
 		t.Fatalf("Put(%d) into %d free space failed", free, free)
 	}
-
 	if r.Used() != 512 {
 		t.Fatalf("Used = %d, want 512 (full)", r.Used())
 	}
 	if r.Free() != 0 {
 		t.Fatalf("Free = %d, want 0 (full)", r.Free())
 	}
-
-	// Drain and verify all data recoverable.
-	var drained []byte
-	for r.Used() > 0 {
-		p := r.Peek()
-		if len(p) == 0 {
-			t.Fatal("Used > 0 but Peek returned nil")
-		}
-		drained = append(drained, p...)
-		r.Discard(uint32(len(p)))
-	}
-	if uint32(len(drained)) != 512 {
+	drained := drain(t, &r)
+	if len(drained) != 512 {
 		t.Fatalf("drained %d bytes, want 512", len(drained))
 	}
 }
@@ -144,13 +159,9 @@ func TestRing512_FullBufferWrapped(t *testing.T) {
 
 func TestRing512_Wrap(t *testing.T) {
 	var r ring512
-	filler := make([]byte, 500)
-	if !r.Put(filler) {
-		t.Fatal("fill failed")
-	}
+	r.Put(make([]byte, 500))
 	r.Discard(490) // tail=490, head=500, used=10
 
-	// Put 30 bytes. Will wrap: 12 at end of buf + 18 at start.
 	wrapData := make([]byte, 30)
 	for i := range wrapData {
 		wrapData[i] = byte(i + 100)
@@ -162,29 +173,24 @@ func TestRing512_Wrap(t *testing.T) {
 		t.Fatalf("Used = %d, want 40", r.Used())
 	}
 
-	// Drain with two Peek/Discard rounds and verify data.
-	var drained []byte
-	for r.Used() > 0 {
-		p := r.Peek()
-		if len(p) == 0 {
-			t.Fatal("Used > 0 but Peek returned nil")
-		}
-		drained = append(drained, p...)
-		r.Discard(uint32(len(p)))
+	d1, d2 := r.Peek()
+	if len(d1)+len(d2) != 40 {
+		t.Fatalf("Peek total = %d, want 40", len(d1)+len(d2))
 	}
-	if uint32(len(drained)) != 40 {
+	if d2 == nil {
+		t.Fatal("expected wrapped data in d2")
+	}
+	drained := drain(t, &r)
+	if len(drained) != 40 {
 		t.Fatalf("drained %d bytes, want 40", len(drained))
 	}
 }
 
 func TestRing512_WrapDataIntegrity(t *testing.T) {
 	var r ring512
-
-	// Advance to position near end of buffer.
 	r.Put(make([]byte, 500))
-	r.Discard(500) // tail=500, head=500
+	r.Discard(500)
 
-	// Put data that wraps.
 	data := make([]byte, 100)
 	for i := range data {
 		data[i] = byte(i)
@@ -192,16 +198,9 @@ func TestRing512_WrapDataIntegrity(t *testing.T) {
 	if !r.Put(data) {
 		t.Fatal("wrapped put failed")
 	}
-	// Data occupies buf[500:512] + buf[0:88]
-
-	var got []byte
-	for r.Used() > 0 {
-		p := r.Peek()
-		got = append(got, p...)
-		r.Discard(uint32(len(p)))
-	}
+	got := drain(t, &r)
 	if !bytes.Equal(got, data) {
-		t.Fatalf("data integrity failure across wrap: got %v, want %v", got[:10], data[:10])
+		t.Fatal("data integrity failure across wrap")
 	}
 }
 
@@ -211,7 +210,7 @@ func TestRing512_DiscardPartial(t *testing.T) {
 	var r ring512
 	r.Put([]byte("abcdefgh"))
 	r.Discard(3)
-	got := r.Peek()
+	got := peekAll(&r)
 	if !bytes.Equal(got, []byte("defgh")) {
 		t.Fatalf("after partial discard, Peek = %q, want %q", got, "defgh")
 	}
@@ -219,9 +218,9 @@ func TestRing512_DiscardPartial(t *testing.T) {
 
 func TestRing512_DiscardZero(t *testing.T) {
 	var r ring512
-	r.Discard(0) // should not panic on empty
+	r.Discard(0)
 	r.Put([]byte("hi"))
-	r.Discard(0) // should not panic on non-empty
+	r.Discard(0)
 	if r.Used() != 2 {
 		t.Fatalf("Used = %d after zero discard", r.Used())
 	}
@@ -274,54 +273,97 @@ func TestRing512_MultiplePutPeekDiscard(t *testing.T) {
 		if !r.Put(msg) {
 			t.Fatalf("Put failed at iteration %d, Free=%d, Used=%d", i, r.Free(), r.Used())
 		}
-		// Drain completely each iteration.
-		var got []byte
-		for r.Used() > 0 {
-			p := r.Peek()
-			got = append(got, p...)
-			r.Discard(uint32(len(p)))
-		}
+		got := drain(t, &r)
 		if !bytes.Equal(got, msg) {
 			t.Fatalf("iter %d: got %q, want %q", i, got, msg)
 		}
 	}
 }
 
-// TestRing512_HeadTailOverflow verifies correctness near uint32 max.
 func TestRing512_HeadTailOverflow(t *testing.T) {
 	var r ring512
-	// Artificially set head/tail near overflow point.
 	near := uint32(0xFFFFFFFF - 100)
 	r.head.Store(near)
 	r.tail.Store(near)
 
-	if r.Used() != 0 {
-		t.Fatalf("Used = %d, want 0", r.Used())
-	}
-	if r.Free() != 512 {
-		t.Fatalf("Free = %d, want 512", r.Free())
+	if r.Used() != 0 || r.Free() != 512 {
+		t.Fatalf("Used=%d Free=%d, want 0/512", r.Used(), r.Free())
 	}
 
-	// Write and read across the overflow boundary.
 	for i := 0; i < 300; i++ {
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		if !r.Put(data) {
 			t.Fatalf("Put failed at iter %d (head=%d tail=%d)", i, r.head.Load(), r.tail.Load())
 		}
-		var got []byte
-		for r.Used() > 0 {
-			p := r.Peek()
-			got = append(got, p...)
-			r.Discard(uint32(len(p)))
-		}
+		got := drain(t, &r)
 		if !bytes.Equal(got, data) {
-			t.Fatalf("iter %d: data mismatch: got %v want %v", i, got, data)
+			t.Fatalf("iter %d: data mismatch", i)
 		}
 	}
+}
 
-	// Head should have wrapped past 0.
-	if r.head.Load() > 1000 && r.head.Load() < near {
-		t.Logf("head didn't wrap as expected: %d", r.head.Load())
+// --- Peek two-segment tests ---
+
+func TestRing512_PeekNoWrap(t *testing.T) {
+	var r ring512
+	r.Put([]byte("hello"))
+	d1, d2 := r.Peek()
+	if !bytes.Equal(d1, []byte("hello")) {
+		t.Fatalf("d1 = %q, want %q", d1, "hello")
+	}
+	if d2 != nil {
+		t.Fatalf("d2 = %v, want nil", d2)
+	}
+}
+
+func TestRing512_PeekWrapped(t *testing.T) {
+	var r ring512
+	r.Put(make([]byte, 508))
+	r.Discard(508) // tail=508, head=508
+
+	data := []byte("abcdefghij") // 10 bytes: 4 at end, 6 at start
+	if !r.Put(data) {
+		t.Fatal("put failed")
+	}
+	d1, d2 := r.Peek()
+	if len(d1) != 4 {
+		t.Fatalf("d1 len = %d, want 4", len(d1))
+	}
+	if len(d2) != 6 {
+		t.Fatalf("d2 len = %d, want 6", len(d2))
+	}
+	var got []byte
+	got = append(got, d1...)
+	got = append(got, d2...)
+	if !bytes.Equal(got, data) {
+		t.Fatalf("got %q, want %q", got, data)
+	}
+}
+
+func TestRing512_PeekEmpty(t *testing.T) {
+	var r ring512
+	d1, d2 := r.Peek()
+	if d1 != nil || d2 != nil {
+		t.Fatalf("Peek on empty = (%v, %v), want (nil, nil)", d1, d2)
+	}
+}
+
+func TestRing512_PeekTotalEqualsUsed(t *testing.T) {
+	var r ring512
+	// Test at many wrap positions.
+	for offset := 0; offset < 512; offset += 37 {
+		r.Reset()
+		if offset > 0 {
+			r.Put(make([]byte, offset))
+			r.Discard(uint32(offset))
+		}
+		sz := 200
+		r.Put(make([]byte, sz))
+		d1, d2 := r.Peek()
+		total := len(d1) + len(d2)
+		if total != sz {
+			t.Fatalf("offset=%d: Peek total=%d, want %d", offset, total, sz)
+		}
 	}
 }
 
@@ -330,7 +372,7 @@ func TestRing512_HeadTailOverflow(t *testing.T) {
 func TestRing512_SPSC(t *testing.T) {
 	for trial := 0; trial < 20; trial++ {
 		var r ring512
-		const totalBytes = 1 << 18 // 256 KiB per trial
+		const totalBytes = 1 << 18
 		produced := make([]byte, totalBytes)
 		for i := range produced {
 			produced[i] = byte(i + trial)
@@ -339,7 +381,6 @@ func TestRing512_SPSC(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(2)
 
-		// Producer
 		go func() {
 			defer wg.Done()
 			sent := 0
@@ -354,17 +395,18 @@ func TestRing512_SPSC(t *testing.T) {
 			}
 		}()
 
-		// Consumer
 		consumed := make([]byte, 0, totalBytes)
 		go func() {
 			defer wg.Done()
 			for len(consumed) < totalBytes {
-				p := r.Peek()
-				if len(p) == 0 {
+				d1, d2 := r.Peek()
+				n := len(d1) + len(d2)
+				if n == 0 {
 					continue
 				}
-				consumed = append(consumed, p...)
-				r.Discard(uint32(len(p)))
+				consumed = append(consumed, d1...)
+				consumed = append(consumed, d2...)
+				r.Discard(uint32(n))
 			}
 		}()
 
@@ -380,8 +422,6 @@ func TestRing512_SPSC(t *testing.T) {
 	}
 }
 
-// TestRing512_SPSCSmallChunks hammers single-byte puts to maximize
-// wrap transitions and contention on the hot path.
 func TestRing512_SPSCSmallChunks(t *testing.T) {
 	var r ring512
 	const totalBytes = 1 << 16
@@ -401,12 +441,14 @@ func TestRing512_SPSCSmallChunks(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for len(consumed) < totalBytes {
-			p := r.Peek()
-			if len(p) == 0 {
+			d1, d2 := r.Peek()
+			n := len(d1) + len(d2)
+			if n == 0 {
 				continue
 			}
-			consumed = append(consumed, p...)
-			r.Discard(uint32(len(p)))
+			consumed = append(consumed, d1...)
+			consumed = append(consumed, d2...)
+			r.Discard(uint32(n))
 		}
 	}()
 
@@ -420,10 +462,7 @@ func TestRing512_SPSCSmallChunks(t *testing.T) {
 
 // --- Fuzz Testing ---
 
-// refRing is a trivially correct reference implementation for comparison.
-type refRing struct {
-	data []byte
-}
+type refRing struct{ data []byte }
 
 func (r *refRing) Put(d []byte) bool {
 	if len(r.data)+len(d) > 512 {
@@ -432,28 +471,15 @@ func (r *refRing) Put(d []byte) bool {
 	r.data = append(r.data, d...)
 	return true
 }
+func (r *refRing) Discard(n uint32) { r.data = r.data[n:] }
+func (r *refRing) Used() uint32     { return uint32(len(r.data)) }
 
-func (r *refRing) Peek() []byte { return r.data }
-
-func (r *refRing) Discard(n uint32) {
-	if uint32(len(r.data)) < n {
-		panic("ref: discard overflow")
-	}
-	r.data = r.data[n:]
-}
-
-func (r *refRing) Used() uint32 { return uint32(len(r.data)) }
-func (r *refRing) Free() uint32 { return 512 - uint32(len(r.data)) }
-func (r *refRing) Reset()       { r.data = r.data[:0] }
-
-// FuzzRing512 runs random sequences of operations against both Ring512 and
-// a reference implementation, comparing results.
+// FuzzRing512 compares ring512 against a trivially correct reference.
 func FuzzRing512(f *testing.F) {
 	f.Add([]byte{0, 10, 1, 5, 2, 0, 10, 1, 10})
 	f.Add([]byte{0, 0})
 	f.Add([]byte{0, 255, 0, 255, 1, 255, 1, 255})
 	f.Add(bytes.Repeat([]byte{0, 64, 1, 64}, 50))
-	// Seed that triggers full-buffer-with-wrap (killed old sentinel design).
 	f.Add([]byte{0, 200, 1, 100, 0, 156, 0, 156})
 
 	f.Fuzz(func(t *testing.T, ops []byte) {
@@ -461,14 +487,10 @@ func FuzzRing512(f *testing.F) {
 		var ref refRing
 
 		i := 0
-		for i < len(ops) {
+		for i+1 < len(ops) {
 			op := ops[i] % 4
-			i++
-			if i >= len(ops) {
-				break
-			}
-			arg := ops[i]
-			i++
+			arg := ops[i+1]
+			i += 2
 
 			switch op {
 			case 0: // Put
@@ -483,15 +505,13 @@ func FuzzRing512(f *testing.F) {
 				gotOK := ring.Put(data)
 				refOK := ref.Put(data)
 				if gotOK != refOK {
-					t.Fatalf("Put(%d): ring=%v ref=%v (ringUsed=%d refUsed=%d)",
-						size, gotOK, refOK, ring.Used(), ref.Used())
+					t.Fatalf("Put(%d): ring=%v ref=%v", size, gotOK, refOK)
 				}
 
 			case 1: // Discard
 				used := ring.Used()
-				refUsed := ref.Used()
-				if used != refUsed {
-					t.Fatalf("Used mismatch before discard: ring=%d ref=%d", used, refUsed)
+				if used != ref.Used() {
+					t.Fatalf("Used mismatch: ring=%d ref=%d", used, ref.Used())
 				}
 				if used == 0 {
 					continue
@@ -501,151 +521,49 @@ func FuzzRing512(f *testing.F) {
 				ref.Discard(n)
 
 			case 2: // Peek + verify
-				ringPeek := ring.Peek()
-				refPeek := ref.Peek()
 				rUsed := ring.Used()
-				refUsed := ref.Used()
-				if rUsed != refUsed {
-					t.Fatalf("Used mismatch: ring=%d ref=%d", rUsed, refUsed)
+				if rUsed != ref.Used() {
+					t.Fatalf("Used mismatch: ring=%d ref=%d", rUsed, ref.Used())
 				}
 				if rUsed == 0 {
-					if ringPeek != nil {
-						t.Fatalf("ring Peek non-nil on empty: %v", ringPeek)
+					d1, d2 := ring.Peek()
+					if d1 != nil || d2 != nil {
+						t.Fatal("Peek non-nil on empty ring")
 					}
 					continue
 				}
-				// Ring512 Peek returns first contiguous segment; must be a prefix.
-				if uint32(len(ringPeek)) > rUsed {
-					t.Fatalf("ring Peek len %d > Used %d", len(ringPeek), rUsed)
+				got := peekAll(&ring)
+				if uint32(len(got)) != rUsed {
+					t.Fatalf("Peek returned %d bytes, Used=%d", len(got), rUsed)
 				}
-				if !bytes.Equal(ringPeek, refPeek[:len(ringPeek)]) {
-					t.Fatalf("Peek data mismatch")
+				if !bytes.Equal(got, ref.data) {
+					t.Fatal("Peek data mismatch")
 				}
 
-			case 3: // Invariant check
+			case 3: // Invariant
 				if ring.Free()+ring.Used() != 512 {
-					t.Fatalf("invariant: Free(%d)+Used(%d) != 512", ring.Free(), ring.Used())
+					t.Fatalf("invariant: Free(%d)+Used(%d)!=512", ring.Free(), ring.Used())
 				}
 			}
 		}
 
-		// Final checks.
-		if ring.Free()+ring.Used() != 512 {
-			t.Fatalf("final: Free(%d)+Used(%d) != 512", ring.Free(), ring.Used())
-		}
 		if ring.Used() != ref.Used() {
 			t.Fatalf("final Used mismatch: ring=%d ref=%d", ring.Used(), ref.Used())
 		}
 	})
 }
 
-// FuzzRing512_PutDrain fuzzes fill-then-drain cycles to exercise all
-// wrap positions and buffer-full states.
-func FuzzRing512_Op(f *testing.F) {
-	const maxsz = 512
-	f.Add(int16(7), int16(200), int16(50), int16(180), int16(-300))
-	f.Add(int16(200), int16(-100), int16(255), int16(157), int16(-300))
-	f.Add(int16(7), int16(200), int16(50), int16(180), int16(-300))
-	f.Add(int16(maxsz), int16(-maxsz), int16(maxsz), int16(-maxsz), int16(maxsz))
-	f.Add(int16(maxsz/2), int16(maxsz/2), int16(-maxsz/3), int16(-maxsz/3), int16(-maxsz/2))
-	f.Fuzz(func(t *testing.T, a, b, c, d, e int16) {
-		rng := rand.New(rand.NewSource(int64(a + b + c + d + e)))
-		var ring ring512
-		var buf [maxsz]byte
-		sizes := [...]int{int(a), int(b), int(c), int(d), int(e)}
-		var testwritten, testread [maxsz * len(sizes)]byte
-		nwritten := 0
-		nread := 0
-		currentUsed := 0
-		initfree := ring.Free()
-		for round, sz := range sizes {
-			write := sz > 0
-			if sz < 0 {
-				sz = -sz
-			}
-			if sz > maxsz {
-				sz = maxsz
-			}
-			free := int(ring.Free())
-			used := int(ring.Used())
-			if free+used != int(initfree) {
-				t.Fatalf("free+used != initfree: %d+%d!=%d", free, used, initfree)
-			} else if used != currentUsed {
-				t.Fatalf("calculated used not match actual used returned %d!=%d", used, currentUsed)
-			}
-			rng.Read(buf[:sz])
-			if write {
-				sz = min(free, sz) // Limit write to be size of free.
-				nwritten += copy(testwritten[nwritten:], buf[:sz])
-				ok := ring.Put(buf[:sz])
-				if !ok {
-					t.Fatal("tried to put data and could not", sz)
-				}
-				currentUsed += sz
-			} else {
-				// read branch.
-				sz = min(currentUsed, sz) // Limit size of operation to what is possible.
-				data1 := ring.Peek()
-				data1 = data1[:min(sz, len(data1))]
-				nread += copy(testread[nread:], data1)
-				ring.Discard(uint32(len(data1)))
-				if len(data1) < sz {
-					data2 := ring.Peek()
-					if len(data2) <= 0 {
-						t.Fatal("expected more data after first discard")
-					} else if len(data2)+len(data1) < sz {
-						t.Fatalf("got promised more data %d+%d<%d", len(data1), len(data2), sz)
-					} else if int(ring.Used()) != currentUsed-len(data1) {
-						t.Fatalf("expected new used to be old used minus read %d != %d-%d", ring.Used(), currentUsed, len(data1))
-					}
-					data2 = data2[:sz-len(data1)]
-					nread += copy(testread[nread:], data2)
-					ring.Discard(uint32(len(data2)))
-				}
-				currentUsed -= sz
-			}
-			if int(ring.Used()) != currentUsed {
-				t.Fatalf("unexpected new used after read/write %d!=%d", ring.Used(), currentUsed)
-			}
-			if !write {
-				// check data read/written match.
-				testlim := min(nread, nwritten)
-				if !bytes.Equal(testread[:testlim], testwritten[:testlim]) {
-					t.Fatalf("round %d mismatch of data written/read", round)
-				}
-			}
-		}
-	})
-}
-
-// FuzzRing512_Op uses raw fuzz bytes as an operation stream.
-// Each iteration consumes 1 byte opcode + 1 byte size, driving an
-// arbitrary-length sequence of puts, peeks, discards, and resets.
-// A reference buffer tracks expected contents for data integrity checks.
+// FuzzRing512_Op2 uses raw fuzz bytes as an operation stream with
+// data integrity tracking.
 func FuzzRing512_Op2(f *testing.F) {
-	// Seeds targeting known-fragile states.
-	f.Add([]byte{
-		0, 255, // put 255
-		0, 255, // put 255 (total 510)
-		0, 2, // put 2 (total 512 = full)
-		1, 255, // read 255
-	})
-	f.Add([]byte{
-		0, 200, // put 200
-		1, 100, // read 100 (off advances to 100)
-		0, 255, // put 255
-		0, 157, // put 157 (fill to exactly 512 → off==end bug)
-		1, 255, // read 255
-		1, 255, // read 255
-	})
-
-	// Rapid small put/read cycling to exercise many wrap positions.
+	f.Add([]byte{0, 255, 0, 255, 0, 2, 1, 255})
+	f.Add([]byte{0, 200, 1, 100, 0, 255, 0, 157, 1, 255, 1, 255})
 	seed := make([]byte, 40)
 	for i := range seed {
 		if i%4 < 2 {
-			seed[i] = 0 // put
+			seed[i] = 0
 		} else {
-			seed[i] = 1 // read
+			seed[i] = 1
 		}
 		if i%2 == 1 {
 			seed[i] = byte(3 + i%13)
@@ -655,10 +573,8 @@ func FuzzRing512_Op2(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, ops []byte) {
 		const buflen = 512
-		const maxOps = 128 // Cap to prevent fuzzer slowdown on huge inputs.
+		const maxOps = 128
 		var ring ring512
-
-		// Reference tracking: circular log of all written bytes.
 		var written []byte
 		totalRead := 0
 
@@ -682,7 +598,6 @@ func FuzzRing512_Op2(f *testing.F) {
 				if sz == 0 {
 					continue
 				}
-				// Generate deterministic data keyed to write position.
 				data := make([]byte, sz)
 				for j := range data {
 					data[j] = byte(len(written) + j)
@@ -692,7 +607,7 @@ func FuzzRing512_Op2(f *testing.F) {
 				}
 				written = append(written, data...)
 
-			case 1: // Peek + Discard (read)
+			case 1: // Read
 				used := int(ring.Used())
 				if used == 0 || sz == 0 {
 					continue
@@ -700,71 +615,44 @@ func FuzzRing512_Op2(f *testing.F) {
 				if sz > used {
 					sz = used
 				}
-				remaining := sz
-
-				// First contiguous segment.
-				p1 := ring.Peek()
-				if len(p1) == 0 {
-					t.Fatalf("Used()=%d but Peek returned empty", used)
+				d1, d2 := ring.Peek()
+				// Concatenate and take sz bytes.
+				var got []byte
+				if sz <= len(d1) {
+					got = d1[:sz]
+				} else {
+					got = make([]byte, sz)
+					copy(got, d1)
+					copy(got[len(d1):], d2)
 				}
-				n1 := min(remaining, len(p1))
-				// Verify data matches what was written.
-				expect := written[totalRead : totalRead+n1]
-				if !bytes.Equal(p1[:n1], expect) {
-					t.Fatalf("data mismatch at read offset %d (segment 1, len %d)", totalRead, n1)
+				expect := written[totalRead : totalRead+sz]
+				if !bytes.Equal(got, expect) {
+					t.Fatalf("data mismatch at read offset %d", totalRead)
 				}
-				ring.Discard(uint32(n1))
-				totalRead += n1
-				remaining -= n1
-
-				// Second segment (after wrap).
-				if remaining > 0 {
-					p2 := ring.Peek()
-					if len(p2) == 0 {
-						t.Fatalf("expected second segment, Used()=%d remaining=%d", ring.Used(), remaining)
-					}
-					n2 := min(remaining, len(p2))
-					expect2 := written[totalRead : totalRead+n2]
-					if !bytes.Equal(p2[:n2], expect2) {
-						t.Fatalf("data mismatch at read offset %d (segment 2, len %d)", totalRead, n2)
-					}
-					ring.Discard(uint32(n2))
-					totalRead += n2
-				}
+				ring.Discard(uint32(sz))
+				totalRead += sz
 
 			case 2: // Reset
 				ring.Reset()
-				// All unread data is lost. Advance totalRead to match.
 				totalRead = len(written)
 			}
 
-			// Invariant: Free + Used == buflen.
 			if ring.Free()+ring.Used() != buflen {
-				t.Fatalf("invariant broken: Free(%d)+Used(%d)!=%d",
-					ring.Free(), ring.Used(), buflen)
+				t.Fatalf("invariant: Free(%d)+Used(%d)!=%d", ring.Free(), ring.Used(), buflen)
 			}
-			// Invariant: Used matches our tracking.
-			expectUsed := len(written) - totalRead
-			if int(ring.Used()) != expectUsed {
-				t.Fatalf("Used()=%d but expected %d (written=%d read=%d)",
-					ring.Used(), expectUsed, len(written), totalRead)
+			if int(ring.Used()) != len(written)-totalRead {
+				t.Fatalf("Used()=%d expected %d", ring.Used(), len(written)-totalRead)
 			}
-
 		}
 
-		// Final drain: verify all remaining data.
-		for ring.Used() > 0 {
-			p := ring.Peek()
-			if len(p) == 0 {
-				t.Fatalf("Used()=%d but Peek empty during final drain", ring.Used())
-			}
-			n := len(p)
-			expect := written[totalRead : totalRead+n]
-			if !bytes.Equal(p, expect) {
-				t.Fatalf("final drain mismatch at offset %d", totalRead)
-			}
-			ring.Discard(uint32(n))
-			totalRead += n
+		// Final drain.
+		d1, d2 := ring.Peek()
+		var remaining []byte
+		remaining = append(remaining, d1...)
+		remaining = append(remaining, d2...)
+		expect := written[totalRead:]
+		if !bytes.Equal(remaining, expect) {
+			t.Fatalf("final drain mismatch: got %d bytes, want %d", len(remaining), len(expect))
 		}
 	})
 }

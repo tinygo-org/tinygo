@@ -6,6 +6,8 @@ import (
 	"errors"
 	"machine"
 	"machine/usb"
+	"sync/atomic"
+	_ "unsafe"
 )
 
 var (
@@ -22,19 +24,28 @@ type cdcLineInfo struct {
 	lineState   uint8
 }
 
+// USBCDC is the USB CDC aka serial over USB interface.
+type USBCDC struct {
+	tx       ring512
+	rx       ring512
+	inflight atomic.Uint32
+	rbuf     [1]byte
+	wbuf     [1]byte
+}
+
+var (
+	// USB is a USB CDC interface.
+	USB *USBCDC
+
+	usbLineInfo = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
+)
+
 // Read from the RX buffer.
 func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
-	b := usbcdc.rx.Peek()
-	if len(b) > 0 {
-		n += copy(data, b)
-		usbcdc.rx.Discard(uint32(n))
-		b = usbcdc.rx.Peek()
-		if len(b) > 0 && len(data) > n {
-			n2 := copy(data[n:], b)
-			usbcdc.rx.Discard(uint32(n2))
-			n += n2
-		}
-	}
+	data1, data2 := usbcdc.rx.Peek()
+	n += copy(data, data1)
+	n += copy(data[n:], data2)
+	usbcdc.rx.Discard(uint32(n))
 	return n, nil
 }
 
@@ -42,7 +53,7 @@ func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
 // If there is no data in the buffer, returns an error.
 func (usbcdc *USBCDC) ReadByte() (byte, error) {
 	// check if RX buffer is empty
-	b := usbcdc.rx.Peek()
+	b, _ := usbcdc.rx.Peek()
 	if len(b) > 0 {
 		c := b[0]
 		usbcdc.rx.Discard(1)
@@ -59,40 +70,33 @@ func (usbcdc *USBCDC) Buffered() int {
 // Receive handles adding data to the UART's data buffer.
 // Usually called by the IRQ handler for a machine.
 func (usbcdc *USBCDC) Receive(data byte) {
-	usbcdc.buf[0] = data
-	usbcdc.rx.Put(usbcdc.buf[:])
+	usbcdc.rbuf[0] = data
+	usbcdc.rx.Put(usbcdc.rbuf[:])
 }
-
-// USBCDC is the USB CDC aka serial over USB interface.
-type USBCDC struct {
-	tx      ring512
-	rx      ring512
-	buf     [1]byte
-	waitTxc bool
-}
-
-var (
-	// USB is a USB CDC interface.
-	USB *USBCDC
-
-	usbLineInfo = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
-)
 
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
 func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 	return nil
 }
 
+func (usbcdc *USBCDC) txhandler() {
+	// Mark data as sent.
+	inflight := usbcdc.inflight.Load()
+	usbcdc.tx.Discard(inflight)
+	// Check if tx needs to send more data.
+	used := usbcdc.tx.Used()
+	usbcdc.inflight.Store(used)
+	if used > 0 {
+		data1, data2 := usbcdc.tx.Peek()
+		usbcdc.send(data1)
+		usbcdc.send(data2)
+	}
+}
+
 // Flush flushes buffered data.
 func (usbcdc *USBCDC) Flush() {
-	b := usbcdc.tx.Peek()
-	if len(b) == 0 {
-		usbcdc.waitTxc = false
-	}
-	for len(b) > 0 {
-		usbcdc.send(b)
-		usbcdc.tx.Discard(uint32(len(b)))
-		b = usbcdc.tx.Peek() // Peek may return non-zero lengthed buffers twice.
+	for usbcdc.tx.Used() > 0 {
+		gosched()
 	}
 }
 
@@ -100,22 +104,19 @@ func (usbcdc *USBCDC) Flush() {
 func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	n = len(data)
 	if usbLineInfo.lineState > 0 {
-		for retry := 0; retry < 5; retry++ {
+		if usbcdc.inflight.Load() == 0 && usbcdc.tx.Used() == 0 {
+			// If no data inflight/inring, send directly to USB device.
+			sz := min(len(data), 512)
+			usbcdc.send(data[:sz])
+			data = data[sz:]
+		}
+		for len(data) > 0 {
 			tosend := min(len(data), int(usbcdc.tx.Free()))
 			usbcdc.tx.Put(data[:tosend])
 			data = data[tosend:]
 			if len(data) > 0 {
 				usbcdc.Flush()
-				if retry == 4 {
-					panic("retries exceeded in USB flush")
-				}
-			} else {
-				break
 			}
-		}
-		if !usbcdc.waitTxc {
-			usbcdc.waitTxc = true
-			usbcdc.Flush()
 		}
 	}
 	return n, nil
@@ -123,16 +124,18 @@ func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 
 func (usbcdc *USBCDC) send(data []byte) {
 	for len(data) > 0 {
-		off := min(64, len(data))
+		off := min(usb.EndpointPacketSize, len(data))
 		chunk := data[:off]
 		data = data[off:]
+		usbcdc.inflight.Add(uint32(len(data)))
 		machine.SendUSBInPacket(cdcEndpointIn, chunk)
 	}
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.
 func (usbcdc *USBCDC) WriteByte(c byte) error {
-	usbcdc.Write([]byte{c})
+	usbcdc.wbuf[0] = c
+	usbcdc.Write(usbcdc.wbuf[:])
 	return nil
 }
 
@@ -207,5 +210,8 @@ func cdcSetup(setup usb.Setup) bool {
 
 func EnableUSBCDC() {
 	machine.USBCDC = New()
-	machine.EnableCDC(USB.Flush, cdcCallbackRx, cdcSetup)
+	machine.EnableCDC(USB.txhandler, cdcCallbackRx, cdcSetup)
 }
+
+//go:linkname gosched runtime.Gosched
+func gosched()
