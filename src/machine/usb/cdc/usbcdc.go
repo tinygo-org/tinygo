@@ -79,20 +79,6 @@ func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 	return nil
 }
 
-func (usbcdc *USBCDC) txhandler() {
-	// Mark data as sent.
-	inflight := usbcdc.inflight.Load()
-	usbcdc.tx.Discard(inflight)
-	// Check if tx needs to send more data.
-	used := usbcdc.tx.Used()
-	usbcdc.inflight.Store(used)
-	if used > 0 {
-		data1, data2 := usbcdc.tx.Peek()
-		usbcdc.send(data1)
-		usbcdc.send(data2)
-	}
-}
-
 // Flush flushes buffered data.
 func (usbcdc *USBCDC) Flush() {
 	for usbcdc.tx.Used() > 0 {
@@ -103,33 +89,49 @@ func (usbcdc *USBCDC) Flush() {
 // Write data to the USBCDC.
 func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	n = len(data)
-	if usbLineInfo.lineState > 0 {
-		if usbcdc.inflight.Load() == 0 && usbcdc.tx.Used() == 0 {
-			// If no data inflight/inring, send directly to USB device.
-			sz := min(len(data), 512)
-			usbcdc.send(data[:sz])
-			data = data[sz:]
+	if usbLineInfo.lineState <= 0 {
+		return n, nil
+	}
+	for len(data) > 0 {
+		tosend := min(len(data), int(usbcdc.tx.Free()))
+		if tosend == 0 {
+			gosched()
+			continue
 		}
-		for len(data) > 0 {
-			tosend := min(len(data), int(usbcdc.tx.Free()))
-			usbcdc.tx.Put(data[:tosend])
-			data = data[tosend:]
-			if len(data) > 0 {
-				usbcdc.Flush()
-			}
-		}
+		usbcdc.tx.Put(data[:tosend])
+		data = data[tosend:]
+		usbcdc.kickTx()
 	}
 	return n, nil
 }
 
-func (usbcdc *USBCDC) send(data []byte) {
-	for len(data) > 0 {
-		off := min(usb.EndpointPacketSize, len(data))
-		chunk := data[:off]
-		data = data[off:]
-		usbcdc.inflight.Add(uint32(len(data)))
-		machine.SendUSBInPacket(cdcEndpointIn, chunk)
+// kickTx starts a transfer if none is in flight. Called from main context only.
+func (usbcdc *USBCDC) kickTx() {
+	if usbcdc.inflight.Load() > 0 {
+		return // txhandler will chain the next packet.
 	}
+	usbcdc.sendFromRing()
+}
+
+func (usbcdc *USBCDC) txhandler() {
+	inflight := usbcdc.inflight.Load()
+	usbcdc.inflight.Store(0)
+	usbcdc.tx.Discard(inflight)
+	usbcdc.sendFromRing()
+}
+
+// sendFromRing sends one USB packet from the ring and sets inflight.
+// Called from kickTx (main) or txhandler (ISR), but never concurrently
+// because kickTx only runs when inflight==0 and txhandler only runs
+// when inflight>0.
+func (usbcdc *USBCDC) sendFromRing() {
+	d1, _ := usbcdc.tx.Peek()
+	if len(d1) == 0 {
+		return
+	}
+	chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
+	usbcdc.inflight.Store(uint32(len(chunk)))
+	machine.SendUSBInPacket(cdcEndpointIn, chunk)
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.
