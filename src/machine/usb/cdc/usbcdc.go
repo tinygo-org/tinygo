@@ -102,13 +102,19 @@ func (usbcdc *USBCDC) Flush() {
 
 // Write data to the USBCDC.
 func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
+	n = len(data)
 	if usbLineInfo.lineState > 0 {
-		for len(data) > 0 {
+		for retry := 0; retry < 5; retry++ {
 			tosend := min(len(data), int(usbcdc.tx.Free()))
 			usbcdc.tx.Put(data[:tosend])
 			data = data[tosend:]
 			if len(data) > 0 {
 				usbcdc.Flush()
+				if retry == 5 {
+					panic("retries exceeded in USB flush")
+				}
+			} else {
+				break
 			}
 		}
 		if !usbcdc.waitTxc {
@@ -116,7 +122,7 @@ func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 			usbcdc.Flush()
 		}
 	}
-	return len(data), nil
+	return n, nil
 }
 
 func (usbcdc *USBCDC) send(data []byte) {

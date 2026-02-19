@@ -541,38 +541,76 @@ func FuzzRing512(f *testing.F) {
 
 // FuzzRing512_PutDrain fuzzes fill-then-drain cycles to exercise all
 // wrap positions and buffer-full states.
-func FuzzRing512_PutDrain(f *testing.F) {
-	f.Add(uint8(7), uint8(200), uint8(50), uint8(180))
-	f.Add(uint8(0), uint8(0), uint8(255), uint8(255))
+func FuzzRing512_Op(f *testing.F) {
+	const maxsz = 512
+	f.Add(int16(7), int16(200), int16(50), int16(180))
+	f.Add(int16(maxsz), int16(-maxsz), int16(maxsz), int16(-maxsz))
 
-	f.Fuzz(func(t *testing.T, a, b, c, d uint8) {
+	f.Fuzz(func(t *testing.T, a, b, c, d int16) {
+		rng := rand.New(rand.NewSource(int64(a + b + c + d)))
 		var ring ring512
-		sizes := []int{int(a), int(b), int(c), int(d)}
+		var buf [maxsz]byte
+		sizes := [...]int{int(a), int(b), int(c), int(d)}
+		var testwritten, testread [maxsz * len(sizes)]byte
+		nwritten := 0
+		nread := 0
+		currentUsed := 0
+		initfree := ring.Free()
 		for round, sz := range sizes {
-			if sz > 512 {
-				sz = 512
+			write := sz > 0
+			if sz < 0 {
+				sz = -sz
 			}
-			data := make([]byte, sz)
-			for i := range data {
-				data[i] = byte(sz ^ i)
+			if sz > maxsz {
+				sz = maxsz
 			}
-			if ring.Free() < uint32(sz) {
-				continue
+			free := int(ring.Free())
+			used := int(ring.Used())
+			if free+used != int(initfree) {
+				t.Fatalf("free+used != initfree: %d+%d!=%d", free, used, initfree)
+			} else if used != currentUsed {
+				t.Fatalf("calculated used not match actual used returned %d!=%d", used, currentUsed)
 			}
-			if !ring.Put(data) {
-				t.Fatalf("round %d: Put(%d) failed but Free=%d", round, sz, ring.Free())
-			}
-			var drained []byte
-			for ring.Used() > 0 {
-				p := ring.Peek()
-				if len(p) == 0 {
-					t.Fatal("Used > 0 but Peek returned nil")
+			rng.Read(buf[:sz])
+			if write {
+				sz = min(free, sz) // Limit write to be size of free.
+				nwritten += copy(testwritten[nwritten:], buf[:sz])
+				ok := ring.Put(buf[:sz])
+				if !ok {
+					t.Fatal("tried to put data and could not", sz)
 				}
-				drained = append(drained, p...)
-				ring.Discard(uint32(len(p)))
+				currentUsed += sz
+			} else {
+				// read branch.
+				sz = min(currentUsed, sz) // Limit size of operation to what is possible.
+				data1 := ring.Peek()
+				data1 = data1[:min(sz, len(data1))]
+				nread += copy(testread[nread:], data1)
+				ring.Discard(uint32(len(data1)))
+				if len(data1) < sz {
+					data2 := ring.Peek()
+					if len(data2) <= 0 {
+						t.Fatal("expected more data after first discard")
+					} else if len(data2)+len(data1) < sz {
+						t.Fatalf("got promised more data %d+%d<%d", len(data1), len(data2), sz)
+					} else if int(ring.Used()) != currentUsed-len(data1) {
+						t.Fatalf("expected new used to be old used minus read %d != %d-%d", ring.Used(), currentUsed, len(data1))
+					}
+					data2 = data2[:sz-len(data1)]
+					nread += copy(testread[nread:], data1)
+					ring.Discard(uint32(len(data2)))
+				}
+				currentUsed -= sz
 			}
-			if !bytes.Equal(drained, data) {
-				t.Fatalf("round %d: data mismatch for size %d", round, sz)
+			if int(ring.Used()) != currentUsed {
+				t.Fatalf("unexpected new used after read/write %d!=%d", ring.Used(), currentUsed)
+			}
+			if !write {
+				// check data read/written match.
+				testlim := min(nread, nwritten)
+				if !bytes.Equal(testread[:testlim], testwritten[:testlim]) {
+					t.Fatalf("round %d mismatch of data written/read", round)
+				}
 			}
 		}
 	})
