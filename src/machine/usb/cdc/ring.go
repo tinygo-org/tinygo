@@ -1,0 +1,100 @@
+package cdc
+
+import "sync/atomic"
+
+// ring512 is an interrupt/concurrent-safe ring buffer for a single-producer,
+// single-consumer (SPSC) pair. The writer calls Put, the reader calls
+// Peek/Discard. Reset may only be called when neither side is active.
+//
+// Implementation uses monotonic counters (head/tail) instead of bounded
+// offsets. This eliminates full/empty ambiguity and removes all CAS
+// recovery paths. Unsigned subtraction (head - tail) always yields
+// correct used count regardless of uint32 overflow.
+type ring512 struct {
+	buf [ringBufLen]byte // power of 2 so compiler can optimize & mask.
+	// head counts total bytes written. Only the writer stores to head.
+	head atomic.Uint32
+	// tail counts total bytes read. Only the reader stores to tail.
+	tail atomic.Uint32
+}
+
+const (
+	ringBufLen = 512
+	ringMask   = ringBufLen - 1 // 0x1FF
+)
+
+// Reset empties the ring buffer. Must not be called concurrently with
+// Put, Peek, or Discard.
+func (r *ring512) Reset() {
+	r.head.Store(0)
+	r.tail.Store(0)
+}
+
+// Free returns number of bytes that can be written via Put.
+func (r *ring512) Free() uint32 {
+	return ringBufLen - r.Used()
+}
+
+// Used returns number of bytes ready to be peeked/discarded.
+func (r *ring512) Used() uint32 {
+	return r.head.Load() - r.tail.Load()
+}
+
+// Peek returns a contiguous view into the readable portion of the buffer
+// without advancing the read position. When data wraps around the end of
+// the internal buffer, only the first contiguous segment is returned;
+// the caller must Discard that segment and Peek again to get the rest.
+// Returns nil when empty.
+func (r *ring512) Peek() []byte {
+	head, tail := r.lims()
+	used := head - tail
+	if used == 0 {
+		return nil
+	}
+	pos := tail & ringMask
+	contig := uint32(ringBufLen) - pos
+	if contig > used {
+		contig = used
+	}
+	return r.buf[pos : pos+contig]
+}
+
+// Discard marks numBytes as read, advancing the read position.
+// Panics if numBytes exceeds Used (indicates a race violating SPSC)
+func (r *ring512) Discard(numBytes uint32) {
+	if numBytes == 0 {
+		return
+	}
+	head, tail := r.lims()
+	used := head - tail
+	if numBytes > used {
+		panic("ring: discard exceeds used")
+	}
+	r.tail.Store(tail + numBytes)
+}
+
+// Put writes data into the ring buffer. Returns true if all data was
+// written, false if insufficient free space (no partial writes).
+func (r *ring512) Put(data []byte) bool {
+	wlen := uint32(len(data))
+	if wlen == 0 {
+		return true
+	}
+	head, tail := r.lims()
+	used := head - tail
+	free := uint32(ringBufLen) - used
+	if wlen > free {
+		return false
+	}
+	pos := head & ringMask
+	n := uint32(copy(r.buf[pos:], data))
+	if n < wlen {
+		copy(r.buf[:], data[n:])
+	}
+	r.head.Store(head + wlen)
+	return true
+}
+
+func (r *ring512) lims() (head, tail uint32) {
+	return r.head.Load(), r.tail.Load()
+}

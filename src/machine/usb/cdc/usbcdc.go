@@ -1,10 +1,11 @@
+//go:build baremetal
+
 package cdc
 
 import (
 	"errors"
 	"machine"
 	"machine/usb"
-	"runtime/interrupt"
 )
 
 var (
@@ -47,29 +48,31 @@ func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
 // If there is no data in the buffer, returns an error.
 func (usbcdc *USBCDC) ReadByte() (byte, error) {
 	// check if RX buffer is empty
-	buf, ok := usbcdc.rxBuffer.Get()
-	if !ok {
-		return 0, ErrBufferEmpty
+	b := usbcdc.rx.Peek()
+	if len(b) > 0 {
+		c := b[0]
+		usbcdc.rx.Discard(1)
+		return c, nil
 	}
-	return buf, nil
+	return 0, ErrBufferEmpty
 }
 
 // Buffered returns the number of bytes currently stored in the RX buffer.
 func (usbcdc *USBCDC) Buffered() int {
-	return int(usbcdc.rxBuffer.Used())
+	return int(usbcdc.rx.Used())
 }
 
 // Receive handles adding data to the UART's data buffer.
 // Usually called by the IRQ handler for a machine.
 func (usbcdc *USBCDC) Receive(data byte) {
-	usbcdc.rxBuffer.Put(data)
+	usbcdc.rx.Put([]byte{data})
 }
 
 // USBCDC is the USB CDC aka serial over USB interface.
 type USBCDC struct {
-	rxBuffer *rxRingBuffer
-	txBuffer *txRingBuffer
-	waitTxc  bool
+	tx      ring512
+	rx      ring512
+	waitTxc bool
 }
 
 var (
@@ -86,27 +89,43 @@ func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 
 // Flush flushes buffered data.
 func (usbcdc *USBCDC) Flush() {
-	mask := interrupt.Disable()
-	if b, ok := usbcdc.txBuffer.Get(); ok {
-		machine.SendUSBInPacket(cdcEndpointIn, b)
-	} else {
+	b := usbcdc.tx.Peek()
+	if len(b) == 0 {
 		usbcdc.waitTxc = false
 	}
-	interrupt.Restore(mask)
+	for len(b) > 0 {
+		usbcdc.send(b)
+		usbcdc.tx.Discard(uint32(len(b)))
+		b = usbcdc.tx.Peek() // Peek may return non-zero lengthed buffers twice.
+	}
 }
 
 // Write data to the USBCDC.
 func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	if usbLineInfo.lineState > 0 {
-		mask := interrupt.Disable()
-		usbcdc.txBuffer.Put(data)
+		for len(data) > 0 {
+			tosend := min(len(data), int(usbcdc.tx.Free()))
+			usbcdc.tx.Put(data[:tosend])
+			data = data[tosend:]
+			if len(data) > 0 {
+				usbcdc.Flush()
+			}
+		}
 		if !usbcdc.waitTxc {
 			usbcdc.waitTxc = true
 			usbcdc.Flush()
 		}
-		interrupt.Restore(mask)
 	}
 	return len(data), nil
+}
+
+func (usbcdc *USBCDC) send(data []byte) {
+	for len(data) > 0 {
+		off := min(64, len(data))
+		chunk := data[:off]
+		data = data[off:]
+		machine.SendUSBInPacket(cdcEndpointIn, chunk)
+	}
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.
@@ -124,9 +143,8 @@ func (usbcdc *USBCDC) RTS() bool {
 }
 
 func cdcCallbackRx(b []byte) {
-	for i := range b {
-		USB.Receive(b[i])
-	}
+	free := USB.rx.Free()
+	USB.rx.Put(b[:min(len(b), int(free))])
 }
 
 var cdcSetupBuff [cdcLineInfoSize]byte
