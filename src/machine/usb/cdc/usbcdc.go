@@ -24,24 +24,18 @@ type cdcLineInfo struct {
 
 // Read from the RX buffer.
 func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
-	// check if RX buffer is empty
-	size := usbcdc.Buffered()
-	if size == 0 {
-		return 0, nil
+	b := usbcdc.rx.Peek()
+	if len(b) > 0 {
+		n += copy(data, b)
+		usbcdc.rx.Discard(uint32(n))
+		b = usbcdc.rx.Peek()
+		if len(b) > 0 && len(data) > n {
+			n2 := copy(data[n:], b)
+			usbcdc.rx.Discard(uint32(n2))
+			n += n2
+		}
 	}
-
-	// Make sure we do not read more from buffer than the data slice can hold.
-	if len(data) < size {
-		size = len(data)
-	}
-
-	// only read number of bytes used from buffer
-	for i := 0; i < size; i++ {
-		v, _ := usbcdc.ReadByte()
-		data[i] = v
-	}
-
-	return size, nil
+	return n, nil
 }
 
 // ReadByte reads a single byte from the RX buffer.
@@ -65,13 +59,15 @@ func (usbcdc *USBCDC) Buffered() int {
 // Receive handles adding data to the UART's data buffer.
 // Usually called by the IRQ handler for a machine.
 func (usbcdc *USBCDC) Receive(data byte) {
-	usbcdc.rx.Put([]byte{data})
+	usbcdc.buf[0] = data
+	usbcdc.rx.Put(usbcdc.buf[:])
 }
 
 // USBCDC is the USB CDC aka serial over USB interface.
 type USBCDC struct {
 	tx      ring512
 	rx      ring512
+	buf     [1]byte
 	waitTxc bool
 }
 
@@ -110,7 +106,7 @@ func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 			data = data[tosend:]
 			if len(data) > 0 {
 				usbcdc.Flush()
-				if retry == 5 {
+				if retry == 4 {
 					panic("retries exceeded in USB flush")
 				}
 			} else {

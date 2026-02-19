@@ -543,14 +543,16 @@ func FuzzRing512(f *testing.F) {
 // wrap positions and buffer-full states.
 func FuzzRing512_Op(f *testing.F) {
 	const maxsz = 512
-	f.Add(int16(7), int16(200), int16(50), int16(180))
-	f.Add(int16(maxsz), int16(-maxsz), int16(maxsz), int16(-maxsz))
-
-	f.Fuzz(func(t *testing.T, a, b, c, d int16) {
-		rng := rand.New(rand.NewSource(int64(a + b + c + d)))
+	f.Add(int16(7), int16(200), int16(50), int16(180), int16(-300))
+	f.Add(int16(200), int16(-100), int16(255), int16(157), int16(-300))
+	f.Add(int16(7), int16(200), int16(50), int16(180), int16(-300))
+	f.Add(int16(maxsz), int16(-maxsz), int16(maxsz), int16(-maxsz), int16(maxsz))
+	f.Add(int16(maxsz/2), int16(maxsz/2), int16(-maxsz/3), int16(-maxsz/3), int16(-maxsz/2))
+	f.Fuzz(func(t *testing.T, a, b, c, d, e int16) {
+		rng := rand.New(rand.NewSource(int64(a + b + c + d + e)))
 		var ring ring512
 		var buf [maxsz]byte
-		sizes := [...]int{int(a), int(b), int(c), int(d)}
+		sizes := [...]int{int(a), int(b), int(c), int(d), int(e)}
 		var testwritten, testread [maxsz * len(sizes)]byte
 		nwritten := 0
 		nread := 0
@@ -597,7 +599,7 @@ func FuzzRing512_Op(f *testing.F) {
 						t.Fatalf("expected new used to be old used minus read %d != %d-%d", ring.Used(), currentUsed, len(data1))
 					}
 					data2 = data2[:sz-len(data1)]
-					nread += copy(testread[nread:], data1)
+					nread += copy(testread[nread:], data2)
 					ring.Discard(uint32(len(data2)))
 				}
 				currentUsed -= sz
@@ -612,6 +614,157 @@ func FuzzRing512_Op(f *testing.F) {
 					t.Fatalf("round %d mismatch of data written/read", round)
 				}
 			}
+		}
+	})
+}
+
+// FuzzRing512_Op uses raw fuzz bytes as an operation stream.
+// Each iteration consumes 1 byte opcode + 1 byte size, driving an
+// arbitrary-length sequence of puts, peeks, discards, and resets.
+// A reference buffer tracks expected contents for data integrity checks.
+func FuzzRing512_Op2(f *testing.F) {
+	// Seeds targeting known-fragile states.
+	f.Add([]byte{
+		0, 255, // put 255
+		0, 255, // put 255 (total 510)
+		0, 2, // put 2 (total 512 = full)
+		1, 255, // read 255
+	})
+	f.Add([]byte{
+		0, 200, // put 200
+		1, 100, // read 100 (off advances to 100)
+		0, 255, // put 255
+		0, 157, // put 157 (fill to exactly 512 → off==end bug)
+		1, 255, // read 255
+		1, 255, // read 255
+	})
+
+	// Rapid small put/read cycling to exercise many wrap positions.
+	seed := make([]byte, 40)
+	for i := range seed {
+		if i%4 < 2 {
+			seed[i] = 0 // put
+		} else {
+			seed[i] = 1 // read
+		}
+		if i%2 == 1 {
+			seed[i] = byte(3 + i%13)
+		}
+	}
+	f.Add(seed)
+
+	f.Fuzz(func(t *testing.T, ops []byte) {
+		const buflen = 512
+		const maxOps = 128 // Cap to prevent fuzzer slowdown on huge inputs.
+		var ring ring512
+
+		// Reference tracking: circular log of all written bytes.
+		var written []byte
+		totalRead := 0
+
+		i := 0
+		nops := 0
+		for i+1 < len(ops) && nops < maxOps {
+			op := ops[i] % 3
+			sz := int(ops[i+1])
+			i += 2
+			nops++
+
+			switch op {
+			case 0: // Put
+				if sz == 0 {
+					continue
+				}
+				free := int(ring.Free())
+				if sz > free {
+					sz = free
+				}
+				if sz == 0 {
+					continue
+				}
+				// Generate deterministic data keyed to write position.
+				data := make([]byte, sz)
+				for j := range data {
+					data[j] = byte(len(written) + j)
+				}
+				if !ring.Put(data) {
+					t.Fatalf("Put(%d) failed with Free()=%d", sz, free)
+				}
+				written = append(written, data...)
+
+			case 1: // Peek + Discard (read)
+				used := int(ring.Used())
+				if used == 0 || sz == 0 {
+					continue
+				}
+				if sz > used {
+					sz = used
+				}
+				remaining := sz
+
+				// First contiguous segment.
+				p1 := ring.Peek()
+				if len(p1) == 0 {
+					t.Fatalf("Used()=%d but Peek returned empty", used)
+				}
+				n1 := min(remaining, len(p1))
+				// Verify data matches what was written.
+				expect := written[totalRead : totalRead+n1]
+				if !bytes.Equal(p1[:n1], expect) {
+					t.Fatalf("data mismatch at read offset %d (segment 1, len %d)", totalRead, n1)
+				}
+				ring.Discard(uint32(n1))
+				totalRead += n1
+				remaining -= n1
+
+				// Second segment (after wrap).
+				if remaining > 0 {
+					p2 := ring.Peek()
+					if len(p2) == 0 {
+						t.Fatalf("expected second segment, Used()=%d remaining=%d", ring.Used(), remaining)
+					}
+					n2 := min(remaining, len(p2))
+					expect2 := written[totalRead : totalRead+n2]
+					if !bytes.Equal(p2[:n2], expect2) {
+						t.Fatalf("data mismatch at read offset %d (segment 2, len %d)", totalRead, n2)
+					}
+					ring.Discard(uint32(n2))
+					totalRead += n2
+				}
+
+			case 2: // Reset
+				ring.Reset()
+				// All unread data is lost. Advance totalRead to match.
+				totalRead = len(written)
+			}
+
+			// Invariant: Free + Used == buflen.
+			if ring.Free()+ring.Used() != buflen {
+				t.Fatalf("invariant broken: Free(%d)+Used(%d)!=%d",
+					ring.Free(), ring.Used(), buflen)
+			}
+			// Invariant: Used matches our tracking.
+			expectUsed := len(written) - totalRead
+			if int(ring.Used()) != expectUsed {
+				t.Fatalf("Used()=%d but expected %d (written=%d read=%d)",
+					ring.Used(), expectUsed, len(written), totalRead)
+			}
+
+		}
+
+		// Final drain: verify all remaining data.
+		for ring.Used() > 0 {
+			p := ring.Peek()
+			if len(p) == 0 {
+				t.Fatalf("Used()=%d but Peek empty during final drain", ring.Used())
+			}
+			n := len(p)
+			expect := written[totalRead : totalRead+n]
+			if !bytes.Equal(p, expect) {
+				t.Fatalf("final drain mismatch at offset %d", totalRead)
+			}
+			ring.Discard(uint32(n))
+			totalRead += n
 		}
 	})
 }
