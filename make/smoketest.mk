@@ -19,6 +19,7 @@ SMOKETEST_SUBTARGETS = \
 	smoketest-rp2xxx \
 	smoketest-pwm-usb \
 	smoketest-stm32 \
+	smoketest-py32 \
 	smoketest-avr \
 	smoketest-esp \
 	smoketest-riscv \
@@ -402,6 +403,17 @@ ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=arduino-uno-q       examples/blinkm
 	@$(MD5SUM) $(SMOKE_OUT).hex
 endif
+
+smoketest-py32: SMOKE_OUT = build/smoke/py32
+smoketest-py32: | build/smoke
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f030  examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f030  examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f002b examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f002b examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).hex
 
 smoketest-avr: SMOKE_OUT = build/smoke/avr
 smoketest-avr: | build/smoke
