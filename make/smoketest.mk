@@ -406,6 +406,7 @@ endif
 
 smoketest-py32: SMOKE_OUT = build/smoke/py32
 smoketest-py32: | build/smoke
+ifneq ($(PY32), 0)
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f030  examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f030  examples/echo
@@ -414,6 +415,7 @@ smoketest-py32: | build/smoke
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f002b examples/echo
 	@$(MD5SUM) $(SMOKE_OUT).hex
+endif
 
 smoketest-avr: SMOKE_OUT = build/smoke/avr
 smoketest-avr: | build/smoke
