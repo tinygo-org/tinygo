@@ -36,3 +36,37 @@ func (can *CAN) SetRxCallback(cb func(data []byte, id uint32, extendedID bool, t
 func (can *CAN) RxPoll() error {
 	return can.rxPoll()
 }
+
+// DLC to bytes lookup table
+var dlcToBytes = [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64}
+
+// dlcToLength converts a DLC value to actual byte length
+func dlcToLength(dlc byte) uint8 {
+	if dlc > 15 {
+		dlc = 15
+	}
+	return dlcToBytes[dlc]
+}
+
+// lengthToDLC converts a byte length to DLC value
+func lengthToDLC(length uint8) (dlc byte) {
+	switch {
+	case length <= 8:
+		dlc = length
+	case length <= 12:
+		dlc = 9
+	case length <= 16:
+		dlc = 10
+	case length <= 20:
+		dlc = 11
+	case length <= 24:
+		dlc = 12
+	case length <= 32:
+		dlc = 13
+	case length <= 48:
+		dlc = 14
+	default:
+		dlc = 15
+	}
+	return dlc
+}

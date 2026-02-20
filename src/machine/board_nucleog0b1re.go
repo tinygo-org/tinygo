@@ -107,7 +107,7 @@ var (
 
 	// FDCAN1 on PA11 (TX) / PA12 (RX)
 	CAN1  = &_CAN1
-	_CAN1 = FDCAN{
+	_CAN1 = CAN{
 		Bus:             stm32.FDCAN1,
 		TxAltFuncSelect: AF9_FDCAN1_FDCAN2,
 		RxAltFuncSelect: AF9_FDCAN1_FDCAN2,
@@ -116,7 +116,7 @@ var (
 
 	// FDCAN2 on PD12 (TX) / PD13 (RX)
 	CAN2  = &_CAN2
-	_CAN2 = FDCAN{
+	_CAN2 = CAN{
 		Bus:             stm32.FDCAN2,
 		TxAltFuncSelect: AF3_FDCAN1_FDCAN2,
 		RxAltFuncSelect: AF3_FDCAN1_FDCAN2,
