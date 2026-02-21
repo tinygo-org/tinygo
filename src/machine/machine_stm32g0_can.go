@@ -84,6 +84,7 @@ type CAN struct {
 	Interrupt       interrupt.Interrupt
 	instance        uint8
 	alwaysFD        bool
+	rxInterrupt     bool
 }
 
 // CANTransferRate represents CAN bus transfer rates
@@ -115,8 +116,9 @@ type CANConfig struct {
 	Mode           CANMode
 	Tx             Pin
 	Rx             Pin
-	Standby        Pin  // Optional standby pin for CAN transceiver (set to NoPin if not used)
-	AlwaysFD       bool // Always transmit as FD frames, even when data fits in classic CAN
+	Standby           Pin  // Optional standby pin for CAN transceiver (set to NoPin if not used)
+	AlwaysFD          bool // Always transmit as FD frames, even when data fits in classic CAN
+	EnableRxInterrupt bool // Enable interrupt-driven receive (messages delivered via SetRxCallback)
 }
 
 // CANFilterConfig represents a message filter configuration
@@ -144,6 +146,10 @@ func enableFDCANClock() {
 
 // flags implemented as described in [CAN.SetRxCallback]
 var canRxCB [2]func(data []byte, id uint32, extendedID bool, timestamp uint32, flags uint32)
+
+// canInstances tracks CAN peripherals with interrupt-driven RX enabled.
+// A non-nil entry means setRxCallback was called with a non-nil callback.
+var canInstances [2]*CAN
 
 // Configure initializes the FDCAN peripheral and starts it.
 func (can *CAN) Configure(config CANConfig) error {
@@ -332,23 +338,50 @@ func (can *CAN) tx(id uint32, extendedID bool, data []byte) error {
 }
 
 // rxFIFOLevel implements [CAN.RxFIFOLevel].
+// Returns 0,0 when interrupt-driven (messages delivered via callback).
 func (can *CAN) rxFIFOLevel() (int, int) {
+	if canInstances[can.instance] != nil {
+		return 0, 0
+	}
 	level := int(can.Bus.RXF0S.Get() & 0x0F) // F0FL[3:0]
 	return level, sramcanRF0Nbr
 }
 
 // setRxCallback implements [CAN.SetRxCallback].
+// When cb is non-nil, interrupt-driven receive is enabled on RX FIFO 0.
+// The CAN.Interrupt field must be initialized with interrupt.New in the board file.
 func (can *CAN) setRxCallback(cb func(data []byte, id uint32, extendedID bool, timestamp uint32, flags uint32)) {
 	canRxCB[can.instance] = cb
+	if cb != nil {
+		canInstances[can.instance] = can
+		// Enable RX FIFO 0 new message interrupt, routed to interrupt line 0.
+		can.Bus.SetIE_RF0NE(1)
+		can.Bus.SetILS_RxFIFO0(0)
+		can.Bus.SetILE_EINT0(1)
+		can.Interrupt.Enable()
+	} else {
+		can.Bus.SetIE_RF0NE(0)
+		canInstances[can.instance] = nil
+	}
 }
 
 // rxPoll implements [CAN.RxPoll].
+// No-op when interrupt-driven receive is active.
 func (can *CAN) rxPoll() error {
+	if canInstances[can.instance] != nil {
+		return nil
+	}
 	cb := canRxCB[can.instance]
 	if cb == nil {
 		return nil
 	}
+	processRxFIFO0(can, cb)
+	return nil
+}
 
+// processRxFIFO0 drains RX FIFO 0 and delivers each message to cb.
+// Used by both rxPoll (poll mode) and canHandleInterrupt (interrupt mode).
+func processRxFIFO0(can *CAN, cb func(data []byte, id uint32, extendedID bool, timestamp uint32, flags uint32)) {
 	for can.Bus.RXF0S.Get()&0x0F != 0 {
 		getIndex := (can.Bus.RXF0S.Get() >> 8) & 0x03 // F0GI[1:0]
 		rxAddr := can.sramBase() + sramcanRF0SA + uintptr(getIndex)*sramcanRF0Size
@@ -399,7 +432,24 @@ func (can *CAN) rxPoll() error {
 		can.Bus.RXF0A.Set(uint32(getIndex))
 		cb(buf[:dataLen], id, extendedID, timestamp, flags)
 	}
-	return nil
+}
+
+// canHandleInterrupt is the shared interrupt handler for FDCAN interrupt line 0 (IRQ_TIM16).
+// Both FDCAN1 and FDCAN2 share this IRQ vector.
+func canHandleInterrupt(interrupt.Interrupt) {
+	for i := range canInstances {
+		can := canInstances[i]
+		if can == nil {
+			continue
+		}
+		ir := can.Bus.IR.Get()
+		if ir&FDCAN_IT_RX_FIFO0_NEW_MESSAGE != 0 {
+			can.Bus.IR.Set(FDCAN_IT_RX_FIFO0_NEW_MESSAGE) // Write 1 to clear
+			if cb := canRxCB[i]; cb != nil {
+				processRxFIFO0(can, cb)
+			}
+		}
+	}
 }
 
 // ConfigureFilter configures a message acceptance filter.
