@@ -7,3 +7,9 @@ files:
 - a/b/bar.txt
 - a/b/foo.txt
 - hello.txt
+all:a files (should include .hidden):
+- a
+- a/b
+- a/b/.hidden
+- a/b/bar.txt
+- a/b/foo.txt

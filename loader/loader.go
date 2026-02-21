@@ -549,7 +549,7 @@ func (p *Package) extractEmbedLines(addError func(error)) {
 					}
 
 					// Look for //go:embed comments.
-					var allPatterns []string
+					var allPatterns []embedPattern
 					for _, comment := range doc.List {
 						if comment.Text != "//go:embed" && !strings.HasPrefix(comment.Text, "//go:embed ") {
 							continue
@@ -577,21 +577,7 @@ func (p *Package) extractEmbedLines(addError func(error)) {
 							})
 							continue
 						}
-						for _, pattern := range patterns {
-							// Check that the pattern is well-formed.
-							// It must be valid: the Go toolchain has already
-							// checked for invalid patterns. But let's check
-							// anyway to be sure.
-							if _, err := path.Match(pattern, ""); err != nil {
-								addError(types.Error{
-									Fset: p.program.fset,
-									Pos:  comment.Pos(),
-									Msg:  "invalid pattern syntax",
-								})
-								continue
-							}
-							allPatterns = append(allPatterns, pattern)
-						}
+						allPatterns = append(allPatterns, patterns...)
 					}
 
 					if len(allPatterns) != 0 {
@@ -624,8 +610,8 @@ func (p *Package) extractEmbedLines(addError func(error)) {
 						// Match all //go:embed patterns against the embed files
 						// provided by `go list`.
 						for _, name := range p.EmbedFiles {
-							for _, pattern := range allPatterns {
-								if matchPattern(pattern, name) {
+							for _, ep := range allPatterns {
+								if ep.Match(name) {
 									p.EmbedGlobals[globalName] = append(p.EmbedGlobals[globalName], &EmbedFile{
 										Name:      name,
 										NeedsData: byteSlice,
@@ -641,13 +627,37 @@ func (p *Package) extractEmbedLines(addError func(error)) {
 	}
 }
 
-// matchPattern returns true if (and only if) the given pattern would match the
-// filename. The pattern could also match a parent directory of name, in which
-// case hidden files do not match.
-func matchPattern(pattern, name string) bool {
+// embedPattern represents a valid //go:embed pattern.
+// See: https://pkg.go.dev/embed#hdr-Directives
+type embedPattern struct {
+	pattern       string // glob pattern without "all:" prefix
+	includeHidden bool   // true if "all:" prefix was present
+}
+
+// newEmbedPattern parses and validates a //go:embed pattern.
+// The "all:" prefix (if present) is stripped and reflected in includeHidden.
+// Returns an error if the pattern syntax is invalid.
+func newEmbedPattern(s string) (embedPattern, error) {
+	ep := embedPattern{pattern: s}
+	if strings.HasPrefix(s, "all:") {
+		ep.pattern = s[4:]
+		ep.includeHidden = true
+	}
+	if _, err := path.Match(ep.pattern, ""); err != nil {
+		return embedPattern{}, err
+	}
+	return ep, nil
+}
+
+// Match returns true if (and only if) the pattern matches the given filename.
+// The pattern could also match a parent directory of name, in which case hidden
+// files do not match (unless includeHidden is true).
+func (ep embedPattern) Match(name string) bool {
+	pattern := ep.pattern
+	includeHidden := ep.includeHidden
+
 	// Match this file.
-	matched, _ := path.Match(pattern, name)
-	if matched {
+	if matched, _ := path.Match(pattern, name); matched {
 		return true
 	}
 
@@ -661,17 +671,20 @@ func matchPattern(pattern, name string) bool {
 		dir = path.Clean(dir)
 		if matched, _ := path.Match(pattern, dir); matched {
 			// Pattern matches the directory.
-			suffix := name[len(dir):]
-			if strings.Contains(suffix, "/_") || strings.Contains(suffix, "/.") {
-				// Pattern matches a hidden file.
-				// Hidden files are included when listed directly as a
-				// pattern, but not when they are part of a directory tree.
-				// Source:
-				// > If a pattern names a directory, all files in the
-				// > subtree rooted at that directory are embedded
-				// > (recursively), except that files with names beginning
-				// > with ‘.’ or ‘_’ are excluded.
-				return false
+			if !includeHidden {
+				suffix := name[len(dir):]
+				if strings.Contains(suffix, "/_") || strings.Contains(suffix, "/.") {
+					// Pattern matches a hidden file.
+					// Hidden files are included when listed directly as a
+					// pattern, or when the "all:" prefix is used, but not
+					// when they are part of a directory tree without "all:".
+					// Source:
+					// > If a pattern names a directory, all files in the
+					// > subtree rooted at that directory are embedded
+					// > (recursively), except that files with names beginning
+					// > with ‘.’ or ‘_’ are excluded.
+					return false
+				}
 			}
 			return true
 		}
@@ -680,11 +693,12 @@ func matchPattern(pattern, name string) bool {
 
 // parseGoEmbed is like strings.Fields but for a //go:embed line. It parses
 // regular fields and quoted fields (that may contain spaces).
-func (p *Package) parseGoEmbed(args string, pos token.Pos) (patterns []string, err error) {
+func (p *Package) parseGoEmbed(args string, pos token.Pos) (patterns []embedPattern, err error) {
 	args = strings.TrimSpace(args)
 	initialLen := len(args)
 	for args != "" {
 		patternPos := pos + token.Pos(initialLen-len(args))
+		var pattern string
 		switch args[0] {
 		case '`', '"', '\\':
 			// Parse the next pattern using the Go scanner.
@@ -703,8 +717,7 @@ func (p *Package) parseGoEmbed(args string, pos token.Pos) (patterns []string, e
 					Msg:  "invalid quoted string in //go:embed",
 				}
 			}
-			pattern := constant.StringVal(constant.MakeFromLiteral(lit, tok, 0))
-			patterns = append(patterns, pattern)
+			pattern = constant.StringVal(constant.MakeFromLiteral(lit, tok, 0))
 			args = strings.TrimLeftFunc(args[len(lit):], unicode.IsSpace)
 		default:
 			// The value is just a regular value.
@@ -713,17 +726,18 @@ func (p *Package) parseGoEmbed(args string, pos token.Pos) (patterns []string, e
 			if index < 0 {
 				index = len(args)
 			}
-			pattern := args[:index]
-			patterns = append(patterns, pattern)
+			pattern = args[:index]
 			args = strings.TrimLeftFunc(args[len(pattern):], unicode.IsSpace)
 		}
-		if _, err := path.Match(patterns[len(patterns)-1], ""); err != nil {
+		ep, err := newEmbedPattern(pattern)
+		if err != nil {
 			return nil, types.Error{
 				Fset: p.program.fset,
 				Pos:  patternPos,
 				Msg:  "invalid pattern syntax",
 			}
 		}
+		patterns = append(patterns, ep)
 	}
 	return patterns, nil
 }

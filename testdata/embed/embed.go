@@ -20,6 +20,10 @@ var (
 //go:embed a/b/.hidden
 var hidden string
 
+// A test to check that hidden files ARE included when using "all:" prefix.
+//go:embed all:a
+var allFiles embed.FS
+
 var helloStringBytes = []byte(helloString)
 
 func main() {
@@ -27,11 +31,13 @@ func main() {
 	println("bytes:", strings.TrimSpace(string(helloBytes)))
 	println("[]byte(string):", strings.TrimSpace(string(helloStringBytes)))
 	println("files:")
-	readFiles(".")
+	readFiles(".", files)
+	println("all:a files (should include .hidden):")
+	readFiles(".", allFiles)
 }
 
-func readFiles(dir string) {
-	entries, err := files.ReadDir(dir)
+func readFiles(dir string, fs embed.FS) {
+	entries, err := fs.ReadDir(dir)
 	if err != nil {
 		println(err.Error())
 		return
@@ -43,7 +49,7 @@ func readFiles(dir string) {
 		}
 		println("-", entryPath)
 		if entry.IsDir() {
-			readFiles(entryPath)
+			readFiles(entryPath, fs)
 		}
 	}
 }
