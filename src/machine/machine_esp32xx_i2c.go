@@ -12,6 +12,7 @@ type I2C struct {
 	Bus              *esp.I2C_Type
 	funcSCL, funcSDA uint32
 	useExt1          bool
+	txCmdBuf         [8]i2cCommand
 }
 
 // I2CConfig is used to store config info for I2C.
@@ -313,7 +314,7 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 	// timeout in milliseconds.
 	const timeout = 40 // 40ms is a reasonable time for a real-time system.
 
-	cmd := make([]i2cCommand, 0, 8)
+	cmd := i2c.txCmdBuf[:0]
 	cmd = append(cmd, i2cCommand{cmd: i2cCMD_RSTART})
 	if len(w) > 0 {
 		cmd = append(cmd, i2cCommand{cmd: i2cCMD_WRITE, data: w})
