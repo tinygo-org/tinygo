@@ -273,6 +273,10 @@ func (p Pin) Get() bool {
 	}
 }
 
+func (p Pin) pinReg() *volatile.Register32 {
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.PIN0), uintptr(p)*4))
+}
+
 var DefaultUART = UART0
 
 var (
