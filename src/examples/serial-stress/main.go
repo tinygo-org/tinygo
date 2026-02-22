@@ -13,8 +13,6 @@ func main() {
 	println("start")
 	serialWrite(buf1)
 	serialWrite(buf2)
-
-	// machine.Serial.
 }
 
 func makeBuffer(sep byte, size int) []byte {
