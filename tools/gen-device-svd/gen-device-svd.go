@@ -129,6 +129,7 @@ type Interrupt struct {
 
 type Peripheral struct {
 	Name        string
+	Alias       string
 	GroupName   string
 	BaseAddress uint64
 	Description string
@@ -1317,6 +1318,9 @@ var (
 		{{- end}}
 	{{- end}}
 	{{.Name}} = (*{{.GroupName}}_Type)(unsafe.Pointer(uintptr(0x{{printf "%x" .BaseAddress}})))
+	{{- if .Alias}}
+	{{.Alias}} = {{.Name}}
+	{{- end}}
 	{{- "\n"}}
 {{- end}}
 )
