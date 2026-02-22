@@ -2,6 +2,7 @@ package main
 
 import (
 	"slices"
+	"strings"
 )
 
 func tweakDevice(d *Device, pkgName string) {
@@ -12,6 +13,15 @@ func tweakDevice(d *Device, pkgName string) {
 
 	for _, p := range d.Peripherals {
 		switch p.GroupName {
+		case "TIM":
+			// SVDs like stm32l4r5.svd define CCMR*_Input and _Output
+			// alternate registers, with _Input sorted before _Output.
+			// This would result in the _Output fields missing from the
+			// TIM_type struct definition, hence compilation would fail.
+			// Therefore we adjust the order of these alternate registers
+			// accordingly.
+			stm32EnsureCCMROrder(p.Registers)
+
 		case "USART":
 			isr := p.lookupRegister("ISR")
 			if isr == nil {
@@ -35,6 +45,21 @@ func tweakDevice(d *Device, pkgName string) {
 			// generated .go file, a constant for TXE is added here
 			// in case TXFNF is defined.
 			stm32EnsureBit(isr, "TXE", "TXFNF", "USART_ISR_")
+		}
+	}
+}
+
+func stm32EnsureCCMROrder(registers []*PeripheralField) {
+	for i, r := range registers {
+		if i > 0 {
+			prev := registers[i-1]
+			if r.Address == prev.Address {
+				// alternate field
+				if strings.HasPrefix(prev.Name, "CCMR") && strings.HasPrefix(r.Name, "CCMR") && strings.HasSuffix(r.Name, "_Output") {
+					// swap register pointers
+					registers[i-1], registers[i] = r, prev
+				}
+			}
 		}
 	}
 }
