@@ -825,3 +825,60 @@ const (
 	OAMOBJ_ATT2_PB_Pos = 0xC
 	OAMOBJ_ATT2_PB_Msk = 0xF
 )
+
+// Constants for SOUND: sound control
+const (
+	SSW_INC = 0x0    // Increasing sweep rate
+	SSW_DEC = 0x0008 // Decreasing sweep rate
+	SSW_OFF = 0x0008 // Disable sweep altogether
+
+	SSQR_DUTY1_8 = 0x0    // 12.5% duty cycle (#-------)
+	SSQR_DUTY1_4 = 0x0040 // 25% duty cycle (##------)
+	SSQR_DUTY1_2 = 0x0080 // 50% duty cycle (####----)
+	SSQR_DUTY3_4 = 0x00C0 // 75% duty cycle (######--) Equivalent to 25%
+	SSQR_INC     = 0x0    // Increasing volume
+	SSQR_DEC     = 0x0800 // Decreasing volume
+
+	SFREQ_HOLD  = 0x0    // Continuous play
+	SFREQ_TIMED = 0x4000 // Timed play
+	SFREQ_RESET = 0x8000 // Reset sound
+
+	SDMG_SQR1  = 0x01
+	SDMG_SQR2  = 0x02
+	SDMG_WAVE  = 0x04
+	SDMG_NOISE = 0x08
+
+	SDMG_LSQR1  = 0x0100 // Enable channel 1 on left
+	SDMG_LSQR2  = 0x0200 // Enable channel 2 on left
+	SDMG_LWAVE  = 0x0400 // Enable channel 3 on left
+	SDMG_LNOISE = 0x0800 // Enable channel 4 on left
+	SDMG_RSQR1  = 0x1000 // Enable channel 1 on right
+	SDMG_RSQR2  = 0x2000 // Enable channel 2 on right
+	SDMG_RWAVE  = 0x4000 // Enable channel 3 on right
+	SDMG_RNOISE = 0x8000 // Enable channel 4 on right
+
+	SDS_DMG25  = 0x0    // Tone generators at 25% volume
+	SDS_DMG50  = 0x0001 // Tone generators at 50% volume
+	SDS_DMG100 = 0x0002 // Tone generators at 100% volume
+	SDS_A50    = 0x0    // Direct Sound A at 50% volume
+	SDS_A100   = 0x0004 // Direct Sound A at 100% volume
+	SDS_B50    = 0x0    // Direct Sound B at 50% volume
+	SDS_B100   = 0x0008 // Direct Sound B at 100% volume
+	SDS_AR     = 0x0100 // Enable Direct Sound A on right
+	SDS_AL     = 0x0200 // Enable Direct Sound A on left
+	SDS_ATMR0  = 0x0    // Direct Sound A to use timer 0
+	SDS_ATMR1  = 0x0400 // Direct Sound A to use timer 1
+	SDS_ARESET = 0x0800 // Reset FIFO of Direct Sound A
+	SDS_BR     = 0x1000 // Enable Direct Sound B on right
+	SDS_BL     = 0x2000 // Enable Direct Sound B on left
+	SDS_BTMR0  = 0x0    // Direct Sound B to use timer 0
+	SDS_BTMR1  = 0x4000 // Direct Sound B to use timer 1
+	SDS_BRESET = 0x8000 // Reset FIFO of Direct Sound B
+
+	SSTAT_SQR1    = 0x0001 // (R) Channel 1 status
+	SSTAT_SQR2    = 0x0002 // (R) Channel 2 status
+	SSTAT_WAVE    = 0x0004 // (R) Channel 3 status
+	SSTAT_NOISE   = 0x0008 // (R) Channel 4 status
+	SSTAT_DISABLE = 0      // Disable sound
+	SSTAT_ENABLE  = 0x0080 // Enable sound. NOTE: enable before using any other sound regs
+)
