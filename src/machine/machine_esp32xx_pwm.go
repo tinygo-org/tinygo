@@ -145,7 +145,7 @@ func (pwm *LEDCPWM) Channel(pin Pin) (uint8, error) {
 	dutyReg.Set(0)
 	conf1 := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.LEDC.CH0_CONF1), baseOff))
 	conf1.Set((1 << 10) | (1 << 20) | (1 << 30) | (1 << 31)) // duty_cycle=1, duty_num=1, duty_inc=1, duty_start=1
-	conf0.SetBits(1 << 4)                                     // low_speed_update: apply channel config
+	conf0.SetBits(1 << 4)                                    // low_speed_update: apply channel config
 	return ch, nil
 }
 
