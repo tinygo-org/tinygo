@@ -11,6 +11,12 @@ func tweakDevice(d *Device, pkgName string) {
 		return
 	}
 
+	// Source file machine_stm32_iwdg.go relies on the presence of
+	// a register IWDG. On some devices, though, like the h723,
+	// there are two registers, IWDG1 and IWDG2. In this case we
+	// define an alias IWDG for IWDG1.
+	addUnnumberedAlias(d, "IWDG", "IWDG1")
+
 	for _, p := range d.Peripherals {
 		switch p.GroupName {
 		case "TIM":
@@ -45,6 +51,14 @@ func tweakDevice(d *Device, pkgName string) {
 			// generated .go file, a constant for TXE is added here
 			// in case TXFNF is defined.
 			stm32EnsureBit(isr, "TXE", "TXFNF", "USART_ISR_")
+		}
+	}
+}
+
+func addUnnumberedAlias(d *Device, dest, src string) {
+	if _, ok := d.PeripheralDict[dest]; !ok {
+		if p := d.PeripheralDict[src]; p != nil {
+			p.Alias = dest
 		}
 	}
 }
