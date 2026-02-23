@@ -55,7 +55,7 @@ func (a ADC) Configure(config ADCConfig) error {
 		return errors.New("invalid ADC pin for ESP32-C3")
 	}
 	initADC()
-	a.Pin.Configure(PinConfig{Mode: PinInput})
+	a.Pin.Configure(PinConfig{Mode: PinAnalog})
 	return nil
 }
 
@@ -110,6 +110,6 @@ func (a ADC) Get() uint16 {
 		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(0)
 		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(0)
 	}
-	raw &= 0xfff
+	//raw &= 0xfff
 	return uint16(raw) << 4
 }
