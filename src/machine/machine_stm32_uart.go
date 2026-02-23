@@ -1,4 +1,4 @@
-//go:build stm32 && !stm32g0
+//go:build stm32
 
 package machine
 
