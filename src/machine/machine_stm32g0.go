@@ -230,7 +230,7 @@ func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
 func (uart *UART) setRegisters() {
 	uart.rxReg = &uart.Bus.RDR
 	uart.txReg = &uart.Bus.TDR
-	uart.statusReg = &uart.Bus.ISR_FIFO_ENABLED
+	uart.statusReg = &uart.Bus.ISR
 	uart.txEmptyFlag = stm32.USART_ISR_TXE
 }
 
@@ -508,7 +508,7 @@ func (t *TIM) registerUPInterrupt() interrupt.Interrupt {
 	case &TIM3:
 		return interrupt.New(stm32.IRQ_TIM3_TIM4, TIM3.handleUPInterrupt)
 	case &TIM6:
-		return interrupt.New(stm32.IRQ_TIM6_DAC, TIM6.handleUPInterrupt)
+		return interrupt.New(stm32.IRQ_TIM6_DAC_LPTIM1, TIM6.handleUPInterrupt)
 	case &TIM7:
 		return interrupt.New(stm32.IRQ_TIM7, TIM7.handleUPInterrupt)
 	case &TIM14:
@@ -533,7 +533,7 @@ func (t *TIM) registerOCInterrupt() interrupt.Interrupt {
 	case &TIM3:
 		return interrupt.New(stm32.IRQ_TIM3_TIM4, TIM3.handleOCInterrupt)
 	case &TIM6:
-		return interrupt.New(stm32.IRQ_TIM6_DAC, TIM6.handleOCInterrupt)
+		return interrupt.New(stm32.IRQ_TIM6_DAC_LPTIM1, TIM6.handleOCInterrupt)
 	case &TIM7:
 		return interrupt.New(stm32.IRQ_TIM7, TIM7.handleOCInterrupt)
 	case &TIM14:
