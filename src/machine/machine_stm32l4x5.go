@@ -1,4 +1,4 @@
-//go:build stm32l4x5
+//go:build stm32l4y5
 
 package machine
 
