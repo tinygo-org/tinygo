@@ -123,7 +123,7 @@ func (a ADC) Get() uint16 {
 
 	// Select the channel to convert using CHSELR
 	// CHSELR uses a bitfield where bit N = 1 enables channel N
-	stm32.ADC.CHSELR.Set(1 << ch)
+	stm32.ADC.CHSELR0.Set(1 << ch)
 
 	// Wait for channel configuration ready
 	for stm32.ADC.GetISR_CCRDY() == 0 {
