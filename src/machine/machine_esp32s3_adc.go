@@ -52,8 +52,11 @@ const (
 )
 
 const (
-	attenDefault = 3 // 11 dB, ~0..3.3 V (IDF ADC_ATTEN_DB_12)
-	adc1Delay    = 800
+	attenDefault   = 3   // 11 dB, ~0..3.3 V (IDF ADC_ATTEN_DB_12)
+	adc1Delay      = 800
+	// Костыль: при нашем RTC init на GND сырой 12-bit ~240 (в IDF/Arduino калибровка через eFuse, не константа).
+	adc1ZeroOffset = 240
+	adc1Scale      = 4095 - adc1ZeroOffset
 )
 
 func adc1Settle() {
@@ -72,7 +75,11 @@ func initADC() {
 	adcOnce.Do(func() {
 		initADCClock()
 
-		// RTC_CNTL.ANA_CONF: SAR I2C pull-up for analog
+		// SENS.SAR_PERI_CLK_GATE_CONF: enable SAR ADC clock (cold boot leaves it 0, Arduino sets bit 30)
+		esp.SENS.SetSAR_PERI_CLK_GATE_CONF_SARADC_CLK_EN(1)
+
+		// RTC_CNTL.ANA_CONF: SAR I2C pull-up; clear I2C_RESET_POR_FORCE_PD to match working state (0x48 not 0x4C)
+		esp.RTC_CNTL.SetANA_CONF_I2C_RESET_POR_FORCE_PD(0)
 		esp.RTC_CNTL.SetANA_CONF_SAR_I2C_PU(1)
 		esp.RTC_CNTL.SetANA_CONF_I2C_RESET_POR_FORCE_PU(1)
 
@@ -86,13 +93,7 @@ func initADC() {
 		esp.SENS.SetSAR_MEAS1_CTRL1_AMP_SHORT_REF_FORCE(3)
 		esp.SENS.SetSAR_MEAS1_CTRL1_AMP_SHORT_REF_GND_FORCE(3)
 
-		// SENS.SAR_READER1_CTRL / SAR_READER2_CTRL: sample clock and count
-		esp.SENS.SetSAR_READER1_CTRL_SAR_SAR1_CLK_DIV(1)
-		esp.SENS.SetSAR_READER1_CTRL_SAR_SAR1_CLK_GATED(0)
-		esp.SENS.SetSAR_READER1_CTRL_SAR_SAR1_SAMPLE_NUM(1)
-		esp.SENS.SetSAR_READER2_CTRL_SAR_SAR2_CLK_DIV(1)
-		esp.SENS.SetSAR_READER2_CTRL_SAR_SAR2_CLK_GATED(0)
-		esp.SENS.SetSAR_READER2_CTRL_SAR_SAR2_SAMPLE_NUM(1)
+		// SENS.SAR_READER: не трогаем — оставляем cold boot default (DATA_INV=1 и т.д.), как в логе 0x30080001
 
 		// SENS.SAR_MEAS2_CTRL1: ADC2 FSM wait times
 		esp.SENS.SetSAR_MEAS2_CTRL1_SAR_SAR2_XPD_WAIT(8)
@@ -111,8 +112,8 @@ func initADC() {
 		esp.APB_SARADC.SetFSM_WAIT_SARADC_STANDBY_WAIT(100)
 		esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(3)
 		esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_GATED(1)
-		esp.APB_SARADC.SetCTRL2_SARADC_SAR1_INV(1)
-		esp.APB_SARADC.SetCTRL2_SARADC_SAR2_INV(1)
+		esp.APB_SARADC.SetCTRL2_SARADC_SAR1_INV(0)
+		esp.APB_SARADC.SetCTRL2_SARADC_SAR2_INV(0)
 		esp.APB_SARADC.SetCLKM_CONF_CLK_SEL(2)
 		esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_NUM(1)
 		esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_B(0)
@@ -172,8 +173,15 @@ func (a ADC) Get() uint16 {
 		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(1)
 		for esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DONE_SAR() == 0 {
 		}
-		raw := esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR() & 0xfff
-		return uint16(raw) << 4
+		raw12 := esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR() & 0xfff
+		if raw12 <= adc1ZeroOffset {
+			return 0
+		}
+		corrected := (raw12 - adc1ZeroOffset) * 4095 / adc1Scale
+		if corrected > 4095 {
+			corrected = 4095
+		}
+		return uint16(corrected) << 4
 	}
 	ch = uint32(a.Pin - 11) // GPIO11→ch0 … GPIO20→ch9
 	// SENS.SAR_MEAS2_CTRL2: force SW control, select channel
