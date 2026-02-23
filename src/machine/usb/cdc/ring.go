@@ -7,8 +7,7 @@ import "sync/atomic"
 // Peek/Discard. Reset may only be called when neither side is active.
 //
 // Implementation uses monotonic counters (head/tail) instead of bounded
-// offsets. This eliminates full/empty ambiguity and removes all CAS
-// recovery paths. Unsigned subtraction (head - tail) always yields
+// offsets. Unsigned subtraction (head - tail) always yields
 // correct used count regardless of uint32 overflow.
 type ring512 struct {
 	buf [ringBufLen]byte // power of 2 so compiler can optimize & mask.
@@ -40,7 +39,7 @@ func (r *ring512) Used() uint32 {
 	return r.head.Load() - r.tail.Load()
 }
 
-// Peek returns a contiguous view into the readable portions of the buffer
+// Peek returns contiguous views into the readable portions of the buffer
 // without advancing the read position. When data wraps around the end of
 // the internal buffer, two segments are returned. Second data2 is nil on fully contiguous buffer.
 // Returns nil,nil when empty.
