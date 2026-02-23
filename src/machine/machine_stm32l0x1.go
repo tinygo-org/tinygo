@@ -188,8 +188,8 @@ func (t *TIM) enableMainOutput() {
 	// nothing to do - no BDTR register
 }
 
-type arrtype = uint16
-type arrRegType = volatile.Register16
+type arrtype = uint32
+type arrRegType = volatile.Register32
 
 const (
 	ARR_MAX = 0x10000
