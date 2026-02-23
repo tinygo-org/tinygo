@@ -1,6 +1,9 @@
 //go:build esp32s3
 
-// ESP32-S3: 2 SAR ADCs. Hardware is 12-bit. Get() return value is scaled by ADCConfig.Resolution (e.g. 8, 10, 12, 16).
+// ESP32-S3: 2 SAR ADCs. Hardware is 12-bit.
+// - Get() return value is scaled by ADCConfig.Resolution (e.g. 8, 10, 12, 16).
+// - Input range (attenuation) is selected from ADCConfig.Reference in millivolts.
+//   If Reference == 0, 3300 mV is used by default.
 // Pin mapping: ADC1 = GPIO 1..10 (channel = GPIO-1); ADC2 = GPIO 11..20 (channel = GPIO-11).
 //
 // Registers used (TRM / IDF):
@@ -20,8 +23,9 @@ import (
 )
 
 var (
-	adcOnce      sync.Once
+	adcOnce       sync.Once
 	adcResolution uint32 = 16 // bits; 8, 10, 12, or 16. Set via ADCConfig.Resolution in Configure().
+	adcAtten      uint32 = 3  // attenuation index (0=0dB,1=2.5dB,2=6dB,3=11dB), chosen from ADCConfig.Reference.
 )
 
 func initADCClock() {
@@ -59,8 +63,7 @@ const (
 )
 
 const (
-	attenDefault = 3   // 12 dB, ~0–3.3 V (IDF ADC_ATTEN_DB_12)
-	adc1Delay    = 800
+	adc1Delay = 800
 )
 
 func adc1Settle() {
@@ -158,9 +161,32 @@ func (a ADC) Configure(config ADCConfig) error {
 		return errors.New("invalid ADC pin for ESP32-S3")
 	}
 	initADC()
+	// Resolution: how many meaningful bits the caller wants in Get() result.
 	if config.Resolution != 0 {
 		adcResolution = config.Resolution
 	}
+
+	// Reference (mV): expected max input voltage, used to pick attenuation.
+	// IDF/Arduino mapping for ESP32-S3:
+	//   0 dB   → 0 ..  950 mV
+	//   2.5 dB → 0 .. 1250 mV
+	//   6 dB   → 0 .. 1750 mV
+	//   11 dB  → 0 .. 3100 mV
+	ref := config.Reference
+	if ref == 0 {
+		ref = 3300
+	}
+	switch {
+	case ref <= 950:
+		adcAtten = 0
+	case ref <= 1250:
+		adcAtten = 1
+	case ref <= 1750:
+		adcAtten = 2
+	default:
+		adcAtten = 3
+	}
+
 	a.Pin.Configure(PinConfig{Mode: PinAnalog})
 	return nil
 }
@@ -174,7 +200,7 @@ func (a ADC) Get() uint16 {
 	var ch uint32
 	if adc1 {
 		ch = uint32(a.Pin - 1) // GPIO1→ch0 … GPIO10→ch9
-		setSensAtten1(ch, attenDefault)
+		setSensAtten1(ch, adcAtten)
 		// SENS.SAR_MEAS1_CTRL2.SAR1_EN_PAD: select channel
 		esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD(1 << ch)
 		adc1Settle()
@@ -192,7 +218,7 @@ func (a ADC) Get() uint16 {
 	esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_FORCE(1)
 	esp.SENS.SetSAR_MEAS2_CTRL2_SAR2_EN_PAD_FORCE(1)
 	esp.SENS.SetSAR_MEAS2_CTRL2_SAR2_EN_PAD(1 << ch)
-	setSensAtten2(ch, attenDefault)
+	setSensAtten2(ch, adcAtten)
 	// APB_SARADC.ARB_CTRL: grant ADC2 to APB for oneshot
 	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(1)
 	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(1)
