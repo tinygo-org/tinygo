@@ -2,6 +2,8 @@
 
 // ESP32-S3: 2 SAR ADCs, 12-bit hardware; Get() returns 16-bit (raw << 4, 0..65520).
 // Pin mapping: ADC1 = GPIO 1..10 (channel = GPIO-1); ADC2 = GPIO 11..20 (channel = GPIO-11).
+// Get() возвращает сырое значение АЦП без калибровки. Для точного 0V/3.3V — двухточечная
+// калибровка в приложении или eFuse-калибровка (как в IDF adc_cali).
 //
 // Registers used (TRM / IDF):
 //   SYSTEM:     PERIP_RST_EN0.APB_SARADC_RST, PERIP_CLK_EN0.APB_SARADC_CLK_EN
@@ -52,11 +54,8 @@ const (
 )
 
 const (
-	attenDefault   = 3   // 11 dB, ~0..3.3 V (IDF ADC_ATTEN_DB_12)
-	adc1Delay      = 800
-	// Костыль: при нашем RTC init на GND сырой 12-bit ~240 (в IDF/Arduino калибровка через eFuse, не константа).
-	adc1ZeroOffset = 240
-	adc1Scale      = 4095 - adc1ZeroOffset
+	attenDefault = 3   // 11 dB, ~0..3.3 V (IDF ADC_ATTEN_DB_12)
+	adc1Delay    = 800
 )
 
 func adc1Settle() {
@@ -92,8 +91,6 @@ func initADC() {
 		esp.SENS.SetSAR_MEAS1_CTRL1_AMP_RST_FB_FORCE(3)
 		esp.SENS.SetSAR_MEAS1_CTRL1_AMP_SHORT_REF_FORCE(3)
 		esp.SENS.SetSAR_MEAS1_CTRL1_AMP_SHORT_REF_GND_FORCE(3)
-
-		// SENS.SAR_READER: не трогаем — оставляем cold boot default (DATA_INV=1 и т.д.), как в логе 0x30080001
 
 		// SENS.SAR_MEAS2_CTRL1: ADC2 FSM wait times
 		esp.SENS.SetSAR_MEAS2_CTRL1_SAR_SAR2_XPD_WAIT(8)
@@ -173,15 +170,8 @@ func (a ADC) Get() uint16 {
 		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(1)
 		for esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DONE_SAR() == 0 {
 		}
-		raw12 := esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR() & 0xfff
-		if raw12 <= adc1ZeroOffset {
-			return 0
-		}
-		corrected := (raw12 - adc1ZeroOffset) * 4095 / adc1Scale
-		if corrected > 4095 {
-			corrected = 4095
-		}
-		return uint16(corrected) << 4
+		raw := esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR() & 0xfff
+		return uint16(raw) << 4
 	}
 	ch = uint32(a.Pin - 11) // GPIO11→ch0 … GPIO20→ch9
 	// SENS.SAR_MEAS2_CTRL2: force SW control, select channel
