@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	led := machine.LED
+	led := machine.GPIO4
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	for {
 		led.Low()

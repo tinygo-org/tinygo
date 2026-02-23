@@ -15,7 +15,9 @@ func main() {
 	sensor.Configure(machine.ADCConfig{})
 
 	println("ADC from GPIO4 (pin 4)...")
+	_ = sensor.Get()
 
+	println("Start loop")
 	for {
 		val := sensor.Get()
 		raw12 := val >> 4

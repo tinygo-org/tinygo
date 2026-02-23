@@ -1,18 +1,18 @@
 //go:build esp32s3
 
-// ESP32-S3: 2 SAR ADCs. Hardware is 12-bit.
-// - Get() return value is scaled by ADCConfig.Resolution (e.g. 8, 10, 12, 16).
-// - Input range (attenuation) is selected from ADCConfig.Reference in millivolts.
-//   If Reference == 0, 3300 mV is used by default.
+// ESP32-S3: 2 SAR ADCs, 12-bit hardware; Get() returns 16-bit (raw << 4, 0..65520).
 // Pin mapping: ADC1 = GPIO 1..10 (channel = GPIO-1); ADC2 = GPIO 11..20 (channel = GPIO-11).
 //
 // Registers used (TRM / IDF):
 //   SYSTEM:     PERIP_RST_EN0.APB_SARADC_RST, PERIP_CLK_EN0.APB_SARADC_CLK_EN
 //   RTC_CNTL:   ANA_CONF.SAR_I2C_PU, I2C_RESET_POR_FORCE_PU
-//   SENS:       SAR_POWER (XPD_SAR, SARCLK_EN); SAR_MEAS1_CTRL1 (AMP/REF); SAR_READER1/2_CTRL (CLK_DIV, SAMPLE_NUM);
-//               SAR_MEAS1_MUX.SAR1_DIG_FORCE; SAR_MEAS1_CTRL2 (SAR1_EN_PAD, MEAS1_START_SAR, MEAS1_DONE_SAR, MEAS1_DATA_SAR);
-//               SAR_ATTEN1/2 (2b per channel); SAR_MEAS2_CTRL1/2; same for ADC2
-//   APB_SARADC: FSM_WAIT, CTRL (XPD_SAR_FORCE, SAR_CLK_GATED); CTRL2 (SAR1_INV, SAR2_INV); CLKM_CONF; ARB_CTRL (ADC2)
+// ADC1 RTC path (oneshot, TRM/IDF):
+//   SENS.SAR_MEAS1_MUX.SAR1_DIG_FORCE = 0  → ADC1 under RTC (not digital/APB)
+//   SENS.SAR_MEAS1_CTRL2.MEAS1_START_FORCE = 1, SAR1_EN_PAD_FORCE = 1  → SW triggers and selects channel
+//   Per conversion: set attenuation (SAR_ATTEN1), channel (SAR1_EN_PAD), then MEAS1_START_SAR 0→1; wait MEAS1_DONE_SAR; read MEAS1_DATA_SAR.
+//   SENS.SAR_MEAS1_CTRL1: amp/ref (FORCE_XPD_AMP etc). SAR_MEAS1_CTRL2: MEAS1_DONE_SAR (done), MEAS1_START_SAR (start), MEAS1_DATA_SAR (12-bit result).
+//   SAR_READER1_CTRL: CLK_DIV, SAR1_CLK_GATED, SAR1_SAMPLE_NUM. No separate FSM wait for ADC1 in SVD; shared APB FSM_WAIT used.
+//   APB_SARADC: FSM_WAIT, CLKM, etc. used for clock/shared logic; ADC2 uses ARB_CTRL.
 
 package machine
 
@@ -22,18 +22,7 @@ import (
 	"sync"
 )
 
-var (
-	adcOnce       sync.Once
-	adcResolution uint32 = 16 // bits; 8, 10, 12, or 16. Set via ADCConfig.Resolution in Configure().
-	adcAtten      uint32 = 3  // attenuation index (0=0dB,1=2.5dB,2=6dB,3=11dB), chosen from ADCConfig.Reference.
-)
-
-func initADCClock() {
-	// SYSTEM: reset and enable APB SARADC clock
-	esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(1)
-	esp.SYSTEM.SetPERIP_CLK_EN0_APB_SARADC_CLK_EN(1)
-	esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(0)
-}
+var adcOnce sync.Once
 
 func InitADC() {
 	initADC()
@@ -63,12 +52,20 @@ const (
 )
 
 const (
-	adc1Delay = 800
+	attenDefault = 3 // 11 dB, ~0..3.3 V (IDF ADC_ATTEN_DB_12)
+	adc1Delay    = 800
 )
 
 func adc1Settle() {
 	for i := 0; i < adc1Delay; i++ {
 	}
+}
+
+func initADCClock() {
+	// SYSTEM: reset and enable APB SARADC clock
+	esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(1)
+	esp.SYSTEM.SetPERIP_CLK_EN0_APB_SARADC_CLK_EN(1)
+	esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(0)
 }
 
 func initADC() {
@@ -103,10 +100,10 @@ func initADC() {
 		esp.SENS.SetSAR_MEAS2_CTRL1_SAR_SAR2_STANDBY_WAIT(100)
 		esp.SENS.SetSAR_MEAS2_CTRL1_SAR_SAR2_RSTB_FORCE(3)
 
-		// SENS.SAR_MEAS1_MUX, SAR_MEAS1_CTRL2: ADC1 RTC controller (same as Arduino/IDF adc_oneshot)
-		esp.SENS.SetSAR_MEAS1_MUX_SAR1_DIG_FORCE(0)       // 0 = RTC control
-		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(1)  // SW triggers conversion
-		esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD_FORCE(1)  // SW selects channel
+		// SENS.SAR_MEAS1_MUX, SAR_MEAS1_CTRL2: ADC1 RTC controller (same path that was working)
+		esp.SENS.SetSAR_MEAS1_MUX_SAR1_DIG_FORCE(0)      // 0 = RTC control
+		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(1) // SW triggers conversion
+		esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD_FORCE(1) // SW selects channel
 
 		// APB_SARADC: shared FSM, clock, invert; needed for ADC2 arbiter and SAR clock
 		esp.APB_SARADC.SetFSM_WAIT_SARADC_XPD_WAIT(8)
@@ -134,20 +131,6 @@ func setSensAtten1(ch, atten uint32) {
 	esp.SENS.SetSAR_ATTEN1(v)
 }
 
-// scaleRaw converts 12-bit raw (0..4095) to uint16 based on adcResolution.
-func scaleRaw(raw uint32) uint16 {
-	switch adcResolution {
-	case 8:
-		return uint16(raw >> 4) // 0..255
-	case 10:
-		return uint16(raw >> 2) // 0..1023
-	case 12:
-		return uint16(raw) // 0..4095
-	default:
-		return uint16(raw << 4) // 0..65520 (16-bit)
-	}
-}
-
 func setSensAtten2(ch, atten uint32) {
 	// SENS.SAR_ATTEN2: 2 bits per channel
 	v := esp.SENS.GetSAR_ATTEN2()
@@ -160,34 +143,8 @@ func (a ADC) Configure(config ADCConfig) error {
 	if a.Pin < 1 || a.Pin > 20 {
 		return errors.New("invalid ADC pin for ESP32-S3")
 	}
-	initADC()
-	// Resolution: how many meaningful bits the caller wants in Get() result.
-	if config.Resolution != 0 {
-		adcResolution = config.Resolution
-	}
-
-	// Reference (mV): expected max input voltage, used to pick attenuation.
-	// IDF/Arduino mapping for ESP32-S3:
-	//   0 dB   → 0 ..  950 mV
-	//   2.5 dB → 0 .. 1250 mV
-	//   6 dB   → 0 .. 1750 mV
-	//   11 dB  → 0 .. 3100 mV
-	ref := config.Reference
-	if ref == 0 {
-		ref = 3300
-	}
-	switch {
-	case ref <= 950:
-		adcAtten = 0
-	case ref <= 1250:
-		adcAtten = 1
-	case ref <= 1750:
-		adcAtten = 2
-	default:
-		adcAtten = 3
-	}
-
 	a.Pin.Configure(PinConfig{Mode: PinAnalog})
+	initADC()
 	return nil
 }
 
@@ -196,29 +153,34 @@ func (a ADC) Get() uint16 {
 		return 0
 	}
 	initADC()
+	a.Pin.Configure(PinConfig{Mode: PinAnalog})
 	adc1 := a.Pin <= 10
 	var ch uint32
 	if adc1 {
 		ch = uint32(a.Pin - 1) // GPIO1→ch0 … GPIO10→ch9
-		setSensAtten1(ch, adcAtten)
-		// SENS.SAR_MEAS1_CTRL2.SAR1_EN_PAD: select channel
+		// RTC controller: must be set before each conversion (adc_ll_set_controller equivalent)
+		esp.SENS.SetSAR_MEAS1_MUX_SAR1_DIG_FORCE(0)
+		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(1)
+		esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD_FORCE(1)
+		setSensAtten1(ch, attenDefault)
 		esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD(1 << ch)
 		adc1Settle()
-		// SENS.SAR_MEAS1_CTRL2.MEAS1_START_SAR: one-shot start
+		// One-shot: 0 then 1 with short gap (TRM: MEAS1_START_SAR active when MEAS1_START_FORCE=1)
 		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(0)
+		for i := 0; i < 50; i++ {
+		}
 		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(1)
 		for esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DONE_SAR() == 0 {
 		}
-		// SENS.SAR_MEAS1_CTRL2.MEAS1_DATA_SAR: 12-bit result
 		raw := esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR() & 0xfff
-		return scaleRaw(raw)
+		return uint16(raw) << 4
 	}
 	ch = uint32(a.Pin - 11) // GPIO11→ch0 … GPIO20→ch9
 	// SENS.SAR_MEAS2_CTRL2: force SW control, select channel
 	esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_FORCE(1)
 	esp.SENS.SetSAR_MEAS2_CTRL2_SAR2_EN_PAD_FORCE(1)
 	esp.SENS.SetSAR_MEAS2_CTRL2_SAR2_EN_PAD(1 << ch)
-	setSensAtten2(ch, adcAtten)
+	setSensAtten2(ch, attenDefault)
 	// APB_SARADC.ARB_CTRL: grant ADC2 to APB for oneshot
 	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(1)
 	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(1)
@@ -231,5 +193,5 @@ func (a ADC) Get() uint16 {
 	raw := esp.SENS.GetSAR_MEAS2_CTRL2_MEAS2_DATA_SAR() & 0xfff
 	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(0)
 	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(0)
-	return scaleRaw(raw)
+	return uint16(raw) << 4
 }
