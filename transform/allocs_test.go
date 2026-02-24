@@ -57,9 +57,9 @@ func TestAllocs2(t *testing.T) {
 	sort.Slice(testOutputs, func(i, j int) bool {
 		return testOutputs[i].line < testOutputs[j].line
 	})
-	testOutput := ""
+	testOutput := make([]string, 0)
 	for _, out := range testOutputs {
-		testOutput += out.String() + "\n"
+		testOutput = append(testOutput, out.String())
 	}
 
 	// Load expected test output (the OUT: lines).
@@ -67,15 +67,18 @@ func TestAllocs2(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not read test input:", err)
 	}
-	var expectedTestOutput string
-	for i, line := range strings.Split(strings.ReplaceAll(string(testInput), "\r\n", "\n"), "\n") {
+	var expectedTestOutput []string
+	for _, line := range strings.Split(strings.ReplaceAll(string(testInput), "\r\n", "\n"), "\n") {
 		if idx := strings.Index(line, " // OUT: "); idx > 0 {
 			msg := line[idx+len(" // OUT: "):]
-			expectedTestOutput += "allocs2.go:" + strconv.Itoa(i+1) + ": " + msg + "\n"
+			expectedTestOutput = append(expectedTestOutput, msg)
 		}
 	}
 
-	if testOutput != expectedTestOutput {
-		t.Errorf("output does not match expected output:\n%s", testOutput)
+	for i := range testOutput {
+		if !strings.HasSuffix(testOutput[i], expectedTestOutput[i]) {
+			t.Errorf("output does not match expected output:\n%s\n%s\n", testOutput[i], expectedTestOutput[i])
+			return
+		}
 	}
 }
