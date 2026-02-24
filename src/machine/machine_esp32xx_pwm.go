@@ -3,19 +3,23 @@
 // PWM on ESP32-C3/S3 uses the LEDC (LED Control) peripheral, low-speed mode only.
 // One timer drives multiple channels; each channel has its own duty, shared frequency.
 // Pin routing is via GPIO matrix (SigOutBase + channel index).
+//
+// Channel config (chanOp) follows the hardware contract from:
+//   - ESP-IDF: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/ledc.html
+//     (timer config → channel config → duty + update_duty).
+//   - SVD (e.g. lib/cmsis-svd/data/Espressif/esp32s3.svd): CONF0.PARA_UP "updates
+//     HPOINT, DUTY_START, SIG_OUT_EN, TIMER_SEL, DUTY_NUM, DUTY_CYCLE, DUTY_SCALE,
+//     DUTY_INC for channel and is auto-cleared by hardware"; CONF1.DUTY_START "other
+//     CONF1 fields take effect when this bit is set to 1".
 
 package machine
 
 import (
 	"device/esp"
 	"errors"
-	"runtime/volatile"
-	"unsafe"
 )
 
 const ledcApbClock = 80_000000
-
-const ledcChannelBlockSize = 20
 
 const ledcDutyFracBits = 4 // DUTY register has 4 fractional bits; write value<<4
 
@@ -31,6 +35,14 @@ type LEDCPWM struct {
 	configured  bool
 	channelPin  [8]Pin
 }
+
+type ledcChanOp uint8
+
+const (
+	ledcChanOpInit ledcChanOp = iota // initial per-channel setup (timer, enable, HPOINT/DUTY/CONF1, PARA_UP)
+	ledcChanOpSetDuty                // update duty and latch it (DUTY + CONF1 + PARA_UP)
+	ledcChanOpSetInvert              // change idle level (IDLE_LV)
+)
 
 func (pwm *LEDCPWM) Configure(config PWMConfig) error {
 	// Enable LEDC clock and release reset (SYSTEM perip_clk_en0 / perip_rst_en0).
@@ -136,19 +148,10 @@ func (pwm *LEDCPWM) Channel(pin Pin) (uint8, error) {
 	pwm.channelPin[ch] = pin
 	signal := pwm.SigOutBase + uint32(ch)
 	pin.configure(PinConfig{Mode: PinOutput}, signal) // GPIO matrix: pin <- LEDC_LS_SIG_OUTn
-
-	baseOff := uintptr(ch) * ledcChannelBlockSize
-	conf0 := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.LEDC.CH0_CONF0), baseOff))
-	conf0.Set((uint32(pwm.timerNum) << 0) | (1 << 2) | (0 << 3)) // timer_sel, sig_out_en=1, idle_lv=0
-	hpointReg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.LEDC.CH0_HPOINT), baseOff))
-	dutyReg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.LEDC.CH0_DUTY), baseOff))
-	hpointReg.Set(0)
-	dutyReg.Set(0)
-	conf1 := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.LEDC.CH0_CONF1), baseOff))
-	conf1.Set((1 << 10) | (1 << 20) | (1 << 30) | (1 << 31)) // duty_cycle=1, duty_num=1, duty_inc=1, duty_start=1
-	conf0.SetBits(1 << 4)                                    // low_speed_update: apply channel config
+	pwm.chanOp(ch, ledcChanOpInit, 0, false)
 	return ch, nil
 }
+
 
 func (pwm *LEDCPWM) Set(channel uint8, value uint32) {
 	if channel >= pwm.NumChannels {
@@ -159,13 +162,7 @@ func (pwm *LEDCPWM) Set(channel uint8, value uint32) {
 		value = top
 	}
 	dutyVal := value << ledcDutyFracBits
-	baseOff := uintptr(channel) * ledcChannelBlockSize
-	dutyReg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.LEDC.CH0_DUTY), baseOff))
-	dutyReg.Set(dutyVal)
-	conf1 := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.LEDC.CH0_CONF1), baseOff))
-	conf1.Set((1 << 10) | (1 << 20) | (1 << 30) | (1 << 31)) // duty_start=1 to latch new duty
-	conf0 := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.LEDC.CH0_CONF0), baseOff))
-	conf0.SetBits((1 << 2) | (1 << 4)) // sig_out_en + low_speed_update
+	pwm.chanOp(channel, ledcChanOpSetDuty, dutyVal, false)
 }
 
 func (pwm *LEDCPWM) Top() uint32 {
@@ -179,11 +176,5 @@ func (pwm *LEDCPWM) SetInverting(channel uint8, inverting bool) {
 	if channel >= pwm.NumChannels {
 		return
 	}
-	base := unsafe.Pointer(&esp.LEDC.CH0_CONF0)
-	conf0 := (*volatile.Register32)(unsafe.Add(base, uintptr(channel)*ledcChannelBlockSize))
-	v := conf0.Get() & ^uint32(1<<3)
-	if inverting {
-		v |= 1 << 3
-	}
-	conf0.Set(v)
+	pwm.chanOp(channel, ledcChanOpSetInvert, 0, inverting)
 }
