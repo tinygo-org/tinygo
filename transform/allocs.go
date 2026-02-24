@@ -6,8 +6,10 @@ package transform
 // interprocedural escape analysis.
 
 import (
+	"bufio"
 	"fmt"
 	"go/token"
+	"os"
 	"regexp"
 
 	"tinygo.org/x/go-llvm"
@@ -36,6 +38,10 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 	// Determine the maximum alignment on this platform.
 	complex128Type := ctx.StructType([]llvm.Type{ctx.DoubleType(), ctx.DoubleType()}, false)
 	maxAlign := int64(targetData.ABITypeAlignment(complex128Type))
+
+	if printAllocs != nil {
+		fmt.Fprintln(os.Stderr, "mode: set")
+	}
 
 	for _, heapalloc := range getUses(allocator) {
 		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
@@ -173,5 +179,35 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 // logAlloc prints a message to stderr explaining why the given object had to be
 // allocated on the heap.
 func logAlloc(logger func(token.Position, string), allocCall llvm.Value, reason string) {
-	logger(getPosition(allocCall), "object allocated on the heap: "+reason)
+	pos := getPosition(allocCall)
+	if pos.Filename == "" || pos.Line <= 0 {
+		logger(pos, "")
+		return
+	}
+
+	endCol := lineLengthAt(pos.Filename, pos.Line)
+	if endCol < 1 {
+		endCol = 1
+	}
+
+	// Only emit the coverprofile line, without position prefix.
+	logger(token.Position{}, fmt.Sprintf("%s:%d.1,%d.%d 1 0", pos.Filename, pos.Line, pos.Line, endCol))
+}
+
+func lineLengthAt(filename string, lineNumber int) int {
+	f, err := os.Open(filename)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	line := 1
+	for scanner.Scan() {
+		if line == lineNumber {
+			return len(scanner.Text())
+		}
+		line++
+	}
+	return 0
 }
