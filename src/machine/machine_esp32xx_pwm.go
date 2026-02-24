@@ -39,9 +39,9 @@ type LEDCPWM struct {
 type ledcChanOp uint8
 
 const (
-	ledcChanOpInit ledcChanOp = iota // initial per-channel setup (timer, enable, HPOINT/DUTY/CONF1, PARA_UP)
-	ledcChanOpSetDuty                // update duty and latch it (DUTY + CONF1 + PARA_UP)
-	ledcChanOpSetInvert              // change idle level (IDLE_LV)
+	ledcChanOpInit      ledcChanOp = iota // initial per-channel setup (timer, enable, HPOINT/DUTY/CONF1, PARA_UP)
+	ledcChanOpSetDuty                     // update duty and latch it (DUTY + CONF1 + PARA_UP)
+	ledcChanOpSetInvert                   // change idle level (IDLE_LV)
 )
 
 func (pwm *LEDCPWM) Configure(config PWMConfig) error {
@@ -151,7 +151,6 @@ func (pwm *LEDCPWM) Channel(pin Pin) (uint8, error) {
 	pwm.chanOp(ch, ledcChanOpInit, 0, false)
 	return ch, nil
 }
-
 
 func (pwm *LEDCPWM) Set(channel uint8, value uint32) {
 	if channel >= pwm.NumChannels {
