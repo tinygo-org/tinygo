@@ -48,11 +48,12 @@ func (pwm *LEDCPWM) Configure(config PWMConfig) error {
 	}
 	freq := uint64(1e9) / period
 	dutyRes := uint8(10)
-	if freq < 100 {
+	switch {
+	case freq < 100:
 		dutyRes = 14
-	} else if freq < 1000 {
+	case freq < 1000:
 		dutyRes = 12
-	} else if freq > 100_000 {
+	case freq > 100_000:
 		dutyRes = 8
 	}
 
