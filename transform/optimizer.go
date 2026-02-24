@@ -88,7 +88,11 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 
 		// Run TinyGo-specific interprocedural optimizations.
 		OptimizeAllocs(mod, config.Options.PrintAllocs, maxStackSize, func(pos token.Position, msg string) {
-			fmt.Fprintln(os.Stderr, pos.String()+": "+msg)
+			if pos.Filename != "" {
+				fmt.Fprintf(os.Stderr, "%s:%d:%d: %s\n", pos.Filename, pos.Line, pos.Column, msg)
+			} else {
+				fmt.Fprintln(os.Stderr, msg) // No prefix!
+			}
 		})
 		OptimizeStringToBytes(mod)
 		OptimizeStringEqual(mod)
