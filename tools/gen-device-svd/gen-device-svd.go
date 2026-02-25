@@ -550,6 +550,10 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		// names like "CNT[31]". Replace invalid characters with "_" when
 		// needed.
 		fieldName := cleanName(fieldEl.Name)
+		// Renesas has duplicate reserved fields that we have to skip
+		if strings.EqualFold(fieldName, "reserved") {
+			continue
+		}
 		if !unicode.IsUpper(rune(fieldName[0])) && !unicode.IsDigit(rune(fieldName[0])) {
 			fieldName = strings.ToUpper(fieldName)
 		}
@@ -834,12 +838,20 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 			// we need to generate a separate register for each "element"
 			var results []*PeripheralField
 			shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(reg.name(), "_%s", ""), "%s", ""))
+			// handle Renesas SVDs that have multiple dimIndex values with same name
+			if reg.element.DimIndex != nil {
+				idx := reg.dimIndex()
+				if !(idx[0] == "0" || idx[0] == "1") {
+					shortName = strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(reg.name(), "_%s", ""), "%s", idx[0]))
+				}
+			}
+
 			for i, j := range reg.dimIndex() {
 				regAddress := reg.address() + (uint64(i) * dimIncrement)
 				results = append(results, &PeripheralField{
 					Name:        strings.ToUpper(strings.ReplaceAll(reg.name(), "%s", j)),
 					Address:     regAddress,
-					Description: reg.description(),
+					Description: strings.ReplaceAll(reg.description(), "%s", j),
 					Array:       -1,
 					ElementSize: reg.size(),
 					ShortName:   shortName,

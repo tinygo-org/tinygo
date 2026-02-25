@@ -1,0 +1,8 @@
+{
+	"inherits": ["cortex-m4"],
+	"build-tags": ["ra4m1", "r7fa4m1ab", "renesas"],
+	"linkerscript": "targets/ra4m1.ld",
+	"extra-files": [
+		"src/device/renesas/r7fa4m1ab.s"
+	]
+}

@@ -1,0 +1,7 @@
+{
+	"inherits": ["ra4m1"],
+	"build-tags": ["arduino_unor4"],
+	"flash-command": "bossac -i -e -w -v -R -U --port={port} --offset=0x4000 {bin}",
+    "serial-port": ["2341:8057", "2341:0057"],
+    "flash-1200-bps-reset": "true"
+}
