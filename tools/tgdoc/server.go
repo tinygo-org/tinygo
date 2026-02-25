@@ -186,7 +186,7 @@ func serve(addr string, results []Result) {
 			http.NotFound(w, r)
 			return
 		}
-		data := pageData{Index: index}
+		data := pageData{Index: index, Results: results}
 		pageTmpl.Execute(w, data)
 	})
 
@@ -197,7 +197,7 @@ func serve(addr string, results []Result) {
 			http.NotFound(w, r)
 			return
 		}
-		data := pageData{Index: index, Selected: entry, SelectedKey: key}
+		data := pageData{Index: index, Results: results, Selected: entry, SelectedKey: key}
 		pageTmpl.Execute(w, data)
 	})
 
@@ -218,6 +218,7 @@ func serve(addr string, results []Result) {
 
 type pageData struct {
 	Index       *IdentIndex
+	Results     []Result
 	Selected    *IdentEntry
 	SelectedKey string
 }
@@ -333,7 +334,8 @@ main .subtitle { color: #666; margin-bottom: 1.5em; }
 <p>Select an identifier from the sidebar to see its appearances across targets.</p>
 <p style="margin-top:1em">Browse by target:</p>
 <nav style="margin-top:0.5em;column-count:3">
-{{range .Index.Entries}}{{end}}
+{{range .Results}}<a href="/target/{{.Target.Name}}" style="display:block;padding:2px 0">{{.Target.Name}}</a>
+{{end}}
 </nav>
 </div>
 {{end}}
