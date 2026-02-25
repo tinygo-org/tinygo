@@ -266,6 +266,7 @@ body { font-family: system-ui, -apple-system, sans-serif; }
 .ident-list a.active { background: #e8e8f4; border-left-color: #4444cc; }
 .ident-list .badge { display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 3px; font-size: 0.65em; font-weight: bold; margin-right: 6px; color: white; flex-shrink: 0; }
 .ident-list .count { margin-left: auto; color: #999; font-size: 0.8em; padding-left: 8px; flex-shrink: 0; }
+.ident-list .ngroups { color: salmon; font-size: 0.8em; padding-left: 2px; flex-shrink: 0; }
 .ident-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kind-type .badge { background: #2196F3; }
 .kind-func .badge { background: #4CAF50; }
@@ -306,7 +307,7 @@ main .subtitle { color: #666; margin-bottom: 1.5em; }
 <a href="/id/{{.Key}}" class="{{kindClass .Kind}}{{if eq .Key $.SelectedKey}} active{{end}}" data-name="{{.Name}}" data-kind="{{.Kind}}">
 <span class="badge">{{kindBadge .Kind}}</span>
 <span class="name">{{.Name}}</span>
-<span class="count">{{.Count}}</span>
+<span class="count">{{.Count}}{{if gt (len .Groups) 1}}<span class="ngroups">/{{len .Groups}}</span>{{end}}</span>
 </a>
 {{end}}
 </div>
