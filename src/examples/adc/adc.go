@@ -12,7 +12,8 @@ import (
 func main() {
 	time.Sleep(time.Second * 1)
 
-	sensor := machine.ADC{machine.GPIO4}
+	println("ADC read from GPIO1...")
+	sensor := machine.ADC{machine.GPIO0}
 	sensor.Configure(machine.ADCConfig{})
 
 	println("ADC read from GPIO2...")

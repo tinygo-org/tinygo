@@ -86,8 +86,6 @@ func (c *ADCDefaultCalibration) SelfCalibrate() {
 	DefaultRegI2C.ADC1CalibrationInit(0)
 	DefaultRegI2C.ADC1CalibrationPrepare(0)
 
-	println("useEfuse", useEfuse)
-	println("initCode", initCode)
 	if useEfuse {
 		DefaultRegI2C.ADC1SetCalibrationParam(0, initCode)
 		DefaultRegI2C.ADC1CalibrationFinish(0)
@@ -97,7 +95,6 @@ func (c *ADCDefaultCalibration) SelfCalibrate() {
 		return
 	}
 
-	println("start self calibration")
 	var codeList [adcCalTimes]uint32
 	var codeSum uint32
 
