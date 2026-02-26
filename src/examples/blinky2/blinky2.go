@@ -16,7 +16,7 @@ func main() {
 }
 
 func led1() {
-	led := machine.GPIO4
+	led := machine.LED1
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	for {
 		println("+")
