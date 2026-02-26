@@ -1,0 +1,8 @@
+{
+    "inherits": [
+        "rp2350"
+    ],
+    "serial-port": ["2e8a:000a"],
+    "build-tags": ["xiao_rp2350"],
+    "default-stack-size": 8192
+}
