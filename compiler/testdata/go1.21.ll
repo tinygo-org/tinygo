@@ -90,7 +90,7 @@ entry:
 declare double @llvm.minimum.f64(double, double) #3
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.minString(ptr readonly %a.data, i32 %a.len, ptr readonly %b.data, i32 %b.len, ptr %context) unnamed_addr #2 {
+define hidden %runtime._string @main.minString(ptr readonly %a.data, i32 range(i32 0, -2147483648) %a.len, ptr readonly %b.data, i32 range(i32 0, -2147483648) %b.len, ptr %context) unnamed_addr #2 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -104,7 +104,7 @@ entry:
   ret %runtime._string %5
 }
 
-declare i1 @runtime.stringLess(ptr readonly, i32, ptr readonly, i32, ptr) #1
+declare i1 @runtime.stringLess(ptr readonly, i32 range(i32 0, -2147483648), ptr readonly, i32 range(i32 0, -2147483648), ptr) #1
 
 ; Function Attrs: nounwind
 define hidden i32 @main.maxInt(i32 %a, i32 %b, ptr %context) unnamed_addr #2 {
@@ -137,7 +137,7 @@ entry:
 declare float @llvm.maximum.f32(float, float) #3
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.maxString(ptr readonly %a.data, i32 %a.len, ptr readonly %b.data, i32 %b.len, ptr %context) unnamed_addr #2 {
+define hidden %runtime._string @main.maxString(ptr readonly %a.data, i32 range(i32 0, -2147483648) %a.len, ptr readonly %b.data, i32 range(i32 0, -2147483648) %b.len, ptr %context) unnamed_addr #2 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -152,9 +152,9 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.clearSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
+define hidden void @main.clearSlice(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #2 {
 entry:
-  %0 = shl i32 %s.len, 2
+  %0 = shl nuw nsw i32 %s.len, 2
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
   ret void
 }
@@ -163,7 +163,7 @@ entry:
 declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #4
 
 ; Function Attrs: nounwind
-define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
+define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #2 {
 entry:
   ret void
 }

@@ -128,10 +128,17 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	c.addStandardDeclaredAttributes(llvmFn)
 
 	dereferenceableOrNullKind := llvm.AttributeKindID("dereferenceable_or_null")
+	rangeKind := llvm.AttributeKindID("range")
 	for i, paramInfo := range paramInfos {
 		if paramInfo.elemSize != 0 {
 			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, paramInfo.elemSize)
 			llvmFn.AddAttributeAtIndex(i+1, dereferenceableOrNull)
+		}
+		if paramInfo.max != 0 {
+			rangeAttr := c.ctx.CreateSmallRangeAttribute(rangeKind, uint(paramInfo.llvmType.IntTypeWidth()), 0, paramInfo.max+1)
+			if !rangeAttr.IsNil() {
+				llvmFn.AddAttributeAtIndex(i+1, rangeAttr)
+			}
 		}
 		if info.noescape && paramInfo.flags&paramIsGoParam != 0 && paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
 			// Parameters to functions with a //go:noescape parameter should get

@@ -141,7 +141,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.copyBuiltinGoroutine(ptr %dst.data, i32 %dst.len, i32 %dst.cap, ptr %src.data, i32 %src.len, i32 %src.cap, ptr %context) unnamed_addr #2 {
+define hidden void @main.copyBuiltinGoroutine(ptr %dst.data, i32 range(i32 0, -2147483648) %dst.len, i32 range(i32 0, -2147483648) %dst.cap, ptr %src.data, i32 range(i32 0, -2147483648) %src.len, i32 range(i32 0, -2147483648) %src.cap, ptr %context) unnamed_addr #2 {
 entry:
   %copy.n = call i32 @llvm.umin.i32(i32 %dst.len, i32 %src.len)
   call void @llvm.memmove.p0.p0.i32(ptr align 1 %dst.data, ptr align 1 %src.data, i32 %copy.n, i1 false)
