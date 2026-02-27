@@ -14,5 +14,5 @@
 		"src/internal/task/task_stack_esp8266.S"
 	],
 	"binary-format": "esp8266",
-	"flash-command": "esptool.py --chip=esp8266 --port {port} write_flash 0x00000 {bin} -fm qio"
+	"flash-method": "esp32flash"
 }
