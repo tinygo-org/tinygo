@@ -32,6 +32,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/buildutil"
+	"tinygo.org/x/espflash"
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
@@ -385,6 +386,8 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		fileExt = ".hex"
 	case "bmp":
 		fileExt = ".elf"
+	case "esp32flash":
+		fileExt = ".bin"
 	case "native":
 		return errors.New("unknown flash method \"native\" - did you miss a -target flag?")
 	default:
@@ -517,6 +520,15 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		if err != nil {
+			return &commandError{"failed to flash", result.Binary, err}
+		}
+	case "esp32flash":
+		port, err := getDefaultPort(port, config.Target.SerialPort)
+		if err != nil {
+			return &commandError{"failed to find port", port, err}
+		}
+
+		if err := flashBinUsingEsp32(port, result.Binary, config.Options); err != nil {
 			return &commandError{"failed to flash", result.Binary, err}
 		}
 	default:
@@ -1017,6 +1029,43 @@ func flashHexUsingMSD(volumes []string, tmppath string, options *compileopts.Opt
 		time.Sleep(500 * time.Millisecond)
 	}
 	return errors.New("unable to locate any volume: [" + strings.Join(volumes, ",") + "]")
+}
+
+func flashBinUsingEsp32(port, tmppath string, options *compileopts.Options) error {
+	flasher, err := espflash.NewFlasher(port, nil)
+	if err != nil {
+		return err
+	}
+	defer flasher.Close()
+
+	chipName := flasher.ChipName()
+	fmt.Printf("Connected to %s\n", chipName)
+
+	offset := uint32(0x0)
+	if chipName == "ESP32" {
+		offset = 0x1000
+	}
+
+	// Read the firmware binary
+	data, err := os.ReadFile(tmppath)
+	if err != nil {
+		return err
+	}
+
+	// Flash with progress reporting
+	err = flasher.FlashImage(data, offset, func(current, total int) {
+		fmt.Printf("\rFlashing: %d/%d bytes (%.0f%%)", current, total,
+			float64(current)/float64(total)*100)
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Println()
+
+	// Reset the device to run the new firmware
+	flasher.Reset()
+
+	return nil
 }
 
 type mountPoint struct {
