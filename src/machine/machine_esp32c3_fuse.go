@@ -72,6 +72,7 @@ func (f *Fuse) ADC1InitCodeAtten3() (uint32, bool) {
 //   - signed value around 0..511 with bit9 as sign,
 //   - digi_ref = 2000 + signed(cal_vol),
 //   - expected calibration voltage is 1370 mV.
+//
 // We only return digi_ref here; the fixed 1370 mV is used by higher
 // layers when needed.
 func (f *Fuse) ADC1DigiRefAtten3() (uint32, bool) {
@@ -110,5 +111,3 @@ func (f *Fuse) ADC1DigiRefAtten3() (uint32, bool) {
 	}
 	return digi, true
 }
-
-

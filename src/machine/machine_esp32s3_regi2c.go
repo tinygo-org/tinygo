@@ -53,10 +53,10 @@ const (
 	adc2InitCodeLowLSB   = uint8(0)   // ADC_SAR2_INITIAL_CODE_LOW_ADDR_LSB
 
 	// Analog config registers for RegI2C block (RTC/ANA config in TRM).
-	anaConfigReg   = uintptr(0x6000E044)
-	i2cSarEnMask   = uint32(1 << 18)
-	anaConfig2Reg  = uintptr(0x6000E048)
-	anaSarCfg2En   = uint32(1 << 16)
+	anaConfigReg  = uintptr(0x6000E044)
+	i2cSarEnMask  = uint32(1 << 18)
+	anaConfig2Reg = uintptr(0x6000E048)
+	anaSarCfg2En  = uint32(1 << 16)
 
 	// REGI2C master control register and helper masks.
 	i2cMstCtrlHost1   = uintptr(0x6000E000)
@@ -101,10 +101,10 @@ func (r *RegI2C) WriteMask(block, hostID, regAddr, msb, lsb, data uint8) {
 		return
 	}
 	cur := (reg.Get() & i2cMstDataMask) >> i2cMstDataShift
-	mask := uint32(1<<(msb-lsb+1) - 1) << lsb
+	mask := uint32(1<<(msb-lsb+1)-1) << lsb
 	cur &^= mask
-	cur |= uint32(data&(1<<(msb-lsb+1) - 1)) << lsb
-	reg.Set(uint32(block)|uint32(regAddr)<<8|i2cMstWrCntlBit | (cur<<i2cMstDataShift)&i2cMstDataMask)
+	cur |= uint32(data&(1<<(msb-lsb+1)-1)) << lsb
+	reg.Set(uint32(block) | uint32(regAddr)<<8 | i2cMstWrCntlBit | (cur<<i2cMstDataShift)&i2cMstDataMask)
 	r.waitIdle(reg)
 }
 
