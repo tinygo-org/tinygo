@@ -68,8 +68,6 @@ const (
 
 type RegI2C struct{}
 
-var DefaultRegI2C RegI2C
-
 // waitIdle polls the REGI2C master BUSY bit until it clears or the
 // simple software timeout expires. This matches the busy‑wait helper
 // used in ESP‑IDF's regi2c_ctrl.c.

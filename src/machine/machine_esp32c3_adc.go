@@ -5,56 +5,59 @@ package machine
 import (
 	"device/esp"
 	"errors"
-	"sync"
 )
 
-var adcOnce sync.Once
-
-func InitADC() {
-	initADC()
-}
+var adcInitialized bool
 
 const (
-	atten0dB = 0
+	// ADC attenuation values for ESP32-C3 APB_SARADC.
+	// 0 dB  : ~0 .. 1.1 V
+	// 11 dB : ~0 .. 3.3 V (matches typical VDD)
+	atten0dB  = 0
+	atten11dB = 3
 )
 
-func initADC() {
-	adcOnce.Do(func() {
-		esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(1)
-		esp.SYSTEM.SetPERIP_CLK_EN0_APB_SARADC_CLK_EN(1)
-		esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(0)
+func InitADC() {
+	if adcInitialized {
+		return
+	}
 
-		esp.RTC_CNTL.SetANA_CONF_SAR_I2C_PU(1)
-		esp.RTC_CNTL.SetSENSOR_CTRL_FORCE_XPD_SAR(1)
-		esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(1)
-		esp.APB_SARADC.SetFSM_WAIT_SARADC_XPD_WAIT(8)
-		esp.APB_SARADC.SetFSM_WAIT_SARADC_RSTB_WAIT(8)
-		esp.APB_SARADC.SetFSM_WAIT_SARADC_STANDBY_WAIT(100)
-		esp.APB_SARADC.SetCLKM_CONF_CLK_SEL(2)
-		esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_NUM(1)
-		esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_B(0)
-		esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_A(0)
-		esp.APB_SARADC.SetCLKM_CONF_CLK_EN(1)
+	esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(1)
+	esp.SYSTEM.SetPERIP_CLK_EN0_APB_SARADC_CLK_EN(1)
+	esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(0)
 
-		var c adcC3Calibration
-		c.SelfCalibrate()
-	})
+	esp.RTC_CNTL.SetANA_CONF_SAR_I2C_PU(1)
+	esp.RTC_CNTL.SetSENSOR_CTRL_FORCE_XPD_SAR(1)
+	esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(1)
+	esp.APB_SARADC.SetFSM_WAIT_SARADC_XPD_WAIT(8)
+	esp.APB_SARADC.SetFSM_WAIT_SARADC_RSTB_WAIT(8)
+	esp.APB_SARADC.SetFSM_WAIT_SARADC_STANDBY_WAIT(100)
+	esp.APB_SARADC.SetCLKM_CONF_CLK_SEL(2)
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_NUM(1)
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_B(0)
+	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_A(0)
+	esp.APB_SARADC.SetCLKM_CONF_CLK_EN(1)
+
+	var c adcC3Calibration
+	c.SelfCalibrate()
+
+	adcInitialized = true
 }
 
 func (a ADC) Configure(config ADCConfig) error {
-	if a.Pin > ADC5 {
+	if a.Pin > 5 {
 		return errors.New("invalid ADC pin for ESP32-C3")
 	}
-	initADC()
+	InitADC()
 	a.Pin.Configure(PinConfig{Mode: PinAnalog})
 	return nil
 }
 
 func (a ADC) Get() uint16 {
-	if a.Pin > ADC5 {
+	if a.Pin > 5 {
 		return 0
 	}
-	initADC()
+	InitADC()
 	adc1 := a.Pin <= 4
 	ch := uint32(a.Pin)
 	if !adc1 {
@@ -62,7 +65,8 @@ func (a ADC) Get() uint16 {
 		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(1)
 		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(1)
 	}
-	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten0dB)
+	// Use 11 dB attenuation so the effective range is approximately 0..3.3 V.
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten11dB)
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_CHANNEL(ch)
 	if adc1 {
 		esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(1)

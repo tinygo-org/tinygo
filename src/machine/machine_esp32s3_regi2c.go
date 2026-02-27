@@ -12,43 +12,53 @@ import (
 )
 
 const (
-	i2cSarADC       = uint8(0x69)
-	i2cSarADCHostID = uint8(1)
+	// I2C_SAR_ADC / I2C_SAR_ADC_HOSTID in regi2c_saradc.h
+	i2cSarADC       = uint8(0x69) // I2C_SAR_ADC
+	i2cSarADCHostID = uint8(1)    // I2C_SAR_ADC_HOSTID
 
-	adc1DrefAddr = uint8(0x2)
-	adc1DrefMSB  = uint8(6)
-	adc1DrefLSB  = uint8(4)
+	// ADC_SAR1_DREF_ADDR(_MSB/_LSB)
+	adc1DrefAddr = uint8(0x2) // ADC_SAR1_DREF_ADDR
+	adc1DrefMSB  = uint8(6)   // ADC_SAR1_DREF_ADDR_MSB
+	adc1DrefLSB  = uint8(4)   // ADC_SAR1_DREF_ADDR_LSB
 
-	adc2DrefAddr = uint8(0x5)
-	adc2DrefMSB  = uint8(6)
-	adc2DrefLSB  = uint8(4)
+	// ADC_SAR2_DREF_ADDR(_MSB/_LSB)
+	adc2DrefAddr = uint8(0x5) // ADC_SAR2_DREF_ADDR
+	adc2DrefMSB  = uint8(6)   // ADC_SAR2_DREF_ADDR_MSB
+	adc2DrefLSB  = uint8(4)   // ADC_SAR2_DREF_ADDR_LSB
 
-	adc1EncalGndAddr = uint8(0x7)
-	adc1EncalGndMSB  = uint8(5)
-	adc1EncalGndLSB  = uint8(5)
+	// ADC_SAR1_ENCAL_GND_ADDR(_MSB/_LSB)
+	adc1EncalGndAddr = uint8(0x7) // ADC_SAR1_ENCAL_GND_ADDR
+	adc1EncalGndMSB  = uint8(5)   // ADC_SAR1_ENCAL_GND_ADDR_MSB
+	adc1EncalGndLSB  = uint8(5)   // ADC_SAR1_ENCAL_GND_ADDR_LSB
 
-	adc2EncalGndAddr = uint8(0x7)
-	adc2EncalGndMSB  = uint8(7)
-	adc2EncalGndLSB  = uint8(7)
+	// ADC_SAR2_ENCAL_GND_ADDR(_MSB/_LSB)
+	adc2EncalGndAddr = uint8(0x7) // ADC_SAR2_ENCAL_GND_ADDR
+	adc2EncalGndMSB  = uint8(7)   // ADC_SAR2_ENCAL_GND_ADDR_MSB
+	adc2EncalGndLSB  = uint8(7)   // ADC_SAR2_ENCAL_GND_ADDR_LSB
 
-	adc1InitCodeHighAddr = uint8(0x1)
-	adc1InitCodeHighMSB  = uint8(3)
-	adc1InitCodeHighLSB  = uint8(0)
-	adc1InitCodeLowAddr  = uint8(0x0)
-	adc1InitCodeLowMSB   = uint8(7)
-	adc1InitCodeLowLSB   = uint8(0)
+	// ADC_SAR1_INITIAL_CODE_HIGH/LOW_ADDR(_MSB/_LSB)
+	adc1InitCodeHighAddr = uint8(0x1) // ADC_SAR1_INITIAL_CODE_HIGH_ADDR
+	adc1InitCodeHighMSB  = uint8(3)   // ADC_SAR1_INITIAL_CODE_HIGH_ADDR_MSB
+	adc1InitCodeHighLSB  = uint8(0)   // ADC_SAR1_INITIAL_CODE_HIGH_ADDR_LSB
+	adc1InitCodeLowAddr  = uint8(0x0) // ADC_SAR1_INITIAL_CODE_LOW_ADDR
+	adc1InitCodeLowMSB   = uint8(7)   // ADC_SAR1_INITIAL_CODE_LOW_ADDR_MSB
+	adc1InitCodeLowLSB   = uint8(0)   // ADC_SAR1_INITIAL_CODE_LOW_ADDR_LSB
 
-	adc2InitCodeHighAddr = uint8(0x4)
-	adc2InitCodeHighMSB  = uint8(3)
-	adc2InitCodeHighLSB  = uint8(0)
-	adc2InitCodeLowAddr  = uint8(0x3)
-	adc2InitCodeLowMSB   = uint8(7)
-	adc2InitCodeLowLSB   = uint8(0)
+	// ADC_SAR2_INITIAL_CODE_HIGH/LOW_ADDR(_MSB/_LSB)
+	adc2InitCodeHighAddr = uint8(0x4) // ADC_SAR2_INITIAL_CODE_HIGH_ADDR
+	adc2InitCodeHighMSB  = uint8(3)   // ADC_SAR2_INITIAL_CODE_HIGH_ADDR_MSB
+	adc2InitCodeHighLSB  = uint8(0)   // ADC_SAR2_INITIAL_CODE_HIGH_ADDR_LSB
+	adc2InitCodeLowAddr  = uint8(0x3) // ADC_SAR2_INITIAL_CODE_LOW_ADDR
+	adc2InitCodeLowMSB   = uint8(7)   // ADC_SAR2_INITIAL_CODE_LOW_ADDR_MSB
+	adc2InitCodeLowLSB   = uint8(0)   // ADC_SAR2_INITIAL_CODE_LOW_ADDR_LSB
 
+	// Analog config registers for RegI2C block (RTC/ANA config in TRM).
 	anaConfigReg   = uintptr(0x6000E044)
 	i2cSarEnMask   = uint32(1 << 18)
 	anaConfig2Reg  = uintptr(0x6000E048)
 	anaSarCfg2En   = uint32(1 << 16)
+
+	// REGI2C master control register and helper masks.
 	i2cMstCtrlHost1   = uintptr(0x6000E000)
 	i2cMstBusyBit     = uint32(1 << 25)
 	i2cMstWrCntlBit   = uint32(1 << 24)
@@ -58,8 +68,6 @@ const (
 )
 
 type RegI2C struct{}
-
-var DefaultRegI2C RegI2C
 
 // waitIdle mimics the IDF regi2c busy-wait helper (see regi2c_ctrl.c).
 // It polls the REGI2C master control register until the BUSY bit clears
