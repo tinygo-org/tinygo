@@ -1,29 +1,29 @@
 package main
 
 import (
-	"fmt"
 	"machine"
 	"time"
 )
 
-// Reads ADC, prints raw (0..4095) and V like Arduino. ESP32-S3: ADC1 = GPIO1..10, ADC2 = GPIO11..20.
-// На многих платах GPIO2 занят (подтяжка/загрузка) — если масса не даёт 0, пробуй GPIO4 или другой свободный пин.
+// This example assumes that an analog sensor such as a rotary dial is connected to pin ADC0.
+// When the dial is turned past the midway point, the built-in LED will light up.
 
 func main() {
-	time.Sleep(time.Second * 1)
+	machine.InitADC()
 
-	println("ADC read from GPIO1...")
-	sensor := machine.ADC{machine.GPIO0}
+	led := machine.LED
+	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
+
+	sensor := machine.ADC{machine.ADC2}
 	sensor.Configure(machine.ADCConfig{})
-
-	println("ADC read from GPIO2...")
 
 	for {
 		val := sensor.Get()
-
-		raw12 := val >> 4
-		v := float64(raw12) / 4095.0 * 3.3
-		fmt.Printf("raw=%d  V~%.3f\n", raw12, v)
+		if val < 0x8000 {
+			led.Low()
+		} else {
+			led.High()
+		}
 		time.Sleep(time.Millisecond * 100)
 	}
 }
