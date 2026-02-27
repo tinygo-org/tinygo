@@ -13,11 +13,12 @@ require (
 	github.com/mattn/go-tty v0.0.4
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
 	github.com/tetratelabs/wazero v1.6.0
-	go.bug.st/serial v1.6.0
+	go.bug.st/serial v1.6.2
 	golang.org/x/net v0.35.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/tools v0.30.0
 	gopkg.in/yaml.v2 v2.4.0
+	tinygo.org/x/espflash v0.1.0
 	tinygo.org/x/go-llvm v0.0.0-20250422114502-b8f170971e74
 )
 
