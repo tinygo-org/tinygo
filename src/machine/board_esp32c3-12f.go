@@ -28,7 +28,7 @@ const (
 	TXD  = GPIO21
 )
 
-// ADC pins (ESP32-C3: ADC1 = GPIO0–4, ADC2 = GPIO5)
+// ADC pins
 const (
 	ADC0 Pin = ADC1_0
 	ADC1 Pin = ADC2_0
