@@ -57,7 +57,6 @@ func (a ADC) Get() uint16 {
 	if a.Pin > 5 {
 		return 0
 	}
-	InitADC()
 	adc1 := a.Pin <= 4
 	ch := uint32(a.Pin)
 	if !adc1 {

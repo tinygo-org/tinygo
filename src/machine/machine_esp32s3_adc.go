@@ -129,7 +129,6 @@ func (a ADC) Get() uint16 {
 		return 0
 	}
 
-	a.Pin.Configure(PinConfig{Mode: PinAnalog})
 	adc1 := a.Pin <= 10
 	var ch uint32
 	if adc1 {
