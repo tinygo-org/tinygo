@@ -2,21 +2,9 @@
 
 package machine
 
-import (
-	"runtime/volatile"
-	"unsafe"
-)
+import "device/esp"
 
 const (
-	// Base address for eFuse controller on ESP32-C3.
-	// Matches DR_REG_EFUSE_BASE in IDF (see soc/efuse_reg.h).
-	efuseBaseC3 = uintptr(0x60008800)
-
-	// Read register range for EFUSE_BLK2 (SYS_DATA), derived from
-	// esp_efuse_utility.c: range_read_addr_blocks[EFUSE_BLK2].
-	// BLK2 spans EFUSE_RD_SYS_PART1_DATA0_REG .. DATA7.
-	efuseRdBlk2Word0 = efuseBaseC3 + 0xa0 // EFUSE_RD_SYS_PART1_DATA0_REG
-
 	// Calibration layout (see esp_efuse_table.csv for esp32c3):
 	//   ADC1_INIT_CODE_ATTEN3  : EFUSE_BLK2, bit 178, len 10
 	//   ADC1_CAL_VOL_ATTEN3    : EFUSE_BLK2, bit 218, len 10
@@ -29,8 +17,26 @@ const (
 type Fuse struct{}
 
 func (f *Fuse) readBlk2Word(index uint32) uint32 {
-	reg := (*volatile.Register32)(unsafe.Pointer(efuseRdBlk2Word0 + uintptr(index*4)))
-	return reg.Get()
+	switch index {
+	case 0:
+		return esp.EFUSE.RD_SYS_PART1_DATA0.Get()
+	case 1:
+		return esp.EFUSE.RD_SYS_PART1_DATA1.Get()
+	case 2:
+		return esp.EFUSE.RD_SYS_PART1_DATA2.Get()
+	case 3:
+		return esp.EFUSE.RD_SYS_PART1_DATA3.Get()
+	case 4:
+		return esp.EFUSE.RD_SYS_PART1_DATA4.Get()
+	case 5:
+		return esp.EFUSE.RD_SYS_PART1_DATA5.Get()
+	case 6:
+		return esp.EFUSE.RD_SYS_PART1_DATA6.Get()
+	case 7:
+		return esp.EFUSE.RD_SYS_PART1_DATA7.Get()
+	default:
+		return 0
+	}
 }
 
 func extractBits(val, bit, length uint32) uint32 {

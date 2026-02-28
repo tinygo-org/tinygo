@@ -14,11 +14,12 @@ func main() {
 	led := machine.LED
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
-	sensor := machine.ADC{machine.ADC2}
+	sensor := machine.ADC{machine.GPIO5}
 	sensor.Configure(machine.ADCConfig{})
 
 	for {
 		val := sensor.Get()
+		println(val)
 		if val < 0x8000 {
 			led.Low()
 		} else {

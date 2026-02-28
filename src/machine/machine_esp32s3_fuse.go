@@ -55,8 +55,6 @@ func (f *Fuse) triggerReadSequence() {
 	cmd.Set(1)
 	for cmd.Get()&1 != 0 {
 	}
-	for cmd.Get()&1 != 0 {
-	}
 }
 
 // readBlock2Data4Data5 reads the EFUSE_BLK2 data words that contain

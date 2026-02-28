@@ -52,19 +52,6 @@ func (c *adcC3Calibration) readADC1() uint32 {
 func (c *adcC3Calibration) SelfCalibrate() {
 	reg := RegI2C{}
 
-	// Optional: log eFuse calibration data (INIT_CODE / DIGI_REF) if present.
-	var fuse Fuse
-	if initCode, ok := fuse.ADC1InitCodeAtten3(); ok {
-		println("ESP32-C3 eFuse ADC1 INIT_CODE atten3:", initCode)
-	} else {
-		println("ESP32-C3 eFuse ADC1 INIT_CODE atten3: not present")
-	}
-	if digi, ok := fuse.ADC1DigiRefAtten3(); ok {
-		println("ESP32-C3 eFuse ADC1 DIGI_REF atten3 digi:", digi)
-	} else {
-		println("ESP32-C3 eFuse ADC1 DIGI_REF atten3: not present")
-	}
-
 	c.calSetup()
 
 	reg.SarEnable()
