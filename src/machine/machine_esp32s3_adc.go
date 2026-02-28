@@ -60,6 +60,7 @@ func InitADC() {
 	esp.SENS.SetSAR_AMP_CTRL2_SAR_XPD_SAR_AMP_FSM_IDLE(1)
 	esp.SENS.SetSAR_AMP_CTRL2_SAR_AMP_SHORT_REF_GND_FSM_IDLE(1)
 
+	// ADC2 uses the same InitADC() as ADC1 (shared APB_SARADC clock/FSM).
 	// SENS.SAR_MEAS2_CTRL1: ADC2 FSM wait timings for power-up/reset/standby.
 	esp.SENS.SetSAR_MEAS2_CTRL1_SAR_SAR2_XPD_WAIT(8)
 	esp.SENS.SetSAR_MEAS2_CTRL1_SAR_SAR2_RSTB_WAIT(8)

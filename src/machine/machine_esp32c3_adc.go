@@ -44,6 +44,8 @@ func InitADC() {
 	adcInitialized = true
 }
 
+// ESP32-C3: ADC1 = GPIO0–GPIO4 (ch 0–4), ADC2 = GPIO5 (ch 0). ADC2 shares with Wi‑Fi;
+// readings may be noisy when Wi‑Fi is active.
 func (a ADC) Configure(config ADCConfig) error {
 	if a.Pin > 5 {
 		return errors.New("invalid ADC pin for ESP32-C3")
@@ -73,9 +75,11 @@ func (a ADC) Get() uint16 {
 		esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
 		esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
 	} else {
-		esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_CHANNEL(5)
+		// ADC2: GPIO5 = channel 0. Grant arbiter to ADC2 first, then set channel and start.
+		esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
 		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(1)
 		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(1)
+		esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_CHANNEL(8) // (1<<3)|0 for ADC2 channel 0
 		esp.APB_SARADC.SetONETIME_SAMPLE_SARADC2_ONETIME_SAMPLE(1)
 		esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(1)
 		for esp.APB_SARADC.GetINT_RAW_APB_SARADC2_DONE_INT_RAW() == 0 {
