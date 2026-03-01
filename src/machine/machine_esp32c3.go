@@ -27,16 +27,29 @@ const (
 	PinInput
 	PinInputPullup
 	PinInputPulldown
+	PinAnalog
 )
 
 const (
-	GPIO0  Pin = 0
-	GPIO1  Pin = 1
-	GPIO2  Pin = 2
-	GPIO3  Pin = 3
-	GPIO4  Pin = 4
-	GPIO5  Pin = 5
-	GPIO6  Pin = 6
+	GPIO0 Pin = 0
+	GPIO1 Pin = 1
+	GPIO2 Pin = 2
+	GPIO3 Pin = 3
+	GPIO4 Pin = 4
+	GPIO5 Pin = 5
+	GPIO6 Pin = 6
+)
+
+const (
+	ADC0 Pin = GPIO0
+	ADC1 Pin = GPIO1
+	ADC2 Pin = GPIO2
+	ADC3 Pin = GPIO3
+	ADC4 Pin = GPIO4
+	ADC5 Pin = GPIO5 // avoid when WiFi is used.
+)
+
+const (
 	GPIO7  Pin = 7
 	GPIO8  Pin = 8
 	GPIO9  Pin = 9
@@ -76,13 +89,15 @@ func (p Pin) Configure(config PinConfig) {
 	const function = 1 // function 1 is GPIO for every pin
 	muxConfig |= function << esp.IO_MUX_GPIO_MCU_SEL_Pos
 
-	// Make this pin an input pin (always).
-	muxConfig |= esp.IO_MUX_GPIO_FUN_IE
+	// FUN_IE: disable for PinAnalog (high-Z for ADC)
+	if config.Mode != PinAnalog {
+		muxConfig |= esp.IO_MUX_GPIO_FUN_IE
+	}
 
 	// Set drive strength: 0 is lowest, 3 is highest.
 	muxConfig |= 2 << esp.IO_MUX_GPIO_FUN_DRV_Pos
 
-	// Select pull mode.
+	// Select pull mode (no pulls for PinAnalog).
 	if config.Mode == PinInputPullup {
 		muxConfig |= esp.IO_MUX_GPIO_FUN_WPU
 	} else if config.Mode == PinInputPulldown {
@@ -99,7 +114,7 @@ func (p Pin) Configure(config PinConfig) {
 	case PinOutput:
 		// Set the 'output enable' bit.
 		esp.GPIO.ENABLE_W1TS.Set(1 << p)
-	case PinInput, PinInputPullup, PinInputPulldown:
+	case PinInput, PinInputPullup, PinInputPulldown, PinAnalog:
 		// Clear the 'output enable' bit.
 		esp.GPIO.ENABLE_W1TC.Set(1 << p)
 	}

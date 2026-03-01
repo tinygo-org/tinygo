@@ -70,6 +70,7 @@ const (
 	PinInput
 	PinInputPullup
 	PinInputPulldown
+	PinAnalog
 )
 
 // Hardware pin numbers
@@ -121,6 +122,29 @@ const (
 	GPIO48 Pin = 48
 )
 
+const (
+	ADC0  Pin = GPIO1
+	ADC2  Pin = GPIO2
+	ADC3  Pin = GPIO3
+	ADC4  Pin = GPIO4
+	ADC5  Pin = GPIO5
+	ADC6  Pin = GPIO6
+	ADC7  Pin = GPIO7
+	ADC8  Pin = GPIO8
+	ADC9  Pin = GPIO9
+	ADC10 Pin = GPIO10
+	ADC11 Pin = GPIO11
+	ADC12 Pin = GPIO12
+	ADC13 Pin = GPIO13
+	ADC14 Pin = GPIO14
+	ADC15 Pin = GPIO15
+	ADC16 Pin = GPIO16
+	ADC17 Pin = GPIO17
+	ADC18 Pin = GPIO18
+	ADC19 Pin = GPIO19
+	ADC20 Pin = GPIO20
+)
+
 // Configure this pin with the given configuration.
 func (p Pin) Configure(config PinConfig) {
 	// Output function 256 is a special value reserved for use as a regular GPIO
@@ -146,8 +170,10 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	// MCU_SEL: Function 1 is always GPIO
 	ioConfig |= (1 << esp.IO_MUX_GPIO_MCU_SEL_Pos)
 
-	// FUN_IE: Make this pin an input pin (always set for GPIO operation)
-	ioConfig |= esp.IO_MUX_GPIO_FUN_IE
+	// FUN_IE: disable for PinAnalog (high-Z for ADC), enable for digital
+	if config.Mode != PinAnalog {
+		ioConfig |= esp.IO_MUX_GPIO_FUN_IE
+	}
 
 	// DRV: Set drive strength to 20 mA as a default. Pins 17 and 18 are special
 	var drive uint32
@@ -158,7 +184,7 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	}
 	ioConfig |= (drive << esp.IO_MUX_GPIO_FUN_DRV_Pos)
 
-	// WPU/WPD: Select pull mode.
+	// WPU/WPD: no pulls for PinAnalog
 	if config.Mode == PinInputPullup {
 		ioConfig |= esp.IO_MUX_GPIO_FUN_WPU
 	} else if config.Mode == PinInputPulldown {
@@ -181,14 +207,14 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 		// output signal, or the special value 256 which indicates regular GPIO
 		// usage.
 		p.outFunc().Set(signal)
-	case PinInput, PinInputPullup, PinInputPulldown:
+	case PinInput, PinInputPullup, PinInputPulldown, PinAnalog:
 		// Clear the 'output enable' bit.
 		if p < 32 {
 			esp.GPIO.ENABLE_W1TC.Set(1 << p)
 		} else {
 			esp.GPIO.ENABLE1_W1TC.Set(1 << (p - 32))
 		}
-		if signal != 256 {
+		if signal != 256 && config.Mode != PinAnalog {
 			// Signal is a peripheral function (not a simple GPIO). Connect this
 			// signal to the pin.
 			// Note that outFunc and inFunc work in the opposite direction.
