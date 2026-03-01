@@ -4,5 +4,4 @@ package main
 
 import "machine"
 
-const AnalogPin = machine.GPIO4
-const led = machine.GPIO4
+const led = machine.NoPin

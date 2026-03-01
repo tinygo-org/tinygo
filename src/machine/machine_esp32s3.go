@@ -122,6 +122,29 @@ const (
 	GPIO48 Pin = 48
 )
 
+const (
+	ADC0  Pin = GPIO1
+	ADC1  Pin = GPIO2
+	ADC2  Pin = GPIO3
+	ADC3  Pin = GPIO4
+	ADC4  Pin = GPIO5
+	ADC5  Pin = GPIO6
+	ADC6  Pin = GPIO7
+	ADC7  Pin = GPIO8
+	ADC8  Pin = GPIO9
+	ADC9  Pin = GPIO10
+	ADC10 Pin = GPIO11
+	ADC11 Pin = GPIO12
+	ADC12 Pin = GPIO13
+	ADC13 Pin = GPIO14
+	ADC14 Pin = GPIO15
+	ADC15 Pin = GPIO16
+	ADC16 Pin = GPIO17
+	ADC17 Pin = GPIO18
+	ADC18 Pin = GPIO19
+	ADC19 Pin = GPIO20
+)
+
 // Configure this pin with the given configuration.
 func (p Pin) Configure(config PinConfig) {
 	// Output function 256 is a special value reserved for use as a regular GPIO

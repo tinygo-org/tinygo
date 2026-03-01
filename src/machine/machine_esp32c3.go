@@ -38,6 +38,18 @@ const (
 	GPIO4  Pin = 4
 	GPIO5  Pin = 5
 	GPIO6  Pin = 6
+)
+
+const (
+	ADC0 Pin = GPIO0
+	ADC1 Pin = GPIO1
+	ADC2 Pin = GPIO2
+	ADC3 Pin = GPIO3
+	ADC4 Pin = GPIO4
+	ADC5 Pin = GPIO5
+)
+
+const (
 	GPIO7  Pin = 7
 	GPIO8  Pin = 8
 	GPIO9  Pin = 9

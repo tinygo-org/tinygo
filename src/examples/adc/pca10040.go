@@ -4,5 +4,4 @@ package main
 
 import "machine"
 
-const AnalogPin = machine.ADC2
 const led = machine.LED
