@@ -30,9 +30,6 @@ const (
 
 // ADC pins
 const (
-	ADC0 Pin = ADC1_0
-	ADC1 Pin = ADC2_0
-
 	ADC1_0 Pin = IO0
 	ADC1_1 Pin = IO1
 	ADC1_2 Pin = IO2
