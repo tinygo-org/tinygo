@@ -1,6 +1,6 @@
 //go:build esp32s3
 
-// ESP32-S3: 2 SAR ADCs, 12-bit hardware; Get() returns 16-bit (raw << 4, 0..65520).
+// ESP32-S3: 2 SAR ADCs, 12-bit hardware; Get() returns 0..4095.
 // Pin mapping: ADC1 = GPIO 1..10 (channel = GPIO-1); ADC2 = GPIO 11..20 (channel = GPIO-11).
 // Get() returns raw, uncalibrated ADC values; accurate 0–3.3V mapping should be done
 // either by a two-point calibration in user code or by using the eFuse-based
@@ -25,14 +25,9 @@ import (
 	"unsafe"
 )
 
-var adcInitialized bool
 var adcDigiRefMv uint32
 
 func InitADC() {
-	if adcInitialized {
-		return
-	}
-
 	// SYSTEM: reset and enable APB_SARADC clock so SAR registers are accessible.
 	esp.SYSTEM.SetPERIP_RST_EN0_APB_SARADC_RST(1)
 	esp.SYSTEM.SetPERIP_CLK_EN0_APB_SARADC_CLK_EN(1)
@@ -90,11 +85,9 @@ func InitADC() {
 	esp.APB_SARADC.SetFILTER_CTRL1_FILTER_FACTOR0(0)
 	esp.APB_SARADC.SetFILTER_CTRL1_FILTER_FACTOR1(0)
 
-	adcCal := ADCDefaultCalibration{}
+	adcCal := adcCalibration{}
 	adcCal.SelfCalibrate()
 	adcDigiRefMv = adcCal.GetDigiRef()
-
-	adcInitialized = true
 }
 
 const (
@@ -141,17 +134,14 @@ func (a ADC) Get() uint16 {
 		esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD_FORCE(1)
 		setSensAtten1(ch, attenDefault)
 		esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD(1 << ch)
-		for i := 0; i < 100; i++ {
-		}
-
 		for esp.SENS.GetSAR_SLAVE_ADDR1_SAR_SARADC_MEAS_STATUS() != 0 {
 		}
 		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(0)
 		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(1)
 		for esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DONE_SAR() == 0 {
 		}
-		raw := esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR() & 0xfff
-		return uint16(raw) << 4
+		raw := esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR()
+		return uint16(raw & 0xfff)
 	}
 	ch = uint32(a.Pin - 11) // GPIO11→ch0 … GPIO20→ch9
 	// SENS.SAR_MEAS2_CTRL2: force SW control, select channel
@@ -167,23 +157,23 @@ func (a ADC) Get() uint16 {
 	esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_SAR(1)
 	for esp.SENS.GetSAR_MEAS2_CTRL2_MEAS2_DONE_SAR() == 0 {
 	}
-	raw := esp.SENS.GetSAR_MEAS2_CTRL2_MEAS2_DATA_SAR() & 0xfff
+	raw := esp.SENS.GetSAR_MEAS2_CTRL2_MEAS2_DATA_SAR()
 	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(0)
 	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(0)
-	return uint16(raw) << 4
+	return uint16(raw & 0xfff)
 }
 
 func (a ADC) GetVoltage() (raw uint32, v float64) {
 	const samples = 4
 	var sum uint32
 	for i := 0; i < samples; i++ {
-		sum += uint32(a.Get() >> 4)
+		sum += uint32(a.Get())
 	}
 	raw = sum / samples
 
 	// Default full-scale for 11 dB is approximately 3.3 V assuming
 	// Vref ≈ 1.1 V and gain ≈ 3. If eFuse provided a per-chip DIGI_REF
-	// (Vref in mV) via ADCDefaultCalibration, use it to adjust the
+	// (Vref in mV) via adcCalibration, use it to adjust the
 	// full-scale range instead.
 	scale := 3.3
 	if adcDigiRefMv != 0 {
@@ -203,7 +193,7 @@ func (a ADC) GetVoltage() (raw uint32, v float64) {
 //   - adc_ll_calibration_prepare()    → SarEnable + ADC1CalibrationPrepare (ENCAL_GND=1)
 //   - adc_ll_calibration_finish()     → ADC1CalibrationFinish (ENCAL_GND=0)
 //   - adc_ll_set_calibration_param()  → ADC1SetCalibrationParam()
-//   - read_cal_channel()              → ADCDefaultCalibration.readADC1():
+//   - read_cal_channel()              → adcCalibration.readADC1():
 //                                      wait for meas_status==0, start 0→1, wait done, read data
 //                                      (similar to adc_oneshot_ll_start + get_raw_result).
 //   - Loop: 10 iterations, code 0..4096, binary search on self_cal==0; drop min/max;
@@ -226,14 +216,14 @@ const (
 	adcDigiRefMaxMv = uint32(1150)
 )
 
-// ADCDefaultCalibration encapsulates the self-calibration flow for ADC1
+// adcCalibration encapsulates the self-calibration flow for ADC1
 // and remembers per-chip calibration data (such as DIGI_REF) when it is
 // available from eFuse.
-type ADCDefaultCalibration struct {
+type adcCalibration struct {
 	digiRefMv uint32
 }
 
-func (c *ADCDefaultCalibration) SelfCalibrate() {
+func (c *adcCalibration) SelfCalibrate() {
 	reg := regI2C{}
 	f := fuse{}
 
@@ -262,11 +252,11 @@ func (c *ADCDefaultCalibration) SelfCalibrate() {
 	c.adc1CalibrateHigh(reg, finalCode)
 }
 
-func (c *ADCDefaultCalibration) GetDigiRef() uint32 {
+func (c *adcCalibration) GetDigiRef() uint32 {
 	return c.digiRefMv
 }
 
-func (c *ADCDefaultCalibration) adc1CalibrationSetup(reg regI2C) {
+func (c *adcCalibration) adc1CalibrationSetup(reg regI2C) {
 	reg.SarEnable()
 
 	esp.SENS.SetSAR_MEAS1_MUX_SAR1_DIG_FORCE(0)
@@ -281,7 +271,7 @@ func (c *ADCDefaultCalibration) adc1CalibrationSetup(reg regI2C) {
 	reg.ADC1CalibrationPrepare(0)
 }
 
-func (c *ADCDefaultCalibration) adc1CalibrateLow(reg regI2C) uint32 {
+func (c *adcCalibration) adc1CalibrateLow(reg regI2C) uint32 {
 	var codeList [adcCalTimes]uint32
 	var codeSum uint32
 
@@ -331,13 +321,13 @@ func (c *ADCDefaultCalibration) adc1CalibrateLow(reg regI2C) uint32 {
 	return finalCode
 }
 
-func (c *ADCDefaultCalibration) adc1CalibrateHigh(reg regI2C, code uint32) {
+func (c *adcCalibration) adc1CalibrateHigh(reg regI2C, code uint32) {
 	reg.ADC1SetCalibrationParam(0, code)
 	reg.ADC1CalibrationFinish(0)
 	c.adc1StartWithPadForce()
 }
 
-func (c *ADCDefaultCalibration) adc1StartWithPadForce() {
+func (c *adcCalibration) adc1StartWithPadForce() {
 	esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD_FORCE(1)
 	esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(1)
 }
@@ -345,7 +335,7 @@ func (c *ADCDefaultCalibration) adc1StartWithPadForce() {
 // readADC1 performs one ADC1 conversion via RTC path (used during calibration).
 // Internal GND is connected via ENCAL_GND, so the pin input is disconnected.
 // Matches IDF: wait conversion idle (meas_status==0), then start 0→1, wait done, read data.
-func (c *ADCDefaultCalibration) readADC1() uint32 {
+func (c *adcCalibration) readADC1() uint32 {
 	for esp.SENS.GetSAR_SLAVE_ADDR1_SAR_SARADC_MEAS_STATUS() != 0 {
 	}
 	esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(0)
@@ -355,7 +345,7 @@ func (c *ADCDefaultCalibration) readADC1() uint32 {
 	return uint32(esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR() & 0xfff)
 }
 
-func (c *ADCDefaultCalibration) restoreFromRTC() (uint32, bool) {
+func (c *adcCalibration) restoreFromRTC() (uint32, bool) {
 	if esp.RTC_CNTL.GetSTORE0() != adcCalRtcMagic {
 		return 0, false
 	}
@@ -366,7 +356,7 @@ func (c *ADCDefaultCalibration) restoreFromRTC() (uint32, bool) {
 	return code, true
 }
 
-func (c *ADCDefaultCalibration) saveToRTC(code uint32) {
+func (c *adcCalibration) saveToRTC(code uint32) {
 	esp.RTC_CNTL.SetSTORE0(adcCalRtcMagic)
 	esp.RTC_CNTL.SetSTORE1(code)
 }
@@ -445,13 +435,13 @@ func (r *regI2C) waitIdle(reg *volatile.Register32) bool {
 	return false
 }
 
-// WriteMask is a software implementation of the REGI2C_WRITE_MASK macro
+// writeMask is a software implementation of the REGI2C_WRITE_MASK macro
 // from IDF (see soc/regi2c_saradc.h). It:
 //   - selects the regI2C SAR ADC block + register address,
 //   - reads the current byte,
 //   - updates only the [msb:lsb] bitfield,
 //   - writes the new value back via the internal I2C master.
-func (r *regI2C) WriteMask(block, hostID, regAddr, msb, lsb, data uint8) {
+func (r *regI2C) writeMask(block, hostID, regAddr, msb, lsb, data uint8) {
 	if hostID != i2cSarADCHostID {
 		return
 	}
@@ -471,25 +461,6 @@ func (r *regI2C) WriteMask(block, hostID, regAddr, msb, lsb, data uint8) {
 	r.waitIdle(reg)
 }
 
-// ReadMask is a software implementation of REGI2C_READ_MASK from IDF.
-// It selects the SAR ADC regI2C address, reads the current byte and
-// returns only the requested [msb:lsb] bitfield.
-func (r *regI2C) ReadMask(block, hostID, regAddr, msb, lsb uint8) uint8 {
-	if hostID != i2cSarADCHostID {
-		return 0
-	}
-	reg := (*volatile.Register32)(unsafe.Pointer(i2cMstCtrlHost1))
-	if !r.waitIdle(reg) {
-		return 0
-	}
-	reg.Set(uint32(block) | uint32(regAddr)<<8)
-	if !r.waitIdle(reg) {
-		return 0
-	}
-	data := (reg.Get() & i2cMstDataMask) >> i2cMstDataShift
-	return uint8((data >> lsb) & (1<<(msb-lsb+1) - 1))
-}
-
 // SarEnable enables the analog SAR I2C domain before any regI2C access,
 // matching the prologue in adc_ll_calibration_prepare() (sets ANA_SAR_CFG2_EN).
 func (r *regI2C) SarEnable() {
@@ -505,9 +476,9 @@ func (r *regI2C) SarEnable() {
 // reference index used by Espressif's calibration flow.
 func (r *regI2C) ADC1CalibrationInit(adcN uint8) {
 	if adcN == 0 {
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc1DrefAddr, adc1DrefMSB, adc1DrefLSB, 4)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1DrefAddr, adc1DrefMSB, adc1DrefLSB, 4)
 	} else {
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc2DrefAddr, adc2DrefMSB, adc2DrefLSB, 4)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2DrefAddr, adc2DrefMSB, adc2DrefLSB, 4)
 	}
 }
 
@@ -517,9 +488,9 @@ func (r *regI2C) ADC1CalibrationInit(adcN uint8) {
 // measure offset with the pin disconnected.
 func (r *regI2C) ADC1CalibrationPrepare(adcN uint8) {
 	if adcN == 0 {
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 1)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 1)
 	} else {
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc2EncalGndAddr, adc2EncalGndMSB, adc2EncalGndLSB, 1)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2EncalGndAddr, adc2EncalGndMSB, adc2EncalGndLSB, 1)
 	}
 }
 
@@ -527,9 +498,9 @@ func (r *regI2C) ADC1CalibrationPrepare(adcN uint8) {
 // it clears ENCAL_GND so that ADC input is again connected to the pad.
 func (r *regI2C) ADC1CalibrationFinish(adcN uint8) {
 	if adcN == 0 {
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 0)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 0)
 	} else {
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc2EncalGndAddr, adc2EncalGndMSB, adc2EncalGndLSB, 0)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2EncalGndAddr, adc2EncalGndMSB, adc2EncalGndLSB, 0)
 	}
 }
 
@@ -540,11 +511,11 @@ func (r *regI2C) ADC1SetCalibrationParam(adcN uint8, param uint32) {
 	msb := uint8(param >> 8)
 	lsb := uint8(param & 0xFF)
 	if adcN == 0 {
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc1InitCodeHighAddr, adc1InitCodeHighMSB, adc1InitCodeHighLSB, msb)
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc1InitCodeLowAddr, adc1InitCodeLowMSB, adc1InitCodeLowLSB, lsb)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1InitCodeHighAddr, adc1InitCodeHighMSB, adc1InitCodeHighLSB, msb)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1InitCodeLowAddr, adc1InitCodeLowMSB, adc1InitCodeLowLSB, lsb)
 	} else {
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc2InitCodeHighAddr, adc2InitCodeHighMSB, adc2InitCodeHighLSB, msb)
-		r.WriteMask(i2cSarADC, i2cSarADCHostID, adc2InitCodeLowAddr, adc2InitCodeLowMSB, adc2InitCodeLowLSB, lsb)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2InitCodeHighAddr, adc2InitCodeHighMSB, adc2InitCodeHighLSB, msb)
+		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2InitCodeLowAddr, adc2InitCodeLowMSB, adc2InitCodeLowLSB, lsb)
 	}
 }
 
@@ -575,58 +546,6 @@ const (
 )
 
 type fuse struct{}
-
-// triggerReadSequence performs one eFuse read operation using the
-// controller's timing/opcode sequence. This roughly corresponds to
-// the low-level logic in the ESP-IDF eFuse HAL (see efuse_ll_* in
-// the IDF sources and the "eFuse Manager" docs:
-// https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/system/efuse.html).
-func (f *fuse) triggerReadSequence() {
-	clk := (*volatile.Register32)(unsafe.Pointer(systemPeripClkEn0))
-	clk.Set(clk.Get() | systemEfuseClkEnBit)
-	efuseClk := (*volatile.Register32)(unsafe.Pointer(efuseClkReg))
-	efuseClk.Set(efuseClk.Get() | efuseClkEnBit)
-	for i := 0; i < 50; i++ {
-	}
-	dac := (*volatile.Register32)(unsafe.Pointer(efuseDacConfReg))
-	dac.Set(0x28 | (0xFF << 9))
-	(*volatile.Register32)(unsafe.Pointer(efuseWrTimConf1Reg)).Set(0x3000 << 8)
-	(*volatile.Register32)(unsafe.Pointer(efuseWrTimConf2Reg)).Set(0x190)
-	(*volatile.Register32)(unsafe.Pointer(efuseConfReg)).Set(efuseReadOpCode)
-	cmd := (*volatile.Register32)(unsafe.Pointer(efuseCmdReg))
-	cmd.Set(1)
-	for cmd.Get()&1 != 0 {
-	}
-}
-
-// readBlock2Data4Data5 reads the EFUSE_BLK2 data words that contain
-// ADC calibration and version information. It returns RD_DATA4,
-// RD_DATA5 and the decoded block version (BLK_VERSION).
-//
-// Layout is derived from the ESP32-S3 TRM and IDF eFuse tables.
-func (f *fuse) readBlock2Data4Data5() (data4, data5 uint32, blkVer uint8) {
-	for i := 0; i < 20; i++ {
-	}
-	data4 = (*volatile.Register32)(unsafe.Pointer(efuseRdData4Reg)).Get()
-	data5 = (*volatile.Register32)(unsafe.Pointer(efuseRdData5Reg)).Get()
-	blkVer = uint8(data4 & 3)
-	return data4, data5, blkVer
-}
-
-// readBlock2Data7 reads RD_DATA7 from EFUSE_BLK2, which for ADC
-// calibration contains additional reference (DIGI_REF) data fields.
-func (f *fuse) readBlock2Data7() uint32 {
-	return (*volatile.Register32)(unsafe.Pointer(efuseRdData7Reg)).Get()
-}
-
-// ReadAdcCalibBlock2 triggers an eFuse read and returns the raw
-// EFUSE_BLK2 words used for ADC calibration (RD_DATA4/5) along
-// with the decoded block version. This is a small helper similar
-// in spirit to the internal IDF helpers around EFUSE_BLK2.
-func (f *fuse) ReadAdcCalibBlock2() (data4, data5 uint32, blkVer uint8) {
-	f.triggerReadSequence()
-	return f.readBlock2Data4Data5()
-}
 
 // ADC1InitCodeAtten3 extracts the ADC1 INIT_CODE (offset trim) for
 // attenuation index 3 (typically 11 dB) from EFUSE_BLK2. This mirrors
@@ -675,8 +594,54 @@ func (f *fuse) ADC1DigiRefAtten3() (uint32, bool) {
 	return digiRef, true
 }
 
-// GetEfuseAdcCalBlk2 is a tiny wrapper that exposes the raw EFUSE_BLK2
-// ADC calibration words for debugging / inspection from other packages.
-func GetEfuseAdcCalBlk2() (data4, data5 uint32, blkVer uint8) {
-	return (&fuse{}).ReadAdcCalibBlock2()
+// triggerReadSequence performs one eFuse read operation using the
+// controller's timing/opcode sequence. This roughly corresponds to
+// the low-level logic in the ESP-IDF eFuse HAL (see efuse_ll_* in
+// the IDF sources and the "eFuse Manager" docs:
+// https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/system/efuse.html).
+func (f *fuse) triggerReadSequence() {
+	clk := (*volatile.Register32)(unsafe.Pointer(systemPeripClkEn0))
+	clk.Set(clk.Get() | systemEfuseClkEnBit)
+	efuseClk := (*volatile.Register32)(unsafe.Pointer(efuseClkReg))
+	efuseClk.Set(efuseClk.Get() | efuseClkEnBit)
+	for i := 0; i < 50; i++ {
+	}
+	dac := (*volatile.Register32)(unsafe.Pointer(efuseDacConfReg))
+	dac.Set(0x28 | (0xFF << 9))
+	(*volatile.Register32)(unsafe.Pointer(efuseWrTimConf1Reg)).Set(0x3000 << 8)
+	(*volatile.Register32)(unsafe.Pointer(efuseWrTimConf2Reg)).Set(0x190)
+	(*volatile.Register32)(unsafe.Pointer(efuseConfReg)).Set(efuseReadOpCode)
+	cmd := (*volatile.Register32)(unsafe.Pointer(efuseCmdReg))
+	cmd.Set(1)
+	for cmd.Get()&1 != 0 {
+	}
+}
+
+// readBlock2Data4Data5 reads the EFUSE_BLK2 data words that contain
+// ADC calibration and version information. It returns RD_DATA4,
+// RD_DATA5 and the decoded block version (BLK_VERSION).
+//
+// Layout is derived from the ESP32-S3 TRM and IDF eFuse tables.
+func (f *fuse) readBlock2Data4Data5() (data4, data5 uint32, blkVer uint8) {
+	for i := 0; i < 20; i++ {
+	}
+	data4 = (*volatile.Register32)(unsafe.Pointer(efuseRdData4Reg)).Get()
+	data5 = (*volatile.Register32)(unsafe.Pointer(efuseRdData5Reg)).Get()
+	blkVer = uint8(data4 & 3)
+	return data4, data5, blkVer
+}
+
+// readBlock2Data7 reads RD_DATA7 from EFUSE_BLK2, which for ADC
+// calibration contains additional reference (DIGI_REF) data fields.
+func (f *fuse) readBlock2Data7() uint32 {
+	return (*volatile.Register32)(unsafe.Pointer(efuseRdData7Reg)).Get()
+}
+
+// readAdcCalibBlock2 triggers an eFuse read and returns the raw
+// EFUSE_BLK2 words used for ADC calibration (RD_DATA4/5) along
+// with the decoded block version. This is a small helper similar
+// in spirit to the internal IDF helpers around EFUSE_BLK2.
+func (f *fuse) readAdcCalibBlock2() (data4, data5 uint32, blkVer uint8) {
+	f.triggerReadSequence()
+	return f.readBlock2Data4Data5()
 }
