@@ -1,10 +1,13 @@
+//go:build baremetal
+
 package cdc
 
 import (
 	"errors"
 	"machine"
 	"machine/usb"
-	"runtime/interrupt"
+	"sync/atomic"
+	_ "unsafe"
 )
 
 var (
@@ -21,55 +24,13 @@ type cdcLineInfo struct {
 	lineState   uint8
 }
 
-// Read from the RX buffer.
-func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
-	// check if RX buffer is empty
-	size := usbcdc.Buffered()
-	if size == 0 {
-		return 0, nil
-	}
-
-	// Make sure we do not read more from buffer than the data slice can hold.
-	if len(data) < size {
-		size = len(data)
-	}
-
-	// only read number of bytes used from buffer
-	for i := 0; i < size; i++ {
-		v, _ := usbcdc.ReadByte()
-		data[i] = v
-	}
-
-	return size, nil
-}
-
-// ReadByte reads a single byte from the RX buffer.
-// If there is no data in the buffer, returns an error.
-func (usbcdc *USBCDC) ReadByte() (byte, error) {
-	// check if RX buffer is empty
-	buf, ok := usbcdc.rxBuffer.Get()
-	if !ok {
-		return 0, ErrBufferEmpty
-	}
-	return buf, nil
-}
-
-// Buffered returns the number of bytes currently stored in the RX buffer.
-func (usbcdc *USBCDC) Buffered() int {
-	return int(usbcdc.rxBuffer.Used())
-}
-
-// Receive handles adding data to the UART's data buffer.
-// Usually called by the IRQ handler for a machine.
-func (usbcdc *USBCDC) Receive(data byte) {
-	usbcdc.rxBuffer.Put(data)
-}
-
 // USBCDC is the USB CDC aka serial over USB interface.
 type USBCDC struct {
-	rxBuffer *rxRingBuffer
-	txBuffer *txRingBuffer
-	waitTxc  bool
+	tx       ring512
+	rx       ring512
+	inflight atomic.Uint32
+	rbuf     [1]byte
+	wbuf     [1]byte
 }
 
 var (
@@ -79,6 +40,40 @@ var (
 	usbLineInfo = cdcLineInfo{115200, 0x00, 0x00, 0x08, 0x00}
 )
 
+// Read from the RX buffer.
+func (usbcdc *USBCDC) Read(data []byte) (n int, err error) {
+	data1, data2 := usbcdc.rx.Peek()
+	n += copy(data, data1)
+	n += copy(data[n:], data2)
+	usbcdc.rx.Discard(uint32(n))
+	return n, nil
+}
+
+// ReadByte reads a single byte from the RX buffer.
+// If there is no data in the buffer, returns an error.
+func (usbcdc *USBCDC) ReadByte() (byte, error) {
+	// check if RX buffer is empty
+	b, _ := usbcdc.rx.Peek()
+	if len(b) > 0 {
+		c := b[0]
+		usbcdc.rx.Discard(1)
+		return c, nil
+	}
+	return 0, ErrBufferEmpty
+}
+
+// Buffered returns the number of bytes currently stored in the RX buffer.
+func (usbcdc *USBCDC) Buffered() int {
+	return int(usbcdc.rx.Used())
+}
+
+// Receive handles adding data to the UART's data buffer.
+// Usually called by the IRQ handler for a machine.
+func (usbcdc *USBCDC) Receive(data byte) {
+	usbcdc.rbuf[0] = data
+	usbcdc.rx.Put(usbcdc.rbuf[:])
+}
+
 // Configure the USB CDC interface. The config is here for compatibility with the UART interface.
 func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 	return nil
@@ -86,32 +81,63 @@ func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 
 // Flush flushes buffered data.
 func (usbcdc *USBCDC) Flush() {
-	mask := interrupt.Disable()
-	if b, ok := usbcdc.txBuffer.Get(); ok {
-		machine.SendUSBInPacket(cdcEndpointIn, b)
-	} else {
-		usbcdc.waitTxc = false
+	for usbcdc.tx.Used() > 0 {
+		gosched()
 	}
-	interrupt.Restore(mask)
 }
 
 // Write data to the USBCDC.
 func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
-	if usbLineInfo.lineState > 0 {
-		mask := interrupt.Disable()
-		usbcdc.txBuffer.Put(data)
-		if !usbcdc.waitTxc {
-			usbcdc.waitTxc = true
-			usbcdc.Flush()
-		}
-		interrupt.Restore(mask)
+	n = len(data)
+	if usbLineInfo.lineState <= 0 {
+		return n, nil
 	}
-	return len(data), nil
+	for len(data) > 0 {
+		tosend := min(len(data), int(usbcdc.tx.Free()))
+		if tosend == 0 {
+			gosched()
+			continue
+		}
+		usbcdc.tx.Put(data[:tosend])
+		data = data[tosend:]
+		usbcdc.kickTx()
+	}
+	return n, nil
+}
+
+// kickTx starts a transfer if none is in flight. Called from main context only.
+func (usbcdc *USBCDC) kickTx() {
+	if usbcdc.inflight.Load() > 0 {
+		return // txhandler will chain the next packet.
+	}
+	usbcdc.sendFromRing()
+}
+
+func (usbcdc *USBCDC) txhandler() {
+	inflight := usbcdc.inflight.Load()
+	usbcdc.inflight.Store(0)
+	usbcdc.tx.Discard(inflight)
+	usbcdc.sendFromRing()
+}
+
+// sendFromRing sends one USB packet from the ring and sets inflight.
+// Called from kickTx (main) or txhandler (ISR), but never concurrently
+// because kickTx only runs when inflight==0 and txhandler only runs
+// when inflight>0.
+func (usbcdc *USBCDC) sendFromRing() {
+	d1, _ := usbcdc.tx.Peek()
+	if len(d1) == 0 {
+		return
+	}
+	chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
+	usbcdc.inflight.Store(uint32(len(chunk)))
+	machine.SendUSBInPacket(cdcEndpointIn, chunk)
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.
 func (usbcdc *USBCDC) WriteByte(c byte) error {
-	usbcdc.Write([]byte{c})
+	usbcdc.wbuf[0] = c
+	usbcdc.Write(usbcdc.wbuf[:])
 	return nil
 }
 
@@ -124,9 +150,8 @@ func (usbcdc *USBCDC) RTS() bool {
 }
 
 func cdcCallbackRx(b []byte) {
-	for i := range b {
-		USB.Receive(b[i])
-	}
+	free := USB.rx.Free()
+	USB.rx.Put(b[:min(len(b), int(free))])
 }
 
 var cdcSetupBuff [cdcLineInfoSize]byte
@@ -187,5 +212,8 @@ func cdcSetup(setup usb.Setup) bool {
 
 func EnableUSBCDC() {
 	machine.USBCDC = New()
-	machine.EnableCDC(USB.Flush, cdcCallbackRx, cdcSetup)
+	machine.EnableCDC(USB.txhandler, cdcCallbackRx, cdcSetup)
 }
+
+//go:linkname gosched runtime.Gosched
+func gosched()

@@ -1,3 +1,5 @@
+//go:build baremetal
+
 package cdc
 
 const (
@@ -9,10 +11,7 @@ const (
 // New returns USBCDC struct.
 func New() *USBCDC {
 	if USB == nil {
-		USB = &USBCDC{
-			rxBuffer: NewRxRingBuffer(),
-			txBuffer: NewTxRingBuffer(),
-		}
+		USB = &USBCDC{}
 	}
 	return USB
 }
