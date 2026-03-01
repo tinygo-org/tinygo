@@ -5,13 +5,45 @@ package machine
 // unexported functions here are implemented in the device file
 // and added to the build tags of this file.
 
+// These types are an alias for documentation purposes exclusively. We wish
+// the interface to be used by other ecosystems besides TinyGo which is why
+// we need these types to be a primitive types at the interface level.
+// If these types are defined at machine or machine/can level they are not
+// usable by non-TinyGo projects. This is not good news for fostering wider adoption
+// of our API in "big-Go" embedded system projects like TamaGo and periph.io
+type (
+	// CAN IDs in tinygo are represented as 30 bit integers where
+	// bits 1..29 store the actual ID and the 30th bit stores the IDE bit (if extended ID).
+	// We include the extended ID bit in the ID itself to make comparison of IDs easier for users
+	// since two identical IDs where one is extended and one is not are NOT equivalent IDs.
+	canID = uint32
+	// CAN flags bitmask are defined below.
+	canFlags = uint32
+)
+
+// CAN ID definitions.
+const (
+	canIDStdMask      canID = (1 << 11) - 1
+	canIDExtendedMask canID = (1 << 29) - 1
+	canIDExtendedBit  canID = 1 << 30
+)
+
+// CAN Flag bit definitions.
+const (
+	canFlagBRS canFlags = 1 << 0 // Bit Rate Switch active on tx/rx of frame.
+	canFlagFDF canFlags = 1 << 1 // Is a FD Frame.
+	canFlagRTR canFlags = 1 << 2 // is a retransmission request frame.
+	canFlagESI canFlags = 1 << 3 // Error status indicator active on tx/rx of frame.
+	canFlagIDE canFlags = 1 << 4 // Extended ID.
+)
+
 // TxFIFOLevel returns amount of CAN frames stored for transmission and total Tx fifo length.
 func (can *CAN) TxFIFOLevel() (level int, maxlevel int) {
 	return can.txFIFOLevel()
 }
 
 // Tx puts a CAN frame in TxFIFO for transmission. Returns error if TxFIFO is full.
-func (can *CAN) Tx(id uint32, extendedID bool, data []byte) error {
+func (can *CAN) Tx(id canID, flags canFlags, data []byte) error {
 	return can.tx(id, extendedID, data)
 }
 
@@ -21,12 +53,8 @@ func (can *CAN) RxFIFOLevel() (level int, maxlevel int) {
 	return can.rxFIFOLevel()
 }
 
-// SetRxCallback sets the receive callback. flags is a bitfield where bits set are:
-//   - bit 0: Is a FD frame.
-//   - bit 1: Is a RTR frame.
-//   - bit 2: Bitrate switch was active in frame.
-//   - bit 3: ESI error state indicator active.
-func (can *CAN) SetRxCallback(cb func(data []byte, id uint32, extendedID bool, timestamp uint32, flags uint32)) {
+// SetRxCallback sets the receive callback. See [canFlags] for information on how bits are layed out.
+func (can *CAN) SetRxCallback(cb func(data []byte, id canID, timestamp uint32, flags canFlags)) {
 	can.setRxCallback(cb)
 }
 
