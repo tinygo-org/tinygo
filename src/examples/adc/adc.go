@@ -11,14 +11,14 @@ import (
 func main() {
 	machine.InitADC()
 
-	led := machine.LED
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
-	sensor := machine.ADC{machine.ADC2}
+	sensor := machine.ADC{AnalogPin}
 	sensor.Configure(machine.ADCConfig{})
 
 	for {
 		val := sensor.Get()
+		println(val)
 		if val < 0x8000 {
 			led.Low()
 		} else {
