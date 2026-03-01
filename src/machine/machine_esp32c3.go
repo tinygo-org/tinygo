@@ -31,13 +31,13 @@ const (
 )
 
 const (
-	GPIO0  Pin = 0
-	GPIO1  Pin = 1
-	GPIO2  Pin = 2
-	GPIO3  Pin = 3
-	GPIO4  Pin = 4
-	GPIO5  Pin = 5
-	GPIO6  Pin = 6
+	GPIO0 Pin = 0
+	GPIO1 Pin = 1
+	GPIO2 Pin = 2
+	GPIO3 Pin = 3
+	GPIO4 Pin = 4
+	GPIO5 Pin = 5
+	GPIO6 Pin = 6
 )
 
 const (
@@ -46,7 +46,7 @@ const (
 	ADC2 Pin = GPIO2
 	ADC3 Pin = GPIO3
 	ADC4 Pin = GPIO4
-	ADC5 Pin = GPIO5
+	ADC5 Pin = GPIO5 // avoid when WiFi is used.
 )
 
 const (
