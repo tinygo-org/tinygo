@@ -25,6 +25,9 @@ import (
 	"unsafe"
 )
 
+// newRegI2C returns the regI2C configured for ESP32-S3: hostID=1, drefInit=4.
+func newRegI2C() regI2C { return regI2C{hostID: 1, drefInit: 4} }
+
 var adcDigiRefMv uint32
 
 func InitADC() {
@@ -85,9 +88,8 @@ func InitADC() {
 	esp.APB_SARADC.SetFILTER_CTRL1_FILTER_FACTOR0(0)
 	esp.APB_SARADC.SetFILTER_CTRL1_FILTER_FACTOR1(0)
 
-	adcCal := adcCalibration{}
-	adcCal.calibrate()
-	adcDigiRefMv = adcCal.getDigiRef()
+	adcSelfCalibrate()
+	adcDigiRefMv = getDigiRef()
 }
 
 const (
@@ -115,7 +117,6 @@ func (a ADC) Configure(config ADCConfig) error {
 		return errors.New("invalid ADC pin for ESP32-S3")
 	}
 	a.Pin.Configure(PinConfig{Mode: PinAnalog})
-	InitADC()
 
 	return nil
 }
@@ -189,11 +190,11 @@ func (a ADC) GetVoltage() (raw uint32, v float64) {
 //
 // Mapping to ESP-IDF (adc_hal_common.c, hal/esp32s3/adc_ll.h):
 //   - adc_hal_self_calibration()      → ADCSelfCalibrate()
-//   - adc_ll_calibration_init()       → regI2C.ADC1CalibrationInit (DREF=4);
+//   - adc_ll_calibration_init()       → regI2C.calibrationInit (DREF=4);
 //                                      in IDF it is not called from self_cal, we call it explicitly.
-//   - adc_ll_calibration_prepare()    → SarEnable + ADC1CalibrationPrepare (ENCAL_GND=1)
-//   - adc_ll_calibration_finish()     → ADC1CalibrationFinish (ENCAL_GND=0)
-//   - adc_ll_set_calibration_param()  → ADC1SetCalibrationParam()
+//   - adc_ll_calibration_prepare()    → SarEnable + calibrationPrepare (ENCAL_GND=1)
+//   - adc_ll_calibration_finish()     → calibrationFinish (ENCAL_GND=0)
+//   - adc_ll_set_calibration_param()  → setCalibrationParam()
 //   - read_cal_channel()              → adcCalibration.readADC1():
 //                                      wait for meas_status==0, start 0→1, wait done, read data
 //                                      (similar to adc_oneshot_ll_start + get_raw_result).
@@ -209,7 +210,6 @@ func (a ADC) GetVoltage() (raw uint32, v float64) {
 
 const (
 	adcCalTimes     = 10
-	adcCalOffsetMax = uint32(4096)
 	adcCalRtcMagic  = uint32(0xADC1C401)
 	adcCalInitMin   = uint32(2000)
 	adcCalInitMax   = uint32(3900)
@@ -220,44 +220,40 @@ const (
 // adcCalibration encapsulates the self-calibration flow for ADC1
 // and remembers per-chip calibration data (such as DIGI_REF) when it is
 // available from eFuse.
-type adcCalibration struct {
-	digiRefMv uint32
-}
-
-func (c *adcCalibration) calibrate() {
-	reg := regI2C{}
+func adcSelfCalibrate() {
+	reg := newRegI2C()
 	f := fuse{}
 
 	if vref, ok := f.adc1DigiRefAtten3(); ok {
-		c.digiRefMv = vref
+		adcDigiRefMv = vref
 	}
 
-	if saved, ok := c.restoreFromRTC(); ok {
+	if saved, ok := restoreFromRTC(); ok {
 		reg.sarEnable()
-		reg.adc1CalibrationInit(0)
-		c.adc1CalibrateHigh(reg, saved)
+		reg.calibrationInit(0)
+		adc1CalibrateHigh(reg, saved)
 		return
 	}
 
 	initCode, useEfuse := f.adc1InitCodeAtten3()
-	c.adc1CalibrationSetup(reg)
+	adc1CalibrationSetup(reg)
 
 	if useEfuse {
-		c.saveToRTC(initCode)
-		c.adc1CalibrateHigh(reg, initCode)
+		saveToRTC(initCode)
+		adc1CalibrateHigh(reg, initCode)
 		return
 	}
 
-	finalCode := c.adc1CalibrateLow(reg)
-	c.saveToRTC(finalCode)
-	c.adc1CalibrateHigh(reg, finalCode)
+	finalCode := reg.calibrateBinarySearch(0, adcCalTimes, readADC1)
+	saveToRTC(finalCode)
+	adc1CalibrateHigh(reg, finalCode)
 }
 
-func (c *adcCalibration) getDigiRef() uint32 {
-	return c.digiRefMv
+func getDigiRef() uint32 {
+	return adcDigiRefMv
 }
 
-func (c *adcCalibration) adc1CalibrationSetup(reg regI2C) {
+func adc1CalibrationSetup(reg regI2C) {
 	reg.sarEnable()
 
 	esp.SENS.SetSAR_MEAS1_MUX_SAR1_DIG_FORCE(0)
@@ -268,67 +264,17 @@ func (c *adcCalibration) adc1CalibrationSetup(reg regI2C) {
 	esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(1)
 	esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD_FORCE(1)
 
-	reg.adc1CalibrationInit(0)
-	reg.adc1CalibrationPrepare(0)
+	reg.calibrationInit(0)
+	reg.calibrationPrepare(0)
 }
 
-func (c *adcCalibration) adc1CalibrateLow(reg regI2C) uint32 {
-	var codeList [adcCalTimes]uint32
-	var codeSum uint32
-
-	for rpt := 0; rpt < adcCalTimes; rpt++ {
-		codeH := adcCalOffsetMax
-		codeL := uint32(0)
-		chkCode := (codeH + codeL) / 2
-		reg.adc1SetCalibrationParam(0, chkCode)
-		selfCal := c.readADC1()
-
-		for codeH-codeL > 1 {
-			if selfCal == 0 {
-				codeH = chkCode
-			} else {
-				codeL = chkCode
-			}
-			chkCode = (codeH + codeL) / 2
-			reg.adc1SetCalibrationParam(0, chkCode)
-			selfCal = c.readADC1()
-			if codeH-codeL == 1 {
-				chkCode++
-				reg.adc1SetCalibrationParam(0, chkCode)
-				selfCal = c.readADC1()
-			}
-		}
-		codeList[rpt] = chkCode
-		codeSum += chkCode
-	}
-
-	codeL := codeList[0]
-	codeH := codeList[0]
-	for i := 0; i < adcCalTimes; i++ {
-		if codeList[i] < codeL {
-			codeL = codeList[i]
-		}
-		if codeList[i] > codeH {
-			codeH = codeList[i]
-		}
-	}
-	excluded := codeH + codeL
-	remaining := codeSum - excluded
-	finalCode := remaining / (adcCalTimes - 2)
-	if remaining%(adcCalTimes-2) >= 4 {
-		finalCode++
-	}
-
-	return finalCode
+func adc1CalibrateHigh(reg regI2C, code uint32) {
+	reg.setCalibrationParam(0, code)
+	reg.calibrationFinish(0)
+	adc1StartWithPadForce()
 }
 
-func (c *adcCalibration) adc1CalibrateHigh(reg regI2C, code uint32) {
-	reg.adc1SetCalibrationParam(0, code)
-	reg.adc1CalibrationFinish(0)
-	c.adc1StartWithPadForce()
-}
-
-func (c *adcCalibration) adc1StartWithPadForce() {
+func adc1StartWithPadForce() {
 	esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD_FORCE(1)
 	esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(1)
 }
@@ -336,7 +282,7 @@ func (c *adcCalibration) adc1StartWithPadForce() {
 // readADC1 performs one ADC1 conversion via RTC path (used during calibration).
 // Internal GND is connected via ENCAL_GND, so the pin input is disconnected.
 // Matches IDF: wait conversion idle (meas_status==0), then start 0→1, wait done, read data.
-func (c *adcCalibration) readADC1() uint32 {
+func readADC1() uint32 {
 	for esp.SENS.GetSAR_SLAVE_ADDR1_SAR_SARADC_MEAS_STATUS() != 0 {
 	}
 	esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(0)
@@ -346,7 +292,7 @@ func (c *adcCalibration) readADC1() uint32 {
 	return uint32(esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR() & 0xfff)
 }
 
-func (c *adcCalibration) restoreFromRTC() (uint32, bool) {
+func restoreFromRTC() (uint32, bool) {
 	if esp.RTC_CNTL.GetSTORE0() != adcCalRtcMagic {
 		return 0, false
 	}
@@ -357,167 +303,9 @@ func (c *adcCalibration) restoreFromRTC() (uint32, bool) {
 	return code, true
 }
 
-func (c *adcCalibration) saveToRTC(code uint32) {
+func saveToRTC(code uint32) {
 	esp.RTC_CNTL.SetSTORE0(adcCalRtcMagic)
 	esp.RTC_CNTL.SetSTORE1(code)
-}
-
-// regI2C — internal I2C for SAR ADC (ESP32-S2 I2C_RTC_CONFIG2, reg 0x6000E000).
-// Source: idf-source/components/soc/esp32s3/include/soc/regi2c_saradc.h
-
-const (
-	// I2C_SAR_ADC / I2C_SAR_ADC_HOSTID in regi2c_saradc.h
-	i2cSarADC       = uint8(0x69) // I2C_SAR_ADC
-	i2cSarADCHostID = uint8(1)    // I2C_SAR_ADC_HOSTID
-
-	// ADC_SAR1_DREF_ADDR(_MSB/_LSB)
-	adc1DrefAddr = uint8(0x2) // ADC_SAR1_DREF_ADDR
-	adc1DrefMSB  = uint8(6)   // ADC_SAR1_DREF_ADDR_MSB
-	adc1DrefLSB  = uint8(4)   // ADC_SAR1_DREF_ADDR_LSB
-
-	// ADC_SAR2_DREF_ADDR(_MSB/_LSB)
-	adc2DrefAddr = uint8(0x5) // ADC_SAR2_DREF_ADDR
-	adc2DrefMSB  = uint8(6)   // ADC_SAR2_DREF_ADDR_MSB
-	adc2DrefLSB  = uint8(4)   // ADC_SAR2_DREF_ADDR_LSB
-
-	// ADC_SAR1_ENCAL_GND_ADDR(_MSB/_LSB)
-	adc1EncalGndAddr = uint8(0x7) // ADC_SAR1_ENCAL_GND_ADDR
-	adc1EncalGndMSB  = uint8(5)   // ADC_SAR1_ENCAL_GND_ADDR_MSB
-	adc1EncalGndLSB  = uint8(5)   // ADC_SAR1_ENCAL_GND_ADDR_LSB
-
-	// ADC_SAR2_ENCAL_GND_ADDR(_MSB/_LSB)
-	adc2EncalGndAddr = uint8(0x7) // ADC_SAR2_ENCAL_GND_ADDR
-	adc2EncalGndMSB  = uint8(7)   // ADC_SAR2_ENCAL_GND_ADDR_MSB
-	adc2EncalGndLSB  = uint8(7)   // ADC_SAR2_ENCAL_GND_ADDR_LSB
-
-	// ADC_SAR1_INITIAL_CODE_HIGH/LOW_ADDR(_MSB/_LSB)
-	adc1InitCodeHighAddr = uint8(0x1) // ADC_SAR1_INITIAL_CODE_HIGH_ADDR
-	adc1InitCodeHighMSB  = uint8(3)   // ADC_SAR1_INITIAL_CODE_HIGH_ADDR_MSB
-	adc1InitCodeHighLSB  = uint8(0)   // ADC_SAR1_INITIAL_CODE_HIGH_ADDR_LSB
-	adc1InitCodeLowAddr  = uint8(0x0) // ADC_SAR1_INITIAL_CODE_LOW_ADDR
-	adc1InitCodeLowMSB   = uint8(7)   // ADC_SAR1_INITIAL_CODE_LOW_ADDR_MSB
-	adc1InitCodeLowLSB   = uint8(0)   // ADC_SAR1_INITIAL_CODE_LOW_ADDR_LSB
-
-	// ADC_SAR2_INITIAL_CODE_HIGH/LOW_ADDR(_MSB/_LSB)
-	adc2InitCodeHighAddr = uint8(0x4) // ADC_SAR2_INITIAL_CODE_HIGH_ADDR
-	adc2InitCodeHighMSB  = uint8(3)   // ADC_SAR2_INITIAL_CODE_HIGH_ADDR_MSB
-	adc2InitCodeHighLSB  = uint8(0)   // ADC_SAR2_INITIAL_CODE_HIGH_ADDR_LSB
-	adc2InitCodeLowAddr  = uint8(0x3) // ADC_SAR2_INITIAL_CODE_LOW_ADDR
-	adc2InitCodeLowMSB   = uint8(7)   // ADC_SAR2_INITIAL_CODE_LOW_ADDR_MSB
-	adc2InitCodeLowLSB   = uint8(0)   // ADC_SAR2_INITIAL_CODE_LOW_ADDR_LSB
-
-	// Analog config registers for regI2C block (RTC/ANA config in TRM).
-	anaConfigReg  = uintptr(0x6000E044)
-	i2cSarEnMask  = uint32(1 << 18)
-	anaConfig2Reg = uintptr(0x6000E048)
-	anaSarCfg2En  = uint32(1 << 16)
-
-	// REGI2C master control register and helper masks.
-	i2cMstCtrlHost1   = uintptr(0x6000E000)
-	i2cMstBusyBit     = uint32(1 << 25)
-	i2cMstWrCntlBit   = uint32(1 << 24)
-	i2cMstDataMask    = uint32(0xFF << 16)
-	i2cMstDataShift   = 16
-	i2cMstBusyTimeout = 10000
-)
-
-type regI2C struct{}
-
-// waitIdle mimics the IDF regi2c busy-wait helper (see regi2c_ctrl.c).
-// It polls the REGI2C master control register until the BUSY bit clears
-// or a small timeout expires, to avoid writing while a previous transfer
-// is still in progress.
-func (r *regI2C) waitIdle(reg *volatile.Register32) bool {
-	for i := 0; i < i2cMstBusyTimeout; i++ {
-		if reg.Get()&i2cMstBusyBit == 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// writeMask is a software implementation of the REGI2C_WRITE_MASK macro
-// from IDF (see soc/regi2c_saradc.h). It:
-//   - selects the regI2C SAR ADC block + register address,
-//   - reads the current byte,
-//   - updates only the [msb:lsb] bitfield,
-//   - writes the new value back via the internal I2C master.
-func (r *regI2C) writeMask(block, hostID, regAddr, msb, lsb, data uint8) {
-	if hostID != i2cSarADCHostID {
-		return
-	}
-	reg := (*volatile.Register32)(unsafe.Pointer(i2cMstCtrlHost1))
-	if !r.waitIdle(reg) {
-		return
-	}
-	reg.Set(uint32(block) | uint32(regAddr)<<8)
-	if !r.waitIdle(reg) {
-		return
-	}
-	cur := (reg.Get() & i2cMstDataMask) >> i2cMstDataShift
-	mask := uint32(1<<(msb-lsb+1)-1) << lsb
-	cur &^= mask
-	cur |= uint32(data&(1<<(msb-lsb+1)-1)) << lsb
-	reg.Set(uint32(block) | uint32(regAddr)<<8 | i2cMstWrCntlBit | (cur<<i2cMstDataShift)&i2cMstDataMask)
-	r.waitIdle(reg)
-}
-
-// sarEnable enables the analog SAR I2C domain before any regI2C access,
-// matching the prologue in adc_ll_calibration_prepare() (sets ANA_SAR_CFG2_EN).
-func (r *regI2C) sarEnable() {
-	cfg := (*volatile.Register32)(unsafe.Pointer(anaConfigReg))
-	cfg2 := (*volatile.Register32)(unsafe.Pointer(anaConfig2Reg))
-	esp.RTC_CNTL.SetANA_CONF_SAR_I2C_PU(1)
-	cfg.Set(cfg.Get() &^ i2cSarEnMask)
-	cfg2.Set(cfg2.Get() | anaSarCfg2En)
-}
-
-// adc1CalibrationInit corresponds to adc_ll_calibration_init() for ESP32-S3:
-// it sets the DREF field to 4 for the selected ADC unit, which is the
-// reference index used by Espressif's calibration flow.
-func (r *regI2C) adc1CalibrationInit(adcN uint8) {
-	if adcN == 0 {
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1DrefAddr, adc1DrefMSB, adc1DrefLSB, 4)
-	} else {
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2DrefAddr, adc2DrefMSB, adc2DrefLSB, 4)
-	}
-}
-
-// adc1CalibrationPrepare corresponds to the ENCAL_GND part of
-// adc_ll_calibration_prepare(): it temporarily routes the internal
-// ground reference into the SAR input so that self-calibration can
-// measure offset with the pin disconnected.
-func (r *regI2C) adc1CalibrationPrepare(adcN uint8) {
-	if adcN == 0 {
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 1)
-	} else {
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2EncalGndAddr, adc2EncalGndMSB, adc2EncalGndLSB, 1)
-	}
-}
-
-// adc1CalibrationFinish corresponds to adc_ll_calibration_finish():
-// it clears ENCAL_GND so that ADC input is again connected to the pad.
-func (r *regI2C) adc1CalibrationFinish(adcN uint8) {
-	if adcN == 0 {
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 0)
-	} else {
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2EncalGndAddr, adc2EncalGndMSB, adc2EncalGndLSB, 0)
-	}
-}
-
-// adc1SetCalibrationParam corresponds to adc_ll_set_calibration_param():
-// it writes the 9-bit initial code (offset) into the high/low INIT_CODE
-// regI2C registers for the selected ADC unit.
-func (r *regI2C) adc1SetCalibrationParam(adcN uint8, param uint32) {
-	msb := uint8(param >> 8)
-	lsb := uint8(param & 0xFF)
-	if adcN == 0 {
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1InitCodeHighAddr, adc1InitCodeHighMSB, adc1InitCodeHighLSB, msb)
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1InitCodeLowAddr, adc1InitCodeLowMSB, adc1InitCodeLowLSB, lsb)
-	} else {
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2InitCodeHighAddr, adc2InitCodeHighMSB, adc2InitCodeHighLSB, msb)
-		r.writeMask(i2cSarADC, i2cSarADCHostID, adc2InitCodeLowAddr, adc2InitCodeLowMSB, adc2InitCodeLowLSB, lsb)
-	}
 }
 
 // fuse
