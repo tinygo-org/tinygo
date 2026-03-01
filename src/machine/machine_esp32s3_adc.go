@@ -1,6 +1,6 @@
 //go:build esp32s3
 
-// ESP32-S3: 2 SAR ADCs, 12-bit hardware; Get() returns 0..4095.
+// ESP32-S3: 2 SAR ADCs, 12-bit hardware; Get() returns 0..65520 (scaled from 12-bit).
 // Pin mapping: ADC1 = GPIO 1..10 (channel = GPIO-1); ADC2 = GPIO 11..20 (channel = GPIO-11).
 // Get() returns raw, uncalibrated ADC values; accurate 0–3.3V mapping should be done
 // either by a two-point calibration in user code or by using the eFuse-based
@@ -125,9 +125,9 @@ func (a ADC) Get() uint16 {
 		return 0
 	}
 
-	adc1 := a.Pin <= 10
 	var ch uint32
-	if adc1 {
+	var raw uint32
+	if a.Pin <= 10 {
 		ch = uint32(a.Pin - 1) // GPIO1→ch0 … GPIO10→ch9
 		esp.SENS.SetSAR_MEAS1_MUX_SAR1_DIG_FORCE(0)
 		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(1)
@@ -140,27 +140,28 @@ func (a ADC) Get() uint16 {
 		esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_SAR(1)
 		for esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DONE_SAR() == 0 {
 		}
-		raw := esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR()
-		return uint16(raw & 0xfff)
+		raw = esp.SENS.GetSAR_MEAS1_CTRL2_MEAS1_DATA_SAR()
+	} else {
+		ch = uint32(a.Pin - 11) // GPIO11→ch0 … GPIO20→ch9
+		// SENS.SAR_MEAS2_CTRL2: force SW control, select channel
+		esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_FORCE(1)
+		esp.SENS.SetSAR_MEAS2_CTRL2_SAR2_EN_PAD_FORCE(1)
+		esp.SENS.SetSAR_MEAS2_CTRL2_SAR2_EN_PAD(1 << ch)
+		setSensAtten2(ch, attenDefault)
+		// APB_SARADC.ARB_CTRL: grant ADC2 to APB for oneshot
+		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(1)
+		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(1)
+		// SENS.SAR_MEAS2_CTRL2.MEAS2_START_SAR: one-shot start
+		esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_SAR(0)
+		esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_SAR(1)
+		for esp.SENS.GetSAR_MEAS2_CTRL2_MEAS2_DONE_SAR() == 0 {
+		}
+		raw = esp.SENS.GetSAR_MEAS2_CTRL2_MEAS2_DATA_SAR()
+		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(0)
+		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(0)
 	}
-	ch = uint32(a.Pin - 11) // GPIO11→ch0 … GPIO20→ch9
-	// SENS.SAR_MEAS2_CTRL2: force SW control, select channel
-	esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_FORCE(1)
-	esp.SENS.SetSAR_MEAS2_CTRL2_SAR2_EN_PAD_FORCE(1)
-	esp.SENS.SetSAR_MEAS2_CTRL2_SAR2_EN_PAD(1 << ch)
-	setSensAtten2(ch, attenDefault)
-	// APB_SARADC.ARB_CTRL: grant ADC2 to APB for oneshot
-	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(1)
-	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(1)
-	// SENS.SAR_MEAS2_CTRL2.MEAS2_START_SAR: one-shot start
-	esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_SAR(0)
-	esp.SENS.SetSAR_MEAS2_CTRL2_MEAS2_START_SAR(1)
-	for esp.SENS.GetSAR_MEAS2_CTRL2_MEAS2_DONE_SAR() == 0 {
-	}
-	raw := esp.SENS.GetSAR_MEAS2_CTRL2_MEAS2_DATA_SAR()
-	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(0)
-	esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(0)
-	return uint16(raw & 0xfff)
+
+	return uint16(raw&0xfff) << 4
 }
 
 func (a ADC) GetVoltage() (raw uint32, v float64) {
@@ -180,7 +181,7 @@ func (a ADC) GetVoltage() (raw uint32, v float64) {
 		scale = 3.0 * float64(adcDigiRefMv) / 1000.0
 	}
 
-	v = float64(raw) / 4095.0 * scale
+	v = float64(raw) / 65520.0 * scale
 	return raw, v
 }
 

@@ -83,7 +83,7 @@ func (a ADC) Get() uint16 {
 		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_APB_FORCE(0)
 		esp.APB_SARADC.SetARB_CTRL_ADC_ARB_GRANT_FORCE(0)
 	}
-	return uint16(raw & 0xfff)
+	return uint16(raw&0xfff) << 4
 }
 
 // adcSelfCalibration
