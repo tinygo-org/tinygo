@@ -604,8 +604,6 @@ func (f *fuse) triggerReadSequence() {
 	clk.Set(clk.Get() | systemEfuseClkEnBit)
 	efuseClk := (*volatile.Register32)(unsafe.Pointer(efuseClkReg))
 	efuseClk.Set(efuseClk.Get() | efuseClkEnBit)
-	for i := 0; i < 50; i++ {
-	}
 	dac := (*volatile.Register32)(unsafe.Pointer(efuseDacConfReg))
 	dac.Set(0x28 | (0xFF << 9))
 	(*volatile.Register32)(unsafe.Pointer(efuseWrTimConf1Reg)).Set(0x3000 << 8)
@@ -623,8 +621,6 @@ func (f *fuse) triggerReadSequence() {
 //
 // Layout is derived from the ESP32-S3 TRM and IDF eFuse tables.
 func (f *fuse) readBlock2Data4Data5() (data4, data5 uint32, blkVer uint8) {
-	for i := 0; i < 20; i++ {
-	}
 	data4 = (*volatile.Register32)(unsafe.Pointer(efuseRdData4Reg)).Get()
 	data5 = (*volatile.Register32)(unsafe.Pointer(efuseRdData5Reg)).Get()
 	blkVer = uint8(data4 & 3)

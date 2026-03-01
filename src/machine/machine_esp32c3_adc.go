@@ -145,8 +145,6 @@ func (c *adcSelfCalibration) calSetupADC2() {
 func (c *adcSelfCalibration) readADC1() uint32 {
 	esp.APB_SARADC.SetINT_CLR_APB_SARADC1_DONE_INT_CLR(1)
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
-	for i := 0; i < 10; i++ {
-	}
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(1)
 	for esp.APB_SARADC.GetINT_RAW_APB_SARADC1_DONE_INT_RAW() == 0 {
 	}
@@ -159,8 +157,6 @@ func (c *adcSelfCalibration) readADC1() uint32 {
 func (c *adcSelfCalibration) readADC2() uint32 {
 	esp.APB_SARADC.SetINT_CLR_APB_SARADC2_DONE_INT_CLR(1)
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
-	for i := 0; i < 10; i++ {
-	}
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(1)
 	for esp.APB_SARADC.GetINT_RAW_APB_SARADC2_DONE_INT_RAW() == 0 {
 	}
