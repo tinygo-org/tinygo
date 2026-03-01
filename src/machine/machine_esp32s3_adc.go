@@ -86,8 +86,8 @@ func InitADC() {
 	esp.APB_SARADC.SetFILTER_CTRL1_FILTER_FACTOR1(0)
 
 	adcCal := adcCalibration{}
-	adcCal.SelfCalibrate()
-	adcDigiRefMv = adcCal.GetDigiRef()
+	adcCal.calibrate()
+	adcDigiRefMv = adcCal.getDigiRef()
 }
 
 const (
@@ -223,22 +223,22 @@ type adcCalibration struct {
 	digiRefMv uint32
 }
 
-func (c *adcCalibration) SelfCalibrate() {
+func (c *adcCalibration) calibrate() {
 	reg := regI2C{}
 	f := fuse{}
 
-	if vref, ok := f.ADC1DigiRefAtten3(); ok {
+	if vref, ok := f.adc1DigiRefAtten3(); ok {
 		c.digiRefMv = vref
 	}
 
 	if saved, ok := c.restoreFromRTC(); ok {
-		reg.SarEnable()
-		reg.ADC1CalibrationInit(0)
+		reg.sarEnable()
+		reg.adc1CalibrationInit(0)
 		c.adc1CalibrateHigh(reg, saved)
 		return
 	}
 
-	initCode, useEfuse := f.ADC1InitCodeAtten3()
+	initCode, useEfuse := f.adc1InitCodeAtten3()
 	c.adc1CalibrationSetup(reg)
 
 	if useEfuse {
@@ -252,12 +252,12 @@ func (c *adcCalibration) SelfCalibrate() {
 	c.adc1CalibrateHigh(reg, finalCode)
 }
 
-func (c *adcCalibration) GetDigiRef() uint32 {
+func (c *adcCalibration) getDigiRef() uint32 {
 	return c.digiRefMv
 }
 
 func (c *adcCalibration) adc1CalibrationSetup(reg regI2C) {
-	reg.SarEnable()
+	reg.sarEnable()
 
 	esp.SENS.SetSAR_MEAS1_MUX_SAR1_DIG_FORCE(0)
 	esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(0)
@@ -267,8 +267,8 @@ func (c *adcCalibration) adc1CalibrationSetup(reg regI2C) {
 	esp.SENS.SetSAR_MEAS1_CTRL2_MEAS1_START_FORCE(1)
 	esp.SENS.SetSAR_MEAS1_CTRL2_SAR1_EN_PAD_FORCE(1)
 
-	reg.ADC1CalibrationInit(0)
-	reg.ADC1CalibrationPrepare(0)
+	reg.adc1CalibrationInit(0)
+	reg.adc1CalibrationPrepare(0)
 }
 
 func (c *adcCalibration) adc1CalibrateLow(reg regI2C) uint32 {
@@ -279,7 +279,7 @@ func (c *adcCalibration) adc1CalibrateLow(reg regI2C) uint32 {
 		codeH := adcCalOffsetMax
 		codeL := uint32(0)
 		chkCode := (codeH + codeL) / 2
-		reg.ADC1SetCalibrationParam(0, chkCode)
+		reg.adc1SetCalibrationParam(0, chkCode)
 		selfCal := c.readADC1()
 
 		for codeH-codeL > 1 {
@@ -289,11 +289,11 @@ func (c *adcCalibration) adc1CalibrateLow(reg regI2C) uint32 {
 				codeL = chkCode
 			}
 			chkCode = (codeH + codeL) / 2
-			reg.ADC1SetCalibrationParam(0, chkCode)
+			reg.adc1SetCalibrationParam(0, chkCode)
 			selfCal = c.readADC1()
 			if codeH-codeL == 1 {
 				chkCode++
-				reg.ADC1SetCalibrationParam(0, chkCode)
+				reg.adc1SetCalibrationParam(0, chkCode)
 				selfCal = c.readADC1()
 			}
 		}
@@ -322,8 +322,8 @@ func (c *adcCalibration) adc1CalibrateLow(reg regI2C) uint32 {
 }
 
 func (c *adcCalibration) adc1CalibrateHigh(reg regI2C, code uint32) {
-	reg.ADC1SetCalibrationParam(0, code)
-	reg.ADC1CalibrationFinish(0)
+	reg.adc1SetCalibrationParam(0, code)
+	reg.adc1CalibrationFinish(0)
 	c.adc1StartWithPadForce()
 }
 
@@ -461,9 +461,9 @@ func (r *regI2C) writeMask(block, hostID, regAddr, msb, lsb, data uint8) {
 	r.waitIdle(reg)
 }
 
-// SarEnable enables the analog SAR I2C domain before any regI2C access,
+// sarEnable enables the analog SAR I2C domain before any regI2C access,
 // matching the prologue in adc_ll_calibration_prepare() (sets ANA_SAR_CFG2_EN).
-func (r *regI2C) SarEnable() {
+func (r *regI2C) sarEnable() {
 	cfg := (*volatile.Register32)(unsafe.Pointer(anaConfigReg))
 	cfg2 := (*volatile.Register32)(unsafe.Pointer(anaConfig2Reg))
 	esp.RTC_CNTL.SetANA_CONF_SAR_I2C_PU(1)
@@ -471,10 +471,10 @@ func (r *regI2C) SarEnable() {
 	cfg2.Set(cfg2.Get() | anaSarCfg2En)
 }
 
-// ADC1CalibrationInit corresponds to adc_ll_calibration_init() for ESP32-S3:
+// adc1CalibrationInit corresponds to adc_ll_calibration_init() for ESP32-S3:
 // it sets the DREF field to 4 for the selected ADC unit, which is the
 // reference index used by Espressif's calibration flow.
-func (r *regI2C) ADC1CalibrationInit(adcN uint8) {
+func (r *regI2C) adc1CalibrationInit(adcN uint8) {
 	if adcN == 0 {
 		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1DrefAddr, adc1DrefMSB, adc1DrefLSB, 4)
 	} else {
@@ -482,11 +482,11 @@ func (r *regI2C) ADC1CalibrationInit(adcN uint8) {
 	}
 }
 
-// ADC1CalibrationPrepare corresponds to the ENCAL_GND part of
+// adc1CalibrationPrepare corresponds to the ENCAL_GND part of
 // adc_ll_calibration_prepare(): it temporarily routes the internal
 // ground reference into the SAR input so that self-calibration can
 // measure offset with the pin disconnected.
-func (r *regI2C) ADC1CalibrationPrepare(adcN uint8) {
+func (r *regI2C) adc1CalibrationPrepare(adcN uint8) {
 	if adcN == 0 {
 		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 1)
 	} else {
@@ -494,9 +494,9 @@ func (r *regI2C) ADC1CalibrationPrepare(adcN uint8) {
 	}
 }
 
-// ADC1CalibrationFinish corresponds to adc_ll_calibration_finish():
+// adc1CalibrationFinish corresponds to adc_ll_calibration_finish():
 // it clears ENCAL_GND so that ADC input is again connected to the pad.
-func (r *regI2C) ADC1CalibrationFinish(adcN uint8) {
+func (r *regI2C) adc1CalibrationFinish(adcN uint8) {
 	if adcN == 0 {
 		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 0)
 	} else {
@@ -504,10 +504,10 @@ func (r *regI2C) ADC1CalibrationFinish(adcN uint8) {
 	}
 }
 
-// ADC1SetCalibrationParam corresponds to adc_ll_set_calibration_param():
+// adc1SetCalibrationParam corresponds to adc_ll_set_calibration_param():
 // it writes the 9-bit initial code (offset) into the high/low INIT_CODE
 // regI2C registers for the selected ADC unit.
-func (r *regI2C) ADC1SetCalibrationParam(adcN uint8, param uint32) {
+func (r *regI2C) adc1SetCalibrationParam(adcN uint8, param uint32) {
 	msb := uint8(param >> 8)
 	lsb := uint8(param & 0xFF)
 	if adcN == 0 {
@@ -547,14 +547,14 @@ const (
 
 type fuse struct{}
 
-// ADC1InitCodeAtten3 extracts the ADC1 INIT_CODE (offset trim) for
+// adc1InitCodeAtten3 extracts the ADC1 INIT_CODE (offset trim) for
 // attenuation index 3 (typically 11 dB) from EFUSE_BLK2. This mirrors
 // the logic used by ESP-IDF's ADC calibration HAL for ESP32-S3.
 //
 // The code is built from four differential eFuse fields (diff0..diff3)
 // and constant offsets (1850, 90, 70) as described in Espressif's
 // internal calibration formulas.
-func (f *fuse) ADC1InitCodeAtten3() (uint32, bool) {
+func (f *fuse) adc1InitCodeAtten3() (uint32, bool) {
 	for try := 0; try < 2; try++ {
 		f.triggerReadSequence()
 		data4, data5, blkVer := f.readBlock2Data4Data5()
@@ -576,10 +576,10 @@ func (f *fuse) ADC1InitCodeAtten3() (uint32, bool) {
 	return 0, false
 }
 
-// ADC1DigiRefAtten3 reads the digital reference (DIGI_REF) for
+// adc1DigiRefAtten3 reads the digital reference (DIGI_REF) for
 // ADC1 at attenuation index 3 from EFUSE_BLK2 / RD_DATA7. This is
 // similar to what the ESP-IDF ADC calibration HAL uses when present.
-func (f *fuse) ADC1DigiRefAtten3() (uint32, bool) {
+func (f *fuse) adc1DigiRefAtten3() (uint32, bool) {
 	f.triggerReadSequence()
 	_, _, blkVer := f.readBlock2Data4Data5()
 	if blkVer != efuseBlkVersionV1 {

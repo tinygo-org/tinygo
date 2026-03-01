@@ -35,7 +35,7 @@ func InitADC() {
 	esp.APB_SARADC.SetCLKM_CONF_CLK_EN(1)
 
 	var c adcSelfCalibration
-	c.SelfCalibrate()
+	c.calibrate()
 }
 
 // ESP32-C3: ADC1 = GPIO0–GPIO4 (ch 0–4), ADC2 = GPIO5 (ch 0). ADC2 shares with Wi‑Fi;
@@ -100,22 +100,22 @@ type adcSelfCalibration struct {
 	digiRefMv uint32
 }
 
-// SelfCalibrate sets ADC1/ADC2 init code from RTC or runs self-calibration (GND).
+// calibrate sets ADC1/ADC2 init code from RTC or runs self-calibration (GND).
 // eFuse is not used: on ESP32-C3 the ADC calibration fields in BLK2 are often unprogrammed.
-func (c *adcSelfCalibration) SelfCalibrate() {
+func (c *adcSelfCalibration) calibrate() {
 	reg := regI2C{}
-	reg.SarEnable()
+	reg.sarEnable()
 
 	var adc1Code uint32
 	if saved, ok := c.restoreFromRTC(); ok {
 		adc1Code = saved
 	} else {
 		c.calSetupADC1()
-		reg.ADC1CalibrationInit(0)
-		reg.ADC1CalibrationPrepare(0)
+		reg.adc1CalibrationInit(0)
+		reg.adc1CalibrationPrepare(0)
 		adc1Code = c.calibrateUnit(reg, 0, c.readADC1)
 		c.saveToRTC(adc1Code)
-		reg.ADC1CalibrationFinish(0)
+		reg.adc1CalibrationFinish(0)
 	}
 
 	c.applyADC1Code(reg, adc1Code)
@@ -193,19 +193,19 @@ func (c *adcSelfCalibration) saveToRTC(code uint32) {
 // applyADC1Code sets ADC1 init code and finishes calibration.
 func (c *adcSelfCalibration) applyADC1Code(reg regI2C, code uint32) {
 	c.calSetupADC1()
-	reg.ADC1CalibrationInit(0)
-	reg.ADC1CalibrationPrepare(0)
-	reg.ADC1SetCalibrationParam(0, code)
-	reg.ADC1CalibrationFinish(0)
+	reg.adc1CalibrationInit(0)
+	reg.adc1CalibrationPrepare(0)
+	reg.adc1SetCalibrationParam(0, code)
+	reg.adc1CalibrationFinish(0)
 }
 
 // applyADC2Code sets ADC2 init code and finishes calibration. On C3 eFuse V1
 // there is no separate ADC2 calibration; IDF uses ADC1 init code for both units.
 func (c *adcSelfCalibration) applyADC2Code(reg regI2C, code uint32) {
-	reg.ADC1CalibrationInit(1)
-	reg.ADC1CalibrationPrepare(1)
-	reg.ADC1SetCalibrationParam(1, code)
-	reg.ADC1CalibrationFinish(1)
+	reg.adc1CalibrationInit(1)
+	reg.adc1CalibrationPrepare(1)
+	reg.adc1SetCalibrationParam(1, code)
+	reg.adc1CalibrationFinish(1)
 }
 
 func (c *adcSelfCalibration) calibrateUnit(reg regI2C, adcN uint8, readADC func() uint32) uint32 {
@@ -216,7 +216,7 @@ func (c *adcSelfCalibration) calibrateUnit(reg regI2C, adcN uint8, readADC func(
 		codeH := adcCalOffsetRangeC3
 		codeL := uint32(0)
 		chkCode := (codeH + codeL) / 2
-		reg.ADC1SetCalibrationParam(adcN, chkCode)
+		reg.adc1SetCalibrationParam(adcN, chkCode)
 		selfCal := readADC()
 
 		for codeH-codeL > 1 {
@@ -226,11 +226,11 @@ func (c *adcSelfCalibration) calibrateUnit(reg regI2C, adcN uint8, readADC func(
 				codeL = chkCode
 			}
 			chkCode = (codeH + codeL) / 2
-			reg.ADC1SetCalibrationParam(adcN, chkCode)
+			reg.adc1SetCalibrationParam(adcN, chkCode)
 			selfCal = readADC()
 			if codeH-codeL == 1 {
 				chkCode++
-				reg.ADC1SetCalibrationParam(adcN, chkCode)
+				reg.adc1SetCalibrationParam(adcN, chkCode)
 				selfCal = readADC()
 			}
 		}
@@ -261,7 +261,7 @@ func (c *adcSelfCalibration) calibrateUnit(reg regI2C, adcN uint8, readADC func(
 		finalCode = adcCalInitMaxC3
 	}
 
-	reg.ADC1SetCalibrationParam(adcN, finalCode)
+	reg.adc1SetCalibrationParam(adcN, finalCode)
 	return finalCode
 }
 
@@ -327,8 +327,8 @@ const (
 
 type regI2C struct{}
 
-// SarEnable enables the SAR analog I2C domain before any regI2C access.
-func (r *regI2C) SarEnable() {
+// sarEnable enables the SAR analog I2C domain before any regI2C access.
+func (r *regI2C) sarEnable() {
 	cfg := (*volatile.Register32)(unsafe.Pointer(anaConfigReg))
 	cfg2 := (*volatile.Register32)(unsafe.Pointer(anaConfig2Reg))
 	esp.RTC_CNTL.SetANA_CONF_SAR_I2C_PU(1)
@@ -336,9 +336,9 @@ func (r *regI2C) SarEnable() {
 	cfg2.Set(cfg2.Get() | anaSarCfg2En)
 }
 
-// ADC1CalibrationInit sets DREF for the selected ADC unit
+// adc1CalibrationInit sets DREF for the selected ADC unit
 // before running the self‑calibration procedure.
-func (r *regI2C) ADC1CalibrationInit(adcN uint8) {
+func (r *regI2C) adc1CalibrationInit(adcN uint8) {
 	if adcN == 0 {
 		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1DrefAddr, adc1DrefMSB, adc1DrefLSB, 1)
 	} else {
@@ -346,9 +346,9 @@ func (r *regI2C) ADC1CalibrationInit(adcN uint8) {
 	}
 }
 
-// ADC1CalibrationPrepare enables ENCAL_GND so that the ADC input
+// adc1CalibrationPrepare enables ENCAL_GND so that the ADC input
 // is internally shorted to ground during self‑calibration.
-func (r *regI2C) ADC1CalibrationPrepare(adcN uint8) {
+func (r *regI2C) adc1CalibrationPrepare(adcN uint8) {
 	if adcN == 0 {
 		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 1)
 	} else {
@@ -356,9 +356,9 @@ func (r *regI2C) ADC1CalibrationPrepare(adcN uint8) {
 	}
 }
 
-// ADC1CalibrationFinish clears ENCAL_GND and reconnects the ADC
+// adc1CalibrationFinish clears ENCAL_GND and reconnects the ADC
 // input back to the external pad after self‑calibration.
-func (r *regI2C) ADC1CalibrationFinish(adcN uint8) {
+func (r *regI2C) adc1CalibrationFinish(adcN uint8) {
 	if adcN == 0 {
 		r.writeMask(i2cSarADC, i2cSarADCHostID, adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 0)
 	} else {
@@ -366,9 +366,9 @@ func (r *regI2C) ADC1CalibrationFinish(adcN uint8) {
 	}
 }
 
-// ADC1SetCalibrationParam writes the INIT_CODE (offset trim) for
+// adc1SetCalibrationParam writes the INIT_CODE (offset trim) for
 // the selected ADC unit using the regI2C bitfields.
-func (r *regI2C) ADC1SetCalibrationParam(adcN uint8, param uint32) {
+func (r *regI2C) adc1SetCalibrationParam(adcN uint8, param uint32) {
 	msb := uint8(param >> 8)
 	lsb := uint8(param & 0xFF)
 	if adcN == 0 {
