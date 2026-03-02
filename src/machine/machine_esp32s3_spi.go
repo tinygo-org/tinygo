@@ -15,11 +15,6 @@ import (
 )
 
 const (
-	SPI_MODE0 = uint8(0)
-	SPI_MODE1 = uint8(1)
-	SPI_MODE2 = uint8(2)
-	SPI_MODE3 = uint8(3)
-
 	// ESP32-S3 PLL clock frequency (same as ESP32-C3)
 	pplClockFreq = 80e6
 
@@ -63,16 +58,6 @@ var (
 	SPI0 = &SPI{Bus: esp.SPI2, busID: 2} // Primary SPI (FSPI)
 	SPI1 = &SPI{Bus: esp.SPI3, busID: 3} // Secondary SPI (HSPI)
 )
-
-type SPIConfig struct {
-	Frequency uint32
-	SCK       Pin   // Serial Clock
-	SDO       Pin   // Serial Data Out (MOSI)
-	SDI       Pin   // Serial Data In  (MISO)
-	CS        Pin   // Chip Select (optional)
-	LSBFirst  bool  // MSB is default
-	Mode      uint8 // SPI_MODE0 is default
-}
 
 // Configure and make the SPI peripheral ready to use.
 // Implementation following ESP-IDF HAL with GPIO Matrix routing
@@ -232,14 +217,14 @@ func (spi *SPI) Configure(config SPIConfig) error {
 
 	// Configure SPI mode (CPOL/CPHA) following ESP-IDF HAL
 	switch config.Mode {
-	case SPI_MODE0:
+	case Mode0:
 		// CPOL=0, CPHA=0 (default)
-	case SPI_MODE1:
+	case Mode1:
 		bus.SetUSER_CK_OUT_EDGE(1) // CPHA=1
-	case SPI_MODE2:
+	case Mode2:
 		bus.SetMISC_CK_IDLE_EDGE(1) // CPOL=1
 		bus.SetUSER_CK_OUT_EDGE(1)  // CPHA=1
-	case SPI_MODE3:
+	case Mode3:
 		bus.SetMISC_CK_IDLE_EDGE(1) // CPOL=1
 	}
 
@@ -319,36 +304,7 @@ func (spi *SPI) Tx(w, r []byte) error {
 
 		// Fill tx buffer.
 		transferWords := (*[16]volatile.Register32)(unsafe.Add(unsafe.Pointer(&bus.W0), 0))
-		if len(w) >= 64 {
-			// We can fill the entire 64-byte transfer buffer with data.
-			// This loop is slightly faster than the loop below.
-			for i := 0; i < 16; i++ {
-				word := uint32(w[i*4]) | uint32(w[i*4+1])<<8 | uint32(w[i*4+2])<<16 | uint32(w[i*4+3])<<24
-				transferWords[i].Set(word)
-			}
-		} else {
-			// We can't fill the entire transfer buffer, so we need to be a bit
-			// more careful.
-			// Note that parts of the transfer buffer that aren't used still
-			// need to be set to zero, otherwise we might be transferring
-			// garbage from a previous transmission if w is smaller than r.
-			for i := 0; i < 16; i++ {
-				var word uint32
-				if i*4+3 < len(w) {
-					word |= uint32(w[i*4+3]) << 24
-				}
-				if i*4+2 < len(w) {
-					word |= uint32(w[i*4+2]) << 16
-				}
-				if i*4+1 < len(w) {
-					word |= uint32(w[i*4+1]) << 8
-				}
-				if i*4+0 < len(w) {
-					word |= uint32(w[i*4+0]) << 0
-				}
-				transferWords[i].Set(word)
-			}
-		}
+		spiTxFillBuffer(transferWords, w)
 
 		// Do the transfer.
 		bus.SetMS_DLEN_MS_DATA_BITLEN(uint32(chunkSize)*8 - 1)
@@ -386,58 +342,6 @@ func (spi *SPI) Tx(w, r []byte) error {
 	}
 
 	return nil
-}
-
-// Compute the SPI bus frequency from the APB clock frequency.
-// Note: APB clock is always 80MHz on ESP32-S3, independent of CPU frequency.
-// Ported from ESP32-C3 implementation for better accuracy.
-func freqToClockDiv(hz uint32) uint32 {
-	// Use APB clock frequency (80MHz), not CPU frequency!
-	// SPI peripheral is connected to APB bus which stays at 80MHz
-	const apbFreq = pplClockFreq // 80MHz
-
-	if hz >= apbFreq { // maximum frequency
-		return 1 << 31
-	}
-	if hz < (apbFreq / (16 * 64)) { // minimum frequency
-		return 15<<18 | 63<<12 | 31<<6 | 63 // pre=15, n=63
-	}
-
-	// iterate looking for an exact match
-	// or iterate all 16 prescaler options
-	// looking for the smallest error
-	var bestPre, bestN, bestErr uint32
-	bestN = 1
-	bestErr = 0xffffffff
-	q := uint32(float32(apbFreq)/float32(hz) + float32(0.5))
-	for p := uint32(0); p < 16; p++ {
-		n := q/(p+1) - 1
-		if n < 1 { // prescaler became too large, stop enum
-			break
-		}
-		if n > 63 { // prescaler too small, skip to next
-			continue
-		}
-
-		freq := apbFreq / ((p + 1) * (n + 1))
-		if freq == hz { // exact match
-			return p<<18 | n<<12 | (n/2)<<6 | n
-		}
-
-		var err uint32
-		if freq < hz {
-			err = hz - freq
-		} else {
-			err = freq - hz
-		}
-		if err < bestErr {
-			bestErr = err
-			bestPre = p
-			bestN = n
-		}
-	}
-
-	return bestPre<<18 | bestN<<12 | (bestN/2)<<6 | bestN
 }
 
 // isDefaultSPIPins checks if the given pins match the default SPI pin configuration
