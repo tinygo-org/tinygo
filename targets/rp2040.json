@@ -1,7 +1,7 @@
 {
     "inherits": ["cortex-m0plus"],
     "build-tags": ["rp2040", "rp"],
-    "scheduler": "cores",
+    "scheduler": "tasks",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",
     "serial": "usb",
