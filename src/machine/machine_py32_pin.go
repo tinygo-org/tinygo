@@ -146,19 +146,22 @@ const (
 const PinInput PinMode = PinInputFloating
 
 const (
-	gpioModeInput     = 0
-	gpioModeOutput    = 1
-	gpioModeAlternate = 2
-	gpioModeAnalog    = 3
-	gpioModeMask      = 0x3
+	gpioModeInput     = py32.GPIO_MODER_MODE0_Input
+	gpioModeOutput    = py32.GPIO_MODER_MODE0_Output
+	gpioModeAlternate = py32.GPIO_MODER_MODE0_Alternate
+	gpioModeAnalog    = py32.GPIO_MODER_MODE0_Analog
+	gpioModeMask      = py32.GPIO_MODER_MODE0_Msk
 
-	gpioPullFloating = 0
-	gpioPullUp       = 1
-	gpioPullDown     = 2
-	gpioPullMask     = 0x3
+	gpioPullFloating = py32.GPIO_PUPDR_PUPD0_Floating
+	gpioPullUp       = py32.GPIO_PUPDR_PUPD0_PullUp
+	gpioPullDown     = py32.GPIO_PUPDR_PUPD0_PullDown
+	gpioPullMask     = py32.GPIO_PUPDR_PUPD0_Msk
 
-	gpioOutputSpeedHigh = 2
-	gpioOutputSpeedMask = 0x3
+	gpioOutputSpeedLow      = py32.GPIO_OSPEEDR_OSPEED0_LowSpeed
+	gpioOutputSpeedMedium   = py32.GPIO_OSPEEDR_OSPEED0_MediumSpeed
+	gpioOutputSpeedHigh     = py32.GPIO_OSPEEDR_OSPEED0_HighSpeed
+	gpioOutputSpeedVeryHigh = py32.GPIO_OSPEEDR_OSPEED0_VeryHighSpeed
+	gpioOutputSpeedMask     = py32.GPIO_OSPEEDR_OSPEED0_Msk
 )
 
 func (p Pin) getPortNumber() uint8 {

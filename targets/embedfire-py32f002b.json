@@ -4,6 +4,6 @@
   ],
   "build-tags": [
     "embedfire_py32f002b",
-		"default_uart_pins"
+    "default_uart_pins"
   ]
 }

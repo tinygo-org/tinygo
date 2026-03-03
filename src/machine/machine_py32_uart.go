@@ -7,10 +7,6 @@ import (
 	"runtime/interrupt"
 )
 
-// Remember the clock used for baud rate calculations so Configure() can be
-// called without explicitly passing the clock.
-var py32UARTClockHz uint32 = 24_000_000
-
 // UART implements a minimal USART1 driver for PY32 parts.
 type UART struct {
 	Bus    *py32.USART_Type
@@ -20,9 +16,7 @@ type UART struct {
 
 var DefaultUART = &UART{Bus: py32.USART1, Buffer: NewRingBuffer()}
 
-// ConfigureWithClock initializes the UART using the provided peripheral clock
-// frequency (in Hz). This avoids assuming a fixed MCU clock.
-func (uart *UART) ConfigureWithClock(config UARTConfig, clockHz uint32) error {
+func (uart *UART) Configure(config UARTConfig) error {
 
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
@@ -35,6 +29,8 @@ func (uart *UART) ConfigureWithClock(config UARTConfig, clockHz uint32) error {
 	uart.Bus.CR1.Set(0)
 	uart.Bus.CR2.Set(0)
 	uart.Bus.CR3.Set(0)
+
+	clockHz := CPUFrequency()
 
 	// Oversampling by 16: BRR expects fck/baud.
 	divider := (clockHz + (config.BaudRate / 2)) / config.BaudRate
@@ -53,29 +49,9 @@ func (uart *UART) ConfigureWithClock(config UARTConfig, clockHz uint32) error {
 	return nil
 }
 
-// Configure uses the last stored clock (defaulting to 24 MHz). Call
-// ConfigureWithClock for explicit control.
-func (uart *UART) Configure(config UARTConfig) error {
-	return uart.ConfigureWithClock(config, py32UARTClockHz)
-}
-
-// InitSerialWithClock configures the default Serial using the supplied
-// peripheral clock frequency.
-func InitSerialWithClock(clockHz uint32) {
-	py32UARTClockHz = clockHz
-	//Serial.ConfigureWithClock(UARTConfig{}, clockHz)
-}
-
 // Configure pin for use by UART
 func ConfigureUARTPin(pin Pin, af uint8) {
-	pin.enableClock()
-	port, n := pin.getPort()
-	pos := (n % 16) * 2
-
-	// Alternate function mode is encoded as 0b10.
-	port.MODER.ReplaceBits(2, gpioModeMask, pos)
-	port.PUPDR.ReplaceBits(gpioPullUp, gpioPullMask, pos)
-	port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
+	pin.Configure(PinConfig{Mode: PinAlternate})
 	pin.SetAltFunc(af)
 }
 

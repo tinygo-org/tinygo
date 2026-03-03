@@ -19,7 +19,8 @@ func main() {
 
 	py32.RCC.SetICSCR_HSI_FS(py32.RCC_ICSCR_HSI_FS_Freq24MHz)
 
-	ConfigureSystemTimer(24_000_000)
+	machine.SetCPUFrequency(24_000_000)
+	ConfigureSystemTimer()
 	machine.InitSerial()
 
 	run()
@@ -28,8 +29,8 @@ func main() {
 
 // Configure SysTick to fire every 1ms on given system frequency.
 // This should be called after any change to the system clock frequency.
-func ConfigureSystemTimer(systemFrequencyHz uint32) {
-	arm.SetupSystemTimer(systemFrequencyHz / 1000)
+func ConfigureSystemTimer() {
+	arm.SetupSystemTimer(machine.CPUFrequency() / 1000)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
