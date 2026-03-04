@@ -15,7 +15,7 @@
 		"src/internal/task/task_stack_esp32.S"
 	],
 	"binary-format": "esp32s3",
-	"flash-method": "esp32flash",
+	"flash-method": "esp32jtag",
 	"emulator": "qemu-system-xtensa -machine esp32 -nographic -drive file={img},if=mtd,format=raw",
 	"gdb": ["xtensa-esp32-elf-gdb"]
 }
