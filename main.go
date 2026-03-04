@@ -32,7 +32,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/buildutil"
-	"tinygo.org/x/espflash"
+	"tinygo.org/x/espflash/pkg/espflash"
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
