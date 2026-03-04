@@ -13,18 +13,17 @@ require (
 	github.com/mattn/go-tty v0.0.4
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
 	github.com/tetratelabs/wazero v1.6.0
-	go.bug.st/serial v1.6.2
+	go.bug.st/serial v1.6.4
 	golang.org/x/net v0.35.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/tools v0.30.0
 	gopkg.in/yaml.v2 v2.4.0
-	tinygo.org/x/espflash v0.2.0
+	tinygo.org/x/espflash v0.3.0
 	tinygo.org/x/go-llvm v0.0.0-20250422114502-b8f170971e74
 )
 
 require (
 	github.com/creack/goselect v0.1.2 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
 	golang.org/x/text v0.22.0 // indirect
 )
