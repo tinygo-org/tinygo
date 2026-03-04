@@ -386,7 +386,7 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		fileExt = ".hex"
 	case "bmp":
 		fileExt = ".elf"
-	case "esp32flash":
+	case "esp32flash", "esp32jtag":
 		fileExt = ".bin"
 	case "native":
 		return errors.New("unknown flash method \"native\" - did you miss a -target flag?")
@@ -528,7 +528,16 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 			return &commandError{"failed to find port", port, err}
 		}
 
-		if err := flashBinUsingEsp32(port, result.Binary, config.Options); err != nil {
+		if err := flashBinUsingEsp32(port, classicReset, result.Binary, config.Options); err != nil {
+			return &commandError{"failed to flash", result.Binary, err}
+		}
+	case "esp32jtag":
+		port, err := getDefaultPort(port, config.Target.SerialPort)
+		if err != nil {
+			return &commandError{"failed to find port", port, err}
+		}
+
+		if err := flashBinUsingEsp32(port, jtagReset, result.Binary, config.Options); err != nil {
 			return &commandError{"failed to flash", result.Binary, err}
 		}
 	default:
@@ -1031,8 +1040,20 @@ func flashHexUsingMSD(volumes []string, tmppath string, options *compileopts.Opt
 	return errors.New("unable to locate any volume: [" + strings.Join(volumes, ",") + "]")
 }
 
-func flashBinUsingEsp32(port, tmppath string, options *compileopts.Options) error {
-	flasher, err := espflash.NewFlasher(port, nil)
+const (
+	classicReset = "classic"
+	jtagReset    = "jtag"
+)
+
+func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Options) error {
+	var opts *espflash.FlasherOptions
+	// On Windows, we have to explicitly specify the reset mode to use USB JTAG.
+	if runtime.GOOS == "windows" && resetMode == jtagReset {
+		opts = espflash.DefaultOptions()
+		opts.ResetMode = espflash.ResetUSBJTAG
+	}
+
+	flasher, err := espflash.NewFlasher(port, opts)
 	if err != nil {
 		return err
 	}
