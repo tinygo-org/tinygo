@@ -13,7 +13,7 @@
 		"src/device/esp/esp32c3.S"
 	],
 	"binary-format": "esp32c3",
-	"flash-method": "esp32flash",
+	"flash-method": "esp32jtag",
 	"serial-port": ["303a:1001"],
 	"openocd-interface": "esp_usb_jtag",
 	"openocd-target": "esp32c3",
