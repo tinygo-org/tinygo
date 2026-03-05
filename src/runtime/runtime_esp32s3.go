@@ -3,8 +3,10 @@
 package runtime
 
 import (
+	"device"
 	"device/esp"
 	"machine"
+	"unsafe"
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
@@ -75,6 +77,9 @@ func main() {
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
+	// Set up the Xtensa interrupt vector table.
+	interruptInit()
+
 	// Initialize the heap, call main.main, etc.
 	run()
 
@@ -90,6 +95,25 @@ func init() {
 func abort() {
 	// lock up forever
 	print("abort called\n")
+}
+
+// interruptInit installs the Xtensa vector table by writing its address
+// to the VECBASE special register and ensures all CPU interrupts are
+// initially disabled.
+func interruptInit() {
+	// Disable all CPU interrupts while we configure.
+	device.AsmFull("wsr {zero}, INTENABLE", map[string]interface{}{
+		"zero": uintptr(0),
+	})
+
+	// Write the vector table address to VECBASE (SR 231).
+	vecbase := uintptr(unsafe.Pointer(&_vector_table))
+	device.AsmFull("wsr {vecbase}, VECBASE", map[string]interface{}{
+		"vecbase": vecbase,
+	})
+
+	// Synchronize pipeline after writing special registers.
+	device.Asm("rsync")
 }
 
 //go:extern _vector_table
