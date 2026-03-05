@@ -201,6 +201,11 @@ func handleInterrupt() {
 		reg.Set(thresholdSave)
 		riscv.Asm("fence")
 
+		// Zero MCAUSE so that interrupt.In() returns false once we
+		// return to normal (non-interrupt) code.  Other RISC-V targets
+		// (FE310, K210) do the same.
+		riscv.MCAUSE.Set(0)
+
 		// restore MSTATUS & MEPC
 		riscv.MSTATUS.Set(mstatus)
 		riscv.MEPC.Set(mepc)
