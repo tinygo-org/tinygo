@@ -32,7 +32,7 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/buildutil"
-	"tinygo.org/x/espflash/pkg/espflash"
+	"tinygo.org/x/espflasher/pkg/espflasher"
 	"tinygo.org/x/go-llvm"
 
 	"go.bug.st/serial"
@@ -1046,14 +1046,14 @@ const (
 )
 
 func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Options) error {
-	var opts *espflash.FlasherOptions
+	var opts *espflasher.FlasherOptions
 	// On Windows, we have to explicitly specify the reset mode to use USB JTAG.
 	if runtime.GOOS == "windows" && resetMode == jtagReset {
-		opts = espflash.DefaultOptions()
-		opts.ResetMode = espflash.ResetUSBJTAG
+		opts = espflasher.DefaultOptions()
+		opts.ResetMode = espflasher.ResetUSBJTAG
 	}
 
-	flasher, err := espflash.NewFlasher(port, opts)
+	flasher, err := espflasher.New(port, opts)
 	if err != nil {
 		return err
 	}
