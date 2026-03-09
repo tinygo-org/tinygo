@@ -129,6 +129,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 			return errs
 		}
 	}
+	StripNoneParamAttrs(mod)
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 		return []error{errors.New("optimizations caused a verification failure")}
 	}
@@ -156,6 +157,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 
 	hasGCPass := MakeGCStackSlots(mod)
 	if hasGCPass {
+		StripNoneParamAttrs(mod)
 		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 			return []error{errors.New("GC pass caused a verification failure")}
 		}
@@ -171,4 +173,17 @@ var functionsUsedInTransforms = []string{
 	"runtime.alloc",
 	"runtime.free",
 	"runtime.nilPanic",
+}
+
+// StripNoneParamAttrs removes the "none" enum attribute (kind 0) from all
+// function parameters. LLVM 21 removed "none" as a valid parameter attribute.
+func StripNoneParamAttrs(mod llvm.Module) {
+	noneKind := llvm.AttributeKindID("none")
+	if noneKind == 0 {
+		for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+			for i := 0; i < fn.ParamsCount(); i++ {
+				fn.RemoveEnumAttributeAtIndex(i+1, 0)
+			}
+		}
+	}
 }

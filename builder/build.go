@@ -396,6 +396,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if errs != nil {
 					return newMultiError(errs, pkg.ImportPath)
 				}
+				transform.StripNoneParamAttrs(mod)
 				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 					return errors.New("verification error after compiling package " + pkg.ImportPath)
 				}
@@ -481,6 +482,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if err != nil {
 					return err
 				}
+				transform.StripNoneParamAttrs(mod)
 				if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 					return errors.New("verification error after interpreting " + pkgInit.Name())
 				}
@@ -1191,6 +1193,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		// linked IR is _expensive_ because dead code hasn't been removed yet,
 		// easily costing a few hundred milliseconds. Therefore, only do it when
 		// specifically requested.
+		transform.StripNoneParamAttrs(mod)
 		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 			return errors.New("verification error after interpreting runtime.initAll")
 		}
@@ -1202,6 +1205,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	if len(errs) > 0 {
 		return newMultiError(errs, "")
 	}
+	transform.StripNoneParamAttrs(mod)
 	if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 		return errors.New("verification failure after LLVM optimization passes")
 	}
@@ -1553,3 +1557,4 @@ func b2u8(b bool) uint8 {
 	}
 	return 0
 }
+
