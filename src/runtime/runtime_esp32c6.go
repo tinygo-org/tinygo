@@ -37,16 +37,25 @@ func main() {
 	esp.LP_WDT.WDTCONFIG0.Set(0)
 
 	// Disable super watchdog.
-	esp.LP_WDT.SWD_WPROTECT.Set(0x8F1D312A)
+	esp.LP_WDT.SWD_WPROTECT.Set(0x50D83AA1)
 	esp.LP_WDT.SWD_CONF.SetBits(1 << 30) // SWD_DISABLE bit
 
-	// Change CPU frequency to 160MHz.
-	// Switch from XTAL to PLL clock source (SOC_CLK_SEL = 1 for SPLL).
-	esp.PCR.SYSCLK_CONF.Set(1 << 16) // SOC_CLK_SEL = 1 (SPLL)
+	// Change CPU frequency to 160MHz from SPLL (480MHz).
+	//
+	// Clock tree: SPLL (480MHz) → HP root → CPU / AHB / APB
+	//
+	// Set dividers BEFORE switching the clock source so the first PLL
+	// cycle already arrives divided:
+	//   HP root  = SPLL / (HS_DIV_NUM+1)      = 480 / 3 = 160 MHz
+	//   CPU      = HP root / (CPU_HS_DIV_NUM+1) = 160 / 1 = 160 MHz
+	//   AHB      = HP root / (AHB_HS_DIV_NUM+1) = 160 / 4 =  40 MHz
+	//   APB      = AHB / (APB_HS_DIV_NUM+1)     =  40 / 1 =  40 MHz
+	esp.PCR.CPU_FREQ_CONF.Set(0 << 8) // CPU_HS_DIV_NUM = 0 (div1)
+	esp.PCR.AHB_FREQ_CONF.Set(3 << 8) // AHB_HS_DIV_NUM = 3 (div4)
+	esp.PCR.APB_FREQ_CONF.Set(0 << 8) // APB_HS_DIV_NUM = 0 (div1)
 
-	// Set CPU divider to div1 for 160MHz from PLL.
-	// CPU_HS_DIV_NUM = 0 means div1 of clk_hproot (160MHz PLL).
-	esp.PCR.CPU_FREQ_CONF.Set(0 << 8) // CPU_HS_DIV_NUM = 0
+	// Switch to PLL: SOC_CLK_SEL = 1 (SPLL), HS_DIV_NUM = 2 (div3).
+	esp.PCR.SYSCLK_CONF.Set(1<<16 | 2<<8)
 
 	clearbss()
 
