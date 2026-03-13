@@ -436,7 +436,7 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 		esp.PCR.UART0_CONF.SetBits(1 << 0) // UART0_CLK_EN
 		// Reset sequence
 		esp.PCR.UART0_CONF.SetBits(1 << 1)   // UART0_RST_EN
-		esp.PCR.UART0_CONF.ClearBits(1 << 1)  // clear reset
+		esp.PCR.UART0_CONF.ClearBits(1 << 1) // clear reset
 		// Enable UART0 function clock
 		esp.PCR.UART0_SCLK_CONF.SetBits(1 << 22) // UART0_SCLK_EN
 		// Select 80MHz PLL clock source (UART0_SCLK_SEL = 1)
@@ -447,7 +447,7 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 		esp.PCR.UART1_CONF.SetBits(1 << 0) // UART1_CLK_EN
 		// Reset sequence
 		esp.PCR.UART1_CONF.SetBits(1 << 1)   // UART1_RST_EN
-		esp.PCR.UART1_CONF.ClearBits(1 << 1)  // clear reset
+		esp.PCR.UART1_CONF.ClearBits(1 << 1) // clear reset
 		// Enable UART1 function clock
 		esp.PCR.UART1_SCLK_CONF.SetBits(1 << 22) // UART1_SCLK_EN
 		// Select 80MHz PLL clock source (UART1_SCLK_SEL = 1)

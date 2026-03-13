@@ -137,7 +137,7 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		}{
 			magic:          0xE9,
 			segment_count:  byte(len(segments)),
-			spi_mode:       2,    // ESP_IMAGE_SPI_MODE_DIO
+			spi_mode:       2, // ESP_IMAGE_SPI_MODE_DIO
 			spi_speed_size: spiSpeedSize,
 			entry_addr:     uint32(inf.Entry),
 			wp_pin:         0xEE, // disable WP pin

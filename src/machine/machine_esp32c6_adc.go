@@ -35,7 +35,7 @@ func InitADC() {
 	esp.PCR.SARADC_CONF.SetBits(1 << 0) // SARADC_REG_CLK_EN
 	// Reset sequence
 	esp.PCR.SARADC_CONF.SetBits(1 << 1)   // SARADC_RST_EN
-	esp.PCR.SARADC_CONF.ClearBits(1 << 1)  // clear reset
+	esp.PCR.SARADC_CONF.ClearBits(1 << 1) // clear reset
 
 	esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(1)
 	esp.APB_SARADC.SetFSM_WAIT_SARADC_XPD_WAIT(8)

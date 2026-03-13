@@ -58,8 +58,8 @@ func (spi *SPI) Configure(config SPIConfig) error {
 	}
 
 	// Enable SPI2 clock and reset via PCR.
-	esp.PCR.SPI2_CONF.SetBits(1 << 0)  // SPI2_CLK_EN
-	esp.PCR.SPI2_CONF.SetBits(1 << 1)  // SPI2_RST_EN
+	esp.PCR.SPI2_CONF.SetBits(1 << 0)   // SPI2_CLK_EN
+	esp.PCR.SPI2_CONF.SetBits(1 << 1)   // SPI2_RST_EN
 	esp.PCR.SPI2_CONF.ClearBits(1 << 1) // clear reset
 
 	// init the spi2 bus

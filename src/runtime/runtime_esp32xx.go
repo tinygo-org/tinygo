@@ -65,4 +65,3 @@ func sleepTicks(d timeUnit) {
 func exit(code int) {
 	abort()
 }
-
