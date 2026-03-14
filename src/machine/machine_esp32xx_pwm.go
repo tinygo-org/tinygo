@@ -1,4 +1,4 @@
-//go:build esp32c3 || esp32s3
+//go:build esp32c3 || esp32c6 || esp32s3
 
 // PWM on ESP32-C3/S3 uses the LEDC (LED Control) peripheral, low-speed mode only.
 // One timer drives multiple channels; each channel has its own duty, shared frequency.
@@ -45,10 +45,8 @@ const (
 )
 
 func (pwm *LEDCPWM) Configure(config PWMConfig) error {
-	// Enable LEDC clock and release reset (SYSTEM perip_clk_en0 / perip_rst_en0).
-	esp.SYSTEM.SetPERIP_RST_EN0_LEDC_RST(1)
-	esp.SYSTEM.SetPERIP_CLK_EN0_LEDC_CLK_EN(1)
-	esp.SYSTEM.SetPERIP_RST_EN0_LEDC_RST(0)
+	// Enable LEDC clock and release reset.
+	enableLEDCPeriphClock()
 
 	// LEDC global: APB clock source, enable internal clock.
 	esp.LEDC.SetCONF_APB_CLK_SEL(1)
