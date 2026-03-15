@@ -1,0 +1,7 @@
+{
+  "inherits": ["stm32u585"],
+  "build-tags": ["arduino_uno_q"],
+  "serial": "uart",
+  "openocd-interface": "stlink",
+  "openocd-target": "stm32u5x"
+}
