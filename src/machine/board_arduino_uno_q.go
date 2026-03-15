@@ -70,4 +70,15 @@ package tmp
 
 
 
-}	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART1.handleInterrupt)func init() {)	DefaultUART = UART1	}		RxAltFuncSelector: AF7_USART1_2_3,		TxAltFuncSelector: AF7_USART1_2_3,		Bus:               stm32.USART2,		Buffer:            NewRingBuffer(),	_UART1 = UART{	UART1  = &_UART1	// debugger to be exposed as virtual COM port over USB.	// USART2 is the hardware serial port connected to the onboard ST-LINKvar ()	UART_RX_PIN = PA3	UART_TX_PIN = PA2	// PA2 and PA3 are connected to the ST-Link Virtual Com Port (VCP)	// UART pinsconst ()	BUTTON = PC13const ()	LED_GREEN   = PA5	LED_BUILTIN = LED_GREEN	LED         = LED_BUILTINconst ()	D15 = PB8	D14 = PB9	D13 = PA5	D12 = PA6	D11 = PA7	D10 = PB0	D9  = PC7	D8  = PA9	D7  = PA8	D6  = PB10	D5  = PB4	D4  = PB5	D3  = PB3	D2  = PA10	D1  = PB6	D0  = PB7	A5 = PB12	A4 = PB11	A3 = PB1	A2 = PA4	A1 = PA1	A0 = PA0	// Arduino Pinsconst ()	"runtime/interrupt"	"device/stm32"import (package machine// Arduino UNO Q board with STM32U585 processor.
+
+
+
+
+
+
+
+
+
+
+
+}	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART1.handleInterrupt)func init() {)	I2C0 = I2C1	}		AltFuncSelector: AF4_I2C1_2_3_4,		Bus:             stm32.I2C1,	I2C1 = &I2C{	// I2C1 is documented, alias to I2C0 as well	DefaultUART = UART1	}		RxAltFuncSelector: AF7_USART1_2_3,		TxAltFuncSelector: AF7_USART1_2_3,		Bus:               stm32.USART2,		Buffer:            NewRingBuffer(),	_UART1 = UART{	UART1  = &_UART1	// debugger to be exposed as virtual COM port over USB.	// USART2 is the hardware serial port connected to the onboard ST-LINKvar ()	I2C0_SDA_PIN = PB9	I2C0_SCL_PIN = PB8	// I2C pins	UART_RX_PIN = PA3	UART_TX_PIN = PA2	// PA2 and PA3 are connected to the ST-Link Virtual Com Port (VCP)	// UART pinsconst ()	BUTTON = PC13const ()	LED_GREEN   = PA5	LED_BUILTIN = LED_GREEN	LED         = LED_BUILTINconst ()	D15 = PB8	D14 = PB9	D13 = PA5	D12 = PA6	D11 = PA7	D10 = PB0	D9  = PC7	D8  = PA9	D7  = PA8	D6  = PB10	D5  = PB4	D4  = PB5	D3  = PB3	D2  = PA10	D1  = PB6	D0  = PB7	A5 = PB12	A4 = PB11	A3 = PB1	A2 = PA4	A1 = PA1	A0 = PA0	// Arduino Pinsconst ()	"runtime/interrupt"	"device/stm32"import (package machine// Arduino UNO Q board with STM32U585 processor.
