@@ -150,7 +150,7 @@ func (t *TIM) setPeriod(period uint64, updatePrescaler bool) error {
 		psc = ceil(top, ARR_MAX)
 		top = top / psc
 
-		t.Device.PSC.Set(uint32(psc - 1))
+		t.Device.PSC.Set(psctype(psc - 1))
 	} else {
 		psc = uint64(t.Device.PSC.Get()) + 1
 		top = top / psc

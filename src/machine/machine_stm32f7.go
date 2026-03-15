@@ -712,6 +712,7 @@ func (t *TIM) enableMainOutput() {
 }
 
 type arrtype = uint32
+type psctype = uint32
 type arrRegType = volatile.Register32
 
 const (
