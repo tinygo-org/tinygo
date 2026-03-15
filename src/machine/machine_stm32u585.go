@@ -1,0 +1,47 @@
+package tmp
+//go:build stm32u585
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}	uart.txEmptyFlag = stm32.USART_ISR_TXE	uart.statusReg = &uart.Bus.ISR	uart.txReg = &uart.Bus.TDR	uart.rxReg = &uart.Bus.RDRfunc (uart *UART) setRegisters() {// Register names vary by ST processor, these are for STM U5}	return CPUFrequency() / baudRatefunc (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {// NOTE: keep this in sync with the runtime/runtime_stm32u5.go clock init code// UART baudrate calc based on the bus and clockspeed}	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.RxAltFuncSelector)	config.TX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTTX}, uart.TxAltFuncSelector)	// enable the alternate functions on the TX and RX pins	}		stm32.PWR.SetSVMCR_IO2SV(1)		// Enable VDDIO2 power supply for PGx pins	if config.RX.getPort() == stm32.GPIOG || config.TX.getPort() == stm32.GPIOG {func (uart *UART) configurePins(config UARTConfig) {// Configure the UART.//---------- UART related codeconst APB2_TIM_FREQ = 160e6 // 160MHzconst APB1_TIM_FREQ = 160e6 // 160MHz// and clock frequencies// in sync with any changes to runtime package which configures the oscillators// Internal use: configured speed of the APB1 and APB2 timers, this should be kept}	return 160000000func CPUFrequency() uint32 {)	"device/stm32"import (package machine
