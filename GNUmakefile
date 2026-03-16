@@ -877,6 +877,12 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32l0x1           examples/serial
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno-q       examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno-q       examples/serial
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno-q       examples/blinkm
+	@$(MD5SUM) test.hex
 endif
 	$(TINYGO) build -size short -o test.hex -target=atmega328pb         examples/blinkm
 	@$(MD5SUM) test.hex
