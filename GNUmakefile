@@ -652,6 +652,8 @@ ifneq ($(WASM), 0)
 	@$(MD5SUM) test.wasm
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=pico                 examples/blinky1
 	@$(MD5SUM) test.wasm
+	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=xiao_esp32s3         examples/blinky1
+	@$(MD5SUM) test.wasm
 endif
 	# test all targets/boards
 	$(TINYGO) build -size short -o test.hex -target=pca10040-s132v6     examples/blinky1
