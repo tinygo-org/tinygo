@@ -977,6 +977,8 @@ endif
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=esp32c3-12f         examples/blinky1
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32c6	            examples/machinetest
+	@$(MD5SUM) test.bin
 
 	$(TINYGO) build -size short -o test.bin -target=makerfabs-esp32c3spi35 examples/machinetest
 	@$(MD5SUM) test.bin

@@ -1,4 +1,4 @@
-//go:build esp32s3
+//go:build esp32s3 || esp32c3 || esp32c6
 
 package machine
 
