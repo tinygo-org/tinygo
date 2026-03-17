@@ -29,9 +29,12 @@
 
 MEMORY
 {
-    /* Note: DRAM and IRAM below are actually in the same 384K address space. */
-    DRAM (rw) : ORIGIN = 0x3FC80000, LENGTH = 384K /* Internal SRAM 1 (data bus) */
-    IRAM (x)  : ORIGIN = 0x40380000, LENGTH = 384K /* Internal SRAM 1 (instruction bus) */
+    /* Note: DRAM and IRAM below are actually in the same 384K address space.
+     * WiFi/BLE ROM variables occupy 0x3FCCE710..0x3FCDFFFC, so DRAM must
+     * stop before that boundary to prevent the Go heap from overwriting them.
+     */
+    DRAM (rw) : ORIGIN = 0x3FC80000, LENGTH = 0x4E710 /* ends at 0x3FCCE710 — WiFi/ROM boundary */
+    IRAM (x)  : ORIGIN = 0x40380000, LENGTH = 0x4E710
 
     /* Note: DROM and IROM below are actually in the same 8M address space. */
     DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 8M /* Data bus (read-only) */
@@ -59,6 +62,7 @@ SECTIONS
     .rodata : ALIGN(4)
     {
         *(.rodata*)
+        *(.srodata*)
         . = ALIGN (4);
     } >DROM
 
@@ -83,6 +87,7 @@ SECTIONS
         . = ALIGN (4);
         _sbss = ABSOLUTE(.);
         *(.sbss)
+        *(.sbss.*)
         *(.bss .bss.*)
         . = ALIGN (4);
         _ebss = ABSOLUTE(.);
