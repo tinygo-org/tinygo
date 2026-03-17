@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"device/stm32"
 	"machine"
 )
 
@@ -24,8 +25,9 @@ func buffered() int {
 
 func initCLK() {
 	// Use MSI at 4MHz — the reset default clock configuration.
-	// This matches the known-working bare-metal C configuration for
-	// the Arduino Uno Q (STM32U585). The MCU boots with MSI at 4MHz,
-	// VOS Range 4, and 0 flash wait states. No additional configuration
-	// is needed.
+	// The MCU boots with MSI at 4MHz, VOS Range 4, and 0 flash wait states.
+
+	// Enable PWR peripheral clock (required on STM32U5 before accessing PWR registers).
+	stm32.RCC.AHB3ENR.SetBits(stm32.RCC_AHB3ENR_PWREN)
+	_ = stm32.RCC.AHB3ENR.Get() // read-back for clock stabilization
 }
