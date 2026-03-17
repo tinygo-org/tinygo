@@ -236,13 +236,16 @@ func (p Pin) enableClock() {
 	default:
 		panic("machine: unknown port")
 	}
+	// Dummy read-back to ensure the clock enable takes effect before
+	// accessing GPIO registers (2 AHB cycle delay per STM32 reference manual).
+	_ = stm32.RCC.AHB2ENR1.Get()
 }
 
 // Enable peripheral clock
 func enableAltFuncClock(bus unsafe.Pointer) {
 	switch bus {
 	case unsafe.Pointer(stm32.PWR): // Power interface clock enable
-		// PWR clock is always enabled on U5 (no dedicated enable bit needed)
+		stm32.RCC.AHB3ENR.SetBits(stm32.RCC_AHB3ENR_PWREN)
 	case unsafe.Pointer(stm32.I2C1): // I2C1 clock enable
 		stm32.RCC.APB1ENR1.SetBits(stm32.RCC_APB1ENR1_I2C1EN)
 	case unsafe.Pointer(stm32.I2C2): // I2C2 clock enable
