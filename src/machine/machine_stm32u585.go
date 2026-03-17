@@ -7,14 +7,14 @@ import (
 )
 
 func CPUFrequency() uint32 {
-	return 160000000
+	return 4_000_000
 }
 
 // Internal use: configured speed of the APB1 and APB2 timers, this should be kept
 // in sync with any changes to runtime package which configures the oscillators
 // and clock frequencies
-const APB1_TIM_FREQ = 160e6 // 160MHz
-const APB2_TIM_FREQ = 160e6 // 160MHz
+const APB1_TIM_FREQ = 4e6 // 4MHz (MSI default)
+const APB2_TIM_FREQ = 4e6 // 4MHz (MSI default)
 
 //---------- UART related code
 
