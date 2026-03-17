@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/stm32"
+	"unsafe"
 )
 
 func CPUFrequency() uint32 {
@@ -20,8 +21,23 @@ const APB2_TIM_FREQ = 4e6 // 4MHz (MSI default)
 
 // Configure the UART.
 func (uart *UART) configurePins(config UARTConfig) {
+	if uart.isLPUART1() {
+		// LPUART1 is on APB3. Explicitly enable its peripheral clock.
+		stm32.RCC.APB3ENR.SetBits(stm32.RCC_APB3ENR_LPUART1EN)
+		_ = stm32.RCC.APB3ENR.Get() // delay for clock stabilization
+
+		// Select PCLK3 as LPUART1 kernel clock source.
+		stm32.RCC.CCIPR3.ReplaceBits(
+			stm32.RCC_CCIPR3_LPUART1SEL_PCLK3<<stm32.RCC_CCIPR3_LPUART1SEL_Pos,
+			stm32.RCC_CCIPR3_LPUART1SEL_Msk, 0)
+	}
+
 	if config.RX.getPort() == stm32.GPIOG || config.TX.getPort() == stm32.GPIOG {
-		// Enable VDDIO2 power supply for PGx pins
+		// Enable VDDIO2 voltage monitoring and wait for ready before
+		// declaring VDDIO2 supply valid (matches HAL_PWREx_EnableVddIO2).
+		stm32.PWR.SetSVMCR_IO2VMEN(1)
+		for stm32.PWR.GetSVMSR_VDDIO2RDY() == 0 {
+		}
 		stm32.PWR.SetSVMCR_IO2SV(1)
 	}
 
@@ -30,9 +46,18 @@ func (uart *UART) configurePins(config UARTConfig) {
 	config.RX.ConfigureAltFunc(PinConfig{Mode: PinModeUARTRX}, uart.RxAltFuncSelector)
 }
 
+// isLPUART1 returns true if this UART is backed by the LPUART1 peripheral.
+func (uart *UART) isLPUART1() bool {
+	return uintptr(unsafe.Pointer(uart.Bus)) == uintptr(unsafe.Pointer(stm32.LPUART1))
+}
+
 // UART baudrate calc based on the bus and clockspeed
 // NOTE: keep this in sync with the runtime/runtime_stm32u5.go clock init code
 func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
+	if uart.isLPUART1() {
+		// LPUART uses BRR = 256 * fclk / baud
+		return (256 * CPUFrequency()) / baudRate
+	}
 	return CPUFrequency() / baudRate
 }
 

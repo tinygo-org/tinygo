@@ -7,54 +7,64 @@ package machine
 import (
 	"device/stm32"
 	"runtime/interrupt"
+	"unsafe"
 )
 
 const (
 	// Arduino Pins
-	A0 = PA0
-	A1 = PA1
-	A2 = PA4
-	A3 = PB1
-	A4 = PB11
-	A5 = PB12
+	A0 = PA4
+	A1 = PA5
+	A2 = PA6
+	A3 = PA7
+	A4 = PC1
+	A5 = PC0
 
 	D0  = PB7
 	D1  = PB6
-	D2  = PA10
-	D3  = PB3
-	D4  = PB5
-	D5  = PB4
-	D6  = PB10
-	D7  = PA8
-	D8  = PA9
-	D9  = PC7
-	D10 = PB0
-	D11 = PA7
-	D12 = PA6
-	D13 = PA5
-	D14 = PB9
-	D15 = PB8
+	D2  = PB3
+	D3  = PB0
+	D4  = PA12
+	D5  = PA11
+	D6  = PB1
+	D7  = PB2
+	D8  = PB4
+	D9  = PB8
+	D10 = PB9
+	D11 = PB15
+	D12 = PB14
+	D13 = PB13
+	D18 = PC1
+	D19 = PC0
+	D20 = PB10
+	D21 = PB11
 )
 
 const (
-	LED         = LED_BUILTIN
-	LED_BUILTIN = LED_GREEN
-	LED_GREEN   = PA5
+	LED    = LED3_R
+	LED3_R = PH10
+	LED3_G = PH11
+	LED3_B = PH12
+	LED4_R = PH13
+	LED4_G = PH14
+	LED4_B = PH15
 )
 
 const (
-	BUTTON = PC13
-)
+	// Default UART pins (LPUART1 active via ST-LINK virtual COM port)
+	UART_TX_PIN = PG7
+	UART_RX_PIN = PG8
 
-const (
-	// UART pins
-	// PA2 and PA3 are connected to the ST-Link Virtual Com Port (VCP)
-	UART_TX_PIN = PA2
-	UART_RX_PIN = PA3
+	// USART1 pins (Arduino header D1/D0)
+	UART1_TX_PIN = D1
+	UART1_RX_PIN = D0
+
+	// LPUART1 pins (active via ST-LINK virtual COM port)
+	UART2_TX_PIN = PG7
+	UART2_RX_PIN = PG8
 
 	// I2C pins
-	I2C0_SCL_PIN = PB8
-	I2C0_SDA_PIN = PB9
+	I2C0_SCL_PIN = D20
+	I2C0_SDA_PIN = D21
 
 	// SPI pins
 	SPI1_SCK_PIN = PA5
@@ -66,23 +76,31 @@ const (
 )
 
 var (
-	// USART2 is the hardware serial port connected to the onboard ST-LINK
-	// debugger to be exposed as virtual COM port over USB.
+	// USART1 on PB6/PB7 (Arduino header D1/D0).
 	UART1  = &_UART1
 	_UART1 = UART{
 		Buffer:            NewRingBuffer(),
-		Bus:               stm32.USART2,
+		Bus:               stm32.USART1,
 		TxAltFuncSelector: AF7_USART1_2_3,
 		RxAltFuncSelector: AF7_USART1_2_3,
 	}
-	DefaultUART = UART1
 
-	// I2C1 is documented, alias to I2C0 as well
-	I2C1 = &I2C{
-		Bus:             stm32.I2C1,
+	// LPUART1 on PG7/PG8 (active via ST-LINK virtual COM port).
+	UART2  = &_UART2
+	_UART2 = UART{
+		Buffer:            NewRingBuffer(),
+		Bus:               (*stm32.USART_Type)(unsafe.Pointer(stm32.LPUART1)),
+		TxAltFuncSelector: AF8_UART4_5_LPUART1_SDMMC1,
+		RxAltFuncSelector: AF8_UART4_5_LPUART1_SDMMC1,
+	}
+	DefaultUART = UART2
+
+	// I2C2 is documented, alias to I2C0 as well
+	I2C2 = &I2C{
+		Bus:             stm32.I2C2,
 		AltFuncSelector: AF4_I2C1_2_3_4,
 	}
-	I2C0 = I2C1
+	I2C0 = I2C2
 
 	// SPI1 is documented, alias to SPI0 as well
 	SPI1 = &SPI{
@@ -93,5 +111,6 @@ var (
 )
 
 func init() {
-	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART1.handleInterrupt)
+	UART1.Interrupt = interrupt.New(stm32.IRQ_USART1, _UART1.handleInterrupt)
+	UART2.Interrupt = interrupt.New(stm32.IRQ_LPUART1, _UART2.handleInterrupt)
 }
