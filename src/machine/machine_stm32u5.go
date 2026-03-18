@@ -272,6 +272,10 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.APB1ENR1.SetBits(stm32.RCC_APB1ENR1_SPI2EN)
 	case unsafe.Pointer(stm32.SPI3): // SPI3 clock enable
 		stm32.RCC.APB3ENR.SetBits(stm32.RCC_APB3ENR_SPI3EN)
+	case unsafe.Pointer(stm32.ADC1): // ADC1/ADC2 clock enable
+		stm32.RCC.AHB2ENR1.SetBits(stm32.RCC_AHB2ENR1_ADC12EN)
+	case unsafe.Pointer(stm32.ADC4): // ADC4 clock enable
+		stm32.RCC.AHB3ENR.SetBits(stm32.RCC_AHB3ENR_ADC4EN)
 	case unsafe.Pointer(stm32.WWDG): // Window watchdog clock enable
 		stm32.RCC.APB1ENR1.SetBits(stm32.RCC_APB1ENR1_WWDGEN)
 	case unsafe.Pointer(stm32.TIM1): // TIM1 clock enable
