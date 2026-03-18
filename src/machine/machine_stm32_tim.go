@@ -13,6 +13,23 @@ import (
 
 const PWM_MODE1 = 0x6
 
+// Hardware bit positions for TIM registers. The SVD-generated constants
+// (stm32.TIM_CCMR1_Output_OC1M_Pos, stm32.TIM_CCER_CC1E, etc.) are
+// systematically shifted by one channel in some STM32 device files,
+// so we define the correct hardware positions here.
+const (
+	// OC1M[2:0] field position within each CCMR half (bits [6:4]).
+	tim_CCMR_OCxM_Pos = 4
+
+	// Per-channel bit positions within CCER (4 bits per channel).
+	tim_CCER_CCxE = 0x1 // CCxE at bit 0 of channel group
+	tim_CCER_CCxP = 0x2 // CCxP at bit 1 of channel group
+
+	// Per-channel bit positions within SR, EGR, and DIER (1 bit per channel,
+	// starting at bit 1 for CC1). Use as: tim_CC1_bit << channel.
+	tim_CC1_bit = 0x2 // CC1G/CC1IF/CC1IE at bit 1
+)
+
 type TimerCallback func()
 type ChannelCallback func(channel uint8)
 
@@ -99,14 +116,14 @@ func (t *TIM) SetMatchInterrupt(channel uint8, callback ChannelCallback) error {
 	t.OCInterrupt = t.registerOCInterrupt()
 
 	// Clear the interrupt flag
-	t.Device.SR.ClearBits(stm32.TIM_SR_CC1IF << channel)
+	t.Device.SR.ClearBits(tim_CC1_bit << channel)
 
 	// Enable the interrupt
 	t.OCInterrupt.SetPriority(0xc1)
 	t.OCInterrupt.Enable()
 
 	// Enable the hardware interrupt
-	t.Device.DIER.SetBits(stm32.TIM_DIER_CC1IE << channel)
+	t.Device.DIER.SetBits(tim_CC1_bit << channel)
 
 	return nil
 }
@@ -210,20 +227,20 @@ func (t *TIM) Set(channel uint8, value uint32) {
 	// Set the PWM to Mode 1 (active below set value, inactive above)
 	// Preload is disabled so we can change OC value within one update period.
 	var ccmrVal uint32
-	ccmrVal |= PWM_MODE1 << stm32.TIM_CCMR1_Output_OC1M_Pos
+	ccmrVal |= PWM_MODE1 << tim_CCMR_OCxM_Pos
 	ccmr.ReplaceBits(ccmrVal, 0xFF, offset)
 
 	// Set the compare value
 	ccr.Set(arrtype(value))
 
 	// Enable the channel (if not already)
-	t.Device.CCER.ReplaceBits(stm32.TIM_CCER_CC1E, 0xD, channel*4)
+	t.Device.CCER.ReplaceBits(tim_CCER_CCxE, 0xD, channel*4)
 
 	// Force update
-	t.Device.EGR.SetBits(stm32.TIM_EGR_CC1G << channel)
+	t.Device.EGR.SetBits(tim_CC1_bit << channel)
 
 	// Reset Interrupt Flag
-	t.Device.SR.ClearBits(stm32.TIM_SR_CC1IF << channel)
+	t.Device.SR.ClearBits(tim_CC1_bit << channel)
 
 	// Restore interrupts
 	interrupt.Restore(mask)
@@ -242,10 +259,10 @@ func (t *TIM) Unset(channel uint8) {
 	ccr.Set(0)
 
 	// Disable the hardware interrupt
-	t.Device.DIER.ClearBits(stm32.TIM_DIER_CC1IE << channel)
+	t.Device.DIER.ClearBits(tim_CC1_bit << channel)
 
 	// Clear the interrupt flag
-	t.Device.SR.ClearBits(stm32.TIM_SR_CC1IF << channel)
+	t.Device.SR.ClearBits(tim_CC1_bit << channel)
 
 	// Restore interrupts
 	interrupt.Restore(mask)
@@ -261,10 +278,10 @@ func (t *TIM) SetInverting(channel uint8, inverting bool) {
 
 	var val = uint32(0)
 	if inverting {
-		val |= stm32.TIM_CCER_CC1P
+		val |= tim_CCER_CCxP
 	}
 
-	t.Device.CCER.ReplaceBits(val, stm32.TIM_CCER_CC1P_Msk, channel*4)
+	t.Device.CCER.ReplaceBits(val, tim_CCER_CCxP, channel*4)
 }
 
 func (t *TIM) handleUPInterrupt(interrupt.Interrupt) {
@@ -279,29 +296,29 @@ func (t *TIM) handleUPInterrupt(interrupt.Interrupt) {
 }
 
 func (t *TIM) handleOCInterrupt(interrupt.Interrupt) {
-	if t.Device.SR.HasBits(stm32.TIM_SR_CC1IF) {
+	if t.Device.SR.HasBits(tim_CC1_bit << 0) {
 		if t.channelCallbacks[0] != nil {
 			t.channelCallbacks[0](0)
 		}
 	}
-	if t.Device.SR.HasBits(stm32.TIM_SR_CC2IF) {
+	if t.Device.SR.HasBits(tim_CC1_bit << 1) {
 		if t.channelCallbacks[1] != nil {
 			t.channelCallbacks[1](1)
 		}
 	}
-	if t.Device.SR.HasBits(stm32.TIM_SR_CC3IF) {
+	if t.Device.SR.HasBits(tim_CC1_bit << 2) {
 		if t.channelCallbacks[2] != nil {
 			t.channelCallbacks[2](2)
 		}
 	}
-	if t.Device.SR.HasBits(stm32.TIM_SR_CC4IF) {
+	if t.Device.SR.HasBits(tim_CC1_bit << 3) {
 		if t.channelCallbacks[3] != nil {
 			t.channelCallbacks[3](3)
 		}
 	}
 
 	// Reset interrupt flags
-	t.Device.SR.ClearBits(stm32.TIM_SR_CC1IF | stm32.TIM_SR_CC2IF | stm32.TIM_SR_CC3IF | stm32.TIM_SR_CC4IF)
+	t.Device.SR.ClearBits(tim_CC1_bit<<0 | tim_CC1_bit<<1 | tim_CC1_bit<<2 | tim_CC1_bit<<3)
 }
 
 func (t *TIM) channelCCR(channel uint8) *arrRegType {
