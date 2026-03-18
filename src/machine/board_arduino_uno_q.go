@@ -19,6 +19,14 @@ const (
 	A4 = PC1
 	A5 = PC0
 
+	// ADC pin aliases
+	ADC0 = A0
+	ADC1 = A1
+	ADC2 = A2
+	ADC3 = A3
+	ADC4 = A4
+	ADC5 = A5
+
 	D0  = PB7
 	D1  = PB6
 	D2  = PB3
