@@ -3,5 +3,6 @@
   "build-tags": ["arduino_uno_q"],
   "serial": "uart",
   "openocd-interface": "stlink",
-  "openocd-target": "stm32u5x"
+  "openocd-target": "stm32u5x",
+  "openocd-commands": ["adapter driver linuxgpiod adapter gpio swclk -chip 1 26 adapter gpio swdio -chip 1 25 adapter gpio srst -chip 1 38 transport select swd adapter speed 1000 reset_config srst_only srst_push_pull"]
 }
