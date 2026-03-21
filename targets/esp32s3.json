@@ -6,7 +6,7 @@
 	"scheduler": "tasks",
 	"serial": "usb",
 	"linker": "ld.lld",
-	"default-stack-size": 2048,
+	"default-stack-size": 8192,
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"linkerscript": "targets/esp32s3.ld",
