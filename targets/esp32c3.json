@@ -5,6 +5,7 @@
 	"serial": "usb",
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
+	"default-stack-size": 8192,
 	"cflags": [
 		"-march=rv32imc"
 	],
