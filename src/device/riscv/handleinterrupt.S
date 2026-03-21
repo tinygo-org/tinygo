@@ -75,6 +75,10 @@ handleInterruptASM:
     SFREG   f30,(30 + 16)*REGSIZE(sp)
     SFREG   f31,(31 + 16)*REGSIZE(sp)
 #endif
+    // Save ra to a global so handleException can print the caller of the NULL
+    // function pointer.
+    la      t0, tinygo_saved_ra
+    SREG    ra, 0(t0)
     call    handleInterrupt
 #ifdef __riscv_flen
     LFREG   f0, (31 + 16)*REGSIZE(sp)
@@ -128,3 +132,10 @@ handleInterruptASM:
     LREG    ra, 0*REGSIZE(sp)
     addi    sp, sp, NREG*REGSIZE
     mret
+
+.section .bss.tinygo_saved_ra
+.global tinygo_saved_ra
+.type tinygo_saved_ra,@object
+.align 2
+tinygo_saved_ra:
+    .space REGSIZE

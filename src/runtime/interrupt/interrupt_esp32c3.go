@@ -10,6 +10,9 @@ import (
 	"unsafe"
 )
 
+//go:extern tinygo_saved_ra
+var tinygo_saved_ra uintptr
+
 // Enable register CPU interrupt with interrupt.Interrupt.
 // The ESP32-C3 has 31 CPU independent interrupts.
 // The Interrupt.New(x, f) (x = [1..31]) attaches CPU interrupt to function f.
@@ -88,7 +91,13 @@ const (
 
 const (
 	defaultThreshold = 5
-	disableThreshold = 10
+	// Priority 0 disables an interrupt on ESP32-C3 (per the TRM,
+	// priority 0 = masked).  During handling we set the current
+	// interrupt's priority to 0 so it cannot re-fire while MIE is
+	// re-enabled for nesting.  This is critical for level-triggered
+	// interrupts where the hardware line stays asserted until the
+	// peripheral source is serviced by the handler.
+	disableThreshold = 0
 )
 
 //go:inline
@@ -225,6 +234,7 @@ func handleException(mcause uintptr) {
 	println("*** Exception:     pc:", riscv.MEPC.Get())
 	println("*** Exception:   code:", uint32(mcause&0x1f))
 	println("*** Exception: mcause:", mcause)
+	println("*** Exception:     ra:", tinygo_saved_ra)
 	switch uint32(mcause & 0x1f) {
 	case riscv.InstructionAccessFault:
 		println("***    virtual address:", riscv.MTVAL.Get())
