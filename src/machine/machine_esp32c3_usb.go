@@ -17,7 +17,7 @@ import (
 // CDC-ACM serial port. The USB protocol and enumeration are handled entirely
 // in hardware; software only reads/writes the EP1 FIFO.
 
-const cpuInterruptFromUSB = 8
+const cpuInterruptFromUSB = 10
 
 // flushTimeout is the maximum number of busy-wait iterations in flush().
 // Prevents hanging when no USB host is connected.

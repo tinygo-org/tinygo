@@ -65,6 +65,14 @@ var _sbss [0]byte
 //go:extern _ebss
 var _ebss [0]byte
 
+// sleepTicks busy-waits until the given number of ticks have passed.
+func sleepTicks(d timeUnit) {
+	sleepUntil := ticks() + d
+	for ticks() < sleepUntil {
+		// TODO: suspend the CPU to not burn power here unnecessarily.
+	}
+}
+
 func abort() {
 	for {
 		device.Asm("waiti 0")
