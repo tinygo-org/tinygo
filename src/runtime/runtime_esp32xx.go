@@ -55,14 +55,6 @@ func ticksToNanoseconds(ticks timeUnit) int64 {
 	return int64(ticks) * 25
 }
 
-// sleepTicks busy-waits until the given number of ticks have passed.
-func sleepTicks(d timeUnit) {
-	sleepUntil := ticks() + d
-	for ticks() < sleepUntil {
-		// TODO: suspend the CPU to not burn power here unnecessarily.
-	}
-}
-
 func exit(code int) {
 	abort()
 }
