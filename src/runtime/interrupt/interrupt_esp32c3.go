@@ -55,6 +55,9 @@ func (i Interrupt) Enable() error {
 //go:linkname callHandlers runtime/interrupt.callHandlers
 func callHandlers(num int)
 
+//go:linkname signalInterrupt runtime.signalInterrupt
+func signalInterrupt()
+
 const (
 	IRQNUM_1 = 1 + iota
 	IRQNUM_2
@@ -202,6 +205,9 @@ func handleInterrupt() {
 
 		// Call registered interrupt handler(s)
 		callHandler(int(interruptNumber))
+
+		// Signal to sleepTicks that an interrupt has occurred.
+		signalInterrupt()
 
 		// disable CPU interrupts
 		riscv.MSTATUS.ClearBits(riscv.MSTATUS_MIE)
