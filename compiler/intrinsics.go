@@ -208,6 +208,23 @@ func (b *builder) defineMathOp() {
 	b.CreateRet(result)
 }
 
+func (b *builder) defineCryptoIntrinsic() bool {
+	if b.fn.Pkg.Pkg.Path() != "crypto/internal/constanttime" {
+		return false
+	}
+
+	switch b.fn.Name() {
+	case "boolToUint8":
+		b.createFunctionStart(true)
+		param := b.getValue(b.fn.Params[0], b.fn.Pos())
+		result := b.CreateZExt(param, b.ctx.Int8Type(), "")
+		b.CreateRet(result)
+		return true
+	}
+
+	return false
+}
+
 // Implement most math/bits functions.
 //
 // This implements all the functions that operate on bits. It does not yet

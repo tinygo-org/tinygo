@@ -873,6 +873,10 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 				// with a LLVM intrinsic.
 				continue
 			}
+			if ok := b.defineCryptoIntrinsic(); ok {
+				// Body of this function was replaced
+				continue
+			}
 			if member.Blocks == nil {
 				// Try to define this as an intrinsic function.
 				b.defineIntrinsicFunction()
