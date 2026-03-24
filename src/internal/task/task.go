@@ -22,7 +22,8 @@ type Task struct {
 	state state
 
 	// This is needed for some crypto packages.
-	FipsIndicator uint8
+	FipsIndicator  uint8
+	FipsOnlyBypass bool
 
 	// State of the goroutine: running, paused, or must-resume-next-pause.
 	// This extra field doesn't increase memory usage on 32-bit CPUs and above,
