@@ -115,7 +115,7 @@ void ram_func flash_cs_force(bool high) {
 	// &ioqspi_hw->io[1].ctrl
 	uint32_t *addr = (uint32_t*)(IO_QSPI_BASE + (1 * 8) + 4);
 
-	*addr = ((*addr) & !IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_BITS)
+	*addr = ((*addr) & ~IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_BITS)
 		| (field_val << IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_LSB);
 
 }
