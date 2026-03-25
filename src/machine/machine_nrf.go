@@ -551,7 +551,7 @@ func handleSoftDeviceEvents() {
 			return // TODO: nrf51 etc
 		}
 		if result != 0 {
-			// Some error occured. The only possible error is
+			// Some error occurred. The only possible error is
 			// NRF_ERROR_NOT_FOUND, which means there are no more events.
 			return
 		}
