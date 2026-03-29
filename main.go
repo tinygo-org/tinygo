@@ -1083,6 +1083,8 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 	}
 	fmt.Println()
 
+	time.Sleep(time.Second)
+
 	// Reset the device to run the new firmware
 	flasher.Reset()
 
