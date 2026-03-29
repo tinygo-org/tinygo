@@ -954,7 +954,11 @@ func findPackagePath(path string, packagePathMap map[string]string) (packagePath
 			libPath := strings.TrimPrefix(path, filepath.Join(goenv.Get("TINYGOROOT"), "lib")+string(os.PathSeparator))
 			parts := strings.SplitN(libPath, string(os.PathSeparator), 2)
 			packagePath = "C " + parts[0]
-			filename = parts[1]
+			if len(parts) > 1 {
+				filename = parts[1]
+			} else {
+				filename = parts[0]
+			}
 		} else if prefix := filepath.Join(goenv.Get("TINYGOROOT"), "llvm-project", "compiler-rt"); strings.HasPrefix(path, prefix) {
 			packagePath = "C compiler-rt"
 			filename = strings.TrimPrefix(path, prefix+string(os.PathSeparator))
