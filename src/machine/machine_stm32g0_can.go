@@ -111,11 +111,11 @@ const (
 
 // CANConfig holds FDCAN configuration parameters
 type CANConfig struct {
-	TransferRate   CANTransferRate // Nominal bit rate (arbitration phase)
-	TransferRateFD CANTransferRate // Data bit rate (data phase), must be >= TransferRate
-	Mode           CANMode
-	Tx             Pin
-	Rx             Pin
+	TransferRate      CANTransferRate // Nominal bit rate (arbitration phase)
+	TransferRateFD    CANTransferRate // Data bit rate (data phase), must be >= TransferRate
+	Mode              CANMode
+	Tx                Pin
+	Rx                Pin
 	Standby           Pin  // Optional standby pin for CAN transceiver (set to NoPin if not used)
 	AlwaysFD          bool // Always transmit as FD frames, even when data fits in classic CAN
 	EnableRxInterrupt bool // Enable interrupt-driven receive (messages delivered via SetRxCallback)
@@ -145,7 +145,7 @@ func enableFDCANClock() {
 }
 
 // flags implemented as described in [CAN.SetRxCallback]
-var canRxCB [2]func(data []byte, id uint32, extendedID bool, timestamp uint32, flags uint32)
+var canRxCB [2]canRxCallback
 
 // canInstances tracks CAN peripherals with interrupt-driven RX enabled.
 // A non-nil entry means setRxCallback was called with a non-nil callback.
@@ -289,7 +289,7 @@ func (can *CAN) txFIFOLevel() (int, int) {
 }
 
 // tx implements [CAN.Tx].
-func (can *CAN) tx(id uint32, extendedID bool, data []byte) error {
+func (can *CAN) tx(id canID, flags canFlags, data []byte) error {
 	if can.Bus.TXFQS.Get()&0x00200000 != 0 { // TFQF bit
 		return errCANTxFifoFull
 	}
@@ -300,14 +300,14 @@ func (can *CAN) tx(id uint32, extendedID bool, data []byte) error {
 	}
 
 	// Use FD framing if configured to always use FD, or if data exceeds classic CAN max.
-	isFD := can.alwaysFD || length > 8
+	isFD := flags&canFlagFDF != 0 || length > 8
 
 	putIndex := (can.Bus.TXFQS.Get() >> 16) & 0x03 // TFQPI[1:0]
 	txAddr := can.sramBase() + sramcanTFQSA + uintptr(putIndex)*sramcanTFQSize
 
 	// Header word 1: identifier and flags.
 	var w1 uint32
-	if extendedID {
+	if flags&canFlagESI != 0 {
 		w1 = (id & 0x1FFFFFFF) | fdcanElementMaskXTD
 	} else {
 		w1 = (id & 0x7FF) << 18
@@ -350,7 +350,7 @@ func (can *CAN) rxFIFOLevel() (int, int) {
 // setRxCallback implements [CAN.SetRxCallback].
 // When cb is non-nil, interrupt-driven receive is enabled on RX FIFO 0.
 // The CAN.Interrupt field must be initialized with interrupt.New in the board file.
-func (can *CAN) setRxCallback(cb func(data []byte, id uint32, extendedID bool, timestamp uint32, flags uint32)) {
+func (can *CAN) setRxCallback(cb canRxCallback) {
 	canRxCB[can.instance] = cb
 	if cb != nil {
 		canInstances[can.instance] = can
@@ -381,7 +381,7 @@ func (can *CAN) rxPoll() error {
 
 // processRxFIFO0 drains RX FIFO 0 and delivers each message to cb.
 // Used by both rxPoll (poll mode) and canHandleInterrupt (interrupt mode).
-func processRxFIFO0(can *CAN, cb func(data []byte, id uint32, extendedID bool, timestamp uint32, flags uint32)) {
+func processRxFIFO0(can *CAN, cb canRxCallback) {
 	for can.Bus.RXF0S.Get()&0x0F != 0 {
 		getIndex := (can.Bus.RXF0S.Get() >> 8) & 0x03 // F0GI[1:0]
 		rxAddr := can.sramBase() + sramcanRF0SA + uintptr(getIndex)*sramcanRF0Size
@@ -391,7 +391,9 @@ func processRxFIFO0(can *CAN, cb func(data []byte, id uint32, extendedID bool, t
 
 		extendedID := w1&fdcanElementMaskXTD != 0
 		var id uint32
+		var flags uint32
 		if extendedID {
+			flags |= canFlagIDE
 			id = w1 & fdcanElementMaskEXTID
 		} else {
 			id = (w1 & fdcanElementMaskSTDID) >> 18
@@ -401,18 +403,17 @@ func processRxFIFO0(can *CAN, cb func(data []byte, id uint32, extendedID bool, t
 		dlc := byte((w2 & fdcanElementMaskDLC) >> 16)
 		isFD := w2&fdcanElementMaskFDF != 0
 
-		var flags uint32
 		if isFD {
-			flags |= 1 // bit 0: FD frame
+			flags |= canFlagFDF
 		}
 		if w1&fdcanElementMaskRTR != 0 {
-			flags |= 2 // bit 1: RTR
+			flags |= canFlagRTR
 		}
 		if w2&fdcanElementMaskBRS != 0 {
-			flags |= 4 // bit 2: BRS
+			flags |= canFlagBRS
 		}
 		if w1&fdcanElementMaskESI != 0 {
-			flags |= 8 // bit 3: ESI
+			flags |= canFlagESI
 		}
 
 		dataLen := dlcToLength(dlc)
@@ -430,7 +431,7 @@ func processRxFIFO0(can *CAN, cb func(data []byte, id uint32, extendedID bool, t
 
 		// Acknowledge before callback so the FIFO slot is freed.
 		can.Bus.RXF0A.Set(uint32(getIndex))
-		cb(buf[:dataLen], id, extendedID, timestamp, flags)
+		cb(buf[:dataLen], id, timestamp, flags)
 	}
 }
 

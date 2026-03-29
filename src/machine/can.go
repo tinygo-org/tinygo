@@ -44,7 +44,7 @@ func (can *CAN) TxFIFOLevel() (level int, maxlevel int) {
 
 // Tx puts a CAN frame in TxFIFO for transmission. Returns error if TxFIFO is full.
 func (can *CAN) Tx(id canID, flags canFlags, data []byte) error {
-	return can.tx(id, extendedID, data)
+	return can.tx(id, flags, data)
 }
 
 // RxFIFOLevel returns amount of CAN frames received and stored and total Rx fifo length.
@@ -53,8 +53,10 @@ func (can *CAN) RxFIFOLevel() (level int, maxlevel int) {
 	return can.rxFIFOLevel()
 }
 
+type canRxCallback = func(data []byte, id canID, timestamp uint32, flags canFlags)
+
 // SetRxCallback sets the receive callback. See [canFlags] for information on how bits are layed out.
-func (can *CAN) SetRxCallback(cb func(data []byte, id canID, timestamp uint32, flags canFlags)) {
+func (can *CAN) SetRxCallback(cb canRxCallback) {
 	can.setRxCallback(cb)
 }
 
