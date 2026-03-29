@@ -132,6 +132,9 @@ SECTIONS
         *(.wifi0iram*)
         *(.wifislpiram*)
         *(.wifirxiram*)
+        *(.wifiorslpiram*)
+        *(.iram1*)
+        *(.coexiram*)
         __init_start = .;
         *(.init)
         __init_end = .;
