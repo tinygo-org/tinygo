@@ -1,5 +1,6 @@
 {
 	"inherits": ["xtensa"],
+	"inheritable-only": true,
 	"cpu": "esp8266",
 	"features": "+debug,+density,+exception,+extendedl32r,+highpriinterrupts,+interrupt,+mul32,+nsa,+prid,+regprotect,+rvector,+timerint",
 	"build-tags": ["esp8266", "esp"],

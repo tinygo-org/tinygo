@@ -239,6 +239,24 @@ func GetTargetSpecs() (map[string]*TargetSpec, error) {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
+
+		// Read raw JSON to check if this is an inheritable-only (non-board)
+		// target before resolving inheritance, since the field would
+		// propagate to child board targets through inheritance.
+		rawData, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("could not read target file: %w", err)
+		}
+		var rawCheck struct {
+			InheritableOnly bool `json:"inheritable-only"`
+		}
+		if err := json.Unmarshal(rawData, &rawCheck); err != nil {
+			return nil, fmt.Errorf("could not parse target file %s: %w", entry.Name(), err)
+		}
+		if rawCheck.InheritableOnly {
+			continue
+		}
+
 		spec, err := LoadTarget(&Options{Target: path})
 		if err != nil {
 			return nil, fmt.Errorf("could not list target: %w", err)
