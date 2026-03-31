@@ -24,8 +24,6 @@ jobs:
           maximum-size: 24GB
           disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
-        with:
-          scoop_update: 'false'
       - name: Install Dependencies
         shell: bash
         run: |
@@ -136,8 +134,6 @@ jobs:
           maximum-size: 24GB
           disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
-        with:
-          scoop_update: 'false'
       - name: Install Dependencies
         shell: bash
         run: |
@@ -202,8 +198,6 @@ jobs:
           maximum-size: 24GB
           disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
-        with:
-          scoop_update: 'false'
       - name: Install Dependencies
         shell: bash
         run: |
