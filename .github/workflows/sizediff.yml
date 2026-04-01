@@ -20,14 +20,14 @@ jobs:
         run: |
           echo "$HOME/go/bin" >> $GITHUB_PATH
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0 # fetch all history (no sparse checkout)
           submodules: true
       - name: Install apt dependencies
         run: ./.github/workflows/sizediff-install-pkgs.sh
       - name: Restore LLVM source cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache-llvm-source
         with:
           key: llvm-source-20-sizediff-v1
@@ -37,7 +37,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Cache Go
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           key: go-cache-linux-sizediff-v2-${{ hashFiles('go.mod') }}
           path: |

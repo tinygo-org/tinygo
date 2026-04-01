@@ -21,12 +21,12 @@ jobs:
         # See: https://github.com/tinygo-org/tinygo/pull/4516#issuecomment-2416363668
         run: sudo apt-get remove llvm-18
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Pull musl, bdwgc
         run: |
             git submodule update --init lib/musl lib/bdwgc
       - name: Restore LLVM source cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
           key: llvm-source-20-linux-nix-v1
@@ -36,7 +36,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Save LLVM source cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}

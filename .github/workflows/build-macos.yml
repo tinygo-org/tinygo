@@ -31,7 +31,7 @@ jobs:
         run: |
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           submodules: true
       - name: Extract TinyGo version
@@ -43,7 +43,7 @@ jobs:
           go-version: '1.25.7'
           cache: true
       - name: Restore LLVM source cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
           key: llvm-source-20-${{ matrix.os }}-v1
@@ -57,7 +57,7 @@ jobs:
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         run: make llvm-source
       - name: Save LLVM source cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
@@ -68,7 +68,7 @@ jobs:
             llvm-project/lld/include
             llvm-project/llvm/include
       - name: Restore LLVM build cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
           key: llvm-build-20-${{ matrix.os }}-v2
@@ -85,7 +85,7 @@ jobs:
           make llvm-build
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
@@ -107,7 +107,7 @@ jobs:
         # - have a double-zipped artifact when downloaded from the UI
         # - have a very slow artifact upload
         # We're doing the former here, to keep artifact uploads fast.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: darwin-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
           path: build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
@@ -131,7 +131,7 @@ jobs:
         run: |
           brew install llvm@${{ matrix.version }}
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Install Go
         uses: actions/setup-go@v6
         with:
