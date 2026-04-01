@@ -27,6 +27,7 @@ jobs:
       - name: Install Dependencies
         shell: bash
         run: |
+          scoop config use_external_7zip true
           scoop install ninja binaryen
       - name: Checkout
         uses: actions/checkout@v6
@@ -98,6 +99,7 @@ jobs:
             C:/Users/runneradmin/go/pkg/mod
       - name: Install wasmtime
         run: |
+          scoop config use_external_7zip true
           scoop install wasmtime@29.0.1
       - name: make gen-device
         run: make -j3 gen-device
@@ -137,6 +139,7 @@ jobs:
       - name: Install Dependencies
         shell: bash
         run: |
+          scoop config use_external_7zip true
           scoop install binaryen
       - name: Checkout
         uses: actions/checkout@v6
@@ -201,7 +204,8 @@ jobs:
       - name: Install Dependencies
         shell: bash
         run: |
-          scoop install binaryen && scoop install wasmtime@29.0.1
+          scoop config use_external_7zip true
+          scoop install binaryen wasmtime@29.0.1
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install Go
