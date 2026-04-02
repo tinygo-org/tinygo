@@ -112,6 +112,23 @@ func interruptInit() {
 		"vecbase": vecbase,
 	})
 
+	// Clear PS.EXCM and PS.INTLEVEL so that level-1 interrupts can fire.
+	// The ROM bootloader leaves PS.EXCM=1 (exception mode), which masks
+	// all interrupts at level ≤ EXCMLEVEL (level 1 on ESP32-S3).
+	// PS.INTLEVEL may also be non-zero. Both must be 0 for peripheral
+	// interrupts to trigger.
+	//
+	// We also set PS.UM=1 (bit 5) so that level-1 interrupts route to
+	// the User exception vector at VECBASE+0x340, where our handler lives.
+	// With PS.UM=0 (the ROM default), they would go to the Kernel exception
+	// vector at VECBASE+0x300 which is an infinite-loop stub.
+	ps := uintptr(device.AsmFull("rsr {}, PS", nil))
+	ps &^= 0x1F // clear INTLEVEL (bits 0-3) and EXCM (bit 4)
+	ps |= 0x20  // set PS.UM (bit 5) — use User exception vector
+	device.AsmFull("wsr {ps}, PS", map[string]interface{}{
+		"ps": ps,
+	})
+
 	// Synchronize pipeline after writing special registers.
 	device.Asm("rsync")
 }
