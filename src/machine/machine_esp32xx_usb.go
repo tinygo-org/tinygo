@@ -5,18 +5,33 @@ package machine
 import (
 	"device/esp"
 	"errors"
+	"machine/usb"
+	"machine/usb/descriptor"
+	"runtime/interrupt"
 )
 
 // USB Serial/JTAG Controller
-// See esp32-c3_technical_reference_manual_en.pdf
-// pg. 736
+// See esp32-s3_technical_reference_manual_en.pdf
+//
+// The ESP32-S3 has a built-in USB Serial/JTAG controller that provides a
+// CDC-ACM serial port. The USB protocol and enumeration are handled entirely
+// in hardware; software only reads/writes the EP1 FIFO.
+
+const cpuInterruptFromUSB = 8
+
+// flushTimeout is the maximum number of busy-wait iterations in flush().
+// Prevents hanging when no USB host is connected.
+const flushTimeout = 200000
+
 type USB_DEVICE struct {
-	Bus *esp.USB_DEVICE_Type
+	Bus    *esp.USB_DEVICE_Type
+	Buffer *RingBuffer
 }
 
 var (
 	_USBCDC = &USB_DEVICE{
-		Bus: esp.USB_DEVICE,
+		Bus:    esp.USB_DEVICE,
+		Buffer: NewRingBuffer(),
 	}
 
 	USBCDC Serialer = _USBCDC
@@ -25,7 +40,6 @@ var (
 var (
 	errUSBWrongSize            = errors.New("USB: invalid write size")
 	errUSBCouldNotWriteAllData = errors.New("USB: could not write all data")
-	errUSBBufferEmpty          = errors.New("USB: read buffer empty")
 )
 
 type Serialer interface {
@@ -38,26 +52,96 @@ type Serialer interface {
 	RTS() bool
 }
 
+var usbConfigured bool
+
+// USBDevice provides a stub USB device for the ESP32-S3. The hardware
+// only supports a fixed-function CDC-ACM serial port, so the programmable
+// USB device features are no-ops.
+type USBDevice struct {
+	initcomplete         bool
+	InitEndpointComplete bool
+}
+
+var USBDev = &USBDevice{}
+
+func (dev *USBDevice) SetStallEPIn(ep uint32)    {}
+func (dev *USBDevice) SetStallEPOut(ep uint32)   {}
+func (dev *USBDevice) ClearStallEPIn(ep uint32)  {}
+func (dev *USBDevice) ClearStallEPOut(ep uint32) {}
+
+// initUSB is intentionally empty — the interp phase evaluates init()
+// functions at compile time and cannot access hardware registers.
+// Actual hardware setup is deferred to the first Configure() call.
 func initUSB() {}
 
+// usbHandleInterrupt is the top-level interrupt handler passed to
+// interrupt.New. It must be a plain function (not a closure) because
+// interrupt.New is a compiler intrinsic that does not support closures.
+func usbHandleInterrupt(interrupt.Interrupt) {
+	_USBCDC.handleInterrupt()
+}
+
+// Configure initialises the USB Serial/JTAG controller.
 func (usbdev *USB_DEVICE) Configure(config UARTConfig) error {
+	if usbConfigured {
+		return nil
+	}
+	usbConfigured = true
+
+	// Enable the USB_DEVICE peripheral clock.
+	esp.SYSTEM.SetPERIP_CLK_EN1_USB_DEVICE_CLK_EN(1)
+	esp.SYSTEM.SetPERIP_RST_EN1_USB_DEVICE_RST(0)
+
+	// Clear any pending interrupts, then enable the RX interrupt.
+	usbdev.Bus.INT_CLR.Set(0xFFFFFFFF)
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
+
+	// Map the USB_DEVICE peripheral interrupt to CPU interrupt line.
+	esp.INTERRUPT_CORE0.SetUSB_DEVICE_INT_MAP(cpuInterruptFromUSB)
+
+	_ = interrupt.New(cpuInterruptFromUSB, usbHandleInterrupt).Enable()
+
 	return nil
 }
 
+// ensureConfigured triggers lazy initialization on first use.
+func (usbdev *USB_DEVICE) ensureConfigured() {
+	if !usbConfigured {
+		usbdev.Configure(UARTConfig{})
+	}
+}
+
+// handleInterrupt is called from the CPU interrupt vector when the USB
+// peripheral raises an interrupt.  For now, just clear the interrupt flag.
+// The actual data drain happens in Buffered() via polling — once the ISR
+// mechanism is proven, we can move the drain here.
+func (usbdev *USB_DEVICE) handleInterrupt() {
+	usbdev.Bus.SetINT_CLR_SERIAL_OUT_RECV_PKT_INT_CLR(1)
+}
+
 func (usbdev *USB_DEVICE) WriteByte(c byte) error {
+	usbdev.ensureConfigured()
 	if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
-		return errUSBCouldNotWriteAllData
+		// FIFO full — try flushing first, then recheck.
+		usbdev.flush()
+		if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
+			return errUSBCouldNotWriteAllData
+		}
 	}
 
-	usbdev.Bus.SetEP1_RDWR_BYTE(uint32(c))
+	// Use EP1.Set() (direct store) instead of SetEP1_RDWR_BYTE which
+	// does a read-modify-write — the read side-effect pops a byte from
+	// the RX FIFO.
+	usbdev.Bus.EP1.Set(uint32(c))
 	usbdev.flush()
 
 	return nil
 }
 
 func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
-	if len(data) == 0 || len(data) > 64 {
-		return 0, errUSBWrongSize
+	usbdev.ensureConfigured()
+	if len(data) == 0 {
+		return 0, nil
 	}
 
 	for i, c := range data {
@@ -65,26 +149,43 @@ func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
 			if i > 0 {
 				usbdev.flush()
 			}
-
-			return i, errUSBCouldNotWriteAllData
+			if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
+				return i, errUSBCouldNotWriteAllData
+			}
 		}
-		usbdev.Bus.SetEP1_RDWR_BYTE(uint32(c))
+		usbdev.Bus.EP1.Set(uint32(c))
 	}
 
 	usbdev.flush()
 	return len(data), nil
 }
 
+// Buffered returns the number of bytes waiting in the receive ring buffer.
+// It drains any data sitting in the hardware FIFO and re-enables the
+// USB interrupt (which the ISR disables via INTENABLE to prevent a
+// level-triggered interrupt storm).
 func (usbdev *USB_DEVICE) Buffered() int {
-	return int(usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL())
+	usbdev.ensureConfigured()
+	// Drain the hardware FIFO into the ring buffer.
+	for usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL() != 0 {
+		b := byte(usbdev.Bus.EP1.Get())
+		usbdev.Buffer.Put(b)
+	}
+	// Clear pending flags and re-enable the RX interrupt.
+	usbdev.Bus.INT_CLR.Set(0xFFFFFFFF)
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
+	// Re-enable CPU interrupt 8 in INTENABLE (the ISR clears all bits).
+	interrupt.New(cpuInterruptFromUSB, usbHandleInterrupt).Enable()
+	return int(usbdev.Buffer.Used())
 }
 
+// ReadByte returns a byte from the receive ring buffer.
 func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
-	if usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL() != 0 {
-		return byte(usbdev.Bus.GetEP1_RDWR_BYTE()), nil
+	b, ok := usbdev.Buffer.Get()
+	if !ok {
+		return 0, nil
 	}
-
-	return 0, nil
+	return b, nil
 }
 
 func (usbdev *USB_DEVICE) DTR() bool {
@@ -95,8 +196,32 @@ func (usbdev *USB_DEVICE) RTS() bool {
 	return false
 }
 
+// flush signals WR_DONE and waits (with timeout) for the hardware to
+// consume the data. A timeout prevents hanging when no USB host is present.
 func (usbdev *USB_DEVICE) flush() {
 	usbdev.Bus.SetEP1_CONF_WR_DONE(1)
-	for usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
+	for i := 0; i < flushTimeout; i++ {
+		if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() != 0 {
+			return
+		}
 	}
+}
+
+// The ESP32-S3 USB Serial/JTAG controller is fixed-function hardware.
+// It only provides a CDC-ACM serial port; the USB protocol and endpoint
+// configuration are handled entirely in silicon. The functions below
+// are no-op stubs so that higher-level USB packages (HID, MIDI, …)
+// compile, but they cannot add real endpoints on this hardware.
+
+// ConfigureUSBEndpoint is a no-op on ESP32-S3.
+func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointConfig, setup []usb.SetupConfig) {
+}
+
+// SendZlp is a no-op on ESP32-S3.
+func SendZlp() {
+}
+
+// SendUSBInPacket is a no-op on ESP32-S3.
+func SendUSBInPacket(ep uint32, data []byte) bool {
+	return false
 }
