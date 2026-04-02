@@ -80,6 +80,9 @@ func main() {
 	// Set up the Xtensa interrupt vector table.
 	interruptInit()
 
+	// Initialize timer alarm interrupt for the scheduler.
+	initTimerInterrupt()
+
 	// Initialize the heap, call main.main, etc.
 	run()
 
