@@ -5,6 +5,8 @@ package runtime
 import (
 	"device/esp"
 	"machine"
+	"runtime/interrupt"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -73,11 +75,62 @@ func ticksToNanoseconds(ticks timeUnit) int64 {
 	return int64(ticks) * 25
 }
 
-// sleepTicks busy-waits until the given number of ticks have passed.
+// CPU interrupt number used for the TIMG0 timer alarm.
+const timerAlarmCPUInterrupt = 9
+
+var interruptPending volatile.Register8
+
+func signalInterrupt() {
+	interruptPending.Set(1)
+}
+
+var timerAlarmInterrupt interrupt.Interrupt
+
+// timerAlarmHandler clears the timer interrupt at the peripheral level
+// and disables INT_ENA to prevent level-triggered re-assertion.
+func timerAlarmHandler(interrupt.Interrupt) {
+	esp.TIMG0.INT_ENA_TIMERS.ClearBits(1)
+	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+}
+
+// initTimerInterrupt routes the TIMG0 timer 0 alarm interrupt to a CPU
+// interrupt and registers a handler that clears the alarm flag.
+func initTimerInterrupt() {
+	// Clear any stale timer interrupt before enabling.
+	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+
+	// Map the TIMG0 T0 peripheral interrupt to a CPU interrupt line.
+	esp.INTERRUPT_CORE0.SetTG_T0_INT_MAP(timerAlarmCPUInterrupt)
+
+	// Register the interrupt handler and enable it once.
+	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
+	timerAlarmInterrupt.Enable()
+}
+
+// sleepTicks spins until the given number of ticks have elapsed, using the
+// TIMG0 alarm interrupt to avoid busy-waiting for the entire duration.
 func sleepTicks(d timeUnit) {
-	sleepUntil := ticks() + d
-	for ticks() < sleepUntil {
-		// TODO: suspend the CPU to not burn power here unnecessarily.
+	target := ticks() + d
+	for ticks() < target {
+		// Set the alarm to fire at the target tick count.
+		interruptPending.Set(0)
+
+		esp.TIMG0.T0ALARMLO.Set(uint32(target))
+		esp.TIMG0.T0ALARMHI.Set(uint32(target >> 32))
+
+		// Enable the alarm (auto-clears when alarm fires).
+		esp.TIMG0.T0CONFIG.SetBits(esp.TIMG_TCONFIG_ALARM_EN)
+
+		// Re-enable the timer interrupt (handler disables INT_ENA).
+		esp.TIMG0.INT_CLR_TIMERS.Set(1)
+		esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
+
+		// Wait for any interrupt (timer alarm or other) or timeout.
+		for interruptPending.Get() == 0 {
+			if ticks() >= target {
+				return
+			}
+		}
 	}
 }
 
