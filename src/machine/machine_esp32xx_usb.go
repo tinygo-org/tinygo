@@ -112,10 +112,11 @@ func (usbdev *USB_DEVICE) ensureConfigured() {
 }
 
 // handleInterrupt is called from the CPU interrupt vector when the USB
-// peripheral raises an interrupt.  For now, just clear the interrupt flag.
-// The actual data drain happens in Buffered() via polling — once the ISR
-// mechanism is proven, we can move the drain here.
+// peripheral raises an interrupt.  Disable INT_ENA to prevent the
+// level-triggered interrupt from re-asserting immediately (data may
+// still be in the FIFO).  Buffered() re-enables after draining.
 func (usbdev *USB_DEVICE) handleInterrupt() {
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(0)
 	usbdev.Bus.SetINT_CLR_SERIAL_OUT_RECV_PKT_INT_CLR(1)
 }
 
@@ -162,7 +163,7 @@ func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
 
 // Buffered returns the number of bytes waiting in the receive ring buffer.
 // It drains any data sitting in the hardware FIFO and re-enables the
-// USB interrupt (which the ISR disables via INTENABLE to prevent a
+// peripheral-level USB interrupt (which the ISR disables to prevent a
 // level-triggered interrupt storm).
 func (usbdev *USB_DEVICE) Buffered() int {
 	usbdev.ensureConfigured()
@@ -171,11 +172,9 @@ func (usbdev *USB_DEVICE) Buffered() int {
 		b := byte(usbdev.Bus.EP1.Get())
 		usbdev.Buffer.Put(b)
 	}
-	// Clear pending flags and re-enable the RX interrupt.
+	// Clear pending flags and re-enable the RX interrupt at the peripheral level.
 	usbdev.Bus.INT_CLR.Set(0xFFFFFFFF)
 	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
-	// Re-enable CPU interrupt 8 in INTENABLE (the ISR clears all bits).
-	interrupt.New(cpuInterruptFromUSB, usbHandleInterrupt).Enable()
 	return int(usbdev.Buffer.Used())
 }
 
