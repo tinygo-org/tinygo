@@ -115,6 +115,9 @@ func handleInterrupt() {
 		}
 	}
 
+	// Signal to sleepTicks that an interrupt has occurred.
+	signalInterrupt()
+
 	inInterrupt = false
 }
 
@@ -179,6 +182,9 @@ func callHandler(n int) {
 //
 //go:linkname callHandlers runtime/interrupt.callHandlers
 func callHandlers(num int)
+
+//go:linkname signalInterrupt runtime.signalInterrupt
+func signalInterrupt()
 
 var errInterruptRange = constError("interrupt for ESP32-S3 must be in range 6 through 30")
 

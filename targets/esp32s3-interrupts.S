@@ -181,18 +181,13 @@ _kernel_vector:
 // -----------------------------------------------------------------------
 // Offset 0x340 — User exception / level-1 interrupt
 //
-// Entire handler is inline — no jump, no stack access, no memory loads.
-// Just disable all CPU interrupts via INTENABLE and return.
-// Buffered() re-enables INTENABLE after draining the hardware FIFO.
+// Save a0 and jump to the full handler below the vector table.
 // -----------------------------------------------------------------------
     .org _vector_table + 0x340
     .global _level1_vector
 _level1_vector:
-    wsr     a0, EXCSAVE1        // save a0
-    movi    a0, 0
-    wsr     a0, INTENABLE       // disable ALL CPU interrupts
-    rsr     a0, EXCSAVE1        // restore a0
-    rfe                         // return from exception
+    wsr     a0, EXCSAVE1        // save a0 — only scratch register available
+    j       _handle_level1      // jump to full handler (PC-relative, no literal pool)
 
 // -----------------------------------------------------------------------
 // Offset 0x3C0 — Double exception (stub — loops forever)
@@ -200,3 +195,127 @@ _level1_vector:
     .org _vector_table + 0x3C0
 _double_vector:
     j _double_vector
+
+// -----------------------------------------------------------------------
+// Level-1 interrupt handler — lives outside the vector table so there
+// is no 64-byte size constraint.
+//
+// Saves the interrupted context on the current stack, clears PS.EXCM
+// (so window overflow/underflow work), calls the Go handleInterrupt
+// dispatcher, restores context, and returns via rfe.
+//
+// We call handleInterrupt via callx4 (window rotation by 4).  This is
+// required because:
+//   - callx0 does not set PS.CALLINC, so the Go function's "entry"
+//     instruction would use whatever CALLINC the interrupted code left,
+//     causing incorrect window rotation and a garbage stack pointer.
+//   - callx0 puts the return address in a0 with the raw PC (0x42xxx for
+//     flash), whose top 2 bits (01) cause retw to decrement WindowBase
+//     by 1 even though nothing was incremented.
+//
+// With callx4, CALLINC is explicitly set to 1 and the return address
+// in a4 has the top 2 bits set to 01 — matching the window rotation
+// that entry performs.  After retw, WindowBase is correctly restored.
+// Our a0..a3 (including a1, the frame pointer) are NOT in the callee's
+// register window (callee uses physical regs +4..+19), so a1 is
+// preserved across the call without needing EXCSAVE1.
+// -----------------------------------------------------------------------
+// Literal data for l32r (must be at a lower address than the l32r).
+    .balign 4
+.LhandleInterrupt_addr:
+    .word   handleInterrupt
+
+    .global _handle_level1
+_handle_level1:
+    // --- allocate 96-byte exception frame on the interrupted stack ---
+    // Layout (offsets from a1 after adjustment):
+    //   0: a0   4: a1(orig)  8: a2  12: a3  16: a4  20: a5
+    //  24: a6  28: a7  32: a8  36: a9  40: a10 44: a11
+    //  48: a12 52: a13 56: a14 60: a15
+    //  64: SAR 68: EPC1  72: PS
+    addi    a0, a1, -96         // a0 = new frame pointer
+    s32i    a1, a0, 4           // save original a1 (SP)
+    mov     a1, a0              // a1 = frame pointer
+
+    rsr     a0, EXCSAVE1        // recover original a0
+    s32i    a0, a1, 0           // save original a0
+
+    // Save general registers a2..a15.
+    s32i    a2,  a1, 8
+    s32i    a3,  a1, 12
+    s32i    a4,  a1, 16
+    s32i    a5,  a1, 20
+    s32i    a6,  a1, 24
+    s32i    a7,  a1, 28
+    s32i    a8,  a1, 32
+    s32i    a9,  a1, 36
+    s32i    a10, a1, 40
+    s32i    a11, a1, 44
+    s32i    a12, a1, 48
+    s32i    a13, a1, 52
+    s32i    a14, a1, 56
+    s32i    a15, a1, 60
+
+    // Save special registers.
+    rsr     a2, SAR
+    s32i    a2, a1, 64
+    rsr     a2, EPC1
+    s32i    a2, a1, 68
+
+    // Clear PS.EXCM (bit 4) so window overflow/underflow exceptions work
+    // during the Go call. Set PS.INTLEVEL=1 to prevent re-entry of
+    // level-1 interrupts.
+    rsr     a2, PS
+    s32i    a2, a1, 72          // save PS (with EXCM=1 set by hardware)
+    movi    a3, ~0x1F           // mask: clear INTLEVEL (bits 0-3) + EXCM (bit 4)
+    and     a2, a2, a3
+    movi    a3, 1               // INTLEVEL = 1
+    or      a2, a2, a3
+    wsr     a2, PS
+    rsync
+
+    // Call the Go interrupt dispatcher via callx4.
+    // callx4 explicitly sets PS.CALLINC=1 and puts the return address
+    // (with top 2 bits = 01) in a4.  After entry rotates the window by
+    // 4, the callee sees:  a0 = our a4 (return addr), a1 = our a5 - N.
+    // We set a5 = our frame pointer so the callee gets a valid stack.
+    mov     a5, a1
+    l32r    a2, .LhandleInterrupt_addr
+    callx4  a2
+    // After retw, WindowBase is restored.  a0..a3 are preserved because
+    // they are outside the callee's register window.
+
+    // --- restore context ---
+
+    // Restore PS (restores EXCM=1).
+    l32i    a2, a1, 72
+    wsr     a2, PS
+    rsync
+
+    // Restore special registers.
+    l32i    a2, a1, 64
+    wsr     a2, SAR
+    l32i    a2, a1, 68
+    wsr     a2, EPC1
+
+    // Restore general registers a15..a2.
+    l32i    a15, a1, 60
+    l32i    a14, a1, 56
+    l32i    a13, a1, 52
+    l32i    a12, a1, 48
+    l32i    a11, a1, 44
+    l32i    a10, a1, 40
+    l32i    a9,  a1, 36
+    l32i    a8,  a1, 32
+    l32i    a7,  a1, 28
+    l32i    a6,  a1, 24
+    l32i    a5,  a1, 20
+    l32i    a4,  a1, 16
+    l32i    a3,  a1, 12
+    l32i    a2,  a1, 8
+
+    // Restore a0 and a1 (a1 must be last since it is the frame pointer).
+    l32i    a0, a1, 0
+    l32i    a1, a1, 4           // restores original SP (deallocates frame)
+
+    rfe
