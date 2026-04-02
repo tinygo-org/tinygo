@@ -924,6 +924,52 @@ func testTypeAssert[T comparable, V any](t *testing.T, val V, wantVal T, wantOk 
 	}
 }
 
+func TestTypeAssertStruct(t *testing.T) {
+	type taStruct struct {
+		i int
+		b bool
+	}
+
+	var a any
+
+	// struct
+	a = taStruct{3, true}
+	if s, ok := a.(taStruct); ok {
+		if s.i != 3 || s.b != true {
+			t.Errorf("a.(S) failed: got s.i=%v, s.b=%v\n", s.i, s.b)
+		}
+	} else {
+		t.Errorf("a.(S) failed: got ok=false")
+	}
+
+	if s, ok := TypeAssert[taStruct](ValueOf(a)); ok {
+		if s.i != 3 || s.b != true {
+			t.Errorf("TypeAssert[S] failed: got s.i=%v, s.b=%v\n", s.i, s.b)
+		}
+	} else {
+		t.Errorf("TypeAssert[S] failed: got ok=false")
+	}
+
+	// struct ptr
+	a = &taStruct{3, true}
+	if s, ok := a.(*taStruct); ok {
+		if s.i != 3 || s.b != true {
+			t.Errorf("a.(*S) failed: got s.i=%v, s.b=%v\n", s.i, s.b)
+		}
+	} else {
+		t.Errorf("a.(*S) failed: got ok=false")
+	}
+
+	if s, ok := TypeAssert[*taStruct](ValueOf(a)); ok {
+		if s.i != 3 || s.b != true {
+			t.Errorf("TypeAssert[*S] failed: got s.i=%v, s.b=%v\n", s.i, s.b)
+		}
+	} else {
+		t.Errorf("TypeAssert[*S] failed: got ok=false")
+	}
+
+}
+
 type testTypeWithMethod struct{ val string }
 
 func (v testTypeWithMethod) String() string { return v.val }

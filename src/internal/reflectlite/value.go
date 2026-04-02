@@ -138,7 +138,7 @@ func TypeAssert[T any](v Value) (T, bool) {
 		var zero T
 		return zero, false
 	}
-	if !v.isIndirect() {
+	if !v.isIndirect() && v.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
 		return *(*T)(unsafe.Pointer(&v.value)), true
 	}
 	return *(*T)(v.value), true
