@@ -39,6 +39,19 @@ SECTIONS
     *(.text.call_start_cpu0)
 } >IRAM AT >DRAM
 
+/* Xtensa exception/interrupt vector table — must be 0x400-aligned. */
+.text.exception_vectors : ALIGN(0x400)
+{
+    *(.text.exception_vectors)
+} >IRAM AT >DRAM
+
+/* Level-1 interrupt handler (called from the vector stub). */
+.text._handle_level1 : ALIGN(4)
+{
+    *(.literal._handle_level1)
+    *(.text._handle_level1)
+} >IRAM AT >DRAM
+
 /* All other code and literals */
 .text : ALIGN(4)
 {
