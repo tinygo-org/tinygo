@@ -942,7 +942,15 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=xiao-esp32s3   		examples/adc
 	@$(MD5SUM) test.bin
-
+	# esp32s3-supermini
+	$(TINYGO) build -size short -o test.bin -target=esp32s3-supermini	    examples/blinky1
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32s3-supermini	    examples/blinkm
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32s3-supermini	    examples/mcp3008
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32s3-supermini   	examples/adc
+	@$(MD5SUM) test.bin
 	# esp32s3-wroom1
 	$(TINYGO) build -size short -o test.bin -target=esp32s3-wroom1	    examples/blinkm
 	@$(MD5SUM) test.bin
