@@ -1,6 +1,6 @@
 //go:build esp32c3_supermini
 
-// This file contains the pin mappings for the ESP32 supermini boards.
+// This file contains the pin mappings for the ESP32C3 supermini board.
 //
 // - https://web.archive.org/web/20240805232453/https://dl.artronshop.co.th/ESP32-C3%20SuperMini%20datasheet.pdf
 
