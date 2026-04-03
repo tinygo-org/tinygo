@@ -9,6 +9,8 @@ import (
 	"unsafe"
 )
 
+// Exported API in src/machine/can.go
+
 // FDCAN Message RAM configuration
 // STM32G0B1 SRAMCAN base address: 0x4000B400
 // Each FDCAN instance has its own message RAM area
@@ -74,78 +76,53 @@ const (
 	FDCAN_IT_ERROR_PASSIVE        = 0x00800000
 )
 
-// FDCAN represents an FDCAN peripheral
-type FDCAN struct {
+// CAN is a STM32G0's CAN/FDCAN peripheral.
+type CAN struct {
 	Bus             *stm32.FDCAN_Type
 	TxAltFuncSelect uint8
 	RxAltFuncSelect uint8
 	Interrupt       interrupt.Interrupt
 	instance        uint8
+	alwaysFD        bool
+	rxInterrupt     bool
 }
 
-// FDCANTransferRate represents CAN bus transfer rates
-type FDCANTransferRate uint32
+// CANTransferRate represents CAN bus transfer rates
+type CANTransferRate uint32
 
 const (
-	FDCANTransferRate125kbps  FDCANTransferRate = 125000
-	FDCANTransferRate250kbps  FDCANTransferRate = 250000
-	FDCANTransferRate500kbps  FDCANTransferRate = 500000
-	FDCANTransferRate1000kbps FDCANTransferRate = 1000000
-	FDCANTransferRate2000kbps FDCANTransferRate = 2000000 // FD only
-	FDCANTransferRate4000kbps FDCANTransferRate = 4000000 // FD only
+	FDCANTransferRate125kbps  CANTransferRate = 125000
+	FDCANTransferRate250kbps  CANTransferRate = 250000
+	FDCANTransferRate500kbps  CANTransferRate = 500000
+	FDCANTransferRate1000kbps CANTransferRate = 1000000
+	FDCANTransferRate2000kbps CANTransferRate = 2000000 // FD only
+	FDCANTransferRate4000kbps CANTransferRate = 4000000 // FD only
 )
 
-// FDCANMode represents the FDCAN operating mode
-type FDCANMode uint8
+// CANMode represents the FDCAN operating mode
+type CANMode uint8
 
 const (
-	FDCANModeNormal           FDCANMode = 0
-	FDCANModeBusMonitoring    FDCANMode = 1
-	FDCANModeInternalLoopback FDCANMode = 2
-	FDCANModeExternalLoopback FDCANMode = 3
+	CANModeNormal           CANMode = 0
+	CANModeBusMonitoring    CANMode = 1
+	CANModeInternalLoopback CANMode = 2
+	CANModeExternalLoopback CANMode = 3
 )
 
-// FDCANConfig holds FDCAN configuration parameters
-type FDCANConfig struct {
-	TransferRate   FDCANTransferRate // Nominal bit rate (arbitration phase)
-	TransferRateFD FDCANTransferRate // Data bit rate (data phase), must be >= TransferRate
-	Mode           FDCANMode
-	Tx             Pin
-	Rx             Pin
-	Standby        Pin // Optional standby pin for CAN transceiver (set to NoPin if not used)
+// CANConfig holds FDCAN configuration parameters
+type CANConfig struct {
+	TransferRate      CANTransferRate // Nominal bit rate (arbitration phase)
+	TransferRateFD    CANTransferRate // Data bit rate (data phase), must be >= TransferRate
+	Mode              CANMode
+	Tx                Pin
+	Rx                Pin
+	Standby           Pin  // Optional standby pin for CAN transceiver (set to NoPin if not used)
+	AlwaysFD          bool // Always transmit as FD frames, even when data fits in classic CAN
+	EnableRxInterrupt bool // Enable interrupt-driven receive (messages delivered via SetRxCallback)
 }
 
-// FDCANTxBufferElement represents a transmit buffer element
-type FDCANTxBufferElement struct {
-	ESI bool     // Error State Indicator
-	XTD bool     // Extended ID flag
-	RTR bool     // Remote Transmission Request
-	ID  uint32   // CAN identifier (11-bit or 29-bit)
-	MM  uint8    // Message Marker
-	EFC bool     // Event FIFO Control
-	FDF bool     // FD Frame indicator
-	BRS bool     // Bit Rate Switch
-	DLC uint8    // Data Length Code (0-15)
-	DB  [64]byte // Data buffer
-}
-
-// FDCANRxBufferElement represents a receive buffer element
-type FDCANRxBufferElement struct {
-	ESI  bool     // Error State Indicator
-	XTD  bool     // Extended ID flag
-	RTR  bool     // Remote Transmission Request
-	ID   uint32   // CAN identifier
-	ANMF bool     // Accepted Non-matching Frame
-	FIDX uint8    // Filter Index
-	FDF  bool     // FD Frame
-	BRS  bool     // Bit Rate Switch
-	DLC  uint8    // Data Length Code
-	RXTS uint16   // RX Timestamp
-	DB   [64]byte // Data buffer
-}
-
-// FDCANFilterConfig represents a filter configuration
-type FDCANFilterConfig struct {
+// CANFilterConfig represents a message filter configuration
+type CANFilterConfig struct {
 	Index        uint8  // Filter index (0-27 for standard, 0-7 for extended)
 	Type         uint8  // 0=Range, 1=Dual, 2=Classic (ID/Mask)
 	Config       uint8  // 0=Disable, 1=FIFO0, 2=FIFO1, 3=Reject
@@ -155,401 +132,350 @@ type FDCANFilterConfig struct {
 }
 
 var (
-	errFDCANInvalidTransferRate   = errors.New("FDCAN: invalid TransferRate")
-	errFDCANInvalidTransferRateFD = errors.New("FDCAN: invalid TransferRateFD")
-	errFDCANTimeout               = errors.New("FDCAN: timeout")
-	errFDCANTxFifoFull            = errors.New("FDCAN: Tx FIFO full")
-	errFDCANRxFifoEmpty           = errors.New("FDCAN: Rx FIFO empty")
-	errFDCANNotStarted            = errors.New("FDCAN: not started")
+	errCANInvalidTransferRate   = errors.New("CAN: invalid TransferRate")
+	errCANInvalidTransferRateFD = errors.New("CAN: invalid TransferRateFD")
+	errCANTimeout               = errors.New("CAN: timeout")
+	errCANTxFifoFull            = errors.New("CAN: Tx FIFO full")
 )
 
-// DLC to bytes lookup table
-var dlcToBytes = [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64}
+// enableFDCANClock enables the FDCAN peripheral clock
+func enableFDCANClock() {
+	// FDCAN clock is on APB1
+	stm32.RCC.SetAPBENR1_FDCANEN(1)
+}
 
-// Configure initializes the FDCAN peripheral
-func (can *FDCAN) Configure(config FDCANConfig) error {
-	// Configure standby pin if specified (for CAN transceivers with standby control)
-	// Setting it low enables the transceiver
+// flags implemented as described in [CAN.SetRxCallback]
+var canRxCB [2]canRxCallback
+
+// canInstances tracks CAN peripherals with interrupt-driven RX enabled.
+// A non-nil entry means setRxCallback was called with a non-nil callback.
+var canInstances [2]*CAN
+
+// Configure initializes the FDCAN peripheral and starts it.
+func (can *CAN) Configure(config CANConfig) error {
+	can.alwaysFD = config.AlwaysFD
+
 	if config.Standby != NoPin {
 		config.Standby.Configure(PinConfig{Mode: PinOutput})
 		config.Standby.Low()
 	}
 
-	// Enable FDCAN clock
 	enableFDCANClock()
 
-	// Configure TX and RX pins
 	config.Tx.ConfigureAltFunc(PinConfig{Mode: PinOutput}, can.TxAltFuncSelect)
 	config.Rx.ConfigureAltFunc(PinConfig{Mode: PinInputFloating}, can.RxAltFuncSelect)
 
-	// Exit from sleep mode
+	// Exit sleep mode.
 	can.Bus.SetCCCR_CSR(0)
-
-	// Wait for sleep mode exit
 	timeout := 10000
 	for can.Bus.GetCCCR_CSA() != 0 {
 		timeout--
 		if timeout == 0 {
-			return errFDCANTimeout
+			return errCANTimeout
 		}
 	}
 
-	// Request initialization
+	// Request initialization.
 	can.Bus.SetCCCR_INIT(1)
-
-	// Wait for init mode
 	timeout = 10000
 	for can.Bus.GetCCCR_INIT() == 0 {
 		timeout--
 		if timeout == 0 {
-			return errFDCANTimeout
+			return errCANTimeout
 		}
 	}
 
-	// Enable configuration change
+	// Enable configuration change.
 	can.Bus.SetCCCR_CCE(1)
 
-	// Configure clock divider (only for FDCAN1)
 	if can.Bus == stm32.FDCAN1 {
-		can.Bus.SetCKDIV_PDIV(0)
-		//can.Bus.CKDIV.Set(0) // No division
+		can.Bus.SetCKDIV_PDIV(0) // No clock division.
 	}
 
-	// Enable automatic retransmission
-	can.Bus.SetCCCR_DAR(0)
+	can.Bus.SetCCCR_DAR(0)  // Enable auto retransmission.
+	can.Bus.SetCCCR_TXP(0)  // Disable transmit pause.
+	can.Bus.SetCCCR_PXHD(0) // Enable protocol exception handling.
+	can.Bus.SetCCCR_FDOE(1) // FD operation.
+	can.Bus.SetCCCR_BRSE(1) // Bit rate switching.
 
-	// Disable transmit pause
-	can.Bus.SetCCCR_TXP(0)
-
-	// Enable protocol exception handling
-	can.Bus.SetCCCR_PXHD(0)
-
-	// Enable FD mode with bit rate switching
-	can.Bus.SetCCCR_FDOE(1)
-	can.Bus.SetCCCR_BRSE(1)
-
-	// Configure operating mode
+	// Reset mode bits, then apply requested mode.
 	can.Bus.SetCCCR_TEST(0)
 	can.Bus.SetCCCR_MON(0)
 	can.Bus.SetCCCR_ASM(0)
 	can.Bus.SetTEST_LBCK(0)
-
 	switch config.Mode {
-	case FDCANModeBusMonitoring:
+	case CANModeBusMonitoring:
 		can.Bus.SetCCCR_MON(1)
-	case FDCANModeInternalLoopback:
+	case CANModeInternalLoopback:
 		can.Bus.SetCCCR_TEST(1)
 		can.Bus.SetCCCR_MON(1)
 		can.Bus.SetTEST_LBCK(1)
-	case FDCANModeExternalLoopback:
+	case CANModeExternalLoopback:
 		can.Bus.SetCCCR_TEST(1)
 		can.Bus.SetTEST_LBCK(1)
 	}
 
-	// Set nominal bit timing
-	// STM32G0 runs at 64MHz, FDCAN clock = PCLK = 64MHz
-	// Bit time = (1 + NTSEG1 + NTSEG2) * tq
-	// tq = (NBRP + 1) / fCAN_CLK
+	// Nominal bit timing (64 MHz FDCAN clock, 16 tq/bit, ~80% sample point).
 	if config.TransferRate == 0 {
 		config.TransferRate = FDCANTransferRate500kbps
 	}
-
-	nbrp, ntseg1, ntseg2, nsjw, err := can.calculateNominalBitTiming(config.TransferRate)
+	nbrp, ntseg1, ntseg2, nsjw, err := fdcanNominalBitTiming(config.TransferRate)
 	if err != nil {
 		return err
 	}
 	can.Bus.NBTP.Set(((nsjw - 1) << 25) | ((nbrp - 1) << 16) | ((ntseg1 - 1) << 8) | (ntseg2 - 1))
 
-	// Set data bit timing (for FD mode)
+	// Data bit timing (FD phase).
 	if config.TransferRateFD == 0 {
 		config.TransferRateFD = FDCANTransferRate1000kbps
 	}
 	if config.TransferRateFD < config.TransferRate {
-		return errFDCANInvalidTransferRateFD
+		return errCANInvalidTransferRateFD
 	}
-
-	dbrp, dtseg1, dtseg2, dsjw, err := can.calculateDataBitTiming(config.TransferRateFD)
+	dbrp, dtseg1, dtseg2, dsjw, err := fdcanDataBitTiming(config.TransferRateFD)
 	if err != nil {
 		return err
 	}
 	can.Bus.DBTP.Set(((dbrp - 1) << 16) | ((dtseg1 - 1) << 8) | ((dtseg2 - 1) << 4) | (dsjw - 1))
 
-	// Configure message RAM
-	can.configureMessageRAM()
+	// Enable timestamp counter (internal, prescaler=1).
+	can.Bus.TSCC.Set(1)
 
-	return nil
-}
+	// Clear message RAM.
+	base := can.sramBase()
+	for addr := base; addr < base+sramcanSize; addr += 4 {
+		*(*uint32)(unsafe.Pointer(addr)) = 0
+	}
 
-// Start enables the FDCAN peripheral for communication
-func (can *FDCAN) Start() error {
-	// Disable configuration change
+	// Set filter list sizes: LSS[20:16], LSE[27:24].
+	rxgfc := can.Bus.RXGFC.Get()
+	rxgfc &= ^uint32(0x0F1F0000)
+	rxgfc |= uint32(sramcanFLSNbr) << 16
+	rxgfc |= uint32(sramcanFLENbr) << 24
+	can.Bus.RXGFC.Set(rxgfc)
+
+	// Start peripheral.
 	can.Bus.SetCCCR_CCE(0)
-
-	// Exit initialization mode
 	can.Bus.SetCCCR_INIT(0)
-
-	// Wait for normal operation
-	timeout := 10000
-
+	timeout = 10000
 	for can.Bus.GetCCCR_INIT() != 0 {
 		timeout--
 		if timeout == 0 {
-			return errFDCANTimeout
+			return errCANTimeout
 		}
 	}
 
 	return nil
 }
 
-// Stop disables the FDCAN peripheral
-func (can *FDCAN) Stop() error {
-	// Request initialization
+// Stop puts the FDCAN peripheral back into initialization mode.
+func (can *CAN) Stop() error {
 	can.Bus.SetCCCR_INIT(1)
-
-	// Wait for init mode
 	timeout := 10000
 	for can.Bus.GetCCCR_INIT() == 0 {
 		timeout--
 		if timeout == 0 {
-			return errFDCANTimeout
+			return errCANTimeout
 		}
 	}
-
-	// Enable configuration change
 	can.Bus.SetCCCR_CCE(1)
-
 	return nil
 }
 
-// TxFifoIsFull returns true if the TX FIFO is full
-func (can *FDCAN) TxFifoIsFull() bool {
-	return (can.Bus.TXFQS.Get() & 0x00200000) != 0 // TFQF bit
+// txFIFOLevel implements [CAN.TxFIFOLevel].
+func (can *CAN) txFIFOLevel() (int, int) {
+	free := int(can.Bus.TXFQS.Get() & 0x07) // TFFL[2:0]
+	return sramcanTFQNbr - free, sramcanTFQNbr
 }
 
-// TxFifoFreeLevel returns the number of free TX FIFO elements
-func (can *FDCAN) TxFifoFreeLevel() int {
-	return int(can.Bus.TXFQS.Get() & 0x07) // TFFL[2:0]
-}
-
-// RxFifoSize returns the number of messages in RX FIFO 0
-func (can *FDCAN) RxFifoSize() int {
-	return int(can.Bus.RXF0S.Get() & 0x0F) // F0FL[3:0]
-}
-
-// RxFifoIsEmpty returns true if RX FIFO 0 is empty
-func (can *FDCAN) RxFifoIsEmpty() bool {
-	return (can.Bus.RXF0S.Get() & 0x0F) == 0
-}
-
-// TxRaw transmits a CAN frame using the raw buffer element structure
-func (can *FDCAN) TxRaw(e *FDCANTxBufferElement) error {
-	// Check if TX FIFO is full
-	if can.TxFifoIsFull() {
-		return errFDCANTxFifoFull
+// tx implements [CAN.Tx].
+func (can *CAN) tx(id canID, flags canFlags, data []byte) error {
+	if can.Bus.TXFQS.Get()&0x00200000 != 0 { // TFQF bit
+		return errCANTxFifoFull
 	}
 
-	// Get put index
-	putIndex := (can.Bus.TXFQS.Get() >> 16) & 0x03 // TFQPI[1:0]
-
-	// Calculate TX buffer address
-	sramBase := can.getSRAMBase()
-	txAddress := sramBase + sramcanTFQSA + (uintptr(putIndex) * sramcanTFQSize)
-
-	// Build first word
-	var w1 uint32
-	id := e.ID
-	if !e.XTD {
-		// Standard ID - shift to bits [28:18]
-		id = (id & 0x7FF) << 18
-	}
-	w1 = id & 0x1FFFFFFF
-	if e.ESI {
-		w1 |= fdcanElementMaskESI
-	}
-	if e.XTD {
-		w1 |= fdcanElementMaskXTD
-	}
-	if e.RTR {
-		w1 |= fdcanElementMaskRTR
-	}
-
-	// Build second word
-	var w2 uint32
-	w2 = uint32(e.DLC) << 16
-	if e.FDF {
-		w2 |= fdcanElementMaskFDF
-	}
-	if e.BRS {
-		w2 |= fdcanElementMaskBRS
-	}
-	if e.EFC {
-		w2 |= fdcanElementMaskEFC
-	}
-	w2 |= uint32(e.MM) << 24
-
-	// Write to message RAM
-	*(*uint32)(unsafe.Pointer(txAddress)) = w1
-	*(*uint32)(unsafe.Pointer(txAddress + 4)) = w2
-
-	// Copy data bytes - must use 32-bit word access on Cortex-M0+
-	dataLen := dlcToBytes[e.DLC&0x0F]
-	numWords := (dataLen + 3) / 4
-	for w := byte(0); w < numWords; w++ {
-		var word uint32
-		baseIdx := w * 4
-		for b := byte(0); b < 4 && baseIdx+b < dataLen; b++ {
-			word |= uint32(e.DB[baseIdx+b]) << (b * 8)
-		}
-		*(*uint32)(unsafe.Pointer(txAddress + 8 + uintptr(w)*4)) = word
-	}
-
-	// Request transmission
-	can.Bus.TXBAR.Set(1 << putIndex)
-
-	return nil
-}
-
-// Tx transmits a CAN frame with the specified ID and data
-func (can *FDCAN) Tx(id uint32, data []byte, isFD, isExtendedID bool) error {
 	length := byte(len(data))
 	if length > 64 {
 		length = 64
 	}
-	if !isFD && length > 8 {
-		length = 8
-	}
 
-	e := FDCANTxBufferElement{
-		ESI: false,
-		XTD: isExtendedID,
-		RTR: false,
-		ID:  id,
-		MM:  0,
-		EFC: false,
-		FDF: isFD,
-		BRS: isFD,
-		DLC: FDCANLengthToDlc(length, isFD),
-	}
+	// Use FD framing if configured to always use FD, or if data exceeds classic CAN max.
+	isFD := flags&canFlagFDF != 0 || length > 8
 
-	for i := byte(0); i < length; i++ {
-		e.DB[i] = data[i]
-	}
+	putIndex := (can.Bus.TXFQS.Get() >> 16) & 0x03 // TFQPI[1:0]
+	txAddr := can.sramBase() + sramcanTFQSA + uintptr(putIndex)*sramcanTFQSize
 
-	return can.TxRaw(&e)
-}
-
-// RxRaw receives a CAN frame into the raw buffer element structure
-func (can *FDCAN) RxRaw(e *FDCANRxBufferElement) error {
-	if can.RxFifoIsEmpty() {
-		return errFDCANRxFifoEmpty
-	}
-
-	// Get get index
-	getIndex := (can.Bus.RXF0S.Get() >> 8) & 0x03 // F0GI[1:0]
-
-	// Calculate RX buffer address
-	sramBase := can.getSRAMBase()
-	rxAddress := sramBase + sramcanRF0SA + (uintptr(getIndex) * sramcanRF0Size)
-
-	// Read first word
-	w1 := *(*uint32)(unsafe.Pointer(rxAddress))
-	e.ESI = (w1 & fdcanElementMaskESI) != 0
-	e.XTD = (w1 & fdcanElementMaskXTD) != 0
-	e.RTR = (w1 & fdcanElementMaskRTR) != 0
-
-	if e.XTD {
-		e.ID = w1 & fdcanElementMaskEXTID
+	// Header word 1: identifier and flags.
+	var w1 uint32
+	if flags&canFlagESI != 0 {
+		w1 = (id & 0x1FFFFFFF) | fdcanElementMaskXTD
 	} else {
-		e.ID = (w1 & fdcanElementMaskSTDID) >> 18
+		w1 = (id & 0x7FF) << 18
 	}
 
-	// Read second word
-	w2 := *(*uint32)(unsafe.Pointer(rxAddress + 4))
-	e.RXTS = uint16(w2 & fdcanElementMaskTS)
-	e.DLC = uint8((w2 & fdcanElementMaskDLC) >> 16)
-	e.BRS = (w2 & fdcanElementMaskBRS) != 0
-	e.FDF = (w2 & fdcanElementMaskFDF) != 0
-	e.FIDX = uint8((w2 & fdcanElementMaskFIDX) >> 24)
-	e.ANMF = (w2 & fdcanElementMaskANMF) != 0
+	// Header word 2: DLC, FD/BRS flags.
+	dlc := lengthToDLC(length)
+	w2 := uint32(dlc) << 16
+	if isFD {
+		w2 |= fdcanElementMaskFDF | fdcanElementMaskBRS
+	}
 
-	// Copy data bytes - must use 32-bit word access on Cortex-M0+
-	dataLen := dlcToBytes[e.DLC&0x0F]
-	numWords := (dataLen + 3) / 4
-	for w := byte(0); w < numWords; w++ {
-		word := *(*uint32)(unsafe.Pointer(rxAddress + 8 + uintptr(w)*4))
-		baseIdx := w * 4
-		for b := byte(0); b < 4 && baseIdx+b < dataLen; b++ {
-			e.DB[baseIdx+b] = byte(word >> (b * 8))
+	*(*uint32)(unsafe.Pointer(txAddr)) = w1
+	*(*uint32)(unsafe.Pointer(txAddr + 4)) = w2
+
+	// Copy data with 32-bit word access (Cortex-M0+).
+	for w := byte(0); w < (length+3)/4; w++ {
+		var word uint32
+		base := w * 4
+		for b := byte(0); b < 4 && base+b < length; b++ {
+			word |= uint32(data[base+b]) << (b * 8)
 		}
+		*(*uint32)(unsafe.Pointer(txAddr + 8 + uintptr(w)*4)) = word
 	}
 
-	// Acknowledge the read
-	can.Bus.RXF0A.Set(uint32(getIndex))
-
+	can.Bus.TXBAR.Set(1 << putIndex)
 	return nil
 }
 
-// Rx receives a CAN frame and returns its components
-func (can *FDCAN) Rx() (id uint32, dlc byte, data []byte, isFD, isExtendedID bool, err error) {
-	e := FDCANRxBufferElement{}
-	err = can.RxRaw(&e)
-	if err != nil {
-		return 0, 0, nil, false, false, err
+// rxFIFOLevel implements [CAN.RxFIFOLevel].
+// Returns 0,0 when interrupt-driven (messages delivered via callback).
+func (can *CAN) rxFIFOLevel() (int, int) {
+	if canInstances[can.instance] != nil {
+		return 0, 0
 	}
-
-	length := FDCANDlcToLength(e.DLC, e.FDF)
-	return e.ID, length, e.DB[:length], e.FDF, e.XTD, nil
+	level := int(can.Bus.RXF0S.Get() & 0x0F) // F0FL[3:0]
+	return level, sramcanRF0Nbr
 }
 
-// SetInterrupt configures interrupt handling for the FDCAN peripheral
-func (can *FDCAN) SetInterrupt(ie uint32, callback func(*FDCAN)) error {
-	if callback == nil {
-		can.Bus.IE.ClearBits(ie)
+// setRxCallback implements [CAN.SetRxCallback].
+// When cb is non-nil, interrupt-driven receive is enabled on RX FIFO 0.
+// The CAN.Interrupt field must be initialized with interrupt.New in the board file.
+func (can *CAN) setRxCallback(cb canRxCallback) {
+	canRxCB[can.instance] = cb
+	if cb != nil {
+		canInstances[can.instance] = can
+		// Enable RX FIFO 0 new message interrupt, routed to interrupt line 0.
+		can.Bus.SetIE_RF0NE(1)
+		can.Bus.SetILS_RxFIFO0(0)
+		can.Bus.SetILE_EINT0(1)
+		can.Interrupt.Enable()
+	} else {
+		can.Bus.SetIE_RF0NE(0)
+		canInstances[can.instance] = nil
+	}
+}
+
+// rxPoll implements [CAN.RxPoll].
+// No-op when interrupt-driven receive is active.
+func (can *CAN) rxPoll() error {
+	if canInstances[can.instance] != nil {
 		return nil
 	}
-
-	can.Bus.IE.SetBits(ie)
-
-	idx := can.instance
-	fdcanInstances[idx] = can
-
-	for i := uint(0); i < 32; i++ {
-		if ie&(1<<i) != 0 {
-			fdcanCallbacks[idx][i] = callback
-		}
+	cb := canRxCB[can.instance]
+	if cb == nil {
+		return nil
 	}
-
-	can.Interrupt.Enable()
+	processRxFIFO0(can, cb)
 	return nil
 }
 
-// ConfigureFilter configures a message filter
-func (can *FDCAN) ConfigureFilter(config FDCANFilterConfig) error {
-	sramBase := can.getSRAMBase()
+// processRxFIFO0 drains RX FIFO 0 and delivers each message to cb.
+// Used by both rxPoll (poll mode) and canHandleInterrupt (interrupt mode).
+func processRxFIFO0(can *CAN, cb canRxCallback) {
+	for can.Bus.RXF0S.Get()&0x0F != 0 {
+		getIndex := (can.Bus.RXF0S.Get() >> 8) & 0x03 // F0GI[1:0]
+		rxAddr := can.sramBase() + sramcanRF0SA + uintptr(getIndex)*sramcanRF0Size
 
-	if config.IsExtendedID {
-		// Extended filter
-		if config.Index >= sramcanFLENbr {
-			return errors.New("FDCAN: filter index out of range")
+		w1 := *(*uint32)(unsafe.Pointer(rxAddr))
+		w2 := *(*uint32)(unsafe.Pointer(rxAddr + 4))
+
+		extendedID := w1&fdcanElementMaskXTD != 0
+		var id uint32
+		var flags uint32
+		if extendedID {
+			flags |= canFlagIDE
+			id = w1 & fdcanElementMaskEXTID
+		} else {
+			id = (w1 & fdcanElementMaskSTDID) >> 18
 		}
 
-		filterAddr := sramBase + sramcanFLESA + (uintptr(config.Index) * sramcanFLESize)
+		timestamp := w2 & fdcanElementMaskTS
+		dlc := byte((w2 & fdcanElementMaskDLC) >> 16)
+		isFD := w2&fdcanElementMaskFDF != 0
 
-		// Build filter elements
+		if isFD {
+			flags |= canFlagFDF
+		}
+		if w1&fdcanElementMaskRTR != 0 {
+			flags |= canFlagRTR
+		}
+		if w2&fdcanElementMaskBRS != 0 {
+			flags |= canFlagBRS
+		}
+		if w1&fdcanElementMaskESI != 0 {
+			flags |= canFlagESI
+		}
+
+		dataLen := dlcToLength(dlc)
+		if !isFD && dataLen > 8 {
+			dataLen = 8
+		}
+		var buf [64]byte
+		for w := byte(0); w < (dataLen+3)/4; w++ {
+			word := *(*uint32)(unsafe.Pointer(rxAddr + 8 + uintptr(w)*4))
+			base := w * 4
+			for b := byte(0); b < 4 && base+b < dataLen; b++ {
+				buf[base+b] = byte(word >> (b * 8))
+			}
+		}
+
+		// Acknowledge before callback so the FIFO slot is freed.
+		can.Bus.RXF0A.Set(uint32(getIndex))
+		cb(buf[:dataLen], id, timestamp, flags)
+	}
+}
+
+// canHandleInterrupt is the shared interrupt handler for FDCAN interrupt line 0 (IRQ_TIM16).
+// Both FDCAN1 and FDCAN2 share this IRQ vector.
+func canHandleInterrupt(interrupt.Interrupt) {
+	for i := range canInstances {
+		can := canInstances[i]
+		if can == nil {
+			continue
+		}
+		ir := can.Bus.IR.Get()
+		if ir&FDCAN_IT_RX_FIFO0_NEW_MESSAGE != 0 {
+			can.Bus.IR.Set(FDCAN_IT_RX_FIFO0_NEW_MESSAGE) // Write 1 to clear
+			if cb := canRxCB[i]; cb != nil {
+				processRxFIFO0(can, cb)
+			}
+		}
+	}
+}
+
+// ConfigureFilter configures a message acceptance filter.
+func (can *CAN) ConfigureFilter(config CANFilterConfig) error {
+	base := can.sramBase()
+
+	if config.IsExtendedID {
+		if config.Index >= sramcanFLENbr {
+			return errors.New("CAN: filter index out of range")
+		}
+
+		filterAddr := base + sramcanFLESA + (uintptr(config.Index) * sramcanFLESize)
+
 		w1 := (uint32(config.Config) << 29) | (config.ID1 & 0x1FFFFFFF)
 		w2 := (uint32(config.Type) << 30) | (config.ID2 & 0x1FFFFFFF)
 
 		*(*uint32)(unsafe.Pointer(filterAddr)) = w1
 		*(*uint32)(unsafe.Pointer(filterAddr + 4)) = w2
 	} else {
-		// Standard filter
 		if config.Index >= sramcanFLSNbr {
-			return errors.New("FDCAN: filter index out of range")
+			return errors.New("CAN: filter index out of range")
 		}
 
-		filterAddr := sramBase + sramcanFLSSA + (uintptr(config.Index) * sramcanFLSSize)
+		filterAddr := base + sramcanFLSSA + (uintptr(config.Index) * sramcanFLSSize)
 
-		// Build filter element
 		w := (uint32(config.Type) << 30) |
 			(uint32(config.Config) << 27) |
 			((config.ID1 & 0x7FF) << 16) |
@@ -561,56 +487,32 @@ func (can *FDCAN) ConfigureFilter(config FDCANFilterConfig) error {
 	return nil
 }
 
-func (can *FDCAN) getSRAMBase() uintptr {
-	base := uintptr(sramcanBase)
+func (can *CAN) sramBase() uintptr {
 	if can.Bus == stm32.FDCAN2 {
-		base += sramcanSize
+		return uintptr(sramcanBase) + sramcanSize
 	}
-	return base
+	return uintptr(sramcanBase)
 }
 
-func (can *FDCAN) configureMessageRAM() {
-	sramBase := can.getSRAMBase()
-
-	// Clear message RAM
-	for addr := sramBase; addr < sramBase+sramcanSize; addr += 4 {
-		*(*uint32)(unsafe.Pointer(addr)) = 0
-	}
-
-	// Configure filter counts (using RXGFC register)
-	// LSS = number of standard filters, LSE = number of extended filters
-	rxgfc := can.Bus.RXGFC.Get()
-	rxgfc &= ^uint32(0xFF000000)            // Clear LSS and LSE
-	rxgfc |= (sramcanFLSNbr << 24)          // Standard filters
-	rxgfc |= (sramcanFLENbr << 24) & 0xFF00 // Extended filters (shifted)
-	can.Bus.RXGFC.Set(rxgfc)
-}
-
-func (can *FDCAN) calculateNominalBitTiming(rate FDCANTransferRate) (brp, tseg1, tseg2, sjw uint32, err error) {
-	// STM32G0 FDCAN clock = 64MHz
-	// Target: 80% sample point
-	// Bit time = (1 + TSEG1 + TSEG2) time quanta
+// fdcanNominalBitTiming returns prescaler and segment values for the nominal (arbitration) phase.
+// STM32G0 FDCAN clock = 64 MHz, 16 time quanta per bit, ~80% sample point.
+func fdcanNominalBitTiming(rate CANTransferRate) (brp, tseg1, tseg2, sjw uint32, err error) {
 	switch rate {
 	case FDCANTransferRate125kbps:
-		// 64MHz / 32 = 2MHz, 16 tq per bit = 125kbps
 		return 32, 13, 2, 4, nil
 	case FDCANTransferRate250kbps:
-		// 64MHz / 16 = 4MHz, 16 tq per bit = 250kbps
 		return 16, 13, 2, 4, nil
 	case FDCANTransferRate500kbps:
-		// 64MHz / 8 = 8MHz, 16 tq per bit = 500kbps
 		return 8, 13, 2, 4, nil
 	case FDCANTransferRate1000kbps:
-		// 64MHz / 4 = 16MHz, 16 tq per bit = 1Mbps
 		return 4, 13, 2, 4, nil
 	default:
-		return 0, 0, 0, 0, errFDCANInvalidTransferRate
+		return 0, 0, 0, 0, errCANInvalidTransferRate
 	}
 }
 
-func (can *FDCAN) calculateDataBitTiming(rate FDCANTransferRate) (brp, tseg1, tseg2, sjw uint32, err error) {
-	// STM32G0 FDCAN clock = 64MHz
-	// For data phase, we need higher bit rates
+// fdcanDataBitTiming returns prescaler and segment values for the data phase (FD).
+func fdcanDataBitTiming(rate CANTransferRate) (brp, tseg1, tseg2, sjw uint32, err error) {
 	switch rate {
 	case FDCANTransferRate125kbps:
 		return 32, 13, 2, 4, nil
@@ -621,91 +523,10 @@ func (can *FDCAN) calculateDataBitTiming(rate FDCANTransferRate) (brp, tseg1, ts
 	case FDCANTransferRate1000kbps:
 		return 4, 13, 2, 4, nil
 	case FDCANTransferRate2000kbps:
-		// 64MHz / 2 = 32MHz, 16 tq per bit = 2Mbps
 		return 2, 13, 2, 4, nil
 	case FDCANTransferRate4000kbps:
-		// 64MHz / 1 = 64MHz, 16 tq per bit = 4Mbps
 		return 1, 13, 2, 4, nil
 	default:
-		return 0, 0, 0, 0, errFDCANInvalidTransferRateFD
+		return 0, 0, 0, 0, errCANInvalidTransferRateFD
 	}
-}
-
-// FDCANDlcToLength converts a DLC value to actual byte length
-func FDCANDlcToLength(dlc byte, isFD bool) byte {
-	if dlc > 15 {
-		dlc = 15
-	}
-	length := dlcToBytes[dlc]
-	if !isFD && length > 8 {
-		return 8
-	}
-	return length
-}
-
-// FDCANLengthToDlc converts a byte length to DLC value
-func FDCANLengthToDlc(length byte, isFD bool) byte {
-	if !isFD {
-		if length > 8 {
-			return 8
-		}
-		return length
-	}
-
-	switch {
-	case length <= 8:
-		return length
-	case length <= 12:
-		return 9
-	case length <= 16:
-		return 10
-	case length <= 20:
-		return 11
-	case length <= 24:
-		return 12
-	case length <= 32:
-		return 13
-	case length <= 48:
-		return 14
-	default:
-		return 15
-	}
-}
-
-// Interrupt handling
-var (
-	fdcanInstances [2]*FDCAN
-	fdcanCallbacks [2][32]func(*FDCAN)
-)
-
-func fdcanHandleInterrupt(idx int) {
-	if fdcanInstances[idx] == nil {
-		return
-	}
-
-	can := fdcanInstances[idx]
-	ir := can.Bus.IR.Get()
-	can.Bus.IR.Set(ir) // Clear interrupt flags
-
-	for i := uint(0); i < 32; i++ {
-		if ir&(1<<i) != 0 && fdcanCallbacks[idx][i] != nil {
-			fdcanCallbacks[idx][i](can)
-		}
-	}
-}
-
-// Data returns the received data as a slice
-func (e *FDCANRxBufferElement) Data() []byte {
-	return e.DB[:FDCANDlcToLength(e.DLC, e.FDF)]
-}
-
-// Length returns the actual data length
-func (e *FDCANRxBufferElement) Length() byte {
-	return FDCANDlcToLength(e.DLC, e.FDF)
-}
-
-// enableFDCANClock enables the FDCAN peripheral clock
-func enableFDCANClock() {
-	// FDCAN clock is on APB1
-	stm32.RCC.SetAPBENR1_FDCANEN(1)
 }

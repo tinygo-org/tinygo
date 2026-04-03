@@ -135,7 +135,7 @@ var (
 
 	// FDCAN1 on PD0 (RX) / PD1 (TX) with onboard transceiver
 	CAN1  = &_CAN1
-	_CAN1 = FDCAN{
+	_CAN1 = CAN{
 		Bus:             stm32.FDCAN1,
 		TxAltFuncSelect: AF3_FDCAN1_FDCAN2,
 		RxAltFuncSelect: AF3_FDCAN1_FDCAN2,
