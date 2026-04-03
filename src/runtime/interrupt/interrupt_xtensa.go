@@ -1,4 +1,4 @@
-//go:build xtensa
+//go:build xtensa && !esp32s3
 
 package interrupt
 

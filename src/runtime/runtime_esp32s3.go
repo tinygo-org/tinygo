@@ -3,8 +3,10 @@
 package runtime
 
 import (
+	"device"
 	"device/esp"
 	"machine"
+	"unsafe"
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
@@ -75,6 +77,9 @@ func main() {
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
+	// Set up the Xtensa interrupt vector table.
+	interruptInit()
+
 	// Initialize the heap, call main.main, etc.
 	run()
 
@@ -90,6 +95,42 @@ func init() {
 func abort() {
 	// lock up forever
 	print("abort called\n")
+}
+
+// interruptInit installs the Xtensa vector table by writing its address
+// to the VECBASE special register and ensures all CPU interrupts are
+// initially disabled.
+func interruptInit() {
+	// Disable all CPU interrupts while we configure.
+	device.AsmFull("wsr {zero}, INTENABLE", map[string]interface{}{
+		"zero": uintptr(0),
+	})
+
+	// Write the vector table address to VECBASE (SR 231).
+	vecbase := uintptr(unsafe.Pointer(&_vector_table))
+	device.AsmFull("wsr {vecbase}, VECBASE", map[string]interface{}{
+		"vecbase": vecbase,
+	})
+
+	// Clear PS.EXCM and PS.INTLEVEL so that level-1 interrupts can fire.
+	// The ROM bootloader leaves PS.EXCM=1 (exception mode), which masks
+	// all interrupts at level ≤ EXCMLEVEL (level 1 on ESP32-S3).
+	// PS.INTLEVEL may also be non-zero. Both must be 0 for peripheral
+	// interrupts to trigger.
+	//
+	// We also set PS.UM=1 (bit 5) so that level-1 interrupts route to
+	// the User exception vector at VECBASE+0x340, where our handler lives.
+	// With PS.UM=0 (the ROM default), they would go to the Kernel exception
+	// vector at VECBASE+0x300 which is an infinite-loop stub.
+	ps := uintptr(device.AsmFull("rsr {}, PS", nil))
+	ps &^= 0x1F // clear INTLEVEL (bits 0-3) and EXCM (bit 4)
+	ps |= 0x20  // set PS.UM (bit 5) — use User exception vector
+	device.AsmFull("wsr {ps}, PS", map[string]interface{}{
+		"ps": ps,
+	})
+
+	// Synchronize pipeline after writing special registers.
+	device.Asm("rsync")
 }
 
 //go:extern _vector_table
