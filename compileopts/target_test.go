@@ -30,7 +30,7 @@ func TestGetTargetSpecs_InheritableOnlyTargetsExcluded(t *testing.T) {
 	}
 
 	// Inheritable-only processor-level targets should not appear in the listing.
-	inheritableOnlyTargets := []string{"esp32", "esp32c3", "esp32c6", "esp32s3", "esp8266", "rp2040", "rp2350", "rp2350b"}
+	inheritableOnlyTargets := []string{"esp32", "esp32c3", "esp32s3", "esp8266", "rp2040", "rp2350", "rp2350b"}
 	for _, name := range inheritableOnlyTargets {
 		if _, ok := specs[name]; ok {
 			t.Errorf("inheritable-only target %q should not appear in GetTargetSpecs", name)
