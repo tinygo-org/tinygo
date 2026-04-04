@@ -1,5 +1,6 @@
 {
     "inherits": ["cortex-m33"],
+    "inheritable-only": true,
     "build-tags": ["rp2350", "rp"],
     "scheduler": "tasks",
     "flash-1200-bps-reset": "true",

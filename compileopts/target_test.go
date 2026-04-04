@@ -23,6 +23,37 @@ func TestLoadTarget(t *testing.T) {
 	}
 }
 
+func TestGetTargetSpecs_InheritableOnlyTargetsExcluded(t *testing.T) {
+	specs, err := GetTargetSpecs()
+	if err != nil {
+		t.Fatal("GetTargetSpecs failed:", err)
+	}
+
+	// Inheritable-only processor-level targets should not appear in the listing.
+	inheritableOnlyTargets := []string{"esp32", "esp32c3", "esp32s3", "esp8266", "rp2040", "rp2350", "rp2350b"}
+	for _, name := range inheritableOnlyTargets {
+		if _, ok := specs[name]; ok {
+			t.Errorf("inheritable-only target %q should not appear in GetTargetSpecs", name)
+		}
+	}
+
+	// Board targets that inherit from inheritable-only targets should still appear.
+	boardTargets := []string{"esp32-coreboard-v2", "pico"}
+	for _, name := range boardTargets {
+		if _, ok := specs[name]; !ok {
+			t.Errorf("board target %q should appear in GetTargetSpecs", name)
+		}
+	}
+}
+
+func TestLoadTarget_InheritableOnlyTargetStillLoadable(t *testing.T) {
+	// Inheritable-only targets should still be loadable directly (for building).
+	_, err := LoadTarget(&Options{Target: "esp32"})
+	if err != nil {
+		t.Errorf("LoadTarget should still load inheritable-only target esp32: %v", err)
+	}
+}
+
 func TestOverrideProperties(t *testing.T) {
 	baseAutoStackSize := true
 	base := &TargetSpec{
