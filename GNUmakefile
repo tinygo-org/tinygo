@@ -263,7 +263,7 @@ gen-device-renesas: build/gen-device-svd
 	GO111MODULE=off $(GO) fmt ./src/device/renesas
 
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b tinygo_20.x --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b tinygo_20.x.1 --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm ## Get LLVM sources
 
 # Configure LLVM.
