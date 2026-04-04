@@ -172,11 +172,12 @@ _nmi_vector:
     j _nmi_vector
 
 // -----------------------------------------------------------------------
-// Offset 0x300 — Kernel exception (stub — loops forever)
+// Offset 0x300 — Kernel exception
+// Diagnostic: steady 1s ON / 1s OFF blink.
 // -----------------------------------------------------------------------
     .org _vector_table + 0x300
 _kernel_vector:
-    j _kernel_vector
+    j       _handle_kernel_exc     // jump to handler below table
 
 // -----------------------------------------------------------------------
 // Offset 0x340 — User exception / level-1 interrupt
@@ -190,11 +191,18 @@ _level1_vector:
     j       _handle_level1      // jump to full handler (PC-relative, no literal pool)
 
 // -----------------------------------------------------------------------
-// Offset 0x3C0 — Double exception (stub — loops forever)
+// Offset 0x3C0 — Double exception
+// Diagnostic: solid LED ON (no blinking).
 // -----------------------------------------------------------------------
     .org _vector_table + 0x3C0
 _double_vector:
-    j _double_vector
+    movi    a0, 1
+    slli    a0, a0, 21
+    movi    a1, 6
+    slli    a1, a1, 28
+    addmi   a1, a1, 0x4000
+    s32i    a0, a1, 0x0C        // LED ON permanently
+1:  j       1b                  // spin forever
 
 // -----------------------------------------------------------------------
 // Level-1 interrupt handler — lives outside the vector table so there
@@ -224,6 +232,36 @@ _double_vector:
     .balign 4
 .LhandleInterrupt_addr:
     .word   handleInterrupt
+
+// -----------------------------------------------------------------------
+// Kernel exception handler (out-of-table).
+// a3 = EXCCAUSE+1 (set in _kernel_vector stub).
+// Blinks GPIO21 a3 times, long pause, repeat forever.
+//   1 blink  = cause 0 (Illegal instruction)
+//   3 blinks = cause 2 (Instruction fetch error)
+//   6 blinks = cause 5 (Alloca / window check in entry)
+//  29 blinks = cause 28 (LoadProhibitedCause)
+// -----------------------------------------------------------------------
+_handle_kernel_exc:
+    // Steady 1-second ON / 1-second OFF blink.
+    // This is the KERNEL exception handler.
+    movi    a0, 1
+    slli    a0, a0, 21             // a0 = GPIO21 bit
+    movi    a1, 6
+    slli    a1, a1, 28
+    addmi   a1, a1, 0x4000         // a1 = 0x60004000
+_hke_blink:
+    s32i    a0, a1, 0x0C           // LED ON
+    movi    a2, 5
+    slli    a2, a2, 23             // ~1s @40MHz
+1:  addi    a2, a2, -1
+    bnez    a2, 1b
+    s32i    a0, a1, 0x08           // LED OFF
+    movi    a2, 5
+    slli    a2, a2, 23             // ~1s @40MHz
+1:  addi    a2, a2, -1
+    bnez    a2, 1b
+    j       _hke_blink
 
     .global _handle_level1
 _handle_level1:

@@ -1,15 +1,25 @@
-/* Linker script for the ESP32-S3 */
-
+/* Linker script for the ESP32-S3 (flash XIP)
+ *
+ * The ESP32-S3 has 512KB of internal SRAM:
+ *   - SRAM0 (32KB): 0x40370000-0x40377FFF — used by ICache when flash XIP is
+ *     active, so we MUST NOT place code here.
+ *   - SRAM1 (416KB): dual-mapped as IRAM 0x40378000-0x403DFFFF and
+ *     DRAM 0x3FC88000-0x3FCEFFFF.
+ *
+ * Flash is memory-mapped via the cache:
+ *   - DROM (read-only data): 0x3C000000, up to 32MB
+ *   - IROM (executable code): 0x42000000, up to 32MB
+ * The MMU uses 64KB pages, so the bottom 16 bits of the virtual address
+ * and the flash offset must match. Dummy sections handle this alignment.
+ */
 
 MEMORY
 {
-    /* Note: DRAM and IRAM below are actually in the same 416K address space. */
-    DRAM (rw) : ORIGIN = 0x3FC88000, LENGTH = 416K /* Internal SRAM 1 (data bus) */
-    IRAM (x)  : ORIGIN = 0x40370000, LENGTH = 416K /* Internal SRAM 1 (instruction bus) */
+    DRAM (rw) : ORIGIN = 0x3FC88000, LENGTH = 416K
+    IRAM (x)  : ORIGIN = 0x40378000, LENGTH = 416K /* SRAM1 only (SRAM0 used by ICache) */
 
-    /* Note: DROM and IROM below are actually in the same 32M address space. */
-    DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 32M /* Data bus (read-only) */
-    IROM (rx) : ORIGIN = 0x42000000, LENGTH = 32M /* Instruction bus */
+    DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 32M /* Flash data bus (read-only) */
+    IROM (rx) : ORIGIN = 0x42000000, LENGTH = 32M /* Flash instruction bus */
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be
@@ -19,9 +29,25 @@ ENTRY(call_start_cpu0)
 
 SECTIONS
 {
+    /* Dummy section so that .rodata starts right after the image header
+     * and DROM segment header in the flash image.
+     */
+    .rodata_dummy (NOLOAD): ALIGN(4)
+    {
+        . += 0x18; /* esp_image_header_t at start of flash */
+        . += 0x8;  /* DROM segment header (8 bytes) */
+    } > DROM
+
+    /* Constant global variables, stored in flash (DROM). */
+    .rodata : ALIGN(4)
+    {
+        *(.rodata*)
+        . = ALIGN (4);
+    } >DROM
+
     /* Put the stack at the bottom of DRAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
-     * See: http://blog.japaric.io/stack-overflow-protection/ */
+     */
     .stack (NOLOAD) :
     {
         . = ALIGN(16);
@@ -29,86 +55,106 @@ SECTIONS
         _stack_top = .;
     } >DRAM
 
-    /* Constant literals and code. Loaded into IRAM for now. Eventually, most
-     * code should be executed directly from flash.
-     * Note that literals must be before code for the l32r instruction to work.
-     */
-.text.call_start_cpu0 : ALIGN(4)
-{
-    *(.literal.call_start_cpu0)
-    *(.text.call_start_cpu0)
-} >IRAM AT >DRAM
-
-/* Xtensa exception/interrupt vector table — must be 0x400-aligned. */
-.text.exception_vectors : ALIGN(0x400)
-{
-    *(.text.exception_vectors)
-} >IRAM AT >DRAM
-
-/* Level-1 interrupt handler (called from the vector stub). */
-.text._handle_level1 : ALIGN(4)
-{
-    *(.literal._handle_level1)
-    *(.text._handle_level1)
-} >IRAM AT >DRAM
-
-/* All other code and literals */
-.text : ALIGN(4)
-{
-    *(.literal .text)
-    *(.literal.* .text.*)
-    *(.text)
-    *(.text.*)
-} >IRAM AT >DRAM
-
-    /* Constant global variables.
-     * They are loaded in DRAM for ease of use. Eventually they should be stored
-     * in flash and loaded directly from there but they're kept in RAM to make
-     * sure they can always be accessed (even in interrupts).
-     */
-    .rodata : ALIGN(4)
-    {
-        *(.rodata)
-        *(.rodata.*)
-    } >DRAM
-
-    /* Mutable global variables.
-     */
-    .data : ALIGN(4)
-    {
-        _sdata = ABSOLUTE(.);
-        *(.data)
-        *(.data.*)
-        _edata = ABSOLUTE(.);
-    } >DRAM
-
-    /* Check that the boot ROM stack (for the APP CPU) does not overlap with the
-     * data that is loaded by the boot ROM. There may be ways to avoid this
-     * issue if it occurs in practice.
-     * The magic value here is _stack_sentry in the boot ROM ELF file.
-     */
-    ASSERT(_edata < 0x3ffe1320, "the .data section overlaps with the stack used by the boot ROM, possibly causing corruption at startup")
-
-    /* Global variables that are mutable and zero-initialized.
-     * These must be zeroed at startup (unlike data, which is loaded by the
-     * bootloader).
-     */
+    /* Global variables that are mutable and zero-initialized. */
     .bss (NOLOAD) : ALIGN(4)
     {
         . = ALIGN (4);
         _sbss = ABSOLUTE(.);
-        *(.bss)
-        *(.bss.*)
+        *(.bss .bss.*)
         . = ALIGN (4);
         _ebss = ABSOLUTE(.);
     } >DRAM
+
+    /* Mutable global variables, initialized by the ROM bootloader. */
+    .data : ALIGN(4)
+    {
+        . = ALIGN (4);
+        _sdata = ABSOLUTE(.);
+        *(.data .data.*)
+        *(.dram*)
+        . = ALIGN (4);
+        _edata = ABSOLUTE(.);
+    } >DRAM
+
+    /* Dummy section to skip past stack+bss+data in IRAM (dual-mapped with DRAM). */
+    .iram_dummy (NOLOAD): ALIGN(4)
+    {
+        . += SIZEOF(.stack);
+        . += SIZEOF(.bss);
+        . += SIZEOF(.data);
+    } > IRAM
+
+    /* IRAM segment: boot code, interrupt vectors, and any code that must
+     * run from RAM. Loaded into SRAM by the ROM bootloader.
+     */
+    .iram : ALIGN(4)
+    {
+        /* Boot entry point and its literals */
+        *(.literal.call_start_cpu0)
+        *(.text.call_start_cpu0)
+
+        /* Xtensa exception/interrupt vector table — must be 0x400-aligned */
+        . = ALIGN(0x400);
+        *(.text.exception_vectors)
+
+        /* Level-1 interrupt handler */
+        *(.literal._handle_level1)
+        *(.text._handle_level1)
+
+        /* WiFi/BLE blob IRAM sections */
+        *(.iram*)
+        *(.wifislprxiram*)
+        *(.wifiextrairam*)
+        *(.wifi0iram*)
+        *(.wifislpiram*)
+        *(.wifirxiram*)
+        *(.wifiorslpiram*)
+        *(.iram1*)
+        *(.coexiram*)
+
+        /* Init code — reclaimed for heap after startup */
+        __init_start = .;
+        *(.init)
+        __init_end = .;
+        . = ALIGN(4);
+        _iram_end = .;
+    } >IRAM
+
+    /* Dummy section to put the IROM segment at the correct flash offset. */
+    .text_dummy (NOLOAD): ALIGN(4)
+    {
+        . += 0x18;                                                  /* esp_image_header_t */
+        . += SIZEOF(.rodata) + ((SIZEOF(.rodata) != 0) ? 0x8 : 0); /* DROM segment (optional) */
+        . += SIZEOF(.data)   + ((SIZEOF(.data)   != 0) ? 0x8 : 0); /* DRAM segment (optional) */
+        . += SIZEOF(.iram)   + 0x8;                                 /* IRAM segment */
+        . += 0x8;                                                   /* IROM segment header */
+    } > IROM
+
+    /* IROM segment: main code executed from flash via cache. */
+    .text : ALIGN(4)
+    {
+        *(.literal .text)
+        *(.literal.* .text.*)
+        _irom_end = .;
+    } >IROM
+
+    /DISCARD/ :
+    {
+        *(.eh_frame)
+    }
 }
 
 /* For the garbage collector.
+ * _heap_start must be after the DRAM shadow of the IRAM section.
+ * IRAM and DRAM share the same physical SRAM1, with addresses offset by
+ * (IRAM_ORIGIN - DRAM_ORIGIN) = 0x6F0000. We use _iram_end (the actual
+ * end of .iram in IRAM space) converted to DRAM to avoid counting any
+ * alignment gaps between .iram_dummy and .iram.
+ * Init code at the end of .iram can be reclaimed for heap.
  */
-_globals_start = _sdata;
-_globals_end = _ebss;
-_heap_start = _ebss;
+_globals_start = _sbss;
+_globals_end = _edata;
+_heap_start = _iram_end - 0x6F0000 - (__init_end - __init_start);
 _heap_end = ORIGIN(DRAM) + LENGTH(DRAM);
 
 _stack_size = 4K;
