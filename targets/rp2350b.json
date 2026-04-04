@@ -1,5 +1,6 @@
 {
     "inherits": ["rp2350"],
+    "inheritable-only": true,
     "build-tags": ["rp2350b"],
     "serial-port": ["2e8a:000f"]
 }

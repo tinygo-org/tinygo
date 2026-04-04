@@ -39,6 +39,8 @@ import (
 	"go.bug.st/serial/enumerator"
 )
 
+var errInheritableOnly = errors.New("target is inheritable-only, which means it cannot be used directly for building or flashing")
+
 // commandError is an error type to wrap os/exec.Command errors. This provides
 // some more information regarding what went wrong while running a command.
 type commandError struct {
@@ -140,6 +142,10 @@ func printCommand(cmd string, args ...string) {
 
 // Build compiles and links the given package and writes it to outpath.
 func Build(pkgName, outpath string, config *compileopts.Config) error {
+	if config.Target != nil && config.Target.InheritableOnly {
+		return errInheritableOnly
+	}
+
 	// Create a temporary directory for intermediary files.
 	tmpdir, err := os.MkdirTemp("", "tinygo")
 	if err != nil {
@@ -355,6 +361,10 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
+	}
+
+	if config.Target != nil && config.Target.InheritableOnly {
+		return errInheritableOnly
 	}
 
 	// determine the type of file to compile
@@ -784,6 +794,10 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return err
+	}
+
+	if config.Target != nil && config.Target.InheritableOnly {
+		return errInheritableOnly
 	}
 
 	_, err = buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
