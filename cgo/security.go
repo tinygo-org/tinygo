@@ -78,6 +78,7 @@ var validCompilerFlags = []*regexp.Regexp{
 	re(`-f(no-)?(pic|PIC|pie|PIE)`),
 	re(`-f(no-)?plt`),
 	re(`-f(no-)?rtti`),
+	re(`-f(no-)?short-enums`),
 	re(`-f(no-)?split-stack`),
 	re(`-f(no-)?stack-(.+)`),
 	re(`-f(no-)?strict-aliasing`),
