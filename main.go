@@ -1060,10 +1060,9 @@ const (
 )
 
 func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Options) error {
-	var opts *espflasher.FlasherOptions
+	opts := espflasher.DefaultOptions()
 	// On Windows, we have to explicitly specify the reset mode to use USB JTAG.
 	if runtime.GOOS == "windows" && resetMode == jtagReset {
-		opts = espflasher.DefaultOptions()
 		opts.ResetMode = espflasher.ResetUSBJTAG
 	}
 
