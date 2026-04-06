@@ -153,71 +153,28 @@ func KeyBufferPop() (byte, bool) {
 	return b, true
 }
 
-// convertKeyToBytes converts an InputKey to bytes (handling special keys).
-func convertKeyToBytes(key InputKey) {
-	// Handle special scan codes (arrow keys, function keys, etc.)
-	if key.ScanCode != ScanNull {
-		var seq []byte
-		switch key.ScanCode {
-		case ScanUp:
-			seq = []byte{0x1b, '[', 'A'}
-		case ScanDown:
-			seq = []byte{0x1b, '[', 'B'}
-		case ScanRight:
-			seq = []byte{0x1b, '[', 'C'}
-		case ScanLeft:
-			seq = []byte{0x1b, '[', 'D'}
-		case ScanHome:
-			seq = []byte{0x1b, '[', 'H'}
-		case ScanEnd:
-			seq = []byte{0x1b, '[', 'F'}
-		case ScanIns:
-			seq = []byte{0x1b, '[', '2', '~'}
-		case ScanDel:
-			seq = []byte{0x1b, '[', '3', '~'}
-		case ScanPgUp:
-			seq = []byte{0x1b, '[', '5', '~'}
-		case ScanPgDn:
-			seq = []byte{0x1b, '[', '6', '~'}
-		case ScanF1:
-			seq = []byte{0x1b, 'O', 'P'}
-		case ScanF2:
-			seq = []byte{0x1b, 'O', 'Q'}
-		case ScanF3:
-			seq = []byte{0x1b, 'O', 'R'}
-		case ScanF4:
-			seq = []byte{0x1b, 'O', 'S'}
-		case ScanF5:
-			seq = []byte{0x1b, '[', '1', '5', '~'}
-		case ScanF6:
-			seq = []byte{0x1b, '[', '1', '7', '~'}
-		case ScanF7:
-			seq = []byte{0x1b, '[', '1', '8', '~'}
-		case ScanF8:
-			seq = []byte{0x1b, '[', '1', '9', '~'}
-		case ScanF9:
-			seq = []byte{0x1b, '[', '2', '0', '~'}
-		case ScanF10:
-			seq = []byte{0x1b, '[', '2', '1', '~'}
-		case ScanEsc:
-			seq = []byte{0x1b}
-		default:
-			return // Unknown scan code, ignore
-		}
-		keyBufferPushBytes(seq)
-		return
-	}
-
-	// Handle regular characters
-	if c := byte(key.UnicodeChar); c < 128 {
-		if c != 0 {
-			keyBufferPushByte(c)
-		}
-		return
-	}
-
-	// Non-ASCII character, output '?'
-	keyBufferPushByte('?')
+var specialKeys = map[uint16][]byte{
+	ScanUp:    []byte{'\x1b', '[', 'A'},           // ESC [ A
+	ScanDown:  []byte{'\x1b', '[', 'B'},           // ESC [ B
+	ScanRight: []byte{'\x1b', '[', 'C'},           // ESC [ C
+	ScanLeft:  []byte{'\x1b', '[', 'D'},           // ESC [ D
+	ScanHome:  []byte{'\x1b', '[', 'H'},           // ESC [ H
+	ScanEnd:   []byte{'\x1b', '[', 'F'},           // ESC [ F
+	ScanIns:   []byte{'\x1b', '[', '2', '~'},      // ESC [ 2 ~
+	ScanDel:   []byte{'\x1b', '[', '3', '~'},      // ESC [ 3 ~
+	ScanPgUp:  []byte{'\x1b', '[', '5', '~'},      // ESC [ 5 ~
+	ScanPgDn:  []byte{'\x1b', '[', '6', '~'},      // ESC [ 6 ~
+	ScanF1:    []byte{'\x1b', 'O', 'P'},           // ESC O P
+	ScanF2:    []byte{'\x1b', 'O', 'Q'},           // ESC O Q
+	ScanF3:    []byte{'\x1b', 'O', 'R'},           // ESC O R
+	ScanF4:    []byte{'\x1b', 'O', 'S'},           // ESC O S
+	ScanF5:    []byte{'\x1b', '[', '1', '5', '~'}, // ESC [ 1 5 ~
+	ScanF6:    []byte{'\x1b', '[', '1', '7', '~'}, // ESC [ 1 7 ~
+	ScanF7:    []byte{'\x1b', '[', '1', '8', '~'}, // ESC [ 1 8 ~
+	ScanF8:    []byte{'\x1b', '[', '1', '9', '~'}, // ESC [ 1 9 ~
+	ScanF9:    []byte{'\x1b', '[', '2', '0', '~'}, // ESC [ 2 0 ~
+	ScanF10:   []byte{'\x1b', '[', '2', '1', '~'}, // ESC [ 2 1 ~
+	ScanEsc:   []byte{'\x1b'},                     // ESC
 }
 
 // ReadKey reads all available keys using the Ex protocol and buffers them.
@@ -237,7 +194,25 @@ func ReadKey() {
 		if status != Success {
 			break
 		}
-		convertKeyToBytes(keyData.Key)
+
+		// Converts an InputKey to bytes (handling special keys).
+		if keyData.Key.ScanCode != ScanNull {
+			if seq, ok := specialKeys[keyData.Key.ScanCode]; ok {
+				keyBufferPushBytes(seq)
+			}
+			continue
+		}
+
+		// Handle regular characters
+		if c := byte(keyData.Key.UnicodeChar); c < 128 {
+			if c != 0 {
+				keyBufferPushByte(c)
+			}
+			continue
+		}
+
+		// Non-ASCII character, output '?'
+		keyBufferPushByte('?')
 	}
 }
 
