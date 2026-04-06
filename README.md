@@ -142,7 +142,7 @@ Non-goals:
 
 ## Why this project exists
 
-> We never expected Go to be an embedded language and so its got serious problems...
+> We never expected Go to be an embedded language, and so it’s got serious problems...
 
 -- Rob Pike, [GopherCon 2014 Opening Keynote](https://www.youtube.com/watch?v=VoS7DsT1rdM&feature=youtu.be&t=2799)
 
