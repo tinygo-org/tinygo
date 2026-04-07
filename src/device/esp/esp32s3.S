@@ -87,6 +87,15 @@
     .long 0x600C4064
 .Ldcache_ctrl1_reg:
     .long 0x600C4004
+// End-of-section symbols for multi-page MMU mapping.
+.Lirom_end:
+    .long _irom_end
+.Ldrom_end:
+    .long _drom_end
+.Lirom_base:
+    .long 0x42000000
+.Ldrom_base:
+    .long 0x3C000000
 
 .global call_start_cpu0
 call_start_cpu0:
@@ -255,16 +264,43 @@ call_start_cpu0:
     l32r a4, .LCache_Set_IDROM_MMU_Size
     callx4 a4
 
-    // 4i. Write MMU entries: map flash page 0 for both IROM and DROM.
+    // 4i. Map flash pages for IROM and DROM using identity mapping.
     //     MMU table at 0x600C5000: entries 0-255 = ICache, 256-511 = DCache.
-    //     Entry value 0 = flash page 0, valid (SOC_MMU_VALID = 0).
-    //     Our .text (IROM, VMA 0x42000xxx) and .rodata (DROM, VMA 0x3C000xxx)
-    //     both reside in flash page 0 (first 64KB).
+    //     Entry value N = flash page N (SOC_MMU_VALID = 0 on S3).
+    //     Each 64KB page needs one 4-byte entry.
+    //
+    //     IROM: map pages 0..N where N = (_irom_end - 0x42000000) >> 16
+    //     DROM: map pages 0..M where M = (_drom_end - 0x3C000000) >> 16
+
     l32r a8, .Lmmu_table_base          // a8 = 0x600C5000
-    movi a9, 0                          // flash page 0
-    s32i a9, a8, 0                      // Entry 0:   ICache VMA 0x42000000
-    addmi a10, a8, 0x400                // a10 = 0x600C5400 (entry 256)
-    s32i a9, a10, 0                     // Entry 256: DCache VMA 0x3C000000
+
+    // --- IROM pages ---
+    l32r a2, .Lirom_end                // a2 = _irom_end (VMA in 0x42xxxxxx)
+    l32r a3, .Lirom_base               // a3 = 0x42000000
+    sub  a2, a2, a3                    // a2 = byte offset past IROM base
+    srli a2, a2, 16                    // a2 = last page index
+    addi a2, a2, 1                     // a2 = number of pages to map
+    movi a9, 0                         // a9 = page counter (and entry value)
+    mov  a10, a8                       // a10 = current MMU entry pointer
+.Lirom_loop:
+    s32i a9, a10, 0
+    addi a9, a9, 1
+    addi a10, a10, 4
+    blt  a9, a2, .Lirom_loop
+
+    // --- DROM pages ---
+    l32r a2, .Ldrom_end                // a2 = _drom_end (VMA in 0x3Cxxxxxx)
+    l32r a3, .Ldrom_base               // a3 = 0x3C000000
+    sub  a2, a2, a3                    // a2 = byte offset past DROM base
+    srli a2, a2, 16                    // a2 = last page index
+    addi a2, a2, 1                     // a2 = number of pages to map
+    movi a9, 0                         // a9 = page counter (and entry value)
+    addmi a10, a8, 0x400              // a10 = 0x600C5400 (DCache entry 256)
+.Ldrom_loop:
+    s32i a9, a10, 0
+    addi a9, a9, 1
+    addi a10, a10, 4
+    blt  a9, a2, .Ldrom_loop
     memw
 
     // 4j. Clear bus-shut bits so core 0 can access ICache and DCache buses.
