@@ -96,8 +96,11 @@ func init() {
 }
 
 func abort() {
-	// lock up forever
 	print("abort called\n")
+	// lock up forever
+	for {
+		device.Asm("waiti 0")
+	}
 }
 
 // interruptInit installs the Xtensa vector table by writing its address

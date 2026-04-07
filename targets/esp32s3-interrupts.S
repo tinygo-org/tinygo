@@ -173,7 +173,7 @@ _nmi_vector:
 
 // -----------------------------------------------------------------------
 // Offset 0x300 — Kernel exception
-// Diagnostic: steady 1s ON / 1s OFF blink.
+// Writes EXCCAUSE+EPC1 to RTC STORE regs, then triggers software reset.
 // -----------------------------------------------------------------------
     .org _vector_table + 0x300
 _kernel_vector:
@@ -192,17 +192,39 @@ _level1_vector:
 
 // -----------------------------------------------------------------------
 // Offset 0x3C0 — Double exception
-// Diagnostic: solid LED ON (no blinking).
+// Diagnostic: write magic to RTC STORE regs, then halt.
+// RTC_CNTL_STORE0 = 0x60008050, STORE1 = 0x60008054
 // -----------------------------------------------------------------------
     .org _vector_table + 0x3C0
 _double_vector:
-    movi    a0, 1
-    slli    a0, a0, 21
-    movi    a1, 6
-    slli    a1, a1, 28
-    addmi   a1, a1, 0x4000
-    s32i    a0, a1, 0x0C        // LED ON permanently
-1:  j       1b                  // spin forever
+    // Write 0x55550000 + EXCCAUSE to RTC_CNTL_STORE0 (0x60008050)
+    // Build address: 0x60008050 = 6<<28 + 0x4000 + 0x4000 + 0x50
+    movi    a0, 6
+    slli    a0, a0, 28             // a0 = 0x60000000
+    addmi   a0, a0, 0x4000         // a0 = 0x60004000
+    addmi   a0, a0, 0x4000         // a0 = 0x60008000
+    addi    a0, a0, 0x50           // a0 = 0x60008050
+    rsr     a1, EXCCAUSE
+    movi    a2, 0x555
+    slli    a2, a2, 20             // a2 = 0x55500000
+    movi    a3, 5
+    slli    a3, a3, 16             // a3 = 0x00050000
+    or      a2, a2, a3             // a2 = 0x55550000
+    or      a1, a2, a1             // a1 = 0x5555xxxx
+    s32i    a1, a0, 0              // STORE0
+    rsr     a1, DEPC
+    s32i    a1, a0, 4              // STORE1 = DEPC
+    rsr     a1, EPC1
+    s32i    a1, a0, 8              // STORE2 = EPC1
+    // Trigger software system reset (preserves RTC STORE regs).
+    // RTC_CNTL_OPTIONS0_REG = 0x60008000, bit 31 = SW_SYS_RST
+    addi    a0, a0, -0x50          // a0 = 0x60008000
+    l32i    a1, a0, 0
+    movi    a2, 1
+    slli    a2, a2, 31
+    or      a1, a1, a2
+    s32i    a1, a0, 0              // trigger reset
+1:  j       1b                     // wait for reset
 
 // -----------------------------------------------------------------------
 // Level-1 interrupt handler — lives outside the vector table so there
@@ -232,6 +254,13 @@ _double_vector:
     .balign 4
 .LhandleInterrupt_addr:
     .word   handleInterrupt
+.Luser_exception_addr:
+    .word   espradio_user_exception
+
+    // Make espradio_user_exception a weak reference so programs that don't
+    // link espradio (e.g. blinky) still build.  The default handler below
+    // is used when no strong definition is provided.
+    .weak   espradio_user_exception
 
 // -----------------------------------------------------------------------
 // Kernel exception handler (out-of-table).
@@ -243,25 +272,30 @@ _double_vector:
 //  29 blinks = cause 28 (LoadProhibitedCause)
 // -----------------------------------------------------------------------
 _handle_kernel_exc:
-    // Steady 1-second ON / 1-second OFF blink.
-    // This is the KERNEL exception handler.
-    movi    a0, 1
-    slli    a0, a0, 21             // a0 = GPIO21 bit
-    movi    a1, 6
-    slli    a1, a1, 28
-    addmi   a1, a1, 0x4000         // a1 = 0x60004000
-_hke_blink:
-    s32i    a0, a1, 0x0C           // LED ON
-    movi    a2, 5
-    slli    a2, a2, 23             // ~1s @40MHz
-1:  addi    a2, a2, -1
-    bnez    a2, 1b
-    s32i    a0, a1, 0x08           // LED OFF
-    movi    a2, 5
-    slli    a2, a2, 23             // ~1s @40MHz
-1:  addi    a2, a2, -1
-    bnez    a2, 1b
-    j       _hke_blink
+    // Write 0x55560000 + EXCCAUSE to RTC_CNTL_STORE0 (0x60008050)
+    movi    a0, 6
+    slli    a0, a0, 28
+    addmi   a0, a0, 0x4000
+    addmi   a0, a0, 0x4000
+    addi    a0, a0, 0x50           // a0 = 0x60008050
+    rsr     a1, EXCCAUSE
+    movi    a2, 0x555
+    slli    a2, a2, 20
+    movi    a3, 6
+    slli    a3, a3, 16
+    or      a2, a2, a3             // a2 = 0x55560000
+    or      a1, a2, a1
+    s32i    a1, a0, 0              // STORE0
+    rsr     a1, EPC1
+    s32i    a1, a0, 4              // STORE1 = EPC1
+    // Trigger software system reset (preserves RTC STORE regs).
+    addi    a0, a0, -0x50          // a0 = 0x60008000
+    l32i    a1, a0, 0
+    movi    a2, 1
+    slli    a2, a2, 31
+    or      a1, a1, a2
+    s32i    a1, a0, 0              // trigger reset
+1:  j       1b                     // wait for reset
 
     .global _handle_level1
 _handle_level1:
@@ -312,6 +346,26 @@ _handle_level1:
     wsr     a2, PS
     rsync
 
+    // Check if this is an exception (not an interrupt).
+    // EXCCAUSE == 4 means level-1 interrupt; anything else is an exception.
+    rsr     a2, EXCCAUSE
+    movi    a3, 4
+    beq     a2, a3, .Lis_interrupt
+
+    // --- It's an exception, not an interrupt ---
+    // Call the C exception handler: espradio_user_exception(cause, epc, excvaddr, frame)
+    // Using callx4 (same convention as handleInterrupt).
+    mov     a6, a2              // a6 = EXCCAUSE (will be a2 after window rotate)
+    l32i    a7, a1, 68          // a7 = EPC1 (saved earlier)
+    rsr     a8, EXCVADDR        // a8 = faulting address
+    mov     a9, a1              // a9 = frame pointer (callee a5)
+    mov     a5, a1              // callee stack
+    l32r    a2, .Luser_exception_addr
+    callx4  a2
+    // Does not return — loops forever in the C handler.
+
+.Lis_interrupt:
+
     // Call the Go interrupt dispatcher via callx4.
     // callx4 explicitly sets PS.CALLINC=1 and puts the return address
     // (with top 2 bits = 01) in a4.  After entry rotates the window by
@@ -357,3 +411,16 @@ _handle_level1:
     l32i    a1, a1, 4           // restores original SP (deallocates frame)
 
     rfe
+
+// -----------------------------------------------------------------------
+// Default weak espradio_user_exception: infinite loop halt.
+// Overridden by the strong definition in espradio's isr.c when linked.
+// -----------------------------------------------------------------------
+    .section .iram1, "ax"
+    .balign 4
+    .weak   espradio_user_exception
+    .type   espradio_user_exception, @function
+espradio_user_exception:
+    waiti   0
+    j       espradio_user_exception
+    .size   espradio_user_exception, . - espradio_user_exception
