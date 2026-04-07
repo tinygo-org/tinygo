@@ -74,3 +74,8 @@ func (s *state) pause() {
 func SystemStack() uintptr {
 	return systemStack
 }
+
+//export tinygo_task_current
+func tinygo_task_current() unsafe.Pointer {
+	return unsafe.Pointer(Current())
+}
