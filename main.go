@@ -1060,10 +1060,15 @@ const (
 )
 
 func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Options) error {
-	var opts *espflasher.FlasherOptions
+	opts := espflasher.DefaultOptions()
+	opts.Compress = true
+	opts.Logger = &espflasher.StdoutLogger{W: os.Stdout}
+	if options.BaudRate != 0 {
+		opts.FlashBaudRate = options.BaudRate
+	}
+
 	// On Windows, we have to explicitly specify the reset mode to use USB JTAG.
 	if runtime.GOOS == "windows" && resetMode == jtagReset {
-		opts = espflasher.DefaultOptions()
 		opts.ResetMode = espflasher.ResetUSBJTAG
 	}
 
@@ -1074,8 +1079,6 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 	defer flasher.Close()
 
 	chipName := flasher.ChipName()
-	fmt.Printf("Connected to %s\n", chipName)
-
 	offset := uint32(0x0)
 	if chipName == "ESP32" {
 		offset = 0x1000
@@ -1087,17 +1090,25 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 		return err
 	}
 
+	if err := flasher.EraseFlash(); err != nil {
+		return fmt.Errorf("erase failed: %v", err)
+	}
+
+	progress := func(current, total int) {
+		pct := float64(current) / float64(total) * 100
+		bar := int(pct / 2)
+		fmt.Printf("\r[%-50s] %6.1f%%", strings.Repeat("#", bar)+strings.Repeat(".", 50-bar), pct)
+		if current >= total {
+			fmt.Println()
+		}
+	}
+
 	// Flash with progress reporting
-	err = flasher.FlashImage(data, offset, func(current, total int) {
-		fmt.Printf("\rFlashing: %d/%d bytes (%.0f%%)", current, total,
-			float64(current)/float64(total)*100)
-	})
+	err = flasher.FlashImage(data, offset, progress)
 	if err != nil {
 		return err
 	}
 	fmt.Println()
-
-	time.Sleep(time.Second)
 
 	// Reset the device to run the new firmware
 	flasher.Reset()
