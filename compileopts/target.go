@@ -64,6 +64,9 @@ type TargetSpec struct {
 	OpenOCDCommands  []string `json:"openocd-commands,omitempty"`
 	OpenOCDVerify    *bool    `json:"openocd-verify,omitempty"` // enable verify when flashing with openocd
 	JLinkDevice      string   `json:"jlink-device,omitempty"`
+	ADBPreCommands   []string `json:"adb-pre-commands,omitempty"`
+	ADBPushRemote    string   `json:"adb-push-remote,omitempty"`
+	ADBPostCommands  []string `json:"adb-post-commands,omitempty"`
 	CodeModel        string   `json:"code-model,omitempty"`
 	RelocationModel  string   `json:"relocation-model,omitempty"`
 	WITPackage       string   `json:"wit-package,omitempty"`

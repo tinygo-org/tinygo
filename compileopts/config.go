@@ -536,7 +536,7 @@ func (c *Config) Programmer() (method, openocdInterface string) {
 	case "":
 		// No configuration supplied.
 		return c.Target.FlashMethod, c.Target.OpenOCDInterface
-	case "openocd", "msd", "command":
+	case "openocd", "msd", "command", "adb":
 		// The -programmer flag only specifies the flash method.
 		return c.Options.Programmer, c.Target.OpenOCDInterface
 	case "bmp":

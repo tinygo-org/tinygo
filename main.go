@@ -396,6 +396,8 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		fileExt = ".hex"
 	case "bmp":
 		fileExt = ".elf"
+	case "adb":
+		fileExt = ".hex"
 	case "esp32flash", "esp32jtag":
 		fileExt = ".bin"
 	case "native":
@@ -531,6 +533,38 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		err = cmd.Run()
 		if err != nil {
 			return &commandError{"failed to flash", result.Binary, err}
+		}
+	case "adb":
+		// Run pre-flash adb shell commands.
+		for _, preCmd := range config.Target.ADBPreCommands {
+			cmd := executeCommand(config.Options, "adb", "shell", preCmd)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				return &commandError{"failed to run adb pre-command", preCmd, err}
+			}
+		}
+
+		// Push the binary to the device.
+		if config.Target.ADBPushRemote == "" {
+			return errors.New("invalid target file: flash-method was set to \"adb\" but no adb-push-remote was set")
+		}
+		cmd := executeCommand(config.Options, "adb", "push", result.Binary, config.Target.ADBPushRemote)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return &commandError{"adb push failed to " + config.Target.ADBPushRemote, result.Binary, err}
+		}
+
+		// Run post-flash adb shell commands.
+		for _, postCmd := range config.Target.ADBPostCommands {
+			postCmd = strings.ReplaceAll(postCmd, "{remote}", config.Target.ADBPushRemote)
+			cmd := executeCommand(config.Options, "adb", "shell", postCmd)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				return &commandError{"failed to run adb post-command", postCmd, err}
+			}
 		}
 	case "esp32flash":
 		port, err := getDefaultPort(port, config.Target.SerialPort)
