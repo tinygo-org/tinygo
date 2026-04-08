@@ -1,6 +1,8 @@
 //go:build rp2040 || rp2350
+
 // Used to track contribution from various authors automatically
 // SPDX-FileCopyrightText:  Copyright Hewlett Packard Enterprise Development LP
+//
 package runtime
 
 import (
@@ -121,15 +123,15 @@ func startSecondaryCores() {
 
 	// Reset Core1
 	arm.DisableIRQ(uint32(sioIrqFifoProc0))
-        rp.PSM.SetFRCE_OFF_PROC1(1)
-        // Now we need to restart the core
-        for rp.PSM.GetFRCE_OFF_PROC1() == 0 {
-                // Sleep a little bit
-                sleepTicks(100)
-        }
-        rp.PSM.SetFRCE_OFF_PROC1(0)
+	rp.PSM.SetFRCE_OFF_PROC1(1)
+	// Now we need to restart the core
+	for rp.PSM.GetFRCE_OFF_PROC1() == 0 {
+		// Sleep a little bit
+		sleepTicks(100)
+	}
+	rp.PSM.SetFRCE_OFF_PROC1(0)
 	multicore_fifo_pop_blocking()
-	sleepTicks(1000)	
+	sleepTicks(1000)
 
 	// Start the second core of the RP2040/RP2350.
 	// See sections 2.8.2 and 5.3 in the datasheets for RP2040 and RP2350 respectively.
@@ -156,18 +158,18 @@ func startSecondaryCores() {
 	// We can only do this after we don't need the FIFO anymore for starting the
 	// second core.
 	intr := interrupt.New(sioIrqFifoProc0, func(intr interrupt.Interrupt) {
-                status := rp.SIO.GetFIFO_ST_VLD()
-                if status != 0 {
-                switch rp.SIO.FIFO_RD.Get() {
-                case 1:
-                        if currentCPU() == 1 {
-                                gcInterruptHandler(1)
-                        } else {
-                                gcInterruptHandler(0)
-                        }
-                }
-                }
-        })
+		status := rp.SIO.GetFIFO_ST_VLD()
+		if status != 0 {
+			switch rp.SIO.FIFO_RD.Get() {
+			case 1:
+				if currentCPU() == 1 {
+					gcInterruptHandler(1)
+				} else {
+					gcInterruptHandler(0)
+				}
+			}
+		}
+	})
 	intr.Enable()
 	intr.SetPriority(0xff)
 }
@@ -197,22 +199,22 @@ func runCore1() {
 	// the GC.
 	// Use the lowest possible priority (highest priority value), so that other
 	// interrupts can still happen while the GC is running.
-        intr := interrupt.New(sioIrqFifoProc1, func(intr interrupt.Interrupt) {
-                status := rp.SIO.GetFIFO_ST_VLD()
-                // ok we have just one interrupt vector ... sor
-                // we shall be acting based on CPU number calling in
+	intr := interrupt.New(sioIrqFifoProc1, func(intr interrupt.Interrupt) {
+		status := rp.SIO.GetFIFO_ST_VLD()
+		// ok we have just one interrupt vector ... sor
+		// we shall be acting based on CPU number calling in
 
-                if status != 0 {
-                        switch rp.SIO.FIFO_RD.Get() {
-                                case 1:
-                                        if currentCPU() == 1 {
-                                                gcInterruptHandler(1)
-                                        } else {
-                                                gcInterruptHandler(0)
-                                        }
-                        }
-                }
-        })
+		if status != 0 {
+			switch rp.SIO.FIFO_RD.Get() {
+			case 1:
+				if currentCPU() == 1 {
+					gcInterruptHandler(1)
+				} else {
+					gcInterruptHandler(0)
+				}
+			}
+		}
+	})
 	intr.Enable()
 	intr.SetPriority(0xff)
 
@@ -326,37 +328,37 @@ func coreStackTop(core uint32) uintptr {
 // These spinlocks are needed by the runtime.
 
 type spinLock struct {
-        atomic.Uint32
+	atomic.Uint32
 }
 
 var (
-        schedulerLock spinLock
-        futexLock     spinLock
-        atomicsLock   spinLock
-        printLock     spinLock
+	schedulerLock spinLock
+	futexLock     spinLock
+	atomicsLock   spinLock
+	printLock     spinLock
 )
 
 func resetSpinLocks() {
 	schedulerLock.Store(0)
-        futexLock.Store(0)
-        atomicsLock.Store(0)
-        printLock.Store(0)
+	futexLock.Store(0)
+	atomicsLock.Store(0)
+	printLock.Store(0)
 }
 
 func (l *spinLock) Lock() {
 	// Wait for the lock to be available.
 
 	for !l.Uint32.CompareAndSwap(0, 1) {
-                spinLoopWait()
-        }
+		spinLoopWait()
+	}
 
 }
 
 func (l *spinLock) Unlock() {
-        if schedulerAsserts && l.Uint32.Load() != 1 {
-                runtimePanic("unlock of unlocked spinlock")
-        }
-        l.Uint32.Store(0)
+	if schedulerAsserts && l.Uint32.Load() != 1 {
+		runtimePanic("unlock of unlocked spinlock")
+	}
+	l.Uint32.Store(0)
 }
 
 // Wait until a signal is received, indicating that it can resume from the
