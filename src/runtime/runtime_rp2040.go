@@ -10,3 +10,6 @@ const (
 	sioIrqFifoProc0 = rp.IRQ_SIO_IRQ_PROC0
 	sioIrqFifoProc1 = rp.IRQ_SIO_IRQ_PROC1
 )
+
+func initRP() {
+}

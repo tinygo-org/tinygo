@@ -14,3 +14,7 @@ const (
 	sioIrqFifoProc0 = rp.IRQ_SIO_IRQ_FIFO
 	sioIrqFifoProc1 = rp.IRQ_SIO_IRQ_FIFO
 )
+
+func initRP() {
+	rp.PPB.SetACTLR_EXTEXCLALL(1)
+}

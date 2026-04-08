@@ -393,6 +393,8 @@ func init() {
 	machineInit()
 
 	machine.InitSerial()
+
+	initRP()
 }
 
 func prerun() {
