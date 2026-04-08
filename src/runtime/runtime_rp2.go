@@ -393,8 +393,6 @@ func init() {
 	machineInit()
 
 	machine.InitSerial()
-
-	rp.PPB.SetACTLR_EXTEXCLALL(1)
 }
 
 func prerun() {
