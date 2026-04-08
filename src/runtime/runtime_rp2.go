@@ -2,7 +2,6 @@
 
 // Used to track contribution from various authors automatically
 // SPDX-FileCopyrightText:  Copyright Hewlett Packard Enterprise Development LP
-//
 package runtime
 
 import (
