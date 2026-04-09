@@ -291,3 +291,4 @@
 - repo: github.com/tidwall/gjson
 - repo: github.com/dchest/siphash
   tags: appengine
+- repo: github.com/soypat/lneto
