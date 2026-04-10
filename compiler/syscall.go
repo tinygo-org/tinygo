@@ -349,6 +349,130 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 	}
 }
 
+// createSyscalln emits instructions for the syscall.syscalln function on
+// Windows. This handles the variadic calling convention used in Go 1.26+:
+//
+//	func syscalln(fn, n uintptr, args ...uintptr) (r1, r2 uintptr, err Errno)
+//
+// The function generates a switch on n to dispatch to the correct fixed-argument
+// function pointer call with SetLastError(0)/GetLastError() wrapping.
+func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
+	const maxArgs = 18 // Windows syscalls support up to 18 args
+
+	isI386 := strings.HasPrefix(b.Triple, "i386-")
+
+	// Get the function pointer (call.Args[0]) and n (call.Args[1]).
+	fn := b.getValue(call.Args[0], getPos(call))
+	fnPtr := b.CreateIntToPtr(fn, b.dataPtrType, "")
+	n := b.getValue(call.Args[1], getPos(call))
+
+	// Get the variadic args slice (call.Args[2]).
+	// In SSA, the variadic slice is the third argument.
+	var argsPtr llvm.Value
+	if len(call.Args) > 2 {
+		argsSlice := b.getValue(call.Args[2], getPos(call))
+		argsPtr = b.CreateExtractValue(argsSlice, 0, "args.data")
+	} else {
+		argsPtr = llvm.ConstNull(b.dataPtrType)
+	}
+
+	// Prepare SetLastError and GetLastError.
+	setLastError := b.mod.NamedFunction("SetLastError")
+	if setLastError.IsNil() {
+		llvmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.ctx.Int32Type()}, false)
+		setLastError = llvm.AddFunction(b.mod, "SetLastError", llvmType)
+		if isI386 {
+			setLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
+		}
+	}
+	getLastError := b.mod.NamedFunction("GetLastError")
+	if getLastError.IsNil() {
+		llvmType := llvm.FunctionType(b.ctx.Int32Type(), nil, false)
+		getLastError = llvm.AddFunction(b.mod, "GetLastError", llvmType)
+		if isI386 {
+			getLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
+		}
+	}
+
+	retType := b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false)
+
+	// Create the merge block where all cases converge.
+	mergeBB := b.insertBasicBlock("syscalln.merge")
+
+	// Create the default (panic) block.
+	panicBB := b.insertBasicBlock("syscalln.panic")
+
+	// Create the switch on n.
+	sw := b.CreateSwitch(n, panicBB, maxArgs+1)
+
+	// We'll collect blocks and values for the PHI node.
+	var incomingVals []llvm.Value
+	var incomingBlocks []llvm.BasicBlock
+
+	// Generate a case for each arg count 0..maxArgs.
+	for i := 0; i <= maxArgs; i++ {
+		caseBB := b.insertBasicBlock("syscalln.case" + strconv.Itoa(i))
+		sw.AddCase(llvm.ConstInt(b.uintptrType, uint64(i), false), caseBB)
+		b.SetInsertPointAtEnd(caseBB)
+
+		// Load args[0] through args[i-1] from the slice data pointer.
+		var params []llvm.Value
+		var paramTypes []llvm.Type
+		for j := 0; j < i; j++ {
+			gep := b.CreateInBoundsGEP(b.uintptrType, argsPtr, []llvm.Value{
+				llvm.ConstInt(b.ctx.Int32Type(), uint64(j), false),
+			}, "")
+			arg := b.CreateLoad(b.uintptrType, gep, "")
+			params = append(params, arg)
+			paramTypes = append(paramTypes, b.uintptrType)
+		}
+
+		// SetLastError(0)
+		setCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.ctx.Int32Type())}, "")
+		var sp llvm.Value
+		if isI386 {
+			setCall.SetInstructionCallConv(llvm.X86StdcallCallConv)
+			sp = b.readStackPointer()
+		}
+
+		// Call fn(args...)
+		fnType := llvm.FunctionType(b.uintptrType, paramTypes, false)
+		syscallResult := b.CreateCall(fnType, fnPtr, params, "")
+		if isI386 {
+			syscallResult.SetInstructionCallConv(llvm.X86StdcallCallConv)
+			b.writeStackPointer(sp)
+		}
+
+		// err = GetLastError()
+		errResult := b.CreateCall(getLastError.GlobalValueType(), getLastError, nil, "err")
+		if isI386 {
+			errResult.SetInstructionCallConv(llvm.X86StdcallCallConv)
+		}
+		if b.uintptrType != b.ctx.Int32Type() {
+			errResult = b.CreateZExt(errResult, b.uintptrType, "err.uintptr")
+		}
+
+		// Build {r1, 0, err}
+		result := llvm.ConstNull(retType)
+		result = b.CreateInsertValue(result, syscallResult, 0, "")
+		result = b.CreateInsertValue(result, errResult, 2, "")
+
+		incomingVals = append(incomingVals, result)
+		incomingBlocks = append(incomingBlocks, b.Builder.GetInsertBlock())
+		b.CreateBr(mergeBB)
+	}
+
+	// Panic block for n > maxArgs.
+	b.SetInsertPointAtEnd(panicBB)
+	b.CreateUnreachable()
+
+	// Merge block: PHI node to select the result.
+	b.SetInsertPointAtEnd(mergeBB)
+	phi := b.CreatePHI(retType, "syscalln.result")
+	phi.AddIncoming(incomingVals, incomingBlocks)
+	return phi, nil
+}
+
 // createRawSyscallNoError emits instructions for the Linux-specific
 // syscall.rawSyscallNoError function.
 func (b *builder) createRawSyscallNoError(call *ssa.CallCommon) (llvm.Value, error) {
