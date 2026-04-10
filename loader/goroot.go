@@ -268,6 +268,16 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		paths["crypto/internal/boring/sig/"] = false
 	}
 
+	if goMinor >= 26 {
+		// Go 1.26 added a CPU jitter entropy source for FIPS 140-3 that
+		// allocates a 32 MiB global buffer (ScratchBuffer [1<<25]byte).
+		// This is fine on systems with virtual memory, but causes RAM
+		// overflow on microcontrollers. Replace with a zero-size stub
+		// since TinyGo targets never use FIPS jitter entropy.
+		paths["crypto/internal/entropy/"] = true
+		paths["crypto/internal/entropy/v1.0.0/"] = false
+	}
+
 	if needsSyscallPackage {
 		paths["syscall/"] = true // include syscall/js
 		paths["internal/syscall/"] = true
