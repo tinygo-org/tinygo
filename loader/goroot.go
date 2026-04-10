@@ -273,6 +273,16 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		paths["internal/syscall/"] = true
 		paths["internal/syscall/unix/"] = false
 	}
+
+	if goMinor >= 26 {
+		// Go 1.26 added SWAR optimizations to unicode/utf8 that use
+		// constants assuming at least 32-bit uintptr. TinyGo supports
+		// 16-bit targets (AVR) where these constants overflow, so we
+		// provide a patched version.
+		paths["unicode/"] = true
+		paths["unicode/utf8/"] = false
+	}
+
 	return paths
 }
 
