@@ -29,7 +29,7 @@ var errInvalidPtrToIntSize = errors.New("interp: ptrtoint integer size does not 
 func isRecoverableError(err error) bool {
 	return err == errIntegerAsPointer || err == errUnsupportedInst ||
 		err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated ||
-		err == errLoopUnrolled
+		err == errLoopUnrolled || err == errInvalidPtrToIntSize
 }
 
 // ErrorLine is one line in a traceback. The position may be missing.
