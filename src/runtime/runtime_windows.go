@@ -247,7 +247,7 @@ func growHeap() bool {
 }
 
 //go:linkname syscall_loadsystemlibrary syscall.loadsystemlibrary
-func syscall_loadsystemlibrary(filename *uint16, absoluteFilepath *uint16) (handle, err uintptr) {
+func syscall_loadsystemlibrary(filename *uint16) (handle, err uintptr) {
 	handle = _LoadLibraryExW(filename, 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
 	if handle == 0 {
 		panic("todo: get error")
