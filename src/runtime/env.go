@@ -27,6 +27,16 @@ func syscallUnsetenv(key string) {
 	unsetenv(&keydata[0])
 }
 
+// Clear the environment.
+// Called from Go 1.26 and above.
+//
+//go:linkname syscallClearenv syscall.runtimeClearenv
+func syscallClearenv(env map[string]int) {
+	for k := range env {
+		syscallUnsetenv(k)
+	}
+}
+
 // Compatibility with Go 1.19 and below.
 //
 //go:linkname syscall_setenv_c syscall.setenv_c
