@@ -1,4 +1,8 @@
+//go:build !tinygo.wasm
+
 package unix
+
+import "syscall"
 
 type GetRandomFlag uintptr
 
@@ -8,5 +12,7 @@ const (
 )
 
 func GetRandom(p []byte, flags GetRandomFlag) (n int, err error) {
-	panic("todo: unix.GetRandom")
+	// Not supported on most TinyGo targets.
+	// On real Linux the sysrand package will fall back to /dev/urandom.
+	return 0, syscall.ENOSYS
 }
