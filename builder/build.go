@@ -546,6 +546,24 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if err != nil {
 					return fmt.Errorf("failed to load bitcode file: %w", err)
 				}
+				// Resolve duplicate function definitions before linking.
+				// This can happen when a newer Go version adds a function
+				// body in a standard library package that was previously
+				// just a declaration provided by //go:linkname from the
+				// runtime. In that case, keep the existing (runtime)
+				// definition and turn the new one into a declaration.
+				for fn := pkgMod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+					if fn.IsDeclaration() {
+						continue
+					}
+					existing := mod.NamedFunction(fn.Name())
+					if existing.IsNil() || existing.IsDeclaration() {
+						continue
+					}
+					for _, bb := range fn.BasicBlocks() {
+						bb.EraseFromParent()
+					}
+				}
 				err = llvm.LinkModules(mod, pkgMod)
 				if err != nil {
 					return fmt.Errorf("failed to link module: %w", err)
