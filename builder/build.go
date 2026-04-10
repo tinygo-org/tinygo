@@ -551,7 +551,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				// body in a standard library package that was previously
 				// just a declaration provided by //go:linkname from the
 				// runtime. In that case, keep the existing (runtime)
-				// definition and turn the new one into a declaration.
+				// definition by weakening the new one's linkage so the
+				// LLVM linker discards it in favor of the existing one.
 				for fn := pkgMod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 					if fn.IsDeclaration() {
 						continue
@@ -560,9 +561,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					if existing.IsNil() || existing.IsDeclaration() {
 						continue
 					}
-					for _, bb := range fn.BasicBlocks() {
-						bb.EraseFromParent()
-					}
+					fn.SetLinkage(llvm.LinkOnceODRLinkage)
 				}
 				err = llvm.LinkModules(mod, pkgMod)
 				if err != nil {
