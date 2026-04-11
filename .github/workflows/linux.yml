@@ -16,7 +16,15 @@ jobs:
     # Build Linux binaries, ready for release.
     # This runs inside an Alpine Linux container so we can more easily create a
     # statically linked binary.
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [ amd64, arm64 ]
+        include:
+          - goarch: amd64
+            os: ubuntu-latest
+          - goarch: arm64
+            os: ubuntu-24.04-arm # TODO: use a -latest variant?
+    runs-on: ${{ matrix.os }}
     container:
       image: golang:1.25-alpine
     outputs:
@@ -40,7 +48,7 @@ jobs:
       - name: Cache Go
         uses: actions/cache@v5
         with:
-          key: go-cache-linux-alpine-v1-${{ hashFiles('go.mod') }}
+          key: go-cache-linux-alpine-${{ matrix.goarch }}-v1-${{ hashFiles('go.mod') }}
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
@@ -73,7 +81,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-linux-alpine-v1
+          key: llvm-build-19-linux-alpine-${{ matrix.goarch }}-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -97,7 +105,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-alpine-v1
+          key: binaryen-linux-alpine-${{ matrix.goarch }}-v1
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -116,15 +124,15 @@ jobs:
       - name: Build TinyGo release
         run: |
           make release deb -j3 STATIC=1
-          cp -p build/release.tar.gz /tmp/tinygo${{ steps.version.outputs.version }}.linux-amd64.tar.gz
-          cp -p build/release.deb    /tmp/tinygo_${{ steps.version.outputs.version }}_amd64.deb
+          cp -p build/release.tar.gz /tmp/tinygo${{ steps.version.outputs.version }}.linux-${{ matrix.goarch }}.tar.gz
+          cp -p build/release.deb    /tmp/tinygo_${{ steps.version.outputs.version }}_${{ matrix.goarch }}.deb
       - name: Publish release artifact
         uses: actions/upload-artifact@v7
         with:
-          name: linux-amd64-double-zipped-${{ steps.version.outputs.version }}
+          name: linux-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
           path: |
-            /tmp/tinygo${{ steps.version.outputs.version }}.linux-amd64.tar.gz
-            /tmp/tinygo_${{ steps.version.outputs.version }}_amd64.deb
+            /tmp/tinygo${{ steps.version.outputs.version }}.linux-${{ matrix.goarch }}.tar.gz
+            /tmp/tinygo_${{ steps.version.outputs.version }}-${{ matrix.goarch }}.deb
   test-linux-build:
     # Test the binaries built in the build-linux job by running the smoke tests.
     runs-on: ubuntu-latest
@@ -272,11 +280,8 @@ jobs:
     # part of the release tarball.
     strategy:
       matrix:
-        goarch: [ arm, arm64 ]
+        goarch: [ arm ]
         include:
-          - goarch: arm64
-            toolchain: aarch64-linux-gnu
-            libc: arm64
           - goarch: arm
             toolchain: arm-linux-gnueabihf
             libc: armhf
