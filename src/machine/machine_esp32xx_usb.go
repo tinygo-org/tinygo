@@ -20,8 +20,10 @@ import (
 const cpuInterruptFromUSB = 8
 
 // flushTimeout is the maximum number of busy-wait iterations in flush().
-// Prevents hanging when no USB host is connected.
-const flushTimeout = 200000
+// Must be long enough for 2-3 USB frames (~3ms at 240MHz) so data gets
+// through when a host is connected, but short enough that println doesn't
+// freeze the application when no host is reading.
+const flushTimeout = 50000
 
 type USB_DEVICE struct {
 	Bus    *esp.USB_DEVICE_Type
@@ -123,7 +125,8 @@ func (usbdev *USB_DEVICE) handleInterrupt() {
 func (usbdev *USB_DEVICE) WriteByte(c byte) error {
 	usbdev.ensureConfigured()
 	if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
-		// FIFO full — try flushing first, then recheck.
+		// FIFO not writable — try a short flush to nudge the hardware
+		// (e.g. after reset the FIFO may need WR_DONE to transition).
 		usbdev.flush()
 		if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
 			return errUSBCouldNotWriteAllData
@@ -195,8 +198,9 @@ func (usbdev *USB_DEVICE) RTS() bool {
 	return false
 }
 
-// flush signals WR_DONE and waits (with timeout) for the hardware to
-// consume the data. A timeout prevents hanging when no USB host is present.
+// flush signals WR_DONE and briefly waits for the hardware to accept more
+// data. The timeout is intentionally short so that serial output never
+// stalls the application when no USB host is reading.
 func (usbdev *USB_DEVICE) flush() {
 	usbdev.Bus.SetEP1_CONF_WR_DONE(1)
 	for i := 0; i < flushTimeout; i++ {
