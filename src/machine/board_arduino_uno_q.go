@@ -70,9 +70,12 @@ const (
 	UART2_TX_PIN = PG7
 	UART2_RX_PIN = PG8
 
-	// I2C pins
+	// I2C pins, also connected to I2C2
 	I2C0_SCL_PIN = D20
 	I2C0_SDA_PIN = D21
+	// QWIIC connector pins, also connected to I2C4
+	I2C1_SCL_PIN = PD12
+	I2C1_SDA_PIN = PD13
 
 	// SPI pins
 	SPI1_SCK_PIN = PA5
@@ -109,6 +112,13 @@ var (
 		AltFuncSelector: AF4_I2C1_2_3_4,
 	}
 	I2C0 = I2C2
+
+	// I2C4 is is connected to the QWIIC connector, alias to I2C1 as well
+	I2C4 = &I2C{
+		Bus:             stm32.I2C4,
+		AltFuncSelector: AF4_I2C1_2_3_4,
+	}
+	I2C1 = I2C4
 
 	// SPI1 is documented, alias to SPI0 as well
 	SPI1 = &SPI{
