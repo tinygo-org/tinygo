@@ -167,9 +167,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		// double.
 		args = append(args, "-mdouble=64")
 	case "riscv32":
-		args = append(args, "-march=rv32imac", "-fforce-enable-int128")
+		args = append(args, "-march="+riscvMarch(config, "rv32imac"), "-fforce-enable-int128")
 	case "riscv64":
-		args = append(args, "-march=rv64gc")
+		args = append(args, "-march="+riscvMarch(config, "rv64gc"))
 	case "mips":
 		args = append(args, "-fno-pic")
 	}
@@ -297,4 +297,18 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	return job, func() {
 		once.Do(unlock)
 	}, nil
+}
+
+// riscvMarch returns the -march value for RISC-V library compilation.
+// It extracts the value from the target's cflags if present, otherwise
+// falls back to the provided default. This ensures libraries are compiled
+// with the correct ISA extensions for each target (e.g. rv32imc for
+// ESP32-C3 which lacks the atomic extension).
+func riscvMarch(config *compileopts.Config, defaultMarch string) string {
+	for _, flag := range config.Target.CFlags {
+		if strings.HasPrefix(flag, "-march=") {
+			return flag[len("-march="):]
+		}
+	}
+	return defaultMarch
 }
