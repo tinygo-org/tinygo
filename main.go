@@ -1089,6 +1089,7 @@ func flashHexUsingMSD(volumes []string, tmppath string, options *compileopts.Opt
 }
 
 const (
+	defaultReset = "default"
 	classicReset = "classic"
 	jtagReset    = "jtag"
 )
@@ -1101,8 +1102,7 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 		opts.FlashBaudRate = options.BaudRate
 	}
 
-	// On Windows, we have to explicitly specify the reset mode to use USB JTAG.
-	if runtime.GOOS == "windows" && resetMode == jtagReset {
+	if resetMode == jtagReset {
 		opts.ResetMode = espflasher.ResetUSBJTAG
 	}
 
