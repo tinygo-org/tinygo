@@ -30,6 +30,8 @@ var (
 	stackTop     = uintptr(unsafe.Pointer(&stackTopSymbol))
 )
 
+func allocateHeap() {}
+
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
 // otherwise.
 func growHeap() bool {
@@ -58,6 +60,11 @@ func libc_free(ptr unsafe.Pointer) {
 //export runtime_putchar
 func runtime_putchar(c byte) {
 	putchar(c)
+}
+
+//export abort
+func runtime_abort() {
+	abort()
 }
 
 //go:linkname syscall_Exit syscall.Exit

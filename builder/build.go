@@ -835,7 +835,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				ctx := llvm.NewContext()
 				mod = ctx.NewModule("main")
 				for _, dependency := range job.dependencies {
-					if !strings.HasSuffix(dependency.description, ".S") {
+					if !strings.HasSuffix(dependency.description, ".S") && dependency.description != "<dummy>" {
 						depMod, err := mod.Context().ParseBitcodeFile(dependency.result)
 						if err != nil {
 							return err
