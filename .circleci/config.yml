@@ -96,7 +96,7 @@ jobs:
     # This tests our lowest supported versions of Go and LLVM, to make sure at
     # least the smoke tests still pass.
     docker:
-      - image: golang:1.22-bullseye
+      - image: golang:1.23-bullseye
     steps:
       - test-linux:
           llvm: "15"
