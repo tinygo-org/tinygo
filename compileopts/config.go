@@ -325,6 +325,9 @@ func (c *Config) DefaultBinaryExtension() string {
 		// I think it's a good tradition, so let's keep it.
 		return ".elf"
 	}
+	if c.BuildMode() == "c-archive" {
+		return ".a"
+	}
 	// Linux, MacOS, etc, don't use a file extension. Use it as a fallback.
 	return ""
 }

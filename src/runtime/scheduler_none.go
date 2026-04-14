@@ -28,6 +28,15 @@ func run() {
 	mainExited = true
 }
 
+//export tinygo_init
+func tinygo_init() {
+	allocateHeap()
+	stackTop = getCurrentStackPointer()
+	initRand()
+	initHeap()
+	initAll()
+}
+
 //go:linkname sleep time.Sleep
 func sleep(duration int64) {
 	if duration <= 0 {

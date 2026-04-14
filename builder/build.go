@@ -785,7 +785,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	}
 
 	// Add libc dependencies, if they exist.
-	linkerDependencies = append(linkerDependencies, libcDependencies...)
+	if config.BuildMode() != "c-archive" {
+		linkerDependencies = append(linkerDependencies, libcDependencies...)
+	}
 
 	// Add embedded files.
 	linkerDependencies = append(linkerDependencies, embedFileObjects...)
@@ -828,6 +830,44 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 				ldflags = append(ldflags, dependency.result)
 			}
+
+			if config.BuildMode() == "c-archive" {
+				ctx := llvm.NewContext()
+				mod = ctx.NewModule("main")
+				for _, dependency := range job.dependencies {
+					if !strings.HasSuffix(dependency.description, ".S") {
+						depMod, err := mod.Context().ParseBitcodeFile(dependency.result)
+						if err != nil {
+							return err
+						}
+						err = llvm.LinkModules(mod, depMod)
+						if err != nil {
+							return err
+						}
+					}
+				}
+				if fn := mod.NamedFunction("main"); !fn.IsNil() {
+					fn.EraseFromParentAsFunction()
+				}
+				buf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
+				if err != nil {
+					return err
+				}
+				defer buf.Dispose()
+				err = os.WriteFile(result.Executable, buf.Bytes(), 0666)
+				if err != nil {
+					return err
+				}
+				result.Binary = result.Executable + ".a"
+				args := []string{"rcs", result.Binary, result.Executable}
+				for _, dependency := range job.dependencies {
+					if strings.HasSuffix(dependency.description, ".S") {
+						args = append(args, dependency.result)
+					}
+				}
+				return link("llvm-ar", args...)
+			}
+
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
 			ldflags = append(ldflags, "-mllvm", "-mattr="+config.Features()) // needed for MIPS softfloat
 			if config.GOOS() == "windows" {
