@@ -540,7 +540,7 @@ func (c *compilerContext) isValidWasmType(typ types.Type, site wasmSite) bool {
 		}
 		for i := 0; i < typ.NumFields(); i++ {
 			ftyp := typ.Field(i).Type()
-			if ftyp.String() == "structs.HostLayout" {
+			if types.Unalias(ftyp).String() == "structs.HostLayout" {
 				hasHostLayout = true
 				continue
 			}
