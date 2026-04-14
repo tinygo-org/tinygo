@@ -270,6 +270,42 @@ func TestUserHomeDir(t *testing.T) {
 	}
 }
 
+func TestUserCacheDir(t *testing.T) {
+	dir, err := UserCacheDir()
+	if dir == "" && err == nil {
+		t.Fatal("UserCacheDir returned an empty string but no error")
+	}
+	if err != nil {
+		t.Logf("UserCacheDir failed: %v", err)
+		return
+	}
+	fi, err := Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fi.IsDir() {
+		t.Fatalf("dir %s is not directory; type = %v", dir, fi.Mode())
+	}
+}
+
+func TestUserConfigDir(t *testing.T) {
+	dir, err := UserConfigDir()
+	if dir == "" && err == nil {
+		t.Fatal("UserConfigDir returned an empty string but no error")
+	}
+	if err != nil {
+		t.Logf("UserConfigDir failed: %v", err)
+		return
+	}
+	fi, err := Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fi.IsDir() {
+		t.Fatalf("dir %s is not directory; type = %v", dir, fi.Mode())
+	}
+}
+
 func TestDirFS(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Log("TODO: implement Readdir for Windows")
