@@ -90,6 +90,9 @@ func interfaceTypeAssert(ok bool) {
 	}
 }
 
+// Implemented in the internal/reflectlite package.
+func typeImplementsMethodSet(actualTypeNum, assertedMethodSet unsafe.Pointer) bool
+
 // The following declarations are only used during IR construction. They are
 // lowered to inline IR in the interface lowering pass.
 // See compiler/interface-lowering.go for details.

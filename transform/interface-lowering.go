@@ -272,13 +272,6 @@ func (p *lowerInterfacesPass) run() error {
 		p.defineInterfaceMethodFunc(fn, itf, signature)
 	}
 
-	// Define all interface type assert functions.
-	for _, fn := range interfaceAssertFunctions {
-		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
-		itf := p.interfaces[methodsAttr.GetStringValue()]
-		p.defineInterfaceImplementsFunc(fn, itf)
-	}
-
 	// Replace each type assert with an actual type comparison or (if the type
 	// assert is impossible) the constant false.
 	llvmFalse := llvm.ConstInt(p.ctx.Int1Type(), 0, false)
@@ -426,66 +419,6 @@ func (p *lowerInterfacesPass) getSignature(name string) *signatureInfo {
 		}
 	}
 	return p.signatures[name]
-}
-
-// defineInterfaceImplementsFunc defines the interface type assert function. It
-// checks whether the given interface type (passed as an argument) is one of the
-// types it implements.
-//
-// The type match is implemented using an if/else chain over all possible types.
-// This if/else chain is easily converted to a big switch over all possible
-// types by the LLVM simplifycfg pass.
-func (p *lowerInterfacesPass) defineInterfaceImplementsFunc(fn llvm.Value, itf *interfaceInfo) {
-	// Create the function and function signature.
-	fn.Param(0).SetName("actualType")
-	fn.SetLinkage(llvm.InternalLinkage)
-	fn.SetUnnamedAddr(true)
-	AddStandardAttributes(fn, p.config)
-
-	// Start the if/else chain at the entry block.
-	entry := p.ctx.AddBasicBlock(fn, "entry")
-	thenBlock := p.ctx.AddBasicBlock(fn, "then")
-	p.builder.SetInsertPointAtEnd(entry)
-
-	if p.dibuilder != nil {
-		difile := p.getDIFile("<Go interface assert>")
-		diFuncType := p.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
-			File: difile,
-		})
-		difunc := p.dibuilder.CreateFunction(difile, llvm.DIFunction{
-			Name:         "(Go interface assert)",
-			File:         difile,
-			Line:         0,
-			Type:         diFuncType,
-			LocalToUnit:  true,
-			IsDefinition: true,
-			ScopeLine:    0,
-			Flags:        llvm.FlagPrototyped,
-			Optimized:    true,
-		})
-		fn.SetSubprogram(difunc)
-		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
-	}
-
-	// Iterate over all possible types.  Each iteration creates a new branch
-	// either to the 'then' block (success) or the .next block, for the next
-	// check.
-	actualType := fn.Param(0)
-	for _, typ := range itf.types {
-		nextBlock := p.ctx.AddBasicBlock(fn, typ.name+".next")
-		cmp := p.builder.CreateICmp(llvm.IntEQ, actualType, typ.typecodeGEP, typ.name+".icmp")
-		p.builder.CreateCondBr(cmp, thenBlock, nextBlock)
-		p.builder.SetInsertPointAtEnd(nextBlock)
-	}
-
-	// The builder is now inserting at the last *.next block.  Once we reach
-	// this point, all types have been checked so the type assert will have
-	// failed.
-	p.builder.CreateRet(llvm.ConstInt(p.ctx.Int1Type(), 0, false))
-
-	// Fill 'then' block (type assert was successful).
-	p.builder.SetInsertPointAtEnd(thenBlock)
-	p.builder.CreateRet(llvm.ConstInt(p.ctx.Int1Type(), 1, false))
 }
 
 // defineInterfaceMethodFunc defines this thunk by calling the concrete method

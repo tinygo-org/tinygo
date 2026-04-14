@@ -439,6 +439,58 @@ offset for int64 matches: true
 offset for complex128 matches: true
 type assertion succeeded for unreferenced type
 
+interface implements
+concrete implements:
+myReader → Reader: true
+*myReader → Reader: true
+myWriter → Writer: false
+*myWriter → Writer: true
+myReadWriter → Reader: true
+myReadWriter → Writer: false
+myReadWriter → ReadWriter: false
+*myReadWriter → Reader: true
+*myReadWriter → Writer: true
+*myReadWriter → ReadWriter: true
+myReader → Closer: false
+*myReadWriter → Closer: false
+errorValue → error: true
+errorValue → Stringer: false
+myErrorStringer → error: true
+myErrorStringer → Stringer: true
+myReader → interface{}: true
+int → interface{}: true
+interface implements interface:
+ReadWriter → Reader: true
+ReadWriter → Writer: true
+Reader → ReadWriter: false
+Writer → ReadWriter: false
+ReadCloser → Reader: true
+ReadCloser → Closer: true
+ReadCloser → Writer: false
+Reader → ReadCloser: false
+Reader → Reader: true
+ReadWriter → ReadWriter: true
+error → Stringer: false
+Stringer → error: false
+Reader → interface{}: true
+ReadWriter → interface{}: true
+assignable to:
+int → int: true
+string → string: true
+int → string: false
+int → int64: false
+myReader → Reader: true
+*myWriter → Writer: true
+myWriter → Writer: false
+*myReadWriter → ReadWriter: true
+ReadWriter → Reader: true
+Reader → ReadWriter: false
+int → interface{}: true
+Reader → interface{}: true
+value set interface:
+Set[0] to BarNode: 10
+Set[1] still FooNode: 2
+
 alignment / offset:
 struct{[0]func(); byte}: true
 
