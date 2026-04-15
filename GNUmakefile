@@ -347,6 +347,7 @@ TEST_PACKAGES_FAST = \
 	go/ast \
 	go/format \
 	go/scanner \
+	go/token \
 	go/version \
 	hash \
 	hash/adler32 \
@@ -359,6 +360,7 @@ TEST_PACKAGES_FAST = \
 	math/cmplx \
 	net/http/internal/ascii \
 	net/mail \
+	net/url \
 	os \
 	path \
 	reflect \
