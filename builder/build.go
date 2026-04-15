@@ -835,10 +835,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				ctx := llvm.NewContext()
 				mod = ctx.NewModule("main")
 				for _, dependency := range job.dependencies {
-					if strings.HasSuffix(dependency.description, ".S") || dependency.description == "<dummy>" {
+					if strings.HasSuffix(dependency.description, ".S") ||
+						dependency.description == "<dummy>" {
 						continue
 					}
-					depMod, err := mod.Context().ParseBitcodeFile(dependency.result)
+					depMod, err := ctx.ParseBitcodeFile(dependency.result)
 					if err != nil {
 						return err
 					}
@@ -852,6 +853,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 				if config.Triple() == "xtensa" {
 					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+						switch fn.Name() {
+						case "malloc", "calloc", "free":
+							fn.SetLinkage(llvm.InternalLinkage)
+						}
+						if strings.HasPrefix(fn.Name(), "__atomic_") ||
+							strings.HasPrefix(fn.Name(), "__sync_") {
+							fn.SetLinkage(llvm.InternalLinkage)
+						}
 						if !fn.IsDeclaration() {
 							fn.SetSection(".text." + fn.Name())
 						}
