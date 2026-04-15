@@ -882,10 +882,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						objs = append(objs, dependency.result)
 					}
 				}
-				objfile := result.Executable + ".o"
-				err = link(config.Target.Linker, append(objs, "-r", "-o", objfile)...)
-				if err != nil {
-					return err
+				if config.Triple() == "xtensa" {
+					obj := result.Executable + ".o"
+					err = link(config.Target.Linker, append(objs, "-r", "-o", obj)...)
+					if err != nil {
+						return err
+					}
+					objs = []string{obj}
 				}
 				result.Binary = result.Executable + ".a"
 				f, err := os.Create(result.Binary)
@@ -893,7 +896,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					return err
 				}
 				defer f.Close()
-				return makeArchive(f, []string{objfile})
+				return makeArchive(f, objs)
 			}
 
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
