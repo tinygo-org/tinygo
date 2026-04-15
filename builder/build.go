@@ -861,8 +861,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 							strings.HasPrefix(fn.Name(), "__sync_") {
 							fn.SetLinkage(llvm.InternalLinkage)
 						}
-						if !fn.IsDeclaration() {
-							fn.SetSection(".text." + fn.Name())
+						fn.SetSection(".text." + fn.Name())
+						if fn.Name() == "tinygo_scanstack" {
+							fn.SetSection(".text.tinygo_scanCurrentStack")
 						}
 					}
 				}
@@ -875,19 +876,24 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if err != nil {
 					return err
 				}
-				result.Binary = result.Executable + ".a"
 				objs := []string{result.Executable}
 				for _, dependency := range job.dependencies {
 					if strings.HasSuffix(dependency.description, ".S") {
 						objs = append(objs, dependency.result)
 					}
 				}
+				objfile := result.Executable + ".o"
+				err = link(config.Target.Linker, append(objs, "-r", "-o", objfile)...)
+				if err != nil {
+					return err
+				}
+				result.Binary = result.Executable + ".a"
 				f, err := os.Create(result.Binary)
 				if err != nil {
 					return err
 				}
 				defer f.Close()
-				return makeArchive(f, objs)
+				return makeArchive(f, []string{objfile})
 			}
 
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
