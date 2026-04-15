@@ -338,14 +338,14 @@ func (p *lowerInterfacesPass) run() error {
 
 	// Collect all method signatures that appear in any interface type
 	// descriptor. When reflect is imported and method sets are kept,
-	// concrete type method sets are pruned to only include these
-	// signatures — methods that don't appear in any interface can never
-	// affect typeImplementsMethodSet checks (since Go cannot create new
-	// interface types at runtime).
+	// concrete type method sets are pruned: individual methods not in any
+	// interface are removed, and types that can't fully satisfy at least
+	// one interface have their method sets emptied entirely.
 	//
 	// When method sets are stripped entirely (reflect not imported),
 	// methodFilter is nil and filterMethodSet replaces with empty.
 	var methodFilter map[string]struct{}
+	var ifaceMethodSets []map[string]struct{}
 	if !stripMethodSets {
 		methodFilter = make(map[string]struct{})
 		for _, name := range typeNames {
@@ -354,11 +354,16 @@ func (p *lowerInterfacesPass) run() error {
 			}
 			t := p.types[name]
 			initializer := t.typecode.Initializer()
+			ifaceSet := make(map[string]struct{})
 			for i := 0; i < initializer.Type().StructElementTypesCount(); i++ {
 				field := p.builder.CreateExtractValue(initializer, i, "")
 				for _, sig := range p.extractMethodSigs(field) {
 					methodFilter[sig] = struct{}{}
+					ifaceSet[sig] = struct{}{}
 				}
+			}
+			if len(ifaceSet) > 0 {
+				ifaceMethodSets = append(ifaceMethodSets, ifaceSet)
 			}
 		}
 	}
@@ -373,7 +378,7 @@ func (p *lowerInterfacesPass) run() error {
 			var newInitializerFields []llvm.Value
 			for i := 1; i < initializer.Type().StructElementTypesCount(); i++ {
 				field := p.builder.CreateExtractValue(initializer, i, "")
-				field = p.filterMethodSet(field, methodFilter)
+				field = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
 				newInitializerFields = append(newInitializerFields, field)
 			}
 			newInitializer := p.ctx.ConstStruct(newInitializerFields, false)
@@ -656,10 +661,12 @@ func (p *lowerInterfacesPass) extractMethodSigs(field llvm.Value) []string {
 // Non-method-set fields are returned unchanged.
 //
 // If keepSigs is nil, the method set is replaced with an empty one (strip mode,
-// used when reflect is not imported). If keepSigs is non-nil, only method
-// signatures present in the map are kept (prune mode, used when reflect is
-// imported to discard methods that no interface requires).
-func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[string]struct{}) llvm.Value {
+// used when reflect is not imported). If keepSigs is non-nil, the method set is
+// pruned in two stages: first, methods not in keepSigs (the union of all
+// interface signatures) are removed; then, if the remaining methods cannot
+// fully satisfy at least one interface in ifaceSets, the entire method set is
+// emptied.
+func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[string]struct{}, ifaceSets []map[string]struct{}) llvm.Value {
 	if !p.isMethodSetType(field.Type()) {
 		return field
 	}
@@ -675,17 +682,47 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 		}, false)
 	}
 
-	// Prune mode: keep only methods whose signature appears in keepSigs.
 	if numMethods == 0 {
 		return field
 	}
 
-	var kept []llvm.Value
+	// Extract all methods and their signature names.
+	type methodEntry struct {
+		value llvm.Value
+		name  string
+	}
+	entries := make([]methodEntry, numMethods)
+	nameSet := make(map[string]struct{}, numMethods)
 	for j := 0; j < numMethods; j++ {
 		sig := p.builder.CreateExtractValue(methodArray, j, "")
 		stripped := stripPointerCasts(sig)
-		if _, ok := keepSigs[stripped.Name()]; ok {
-			kept = append(kept, sig)
+		name := stripped.Name()
+		entries[j] = methodEntry{sig, name}
+		nameSet[name] = struct{}{}
+	}
+
+	// Check whether this type can fully implement at least one interface.
+	// If not, its method set can never produce a true result from
+	// typeImplementsMethodSet, so we can empty it entirely.
+	implementsAny := false
+	for _, ifaceSet := range ifaceSets {
+		if isSubsetOf(ifaceSet, nameSet) {
+			implementsAny = true
+			break
+		}
+	}
+	if !implementsAny {
+		return p.ctx.ConstStruct([]llvm.Value{
+			llvm.ConstInt(p.uintptrType, 0, false),
+			llvm.ConstArray(p.ptrType, nil),
+		}, false)
+	}
+
+	// Prune: keep only methods whose signature appears in keepSigs.
+	var kept []llvm.Value
+	for _, e := range entries {
+		if _, ok := keepSigs[e.name]; ok {
+			kept = append(kept, e.value)
 		}
 	}
 
@@ -697,4 +734,14 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 		llvm.ConstInt(p.uintptrType, uint64(len(kept)), false),
 		llvm.ConstArray(p.ptrType, kept),
 	}, false)
+}
+
+// isSubsetOf reports whether every key in sub is also in super.
+func isSubsetOf(sub, super map[string]struct{}) bool {
+	for k := range sub {
+		if _, ok := super[k]; !ok {
+			return false
+		}
+	}
+	return true
 }
