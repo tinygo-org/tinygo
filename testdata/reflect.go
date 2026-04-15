@@ -615,6 +615,24 @@ type myErrorStringer struct{}
 func (myErrorStringer) Error() string  { return "err" }
 func (myErrorStringer) String() string { return "str" }
 
+// Interface with unexported method (from upstream set_test.go).
+type exprLike interface {
+	Pos() int
+	End() int
+	exprNode()
+}
+
+type notAnExpr struct{}
+
+func (notAnExpr) Pos() int  { return 0 }
+func (notAnExpr) End() int  { return 0 }
+func (notAnExpr) exprNode() {}
+
+// Named types for assignability tests (from upstream set_test.go).
+type IntPtr *int
+type IntPtr1 *int
+type Ch <-chan interface{}
+
 func testImplements() {
 	readerType := reflect.TypeOf((*Reader)(nil)).Elem()
 	writerType := reflect.TypeOf((*Writer)(nil)).Elem()
@@ -709,6 +727,25 @@ func testImplements() {
 	// Everything assignable to empty interface
 	println("int → interface{}:", reflect.TypeOf(0).AssignableTo(emptyItf))             // true
 	println("Reader → interface{}:", readerType.AssignableTo(emptyItf))                 // true
+
+	// --- Upstream set_test.go: unexported method interfaces ---
+	println("unexported method interface:")
+	exprType := reflect.TypeOf((*exprLike)(nil)).Elem()
+	println("*notAnExpr → exprLike:", reflect.TypeOf(new(notAnExpr)).Implements(exprType))       // true
+	println("notAnExpr → exprLike:", reflect.TypeOf(notAnExpr{}).Implements(exprType))            // true
+	println("*notAnExpr → exprLike (AssignableTo):", reflect.TypeOf(new(notAnExpr)).AssignableTo(exprType)) // true
+
+	// --- Upstream set_test.go: channel direction assignability ---
+	println("channel direction:")
+	println("chan int → <-chan int:", reflect.TypeOf(make(chan int)).AssignableTo(reflect.TypeOf(make(<-chan int))))    // true
+	println("<-chan int → chan int:", reflect.TypeOf(make(<-chan int)).AssignableTo(reflect.TypeOf(make(chan int))))    // false
+
+	// --- Upstream set_test.go: named type assignability ---
+	println("named types:")
+	println("*int → IntPtr:", reflect.TypeOf(new(int)).AssignableTo(reflect.TypeOf(IntPtr(nil))))     // true
+	println("IntPtr → *int:", reflect.TypeOf(IntPtr(nil)).AssignableTo(reflect.TypeOf(new(int))))     // true
+	println("IntPtr → IntPtr1:", reflect.TypeOf(IntPtr(nil)).AssignableTo(reflect.TypeOf(IntPtr1(nil)))) // false
+	println("Ch → <-chan interface{}:", reflect.TypeOf(Ch(nil)).AssignableTo(reflect.TypeOf(make(<-chan interface{})))) // true
 
 	// --- reflect.Value.Set with interface (issue #4277) ---
 	println("value set interface:")

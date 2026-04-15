@@ -487,6 +487,18 @@ ReadWriter → Reader: true
 Reader → ReadWriter: false
 int → interface{}: true
 Reader → interface{}: true
+unexported method interface:
+*notAnExpr → exprLike: true
+notAnExpr → exprLike: true
+*notAnExpr → exprLike (AssignableTo): true
+channel direction:
+chan int → <-chan int: true
+<-chan int → chan int: false
+named types:
+*int → IntPtr: true
+IntPtr → *int: true
+IntPtr → IntPtr1: false
+Ch → <-chan interface{}: true
 value set interface:
 Set[0] to BarNode: 10
 Set[1] still FooNode: 2
