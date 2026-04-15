@@ -379,6 +379,7 @@ TEST_PACKAGES_FAST = \
 # crypto/des fails on wasi, needs panic()/recover()
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
+# encoding/xml takes a minute on linux and gives a stack overflow on wasi
 # image requires recover(), which is not yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
 # mime: fail on wasi; neds panic()/recover()
@@ -401,6 +402,7 @@ TEST_PACKAGES_LINUX := \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
+	encoding/xml \
 	image \
 	io/ioutil \
 	mime \
