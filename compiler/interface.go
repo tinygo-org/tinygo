@@ -715,16 +715,11 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 			// This type assertion always succeeds, so we can just set commaOk to true.
 			commaOk = llvm.ConstInt(b.ctx.Int1Type(), 1, true)
 		} else {
-			// Type assert using interface type with methods.
-			// This is implemented using a runtime call, which checks that the
-			// type implements each method of the interface.
-			// For comparison, here is how the Go compiler does this (which is
-			// very similar):
-			// https://research.swtch.com/interfaces
-			commaOk = b.createRuntimeCall("typeImplementsMethodSet", []llvm.Value{
-				actualTypeNum,
-				b.getInterfaceMethodSet(intf),
-			}, "")
+			// Type assert on an interface type with methods.
+			// Create a call to a declared-but-not-defined function that will
+			// be lowered by the interface lowering pass into a type-ID
+			// comparison chain.
+			commaOk = b.createInterfaceTypeAssert(intf, actualTypeNum)
 		}
 	} else {
 		name, _ := getTypeCodeName(expr.AssertedType)
@@ -893,6 +888,24 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))
 	}
 	return llvmFn
+}
+
+// createInterfaceTypeAssert creates a call to a declared-but-not-defined
+// $typeassert function for the given interface. This function will be defined
+// by the interface lowering pass as a type-ID comparison chain, avoiding the
+// need for runtime.typeImplementsMethodSet at compile time.
+func (b *builder) createInterfaceTypeAssert(intf *types.Interface, actualType llvm.Value) llvm.Value {
+	s, _ := getTypeCodeName(intf)
+	fnName := s + ".$typeassert"
+	llvmFn := b.mod.NamedFunction(fnName)
+	if llvmFn.IsNil() {
+		llvmFnType := llvm.FunctionType(b.ctx.Int1Type(), []llvm.Type{b.dataPtrType}, false)
+		llvmFn = llvm.AddFunction(b.mod, fnName, llvmFnType)
+		b.addStandardDeclaredAttributes(llvmFn)
+		methods := b.getMethodsString(intf)
+		llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-methods", methods))
+	}
+	return b.CreateCall(llvmFn.GlobalValueType(), llvmFn, []llvm.Value{actualType}, "")
 }
 
 // getInterfaceInvokeWrapper returns a wrapper for the given method so it can be

@@ -272,6 +272,13 @@ func (p *lowerInterfacesPass) run() error {
 		p.defineInterfaceMethodFunc(fn, itf, signature)
 	}
 
+	// Define all interface type assert functions.
+	for _, fn := range interfaceAssertFunctions {
+		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
+		itf := p.interfaces[methodsAttr.GetStringValue()]
+		p.defineInterfaceAssertFunc(fn, itf)
+	}
+
 	// Replace each type assert with an actual type comparison or (if the type
 	// assert is impossible) the constant false.
 	llvmFalse := llvm.ConstInt(p.ctx.Int1Type(), 0, false)
@@ -318,6 +325,17 @@ func (p *lowerInterfacesPass) run() error {
 	}
 	sort.Strings(typeNames)
 
+	// Check whether runtime.typeImplementsMethodSet still has uses. Now that
+	// interface type assertions have been lowered to type-ID comparison
+	// chains, the only remaining callers would be from reflect
+	// (AssignableTo/Implements). If none remain, we can strip the inline
+	// method-set data from type descriptors to save binary size.
+	stripMethodSets := false
+	typeImplementsFn := p.mod.NamedFunction("runtime.typeImplementsMethodSet")
+	if !typeImplementsFn.IsNil() && !hasUses(typeImplementsFn) {
+		stripMethodSets = true
+	}
+
 	// Remove all method sets, which are now unnecessary and inhibit later
 	// optimizations if they are left in place.
 	zero := llvm.ConstInt(p.ctx.Int32Type(), 0, false)
@@ -327,7 +345,11 @@ func (p *lowerInterfacesPass) run() error {
 			initializer := t.typecode.Initializer()
 			var newInitializerFields []llvm.Value
 			for i := 1; i < initializer.Type().StructElementTypesCount(); i++ {
-				newInitializerFields = append(newInitializerFields, p.builder.CreateExtractValue(initializer, i, ""))
+				field := p.builder.CreateExtractValue(initializer, i, "")
+				if stripMethodSets {
+					field = p.replaceMethodSetWithEmpty(name, i-1, field)
+				}
+				newInitializerFields = append(newInitializerFields, field)
 			}
 			newInitializer := p.ctx.ConstStruct(newInitializerFields, false)
 			typecodeName := t.typecode.Name()
@@ -524,4 +546,84 @@ func (p *lowerInterfacesPass) getDIFile(file string) llvm.Metadata {
 		p.difiles[file] = difile
 	}
 	return difile
+}
+
+// defineInterfaceAssertFunc defines a $typeassert function for the given
+// interface. The function returns true if the concrete type (passed as a
+// type-ID pointer) implements the interface, using a chain of type-ID
+// comparisons. This avoids pulling in runtime.typeImplementsMethodSet for
+// programs that don't use reflect.
+func (p *lowerInterfacesPass) defineInterfaceAssertFunc(fn llvm.Value, itf *interfaceInfo) {
+	actualType := fn.FirstParam()
+	actualType.SetName("actualType")
+	fn.SetLinkage(llvm.InternalLinkage)
+	fn.SetUnnamedAddr(true)
+	AddStandardAttributes(fn, p.config)
+
+	entry := p.ctx.AddBasicBlock(fn, "entry")
+	p.builder.SetInsertPointAtEnd(entry)
+
+	if p.dibuilder != nil {
+		difile := p.getDIFile("<Go interface type assert>")
+		diFuncType := p.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File: difile,
+		})
+		difunc := p.dibuilder.CreateFunction(difile, llvm.DIFunction{
+			Name:         "(Go interface type assert)",
+			File:         difile,
+			Line:         0,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		fn.SetSubprogram(difunc)
+		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
+	}
+
+	// Build an OR chain: return (type == T1) || (type == T2) || ...
+	llvmFalse := llvm.ConstInt(p.ctx.Int1Type(), 0, false)
+	result := llvmFalse
+	for _, typ := range itf.types {
+		cmp := p.builder.CreateICmp(llvm.IntEQ, actualType, typ.typecodeGEP, typ.name+".icmp")
+		result = p.builder.CreateOr(result, cmp, "")
+	}
+	p.builder.CreateRet(result)
+}
+
+// replaceMethodSetWithEmpty replaces a method-set field in a type descriptor
+// with an empty method set ({0, [0]ptr}). This is used when reflect is not
+// needed and method-set data can be stripped to save binary size.
+//
+// The field index is relative to the type descriptor after $methodset removal
+// (i.e., field 0 is the kind/meta byte). Type descriptor layouts:
+//
+//	named:     [kind, numMethods, ptrTo, underlying, pkgpath, methods, name]
+//	pointer:   [kind, numMethods, elem, methods]
+//	struct:    [kind, numMethods, ptrTo, pkgpath, size, numFields, fields, methods]
+//	interface: [kind, ptrTo, methods]
+func (p *lowerInterfacesPass) replaceMethodSetWithEmpty(typeName string, fieldIdx int, field llvm.Value) llvm.Value {
+	isMethodSetField := false
+	switch {
+	case strings.HasPrefix(typeName, "named:"):
+		isMethodSetField = (fieldIdx == 5)
+	case strings.HasPrefix(typeName, "pointer:"):
+		isMethodSetField = (fieldIdx == 3)
+	case strings.HasPrefix(typeName, "struct:"):
+		isMethodSetField = (fieldIdx == 7)
+	case strings.HasPrefix(typeName, "interface:"):
+		isMethodSetField = (fieldIdx == 2)
+	}
+	if !isMethodSetField {
+		return field
+	}
+
+	// Replace with empty method set: {length=0, methods=[0 x ptr]}
+	emptyMethodSet := p.ctx.ConstStruct([]llvm.Value{
+		llvm.ConstInt(p.uintptrType, 0, false),
+		llvm.ConstArray(p.ptrType, nil),
+	}, false)
+	return emptyMethodSet
 }
