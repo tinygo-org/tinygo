@@ -835,19 +835,27 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				ctx := llvm.NewContext()
 				mod = ctx.NewModule("main")
 				for _, dependency := range job.dependencies {
-					if !strings.HasSuffix(dependency.description, ".S") && dependency.description != "<dummy>" {
-						depMod, err := mod.Context().ParseBitcodeFile(dependency.result)
-						if err != nil {
-							return err
-						}
-						err = llvm.LinkModules(mod, depMod)
-						if err != nil {
-							return err
-						}
+					if strings.HasSuffix(dependency.description, ".S") || dependency.description == "<dummy>" {
+						continue
+					}
+					depMod, err := mod.Context().ParseBitcodeFile(dependency.result)
+					if err != nil {
+						return err
+					}
+					err = llvm.LinkModules(mod, depMod)
+					if err != nil {
+						return err
 					}
 				}
 				if fn := mod.NamedFunction("main"); !fn.IsNil() {
 					fn.EraseFromParentAsFunction()
+				}
+				if config.Triple() == "xtensa" {
+					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+						if !fn.IsDeclaration() {
+							fn.SetSection(".text." + fn.Name())
+						}
+					}
 				}
 				buf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
 				if err != nil {
