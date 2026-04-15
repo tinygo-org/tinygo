@@ -336,6 +336,33 @@ func (p *lowerInterfacesPass) run() error {
 		stripMethodSets = true
 	}
 
+	// Collect all method signatures that appear in any interface type
+	// descriptor. When reflect is imported and method sets are kept,
+	// concrete type method sets are pruned to only include these
+	// signatures — methods that don't appear in any interface can never
+	// affect typeImplementsMethodSet checks (since Go cannot create new
+	// interface types at runtime).
+	//
+	// When method sets are stripped entirely (reflect not imported),
+	// methodFilter is nil and filterMethodSet replaces with empty.
+	var methodFilter map[string]struct{}
+	if !stripMethodSets {
+		methodFilter = make(map[string]struct{})
+		for _, name := range typeNames {
+			if !strings.HasPrefix(name, "interface:") {
+				continue
+			}
+			t := p.types[name]
+			initializer := t.typecode.Initializer()
+			for i := 0; i < initializer.Type().StructElementTypesCount(); i++ {
+				field := p.builder.CreateExtractValue(initializer, i, "")
+				for _, sig := range p.extractMethodSigs(field) {
+					methodFilter[sig] = struct{}{}
+				}
+			}
+		}
+	}
+
 	// Remove all method sets, which are now unnecessary and inhibit later
 	// optimizations if they are left in place.
 	zero := llvm.ConstInt(p.ctx.Int32Type(), 0, false)
@@ -346,9 +373,7 @@ func (p *lowerInterfacesPass) run() error {
 			var newInitializerFields []llvm.Value
 			for i := 1; i < initializer.Type().StructElementTypesCount(); i++ {
 				field := p.builder.CreateExtractValue(initializer, i, "")
-				if stripMethodSets {
-					field = p.replaceMethodSetWithEmpty(name, i-1, field)
-				}
+				field = p.filterMethodSet(field, methodFilter)
 				newInitializerFields = append(newInitializerFields, field)
 			}
 			newInitializer := p.ctx.ConstStruct(newInitializerFields, false)
@@ -593,37 +618,83 @@ func (p *lowerInterfacesPass) defineInterfaceAssertFunc(fn llvm.Value, itf *inte
 	p.builder.CreateRet(result)
 }
 
-// replaceMethodSetWithEmpty replaces a method-set field in a type descriptor
-// with an empty method set ({0, [0]ptr}). This is used when reflect is not
-// needed and method-set data can be stripped to save binary size.
-//
-// The field index is relative to the type descriptor after $methodset removal
-// (i.e., field 0 is the kind/meta byte). Type descriptor layouts:
-//
-//	named:     [kind, numMethods, ptrTo, underlying, pkgpath, methods, name]
-//	pointer:   [kind, numMethods, elem, methods]
-//	struct:    [kind, numMethods, ptrTo, pkgpath, size, numFields, fields, methods]
-//	interface: [kind, ptrTo, methods]
-func (p *lowerInterfacesPass) replaceMethodSetWithEmpty(typeName string, fieldIdx int, field llvm.Value) llvm.Value {
-	isMethodSetField := false
-	switch {
-	case strings.HasPrefix(typeName, "named:"):
-		isMethodSetField = (fieldIdx == 5)
-	case strings.HasPrefix(typeName, "pointer:"):
-		isMethodSetField = (fieldIdx == 3)
-	case strings.HasPrefix(typeName, "struct:"):
-		isMethodSetField = (fieldIdx == 7)
-	case strings.HasPrefix(typeName, "interface:"):
-		isMethodSetField = (fieldIdx == 2)
+// isMethodSetType reports whether ty has the shape of a method-set struct:
+// { uintptr, [N x ptr] }.
+func (p *lowerInterfacesPass) isMethodSetType(ty llvm.Type) bool {
+	if ty.TypeKind() != llvm.StructTypeKind {
+		return false
 	}
-	if !isMethodSetField {
+	elems := ty.StructElementTypes()
+	if len(elems) != 2 {
+		return false
+	}
+	if elems[0] != p.uintptrType {
+		return false
+	}
+	return elems[1].TypeKind() == llvm.ArrayTypeKind && elems[1].ElementType() == p.ptrType
+}
+
+// extractMethodSigs returns the names of method signature globals inside a
+// method-set field ({ uintptr, [N x ptr] }). Returns nil if field is not a
+// method set.
+func (p *lowerInterfacesPass) extractMethodSigs(field llvm.Value) []string {
+	if !p.isMethodSetType(field.Type()) {
+		return nil
+	}
+	methodArray := p.builder.CreateExtractValue(field, 1, "")
+	n := methodArray.Type().ArrayLength()
+	sigs := make([]string, 0, n)
+	for j := 0; j < n; j++ {
+		sig := p.builder.CreateExtractValue(methodArray, j, "")
+		sig = stripPointerCasts(sig)
+		sigs = append(sigs, sig.Name())
+	}
+	return sigs
+}
+
+// filterMethodSet processes a type-descriptor field that may be a method set.
+// Non-method-set fields are returned unchanged.
+//
+// If keepSigs is nil, the method set is replaced with an empty one (strip mode,
+// used when reflect is not imported). If keepSigs is non-nil, only method
+// signatures present in the map are kept (prune mode, used when reflect is
+// imported to discard methods that no interface requires).
+func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[string]struct{}) llvm.Value {
+	if !p.isMethodSetType(field.Type()) {
 		return field
 	}
 
-	// Replace with empty method set: {length=0, methods=[0 x ptr]}
-	emptyMethodSet := p.ctx.ConstStruct([]llvm.Value{
-		llvm.ConstInt(p.uintptrType, 0, false),
-		llvm.ConstArray(p.ptrType, nil),
+	methodArray := p.builder.CreateExtractValue(field, 1, "")
+	numMethods := methodArray.Type().ArrayLength()
+
+	// Strip mode: replace with empty method set.
+	if keepSigs == nil {
+		return p.ctx.ConstStruct([]llvm.Value{
+			llvm.ConstInt(p.uintptrType, 0, false),
+			llvm.ConstArray(p.ptrType, nil),
+		}, false)
+	}
+
+	// Prune mode: keep only methods whose signature appears in keepSigs.
+	if numMethods == 0 {
+		return field
+	}
+
+	var kept []llvm.Value
+	for j := 0; j < numMethods; j++ {
+		sig := p.builder.CreateExtractValue(methodArray, j, "")
+		stripped := stripPointerCasts(sig)
+		if _, ok := keepSigs[stripped.Name()]; ok {
+			kept = append(kept, sig)
+		}
+	}
+
+	if len(kept) == numMethods {
+		return field
+	}
+
+	return p.ctx.ConstStruct([]llvm.Value{
+		llvm.ConstInt(p.uintptrType, uint64(len(kept)), false),
+		llvm.ConstArray(p.ptrType, kept),
 	}, false)
-	return emptyMethodSet
 }
