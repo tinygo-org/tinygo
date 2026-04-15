@@ -889,6 +889,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						return err
 					}
 					objs = []string{obj}
+					name, err := LookupCommand("llvm-objcopy")
+					if err != nil {
+						return err
+					}
+					err = exec.Command(name, "--strip-symbol", "call_start_cpu0", obj).Run()
+					if err != nil {
+						return err
+					}
 				}
 				result.Binary = result.Executable + ".a"
 				f, err := os.Create(result.Binary)

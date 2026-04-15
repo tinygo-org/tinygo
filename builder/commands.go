@@ -22,6 +22,7 @@ func init() {
 	commands["ld.lld"] = []string{"ld.lld-" + llvmMajor, "ld.lld"}
 	commands["wasm-ld"] = []string{"wasm-ld-" + llvmMajor, "wasm-ld"}
 	commands["lldb"] = []string{"lldb-" + llvmMajor, "lldb"}
+	commands["llvm-objcopy"] = []string{"llvm-objcopy-" + llvmMajor, "llvm-objcopy"}
 	// Add the path to a Homebrew-installed LLVM for ease of use (no need to
 	// manually set $PATH).
 	if runtime.GOOS == "darwin" {
@@ -39,6 +40,7 @@ func init() {
 		commands["ld.lld"] = append(commands["ld.lld"], prefix+"ld.lld")
 		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld")
 		commands["lldb"] = append(commands["lldb"], prefix+"lldb")
+		commands["llvm-objcopy"] = append(commands["llvm-objcopy"], prefix+"llvm-objcopy")
 	}
 	// Add the path for when LLVM was installed with the installer from
 	// llvm.org, which by default doesn't add LLVM to the $PATH environment
