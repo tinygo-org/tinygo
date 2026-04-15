@@ -24,6 +24,10 @@ type UART struct {
 	txReg       *volatile.Register32
 	statusReg   *volatile.Register32
 	txEmptyFlag uint32
+	// errClearReg points to the ICR register on newer STM32 USART peripherals
+	// (L0, L4, L5, G0, F7, U5, WL, etc.) for clearing error flags. Nil for
+	// older peripherals (F1, F4) where errors are cleared by reading SR+DR.
+	errClearReg *volatile.Register32
 }
 
 // Configure the UART.
@@ -63,7 +67,28 @@ func (uart *UART) Configure(config UARTConfig) {
 // handleInterrupt should be called from the appropriate interrupt handler for
 // this UART instance.
 func (uart *UART) handleInterrupt(interrupt.Interrupt) {
-	uart.Receive(byte((uart.rxReg.Get() & 0xFF)))
+	s := uart.statusReg.Get()
+
+	// Only read data when RXNE/RXFNE (bit 5) is set. On all STM32 families,
+	// RXNEIE enables both the RX-data-ready and overrun-error (ORE) interrupts.
+	// Without this check, an ORE-only interrupt reads garbage from RDR.
+	if s&0x20 != 0 { // RXNE / RXFNE
+		uart.Receive(byte((uart.rxReg.Get() & 0xFF)))
+	}
+
+	// Clear overrun error (ORE, bit 3) to prevent an interrupt storm.
+	if s&0x8 != 0 {
+		if uart.errClearReg != nil {
+			// Newer USART peripherals: clear ORE via the ICR register.
+			uart.errClearReg.Set(0x8) // ORECF
+		} else if s&0x20 == 0 {
+			// Older USART (F1/F4): ORE is cleared by reading SR then DR.
+			// SR was already read above. If RXNE was set, DR was read in
+			// the Receive path. Otherwise do a dummy DR read to complete
+			// the clearing sequence.
+			uart.rxReg.Get()
+		}
+	}
 }
 
 // SetBaudRate sets the communication speed for the UART. Defer to chip-specific
