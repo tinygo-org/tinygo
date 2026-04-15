@@ -865,7 +865,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						args = append(args, dependency.result)
 					}
 				}
-				return link("llvm-ar", args...)
+				name, err := LookupCommand("llvm-ar")
+				if err != nil {
+					return err
+				}
+				return exec.Command(name, args...).Run()
 			}
 
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
