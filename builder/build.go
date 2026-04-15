@@ -859,17 +859,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					return err
 				}
 				result.Binary = result.Executable + ".a"
-				args := []string{"rcs", result.Binary, result.Executable}
+				objs := []string{result.Executable}
 				for _, dependency := range job.dependencies {
 					if strings.HasSuffix(dependency.description, ".S") {
-						args = append(args, dependency.result)
+						objs = append(objs, dependency.result)
 					}
 				}
-				name, err := LookupCommand("llvm-ar")
+				f, err := os.Create(result.Binary)
 				if err != nil {
 					return err
 				}
-				return exec.Command(name, args...).Run()
+				defer f.Close()
+				return makeArchive(f, objs)
 			}
 
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
