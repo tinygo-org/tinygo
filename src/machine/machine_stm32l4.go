@@ -299,6 +299,7 @@ func (uart *UART) setRegisters() {
 	uart.txReg = &uart.Bus.TDR
 	uart.statusReg = &uart.Bus.ISR
 	uart.txEmptyFlag = stm32.USART_ISR_TXE
+	uart.errClearReg = &uart.Bus.ICR
 }
 
 //---------- SPI related types and code
