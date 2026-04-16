@@ -768,6 +768,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// Integer binary operations.
 			lhs := operands[0]
 			rhs := operands[1]
+			if _, err := rhs.asPointer(r); err == nil {
+				lhs, rhs = rhs, lhs
+			}
 			lhsPtr, err := lhs.asPointer(r)
 			if err == nil {
 				// The lhs is a pointer. This sometimes happens for particular
