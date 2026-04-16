@@ -375,10 +375,38 @@ func (p *lowerInterfacesPass) run() error {
 		t := p.types[name]
 		if !t.methodSet.IsNil() {
 			initializer := t.typecode.Initializer()
+			numFields := initializer.Type().StructElementTypesCount()
+
+			// Read numMethods from the original type descriptor (index 2:
+			// after prefix pointer at 0 and kind byte at 1). For Named,
+			// Pointer, and Struct types, bit 15 (0x8000) indicates that an
+			// inline method set is present.
+			var numMethodsConst uint64
+			var numMethodsIsI16 bool
+			if numFields > 2 {
+				nmField := p.builder.CreateExtractValue(initializer, 2, "")
+				if nmField.Type() == p.ctx.Int16Type() {
+					numMethodsConst = nmField.ZExtValue()
+					numMethodsIsI16 = true
+				}
+			}
+
 			var newInitializerFields []llvm.Value
-			for i := 1; i < initializer.Type().StructElementTypesCount(); i++ {
+			for i := 1; i < numFields; i++ {
 				field := p.builder.CreateExtractValue(initializer, i, "")
 				field = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
+				// Strip empty inline method sets for Named, Pointer, and
+				// Struct types. When the method set is pruned to empty, we
+				// remove it and clear the numMethodHasMethodSet flag (bit 15
+				// of numMethod) so the runtime skips reading it.
+				if numMethodsIsI16 && numMethodsConst&0x8000 != 0 && p.isMethodSetType(field.Type()) {
+					elems := field.Type().StructElementTypes()
+					if elems[1].ArrayLength() == 0 {
+						clearedNumMethods := numMethodsConst & ^uint64(0x8000)
+						newInitializerFields[1] = llvm.ConstInt(p.ctx.Int16Type(), clearedNumMethods, false)
+						continue
+					}
+				}
 				newInitializerFields = append(newInitializerFields, field)
 			}
 			newInitializer := p.ctx.ConstStruct(newInitializerFields, false)

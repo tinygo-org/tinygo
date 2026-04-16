@@ -157,6 +157,10 @@ const (
 	flagIsBinary   = 128 // flag that is set if this type uses the hashmap binary algorithm
 )
 
+// Flag in the numMethod field (uint16) of Pointer and Struct type descriptors,
+// indicating that an inline method set is present in the type descriptor.
+const numMethodHasMethodSet = 0x8000
+
 // The base type struct. All type structs start with this.
 type RawType struct {
 	meta uint8 // metadata byte, contains kind and flags (see constants above)
@@ -171,11 +175,16 @@ type elemType struct {
 	elem      *RawType
 }
 
+// ptrType is the type descriptor for pointer types.
+// The numMethod field stores the number of exported methods in the lower bits,
+// with bit 15 (numMethodHasMethodSet) indicating whether the methods field is
+// present. When the flag is clear, the methods field does not exist in the
+// actual type descriptor and must not be accessed.
 type ptrType struct {
 	RawType
 	numMethod uint16
 	elem      *RawType
-	methods   methodSet
+	methods   methodSet // only present when numMethod & numMethodHasMethodSet != 0
 }
 
 type interfaceType struct {
@@ -201,14 +210,19 @@ type mapType struct {
 	key       *RawType
 }
 
+// namedType is the type descriptor for named types. The numMethod field uses
+// bit 15 (numMethodHasMethodSet) to indicate whether an inline method set is
+// present after pkg. When the flag is set, a methodSet follows at
+// unsafe.Sizeof(namedType{}), and the name string follows after the method
+// set's entries. When clear, the name string starts directly at that offset.
 type namedType struct {
 	RawType
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
 	pkg       *byte
-	methods   methodSet
-	name      [1]byte
+	// if numMethod & numMethodHasMethodSet != 0: methodSet follows here
+	// name (null-terminated "pkg.Name\0") follows after the method set (or directly here)
 }
 
 // Type for struct types. The numField value is intentionally put before ptrTo
@@ -218,6 +232,10 @@ type namedType struct {
 // The fields array isn't necessarily 1 structField long, instead it is as long
 // as numFields. The array is given a length of 1 to satisfy the Go type
 // checker.
+// The numMethod field stores the number of exported methods in the lower bits,
+// with bit 15 (numMethodHasMethodSet) indicating whether an inline method set
+// follows the fields array. When the flag is clear, no method set is present
+// and the type descriptor ends after the last structField entry.
 type structType struct {
 	RawType
 	numMethod uint16
@@ -226,7 +244,7 @@ type structType struct {
 	size      uint32
 	numField  uint16
 	fields    [1]structField // the remaining fields are all of type structField
-	// methods methodSet follows after fields, but is accessed via pointer arithmetic
+	// methods methodSet follows after fields, only when numMethod & numMethodHasMethodSet != 0
 }
 
 type structField struct {
@@ -807,17 +825,26 @@ func typeImplementsMethodSet(concreteType, assertedMethodSet unsafe.Pointer) boo
 	metaByte := *(*uint8)(concreteType)
 	if metaByte&flagNamed != 0 {
 		ct := (*namedType)(concreteType)
-		methods = &ct.methods
+		if ct.numMethod&numMethodHasMethodSet == 0 {
+			return false
+		}
+		methods = (*methodSet)(unsafe.Add(unsafe.Pointer(ct), unsafe.Sizeof(*ct)))
 	} else if metaByte&kindMask == uint8(Interface) {
 		ct := (*interfaceType)(concreteType)
 		methods = &ct.methods
 	} else if metaByte&kindMask == uint8(Pointer) {
 		ct := (*ptrType)(concreteType)
+		if ct.numMethod&numMethodHasMethodSet == 0 {
+			return false
+		}
 		methods = &ct.methods
 	} else if metaByte&kindMask == uint8(Struct) {
+		ct := (*structType)(concreteType)
+		if ct.numMethod&numMethodHasMethodSet == 0 {
+			return false
+		}
 		// For struct types, the method set follows after the variable-length
 		// fields array. We need to compute its offset dynamically.
-		ct := (*structType)(concreteType)
 		fieldSize := unsafe.Sizeof(structField{})
 		methodsPtr := unsafe.Add(unsafe.Pointer(&ct.fields[0]), uintptr(ct.numField)*fieldSize)
 		methods = (*methodSet)(methodsPtr)
@@ -877,14 +904,14 @@ func (t *RawType) ChanDir() ChanDir {
 func (t *RawType) NumMethod() int {
 
 	if t.isNamed() {
-		return int((*namedType)(unsafe.Pointer(t)).numMethod)
+		return int((*namedType)(unsafe.Pointer(t)).numMethod & ^uint16(numMethodHasMethodSet))
 	}
 
 	switch t.Kind() {
 	case Pointer:
-		return int((*ptrType)(unsafe.Pointer(t)).numMethod)
+		return int((*ptrType)(unsafe.Pointer(t)).numMethod & ^uint16(numMethodHasMethodSet))
 	case Struct:
-		return int((*structType)(unsafe.Pointer(t)).numMethod)
+		return int((*structType)(unsafe.Pointer(t)).numMethod & ^uint16(numMethodHasMethodSet))
 	case Interface:
 		//FIXME: Use len(methods)
 		return (*interfaceType)(unsafe.Pointer(t)).ptrTo.NumMethod()
@@ -911,9 +938,13 @@ func readStringZ(data unsafe.Pointer) string {
 
 func (t *RawType) name() string {
 	ntype := (*namedType)(unsafe.Pointer(t))
-	ptr := unsafe.Pointer(&ntype.name[0])
-	// Skip past the variable-length methods array that precedes the name.
-	ptr = unsafe.Add(ptr, uintptr(ntype.methods.length)*unsafe.Sizeof(unsafe.Pointer(nil)))
+	// The name follows after the fixed fields (and optionally the method set).
+	ptr := unsafe.Add(unsafe.Pointer(ntype), unsafe.Sizeof(*ntype))
+	if ntype.numMethod&numMethodHasMethodSet != 0 {
+		ms := (*methodSet)(ptr)
+		// Skip past the length field and the method pointer entries.
+		ptr = unsafe.Add(ptr, unsafe.Sizeof(uintptr(0))+uintptr(ms.length)*unsafe.Sizeof(unsafe.Pointer(nil)))
+	}
 	return readStringZ(ptr)
 }
 
