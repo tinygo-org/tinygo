@@ -30,7 +30,15 @@ var (
 	stackTop     = uintptr(unsafe.Pointer(&stackTopSymbol))
 )
 
-func allocateHeap() {}
+//export tinygo_init
+func tinygo_init(p, n, bss, bssEnd, sp uintptr) {
+	heapStart, heapEnd = p, p+n
+	globalsStart, globalsEnd = bss, bssEnd
+	stackTop = sp
+	initRand()
+	initHeap()
+	initAll()
+}
 
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
 // otherwise.

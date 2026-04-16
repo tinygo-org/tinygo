@@ -853,10 +853,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 				if config.Triple() == "xtensa" {
 					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-						switch fn.Name() {
-						case "malloc", "calloc", "free":
-							fn.SetLinkage(llvm.InternalLinkage)
-						}
 						if strings.HasPrefix(fn.Name(), "__atomic_") ||
 							strings.HasPrefix(fn.Name(), "__sync_") {
 							fn.SetLinkage(llvm.InternalLinkage)
