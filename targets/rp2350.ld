@@ -6,7 +6,7 @@ MEMORY
     /* RAM consists of 8 banks, SRAM0..SRAM7 with striped mapping. */
     SRAM : ORIGIN = 0x20000000, LENGTH = 512k
     /* Banks 8 and 9 use direct mapping which can be
-       specailized for applications where predictable access time is beneficial.
+       specialized for applications where predictable access time is beneficial.
        i.e: Separate stacks for core0 and core1. */
     SRAM4 : ORIGIN = 0x20080000, LENGTH = 4k
     SRAM5 : ORIGIN = 0x20081000, LENGTH = 4k
