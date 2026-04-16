@@ -118,13 +118,18 @@ jobs:
           make release deb -j3 STATIC=1
           cp -p build/release.tar.gz /tmp/tinygo${{ steps.version.outputs.version }}.linux-amd64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_${{ steps.version.outputs.version }}_amd64.deb
-      - name: Publish release artifact
+      - name: "Publish release artifact: tarball"
         uses: actions/upload-artifact@v7
         with:
-          name: linux-amd64-double-zipped-${{ steps.version.outputs.version }}
-          path: |
-            /tmp/tinygo${{ steps.version.outputs.version }}.linux-amd64.tar.gz
-            /tmp/tinygo_${{ steps.version.outputs.version }}_amd64.deb
+          name: tinygo${{ steps.version.outputs.version }}.linux-amd64.tar.gz
+          path: /tmp/tinygo${{ steps.version.outputs.version }}.linux-amd64.tar.gz
+          archive: false
+      - name: "Publish release artifact: Debian package"
+        uses: actions/upload-artifact@v7
+        with:
+          name: tinygo_${{ steps.version.outputs.version }}_amd64.deb
+          path: /tmp/tinygo_${{ steps.version.outputs.version }}_amd64.deb
+          archive: false
   test-linux-build:
     # Test the binaries built in the build-linux job by running the smoke tests.
     runs-on: ubuntu-latest
@@ -146,9 +151,9 @@ jobs:
       - name: Install wasm-tools
         uses: bytecodealliance/actions/wasm-tools/setup@v1
       - name: Download release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: linux-amd64-double-zipped-${{ needs.build-linux.outputs.version }}
+          name: tinygo${{ needs.build-linux.outputs.version }}.linux-amd64.tar.gz
       - name: Extract release tarball
         run: |
           mkdir -p ~/lib
@@ -370,9 +375,9 @@ jobs:
         run: |
           make CROSS=${{ matrix.toolchain }}
       - name: Download amd64 release
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: linux-amd64-double-zipped-${{ needs.build-linux.outputs.version }}
+          name: tinygo${{ needs.build-linux.outputs.version }}.linux-amd64.tar.gz
       - name: Extract amd64 release
         run: |
           mkdir -p build/release
@@ -384,12 +389,17 @@ jobs:
       - name: Create ${{ matrix.goarch }} release
         run: |
           make release deb RELEASEONLY=1 DEB_ARCH=${{ matrix.libc }}
-          cp -p build/release.tar.gz /tmp/tinygo${{ steps.version.outputs.version }}.linux-${{ matrix.goarch }}.tar.gz
-          cp -p build/release.deb    /tmp/tinygo_${{ steps.version.outputs.version }}_${{ matrix.libc }}.deb
-      - name: Publish release artifact
+          cp -p build/release.tar.gz /tmp/tinygo${{ needs.build-linux.outputs.version }}.linux-${{ matrix.goarch }}.tar.gz
+          cp -p build/release.deb    /tmp/tinygo_${{ needs.build-linux.outputs.version }}_${{ matrix.libc }}.deb
+      - name: "Publish release artifact: tarball"
         uses: actions/upload-artifact@v7
         with:
-          name: linux-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
-          path: |
-            /tmp/tinygo${{ steps.version.outputs.version }}.linux-${{ matrix.goarch }}.tar.gz
-            /tmp/tinygo_${{ steps.version.outputs.version }}_${{ matrix.libc }}.deb
+          name: linux-${{ matrix.goarch }}-double-zipped-${{ needs.build-linux.outputs.version }}
+          path: /tmp/tinygo${{ needs.build-linux.outputs.version }}.linux-${{ matrix.goarch }}.tar.gz
+          archive: false
+      - name: "Publish release artifact: Debian package"
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-${{ matrix.goarch }}-double-zipped-${{ needs.build-linux.outputs.version }}
+          path: /tmp/tinygo_${{ needs.build-linux.outputs.version }}_${{ matrix.libc }}.deb
+          archive: false

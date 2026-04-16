@@ -114,16 +114,11 @@ jobs:
         working-directory: build/release
         run: 7z -tzip a tinygo${{ steps.version.outputs.version }}.windows-amd64.zip tinygo
       - name: Publish release artifact
-        # Note: this release artifact is double-zipped, see:
-        # https://github.com/actions/upload-artifact/issues/39
-        # We can essentially pick one of these:
-        # - have a dobule-zipped artifact when downloaded from the UI
-        # - have a very slow artifact upload
-        # We're doing the former here, to keep artifact uploads fast.
         uses: actions/upload-artifact@v7
         with:
-          name: windows-amd64-double-zipped-${{ steps.version.outputs.version }}
+          name: tinygo${{ steps.version.outputs.version }}.windows-amd64.zip
           path: build/release/tinygo${{ steps.version.outputs.version }}.windows-amd64.zip
+          archive: false
 
   smoke-test-windows:
     runs-on: windows-2022
@@ -149,14 +144,11 @@ jobs:
           go-version: '1.26.2'
           cache: true
       - name: Download TinyGo build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: windows-amd64-double-zipped-${{ needs.build-windows.outputs.version }}
+          name: tinygo${{ needs.build-windows.outputs.version }}.windows-amd64.zip
           path: build/
-      - name: Unzip TinyGo build
-        shell: bash
-        working-directory: build
-        run: 7z x tinygo*.windows-amd64.zip -r
+        # This build is already unzipped.
       - name: Smoke tests
         shell: bash
         run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo
@@ -179,14 +171,11 @@ jobs:
           go-version: '1.26.2'
           cache: true
       - name: Download TinyGo build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: windows-amd64-double-zipped-${{ needs.build-windows.outputs.version }}
+          name: tinygo${{ needs.build-windows.outputs.version }}.windows-amd64.zip
           path: build/
-      - name: Unzip TinyGo build
-        shell: bash
-        working-directory: build
-        run: 7z x tinygo*.windows-amd64.zip -r
+        # This build is already unzipped.
       - name: Test stdlib packages
         run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
@@ -214,13 +203,10 @@ jobs:
           go-version: '1.26.2'
           cache: true
       - name: Download TinyGo build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: windows-amd64-double-zipped-${{ needs.build-windows.outputs.version }}
+          name: tinygo${{ needs.build-windows.outputs.version }}.windows-amd64.zip
           path: build/
-      - name: Unzip TinyGo build
-        shell: bash
-        working-directory: build
-        run: 7z x tinygo*.windows-amd64.zip -r
+        # This build is already unzipped.
       - name: Test stdlib packages on wasip1
         run: make tinygo-test-wasip1-fast TINYGO=$(PWD)/build/tinygo/bin/tinygo
