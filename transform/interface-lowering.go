@@ -36,6 +36,12 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// numMethodHasMethodSet is a flag in bit 15 of the numMethod field (uint16) in
+// Named, Pointer, and Struct type descriptors. When set, an inline method set
+// is present in the type descriptor. Must match the constant in
+// src/internal/reflectlite/type.go.
+const numMethodHasMethodSet = 0x8000
+
 // signatureInfo is a Go signature of an interface method. It does not represent
 // any method in particular.
 type signatureInfo struct {
@@ -379,8 +385,8 @@ func (p *lowerInterfacesPass) run() error {
 
 			// Read numMethods from the original type descriptor (index 2:
 			// after prefix pointer at 0 and kind byte at 1). For Named,
-			// Pointer, and Struct types, bit 15 (0x8000) indicates that an
-			// inline method set is present.
+			// Pointer, and Struct types, the numMethodHasMethodSet flag
+			// indicates that an inline method set is present.
 			var numMethodsConst uint64
 			var numMethodsIsI16 bool
 			if numFields > 2 {
@@ -399,10 +405,10 @@ func (p *lowerInterfacesPass) run() error {
 				// Struct types. When the method set is pruned to empty, we
 				// remove it and clear the numMethodHasMethodSet flag (bit 15
 				// of numMethod) so the runtime skips reading it.
-				if numMethodsIsI16 && numMethodsConst&0x8000 != 0 && p.isMethodSetType(field.Type()) {
+				if numMethodsIsI16 && numMethodsConst&numMethodHasMethodSet != 0 && p.isMethodSetType(field.Type()) {
 					elems := field.Type().StructElementTypes()
 					if elems[1].ArrayLength() == 0 {
-						clearedNumMethods := numMethodsConst & ^uint64(0x8000)
+						clearedNumMethods := numMethodsConst & ^uint64(numMethodHasMethodSet)
 						newInitializerFields[1] = llvm.ConstInt(p.ctx.Int16Type(), clearedNumMethods, false)
 						continue
 					}

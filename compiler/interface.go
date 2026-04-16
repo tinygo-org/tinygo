@@ -18,6 +18,12 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// numMethodHasMethodSet is a flag in bit 15 of the numMethod field (uint16) in
+// Named, Pointer, and Struct type descriptors. When set, an inline method set
+// is present in the type descriptor. Must match the constant in
+// src/internal/reflectlite/type.go.
+const numMethodHasMethodSet = 0x8000
+
 // Type kinds for basic types.
 // They must match the constants for the Kind type in src/reflect/type.go.
 var basicTypes = [...]uint8{
@@ -321,8 +327,11 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 			pkgPathPtr := c.pkgPathPtr(pkgpath)
 			namedNumMethods := uint64(numMethods)
+			if namedNumMethods&numMethodHasMethodSet != 0 {
+				panic("numMethods overflow: too many exported methods on named type " + name)
+			}
 			if len(methods) > 0 {
-				namedNumMethods |= 0x8000 // numMethodHasMethodSet flag
+				namedNumMethods |= numMethodHasMethodSet
 			}
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.ctx.Int16Type(), namedNumMethods, false), // numMethods
@@ -359,8 +368,11 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 		case *types.Pointer:
 			ptrNumMethods := uint64(numMethods)
+			if ptrNumMethods&numMethodHasMethodSet != 0 {
+				panic("numMethods overflow: too many exported methods on pointer type")
+			}
 			if len(methods) > 0 {
-				ptrNumMethods |= 0x8000 // numMethodHasMethodSet flag
+				ptrNumMethods |= numMethodHasMethodSet
 			}
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.ctx.Int16Type(), ptrNumMethods, false), // numMethods
@@ -396,8 +408,11 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			llvmStructType := c.getLLVMType(typ)
 			size := c.targetData.TypeStoreSize(llvmStructType)
 			structNumMethods := uint64(numMethods)
+			if structNumMethods&numMethodHasMethodSet != 0 {
+				panic("numMethods overflow: too many exported methods on struct type")
+			}
 			if len(methods) > 0 {
-				structNumMethods |= 0x8000 // numMethodHasMethodSet flag
+				structNumMethods |= numMethodHasMethodSet
 			}
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.ctx.Int16Type(), structNumMethods, false), // numMethods
