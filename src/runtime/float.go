@@ -76,7 +76,7 @@ func fmaximumf(x, y float32) float32 {
 	return maximumFloat32(x, y)
 }
 
-// Create seperate copies of the function that are not exported.
+// Create separate copies of the function that are not exported.
 // This is necessary so that LLVM does not recognize them as builtins.
 // If tests called the builtins, LLVM would just override them on most platforms.
 
@@ -114,7 +114,7 @@ func minimumFloat[T float, I floatInt](x, y T, minPosNaN, magMask I) T {
 	// We can turn a float into a signed-comparable value by reversing the comparison order of negative values.
 	// We can reverse the order by inverting the bits.
 	// This also ensures that positive zero compares greater than negative zero (as required by the spec).
-	// Negative NaN values will compare less than any other value, so they require no special handling to propogate.
+	// Negative NaN values will compare less than any other value, so they require no special handling to propagate.
 	if xBits < 0 {
 		xBits ^= magMask
 	}
@@ -138,7 +138,7 @@ func maximumFloat[T float, I floatInt](x, y T, minPosNaN, magMask I) T {
 	// We can turn a float into a signed-comparable value by reversing the comparison order of negative values.
 	// We can reverse the order by inverting the bits.
 	// This also ensures that positive zero compares greater than negative zero (as required by the spec).
-	// Positive NaN values will compare greater than any other value, so they require no special handling to propogate.
+	// Positive NaN values will compare greater than any other value, so they require no special handling to propagate.
 	if xBits < 0 {
 		xBits ^= magMask
 	}
