@@ -344,6 +344,7 @@ TEST_PACKAGES_FAST = \
 	encoding/base64 \
 	encoding/csv \
 	encoding/hex \
+	expvar \
 	go/ast \
 	go/format \
 	go/scanner \
@@ -397,6 +398,7 @@ TEST_PACKAGES_FAST = \
 TEST_PACKAGES_LINUX := \
 	archive/zip \
 	compress/flate \
+	context \
 	crypto/aes \
 	crypto/des \
 	crypto/hmac \
@@ -439,6 +441,7 @@ TEST_PACKAGES_NONWASM = \
 	crypto/ecdsa \
 	debug/macho \
 	embed/internal/embedtest \
+	expvar \
 	go/format \
 	os \
 	testing \
