@@ -334,7 +334,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				typeFields = append(typeFields, methodSetValue) // methods
 			}
 			typeFields = append(typeFields, c.ctx.ConstString(pkgname+"."+name+"\x00", false)) // name
-			metabyte |= 1 << 5 // "named" flag
+			metabyte |= 1 << 5                                                                 // "named" flag
 		case *types.Chan:
 			var dir reflectChanDir
 			switch typ.Dir() {
