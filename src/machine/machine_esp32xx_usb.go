@@ -19,13 +19,11 @@ import (
 
 const cpuInterruptFromUSB = 8
 
-// flushTimeout is the maximum number of busy-wait iterations in flush().
-// Prevents hanging when no USB host is connected.
-const flushTimeout = 200000
-
 type USB_DEVICE struct {
-	Bus    *esp.USB_DEVICE_Type
-	Buffer *RingBuffer
+	Bus       *esp.USB_DEVICE_Type
+	Buffer    *RingBuffer
+	txPending bool // unflushed data in the EP1 TX FIFO
+	txStalled bool // set when flushAndWait fails (no host reading); cleared when FIFO becomes writable
 }
 
 var (
@@ -123,18 +121,36 @@ func (usbdev *USB_DEVICE) handleInterrupt() {
 func (usbdev *USB_DEVICE) WriteByte(c byte) error {
 	usbdev.ensureConfigured()
 	if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
-		// FIFO full — try flushing first, then recheck.
-		usbdev.flush()
-		if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
+		// FIFO locked by a pending USB transfer.
+		if usbdev.txStalled {
+			// Previously failed — skip the expensive spin and drop
+			// the byte. When a host reconnects SERIAL_IN_EP_DATA_FREE
+			// goes back to 1, clearing the stall on the next call.
+			return errUSBCouldNotWriteAllData
+		}
+		// First time the FIFO is full: wait briefly for the host to
+		// read the previous packet.
+		if !usbdev.flushAndWait() {
+			usbdev.txStalled = true
 			return errUSBCouldNotWriteAllData
 		}
 	}
+	usbdev.txStalled = false
 
 	// Use EP1.Set() (direct store) instead of SetEP1_RDWR_BYTE which
 	// does a read-modify-write — the read side-effect pops a byte from
 	// the RX FIFO.
 	usbdev.Bus.EP1.Set(uint32(c))
-	usbdev.flush()
+
+	// Only signal WR_DONE on newline to batch bytes into a single USB
+	// packet. The FIFO-full path above also flushes when the 64-byte
+	// FIFO fills up.
+	if c == '\n' {
+		usbdev.flush()
+		usbdev.txPending = false
+	} else {
+		usbdev.txPending = true
+	}
 
 	return nil
 }
@@ -147,17 +163,20 @@ func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
 
 	for i, c := range data {
 		if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
-			if i > 0 {
-				usbdev.flush()
+			if usbdev.txStalled {
+				return i, errUSBCouldNotWriteAllData
 			}
-			if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() == 0 {
+			if !usbdev.flushAndWait() {
+				usbdev.txStalled = true
 				return i, errUSBCouldNotWriteAllData
 			}
 		}
+		usbdev.txStalled = false
 		usbdev.Bus.EP1.Set(uint32(c))
 	}
 
 	usbdev.flush()
+	usbdev.txPending = false
 	return len(data), nil
 }
 
@@ -167,6 +186,12 @@ func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
 // level-triggered interrupt storm).
 func (usbdev *USB_DEVICE) Buffered() int {
 	usbdev.ensureConfigured()
+	// Flush any pending TX data so callers like echo loops don't
+	// need to explicitly flush after WriteByte.
+	if usbdev.txPending {
+		usbdev.flush()
+		usbdev.txPending = false
+	}
 	// Drain the hardware FIFO into the ring buffer.
 	for usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL() != 0 {
 		b := byte(usbdev.Bus.EP1.Get())
@@ -195,15 +220,34 @@ func (usbdev *USB_DEVICE) RTS() bool {
 	return false
 }
 
-// flush signals WR_DONE and waits (with timeout) for the hardware to
-// consume the data. A timeout prevents hanging when no USB host is present.
+// flush signals WR_DONE to tell the hardware to send the data that has
+// been written to the EP1 FIFO. Returns immediately without waiting.
 func (usbdev *USB_DEVICE) flush() {
 	usbdev.Bus.SetEP1_CONF_WR_DONE(1)
-	for i := 0; i < flushTimeout; i++ {
+}
+
+// FlushSerial flushes any pending USB serial TX data. Called from the
+// runtime (e.g. before sleeping) to ensure data from print() without
+// a trailing newline gets sent promptly.
+func FlushSerial() {
+	if _USBCDC.txPending {
+		_USBCDC.flush()
+		_USBCDC.txPending = false
+	}
+}
+
+// flushAndWait signals WR_DONE and waits for the EP1 FIFO to become
+// writable again. The timeout covers a few USB frames so that data gets
+// through when a host is connected. Returns false if the FIFO is still
+// locked after the timeout (no host reading).
+func (usbdev *USB_DEVICE) flushAndWait() bool {
+	usbdev.Bus.SetEP1_CONF_WR_DONE(1)
+	for i := 0; i < 50000; i++ {
 		if usbdev.Bus.GetEP1_CONF_SERIAL_IN_EP_DATA_FREE() != 0 {
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // The ESP32-S3 USB Serial/JTAG controller is fixed-function hardware.

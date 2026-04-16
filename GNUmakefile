@@ -379,6 +379,7 @@ TEST_PACKAGES_FAST = \
 # crypto/des fails on wasi, needs panic()/recover()
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
+# encoding/xml takes a minute on linux and gives a stack overflow on wasi
 # image requires recover(), which is not yet supported on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
 # mime: fail on wasi; neds panic()/recover()
@@ -401,6 +402,7 @@ TEST_PACKAGES_LINUX := \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
+	encoding/xml \
 	image \
 	io/ioutil \
 	mime \
@@ -913,6 +915,12 @@ endif
 	$(TINYGO) build -size short -o test.hex -target=digispark -gc=leaking examples/blinky1
 	@$(MD5SUM) test.hex
 ifneq ($(XTENSA), 0)
+	$(TINYGO) build -size short -o test.bin -target=esp32-generic       examples/machinetest
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32c3-generic     examples/machinetest
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32s3-generic     examples/machinetest
+	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=esp32-mini32      	examples/blinky1
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=esp32c3-supermini   examples/blinky1
@@ -950,15 +958,6 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target=esp32s3-supermini	    examples/mcp3008
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=esp32s3-supermini   	examples/adc
-	@$(MD5SUM) test.bin
-	# esp32s3-wroom1
-	$(TINYGO) build -size short -o test.bin -target=esp32s3-wroom1	    examples/blinkm
-	@$(MD5SUM) test.bin
-	$(TINYGO) build -size short -o test.bin -target=esp32s3-wroom1	    examples/mcp3008
-	@$(MD5SUM) test.bin
-	$(TINYGO) build -size short -o test.bin -target=esp32s3-wroom1   	examples/pwm
-	@$(MD5SUM) test.bin
-	$(TINYGO) build -size short -o test.bin -target=xiao-esp32s3   		examples/adc
 	@$(MD5SUM) test.bin
 endif
     # esp32c3-supermini

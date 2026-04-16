@@ -110,6 +110,7 @@ func initTimerInterrupt() {
 // sleepTicks spins until the given number of ticks have elapsed, using the
 // TIMG0 alarm interrupt to avoid busy-waiting for the entire duration.
 func sleepTicks(d timeUnit) {
+	machine.FlushSerial()
 	target := ticks() + d
 	for ticks() < target {
 		// Set the alarm to fire at the target tick count.
