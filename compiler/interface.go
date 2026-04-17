@@ -895,6 +895,19 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 			value.SetGlobalConstant(true)
 			value.SetLinkage(llvm.LinkOnceODRLinkage)
 			value.SetAlignment(1)
+			if c.Debug {
+				file := c.getDIFile("<Go type>")
+				diglobal := c.dibuilder.CreateGlobalVariableExpression(file, llvm.DIGlobalVariableExpression{
+					Name:        globalName,
+					File:        file,
+					Line:        1,
+					Type:        c.getDIType(types.Typ[types.Uint8]),
+					LocalToUnit: false,
+					Expr:        c.dibuilder.CreateExpression(nil),
+					AlignInBits: 8,
+				})
+				value.AddMetadata(0, diglobal)
+			}
 		}
 		refs = append(refs, methodRef{globalName, value})
 	}
