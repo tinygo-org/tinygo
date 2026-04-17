@@ -33,6 +33,7 @@ func main() {
 	// package time
 	time.Sleep(time.Millisecond)
 	time.Sleep(-1) // negative sleep should return immediately
+	time.LoadLocation("UTC")
 
 	// Exit the program normally.
 	os.Exit(0)
