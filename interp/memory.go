@@ -211,7 +211,6 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		llvmType := llvmValue.Type()
 		switch llvmType.TypeKind() {
 		case llvm.IntegerTypeKind, llvm.FloatTypeKind, llvm.DoubleTypeKind:
-		case llvm.VectorTypeKind, llvm.MetadataTypeKind:
 			// Nothing to do here. Integers and floats aren't pointers so don't
 			// need any marking.
 		case llvm.StructTypeKind:
@@ -223,7 +222,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 					return err
 				}
 			}
-		case llvm.ArrayTypeKind:
+		case llvm.ArrayTypeKind, llvm.VectorTypeKind:
 			numElements := llvmType.ArrayLength()
 			for i := 0; i < numElements; i++ {
 				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
@@ -232,6 +231,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 					return err
 				}
 			}
+		case llvm.MetadataTypeKind:
 		default:
 			return errors.New("interp: unknown type kind in markExternalValue")
 		}
