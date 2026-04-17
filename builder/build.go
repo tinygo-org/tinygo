@@ -848,10 +848,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						return err
 					}
 				}
-				if fn := mod.NamedFunction("main"); !fn.IsNil() {
-					fn.EraseFromParentAsFunction()
-				}
-				for _, name := range []string{"malloc", "calloc", "free"} {
+				for _, name := range []string{"main", "malloc", "calloc", "free"} {
 					if fn := mod.NamedFunction(name); !fn.IsNil() {
 						fn2 := llvm.AddFunction(mod, name, fn.Type())
 						fn.ReplaceAllUsesWith(fn2)
