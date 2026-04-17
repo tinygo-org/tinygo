@@ -856,12 +856,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						fn2.SetName(name)
 					}
 				}
-				if config.Triple() == "xtensa" {
-					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-						if strings.HasPrefix(fn.Name(), "__atomic_") ||
-							strings.HasPrefix(fn.Name(), "__sync_") {
-							fn.SetLinkage(llvm.InternalLinkage)
-						}
+				for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+					if strings.HasPrefix(fn.Name(), "__atomic_") ||
+						strings.HasPrefix(fn.Name(), "__sync_") {
+						fn.SetLinkage(llvm.InternalLinkage)
+					}
+					if config.Triple() == "xtensa" {
 						fn.SetSection(".text." + fn.Name())
 						if fn.Name() == "tinygo_scanstack" {
 							fn.SetSection(".text.tinygo_scanCurrentStack")
