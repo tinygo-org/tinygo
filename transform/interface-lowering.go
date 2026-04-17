@@ -36,6 +36,12 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// numMethodHasMethodSet is a flag in bit 15 of the numMethod field (uint16) in
+// Named, Pointer, and Struct type descriptors. When set, an inline method set
+// is present in the type descriptor. Must match the constant in
+// src/internal/reflectlite/type.go.
+const numMethodHasMethodSet = 0x8000
+
 // signatureInfo is a Go signature of an interface method. It does not represent
 // any method in particular.
 type signatureInfo struct {
@@ -276,7 +282,7 @@ func (p *lowerInterfacesPass) run() error {
 	for _, fn := range interfaceAssertFunctions {
 		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
 		itf := p.interfaces[methodsAttr.GetStringValue()]
-		p.defineInterfaceImplementsFunc(fn, itf)
+		p.defineInterfaceAssertFunc(fn, itf)
 	}
 
 	// Replace each type assert with an actual type comparison or (if the type
@@ -325,6 +331,49 @@ func (p *lowerInterfacesPass) run() error {
 	}
 	sort.Strings(typeNames)
 
+	// Check whether runtime.typeImplementsMethodSet still has uses. Now that
+	// interface type assertions have been lowered to type-ID comparison
+	// chains, the only remaining callers would be from reflect
+	// (AssignableTo/Implements). If none remain, we can strip the inline
+	// method-set data from type descriptors to save binary size.
+	stripMethodSets := false
+	typeImplementsFn := p.mod.NamedFunction("runtime.typeImplementsMethodSet")
+	if !typeImplementsFn.IsNil() && !hasUses(typeImplementsFn) {
+		stripMethodSets = true
+	}
+
+	// Collect all method signatures that appear in any interface type
+	// descriptor. When reflect is imported and method sets are kept,
+	// concrete type method sets are pruned: individual methods not in any
+	// interface are removed, and types that can't fully satisfy at least
+	// one interface have their method sets emptied entirely.
+	//
+	// When method sets are stripped entirely (reflect not imported),
+	// methodFilter is nil and filterMethodSet replaces with empty.
+	var methodFilter map[string]struct{}
+	var ifaceMethodSets []map[string]struct{}
+	if !stripMethodSets {
+		methodFilter = make(map[string]struct{})
+		for _, name := range typeNames {
+			if !strings.HasPrefix(name, "interface:") {
+				continue
+			}
+			t := p.types[name]
+			initializer := t.typecode.Initializer()
+			ifaceSet := make(map[string]struct{})
+			for i := 0; i < initializer.Type().StructElementTypesCount(); i++ {
+				field := p.builder.CreateExtractValue(initializer, i, "")
+				for _, sig := range p.extractMethodSigs(field) {
+					methodFilter[sig] = struct{}{}
+					ifaceSet[sig] = struct{}{}
+				}
+			}
+			if len(ifaceSet) > 0 {
+				ifaceMethodSets = append(ifaceMethodSets, ifaceSet)
+			}
+		}
+	}
+
 	// Remove all method sets, which are now unnecessary and inhibit later
 	// optimizations if they are left in place.
 	zero := llvm.ConstInt(p.ctx.Int32Type(), 0, false)
@@ -332,9 +381,39 @@ func (p *lowerInterfacesPass) run() error {
 		t := p.types[name]
 		if !t.methodSet.IsNil() {
 			initializer := t.typecode.Initializer()
+			numFields := initializer.Type().StructElementTypesCount()
+
+			// Read numMethods from the original type descriptor (index 2:
+			// after prefix pointer at 0 and kind byte at 1). For Named,
+			// Pointer, and Struct types, the numMethodHasMethodSet flag
+			// indicates that an inline method set is present.
+			var numMethodsConst uint64
+			var numMethodsIsI16 bool
+			if numFields > 2 {
+				nmField := p.builder.CreateExtractValue(initializer, 2, "")
+				if nmField.Type() == p.ctx.Int16Type() {
+					numMethodsConst = nmField.ZExtValue()
+					numMethodsIsI16 = true
+				}
+			}
+
 			var newInitializerFields []llvm.Value
-			for i := 1; i < initializer.Type().StructElementTypesCount(); i++ {
-				newInitializerFields = append(newInitializerFields, p.builder.CreateExtractValue(initializer, i, ""))
+			for i := 1; i < numFields; i++ {
+				field := p.builder.CreateExtractValue(initializer, i, "")
+				field = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
+				// Strip empty inline method sets for Named, Pointer, and
+				// Struct types. When the method set is pruned to empty, we
+				// remove it and clear the numMethodHasMethodSet flag (bit 15
+				// of numMethod) so the runtime skips reading it.
+				if numMethodsIsI16 && numMethodsConst&numMethodHasMethodSet != 0 && p.isMethodSetType(field.Type()) {
+					elems := field.Type().StructElementTypes()
+					if elems[1].ArrayLength() == 0 {
+						clearedNumMethods := numMethodsConst & ^uint64(numMethodHasMethodSet)
+						newInitializerFields[1] = llvm.ConstInt(p.ctx.Int16Type(), clearedNumMethods, false)
+						continue
+					}
+				}
+				newInitializerFields = append(newInitializerFields, field)
 			}
 			newInitializer := p.ctx.ConstStruct(newInitializerFields, false)
 			typecodeName := t.typecode.Name()
@@ -426,66 +505,6 @@ func (p *lowerInterfacesPass) getSignature(name string) *signatureInfo {
 		}
 	}
 	return p.signatures[name]
-}
-
-// defineInterfaceImplementsFunc defines the interface type assert function. It
-// checks whether the given interface type (passed as an argument) is one of the
-// types it implements.
-//
-// The type match is implemented using an if/else chain over all possible types.
-// This if/else chain is easily converted to a big switch over all possible
-// types by the LLVM simplifycfg pass.
-func (p *lowerInterfacesPass) defineInterfaceImplementsFunc(fn llvm.Value, itf *interfaceInfo) {
-	// Create the function and function signature.
-	fn.Param(0).SetName("actualType")
-	fn.SetLinkage(llvm.InternalLinkage)
-	fn.SetUnnamedAddr(true)
-	AddStandardAttributes(fn, p.config)
-
-	// Start the if/else chain at the entry block.
-	entry := p.ctx.AddBasicBlock(fn, "entry")
-	thenBlock := p.ctx.AddBasicBlock(fn, "then")
-	p.builder.SetInsertPointAtEnd(entry)
-
-	if p.dibuilder != nil {
-		difile := p.getDIFile("<Go interface assert>")
-		diFuncType := p.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
-			File: difile,
-		})
-		difunc := p.dibuilder.CreateFunction(difile, llvm.DIFunction{
-			Name:         "(Go interface assert)",
-			File:         difile,
-			Line:         0,
-			Type:         diFuncType,
-			LocalToUnit:  true,
-			IsDefinition: true,
-			ScopeLine:    0,
-			Flags:        llvm.FlagPrototyped,
-			Optimized:    true,
-		})
-		fn.SetSubprogram(difunc)
-		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
-	}
-
-	// Iterate over all possible types.  Each iteration creates a new branch
-	// either to the 'then' block (success) or the .next block, for the next
-	// check.
-	actualType := fn.Param(0)
-	for _, typ := range itf.types {
-		nextBlock := p.ctx.AddBasicBlock(fn, typ.name+".next")
-		cmp := p.builder.CreateICmp(llvm.IntEQ, actualType, typ.typecodeGEP, typ.name+".icmp")
-		p.builder.CreateCondBr(cmp, thenBlock, nextBlock)
-		p.builder.SetInsertPointAtEnd(nextBlock)
-	}
-
-	// The builder is now inserting at the last *.next block.  Once we reach
-	// this point, all types have been checked so the type assert will have
-	// failed.
-	p.builder.CreateRet(llvm.ConstInt(p.ctx.Int1Type(), 0, false))
-
-	// Fill 'then' block (type assert was successful).
-	p.builder.SetInsertPointAtEnd(thenBlock)
-	p.builder.CreateRet(llvm.ConstInt(p.ctx.Int1Type(), 1, false))
 }
 
 // defineInterfaceMethodFunc defines this thunk by calling the concrete method
@@ -591,4 +610,172 @@ func (p *lowerInterfacesPass) getDIFile(file string) llvm.Metadata {
 		p.difiles[file] = difile
 	}
 	return difile
+}
+
+// defineInterfaceAssertFunc defines a $typeassert function for the given
+// interface. The function returns true if the concrete type (passed as a
+// type-ID pointer) implements the interface, using a chain of type-ID
+// comparisons. This avoids pulling in runtime.typeImplementsMethodSet for
+// programs that don't use reflect.
+func (p *lowerInterfacesPass) defineInterfaceAssertFunc(fn llvm.Value, itf *interfaceInfo) {
+	actualType := fn.FirstParam()
+	actualType.SetName("actualType")
+	fn.SetLinkage(llvm.InternalLinkage)
+	fn.SetUnnamedAddr(true)
+	AddStandardAttributes(fn, p.config)
+
+	entry := p.ctx.AddBasicBlock(fn, "entry")
+	p.builder.SetInsertPointAtEnd(entry)
+
+	if p.dibuilder != nil {
+		difile := p.getDIFile("<Go interface type assert>")
+		diFuncType := p.dibuilder.CreateSubroutineType(llvm.DISubroutineType{
+			File: difile,
+		})
+		difunc := p.dibuilder.CreateFunction(difile, llvm.DIFunction{
+			Name:         "(Go interface type assert)",
+			File:         difile,
+			Line:         0,
+			Type:         diFuncType,
+			LocalToUnit:  true,
+			IsDefinition: true,
+			ScopeLine:    0,
+			Flags:        llvm.FlagPrototyped,
+			Optimized:    true,
+		})
+		fn.SetSubprogram(difunc)
+		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
+	}
+
+	// Build an OR chain: return (type == T1) || (type == T2) || ...
+	llvmFalse := llvm.ConstInt(p.ctx.Int1Type(), 0, false)
+	result := llvmFalse
+	for _, typ := range itf.types {
+		cmp := p.builder.CreateICmp(llvm.IntEQ, actualType, typ.typecodeGEP, typ.name+".icmp")
+		result = p.builder.CreateOr(result, cmp, "")
+	}
+	p.builder.CreateRet(result)
+}
+
+// isMethodSetType reports whether ty has the shape of a method-set struct:
+// { uintptr, [N x ptr] }.
+func (p *lowerInterfacesPass) isMethodSetType(ty llvm.Type) bool {
+	if ty.TypeKind() != llvm.StructTypeKind {
+		return false
+	}
+	elems := ty.StructElementTypes()
+	if len(elems) != 2 {
+		return false
+	}
+	if elems[0] != p.uintptrType {
+		return false
+	}
+	return elems[1].TypeKind() == llvm.ArrayTypeKind && elems[1].ElementType() == p.ptrType
+}
+
+// extractMethodSigs returns the names of method signature globals inside a
+// method-set field ({ uintptr, [N x ptr] }). Returns nil if field is not a
+// method set.
+func (p *lowerInterfacesPass) extractMethodSigs(field llvm.Value) []string {
+	if !p.isMethodSetType(field.Type()) {
+		return nil
+	}
+	methodArray := p.builder.CreateExtractValue(field, 1, "")
+	n := methodArray.Type().ArrayLength()
+	sigs := make([]string, 0, n)
+	for j := 0; j < n; j++ {
+		sig := p.builder.CreateExtractValue(methodArray, j, "")
+		sig = stripPointerCasts(sig)
+		sigs = append(sigs, sig.Name())
+	}
+	return sigs
+}
+
+// filterMethodSet processes a type-descriptor field that may be a method set.
+// Non-method-set fields are returned unchanged.
+//
+// If keepSigs is nil, the method set is replaced with an empty one (strip mode,
+// used when reflect is not imported). If keepSigs is non-nil, the method set is
+// pruned in two stages: first, methods not in keepSigs (the union of all
+// interface signatures) are removed; then, if the remaining methods cannot
+// fully satisfy at least one interface in ifaceSets, the entire method set is
+// emptied.
+func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[string]struct{}, ifaceSets []map[string]struct{}) llvm.Value {
+	if !p.isMethodSetType(field.Type()) {
+		return field
+	}
+
+	methodArray := p.builder.CreateExtractValue(field, 1, "")
+	numMethods := methodArray.Type().ArrayLength()
+
+	// Strip mode: replace with empty method set.
+	if keepSigs == nil {
+		return p.ctx.ConstStruct([]llvm.Value{
+			llvm.ConstInt(p.uintptrType, 0, false),
+			llvm.ConstArray(p.ptrType, nil),
+		}, false)
+	}
+
+	if numMethods == 0 {
+		return field
+	}
+
+	// Extract all methods and their signature names.
+	type methodEntry struct {
+		value llvm.Value
+		name  string
+	}
+	entries := make([]methodEntry, numMethods)
+	nameSet := make(map[string]struct{}, numMethods)
+	for j := 0; j < numMethods; j++ {
+		sig := p.builder.CreateExtractValue(methodArray, j, "")
+		stripped := stripPointerCasts(sig)
+		name := stripped.Name()
+		entries[j] = methodEntry{sig, name}
+		nameSet[name] = struct{}{}
+	}
+
+	// Check whether this type can fully implement at least one interface.
+	// If not, its method set can never produce a true result from
+	// typeImplementsMethodSet, so we can empty it entirely.
+	implementsAny := false
+	for _, ifaceSet := range ifaceSets {
+		if isSubsetOf(ifaceSet, nameSet) {
+			implementsAny = true
+			break
+		}
+	}
+	if !implementsAny {
+		return p.ctx.ConstStruct([]llvm.Value{
+			llvm.ConstInt(p.uintptrType, 0, false),
+			llvm.ConstArray(p.ptrType, nil),
+		}, false)
+	}
+
+	// Prune: keep only methods whose signature appears in keepSigs.
+	var kept []llvm.Value
+	for _, e := range entries {
+		if _, ok := keepSigs[e.name]; ok {
+			kept = append(kept, e.value)
+		}
+	}
+
+	if len(kept) == numMethods {
+		return field
+	}
+
+	return p.ctx.ConstStruct([]llvm.Value{
+		llvm.ConstInt(p.uintptrType, uint64(len(kept)), false),
+		llvm.ConstArray(p.ptrType, kept),
+	}, false)
+}
+
+// isSubsetOf reports whether every key in sub is also in super.
+func isSubsetOf(sub, super map[string]struct{}) bool {
+	for k := range sub {
+		if _, ok := super[k]; !ok {
+			return false
+		}
+	}
+	return true
 }

@@ -348,6 +348,7 @@ TEST_PACKAGES_FAST = \
 	go/ast \
 	go/format \
 	go/scanner \
+	go/token \
 	go/version \
 	hash \
 	hash/adler32 \
@@ -360,6 +361,7 @@ TEST_PACKAGES_FAST = \
 	math/cmplx \
 	net/http/internal/ascii \
 	net/mail \
+	net/url \
 	os \
 	path \
 	reflect \
@@ -485,7 +487,7 @@ TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
 TEST_IOFS := false
 endif
 
-TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic'
+TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic|TestParseQueryLimits|TestParseStrictIpv6'
 TEST_ADDITIONAL_FLAGS ?=
 
 # Test known-working standard library packages.
