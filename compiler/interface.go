@@ -843,35 +843,6 @@ func (c *compilerContext) getMethodsString(itf *types.Interface) string {
 	return strings.Join(methods, "; ")
 }
 
-// getInterfaceMethodSet returns a global that contains the method set for an
-// interface type, creating it if needed.
-func (c *compilerContext) getInterfaceMethodSet(t *types.Interface) llvm.Value {
-	s, _ := getTypeCodeName(t)
-	methodSetName := s + "$itfmethods"
-	methodSet := c.mod.NamedGlobal(methodSetName)
-	if !methodSet.IsNil() {
-		return methodSet
-	}
-
-	var methods []*types.Func
-	for i := 0; i < t.NumMethods(); i++ {
-		methods = append(methods, t.Method(i))
-	}
-	if len(methods) == 0 {
-		panic("unreachable: getInterfaceMethodSet called on empty interface")
-	}
-
-	methodSetValue := c.getMethodSetValue(methods)
-	methodSet = llvm.AddGlobal(c.mod, methodSetValue.Type(), methodSetName)
-	methodSet.SetInitializer(methodSetValue)
-	methodSet.SetGlobalConstant(true)
-	methodSet.SetLinkage(llvm.LinkOnceODRLinkage)
-	methodSet.SetAlignment(c.targetData.ABITypeAlignment(methodSetValue.Type()))
-	methodSet.SetUnnamedAddr(true)
-
-	return methodSet
-}
-
 // getMethodSetValue creates the method set struct value for a list of methods.
 // The struct contains a length and a sorted array of method signature pointers.
 func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
