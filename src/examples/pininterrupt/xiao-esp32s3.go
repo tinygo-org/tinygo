@@ -6,6 +6,6 @@ import "machine"
 
 const (
 	button          = machine.D1
-	buttonMode      = machine.PinInput
+	buttonMode      = machine.PinInputPullup
 	buttonPinChange = machine.PinFalling
 )
