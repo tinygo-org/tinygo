@@ -398,9 +398,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	llvmvendor := "unknown"
 	switch options.GOOS {
 	case "darwin":
-		if options.GC == "boehm" {
-			spec.GC = "boehm"
-		}
+		spec.GC = "boehm"
 		platformVersion := "10.12.0"
 		if options.GOARCH == "arm64" {
 			platformVersion = "11.0.0" // first macosx platform with arm64 support
@@ -420,13 +418,10 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		)
 		spec.ExtraFiles = append(spec.ExtraFiles,
 			"src/internal/futex/futex_darwin.c",
+			"src/internal/task/task_threads.c",
 			"src/runtime/os_darwin.c",
 			"src/runtime/runtime_unix.c",
 			"src/runtime/signal.c")
-		if options.Scheduler == "threads" {
-			spec.ExtraFiles = append(spec.ExtraFiles,
-				"src/internal/task/task_threads.c")
-		}
 	case "linux":
 		spec.GC = "boehm"
 		spec.Scheduler = "threads"
