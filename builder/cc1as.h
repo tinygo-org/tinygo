@@ -107,7 +107,7 @@ struct AssemblerInvocation {
   EmitDwarfUnwindType EmitDwarfUnwind;
 
   // Whether to emit compact-unwind for non-canonical entries.
-  // Note: maybe overriden by other constraints.
+  // Note: maybe overridden by other constraints.
   LLVM_PREFERRED_TYPE(bool)
   unsigned EmitCompactUnwindNonCanonical : 1;
 

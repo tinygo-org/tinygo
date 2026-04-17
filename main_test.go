@@ -107,6 +107,9 @@ func TestBuild(t *testing.T) {
 	if minor >= 23 {
 		tests = append(tests, "go1.23/")
 	}
+	if minor >= 24 {
+		tests = append(tests, "typealias.go")
+	}
 
 	if *testTarget != "" {
 		// This makes it possible to run one specific test (instead of all),

@@ -309,7 +309,7 @@ func (spi *SPI) tx(tx []byte) error {
 
 	// Make sure the read buffer stays alive until this point (in the unlikely
 	// case the tx slice wasn't read after this function returns and a GC cycle
-	// happened inbetween).
+	// happened in the meantime).
 	keepAliveNoEscape(unsafe.Pointer(unsafe.SliceData(tx)))
 
 	// We didn't read any result values, which means the RX FIFO has likely

@@ -289,13 +289,13 @@ WASM_TOOLS_MODULE=go.bytecodealliance.org
 .PHONY: wasi-syscall
 wasi-syscall: wasi-cm
 	rm -rf ./src/internal/wasi/*
-	go run -modfile ./internal/wasm-tools/go.mod $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm ./lib/wasi-cli/wit
+	go run $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm ./lib/wasi-cli/wit
 
 # Copy package cm into src/internal/cm
 .PHONY: wasi-cm
 wasi-cm:
 	rm -rf ./src/internal/cm/*
-	rsync -rv --delete --exclude go.mod --exclude '*_test.go' --exclude '*_json.go' --exclude '*.md' --exclude LICENSE $(shell go list -modfile ./internal/wasm-tools/go.mod -m -f {{.Dir}} $(WASM_TOOLS_MODULE)/cm)/ ./src/internal/cm
+	rsync -rv --delete --exclude go.mod --exclude '*_test.go' --exclude '*_json.go' --exclude '*.md' --exclude LICENSE $(shell go list -m -f {{.Dir}} $(WASM_TOOLS_MODULE)/cm)/ ./src/internal/cm
 
 # Check for Node.js used during WASM tests.
 MIN_NODEJS_VERSION=18
@@ -344,9 +344,11 @@ TEST_PACKAGES_FAST = \
 	encoding/base64 \
 	encoding/csv \
 	encoding/hex \
+	expvar \
 	go/ast \
 	go/format \
 	go/scanner \
+	go/token \
 	go/version \
 	hash \
 	hash/adler32 \
@@ -359,6 +361,7 @@ TEST_PACKAGES_FAST = \
 	math/cmplx \
 	net/http/internal/ascii \
 	net/mail \
+	net/url \
 	os \
 	path \
 	reflect \
@@ -397,6 +400,7 @@ TEST_PACKAGES_FAST = \
 TEST_PACKAGES_LINUX := \
 	archive/zip \
 	compress/flate \
+	context \
 	crypto/aes \
 	crypto/des \
 	crypto/hmac \
@@ -439,6 +443,7 @@ TEST_PACKAGES_NONWASM = \
 	crypto/ecdsa \
 	debug/macho \
 	embed/internal/embedtest \
+	expvar \
 	go/format \
 	os \
 	testing \
@@ -482,7 +487,7 @@ TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
 TEST_IOFS := false
 endif
 
-TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic'
+TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic|TestParseQueryLimits|TestParseStrictIpv6'
 TEST_ADDITIONAL_FLAGS ?=
 
 # Test known-working standard library packages.
@@ -1178,7 +1183,7 @@ endif
 
 .PHONY: tools
 tools:
-	cd internal/tools && go generate -tags tools ./
+	go generate -tags tools ./
 
 LINTDIRS=src/os/ src/reflect/
 .PHONY: lint

@@ -157,6 +157,10 @@ const (
 	flagIsBinary   = 128 // flag that is set if this type uses the hashmap binary algorithm
 )
 
+// Flag in the numMethod field (uint16) of Pointer and Struct type descriptors,
+// indicating that an inline method set is present in the type descriptor.
+const numMethodHasMethodSet = 0x8000
+
 // The base type struct. All type structs start with this.
 type RawType struct {
 	meta uint8 // metadata byte, contains kind and flags (see constants above)
@@ -171,16 +175,22 @@ type elemType struct {
 	elem      *RawType
 }
 
+// ptrType is the type descriptor for pointer types.
+// The numMethod field stores the number of exported methods in the lower bits,
+// with bit 15 (numMethodHasMethodSet) indicating whether the methods field is
+// present. When the flag is clear, the methods field does not exist in the
+// actual type descriptor and must not be accessed.
 type ptrType struct {
 	RawType
 	numMethod uint16
 	elem      *RawType
+	methods   methodSet // only present when numMethod & numMethodHasMethodSet != 0
 }
 
 type interfaceType struct {
 	RawType
-	ptrTo *RawType
-	// TODO: methods
+	ptrTo   *RawType
+	methods methodSet
 }
 
 type arrayType struct {
@@ -200,13 +210,19 @@ type mapType struct {
 	key       *RawType
 }
 
+// namedType is the type descriptor for named types. The numMethod field uses
+// bit 15 (numMethodHasMethodSet) to indicate whether an inline method set is
+// present after pkg. When the flag is set, a methodSet follows at
+// unsafe.Sizeof(namedType{}), and the name string follows after the method
+// set's entries. When clear, the name string starts directly at that offset.
 type namedType struct {
 	RawType
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
 	pkg       *byte
-	name      [1]byte
+	// if numMethod & numMethodHasMethodSet != 0: methodSet follows here
+	// name (null-terminated "pkg.Name\0") follows after the method set (or directly here)
 }
 
 // Type for struct types. The numField value is intentionally put before ptrTo
@@ -216,6 +232,10 @@ type namedType struct {
 // The fields array isn't necessarily 1 structField long, instead it is as long
 // as numFields. The array is given a length of 1 to satisfy the Go type
 // checker.
+// The numMethod field stores the number of exported methods in the lower bits,
+// with bit 15 (numMethodHasMethodSet) indicating whether an inline method set
+// follows the fields array. When the flag is clear, no method set is present
+// and the type descriptor ends after the last structField entry.
 type structType struct {
 	RawType
 	numMethod uint16
@@ -224,11 +244,18 @@ type structType struct {
 	size      uint32
 	numField  uint16
 	fields    [1]structField // the remaining fields are all of type structField
+	// methods methodSet follows after fields, only when numMethod & numMethodHasMethodSet != 0
 }
 
 type structField struct {
 	fieldType *RawType
 	data      unsafe.Pointer // various bits of information, packed in a byte array
+}
+
+// Method set, as emitted by the compiler.
+type methodSet struct {
+	length  uintptr
+	methods [0]unsafe.Pointer // variable number of method signature pointers
 }
 
 // Equivalent to (go/types.Type).Underlying(): if this is a named type return
@@ -733,21 +760,38 @@ func (t *RawType) FieldAlign() int {
 // AssignableTo returns whether a value of type t can be assigned to a variable
 // of type u.
 func (t *RawType) AssignableTo(u Type) bool {
-	if t == u.(*RawType) {
-		return true
-	}
-
-	if t.underlying() == u.(*RawType).underlying() && (!t.isNamed() || !u.(*RawType).isNamed()) {
-		return true
-	}
-
-	if u.Kind() == Interface && u.NumMethod() == 0 {
+	u_raw := u.(*RawType)
+	if t == u_raw {
 		return true
 	}
 
 	if u.Kind() == Interface {
-		panic("reflect: unimplemented: AssignableTo with interface")
+		// T is an interface type and x implements T.
+		u_itf := (*interfaceType)(unsafe.Pointer(u_raw.underlying()))
+		return typeImplementsMethodSet(unsafe.Pointer(t), unsafe.Pointer(&u_itf.methods))
 	}
+
+	t_named := t.isNamed()
+	u_named := u_raw.isNamed()
+	if t_named && u_named {
+		return false
+	}
+	if t.underlying() == u_raw.underlying() {
+		return true
+	}
+
+	if t.Kind() == Chan && u_raw.Kind() == Chan {
+		t_chan := (*elemType)(unsafe.Pointer(t.underlying()))
+		u_chan := (*elemType)(unsafe.Pointer(u_raw.underlying()))
+		if t_chan.elem != u_chan.elem {
+			return false
+		}
+		if t_chan.ChanDir() != BothDir {
+			return false
+		}
+		return true
+	}
+
 	return false
 }
 
@@ -755,7 +799,85 @@ func (t *RawType) Implements(u Type) bool {
 	if u.Kind() != Interface {
 		panic("reflect: non-interface type passed to Type.Implements")
 	}
-	return t.AssignableTo(u)
+	u_itf := (*interfaceType)(unsafe.Pointer(u.(*RawType).underlying()))
+	return typeImplementsMethodSet(unsafe.Pointer(t), unsafe.Pointer(&u_itf.methods))
+}
+
+// typeImplementsMethodSet checks whether the concrete type (identified by its
+// typecode pointer) implements the given method set. Both the concrete type's
+// method set and the asserted method set are sorted arrays of method signature
+// pointers, so comparison is O(n+m).
+//
+//go:linkname typeImplementsMethodSet runtime.typeImplementsMethodSet
+func typeImplementsMethodSet(concreteType, assertedMethodSet unsafe.Pointer) bool {
+	if concreteType == nil {
+		return false
+	}
+
+	const ptrSize = unsafe.Sizeof((*byte)(nil))
+	itfNumMethod := *(*uintptr)(assertedMethodSet)
+	if itfNumMethod == 0 {
+		return true
+	}
+
+	// Pull the method set out of the concrete type.
+	var methods *methodSet
+	metaByte := *(*uint8)(concreteType)
+	if metaByte&flagNamed != 0 {
+		ct := (*namedType)(concreteType)
+		if ct.numMethod&numMethodHasMethodSet == 0 {
+			return false
+		}
+		methods = (*methodSet)(unsafe.Add(unsafe.Pointer(ct), unsafe.Sizeof(*ct)))
+	} else if metaByte&kindMask == uint8(Interface) {
+		ct := (*interfaceType)(concreteType)
+		methods = &ct.methods
+	} else if metaByte&kindMask == uint8(Pointer) {
+		ct := (*ptrType)(concreteType)
+		if ct.numMethod&numMethodHasMethodSet == 0 {
+			return false
+		}
+		methods = &ct.methods
+	} else if metaByte&kindMask == uint8(Struct) {
+		ct := (*structType)(concreteType)
+		if ct.numMethod&numMethodHasMethodSet == 0 {
+			return false
+		}
+		// For struct types, the method set follows after the variable-length
+		// fields array. We need to compute its offset dynamically.
+		fieldSize := unsafe.Sizeof(structField{})
+		methodsPtr := unsafe.Add(unsafe.Pointer(&ct.fields[0]), uintptr(ct.numField)*fieldSize)
+		methods = (*methodSet)(methodsPtr)
+	} else {
+		return false
+	}
+
+	concreteTypePtr := unsafe.Pointer(&methods.methods)
+	concreteTypeEnd := unsafe.Add(concreteTypePtr, uintptr(methods.length)*ptrSize)
+
+	// Iterate over each method in the interface method set, and check whether
+	// the method exists in the method set of the concrete type.
+	// Both method sets are sorted, so we can use a linear scan.
+	assertedTypePtr := unsafe.Add(assertedMethodSet, ptrSize)
+	assertedTypeEnd := unsafe.Add(assertedTypePtr, itfNumMethod*ptrSize)
+	for assertedTypePtr != assertedTypeEnd {
+		assertedMethod := *(*unsafe.Pointer)(assertedTypePtr)
+
+		for {
+			if concreteTypePtr == concreteTypeEnd {
+				return false
+			}
+			concreteMethod := *(*unsafe.Pointer)(concreteTypePtr)
+			concreteTypePtr = unsafe.Add(concreteTypePtr, ptrSize)
+			if concreteMethod == assertedMethod {
+				break
+			}
+		}
+
+		assertedTypePtr = unsafe.Add(assertedTypePtr, ptrSize)
+	}
+
+	return true
 }
 
 // Comparable returns whether values of this type can be compared to each other.
@@ -782,14 +904,14 @@ func (t *RawType) ChanDir() ChanDir {
 func (t *RawType) NumMethod() int {
 
 	if t.isNamed() {
-		return int((*namedType)(unsafe.Pointer(t)).numMethod)
+		return int((*namedType)(unsafe.Pointer(t)).numMethod & ^uint16(numMethodHasMethodSet))
 	}
 
 	switch t.Kind() {
 	case Pointer:
-		return int((*ptrType)(unsafe.Pointer(t)).numMethod)
+		return int((*ptrType)(unsafe.Pointer(t)).numMethod & ^uint16(numMethodHasMethodSet))
 	case Struct:
-		return int((*structType)(unsafe.Pointer(t)).numMethod)
+		return int((*structType)(unsafe.Pointer(t)).numMethod & ^uint16(numMethodHasMethodSet))
 	case Interface:
 		//FIXME: Use len(methods)
 		return (*interfaceType)(unsafe.Pointer(t)).ptrTo.NumMethod()
@@ -816,7 +938,14 @@ func readStringZ(data unsafe.Pointer) string {
 
 func (t *RawType) name() string {
 	ntype := (*namedType)(unsafe.Pointer(t))
-	return readStringZ(unsafe.Pointer(&ntype.name[0]))
+	// The name follows after the fixed fields (and optionally the method set).
+	ptr := unsafe.Add(unsafe.Pointer(ntype), unsafe.Sizeof(*ntype))
+	if ntype.numMethod&numMethodHasMethodSet != 0 {
+		ms := (*methodSet)(ptr)
+		// Skip past the length field and the method pointer entries.
+		ptr = unsafe.Add(ptr, unsafe.Sizeof(uintptr(0))+uintptr(ms.length)*unsafe.Sizeof(unsafe.Pointer(nil)))
+	}
+	return readStringZ(ptr)
 }
 
 func (t *RawType) Name() string {

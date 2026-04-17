@@ -92,7 +92,7 @@ func (layout gcLayout) scan(start, len uintptr) {
 		scanSimple(start, len, size*unsafe.Alignof(start), mask)
 
 	default:
-		// The layout is stored seperately in a global object.
+		// The layout is stored separately in a global object.
 		// Extract the size and bitmap.
 		layoutAddr := unsafe.Pointer(layout)
 		size := *(*uintptr)(layoutAddr)
