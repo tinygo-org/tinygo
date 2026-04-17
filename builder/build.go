@@ -851,6 +851,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if fn := mod.NamedFunction("main"); !fn.IsNil() {
 					fn.EraseFromParentAsFunction()
 				}
+				for _, name := range []string{"malloc", "calloc", "free"} {
+					if fn := mod.NamedFunction(name); !fn.IsNil() {
+						fn2 := llvm.AddFunction(mod, "__"+name, fn.Type())
+						fn2.SetLinkage(llvm.ExternalLinkage)
+						fn.ReplaceAllUsesWith(fn2)
+						fn.EraseFromParentAsFunction()
+						fn2.SetName(name)
+					}
+				}
 				if config.Triple() == "xtensa" {
 					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 						if strings.HasPrefix(fn.Name(), "__atomic_") ||
