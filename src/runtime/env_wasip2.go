@@ -15,4 +15,7 @@ func syscallSetenv(key, value string) {
 
 //go:linkname syscallUnsetenv syscall.runtimeUnsetenv
 func syscallUnsetenv(key string) {
+	if key == "GODEBUG" && godebugUpdate != nil {
+		godebugUpdate(key, "")
+	}
 }
