@@ -634,7 +634,7 @@ smoketest: testchdir
 	@$(MD5SUM) test.hex
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
-	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=arduino              examples/blinky1
+	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=arduino_uno          examples/blinky1
 	@$(MD5SUM) test.wasm
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=hifive1b             examples/blinky1
 	@$(MD5SUM) test.wasm
@@ -898,13 +898,13 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/machinetest
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=arduino             examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno         examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-leonardo    examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=arduino             examples/pwm
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno         examples/pwm
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=arduino -scheduler=tasks  examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno -scheduler=tasks  examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-mega1280    examples/blinky1
 	@$(MD5SUM) test.hex

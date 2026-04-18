@@ -1,4 +1,4 @@
-//go:build (avr && atmega328p) || arduino || arduino_nano
+//go:build (avr && atmega328p) || arduino_uno || arduino_nano
 
 package machine
 
