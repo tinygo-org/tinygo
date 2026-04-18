@@ -1,4 +1,4 @@
-//go:build (linux || darwin || windows || wasip1) && !wasip2
+//go:build (linux || darwin || windows || wasip1) && !wasip2 && !baremetal && !wasm_unknown
 
 package runtime
 
