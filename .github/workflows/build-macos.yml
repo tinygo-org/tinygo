@@ -116,7 +116,7 @@ jobs:
         version: [16, 17, 18, 19, 20]
     steps:
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@master
+        uses: Homebrew/actions/setup-homebrew@main
       - name: Fix Python symlinks
         run: |
           # Github runners have broken symlinks, so relink
@@ -125,6 +125,7 @@ jobs:
       - name: Install LLVM
         run: |
           brew install llvm@${{ matrix.version }}
+          brew link llvm@${{ matrix.version }}
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install Go
