@@ -176,3 +176,7 @@ type RawSockaddrInet4 struct {
 type RawSockaddrInet6 struct {
 	// stub
 }
+
+// These two functions are provided by the runtime.
+func runtimeSetenv(key, value string)
+func runtimeUnsetenv(key string)
