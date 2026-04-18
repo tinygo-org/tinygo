@@ -49,6 +49,9 @@ func growHeap() bool {
 
 //export malloc
 func libc_malloc(size uintptr) unsafe.Pointer {
+	if size == ^uintptr(0) {
+		return nil
+	}
 	// Note: this zeroes the returned buffer which is not necessary.
 	// The same goes for bytealg.MakeNoZero.
 	return alloc(size, nil)
