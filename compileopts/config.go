@@ -474,7 +474,7 @@ func (c *Config) LDFlags() []string {
 // executable. This can include extra C and assembly files.
 func (c *Config) ExtraFiles() (paths []string) {
 	for _, path := range c.Target.ExtraFiles {
-		if c.Options.BuildMode == "c-archive" {
+		if c.BuildMode() == "c-archive" {
 			if strings.HasSuffix(path, "_no_c_archive"+filepath.Ext(path)) {
 				continue
 			}

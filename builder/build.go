@@ -705,18 +705,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	result.Binary = result.Executable // final file
 	ldflags := append(config.LDFlags(), "-o", result.Executable)
 
-	if config.Options.BuildMode == "c-archive" {
+	if config.BuildMode() == "c-archive" {
 		ldflags = []string{"-r", "-o", result.Executable}
 	}
 
-	if config.Options.BuildMode == "c-shared" {
+	if config.BuildMode() == "c-shared" {
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
 			return result, fmt.Errorf("buildmode c-shared is only supported on wasm at the moment")
 		}
 		ldflags = append(ldflags, "--no-entry")
 	}
 
-	if config.Options.BuildMode == "wasi-legacy" {
+	if config.BuildMode() == "wasi-legacy" {
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
 			return result, fmt.Errorf("buildmode wasi-legacy is only supported on wasm")
 		}
@@ -728,7 +728,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
-	if config.Target.RTLib == "compiler-rt" && config.Options.BuildMode != "c-archive" {
+	if config.Target.RTLib == "compiler-rt" && config.BuildMode() != "c-archive" {
 		job, unlock, err := libCompilerRT.load(config, tmpdir)
 		if err != nil {
 			return result, err
@@ -789,7 +789,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	}
 
 	// Add libc dependencies, if they exist.
-	if config.Options.BuildMode != "c-archive" {
+	if config.BuildMode() != "c-archive" {
 		linkerDependencies = append(linkerDependencies, libcDependencies...)
 	}
 
@@ -871,7 +871,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			if err != nil {
 				return err
 			}
-			if config.Options.BuildMode == "c-archive" {
+			if config.BuildMode() == "c-archive" {
 				result.Binary = result.Executable + ".a"
 				f, err := os.Create(result.Binary)
 				if err != nil {
