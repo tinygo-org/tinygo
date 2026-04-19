@@ -2,43 +2,7 @@
 
 package runtime
 
-import (
-	"sync/atomic"
-	"unsafe"
-)
-
-//go:extern _heap_start
-var heapStartSymbol [0]byte
-
-//go:extern _heap_end
-var heapEndSymbol [0]byte
-
-//go:extern _globals_start
-var globalsStartSymbol [0]byte
-
-//go:extern _globals_end
-var globalsEndSymbol [0]byte
-
-//go:extern _stack_top
-var stackTopSymbol [0]byte
-
-var (
-	heapStart    = uintptr(unsafe.Pointer(&heapStartSymbol))
-	heapEnd      = uintptr(unsafe.Pointer(&heapEndSymbol))
-	globalsStart = uintptr(unsafe.Pointer(&globalsStartSymbol))
-	globalsEnd   = uintptr(unsafe.Pointer(&globalsEndSymbol))
-	stackTop     = uintptr(unsafe.Pointer(&stackTopSymbol))
-)
-
-//export tinygo_init
-func tinygo_init(p, n, glb, glbEnd, sp uintptr) {
-	heapStart, heapEnd = p, p+n
-	globalsStart, globalsEnd = glb, glbEnd
-	stackTop = sp
-	initRand()
-	initHeap()
-	initAll()
-}
+import "sync/atomic"
 
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
 // otherwise.
