@@ -147,6 +147,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// the libc needs them.
 	root := goenv.Get("TINYGOROOT")
 	var libcDependencies []*compileJob
+	if config.BuildMode() == "c-archive" {
+		config.Target.Libc = ""
+	}
 	switch config.Target.Libc {
 	case "darwin-libSystem":
 		libcJob := makeDarwinLibSystemJob(config, tmpdir)
@@ -789,9 +792,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	}
 
 	// Add libc dependencies, if they exist.
-	if config.BuildMode() != "c-archive" {
-		linkerDependencies = append(linkerDependencies, libcDependencies...)
-	}
+	linkerDependencies = append(linkerDependencies, libcDependencies...)
 
 	// Add embedded files.
 	linkerDependencies = append(linkerDependencies, embedFileObjects...)

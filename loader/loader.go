@@ -485,6 +485,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags(true)...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
+		initialCFlags = append(initialCFlags, goenv.Get("CGO_CFLAGS"))
 		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags, p.program.config.GOOS())
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
