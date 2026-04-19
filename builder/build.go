@@ -705,6 +705,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	result.Binary = result.Executable // final file
 	ldflags := append(config.LDFlags(), "-o", result.Executable)
 
+	if config.Options.BuildMode == "c-archive" {
+		ldflags = []string{"-r", "-o", result.Executable}
+	}
+
 	if config.Options.BuildMode == "c-shared" {
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
 			return result, fmt.Errorf("buildmode c-shared is only supported on wasm at the moment")
@@ -724,7 +728,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
-	if config.Target.RTLib == "compiler-rt" {
+	if config.Target.RTLib == "compiler-rt" && config.Options.BuildMode != "c-archive" {
 		job, unlock, err := libCompilerRT.load(config, tmpdir)
 		if err != nil {
 			return result, err
@@ -785,7 +789,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	}
 
 	// Add libc dependencies, if they exist.
-	if config.BuildMode() != "c-archive" {
+	if config.Options.BuildMode != "c-archive" {
 		linkerDependencies = append(linkerDependencies, libcDependencies...)
 	}
 
@@ -830,69 +834,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 				ldflags = append(ldflags, dependency.result)
 			}
-
-			if config.BuildMode() == "c-archive" {
-				ctx := llvm.NewContext()
-				mod = ctx.NewModule("main")
-				for _, dependency := range job.dependencies {
-					if strings.HasSuffix(dependency.description, ".S") ||
-						strings.HasSuffix(dependency.result, ".a") {
-						continue
-					}
-					depMod, err := ctx.ParseBitcodeFile(dependency.result)
-					if err != nil {
-						return err
-					}
-					err = llvm.LinkModules(mod, depMod)
-					if err != nil {
-						return err
-					}
-				}
-				if config.Triple() == "xtensa" {
-					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-						fn.SetSection(".text." + fn.Name())
-					}
-				}
-				buf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
-				if err != nil {
-					return err
-				}
-				defer buf.Dispose()
-				err = os.WriteFile(result.Executable, buf.Bytes(), 0666)
-				if err != nil {
-					return err
-				}
-				objs := []string{result.Executable}
-				for _, dependency := range job.dependencies {
-					if strings.HasSuffix(dependency.description, ".S") {
-						objs = append(objs, dependency.result)
-					}
-				}
-				if config.Triple() == "xtensa" {
-					obj := result.Executable + ".o"
-					err = link(config.Target.Linker, append(objs, "-r", "-o", obj)...)
-					if err != nil {
-						return err
-					}
-					objs = []string{obj}
-					name, err := LookupCommand("llvm-objcopy")
-					if err != nil {
-						return err
-					}
-					err = exec.Command(name, "--strip-symbol", "call_start_cpu0", obj).Run()
-					if err != nil {
-						return err
-					}
-				}
-				result.Binary = result.Executable + ".a"
-				f, err := os.Create(result.Binary)
-				if err != nil {
-					return err
-				}
-				defer f.Close()
-				return makeArchive(f, objs)
-			}
-
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
 			ldflags = append(ldflags, "-mllvm", "-mattr="+config.Features()) // needed for MIPS softfloat
 			if config.GOOS() == "windows" {
@@ -929,6 +870,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			err = link(config.Target.Linker, ldflags...)
 			if err != nil {
 				return err
+			}
+			if config.Options.BuildMode == "c-archive" {
+				result.Binary = result.Executable + ".a"
+				f, err := os.Create(result.Binary)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+				return makeArchive(f, []string{result.Executable})
 			}
 
 			var calculatedStacks []string
