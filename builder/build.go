@@ -848,20 +848,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						return err
 					}
 				}
-				for _, name := range []string{"main", "malloc", "calloc", "free"} {
-					if fn := mod.NamedFunction(name); !fn.IsNil() {
-						fn2 := llvm.AddFunction(mod, name, fn.Type())
-						fn.ReplaceAllUsesWith(fn2)
-						fn.EraseFromParentAsFunction()
-						fn2.SetName(name)
-					}
-				}
-				for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-					if strings.HasPrefix(fn.Name(), "__atomic_") ||
-						strings.HasPrefix(fn.Name(), "__sync_") {
-						fn.SetLinkage(llvm.InternalLinkage)
-					}
-					if config.Triple() == "xtensa" {
+				if config.Triple() == "xtensa" {
+					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 						fn.SetSection(".text." + fn.Name())
 						if fn.Name() == "tinygo_scanstack" {
 							fn.SetSection(".text.tinygo_scanCurrentStack")

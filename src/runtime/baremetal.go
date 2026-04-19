@@ -31,9 +31,9 @@ var (
 )
 
 //export tinygo_init
-func tinygo_init(p, n, bss, bssEnd, sp uintptr) {
+func tinygo_init(p, n, glb, glbEnd, sp uintptr) {
 	heapStart, heapEnd = p, p+n
-	globalsStart, globalsEnd = bss, bssEnd
+	globalsStart, globalsEnd = glb, glbEnd
 	stackTop = sp
 	initRand()
 	initHeap()
@@ -45,27 +45,6 @@ func tinygo_init(p, n, bss, bssEnd, sp uintptr) {
 func growHeap() bool {
 	// On baremetal, there is no way the heap can be grown.
 	return false
-}
-
-//export malloc
-func libc_malloc(size uintptr) unsafe.Pointer {
-	if size == ^uintptr(0) {
-		return nil
-	}
-	// Note: this zeroes the returned buffer which is not necessary.
-	// The same goes for bytealg.MakeNoZero.
-	return alloc(size, nil)
-}
-
-//export calloc
-func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
-	// No difference between calloc and malloc.
-	return libc_malloc(nmemb * size)
-}
-
-//export free
-func libc_free(ptr unsafe.Pointer) {
-	free(ptr)
 }
 
 //export runtime_putchar

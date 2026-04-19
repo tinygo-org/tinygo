@@ -110,6 +110,7 @@ func (c *Config) BuildTags() []string {
 		"osusergo",                                   // to get os/user to work
 		"math_big_pure_go",                           // to get math/big to work
 		"gc." + c.GC(), "scheduler." + c.Scheduler(), // used inside the runtime package
+		"buildmode." + strings.ReplaceAll(c.BuildMode(), "-", "_"),
 		"serial." + c.Serial()}...) // used inside the machine package
 	switch c.Scheduler() {
 	case "threads", "cores":
