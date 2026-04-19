@@ -1,4 +1,4 @@
-//go:build arduino
+//go:build arduino_uno
 
 package main
 

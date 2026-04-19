@@ -67,6 +67,12 @@ func (spi *SPI) Configure(config SPIConfig) error {
 		config.Frequency = SPI_DEFAULT_FREQUENCY
 	}
 
+	// Default CS to NoPin so that an unset CS field (zero value = GPIO0)
+	// does not accidentally configure GPIO0 as the chip select output.
+	if config.CS == 0 {
+		config.CS = NoPin
+	}
+
 	switch spi.busID {
 	case 2: // SPI2 (FSPI)
 		if config.SCK == 0 {

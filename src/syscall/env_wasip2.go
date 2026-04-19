@@ -43,11 +43,13 @@ func Setenv(key, val string) (err error) {
 		}
 	}
 	libc_envs[key] = val
+	runtimeSetenv(key, val)
 	return nil
 }
 
 func Unsetenv(key string) (err error) {
 	delete(libc_envs, key)
+	runtimeUnsetenv(key)
 	return nil
 }
 

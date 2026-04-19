@@ -21,6 +21,11 @@ func main() {
 	<-ticker.C
 	println("waited on ticker at 1000ms")
 	ticker.Stop()
+	// Drain any tick that was already queued before Stop took effect.
+	select {
+	case <-ticker.C:
+	default:
+	}
 	time.Sleep(time.Millisecond * 750)
 	select {
 	case <-ticker.C:

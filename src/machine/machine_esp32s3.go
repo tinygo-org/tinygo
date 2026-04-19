@@ -306,7 +306,12 @@ func (p Pin) pinReg() *volatile.Register32 {
 }
 
 const maxPin = 49
-const cpuInterruptFromPin = 8
+
+// cpuInterruptFromPin selects an edge-triggered CPU interrupt line for GPIO.
+// CPU interrupt 10 is edge-triggered level-1 on the Xtensa LX7, which prevents
+// the ISR from re-entering continuously when other peripherals (e.g. SPI via
+// the GPIO Matrix) keep GPIO.STATUS bits asserted.
+const cpuInterruptFromPin = 10
 
 type PinChange uint8
 
@@ -370,23 +375,28 @@ var (
 func setupPinInterrupt() error {
 	esp.INTERRUPT_CORE0.SetGPIO_INTERRUPT_PRO_MAP(cpuInterruptFromPin)
 	return interrupt.New(cpuInterruptFromPin, func(interrupt.Interrupt) {
-		// Check status for GPIO0-31
+		// Read and immediately clear interrupt status bits.
+		// Clearing before processing is critical for edge-triggered CPU
+		// interrupts: any new GPIO events that arrive during callback
+		// execution will set fresh STATUS bits, generating a new edge
+		// on the CPU interrupt line so they are not lost.
 		status := esp.GPIO.STATUS.Get()
+		status1 := esp.GPIO.STATUS1.Get()
+		esp.GPIO.STATUS_W1TC.Set(status)
+		esp.GPIO.STATUS1_W1TC.Set(status1)
+
+		// Check status for GPIO0-31
 		for i, mask := 0, uint32(1); i < 32; i, mask = i+1, mask<<1 {
 			if (status&mask) != 0 && pinCallbacks[i] != nil {
 				pinCallbacks[i](Pin(i))
 			}
 		}
 		// Check status for GPIO32-48
-		status1 := esp.GPIO.STATUS1.Get()
 		for i, mask := 32, uint32(1); i < maxPin; i, mask = i+1, mask<<1 {
 			if (status1&mask) != 0 && pinCallbacks[i] != nil {
 				pinCallbacks[i](Pin(i))
 			}
 		}
-		// Clear interrupt bits
-		esp.GPIO.STATUS_W1TC.SetBits(status)
-		esp.GPIO.STATUS1_W1TC.SetBits(status1)
 	}).Enable()
 }
 

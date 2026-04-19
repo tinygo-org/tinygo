@@ -101,16 +101,11 @@ jobs:
       - name: Make release artifact
         run: cp -p build/release.tar.gz build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
       - name: Publish release artifact
-        # Note: this release artifact is double-zipped, see:
-        # https://github.com/actions/upload-artifact/issues/39
-        # We can essentially pick one of these:
-        # - have a double-zipped artifact when downloaded from the UI
-        # - have a very slow artifact upload
-        # We're doing the former here, to keep artifact uploads fast.
         uses: actions/upload-artifact@v7
         with:
           name: darwin-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
           path: build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
+          archive: false
       - name: Smoke tests
         run: make smoketest TINYGO=$(PWD)/build/tinygo
   test-macos-homebrew:
@@ -121,7 +116,7 @@ jobs:
         version: [16, 17, 18, 19, 20]
     steps:
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@master
+        uses: Homebrew/actions/setup-homebrew@main
       - name: Fix Python symlinks
         run: |
           # Github runners have broken symlinks, so relink
@@ -130,6 +125,7 @@ jobs:
       - name: Install LLVM
         run: |
           brew install llvm@${{ matrix.version }}
+          brew link llvm@${{ matrix.version }}
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install Go

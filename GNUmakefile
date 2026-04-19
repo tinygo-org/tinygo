@@ -339,6 +339,7 @@ TEST_PACKAGES_FAST = \
 	embed/internal/embedtest \
 	encoding \
 	encoding/ascii85 \
+	errors \
 	encoding/asn1 \
 	encoding/base32 \
 	encoding/base64 \
@@ -487,7 +488,7 @@ TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
 TEST_IOFS := false
 endif
 
-TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic|TestParseQueryLimits|TestParseStrictIpv6'
+TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic|TestAsValidation'
 TEST_ADDITIONAL_FLAGS ?=
 
 # Test known-working standard library packages.
@@ -633,7 +634,7 @@ smoketest: testchdir
 	@$(MD5SUM) test.hex
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
-	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=arduino              examples/blinky1
+	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=arduino_uno          examples/blinky1
 	@$(MD5SUM) test.wasm
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=hifive1b             examples/blinky1
 	@$(MD5SUM) test.wasm
@@ -650,6 +651,8 @@ ifneq ($(WASM), 0)
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=gopher_badge         examples/blinky1
 	@$(MD5SUM) test.wasm
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=pico                 examples/blinky1
+	@$(MD5SUM) test.wasm
+	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=xiao_esp32s3         examples/blinky1
 	@$(MD5SUM) test.wasm
 endif
 	# test all targets/boards
@@ -895,13 +898,13 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=atmega1284p         examples/machinetest
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=arduino             examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno         examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-leonardo    examples/blinky1
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=arduino             examples/pwm
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno         examples/pwm
 	@$(MD5SUM) test.hex
-	$(TINYGO) build -size short -o test.hex -target=arduino -scheduler=tasks  examples/blinky1
+	$(TINYGO) build -size short -o test.hex -target=arduino-uno -scheduler=tasks  examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-mega1280    examples/blinky1
 	@$(MD5SUM) test.hex

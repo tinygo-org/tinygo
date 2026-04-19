@@ -107,6 +107,12 @@ func handleInterrupt() {
 	enabled := readINTENABLE()
 	active := pending & enabled
 
+	// Clear edge-triggered pending bits before dispatching handlers so that
+	// new edges arriving during handler execution are not lost.  Writing to
+	// INTCLEAR is a no-op for level-triggered lines, so this is safe for all
+	// interrupt types.
+	writeINTCLEAR(active)
+
 	for i := firstCPUInt; i <= lastCPUInt; i++ {
 		if active&(1<<uint(i)) != 0 {
 			// callHandlers requires a compile-time constant, so we
@@ -210,6 +216,16 @@ func writeINTENABLE(val uint32) {
 // reflects the currently pending CPU interrupts.
 func readINTERRUPT() uint32 {
 	return uint32(device.AsmFull("rsr {}, INTERRUPT", nil))
+}
+
+// writeINTCLEAR writes the INTCLEAR special register (SR 227).
+// Setting bit N clears CPU interrupt N if it is edge-triggered or
+// software-triggered.  Bits corresponding to level-triggered interrupts
+// are ignored by hardware.
+func writeINTCLEAR(val uint32) {
+	device.AsmFull("wsr {val}, INTCLEAR", map[string]interface{}{
+		"val": val,
+	})
 }
 
 // -- Interrupt matrix helpers -----------------------------------------------

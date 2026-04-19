@@ -261,13 +261,13 @@ func setupPinInterrupt() error {
 	esp.INTERRUPT_CORE0.GPIO_INTERRUPT_PRO_MAP.Set(cpuInterruptFromPin)
 	return interrupt.New(cpuInterruptFromPin, func(interrupt.Interrupt) {
 		status := esp.GPIO.STATUS.Get()
+		// Clear before processing so new edges during callbacks are not lost.
+		esp.GPIO.STATUS_W1TC.SetBits(status)
 		for i, mask := 0, uint32(1); i < maxPin; i, mask = i+1, mask<<1 {
 			if (status&mask) != 0 && pinCallbacks[i] != nil {
 				pinCallbacks[i](Pin(i))
 			}
 		}
-		// clear interrupt bit
-		esp.GPIO.STATUS_W1TC.SetBits(status)
 	}).Enable()
 }
 

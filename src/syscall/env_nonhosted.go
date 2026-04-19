@@ -28,18 +28,38 @@ func Getenv(key string) (value string, found bool) {
 }
 
 func Setenv(key, val string) (err error) {
-	// stub for now
-	return ENOSYS
+	if len(key) == 0 {
+		return EINVAL
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] == '=' || key[i] == 0 {
+			return EINVAL
+		}
+	}
+	for i := 0; i < len(val); i++ {
+		if val[i] == 0 {
+			return EINVAL
+		}
+	}
+	runtimeSetenv(key, val)
+	return nil
 }
 
 func Unsetenv(key string) (err error) {
-	// stub for now
-	return ENOSYS
+	runtimeUnsetenv(key)
+	return nil
 }
 
 func Clearenv() (err error) {
-	// stub for now
-	return ENOSYS
+	for _, s := range Environ() {
+		for j := 0; j < len(s); j++ {
+			if s[j] == '=' {
+				Unsetenv(s[:j])
+				break
+			}
+		}
+	}
+	return nil
 }
 
 func runtime_envs() []string
