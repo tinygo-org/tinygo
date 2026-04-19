@@ -851,9 +851,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if config.Triple() == "xtensa" {
 					for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 						fn.SetSection(".text." + fn.Name())
-						if fn.Name() == "tinygo_scanstack" {
-							fn.SetSection(".text.tinygo_scanCurrentStack")
-						}
 					}
 				}
 				buf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
