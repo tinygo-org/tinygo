@@ -142,14 +142,16 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		}
 	}
 
+	if config.BuildMode() == "c-archive" {
+		config.Target.Libc = ""
+		config.Target.RTLib = ""
+	}
+
 	// Check for a libc dependency.
 	// As a side effect, this also creates the headers for the given libc, if
 	// the libc needs them.
 	root := goenv.Get("TINYGOROOT")
 	var libcDependencies []*compileJob
-	if config.BuildMode() == "c-archive" {
-		config.Target.Libc = ""
-	}
 	switch config.Target.Libc {
 	case "darwin-libSystem":
 		libcJob := makeDarwinLibSystemJob(config, tmpdir)
@@ -731,7 +733,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
 	// a cache.
-	if config.Target.RTLib == "compiler-rt" && config.BuildMode() != "c-archive" {
+	if config.Target.RTLib == "compiler-rt" {
 		job, unlock, err := libCompilerRT.load(config, tmpdir)
 		if err != nil {
 			return result, err
