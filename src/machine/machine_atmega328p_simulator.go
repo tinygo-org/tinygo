@@ -1,4 +1,4 @@
-//go:build !baremetal && (arduino || arduino_nano)
+//go:build !baremetal && (arduino_uno || arduino_nano)
 
 package machine
 
