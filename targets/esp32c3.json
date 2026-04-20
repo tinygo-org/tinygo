@@ -12,7 +12,7 @@
 	],
 	"linkerscript": "targets/esp32c3.ld",
 	"extra-files": [
-		"src/device/esp/esp32c3_no_c_archive.S"
+		"src/device/esp/esp32c3.S"
 	],
 	"binary-format": "esp32c3",
 	"flash-method": "esp32jtag",

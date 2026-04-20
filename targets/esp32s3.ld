@@ -25,7 +25,7 @@ MEMORY
 /* The entry point. It is set in the image flashed to the chip, so must be
  * defined.
  */
-ENTRY(call_start_cpu0)
+ENTRY(_call_start_cpu0)
 
 SECTIONS
 {

@@ -472,16 +472,8 @@ func (c *Config) LDFlags() []string {
 
 // ExtraFiles returns the list of extra files to be built and linked with the
 // executable. This can include extra C and assembly files.
-func (c *Config) ExtraFiles() (paths []string) {
-	for _, path := range c.Target.ExtraFiles {
-		if c.BuildMode() == "c-archive" {
-			if strings.HasSuffix(path, "_no_c_archive"+filepath.Ext(path)) {
-				continue
-			}
-		}
-		paths = append(paths, path)
-	}
-	return
+func (c *Config) ExtraFiles() []string {
+	return c.Target.ExtraFiles
 }
 
 // DumpSSA returns whether to dump Go SSA while compiling (-dumpssa flag). Only

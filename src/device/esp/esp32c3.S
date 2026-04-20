@@ -9,9 +9,9 @@
 // https://www.imperialviolet.org/2016/12/31/riscv.html
 
 .section .init
-.global call_start_cpu0
-.type call_start_cpu0,@function
-call_start_cpu0:
+.global _call_start_cpu0
+.type _call_start_cpu0,@function
+_call_start_cpu0:
     // At this point:
     // - The ROM bootloader is finished and has jumped to here.
     // - We're running from IRAM: both IRAM and DRAM segments have been loaded
@@ -49,10 +49,10 @@ call_start_cpu0:
     j _start
 
 .section .text.exception_vectors
-.global _vector_table
-.type _vector_table,@function
+.global __vector_table
+.type __vector_table,@function
 
-_vector_table:
+__vector_table:
 
     .option push
     .option norvc
@@ -63,5 +63,5 @@ _vector_table:
 
     .option pop
 
-.size _vector_table, .-_vector_table
+.size __vector_table, .-__vector_table
 
