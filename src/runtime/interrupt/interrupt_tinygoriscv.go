@@ -1,4 +1,4 @@
-//go:build tinygo.riscv && !tkey && !buildmode.c_archive
+//go:build tinygo.riscv && !tkey && !(esp32c3 && buildmode.c_archive)
 
 package interrupt
 

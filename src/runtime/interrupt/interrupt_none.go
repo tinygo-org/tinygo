@@ -1,4 +1,4 @@
-//go:build !baremetal || tkey || buildmode.c_archive
+//go:build !baremetal || tkey || (esp32c3 && buildmode.c_archive)
 
 package interrupt
 
