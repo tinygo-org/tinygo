@@ -34,7 +34,7 @@ func main() {
 }
 ```
 
-The above program can be compiled and run without modification on an Arduino Uno, an Adafruit ItsyBitsy M0, or any of the supported boards that have a built-in LED, just by setting the correct TinyGo compiler target. For example, this compiles and flashes an Arduino Uno:
+The above program can be compiled and run without modification on an [Arduino Uno](https://tinygo.org/docs/reference/microcontrollers/boards/arduino-uno), an [Adafruit Circuit Playground Express](https://tinygo.org/docs/reference/microcontrollers/featured/circuitplay-express), a [Seeed Studio XIAO-ESP32S3](https://tinygo.org/docs/reference/microcontrollers/featured/xiao-esp32s3) or any of the many supported boards that have a built-in LED, just by setting the correct TinyGo compiler target. For example, this compiles and flashes an Arduino Uno:
 
 ```shell
 tinygo flash -target arduino-uno examples/blinky1
@@ -77,7 +77,7 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 
 ### Embedded
 
-You can compile TinyGo programs for over 94 different microcontroller boards.
+You can compile TinyGo programs for over 150 different microcontroller boards.
 
 For more information, please see https://tinygo.org/docs/reference/microcontrollers/
 
