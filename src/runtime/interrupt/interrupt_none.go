@@ -1,4 +1,4 @@
-//go:build !baremetal || tkey
+//go:build !baremetal || tkey || buildmode.c_archive
 
 package interrupt
 

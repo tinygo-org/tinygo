@@ -1,4 +1,4 @@
-//go:build tinygo.riscv && !tkey
+//go:build tinygo.riscv && !tkey && !buildmode.c_archive
 
 package interrupt
 

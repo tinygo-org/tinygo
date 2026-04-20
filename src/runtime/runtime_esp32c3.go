@@ -173,5 +173,5 @@ func sleepTicks(d timeUnit) {
 	}
 }
 
-//go:extern _vector_table
+//go:extern __vector_table
 var _vector_table [0]uintptr
