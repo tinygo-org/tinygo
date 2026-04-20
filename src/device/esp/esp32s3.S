@@ -355,7 +355,7 @@ _call_start_cpu0:
 // pointed to by the pane's a1 (sp).  After all panes are flushed, a
 // scan from the current sp to stackTop covers every live value.
 // -----------------------------------------------------------------------
-.section .text.tinygo_scanCurrentStack
+.section .text.tinygo_scanstack
 
 .global tinygo_scanCurrentStack
 tinygo_scanCurrentStack:

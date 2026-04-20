@@ -50,7 +50,7 @@ _call_start_cpu0:
     // Jump to the runtime start function written in Go.
     call4 main
 
-.section .text.tinygo_scanCurrentStack
+.section .text.tinygo_scanstack
 .global tinygo_scanCurrentStack
 tinygo_scanCurrentStack:
     // TODO: save callee saved registers on the stack
