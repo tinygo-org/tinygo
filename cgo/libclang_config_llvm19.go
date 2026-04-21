@@ -3,7 +3,7 @@
 package cgo
 
 /*
-#cgo linux        CFLAGS:  -I/usr/include/llvm-19 -I/usr/include/llvm-c-19 -I/usr/lib/llvm-19/include
+#cgo linux        CFLAGS:  -I/usr/include/llvm-19 -I/usr/include/llvm-c-19 -I/usr/lib/llvm-19/include -I/usr/lib64/llvm19/include
 #cgo darwin,amd64 CFLAGS:  -I/usr/local/opt/llvm@19/include
 #cgo darwin,arm64 CFLAGS:  -I/opt/homebrew/opt/llvm@19/include
 #cgo freebsd      CFLAGS:  -I/usr/local/llvm19/include
