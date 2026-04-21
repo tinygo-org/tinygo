@@ -20,6 +20,7 @@
 	"linkerscript": "targets/esp32s3.ld",
 	"extra-files": [
 		"src/device/esp/esp32s3.S",
+		"src/device/esp/esp32s3-stack.S",
 		"targets/esp32s3-interrupts.S",
 		"src/internal/task/task_stack_esp32.S"
 	],

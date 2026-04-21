@@ -1,4 +1,4 @@
-//go:build !baremetal || tkey || uefi
+//go:build !baremetal || tkey || uefi || espidf
 
 package interrupt
 

@@ -188,7 +188,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(tmpdir, config.GOARCH())...)
-	case "":
+	case "", "none":
 		// no library specified, so nothing to do
 	default:
 		return BuildResult{}, fmt.Errorf("unknown libc: %s", config.Target.Libc)
