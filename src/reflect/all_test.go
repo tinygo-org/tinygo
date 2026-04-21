@@ -1083,6 +1083,21 @@ type structWithSelfPtr struct {
 	s string
 }
 
+type deepEqualInterface interface {
+	Foo()
+}
+
+type deepEqualConcrete struct {
+	int
+}
+
+func (deepEqualConcrete) Foo() {}
+
+var (
+	deepEqualConcrete1 = deepEqualConcrete{1}
+	deepEqualConcrete2 = deepEqualConcrete{2}
+)
+
 func init() {
 	loop1 = &loop2
 	loop2 = &loop1
@@ -1115,6 +1130,7 @@ var deepEqualTests = []DeepEqualTest{
 	{[]byte{1, 2, 3}, []byte{1, 2, 3}, true},
 	{[]MyByte{1, 2, 3}, []MyByte{1, 2, 3}, true},
 	{MyBytes{1, 2, 3}, MyBytes{1, 2, 3}, true},
+	{map[deepEqualInterface]string{deepEqualConcrete1: "a"}, map[deepEqualInterface]string{deepEqualConcrete1: "a"}, true},
 
 	// Inequalities
 	{1, 2, false},
@@ -1136,6 +1152,7 @@ var deepEqualTests = []DeepEqualTest{
 	{fn3, fn3, false},
 	{[][]int{{1}}, [][]int{{2}}, false},
 	{&structWithSelfPtr{p: &structWithSelfPtr{s: "a"}}, &structWithSelfPtr{p: &structWithSelfPtr{s: "b"}}, false},
+	{map[deepEqualInterface]string{deepEqualConcrete1: "a"}, map[deepEqualInterface]string{deepEqualConcrete2: "a"}, false},
 
 	// Fun with floating point.
 	{math.NaN(), math.NaN(), false},
