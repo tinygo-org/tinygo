@@ -63,7 +63,7 @@ func clock_gettime(clk_id int32, ts *timespec)
 func getTime(clock int32) uint64 {
 	ts := timespec{}
 	clock_gettime(clock, &ts)
-	return uint64(ts.tv_sec)*1000*1000*1000 + uint64(ts.tv_nsec)
+	return uint64(ts.tv_sec)*1e9 + uint64(ts.tv_nsec)
 }
 
 const clock_MONOTONIC = 1
@@ -84,11 +84,11 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns)
 }
 
-//export nanosleep
-func nanosleep(req, rem *timespec) int
+//export usleep
+func usleep(usec uint) int
 
 func sleepTicks(d timeUnit) {
-	nanosleep(&timespec{int64(d / 1e9), int32(d % 1e9)}, nil)
+	usleep(uint(d / 1e3))
 }
 
 const baremetal = true
