@@ -92,6 +92,7 @@ type compilerContext struct {
 	pkg              *types.Package
 	packageDir       string // directory for this package
 	runtimePkg       *types.Package
+	scopeIdx         map[*types.Scope]int
 }
 
 // newCompilerContext returns a new compiler context ready for use, most
@@ -106,6 +107,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		targetData:    machine.CreateTargetData(),
 		functionInfos: map[*ssa.Function]functionInfo{},
 		astComments:   map[string]*ast.CommentGroup{},
+		scopeIdx:      map[*types.Scope]int{},
 	}
 
 	c.ctx = llvm.NewContext()

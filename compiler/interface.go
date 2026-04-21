@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -166,7 +165,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		}
 	}
 
-	typeCodeName, isLocal := getTypeCodeName(typ)
+	typeCodeName, isLocal := c.getTypeCodeName(typ)
 	globalName := "reflect/types.type:" + typeCodeName
 	var global llvm.Value
 	if isLocal {
@@ -578,35 +577,26 @@ var basicTypeNames = [...]string{
 	types.UnsafePointer: "unsafe.Pointer",
 }
 
-var scopeIDCache = struct {
-	sync.Mutex
-	scopeid map[*types.Scope]string
-}{
-	sync.Mutex{},
-	make(map[*types.Scope]string),
-}
-
 // return an integer representing this scope in a package.
-func scopeID(pkg *types.Scope, scope *types.Scope) string {
-	scopeIDCache.Lock()
-	defer scopeIDCache.Unlock()
-
-	if id := scopeIDCache.scopeid[scope]; id != "" {
-		return id
-	}
-
-	entry := scope
-
+func (c *compilerContext) getScopeID(pkg *types.Scope, scope *types.Scope) string {
 	var ids []int
 	for scope != pkg {
-		parent := scope.Parent()
-		for i := range parent.NumChildren() {
-			if parent.Child(i) == scope {
-				ids = append(ids, i)
-				scope = scope.Parent()
-				break
+		if idx, ok := c.scopeIdx[scope]; ok {
+			ids = append(ids, idx)
+		} else {
+			// flesh out scope idx for all children of this parent
+			parent := scope.Parent()
+			for i := range parent.NumChildren() {
+				child := parent.Child(i)
+				if child == scope {
+					c.scopeIdx[scope] = i
+					break
+				}
 			}
+			ids = append(ids, c.scopeIdx[scope])
 		}
+		// move up a level
+		scope = scope.Parent()
 	}
 
 	var buf []byte
@@ -616,28 +606,27 @@ func scopeID(pkg *types.Scope, scope *types.Scope) string {
 	}
 
 	id := string(buf)
-	scopeIDCache.scopeid[entry] = id
 	return id
 }
 
 // getTypeCodeName returns a name for this type that can be used in the
 // interface lowering pass to assign type codes as expected by the reflect
 // package. See getTypeCodeNum.
-func getTypeCodeName(t types.Type) (string, bool) {
+func (c *compilerContext) getTypeCodeName(t types.Type) (string, bool) {
 	switch t := types.Unalias(t).(type) {
 	case *types.Named:
 		parent, pkg := t.Obj().Parent(), t.Obj().Pkg().Scope()
 		if parent != pkg {
-			return fmt.Sprintf("named:%s$local:%s", t.String(), scopeID(pkg, parent)), true
+			return fmt.Sprintf("named:%s$local:%s", t.String(), c.getScopeID(pkg, parent)), true
 		}
 		return "named:" + t.String(), false
 	case *types.Array:
-		s, isLocal := getTypeCodeName(t.Elem())
+		s, isLocal := c.getTypeCodeName(t.Elem())
 		return "array:" + strconv.FormatInt(t.Len(), 10) + ":" + s, isLocal
 	case *types.Basic:
 		return "basic:" + basicTypeNames[t.Kind()], false
 	case *types.Chan:
-		s, isLocal := getTypeCodeName(t.Elem())
+		s, isLocal := c.getTypeCodeName(t.Elem())
 		var dir string
 		switch t.Dir() {
 		case types.SendOnly:
@@ -657,7 +646,7 @@ func getTypeCodeName(t types.Type) (string, bool) {
 			if !token.IsExported(name) {
 				name = t.Method(i).Pkg().Path() + "." + name
 			}
-			s, local := getTypeCodeName(t.Method(i).Type())
+			s, local := c.getTypeCodeName(t.Method(i).Type())
 			if local {
 				isLocal = true
 			}
@@ -665,17 +654,17 @@ func getTypeCodeName(t types.Type) (string, bool) {
 		}
 		return "interface:" + "{" + strings.Join(methods, ",") + "}", isLocal
 	case *types.Map:
-		keyType, keyLocal := getTypeCodeName(t.Key())
-		elemType, elemLocal := getTypeCodeName(t.Elem())
+		keyType, keyLocal := c.getTypeCodeName(t.Key())
+		elemType, elemLocal := c.getTypeCodeName(t.Elem())
 		return "map:" + "{" + keyType + "," + elemType + "}", keyLocal || elemLocal
 	case *types.Pointer:
-		s, isLocal := getTypeCodeName(t.Elem())
+		s, isLocal := c.getTypeCodeName(t.Elem())
 		return "pointer:" + s, isLocal
 	case *types.Signature:
 		isLocal := false
 		params := make([]string, t.Params().Len())
 		for i := 0; i < t.Params().Len(); i++ {
-			s, local := getTypeCodeName(t.Params().At(i).Type())
+			s, local := c.getTypeCodeName(t.Params().At(i).Type())
 			if local {
 				isLocal = true
 			}
@@ -683,7 +672,7 @@ func getTypeCodeName(t types.Type) (string, bool) {
 		}
 		results := make([]string, t.Results().Len())
 		for i := 0; i < t.Results().Len(); i++ {
-			s, local := getTypeCodeName(t.Results().At(i).Type())
+			s, local := c.getTypeCodeName(t.Results().At(i).Type())
 			if local {
 				isLocal = true
 			}
@@ -691,7 +680,7 @@ func getTypeCodeName(t types.Type) (string, bool) {
 		}
 		return "func:" + "{" + strings.Join(params, ",") + "}{" + strings.Join(results, ",") + "}", isLocal
 	case *types.Slice:
-		s, isLocal := getTypeCodeName(t.Elem())
+		s, isLocal := c.getTypeCodeName(t.Elem())
 		return "slice:" + s, isLocal
 	case *types.Struct:
 		elems := make([]string, t.NumFields())
@@ -701,7 +690,7 @@ func getTypeCodeName(t types.Type) (string, bool) {
 			if t.Field(i).Embedded() {
 				embedded = "#"
 			}
-			s, local := getTypeCodeName(t.Field(i).Type())
+			s, local := c.getTypeCodeName(t.Field(i).Type())
 			if local {
 				isLocal = true
 			}
@@ -813,7 +802,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 			commaOk = b.createInterfaceTypeAssert(intf, actualTypeNum)
 		}
 	} else {
-		name, _ := getTypeCodeName(expr.AssertedType)
+		name, _ := b.getTypeCodeName(expr.AssertedType)
 		globalName := "reflect/types.typeid:" + name
 		assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
 		if assertedTypeCodeGlobal.IsNil() {
@@ -901,7 +890,7 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 		if !token.IsExported(name) {
 			name = method.Pkg().Path() + "." + name
 		}
-		s, _ := getTypeCodeName(method.Type())
+		s, _ := c.getTypeCodeName(method.Type())
 		globalName := "reflect/types.signature:" + name + ":" + s
 		value := c.mod.NamedGlobal(globalName)
 		if value.IsNil() {
@@ -945,7 +934,7 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 // thunk is declared, not defined: it will be defined by the interface lowering
 // pass.
 func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
-	s, _ := getTypeCodeName(instr.Value.Type().Underlying())
+	s, _ := c.getTypeCodeName(instr.Value.Type().Underlying())
 	fnName := s + "." + instr.Method.Name() + "$invoke"
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
@@ -970,7 +959,7 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 // by the interface lowering pass as a type-ID comparison chain, avoiding the
 // need for runtime.typeImplementsMethodSet at compile time.
 func (b *builder) createInterfaceTypeAssert(intf *types.Interface, actualType llvm.Value) llvm.Value {
-	s, _ := getTypeCodeName(intf)
+	s, _ := b.getTypeCodeName(intf)
 	fnName := s + ".$typeassert"
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
