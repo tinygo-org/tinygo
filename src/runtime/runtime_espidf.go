@@ -2,6 +2,8 @@
 
 package runtime
 
+import "unsafe"
+
 var (
 	heapStart    uintptr
 	heapEnd      uintptr
@@ -110,4 +112,12 @@ var errno int32
 //export __errno_location
 func libc_errno_location() *int32 {
 	return &errno
+}
+
+//export esp_fill_random
+func esp_fill_random(buf unsafe.Pointer, len uintptr)
+
+func hardwareRand() (n uint64, ok bool) {
+	esp_fill_random(unsafe.Pointer(&n), 8)
+	return n, true
 }
