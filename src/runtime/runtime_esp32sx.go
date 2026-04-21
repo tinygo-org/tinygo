@@ -58,7 +58,10 @@ func initTimer() {
 func ticks() timeUnit {
 	// First, update the LO and HI register pair by writing any value to the
 	// register. This allows reading the pair atomically.
-	esp.TIMG0.T0UPDATE.Set(0)
+	esp.TIMG0.T0UPDATE.Set(1)
+	for esp.TIMG0.T0UPDATE.Get() != 0 {
+		// Register is cleared when the update is complete.
+	}
 	// Then read the two 32-bit parts of the timer.
 	return timeUnit(uint64(esp.TIMG0.T0LO.Get()) | uint64(esp.TIMG0.T0HI.Get())<<32)
 }
