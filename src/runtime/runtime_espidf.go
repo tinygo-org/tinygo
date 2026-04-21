@@ -52,21 +52,24 @@ func buffered() int {
 	return 0
 }
 
+const (
+	clock_REALTIME  = 1
+	clock_MONOTONIC = 4
+)
+
 type timespec struct {
 	tv_sec  int64
 	tv_nsec int32
 }
 
 //export clock_gettime
-func clock_gettime(clk_id int32, ts *timespec)
+func clock_gettime(clock int32, ts *timespec)
 
 func getTime(clock int32) uint64 {
-	ts := timespec{}
+	var ts timespec
 	clock_gettime(clock, &ts)
 	return uint64(ts.tv_sec)*1e9 + uint64(ts.tv_nsec)
 }
-
-const clock_MONOTONIC = 1
 
 func monotime() uint64 {
 	return getTime(clock_MONOTONIC)
@@ -95,9 +98,11 @@ const baremetal = true
 
 //go:linkname now time.now
 func now() (sec int64, nsec int32, mono int64) {
+	var ts timespec
+	clock_gettime(clock_REALTIME, &ts)
+	sec = ts.tv_sec
+	nsec = ts.tv_nsec
 	mono = nanotime()
-	sec = mono / 1e9
-	nsec = int32(mono % 1e9)
 	return
 }
 
