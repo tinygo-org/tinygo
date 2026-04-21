@@ -92,6 +92,7 @@ type compilerContext struct {
 	pkg              *types.Package
 	packageDir       string // directory for this package
 	runtimePkg       *types.Package
+	localTypeNames   typeutil.Map // *types.Named (synthetic local from generic instantiation) -> string
 }
 
 // newCompilerContext returns a new compiler context ready for use, most
@@ -299,6 +300,11 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 
 	// Convert AST to SSA.
 	ssaPkg.Build()
+
+	// Assign names to function-local named types before compiling the
+	// package, so that types declared in different functions (or in
+	// different instantiations of a generic function) do not collide.
+	c.scanLocalTypes(ssaPkg)
 
 	// Initialize debug information.
 	if c.Debug {
