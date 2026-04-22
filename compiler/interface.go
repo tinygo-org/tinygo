@@ -315,9 +315,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			numIn := typ.Params().Len()
 			numOut := typ.Results().Len()
 			typeFieldTypes = append(typeFieldTypes,
+				types.NewVar(token.NoPos, nil, "numIn", types.Typ[types.Uint8]),
+				types.NewVar(token.NoPos, nil, "numOut", types.Typ[types.Uint8]), // high bit = variadic
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
-				types.NewVar(token.NoPos, nil, "numIn", types.Typ[types.Uint16]), // high bit = variadic
-				types.NewVar(token.NoPos, nil, "numOut", types.Typ[types.Uint16]),
 				types.NewVar(token.NoPos, nil, "inOut", types.NewArray(types.Typ[types.UnsafePointer], int64(numIn+numOut))),
 			)
 		}
@@ -513,15 +513,15 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Signature:
 			params := typ.Params()
 			results := typ.Results()
-			if params.Len() >= 0x8000 {
+			if params.Len() >= 0x100 {
 				c.addError(token.NoPos, fmt.Sprintf("too many function parameters for typecode (%d): %s", params.Len(), typ.String()))
 			}
-			if results.Len() >= 0x10000 {
+			if results.Len() >= 0x80 {
 				c.addError(token.NoPos, fmt.Sprintf("too many function results for typecode (%d): %s", results.Len(), typ.String()))
 			}
-			numIn := uint64(params.Len())
+			numOut := uint64(results.Len())
 			if typ.Variadic() {
-				numIn |= 0x8000 // variadic flag in high bit
+				numOut |= 0x80 // variadic flag in high bit
 			}
 			inOut := make([]llvm.Value, 0, params.Len()+results.Len())
 			for i := 0; i < params.Len(); i++ {
@@ -531,9 +531,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				inOut = append(inOut, c.getTypeCode(results.At(i).Type()))
 			}
 			typeFields = []llvm.Value{
+				llvm.ConstInt(c.ctx.Int8Type(), uint64(params.Len()), false),
+				llvm.ConstInt(c.ctx.Int8Type(), numOut, false),
 				c.getTypeCode(types.NewPointer(typ)),
-				llvm.ConstInt(c.ctx.Int16Type(), numIn, false),
-				llvm.ConstInt(c.ctx.Int16Type(), uint64(results.Len()), false),
 				llvm.ConstArray(c.dataPtrType, inOut),
 			}
 		}
