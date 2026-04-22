@@ -47,9 +47,12 @@
 // - interface types (this is missing the interface methods):
 //     meta         uint8
 //     ptrTo        *typeStruct
-// - signature types (this is missing input and output parameters):
+// - signature types:
 //     meta         uint8
 //     ptrTo        *typeStruct
+//     numIn        uint16
+//     numOut       uint16
+//     inOut        [...]typeStruct // input types followed by output types
 // - named types
 //     meta         uint8
 //     nmethods     uint16      // number of methods
@@ -460,7 +463,7 @@ func (t *rawType) Implements(u Type) bool {
 }
 
 func (t *rawType) In(i int) Type {
-	panic("unimplemented: (reflect.Type).In()")
+	return toType(t.RawType.In(i).(*reflectlite.RawType))
 }
 
 func (t *rawType) Ins() iter.Seq[Type] {
@@ -474,7 +477,7 @@ func (t *rawType) Ins() iter.Seq[Type] {
 }
 
 func (t *rawType) IsVariadic() bool {
-	panic("unimplemented: (reflect.Type).IsVariadic()")
+	return t.RawType.IsVariadic()
 }
 
 func (t *rawType) Key() Type {
@@ -500,15 +503,15 @@ func (t *rawType) Methods() iter.Seq[Method] {
 }
 
 func (t *rawType) NumIn() int {
-	panic("unimplemented: (reflect.Type).NumIn()")
+	return t.RawType.NumIn()
 }
 
 func (t *rawType) NumOut() int {
-	panic("unimplemented: (reflect.Type).NumOut()")
+	return t.RawType.NumOut()
 }
 
 func (t *rawType) Out(i int) Type {
-	panic("unimplemented: (reflect.Type).Out()")
+	return toType(t.RawType.Out(i).(*reflectlite.RawType))
 }
 
 func (t *rawType) Outs() iter.Seq[Type] {

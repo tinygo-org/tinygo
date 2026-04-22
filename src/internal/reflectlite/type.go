@@ -252,6 +252,21 @@ type structField struct {
 	data      unsafe.Pointer // various bits of information, packed in a byte array
 }
 
+// funcType is the type descriptor for function types. The numIn field uses
+// bit 15 (funcTypeVariadic) to indicate whether the function is variadic; the
+// remaining bits hold the number of input parameters. The inOut array contains
+// numIn+numOut entries: input parameter types followed by output parameter
+// types.
+type funcType struct {
+	RawType
+	ptrTo  *RawType
+	numIn  uint16
+	numOut uint16
+	inOut  [0]*RawType
+}
+
+const funcTypeVariadic = 0x8000
+
 // Method set, as emitted by the compiler.
 type methodSet struct {
 	length  uintptr
@@ -370,6 +385,41 @@ func (t *RawType) String() string {
 	case Interface:
 		// TODO(dgryski): Needs actual method set info
 		return "interface {}"
+	case Func:
+		ft := t.funcDescriptor()
+		numIn := int(ft.numIn &^ funcTypeVariadic)
+		numOut := int(ft.numOut)
+		variadic := ft.numIn&funcTypeVariadic != 0
+		arr := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
+		s := "func("
+		for i := 0; i < numIn; i++ {
+			if i > 0 {
+				s += ", "
+			}
+			if variadic && i == numIn-1 {
+				// final variadic parameter is stored as []T but printed as ...T
+				s += "..." + arr[i].elem().String()
+			} else {
+				s += arr[i].String()
+			}
+		}
+		s += ")"
+		switch numOut {
+		case 0:
+			// no result
+		case 1:
+			s += " " + arr[numIn].String()
+		default:
+			s += " ("
+			for i := 0; i < numOut; i++ {
+				if i > 0 {
+					s += ", "
+				}
+				s += arr[numIn+i].String()
+			}
+			s += ")"
+		}
+		return s
 	default:
 		return t.Kind().String()
 	}
@@ -988,6 +1038,60 @@ func (t *RawType) ChanDir() ChanDir {
 
 	// nummethod is overloaded for channel to store channel direction
 	return ChanDir(dir)
+}
+
+// funcDescriptor returns the funcType descriptor for t. If t is a named func
+// type, it walks through to the underlying signature.
+func (t *RawType) funcDescriptor() *funcType {
+	return (*funcType)(unsafe.Pointer(t.underlying()))
+}
+
+func (t *RawType) NumIn() int {
+	if t.Kind() != Func {
+		panic(TypeError{"NumIn"})
+	}
+	return int(t.funcDescriptor().numIn &^ funcTypeVariadic)
+}
+
+func (t *RawType) NumOut() int {
+	if t.Kind() != Func {
+		panic(TypeError{"NumOut"})
+	}
+	return int(t.funcDescriptor().numOut)
+}
+
+func (t *RawType) IsVariadic() bool {
+	if t.Kind() != Func {
+		panic(TypeError{"IsVariadic"})
+	}
+	return t.funcDescriptor().numIn&funcTypeVariadic != 0
+}
+
+func (t *RawType) In(i int) Type {
+	if t.Kind() != Func {
+		panic(TypeError{"In"})
+	}
+	ft := t.funcDescriptor()
+	n := int(ft.numIn &^ funcTypeVariadic)
+	if i < 0 || i >= n {
+		panic("reflect: Type.In: index out of range")
+	}
+	arr := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
+	return arr[i]
+}
+
+func (t *RawType) Out(i int) Type {
+	if t.Kind() != Func {
+		panic(TypeError{"Out"})
+	}
+	ft := t.funcDescriptor()
+	numIn := int(ft.numIn &^ funcTypeVariadic)
+	numOut := int(ft.numOut)
+	if i < 0 || i >= numOut {
+		panic("reflect: Type.Out: index out of range")
+	}
+	arr := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
+	return arr[numIn+i]
 }
 
 func (t *RawType) NumMethod() int {
