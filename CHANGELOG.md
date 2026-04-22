@@ -1,3 +1,12 @@
+0.41.1
+---
+* **machine**
+  - esp32c3: correct pin interrupt setup call that was overlooked from #5320
+* **runtime**
+  - esp32s3: wait for TIMG0 update register to clear before reading timer registers
+* **net**
+  - update net module to a version that is backwards compatible with Go 1.25.x to fix #5332
+
 0.41.0
 ---
 * **general**
