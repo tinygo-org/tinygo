@@ -49,9 +49,9 @@
 //     ptrTo        *typeStruct
 // - signature types:
 //     meta         uint8
+//     numIn        uint8
+//     numOut       uint8       // high bit indicates a variadic signature
 //     ptrTo        *typeStruct
-//     numIn        uint16
-//     numOut       uint16
 //     inOut        [...]typeStruct // input types followed by output types
 // - named types
 //     meta         uint8
