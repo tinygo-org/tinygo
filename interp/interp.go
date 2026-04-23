@@ -19,22 +19,23 @@ const checks = true
 
 // runner contains all state related to one interp run.
 type runner struct {
-	mod           llvm.Module
-	targetData    llvm.TargetData
-	builder       llvm.Builder
-	pointerSize   uint32                   // cached pointer size from the TargetData
-	dataPtrType   llvm.Type                // often used type so created in advance
-	uintptrType   llvm.Type                // equivalent to uintptr in Go
-	maxAlign      int                      // maximum alignment of an object, alignment of runtime.alloc() result
-	byteOrder     binary.ByteOrder         // big-endian or little-endian
-	debug         bool                     // log debug messages
-	pkgName       string                   // package name of the currently executing package
-	functionCache map[llvm.Value]*function // cache of compiled functions
-	objects       []object                 // slice of objects in memory
-	globals       map[llvm.Value]int       // map from global to index in objects slice
-	start         time.Time
-	timeout       time.Duration
-	callsExecuted uint64
+	mod              llvm.Module
+	targetData       llvm.TargetData
+	builder          llvm.Builder
+	pointerSize      uint32                   // cached pointer size from the TargetData
+	dataPtrType      llvm.Type                // often used type so created in advance
+	uintptrType      llvm.Type                // equivalent to uintptr in Go
+	maxAlign         int                      // maximum alignment of an object, alignment of runtime.alloc() result
+	byteOrder        binary.ByteOrder         // big-endian or little-endian
+	debug            bool                     // log debug messages
+	pkgName          string                   // package name of the currently executing package
+	functionCache    map[llvm.Value]*function // cache of compiled functions
+	objects          []object                 // slice of objects in memory
+	globals          map[llvm.Value]int       // map from global to index in objects slice
+	start            time.Time
+	timeout          time.Duration
+	undefinedGlobals map[string]struct{} // globals set via -X, skip stores to these
+	callsExecuted    uint64
 }
 
 func newRunner(mod llvm.Module, timeout time.Duration, debug bool) *runner {
@@ -204,11 +205,13 @@ func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
 
 // RunFunc evaluates a single package initializer at compile time.
 // Set debug to true if it should print output while running.
-func RunFunc(fn llvm.Value, timeout time.Duration, debug bool) error {
+// undefinedGlobals contains globals set via -X ldflags; stores to these are skipped.
+func RunFunc(fn llvm.Value, undefinedGlobals map[string]struct{}, timeout time.Duration, debug bool) error {
 	// Create and initialize *runner object.
 	mod := fn.GlobalParent()
 	r := newRunner(mod, timeout, debug)
 	defer r.dispose()
+	r.undefinedGlobals = undefinedGlobals
 	initName := fn.Name()
 	if !strings.HasSuffix(initName, ".init") {
 		return errorAt(fn, "interp: unexpected function name (expected *.init)")

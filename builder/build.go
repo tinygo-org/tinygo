@@ -88,7 +88,7 @@ type packageAction struct {
 	EmbeddedFiles    map[string]string // hash of all the //go:embed files in the package
 	Imports          map[string]string // map from imported package to action ID hash
 	OptLevel         string            // LLVM optimization level (O0, O1, O2, Os, Oz)
-	UndefinedGlobals []string          // globals that are left as external globals (no initializer)
+	UndefinedGlobals map[string]string // globals set via -ldflags -X (name -> value), for cache key
 }
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -268,11 +268,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	for _, pkg := range lprogram.Sorted() {
 		pkg := pkg // necessary to avoid a race condition
 
-		var undefinedGlobals []string
-		for name := range globalValues[pkg.Pkg.Path()] {
-			undefinedGlobals = append(undefinedGlobals, name)
+		// Collect -X globals for this package (name -> value)
+		undefinedGlobals := globalValues[pkg.Pkg.Path()]
+		if undefinedGlobals == nil {
+			undefinedGlobals = map[string]string{}
 		}
-		sort.Strings(undefinedGlobals)
 
 		// Make compile jobs to load files to be embedded in the output binary.
 		var actionIDDependencies []*compileJob
@@ -444,30 +444,39 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					}
 				}
 
-				// Erase all globals that are part of the undefinedGlobals list.
-				// This list comes from the -ldflags="-X pkg.foo=val" option.
-				// Instead of setting the value directly in the AST (which would
-				// mean the value, which may be a secret, is stored in the build
-				// cache), the global itself is left external (undefined) and is
-				// only set at the end of the compilation.
-				for _, name := range undefinedGlobals {
-					globalName := pkg.Pkg.Path() + "." + name
-					global := mod.NamedGlobal(globalName)
-					if global.IsNil() {
-						return errors.New("global not found: " + globalName)
+				// Set -X global values before interp runs.
+				// This ensures that dependent init code (e.g., var VersionLen = len(Version))
+				// sees the correct -X value during interpretation.
+				// The -X global names are passed to interp so it skips stores to them.
+				undefinedGlobalNames := make(map[string]struct{}, len(undefinedGlobals))
+				if len(undefinedGlobals) > 0 {
+					targetData := machine.CreateTargetData()
+					uintptrType := mod.Context().IntType(targetData.PointerSize() * 8)
+					targetData.Dispose()
+					for name, value := range undefinedGlobals {
+						globalName := pkg.Pkg.Path() + "." + name
+						undefinedGlobalNames[globalName] = struct{}{}
+						global := mod.NamedGlobal(globalName)
+						if global.IsNil() {
+							return errors.New("global not found: " + globalName)
+						}
+						globalType := global.GlobalValueType()
+						if globalType.TypeKind() != llvm.StructTypeKind || globalType.StructName() != "runtime._string" {
+							// Verify this is indeed a string.
+							return fmt.Errorf("%s: not a string", globalName)
+						}
+						// Set the -X value as the initializer.
+						// interp will skip stores to this global, preserving this value.
+						bufInitializer := mod.Context().ConstString(value, false)
+						buf := llvm.AddGlobal(mod, bufInitializer.Type(), globalName+".str")
+						buf.SetInitializer(bufInitializer)
+						buf.SetAlignment(1)
+						buf.SetUnnamedAddr(true)
+						buf.SetLinkage(llvm.PrivateLinkage)
+						length := llvm.ConstInt(uintptrType, uint64(len(value)), false)
+						initializer := llvm.ConstNamedStruct(globalType, []llvm.Value{buf, length})
+						global.SetInitializer(initializer)
 					}
-					globalType := global.GlobalValueType()
-					if globalType.TypeKind() != llvm.StructTypeKind || globalType.StructName() != "runtime._string" {
-						// Verify this is indeed a string. This is needed so
-						// that makeGlobalsModule can just create the right
-						// globals of string type without checking.
-						return fmt.Errorf("%s: not a string", globalName)
-					}
-					name := global.Name()
-					newGlobal := llvm.AddGlobal(mod, globalType, name+".tmp")
-					global.ReplaceAllUsesWith(newGlobal)
-					global.EraseFromParentAsGlobal()
-					newGlobal.SetName(name)
 				}
 
 				// Try to interpret package initializers at compile time.
@@ -477,7 +486,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				err := interp.RunFunc(pkgInit, config.Options.InterpTimeout, config.DumpSSA())
+				err := interp.RunFunc(pkgInit, undefinedGlobalNames, config.Options.InterpTimeout, config.DumpSSA())
 				if err != nil {
 					return err
 				}
@@ -568,15 +577,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					return fmt.Errorf("failed to link module: %w", err)
 				}
 			}
-
-			// Insert values from -ldflags="-X ..." into the IR.
-			// This is a separate module, so that the "runtime._string" type
-			// doesn't need to match precisely. LLVM tends to rename that type
-			// sometimes, leading to errors. But linking in a separate module
-			// works fine. See:
-			// https://github.com/tinygo-org/tinygo/issues/4810
-			globalsMod := makeGlobalsModule(ctx, globalValues, machine)
-			llvm.LinkModules(mod, globalsMod)
 
 			// Create runtime.initAll function that calls the runtime
 			// initializer of each package.
@@ -1224,60 +1224,6 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	}
 
 	return nil
-}
-
-func makeGlobalsModule(ctx llvm.Context, globals map[string]map[string]string, machine llvm.TargetMachine) llvm.Module {
-	mod := ctx.NewModule("cmdline-globals")
-	targetData := machine.CreateTargetData()
-	defer targetData.Dispose()
-	mod.SetDataLayout(targetData.String())
-
-	stringType := ctx.StructCreateNamed("runtime._string")
-	uintptrType := ctx.IntType(targetData.PointerSize() * 8)
-	stringType.StructSetBody([]llvm.Type{
-		llvm.PointerType(ctx.Int8Type(), 0),
-		uintptrType,
-	}, false)
-
-	var pkgPaths []string
-	for pkgPath := range globals {
-		pkgPaths = append(pkgPaths, pkgPath)
-	}
-	sort.Strings(pkgPaths)
-	for _, pkgPath := range pkgPaths {
-		pkg := globals[pkgPath]
-		var names []string
-		for name := range pkg {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			value := pkg[name]
-			globalName := pkgPath + "." + name
-
-			// Create a buffer for the string contents.
-			bufInitializer := mod.Context().ConstString(value, false)
-			buf := llvm.AddGlobal(mod, bufInitializer.Type(), ".string")
-			buf.SetInitializer(bufInitializer)
-			buf.SetAlignment(1)
-			buf.SetUnnamedAddr(true)
-			buf.SetLinkage(llvm.PrivateLinkage)
-
-			// Create the string value, which is a {ptr, len} pair.
-			length := llvm.ConstInt(uintptrType, uint64(len(value)), false)
-			initializer := llvm.ConstNamedStruct(stringType, []llvm.Value{
-				buf,
-				length,
-			})
-
-			// Create the string global.
-			global := llvm.AddGlobal(mod, stringType, globalName)
-			global.SetInitializer(initializer)
-			global.SetAlignment(targetData.PrefTypeAlignment(stringType))
-		}
-	}
-
-	return mod
 }
 
 // functionStackSizes keeps stack size information about a single function
