@@ -1770,6 +1770,7 @@ func main() {
 
 	// Internal flags, that are only intended for TinyGo development.
 	printIR := flag.Bool("internal-printir", false, "print LLVM IR")
+	printInit := flag.Bool("internal-printinit", false, "print init() functions")
 	dumpSSA := flag.Bool("internal-dumpssa", false, "dump internal Go SSA")
 	verifyIR := flag.Bool("internal-verifyir", false, "run extra verification steps on LLVM IR")
 	// Don't generate debug information in the IR, to make IR more readable.
@@ -1879,6 +1880,7 @@ func main() {
 		PrintSizes:      *printSize,
 		PrintStacks:     *printStacks,
 		PrintAllocs:     printAllocs,
+		PrintInit:       *printInit,
 		Tags:            []string(tags),
 		TestConfig:      testConfig,
 		GlobalValues:    globalVarValues,
