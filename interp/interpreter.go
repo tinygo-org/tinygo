@@ -547,6 +547,20 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err != nil {
 				return nil, mem, r.errorAt(inst, err)
 			}
+			// Skip stores to -X globals. These globals already have the correct
+			// value set via -ldflags, and we don't want the init code to
+			// overwrite it with the source code's default value.
+			if r.undefinedGlobals != nil {
+				obj := mem.get(ptr.index())
+				if !obj.llvmGlobal.IsNil() {
+					if _, isUndefined := r.undefinedGlobals[obj.llvmGlobal.Name()]; isUndefined {
+						if r.debug {
+							fmt.Fprintln(os.Stderr, indent+"skip store to -X global:", obj.llvmGlobal.Name())
+						}
+						continue
+					}
+				}
+			}
 			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalLoadOrStore(ptr) {
 				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 				if err != nil {
