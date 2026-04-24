@@ -255,6 +255,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		result.PackagePathMap[pkg.OriginalDir()] = pkg.Pkg.Path()
 	}
 
+	// Strip default initializers for -X globals from the type info before
+	// building SSA. This prevents go/ssa from emitting init stores for them,
+	// so that makeGlobalsModule can supply the correct values at final link
+	// time without any runtime init overwriting them. The -X values themselves
+	// are kept out of the per-package build cache; only the variable names
+	// appear in the cache key.
+	for _, pkg := range lprogram.Sorted() {
+		for name := range globalValues[pkg.Pkg.Path()] {
+			pkg.StripVarInitializer(name)
+		}
+	}
+
 	// Create the *ssa.Program. This does not yet build the entire SSA of the
 	// program so it's pretty fast and doesn't need to be parallelized.
 	program := lprogram.LoadSSA()

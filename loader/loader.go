@@ -304,6 +304,29 @@ func (p *Program) Sorted() []*Package {
 	return p.sorted
 }
 
+// StripVarInitializer removes the package-level initializer for the named
+// variable from the type info. This prevents go/ssa from emitting an init
+// store for it, leaving the global zero-initialized in the IR. An external
+// value (e.g. from -ldflags -X via makeGlobalsModule) can then be linked in
+// at final link time without any runtime init overwriting it.
+//
+// Must be called after Parse() (typechecking populates InitOrder) and before
+// LoadSSA() (which consumes InitOrder to build the package init function).
+//
+// Only 1:1 var initializers (var x = expr) are matched. Multi-variable
+// initializers (var x, y = f()) are left untouched.
+func (p *Package) StripVarInitializer(name string) {
+	n := 0
+	for _, init := range p.info.InitOrder {
+		if len(init.Lhs) == 1 && init.Lhs[0].Name() == name {
+			continue // drop this initializer
+		}
+		p.info.InitOrder[n] = init
+		n++
+	}
+	p.info.InitOrder = p.info.InitOrder[:n]
+}
+
 // MainPkg returns the last package in the Sorted() slice. This is the main
 // package of the program.
 func (p *Program) MainPkg() *Package {
