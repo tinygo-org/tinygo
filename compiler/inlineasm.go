@@ -47,6 +47,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 	asmString := constant.StringVal(instr.Args[0].(*ssa.Const).Value)
 	registers := map[string]llvm.Value{}
 	if registerMap, ok := instr.Args[1].(*ssa.MakeMap); ok {
+	referrers:
 		for _, r := range *registerMap.Referrers() {
 			switch r := r.(type) {
 			case *ssa.DebugRef:
@@ -59,7 +60,9 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 				registers[key] = b.getValue(r.Value.(*ssa.MakeInterface).X, getPos(instr))
 			case *ssa.Call:
 				if r.Common() == instr {
-					break
+					// Stop processing when we encounter the AsmFull call itself
+					// to avoid including MapUpdate operations that happen after the call
+					break referrers
 				}
 			default:
 				return llvm.Value{}, b.makeError(instr.Pos(), "don't know how to handle argument to inline assembly: "+r.String())

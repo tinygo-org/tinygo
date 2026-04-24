@@ -50,6 +50,7 @@ func TestCompiler(t *testing.T) {
 		{"channel.go", "", ""},
 		{"gc.go", "", ""},
 		{"zeromap.go", "", ""},
+		{"asmfull.go", "", ""},
 	}
 	if goMinor >= 20 {
 		tests = append(tests, testCase{"go1.20.go", "", ""})
