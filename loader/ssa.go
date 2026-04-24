@@ -8,9 +8,7 @@ import (
 //
 // The program must already be parsed and type-checked with the .Parse() method.
 func (p *Program) LoadSSA() *ssa.Program {
-	// TODO: re-enable SanityCheckFunctions when x/tools is upgraded to
-	// a version with a fix for https://golang.org/issues/73594.
-	prog := ssa.NewProgram(p.fset /*ssa.SanityCheckFunctions|*/, ssa.BareInits|ssa.GlobalDebug|ssa.InstantiateGenerics)
+	prog := ssa.NewProgram(p.fset, ssa.SanityCheckFunctions|ssa.BareInits|ssa.GlobalDebug|ssa.InstantiateGenerics)
 
 	for _, pkg := range p.sorted {
 		prog.CreatePackage(pkg.Pkg, pkg.Files, &pkg.info, true)
