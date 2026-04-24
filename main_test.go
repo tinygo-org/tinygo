@@ -155,6 +155,19 @@ func TestBuild(t *testing.T) {
 			}
 			runTestWithConfig("ldflags.go", t, opts, nil, nil)
 		})
+
+		// Same as ldflags, but the global has a default value in source.
+		// -ldflags -X must override it, matching standard Go behaviour.
+		t.Run("ldflags-initialized", func(t *testing.T) {
+			t.Parallel()
+			opts := optionsFromTarget("", sema)
+			opts.GlobalValues = map[string]map[string]string{
+				"main": {
+					"someGlobal": "foobar",
+				},
+			}
+			runTestWithConfig("ldflags-initialized.go", t, opts, nil, nil)
+		})
 	})
 
 	if testing.Short() {
