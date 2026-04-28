@@ -115,6 +115,72 @@ func doublyNestedInGeneric[T any]() (any, checker) {
 	return v, c
 }
 
+// issue4931Item's layout depends on T, so sharing generic function
+// bodies across different local T declarations is observable.
+type issue4931Item[T any] struct {
+	_      T
+	Labels []int
+}
+
+func issue4931Run[T any](input <-chan issue4931Item[T]) int {
+	item := <-input
+	return len(item.Labels)
+}
+
+func issue4931A() int {
+	type T struct{ _ [1]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Run(items)
+}
+
+func issue4931B() int {
+	type T struct{ _ [0]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Run(items)
+}
+
+func issue4931Pair[A, B any](input <-chan issue4931Item[A]) int {
+	item := <-input
+	return len(item.Labels)
+}
+
+func issue4931PairA() int {
+	type T struct{ _ [1]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Pair[T, int](items)
+}
+
+func issue4931PairB() int {
+	type T struct{ _ [0]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Pair[T, int](items)
+}
+
+type issue4931Runner[T any] struct{}
+
+func (issue4931Runner[T]) run(input <-chan issue4931Item[T]) int {
+	item := <-input
+	return len(item.Labels)
+}
+
+func issue4931MethodA() int {
+	type T struct{ _ [1]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Runner[T]{}.run(items)
+}
+
+func issue4931MethodB() int {
+	type T struct{ _ [0]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Runner[T]{}.run(items)
+}
+
 func expect(name string, ok bool) {
 	if ok {
 		println("ok:", name)
@@ -226,4 +292,12 @@ func main() {
 	expect("doublyNestedInGeneric[string].Y accepts own", dnsC(dns))
 	expect("doublyNestedInGeneric[int].Y rejects [string].Y", !dniC(dns))
 	expect("doublyNestedInGeneric[string].Y rejects [int].Y", !dnsC(dni))
+
+	// Issue 4931: generic instances with local type args must not share bodies.
+	println("issue4931A labels:", issue4931A())
+	println("issue4931B labels:", issue4931B())
+	println("issue4931PairA labels:", issue4931PairA())
+	println("issue4931PairB labels:", issue4931PairB())
+	println("issue4931MethodA labels:", issue4931MethodA())
+	println("issue4931MethodB labels:", issue4931MethodB())
 }
