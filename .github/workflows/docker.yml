@@ -14,7 +14,7 @@ concurrency:
 jobs:
   push_to_registry:
     name: build-push-dev
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24-04-better
     permissions:
       packages: write
       contents: read

@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build-windows:
-    runs-on: windows-2022
+    runs-on: windows-2022-better
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-20-windows-v1
+          key: llvm-source-20-windows-v2
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -71,7 +71,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-windows-v2
+          key: llvm-build-20-windows-v3
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -93,7 +93,7 @@ jobs:
       - name: Cache Go cache
         uses: actions/cache@v5
         with:
-          key: go-cache-windows-v2-${{ hashFiles('go.mod') }}
+          key: go-cache-windows-v3-${{ hashFiles('go.mod') }}
           path: |
             C:/Users/runneradmin/AppData/Local/go-build
             C:/Users/runneradmin/go/pkg/mod
@@ -121,7 +121,7 @@ jobs:
           archive: false
 
   smoke-test-windows:
-    runs-on: windows-2022
+    runs-on: windows-2022-better
     needs: build-windows
     steps:
       - name: Configure pagefile
@@ -154,7 +154,7 @@ jobs:
         run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-test-windows:
-    runs-on: windows-2022
+    runs-on: windows-2022-better
     needs: build-windows
     steps:
       - name: Configure pagefile
@@ -180,7 +180,7 @@ jobs:
         run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-wasi-test-windows:
-    runs-on: windows-2022
+    runs-on: windows-2022-better
     needs: build-windows
     steps:
       - name: Configure pagefile

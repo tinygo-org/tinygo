@@ -16,7 +16,7 @@ jobs:
     # Build Linux binaries, ready for release.
     # This runs inside an Alpine Linux container so we can more easily create a
     # statically linked binary.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24-04-better
     container:
       image: golang:1.26-alpine
     outputs:
@@ -132,7 +132,7 @@ jobs:
           archive: false
   test-linux-build:
     # Test the binaries built in the build-linux job by running the smoke tests.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24-04-better
     needs: build-linux
     steps:
       - name: Checkout
@@ -166,7 +166,7 @@ jobs:
   assert-test-linux:
     # Run all tests that can run on Linux, with LLVM assertions enabled to catch
     # potential bugs.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24-04-better
     steps:
       - name: Checkout
         uses: actions/checkout@v6
