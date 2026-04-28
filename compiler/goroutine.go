@@ -97,7 +97,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		funcType = b.getLLVMFunctionType(instr.Call.Value.Type().Underlying().(*types.Signature))
 		params = append(params, context, funcPtr)
 		hasContext = true
-		prefix = b.fn.RelString(nil)
+		prefix = b.getFunctionInfo(b.fn).linkName
 	}
 
 	paramBundle := b.emitPointerPack(params)
@@ -139,7 +139,7 @@ func (b *builder) createWasmExport() {
 	// Declare the exported function.
 	paramTypes := b.llvmFnType.ParamTypes()
 	exportedFnType := llvm.FunctionType(b.llvmFnType.ReturnType(), paramTypes[:len(paramTypes)-1], false)
-	exportedFn := llvm.AddFunction(b.mod, b.fn.RelString(nil)+suffix, exportedFnType)
+	exportedFn := llvm.AddFunction(b.mod, b.getFunctionInfo(b.fn).linkName+suffix, exportedFnType)
 	b.addStandardAttributes(exportedFn)
 	llvmutil.AppendToGlobal(b.mod, "llvm.used", exportedFn)
 	exportedFn.AddFunctionAttr(b.ctx.CreateStringAttribute("wasm-export-name", b.info.wasmExport))
