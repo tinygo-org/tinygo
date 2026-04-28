@@ -323,6 +323,12 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 		linkName: f.RelString(nil),
 	}
 
+	// RelString is not unique for local type arguments, so add a suffix
+	// when needed.
+	if suffix := c.localTypeArgsSuffix(f); suffix != "" {
+		info.linkName += suffix
+	}
+
 	// Check for a few runtime functions that are treated specially.
 	if info.linkName == "runtime.wasmEntryReactor" && c.BuildMode == "c-shared" {
 		info.linkName = "_initialize"
@@ -345,6 +351,26 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 
 	c.functionInfos[f] = info
 	return info
+}
+
+func (c *compilerContext) localTypeArgsSuffix(f *ssa.Function) string {
+	typeArgs := f.TypeArgs()
+	if len(typeArgs) == 0 {
+		return ""
+	}
+	var hasLocal bool
+	parts := make([]string, len(typeArgs))
+	for i, ta := range typeArgs {
+		name, isLocal := c.getTypeCodeName(ta)
+		if isLocal {
+			hasLocal = true
+		}
+		parts[i] = name
+	}
+	if !hasLocal {
+		return ""
+	}
+	return "$localtype:" + strings.Join(parts, ",")
 }
 
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
