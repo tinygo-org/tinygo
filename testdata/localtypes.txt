@@ -41,3 +41,9 @@ ok: doublyNestedInGeneric[int].Y accepts own
 ok: doublyNestedInGeneric[string].Y accepts own
 ok: doublyNestedInGeneric[int].Y rejects [string].Y
 ok: doublyNestedInGeneric[string].Y rejects [int].Y
+issue4931A labels: 0
+issue4931B labels: 1
+issue4931PairA labels: 0
+issue4931PairB labels: 1
+issue4931MethodA labels: 0
+issue4931MethodB labels: 1
