@@ -294,6 +294,11 @@
 						return BigInt((timeOrigin + performance.now()) * 1e6);
 					},
 
+					// func getRandomData(r []byte)
+					"runtime.getRandomData": (slice_ptr, slice_len, slice_cap) => {
+						crypto.getRandomValues(loadSlice(slice_ptr, slice_len, slice_cap));
+					},
+
 					// func sleepTicks(timeout int64)
 					"runtime.sleepTicks": (timeout) => {
 						// Do not sleep, only reactivate scheduler after the given timeout.
