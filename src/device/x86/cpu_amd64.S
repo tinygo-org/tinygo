@@ -34,7 +34,7 @@ asmCpuid:
     jrcxz  .SkipEbx
     mov    %ebx, (%rcx)
 .SkipEbx:
-    mov    0x38(%rsp), %rcx
+    mov    0x40(%rsp), %rcx
     jrcxz  .SkipEdx
     mov    %edx, (%rcx)
 .SkipEdx:

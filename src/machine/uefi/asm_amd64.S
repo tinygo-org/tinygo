@@ -68,7 +68,7 @@ uefiCall4:
 uefiCall5:
     pushq  %rbp
     movq   %rsp, %rbp
-    subq   $0x28, %rsp
+    subq   $0x30, %rsp
     movq   %rcx, %rax
     movq   %rdx, %rcx
     movq   %r8,  %rdx
