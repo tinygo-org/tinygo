@@ -102,6 +102,10 @@ func main(imageHandle uintptr, systemTable uintptr) uintptr {
 	preinit()
 	stackTop = getCurrentStackPointer()
 	runMain()
-	uefi.BS().Exit(uefi.GetImageHandle(), 0, 0, nil)
+
+	if heapStart != 0 {
+		uefi.BS().FreePages(uefi.EFI_PHYSICAL_ADDRESS(heapStart), uefi.UINTN(heapSize/4096))
+	}
+
 	return 0
 }

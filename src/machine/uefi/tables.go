@@ -58,6 +58,10 @@ func (p *EFI_BOOT_SERVICES) AllocatePages(typ EFI_ALLOCATE_TYPE, memoryType EFI_
 	return UefiCall4(p.allocatePages, uintptr(typ), uintptr(memoryType), uintptr(pages), uintptr(unsafe.Pointer(memory)))
 }
 
+func (p *EFI_BOOT_SERVICES) FreePages(memory EFI_PHYSICAL_ADDRESS, pages UINTN) EFI_STATUS {
+	return UefiCall2(p.freePages, uintptr(memory), uintptr(pages))
+}
+
 func (p *EFI_BOOT_SERVICES) CreateEvent(typ EVENT_TYPE, notifyTPL EFI_TPL, notifyFunction unsafe.Pointer, notifyContext unsafe.Pointer, event *EFI_EVENT) EFI_STATUS {
 	return UefiCall5(p.createEvent, uintptr(typ), uintptr(notifyTPL), uintptr(notifyFunction), uintptr(notifyContext), uintptr(unsafe.Pointer(event)))
 }
