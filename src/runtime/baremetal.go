@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"sync/atomic"
+	"unsafe"
 )
 
 //export malloc

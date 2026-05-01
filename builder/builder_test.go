@@ -35,6 +35,7 @@ func TestClangAttributes(t *testing.T) {
 		"nintendoswitch",
 		"riscv-qemu",
 		"tkey",
+		"uefi-amd64",
 		"wasip1",
 		"wasip2",
 		"wasm",
