@@ -842,22 +842,25 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
 			ldflags = append(ldflags, "-mllvm", "-mattr="+config.Features()) // needed for MIPS softfloat
-			if config.GOOS() == "windows" {
-				// Options for the MinGW wrapper for the lld COFF linker.
+			switch config.LinkerFlavor() {
+			case "coff":
+				// Options for driving ld.lld in PE/COFF mode.
 				ldflags = append(ldflags,
 					"-Xlink=/opt:lldlto="+strconv.Itoa(speedLevel),
 					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
-			} else if config.GOOS() == "darwin" {
+			case "darwin":
 				// Options for the ld64-compatible lld linker.
 				ldflags = append(ldflags,
 					"--lto-O"+strconv.Itoa(speedLevel),
 					"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
-			} else {
+			case "gnu":
 				// Options for the ELF linker.
 				ldflags = append(ldflags,
 					"--lto-O"+strconv.Itoa(speedLevel),
 					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
 				)
+			default:
+				return fmt.Errorf("unknown linker flavor: %s", config.LinkerFlavor())
 			}
 			if config.CodeModel() != "default" {
 				ldflags = append(ldflags,
