@@ -82,6 +82,10 @@ func (p *EFI_BOOT_SERVICES) CheckEvent(event EFI_EVENT) EFI_STATUS {
 	return UefiCall1(p.checkEvent, uintptr(event))
 }
 
+func (p *EFI_BOOT_SERVICES) HandleProtocol(handle EFI_HANDLE, protocol *EFI_GUID, iface unsafe.Pointer) EFI_STATUS {
+	return UefiCall3(p.handleProtocol, uintptr(handle), uintptr(unsafe.Pointer(protocol)), uintptr(iface))
+}
+
 func (p *EFI_BOOT_SERVICES) Exit(imageHandle EFI_HANDLE, exitStatus EFI_STATUS, exitDataSize UINTN, exitData *CHAR16) EFI_STATUS {
 	return UefiCall4(p.exit, uintptr(imageHandle), uintptr(exitStatus), uintptr(exitDataSize), uintptr(unsafe.Pointer(exitData)))
 }

@@ -11,6 +11,13 @@ type CHAR16 uint16
 type BOOLEAN bool
 type VOID byte
 
+type EFI_GUID struct {
+	Data1 uint32
+	Data2 uint16
+	Data3 uint16
+	Data4 [8]byte
+}
+
 type EFI_TABLE_HEADER struct {
 	Signature  uint64
 	Revision   uint32
