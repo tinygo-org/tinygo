@@ -91,6 +91,15 @@ func growHeap() bool {
 	return false
 }
 
+func init() {
+	mono := nanotime()
+	efiTime, status := uefi.GetTime()
+	if status == uefi.EFI_SUCCESS {
+		sec, nsec := efiTime.GetEpoch()
+		timeOffset.Store(sec*1000000000 + int64(nsec) - mono)
+	}
+}
+
 //go:noinline
 func runMain() {
 	run()

@@ -27,3 +27,8 @@ type EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL struct {
 func (p *EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) OutputString(s *CHAR16) EFI_STATUS {
 	return UefiCall2(p.outputString, uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(s)))
 }
+
+func (p *EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) WriteString(s string) EFI_STATUS {
+	buf := StringToCHAR16Z(s)
+	return p.OutputString(&buf[0])
+}

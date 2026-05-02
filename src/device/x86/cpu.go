@@ -20,15 +20,15 @@ func AsmPause()
 func AsmReadRdtsc() uint64
 
 //export asmCpuid
-func AsmCpuid(index uint32, registerEax *uint32, registerEbx *uint32, registerEcx *uint32, registerEdx *uint32) int
+func AsmCpuid(index uint32, registerEax *uint32, registerEbx *uint32, registerEcx *uint32) int
 
 var maxCpuidIndex uint32
 var stdVendorName0 uint32
 var stdCpuid1Eax uint32
 
 func init() {
-	AsmCpuid(0, &maxCpuidIndex, &stdVendorName0, nil, nil)
-	AsmCpuid(1, &stdCpuid1Eax, nil, nil, nil)
+	AsmCpuid(0, &maxCpuidIndex, &stdVendorName0, nil)
+	AsmCpuid(1, &stdCpuid1Eax, nil, nil)
 }
 
 func getExtendedCPUFamily() CPUExtendedFamily {
@@ -57,7 +57,7 @@ func cpuidCoreClockCalculateTSCFrequency() uint64 {
 	var ebx uint32
 	var ecx uint32
 
-	AsmCpuid(CPUIDTimeStampCounter, &eax, &ebx, &ecx, nil)
+	AsmCpuid(CPUIDTimeStampCounter, &eax, &ebx, &ecx)
 	if eax == 0 || ebx == 0 {
 		return 0
 	}
