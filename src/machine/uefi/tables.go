@@ -56,6 +56,14 @@ type EFI_BOOT_SERVICES struct {
 	getNextMonotonicCount     uintptr
 	stall                     uintptr
 	setWatchdogTimer          uintptr
+	connectController         uintptr
+	disconnectController      uintptr
+	openProtocol              uintptr
+	closeProtocol             uintptr
+	openProtocolInformation   uintptr
+	protocolsPerHandle        uintptr
+	locateHandleBuffer        uintptr
+	locateProtocol            uintptr
 }
 
 func (p *EFI_BOOT_SERVICES) AllocatePages(typ EFI_ALLOCATE_TYPE, memoryType EFI_MEMORY_TYPE, pages UINTN, memory *EFI_PHYSICAL_ADDRESS) EFI_STATUS {
@@ -90,6 +98,10 @@ func (p *EFI_BOOT_SERVICES) HandleProtocol(handle EFI_HANDLE, protocol *EFI_GUID
 	return UefiCall3(p.handleProtocol, uintptr(handle), uintptr(unsafe.Pointer(protocol)), uintptr(iface))
 }
 
+func (p *EFI_BOOT_SERVICES) LocateProtocol(protocol *EFI_GUID, registration *VOID, iface unsafe.Pointer) EFI_STATUS {
+	return UefiCall3(p.locateProtocol, uintptr(unsafe.Pointer(protocol)), uintptr(unsafe.Pointer(registration)), uintptr(iface))
+}
+
 func (p *EFI_BOOT_SERVICES) Exit(imageHandle EFI_HANDLE, exitStatus EFI_STATUS, exitDataSize UINTN, exitData *CHAR16) EFI_STATUS {
 	return UefiCall4(p.exit, uintptr(imageHandle), uintptr(exitStatus), uintptr(exitDataSize), uintptr(unsafe.Pointer(exitData)))
 }
@@ -103,7 +115,7 @@ type EFI_SYSTEM_TABLE struct {
 	FirmwareVendor       *CHAR16
 	FirmwareRevision     uint32
 	ConsoleInHandle      EFI_HANDLE
-	ConIn                *VOID
+	ConIn                *EFI_SIMPLE_TEXT_INPUT_PROTOCOL
 	ConsoleOutHandle     EFI_HANDLE
 	ConOut               *EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
 	StandardErrorHandle  EFI_HANDLE
