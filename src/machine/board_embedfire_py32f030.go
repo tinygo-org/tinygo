@@ -19,6 +19,8 @@ const (
 )
 
 func configureDefaultUARTPins() {
-	ConfigureUARTPin(PA7, 8) // TX
-	ConfigureUARTPin(PA8, 8) // RX
+	PA7.Configure(PinConfig{Mode: PinAlternate})
+	PA7.SetAltFunc(8)
+	PA8.Configure(PinConfig{Mode: PinAlternate})
+	PA8.SetAltFunc(8)
 }

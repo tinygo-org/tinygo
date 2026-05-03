@@ -49,12 +49,6 @@ func (uart *UART) Configure(config UARTConfig) error {
 	return nil
 }
 
-// Configure pin for use by UART
-func ConfigureUARTPin(pin Pin, af uint8) {
-	pin.Configure(PinConfig{Mode: PinAlternate})
-	pin.SetAltFunc(af)
-}
-
 func handleUartInterrupt(interrupt.Interrupt) {
 	uart := DefaultUART
 	data := uint8(uart.Bus.DR.Get())
