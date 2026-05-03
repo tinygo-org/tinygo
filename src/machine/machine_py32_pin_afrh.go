@@ -2,6 +2,18 @@
 
 package machine
 
+// SetAltFunc selects the alternate function for a GPIO pin on PY32F devices.
+//
+// Each pin supports up to 16 alternate functions (AF0–AF15), encoded as a
+// 4-bit field in the GPIO alternate-function registers. The register is split
+// in two: AFRL holds the 4-bit selectors for pins 0–7 and AFRH holds them for
+// pins 8–15, with each selector at bit offset (pin%8)*4 within its register.
+//
+// AF0 is the system function (typically GPIO / SWDIO / SWCLK on JTAG pins).
+// AF1–AF7 map peripherals such as USART, SPI, I2C, TIM, and MCO depending on
+// the specific pin and PY32F variant; consult the alternate-function table in
+// the device datasheet.  The pin must also be configured as PinAlternate via
+// Pin.Configure before the alternate function takes effect.
 func (p Pin) SetAltFunc(af uint8) {
 	port, pin := p.getPort()
 	if pin >= 8 {
