@@ -7,6 +7,21 @@ import (
 	"runtime/interrupt"
 )
 
+// errUARTWriteTimeout is returned by writeByte when the TX register does not
+// become empty within the retry budget.
+type uartError string
+
+func (e uartError) Error() string { return string(e) }
+
+const errUARTWriteTimeout uartError = "UART: write timeout"
+
+// uartTXRetries is the upper bound on the SR polling loop in writeByte and
+// flush. At the PY32F maximum CPU frequency of 48 MHz, an APB peripheral read
+// plus loop overhead costs roughly 5 cycles (~104 ns). One byte at 9600 baud
+// takes ~1.04 ms, which at that rate corresponds to ~10 000 iterations — the
+// worst case for any standard baud rate at the highest supported clock.
+const uartTXRetries = 10000
+
 // UART implements a minimal USART1 driver for PY32 parts.
 type UART struct {
 	Bus    *py32.USART_Type
@@ -56,13 +71,20 @@ func handleUartInterrupt(interrupt.Interrupt) {
 }
 
 func (uart *UART) writeByte(c byte) error {
-	for uart.Bus.SR.Get()&py32.USART_SR_TXE == 0 {
+	retries := uartTXRetries
+	for retries > 0 && uart.Bus.SR.Get()&py32.USART_SR_TXE == 0 {
+		retries--
+	}
+	if retries <= 0 {
+		return errUARTWriteTimeout
 	}
 	uart.Bus.DR.Set(uint32(c))
 	return nil
 }
 
 func (uart *UART) flush() {
-	for uart.Bus.SR.Get()&py32.USART_SR_TC == 0 {
+	retries := uartTXRetries
+	for retries > 0 && uart.Bus.SR.Get()&py32.USART_SR_TC == 0 {
+		retries--
 	}
 }
