@@ -1,23 +1,19 @@
 package uefi
 
-import "unsafe"
+//go:linkname gosched runtime.Gosched
+func gosched()
 
-var imageHandle EFI_HANDLE
-var systemTable *EFI_SYSTEM_TABLE
-
-func Init(handle uintptr, table uintptr) {
-	imageHandle = EFI_HANDLE(handle)
-	systemTable = (*EFI_SYSTEM_TABLE)(unsafe.Pointer(table))
-}
-
-func ST() *EFI_SYSTEM_TABLE {
-	return systemTable
-}
-
-func BS() *EFI_BOOT_SERVICES {
-	return systemTable.BootServices
-}
-
-func GetImageHandle() EFI_HANDLE {
-	return imageHandle
+// WaitForEvent blocks while yielding to the TinyGo scheduler so other
+// goroutines can continue to run.
+func WaitForEvent(event EFI_EVENT) EFI_STATUS {
+	for {
+		status := BS().CheckEvent(event)
+		if status == EFI_SUCCESS {
+			return EFI_SUCCESS
+		}
+		if status != EFI_NOT_READY {
+			return status
+		}
+		gosched()
+	}
 }

@@ -56,15 +56,9 @@ func (p *EFI_SIMPLE_TEXT_INPUT_PROTOCOL) GetKey() (EFI_INPUT_KEY, EFI_STATUS) {
 	var key EFI_INPUT_KEY
 	var status EFI_STATUS
 	for {
-		for {
-			status = BS().CheckEvent(p.WaitForKey)
-			if status == EFI_SUCCESS {
-				break
-			}
-			if status != EFI_NOT_READY {
-				return key, status
-			}
-			CpuPause()
+		status = WaitForEvent(p.WaitForKey)
+		if status != EFI_SUCCESS {
+			return key, status
 		}
 		status = p.ReadKeyStroke(&key)
 		if status == EFI_SUCCESS {
@@ -112,15 +106,9 @@ func (p *EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL) GetKey() (EFI_KEY_DATA, EFI_STATUS) 
 	var key EFI_KEY_DATA
 	var status EFI_STATUS
 	for {
-		for {
-			status = BS().CheckEvent(p.WaitForKeyEx)
-			if status == EFI_SUCCESS {
-				break
-			}
-			if status != EFI_NOT_READY {
-				return key, status
-			}
-			CpuPause()
+		status = WaitForEvent(p.WaitForKeyEx)
+		if status != EFI_SUCCESS {
+			return key, status
 		}
 		status = p.ReadKeyStroke(&key)
 		if status == EFI_SUCCESS {
