@@ -330,26 +330,41 @@ func (mv *memoryView) store(v value, p pointerValue) bool {
 	if checks && mv.hasExternalLoadOrStore(p) {
 		panic("interp: store to object with external load/store")
 	}
-	obj := mv.get(p.index())
+	index := p.index()
+	var obj object
+	writable := false
+	if mv.objects != nil {
+		obj, writable = mv.objects[index]
+	}
+	if !writable {
+		obj = mv.get(index)
+	}
 	if obj.buffer == nil {
 		// External global, return false (for a failure).
 		return false
 	}
-	if checks && p.offset()+v.len(mv.r) > obj.size {
+	valueLen := v.len(mv.r)
+	if checks && p.offset()+valueLen > obj.size {
 		panic("interp: store out of bounds")
 	}
-	if p.offset() == 0 && v.len(mv.r) == obj.buffer.len(mv.r) {
-		obj.buffer = v
+	if p.offset() == 0 && valueLen == obj.buffer.len(mv.r) {
+		obj.buffer = v.clone()
 	} else {
-		obj = obj.clone()
+		if !writable {
+			obj = obj.clone()
+		}
 		buffer := obj.buffer.asRawValue(mv.r)
 		obj.buffer = buffer
 		v := v.asRawValue(mv.r)
-		for i := uint32(0); i < v.len(mv.r); i++ {
+		if writable {
+			// A partial load from this object may share the destination buffer.
+			v.buf = append([]uint64(nil), v.buf...)
+		}
+		for i := uint32(0); i < valueLen; i++ {
 			buffer.buf[p.offset()+i] = v.buf[i]
 		}
 	}
-	mv.put(p.index(), obj)
+	mv.put(index, obj)
 	return true // success
 }
 
