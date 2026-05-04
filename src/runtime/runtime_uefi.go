@@ -18,6 +18,9 @@ var stackTop uintptr
 var allocatePagesAddress uefi.EFI_PHYSICAL_ADDRESS
 var consoleInEx *uefi.EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL
 var consoleIn *uefi.EFI_SIMPLE_TEXT_INPUT_PROTOCOL
+var waitForEventsFunction = func() {
+	uefi.CpuPause()
+}
 
 func ticks() timeUnit {
 	return timeUnit(uefi.Ticks())
@@ -28,7 +31,9 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	if frequency == 0 {
 		return timeUnit(ns)
 	}
-	return timeUnit(ns * frequency / 1000000000)
+	seconds := ns / 1000000000
+	remainder := ns % 1000000000
+	return timeUnit(seconds*frequency + (remainder*frequency)/1000000000)
 }
 
 func ticksToNanoseconds(t timeUnit) int64 {
@@ -106,6 +111,14 @@ func init() {
 		sec, nsec := efiTime.GetEpoch()
 		timeOffset.Store(sec*1000000000 + int64(nsec) - mono)
 	}
+}
+
+func SetWaitForEvents(f func()) {
+	waitForEventsFunction = f
+}
+
+func waitForEvents() {
+	waitForEventsFunction()
 }
 
 //go:noinline
