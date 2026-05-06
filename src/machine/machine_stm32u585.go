@@ -58,7 +58,16 @@ func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
 		// LPUART uses BRR = 256 * fclk / baud
 		return (256 * CPUFrequency()) / baudRate
 	}
-	return CPUFrequency() / baudRate
+	// USART requires BRR >= 16 for 16x oversampling (OVER8=0).
+	// A divisor below 16 is invalid per the STM32 reference manual and causes
+	// undefined hardware behaviour — in practice the receiver fires ORE/RXNE
+	// interrupts at an impossible rate, completely starving the CPU.
+	const minBRR = 16
+	divisor := CPUFrequency() / baudRate
+	if divisor < minBRR {
+		divisor = minBRR
+	}
+	return divisor
 }
 
 // Register names vary by ST processor, these are for STM U5
@@ -68,6 +77,24 @@ func (uart *UART) setRegisters() {
 	uart.statusReg = &uart.Bus.ISR
 	uart.txEmptyFlag = stm32.USART_ISR_TXE
 	uart.errClearReg = &uart.Bus.ICR
+}
+
+// SetBaudRate overrides the shared implementation for STM32U5. On this
+// family the BRR register is read-only while UE=1 (USART enabled), so the
+// USART must be briefly disabled to change the baud rate. This matters when
+// the servo library (or any code) calls SetBaudRate after Configure has
+// already enabled the USART.
+func (uart *UART) SetBaudRate(br uint32) {
+	cr1 := uart.Bus.CR1.Get()
+	if cr1&stm32.USART_CR1_UE != 0 {
+		// Disable the USART so BRR becomes writable.
+		uart.Bus.CR1.Set(cr1 &^ stm32.USART_CR1_UE)
+	}
+	uart.Bus.BRR.Set(uart.getBaudRateDivisor(br))
+	if cr1&stm32.USART_CR1_UE != 0 {
+		// Restore CR1 exactly as it was (re-enables USART, TE, RE, etc.).
+		uart.Bus.CR1.Set(cr1)
+	}
 }
 
 //---------- SPI related types and code

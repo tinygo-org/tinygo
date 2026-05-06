@@ -256,6 +256,7 @@ func enableAltFuncClock(bus unsafe.Pointer) {
 		stm32.RCC.APB1ENR2.SetBits(stm32.RCC_APB1ENR2_I2C4EN)
 	case unsafe.Pointer(stm32.USART1): // USART1 clock enable
 		stm32.RCC.APB2ENR.SetBits(stm32.RCC_APB2ENR_USART1EN)
+		_ = stm32.RCC.APB2ENR.Get() // readback: ensure clock is active before accessing USART1 registers
 	case unsafe.Pointer(stm32.USART2): // USART2 clock enable
 		stm32.RCC.APB1ENR1.SetBits(stm32.RCC_APB1ENR1_USART2EN)
 	case unsafe.Pointer(stm32.USART3): // USART3 clock enable
