@@ -8,14 +8,14 @@ import (
 )
 
 func CPUFrequency() uint32 {
-	return 4_000_000
+	return 160_000_000
 }
 
 // Internal use: configured speed of the APB1 and APB2 timers, this should be kept
 // in sync with any changes to runtime package which configures the oscillators
 // and clock frequencies
-const APB1_TIM_FREQ = 4e6 // 4MHz (MSI default)
-const APB2_TIM_FREQ = 4e6 // 4MHz (MSI default)
+const APB1_TIM_FREQ = 160e6 // 160MHz (PLL1: MSIS 4MHz × 80 / 1 / 2)
+const APB2_TIM_FREQ = 160e6 // 160MHz (PLL1: MSIS 4MHz × 80 / 1 / 2)
 
 //---------- UART related code
 
@@ -55,8 +55,10 @@ func (uart *UART) isLPUART1() bool {
 // NOTE: keep this in sync with the runtime/runtime_stm32u5.go clock init code
 func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
 	if uart.isLPUART1() {
-		// LPUART uses BRR = 256 * fclk / baud
-		return (256 * CPUFrequency()) / baudRate
+		// LPUART uses BRR = 256 * fclk / baud.
+		// Use 64-bit arithmetic to avoid overflow: at 160 MHz,
+		// 256 * 160_000_000 = 40_960_000_000 which exceeds uint32 max.
+		return uint32(uint64(256) * uint64(CPUFrequency()) / uint64(baudRate))
 	}
 	// USART requires BRR >= 16 for 16x oversampling (OVER8=0).
 	// A divisor below 16 is invalid per the STM32 reference manual and causes
