@@ -256,7 +256,7 @@ func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, e
 	if addr == unsafe.Pointer(^uintptr(0)) {
 		return nil, getErrno()
 	}
-	return (*[1 << 30]byte)(addr)[:length:length], nil
+	return unsafe.Slice((*byte)(addr), length), nil
 }
 
 func Munmap(b []byte) (err error) {

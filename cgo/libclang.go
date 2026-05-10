@@ -130,7 +130,7 @@ func (f *cgoFile) readNames(fragment string, cflags []string, filename string, c
 	// convert Go slice of strings to C array of strings.
 	cmdargsC := C.malloc(C.size_t(len(cflags)) * C.size_t(unsafe.Sizeof(uintptr(0))))
 	defer C.free(cmdargsC)
-	cmdargs := (*[1 << 16]*C.char)(cmdargsC)
+	cmdargs := unsafe.Slice((**C.char)(cmdargsC), len(cflags))
 	for i, cflag := range cflags {
 		s := C.CString(cflag)
 		cmdargs[i] = s
@@ -190,7 +190,7 @@ func (f *cgoFile) readNames(fragment string, cflags []string, filename string, c
 			// Sanity check. This should (hopefully) never trigger.
 			panic("libclang: file contents was not loaded")
 		}
-		data := (*[1 << 24]byte)(unsafe.Pointer(rawData))[:size]
+		data := unsafe.Slice((*byte)(unsafe.Pointer(rawData)), size)
 
 		// Hash the contents if it isn't hashed yet.
 		if _, ok := f.visitedFiles[path]; !ok {
@@ -624,7 +624,7 @@ func (p *cgoPackage) getClangLocationPosition(location C.CXSourceLocation, tu C.
 		// now by reading the file from libclang.
 		var size C.size_t
 		sourcePtr := C.clang_getFileContents(tu, file, &size)
-		source := ((*[1 << 28]byte)(unsafe.Pointer(sourcePtr)))[:size:size]
+		source := unsafe.Slice((*byte)(unsafe.Pointer(sourcePtr)), size)
 		lines := []int{0}
 		for i := 0; i < len(source)-1; i++ {
 			if source[i] == '\n' {

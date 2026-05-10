@@ -28,7 +28,7 @@ func RunTool(tool string, args ...string) error {
 	var cflag *C.char
 	buf := C.calloc(C.size_t(len(args)), C.size_t(unsafe.Sizeof(cflag)))
 	defer C.free(buf)
-	cflags := (*[1 << 10]*C.char)(unsafe.Pointer(buf))[:len(args):len(args)]
+	cflags := unsafe.Slice((**C.char)(buf), len(args))
 	for i, flag := range args {
 		cflag := C.CString(flag)
 		cflags[i] = cflag
