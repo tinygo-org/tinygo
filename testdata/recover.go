@@ -41,6 +41,9 @@ func main() {
 
 	println("\n# recover runtime errors")
 	recoverRuntimeError()
+
+	println("\n# recover from nil map and closed channel")
+	recoverNilMapAndChan()
 }
 
 func recoverSimple() {
@@ -240,4 +243,21 @@ func recoverMustPanic(name string, f func()) {
 		}
 	}()
 	f()
+}
+
+// Test recovering from nil map assignment and closed channel send.
+func recoverNilMapAndChan() {
+	recoverMustPanic("nil map", func() {
+		var m map[string]int
+		m["x"] = 1
+	})
+	recoverMustPanic("closed chan", func() {
+		ch := make(chan int)
+		close(ch)
+		ch <- 1
+	})
+	recoverMustPanic("close nil chan", func() {
+		var ch chan int
+		close(ch)
+	})
 }
