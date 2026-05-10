@@ -24,6 +24,7 @@ const (
 // https://opensource.apple.com/source/xnu/xnu-7195.141.2/bsd/sys/signal.h.auto.html
 const (
 	sig_SIGBUS  = 10
+	sig_SIGFPE  = 8
 	sig_SIGILL  = 4
 	sig_SIGSEGV = 11
 )

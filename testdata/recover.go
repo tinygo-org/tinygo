@@ -44,6 +44,9 @@ func main() {
 
 	println("\n# recover from nil map and closed channel")
 	recoverNilMapAndChan()
+
+	println("\n# recover from hardware signals")
+	recoverSignals()
 }
 
 func recoverSimple() {
@@ -259,5 +262,17 @@ func recoverNilMapAndChan() {
 	recoverMustPanic("close nil chan", func() {
 		var ch chan int
 		close(ch)
+	})
+}
+
+// Test recovering from hardware signals (SIGFPE, SIGSEGV).
+func recoverSignals() {
+	recoverMustPanic("divide by zero", func() {
+		var x int
+		println(1 / x)
+	})
+	recoverMustPanic("nil pointer dereference", func() {
+		var p *int
+		println(*p)
 	})
 }

@@ -139,6 +139,26 @@ func runMain() {
 //export tinygo_register_fatal_signals
 func tinygo_register_fatal_signals()
 
+//go:extern tinygo_caught_signal
+var tinygo_caught_signal int32
+
+// tinygo_sigpanic is called when a signal (SIGSEGV, SIGFPE, etc.) is caught
+// and the signal handler has redirected execution here. It turns the signal
+// into a Go panic that can be recovered with recover().
+//
+//export tinygo_sigpanic
+func tinygo_sigpanic() {
+	sig := tinygo_caught_signal
+	switch sig {
+	case sig_SIGSEGV, sig_SIGBUS:
+		runtimePanic("nil pointer dereference")
+	case sig_SIGFPE:
+		runtimePanic("divide by zero")
+	default:
+		runtimePanic("signal")
+	}
+}
+
 // Print fatal errors when they happen, including the instruction location.
 // With the particular formatting below, `tinygo run` can extract the location
 // where the signal happened and try to show the source location based on DWARF

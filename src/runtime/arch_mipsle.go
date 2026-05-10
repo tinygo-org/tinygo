@@ -12,6 +12,7 @@ const callInstSize = 8 // "jal someFunc" is 4 bytes, plus a MIPS delay slot
 const (
 	linux_MAP_ANONYMOUS = 0x800
 	linux_SIGBUS        = 10
+	linux_SIGFPE        = 8
 	linux_SIGILL        = 4
 	linux_SIGSEGV       = 11
 )
