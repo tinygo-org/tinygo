@@ -49,3 +49,7 @@ outer recovered: repanic value
   recovered: nil map
   recovered: closed chan
   recovered: close nil chan
+
+# recover from hardware signals
+  recovered: divide by zero
+  recovered: nil pointer dereference
