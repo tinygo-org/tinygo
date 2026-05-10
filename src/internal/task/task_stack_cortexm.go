@@ -70,3 +70,10 @@ func (s *state) pause() {
 //
 //export SystemStack
 func SystemStack() uintptr
+
+// GoroutineStack returns the PSP (goroutine stack pointer). When a fault
+// occurs in goroutine context, the hardware saves the exception frame to PSP;
+// reading PSP+0x18 gives the actual faulting PC.
+//
+//export GoroutineStack
+func GoroutineStack() uintptr

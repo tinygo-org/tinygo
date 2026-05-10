@@ -11,3 +11,14 @@ uintptr_t SystemStack() {
     );
     return sp;
 }
+
+uintptr_t GoroutineStack() {
+    uintptr_t sp;
+    asm volatile(
+        "mrs %0, PSP"
+        : "=r"(sp)
+        :
+        : "memory"
+    );
+    return sp;
+}
