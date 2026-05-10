@@ -82,3 +82,34 @@ func (m *Map) Swap(key, value any) (previous any, loaded bool) {
 	m.m[key] = value
 	return
 }
+
+// CompareAndSwap swaps the old and new values for an existing key if the value
+// stored in the map is equal to old.
+func (m *Map) CompareAndSwap(key, old, new any) (swapped bool) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if m.m == nil {
+		return false
+	}
+	value, ok := m.m[key]
+	if !ok || value != old {
+		return false
+	}
+	m.m[key] = new
+	return true
+}
+
+// CompareAndDelete deletes the entry for key if its value is equal to old.
+func (m *Map) CompareAndDelete(key, old any) (deleted bool) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if m.m == nil {
+		return false
+	}
+	value, ok := m.m[key]
+	if !ok || value != old {
+		return false
+	}
+	delete(m.m, key)
+	return true
+}
