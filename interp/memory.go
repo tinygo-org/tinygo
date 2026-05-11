@@ -316,10 +316,14 @@ func (mv *memoryView) load(p pointerValue, size uint32) value {
 		panic("interp: load out of bounds")
 	}
 	v := obj.buffer.asRawValue(mv.r)
-	loadedValue := rawValue{
-		buf: v.buf[p.offset() : p.offset()+size],
+	loadedBuf := v.buf[p.offset() : p.offset()+size]
+	if _, writable := mv.objects[p.index()]; writable {
+		// This object's buffer is owned by this view, which means a later
+		// store may mutate it in place (see store below). Copy the loaded
+		// slice so the returned value is not aliased with the live buffer.
+		loadedBuf = append([]uint64(nil), loadedBuf...)
 	}
-	return loadedValue
+	return rawValue{buf: loadedBuf}
 }
 
 // Store to the value behind the given pointer. This overwrites the value in the
@@ -356,10 +360,6 @@ func (mv *memoryView) store(v value, p pointerValue) bool {
 		buffer := obj.buffer.asRawValue(mv.r)
 		obj.buffer = buffer
 		v := v.asRawValue(mv.r)
-		if writable {
-			// A partial load from this object may share the destination buffer.
-			v.buf = append([]uint64(nil), v.buf...)
-		}
 		for i := uint32(0); i < valueLen; i++ {
 			buffer.buf[p.offset()+i] = v.buf[i]
 		}
