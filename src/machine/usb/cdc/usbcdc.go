@@ -26,11 +26,19 @@ type cdcLineInfo struct {
 
 // USBCDC is the USB CDC aka serial over USB interface.
 type USBCDC struct {
-	tx       ring512
-	rx       ring512
+	tx ring512
+	rx ring512
+
+	// inflight is the number of bytes currently submitted to the USB IN endpoint.
 	inflight atomic.Uint32
-	rbuf     [1]byte
-	wbuf     [1]byte
+
+	// txActive serializes the USB CDC TX pump between Write and the TX
+	// completion handler. This matters on multicore targets where they can run
+	// concurrently.
+	txActive atomic.Uint32
+
+	rbuf [1]byte
+	wbuf [1]byte
 }
 
 var (
@@ -81,7 +89,7 @@ func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 
 // Flush flushes buffered data.
 func (usbcdc *USBCDC) Flush() {
-	for usbcdc.tx.Used() > 0 {
+	for usbcdc.tx.Used() > 0 || usbcdc.txActive.Load() != 0 {
 		gosched()
 	}
 }
@@ -105,33 +113,50 @@ func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	return n, nil
 }
 
-// kickTx starts a transfer if none is in flight. Called from main context only.
+// kickTx starts the TX pump if it is idle.
 func (usbcdc *USBCDC) kickTx() {
-	if usbcdc.inflight.Load() > 0 {
-		return // txhandler will chain the next packet.
+	if !usbcdc.txActive.CompareAndSwap(0, 1) {
+		return
 	}
 	usbcdc.sendFromRing()
 }
 
 func (usbcdc *USBCDC) txhandler() {
 	inflight := usbcdc.inflight.Load()
-	usbcdc.inflight.Store(0)
+	if inflight == 0 {
+		return
+	}
 	usbcdc.tx.Discard(inflight)
+	usbcdc.inflight.Store(0)
 	usbcdc.sendFromRing()
 }
 
 // sendFromRing sends one USB packet from the ring and sets inflight.
-// Called from kickTx (main) or txhandler (ISR), but never concurrently
-// because kickTx only runs when inflight==0 and txhandler only runs
-// when inflight>0.
+//
+// The caller must own txActive. Ownership starts in kickTx and is kept across
+// TX completion interrupts until the TX ring is empty.
 func (usbcdc *USBCDC) sendFromRing() {
-	d1, _ := usbcdc.tx.Peek()
-	if len(d1) == 0 {
+	for {
+		d1, _ := usbcdc.tx.Peek()
+		if len(d1) == 0 {
+			usbcdc.txActive.Store(0)
+
+			// Avoid a missed wakeup: Write may append data while txActive is
+			// still set, causing kickTx to return without starting a transfer.
+			if usbcdc.tx.Used() == 0 {
+				return
+			}
+			if !usbcdc.txActive.CompareAndSwap(0, 1) {
+				return
+			}
+			continue
+		}
+
+		chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
+		usbcdc.inflight.Store(uint32(len(chunk)))
+		machine.SendUSBInPacket(cdcEndpointIn, chunk)
 		return
 	}
-	chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
-	usbcdc.inflight.Store(uint32(len(chunk)))
-	machine.SendUSBInPacket(cdcEndpointIn, chunk)
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.
