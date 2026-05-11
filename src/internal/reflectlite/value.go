@@ -722,20 +722,12 @@ func (v Value) Slice(i, j int) Value {
 
 	case String:
 		i, j := uintptr(i), uintptr(j)
-		str := *(*stringHeader)(v.value)
-
-		if j < i || str.len < j {
-			slicePanic()
-		}
-
-		hdr := stringHeader{
-			data: unsafe.Add(str.data, i),
-			len:  j - i,
-		}
+		str := *(*string)(v.value)
+		sliced := str[i:j]
 
 		return Value{
 			typecode: v.typecode,
-			value:    unsafe.Pointer(&hdr),
+			value:    unsafe.Pointer(&sliced),
 			flags:    v.flags,
 		}
 	}
@@ -810,7 +802,7 @@ func (v Value) Len() int {
 	case Slice:
 		return int((*sliceHeader)(v.value).len)
 	case String:
-		return int((*stringHeader)(v.value).len)
+		return len(*(*string)(v.value))
 	default:
 		panic(&ValueError{Method: "Len", Kind: v.Kind()})
 	}
@@ -986,13 +978,10 @@ func (v Value) Index(i int) Value {
 		// Keeping valueFlagExported if set, but don't set valueFlagIndirect
 		// otherwise CanSet will return true for string elements (which is bad,
 		// strings are read-only).
-		s := *(*stringHeader)(v.value)
-		if uint(i) >= uint(s.len) {
-			panic("reflect: string index out of range")
-		}
+		s := *(*string)(v.value)
 		return Value{
 			typecode: uint8Type,
-			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Add(s.data, i)))),
+			value:    unsafe.Pointer(uintptr(s[i])),
 			flags:    v.flags & valueFlagExported,
 		}
 	case Array:
@@ -1734,8 +1723,7 @@ const zerobufferLen = 32
 func init() {
 	// 32 characters of zero bytes
 	zerobufferStr := "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-	s := (*stringHeader)(unsafe.Pointer(&zerobufferStr))
-	zerobuffer = s.data
+	zerobuffer = unsafe.Pointer(unsafe.StringData(zerobufferStr))
 }
 
 func Zero(typ Type) Value {
@@ -1786,19 +1774,11 @@ type sliceHeader struct {
 	cap  uintptr
 }
 
-// Like sliceHeader, this type is used internally to make sure pointer and
-// non-pointer fields match those of actual strings.
-type stringHeader struct {
-	data unsafe.Pointer
-	len  uintptr
-}
-
-// Verify SliceHeader and StringHeader sizes.
+// Verify SliceHeader size.
 // See https://github.com/tinygo-org/tinygo/pull/4156
 // and https://github.com/tinygo-org/tinygo/issues/1284.
 var (
 	_ [unsafe.Sizeof([]byte{})]byte = [unsafe.Sizeof(sliceHeader{})]byte{}
-	_ [unsafe.Sizeof("")]byte       = [unsafe.Sizeof(stringHeader{})]byte{}
 )
 
 type ValueError struct {
@@ -1865,29 +1845,29 @@ func Copy(dst, src Value) int {
 
 func buflen(v Value) (unsafe.Pointer, uintptr) {
 	var buf unsafe.Pointer
-	var len uintptr
+	var length uintptr
 	switch v.typecode.Kind() {
 	case Slice:
 		hdr := (*sliceHeader)(v.value)
 		buf = hdr.data
-		len = hdr.len
+		length = hdr.len
 	case Array:
 		if v.isIndirect() || v.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
 			buf = v.value
 		} else {
 			buf = unsafe.Pointer(&v.value)
 		}
-		len = uintptr(v.Len())
+		length = uintptr(v.Len())
 	case String:
-		hdr := (*stringHeader)(v.value)
-		buf = hdr.data
-		len = hdr.len
+		s := *(*string)(v.value)
+		buf = unsafe.Pointer(unsafe.StringData(s))
+		length = uintptr(len(s))
 	default:
 		// This shouldn't happen
 		panic("reflect.Copy: not slice or array or string")
 	}
 
-	return buf, len
+	return buf, length
 }
 
 //go:linkname sliceGrow runtime.sliceGrow
