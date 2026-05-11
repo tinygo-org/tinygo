@@ -371,7 +371,7 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 		return 0, errFlashCannotReadPastEOF
 	}
 
-	data := unsafe.Slice((*byte)(unsafe.Pointer(FlashDataStart()+uintptr(off))), len(p))
+	data := unsafe.Slice((*byte)(unsafe.Add(FlashDataStart(), off)), len(p))
 	copy(p, data)
 
 	return len(p), nil

@@ -106,7 +106,7 @@ func handlePadCalibration() {
 	// #define USB_FUSES_TRIM_Msk          (0x7u << USB_FUSES_TRIM_Pos)
 	// #define USB_FUSES_TRIM(value)       ((USB_FUSES_TRIM_Msk & ((value) << USB_FUSES_TRIM_Pos)))
 	//
-	fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
+	fuse := *(*uint32)(unsafe.Add(0x00806020, 4))
 	calibTransN := uint16(fuse>>13) & uint16(0x1f)
 	calibTransP := uint16(fuse>>18) & uint16(0x1f)
 	calibTrim := uint16(fuse>>23) & uint16(0x7)

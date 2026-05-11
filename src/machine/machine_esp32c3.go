@@ -142,7 +142,7 @@ func (p Pin) outFunc() *volatile.Register32 {
 }
 
 func (p Pin) pinReg() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.PIN0)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.PIN0), uintptr(p)*4))
 }
 
 // inFunc returns the FUNCy_IN_SEL_CFG register used for configuring the input

@@ -299,7 +299,7 @@ func InitADC() {
 	// #define ADC_FUSES_LINEARITY_1_Msk   (0x7u << ADC_FUSES_LINEARITY_1_Pos)
 	// #define ADC_FUSES_LINEARITY_1(value) ((ADC_FUSES_LINEARITY_1_Msk & ((value) << ADC_FUSES_LINEARITY_1_Pos)))
 
-	biasFuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
+	biasFuse := *(*uint32)(unsafe.Add(0x00806020, 4))
 	bias := uint16(biasFuse>>3) & uint16(0x7)
 
 	// ADC Linearity bits 4:0
@@ -307,7 +307,7 @@ func InitADC() {
 	linearity := uint16(linearity0Fuse>>27) & uint16(0x1f)
 
 	// ADC Linearity bits 7:5
-	linearity1Fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
+	linearity1Fuse := *(*uint32)(unsafe.Add(0x00806020, 4))
 	linearity |= uint16(linearity1Fuse) & uint16(0x7) << 5
 
 	// set calibration
@@ -1923,7 +1923,7 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
 		// page buffer is 64 bytes long, but only 4 bytes can be written at once
 		for k := 0; k < int(f.WriteBlockSize()); k += 4 {
-			*(*uint32)(unsafe.Pointer(address + uintptr(k))) = binary.LittleEndian.Uint32(padded[j+k : j+k+4])
+			*(*uint32)(unsafe.Add(address, k)) = binary.LittleEndian.Uint32(padded[j+k : j+k+4])
 		}
 
 		sam.NVMCTRL.SetADDR(uint32(address >> 1))

@@ -389,7 +389,7 @@ func (i2c *I2C) SetBaudRate(br uint32) error {
 }
 
 func (p Pin) pinReg() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.PIN0)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.PIN0), uintptr(p)*4))
 }
 
 func nextAddress(reg *volatile.Register32) *volatile.Register32 {
