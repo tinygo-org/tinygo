@@ -178,7 +178,7 @@ func scheduler(returnAtDeadlock bool) {
 					// JavaScript is treated specially, see below.
 					return
 				}
-				schedulerIdleWait(0)
+				waitForEvents()
 				continue
 			}
 
@@ -203,7 +203,7 @@ func scheduler(returnAtDeadlock bool) {
 				}
 			}
 			if timeLeft > 0 {
-				schedulerIdleWait(timeLeft)
+				sleepTicks(timeLeft)
 				if asyncScheduler {
 					// The sleepTicks function above only sets a timeout at
 					// which point the scheduler will be called again. It does

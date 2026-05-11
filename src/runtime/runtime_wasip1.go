@@ -78,11 +78,6 @@ var (
 	sleepTicksNEvents uint32
 )
 
-func sleepTicks(d timeUnit) {
-	sleepTicksSubscription.u.u.timeout = uint64(d)
-	poll_oneoff(&sleepTicksSubscription, &sleepTicksResult, 1, &sleepTicksNEvents)
-}
-
 func ticks() timeUnit {
 	var nano uint64
 	clock_time_get(0, timePrecisionNanoseconds, &nano)
