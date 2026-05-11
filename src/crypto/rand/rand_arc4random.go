@@ -20,7 +20,7 @@ type reader struct {
 
 func (r *reader) Read(b []byte) (n int, err error) {
 	if len(b) != 0 {
-		libc_arc4random_buf(unsafe.Pointer(&b[0]), uint(len(b)))
+		libc_arc4random_buf(unsafe.Pointer(unsafe.SliceData(b)), uint(len(b)))
 	}
 	return len(b), nil
 }

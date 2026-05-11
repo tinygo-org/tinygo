@@ -35,7 +35,7 @@ func os_runtime_args() []string {
 		// Obtain the command line arguments
 		argsSlice := make([]unsafe.Pointer, argc)
 		buf := make([]byte, argv_buf_size)
-		args_get(&argsSlice[0], unsafe.Pointer(&buf[0]))
+		args_get(&argsSlice[0], unsafe.Pointer(unsafe.SliceData(buf)))
 
 		// Convert the array of C strings to an array of Go strings.
 		args = make([]string, argc)
