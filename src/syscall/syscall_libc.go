@@ -260,7 +260,7 @@ func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, e
 }
 
 func Munmap(b []byte) (err error) {
-	errCode := libc_munmap(unsafe.Pointer(&b[0]), uintptr(len(b)))
+	errCode := libc_munmap(unsafe.Pointer(unsafe.SliceData(b)), uintptr(len(b)))
 	if errCode != 0 {
 		err = getErrno()
 	}
@@ -268,7 +268,7 @@ func Munmap(b []byte) (err error) {
 }
 
 func Mprotect(b []byte, prot int) (err error) {
-	errCode := libc_mprotect(unsafe.Pointer(&b[0]), uintptr(len(b)), int32(prot))
+	errCode := libc_mprotect(unsafe.Pointer(unsafe.SliceData(b)), uintptr(len(b)), int32(prot))
 	if errCode != 0 {
 		err = getErrno()
 	}

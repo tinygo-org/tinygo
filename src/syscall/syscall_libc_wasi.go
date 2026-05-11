@@ -443,7 +443,7 @@ type RawSockaddrInet6 struct {
 
 func RandomGet(b []byte) error {
 	if len(b) > 0 {
-		libc_arc4random_buf(unsafe.Pointer(&b[0]), uint(len(b)))
+		libc_arc4random_buf(unsafe.Pointer(unsafe.SliceData(b)), uint(len(b)))
 	}
 	return nil
 }
