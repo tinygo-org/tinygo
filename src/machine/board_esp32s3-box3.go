@@ -53,20 +53,27 @@ const (
 	IO48 = GPIO48 // LCD Reset
 )
 
-// SPI pins for LCD (SPI2)
+// SPI pins
 const (
-	SPI2_SCK_PIN = IO7   // LCD_PCLK
-	SPI2_SDO_PIN = IO6   // LCD_DATA0
-	SPI2_SDI_PIN = NoPin // Not used for LCD
-	SPI2_CS_PIN  = IO5   // LCD_CS
+	// SPI1 - used for LCD
+	SPI1_SCK_PIN  = IO7   // LCD_PCLK
+	SPI1_MOSI_PIN = IO6   // LCD_DATA0 (MOSI)
+	SPI1_MISO_PIN = NoPin // Not used for LCD
+	SPI1_CS_PIN   = IO5   // LCD_CS
+
+	// SPI2 (not used on this board)
+	SPI2_SCK_PIN  = NoPin
+	SPI2_MOSI_PIN = NoPin
+	SPI2_MISO_PIN = NoPin
+	SPI2_CS_PIN   = NoPin
 )
 
 // LCD pins (ST7789/ILI9341)
 const (
-	LCD_SCK_PIN = SPI2_SCK_PIN
-	LCD_SDO_PIN = SPI2_SDO_PIN
+	LCD_SCK_PIN = SPI1_SCK_PIN
+	LCD_SDO_PIN = SPI1_MOSI_PIN
 	LCD_SDI_PIN = NoPin
-	LCD_SS_PIN  = SPI2_CS_PIN
+	LCD_SS_PIN  = SPI1_CS_PIN
 	LCD_DC_PIN  = IO4
 	LCD_RST_PIN = IO48
 	LCD_BL_PIN  = IO47
