@@ -42,11 +42,6 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns)
 }
 
-func sleepTicks(d timeUnit) {
-	p := monotonicclock.SubscribeDuration(monotonicclock.Duration(d))
-	p.Block()
-}
-
 func ticks() timeUnit {
 	return timeUnit(monotonicclock.Now())
 }
