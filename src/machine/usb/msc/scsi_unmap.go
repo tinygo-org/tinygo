@@ -9,13 +9,16 @@ import (
 type Error int
 
 const (
-	errorLBAOutOfRange Error = iota
+	errorLBAOutOfRange        Error = iota
+	errorEraseBlockMisaligned Error
 )
 
 func (e Error) Error() string {
 	switch e {
 	case errorLBAOutOfRange:
 		return "LBA out of range"
+	case errorEraseBlockMisaligned:
+		return "Erase attempted on partial erase block"
 	default:
 		return "unknown error"
 	}
@@ -49,7 +52,7 @@ func (m *msc) scsiUnmap(b []byte) {
 
 	// Unmap the blocks we can from this packet
 	for i := 8; i < descEnd; i += 16 {
-		err := m.unmapBlocksFromDescriptor(b[i:], uint64(m.blockCount))
+		err := m.unmapBlocksFromDescriptor(b[i:])
 		if err != nil {
 			// TODO: Might need a better error code here for device errors?
 			m.sendScsiError(csw.StatusFailed, scsi.SenseVolumeOverflow, scsi.SenseCodeLBAOutOfRange)
@@ -67,7 +70,7 @@ func (m *msc) scsiUnmap(b []byte) {
 	}
 }
 
-func (m *msc) unmapBlocksFromDescriptor(b []byte, numBlocks uint64) error {
+func (m *msc) unmapBlocksFromDescriptor(b []byte) error {
 	blockCount := binary.BigEndian.Uint32(b[8:12])
 	if blockCount == 0 {
 		// No blocks to unmap. Explicitly not an error per the spec
@@ -82,9 +85,18 @@ func (m *msc) unmapBlocksFromDescriptor(b []byte, numBlocks uint64) error {
 		return errorLBAOutOfRange
 	}
 
+	return m.unmapUSBBlocks(lba, blockCount)
+}
+
+func (m *msc) unmapUSBBlocks(firstBlock, numBlocks uint32) error {
+	if firstBlock%m.blockSizeUSB != m.eraseBlockOffset {
+		// The starting block is not aligned to the underlying hardware erase block
+		return errorEraseBlockMisaligned
+	}
+
 	// Convert the emulated block size to the underlying hardware erase block size
-	blockStart := int64(lba*m.blockSizeUSB) / m.dev.EraseBlockSize()
-	rawBlockCount := int64(blockCount*m.blockSizeUSB) / m.dev.EraseBlockSize()
+	blockStart := int64(firstBlock*m.blockSizeUSB) / m.dev.EraseBlockSize()
+	rawBlockCount := int64(numBlocks*m.blockSizeUSB) / m.dev.EraseBlockSize()
 
 	// Unmap the blocks
 	return m.dev.EraseBlocks(blockStart, rawBlockCount)
