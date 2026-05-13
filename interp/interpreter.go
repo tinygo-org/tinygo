@@ -12,13 +12,11 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// maxInterpBlockEntries is the maximum number of times a single basic block may
-// be entered during interpretation of one function call. This limits how far
-// the interpreter will unroll or evaluate loops before deferring the init
-// function to runtime. A value of 1000 allows reasonable init-time loops (e.g.
-// filling 256-element lookup tables) while preventing pathological cases like
-// inserting tens of thousands of map entries at compile time.
-const maxInterpBlockEntries = 1000
+// DefaultMaxInterpBlockEntries is the default maximum number of times a single
+// basic block may be entered during interpretation of one function call. This
+// limits how far the interpreter will unroll or evaluate loops before deferring
+// the init function to runtime.
+const DefaultMaxInterpBlockEntries = 1000
 
 func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent string) (value, memoryView, *Error) {
 	mem := memoryView{r: r, parent: parentMem}
@@ -56,7 +54,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				blockCounts = make(map[int]int)
 			}
 			blockCounts[currentBB]++
-			if blockCounts[currentBB] > maxInterpBlockEntries {
+			if r.maxLoopIterations > 0 && blockCounts[currentBB] > r.maxLoopIterations {
 				return nil, mem, r.errorAt(bb.instructions[0], errLoopTooLong)
 			}
 
