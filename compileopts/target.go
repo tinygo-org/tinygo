@@ -67,6 +67,7 @@ type TargetSpec struct {
 	ADBPreCommands   []string `json:"adb-pre-commands,omitempty"`
 	ADBPushRemote    string   `json:"adb-push-remote,omitempty"`
 	ADBPostCommands  []string `json:"adb-post-commands,omitempty"`
+	ProbeRSChip      string   `json:"probe-rs-chip,omitempty"`
 	CodeModel        string   `json:"code-model,omitempty"`
 	RelocationModel  string   `json:"relocation-model,omitempty"`
 	WITPackage       string   `json:"wit-package,omitempty"`

@@ -394,7 +394,7 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		fileExt = filepath.Ext(config.Target.FlashFilename)
 	case "openocd":
 		fileExt = ".hex"
-	case "bmp":
+	case "bmp", "probe-rs":
 		fileExt = ".elf"
 	case "adb":
 		fileExt = ".hex"
@@ -528,6 +528,16 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		}
 		args := []string{"-ex", "target extended-remote " + bmpGDBPort, "-ex", "monitor swdp_scan", "-ex", "attach 1", "-ex", "load", filepath.ToSlash(result.Binary)}
 		cmd := executeCommand(config.Options, gdb, args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			return &commandError{"failed to flash", result.Binary, err}
+		}
+	case "probe-rs":
+		// TODO: this halts the target after flashing.
+		// See: https://github.com/probe-rs/probe-rs/discussions/4005
+		cmd := executeCommand(config.Options, "probe-rs", "download", "--chip="+config.Target.ProbeRSChip, "--verify", result.Binary)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
@@ -691,6 +701,21 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 			w := &ColorWriter{
 				Out:    colorable.NewColorableStderr(),
 				Prefix: "openocd: ",
+				Color:  TermColorYellow,
+			}
+			daemon.Stdout = w
+			daemon.Stderr = w
+		}
+	case "probe-rs":
+		port = ":1337"
+		gdbCommands = append(gdbCommands, "monitor halt", "load", "monitor reset halt")
+
+		daemon = executeCommand(config.Options, "probe-rs", "gdb", "--chip="+config.Target.ProbeRSChip)
+		if ocdOutput {
+			// Make it clear which output is from the daemon.
+			w := &ColorWriter{
+				Out:    colorable.NewColorableStderr(),
+				Prefix: "probe-rs: ",
 				Color:  TermColorYellow,
 			}
 			daemon.Stdout = w
