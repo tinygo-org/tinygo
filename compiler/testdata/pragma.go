@@ -120,3 +120,31 @@ func stillEscapes(a *int, b []int, c chan int, d *[0]byte) {
 func doesHeapAlloc() *int {
 	return new(int)
 }
+
+// Define a function in a different package using a file-level go:linkname.
+// (Same as withLinkageName1, but with the //go:linkname directive detached
+// from the function declaration — see https://github.com/tinygo-org/tinygo/issues/4395)
+func withFileLevelLinkageName1() {
+}
+
+// Import a function from a different package using a file-level go:linkname.
+// (Same as withLinkageName2, but with the //go:linkname directive detached
+// from the function declaration.)
+func withFileLevelLinkageName2()
+
+//go:linkname withFileLevelLinkageName1 somepkg.someFileLevelFunction1
+//go:linkname withFileLevelLinkageName2 somepkg.someFileLevelFunction2
+
+// File-level linkname directives can also appear between two function
+// declarations, in which case Go's AST attaches them as the doc comment
+// of the following function — even when the directive's localname refers
+// to a different function. Exercise that case: the directive below names
+// withAdjacentLinkageName, but Go will attach it to
+// sentinelAfterAdjacentLinkname's Doc. The file-level scan must find it
+// by walking comment groups regardless of which decl they're attached to.
+func withAdjacentLinkageName() {
+}
+
+//go:linkname withAdjacentLinkageName somepkg.someAdjacentFunction
+func sentinelAfterAdjacentLinkname() {
+}
