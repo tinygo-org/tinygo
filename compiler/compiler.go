@@ -90,7 +90,8 @@ type compilerContext struct {
 	astComments      map[string]*ast.CommentGroup
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
-	packageDir       string // directory for this package
+	loaderPkg        *loader.Package // current package being compiled (for AST access)
+	packageDir       string          // directory for this package
 	runtimePkg       *types.Package
 	localTypeNames   typeutil.Map // *types.Named (synthetic local from generic instantiation) -> string
 }
@@ -308,6 +309,7 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	c.packageDir = pkg.OriginalDir()
 	c.embedGlobals = pkg.EmbedGlobals
 	c.pkg = pkg.Pkg
+	c.loaderPkg = pkg
 	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
 	c.program = ssaPkg.Prog
 
