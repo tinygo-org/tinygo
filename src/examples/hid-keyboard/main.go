@@ -22,6 +22,7 @@ func main() {
 	button.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
 	kb := keyboard.Port()
+	machine.USBDev.Configure(machine.UARTConfig{}) // no-op if already init'd by serial.usb
 
 	for {
 		if !button.Get() {

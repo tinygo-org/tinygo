@@ -1,4 +1,4 @@
-//go:build sam || nrf52840 || rp2040 || rp2350
+//go:build sam || nrf52840 || rp2040 || rp2350 || stm32f4 || stm32f7
 
 package machine
 
@@ -184,7 +184,9 @@ func sendDescriptor(setup usb.Setup) {
 			return
 		}
 	case descriptor.TypeDeviceQualifier:
-		// skip
+		// Full-speed-only device: STALL to signal no high-speed capability (USB 2.0 §9.6.2).
+		USBDev.SetStallEPIn(0)
+		return
 	default:
 	}
 
@@ -368,6 +370,10 @@ func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.S
 			},
 		})
 }
+
+// PhysicalEndpoint maps a virtual endpoint index to the physical endpoint number
+// used by the hardware. This is an identity mapping on all currently supported platforms.
+func PhysicalEndpoint(ep uint32) uint32 { return ep }
 
 func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointConfig, setup []usb.SetupConfig) {
 	usbDescriptor = desc
