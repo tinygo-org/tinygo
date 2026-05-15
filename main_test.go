@@ -348,6 +348,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
 		})
 	}
+	if options.GOOS == "darwin" {
+		t.Run("syscall_darwin.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("syscall_darwin.go", options, t, nil, nil)
+		})
+	}
 	if isWebAssembly {
 		t.Run("alias.go-scheduler-none", func(t *testing.T) {
 			t.Parallel()

@@ -1,0 +1,3 @@
+getpid ok
+close ebadf ok
+mmap6 ok

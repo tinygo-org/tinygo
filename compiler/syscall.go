@@ -269,6 +269,24 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		retval = b.CreateInsertValue(retval, zero, 1, "")
 		retval = b.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil
+	case "darwin":
+		r1, r2, errFlag, err := b.createDarwinRawSyscall(call)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		// Darwin returns (r1, r2, err) where err is the raw errno on
+		// failure (carry flag set) and r1=-1 in that case. On success,
+		// err=0 and r1/r2 carry the syscall return values.
+		zero := llvm.ConstInt(b.uintptrType, 0, false)
+		minusOne := llvm.ConstInt(b.uintptrType, ^uint64(0), false) // -1 as uintptr
+		finalR1 := b.CreateSelect(errFlag, minusOne, r1, "")
+		finalR2 := b.CreateSelect(errFlag, zero, r2, "")
+		finalErr := b.CreateSelect(errFlag, r1, zero, "syscallError")
+		retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
+		retval = b.CreateInsertValue(retval, finalR1, 0, "")
+		retval = b.CreateInsertValue(retval, finalR2, 1, "")
+		retval = b.CreateInsertValue(retval, finalErr, 2, "")
+		return retval, nil
 	case "windows":
 		// On Windows, syscall.Syscall* is basically just a function pointer
 		// call. This is complicated in gc because of stack switching and the
@@ -545,4 +563,105 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 	// Cast the function pointer to a uintptr (because that's what
 	// abi.FuncPCABI0 returns).
 	return b.CreatePtrToInt(llvmFn, b.uintptrType, "")
+}
+
+// createDarwinRawSyscall emits a raw kernel syscall for darwin and returns
+// (r1, r2, errFlag). errFlag is an i1 derived from the carry flag. It is
+// called only from createSyscall's darwin branch.
+//
+// References (upstream Go):
+//
+//	src/syscall/asm_darwin_amd64.s
+//	src/syscall/asm_darwin_arm64.s
+func (b *builder) createDarwinRawSyscall(call *ssa.CallCommon) (r1, r2, errFlag llvm.Value, err error) {
+	num := b.getValue(call.Args[0], getPos(call))
+	switch b.GOARCH {
+	case "amd64":
+		// AMD64 darwin syscall ABI:
+		//   - syscall number in RAX, ORed with 0x2000000 (BSD class)
+		//   - args in RDI, RSI, RDX, R10, R8, R9
+		//   - SYSCALL instruction
+		//   - primary return in RAX, secondary in RDX
+		//   - carry flag set on error
+		args := []llvm.Value{
+			b.CreateAdd(num, llvm.ConstInt(b.uintptrType, 0x2000000, false), ""),
+		}
+		argTypes := []llvm.Type{b.uintptrType}
+		constraints := "={rax},={rdx},={@ccc},0"
+		for i, arg := range call.Args[1:] {
+			constraints += "," + [...]string{
+				"{rdi}",
+				"{rsi}",
+				"{rdx}",
+				"{r10}",
+				"{r8}",
+				"{r9}",
+			}[i]
+			llvmValue := b.getValue(arg, getPos(call))
+			args = append(args, llvmValue)
+			argTypes = append(argTypes, llvmValue.Type())
+		}
+		constraints += ",~{rcx},~{r11}"
+		// LLVM's x86 backend requires the flag-output (={@ccc}) to be at least
+		// i32; passing i1 directly triggers "Glue output operand is of invalid
+		// type" during instruction selection. Receive i32 and truncate.
+		retType := b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.ctx.Int32Type()}, false)
+		fnType := llvm.FunctionType(retType, argTypes, false)
+		target := llvm.InlineAsm(fnType, "syscall", constraints, true, false, llvm.InlineAsmDialectIntel, false)
+		result := b.CreateCall(fnType, target, args, "")
+		r1 = b.CreateExtractValue(result, 0, "syscall.r1")
+		r2 = b.CreateExtractValue(result, 1, "syscall.r2")
+		errFlagWide := b.CreateExtractValue(result, 2, "syscall.errFlagWide")
+		errFlag = b.CreateTrunc(errFlagWide, b.ctx.Int1Type(), "syscall.errFlag")
+		return r1, r2, errFlag, nil
+
+	case "arm64":
+		// ARM64 darwin syscall ABI:
+		//   - syscall number in X16
+		//   - args in X0..X5
+		//   - SVC #0x80
+		//   - primary return in X0, secondary in X1
+		//   - carry flag set on error (BCS)
+		var args []llvm.Value
+		var argTypes []llvm.Type
+		constraints := "={x0},={x1},={@cccs}"
+		for i, arg := range call.Args[1:] {
+			constraints += "," + [...]string{
+				"0", // tie to first output (X0)
+				"{x1}",
+				"{x2}",
+				"{x3}",
+				"{x4}",
+				"{x5}",
+			}[i]
+			llvmValue := b.getValue(arg, getPos(call))
+			args = append(args, llvmValue)
+			argTypes = append(argTypes, llvmValue.Type())
+		}
+		args = append(args, num)
+		argTypes = append(argTypes, b.uintptrType)
+		constraints += ",{x16}" // syscall number (also implicitly clobbered)
+		// Mark X0-X7 clobbered if not used as inputs. The kernel may
+		// clobber any of these per the AArch64 caller-saved convention.
+		// Unlike linux/arm64 (which uses x8 for the syscall number and
+		// has x16/x17 as scratch), darwin's ABI uses x16 directly, so
+		// no extra scratch-register clobbers are needed.
+		for i := len(call.Args) - 1; i < 8; i++ {
+			constraints += ",~{x" + strconv.Itoa(i) + "}"
+		}
+		// AArch64's flag-output constraint requires an i32 result, not i1.
+		// Truncate to i1 after extraction.
+		retType := b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.ctx.Int32Type()}, false)
+		fnType := llvm.FunctionType(retType, argTypes, false)
+		target := llvm.InlineAsm(fnType, "svc #0x80", constraints, true, false, 0, false)
+		result := b.CreateCall(fnType, target, args, "")
+		r1 = b.CreateExtractValue(result, 0, "syscall.r1")
+		r2 = b.CreateExtractValue(result, 1, "syscall.r2")
+		errFlagWide := b.CreateExtractValue(result, 2, "syscall.errFlagWide")
+		errFlag = b.CreateTrunc(errFlagWide, b.ctx.Int1Type(), "syscall.errFlag")
+		return r1, r2, errFlag, nil
+
+	default:
+		return llvm.Value{}, llvm.Value{}, llvm.Value{}, b.makeError(call.Pos(), "system calls are not supported on darwin/"+b.GOARCH)
+	}
 }

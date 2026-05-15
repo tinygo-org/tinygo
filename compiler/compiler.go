@@ -1981,9 +1981,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		case strings.HasPrefix(name, "(device/riscv.CSR)."):
 			return b.emitCSROperation(instr)
 		case (strings.HasPrefix(name, "syscall.Syscall") || strings.HasPrefix(name, "syscall.RawSyscall") || strings.HasPrefix(name, "golang.org/x/sys/unix.Syscall") || strings.HasPrefix(name, "golang.org/x/sys/unix.RawSyscall")) && name != "syscall.SyscallN":
-			if b.GOOS != "darwin" {
-				return b.createSyscall(instr)
-			}
+			return b.createSyscall(instr)
 		case name == "syscall.syscalln":
 			if b.GOOS == "windows" {
 				return b.createSyscalln(instr)
