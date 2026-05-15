@@ -588,7 +588,7 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		return fmt.Errorf("unknown flash method: %s", flashMethod)
 	}
 	if options.Monitor {
-		return Monitor(result.Executable, "", config)
+		return Monitor(result.Executable, port, config)
 	}
 	return nil
 }
