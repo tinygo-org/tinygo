@@ -30,6 +30,7 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/buildutil"
 	"tinygo.org/x/espflasher/pkg/espflasher"
@@ -1738,6 +1739,7 @@ func main() {
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb, rtt)")
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
 	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
+	interpLoopLimit := flag.Int("interp-loop-limit", interp.DefaultMaxInterpBlockEntries, "maximum loop iterations during interp (0 to disable)")
 	var tags buildutil.TagsFlag
 	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
@@ -1855,42 +1857,43 @@ func main() {
 	}
 
 	options := &compileopts.Options{
-		GOOS:            goenv.Get("GOOS"),
-		GOARCH:          goenv.Get("GOARCH"),
-		GOARM:           goenv.Get("GOARM"),
-		GOMIPS:          goenv.Get("GOMIPS"),
-		Target:          *target,
-		BuildMode:       *buildMode,
-		StackSize:       stackSize,
-		Opt:             *opt,
-		GC:              *gc,
-		PanicStrategy:   *panicStrategy,
-		Scheduler:       *scheduler,
-		Serial:          *serial,
-		Work:            *work,
-		InterpTimeout:   *interpTimeout,
-		PrintIR:         *printIR,
-		DumpSSA:         *dumpSSA,
-		VerifyIR:        *verifyIR,
-		SkipDWARF:       *skipDwarf,
-		Semaphore:       make(chan struct{}, *parallelism),
-		Debug:           !*nodebug,
-		Nobounds:        *nobounds,
-		PrintSizes:      *printSize,
-		PrintStacks:     *printStacks,
-		PrintAllocs:     printAllocs,
-		Tags:            []string(tags),
-		TestConfig:      testConfig,
-		GlobalValues:    globalVarValues,
-		Programmer:      *programmer,
-		OpenOCDCommands: ocdCommands,
-		LLVMFeatures:    *llvmFeatures,
-		Monitor:         *monitor,
-		BaudRate:        *baudrate,
-		Timeout:         *timeout,
-		WITPackage:      witPackage,
-		WITWorld:        witWorld,
-		GoCompatibility: *gocompatibility,
+		GOOS:                    goenv.Get("GOOS"),
+		GOARCH:                  goenv.Get("GOARCH"),
+		GOARM:                   goenv.Get("GOARM"),
+		GOMIPS:                  goenv.Get("GOMIPS"),
+		Target:                  *target,
+		BuildMode:               *buildMode,
+		StackSize:               stackSize,
+		Opt:                     *opt,
+		GC:                      *gc,
+		PanicStrategy:           *panicStrategy,
+		Scheduler:               *scheduler,
+		Serial:                  *serial,
+		Work:                    *work,
+		InterpTimeout:           *interpTimeout,
+		InterpMaxLoopIterations: *interpLoopLimit,
+		PrintIR:                 *printIR,
+		DumpSSA:                 *dumpSSA,
+		VerifyIR:                *verifyIR,
+		SkipDWARF:               *skipDwarf,
+		Semaphore:               make(chan struct{}, *parallelism),
+		Debug:                   !*nodebug,
+		Nobounds:                *nobounds,
+		PrintSizes:              *printSize,
+		PrintStacks:             *printStacks,
+		PrintAllocs:             printAllocs,
+		Tags:                    []string(tags),
+		TestConfig:              testConfig,
+		GlobalValues:            globalVarValues,
+		Programmer:              *programmer,
+		OpenOCDCommands:         ocdCommands,
+		LLVMFeatures:            *llvmFeatures,
+		Monitor:                 *monitor,
+		BaudRate:                *baudrate,
+		Timeout:                 *timeout,
+		WITPackage:              witPackage,
+		WITWorld:                witWorld,
+		GoCompatibility:         *gocompatibility,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
