@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
-
-	"github.com/tinygo-org/tinygo/src/tinygo"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -36,26 +34,39 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 		}
 	}
 
-	var alg uint64
+	// Resolve hash and equal functions for this key type. For string and
+	// binary key types, reference the corresponding runtime functions
+	// directly. For composite types, generate type-specific functions.
+	var hashFn, equalFn llvm.Value
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
-		alg = uint64(tinygo.HashmapAlgorithmString)
+		hashFn = b.getRuntimeFunctionValue("hashmapStringPtrHash", hashmapKeyHashSignature())
+		equalFn = b.getRuntimeFunctionValue("hashmapStringEqual", hashmapKeyEqualSignature())
 	} else if hashmapIsBinaryKey(keyType) {
-		alg = uint64(tinygo.HashmapAlgorithmBinary)
+		hashFn = b.getRuntimeFunctionValue("hash32", hashmapKeyHashSignature())
+		equalFn = b.getRuntimeFunctionValue("memequal", hashmapKeyEqualSignature())
 	} else {
-		// Composite keys: use compiler-generated hash/equal functions.
-		hashFn := b.getOrGenerateKeyHashFunc(keyType)
-		equalFn := b.getOrGenerateKeyEqualFunc(keyType)
-		hashFuncValue := b.createFuncValue(hashFn, llvm.ConstNull(b.dataPtrType), hashmapKeyHashSignature())
-		equalFuncValue := b.createFuncValue(equalFn, llvm.ConstNull(b.dataPtrType), hashmapKeyEqualSignature())
-		hashmap := b.createRuntimeCall("hashmapMakeGeneric", []llvm.Value{
-			llvmKeySize, llvmValueSize, sizeHint,
-			hashFuncValue, equalFuncValue,
-		}, "")
-		return hashmap, nil
+		fn := b.getOrGenerateKeyHashFunc(keyType)
+		hashFn = b.createFuncValue(fn, llvm.ConstNull(b.dataPtrType), hashmapKeyHashSignature())
+		fn = b.getOrGenerateKeyEqualFunc(keyType)
+		equalFn = b.createFuncValue(fn, llvm.ConstNull(b.dataPtrType), hashmapKeyEqualSignature())
 	}
-	algEnum := llvm.ConstInt(b.ctx.Int8Type(), alg, false)
-	hashmap := b.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint, algEnum}, "")
+
+	hashmap := b.createRuntimeCall("hashmapMakeGeneric", []llvm.Value{
+		llvmKeySize, llvmValueSize, sizeHint,
+		hashFn, equalFn,
+	}, "")
 	return hashmap, nil
+}
+
+// getRuntimeFunctionValue returns a TinyGo function value (with nil context)
+// for the named runtime function.
+func (b *builder) getRuntimeFunctionValue(name string, sig *types.Signature) llvm.Value {
+	member := b.program.ImportedPackage("runtime").Members[name]
+	if member == nil {
+		panic("unknown runtime function: " + name)
+	}
+	_, llvmFn := b.getFunction(member.(*ssa.Function))
+	return b.createFuncValue(llvmFn, llvm.ConstNull(b.dataPtrType), sig)
 }
 
 // createMapLookup returns the value in a map. It calls a runtime function
@@ -211,35 +222,6 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 		return true
 	case *types.Array:
 		return hashmapIsBinaryKey(keyType.Elem())
-	default:
-		return false
-	}
-}
-
-// hashmapCanGenerateHashEqual returns true if the compiler can generate
-// type-specific hash and equal functions for this key type. This covers all
-// comparable types: integers, booleans, strings, floats, complex numbers,
-// pointers, channels, interfaces, and composites (structs/arrays) of these.
-func hashmapCanGenerateHashEqual(keyType types.Type) bool {
-	switch keyType := keyType.Underlying().(type) {
-	case *types.Basic:
-		return keyType.Info()&(types.IsBoolean|types.IsInteger|types.IsString|types.IsFloat|types.IsComplex) != 0 || keyType.Kind() == types.UnsafePointer
-	case *types.Pointer:
-		return true
-	case *types.Chan:
-		return true
-	case *types.Interface:
-		return true
-	case *types.Struct:
-		for i := 0; i < keyType.NumFields(); i++ {
-			fieldType := keyType.Field(i).Type().Underlying()
-			if !hashmapCanGenerateHashEqual(fieldType) {
-				return false
-			}
-		}
-		return true
-	case *types.Array:
-		return hashmapCanGenerateHashEqual(keyType.Elem())
 	default:
 		return false
 	}
