@@ -150,6 +150,9 @@ var InterfaceCDCData = InterfaceType{
 	data: interfaceCDCData[:],
 }
 
+// EP1 IN : CDC Call Management
+// EP2 OUT: CDC OUT
+// EP2 IN : CDC IN
 var CDC = Descriptor{
 	Device: DeviceCDC.Bytes(),
 	Configuration: Append([][]byte{
@@ -160,9 +163,9 @@ var CDC = Descriptor{
 		ClassSpecificCDCCallManagement.Bytes(),
 		ClassSpecificCDCACM.Bytes(),
 		ClassSpecificCDCUnion.Bytes(),
-		EndpointEP1IN.Bytes(),
+		EndpointIN(EndpointEP1, TransferTypeInterrupt, 0x10, 0x10).Bytes(),
 		InterfaceCDCData.Bytes(),
-		EndpointEP2OUT.Bytes(),
-		EndpointEP3IN.Bytes(),
+		EndpointOUT(EndpointEP2, TransferTypeBulk, 0x40, 0x00).Bytes(),
+		EndpointIN(EndpointEP2, TransferTypeBulk, 0x40, 0x00).Bytes(),
 	}),
 }
