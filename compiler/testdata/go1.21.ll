@@ -169,13 +169,13 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.clearMap(ptr dereferenceable_or_null(40) %m, ptr %context) unnamed_addr #2 {
+define hidden void @main.clearMap(ptr dereferenceable_or_null(48) %m, ptr %context) unnamed_addr #2 {
 entry:
   call void @runtime.hashmapClear(ptr %m, ptr undef) #5
   ret void
 }
 
-declare void @runtime.hashmapClear(ptr dereferenceable_or_null(40), ptr) #1
+declare void @runtime.hashmapClear(ptr dereferenceable_or_null(48), ptr) #1
 
 attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }

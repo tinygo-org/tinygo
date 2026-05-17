@@ -149,6 +149,9 @@ func TypeAssert[T any](v Value) (T, bool) {
 // loadSmallValue loads a value of size <= sizeof(uintptr) from ptr into
 // a pointer-sized value suitable for storing in an interface's data field.
 func loadSmallValue(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	if size == unsafe.Sizeof(uintptr(0)) {
+		return *(*unsafe.Pointer)(ptr)
+	}
 	var value uintptr
 	for j := size; j != 0; j-- {
 		value = (value << 8) | uintptr(*(*uint8)(unsafe.Add(ptr, j-1)))

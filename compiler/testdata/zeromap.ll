@@ -17,7 +17,7 @@ entry:
 }
 
 ; Function Attrs: noinline nounwind
-define hidden i32 @main.testZeroGet(ptr dereferenceable_or_null(40) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #3 {
+define hidden i32 @main.testZeroGet(ptr dereferenceable_or_null(48) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #3 {
 entry:
   %hashmap.key = alloca %main.hasPadding, align 8
   %hashmap.value = alloca i32, align 4
@@ -37,13 +37,13 @@ entry:
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture) #4
 
-declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(40), ptr nocapture, ptr nocapture, i32, ptr) #1
+declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(48), ptr nocapture, ptr nocapture, i32, ptr) #1
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture) #4
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.testZeroSet(ptr dereferenceable_or_null(40) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #3 {
+define hidden void @main.testZeroSet(ptr dereferenceable_or_null(48) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #3 {
 entry:
   %hashmap.key = alloca %main.hasPadding, align 8
   %hashmap.value = alloca i32, align 4
@@ -60,10 +60,10 @@ entry:
   ret void
 }
 
-declare void @runtime.hashmapGenericSet(ptr dereferenceable_or_null(40), ptr nocapture, ptr nocapture, ptr) #1
+declare void @runtime.hashmapGenericSet(ptr dereferenceable_or_null(48), ptr nocapture, ptr nocapture, ptr) #1
 
 ; Function Attrs: noinline nounwind
-define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(40) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #3 {
+define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(48) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #3 {
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
@@ -82,7 +82,7 @@ entry:
 }
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.testZeroArraySet(ptr dereferenceable_or_null(40) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #3 {
+define hidden void @main.testZeroArraySet(ptr dereferenceable_or_null(48) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #3 {
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4

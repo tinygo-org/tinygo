@@ -66,3 +66,33 @@ func BenchmarkMapCompositeSet(b *testing.B) {
 		m[compositeKey{S: "key", N: int32(i)}] = i
 	}
 }
+
+type bigKey [256]byte
+
+func BenchmarkMapBigKeyGet(b *testing.B) {
+	m := make(map[bigKey]int, 100)
+	for i := 0; i < 100; i++ {
+		var k bigKey
+		k[0] = byte(i)
+		m[k] = i
+	}
+	var k bigKey
+	k[0] = 42
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		intSink += m[k]
+	}
+}
+
+func BenchmarkMapBigKeySet(b *testing.B) {
+	m := make(map[bigKey]int, b.N)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var k bigKey
+		k[0] = byte(i)
+		k[1] = byte(i >> 8)
+		k[2] = byte(i >> 16)
+		k[3] = byte(i >> 24)
+		m[k] = i
+	}
+}
