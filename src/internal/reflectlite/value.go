@@ -146,6 +146,16 @@ func TypeAssert[T any](v Value) (T, bool) {
 
 // valueInterfaceUnsafe is used by the runtime to hash map keys. It should not
 // be subject to the isExported check.
+// loadSmallValue loads a value of size <= sizeof(uintptr) from ptr into
+// a pointer-sized value suitable for storing in an interface's data field.
+func loadSmallValue(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	var value uintptr
+	for j := size; j != 0; j-- {
+		value = (value << 8) | uintptr(*(*uint8)(unsafe.Add(ptr, j-1)))
+	}
+	return unsafe.Pointer(value)
+}
+
 func valueInterfaceUnsafe(v Value) interface{} {
 	if v.typecode.Kind() == Interface {
 		// The value itself is an interface. This can happen when getting the
@@ -158,11 +168,7 @@ func valueInterfaceUnsafe(v Value) interface{} {
 	if v.isIndirect() && v.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
-		var value uintptr
-		for j := v.typecode.Size(); j != 0; j-- {
-			value = (value << 8) | uintptr(*(*uint8)(unsafe.Add(v.value, j-1)))
-		}
-		v.value = unsafe.Pointer(value)
+		v.value = loadSmallValue(v.value, v.typecode.Size())
 	}
 	return composeInterface(unsafe.Pointer(v.typecode), v.value)
 }
@@ -1174,7 +1180,15 @@ func genericKeyPtr(vkey *RawType, key Value) unsafe.Pointer {
 			return key.value
 		}
 		// Concrete value being used as an interface key.
-		intf := composeInterface(unsafe.Pointer(key.typecode), key.value)
+		// For small addressable values, key.value is a pointer to
+		// the data, but the interface value field stores the data
+		// directly; load it using the same endian-safe approach as
+		// valueInterfaceUnsafe.
+		val := key.value
+		if key.isIndirect() && key.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
+			val = loadSmallValue(key.value, key.typecode.Size())
+		}
+		intf := composeInterface(unsafe.Pointer(key.typecode), val)
 		return unsafe.Pointer(&intf)
 	}
 	if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
@@ -2089,15 +2103,19 @@ func (v Value) SetMapIndex(key, elem Value) {
 	}
 
 	// make elem an interface if it needs to be converted
-	if v.typecode.elem().Kind() == Interface && elem.typecode.Kind() != Interface {
-		intf := composeInterface(unsafe.Pointer(elem.typecode), elem.value)
+	if !del && v.typecode.elem().Kind() == Interface && elem.typecode.Kind() != Interface {
+		val := elem.value
+		if elem.isIndirect() && elem.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
+			val = loadSmallValue(elem.value, elem.typecode.Size())
+		}
+		intf := composeInterface(unsafe.Pointer(elem.typecode), val)
 		elem = Value{
 			typecode: v.typecode.elem(),
 			value:    unsafe.Pointer(&intf),
 		}
 	}
 
-	if key.Kind() == String {
+	if vkey.Kind() == String {
 		if del {
 			hashmapStringDelete(v.pointer(), *(*string)(key.value))
 		} else {
@@ -2110,7 +2128,7 @@ func (v Value) SetMapIndex(key, elem Value) {
 			hashmapStringSet(v.pointer(), *(*string)(key.value), elemptr)
 		}
 
-	} else if key.typecode.isBinary() {
+	} else if vkey.isBinary() {
 		var keyptr unsafe.Pointer
 		if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
 			keyptr = key.value
@@ -2214,6 +2232,9 @@ func (v Value) FieldByNameFunc(match func(string) bool) Value {
 //go:linkname hashmapMake runtime.hashmapMake
 func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
 
+//go:linkname hashmapMakeReflect runtime.hashmapMakeReflect
+func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, keyType unsafe.Pointer) unsafe.Pointer
+
 // MakeMapWithSize creates a new map with the specified type and initial space
 // for approximately n elements.
 func MakeMapWithSize(typ Type, n int) Value {
@@ -2222,7 +2243,6 @@ func MakeMapWithSize(typ Type, n int) Value {
 	const (
 		hashmapAlgorithmBinary uint8 = iota
 		hashmapAlgorithmString
-		hashmapAlgorithmInterface
 	)
 
 	if typ.Kind() != Map {
@@ -2236,17 +2256,18 @@ func MakeMapWithSize(typ Type, n int) Value {
 	key := typ.Key().(*RawType)
 	val := typ.Elem().(*RawType)
 
-	var alg uint8
+	var m unsafe.Pointer
 
 	if key.Kind() == String {
-		alg = hashmapAlgorithmString
+		m = hashmapMake(key.Size(), val.Size(), uintptr(n), hashmapAlgorithmString)
 	} else if key.isBinary() {
-		alg = hashmapAlgorithmBinary
+		m = hashmapMake(key.Size(), val.Size(), uintptr(n), hashmapAlgorithmBinary)
 	} else {
-		alg = hashmapAlgorithmInterface
+		// Composite key type (struct with strings, floats, etc.).
+		// Use runtime-generated hash/equal closures that walk the
+		// type structure, matching the compiler-generated functions.
+		m = hashmapMakeReflect(key.Size(), val.Size(), uintptr(n), unsafe.Pointer(key))
 	}
-
-	m := hashmapMake(key.Size(), val.Size(), uintptr(n), alg)
 
 	return Value{
 		typecode: typ.(*RawType),

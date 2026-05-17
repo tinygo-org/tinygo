@@ -503,6 +503,24 @@ value set interface:
 Set[0] to BarNode: 10
 Set[1] still FooNode: 2
 
+reflect.MakeMap composite key:
+len: 2
+key1: 100
+key2: 200
+after delete, len: 1
+key2 after delete: 200
+
+reflect.MakeMap interface key:
+len: 2
+42: 100
+hello: 200
+compiled 42: 100
+compiled hello: 200
+addressable 99: 300
+
+reflect.MakeMap padded key:
+padded lookup: 100
+
 alignment / offset:
 struct{[0]func(); byte}: true
 

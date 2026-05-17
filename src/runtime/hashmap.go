@@ -553,6 +553,41 @@ func hashmapMakeGeneric(keySize, valueSize uintptr, sizeHint uintptr,
 	}
 }
 
+// hashmapMakeReflect creates a hashmap for reflect.MakeMapWithSize using
+// closures that reconstruct interface{} values from raw key bytes,
+// delegating to hashmapInterfaceHash for hashing and == for equality.
+func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, keyType unsafe.Pointer) *hashmap {
+	t := (*reflectlite.RawType)(keyType)
+	if t.Kind() == reflectlite.Interface {
+		// Interface keys are already stored as interface values in the
+		// bucket; use the existing interface hash/equal directly.
+		return hashmapMakeGeneric(keySize, valueSize, sizeHint,
+			hashmapInterfacePtrHash, hashmapInterfaceEqual)
+	}
+	keyHash := func(key unsafe.Pointer, size, seed uintptr) uint32 {
+		return hashmapInterfaceHash(rawToInterface(t, key), seed)
+	}
+	keyEqual := func(x, y unsafe.Pointer, n uintptr) bool {
+		return rawToInterface(t, x) == rawToInterface(t, y)
+	}
+	return hashmapMakeGeneric(keySize, valueSize, sizeHint, keyHash, keyEqual)
+}
+
+// rawToInterface reconstructs an interface{} from raw bytes at ptr.
+func rawToInterface(t *reflectlite.RawType, ptr unsafe.Pointer) interface{} {
+	var val unsafe.Pointer
+	if t.Size() <= unsafe.Sizeof(uintptr(0)) {
+		val = reflectliteLoadSmallValue(ptr, t.Size())
+	} else {
+		val = ptr
+	}
+	i := composeInterface(unsafe.Pointer(t), val)
+	return *(*interface{})(unsafe.Pointer(&i))
+}
+
+//go:linkname reflectliteLoadSmallValue internal/reflectlite.loadSmallValue
+func reflectliteLoadSmallValue(ptr unsafe.Pointer, size uintptr) unsafe.Pointer
+
 // Hashmap with string keys (a common case).
 
 func hashmapStringEqual(x, y unsafe.Pointer, n uintptr) bool {
