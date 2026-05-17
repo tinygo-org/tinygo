@@ -143,10 +143,10 @@ func (usbcdc *USBCDC) sendFromRing() {
 
 			// Avoid a missed wakeup: Write may append data while txActive is
 			// still set, causing kickTx to return without starting a transfer.
-			if usbcdc.tx.Used() == 0 {
+			switch {
+			case usbcdc.tx.Used() == 0:
 				return
-			}
-			if !usbcdc.txActive.CompareAndSwap(0, 1) {
+			case !usbcdc.txActive.CompareAndSwap(0, 1):
 				return
 			}
 			continue
