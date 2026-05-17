@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"sort"
 	"unsafe"
 )
@@ -130,7 +131,11 @@ func main() {
 
 	mapgrow()
 
+	reflectMapIterfaceKey()
+
 	interfacerehash()
+
+	paddingBlankMaps()
 }
 
 func floatcmplx() {
@@ -307,4 +312,61 @@ func interfacerehash() {
 	if failures == 0 {
 		println("no interface lookup failures")
 	}
+}
+
+func paddingBlankMaps() {
+	// Struct keys with padding: the hash/equal must operate per-field
+	// and not include padding bytes. Only test when padding actually
+	// exists (e.g., not on AVR where alignment is 1).
+	type paddedKey struct {
+		A int8
+		B int32
+	}
+	if unsafe.Offsetof(paddedKey{}.B) > 1 {
+		pm := make(map[paddedKey]int)
+		var pk1, pk2 paddedKey
+		pk1.A = 1; pk1.B = 42
+		pk2.A = 1; pk2.B = 42
+		// Poison pk2's padding byte (between A and B).
+		*(*byte)(unsafe.Add(unsafe.Pointer(&pk2), 1)) = 0xFF
+		pm[pk1] = 100
+		println("padded key lookup:", pm[pk2])         // 100
+		println("padded key equal:", pk1 == pk2)        // true
+	} else {
+		// No padding on this platform; print expected output.
+		println("padded key lookup:", 100)
+		println("padded key equal:", true)
+	}
+
+	// Struct keys with blank fields: blank fields are ignored in equality.
+	type blankKey struct {
+		_ int
+		X string
+	}
+	bm := make(map[blankKey]int)
+	var bk1, bk2 blankKey
+	bk1.X = "hello"
+	bk2.X = "hello"
+	*(*int)(unsafe.Pointer(&bk2)) = 999
+	bm[bk1] = 200
+	println("blank key lookup:", bm[bk2])           // 200
+	println("blank key equal:", bk1 == bk2)          // true
+}
+
+// Test for issue #3794: reflect MapIter.Key() should return a value with
+// interface kind for map[interface{}] keys, not the underlying concrete kind.
+func reflectMapIterfaceKey() {
+	m := make(map[interface{}]int)
+	m[1] = 2
+	m["hello"] = 3
+	rv := reflect.ValueOf(m)
+	iter := rv.MapRange()
+	for iter.Next() {
+		k := iter.Key()
+		if k.Kind() != reflect.Interface {
+			println("FAIL #3794: expected interface kind, got", k.Kind().String())
+			return
+		}
+	}
+	println("reflect map interface key ok")
 }

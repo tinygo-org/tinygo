@@ -34,6 +34,12 @@ type hashmapBucket struct {
 	// allocated but as they're of variable size they can't be shown here.
 }
 
+// hashmapBucketHeaderSize is the offset in bytes from the start of a bucket to
+// the first key, aligned to 8 bytes. This ensures that keys requiring 8-byte
+// alignment (float64, complex128, uint64 on strict-alignment architectures
+// like MIPS) are properly aligned in the bucket.
+const hashmapBucketHeaderSize = (unsafe.Sizeof(hashmapBucket{}) + 7) &^ 7
+
 type hashmapIterator struct {
 	buckets      unsafe.Pointer // pointer to array of hashapBuckets
 	numBuckets   uintptr        // length of buckets array
@@ -66,7 +72,7 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashm
 		bucketBits++
 	}
 
-	bucketBufSize := unsafe.Sizeof(hashmapBucket{}) + keySize*8 + valueSize*8
+	bucketBufSize := hashmapBucketHeaderSize + keySize*8 + valueSize*8
 	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
 
 	keyHash := hashmapKeyHashAlg(tinygo.HashmapAlgorithm(alg))
@@ -172,7 +178,7 @@ func hashmapLen(m *hashmap) int {
 
 //go:inline
 func hashmapBucketSize(m *hashmap) uintptr {
-	return unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
+	return hashmapBucketHeaderSize + uintptr(m.keySize)*8 + uintptr(m.valueSize)*8
 }
 
 //go:inline
@@ -191,14 +197,14 @@ func hashmapBucketAddrForHash(m *hashmap, hash uint32) *hashmapBucket {
 
 //go:inline
 func hashmapSlotKey(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Pointer {
-	slotKeyOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*uintptr(slot)
+	slotKeyOffset := hashmapBucketHeaderSize + uintptr(m.keySize)*uintptr(slot)
 	slotKey := unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
 	return slotKey
 }
 
 //go:inline
 func hashmapSlotValue(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Pointer {
-	slotValueOffset := unsafe.Sizeof(hashmapBucket{}) + uintptr(m.keySize)*8 + uintptr(m.valueSize)*uintptr(slot)
+	slotValueOffset := hashmapBucketHeaderSize + uintptr(m.keySize)*8 + uintptr(m.valueSize)*uintptr(slot)
 	slotValue := unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
 	return slotValue
 }
@@ -489,6 +495,62 @@ func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
 	}
 	hash := hash32(key, m.keySize, m.seed)
 	hashmapDelete(m, key, hash)
+}
+
+// Hashmap with compiler-generated key hash/equal functions.
+// Unlike the binary path (which uses hash32/memequal), these use the
+// type-specific keyHash and keyEqual function pointers stored in the hashmap
+// struct. This is used for composite key types (e.g. structs containing
+// strings) where the compiler generates specialized hash/equal functions.
+
+func hashmapGenericSet(m *hashmap, key, value unsafe.Pointer) {
+	if m == nil {
+		nilMapPanic()
+	}
+	hash := m.keyHash(key, m.keySize, m.seed)
+	hashmapSet(m, key, value, hash)
+}
+
+func hashmapGenericGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr) bool {
+	if m == nil {
+		memzero(value, uintptr(valueSize))
+		return false
+	}
+	hash := m.keyHash(key, m.keySize, m.seed)
+	return hashmapGet(m, key, value, valueSize, hash)
+}
+
+func hashmapGenericDelete(m *hashmap, key unsafe.Pointer) {
+	if m == nil {
+		return
+	}
+	hash := m.keyHash(key, m.keySize, m.seed)
+	hashmapDelete(m, key, hash)
+}
+
+// hashmapMakeGeneric creates a new hashmap with compiler-provided hash and
+// equal functions. This avoids the interface/reflection path for composite
+// key types like structs containing strings.
+func hashmapMakeGeneric(keySize, valueSize uintptr, sizeHint uintptr,
+	keyHash func(key unsafe.Pointer, size, seed uintptr) uint32,
+	keyEqual func(x, y unsafe.Pointer, n uintptr) bool) *hashmap {
+	bucketBits := uint8(0)
+	for hashmapHasSpaceToGrow(bucketBits) && hashmapOverLoadFactor(sizeHint, bucketBits) {
+		bucketBits++
+	}
+
+	bucketBufSize := hashmapBucketHeaderSize + keySize*8 + valueSize*8
+	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
+
+	return &hashmap{
+		buckets:    buckets,
+		seed:       uintptr(fastrand()),
+		keySize:    keySize,
+		valueSize:  valueSize,
+		bucketBits: bucketBits,
+		keyEqual:   keyEqual,
+		keyHash:    keyHash,
+	}
 }
 
 // Hashmap with string keys (a common case).

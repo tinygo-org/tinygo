@@ -80,4 +80,9 @@ tested growing of a map
 2
 2
 done
+reflect map interface key ok
 no interface lookup failures
+padded key lookup: 100
+padded key equal: true
+blank key lookup: 200
+blank key equal: true

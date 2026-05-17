@@ -190,6 +190,31 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	case "runtime.stringFromRunes":
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
+	case "runtime.hashmapSet":
+		// The key (param 2) and value (param 3) pointers are only read via
+		// memcpy/hash/equal and are never captured. The indirect calls
+		// through m.keyHash and m.keyEqual function pointers prevent LLVM's
+		// functionattrs pass from inferring this automatically.
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapGet":
+		// The key (param 2) is read-only and never captured.
+		// The value (param 3) is written to (receives the result) but never captured.
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapDelete":
+		// The key (param 2) is read-only and never captured.
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapGenericSet":
+		// Same as hashmapBinarySet: key (param 2) and value (param 3) are
+		// not captured.
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapGenericGet":
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapGenericDelete":
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 	case "runtime.trackPointer":
 		// This function is necessary for tracking pointers on the stack in a
 		// portable way (see gc_stack_portable.go). Indicate to the optimizer

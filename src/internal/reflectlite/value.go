@@ -1082,25 +1082,44 @@ func (v Value) MapKeys() []Value {
 	keys := make([]Value, 0, v.Len())
 
 	it := hashmapNewIterator()
-	k := New(v.typecode.Key())
 	e := New(v.typecode.Elem())
 
+	// Keys are stored as interface{} only for types that still use the
+	// legacy interface path (e.g., unsafe.Pointer). For those, we need
+	// to allocate an interface-sized buffer for hashmapNext (which writes
+	// m.keySize bytes), then unpack the interface to get the actual value.
 	keyType := v.typecode.key()
-	keyTypeIsEmptyInterface := keyType.Kind() == Interface && keyType.NumMethod() == 0
-	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !keyType.isBinary()
+	shouldUnpackInterface := keyType.Kind() != String && !keyType.isBinary() && !hashmapKeyUsesGenericPath(keyType)
 
+	k := newMapKeyAlloc(keyType, shouldUnpackInterface)
 	for hashmapNext(v.pointer(), it, k.value, e.value) {
 		if shouldUnpackInterface {
 			intf := *(*interface{})(k.value)
-			v := ValueOf(intf)
-			keys = append(keys, v)
+			keys = append(keys, ValueOf(intf))
 		} else {
 			keys = append(keys, k.Elem())
 		}
-		k = New(v.typecode.Key())
+		k = newMapKeyAlloc(keyType, shouldUnpackInterface)
 	}
 
 	return keys
+}
+
+// newMapKeyAlloc allocates a Value suitable for receiving a key from
+// hashmapNext. When interfaceStored is true, the map stores keys as
+// interface{} (which may be larger than the declared key type), so an
+// interface-sized buffer is allocated to avoid overflow.
+func newMapKeyAlloc(keyType *RawType, interfaceStored bool) Value {
+	size := keyType.Size()
+	if interfaceStored {
+		var itf interface{}
+		size = unsafe.Sizeof(itf)
+	}
+	return Value{
+		typecode: pointerTo(keyType),
+		value:    alloc(size, nil),
+		flags:    valueFlagExported,
+	}
 }
 
 //go:linkname hashmapStringGet runtime.hashmapStringGet
@@ -1109,8 +1128,60 @@ func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueS
 //go:linkname hashmapBinaryGet runtime.hashmapBinaryGet
 func hashmapBinaryGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
 
+//go:linkname hashmapGenericGet runtime.hashmapGenericGet
+func hashmapGenericGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
+
 //go:linkname hashmapInterfaceGet runtime.hashmapInterfaceGet
 func hashmapInterfaceGet(m unsafe.Pointer, key interface{}, value unsafe.Pointer, valueSize uintptr) bool
+
+// hashmapKeyUsesGenericPath reports whether the given map key type uses the
+// compiler-generated hash/equal path (storing keys at their actual type) as
+// opposed to the legacy interface path (storing keys as interface{}).
+// This must match the compiler's hashmapCanGenerateHashEqual predicate.
+func hashmapKeyUsesGenericPath(t *RawType) bool {
+	switch t.Kind() {
+	case Bool, Int, Int8, Int16, Int32, Int64,
+		Uint, Uint8, Uint16, Uint32, Uint64, Uintptr,
+		Float32, Float64, Complex64, Complex128,
+		String, Chan, Ptr, Interface:
+		return true
+	case Array:
+		return hashmapKeyUsesGenericPath(t.Elem().(*RawType))
+	case Struct:
+		for i := 0; i < t.NumField(); i++ {
+			if !hashmapKeyUsesGenericPath(t.Field(i).Type.(*RawType)) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+// genericKeyPtr returns a pointer to key data suitable for passing to the
+// hashmapGeneric* functions. When the map's key type is an interface,
+// special handling is needed: if the key Value already holds an interface
+// (e.g. from MapKeys iteration), its memory already contains the
+// {typecode, data} pair the hashmap expects, so we use it directly.
+// If the key is a concrete type being assigned to an interface-keyed map,
+// we compose the interface first.
+func genericKeyPtr(vkey *RawType, key Value) unsafe.Pointer {
+	if vkey.Kind() == Interface {
+		if key.Kind() == Interface {
+			// Key is already an interface value stored indirectly;
+			// key.value points to {typecode, data}.
+			return key.value
+		}
+		// Concrete value being used as an interface key.
+		intf := composeInterface(unsafe.Pointer(key.typecode), key.value)
+		return unsafe.Pointer(&intf)
+	}
+	if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+		return key.value
+	}
+	return unsafe.Pointer(&key.value)
+}
 
 func (v Value) MapIndex(key Value) Value {
 	if v.Kind() != Map {
@@ -1145,7 +1216,17 @@ func (v Value) MapIndex(key Value) Value {
 			return Value{}
 		}
 		return elem.Elem()
+	} else if hashmapKeyUsesGenericPath(vkey) {
+		// Compiler-generated hash/equal path: keys are stored at their
+		// actual type. Use hashmapGenericGet which dispatches through the
+		// map's own keyHash/keyEqual function pointers.
+		keyptr := genericKeyPtr(vkey, key)
+		if ok := hashmapGenericGet(v.pointer(), keyptr, elem.value, elemType.Size()); !ok {
+			return Value{}
+		}
+		return elem.Elem()
 	} else {
+		// Legacy interface path: keys are stored as interface{}.
 		if ok := hashmapInterfaceGet(v.pointer(), key.Interface(), elem.value, elemType.Size()); !ok {
 			return Value{}
 		}
@@ -1206,7 +1287,7 @@ func (v Value) SetIterValue(iter *MapIter) {
 }
 
 func (it *MapIter) Next() bool {
-	it.key = New(it.m.typecode.Key())
+	it.key = newMapKeyAlloc(it.m.typecode.key(), it.unpackKeyInterface)
 	it.val = New(it.m.typecode.Elem())
 
 	it.valid = hashmapNext(it.m.pointer(), it.it, it.key.value, it.val.value)
@@ -1218,10 +1299,10 @@ func (iter *MapIter) Reset(v Value) {
 		panic(&ValueError{Method: "MapRange", Kind: v.Kind()})
 	}
 
+	// Keys are stored as interface{} only for types that still use the
+	// legacy interface path.
 	keyType := v.typecode.key()
-
-	keyTypeIsEmptyInterface := keyType.Kind() == Interface && keyType.NumMethod() == 0
-	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !keyType.isBinary()
+	shouldUnpackInterface := keyType.Kind() != String && !keyType.isBinary() && !hashmapKeyUsesGenericPath(keyType)
 
 	*iter = MapIter{
 		m:                  v,
@@ -1969,6 +2050,9 @@ func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
 //go:linkname hashmapBinarySet runtime.hashmapBinarySet
 func hashmapBinarySet(m unsafe.Pointer, key, value unsafe.Pointer)
 
+//go:linkname hashmapGenericSet runtime.hashmapGenericSet
+func hashmapGenericSet(m unsafe.Pointer, key, value unsafe.Pointer)
+
 //go:linkname hashmapInterfaceSet runtime.hashmapInterfaceSet
 func hashmapInterfaceSet(m unsafe.Pointer, key interface{}, value unsafe.Pointer)
 
@@ -1977,6 +2061,9 @@ func hashmapStringDelete(m unsafe.Pointer, key string)
 
 //go:linkname hashmapBinaryDelete runtime.hashmapBinaryDelete
 func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
+
+//go:linkname hashmapGenericDelete runtime.hashmapGenericDelete
+func hashmapGenericDelete(m unsafe.Pointer, key unsafe.Pointer)
 
 //go:linkname hashmapInterfaceDelete runtime.hashmapInterfaceDelete
 func hashmapInterfaceDelete(m unsafe.Pointer, key interface{})
@@ -2042,7 +2129,24 @@ func (v Value) SetMapIndex(key, elem Value) {
 			}
 			hashmapBinarySet(v.pointer(), keyptr, elemptr)
 		}
+	} else if hashmapKeyUsesGenericPath(vkey) {
+		// Compiler-generated hash/equal path.
+		keyptr := genericKeyPtr(vkey, key)
+
+		if del {
+			hashmapGenericDelete(v.pointer(), keyptr)
+		} else {
+			var elemptr unsafe.Pointer
+			if elem.isIndirect() || elem.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+				elemptr = elem.value
+			} else {
+				elemptr = unsafe.Pointer(&elem.value)
+			}
+
+			hashmapGenericSet(v.pointer(), keyptr, elemptr)
+		}
 	} else {
+		// Legacy interface path.
 		if del {
 			hashmapInterfaceDelete(v.pointer(), key.Interface())
 		} else {
