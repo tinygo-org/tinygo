@@ -396,6 +396,24 @@ func main() {
 			}
 		}
 	}
+
+	// Test for issue #3794: reflect MapIter.Key() should return a value with
+	// interface kind for map[interface{}] keys, not the underlying concrete kind.
+	{
+		m := make(map[interface{}]int)
+		m[1] = 2
+		m["hello"] = 3
+		rv := reflect.ValueOf(m)
+		iter := rv.MapRange()
+		for iter.Next() {
+			k := iter.Key()
+			if k.Kind() != reflect.Interface {
+				println("FAIL #3794: expected interface kind, got", k.Kind().String())
+				break
+			}
+		}
+		println("reflect map interface key ok")
+	}
 }
 
 func emptyFunc() {

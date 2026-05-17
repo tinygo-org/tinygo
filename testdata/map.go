@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"sort"
 	"unsafe"
 )
@@ -29,6 +28,14 @@ var testMapArrayKey = map[ArrayKey]int{
 	ArrayKey([4]byte{4, 3, 2, 1}): 4321,
 }
 var testmapIntInt = map[int]int{1: 1, 2: 4, 3: 9}
+
+// Package-level pointer map literals: these exercise the interp pass's
+// ability to defer pointer-keyed map inserts to runtime (since pointer
+// hashes can't be computed at compile time).
+var testPtrMapVar1 = 42
+var testPtrMapVar2 = 99
+var testPtrMap = map[*int]int{&testPtrMapVar1: 1, &testPtrMapVar2: 2}
+var testUnsafePtrMap = map[unsafe.Pointer]int{unsafe.Pointer(&testPtrMapVar1): 10}
 
 type namedFloat struct {
 	s string
@@ -133,11 +140,9 @@ func main() {
 
 	nestedarraymaps()
 
-	reflectMapIterfaceKey()
+	ptrmaps()
 
 	interfacerehash()
-
-	paddingBlankMaps()
 }
 
 func floatcmplx() {
@@ -329,7 +334,28 @@ func nestedarraymaps() {
 	println("nested array key:", m[k])
 }
 
-func paddingBlankMaps() {
+func ptrmaps() {
+	// Package-level pointer map literals (interp defers inserts to runtime).
+	println("ptr map literal:", testPtrMap[&testPtrMapVar1], testPtrMap[&testPtrMapVar2])
+	println("unsafe ptr literal:", testUnsafePtrMap[unsafe.Pointer(&testPtrMapVar1)])
+
+	// Runtime pointer maps.
+	a, b, c := 1, 2, 3
+	m := make(map[*int]int)
+	m[&a] = 10
+	m[&b] = 20
+	m[&c] = 30
+	println("ptr map len:", len(m))
+	println("ptr map a:", m[&a])
+	delete(m, &b)
+	_, ok := m[&b]
+	println("ptr map deleted:", ok)
+
+	// Runtime unsafe.Pointer maps.
+	m2 := make(map[unsafe.Pointer]int)
+	m2[unsafe.Pointer(&a)] = 100
+	println("unsafe ptr map:", m2[unsafe.Pointer(&a)])
+
 	// Struct keys with padding: the hash/equal must operate per-field
 	// and not include padding bytes. Only test when padding actually
 	// exists (e.g., not on AVR where alignment is 1).
@@ -366,22 +392,4 @@ func paddingBlankMaps() {
 	bm[bk1] = 200
 	println("blank key lookup:", bm[bk2])           // 200
 	println("blank key equal:", bk1 == bk2)          // true
-}
-
-// Test for issue #3794: reflect MapIter.Key() should return a value with
-// interface kind for map[interface{}] keys, not the underlying concrete kind.
-func reflectMapIterfaceKey() {
-	m := make(map[interface{}]int)
-	m[1] = 2
-	m["hello"] = 3
-	rv := reflect.ValueOf(m)
-	iter := rv.MapRange()
-	for iter.Next() {
-		k := iter.Key()
-		if k.Kind() != reflect.Interface {
-			println("FAIL #3794: expected interface kind, got", k.Kind().String())
-			return
-		}
-	}
-	println("reflect map interface key ok")
 }

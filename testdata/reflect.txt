@@ -530,3 +530,4 @@ blue gopher
 v.Interface() method
 kind: interface
 int 5
+reflect map interface key ok

@@ -36,11 +36,13 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 		}
 	}
 
-	if hashmapCanGenerateHashEqual(keyType) && !hashmapIsBinaryKey(keyType) {
+	var alg uint64
+	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
+		alg = uint64(tinygo.HashmapAlgorithmString)
+	} else if hashmapIsBinaryKey(keyType) {
+		alg = uint64(tinygo.HashmapAlgorithmBinary)
+	} else {
 		// Composite keys: use compiler-generated hash/equal functions.
-		// Binary and string keys use the more efficient dedicated paths
-		// (hashmapMake with algorithm enum) which avoid function pointer
-		// indirection.
 		hashFn := b.getOrGenerateKeyHashFunc(keyType)
 		equalFn := b.getOrGenerateKeyEqualFunc(keyType)
 		hashFuncValue := b.createFuncValue(hashFn, llvm.ConstNull(b.dataPtrType), hashmapKeyHashSignature())
@@ -50,18 +52,6 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 			hashFuncValue, equalFuncValue,
 		}, "")
 		return hashmap, nil
-	}
-
-	var alg uint64
-	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
-		alg = uint64(tinygo.HashmapAlgorithmString)
-	} else if hashmapIsBinaryKey(keyType) {
-		alg = uint64(tinygo.HashmapAlgorithmBinary)
-	} else {
-		// Fallback for types not handled by hashmapCanGenerateHashEqual
-		// (currently only unsafe.Pointer due to an interp issue).
-		llvmKeyType = b.getLLVMRuntimeType("_interface")
-		alg = uint64(tinygo.HashmapAlgorithmInterface)
 	}
 	algEnum := llvm.ConstInt(b.ctx.Int8Type(), alg, false)
 	hashmap := b.createRuntimeCall("hashmapMake", []llvm.Value{llvmKeySize, llvmValueSize, sizeHint, algEnum}, "")
@@ -89,13 +79,12 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 
 	// Do the lookup. How it is done depends on the key type.
 	var commaOkValue llvm.Value
-	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
 		params := []llvm.Value{m, key, mapValueAlloca, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapStringGet", params, "")
-	} else if hashmapIsBinaryKey(keyType) || hashmapCanGenerateHashEqual(keyType) {
+	} else {
 		// Key stored at actual type: either binary-comparable or with
 		// compiler-generated hash/equal.
 		mapKeyAlloca, mapKeySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
@@ -107,15 +96,6 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 		}
 		commaOkValue = b.createRuntimeCall(fnName, params, "")
 		b.emitLifetimeEnd(mapKeyAlloca, mapKeySize)
-	} else {
-		// Not trivially comparable using memcmp. Make it an interface instead.
-		itfKey := key
-		if _, ok := keyType.(*types.Interface); !ok {
-			// Not already an interface, so convert it to an interface now.
-			itfKey = b.createMakeInterface(key, origKeyType, pos)
-		}
-		params := []llvm.Value{m, itfKey, mapValueAlloca, mapValueSize}
-		commaOkValue = b.createRuntimeCall("hashmapInterfaceGet", params, "")
 	}
 
 	// Load the resulting value from the hashmap. The value is set to the zero
@@ -138,13 +118,12 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) {
 	valueAlloca, valueSize := b.createTemporaryAlloca(value.Type(), "hashmap.value")
 	b.CreateStore(value, valueAlloca)
-	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
 		params := []llvm.Value{m, key, valueAlloca}
 		b.createRuntimeCall("hashmapStringSet", params, "")
-	} else if hashmapIsBinaryKey(keyType) || hashmapCanGenerateHashEqual(keyType) {
+	} else {
 		// Key stored at actual type.
 		keyAlloca, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
@@ -155,15 +134,6 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 		params := []llvm.Value{m, keyAlloca, valueAlloca}
 		b.createRuntimeCall(fnName, params, "")
 		b.emitLifetimeEnd(keyAlloca, keySize)
-	} else {
-		// Key is not trivially comparable, so compare it as an interface instead.
-		itfKey := key
-		if _, ok := keyType.(*types.Interface); !ok {
-			// Not already an interface, so convert it to an interface first.
-			itfKey = b.createMakeInterface(key, origKeyType, pos)
-		}
-		params := []llvm.Value{m, itfKey, valueAlloca}
-		b.createRuntimeCall("hashmapInterfaceSet", params, "")
 	}
 	b.emitLifetimeEnd(valueAlloca, valueSize)
 }
@@ -171,14 +141,13 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 // createMapDelete deletes a key from a map by calling the appropriate runtime
 // function. It is the implementation of the Go delete() builtin.
 func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos token.Pos) error {
-	origKeyType := keyType
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
 		params := []llvm.Value{m, key}
 		b.createRuntimeCall("hashmapStringDelete", params, "")
 		return nil
-	} else if hashmapIsBinaryKey(keyType) || hashmapCanGenerateHashEqual(keyType) {
+	} else {
 		// Key stored at actual type.
 		keyAlloca, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
@@ -189,17 +158,6 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 		params := []llvm.Value{m, keyAlloca}
 		b.createRuntimeCall(fnName, params, "")
 		b.emitLifetimeEnd(keyAlloca, keySize)
-		return nil
-	} else {
-		// Key is not trivially comparable, so compare it as an interface
-		// instead.
-		itfKey := key
-		if _, ok := keyType.(*types.Interface); !ok {
-			// Not already an interface, so convert it to an interface first.
-			itfKey = b.createMakeInterface(key, origKeyType, pos)
-		}
-		params := []llvm.Value{m, itfKey}
-		b.createRuntimeCall("hashmapInterfaceDelete", params, "")
 		return nil
 	}
 }
@@ -220,37 +178,14 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 	llvmKeyType := b.getLLVMType(keyType)
 	llvmValueType := b.getLLVMType(valueType)
 
-	// Keys are stored as an interface value only for types not handled by
-	// the binary or generic paths (currently only unsafe.Pointer).
-	isKeyStoredAsInterface := false
-	if t, ok := keyType.Underlying().(*types.Basic); ok && t.Info()&types.IsString != 0 {
-		// key is a string
-	} else if hashmapIsBinaryKey(keyType) || hashmapCanGenerateHashEqual(keyType) {
-		// key stored at actual type
-	} else {
-		if _, ok := keyType.Underlying().(*types.Interface); !ok {
-			isKeyStoredAsInterface = true
-		}
-	}
-
-	// Determine the type of the key as stored in the map.
-	llvmStoredKeyType := llvmKeyType
-	if isKeyStoredAsInterface {
-		llvmStoredKeyType = b.getLLVMRuntimeType("_interface")
-	}
+	// All key types are now stored at their declared type (no interface wrapping).
 
 	// Extract the key and value from the map.
-	mapKeyAlloca, mapKeySize := b.createTemporaryAlloca(llvmStoredKeyType, "range.key")
+	mapKeyAlloca, mapKeySize := b.createTemporaryAlloca(llvmKeyType, "range.key")
 	mapValueAlloca, mapValueSize := b.createTemporaryAlloca(llvmValueType, "range.value")
 	ok := b.createRuntimeCall("hashmapNext", []llvm.Value{llvmRangeVal, it, mapKeyAlloca, mapValueAlloca}, "range.next")
-	mapKey := b.CreateLoad(llvmStoredKeyType, mapKeyAlloca, "")
+	mapKey := b.CreateLoad(llvmKeyType, mapKeyAlloca, "")
 	mapValue := b.CreateLoad(llvmValueType, mapValueAlloca, "")
-
-	if isKeyStoredAsInterface {
-		// The key is stored as an interface but it isn't of interface type.
-		// Extract the underlying value.
-		mapKey = b.extractValueFromInterface(mapKey, llvmKeyType)
-	}
 
 	// End the lifetimes of the allocas, because we're done with them.
 	b.emitLifetimeEnd(mapKeyAlloca, mapKeySize)
@@ -271,10 +206,7 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 func hashmapIsBinaryKey(keyType types.Type) bool {
 	switch keyType := keyType.Underlying().(type) {
 	case *types.Basic:
-		// TODO: unsafe.Pointer is also a binary key, but to support that we
-		// need to fix an issue with interp first (see
-		// https://github.com/tinygo-org/tinygo/pull/4898).
-		return keyType.Info()&(types.IsBoolean|types.IsInteger) != 0
+		return keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 || keyType.Kind() == types.UnsafePointer
 	case *types.Pointer:
 		return true
 	case *types.Array:
@@ -291,9 +223,7 @@ func hashmapIsBinaryKey(keyType types.Type) bool {
 func hashmapCanGenerateHashEqual(keyType types.Type) bool {
 	switch keyType := keyType.Underlying().(type) {
 	case *types.Basic:
-		// Note: unsafe.Pointer is excluded (not IsBoolean/IsInteger/etc.)
-		// due to a known interp issue (see hashmapIsBinaryKey).
-		return keyType.Info()&(types.IsBoolean|types.IsInteger|types.IsString|types.IsFloat|types.IsComplex) != 0
+		return keyType.Info()&(types.IsBoolean|types.IsInteger|types.IsString|types.IsFloat|types.IsComplex) != 0 || keyType.Kind() == types.UnsafePointer
 	case *types.Pointer:
 		return true
 	case *types.Chan:

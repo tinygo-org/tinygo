@@ -81,9 +81,14 @@ tested growing of a map
 2
 done
 nested array key: 42
-reflect map interface key ok
-no interface lookup failures
+ptr map literal: 1 2
+unsafe ptr literal: 10
+ptr map len: 3
+ptr map a: 10
+ptr map deleted: false
+unsafe ptr map: 100
 padded key lookup: 100
 padded key equal: true
 blank key lookup: 200
 blank key equal: true
+no interface lookup failures

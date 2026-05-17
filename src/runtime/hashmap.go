@@ -124,8 +124,6 @@ func hashmapKeyEqualAlg(alg tinygo.HashmapAlgorithm) func(x, y unsafe.Pointer, n
 		return memequal
 	case tinygo.HashmapAlgorithmString:
 		return hashmapStringEqual
-	case tinygo.HashmapAlgorithmInterface:
-		return hashmapInterfaceEqual
 	default:
 		// compiler bug :(
 		return nil
@@ -138,8 +136,6 @@ func hashmapKeyHashAlg(alg tinygo.HashmapAlgorithm) func(key unsafe.Pointer, n, 
 		return hash32
 	case tinygo.HashmapAlgorithmString:
 		return hashmapStringPtrHash
-	case tinygo.HashmapAlgorithmInterface:
-		return hashmapInterfacePtrHash
 	default:
 		// compiler bug :(
 		return nil
@@ -722,29 +718,4 @@ func hashmapInterfacePtrHash(iptr unsafe.Pointer, size uintptr, seed uintptr) ui
 
 func hashmapInterfaceEqual(x, y unsafe.Pointer, n uintptr) bool {
 	return *(*interface{})(x) == *(*interface{})(y)
-}
-
-func hashmapInterfaceSet(m *hashmap, key interface{}, value unsafe.Pointer) {
-	if m == nil {
-		nilMapPanic()
-	}
-	hash := hashmapInterfaceHash(key, m.seed)
-	hashmapSet(m, unsafe.Pointer(&key), value, hash)
-}
-
-func hashmapInterfaceGet(m *hashmap, key interface{}, value unsafe.Pointer, valueSize uintptr) bool {
-	if m == nil {
-		memzero(value, uintptr(valueSize))
-		return false
-	}
-	hash := hashmapInterfaceHash(key, m.seed)
-	return hashmapGet(m, unsafe.Pointer(&key), value, valueSize, hash)
-}
-
-func hashmapInterfaceDelete(m *hashmap, key interface{}) {
-	if m == nil {
-		return
-	}
-	hash := hashmapInterfaceHash(key, m.seed)
-	hashmapDelete(m, unsafe.Pointer(&key), hash)
 }

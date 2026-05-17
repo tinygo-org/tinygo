@@ -36,6 +36,7 @@ type runner struct {
 	timeout           time.Duration
 	maxLoopIterations int
 	callsExecuted     uint64
+	interpErr         error // set by Uint/Int when they encounter pointer data
 }
 
 func newRunner(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bool) *runner {
