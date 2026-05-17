@@ -131,6 +131,8 @@ func main() {
 
 	mapgrow()
 
+	nestedarraymaps()
+
 	reflectMapIterfaceKey()
 
 	interfacerehash()
@@ -312,6 +314,19 @@ func interfacerehash() {
 	if failures == 0 {
 		println("no interface lookup failures")
 	}
+}
+
+func nestedarraymaps() {
+	type nestedArrayElem struct {
+		x uint8
+	}
+	type nestedArrayKey struct {
+		a [5][5]nestedArrayElem
+	}
+	var k nestedArrayKey
+	k.a[4][4].x = 7
+	m := map[nestedArrayKey]int{k: 42}
+	println("nested array key:", m[k])
 }
 
 func paddingBlankMaps() {

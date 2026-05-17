@@ -12,6 +12,8 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+const hashArrayUnrollLimit = 4
+
 // createMakeMap creates a new map object (runtime.hashmap) by allocating and
 // initializing an appropriately sized object.
 func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
@@ -533,15 +535,54 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 	case *types.Array:
 		elemType := keyType.Elem()
 		llvmElemType := b.getLLVMType(elemType)
-		hash := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-		for i := 0; i < int(keyType.Len()); i++ {
-			idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
-			elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, idx}, "")
-			elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
-			hash = b.CreateXor(hash, elemHash, "")
+		arrayLen := keyType.Len()
+		if hashmapIsBinaryKey(elemType) {
+			// All elements are binary-comparable; hash the entire array as raw bytes.
+			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
+			return b.createRuntimeCall("hash32", []llvm.Value{keyPtr, size, seed}, "hash")
 		}
-		return hash
+		if arrayLen == 0 {
+			return llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+		}
+		if arrayLen <= hashArrayUnrollLimit {
+			hash := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			for i := 0; i < int(arrayLen); i++ {
+				idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
+				elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, idx}, "")
+				elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
+				hash = b.CreateXor(hash, elemHash, "")
+			}
+			return hash
+		}
+		initHash := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+
+		loopEntry := b.GetInsertBlock()
+		loopBody := b.ctx.AddBasicBlock(loopEntry.Parent(), "hash.array.body")
+		loopDone := b.ctx.AddBasicBlock(loopEntry.Parent(), "hash.array.done")
+
+		b.CreateBr(loopBody)
+		b.SetInsertPointAtEnd(loopBody)
+
+		phiI := b.CreatePHI(b.uintptrType, "i")
+		phiHash := b.CreatePHI(b.ctx.Int32Type(), "hash.acc")
+
+		elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, phiI}, "")
+		elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
+		newHash := b.CreateXor(phiHash, elemHash, "")
+		nextI := b.CreateAdd(phiI, llvm.ConstInt(b.uintptrType, 1, false), "")
+		cond := b.CreateICmp(llvm.IntULT, nextI, llvm.ConstInt(b.uintptrType, uint64(arrayLen), false), "")
+		b.CreateCondBr(cond, loopBody, loopDone)
+
+		bodyEnd := b.GetInsertBlock()
+		phiI.AddIncoming([]llvm.Value{llvm.ConstInt(b.uintptrType, 0, false), nextI},
+			[]llvm.BasicBlock{loopEntry, bodyEnd})
+		phiHash.AddIncoming([]llvm.Value{initHash, newHash},
+			[]llvm.BasicBlock{loopEntry, bodyEnd})
+
+		b.SetInsertPointAtEnd(loopDone)
+		return newHash
 	default:
 		panic(fmt.Sprintf("unhandled key type for hash generation: %T", keyType))
 	}
@@ -619,16 +660,53 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 	case *types.Array:
 		elemType := keyType.Elem()
 		llvmElemType := b.getLLVMType(elemType)
-		result := llvm.ConstInt(b.ctx.Int1Type(), 1, false)
-		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-		for i := 0; i < int(keyType.Len()); i++ {
-			idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
-			xElemPtr := b.CreateInBoundsGEP(llvmKeyType, xPtr, []llvm.Value{zero, idx}, "")
-			yElemPtr := b.CreateInBoundsGEP(llvmKeyType, yPtr, []llvm.Value{zero, idx}, "")
-			elemEq := b.generateKeyEqual(elemType, llvmElemType, xElemPtr, yElemPtr, fn)
-			result = b.CreateAnd(result, elemEq, "")
+		arrayLen := keyType.Len()
+		if hashmapIsBinaryKey(elemType) {
+			// All elements are binary-comparable; compare the entire array.
+			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
+			return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")
 		}
-		return result
+		if arrayLen == 0 {
+			return llvm.ConstInt(b.ctx.Int1Type(), 1, false)
+		}
+		if arrayLen <= hashArrayUnrollLimit {
+			result := llvm.ConstInt(b.ctx.Int1Type(), 1, false)
+			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			for i := 0; i < int(arrayLen); i++ {
+				idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
+				xElemPtr := b.CreateInBoundsGEP(llvmKeyType, xPtr, []llvm.Value{zero, idx}, "")
+				yElemPtr := b.CreateInBoundsGEP(llvmKeyType, yPtr, []llvm.Value{zero, idx}, "")
+				elemEq := b.generateKeyEqual(elemType, llvmElemType, xElemPtr, yElemPtr, fn)
+				result = b.CreateAnd(result, elemEq, "")
+			}
+			return result
+		}
+		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+
+		loopEntry := b.GetInsertBlock()
+		loopBody := b.ctx.AddBasicBlock(loopEntry.Parent(), "eq.array.body")
+		loopDone := b.ctx.AddBasicBlock(loopEntry.Parent(), "eq.array.done")
+
+		b.CreateBr(loopBody)
+		b.SetInsertPointAtEnd(loopBody)
+
+		phiI := b.CreatePHI(b.uintptrType, "i")
+
+		xElemPtr := b.CreateInBoundsGEP(llvmKeyType, xPtr, []llvm.Value{zero, phiI}, "")
+		yElemPtr := b.CreateInBoundsGEP(llvmKeyType, yPtr, []llvm.Value{zero, phiI}, "")
+		elemEq := b.generateKeyEqual(elemType, llvmElemType, xElemPtr, yElemPtr, fn)
+
+		nextI := b.CreateAdd(phiI, llvm.ConstInt(b.uintptrType, 1, false), "")
+		atEnd := b.CreateICmp(llvm.IntUGE, nextI, llvm.ConstInt(b.uintptrType, uint64(arrayLen), false), "")
+		exitLoop := b.CreateOr(atEnd, b.CreateNot(elemEq, ""), "")
+		b.CreateCondBr(exitLoop, loopDone, loopBody)
+
+		bodyEnd := b.GetInsertBlock()
+		phiI.AddIncoming([]llvm.Value{llvm.ConstInt(b.uintptrType, 0, false), nextI},
+			[]llvm.BasicBlock{loopEntry, bodyEnd})
+
+		b.SetInsertPointAtEnd(loopDone)
+		return elemEq
 	default:
 		panic(fmt.Sprintf("unhandled key type for equal generation: %T", keyType))
 	}

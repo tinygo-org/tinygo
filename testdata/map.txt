@@ -80,6 +80,7 @@ tested growing of a map
 2
 2
 done
+nested array key: 42
 reflect map interface key ok
 no interface lookup failures
 padded key lookup: 100
