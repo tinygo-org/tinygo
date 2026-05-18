@@ -221,6 +221,8 @@
 			}
 
 			const loadSlice = (array, len, cap) => {
+				array >>>= 0;
+				len >>>= 0;
 				return new Uint8Array(this._inst.exports.memory.buffer, array, len);
 			}
 
@@ -233,6 +235,8 @@
 			}
 
 			const loadString = (ptr, len) => {
+				ptr >>>= 0;
+				len >>>= 0;
 				return decoder.decode(new DataView(this._inst.exports.memory.buffer, ptr, len));
 			}
 
@@ -243,6 +247,9 @@
 				wasi_snapshot_preview1: {
 					// https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/docs.md
 					fd_write: function(fd, iovs_ptr, iovs_len, nwritten_ptr) {
+						iovs_ptr >>>= 0;
+						iovs_len >>>= 0;
+						nwritten_ptr >>>= 0;
 						let nwritten = 0;
 						if (fd == 1) {
 							for (let iovs_i=0; iovs_i<iovs_len;iovs_i++) {
@@ -284,6 +291,8 @@
 						throw wasmExit;
 					},
 					random_get: (bufPtr, bufLen) => {
+						bufPtr >>>= 0;
+						bufLen >>>= 0;
 						crypto.getRandomValues(loadSlice(bufPtr, bufLen));
 						return 0;
 					},
@@ -426,6 +435,8 @@
 
 					// valueLoadString(v ref, b []byte)
 					"syscall/js.valueLoadString": (v_ref, slice_ptr, slice_len, slice_cap) => {
+						slice_ptr >>>= 0;
+						slice_len >>>= 0;
 						const str = unboxValue(v_ref);
 						loadSlice(slice_ptr, slice_len, slice_cap).set(str);
 					},
@@ -437,6 +448,9 @@
 
 					// func copyBytesToGo(dst []byte, src ref) (int, bool)
 					"syscall/js.copyBytesToGo": (ret_addr, dest_addr, dest_len, dest_cap, src_ref) => {
+						ret_addr >>>= 0;
+						dest_addr >>>= 0;
+						dest_len >>>= 0;
 						let num_bytes_copied_addr = ret_addr;
 						let returned_status_addr = ret_addr + 4; // Address of returned boolean status variable
 
@@ -456,6 +470,9 @@
 					// Originally copied from upstream Go project, then modified:
 					//   https://github.com/golang/go/blob/3f995c3f3b43033013013e6c7ccc93a9b1411ca9/misc/wasm/wasm_exec.js#L404-L416
 					"syscall/js.copyBytesToJS": (ret_addr, dst_ref, src_addr, src_len, src_cap) => {
+						ret_addr >>>= 0;
+						src_addr >>>= 0;
+						src_len >>>= 0;
 						let num_bytes_copied_addr = ret_addr;
 						let returned_status_addr = ret_addr + 4; // Address of returned boolean status variable
 
