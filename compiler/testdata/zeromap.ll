@@ -17,7 +17,7 @@ entry:
 }
 
 ; Function Attrs: noinline nounwind
-define hidden i32 @main.testZeroGet(ptr dereferenceable_or_null(40) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #3 {
+define hidden i32 @main.testZeroGet(ptr dereferenceable_or_null(48) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #3 {
 entry:
   %hashmap.key = alloca %main.hasPadding, align 8
   %hashmap.value = alloca i32, align 4
@@ -27,29 +27,23 @@ entry:
   call void @llvm.lifetime.start.p0(i64 4, ptr nonnull %hashmap.value)
   call void @llvm.lifetime.start.p0(i64 12, ptr nonnull %hashmap.key)
   store %main.hasPadding %2, ptr %hashmap.key, align 4
-  %3 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 1
-  call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #5
-  %4 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 9
-  call void @runtime.memzero(ptr nonnull %4, i32 3, ptr undef) #5
-  %5 = call i1 @runtime.hashmapBinaryGet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, i32 4, ptr undef) #5
+  %3 = call i1 @runtime.hashmapGenericGet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, i32 4, ptr undef) #5
   call void @llvm.lifetime.end.p0(i64 12, ptr nonnull %hashmap.key)
-  %6 = load i32, ptr %hashmap.value, align 4
+  %4 = load i32, ptr %hashmap.value, align 4
   call void @llvm.lifetime.end.p0(i64 4, ptr nonnull %hashmap.value)
-  ret i32 %6
+  ret i32 %4
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture) #4
 
-declare void @runtime.memzero(ptr, i32, ptr) #1
-
-declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(40), ptr, ptr, i32, ptr) #1
+declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(48), ptr nocapture, ptr nocapture, i32, ptr) #1
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture) #4
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.testZeroSet(ptr dereferenceable_or_null(40) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #3 {
+define hidden void @main.testZeroSet(ptr dereferenceable_or_null(48) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #3 {
 entry:
   %hashmap.key = alloca %main.hasPadding, align 8
   %hashmap.value = alloca i32, align 4
@@ -60,20 +54,16 @@ entry:
   store i32 5, ptr %hashmap.value, align 4
   call void @llvm.lifetime.start.p0(i64 12, ptr nonnull %hashmap.key)
   store %main.hasPadding %2, ptr %hashmap.key, align 4
-  %3 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 1
-  call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #5
-  %4 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 9
-  call void @runtime.memzero(ptr nonnull %4, i32 3, ptr undef) #5
-  call void @runtime.hashmapBinarySet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, ptr undef) #5
+  call void @runtime.hashmapGenericSet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, ptr undef) #5
   call void @llvm.lifetime.end.p0(i64 12, ptr nonnull %hashmap.key)
   call void @llvm.lifetime.end.p0(i64 4, ptr nonnull %hashmap.value)
   ret void
 }
 
-declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(40), ptr, ptr, ptr) #1
+declare void @runtime.hashmapGenericSet(ptr dereferenceable_or_null(48), ptr nocapture, ptr nocapture, ptr) #1
 
 ; Function Attrs: noinline nounwind
-define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(40) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #3 {
+define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(48) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #3 {
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
@@ -84,23 +74,15 @@ entry:
   %hashmap.key.repack1 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 12
   %s.elt2 = extractvalue [2 x %main.hasPadding] %s, 1
   store %main.hasPadding %s.elt2, ptr %hashmap.key.repack1, align 4
-  %0 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 1
-  call void @runtime.memzero(ptr nonnull %0, i32 3, ptr undef) #5
-  %1 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 9
-  call void @runtime.memzero(ptr nonnull %1, i32 3, ptr undef) #5
-  %2 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 13
-  call void @runtime.memzero(ptr nonnull %2, i32 3, ptr undef) #5
-  %3 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 21
-  call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #5
-  %4 = call i1 @runtime.hashmapBinaryGet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, i32 4, ptr undef) #5
+  %0 = call i1 @runtime.hashmapGenericGet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, i32 4, ptr undef) #5
   call void @llvm.lifetime.end.p0(i64 24, ptr nonnull %hashmap.key)
-  %5 = load i32, ptr %hashmap.value, align 4
+  %1 = load i32, ptr %hashmap.value, align 4
   call void @llvm.lifetime.end.p0(i64 4, ptr nonnull %hashmap.value)
-  ret i32 %5
+  ret i32 %1
 }
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.testZeroArraySet(ptr dereferenceable_or_null(40) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #3 {
+define hidden void @main.testZeroArraySet(ptr dereferenceable_or_null(48) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #3 {
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
@@ -112,15 +94,7 @@ entry:
   %hashmap.key.repack1 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 12
   %s.elt2 = extractvalue [2 x %main.hasPadding] %s, 1
   store %main.hasPadding %s.elt2, ptr %hashmap.key.repack1, align 4
-  %0 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 1
-  call void @runtime.memzero(ptr nonnull %0, i32 3, ptr undef) #5
-  %1 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 9
-  call void @runtime.memzero(ptr nonnull %1, i32 3, ptr undef) #5
-  %2 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 13
-  call void @runtime.memzero(ptr nonnull %2, i32 3, ptr undef) #5
-  %3 = getelementptr inbounds nuw i8, ptr %hashmap.key, i32 21
-  call void @runtime.memzero(ptr nonnull %3, i32 3, ptr undef) #5
-  call void @runtime.hashmapBinarySet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, ptr undef) #5
+  call void @runtime.hashmapGenericSet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, ptr undef) #5
   call void @llvm.lifetime.end.p0(i64 24, ptr nonnull %hashmap.key)
   call void @llvm.lifetime.end.p0(i64 4, ptr nonnull %hashmap.value)
   ret void

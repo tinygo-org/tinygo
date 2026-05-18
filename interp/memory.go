@@ -556,11 +556,13 @@ func (v pointerValue) asRawValue(r *runner) rawValue {
 }
 
 func (v pointerValue) Uint(r *runner) uint64 {
-	panic("cannot convert pointer to integer")
+	r.interpErr = errUnsupportedInst
+	return 0
 }
 
 func (v pointerValue) Int(r *runner) int64 {
-	panic("cannot convert pointer to integer")
+	r.interpErr = errUnsupportedInst
+	return 0
 }
 
 func (v pointerValue) equal(rhs pointerValue) bool {
@@ -736,11 +738,12 @@ func (v rawValue) asRawValue(r *runner) rawValue {
 	return v
 }
 
-func (v rawValue) bytes() []byte {
+func (v rawValue) bytes(r *runner) []byte {
 	buf := make([]byte, len(v.buf))
 	for i, p := range v.buf {
 		if p > 255 {
-			panic("cannot convert pointer value to byte")
+			r.interpErr = errUnsupportedInst
+			return buf
 		}
 		buf[i] = byte(p)
 	}
@@ -748,7 +751,10 @@ func (v rawValue) bytes() []byte {
 }
 
 func (v rawValue) Uint(r *runner) uint64 {
-	buf := v.bytes()
+	buf := v.bytes(r)
+	if r.interpErr != nil {
+		return 0
+	}
 
 	switch len(v.buf) {
 	case 1:

@@ -77,6 +77,7 @@ func TestBuild(t *testing.T) {
 		"interface.go",
 		"json.go",
 		"map.go",
+		"map_bigkey.go",
 		"math.go",
 		"oldgo/",
 		"print.go",
@@ -294,6 +295,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			case "reflect.go":
 				// Reflect tests do not run correctly, probably because of the
 				// limited amount of memory.
+				continue
+
+			case "map_bigkey.go":
+				// Compiler generates many large stack temporaries for [256]byte
+				// map keys, overflowing the goroutine stack (384 bytes).
 				continue
 
 			case "gc.go":

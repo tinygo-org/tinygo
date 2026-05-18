@@ -847,6 +847,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			return nil, mem, r.errorAt(inst, errUnsupportedInst)
 		}
+
+		// Check if an instruction triggered a recoverable error (e.g.,
+		// trying to interpret pointer data as integer bytes).
+		if r.interpErr != nil {
+			err := r.interpErr
+			r.interpErr = nil
+			return nil, mem, r.errorAt(inst, err)
+		}
 	}
 	return nil, mem, r.errorAt(bb.instructions[len(bb.instructions)-1], errors.New("interp: reached end of basic block without terminator"))
 }
