@@ -221,8 +221,6 @@
 			}
 
 			const loadSlice = (array, len, cap) => {
-				array >>>= 0;
-				len >>>= 0;
 				return new Uint8Array(this._inst.exports.memory.buffer, array, len);
 			}
 
@@ -235,8 +233,6 @@
 			}
 
 			const loadString = (ptr, len) => {
-				ptr >>>= 0;
-				len >>>= 0;
 				return decoder.decode(new DataView(this._inst.exports.memory.buffer, ptr, len));
 			}
 
@@ -305,6 +301,8 @@
 
 					// func getRandomData(r []byte)
 					"runtime.getRandomData": (slice_ptr, slice_len, slice_cap) => {
+						slice_ptr >>>= 0;
+						slice_len >>>= 0;
 						crypto.getRandomValues(loadSlice(slice_ptr, slice_len, slice_cap));
 					},
 
@@ -342,12 +340,15 @@
 					// func stringVal(value string) ref
 					"syscall/js.stringVal": (value_ptr, value_len) => {
 						value_ptr >>>= 0;
+						value_len >>>= 0;
 						const s = loadString(value_ptr, value_len);
 						return boxValue(s);
 					},
 
 					// func valueGet(v ref, p string) ref
 					"syscall/js.valueGet": (v_ref, p_ptr, p_len) => {
+						p_ptr >>>= 0;
+						p_len >>>= 0;
 						let prop = loadString(p_ptr, p_len);
 						let v = unboxValue(v_ref);
 						let result = Reflect.get(v, prop);
@@ -356,6 +357,8 @@
 
 					// func valueSet(v ref, p string, x ref)
 					"syscall/js.valueSet": (v_ref, p_ptr, p_len, x_ref) => {
+						p_ptr >>>= 0;
+						p_len >>>= 0;
 						const v = unboxValue(v_ref);
 						const p = loadString(p_ptr, p_len);
 						const x = unboxValue(x_ref);
@@ -364,6 +367,8 @@
 
 					// func valueDelete(v ref, p string)
 					"syscall/js.valueDelete": (v_ref, p_ptr, p_len) => {
+						p_ptr >>>= 0;
+						p_len >>>= 0;
 						const v = unboxValue(v_ref);
 						const p = loadString(p_ptr, p_len);
 						Reflect.deleteProperty(v, p);
@@ -381,6 +386,11 @@
 
 					// func valueCall(v ref, m string, args []ref) (ref, bool)
 					"syscall/js.valueCall": (ret_addr, v_ref, m_ptr, m_len, args_ptr, args_len, args_cap) => {
+						ret_addr >>>= 0;
+						m_ptr >>>= 0;
+						m_len >>>= 0;
+						args_ptr >>>= 0;
+						args_len >>>= 0;
 						const v = unboxValue(v_ref);
 						const name = loadString(m_ptr, m_len);
 						const args = loadSliceOfValues(args_ptr, args_len, args_cap);
@@ -396,6 +406,9 @@
 
 					// func valueInvoke(v ref, args []ref) (ref, bool)
 					"syscall/js.valueInvoke": (ret_addr, v_ref, args_ptr, args_len, args_cap) => {
+						ret_addr >>>= 0;
+						args_ptr >>>= 0;
+						args_len >>>= 0;
 						try {
 							const v = unboxValue(v_ref);
 							const args = loadSliceOfValues(args_ptr, args_len, args_cap);
@@ -409,6 +422,9 @@
 
 					// func valueNew(v ref, args []ref) (ref, bool)
 					"syscall/js.valueNew": (ret_addr, v_ref, args_ptr, args_len, args_cap) => {
+						ret_addr >>>= 0;
+						args_ptr >>>= 0;
+						args_len >>>= 0;
 						const v = unboxValue(v_ref);
 						const args = loadSliceOfValues(args_ptr, args_len, args_cap);
 						try {
@@ -427,6 +443,7 @@
 
 					// valuePrepareString(v ref) (ref, int)
 					"syscall/js.valuePrepareString": (ret_addr, v_ref) => {
+						ret_addr >>>= 0;
 						const s = String(unboxValue(v_ref));
 						const str = encoder.encode(s);
 						storeValue(ret_addr, str);
