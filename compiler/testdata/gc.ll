@@ -25,19 +25,16 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:basic:complex128" = linkonce_odr constant { i8, ptr } { i8 80, ptr @"reflect/types.type:pointer:basic:complex128" }, align 4
 @"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:complex128" }, align 4
 
-; Function Attrs: allockind("alloc,zeroed") allocsize(0)
-declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
-
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.newScalar(ptr %context) unnamed_addr #2 {
+define hidden void @main.newScalar(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %new = call align 1 dereferenceable(1) ptr @runtime.alloc(i32 1, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
@@ -55,8 +52,11 @@ entry:
   ret void
 }
 
+; Function Attrs: allockind("alloc,zeroed") allocsize(0)
+declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #2
+
 ; Function Attrs: nounwind
-define hidden void @main.newArray(ptr %context) unnamed_addr #2 {
+define hidden void @main.newArray(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %new = call align 1 dereferenceable(3) ptr @runtime.alloc(i32 3, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
@@ -72,7 +72,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.newStruct(ptr %context) unnamed_addr #2 {
+define hidden void @main.newStruct(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %new = call align 1 ptr @runtime.alloc(i32 0, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
@@ -94,7 +94,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden ptr @main.newFuncValue(ptr %context) unnamed_addr #2 {
+define hidden ptr @main.newFuncValue(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %new = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 197 to ptr), ptr undef) #3
@@ -103,7 +103,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.makeSlice(ptr %context) unnamed_addr #2 {
+define hidden void @main.makeSlice(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %makeslice = call align 1 dereferenceable(5) ptr @runtime.alloc(i32 5, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
@@ -125,7 +125,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._interface @main.makeInterface(double %v.r, double %v.i, ptr %context) unnamed_addr #2 {
+define hidden %runtime._interface @main.makeInterface(double %v.r, double %v.i, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %0 = call align 8 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #3
@@ -139,7 +139,7 @@ entry:
   ret %runtime._interface %1
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #3 = { nounwind }

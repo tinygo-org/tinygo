@@ -11,95 +11,91 @@ target triple = "wasm32-unknown-wasi"
 @undefinedGlobalNotInSection = external global i32, align 4
 @main.multipleGlobalPragmas = hidden global i32 0, section ".global_section", align 1024
 
-; Function Attrs: allockind("alloc,zeroed") allocsize(0)
-declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
-
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define void @extern_func() #3 {
+define void @extern_func() #2 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @somepkg.someFunction1(ptr %context) unnamed_addr #2 {
+define hidden void @somepkg.someFunction1(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
-declare void @somepkg.someFunction2(ptr) #1
+declare void @somepkg.someFunction2(ptr) #0
 
 ; Function Attrs: inlinehint nounwind
-define hidden void @main.inlineFunc(ptr %context) unnamed_addr #4 {
+define hidden void @main.inlineFunc(ptr %context) unnamed_addr #3 {
 entry:
   ret void
 }
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.noinlineFunc(ptr %context) unnamed_addr #5 {
+define hidden void @main.noinlineFunc(ptr %context) unnamed_addr #4 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.useGeneric(ptr %context) unnamed_addr #2 {
+define hidden void @main.useGeneric(ptr %context) unnamed_addr #1 {
 entry:
   call void @"main.noinlineGenericFunc[int8]"(ptr undef)
   ret void
 }
 
 ; Function Attrs: noinline nounwind
-define linkonce_odr hidden void @"main.noinlineGenericFunc[int8]"(ptr %context) unnamed_addr #5 {
+define linkonce_odr hidden void @"main.noinlineGenericFunc[int8]"(ptr %context) unnamed_addr #4 {
 entry:
   ret void
 }
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.functionInSection(ptr %context) unnamed_addr #5 section ".special_function_section" {
+define hidden void @main.functionInSection(ptr %context) unnamed_addr #4 section ".special_function_section" {
 entry:
   ret void
 }
 
 ; Function Attrs: noinline nounwind
-define void @exportedFunctionInSection() #6 section ".special_function_section" {
+define void @exportedFunctionInSection() #5 section ".special_function_section" {
 entry:
   ret void
 }
 
-declare void @main.declaredImport() #7
+declare void @main.declaredImport() #6
 
-declare void @imported() #8
+declare void @imported() #7
 
 ; Function Attrs: nounwind
-define void @exported() #9 {
+define void @exported() #8 {
 entry:
   ret void
 }
 
-declare void @main.undefinedFunctionNotInSection(ptr) #1
+declare void @main.undefinedFunctionNotInSection(ptr) #0
 
-declare void @main.doesNotEscapeParam(ptr nocapture dereferenceable_or_null(4), ptr nocapture, i32, i32, ptr nocapture dereferenceable_or_null(36), ptr nocapture, ptr) #1
+declare void @main.doesNotEscapeParam(ptr nocapture dereferenceable_or_null(4), ptr nocapture, i32, i32, ptr nocapture dereferenceable_or_null(36), ptr nocapture, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.stillEscapes(ptr dereferenceable_or_null(4) %a, ptr %b.data, i32 %b.len, i32 %b.cap, ptr dereferenceable_or_null(36) %c, ptr %d, ptr %context) unnamed_addr #2 {
+define hidden void @main.stillEscapes(ptr dereferenceable_or_null(4) %a, ptr %b.data, i32 %b.len, i32 %b.cap, ptr dereferenceable_or_null(36) %c, ptr %d, ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="extern_func" }
-attributes #4 = { inlinehint nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #6 = { noinline nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exportedFunctionInSection" }
-attributes #7 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="modulename" "wasm-import-name"="import1" }
-attributes #8 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="foobar" "wasm-import-name"="imported" }
-attributes #9 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exported" }
+attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="extern_func" }
+attributes #3 = { inlinehint nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #4 = { noinline nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exportedFunctionInSection" }
+attributes #6 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="modulename" "wasm-import-name"="import1" }
+attributes #7 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="foobar" "wasm-import-name"="imported" }
+attributes #8 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exported" }
