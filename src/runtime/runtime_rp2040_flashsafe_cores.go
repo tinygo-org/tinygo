@@ -11,11 +11,9 @@ import (
 )
 
 const (
-	rp2040FlashSafeFIFOCommand = 2
-
-	rp2040FlashSafeIdle    = 0
-	rp2040FlashSafeLocked  = 1
-	rp2040FlashSafeRelease = 2
+	rp2040FlashSafeIdle uint8 = iota
+	rp2040FlashSafeLocked
+	rp2040FlashSafeRelease
 )
 
 // rp2040FlashSafeState is used to synchronize the core that performs a flash
@@ -79,7 +77,7 @@ func rp2040ExitFlashSafeSection(state interrupt.State) {
 
 func rp2040FlashSafePauseCore(core uint32) {
 	_ = core // RP2040 SIO FIFO writes to the other core.
-	rp.SIO.FIFO_WR.Set(rp2040FlashSafeFIFOCommand)
+	rp.SIO.FIFO_WR.Set(rp2SIOFIFOCommandFlashSafe)
 	arm.Asm("sev")
 }
 
