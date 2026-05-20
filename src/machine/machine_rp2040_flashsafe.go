@@ -1,5 +1,11 @@
 //go:build tinygo && rp2040
 
+// "Flash safe" follows the RP2040/Pico SDK terminology: flash operations
+// must run while the other core is not executing from XIP flash.
+//
+// Use linkname to call runtime hooks from package machine without creating
+// an import cycle.
+
 package machine
 
 import (
