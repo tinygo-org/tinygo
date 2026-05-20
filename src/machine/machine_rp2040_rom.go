@@ -230,15 +230,17 @@ func (f flashBlockDevice) writeAt(p []byte, off int64) (n int, err error) {
 	// 0x00003000
 	address := writeAddress(off)
 	padded := flashPad(p, int(f.WriteBlockSize()))
+	buf := make([]byte, len(padded))
+	copy(buf, padded)
 
 	state := rp2040EnterFlashSafeSection()
 	defer rp2040ExitFlashSafeSection(state)
 
 	C.flash_range_write(C.uint32_t(address),
-		(*C.uint8_t)(unsafe.Pointer(&padded[0])),
-		C.ulong(len(padded)))
+		(*C.uint8_t)(unsafe.Pointer(&buf[0])),
+		C.ulong(len(buf)))
 
-	return len(padded), nil
+	return len(buf), nil
 }
 
 func (f flashBlockDevice) eraseBlocks(start, length int64) error {
