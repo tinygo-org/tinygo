@@ -314,9 +314,6 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	// Load comments such as //go:extern on globals.
 	c.loadASTComments(pkg)
 
-	// Predeclare the runtime.alloc function, which is used by the wordpack
-	// functionality.
-	c.getFunction(c.program.ImportedPackage("runtime").Members["alloc"].(*ssa.Function))
 	if c.NeedsStackObjects {
 		// Predeclare trackPointer, which is used everywhere we use runtime.alloc.
 		c.getFunction(c.program.ImportedPackage("runtime").Members["trackPointer"].(*ssa.Function))

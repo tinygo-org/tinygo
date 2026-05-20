@@ -6,19 +6,16 @@ target triple = "thumbv7m-unknown-unknown-eabi"
 %runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i8, %runtime._interface }
 %runtime._interface = type { ptr, ptr }
 
-; Function Attrs: allockind("alloc,zeroed") allocsize(0)
-declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
-
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #1 {
+define hidden void @main.init(ptr %context) unnamed_addr #0 {
 entry:
   ret void
 }
 
-declare void @main.external(ptr) #2
+declare void @main.external(ptr) #1
 
 ; Function Attrs: nounwind
-define hidden void @main.deferSimple(ptr %context) unnamed_addr #1 {
+define hidden void @main.deferSimple(ptr %context) unnamed_addr #0 {
 entry:
   %defer.alloca = alloca { i32, ptr }, align 4
   %deferPtr = alloca ptr, align 4
@@ -112,14 +109,14 @@ rundefers.end3:                                   ; preds = %rundefers.loophead6
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn
-declare ptr @llvm.stacksave.p0() #3
+declare ptr @llvm.stacksave.p0() #2
 
-declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(24), ptr, ptr) #2
+declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(24), ptr, ptr) #1
 
-declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(24), ptr) #2
+declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(24), ptr) #1
 
 ; Function Attrs: nounwind
-define internal void @"main.deferSimple$1"(ptr %context) unnamed_addr #1 {
+define internal void @"main.deferSimple$1"(ptr %context) unnamed_addr #0 {
 entry:
   call void @runtime.printlock(ptr undef) #4
   call void @runtime.printint32(i32 3, ptr undef) #4
@@ -127,14 +124,14 @@ entry:
   ret void
 }
 
-declare void @runtime.printlock(ptr) #2
+declare void @runtime.printlock(ptr) #1
 
-declare void @runtime.printint32(i32, ptr) #2
+declare void @runtime.printint32(i32, ptr) #1
 
-declare void @runtime.printunlock(ptr) #2
+declare void @runtime.printunlock(ptr) #1
 
 ; Function Attrs: nounwind
-define hidden void @main.deferMultiple(ptr %context) unnamed_addr #1 {
+define hidden void @main.deferMultiple(ptr %context) unnamed_addr #0 {
 entry:
   %defer.alloca2 = alloca { i32, ptr }, align 4
   %defer.alloca = alloca { i32, ptr }, align 4
@@ -253,7 +250,7 @@ rundefers.end7:                                   ; preds = %rundefers.loophead1
 }
 
 ; Function Attrs: nounwind
-define internal void @"main.deferMultiple$1"(ptr %context) unnamed_addr #1 {
+define internal void @"main.deferMultiple$1"(ptr %context) unnamed_addr #0 {
 entry:
   call void @runtime.printlock(ptr undef) #4
   call void @runtime.printint32(i32 3, ptr undef) #4
@@ -262,7 +259,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define internal void @"main.deferMultiple$2"(ptr %context) unnamed_addr #1 {
+define internal void @"main.deferMultiple$2"(ptr %context) unnamed_addr #0 {
 entry:
   call void @runtime.printlock(ptr undef) #4
   call void @runtime.printint32(i32 5, ptr undef) #4
@@ -271,7 +268,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.deferInfiniteLoop(ptr %context) unnamed_addr #1 {
+define hidden void @main.deferInfiniteLoop(ptr %context) unnamed_addr #0 {
 entry:
   %deferPtr = alloca ptr, align 4
   store ptr null, ptr %deferPtr, align 4
@@ -315,8 +312,11 @@ rundefers.end:                                    ; preds = %rundefers.loophead
   br label %recover
 }
 
+; Function Attrs: allockind("alloc,zeroed") allocsize(0)
+declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #3
+
 ; Function Attrs: nounwind
-define hidden void @main.deferLoop(ptr %context) unnamed_addr #1 {
+define hidden void @main.deferLoop(ptr %context) unnamed_addr #0 {
 entry:
   %deferPtr = alloca ptr, align 4
   store ptr null, ptr %deferPtr, align 4
@@ -405,7 +405,7 @@ rundefers.end1:                                   ; preds = %rundefers.loophead4
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.deferBetweenLoops(ptr %context) unnamed_addr #1 {
+define hidden void @main.deferBetweenLoops(ptr %context) unnamed_addr #0 {
 entry:
   %defer.alloca = alloca { i32, ptr, i32 }, align 4
   %deferPtr = alloca ptr, align 4
@@ -505,9 +505,9 @@ rundefers.end4:                                   ; preds = %rundefers.loophead7
   br label %recover
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
-attributes #1 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
-attributes #2 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
-attributes #3 = { nocallback nofree nosync nounwind willreturn }
+attributes #0 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
+attributes #1 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
+attributes #2 = { nocallback nofree nosync nounwind willreturn }
+attributes #3 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
 attributes #4 = { nounwind }
 attributes #5 = { nounwind returns_twice }
