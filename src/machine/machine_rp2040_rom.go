@@ -238,6 +238,9 @@ func (f flashBlockDevice) writeAt(p []byte, off int64) (n int, err error) {
 	padded := flashPad(p, int(f.WriteBlockSize()))
 	buf := make([]byte, len(padded))
 	copy(buf, padded)
+	if len(buf) == 0 {
+		return 0, nil
+	}
 
 	state := rp2040EnterFlashSafeSection()
 	defer rp2040ExitFlashSafeSection(state)
