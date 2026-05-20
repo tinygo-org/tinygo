@@ -205,14 +205,20 @@ func doFlashCommand(tx []byte, rx []byte) error {
 	if len(tx) != len(rx) {
 		return errFlashInvalidWriteLength
 	}
+	if len(tx) == 0 {
+		return nil
+	}
+
+	txbuf := make([]byte, len(tx))
+	copy(txbuf, tx)
 
 	state := rp2040EnterFlashSafeSection()
 	defer rp2040ExitFlashSafeSection(state)
 
 	C.flash_do_cmd(
-		(*C.uint8_t)(unsafe.Pointer(&tx[0])),
+		(*C.uint8_t)(unsafe.Pointer(&txbuf[0])),
 		(*C.uint8_t)(unsafe.Pointer(&rx[0])),
-		C.ulong(len(tx)))
+		C.ulong(len(txbuf)))
 
 	return nil
 }
