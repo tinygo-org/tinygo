@@ -488,7 +488,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		size := b.targetData.TypeAllocSize(deferredCallType)
 		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
 		nilPtr := llvm.ConstNull(b.dataPtrType)
-		alloca = b.createRuntimeCall("alloc", []llvm.Value{sizeValue, nilPtr}, "defer.alloc.call")
+		alloca = b.createRuntimeCall(b.allocFunc(), []llvm.Value{sizeValue, nilPtr}, "defer.alloc.call")
 	}
 	if b.NeedsStackObjects {
 		b.trackPointer(alloca)

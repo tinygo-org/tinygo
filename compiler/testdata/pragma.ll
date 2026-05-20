@@ -90,6 +90,18 @@ entry:
   ret void
 }
 
+; Function Attrs: nounwind
+define hidden ptr @main.doesHeapAlloc(ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %new = call align 4 dereferenceable(4) ptr @runtime.alloc_noheap(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #10
+  call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef) #10
+  ret ptr %new
+}
+
+; Function Attrs: allockind("alloc,zeroed") allocsize(0)
+declare noalias nonnull ptr @runtime.alloc_noheap(i32, ptr, ptr) #9
+
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="extern_func" }
@@ -99,3 +111,5 @@ attributes #5 = { noinline nounwind "target-features"="+bulk-memory,+bulk-memory
 attributes #6 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="modulename" "wasm-import-name"="import1" }
 attributes #7 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="foobar" "wasm-import-name"="imported" }
 attributes #8 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exported" }
+attributes #9 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #10 = { nounwind }

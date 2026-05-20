@@ -115,3 +115,8 @@ func doesNotEscapeParam(a *int, b []int, c chan int, d *[0]byte)
 //go:noescape
 func stillEscapes(a *int, b []int, c chan int, d *[0]byte) {
 }
+
+//go:noheap
+func doesHeapAlloc() *int {
+	return new(int)
+}

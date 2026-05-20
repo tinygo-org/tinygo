@@ -34,6 +34,7 @@ type functionInfo struct {
 	interrupt     bool       // go:interrupt
 	nobounds      bool       // go:nobounds
 	noescape      bool       // go:noescape
+	noheap        bool       // go:noheap
 	variadic      bool       // go:variadic (CGo only)
 	inline        inlineType // go:inline
 }
@@ -161,7 +162,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 	case "machine.keepAliveNoEscape", "machine.unsafeNoEscape":
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
-	case "runtime.alloc":
+	case "runtime.alloc", "runtime.alloc_noheap":
 		// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 		// returns values that are never null and never alias to an existing value.
 		for _, attrName := range []string{"noalias", "nonnull"} {
@@ -476,6 +477,9 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			if len(f.Blocks) == 0 {
 				info.noescape = true
 			}
+		case "//go:noheap":
+			// Ensure this function does not allocate on the heap.
+			info.noheap = true
 		case "//go:variadic":
 			// The //go:variadic pragma is emitted by the CGo preprocessing
 			// pass for C variadic functions. This includes both explicit

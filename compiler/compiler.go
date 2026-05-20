@@ -192,6 +192,16 @@ func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *bu
 	}
 }
 
+// Return the runtime.alloc function variant.
+// This is normally just "alloc", but is "alloc_noheap" if the //go:noheap
+// pragma is used.
+func (b *builder) allocFunc() string {
+	if b.info.noheap {
+		return "alloc_noheap"
+	}
+	return "alloc"
+}
+
 type blockInfo struct {
 	// entry is the LLVM basic block corresponding to the start of this *ssa.Block.
 	entry llvm.BasicBlock
@@ -2173,7 +2183,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			}
 			sizeValue := llvm.ConstInt(b.uintptrType, size, false)
 			layoutValue := b.createObjectLayout(typ, expr.Pos())
-			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue, layoutValue}, expr.Comment)
+			buf := b.createRuntimeCall(b.allocFunc(), []llvm.Value{sizeValue, layoutValue}, expr.Comment)
 			align := b.targetData.ABITypeAlignment(typ)
 			buf.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
 			return buf, nil
@@ -2405,7 +2415,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
 		layoutValue := b.createObjectLayout(llvmElemType, expr.Pos())
-		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize, layoutValue}, "makeslice.buf")
+		slicePtr := b.createRuntimeCall(b.allocFunc(), []llvm.Value{sliceSize, layoutValue}, "makeslice.buf")
 		slicePtr.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elemAlign)))
 
 		// Extend or truncate if necessary. This is safe as we've already done
