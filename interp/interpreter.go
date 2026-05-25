@@ -299,7 +299,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// means that monotonic time in the time package is counted from
 				// time.Time{}.Sub(1), which should be fine.
 				locals[inst.localIndex] = literalValue{uint64(0)}
-			case callFn.name == "runtime.alloc" || callFn.name == "runtime.alloc_noheap":
+			case callFn.name == "runtime.alloc" || callFn.name == "runtime.alloc_noheap" || callFn.name == "runtime.alloc_zero":
 				// Allocate heap memory. At compile time, this is instead done
 				// by creating a global variable.
 

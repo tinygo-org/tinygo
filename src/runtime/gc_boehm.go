@@ -26,9 +26,6 @@ import (
 
 const needsStaticHeap = false
 
-// zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
-var zeroSizedAlloc uint8
-
 var gcLock task.PMutex
 
 func initHeap() {
@@ -67,7 +64,7 @@ func markCurrentGoroutineStack(sp uintptr) {
 //go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {
-		return unsafe.Pointer(&zeroSizedAlloc)
+		return alloc_zero(size, layout)
 	}
 
 	gcLock.Lock()

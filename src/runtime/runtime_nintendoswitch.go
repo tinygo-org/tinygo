@@ -4,6 +4,11 @@ package runtime
 
 import "unsafe"
 
+// Not sure whether there is anything on this location, but it doesn't look like
+// it according to the memory map:
+// https://switchbrew.org/wiki/Memory_layout
+const zeroSizeAllocPtr uintptr = 16
+
 const (
 	// Handles
 	infoTypeTotalMemorySize = 6          // Total amount of memory available for process.

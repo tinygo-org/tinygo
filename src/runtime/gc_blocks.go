@@ -58,9 +58,6 @@ var (
 	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
 )
 
-// zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
-var zeroSizedAlloc uint8
-
 // Provide some abstraction over heap blocks.
 
 // blockState stores the four states in which a block can be.
@@ -405,7 +402,7 @@ func calculateHeapAddresses() {
 //go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {
-		return unsafe.Pointer(&zeroSizedAlloc)
+		return alloc_zero(size, layout)
 	}
 
 	if interrupt.In() {

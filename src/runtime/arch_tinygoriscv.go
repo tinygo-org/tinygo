@@ -4,6 +4,8 @@ package runtime
 
 import "device/riscv"
 
+const zeroSizeAllocPtr uintptr = 0xffff_fff0 // should be unused on most RISC-V chips
+
 const deferExtraRegs = 0
 
 const callInstSize = 4 // 8 without relaxation, maybe 4 with relaxation

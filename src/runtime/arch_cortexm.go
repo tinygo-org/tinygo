@@ -11,6 +11,8 @@ const GOARCH = "arm"
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 32
 
+const zeroSizeAllocPtr uintptr = 16 // part of the interrupt vector
+
 const deferExtraRegs = 0
 
 const callInstSize = 4 // "bl someFunction" is 4 bytes
