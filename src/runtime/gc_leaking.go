@@ -8,10 +8,15 @@ package runtime
 
 import (
 	"internal/task"
+	"sync/atomic"
 	"unsafe"
 )
 
 const needsStaticHeap = true
+
+var gcScanState atomic.Uint32
+
+func scanCurrentStack() {}
 
 // Ever-incrementing pointer: no memory is freed.
 var heapptr uintptr

@@ -141,7 +141,7 @@ func setEPDataPID(ep uint32, dataOne bool) {
 }
 
 func SendZlp() {
-	sendUSBPacket(0, []byte{})
+	sendUSBPacket(0, empty[:])
 }
 
 func sendViaEPIn(ep uint32, data []byte, count int) {
