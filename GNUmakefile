@@ -193,8 +193,13 @@ NINJA_BUILD_TARGETS = clang llvm-config llvm-ar llvm-nm lld $(addprefix lib/lib,
 # For static linking.
 ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
     CGO_CPPFLAGS+=$(shell $(LLVM_CONFIG_PREFIX) $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
-    CGO_CFLAGS=-gz=none
-    CGO_CXXFLAGS=-std=c++17 -gz=none
+    CGO_CXXFLAGS=-std=c++17
+ifneq ($(uname),Windows_NT)
+    # Disable GCC DWARF compression: lld built without zlib cannot link
+    # object files with ELFCOMPRESS_ZLIB debug sections.
+    CGO_CFLAGS+=-gz=none
+    CGO_CXXFLAGS+=-gz=none
+endif
     CGO_LDFLAGS+=-L$(abspath $(LLVM_BUILDDIR)/lib) -lclang $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_CONFIG_PREFIX) $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
 
