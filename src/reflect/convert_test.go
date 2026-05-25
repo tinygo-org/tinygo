@@ -181,6 +181,14 @@ func TestTinyConvert(t *testing.T) {
 		{V(float32(167)), V(float64(167))},
 		{V(float64(168)), V(float32(168))},
 		{V(float64(169)), V(float64(169))},
+
+		{V(float64(1.5)), V(int(1))},
+
+		// complex
+		{V(complex64(1i)), V(complex64(1i))},
+		{V(complex64(2i)), V(complex128(2i))},
+		{V(complex128(3i)), V(complex64(3i))},
+		{V(complex128(4i)), V(complex128(4i))},
 	}
 
 	for _, tt := range tests {
