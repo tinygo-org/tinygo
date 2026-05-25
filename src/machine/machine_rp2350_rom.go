@@ -27,14 +27,11 @@ typedef int bool;
 
 #define ram_func __attribute__((section(".ramfuncs"),noinline))
 
-typedef void (*flash_exit_xip_fn)(void);
-typedef void (*flash_flush_cache_fn)(void);
-typedef void (*flash_connect_internal_fn)(void);
-typedef void (*flash_range_erase_fn)(uint32_t, size_t, uint32_t, uint16_t);
-typedef void (*flash_range_program_fn)(uint32_t, const uint8_t*, size_t);
 static inline __attribute__((always_inline)) void __compiler_memory_barrier(void) {
     __asm__ volatile ("" : : : "memory");
 }
+
+extern char __flash_size;
 
 // https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf
 // 13.9. Predefined OTP Data Locations
@@ -58,7 +55,6 @@ static inline __attribute__((always_inline)) void __compiler_memory_barrier(void
 #define XIP_QMI_BASE 0x400d0000
 #define IO_QSPI_BASE 0x40030000
 #define BOOTRAM_BASE 0x400e0000
-
 
 // https://github.com/raspberrypi/pico-sdk
 // src/rp2_common/hardware_base/include/hardware/address_mapped.h
@@ -229,11 +225,12 @@ void reset_usb_boot(uint32_t usb_activity_gpio_pin_mask, uint32_t disable_interf
 // https://github.com/raspberrypi/pico-sdk
 // src/rp2350/hardware_regs/include/hardware/regs/qmi.h
 
-#define QMI_DIRECT_CSR_EN_BITS      0x00000001
-#define QMI_DIRECT_CSR_RXEMPTY_BITS 0x00010000
-#define QMI_DIRECT_CSR_TXFULL_BITS  0x00000400
-#define QMI_M1_WFMT_RESET           0x00001000
-#define QMI_M1_WCMD_RESET           0x0000a002
+#define QMI_DIRECT_CSR_EN_BITS          0x00000001
+#define QMI_DIRECT_CSR_ASSERT_CS0N_BITS 0x00000004
+#define QMI_DIRECT_CSR_RXEMPTY_BITS     0x00010000
+#define QMI_DIRECT_CSR_TXFULL_BITS      0x00000400
+#define QMI_M1_WFMT_RESET               0x00001000
+#define QMI_M1_WCMD_RESET               0x0000a002
 
 
 // https://github.com/raspberrypi/pico-sdk
@@ -310,14 +307,6 @@ typedef struct {
 
 
 // https://github.com/raspberrypi/pico-sdk
-// src/rp2_common/hardware_xip_cache/include/hardware/xip_cache.h
-
-// Noop unless using XIP Cache-as-SRAM
-// Non-noop version in src/rp2_common/hardware_xip_cache/xip_cache.c
-static inline void xip_cache_clean_all(void) {}
-
-
-// https://github.com/raspberrypi/pico-sdk
 // src/rp2_common/hardware_flash/include/hardware/flash.h
 
 #define FLASH_PAGE_SIZE (1u << 8)
@@ -328,23 +317,15 @@ static inline void xip_cache_clean_all(void) {}
 // https://github.com/raspberrypi/pico-sdk
 // src/rp2_common/hardware_flash/flash.c
 
-#define BOOT2_SIZE_WORDS 64
 #define FLASH_BLOCK_ERASE_CMD 0xd8
 
-static uint32_t boot2_copyout[BOOT2_SIZE_WORDS];
-static bool boot2_copyout_valid = false;
-
-static ram_func void flash_init_boot2_copyout(void) {
-    if (boot2_copyout_valid)
-        return;
-    for (int i = 0; i < BOOT2_SIZE_WORDS; ++i)
-		boot2_copyout[i] = ((uint32_t *)BOOTRAM_BASE)[i];
+// Configure QMI M0 for standard single-SPI read (0x03 cmd, reset-value register config),
+// then clear direct mode so XIP auto-mode resumes. Flash must already be in SPI mode.
+static ram_func void flash_restore_xip_spi_mode(void) {
+    qmi_hw->m[0].rfmt = 0x00001000u; // PREFIX_LEN=1 (8-bit cmd), all widths=single, no dummy
+    qmi_hw->m[0].rcmd = 0x0000a003u; // command prefix = 0x03 (standard read)
+    hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_EN_BITS);
     __compiler_memory_barrier();
-    boot2_copyout_valid = true;
-}
-
-static ram_func void flash_enable_xip_via_boot2(void) {
-    ((void (*)(void))((intptr_t)boot2_copyout+1))();
 }
 
 // This is a static symbol because the layout of FLASH_DEVINFO is liable to change from device to
@@ -357,21 +338,26 @@ static io_rw_16 * ram_func flash_devinfo_ptr(void) {
 
 // This is a RAM function because may be called during flash programming to enable save/restore of
 // QMI window 1 registers on RP2350:
-uint8_t ram_func flash_devinfo_get_cs_size(uint8_t cs) {
-    io_ro_16 *devinfo = (io_ro_16 *) flash_devinfo_ptr();
-    if (cs == 0u) {
-        return (uint8_t) (
-            (*devinfo & OTP_DATA_FLASH_DEVINFO_CS0_SIZE_BITS) >> OTP_DATA_FLASH_DEVINFO_CS0_SIZE_LSB
-        );
+uint8_t ram_func __attribute__((used)) flash_devinfo_get_cs_size(uint8_t cs) {
+    volatile uint8_t local_cs = cs;
+    if (local_cs == 0u) {
+        uint32_t flash_size = (uint32_t)&__flash_size;
+        if (flash_size == 0) {
+            return 0; // FLASH_DEVINFO_SIZE_NONE
+        }
+        // Size code = __builtin_ctz(flash_size / 8192) + 1
+        // Where FLASH_DEVINFO_SIZE_8K is 1
+        return (uint8_t)(__builtin_ctz(flash_size / 8192) + 1);
     } else {
+        io_ro_16 *devinfo = (io_ro_16 *) flash_devinfo_ptr();
         return (uint8_t) (
             (*devinfo & OTP_DATA_FLASH_DEVINFO_CS1_SIZE_BITS) >> OTP_DATA_FLASH_DEVINFO_CS1_SIZE_LSB
         );
     }
 }
 
-// This is specifically for saving/restoring the registers modified by RP2350
-// flash_exit_xip() ROM func, not the entirety of the QMI window state.
+// Saves/restores QMI window 1 registers (timing, rcmd, rfmt). Window 0 is
+// reconfigured by flash_restore_xip_spi_mode(); window 1 (CS1) is preserved here.
 typedef struct flash_rp2350_qmi_save_state {
     uint32_t timing;
     uint32_t rcmd;
@@ -386,99 +372,208 @@ static ram_func void flash_rp2350_save_qmi_cs1(flash_rp2350_qmi_save_state_t *st
 
 static ram_func void flash_rp2350_restore_qmi_cs1(const flash_rp2350_qmi_save_state_t *state) {
     if (flash_devinfo_get_cs_size(1) == 0) {
-        // Case 1: The RP2350 ROM sets QMI to a clean (03h read) configuration
-        // during flash_exit_xip(), even though when CS1 is not enabled via
-        // FLASH_DEVINFO it does not issue an XIP exit sequence to CS1. In
-        // this case, restore the original register config for CS1 as it is
-        // still the correct config.
+        // No CS1 device: restore saved config (still valid, nothing touched it).
         qmi_hw->m[1].timing = state->timing;
         qmi_hw->m[1].rcmd = state->rcmd;
         qmi_hw->m[1].rfmt = state->rfmt;
     } else {
-        // Case 2: If RAM is attached to CS1, and the ROM has issued an XIP
-        // exit sequence to it, then the ROM re-initialisation of the QMI
-        // registers has actually not gone far enough. The old XIP write mode
-        // is no longer valid when the QSPI RAM is returned to a serial
-        // command state. Restore the default 02h serial write command config.
+        // CS1 has QSPI RAM: our direct-mode ops returned it to serial command state.
+        // Old XIP write mode is no longer valid; restore default 02h serial write config.
         qmi_hw->m[1].wfmt = QMI_M1_WFMT_RESET;
         qmi_hw->m[1].wcmd = QMI_M1_WCMD_RESET;
     }
 }
 
-void ram_func flash_cs_force(bool high) {
-    uint32_t field_val = high ?
-        IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_VALUE_HIGH :
-        IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_VALUE_LOW;
-    hw_write_masked(&io_qspi_hw->io[1].ctrl,
-        field_val << IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_LSB,
-        IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_BITS
-    );
+#define PADS_QSPI_BASE 0x40040000
+
+typedef struct {
+    io_rw_32 voltage_select;
+    io_rw_32 io[6];
+} pads_qspi_hw_t;
+
+#define pads_qspi_hw ((pads_qspi_hw_t *)PADS_QSPI_BASE)
+
+typedef struct flash_hardware_save_state {
+    flash_rp2350_qmi_save_state_t qmi_save;
+    uint32_t qspi_pads[6];
+} flash_hardware_save_state_t;
+
+static ram_func void flash_save_hardware_state(flash_hardware_save_state_t *state) {
+    for (size_t i = 0; i < 6; ++i) {
+        state->qspi_pads[i] = pads_qspi_hw->io[i];
+    }
+    flash_rp2350_save_qmi_cs1(&state->qmi_save);
 }
 
-// Adapted from flash_range_program()
+static ram_func void flash_restore_hardware_state(flash_hardware_save_state_t *state) {
+    for (size_t i = 0; i < 6; ++i) {
+        pads_qspi_hw->io[i] = state->qspi_pads[i];
+    }
+    flash_rp2350_restore_qmi_cs1(&state->qmi_save);
+}
+
+// Invalidate the XIP cache via the maintenance window (0x18000000).
+// ROM flush_cache (FC) hangs on this board; this replaces it.
+static ram_func void flash_invalidate_xip_cache(void) {
+    for (uint32_t i = 0; i < 16u * 1024u; i += 8u) {
+        *(volatile uint32_t *)(0x18000000u + i) = 0u;
+    }
+    __asm volatile ("dsb" : : : "memory");
+    __asm volatile ("isb" : : : "memory");
+}
+
+// Send a single-byte command with no address/data. EN_BITS must be set.
+static ram_func void flash_spi_cmd(uint8_t cmd) {
+    hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+    qmi_hw->direct_tx = cmd;
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+    hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+}
+
+// Poll STATUS1 WIP bit until clear. EN_BITS must be set.
+static ram_func void flash_spi_wait_ready(void) {
+    uint8_t sr;
+    do {
+        hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+        qmi_hw->direct_tx = 0x05; // RDSR1
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        qmi_hw->direct_tx = 0x00;
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS);
+        sr = (uint8_t)qmi_hw->direct_rx;
+        hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+    } while (sr & 1u);
+}
+
+// Exit QPI/continuous-read mode on flash and switch to single-SPI direct mode.
+// The RP2350 bootrom may leave flash in QPI or continuous-read mode. This must be
+// called before any direct SPI command. Leaves EN_BITS set on return — caller must
+// not clear it until flash_restore_xip_spi_mode() reconfigures QMI M0 for SPI XIP.
+static ram_func void flash_exit_qpi_mode(void) {
+    // Enable direct mode (suspends QMI XIP auto-mode).
+    hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_EN_BITS);
+    // OD=1/PUE=1 on WP# (io[3]=SD2) and HOLD# (io[4]=SD3): disable output driver,
+    // pull-up keeps them HIGH. QMI may have left these driven LOW from a prior quad
+    // XIP transfer; LOW on HOLD# while CS is asserted pauses the flash chip.
+    pads_qspi_hw->io[3] = (pads_qspi_hw->io[3] & ~0x4) | 0x8 | 0x80;
+    pads_qspi_hw->io[4] = (pads_qspi_hw->io[4] & ~0x4) | 0x8 | 0x80;
+    for (volatile int i = 0; i < 200; i++);
+
+    uint32_t quad_oe = (0x2u << 16) | (1u << 19); // IWIDTH=quad, OE=1
+
+    // Transaction 1: CS → 0xFF on 4 lines → ~CS.
+    // Exits QPI mode if flash is in QPI mode (Winbond Exit QPI = 0xFF on all 4 lines).
+    // If flash is in continuous read mode, this is received as partial address; CS
+    // deassert aborts the transaction but does NOT exit continuous read mode.
+    hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+    qmi_hw->direct_tx = 0xFF | quad_oe;
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+    hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+    for (volatile int i = 0; i < 200; i++);
+
+    // Transaction 2: CS → 3 addr bytes + mode byte on 4 lines → ~CS.
+    // If flash is in continuous read mode (quad I/O / 0xEB performance enhance):
+    //   flash expects [24-bit addr][8-bit mode] on 4 lines after CS assert.
+    //   Mode byte M[7:4] = 0xF (≠ 0xA continuation pattern) → exits continuous read.
+    // If flash was in QPI and exited via txn 1: now in SPI mode; this txn is harmless
+    //   (D0 carries 0x00 command = NOP, WEL=0 so no accidental write).
+    hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+    qmi_hw->direct_tx = 0x00 | quad_oe; // addr[23:16]
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+    qmi_hw->direct_tx = 0x00 | quad_oe; // addr[15:8]
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+    qmi_hw->direct_tx = 0x00 | quad_oe; // addr[7:0]
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+    qmi_hw->direct_tx = 0xF0 | quad_oe; // mode: M[7:4]=0xF ≠ 0xA → exit continuous read
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+    hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+
+    for (volatile int i = 0; i < 500; i++); // let flash settle
+    // EN_BITS stays set: do not clear until flash_restore_xip_spi_mode() reconfigures
+    // QMI M0, or QMI will resume XIP in quad mode while flash is in SPI mode.
+}
+
 void ram_func flash_range_write(uint32_t offset, const uint8_t *data, size_t count) {
-    flash_connect_internal_fn flash_connect_internal_func = (flash_connect_internal_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
-    flash_exit_xip_fn flash_exit_xip_func = (flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
-    flash_range_program_fn flash_range_program_func = (flash_range_program_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_PROGRAM);
-    flash_flush_cache_fn flash_flush_cache_func = (flash_flush_cache_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_FLUSH_CACHE);
-    flash_init_boot2_copyout();
-    xip_cache_clean_all();
-    flash_rp2350_qmi_save_state_t qmi_save;
-    flash_rp2350_save_qmi_cs1(&qmi_save);
-
+    flash_hardware_save_state_t state;
+    flash_save_hardware_state(&state);
+    uint32_t ints_saved;
+    __asm volatile("mrs %0, PRIMASK" : "=r"(ints_saved) : : "memory");
+    __asm volatile("cpsid i" : : : "memory");
     __compiler_memory_barrier();
-
-    flash_connect_internal_func();
-    flash_exit_xip_func();
-    flash_range_program_func(offset, data, count);
-    flash_flush_cache_func(); // Note this is needed to remove CSn IO force as well as cache flushing
-    flash_enable_xip_via_boot2();
-    flash_rp2350_restore_qmi_cs1(&qmi_save);
+    flash_exit_qpi_mode();
+    // Direct SPI page program (0x02), 256 bytes per page.
+    for (uint32_t pos = 0; pos < (uint32_t)count; pos += FLASH_PAGE_SIZE) {
+        flash_spi_cmd(0x06); // WREN
+        uint32_t addr = offset + pos;
+        hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+        qmi_hw->direct_tx = 0x02; // Page Program
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        qmi_hw->direct_tx = (addr >> 16) & 0xFFu;
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        qmi_hw->direct_tx = (addr >> 8) & 0xFFu;
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        qmi_hw->direct_tx = addr & 0xFFu;
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        uint32_t page_count = FLASH_PAGE_SIZE;
+        if (pos + FLASH_PAGE_SIZE > (uint32_t)count) page_count = (uint32_t)count - pos;
+        for (uint32_t j = 0; j < page_count; j++) {
+            while (qmi_hw->direct_csr & QMI_DIRECT_CSR_TXFULL_BITS);
+            qmi_hw->direct_tx = data[pos + j];
+            while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        }
+        hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+        flash_spi_wait_ready();
+    }
+    flash_restore_xip_spi_mode();
+    flash_invalidate_xip_cache();
+    flash_restore_hardware_state(&state);
+    __asm volatile("msr PRIMASK, %0" : : "r"(ints_saved) : "memory");
 }
 
-// Adapted from flash_range_erase()
 void ram_func flash_erase_blocks(uint32_t offset, size_t count) {
-    flash_connect_internal_fn flash_connect_internal_func = (flash_connect_internal_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
-    flash_exit_xip_fn flash_exit_xip_func = (flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
-    flash_range_erase_fn flash_range_erase_func = (flash_range_erase_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_ERASE);
-    flash_flush_cache_fn flash_flush_cache_func = (flash_flush_cache_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_FLUSH_CACHE);
-    flash_init_boot2_copyout();
-    // Commit any pending writes to external RAM, to avoid losing them in the subsequent flush:
-    xip_cache_clean_all();
-    flash_rp2350_qmi_save_state_t qmi_save;
-    flash_rp2350_save_qmi_cs1(&qmi_save);
-
-    // No flash accesses after this point
+    flash_hardware_save_state_t state;
+    flash_save_hardware_state(&state);
+    uint32_t ints_saved;
+    __asm volatile("mrs %0, PRIMASK" : "=r"(ints_saved) : : "memory");
+    __asm volatile("cpsid i" : : : "memory");
     __compiler_memory_barrier();
-
-    flash_connect_internal_func();
-    flash_exit_xip_func();
-    flash_range_erase_func(offset, count, FLASH_BLOCK_SIZE, FLASH_BLOCK_ERASE_CMD);
-    flash_flush_cache_func(); // Note this is needed to remove CSn IO force as well as cache flushing
-    flash_enable_xip_via_boot2();
-    flash_rp2350_restore_qmi_cs1(&qmi_save);
+    flash_exit_qpi_mode();
+    // Direct SPI 64KB block erase (0xD8).
+    for (uint32_t pos = 0; pos < (uint32_t)count; pos += FLASH_BLOCK_SIZE) {
+        flash_spi_cmd(0x06); // WREN
+        uint32_t addr = offset + pos;
+        hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+        qmi_hw->direct_tx = FLASH_BLOCK_ERASE_CMD; // 0xD8
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        qmi_hw->direct_tx = (addr >> 16) & 0xFFu;
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        qmi_hw->direct_tx = (addr >> 8) & 0xFFu;
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        qmi_hw->direct_tx = addr & 0xFFu;
+        while (qmi_hw->direct_csr & QMI_DIRECT_CSR_RXEMPTY_BITS); (void)qmi_hw->direct_rx;
+        hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+        flash_spi_wait_ready(); // W25Q128JV 64KB erase: typ 150ms, max 2000ms
+    }
+    flash_restore_xip_spi_mode();
+    flash_invalidate_xip_cache();
+    flash_restore_hardware_state(&state);
+    __asm volatile("msr PRIMASK, %0" : : "r"(ints_saved) : "memory");
 }
 
 void ram_func flash_do_cmd(const uint8_t *txbuf, uint8_t *rxbuf, size_t count) {
-    flash_connect_internal_fn flash_connect_internal_func = (flash_connect_internal_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
-    flash_exit_xip_fn flash_exit_xip_func = (flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
-    flash_flush_cache_fn flash_flush_cache_func = (flash_flush_cache_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_FLUSH_CACHE);
-    flash_init_boot2_copyout();
-    xip_cache_clean_all();
-
-    flash_rp2350_qmi_save_state_t qmi_save;
-    flash_rp2350_save_qmi_cs1(&qmi_save);
-
+    flash_hardware_save_state_t state;
+    flash_save_hardware_state(&state);
+    uint32_t ints_saved;
+    __asm volatile("mrs %0, PRIMASK" : "=r"(ints_saved) : : "memory");
+    __asm volatile("cpsid i" : : : "memory");
     __compiler_memory_barrier();
-    flash_connect_internal_func();
-    flash_exit_xip_func();
+    flash_exit_qpi_mode();
 
-    flash_cs_force(0);
+    // Assert CS and run the FIFO transfer in single-SPI direct mode.
+    hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
     size_t tx_remaining = count;
     size_t rx_remaining = count;
 
-    // QMI version -- no need to bound FIFO contents as QMI stalls on full DIRECT_RX.
-    hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_EN_BITS);
+    // QMI stalls on full DIRECT_RX, so no need to bound FIFO contents.
     while (tx_remaining || rx_remaining) {
         uint32_t flags = qmi_hw->direct_csr;
         bool can_put = !(flags & QMI_DIRECT_CSR_TXFULL_BITS);
@@ -492,13 +587,11 @@ void ram_func flash_do_cmd(const uint8_t *txbuf, uint8_t *rxbuf, size_t count) {
             --rx_remaining;
         }
     }
-    hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_EN_BITS);
-
-    flash_cs_force(1);
-
-    flash_flush_cache_func();
-    flash_enable_xip_via_boot2();
-    flash_rp2350_restore_qmi_cs1(&qmi_save);
+    hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+    flash_restore_xip_spi_mode();
+    flash_invalidate_xip_cache();
+    flash_restore_hardware_state(&state);
+    __asm volatile("msr PRIMASK, %0" : : "r"(ints_saved) : "memory");
 }
 
 */
