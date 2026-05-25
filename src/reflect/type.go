@@ -402,7 +402,7 @@ func (t *rawType) CanSeq2() bool {
 }
 
 func (t *rawType) ConvertibleTo(u Type) bool {
-	panic("unimplemented: (reflect.Type).ConvertibleTo()")
+	return t.RawType.Convertibleto(u.(*rawType).RawType)
 }
 
 func (t *rawType) Elem() Type {
