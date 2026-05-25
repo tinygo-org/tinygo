@@ -1485,13 +1485,11 @@ func convertOp(src Value, typ Type) (Value, bool) {
 			return cvtFloat(src, rtype), true
 		}
 
-		/*
-			case Complex64, Complex128:
-				switch src.Kind() {
-				case Complex64, Complex128:
-					return cvtComplex
-				}
-		*/
+	case Complex64, Complex128:
+		switch src.Kind() {
+		case Complex64, Complex128:
+			return cvtComplex(src, typ.(*RawType)), true
+		}
 
 	case Slice:
 		switch rtype := typ.(*RawType); rtype.Kind() {
@@ -1578,6 +1576,10 @@ func cvtFloat(v Value, t *RawType) Value {
 	return makeFloat(v.flags, v.Float(), t)
 }
 
+func cvtComplex(v Value, t *RawType) Value {
+	return makeComplex(v.flags, v.Complex(), t)
+}
+
 //go:linkname stringToBytes runtime.stringToBytes
 func stringToBytes(x string) []byte
 
@@ -1658,6 +1660,29 @@ func makeFloat32(flags valueFlags, f float32, t *RawType) Value {
 		flags:    flags,
 	}
 	*(*float32)(unsafe.Pointer(&v.value)) = float32(f)
+	return v
+}
+
+func makeComplex(flags valueFlags, f complex128, t *RawType) Value {
+	size := t.Size()
+
+	v := Value{
+		typecode: t,
+		flags:    flags,
+	}
+
+	ptr := unsafe.Pointer(&v.value)
+	if size > unsafe.Sizeof(uintptr(0)) {
+		ptr = alloc(size, nil)
+		v.value = ptr
+	}
+
+	switch size {
+	case 8:
+		*(*complex64)(ptr) = complex64(f)
+	case 16:
+		*(*complex128)(ptr) = f
+	}
 	return v
 }
 
