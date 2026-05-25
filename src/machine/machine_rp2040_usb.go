@@ -123,14 +123,12 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 	}
 }
 
-var empty [0]byte
-
 func handleUSBSetAddress(setup usb.Setup) bool {
 	// Using 570μs timeout which is exactly the same as SAMD21.
 	const ackTimeout = 570
 
 	rp.USBCTRL_REGS.SIE_STATUS.Set(rp.USBCTRL_REGS_SIE_STATUS_ACK_REC)
-	sendUSBPacket(0, empty[:])
+	sendUSBPacket(0, nil)
 
 	// Wait for transfer to complete with a timeout.
 	t := timer.timeElapsed()
