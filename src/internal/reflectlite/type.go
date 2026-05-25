@@ -754,6 +754,93 @@ func (t *RawType) FieldAlign() int {
 	return t.Align()
 }
 
+// ConvertibleTo returns wheather a value of type t can be converted to a variable of of type u
+
+func (r *RawType) ConvertibleTo(u *RawType) bool {
+
+	// This logic is mostly copied from Value.CanConvert
+
+	// Don't need to do anything
+	if r.underlying() == u.underlying() {
+		return true
+	}
+
+	switch r.Kind() {
+	case Int, Int8, Int16, Int32, Int64:
+		switch u.Kind() {
+		case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+			return true
+		case Float32, Float64:
+			return true
+		case String:
+			return true
+		}
+
+	case Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+		switch u.Kind() {
+		case Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+			return true
+		case Float32, Float64:
+			return true
+		case String:
+			return true
+		}
+
+	case Float32, Float64:
+		switch u.Kind() {
+		case Int, Int8, Int16, Int32, Int64:
+			return true
+		case Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+			return true
+		case Float32, Float64:
+			return true
+		}
+
+	case Complex64, Complex128:
+		switch u.Kind() {
+		case Complex64, Complex128:
+			return true
+		}
+
+	case Slice:
+		switch u.Kind() {
+		case Array:
+			// This may fail at runtime if there isn't room
+			if r.elem() == u.elem() {
+				return true
+			}
+
+		case Pointer:
+			// This may fail at runtime if there isn't room
+			if u.elem().Kind() == Array {
+				return true
+			}
+
+		case String:
+			// bytes or runes
+			if r.elem().Kind() == Uint8 || r.elem().Kind() == Int32 {
+				return true
+			}
+
+		}
+
+	case String:
+		// bytes or runes
+		if u.elem().Kind() == Uint8 || u.elem().Kind() == Int32 {
+			return true
+		}
+
+	}
+
+	// TODO(dgryski): Unimplemented
+	// struct types
+	// channels
+	//
+
+	return false
+
+}
+
 // AssignableTo returns whether a value of type t can be assigned to a variable
 // of type u.
 func (t *RawType) AssignableTo(u Type) bool {
