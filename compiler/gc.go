@@ -10,6 +10,25 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// Heap-allocate a buffer of the given size. This will typically call
+// runtime.alloc.
+func (b *builder) createAlloc(sizeValue, layoutValue llvm.Value, align int, comment string) llvm.Value {
+	// Normally allocate using "runtime.alloc", but use "runtime.alloc_noheap"
+	// if the //go:noheap pragma is used.
+	allocFunc := "alloc"
+	if b.info.noheap {
+		allocFunc = "alloc_noheap"
+	}
+
+	call := b.createRuntimeCall(allocFunc, []llvm.Value{sizeValue, layoutValue}, comment)
+	if align != 0 {
+		// TODO: make sure all callsites set the correct alignment.
+		call.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
+	}
+
+	return call
+}
+
 // trackExpr inserts pointer tracking intrinsics for the GC if the expression is
 // one of the expressions that need this.
 func (b *builder) trackExpr(expr ssa.Value, value llvm.Value) {
