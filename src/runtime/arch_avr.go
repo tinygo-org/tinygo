@@ -9,6 +9,8 @@ const GOARCH = "arm" // avr pretends to be arm
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 8
 
+const zeroSizeAllocPtr uintptr = 16 // points into the register file or I/O sapce (which is memory mapped but shouldn't be accessed directly)
+
 const deferExtraRegs = 1 // the frame pointer (Y register) also needs to be stored
 
 const callInstSize = 2 // "call" is 4 bytes, "rcall" is 2 bytes

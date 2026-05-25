@@ -20,6 +20,13 @@ func (b *builder) createAlloc(sizeValue, layoutValue llvm.Value, align int, comm
 		allocFunc = "alloc_noheap"
 	}
 
+	// Allocs that don't allocate anything can return an architecture-specific
+	// sentinel value.
+	if !sizeValue.IsAConstantInt().IsNil() && sizeValue.ZExtValue() == 0 {
+		allocFunc = "alloc_zero"
+	}
+
+	// Make the runtime call.
 	call := b.createRuntimeCall(allocFunc, []llvm.Value{sizeValue, layoutValue}, comment)
 	if align != 0 {
 		// TODO: make sure all callsites set the correct alignment.

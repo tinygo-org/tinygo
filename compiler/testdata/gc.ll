@@ -75,7 +75,7 @@ entry:
 define hidden void @main.newStruct(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %new = call align 1 ptr @runtime.alloc(i32 0, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
+  %new = call align 1 ptr @runtime.alloc_zero(i32 0, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef) #3
   store ptr %new, ptr @main.struct1, align 4
   %new1 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
@@ -92,6 +92,9 @@ entry:
   store ptr %new4, ptr @main.struct5, align 4
   ret void
 }
+
+; Function Attrs: allockind("alloc,zeroed") allocsize(0)
+declare noalias nonnull ptr @runtime.alloc_zero(i32, ptr, ptr) #2
 
 ; Function Attrs: nounwind
 define hidden ptr @main.newFuncValue(ptr %context) unnamed_addr #1 {

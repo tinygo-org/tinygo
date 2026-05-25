@@ -6,6 +6,8 @@ import "device"
 
 const GOARCH = "arm" // xtensa pretends to be arm
 
+const zeroSizeAllocPtr uintptr = 16 // part of early flash: partition table, etc
+
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 32
 

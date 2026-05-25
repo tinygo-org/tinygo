@@ -4,6 +4,8 @@ import "unsafe"
 
 const GOOS = "windows"
 
+const zeroSizeAllocPtr uintptr = 16 // part of the first protected page
+
 //export GetModuleHandleExA
 func _GetModuleHandleExA(dwFlags uint32, lpModuleName unsafe.Pointer, phModule **exeHeader) bool
 

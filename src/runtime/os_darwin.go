@@ -6,6 +6,8 @@ import "unsafe"
 
 const GOOS = "darwin"
 
+const zeroSizeAllocPtr uintptr = 16 // part of the first protected page
+
 const (
 	// See https://github.com/golang/go/blob/master/src/syscall/zerrors_darwin_amd64.go
 	flag_PROT_READ     = 0x1
