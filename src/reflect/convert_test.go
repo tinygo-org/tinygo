@@ -269,6 +269,51 @@ func TestTinyConvert(t *testing.T) {
 		{V(MyRunes("runes🙈🙉🙊")), V(MyRunes("runes🙈🙉🙊"))},
 		{V(MyString("runes♝")), V(MyRunes("runes♝"))},
 		{V(MyRunes("runes♕")), V(MyString("runes♕"))},
+
+		// slice to array
+		{V([]byte(nil)), V([0]byte{})},
+		{V([]byte{}), V([0]byte{})},
+		{V([]byte{1}), V([1]byte{1})},
+		{V([]byte{1, 2}), V([2]byte{1, 2})},
+		{V([]byte{1, 2, 3}), V([3]byte{1, 2, 3})},
+		{V(MyBytes([]byte(nil))), V([0]byte{})},
+		{V(MyBytes{}), V([0]byte{})},
+		{V(MyBytes{1}), V([1]byte{1})},
+		{V(MyBytes{1, 2}), V([2]byte{1, 2})},
+		{V(MyBytes{1, 2, 3}), V([3]byte{1, 2, 3})},
+		{V([]byte(nil)), V(MyBytesArray0{})},
+		{V([]byte{}), V(MyBytesArray0([0]byte{}))},
+		{V([]byte{1, 2, 3, 4}), V(MyBytesArray([4]byte{1, 2, 3, 4}))},
+		{V(MyBytes{}), V(MyBytesArray0([0]byte{}))},
+		{V(MyBytes{5, 6, 7, 8}), V(MyBytesArray([4]byte{5, 6, 7, 8}))},
+		{V([]MyByte{}), V([0]MyByte{})},
+		{V([]MyByte{1, 2}), V([2]MyByte{1, 2})},
+
+		// slice to array pointer
+		{V([]byte(nil)), V((*[0]byte)(nil))},
+		{V([]byte{}), V(new([0]byte))},
+		{V([]byte{7}), V(&[1]byte{7})},
+		{V(MyBytes([]byte(nil))), V((*[0]byte)(nil))},
+		{V(MyBytes([]byte{})), V(new([0]byte))},
+		{V(MyBytes([]byte{9})), V(&[1]byte{9})},
+		{V([]byte(nil)), V(MyBytesArrayPtr0(nil))},
+		{V([]byte{}), V(MyBytesArrayPtr0(new([0]byte)))},
+		{V([]byte{1, 2, 3, 4}), V(MyBytesArrayPtr(&[4]byte{1, 2, 3, 4}))},
+		{V(MyBytes([]byte{})), V(MyBytesArrayPtr0(new([0]byte)))},
+		{V(MyBytes([]byte{5, 6, 7, 8})), V(MyBytesArrayPtr(&[4]byte{5, 6, 7, 8}))},
+
+		{V([]byte(nil)), V((*MyBytesArray0)(nil))},
+		{V([]byte{}), V((*MyBytesArray0)(new([0]byte)))},
+		{V([]byte{1, 2, 3, 4}), V(&MyBytesArray{1, 2, 3, 4})},
+		{V(MyBytes([]byte(nil))), V((*MyBytesArray0)(nil))},
+		{V(MyBytes([]byte{})), V((*MyBytesArray0)(new([0]byte)))},
+		{V(MyBytes([]byte{5, 6, 7, 8})), V(&MyBytesArray{5, 6, 7, 8})},
+		/*
+			{V(new([0]byte)), V(new(MyBytesArray0))},
+			{V(new(MyBytesArray0)), V(new([0]byte))},
+			{V(MyBytesArrayPtr0(nil)), V((*[0]byte)(nil))},
+			{V((*[0]byte)(nil)), V(MyBytesArrayPtr0(nil))},
+		*/
 	}
 
 	for _, tt := range tests {
