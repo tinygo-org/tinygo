@@ -93,6 +93,17 @@ func runtimePanicAt(addr unsafe.Pointer, msg string) {
 	if panicStrategy() == tinygo.PanicStrategyTrap {
 		trap()
 	}
+	if supportsRecover() && !interrupt.In() {
+		frame := (*deferFrame)(task.Current().DeferFrame)
+		if frame != nil {
+			// Use the normal panic mechanism so that this runtime error
+			// can be recovered with recover().
+			frame.PanicValue = plainError(msg)
+			frame.Panicking = panicTrue
+			tinygo_longjmp(frame)
+			// unreachable
+		}
+	}
 	if hasReturnAddr {
 		// Note: the string "panic: runtime error at " is also used in
 		// runtime_cortexm_hardfault.go. It is kept the same so that the string
@@ -149,6 +160,16 @@ func destroyDeferFrame(frame *deferFrame) {
 // panicking goroutine.
 // useParentFrame is set when the caller of runtime._recover has a defer frame
 // itself. In that case, recover() shouldn't check that frame but one frame up.
+//
+// TODO: Go only allows recover() to succeed when called directly from a
+// deferred function, not from a sub-call (e.g. defer func() { sub() }() where
+// sub() calls recover()). The Go compiler enforces this by walking the stack
+// to count frames between gorecover and gopanic. TinyGo currently does not
+// have a stack unwinder, so this restriction is not enforced at runtime.
+// Functions calling recover() are marked noinline to prevent the most common
+// case (inlined sub-call), but non-inlined sub-calls can still incorrectly
+// recover. Fixing this properly requires either frame pointer support or a
+// lightweight stack unwinder.
 func _recover(useParentFrame bool) interface{} {
 	if !supportsRecover() || interrupt.In() {
 		// Either we're compiling without stack unwinding support, or we're
@@ -157,9 +178,6 @@ func _recover(useParentFrame bool) interface{} {
 		// function.
 		return nil
 	}
-	// TODO: somehow check that recover() is called directly by a deferred
-	// function in a panicking goroutine. Maybe this can be done by comparing
-	// the frame pointer?
 	frame := (*deferFrame)(task.Current().DeferFrame)
 	if useParentFrame {
 		// Don't recover panic from the current frame (which can't be panicking

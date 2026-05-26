@@ -1895,6 +1895,12 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			// not of the current function.
 			useParentFrame = 1
 		}
+		// Prevent inlining of functions that call recover(), matching the
+		// Go compiler's behavior. If this function were inlined into a
+		// deferred function, recover() would incorrectly succeed because
+		// the inlined code runs in the deferred function's context.
+		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
+		b.llvmFn.AddFunctionAttr(noinline)
 		return b.createRuntimeCall("_recover", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), useParentFrame, false)}, ""), nil
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?

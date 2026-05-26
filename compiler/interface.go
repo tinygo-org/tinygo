@@ -796,40 +796,56 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 
 	prevBlock := b.GetInsertBlock()
 	okBlock := b.insertBasicBlock("typeassert.ok")
-	nextBlock := b.insertBasicBlock("typeassert.next")
-	b.currentBlockInfo.exit = nextBlock // adjust outgoing block for phi nodes
-	b.CreateCondBr(commaOk, okBlock, nextBlock)
-
-	// Retrieve the value from the interface if the type assert was
-	// successful.
-	b.SetInsertPointAtEnd(okBlock)
-	var valueOk llvm.Value
-	if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
-		// Type assert on interface type. Easy: just return the same
-		// interface value.
-		valueOk = itf
-	} else {
-		// Type assert on concrete type. Extract the underlying type from
-		// the interface (but only after checking it matches).
-		valueOk = b.extractValueFromInterface(itf, assertedType)
-	}
-	b.CreateBr(nextBlock)
-
-	// Continue after the if statement.
-	b.SetInsertPointAtEnd(nextBlock)
-	phi := b.CreatePHI(assertedType, "typeassert.value")
-	phi.AddIncoming([]llvm.Value{llvm.ConstNull(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
 
 	if expr.CommaOk {
+		nextBlock := b.insertBasicBlock("typeassert.next")
+		b.currentBlockInfo.exit = nextBlock
+		b.CreateCondBr(commaOk, okBlock, nextBlock)
+
+		// Retrieve the value from the interface if the type assert was
+		// successful.
+		b.SetInsertPointAtEnd(okBlock)
+		var valueOk llvm.Value
+		if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+			// Type assert on interface type. Easy: just return the same
+			// interface value.
+			valueOk = itf
+		} else {
+			// Type assert on concrete type. Extract the underlying type from
+			// the interface (but only after checking it matches).
+			valueOk = b.extractValueFromInterface(itf, assertedType)
+		}
+		b.CreateBr(nextBlock)
+
+		// Continue after the if statement.
+		b.SetInsertPointAtEnd(nextBlock)
+		phi := b.CreatePHI(assertedType, "typeassert.value")
+		phi.AddIncoming([]llvm.Value{llvm.ConstNull(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
+
 		tuple := b.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(b.ctx.Int1Type())}, false) // create empty tuple
 		tuple = b.CreateInsertValue(tuple, phi, 0, "")                                                          // insert value
 		tuple = b.CreateInsertValue(tuple, commaOk, 1, "")                                                      // insert 'comma ok' boolean
 		return tuple
 	} else {
-		// This is kind of dirty as the branch above becomes mostly useless,
-		// but hopefully this gets optimized away.
-		b.createRuntimeCall("interfaceTypeAssert", []llvm.Value{commaOk}, "")
-		return phi
+		// Type assert without comma-ok. If it fails, panic.
+		faultBlock := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.throw")
+		b.currentBlockInfo.exit = okBlock
+		b.CreateCondBr(commaOk, okBlock, faultBlock)
+
+		// Fault: emit a checkpoint (for recover) and panic.
+		b.SetInsertPointAtEnd(faultBlock)
+		if b.hasDeferFrame() {
+			b.createFaultCheckpoint()
+		}
+		b.createRuntimeCall("interfaceTypeAssert", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
+		b.CreateUnreachable()
+
+		// OK: extract the value from the interface.
+		b.SetInsertPointAtEnd(okBlock)
+		if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+			return itf
+		}
+		return b.extractValueFromInterface(itf, assertedType)
 	}
 }
 
