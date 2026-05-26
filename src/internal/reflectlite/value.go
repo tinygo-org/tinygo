@@ -1686,12 +1686,25 @@ func makeComplex(flags valueFlags, f complex128, t *RawType) Value {
 	return v
 }
 
-func cvtIntString(src Value, t *RawType) Value {
-	panic("cvtUintString: unimplemented")
+//go:linkname stringFromUnicode runtime.stringFromUnicode
+func stringFromUnicode(x rune) string
+
+func cvtIntString(v Value, t *RawType) Value {
+	b := stringFromUnicode(rune(v.Int()))
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&b),
+		flags:    v.flags,
+	}
 }
 
-func cvtUintString(src Value, t *RawType) Value {
-	panic("cvtUintString: unimplemented")
+func cvtUintString(v Value, t *RawType) Value {
+	b := stringFromUnicode(rune(v.Uint()))
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&b),
+		flags:    v.flags,
+	}
 }
 
 //go:linkname stringToRunes runtime.stringToRunes
