@@ -1694,12 +1694,28 @@ func cvtUintString(src Value, t *RawType) Value {
 	panic("cvtUintString: unimplemented")
 }
 
-func cvtStringRunes(src Value, t *RawType) Value {
-	panic("cvsStringRunes: unimplemented")
+//go:linkname stringToRunes runtime.stringToRunes
+func stringToRunes(s string) []rune
+
+func cvtStringRunes(v Value, t *RawType) Value {
+	b := stringToRunes(*(*string)(v.value))
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&b),
+		flags:    v.flags,
+	}
 }
 
-func cvtRunesString(src Value, t *RawType) Value {
-	panic("cvsRunesString: unimplemented")
+//go:linkname stringFromRunes runtime.stringFromRunes
+func stringFromRunes(r []rune) string
+
+func cvtRunesString(v Value, t *RawType) Value {
+	s := stringFromRunes(*(*[]rune)(v.value))
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&s),
+		flags:    v.flags,
+	}
 }
 
 //go:linkname slicePanic runtime.slicePanic
