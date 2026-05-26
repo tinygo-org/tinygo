@@ -30,8 +30,17 @@ func main() {
 	println("\n# defer panic")
 	deferPanic()
 
+	println("\n# indirect recover")
+	indirectRecover()
+
 	println("\n# runtime.Goexit")
 	runtimeGoexit()
+
+	println("\n# repanic")
+	recoverRepanic()
+
+	println("\n# recover runtime errors")
+	recoverRuntimeError()
 }
 
 func recoverSimple() {
@@ -114,6 +123,24 @@ func deferPanic() {
 	println("defer panic")
 }
 
+// TODO: Go only allows recover() to succeed when called directly from a
+// deferred function. Update this test once runtime recover can distinguish it.
+func indirectRecover() {
+	defer func() {
+		if r := indirectRecoverHelper(); r == nil {
+			println("indirect recover returned nil")
+		} else {
+			printitf("indirect recover returned:", r)
+		}
+	}()
+	panic("indirect panic")
+}
+
+//go:noinline
+func indirectRecoverHelper() interface{} {
+	return recover()
+}
+
 func runtimeGoexit() {
 	wg.Add(1)
 	go func() {
@@ -127,6 +154,27 @@ func runtimeGoexit() {
 	wg.Wait()
 }
 
+// Test that a repanic inside a deferred function propagates correctly
+// instead of re-running the same defer. This is a regression test for
+// tinygo-org/tinygo issue 3449.
+func recoverRepanic() {
+	// Two defers: inner recovers and repanics, outer should catch it.
+	defer func() {
+		r := recover()
+		if r != nil {
+			printitf("outer recovered:", r)
+		}
+	}()
+	defer func() {
+		r := recover()
+		if r != nil {
+			println("inner, repanicking")
+			panic(r)
+		}
+	}()
+	panic("repanic value")
+}
+
 func printitf(msg string, itf interface{}) {
 	switch itf := itf.(type) {
 	case string:
@@ -134,4 +182,62 @@ func printitf(msg string, itf interface{}) {
 	default:
 		println(msg, itf)
 	}
+}
+
+// Test recovering from runtime errors (bounds checks, type assertions, etc.)
+func recoverRuntimeError() {
+	recoverMustPanic("index", func() {
+		s := make([]int, 5)
+		_ = s[99]
+	})
+	recoverMustPanic("index from helper", func() {
+		s := []byte{1}
+		_ = readOutOfBounds(s)
+	})
+	recoverMustPanic("slice", func() {
+		s := make([]int, 5)
+		_ = s[3:99]
+	})
+	recoverMustPanic("type assert", func() {
+		var x interface{} = 1
+		_ = x.(string)
+	})
+	recoverEmptyInterfaceTypeAssert()
+}
+
+//go:noinline
+func readOutOfBounds(s []byte) byte {
+	return s[2]
+}
+
+func recoverEmptyInterfaceTypeAssert() {
+	defer func() {
+		r := recover()
+		if r != nil {
+			println("  failed empty interface type assert")
+		} else {
+			println("  recovered: empty interface type assert")
+		}
+	}()
+	var intf interface{} = 3
+	typed := intf.(interface{})
+	useEmptyInterface(typed)
+}
+
+func useEmptyInterface(typed interface{}) {
+	if typed.(int) != 3 {
+		println("  failed empty interface value")
+	}
+}
+
+func recoverMustPanic(name string, f func()) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			println("  recovered:", name)
+		} else {
+			println("  failed to recover:", name)
+		}
+	}()
+	f()
 }

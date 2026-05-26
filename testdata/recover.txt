@@ -28,5 +28,19 @@ recovered: panic 2
 defer panic
 recovered from deferred call: deferred panic
 
+# indirect recover
+indirect recover returned: indirect panic
+
 # runtime.Goexit
 Goexit deferred function, recover is nil: true
+
+# repanic
+inner, repanicking
+outer recovered: repanic value
+
+# recover runtime errors
+  recovered: index
+  recovered: index from helper
+  recovered: slice
+  recovered: type assert
+  recovered: empty interface type assert

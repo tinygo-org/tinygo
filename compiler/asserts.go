@@ -252,6 +252,9 @@ func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc
 
 	// Fail: the assert triggered so panic.
 	b.SetInsertPointAtEnd(faultBlock)
+	if b.hasDeferFrame() {
+		b.createFaultCheckpoint()
+	}
 	b.createRuntimeCall(assertFunc, nil, "")
 	b.CreateUnreachable()
 

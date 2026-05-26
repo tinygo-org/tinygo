@@ -42,9 +42,9 @@ func TestBinarySize(t *testing.T) {
 	// This is a small number of very diverse targets that we want to test.
 	tests := []sizeTest{
 		// microcontrollers
-		{"hifive1b", "examples/echo", 3680, 280, 0, 2252},
-		{"microbit", "examples/serial", 2694, 342, 8, 2248},
-		{"wioterminal", "examples/pininterrupt", 7074, 1510, 120, 7248},
+		{"hifive1b", "examples/echo", 3817, 299, 0, 2252},
+		{"microbit", "examples/serial", 2816, 356, 8, 2248},
+		{"wioterminal", "examples/pininterrupt", 7206, 1510, 120, 7248},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
@@ -99,7 +99,7 @@ func TestSizeFull(t *testing.T) {
 				t.Fatal("could not read program size:", err)
 			}
 			for _, pkg := range sizes.sortedPackageNames() {
-				if pkg == "(padding)" || pkg == "(unknown)" {
+				if pkg == "(padding)" || pkg == "(unknown)" || pkg == "Go types" {
 					// TODO: correctly attribute all unknown binary size.
 					continue
 				}

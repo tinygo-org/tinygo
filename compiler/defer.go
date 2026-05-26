@@ -241,6 +241,17 @@ func (b *builder) createInvokeCheckpoint() {
 	b.currentBlockInfo.exit = continueBB
 }
 
+// createFaultCheckpoint is like createInvokeCheckpoint but for use in fault
+// blocks (e.g., bounds check failures). Unlike createInvokeCheckpoint, it does
+// not update currentBlockInfo.exit because the fault block is a dead-end that
+// does not participate in phi node resolution.
+func (b *builder) createFaultCheckpoint() {
+	isZero := b.createCheckpoint(b.deferFrame)
+	continueBB := b.insertBasicBlock("")
+	b.CreateCondBr(isZero, continueBB, b.landingpad)
+	b.SetInsertPointAtEnd(continueBB)
+}
+
 // isInLoop checks if there is a path from the current block to itself.
 // Use Tarjan's strongly connected components algorithm to search for cycles.
 // A one-node SCC is a cycle iff there is an edge from the node to itself.
