@@ -160,6 +160,7 @@
 
 
 			const loadValue = (addr) => {
+				addr >>>= 0;
 				let v_ref = mem().getBigUint64(addr, true);
 				return unboxValue(v_ref);
 			}
@@ -221,10 +222,14 @@
 			}
 
 			const loadSlice = (array, len, cap) => {
+				array >>>= 0;
+				len >>>= 0;
 				return new Uint8Array(this._inst.exports.memory.buffer, array, len);
 			}
 
 			const loadSliceOfValues = (array, len, cap) => {
+				array >>>= 0;
+				len >>>= 0;
 				const a = new Array(len);
 				for (let i = 0; i < len; i++) {
 					a[i] = loadValue(array + i * 8);
@@ -233,6 +238,8 @@
 			}
 
 			const loadString = (ptr, len) => {
+				ptr >>>= 0;
+				len >>>= 0;
 				return decoder.decode(new DataView(this._inst.exports.memory.buffer, ptr, len));
 			}
 
