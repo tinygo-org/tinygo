@@ -1690,20 +1690,27 @@ func makeComplex(flags valueFlags, f complex128, t *RawType) Value {
 func stringFromUnicode(x rune) string
 
 func cvtIntString(v Value, t *RawType) Value {
-	b := stringFromUnicode(rune(v.Int()))
+	s := "\uFFFD"
+	if x := v.Int(); int64(rune(x)) == x {
+		s = string(rune(x))
+	}
 	return Value{
 		typecode: t,
-		value:    unsafe.Pointer(&b),
-		flags:    v.flags,
+		value:    unsafe.Pointer(&s),
+		flags:    v.flags | valueFlagRO,
 	}
 }
 
 func cvtUintString(v Value, t *RawType) Value {
-	b := stringFromUnicode(rune(v.Uint()))
+	s := "\uFFFD"
+	if x := v.Uint(); uint64(rune(x)) == x {
+		s = string(rune(x))
+	}
+
 	return Value{
 		typecode: t,
-		value:    unsafe.Pointer(&b),
-		flags:    v.flags,
+		value:    unsafe.Pointer(&s),
+		flags:    v.flags | valueFlagRO,
 	}
 }
 
