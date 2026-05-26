@@ -23,17 +23,19 @@ class Comparison:
 def readSizes(path):
     sizes = []
     lines = open(path).readlines()
+    command = None
     for i in range(len(lines)):
-        if not lines[i].strip().startswith('code '):
-            continue
-        # found a size header
-        code, data, bss, flash, ram = map(int, lines[i+1].replace("|", "").split())
-        command = lines[i-1].strip()
-        sizes.append({
-            'command': command,
-            'flash':   flash,
-            'ram':     ram
-        })
+        if lines[i].strip().startswith('tinygo build'):
+            command = lines[i].strip()
+        elif lines[i].strip().startswith('code '):
+            # found a size header
+            code, data, bss, flash, ram = map(int, lines[i+1].replace("|", "").split())
+            sizes.append({
+                'command': command,
+                'flash':   flash,
+                'ram':     ram
+            })
+            command = None # make sure we don't accidentally miss a 'tinygo build' line
     return sizes
 
 def main():
