@@ -7,6 +7,7 @@ package runtime
 // targets that have far too little RAM even for the leaking memory allocator.
 
 import (
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -15,6 +16,9 @@ const needsStaticHeap = false
 var gcTotalAlloc uint64 // for runtime.MemStats
 var gcMallocs uint64
 var gcFrees uint64
+var gcScanState atomic.Uint32
+
+func scanCurrentStack() {}
 
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 
