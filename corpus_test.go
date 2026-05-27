@@ -150,6 +150,63 @@ func TestCorpus(t *testing.T) {
 	}
 }
 
+func TestLoadRepos(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+		path := t.TempDir() + "/empty.yaml"
+		if err := os.WriteFile(path, []byte(""), 0644); err != nil {
+			t.Fatal(err)
+		}
+		repos, err := loadRepos(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(repos) != 0 {
+			t.Errorf("expected 0 repos, got %d", len(repos))
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		t.Parallel()
+		path := t.TempDir() + "/invalid.yaml"
+		if err := os.WriteFile(path, []byte("{"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := loadRepos(path); err == nil {
+			t.Error("expected error for invalid YAML")
+		}
+	})
+
+	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
+		path := t.TempDir() + "/valid.yaml"
+		data := []byte("- repo: example.com/test\n  tags: noasm\n  skipwasi: true\n  slow: true\n  version: v1.0.0\n  subdirs:\n    - pkg: sub\n      skipwasi: true\n      slow: false\n")
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+		repos, err := loadRepos(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(repos) != 1 {
+			t.Fatalf("expected 1 repo, got %d", len(repos))
+		}
+		r := repos[0]
+		if r.Repo != "example.com/test" || r.Tags != "noasm" || !r.SkipWASI || !r.Slow || r.Version != "v1.0.0" {
+			t.Errorf("unexpected repo fields: %+v", r)
+		}
+		if len(r.Subdirs) != 1 {
+			t.Fatalf("expected 1 subdir, got %d", len(r.Subdirs))
+		}
+		s := r.Subdirs[0]
+		if s.Pkg != "sub" || !s.SkipWASI || s.Slow {
+			t.Errorf("unexpected subdir fields: %+v", s)
+		}
+	})
+}
+
 type T struct {
 	Repo     string
 	Tags     string
