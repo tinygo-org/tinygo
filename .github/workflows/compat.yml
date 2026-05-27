@@ -1,0 +1,72 @@
+# This CI job checks whether at least the smoke tests pass for the oldest
+# Go/LLVM version we claim to support.
+
+name: Version compatibility test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - release
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-compat:
+    runs-on: ubuntu-22.04 # this must be a specific version for the apt install below
+    env:
+      # Oldest versions currently supported by TinyGo
+      LLVM: "15"
+      Go: "1.23"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.Go }}
+          cache: true
+      - name: Install LLVM
+        run: |
+          echo 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-${{ env.LLVM }} main' | sudo tee /etc/apt/sources.list.d/llvm.list
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+              llvm-${{ env.LLVM }}-dev \
+              clang-${{ env.LLVM }} \
+              libclang-${{ env.LLVM }}-dev \
+              lld-${{ env.LLVM }} \
+              binaryen
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v5
+        id: cache-llvm-source
+        with:
+          key: llvm-source-20-linux-compat
+          path: llvm-project/compiler-rt
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v5
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: llvm-project/compiler-rt
+      - name: Go cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-build-${{ env.Go }}-llvm${{ env.LLVM }}-${{ hashFiles('go.sum') }}
+      - name: Build TinyGo
+        run: go install -tags=llvm${{ env.LLVM }}
+      - run: tinygo version
+      - run: make gen-device -j4
+      - run: go test -tags=llvm${{ env.LLVM }} -short -skip=TestErrors
+      - run: make smoketest XTENSA=0
