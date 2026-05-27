@@ -266,6 +266,8 @@ jobs:
       - run: make smoketest
       - run: make wasmtest
       - run: make tinygo-test-baremetal
+      - name: Check Go code formatting
+        run: make fmt-check lint
   build-linux-cross:
     # Build ARM Linux binaries, ready for release.
     # This intentionally uses an older Linux image, so that we compile against
