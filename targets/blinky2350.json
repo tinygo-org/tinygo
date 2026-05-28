@@ -1,0 +1,9 @@
+{
+    "inherits": ["rp2350"],
+    "build-tags": ["blinky2350"],
+    "serial-port": ["2e8a:0005"],
+    "default-stack-size": 8192,
+    "ldflags": [
+        "--defsym=__flash_size=16M"
+    ]
+}
