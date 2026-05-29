@@ -47,12 +47,20 @@ func (v Value) isExported() bool {
 	return v.flags&valueFlagExported != 0
 }
 
-func (v Value) isRO() bool {
+func (v Value) IsRO() bool {
 	return v.flags&(valueFlagRO) != 0
 }
 
+func (v *Value) MakeRO(ro bool) {
+	if ro {
+		v.flags |= valueFlagRO
+	} else {
+		v.flags &^= valueFlagRO
+	}
+}
+
 func (v Value) checkRO() {
-	if v.isRO() {
+	if v.IsRO() {
 		panic("reflect: value is not settable")
 	}
 }
@@ -297,7 +305,7 @@ func (v Value) IsValid() bool {
 }
 
 func (v Value) CanInterface() bool {
-	return v.isExported() && !v.isRO()
+	return v.isExported() && !v.IsRO()
 }
 
 func (v Value) CanAddr() bool {
@@ -1532,6 +1540,12 @@ func convertOp(src Value, typ Type) (Value, bool) {
 				return cvtStringRunes(src, rtype), true
 			}
 		}
+
+	case Pointer:
+		rtype := typ.(*RawType)
+		if rtype.Kind() == Pointer && !rtype.isNamed() {
+			return cvtDirect(src, rtype), true
+		}
 	}
 
 	// TODO(dgryski): Unimplemented:
@@ -1574,6 +1588,14 @@ func cvtFloat(v Value, t *RawType) Value {
 		return makeFloat32(v.flags, v.Float32(), t)
 	}
 	return makeFloat(v.flags, v.Float(), t)
+}
+
+func cvtDirect(v Value, t *RawType) Value {
+	return Value{
+		typecode: t,
+		value:    v.value,
+		flags:    v.flags,
+	}
 }
 
 func cvtComplex(v Value, t *RawType) Value {
@@ -1697,7 +1719,7 @@ func cvtIntString(v Value, t *RawType) Value {
 	return Value{
 		typecode: t,
 		value:    unsafe.Pointer(&s),
-		flags:    v.flags | valueFlagRO,
+		flags:    v.flags,
 	}
 }
 
@@ -1710,7 +1732,7 @@ func cvtUintString(v Value, t *RawType) Value {
 	return Value{
 		typecode: t,
 		value:    unsafe.Pointer(&s),
-		flags:    v.flags | valueFlagRO,
+		flags:    v.flags,
 	}
 }
 

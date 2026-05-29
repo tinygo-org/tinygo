@@ -4249,8 +4249,6 @@ type BytesChan chan []byte
 type BytesChanRecv <-chan []byte
 type BytesChanSend chan<- []byte
 
-/*
-
 var convertTests = []struct {
 	in  Value
 	out Value
@@ -4286,7 +4284,7 @@ var convertTests = []struct {
 				}
 			}
 		}
-*/ /*
+	*/
 	{V(int8(1)), V(int8(1))},
 	{V(int8(2)), V(uint8(2))},
 	{V(uint8(3)), V(int8(3))},
@@ -4602,37 +4600,41 @@ var convertTests = []struct {
 	{V((func())(nil)), V(MyFunc(nil))},
 	{V((MyFunc)(nil)), V((func())(nil))},
 
-	// structs with different tags
-	{V(struct {
-		x int `some:"foo"`
-	}{}), V(struct {
-		x int `some:"bar"`
-	}{})},
+	/*
 
-	{V(struct {
-		x int `some:"bar"`
-	}{}), V(struct {
-		x int `some:"foo"`
-	}{})},
+		// structs with different tags
+		{V(struct {
+			x int `some:"foo"`
+		}{}), V(struct {
+			x int `some:"bar"`
+		}{})},
 
-	{V(MyStruct{}), V(struct {
-		x int `some:"foo"`
-	}{})},
+		{V(struct {
+			x int `some:"bar"`
+		}{}), V(struct {
+			x int `some:"foo"`
+		}{})},
 
-	{V(struct {
-		x int `some:"foo"`
-	}{}), V(MyStruct{})},
+		{V(MyStruct{}), V(struct {
+			x int `some:"foo"`
+		}{})},
 
-	{V(MyStruct{}), V(struct {
-		x int `some:"bar"`
-	}{})},
+		{V(struct {
+			x int `some:"foo"`
+		}{}), V(MyStruct{})},
 
-	{V(struct {
-		x int `some:"bar"`
-	}{}), V(MyStruct{})},
+		{V(MyStruct{}), V(struct {
+			x int `some:"bar"`
+		}{})},
 
-	{V(MyStruct1{}), V(MyStruct2{})},
-	{V(MyStruct2{}), V(MyStruct1{})},
+		{V(struct {
+			x int `some:"bar"`
+		}{}), V(MyStruct{})},
+
+
+		{V(MyStruct1{}), V(MyStruct2{})},
+		{V(MyStruct2{}), V(MyStruct1{})},
+	*/
 
 	// can convert *byte and *MyByte
 	{V((*byte)(nil)), V((*MyByte)(nil))},
@@ -4674,46 +4676,59 @@ var convertTests = []struct {
 	{V(new(io.Reader)), V(new(io.Reader))},
 	{V(new(io.Writer)), V(new(io.Writer))},
 
-	// channels
-	{V(IntChan(nil)), V((chan<- int)(nil))},
-	{V(IntChan(nil)), V((<-chan int)(nil))},
-	{V((chan int)(nil)), V(IntChanRecv(nil))},
-	{V((chan int)(nil)), V(IntChanSend(nil))},
-	{V(IntChanRecv(nil)), V((<-chan int)(nil))},
-	{V((<-chan int)(nil)), V(IntChanRecv(nil))},
-	{V(IntChanSend(nil)), V((chan<- int)(nil))},
-	{V((chan<- int)(nil)), V(IntChanSend(nil))},
-	{V(IntChan(nil)), V((chan int)(nil))},
-	{V((chan int)(nil)), V(IntChan(nil))},
-	{V((chan int)(nil)), V((<-chan int)(nil))},
-	{V((chan int)(nil)), V((chan<- int)(nil))},
-	{V(BytesChan(nil)), V((chan<- []byte)(nil))},
-	{V(BytesChan(nil)), V((<-chan []byte)(nil))},
-	{V((chan []byte)(nil)), V(BytesChanRecv(nil))},
-	{V((chan []byte)(nil)), V(BytesChanSend(nil))},
-	{V(BytesChanRecv(nil)), V((<-chan []byte)(nil))},
-	{V((<-chan []byte)(nil)), V(BytesChanRecv(nil))},
-	{V(BytesChanSend(nil)), V((chan<- []byte)(nil))},
-	{V((chan<- []byte)(nil)), V(BytesChanSend(nil))},
-	{V(BytesChan(nil)), V((chan []byte)(nil))},
-	{V((chan []byte)(nil)), V(BytesChan(nil))},
-	{V((chan []byte)(nil)), V((<-chan []byte)(nil))},
-	{V((chan []byte)(nil)), V((chan<- []byte)(nil))},
+	/*
 
-	// cannot convert other instances (channels)
-	{V(IntChan(nil)), V(IntChan(nil))},
-	{V(IntChanRecv(nil)), V(IntChanRecv(nil))},
-	{V(IntChanSend(nil)), V(IntChanSend(nil))},
-	{V(BytesChan(nil)), V(BytesChan(nil))},
-	{V(BytesChanRecv(nil)), V(BytesChanRecv(nil))},
-	{V(BytesChanSend(nil)), V(BytesChanSend(nil))},
+		// channels
+		{V(IntChan(nil)), V((chan<- int)(nil))},
+		{V(IntChan(nil)), V((<-chan int)(nil))},
+		{V((chan int)(nil)), V(IntChanRecv(nil))},
+		{V((chan int)(nil)), V(IntChanSend(nil))},
+		{V(IntChanRecv(nil)), V((<-chan int)(nil))},
+		{V((<-chan int)(nil)), V(IntChanRecv(nil))},
+		{V(IntChanSend(nil)), V((chan<- int)(nil))},
+		{V((chan<- int)(nil)), V(IntChanSend(nil))},
+		{V(IntChan(nil)), V((chan int)(nil))},
+		{V((chan int)(nil)), V(IntChan(nil))},
+		{V((chan int)(nil)), V((<-chan int)(nil))},
+		{V((chan int)(nil)), V((chan<- int)(nil))},
+		{V(BytesChan(nil)), V((chan<- []byte)(nil))},
+		{V(BytesChan(nil)), V((<-chan []byte)(nil))},
+		{V((chan []byte)(nil)), V(BytesChanRecv(nil))},
+		{V((chan []byte)(nil)), V(BytesChanSend(nil))},
+		{V(BytesChanRecv(nil)), V((<-chan []byte)(nil))},
+		{V((<-chan []byte)(nil)), V(BytesChanRecv(nil))},
+		{V(BytesChanSend(nil)), V((chan<- []byte)(nil))},
+		{V((chan<- []byte)(nil)), V(BytesChanSend(nil))},
+		{V(BytesChan(nil)), V((chan []byte)(nil))},
+		{V((chan []byte)(nil)), V(BytesChan(nil))},
+		{V((chan []byte)(nil)), V((<-chan []byte)(nil))},
+		{V((chan []byte)(nil)), V((chan<- []byte)(nil))},
 
-	// interfaces
-	{V(int(1)), EmptyInterfaceV(int(1))},
-	{V(string("hello")), EmptyInterfaceV(string("hello"))},
-	{V(new(bytes.Buffer)), ReaderV(new(bytes.Buffer))},
-	{ReadWriterV(new(bytes.Buffer)), ReaderV(new(bytes.Buffer))},
-	{V(new(bytes.Buffer)), ReadWriterV(new(bytes.Buffer))},
+		// cannot convert other instances (channels)
+		{V(IntChan(nil)), V(IntChan(nil))},
+		{V(IntChanRecv(nil)), V(IntChanRecv(nil))},
+		{V(IntChanSend(nil)), V(IntChanSend(nil))},
+		{V(BytesChan(nil)), V(BytesChan(nil))},
+		{V(BytesChanRecv(nil)), V(BytesChanRecv(nil))},
+		{V(BytesChanSend(nil)), V(BytesChanSend(nil))},
+
+		// interfaces
+		{V(int(1)), EmptyInterfaceV(int(1))},
+		{V(string("hello")), EmptyInterfaceV(string("hello"))},
+		{V(new(bytes.Buffer)), ReaderV(new(bytes.Buffer))},
+		{ReadWriterV(new(bytes.Buffer)), ReaderV(new(bytes.Buffer))},
+		{V(new(bytes.Buffer)), ReadWriterV(new(bytes.Buffer))},
+	*/
+
+}
+
+func IsRO(v Value) bool {
+	return v.IsRO()
+}
+
+func MakeRO(v Value) Value {
+	v.MakeRO(true)
+	return v
 }
 
 func TestConvert(t *testing.T) {
@@ -4804,6 +4819,8 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+/*
+
 func TestConvertPanic(t *testing.T) {
 	s := make([]byte, 4)
 	p := new([8]byte)
@@ -4848,6 +4865,8 @@ func TestConvertSlice2Array(t *testing.T) {
 	}
 }
 
+*/
+
 var gFloat32 float32
 
 const snan uint32 = 0x7f800001
@@ -4869,8 +4888,6 @@ func TestConvertNaNs(t *testing.T) {
 		t.Errorf("signaling nan conversion got %x, want %x", got, snan)
 	}
 }
-
-*/
 
 type ComparableStruct struct {
 	X int
