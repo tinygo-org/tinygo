@@ -754,8 +754,7 @@ func (t *RawType) FieldAlign() int {
 	return t.Align()
 }
 
-// ConvertibleTo returns wheather a value of type t can be converted to a variable of of type u
-
+// ConvertibleTo returns whether a value of type t can be converted to a variable of type u
 func (r *RawType) ConvertibleTo(u *RawType) bool {
 
 	// This logic is mostly copied from Value.CanConvert
