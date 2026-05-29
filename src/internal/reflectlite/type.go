@@ -760,11 +760,6 @@ func (r *RawType) ConvertibleTo(u *RawType) bool {
 
 	// This logic is mostly copied from Value.CanConvert
 
-	// Don't need to do anything
-	if r.underlying() == u.underlying() {
-		return true
-	}
-
 	switch r.Kind() {
 	case Int, Int8, Int16, Int32, Int64:
 		switch u.Kind() {
@@ -812,13 +807,13 @@ func (r *RawType) ConvertibleTo(u *RawType) bool {
 
 		case Pointer:
 			// This may fail at runtime if there isn't room
-			if u.elem().Kind() == Array {
+			if u.elem().Kind() == Array && r.elem() == u.elem().elem() {
 				return true
 			}
 
 		case String:
 			// bytes or runes
-			if r.elem().Kind() == Uint8 || r.elem().Kind() == Int32 {
+			if !r.elem().isNamed() && (r.elem().Kind() == Uint8 || r.elem().Kind() == Int32) {
 				return true
 			}
 
@@ -826,16 +821,27 @@ func (r *RawType) ConvertibleTo(u *RawType) bool {
 
 	case String:
 		// bytes or runes
-		if u.elem().Kind() == Uint8 || u.elem().Kind() == Int32 {
+		if u.Kind() == Slice && !u.elem().isNamed() && (u.elem().Kind() == Uint8 || u.elem().Kind() == Int32) {
 			return true
 		}
 
+	case Pointer:
+		if !r.isNamed() && u.Kind() == Pointer && !u.isNamed() && r.elem().underlying() == u.elem().underlying() {
+			return true
+		}
+	}
+
+	if r.underlying() == u.underlying() {
+		return true
+	}
+
+	if u.Kind() == Interface && u.NumMethod() == 0 {
+		return true
 	}
 
 	// TODO(dgryski): Unimplemented
 	// struct types
 	// channels
-	//
 
 	return false
 

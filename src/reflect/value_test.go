@@ -628,7 +628,7 @@ func TestAssignableTo(t *testing.T) {
 	}
 }
 
-func TestConvert(t *testing.T) {
+func TestConvertBasic(t *testing.T) {
 	v := ValueOf(int64(3))
 	c := v.Convert(TypeOf(byte(0)))
 
