@@ -1494,9 +1494,9 @@ func convertOp(src Value, typ Type) (Value, bool) {
 		}
 
 	case Complex64, Complex128:
-		switch src.Kind() {
+		switch rtype := typ.(*RawType); rtype.Kind() {
 		case Complex64, Complex128:
-			return cvtComplex(src, typ.(*RawType)), true
+			return cvtComplex(src, rtype), true
 		}
 
 	case Slice:
@@ -1543,7 +1543,7 @@ func convertOp(src Value, typ Type) (Value, bool) {
 
 	case Pointer:
 		rtype := typ.(*RawType)
-		if rtype.Kind() == Pointer && !rtype.isNamed() {
+		if rtype.Kind() == Pointer && !src.typecode.isNamed() && !rtype.isNamed() && src.typecode.elem().underlying() == rtype.elem().underlying() {
 			return cvtDirect(src, rtype), true
 		}
 	}
@@ -1707,9 +1707,6 @@ func makeComplex(flags valueFlags, f complex128, t *RawType) Value {
 	}
 	return v
 }
-
-//go:linkname stringFromUnicode runtime.stringFromUnicode
-func stringFromUnicode(x rune) string
 
 func cvtIntString(v Value, t *RawType) Value {
 	s := "\uFFFD"
