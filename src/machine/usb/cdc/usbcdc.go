@@ -134,8 +134,14 @@ func (usbcdc *USBCDC) txhandler() {
 // sendFromRing sends one USB packet from the ring and sets inflight.
 //
 // The caller must own txActive. Ownership starts in kickTx and is kept across
-// TX completion interrupts until the TX ring is empty.
+// TX completion handling until the TX ring is empty.
 func (usbcdc *USBCDC) sendFromRing() {
+	// This is the main TX pump loop. While txActive is held, each iteration
+	// peeks the TX ring and sends one packet if data is available.
+	//
+	// The empty-ring case below is the shutdown path: release txActive, then
+	// re-check the ring to avoid missing a Write that appended data while
+	// txActive was still set.
 	for {
 		d1, _ := usbcdc.tx.Peek()
 		if len(d1) == 0 {
@@ -149,6 +155,9 @@ func (usbcdc *USBCDC) sendFromRing() {
 			case !usbcdc.txActive.CompareAndSwap(0, 1):
 				return
 			}
+
+			// New data appeared while txActive was set, and this TX pump owner
+			// re-acquired ownership. Continue the pump and re-peek the ring.
 			continue
 		}
 
