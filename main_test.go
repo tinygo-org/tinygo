@@ -280,6 +280,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 
 	for _, name := range tests {
+		if name == "goroutines.go" && (spec.Scheduler == "threads" || spec.Scheduler == "cores") {
+			// This test intentionally checks concurrent scheduling by comparing
+			// output order, so only run it with non-threaded schedulers.
+			continue
+		}
 		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
 			switch name {
 			case "timers.go":
