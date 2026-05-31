@@ -295,16 +295,33 @@ var DefaultUART = UART0
 
 var (
 	UART0  = &_UART0
-	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}
+	_UART0 = UART{
+		Bus:          esp.UART0,
+		Buffer:       NewRingBuffer(),
+		TXRXSignal:   14,
+		RTSCTSSignal: 15,
+	}
 	UART1  = &_UART1
-	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
+	_UART1 = UART{
+		Bus:          esp.UART1,
+		Buffer:       NewRingBuffer(),
+		TXRXSignal:   17,
+		RTSCTSSignal: 18,
+	}
 	UART2  = &_UART2
-	_UART2 = UART{Bus: esp.UART2, Buffer: NewRingBuffer()}
+	_UART2 = UART{
+		Bus:          esp.UART2,
+		Buffer:       NewRingBuffer(),
+		TXRXSignal:   198,
+		RTSCTSSignal: 199,
+	}
 )
 
 type UART struct {
-	Bus    *esp.UART_Type
-	Buffer *RingBuffer
+	Bus          *esp.UART_Type
+	Buffer       *RingBuffer
+	TXRXSignal   uint32
+	RTSCTSSignal uint32
 }
 
 func (uart *UART) Configure(config UARTConfig) {
@@ -312,6 +329,22 @@ func (uart *UART) Configure(config UARTConfig) {
 		config.BaudRate = 115200
 	}
 	uart.Bus.CLKDIV.Set(peripheralClock / config.BaudRate)
+
+	if config.RX != NoPin {
+		config.RX.configure(PinConfig{Mode: PinInputPullup}, uart.TXRXSignal)
+	}
+
+	if config.TX != NoPin {
+		config.TX.configure(PinConfig{Mode: PinOutput}, uart.TXRXSignal)
+	}
+
+	if config.RTS != NoPin {
+		config.RTS.configure(PinConfig{Mode: PinOutput}, uart.RTSCTSSignal)
+	}
+
+	if config.CTS != NoPin {
+		config.CTS.configure(PinConfig{Mode: PinInputPullup}, uart.RTSCTSSignal)
+	}
 }
 
 func (uart *UART) writeByte(b byte) error {
@@ -319,6 +352,7 @@ func (uart *UART) writeByte(b byte) error {
 		// Read UART_TXFIFO_CNT from the status register, which indicates how
 		// many bytes there are in the transmit buffer. Wait until there are
 		// less than 128 bytes in this buffer (the default buffer size).
+		gosched()
 	}
 	// Write to the TX_FIFO register.
 	(*volatile.Register8)(unsafe.Add(unsafe.Pointer(uart.Bus), 0x200C0000)).Set(b)
