@@ -176,6 +176,9 @@ type builder struct {
 	deferBuiltinFuncs map[ssa.Value]deferBuiltin
 	runDefersBlock    []llvm.BasicBlock
 	afterDefersBlock  []llvm.BasicBlock
+
+	runtimeAssertBlocks  map[string]llvm.BasicBlock
+	interfaceAssertBlock llvm.BasicBlock
 }
 
 func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *builder {

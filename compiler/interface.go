@@ -828,17 +828,9 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		return tuple
 	} else {
 		// Type assert without comma-ok. If it fails, panic.
-		faultBlock := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.throw")
+		faultBlock := b.getInterfaceAssertBlock()
 		b.currentBlockInfo.exit = okBlock
 		b.CreateCondBr(commaOk, okBlock, faultBlock)
-
-		// Fault: emit a checkpoint (for recover) and panic.
-		b.SetInsertPointAtEnd(faultBlock)
-		if b.hasDeferFrame() {
-			b.createFaultCheckpoint()
-		}
-		b.createRuntimeCall("interfaceTypeAssert", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
-		b.CreateUnreachable()
 
 		// OK: extract the value from the interface.
 		b.SetInsertPointAtEnd(okBlock)
@@ -847,6 +839,23 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		}
 		return b.extractValueFromInterface(itf, assertedType)
 	}
+}
+
+func (b *builder) getInterfaceAssertBlock() llvm.BasicBlock {
+	if !b.interfaceAssertBlock.IsNil() {
+		return b.interfaceAssertBlock
+	}
+	savedBlock := b.GetInsertBlock()
+	block := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.throw")
+	b.interfaceAssertBlock = block
+	b.SetInsertPointAtEnd(block)
+	if b.hasDeferFrame() {
+		b.createFaultCheckpoint()
+	}
+	b.createRuntimeCall("interfaceTypeAssert", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
+	b.CreateUnreachable()
+	b.SetInsertPointAtEnd(savedBlock)
+	return block
 }
 
 // getMethodsString returns a string to be used in the "tinygo-methods" string
