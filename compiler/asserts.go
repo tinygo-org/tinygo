@@ -241,25 +241,35 @@ func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc
 		}
 	}
 
-	// Put the fault block at the end of the function and the next block at the
-	// current insert position.
-	faultBlock := b.ctx.AddBasicBlock(b.llvmFn, blockPrefix+".throw")
+	faultBlock := b.getRuntimeAssertBlock(blockPrefix, assertFunc)
 	nextBlock := b.insertBasicBlock(blockPrefix + ".next")
 	b.currentBlockInfo.exit = nextBlock // adjust outgoing block for phi nodes
 
 	// Now branch to the out-of-bounds or the regular block.
 	b.CreateCondBr(assert, faultBlock, nextBlock)
 
-	// Fail: the assert triggered so panic.
-	b.SetInsertPointAtEnd(faultBlock)
+	// Ok: assert didn't trigger so continue normally.
+	b.SetInsertPointAtEnd(nextBlock)
+}
+
+func (b *builder) getRuntimeAssertBlock(blockPrefix, assertFunc string) llvm.BasicBlock {
+	if b.runtimeAssertBlocks == nil {
+		b.runtimeAssertBlocks = make(map[string]llvm.BasicBlock)
+	}
+	if block := b.runtimeAssertBlocks[assertFunc]; !block.IsNil() {
+		return block
+	}
+	savedBlock := b.GetInsertBlock()
+	block := b.ctx.AddBasicBlock(b.llvmFn, blockPrefix+".throw")
+	b.runtimeAssertBlocks[assertFunc] = block
+	b.SetInsertPointAtEnd(block)
 	if b.hasDeferFrame() {
 		b.createFaultCheckpoint()
 	}
 	b.createRuntimeCall(assertFunc, nil, "")
 	b.CreateUnreachable()
-
-	// Ok: assert didn't trigger so continue normally.
-	b.SetInsertPointAtEnd(nextBlock)
+	b.SetInsertPointAtEnd(savedBlock)
+	return block
 }
 
 // extendInteger extends the value to at least targetType using a zero or sign
