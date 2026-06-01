@@ -40,6 +40,7 @@ type deferFrame struct {
 	Previous   *deferFrame                    // previous recover buffer pointer
 	Panicking  panicState                     // not panicking, panicking, or in Goexit
 	PanicValue interface{}                    // panic value, might be nil for panic(nil) for example
+	DeferPtr   unsafe.Pointer                 // head of the stack-allocated defer list
 }
 
 type panicState uint8
@@ -125,6 +126,7 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 	frame.Previous = (*deferFrame)(currentTask.DeferFrame)
 	frame.JumpSP = jumpSP
 	frame.Panicking = panicFalse
+	frame.DeferPtr = nil
 	currentTask.DeferFrame = unsafe.Pointer(frame)
 }
 

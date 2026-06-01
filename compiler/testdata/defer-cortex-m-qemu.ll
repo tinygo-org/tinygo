@@ -3,7 +3,7 @@ source_filename = "defer.go"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-unknown-unknown-eabi"
 
-%runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i8, %runtime._interface }
+%runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i8, %runtime._interface, ptr }
 %runtime._interface = type { ptr, ptr }
 
 ; Function Attrs: nounwind
@@ -18,14 +18,14 @@ declare void @main.external(ptr) #1
 define hidden void @main.deferSimple(ptr %context) unnamed_addr #0 {
 entry:
   %defer.alloca = alloca { i32, ptr }, align 4
-  %deferPtr = alloca ptr, align 4
-  store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferPtr = getelementptr inbounds nuw i8, ptr %deferframe.buf, i32 24
   %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  %defer.next = load ptr, ptr %deferPtr, align 4
   store i32 0, ptr %defer.alloca, align 4
   %defer.alloca.repack15 = getelementptr inbounds nuw i8, ptr %defer.alloca, i32 4
-  store ptr null, ptr %defer.alloca.repack15, align 4
+  store ptr %defer.next, ptr %defer.alloca.repack15, align 4
   store ptr %defer.alloca, ptr %deferPtr, align 4
   %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(ptr nonnull %deferframe.buf) #5
   %setjmp.result = icmp eq i32 %setjmp, 0
@@ -111,9 +111,9 @@ rundefers.end3:                                   ; preds = %rundefers.loophead6
 ; Function Attrs: nocallback nofree nosync nounwind willreturn
 declare ptr @llvm.stacksave.p0() #2
 
-declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(24), ptr, ptr) #1
+declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(28), ptr, ptr) #1
 
-declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(24), ptr) #1
+declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(28), ptr) #1
 
 ; Function Attrs: nounwind
 define internal void @"main.deferSimple$1"(ptr %context) unnamed_addr #0 {
@@ -135,18 +135,18 @@ define hidden void @main.deferMultiple(ptr %context) unnamed_addr #0 {
 entry:
   %defer.alloca2 = alloca { i32, ptr }, align 4
   %defer.alloca = alloca { i32, ptr }, align 4
-  %deferPtr = alloca ptr, align 4
-  store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferPtr = getelementptr inbounds nuw i8, ptr %deferframe.buf, i32 24
   %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  %defer.next = load ptr, ptr %deferPtr, align 4
   store i32 0, ptr %defer.alloca, align 4
   %defer.alloca.repack22 = getelementptr inbounds nuw i8, ptr %defer.alloca, i32 4
-  store ptr null, ptr %defer.alloca.repack22, align 4
+  store ptr %defer.next, ptr %defer.alloca.repack22, align 4
   store ptr %defer.alloca, ptr %deferPtr, align 4
   store i32 1, ptr %defer.alloca2, align 4
-  %defer.alloca2.repack23 = getelementptr inbounds nuw i8, ptr %defer.alloca2, i32 4
-  store ptr %defer.alloca, ptr %defer.alloca2.repack23, align 4
+  %defer.alloca2.repack24 = getelementptr inbounds nuw i8, ptr %defer.alloca2, i32 4
+  store ptr %defer.alloca, ptr %defer.alloca2.repack24, align 4
   store ptr %defer.alloca2, ptr %deferPtr, align 4
   %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(ptr nonnull %deferframe.buf) #5
   %setjmp.result = icmp eq i32 %setjmp, 0
@@ -270,9 +270,8 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.deferInfiniteLoop(ptr %context) unnamed_addr #0 {
 entry:
-  %deferPtr = alloca ptr, align 4
-  store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferPtr = getelementptr inbounds nuw i8, ptr %deferframe.buf, i32 24
   %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   br label %for.body
@@ -318,9 +317,8 @@ declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #3
 ; Function Attrs: nounwind
 define hidden void @main.deferLoop(ptr %context) unnamed_addr #0 {
 entry:
-  %deferPtr = alloca ptr, align 4
-  store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferPtr = getelementptr inbounds nuw i8, ptr %deferframe.buf, i32 24
   %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   br label %for.loop
@@ -408,9 +406,8 @@ rundefers.end1:                                   ; preds = %rundefers.loophead4
 define hidden void @main.deferBetweenLoops(ptr %context) unnamed_addr #0 {
 entry:
   %defer.alloca = alloca { i32, ptr, i32 }, align 4
-  %deferPtr = alloca ptr, align 4
-  store ptr null, ptr %deferPtr, align 4
   %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferPtr = getelementptr inbounds nuw i8, ptr %deferframe.buf, i32 24
   %0 = call ptr @llvm.stacksave.p0()
   call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
   br label %for.loop
