@@ -131,36 +131,50 @@ func (usbcdc *USBCDC) txhandler() {
 	usbcdc.sendFromRing()
 }
 
-// sendFromRing sends one USB packet from the ring and sets inflight.
+// sendFromRing submits one USB IN packet from the TX ring, or shuts down
+// the TX pump if the ring is empty.
 //
-// The caller must own txActive. Ownership starts in kickTx and is kept across
-// TX completion handling until the TX ring is empty.
+// The caller must own txActive (either having just acquired it via CAS,
+// or continuing ownership from a previous packet submission).
+// For kickTx: newly acquired via CAS.
+// For txhandler: inherited from the previous packet submission.
+//
+// While the caller owns txActive:
+//   - If data is available, one packet is sent and txActive remains set
+//     for the in-flight packet (ownership continues to txhandler).
+//   - If the ring is empty, txActive is cleared and the pump shuts down
+//     (with a final re-check to avoid a missed wakeup from Write).
 func (usbcdc *USBCDC) sendFromRing() {
-	// This is the main TX pump loop. While txActive is held, each iteration
-	// peeks the TX ring and sends one packet if data is available.
+	// This loop sends at most one USB IN packet per entry.
 	//
-	// The empty-ring case below is the shutdown path: release txActive, then
-	// re-check the ring to avoid missing a Write that appended data while
-	// txActive was still set.
+	// If the TX ring has data, one packet is handed to the USB hardware and
+	// txActive remains set until txhandler continues the pump after
+	// completion.
+	//
+	// If the TX ring appears empty, this is the shutdown path. Clear
+	// txActive, then re-check the ring to avoid missing a Write that added
+	// data while txActive was still set.
 	for {
 		d1, _ := usbcdc.tx.Peek()
 		if len(d1) == 0 {
 			usbcdc.txActive.Store(0)
-
-			// Avoid a missed wakeup: Write may append data while txActive is
-			// still set, causing kickTx to return without starting a transfer.
+			// Avoid a missed wakeup.
+			//
+			// A concurrent Write may have appended data while txActive was
+			// still set. In that case kickTx would see an active pump and
+			// return without starting another transfer. After clearing
+			// txActive, re-check the ring and reclaim txActive if this pump
+			// must continue.
 			switch {
 			case usbcdc.tx.Used() == 0:
 				return
 			case !usbcdc.txActive.CompareAndSwap(0, 1):
 				return
 			}
-
-			// New data appeared while txActive was set, and this TX pump owner
-			// re-acquired ownership. Continue the pump and re-peek the ring.
+			// New data appeared during shutdown, and this caller reclaimed
+			// txActive. Continue and re-peek the ring.
 			continue
 		}
-
 		chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
 		usbcdc.inflight.Store(uint32(len(chunk)))
 		machine.SendUSBInPacket(cdcEndpointIn, chunk)
