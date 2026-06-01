@@ -60,10 +60,6 @@ func (b *builder) deferInitFunc() {
 	b.deferExprFuncs = make(map[ssa.Value]int)
 	b.deferBuiltinFuncs = make(map[ssa.Value]deferBuiltin)
 
-	// Create defer list pointer.
-	b.deferPtr = b.CreateAlloca(b.dataPtrType, "deferPtr")
-	b.CreateStore(llvm.ConstPointerNull(b.dataPtrType), b.deferPtr)
-
 	if b.hasDeferFrame() {
 		// Set up the defer frame with the current stack pointer.
 		// This assumes that the stack pointer doesn't move outside of the
@@ -73,12 +69,20 @@ func (b *builder) deferInitFunc() {
 		// in the setjmp-like inline assembly.
 		deferFrameType := b.getLLVMRuntimeType("deferFrame")
 		b.deferFrame = b.CreateAlloca(deferFrameType, "deferframe.buf")
+		b.deferPtr = b.CreateInBoundsGEP(deferFrameType, b.deferFrame, []llvm.Value{
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.ctx.Int32Type(), 6, false), // DeferPtr field
+		}, "deferPtr")
 		stackPointer := b.readStackPointer()
 		b.createRuntimeCall("setupDeferFrame", []llvm.Value{b.deferFrame, stackPointer}, "")
 
 		// Create the landing pad block, which is where control transfers after
 		// a panic.
 		b.landingpad = b.ctx.AddBasicBlock(b.llvmFn, "lpad")
+	} else {
+		// Create defer list pointer.
+		b.deferPtr = b.CreateAlloca(b.dataPtrType, "deferPtr")
+		b.CreateStore(llvm.ConstPointerNull(b.dataPtrType), b.deferPtr)
 	}
 }
 
