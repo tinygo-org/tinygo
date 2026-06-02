@@ -1,6 +1,5 @@
 //go:build blinky2350
 
-// Pin mapping verified against pimoroni/blinky2350 board/pins.csv.
 // Chip: RP2350A (QFN-60, 30 GPIO) -> target inherits from "rp2350".
 // Pin source: https://github.com/pimoroni/blinky2350/blob/main/board/pins.csv
 //

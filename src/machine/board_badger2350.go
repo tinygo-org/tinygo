@@ -1,6 +1,5 @@
 //go:build badger2350
 
-// Pin mapping verified against pimoroni/badger2350 board/pins.csv.
 // Chip: RP2350A (QFN-60, 30 GPIO) -> target inherits from "rp2350".
 // Pin source: https://github.com/pimoroni/badger2350/blob/main/board/pins.csv
 //
