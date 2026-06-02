@@ -69,6 +69,8 @@ func (b *builder) deferInitFunc() {
 		// in the setjmp-like inline assembly.
 		deferFrameType := b.getLLVMRuntimeType("deferFrame")
 		b.deferFrame = b.CreateAlloca(deferFrameType, "deferframe.buf")
+		// The field index must match the DeferPtr field in runtime.deferFrame,
+		// defined in src/runtime/panic.go.
 		b.deferPtr = b.CreateInBoundsGEP(deferFrameType, b.deferFrame, []llvm.Value{
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 			llvm.ConstInt(b.ctx.Int32Type(), 6, false), // DeferPtr field

@@ -31,8 +31,8 @@ func panicStrategy() uint8
 // DeferFrame is a stack allocated object that stores information for the
 // current "defer frame", which is used in functions that use the `defer`
 // keyword.
-// The compiler knows about the JumpPC struct offset, so it should not be moved
-// without also updating compiler/defer.go.
+// The compiler knows about the JumpPC struct offset and the DeferPtr field
+// index, so they should not be moved without also updating compiler/defer.go.
 type deferFrame struct {
 	JumpSP     unsafe.Pointer                 // stack pointer to return to
 	JumpPC     unsafe.Pointer                 // pc to return to
