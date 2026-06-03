@@ -1,14 +1,39 @@
-//go:build arm7tdmi && !mgbadebug
+//go:build gameboyadvance && mgbadebug
 
 package runtime
 
 import (
 	_ "runtime/interrupt" // make sure the interrupt handler is defined
+	"runtime/volatile"
 	"unsafe"
 )
 
+var (
+	// Setting this memory address to 0xC0DE enables mGBA's debug printing
+	debugEnable = (*volatile.Register16)(unsafe.Pointer(uintptr(0x4FFF780)))
+	// mGBA supports log levels from 0x100(fatal) to 0x104(debug)
+	logLevel uint16 = 0x104 // use the debug log level
+	// Once we are ready to output we set the debug flags register to logLevel
+	// mGBA will output the text and then clear the text buffer when set
+	debugFlags = (*volatile.Register16)(unsafe.Pointer(uintptr(0x4FFF700)))
+
+	textBuffer = (*[255]byte)(unsafe.Pointer(uintptr(0x4FFF600)))
+	index      = 0
+)
+
 func putchar(c byte) {
-	// dummy, TODO
+	if c == '\n' || index >= len(textBuffer) {
+		debugFlags.Set(logLevel)
+		index = 0
+
+		// mGBA automatically prints a new line so we can ignore it
+		if c == '\n' {
+			return
+		}
+	}
+
+	textBuffer[index] = c
+	index++
 }
 
 func getchar() byte {
@@ -42,6 +67,9 @@ var _edata [0]byte
 func main() {
 	// Initialize .data and .bss sections.
 	preinit()
+
+	// Enable mGBA debugging.
+	debugEnable.Set(0xC0DE)
 
 	// Run program.
 	run()
