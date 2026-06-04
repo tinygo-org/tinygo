@@ -32,9 +32,13 @@ type USBCDC struct {
 	// inflight is the number of bytes currently submitted to the USB IN endpoint.
 	inflight atomic.Uint32
 
-	// txActive serializes the USB CDC TX pump between Write and the TX
-	// completion handler. This matters on multicore targets where they can run
-	// concurrently.
+	// txActive is the TX-pump ownership flag: 0 = idle, 1 = a pump owns the TX
+	// path. Claimed once (kickTx, CAS 0->1), held across every in-flight packet
+	// and the TX-complete IRQ, and released only when the ring drains. While it
+	// is set, kickTx's CAS fails and no second pump starts, which serializes the
+	// pump against Write across cores. Same model as Linux NAPI_STATE_SCHED:
+	// held across completion, dropped only with a recheck
+	// (Documentation/networking/napi.rst).
 	txActive atomic.Uint32
 
 	rbuf [1]byte
@@ -113,7 +117,9 @@ func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	return n, nil
 }
 
-// kickTx starts the TX pump if it is idle.
+// kickTx claims the TX pump for a producer. This CAS is the only start-from-idle
+// edge; if it fails, a pump already owns the path and will drain what we just
+// enqueued -- see the recheck in sendFromRing.
 func (usbcdc *USBCDC) kickTx() {
 	if !usbcdc.txActive.CompareAndSwap(0, 1) {
 		return
@@ -122,6 +128,9 @@ func (usbcdc *USBCDC) kickTx() {
 }
 
 func (usbcdc *USBCDC) txhandler() {
+	// TX-complete IRQ. The pump is still owned here (txActive stayed 1 across the
+	// in-flight packet), so continue WITHOUT re-claiming -- pairs with the CAS in
+	// kickTx. A CAS here would see the flag already set, bail, and stall the chain.
 	inflight := usbcdc.inflight.Load()
 	if inflight == 0 {
 		return
@@ -131,54 +140,35 @@ func (usbcdc *USBCDC) txhandler() {
 	usbcdc.sendFromRing()
 }
 
-// sendFromRing submits one USB IN packet from the TX ring, or shuts down
-// the TX pump if the ring is empty.
-//
-// The caller must own txActive (either having just acquired it via CAS,
-// or continuing ownership from a previous packet submission).
-// For kickTx: newly acquired via CAS.
-// For txhandler: inherited from the previous packet submission.
-//
-// While the caller owns txActive:
-//   - If data is available, one packet is sent and txActive remains set
-//     for the in-flight packet (ownership continues to txhandler).
-//   - If the ring is empty, txActive is cleared and the pump shuts down
-//     (with a final re-check to avoid a missed wakeup from Write).
+// sendFromRing runs one step of the TX pump: submit one IN packet, or release the
+// pump if the ring is empty. Precondition: txActive == 1 (from kickTx's CAS, or
+// still held from the previous packet when entered via txhandler).
 func (usbcdc *USBCDC) sendFromRing() {
-	// This loop sends at most one USB IN packet per entry.
-	//
-	// If the TX ring has data, one packet is handed to the USB hardware and
-	// txActive remains set until txhandler continues the pump after
-	// completion.
-	//
-	// If the TX ring appears empty, this is the shutdown path. Clear
-	// txActive, then re-check the ring to avoid missing a Write that added
-	// data while txActive was still set.
 	for {
 		d1, _ := usbcdc.tx.Peek()
 		if len(d1) == 0 {
+			// Release the pump, then re-scan the ring: closes the missed-wakeup
+			// race where Write Put()s data and kickTx's CAS then fails (txActive
+			// still set), leaving the data for this pump to drain. The Store(0)
+			// is ordered before the Used() load -- and, in the producer, Put()
+			// before its CAS -- by the sequential consistency of Go's atomics, so
+			// neither side misses the other (assumes the ring's accesses are
+			// atomic too). cf. napi_complete_done() clearing NAPI_STATE_SCHED
+			// then rechecking.
 			usbcdc.txActive.Store(0)
-			// Avoid a missed wakeup.
-			//
-			// A concurrent Write may have appended data while txActive was
-			// still set. In that case kickTx would see an active pump and
-			// return without starting another transfer. After clearing
-			// txActive, re-check the ring and reclaim txActive if this pump
-			// must continue.
-			switch {
-			case usbcdc.tx.Used() == 0:
-				return
-			case !usbcdc.txActive.CompareAndSwap(0, 1):
-				return
+			if usbcdc.tx.Used() == 0 {
+				return // ring empty and pump released; done
 			}
-			// New data appeared during shutdown, and this caller reclaimed
-			// txActive. Continue and re-peek the ring.
-			continue
+			if !usbcdc.txActive.CompareAndSwap(0, 1) {
+				return // another producer re-claimed the pump; let it run
+			}
+			continue // re-claimed; re-peek and keep pumping
 		}
+
 		chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
 		usbcdc.inflight.Store(uint32(len(chunk)))
 		machine.SendUSBInPacket(cdcEndpointIn, chunk)
-		return
+		return // in flight; txActive stays set, txhandler continues
 	}
 }
 
