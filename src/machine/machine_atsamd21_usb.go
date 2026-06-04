@@ -23,19 +23,6 @@ const (
 	NumberOfUSBEndpoints = 8
 )
 
-var (
-	endPoints = []uint32{
-		usb.CONTROL_ENDPOINT:  usb.ENDPOINT_TYPE_CONTROL,
-		usb.CDC_ENDPOINT_ACM:  (usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn),
-		usb.CDC_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_BULK | usb.EndpointOut),
-		usb.CDC_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_BULK | usb.EndpointIn),
-		usb.HID_ENDPOINT_IN:   (usb.ENDPOINT_TYPE_DISABLE), // Interrupt In
-		usb.HID_ENDPOINT_OUT:  (usb.ENDPOINT_TYPE_DISABLE), // Interrupt Out
-		usb.MIDI_ENDPOINT_IN:  (usb.ENDPOINT_TYPE_DISABLE), // Bulk In
-		usb.MIDI_ENDPOINT_OUT: (usb.ENDPOINT_TYPE_DISABLE), // Bulk Out
-	}
-)
-
 // Configure the USB peripheral. The config is here for compatibility with the UART interface.
 func (dev *USBDevice) Configure(config UARTConfig) {
 	if dev.initcomplete {
