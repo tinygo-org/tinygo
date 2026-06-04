@@ -609,7 +609,7 @@ func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bo
 			// Ordinary function-local type. Use the un-//line-adjusted
 			// declaration position as the disambiguator.
 			pos := c.program.Fset.PositionFor(tn.Pos(), false)
-			return "named:" + t.String() + "$" + filepath.Base(pos.Filename) + ":" + strconv.Itoa(pos.Line) + ":" + strconv.Itoa(pos.Column), true
+			return fmt.Sprintf("named:%s$%s:%d:%d", t.String(), filepath.Base(pos.Filename), pos.Line, pos.Column), true
 		}
 		// Synthetic local from generic instantiation: must have been
 		// pre-registered by scanLocalTypes.
@@ -733,10 +733,13 @@ func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
 	// (including instances declared in imported packages and any
 	// function reached through an instance subtree).
 	var instances []*ssa.Function
-	seen := map[*ssa.Function]bool{}
+	seen := map[*ssa.Function]struct{}{}
 	var walk func(fn *ssa.Function, inInstance bool)
 	walk = func(fn *ssa.Function, inInstance bool) {
-		if fn == nil || seen[fn] {
+		if fn == nil {
+			return
+		}
+		if _, ok := seen[fn]; ok {
 			return
 		}
 		// fn belongs to an instance subtree if it is itself an
@@ -752,7 +755,7 @@ func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
 		if fn.Blocks == nil && fn.AnonFuncs == nil {
 			return
 		}
-		seen[fn] = true
+		seen[fn] = struct{}{}
 		isInInstance := inInstance || isInstanceRoot
 		if isInInstance {
 			instances = append(instances, fn)
@@ -817,13 +820,16 @@ func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
 // scanLocalTypes' deterministic order).
 func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 	var found []*types.Named
-	seen := map[types.Type]bool{}
+	seen := map[types.Type]struct{}{}
 	var visit func(t types.Type)
 	visit = func(t types.Type) {
-		if t == nil || seen[t] {
+		if t == nil {
 			return
 		}
-		seen[t] = true
+		if _, ok := seen[t]; ok {
+			return
+		}
+		seen[t] = struct{}{}
 		switch t := t.(type) {
 		case *types.Alias:
 			visit(types.Unalias(t))
@@ -919,7 +925,7 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 	})
 	enclosing := fn.RelString(nil)
 	for i, named := range found {
-		c.localTypeNames.Set(named, enclosing+"."+named.Obj().Name()+"$"+strconv.Itoa(i+1))
+		c.localTypeNames.Set(named, fmt.Sprintf("%s.%s$%d", enclosing, named.Obj().Name(), i))
 	}
 }
 
