@@ -76,6 +76,8 @@ func TestBuild(t *testing.T) {
 		"init_multi.go",
 		"interface.go",
 		"json.go",
+		"localtypes/",
+		"localtypes.go",
 		"map.go",
 		"map_bigkey.go",
 		"math.go",
