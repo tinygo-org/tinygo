@@ -23,6 +23,7 @@ func handleInterrupt() {
 	for i := 0; i < 14; i++ {
 		if flags&(1<<uint(i)) != 0 {
 			gba.INTERRUPT.IF.Set(1 << uint(i)) // acknowledge interrupt
+			gba.BIOS_IF.Set(1 << uint(i)) // acknowledge interrupt for BIOS
 			callInterruptHandler(i)
 		}
 	}
