@@ -485,7 +485,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		if !filepath.IsAbs(file) {
 			file = filepath.Join(p.Dir, file)
 		}
-		f, err := p.parseFile(file, parser.ParseComments)
+		f, err := p.parseFile(file, parser.ParseComments|parser.SkipObjectResolution)
 		if err != nil {
 			fileErrs = append(fileErrs, err)
 			return

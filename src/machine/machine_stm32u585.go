@@ -8,14 +8,14 @@ import (
 )
 
 func CPUFrequency() uint32 {
-	return 4_000_000
+	return 160_000_000
 }
 
 // Internal use: configured speed of the APB1 and APB2 timers, this should be kept
 // in sync with any changes to runtime package which configures the oscillators
 // and clock frequencies
-const APB1_TIM_FREQ = 4e6 // 4MHz (MSI default)
-const APB2_TIM_FREQ = 4e6 // 4MHz (MSI default)
+const APB1_TIM_FREQ = 160e6 // 160MHz (PLL1: MSIS 4MHz × 80 / 1 / 2)
+const APB2_TIM_FREQ = 160e6 // 160MHz (PLL1: MSIS 4MHz × 80 / 1 / 2)
 
 //---------- UART related code
 
@@ -55,10 +55,21 @@ func (uart *UART) isLPUART1() bool {
 // NOTE: keep this in sync with the runtime/runtime_stm32u5.go clock init code
 func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
 	if uart.isLPUART1() {
-		// LPUART uses BRR = 256 * fclk / baud
-		return (256 * CPUFrequency()) / baudRate
+		// LPUART uses BRR = 256 * fclk / baud.
+		// Use 64-bit arithmetic to avoid overflow: at 160 MHz,
+		// 256 * 160_000_000 = 40_960_000_000 which exceeds uint32 max.
+		return uint32(uint64(256) * uint64(CPUFrequency()) / uint64(baudRate))
 	}
-	return CPUFrequency() / baudRate
+	// USART requires BRR >= 16 for 16x oversampling (OVER8=0).
+	// A divisor below 16 is invalid per the STM32 reference manual and causes
+	// undefined hardware behaviour — in practice the receiver fires ORE/RXNE
+	// interrupts at an impossible rate, completely starving the CPU.
+	const minBRR = 16
+	divisor := CPUFrequency() / baudRate
+	if divisor < minBRR {
+		divisor = minBRR
+	}
+	return divisor
 }
 
 // Register names vary by ST processor, these are for STM U5
@@ -68,6 +79,24 @@ func (uart *UART) setRegisters() {
 	uart.statusReg = &uart.Bus.ISR
 	uart.txEmptyFlag = stm32.USART_ISR_TXE
 	uart.errClearReg = &uart.Bus.ICR
+}
+
+// SetBaudRate overrides the shared implementation for STM32U5. On this
+// family the BRR register is read-only while UE=1 (USART enabled), so the
+// USART must be briefly disabled to change the baud rate. This matters when
+// the servo library (or any code) calls SetBaudRate after Configure has
+// already enabled the USART.
+func (uart *UART) SetBaudRate(br uint32) {
+	cr1 := uart.Bus.CR1.Get()
+	if cr1&stm32.USART_CR1_UE != 0 {
+		// Disable the USART so BRR becomes writable.
+		uart.Bus.CR1.Set(cr1 &^ stm32.USART_CR1_UE)
+	}
+	uart.Bus.BRR.Set(uart.getBaudRateDivisor(br))
+	if cr1&stm32.USART_CR1_UE != 0 {
+		// Restore CR1 exactly as it was (re-enables USART, TE, RE, etc.).
+		uart.Bus.CR1.Set(cr1)
+	}
 }
 
 //---------- SPI related types and code

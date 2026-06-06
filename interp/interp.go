@@ -19,35 +19,38 @@ const checks = true
 
 // runner contains all state related to one interp run.
 type runner struct {
-	mod           llvm.Module
-	targetData    llvm.TargetData
-	builder       llvm.Builder
-	pointerSize   uint32                   // cached pointer size from the TargetData
-	dataPtrType   llvm.Type                // often used type so created in advance
-	uintptrType   llvm.Type                // equivalent to uintptr in Go
-	maxAlign      int                      // maximum alignment of an object, alignment of runtime.alloc() result
-	byteOrder     binary.ByteOrder         // big-endian or little-endian
-	debug         bool                     // log debug messages
-	pkgName       string                   // package name of the currently executing package
-	functionCache map[llvm.Value]*function // cache of compiled functions
-	objects       []object                 // slice of objects in memory
-	globals       map[llvm.Value]int       // map from global to index in objects slice
-	start         time.Time
-	timeout       time.Duration
-	callsExecuted uint64
+	mod               llvm.Module
+	targetData        llvm.TargetData
+	builder           llvm.Builder
+	pointerSize       uint32                   // cached pointer size from the TargetData
+	dataPtrType       llvm.Type                // often used type so created in advance
+	uintptrType       llvm.Type                // equivalent to uintptr in Go
+	maxAlign          int                      // maximum alignment of an object, alignment of runtime.alloc() result
+	byteOrder         binary.ByteOrder         // big-endian or little-endian
+	debug             bool                     // log debug messages
+	pkgName           string                   // package name of the currently executing package
+	functionCache     map[llvm.Value]*function // cache of compiled functions
+	objects           []object                 // slice of objects in memory
+	globals           map[llvm.Value]int       // map from global to index in objects slice
+	start             time.Time
+	timeout           time.Duration
+	maxLoopIterations int
+	callsExecuted     uint64
+	interpErr         error // set by Uint/Int when they encounter pointer data
 }
 
-func newRunner(mod llvm.Module, timeout time.Duration, debug bool) *runner {
+func newRunner(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bool) *runner {
 	r := runner{
-		mod:           mod,
-		targetData:    llvm.NewTargetData(mod.DataLayout()),
-		byteOrder:     llvmutil.ByteOrder(mod.Target()),
-		debug:         debug,
-		functionCache: make(map[llvm.Value]*function),
-		objects:       []object{{}},
-		globals:       make(map[llvm.Value]int),
-		start:         time.Now(),
-		timeout:       timeout,
+		mod:               mod,
+		targetData:        llvm.NewTargetData(mod.DataLayout()),
+		byteOrder:         llvmutil.ByteOrder(mod.Target()),
+		debug:             debug,
+		functionCache:     make(map[llvm.Value]*function),
+		objects:           []object{{}},
+		globals:           make(map[llvm.Value]int),
+		start:             time.Now(),
+		timeout:           timeout,
+		maxLoopIterations: maxLoopIterations,
 	}
 	r.pointerSize = uint32(r.targetData.PointerSize())
 	r.dataPtrType = llvm.PointerType(mod.Context().Int8Type(), 0)
@@ -64,8 +67,8 @@ func (r *runner) dispose() {
 
 // Run evaluates runtime.initAll function as much as possible at compile time.
 // Set debug to true if it should print output while running.
-func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
-	r := newRunner(mod, timeout, debug)
+func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bool) error {
+	r := newRunner(mod, timeout, maxLoopIterations, debug)
 	defer r.dispose()
 
 	initAll := mod.NamedFunction("runtime.initAll")
@@ -204,10 +207,10 @@ func Run(mod llvm.Module, timeout time.Duration, debug bool) error {
 
 // RunFunc evaluates a single package initializer at compile time.
 // Set debug to true if it should print output while running.
-func RunFunc(fn llvm.Value, timeout time.Duration, debug bool) error {
+func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug bool) error {
 	// Create and initialize *runner object.
 	mod := fn.GlobalParent()
-	r := newRunner(mod, timeout, debug)
+	r := newRunner(mod, timeout, maxLoopIterations, debug)
 	defer r.dispose()
 	initName := fn.Name()
 	if !strings.HasSuffix(initName, ".init") {

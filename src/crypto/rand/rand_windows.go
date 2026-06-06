@@ -25,7 +25,7 @@ func (r *reader) Read(b []byte) (n int, err error) {
 	// See for example: https://github.com/golang/go/issues/33542
 	// For Windows 7 and newer, we might switch to ProcessPrng in the future
 	// (which is a documented function and might be a tiny bit faster).
-	ok := libc_RtlGenRandom(unsafe.Pointer(&b[0]), len(b))
+	ok := libc_RtlGenRandom(unsafe.Pointer(unsafe.SliceData(b)), len(b))
 	if !ok {
 		return 0, errRandom
 	}

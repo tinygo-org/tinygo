@@ -34,6 +34,7 @@ type functionInfo struct {
 	interrupt     bool       // go:interrupt
 	nobounds      bool       // go:nobounds
 	noescape      bool       // go:noescape
+	noheap        bool       // go:noheap
 	variadic      bool       // go:variadic (CGo only)
 	inline        inlineType // go:inline
 }
@@ -161,7 +162,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 	case "machine.keepAliveNoEscape", "machine.unsafeNoEscape":
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
-	case "runtime.alloc":
+	case "runtime.alloc", "runtime.alloc_noheap":
 		// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 		// returns values that are never null and never alias to an existing value.
 		for _, attrName := range []string{"noalias", "nonnull"} {
@@ -190,6 +191,31 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	case "runtime.stringFromRunes":
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
+	case "runtime.hashmapSet":
+		// The key (param 2) and value (param 3) pointers are only read via
+		// memcpy/hash/equal and are never captured. The indirect calls
+		// through m.keyHash and m.keyEqual function pointers prevent LLVM's
+		// functionattrs pass from inferring this automatically.
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapGet":
+		// The key (param 2) is read-only and never captured.
+		// The value (param 3) is written to (receives the result) but never captured.
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapDelete":
+		// The key (param 2) is read-only and never captured.
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapGenericSet":
+		// Same as hashmapBinarySet: key (param 2) and value (param 3) are
+		// not captured.
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapGenericGet":
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
+	case "runtime.hashmapGenericDelete":
+		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 	case "runtime.trackPointer":
 		// This function is necessary for tracking pointers on the stack in a
 		// portable way (see gc_stack_portable.go). Indicate to the optimizer
@@ -451,6 +477,9 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			if len(f.Blocks) == 0 {
 				info.noescape = true
 			}
+		case "//go:noheap":
+			// Ensure this function does not allocate on the heap.
+			info.noheap = true
 		case "//go:variadic":
 			// The //go:variadic pragma is emitted by the CGo preprocessing
 			// pass for C variadic functions. This includes both explicit

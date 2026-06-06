@@ -145,7 +145,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 
 	// Set and enable the GPIOTE interrupt. It's not a problem if this happens
 	// more than once.
-	interrupt.New(nrf.IRQ_GPIOTE, func(interrupt.Interrupt) {
+	intr := interrupt.New(nrf.IRQ_GPIOTE, func(interrupt.Interrupt) {
 		for i := range nrf.GPIOTE.EVENTS_IN {
 			if nrf.GPIOTE.EVENTS_IN[i].Get() != 0 {
 				nrf.GPIOTE.EVENTS_IN[i].Set(0)
@@ -153,7 +153,9 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 				pinCallbacks[i](pin)
 			}
 		}
-	}).Enable()
+	})
+	intr.SetPriority(0x40) // interrupt priority 2 (highest priority not reserved by the SoftDevice)
+	intr.Enable()
 
 	// Everything was configured correctly.
 	return nil

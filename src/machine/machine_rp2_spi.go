@@ -174,7 +174,9 @@ func (spi *SPI) Configure(config SPIConfig) error {
 	// SPI pin configuration
 	config.SCK.setFunc(fnSPI)
 	config.SDO.setFunc(fnSPI)
-	config.SDI.setFunc(fnSPI)
+	if config.SDI != NoPin {
+		config.SDI.setFunc(fnSPI)
+	}
 
 	return spi.initSPI(config)
 }

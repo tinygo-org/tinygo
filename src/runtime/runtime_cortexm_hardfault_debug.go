@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"device/arm"
+	"internal/task"
 	"unsafe"
 )
 
@@ -106,6 +107,20 @@ func HardFault_Handler() {
 			print(" pc=", sp.PC)
 		}
 	}
+
+	// PSP holds the actual exception frame when the fault occurred in a
+	// goroutine (thread mode, PSP active). The MSP-based sp above is the
+	// scheduler's stack and its PC is garbage in that case.
+	pspVal := task.GoroutineStack()
+
+	// heapEndSymbol is defined in baremetal.go; we also ensure that the goroutine exception frame is within addressable memory.
+	if pspVal >= 0x20000000 && pspVal < (uintptr(unsafe.Pointer(&heapEndSymbol))-uintptr(unsafe.Sizeof(interruptStack{}))) {
+		pspFrame := (*interruptStack)(unsafe.Pointer(pspVal))
+		print(" psp=", pspFrame)
+		print(" psp_pc=", pspFrame.PC)
+		print(" psp_lr=", pspFrame.LR)
+	}
+
 	println()
 	abort()
 }
