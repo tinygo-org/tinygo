@@ -146,6 +146,19 @@ func TypeAssert[T any](v Value) (T, bool) {
 
 // valueInterfaceUnsafe is used by the runtime to hash map keys. It should not
 // be subject to the isExported check.
+// loadSmallValue loads a value of size <= sizeof(uintptr) from ptr into
+// a pointer-sized value suitable for storing in an interface's data field.
+func loadSmallValue(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
+	if size == unsafe.Sizeof(uintptr(0)) {
+		return *(*unsafe.Pointer)(ptr)
+	}
+	var value uintptr
+	for j := size; j != 0; j-- {
+		value = (value << 8) | uintptr(*(*uint8)(unsafe.Add(ptr, j-1)))
+	}
+	return unsafe.Pointer(value)
+}
+
 func valueInterfaceUnsafe(v Value) interface{} {
 	if v.typecode.Kind() == Interface {
 		// The value itself is an interface. This can happen when getting the
@@ -158,11 +171,7 @@ func valueInterfaceUnsafe(v Value) interface{} {
 	if v.isIndirect() && v.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
-		var value uintptr
-		for j := v.typecode.Size(); j != 0; j-- {
-			value = (value << 8) | uintptr(*(*uint8)(unsafe.Add(v.value, j-1)))
-		}
-		v.value = unsafe.Pointer(value)
+		v.value = loadSmallValue(v.value, v.typecode.Size())
 	}
 	return composeInterface(unsafe.Pointer(v.typecode), v.value)
 }
@@ -713,20 +722,12 @@ func (v Value) Slice(i, j int) Value {
 
 	case String:
 		i, j := uintptr(i), uintptr(j)
-		str := *(*stringHeader)(v.value)
-
-		if j < i || str.len < j {
-			slicePanic()
-		}
-
-		hdr := stringHeader{
-			data: unsafe.Add(str.data, i),
-			len:  j - i,
-		}
+		str := *(*string)(v.value)
+		sliced := str[i:j]
 
 		return Value{
 			typecode: v.typecode,
-			value:    unsafe.Pointer(&hdr),
+			value:    unsafe.Pointer(&sliced),
 			flags:    v.flags,
 		}
 	}
@@ -801,7 +802,7 @@ func (v Value) Len() int {
 	case Slice:
 		return int((*sliceHeader)(v.value).len)
 	case String:
-		return int((*stringHeader)(v.value).len)
+		return len(*(*string)(v.value))
 	default:
 		panic(&ValueError{Method: "Len", Kind: v.Kind()})
 	}
@@ -977,13 +978,10 @@ func (v Value) Index(i int) Value {
 		// Keeping valueFlagExported if set, but don't set valueFlagIndirect
 		// otherwise CanSet will return true for string elements (which is bad,
 		// strings are read-only).
-		s := *(*stringHeader)(v.value)
-		if uint(i) >= uint(s.len) {
-			panic("reflect: string index out of range")
-		}
+		s := *(*string)(v.value)
 		return Value{
 			typecode: uint8Type,
-			value:    unsafe.Pointer(uintptr(*(*uint8)(unsafe.Add(s.data, i)))),
+			value:    unsafe.Pointer(uintptr(s[i])),
 			flags:    v.flags & valueFlagExported,
 		}
 	case Array:
@@ -1085,18 +1083,8 @@ func (v Value) MapKeys() []Value {
 	k := New(v.typecode.Key())
 	e := New(v.typecode.Elem())
 
-	keyType := v.typecode.key()
-	keyTypeIsEmptyInterface := keyType.Kind() == Interface && keyType.NumMethod() == 0
-	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !keyType.isBinary()
-
 	for hashmapNext(v.pointer(), it, k.value, e.value) {
-		if shouldUnpackInterface {
-			intf := *(*interface{})(k.value)
-			v := ValueOf(intf)
-			keys = append(keys, v)
-		} else {
-			keys = append(keys, k.Elem())
-		}
+		keys = append(keys, k.Elem())
 		k = New(v.typecode.Key())
 	}
 
@@ -1109,9 +1097,40 @@ func hashmapStringGet(m unsafe.Pointer, key string, value unsafe.Pointer, valueS
 //go:linkname hashmapBinaryGet runtime.hashmapBinaryGet
 func hashmapBinaryGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
 
-//go:linkname hashmapInterfaceGet runtime.hashmapInterfaceGet
-func hashmapInterfaceGet(m unsafe.Pointer, key interface{}, value unsafe.Pointer, valueSize uintptr) bool
+//go:linkname hashmapGenericGet runtime.hashmapGenericGet
+func hashmapGenericGet(m unsafe.Pointer, key, value unsafe.Pointer, valueSize uintptr) bool
 
+// genericKeyPtr returns a pointer to key data suitable for passing to the
+// hashmapGeneric* functions. When the map's key type is an interface,
+// special handling is needed: if the key Value already holds an interface
+// (e.g. from MapKeys iteration), its memory already contains the
+// {typecode, data} pair the hashmap expects, so we use it directly.
+// If the key is a concrete type being assigned to an interface-keyed map,
+// we compose the interface first.
+func genericKeyPtr(vkey *RawType, key Value) unsafe.Pointer {
+	if vkey.Kind() == Interface {
+		if key.Kind() == Interface {
+			// Key is already an interface value stored indirectly;
+			// key.value points to {typecode, data}.
+			return key.value
+		}
+		// Concrete value being used as an interface key.
+		// For small addressable values, key.value is a pointer to
+		// the data, but the interface value field stores the data
+		// directly; load it using the same endian-safe approach as
+		// valueInterfaceUnsafe.
+		val := key.value
+		if key.isIndirect() && key.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
+			val = loadSmallValue(key.value, key.typecode.Size())
+		}
+		intf := composeInterface(unsafe.Pointer(key.typecode), val)
+		return unsafe.Pointer(&intf)
+	}
+	if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+		return key.value
+	}
+	return unsafe.Pointer(&key.value)
+}
 func (v Value) MapIndex(key Value) Value {
 	if v.Kind() != Map {
 		panic(&ValueError{Method: "MapIndex", Kind: v.Kind()})
@@ -1140,13 +1159,16 @@ func (v Value) MapIndex(key Value) Value {
 		} else {
 			keyptr = unsafe.Pointer(&key.value)
 		}
-		//TODO(dgryski): zero out padding bytes in key, if any
 		if ok := hashmapBinaryGet(v.pointer(), keyptr, elem.value, elemType.Size()); !ok {
 			return Value{}
 		}
 		return elem.Elem()
 	} else {
-		if ok := hashmapInterfaceGet(v.pointer(), key.Interface(), elem.value, elemType.Size()); !ok {
+		// Compiler-generated hash/equal path: keys are stored at their
+		// actual type. Use hashmapGenericGet which dispatches through the
+		// map's own keyHash/keyEqual function pointers.
+		keyptr := genericKeyPtr(vkey, key)
+		if ok := hashmapGenericGet(v.pointer(), keyptr, elem.value, elemType.Size()); !ok {
 			return Value{}
 		}
 		return elem.Elem()
@@ -1171,19 +1193,12 @@ type MapIter struct {
 	key Value
 	val Value
 
-	valid              bool
-	unpackKeyInterface bool
+	valid bool
 }
 
 func (it *MapIter) Key() Value {
 	if !it.valid {
 		panic("reflect.MapIter.Key called on invalid iterator")
-	}
-
-	if it.unpackKeyInterface {
-		intf := *(*interface{})(it.key.value)
-		v := ValueOf(intf)
-		return v
 	}
 
 	return it.key.Elem()
@@ -1218,15 +1233,9 @@ func (iter *MapIter) Reset(v Value) {
 		panic(&ValueError{Method: "MapRange", Kind: v.Kind()})
 	}
 
-	keyType := v.typecode.key()
-
-	keyTypeIsEmptyInterface := keyType.Kind() == Interface && keyType.NumMethod() == 0
-	shouldUnpackInterface := !keyTypeIsEmptyInterface && keyType.Kind() != String && !keyType.isBinary()
-
 	*iter = MapIter{
-		m:                  v,
-		it:                 hashmapNewIterator(),
-		unpackKeyInterface: shouldUnpackInterface,
+		m:  v,
+		it: hashmapNewIterator(),
 	}
 }
 
@@ -1714,8 +1723,7 @@ const zerobufferLen = 32
 func init() {
 	// 32 characters of zero bytes
 	zerobufferStr := "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-	s := (*stringHeader)(unsafe.Pointer(&zerobufferStr))
-	zerobuffer = s.data
+	zerobuffer = unsafe.Pointer(unsafe.StringData(zerobufferStr))
 }
 
 func Zero(typ Type) Value {
@@ -1766,19 +1774,11 @@ type sliceHeader struct {
 	cap  uintptr
 }
 
-// Like sliceHeader, this type is used internally to make sure pointer and
-// non-pointer fields match those of actual strings.
-type stringHeader struct {
-	data unsafe.Pointer
-	len  uintptr
-}
-
-// Verify SliceHeader and StringHeader sizes.
+// Verify SliceHeader size.
 // See https://github.com/tinygo-org/tinygo/pull/4156
 // and https://github.com/tinygo-org/tinygo/issues/1284.
 var (
 	_ [unsafe.Sizeof([]byte{})]byte = [unsafe.Sizeof(sliceHeader{})]byte{}
-	_ [unsafe.Sizeof("")]byte       = [unsafe.Sizeof(stringHeader{})]byte{}
 )
 
 type ValueError struct {
@@ -1845,29 +1845,29 @@ func Copy(dst, src Value) int {
 
 func buflen(v Value) (unsafe.Pointer, uintptr) {
 	var buf unsafe.Pointer
-	var len uintptr
+	var length uintptr
 	switch v.typecode.Kind() {
 	case Slice:
 		hdr := (*sliceHeader)(v.value)
 		buf = hdr.data
-		len = hdr.len
+		length = hdr.len
 	case Array:
 		if v.isIndirect() || v.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
 			buf = v.value
 		} else {
 			buf = unsafe.Pointer(&v.value)
 		}
-		len = uintptr(v.Len())
+		length = uintptr(v.Len())
 	case String:
-		hdr := (*stringHeader)(v.value)
-		buf = hdr.data
-		len = hdr.len
+		s := *(*string)(v.value)
+		buf = unsafe.Pointer(unsafe.StringData(s))
+		length = uintptr(len(s))
 	default:
 		// This shouldn't happen
 		panic("reflect.Copy: not slice or array or string")
 	}
 
-	return buf, len
+	return buf, length
 }
 
 //go:linkname sliceGrow runtime.sliceGrow
@@ -1969,8 +1969,8 @@ func hashmapStringSet(m unsafe.Pointer, key string, value unsafe.Pointer)
 //go:linkname hashmapBinarySet runtime.hashmapBinarySet
 func hashmapBinarySet(m unsafe.Pointer, key, value unsafe.Pointer)
 
-//go:linkname hashmapInterfaceSet runtime.hashmapInterfaceSet
-func hashmapInterfaceSet(m unsafe.Pointer, key interface{}, value unsafe.Pointer)
+//go:linkname hashmapGenericSet runtime.hashmapGenericSet
+func hashmapGenericSet(m unsafe.Pointer, key, value unsafe.Pointer)
 
 //go:linkname hashmapStringDelete runtime.hashmapStringDelete
 func hashmapStringDelete(m unsafe.Pointer, key string)
@@ -1978,8 +1978,8 @@ func hashmapStringDelete(m unsafe.Pointer, key string)
 //go:linkname hashmapBinaryDelete runtime.hashmapBinaryDelete
 func hashmapBinaryDelete(m unsafe.Pointer, key unsafe.Pointer)
 
-//go:linkname hashmapInterfaceDelete runtime.hashmapInterfaceDelete
-func hashmapInterfaceDelete(m unsafe.Pointer, key interface{})
+//go:linkname hashmapGenericDelete runtime.hashmapGenericDelete
+func hashmapGenericDelete(m unsafe.Pointer, key unsafe.Pointer)
 
 func (v Value) SetMapIndex(key, elem Value) {
 	v.checkRO()
@@ -2002,15 +2002,19 @@ func (v Value) SetMapIndex(key, elem Value) {
 	}
 
 	// make elem an interface if it needs to be converted
-	if v.typecode.elem().Kind() == Interface && elem.typecode.Kind() != Interface {
-		intf := composeInterface(unsafe.Pointer(elem.typecode), elem.value)
+	if !del && v.typecode.elem().Kind() == Interface && elem.typecode.Kind() != Interface {
+		val := elem.value
+		if elem.isIndirect() && elem.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
+			val = loadSmallValue(elem.value, elem.typecode.Size())
+		}
+		intf := composeInterface(unsafe.Pointer(elem.typecode), val)
 		elem = Value{
 			typecode: v.typecode.elem(),
 			value:    unsafe.Pointer(&intf),
 		}
 	}
 
-	if key.Kind() == String {
+	if vkey.Kind() == String {
 		if del {
 			hashmapStringDelete(v.pointer(), *(*string)(key.value))
 		} else {
@@ -2023,7 +2027,7 @@ func (v Value) SetMapIndex(key, elem Value) {
 			hashmapStringSet(v.pointer(), *(*string)(key.value), elemptr)
 		}
 
-	} else if key.typecode.isBinary() {
+	} else if vkey.isBinary() {
 		var keyptr unsafe.Pointer
 		if key.isIndirect() || key.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
 			keyptr = key.value
@@ -2043,8 +2047,11 @@ func (v Value) SetMapIndex(key, elem Value) {
 			hashmapBinarySet(v.pointer(), keyptr, elemptr)
 		}
 	} else {
+		// Compiler-generated hash/equal path.
+		keyptr := genericKeyPtr(vkey, key)
+
 		if del {
-			hashmapInterfaceDelete(v.pointer(), key.Interface())
+			hashmapGenericDelete(v.pointer(), keyptr)
 		} else {
 			var elemptr unsafe.Pointer
 			if elem.isIndirect() || elem.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
@@ -2053,7 +2060,7 @@ func (v Value) SetMapIndex(key, elem Value) {
 				elemptr = unsafe.Pointer(&elem.value)
 			}
 
-			hashmapInterfaceSet(v.pointer(), key.Interface(), elemptr)
+			hashmapGenericSet(v.pointer(), keyptr, elemptr)
 		}
 	}
 }
@@ -2110,6 +2117,9 @@ func (v Value) FieldByNameFunc(match func(string) bool) Value {
 //go:linkname hashmapMake runtime.hashmapMake
 func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
 
+//go:linkname hashmapMakeReflect runtime.hashmapMakeReflect
+func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, keyType unsafe.Pointer) unsafe.Pointer
+
 // MakeMapWithSize creates a new map with the specified type and initial space
 // for approximately n elements.
 func MakeMapWithSize(typ Type, n int) Value {
@@ -2118,7 +2128,6 @@ func MakeMapWithSize(typ Type, n int) Value {
 	const (
 		hashmapAlgorithmBinary uint8 = iota
 		hashmapAlgorithmString
-		hashmapAlgorithmInterface
 	)
 
 	if typ.Kind() != Map {
@@ -2132,17 +2141,18 @@ func MakeMapWithSize(typ Type, n int) Value {
 	key := typ.Key().(*RawType)
 	val := typ.Elem().(*RawType)
 
-	var alg uint8
+	var m unsafe.Pointer
 
 	if key.Kind() == String {
-		alg = hashmapAlgorithmString
+		m = hashmapMake(key.Size(), val.Size(), uintptr(n), hashmapAlgorithmString)
 	} else if key.isBinary() {
-		alg = hashmapAlgorithmBinary
+		m = hashmapMake(key.Size(), val.Size(), uintptr(n), hashmapAlgorithmBinary)
 	} else {
-		alg = hashmapAlgorithmInterface
+		// Composite key type (struct with strings, floats, etc.).
+		// Use runtime-generated hash/equal closures that walk the
+		// type structure, matching the compiler-generated functions.
+		m = hashmapMakeReflect(key.Size(), val.Size(), uintptr(n), unsafe.Pointer(key))
 	}
-
-	m := hashmapMake(key.Size(), val.Size(), uintptr(n), alg)
 
 	return Value{
 		typecode: typ.(*RawType),

@@ -1,4 +1,4 @@
-//go:build arm7tdmi
+//go:build arm7tdmi && !mgbadebug
 
 package runtime
 

@@ -27,41 +27,10 @@ func Dup(fd int) (fd2 int, err error) {
 	return
 }
 
-func Write(fd int, p []byte) (n int, err error) {
-	buf, count := splitSlice(p)
-	n = libc_write(int32(fd), buf, uint(count))
-	if n < 0 {
-		err = getErrno()
-	}
-	return
-}
-
-func Read(fd int, p []byte) (n int, err error) {
-	buf, count := splitSlice(p)
-	n = libc_read(int32(fd), buf, uint(count))
-	if n < 0 {
-		err = getErrno()
-	}
-	return
-}
-
-func Pread(fd int, p []byte, offset int64) (n int, err error) {
-	buf, count := splitSlice(p)
-	n = libc_pread(int32(fd), buf, uint(count), offset)
-	if n < 0 {
-		err = getErrno()
-	}
-	return
-}
-
-func Pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	buf, count := splitSlice(p)
-	n = libc_pwrite(int32(fd), buf, uint(count), offset)
-	if n < 0 {
-		err = getErrno()
-	}
-	return
-}
+// Read, Write, Pread, Pwrite are defined per-build-target so that the
+// wasip1 cooperative-scheduler build can wrap the libc syscalls with a
+// park-on-EAGAIN loop. See syscall_libc_default.go and
+// syscall_libc_wasip1.go.
 
 func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
 	newoffset = libc_lseek(int32(fd), offset, whence)
@@ -256,11 +225,11 @@ func Mmap(fd int, offset int64, length int, prot int, flags int) (data []byte, e
 	if addr == unsafe.Pointer(^uintptr(0)) {
 		return nil, getErrno()
 	}
-	return (*[1 << 30]byte)(addr)[:length:length], nil
+	return unsafe.Slice((*byte)(addr), length), nil
 }
 
 func Munmap(b []byte) (err error) {
-	errCode := libc_munmap(unsafe.Pointer(&b[0]), uintptr(len(b)))
+	errCode := libc_munmap(unsafe.Pointer(unsafe.SliceData(b)), uintptr(len(b)))
 	if errCode != 0 {
 		err = getErrno()
 	}
@@ -268,7 +237,7 @@ func Munmap(b []byte) (err error) {
 }
 
 func Mprotect(b []byte, prot int) (err error) {
-	errCode := libc_mprotect(unsafe.Pointer(&b[0]), uintptr(len(b)), int32(prot))
+	errCode := libc_mprotect(unsafe.Pointer(unsafe.SliceData(b)), uintptr(len(b)), int32(prot))
 	if errCode != 0 {
 		err = getErrno()
 	}

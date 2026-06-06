@@ -12,6 +12,7 @@ const callInstSize = 4 // "bl someFunction" is 4 bytes
 const (
 	linux_MAP_ANONYMOUS = 0x20
 	linux_SIGBUS        = 7
+	linux_SIGFPE        = 8
 	linux_SIGILL        = 4
 	linux_SIGSEGV       = 11
 )

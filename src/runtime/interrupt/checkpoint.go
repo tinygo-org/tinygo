@@ -20,6 +20,10 @@ package interrupt
 //	if c.Saved() {
 //		c.Jump()
 //	}
+//
+// Warning: only use this in special runtime code! If it is used from a normal
+// goroutine, and the scheduler switches to a different goroutine, havoc will
+// ensure.
 type Checkpoint struct {
 	jumpSP uintptr
 	jumpPC uintptr

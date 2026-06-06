@@ -5,30 +5,27 @@ target triple = "wasm32-unknown-wasi"
 
 @"main$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
 
-; Function Attrs: allockind("alloc,zeroed") allocsize(0)
-declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #0
-
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #1
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.init(ptr %context) unnamed_addr #2 {
+define hidden void @main.init(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.regularFunctionGoroutine(ptr %context) unnamed_addr #2 {
+define hidden void @main.regularFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
   call void @"internal/task.start"(i32 ptrtoint (ptr @"main.regularFunction$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 65536, ptr undef) #11
   ret void
 }
 
-declare void @main.regularFunction(i32, ptr) #1
+declare void @main.regularFunction(i32, ptr) #0
 
-declare void @runtime.deadlock(ptr) #1
+declare void @runtime.deadlock(ptr) #0
 
 ; Function Attrs: nounwind
-define linkonce_odr void @"main.regularFunction$gowrapper"(ptr %0) unnamed_addr #3 {
+define linkonce_odr void @"main.regularFunction$gowrapper"(ptr %0) unnamed_addr #2 {
 entry:
   %unpack.int = ptrtoint ptr %0 to i32
   call void @main.regularFunction(i32 %unpack.int, ptr undef) #11
@@ -36,23 +33,23 @@ entry:
   unreachable
 }
 
-declare void @"internal/task.start"(i32, ptr, i32, ptr) #1
+declare void @"internal/task.start"(i32, ptr, i32, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.inlineFunctionGoroutine(ptr %context) unnamed_addr #2 {
+define hidden void @main.inlineFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
   call void @"internal/task.start"(i32 ptrtoint (ptr @"main.inlineFunctionGoroutine$1$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 65536, ptr undef) #11
   ret void
 }
 
 ; Function Attrs: nounwind
-define internal void @"main.inlineFunctionGoroutine$1"(i32 %x, ptr %context) unnamed_addr #2 {
+define internal void @"main.inlineFunctionGoroutine$1"(i32 %x, ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(ptr %0) unnamed_addr #4 {
+define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(ptr %0) unnamed_addr #3 {
 entry:
   %unpack.int = ptrtoint ptr %0 to i32
   call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.int, ptr undef)
@@ -61,7 +58,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.closureFunctionGoroutine(ptr %context) unnamed_addr #2 {
+define hidden void @main.closureFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %n = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #11
@@ -82,8 +79,11 @@ entry:
   ret void
 }
 
+; Function Attrs: allockind("alloc,zeroed") allocsize(0)
+declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #4
+
 ; Function Attrs: nounwind
-define internal void @"main.closureFunctionGoroutine$1"(i32 %x, ptr %context) unnamed_addr #2 {
+define internal void @"main.closureFunctionGoroutine$1"(i32 %x, ptr %context) unnamed_addr #1 {
 entry:
   store i32 7, ptr %context, align 4
   ret void
@@ -100,14 +100,14 @@ entry:
   unreachable
 }
 
-declare void @runtime.printlock(ptr) #1
+declare void @runtime.printlock(ptr) #0
 
-declare void @runtime.printint32(i32, ptr) #1
+declare void @runtime.printint32(i32, ptr) #0
 
-declare void @runtime.printunlock(ptr) #1
+declare void @runtime.printunlock(ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #2 {
+define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #11
@@ -135,13 +135,13 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.recoverBuiltinGoroutine(ptr %context) unnamed_addr #2 {
+define hidden void @main.recoverBuiltinGoroutine(ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.copyBuiltinGoroutine(ptr %dst.data, i32 %dst.len, i32 %dst.cap, ptr %src.data, i32 %src.len, i32 %src.cap, ptr %context) unnamed_addr #2 {
+define hidden void @main.copyBuiltinGoroutine(ptr %dst.data, i32 %dst.len, i32 %dst.cap, ptr %src.data, i32 %src.len, i32 %src.cap, ptr %context) unnamed_addr #1 {
 entry:
   %copy.n = call i32 @llvm.umin.i32(i32 %dst.len, i32 %src.len)
   call void @llvm.memmove.p0.p0.i32(ptr align 1 %dst.data, ptr align 1 %src.data, i32 %copy.n, i1 false)
@@ -155,16 +155,16 @@ declare i32 @llvm.umin.i32(i32, i32) #7
 declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture readonly, i32, i1 immarg) #8
 
 ; Function Attrs: nounwind
-define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(36) %ch, ptr %context) unnamed_addr #2 {
+define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(36) %ch, ptr %context) unnamed_addr #1 {
 entry:
   call void @runtime.chanClose(ptr %ch, ptr undef) #11
   ret void
 }
 
-declare void @runtime.chanClose(ptr dereferenceable_or_null(36), ptr) #1
+declare void @runtime.chanClose(ptr dereferenceable_or_null(36), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #2 {
+define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #11
@@ -197,11 +197,11 @@ entry:
   unreachable
 }
 
-attributes #0 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #1 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.regularFunction" }
-attributes #4 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
+attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.regularFunction" }
+attributes #3 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.inlineFunctionGoroutine$1" }
+attributes #4 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #5 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
 attributes #6 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper" }
 attributes #7 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }

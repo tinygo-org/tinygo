@@ -15,7 +15,7 @@ func GetRandom(p []byte, flags GetRandomFlag) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	libc_arc4random_buf(unsafe.Pointer(&p[0]), uint(len(p)))
+	libc_arc4random_buf(unsafe.Pointer(unsafe.SliceData(p)), uint(len(p)))
 	return len(p), nil
 }
 

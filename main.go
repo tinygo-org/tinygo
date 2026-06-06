@@ -30,6 +30,7 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/buildutil"
 	"tinygo.org/x/espflasher/pkg/espflasher"
@@ -394,7 +395,7 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		fileExt = filepath.Ext(config.Target.FlashFilename)
 	case "openocd":
 		fileExt = ".hex"
-	case "bmp":
+	case "bmp", "probe-rs":
 		fileExt = ".elf"
 	case "adb":
 		fileExt = ".hex"
@@ -534,6 +535,16 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		if err != nil {
 			return &commandError{"failed to flash", result.Binary, err}
 		}
+	case "probe-rs":
+		// TODO: this halts the target after flashing.
+		// See: https://github.com/probe-rs/probe-rs/discussions/4005
+		cmd := executeCommand(config.Options, "probe-rs", "download", "--chip="+config.Target.ProbeRSChip, "--verify", result.Binary)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			return &commandError{"failed to flash", result.Binary, err}
+		}
 	case "adb":
 		// Run pre-flash adb shell commands.
 		for _, preCmd := range config.Target.ADBPreCommands {
@@ -588,7 +599,7 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		return fmt.Errorf("unknown flash method: %s", flashMethod)
 	}
 	if options.Monitor {
-		return Monitor(result.Executable, "", config)
+		return Monitor(result.Executable, port, config)
 	}
 	return nil
 }
@@ -691,6 +702,21 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 			w := &ColorWriter{
 				Out:    colorable.NewColorableStderr(),
 				Prefix: "openocd: ",
+				Color:  TermColorYellow,
+			}
+			daemon.Stdout = w
+			daemon.Stderr = w
+		}
+	case "probe-rs":
+		port = ":1337"
+		gdbCommands = append(gdbCommands, "monitor halt", "load", "monitor reset halt")
+
+		daemon = executeCommand(config.Options, "probe-rs", "gdb", "--chip="+config.Target.ProbeRSChip)
+		if ocdOutput {
+			// Make it clear which output is from the daemon.
+			w := &ColorWriter{
+				Out:    colorable.NewColorableStderr(),
+				Prefix: "probe-rs: ",
 				Color:  TermColorYellow,
 			}
 			daemon.Stdout = w
@@ -1738,6 +1764,7 @@ func main() {
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb, rtt)")
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
 	interpTimeout := flag.Duration("interp-timeout", 180*time.Second, "interp optimization pass timeout")
+	interpLoopLimit := flag.Int("interp-loop-limit", interp.DefaultMaxInterpBlockEntries, "maximum loop iterations during interp (0 to disable)")
 	var tags buildutil.TagsFlag
 	flag.Var(&tags, "tags", "a space-separated list of extra build tags")
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
@@ -1855,42 +1882,43 @@ func main() {
 	}
 
 	options := &compileopts.Options{
-		GOOS:            goenv.Get("GOOS"),
-		GOARCH:          goenv.Get("GOARCH"),
-		GOARM:           goenv.Get("GOARM"),
-		GOMIPS:          goenv.Get("GOMIPS"),
-		Target:          *target,
-		BuildMode:       *buildMode,
-		StackSize:       stackSize,
-		Opt:             *opt,
-		GC:              *gc,
-		PanicStrategy:   *panicStrategy,
-		Scheduler:       *scheduler,
-		Serial:          *serial,
-		Work:            *work,
-		InterpTimeout:   *interpTimeout,
-		PrintIR:         *printIR,
-		DumpSSA:         *dumpSSA,
-		VerifyIR:        *verifyIR,
-		SkipDWARF:       *skipDwarf,
-		Semaphore:       make(chan struct{}, *parallelism),
-		Debug:           !*nodebug,
-		Nobounds:        *nobounds,
-		PrintSizes:      *printSize,
-		PrintStacks:     *printStacks,
-		PrintAllocs:     printAllocs,
-		Tags:            []string(tags),
-		TestConfig:      testConfig,
-		GlobalValues:    globalVarValues,
-		Programmer:      *programmer,
-		OpenOCDCommands: ocdCommands,
-		LLVMFeatures:    *llvmFeatures,
-		Monitor:         *monitor,
-		BaudRate:        *baudrate,
-		Timeout:         *timeout,
-		WITPackage:      witPackage,
-		WITWorld:        witWorld,
-		GoCompatibility: *gocompatibility,
+		GOOS:                    goenv.Get("GOOS"),
+		GOARCH:                  goenv.Get("GOARCH"),
+		GOARM:                   goenv.Get("GOARM"),
+		GOMIPS:                  goenv.Get("GOMIPS"),
+		Target:                  *target,
+		BuildMode:               *buildMode,
+		StackSize:               stackSize,
+		Opt:                     *opt,
+		GC:                      *gc,
+		PanicStrategy:           *panicStrategy,
+		Scheduler:               *scheduler,
+		Serial:                  *serial,
+		Work:                    *work,
+		InterpTimeout:           *interpTimeout,
+		InterpMaxLoopIterations: *interpLoopLimit,
+		PrintIR:                 *printIR,
+		DumpSSA:                 *dumpSSA,
+		VerifyIR:                *verifyIR,
+		SkipDWARF:               *skipDwarf,
+		Semaphore:               make(chan struct{}, *parallelism),
+		Debug:                   !*nodebug,
+		Nobounds:                *nobounds,
+		PrintSizes:              *printSize,
+		PrintStacks:             *printStacks,
+		PrintAllocs:             printAllocs,
+		Tags:                    []string(tags),
+		TestConfig:              testConfig,
+		GlobalValues:            globalVarValues,
+		Programmer:              *programmer,
+		OpenOCDCommands:         ocdCommands,
+		LLVMFeatures:            *llvmFeatures,
+		Monitor:                 *monitor,
+		BaudRate:                *baudrate,
+		Timeout:                 *timeout,
+		WITPackage:              witPackage,
+		WITWorld:                witWorld,
+		GoCompatibility:         *gocompatibility,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand

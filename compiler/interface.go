@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -165,7 +166,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		}
 	}
 
-	typeCodeName, isLocal := getTypeCodeName(typ)
+	typeCodeName, isLocal := c.getTypeCodeName(typ)
 	globalName := "reflect/types.type:" + typeCodeName
 	var global llvm.Value
 	if isLocal {
@@ -580,20 +581,50 @@ var basicTypeNames = [...]string{
 // getTypeCodeName returns a name for this type that can be used in the
 // interface lowering pass to assign type codes as expected by the reflect
 // package. See getTypeCodeNum.
-func getTypeCodeName(t types.Type) (string, bool) {
+//
+// isLocal is true when the type is declared inside a function body.
+// Such types need a per-declaration (or per instantiation) suffix
+// because their printed names are not unique.
+//
+// Ordinary function-local types (TypeName.Parent() != nil) are
+// disambiguated lazily from their declaration position: every
+// declaration in the package has a distinct (file, line, column)
+// triple, and the position is taken un-//line-adjusted so it is
+// stable across builds. Such types are only nameable inside their
+// declaring package, so the name does not need to agree with anything
+// computed in another package.
+//
+// Synthetic locals (TypeName.Parent() == nil), produced by generic
+// instantiation, are pre-registered by scanLocalTypes because their
+// names must agree across packages that materialize the same instance.
+func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bool) {
 	switch t := types.Unalias(t).(type) {
 	case *types.Named:
-		if t.Obj().Parent() != t.Obj().Pkg().Scope() {
-			return "named:" + t.String() + "$local", true
+		tn := t.Obj()
+		if tn.Pkg() == nil || tn.Parent() == tn.Pkg().Scope() {
+			// Package-scope or builtin: the printed name is unique.
+			return "named:" + t.String(), false
 		}
-		return "named:" + t.String(), false
+		if tn.Parent() != nil {
+			// Ordinary function-local type. Use the un-//line-adjusted
+			// declaration position as the disambiguator.
+			pos := c.program.Fset.PositionFor(tn.Pos(), false)
+			return fmt.Sprintf("named:%s$%s:%d:%d", t.String(), filepath.Base(pos.Filename), pos.Line, pos.Column), true
+		}
+		// Synthetic local from generic instantiation: must have been
+		// pre-registered by scanLocalTypes.
+		v := c.localTypeNames.At(t)
+		if v == nil {
+			panic("compiler: synthetic local type " + tn.Name() + " was not registered by scanLocalTypes")
+		}
+		return "named:" + v.(string), true
 	case *types.Array:
-		s, isLocal := getTypeCodeName(t.Elem())
+		s, isLocal := c.getTypeCodeName(t.Elem())
 		return "array:" + strconv.FormatInt(t.Len(), 10) + ":" + s, isLocal
 	case *types.Basic:
 		return "basic:" + basicTypeNames[t.Kind()], false
 	case *types.Chan:
-		s, isLocal := getTypeCodeName(t.Elem())
+		s, isLocal := c.getTypeCodeName(t.Elem())
 		var dir string
 		switch t.Dir() {
 		case types.SendOnly:
@@ -613,7 +644,7 @@ func getTypeCodeName(t types.Type) (string, bool) {
 			if !token.IsExported(name) {
 				name = t.Method(i).Pkg().Path() + "." + name
 			}
-			s, local := getTypeCodeName(t.Method(i).Type())
+			s, local := c.getTypeCodeName(t.Method(i).Type())
 			if local {
 				isLocal = true
 			}
@@ -621,17 +652,17 @@ func getTypeCodeName(t types.Type) (string, bool) {
 		}
 		return "interface:" + "{" + strings.Join(methods, ",") + "}", isLocal
 	case *types.Map:
-		keyType, keyLocal := getTypeCodeName(t.Key())
-		elemType, elemLocal := getTypeCodeName(t.Elem())
+		keyType, keyLocal := c.getTypeCodeName(t.Key())
+		elemType, elemLocal := c.getTypeCodeName(t.Elem())
 		return "map:" + "{" + keyType + "," + elemType + "}", keyLocal || elemLocal
 	case *types.Pointer:
-		s, isLocal := getTypeCodeName(t.Elem())
+		s, isLocal := c.getTypeCodeName(t.Elem())
 		return "pointer:" + s, isLocal
 	case *types.Signature:
 		isLocal := false
 		params := make([]string, t.Params().Len())
 		for i := 0; i < t.Params().Len(); i++ {
-			s, local := getTypeCodeName(t.Params().At(i).Type())
+			s, local := c.getTypeCodeName(t.Params().At(i).Type())
 			if local {
 				isLocal = true
 			}
@@ -639,7 +670,7 @@ func getTypeCodeName(t types.Type) (string, bool) {
 		}
 		results := make([]string, t.Results().Len())
 		for i := 0; i < t.Results().Len(); i++ {
-			s, local := getTypeCodeName(t.Results().At(i).Type())
+			s, local := c.getTypeCodeName(t.Results().At(i).Type())
 			if local {
 				isLocal = true
 			}
@@ -647,7 +678,7 @@ func getTypeCodeName(t types.Type) (string, bool) {
 		}
 		return "func:" + "{" + strings.Join(params, ",") + "}{" + strings.Join(results, ",") + "}", isLocal
 	case *types.Slice:
-		s, isLocal := getTypeCodeName(t.Elem())
+		s, isLocal := c.getTypeCodeName(t.Elem())
 		return "slice:" + s, isLocal
 	case *types.Struct:
 		elems := make([]string, t.NumFields())
@@ -657,7 +688,7 @@ func getTypeCodeName(t types.Type) (string, bool) {
 			if t.Field(i).Embedded() {
 				embedded = "#"
 			}
-			s, local := getTypeCodeName(t.Field(i).Type())
+			s, local := c.getTypeCodeName(t.Field(i).Type())
 			if local {
 				isLocal = true
 			}
@@ -669,6 +700,232 @@ func getTypeCodeName(t types.Type) (string, bool) {
 		return "struct:" + "{" + strings.Join(elems, ",") + "}", isLocal
 	default:
 		panic("unknown type: " + t.String())
+	}
+}
+
+// scanLocalTypes assigns names to every synthetic *types.TypeName
+// (TypeName.Parent() == nil) reachable from this package and stores
+// them in c.localTypeNames.
+//
+// Synthetic TypeNames are produced by generic instantiation: two
+// instantiations of the same generic function (e.g. F[int] and
+// F[string]) produce TypeNames with the same printed name and the
+// same source position, so each is named with the enclosing
+// instance's RelString as prefix. RelString encodes the type
+// arguments, matching Go's runtime behavior, where F[int].Inner and
+// F[string].Inner are distinct types even when Inner does not mention
+// the type parameter.
+//
+// A given instance may be materialized by several packages (the body
+// of F[int] is compiled in every package that calls F[int]); its
+// reflect/types.type:* global has LinkOnceODRLinkage and is merged by
+// name at link time. The chosen name therefore depends only on
+// intrinsic SSA properties (RelString and the raw token.Pos used as a
+// sort key), so any package compiling the same instance produces the
+// same identifier.
+//
+// Ordinary function-local TypeNames (TypeName.Parent() != nil) are
+// not handled here: they are nameable only inside their declaring
+// package, and getTypeCodeName derives a stable per-declaration name
+// for them directly from their source position.
+func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
+	// Locate every generic instance reachable from this package
+	// (including instances declared in imported packages and any
+	// function reached through an instance subtree).
+	var instances []*ssa.Function
+	seen := map[*ssa.Function]struct{}{}
+	var walk func(fn *ssa.Function, inInstance bool)
+	walk = func(fn *ssa.Function, inInstance bool) {
+		if fn == nil {
+			return
+		}
+		if _, ok := seen[fn]; ok {
+			return
+		}
+		// fn belongs to an instance subtree if it is itself an
+		// instantiation or if we reached it from one.
+		//
+		// len(TypeArgs()) is used instead of fn.Origin() because
+		// Origin() may call Build() on fn's declaring package, which
+		// would defeat per-package compilation.
+		isInstanceRoot := len(fn.TypeArgs()) > 0
+		if !isInstanceRoot && !inInstance && fn.Pkg != ssaPkg {
+			return
+		}
+		if fn.Blocks == nil && fn.AnonFuncs == nil {
+			return
+		}
+		seen[fn] = struct{}{}
+		isInInstance := inInstance || isInstanceRoot
+		if isInInstance {
+			instances = append(instances, fn)
+		}
+		for _, anon := range fn.AnonFuncs {
+			walk(anon, isInInstance)
+		}
+		var ops [10]*ssa.Value
+		for _, b := range fn.Blocks {
+			for _, instr := range b.Instrs {
+				for _, op := range instr.Operands(ops[:0]) {
+					if op == nil || *op == nil {
+						continue
+					}
+					if callee, ok := (*op).(*ssa.Function); ok {
+						walk(callee, isInInstance)
+					}
+				}
+			}
+		}
+	}
+	for _, member := range ssaPkg.Members {
+		switch m := member.(type) {
+		case *ssa.Function:
+			walk(m, false)
+		case *ssa.Type:
+			mset := c.program.MethodSets.MethodSet(m.Type())
+			for i := 0; i < mset.Len(); i++ {
+				walk(c.program.MethodValue(mset.At(i)), false)
+			}
+			pmset := c.program.MethodSets.MethodSet(types.NewPointer(m.Type()))
+			for i := 0; i < pmset.Len(); i++ {
+				walk(c.program.MethodValue(pmset.At(i)), false)
+			}
+		}
+	}
+
+	// Registration is first-writer-wins (a synthetic TypeName may be
+	// reachable from several instances), so visit instances in a
+	// deterministic order. Pos() is a defensive tiebreaker.
+	sort.Slice(instances, func(i, j int) bool {
+		ri, rj := instances[i].RelString(nil), instances[j].RelString(nil)
+		if ri != rj {
+			return ri < rj
+		}
+		return instances[i].Pos() < instances[j].Pos()
+	})
+	for _, fn := range instances {
+		c.registerSyntheticLocalTypes(fn)
+	}
+}
+
+// registerSyntheticLocalTypes walks every type reachable from fn's
+// body and records each synthetic *types.Named (TypeName.Parent() ==
+// nil) in c.localTypeNames. Each is named with fn.RelString as the
+// owning function plus a per-function counter assigned in source
+// order.
+//
+// First-writer-wins: a *types.Named already present in
+// c.localTypeNames is left alone, so a synthetic type reachable from
+// several instances keeps the name assigned by the first (in
+// scanLocalTypes' deterministic order).
+func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
+	var found []*types.Named
+	seen := map[types.Type]struct{}{}
+	var visit func(t types.Type)
+	visit = func(t types.Type) {
+		if t == nil {
+			return
+		}
+		if _, ok := seen[t]; ok {
+			return
+		}
+		seen[t] = struct{}{}
+		switch t := t.(type) {
+		case *types.Alias:
+			visit(types.Unalias(t))
+		case *types.Named:
+			tn := t.Obj()
+			if tn.Pkg() != nil && tn.Parent() == nil {
+				if c.localTypeNames.At(t) == nil {
+					// Reserve the slot so later calls within this
+					// scanLocalTypes invocation skip it; the final
+					// name is filled in after sorting, before any
+					// getTypeCodeName lookups happen.
+					c.localTypeNames.Set(t, "")
+					found = append(found, t)
+				}
+			}
+			targs := t.TypeArgs()
+			for i := 0; i < targs.Len(); i++ {
+				visit(targs.At(i))
+			}
+			visit(t.Underlying())
+		case *types.Pointer:
+			visit(t.Elem())
+		case *types.Slice:
+			visit(t.Elem())
+		case *types.Array:
+			visit(t.Elem())
+		case *types.Chan:
+			visit(t.Elem())
+		case *types.Map:
+			visit(t.Key())
+			visit(t.Elem())
+		case *types.Struct:
+			for i := 0; i < t.NumFields(); i++ {
+				visit(t.Field(i).Type())
+			}
+		case *types.Signature:
+			if p := t.Params(); p != nil {
+				for i := 0; i < p.Len(); i++ {
+					visit(p.At(i).Type())
+				}
+			}
+			if r := t.Results(); r != nil {
+				for i := 0; i < r.Len(); i++ {
+					visit(r.At(i).Type())
+				}
+			}
+		case *types.Tuple:
+			for i := 0; i < t.Len(); i++ {
+				visit(t.At(i).Type())
+			}
+		case *types.Interface:
+			// A synthetic local type can be reachable only through a
+			// local interface's method signature, so descend into
+			// them. getTypeCodeName encodes those signatures into
+			// the interface's identifier, and the seen map breaks
+			// cycles formed by methods that mention the interface
+			// itself.
+			for i := 0; i < t.NumMethods(); i++ {
+				visit(t.Method(i).Type())
+			}
+		}
+	}
+	for _, p := range fn.Params {
+		visit(p.Type())
+	}
+	for _, fv := range fn.FreeVars {
+		visit(fv.Type())
+	}
+	for _, l := range fn.Locals {
+		visit(l.Type())
+	}
+	var ops [10]*ssa.Value
+	for _, b := range fn.Blocks {
+		for _, instr := range b.Instrs {
+			if v, ok := instr.(ssa.Value); ok {
+				visit(v.Type())
+			}
+			for _, op := range instr.Operands(ops[:0]) {
+				if op != nil && *op != nil {
+					visit((*op).Type())
+				}
+			}
+		}
+	}
+	if len(found) == 0 {
+		return
+	}
+	// Sort by raw token.Pos: this gives a total order on declarations
+	// that is stable across builds and unaffected by //line directives
+	// (which only adjust the human-facing position from Fset.Position).
+	sort.Slice(found, func(i, j int) bool {
+		return found[i].Obj().Pos() < found[j].Obj().Pos()
+	})
+	enclosing := fn.RelString(nil)
+	for i, named := range found {
+		c.localTypeNames.Set(named, fmt.Sprintf("%s.%s$%d", enclosing, named.Obj().Name(), i))
 	}
 }
 
@@ -769,7 +1026,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 			commaOk = b.createInterfaceTypeAssert(intf, actualTypeNum)
 		}
 	} else {
-		name, _ := getTypeCodeName(expr.AssertedType)
+		name, _ := b.getTypeCodeName(expr.AssertedType)
 		globalName := "reflect/types.typeid:" + name
 		assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
 		if assertedTypeCodeGlobal.IsNil() {
@@ -796,41 +1053,66 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 
 	prevBlock := b.GetInsertBlock()
 	okBlock := b.insertBasicBlock("typeassert.ok")
-	nextBlock := b.insertBasicBlock("typeassert.next")
-	b.currentBlockInfo.exit = nextBlock // adjust outgoing block for phi nodes
-	b.CreateCondBr(commaOk, okBlock, nextBlock)
-
-	// Retrieve the value from the interface if the type assert was
-	// successful.
-	b.SetInsertPointAtEnd(okBlock)
-	var valueOk llvm.Value
-	if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
-		// Type assert on interface type. Easy: just return the same
-		// interface value.
-		valueOk = itf
-	} else {
-		// Type assert on concrete type. Extract the underlying type from
-		// the interface (but only after checking it matches).
-		valueOk = b.extractValueFromInterface(itf, assertedType)
-	}
-	b.CreateBr(nextBlock)
-
-	// Continue after the if statement.
-	b.SetInsertPointAtEnd(nextBlock)
-	phi := b.CreatePHI(assertedType, "typeassert.value")
-	phi.AddIncoming([]llvm.Value{llvm.ConstNull(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
 
 	if expr.CommaOk {
+		nextBlock := b.insertBasicBlock("typeassert.next")
+		b.currentBlockInfo.exit = nextBlock
+		b.CreateCondBr(commaOk, okBlock, nextBlock)
+
+		// Retrieve the value from the interface if the type assert was
+		// successful.
+		b.SetInsertPointAtEnd(okBlock)
+		var valueOk llvm.Value
+		if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+			// Type assert on interface type. Easy: just return the same
+			// interface value.
+			valueOk = itf
+		} else {
+			// Type assert on concrete type. Extract the underlying type from
+			// the interface (but only after checking it matches).
+			valueOk = b.extractValueFromInterface(itf, assertedType)
+		}
+		b.CreateBr(nextBlock)
+
+		// Continue after the if statement.
+		b.SetInsertPointAtEnd(nextBlock)
+		phi := b.CreatePHI(assertedType, "typeassert.value")
+		phi.AddIncoming([]llvm.Value{llvm.ConstNull(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
+
 		tuple := b.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(b.ctx.Int1Type())}, false) // create empty tuple
 		tuple = b.CreateInsertValue(tuple, phi, 0, "")                                                          // insert value
 		tuple = b.CreateInsertValue(tuple, commaOk, 1, "")                                                      // insert 'comma ok' boolean
 		return tuple
 	} else {
-		// This is kind of dirty as the branch above becomes mostly useless,
-		// but hopefully this gets optimized away.
-		b.createRuntimeCall("interfaceTypeAssert", []llvm.Value{commaOk}, "")
-		return phi
+		// Type assert without comma-ok. If it fails, panic.
+		faultBlock := b.getInterfaceAssertBlock()
+		b.currentBlockInfo.exit = okBlock
+		b.CreateCondBr(commaOk, okBlock, faultBlock)
+
+		// OK: extract the value from the interface.
+		b.SetInsertPointAtEnd(okBlock)
+		if _, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
+			return itf
+		}
+		return b.extractValueFromInterface(itf, assertedType)
 	}
+}
+
+func (b *builder) getInterfaceAssertBlock() llvm.BasicBlock {
+	if !b.interfaceAssertBlock.IsNil() {
+		return b.interfaceAssertBlock
+	}
+	savedBlock := b.GetInsertBlock()
+	block := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.throw")
+	b.interfaceAssertBlock = block
+	b.SetInsertPointAtEnd(block)
+	if b.hasDeferFrame() {
+		b.createFaultCheckpoint()
+	}
+	b.createRuntimeCall("interfaceTypeAssert", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
+	b.CreateUnreachable()
+	b.SetInsertPointAtEnd(savedBlock)
+	return block
 }
 
 // getMethodsString returns a string to be used in the "tinygo-methods" string
@@ -857,7 +1139,7 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 		if !token.IsExported(name) {
 			name = method.Pkg().Path() + "." + name
 		}
-		s, _ := getTypeCodeName(method.Type())
+		s, _ := c.getTypeCodeName(method.Type())
 		globalName := "reflect/types.signature:" + name + ":" + s
 		value := c.mod.NamedGlobal(globalName)
 		if value.IsNil() {
@@ -901,7 +1183,7 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 // thunk is declared, not defined: it will be defined by the interface lowering
 // pass.
 func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
-	s, _ := getTypeCodeName(instr.Value.Type().Underlying())
+	s, _ := c.getTypeCodeName(instr.Value.Type().Underlying())
 	fnName := s + "." + instr.Method.Name() + "$invoke"
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
@@ -926,7 +1208,7 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 // by the interface lowering pass as a type-ID comparison chain, avoiding the
 // need for runtime.typeImplementsMethodSet at compile time.
 func (b *builder) createInterfaceTypeAssert(intf *types.Interface, actualType llvm.Value) llvm.Value {
-	s, _ := getTypeCodeName(intf)
+	s, _ := b.getTypeCodeName(intf)
 	fnName := s + ".$typeassert"
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {

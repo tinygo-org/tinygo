@@ -48,7 +48,7 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	channelOpAlloca, channelOpAllocaSize := b.createTemporaryAlloca(channelOp, "chan.op")
 
 	// Do the send.
-	b.createRuntimeCall("chanSend", []llvm.Value{ch, valueAlloca, channelOpAlloca}, "")
+	b.createRuntimeInvoke("chanSend", []llvm.Value{ch, valueAlloca, channelOpAlloca}, "")
 
 	// End the lifetime of the allocas.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
@@ -101,7 +101,7 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 
 // createChanClose closes the given channel.
 func (b *builder) createChanClose(ch llvm.Value) {
-	b.createRuntimeCall("chanClose", []llvm.Value{ch}, "")
+	b.createRuntimeInvoke("chanClose", []llvm.Value{ch}, "")
 }
 
 // createSelect emits all IR necessary for a select statements. That's a

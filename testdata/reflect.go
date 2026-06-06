@@ -396,6 +396,24 @@ func main() {
 			}
 		}
 	}
+
+	// Test for issue #3794: reflect MapIter.Key() should return a value with
+	// interface kind for map[interface{}] keys, not the underlying concrete kind.
+	{
+		m := make(map[interface{}]int)
+		m[1] = 2
+		m["hello"] = 3
+		rv := reflect.ValueOf(m)
+		iter := rv.MapRange()
+		for iter.Next() {
+			k := iter.Key()
+			if k.Kind() != reflect.Interface {
+				println("FAIL #3794: expected interface kind, got", k.Kind().String())
+				break
+			}
+		}
+		println("reflect map interface key ok")
+	}
 }
 
 func emptyFunc() {
@@ -755,6 +773,9 @@ func testImplements() {
 	// Make FooNode and BarNode implement Node with pointer receivers
 	// (can't add methods to local types in function, use a different approach)
 	testValueSetInterface()
+	testMakeMapCompositeKey()
+	testMakeMapInterfaceKey()
+	testMakeMapPaddedKey()
 }
 
 type IfaceNode interface {
@@ -806,4 +827,123 @@ func xorshift32(x uint32) uint32 {
 func randuint32() uint32 {
 	xorshift32State = xorshift32(xorshift32State)
 	return xorshift32State
+}
+
+type compositeKey struct {
+	S string
+	N int32
+}
+
+// testMakeMapCompositeKey tests that reflect.MakeMap works correctly with
+// composite key types (structs containing strings). This exercises the
+// hash/equal dispatch path for maps created through reflection rather
+// than by the compiler.
+func testMakeMapCompositeKey() {
+	println("\nreflect.MakeMap composite key:")
+	mapType := reflect.TypeOf(map[compositeKey]int{})
+	m := reflect.MakeMap(mapType)
+
+	// Insert two keys that share the same string but differ in the int field.
+	key1 := reflect.ValueOf(compositeKey{S: "hello", N: 1})
+	key2 := reflect.ValueOf(compositeKey{S: "hello", N: 2})
+	m.SetMapIndex(key1, reflect.ValueOf(100))
+	m.SetMapIndex(key2, reflect.ValueOf(200))
+
+	println("len:", m.Len())
+
+	v1 := m.MapIndex(key1)
+	if v1.IsValid() {
+		println("key1:", v1.Int())
+	} else {
+		println("key1: not found")
+	}
+	v2 := m.MapIndex(key2)
+	if v2.IsValid() {
+		println("key2:", v2.Int())
+	} else {
+		println("key2: not found")
+	}
+
+	// Delete key1, verify key2 remains.
+	m.SetMapIndex(key1, reflect.Value{})
+	println("after delete, len:", m.Len())
+	v2 = m.MapIndex(key2)
+	if v2.IsValid() {
+		println("key2 after delete:", v2.Int())
+	} else {
+		println("key2 after delete: not found")
+	}
+}
+
+// testMakeMapInterfaceKey tests that reflect.MakeMap works correctly with
+// interface{} key types, including cross-path usage (reflect insert,
+// compiled lookup and vice versa).
+func testMakeMapInterfaceKey() {
+	println("\nreflect.MakeMap interface key:")
+	mapType := reflect.TypeOf(map[interface{}]int{})
+	rv := reflect.MakeMap(mapType)
+
+	rv.SetMapIndex(reflect.ValueOf(42), reflect.ValueOf(100))
+	rv.SetMapIndex(reflect.ValueOf("hello"), reflect.ValueOf(200))
+	println("len:", rv.Len())
+
+	v1 := rv.MapIndex(reflect.ValueOf(42))
+	if v1.IsValid() {
+		println("42:", v1.Int())
+	} else {
+		println("42: not found")
+	}
+	v2 := rv.MapIndex(reflect.ValueOf("hello"))
+	if v2.IsValid() {
+		println("hello:", v2.Int())
+	} else {
+		println("hello: not found")
+	}
+
+	// Cross-path: use from compiled code.
+	m := rv.Interface().(map[interface{}]int)
+	println("compiled 42:", m[42])
+	println("compiled hello:", m["hello"])
+
+	// Addressable small value as key.
+	x := 99
+	addrVal := reflect.ValueOf(&x).Elem()
+	rv.SetMapIndex(addrVal, reflect.ValueOf(300))
+	v3 := rv.MapIndex(reflect.ValueOf(99))
+	if v3.IsValid() {
+		println("addressable 99:", v3.Int())
+	} else {
+		println("addressable 99: not found")
+	}
+}
+
+type paddedKey struct {
+	A int8
+	B int32
+}
+
+// testMakeMapPaddedKey tests that struct keys with padding work correctly
+// through reflect, using addressable values with poisoned padding bytes.
+func testMakeMapPaddedKey() {
+	println("\nreflect.MakeMap padded key:")
+	var pk1, pk2 paddedKey
+	pk1.A = 1
+	pk1.B = 42
+	pk2.A = 1
+	pk2.B = 42
+
+	if unsafe.Offsetof(paddedKey{}.B) > 1 {
+		// Poison pk2's padding byte (between A and B).
+		*(*byte)(unsafe.Add(unsafe.Pointer(&pk2), 1)) = 0xFF
+	}
+
+	// Use addressable values so padding survives into reflect.
+	rm := reflect.MakeMap(reflect.TypeOf(map[paddedKey]int{}))
+	rm.SetMapIndex(reflect.ValueOf(&pk1).Elem(), reflect.ValueOf(100))
+	v := rm.MapIndex(reflect.ValueOf(&pk2).Elem())
+	if v.IsValid() {
+		println("padded lookup:", v.Int())
+	} else {
+		println("padded lookup: not found")
+	}
 }

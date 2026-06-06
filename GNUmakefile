@@ -194,6 +194,12 @@ NINJA_BUILD_TARGETS = clang llvm-config llvm-ar llvm-nm lld $(addprefix lib/lib,
 ifneq ("$(wildcard $(LLVM_BUILDDIR)/bin/llvm-config*)","")
     CGO_CPPFLAGS+=$(shell $(LLVM_CONFIG_PREFIX) $(LLVM_BUILDDIR)/bin/llvm-config --cppflags) -I$(abspath $(LLVM_BUILDDIR))/tools/clang/include -I$(abspath $(CLANG_SRC))/include -I$(abspath $(LLD_SRC))/include
     CGO_CXXFLAGS=-std=c++17
+ifneq ($(uname),Windows_NT)
+    # Disable GCC DWARF compression: lld built without zlib cannot link
+    # object files with ELFCOMPRESS_ZLIB debug sections.
+    CGO_CFLAGS+=-gz=none
+    CGO_CXXFLAGS+=-gz=none
+endif
     CGO_LDFLAGS+=-L$(abspath $(LLVM_BUILDDIR)/lib) -lclang $(CLANG_LIBS) $(LLD_LIBS) $(shell $(LLVM_CONFIG_PREFIX) $(LLVM_BUILDDIR)/bin/llvm-config --ldflags --libs --system-libs $(LLVM_COMPONENTS)) -lstdc++ $(CGO_LDFLAGS_EXTRA)
 endif
 
@@ -310,7 +316,7 @@ check-nodejs-version:
 
 tinygo: ## Build the TinyGo compiler
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  $(MAKE) llvm-source"; echo "  $(MAKE) $(LLVM_BUILDDIR)"; exit 1; fi
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags "byollvm osusergo" .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CFLAGS="$(CGO_CFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags "byollvm osusergo" .
 test: check-nodejs-version
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags "byollvm osusergo" $(GOTESTPKGS)
 
@@ -379,22 +385,22 @@ TEST_PACKAGES_FAST = \
 # archive/zip requires os.ReadAt, which is not yet supported on windows
 # bytes requires mmap
 # compress/flate appears to hang on wasi
-# crypto/aes fails on wasi, needs panic()/recover()
+# crypto/aes needs reflect.Type.Method(), not yet implemented
 # crypto/des fails on wasi, needs panic()/recover()
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # encoding/xml takes a minute on linux and gives a stack overflow on wasi
-# image requires recover(), which is not yet supported on wasi
+# image fails on wasi, needs panic()/recover()
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
-# mime: fail on wasi; neds panic()/recover()
+# mime: fails on wasi, needs panic()/recover()
 # mime/multipart: needs wasip1 syscall.FDFLAG_NONBLOCK
 # mime/quotedprintable requires syscall.Faccessat
 # net/mail: needs wasip1  syscall.FDFLAG_NONBLOCK
 # net/ntextproto: needs wasip1 syscall.FDFLAG_NONBLOCK
-# regexp/syntax: fails on wasip1; needs panic()/recover()
-# strconv requires recover() which is not yet supported on wasi
-# text/tabwriter requires recover(), which is not yet supported on wasi
-# text/template/parse requires recover(), which is not yet supported on wasi
+# regexp/syntax: fails on wasip1, needs panic()/recover()
+# strconv: fails on wasi, needs panic()/recover()
+# text/tabwriter: fails on wasi, needs panic()/recover()
+# text/template/parse: fails on wasi, needs panic()/recover()
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
 
 # Additional standard library packages that pass tests on individual platforms
@@ -419,6 +425,7 @@ TEST_PACKAGES_LINUX := \
 	os/user \
 	regexp/syntax \
 	strconv \
+	testing/fstest \
 	text/tabwriter \
 	text/template/parse
 
@@ -429,7 +436,11 @@ TEST_PACKAGES_WINDOWS := \
 	compress/flate \
 	crypto/des \
 	crypto/hmac \
+	image \
+	mime \
+	regexp/syntax \
 	strconv \
+	text/tabwriter \
 	text/template/parse \
 	$(nil)
 
@@ -778,6 +789,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pico                examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pico -gc=leaking    examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nano-33-ble         examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nano-rp2040         examples/blinky1
@@ -966,6 +979,8 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target=esp32s3-supermini	    examples/mcp3008
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=esp32s3-supermini   	examples/adc
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32s3-box-3       examples/blinky1
 	@$(MD5SUM) test.bin
 endif
     # esp32c3-supermini
@@ -1163,8 +1178,8 @@ endif
 	@cp -rp lib/wasi-libc/libc-top-half/musl/src/unistd             build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
 	@cp -rp lib/wasi-libc/libc-top-half/sources                     build/release/tinygo/lib/wasi-libc/libc-top-half
 	@cp -rp lib/wasi-cli/wit                                        build/release/tinygo/lib/wasi-cli/wit
-	@cp -rp llvm-project/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt-builtins
-	@cp -rp llvm-project/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
+	@cp -rp ${LLVM_PROJECTDIR}/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt-builtins
+	@cp -rp ${LLVM_PROJECTDIR}/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp src                          build/release/tinygo/src
 	@cp -rp targets                      build/release/tinygo/targets
 

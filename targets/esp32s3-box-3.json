@@ -1,0 +1,6 @@
+{
+  "inherits": ["esp32s3"],
+  "build-tags": ["esp32s3_box3"],
+  "serial-port": ["303a:1001"],
+  "flash-mode": "dio"
+}

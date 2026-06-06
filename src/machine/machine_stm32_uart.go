@@ -76,13 +76,15 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 		uart.Receive(byte((uart.rxReg.Get() & 0xFF)))
 	}
 
-	// Clear overrun error (ORE, bit 3) to prevent an interrupt storm.
-	if s&0x8 != 0 {
+	// Clear error flags (ORE=bit3, NE=bit2, FE=bit1, PE=bit0) to prevent
+	// an interrupt storm and ensure the USART can continue receiving.
+	if s&0xF != 0 {
 		if uart.errClearReg != nil {
-			// Newer USART peripherals: clear ORE via the ICR register.
-			uart.errClearReg.Set(0x8) // ORECF
+			// Newer USART peripherals (L0, L4, L5, G0, F7, U5, WL, etc.):
+			// clear all error flags via ICR (ORECF|NECF|FECF|PECF = bits 3:0).
+			uart.errClearReg.Set(s & 0xF)
 		} else if s&0x20 == 0 {
-			// Older USART (F1/F4): ORE is cleared by reading SR then DR.
+			// Older USART (F1/F4): errors are cleared by reading SR then DR.
 			// SR was already read above. If RXNE was set, DR was read in
 			// the Receive path. Otherwise do a dummy DR read to complete
 			// the clearing sequence.
@@ -91,20 +93,20 @@ func (uart *UART) handleInterrupt(interrupt.Interrupt) {
 	}
 }
 
-// SetBaudRate sets the communication speed for the UART. Defer to chip-specific
-// routines for calculation
-func (uart *UART) SetBaudRate(br uint32) {
-	divider := uart.getBaudRateDivisor(br)
-	uart.Bus.BRR.Set(divider)
-}
-
 // WriteByte writes a byte of data to the UART.
 func (uart *UART) writeByte(c byte) error {
-	uart.txReg.Set(uint32(c))
-
+	// Wait for the transmit data register to be empty before writing, so we
+	// don't overwrite a byte that hasn't moved to the shift register yet.
 	for !uart.statusReg.HasBits(uart.txEmptyFlag) {
 	}
+	uart.txReg.Set(uint32(c))
 	return nil
 }
 
-func (uart *UART) flush() {}
+// flush waits until the USART shift register has finished transmitting the
+// last byte (TC = Transmission Complete, bit 6). Without this, Write() returns
+// while the final byte is still clocking out on the wire.
+func (uart *UART) flush() {
+	for !uart.statusReg.HasBits(1 << 6) { // TC bit
+	}
+}

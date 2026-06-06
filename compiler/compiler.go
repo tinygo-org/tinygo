@@ -92,6 +92,7 @@ type compilerContext struct {
 	pkg              *types.Package
 	packageDir       string // directory for this package
 	runtimePkg       *types.Package
+	localTypeNames   typeutil.Map // *types.Named (synthetic local from generic instantiation) -> string
 }
 
 // newCompilerContext returns a new compiler context ready for use, most
@@ -176,6 +177,9 @@ type builder struct {
 	deferBuiltinFuncs map[ssa.Value]deferBuiltin
 	runDefersBlock    []llvm.BasicBlock
 	afterDefersBlock  []llvm.BasicBlock
+
+	runtimeAssertBlocks  map[string]llvm.BasicBlock
+	interfaceAssertBlock llvm.BasicBlock
 }
 
 func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *builder {
@@ -190,6 +194,16 @@ func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *bu
 		locals:          make(map[ssa.Value]llvm.Value),
 		dilocals:        make(map[*types.Var]llvm.Metadata),
 	}
+}
+
+// Return the runtime.alloc function variant.
+// This is normally just "alloc", but is "alloc_noheap" if the //go:noheap
+// pragma is used.
+func (b *builder) allocFunc() string {
+	if b.info.noheap {
+		return "alloc_noheap"
+	}
+	return "alloc"
 }
 
 type blockInfo struct {
@@ -300,6 +314,11 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	// Convert AST to SSA.
 	ssaPkg.Build()
 
+	// Assign names to function-local named types before compiling the
+	// package, so that types declared in different functions (or in
+	// different instantiations of a generic function) do not collide.
+	c.scanLocalTypes(ssaPkg)
+
 	// Initialize debug information.
 	if c.Debug {
 		c.cu = c.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
@@ -314,9 +333,6 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	// Load comments such as //go:extern on globals.
 	c.loadASTComments(pkg)
 
-	// Predeclare the runtime.alloc function, which is used by the wordpack
-	// functionality.
-	c.getFunction(c.program.ImportedPackage("runtime").Members["alloc"].(*ssa.Function))
 	if c.NeedsStackObjects {
 		// Predeclare trackPointer, which is used everywhere we use runtime.alloc.
 		c.getFunction(c.program.ImportedPackage("runtime").Members["trackPointer"].(*ssa.Function))
@@ -1888,6 +1904,12 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			// not of the current function.
 			useParentFrame = 1
 		}
+		// Prevent inlining of functions that call recover(), matching the
+		// Go compiler's behavior. If this function were inlined into a
+		// deferred function, recover() would incorrectly succeed because
+		// the inlined code runs in the deferred function's context.
+		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
+		b.llvmFn.AddFunctionAttr(noinline)
 		return b.createRuntimeCall("_recover", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), useParentFrame, false)}, ""), nil
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
@@ -2176,7 +2198,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			}
 			sizeValue := llvm.ConstInt(b.uintptrType, size, false)
 			layoutValue := b.createObjectLayout(typ, expr.Pos())
-			buf := b.createRuntimeCall("alloc", []llvm.Value{sizeValue, layoutValue}, expr.Comment)
+			buf := b.createRuntimeCall(b.allocFunc(), []llvm.Value{sizeValue, layoutValue}, expr.Comment)
 			align := b.targetData.ABITypeAlignment(typ)
 			buf.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
 			return buf, nil
@@ -2408,7 +2430,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
 		layoutValue := b.createObjectLayout(llvmElemType, expr.Pos())
-		slicePtr := b.createRuntimeCall("alloc", []llvm.Value{sliceSize, layoutValue}, "makeslice.buf")
+		slicePtr := b.createRuntimeCall(b.allocFunc(), []llvm.Value{sliceSize, layoutValue}, "makeslice.buf")
 		slicePtr.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elemAlign)))
 
 		// Extend or truncate if necessary. This is safe as we've already done
