@@ -43,6 +43,7 @@ type peSection struct {
 var module *exeHeader
 
 func findGlobalsForPE(found func(start, end uintptr)) {
+    // https://docs.microsoft.com/en-us/windows/win32/debug/pe-format
 	const imageSCNMemWrite = 0x80000000
 
 	pe := (*peHeader)(unsafe.Add(unsafe.Pointer(module), module.peHeader))
