@@ -37,9 +37,19 @@ func rename(oldname, newname string) error {
 // can overwrite this data, which could cause the finalizer
 // to close the wrong file descriptor.
 type file struct {
-	handle     FileHandle
-	name       string
-	dirinfo    *dirInfo // nil unless directory being read
+	handle  FileHandle
+	name    string
+	dirinfo *dirInfo // nil unless directory being read
+
+	// pfd is set on wasip1 by (*File).PollFD to a *poll.FD that wraps
+	// the underlying syscall FD. When set, Close routes through it so
+	// the refcount semantics shared with net.FileListener / net.FileConn
+	// are honoured. On non-wasip1 builds pfd is a literal empty struct
+	// (see pollfd_other.go) and stays at zero bytes — provided it's not
+	// the last field of this struct, which is why it lives here above
+	// appendMode rather than at the end.
+	pfd pollFD
+
 	appendMode bool
 }
 
@@ -47,6 +57,9 @@ func (f *file) close() (err error) {
 	if f.dirinfo != nil {
 		f.dirinfo.close()
 		f.dirinfo = nil
+	}
+	if f.pfd.Exist() {
+		return f.pfd.Close()
 	}
 	return f.handle.Close()
 }

@@ -12,6 +12,12 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// DefaultMaxInterpBlockEntries is the default maximum number of times a single
+// basic block may be entered during interpretation of one function call. This
+// limits how far the interpreter will unroll or evaluate loops before deferring
+// the init function to runtime.
+const DefaultMaxInterpBlockEntries = 1000
+
 func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent string) (value, memoryView, *Error) {
 	mem := memoryView{r: r, parent: parentMem}
 	locals := make([]value, len(fn.locals))
@@ -26,6 +32,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 	// This is used to prevent unrolling.
 	var runtimeBlocks map[int]struct{}
 
+	// Track how many times each basic block has been entered, to detect
+	// loops that are too expensive to evaluate at compile time.
+	var blockCounts map[int]int
+
 	// Start with the first basic block and the first instruction.
 	// Branch instructions may modify both bb and instIndex when branching.
 	bb := fn.blocks[0]
@@ -36,6 +46,18 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 	for instIndex := 0; instIndex < len(bb.instructions); instIndex++ {
 		if instIndex == 0 {
 			// This is the start of a new basic block.
+
+			// Check whether this block has been entered too many times,
+			// which indicates an expensive loop that should be deferred
+			// to runtime.
+			if blockCounts == nil {
+				blockCounts = make(map[int]int)
+			}
+			blockCounts[currentBB]++
+			if r.maxLoopIterations > 0 && blockCounts[currentBB] > r.maxLoopIterations {
+				return nil, mem, r.errorAt(bb.instructions[0], errLoopTooLong)
+			}
+
 			if len(mem.instructions) != startRTInsts {
 				if _, ok := runtimeBlocks[lastBB]; ok {
 					// This loop has been unrolled.
@@ -277,7 +299,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// means that monotonic time in the time package is counted from
 				// time.Time{}.Sub(1), which should be fine.
 				locals[inst.localIndex] = literalValue{uint64(0)}
-			case callFn.name == "runtime.alloc":
+			case callFn.name == "runtime.alloc" || callFn.name == "runtime.alloc_noheap":
 				// Allocate heap memory. At compile time, this is instead done
 				// by creating a global variable.
 
@@ -824,6 +846,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				fmt.Fprintln(os.Stderr, indent+inst.String())
 			}
 			return nil, mem, r.errorAt(inst, errUnsupportedInst)
+		}
+
+		// Check if an instruction triggered a recoverable error (e.g.,
+		// trying to interpret pointer data as integer bytes).
+		if r.interpErr != nil {
+			err := r.interpErr
+			r.interpErr = nil
+			return nil, mem, r.errorAt(inst, err)
 		}
 	}
 	return nil, mem, r.errorAt(bb.instructions[len(bb.instructions)-1], errors.New("interp: reached end of basic block without terminator"))

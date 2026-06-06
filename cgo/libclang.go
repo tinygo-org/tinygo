@@ -130,7 +130,7 @@ func (f *cgoFile) readNames(fragment string, cflags []string, filename string, c
 	// convert Go slice of strings to C array of strings.
 	cmdargsC := C.malloc(C.size_t(len(cflags)) * C.size_t(unsafe.Sizeof(uintptr(0))))
 	defer C.free(cmdargsC)
-	cmdargs := (*[1 << 16]*C.char)(cmdargsC)
+	cmdargs := unsafe.Slice((**C.char)(cmdargsC), len(cflags))
 	for i, cflag := range cflags {
 		s := C.CString(cflag)
 		cmdargs[i] = s
@@ -190,7 +190,7 @@ func (f *cgoFile) readNames(fragment string, cflags []string, filename string, c
 			// Sanity check. This should (hopefully) never trigger.
 			panic("libclang: file contents was not loaded")
 		}
-		data := (*[1 << 24]byte)(unsafe.Pointer(rawData))[:size]
+		data := unsafe.Slice((*byte)(unsafe.Pointer(rawData)), size)
 
 		// Hash the contents if it isn't hashed yet.
 		if _, ok := f.visitedFiles[path]; !ok {
@@ -217,10 +217,6 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 	case C.CXCursor_FunctionDecl:
 		cursorType := C.tinygo_clang_getCursorType(c)
 		numArgs := int(C.tinygo_clang_Cursor_getNumArguments(c))
-		obj := &ast.Object{
-			Kind: ast.Fun,
-			Name: "_Cgo_" + name,
-		}
 		exportName := name
 		localName := name
 		var stringSignature string
@@ -258,7 +254,6 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 			Name: &ast.Ident{
 				NamePos: pos,
 				Name:    "_Cgo_" + localName,
-				Obj:     obj,
 			},
 			Type: &ast.FuncType{
 				Func: pos,
@@ -295,11 +290,6 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 					{
 						NamePos: pos,
 						Name:    argName,
-						Obj: &ast.Object{
-							Kind: ast.Var,
-							Name: argName,
-							Decl: decl,
-						},
 					},
 				},
 				Type: f.makeDecayingASTType(argType, pos),
@@ -315,7 +305,6 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 				},
 			}
 		}
-		obj.Decl = decl
 		return decl, stringSignature
 	case C.CXCursor_StructDecl, C.CXCursor_UnionDecl:
 		typ := f.makeASTRecordType(c, pos)
@@ -325,39 +314,27 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 			// Convert to a single-field struct type.
 			typeExpr = f.makeUnionField(typ)
 		}
-		obj := &ast.Object{
-			Kind: ast.Typ,
-			Name: typeName,
-		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
 				NamePos: typ.pos,
 				Name:    typeName,
-				Obj:     obj,
 			},
 			Type: typeExpr,
 		}
-		obj.Decl = typeSpec
 		return typeSpec, typ
 	case C.CXCursor_TypedefDecl:
 		typeName := "_Cgo_" + name
 		underlyingType := C.tinygo_clang_getTypedefDeclUnderlyingType(c)
-		obj := &ast.Object{
-			Kind: ast.Typ,
-			Name: typeName,
-		}
 		typeSpec := &ast.TypeSpec{
 			Name: &ast.Ident{
 				NamePos: pos,
 				Name:    typeName,
-				Obj:     obj,
 			},
 			Type: f.makeASTType(underlyingType, pos),
 		}
 		if underlyingType.kind != C.CXType_Enum {
 			typeSpec.Assign = pos
 		}
-		obj.Decl = typeSpec
 		return typeSpec, nil
 	case C.CXCursor_VarDecl:
 		cursorType := C.tinygo_clang_getCursorType(c)
@@ -376,19 +353,13 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 				},
 			},
 		}
-		obj := &ast.Object{
-			Kind: ast.Var,
-			Name: "_Cgo_" + name,
-		}
 		valueSpec := &ast.ValueSpec{
 			Names: []*ast.Ident{{
 				NamePos: pos,
 				Name:    "_Cgo_" + name,
-				Obj:     obj,
 			}},
 			Type: typeExpr,
 		}
-		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
 		return gen, nil
 	case C.CXCursor_MacroDefinition:
@@ -405,26 +376,16 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 			Lparen: token.NoPos,
 			Rparen: token.NoPos,
 		}
-		obj := &ast.Object{
-			Kind: ast.Con,
-			Name: "_Cgo_" + name,
-		}
 		valueSpec := &ast.ValueSpec{
 			Names: []*ast.Ident{{
 				NamePos: pos,
 				Name:    "_Cgo_" + name,
-				Obj:     obj,
 			}},
 			Values: []ast.Expr{expr},
 		}
-		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
 		return gen, nil
 	case C.CXCursor_EnumDecl:
-		obj := &ast.Object{
-			Kind: ast.Typ,
-			Name: "_Cgo_" + name,
-		}
 		underlying := C.tinygo_clang_getEnumDeclIntegerType(c)
 		// TODO: gc's CGo implementation uses types such as `uint32` for enums
 		// instead of types such as C.int, which are used here.
@@ -432,12 +393,10 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 			Name: &ast.Ident{
 				NamePos: pos,
 				Name:    "_Cgo_" + name,
-				Obj:     obj,
 			},
 			Assign: pos,
 			Type:   f.makeASTType(underlying, pos),
 		}
-		obj.Decl = typeSpec
 		return typeSpec, nil
 	case C.CXCursor_EnumConstantDecl:
 		value := C.tinygo_clang_getEnumConstantDeclValue(c)
@@ -452,19 +411,13 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 			Lparen: token.NoPos,
 			Rparen: token.NoPos,
 		}
-		obj := &ast.Object{
-			Kind: ast.Con,
-			Name: "_Cgo_" + name,
-		}
 		valueSpec := &ast.ValueSpec{
 			Names: []*ast.Ident{{
 				NamePos: pos,
 				Name:    "_Cgo_" + name,
-				Obj:     obj,
 			}},
 			Values: []ast.Expr{expr},
 		}
-		obj.Decl = valueSpec
 		gen.Specs = append(gen.Specs, valueSpec)
 		return gen, nil
 	default:
@@ -624,7 +577,7 @@ func (p *cgoPackage) getClangLocationPosition(location C.CXSourceLocation, tu C.
 		// now by reading the file from libclang.
 		var size C.size_t
 		sourcePtr := C.clang_getFileContents(tu, file, &size)
-		source := ((*[1 << 28]byte)(unsafe.Pointer(sourcePtr)))[:size:size]
+		source := unsafe.Slice((*byte)(unsafe.Pointer(sourcePtr)), size)
 		lines := []int{0}
 		for i := 0; i < len(source)-1; i++ {
 			if source[i] == '\n' {
@@ -956,22 +909,16 @@ func (p *cgoPackage) getIntegerType(name string, cursor clangCursor) *ast.TypeSp
 	}
 
 	// Construct an *ast.TypeSpec for this type.
-	obj := &ast.Object{
-		Kind: ast.Typ,
-		Name: name,
-	}
 	spec := &ast.TypeSpec{
 		Name: &ast.Ident{
 			NamePos: pos,
 			Name:    name,
-			Obj:     obj,
 		},
 		Type: &ast.Ident{
 			NamePos: pos,
 			Name:    goName,
 		},
 	}
-	obj.Decl = spec
 	return spec
 }
 
@@ -1104,7 +1051,6 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 				pos:      prevField.Names[0].NamePos,
 			})
 			prevField.Names[0].Name = bitfieldName
-			prevField.Names[0].Obj.Name = bitfieldName
 		}
 		prevBitfield := &(*bitfieldList)[len(*bitfieldList)-1]
 		prevBitfield.endBit = bitfieldOffset
@@ -1121,11 +1067,6 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 		{
 			NamePos: pos,
 			Name:    name,
-			Obj: &ast.Object{
-				Kind: ast.Var,
-				Name: name,
-				Decl: field,
-			},
 		},
 	}
 	fieldList.List = append(fieldList.List, field)

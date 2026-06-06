@@ -316,10 +316,14 @@ func (mv *memoryView) load(p pointerValue, size uint32) value {
 		panic("interp: load out of bounds")
 	}
 	v := obj.buffer.asRawValue(mv.r)
-	loadedValue := rawValue{
-		buf: v.buf[p.offset() : p.offset()+size],
+	loadedBuf := v.buf[p.offset() : p.offset()+size]
+	if _, writable := mv.objects[p.index()]; writable {
+		// This object's buffer is owned by this view, which means a later
+		// store may mutate it in place (see store below). Copy the loaded
+		// slice so the returned value is not aliased with the live buffer.
+		loadedBuf = append([]uint64(nil), loadedBuf...)
 	}
-	return loadedValue
+	return rawValue{buf: loadedBuf}
 }
 
 // Store to the value behind the given pointer. This overwrites the value in the
@@ -330,26 +334,37 @@ func (mv *memoryView) store(v value, p pointerValue) bool {
 	if checks && mv.hasExternalLoadOrStore(p) {
 		panic("interp: store to object with external load/store")
 	}
-	obj := mv.get(p.index())
+	index := p.index()
+	var obj object
+	writable := false
+	if mv.objects != nil {
+		obj, writable = mv.objects[index]
+	}
+	if !writable {
+		obj = mv.get(index)
+	}
 	if obj.buffer == nil {
 		// External global, return false (for a failure).
 		return false
 	}
-	if checks && p.offset()+v.len(mv.r) > obj.size {
+	valueLen := v.len(mv.r)
+	if checks && p.offset()+valueLen > obj.size {
 		panic("interp: store out of bounds")
 	}
-	if p.offset() == 0 && v.len(mv.r) == obj.buffer.len(mv.r) {
-		obj.buffer = v
+	if p.offset() == 0 && valueLen == obj.buffer.len(mv.r) {
+		obj.buffer = v.clone()
 	} else {
-		obj = obj.clone()
+		if !writable {
+			obj = obj.clone()
+		}
 		buffer := obj.buffer.asRawValue(mv.r)
 		obj.buffer = buffer
 		v := v.asRawValue(mv.r)
-		for i := uint32(0); i < v.len(mv.r); i++ {
+		for i := uint32(0); i < valueLen; i++ {
 			buffer.buf[p.offset()+i] = v.buf[i]
 		}
 	}
-	mv.put(p.index(), obj)
+	mv.put(index, obj)
 	return true // success
 }
 
@@ -556,11 +571,13 @@ func (v pointerValue) asRawValue(r *runner) rawValue {
 }
 
 func (v pointerValue) Uint(r *runner) uint64 {
-	panic("cannot convert pointer to integer")
+	r.interpErr = errUnsupportedInst
+	return 0
 }
 
 func (v pointerValue) Int(r *runner) int64 {
-	panic("cannot convert pointer to integer")
+	r.interpErr = errUnsupportedInst
+	return 0
 }
 
 func (v pointerValue) equal(rhs pointerValue) bool {
@@ -736,11 +753,12 @@ func (v rawValue) asRawValue(r *runner) rawValue {
 	return v
 }
 
-func (v rawValue) bytes() []byte {
+func (v rawValue) bytes(r *runner) []byte {
 	buf := make([]byte, len(v.buf))
 	for i, p := range v.buf {
 		if p > 255 {
-			panic("cannot convert pointer value to byte")
+			r.interpErr = errUnsupportedInst
+			return buf
 		}
 		buf[i] = byte(p)
 	}
@@ -748,7 +766,10 @@ func (v rawValue) bytes() []byte {
 }
 
 func (v rawValue) Uint(r *runner) uint64 {
-	buf := v.bytes()
+	buf := v.bytes(r)
+	if r.interpErr != nil {
+		return 0
+	}
 
 	switch len(v.buf) {
 	case 1:

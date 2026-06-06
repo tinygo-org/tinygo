@@ -60,6 +60,10 @@ func mainCRTStartup() int {
 		_QueryPerformanceFrequency(&performanceFrequency)
 	}
 
+	// Register vectored exception handler so that access violations and
+	// divide-by-zero exceptions can be recovered with defer/recover.
+	tinygo_init_exception_handler()
+
 	// Obtain the initial stack pointer right before calling the run() function.
 	// The run function has been moved to a separate (non-inlined) function so
 	// that the correct stack pointer is read.
@@ -294,3 +298,27 @@ func hardwareRand() (n uint64, ok bool) {
 //
 //export SystemFunction036
 func _RtlGenRandom(buf unsafe.Pointer, len int) bool
+
+const (
+	_EXCEPTION_ACCESS_VIOLATION   = 0xC0000005
+	_EXCEPTION_IN_PAGE_ERROR      = 0xC0000006
+	_EXCEPTION_INT_DIVIDE_BY_ZERO = 0xC0000094
+	_EXCEPTION_INT_OVERFLOW       = 0xC0000095
+)
+
+//export tinygo_init_exception_handler
+func tinygo_init_exception_handler()
+
+//export tinygo_sigpanic_windows
+func tinygo_sigpanic_windows(exceptionCode int32) {
+	switch uint32(exceptionCode) {
+	case _EXCEPTION_ACCESS_VIOLATION, _EXCEPTION_IN_PAGE_ERROR:
+		runtimePanic("nil pointer dereference")
+	case _EXCEPTION_INT_DIVIDE_BY_ZERO:
+		runtimePanic("divide by zero")
+	case _EXCEPTION_INT_OVERFLOW:
+		runtimePanic("integer overflow")
+	default:
+		runtimePanic("unknown exception")
+	}
+}

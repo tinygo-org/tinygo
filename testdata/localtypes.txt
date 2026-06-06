@@ -1,0 +1,43 @@
+ok: issue5180 TestCopy1
+ok: issue5180 TestCopyIgnoreNilMembers
+ok: siblingA.Foo accepts own
+ok: siblingB.Foo accepts own
+ok: siblingA.Foo rejects siblingB.Foo
+ok: siblingB.Foo rejects siblingA.Foo
+ok: nestedScopes.Bar#1 accepts own
+ok: nestedScopes.Bar#2 accepts own
+ok: nestedScopes.Bar#3 accepts own
+ok: nestedScopes.Bar#1 rejects #2
+ok: nestedScopes.Bar#2 rejects #3
+ok: nestedScopes.Bar#1 rejects #3
+ok: genericWithLocals[int].UsesT accepts own
+ok: genericWithLocals[int].NoT accepts own
+ok: genericWithLocals[string].UsesT accepts own
+ok: genericWithLocals[string].NoT accepts own
+ok: genericWithLocals[int].UsesT rejects [string].UsesT
+ok: genericWithLocals[int].NoT rejects [string].NoT
+ok: genericWithLocals[string].UsesT rejects [int].UsesT
+ok: genericWithLocals[string].NoT rejects [int].NoT
+ok: genericWithLocals[int].UsesT matches across calls
+ok: genericWithLocals[int].NoT matches across calls
+ok: siblingClosures.C#1 accepts own
+ok: siblingClosures.C#2 accepts own
+ok: siblingClosures.C#1 rejects C#2
+ok: siblingClosures.C#2 rejects C#1
+ok: closureInGenericUsesT[int].X accepts own
+ok: closureInGenericUsesT[string].X accepts own
+ok: closureInGenericUsesT[int].X rejects [string].X
+ok: closureInGenericUsesT[string].X rejects [int].X
+ok: closureInGenericNoT[int].X accepts own
+ok: closureInGenericNoT[string].X accepts own
+ok: closureInGenericNoT[int].X rejects [string].X
+ok: closureInGenericNoT[string].X rejects [int].X
+ok: siblingClosuresInGeneric[int].C#1 accepts own
+ok: siblingClosuresInGeneric[int].C#2 accepts own
+ok: siblingClosuresInGeneric[int].C#1 rejects C#2
+ok: siblingClosuresInGeneric[int].C#1 rejects [string].C#1
+ok: siblingClosuresInGeneric[string].C#1 rejects [int].C#1
+ok: doublyNestedInGeneric[int].Y accepts own
+ok: doublyNestedInGeneric[string].Y accepts own
+ok: doublyNestedInGeneric[int].Y rejects [string].Y
+ok: doublyNestedInGeneric[string].Y rejects [int].Y

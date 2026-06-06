@@ -39,7 +39,7 @@ var (
 	putcharBuffer        = [putcharBufferSize]byte{}
 	putcharPosition uint = 0
 	putcharIOVec         = __wasi_iovec_t{
-		buf: unsafe.Pointer(&putcharBuffer[0]),
+		buf: unsafe.Pointer(unsafe.SliceData(putcharBuffer[:])),
 	}
 	putcharNWritten uint
 )

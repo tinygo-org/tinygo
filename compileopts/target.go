@@ -67,6 +67,7 @@ type TargetSpec struct {
 	ADBPreCommands   []string `json:"adb-pre-commands,omitempty"`
 	ADBPushRemote    string   `json:"adb-push-remote,omitempty"`
 	ADBPostCommands  []string `json:"adb-post-commands,omitempty"`
+	ProbeRSChip      string   `json:"probe-rs-chip,omitempty"`
 	CodeModel        string   `json:"code-model,omitempty"`
 	RelocationModel  string   `json:"relocation-model,omitempty"`
 	WITPackage       string   `json:"wit-package,omitempty"`
@@ -484,6 +485,8 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			"--no-insert-timestamp",
 			"--no-dynamicbase",
 		)
+		spec.ExtraFiles = append(spec.ExtraFiles,
+			"src/runtime/runtime_windows.c")
 	case "wasm", "wasip1", "wasip2":
 		return nil, fmt.Errorf("GOOS=%s but GOARCH is unset. Please set GOARCH to wasm", options.GOOS)
 	default:

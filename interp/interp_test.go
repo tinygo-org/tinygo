@@ -18,6 +18,7 @@ func TestInterp(t *testing.T) {
 		"copy",
 		"interface",
 		"revert",
+		"store",
 		"alloc",
 	} {
 		name := name // make local to this closure
@@ -44,7 +45,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	defer mod.Dispose()
 
 	// Perform the transform.
-	err = Run(mod, 10*time.Minute, false)
+	err = Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false)
 	if err != nil {
 		if err, match := err.(*Error); match {
 			println(err.Error())

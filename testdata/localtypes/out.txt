@@ -1,0 +1,12 @@
+ok: main GenericWithLocals[int].UsesT accepts lib2's value
+ok: main GenericWithLocals[int].NoT accepts lib2's value
+ok: lib2 GenericWithLocals[int].UsesT accepts main's value
+ok: lib2 GenericWithLocals[int].NoT accepts main's value
+ok: GenericWithLocals[int].UsesT rejects [string].UsesT
+ok: GenericWithLocals[int].NoT rejects [string].NoT
+ok: GenericWithLocals[string].UsesT rejects [int].UsesT
+ok: GenericWithLocals[string].NoT rejects [int].NoT
+ok: lib.SiblingClosures.Foo#1 accepts own
+ok: lib.SiblingClosures.Foo#2 accepts own
+ok: lib.SiblingClosures.Foo#1 rejects Foo#2
+ok: lib.SiblingClosures.Foo#2 rejects Foo#1
