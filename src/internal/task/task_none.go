@@ -42,3 +42,8 @@ func SystemStack() uintptr {
 	runtimePanic("scheduler is disabled")
 	return 0 // unreachable
 }
+
+func GoroutineStack() uintptr {
+	// No separate goroutine stack without a scheduler.
+	return 0
+}

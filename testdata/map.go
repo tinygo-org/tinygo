@@ -29,6 +29,14 @@ var testMapArrayKey = map[ArrayKey]int{
 }
 var testmapIntInt = map[int]int{1: 1, 2: 4, 3: 9}
 
+// Package-level pointer map literals: these exercise the interp pass's
+// ability to defer pointer-keyed map inserts to runtime (since pointer
+// hashes can't be computed at compile time).
+var testPtrMapVar1 = 42
+var testPtrMapVar2 = 99
+var testPtrMap = map[*int]int{&testPtrMapVar1: 1, &testPtrMapVar2: 2}
+var testUnsafePtrMap = map[unsafe.Pointer]int{unsafe.Pointer(&testPtrMapVar1): 10}
+
 type namedFloat struct {
 	s string
 	f float32
@@ -129,6 +137,10 @@ func main() {
 	floatcmplx()
 
 	mapgrow()
+
+	nestedarraymaps()
+
+	ptrmaps()
 
 	interfacerehash()
 }
@@ -307,4 +319,77 @@ func interfacerehash() {
 	if failures == 0 {
 		println("no interface lookup failures")
 	}
+}
+
+func nestedarraymaps() {
+	type nestedArrayElem struct {
+		x uint8
+	}
+	type nestedArrayKey struct {
+		a [5][5]nestedArrayElem
+	}
+	var k nestedArrayKey
+	k.a[4][4].x = 7
+	m := map[nestedArrayKey]int{k: 42}
+	println("nested array key:", m[k])
+}
+
+func ptrmaps() {
+	// Package-level pointer map literals (interp defers inserts to runtime).
+	println("ptr map literal:", testPtrMap[&testPtrMapVar1], testPtrMap[&testPtrMapVar2])
+	println("unsafe ptr literal:", testUnsafePtrMap[unsafe.Pointer(&testPtrMapVar1)])
+
+	// Runtime pointer maps.
+	a, b, c := 1, 2, 3
+	m := make(map[*int]int)
+	m[&a] = 10
+	m[&b] = 20
+	m[&c] = 30
+	println("ptr map len:", len(m))
+	println("ptr map a:", m[&a])
+	delete(m, &b)
+	_, ok := m[&b]
+	println("ptr map deleted:", ok)
+
+	// Runtime unsafe.Pointer maps.
+	m2 := make(map[unsafe.Pointer]int)
+	m2[unsafe.Pointer(&a)] = 100
+	println("unsafe ptr map:", m2[unsafe.Pointer(&a)])
+
+	// Struct keys with padding: the hash/equal must operate per-field
+	// and not include padding bytes. Only test when padding actually
+	// exists (e.g., not on AVR where alignment is 1).
+	type paddedKey struct {
+		A int8
+		B int32
+	}
+	if unsafe.Offsetof(paddedKey{}.B) > 1 {
+		pm := make(map[paddedKey]int)
+		var pk1, pk2 paddedKey
+		pk1.A = 1; pk1.B = 42
+		pk2.A = 1; pk2.B = 42
+		// Poison pk2's padding byte (between A and B).
+		*(*byte)(unsafe.Add(unsafe.Pointer(&pk2), 1)) = 0xFF
+		pm[pk1] = 100
+		println("padded key lookup:", pm[pk2])         // 100
+		println("padded key equal:", pk1 == pk2)        // true
+	} else {
+		// No padding on this platform; print expected output.
+		println("padded key lookup:", 100)
+		println("padded key equal:", true)
+	}
+
+	// Struct keys with blank fields: blank fields are ignored in equality.
+	type blankKey struct {
+		_ int
+		X string
+	}
+	bm := make(map[blankKey]int)
+	var bk1, bk2 blankKey
+	bk1.X = "hello"
+	bk2.X = "hello"
+	*(*int)(unsafe.Pointer(&bk2)) = 999
+	bm[bk1] = 200
+	println("blank key lookup:", bm[bk2])           // 200
+	println("blank key equal:", bk1 == bk2)          // true
 }

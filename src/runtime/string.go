@@ -280,7 +280,7 @@ func cgo_GoBytes(ptr unsafe.Pointer, length uintptr) []byte {
 	// of upstream Go.
 	buf := make([]byte, length)
 	if length != 0 {
-		memcpy(unsafe.Pointer(&buf[0]), ptr, uintptr(length))
+		memcpy(unsafe.Pointer(unsafe.SliceData(buf)), ptr, uintptr(length))
 	}
 	return buf
 }

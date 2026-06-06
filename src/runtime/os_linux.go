@@ -27,6 +27,7 @@ const (
 
 const (
 	sig_SIGBUS  = linux_SIGBUS
+	sig_SIGFPE  = linux_SIGFPE
 	sig_SIGILL  = linux_SIGILL
 	sig_SIGSEGV = linux_SIGSEGV
 )

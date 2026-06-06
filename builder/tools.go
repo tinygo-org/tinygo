@@ -121,13 +121,19 @@ func parseLLDErrors(text string) error {
 				if matches != nil {
 					parsedError = true
 					line, _ := strconv.Atoi(matches[3])
-					// TODO: detect common mistakes like -gc=none?
+					msg := "linker could not find symbol " + symbolName
+					switch symbolName {
+					case "runtime.alloc":
+						msg = "object allocated on the heap with -gc=none"
+					case "runtime.alloc_noheap":
+						msg = "object allocated on the heap in //go:noheap function"
+					}
 					linkErrors = append(linkErrors, scanner.Error{
 						Pos: token.Position{
 							Filename: matches[2],
 							Line:     line,
 						},
-						Msg: "linker could not find symbol " + symbolName,
+						Msg: msg,
 					})
 				}
 			}

@@ -60,10 +60,6 @@ func (b *builder) deferInitFunc() {
 	b.deferExprFuncs = make(map[ssa.Value]int)
 	b.deferBuiltinFuncs = make(map[ssa.Value]deferBuiltin)
 
-	// Create defer list pointer.
-	b.deferPtr = b.CreateAlloca(b.dataPtrType, "deferPtr")
-	b.CreateStore(llvm.ConstPointerNull(b.dataPtrType), b.deferPtr)
-
 	if b.hasDeferFrame() {
 		// Set up the defer frame with the current stack pointer.
 		// This assumes that the stack pointer doesn't move outside of the
@@ -73,12 +69,22 @@ func (b *builder) deferInitFunc() {
 		// in the setjmp-like inline assembly.
 		deferFrameType := b.getLLVMRuntimeType("deferFrame")
 		b.deferFrame = b.CreateAlloca(deferFrameType, "deferframe.buf")
+		// The field index must match the DeferPtr field in runtime.deferFrame,
+		// defined in src/runtime/panic.go.
+		b.deferPtr = b.CreateInBoundsGEP(deferFrameType, b.deferFrame, []llvm.Value{
+			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.ctx.Int32Type(), 6, false), // DeferPtr field
+		}, "deferPtr")
 		stackPointer := b.readStackPointer()
 		b.createRuntimeCall("setupDeferFrame", []llvm.Value{b.deferFrame, stackPointer}, "")
 
 		// Create the landing pad block, which is where control transfers after
 		// a panic.
 		b.landingpad = b.ctx.AddBasicBlock(b.llvmFn, "lpad")
+	} else {
+		// Create defer list pointer.
+		b.deferPtr = b.CreateAlloca(b.dataPtrType, "deferPtr")
+		b.CreateStore(llvm.ConstPointerNull(b.dataPtrType), b.deferPtr)
 	}
 }
 
@@ -235,6 +241,17 @@ func (b *builder) createInvokeCheckpoint() {
 	b.CreateCondBr(isZero, continueBB, b.landingpad)
 	b.SetInsertPointAtEnd(continueBB)
 	b.currentBlockInfo.exit = continueBB
+}
+
+// createFaultCheckpoint is like createInvokeCheckpoint but for use in fault
+// blocks (e.g., bounds check failures). Unlike createInvokeCheckpoint, it does
+// not update currentBlockInfo.exit because the fault block is a dead-end that
+// does not participate in phi node resolution.
+func (b *builder) createFaultCheckpoint() {
+	isZero := b.createCheckpoint(b.deferFrame)
+	continueBB := b.insertBasicBlock("")
+	b.CreateCondBr(isZero, continueBB, b.landingpad)
+	b.SetInsertPointAtEnd(continueBB)
 }
 
 // isInLoop checks if there is a path from the current block to itself.
@@ -488,7 +505,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		size := b.targetData.TypeAllocSize(deferredCallType)
 		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
 		nilPtr := llvm.ConstNull(b.dataPtrType)
-		alloca = b.createRuntimeCall("alloc", []llvm.Value{sizeValue, nilPtr}, "defer.alloc.call")
+		alloca = b.createRuntimeCall(b.allocFunc(), []llvm.Value{sizeValue, nilPtr}, "defer.alloc.call")
 	}
 	if b.NeedsStackObjects {
 		b.trackPointer(alloca)

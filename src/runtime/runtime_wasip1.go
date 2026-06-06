@@ -35,7 +35,7 @@ func os_runtime_args() []string {
 		// Obtain the command line arguments
 		argsSlice := make([]unsafe.Pointer, argc)
 		buf := make([]byte, argv_buf_size)
-		args_get(&argsSlice[0], unsafe.Pointer(&buf[0]))
+		args_get(&argsSlice[0], unsafe.Pointer(unsafe.SliceData(buf)))
 
 		// Convert the array of C strings to an array of Go strings.
 		args = make([]string, argc)
@@ -78,11 +78,6 @@ var (
 	sleepTicksNEvents uint32
 )
 
-func sleepTicks(d timeUnit) {
-	sleepTicksSubscription.u.u.timeout = uint64(d)
-	poll_oneoff(&sleepTicksSubscription, &sleepTicksResult, 1, &sleepTicksNEvents)
-}
-
 func ticks() timeUnit {
 	var nano uint64
 	clock_time_get(0, timePrecisionNanoseconds, &nano)
@@ -106,9 +101,9 @@ func poll_oneoff(in *__wasi_subscription_t, out *__wasi_event_t, nsubscriptions 
 type __wasi_eventtype_t = uint8
 
 const (
-	__wasi_eventtype_t_clock __wasi_eventtype_t = 0
-	// TODO: __wasi_eventtype_t_fd_read  __wasi_eventtype_t = 1
-	// TODO: __wasi_eventtype_t_fd_write __wasi_eventtype_t = 2
+	__wasi_eventtype_t_clock __wasi_eventtype_t = iota
+	__wasi_eventtype_t_fd_read
+	__wasi_eventtype_t_fd_write
 )
 
 type (
@@ -118,10 +113,12 @@ type (
 		u        __wasi_subscription_u_t
 	}
 
+	// The union payload is sized by the largest variant (clock, 32 bytes after
+	// the tag and its 7-byte alignment pad). FD read/write subscriptions reuse
+	// the same memory via setFDReadWrite.
 	__wasi_subscription_u_t struct {
 		tag __wasi_eventtype_t
 
-		// TODO: support fd_read/fd_write event
 		u __wasi_subscription_clock_t
 	}
 
@@ -134,6 +131,28 @@ type (
 	}
 )
 
+// __wasi_subscription_fd_readwrite_t is the FD variant of the subscription
+// union payload. It overlays the first 4 bytes of the clock variant.
+type __wasi_subscription_fd_readwrite_t struct {
+	fd uint32
+}
+
+func (s *__wasi_subscription_u_t) setClock(id uint32, timeoutNs, precision uint64, flags uint16) {
+	s.tag = __wasi_eventtype_t_clock
+	s.u = __wasi_subscription_clock_t{
+		id:        id,
+		timeout:   timeoutNs,
+		precision: precision,
+		flags:     flags,
+	}
+}
+
+func (s *__wasi_subscription_u_t) setFDReadWrite(eventType __wasi_eventtype_t, fd uint32) {
+	s.tag = eventType
+	s.u = __wasi_subscription_clock_t{}
+	(*__wasi_subscription_fd_readwrite_t)(unsafe.Pointer(&s.u)).fd = fd
+}
+
 type (
 	// https://github.com/WebAssembly/WASI/blob/main/phases/snapshot/docs.md#-event-record
 	__wasi_event_t struct {
@@ -141,11 +160,18 @@ type (
 		errno     uint16
 		eventType __wasi_eventtype_t
 
-		// only used for fd_read or fd_write events
-		// TODO: support fd_read/fd_write event
-		_ struct {
+		// fdReadWrite is populated by poll_oneoff for fd_read / fd_write events.
+		// For clock events the field is zero. Reading nBytes/flags after a
+		// clock event is meaningless but not unsafe.
+		fdReadWrite struct {
 			nBytes uint64
 			flags  uint16
 		}
 	}
 )
+
+// Compile-time size assertions for the wasip1 ABI. If these fail to compile
+// the struct layout drifted from the spec and poll_oneoff would corrupt
+// memory.
+var _ [0]byte = [48 - unsafe.Sizeof(__wasi_subscription_t{})]byte{}
+var _ [0]byte = [32 - unsafe.Sizeof(__wasi_event_t{})]byte{}

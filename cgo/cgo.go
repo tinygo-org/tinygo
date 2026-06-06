@@ -654,7 +654,6 @@ func (p *cgoPackage) createUnionAccessor(field *ast.Field, typeName string) {
 		X: &ast.Ident{
 			NamePos: pos,
 			Name:    "union",
-			Obj:     nil,
 		},
 		Sel: &ast.Ident{
 			NamePos: pos,
@@ -708,7 +707,6 @@ func (p *cgoPackage) createUnionAccessor(field *ast.Field, typeName string) {
 						X: &ast.Ident{
 							NamePos: pos,
 							Name:    typeName,
-							Obj:     nil,
 						},
 					},
 				},
@@ -764,7 +762,6 @@ func (p *cgoPackage) createBitfieldGetter(bitfield bitfieldInfo, typeName string
 		X: &ast.Ident{
 			NamePos: bitfield.pos,
 			Name:    "s",
-			Obj:     nil,
 		},
 		Sel: &ast.Ident{
 			NamePos: bitfield.pos,
@@ -811,11 +808,6 @@ func (p *cgoPackage) createBitfieldGetter(bitfield bitfieldInfo, typeName string
 						{
 							NamePos: bitfield.pos,
 							Name:    "s",
-							Obj: &ast.Object{
-								Kind: ast.Var,
-								Name: "s",
-								Decl: nil,
-							},
 						},
 					},
 					Type: &ast.StarExpr{
@@ -823,7 +815,6 @@ func (p *cgoPackage) createBitfieldGetter(bitfield bitfieldInfo, typeName string
 						X: &ast.Ident{
 							NamePos: bitfield.pos,
 							Name:    typeName,
-							Obj:     nil,
 						},
 					},
 				},
@@ -881,7 +872,6 @@ func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string
 		X: &ast.Ident{
 			NamePos: bitfield.pos,
 			Name:    "s",
-			Obj:     nil,
 		},
 		Sel: &ast.Ident{
 			NamePos: bitfield.pos,
@@ -964,11 +954,6 @@ func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string
 						{
 							NamePos: bitfield.pos,
 							Name:    "s",
-							Obj: &ast.Object{
-								Kind: ast.Var,
-								Name: "s",
-								Decl: nil,
-							},
 						},
 					},
 					Type: &ast.StarExpr{
@@ -976,7 +961,6 @@ func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string
 						X: &ast.Ident{
 							NamePos: bitfield.pos,
 							Name:    typeName,
-							Obj:     nil,
 						},
 					},
 				},
@@ -997,7 +981,6 @@ func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string
 							{
 								NamePos: bitfield.pos,
 								Name:    "value",
-								Obj:     nil,
 							},
 						},
 						Type: bitfield.field.Type,
@@ -1015,7 +998,6 @@ func (p *cgoPackage) createBitfieldSetter(bitfield bitfieldInfo, typeName string
 							X: &ast.Ident{
 								NamePos: bitfield.pos,
 								Name:    "s",
-								Obj:     nil,
 							},
 							Sel: &ast.Ident{
 								NamePos: bitfield.pos,

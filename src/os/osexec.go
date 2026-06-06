@@ -34,7 +34,7 @@ func execve(pathname string, argv []string, envv []string) error {
 	}
 	env1[len(envv)] = nil
 
-	ret, _, err := syscall.Syscall(syscall.SYS_EXECVE, uintptr(unsafe.Pointer(&argv0[0])), uintptr(unsafe.Pointer(&argv1[0])), uintptr(unsafe.Pointer(&env1[0])))
+	ret, _, err := syscall.Syscall(syscall.SYS_EXECVE, uintptr(unsafe.Pointer(unsafe.SliceData(argv0))), uintptr(unsafe.Pointer(unsafe.SliceData(argv1))), uintptr(unsafe.Pointer(unsafe.SliceData(env1))))
 	if int(ret) != 0 {
 		return err
 	}

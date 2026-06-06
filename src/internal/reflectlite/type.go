@@ -453,10 +453,7 @@ func rawStructFieldFromPointer(descriptor *structType, fieldType *RawType, data 
 		data = unsafe.Add(data, 1) // C: data+1
 		tagLen := uintptr(*(*byte)(data))
 		data = unsafe.Add(data, 1) // C: data+1
-		tag = *(*string)(unsafe.Pointer(&stringHeader{
-			data: data,
-			len:  tagLen,
-		}))
+		tag = unsafe.String((*byte)(data), tagLen)
 	}
 
 	// Set the PkgPath to some (arbitrary) value if the package path is not
@@ -930,10 +927,7 @@ func readStringZ(data unsafe.Pointer) string {
 		data = unsafe.Add(data, 1) // C: data++
 	}
 
-	return *(*string)(unsafe.Pointer(&stringHeader{
-		data: start,
-		len:  len,
-	}))
+	return unsafe.String((*byte)(start), len)
 }
 
 func (t *RawType) name() string {

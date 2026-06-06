@@ -1,0 +1,8 @@
+bigkey get: 100
+bigkey get same: 100
+bigkey get diff: 0
+bigkey overwrite: 200
+bigval get: 7 99
+bigboth get: 7 99
+bigboth deleted: 0
+bigkey len: 2 iterated: 2

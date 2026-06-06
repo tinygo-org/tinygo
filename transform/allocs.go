@@ -23,8 +23,15 @@ import (
 // heap allocation explanation should be printed (why the object can't be stack
 // allocated).
 func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc uint64, logger func(token.Position, string)) {
-	allocator := mod.NamedFunction("runtime.alloc")
-	if allocator.IsNil() {
+	// Find allocator functions.
+	var allocators []llvm.Value
+	for _, name := range []string{"runtime.alloc", "runtime.alloc_noheap"} {
+		allocator := mod.NamedFunction(name)
+		if !allocator.IsNil() {
+			allocators = append(allocators, allocator)
+		}
+	}
+	if len(allocators) == 0 {
 		// nothing to optimize
 		return
 	}
@@ -43,7 +50,13 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		fmt.Fprintln(os.Stderr, "mode: set")
 	}
 
-	for _, heapalloc := range getUses(allocator) {
+	// Find all allocator calls.
+	var heapallocs []llvm.Value
+	for _, allocator := range allocators {
+		heapallocs = append(heapallocs, getUses(allocator)...)
+	}
+
+	for _, heapalloc := range heapallocs {
 		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
 		if heapalloc.Operand(0).IsAConstantInt().IsNil() {
 			// Do not allocate variable length arrays on the stack.
