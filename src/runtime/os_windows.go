@@ -4,46 +4,15 @@ import "unsafe"
 
 const GOOS = "windows"
 
+const (
+	// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexa
+	GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT = 0x00000002
+)
+
 //export GetModuleHandleExA
-func _GetModuleHandleExA(dwFlags uint32, lpModuleName unsafe.Pointer, phModule **exeHeader) bool
+func _GetModuleHandleExA(dwFlags uint32, lpModuleName unsafe.Pointer, phModule **dosHeader) bool
 
-// MS-DOS stub with PE header offset:
-// https://docs.microsoft.com/en-us/windows/win32/debug/pe-format#ms-dos-stub-image-only
-type exeHeader struct {
-	signature uint16
-	_         [58]byte // skip DOS header
-	peHeader  uint32   // at offset 0x3C
-}
-
-// COFF file header:
-// https://docs.microsoft.com/en-us/windows/win32/debug/pe-format#file-headers
-type peHeader struct {
-	magic                uint32
-	machine              uint16
-	numberOfSections     uint16
-	timeDateStamp        uint32
-	pointerToSymbolTable uint32
-	numberOfSymbols      uint32
-	sizeOfOptionalHeader uint16
-	characteristics      uint16
-}
-
-// COFF section header:
-// https://docs.microsoft.com/en-us/windows/win32/debug/pe-format#section-table-section-headers
-type peSection struct {
-	name                 [8]byte
-	virtualSize          uint32
-	virtualAddress       uint32
-	sizeOfRawData        uint32
-	pointerToRawData     uint32
-	pointerToRelocations uint32
-	pointerToLinenumbers uint32
-	numberOfRelocations  uint16
-	numberOfLinenumbers  uint16
-	characteristics      uint32
-}
-
-var module *exeHeader
+var module *dosHeader
 
 // Mark global variables.
 // Unfortunately, the linker doesn't provide symbols for the start and end of
@@ -53,15 +22,6 @@ var module *exeHeader
 // Most of this function is based on the documentation in
 // https://docs.microsoft.com/en-us/windows/win32/debug/pe-format.
 func findGlobals(found func(start, end uintptr)) {
-	// Constants used in this function.
-	const (
-		// https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexa
-		GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT = 0x00000002
-
-		// https://docs.microsoft.com/en-us/windows/win32/debug/pe-format
-		IMAGE_SCN_MEM_WRITE = 0x80000000
-	)
-
 	if module == nil {
 		// Obtain a handle to the currently executing image. What we're getting
 		// here is really just __ImageBase, but it's probably better to obtain
@@ -72,23 +32,7 @@ func findGlobals(found func(start, end uintptr)) {
 		}
 	}
 
-	// Find the PE header at offset 0x3C.
-	pe := (*peHeader)(unsafe.Add(unsafe.Pointer(module), module.peHeader))
-	if gcAsserts && pe.magic != 0x00004550 { // 0x4550 is "PE"
-		runtimePanic("cannot find PE header")
-	}
-
-	// Iterate through sections.
-	section := (*peSection)(unsafe.Pointer(uintptr(unsafe.Pointer(pe)) + uintptr(pe.sizeOfOptionalHeader) + unsafe.Sizeof(peHeader{})))
-	for i := 0; i < int(pe.numberOfSections); i++ {
-		if section.characteristics&IMAGE_SCN_MEM_WRITE != 0 {
-			// Found a writable section. Scan the entire section for roots.
-			start := uintptr(unsafe.Pointer(module)) + uintptr(section.virtualAddress)
-			end := uintptr(unsafe.Pointer(module)) + uintptr(section.virtualAddress) + uintptr(section.virtualSize)
-			found(start, end)
-		}
-		section = (*peSection)(unsafe.Add(unsafe.Pointer(section), unsafe.Sizeof(peSection{})))
-	}
+	findGlobalsFromPE(module, found)
 }
 
 type systeminfo struct {

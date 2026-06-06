@@ -1,4 +1,4 @@
-//go:build scheduler.tasks && amd64 && !windows
+//go:build scheduler.tasks && amd64 && !windows && !uefi
 
 package task
 

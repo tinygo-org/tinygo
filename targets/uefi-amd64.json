@@ -1,0 +1,42 @@
+{
+	"llvm-target": "x86_64-unknown-windows",
+	"cpu": "x86-64",
+	"features": "+cmov,+cx8,+fxsr,+mmx,+sse,+sse2,+x87",
+	"build-tags": ["uefi", "baremetal", "amd64"],
+	"goos": "linux",
+	"goarch": "amd64",
+	"gc": "precise",
+	"scheduler": "tasks",
+	"linker": "ld.lld",
+	"rtlib": "compiler-rt",
+	"default-stack-size": 65536,
+	"cflags": [
+		"-target", "x86_64-unknown-windows-gnu",
+		"-Werror",
+		"-fshort-enums",
+		"-fomit-frame-pointer",
+		"-fno-exceptions",
+		"-fno-unwind-tables",
+		"-fno-asynchronous-unwind-tables",
+		"-ffunction-sections",
+		"-fdata-sections",
+		"-mno-red-zone"
+	],
+	"ldflags": [
+		"-m", "i386pep",
+		"--subsystem", "efi_application",
+		"--gc-sections",
+		"--entry", "efi_main",
+		"--no-dynamicbase",
+		"-Bstatic"
+	],
+	"extra-files": [
+		"src/runtime/runtime_uefi_amd64.S",
+		"src/runtime/asm_amd64_windows.S",
+		"src/machine/uefi/cpu_amd64.S",
+		"src/machine/uefi/api_amd64.S",
+		"src/internal/task/task_stack_amd64_windows.S"
+	],
+	"emulator": "./emulators/qemu-uefi-x86_64.sh {}",
+	"gdb": ["gdb", "gdb-multiarch"]
+}

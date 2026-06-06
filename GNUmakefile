@@ -841,6 +841,18 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=xiao-rp2350        examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.exe -target=uefi-amd64          examples/echo2
+	@$(MD5SUM) test.exe
+	$(TINYGO) build -size short -o test.exe -target=uefi-amd64          examples/empty
+	@$(MD5SUM) test.exe
+	$(TINYGO) build -size short -o test.exe -target=uefi-amd64          examples/time-offset
+	@$(MD5SUM) test.exe
+	$(TINYGO) build -size short -o test.exe -target=uefi-arm64          examples/echo2
+	@$(MD5SUM) test.exe
+	$(TINYGO) build -size short -o test.exe -target=uefi-arm64          examples/empty
+	@$(MD5SUM) test.exe
+	$(TINYGO) build -size short -o test.exe -target=uefi-arm64          examples/time-offset
+	@$(MD5SUM) test.exe
 	# test pwm
 	$(TINYGO) build -size short -o test.hex -target=itsybitsy-m0        examples/pwm
 	@$(MD5SUM) test.hex
