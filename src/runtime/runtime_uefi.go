@@ -16,8 +16,6 @@ var heapSize uintptr = 64 * 1024 * 1024
 var heapStart, heapEnd uintptr
 var stackTop uintptr
 var allocatePagesAddress uefi.EFI_PHYSICAL_ADDRESS
-var consoleInEx *uefi.EFI_SIMPLE_TEXT_INPUT_EX_PROTOCOL
-var consoleIn *uefi.EFI_SIMPLE_TEXT_INPUT_PROTOCOL
 var waitForEventsFunction = func() {
 	uefi.CpuPause()
 }
@@ -69,12 +67,6 @@ func abort() {
 
 func preinit() {
 	uefi.BS().SetWatchdogTimer(0, 0, 0, nil)
-	if protoEx, status := uefi.SimpleTextInExProtocol(); status == uefi.EFI_SUCCESS {
-		consoleInEx = protoEx
-	}
-	if proto, status := uefi.SimpleTextInProtocol(); status == uefi.EFI_SUCCESS {
-		consoleIn = proto
-	}
 	if !growHeap() {
 		runtimePanic("could not allocate initial UEFI heap")
 	}
@@ -104,15 +96,6 @@ func growHeap() bool {
 	return false
 }
 
-func init() {
-	mono := nanotime()
-	efiTime, status := uefi.GetTime()
-	if status == uefi.EFI_SUCCESS {
-		sec, nsec := efiTime.GetEpoch()
-		timeOffset.Store(sec*1000000000 + int64(nsec) - mono)
-	}
-}
-
 func SetWaitForEvents(f func()) {
 	waitForEventsFunction = f
 }
@@ -127,47 +110,11 @@ func runMain() {
 }
 
 func buffered() int {
-	if consoleInEx != nil {
-		if uefi.BS().CheckEvent(consoleInEx.WaitForKeyEx) == uefi.EFI_SUCCESS {
-			return 1
-		}
-		return 0
-	}
-	if consoleIn != nil {
-		if uefi.BS().CheckEvent(consoleIn.WaitForKey) == uefi.EFI_SUCCESS {
-			return 1
-		}
-		return 0
-	}
 	return 0
 }
 
 func getchar() byte {
-	for {
-		if consoleInEx != nil {
-			key, status := consoleInEx.GetKey()
-			if status == uefi.EFI_SUCCESS && key.Key.UnicodeChar != 0 {
-				return byte(key.Key.UnicodeChar)
-			}
-			if status != uefi.EFI_SUCCESS && status != uefi.EFI_NOT_READY && consoleIn == nil {
-				return 0
-			}
-			if status == uefi.EFI_SUCCESS || status == uefi.EFI_NOT_READY {
-				continue
-			}
-		}
-		if consoleIn != nil {
-			key, status := consoleIn.GetKey()
-			if status == uefi.EFI_SUCCESS && key.UnicodeChar != 0 {
-				return byte(key.UnicodeChar)
-			}
-			if status != uefi.EFI_SUCCESS && status != uefi.EFI_NOT_READY {
-				return 0
-			}
-			continue
-		}
-		return 0
-	}
+	return 0
 }
 
 //export efi_main

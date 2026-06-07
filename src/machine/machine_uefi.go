@@ -9,30 +9,8 @@ import (
 const deviceName = "UEFI"
 
 type (
-	EFI_STATUS            = deviceuefi.EFI_STATUS
-	EFI_TIME              = deviceuefi.EFI_TIME
-	EFI_TIME_CAPABILITIES = deviceuefi.EFI_TIME_CAPABILITIES
-	EFI_KEY_DATA          = deviceuefi.EFI_KEY_DATA
-	EFI_INPUT_KEY         = deviceuefi.EFI_INPUT_KEY
-	EFI_KEY_STATE         = deviceuefi.EFI_KEY_STATE
-	EFI_KEY_TOGGLE_STATE  = deviceuefi.EFI_KEY_TOGGLE_STATE
-	EFI_GUID              = deviceuefi.EFI_GUID
-	UINTN                 = deviceuefi.UINTN
-
-	EFI_GRAPHICS_OUTPUT_PROTOCOL         = deviceuefi.EFI_GRAPHICS_OUTPUT_PROTOCOL
-	EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE    = deviceuefi.EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE
-	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION = deviceuefi.EFI_GRAPHICS_OUTPUT_MODE_INFORMATION
-	EFI_GRAPHICS_OUTPUT_BLT_PIXEL        = deviceuefi.EFI_GRAPHICS_OUTPUT_BLT_PIXEL
-	EFI_GRAPHICS_OUTPUT_BLT_OPERATION    = deviceuefi.EFI_GRAPHICS_OUTPUT_BLT_OPERATION
-	EFI_GRAPHICS_PIXEL_FORMAT            = deviceuefi.EFI_GRAPHICS_PIXEL_FORMAT
-	EFI_PIXEL_BITMASK                    = deviceuefi.EFI_PIXEL_BITMASK
-
-	EFI_LOADED_IMAGE_PROTOCOL = deviceuefi.EFI_LOADED_IMAGE_PROTOCOL
-	EFI_DEVICE_PATH_PROTOCOL  = deviceuefi.EFI_DEVICE_PATH_PROTOCOL
-
-	TextOutput      = deviceuefi.TextOutput
-	TextInput       = deviceuefi.TextInput
-	TextInputSource = deviceuefi.TextInputSource
+	EFI_STATUS = deviceuefi.EFI_STATUS
+	TextOutput = deviceuefi.TextOutput
 
 	Error = deviceuefi.Error
 )
@@ -72,22 +50,6 @@ const (
 	EFI_COMPROMISED_DATA     = deviceuefi.EFI_COMPROMISED_DATA
 	EFI_IP_ADDRESS_CONFLICT  = deviceuefi.EFI_IP_ADDRESS_CONFLICT
 	EFI_HTTP_ERROR           = deviceuefi.EFI_HTTP_ERROR
-
-	TextInputNone              = deviceuefi.TextInputNone
-	TextInputSimpleTextInputEx = deviceuefi.TextInputSimpleTextInputEx
-	TextInputSimpleTextInput   = deviceuefi.TextInputSimpleTextInput
-
-	BltVideoFill        = deviceuefi.BltVideoFill
-	BltVideoToBltBuffer = deviceuefi.BltVideoToBltBuffer
-	BltBufferToVideo    = deviceuefi.BltBufferToVideo
-	BltVideoToVideo     = deviceuefi.BltVideoToVideo
-	BltOperationMax     = deviceuefi.BltOperationMax
-
-	PixelRedGreenBlueReserved8BitPerColor = deviceuefi.PixelRedGreenBlueReserved8BitPerColor
-	PixelBlueGreenRedReserved8BitPerColor = deviceuefi.PixelBlueGreenRedReserved8BitPerColor
-	PixelBitMask                          = deviceuefi.PixelBitMask
-	PixelBltOnly                          = deviceuefi.PixelBltOnly
-	PixelFormatMax                        = deviceuefi.PixelFormatMax
 )
 
 var (
@@ -126,28 +88,12 @@ var (
 	ErrHTTPError           = deviceuefi.ErrHTTPError
 )
 
-func GetTime() (EFI_TIME, EFI_STATUS) {
-	return deviceuefi.GetTime()
-}
-
 func ConsoleOut() *TextOutput {
 	return deviceuefi.ConsoleOut()
 }
 
 func StandardError() *TextOutput {
 	return deviceuefi.StandardError()
-}
-
-func ConsoleInput() (*TextInput, error) {
-	return deviceuefi.ConsoleInput()
-}
-
-func GraphicsOutputProtocol() (*EFI_GRAPHICS_OUTPUT_PROTOCOL, EFI_STATUS) {
-	return deviceuefi.GraphicsOutputProtocol()
-}
-
-func GetLoadedImageProtocol() (*EFI_LOADED_IMAGE_PROTOCOL, EFI_STATUS) {
-	return deviceuefi.GetLoadedImageProtocol()
 }
 
 func StatusError(status EFI_STATUS) *Error {

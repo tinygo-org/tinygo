@@ -20,10 +20,6 @@ type EFI_RUNTIME_SERVICES struct {
 	queryVariableInfo    uintptr
 }
 
-func (p *EFI_RUNTIME_SERVICES) GetTime(time *EFI_TIME, capabilities *EFI_TIME_CAPABILITIES) EFI_STATUS {
-	return UefiCall2(p.getTime, uintptr(unsafe.Pointer(time)), uintptr(unsafe.Pointer(capabilities)))
-}
-
 type EFI_BOOT_SERVICES struct {
 	Hdr                       EFI_TABLE_HEADER
 	raiseTPL                  uintptr
@@ -115,7 +111,7 @@ type EFI_SYSTEM_TABLE struct {
 	FirmwareVendor       *CHAR16
 	FirmwareRevision     uint32
 	ConsoleInHandle      EFI_HANDLE
-	ConIn                *EFI_SIMPLE_TEXT_INPUT_PROTOCOL
+	ConIn                *VOID
 	ConsoleOutHandle     EFI_HANDLE
 	ConOut               *EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
 	StandardErrorHandle  EFI_HANDLE

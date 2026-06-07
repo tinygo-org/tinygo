@@ -2,6 +2,13 @@ package uefi
 
 import "unsafe"
 
+func booleanArg(v BOOLEAN) uintptr {
+	if v {
+		return 1
+	}
+	return 0
+}
+
 type EFI_SIMPLE_TEXT_OUTPUT_MODE struct {
 	MaxMode       int32
 	Mode          int32
