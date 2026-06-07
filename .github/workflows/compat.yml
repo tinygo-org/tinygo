@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test-compat:
-    runs-on: ubuntu-22.04-better # this must be a specific version for the apt install below
+    runs-on: ubuntu-22.04 # this must be a specific version for the apt install below
     env:
       # Oldest versions currently supported by TinyGo
       LLVM: "15"
