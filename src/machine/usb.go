@@ -196,17 +196,18 @@ func sendDescriptorString(data string, maxLen uint16) {
 
 	// Clamp the length.
 	maxEncBytes := min(len(usb_trans_buffer), len(udd_ep_control_cache_buffer), int(maxLen))
-	data = data[:min(len(data), (maxEncBytes-2)/2)]
-
 	// Write the header.
-	buf := usb_trans_buffer[:2*len(data)+2]
+	buf := usb_trans_buffer[:min(2*len(data)+2, maxEncBytes)]
 	hdr, body := buf[:2], buf[2:]
-	hdr[0] = byte(len(buf))
+
+	// hdr[0] (bLength) should convey the "original total string length" before being limited by the host's maxLen.
+	hdr[0] = byte(2*len(data) + 2)
 	hdr[1] = descriptor.TypeString
 
 	// Convert the string to UTF16.
 	// NOTE: Using range here would cause the length to disagree when multibyte codepoints are present.
-	for i := 0; i < len(data); i++ {
+	limit := min(len(data), len(body)/2)
+	for i := 0; i < limit; i++ {
 		body[2*i] = byte(data[i])
 		body[2*i+1] = 0
 	}
