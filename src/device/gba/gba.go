@@ -85,6 +85,9 @@ var (
 	SIO = (*SIO_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0134)))
 
 	INTERRUPT = (*INTERRUPT_Type)(unsafe.Add(unsafe.Pointer(REG_BASE), uintptr(0x0200)))
+
+	// BIOS interrupt flags
+	BIOS_IF = (*volatile.Register16)(unsafe.Pointer(uintptr(0x03007FF8)))
 )
 
 // Main memory sections
