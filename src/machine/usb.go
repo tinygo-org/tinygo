@@ -14,9 +14,21 @@ type USBDevice struct {
 	InitEndpointComplete bool
 }
 
+type usbEndpointEntry struct {
+	Endpoint uint32
+	Config   uint32
+}
+
 var (
 	USBDev = &USBDevice{}
 	USBCDC Serialer
+
+	endPoints = []usbEndpointEntry{
+		{
+			Endpoint: usb.CONTROL_ENDPOINT,
+			Config:   usb.ENDPOINT_TYPE_CONTROL,
+		},
+	}
 )
 
 func initUSB() {
@@ -196,17 +208,18 @@ func sendDescriptorString(data string, maxLen uint16) {
 
 	// Clamp the length.
 	maxEncBytes := min(len(usb_trans_buffer), len(udd_ep_control_cache_buffer), int(maxLen))
-	data = data[:min(len(data), (maxEncBytes-2)/2)]
-
 	// Write the header.
-	buf := usb_trans_buffer[:2*len(data)+2]
+	buf := usb_trans_buffer[:min(2*len(data)+2, maxEncBytes)]
 	hdr, body := buf[:2], buf[2:]
-	hdr[0] = byte(len(buf))
+
+	// hdr[0] (bLength) should convey the "original total string length" before being limited by the host's maxLen.
+	hdr[0] = byte(2*len(data) + 2)
 	hdr[1] = descriptor.TypeString
 
 	// Convert the string to UTF16.
 	// NOTE: Using range here would cause the length to disagree when multibyte codepoints are present.
-	for i := 0; i < len(data); i++ {
+	limit := min(len(data), len(body)/2)
+	for i := 0; i < limit; i++ {
 		body[2*i] = byte(data[i])
 		body[2*i+1] = 0
 	}
@@ -276,8 +289,11 @@ func handleStandardSetup(setup usb.Setup) bool {
 
 	case usb.SET_CONFIGURATION:
 		if setup.BmRequestType&usb.REQUEST_RECIPIENT == usb.REQUEST_DEVICE {
-			for i := 1; i < len(endPoints); i++ {
-				initEndpoint(uint32(i), endPoints[i])
+			for _, entry := range endPoints {
+				if entry.Endpoint == usb.CONTROL_ENDPOINT {
+					continue
+				}
+				initEndpoint(uint32(entry.Endpoint), entry.Config)
 			}
 
 			usbConfiguration = setup.WValueL
@@ -358,12 +374,18 @@ func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointC
 
 	for _, ep := range epSettings {
 		if ep.IsIn {
-			endPoints[ep.Index] = uint32(ep.Type | usb.EndpointIn)
+			endPoints = append(endPoints, usbEndpointEntry{
+				Endpoint: uint32(ep.Index),
+				Config:   uint32(ep.Type | usb.EndpointIn),
+			})
 			if ep.TxHandler != nil {
 				usbTxHandler[ep.Index] = ep.TxHandler
 			}
 		} else {
-			endPoints[ep.Index] = uint32(ep.Type | usb.EndpointOut)
+			endPoints = append(endPoints, usbEndpointEntry{
+				Endpoint: uint32(ep.Index),
+				Config:   uint32(ep.Type | usb.EndpointOut),
+			})
 			if ep.RxHandler != nil {
 				usbRxHandler[ep.Index] = func(b []byte) bool {
 					ep.RxHandler(b)
