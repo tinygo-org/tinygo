@@ -3,7 +3,7 @@
 package runtime
 
 import (
-	"machine/uefi"
+	"device/uefi"
 	"unsafe"
 )
 

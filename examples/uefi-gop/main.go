@@ -1,6 +1,6 @@
 package main
 
-import "machine/uefi"
+import uefi "machine"
 
 func main() {
 	conOut := uefi.ConsoleOut()

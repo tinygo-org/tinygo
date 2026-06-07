@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"machine/uefi"
+	uefi "machine"
 	"time"
 )
 

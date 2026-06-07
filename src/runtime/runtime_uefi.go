@@ -2,7 +2,7 @@
 
 package runtime
 
-import "machine/uefi"
+import "device/uefi"
 
 //go:linkname procPin sync/atomic.runtime_procPin
 func procPin() {
