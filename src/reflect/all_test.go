@@ -4727,8 +4727,7 @@ func IsRO(v Value) bool {
 }
 
 func MakeRO(v Value) Value {
-	v.MakeRO(true)
-	return v
+	return Value{v.MakeRO(true)}
 }
 
 func TestConvert(t *testing.T) {
