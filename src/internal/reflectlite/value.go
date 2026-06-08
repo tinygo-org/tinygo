@@ -51,12 +51,13 @@ func (v Value) IsRO() bool {
 	return v.flags&(valueFlagRO) != 0
 }
 
-func (v *Value) MakeRO(ro bool) {
+func (v Value) MakeRO(ro bool) Value {
 	if ro {
 		v.flags |= valueFlagRO
 	} else {
 		v.flags &^= valueFlagRO
 	}
+	return v
 }
 
 func (v Value) checkRO() {
