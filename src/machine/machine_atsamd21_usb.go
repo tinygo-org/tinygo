@@ -175,7 +175,7 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 
 	// Now the actual transfer handlers, ignore endpoint number 0 (setup)
 	var i uint32
-	for i = 1; i < uint32(len(endPoints)); i++ {
+	for i = 1; i < NumberOfUSBEndpoints; i++ {
 		// Check if endpoint has a pending interrupt
 		epFlags := getEPINTFLAG(i)
 		setEPINTFLAG(i, epFlags)
@@ -193,6 +193,8 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 }
 
 func initEndpoint(ep, config uint32) {
+	// Note: Both IN (Bank 1) and OUT (Bank 0) configurations share the same EPCFG register.
+	// We must use getEPCFG(ep) | ... to avoid clearing/disabling the opposite direction.
 	switch config {
 	case usb.ENDPOINT_TYPE_INTERRUPT | usb.EndpointIn:
 		// set packet size
@@ -202,7 +204,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, ((usb.ENDPOINT_TYPE_INTERRUPT + 1) << sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
+		setEPCFG(ep, getEPCFG(ep)|((usb.ENDPOINT_TYPE_INTERRUPT+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
 
 		setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT1)
 
@@ -214,7 +216,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, ((usb.ENDPOINT_TYPE_BULK + 1) << sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
+		setEPCFG(ep, getEPCFG(ep)|((usb.ENDPOINT_TYPE_BULK+1)<<sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
 
 		// receive interrupts when current transfer complete
 		setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT0)
@@ -233,7 +235,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[0].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, ((usb.ENDPOINT_TYPE_INTERRUPT + 1) << sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
+		setEPCFG(ep, getEPCFG(ep)|((usb.ENDPOINT_TYPE_INTERRUPT+1)<<sam.USB_DEVICE_EPCFG_EPTYPE0_Pos))
 
 		// receive interrupts when current transfer complete
 		setEPINTENSET(ep, sam.USB_DEVICE_EPINTENSET_TRCPT0)
@@ -252,7 +254,7 @@ func initEndpoint(ep, config uint32) {
 		usbEndpointDescriptors[ep].DeviceDescBank[1].ADDR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_in_cache_buffer[ep]))))
 
 		// set endpoint type
-		setEPCFG(ep, ((usb.ENDPOINT_TYPE_BULK + 1) << sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
+		setEPCFG(ep, getEPCFG(ep)|((usb.ENDPOINT_TYPE_BULK+1)<<sam.USB_DEVICE_EPCFG_EPTYPE1_Pos))
 
 		// NAK on endpoint IN, the bank is not yet filled in.
 		setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_BK1RDY)
@@ -649,4 +651,20 @@ func setEPINTENSET(ep uint32, val uint8) {
 	default:
 		return
 	}
+}
+
+func (dev *USBDevice) SetStallEPIn(ep uint32) {
+	setEPSTATUSSET(ep, sam.USB_DEVICE_EPSTATUSSET_STALLRQ1)
+}
+
+func (dev *USBDevice) SetStallEPOut(ep uint32) {
+	setEPSTATUSSET(ep, sam.USB_DEVICE_EPSTATUSSET_STALLRQ0)
+}
+
+func (dev *USBDevice) ClearStallEPIn(ep uint32) {
+	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_STALLRQ1)
+}
+
+func (dev *USBDevice) ClearStallEPOut(ep uint32) {
+	setEPSTATUSCLR(ep, sam.USB_DEVICE_EPSTATUSCLR_STALLRQ0)
 }
