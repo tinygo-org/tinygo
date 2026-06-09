@@ -1,6 +1,6 @@
 //go:build amd64
 
-package x86
+package amd64
 
 const (
 	CPUIDTimeStampCounter   = 0x15

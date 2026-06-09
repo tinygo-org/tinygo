@@ -2,16 +2,16 @@
 
 package uefi
 
-import "device/x86"
+import "device/amd64"
 
 func Ticks() uint64 {
-	return x86.AsmReadRdtsc()
+	return amd64.AsmReadRdtsc()
 }
 
 func CpuPause() {
-	x86.AsmPause()
+	amd64.AsmPause()
 }
 
 func getTSCFrequency() uint64 {
-	return x86.InternalGetPerformanceCounterFrequency()
+	return amd64.InternalGetPerformanceCounterFrequency()
 }
