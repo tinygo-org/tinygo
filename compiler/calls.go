@@ -15,6 +15,15 @@ import (
 // a struct contains more fields, it is passed as a struct without expanding.
 const maxFieldsPerParam = 3
 
+// The maximum number of scalar leaves an aggregate parameter may have before
+// it is passed by pointer to a caller-owned copy instead of by value. Some
+// backends (notably WebAssembly) flatten aggregate parameters into individual
+// scalar parameters, and the WebAssembly JS embedding rejects function types
+// with more than 1000 parameters. See paramNeedsSpill.
+// With at most 16 scalars per parameter, a function needs over 60 such
+// parameters to approach the 1000-parameter limit.
+const maxLeavesPerParam = 16
+
 // paramInfo contains some information collected about a function parameter,
 // useful while declaring or defining a function.
 type paramInfo struct {
@@ -296,6 +305,51 @@ func extractSubfield(t types.Type, field int) types.Type {
 		// This should be unreachable.
 		panic("cannot split subfield: " + t.String())
 	}
+}
+
+// countFlattenedLeaves returns the number of scalar values this type would be
+// flattened into when passed by value. Unlike flattenAggregateType, it looks
+// through arrays as well: LLVM's SelectionDAG (ComputeValueVTs) scalarizes
+// both structs and arrays in by-value aggregate parameters.
+func (c *compilerContext) countFlattenedLeaves(t llvm.Type) int {
+	switch t.TypeKind() {
+	case llvm.StructTypeKind:
+		count := 0
+		for _, field := range t.StructElementTypes() {
+			if c.targetData.TypeAllocSize(field) == 0 {
+				continue
+			}
+			count += c.countFlattenedLeaves(field)
+			if count >= 1<<30 {
+				// Saturate instead of overflowing, like the array case below.
+				return 1 << 30
+			}
+		}
+		return count
+	case llvm.ArrayTypeKind:
+		elemLeaves := c.countFlattenedLeaves(t.ElementType())
+		length := t.ArrayLength()
+		if elemLeaves > 0 && length > (1<<30)/elemLeaves {
+			// Saturate instead of overflowing; this is already far above
+			// any spill threshold.
+			return 1 << 30
+		}
+		return length * elemLeaves
+	default:
+		return 1
+	}
+}
+
+// paramNeedsSpill returns whether a parameter of this type must be passed by
+// pointer to a caller-owned copy instead of by value in the Go-internal
+// calling convention, to avoid creating functions with enormous numbers of
+// parameters once the backend flattens the aggregate.
+func (c *compilerContext) paramNeedsSpill(t llvm.Type) bool {
+	switch t.TypeKind() {
+	case llvm.StructTypeKind, llvm.ArrayTypeKind:
+		return c.countFlattenedLeaves(t) > maxLeavesPerParam
+	}
+	return false
 }
 
 // flattenAggregateTypeOffsets returns the offsets from the start of an object of
