@@ -215,58 +215,112 @@ fmt-check: ## Warn if any source needs reformatting
 
 gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp ## Generate microcontroller-specific sources
 ifneq ($(RENESAS), 0)
-gen-device: gen-device-renesas
+# Renesas is currently unused
+#gen-device: gen-device-renesas
 endif
 ifneq ($(STM32), 0)
 gen-device: gen-device-stm32
 endif
 
-gen-device-avr:
-	@if [ ! -e lib/avr/README.md ]; then echo "Submodules have not been downloaded. Please download them using:\n  git submodule update --init"; exit 1; fi
-	$(GO) build -o ./build/gen-device-avr ./tools/gen-device-avr/
-	./build/gen-device-avr lib/avr/packs/atmega src/device/avr/
-	./build/gen-device-avr lib/avr/packs/tiny src/device/avr/
-	@GO111MODULE=off $(GO) fmt ./src/device/avr
+build/gen-device-%: ./tools/gen-device-%/*.go
+	$(GO) build -o $@ ./tools/gen-device-$*/
 
-build/gen-device-svd: ./tools/gen-device-svd/*.go
-	$(GO) build -o $@ ./tools/gen-device-svd/
+gen-device-avr: gen-device-atmega gen-device-attiny
 
-gen-device-esp: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif-Community -interrupts=software lib/cmsis-svd/data/Espressif-Community/ src/device/esp/
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif -interrupts=software lib/cmsis-svd/data/Espressif/ src/device/esp/
-	GO111MODULE=off $(GO) fmt ./src/device/esp
+# ATmega
 
-gen-device-nrf: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk lib/nrfx/mdk/ src/device/nrf/
-	GO111MODULE=off $(GO) fmt ./src/device/nrf
+DEVICES_AVR_MEGA = 1280 1284P 2560 328PB 328P 32U4
 
-gen-device-nxp: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/NXP lib/cmsis-svd/data/NXP/ src/device/nxp/
-	GO111MODULE=off $(GO) fmt ./src/device/nxp
+gen-device-atmega: $(foreach m,$(DEVICES_AVR_MEGA),src/device/avr/ATmega$(m).go src/device/avr/ATmega$(m).s src/device/avr/ATmega$(m).ld)
 
-gen-device-sam: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel lib/cmsis-svd/data/Atmel/ src/device/sam/
-	GO111MODULE=off $(GO) fmt ./src/device/sam
+src/device/avr/ATmega%.go src/device/avr/ATmega%.s src/device/avr/ATmega%.ld: lib/avr/packs/atmega/ATmega%.atdf build/gen-device-avr
+	build/gen-device-avr $< src/device/avr/ATmega$*.go src/device/avr/ATmega$*.s src/device/avr/ATmega$*.ld
 
-gen-device-sifive: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/SiFive-Community -interrupts=software lib/cmsis-svd/data/SiFive-Community/ src/device/sifive/
-	GO111MODULE=off $(GO) fmt ./src/device/sifive
+# ATtiny
 
-gen-device-kendryte: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Kendryte-Community -interrupts=software lib/cmsis-svd/data/Kendryte-Community/ src/device/kendryte/
-	GO111MODULE=off $(GO) fmt ./src/device/kendryte
+DEVICES_AVR_TINY = 1616 85
 
-gen-device-stm32: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/tinygo-org/stm32-svd lib/stm32-svd/svd src/device/stm32/
-	GO111MODULE=off $(GO) fmt ./src/device/stm32
+gen-device-attiny: $(foreach m,$(DEVICES_AVR_TINY),src/device/avr/ATtiny$(m).go src/device/avr/ATtiny$(m).s src/device/avr/ATtiny$(m).ld)
 
-gen-device-rp: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/RaspberryPi lib/cmsis-svd/data/RaspberryPi/ src/device/rp/
-	GO111MODULE=off $(GO) fmt ./src/device/rp
+src/device/avr/ATtiny%.go src/device/avr/ATtiny%.s src/device/avr/ATtiny%.ld: lib/avr/packs/tiny/ATtiny%.atdf build/gen-device-avr
+	build/gen-device-avr $< src/device/avr/ATtiny$*.go src/device/avr/ATtiny$*.s src/device/avr/ATtiny$*.ld
 
-gen-device-renesas: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/cmsis-svd/cmsis-svd-data/tree/master/data/Renesas lib/cmsis-svd/data/Renesas/ src/device/renesas/
-	GO111MODULE=off $(GO) fmt ./src/device/renesas
+# Espressif
+
+# Both Espressif and Espressif-Community define esp32.
+# The Espressif directory takes priority. 
+
+gen-device-esp: src/device/esp/esp32c3.go src/device/esp/esp32s3.go src/device/esp/esp32.go src/device/esp/esp8266.go
+
+src/device/esp/%.go: lib/cmsis-svd/data/Espressif/%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif -interrupts=software $< $@
+
+src/device/esp/%.go: lib/cmsis-svd/data/Espressif-Community/%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/posborne/cmsis-svd/tree/master/data/Espressif-Community -interrupts=software $< $@
+
+# NRF
+
+DEVICES_NRF = 51 52833 52840 52
+
+gen-device-nrf: $(foreach m,$(DEVICES_NRF),src/device/nrf/nrf$(m).go src/device/nrf/nrf$(m).s)
+
+src/device/nrf/nrf%.go src/device/nrf/nrf%.s: lib/nrfx/mdk/nrf%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/NordicSemiconductor/nrfx/tree/master/mdk -asm=src/device/nrf/nrf$*.s $< src/device/nrf/nrf$*.go
+
+# NXP
+
+DEVICES_NXP = MIMXRT1062 MK66F18
+
+gen-device-nxp: $(foreach m,$(DEVICES_NXP),src/device/nxp/$(m).go src/device/nxp/$(m).s)
+
+src/device/nxp/%.go src/device/nxp/%.s: lib/cmsis-svd/data/NXP/%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/posborne/cmsis-svd/tree/master/data/NXP -asm=src/device/nxp/$*.s $< src/device/nxp/$*.go
+
+# SAM
+
+DEVICES_SAM = D21E18A D21G18A D51G19A D51J19A D51J20A D51P19A D51P20A D51J19A E51J19A E54P20A
+
+gen-device-sam: $(foreach m,$(DEVICES_SAM),src/device/sam/ATSAM$(m).go src/device/sam/ATSAM$(m).s)
+
+src/device/sam/ATSAM%.go src/device/sam/ATSAM%.s: lib/cmsis-svd/data/Atmel/ATSAM%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/posborne/cmsis-svd/tree/master/data/Atmel -asm=src/device/sam/ATSAM$*.s $< src/device/sam/ATSAM$*.go
+
+# SiFive
+
+DEVICES_SIFIVE = e310x
+
+gen-device-sifive: $(foreach m,$(DEVICES_SIFIVE),src/device/sifive/$(m).go)
+
+src/device/sifive/%.go: lib/cmsis-svd/data/SiFive-Community/%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/posborne/cmsis-svd/tree/master/data/SiFive-Community -interrupts=software $< $@
+
+# Kendryte
+
+DEVICES_KENDRYTE = 210
+
+gen-device-kendryte: $(foreach m,$(DEVICES_KENDRYTE),src/device/kendryte/k$(m).go)
+
+src/device/kendryte/k%.go: lib/cmsis-svd/data/Kendryte-Community/k%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/posborne/cmsis-svd/tree/master/data/Kendryte-Community -interrupts=software $< $@
+
+# STM32
+
+DEVICES_STM32 = f103 f405 f407 f469 f722 g0b1 l4r5 l0x1 l0x2 l4x2 l4x5 l4x6 l552 u585 wl5x_cm4 wle5
+
+gen-device-stm32: $(foreach m,$(DEVICES_STM32),src/device/stm32/stm32$(m).go src/device/stm32/stm32$(m).s)
+
+src/device/stm32/stm32%.go src/device/stm32/stm32%.s: lib/stm32-svd/svd/stm32%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/tinygo-org/stm32-svd -asm=src/device/stm32/stm32$*.s $< src/device/stm32/stm32$*.go
+
+# Raspberry Pi
+
+DEVICES_RP = 2040 2350
+
+gen-device-rp: $(foreach m,$(DEVICES_RP),src/device/rp/rp$(m).go src/device/rp/rp$(m).s)
+
+src/device/rp/rp%.go src/device/rp/rp%.s: lib/cmsis-svd/data/RaspberryPi/rp%.svd build/gen-device-svd
+	build/gen-device-svd -url=https://github.com/posborne/cmsis-svd/tree/master/data/RaspberryPi -asm=src/device/rp/rp$*.s $< src/device/rp/rp$*.go
+
 
 $(LLVM_PROJECTDIR)/llvm:
 	git clone -b tinygo_20.x --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)

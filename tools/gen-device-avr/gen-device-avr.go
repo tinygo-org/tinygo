@@ -1,18 +1,17 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/xml"
 	"fmt"
+	"go/format"
 	"html/template"
 	"math/bits"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 type AVRToolsDeviceFile struct {
@@ -398,14 +397,8 @@ func readATDF(path string) (*Device, error) {
 	}, nil
 }
 
-func writeGo(outdir string, device *Device) error {
+func writeGo(dst string, device *Device) error {
 	// The Go module for this device.
-	outf, err := os.Create(outdir + "/" + device.metadata["nameLower"].(string) + ".go")
-	if err != nil {
-		return err
-	}
-	defer outf.Close()
-	w := bufio.NewWriter(outf)
 
 	maxInterruptNum := 0
 	for _, intr := range device.interrupts {
@@ -484,9 +477,11 @@ type {{.Name}}_Type struct {
 {{end}}
 {{end}}
 `))
-	err = t.Execute(w, map[string]interface{}{
+	var buf bytes.Buffer
+	w := &buf
+	err := t.Execute(w, map[string]interface{}{
 		"metadata":     device.metadata,
-		"pkgName":      filepath.Base(strings.TrimRight(outdir, "/")),
+		"pkgName":      filepath.Base(filepath.Dir(dst)),
 		"interrupts":   device.interrupts,
 		"interruptMax": maxInterruptNum,
 		"instances":    device.instances,
@@ -559,12 +554,20 @@ type {{.Name}}_Type struct {
 		}
 		fmt.Fprintf(w, ")\n")
 	}
-	return w.Flush()
+
+	// Format the source.
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return err
+	}
+
+	// Save the file.
+	return os.WriteFile(dst, formatted, 0666)
 }
 
-func writeAsm(outdir string, device *Device) error {
+func writeAsm(dst string, device *Device) error {
 	// The interrupt vector, which is hard to write directly in Go.
-	out, err := os.Create(outdir + "/" + device.metadata["nameLower"].(string) + ".s")
+	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
@@ -628,9 +631,9 @@ __vector_default:
 	return nil
 }
 
-func writeLD(outdir string, device *Device) error {
+func writeLD(dst string, device *Device) error {
 	// Variables for the linker script.
-	out, err := os.Create(outdir + "/" + device.metadata["nameLower"].(string) + ".ld")
+	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
@@ -649,73 +652,28 @@ __num_isrs   = {{.numInterrupts}};
 	return t.Execute(out, device.metadata)
 }
 
-func processFile(filepath, outdir string) error {
-	device, err := readATDF(filepath)
-	if err != nil {
-		return err
-	}
-	err = writeGo(outdir, device)
-	if err != nil {
-		return err
-	}
-	err = writeAsm(outdir, device)
-	if err != nil {
-		return err
-	}
-	return writeLD(outdir, device)
-}
-
-func generate(indir, outdir string) error {
-	// Read list of ATDF files to process.
-	matches, err := filepath.Glob(indir + "/*.atdf")
-	if err != nil {
-		return err
-	}
-
-	// Start worker goroutines.
-	var wg sync.WaitGroup
-	workChan := make(chan string)
-	errChan := make(chan error, 1)
-	for i := 0; i < runtime.NumCPU(); i++ {
-		go func() {
-			for filepath := range workChan {
-				err := processFile(filepath, outdir)
-				wg.Done()
-				if err != nil {
-					// Store error to errChan if no error was stored before.
-					select {
-					case errChan <- err:
-					default:
-					}
-				}
-			}
-		}()
-	}
-
-	// Submit all jobs to the goroutines.
-	wg.Add(len(matches))
-	for _, filepath := range matches {
-		fmt.Println(filepath)
-		workChan <- filepath
-	}
-	close(workChan)
-
-	// Wait until all workers have finished.
-	wg.Wait()
-
-	// Check for an error.
-	select {
-	case err := <-errChan:
-		return err
-	default:
-		return nil
-	}
-}
-
 func main() {
-	indir := os.Args[1]  // directory with register descriptor files (*.atdf)
-	outdir := os.Args[2] // output directory
-	err := generate(indir, outdir)
+	src := os.Args[1]
+	dstGo := os.Args[2]
+	dstASM := os.Args[3]
+	dstLD := os.Args[4]
+
+	device, err := readATDF(src)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	err = writeGo(dstGo, device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	err = writeAsm(dstASM, device)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	err = writeLD(dstLD, device)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

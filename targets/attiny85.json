@@ -5,9 +5,9 @@
 	"cflags": [
 		"-D__AVR_ARCH__=25"
 	],
-	"linkerscript": "src/device/avr/attiny85.ld",
+	"linkerscript": "src/device/avr/ATtiny85.ld",
 	"extra-files": [
 		"targets/avr.S",
-		"src/device/avr/attiny85.s"
+		"src/device/avr/ATtiny85.s"
 	]
 }

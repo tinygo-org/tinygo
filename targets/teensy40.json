@@ -5,7 +5,7 @@
   "automatic-stack-size": false,
   "linkerscript": "targets/mimxrt1062-teensy40.ld",
   "extra-files": [
-    "src/device/nxp/mimxrt1062.s",
+    "src/device/nxp/MIMXRT1062.s",
     "targets/teensy40.s"
   ],
   "flash-command": "teensy_loader_cli -mmcu=imxrt1062 -v -w {hex}"
