@@ -299,7 +299,8 @@ func (mv *memoryView) put(index uint32, obj object) {
 }
 
 // Load the value behind the given pointer. Returns nil if the pointer points to
-// an external global.
+// an external global or if the load is out of bounds of the object (in which
+// case the caller defers the load to runtime).
 func (mv *memoryView) load(p pointerValue, size uint32) value {
 	if checks && mv.hasExternalStore(p) {
 		panic("interp: load from object with external store")
@@ -312,8 +313,13 @@ func (mv *memoryView) load(p pointerValue, size uint32) value {
 	if p.offset() == 0 && size == obj.size {
 		return obj.buffer.clone()
 	}
-	if checks && p.offset()+size > obj.size {
-		panic("interp: load out of bounds")
+	if p.offset()+size > obj.size {
+		// The load is out of bounds of the object. This can happen for valid
+		// Go programs, for example when dereferencing the pointer returned by
+		// unsafe.SliceData on a zero-capacity slice (which points to a
+		// zero-sized object). Return nil so the caller defers this load to
+		// runtime instead of crashing the compiler.
+		return nil
 	}
 	v := obj.buffer.asRawValue(mv.r)
 	loadedBuf := v.buf[p.offset() : p.offset()+size]
