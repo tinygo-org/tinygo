@@ -324,6 +324,9 @@ func TestCompilerErrors(t *testing.T) {
 		}
 		expectedErrorsIdx++
 	}
+	for _, missing := range expectedErrors[expectedErrorsIdx:] {
+		t.Errorf("expected compiler error was not produced: %s", missing)
+	}
 }
 
 func TestAggregateValueCount(t *testing.T) {

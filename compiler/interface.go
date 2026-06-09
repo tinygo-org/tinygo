@@ -1298,11 +1298,39 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 		return wrapper
 	}
 
-	// Get the expanded receiver type.
+	// Get the expanded receiver type. Exported methods keep their C ABI and
+	// therefore pass even large value receivers directly.
+	exported := c.getFunctionInfo(fn).exported
+
+	// Interface invoke thunks use the Go internal calling convention, but
+	// exported methods keep their C ABI. The receiver is bridged below; a
+	// large aggregate result or parameter, however, is placed differently by
+	// the two conventions (indirect vs. direct), so such a method cannot be
+	// called through an interface. Report that instead of building a wrapper
+	// with a mismatched signature.
+	if exported {
+		if _, indirect := c.hasIndirectResult(fn.Signature); indirect {
+			c.addError(fn.Pos(), fmt.Sprintf("exported method %s with a large aggregate result cannot be called through an interface", fn.RelString(nil)))
+			return llvmFn
+		}
+		for param := range fn.Signature.Params().Variables() {
+			if c.paramNeedsSpill(c.getLLVMType(param.Type())) {
+				c.addError(fn.Pos(), fmt.Sprintf("exported method %s with a large aggregate parameter cannot be called through an interface", fn.RelString(nil)))
+				return llvmFn
+			}
+		}
+	}
+
 	receiverType := c.getLLVMType(fn.Signature.Recv().Type())
 	var expandedReceiverType []llvm.Type
-	receiverIndirect := c.isIndirectAggregate(receiverType)
-	for _, info := range c.expandFormalParamType(receiverType, "", nil) {
+	receiverIndirect := c.isIndirectParam(receiverType, exported)
+	var receiverInfos []paramInfo
+	if exported {
+		receiverInfos = c.expandDirectFormalParamType(receiverType, "", nil)
+	} else {
+		receiverInfos = c.expandFormalParamType(receiverType, "", nil)
+	}
+	for _, info := range receiverInfos {
 		expandedReceiverType = append(expandedReceiverType, info.llvmType)
 	}
 
@@ -1317,7 +1345,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 
 	// create wrapper function
 	resultOffset := 0
-	if _, indirect := c.hasIndirectResult(fn.Signature); indirect {
+	if _, indirect := c.hasIndirectResult(fn.Signature); indirect && !exported {
 		resultOffset = 1
 	}
 	paramTypes := append([]llvm.Type{}, llvmFnType.ParamTypes()[:resultOffset]...)
