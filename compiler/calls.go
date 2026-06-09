@@ -114,7 +114,7 @@ func (b *builder) createInvoke(fnType llvm.Type, fn llvm.Value, args []llvm.Valu
 // Expand an argument type to a list that can be used in a function call
 // parameter list.
 func (c *compilerContext) expandFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
-	if c.isIndirectAggregate(t) {
+	if c.paramNeedsSpill(t) {
 		return []paramInfo{{
 			llvmType: c.dataPtrType,
 			name:     name,
@@ -147,7 +147,7 @@ func (c *compilerContext) storedParamType(t llvm.Type, exported bool) llvm.Type 
 }
 
 func (c *compilerContext) isIndirectParam(t llvm.Type, exported bool) bool {
-	return !exported && c.isIndirectAggregate(t)
+	return !exported && c.paramNeedsSpill(t)
 }
 
 func (b *builder) appendStoredValueTypes(valueTypes []llvm.Type, values []ssa.Value, exported bool) []llvm.Type {
