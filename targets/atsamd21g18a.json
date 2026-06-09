@@ -4,7 +4,7 @@
 	"serial": "usb",
 	"linkerscript": "targets/atsamd21.ld",
 	"extra-files": [
-		"src/device/sam/atsamd21g18a.s"
+		"src/device/sam/ATSAMD21G18A.s"
 	],
 	"openocd-transport": "swd",
 	"openocd-target": "at91samdXX"

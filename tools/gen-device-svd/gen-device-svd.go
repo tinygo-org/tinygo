@@ -2,11 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/xml"
-	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
+	"go/format"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1219,14 +1219,7 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 }
 
 // The Go module for this device.
-func writeGo(outdir string, device *Device, interruptSystem string) error {
-	outf, err := os.Create(filepath.Join(outdir, device.Metadata.NameLower+".go"))
-	if err != nil {
-		return err
-	}
-	defer outf.Close()
-	w := bufio.NewWriterSize(outf, 1<<20)
-
+func writeGo(dst string, device *Device, interruptSystem string) error {
 	maxInterruptValue := 0
 	for _, intr := range device.Interrupts {
 		if intr.Value > maxInterruptValue {
@@ -1330,10 +1323,12 @@ var (
 )
 
 `))
-	pkgName := filepath.Base(strings.TrimRight(outdir, "/"))
+	pkgName := filepath.Base(filepath.Dir(dst))
 	tweakDevice(device, pkgName)
 
-	err = t.Execute(w, map[string]any{
+	var buf bytes.Buffer
+	w := &buf
+	err := t.Execute(w, map[string]any{
 		"device":            device,
 		"pkgName":           pkgName,
 		"interruptMax":      maxInterruptValue,
@@ -1598,10 +1593,17 @@ var (
 		w.WriteString(")\n")
 	}
 
-	return w.Flush()
+	// Format the source.
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return err
+	}
+
+	// Save the file.
+	return os.WriteFile(dst, formatted, 0666)
 }
 
-func writeGoRegisterConstants(w *bufio.Writer, register *PeripheralField, name string) {
+func writeGoRegisterConstants(w *bytes.Buffer, register *PeripheralField, name string) {
 	w.WriteString("\n\t// " + name)
 	if register.Description != "" {
 		if isMultiline(register.Description) {
@@ -1623,7 +1625,7 @@ func writeGoRegisterConstants(w *bufio.Writer, register *PeripheralField, name s
 	}
 }
 
-func writeGoRegisterBitfieldType(w *bufio.Writer, register *PeripheralField, peripheralName, registerName string) {
+func writeGoRegisterBitfieldType(w *bytes.Buffer, register *PeripheralField, peripheralName, registerName string) {
 	if len(register.Bitfields) == 0 {
 		return
 	}
@@ -1696,8 +1698,8 @@ func writeGoRegisterBitfieldType(w *bufio.Writer, register *PeripheralField, per
 }
 
 // The interrupt vector, which is hard to write directly in Go.
-func writeAsm(outdir string, device *Device) error {
-	outf, err := os.Create(filepath.Join(outdir, device.Metadata.NameLower+".s"))
+func writeAsm(dst string, device *Device) error {
+	outf, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
@@ -1800,58 +1802,33 @@ __isr_vector:
 	return w.Flush()
 }
 
-func generate(indir, outdir, sourceURL, interruptSystem string) error {
-	if _, err := os.Stat(indir); errors.Is(err, fs.ErrNotExist) {
-		fmt.Fprintln(os.Stderr, "cannot find input directory:", indir)
-		os.Exit(1)
-	}
-	os.MkdirAll(outdir, 0777)
-
-	infiles, err := filepath.Glob(filepath.Join(indir, "*.svd"))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "could not read .svd files:", err)
-		os.Exit(1)
-	}
-	sort.Strings(infiles)
-	for _, infile := range infiles {
-		fmt.Println(infile)
-		device, err := readSVD(infile, sourceURL)
-		if err != nil {
-			return fmt.Errorf("failed to read: %w", err)
-		}
-		err = writeGo(outdir, device, interruptSystem)
-		if err != nil {
-			return fmt.Errorf("failed to write Go file: %w", err)
-		}
-		switch interruptSystem {
-		case "software":
-			// Nothing to do.
-		case "hardware":
-			err = writeAsm(outdir, device)
-			if err != nil {
-				return fmt.Errorf("failed to write assembly file: %w", err)
-			}
-		default:
-			return fmt.Errorf("unknown interrupt system: %s", interruptSystem)
-		}
-	}
-	return nil
-}
-
 func main() {
-	sourceURL := flag.String("source", "<unknown>", "source SVD file")
+	sourceURL := flag.String("url", "<unknown>", "URL of source SVD repository")
 	interruptSystem := flag.String("interrupts", "hardware", "interrupt system in use (software, hardware)")
+	asmDst := flag.String("asm", "", "destination path for assembly")
 	flag.Parse()
 	if flag.NArg() != 2 {
-		fmt.Fprintln(os.Stderr, "provide exactly two arguments: input directory (with .svd files) and output directory for generated files")
+		fmt.Fprintln(os.Stderr, "provide exactly two arguments: input path (.svd) and output path (.go)")
 		flag.PrintDefaults()
 		return
 	}
-	indir := flag.Arg(0)
-	outdir := flag.Arg(1)
-	err := generate(indir, outdir, *sourceURL, *interruptSystem)
+	src := flag.Arg(0)
+	dst := flag.Arg(1)
+	device, err := readSVD(src, *sourceURL)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "failed to read: %s\n", err)
 		os.Exit(1)
+	}
+	err = writeGo(dst, device, *interruptSystem)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write Go file: %s\n", err)
+		os.Exit(1)
+	}
+	if asm := *asmDst; asm != "" {
+		err = writeAsm(asm, device)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to write assembly file: %s\n", err)
+			os.Exit(1)
+		}
 	}
 }

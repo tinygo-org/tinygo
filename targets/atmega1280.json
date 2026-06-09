@@ -6,9 +6,9 @@
     "ldflags": [
         "--defsym=_stack_size=512"
     ],
-    "linkerscript": "src/device/avr/atmega1280.ld",
+    "linkerscript": "src/device/avr/ATmega1280.ld",
     "extra-files": [
         "targets/avr.S",
-        "src/device/avr/atmega1280.s"
+        "src/device/avr/ATmega1280.s"
     ]
 }
