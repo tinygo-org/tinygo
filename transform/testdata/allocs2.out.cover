@@ -1,0 +1,10 @@
+testdata/allocs2.go:13.1,13.9 1 0
+testdata/allocs2.go:23.1,23.22 1 0
+testdata/allocs2.go:26.1,26.43 1 0
+testdata/allocs2.go:28.1,28.25 1 0
+testdata/allocs2.go:31.1,31.22 1 0
+testdata/allocs2.go:38.1,38.23 1 0
+testdata/allocs2.go:46.1,46.23 1 0
+testdata/allocs2.go:48.1,48.22 1 0
+testdata/allocs2.go:51.1,51.9 1 0
+testdata/allocs2.go:52.1,52.9 1 0

@@ -2,11 +2,8 @@ package transform_test
 
 import (
 	"go/token"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -21,21 +18,16 @@ func TestAllocs(t *testing.T) {
 	})
 }
 
-type allocsTestOutput struct {
-	filename string
-	line     int
-	msg      string
-}
-
-func (out allocsTestOutput) String() string {
-	return out.filename + ":" + strconv.Itoa(out.line) + ": " + out.msg
-}
-
 // Test with a Go file as input (for more accurate tests).
 func TestAllocs2(t *testing.T) {
 	t.Parallel()
 
-	mod := compileGoFileForTesting(t, "./testdata/allocs2.go")
+	const (
+		basePath   = "testdata/allocs2"
+		goFile     = basePath + ".go"
+		goldenFile = basePath + ".out"
+	)
+	mod := compileGoFileForTesting(t, goFile)
 
 	// Run functionattrs pass, which is necessary for escape analysis.
 	po := llvm.NewPassBuilderOptions()
@@ -46,39 +38,34 @@ func TestAllocs2(t *testing.T) {
 	}
 
 	// Run heap to stack transform.
-	var testOutputs []allocsTestOutput
-	transform.OptimizeAllocs(mod, regexp.MustCompile("."), 256, func(pos token.Position, msg string) {
-		testOutputs = append(testOutputs, allocsTestOutput{
-			filename: filepath.Base(pos.Filename),
-			line:     pos.Line,
-			msg:      msg,
+	type report struct {
+		pos    token.Position
+		reason string
+	}
+	var reports []report
+	transform.OptimizeAllocs(mod, regexp.MustCompile("."), 256, func(pos token.Position, reason string) {
+		pos.Filename = goFile
+		reports = append(reports, report{pos, reason})
+	})
+	sort.Slice(reports, func(i, j int) bool { return reports[i].pos.Line < reports[j].pos.Line })
+
+	// Render every report in each format and diff against its golden file.
+	for _, format := range []struct {
+		name   string
+		render func(report) string
+	}{
+		{"reason", func(r report) string { return transform.FormatAllocReason(r.pos, r.reason) }},
+		{"cover", func(r report) string { return transform.FormatAllocCover(r.pos) }},
+	} {
+		t.Run(format.name, func(t *testing.T) {
+			var got strings.Builder
+			for _, r := range reports {
+				if line := format.render(r); line != "" {
+					got.WriteString(line)
+					got.WriteByte('\n')
+				}
+			}
+			checkGolden(t, goldenFile+"."+format.name, got.String())
 		})
-	})
-	sort.Slice(testOutputs, func(i, j int) bool {
-		return testOutputs[i].line < testOutputs[j].line
-	})
-	testOutput := make([]string, 0)
-	for _, out := range testOutputs {
-		testOutput = append(testOutput, out.String())
-	}
-
-	// Load expected test output (the OUT: lines).
-	testInput, err := os.ReadFile("./testdata/allocs2.go")
-	if err != nil {
-		t.Fatal("could not read test input:", err)
-	}
-	var expectedTestOutput []string
-	for _, line := range strings.Split(strings.ReplaceAll(string(testInput), "\r\n", "\n"), "\n") {
-		if idx := strings.Index(line, " // OUT: "); idx > 0 {
-			msg := line[idx+len(" // OUT: "):]
-			expectedTestOutput = append(expectedTestOutput, msg)
-		}
-	}
-
-	for i := range testOutput {
-		if !strings.HasSuffix(testOutput[i], expectedTestOutput[i]) {
-			t.Errorf("output does not match expected output:\n%s\n%s\n", testOutput[i], expectedTestOutput[i])
-			return
-		}
 	}
 }
