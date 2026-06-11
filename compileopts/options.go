@@ -47,6 +47,7 @@ type Options struct {
 	Nobounds                bool
 	PrintSizes              string
 	PrintAllocs             *regexp.Regexp // regexp string
+	PrintAllocsCover        bool           // emit allocs in go coverage tool format
 	PrintStacks             bool
 	Tags                    []string
 	GlobalValues            map[string]map[string]string // map[pkgpath]map[varname]value

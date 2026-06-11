@@ -24,6 +24,24 @@ var defaultTestConfig = &compileopts.Config{
 	Options: &compileopts.Options{Opt: "2"},
 }
 
+// checkGolden compares got against the golden file at path, or rewrites that
+// file when the test is run with -update.
+func checkGolden(t *testing.T, path, got string) {
+	if *update {
+		if err := os.WriteFile(path, []byte(got), 0o666); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != string(want) {
+		t.Errorf("%s does not match expected output:\n%s", path, got)
+	}
+}
+
 // testTransform runs a transformation pass on an input file (pathPrefix+".ll")
 // and checks whether it matches the expected output (pathPrefix+".out.ll"). The
 // output is compared with a fuzzy match that ignores some irrelevant lines such

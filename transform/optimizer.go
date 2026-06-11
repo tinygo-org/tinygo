@@ -86,13 +86,23 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		}
 
 		// Run TinyGo-specific interprocedural optimizations.
-		OptimizeAllocs(mod, config.Options.PrintAllocs, maxStackSize, func(pos token.Position, msg string) {
-			if pos.Filename != "" {
-				fmt.Fprintf(os.Stderr, "%s:%d:%d: %s\n", pos.Filename, pos.Line, pos.Column, msg)
-			} else {
-				fmt.Fprintln(os.Stderr, msg) // No prefix!
-			}
-		})
+		if config.Options.PrintAllocs != nil && config.Options.PrintAllocsCover {
+			// The go coverage tool expects this header before any blocks.
+			fmt.Fprintln(os.Stderr, "mode: set")
+		}
+		OptimizeAllocs(mod, config.Options.PrintAllocs, maxStackSize,
+			func(pos token.Position, reason string) {
+				var line string
+				if config.Options.PrintAllocsCover {
+					line = FormatAllocCover(pos)
+				} else {
+					line = FormatAllocReason(pos, reason)
+				}
+				if line != "" {
+					fmt.Fprintln(os.Stderr, line)
+				}
+			},
+		)
 		OptimizeStringToBytes(mod)
 		OptimizeStringEqual(mod)
 
