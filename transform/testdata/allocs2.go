@@ -9,7 +9,6 @@ func main() {
 	n1 := 5
 	derefInt(&n1)
 
-	// This should eventually be modified to not escape.
 	n2 := 6
 	returnIntPtr(&n2)
 
@@ -19,7 +18,6 @@ func main() {
 	s2 := [3]int{}
 	readIntSlice(s2[:])
 
-	// This should also be modified to not escape.
 	s3 := make([]int, 3)
 	returnIntSlice(s3)
 
@@ -76,6 +74,61 @@ func main() {
 	pseudoVolatile.Set(uint32(unsafeNoEscape(unsafe.Pointer(&dmaBuf2[0]))))
 	// ...use the buffer in the DMA peripheral
 	keepAliveNoEscape(unsafe.Pointer(&dmaBuf2[0]))
+}
+
+type vector3 [3]float32
+
+func scaleVector3(vec *vector3, f float32) *vector3 {
+	vec[0] *= f
+	vec[1] *= f
+	vec[2] *= f
+	return vec
+}
+
+func crossVector3(a, b *vector3) vector3 {
+	return vector3{
+		a[1]*b[2] - a[2]*b[1],
+		a[2]*b[0] - a[0]*b[2],
+		a[0]*b[1] - a[1]*b[0],
+	}
+}
+
+func nonEscapingReturnedPointer() vector3 {
+	a := vector3{1, 2, 3}
+	b := vector3{4, 5, 6}
+
+	c := scaleVector3(&b, 0.5)
+	return crossVector3(&a, c)
+}
+
+var escapedSlice []int
+
+func escapingReturnedSlice() {
+	s := make([]int, 3)
+	escapedSlice = returnIntSlice(s)
+}
+
+var escapedVector3 *vector3
+
+func escapingReturnedPointer() {
+	b := vector3{4, 5, 6}
+
+	c := scaleVector3(&b, 0.5)
+	escapedVector3 = c
+}
+
+func recursiveScaleVector3(vec *vector3, n int) *vector3 {
+	if n == 0 {
+		return vec
+	}
+	return recursiveScaleVector3(vec, n-1)
+}
+
+func recursiveReturnedPointer() vector3 {
+	b := vector3{4, 5, 6}
+
+	c := recursiveScaleVector3(&b, 1)
+	return *c
 }
 
 func derefInt(x *int) int {
