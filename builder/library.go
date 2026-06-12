@@ -218,7 +218,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 				return err
 			}
 			// Store this archive in the cache.
-			return os.Rename(f.Name(), archiveFilePath)
+			return robustRename(f.Name(), archiveFilePath)
 		},
 	}
 
