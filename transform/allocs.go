@@ -162,21 +162,41 @@ func FormatAllocCover(pos token.Position) string {
 // valueEscapesAt returns the instruction where the given value may escape and a
 // nil llvm.Value if it definitely doesn't. The value must be an instruction.
 func valueEscapesAt(value llvm.Value) llvm.Value {
-	return valueEscapesAtImpl(value, false, nil)
+	return valueEscapesAtImpl(value, false, nil).escapeAt
 }
 
-func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) llvm.Value {
+type escapeResult struct {
+	escapeAt llvm.Value
+
+	// returned is separate from escapeAt because values can flow to a return
+	// through aggregate operations. LLVM can mark a scalar returned parameter,
+	// but a slice data pointer returned inside {ptr, len, cap} is only visible
+	// after walking insertvalue/ret uses in the callee.
+	returned bool
+}
+
+func (r *escapeResult) merge(other escapeResult) bool {
+	if !other.escapeAt.IsNil() {
+		r.escapeAt = other.escapeAt
+		return false
+	}
+	r.returned = r.returned || other.returned
+	return true
+}
+
+func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) escapeResult {
 	if visiting == nil {
 		visiting = make(map[llvm.Value]struct{})
 	}
 	if _, ok := visiting[value]; ok {
 		// Recursive call graph while following returned parameters. Treat this
 		// as escaping to keep the analysis conservative and bounded.
-		return value
+		return escapeResult{escapeAt: value}
 	}
 	visiting[value] = struct{}{}
 	defer delete(visiting, value)
 
+	var result escapeResult
 	uses := getUses(value)
 	for _, use := range uses {
 		if use.IsAInstruction().IsNil() {
@@ -184,13 +204,23 @@ func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Va
 		}
 		switch use.InstructionOpcode() {
 		case llvm.GetElementPtr:
-			if at := valueEscapesAtImpl(use, allowReturn, visiting); !at.IsNil() {
-				return at
+			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				return result
 			}
 		case llvm.BitCast:
 			// A bitcast escapes if the casted-to value escapes.
-			if at := valueEscapesAtImpl(use, allowReturn, visiting); !at.IsNil() {
-				return at
+			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				return result
+			}
+		case llvm.InsertValue:
+			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				return result
+			}
+		case llvm.ExtractValue:
+			if use.Type().TypeKind() == llvm.PointerTypeKind {
+				if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+					return result
+				}
 			}
 		case llvm.Load:
 			// Load does not escape.
@@ -198,41 +228,42 @@ func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Va
 			// Store only escapes when the value is stored to, not when the
 			// value is stored into another value.
 			if use.Operand(0) == value {
-				return use
+				return escapeResult{escapeAt: use}
 			}
 		case llvm.Call:
-			if at := callValueEscapesAt(use, value, allowReturn, visiting); !at.IsNil() {
-				return at
+			if !result.merge(callValueEscapesAt(use, value, allowReturn, visiting)) {
+				return result
 			}
 		case llvm.ICmp:
 			// Comparing pointers don't let the pointer escape.
 			// This is often a compiler-inserted nil check.
 		case llvm.Ret:
 			if !allowReturn || use.Operand(0) != value {
-				return use
+				return escapeResult{escapeAt: use}
 			}
+			result.returned = true
 		default:
 			// Unknown instruction, might escape.
-			return use
+			return escapeResult{escapeAt: use}
 		}
 	}
 
 	// Checked all uses, and none let the pointer value escape.
-	return llvm.Value{}
+	return result
 }
 
 // callValueEscapesAt returns whether value escapes through this call. It also
 // handles calls that return value unchanged, as long as the called function does
 // not otherwise capture the parameter and the returned alias does not escape.
-func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) llvm.Value {
+func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) escapeResult {
 	called := call.CalledValue()
 	if called.IsAFunction().IsNil() {
-		return call
+		return escapeResult{escapeAt: call}
 	}
 	kindNoCapture := llvm.AttributeKindID("nocapture")
 	kindReturned := llvm.AttributeKindID("returned")
 	matched := false
-	returned := false
+	var result escapeResult
 	for i := 0; i < called.ParamsCount(); i++ {
 		if call.Operand(i) != value {
 			continue
@@ -242,30 +273,30 @@ func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[l
 		nocapture := !called.GetEnumAttributeAtIndex(index, kindNoCapture).IsNil()
 		returnedParam := !called.GetEnumAttributeAtIndex(index, kindReturned).IsNil()
 		if returnedParam {
-			returned = true
+			result.returned = true
 		}
 		if nocapture {
 			continue
 		}
-		if !returnedParam || called.IsDeclaration() {
-			return call
+		if called.IsDeclaration() {
+			return escapeResult{escapeAt: call}
 		}
-		if at := valueEscapesAtImpl(called.Param(i), true, visiting); !at.IsNil() {
-			return at
+		if !result.merge(valueEscapesAtImpl(called.Param(i), true, visiting)) {
+			return result
 		}
 	}
 	for i := called.ParamsCount(); i < call.OperandsCount(); i++ {
 		if call.Operand(i) == value {
-			return call
+			return escapeResult{escapeAt: call}
 		}
 	}
 	if !matched {
-		return llvm.Value{}
+		return escapeResult{}
 	}
-	if returned {
+	if result.returned {
 		return valueEscapesAtImpl(call, allowReturn, visiting)
 	}
-	return llvm.Value{}
+	return escapeResult{}
 }
 
 func lineLengthAt(filename string, lineNumber int) int {
