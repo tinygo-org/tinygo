@@ -1,4 +1,3 @@
-testdata/allocs2.go:21.1,21.22 1 0
 testdata/allocs2.go:24.1,24.43 1 0
 testdata/allocs2.go:26.1,26.25 1 0
 testdata/allocs2.go:29.1,29.22 1 0
