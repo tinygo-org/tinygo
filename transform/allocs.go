@@ -162,6 +162,21 @@ func FormatAllocCover(pos token.Position) string {
 // valueEscapesAt returns the instruction where the given value may escape and a
 // nil llvm.Value if it definitely doesn't. The value must be an instruction.
 func valueEscapesAt(value llvm.Value) llvm.Value {
+	return valueEscapesAtImpl(value, false, nil)
+}
+
+func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) llvm.Value {
+	if visiting == nil {
+		visiting = make(map[llvm.Value]struct{})
+	}
+	if _, ok := visiting[value]; ok {
+		// Recursive call graph while following returned parameters. Treat this
+		// as escaping to keep the analysis conservative and bounded.
+		return value
+	}
+	visiting[value] = struct{}{}
+	defer delete(visiting, value)
+
 	uses := getUses(value)
 	for _, use := range uses {
 		if use.IsAInstruction().IsNil() {
@@ -169,12 +184,12 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 		}
 		switch use.InstructionOpcode() {
 		case llvm.GetElementPtr:
-			if at := valueEscapesAt(use); !at.IsNil() {
+			if at := valueEscapesAtImpl(use, allowReturn, visiting); !at.IsNil() {
 				return at
 			}
 		case llvm.BitCast:
 			// A bitcast escapes if the casted-to value escapes.
-			if at := valueEscapesAt(use); !at.IsNil() {
+			if at := valueEscapesAtImpl(use, allowReturn, visiting); !at.IsNil() {
 				return at
 			}
 		case llvm.Load:
@@ -186,12 +201,16 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 				return use
 			}
 		case llvm.Call:
-			if !hasFlag(use, value, "nocapture") {
-				return use
+			if at := callValueEscapesAt(use, value, allowReturn, visiting); !at.IsNil() {
+				return at
 			}
 		case llvm.ICmp:
 			// Comparing pointers don't let the pointer escape.
 			// This is often a compiler-inserted nil check.
+		case llvm.Ret:
+			if !allowReturn || use.Operand(0) != value {
+				return use
+			}
 		default:
 			// Unknown instruction, might escape.
 			return use
@@ -199,6 +218,53 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 	}
 
 	// Checked all uses, and none let the pointer value escape.
+	return llvm.Value{}
+}
+
+// callValueEscapesAt returns whether value escapes through this call. It also
+// handles calls that return value unchanged, as long as the called function does
+// not otherwise capture the parameter and the returned alias does not escape.
+func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) llvm.Value {
+	called := call.CalledValue()
+	if called.IsAFunction().IsNil() {
+		return call
+	}
+	kindNoCapture := llvm.AttributeKindID("nocapture")
+	kindReturned := llvm.AttributeKindID("returned")
+	matched := false
+	returned := false
+	for i := 0; i < called.ParamsCount(); i++ {
+		if call.Operand(i) != value {
+			continue
+		}
+		matched = true
+		index := i + 1 // param attributes start at 1
+		nocapture := !called.GetEnumAttributeAtIndex(index, kindNoCapture).IsNil()
+		returnedParam := !called.GetEnumAttributeAtIndex(index, kindReturned).IsNil()
+		if returnedParam {
+			returned = true
+		}
+		if nocapture {
+			continue
+		}
+		if !returnedParam || called.IsDeclaration() {
+			return call
+		}
+		if at := valueEscapesAtImpl(called.Param(i), true, visiting); !at.IsNil() {
+			return at
+		}
+	}
+	for i := called.ParamsCount(); i < call.OperandsCount(); i++ {
+		if call.Operand(i) == value {
+			return call
+		}
+	}
+	if !matched {
+		return llvm.Value{}
+	}
+	if returned {
+		return valueEscapesAtImpl(call, allowReturn, visiting)
+	}
 	return llvm.Value{}
 }
 

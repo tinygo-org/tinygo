@@ -1,4 +1,3 @@
-testdata/allocs2.go:12:2: object allocated on the heap: escapes at line 13
 testdata/allocs2.go:21:12: object allocated on the heap: escapes at line 22
 testdata/allocs2.go:24:15: object allocated on the heap: size is not constant
 testdata/allocs2.go:26:12: object allocated on the heap: object size 300 exceeds maximum stack allocation size 256
@@ -8,7 +7,6 @@ testdata/allocs2.go:44:22: object allocated on the heap: escapes at line 44
 testdata/allocs2.go:46:13: object allocated on the heap: escapes at line 47
 testdata/allocs2.go:49:2: object allocated on the heap: escapes at line 51
 testdata/allocs2.go:50:2: object allocated on the heap: escapes at line 51
-testdata/allocs2.go:98:2: object allocated on the heap: escapes at line 100
 testdata/allocs2.go:107:11: object allocated on the heap: escapes at line 108
-testdata/allocs2.go:114:2: object allocated on the heap: escapes at line 116
+testdata/allocs2.go:114:2: object allocated on the heap: escapes at line 117
 testdata/allocs2.go:128:2: object allocated on the heap: escapes at line 130
