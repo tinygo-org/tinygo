@@ -155,9 +155,7 @@ static bool pico_processor_state_is_nonsecure(void) {
 
 #define BOOTROM_FUNC_TABLE_OFFSET 0x14
 
-// todo remove this (or #ifdef it for A1/A2)
-#define BOOTROM_IS_A2() ((*(volatile uint8_t *)0x13) == 2)
-#define BOOTROM_WELL_KNOWN_PTR_SIZE (BOOTROM_IS_A2() ? 2 : 4)
+#define BOOTROM_WELL_KNOWN_PTR_SIZE 2
 
 #define BOOTROM_VTABLE_OFFSET 0x00
 #define BOOTROM_TABLE_LOOKUP_OFFSET     (BOOTROM_FUNC_TABLE_OFFSET + BOOTROM_WELL_KNOWN_PTR_SIZE)
@@ -229,11 +227,12 @@ void reset_usb_boot(uint32_t usb_activity_gpio_pin_mask, uint32_t disable_interf
 // https://github.com/raspberrypi/pico-sdk
 // src/rp2350/hardware_regs/include/hardware/regs/qmi.h
 
-#define QMI_DIRECT_CSR_EN_BITS      0x00000001
-#define QMI_DIRECT_CSR_RXEMPTY_BITS 0x00010000
-#define QMI_DIRECT_CSR_TXFULL_BITS  0x00000400
-#define QMI_M1_WFMT_RESET           0x00001000
-#define QMI_M1_WCMD_RESET           0x0000a002
+#define QMI_DIRECT_CSR_EN_BITS          0x00000001
+#define QMI_DIRECT_CSR_ASSERT_CS0N_BITS 0x00000004
+#define QMI_DIRECT_CSR_RXEMPTY_BITS     0x00010000
+#define QMI_DIRECT_CSR_TXFULL_BITS      0x00000400
+#define QMI_M1_WFMT_RESET               0x00001000
+#define QMI_M1_WCMD_RESET               0x0000a002
 
 
 // https://github.com/raspberrypi/pico-sdk
@@ -406,13 +405,11 @@ static ram_func void flash_rp2350_restore_qmi_cs1(const flash_rp2350_qmi_save_st
 }
 
 void ram_func flash_cs_force(bool high) {
-    uint32_t field_val = high ?
-        IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_VALUE_HIGH :
-        IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_VALUE_LOW;
-    hw_write_masked(&io_qspi_hw->io[1].ctrl,
-        field_val << IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_LSB,
-        IO_QSPI_GPIO_QSPI_SS_CTRL_OUTOVER_BITS
-    );
+    if (high) {
+        hw_clear_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+    } else {
+        hw_set_bits(&qmi_hw->direct_csr, QMI_DIRECT_CSR_ASSERT_CS0N_BITS);
+    }
 }
 
 // Adapted from flash_range_program()

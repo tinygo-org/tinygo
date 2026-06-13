@@ -1352,6 +1352,14 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 	}
 	baseStackSize, baseStackSizeType, baseStackSizeFailedAt := functions["tinygo_startTask"][0].StackSize()
 
+	// Account for the bytes that tinygo_swapTask pushes onto the goroutine stack
+	// on every context switch. The static analysis correctly traces Go calls,
+	// but it cannot see into the assembly-level register push.
+	var contextSwitchOverhead uint64
+	if swapFuncs, ok := functions["tinygo_swapTask"]; ok && len(swapFuncs) == 1 {
+		contextSwitchOverhead = swapFuncs[0].FrameSize
+	}
+
 	sizes := make(map[string]functionStackSize)
 
 	// Add the reset handler function, for convenience. The reset handler runs
@@ -1399,6 +1407,12 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 			// registers to start and suspend the goroutine. Otherwise a stack
 			// overflow will occur even before the goroutine is started.
 			stackSize = baseStackSize
+		}
+		if stackSizeType == stacksize.Bounded {
+			// Add the overhead of context switching. This is needed because the
+			// context switch (tinygo_swapTask) pushes callee-saved registers
+			// onto the current stack, which is not seen by the static analysis.
+			stackSize += contextSwitchOverhead
 		}
 		sizes[name] = functionStackSize{
 			stackSize:        stackSize,

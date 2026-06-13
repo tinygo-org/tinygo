@@ -485,6 +485,8 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			"--no-insert-timestamp",
 			"--no-dynamicbase",
 		)
+		spec.ExtraFiles = append(spec.ExtraFiles,
+			"src/runtime/runtime_windows.c")
 	case "wasm", "wasip1", "wasip2":
 		return nil, fmt.Errorf("GOOS=%s but GOARCH is unset. Please set GOARCH to wasm", options.GOOS)
 	default:

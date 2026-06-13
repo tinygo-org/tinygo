@@ -4,7 +4,7 @@ package syscall
 
 import (
 	"internal/task"
-	_ "unsafe" // for go:linkname
+	"unsafe"
 )
 
 // pollMode constants must mirror runtime/netpoll_wasip1.go's pollRead/
@@ -26,9 +26,8 @@ func runtime_netpoll_done(pd uintptr)
 // goroutine until the cooperative scheduler's pollIO wakes us, then
 // retry. EINTR retries immediately without parking.
 func Write(fd int, p []byte) (n int, err error) {
-	buf, count := splitSlice(p)
 	for {
-		n = libc_write(int32(fd), buf, uint(count))
+		n = libc_write(int32(fd), unsafe.SliceData(p), uint(len(p)))
 		if n >= 0 {
 			return
 		}
@@ -45,9 +44,8 @@ func Write(fd int, p []byte) (n int, err error) {
 }
 
 func Read(fd int, p []byte) (n int, err error) {
-	buf, count := splitSlice(p)
 	for {
-		n = libc_read(int32(fd), buf, uint(count))
+		n = libc_read(int32(fd), unsafe.SliceData(p), uint(len(p)))
 		if n >= 0 {
 			return
 		}
@@ -64,9 +62,8 @@ func Read(fd int, p []byte) (n int, err error) {
 }
 
 func Pread(fd int, p []byte, offset int64) (n int, err error) {
-	buf, count := splitSlice(p)
 	for {
-		n = libc_pread(int32(fd), buf, uint(count), offset)
+		n = libc_pread(int32(fd), unsafe.SliceData(p), uint(len(p)), offset)
 		if n >= 0 {
 			return
 		}
@@ -83,9 +80,8 @@ func Pread(fd int, p []byte, offset int64) (n int, err error) {
 }
 
 func Pwrite(fd int, p []byte, offset int64) (n int, err error) {
-	buf, count := splitSlice(p)
 	for {
-		n = libc_pwrite(int32(fd), buf, uint(count), offset)
+		n = libc_pwrite(int32(fd), unsafe.SliceData(p), uint(len(p)), offset)
 		if n >= 0 {
 			return
 		}

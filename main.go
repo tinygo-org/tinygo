@@ -1778,6 +1778,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full, html)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
+	printAllocsCoverString := flag.String("print-allocs-cover", "", "like -print-allocs, but in go coverage tool format")
 	printCommands := flag.Bool("x", false, "Print commands")
 	flagJSON := flag.Bool("json", false, "print output in JSON format")
 	parallelism := flag.Int("p", runtime.GOMAXPROCS(0), "the number of build jobs that can run in parallel")
@@ -1858,8 +1859,14 @@ func main() {
 	}
 
 	var printAllocs *regexp.Regexp
-	if *printAllocsString != "" {
-		printAllocs, err = regexp.Compile(*printAllocsString)
+	printAllocsCover := false
+	printAllocsPattern := *printAllocsString
+	if *printAllocsCoverString != "" {
+		printAllocsPattern = *printAllocsCoverString
+		printAllocsCover = true
+	}
+	if printAllocsPattern != "" {
+		printAllocs, err = regexp.Compile(printAllocsPattern)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -1907,6 +1914,7 @@ func main() {
 		PrintSizes:              *printSize,
 		PrintStacks:             *printStacks,
 		PrintAllocs:             printAllocs,
+		PrintAllocsCover:        printAllocsCover,
 		Tags:                    []string(tags),
 		TestConfig:              testConfig,
 		GlobalValues:            globalVarValues,

@@ -133,7 +133,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
 		params := []llvm.Value{m, key, valueAlloca}
-		b.createRuntimeCall("hashmapStringSet", params, "")
+		b.createRuntimeInvoke("hashmapStringSet", params, "")
 	} else {
 		// Key stored at actual type.
 		keyAlloca, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
@@ -143,7 +143,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, 
 			fnName = "hashmapGenericSet"
 		}
 		params := []llvm.Value{m, keyAlloca, valueAlloca}
-		b.createRuntimeCall(fnName, params, "")
+		b.createRuntimeInvoke(fnName, params, "")
 		b.emitLifetimeEnd(keyAlloca, keySize)
 	}
 	b.emitLifetimeEnd(valueAlloca, valueSize)

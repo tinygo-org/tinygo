@@ -111,6 +111,11 @@ var ClassHID = ClassHIDType{
 	data: classHID[:],
 }
 
+// EP1 IN : CDC Call Management
+// EP2 OUT: CDC OUT
+// EP2 IN : CDC IN
+// EP3 OUT: HID OUT
+// EP3 IN : HID IN
 var CDCHID = Descriptor{
 	Device: DeviceCDC.Bytes(),
 	Configuration: Append([][]byte{
@@ -121,14 +126,14 @@ var CDCHID = Descriptor{
 		ClassSpecificCDCACM.Bytes(),
 		ClassSpecificCDCUnion.Bytes(),
 		ClassSpecificCDCCallManagement.Bytes(),
-		EndpointEP1IN.Bytes(),
+		EndpointIN(EndpointEP1, TransferTypeInterrupt, 0x10, 0x10).Bytes(),
 		InterfaceCDCData.Bytes(),
-		EndpointEP2OUT.Bytes(),
-		EndpointEP3IN.Bytes(),
+		EndpointOUT(EndpointEP2, TransferTypeBulk, 0x40, 0x00).Bytes(),
+		EndpointIN(EndpointEP2, TransferTypeBulk, 0x40, 0x00).Bytes(),
 		InterfaceHID.Bytes(),
 		ClassHID.Bytes(),
-		EndpointEP4IN.Bytes(),
-		EndpointEP5OUT.Bytes(),
+		EndpointIN(EndpointEP3, TransferTypeInterrupt, 0x40, 0x01).Bytes(),
+		EndpointOUT(EndpointEP3, TransferTypeInterrupt, 0x40, 0x01).Bytes(),
 	}),
 	HID: map[uint16][]byte{
 		2: Append([][]byte{ // Update ClassLength in classHID whenever the array length is modified!

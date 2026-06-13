@@ -92,6 +92,7 @@ type compilerContext struct {
 	pkg              *types.Package
 	packageDir       string // directory for this package
 	runtimePkg       *types.Package
+	localTypeNames   typeutil.Map // *types.Named (synthetic local from generic instantiation) -> string
 }
 
 // newCompilerContext returns a new compiler context ready for use, most
@@ -176,6 +177,9 @@ type builder struct {
 	deferBuiltinFuncs map[ssa.Value]deferBuiltin
 	runDefersBlock    []llvm.BasicBlock
 	afterDefersBlock  []llvm.BasicBlock
+
+	runtimeAssertBlocks  map[string]llvm.BasicBlock
+	interfaceAssertBlock llvm.BasicBlock
 }
 
 func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *builder {
@@ -309,6 +313,11 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 
 	// Convert AST to SSA.
 	ssaPkg.Build()
+
+	// Assign names to function-local named types before compiling the
+	// package, so that types declared in different functions (or in
+	// different instantiations of a generic function) do not collide.
+	c.scanLocalTypes(ssaPkg)
 
 	// Initialize debug information.
 	if c.Debug {
@@ -1895,6 +1904,12 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			// not of the current function.
 			useParentFrame = 1
 		}
+		// Prevent inlining of functions that call recover(), matching the
+		// Go compiler's behavior. If this function were inlined into a
+		// deferred function, recover() would incorrectly succeed because
+		// the inlined code runs in the deferred function's context.
+		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
+		b.llvmFn.AddFunctionAttr(noinline)
 		return b.createRuntimeCall("_recover", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), useParentFrame, false)}, ""), nil
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?

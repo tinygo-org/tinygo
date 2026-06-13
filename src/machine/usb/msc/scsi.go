@@ -298,9 +298,9 @@ func (m *msc) sendScsiError(status csw.Status, key scsi.Sense, code scsi.SenseCo
 
 	if expected > 0 && residue > 0 {
 		if m.cbw.isIn() {
-			m.stallEndpoint(usb.MSC_ENDPOINT_IN)
+			m.stallEndpointIn(usb.MSC_ENDPOINT_IN)
 		} else {
-			m.stallEndpoint(usb.MSC_ENDPOINT_OUT)
+			m.stallEndpointOut(usb.MSC_ENDPOINT_OUT)
 		}
 	}
 }

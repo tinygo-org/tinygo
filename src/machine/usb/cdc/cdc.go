@@ -2,10 +2,14 @@
 
 package cdc
 
+import (
+	"machine/usb"
+)
+
 const (
-	cdcEndpointACM = 1
-	cdcEndpointOut = 2
-	cdcEndpointIn  = 3
+	cdcEndpointACM = usb.CDC_ENDPOINT_ACM
+	cdcEndpointOut = usb.CDC_ENDPOINT_OUT
+	cdcEndpointIn  = usb.CDC_ENDPOINT_IN
 )
 
 // New returns USBCDC struct.

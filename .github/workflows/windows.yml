@@ -13,16 +13,10 @@ concurrency:
 
 jobs:
   build-windows:
-    runs-on: windows-2022-better
+    runs-on: windows-2022
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.4
-        with:
-          minimum-size: 8GB
-          maximum-size: 24GB
-          disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
         shell: bash
@@ -40,13 +34,13 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Restore cached LLVM source
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-20-windows-v2
+          key: llvm-source-20-windows-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -71,7 +65,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-windows-v3
+          key: llvm-build-20-windows-v4
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -121,15 +115,9 @@ jobs:
           archive: false
 
   smoke-test-windows:
-    runs-on: windows-2022-better
+    runs-on: windows-2022
     needs: build-windows
     steps:
-      - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.4
-        with:
-          minimum-size: 8GB
-          maximum-size: 24GB
-          disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
         shell: bash
@@ -141,7 +129,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -154,21 +142,15 @@ jobs:
         run: make smoketest TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-test-windows:
-    runs-on: windows-2022-better
+    runs-on: windows-2022
     needs: build-windows
     steps:
-      - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.4
-        with:
-          minimum-size: 8GB
-          maximum-size: 24GB
-          disk-root: "C:"
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -180,15 +162,9 @@ jobs:
         run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-wasi-test-windows:
-    runs-on: windows-2022-better
+    runs-on: windows-2022
     needs: build-windows
     steps:
-      - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.4
-        with:
-          minimum-size: 8GB
-          maximum-size: 24GB
-          disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
         shell: bash
@@ -200,7 +176,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
