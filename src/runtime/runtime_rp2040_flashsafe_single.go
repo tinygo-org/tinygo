@@ -12,6 +12,6 @@ func rp2040ExitFlashSafeSection(state interrupt.State) {
 	interrupt.Restore(state)
 }
 
-func rp2FlashSafeInterruptHandler(core uint32) {
-	_ = core
+func rp2FlashSafeInterruptHandler(uint32) {
+	// No-op on single-core schedulers.
 }
