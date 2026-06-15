@@ -842,22 +842,25 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
 			ldflags = append(ldflags, "-mllvm", "-mattr="+config.Features()) // needed for MIPS softfloat
-			if config.GOOS() == "windows" {
-				// Options for the MinGW wrapper for the lld COFF linker.
+			switch config.LinkerFlavor() {
+			case "coff":
+				// Options for driving ld.lld in PE/COFF mode.
 				ldflags = append(ldflags,
 					"-Xlink=/opt:lldlto="+strconv.Itoa(speedLevel),
 					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
-			} else if config.GOOS() == "darwin" {
+			case "darwin":
 				// Options for the ld64-compatible lld linker.
 				ldflags = append(ldflags,
 					"--lto-O"+strconv.Itoa(speedLevel),
 					"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
-			} else {
+			case "gnu":
 				// Options for the ELF linker.
 				ldflags = append(ldflags,
 					"--lto-O"+strconv.Itoa(speedLevel),
 					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"),
 				)
+			default:
+				return fmt.Errorf("unknown linker flavor: %s", config.LinkerFlavor())
 			}
 			if config.CodeModel() != "default" {
 				ldflags = append(ldflags,
@@ -1352,14 +1355,6 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 	}
 	baseStackSize, baseStackSizeType, baseStackSizeFailedAt := functions["tinygo_startTask"][0].StackSize()
 
-	// Account for the bytes that tinygo_swapTask pushes onto the goroutine stack
-	// on every context switch. The static analysis correctly traces Go calls,
-	// but it cannot see into the assembly-level register push.
-	var contextSwitchOverhead uint64
-	if swapFuncs, ok := functions["tinygo_swapTask"]; ok && len(swapFuncs) == 1 {
-		contextSwitchOverhead = swapFuncs[0].FrameSize
-	}
-
 	sizes := make(map[string]functionStackSize)
 
 	// Add the reset handler function, for convenience. The reset handler runs
@@ -1407,12 +1402,6 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 			// registers to start and suspend the goroutine. Otherwise a stack
 			// overflow will occur even before the goroutine is started.
 			stackSize = baseStackSize
-		}
-		if stackSizeType == stacksize.Bounded {
-			// Add the overhead of context switching. This is needed because the
-			// context switch (tinygo_swapTask) pushes callee-saved registers
-			// onto the current stack, which is not seen by the static analysis.
-			stackSize += contextSwitchOverhead
 		}
 		sizes[name] = functionStackSize{
 			stackSize:        stackSize,

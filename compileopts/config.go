@@ -466,6 +466,26 @@ func (c *Config) LDFlags() []string {
 	return ldflags
 }
 
+// LinkerFlavor returns how the configured linker should be driven.
+// Usually this is derived from GOOS, but targets may override it explicitly.
+func (c *Config) LinkerFlavor() string {
+	if c.Target.LinkerFlavor != "" {
+		return c.Target.LinkerFlavor
+	}
+	goos := c.GOOS()
+	if goos == "" {
+		goos = c.Options.GOOS
+	}
+	switch goos {
+	case "windows":
+		return "coff"
+	case "darwin":
+		return "darwin"
+	default:
+		return "gnu"
+	}
+}
+
 // ExtraFiles returns the list of extra files to be built and linked with the
 // executable. This can include extra C and assembly files.
 func (c *Config) ExtraFiles() []string {
