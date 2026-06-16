@@ -209,6 +209,8 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
 func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
+	optionsCopy := *options
+	options = &optionsCopy
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
