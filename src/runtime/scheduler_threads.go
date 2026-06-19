@@ -79,8 +79,8 @@ func timerRunner() {
 			// Using a futex, so that the wait is exited early when adding a new
 			// (sooner-to-expire) timer.
 			val := timerFutex.Load()
-			timerQueueLock.Unlock()
 			timeout := ticksToNanoseconds(timerQueue.whenTicks() - now)
+			timerQueueLock.Unlock()
 			timerFutex.WaitUntil(val, uint64(timeout))
 			continue
 		}
