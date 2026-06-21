@@ -71,16 +71,18 @@ type rttSerial struct {
 	rttControlBlock
 }
 
+var terminalByteString = []byte("Terminal\x00")
+
 func (s *rttSerial) Configure(config UARTConfig) error {
 	s.maxNumUpBuffers = rttMaxNumUpBuffers
 	s.maxNumDownBuffers = rttMaxNumDownBuffers
 
-	s.buffersUp[0].name = &[]byte("Terminal\x00")[0]
+	s.buffersUp[0].name = &terminalByteString[0]
 	s.buffersUp[0].buffer = &rttBufferUpData[0]
 	s.buffersUp[0].bufferSize = rttBufferSizeUp
 	s.buffersUp[0].flags = rttModeNoBlockSkip
 
-	s.buffersDown[0].name = &[]byte("Terminal\x00")[0]
+	s.buffersDown[0].name = &terminalByteString[0]
 	s.buffersDown[0].buffer = &rttBufferDownData[0]
 	s.buffersDown[0].bufferSize = rttBufferSizeDown
 	s.buffersDown[0].flags = rttModeNoBlockSkip
