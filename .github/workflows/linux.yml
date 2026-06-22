@@ -133,7 +133,7 @@ jobs:
         run: make spell
       - name: Build TinyGo release
         run: |
-          make release deb -j3 STATIC=1
+          make -j -O release deb STATIC=1
           cp -p build/release.tar.gz /tmp/tinygo${{ steps.version.outputs.version }}.linux-amd64.tar.gz
           cp -p build/release.deb    /tmp/tinygo_${{ steps.version.outputs.version }}_amd64.deb
       - name: "Publish release artifact: tarball"
@@ -272,7 +272,7 @@ jobs:
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
-      - run: make gen-device -j4
+      - run: make -j -O gen-device
       - name: Test TinyGo
         run: make ASSERT=1 test
       - name: Build TinyGo

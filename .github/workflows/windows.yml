@@ -95,14 +95,14 @@ jobs:
         run: |
           scoop config use_external_7zip true
           scoop install wasmtime@29.0.1
-      - name: make gen-device
-        run: make -j3 gen-device
+      - name: Generate device files
+        run: make -j -O gen-device
       - name: Test TinyGo
         shell: bash
         run: make test GOTESTFLAGS="-only-current-os"
       - name: Build TinyGo release tarball
         shell: bash
-        run: make build/release -j4
+        run: make -j -O build/release
       - name: Make release artifact
         shell: bash
         working-directory: build/release

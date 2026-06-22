@@ -90,12 +90,12 @@ jobs:
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
-      - name: make gen-device
-        run: make -j3 gen-device
+      - name: Generate device files
+        run: make -j -O gen-device
       - name: Test TinyGo
         run: make test GOTESTFLAGS="-only-current-os"
       - name: Build TinyGo release tarball
-        run: make release -j3
+        run: make -j -O release
       - name: Test stdlib packages
         run: make tinygo-test
       - name: Make release artifact

@@ -67,6 +67,6 @@ jobs:
       - name: Build TinyGo
         run: go install -tags=llvm${{ env.LLVM }}
       - run: tinygo version
-      - run: make gen-device -j4
+      - run: make -j -O gen-device
       - run: go test -tags=llvm${{ env.LLVM }} -short -skip=TestErrors
       - run: make smoketest XTENSA=0
