@@ -1,7 +1,9 @@
 package transform_test
 
 import (
+	"fmt"
 	"go/token"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -49,23 +51,37 @@ func TestAllocs2(t *testing.T) {
 	})
 	sort.Slice(reports, func(i, j int) bool { return reports[i].pos.Line < reports[j].pos.Line })
 
-	// Render every report in each format and diff against its golden file.
-	for _, format := range []struct {
-		name   string
-		render func(report) string
-	}{
-		{"reason", func(r report) string { return transform.FormatAllocReason(r.pos, r.reason) }},
-		{"cover", func(r report) string { return transform.FormatAllocCover(r.pos) }},
-	} {
-		t.Run(format.name, func(t *testing.T) {
-			var got strings.Builder
-			for _, r := range reports {
-				if line := format.render(r); line != "" {
-					got.WriteString(line)
-					got.WriteByte('\n')
-				}
-			}
-			checkGolden(t, goldenFile+"."+format.name, got.String())
-		})
+	// Load expected test output (the OUT: lines).
+	testInput, err := os.ReadFile("./testdata/allocs2.go")
+	if err != nil {
+		t.Fatal("could not read test input:", err)
 	}
+	var expectedTestOutput strings.Builder
+	for i, line := range strings.Split(strings.ReplaceAll(string(testInput), "\r\n", "\n"), "\n") {
+		const prefix = " // OUT: "
+		if idx := strings.Index(line, prefix); idx > 0 {
+			msg := line[idx+len(prefix):]
+			fmt.Fprintf(&expectedTestOutput, "allocs2.go:%d: %s\n", i+1, msg)
+		}
+	}
+
+	// Check whether the '// OUT' lines in allocs2.go match with the output we
+	// got from the test.
+	var actualTestOutput strings.Builder
+	for _, r := range reports {
+		fmt.Fprintf(&actualTestOutput, "allocs2.go:%d: %s\n", r.pos.Line, r.reason)
+	}
+	if actualTestOutput.String() != expectedTestOutput.String() {
+		t.Errorf("expected:\n%s\nactual:\n%s", expectedTestOutput.String(), actualTestOutput.String())
+	}
+
+	// Render the cover report and diff it against its golden file.
+	var got strings.Builder
+	for _, r := range reports {
+		if line := transform.FormatAllocCover(r.pos); line != "" {
+			got.WriteString(line)
+			got.WriteByte('\n')
+		}
+	}
+	checkGolden(t, goldenFile+".cover", got.String())
 }
