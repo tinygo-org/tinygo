@@ -21,19 +21,19 @@ func main() {
 	s3 := make([]int, 3)
 	returnIntSlice(s3)
 
-	useSlice(make([]int, getUnknownNumber()))
+	useSlice(make([]int, getUnknownNumber())) // OUT: size is not constant
 
-	s4 := make([]byte, 300)
+	s4 := make([]byte, 300) // OUT: object size 300 exceeds maximum stack allocation size 256
 	readByteSlice(s4)
 
-	s5 := make([]int, 4)
+	s5 := make([]int, 4) // OUT: escapes at line 30
 	_ = append(s5, 5)
 
 	s6 := make([]int, 3)
 	s7 := []int{1, 2, 3}
 	copySlice(s6, s7)
 
-	c1 := getComplex128()
+	c1 := getComplex128() // OUT: escapes at line 37
 	useInterface(c1)
 
 	n3 := 5
@@ -41,13 +41,13 @@ func main() {
 		return n3
 	}()
 
-	callVariadic(3, 5, 8)
+	callVariadic(3, 5, 8) // OUT: escapes at line 44
 
-	s8 := []int{3, 5, 8}
+	s8 := []int{3, 5, 8} // OUT: escapes at line 47
 	callVariadic(s8...)
 
-	n4 := 3
-	n5 := 7
+	n4 := 3 // OUT: escapes at line 51
+	n5 := 7 // OUT: escapes at line 51
 	func() {
 		n4 = n5
 	}()
@@ -104,14 +104,14 @@ func nonEscapingReturnedPointer() vector3 {
 var escapedSlice []int
 
 func escapingReturnedSlice() {
-	s := make([]int, 3)
+	s := make([]int, 3) // OUT: escapes at line 108
 	escapedSlice = returnIntSlice(s)
 }
 
 var escapedVector3 *vector3
 
 func escapingReturnedPointer() {
-	b := vector3{4, 5, 6}
+	b := vector3{4, 5, 6} // OUT: escapes at line 117
 
 	c := scaleVector3(&b, 0.5)
 	escapedVector3 = c
@@ -125,7 +125,7 @@ func recursiveScaleVector3(vec *vector3, n int) *vector3 {
 }
 
 func recursiveReturnedPointer() vector3 {
-	b := vector3{4, 5, 6}
+	b := vector3{4, 5, 6} // OUT: escapes at unknown line
 
 	c := recursiveScaleVector3(&b, 1)
 	return *c
