@@ -40,7 +40,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5
@@ -71,7 +71,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-${{ matrix.os }}-v2
+          key: llvm-build-20-${{ matrix.os }}-v3
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -131,7 +131,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Build TinyGo (LLVM ${{ matrix.version }})
         run: go install -tags=llvm${{ matrix.version }}
