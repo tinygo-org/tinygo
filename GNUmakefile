@@ -963,6 +963,8 @@ ifneq ($(XTENSA), 0)
 	# xiao-esp32c6
 	$(TINYGO) build -size short -o test.bin -target=xiao-esp32c6      	examples/blinky1
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=xiao-esp32c6   		examples/blinkm
+	@$(MD5SUM) test.bin
 	# xiao-esp32s3
 	$(TINYGO) build -size short -o test.bin -target=xiao-esp32s3   		examples/blinky1
 	@$(MD5SUM) test.bin
