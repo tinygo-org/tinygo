@@ -23,7 +23,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Run go mod tidy
         run: go mod tidy
@@ -36,7 +36,7 @@ jobs:
     # statically linked binary.
     runs-on: ubuntu-latest
     container:
-      image: golang:1.26-alpine
+      image: golang:1.27rc2-alpine
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -91,7 +91,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-linux-alpine-v2
+          key: llvm-build-20-linux-alpine-v3
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -115,7 +115,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-alpine-v2
+          key: binaryen-linux-alpine-v3
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -160,7 +160,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
@@ -204,7 +204,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v6
@@ -245,7 +245,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-linux-asserts-v1
+          key: llvm-build-20-linux-asserts-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -323,7 +323,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5
@@ -354,7 +354,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-linux-${{ matrix.goarch }}-v1
+          key: llvm-build-20-linux-${{ matrix.goarch }}-v2
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -378,7 +378,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-${{ matrix.goarch }}-v4
+          key: binaryen-linux-${{ matrix.goarch }}-v5
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
