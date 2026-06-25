@@ -100,12 +100,24 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 	chip_id := map[string]uint16{
 		"esp32":   0x0000,
 		"esp32c3": 0x0005,
+		"esp32c6": 0x000d,
 		"esp32s3": 0x0009,
+	}[chip]
+
+	// SPI flash speed/size byte (byte 3 of header):
+	//   Upper nibble = flash size, lower nibble = flash frequency.
+	//   The espflasher auto-detects and patches the flash size (upper nibble),
+	//   but the frequency (lower nibble) must be correct per chip.
+	spiSpeedSize := map[string]uint8{
+		"esp32":   0x1f, // 80MHz=0x0F, 2MB=0x10
+		"esp32c3": 0x1f, // 80MHz=0x0F, 2MB=0x10
+		"esp32c6": 0x10, // 80MHz=0x00, 2MB=0x10 (C6 uses different freq encoding)
+		"esp32s3": 0x1f, // 80MHz=0x0F, 2MB=0x10
 	}[chip]
 
 	// Image header.
 	switch chip {
-	case "esp32", "esp32c3", "esp32s3":
+	case "esp32", "esp32c3", "esp32s3", "esp32c6":
 		// Header format:
 		// https://github.com/espressif/esp-idf/blob/v4.3/components/bootloader_support/include/esp_app_format.h#L71
 		// Note: not adding a SHA256 hash as the binary is modified by
@@ -126,8 +138,8 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		}{
 			magic:          0xE9,
 			segment_count:  byte(len(segments)),
-			spi_mode:       2,    // ESP_IMAGE_SPI_MODE_DIO
-			spi_speed_size: 0x1f, // ESP_IMAGE_SPI_SPEED_80M, ESP_IMAGE_FLASH_SIZE_2MB
+			spi_mode:       2, // ESP_IMAGE_SPI_MODE_DIO
+			spi_speed_size: spiSpeedSize,
 			entry_addr:     uint32(inf.Entry),
 			wp_pin:         0xEE, // disable WP pin
 			chip_id:        chip_id,
