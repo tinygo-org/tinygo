@@ -1,4 +1,4 @@
-//go:build (esp32c3 || esp32s3) && !m5stamp_c3
+//go:build (esp32c3 || esp32c6 || esp32s3) && !m5stamp_c3
 
 package machine
 
@@ -53,9 +53,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 //go:inline
 func (i2c *I2C) initClock(config I2CConfig) {
 	if !i2c.useExt1 {
-		esp.SYSTEM.SetPERIP_RST_EN0_I2C_EXT0_RST(1)
-		esp.SYSTEM.SetPERIP_CLK_EN0_I2C_EXT0_CLK_EN(1)
-		esp.SYSTEM.SetPERIP_RST_EN0_I2C_EXT0_RST(0)
+		enableI2C0PeriphClock()
 	} else {
 		initI2CExt1Clock()
 	}
