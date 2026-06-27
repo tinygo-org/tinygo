@@ -22,6 +22,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -508,7 +509,11 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags(true)...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
-		initialCFlags = append(initialCFlags, strings.Fields(goenv.Get("CGO_CFLAGS"))...)
+		cgoCFlags, err := shlex.Split(goenv.Get("CGO_CFLAGS"))
+		if err != nil {
+			return nil, err
+		}
+		initialCFlags = append(initialCFlags, cgoCFlags...)
 		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags, p.program.config.GOOS())
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
