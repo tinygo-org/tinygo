@@ -501,8 +501,9 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 						Align:   section.Addralign,
 						Type:    memoryStack,
 					})
-				} else {
-					// Regular .bss section.
+				} else if section.Flags&elf.SHF_WRITE != 0 {
+					// Regular .bss section. Zero-initialized RAM is always
+					// writable, so require SHF_WRITE here.
 					sections = append(sections, memorySection{
 						Address: section.Addr,
 						Size:    section.Size,
@@ -510,6 +511,11 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 						Type:    memoryBSS,
 					})
 				}
+				// Other (non-writable) SHT_NOBITS sections are address-space
+				// placeholders that occupy no RAM, such as the ESP linker
+				// script's .irom_dummy / .rodata_dummy sections which reserve
+				// the flash-mapped XIP virtual address ranges. They must not be
+				// counted as bss/RAM usage.
 			} else if section.Type == elf.SHT_PROGBITS && section.Flags&elf.SHF_EXECINSTR != 0 {
 				// .text
 				sections = append(sections, memorySection{
