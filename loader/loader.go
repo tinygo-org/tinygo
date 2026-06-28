@@ -511,7 +511,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
 		cgoCFlags, err := shlex.Split(goenv.Get("CGO_CFLAGS"))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to split CGO_CFLAGS: %w", err)
 		}
 		initialCFlags = append(initialCFlags, cgoCFlags...)
 		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags, p.program.config.GOOS())
