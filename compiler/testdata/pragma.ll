@@ -33,6 +33,8 @@ entry:
 
 declare void @somepkg.someFunction2(ptr) #0
 
+declare void @somepkg.someFunctionStd(ptr) #0
+
 ; Function Attrs: inlinehint nounwind
 define hidden void @main.inlineFunc(ptr %context) unnamed_addr #3 {
 entry:

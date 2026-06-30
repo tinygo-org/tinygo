@@ -35,6 +35,12 @@ func withLinkageName1() {
 //go:linkname withLinkageName2 somepkg.someFunction2
 func withLinkageName2()
 
+// Import a function from a different package using go:linknamestd (the standard
+// library variant of go:linkname introduced in Go 1.27).
+//
+//go:linknamestd withLinkageNameStd somepkg.someFunctionStd
+func withLinkageNameStd()
+
 // Function has an 'inline hint', similar to the inline keyword in C.
 //
 //go:inline
