@@ -47,11 +47,18 @@ func (v Value) isExported() bool {
 	return v.flags&valueFlagExported != 0
 }
 
-func (v Value) IsRO() bool {
+func (v Value) isRO() bool {
 	return v.flags&(valueFlagRO) != 0
 }
 
-func (v Value) MakeRO(ro bool) Value {
+// These are package methods, not methods on Value, since the reflect.Value embeds a reflectlite.Value, so any
+// methods added to reflectlite.Value are visible to the user.
+
+func IsRO(v Value) bool {
+	return v.isRO()
+}
+
+func MakeRO(v Value, ro bool) Value {
 	if ro {
 		v.flags |= valueFlagRO
 	} else {
@@ -61,7 +68,7 @@ func (v Value) MakeRO(ro bool) Value {
 }
 
 func (v Value) checkRO() {
-	if v.IsRO() {
+	if v.isRO() {
 		panic("reflect: value is not settable")
 	}
 }
@@ -306,7 +313,7 @@ func (v Value) IsValid() bool {
 }
 
 func (v Value) CanInterface() bool {
-	return v.isExported() && !v.IsRO()
+	return v.isExported() && !v.isRO()
 }
 
 func (v Value) CanAddr() bool {

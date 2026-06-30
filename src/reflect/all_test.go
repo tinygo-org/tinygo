@@ -4722,14 +4722,6 @@ var convertTests = []struct {
 
 }
 
-func IsRO(v Value) bool {
-	return v.IsRO()
-}
-
-func MakeRO(v Value) Value {
-	return Value{v.MakeRO(true)}
-}
-
 func TestConvert(t *testing.T) {
 	canConvert := map[[2]Type]bool{}
 	all := map[Type]bool{}
