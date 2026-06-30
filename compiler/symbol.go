@@ -515,7 +515,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.inline = inlineHint
 		case "//go:noinline":
 			info.inline = inlineNone
-		case "//go:linkname":
+		case "//go:linkname", "//go:linknamestd":
 			if len(parts) != 3 || parts[1] != f.Name() {
 				continue
 			}
