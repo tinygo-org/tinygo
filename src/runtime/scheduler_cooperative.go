@@ -49,9 +49,18 @@ var (
 //
 //go:noinline
 func deadlock() {
-	// call yield without requesting a wakeup
+	exitGoroutine()
+}
+
+func exitGoroutine() {
+	// Pause the goroutine without a way for it to wake up.
+	// This makes the goroutine unreachable, and should eventually get it
+	// cleaned up by the GC.
 	task.Pause()
-	panic("unreachable")
+
+	// We will never return from task.Pause(). Make sure the compiler knows
+	// this.
+	trap()
 }
 
 // Add this task to the end of the run queue.

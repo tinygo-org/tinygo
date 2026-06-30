@@ -72,9 +72,9 @@ func panicOrGoexit(message interface{}, panicking panicState) {
 		}
 	}
 	if panicking == panicGoexit {
-		// Call to Goexit() instead of a panic.
+		// This is a call to Goexit() instead of a panic.
 		// Exit the goroutine instead of printing a panic message.
-		deadlock()
+		exitGoroutine()
 	}
 	printstring("panic: ")
 	printitf(message)
