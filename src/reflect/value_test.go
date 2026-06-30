@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"internal/reflectlite"
 	. "reflect"
 	"runtime"
 	"slices"
@@ -991,4 +992,14 @@ func TestTypeAssertPanic(t *testing.T) {
 		TypeAssert[int](ValueOf(&testTypeWithMethod{}).FieldByName("val"))
 		t.Fatalf("TypeAssert did not panic")
 	})
+}
+
+// Functions needed by all_test.go
+
+func IsRO(v Value) bool {
+	return reflectlite.IsRO(v.Value)
+}
+
+func MakeRO(v Value) Value {
+	return Value{reflectlite.MakeRO(v.Value, true)}
 }
