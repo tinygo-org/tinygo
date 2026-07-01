@@ -20,7 +20,7 @@ jobs:
     env:
       # Oldest versions currently supported by TinyGo
       LLVM: "15"
-      Go: "1.24" # when updating this, also update minorMin in builder/config.go
+      Go: "1.25" # when updating this, also update minorMin in builder/config.go
     steps:
       - name: Checkout
         uses: actions/checkout@v6
