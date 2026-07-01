@@ -209,7 +209,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '18'
+          node-version: '22'
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
         with:

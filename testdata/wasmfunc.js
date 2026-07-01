@@ -1,12 +1,4 @@
-const crypto = require('crypto');
 const fs = require('fs')
-
-// Polyfill required to maintain compatibility with NodeJS 18
-globalThis.crypto = {
-    getRandomValues(b) {
-        crypto.randomFillSync(b);
-    },
-};
 
 require('../targets/wasm_exec.js');
 
