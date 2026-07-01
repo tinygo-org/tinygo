@@ -1,5 +1,7 @@
 //go:build rp2040 || rp2350
 
+// Used to track contribution from various authors automatically
+// SPDX-FileCopyrightText:  Copyright Hewlett Packard Enterprise Development LP
 package runtime
 
 import (
@@ -10,6 +12,7 @@ import (
 	_ "machine/usb/cdc"
 	"runtime/interrupt"
 	"runtime/volatile"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -116,6 +119,19 @@ func currentCPU() uint32 {
 // Start the secondary cores for this chip.
 // On the RP2040/RP2350, there is only one other core to start.
 func startSecondaryCores() {
+
+	// Reset Core1
+	arm.DisableIRQ(uint32(sioIrqFifoProc0))
+	rp.PSM.SetFRCE_OFF_PROC1(1)
+	// Now we need to restart the core
+	for rp.PSM.GetFRCE_OFF_PROC1() == 0 {
+		// Sleep a little bit
+		sleepTicks(100)
+	}
+	rp.PSM.SetFRCE_OFF_PROC1(0)
+	multicore_fifo_pop_blocking()
+	sleepTicks(1000)
+
 	// Start the second core of the RP2040/RP2350.
 	// See sections 2.8.2 and 5.3 in the datasheets for RP2040 and RP2350 respectively.
 	seq := 0
@@ -141,9 +157,16 @@ func startSecondaryCores() {
 	// We can only do this after we don't need the FIFO anymore for starting the
 	// second core.
 	intr := interrupt.New(sioIrqFifoProc0, func(intr interrupt.Interrupt) {
-		switch rp.SIO.FIFO_RD.Get() {
-		case 1:
-			gcInterruptHandler(0)
+		status := rp.SIO.GetFIFO_ST_VLD()
+		if status != 0 {
+			switch rp.SIO.FIFO_RD.Get() {
+			case 1:
+				if currentCPU() == 1 {
+					gcInterruptHandler(1)
+				} else {
+					gcInterruptHandler(0)
+				}
+			}
 		}
 	})
 	intr.Enable()
@@ -169,15 +192,26 @@ var stack1TopSymbol [0]uint32
 func runCore1() {
 	// Clear sticky bit that seems to have been set while starting this core.
 	rp.SIO.FIFO_ST.Set(rp.SIO_FIFO_ST_ROE)
+	rp.SIO.FIFO_ST.Set(rp.SIO_FIFO_ST_WOF)
 
 	// Enable the FIFO interrupt, mainly used for the stop-the-world phase of
 	// the GC.
 	// Use the lowest possible priority (highest priority value), so that other
 	// interrupts can still happen while the GC is running.
 	intr := interrupt.New(sioIrqFifoProc1, func(intr interrupt.Interrupt) {
-		switch rp.SIO.FIFO_RD.Get() {
-		case 1:
-			gcInterruptHandler(1)
+		status := rp.SIO.GetFIFO_ST_VLD()
+		// ok we have just one interrupt vector ... sor
+		// we shall be acting based on CPU number calling in
+
+		if status != 0 {
+			switch rp.SIO.FIFO_RD.Get() {
+			case 1:
+				if currentCPU() == 1 {
+					gcInterruptHandler(1)
+				} else {
+					gcInterruptHandler(0)
+				}
+			}
 		}
 	})
 	intr.Enable()
@@ -291,41 +325,39 @@ func coreStackTop(core uint32) uintptr {
 }
 
 // These spinlocks are needed by the runtime.
+
+type spinLock struct {
+	atomic.Uint32
+}
+
 var (
-	printLock     = spinLock{id: 20}
-	schedulerLock = spinLock{id: 21}
-	atomicsLock   = spinLock{id: 22}
-	futexLock     = spinLock{id: 23}
+	schedulerLock spinLock
+	futexLock     spinLock
+	atomicsLock   spinLock
+	printLock     spinLock
 )
 
 func resetSpinLocks() {
-	for i := uint8(0); i < numSpinlocks; i++ {
-		l := &spinLock{id: i}
-		l.spinlock().Set(0)
-	}
-}
-
-// A hardware spinlock, one of the 32 spinlocks defined in the SIO peripheral.
-type spinLock struct {
-	id uint8
-}
-
-// Return the spinlock register: rp.SIO.SPINLOCKx
-func (l *spinLock) spinlock() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&rp.SIO.SPINLOCK0), l.id*4))
+	schedulerLock.Store(0)
+	futexLock.Store(0)
+	atomicsLock.Store(0)
+	printLock.Store(0)
 }
 
 func (l *spinLock) Lock() {
 	// Wait for the lock to be available.
-	spinlock := l.spinlock()
-	for spinlock.Get() == 0 {
-		arm.Asm("wfe")
+
+	for !l.Uint32.CompareAndSwap(0, 1) {
+		spinLoopWait()
 	}
+
 }
 
 func (l *spinLock) Unlock() {
-	l.spinlock().Set(0)
-	arm.Asm("sev")
+	if schedulerAsserts && l.Uint32.Load() != 1 {
+		runtimePanic("unlock of unlocked spinlock")
+	}
+	l.Uint32.Store(0)
 }
 
 // Wait until a signal is received, indicating that it can resume from the
@@ -361,6 +393,8 @@ func init() {
 	machineInit()
 
 	machine.InitSerial()
+
+	initRP()
 }
 
 func prerun() {
