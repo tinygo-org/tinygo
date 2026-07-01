@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 //
 // This file has been modified for use by the TinyGo compiler.
-// Polyfill required to maintain compatibility with NodeJS 18
 "use strict";
 
 if (process.argv.length < 3) {
