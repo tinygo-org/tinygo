@@ -16,11 +16,36 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/tinygo-org/tinygo/compileopts"
 )
 
 type espImageSegment struct {
 	addr uint32
 	data []byte
+}
+
+var espFlashSizes = map[string]uint8{
+	"1MB":   0x00,
+	"2MB":   0x10,
+	"4MB":   0x20,
+	"8MB":   0x30,
+	"16MB":  0x40,
+	"32MB":  0x50,
+	"64MB":  0x60,
+	"128MB": 0x70,
+}
+
+func setESPFlashSize(spiSpeedSize uint8, target *compileopts.TargetSpec) (uint8, error) {
+	if target == nil || target.ESPFlashSize == "" {
+		return spiSpeedSize, nil
+	}
+	size := strings.ToUpper(target.ESPFlashSize)
+	spiSize, ok := espFlashSizes[size]
+	if !ok {
+		return 0, fmt.Errorf("invalid esp-flash-size %q", size)
+	}
+	return spiSize | (spiSpeedSize & 0x0f), nil
 }
 
 // makeESPFirmwareImage converts an input ELF file to an image file for an ESP32 or
@@ -31,7 +56,7 @@ type espImageSegment struct {
 // https://github.com/espressif/esptool/wiki/Firmware-Image-Format
 // https://github.com/espressif/esp-idf/blob/8fbb63c2a701c22ccf4ce249f43aded73e134a34/components/bootloader_support/include/esp_image_format.h#L58
 // https://github.com/espressif/esptool/blob/master/esptool.py
-func makeESPFirmwareImage(infile, outfile, format string) error {
+func makeESPFirmwareImage(infile, outfile, format string, target *compileopts.TargetSpec) error {
 	inf, err := elf.Open(infile)
 	if err != nil {
 		return err
@@ -118,6 +143,10 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 	// Image header.
 	switch chip {
 	case "esp32", "esp32c3", "esp32s3", "esp32c6":
+		spiSpeedSize, err = setESPFlashSize(spiSpeedSize, target)
+		if err != nil {
+			return err
+		}
 		// Header format:
 		// https://github.com/espressif/esp-idf/blob/v4.3/components/bootloader_support/include/esp_app_format.h#L71
 		// Note: not adding a SHA256 hash as the binary is modified by
