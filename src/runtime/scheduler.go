@@ -52,6 +52,47 @@ func timerQueueRemove(t *timer) *timerNode {
 	return nil
 }
 
+// firingTimers is a list of timer nodes whose callback is currently running.
+// It is only used by schedulers that run timer callbacks concurrently with user
+// goroutines (the threads and cores schedulers), so that a timer stopped or
+// reset while its callback is running is not re-added to the timer queue by a
+// periodic timer's callback. Access is protected by the scheduler's timer lock.
+var firingTimers *timerNode
+
+// firingTimersAdd marks the given timer node as currently firing. The caller
+// must hold the scheduler's timer lock.
+func firingTimersAdd(tn *timerNode) {
+	tn.stopped = false
+	tn.firingNext = firingTimers
+	firingTimers = tn
+}
+
+// firingTimersRemove removes the given timer node from the firing list. The
+// caller must hold the scheduler's timer lock.
+func firingTimersRemove(tn *timerNode) {
+	for q := &firingTimers; *q != nil; q = &(*q).firingNext {
+		if *q == tn {
+			*q = tn.firingNext
+			tn.firingNext = nil
+			return
+		}
+	}
+}
+
+// firingTimerStop marks a currently-firing timer as stopped, so that its
+// callback will not re-add it to the queue. It returns the matching node if the
+// timer is currently firing, or nil otherwise. The caller must hold the
+// scheduler's timer lock.
+func firingTimerStop(tim *timer) *timerNode {
+	for tn := firingTimers; tn != nil; tn = tn.firingNext {
+		if tn.timer == tim {
+			tn.stopped = true
+			return tn
+		}
+	}
+	return nil
+}
+
 // Goexit terminates the currently running goroutine. No other goroutines are affected.
 func Goexit() {
 	panicOrGoexit(nil, panicGoexit)
