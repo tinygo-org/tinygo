@@ -138,6 +138,22 @@ func Symlink(oldname, newname string) error {
 	return ErrNotImplemented
 }
 
+func Chmod(name string, mode FileMode) error {
+	return ErrNotImplemented
+}
+
+func Chown(name string, uid, gid int) error {
+	return ErrNotImplemented
+}
+
+func Link(oldname, newname string) error {
+	return ErrNotImplemented
+}
+
+func (f *File) Chown(uid, gid int) error {
+	return ErrNotImplemented
+}
+
 func Readlink(name string) (string, error) {
 	return "", ErrNotImplemented
 }

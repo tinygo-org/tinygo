@@ -20,13 +20,52 @@ import (
 	"net"
 )
 
+// Conn represents a secured connection. TINYGO: the actual TLS handshake and
+// record layer are offloaded to the network device (see net.TLSConn), so Conn
+// is a thin wrapper over an underlying net.Conn that exists to satisfy callers
+// (e.g. google.golang.org/grpc/credentials) which expect the *tls.Conn API
+// shape — ConnectionState/Handshake — that this package does not implement in
+// software.
+type Conn struct {
+	net.Conn
+}
+
+// ConnectionState returns basic TLS details about the connection. TINYGO:
+// empty; TLS is offloaded to the network device.
+func (c *Conn) ConnectionState() ConnectionState {
+	return ConnectionState{}
+}
+
+// Handshake runs the client or server handshake protocol if it has not yet been
+// run. TINYGO: no-op; the handshake is performed by the network device.
+func (c *Conn) Handshake() error {
+	return c.HandshakeContext(context.Background())
+}
+
+// HandshakeContext is the context-aware variant of Handshake. TINYGO: no-op.
+func (c *Conn) HandshakeContext(ctx context.Context) error {
+	return nil
+}
+
+// NetConn returns the underlying connection that is wrapped by c.
+func (c *Conn) NetConn() net.Conn {
+	return c.Conn
+}
+
 // Client returns a new TLS client side connection
 // using conn as the underlying transport.
 // The config cannot be nil: users must set either ServerName or
 // InsecureSkipVerify in the config.
-func Client(conn net.Conn, config *Config) *net.TLSConn {
-	panic("tls.Client() not implemented")
-	return nil
+func Client(conn net.Conn, config *Config) *Conn {
+	return &Conn{Conn: conn}
+}
+
+// Server returns a new TLS server side connection
+// using conn as the underlying transport.
+// The configuration config must be non-nil and must include
+// at least one certificate or else set GetCertificate.
+func Server(conn net.Conn, config *Config) *Conn {
+	return &Conn{Conn: conn}
 }
 
 // A listener implements a network listener (net.Listener) for TLS connections.
