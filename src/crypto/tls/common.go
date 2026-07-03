@@ -78,12 +78,12 @@ type ConnectionState struct {
 	//
 	// Minimum (empty) fields for fortio.org/log http logging and others
 	// to compile and run.
-	Version                     uint16
-	ServerName                  string
-	PeerCertificates            []*x509.Certificate
-	CipherSuite                 uint16
-	NegotiatedProtocol          string
-	NegotiatedProtocolIsMutual  bool // Deprecated: this value is always true.
+	Version                    uint16
+	ServerName                 string
+	PeerCertificates           []*x509.Certificate
+	CipherSuite                uint16
+	NegotiatedProtocol         string
+	NegotiatedProtocolIsMutual bool // Deprecated: this value is always true.
 }
 
 // ClientAuthType declares the policy the server will follow for
