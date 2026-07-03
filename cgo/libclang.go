@@ -592,7 +592,8 @@ func (p *cgoPackage) getClangLocationPosition(location C.CXSourceLocation, tu C.
 			Package: f.Pos(0),
 			Name:    ast.NewIdent(p.packageName),
 		}
-		setASTFileFields(astFile, f.Pos(0), f.Pos(int(size)))
+		astFile.FileStart = f.Pos(0)
+		astFile.FileEnd = f.Pos(int(size))
 		p.cgoFiles = append(p.cgoFiles, astFile)
 	}
 	positionFile := p.tokenFiles[filename]

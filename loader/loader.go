@@ -27,8 +27,6 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
-var initFileVersions = func(info *types.Info) {}
-
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
 	config      *compileopts.Config
@@ -435,7 +433,7 @@ func (p *Package) Check() error {
 		}
 		checker.GoVersion = fmt.Sprintf("go%d.%d", major, minor)
 	}
-	initFileVersions(&p.info)
+	p.info.FileVersions = make(map[*ast.File]string)
 
 	// Do typechecking of the package.
 	packageName := p.ImportPath
