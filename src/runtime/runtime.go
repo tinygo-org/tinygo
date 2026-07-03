@@ -160,12 +160,7 @@ func write(fd uintptr, p unsafe.Pointer, n int32) int32 {
 	if fd == 2 { // stderr
 		// Convert to a string, because we know that p won't change during the
 		// call to printstring.
-		// TODO: use unsafe.String instead once we require Go 1.20.
-		s := _string{
-			ptr:    (*byte)(p),
-			length: uintptr(n),
-		}
-		str := *(*string)(unsafe.Pointer(&s))
+		str := unsafe.String((*byte)(p), int(n))
 		printstring(str)
 		return n
 	}

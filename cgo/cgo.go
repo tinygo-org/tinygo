@@ -26,10 +26,6 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-// Function that's only defined in Go 1.22.
-var setASTFileFields = func(f *ast.File, start, end token.Pos) {
-}
-
 // cgoPackage holds all CGo-related information of a package.
 type cgoPackage struct {
 	generated       *ast.File

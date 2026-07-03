@@ -37,20 +37,6 @@ func syscallClearenv(env map[string]int) {
 	}
 }
 
-// Compatibility with Go 1.19 and below.
-//
-//go:linkname syscall_setenv_c syscall.setenv_c
-func syscall_setenv_c(key string, val string) {
-	syscallSetenv(key, val)
-}
-
-// Compatibility with Go 1.19 and below.
-//
-//go:linkname syscall_unsetenv_c syscall.unsetenv_c
-func syscall_unsetenv_c(key string) {
-	syscallUnsetenv(key)
-}
-
 // cstring converts a Go string to a C string.
 // borrowed from syscall
 func cstring(s string) []byte {
