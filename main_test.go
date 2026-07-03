@@ -476,6 +476,12 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	// Build the test binary.
 	stdout := &bytes.Buffer{}
 	_, err = buildAndRun(pkgName, config, stdout, cmdArgs, environmentVars, 2*time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		if config.EmulatorName() == "simavr" {
+			// simavr before v1.8 wrote firmware output to stderr and loader logs
+			// to stdout, but PR #490 swapped these streams:
+			// https://github.com/buserror/simavr/pull/490
+			cmd.Stdout = stdout
+		}
 		return cmd.Run()
 	})
 	if err != nil {
@@ -493,11 +499,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 
 	actual := stdout.Bytes()
 	if config.EmulatorName() == "simavr" {
-		// Strip simavr log formatting.
-		actual = bytes.Replace(actual, []byte{0x1b, '[', '3', '2', 'm'}, nil, -1)
-		actual = bytes.Replace(actual, []byte{0x1b, '[', '0', 'm'}, nil, -1)
-		actual = bytes.Replace(actual, []byte{'.', '.', '\n'}, []byte{'\n'}, -1)
-		actual = bytes.Replace(actual, []byte{'\n', '.', '\n'}, []byte{'\n', '\n'}, -1)
+		actual = cleanSimAVRTestOutput(actual)
 	}
 	if name == "testing.go" {
 		// Strip actual time.
@@ -523,6 +525,28 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		t.Fail()
 	}
 }
+
+func cleanSimAVRTestOutput(output []byte) []byte {
+	output = bytes.ReplaceAll(output, []byte{0x1b, '[', '3', '2', 'm'}, nil)
+	output = bytes.ReplaceAll(output, []byte{0x1b, '[', '0', 'm'}, nil)
+	output = bytes.ReplaceAll(output, []byte{'.', '.', '\n'}, []byte{'\n'})
+	output = bytes.ReplaceAll(output, []byte{'\n', '.', '\n'}, []byte{'\n', '\n'})
+
+	var cleaned []byte
+	for _, line := range bytes.SplitAfter(output, []byte{'\n'}) {
+		trimmedLine := bytes.TrimRight(line, "\r\n")
+		if simavrLoadTextLogPattern.Match(trimmedLine) || simavrLoadBytesLogPattern.Match(trimmedLine) {
+			continue
+		}
+		cleaned = append(cleaned, line...)
+	}
+	return cleaned
+}
+
+var (
+	simavrLoadTextLogPattern  = regexp.MustCompile(`^Loaded [0-9]+ \.[A-Za-z0-9_]+( at address 0x[0-9a-fA-F]+)?$`)
+	simavrLoadBytesLogPattern = regexp.MustCompile(`^Loaded [0-9]+ bytes of [A-Za-z]+ data at (0x)?[0-9a-fA-F]+$`)
+)
 
 // Test WebAssembly files for certain properties.
 func TestWebAssembly(t *testing.T) {
