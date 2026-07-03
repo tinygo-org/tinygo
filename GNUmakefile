@@ -410,6 +410,7 @@ TEST_PACKAGES_LINUX := \
 	context \
 	crypto/aes \
 	crypto/des \
+	crypto/ecdh \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \

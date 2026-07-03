@@ -193,7 +193,12 @@ func (b *B) run1() bool {
 			ctx.maxLen = n + 8 // Add additional slack to avoid too many jumps in size.
 		}
 	}
-	b.runN(1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		b.runN(1)
+	}()
+	<-done
 	return !b.hasSub
 }
 
@@ -209,8 +214,12 @@ func (b *B) run() {
 }
 
 func (b *B) doBench() BenchmarkResult {
-	// in upstream, this uses a goroutine
-	b.launch()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		b.launch()
+	}()
+	<-done
 	return b.result
 }
 

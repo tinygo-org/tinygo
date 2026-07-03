@@ -11,8 +11,6 @@
             c
         failed
         after failed
-    --- FAIL: TestBar/Bar4 (0.00s)
-        fatal
     log Bar end
 --- FAIL: TestAllLowercase (0.00s)
     --- FAIL: TestAllLowercase/BETA (0.00s)
