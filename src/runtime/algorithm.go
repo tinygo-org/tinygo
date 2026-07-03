@@ -12,44 +12,23 @@ import (
 //
 //go:linkname rand_fastrand64 math/rand.fastrand64
 func rand_fastrand64() uint64 {
-	return fastrand64()
-}
-
-// This function is used by hash/maphash.
-// This function isn't required anymore since Go 1.22, so should be removed once
-// that becomes the minimum requirement.
-func fastrand() uint32 {
-	xorshift32State = xorshift32(xorshift32State)
-	return xorshift32State
+	return rand()
 }
 
 func initRand() {
 	r, _ := hardwareRand()
 	xorshift64State = uint64(r | 1) // protect against 0
-	xorshift32State = uint32(xorshift64State)
-}
-
-var xorshift32State uint32 = 1
-
-func xorshift32(x uint32) uint32 {
-	// Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs".
-	// Improved sequence based on
-	// http://www.iro.umontreal.ca/~lecuyer/myftp/papers/xorshift.pdf
-	x ^= x << 7
-	x ^= x >> 1
-	x ^= x << 9
-	return x
-}
-
-// This function is used by hash/maphash.
-// This function isn't required anymore since Go 1.22, so should be removed once
-// that becomes the minimum requirement.
-func fastrand64() uint64 {
-	xorshift64State = xorshiftMult64(xorshift64State)
-	return xorshift64State
 }
 
 var xorshift64State uint64 = 1
+
+// 32-bit xorshift mixer used by the leveldb hash implementation.
+func xorshift32(x uint32) uint32 {
+	x ^= x << 13
+	x ^= x >> 7
+	x ^= x << 17
+	return x
+}
 
 // 64-bit xorshift multiply rng from http://vigna.di.unimi.it/ftp/papers/xorshift.pdf
 func xorshiftMult64(x uint64) uint64 {
@@ -72,10 +51,11 @@ func rand() uint64 {
 	// Return a random number from hardware, falling back to software if
 	// unavailable.
 	n, ok := hardwareRand()
-	if !ok {
-		// Fallback to static random number.
-		// Not great, but we can't do much better than this.
-		n = fastrand64()
+	if ok {
+		return n
 	}
-	return n
+
+	// Fallback to a deterministic software generator.
+	xorshift64State = xorshiftMult64(xorshift64State)
+	return xorshift64State
 }

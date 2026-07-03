@@ -46,15 +46,6 @@ var supportedLinuxArches = map[string]string{
 	"WASIp1":     "wasip1/wasm",
 }
 
-func init() {
-	major, _, _ := goenv.GetGorootVersion()
-	if major < 21 {
-		// Go 1.20 backwards compatibility.
-		// Should be removed once we drop support for Go 1.20.
-		delete(supportedLinuxArches, "WASIp1")
-	}
-}
-
 var sema = make(chan struct{}, runtime.NumCPU())
 
 func TestBuild(t *testing.T) {

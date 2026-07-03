@@ -139,7 +139,7 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashm
 
 	return &hashmap{
 		buckets:       buckets,
-		seed:          uintptr(fastrand()),
+		seed:          uintptr(rand()),
 		keySize:       keySize,
 		valueSize:     valueSize,
 		keySlotSize:   keySlotSize,
@@ -387,7 +387,7 @@ func hashmapCopy(m *hashmap, sizeBits uint8) hashmap {
 	// clone map as empty
 	n := *m
 	n.count = 0
-	n.seed = uintptr(fastrand())
+	n.seed = uintptr(rand())
 
 	n.bucketBits = sizeBits
 	numBuckets := uintptr(1) << n.bucketBits
@@ -497,8 +497,8 @@ func hashmapNext(m *hashmap, it *hashmapIterator, key, value unsafe.Pointer) boo
 		// initialize iterator
 		it.buckets = m.buckets
 		it.numBuckets = uintptr(1) << m.bucketBits
-		it.startBucket = uintptr(fastrand()) & (it.numBuckets - 1)
-		it.startIndex = uint8(fastrand() & 7)
+		it.startBucket = uintptr(rand()) & (it.numBuckets - 1)
+		it.startIndex = uint8(rand() & 7)
 
 		it.bucketNumber = it.startBucket
 		it.bucket = hashmapBucketAddr(m, it.buckets, it.bucketNumber)
@@ -648,7 +648,7 @@ func hashmapMakeGeneric(keySize, valueSize uintptr, sizeHint uintptr,
 
 	return &hashmap{
 		buckets:       buckets,
-		seed:          uintptr(fastrand()),
+		seed:          uintptr(rand()),
 		keySize:       keySize,
 		valueSize:     valueSize,
 		keySlotSize:   keySlotSize,
