@@ -7,14 +7,6 @@ import (
 	"unsafe"
 )
 
-// This function is needed by math/rand since Go 1.20.
-// See: https://github.com/golang/go/issues/54880
-//
-//go:linkname rand_fastrand64 math/rand.fastrand64
-func rand_fastrand64() uint64 {
-	return rand()
-}
-
 func initRand() {
 	r, _ := hardwareRand()
 	xorshift64State = uint64(r | 1) // protect against 0
