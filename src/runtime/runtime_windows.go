@@ -2,9 +2,6 @@ package runtime
 
 import "unsafe"
 
-//export abort
-func abort()
-
 //export exit
 func libc_exit(code int)
 
@@ -130,6 +127,11 @@ func os_runtime_args() []string {
 
 func putchar(c byte) {
 	libc_putchar(int(c))
+}
+
+func abort() {
+	libc_exit(1)
+	trap()
 }
 
 var heapSize uintptr = 128 * 1024 // small amount to start

@@ -42,6 +42,10 @@ func deadlock() {
 	runtimePanic("all goroutines are asleep - deadlock!")
 }
 
+func goexit() {
+	deadlock()
+}
+
 func scheduleTask(t *task.Task) {
 	// Pause() will panic, so this should not be reachable.
 }

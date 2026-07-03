@@ -54,6 +54,10 @@ func deadlock() {
 	panic("unreachable")
 }
 
+func goexit() {
+	task.Exit()
+}
+
 // Add this task to the end of the run queue.
 func scheduleTask(t *task.Task) {
 	runqueue.Push(t)

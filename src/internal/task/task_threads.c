@@ -145,6 +145,11 @@ void* tinygo_task_current(void) {
     return current_task;
 }
 
+// Exit the current thread.
+void tinygo_task_exit(void) {
+    pthread_exit(NULL);
+}
+
 // Send a signal to cause the task to pause for the GC mark phase.
 void tinygo_task_send_gc_signal(pthread_t thread) {
     pthread_kill(thread, taskPauseSignal);
