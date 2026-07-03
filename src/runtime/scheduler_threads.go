@@ -40,8 +40,11 @@ func sleep(duration int64) {
 }
 
 func deadlock() {
-	// TODO: exit the thread via pthread_exit.
 	task.Pause()
+}
+
+func goexit() {
+	task.Exit()
 }
 
 func scheduleTask(t *task.Task) {
