@@ -473,6 +473,12 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		options.Directory = path
 		pkgName = "."
 	}
+	isWebAssembly := strings.HasPrefix(options.Target, "wasi") ||
+		strings.HasPrefix(options.Target, "wasm") ||
+		strings.HasPrefix(options.GOARCH, "wasm")
+	if name == "testing.go" && isWebAssembly {
+		expectedOutputPath = TESTDATA + "/testing-wasm.txt"
+	}
 
 	config, err := builder.NewConfig(&options)
 	if err != nil {
@@ -945,6 +951,32 @@ func checkOutputData(t *testing.T, expectedOutput, actual []byte) {
 	if !bytes.Equal(actual, expectedOutput) {
 		t.Errorf("output did not match (expected %d bytes, got %d bytes):", len(expectedOutput), len(actual))
 		t.Error(string(Diff("expected", expectedOutput, "actual", actual)))
+	}
+}
+
+func TestGoexitCrash(t *testing.T) {
+	t.Parallel()
+
+	options := optionsFromTarget("", sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output := &bytes.Buffer{}
+	_, err = buildAndRun("testdata/goexit.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+		data, err := cmd.CombinedOutput()
+		output.Write(data)
+		return err
+	})
+	if err == nil {
+		t.Fatal("program unexpectedly exited successfully")
+	}
+	const want = "panic: panic after Goexit"
+	if !strings.Contains(output.String(), want) {
+		t.Fatalf("output does not contain %q:\n%s", want, output.String())
 	}
 }
 

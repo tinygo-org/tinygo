@@ -41,6 +41,7 @@ type deferFrame struct {
 	Panicking  panicState                     // not panicking, panicking, or in Goexit
 	PanicValue interface{}                    // panic value, might be nil for panic(nil) for example
 	DeferPtr   unsafe.Pointer                 // head of the stack-allocated defer list
+	Goexit     bool                           // whether Goexit is still pending after a recovered deferred panic
 }
 
 type panicState uint8
@@ -57,7 +58,7 @@ func _panic(message interface{}) {
 }
 
 func panicOrGoexit(message interface{}, panicking panicState) {
-	if panicStrategy() == tinygo.PanicStrategyTrap {
+	if panicking != panicGoexit && panicStrategy() == tinygo.PanicStrategyTrap {
 		trap()
 	}
 	// Note: recover is not supported inside interrupts.
@@ -65,6 +66,9 @@ func panicOrGoexit(message interface{}, panicking panicState) {
 	if supportsRecover() && !interrupt.In() {
 		frame := (*deferFrame)(task.Current().DeferFrame)
 		if frame != nil {
+			if panicking == panicGoexit {
+				frame.Goexit = true
+			}
 			frame.PanicValue = message
 			frame.Panicking = panicking
 			tinygo_longjmp(frame)
@@ -138,6 +142,7 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 	frame.JumpSP = jumpSP
 	frame.Panicking = panicFalse
 	frame.DeferPtr = nil
+	frame.Goexit = false
 	currentTask.DeferFrame = unsafe.Pointer(frame)
 }
 
@@ -153,6 +158,11 @@ func destroyDeferFrame(frame *deferFrame) {
 		// We're still panicking!
 		// Re-raise the panic now.
 		panicOrGoexit(frame.PanicValue, frame.Panicking)
+	}
+	if frame.Goexit {
+		// A deferred function panicked during Goexit, and that panic was
+		// recovered. Continue the original Goexit instead of returning.
+		panicOrGoexit(nil, panicGoexit)
 	}
 }
 

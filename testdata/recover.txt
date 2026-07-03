@@ -33,6 +33,11 @@ indirect recover returned: indirect panic
 
 # runtime.Goexit
 Goexit deferred function, recover is nil: true
+Goexit recovered deferred panic: panic during Goexit
+Goexit nested recovered deferred panic: nested panic during Goexit
+Goexit loop recovered deferred panic: loop panic during Goexit
+Goexit loop defer
+Goexit loop defer
 
 # repanic
 inner, repanicking

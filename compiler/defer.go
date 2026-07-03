@@ -116,8 +116,8 @@ func (b *builder) createLandingPad() {
 func (b *builder) createCheckpoint(ptr llvm.Value) llvm.Value {
 	// Construct inline assembly equivalents of setjmp.
 	// The assembly works as follows:
-	//   * All registers (both callee-saved and caller saved) are clobbered
-	//     after the inline assembly returns.
+	//   * Registers are either clobbered or, on 386, saved for longjmp to
+	//     restore if the ABI requires them to survive calls.
 	//   * The assembly stores the address just past the end of the assembly
 	//     into the jump buffer.
 	//   * The return value (eax, rax, r0, etc) is set to zero in the inline
@@ -130,8 +130,12 @@ func (b *builder) createCheckpoint(ptr llvm.Value) llvm.Value {
 		asmString = `
 xorl %eax, %eax
 movl $$1f, 4(%ebx)
+movl %ebx, 8(%ebx)
+movl %esi, 12(%ebx)
+movl %edi, 16(%ebx)
+movl %ebp, 20(%ebx)
 1:`
-		constraints = "={eax},{ebx},~{ebx},~{ecx},~{edx},~{esi},~{edi},~{ebp},~{xmm0},~{xmm1},~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{fpsr},~{fpcr},~{flags},~{dirflag},~{memory}"
+		constraints = "={eax},{ebx},~{ecx},~{edx},~{xmm0},~{xmm1},~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{fpsr},~{fpcr},~{flags},~{dirflag},~{memory}"
 		// This doesn't include the floating point stack because TinyGo uses
 		// newer floating point instructions.
 	case "x86_64":
