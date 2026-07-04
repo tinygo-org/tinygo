@@ -490,10 +490,12 @@ report-stdlib-tests-pass:
 ifeq ($(uname),Darwin)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_DARWIN)
 TEST_IOFS := true
+TEST_ENCODING_XML := true
 endif
 ifeq ($(uname),Linux)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_LINUX)
 TEST_IOFS := true
+TEST_ENCODING_XML := true
 endif
 ifeq ($(OS),Windows_NT)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
@@ -509,7 +511,10 @@ TEST_ADDITIONAL_FLAGS ?=
 tinygo-test:
 	@# TestExtraMethods: used by many crypto packages and uses reflect.Type.Method which is not implemented.
 	@# TestParseAndBytesRoundTrip/P256/Generic: needs Goexit to run defers on wasm.
-	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW)
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml,$(TEST_PACKAGES_HOST)) $(TEST_PACKAGES_SLOW)
+ifeq ($(TEST_ENCODING_XML),true)
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) -stack-size=16MB encoding/xml
+endif
 	@# io/fs requires os.ReadDir, not yet supported on windows or wasi. It also
 	@# requires a large stack-size. Hence, io/fs is only run conditionally.
 	@# For more details, see the comments on issue #3143.
