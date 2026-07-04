@@ -38,17 +38,15 @@ type deferFrame struct {
 	JumpPC     unsafe.Pointer                 // pc to return to
 	ExtraRegs  [deferExtraRegs]unsafe.Pointer // extra registers (depending on the architecture)
 	Previous   *deferFrame                    // previous recover buffer pointer
-	Panicking  panicState                     // not panicking, panicking, or in Goexit
+	Panicking  panicState                     // panic/Goexit state
 	PanicValue interface{}                    // panic value, might be nil for panic(nil) for example
 	DeferPtr   unsafe.Pointer                 // head of the stack-allocated defer list
-	Goexit     bool                           // whether Goexit is still pending after a recovered deferred panic
 }
 
 type panicState uint8
 
 const (
-	panicFalse panicState = iota
-	panicTrue
+	panicTrue panicState = 1 << iota
 	panicGoexit
 )
 
@@ -66,10 +64,10 @@ func panicOrGoexit(message interface{}, panicking panicState) {
 	if supportsRecover() && !interrupt.In() {
 		frame := (*deferFrame)(task.Current().DeferFrame)
 		if frame != nil {
-			if panicking == panicGoexit {
-				frame.Goexit = true
-			}
 			frame.PanicValue = message
+			if panicking&panicTrue != 0 {
+				panicking |= frame.Panicking & panicGoexit
+			}
 			frame.Panicking = panicking
 			tinygo_longjmp(frame)
 			// unreachable
@@ -103,7 +101,7 @@ func runtimePanicAt(addr unsafe.Pointer, msg string) {
 			// Use the normal panic mechanism so that this runtime error
 			// can be recovered with recover().
 			frame.PanicValue = plainError(msg)
-			frame.Panicking = panicTrue
+			frame.Panicking = panicTrue | (frame.Panicking & panicGoexit)
 			tinygo_longjmp(frame)
 			// unreachable
 		}
@@ -140,9 +138,8 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 	currentTask := task.Current()
 	frame.Previous = (*deferFrame)(currentTask.DeferFrame)
 	frame.JumpSP = jumpSP
-	frame.Panicking = panicFalse
+	frame.Panicking = 0
 	frame.DeferPtr = nil
-	frame.Goexit = false
 	currentTask.DeferFrame = unsafe.Pointer(frame)
 }
 
@@ -154,12 +151,12 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 //go:nobounds
 func destroyDeferFrame(frame *deferFrame) {
 	task.Current().DeferFrame = unsafe.Pointer(frame.Previous)
-	if frame.Panicking != panicFalse {
+	if frame.Panicking&panicTrue != 0 {
 		// We're still panicking!
 		// Re-raise the panic now.
-		panicOrGoexit(frame.PanicValue, frame.Panicking)
+		panicOrGoexit(frame.PanicValue, panicTrue)
 	}
-	if frame.Goexit {
+	if frame.Panicking&panicGoexit != 0 {
 		// A deferred function panicked during Goexit, and that panic was
 		// recovered. Continue the original Goexit instead of returning.
 		panicOrGoexit(nil, panicGoexit)
@@ -194,15 +191,15 @@ func _recover(useParentFrame bool) interface{} {
 		// already), but instead from the previous frame.
 		frame = frame.Previous
 	}
-	if frame != nil && frame.Panicking != panicFalse {
-		if frame.Panicking == panicGoexit {
+	if frame != nil && frame.Panicking != 0 {
+		if frame.Panicking&panicTrue == 0 {
 			// Special value that indicates we're exiting the goroutine using
 			// Goexit(). Therefore, make this recover call a no-op.
 			return nil
 		}
 		// Only the first call to recover returns the panic value. It also stops
 		// the panicking sequence, hence setting panicking to false.
-		frame.Panicking = panicFalse
+		frame.Panicking &^= panicTrue
 		return frame.PanicValue
 	}
 	// Not panicking, so return a nil interface.

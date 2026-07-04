@@ -3,7 +3,7 @@ source_filename = "defer.go"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-unknown-unknown-eabi"
 
-%runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i8, %runtime._interface, ptr, i1 }
+%runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i8, %runtime._interface, ptr }
 %runtime._interface = type { ptr, ptr }
 
 ; Function Attrs: nounwind
@@ -111,9 +111,9 @@ rundefers.end3:                                   ; preds = %rundefers.loophead6
 ; Function Attrs: nocallback nofree nosync nounwind willreturn
 declare ptr @llvm.stacksave.p0() #2
 
-declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(32), ptr, ptr) #1
+declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(28), ptr, ptr) #1
 
-declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(32), ptr) #1
+declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(28), ptr) #1
 
 ; Function Attrs: nounwind
 define internal void @"main.deferSimple$1"(ptr %context) unnamed_addr #0 {
