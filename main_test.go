@@ -481,7 +481,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	if err != nil {
 		w := &bytes.Buffer{}
 		diagnostics.CreateDiagnostics(err).WriteTo(w, "")
-		for _, line := range strings.Split(strings.TrimRight(w.String(), "\n"), "\n") {
+		for line := range strings.SplitSeq(strings.TrimRight(w.String(), "\n"), "\n") {
 			t.Log(line)
 		}
 		if stdout.Len() != 0 {

@@ -1244,7 +1244,7 @@ func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not list mount points: %w", err)
 		}
-		for _, line := range strings.Split(string(tab), "\n") {
+		for line := range strings.SplitSeq(string(tab), "\n") {
 			fields := strings.Fields(line)
 			if len(fields) <= 2 {
 				continue
@@ -1273,7 +1273,7 @@ func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
 		}
 
 		// Extract data to convert to a []mountPoint slice.
-		for _, line := range strings.Split(out.String(), "\n") {
+		for line := range strings.SplitSeq(out.String(), "\n") {
 			words := strings.Fields(line)
 			if len(words) < 3 {
 				continue

@@ -489,7 +489,7 @@ func (p *lowerInterfacesPass) addInterface(methodsString string) {
 		signatures: make(map[string]*signatureInfo),
 	}
 	p.interfaces[methodsString] = t
-	for _, method := range strings.Split(methodsString, "; ") {
+	for method := range strings.SplitSeq(methodsString, "; ") {
 		signature := p.getSignature(method)
 		signature.interfaces = append(signature.interfaces, t)
 		t.signatures[method] = signature

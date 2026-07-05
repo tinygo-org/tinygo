@@ -188,7 +188,7 @@ func TestCompilerErrors(t *testing.T) {
 		t.Error(err)
 	}
 	errorsFileString := strings.ReplaceAll(string(errorsFile), "\r\n", "\n")
-	for _, line := range strings.Split(errorsFileString, "\n") {
+	for line := range strings.SplitSeq(errorsFileString, "\n") {
 		if after, ok := strings.CutPrefix(line, "// ERROR: "); ok {
 			expectedErrors = append(expectedErrors, after)
 		}

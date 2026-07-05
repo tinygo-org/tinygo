@@ -417,7 +417,7 @@ func (c *compilerContext) archFamily() string {
 // features string is not one for an ARM architecture.
 func (c *compilerContext) isThumb() bool {
 	var isThumb, isNotThumb bool
-	for _, feature := range strings.Split(c.Features, ",") {
+	for feature := range strings.SplitSeq(c.Features, ",") {
 		if feature == "+thumb-mode" {
 			isThumb = true
 		}
