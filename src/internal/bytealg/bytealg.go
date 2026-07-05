@@ -45,10 +45,7 @@ func Compare(a, b []byte) int {
 // This function was copied from the Go 1.23 source tree (with runtime_cmpstring
 // manually inlined).
 func CompareString(a, b string) int {
-	l := len(a)
-	if len(b) < l {
-		l = len(b)
-	}
+	l := min(len(b), len(a))
 	for i := 0; i < l; i++ {
 		c1, c2 := a[i], b[i]
 		if c1 < c2 {
