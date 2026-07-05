@@ -53,13 +53,13 @@ func stopTimer(tim *timeTimer) bool {
 
 //go:linkname resetTimer time.resetTimer
 func resetTimer(t *timeTimer, when, period int64) bool {
-	t.timer.when = when
-	t.timer.period = period
 	n := removeTimer(&t.timer)
 	removed := n != nil
 	if n == nil {
 		n = new(timerNode)
 	}
+	t.timer.when = when
+	t.timer.period = period
 	n.timer = &t.timer
 	n.callback = timerCallback
 	addTimer(n)
@@ -121,7 +121,6 @@ func timerCallback(tn *timerNode, delta int64) {
 
 	// If this is a periodic timer (a ticker), re-add it to the queue.
 	if tn.timer.period != 0 {
-		tn.timer.when += tn.timer.period
 		reAddTimer(tn)
 	}
 }

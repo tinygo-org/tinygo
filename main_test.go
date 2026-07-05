@@ -245,6 +245,21 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+// TestTimerStopResetRace checks that stopping or resetting a timer while its
+// callback is running behaves correctly. It reaches into the runtime timer
+// hooks via //go:linkname and relies on the threads scheduler, which is only
+// used on these hosts.
+func TestTimerStopResetRace(t *testing.T) {
+	t.Parallel()
+
+	switch runtime.GOOS {
+	case "darwin", "linux":
+	default:
+		t.Skipf("host GOOS %s does not use the threads scheduler", runtime.GOOS)
+	}
+	runTest("timer_stop_reset_race.go", optionsFromTarget("", sema), t, nil, nil)
+}
+
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	emuCheck(t, options)
 

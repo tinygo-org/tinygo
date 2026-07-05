@@ -80,17 +80,16 @@ func firingTimersRemove(tn *timerNode) {
 }
 
 // firingTimerStop marks a currently-firing timer as stopped, so that its
-// callback will not re-add it to the queue. It returns the matching node if the
-// timer is currently firing, or nil otherwise. The caller must hold the
-// scheduler's timer lock.
-func firingTimerStop(tim *timer) *timerNode {
+// callback will not re-add it to the queue. It returns whether the timer is
+// currently firing. The caller must hold the scheduler's timer lock.
+func firingTimerStop(tim *timer) bool {
 	for tn := firingTimers; tn != nil; tn = tn.firingNext {
 		if tn.timer == tim {
 			tn.stopped = true
-			return tn
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 // Goexit terminates the currently running goroutine. No other goroutines are affected.
