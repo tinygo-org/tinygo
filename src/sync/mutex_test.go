@@ -150,9 +150,9 @@ func TestRWMutexWriteToRead(t *testing.T) {
 	mu.Lock()
 
 	const n = 3
-	var readAcquires uint32
-	var completed uint32
-	var unlocked uint32
+	var readAcquires atomic.Uint32
+	var completed atomic.Uint32
+	var unlocked atomic.Uint32
 	var bad uint32
 	for range n {
 		go func() {
@@ -160,21 +160,21 @@ func TestRWMutexWriteToRead(t *testing.T) {
 			mu.RLock()
 
 			// Verify that the write lock is supposed to be released by now.
-			if atomic.LoadUint32(&unlocked) == 0 {
+			if unlocked.Load() == 0 {
 				// The write lock is still being held.
 				atomic.AddUint32(&bad, 1)
 			}
 
 			// Add ourselves to the read lock counter.
-			atomic.AddUint32(&readAcquires, 1)
+			readAcquires.Add(1)
 
 			// Wait for everything to hold the read lock simultaneously.
-			for atomic.LoadUint32(&readAcquires) < n {
+			for readAcquires.Load() < n {
 				runtime.Gosched()
 			}
 
 			// Notify of completion.
-			atomic.AddUint32(&completed, 1)
+			completed.Add(1)
 
 			// Release the read lock.
 			mu.RUnlock()
@@ -187,11 +187,11 @@ func TestRWMutexWriteToRead(t *testing.T) {
 	}
 
 	// Release the write lock so that the goroutines acquire read locks.
-	atomic.StoreUint32(&unlocked, 1)
+	unlocked.Store(1)
 	mu.Unlock()
 
 	// Wait for everything to complete.
-	for atomic.LoadUint32(&completed) < n {
+	for completed.Load() < n {
 		runtime.Gosched()
 	}
 
