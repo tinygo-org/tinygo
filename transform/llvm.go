@@ -34,7 +34,7 @@ func hasUses(value llvm.Value) bool {
 // contents, and returns the global and initializer type.
 // Note that it is left with the default linkage etc., you should set
 // linkage/constant/etc properties yourself.
-func makeGlobalArray(mod llvm.Module, bufItf interface{}, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
+func makeGlobalArray(mod llvm.Module, bufItf any, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
 	buf := reflect.ValueOf(bufItf)
 	var values []llvm.Value
 	for i := 0; i < buf.Len(); i++ {
@@ -64,7 +64,7 @@ func getGlobalBytes(global llvm.Value, builder llvm.Builder) []byte {
 // replaceGlobalByteWithArray replaces a global integer type in the module with
 // an integer array, using a GEP to make the types match. It is a convenience
 // function used for creating reflection sidetables, for example.
-func replaceGlobalIntWithArray(mod llvm.Module, name string, buf interface{}) llvm.Value {
+func replaceGlobalIntWithArray(mod llvm.Module, name string, buf any) llvm.Value {
 	oldGlobal := mod.NamedGlobal(name)
 	globalType, global := makeGlobalArray(mod, buf, name+".tmp", oldGlobal.GlobalValueType())
 	gep := llvm.ConstGEP(globalType, global, []llvm.Value{

@@ -44,7 +44,7 @@ type cgoPackage struct {
 	tokenFiles      map[string]*token.File
 	definedGlobally map[string]ast.Node
 	noescapingFuncs map[string]*noescapingFunc // #cgo noescape lines
-	anonDecls       map[interface{}]string
+	anonDecls       map[any]string
 	cflags          []string // CFlags from #cgo lines
 	ldflags         []string // LDFlags from #cgo lines
 	visitedFiles    map[string][]byte
@@ -263,7 +263,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 		tokenFiles:      map[string]*token.File{},
 		definedGlobally: map[string]ast.Node{},
 		noescapingFuncs: map[string]*noescapingFunc{},
-		anonDecls:       map[interface{}]string{},
+		anonDecls:       map[any]string{},
 		visitedFiles:    map[string][]byte{},
 	}
 
@@ -1221,7 +1221,7 @@ func getPos(node ast.Node) token.Pos {
 // getUnnamedDeclName creates a name (with the given prefix) for the given C
 // declaration. This is used for structs, unions, and enums that are often
 // defined without a name and used in a typedef.
-func (p *cgoPackage) getUnnamedDeclName(prefix string, itf interface{}) string {
+func (p *cgoPackage) getUnnamedDeclName(prefix string, itf any) string {
 	if name, ok := p.anonDecls[itf]; ok {
 		return name
 	}

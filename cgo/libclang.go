@@ -534,7 +534,7 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 
 // Get the precise location in the source code. Used for uniquely identifying
 // source locations.
-func (f *cgoFile) getUniqueLocationID(pos token.Pos, cursor C.GoCXCursor) interface{} {
+func (f *cgoFile) getUniqueLocationID(pos token.Pos, cursor C.GoCXCursor) any {
 	clangLocation := C.tinygo_clang_getCursorLocation(cursor)
 	var file C.CXFile
 	var line C.unsigned

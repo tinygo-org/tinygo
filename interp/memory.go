@@ -392,7 +392,7 @@ type value interface {
 // literalValue contains simple integer values that don't need to be stored in a
 // buffer.
 type literalValue struct {
-	value interface{}
+	value any
 }
 
 // Make a literalValue given the number of bits.

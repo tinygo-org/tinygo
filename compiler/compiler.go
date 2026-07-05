@@ -168,7 +168,7 @@ type builder struct {
 	dilocals          map[*types.Var]llvm.Metadata
 	initInlinedAt     llvm.Metadata            // fake inlinedAt position
 	initPseudoFuncs   map[string]llvm.Metadata // fake "inlined" functions for proper init debug locations
-	allDeferFuncs     []interface{}
+	allDeferFuncs     []any
 	deferFuncs        map[*ssa.Function]int
 	deferInvokeFuncs  map[string]int
 	deferClosureFuncs map[*ssa.Function]int
