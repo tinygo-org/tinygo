@@ -914,7 +914,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 
 			// Run wasm-opt for wasm binaries
-			if arch := strings.Split(config.Triple(), "-")[0]; arch == "wasm32" {
+			if arch, _, _ := strings.Cut(config.Triple(), "-"); arch == "wasm32" {
 				optLevel, _, _ := config.OptLevel()
 				opt := "-" + optLevel
 

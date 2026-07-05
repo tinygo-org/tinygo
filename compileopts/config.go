@@ -245,7 +245,7 @@ func (c *Config) RP2040BootPatch() bool {
 // Return a canonicalized architecture name, so we don't have to deal with arm*
 // vs thumb* vs arm64.
 func CanonicalArchName(triple string) string {
-	arch := strings.Split(triple, "-")[0]
+	arch, _, _ := strings.Cut(triple, "-")
 	if arch == "arm64" {
 		return "aarch64"
 	}

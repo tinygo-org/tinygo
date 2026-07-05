@@ -15,7 +15,7 @@ func makeDarwinLibSystemJob(config *compileopts.Config, tmpdir string) *compileJ
 	return &compileJob{
 		description: "compile Darwin libSystem.dylib",
 		run: func(job *compileJob) (err error) {
-			arch := strings.Split(config.Triple(), "-")[0]
+			arch, _, _ := strings.Cut(config.Triple(), "-")
 			job.result = filepath.Join(tmpdir, "libSystem.dylib")
 			objpath := filepath.Join(tmpdir, "libSystem.o")
 			inpath := filepath.Join(goenv.Get("TINYGOROOT"), "lib/macos-minimal-sdk/src", arch, "libSystem.s")

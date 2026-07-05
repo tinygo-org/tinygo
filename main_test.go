@@ -392,7 +392,7 @@ func emuCheck(t *testing.T, options compileopts.Options) {
 		t.Fatal("failed to load target spec:", err)
 	}
 	if spec.Emulator != "" {
-		emulatorCommand := strings.SplitN(spec.Emulator, " ", 2)[0]
+		emulatorCommand, _, _ := strings.Cut(spec.Emulator, " ")
 		_, err := exec.LookPath(emulatorCommand)
 		if err != nil {
 			if errors.Is(err, exec.ErrNotFound) {

@@ -1685,18 +1685,18 @@ func (m globalValuesFlag) String() string {
 }
 
 func (m globalValuesFlag) Set(value string) error {
-	equalsIndex := strings.IndexByte(value, '=')
-	if equalsIndex < 0 {
+	before, after, ok := strings.Cut(value, "=")
+	if !ok {
 		return errors.New("expected format pkgpath.Var=value")
 	}
-	pathAndName := value[:equalsIndex]
+	pathAndName := before
 	pointIndex := strings.LastIndexByte(pathAndName, '.')
 	if pointIndex < 0 {
 		return errors.New("expected format pkgpath.Var=value")
 	}
 	path := pathAndName[:pointIndex]
 	name := pathAndName[pointIndex+1:]
-	stringValue := value[equalsIndex+1:]
+	stringValue := after
 	if m[path] == nil {
 		m[path] = make(map[string]string)
 	}
