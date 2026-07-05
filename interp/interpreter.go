@@ -471,7 +471,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// should be returned.
 				numMethods := int(r.builder.CreateExtractValue(methodSet, 0, "").ZExtValue())
 				var method llvm.Value
-				for i := 0; i < numMethods; i++ {
+				for i := range numMethods {
 					methodSignatureAgg := r.builder.CreateExtractValue(methodSet, 1, "")
 					methodSignature := r.builder.CreateExtractValue(methodSignatureAgg, i, "")
 					if methodSignature == signature {
@@ -908,7 +908,7 @@ func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) bool
 func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
-	for i := 0; i < numOperands; i++ {
+	for i := range numOperands {
 		operand := inst.llvmInst.Operand(i)
 		if !operand.IsAInstruction().IsNil() || !operand.IsAArgument().IsNil() {
 			var err error

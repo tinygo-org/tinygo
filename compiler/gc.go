@@ -89,7 +89,7 @@ func (b *builder) trackValue(value llvm.Value) {
 			return
 		}
 		numElements := typ.StructElementTypesCount()
-		for i := 0; i < numElements; i++ {
+		for i := range numElements {
 			subValue := b.CreateExtractValue(value, i, "")
 			b.trackValue(subValue)
 		}
@@ -98,7 +98,7 @@ func (b *builder) trackValue(value llvm.Value) {
 			return
 		}
 		numElements := typ.ArrayLength()
-		for i := 0; i < numElements; i++ {
+		for i := range numElements {
 			subValue := b.CreateExtractValue(value, i, "")
 			b.trackValue(subValue)
 		}

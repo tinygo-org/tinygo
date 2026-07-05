@@ -173,7 +173,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 							continue
 						}
 						numOperands := inst.OperandsCount()
-						for i := 0; i < numOperands; i++ {
+						for i := range numOperands {
 							// Using mark '2' (which means read/write access)
 							// because this might be a store instruction.
 							err := mv.markExternal(inst.Operand(i), 2)
@@ -216,7 +216,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 			// need any marking.
 		case llvm.StructTypeKind:
 			numElements := llvmType.StructElementTypesCount()
-			for i := 0; i < numElements; i++ {
+			for i := range numElements {
 				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
 				err := mv.markExternal(element, mark)
 				if err != nil {
@@ -225,7 +225,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 			}
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
-			for i := 0; i < numElements; i++ {
+			for i := range numElements {
 				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
 				err := mv.markExternal(element, mark)
 				if err != nil {
@@ -367,7 +367,7 @@ func (mv *memoryView) store(v value, p pointerValue) bool {
 		buffer := obj.buffer.asRawValue(mv.r)
 		obj.buffer = buffer
 		v := v.asRawValue(mv.r)
-		for i := uint32(0); i < valueLen; i++ {
+		for i := range valueLen {
 			buffer.buf[p.offset()+i] = v.buf[i]
 		}
 	}
@@ -1016,7 +1016,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 		if err != nil {
 			panic(err)
 		}
-		for i := uint32(0); i < ptrSize; i++ {
+		for i := range ptrSize {
 			v.buf[i] = ptr.pointer
 		}
 	} else if !llvmValue.IsAConstantExpr().IsNil() {
@@ -1057,7 +1057,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				panic(err)
 			}
 			ptrValue.pointer += totalOffset
-			for i := uint32(0); i < ptrSize; i++ {
+			for i := range ptrSize {
 				v.buf[i] = ptrValue.pointer
 			}
 		case llvm.ICmp:
@@ -1114,7 +1114,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			}
 		case llvm.StructTypeKind:
 			numElements := llvmType.StructElementTypesCount()
-			for i := 0; i < numElements; i++ {
+			for i := range numElements {
 				offset := r.targetData.ElementOffset(llvmType, i)
 				field := rawValue{
 					buf: v.buf[offset:],
@@ -1125,7 +1125,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			numElements := llvmType.ArrayLength()
 			childType := llvmType.ElementType()
 			childTypeSize := r.targetData.TypeAllocSize(childType)
-			for i := 0; i < numElements; i++ {
+			for i := range numElements {
 				offset := i * int(childTypeSize)
 				field := rawValue{
 					buf: v.buf[offset:],

@@ -1046,7 +1046,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 
 func touchSerialPortAt1200bps(port string) (err error) {
 	retryCount := 3
-	for i := 0; i < retryCount; i++ {
+	for range retryCount {
 		// Open port
 		p, e := serial.Open(port, &serial.Mode{BaudRate: 1200})
 		if e != nil {
