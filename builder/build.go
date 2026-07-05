@@ -278,7 +278,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	var embedFileObjects []*compileJob
 	for _, pkg := range lprogram.Sorted() {
-		pkg := pkg // necessary to avoid a race condition
 
 		var undefinedGlobals []string
 		for name := range globalValues[pkg.Pkg.Path()] {
@@ -775,7 +774,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// TODO: do this as part of building the package to be able to link the
 	// bitcode files together.
 	for _, pkg := range lprogram.Sorted() {
-		pkg := pkg
 		for _, filename := range pkg.CFiles {
 			abspath := filepath.Join(pkg.OriginalDir(), filename)
 			job := &compileJob{

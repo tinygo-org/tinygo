@@ -47,7 +47,6 @@ func TestClangAttributes(t *testing.T) {
 		targetNames = append(targetNames, "esp32", "esp8266")
 	}
 	for _, targetName := range targetNames {
-		targetName := targetName
 		t.Run(targetName, func(t *testing.T) {
 			testClangAttributes(t, &compileopts.Options{Target: targetName})
 		})

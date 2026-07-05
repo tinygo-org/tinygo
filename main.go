@@ -2054,7 +2054,6 @@ func main() {
 		// This uses an additional semaphore to reduce the memory usage.
 		testSema := make(chan struct{}, cap(options.Semaphore))
 		for i, pkgName := range explicitPkgNames {
-			pkgName := pkgName
 			buf := &bufs[i]
 			testSema <- struct{}{}
 			wg.Add(1)

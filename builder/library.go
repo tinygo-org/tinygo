@@ -232,7 +232,6 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	}
 	for _, path := range paths {
 		// Strip leading "../" parts off the path.
-		path := path
 		cleanpath := path
 		for strings.HasPrefix(cleanpath, "../") {
 			cleanpath = cleanpath[3:]

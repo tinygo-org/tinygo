@@ -539,7 +539,6 @@ func TestWebAssembly(t *testing.T) {
 		{name: "panic-default", target: "wasip1", imports: []string{"wasi_snapshot_preview1.fd_write", "wasi_snapshot_preview1.random_get"}},
 		{name: "panic-trap", target: "wasm-unknown", panicStrategy: "trap", imports: []string{}},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			tmpdir := t.TempDir()
@@ -661,7 +660,6 @@ func TestWasmExport(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -831,7 +829,6 @@ func TestWasmExportJS(t *testing.T) {
 		{name: "c-shared", buildMode: "c-shared"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			// Build the wasm binary.
@@ -879,7 +876,6 @@ func TestWasmExit(t *testing.T) {
 		{name: "exit-1-sleep", output: "slept\nexit code: 1\n"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			options := optionsFromTarget("wasm", sema)
@@ -954,7 +950,6 @@ func TestTest(t *testing.T) {
 		)
 	}
 	for _, targ := range targs {
-		targ := targ
 		t.Run(targ.name, func(t *testing.T) {
 			t.Parallel()
 

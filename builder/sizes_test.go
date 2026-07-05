@@ -51,7 +51,6 @@ func TestBinarySize(t *testing.T) {
 		// output varies by binaryen version.
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.target+"/"+tc.path, func(t *testing.T) {
 			t.Parallel()
 
@@ -85,7 +84,6 @@ func TestSizeFull(t *testing.T) {
 	pkgMatch := regexp.MustCompile(`^[a-z/]+$`)    // example: "internal/task"
 
 	for _, target := range tests {
-		target := target
 		t.Run(target, func(t *testing.T) {
 			t.Parallel()
 
