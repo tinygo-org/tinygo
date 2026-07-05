@@ -30,7 +30,6 @@ func (s *stdSizes) Alignof(T types.Type) int64 {
 		// field f of x, but at least 1."
 		max := int64(1)
 		for f := range t.Fields() {
-			f := f
 			if a := s.Alignof(f.Type()); a > max {
 				max = a
 			}

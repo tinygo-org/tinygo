@@ -937,7 +937,6 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 		// Create method set.
 		var signatures, wrappers []llvm.Value
 		for method := range ms.Methods() {
-			method := method
 			signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
 			signatures = append(signatures, signatureGlobal)
 			fn := c.program.MethodValue(method)
