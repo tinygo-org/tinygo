@@ -43,6 +43,7 @@ var libPicolibc = Library{
 		}
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc/newlib") },
+	inputDir:  func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc") },
 	librarySources: func(target string, _ bool) ([]string, error) {
 		sources := append([]string(nil), picolibcSources...)
 		if !strings.HasPrefix(target, "avr") {

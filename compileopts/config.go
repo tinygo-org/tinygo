@@ -9,23 +9,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/goenv"
 )
-
-// Library versions. Whenever an existing library is changed, this number should
-// be added/increased so that existing caches are invalidated.
-//
-// (This is a bit of a layering violation, this should really be part of the
-// builder.Library struct but that's hard to do since we want to know the
-// library path in advance in several places).
-var libVersions = map[string]int{
-	"musl":  3,
-	"bdwgc": 2,
-}
 
 // Config keeps all configuration affecting the build in a single struct.
 type Config struct {
@@ -33,6 +21,7 @@ type Config struct {
 	Target         *TargetSpec
 	GoMinorVersion int
 	TestConfig     TestConfig
+	LibraryKeys    map[string]string
 }
 
 // Triple returns the LLVM target triple, like armv6m-unknown-unknown-eabi.
@@ -288,9 +277,8 @@ func (c *Config) LibraryPath(name string) string {
 		archname += "-" + c.Target.Libc
 	}
 
-	// Append a version string, if this library has a version.
-	if v, ok := libVersions[name]; ok {
-		archname += "-v" + strconv.Itoa(v)
+	if key, ok := c.LibraryKeys[name]; ok {
+		archname += "-h" + key
 	}
 
 	options := ""
@@ -371,8 +359,8 @@ func (c *Config) CFlags(libclang bool) []string {
 }
 
 // LibcCFlags returns the C compiler flags for the configured libc.
-// It only uses flags that are part of the libc path (triple, cpu, abi, libc
-// name) so it can safely be used to compile another C library.
+// It only uses flags that are part of the libc path, so it can safely be used
+// to compile another C library.
 func (c *Config) LibcCFlags() []string {
 	switch c.Target.Libc {
 	case "darwin-libSystem":
