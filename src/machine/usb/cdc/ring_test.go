@@ -494,10 +494,7 @@ func FuzzRing512(f *testing.F) {
 
 			switch op {
 			case 0: // Put
-				size := int(arg)
-				if size > 512 {
-					size = 512
-				}
+				size := min(int(arg), 512)
 				data := make([]byte, size)
 				for j := range data {
 					data[j] = byte(j)
