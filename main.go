@@ -786,15 +786,15 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		}
 		defer func() {
 			daemon.Process.Signal(os.Interrupt)
-			var stopped uint32
+			var stopped atomic.Uint32
 			go func() {
 				time.Sleep(time.Millisecond * 100)
-				if atomic.LoadUint32(&stopped) == 0 {
+				if stopped.Load() == 0 {
 					daemon.Process.Kill()
 				}
 			}()
 			daemon.Wait()
-			atomic.StoreUint32(&stopped, 1)
+			stopped.Store(1)
 		}()
 	}
 
