@@ -29,8 +29,8 @@ func (s *stdSizes) Alignof(T types.Type) int64 {
 		// is the largest of the values unsafe.Alignof(x.f) for each
 		// field f of x, but at least 1."
 		max := int64(1)
-		for i := 0; i < t.NumFields(); i++ {
-			f := t.Field(i)
+		for f := range t.Fields() {
+			f := f
 			if a := s.Alignof(f.Type()); a > max {
 				max = a
 			}

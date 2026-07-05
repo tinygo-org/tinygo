@@ -145,8 +145,8 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 	// For a non-interface type, it returns the number of exported methods.
 	// For an interface type, it returns the number of exported and unexported methods.
 	var numMethods int
-	for i := 0; i < ms.Len(); i++ {
-		if isInterface || ms.At(i).Obj().Exported() {
+	for method := range ms.Methods() {
+		if isInterface || method.Obj().Exported() {
 			numMethods++
 		}
 	}
@@ -193,8 +193,8 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		}
 		// Compute the method set value for types that support methods.
 		var methods []*types.Func
-		for i := 0; i < ms.Len(); i++ {
-			methods = append(methods, ms.At(i).Obj().(*types.Func))
+		for method := range ms.Methods() {
+			methods = append(methods, method.Obj().(*types.Func))
 		}
 		methodSetType := types.NewStruct([]*types.Var{
 			types.NewVar(token.NoPos, nil, "length", types.Typ[types.Uintptr]),
@@ -780,12 +780,12 @@ func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
 			walk(m, false)
 		case *ssa.Type:
 			mset := c.program.MethodSets.MethodSet(m.Type())
-			for i := 0; i < mset.Len(); i++ {
-				walk(c.program.MethodValue(mset.At(i)), false)
+			for method := range mset.Methods() {
+				walk(c.program.MethodValue(method), false)
 			}
 			pmset := c.program.MethodSets.MethodSet(types.NewPointer(m.Type()))
-			for i := 0; i < pmset.Len(); i++ {
-				walk(c.program.MethodValue(pmset.At(i)), false)
+			for method := range pmset.Methods() {
+				walk(c.program.MethodValue(method), false)
 			}
 		}
 	}
@@ -843,8 +843,8 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 				}
 			}
 			targs := t.TypeArgs()
-			for i := 0; i < targs.Len(); i++ {
-				visit(targs.At(i))
+			for t := range targs.Types() {
+				visit(t)
 			}
 			visit(t.Underlying())
 		case *types.Pointer:
@@ -859,23 +859,23 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 			visit(t.Key())
 			visit(t.Elem())
 		case *types.Struct:
-			for i := 0; i < t.NumFields(); i++ {
-				visit(t.Field(i).Type())
+			for field := range t.Fields() {
+				visit(field.Type())
 			}
 		case *types.Signature:
 			if p := t.Params(); p != nil {
-				for i := 0; i < p.Len(); i++ {
-					visit(p.At(i).Type())
+				for v := range p.Variables() {
+					visit(v.Type())
 				}
 			}
 			if r := t.Results(); r != nil {
-				for i := 0; i < r.Len(); i++ {
-					visit(r.At(i).Type())
+				for v := range r.Variables() {
+					visit(v.Type())
 				}
 			}
 		case *types.Tuple:
-			for i := 0; i < t.Len(); i++ {
-				visit(t.At(i).Type())
+			for v := range t.Variables() {
+				visit(v.Type())
 			}
 		case *types.Interface:
 			// A synthetic local type can be reachable only through a
@@ -884,8 +884,8 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 			// the interface's identifier, and the seen map breaks
 			// cycles formed by methods that mention the interface
 			// itself.
-			for i := 0; i < t.NumMethods(); i++ {
-				visit(t.Method(i).Type())
+			for method := range t.Methods() {
+				visit(method.Type())
 			}
 		}
 	}
@@ -936,8 +936,8 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 
 		// Create method set.
 		var signatures, wrappers []llvm.Value
-		for i := 0; i < ms.Len(); i++ {
-			method := ms.At(i)
+		for method := range ms.Methods() {
+			method := method
 			signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
 			signatures = append(signatures, signatureGlobal)
 			fn := c.program.MethodValue(method)
@@ -1186,8 +1186,8 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 	if llvmFn.IsNil() {
 		sig := instr.Method.Type().(*types.Signature)
 		var paramTuple []*types.Var
-		for i := 0; i < sig.Params().Len(); i++ {
-			paramTuple = append(paramTuple, sig.Params().At(i))
+		for v := range sig.Params().Variables() {
+			paramTuple = append(paramTuple, v)
 		}
 		paramTuple = append(paramTuple, types.NewVar(token.NoPos, nil, "$typecode", types.Typ[types.UnsafePointer]))
 		llvmFnType := c.getLLVMFunctionType(types.NewSignature(sig.Recv(), types.NewTuple(paramTuple...), sig.Results(), false))

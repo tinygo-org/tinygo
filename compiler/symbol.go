@@ -86,8 +86,8 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		retType = c.getLLVMType(fn.Signature.Results().At(0).Type())
 	} else {
 		results := make([]llvm.Type, 0, fn.Signature.Results().Len())
-		for i := 0; i < fn.Signature.Results().Len(); i++ {
-			results = append(results, c.getLLVMType(fn.Signature.Results().At(i).Type()))
+		for v := range fn.Signature.Results().Variables() {
+			results = append(results, c.getLLVMType(v.Type()))
 		}
 		retType = c.ctx.StructType(results, false)
 	}
@@ -568,8 +568,8 @@ func (c *compilerContext) isValidWasmType(typ types.Type, site wasmSite) bool {
 				hasHostLayout = false // package structs added in go1.23
 			}
 		}
-		for i := 0; i < typ.NumFields(); i++ {
-			ftyp := typ.Field(i).Type()
+		for field := range typ.Fields() {
+			ftyp := field.Type()
 			if types.Unalias(ftyp).String() == "structs.HostLayout" {
 				hasHostLayout = true
 				continue
@@ -601,8 +601,8 @@ func getParams(sig *types.Signature) []*types.Var {
 	if sig.Recv() != nil {
 		params = append(params, sig.Recv())
 	}
-	for i := 0; i < sig.Params().Len(); i++ {
-		params = append(params, sig.Params().At(i))
+	for v := range sig.Params().Variables() {
+		params = append(params, v)
 	}
 	return params
 }
