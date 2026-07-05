@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/interp"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -156,6 +159,71 @@ func TestBuildSharesSemaphore(t *testing.T) {
 	}
 	if config.Options.Semaphore != semaphore {
 		t.Fatal("Build changed the semaphore")
+	}
+}
+
+func TestBuildPreservesSharedConfig(t *testing.T) {
+	config, err := NewConfig(&compileopts.Options{
+		Target: "cortex-m-qemu", GC: "leaking", Opt: "z",
+		Semaphore: make(chan struct{}, 2),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Target.Libc = ""
+	config.Target.RTLib = ""
+	keys := map[string]string{"existing": "key"}
+	config.LibraryKeys = keys
+	start := make(chan struct{})
+	results := make(chan error, 4)
+	for range cap(results) {
+		dir := t.TempDir()
+		go func() {
+			<-start
+			_, err := Build("does/not/exist", filepath.Join(dir, "out.ll"), dir, config)
+			results <- err
+		}()
+	}
+	close(start)
+	for range cap(results) {
+		if err := <-results; err == nil || !strings.Contains(err.Error(), "does/not/exist") {
+			t.Errorf("Build() error = %v, want invalid package error", err)
+		}
+	}
+	if !reflect.DeepEqual(config.LibraryKeys, keys) {
+		t.Fatalf("Build changed caller's library keys: %v", config.LibraryKeys)
+	}
+}
+
+func TestBuildNonLinkingWithoutCompilerRT(t *testing.T) {
+	saved := libCompilerRT
+	t.Cleanup(func() { libCompilerRT = saved })
+	missing := filepath.Join(t.TempDir(), "missing-compiler-rt")
+	libCompilerRT.sourceDir = func() string { return missing }
+	config, err := NewConfig(&compileopts.Options{
+		Target: "cortex-m-qemu", GC: "leaking", Opt: "z", Semaphore: sema,
+		InterpTimeout: time.Minute, InterpMaxLoopIterations: interp.DefaultMaxInterpBlockEntries,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Target.Libc = ""
+	source := filepath.Join(t.TempDir(), "main.go")
+	if err := os.WriteFile(source, []byte("package main\nfunc main() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, extension := range []string{".o", ".bc", ".ll", ".elf"} {
+		t.Run(extension, func(t *testing.T) {
+			dir := t.TempDir()
+			_, err := Build(source, filepath.Join(dir, "out"+extension), dir, config)
+			if extension == ".elf" {
+				if err == nil || !strings.Contains(err.Error(), missing) {
+					t.Fatalf("linked build error = %v, want missing compiler-rt", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
