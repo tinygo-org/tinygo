@@ -150,11 +150,11 @@ func (p *lowerInterfacesPass) run() error {
 
 	// Collect all type codes.
 	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
-		if strings.HasPrefix(global.Name(), "reflect/types.type:") {
+		if after, ok := strings.CutPrefix(global.Name(), "reflect/types.type:"); ok {
 			// Retrieve Go type information based on an opaque global variable.
 			// Only the name of the global is relevant, the object itself is
 			// discarded afterwards.
-			name := strings.TrimPrefix(global.Name(), "reflect/types.type:")
+			name := after
 			if _, ok := p.types[name]; !ok {
 				t := &typeInfo{
 					name:     name,
