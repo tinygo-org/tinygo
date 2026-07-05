@@ -3,6 +3,7 @@ package compileopts
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -129,10 +130,5 @@ func (o *Options) Verify() error {
 }
 
 func isInArray(arr []string, item string) bool {
-	for _, i := range arr {
-		if i == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(arr, item)
 }

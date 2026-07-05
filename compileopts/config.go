@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -140,13 +141,7 @@ func (c *Config) GC() string {
 func (c *Config) NeedsStackObjects() bool {
 	switch c.GC() {
 	case "conservative", "custom", "precise", "boehm":
-		for _, tag := range c.BuildTags() {
-			if tag == "tinygo.wasm" {
-				return true
-			}
-		}
-
-		return false
+		return slices.Contains(c.BuildTags(), "tinygo.wasm")
 	default:
 		return false
 	}

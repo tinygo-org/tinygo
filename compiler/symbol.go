@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -800,10 +801,5 @@ func getAllMethods(prog *ssa.Program, typ types.Type) []*types.Selection {
 
 // Return true if this package imports "unsafe", false otherwise.
 func hasUnsafeImport(pkg *types.Package) bool {
-	for _, imp := range pkg.Imports() {
-		if imp == types.Unsafe {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(pkg.Imports(), types.Unsafe)
 }

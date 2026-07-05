@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -985,9 +986,9 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			mem.instructions = append(mem.instructions, agg)
 		}
 		result = operands[1]
-		for i := len(indices) - 1; i >= 0; i-- {
+		for i, indice := range slices.Backward(indices) {
 			agg := aggregates[i]
-			result = r.builder.CreateInsertValue(agg, result, int(indices[i]), inst.name+".insertvalue"+strconv.Itoa(i))
+			result = r.builder.CreateInsertValue(agg, result, int(indice), inst.name+".insertvalue"+strconv.Itoa(i))
 			if i != 0 { // don't add last result to mem.instructions as it will be done at the end already
 				mem.instructions = append(mem.instructions, result)
 			}

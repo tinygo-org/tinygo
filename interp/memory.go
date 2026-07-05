@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -90,8 +91,8 @@ func (mv *memoryView) extend(sub memoryView) {
 // created in this memoryView. Do not reuse this memoryView.
 func (mv *memoryView) revert() {
 	// Erase instructions in reverse order.
-	for i := len(mv.instructions) - 1; i >= 0; i-- {
-		llvmInst := mv.instructions[i]
+	for _, llvmInst := range slices.Backward(mv.instructions) {
+
 		if llvmInst.IsAInstruction().IsNil() {
 			// The IR builder will try to create constant versions of
 			// instructions whenever possible. If it does this, it's not an

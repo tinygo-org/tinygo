@@ -5,6 +5,7 @@ package compiler
 
 import (
 	"go/token"
+	"slices"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -118,12 +119,7 @@ func typeHasPointers(t llvm.Type) bool {
 	case llvm.PointerTypeKind:
 		return true
 	case llvm.StructTypeKind:
-		for _, subType := range t.StructElementTypes() {
-			if typeHasPointers(subType) {
-				return true
-			}
-		}
-		return false
+		return slices.ContainsFunc(t.StructElementTypes(), typeHasPointers)
 	case llvm.ArrayTypeKind:
 		if t.ArrayLength() == 0 {
 			return false
