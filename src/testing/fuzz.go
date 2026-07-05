@@ -53,7 +53,7 @@ type corpusEntry = struct {
 	Parent     string
 	Path       string
 	Data       []byte
-	Values     []interface{}
+	Values     []any
 	Generation int
 	IsSeed     bool
 }
@@ -61,8 +61,8 @@ type corpusEntry = struct {
 // Add will add the arguments to the seed corpus for the fuzz test. This will be
 // a no-op if called after or within the fuzz target, and args must match the
 // arguments for the fuzz target.
-func (f *F) Add(args ...interface{}) {
-	var values []interface{}
+func (f *F) Add(args ...any) {
+	var values []any
 	for i := range args {
 		if t := reflect.TypeOf(args[i]); !supportedTypes[t] {
 			panic(fmt.Sprintf("testing: unsupported type to Add %v", t))
@@ -119,7 +119,7 @@ var supportedTypes = map[reflect.Type]bool{
 // When fuzzing, F.Fuzz does not return until a problem is found, time runs out
 // (set with -fuzztime), or the test process is interrupted by a signal. F.Fuzz
 // should be called exactly once, unless F.Skip or F.Fail is called beforehand.
-func (f *F) Fuzz(ff interface{}) {
+func (f *F) Fuzz(ff any) {
 	f.failed = true
 	f.result.N = 0
 	f.result.T = 0
