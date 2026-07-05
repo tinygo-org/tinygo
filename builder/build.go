@@ -79,17 +79,18 @@ type BuildResult struct {
 // key, avoiding the need for recompiling all dependencies when only the
 // implementation of an imported package changes.
 type packageAction struct {
-	ImportPath       string
-	CompilerBuildID  string
-	TinyGoVersion    string
-	LLVMVersion      string
-	Config           *compiler.Config
-	CFlags           []string
-	FileHashes       map[string]string // hash of every file that's part of the package
-	EmbeddedFiles    map[string]string // hash of all the //go:embed files in the package
-	Imports          map[string]string // map from imported package to action ID hash
-	OptLevel         string            // LLVM optimization level (O0, O1, O2, Os, Oz)
-	UndefinedGlobals []string          // globals that are left as external globals (no initializer)
+	ImportPath        string
+	CompilerBuildID   string
+	TinyGoVersion     string
+	LLVMVersion       string
+	CCompilerIdentity string
+	Config            *compiler.Config
+	CFlags            []string
+	FileHashes        map[string]string // hash of every file that's part of the package
+	EmbeddedFiles     map[string]string // hash of all the //go:embed files in the package
+	Imports           map[string]string // map from imported package to action ID hash
+	OptLevel          string            // LLVM optimization level (O0, O1, O2, Os, Oz)
+	UndefinedGlobals  []string          // globals that are left as external globals (no initializer)
 }
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -342,6 +343,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					OptLevel:         optLevel,
 					UndefinedGlobals: undefinedGlobals,
 				}
+				if len(pkg.CGoHeaders) != 0 {
+					compilerID, err := clangCompilerIdentity()
+					if err != nil {
+						return err
+					}
+					actionID.CCompilerIdentity = compilerID
+				}
 				for filePath, hash := range pkg.FileHashes {
 					actionID.FileHashes[filePath] = hex.EncodeToString(hash)
 				}
@@ -391,9 +399,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				}
 
 				// Load bitcode of CGo headers and join the modules together.
-				// This may seem vulnerable to cache problems, but this is not
-				// the case: the Go code that was just compiled already tracks
-				// all C files that are read and hashes them.
 				// These headers could be compiled in parallel but the benefit
 				// is so small that it's probably not worth parallelizing.
 				// Packages are compiled independently anyway.
@@ -403,14 +408,16 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					if err != nil {
 						return err
 					}
-					_, err = f.Write([]byte(cgoHeader))
-					if err != nil {
+					if _, err := f.Write([]byte(cgoHeader)); err != nil {
 						return err
 					}
-					f.Close()
+					if err := f.Close(); err != nil {
+						return err
+					}
+					output := f.Name() + ".bc"
 
 					// Compile the code (if there is any) to bitcode.
-					flags := append([]string{"-c", "-emit-llvm", "-o", f.Name() + ".bc", f.Name()}, pkg.CFlags...)
+					flags := cgoHeaderCompileArgs(f.Name(), output, pkg.CFlags)
 					if config.Options.PrintCommands != nil {
 						config.Options.PrintCommands("clang", flags...)
 					}
@@ -424,7 +431,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					// in the header together with the Go code. In particular,
 					// this allows inlining. It also ensures there is only one
 					// file per package to cache.
-					headerMod, err := mod.Context().ParseBitcodeFile(f.Name() + ".bc")
+					headerMod, err := mod.Context().ParseBitcodeFile(output)
 					if err != nil {
 						return fmt.Errorf("failed to load bitcode file: %w", err)
 					}
@@ -1065,6 +1072,15 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	}
 
 	return result, nil
+}
+
+func cgoHeaderCompileArgs(source, output string, cflags []string) []string {
+	flags := append([]string{"-c", "-emit-llvm", "-o", output, source}, cflags...)
+	flags = append(flags,
+		"-ffile-prefix-map="+source+"=tinygo-cgo.c",
+		"-fdebug-prefix-map="+source+"=tinygo-cgo.c",
+	)
+	return appendCacheStableCFlags(flags)
 }
 
 // createEmbedObjectFile creates a new object file with the given contents, for
