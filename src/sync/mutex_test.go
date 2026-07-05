@@ -14,7 +14,7 @@ type mutex interface {
 }
 
 func HammerMutex(m mutex, loops int, cdone chan bool) {
-	for i := 0; i < loops; i++ {
+	for i := range loops {
 		if i%3 == 0 {
 			if m.TryLock() {
 				m.Unlock()
@@ -41,10 +41,10 @@ func TestMutex(t *testing.T) {
 	m.Unlock()
 
 	c := make(chan bool)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go HammerMutex(m, 1000, c)
 	}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-c
 	}
 }
@@ -54,7 +54,7 @@ func TestMutexUncontended(t *testing.T) {
 	var mu sync.Mutex
 
 	// Lock and unlock the mutex a few times.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		mu.Lock()
 		mu.Unlock()
 	}
@@ -69,7 +69,7 @@ func TestMutexConcurrent(t *testing.T) {
 	var fail atomic.Uint32
 
 	const n = 10
-	for i := 0; i < n; i++ {
+	for i := range n {
 		j := i
 		go func() {
 			// Delay a bit.
@@ -129,12 +129,12 @@ func TestRWMutexUncontended(t *testing.T) {
 
 	// Acquire several read locks.
 	const n = 5
-	for i := 0; i < n; i++ {
+	for range n {
 		mu.RLock()
 	}
 
 	// Release all of the read locks.
-	for i := 0; i < n; i++ {
+	for range n {
 		mu.RUnlock()
 	}
 
@@ -154,7 +154,7 @@ func TestRWMutexWriteToRead(t *testing.T) {
 	var completed uint32
 	var unlocked uint32
 	var bad uint32
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			// Acquire a read lock.
 			mu.RLock()
@@ -182,7 +182,7 @@ func TestRWMutexWriteToRead(t *testing.T) {
 	}
 
 	// Wait a bit for the goroutines to block.
-	for i := 0; i < 3*n; i++ {
+	for range 3 * n {
 		runtime.Gosched()
 	}
 
@@ -209,7 +209,7 @@ func TestRWMutexReadToWrite(t *testing.T) {
 	const n = 3
 	var mu sync.RWMutex
 	var readers uint32
-	for i := 0; i < n; i++ {
+	for range n {
 		mu.RLock()
 		readers++
 	}
@@ -230,7 +230,7 @@ func TestRWMutexReadToWrite(t *testing.T) {
 	}()
 
 	// Release the read locks.
-	for i := 0; i < n; i++ {
+	for range n {
 		runtime.Gosched()
 		atomic.AddUint32(&readers, ^uint32(0))
 		mu.RUnlock()
@@ -261,10 +261,10 @@ func TestRWMutex(t *testing.T) {
 	m.Unlock()
 
 	c := make(chan bool)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go HammerMutex(m, 1000, c)
 	}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-c
 	}
 }

@@ -44,7 +44,7 @@ func TestCondBroadcast(t *testing.T) {
 	// Start goroutines to wait for the broadcast.
 	var wg sync.WaitGroup
 	const n = 5
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		mu.RLock()
 		go func() {

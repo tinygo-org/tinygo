@@ -672,7 +672,7 @@ func (t *T) report() {
 // Not implemented.
 func AllocsPerRun(runs int, f func()) (avg float64) {
 	f()
-	for i := 0; i < runs; i++ {
+	for range runs {
 		f()
 	}
 	return 0
