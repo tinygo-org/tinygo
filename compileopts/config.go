@@ -472,11 +472,7 @@ func (c *Config) LinkerFlavor() string {
 	if c.Target.LinkerFlavor != "" {
 		return c.Target.LinkerFlavor
 	}
-	goos := c.GOOS()
-	if goos == "" {
-		goos = c.Options.GOOS
-	}
-	switch goos {
+	switch c.GOOS() {
 	case "windows":
 		return "coff"
 	case "darwin":
