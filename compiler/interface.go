@@ -1304,34 +1304,34 @@ func methodSignature(method *types.Func) string {
 //	() string
 //	(string, int) (int, error)
 func signature(sig *types.Signature) string {
-	s := ""
+	var s strings.Builder
 	if sig.Params().Len() == 0 {
-		s += "()"
+		s.WriteString("()")
 	} else {
-		s += "("
+		s.WriteString("(")
 		for i := 0; i < sig.Params().Len(); i++ {
 			if i > 0 {
-				s += ", "
+				s.WriteString(", ")
 			}
-			s += typestring(sig.Params().At(i).Type())
+			s.WriteString(typestring(sig.Params().At(i).Type()))
 		}
-		s += ")"
+		s.WriteString(")")
 	}
 	if sig.Results().Len() == 0 {
 		// keep as-is
 	} else if sig.Results().Len() == 1 {
-		s += " " + typestring(sig.Results().At(0).Type())
+		s.WriteString(" " + typestring(sig.Results().At(0).Type()))
 	} else {
-		s += " ("
+		s.WriteString(" (")
 		for i := 0; i < sig.Results().Len(); i++ {
 			if i > 0 {
-				s += ", "
+				s.WriteString(", ")
 			}
-			s += typestring(sig.Results().At(i).Type())
+			s.WriteString(typestring(sig.Results().At(i).Type()))
 		}
-		s += ")"
+		s.WriteString(")")
 	}
-	return s
+	return s.String()
 }
 
 // typestring returns a stable (human-readable) type string for the given type

@@ -306,7 +306,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Find `import "C"` C fragments in the file.
 	p.cgoHeaders = make([]string, len(files)) // combined CGo header fragment for each file
 	for i, f := range files {
-		var cgoHeader string
+		var cgoHeader strings.Builder
 		for i := 0; i < len(f.Decls); i++ {
 			decl := f.Decls[i]
 			genDecl, ok := decl.(*ast.GenDecl)
@@ -341,7 +341,8 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 			// Iterate through all parts of the CGo header. Note that every //
 			// line is a new comment.
 			position := fset.Position(genDecl.Doc.Pos())
-			fragment := fmt.Sprintf("# %d %#v\n", position.Line, position.Filename)
+			var fragment strings.Builder
+			fragment.WriteString(fmt.Sprintf("# %d %#v\n", position.Line, position.Filename))
 			for _, comment := range genDecl.Doc.List {
 				// Find all #cgo lines, extract and use their contents, and
 				// replace the lines with spaces (to preserve locations).
@@ -358,12 +359,13 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 				} else { // comment
 					c = "  " + c[2:len(c)-2]
 				}
-				fragment += c + "\n"
+				fragment.WriteString(c)
+				fragment.WriteByte('\n')
 			}
-			cgoHeader += fragment
+			cgoHeader.WriteString(fragment.String())
 		}
 
-		p.cgoHeaders[i] = cgoHeader
+		p.cgoHeaders[i] = cgoHeader.String()
 	}
 
 	// Define CFlags that will be used while parsing the package.
