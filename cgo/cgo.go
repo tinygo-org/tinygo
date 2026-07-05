@@ -15,6 +15,7 @@ package cgo
 // source file parsing.
 
 import (
+	"crypto/sha512"
 	"fmt"
 	"go/ast"
 	"go/build/constraint"
@@ -60,8 +61,20 @@ type cgoPackage struct {
 	packageCFlags   []string // env and #cgo flags for C files
 	packageCXXFlags []string // env and #cgo flags for C++ files
 	ldflags         []string // LDFlags from #cgo lines
-	visitedFiles    map[string][]byte
-	cgoHeaders      []string
+	visitedFiles    [][]FileHash
+	cgoHeaders      []Header
+}
+
+// Header is a C translation unit generated from one Go file.
+type Header struct {
+	Preamble string
+	Wrappers string
+}
+
+// FileHash identifies a file read by libclang.
+type FileHash struct {
+	Path string
+	Sum  [sha512.Size224]byte
 }
 
 // cgoFile holds information only for a single Go file (with one or more
@@ -264,10 +277,10 @@ func _Cgo___get_errno() error {
 // with libclang, and modifies the AST to use this information. It returns a
 // newly created *ast.File that should be added to the list of to-be-parsed
 // files, the CGo header snippets that should be compiled (for inline
-// functions), the C, C++, and linker flags from env and #cgo lines, and a map
-// of file hashes of the accessed C header files. If there is one or more error,
+// functions), the C, C++, and linker flags from env and #cgo lines, and the
+// header files read in each libclang invocation. If there is one or more error,
 // it returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, env Flags, goos, goarch string, buildTags []string) ([]*ast.File, []string, []string, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, env Flags, goos, goarch string, buildTags []string) ([]*ast.File, []Header, []string, []string, []string, [][]FileHash, []error) {
 	p := &cgoPackage{
 		packageName:     files[0].Name.Name,
 		currentDir:      dir,
@@ -280,7 +293,6 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 		definedGlobally: map[string]ast.Node{},
 		noescapingFuncs: map[string]*noescapingFunc{},
 		anonDecls:       map[any]string{},
-		visitedFiles:    map[string][]byte{},
 	}
 
 	// Add a new location for the following file.
@@ -320,7 +332,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	p.generated.Comments = nil
 
 	// Find `import "C"` C fragments in the file.
-	p.cgoHeaders = make([]string, len(files)) // combined CGo header fragment for each file
+	p.cgoHeaders = make([]Header, len(files))
 	for i, f := range files {
 		var cgoHeader strings.Builder
 		for i := 0; i < len(f.Decls); i++ {
@@ -381,7 +393,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 			cgoHeader.WriteString(fragment.String())
 		}
 
-		p.cgoHeaders[i] = cgoHeader.String()
+		p.cgoHeaders[i].Preamble = cgoHeader.String()
 	}
 
 	// Define CFlags that will be used while parsing the package.
@@ -416,7 +428,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 		cf.names["_Bool"] = clangCursor{}
 		// Now read all the names (identifies) that C defines in the header
 		// snippet.
-		cf.readNames(p.cgoHeaders[i], cflagsForCGo, filepath.Base(fset.File(f.Pos()).Name()), func(names map[string]clangCursor) {
+		cf.readNames(p.cgoHeaders[i].Preamble, cflagsForCGo, filepath.Base(fset.File(f.Pos()).Name()), func(names map[string]clangCursor) {
 			for _, name := range builtinAliases {
 				// Names such as C.int should not be obtained from C.
 				// This works around an issue in picolibc that has `#define int`
@@ -1370,7 +1382,7 @@ func (f *cgoFile) getASTDeclNode(name string, found clangCursor) ast.Node {
 extern __typeof(%s) %s __attribute__((alias(%#v)));
 #endif
 `, extra.(string), callInst, name, globalName, name)
-			f.cgoHeaders[f.index] += "\n\n" + aliasDeclaration
+			f.cgoHeaders[f.index].Wrappers += "\n\n" + aliasDeclaration
 		} else {
 			// Regular (non-static) function.
 			f.definedGlobally[name] = node

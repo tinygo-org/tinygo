@@ -14,7 +14,6 @@ import (
 	"go/token"
 	"go/types"
 	"io"
-	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -113,9 +112,11 @@ type Package struct {
 	program      *Program
 	Files        []*ast.File
 	FileHashes   map[string][]byte
+	CGoInputs    [][]cgo.FileHash
 	CFlags       []string // CFlags used during CGo preprocessing (only set if CGo is used)
 	CXXFlags     []string // flags used to compile C++ files
-	CGoHeaders   []string // text above 'import "C"' lines
+	CGoHeaders   []cgo.Header
+	CGoASTHashes [][sha512.Size224]byte
 	EmbedGlobals map[string][]*EmbedFile
 	Pkg          *types.Package
 	info         types.Info
@@ -922,11 +923,21 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		p.CFlags = slices.Concat(initialCFlags, cflags)
 		p.CXXFlags = slices.Concat(initialCFlags, cxxflags)
 		p.CGoHeaders = headerCode
-		maps.Copy(p.FileHashes, accessedFiles)
+		p.CGoInputs = accessedFiles
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 		}
 		files = append(files, generated...)
+		if !p.program.analysis && len(errs) == 0 {
+			// A preprocessor query can change the Go AST without opening a header.
+			for _, file := range files {
+				hash := sha512.New512_224()
+				if err := printer.Fprint(hash, p.program.fset, file); err != nil {
+					return nil, err
+				}
+				p.CGoASTHashes = append(p.CGoASTHashes, [sha512.Size224]byte(hash.Sum(nil)))
+			}
+		}
 		p.program.LDFlags = append(p.program.LDFlags, ldflags...)
 	}
 

@@ -4,6 +4,7 @@
 package builder
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"crypto/sha512"
 	"debug/elf"
@@ -94,11 +95,49 @@ type packageAction struct {
 	CCompilerIdentity string
 	Config            *compiler.Config
 	CFlags            []string
-	FileHashes        map[string]string // hash of every file that's part of the package
+	GoInputs          []packageInput
+	CGoParseInputs    [][]packageInput  `json:",omitempty"`
+	CGoASTHashes      []string          `json:",omitempty"`
+	CGoCompileInputs  []cgoCompileInput `json:",omitempty"`
 	EmbeddedFiles     map[string]string // hash of all the //go:embed files in the package
 	Imports           map[string]string // map from imported package to action ID hash
 	OptLevel          string            // LLVM optimization level (O0, O1, O2, Os, Oz)
 	UndefinedGlobals  []string          // globals that are left as external globals (no initializer)
+}
+
+type packageInput struct {
+	Path string
+	Hash string
+}
+
+type cgoCompileInput struct {
+	Source      string
+	WrapperHash string `json:",omitempty"`
+	Headers     []packageInput
+}
+
+type cgoCompileJob struct {
+	source      string
+	flags       []string
+	wrapperHash string
+	inputs      []packageInput
+}
+
+func hashCDependencies(paths []string) ([]packageInput, error) {
+	inputs := make([]packageInput, 0, len(paths))
+	for _, path := range paths {
+		hash, err := hashFile(path)
+		if err != nil {
+			return nil, err
+		}
+		inputs = append(inputs, packageInput{path, hash})
+	}
+	return inputs, nil
+}
+
+func sortPackageInputs(inputs []packageInput) {
+	// Preserve observation order when multiple inputs share a recorded path.
+	slices.SortStableFunc(inputs, func(a, b packageInput) int { return cmp.Compare(a.Path, b.Path) })
 }
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -392,14 +431,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		// Create a job that will calculate the action ID for a package compile
 		// job. The action ID is the cache key that is used for caching this
 		// package.
-		var cgoHeaders []struct {
-			source string
-			flags  []string
-		}
+		var cgoHeaders []cgoCompileJob
 		packageNameHash := sha256.Sum256([]byte(pkg.ImportPath))
-		for i, text := range pkg.CGoHeaders {
+		for i, header := range pkg.CGoHeaders {
 			source := filepath.Join(tmpdir, fmt.Sprintf("cgosnippet-%x-%d.c", packageNameHash, i))
-			if err := os.WriteFile(source, []byte(text), 0o600); err != nil {
+			if err := os.WriteFile(source, []byte(header.Preamble+header.Wrappers), 0o600); err != nil {
 				return nil, err
 			}
 			flags := cgoHeaderCompileArgs(source, source+".bc", pkg.CFlags)
@@ -407,10 +443,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			if config.TrimPath() {
 				flags = append(flags, compileopts.FilePrefixMap(tmpdir, config.CSourcePath(pkg.RecordedDir())))
 			}
-			cgoHeaders = append(cgoHeaders, struct {
-				source string
-				flags  []string
-			}{source, flags})
+			var wrapperHash string
+			if header.Wrappers != "" {
+				hash := sha512.Sum512_224([]byte(header.Wrappers))
+				wrapperHash = hex.EncodeToString(hash[:])
+			}
+			cgoHeaders = append(cgoHeaders, cgoCompileJob{source: source, flags: flags, wrapperHash: wrapperHash})
 		}
 		packageActionIDJob := &compileJob{
 			description:  "calculate cache key for package " + pkg.ImportPath,
@@ -424,7 +462,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 					LLVMVersion:      llvm.Version,
 					Config:           compilerConfig,
 					CFlags:           pkg.RecordedCFlags(),
-					FileHashes:       make(map[string]string, len(pkg.FileHashes)),
 					EmbeddedFiles:    make(map[string]string, len(allFiles)),
 					Imports:          make(map[string]string, len(pkg.Pkg.Imports())),
 					OptLevel:         optLevel,
@@ -437,24 +474,40 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 					}
 					actionID.CCompilerIdentity = compilerID
 				}
-				for filePath, hash := range pkg.FileHashes {
-					actionID.FileHashes[pkg.RecordedPath(filePath)] = hex.EncodeToString(hash)
+				for _, filePath := range slices.Sorted(maps.Keys(pkg.FileHashes)) {
+					actionID.GoInputs = append(actionID.GoInputs, packageInput{pkg.RecordedPath(filePath), hex.EncodeToString(pkg.FileHashes[filePath])})
 				}
-				for _, header := range cgoHeaders {
+				sortPackageInputs(actionID.GoInputs)
+				for _, hash := range pkg.CGoASTHashes {
+					actionID.CGoASTHashes = append(actionID.CGoASTHashes, hex.EncodeToString(hash[:]))
+				}
+				for _, files := range pkg.CGoInputs {
+					var inputs []packageInput
+					for _, file := range files {
+						inputs = append(inputs, packageInput{pkg.RecordedPath(file.Path), hex.EncodeToString(file.Sum[:])})
+					}
+					sortPackageInputs(inputs)
+					actionID.CGoParseInputs = append(actionID.CGoParseInputs, inputs)
+				}
+				for i := range cgoHeaders {
+					header := &cgoHeaders[i]
+					input := cgoCompileInput{Source: filepath.Base(header.source), WrapperHash: header.wrapperHash}
 					dependencies, err := scanCDependencies(header.source, tmpdir, header.flags, config.Options.PrintCommands)
 					if err != nil {
 						return err
 					}
-					for _, dependency := range dependencies {
-						if dependency == header.source {
+					header.inputs, err = hashCDependencies(dependencies)
+					if err != nil {
+						return err
+					}
+					for _, dependency := range header.inputs {
+						if dependency.Path == header.source {
 							continue
 						}
-						hash, err := hashFile(dependency)
-						if err != nil {
-							return err
-						}
-						actionID.FileHashes[pkg.RecordedPath(dependency)] = hash
+						input.Headers = append(input.Headers, packageInput{pkg.RecordedPath(dependency.Path), dependency.Hash})
 					}
+					sortPackageInputs(input.Headers)
+					actionID.CGoCompileInputs = append(actionID.CGoCompileInputs, input)
 				}
 				for name, files := range allFiles {
 					actionID.EmbeddedFiles[name] = files[0].Hash
@@ -512,12 +565,16 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 				// Packages are compiled independently anyway.
 				for _, header := range cgoHeaders {
 					output := header.source + ".bc"
-					if config.Options.PrintCommands != nil {
-						config.Options.PrintCommands("clang", header.flags...)
-					}
-					err := runCCompiler(header.flags...)
+					dependencies, err := runCWithDependencies(header.source, tmpdir, header.flags, true, config.Options.PrintCommands)
 					if err != nil {
-						return &commandError{"failed to build CGo header", "", err}
+						return err
+					}
+					inputs, err := hashCDependencies(dependencies)
+					if err != nil {
+						return err
+					}
+					if !slices.Equal(inputs, header.inputs) {
+						return fmt.Errorf("CGo inputs changed during compilation of %s", pkg.ImportPath)
 					}
 
 					// Load and link the bitcode.

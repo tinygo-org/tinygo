@@ -184,9 +184,15 @@ func (f *cgoFile) readNames(fragment string, cflags []string, filename string, c
 	cursor := C.tinygo_clang_getTranslationUnitCursor(unit)
 	C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_globals_visitor), C.CXClientData(ref))
 
-	// Determine files read during CGo processing, for caching.
+	// The virtual main file is derived from Go sources and flags.
+	mainFile := C.clang_getFile(unit, filenameC)
+	seen := make(map[C.CXFile]bool)
+	var inputs []FileHash
 	inclusionCallback := func(includedFile C.CXFile) {
-		// Get full file path.
+		if includedFile == mainFile || seen[includedFile] {
+			return
+		}
+		seen[includedFile] = true
 		path := getString(C.clang_getFileName(includedFile))
 
 		// Get contents of file (that should be in-memory).
@@ -198,16 +204,12 @@ func (f *cgoFile) readNames(fragment string, cflags []string, filename string, c
 		}
 		data := unsafe.Slice((*byte)(unsafe.Pointer(rawData)), size)
 
-		// Hash the contents if it isn't hashed yet.
-		if _, ok := f.visitedFiles[path]; !ok {
-			// already stored
-			sum := sha512.Sum512_224(data)
-			f.visitedFiles[path] = sum[:]
-		}
+		inputs = append(inputs, FileHash{Path: path, Sum: sha512.Sum512_224(data)})
 	}
 	inclusionCallbackRef := storedRefs.Put(inclusionCallback)
 	defer storedRefs.Remove(inclusionCallbackRef)
 	C.clang_getInclusions(unit, C.CXInclusionVisitor(C.tinygo_clang_inclusion_visitor), C.CXClientData(inclusionCallbackRef))
+	f.visitedFiles = append(f.visitedFiles, inputs)
 
 	// Do all the C AST operations inside a callback. This makes sure that
 	// libclang related memory is only freed after it is not necessary anymore.

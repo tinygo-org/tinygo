@@ -2,11 +2,13 @@ package builder
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,13 +58,9 @@ func TestCGoHeaderCompileIsPathIndependent(t *testing.T) {
 }
 
 func TestCGoHeaderCacheDependencies(t *testing.T) {
-	cache := t.TempDir()
-	t.Setenv("HOME", cache)
-	t.Setenv("XDG_CACHE_HOME", cache)
-	t.Setenv("LocalAppData", cache)
-	dir := t.TempDir()
+	dir, config := cgoCacheTestConfig(t)
 	source := filepath.Join(dir, "main.go")
-	if err := os.WriteFile(source, []byte(`package main
+	writeCGoCacheFile(t, source, `package main
 /*
 #ifndef _FORTIFY_SOURCE
 #include "hidden.h"
@@ -77,8 +75,123 @@ static int value(void) {
 */
 import "C"
 func main() { println(C.value()) }
-`), 0o600); err != nil {
-		t.Fatal(err)
+`)
+	compilations := 0
+	config.Options.PrintCommands = func(command string, args ...string) {
+		if command == "clang" && slices.Contains(args, "-emit-llvm") && !slices.Contains(args, "-M") {
+			compilations++
+		}
+	}
+	previous := 0
+	for i, value := range []string{"1", "2", "2"} {
+		writeCGoCacheFile(t, filepath.Join(dir, "hidden.h"), "#define HIDDEN "+value+"\n")
+		checkCGoCacheBuild(t, dir, source, value, config)
+		if i == 1 && compilations == previous {
+			t.Fatal("editing a compiler-only header reused cached bitcode")
+		}
+		if i == 2 && compilations != previous {
+			t.Fatal("unchanged CGo inputs were recompiled")
+		}
+		previous = compilations
+	}
+}
+
+func TestCGoHeaderCacheParseAndCompile(t *testing.T) {
+	dir, config := cgoCacheTestConfig(t)
+	source := filepath.Join(dir, "main.go")
+	header := filepath.Join(dir, "value.h")
+	writeCGoCacheFile(t, source, fmt.Sprintf(`package main
+/*
+#include "%s"
+static int value(void) { return NUMBER; }
+*/
+import "C"
+func main() { println(C.NUMBER, C.value()) }
+`, filepath.ToSlash(header)))
+	writeCGoCacheFile(t, header, "#define NUMBER 1\n")
+	changed := false
+	config.Options.PrintCommands = func(command string, args ...string) {
+		if !changed && command == "clang" && slices.Contains(args, "-M") && slices.Contains(args, "-emit-llvm") {
+			changed = true
+			if err := os.WriteFile(header, []byte("#define NUMBER 2\n"), 0o600); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	for _, want := range []string{"1 2", "2 2"} {
+		checkCGoCacheBuild(t, dir, source, want, config)
+	}
+}
+
+func TestCGoHeaderCacheParserOnlyLookup(t *testing.T) {
+	dir, config := cgoCacheTestConfig(t)
+	source := filepath.Join(dir, "main.go")
+	writeCGoCacheFile(t, source, `package main
+	/*
+	#ifdef _FORTIFY_SOURCE
+	#if __has_include("optional.h")
+	#define NUMBER 2
+	#endif
+	#endif
+	#ifndef NUMBER
+	#define NUMBER 1
+	#endif
+	*/
+	import "C"
+	func main() { println(C.NUMBER) }
+	`)
+	for i, want := range []string{"1", "2", "1"} {
+		header := filepath.Join(dir, "optional.h")
+		if i == 1 {
+			writeCGoCacheFile(t, header, "/* optional */\n")
+		} else if i == 2 {
+			if err := os.Remove(header); err != nil {
+				t.Fatal(err)
+			}
+		}
+		checkCGoCacheBuild(t, dir, source, want, config)
+	}
+}
+
+func TestCGoHeaderCacheRejectsChangedCompileInputs(t *testing.T) {
+	dir, config := cgoCacheTestConfig(t)
+	source := filepath.Join(dir, "main.go")
+	header := filepath.Join(dir, "hidden.h")
+	writeCGoCacheFile(t, source, `package main
+	/*
+	#ifdef _FORTIFY_SOURCE
+	static int value(void) { return 0; }
+	#else
+	#include "hidden.h"
+	static int value(void) { return NUMBER; }
+	#endif
+	*/
+	import "C"
+	func main() { println(C.value()) }
+	`)
+	writeCGoCacheFile(t, header, "#define NUMBER 1\n")
+	changed := false
+	config.Options.PrintCommands = func(command string, args ...string) {
+		if command == "clang" && slices.Contains(args, "-emit-llvm") && !slices.Contains(args, "-M") && !changed {
+			changed = true
+			if err := os.WriteFile(header, []byte("#define NUMBER 2\n"), 0o600); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	_, err := Build(source, filepath.Join(dir, "probe"), t.TempDir(), config)
+	if !changed || err == nil || !strings.Contains(err.Error(), "CGo inputs changed during compilation") {
+		t.Fatalf("build with changed inputs: err = %v, edit performed = %v", err, changed)
+	}
+	writeCGoCacheFile(t, header, "#define NUMBER 1\n")
+	checkCGoCacheBuild(t, dir, source, "1", config)
+}
+
+func cgoCacheTestConfig(t *testing.T) (string, *compileopts.Config) {
+	t.Helper()
+	cache := t.TempDir()
+	for _, name := range []string{"HOME", "XDG_CACHE_HOME", "LocalAppData"} {
+		t.Setenv(name, cache)
 	}
 	config, err := NewConfig(&compileopts.Options{
 		GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
@@ -88,34 +201,24 @@ func main() { println(C.value()) }
 	if err != nil {
 		t.Fatal(err)
 	}
-	compilations := 0
-	config.Options.PrintCommands = func(command string, args ...string) {
-		if command == "clang" && slices.Contains(args, "-emit-llvm") && !slices.Contains(args, "-M") {
-			compilations++
-		}
+	return t.TempDir(), config
+}
+
+func writeCGoCacheFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	previous := 0
-	for i, value := range []string{"1", "2", "2"} {
-		if err := os.WriteFile(filepath.Join(dir, "hidden.h"), []byte("#define HIDDEN "+value+"\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		result, err := Build(source, filepath.Join(dir, "probe"), t.TempDir(), config)
-		if err != nil {
-			t.Fatal(err)
-		}
-		output, err := exec.Command(result.Executable).CombinedOutput()
-		if err != nil {
-			t.Fatalf("running CGo program: %v\n%s", err, output)
-		}
-		if got := string(bytes.TrimSpace(output)); got != value {
-			t.Fatalf("CGo result = %q, want %q", got, value)
-		}
-		if i == 1 && compilations == previous {
-			t.Fatal("editing a compiler-only header reused cached bitcode")
-		}
-		if i == 2 && compilations != previous {
-			t.Fatal("unchanged CGo inputs were recompiled")
-		}
-		previous = compilations
+}
+
+func checkCGoCacheBuild(t *testing.T, dir, source, want string, config *compileopts.Config) {
+	t.Helper()
+	result, err := Build(source, filepath.Join(dir, "probe"), t.TempDir(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := exec.Command(result.Executable).CombinedOutput()
+	if got := string(bytes.TrimSpace(output)); err != nil || got != want {
+		t.Fatalf("CGo result = %q, err = %v, want %q", got, err, want)
 	}
 }
