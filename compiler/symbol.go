@@ -705,10 +705,7 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 		llvmGlobal = llvm.AddGlobal(c.mod, llvmType, info.linkName)
 
 		// Set alignment from the //go:align comment.
-		alignment := c.targetData.ABITypeAlignment(llvmType)
-		if info.align > alignment {
-			alignment = info.align
-		}
+		alignment := max(info.align, c.targetData.ABITypeAlignment(llvmType))
 		if alignment <= 0 || alignment&(alignment-1) != 0 {
 			// Check for power-of-two (or 0).
 			// See: https://stackoverflow.com/a/108360

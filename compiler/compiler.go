@@ -2154,13 +2154,10 @@ func (c *compilerContext) maxSliceSize(elementType llvm.Type) uint64 {
 	if elementSize == 0 {
 		elementSize = 1
 	}
-	maxSize := maxPointerValue / elementSize
-
-	// len(slice) is an int. Make sure the length remains small enough to fit in
-	// an int.
-	if maxSize > maxIntegerValue {
-		maxSize = maxIntegerValue
-	}
+	maxSize := min(
+		// len(slice) is an int. Make sure the length remains small enough to fit in
+		// an int.
+		maxPointerValue/elementSize, maxIntegerValue)
 
 	return maxSize
 }

@@ -490,10 +490,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeMethodSet(typ),
 			}, typeFields...)
 		}
-		alignment := c.targetData.TypeAllocSize(c.dataPtrType)
-		if alignment < 4 {
-			alignment = 4
-		}
+		alignment := max(c.targetData.TypeAllocSize(c.dataPtrType), 4)
 		globalValue := c.ctx.ConstStruct(typeFields, false)
 		global.SetInitializer(globalValue)
 		if isLocal {

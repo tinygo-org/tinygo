@@ -116,10 +116,7 @@ func Diff(oldName string, old []byte, newName string, new []byte) []byte {
 
 		// End chunk with common lines for context.
 		if len(ctext) > 0 {
-			n := end.x - start.x
-			if n > C {
-				n = C
-			}
+			n := min(end.x-start.x, C)
 			for _, s := range x[start.x : start.x+n] {
 				ctext = append(ctext, " "+s)
 				count.x++
