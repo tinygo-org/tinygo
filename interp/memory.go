@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"slices"
@@ -81,9 +82,7 @@ func (mv *memoryView) extend(sub memoryView) {
 	if mv.objects == nil && len(sub.objects) != 0 {
 		mv.objects = make(map[uint32]object)
 	}
-	for key, value := range sub.objects {
-		mv.objects[key] = value
-	}
+	maps.Copy(mv.objects, sub.objects)
 	mv.instructions = append(mv.instructions, sub.instructions...)
 }
 

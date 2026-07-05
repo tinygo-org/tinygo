@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"go/types"
 	"hash/crc32"
+	"maps"
 	"math/bits"
 	"os"
 	"os/exec"
@@ -137,9 +138,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		if _, ok := globalValues[pkgPath]; !ok {
 			globalValues[pkgPath] = map[string]string{}
 		}
-		for k, v := range vals {
-			globalValues[pkgPath][k] = v
-		}
+		maps.Copy(globalValues[pkgPath], vals)
 	}
 
 	// Check for a libc dependency.
