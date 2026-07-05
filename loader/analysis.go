@@ -28,7 +28,7 @@ type Analysis struct {
 
 // LoadForAnalysis retains distinct package identities when includeTests is true.
 // Overlay keys are absolute original source paths, not cached GOROOT paths.
-func LoadForAnalysis(config *compileopts.Config, patterns []string, sizes types.Sizes, overlay map[string][]byte, includeTests bool) (*Analysis, error) {
+func LoadForAnalysis(config *compileopts.Config, patterns []string, sizes types.Sizes, overlay map[string][]byte, includeTests bool, prepareCGo func(*compileopts.Config) (func(), error)) (*Analysis, error) {
 	if sizes == nil {
 		return nil, fmt.Errorf("analysis requires target type sizes")
 	}
@@ -49,6 +49,18 @@ func LoadForAnalysis(config *compileopts.Config, patterns []string, sizes types.
 	program, err := load(&cfg, patterns, types.Config{Sizes: sizes}, true, overlay)
 	if err != nil {
 		return nil, err
+	}
+	for _, pkg := range program.sorted {
+		if len(pkg.CgoFiles) != 0 {
+			cleanup, err := prepareCGo(&cfg)
+			if err != nil {
+				return nil, err
+			}
+			if cleanup != nil {
+				defer cleanup()
+			}
+			break
+		}
 	}
 	if err := program.Parse(); err != nil {
 		return nil, err

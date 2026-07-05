@@ -219,6 +219,70 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, compileConfig
 	return outpath, nil
 }
 
+func scanCDependencies(source, tmpdir string, flags []string, printCommands func(string, ...string)) ([]string, error) {
+	depFile, err := os.CreateTemp(tmpdir, "dep-*.d")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(depFile.Name())
+	if err := depFile.Close(); err != nil {
+		return nil, err
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	baseDir := workingDir
+	for i, flag := range flags {
+		dir := ""
+		if strings.HasPrefix(flag, "-working-directory=") {
+			dir = strings.TrimPrefix(flag, "-working-directory=")
+		} else if flag == "-working-directory" && i+1 < len(flags) {
+			dir = flags[i+1]
+		}
+		if dir != "" {
+			if !filepath.IsAbs(dir) {
+				dir = appendPath(baseDir, dir)
+			}
+			workingDir = dir
+		}
+	}
+	args := append([]string(nil), flags...)
+	args = append(args, "-M", "-MV", "-MTdeps", "-MF", depFile.Name(), "-Qunused-arguments")
+	if printCommands != nil {
+		printCommands("clang", args...)
+	}
+	if err := runCCompiler(args...); err != nil {
+		return nil, &commandError{"failed to scan dependencies", source, err}
+	}
+	paths, err := readDepFile(depFile.Name())
+	if err != nil {
+		return nil, err
+	}
+	paths = append(paths, source)
+	dependencies := make(map[string]struct{}, len(paths))
+	var result []string
+	for _, path := range paths {
+		if !filepath.IsAbs(path) {
+			path = appendPath(workingDir, path)
+		}
+		if _, ok := dependencies[path]; !ok {
+			dependencies[path] = struct{}{}
+			result = append(result, path)
+		}
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+// appendPath preserves parent components for filesystem resolution.
+func appendPath(dir, name string) string {
+	if dir == "" || os.IsPathSeparator(dir[len(dir)-1]) {
+		return dir + name
+	}
+	return dir + string(filepath.Separator) + name
+}
+
 // Create a cache path (a path in GOCACHE) to store the output of a compiler
 // job. This path is based on the dep file name (which is a hash of metadata
 // including compiler flags) and the hash of all input files in the paths slice.
