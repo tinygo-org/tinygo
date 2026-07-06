@@ -383,6 +383,45 @@ func TestValueSeq2(t *testing.T) {
 	}
 }
 
+func TestValueFields(t *testing.T) {
+	type T struct {
+		First  int
+		Second string
+		Third  bool
+	}
+	v := ValueOf(T{First: 10, Second: "visible", Third: true})
+
+	names := []string{"First", "Second", "Third"}
+	values := []any{10, "visible", true}
+	var count int
+	for field, value := range v.Fields() {
+		if field.Name != names[count] {
+			t.Fatalf("field %d name = %q, want %q", count, field.Name, names[count])
+		}
+		if field.Index[0] != count {
+			t.Fatalf("field %d index = %v, want [%d]", count, field.Index, count)
+		}
+		if got := value.Interface(); got != values[count] {
+			t.Fatalf("field %d value = %v, want %v", count, got, values[count])
+		}
+		count++
+	}
+	if count != len(names) {
+		t.Fatalf("field count = %d, want %d", count, len(names))
+	}
+
+	count = 0
+	for field := range v.Type().Fields() {
+		if field.Name != names[count] {
+			t.Fatalf("type field %d name = %q, want %q", count, field.Name, names[count])
+		}
+		count++
+	}
+	if count != len(names) {
+		t.Fatalf("type field count = %d, want %d", count, len(names))
+	}
+}
+
 // methodIter is a type from which we can derive a method
 // value that is an iter.Seq.
 type methodIter struct{}

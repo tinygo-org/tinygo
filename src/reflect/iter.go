@@ -8,6 +8,31 @@ import (
 	"iter"
 )
 
+// Fields returns an iterator over each StructField of v along with its Value.
+func (v Value) Fields() iter.Seq2[StructField, Value] {
+	if v.Kind() != Struct {
+		panic(&ValueError{Method: "reflect.Value.Fields", Kind: v.Kind()})
+	}
+	return func(yield func(StructField, Value) bool) {
+		for i, n := 0, v.NumField(); i < n; i++ {
+			if !yield(v.Type().Field(i), v.Field(i)) {
+				return
+			}
+		}
+	}
+}
+
+// Methods returns an iterator over each Method of v along with its Value.
+func (v Value) Methods() iter.Seq2[Method, Value] {
+	return func(yield func(Method, Value) bool) {
+		for i, n := 0, v.NumMethod(); i < n; i++ {
+			if !yield(v.Type().Method(i), v.Method(i)) {
+				return
+			}
+		}
+	}
+}
+
 func rangeNum[T int8 | int16 | int32 | int64 | int |
 	uint8 | uint16 | uint32 | uint64 | uint |
 	uintptr, N int64 | uint64](num N, t Type) iter.Seq[Value] {
