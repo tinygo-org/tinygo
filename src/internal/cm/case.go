@@ -12,8 +12,8 @@ func CaseUnmarshaler[T ~uint8 | ~uint16 | ~uint32](cases []string) func(v *T, te
 				return &emptyTextError{}
 			}
 			s := string(text)
-			for i := range cases {
-				if cases[i] == s {
+			for i, c := range cases {
+				if c == s {
 					*v = T(i)
 					return nil
 				}

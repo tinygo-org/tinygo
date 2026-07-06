@@ -390,7 +390,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.wasmName = info.linkName
 			info.exported = true
 		case "//go:interrupt":
-			if hasUnsafeImport(f.Pkg.Pkg) {
+			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.interrupt = true
 			}
 		case "//go:wasm-module":
@@ -452,14 +452,14 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// This is a slightly looser requirement than what gc uses: gc
 			// requires the file to import "unsafe", not the package as a
 			// whole.
-			if hasUnsafeImport(f.Pkg.Pkg) {
+			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.linkName = parts[2]
 			}
 		case "//go:section":
 			// Only enable go:section when the package imports "unsafe".
 			// go:section also implies go:noinline since inlining could
 			// move the code to a different section than that requested.
-			if len(parts) == 2 && hasUnsafeImport(f.Pkg.Pkg) {
+			if len(parts) == 2 && slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.section = parts[1]
 				info.inline = inlineNone
 			}
@@ -468,7 +468,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// runtime functions.
 			// This is somewhat dangerous and thus only imported in packages
 			// that import unsafe.
-			if hasUnsafeImport(f.Pkg.Pkg) {
+			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.nobounds = true
 			}
 		case "//go:noescape":
@@ -779,7 +779,7 @@ func (info *globalInfo) parsePragmas(doc *ast.CommentGroup, c *compilerContext, 
 			// This is a slightly looser requirement than what gc uses: gc
 			// requires the file to import "unsafe", not the package as a
 			// whole.
-			if hasUnsafeImport(g.Pkg.Pkg) {
+			if slices.Contains(g.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.linkName = parts[2]
 			}
 		}
@@ -794,9 +794,4 @@ func getAllMethods(prog *ssa.Program, typ types.Type) []*types.Selection {
 		methods[i] = ms.At(i)
 	}
 	return methods
-}
-
-// Return true if this package imports "unsafe", false otherwise.
-func hasUnsafeImport(pkg *types.Package) bool {
-	return slices.Contains(pkg.Imports(), types.Unsafe)
 }

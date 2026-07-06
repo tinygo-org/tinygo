@@ -1308,11 +1308,13 @@ func signature(sig *types.Signature) string {
 		s.WriteString("()")
 	} else {
 		s.WriteString("(")
-		for i := 0; i < sig.Params().Len(); i++ {
+		i := 0
+		for v := range sig.Params().Variables() {
 			if i > 0 {
 				s.WriteString(", ")
 			}
-			s.WriteString(typestring(sig.Params().At(i).Type()))
+			s.WriteString(typestring(v.Type()))
+			i++
 		}
 		s.WriteString(")")
 	}
@@ -1322,11 +1324,13 @@ func signature(sig *types.Signature) string {
 		s.WriteString(" " + typestring(sig.Results().At(0).Type()))
 	} else {
 		s.WriteString(" (")
-		for i := 0; i < sig.Results().Len(); i++ {
+		i := 0
+		for v := range sig.Results().Variables() {
 			if i > 0 {
 				s.WriteString(", ")
 			}
-			s.WriteString(typestring(sig.Results().At(i).Type()))
+			s.WriteString(typestring(v.Type()))
+			i++
 		}
 		s.WriteString(")")
 	}
