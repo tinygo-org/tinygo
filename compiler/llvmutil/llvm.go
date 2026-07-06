@@ -44,7 +44,7 @@ func CreateTemporaryAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type, n
 	alloca = CreateEntryBlockAlloca(builder, t, name)
 	size = llvm.ConstInt(ctx.Int64Type(), targetData.TypeAllocSize(t), false)
 	fnType, fn := getLifetimeStartFunc(mod)
-	builder.CreateCall(fnType, fn, []llvm.Value{size, alloca}, "")
+	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, alloca), "")
 	return
 }
 
@@ -58,14 +58,14 @@ func CreateInstructionAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type,
 	builder.SetInsertPointBefore(inst)
 	size := llvm.ConstInt(ctx.Int64Type(), targetData.TypeAllocSize(t), false)
 	fnType, fn := getLifetimeStartFunc(mod)
-	builder.CreateCall(fnType, fn, []llvm.Value{size, alloca}, "")
+	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, alloca), "")
 	if next := llvm.NextInstruction(inst); !next.IsNil() {
 		builder.SetInsertPointBefore(next)
 	} else {
 		builder.SetInsertPointAtEnd(inst.InstructionParent())
 	}
 	fnType, fn = getLifetimeEndFunc(mod)
-	builder.CreateCall(fnType, fn, []llvm.Value{size, alloca}, "")
+	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, alloca), "")
 	return alloca
 }
 
@@ -74,7 +74,27 @@ func CreateInstructionAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type,
 // createTemporaryAlloca.
 func EmitLifetimeEnd(builder llvm.Builder, mod llvm.Module, ptr, size llvm.Value) {
 	fnType, fn := getLifetimeEndFunc(mod)
-	builder.CreateCall(fnType, fn, []llvm.Value{size, ptr}, "")
+	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, ptr), "")
+}
+
+// lifetimeCallArgs returns the arguments to pass to a call of the
+// llvm.lifetime.start/end intrinsics. LLVM 22 dropped the (redundant,
+// already required to match the alloca size) i64 size argument, so the
+// intrinsic now only takes the pointer.
+func lifetimeCallArgs(size, ptr llvm.Value) []llvm.Value {
+	if Version() >= 22 {
+		return []llvm.Value{ptr}
+	}
+	return []llvm.Value{size, ptr}
+}
+
+// lifetimeFuncType returns the function type of the llvm.lifetime.start/end
+// intrinsics, which lost their i64 size parameter in LLVM 22.
+func lifetimeFuncType(ctx llvm.Context, ptrType llvm.Type) llvm.Type {
+	if Version() >= 22 {
+		return llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+	}
+	return llvm.FunctionType(ctx.VoidType(), []llvm.Type{ctx.Int64Type(), ptrType}, false)
 }
 
 // getLifetimeStartFunc returns the llvm.lifetime.start intrinsic and creates it
@@ -84,7 +104,7 @@ func getLifetimeStartFunc(mod llvm.Module) (llvm.Type, llvm.Value) {
 	fn := mod.NamedFunction(fnName)
 	ctx := mod.Context()
 	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
-	fnType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ctx.Int64Type(), ptrType}, false)
+	fnType := lifetimeFuncType(ctx, ptrType)
 	if fn.IsNil() {
 		fn = llvm.AddFunction(mod, fnName, fnType)
 	}
@@ -98,7 +118,7 @@ func getLifetimeEndFunc(mod llvm.Module) (llvm.Type, llvm.Value) {
 	fn := mod.NamedFunction(fnName)
 	ctx := mod.Context()
 	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
-	fnType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ctx.Int64Type(), ptrType}, false)
+	fnType := lifetimeFuncType(ctx, ptrType)
 	if fn.IsNil() {
 		fn = llvm.AddFunction(mod, fnName, fnType)
 	}
@@ -216,6 +236,36 @@ func Version() int {
 		panic("unexpected error while parsing LLVM version: " + err.Error()) // should not happen
 	}
 	return major
+}
+
+// NoCaptureAttrName returns the name of the LLVM attribute kind that marks a
+// pointer parameter as guaranteed not to escape by capture.
+//
+// LLVM 21 removed the old boolean 'nocapture' enum attribute in favor of the
+// more expressive 'captures' int attribute, where 'captures(none)' (encoded
+// as the value 0) is the equivalent of the old 'nocapture'. LLVM 20 supports
+// both, but its own optimizer still emits 'nocapture', so the cutoff for
+// reading/writing the new name is LLVM 21.
+func NoCaptureAttrName() string {
+	if Version() >= 21 {
+		return "captures"
+	}
+	return "nocapture"
+}
+
+// IsNoCapture reports whether attr (looked up using the kind returned by
+// NoCaptureAttrName) indicates that the pointer it is attached to does not
+// escape by capture. It returns false for a nil attribute.
+func IsNoCapture(attr llvm.Attribute) bool {
+	if attr.IsNil() {
+		return false
+	}
+	if Version() >= 21 {
+		// captures(none) is encoded as the value 0; any other value permits
+		// some form of capture.
+		return attr.GetEnumValue() == 0
+	}
+	return true
 }
 
 // ByteOrder returns the byte order for the given target triple. Most targets are little

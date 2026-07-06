@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -99,6 +100,29 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 // equal. That means, only relevant lines are compared (excluding comments
 // etc.).
 func fuzzyEqualIR(s1, s2 string) bool {
+	// Golden files are written using the pre-LLVM21 'nocapture' spelling,
+	// which LLVM printed before any co-occurring attribute such as
+	// 'readonly' (e.g. "ptr nocapture readonly"). LLVM 21+ prints the
+	// equivalent 'captures(none)' instead, and after such attributes (e.g.
+	// "ptr readonly captures(none)"). Normalize both name and position back
+	// to the old spelling to keep a single golden file working across LLVM
+	// versions.
+	s1 = normalizeCapturesAttr(s1)
+	s2 = normalizeCapturesAttr(s2)
+
+	// LLVM 21+ also added an explicit 'nocreateundeforpoison' attribute to
+	// certain intrinsic declarations (e.g. llvm.umin) that were implicitly
+	// assumed not to create undef/poison before. It's unrelated to the
+	// escape-analysis behavior under test, so ignore it for comparison.
+	s1 = strings.ReplaceAll(s1, "nocreateundeforpoison ", "")
+	s2 = strings.ReplaceAll(s2, "nocreateundeforpoison ", "")
+
+	// LLVM 22 dropped the (redundant) i64 size argument from
+	// llvm.lifetime.start/end. Normalize away that argument so golden files
+	// written against the two-argument form still match.
+	s1 = lifetimeSizeArgRe.ReplaceAllString(s1, "$1")
+	s2 = lifetimeSizeArgRe.ReplaceAllString(s2, "$1")
+
 	lines1 := filterIrrelevantIRLines(strings.Split(s1, "\n"))
 	lines2 := filterIrrelevantIRLines(strings.Split(s2, "\n"))
 	if len(lines1) != len(lines2) {
@@ -112,6 +136,25 @@ func fuzzyEqualIR(s1, s2 string) bool {
 	}
 
 	return true
+}
+
+// capturesNoneAttrRe matches a co-occurring attribute directly followed by
+// 'captures(none)', which is how LLVM 21+ orders these two attributes when
+// printing IR (the pre-LLVM21 'nocapture' attribute printed the other way
+// around).
+var capturesNoneAttrRe = regexp.MustCompile(`\b(readonly|readnone|writeonly|nonnull)\s+captures\(none\)`)
+
+// lifetimeSizeArgRe matches the i64 size argument of an
+// llvm.lifetime.start/end call or declaration, which LLVM 22 removed.
+var lifetimeSizeArgRe = regexp.MustCompile(`(@llvm\.lifetime\.(?:start|end)\.p0\()i64(?: immarg| \d+), `)
+
+// normalizeCapturesAttr rewrites LLVM 21+'s 'captures(none)' attribute back
+// to the pre-LLVM21 'nocapture' spelling and position, so golden IR files
+// written against LLVM <21 keep matching.
+func normalizeCapturesAttr(s string) string {
+	s = capturesNoneAttrRe.ReplaceAllString(s, "nocapture $1")
+	s = strings.ReplaceAll(s, "captures(none)", "nocapture")
+	return s
 }
 
 // filterIrrelevantIRLines removes lines from the input slice of strings that

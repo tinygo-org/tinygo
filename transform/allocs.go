@@ -12,6 +12,7 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -260,7 +261,7 @@ func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[l
 	if called.IsAFunction().IsNil() {
 		return escapeResult{escapeAt: call}
 	}
-	kindNoCapture := llvm.AttributeKindID("nocapture")
+	kindNoCapture := llvm.AttributeKindID(llvmutil.NoCaptureAttrName())
 	kindReturned := llvm.AttributeKindID("returned")
 	matched := false
 	var result escapeResult
@@ -270,7 +271,7 @@ func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[l
 		}
 		matched = true
 		index := i + 1 // param attributes start at 1
-		nocapture := !called.GetEnumAttributeAtIndex(index, kindNoCapture).IsNil()
+		nocapture := llvmutil.IsNoCapture(called.GetEnumAttributeAtIndex(index, kindNoCapture))
 		returnedParam := !called.GetEnumAttributeAtIndex(index, kindReturned).IsNil()
 		if returnedParam {
 			result.returned = true
