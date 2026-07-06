@@ -53,13 +53,13 @@ func stopTimer(tim *timeTimer) bool {
 
 //go:linkname resetTimer time.resetTimer
 func resetTimer(t *timeTimer, when, period int64) bool {
-	t.timer.when = when
-	t.timer.period = period
 	n := removeTimer(&t.timer)
 	removed := n != nil
 	if n == nil {
 		n = new(timerNode)
 	}
+	t.timer.when = when
+	t.timer.period = period
 	n.timer = &t.timer
 	n.callback = timerCallback
 	addTimer(n)
@@ -84,6 +84,19 @@ type timerNode struct {
 	next     *timerNode
 	timer    *timer
 	callback func(node *timerNode, delta int64)
+
+	// The following fields are only used by schedulers that run timer
+	// callbacks concurrently with user goroutines (the threads and cores
+	// schedulers). They make it possible to stop or reset a periodic timer (a
+	// ticker) while its callback is running, without the callback re-adding the
+	// timer to the queue afterwards. They are protected by the scheduler's
+	// timer lock.
+	//
+	// firingNext links nodes whose callback is currently running into the
+	// firingTimers list. stopped is set when the timer was stopped or reset
+	// while its callback was running, so that timerCallback does not re-add it.
+	firingNext *timerNode
+	stopped    bool
 }
 
 // whenTicks returns the (absolute) time when this timer should trigger next.
@@ -108,8 +121,7 @@ func timerCallback(tn *timerNode, delta int64) {
 
 	// If this is a periodic timer (a ticker), re-add it to the queue.
 	if tn.timer.period != 0 {
-		tn.timer.when += tn.timer.period
-		addTimer(tn)
+		reAddTimer(tn)
 	}
 }
 

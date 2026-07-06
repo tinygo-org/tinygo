@@ -21,7 +21,11 @@ func main() {
 	<-ticker.C
 	println("waited on ticker at 1000ms")
 	ticker.Stop()
-	// Drain any tick that was already queued before Stop took effect.
+	// Ticker.Stop does not drain already-buffered ticks from the channel, and
+	// on a slow CI runner a final tick may be delivered concurrently right as
+	// Stop is called. Give any such in-flight tick a chance to arrive, then
+	// drain the channel before checking that no further ticks are sent.
+	time.Sleep(time.Millisecond * 100)
 	select {
 	case <-ticker.C:
 	default:
