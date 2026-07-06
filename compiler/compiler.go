@@ -1354,6 +1354,15 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 // diagnostic.
 func (b *builder) createFunction() {
 	b.createFunctionStart(false)
+	// createFunctionStart returns early (leaving blockInfo unset) when it hits
+	// an error such as a redeclared symbol. Don't plow into the block loop and
+	// panic on an empty blockInfo — the error was already recorded.
+	if b.blockInfo == nil {
+		// TINYGO-DEBUG: surface the redeclaration collision.
+		fmt.Printf("TINYGO-DEBUG skipping fn (redeclared/errored): %s  pkg=%s\n",
+			b.fn.RelString(nil), b.fn.Pkg.Pkg.Path())
+		return
+	}
 
 	// Fill blocks with instructions.
 	for _, block := range b.fn.DomPreorder() {
