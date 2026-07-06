@@ -206,7 +206,7 @@ func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType l
 	globalType := llvm.ArrayType(elementType, len(buf))
 	global := llvm.AddGlobal(c.mod, globalType, name)
 	value := llvm.Undef(globalType)
-	for i := 0; i < len(buf); i++ {
+	for i := range buf {
 		ch := uint64(buf[i])
 		value = c.builder.CreateInsertValue(value, llvm.ConstInt(elementType, ch, false), i, "")
 	}
@@ -390,7 +390,7 @@ func (c *compilerContext) buildPointerBitmap(
 			return
 		}
 		elementSize /= ptrAlign
-		for i := 0; i < len; i++ {
+		for i := range len {
 			c.buildPointerBitmap(
 				dst,
 				ptrAlign,
@@ -417,7 +417,7 @@ func (c *compilerContext) archFamily() string {
 // features string is not one for an ARM architecture.
 func (c *compilerContext) isThumb() bool {
 	var isThumb, isNotThumb bool
-	for _, feature := range strings.Split(c.Features, ",") {
+	for feature := range strings.SplitSeq(c.Features, ",") {
 		if feature == "+thumb-mode" {
 			isThumb = true
 		}

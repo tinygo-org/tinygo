@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"go/types"
 	"hash/crc32"
+	"maps"
 	"math/bits"
 	"os"
 	"os/exec"
@@ -137,9 +138,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		if _, ok := globalValues[pkgPath]; !ok {
 			globalValues[pkgPath] = map[string]string{}
 		}
-		for k, v := range vals {
-			globalValues[pkgPath][k] = v
-		}
+		maps.Copy(globalValues[pkgPath], vals)
 	}
 
 	// Check for a libc dependency.
@@ -278,7 +277,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	var embedFileObjects []*compileJob
 	for _, pkg := range lprogram.Sorted() {
-		pkg := pkg // necessary to avoid a race condition
 
 		var undefinedGlobals []string
 		for name := range globalValues[pkg.Pkg.Path()] {
@@ -775,7 +773,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// TODO: do this as part of building the package to be able to link the
 	// bitcode files together.
 	for _, pkg := range lprogram.Sorted() {
-		pkg := pkg
 		for _, filename := range pkg.CFiles {
 			abspath := filepath.Join(pkg.OriginalDir(), filename)
 			job := &compileJob{
@@ -914,7 +911,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 
 			// Run wasm-opt for wasm binaries
-			if arch := strings.Split(config.Triple(), "-")[0]; arch == "wasm32" {
+			if arch, _, _ := strings.Cut(config.Triple(), "-"); arch == "wasm32" {
 				optLevel, _, _ := config.OptLevel()
 				opt := "-" + optLevel
 

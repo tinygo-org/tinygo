@@ -40,7 +40,7 @@ func convertBinToUF2(input []byte, targetAddr uint32, uf2FamilyID string) ([]byt
 	}
 	bl.SetNumBlocks(len(blocks))
 
-	for i := 0; i < len(blocks); i++ {
+	for i := range blocks {
 		bl.SetBlockNo(i)
 		bl.SetData(blocks[i])
 

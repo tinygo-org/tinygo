@@ -11,7 +11,7 @@ type testItem struct {
 
 func TestPool(t *testing.T) {
 	p := sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return &testItem{}
 		},
 	}

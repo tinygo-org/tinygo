@@ -281,7 +281,7 @@ func parseDepFile(s string) ([]string, error) {
 	s = strings.ReplaceAll(s, "\\\n", " ")
 
 	// Only use the first line, which is expected to begin with "deps:".
-	line := strings.SplitN(s, "\n", 2)[0]
+	line, _, _ := strings.Cut(s, "\n")
 	if !strings.HasPrefix(line, "deps:") {
 		return nil, errors.New("readDepFile: expected 'deps:' prefix")
 	}

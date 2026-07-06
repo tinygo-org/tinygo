@@ -26,24 +26,25 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		argTypes := []llvm.Type{b.uintptrType}
 		// Constraints will look something like:
 		//   "={rax},0,{rdi},{rsi},{rdx},{r10},{r8},{r9},~{rcx},~{r11}"
-		constraints := "={rax},0"
+		var constraints strings.Builder
+		constraints.WriteString("={rax},0")
 		for i, arg := range call.Args[1:] {
-			constraints += "," + [...]string{
+			constraints.WriteString("," + [...]string{
 				"{rdi}",
 				"{rsi}",
 				"{rdx}",
 				"{r10}",
 				"{r8}",
 				"{r9}",
-			}[i]
+			}[i])
 			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
 		// rcx and r11 are clobbered by the syscall, so make sure they are not used
-		constraints += ",~{rcx},~{r11}"
+		constraints.WriteString(",~{rcx},~{r11}")
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-		target := llvm.InlineAsm(fnType, "syscall", constraints, true, false, llvm.InlineAsmDialectIntel, false)
+		target := llvm.InlineAsm(fnType, "syscall", constraints.String(), true, false, llvm.InlineAsmDialectIntel, false)
 		return b.CreateCall(fnType, target, args, ""), nil
 
 	case b.GOARCH == "386" && b.GOOS == "linux":
@@ -55,22 +56,23 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		argTypes := []llvm.Type{b.uintptrType}
 		// Constraints will look something like:
 		//   "={eax},0,{ebx},{ecx},{edx},{esi},{edi},{ebp}"
-		constraints := "={eax},0"
+		var constraints strings.Builder
+		constraints.WriteString("={eax},0")
 		for i, arg := range call.Args[1:] {
-			constraints += "," + [...]string{
+			constraints.WriteString("," + [...]string{
 				"{ebx}",
 				"{ecx}",
 				"{edx}",
 				"{esi}",
 				"{edi}",
 				"{ebp}",
-			}[i]
+			}[i])
 			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-		target := llvm.InlineAsm(fnType, "int 0x80", constraints, true, false, llvm.InlineAsmDialectIntel, false)
+		target := llvm.InlineAsm(fnType, "int 0x80", constraints.String(), true, false, llvm.InlineAsmDialectIntel, false)
 		return b.CreateCall(fnType, target, args, ""), nil
 
 	case b.GOARCH == "arm" && b.GOOS == "linux":
@@ -88,9 +90,10 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		argTypes := []llvm.Type{}
 		// Constraints will look something like:
 		//   ={r0},0,{r1},{r2},{r7},~{r3}
-		constraints := "={r0}"
+		var constraints strings.Builder
+		constraints.WriteString("={r0}")
 		for i, arg := range call.Args[1:] {
-			constraints += "," + [...]string{
+			constraints.WriteString("," + [...]string{
 				"0", // tie to output
 				"{r1}",
 				"{r2}",
@@ -98,20 +101,20 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"{r4}",
 				"{r5}",
 				"{r6}",
-			}[i]
+			}[i])
 			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
 		args = append(args, num)
 		argTypes = append(argTypes, b.uintptrType)
-		constraints += ",{r7}" // syscall number
+		constraints.WriteString(",{r7}") // syscall number
 		for i := len(call.Args) - 1; i < 4; i++ {
 			// r0-r3 get clobbered after the syscall returns
-			constraints += ",~{r" + strconv.Itoa(i) + "}"
+			constraints.WriteString(",~{r" + strconv.Itoa(i) + "}")
 		}
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
+		target := llvm.InlineAsm(fnType, "svc #0", constraints.String(), true, false, 0, false)
 		return b.CreateCall(fnType, target, args, ""), nil
 
 	case b.GOARCH == "arm64" && b.GOOS == "linux":
@@ -120,31 +123,32 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		argTypes := []llvm.Type{}
 		// Constraints will look something like:
 		//   ={x0},0,{x1},{x2},{x8},~{x3},~{x4},~{x5},~{x6},~{x7},~{x16},~{x17}
-		constraints := "={x0}"
+		var constraints strings.Builder
+		constraints.WriteString("={x0}")
 		for i, arg := range call.Args[1:] {
-			constraints += "," + [...]string{
+			constraints.WriteString("," + [...]string{
 				"0", // tie to output
 				"{x1}",
 				"{x2}",
 				"{x3}",
 				"{x4}",
 				"{x5}",
-			}[i]
+			}[i])
 			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
 		}
 		args = append(args, num)
 		argTypes = append(argTypes, b.uintptrType)
-		constraints += ",{x8}" // syscall number
+		constraints.WriteString(",{x8}") // syscall number
 		for i := len(call.Args) - 1; i < 8; i++ {
 			// x0-x7 may get clobbered during the syscall following the aarch64
 			// calling convention.
-			constraints += ",~{x" + strconv.Itoa(i) + "}"
+			constraints.WriteString(",~{x" + strconv.Itoa(i) + "}")
 		}
-		constraints += ",~{x16},~{x17}" // scratch registers
+		constraints.WriteString(",~{x16},~{x17}") // scratch registers
 		fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-		target := llvm.InlineAsm(fnType, "svc #0", constraints, true, false, 0, false)
+		target := llvm.InlineAsm(fnType, "svc #0", constraints.String(), true, false, 0, false)
 		return b.CreateCall(fnType, target, args, ""), nil
 
 	case (b.GOARCH == "mips" || b.GOARCH == "mipsle") && b.GOOS == "linux":
@@ -163,7 +167,8 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// faster and smaller code.
 		args := []llvm.Value{num}
 		argTypes := []llvm.Type{b.uintptrType}
-		constraints := "={$2},={$7},0"
+		var constraints strings.Builder
+		constraints.WriteString("={$2},={$7},0")
 		syscallParams := call.Args[1:]
 		if len(syscallParams) > 7 {
 			// There is one syscall that uses 7 parameters: sync_file_range.
@@ -172,7 +177,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 			syscallParams = syscallParams[:7]
 		}
 		for i, arg := range syscallParams {
-			constraints += "," + [...]string{
+			constraints.WriteString("," + [...]string{
 				"{$4}", // arg1
 				"{$5}", // arg2
 				"{$6}", // arg3
@@ -180,7 +185,7 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"r",    // arg5 on the stack
 				"r",    // arg6 on the stack
 				"r",    // arg7 on the stack
-			}[i]
+			}[i])
 			llvmValue := b.getValue(arg, getPos(call))
 			args = append(args, llvmValue)
 			argTypes = append(argTypes, llvmValue.Type())
@@ -221,10 +226,10 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 				"addu $$sp, $$sp, 32\n" +
 				".set at\n"
 		}
-		constraints += ",~{$3},~{$4},~{$5},~{$6},~{$8},~{$9},~{$10},~{$11},~{$12},~{$13},~{$14},~{$15},~{$24},~{$25},~{hi},~{lo},~{memory}"
+		constraints.WriteString(",~{$3},~{$4},~{$5},~{$6},~{$8},~{$9},~{$10},~{$11},~{$12},~{$13},~{$14},~{$15},~{$24},~{$25},~{hi},~{lo},~{memory}")
 		returnType := b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType}, false)
 		fnType := llvm.FunctionType(returnType, argTypes, false)
-		target := llvm.InlineAsm(fnType, asm, constraints, true, true, 0, false)
+		target := llvm.InlineAsm(fnType, asm, constraints.String(), true, true, 0, false)
 		call := b.CreateCall(fnType, target, args, "")
 		resultCode := b.CreateExtractValue(call, 0, "") // r2
 		errorFlag := b.CreateExtractValue(call, 1, "")  // r7

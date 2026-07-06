@@ -786,15 +786,15 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		}
 		defer func() {
 			daemon.Process.Signal(os.Interrupt)
-			var stopped uint32
+			var stopped atomic.Uint32
 			go func() {
 				time.Sleep(time.Millisecond * 100)
-				if atomic.LoadUint32(&stopped) == 0 {
+				if stopped.Load() == 0 {
 					daemon.Process.Kill()
 				}
 			}()
 			daemon.Wait()
-			atomic.StoreUint32(&stopped, 1)
+			stopped.Store(1)
 		}()
 	}
 
@@ -1046,7 +1046,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 
 func touchSerialPortAt1200bps(port string) (err error) {
 	retryCount := 3
-	for i := 0; i < retryCount; i++ {
+	for range retryCount {
 		// Open port
 		p, e := serial.Open(port, &serial.Mode{BaudRate: 1200})
 		if e != nil {
@@ -1244,7 +1244,7 @@ func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not list mount points: %w", err)
 		}
-		for _, line := range strings.Split(string(tab), "\n") {
+		for line := range strings.SplitSeq(string(tab), "\n") {
 			fields := strings.Fields(line)
 			if len(fields) <= 2 {
 				continue
@@ -1273,7 +1273,7 @@ func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
 		}
 
 		// Extract data to convert to a []mountPoint slice.
-		for _, line := range strings.Split(out.String(), "\n") {
+		for line := range strings.SplitSeq(out.String(), "\n") {
 			words := strings.Fields(line)
 			if len(words) < 3 {
 				continue
@@ -1685,18 +1685,18 @@ func (m globalValuesFlag) String() string {
 }
 
 func (m globalValuesFlag) Set(value string) error {
-	equalsIndex := strings.IndexByte(value, '=')
-	if equalsIndex < 0 {
+	before, after, ok := strings.Cut(value, "=")
+	if !ok {
 		return errors.New("expected format pkgpath.Var=value")
 	}
-	pathAndName := value[:equalsIndex]
+	pathAndName := before
 	pointIndex := strings.LastIndexByte(pathAndName, '.')
 	if pointIndex < 0 {
 		return errors.New("expected format pkgpath.Var=value")
 	}
 	path := pathAndName[:pointIndex]
 	name := pathAndName[pointIndex+1:]
-	stringValue := value[equalsIndex+1:]
+	stringValue := after
 	if m[path] == nil {
 		m[path] = make(map[string]string)
 	}
@@ -2054,7 +2054,6 @@ func main() {
 		// This uses an additional semaphore to reduce the memory usage.
 		testSema := make(chan struct{}, cap(options.Semaphore))
 		for i, pkgName := range explicitPkgNames {
-			pkgName := pkgName
 			buf := &bufs[i]
 			testSema <- struct{}{}
 			wg.Add(1)

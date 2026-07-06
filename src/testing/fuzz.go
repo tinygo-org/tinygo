@@ -53,7 +53,7 @@ type corpusEntry = struct {
 	Parent     string
 	Path       string
 	Data       []byte
-	Values     []interface{}
+	Values     []any
 	Generation int
 	IsSeed     bool
 }
@@ -61,8 +61,8 @@ type corpusEntry = struct {
 // Add will add the arguments to the seed corpus for the fuzz test. This will be
 // a no-op if called after or within the fuzz target, and args must match the
 // arguments for the fuzz target.
-func (f *F) Add(args ...interface{}) {
-	var values []interface{}
+func (f *F) Add(args ...any) {
+	var values []any
 	for i := range args {
 		if t := reflect.TypeOf(args[i]); !supportedTypes[t] {
 			panic(fmt.Sprintf("testing: unsupported type to Add %v", t))
@@ -74,23 +74,23 @@ func (f *F) Add(args ...interface{}) {
 
 // supportedTypes represents all of the supported types which can be fuzzed.
 var supportedTypes = map[reflect.Type]bool{
-	reflect.TypeOf(([]byte)("")):  true,
-	reflect.TypeOf((string)("")):  true,
+	reflect.TypeFor[[]byte]():     true,
+	reflect.TypeFor[string]():     true,
 	reflect.TypeOf((bool)(false)): true,
-	reflect.TypeOf((byte)(0)):     true,
-	reflect.TypeOf((rune)(0)):     true,
-	reflect.TypeOf((float32)(0)):  true,
-	reflect.TypeOf((float64)(0)):  true,
-	reflect.TypeOf((int)(0)):      true,
-	reflect.TypeOf((int8)(0)):     true,
-	reflect.TypeOf((int16)(0)):    true,
-	reflect.TypeOf((int32)(0)):    true,
-	reflect.TypeOf((int64)(0)):    true,
-	reflect.TypeOf((uint)(0)):     true,
-	reflect.TypeOf((uint8)(0)):    true,
-	reflect.TypeOf((uint16)(0)):   true,
-	reflect.TypeOf((uint32)(0)):   true,
-	reflect.TypeOf((uint64)(0)):   true,
+	reflect.TypeFor[byte]():       true,
+	reflect.TypeFor[rune]():       true,
+	reflect.TypeFor[float32]():    true,
+	reflect.TypeFor[float64]():    true,
+	reflect.TypeFor[int]():        true,
+	reflect.TypeFor[int8]():       true,
+	reflect.TypeFor[int16]():      true,
+	reflect.TypeFor[int32]():      true,
+	reflect.TypeFor[int64]():      true,
+	reflect.TypeFor[uint]():       true,
+	reflect.TypeFor[uint8]():      true,
+	reflect.TypeFor[uint16]():     true,
+	reflect.TypeFor[uint32]():     true,
+	reflect.TypeFor[uint64]():     true,
 }
 
 // Fuzz runs the fuzz function, ff, for fuzz testing. If ff fails for a set of
@@ -119,7 +119,7 @@ var supportedTypes = map[reflect.Type]bool{
 // When fuzzing, F.Fuzz does not return until a problem is found, time runs out
 // (set with -fuzztime), or the test process is interrupted by a signal. F.Fuzz
 // should be called exactly once, unless F.Skip or F.Fail is called beforehand.
-func (f *F) Fuzz(ff interface{}) {
+func (f *F) Fuzz(ff any) {
 	f.failed = true
 	f.result.N = 0
 	f.result.T = 0

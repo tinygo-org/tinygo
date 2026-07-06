@@ -22,7 +22,6 @@ func TestInterp(t *testing.T) {
 		"alloc",
 		"slicedata",
 	} {
-		name := name // make local to this closure
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			runTest(t, "testdata/"+name)

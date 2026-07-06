@@ -116,7 +116,7 @@ func parseLLDErrors(text string) error {
 		// This can happen in some cases like with CGo and //go:linkname tricker.
 		if matches := regexp.MustCompile(`^ld.lld(-[0-9]+)?: error: undefined symbol: (.*)\n`).FindStringSubmatch(message); matches != nil {
 			symbolName := matches[2]
-			for _, line := range strings.Split(message, "\n") {
+			for line := range strings.SplitSeq(message, "\n") {
 				matches := regexp.MustCompile(`referenced by .* \(((.*):([0-9]+))\)`).FindStringSubmatch(line)
 				if matches != nil {
 					parsedError = true

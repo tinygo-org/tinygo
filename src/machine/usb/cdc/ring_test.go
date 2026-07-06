@@ -268,7 +268,7 @@ func TestRing512_PutOversize(t *testing.T) {
 
 func TestRing512_MultiplePutPeekDiscard(t *testing.T) {
 	var r ring512
-	for i := 0; i < 2000; i++ {
+	for i := range 2000 {
 		msg := []byte(fmt.Sprintf("msg%04d", i))
 		if !r.Put(msg) {
 			t.Fatalf("Put failed at iteration %d, Free=%d, Used=%d", i, r.Free(), r.Used())
@@ -290,7 +290,7 @@ func TestRing512_HeadTailOverflow(t *testing.T) {
 		t.Fatalf("Used=%d Free=%d, want 0/512", r.Used(), r.Free())
 	}
 
-	for i := 0; i < 300; i++ {
+	for i := range 300 {
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		if !r.Put(data) {
 			t.Fatalf("Put failed at iter %d (head=%d tail=%d)", i, r.head.Load(), r.tail.Load())
@@ -370,7 +370,7 @@ func TestRing512_PeekTotalEqualsUsed(t *testing.T) {
 // --- Concurrent SPSC Test ---
 
 func TestRing512_SPSC(t *testing.T) {
-	for trial := 0; trial < 20; trial++ {
+	for trial := range 20 {
 		var r ring512
 		const totalBytes = 1 << 18
 		produced := make([]byte, totalBytes)
@@ -431,7 +431,7 @@ func TestRing512_SPSCSmallChunks(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		for i := 0; i < totalBytes; i++ {
+		for i := range totalBytes {
 			for !r.Put([]byte{byte(i)}) {
 			}
 		}
@@ -494,10 +494,7 @@ func FuzzRing512(f *testing.F) {
 
 			switch op {
 			case 0: // Put
-				size := int(arg)
-				if size > 512 {
-					size = 512
-				}
+				size := min(int(arg), 512)
 				data := make([]byte, size)
 				for j := range data {
 					data[j] = byte(j)

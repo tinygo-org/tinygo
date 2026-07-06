@@ -195,11 +195,11 @@ type intHeap struct {
 	sort.IntSlice
 }
 
-func (h *intHeap) Push(x interface{}) {
+func (h *intHeap) Push(x any) {
 	h.IntSlice = append(h.IntSlice, x.(int))
 }
 
-func (h *intHeap) Pop() interface{} {
+func (h *intHeap) Pop() any {
 	x := h.IntSlice[len(h.IntSlice)-1]
 	h.IntSlice = h.IntSlice[:len(h.IntSlice)-1]
 	return x

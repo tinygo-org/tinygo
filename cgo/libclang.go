@@ -160,7 +160,7 @@ func (f *cgoFile) readNames(fragment string, cflags []string, filename string, c
 			pos := f.getClangLocationPosition(location, unit)
 			f.addError(pos, severity+": "+spelling)
 		}
-		for i := 0; i < numDiagnostics; i++ {
+		for i := range numDiagnostics {
 			diagnostic := C.clang_getDiagnostic(unit, C.uint(i))
 			addDiagnostic(diagnostic)
 
@@ -278,7 +278,7 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 				Text:  strings.Join(doc, "\n"),
 			})
 		}
-		for i := 0; i < numArgs; i++ {
+		for i := range numArgs {
 			arg := C.tinygo_clang_Cursor_getArgument(c, C.uint(i))
 			argName := getString(C.tinygo_clang_getCursorSpelling(arg))
 			argType := C.clang_getArgType(cursorType, C.uint(i))
@@ -534,7 +534,7 @@ func tinygo_clang_globals_visitor(c, parent C.GoCXCursor, client_data C.CXClient
 
 // Get the precise location in the source code. Used for uniquely identifying
 // source locations.
-func (f *cgoFile) getUniqueLocationID(pos token.Pos, cursor C.GoCXCursor) interface{} {
+func (f *cgoFile) getUniqueLocationID(pos token.Pos, cursor C.GoCXCursor) any {
 	clangLocation := C.tinygo_clang_getCursorLocation(cursor)
 	var file C.CXFile
 	var line C.unsigned

@@ -398,7 +398,7 @@ func emuCheck(t *testing.T, options compileopts.Options) {
 		t.Fatal("failed to load target spec:", err)
 	}
 	if spec.Emulator != "" {
-		emulatorCommand := strings.SplitN(spec.Emulator, " ", 2)[0]
+		emulatorCommand, _, _ := strings.Cut(spec.Emulator, " ")
 		_, err := exec.LookPath(emulatorCommand)
 		if err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
@@ -493,7 +493,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	if err != nil {
 		w := &bytes.Buffer{}
 		diagnostics.CreateDiagnostics(err).WriteTo(w, "")
-		for _, line := range strings.Split(strings.TrimRight(w.String(), "\n"), "\n") {
+		for line := range strings.SplitSeq(strings.TrimRight(w.String(), "\n"), "\n") {
 			t.Log(line)
 		}
 		if stdout.Len() != 0 {
@@ -569,7 +569,6 @@ func TestWebAssembly(t *testing.T) {
 		{name: "panic-default", target: "wasip1", imports: []string{"wasi_snapshot_preview1.fd_write", "wasi_snapshot_preview1.random_get"}},
 		{name: "panic-trap", target: "wasm-unknown", panicStrategy: "trap", imports: []string{}},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			tmpdir := t.TempDir()
@@ -691,7 +690,6 @@ func TestWasmExport(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -861,7 +859,6 @@ func TestWasmExportJS(t *testing.T) {
 		{name: "c-shared", buildMode: "c-shared"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			// Build the wasm binary.
@@ -909,7 +906,6 @@ func TestWasmExit(t *testing.T) {
 		{name: "exit-1-sleep", output: "slept\nexit code: 1\n"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			options := optionsFromTarget("wasm", sema)
@@ -984,7 +980,6 @@ func TestTest(t *testing.T) {
 		)
 	}
 	for _, targ := range targs {
-		targ := targ
 		t.Run(targ.name, func(t *testing.T) {
 			t.Parallel()
 

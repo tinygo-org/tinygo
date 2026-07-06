@@ -669,8 +669,8 @@ func (b *builder) createRunDefers() {
 			fn := callback.Fn.(*ssa.Function)
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
 			params := fn.Signature.Params()
-			for i := 0; i < params.Len(); i++ {
-				valueTypes = append(valueTypes, b.getLLVMType(params.At(i).Type()))
+			for v := range params.Variables() {
+				valueTypes = append(valueTypes, b.getLLVMType(v.Type()))
 			}
 			valueTypes = append(valueTypes, b.dataPtrType) // closure
 			deferredCallType := b.ctx.StructType(valueTypes, false)
@@ -695,8 +695,8 @@ func (b *builder) createRunDefers() {
 
 			//Get signature from call results
 			params := callback.Type().Underlying().(*types.Signature).Params()
-			for i := 0; i < params.Len(); i++ {
-				valueTypes = append(valueTypes, b.getLLVMType(params.At(i).Type()))
+			for v := range params.Variables() {
+				valueTypes = append(valueTypes, b.getLLVMType(v.Type()))
 			}
 
 			deferredCallType := b.ctx.StructType(valueTypes, false)

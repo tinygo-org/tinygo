@@ -12,17 +12,17 @@ import "C"
 // C. It is useful if an API uses function pointers and you cannot pass a Go
 // pointer but only a C pointer.
 type refMap struct {
-	refs map[unsafe.Pointer]interface{}
+	refs map[unsafe.Pointer]any
 	lock sync.Mutex
 }
 
 // Put stores a value in the map. It can later be retrieved using Get. It must
 // be removed using Remove to avoid memory leaks.
-func (m *refMap) Put(v interface{}) unsafe.Pointer {
+func (m *refMap) Put(v any) unsafe.Pointer {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.refs == nil {
-		m.refs = make(map[unsafe.Pointer]interface{}, 1)
+		m.refs = make(map[unsafe.Pointer]any, 1)
 	}
 	ref := C.malloc(1)
 	m.refs[ref] = v
@@ -31,7 +31,7 @@ func (m *refMap) Put(v interface{}) unsafe.Pointer {
 
 // Get returns a stored value previously inserted with Put. Use the same
 // reference as you got from Put.
-func (m *refMap) Get(ref unsafe.Pointer) interface{} {
+func (m *refMap) Get(ref unsafe.Pointer) any {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	return m.refs[ref]
