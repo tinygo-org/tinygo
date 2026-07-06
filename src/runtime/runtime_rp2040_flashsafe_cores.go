@@ -20,14 +20,6 @@ const (
 // operation with the other core that must stop executing from XIP flash.
 var rp2040FlashSafeState volatile.Register8
 
-// flashSafeLock serializes Enter/Exit so that only one core at a time
-// owns the flash-safe state machine. The other core can still participate
-// as a victim through the FIFO interrupt while spinning on this lock.
-//
-// id: 24 is reserved here. ids 20-23 are already used by printLock,
-// schedulerLock, atomicsLock, futexLock (see runtime_rp2.go).
-var flashSafeLock = spinLock{id: 24}
-
 // rp2040EnterFlashSafeSection enters a section in which RP2040 flash operations
 // may temporarily disable XIP.
 //
@@ -76,7 +68,7 @@ func rp2040ExitFlashSafeSection(state interrupt.State) {
 }
 
 func rp2040FlashSafePauseCore(core uint32) {
-	_ = core // RP2040 SIO FIFO writes to the other core.
+	// RP2040 SIO FIFO writes to the other core.
 	rp.SIO.FIFO_WR.Set(rp2SIOFIFOCommandFlashSafe)
 	arm.Asm("sev")
 }
@@ -91,8 +83,6 @@ func rp2040FlashSafePauseCore(core uint32) {
 //
 //go:section .ramfuncs
 func rp2FlashSafeInterruptHandler(core uint32) {
-	_ = core
-
 	state := interrupt.Disable()
 
 	rp2040FlashSafeState.Set(rp2040FlashSafeLocked)

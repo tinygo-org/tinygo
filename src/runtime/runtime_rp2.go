@@ -286,6 +286,15 @@ var (
 	schedulerLock = spinLock{id: 21}
 	atomicsLock   = spinLock{id: 22}
 	futexLock     = spinLock{id: 23}
+
+	// flashSafeLock serializes RP2040 flash-safe Enter/Exit so that only one
+	// core owns the flash-safe state machine at a time. The other core can
+	// still participate as a victim through the FIFO interrupt while spinning
+	// on this lock.
+	//
+	// It is defined here with the other RP2 spinLocks so spinLock IDs remain
+	// visible in one place.
+	flashSafeLock = spinLock{id: 24}
 )
 
 func resetSpinLocks() {
