@@ -107,6 +107,12 @@ func addTimer(tn *timerNode) {
 // running (in which case it must not be re-added).
 func reAddTimer(tn *timerNode) {
 	schedulerLock.Lock()
+
+	// Remove the timer from the firing list before re-adding it to the queue,
+	// so that another core popping it off the queue can't insert it into the
+	// firing list a second time (which would corrupt the list).
+	firingTimersRemove(tn)
+
 	if tn.stopped {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
@@ -233,7 +239,12 @@ func scheduler(_ bool) {
 				schedulerLock.Unlock()
 				tn.callback(tn, delay)
 				schedulerLock.Lock()
-				firingTimersRemove(tn)
+				// A periodic timer (a ticker) already removed itself from the
+				// firing list in reAddTimer; a one-shot timer isn't re-added, so
+				// remove it from the firing list here.
+				if tn.timer.period == 0 {
+					firingTimersRemove(tn)
+				}
 				continue
 			}
 		}

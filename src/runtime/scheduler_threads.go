@@ -101,10 +101,13 @@ func timerRunner() {
 		delay := ticksToNanoseconds(now - tn.whenTicks())
 		tn.callback(tn, delay)
 
-		// The callback has finished running (and, for a ticker, may have
-		// re-added the timer). It is no longer firing.
+		// The callback has finished running. A periodic timer (a ticker) already
+		// removed itself from the firing list in reAddTimer; a one-shot timer
+		// isn't re-added, so remove it from the firing list here.
 		timerQueueLock.Lock()
-		firingTimersRemove(tn)
+		if tn.timer.period == 0 {
+			firingTimersRemove(tn)
+		}
 		timerQueueLock.Unlock()
 	}
 }
@@ -130,6 +133,11 @@ func addTimer(tim *timerNode) {
 // running (in which case it must not be re-added).
 func reAddTimer(tn *timerNode) {
 	timerQueueLock.Lock()
+
+	// Remove the timer from the firing list before re-adding it to the queue,
+	// so that another core popping it off the queue can't insert it into the
+	// firing list a second time (which would corrupt the list).
+	firingTimersRemove(tn)
 
 	if tn.stopped {
 		// The timer was stopped or reset while its callback was running. Don't
