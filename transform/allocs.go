@@ -57,7 +57,9 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		if heapalloc.Operand(0).IsAConstantInt().IsNil() {
 			// Do not allocate variable length arrays on the stack.
 			if logAllocs {
-				logger(getPosition(heapalloc), "size is not constant")
+				logger(
+					getPosition(heapalloc),
+					fmt.Sprintf("%s size is not constant", getID(heapalloc)))
 			}
 			continue
 		}
@@ -67,7 +69,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			// The maximum size for a stack allocation.
 			if logAllocs {
 				logger(getPosition(heapalloc),
-					fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
+					fmt.Sprintf("%s size %d exceeds maximum stack allocation size %d", getID(heapalloc), size, maxStackAlloc))
 			}
 			continue
 		}
@@ -104,7 +106,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 				if atPos.Line != 0 {
 					msg = fmt.Sprintf("escapes at line %d", atPos.Line)
 				}
-				logger(getPosition(heapalloc), msg)
+				logger(getPosition(heapalloc), fmt.Sprintf("%s %s", getID(heapalloc), msg))
 			}
 			continue
 		}
@@ -315,4 +317,54 @@ func lineLengthAt(filename string, lineNumber int) int {
 		line++
 	}
 	return 0
+}
+
+func getID(v llvm.Value) string {
+	id := v.Name()
+	if len(id) == 0 {
+		if v.InstructionOpcode() == llvm.Call && (!v.IsAAllocaInst().IsNil() || !v.IsACallInst().IsNil() ||
+			!v.IsAInvokeInst().IsNil()) {
+			id = v.AllocatedType().String()
+		}
+	}
+	if id == "complit" {
+		// Handle case like: c := scaleVector3(&vector3{4, 5, 6}, 0.5)
+		/*
+			%complit = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #1, !dbg !53
+			%0 = getelementptr inbounds nuw i8, ptr %complit, i32 4, !dbg !53
+			%1 = getelementptr inbounds nuw i8, ptr %complit, i32 8, !dbg !53
+			store float 4.000000e+00, ptr %complit, align 4, !dbg !54
+			store float 5.000000e+00, ptr %0, align 4, !dbg !55
+			store float 6.000000e+00, ptr %1, align 4, !dbg !56
+			%2 = call ptr @main.scaleVector3(ptr nonnull %complit, float 5.000000e-01, ptr undef), !dbg !57
+			store ptr %2, ptr @main.escapedVector3, align 4, !dbg !60
+			ret void, !dbg !61
+		*/
+		/*
+		 * 1. Find the next "call", where %complit is passed as parameter.
+		 * 2. Produce ID: "Arg 0 of main.scaleVector3() call" // escapes at ...
+		 */
+		n := v
+	InstLoop:
+		for _ = range 64 {
+			n = llvm.NextInstruction(n)
+			if n.IsNil() {
+				break
+			}
+			if call := n.IsACallInst(); !call.IsNil() {
+				argIdx := 0
+				for argIdx = range call.OperandsCount() {
+					argV := call.Operand(argIdx)
+					if argV.Name() == "complit" {
+						id = fmt.Sprintf("Arg %d of %s() call", argIdx, call.CalledValue().Name())
+						break InstLoop
+					}
+				}
+			}
+		}
+	}
+	if len(id) == 0 {
+		id = v.String()
+	}
+	return id
 }
