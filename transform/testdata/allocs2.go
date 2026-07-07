@@ -117,9 +117,13 @@ func escapingReturnedPointer() {
 	escapedVector3 = c
 }
 
+var escapedArray [2](*vector3)
+
 func escapingReturnedPointer2() {
-	c := scaleVector3(&vector3{4, 5, 6}, 0.5) // OUT: Arg 0 of main.scaleVector3() call escapes at line 122
+	c := scaleVector3(&vector3{4, 5, 6}, 0.5) // OUT: Arg 0 of main.scaleVector3() call escapes at line 124
 	escapedVector3 = c
+	a := [2](*vector3){&vector3{7, 8, 9}, &vector3{2, 3, 4}} // OUT: complit1 escapes at line 126 && complit2 escapes at line 126
+	escapedArray = a
 }
 
 func recursiveScaleVector3(vec *vector3, n int) *vector3 {

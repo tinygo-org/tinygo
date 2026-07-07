@@ -52,6 +52,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		heapallocs = append(heapallocs, getUses(allocator)...)
 	}
 
+	idMiner := makeIdMiner()
 	for _, heapalloc := range heapallocs {
 		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
 		if heapalloc.Operand(0).IsAConstantInt().IsNil() {
@@ -59,7 +60,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			if logAllocs {
 				logger(
 					getPosition(heapalloc),
-					fmt.Sprintf("%s size is not constant", getID(heapalloc)))
+					fmt.Sprintf("%s size is not constant", idMiner.get(heapalloc)))
 			}
 			continue
 		}
@@ -69,7 +70,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			// The maximum size for a stack allocation.
 			if logAllocs {
 				logger(getPosition(heapalloc),
-					fmt.Sprintf("%s size %d exceeds maximum stack allocation size %d", getID(heapalloc), size, maxStackAlloc))
+					fmt.Sprintf("%s size %d exceeds maximum stack allocation size %d", idMiner.get(heapalloc), size, maxStackAlloc))
 			}
 			continue
 		}
@@ -106,7 +107,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 				if atPos.Line != 0 {
 					msg = fmt.Sprintf("escapes at line %d", atPos.Line)
 				}
-				logger(getPosition(heapalloc), fmt.Sprintf("%s %s", getID(heapalloc), msg))
+				logger(getPosition(heapalloc), fmt.Sprintf("%s %s", idMiner.get(heapalloc), msg))
 			}
 			continue
 		}
@@ -319,7 +320,15 @@ func lineLengthAt(filename string, lineNumber int) int {
 	return 0
 }
 
-func getID(v llvm.Value) string {
+type idMiner struct {
+	complitReg *regexp.Regexp
+}
+
+func makeIdMiner() idMiner {
+	return idMiner{complitReg: regexp.MustCompile(`^complit\d*$`)}
+}
+
+func (this *idMiner) get(v llvm.Value) string {
 	id := v.Name()
 	if len(id) == 0 {
 		if v.InstructionOpcode() == llvm.Call && (!v.IsAAllocaInst().IsNil() || !v.IsACallInst().IsNil() ||
@@ -327,7 +336,7 @@ func getID(v llvm.Value) string {
 			id = v.AllocatedType().String()
 		}
 	}
-	if id == "complit" {
+	if this.complitReg.MatchString(id) {
 		// Handle case like: c := scaleVector3(&vector3{4, 5, 6}, 0.5)
 		/*
 			%complit = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #1, !dbg !53
@@ -355,7 +364,7 @@ func getID(v llvm.Value) string {
 				argIdx := 0
 				for argIdx = range call.OperandsCount() {
 					argV := call.Operand(argIdx)
-					if argV.Name() == "complit" {
+					if argV.Name() == id {
 						id = fmt.Sprintf("Arg %d of %s() call", argIdx, call.CalledValue().Name())
 						break InstLoop
 					}
@@ -364,7 +373,7 @@ func getID(v llvm.Value) string {
 		}
 	}
 	if len(id) == 0 {
-		id = v.String()
+		id = "allocation"
 	}
 	return id
 }

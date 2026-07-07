@@ -8,5 +8,7 @@ testdata/allocs2.go:49.1,49.39 1 0
 testdata/allocs2.go:50.1,50.39 1 0
 testdata/allocs2.go:107.1,107.59 1 0
 testdata/allocs2.go:114.1,114.53 1 0
-testdata/allocs2.go:121.1,121.105 1 0
-testdata/allocs2.go:133.1,133.57 1 0
+testdata/allocs2.go:123.1,123.105 1 0
+testdata/allocs2.go:125.1,125.127 1 0
+testdata/allocs2.go:125.1,125.127 1 0
+testdata/allocs2.go:137.1,137.57 1 0
