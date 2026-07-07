@@ -58,6 +58,23 @@ func main() {
 	// Switch to PLL: SOC_CLK_SEL = 1 (SPLL), HS_DIV_NUM = 2 (div3).
 	esp.PCR.SYSCLK_CONF.Set(1<<16 | 2<<8)
 
+	// Select the Timer Group 0 timer clock source.
+	//
+	// The shared timekeeping code (runtime_esp32xx.go) assumes the TIMG0 timer
+	// counts at 40MHz: an 80MHz source divided by the prescaler of 2 set in
+	// initTimer, giving 25ns/tick. On the ESP32-C6 the timer group timer clock
+	// is not the APB clock; it is selected via PCR and defaults to the 40MHz
+	// XTAL (TG0_TIMER_CLK_SEL = 0). With the /2 prescaler that yields a 20MHz
+	// tick, so every delay would be twice as long as intended (time.Sleep and
+	// therefore blinky run at half speed).
+	//
+	// Select PLL_F80M (80MHz) as the source so the timer counts at 40MHz and
+	// the 25ns/tick assumption holds. Clock source encoding (esp-idf
+	// timer_ll_set_clock_source): 0 = XTAL, 1 = PLL_F80M, 2 = RC_FAST.
+	esp.PCR.SetTIMERGROUP0_CONF_TG0_CLK_EN(1)
+	esp.PCR.SetTIMERGROUP0_TIMER_CLK_CONF_TG0_TIMER_CLK_SEL(1)
+	esp.PCR.SetTIMERGROUP0_TIMER_CLK_CONF_TG0_TIMER_CLK_EN(1)
+
 	clearbss()
 
 	// Configure interrupt handler
