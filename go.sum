@@ -122,5 +122,5 @@ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 tinygo.org/x/espflasher v0.6.1 h1:9jfyAP9jGjxF63FQUY2Bml9TFb5fCZYxVgbgR2IjUGs=
 tinygo.org/x/espflasher v0.6.1/go.mod h1:tr5u08HoE67WD5zxJesCiiVF/R1b6Akz3yXwh5zah8U=
-tinygo.org/x/go-llvm v0.0.0-20260422095634-06c6725fe5e6 h1:QSnqFgNV2Ij0T4hM2qKv53fcDAFElxClPjVUZXzYkWU=
-tinygo.org/x/go-llvm v0.0.0-20260422095634-06c6725fe5e6/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
+tinygo.org/x/go-llvm v0.0.0-20260707200325-ddd595b68360 h1:BOGCjKGwPn2q54p/CNyfGzUDmqyi8YBSm3KlDheaTEU=
+tinygo.org/x/go-llvm v0.0.0-20260707200325-ddd595b68360/go.mod h1:GFbusT2VTA4I+l4j80b17KFK+6whv69Wtny5U+T8RR0=
