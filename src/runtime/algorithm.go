@@ -15,6 +15,14 @@ func fastrand() uint32 {
 	return xorshift32State
 }
 
+// fastrandn is the equivalent of fastrand()%n, but faster. Some packages
+// (e.g. wireguard-go's device/timers.go) reach it via
+// //go:linkname ... runtime.fastrandn, so it must exist in the runtime.
+func fastrandn(n uint32) uint32 {
+	// See https://lemire.me/blog/2016/06/30/fast-random-shuffling/
+	return uint32(uint64(fastrand()) * uint64(n) >> 32)
+}
+
 func initRand() {
 	r, _ := hardwareRand()
 	xorshift64State = uint64(r | 1) // protect against 0
