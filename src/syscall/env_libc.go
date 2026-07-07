@@ -1,4 +1,4 @@
-//go:build nintendoswitch || wasip1
+//go:build nintendoswitch || wasip1 || wasip2
 
 package syscall
 
@@ -6,8 +6,8 @@ import (
 	"unsafe"
 )
 
-func Environ() []string {
-
+// environFromPointer converts a NULL terminated libc environ array to a []string.
+func environFromPointer(environ *unsafe.Pointer) []string {
 	// This function combines all the environment into a single allocation.
 	// While this optimizes for memory usage and garbage collector
 	// overhead, it does run the risk of potentially pinning a "large"
@@ -18,10 +18,10 @@ func Environ() []string {
 	// calculate total memory required
 	var length uintptr
 	var vars int
-	for environ := libc_environ; *environ != nil; {
-		length += libc_strlen(*environ)
+	for e := environ; *e != nil; {
+		length += libc_strlen(*e)
 		vars++
-		environ = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(environ), unsafe.Sizeof(environ)))
+		e = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(e), unsafe.Sizeof(e)))
 	}
 
 	// allocate our backing slice for the strings
@@ -30,15 +30,15 @@ func Environ() []string {
 	envs := make([]string, 0, vars)
 
 	// loop over the environment again, this time copying over the data to the backing slice
-	for environ := libc_environ; *environ != nil; {
-		length = libc_strlen(*environ)
+	for e := environ; *e != nil; {
+		length = libc_strlen(*e)
 		// construct a Go string pointing at the libc-allocated environment variable data
 		var envVar string
 		rawEnvVar := (*struct {
 			ptr    unsafe.Pointer
 			length uintptr
 		})(unsafe.Pointer(&envVar))
-		rawEnvVar.ptr = *environ
+		rawEnvVar.ptr = *e
 		rawEnvVar.length = length
 		// pull off the number of bytes we need for this environment variable
 		var bs []byte
@@ -49,8 +49,8 @@ func Environ() []string {
 		s := *(*string)(unsafe.Pointer(&bs))
 		// add s to our list of environment variables
 		envs = append(envs, s)
-		// environ++
-		environ = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(environ), unsafe.Sizeof(environ)))
+		// e++
+		e = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(e), unsafe.Sizeof(e)))
 	}
 	return envs
 }
@@ -105,6 +105,3 @@ func Clearenv() {
 		}
 	}
 }
-
-//go:extern environ
-var libc_environ *unsafe.Pointer
