@@ -1,4 +1,4 @@
-//go:build linux || darwin || wasip1
+//go:build linux || darwin || wasip1 || wasip2
 
 package runtime
 

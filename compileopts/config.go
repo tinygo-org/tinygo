@@ -23,11 +23,12 @@ import (
 // builder.Library struct but that's hard to do since we want to know the
 // library path in advance in several places).
 var libVersions = map[string]int{
-	"musl":         3,
-	"bdwgc":        2,
-	"picolibc":     1,
-	"wasmbuiltins": 1,
-	"wasi-libc":    1,
+	"musl":             3,
+	"bdwgc":            2,
+	"picolibc":         1,
+	"wasmbuiltins":     1,
+	"wasi-libc":        1,
+	"wasi-libc-wasip2": 1,
 }
 
 // Config keeps all configuration affecting the build in a single struct.
