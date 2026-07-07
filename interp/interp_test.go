@@ -2,6 +2,7 @@ package interp
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -92,6 +93,16 @@ func runTest(t *testing.T, pathPrefix string) {
 // equal. That means, only relevant lines are compared (excluding comments
 // etc.).
 func fuzzyEqualIR(s1, s2 string) bool {
+	// Golden files are written using the pre-LLVM21 'nocapture' spelling,
+	// which LLVM printed before any co-occurring attribute such as
+	// 'readonly' (e.g. "ptr nocapture readonly"). LLVM 21+ prints the
+	// equivalent 'captures(none)' instead, and after such attributes (e.g.
+	// "ptr readonly captures(none)"). Normalize both name and position back
+	// to the old spelling to keep a single golden file working across LLVM
+	// versions.
+	s1 = normalizeCapturesAttr(s1)
+	s2 = normalizeCapturesAttr(s2)
+
 	lines1 := filterIrrelevantIRLines(strings.Split(s1, "\n"))
 	lines2 := filterIrrelevantIRLines(strings.Split(s2, "\n"))
 	if len(lines1) != len(lines2) {
@@ -105,6 +116,21 @@ func fuzzyEqualIR(s1, s2 string) bool {
 	}
 
 	return true
+}
+
+// capturesNoneAttrRe matches a co-occurring attribute directly followed by
+// 'captures(none)', which is how LLVM 21+ orders these two attributes when
+// printing IR (the pre-LLVM21 'nocapture' attribute printed the other way
+// around).
+var capturesNoneAttrRe = regexp.MustCompile(`\b(readonly|readnone|writeonly|nonnull)\s+captures\(none\)`)
+
+// normalizeCapturesAttr rewrites LLVM 21+'s 'captures(none)' attribute back
+// to the pre-LLVM21 'nocapture' spelling and position, so golden IR files
+// written against LLVM <21 keep matching.
+func normalizeCapturesAttr(s string) string {
+	s = capturesNoneAttrRe.ReplaceAllString(s, "nocapture $1")
+	s = strings.ReplaceAll(s, "captures(none)", "nocapture")
+	return s
 }
 
 // filterIrrelevantIRLines removes lines from the input slice of strings that
