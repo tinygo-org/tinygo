@@ -66,8 +66,7 @@ func Getenv(key string) (value string, found bool) {
 	for size := uintptr(0); ; size++ {
 		v := *(*byte)(unsafe.Pointer(ptr))
 		if v == 0 {
-			src := *(*[]byte)(unsafe.Pointer(&sliceHeader{buf: raw, len: size, cap: size}))
-			return string(src), true
+			return string(unsafe.Slice(raw, size)), true
 		}
 		ptr += unsafe.Sizeof(byte(0))
 	}

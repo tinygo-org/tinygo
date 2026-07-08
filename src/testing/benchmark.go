@@ -170,20 +170,6 @@ func (b *B) runN(n int) {
 	b.StopTimer()
 }
 
-func min(x, y int64) int64 {
-	if x > y {
-		return y
-	}
-	return x
-}
-
-func max(x, y int64) int64 {
-	if x < y {
-		return y
-	}
-	return x
-}
-
 // run1 runs the first iteration of benchFunc. It reports whether more
 // iterations of this benchmarks should be run.
 func (b *B) run1() bool {

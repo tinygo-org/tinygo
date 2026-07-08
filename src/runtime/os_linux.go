@@ -11,6 +11,8 @@ import (
 
 const GOOS = "linux"
 
+const zeroSizeAllocPtr uintptr = 16 // part of the first protected page
+
 const (
 	// See https://github.com/torvalds/linux/blob/master/include/uapi/asm-generic/mman-common.h
 	flag_PROT_READ     = 0x1

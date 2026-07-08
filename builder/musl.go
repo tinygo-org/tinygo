@@ -28,8 +28,8 @@ func buildMuslAllTypes(arch, muslDir, outputBitsDir string) error {
 		if err != nil {
 			return err
 		}
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(string(data), "\n")
+		for line := range lines {
 			if strings.HasPrefix(line, "TYPEDEF ") {
 				matches := regexp.MustCompile(`TYPEDEF (.*) ([^ ]*);`).FindStringSubmatch(line)
 				value := matches[1]

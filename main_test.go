@@ -46,15 +46,6 @@ var supportedLinuxArches = map[string]string{
 	"WASIp1":     "wasip1/wasm",
 }
 
-func init() {
-	major, _, _ := goenv.GetGorootVersion()
-	if major < 21 {
-		// Go 1.20 backwards compatibility.
-		// Should be removed once we drop support for Go 1.20.
-		delete(supportedLinuxArches, "WASIp1")
-	}
-}
-
 var sema = make(chan struct{}, runtime.NumCPU())
 
 func TestBuild(t *testing.T) {
@@ -254,6 +245,21 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+// TestTimerStopResetRace checks that stopping or resetting a timer while its
+// callback is running behaves correctly. It reaches into the runtime timer
+// hooks via //go:linkname and relies on the threads scheduler, which is only
+// used on these hosts.
+func TestTimerStopResetRace(t *testing.T) {
+	t.Parallel()
+
+	switch runtime.GOOS {
+	case "darwin", "linux":
+	default:
+		t.Skipf("host GOOS %s does not use the threads scheduler", runtime.GOOS)
+	}
+	runTest("timer_stop_reset_race.go", optionsFromTarget("", sema), t, nil, nil)
+}
+
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	emuCheck(t, options)
 
@@ -392,7 +398,7 @@ func emuCheck(t *testing.T, options compileopts.Options) {
 		t.Fatal("failed to load target spec:", err)
 	}
 	if spec.Emulator != "" {
-		emulatorCommand := strings.SplitN(spec.Emulator, " ", 2)[0]
+		emulatorCommand, _, _ := strings.Cut(spec.Emulator, " ")
 		_, err := exec.LookPath(emulatorCommand)
 		if err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
@@ -476,12 +482,18 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	// Build the test binary.
 	stdout := &bytes.Buffer{}
 	_, err = buildAndRun(pkgName, config, stdout, cmdArgs, environmentVars, 2*time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		if config.EmulatorName() == "simavr" {
+			// simavr before v1.8 wrote firmware output to stderr and loader logs
+			// to stdout, but PR #490 swapped these streams:
+			// https://github.com/buserror/simavr/pull/490
+			cmd.Stdout = stdout
+		}
 		return cmd.Run()
 	})
 	if err != nil {
 		w := &bytes.Buffer{}
 		diagnostics.CreateDiagnostics(err).WriteTo(w, "")
-		for _, line := range strings.Split(strings.TrimRight(w.String(), "\n"), "\n") {
+		for line := range strings.SplitSeq(strings.TrimRight(w.String(), "\n"), "\n") {
 			t.Log(line)
 		}
 		if stdout.Len() != 0 {
@@ -493,11 +505,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 
 	actual := stdout.Bytes()
 	if config.EmulatorName() == "simavr" {
-		// Strip simavr log formatting.
-		actual = bytes.Replace(actual, []byte{0x1b, '[', '3', '2', 'm'}, nil, -1)
-		actual = bytes.Replace(actual, []byte{0x1b, '[', '0', 'm'}, nil, -1)
-		actual = bytes.Replace(actual, []byte{'.', '.', '\n'}, []byte{'\n'}, -1)
-		actual = bytes.Replace(actual, []byte{'\n', '.', '\n'}, []byte{'\n', '\n'}, -1)
+		actual = cleanSimAVRTestOutput(actual)
 	}
 	if name == "testing.go" {
 		// Strip actual time.
@@ -524,6 +532,28 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	}
 }
 
+func cleanSimAVRTestOutput(output []byte) []byte {
+	output = bytes.ReplaceAll(output, []byte{0x1b, '[', '3', '2', 'm'}, nil)
+	output = bytes.ReplaceAll(output, []byte{0x1b, '[', '0', 'm'}, nil)
+	output = bytes.ReplaceAll(output, []byte{'.', '.', '\n'}, []byte{'\n'})
+	output = bytes.ReplaceAll(output, []byte{'\n', '.', '\n'}, []byte{'\n', '\n'})
+
+	var cleaned []byte
+	for _, line := range bytes.SplitAfter(output, []byte{'\n'}) {
+		trimmedLine := bytes.TrimRight(line, "\r\n")
+		if simavrLoadTextLogPattern.Match(trimmedLine) || simavrLoadBytesLogPattern.Match(trimmedLine) {
+			continue
+		}
+		cleaned = append(cleaned, line...)
+	}
+	return cleaned
+}
+
+var (
+	simavrLoadTextLogPattern  = regexp.MustCompile(`^Loaded [0-9]+ \.[A-Za-z0-9_]+( at address 0x[0-9a-fA-F]+)?$`)
+	simavrLoadBytesLogPattern = regexp.MustCompile(`^Loaded [0-9]+ bytes of [A-Za-z]+ data at (0x)?[0-9a-fA-F]+$`)
+)
+
 // Test WebAssembly files for certain properties.
 func TestWebAssembly(t *testing.T) {
 	t.Parallel()
@@ -539,7 +569,6 @@ func TestWebAssembly(t *testing.T) {
 		{name: "panic-default", target: "wasip1", imports: []string{"wasi_snapshot_preview1.fd_write", "wasi_snapshot_preview1.random_get"}},
 		{name: "panic-trap", target: "wasm-unknown", panicStrategy: "trap", imports: []string{}},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			tmpdir := t.TempDir()
@@ -661,7 +690,6 @@ func TestWasmExport(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -831,7 +859,6 @@ func TestWasmExportJS(t *testing.T) {
 		{name: "c-shared", buildMode: "c-shared"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			// Build the wasm binary.
@@ -879,7 +906,6 @@ func TestWasmExit(t *testing.T) {
 		{name: "exit-1-sleep", output: "slept\nexit code: 1\n"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			options := optionsFromTarget("wasm", sema)
@@ -954,7 +980,6 @@ func TestTest(t *testing.T) {
 		)
 	}
 	for _, targ := range targs {
-		targ := targ
 		t.Run(targ.name, func(t *testing.T) {
 			t.Parallel()
 

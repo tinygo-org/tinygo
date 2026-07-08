@@ -3,6 +3,7 @@ package compileopts
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -47,6 +48,7 @@ type Options struct {
 	Nobounds                bool
 	PrintSizes              string
 	PrintAllocs             *regexp.Regexp // regexp string
+	PrintAllocsCover        bool           // emit allocs in go coverage tool format
 	PrintStacks             bool
 	Tags                    []string
 	GlobalValues            map[string]map[string]string // map[pkgpath]map[varname]value
@@ -66,7 +68,7 @@ type Options struct {
 // Verify performs a validation on the given options, raising an error if options are not valid.
 func (o *Options) Verify() error {
 	if o.BuildMode != "" {
-		valid := isInArray(validBuildModeOptions, o.BuildMode)
+		valid := slices.Contains(validBuildModeOptions, o.BuildMode)
 		if !valid {
 			return fmt.Errorf(`invalid buildmode option '%s': valid values are %s`,
 				o.BuildMode,
@@ -74,7 +76,7 @@ func (o *Options) Verify() error {
 		}
 	}
 	if o.GC != "" {
-		valid := isInArray(validGCOptions, o.GC)
+		valid := slices.Contains(validGCOptions, o.GC)
 		if !valid {
 			return fmt.Errorf(`invalid gc option '%s': valid values are %s`,
 				o.GC,
@@ -83,7 +85,7 @@ func (o *Options) Verify() error {
 	}
 
 	if o.Scheduler != "" {
-		valid := isInArray(validSchedulerOptions, o.Scheduler)
+		valid := slices.Contains(validSchedulerOptions, o.Scheduler)
 		if !valid {
 			return fmt.Errorf(`invalid scheduler option '%s': valid values are %s`,
 				o.Scheduler,
@@ -92,7 +94,7 @@ func (o *Options) Verify() error {
 	}
 
 	if o.Serial != "" {
-		valid := isInArray(validSerialOptions, o.Serial)
+		valid := slices.Contains(validSerialOptions, o.Serial)
 		if !valid {
 			return fmt.Errorf(`invalid serial option '%s': valid values are %s`,
 				o.Serial,
@@ -101,7 +103,7 @@ func (o *Options) Verify() error {
 	}
 
 	if o.PrintSizes != "" {
-		valid := isInArray(validPrintSizeOptions, o.PrintSizes)
+		valid := slices.Contains(validPrintSizeOptions, o.PrintSizes)
 		if !valid {
 			return fmt.Errorf(`invalid size option '%s': valid values are %s`,
 				o.PrintSizes,
@@ -110,7 +112,7 @@ func (o *Options) Verify() error {
 	}
 
 	if o.PanicStrategy != "" {
-		valid := isInArray(validPanicStrategyOptions, o.PanicStrategy)
+		valid := slices.Contains(validPanicStrategyOptions, o.PanicStrategy)
 		if !valid {
 			return fmt.Errorf(`invalid panic option '%s': valid values are %s`,
 				o.PanicStrategy,
@@ -119,19 +121,10 @@ func (o *Options) Verify() error {
 	}
 
 	if o.Opt != "" {
-		if !isInArray(validOptOptions, o.Opt) {
+		if !slices.Contains(validOptOptions, o.Opt) {
 			return fmt.Errorf("invalid -opt=%s: valid values are %s", o.Opt, strings.Join(validOptOptions, ", "))
 		}
 	}
 
 	return nil
-}
-
-func isInArray(arr []string, item string) bool {
-	for _, i := range arr {
-		if i == item {
-			return true
-		}
-	}
-	return false
 }

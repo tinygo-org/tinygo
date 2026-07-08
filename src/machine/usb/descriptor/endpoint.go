@@ -15,104 +15,44 @@ const (
 	TransferTypeInterrupt
 )
 
-var endpointEP1IN = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x81, // EndpointAddress
-	0x03, // Attributes
-	0x10, // MaxPacketSizeL
-	0x00, // MaxPacketSizeH
-	0x10, // Interval
+type EndpointNumber uint8
+
+const (
+	EndpointEP1 EndpointNumber = iota
+	EndpointEP2
+	EndpointEP3
+	EndpointEP4
+)
+
+const (
+	maxEndpoints = 4
+)
+
+var (
+	endpointEPIn  = [maxEndpoints][endpointTypeLen]byte{}
+	endpointEPOut = [maxEndpoints][endpointTypeLen]byte{}
+)
+
+func EndpointIN(ep EndpointNumber, transferType uint8, maxPacketSize uint16, interval uint8) EndpointType {
+	e := EndpointType{data: endpointEPIn[ep][:]}
+	e.Length(endpointTypeLen)
+	e.Type(TypeEndpoint)
+	e.EndpointAddress(uint8(ep+1) | 0x80) // EndpointNumber is 0-based, addresses are 1-based
+	e.Attributes(transferType)
+	e.MaxPacketSize(maxPacketSize)
+	e.Interval(interval)
+	return e
 }
 
-var EndpointEP1IN = EndpointType{
-	data: endpointEP1IN[:],
-}
-
-var endpointEP2OUT = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x02, // EndpointAddress
-	0x02, // Attributes
-	0x40, // MaxPacketSizeL
-	0x00, // MaxPacketSizeH
-	0x00, // Interval
-}
-
-var EndpointEP2OUT = EndpointType{
-	data: endpointEP2OUT[:],
-}
-
-var endpointEP3IN = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x83, // EndpointAddress
-	0x02, // Attributes
-	0x40, // MaxPacketSizeL
-	0x00, // MaxPacketSizeH
-	0x00, // Interval
-}
-
-var EndpointEP3IN = EndpointType{
-	data: endpointEP3IN[:],
-}
-
-var endpointEP4IN = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x84, // EndpointAddress
-	0x03, // Attributes
-	0x40, // MaxPacketSizeL
-	0x00, // MaxPacketSizeH
-	0x01, // Interval
-}
-
-var EndpointEP4IN = EndpointType{
-	data: endpointEP4IN[:],
-}
-
-var endpointEP5OUT = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x05, // EndpointAddress
-	0x03, // Attributes
-	0x40, // MaxPacketSizeL
-	0x00, // MaxPacketSizeH
-	0x01, // Interval
-}
-
-var EndpointEP5OUT = EndpointType{
-	data: endpointEP5OUT[:],
-}
-
-// Mass Storage Class bulk in endpoint
-var endpointMSCIN = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x86,             // EndpointAddress
-	TransferTypeBulk, // Attributes
-	0x40,             // MaxPacketSizeL (64 bytes)
-	0x00,             // MaxPacketSizeH
-	0x00,             // Interval
-}
-
-var EndpointMSCIN = EndpointType{
-	data: endpointMSCIN[:],
-}
-
-// Mass Storage Class bulk out endpoint
-var endpointMSCOUT = [endpointTypeLen]byte{
-	endpointTypeLen,
-	TypeEndpoint,
-	0x07,             // EndpointAddress
-	TransferTypeBulk, // Attributes
-	0x40,             // MaxPacketSizeL (64 bytes)
-	0x00,             // MaxPacketSizeH
-	0x00,             // Interval
-}
-
-var EndpointMSCOUT = EndpointType{
-	data: endpointMSCOUT[:],
+func EndpointOUT(ep EndpointNumber, transferType uint8, maxPacketSize uint16, interval uint8) EndpointType {
+	e := EndpointType{data: endpointEPOut[ep][:]}
+	e.Length(endpointTypeLen)
+	e.Type(TypeEndpoint)
+	e.EndpointAddress(uint8(ep + 1)) // EndpointNumber is 0-based, addresses are 1-based
+	e.Attributes(transferType)
+	e.MaxPacketSize(maxPacketSize)
+	e.Interval(interval)
+	return e
 }
 
 const (

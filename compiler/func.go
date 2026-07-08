@@ -81,8 +81,8 @@ func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
 			paramTypes = append(paramTypes, info.llvmType)
 		}
 	}
-	for i := 0; i < typ.Params().Len(); i++ {
-		subType := c.getLLVMType(typ.Params().At(i).Type())
+	for v := range typ.Params().Variables() {
+		subType := c.getLLVMType(v.Type())
 		for _, info := range c.expandFormalParamType(subType, "", nil) {
 			paramTypes = append(paramTypes, info.llvmType)
 		}

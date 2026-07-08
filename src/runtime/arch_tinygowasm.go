@@ -11,6 +11,13 @@ const GOARCH = "wasm"
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 32
 
+// zeroSizedAlloc a sentinel that gets returned when allocating 0 bytes.
+// Using this instead of a constant value since I can't easily find a memory
+// location that is definitely not going to end up as a valid pointer.
+var zeroSizedAlloc uint8
+
+var zeroSizeAllocPtr = &zeroSizedAlloc
+
 const deferExtraRegs = 0
 
 const callInstSize = 1 // unknown and irrelevant (llvm.returnaddress doesn't work), so make something up

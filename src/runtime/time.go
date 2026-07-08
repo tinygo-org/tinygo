@@ -1,5 +1,71 @@
 package runtime
 
+import "unsafe"
+
+// This is the timer that's used internally inside the runtime.
+type timer struct {
+	// When to call the timer, and the interval for the ticker.
+	when   int64
+	period int64
+
+	// Callback from the time package.
+	f   func(arg any, seq uintptr, delta int64)
+	arg any
+}
+
+func (tim *timer) callCallback(delta int64) {
+	tim.f(tim.arg, 0, delta)
+}
+
+// This is the struct used internally in the runtime. The first two fields are
+// the same as time.Timer and time.Ticker so it can be used as-is in the time
+// package.
+type timeTimer struct {
+	c    unsafe.Pointer // <-chan time.Time
+	init bool
+	timer
+}
+
+//go:linkname newTimer time.newTimer
+func newTimer(when, period int64, f func(arg any, seq uintptr, delta int64), arg any, c unsafe.Pointer) *timeTimer {
+	tim := &timeTimer{
+		c:    c,
+		init: true,
+		timer: timer{
+			when:   when,
+			period: period,
+			f:      f,
+			arg:    arg,
+		},
+	}
+	scheduleLog("new timer")
+	addTimer(&timerNode{
+		timer:    &tim.timer,
+		callback: timerCallback,
+	})
+	return tim
+}
+
+//go:linkname stopTimer time.stopTimer
+func stopTimer(tim *timeTimer) bool {
+	return removeTimer(&tim.timer) != nil
+}
+
+//go:linkname resetTimer time.resetTimer
+func resetTimer(t *timeTimer, when, period int64) bool {
+	n := removeTimer(&t.timer)
+	removed := n != nil
+	if n == nil {
+		n = new(timerNode)
+	}
+	t.timer.when = when
+	t.timer.period = period
+	n.timer = &t.timer
+	n.callback = timerCallback
+	addTimer(n)
+	return removed
+}
+
 //go:linkname time_runtimeNano time.runtimeNano
 func time_runtimeNano() int64 {
 	// Note: we're ignoring sync groups here (package testing/synctest).
@@ -18,6 +84,19 @@ type timerNode struct {
 	next     *timerNode
 	timer    *timer
 	callback func(node *timerNode, delta int64)
+
+	// The following fields are only used by schedulers that run timer
+	// callbacks concurrently with user goroutines (the threads and cores
+	// schedulers). They make it possible to stop or reset a periodic timer (a
+	// ticker) while its callback is running, without the callback re-adding the
+	// timer to the queue afterwards. They are protected by the scheduler's
+	// timer lock.
+	//
+	// firingNext links nodes whose callback is currently running into the
+	// firingTimers list. stopped is set when the timer was stopped or reset
+	// while its callback was running, so that timerCallback does not re-add it.
+	firingNext *timerNode
+	stopped    bool
 }
 
 // whenTicks returns the (absolute) time when this timer should trigger next.
@@ -42,8 +121,7 @@ func timerCallback(tn *timerNode, delta int64) {
 
 	// If this is a periodic timer (a ticker), re-add it to the queue.
 	if tn.timer.period != 0 {
-		tn.timer.when += tn.timer.period
-		addTimer(tn)
+		reAddTimer(tn)
 	}
 }
 

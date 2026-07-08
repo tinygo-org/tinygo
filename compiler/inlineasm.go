@@ -146,13 +146,14 @@ func (b *builder) emitSVCall(args []ssa.Value, pos token.Pos) (llvm.Value, error
 	llvmArgs := []llvm.Value{}
 	argTypes := []llvm.Type{}
 	asm := "svc #" + strconv.FormatUint(num, 10)
-	constraints := "={r0}"
+	var constraints strings.Builder
+	constraints.WriteString("={r0}")
 	for i, arg := range args[1:] {
 		arg = arg.(*ssa.MakeInterface).X
 		if i == 0 {
-			constraints += ",0"
+			constraints.WriteString(",0")
 		} else {
-			constraints += ",{r" + strconv.Itoa(i) + "}"
+			constraints.WriteString(",{r" + strconv.Itoa(i) + "}")
 		}
 		llvmValue := b.getValue(arg, pos)
 		llvmArgs = append(llvmArgs, llvmValue)
@@ -161,9 +162,9 @@ func (b *builder) emitSVCall(args []ssa.Value, pos token.Pos) (llvm.Value, error
 	// Implement the ARM calling convention by marking r1-r3 as
 	// clobbered. r0 is used as an output register so doesn't have to be
 	// marked as clobbered.
-	constraints += ",~{r1},~{r2},~{r3}"
+	constraints.WriteString(",~{r1},~{r2},~{r3}")
 	fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-	target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0, false)
+	target := llvm.InlineAsm(fnType, asm, constraints.String(), true, false, 0, false)
 	return b.CreateCall(fnType, target, llvmArgs, ""), nil
 }
 
@@ -184,13 +185,14 @@ func (b *builder) emitSV64Call(args []ssa.Value, pos token.Pos) (llvm.Value, err
 	llvmArgs := []llvm.Value{}
 	argTypes := []llvm.Type{}
 	asm := "svc #" + strconv.FormatUint(num, 10)
-	constraints := "={x0}"
+	var constraints strings.Builder
+	constraints.WriteString("={x0}")
 	for i, arg := range args[1:] {
 		arg = arg.(*ssa.MakeInterface).X
 		if i == 0 {
-			constraints += ",0"
+			constraints.WriteString(",0")
 		} else {
-			constraints += ",{x" + strconv.Itoa(i) + "}"
+			constraints.WriteString(",{x" + strconv.Itoa(i) + "}")
 		}
 		llvmValue := b.getValue(arg, pos)
 		llvmArgs = append(llvmArgs, llvmValue)
@@ -199,9 +201,9 @@ func (b *builder) emitSV64Call(args []ssa.Value, pos token.Pos) (llvm.Value, err
 	// Implement the ARM64 calling convention by marking x1-x7 as
 	// clobbered. x0 is used as an output register so doesn't have to be
 	// marked as clobbered.
-	constraints += ",~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7}"
+	constraints.WriteString(",~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7}")
 	fnType := llvm.FunctionType(b.uintptrType, argTypes, false)
-	target := llvm.InlineAsm(fnType, asm, constraints, true, false, 0, false)
+	target := llvm.InlineAsm(fnType, asm, constraints.String(), true, false, 0, false)
 	return b.CreateCall(fnType, target, llvmArgs, ""), nil
 }
 

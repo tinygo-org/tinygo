@@ -26,11 +26,23 @@ type cdcLineInfo struct {
 
 // USBCDC is the USB CDC aka serial over USB interface.
 type USBCDC struct {
-	tx       ring512
-	rx       ring512
+	tx ring512
+	rx ring512
+
+	// inflight is the number of bytes currently submitted to the USB IN endpoint.
 	inflight atomic.Uint32
-	rbuf     [1]byte
-	wbuf     [1]byte
+
+	// txActive is the TX-pump ownership flag: 0 = idle, 1 = a pump owns the TX
+	// path. Claimed once (kickTx, CAS 0->1), held across every in-flight packet
+	// and the TX-complete IRQ, and released only when the ring drains. While it
+	// is set, kickTx's CAS fails and no second pump starts, which serializes the
+	// pump against Write across cores. Same model as Linux NAPI_STATE_SCHED:
+	// held across completion, dropped only with a recheck
+	// (Documentation/networking/napi.rst).
+	txActive atomic.Uint32
+
+	rbuf [1]byte
+	wbuf [1]byte
 }
 
 var (
@@ -81,7 +93,7 @@ func (usbcdc *USBCDC) Configure(config machine.UARTConfig) error {
 
 // Flush flushes buffered data.
 func (usbcdc *USBCDC) Flush() {
-	for usbcdc.tx.Used() > 0 {
+	for usbcdc.tx.Used() > 0 || usbcdc.txActive.Load() != 0 {
 		gosched()
 	}
 }
@@ -105,33 +117,59 @@ func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	return n, nil
 }
 
-// kickTx starts a transfer if none is in flight. Called from main context only.
+// kickTx claims the TX pump for a producer. This CAS is the only start-from-idle
+// edge; if it fails, a pump already owns the path and will drain what we just
+// enqueued -- see the recheck in sendFromRing.
 func (usbcdc *USBCDC) kickTx() {
-	if usbcdc.inflight.Load() > 0 {
-		return // txhandler will chain the next packet.
+	if !usbcdc.txActive.CompareAndSwap(0, 1) {
+		return
 	}
 	usbcdc.sendFromRing()
 }
 
 func (usbcdc *USBCDC) txhandler() {
+	// TX-complete IRQ. The pump is still owned here (txActive stayed 1 across the
+	// in-flight packet), so continue WITHOUT re-claiming -- pairs with the CAS in
+	// kickTx. A CAS here would see the flag already set, bail, and stall the chain.
 	inflight := usbcdc.inflight.Load()
-	usbcdc.inflight.Store(0)
+	if inflight == 0 {
+		return
+	}
 	usbcdc.tx.Discard(inflight)
+	usbcdc.inflight.Store(0)
 	usbcdc.sendFromRing()
 }
 
-// sendFromRing sends one USB packet from the ring and sets inflight.
-// Called from kickTx (main) or txhandler (ISR), but never concurrently
-// because kickTx only runs when inflight==0 and txhandler only runs
-// when inflight>0.
+// sendFromRing runs one step of the TX pump: submit one IN packet, or release the
+// pump if the ring is empty. Precondition: txActive == 1 (from kickTx's CAS, or
+// still held from the previous packet when entered via txhandler).
 func (usbcdc *USBCDC) sendFromRing() {
-	d1, _ := usbcdc.tx.Peek()
-	if len(d1) == 0 {
-		return
+	for {
+		d1, _ := usbcdc.tx.Peek()
+		if len(d1) == 0 {
+			// Release the pump, then re-scan the ring: closes the missed-wakeup
+			// race where Write Put()s data and kickTx's CAS then fails (txActive
+			// still set), leaving the data for this pump to drain. The Store(0)
+			// is ordered before the Used() load -- and, in the producer, Put()
+			// before its CAS -- by the sequential consistency of Go's atomics, so
+			// neither side misses the other (assumes the ring's accesses are
+			// atomic too). cf. napi_complete_done() clearing NAPI_STATE_SCHED
+			// then rechecking.
+			usbcdc.txActive.Store(0)
+			if usbcdc.tx.Used() == 0 {
+				return // ring empty and pump released; done
+			}
+			if !usbcdc.txActive.CompareAndSwap(0, 1) {
+				return // another producer re-claimed the pump; let it run
+			}
+			continue // re-claimed; re-peek and keep pumping
+		}
+
+		chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
+		usbcdc.inflight.Store(uint32(len(chunk)))
+		machine.SendUSBInPacket(cdcEndpointIn, chunk)
+		return // in flight; txActive stays set, txhandler continues
 	}
-	chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
-	usbcdc.inflight.Store(uint32(len(chunk)))
-	machine.SendUSBInPacket(cdcEndpointIn, chunk)
 }
 
 // WriteByte writes a byte of data to the USB CDC interface.

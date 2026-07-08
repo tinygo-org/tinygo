@@ -172,7 +172,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 		epDataStatus := nrf.USBD.EPDATASTATUS.Get()
 		nrf.USBD.EPDATASTATUS.Set(epDataStatus)
 		var i uint32
-		for i = 1; i < uint32(len(endPoints)); i++ {
+		for i = 1; i < NumberOfUSBEndpoints; i++ {
 			// Check if endpoint has a pending interrupt
 			inDataDone := epDataStatus&(nrf.USBD_EPDATASTATUS_EPIN1<<(i-1)) > 0
 			outDataDone := epDataStatus&(nrf.USBD_EPDATASTATUS_EPOUT1<<(i-1)) > 0
@@ -191,7 +191,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 	}
 
 	// ENDEPOUT[n] events
-	for i := 0; i < len(endPoints); i++ {
+	for i := 0; i < NumberOfUSBEndpoints; i++ {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
 			buf := handleEndpointRx(uint32(i))
@@ -366,4 +366,20 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	copy(b[:7], udd_ep_out_cache_buffer[0][:count])
 
 	return b, nil
+}
+
+func (dev *USBDevice) SetStallEPIn(ep uint32) {
+	nrf.USBD.EPSTALL.Set(ep | nrf.USBD_EPSTALL_IO | nrf.USBD_EPSTALL_STALL)
+}
+
+func (dev *USBDevice) SetStallEPOut(ep uint32) {
+	nrf.USBD.EPSTALL.Set(ep | nrf.USBD_EPSTALL_STALL)
+}
+
+func (dev *USBDevice) ClearStallEPIn(ep uint32) {
+	nrf.USBD.EPSTALL.Set(ep | nrf.USBD_EPSTALL_IO)
+}
+
+func (dev *USBDevice) ClearStallEPOut(ep uint32) {
+	nrf.USBD.EPSTALL.Set(ep)
 }

@@ -36,6 +36,8 @@ var _sidata [0]byte
 //go:extern _edata
 var _edata [0]byte
 
+const zeroSizeAllocPtr uintptr = 16 // points somewhere in the BIOS which is not readable
+
 // Entry point for Go. Initialize all packages and call main.main().
 //
 //export main

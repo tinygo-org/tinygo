@@ -12,6 +12,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  go-mod-tidy:
+    # Check that go.sum is up to date.
+    runs-on: ubuntu-slim
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+      - name: Run go mod tidy
+        run: go mod tidy
+      - name: Check go.mod and go.sum are up to date
+        run: git diff --exit-code
+
   build-linux:
     # Build Linux binaries, ready for release.
     # This runs inside an Alpine Linux container so we can more easily create a
@@ -142,7 +160,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
@@ -186,12 +204,12 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '18'
+          node-version: '22'
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
         with:
@@ -305,7 +323,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5

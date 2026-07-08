@@ -150,11 +150,11 @@ func (p *lowerInterfacesPass) run() error {
 
 	// Collect all type codes.
 	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
-		if strings.HasPrefix(global.Name(), "reflect/types.type:") {
+		if after, ok := strings.CutPrefix(global.Name(), "reflect/types.type:"); ok {
 			// Retrieve Go type information based on an opaque global variable.
 			// Only the name of the global is relevant, the object itself is
 			// discarded afterwards.
-			name := strings.TrimPrefix(global.Name(), "reflect/types.type:")
+			name := after
 			if _, ok := p.types[name]; !ok {
 				t := &typeInfo{
 					name:     name,
@@ -463,7 +463,7 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 	signatures := p.builder.CreateExtractValue(set, 1, "")
 	wrappers := p.builder.CreateExtractValue(set, 2, "")
 	numMethods := signatures.Type().ArrayLength()
-	for i := 0; i < numMethods; i++ {
+	for i := range numMethods {
 		signatureGlobal := p.builder.CreateExtractValue(signatures, i, "")
 		function := p.builder.CreateExtractValue(wrappers, i, "")
 		function = stripPointerCasts(function) // strip bitcasts
@@ -489,7 +489,7 @@ func (p *lowerInterfacesPass) addInterface(methodsString string) {
 		signatures: make(map[string]*signatureInfo),
 	}
 	p.interfaces[methodsString] = t
-	for _, method := range strings.Split(methodsString, "; ") {
+	for method := range strings.SplitSeq(methodsString, "; ") {
 		signature := p.getSignature(method)
 		signature.interfaces = append(signature.interfaces, t)
 		t.signatures[method] = signature
@@ -683,7 +683,7 @@ func (p *lowerInterfacesPass) extractMethodSigs(field llvm.Value) []string {
 	methodArray := p.builder.CreateExtractValue(field, 1, "")
 	n := methodArray.Type().ArrayLength()
 	sigs := make([]string, 0, n)
-	for j := 0; j < n; j++ {
+	for j := range n {
 		sig := p.builder.CreateExtractValue(methodArray, j, "")
 		sig = stripPointerCasts(sig)
 		sigs = append(sigs, sig.Name())
@@ -727,7 +727,7 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 	}
 	entries := make([]methodEntry, numMethods)
 	nameSet := make(map[string]struct{}, numMethods)
-	for j := 0; j < numMethods; j++ {
+	for j := range numMethods {
 		sig := p.builder.CreateExtractValue(methodArray, j, "")
 		stripped := stripPointerCasts(sig)
 		name := stripped.Name()

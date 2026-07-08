@@ -17,12 +17,6 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.4
-        with:
-          minimum-size: 8GB
-          maximum-size: 24GB
-          disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
         shell: bash
@@ -40,7 +34,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Restore cached LLVM source
         uses: actions/cache/restore@v5
@@ -124,12 +118,6 @@ jobs:
     runs-on: windows-2022
     needs: build-windows
     steps:
-      - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.4
-        with:
-          minimum-size: 8GB
-          maximum-size: 24GB
-          disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
         shell: bash
@@ -141,7 +129,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -157,18 +145,12 @@ jobs:
     runs-on: windows-2022
     needs: build-windows
     steps:
-      - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.4
-        with:
-          minimum-size: 8GB
-          maximum-size: 24GB
-          disk-root: "C:"
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -183,12 +165,6 @@ jobs:
     runs-on: windows-2022
     needs: build-windows
     steps:
-      - name: Configure pagefile
-        uses: al-cheb/configure-pagefile-action@v1.4
-        with:
-          minimum-size: 8GB
-          maximum-size: 24GB
-          disk-root: "C:"
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
         shell: bash
@@ -200,7 +176,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.4'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8

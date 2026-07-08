@@ -59,7 +59,6 @@ func TestCorpus(t *testing.T) {
 	}
 
 	for _, repo := range repos {
-		repo := repo
 		name := repo.Repo
 		if repo.Tags != "" {
 			name += "(" + strings.ReplaceAll(repo.Tags, " ", "-") + ")"
@@ -132,7 +131,6 @@ func TestCorpus(t *testing.T) {
 			}
 
 			for _, dir := range repo.Subdirs {
-				dir := dir
 				t.Run(dir.Pkg, func(t *testing.T) {
 					t.Parallel()
 

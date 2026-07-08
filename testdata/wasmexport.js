@@ -1,3 +1,5 @@
+const fs = require('fs')
+
 require('../targets/wasm_exec.js');
 
 function runTests() {

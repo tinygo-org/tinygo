@@ -168,7 +168,7 @@ type builder struct {
 	dilocals          map[*types.Var]llvm.Metadata
 	initInlinedAt     llvm.Metadata            // fake inlinedAt position
 	initPseudoFuncs   map[string]llvm.Metadata // fake "inlined" functions for proper init debug locations
-	allDeferFuncs     []interface{}
+	allDeferFuncs     []any
 	deferFuncs        map[*ssa.Function]int
 	deferInvokeFuncs  map[string]int
 	deferClosureFuncs map[*ssa.Function]int
@@ -194,16 +194,6 @@ func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *bu
 		locals:          make(map[ssa.Value]llvm.Value),
 		dilocals:        make(map[*types.Var]llvm.Metadata),
 	}
-}
-
-// Return the runtime.alloc function variant.
-// This is normally just "alloc", but is "alloc_noheap" if the //go:noheap
-// pragma is used.
-func (b *builder) allocFunc() string {
-	if b.info.noheap {
-		return "alloc_noheap"
-	}
-	return "alloc"
 }
 
 type blockInfo struct {
@@ -878,10 +868,9 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 			}
 			// Create the function definition.
 			b := newBuilder(c, irbuilder, member)
-			if _, ok := mathToLLVMMapping[member.RelString(nil)]; ok {
+			if ok := b.defineMathOp(); ok {
 				// The body of this function (if there is one) is ignored and
 				// replaced with a LLVM intrinsic call.
-				b.defineMathOp()
 				continue
 			}
 			if ok := b.defineMathBitsIntrinsic(); ok {
@@ -2165,13 +2154,10 @@ func (c *compilerContext) maxSliceSize(elementType llvm.Type) uint64 {
 	if elementSize == 0 {
 		elementSize = 1
 	}
-	maxSize := maxPointerValue / elementSize
-
-	// len(slice) is an int. Make sure the length remains small enough to fit in
-	// an int.
-	if maxSize > maxIntegerValue {
-		maxSize = maxIntegerValue
-	}
+	maxSize := min(
+		// len(slice) is an int. Make sure the length remains small enough to fit in
+		// an int.
+		maxPointerValue/elementSize, maxIntegerValue)
 
 	return maxSize
 }
@@ -2198,9 +2184,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			}
 			sizeValue := llvm.ConstInt(b.uintptrType, size, false)
 			layoutValue := b.createObjectLayout(typ, expr.Pos())
-			buf := b.createRuntimeCall(b.allocFunc(), []llvm.Value{sizeValue, layoutValue}, expr.Comment)
 			align := b.targetData.ABITypeAlignment(typ)
-			buf.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
+			buf := b.createAlloc(sizeValue, layoutValue, align, expr.Comment)
 			return buf, nil
 		} else {
 			buf := llvmutil.CreateEntryBlockAlloca(b.Builder, typ, expr.Comment)
@@ -2430,7 +2415,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
 		layoutValue := b.createObjectLayout(llvmElemType, expr.Pos())
-		slicePtr := b.createRuntimeCall(b.allocFunc(), []llvm.Value{sliceSize, layoutValue}, "makeslice.buf")
+		slicePtr := b.createAlloc(sliceSize, layoutValue, 0, "makeslice.buf")
 		slicePtr.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elemAlign)))
 
 		// Extend or truncate if necessary. This is safe as we've already done

@@ -6,12 +6,6 @@ import (
 	"unsafe"
 )
 
-type sliceHeader struct {
-	buf *byte
-	len uintptr
-	cap uintptr
-}
-
 func Close(fd int) (err error) {
 	if libc_close(int32(fd)) < 0 {
 		err = getErrno()
@@ -58,8 +52,7 @@ func Fsync(fd int) (err error) {
 
 func Readlink(path string, p []byte) (n int, err error) {
 	data := cstring(path)
-	buf, count := splitSlice(p)
-	n = libc_readlink(&data[0], buf, uint(count))
+	n = libc_readlink(&data[0], unsafe.SliceData(p), uint(len(p)))
 	if n < 0 {
 		err = getErrno()
 	}
@@ -262,11 +255,6 @@ func cstring(s string) []byte {
 	copy(data, s)
 	// final byte should be zero from the initial allocation
 	return data
-}
-
-func splitSlice(p []byte) (buf *byte, len uintptr) {
-	slice := (*sliceHeader)(unsafe.Pointer(&p))
-	return slice.buf, slice.len
 }
 
 // These two functions are provided by the runtime.

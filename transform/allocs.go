@@ -46,10 +46,6 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 	complex128Type := ctx.StructType([]llvm.Type{ctx.DoubleType(), ctx.DoubleType()}, false)
 	maxAlign := int64(targetData.ABITypeAlignment(complex128Type))
 
-	if printAllocs != nil {
-		fmt.Fprintln(os.Stderr, "mode: set")
-	}
-
 	// Find all allocator calls.
 	var heapallocs []llvm.Value
 	for _, allocator := range allocators {
@@ -61,7 +57,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		if heapalloc.Operand(0).IsAConstantInt().IsNil() {
 			// Do not allocate variable length arrays on the stack.
 			if logAllocs {
-				logAlloc(logger, heapalloc, "size is not constant")
+				logger(getPosition(heapalloc), "size is not constant")
 			}
 			continue
 		}
@@ -70,7 +66,8 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		if size > maxStackAlloc {
 			// The maximum size for a stack allocation.
 			if logAllocs {
-				logAlloc(logger, heapalloc, fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
+				logger(getPosition(heapalloc),
+					fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
 			}
 			continue
 		}
@@ -107,7 +104,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 				if atPos.Line != 0 {
 					msg = fmt.Sprintf("escapes at line %d", atPos.Line)
 				}
-				logAlloc(logger, heapalloc, msg)
+				logger(getPosition(heapalloc), msg)
 			}
 			continue
 		}
@@ -146,9 +143,60 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 	}
 }
 
+// FormatAllocReason renders the heap allocation in a human-readable format.
+func FormatAllocReason(pos token.Position, reason string) string {
+	return fmt.Sprintf("%s: object allocated on the heap: %s", pos.String(), reason)
+}
+
+// FormatAllocCover renders the heap allocation in the go coverage tool format.
+func FormatAllocCover(pos token.Position) string {
+	if pos.Filename == "" || pos.Line <= 0 {
+		return "" // no position info; a blank line would corrupt the profile
+	}
+	// Highlight the whole line: column 1 to one past the last byte (the end
+	// column is exclusive, so add 1 to the line length).
+	endCol := max(lineLengthAt(pos.Filename, pos.Line), 1) + 1
+	return fmt.Sprintf("%s:%d.1,%d.%d 1 0", pos.Filename, pos.Line, pos.Line, endCol)
+}
+
 // valueEscapesAt returns the instruction where the given value may escape and a
 // nil llvm.Value if it definitely doesn't. The value must be an instruction.
 func valueEscapesAt(value llvm.Value) llvm.Value {
+	return valueEscapesAtImpl(value, false, nil).escapeAt
+}
+
+type escapeResult struct {
+	escapeAt llvm.Value
+
+	// returned is separate from escapeAt because values can flow to a return
+	// through aggregate operations. LLVM can mark a scalar returned parameter,
+	// but a slice data pointer returned inside {ptr, len, cap} is only visible
+	// after walking insertvalue/ret uses in the callee.
+	returned bool
+}
+
+func (r *escapeResult) merge(other escapeResult) bool {
+	if !other.escapeAt.IsNil() {
+		r.escapeAt = other.escapeAt
+		return false
+	}
+	r.returned = r.returned || other.returned
+	return true
+}
+
+func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) escapeResult {
+	if visiting == nil {
+		visiting = make(map[llvm.Value]struct{})
+	}
+	if _, ok := visiting[value]; ok {
+		// Recursive call graph while following returned parameters. Treat this
+		// as escaping to keep the analysis conservative and bounded.
+		return escapeResult{escapeAt: value}
+	}
+	visiting[value] = struct{}{}
+	defer delete(visiting, value)
+
+	var result escapeResult
 	uses := getUses(value)
 	for _, use := range uses {
 		if use.IsAInstruction().IsNil() {
@@ -156,13 +204,23 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 		}
 		switch use.InstructionOpcode() {
 		case llvm.GetElementPtr:
-			if at := valueEscapesAt(use); !at.IsNil() {
-				return at
+			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				return result
 			}
 		case llvm.BitCast:
 			// A bitcast escapes if the casted-to value escapes.
-			if at := valueEscapesAt(use); !at.IsNil() {
-				return at
+			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				return result
+			}
+		case llvm.InsertValue:
+			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				return result
+			}
+		case llvm.ExtractValue:
+			if use.Type().TypeKind() == llvm.PointerTypeKind {
+				if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+					return result
+				}
 			}
 		case llvm.Load:
 			// Load does not escape.
@@ -170,41 +228,75 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 			// Store only escapes when the value is stored to, not when the
 			// value is stored into another value.
 			if use.Operand(0) == value {
-				return use
+				return escapeResult{escapeAt: use}
 			}
 		case llvm.Call:
-			if !hasFlag(use, value, "nocapture") {
-				return use
+			if !result.merge(callValueEscapesAt(use, value, allowReturn, visiting)) {
+				return result
 			}
 		case llvm.ICmp:
 			// Comparing pointers don't let the pointer escape.
 			// This is often a compiler-inserted nil check.
+		case llvm.Ret:
+			if !allowReturn || use.Operand(0) != value {
+				return escapeResult{escapeAt: use}
+			}
+			result.returned = true
 		default:
 			// Unknown instruction, might escape.
-			return use
+			return escapeResult{escapeAt: use}
 		}
 	}
 
 	// Checked all uses, and none let the pointer value escape.
-	return llvm.Value{}
+	return result
 }
 
-// logAlloc prints a message to stderr explaining why the given object had to be
-// allocated on the heap.
-func logAlloc(logger func(token.Position, string), allocCall llvm.Value, reason string) {
-	pos := getPosition(allocCall)
-	if pos.Filename == "" || pos.Line <= 0 {
-		logger(pos, "")
-		return
+// callValueEscapesAt returns whether value escapes through this call. It also
+// handles calls that return value unchanged, as long as the called function does
+// not otherwise capture the parameter and the returned alias does not escape.
+func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) escapeResult {
+	called := call.CalledValue()
+	if called.IsAFunction().IsNil() {
+		return escapeResult{escapeAt: call}
 	}
-
-	endCol := lineLengthAt(pos.Filename, pos.Line)
-	if endCol < 1 {
-		endCol = 1
+	kindNoCapture := llvm.AttributeKindID("nocapture")
+	kindReturned := llvm.AttributeKindID("returned")
+	matched := false
+	var result escapeResult
+	for i := 0; i < called.ParamsCount(); i++ {
+		if call.Operand(i) != value {
+			continue
+		}
+		matched = true
+		index := i + 1 // param attributes start at 1
+		nocapture := !called.GetEnumAttributeAtIndex(index, kindNoCapture).IsNil()
+		returnedParam := !called.GetEnumAttributeAtIndex(index, kindReturned).IsNil()
+		if returnedParam {
+			result.returned = true
+		}
+		if nocapture {
+			continue
+		}
+		if called.IsDeclaration() {
+			return escapeResult{escapeAt: call}
+		}
+		if !result.merge(valueEscapesAtImpl(called.Param(i), true, visiting)) {
+			return result
+		}
 	}
-
-	// Only emit the coverprofile line, without position prefix.
-	logger(token.Position{}, fmt.Sprintf("%s:%d.1,%d.%d 1 0", pos.Filename, pos.Line, pos.Line, endCol))
+	for i := called.ParamsCount(); i < call.OperandsCount(); i++ {
+		if call.Operand(i) == value {
+			return escapeResult{escapeAt: call}
+		}
+	}
+	if !matched {
+		return escapeResult{}
+	}
+	if result.returned {
+		return valueEscapesAtImpl(call, allowReturn, visiting)
+	}
+	return escapeResult{}
 }
 
 func lineLengthAt(filename string, lineNumber int) int {

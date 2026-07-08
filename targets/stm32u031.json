@@ -1,0 +1,16 @@
+{
+    "inherits": [
+        "cortex-m0plus"
+    ],
+    "build-tags": [
+        "stm32u031",
+        "stm32u0",
+        "stm32"
+    ],
+    "linkerscript": "targets/stm32u031x8.ld",
+    "extra-files": [
+        "src/device/stm32/stm32u031.s"
+    ],
+    "flash-method": "probe-rs",
+    "probe-rs-chip": "STM32U031K8Ux"
+}

@@ -65,6 +65,7 @@ package reflect
 
 import (
 	"internal/reflectlite"
+	"iter"
 	"unsafe"
 )
 
@@ -265,6 +266,10 @@ type Type interface {
 	// It panics if i is not in the range [0, NumField()).
 	Field(i int) StructField
 
+	// Fields returns an iterator over each struct field for struct type t.
+	// It panics if the type's Kind is not Struct.
+	Fields() iter.Seq[StructField]
+
 	// FieldByIndex returns the nested field corresponding
 	// to the index sequence. It is equivalent to calling Field
 	// successively for each index i.
@@ -294,6 +299,10 @@ type Type interface {
 	// It panics if i is not in the range [0, NumIn()).
 	In(i int) Type
 
+	// Ins returns an iterator over each input parameter of function type t.
+	// It panics if the type's Kind is not Func.
+	Ins() iter.Seq[Type]
+
 	// Key returns a map type's key type.
 	// It panics if the type's Kind is not Map.
 	Key() Type
@@ -319,6 +328,10 @@ type Type interface {
 	// It panics if i is not in the range [0, NumOut()).
 	Out(i int) Type
 
+	// Outs returns an iterator over each output parameter of function type t.
+	// It panics if the type's Kind is not Func.
+	Outs() iter.Seq[Type]
+
 	// OverflowComplex reports whether the complex128 x cannot be represented by type t.
 	// It panics if t's Kind is not Complex64 or Complex128.
 	OverflowComplex(x complex128) bool
@@ -340,6 +353,9 @@ type Type interface {
 
 	// CanSeq2 reports whether a [Value] with this type can be iterated over using [Value.Seq2].
 	CanSeq2() bool
+
+	// Methods returns an iterator over each method in the type's method set.
+	Methods() iter.Seq[Method]
 }
 
 type rawType struct {
@@ -402,7 +418,7 @@ func (t *rawType) CanSeq2() bool {
 }
 
 func (t *rawType) ConvertibleTo(u Type) bool {
-	panic("unimplemented: (reflect.Type).ConvertibleTo()")
+	return t.RawType.ConvertibleTo(&(u.(*rawType).RawType))
 }
 
 func (t *rawType) Elem() Type {
@@ -412,6 +428,16 @@ func (t *rawType) Elem() Type {
 func (t *rawType) Field(i int) StructField {
 	f := t.RawType.Field(i)
 	return toStructField(f)
+}
+
+func (t *rawType) Fields() iter.Seq[StructField] {
+	return func(yield func(StructField) bool) {
+		for i, n := 0, t.NumField(); i < n; i++ {
+			if !yield(t.Field(i)) {
+				return
+			}
+		}
+	}
 }
 
 func (t *rawType) FieldByIndex(index []int) StructField {
@@ -437,6 +463,16 @@ func (t *rawType) In(i int) Type {
 	panic("unimplemented: (reflect.Type).In()")
 }
 
+func (t *rawType) Ins() iter.Seq[Type] {
+	return func(yield func(Type) bool) {
+		for i, n := 0, t.NumIn(); i < n; i++ {
+			if !yield(t.In(i)) {
+				return
+			}
+		}
+	}
+}
+
 func (t *rawType) IsVariadic() bool {
 	panic("unimplemented: (reflect.Type).IsVariadic()")
 }
@@ -453,6 +489,16 @@ func (t *rawType) MethodByName(name string) (Method, bool) {
 	panic("unimplemented: (reflect.Type).MethodByName()")
 }
 
+func (t *rawType) Methods() iter.Seq[Method] {
+	return func(yield func(Method) bool) {
+		for i, n := 0, t.NumMethod(); i < n; i++ {
+			if !yield(t.Method(i)) {
+				return
+			}
+		}
+	}
+}
+
 func (t *rawType) NumIn() int {
 	panic("unimplemented: (reflect.Type).NumIn()")
 }
@@ -463,6 +509,16 @@ func (t *rawType) NumOut() int {
 
 func (t *rawType) Out(i int) Type {
 	panic("unimplemented: (reflect.Type).Out()")
+}
+
+func (t *rawType) Outs() iter.Seq[Type] {
+	return func(yield func(Type) bool) {
+		for i, n := 0, t.NumOut(); i < n; i++ {
+			if !yield(t.Out(i)) {
+				return
+			}
+		}
+	}
 }
 
 // A StructField describes a single field in a struct.

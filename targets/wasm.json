@@ -27,5 +27,5 @@
 		"src/runtime/asm_tinygowasm.S",
 		"src/runtime/gc_boehm.c"
 	],
-	"emulator":      "node {root}/targets/wasm_exec.js {}"
+	"emulator":      "node {root}/targets/wasm_exec_node.js {}"
 }

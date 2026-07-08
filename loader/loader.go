@@ -22,12 +22,11 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
-
-var initFileVersions = func(info *types.Info) {}
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
@@ -435,7 +434,7 @@ func (p *Package) Check() error {
 		}
 		checker.GoVersion = fmt.Sprintf("go%d.%d", major, minor)
 	}
-	initFileVersions(&p.info)
+	p.info.FileVersions = make(map[*ast.File]string)
 
 	// Do typechecking of the package.
 	packageName := p.ImportPath
@@ -508,6 +507,11 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags(true)...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
+		cgoCFlags, err := shlex.Split(goenv.Get("CGO_CFLAGS"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to split CGO_CFLAGS: %w", err)
+		}
+		initialCFlags = append(initialCFlags, cgoCFlags...)
 		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags, p.program.config.GOOS())
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode

@@ -153,7 +153,9 @@ func stringNext(s string, it *stringIterator) (bool, int, rune) {
 }
 
 // Convert a Unicode code point into an array of bytes and its length.
-func encodeUTF8(x rune) ([4]byte, uintptr) {
+func encodeUTF8(r rune) ([4]byte, uintptr) {
+	x := uint32(r)
+
 	// https://stackoverflow.com/questions/6240055/manually-converting-unicode-codepoints-into-utf-8-and-utf-16
 	// Note: this code can probably be optimized (in size and speed).
 	switch {

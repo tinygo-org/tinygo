@@ -1,5 +1,3 @@
-//go:build go1.23
-
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -382,6 +380,45 @@ func TestValueSeq2(t *testing.T) {
 	for _, tc := range tests {
 		seq := tc.val.Seq2()
 		tc.check(t, seq)
+	}
+}
+
+func TestValueFields(t *testing.T) {
+	type T struct {
+		First  int
+		Second string
+		Third  bool
+	}
+	v := ValueOf(T{First: 10, Second: "visible", Third: true})
+
+	names := []string{"First", "Second", "Third"}
+	values := []any{10, "visible", true}
+	var count int
+	for field, value := range v.Fields() {
+		if field.Name != names[count] {
+			t.Fatalf("field %d name = %q, want %q", count, field.Name, names[count])
+		}
+		if field.Index[0] != count {
+			t.Fatalf("field %d index = %v, want [%d]", count, field.Index, count)
+		}
+		if got := value.Interface(); got != values[count] {
+			t.Fatalf("field %d value = %v, want %v", count, got, values[count])
+		}
+		count++
+	}
+	if count != len(names) {
+		t.Fatalf("field count = %d, want %d", count, len(names))
+	}
+
+	count = 0
+	for field := range v.Type().Fields() {
+		if field.Name != names[count] {
+			t.Fatalf("type field %d name = %q, want %q", count, field.Name, names[count])
+		}
+		count++
+	}
+	if count != len(names) {
+		t.Fatalf("type field count = %d, want %d", count, len(names))
 	}
 }
 

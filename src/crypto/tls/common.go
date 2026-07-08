@@ -55,6 +55,16 @@ func VersionName(version uint16) string {
 // only supports Elliptic Curve based groups. See RFC 8446, Section 4.2.7.
 type CurveID uint16
 
+const (
+	CurveP256          CurveID = 23
+	CurveP384          CurveID = 24
+	CurveP521          CurveID = 25
+	X25519             CurveID = 29
+	X25519MLKEM768     CurveID = 4588
+	SecP256r1MLKEM768  CurveID = 4587
+	SecP384r1MLKEM1024 CurveID = 4589
+)
+
 // CipherSuiteName returns the standard name for the passed cipher suite ID
 //
 // Not Implemented.
@@ -68,13 +78,41 @@ type ConnectionState struct {
 	//
 	// Minimum (empty) fields for fortio.org/log http logging and others
 	// to compile and run.
-	PeerCertificates []*x509.Certificate
-	CipherSuite      uint16
+	Version                    uint16
+	ServerName                 string
+	PeerCertificates           []*x509.Certificate
+	CipherSuite                uint16
+	NegotiatedProtocol         string
+	NegotiatedProtocolIsMutual bool // Deprecated: this value is always true.
 }
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.
 type ClientAuthType int
+
+const (
+	// NoClientCert indicates that no client certificate should be requested
+	// during the handshake, and if any certificates are sent they will not
+	// be verified.
+	NoClientCert ClientAuthType = iota
+	// RequestClientCert indicates that a client certificate should be requested
+	// during the handshake, but does not require that the client send any
+	// certificates.
+	RequestClientCert
+	// RequireAnyClientCert indicates that a client certificate should be requested
+	// during the handshake, and that at least one certificate is required to be
+	// sent by the client, but that certificate is not required to be valid.
+	RequireAnyClientCert
+	// VerifyClientCertIfGiven indicates that a client certificate should be requested
+	// during the handshake, but does not require that the client sends a
+	// certificate. If the client does send a certificate it is required to be
+	// valid.
+	VerifyClientCertIfGiven
+	// RequireAndVerifyClientCert indicates that a client certificate should be requested
+	// during the handshake, and that at least one valid certificate is required
+	// to be sent by the client.
+	RequireAndVerifyClientCert
+)
 
 // ClientSessionCache is a cache of ClientSessionState objects that can be used
 // by a client to resume a TLS session with a given server. ClientSessionCache
@@ -99,6 +137,45 @@ type ClientSessionCache interface {
 // SignatureScheme identifies a signature algorithm supported by TLS. See
 // RFC 8446, Section 4.2.3.
 type SignatureScheme uint16
+
+const (
+	// RSASSA-PKCS1-v1_5 algorithms.
+	PKCS1WithSHA256 SignatureScheme = 0x0401
+	PKCS1WithSHA384 SignatureScheme = 0x0501
+	PKCS1WithSHA512 SignatureScheme = 0x0601
+
+	// RSASSA-PSS algorithms with public key OID rsaEncryption.
+	PSSWithSHA256 SignatureScheme = 0x0804
+	PSSWithSHA384 SignatureScheme = 0x0805
+	PSSWithSHA512 SignatureScheme = 0x0806
+
+	// ECDSA algorithms. Only constrained to a specific curve in TLS 1.3.
+	ECDSAWithP256AndSHA256 SignatureScheme = 0x0403
+	ECDSAWithP384AndSHA384 SignatureScheme = 0x0503
+	ECDSAWithP521AndSHA512 SignatureScheme = 0x0603
+
+	// EdDSA algorithms.
+	Ed25519 SignatureScheme = 0x0807
+
+	// Legacy signature and hash algorithms for TLS 1.2.
+	PKCS1WithSHA1 SignatureScheme = 0x0201
+	ECDSAWithSHA1 SignatureScheme = 0x0203
+)
+
+// CipherSuite is a TLS cipher suite. Note that most functions in this package
+// accept and expose cipher suite IDs instead of this type.
+type CipherSuite struct {
+	ID   uint16
+	Name string
+
+	// Supported versions is the list of TLS protocol versions that can
+	// negotiate this cipher suite.
+	SupportedVersions []uint16
+
+	// Insecure is true if the cipher suite has known security issues
+	// due to its primitives, design, or implementation.
+	Insecure bool
+}
 
 // ClientHelloInfo contains information from a ClientHello message in order to
 // guide application logic in the GetCertificate and GetConfigForClient callbacks.
@@ -457,6 +534,48 @@ type Config struct {
 	// autoSessionTicketKeys is like sessionTicketKeys but is owned by the
 	// auto-rotation logic. See Config.ticketKeys.
 	autoSessionTicketKeys []ticketKey
+}
+
+// Clone returns a shallow clone of c or nil if c is nil. It is safe to clone a
+// Config that is being used concurrently by a TLS client or server.
+func (c *Config) Clone() *Config {
+	if c == nil {
+		return nil
+	}
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return &Config{
+		Rand:                        c.Rand,
+		Time:                        c.Time,
+		Certificates:                c.Certificates,
+		NameToCertificate:           c.NameToCertificate,
+		GetCertificate:              c.GetCertificate,
+		GetClientCertificate:        c.GetClientCertificate,
+		GetConfigForClient:          c.GetConfigForClient,
+		VerifyPeerCertificate:       c.VerifyPeerCertificate,
+		VerifyConnection:            c.VerifyConnection,
+		RootCAs:                     c.RootCAs,
+		NextProtos:                  c.NextProtos,
+		ServerName:                  c.ServerName,
+		ClientAuth:                  c.ClientAuth,
+		ClientCAs:                   c.ClientCAs,
+		InsecureSkipVerify:          c.InsecureSkipVerify,
+		CipherSuites:                c.CipherSuites,
+		PreferServerCipherSuites:    c.PreferServerCipherSuites,
+		SessionTicketsDisabled:      c.SessionTicketsDisabled,
+		SessionTicketKey:            c.SessionTicketKey,
+		ClientSessionCache:          c.ClientSessionCache,
+		UnwrapSession:               c.UnwrapSession,
+		WrapSession:                 c.WrapSession,
+		MinVersion:                  c.MinVersion,
+		MaxVersion:                  c.MaxVersion,
+		CurvePreferences:            c.CurvePreferences,
+		DynamicRecordSizingDisabled: c.DynamicRecordSizingDisabled,
+		Renegotiation:               c.Renegotiation,
+		KeyLogWriter:                c.KeyLogWriter,
+		sessionTicketKeys:           c.sessionTicketKeys,
+		autoSessionTicketKeys:       c.autoSessionTicketKeys,
+	}
 }
 
 // ticketKey is the internal representation of a session ticket key.

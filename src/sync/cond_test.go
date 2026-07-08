@@ -15,21 +15,21 @@ func TestCondSignal(t *testing.T) {
 	cond.L.Lock()
 
 	// Start a goroutine to signal us once we wait.
-	var signaled uint32
+	var signaled atomic.Uint32
 	go func() {
 		// Wait for the test goroutine to wait.
 		cond.L.Lock()
 		defer cond.L.Unlock()
 
 		// Send a signal to the test goroutine.
-		atomic.StoreUint32(&signaled, 1)
+		signaled.Store(1)
 		cond.Signal()
 	}()
 
 	// Wait for a signal.
 	// This will unlock the mutex, and allow the spawned goroutine to run.
 	cond.Wait()
-	if atomic.LoadUint32(&signaled) == 0 {
+	if signaled.Load() == 0 {
 		t.Error("wait returned before a signal was sent")
 	}
 }
@@ -44,7 +44,7 @@ func TestCondBroadcast(t *testing.T) {
 	// Start goroutines to wait for the broadcast.
 	var wg sync.WaitGroup
 	const n = 5
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		mu.RLock()
 		go func() {

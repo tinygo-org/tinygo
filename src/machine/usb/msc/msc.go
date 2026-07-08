@@ -166,6 +166,7 @@ func (m *msc) sendCSW(status csw.Status) {
 	}
 	m.cbw.CSW(status, residue, m.cswBuf)
 	m.state = mscStateStatusSent
+	m.queuedBytes = csw.MsgLen
 	m.sendUSBPacket(m.cswBuf)
 }
 
@@ -235,9 +236,9 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 			// 6.6.1 CBW Not Valid
 			// https://usb.org/sites/default/files/usbmassbulk_10.pdf
 			m.state = mscStateNeedReset
-			m.stallEndpoint(usb.MSC_ENDPOINT_IN)
-			m.stallEndpoint(usb.MSC_ENDPOINT_OUT)
-			m.stallEndpoint(usb.CONTROL_ENDPOINT)
+			m.stallEndpointIn(usb.MSC_ENDPOINT_IN)
+			m.stallEndpointOut(usb.MSC_ENDPOINT_OUT)
+			m.stallEndpointIn(usb.CONTROL_ENDPOINT)
 			return ack
 		}
 
@@ -284,7 +285,7 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 	if m.state == mscStateStatus && !m.txStalled {
 		if m.cbw.transferLength() > m.sentBytes && m.cbw.isIn() {
 			// 6.7.2 The Thirteen Cases - Case 5 (Hi > Di): STALL before status
-			m.stallEndpoint(usb.MSC_ENDPOINT_IN)
+			m.stallEndpointIn(usb.MSC_ENDPOINT_IN)
 		} else if m.sendZLP {
 			// Send a zero-length packet to force the end of the transfer before we send a CSW
 			m.queuedBytes = 0

@@ -8,15 +8,15 @@ package runtime
 // The memory manager internally uses blocks of 4 pointers big (see
 // bytesPerBlock). Every allocation first rounds up to this size to align every
 // block. It will first try to find a chain of blocks that is big enough to
-// satisfy the allocation. If it finds one, it marks the first one as the "head"
-// and the following ones (if any) as the "tail" (see below). If it cannot find
+// satisfy the allocation. If it finds one, it marks the last one as the "head"
+// and the preceding ones (if any) as the "tail" (see below). If it cannot find
 // any free space, it will perform a garbage collection cycle and try again. If
 // it still cannot find any free space, it gives up.
 //
 // Every block has some metadata, which is stored at the end of the heap.
 // The four states are "free", "head", "tail", and "mark". During normal
-// operation, there are no marked blocks. Every allocated object starts with a
-// "head" and is followed by "tail" blocks. The reason for this distinction is
+// operation, there are no marked blocks. Every allocated object ends with a
+// "head" and is preceded by "tail" blocks. The reason for this distinction is
 // that this way, the start and end of every object can be found easily.
 //
 // Metadata is stored in a special area at the end of the heap, in the area
@@ -57,9 +57,6 @@ var (
 	gcMallocs     uint64         // total number of allocations
 	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
 )
-
-// zeroSizedAlloc is just a sentinel that gets returned when allocating 0 bytes.
-var zeroSizedAlloc uint8
 
 // Provide some abstraction over heap blocks.
 
@@ -129,7 +126,7 @@ func (b gcBlock) address() uintptr {
 	return addr
 }
 
-// findHead returns the head (first block) of an object, assuming the block
+// findHead returns the head (last block) of an object, assuming the block
 // points to an allocated object. It returns the same block if this block
 // already points to the head.
 func (b gcBlock) findHead() gcBlock {
@@ -142,7 +139,7 @@ func (b gcBlock) findHead() gcBlock {
 		// large allocation.
 		stateByte := b.stateByte()
 		if stateByte == blockStateByteAllTails {
-			b -= (b % blocksPerStateByte) + 1
+			b += blocksPerStateByte - (b % blocksPerStateByte)
 			continue
 		}
 
@@ -152,24 +149,12 @@ func (b gcBlock) findHead() gcBlock {
 		if state != blockStateTail {
 			break
 		}
-		b--
+		b++
 	}
 	if gcAsserts {
 		if b.state() != blockStateHead && b.state() != blockStateMark {
 			runtimePanic("gc: found tail without head")
 		}
-	}
-	return b
-}
-
-// findNext returns the first block just past the end of the tail. This may or
-// may not be the head of an object.
-func (b gcBlock) findNext() gcBlock {
-	if b.state() == blockStateHead || b.state() == blockStateMark {
-		b++
-	}
-	for b.address() < uintptr(metadataStart) && b.state() == blockStateTail {
-		b++
 	}
 	return b
 }
@@ -200,7 +185,22 @@ func (b gcBlock) setState(newState blockState) {
 	}
 }
 
-// objHeader is a structure prepended to every heap object to hold metadata.
+// unmark changes the state of b from blockStateMark to blockStateHead.
+func (b gcBlock) unmark() {
+	if gcAsserts && b.state() != blockStateMark {
+		runtimePanic("gc: block not marked")
+	}
+	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
+	*stateBytePtr ^= uint8(blockStateMark^blockStateHead) << (b % blocksPerStateByte)
+}
+
+// free changes the state of b to blockStateFree.
+func (b gcBlock) free() {
+	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
+	*stateBytePtr &^= uint8(blockStateMask) << (b % blocksPerStateByte)
+}
+
+// objHeader is a structure appended to every heap object to hold metadata.
 type objHeader struct {
 	// next is the next object to scan after this.
 	next *objHeader
@@ -317,8 +317,12 @@ func initHeap() {
 	metadataSize := heapEnd - uintptr(metadataStart)
 	memzero(unsafe.Pointer(metadataStart), metadataSize)
 
-	// Rebuild the free ranges list.
-	buildFreeRanges()
+	// Create the initial free range.
+	if endBlock > 0 {
+		r := (*freeRange)(unsafe.Pointer(heapStart))
+		*r = freeRange{len: uintptr(endBlock)}
+		freeRanges = r
+	}
 }
 
 // setHeapEnd is called to expand the heap. The heap can only grow, not shrink.
@@ -340,6 +344,7 @@ func setHeapEnd(newHeapEnd uintptr) {
 	// memcpy is fine as it only copies the old metadata and the new memory will
 	// have been zero initialized.
 	heapEnd = newHeapEnd
+	oldEndBlock := endBlock
 	calculateHeapAddresses()
 	memcpy(metadataStart, oldMetadataStart, oldMetadataSize)
 
@@ -351,8 +356,14 @@ func setHeapEnd(newHeapEnd uintptr) {
 		runtimePanic("gc: heap did not grow enough at once")
 	}
 
-	// Rebuild the free ranges list.
-	buildFreeRanges()
+	// Insert the new free range. This range will be separate from any previous
+	// free space at the end of the heap. This may result in more heap growth
+	// than strictly necessary when an allocation requests more memory than the
+	// previous heap size. Otherwise this will only result in slightly more
+	// memory fragmentation than necessary. We cannot easily remove the old
+	// range and adding a special free-list rebuild function for this edge case
+	// would not be worthwhile in terms of binary size or code maintenance.
+	insertFreeRange(oldEndBlock.pointer(), uintptr(endBlock-oldEndBlock))
 }
 
 // calculateHeapAddresses initializes variables such as metadataStart and
@@ -391,7 +402,7 @@ func calculateHeapAddresses() {
 //go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {
-		return unsafe.Pointer(&zeroSizedAlloc)
+		return alloc_zero(size, layout)
 	}
 
 	if interrupt.In() {
@@ -400,7 +411,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 
 	// Round the size up to a multiple of blocks, adding space for the header.
 	rawSize := size
-	size += align(unsafe.Sizeof(objHeader{}))
+	size += unsafe.Sizeof(objHeader{})
 	size += bytesPerBlock - 1
 	if size < rawSize {
 		// The size overflowed.
@@ -456,25 +467,27 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		runtimePanicAt(returnAddress(0), "out of memory")
 	}
 
-	// Set the backing blocks as being allocated.
+	// Set the block states.
 	block := blockFromAddr(uintptr(pointer))
-	block.setState(blockStateHead)
-	for i := block + 1; i != block+gcBlock(neededBlocks); i++ {
+	i := block + gcBlock(neededBlocks) - 1
+	i.setState(blockStateHead)
+	for i != block {
+		i--
 		i.setState(blockStateTail)
 	}
 
 	// Create the object header.
-	header := (*objHeader)(pointer)
+	size -= unsafe.Sizeof(objHeader{})
+	header := (*objHeader)(unsafe.Add(pointer, size))
 	header.layout = parseGCLayout(layout)
 
 	// We've claimed this allocation, now we can unlock the heap.
 	gcLock.Unlock()
 
-	// Return a pointer to this allocation.
-	add := align(unsafe.Sizeof(objHeader{}))
-	pointer = unsafe.Add(pointer, add)
-	size -= add
+	// Clear the allocation body.
 	memzero(pointer, size)
+
+	// Return a pointer to this allocation.
 	return pointer
 }
 
@@ -483,16 +496,28 @@ func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 		return alloc(size, nil)
 	}
 
-	ptrAddress := uintptr(ptr)
-	endOfTailAddress := blockFromAddr(ptrAddress).findNext().address()
+	// Find the first block of the original allocation.
+	firstBlock := blockFromAddr(uintptr(ptr))
 
-	// this might be a few bytes longer than the original size of
-	// ptr, because we align to full blocks of size bytesPerBlock
-	oldSize := endOfTailAddress - ptrAddress
+	// Find the last block of the original allocation.
+	lastBlock := firstBlock.findHead()
+
+	// Calculate the size of the original allocation body.
+	oldSize := uintptr(lastBlock-firstBlock)*blocksPerStateByte + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
+
 	if size <= oldSize {
+		// The requested size is less than the old size.
+		// There are likely scenarios for this:
+		//  - The caller intended to grow the allocation, but the original size
+		//    was rounded up by alloc to a multiple of the block size.
+		//    The rounded size is already sufficient.
+		//  - The caller intended to shrink the allocation.
+		//    We currently ignore this case.
+		// Either way, the current allocation can be left alone.
 		return ptr
 	}
 
+	// Create a new allocation and copy the old data.
 	newAlloc := alloc(size, nil)
 	memcpy(newAlloc, ptr, oldSize)
 	free(ptr)
@@ -559,11 +584,8 @@ func runGC() (freeBytes uintptr) {
 	gcResumeWorld()
 
 	// Sweep phase: free all non-marked objects and unmark marked objects for
-	// the next collection cycle.
-	sweep()
-
-	// Rebuild the free ranges list.
-	freeBytes = buildFreeRanges()
+	// the next collection cycle. This also rebuilds the free ranges list.
+	freeBytes = sweep()
 
 	// Show how much has been sweeped, for debugging.
 	if gcDebug {
@@ -629,13 +651,21 @@ func finishMark() {
 			continue
 		}
 
-		// Compute the scan bounds.
-		objAddr := uintptr(unsafe.Pointer(obj))
-		start := objAddr + align(unsafe.Sizeof(objHeader{}))
-		end := blockFromAddr(objAddr).findNext().address()
+		// Find the last block in the object.
+		// This block contains the header.
+		lastBlock := blockFromAddr(uintptr(unsafe.Pointer(obj)))
+
+		// Find the first block in the allocation.
+		firstBlock := lastBlock
+		for firstBlock > 0 && (firstBlock-1).state() == blockStateTail {
+			firstBlock--
+		}
+
+		// Compute the size of the allocation.
+		bodySize := uintptr(lastBlock-firstBlock)*bytesPerBlock + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
 
 		// Scan the object.
-		obj.layout.scan(start, end-start)
+		obj.layout.scan(firstBlock.address(), bodySize)
 	}
 }
 
@@ -668,97 +698,55 @@ func markRoot(addr, root uintptr) {
 	head.setState(blockStateMark)
 
 	// Add the object to the scan list.
-	header := (*objHeader)(head.pointer())
+	header := (*objHeader)(unsafe.Add(head.pointer(), bytesPerBlock-unsafe.Sizeof(objHeader{})))
 	header.next = scanList
 	scanList = header
 }
 
 // Sweep goes through all memory and frees unmarked memory.
-func sweep() {
-	metadataEnd := unsafe.Add(metadataStart, (endBlock+(blocksPerStateByte-1))/blocksPerStateByte)
-	var carry byte
-	for meta := metadataStart; meta != metadataEnd; meta = unsafe.Add(meta, 1) {
-		// Fetch the state byte.
-		stateBytePtr := (*byte)(unsafe.Pointer(meta))
-		stateByte := *stateBytePtr
-
-		// Separate blocks by type.
-		// Split the nibbles.
-		// Each nibble is a mask of blocks.
-		high := stateByte >> blocksPerStateByte
-		low := stateByte & blockStateEach
-		// Marked heads are in both nibbles.
-		markedHeads := low & high
-		// Unmarked heads are in the low nibble but not the high nibble.
-		unmarkedHeads := low &^ high
-		// Tails are in the high nibble but not the low nibble.
-		tails := high &^ low
-
-		// Clear all tail runs after unmarked (freed) heads.
-		//
-		// Adding 1 to the start of a bit run will clear the run and set the next bit:
-		//   (2^k - 1) + 1 = 2^k
-		//   e.g. 0b0011 + 1 = 0b0100
-		// Bitwise-and with the original mask to clear the newly set bit.
-		//   e.g. (0b0011 + 1) & 0b0011 = 0b0100 & 0b0011 = 0b0000
-		// This will not clear bits after the run because the gap stops the carry:
-		//   e.g. (0b1011 + 1) & 0b1011 = 0b1100 & 0b1011 = 0b1000
-		// This can clear multiple runs in a single addition:
-		//   e.g. (0b1101 + 0b0101) & 0b1101 = 0b10010 & 0b1101 = 0b0000
-		//
-		// In order to find tail run starts after unmarked heads we could use tails & (unmarkedHeads << 1).
-		// It is possible omit the bitwise-and because the clear still works if the next block is not a tail.
-		// A head is not a tail, so corresponding missing tail bit will stop the carry from a previous tail run.
-		// As such it will set the next bit which will be cleared back away later.
-		// e.g. HHTH: (0b0010 + (0b1101 << 1)) & 0b0010 = 0b11100 & 0b0010 = 0b0000
-		//
-		// Treat the whole heap as a single pair of integer masks.
-		// This is accomplished for addition by carrying the overflow to the next state byte.
-		// The unmarkedHeads << 1 is equivalent to unmarkedHeads + unmarkedHeads, so it can be merged with the sum.
-		// This does not require any special work for the bitwise-and because it operates bitwise.
-		tailClear := tails + (unmarkedHeads << 1) + carry
-		carry = tailClear >> blocksPerStateByte
-		tails &= tailClear
-
-		// Construct the new state byte.
-		*stateBytePtr = markedHeads | (tails << blocksPerStateByte)
-	}
-}
-
-// buildFreeRanges rebuilds the freeRanges list.
-// This must be called after a GC sweep or heap grow.
-// It returns how many bytes are free in the heap.
-func buildFreeRanges() uintptr {
+func sweep() uintptr {
+	// Discard the old free ranges list.
 	freeRanges = nil
+
+	// Scan backwards through the block metadata.
 	block := endBlock
-	var totalBlocks uintptr
+	var freeBlocks uintptr
 	for {
-		// Skip backwards over occupied blocks.
-		for block > 0 && (block-1).state() != blockStateFree {
+		// Scan backwards until we find a marked head.
+		// Free the blocks as we go.
+		freeEnd := block
+		for block > 0 && (block-1).state() != blockStateMark {
 			block--
+			block.free()
 		}
+
+		if freeLen := uintptr(freeEnd - block); freeLen > 0 {
+			// Insert the freed blocks.
+			freeBlocks += freeLen
+			insertFreeRange(block.pointer(), freeLen)
+		}
+
 		if block == 0 {
+			// There are no more blocks to sweep.
 			break
 		}
 
-		// Find the start of the free range.
-		end := block
-		for block > 0 && (block-1).state() == blockStateFree {
+		// Unmark the next head.
+		block--
+		block.unmark()
+
+		// Skip the tail.
+		for block > 0 && (block-1).state() == blockStateTail {
 			block--
 		}
-
-		// Insert the free range.
-		len := uintptr(end - block)
-		totalBlocks += len
-		insertFreeRange(block.pointer(), len)
 	}
 
 	if gcDebug {
-		println("free ranges after rebuild:")
+		println("free ranges after sweep:")
 		dumpFreeRangeCounts()
 	}
 
-	return totalBlocks * bytesPerBlock
+	return freeBlocks * bytesPerBlock
 }
 
 func dumpFreeRangeCounts() {

@@ -115,6 +115,15 @@ func addTimer(tim *timerNode) {
 	interrupt.Restore(mask)
 }
 
+// reAddTimer advances and re-adds a periodic timer (a ticker) after its
+// callback has run. The cooperative scheduler runs timer callbacks to
+// completion inside the scheduler loop, so a timer can't be stopped or reset
+// while its callback is running and the timer can always be re-added directly.
+func reAddTimer(tn *timerNode) {
+	tn.timer.when += tn.timer.period
+	addTimer(tn)
+}
+
 // removeTimer is the implementation of time.stopTimer. It removes a timer from
 // the timer queue, returning it if the timer is present in the timer queue.
 func removeTimer(tim *timer) *timerNode {

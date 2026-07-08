@@ -45,7 +45,6 @@ func TestCGo(t *testing.T) {
 		"flags",
 		"const",
 	} {
-		name := name // avoid a race condition
 		t.Run(name, func(t *testing.T) {
 			// Read the AST in memory.
 			path := filepath.Join("testdata", name+".go")

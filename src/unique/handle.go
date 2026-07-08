@@ -71,4 +71,4 @@ func Make[T comparable](value T) Handle[T] {
 }
 
 //go:linkname decomposeInterface runtime.decomposeInterface
-func decomposeInterface(i interface{}) (unsafe.Pointer, unsafe.Pointer)
+func decomposeInterface(i any) (unsafe.Pointer, unsafe.Pointer)
