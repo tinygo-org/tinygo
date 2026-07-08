@@ -84,7 +84,7 @@ const (
 //
 // An interface value is a {typecode, value} tuple named runtime._interface.
 func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) llvm.Value {
-	itfValue := b.emitPointerPack([]llvm.Value{val})
+	itfValue := b.emitPointerPack([]llvm.Value{val}, pos)
 	itfType := b.getTypeCode(typ)
 	itf := llvm.Undef(b.getLLVMRuntimeType("_interface"))
 	itf = b.CreateInsertValue(itf, itfType, 0, "")

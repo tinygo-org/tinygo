@@ -2417,8 +2417,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
 		layoutValue := b.createObjectLayout(llvmElemType, expr.Pos())
-		slicePtr := b.createAlloc(sliceSize, layoutValue, 0, "makeslice.buf")
-		slicePtr.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elemAlign)))
+		slicePtr := b.createAlloc(sliceSize, layoutValue, elemAlign, "makeslice.buf")
 
 		// Extend or truncate if necessary. This is safe as we've already done
 		// the bounds check.

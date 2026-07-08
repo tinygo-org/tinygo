@@ -66,7 +66,7 @@ entry:
   store i32 3, ptr %n, align 4
   call void @runtime.trackPointer(ptr nonnull %n, ptr nonnull %stackalloc, ptr undef) #11
   call void @runtime.trackPointer(ptr nonnull @"main.closureFunctionGoroutine$1", ptr nonnull %stackalloc, ptr undef) #11
-  %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr null, ptr undef) #11
+  %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 133 to ptr), ptr undef) #11
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #11
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
@@ -110,7 +110,7 @@ declare void @runtime.printunlock(ptr) #0
 define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #11
+  %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 391 to ptr), ptr undef) #11
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #11
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
@@ -167,7 +167,7 @@ declare void @runtime.chanClose(ptr dereferenceable_or_null(36), ptr) #0
 define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #11
+  %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 713 to ptr), ptr undef) #11
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #11
   store ptr %itf.value, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4

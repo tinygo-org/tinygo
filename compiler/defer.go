@@ -508,8 +508,9 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// This may be hit a variable number of times, so use a heap allocation.
 		size := b.targetData.TypeAllocSize(deferredCallType)
 		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
-		nilPtr := llvm.ConstNull(b.dataPtrType)
-		alloca = b.createAlloc(sizeValue, nilPtr, 0, "defer.alloc.call")
+		layoutValue := b.createObjectLayout(deferredCallType, instr.Pos())
+		align := b.targetData.ABITypeAlignment(deferredCallType)
+		alloca = b.createAlloc(sizeValue, layoutValue, align, "defer.alloc.call")
 	}
 	if b.NeedsStackObjects {
 		b.trackPointer(alloca)

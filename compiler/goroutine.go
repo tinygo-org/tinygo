@@ -100,7 +100,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		prefix = b.getFunctionInfo(b.fn).linkName
 	}
 
-	paramBundle := b.emitPointerPack(params)
+	paramBundle := b.emitPointerPack(params, instr.Pos())
 	var stackSize llvm.Value
 	callee := b.createGoroutineStartWrapper(funcType, funcPtr, prefix, hasContext, false, instr.Pos())
 	if b.AutomaticStackSize {
