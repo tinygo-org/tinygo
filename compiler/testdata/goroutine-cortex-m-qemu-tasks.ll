@@ -60,7 +60,7 @@ define hidden void @main.closureFunctionGoroutine(ptr %context) unnamed_addr #0 
 entry:
   %n = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #11
   store i32 3, ptr %n, align 4
-  %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr null, ptr undef) #11
+  %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 133 to ptr), ptr undef) #11
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr %n, ptr %1, align 4
@@ -102,7 +102,7 @@ declare void @runtime.printunlock(ptr) #1
 ; Function Attrs: nounwind
 define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #0 {
 entry:
-  %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #11
+  %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 391 to ptr), ptr undef) #11
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr %fn.context, ptr %1, align 4
@@ -157,7 +157,7 @@ declare void @runtime.chanClose(ptr dereferenceable_or_null(36), ptr) #1
 ; Function Attrs: nounwind
 define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #0 {
 entry:
-  %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #11
+  %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 713 to ptr), ptr undef) #11
   store ptr %itf.value, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr @"main$string", ptr %1, align 4

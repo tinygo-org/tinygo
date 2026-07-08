@@ -131,7 +131,7 @@ entry:
 define hidden %runtime._interface @main.makeInterface(double %v.r, double %v.i, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call align 8 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #3
+  %0 = call align 8 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #3
   store double %v.r, ptr %0, align 8
   %.repack1 = getelementptr inbounds nuw i8, ptr %0, i32 8

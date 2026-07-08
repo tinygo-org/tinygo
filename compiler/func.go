@@ -112,7 +112,7 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 
 	// Store the bound variables in a single object, allocating it on the heap
 	// if necessary.
-	context := b.emitPointerPack(boundVars)
+	context := b.emitPointerPack(boundVars, expr.Pos())
 
 	// Create the closure.
 	_, fn := b.getFunction(f)

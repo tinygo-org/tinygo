@@ -278,7 +278,7 @@ entry:
 
 for.body:                                         ; preds = %for.body, %entry
   %defer.next = load ptr, ptr %deferPtr, align 4
-  %defer.alloc.call = call dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #4
+  %defer.alloc.call = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 135 to ptr), ptr undef) #4
   store i32 0, ptr %defer.alloc.call, align 4
   %defer.alloc.call.repack1 = getelementptr inbounds nuw i8, ptr %defer.alloc.call, i32 4
   store ptr %defer.next, ptr %defer.alloc.call.repack1, align 4
@@ -330,7 +330,7 @@ for.loop:                                         ; preds = %for.body, %entry
 
 for.body:                                         ; preds = %for.loop
   %defer.next = load ptr, ptr %deferPtr, align 4
-  %defer.alloc.call = call dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #4
+  %defer.alloc.call = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 135 to ptr), ptr undef) #4
   store i32 0, ptr %defer.alloc.call, align 4
   %defer.alloc.call.repack13 = getelementptr inbounds nuw i8, ptr %defer.alloc.call, i32 4
   store ptr %defer.next, ptr %defer.alloc.call.repack13, align 4

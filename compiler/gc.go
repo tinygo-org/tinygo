@@ -29,10 +29,10 @@ func (b *builder) createAlloc(sizeValue, layoutValue llvm.Value, align int, comm
 
 	// Make the runtime call.
 	call := b.createRuntimeCall(allocFunc, []llvm.Value{sizeValue, layoutValue}, comment)
-	if align != 0 {
-		// TODO: make sure all callsites set the correct alignment.
-		call.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
+	if align == 0 || align&(align-1) != 0 {
+		panic("invalid alignment")
 	}
+	call.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
 
 	return call
 }
