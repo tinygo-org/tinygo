@@ -47,17 +47,20 @@ func main() {
 	// faster.
 	clearbss()
 
-	// Initialize UART.
-	machine.InitSerial()
-
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
-	// Set up the Xtensa interrupt vector table.
+	// Set up the Xtensa interrupt vector table. This zeroes INTENABLE, so it
+	// must run before any peripheral (UART, timer, etc) enables its own CPU
+	// interrupt line - otherwise that enable would be wiped out here.
 	interruptInit()
 
 	// Initialize timer alarm interrupt for the scheduler.
 	initTimerInterrupt()
+
+	// Initialize UART. This enables the UART RX interrupt, which must happen
+	// after interruptInit so the INTENABLE bit is not cleared again.
+	machine.InitSerial()
 
 	// Initialize the heap, call main.main, etc.
 	run()
