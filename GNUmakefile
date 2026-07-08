@@ -304,7 +304,7 @@ wasi-cm:
 	rsync -rv --delete --exclude go.mod --exclude '*_test.go' --exclude '*_json.go' --exclude '*.md' --exclude LICENSE $(shell go list -m -f {{.Dir}} $(WASM_TOOLS_MODULE)/cm)/ ./src/internal/cm
 
 # Check for Node.js used during WASM tests.
-MIN_NODEJS_VERSION=18
+MIN_NODEJS_VERSION=22
 
 .PHONY: check-nodejs-version
 check-nodejs-version:
