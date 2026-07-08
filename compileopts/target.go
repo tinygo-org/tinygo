@@ -475,10 +475,12 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 				"-m", "i386pep",
 				"--image-base", "0x400000",
 			)
+			spec.RTLib = "compiler-rt"
 		case "arm64":
 			spec.LDFlags = append(spec.LDFlags,
 				"-m", "arm64pe",
 			)
+			spec.RTLib = "compiler-rt"
 		}
 		spec.LDFlags = append(spec.LDFlags,
 			"-Bdynamic",
