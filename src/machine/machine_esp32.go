@@ -412,19 +412,65 @@ var (
 		TXRXSignal:   198,
 		RTSCTSSignal: 199,
 	}
+
+	onceUart = sync.Once{}
 )
 
+// CPU interrupt line used for all UART peripherals.
+//
+// On the ESP32 (Xtensa LX6) the 32 CPU interrupt lines have fixed hardware
+// roles. Lines 6, 7, 11, 14, 15, 16 and 29 are internal (Xtensa timers,
+// software and profiling/NMI) and are NOT wired to the peripheral interrupt
+// matrix, so a peripheral routed to one of them via DPORT never fires.
+// The usable level-1 peripheral lines are 2, 3, 5, 8, 9, 10 (edge), 12, 13,
+// 17 and 18. We use line 8 for UART (9 is the timer alarm, 10 is GPIO).
+const cpuInterruptFromUART = 8
+
+// uartInterrupts is the set of UART interrupt flags we care about for RX.
+const uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
+	esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA |
+	esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
+	esp.UART_INT_ENA_FRM_ERR_INT_ENA |
+	esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
+	esp.UART_INT_ENA_GLITCH_DET_INT_ENA
+
 type UART struct {
-	Bus          *esp.UART_Type
-	Buffer       *RingBuffer
-	TXRXSignal   uint32
-	RTSCTSSignal uint32
+	Bus                  *esp.UART_Type
+	Buffer               *RingBuffer
+	TXRXSignal           uint32
+	RTSCTSSignal         uint32
+	ParityErrorDetected  bool
+	DataErrorDetected    bool
+	DataOverflowDetected bool
 }
 
 func (uart *UART) Configure(config UARTConfig) {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
+
+	// If no pins are specified (the zero value is GPIO0, which is never a
+	// sensible default for both TX and RX), pick sensible defaults per UART.
+	//
+	// For UART0 (the console) we deliberately leave the pins untouched: the
+	// ROM bootloader has already wired GPIO1 (TX) and GPIO3 (RX) directly via
+	// the IO MUX to the USB-serial bridge. Re-routing them through the GPIO
+	// matrix is unnecessary and can break RX, so we keep the bootloader setup
+	// which is exactly what makes the boot log and greeting appear.
+	if config.TX == 0 && config.RX == 0 {
+		switch uart.Bus {
+		case esp.UART0:
+			config.TX = NoPin
+			config.RX = NoPin
+		case esp.UART1:
+			config.TX = 10
+			config.RX = 9
+		case esp.UART2:
+			config.TX = 17
+			config.RX = 16
+		}
+	}
+
 	uart.Bus.CLKDIV.Set(peripheralClock / config.BaudRate)
 
 	if config.RX != NoPin {
@@ -452,6 +498,101 @@ func (uart *UART) Configure(config UARTConfig) {
 	if config.CTS != NoPin {
 		config.CTS.configure(PinConfig{Mode: PinInputPullup}, uart.RTSCTSSignal)
 	}
+
+	uart.configureInterrupt()
+	uart.enableReceiver()
+}
+
+func (uart *UART) configureInterrupt() {
+	// Disable all UART interrupts while configuring.
+	uart.Bus.INT_ENA.ClearBits(0x0ffff)
+
+	// Map this UART's peripheral interrupt to a CPU interrupt line via DPORT.
+	switch uart.Bus {
+	case esp.UART0:
+		esp.DPORT.SetPRO_UART_INTR_MAP(cpuInterruptFromUART)
+	case esp.UART1:
+		esp.DPORT.SetPRO_UART1_INTR_MAP(cpuInterruptFromUART)
+	case esp.UART2:
+		esp.DPORT.SetPRO_UART2_INTR_MAP(cpuInterruptFromUART)
+	}
+
+	// Register the ISR only once (shared across all UARTs on the same CPU int).
+	// interrupt.New is a compiler intrinsic and requires a plain (non-capturing)
+	// handler function, so we use a named package-level function.
+	onceUart.Do(func() {
+		_ = interrupt.New(cpuInterruptFromUART, handleUARTInterrupt).Enable()
+	})
+}
+
+// handleUARTInterrupt is the shared UART interrupt handler. It must be a plain
+// function (not a closure) because interrupt.New is a compiler intrinsic that
+// does not support closures.
+func handleUARTInterrupt(interrupt.Interrupt) {
+	UART0.serveInterrupt()
+	UART1.serveInterrupt()
+	UART2.serveInterrupt()
+}
+
+func (uart *UART) serveInterrupt() {
+	// Check masked interrupt status.
+	interruptFlag := uart.Bus.INT_ST.Get()
+	if (interruptFlag & uartInterrupts) == 0 {
+		return
+	}
+
+	// Block UART interrupts while processing.
+	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
+
+	if interruptFlag&(esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA|esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA) != 0 {
+		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
+			// The ESP32 UART FIFO must be accessed through the AHB address
+			// (base + 0x200C0000 == 0x60000000 for UART0), not the APB FIFO
+			// register, due to a silicon erratum. This mirrors writeByte.
+			b := (*volatile.Register8)(unsafe.Add(unsafe.Pointer(uart.Bus), 0x200C0000)).Get()
+			if !uart.Buffer.Put(b) {
+				uart.DataOverflowDetected = true
+			}
+		}
+	}
+	if interruptFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
+		uart.ParityErrorDetected = true
+	}
+	if interruptFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA != 0 {
+		uart.DataErrorDetected = true
+	}
+	if interruptFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA != 0 {
+		uart.DataOverflowDetected = true
+	}
+	if interruptFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA != 0 {
+		uart.DataErrorDetected = true
+	}
+
+	// Clear the interrupt status bits.
+	uart.Bus.INT_CLR.SetBits(interruptFlag)
+	uart.Bus.INT_CLR.ClearBits(interruptFlag)
+	// Re-enable UART interrupts.
+	uart.Bus.INT_ENA.Set(uartInterrupts)
+}
+
+func (uart *UART) enableReceiver() {
+	// Reset the RX FIFO.
+	uart.Bus.SetCONF0_RXFIFO_RST(1)
+	uart.Bus.SetCONF0_RXFIFO_RST(0)
+	// Trigger interrupt when 1 byte is available (low latency).
+	uart.Bus.SetCONF1_RXFIFO_FULL_THRHD(1)
+	// Enable the RX timeout so that a single byte still generates an interrupt
+	// once the line has been idle for the given number of bit periods. Without
+	// this, RXFIFO_FULL only fires once more than the threshold has arrived.
+	uart.Bus.SetCONF1_RX_TOUT_THRHD(2)
+	uart.Bus.SetCONF1_RX_TOUT_EN(1)
+	// Enable RX-related interrupts.
+	uart.Bus.SetINT_ENA_RXFIFO_FULL_INT_ENA(1)
+	uart.Bus.SetINT_ENA_RXFIFO_TOUT_INT_ENA(1)
+	uart.Bus.SetINT_ENA_FRM_ERR_INT_ENA(1)
+	uart.Bus.SetINT_ENA_PARITY_ERR_INT_ENA(1)
+	uart.Bus.SetINT_ENA_GLITCH_DET_INT_ENA(1)
+	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
 }
 
 func (uart *UART) writeByte(b byte) error {
