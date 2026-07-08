@@ -38,7 +38,8 @@ type TargetSpec struct {
 	Scheduler        string   `json:"scheduler,omitempty"`
 	Serial           string   `json:"serial,omitempty"` // which serial output to use (uart, usb, none)
 	Linker           string   `json:"linker,omitempty"`
-	RTLib            string   `json:"rtlib,omitempty"` // compiler runtime library (libgcc, compiler-rt)
+	LinkerFlavor     string   `json:"linker-flavor,omitempty"` // how to drive the configured linker (for example: gnu, coff, darwin)
+	RTLib            string   `json:"rtlib,omitempty"`         // compiler runtime library (libgcc, compiler-rt)
 	Libc             string   `json:"libc,omitempty"`
 	AutoStackSize    *bool    `json:"automatic-stack-size,omitempty"` // Determine stack size automatically at compile time.
 	DefaultStackSize uint64   `json:"default-stack-size,omitempty"`   // Default stack size if the size couldn't be determined at compile time.

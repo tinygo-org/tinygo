@@ -112,3 +112,52 @@ func TestOverrideProperties(t *testing.T) {
 	}
 
 }
+
+func TestConfigLinkerFlavor(t *testing.T) {
+	tests := []struct {
+		name   string
+		target *TargetSpec
+		goos   string
+		want   string
+	}{
+		{
+			name:   "default gnu",
+			target: &TargetSpec{},
+			goos:   "linux",
+			want:   "gnu",
+		},
+		{
+			name:   "default coff",
+			target: &TargetSpec{},
+			goos:   "windows",
+			want:   "coff",
+		},
+		{
+			name:   "default darwin",
+			target: &TargetSpec{},
+			goos:   "darwin",
+			want:   "darwin",
+		},
+		{
+			name: "target override",
+			target: &TargetSpec{
+				LinkerFlavor: "coff",
+			},
+			goos: "linux",
+			want: "coff",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.target.GOOS = tc.goos
+			config := &Config{
+				Options: &Options{},
+				Target:  tc.target,
+			}
+			if got := config.LinkerFlavor(); got != tc.want {
+				t.Fatalf("LinkerFlavor() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
