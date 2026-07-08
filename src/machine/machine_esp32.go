@@ -5,7 +5,9 @@ package machine
 import (
 	"device/esp"
 	"errors"
+	"runtime/interrupt"
 	"runtime/volatile"
+	"sync"
 	"unsafe"
 )
 
@@ -289,6 +291,101 @@ func (p Pin) mux() *volatile.Register32 {
 	default:
 		return nil
 	}
+}
+
+const maxPin = 40
+
+// cpuInterruptFromPin selects an edge-triggered CPU interrupt line for GPIO.
+// CPU interrupt 10 is edge-triggered level-1 on the Xtensa LX6, which prevents
+// the ISR from re-entering continuously when other peripherals (e.g. SPI via
+// the GPIO Matrix) keep GPIO.STATUS bits asserted.
+const cpuInterruptFromPin = 10
+
+type PinChange uint8
+
+// Pin change interrupt constants for SetInterrupt.
+const (
+	PinRising PinChange = iota + 1
+	PinFalling
+	PinToggle
+)
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
+//
+// You can pass a nil func to unset the pin change interrupt. If you do so,
+// the change parameter is ignored and can be set to any value (such as 0).
+// If the pin is already configured with a callback, you must first unset
+// this pins interrupt before you can set a new callback.
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) (err error) {
+	if p >= maxPin {
+		return ErrInvalidInputPin
+	}
+
+	if callback == nil {
+		// Disable this pin interrupt
+		p.pinReg().ClearBits(esp.GPIO_PIN_INT_TYPE_Msk | esp.GPIO_PIN_INT_ENA_Msk)
+
+		if pinCallbacks[p] != nil {
+			pinCallbacks[p] = nil
+		}
+		return nil
+	}
+
+	if pinCallbacks[p] != nil {
+		// The pin was already configured.
+		// To properly re-configure a pin, unset it first and set a new
+		// configuration.
+		return ErrNoPinChangeChannel
+	}
+	pinCallbacks[p] = callback
+
+	onceSetupPinInterrupt.Do(func() {
+		err = setupPinInterrupt()
+	})
+	if err != nil {
+		return err
+	}
+
+	p.pinReg().Set(
+		(p.pinReg().Get() & ^uint32(esp.GPIO_PIN_INT_TYPE_Msk|esp.GPIO_PIN_INT_ENA_Msk)) |
+			uint32(change)<<esp.GPIO_PIN_INT_TYPE_Pos | uint32(1)<<esp.GPIO_PIN_INT_ENA_Pos)
+
+	return nil
+}
+
+var (
+	pinCallbacks          [maxPin]func(Pin)
+	onceSetupPinInterrupt sync.Once
+)
+
+func setupPinInterrupt() error {
+	esp.DPORT.SetPRO_GPIO_INTERRUPT_MAP_PRO_GPIO_INTERRUPT_PRO_MAP(cpuInterruptFromPin)
+	return interrupt.New(cpuInterruptFromPin, func(interrupt.Interrupt) {
+		// Read and immediately clear interrupt status bits.
+		// Clearing before processing is critical for edge-triggered CPU
+		// interrupts: any new GPIO events that arrive during callback
+		// execution will set fresh STATUS bits, generating a new edge
+		// on the CPU interrupt line so they are not lost.
+		status := esp.GPIO.STATUS.Get()
+		status1 := esp.GPIO.STATUS1.Get()
+		esp.GPIO.STATUS_W1TC.Set(status)
+		esp.GPIO.STATUS1_W1TC.Set(status1)
+
+		// Check status for GPIO0-31
+		for i, mask := 0, uint32(1); i < 32; i, mask = i+1, mask<<1 {
+			if (status&mask) != 0 && pinCallbacks[i] != nil {
+				pinCallbacks[i](Pin(i))
+			}
+		}
+		// Check status for GPIO32-39
+		for i, mask := 32, uint32(1); i < maxPin; i, mask = i+1, mask<<1 {
+			if (status1&mask) != 0 && pinCallbacks[i] != nil {
+				pinCallbacks[i](Pin(i))
+			}
+		}
+	}).Enable()
 }
 
 var DefaultUART = UART0

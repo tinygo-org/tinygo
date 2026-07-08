@@ -31,6 +31,15 @@ SECTIONS
     {
         *(.literal.call_start_cpu0)
         *(.text.call_start_cpu0)
+
+        /* Xtensa exception/interrupt vector table — must be 0x400-aligned */
+        . = ALIGN(0x400);
+        *(.text.exception_vectors)
+
+        /* Level-1 interrupt handler */
+        *(.literal._handle_level1)
+        *(.text._handle_level1)
+
         *(.literal .text)
         *(.literal.* .text.*)
     } >IRAM
