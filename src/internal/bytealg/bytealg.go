@@ -45,11 +45,8 @@ func Compare(a, b []byte) int {
 // This function was copied from the Go 1.23 source tree (with runtime_cmpstring
 // manually inlined).
 func CompareString(a, b string) int {
-	l := len(a)
-	if len(b) < l {
-		l = len(b)
-	}
-	for i := 0; i < l; i++ {
+	l := min(len(b), len(a))
+	for i := range l {
 		c1, c2 := a[i], b[i]
 		if c1 < c2 {
 			return -1
@@ -170,7 +167,7 @@ const PrimeRK = 16777619
 // This function was removed in Go 1.22.
 func HashStrBytes(sep []byte) (uint32, uint32) {
 	hash := uint32(0)
-	for i := 0; i < len(sep); i++ {
+	for i := range sep {
 		hash = hash*PrimeRK + uint32(sep[i])
 	}
 	var pow, sq uint32 = 1, PrimeRK
@@ -249,7 +246,7 @@ func IndexRabinKarpBytes(s, sep []byte) int {
 	hashsep, pow := HashStrBytes(sep)
 	n := len(sep)
 	var h uint32
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h = h*PrimeRK + uint32(s[i])
 	}
 	if h == hashsep && Equal(s[:n], sep) {
@@ -276,7 +273,7 @@ func IndexRabinKarp[T string | []byte](s, sep T) int {
 	hashss, pow := HashStr(sep)
 	n := len(sep)
 	var h uint32
-	for i := 0; i < n; i++ {
+	for i := range n {
 		h = h*PrimeRK + uint32(s[i])
 	}
 	if h == hashss && string(s[:n]) == string(sep) {

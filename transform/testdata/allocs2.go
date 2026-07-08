@@ -9,8 +9,7 @@ func main() {
 	n1 := 5
 	derefInt(&n1)
 
-	// This should eventually be modified to not escape.
-	n2 := 6 // OUT: allocs2.go:52.1,52.42 1 0
+	n2 := 6
 	returnIntPtr(&n2)
 
 	s1 := make([]int, 3)
@@ -19,23 +18,22 @@ func main() {
 	s2 := [3]int{}
 	readIntSlice(s2[:])
 
-	// This should also be modified to not escape.
-	s3 := make([]int, 3) // OUT: allocs2.go:51.1,51.42 1 0
+	s3 := make([]int, 3)
 	returnIntSlice(s3)
 
-	useSlice(make([]int, getUnknownNumber())) // OUT: allocs2.go:48.1,48.55 1 0
+	useSlice(make([]int, getUnknownNumber())) // OUT: size is not constant
 
-	s4 := make([]byte, 300) // OUT: allocs2.go:46.1,46.56 1 0
+	s4 := make([]byte, 300) // OUT: object size 300 exceeds maximum stack allocation size 256
 	readByteSlice(s4)
 
-	s5 := make([]int, 4) // OUT: allocs2.go:38.1,38.56 1 0
+	s5 := make([]int, 4) // OUT: escapes at line 30
 	_ = append(s5, 5)
 
 	s6 := make([]int, 3)
 	s7 := []int{1, 2, 3}
 	copySlice(s6, s7)
 
-	c1 := getComplex128() // OUT: allocs2.go:31.1,31.55 1 0
+	c1 := getComplex128() // OUT: escapes at line 37
 	useInterface(c1)
 
 	n3 := 5
@@ -43,13 +41,13 @@ func main() {
 		return n3
 	}()
 
-	callVariadic(3, 5, 8) // OUT: allocs2.go:28.1,28.58 1 0
+	callVariadic(3, 5, 8) // OUT: escapes at line 44
 
-	s8 := []int{3, 5, 8} // OUT: allocs2.go:26.1,26.76 1 0
+	s8 := []int{3, 5, 8} // OUT: escapes at line 47
 	callVariadic(s8...)
 
-	n4 := 3 // OUT: allocs2.go:23.1,23.55 1 0
-	n5 := 7 // OUT: allocs2.go:13.1,13.42 1 0
+	n4 := 3 // OUT: escapes at line 51
+	n5 := 7 // OUT: escapes at line 51
 	func() {
 		n4 = n5
 	}()
@@ -76,6 +74,61 @@ func main() {
 	pseudoVolatile.Set(uint32(unsafeNoEscape(unsafe.Pointer(&dmaBuf2[0]))))
 	// ...use the buffer in the DMA peripheral
 	keepAliveNoEscape(unsafe.Pointer(&dmaBuf2[0]))
+}
+
+type vector3 [3]float32
+
+func scaleVector3(vec *vector3, f float32) *vector3 {
+	vec[0] *= f
+	vec[1] *= f
+	vec[2] *= f
+	return vec
+}
+
+func crossVector3(a, b *vector3) vector3 {
+	return vector3{
+		a[1]*b[2] - a[2]*b[1],
+		a[2]*b[0] - a[0]*b[2],
+		a[0]*b[1] - a[1]*b[0],
+	}
+}
+
+func nonEscapingReturnedPointer() vector3 {
+	a := vector3{1, 2, 3}
+	b := vector3{4, 5, 6}
+
+	c := scaleVector3(&b, 0.5)
+	return crossVector3(&a, c)
+}
+
+var escapedSlice []int
+
+func escapingReturnedSlice() {
+	s := make([]int, 3) // OUT: escapes at line 108
+	escapedSlice = returnIntSlice(s)
+}
+
+var escapedVector3 *vector3
+
+func escapingReturnedPointer() {
+	b := vector3{4, 5, 6} // OUT: escapes at line 117
+
+	c := scaleVector3(&b, 0.5)
+	escapedVector3 = c
+}
+
+func recursiveScaleVector3(vec *vector3, n int) *vector3 {
+	if n == 0 {
+		return vec
+	}
+	return recursiveScaleVector3(vec, n-1)
+}
+
+func recursiveReturnedPointer() vector3 {
+	b := vector3{4, 5, 6} // OUT: escapes at unknown line
+
+	c := recursiveScaleVector3(&b, 1)
+	return *c
 }
 
 func derefInt(x *int) int {

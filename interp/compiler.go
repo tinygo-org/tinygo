@@ -151,7 +151,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 			case llvm.PHI:
 				inst.name = llvmInst.Name()
 				incomingCount := inst.llvmInst.IncomingCount()
-				for i := 0; i < incomingCount; i++ {
+				for i := range incomingCount {
 					incomingBB := inst.llvmInst.IncomingBlock(i)
 					incomingValue := inst.llvmInst.IncomingValue(i)
 					inst.operands = append(inst.operands,

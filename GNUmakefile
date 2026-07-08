@@ -304,7 +304,7 @@ wasi-cm:
 	rsync -rv --delete --exclude go.mod --exclude '*_test.go' --exclude '*_json.go' --exclude '*.md' --exclude LICENSE $(shell go list -m -f {{.Dir}} $(WASM_TOOLS_MODULE)/cm)/ ./src/internal/cm
 
 # Check for Node.js used during WASM tests.
-MIN_NODEJS_VERSION=18
+MIN_NODEJS_VERSION=22
 
 .PHONY: check-nodejs-version
 check-nodejs-version:
@@ -753,6 +753,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=xiao                examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=xiao-ble-plus       examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=rak4631             examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=circuitplay-express examples/dac
@@ -900,6 +902,8 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=stm32l0x1           examples/serial
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=stm32u031           examples/empty
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-uno-q       examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=arduino-uno-q       examples/serial
@@ -959,6 +963,11 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target m5paper             examples/machinetest
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target mch2022             examples/machinetest
+	@$(MD5SUM) test.bin
+	# xiao-esp32c6
+	$(TINYGO) build -size short -o test.bin -target=xiao-esp32c6      	examples/blinky1
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=xiao-esp32c6   		examples/blinkm
 	@$(MD5SUM) test.bin
 	# xiao-esp32s3
 	$(TINYGO) build -size short -o test.bin -target=xiao-esp32s3   		examples/blinky1

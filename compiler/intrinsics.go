@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -166,12 +167,22 @@ func (b *builder) createMachineKeepAliveImpl() {
 }
 
 var mathToLLVMMapping = map[string]string{
+	"math.Acos":  "llvm.acos.f64",
+	"math.Asin":  "llvm.asin.f64",
+	"math.Atan":  "llvm.atan.f64",
+	"math.Atan2": "llvm.atan2.f64",
 	"math.Ceil":  "llvm.ceil.f64",
+	"math.Cos":   "llvm.cos.f64",
+	"math.Cosh":  "llvm.cosh.f64",
 	"math.Exp":   "llvm.exp.f64",
 	"math.Exp2":  "llvm.exp2.f64",
 	"math.Floor": "llvm.floor.f64",
 	"math.Log":   "llvm.log.f64",
+	"math.Sin":   "llvm.sin.f64",
+	"math.Sinh":  "llvm.sinh.f64",
 	"math.Sqrt":  "llvm.sqrt.f64",
+	"math.Tan":   "llvm.tan.f64",
+	"math.Tanh":  "llvm.tanh.f64",
 	"math.Trunc": "llvm.trunc.f64",
 }
 
@@ -185,18 +196,40 @@ var mathToLLVMMapping = map[string]string{
 // float32(math.Sqrt(float64(v))) to a 32-bit floating point operation, which is
 // beneficial on architectures where 64-bit floating point operations are (much)
 // more expensive than 32-bit ones.
-func (b *builder) defineMathOp() {
-	b.createFunctionStart(true)
-	llvmName := mathToLLVMMapping[b.fn.RelString(nil)]
-	if llvmName == "" {
-		panic("unreachable: unknown math operation") // sanity check
+func (b *builder) defineMathOp() bool {
+	llvmName, ok := mathToLLVMMapping[b.fn.RelString(nil)]
+	if !ok {
+		return false
 	}
+	if strings.HasSuffix(b.Triple, "-wasi") || llvmutil.Version() < 19 {
+		// We don't have a real libc for wasip2. Until that is fixed, we need to
+		// limit math intrinsics on WASI to a subset supported natively in
+		// WebAssembly.
+		// Also, since we don't know the specific libc we will target, disallow
+		// these for all WASI targets.
+		//
+		// We also need to limit ourselves to LLVM 19 and above for the extended
+		// set of math intrinsics, see:
+		// https://discourse.llvm.org/t/rfc-all-the-math-intrinsics/78294
+		switch b.fn.Name() {
+		case "Ceil", "Exp", "Exp2", "Floor", "Log", "Sqrt", "Trunc":
+		default:
+			return false
+		}
+	}
+	b.createFunctionStart(true)
 	llvmFn := b.mod.NamedFunction(llvmName)
 	if llvmFn.IsNil() {
 		// The intrinsic doesn't exist yet, so declare it.
-		// At the moment, all supported intrinsics have the form "double
-		// foo(double %x)" so we can hardcode the signature here.
-		llvmType := llvm.FunctionType(b.ctx.DoubleType(), []llvm.Type{b.ctx.DoubleType()}, false)
+		var llvmType llvm.Type
+		switch b.fn.Name() {
+		case "Atan2":
+			// double atan2(double %y, double %x)
+			llvmType = llvm.FunctionType(b.ctx.DoubleType(), []llvm.Type{b.ctx.DoubleType(), b.ctx.DoubleType()}, false)
+		default:
+			// double foo(double %x)
+			llvmType = llvm.FunctionType(b.ctx.DoubleType(), []llvm.Type{b.ctx.DoubleType()}, false)
+		}
 		llvmFn = llvm.AddFunction(b.mod, llvmName, llvmType)
 	}
 	// Create a call to the intrinsic.
@@ -206,6 +239,7 @@ func (b *builder) defineMathOp() {
 	}
 	result := b.CreateCall(llvmFn.GlobalValueType(), llvmFn, args, "")
 	b.CreateRet(result)
+	return true
 }
 
 func (b *builder) defineCryptoIntrinsic() bool {

@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -85,8 +86,8 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		retType = c.getLLVMType(fn.Signature.Results().At(0).Type())
 	} else {
 		results := make([]llvm.Type, 0, fn.Signature.Results().Len())
-		for i := 0; i < fn.Signature.Results().Len(); i++ {
-			results = append(results, c.getLLVMType(fn.Signature.Results().At(i).Type()))
+		for v := range fn.Signature.Results().Variables() {
+			results = append(results, c.getLLVMType(v.Type()))
 		}
 		retType = c.ctx.StructType(results, false)
 	}
@@ -162,7 +163,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
 	case "machine.keepAliveNoEscape", "machine.unsafeNoEscape":
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("nocapture"), 0))
-	case "runtime.alloc", "runtime.alloc_noheap":
+	case "runtime.alloc", "runtime.alloc_noheap", "runtime.alloc_zero":
 		// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 		// returns values that are never null and never alias to an existing value.
 		for _, attrName := range []string{"noalias", "nonnull"} {
@@ -389,7 +390,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.wasmName = info.linkName
 			info.exported = true
 		case "//go:interrupt":
-			if hasUnsafeImport(f.Pkg.Pkg) {
+			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.interrupt = true
 			}
 		case "//go:wasm-module":
@@ -451,14 +452,14 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// This is a slightly looser requirement than what gc uses: gc
 			// requires the file to import "unsafe", not the package as a
 			// whole.
-			if hasUnsafeImport(f.Pkg.Pkg) {
+			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.linkName = parts[2]
 			}
 		case "//go:section":
 			// Only enable go:section when the package imports "unsafe".
 			// go:section also implies go:noinline since inlining could
 			// move the code to a different section than that requested.
-			if len(parts) == 2 && hasUnsafeImport(f.Pkg.Pkg) {
+			if len(parts) == 2 && slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.section = parts[1]
 				info.inline = inlineNone
 			}
@@ -467,7 +468,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// runtime functions.
 			// This is somewhat dangerous and thus only imported in packages
 			// that import unsafe.
-			if hasUnsafeImport(f.Pkg.Pkg) {
+			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.nobounds = true
 			}
 		case "//go:noescape":
@@ -567,8 +568,8 @@ func (c *compilerContext) isValidWasmType(typ types.Type, site wasmSite) bool {
 				hasHostLayout = false // package structs added in go1.23
 			}
 		}
-		for i := 0; i < typ.NumFields(); i++ {
-			ftyp := typ.Field(i).Type()
+		for field := range typ.Fields() {
+			ftyp := field.Type()
 			if types.Unalias(ftyp).String() == "structs.HostLayout" {
 				hasHostLayout = true
 				continue
@@ -600,8 +601,8 @@ func getParams(sig *types.Signature) []*types.Var {
 	if sig.Recv() != nil {
 		params = append(params, sig.Recv())
 	}
-	for i := 0; i < sig.Params().Len(); i++ {
-		params = append(params, sig.Params().At(i))
+	for v := range sig.Params().Variables() {
+		params = append(params, v)
 	}
 	return params
 }
@@ -704,10 +705,7 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 		llvmGlobal = llvm.AddGlobal(c.mod, llvmType, info.linkName)
 
 		// Set alignment from the //go:align comment.
-		alignment := c.targetData.ABITypeAlignment(llvmType)
-		if info.align > alignment {
-			alignment = info.align
-		}
+		alignment := max(info.align, c.targetData.ABITypeAlignment(llvmType))
 		if alignment <= 0 || alignment&(alignment-1) != 0 {
 			// Check for power-of-two (or 0).
 			// See: https://stackoverflow.com/a/108360
@@ -781,7 +779,7 @@ func (info *globalInfo) parsePragmas(doc *ast.CommentGroup, c *compilerContext, 
 			// This is a slightly looser requirement than what gc uses: gc
 			// requires the file to import "unsafe", not the package as a
 			// whole.
-			if hasUnsafeImport(g.Pkg.Pkg) {
+			if slices.Contains(g.Pkg.Pkg.Imports(), types.Unsafe) {
 				info.linkName = parts[2]
 			}
 		}
@@ -796,14 +794,4 @@ func getAllMethods(prog *ssa.Program, typ types.Type) []*types.Selection {
 		methods[i] = ms.At(i)
 	}
 	return methods
-}
-
-// Return true if this package imports "unsafe", false otherwise.
-func hasUnsafeImport(pkg *types.Package) bool {
-	for _, imp := range pkg.Imports() {
-		if imp == types.Unsafe {
-			return true
-		}
-	}
-	return false
 }

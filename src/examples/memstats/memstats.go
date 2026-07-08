@@ -25,7 +25,7 @@ func main() {
 func escapesToHeap() {
 	n := rand.Intn(100)
 	println("Doing ", n, " iterations")
-	for i := 0; i < n; i++ {
+	for i := range n {
 		s := make([]byte, i)
 		_ = append(s, 42)
 	}

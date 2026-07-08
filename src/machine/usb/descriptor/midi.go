@@ -171,10 +171,10 @@ var ClassSpecificMIDIInEndpoint = ClassSpecificType{
 
 const endpointMIDITypeLen = 9
 
-var endpointEP6IN = [endpointMIDITypeLen]byte{
+var endpointMIDIIN = [endpointMIDITypeLen]byte{
 	endpointMIDITypeLen,
 	TypeEndpoint,
-	0x86, // EndpointAddress
+	0x83, // EndpointAddress
 	0x02, // Attributes
 	0x40, // MaxPacketSizeL
 	0x00, // MaxPacketSizeH
@@ -183,14 +183,14 @@ var endpointEP6IN = [endpointMIDITypeLen]byte{
 	0x00, // sync address
 }
 
-var EndpointEP6IN = EndpointType{
-	data: endpointEP6IN[:],
+var EndpointMIDIIN = EndpointType{
+	data: endpointMIDIIN[:],
 }
 
-var endpointEP7OUT = [endpointMIDITypeLen]byte{
+var endpointMIDIOUT = [endpointMIDITypeLen]byte{
 	endpointMIDITypeLen,
 	TypeEndpoint,
-	0x07, // EndpointAddress
+	0x03, // EndpointAddress
 	0x02, // Attributes
 	0x40, // MaxPacketSizeL
 	0x00, // MaxPacketSizeH
@@ -199,8 +199,8 @@ var endpointEP7OUT = [endpointMIDITypeLen]byte{
 	0x00, // sync address
 }
 
-var EndpointEP7OUT = EndpointType{
-	data: endpointEP7OUT[:],
+var EndpointMIDIOUT = EndpointType{
+	data: endpointMIDIOUT[:],
 }
 
 var configurationCDCMIDI = [configurationTypeLen]byte{
@@ -218,6 +218,11 @@ var ConfigurationCDCMIDI = ConfigurationType{
 	data: configurationCDCMIDI[:],
 }
 
+// EP1 IN : CDC Call Management
+// EP2 OUT: CDC OUT
+// EP2 IN : CDC IN
+// EP3 OUT: MIDI OUT (custom endpoint descriptor)
+// EP3 IN : MIDI IN (custom endpoint descriptor)
 var CDCMIDI = Descriptor{
 	Device: DeviceCDC.Bytes(),
 	Configuration: Append([][]byte{
@@ -228,10 +233,10 @@ var CDCMIDI = Descriptor{
 		ClassSpecificCDCACM.Bytes(),
 		ClassSpecificCDCUnion.Bytes(),
 		ClassSpecificCDCCallManagement.Bytes(),
-		EndpointEP1IN.Bytes(),
+		EndpointIN(EndpointEP1, TransferTypeInterrupt, 0x10, 0x10).Bytes(),
 		InterfaceCDCData.Bytes(),
-		EndpointEP2OUT.Bytes(),
-		EndpointEP3IN.Bytes(),
+		EndpointOUT(EndpointEP2, TransferTypeBulk, 0x40, 0x00).Bytes(),
+		EndpointIN(EndpointEP2, TransferTypeBulk, 0x40, 0x00).Bytes(),
 		InterfaceAssociationMIDI.Bytes(),
 		InterfaceAudio.Bytes(),
 		ClassSpecificAudioInterface.Bytes(),
@@ -241,9 +246,9 @@ var CDCMIDI = Descriptor{
 		ClassSpecificMIDIInJack2.Bytes(),
 		ClassSpecificMIDIOutJack1.Bytes(),
 		ClassSpecificMIDIOutJack2.Bytes(),
-		EndpointEP7OUT.Bytes(),
+		EndpointMIDIOUT.Bytes(),
 		ClassSpecificMIDIOutEndpoint.Bytes(),
-		EndpointEP6IN.Bytes(),
+		EndpointMIDIIN.Bytes(),
 		ClassSpecificMIDIInEndpoint.Bytes(),
 	}),
 }

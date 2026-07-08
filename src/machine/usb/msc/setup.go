@@ -52,32 +52,30 @@ func (m *msc) handleClearFeature(setup usb.Setup, wValue uint16) bool {
 	// (c) a Clear Feature HALT to the Bulk-Out endpoint (clear stall OUT)
 	// https://usb.org/sites/default/files/usbmassbulk_10.pdf
 	if m.state == mscStateNeedReset {
-		wIndex := setup.WIndex & 0x7F // Clear the direction bit from the endpoint address for comparison
+		wIndex := uint8(setup.WIndex & 0x7F)
 		if wIndex == usb.MSC_ENDPOINT_IN {
-			m.stallEndpoint(usb.MSC_ENDPOINT_IN)
-		} else if wIndex == usb.MSC_ENDPOINT_OUT {
-			m.stallEndpoint(usb.MSC_ENDPOINT_OUT)
+			if (setup.WIndex & 0x80) != 0 {
+				m.stallEndpointIn(wIndex)
+			} else {
+				m.stallEndpointOut(wIndex)
+			}
 		}
 		machine.SendZlp()
 		return true
 	}
 
-	// Clear the direction bit from the endpoint address for comparison
-	wIndex := setup.WIndex & 0x7F
-
-	// Clear the IN/OUT stalls if addressed to the endpoint
+	wIndex := uint8(setup.WIndex & 0x7F)
 	if wIndex == usb.MSC_ENDPOINT_IN {
-		m.clearStallEndpoint(usb.MSC_ENDPOINT_IN)
-		ok = true
-	}
-	if wIndex == usb.MSC_ENDPOINT_OUT {
-		m.clearStallEndpoint(usb.MSC_ENDPOINT_OUT)
-		ok = true
-	}
-	// Send a CSW if needed to resume after the IN endpoint stall is cleared
-	if m.state == mscStateStatus && wIndex == usb.MSC_ENDPOINT_IN {
-		m.sendCSW(m.respStatus)
-		ok = true
+		if (setup.WIndex & 0x80) != 0 {
+			m.clearStallEndpointIn(wIndex)
+			ok = true
+			if m.state == mscStateStatus {
+				m.sendCSW(m.respStatus)
+			}
+		} else {
+			m.clearStallEndpointOut(wIndex)
+			ok = true
+		}
 	}
 
 	if ok {
@@ -120,26 +118,28 @@ func (m *msc) handleReset(setup usb.Setup, wValue uint16) bool {
 	return true
 }
 
-func (m *msc) stallEndpoint(ep uint8) {
-	if ep == usb.MSC_ENDPOINT_IN {
-		m.txStalled = true
-		machine.USBDev.SetStallEPIn(usb.MSC_ENDPOINT_IN)
-	} else if ep == usb.MSC_ENDPOINT_OUT {
-		m.rxStalled = true
-		machine.USBDev.SetStallEPOut(usb.MSC_ENDPOINT_OUT)
-	} else if ep == usb.CONTROL_ENDPOINT {
+func (m *msc) stallEndpointIn(ep uint8) {
+	if ep == usb.CONTROL_ENDPOINT {
 		machine.USBDev.SetStallEPIn(usb.CONTROL_ENDPOINT)
+		return
 	}
+	m.txStalled = true
+	machine.USBDev.SetStallEPIn(uint32(ep))
 }
 
-func (m *msc) clearStallEndpoint(ep uint8) {
-	if ep == usb.MSC_ENDPOINT_IN {
-		machine.USBDev.ClearStallEPIn(usb.MSC_ENDPOINT_IN)
-		m.txStalled = false
-	} else if ep == usb.MSC_ENDPOINT_OUT {
-		machine.USBDev.ClearStallEPOut(usb.MSC_ENDPOINT_OUT)
-		m.rxStalled = false
-	}
+func (m *msc) stallEndpointOut(ep uint8) {
+	m.rxStalled = true
+	machine.USBDev.SetStallEPOut(uint32(ep))
+}
+
+func (m *msc) clearStallEndpointIn(ep uint8) {
+	machine.USBDev.ClearStallEPIn(uint32(ep))
+	m.txStalled = false
+}
+
+func (m *msc) clearStallEndpointOut(ep uint8) {
+	machine.USBDev.ClearStallEPOut(uint32(ep))
+	m.rxStalled = false
 }
 
 func (m *msc) setStringField(field []byte, value string) {

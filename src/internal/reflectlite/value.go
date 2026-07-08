@@ -51,6 +51,22 @@ func (v Value) isRO() bool {
 	return v.flags&(valueFlagRO) != 0
 }
 
+// These are package methods, not methods on Value, since the reflect.Value embeds a reflectlite.Value, so any
+// methods added to reflectlite.Value are visible to the user.
+
+func IsRO(v Value) bool {
+	return v.isRO()
+}
+
+func MakeRO(v Value, ro bool) Value {
+	if ro {
+		v.flags |= valueFlagRO
+	} else {
+		v.flags &^= valueFlagRO
+	}
+	return v
+}
+
 func (v Value) checkRO() {
 	if v.isRO() {
 		panic("reflect: value is not settable")
@@ -1485,13 +1501,11 @@ func convertOp(src Value, typ Type) (Value, bool) {
 			return cvtFloat(src, rtype), true
 		}
 
-		/*
-			case Complex64, Complex128:
-				switch src.Kind() {
-				case Complex64, Complex128:
-					return cvtComplex
-				}
-		*/
+	case Complex64, Complex128:
+		switch rtype := typ.(*RawType); rtype.Kind() {
+		case Complex64, Complex128:
+			return cvtComplex(src, rtype), true
+		}
 
 	case Slice:
 		switch rtype := typ.(*RawType); rtype.Kind() {
@@ -1533,6 +1547,12 @@ func convertOp(src Value, typ Type) (Value, bool) {
 			case Int32:
 				return cvtStringRunes(src, rtype), true
 			}
+		}
+
+	case Pointer:
+		rtype := typ.(*RawType)
+		if rtype.Kind() == Pointer && !src.typecode.isNamed() && !rtype.isNamed() && src.typecode.elem().underlying() == rtype.elem().underlying() {
+			return cvtDirect(src, rtype), true
 		}
 	}
 
@@ -1576,6 +1596,18 @@ func cvtFloat(v Value, t *RawType) Value {
 		return makeFloat32(v.flags, v.Float32(), t)
 	}
 	return makeFloat(v.flags, v.Float(), t)
+}
+
+func cvtDirect(v Value, t *RawType) Value {
+	return Value{
+		typecode: t,
+		value:    v.value,
+		flags:    v.flags,
+	}
+}
+
+func cvtComplex(v Value, t *RawType) Value {
+	return makeComplex(v.flags, v.Complex(), t)
 }
 
 //go:linkname stringToBytes runtime.stringToBytes
@@ -1661,20 +1693,76 @@ func makeFloat32(flags valueFlags, f float32, t *RawType) Value {
 	return v
 }
 
-func cvtIntString(src Value, t *RawType) Value {
-	panic("cvtUintString: unimplemented")
+func makeComplex(flags valueFlags, f complex128, t *RawType) Value {
+	size := t.Size()
+
+	v := Value{
+		typecode: t,
+		flags:    flags,
+	}
+
+	ptr := unsafe.Pointer(&v.value)
+	if size > unsafe.Sizeof(uintptr(0)) {
+		ptr = alloc(size, nil)
+		v.value = ptr
+	}
+
+	switch size {
+	case 8:
+		*(*complex64)(ptr) = complex64(f)
+	case 16:
+		*(*complex128)(ptr) = f
+	}
+	return v
 }
 
-func cvtUintString(src Value, t *RawType) Value {
-	panic("cvtUintString: unimplemented")
+func cvtIntString(v Value, t *RawType) Value {
+	s := "\uFFFD"
+	if x := v.Int(); int64(rune(x)) == x {
+		s = string(rune(x))
+	}
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&s),
+		flags:    v.flags,
+	}
 }
 
-func cvtStringRunes(src Value, t *RawType) Value {
-	panic("cvsStringRunes: unimplemented")
+func cvtUintString(v Value, t *RawType) Value {
+	s := "\uFFFD"
+	if x := v.Uint(); uint64(rune(x)) == x {
+		s = string(rune(x))
+	}
+
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&s),
+		flags:    v.flags,
+	}
 }
 
-func cvtRunesString(src Value, t *RawType) Value {
-	panic("cvsRunesString: unimplemented")
+//go:linkname stringToRunes runtime.stringToRunes
+func stringToRunes(s string) []rune
+
+func cvtStringRunes(v Value, t *RawType) Value {
+	b := stringToRunes(*(*string)(v.value))
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&b),
+		flags:    v.flags,
+	}
+}
+
+//go:linkname stringFromRunes runtime.stringFromRunes
+func stringFromRunes(r []rune) string
+
+func cvtRunesString(v Value, t *RawType) Value {
+	s := stringFromRunes(*(*[]rune)(v.value))
+	return Value{
+		typecode: t,
+		value:    unsafe.Pointer(&s),
+		flags:    v.flags,
+	}
 }
 
 //go:linkname slicePanic runtime.slicePanic

@@ -42,16 +42,15 @@ func TestBinarySize(t *testing.T) {
 	// This is a small number of very diverse targets that we want to test.
 	tests := []sizeTest{
 		// microcontrollers
-		{"hifive1b", "examples/echo", 3817, 299, 0, 2252},
-		{"microbit", "examples/serial", 2820, 356, 8, 2248},
-		{"wioterminal", "examples/pininterrupt", 7930, 1650, 132, 7472},
+		{"hifive1b", "examples/echo", 3699, 297, 0, 2252},
+		{"microbit", "examples/serial", 2736, 356, 8, 2248},
+		{"wioterminal", "examples/pininterrupt", 7960, 1652, 132, 7480},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
 		// output varies by binaryen version.
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.target+"/"+tc.path, func(t *testing.T) {
 			t.Parallel()
 
@@ -85,7 +84,6 @@ func TestSizeFull(t *testing.T) {
 	pkgMatch := regexp.MustCompile(`^[a-z/]+$`)    // example: "internal/task"
 
 	for _, target := range tests {
-		target := target
 		t.Run(target, func(t *testing.T) {
 			t.Parallel()
 

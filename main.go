@@ -209,6 +209,8 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
 func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
+	optionsCopy := *options
+	options = &optionsCopy
 	options.TestConfig.CompileTestBinary = true
 	config, err := builder.NewConfig(options)
 	if err != nil {
@@ -784,15 +786,15 @@ func Debug(debugger, pkgName string, ocdOutput bool, options *compileopts.Option
 		}
 		defer func() {
 			daemon.Process.Signal(os.Interrupt)
-			var stopped uint32
+			var stopped atomic.Uint32
 			go func() {
 				time.Sleep(time.Millisecond * 100)
-				if atomic.LoadUint32(&stopped) == 0 {
+				if stopped.Load() == 0 {
 					daemon.Process.Kill()
 				}
 			}()
 			daemon.Wait()
-			atomic.StoreUint32(&stopped, 1)
+			stopped.Store(1)
 		}()
 	}
 
@@ -1044,7 +1046,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 
 func touchSerialPortAt1200bps(port string) (err error) {
 	retryCount := 3
-	for i := 0; i < retryCount; i++ {
+	for range retryCount {
 		// Open port
 		p, e := serial.Open(port, &serial.Mode{BaudRate: 1200})
 		if e != nil {
@@ -1242,7 +1244,7 @@ func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not list mount points: %w", err)
 		}
-		for _, line := range strings.Split(string(tab), "\n") {
+		for line := range strings.SplitSeq(string(tab), "\n") {
 			fields := strings.Fields(line)
 			if len(fields) <= 2 {
 				continue
@@ -1271,7 +1273,7 @@ func findFATMounts(options *compileopts.Options) ([]mountPoint, error) {
 		}
 
 		// Extract data to convert to a []mountPoint slice.
-		for _, line := range strings.Split(out.String(), "\n") {
+		for line := range strings.SplitSeq(out.String(), "\n") {
 			words := strings.Fields(line)
 			if len(words) < 3 {
 				continue
@@ -1683,18 +1685,18 @@ func (m globalValuesFlag) String() string {
 }
 
 func (m globalValuesFlag) Set(value string) error {
-	equalsIndex := strings.IndexByte(value, '=')
-	if equalsIndex < 0 {
+	before, after, ok := strings.Cut(value, "=")
+	if !ok {
 		return errors.New("expected format pkgpath.Var=value")
 	}
-	pathAndName := value[:equalsIndex]
+	pathAndName := before
 	pointIndex := strings.LastIndexByte(pathAndName, '.')
 	if pointIndex < 0 {
 		return errors.New("expected format pkgpath.Var=value")
 	}
 	path := pathAndName[:pointIndex]
 	name := pathAndName[pointIndex+1:]
-	stringValue := value[equalsIndex+1:]
+	stringValue := after
 	if m[path] == nil {
 		m[path] = make(map[string]string)
 	}
@@ -1778,6 +1780,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full, html)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
+	printAllocsCoverString := flag.String("print-allocs-cover", "", "like -print-allocs, but in go coverage tool format")
 	printCommands := flag.Bool("x", false, "Print commands")
 	flagJSON := flag.Bool("json", false, "print output in JSON format")
 	parallelism := flag.Int("p", runtime.GOMAXPROCS(0), "the number of build jobs that can run in parallel")
@@ -1858,8 +1861,14 @@ func main() {
 	}
 
 	var printAllocs *regexp.Regexp
-	if *printAllocsString != "" {
-		printAllocs, err = regexp.Compile(*printAllocsString)
+	printAllocsCover := false
+	printAllocsPattern := *printAllocsString
+	if *printAllocsCoverString != "" {
+		printAllocsPattern = *printAllocsCoverString
+		printAllocsCover = true
+	}
+	if printAllocsPattern != "" {
+		printAllocs, err = regexp.Compile(printAllocsPattern)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -1907,6 +1916,7 @@ func main() {
 		PrintSizes:              *printSize,
 		PrintStacks:             *printStacks,
 		PrintAllocs:             printAllocs,
+		PrintAllocsCover:        printAllocsCover,
 		Tags:                    []string(tags),
 		TestConfig:              testConfig,
 		GlobalValues:            globalVarValues,
@@ -2044,7 +2054,6 @@ func main() {
 		// This uses an additional semaphore to reduce the memory usage.
 		testSema := make(chan struct{}, cap(options.Semaphore))
 		for i, pkgName := range explicitPkgNames {
-			pkgName := pkgName
 			buf := &bufs[i]
 			testSema <- struct{}{}
 			wg.Add(1)

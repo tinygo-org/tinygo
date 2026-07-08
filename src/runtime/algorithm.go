@@ -7,20 +7,20 @@ import (
 	"unsafe"
 )
 
-// This function is needed by math/rand since Go 1.20.
-// See: https://github.com/golang/go/issues/54880
-//
-//go:linkname rand_fastrand64 math/rand.fastrand64
-func rand_fastrand64() uint64 {
-	return fastrand64()
-}
-
 // This function is used by hash/maphash.
 // This function isn't required anymore since Go 1.22, so should be removed once
 // that becomes the minimum requirement.
 func fastrand() uint32 {
 	xorshift32State = xorshift32(xorshift32State)
 	return xorshift32State
+}
+
+// fastrandn is the equivalent of fastrand()%n, but faster. Some packages
+// (e.g. wireguard-go's device/timers.go) reach it via
+// //go:linkname ... runtime.fastrandn, so it must exist in the runtime.
+func fastrandn(n uint32) uint32 {
+	// See https://lemire.me/blog/2016/06/30/fast-random-shuffling/
+	return uint32(uint64(fastrand()) * uint64(n) >> 32)
 }
 
 func initRand() {

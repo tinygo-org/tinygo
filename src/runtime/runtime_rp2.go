@@ -8,7 +8,6 @@ import (
 	"internal/task"
 	"machine"
 	_ "machine/usb/cdc"
-	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -140,14 +139,7 @@ func startSecondaryCores() {
 	// Enable the FIFO interrupt for the GC stop the world phase.
 	// We can only do this after we don't need the FIFO anymore for starting the
 	// second core.
-	intr := interrupt.New(sioIrqFifoProc0, func(intr interrupt.Interrupt) {
-		switch rp.SIO.FIFO_RD.Get() {
-		case 1:
-			gcInterruptHandler(0)
-		}
-	})
-	intr.Enable()
-	intr.SetPriority(0xff)
+	enableSIOFifoInterruptCore0()
 }
 
 var core1StartSequence = [...]uint32{
@@ -174,14 +166,7 @@ func runCore1() {
 	// the GC.
 	// Use the lowest possible priority (highest priority value), so that other
 	// interrupts can still happen while the GC is running.
-	intr := interrupt.New(sioIrqFifoProc1, func(intr interrupt.Interrupt) {
-		switch rp.SIO.FIFO_RD.Get() {
-		case 1:
-			gcInterruptHandler(1)
-		}
-	})
-	intr.Enable()
-	intr.SetPriority(0xff)
+	enableSIOFifoInterruptCore1()
 
 	// Now start running the scheduler on this core.
 	schedulerLock.Lock()

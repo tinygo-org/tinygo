@@ -5,10 +5,37 @@ package compiler
 
 import (
 	"go/token"
+	"slices"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
+
+// Heap-allocate a buffer of the given size. This will typically call
+// runtime.alloc.
+func (b *builder) createAlloc(sizeValue, layoutValue llvm.Value, align int, comment string) llvm.Value {
+	// Normally allocate using "runtime.alloc", but use "runtime.alloc_noheap"
+	// if the //go:noheap pragma is used.
+	allocFunc := "alloc"
+	if b.info.noheap {
+		allocFunc = "alloc_noheap"
+	}
+
+	// Allocs that don't allocate anything can return an architecture-specific
+	// sentinel value.
+	if !sizeValue.IsAConstantInt().IsNil() && sizeValue.ZExtValue() == 0 {
+		allocFunc = "alloc_zero"
+	}
+
+	// Make the runtime call.
+	call := b.createRuntimeCall(allocFunc, []llvm.Value{sizeValue, layoutValue}, comment)
+	if align != 0 {
+		// TODO: make sure all callsites set the correct alignment.
+		call.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(align)))
+	}
+
+	return call
+}
 
 // trackExpr inserts pointer tracking intrinsics for the GC if the expression is
 // one of the expressions that need this.
@@ -62,7 +89,7 @@ func (b *builder) trackValue(value llvm.Value) {
 			return
 		}
 		numElements := typ.StructElementTypesCount()
-		for i := 0; i < numElements; i++ {
+		for i := range numElements {
 			subValue := b.CreateExtractValue(value, i, "")
 			b.trackValue(subValue)
 		}
@@ -71,7 +98,7 @@ func (b *builder) trackValue(value llvm.Value) {
 			return
 		}
 		numElements := typ.ArrayLength()
-		for i := 0; i < numElements; i++ {
+		for i := range numElements {
 			subValue := b.CreateExtractValue(value, i, "")
 			b.trackValue(subValue)
 		}
@@ -92,12 +119,7 @@ func typeHasPointers(t llvm.Type) bool {
 	case llvm.PointerTypeKind:
 		return true
 	case llvm.StructTypeKind:
-		for _, subType := range t.StructElementTypes() {
-			if typeHasPointers(subType) {
-				return true
-			}
-		}
-		return false
+		return slices.ContainsFunc(t.StructElementTypes(), typeHasPointers)
 	case llvm.ArrayTypeKind:
 		if t.ArrayLength() == 0 {
 			return false

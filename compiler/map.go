@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"go/types"
 	"golang.org/x/tools/go/ssa"
+	"strings"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -293,14 +294,15 @@ func hashmapCanonicalTypeName(t types.Type) string {
 		}
 		return t.String()
 	case *types.Struct:
-		s := "struct{"
+		var s strings.Builder
+		s.WriteString("struct{")
 		for i := 0; i < t.NumFields(); i++ {
 			if i > 0 {
-				s += "; "
+				s.WriteString("; ")
 			}
-			s += hashmapCanonicalTypeName(t.Field(i).Type())
+			s.WriteString(hashmapCanonicalTypeName(t.Field(i).Type()))
 		}
-		return s + "}"
+		return s.String() + "}"
 	case *types.Array:
 		return fmt.Sprintf("[%d]%s", t.Len(), hashmapCanonicalTypeName(t.Elem()))
 	}

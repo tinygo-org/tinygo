@@ -414,7 +414,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 			// Extract parameters from the state object, and call the function
 			// that's being wrapped.
 			var callParams []llvm.Value
-			for i := 0; i < numParams; i++ {
+			for i := range numParams {
 				gep := b.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
 					llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 					llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),

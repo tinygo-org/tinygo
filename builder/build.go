@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"go/types"
 	"hash/crc32"
+	"maps"
 	"math/bits"
 	"os"
 	"os/exec"
@@ -137,9 +138,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		if _, ok := globalValues[pkgPath]; !ok {
 			globalValues[pkgPath] = map[string]string{}
 		}
-		for k, v := range vals {
-			globalValues[pkgPath][k] = v
-		}
+		maps.Copy(globalValues[pkgPath], vals)
 	}
 
 	// Check for a libc dependency.
@@ -278,7 +277,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	var embedFileObjects []*compileJob
 	for _, pkg := range lprogram.Sorted() {
-		pkg := pkg // necessary to avoid a race condition
 
 		var undefinedGlobals []string
 		for name := range globalValues[pkg.Pkg.Path()] {
@@ -775,7 +773,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// TODO: do this as part of building the package to be able to link the
 	// bitcode files together.
 	for _, pkg := range lprogram.Sorted() {
-		pkg := pkg
 		for _, filename := range pkg.CFiles {
 			abspath := filepath.Join(pkg.OriginalDir(), filename)
 			job := &compileJob{
@@ -917,7 +914,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 
 			// Run wasm-opt for wasm binaries
-			if arch := strings.Split(config.Triple(), "-")[0]; arch == "wasm32" {
+			if arch, _, _ := strings.Cut(config.Triple(), "-"); arch == "wasm32" {
 				optLevel, _, _ := config.OptLevel()
 				opt := "-" + optLevel
 
@@ -1079,7 +1076,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		if err != nil {
 			return result, err
 		}
-	case "esp32", "esp32-img", "esp32c3", "esp32s3", "esp8266":
+	case "esp32", "esp32-img", "esp32c3", "esp32s3", "esp32c6", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
@@ -1355,6 +1352,14 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 	}
 	baseStackSize, baseStackSizeType, baseStackSizeFailedAt := functions["tinygo_startTask"][0].StackSize()
 
+	// Account for the bytes that tinygo_swapTask pushes onto the goroutine stack
+	// on every context switch. The static analysis correctly traces Go calls,
+	// but it cannot see into the assembly-level register push.
+	var contextSwitchOverhead uint64
+	if swapFuncs, ok := functions["tinygo_swapTask"]; ok && len(swapFuncs) == 1 {
+		contextSwitchOverhead = swapFuncs[0].FrameSize
+	}
+
 	sizes := make(map[string]functionStackSize)
 
 	// Add the reset handler function, for convenience. The reset handler runs
@@ -1402,6 +1407,12 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 			// registers to start and suspend the goroutine. Otherwise a stack
 			// overflow will occur even before the goroutine is started.
 			stackSize = baseStackSize
+		}
+		if stackSizeType == stacksize.Bounded {
+			// Add the overhead of context switching. This is needed because the
+			// context switch (tinygo_swapTask) pushes callee-saved registers
+			// onto the current stack, which is not seen by the static analysis.
+			stackSize += contextSwitchOverhead
 		}
 		sizes[name] = functionStackSize{
 			stackSize:        stackSize,

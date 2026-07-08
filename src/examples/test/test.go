@@ -70,7 +70,7 @@ func main() {
 	printItf(Number(3))
 	s := Stringer(thing)
 	println("Stringer.String():", s.String())
-	var itf interface{} = s
+	var itf any = s
 	println("Stringer.(*Thing).String():", itf.(Stringer).String())
 
 	// unusual calls
@@ -124,7 +124,7 @@ func strlen(s string) int {
 	return len(s)
 }
 
-func printItf(val interface{}) {
+func printItf(val any) {
 	switch val := val.(type) {
 	case Doubler:
 		println("is Doubler:", val.Double())

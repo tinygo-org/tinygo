@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -299,7 +300,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// means that monotonic time in the time package is counted from
 				// time.Time{}.Sub(1), which should be fine.
 				locals[inst.localIndex] = literalValue{uint64(0)}
-			case callFn.name == "runtime.alloc" || callFn.name == "runtime.alloc_noheap":
+			case callFn.name == "runtime.alloc" || callFn.name == "runtime.alloc_noheap" || callFn.name == "runtime.alloc_zero":
 				// Allocate heap memory. At compile time, this is instead done
 				// by creating a global variable.
 
@@ -470,7 +471,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// should be returned.
 				numMethods := int(r.builder.CreateExtractValue(methodSet, 0, "").ZExtValue())
 				var method llvm.Value
-				for i := 0; i < numMethods; i++ {
+				for i := range numMethods {
 					methodSignatureAgg := r.builder.CreateExtractValue(methodSet, 1, "")
 					methodSignature := r.builder.CreateExtractValue(methodSignatureAgg, i, "")
 					if methodSignature == signature {
@@ -907,7 +908,7 @@ func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) bool
 func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
-	for i := 0; i < numOperands; i++ {
+	for i := range numOperands {
 		operand := inst.llvmInst.Operand(i)
 		if !operand.IsAInstruction().IsNil() || !operand.IsAArgument().IsNil() {
 			var err error
@@ -985,9 +986,9 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			mem.instructions = append(mem.instructions, agg)
 		}
 		result = operands[1]
-		for i := len(indices) - 1; i >= 0; i-- {
+		for i, indice := range slices.Backward(indices) {
 			agg := aggregates[i]
-			result = r.builder.CreateInsertValue(agg, result, int(indices[i]), inst.name+".insertvalue"+strconv.Itoa(i))
+			result = r.builder.CreateInsertValue(agg, result, int(indice), inst.name+".insertvalue"+strconv.Itoa(i))
 			if i != 0 { // don't add last result to mem.instructions as it will be done at the end already
 				mem.instructions = append(mem.instructions, result)
 			}

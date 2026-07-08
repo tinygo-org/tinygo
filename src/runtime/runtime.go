@@ -66,11 +66,6 @@ func llvm_sponentry() unsafe.Pointer
 //export strlen
 func strlen(ptr unsafe.Pointer) uintptr
 
-// Special alloc function that should never actually be called.
-// It is used instead of normal alloc in //go:noheap functions, and must either
-// be optimized away or throw a linker error.
-func alloc_noheap(size uintptr, layout unsafe.Pointer) unsafe.Pointer
-
 //export malloc
 func malloc(size uintptr) unsafe.Pointer
 
@@ -165,12 +160,7 @@ func write(fd uintptr, p unsafe.Pointer, n int32) int32 {
 	if fd == 2 { // stderr
 		// Convert to a string, because we know that p won't change during the
 		// call to printstring.
-		// TODO: use unsafe.String instead once we require Go 1.20.
-		s := _string{
-			ptr:    (*byte)(p),
-			length: uintptr(n),
-		}
-		str := *(*string)(unsafe.Pointer(&s))
+		str := unsafe.String((*byte)(p), int(n))
 		printstring(str)
 		return n
 	}

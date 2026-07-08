@@ -438,19 +438,7 @@ func tinygo_signal_disable(s uint32)
 //
 //export tinygo_signal_handler
 func tinygo_signal_handler(s int32) {
-	// The following loop is equivalent to the following:
-	//
-	//     receivedSignals.Or(uint32(1) << uint32(s))
-	//
-	// TODO: use this instead of a loop once we drop support for Go 1.22.
-	for {
-		mask := uint32(1) << uint32(s)
-		val := receivedSignals.Load()
-		swapped := receivedSignals.CompareAndSwap(val, val|mask)
-		if swapped {
-			break
-		}
-	}
+	receivedSignals.Or(uint32(1) << uint32(s))
 
 	// Notify the main thread that there was a signal.
 	// This will exit the call to Wait or WaitUntil early.
@@ -485,19 +473,7 @@ func signal_recv() uint32 {
 		num := uint32(bits.TrailingZeros32(val))
 
 		// Atomically clear the signal number from receivedSignals.
-		// TODO: use atomic.Uint32.And once we drop support for Go 1.22 instead
-		// of this loop, like so:
-		//
-		//   receivedSignals.And(^(uint32(1) << num))
-		//
-		for {
-			newVal := val &^ (1 << num)
-			swapped := receivedSignals.CompareAndSwap(val, newVal)
-			if swapped {
-				break
-			}
-			val = receivedSignals.Load()
-		}
+		receivedSignals.And(^(uint32(1) << num))
 
 		return num
 	}

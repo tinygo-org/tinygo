@@ -93,6 +93,7 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 		}
 
 		s2 := rp.USB.BUFF_STATUS.Get()
+		rp.USB.BUFF_STATUS.Set(s2)
 
 		// OUT (PC -> rp2350)
 		for i := 0; i < 16; i++ {
@@ -113,7 +114,6 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			}
 		}
 
-		rp.USB.BUFF_STATUS.Set(s2)
 	}
 
 	// Bus is reset

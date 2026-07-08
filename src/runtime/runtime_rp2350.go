@@ -4,6 +4,7 @@ package runtime
 
 import (
 	"device/rp"
+	"runtime/interrupt"
 )
 
 const (
@@ -14,3 +15,25 @@ const (
 	sioIrqFifoProc0 = rp.IRQ_SIO_IRQ_FIFO
 	sioIrqFifoProc1 = rp.IRQ_SIO_IRQ_FIFO
 )
+
+var sioFifoInterrupt = interrupt.New(sioIrqFifoProc0, handleSIOFifoInterrupt)
+
+// On RP2350 both cores share IRQ_SIO_IRQ_FIFO, but the NVIC enable and
+// priority state is per-core. Each core must enable the shared IRQ on
+// its own NVIC, so both Core0 and Core1 call Enable()/SetPriority().
+func enableSIOFifoInterruptCore0() {
+	sioFifoInterrupt.Enable()
+	sioFifoInterrupt.SetPriority(0xff)
+}
+
+func enableSIOFifoInterruptCore1() {
+	sioFifoInterrupt.Enable()
+	sioFifoInterrupt.SetPriority(0xff)
+}
+
+func handleSIOFifoInterrupt(intr interrupt.Interrupt) {
+	switch rp.SIO.FIFO_RD.Get() {
+	case 1:
+		gcInterruptHandler(currentCPU())
+	}
+}

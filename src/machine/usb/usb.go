@@ -74,13 +74,13 @@ const (
 	CONTROL_ENDPOINT  = 0
 	CDC_ENDPOINT_ACM  = 1
 	CDC_ENDPOINT_OUT  = 2
-	CDC_ENDPOINT_IN   = 3
-	HID_ENDPOINT_IN   = 4 // for Interrupt In
-	HID_ENDPOINT_OUT  = 5 // for Interrupt Out
-	MIDI_ENDPOINT_IN  = 6 // for Bulk In
-	MIDI_ENDPOINT_OUT = 7 // for Bulk Out
-	MSC_ENDPOINT_IN   = 6 // for Bulk In
-	MSC_ENDPOINT_OUT  = 7 // for Bulk Out
+	CDC_ENDPOINT_IN   = 2
+	HID_ENDPOINT_IN   = 3 // for Interrupt In
+	HID_ENDPOINT_OUT  = 3 // for Interrupt Out
+	MIDI_ENDPOINT_IN  = 3 // for Bulk In
+	MIDI_ENDPOINT_OUT = 3 // for Bulk Out
+	MSC_ENDPOINT_IN   = 3 // for Bulk In
+	MSC_ENDPOINT_OUT  = 3 // for Bulk Out
 
 	// bmRequestType
 	REQUEST_HOSTTODEVICE = 0x00
