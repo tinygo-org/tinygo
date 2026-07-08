@@ -273,6 +273,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	isWASI := strings.HasPrefix(options.Target, "wasi")
 	isWebAssembly := isWASI || strings.HasPrefix(options.Target, "wasm") || (options.Target == "" && strings.HasPrefix(options.GOARCH, "wasm"))
 	isBaremetal := options.Target == "simavr" || options.Target == "cortex-m-qemu" || options.Target == "riscv-qemu"
+	_, goMinor, err := goenv.GetGorootVersion()
+	if err != nil {
+		t.Fatal("could not get version:", goMinor)
+	}
 
 	for _, name := range tests {
 		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
@@ -295,6 +299,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// to bitfield access methods).
 				continue
 			}
+		}
+		if options.Target == "cortex-m-qemu" && goMinor >= 27 && name == "json.go" {
+			// Go 1.27 jsonv2 exceeds the LM3S6965's 256KiB flash. json.go
+			// is still covered by larger targets such as riscv-qemu.
+			continue
 		}
 		if options.Target == "simavr" {
 			// Not all tests are currently supported on AVR.
