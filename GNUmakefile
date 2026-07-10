@@ -142,6 +142,9 @@ ifeq ($(OS),Windows_NT)
 
     # PIC needs to be disabled for libclang to work.
     LLVM_OPTION += -DLLVM_ENABLE_PIC=OFF
+    # Statically link the C++ and GCC runtime into LLVM tools so they don't
+    # depend on MinGW DLLs that may not be on PATH when executed during the build.
+    LLVM_OPTION += '-DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -static-libstdc++'
 
     CGO_CPPFLAGS += -DCINDEX_NO_EXPORTS
     CGO_LDFLAGS += -static -static-libgcc -static-libstdc++
