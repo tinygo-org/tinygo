@@ -364,8 +364,75 @@ _handle_level1:
     rfe
 
 // -----------------------------------------------------------------------
-// Exception halt: infinite loop for unhandled exceptions.
+// Exception halt: dump EXCCAUSE and EPC1 over UART0, then loop forever.
+// Helps diagnose unhandled CPU exceptions (crashes) which would otherwise
+// look like a silent freeze (especially with the watchdogs disabled).
 // -----------------------------------------------------------------------
+.Lexc_uart_fifo:
+    .long 0x3FF40000            // UART0 FIFO
+.Lexc_uart_stat:
+    .long 0x3FF4001C            // UART0 STATUS (TXFIFO_CNT bits 23:16)
 .Lexception_halt:
+    // Emit marker "\nEXC " then EXCCAUSE (8 hex), ' ', EPC1 (8 hex), '\n'.
+    l32r    a4, .Lexc_uart_fifo
+    l32r    a5, .Lexc_uart_stat
+    movi    a6, 10              // '\n'
+    call0   .Lexc_putc
+    movi    a6, 'E'
+    call0   .Lexc_putc
+    movi    a6, 'X'
+    call0   .Lexc_putc
+    movi    a6, 'C'
+    call0   .Lexc_putc
+    movi    a6, ' '
+    call0   .Lexc_putc
+    rsr     a7, EXCCAUSE
+    call0   .Lexc_puthex
+    movi    a6, ' '
+    call0   .Lexc_putc
+    rsr     a7, EPC1
+    call0   .Lexc_puthex
+    movi    a6, ' '
+    call0   .Lexc_putc
+    rsr     a7, EXCVADDR
+    call0   .Lexc_puthex
+    movi    a6, ' '
+    call0   .Lexc_putc
+    l32i    a7, a1, 0           // saved a0 (return address of faulting frame)
+    call0   .Lexc_puthex
+    movi    a6, 10              // '\n'
+    call0   .Lexc_putc
+1:
     waiti   0
-    j       .Lexception_halt
+    j       1b
+
+// Emit char in a6 (clobbers a3). a4=fifo, a5=status. Returns via a0 (call0).
+    .align 4
+.Lexc_putc:
+    s32i    a6, a4, 0
+2:  l32i    a3, a5, 0
+    extui   a3, a3, 16, 8
+    bnez    a3, 2b
+    ret
+
+// Emit 32-bit value in a7 as 8 hex chars (clobbers a6,a8,a9,a3).
+// Uses a10 as return save since call0 to .Lexc_putc clobbers a0.
+    .align 4
+.Lexc_puthex:
+    mov     a10, a0             // save return address
+    movi    a9, 28              // shift
+3:
+    ssr     a9
+    srl     a8, a7
+    extui   a8, a8, 0, 4        // nibble
+    movi    a6, 10
+    bge     a8, a6, 4f
+    addi    a6, a8, '0'
+    j       5f
+4:  addi    a6, a8, 'a' - 10
+5:  call0   .Lexc_putc
+    addi    a9, a9, -4
+    bgez    a9, 3b
+    mov     a0, a10             // restore return address
+    ret
+
