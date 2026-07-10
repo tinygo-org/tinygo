@@ -7,6 +7,13 @@
 	"scheduler": "tasks",
 	"serial": "uart",
 	"linker": "ld.lld",
+	"ldflags": [
+		"--wrap=malloc",
+		"--wrap=calloc",
+		"--wrap=free",
+		"--wrap=realloc",
+		"--wrap=ppCheckTxConnTrafficIdle"
+	],
 	"default-stack-size": 8192,
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
