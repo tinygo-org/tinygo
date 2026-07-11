@@ -479,6 +479,11 @@ TEST_PACKAGES_NONBAREMETAL = \
 	math \
 	$(nil)
 
+TEST_PACKAGES_FAST_WASI = $(filter-out $(TEST_PACKAGES_NOWASI), $(TEST_PACKAGES_FAST))
+TEST_PACKAGES_NOWASI = \
+	crypto/ecdsa \
+	$(nil)
+
 # Report platforms on which each standard library package is known to pass tests
 report-stdlib-tests-pass:
 	$(eval jointmp := $(shell echo /tmp/join.$$$$))
@@ -539,12 +544,12 @@ tinygo-test-wasi:
 tinygo-test-wasip1:
 	GOOS=wasip1 GOARCH=wasm $(TINYGO) test $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW) ./tests/runtime_wasi
 tinygo-test-wasip1-fast:
-	$(TINYGO) test -target=wasip1 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
+	$(TINYGO) test -target=wasip1 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST_WASI) ./tests/runtime_wasi
 
 tinygo-test-wasip2-slow:
 	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_SLOW)
 tinygo-test-wasip2-fast:
-	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
+	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST_WASI) ./tests/runtime_wasi
 
 tinygo-test-wasip2-sum-slow:
 	TINYGO=$(TINYGO) \
