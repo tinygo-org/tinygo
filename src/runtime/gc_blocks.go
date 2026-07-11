@@ -2,203 +2,126 @@
 
 package runtime
 
-// This memory manager is a textbook mark/sweep implementation, heavily inspired
-// by the MicroPython garbage collector.
+// The -gc=conservative and -gc=precise memory managers are conventional
+// mark-sweep garbage collectors.
 //
-// The memory manager internally uses blocks of 4 pointers big (see
-// bytesPerBlock). Every allocation first rounds up to this size to align every
-// block. It will first try to find a chain of blocks that is big enough to
-// satisfy the allocation. If it finds one, it marks the last one as the "head"
-// and the preceding ones (if any) as the "tail" (see below). If it cannot find
-// any free space, it will perform a garbage collection cycle and try again. If
-// it still cannot find any free space, it gives up.
+// This memory manager uses a single flat range of backing memory.
+// The range is provided by the platform runtime through the heapStart
+// (inclusive) and heapEnd (exclusive) variables.
 //
-// Every block has some metadata, which is stored at the end of the heap.
-// The four states are "free", "head", "tail", and "mark". During normal
-// operation, there are no marked blocks. Every allocated object ends with a
-// "head" and is preceded by "tail" blocks. The reason for this distinction is
-// that this way, the start and end of every object can be found easily.
+// This range is subdivided by calculateHeapAddresses into 3 regions:
+//  - The blocks array at [heapStart, endBlocksBitmap)
+//  - The end blocks bitmap at [endBlocksBitmap, visitedBlocksBitmap)
+//  - The visited blocks bitmap at [visitedBlocksBitmap, visitedBlocksBitmap+bitmapSize)
+// The leftover memory after the visited blocks bitmap is unused.
 //
-// Metadata is stored in a special area at the end of the heap, in the area
-// metadataStart..heapEnd. The actual blocks are stored in
-// heapStart..metadataStart.
+// The blocks array is the region that memory is allocated in. It it is divided
+// into blocks of 4 pointer widths (see bytesPerBlock). This size is always a
+// multiple of the maximum required alignment, so each block is always
+// appropriately aligned.
 //
-// More information:
-// https://aykevl.nl/2020/09/gc-tinygo
-// https://github.com/micropython/micropython/wiki/Memory-Manager
-// https://github.com/micropython/micropython/blob/master/py/gc.c
-// "The Garbage Collection Handbook" by Richard Jones, Antony Hosking, Eliot
-// Moss.
+// During normal allocation, the memory manager maintains a list of free block
+// ranges (see freeRanges). It removes the shortest range that is long enough
+// to hold the requested heap object. If the removed range is longer than
+// requested, it reinserts the leftover blocks into the list. The last block of
+// the heap object range is added to the end blocks bitmap, and an objHeader is
+// placed at the end of it. This objHeader will later be used by the mark pass.
+// When using -gc=precise, the type information data is placed within this
+// header.
+//
+// If no sufficiently-long ranges are found then the mark pass begins. The
+// visited blocks bitmap is first cleared. The ending blocks of all remaining
+// free ranges are added to both bitmaps. Next all stacks and globals are
+// scanned for pointers, which are then "marked". The process of marking a
+// pointer consists of:
+//  1. Find the index of the block containing the address. Addresses outside
+//     the blocks array are ignored.
+//  2. Skip forwards until the next block that is in either the visited or ends
+//     bitmap, adding them to the visited bitmap as we go. If we encounter an
+//     already-visited block, then the pointer is to an already-marked object
+//     or free range.
+//  3. Add the objHeader in the block to the scanList to process later.
+// Next, we loop through the scanList to mark the contents of all visited objects.
+//
+// After the marking pass is done, all live objects have been added to the
+// visited blocks bitmap. The sweep pass begins by removing the previously-free
+// ranges from the visited bitmap. It then seperates visited and unvisited
+// object ends into two bitmaps:
+//  - The visited objects are in use, and thus stay in the end blocks bitmap.
+//  - The unvisited objects are now free. The memory of the visited blocks
+//    bitmap is reused to track free ends.
+// Finally, buildFreeRanges rebuilds the free ranges list based on these two
+// bitmaps. At this point, the GC is done and the allocator can repeat the
+// search for a usable free range.
+//
+// If there are still no free ranges, then it attempts to grow the heap's
+// backing memory range. On hosted targets (Linux/WASM/etc.), this may extend
+// the virtual memory used by the heap. If this is possible, setHeapEnd moves
+// the ends bitmap and updates the free list. The allocator can repeat the
+// search for a usable free range with the new list.
+//
+// If the heap cannot be grown enough to satisfy the request, we finally give
+// up and panic with an "out of memory" message.
 
 import (
 	"internal/task"
+	"math/bits"
 	"runtime/interrupt"
 	"unsafe"
 )
 
 const gcDebug = false
+const gcTiming = false
+const sweepMetrics = false
 const needsStaticHeap = true
 
 // Some globals + constants for the entire GC.
 
 const (
-	wordsPerBlock      = 4 // number of pointers in an allocated block
-	bytesPerBlock      = wordsPerBlock * unsafe.Sizeof(heapStart)
-	stateBits          = 2 // how many bits a block state takes (see blockState type)
-	blocksPerStateByte = 8 / stateBits
+	// wordsPerBlock is the number of pointers that can fit into a block without overlapping.
+	wordsPerBlock = 4
+
+	// bytesPerBlock is the size of a heap block in bytes.
+	bytesPerBlock = wordsPerBlock * unsafe.Sizeof(uintptr(0))
+
+	// maskSizeBytes is the size of the gcMask type in bytes.
+	maskSizeBytes = unsafe.Sizeof(gcMask(0))
+
+	// maskSizeBits is the size of the gcMask type in bits.
+	maskSizeBits = 8 * maskSizeBytes
 )
 
 var (
-	metadataStart unsafe.Pointer // pointer to the start of the heap metadata
-	scanList      *objHeader     // scanList is a singly linked list of heap objects that have been marked but not scanned
-	freeRanges    *freeRange     // freeRanges is a linked list of free block ranges
-	endBlock      gcBlock        // the block just past the end of the available space
-	gcTotalAlloc  uint64         // total number of bytes allocated
-	gcMallocs     uint64         // total number of allocations
-	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
+	// endBlocksBitmap is the base address of the end blocks bitmap.
+	// The last block in a heap object or free range is considered an end block.
+	endBlocksBitmap uintptr
+
+	// visitedBlocksBitmap is the base address of the visited blocks bitmap.
+	// markRoot "visits" blocks from the marked address to the next end block.
+	// It may stop early if it finds an already-visited block.
+	visitedBlocksBitmap uintptr
+
+	// blocks is the heap size in blocks.
+	blocks uintptr
+
+	// scanList is a singly linked list of heap objects that have been marked but not scanned.
+	scanList *objHeader
+
+	// freeRanges is a linked list of free block ranges.
+	freeRanges *freeRange
+
+	// gcTotalAlloc is the total number of bytes allocated since heap initialization.
+	// This is used by ReadMemStats.
+	gcTotalAlloc uint64
+
+	// gcMallocs is the total number of allocations since heap initialization.
+	// This is used by ReadMemStats.
+	gcMallocs uint64
+
+	// gcLock is used to control access to the GC on multicore systems.
+	// The GC is not otherwise thread-safe.
+	gcLock task.PMutex
 )
-
-// Provide some abstraction over heap blocks.
-
-// blockState stores the four states in which a block can be.
-// It holds 1 bit in each nibble.
-// When stored into a state byte, each bit in a nibble corresponds to a different block.
-// For blocks A-D, a state byte would be laid out as 0bDCBA_DCBA.
-type blockState uint8
-
-const (
-	blockStateLow  blockState = 1
-	blockStateHigh blockState = 1 << blocksPerStateByte
-
-	blockStateFree blockState = 0
-	blockStateHead blockState = blockStateLow
-	blockStateTail blockState = blockStateHigh
-	blockStateMark blockState = blockStateLow | blockStateHigh
-	blockStateMask blockState = blockStateLow | blockStateHigh
-)
-
-// blockStateEach is a mask that can be used to extract a nibble from the block state.
-const blockStateEach = 1<<blocksPerStateByte - 1
-
-// The byte value of a block where every block is a 'tail' block.
-const blockStateByteAllTails = byte(blockStateTail) * blockStateEach
-
-// String returns a human-readable version of the block state, for debugging.
-func (s blockState) String() string {
-	switch s {
-	case blockStateFree:
-		return "free"
-	case blockStateHead:
-		return "head"
-	case blockStateTail:
-		return "tail"
-	case blockStateMark:
-		return "mark"
-	default:
-		// must never happen
-		return "!err"
-	}
-}
-
-// The block number in the pool.
-type gcBlock uintptr
-
-// blockFromAddr returns a block given an address somewhere in the heap (which
-// might not be heap-aligned).
-func blockFromAddr(addr uintptr) gcBlock {
-	if gcAsserts && (addr < heapStart || addr >= uintptr(metadataStart)) {
-		runtimePanic("gc: trying to get block from invalid address")
-	}
-	return gcBlock((addr - heapStart) / bytesPerBlock)
-}
-
-// Return a pointer to the start of the allocated object.
-func (b gcBlock) pointer() unsafe.Pointer {
-	return unsafe.Pointer(b.address())
-}
-
-// Return the address of the start of the allocated object.
-func (b gcBlock) address() uintptr {
-	addr := heapStart + uintptr(b)*bytesPerBlock
-	if gcAsserts && addr > uintptr(metadataStart) {
-		runtimePanic("gc: block pointing inside metadata")
-	}
-	return addr
-}
-
-// findHead returns the head (last block) of an object, assuming the block
-// points to an allocated object. It returns the same block if this block
-// already points to the head.
-func (b gcBlock) findHead() gcBlock {
-	for {
-		// Optimization: check whether the current block state byte (which
-		// contains the state of multiple blocks) is composed entirely of tail
-		// blocks. If so, we can skip back to the last block in the previous
-		// state byte.
-		// This optimization speeds up findHead for pointers that point into a
-		// large allocation.
-		stateByte := b.stateByte()
-		if stateByte == blockStateByteAllTails {
-			b += blocksPerStateByte - (b % blocksPerStateByte)
-			continue
-		}
-
-		// Check whether we've found a non-tail block, which means we found the
-		// head.
-		state := b.stateFromByte(stateByte)
-		if state != blockStateTail {
-			break
-		}
-		b++
-	}
-	if gcAsserts {
-		if b.state() != blockStateHead && b.state() != blockStateMark {
-			runtimePanic("gc: found tail without head")
-		}
-	}
-	return b
-}
-
-func (b gcBlock) stateByte() byte {
-	return *(*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
-}
-
-// Return the block state given a state byte. The state byte must have been
-// obtained using b.stateByte(), otherwise the result is incorrect.
-func (b gcBlock) stateFromByte(stateByte byte) blockState {
-	return blockState(stateByte>>(b%blocksPerStateByte)) & blockStateMask
-}
-
-// State returns the current block state.
-func (b gcBlock) state() blockState {
-	return b.stateFromByte(b.stateByte())
-}
-
-// setState sets the current block to the given state, which must contain more
-// bits than the current state. Allowed transitions: from free to any state and
-// from head to mark.
-func (b gcBlock) setState(newState blockState) {
-	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
-	*stateBytePtr |= uint8(newState << (b % blocksPerStateByte))
-	if gcAsserts && b.state() != newState {
-		runtimePanic("gc: setState() was not successful")
-	}
-}
-
-// unmark changes the state of b from blockStateMark to blockStateHead.
-func (b gcBlock) unmark() {
-	if gcAsserts && b.state() != blockStateMark {
-		runtimePanic("gc: block not marked")
-	}
-	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
-	*stateBytePtr ^= uint8(blockStateMark^blockStateHead) << (b % blocksPerStateByte)
-}
-
-// free changes the state of b to blockStateFree.
-func (b gcBlock) free() {
-	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
-	*stateBytePtr &^= uint8(blockStateMask) << (b % blocksPerStateByte)
-}
 
 // objHeader is a structure appended to every heap object to hold metadata.
 type objHeader struct {
@@ -215,23 +138,25 @@ type objHeader struct {
 // - The inner level (freeRangeMore) has one entry for each additional range of the same length.
 // This two-level structure ensures that insertion/removal times are proportional to the requested length.
 type freeRange struct {
-	// len is the length of this free range.
-	len uintptr
+	freeRangeMore
 
 	// nextLen is the next longer free range.
 	nextLen *freeRange
 
-	// nextWithLen is the next free range with this length.
-	nextWithLen *freeRangeMore
+	// len is the length of this free range.
+	len uintptr
 }
 
 // freeRangeMore is a node on the inner list of equal-length ranges.
 type freeRangeMore struct {
-	next *freeRangeMore
+	// nextWithLen is the next free range with the same length.
+	nextWithLen *freeRangeMore
 }
 
-// insertFreeRange inserts a range of len blocks starting at ptr into the free list.
-func insertFreeRange(ptr unsafe.Pointer, len uintptr) {
+// insertFreeRange inserts a range of len blocks ending at endAddr into the free list.
+//
+//go:nobounds
+func insertFreeRange(endAddr uintptr, len uintptr) {
 	if gcAsserts && len == 0 {
 		runtimePanic("gc: insert 0-length free range")
 	}
@@ -247,82 +172,43 @@ func insertFreeRange(ptr unsafe.Pointer, len uintptr) {
 	next := *insDst
 	if next != nil && next.len == len {
 		// Insert into the list with this length.
-		newRange := (*freeRangeMore)(ptr)
-		newRange.next = next.nextWithLen
+		newRange := (*freeRangeMore)(unsafe.Pointer(endAddr - unsafe.Sizeof(freeRangeMore{})))
+		newRange.nextWithLen = next.nextWithLen
 		next.nextWithLen = newRange
 	} else {
 		// Insert into the list of lengths.
-		newRange := (*freeRange)(ptr)
+		newRange := (*freeRange)(unsafe.Pointer(endAddr - unsafe.Sizeof(freeRange{})))
 		*newRange = freeRange{
-			len:         len,
-			nextLen:     next,
-			nextWithLen: nil,
+			len:     len,
+			nextLen: next,
 		}
 		*insDst = newRange
 	}
-}
-
-// popFreeRange removes a range of len blocks from the freeRanges list.
-// It returns nil if there are no sufficiently long ranges.
-func popFreeRange(len uintptr) unsafe.Pointer {
-	if gcAsserts && len == 0 {
-		runtimePanic("gc: pop 0-length free range")
-	}
-
-	// Find the removal point by length.
-	// Skip until the next range is at least the target length.
-	remDst := &freeRanges
-	for *remDst != nil && (*remDst).len < len {
-		remDst = &(*remDst).nextLen
-	}
-
-	rangeWithLength := *remDst
-	if rangeWithLength == nil {
-		// No ranges are long enough.
-		return nil
-	}
-	removedLen := rangeWithLength.len
-
-	// Remove the range.
-	var ptr unsafe.Pointer
-	if nextWithLen := rangeWithLength.nextWithLen; nextWithLen != nil {
-		// Remove from the list with this length.
-		rangeWithLength.nextWithLen = nextWithLen.next
-		ptr = unsafe.Pointer(nextWithLen)
-	} else {
-		// Remove from the list of lengths.
-		*remDst = rangeWithLength.nextLen
-		ptr = unsafe.Pointer(rangeWithLength)
-	}
-
-	if removedLen > len {
-		// Insert the leftover range.
-		insertFreeRange(unsafe.Add(ptr, len*bytesPerBlock), removedLen-len)
-	}
-	return ptr
-}
-
-func isOnHeap(ptr uintptr) bool {
-	return ptr >= heapStart && ptr < uintptr(metadataStart)
 }
 
 // Initialize the memory allocator.
 // No memory may be allocated before this is called. That means the runtime and
 // any packages the runtime depends upon may not allocate memory during package
 // initialization.
+//
+//go:nobounds
 func initHeap() {
 	calculateHeapAddresses()
 
-	// Set all block states to 'free'.
-	metadataSize := heapEnd - uintptr(metadataStart)
-	memzero(unsafe.Pointer(metadataStart), metadataSize)
-
-	// Create the initial free range.
-	if endBlock > 0 {
-		r := (*freeRange)(unsafe.Pointer(heapStart))
-		*r = freeRange{len: uintptr(endBlock)}
-		freeRanges = r
+	// Initialize the ends bitmap.
+	endBlocksBitmap := endBlocksBitmap
+	visitedBlocksBitmap := visitedBlocksBitmap
+	bitmapSize := visitedBlocksBitmap - endBlocksBitmap
+	if bitmapSize == 0 {
+		// Empty heap.
+		return
 	}
+	memzero(unsafe.Pointer(endBlocksBitmap), bitmapSize)
+
+	// Insert the initial free range.
+	r := (*freeRange)(unsafe.Pointer(endBlocksBitmap - unsafe.Sizeof(freeRange{})))
+	freeRanges = r
+	*r = freeRange{len: blocks}
 }
 
 // setHeapEnd is called to expand the heap. The heap can only grow, not shrink.
@@ -334,65 +220,65 @@ func setHeapEnd(newHeapEnd uintptr) {
 	}
 
 	// Save some old variables we need later.
-	oldMetadataStart := metadataStart
-	oldMetadataSize := heapEnd - uintptr(metadataStart)
+	oldEndBlocksBitmap := endBlocksBitmap
+	oldBitmapSize := visitedBlocksBitmap - endBlocksBitmap
 
-	// Increase the heap. After setting the new heapEnd, calculateHeapAddresses
-	// will update metadataStart and the memcpy will copy the metadata to the
-	// new location.
-	// The new metadata will be bigger than the old metadata, but a simple
-	// memcpy is fine as it only copies the old metadata and the new memory will
-	// have been zero initialized.
+	// Update the heap layout.
 	heapEnd = newHeapEnd
-	oldEndBlock := endBlock
 	calculateHeapAddresses()
-	memcpy(metadataStart, oldMetadataStart, oldMetadataSize)
 
-	// Note: the memcpy above assumes the heap grows enough so that the new
-	// metadata does not overlap the old metadata. If that isn't true, memmove
-	// should be used to avoid corruption.
-	// This assert checks whether that's true.
-	if gcAsserts && uintptr(metadataStart) < uintptr(oldMetadataStart)+oldMetadataSize {
-		runtimePanic("gc: heap did not grow enough at once")
-	}
+	// Move the old end blocks bitmap.
+	endBlocksBitmap := endBlocksBitmap
+	memmove(unsafe.Pointer(endBlocksBitmap), unsafe.Pointer(oldEndBlocksBitmap), oldBitmapSize)
 
-	// Insert the new free range. This range will be separate from any previous
-	// free space at the end of the heap. This may result in more heap growth
-	// than strictly necessary when an allocation requests more memory than the
-	// previous heap size. Otherwise this will only result in slightly more
-	// memory fragmentation than necessary. We cannot easily remove the old
-	// range and adding a special free-list rebuild function for this edge case
-	// would not be worthwhile in terms of binary size or code maintenance.
-	insertFreeRange(oldEndBlock.pointer(), uintptr(endBlock-oldEndBlock))
+	// Widen the bitmap.
+	visitedBlocksBitmap := visitedBlocksBitmap
+	newBitmapSize := visitedBlocksBitmap - endBlocksBitmap
+	memzero(unsafe.Pointer(endBlocksBitmap+oldBitmapSize), newBitmapSize-oldBitmapSize)
+
+	// Populate the visitedBlocksBitmap with free range ends (including the new free range).
+	memzero(unsafe.Pointer(visitedBlocksBitmap), newBitmapSize-maskSizeBytes)
+	*(*gcMask)(unsafe.Pointer(visitedBlocksBitmap + newBitmapSize - maskSizeBytes)) = 1 << ((blocks - 1) % maskSizeBits)
+	toggleFree(visitedBlocksBitmap)
+
+	// Rebuild the free ranges.
+	buildFreeRanges()
 }
 
-// calculateHeapAddresses initializes variables such as metadataStart and
-// numBlock based on heapStart and heapEnd.
+// calculateHeapAddresses initializes the heap layout variables based on
+// heapStart and heapEnd.
 //
 // This function can be called again when the heap size increases. The caller is
-// responsible for copying the metadata to the new location.
+// responsible for copying the endBlockBitmap to the new location.
 func calculateHeapAddresses() {
 	totalSize := heapEnd - heapStart
 
 	// Allocate some memory to keep 2 bits of information about every block.
-	metadataSize := (totalSize + blocksPerStateByte*bytesPerBlock) / (1 + blocksPerStateByte*bytesPerBlock)
-	metadataStart = unsafe.Pointer(heapEnd - metadataSize)
-
 	// Use the rest of the available memory as heap.
-	numBlocks := (uintptr(metadataStart) - heapStart) / bytesPerBlock
-	endBlock = gcBlock(numBlocks)
+	const batchSize = maskSizeBits*bytesPerBlock + 2*maskSizeBytes
+	bitmapSize := ((totalSize + batchSize - bytesPerBlock) / batchSize) * maskSizeBytes
+	blocks = (totalSize - 2*bitmapSize) / bytesPerBlock
+	endBlocksBitmap = heapStart + blocks*bytesPerBlock
+	visitedBlocksBitmap = endBlocksBitmap + bitmapSize
+
 	if gcDebug {
-		println("heapStart:        ", heapStart)
-		println("heapEnd:          ", heapEnd)
-		println("total size:       ", totalSize)
-		println("metadata size:    ", metadataSize)
-		println("metadataStart:    ", metadataStart)
-		println("# of blocks:      ", numBlocks)
-		println("# of block states:", metadataSize*blocksPerStateByte)
+		println("heapStart:          ", heapStart)
+		println("heapEnd:            ", heapEnd)
+		println("total size:         ", totalSize)
+		println("bitmap size:        ", bitmapSize)
+		println("endBlocksBitmap:    ", endBlocksBitmap)
+		println("visitedBlocksBitmap:", visitedBlocksBitmap)
+		println("# of blocks:        ", blocks)
 	}
-	if gcAsserts && metadataSize*blocksPerStateByte < numBlocks {
+
+	if gcAsserts {
 		// sanity check
-		runtimePanic("gc: metadata array is too small")
+		if 8*bitmapSize < blocks {
+			runtimePanic("gc: metadata array is too small")
+		}
+		if visitedBlocksBitmap+bitmapSize > heapEnd {
+			runtimePanic("gc: heap bounds overrun")
+		}
 	}
 }
 
@@ -400,6 +286,7 @@ func calculateHeapAddresses() {
 // collection cycle if needed. If no space is free, it panics.
 //
 //go:noinline
+//go:nobounds
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {
 		return alloc_zero(size, layout)
@@ -431,10 +318,36 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// Acquire a range of free blocks.
 	var ranGC bool
 	var grewHeap bool
-	var pointer unsafe.Pointer
+	var endAddr uintptr
 	for {
-		pointer = popFreeRange(neededBlocks)
-		if pointer != nil {
+		// Search the free ranges length list for neededBlocks.
+		remDst := &freeRanges
+		for *remDst != nil && (*remDst).len < neededBlocks {
+			remDst = &(*remDst).nextLen
+		}
+		rangeWithLength := *remDst
+		if rangeWithLength != nil {
+			// We found a sufficiently-long range.
+			removedLen := rangeWithLength.len
+
+			// Remove the range.
+			if nextWithLen := rangeWithLength.nextWithLen; nextWithLen != nil {
+				// Remove from the list with this length.
+				rangeWithLength.nextWithLen = nextWithLen.nextWithLen
+				endAddr = uintptr(unsafe.Pointer(nextWithLen)) + unsafe.Sizeof(freeRangeMore{})
+			} else {
+				// Remove from the list of lengths.
+				*remDst = rangeWithLength.nextLen
+				endAddr = uintptr(unsafe.Pointer(rangeWithLength)) + unsafe.Sizeof(freeRange{})
+			}
+
+			if removedLen > neededBlocks {
+				// Insert the leftover range.
+				leftover := removedLen - neededBlocks
+				insertFreeRange(endAddr, leftover)
+				endAddr -= leftover * bytesPerBlock
+			}
+
 			break
 		}
 
@@ -442,7 +355,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			// Run the collector and try again.
 			freeBytes := runGC()
 			ranGC = true
-			heapSize := uintptr(metadataStart) - heapStart
+			heapSize := endBlocksBitmap - heapStart
 			if freeBytes < heapSize/3 {
 				// Ensure there is at least 33% headroom.
 				// This percentage was arbitrarily chosen, and may need to
@@ -467,24 +380,23 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		runtimePanicAt(returnAddress(0), "out of memory")
 	}
 
-	// Set the block states.
-	block := blockFromAddr(uintptr(pointer))
-	i := block + gcBlock(neededBlocks) - 1
-	i.setState(blockStateHead)
-	for i != block {
-		i--
-		i.setState(blockStateTail)
-	}
+	// Add the new object to the ends bitmap.
+	endBlock := ((endAddr - heapStart) / bytesPerBlock) - 1
+	*(*gcMask)(unsafe.Pointer(endBlocksBitmap + maskSizeBytes*(endBlock/maskSizeBits))) |= 1 << (endBlock % maskSizeBits)
 
 	// Create the object header.
-	size -= unsafe.Sizeof(objHeader{})
-	header := (*objHeader)(unsafe.Add(pointer, size))
+	header := (*objHeader)(unsafe.Pointer(endAddr - unsafe.Sizeof(objHeader{})))
 	header.layout = parseGCLayout(layout)
 
 	// We've claimed this allocation, now we can unlock the heap.
 	gcLock.Unlock()
 
-	// Clear the allocation body.
+	// Return a pointer to this allocation.
+	pointer := unsafe.Pointer(endAddr - size)
+	size -= unsafe.Sizeof(objHeader{})
+	if gcDebug {
+		println("alloc", pointer, "-", endAddr, "size:", size)
+	}
 	memzero(pointer, size)
 
 	// Return a pointer to this allocation.
@@ -496,15 +408,23 @@ func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 		return alloc(size, nil)
 	}
 
-	// Find the first block of the original allocation.
-	firstBlock := blockFromAddr(uintptr(ptr))
+	gcLock.Lock()
 
-	// Find the last block of the original allocation.
-	lastBlock := firstBlock.findHead()
+	startBlock := (uintptr(ptr) - heapStart) / bytesPerBlock
+	blocks := blocks
+	endBlocksBitmap := endBlocksBitmap
+	endBlock := startBlock
+	for ; endBlock < blocks; endBlock++ {
+		if *(*gcMask)(unsafe.Pointer(endBlocksBitmap + maskSizeBytes*(endBlock/maskSizeBits)))&(1<<(endBlock%maskSizeBits)) != 0 {
+			break
+		}
+	}
 
-	// Calculate the size of the original allocation body.
-	oldSize := uintptr(lastBlock-firstBlock)*blocksPerStateByte + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
+	gcLock.Unlock()
 
+	// this might be a few bytes longer than the original size of
+	// ptr, because we align to full blocks of size bytesPerBlock
+	oldSize := (endBlock-startBlock)*bytesPerBlock + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
 	if size <= oldSize {
 		// The requested size is less than the old size.
 		// There are likely scenarios for this:
@@ -544,8 +464,31 @@ func runGC() (freeBytes uintptr) {
 		println("running collection cycle...")
 	}
 
+	var gcStart timeUnit
+	if gcTiming {
+		gcStart = ticks()
+	}
+
+	// Clear the visited bitmap.
+	memzero(unsafe.Pointer(visitedBlocksBitmap), visitedBlocksBitmap-endBlocksBitmap)
+
+	// Add the free ranges as visited ends.
+	// This will prevent marking of addresses to within them.
+	toggleFree(endBlocksBitmap)
+	toggleFree(visitedBlocksBitmap)
+
+	var gcPrepEnd timeUnit
+	if gcTiming {
+		gcPrepEnd = ticks()
+	}
+
 	// Mark phase: mark all reachable objects, recursively.
 	gcMarkReachable()
+
+	var gcPreMarkEnd timeUnit
+	if gcTiming {
+		gcPreMarkEnd = ticks()
+	}
 
 	if baremetal && hasScheduler {
 		// Channel operations in interrupts may move task pointers around while we are marking.
@@ -579,25 +522,85 @@ func runGC() (freeBytes uintptr) {
 		finishMark()
 	}
 
+	var gcPostMarkEnd timeUnit
+	if gcTiming {
+		gcPostMarkEnd = ticks()
+	}
+
 	// If we're using threads, resume all other threads before starting the
 	// sweep.
 	gcResumeWorld()
 
-	// Sweep phase: free all non-marked objects and unmark marked objects for
-	// the next collection cycle. This also rebuilds the free ranges list.
-	freeBytes = sweep()
+	var gcCleanupEnd timeUnit
+	if gcTiming {
+		gcCleanupEnd = ticks()
+	}
 
-	// Show how much has been sweeped, for debugging.
+	// Unmark the free range ends.
+	toggleFree(visitedBlocksBitmap)
+
+	// Split the ends into two bitmaps: one with visited ends and one with unvisited ends.
+	{
+		endBlocksBitmap := endBlocksBitmap
+		visitedBlocksBitmap := visitedBlocksBitmap
+		for i := visitedBlocksBitmap - endBlocksBitmap; i > 0; {
+			i -= maskSizeBytes
+			endsPtr := (*gcMask)(unsafe.Pointer(endBlocksBitmap + i))
+			visitedPtr := (*gcMask)(unsafe.Pointer(visitedBlocksBitmap + i))
+			ends := *endsPtr
+			visited := *visitedPtr
+			*endsPtr = ends & visited
+			*visitedPtr = ends &^ visited
+		}
+	}
+
+	// Rebuild the free ranges based on these bitmaps.
+	freeBytes = buildFreeRanges()
+
+	var gcSweepEnd timeUnit
+	if gcTiming {
+		gcSweepEnd = ticks()
+	}
+
+	if gcTiming {
+		println("gc timing:", ticksToNanoseconds(gcSweepEnd-gcStart), "ns")
+		println("\tprep:     ", ticksToNanoseconds(gcPrepEnd-gcStart), "ns")
+		println("\tpre-mark: ", ticksToNanoseconds(gcPreMarkEnd-gcPrepEnd), "ns")
+		println("\tpost-mark:", ticksToNanoseconds(gcPostMarkEnd-gcPreMarkEnd), "ns")
+		println("\tcleanup:  ", ticksToNanoseconds(gcCleanupEnd-gcPostMarkEnd), "ns")
+		println("\tsweep:    ", ticksToNanoseconds(gcSweepEnd-gcCleanupEnd), "ns")
+	}
+
 	if gcDebug {
-		dumpHeap()
+		println("free ranges after gc:")
+		dumpFreeRangeCounts()
 	}
 
 	return
 }
 
+// toggleFree toggles the ends of free ranges in the provided bitmap.
+//
+//go:nobounds
+func toggleFree(base uintptr) {
+	heapStart := heapStart
+	for rangeWithLength := freeRanges; rangeWithLength != nil; {
+		r := &rangeWithLength.freeRangeMore
+		rangeWithLength = rangeWithLength.nextLen
+		for {
+			block := (uintptr(unsafe.Pointer(r)) - heapStart) / bytesPerBlock
+			*(*gcMask)(unsafe.Pointer(base + maskSizeBytes*(block/maskSizeBits))) ^= 1 << (block % maskSizeBits)
+			r = r.nextWithLen
+			if r == nil {
+				break
+			}
+		}
+	}
+}
+
 // markRoots reads all pointers from start to end (exclusive) and if they look
-// like a heap pointer and are unmarked, marks them and scans that object as
-// well (recursively). The starting address must be valid and aligned.
+// like a heap pointer and are unmarked, marks them and adds them to the
+// scanList. The starting address must be valid and aligned.
 func markRoots(start, end uintptr) {
 	if gcDebug {
 		println("mark from", start, "to", end, int(end-start))
@@ -615,8 +618,11 @@ func markRoots(start, end uintptr) {
 	scanConservative(start, end-start)
 }
 
-// scanConservative scans all possible pointer locations in a range and marks referenced heap allocations.
-// The starting address must be valid and pointer-aligned.
+// scanConservative scans all possible pointer locations in a range and marks
+// referenced heap allocations. The starting address must be valid and
+// pointer-aligned.
+//
+//go:nobounds
 func scanConservative(addr, len uintptr) {
 	for len >= unsafe.Sizeof(addr) {
 		root := *(*uintptr)(unsafe.Pointer(addr))
@@ -633,7 +639,86 @@ func markCurrentGoroutineStack(sp uintptr) {
 	markRoot(0, sp)
 }
 
+// mark a GC root at the address addr. If root is an address within an umarked
+// heap object, this adds the object to the scanList.
+//
+//go:nobounds
+func markRoot(addr, root uintptr) {
+	// Find the corresponding heap block index.
+	heapStart := heapStart
+	block := (root - heapStart) / bytesPerBlock
+	if block >= blocks {
+		// This is not on the heap.
+		return
+	}
+
+	// Visit blocks until we reach an end.
+	endBlocksBitmap := endBlocksBitmap
+	visitedBlocksBitmap := visitedBlocksBitmap
+	for {
+		// Split the bitmap position into a word and a bit.
+		wordIdx := block / maskSizeBits
+		bit := gcMask(1) << (block % maskSizeBits)
+
+		// Subtracting the selected bit from the ends mask will clear the end and set all bits inbetween.
+		// We can xor with the original ends mask to get an inclusive range of blocks.
+		ends := *(*gcMask)(unsafe.Pointer(endBlocksBitmap + wordIdx*maskSizeBytes))
+		newVisit := (ends - bit) ^ ends
+
+		// Add these bits to the visited mask.
+		visitedPtr := (*gcMask)(unsafe.Pointer(visitedBlocksBitmap + wordIdx*maskSizeBytes))
+		oldVisit := *visitedPtr
+		*visitedPtr = oldVisit | newVisit
+		if oldVisit&newVisit != 0 {
+			// We reached a block that has already been visited.
+			// This markRoot is redundant.
+			if gcDebug {
+				println("root already visited", root, "from", addr)
+			}
+			return
+		}
+
+		if newVisit&ends != 0 {
+			// We reached an unvisited end.
+			// Compute the final block index.
+			if hasFastCLZ {
+				block &^= maskSizeBits - 1
+				// NOTE: LLVM can narrow this to the appropriate type.
+				block += 63 - uintptr(bits.LeadingZeros64(uint64(newVisit)))
+			} else {
+				tmp := newVisit
+				for {
+					tmp >>= 1
+					if tmp < bit {
+						break
+					}
+					block++
+				}
+			}
+			break
+		}
+
+		// Skip to the next bitmap word.
+		block = (block | (maskSizeBits - 1)) + 1
+	}
+
+	if gcAsserts && *(*gcMask)(unsafe.Pointer(endBlocksBitmap + maskSizeBytes*(block/maskSizeBits)))&(1<<(block%maskSizeBits)) == 0 {
+		runtimePanic("wrong end")
+	}
+
+	if gcDebug {
+		println("mark root", root, "from", addr, "end", heapStart+block*bytesPerBlock+bytesPerBlock)
+	}
+
+	// Add the object to the scan list.
+	hdr := (*objHeader)(unsafe.Pointer(heapStart + block*bytesPerBlock + (bytesPerBlock - unsafe.Sizeof(objHeader{}))))
+	hdr.next = scanList
+	scanList = hdr
+}
+
 // finishMark finishes the marking process by scanning all heap objects on scanList.
+//
+//go:nobounds
 func finishMark() {
 	for {
 		// Remove an object from the scan list.
@@ -651,132 +736,140 @@ func finishMark() {
 			continue
 		}
 
-		// Find the last block in the object.
-		// This block contains the header.
-		lastBlock := blockFromAddr(uintptr(unsafe.Pointer(obj)))
-
-		// Find the first block in the allocation.
-		firstBlock := lastBlock
-		for firstBlock > 0 && (firstBlock-1).state() == blockStateTail {
-			firstBlock--
-		}
-
-		// Compute the size of the allocation.
-		bodySize := uintptr(lastBlock-firstBlock)*bytesPerBlock + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
+		// Compute the scan bounds.
+		end := uintptr(unsafe.Pointer(obj))
+		heapStart := heapStart
+		endBlock := (end - heapStart) / bytesPerBlock
+		startBlock := gcBitmapScanBackwards(endBlocksBitmap, endBlock) + 1
+		start := heapStart + startBlock*bytesPerBlock
 
 		// Scan the object.
-		obj.layout.scan(firstBlock.address(), bodySize)
+		obj.layout.scan(start, end-start)
 	}
 }
 
-// mark a GC root at the address addr.
-func markRoot(addr, root uintptr) {
-	// Find the heap block corresponding to the root.
-	if !isOnHeap(root) {
-		// This is not a heap pointer.
-		return
-	}
-	block := blockFromAddr(root)
-
-	// Find the head of the corresponding object.
-	if block.state() == blockStateFree {
-		// The to-be-marked object doesn't actually exist.
-		// This could either be a dangling pointer (oops!) but most likely
-		// just a false positive.
-		return
-	}
-	head := block.findHead()
-
-	// Mark the object.
-	if head.state() == blockStateMark {
-		// This object is already marked.
-		return
-	}
-	if gcDebug {
-		println("found unmarked pointer", root, "at address", addr)
-	}
-	head.setState(blockStateMark)
-
-	// Add the object to the scan list.
-	header := (*objHeader)(unsafe.Add(head.pointer(), bytesPerBlock-unsafe.Sizeof(objHeader{})))
-	header.next = scanList
-	scanList = header
-}
-
-// Sweep goes through all memory and frees unmarked memory.
-func sweep() uintptr {
-	// Discard the old free ranges list.
+// buildFreeRanges discards and rebuilds the free ranges list. It expects the
+// GC or setHeapEnd to first populate visitedBlocksBitmap with all free or dead
+// range ends.
+//
+//go:nobounds
+func buildFreeRanges() uintptr {
+	// Clear the free ranges list.
 	freeRanges = nil
 
-	// Scan backwards through the block metadata.
-	block := endBlock
-	var freeBlocks uintptr
-	for {
-		// Scan backwards until we find a marked head.
-		// Free the blocks as we go.
-		freeEnd := block
-		for block > 0 && (block-1).state() != blockStateMark {
-			block--
-			block.free()
-		}
-
-		if freeLen := uintptr(freeEnd - block); freeLen > 0 {
-			// Insert the freed blocks.
-			freeBlocks += freeLen
-			insertFreeRange(block.pointer(), freeLen)
-		}
-
-		if block == 0 {
-			// There are no more blocks to sweep.
+	// Loop backwards over the heap to find free ranges.
+	heapStart := heapStart
+	var totalFreeBlocks uintptr
+	var totalFreeRanges uintptr
+	for block := blocks; ; {
+		// Find the next free or dead end.
+		groupEnd := gcBitmapScanBackwards(visitedBlocksBitmap, block)
+		if groupEnd == ^uintptr(0) {
+			// There is no empty space left in the heap.
 			break
 		}
 
-		// Unmark the next head.
-		block--
-		block.unmark()
+		// Find the next live end.
+		block = gcBitmapScanBackwards(endBlocksBitmap, groupEnd)
 
-		// Skip the tail.
-		for block > 0 && (block-1).state() == blockStateTail {
-			block--
+		// Add the range between these ends to the free list.
+		groupBlocks := groupEnd - block
+		totalFreeBlocks += groupBlocks
+		if gcDebug {
+			println("insert free range", heapStart+block*bytesPerBlock+bytesPerBlock, "-", heapStart+groupEnd*bytesPerBlock+bytesPerBlock, "blocks:", groupBlocks)
+		}
+		insertFreeRange(heapStart+groupEnd*bytesPerBlock+bytesPerBlock, groupBlocks)
+		totalFreeRanges++
+
+		if block == ^uintptr(0) {
+			// The range reached the start of the heap.
+			break
 		}
 	}
 
-	if gcDebug {
-		println("free ranges after sweep:")
-		dumpFreeRangeCounts()
+	if sweepMetrics {
+		var sourceFrees uintptr
+		for i := (visitedBlocksBitmap - endBlocksBitmap) / maskSizeBytes; i > 0; {
+			i--
+			mask := *(*gcMask)(unsafe.Pointer(visitedBlocksBitmap + maskSizeBytes*i))
+			for mask != 0 {
+				sourceFrees++
+				mask &= mask - 1
+			}
+		}
+		println("sweep metrics:")
+		println("\tsource free ranges:  ", uint(sourceFrees))
+		println("\tfree blocks:         ", uint(totalFreeBlocks))
+		println("\tfree ranges:         ", uint(totalFreeRanges))
+		println("\tavg blocks per range:", uint(totalFreeBlocks/totalFreeRanges))
+		println("\tavg merged:          ", uint(sourceFrees/totalFreeRanges))
 	}
 
-	return freeBlocks * bytesPerBlock
+	return totalFreeBlocks * bytesPerBlock
 }
 
+// gcBitmapScanBackwards finds the next index less than idx set in the provided
+// bitmap. It returns ^uintptr(0) if no set bits are found.
+//
+//go:nobounds
+func gcBitmapScanBackwards(base uintptr, idx uintptr) uintptr {
+	// Select the next valid index.
+	idx--
+	if idx == ^uintptr(0) {
+		// There are no more valid indices.
+		return idx
+	}
+
+	// Select the word containing idx.
+	// Shift off bits after idx.
+	maskAddr := base + maskSizeBytes*(idx/maskSizeBits)
+	mask := *(*gcMask)(unsafe.Pointer(maskAddr)) << ((maskSizeBits - 1) - (idx % maskSizeBits))
+	if mask == 0 {
+		// There were no more set bits in that word.
+		// Skip backwards to find the next nonzero word.
+		idx |= maskSizeBits - 1
+		for {
+			idx -= maskSizeBits
+			if idx == ^uintptr(0) {
+				return idx
+			}
+			maskAddr -= maskSizeBytes
+			mask = *(*gcMask)(unsafe.Pointer(maskAddr))
+			if mask != 0 {
+				break
+			}
+		}
+	}
+
+	// The current idx is at the top bit of mask.
+	// Move idx to the highest set bit in mask.
+	if hasFastCLZ {
+		// Subtract the leading zeroes from idx. When using bits.LeadingZeros64
+		// on a wider type, we must compensate for the zeroes added by
+		// zero-extending to uint64.
+		// NOTE: LLVM can narrow this to the appropriate type.
+		idx -= uintptr(bits.LeadingZeros64(uint64(mask))) - (64 - maskSizeBits)
+	} else {
+		// Shift mask up until the top bit is set.
+		// Decrement the index every time we shift.
+		for mask < 1<<(maskSizeBits-1) {
+			mask <<= 1
+			idx--
+		}
+	}
+
+	return idx
+}
+
+// dumpFreeRangeCounts prints the distribution of range lengths in the current freeRanges list.
+// This is useful for debugging memory fragmentation.
 func dumpFreeRangeCounts() {
 	for rangeWithLength := freeRanges; rangeWithLength != nil; rangeWithLength = rangeWithLength.nextLen {
 		totalRanges := uintptr(1)
-		for nextWithLen := rangeWithLength.nextWithLen; nextWithLen != nil; nextWithLen = nextWithLen.next {
+		for nextWithLen := rangeWithLength.nextWithLen; nextWithLen != nil; nextWithLen = nextWithLen.nextWithLen {
 			totalRanges++
 		}
 		println("-", uint(rangeWithLength.len), "x", uint(totalRanges))
-	}
-}
-
-// dumpHeap can be used for debugging purposes. It dumps the state of each heap
-// block to standard output.
-func dumpHeap() {
-	println("heap:")
-	for block := gcBlock(0); block < endBlock; block++ {
-		switch block.state() {
-		case blockStateHead:
-			print("*")
-		case blockStateTail:
-			print("-")
-		case blockStateMark:
-			print("#")
-		default: // free
-			print("·")
-		}
-		if block%64 == 63 || block+1 == endBlock {
-			println()
-		}
 	}
 }
 
@@ -791,69 +884,66 @@ func ReadMemStats(m *MemStats) {
 	heapEnd := heapEnd
 	heapStart := heapStart
 	m.Sys = uint64(heapEnd - heapStart)
-	m.HeapSys = uint64(uintptr(metadataStart) - heapStart)
-	metadataStart := metadataStart
+	endBlocksBitmap := endBlocksBitmap
+	m.HeapSys = uint64(endBlocksBitmap - heapStart)
 	// TODO: should GCSys include objHeaders?
-	m.GCSys = uint64(heapEnd - uintptr(metadataStart))
+	m.GCSys = uint64(heapEnd - endBlocksBitmap)
 	m.HeapReleased = 0 // always 0, we don't currently release memory back to the OS.
 
-	// Count live heads and tails.
-	var liveHeads, liveTails uintptr
-	endBlock := endBlock
-	metadataEnd := unsafe.Add(metadataStart, (endBlock+(blocksPerStateByte-1))/blocksPerStateByte)
-	for meta := metadataStart; meta != metadataEnd; meta = unsafe.Add(meta, 1) {
-		// Since we are outside of a GC, nothing is marked.
-		// A bit in the low nibble implies a head.
-		// A bit in the high nibble implies a tail.
-		stateByte := *(*byte)(unsafe.Pointer(meta))
-		liveHeads += uintptr(count4LUT[stateByte&blockStateEach])
-		liveTails += uintptr(count4LUT[stateByte>>blocksPerStateByte])
+	// Count live objects.
+	var liveObjects uintptr
+	for i := visitedBlocksBitmap - endBlocksBitmap; i > 0; {
+		// Select the next mask.
+		i -= maskSizeBytes
+		mask := *(*gcMask)(unsafe.Pointer(endBlocksBitmap + i))
+
+		// Add the bits in this mask to liveObjects.
+		// NOTE: We could use bits.OnesCount* here on some platforms?
+		for ; mask != 0; mask &= mask - 1 {
+			liveObjects++
+		}
+	}
+	m.HeapObjects = uint64(liveObjects)
+
+	// Count free ranges and their contained space.
+	var freeRangeCount uintptr
+	var freeBlocks uintptr
+	for rangeWithLength := freeRanges; rangeWithLength != nil; {
+		len := rangeWithLength.len
+		r := &rangeWithLength.freeRangeMore
+		rangeWithLength = rangeWithLength.nextLen
+		for {
+			freeRangeCount++
+			freeBlocks += len
+			r = r.nextWithLen
+			if r == nil {
+				break
+			}
+		}
 	}
 
-	// Add heads and tails to count live blocks.
-	liveBlocks := liveHeads + liveTails
+	// Record the free space.
+	m.HeapIdle = uint64(freeBlocks * bytesPerBlock)
+
+	// Subtract free blocks from total blocks to count live blocks.
+	blocks := blocks
+	liveBlocks := blocks - freeBlocks
 	liveBytes := uint64(liveBlocks * bytesPerBlock)
 	m.HeapInuse = liveBytes
 	m.HeapAlloc = liveBytes
-	m.HeapObjects = uint64(liveHeads)
 	m.Alloc = liveBytes
 
-	// Subtract live blocks from total blocks to count free blocks.
-	freeBlocks := uintptr(endBlock) - liveBlocks
-	m.HeapIdle = uint64(freeBlocks * bytesPerBlock)
-
-	// Record the number of allocated objects.
+	// Record the lifetime allocation count of the GC.
 	gcMallocs := gcMallocs
 	m.Mallocs = gcMallocs
 
 	// Subtract live objects from allocated objects to count freed objects.
-	m.Frees = gcMallocs - uint64(liveHeads)
+	m.Frees = gcMallocs - uint64(liveObjects)
 
 	// Record the total allocated bytes.
 	m.TotalAlloc = gcTotalAlloc
 
 	gcLock.Unlock()
-}
-
-// count4LUT is a lookup table used to count set bits in a 4-bit mask.
-// TODO: replace with popcnt when available
-var count4LUT = [16]uint8{
-	0b0000: 0,
-	0b0001: 1,
-	0b0010: 1,
-	0b0011: 2,
-	0b0100: 1,
-	0b0101: 2,
-	0b0110: 2,
-	0b0111: 3,
-	0b1000: 1,
-	0b1001: 2,
-	0b1010: 2,
-	0b1011: 3,
-	0b1100: 2,
-	0b1101: 3,
-	0b1110: 3,
-	0b1111: 4,
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {

@@ -93,6 +93,11 @@ func (b *builder) createSliceToArrayPointerCheck(sliceLen llvm.Value, arrayLen i
 // and unsafe.String. This function must panic if the ptr/len parameters are
 // invalid.
 func (b *builder) createUnsafeSliceStringCheck(name string, ptr, len llvm.Value, elementType llvm.Type, lenType *types.Basic) {
+	if b.info.nobounds {
+		// Function disabled bounds checking - skip conversion check.
+		return
+	}
+
 	// From the documentation of unsafe.Slice and unsafe.String:
 	//   > At run time, if len is negative, or if ptr is nil and len is not
 	//   > zero, a run-time panic occurs.
@@ -162,6 +167,11 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 // It has no effect in well-behaved programs, but makes sure no uncaught nil
 // pointer dereferences exist in valid Go code.
 func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix string) {
+	if b.info.nobounds {
+		// Function disabled bounds checking - skip nil check.
+		return
+	}
+
 	// Check whether we need to emit this check at all.
 	if !ptr.IsAGlobalValue().IsNil() {
 		return

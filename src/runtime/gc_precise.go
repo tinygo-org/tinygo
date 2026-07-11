@@ -74,6 +74,8 @@ func (layout gcLayout) pointerFree() bool {
 // scan an object with this element layout.
 // The starting address must be valid and pointer-aligned.
 // The length is rounded down to a multiple of the element size.
+//
+//go:nobounds
 func (layout gcLayout) scan(start, len uintptr) {
 	switch {
 	case layout == 0:
@@ -136,6 +138,8 @@ func scanComplex(start, len, size uintptr, bitmap []byte) {
 
 // scanWithMask scans a portion of an object with a mask of pointer locations.
 // The address must be valid and pointer-aligned.
+//
+//go:nobounds
 func scanWithMask(addr, mask uintptr) {
 	// TODO: use ctz when available
 	for mask != 0 {
