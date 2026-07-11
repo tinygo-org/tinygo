@@ -47,3 +47,5 @@ issue4931PairA labels: 0
 issue4931PairB labels: 0
 issue4931MethodA labels: 0
 issue4931MethodB labels: 0
+ok: aliasSize[float32]==32
+ok: aliasSize[float64]==64

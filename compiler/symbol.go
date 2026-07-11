@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -364,6 +365,22 @@ func (c *compilerContext) localTypeArgsSuffix(f *ssa.Function) string {
 		name, isLocal := c.getTypeCodeName(ta)
 		if isLocal {
 			hasLocal = true
+		}
+		// A function-local type alias (e.g. `type F = float64` inside a
+		// function body) is invisible to getTypeCodeName because it calls
+		// types.Unalias first. Two callers that use distinct aliases with
+		// the same name (e.g. Go 1.27's internal/strconv.ftoa32 and ftoa64
+		// both declare a local `type F = ...`) then produce identical
+		// RelStrings for their shortFloat[F] instantiations and collide on
+		// mod.NamedFunction. Treat these aliases as local so the suffix
+		// disambiguates them.
+		if alias, ok := ta.(*types.Alias); ok {
+			if obj := alias.Obj(); obj.Pkg() != nil && obj.Parent() != obj.Pkg().Scope() {
+				hasLocal = true
+				pos := c.program.Fset.PositionFor(obj.Pos(), false)
+				parts[i] = fmt.Sprintf("%s$alias:%s:%d:%d", name, filepath.Base(pos.Filename), pos.Line, pos.Column)
+				continue
+			}
 		}
 		parts[i] = name
 	}

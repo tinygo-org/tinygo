@@ -1,6 +1,9 @@
 package main
 
-import "reflect"
+import (
+	"reflect"
+	"unsafe"
+)
 
 type checker = func(any) bool
 
@@ -216,6 +219,28 @@ func issue5180CopyIgnoreNilMembers() (ok bool) {
 	return ok
 }
 
+// aliasSize is the pattern used by Go 1.27's internal/strconv.ftoa32 and
+// ftoa64 (and by shortFloat in internal/strconv/uscale.go): a generic
+// function parameterized on F={float32|float64} that switches on
+// unsafe.Sizeof(F(0)). Callers pass F via a function-local `type F = ...`
+// alias. If the two instantiations share an SSA function name (because
+// x/tools' go/ssa targstr uses the alias's declared name), TinyGo's
+// getFunction reuses the first LLVM function for the second call and the
+// second instantiation returns the first's result.
+func aliasSize[F float32 | float64]() int {
+	return 8 * int(unsafe.Sizeof(F(0)))
+}
+
+func aliasSizeCaller32() int {
+	type F = float32
+	return aliasSize[F]()
+}
+
+func aliasSizeCaller64() int {
+	type F = float64
+	return aliasSize[F]()
+}
+
 func main() {
 	expect("issue5180 TestCopy1", issue5180Copy1())
 	expect("issue5180 TestCopyIgnoreNilMembers", issue5180CopyIgnoreNilMembers())
@@ -300,4 +325,9 @@ func main() {
 	println("issue4931PairB labels:", issue4931PairB())
 	println("issue4931MethodA labels:", issue4931MethodA())
 	println("issue4931MethodB labels:", issue4931MethodB())
+
+	// Generic instances distinguished only by function-local type aliases
+	// must not share bodies either (the Go 1.27 strconv shortFloat pattern).
+	expect("aliasSize[float32]==32", aliasSizeCaller32() == 32)
+	expect("aliasSize[float64]==64", aliasSizeCaller64() == 64)
 }
