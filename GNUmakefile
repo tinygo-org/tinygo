@@ -387,7 +387,9 @@ TEST_PACKAGES_FAST = \
 
 # archive/zip requires os.ReadAt, which is not yet supported on windows
 # bytes requires mmap
-# compress/flate appears to hang on wasi
+# compress/flate appears to hang on wasi; on all targets Go 1.27's new
+#   compress/flate.indexTokens returns a ~262KB struct by value which crashes
+#   LLVM's X86 instruction selector during LTO codegen
 # crypto/aes needs reflect.Type.Method(), not yet implemented
 # crypto/des fails on wasi, needs panic()/recover()
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
@@ -409,7 +411,6 @@ TEST_PACKAGES_FAST = \
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
-	compress/flate \
 	context \
 	crypto/aes \
 	crypto/des \
@@ -437,7 +438,6 @@ TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 
 # os/user requires t.Skip() support
 TEST_PACKAGES_WINDOWS := \
-	compress/flate \
 	crypto/des \
 	crypto/hmac \
 	image \
