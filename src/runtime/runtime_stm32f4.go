@@ -73,7 +73,7 @@ func initCLK() {
 		// PCLK1 = HCLK / 4
 		stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_Div4 << stm32.RCC_CFGR_PPRE1_Pos)
 		// Configure the main PLL
-		stm32.RCC.PLLCFGR.Set(PLL_CFGR)
+		stm32.RCC.PLLCFGR.Set(pllCFGR())
 		// Enable main PLL
 		stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)
 		// Wait till the main PLL is ready

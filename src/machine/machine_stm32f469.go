@@ -3,7 +3,8 @@
 package machine
 
 func CPUFrequency() uint32 {
-	return 180000000
+	pll := PLLParams180MHz()
+	return xtalHz / pll.M * pll.N / pll.P
 }
 
 // Internal use: configured speed of the APB1 and APB2 timers, this should be kept

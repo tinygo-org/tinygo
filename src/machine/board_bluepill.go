@@ -7,6 +7,8 @@ import (
 	"runtime/interrupt"
 )
 
+const xtalHz = 8_000_000
+
 // Pins printed on the silkscreen
 const (
 	C13 = PC13
