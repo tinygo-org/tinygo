@@ -980,14 +980,15 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 // getMethodSignatureName returns a unique name (that can be used as the name of
 // a global) for the given method.
 func (c *compilerContext) getMethodSignatureName(method *types.Func) string {
-	signature := methodSignature(method)
-	var globalName string
+	name := method.Name()
+	var prefix string
 	if token.IsExported(method.Name()) {
-		globalName = "reflect/methods." + signature
+		prefix = "reflect/methods."
 	} else {
-		globalName = method.Type().(*types.Signature).Recv().Pkg().Path() + ".$methods." + signature
+		prefix = method.Type().(*types.Signature).Recv().Pkg().Path() + ".$methods."
 	}
-	return globalName
+	signature, _ := c.getTypeCodeName(method.Type())
+	return prefix + name + ":" + signature
 }
 
 // getMethodSignature returns a global variable which is a reference to an
@@ -1297,109 +1298,4 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	}
 
 	return wrapper
-}
-
-// methodSignature creates a readable version of a method signature (including
-// the function name, excluding the receiver name). This string is used
-// internally to match interfaces and to call the correct method on an
-// interface. Examples:
-//
-//	String() string
-//	Read([]byte) (int, error)
-func methodSignature(method *types.Func) string {
-	return method.Name() + signature(method.Type().(*types.Signature))
-}
-
-// Make a readable version of a function (pointer) signature.
-// Examples:
-//
-//	() string
-//	(string, int) (int, error)
-func signature(sig *types.Signature) string {
-	var s strings.Builder
-	if sig.Params().Len() == 0 {
-		s.WriteString("()")
-	} else {
-		s.WriteString("(")
-		i := 0
-		for v := range sig.Params().Variables() {
-			if i > 0 {
-				s.WriteString(", ")
-			}
-			s.WriteString(typestring(v.Type()))
-			i++
-		}
-		s.WriteString(")")
-	}
-	if sig.Results().Len() == 0 {
-		// keep as-is
-	} else if sig.Results().Len() == 1 {
-		s.WriteString(" " + typestring(sig.Results().At(0).Type()))
-	} else {
-		s.WriteString(" (")
-		i := 0
-		for v := range sig.Results().Variables() {
-			if i > 0 {
-				s.WriteString(", ")
-			}
-			s.WriteString(typestring(v.Type()))
-			i++
-		}
-		s.WriteString(")")
-	}
-	return s.String()
-}
-
-// typestring returns a stable (human-readable) type string for the given type
-// that can be used for interface equality checks. It is almost (but not
-// exactly) the same as calling t.String(). The main difference is some
-// normalization around `byte` vs `uint8` for example.
-func typestring(t types.Type) string {
-	// See: https://github.com/golang/go/blob/master/src/go/types/typestring.go
-	switch t := types.Unalias(t).(type) {
-	case *types.Array:
-		return "[" + strconv.FormatInt(t.Len(), 10) + "]" + typestring(t.Elem())
-	case *types.Basic:
-		return basicTypeNames[t.Kind()]
-	case *types.Chan:
-		switch t.Dir() {
-		case types.SendRecv:
-			return "chan (" + typestring(t.Elem()) + ")"
-		case types.SendOnly:
-			return "chan<- (" + typestring(t.Elem()) + ")"
-		case types.RecvOnly:
-			return "<-chan (" + typestring(t.Elem()) + ")"
-		default:
-			panic("unknown channel direction")
-		}
-	case *types.Interface:
-		methods := make([]string, t.NumMethods())
-		for i := range methods {
-			method := t.Method(i)
-			methods[i] = method.Name() + signature(method.Type().(*types.Signature))
-		}
-		return "interface{" + strings.Join(methods, ";") + "}"
-	case *types.Map:
-		return "map[" + typestring(t.Key()) + "]" + typestring(t.Elem())
-	case *types.Named:
-		return t.String()
-	case *types.Pointer:
-		return "*" + typestring(t.Elem())
-	case *types.Signature:
-		return "func" + signature(t)
-	case *types.Slice:
-		return "[]" + typestring(t.Elem())
-	case *types.Struct:
-		fields := make([]string, t.NumFields())
-		for i := range fields {
-			field := t.Field(i)
-			fields[i] = field.Name() + " " + typestring(field.Type())
-			if tag := t.Tag(i); tag != "" {
-				fields[i] += " " + strconv.Quote(tag)
-			}
-		}
-		return "struct{" + strings.Join(fields, ";") + "}"
-	default:
-		panic("unknown type: " + t.String())
-	}
 }
