@@ -57,5 +57,5 @@ ok: aliasBox[float32] implements Get() float32
 ok: aliasBox[float64] implements Get() float64
 ok: aliasMethod[float32] accepts own
 ok: aliasMethod[float64] accepts own
-BUG: aliasMethod[float32] rejects [float64]
-BUG: aliasMethod[float64] rejects [float32]
+ok: aliasMethod[float32] rejects [float64]
+ok: aliasMethod[float64] rejects [float32]
