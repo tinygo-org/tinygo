@@ -1,6 +1,9 @@
 package main
 
-import "reflect"
+import (
+	"reflect"
+	"unsafe"
+)
 
 type checker = func(any) bool
 
@@ -216,6 +219,92 @@ func issue5180CopyIgnoreNilMembers() (ok bool) {
 	return ok
 }
 
+func aliasSize[F float32 | float64]() int {
+	return 8 * int(unsafe.Sizeof(F(0)))
+}
+
+func aliasSizeCaller32() int {
+	type F = float32
+	return aliasSize[F]()
+}
+
+func aliasSizeCaller64() int {
+	type F = float64
+	return aliasSize[F]()
+}
+
+func aliasLocal[F float32 | float64]() (any, checker) {
+	type Local struct{ Value F }
+	return Local{}, func(x any) bool {
+		_, ok := x.(Local)
+		return ok
+	}
+}
+
+func aliasLocalCaller32() (any, checker) {
+	type F = float32
+	return aliasLocal[F]()
+}
+
+func aliasLocalCaller64() (any, checker) {
+	type F = float64
+	return aliasLocal[F]()
+}
+
+type aliasBox[F float32 | float64] struct {
+	Value F
+}
+
+func (b aliasBox[F]) Get() F {
+	return b.Value
+}
+
+func aliasBoxCaller32() bool {
+	type F = float32
+	var box any = aliasBox[F]{Value: 32}
+	_, ok := box.(interface{ Get() float32 })
+	return ok
+}
+
+func aliasBoxCaller64() bool {
+	type F = float64
+	var box any = aliasBox[F]{Value: 64}
+	_, ok := box.(interface{ Get() float64 })
+	return ok
+}
+
+type aliasMethodResult[F float32 | float64] struct {
+	Value F
+}
+
+type aliasMethodBox[F float32 | float64] struct {
+	Value F
+}
+
+func (b aliasMethodBox[F]) Get() aliasMethodResult[F] {
+	return aliasMethodResult[F]{Value: b.Value}
+}
+
+func aliasMethodCaller32() (any, checker) {
+	type F = float32
+	return aliasMethodBox[F]{Value: 32}, func(x any) bool {
+		_, ok := x.(interface {
+			Get() aliasMethodResult[F]
+		})
+		return ok
+	}
+}
+
+func aliasMethodCaller64() (any, checker) {
+	type F = float64
+	return aliasMethodBox[F]{Value: 64}, func(x any) bool {
+		_, ok := x.(interface {
+			Get() aliasMethodResult[F]
+		})
+		return ok
+	}
+}
+
 func main() {
 	expect("issue5180 TestCopy1", issue5180Copy1())
 	expect("issue5180 TestCopyIgnoreNilMembers", issue5180CopyIgnoreNilMembers())
@@ -300,4 +389,20 @@ func main() {
 	println("issue4931PairB labels:", issue4931PairB())
 	println("issue4931MethodA labels:", issue4931MethodA())
 	println("issue4931MethodB labels:", issue4931MethodB())
+	expect("aliasSize[float32]==32", aliasSizeCaller32() == 32)
+	expect("aliasSize[float64]==64", aliasSizeCaller64() == 64)
+	aliasLocal32, aliasLocalCheck32 := aliasLocalCaller32()
+	aliasLocal64, aliasLocalCheck64 := aliasLocalCaller64()
+	expect("aliasLocal[float32] accepts own", aliasLocalCheck32(aliasLocal32))
+	expect("aliasLocal[float64] accepts own", aliasLocalCheck64(aliasLocal64))
+	expect("aliasLocal[float32] rejects [float64]", !aliasLocalCheck32(aliasLocal64))
+	expect("aliasLocal[float64] rejects [float32]", !aliasLocalCheck64(aliasLocal32))
+	expect("aliasBox[float32] implements Get() float32", aliasBoxCaller32())
+	expect("aliasBox[float64] implements Get() float64", aliasBoxCaller64())
+	aliasMethod32, aliasMethodCheck32 := aliasMethodCaller32()
+	aliasMethod64, aliasMethodCheck64 := aliasMethodCaller64()
+	expect("aliasMethod[float32] accepts own", aliasMethodCheck32(aliasMethod32))
+	expect("aliasMethod[float64] accepts own", aliasMethodCheck64(aliasMethod64))
+	expect("aliasMethod[float32] rejects [float64]", !aliasMethodCheck32(aliasMethod64))
+	expect("aliasMethod[float64] rejects [float32]", !aliasMethodCheck64(aliasMethod32))
 }

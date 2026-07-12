@@ -47,3 +47,15 @@ issue4931PairA labels: 0
 issue4931PairB labels: 0
 issue4931MethodA labels: 0
 issue4931MethodB labels: 0
+ok: aliasSize[float32]==32
+BUG: aliasSize[float64]==64
+ok: aliasLocal[float32] accepts own
+ok: aliasLocal[float64] accepts own
+BUG: aliasLocal[float32] rejects [float64]
+BUG: aliasLocal[float64] rejects [float32]
+ok: aliasBox[float32] implements Get() float32
+BUG: aliasBox[float64] implements Get() float64
+ok: aliasMethod[float32] accepts own
+ok: aliasMethod[float64] accepts own
+BUG: aliasMethod[float32] rejects [float64]
+BUG: aliasMethod[float64] rejects [float32]
