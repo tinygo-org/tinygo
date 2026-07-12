@@ -17,12 +17,12 @@ entry:
 ; Function Attrs: nounwind
 define hidden i32 @main.aliasSize32(ptr %context) unnamed_addr #1 {
 entry:
-  %0 = call i32 @"main.aliasSize[main.F]"(ptr undef)
+  %0 = call i32 @"main.aliasSize[basic:float32]"(ptr undef)
   ret i32 %0
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden i32 @"main.aliasSize[main.F]"(ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden i32 @"main.aliasSize[basic:float32]"(ptr %context) unnamed_addr #1 {
 entry:
   ret i32 4
 }
@@ -30,15 +30,21 @@ entry:
 ; Function Attrs: nounwind
 define hidden i32 @main.aliasSize64(ptr %context) unnamed_addr #1 {
 entry:
-  %0 = call i32 @"main.aliasSize[main.F]"(ptr undef)
+  %0 = call i32 @"main.aliasSize[basic:float64]"(ptr undef)
   ret i32 %0
+}
+
+; Function Attrs: nounwind
+define linkonce_odr hidden i32 @"main.aliasSize[basic:float64]"(ptr %context) unnamed_addr #1 {
+entry:
+  ret i32 8
 }
 
 ; Function Attrs: nounwind
 define hidden void @main.main(ptr %context) unnamed_addr #1 {
 entry:
-  %0 = call %"main.Point[float32]" @"main.Add[float32]"(float 0.000000e+00, float 0.000000e+00, float 0.000000e+00, float 0.000000e+00, ptr undef)
-  %1 = call %"main.Point[int]" @"main.Add[int]"(i32 0, i32 0, i32 0, i32 0, ptr undef)
+  %0 = call %"main.Point[float32]" @"main.Add[basic:float32]"(float 0.000000e+00, float 0.000000e+00, float 0.000000e+00, float 0.000000e+00, ptr undef)
+  %1 = call %"main.Point[int]" @"main.Add[basic:int]"(i32 0, i32 0, i32 0, i32 0, ptr undef)
   %2 = call i32 @main.aliasSize32(ptr undef)
   call void @main.checkSize(i32 %2, ptr undef) #4
   %3 = call i32 @main.aliasSize64(ptr undef)
@@ -47,7 +53,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %"main.Point[float32]" @"main.Add[float32]"(float %a.X, float %a.Y, float %b.X, float %b.Y, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %"main.Point[float32]" @"main.Add[basic:float32]"(float %a.X, float %a.Y, float %b.X, float %b.Y, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %a = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #4
@@ -110,7 +116,7 @@ declare void @main.checkSize(i32, ptr) #0
 declare void @runtime.nilPanic(ptr) #0
 
 ; Function Attrs: nounwind
-define linkonce_odr hidden %"main.Point[int]" @"main.Add[int]"(i32 %a.X, i32 %a.Y, i32 %b.X, i32 %b.Y, ptr %context) unnamed_addr #1 {
+define linkonce_odr hidden %"main.Point[int]" @"main.Add[basic:int]"(i32 %a.X, i32 %a.Y, i32 %b.X, i32 %b.Y, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %a = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #4
@@ -170,7 +176,7 @@ declare void @main.checkBool(i1, ptr) #0
 ; Function Attrs: nounwind
 define hidden void @main.aliasMethod32(ptr %x.typecode, ptr %x.value, ptr %context) unnamed_addr #1 {
 entry:
-  %0 = call i1 @"interface:{Get:func:{}{named:main.aliasMethodResult[main.F]}}.$typeassert"(ptr %x.typecode) #4
+  %0 = call i1 @"interface:{Get:func:{}{named:main.aliasMethodResult[basic:float32]}}.$typeassert"(ptr %x.typecode) #4
   br i1 %0, label %typeassert.ok, label %typeassert.next
 
 typeassert.next:                                  ; preds = %typeassert.ok, %entry
@@ -181,7 +187,7 @@ typeassert.ok:                                    ; preds = %entry
   br label %typeassert.next
 }
 
-declare i1 @"interface:{Get:func:{}{named:main.aliasMethodResult[main.F]}}.$typeassert"(ptr) #3
+declare i1 @"interface:{Get:func:{}{named:main.aliasMethodResult[basic:float32]}}.$typeassert"(ptr) #3
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }

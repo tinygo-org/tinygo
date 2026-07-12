@@ -50,12 +50,12 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.useGeneric(ptr %context) unnamed_addr #1 {
 entry:
-  call void @"main.noinlineGenericFunc[int8]"(ptr undef)
+  call void @"main.noinlineGenericFunc[basic:int8]"(ptr undef)
   ret void
 }
 
 ; Function Attrs: noinline nounwind
-define linkonce_odr hidden void @"main.noinlineGenericFunc[int8]"(ptr %context) unnamed_addr #4 {
+define linkonce_odr hidden void @"main.noinlineGenericFunc[basic:int8]"(ptr %context) unnamed_addr #4 {
 entry:
   ret void
 }
