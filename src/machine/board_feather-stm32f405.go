@@ -7,6 +7,8 @@ import (
 	"runtime/interrupt"
 )
 
+const xtalHz = 12_000_000
+
 const (
 	NUM_DIGITAL_IO_PINS = 39
 	NUM_ANALOG_IO_PINS  = 7

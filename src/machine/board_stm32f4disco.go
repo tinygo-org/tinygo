@@ -7,6 +7,8 @@ import (
 	"runtime/interrupt"
 )
 
+const xtalHz = 8_000_000
+
 const (
 	LED1        = LED_GREEN
 	LED2        = LED_ORANGE
