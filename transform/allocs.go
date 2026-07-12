@@ -148,7 +148,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 
 // FormatAllocReason renders the heap allocation in a human-readable format.
 func FormatAllocReason(pos token.Position, reason string) string {
-	return fmt.Sprintf("%s: object allocated on the heap: %s", pos.String(), reason)
+	return fmt.Sprintf("%s: heap allocation: %s", pos.String(), reason)
 }
 
 // FormatAllocCover renders the heap allocation in the go coverage tool format.
@@ -318,62 +318,4 @@ func lineLengthAt(filename string, lineNumber int) int {
 		line++
 	}
 	return 0
-}
-
-type idMiner struct {
-	complitReg *regexp.Regexp
-}
-
-func makeIdMiner() idMiner {
-	return idMiner{complitReg: regexp.MustCompile(`^complit\d*$`)}
-}
-
-func (this *idMiner) get(v llvm.Value) string {
-	id := v.Name()
-	if len(id) == 0 {
-		if v.InstructionOpcode() == llvm.Call && (!v.IsAAllocaInst().IsNil() || !v.IsACallInst().IsNil() ||
-			!v.IsAInvokeInst().IsNil()) {
-			id = v.AllocatedType().String()
-		}
-	}
-	if this.complitReg.MatchString(id) {
-		// Handle case like: c := scaleVector3(&vector3{4, 5, 6}, 0.5)
-		/*
-			%complit = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #1, !dbg !53
-			%0 = getelementptr inbounds nuw i8, ptr %complit, i32 4, !dbg !53
-			%1 = getelementptr inbounds nuw i8, ptr %complit, i32 8, !dbg !53
-			store float 4.000000e+00, ptr %complit, align 4, !dbg !54
-			store float 5.000000e+00, ptr %0, align 4, !dbg !55
-			store float 6.000000e+00, ptr %1, align 4, !dbg !56
-			%2 = call ptr @main.scaleVector3(ptr nonnull %complit, float 5.000000e-01, ptr undef), !dbg !57
-			store ptr %2, ptr @main.escapedVector3, align 4, !dbg !60
-			ret void, !dbg !61
-		*/
-		/*
-		 * 1. Find the next "call", where %complit is passed as parameter.
-		 * 2. Produce ID: "Arg 0 of main.scaleVector3() call" // escapes at ...
-		 */
-		n := v
-	InstLoop:
-		for _ = range 64 {
-			n = llvm.NextInstruction(n)
-			if n.IsNil() {
-				break
-			}
-			if call := n.IsACallInst(); !call.IsNil() {
-				argIdx := 0
-				for argIdx = range call.OperandsCount() {
-					argV := call.Operand(argIdx)
-					if argV.Name() == id {
-						id = fmt.Sprintf("Arg %d of %s() call", argIdx, call.CalledValue().Name())
-						break InstLoop
-					}
-				}
-			}
-		}
-	}
-	if len(id) == 0 {
-		id = "allocation"
-	}
-	return id
 }
