@@ -599,8 +599,21 @@ func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bo
 	case *types.Named:
 		tn := t.Obj()
 		if tn.Pkg() == nil || tn.Parent() == tn.Pkg().Scope() {
-			// Package-scope or builtin: the printed name is unique.
-			return "named:" + t.String(), false
+			name := tn.Name()
+			if tn.Pkg() != nil {
+				name = tn.Pkg().Path() + "." + name
+			}
+			isLocal := false
+			if targs := t.TypeArgs(); targs.Len() != 0 {
+				parts := make([]string, targs.Len())
+				for i := range parts {
+					var local bool
+					parts[i], local = c.getTypeCodeName(targs.At(i))
+					isLocal = isLocal || local
+				}
+				name += "[" + strings.Join(parts, ",") + "]"
+			}
+			return "named:" + name, isLocal
 		}
 		if tn.Parent() != nil {
 			// Ordinary function-local type. Use the un-//line-adjusted
@@ -707,8 +720,8 @@ func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bo
 // Synthetic TypeNames are produced by generic instantiation: two
 // instantiations of the same generic function (e.g. F[int] and
 // F[string]) produce TypeNames with the same printed name and the
-// same source position, so each is named with the enclosing
-// instance's RelString as prefix. RelString encodes the type
+// same source position, so each is named with the enclosing instance's
+// canonical function name as prefix. The function name encodes the type
 // arguments, matching Go's runtime behavior, where F[int].Inner and
 // F[string].Inner are distinct types even when Inner does not mention
 // the type parameter.
@@ -717,9 +730,9 @@ func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bo
 // of F[int] is compiled in every package that calls F[int]); its
 // reflect/types.type:* global has LinkOnceODRLinkage and is merged by
 // name at link time. The chosen name therefore depends only on
-// intrinsic SSA properties (RelString and the raw token.Pos used as a
-// sort key), so any package compiling the same instance produces the
-// same identifier.
+// intrinsic SSA properties (the canonical function name and raw token.Pos),
+// so any package compiling the same instance produces the same
+// identifier.
 //
 // Ordinary function-local TypeNames (TypeName.Parent() != nil) are
 // not handled here: they are nameable only inside their declaring
@@ -807,9 +820,8 @@ func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
 
 // registerSyntheticLocalTypes walks every type reachable from fn's
 // body and records each synthetic *types.Named (TypeName.Parent() ==
-// nil) in c.localTypeNames. Each is named with fn.RelString as the
-// owning function plus a per-function counter assigned in source
-// order.
+// nil) in c.localTypeNames. Each is named with the canonical function
+// name plus a per-function counter assigned in source order.
 //
 // First-writer-wins: a *types.Named already present in
 // c.localTypeNames is left alone, so a synthetic type reachable from
@@ -920,7 +932,7 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 	sort.Slice(found, func(i, j int) bool {
 		return found[i].Obj().Pos() < found[j].Obj().Pos()
 	})
-	enclosing := fn.RelString(nil)
+	enclosing := c.canonicalFunctionName(fn)
 	for i, named := range found {
 		c.localTypeNames.Set(named, fmt.Sprintf("%s.%s$%d", enclosing, named.Obj().Name(), i))
 	}
@@ -929,7 +941,8 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 // getTypeMethodSet returns a reference (GEP) to a global method set. This
 // method set should be unreferenced after the interface lowering pass.
 func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
-	globalName := typ.String() + "$methodset"
+	typeName, _ := c.getTypeCodeName(typ)
+	globalName := typeName + "$methodset"
 	global := c.mod.NamedGlobal(globalName)
 	if global.IsNil() {
 		ms := c.program.MethodSets.MethodSet(typ)

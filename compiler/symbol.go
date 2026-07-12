@@ -320,13 +320,7 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	}
 	info := functionInfo{
 		// Pick the default linkName.
-		linkName: f.RelString(nil),
-	}
-
-	// RelString is not unique for local type arguments, so add a suffix
-	// when needed.
-	if suffix := c.localTypeArgsSuffix(f); suffix != "" {
-		info.linkName += suffix
+		linkName: c.canonicalFunctionName(f),
 	}
 
 	// Check for a few runtime functions that are treated specially.
@@ -353,24 +347,16 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	return info
 }
 
-func (c *compilerContext) localTypeArgsSuffix(f *ssa.Function) string {
+func (c *compilerContext) canonicalFunctionName(f *ssa.Function) string {
 	typeArgs := f.TypeArgs()
 	if len(typeArgs) == 0 {
-		return ""
+		return f.RelString(nil)
 	}
-	var hasLocal bool
 	parts := make([]string, len(typeArgs))
 	for i, ta := range typeArgs {
-		name, isLocal := c.getTypeCodeName(ta)
-		if isLocal {
-			hasLocal = true
-		}
-		parts[i] = name
+		parts[i], _ = c.getTypeCodeName(ta)
 	}
-	if !hasLocal {
-		return ""
-	}
-	return "$localtype:" + strings.Join(parts, ",")
+	return f.Origin().RelString(nil) + "[" + strings.Join(parts, ",") + "]"
 }
 
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
