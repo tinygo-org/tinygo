@@ -510,7 +510,7 @@ func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	lastBlock := firstBlock.findHead()
 
 	// Calculate the size of the original allocation body.
-	oldSize := uintptr(lastBlock-firstBlock)*blocksPerStateByte + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
+	oldSize := uintptr(lastBlock-firstBlock)*bytesPerBlock + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
 
 	if size <= oldSize {
 		// The requested size is less than the old size.
