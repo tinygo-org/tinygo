@@ -1122,6 +1122,15 @@ const (
 	jtagReset    = "jtag"
 )
 
+var progressFunc = func(current, total int) {
+	pct := float64(current) / float64(total) * 100
+	bar := int(pct / 2)
+	fmt.Printf("\r[%-50s] %6.1f%%", strings.Repeat("#", bar)+strings.Repeat(".", 50-bar), pct)
+	if current >= total {
+		fmt.Println()
+	}
+}
+
 func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Options) error {
 	opts := espflasher.DefaultOptions()
 	opts.Compress = true
@@ -1152,21 +1161,12 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 		return err
 	}
 
-	if err := flasher.EraseFlash(); err != nil {
+	if err := flasher.EraseFlash(progressFunc); err != nil {
 		return fmt.Errorf("erase failed: %v", err)
 	}
 
-	progress := func(current, total int) {
-		pct := float64(current) / float64(total) * 100
-		bar := int(pct / 2)
-		fmt.Printf("\r[%-50s] %6.1f%%", strings.Repeat("#", bar)+strings.Repeat(".", 50-bar), pct)
-		if current >= total {
-			fmt.Println()
-		}
-	}
-
 	// Flash with progress reporting
-	err = flasher.FlashImage(data, offset, progress)
+	err = flasher.FlashImage(data, offset, progressFunc)
 	if err != nil {
 		return err
 	}
