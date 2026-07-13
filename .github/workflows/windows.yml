@@ -65,7 +65,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-windows-v4
+          key: llvm-build-20-windows-v5
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'

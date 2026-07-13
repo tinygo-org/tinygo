@@ -51,6 +51,7 @@ func (m *msc) handleClearFeature(setup usb.Setup, wValue uint16) bool {
 	// (b) a Clear Feature HALT to the Bulk-In endpoint (clear stall IN)
 	// (c) a Clear Feature HALT to the Bulk-Out endpoint (clear stall OUT)
 	// https://usb.org/sites/default/files/usbmassbulk_10.pdf
+
 	if m.state == mscStateNeedReset {
 		wIndex := uint8(setup.WIndex & 0x7F)
 		if wIndex == usb.MSC_ENDPOINT_IN {

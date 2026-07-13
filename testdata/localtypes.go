@@ -1,6 +1,9 @@
 package main
 
-import "reflect"
+import (
+	"reflect"
+	"unsafe"
+)
 
 type checker = func(any) bool
 
@@ -115,6 +118,72 @@ func doublyNestedInGeneric[T any]() (any, checker) {
 	return v, c
 }
 
+// issue4931Item's layout depends on T, so sharing generic function
+// bodies across different local T declarations is observable.
+type issue4931Item[T any] struct {
+	_      T
+	Labels []int
+}
+
+func issue4931Run[T any](input <-chan issue4931Item[T]) int {
+	item := <-input
+	return len(item.Labels)
+}
+
+func issue4931A() int {
+	type T struct{ _ [1]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Run(items)
+}
+
+func issue4931B() int {
+	type T struct{ _ [0]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Run(items)
+}
+
+func issue4931Pair[A, B any](input <-chan issue4931Item[A]) int {
+	item := <-input
+	return len(item.Labels)
+}
+
+func issue4931PairA() int {
+	type T struct{ _ [1]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Pair[T, int](items)
+}
+
+func issue4931PairB() int {
+	type T struct{ _ [0]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Pair[T, int](items)
+}
+
+type issue4931Runner[T any] struct{}
+
+func (issue4931Runner[T]) run(input <-chan issue4931Item[T]) int {
+	item := <-input
+	return len(item.Labels)
+}
+
+func issue4931MethodA() int {
+	type T struct{ _ [1]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Runner[T]{}.run(items)
+}
+
+func issue4931MethodB() int {
+	type T struct{ _ [0]any }
+	items := make(chan issue4931Item[T], 1)
+	items <- issue4931Item[T]{Labels: nil}
+	return issue4931Runner[T]{}.run(items)
+}
+
 func expect(name string, ok bool) {
 	if ok {
 		println("ok:", name)
@@ -148,6 +217,92 @@ func issue5180CopyIgnoreNilMembers() (ok bool) {
 	dst := reflect.New(reflect.TypeOf(f1).Elem()).Interface()
 	_, ok = dst.(*Foo)
 	return ok
+}
+
+func aliasSize[F float32 | float64]() int {
+	return 8 * int(unsafe.Sizeof(F(0)))
+}
+
+func aliasSizeCaller32() int {
+	type F = float32
+	return aliasSize[F]()
+}
+
+func aliasSizeCaller64() int {
+	type F = float64
+	return aliasSize[F]()
+}
+
+func aliasLocal[F float32 | float64]() (any, checker) {
+	type Local struct{ Value F }
+	return Local{}, func(x any) bool {
+		_, ok := x.(Local)
+		return ok
+	}
+}
+
+func aliasLocalCaller32() (any, checker) {
+	type F = float32
+	return aliasLocal[F]()
+}
+
+func aliasLocalCaller64() (any, checker) {
+	type F = float64
+	return aliasLocal[F]()
+}
+
+type aliasBox[F float32 | float64] struct {
+	Value F
+}
+
+func (b aliasBox[F]) Get() F {
+	return b.Value
+}
+
+func aliasBoxCaller32() bool {
+	type F = float32
+	var box any = aliasBox[F]{Value: 32}
+	_, ok := box.(interface{ Get() float32 })
+	return ok
+}
+
+func aliasBoxCaller64() bool {
+	type F = float64
+	var box any = aliasBox[F]{Value: 64}
+	_, ok := box.(interface{ Get() float64 })
+	return ok
+}
+
+type aliasMethodResult[F float32 | float64] struct {
+	Value F
+}
+
+type aliasMethodBox[F float32 | float64] struct {
+	Value F
+}
+
+func (b aliasMethodBox[F]) Get() aliasMethodResult[F] {
+	return aliasMethodResult[F]{Value: b.Value}
+}
+
+func aliasMethodCaller32() (any, checker) {
+	type F = float32
+	return aliasMethodBox[F]{Value: 32}, func(x any) bool {
+		_, ok := x.(interface {
+			Get() aliasMethodResult[F]
+		})
+		return ok
+	}
+}
+
+func aliasMethodCaller64() (any, checker) {
+	type F = float64
+	return aliasMethodBox[F]{Value: 64}, func(x any) bool {
+		_, ok := x.(interface {
+			Get() aliasMethodResult[F]
+		})
+		return ok
+	}
 }
 
 func main() {
@@ -226,4 +381,28 @@ func main() {
 	expect("doublyNestedInGeneric[string].Y accepts own", dnsC(dns))
 	expect("doublyNestedInGeneric[int].Y rejects [string].Y", !dniC(dns))
 	expect("doublyNestedInGeneric[string].Y rejects [int].Y", !dnsC(dni))
+
+	// Issue 4931: generic instances with local type args must not share bodies.
+	println("issue4931A labels:", issue4931A())
+	println("issue4931B labels:", issue4931B())
+	println("issue4931PairA labels:", issue4931PairA())
+	println("issue4931PairB labels:", issue4931PairB())
+	println("issue4931MethodA labels:", issue4931MethodA())
+	println("issue4931MethodB labels:", issue4931MethodB())
+	expect("aliasSize[float32]==32", aliasSizeCaller32() == 32)
+	expect("aliasSize[float64]==64", aliasSizeCaller64() == 64)
+	aliasLocal32, aliasLocalCheck32 := aliasLocalCaller32()
+	aliasLocal64, aliasLocalCheck64 := aliasLocalCaller64()
+	expect("aliasLocal[float32] accepts own", aliasLocalCheck32(aliasLocal32))
+	expect("aliasLocal[float64] accepts own", aliasLocalCheck64(aliasLocal64))
+	expect("aliasLocal[float32] rejects [float64]", !aliasLocalCheck32(aliasLocal64))
+	expect("aliasLocal[float64] rejects [float32]", !aliasLocalCheck64(aliasLocal32))
+	expect("aliasBox[float32] implements Get() float32", aliasBoxCaller32())
+	expect("aliasBox[float64] implements Get() float64", aliasBoxCaller64())
+	aliasMethod32, aliasMethodCheck32 := aliasMethodCaller32()
+	aliasMethod64, aliasMethodCheck64 := aliasMethodCaller64()
+	expect("aliasMethod[float32] accepts own", aliasMethodCheck32(aliasMethod32))
+	expect("aliasMethod[float64] accepts own", aliasMethodCheck64(aliasMethod64))
+	expect("aliasMethod[float32] rejects [float64]", !aliasMethodCheck32(aliasMethod64))
+	expect("aliasMethod[float64] rejects [float32]", !aliasMethodCheck64(aliasMethod32))
 }

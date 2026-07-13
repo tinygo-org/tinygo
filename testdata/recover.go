@@ -158,6 +158,71 @@ func runtimeGoexit() {
 		runtime.Goexit()
 	}()
 	wg.Wait()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runtimeGoexitRecoveredPanic()
+		println("unreachable after Goexit helper")
+	}()
+	wg.Wait()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runtimeGoexitNestedRecoveredPanic()
+		println("unreachable after nested Goexit helper")
+	}()
+	wg.Wait()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runtimeGoexitLoopDefers()
+		println("unreachable after loop Goexit helper")
+	}()
+	wg.Wait()
+}
+
+func runtimeGoexitRecoveredPanic() {
+	defer func() {
+		if r := recover(); r != nil {
+			printitf("Goexit recovered deferred panic:", r)
+		}
+	}()
+	defer func() {
+		panic("panic during Goexit")
+	}()
+	runtime.Goexit()
+}
+
+func runtimeGoexitNestedRecoveredPanic() {
+	defer func() {
+		defer func() {
+			if r := recover(); r != nil {
+				printitf("Goexit nested recovered deferred panic:", r)
+			}
+		}()
+		panic("nested panic during Goexit")
+	}()
+	runtime.Goexit()
+}
+
+func runtimeGoexitLoopDefers() {
+	for i := 0; i < 2; i++ {
+		defer func() {
+			println("Goexit loop defer")
+		}()
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			printitf("Goexit loop recovered deferred panic:", r)
+		}
+	}()
+	defer func() {
+		panic("loop panic during Goexit")
+	}()
+	runtime.Goexit()
 }
 
 // Test that a repanic inside a deferred function propagates correctly

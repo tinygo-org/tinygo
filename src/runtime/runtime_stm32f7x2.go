@@ -23,7 +23,7 @@ const (
 	PLL_M               = 4
 	PLL_N               = 216
 	PLL_P               = 2
-	PLL_Q               = 2
+	PLL_Q               = 9
 )
 
 func init() {
@@ -55,7 +55,7 @@ func initCLK() {
 	stm32.RCC.APB1ENR.SetBits(stm32.RCC_APB1ENR_PWREN)
 	_ = stm32.RCC.APB1ENR.Get()
 
-	// PWR_VOLTAGESCALING_CONFIG
+	// PWR_VOLTAGESCALING_CONFIG: Set VOS to Scale 1 (max performance)
 	stm32.PWR.CR1.ReplaceBits(0x3<<stm32.PWR_CR1_VOS_Pos, stm32.PWR_CR1_VOS_Msk, 0)
 	_ = stm32.PWR.CR1.Get()
 
@@ -66,6 +66,9 @@ func initCLK() {
 	if (stm32.FLASH.ACR.Get() & stm32.FLASH_ACR_LATENCY_Msk) < 7 {
 		stm32.FLASH.ACR.ReplaceBits(7, stm32.FLASH_ACR_LATENCY_Msk, 0)
 	}
+
+	// Enable ART Accelerator and Prefetch (ARTEN also enables I-Cache on F7)
+	stm32.FLASH.ACR.SetBits(stm32.FLASH_ACR_ARTEN | stm32.FLASH_ACR_PRFTEN)
 
 	// HCLK (0x1C00 = DIV_16, 0x0 = RCC_SYSCLK_DIV1) - ensure timers remain
 	// within spec as the SYSCLK source changes.
@@ -87,6 +90,9 @@ func initCLK() {
 	// Set APB1 and APB2 clocks (0x1800 = DIV8, 0x1000 = DIV2)
 	stm32.RCC.CFGR.ReplaceBits(0x1800, stm32.RCC_CFGR_PPRE1_Msk, 0)
 	stm32.RCC.CFGR.ReplaceBits(0x1000<<3, stm32.RCC_CFGR_PPRE2_Msk, 0)
+
+	// Select Main PLL as the 48MHz clock source for USB/RNG/SDMMC (CK48MSEL = 0).
+	stm32.RCC.DCKCFGR2.ClearBits(stm32.RCC_DCKCFGR2_CK48MSEL)
 }
 
 func initOsc() {
@@ -100,13 +106,13 @@ func initOsc() {
 	for stm32.RCC.CR.HasBits(stm32.RCC_CR_PLLRDY) {
 	}
 
-	// Configure the PLL
-	stm32.RCC.PLLCFGR.Set(0x20000000 |
-		(1 << stm32.RCC_PLLCFGR_PLLSRC_Pos) | // 1 = HSE
-		PLL_M |
-		(PLL_N << stm32.RCC_PLLCFGR_PLLN_Pos) |
-		(((PLL_P >> 1) - 1) << stm32.RCC_PLLCFGR_PLLP_Pos) |
-		(PLL_Q << stm32.RCC_PLLCFGR_PLLQ_Pos))
+	// Configure the PLL: HSE as source, use SVD constants for positions.
+	stm32.RCC.PLLCFGR.Set(
+		(stm32.RCC_PLLCFGR_PLLSRC_HSE << stm32.RCC_PLLCFGR_PLLSRC_Pos) |
+			(PLL_M << stm32.RCC_PLLCFGR_PLLM_Pos) |
+			(PLL_N << stm32.RCC_PLLCFGR_PLLN_Pos) |
+			(((PLL_P >> 1) - 1) << stm32.RCC_PLLCFGR_PLLP_Pos) |
+			(PLL_Q << stm32.RCC_PLLCFGR_PLLQ_Pos))
 
 	// Enable the PLL, wait until ready
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)

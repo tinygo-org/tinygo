@@ -41,3 +41,21 @@ ok: doublyNestedInGeneric[int].Y accepts own
 ok: doublyNestedInGeneric[string].Y accepts own
 ok: doublyNestedInGeneric[int].Y rejects [string].Y
 ok: doublyNestedInGeneric[string].Y rejects [int].Y
+issue4931A labels: 0
+issue4931B labels: 0
+issue4931PairA labels: 0
+issue4931PairB labels: 0
+issue4931MethodA labels: 0
+issue4931MethodB labels: 0
+ok: aliasSize[float32]==32
+ok: aliasSize[float64]==64
+ok: aliasLocal[float32] accepts own
+ok: aliasLocal[float64] accepts own
+ok: aliasLocal[float32] rejects [float64]
+ok: aliasLocal[float64] rejects [float32]
+ok: aliasBox[float32] implements Get() float32
+ok: aliasBox[float64] implements Get() float64
+ok: aliasMethod[float32] accepts own
+ok: aliasMethod[float64] accepts own
+ok: aliasMethod[float32] rejects [float64]
+ok: aliasMethod[float64] rejects [float32]

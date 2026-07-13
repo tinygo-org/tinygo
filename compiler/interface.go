@@ -599,8 +599,21 @@ func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bo
 	case *types.Named:
 		tn := t.Obj()
 		if tn.Pkg() == nil || tn.Parent() == tn.Pkg().Scope() {
-			// Package-scope or builtin: the printed name is unique.
-			return "named:" + t.String(), false
+			name := tn.Name()
+			if tn.Pkg() != nil {
+				name = tn.Pkg().Path() + "." + name
+			}
+			isLocal := false
+			if targs := t.TypeArgs(); targs.Len() != 0 {
+				parts := make([]string, targs.Len())
+				for i := range parts {
+					var local bool
+					parts[i], local = c.getTypeCodeName(targs.At(i))
+					isLocal = isLocal || local
+				}
+				name += "[" + strings.Join(parts, ",") + "]"
+			}
+			return "named:" + name, isLocal
 		}
 		if tn.Parent() != nil {
 			// Ordinary function-local type. Use the un-//line-adjusted
@@ -707,8 +720,8 @@ func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bo
 // Synthetic TypeNames are produced by generic instantiation: two
 // instantiations of the same generic function (e.g. F[int] and
 // F[string]) produce TypeNames with the same printed name and the
-// same source position, so each is named with the enclosing
-// instance's RelString as prefix. RelString encodes the type
+// same source position, so each is named with the enclosing instance's
+// canonical function name as prefix. The function name encodes the type
 // arguments, matching Go's runtime behavior, where F[int].Inner and
 // F[string].Inner are distinct types even when Inner does not mention
 // the type parameter.
@@ -717,9 +730,9 @@ func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bo
 // of F[int] is compiled in every package that calls F[int]); its
 // reflect/types.type:* global has LinkOnceODRLinkage and is merged by
 // name at link time. The chosen name therefore depends only on
-// intrinsic SSA properties (RelString and the raw token.Pos used as a
-// sort key), so any package compiling the same instance produces the
-// same identifier.
+// intrinsic SSA properties (the canonical function name and raw token.Pos),
+// so any package compiling the same instance produces the same
+// identifier.
 //
 // Ordinary function-local TypeNames (TypeName.Parent() != nil) are
 // not handled here: they are nameable only inside their declaring
@@ -807,9 +820,8 @@ func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
 
 // registerSyntheticLocalTypes walks every type reachable from fn's
 // body and records each synthetic *types.Named (TypeName.Parent() ==
-// nil) in c.localTypeNames. Each is named with fn.RelString as the
-// owning function plus a per-function counter assigned in source
-// order.
+// nil) in c.localTypeNames. Each is named with the canonical function
+// name plus a per-function counter assigned in source order.
 //
 // First-writer-wins: a *types.Named already present in
 // c.localTypeNames is left alone, so a synthetic type reachable from
@@ -920,7 +932,7 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 	sort.Slice(found, func(i, j int) bool {
 		return found[i].Obj().Pos() < found[j].Obj().Pos()
 	})
-	enclosing := fn.RelString(nil)
+	enclosing := c.canonicalFunctionName(fn)
 	for i, named := range found {
 		c.localTypeNames.Set(named, fmt.Sprintf("%s.%s$%d", enclosing, named.Obj().Name(), i))
 	}
@@ -929,7 +941,8 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 // getTypeMethodSet returns a reference (GEP) to a global method set. This
 // method set should be unreferenced after the interface lowering pass.
 func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
-	globalName := typ.String() + "$methodset"
+	typeName, _ := c.getTypeCodeName(typ)
+	globalName := typeName + "$methodset"
 	global := c.mod.NamedGlobal(globalName)
 	if global.IsNil() {
 		ms := c.program.MethodSets.MethodSet(typ)
@@ -967,14 +980,15 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 // getMethodSignatureName returns a unique name (that can be used as the name of
 // a global) for the given method.
 func (c *compilerContext) getMethodSignatureName(method *types.Func) string {
-	signature := methodSignature(method)
-	var globalName string
+	name := method.Name()
+	var prefix string
 	if token.IsExported(method.Name()) {
-		globalName = "reflect/methods." + signature
+		prefix = "reflect/methods."
 	} else {
-		globalName = method.Type().(*types.Signature).Recv().Pkg().Path() + ".$methods." + signature
+		prefix = method.Type().(*types.Signature).Recv().Pkg().Path() + ".$methods."
 	}
-	return globalName
+	signature, _ := c.getTypeCodeName(method.Type())
+	return prefix + name + ":" + signature
 }
 
 // getMethodSignature returns a global variable which is a reference to an
@@ -1284,109 +1298,4 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	}
 
 	return wrapper
-}
-
-// methodSignature creates a readable version of a method signature (including
-// the function name, excluding the receiver name). This string is used
-// internally to match interfaces and to call the correct method on an
-// interface. Examples:
-//
-//	String() string
-//	Read([]byte) (int, error)
-func methodSignature(method *types.Func) string {
-	return method.Name() + signature(method.Type().(*types.Signature))
-}
-
-// Make a readable version of a function (pointer) signature.
-// Examples:
-//
-//	() string
-//	(string, int) (int, error)
-func signature(sig *types.Signature) string {
-	var s strings.Builder
-	if sig.Params().Len() == 0 {
-		s.WriteString("()")
-	} else {
-		s.WriteString("(")
-		i := 0
-		for v := range sig.Params().Variables() {
-			if i > 0 {
-				s.WriteString(", ")
-			}
-			s.WriteString(typestring(v.Type()))
-			i++
-		}
-		s.WriteString(")")
-	}
-	if sig.Results().Len() == 0 {
-		// keep as-is
-	} else if sig.Results().Len() == 1 {
-		s.WriteString(" " + typestring(sig.Results().At(0).Type()))
-	} else {
-		s.WriteString(" (")
-		i := 0
-		for v := range sig.Results().Variables() {
-			if i > 0 {
-				s.WriteString(", ")
-			}
-			s.WriteString(typestring(v.Type()))
-			i++
-		}
-		s.WriteString(")")
-	}
-	return s.String()
-}
-
-// typestring returns a stable (human-readable) type string for the given type
-// that can be used for interface equality checks. It is almost (but not
-// exactly) the same as calling t.String(). The main difference is some
-// normalization around `byte` vs `uint8` for example.
-func typestring(t types.Type) string {
-	// See: https://github.com/golang/go/blob/master/src/go/types/typestring.go
-	switch t := types.Unalias(t).(type) {
-	case *types.Array:
-		return "[" + strconv.FormatInt(t.Len(), 10) + "]" + typestring(t.Elem())
-	case *types.Basic:
-		return basicTypeNames[t.Kind()]
-	case *types.Chan:
-		switch t.Dir() {
-		case types.SendRecv:
-			return "chan (" + typestring(t.Elem()) + ")"
-		case types.SendOnly:
-			return "chan<- (" + typestring(t.Elem()) + ")"
-		case types.RecvOnly:
-			return "<-chan (" + typestring(t.Elem()) + ")"
-		default:
-			panic("unknown channel direction")
-		}
-	case *types.Interface:
-		methods := make([]string, t.NumMethods())
-		for i := range methods {
-			method := t.Method(i)
-			methods[i] = method.Name() + signature(method.Type().(*types.Signature))
-		}
-		return "interface{" + strings.Join(methods, ";") + "}"
-	case *types.Map:
-		return "map[" + typestring(t.Key()) + "]" + typestring(t.Elem())
-	case *types.Named:
-		return t.String()
-	case *types.Pointer:
-		return "*" + typestring(t.Elem())
-	case *types.Signature:
-		return "func" + signature(t)
-	case *types.Slice:
-		return "[]" + typestring(t.Elem())
-	case *types.Struct:
-		fields := make([]string, t.NumFields())
-		for i := range fields {
-			field := t.Field(i)
-			fields[i] = field.Name() + " " + typestring(field.Type())
-			if tag := t.Tag(i); tag != "" {
-				fields[i] += " " + strconv.Quote(tag)
-			}
-		}
-		return "struct{" + strings.Join(fields, ";") + "}"
-	default:
-		panic("unknown type: " + t.String())
-	}
 }

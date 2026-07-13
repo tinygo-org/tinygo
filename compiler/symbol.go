@@ -320,7 +320,7 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	}
 	info := functionInfo{
 		// Pick the default linkName.
-		linkName: f.RelString(nil),
+		linkName: c.canonicalFunctionName(f),
 	}
 
 	// Check for a few runtime functions that are treated specially.
@@ -347,6 +347,18 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	return info
 }
 
+func (c *compilerContext) canonicalFunctionName(f *ssa.Function) string {
+	typeArgs := f.TypeArgs()
+	if len(typeArgs) == 0 {
+		return f.RelString(nil)
+	}
+	parts := make([]string, len(typeArgs))
+	for i, ta := range typeArgs {
+		parts[i], _ = c.getTypeCodeName(ta)
+	}
+	return f.Origin().RelString(nil) + "[" + strings.Join(parts, ",") + "]"
+}
+
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
 // //export or //go:noinline.
 func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
@@ -368,6 +380,51 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 				pragmas = append(pragmas, comment)
 				if strings.HasPrefix(comment.Text, "//go:wasmexport ") {
 					hasWasmExport = true
+				}
+			}
+		}
+	}
+
+	// Also scan file-level //go:linkname directives. These appear as
+	// free-standing comments in *ast.File.Comments (not attached to any
+	// declaration), and are used by modern golang.org/x/sys/unix and others.
+	// Function-attached directives (above) take precedence — we only add
+	// file-level ones if no doc-comment linkname was found for this function.
+	//
+	// TODO: the hasUnsafeImport gate enforced downstream (see the
+	// //go:linkname case below) is package-level. gc enforces it per
+	// file, on the file containing the directive. For file-level
+	// linknames this is more important than for function-attached ones,
+	// because the directive can live in a file separate from the
+	// function. A stricter implementation would check whether the file
+	// returned by fileForFunc imports "unsafe", not whether any file in
+	// the package does.
+	hasFunctionLinkname := false
+	for _, comment := range pragmas {
+		if strings.HasPrefix(comment.Text, "//go:linkname ") {
+			parts := strings.Fields(comment.Text)
+			if len(parts) == 3 && parts[1] == f.Name() {
+				hasFunctionLinkname = true
+				break
+			}
+		}
+	}
+	if !hasFunctionLinkname {
+		if file := c.fileForFunc(f); file != nil {
+			for _, group := range file.Comments {
+				// Skip the function's own doc comment — already handled above.
+				if decl, ok := syntax.(*ast.FuncDecl); ok && group == decl.Doc {
+					continue
+				}
+				for _, comment := range group.List {
+					if !strings.HasPrefix(comment.Text, "//go:linkname ") {
+						continue
+					}
+					parts := strings.Fields(comment.Text)
+					if len(parts) != 3 || parts[1] != f.Name() {
+						continue
+					}
+					pragmas = append(pragmas, comment)
 				}
 			}
 		}
@@ -444,7 +501,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.inline = inlineHint
 		case "//go:noinline":
 			info.inline = inlineNone
-		case "//go:linkname":
+		case "//go:linkname", "//go:linknamestd":
 			if len(parts) != 3 || parts[1] != f.Name() {
 				continue
 			}
@@ -665,6 +722,34 @@ type globalInfo struct {
 	extern   bool   // go:extern
 	align    int    // go:align
 	section  string // go:section
+}
+
+// fileForFunc returns the *ast.File that contains the declaration of f, or
+// nil if it cannot be determined. File-level pragmas are only consulted for
+// functions in the package currently being compiled — functions imported from
+// other packages have their file-level pragmas processed when those packages
+// are compiled.
+func (c *compilerContext) fileForFunc(f *ssa.Function) *ast.File {
+	if c.loaderPkg == nil || f.Pkg == nil || f.Pkg.Pkg != c.loaderPkg.Pkg {
+		return nil
+	}
+	syntax := f.Syntax()
+	if f.Origin() != nil {
+		syntax = f.Origin().Syntax()
+	}
+	if syntax == nil {
+		return nil
+	}
+	pos := syntax.Pos()
+	if !pos.IsValid() {
+		return nil
+	}
+	for _, file := range c.loaderPkg.Files {
+		if file.FileStart <= pos && pos < file.FileEnd {
+			return file
+		}
+	}
+	return nil
 }
 
 // loadASTComments loads comments on globals from the AST, for use later in the

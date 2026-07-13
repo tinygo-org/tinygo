@@ -142,6 +142,9 @@ ifeq ($(OS),Windows_NT)
 
     # PIC needs to be disabled for libclang to work.
     LLVM_OPTION += -DLLVM_ENABLE_PIC=OFF
+    # Statically link the C++ and GCC runtime into LLVM tools so they don't
+    # depend on MinGW DLLs that may not be on PATH when executed during the build.
+    LLVM_OPTION += '-DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -static-libstdc++'
 
     CGO_CPPFLAGS += -DCINDEX_NO_EXPORTS
     CGO_LDFLAGS += -static -static-libgcc -static-libstdc++
@@ -410,6 +413,7 @@ TEST_PACKAGES_LINUX := \
 	context \
 	crypto/aes \
 	crypto/des \
+	crypto/ecdh \
 	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
@@ -489,10 +493,12 @@ report-stdlib-tests-pass:
 ifeq ($(uname),Darwin)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_DARWIN)
 TEST_IOFS := true
+TEST_ENCODING_XML := true
 endif
 ifeq ($(uname),Linux)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_LINUX)
 TEST_IOFS := true
+TEST_ENCODING_XML := true
 endif
 ifeq ($(OS),Windows_NT)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
@@ -507,8 +513,11 @@ TEST_ADDITIONAL_FLAGS ?=
 .PHONY: tinygo-test
 tinygo-test:
 	@# TestExtraMethods: used by many crypto packages and uses reflect.Type.Method which is not implemented.
-	@# TestParseAndBytesRoundTrip/P256/Generic: relies on t.Skip() which is not implemented
-	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW)
+	@# TestParseAndBytesRoundTrip/P256/Generic: needs Goexit to run defers on wasm.
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml,$(TEST_PACKAGES_HOST)) $(TEST_PACKAGES_SLOW)
+ifeq ($(TEST_ENCODING_XML),true)
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) -stack-size=16MB encoding/xml
+endif
 	@# io/fs requires os.ReadDir, not yet supported on windows or wasi. It also
 	@# requires a large stack-size. Hence, io/fs is only run conditionally.
 	@# For more details, see the comments on issue #3143.

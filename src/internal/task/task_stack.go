@@ -33,8 +33,7 @@ type state struct {
 
 //export tinygo_task_exit
 func taskExit() {
-	// TODO: explicitly free the stack after switching back to the scheduler.
-	Pause()
+	exit(false)
 }
 
 // initialize the state and prepare to call the specified function with the specified argument bundle.
@@ -73,6 +72,7 @@ var startTask [0]uint8
 // The new goroutine is scheduled to run later.
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	t := &Task{}
+	addLiveTask(t)
 	t.state.initialize(fn, args, stackSize)
 	scheduleTask(t)
 }

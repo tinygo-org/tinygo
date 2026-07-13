@@ -43,6 +43,10 @@ tinygo_longjmp:
     // Note: the code we jump to assumes eax is set to a non-zero value if we
     // jump from here.
     movl 4(%esp), %eax
+    movl 8(%eax), %ebx
+    movl 12(%eax), %esi
+    movl 16(%eax), %edi
+    movl 20(%eax), %ebp
     movl 0(%eax), %esp // jumpSP
     movl 4(%eax), %eax // jumpPC (stash in volatile register)
     jmpl *%eax

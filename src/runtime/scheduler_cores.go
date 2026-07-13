@@ -32,6 +32,10 @@ func deadlock() {
 	trap()
 }
 
+func goexit() {
+	task.Exit()
+}
+
 // Mark the given task as ready to resume.
 // This is allowed even if the task isn't paused yet, but will pause soon.
 func scheduleTask(t *task.Task) {

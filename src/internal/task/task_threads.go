@@ -43,7 +43,9 @@ var mainTask Task
 
 // Queue of tasks (see QueueNext) that currently exist in the program.
 var activeTasks = &mainTask
+var activeTaskCount uint32 = 1
 var activeTaskLock PMutex
+var mainExitedByGoexit bool
 
 func OnSystemStack() bool {
 	runtimePanic("todo: task.OnSystemStack")
@@ -95,9 +97,6 @@ func (t *Task) Resume() {
 	t.state.pauseSem.Post()
 }
 
-// otherGoroutines is the total number of live goroutines minus one.
-var otherGoroutines uint32
-
 // Start a new OS thread.
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	t := &Task{}
@@ -117,7 +116,7 @@ func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	}
 	t.state.QueueNext = activeTasks
 	activeTasks = t
-	otherGoroutines++
+	activeTaskCount++
 	activeTaskLock.Unlock()
 }
 
@@ -127,6 +126,12 @@ func taskExited(t *Task) {
 		println("*** exit:", t.state.id)
 	}
 
+	if exit(t) {
+		runtimePanic("all goroutines are asleep - deadlock!")
+	}
+}
+
+func exit(t *Task) bool {
 	// Remove from the queue.
 	// TODO: this can be made more efficient by using a doubly linked list.
 	activeTaskLock.Lock()
@@ -135,16 +140,46 @@ func taskExited(t *Task) {
 		if *q == t {
 			*q = t.state.QueueNext
 			found = true
+			activeTaskCount--
 			break
 		}
 	}
-	otherGoroutines--
+	deadlocked := mainExitedByGoexit && activeTaskCount == 0
 	activeTaskLock.Unlock()
 
 	// Sanity check.
 	if !found {
 		runtimePanic("taskExited failed")
 	}
+	return deadlocked
+}
+
+func otherTasks(current *Task) uint32 {
+	if activeTaskCount == 0 {
+		return 0
+	}
+	return activeTaskCount - 1
+}
+
+// Exit exits the current task. If this is the main task and there are no other
+// goroutines, it reports a deadlock.
+func Exit() {
+	t := Current()
+	if t == &mainTask {
+		activeTaskLock.Lock()
+		noOtherTasks := otherTasks(t) == 0
+		if !noOtherTasks {
+			mainExitedByGoexit = true
+		}
+		activeTaskLock.Unlock()
+		if noOtherTasks {
+			runtimePanic("all goroutines are asleep - deadlock!")
+		}
+	}
+	if exit(t) {
+		runtimePanic("all goroutines are asleep - deadlock!")
+	}
+	tinygo_task_exit()
 }
 
 // scanWaitGroup is used to wait on until all threads have finished the current state transition.
@@ -206,7 +241,7 @@ func GCStopWorldAndScan() {
 		gcState.Store(gcStateStopped)
 
 		// Set the number of threads to wait for.
-		scanWaitGroup = initWaitGroup(otherGoroutines)
+		scanWaitGroup = initWaitGroup(otherTasks(current))
 
 		// Pause all other threads.
 		for t := activeTasks; t != nil; t = t.state.QueueNext {
@@ -242,7 +277,7 @@ func GCResumeWorld() {
 	}
 
 	// Set the wait group to track resume progress.
-	scanWaitGroup = initWaitGroup(otherGoroutines)
+	scanWaitGroup = initWaitGroup(otherTasks(Current()))
 
 	// Set the state to resumed.
 	gcState.Store(gcStateResumed)
@@ -303,6 +338,9 @@ func tinygo_task_init(t *Task, thread *threadID, numCPU *int32)
 //
 //go:linkname tinygo_task_start tinygo_task_start
 func tinygo_task_start(fn uintptr, args unsafe.Pointer, t *Task, thread *threadID, stackTop *uintptr, stackSize uintptr) int32
+
+//go:linkname tinygo_task_exit tinygo_task_exit
+func tinygo_task_exit()
 
 // Pause the thread by sending it a signal.
 //

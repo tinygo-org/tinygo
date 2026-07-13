@@ -473,6 +473,12 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		options.Directory = path
 		pkgName = "."
 	}
+	isWebAssembly := strings.HasPrefix(options.Target, "wasi") ||
+		strings.HasPrefix(options.Target, "wasm") ||
+		strings.HasPrefix(options.GOARCH, "wasm")
+	if name == "testing.go" && isWebAssembly {
+		expectedOutputPath = TESTDATA + "/testing-wasm.txt"
+	}
 
 	config, err := builder.NewConfig(&options)
 	if err != nil {
@@ -945,6 +951,48 @@ func checkOutputData(t *testing.T, expectedOutput, actual []byte) {
 	if !bytes.Equal(actual, expectedOutput) {
 		t.Errorf("output did not match (expected %d bytes, got %d bytes):", len(expectedOutput), len(actual))
 		t.Error(string(Diff("expected", expectedOutput, "actual", actual)))
+	}
+}
+
+func TestGoexitCrash(t *testing.T) {
+	t.Parallel()
+
+	options := optionsFromTarget("", sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		want string
+	}{
+		{"main", "all goroutines are asleep - deadlock!"},
+		{"deadlock", "all goroutines are asleep - deadlock!"},
+		{"exit", "all goroutines are asleep - deadlock!"},
+		{"main-other", "all goroutines are asleep - deadlock!"},
+		{"in-panic", "all goroutines are asleep - deadlock!"},
+		{"panic", "panic: panic after Goexit"},
+		{"recovered-panic", "all goroutines are asleep - deadlock!"},
+		{"recover-before-panic", "all goroutines are asleep - deadlock!"},
+		{"recover-before-panic-loop", "all goroutines are asleep - deadlock!"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			output := &bytes.Buffer{}
+			_, err = buildAndRun("testdata/goexit.go", config, output, []string{tc.name}, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+				cmd.Stdout = nil
+				cmd.Stderr = nil
+				data, err := cmd.CombinedOutput()
+				output.Write(data)
+				return err
+			})
+			if err == nil {
+				t.Fatal("program unexpectedly exited successfully")
+			}
+			if !strings.Contains(output.String(), tc.want) {
+				t.Fatalf("output does not contain %q:\n%s", tc.want, output.String())
+			}
+		})
 	}
 }
 
