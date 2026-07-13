@@ -4,6 +4,8 @@ package runtime
 
 import "device/uefi"
 
+const zeroSizeAllocPtr uintptr = 16
+
 //go:linkname procPin sync/atomic.runtime_procPin
 func procPin() {
 }
