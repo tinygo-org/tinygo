@@ -47,8 +47,14 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcTotalAlloc += uint64(size)
 	gcMallocs++
 	heapptr += size
-	for heapptr >= heapEnd {
+	if heapptr < addr {
+		// The allocation size overflowed the heap pointer.
+		runtimePanic("out of memory")
+	}
+	for heapptr > heapEnd {
 		// Try to increase the heap and check again.
+		// Use > instead of >= because an allocation that exactly
+		// ends at heapEnd is still within heap boundaries.
 		if growHeap() {
 			continue
 		}
