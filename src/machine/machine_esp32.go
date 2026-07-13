@@ -332,10 +332,20 @@ func (uart *UART) Configure(config UARTConfig) {
 
 	if config.RX != NoPin {
 		config.RX.configure(PinConfig{Mode: PinInputPullup}, uart.TXRXSignal)
+		if config.InvertRX {
+			inFunc(uart.TXRXSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
+		} else {
+			inFunc(uart.TXRXSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
+		}
 	}
 
 	if config.TX != NoPin {
 		config.TX.configure(PinConfig{Mode: PinOutput}, uart.TXRXSignal)
+		if config.InvertTX {
+			config.TX.outFunc().Set(uart.TXRXSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
+		} else {
+			config.TX.outFunc().Set(uart.TXRXSignal)
+		}
 	}
 
 	if config.RTS != NoPin {
