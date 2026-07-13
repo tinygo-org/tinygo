@@ -52,12 +52,15 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		heapallocs = append(heapallocs, getUses(allocator)...)
 	}
 
+	idMiner := makeIdMiner()
 	for _, heapalloc := range heapallocs {
 		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
 		if heapalloc.Operand(0).IsAConstantInt().IsNil() {
 			// Do not allocate variable length arrays on the stack.
 			if logAllocs {
-				logger(getPosition(heapalloc), "size is not constant")
+				logger(
+					getPosition(heapalloc),
+					fmt.Sprintf("%s size is not constant", idMiner.get(heapalloc)))
 			}
 			continue
 		}
@@ -67,7 +70,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			// The maximum size for a stack allocation.
 			if logAllocs {
 				logger(getPosition(heapalloc),
-					fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
+					fmt.Sprintf("%s size %d exceeds maximum stack allocation size %d", idMiner.get(heapalloc), size, maxStackAlloc))
 			}
 			continue
 		}
@@ -104,7 +107,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 				if atPos.Line != 0 {
 					msg = fmt.Sprintf("escapes at line %d", atPos.Line)
 				}
-				logger(getPosition(heapalloc), msg)
+				logger(getPosition(heapalloc), fmt.Sprintf("%s %s", idMiner.get(heapalloc), msg))
 			}
 			continue
 		}
@@ -145,7 +148,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 
 // FormatAllocReason renders the heap allocation in a human-readable format.
 func FormatAllocReason(pos token.Position, reason string) string {
-	return fmt.Sprintf("%s: object allocated on the heap: %s", pos.String(), reason)
+	return fmt.Sprintf("%s: heap allocation: %s", pos.String(), reason)
 }
 
 // FormatAllocCover renders the heap allocation in the go coverage tool format.

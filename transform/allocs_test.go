@@ -60,8 +60,24 @@ func TestAllocs2(t *testing.T) {
 	for i, line := range strings.Split(strings.ReplaceAll(string(testInput), "\r\n", "\n"), "\n") {
 		const prefix = " // OUT: "
 		if idx := strings.Index(line, prefix); idx > 0 {
-			msg := line[idx+len(prefix):]
-			fmt.Fprintf(&expectedTestOutput, "allocs2.go:%d: %s\n", i+1, msg)
+			msgLine := strings.TrimSpace(line[idx+len(prefix):])
+			msgs := make([]string, 0, 2)
+			const separator = " && "
+			for true {
+				idx = strings.Index(msgLine, separator)
+				if idx < 0 {
+					break
+				}
+				msg := strings.TrimSpace(msgLine[:idx])
+				msgs = append(msgs, msg)
+				msgLine = strings.TrimSpace(msgLine[idx+len(separator):])
+			}
+			if len(msgLine) > 0 {
+				msgs = append(msgs, msgLine)
+			}
+			for _, msg := range msgs {
+				fmt.Fprintf(&expectedTestOutput, "allocs2.go:%d: %s\n", i+1, msg)
+			}
 		}
 	}
 
