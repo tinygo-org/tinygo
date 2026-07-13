@@ -31,6 +31,7 @@ package runtime
 // Moss.
 
 import (
+	"internal/reflectlite"
 	"internal/task"
 	"runtime/interrupt"
 	"unsafe"
@@ -484,6 +485,12 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// We've claimed this allocation, now we can unlock the heap.
 	gcLock.Unlock()
 
+	// If the GC above queued any finalizers, run them now that gcLock is free.
+	if finalizersQueued {
+		finalizersQueued = false
+		wakeFinalizer()
+	}
+
 	// Clear the allocation body.
 	memzero(pointer, size)
 
@@ -534,6 +541,12 @@ func GC() {
 	gcLock.Lock()
 	runGC()
 	gcLock.Unlock()
+
+	// If the GC queued any finalizers, run them now that gcLock is free.
+	if finalizersQueued {
+		finalizersQueued = false
+		wakeFinalizer()
+	}
 }
 
 // runGC performs a garbage collection cycle. It is the internal implementation
@@ -578,6 +591,11 @@ func runGC() (freeBytes uintptr) {
 	} else {
 		finishMark()
 	}
+
+	// Detect finalizable objects that became unreachable and queue their
+	// finalizers. This runs while the world is still stopped, after marking is
+	// complete and before sweep frees anything.
+	scanFinalizers()
 
 	// If we're using threads, resume all other threads before starting the
 	// sweep.
@@ -857,5 +875,23 @@ var count4LUT = [16]uint8{
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
+	// Validate the arguments up front, like the standard library does, so misuse
+	// fails fast at registration instead of corrupting state when the finalizer
+	// is later invoked. reflectlite cannot inspect a func's signature, so the
+	// exact func(*T) match is not checked; the closure ABI is uniform for any
+	// single pointer argument, which is why callFinalizer can reinterpret it.
+	if reflectlite.ValueOf(obj).Kind() != reflectlite.Pointer {
+		runtimePanic("runtime.SetFinalizer: first argument is not a pointer")
+	}
+	if finalizer != nil && reflectlite.ValueOf(finalizer).Kind() != reflectlite.Func {
+		runtimePanic("runtime.SetFinalizer: second argument is not a function")
+	}
+
+	// For an interface holding a pointer, the value word is the pointer itself.
+	objPtr := (*_interface)(unsafe.Pointer(&obj)).value
+	if objPtr == nil {
+		// A nil pointer has nothing to finalize.
+		return
+	}
+	registerFinalizer(uintptr(objPtr), finalizer)
 }
