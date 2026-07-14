@@ -2090,14 +2090,10 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		}
 	}
 
-	var params []llvm.Value
-	for _, param := range instr.Args {
-		params = append(params, b.getValue(param, getPos(instr)))
-	}
-
 	// Try to call the function directly for trivially static calls.
 	var callee, context llvm.Value
 	var calleeType llvm.Type
+	var invokeTypecode, invokeReceiver llvm.Value
 	exported := false
 	if fn := instr.StaticCallee(); fn != nil {
 		calleeType, callee = b.getFunction(fn)
@@ -2127,19 +2123,18 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		exported = info.exported
 	} else if call, ok := instr.Value.(*ssa.Builtin); ok {
 		// Builtin function (append, close, delete, etc.).)
+		var params []llvm.Value
 		var argTypes []types.Type
 		for _, arg := range instr.Args {
 			argTypes = append(argTypes, arg.Type())
+			params = append(params, b.getValue(arg, getPos(instr)))
 		}
 		return b.createBuiltin(argTypes, params, call.Name(), instr.Pos())
 	} else if instr.IsInvoke() {
 		// Interface method call (aka invoke call).
 		itf := b.getValue(instr.Value, getPos(instr)) // interface value (runtime._interface)
-		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
-		value := b.CreateExtractValue(itf, 1, "invoke.func.value") // receiver
-		// Prefix the params with receiver value and suffix with typecode.
-		params = append([]llvm.Value{value}, params...)
-		params = append(params, typecode)
+		invokeTypecode = b.CreateExtractValue(itf, 0, "invoke.func.typecode")
+		invokeReceiver = b.CreateExtractValue(itf, 1, "invoke.func.value")
 		callee = b.getInvokeFunction(instr)
 		calleeType = callee.GlobalValueType()
 		context = llvm.Undef(b.dataPtrType)
@@ -2151,6 +2146,15 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		callee, context = b.decodeFuncValue(value)
 		calleeType = b.getLLVMFunctionType(instr.Value.Type().Underlying().(*types.Signature))
 		b.createNilCheck(instr.Value, callee, "fpcall")
+	}
+
+	var params []llvm.Value
+	for _, param := range instr.Args {
+		params = append(params, b.getValue(param, getPos(instr)))
+	}
+	if instr.IsInvoke() {
+		params = append([]llvm.Value{invokeReceiver}, params...)
+		params = append(params, invokeTypecode)
 	}
 
 	if !exported {

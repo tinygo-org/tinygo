@@ -47,20 +47,15 @@ func (b *builder) createGo(instr *ssa.Go) {
 		return
 	}
 
-	// Get all function parameters to pass to the goroutine.
 	var params []llvm.Value
-	for _, param := range instr.Call.Args {
-		params = append(params, b.getGoroutineCallArgument(param)...)
-	}
-
 	var prefix string
 	var funcPtr llvm.Value
 	var funcType llvm.Type
+	var context llvm.Value
 	hasContext := false
 	if callee := instr.Call.StaticCallee(); callee != nil {
 		// Static callee is known. This makes it easier to start a new
 		// goroutine.
-		var context llvm.Value
 		switch value := instr.Call.Value.(type) {
 		case *ssa.Function:
 			// Goroutine call is regular function call. No context is necessary.
@@ -73,7 +68,6 @@ func (b *builder) createGo(instr *ssa.Go) {
 			panic("StaticCallee returned an unexpected value")
 		}
 		if !context.IsNil() {
-			params = append(params, context) // context parameter
 			hasContext = true
 		}
 		funcType, funcPtr = b.getFunction(callee)
@@ -84,20 +78,28 @@ func (b *builder) createGo(instr *ssa.Go) {
 		itfValue := b.CreateExtractValue(itf, 1, "")
 		funcPtr = b.getInvokeFunction(&instr.Call)
 		funcType = funcPtr.GlobalValueType()
-		params = append([]llvm.Value{itfValue}, params...) // start with receiver
-		params = append(params, itfTypeCode)               // end with typecode
+		params = append(params, itfValue)
+		context = itfTypeCode
 	} else {
 		// This is a function pointer.
 		// At the moment, two extra params are passed to the newly started
 		// goroutine:
 		//   * The function context, for closures.
 		//   * The function pointer (for tasks).
-		var context llvm.Value
 		funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value, getPos(instr)))
 		funcType = b.getLLVMFunctionType(instr.Call.Value.Type().Underlying().(*types.Signature))
-		params = append(params, context, funcPtr)
 		hasContext = true
 		prefix = b.getFunctionInfo(b.fn).linkName
+	}
+
+	for _, param := range instr.Call.Args {
+		params = append(params, b.getGoroutineCallArgument(param)...)
+	}
+	if !context.IsNil() {
+		params = append(params, context)
+	}
+	if hasContext && instr.Call.StaticCallee() == nil {
+		params = append(params, funcPtr)
 	}
 
 	paramBundle := b.emitPointerPack(params, instr.Pos())
