@@ -10,6 +10,21 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+func (c *compilerContext) getLLVMResultType(sig *types.Signature) llvm.Type {
+	switch sig.Results().Len() {
+	case 0:
+		return c.ctx.VoidType()
+	case 1:
+		return c.getLLVMType(sig.Results().At(0).Type())
+	default:
+		results := make([]llvm.Type, sig.Results().Len())
+		for i := range results {
+			results[i] = c.getLLVMType(sig.Results().At(i).Type())
+		}
+		return c.ctx.StructType(results, false)
+	}
+}
+
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
 func (b *builder) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
@@ -48,25 +63,7 @@ func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 
 // getLLVMFunctionType returns a LLVM function type for a given signature.
 func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
-	// Get the return type.
-	var returnType llvm.Type
-	switch typ.Results().Len() {
-	case 0:
-		// No return values.
-		returnType = c.ctx.VoidType()
-	case 1:
-		// Just one return value.
-		returnType = c.getLLVMType(typ.Results().At(0).Type())
-	default:
-		// Multiple return values. Put them together in a struct.
-		// This appears to be the common way to handle multiple return values in
-		// LLVM.
-		members := make([]llvm.Type, typ.Results().Len())
-		for i := 0; i < typ.Results().Len(); i++ {
-			members[i] = c.getLLVMType(typ.Results().At(i).Type())
-		}
-		returnType = c.ctx.StructType(members, false)
-	}
+	returnType := c.getLLVMResultType(typ)
 
 	// Get the parameter types.
 	var paramTypes []llvm.Type
