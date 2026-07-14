@@ -1523,10 +1523,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			b.diagnostics = append(b.diagnostics, err)
 			b.locals[instr] = llvm.Undef(b.getLLVMType(instr.Type()))
 		} else {
-			b.locals[instr] = value
-			if len(*instr.Referrers()) != 0 && b.NeedsStackObjects {
-				b.trackExpr(instr, value)
-			}
+			b.setValue(instr, value)
 		}
 	case *ssa.DebugRef:
 		// ignore
@@ -1556,19 +1553,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		if b.hasDeferFrame() {
 			b.createRuntimeCall("destroyDeferFrame", []llvm.Value{b.deferFrame}, "")
 		}
-		if len(instr.Results) == 0 {
-			b.CreateRetVoid()
-		} else if len(instr.Results) == 1 {
-			b.CreateRet(b.getValue(instr.Results[0], getPos(instr)))
-		} else {
-			// Multiple return values. Put them all in a struct.
-			retVal := llvm.ConstNull(b.llvmFn.GlobalValueType().ReturnType())
-			for i, result := range instr.Results {
-				val := b.getValue(result, getPos(instr))
-				retVal = b.CreateInsertValue(retVal, val, i, "")
-			}
-			b.CreateRet(retVal)
-		}
+		b.createReturn(instr.Results, getPos(instr))
 	case *ssa.RunDefers:
 		// Note where we're going to put the rundefers block
 		run := b.insertBasicBlock("rundefers.block")
@@ -1591,6 +1576,28 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		b.storeValue(llvmAddr, instr.Val)
 	default:
 		b.addError(instr.Pos(), "unknown instruction: "+instr.String())
+	}
+}
+
+func (b *builder) setValue(value ssa.Value, llvmValue llvm.Value) {
+	b.locals[value] = llvmValue
+	if len(*value.Referrers()) != 0 && b.NeedsStackObjects {
+		b.trackExpr(value, llvmValue)
+	}
+}
+
+func (b *builder) createReturn(results []ssa.Value, pos token.Pos) {
+	switch len(results) {
+	case 0:
+		b.CreateRetVoid()
+	case 1:
+		b.CreateRet(b.getValue(results[0], pos))
+	default:
+		result := llvm.ConstNull(b.llvmFn.GlobalValueType().ReturnType())
+		for i, value := range results {
+			result = b.CreateInsertValue(result, b.getValue(value, pos), i, "")
+		}
+		b.CreateRet(result)
 	}
 }
 
