@@ -1546,10 +1546,8 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		b.CreateBr(blockJump)
 	case *ssa.MapUpdate:
 		m := b.getValue(instr.Map, getPos(instr))
-		key := b.getValue(instr.Key, getPos(instr))
-		value := b.getValue(instr.Value, getPos(instr))
 		mapType := instr.Map.Type().Underlying().(*types.Map)
-		b.createMapUpdate(mapType.Key(), m, key, value, instr.Pos())
+		b.createMapUpdate(mapType.Key(), m, instr.Key, instr.Value, instr.Pos())
 	case *ssa.Panic:
 		value := b.getValue(instr.X, getPos(instr))
 		b.createRuntimeInvoke("_panic", []llvm.Value{value}, "")
@@ -1584,16 +1582,78 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		b.createChanSend(instr)
 	case *ssa.Store:
 		llvmAddr := b.getValue(instr.Addr, getPos(instr))
-		llvmVal := b.getValue(instr.Val, getPos(instr))
 		b.createNilCheck(instr.Addr, llvmAddr, "store")
-		if b.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
+		llvmType := b.getLLVMType(instr.Val.Type())
+		if b.targetData.TypeAllocSize(llvmType) == 0 {
 			// nothing to store
 			return
 		}
-		b.CreateStore(llvmVal, llvmAddr)
+		b.storeValue(llvmAddr, instr.Val)
 	default:
 		b.addError(instr.Pos(), "unknown instruction: "+instr.String())
 	}
+}
+
+func (b *builder) storeValue(dst llvm.Value, value ssa.Value) {
+	b.CreateStore(b.getValue(value, getPos(value)), dst)
+}
+
+func (b *builder) loadFromStorage(ptr llvm.Value, typ types.Type, name string) llvm.Value {
+	return b.CreateLoad(b.getLLVMType(typ), ptr, name)
+}
+
+func (b *builder) getValueStorage(value ssa.Value, name string) (ptr, size llvm.Value) {
+	typ := b.getLLVMType(value.Type())
+	ptr, size = b.createTemporaryAlloca(typ, name)
+	b.storeValue(ptr, value)
+	return ptr, size
+}
+
+type runtimeValueResult struct {
+	valueType  llvm.Type
+	resultType llvm.Type
+	valuePtr   llvm.Value
+	valueSize  llvm.Value
+	temporary  bool
+	zero       bool
+	commaOk    bool
+}
+
+func (b *builder) createRuntimeValueResult(valueType llvm.Type, commaOk, zeroAsNull bool, name string) runtimeValueResult {
+	result := runtimeValueResult{
+		valueType:  valueType,
+		resultType: valueType,
+		commaOk:    commaOk,
+	}
+	if commaOk {
+		result.resultType = b.ctx.StructType([]llvm.Type{valueType, b.ctx.Int1Type()}, false)
+	}
+	if zeroAsNull && b.targetData.TypeAllocSize(valueType) == 0 {
+		result.valuePtr = llvm.ConstNull(b.dataPtrType)
+		result.zero = true
+		return result
+	}
+	result.valuePtr, result.valueSize = b.createTemporaryAlloca(valueType, name+".value")
+	result.temporary = true
+	return result
+}
+
+func (r runtimeValueResult) finish(b *builder, commaOk llvm.Value, name string) llvm.Value {
+	var value llvm.Value
+	if r.zero {
+		value = llvm.ConstNull(r.valueType)
+	} else {
+		value = b.CreateLoad(r.valueType, r.valuePtr, name)
+	}
+	if r.temporary {
+		b.emitLifetimeEnd(r.valuePtr, r.valueSize)
+	}
+	if !r.commaOk {
+		return value
+	}
+	result := llvm.Undef(r.resultType)
+	result = b.CreateInsertValue(result, value, 0, "")
+	return b.CreateInsertValue(result, commaOk, 1, "")
 }
 
 // createBuiltin lowers a builtin Go function (append, close, delete, etc.) to
@@ -2270,11 +2330,11 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Global:
 		panic("global is not an expression")
 	case *ssa.Index:
-		collection := b.getValue(expr.X, getPos(expr))
 		index := b.getValue(expr.Index, getPos(expr))
 
 		switch xType := expr.X.Type().Underlying().(type) {
 		case *types.Basic: // extract byte from string
+			collection := b.getValue(expr.X, getPos(expr))
 			// Value type must be a string, which is a basic type.
 			if xType.Info()&types.IsString == 0 {
 				panic("lookup on non-string?")
@@ -2308,12 +2368,11 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 			// Can't load directly from array (as index is non-constant), so
 			// have to do it using an alloca+gep+load.
-			arrayType := collection.Type()
-			alloca, allocaSize := b.createTemporaryAlloca(arrayType, "index.alloca")
-			b.CreateStore(collection, alloca)
+			arrayType := b.getLLVMType(expr.X.Type())
+			alloca, allocaSize := b.getValueStorage(expr.X, "index.alloca")
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			ptr := b.CreateInBoundsGEP(arrayType, alloca, []llvm.Value{zero, index}, "index.gep")
-			result := b.CreateLoad(arrayType.ElementType(), ptr, "index.load")
+			result := b.loadFromStorage(ptr, expr.Type(), "index.load")
 			b.emitLifetimeEnd(alloca, allocaSize)
 			return result, nil
 		default:
@@ -2373,12 +2432,11 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 	case *ssa.Lookup: // map lookup
 		value := b.getValue(expr.X, getPos(expr))
-		index := b.getValue(expr.Index, getPos(expr))
 		valueType := expr.Type()
 		if expr.CommaOk {
 			valueType = valueType.(*types.Tuple).At(0).Type()
 		}
-		return b.createMapLookup(expr.X.Type().Underlying().(*types.Map).Key(), valueType, value, index, expr.CommaOk, expr.Pos())
+		return b.createMapLookup(expr.X.Type().Underlying().(*types.Map).Key(), valueType, value, expr.Index, expr.CommaOk, expr.Pos())
 	case *ssa.MakeChan:
 		return b.createMakeChan(expr), nil
 	case *ssa.MakeClosure:
@@ -3453,8 +3511,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			return fn, nil
 		} else {
 			b.createNilCheck(unop.X, x, "deref")
-			load := b.CreateLoad(valueType, x, "")
-			return load, nil
+			return b.loadFromStorage(x, unop.Type(), ""), nil
 		}
 	case token.XOR: // ^x, toggle all bits in integer
 		return b.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
