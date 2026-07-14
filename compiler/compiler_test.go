@@ -131,6 +131,46 @@ func TestCompiler(t *testing.T) {
 	}
 }
 
+func TestOptimizedLargeAggregateABI(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "large-optimized.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	passOptions := llvm.NewPassBuilderOptions()
+	defer passOptions.Dispose()
+	if err := mod.RunPasses("default<O2>", llvm.TargetMachine{}, passOptions); err != nil {
+		t.Fatal(err)
+	}
+
+	resultFn := mod.NamedFunction("main.makeLargeOptimizedValue")
+	if resultFn.IsNil() {
+		t.Fatal("missing function main.makeLargeOptimizedValue")
+	}
+	if resultType := resultFn.GlobalValueType().ReturnType(); resultType.TypeKind() != llvm.VoidTypeKind {
+		t.Errorf("large aggregate result was promoted to %s", resultType)
+	}
+
+	for _, name := range []string{
+		"main.makeLargeOptimizedValue",
+		"main.readLargeOptimizedValue",
+		"main.readMixedLargeOptimizedValue",
+	} {
+		fn := mod.NamedFunction(name)
+		if fn.IsNil() {
+			t.Fatalf("missing function %s", name)
+		}
+		if paramType := fn.GlobalValueType().ParamTypes()[0]; paramType.TypeKind() != llvm.PointerTypeKind {
+			t.Errorf("%s aggregate parameter was promoted to %s", name, paramType)
+		}
+	}
+}
+
 // normalizeIR canonicalizes LLVM IR so a single golden file keeps matching
 // across LLVM versions. Golden files are written against LLVM <21; newer LLVM
 // prints some attributes differently.
@@ -281,6 +321,49 @@ func TestCompilerErrors(t *testing.T) {
 			continue
 		}
 		expectedErrorsIdx++
+	}
+}
+
+func TestAggregateValueCount(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+
+	byteType := ctx.Int8Type()
+	tests := []struct {
+		name     string
+		typ      llvm.Type
+		count    uint64
+		exceeded bool
+	}{
+		{"empty", llvm.ArrayType(byteType, 0), 0, false},
+		{"limit", llvm.ArrayType(byteType, 1024), 1024, false},
+		{"over limit", llvm.ArrayType(byteType, 1025), 0, true},
+		{"combined limit", ctx.StructType([]llvm.Type{
+			llvm.ArrayType(byteType, 512),
+			llvm.ArrayType(byteType, 512),
+		}, false), 1024, false},
+		{"combined over limit", ctx.StructType([]llvm.Type{
+			llvm.ArrayType(byteType, 1000),
+			llvm.ArrayType(byteType, 1000),
+		}, false), 0, true},
+		{"comma-ok over limit", ctx.StructType([]llvm.Type{
+			llvm.ArrayType(byteType, 1024),
+			ctx.Int1Type(),
+		}, false), 0, true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			count, exceeded := aggregateValueCount(test.typ, 0)
+			if exceeded != test.exceeded {
+				t.Errorf("expected exceeded=%t, got %t", test.exceeded, exceeded)
+			}
+			if !exceeded && count != test.count {
+				t.Errorf("expected count=%d, got %d", test.count, count)
+			}
+		})
 	}
 }
 

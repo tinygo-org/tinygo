@@ -53,6 +53,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	var funcType llvm.Type
 	var context llvm.Value
 	hasContext := false
+	exported := false
 	if callee := instr.Call.StaticCallee(); callee != nil {
 		// Static callee is known. This makes it easier to start a new
 		// goroutine.
@@ -71,6 +72,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 			hasContext = true
 		}
 		funcType, funcPtr = b.getFunction(callee)
+		exported = b.getFunctionInfo(callee).exported
 	} else if instr.Call.IsInvoke() {
 		// This is a method call on an interface value.
 		itf := b.getValue(instr.Call.Value, getPos(instr))
@@ -93,7 +95,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	}
 
 	for _, param := range instr.Call.Args {
-		params = append(params, b.getGoroutineCallArgument(param)...)
+		params = append(params, b.getGoroutineCallArgument(param, exported)...)
 	}
 	if !context.IsNil() {
 		params = append(params, context)
@@ -101,6 +103,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	if hasContext && instr.Call.StaticCallee() == nil {
 		params = append(params, funcPtr)
 	}
+	params = b.prependIndirectResult(instr.Call.Signature(), exported, params, "go.result")
 
 	paramBundle := b.emitPointerPack(params, instr.Pos())
 	var stackSize llvm.Value
@@ -124,8 +127,13 @@ func (b *builder) createGo(instr *ssa.Go) {
 	b.createCall(fnType, start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.dataPtrType)}, "")
 }
 
-func (b *builder) getGoroutineCallArgument(value ssa.Value) []llvm.Value {
-	return b.expandFormalParam(b.getValue(value, getPos(value)))
+func (b *builder) getGoroutineCallArgument(value ssa.Value, exported bool) []llvm.Value {
+	typ := b.getLLVMType(value.Type())
+	arg := b.getCallArgument(value, exported)
+	if b.isIndirectParam(typ, exported) {
+		return []llvm.Value{b.copyToIndirectStorage(arg, typ, "go.param")}
+	}
+	return b.expandFormalParam(arg)
 }
 
 // Create an exported wrapper function for functions with the //go:wasmexport

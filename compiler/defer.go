@@ -406,7 +406,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 	var values llvmValueList
 	lowerArgument := func(value ssa.Value) llvm.Value {
-		return b.getValue(value, getPos(instr))
+		return b.getCallArgument(value, false)
 	}
 	if instr.Call.IsInvoke() {
 		// Method call on an interface.
@@ -438,7 +438,10 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
 		values = newLLVMValueList(callback, next)
-		values.appendSSAValues(instr.Call.Args, lowerArgument)
+		exported := b.getFunctionInfo(callee).exported
+		values.appendSSAValues(instr.Call.Args, func(value ssa.Value) llvm.Value {
+			return b.getCallArgument(value, exported)
+		})
 
 	} else if makeClosure, ok := instr.Call.Value.(*ssa.MakeClosure); ok {
 		// Immediately applied function literal with free variables.
@@ -612,9 +615,7 @@ func (b *builder) createRunDefers() {
 				valueTypes = append(valueTypes, b.dataPtrType, b.dataPtrType)
 			}
 
-			for _, arg := range callback.Args {
-				valueTypes = append(valueTypes, b.getLLVMType(arg.Type()))
-			}
+			valueTypes = b.appendStoredValueTypes(valueTypes, callback.Args, false)
 
 			// Extract the params from the struct (including receiver).
 			deferredCallType := b.ctx.StructType(valueTypes, false)
@@ -647,6 +648,7 @@ func (b *builder) createRunDefers() {
 				// with a strict calling convention.
 				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
 			}
+			forwardParams = b.prependIndirectResult(callback.Signature(), false, forwardParams, "defer.result")
 
 			b.createCall(fnType, fnPtr, forwardParams, "")
 
@@ -655,9 +657,8 @@ func (b *builder) createRunDefers() {
 
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
-			for _, param := range getParams(callback.Signature) {
-				valueTypes = append(valueTypes, b.getLLVMType(param.Type()))
-			}
+			exported := b.getFunctionInfo(callback).exported
+			valueTypes = b.appendStoredParamTypes(valueTypes, getParams(callback.Signature), exported)
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 
 			// Extract the params from the struct.
@@ -665,11 +666,12 @@ func (b *builder) createRunDefers() {
 
 			// Plain TinyGo functions add some extra parameters to implement async functionality and function receivers.
 			// These parameters should not be supplied when calling into an external C/ASM function.
-			if !b.getFunctionInfo(callback).exported {
+			if !exported {
 				// Add the context parameter. We know it is ignored by the receiving
 				// function, but we have to pass one anyway.
 				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
 			}
+			forwardParams = b.prependIndirectResult(callback.Signature, exported, forwardParams, "defer.result")
 
 			// Call real function.
 			fnType, fn := b.getFunction(callback)
@@ -679,10 +681,7 @@ func (b *builder) createRunDefers() {
 			// Get the real defer struct type and cast to it.
 			fn := callback.Fn.(*ssa.Function)
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
-			params := fn.Signature.Params()
-			for v := range params.Variables() {
-				valueTypes = append(valueTypes, b.getLLVMType(v.Type()))
-			}
+			valueTypes = b.appendStoredParamTypes(valueTypes, getParams(fn.Signature), false)
 			valueTypes = append(valueTypes, b.dataPtrType) // closure
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 
@@ -691,6 +690,7 @@ func (b *builder) createRunDefers() {
 
 			// Call deferred function.
 			fnType, llvmFn := b.getFunction(fn)
+			forwardParams = b.prependIndirectResult(fn.Signature, false, forwardParams, "defer.result")
 			b.createCall(fnType, llvmFn, forwardParams, "")
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]

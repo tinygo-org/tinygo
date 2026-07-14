@@ -10,6 +10,11 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// LLVM recursively expands each struct field and array element in parameters
+// and results into separate values. It gets very slow with too many values, so
+// pass larger aggregates indirectly before LLVM expands them.
+const maxDirectAggregateValues = 1024
+
 func (c *compilerContext) getLLVMResultType(sig *types.Signature) llvm.Type {
 	switch sig.Results().Len() {
 	case 0:
@@ -22,6 +27,71 @@ func (c *compilerContext) getLLVMResultType(sig *types.Signature) llvm.Type {
 			results[i] = c.getLLVMType(sig.Results().At(i).Type())
 		}
 		return c.ctx.StructType(results, false)
+	}
+}
+
+func (c *compilerContext) hasIndirectResult(sig *types.Signature) (llvm.Type, bool) {
+	resultType := c.getLLVMResultType(sig)
+	return resultType, c.isIndirectAggregate(resultType)
+}
+
+func (c *compilerContext) isIndirectAggregate(typ llvm.Type) bool {
+	switch typ.TypeKind() {
+	case llvm.ArrayTypeKind, llvm.StructTypeKind:
+		_, exceeded := aggregateValueCount(typ, 0)
+		return exceeded
+	default:
+		return false
+	}
+}
+
+func aggregateValueCount(typ llvm.Type, count uint64) (uint64, bool) {
+	switch typ.TypeKind() {
+	case llvm.ArrayTypeKind:
+		length := uint64(typ.ArrayLength())
+		if length == 0 {
+			return count, false
+		}
+		elementCount, exceeded := aggregateValueCount(typ.ElementType(), 0)
+		if exceeded {
+			return count, true
+		}
+		if elementCount != 0 && length > (maxDirectAggregateValues-count)/elementCount {
+			return count, true
+		}
+		return count + length*elementCount, false
+	case llvm.StructTypeKind:
+		for _, field := range typ.StructElementTypes() {
+			var exceeded bool
+			count, exceeded = aggregateValueCount(field, count)
+			if exceeded {
+				return count, true
+			}
+		}
+		return count, false
+	default:
+		count++
+		return count, count > maxDirectAggregateValues
+	}
+}
+
+func isLLVMValueType(typ types.Type) bool {
+	switch typ := typ.Underlying().(type) {
+	case *types.Basic:
+		return typ.Kind() != types.Invalid
+	case *types.Array:
+		return isLLVMValueType(typ.Elem())
+	case *types.Struct:
+		for field := range typ.Fields() {
+			if !isLLVMValueType(field.Type()) {
+				return false
+			}
+		}
+		return true
+	case *types.Chan, *types.Interface, *types.Map, *types.Pointer, *types.Signature, *types.Slice:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -63,10 +133,18 @@ func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 
 // getLLVMFunctionType returns a LLVM function type for a given signature.
 func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
-	returnType := c.getLLVMResultType(typ)
+	returnType, indirectResult := c.hasIndirectResult(typ)
 
 	// Get the parameter types.
 	var paramTypes []llvm.Type
+	if indirectResult {
+		// LLVM expands aggregate returns into scalar leaves before deciding
+		// whether to pass them indirectly, so a large IR return can exhaust
+		// memory. Returning void avoids that expansion and cannot be demoted
+		// again. Keep the result pointer first so the context remains last.
+		paramTypes = append(paramTypes, c.dataPtrType)
+		returnType = c.ctx.VoidType()
+	}
 	if typ.Recv() != nil {
 		recv := c.getLLVMType(typ.Recv().Type())
 		if recv.StructName() == "runtime._interface" {

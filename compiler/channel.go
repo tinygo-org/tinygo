@@ -34,11 +34,11 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	// store value-to-send
 	valueType := b.getLLVMType(instr.X.Type())
 	isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
-	var valueAlloca, valueAllocaSize llvm.Value
+	var storage valueStorage
 	if isZeroSize {
-		valueAlloca = llvm.ConstNull(b.dataPtrType)
+		storage.ptr = llvm.ConstNull(b.dataPtrType)
 	} else {
-		valueAlloca, valueAllocaSize = b.getValueStorage(instr.X, "chan.value")
+		storage = b.getValueStorage(instr.X, "chan.value")
 	}
 
 	// Allocate buffer for the channel operation.
@@ -46,15 +46,13 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	channelOpAlloca, channelOpAllocaSize := b.createTemporaryAlloca(channelOp, "chan.op")
 
 	// Do the send.
-	b.createRuntimeInvoke("chanSend", []llvm.Value{ch, valueAlloca, channelOpAlloca}, "")
+	b.createRuntimeInvoke("chanSend", []llvm.Value{ch, storage.ptr, channelOpAlloca}, "")
 
 	// End the lifetime of the allocas.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
 	// https://bugs.llvm.org/show_bug.cgi?id=41742
 	b.emitLifetimeEnd(channelOpAlloca, channelOpAllocaSize)
-	if !isZeroSize {
-		b.emitLifetimeEnd(valueAlloca, valueAllocaSize)
-	}
+	b.endValueStorage(storage)
 }
 
 // createChanRecv emits a pseudo chan receive operation. It is lowered to the
@@ -63,6 +61,7 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 	valueType := b.getLLVMType(unop.X.Type().Underlying().(*types.Chan).Elem())
 	ch := b.getValue(unop.X, getPos(unop))
 
+	// Allocate memory to receive into.
 	result := b.createRuntimeValueResult(valueType, unop.CommaOk, true, "chan")
 
 	// Allocate buffer for the channel operation.
@@ -261,6 +260,9 @@ func (b *builder) getChanSelectResult(expr *ssa.Extract) llvm.Value {
 
 func (b *builder) getSelectSendStorage(value ssa.Value) llvm.Value {
 	typ := b.getLLVMType(value.Type())
+	if b.isIndirectAggregate(typ) {
+		return b.getValuePointer(value)
+	}
 	llvmValue := b.getValue(value, getPos(value))
 	ptr := llvmutil.CreateEntryBlockAlloca(b.Builder, typ, "select.send.value")
 	b.CreateStore(llvmValue, ptr)
