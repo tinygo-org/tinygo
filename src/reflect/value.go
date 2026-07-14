@@ -201,6 +201,11 @@ func MakeMapWithSize(typ Type, n int) Value {
 	return Value{reflectlite.MakeMapWithSize(toRawType(typ), n)}
 }
 
+// MakeChan creates a new channel with the specified type and buffer size.
+func MakeChan(typ Type, buffer int) Value {
+	return Value{reflectlite.MakeChan(toRawType(typ), buffer)}
+}
+
 func (v Value) Call(in []Value) []Value {
 	panic("unimplemented: (reflect.Value).Call()")
 }

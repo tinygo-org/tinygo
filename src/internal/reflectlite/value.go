@@ -2208,6 +2208,9 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe
 //go:linkname hashmapMakeReflect runtime.hashmapMakeReflect
 func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, keyType unsafe.Pointer) unsafe.Pointer
 
+//go:linkname chanMake runtime.chanMake
+func chanMake(elementSize uintptr, bufSize uintptr) unsafe.Pointer
+
 // MakeMapWithSize creates a new map with the specified type and initial space
 // for approximately n elements.
 func MakeMapWithSize(typ Type, n int) Value {
@@ -2252,6 +2255,26 @@ func MakeMapWithSize(typ Type, n int) Value {
 // MakeMap creates a new map with the specified type.
 func MakeMap(typ Type) Value {
 	return MakeMapWithSize(typ, 8)
+}
+
+// MakeChan creates a new channel with the specified type and buffer size.
+func MakeChan(typ Type, size int) Value {
+	if typ.Kind() != Chan {
+		panic(&ValueError{Method: "MakeChan", Kind: typ.Kind()})
+	}
+	if size < 0 {
+		panic("reflect.MakeChan: negative buffer size")
+	}
+	if typ.(*RawType).ChanDir() != BothDir {
+		panic("reflect.MakeChan: unidirectional channel type")
+	}
+	elem := typ.Elem().(*RawType)
+	ch := chanMake(elem.Size(), uintptr(size))
+	return Value{
+		typecode: typ.(*RawType),
+		value:    ch,
+		flags:    valueFlagExported,
+	}
 }
 
 func (v Value) Call(in []Value) []Value {
