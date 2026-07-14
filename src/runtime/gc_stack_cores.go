@@ -43,6 +43,12 @@ func gcMarkReachable() {
 		gcPauseCore(i)
 	}
 
+	// Busy-wait until all the other cores are ready.
+	for gcScanState.Load() != numCPU {
+		spinLoopWait()
+	}
+	gcScanState.Store(0)
+
 	// Scan the stack(s) of the current core.
 	scanCurrentStack()
 	if !task.OnSystemStack() {
@@ -52,13 +58,6 @@ func gcMarkReachable() {
 
 	// Scan globals.
 	findGlobals(markRoots)
-
-	// Busy-wait until all the other cores are ready. They certainly should be,
-	// after the scanning we did above.
-	for gcScanState.Load() != numCPU {
-		spinLoopWait()
-	}
-	gcScanState.Store(0)
 
 	// Signal each core in turn that they can scan the stack.
 	for i := uint32(0); i < numCPU; i++ {
