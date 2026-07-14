@@ -2189,6 +2189,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			layoutValue := b.createObjectLayout(typ, expr.Pos())
 			align := b.targetData.ABITypeAlignment(typ)
 			buf := b.createAlloc(sizeValue, layoutValue, align, expr.Comment)
+			buf.AddCallSiteAttribute(-1, b.ctx.CreateStringAttribute("tinygo-alloc-type", expr.Type().String()))
+			buf.AddCallSiteAttribute(-1, b.ctx.CreateStringAttribute("tinygo-alloc-name", expr.Comment))
 			return buf, nil
 		} else {
 			buf := llvmutil.CreateEntryBlockAlloca(b.Builder, typ, expr.Comment)
@@ -2419,6 +2421,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
 		layoutValue := b.createObjectLayout(llvmElemType, expr.Pos())
 		slicePtr := b.createAlloc(sliceSize, layoutValue, 0, "makeslice.buf")
+		slicePtr.AddCallSiteAttribute(-1, b.ctx.CreateStringAttribute("tinygo-alloc-type", expr.Type().String()))
+		slicePtr.AddCallSiteAttribute(-1, b.ctx.CreateStringAttribute("tinygo-alloc-name", expr.Block().Comment))
 		slicePtr.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elemAlign)))
 
 		// Extend or truncate if necessary. This is safe as we've already done

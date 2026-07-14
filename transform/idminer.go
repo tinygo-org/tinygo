@@ -17,6 +17,47 @@ func makeIdMiner() idMiner {
 }
 
 func (this *idMiner) get(v llvm.Value) string {
+	if !v.IsACallInst().IsNil() {
+		getAttr := func(key string) (value string, found bool) {
+			attr := v.GetCallSiteStringAttribute(-1, key)
+			if attr.IsNil() {
+				return "", false
+			}
+			value = attr.GetStringValue()
+			return value, len(value) > 0
+		}
+		typeAttr, hasType := getAttr("tinygo-alloc-type")
+		nameAttr, hasName := getAttr("tinygo-alloc-name")
+		typeAttr, _ = strings.CutPrefix(typeAttr, "*")
+		if nameAttr == "entry" && v.Name() == "makeslice.buf" {
+			nameAttr = "slice"
+		}
+		if hasType && hasName {
+			if nameAttr == "complit" {
+				return typeAttr
+			}
+			if nameAttr == "varargs" {
+				return fmt.Sprint(nameAttr, " ", typeAttr)
+			}
+			if nameAttr == "makeslice" || nameAttr == "slicelit" {
+				return fmt.Sprint("slice ", typeAttr)
+			}
+		}
+		if hasName {
+			if nameAttr == "complit" {
+				return "composite literal"
+			}
+			if nameAttr == "makeslice" || nameAttr == "slicelit" {
+				return "slice"
+			}
+			return nameAttr
+		}
+		if hasType {
+			return typeAttr
+		}
+	}
+	// Not all allocations are attributed with "tinygo-alloc-..." falling back
+	// to LLVM IR mining.
 	this.v = v
 	id := v.Name()
 	if len(id) == 0 {
@@ -51,17 +92,6 @@ func (this *idMiner) handleCompositLiteral(id string) (newId string, handled boo
 	if this.complitReg.MatchString(id) {
 		// Handle case like: c := scaleVector3(&vector3{4, 5, 6}, 0.5)
 		/*
-			%complit = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #1, !dbg !53
-			%0 = getelementptr inbounds nuw i8, ptr %complit, i32 4, !dbg !53
-			%1 = getelementptr inbounds nuw i8, ptr %complit, i32 8, !dbg !53
-			store float 4.000000e+00, ptr %complit, align 4, !dbg !54
-			store float 5.000000e+00, ptr %0, align 4, !dbg !55
-			store float 6.000000e+00, ptr %1, align 4, !dbg !56
-			%2 = call ptr @main.scaleVector3(ptr nonnull %complit, float 5.000000e-01, ptr undef), !dbg !57
-			store ptr %2, ptr @main.escapedVector3, align 4, !dbg !60
-			ret void, !dbg !61
-		*/
-		/*
 		 * 1. Find the next "call", where %complit is passed as parameter.
 		 * 2. Produce ID: "Arg 0 of main.scaleVector3() call" // escapes at ...
 		 */
@@ -88,39 +118,6 @@ func (this *idMiner) handleCompositLiteral(id string) (newId string, handled boo
 // is called and check that the arg indicies displayed correctly
 func (this *idMiner) lookForInterfaceWrapping(id string) (newId string, handled bool) {
 	/* --- The costumError -> error, struct -> interface ---
-		 * %10 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr null, ptr undef) #1, !dbg !193
-	  	 * %.elt = extractvalue { double, double } %9, 0, !dbg !193
-	     * store double %.elt, ptr %10, align 4, !dbg !193
-	     * %.repack18 = getelementptr inbounds nuw i8, ptr %10, i32 8, !dbg !193
-	     * %.elt19 = extractvalue { double, double } %9, 1, !dbg !193
-	     * store double %.elt19, ptr %.repack18, align 4, !dbg !193
-	     * call void @main.useInterface(ptr nonnull @"reflect/types.type:basic:complex128", ptr nonnull %10, ptr undef) #1, !dbg !196
-	     *
-	     * %11 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr null, ptr undef) #1, !dbg !218
-	     * store i32 10, ptr %11, align 4, !dbg !218
-	     * %.repack25 = getelementptr inbounds nuw i8, ptr %11, i32 4, !dbg !218
-	     * store i32 11, ptr %.repack25, align 4, !dbg !218
-	     * %.repack26 = getelementptr inbounds nuw i8, ptr %11, i32 8, !dbg !218
-	     * store i32 12, ptr %.repack26, align 4, !dbg !218
-	     * call void @main.useInterface(ptr nonnull @"reflect/types.type:array:3:basic:int32", ptr nonnull %11, ptr undef) #1, !dbg !219
-		 *
-		 * %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr null, ptr undef) #1, !dbg !134
-	  	 * store ptr @"main$string.1", ptr %0, align 4, !dbg !134
-	     * %.repack5 = getelementptr inbounds nuw i8, ptr %0, i32 4, !dbg !134
-	     * store i32 5, ptr %.repack5, align 4, !dbg !134
-	     * %1 = insertvalue %runtime._interface { ptr getelementptr ({ ptr, i8, i16, ptr, ptr, ptr, { i32, [1 x ptr] }, [14 x i8] }, ptr @"reflect/types.type:named:main.theError", i32 0, i32 1), ptr undef }, ptr %0, 1, !dbg !134
-	     * ret %runtime._interface %1, !dbg !135
-	     *
-	     * %1 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr null, ptr undef) #1, !dbg !133
-	     * %2 = extractvalue %main.theError %0, 0, !dbg !133
-	     * %.elt = extractvalue %runtime._string %2, 0, !dbg !133
-	     * store ptr %.elt, ptr %1, align 4, !dbg !133
-	     * %.repack1 = getelementptr inbounds nuw i8, ptr %1, i32 4, !dbg !133
-	     * %.elt2 = extractvalue %runtime._string %2, 1, !dbg !133
-	     * store i32 %.elt2, ptr %.repack1, align 4, !dbg !133
-	     * %3 = insertvalue %runtime._interface { ptr getelementptr ({ ptr, i8, i16, ptr, ptr, ptr, { i32, [1 x ptr] }, [14 x i8] }, ptr @"reflect/types.type:named:main.theError", i32 0, i32 1), ptr undef }, ptr %1, 1, !dbg !133
-	     * ret %runtime._interface %3, !dbg !134
-	     *
 	     * pattern:
 	     * %reg = alloc
 	     * store reg/var -> ptr %reg	// write to struct, array or slice
@@ -132,7 +129,6 @@ func (this *idMiner) lookForInterfaceWrapping(id string) (newId string, handled 
 		 * - Error message: "array:3:basic:int32" + " escapes at ..."
 		 *
 	*/
-	// dumpIR("--- FloatType ----", 32, this.v)
 	ptrToAllocated := this.v
 	n := this.v
 	for _ = range 64 {
@@ -170,7 +166,7 @@ func (this *idMiner) lookForInterfaceWrapping(id string) (newId string, handled 
 }
 
 type arg struct {
-	descTypeName string // It is set when arg is an interface arg,
+	descTypeName string	// It is set when arg is an interface arg,
 	// this is the type name which is wrapped by the interface.
 	name string // sometimes the name is available
 	arg  llvm.Value
@@ -191,35 +187,6 @@ func getId(callInst llvm.Value, idx int, a *arg) string {
 }
 
 func getArgs(callInst llvm.Value) []arg {
-	/*
-		 	func useInterfaces(int, interface{}, reflect.Type, int, interface{})
-			call void @main.useInterfaces(
-				i32 16,
-				ptr nonnull @"reflect/types.type:pointer:named:main.vector3", ptr nonnull %complit,
-				ptr %5, ptr %6,
-				i32 32,
-				ptr nonnull @"reflect/types.type:pointer:named:main.vector3", ptr nonnull %complit1,
-				ptr undef) #1, !dbg !191
-	*/
-	/* Scanning backward could identify which ptr pairs are interfaces:
-		 *
-		 * %5 = extractvalue %runtime._interface %2, 0, !dbg !541
-	  	 * %6 = extractvalue %runtime._interface %2, 1, !dbg !541
-	     * call void @main.useInterfaces(i32 16, ptr nonnull @"reflect/types.type:pointer:named:main.vector3", ptr nonnull %complit, ptr %5, ptr %6, i32 32, ptr nonnull @"reflect/types.type:pointer:named:main.vector3", ptr nonnull %complit1, ptr undef) #1, !dbg !541
-		 *
-		 * When the passed interface is the argument of the called function:
-		 * define hidden void @main.passAnInterface(
-		 * 		ptr %t.typecode, ptr %t.value, ptr nocapture readnone %context
-		 * ) unnamed_addr #1 !dbg !553 {
-		 *	call void @main.useInterfaces(
-		 * 		i32 16,
-		 * 		ptr nonnull @"reflect/types.type:pointer:named:main.vector3", ptr nonnull %complit,
-		 * 		ptr %t.typecode, ptr %t.value,
-		 * 		i32 32,
-		 * 		ptr nonnull @"reflect/types.type:pointer:named:main.vector3", ptr nonnull %complit1,
-		 *	 	ptr undef) #1, !dbg !569
-	  ret void, !dbg !570
-	*/
 	typeSuffix := ".typecode"
 	valueSuffix := ".value"
 	res := make([]arg, 0, 4)
@@ -306,16 +273,6 @@ func removeReflexPrefix(typeName string) (newTypeName string, removed bool) {
 }
 
 func getTypeNameFromInsertValue(insertValueInst llvm.Value) (typeName string, found bool) {
-	// %3 = insertvalue %runtime._interface {
-	// 	ptr getelementptr (
-	// 		{ ptr, i8, i16, ptr, ptr, ptr, {
-	// 			i32, [1 x ptr] }, [14 x i8]
-	//      },
-	// 		ptr @"reflect/types.type:named:main.theError",
-	// 		i32 0, i32 1
-	//  ), ptr undef
-	// },
-	// ptr %1, 1, !dbg !133
 	baseAggregate := insertValueInst.Operand(0)
 
 	// Since it's an inline constant structure, let's look at its elements.

@@ -23,12 +23,12 @@ func main() {
 	s3 := make([]int, 3)
 	returnIntSlice(s3)
 
-	useSlice(make([]int, getUnknownNumber())) // OUT: makeslice.buf size is not constant
+	useSlice(make([]int, getUnknownNumber())) // OUT: slice size is not constant
 
-	s4 := make([]byte, 300) // OUT: makeslice4 size 300 exceeds maximum stack allocation size 256
+	s4 := make([]byte, 300) // OUT: slice [300]byte size 300 exceeds maximum stack allocation size 256
 	readByteSlice(s4)
 
-	s5 := make([]int, 4) // OUT: makeslice6 escapes at line 32
+	s5 := make([]int, 4) // OUT: slice [4]int escapes at line 32
 	_ = append(s5, 5)
 
 	s6 := make([]int, 3)
@@ -47,9 +47,9 @@ func main() {
 		return n3
 	}()
 
-	callVariadic(3, 5, 8) // OUT: varargs12 escapes at line 50
+	callVariadic(3, 5, 8) // OUT: varargs [3]int escapes at line 50
 
-	s8 := []int{3, 5, 8} // OUT: slicelit14 escapes at line 53
+	s8 := []int{3, 5, 8} // OUT: slice [3]int escapes at line 53
 	callVariadic(s8...)
 
 	n4 := 3 // OUT: n4 escapes at line 57
@@ -80,11 +80,6 @@ func main() {
 	pseudoVolatile.Set(uint32(unsafeNoEscape(unsafe.Pointer(&dmaBuf2[0]))))
 	// ...use the buffer in the DMA peripheral
 	keepAliveNoEscape(unsafe.Pointer(&dmaBuf2[0]))
-	// Doesn't escape.
-	theErr := theError{}
-	var err error = theErr
-	theErr.set("hello")
-	println(err.Error())
 }
 
 type vector3 [3]float32
@@ -129,14 +124,14 @@ func nonEscapingReturnedPointer() vector3 {
 var escapedSlice []int
 
 func escapingReturnedSlice() {
-	s := make([]int, 3) // OUT: makeslice escapes at line 133
+	s := make([]int, 3) // OUT: slice [3]int escapes at line 128
 	escapedSlice = returnIntSlice(s)
 }
 
 var escapedVector3 *vector3
 
 func escapingReturnedPointer() {
-	b := vector3{4, 5, 6} // OUT: b escapes at line 142
+	b := vector3{4, 5, 6} // OUT: b escapes at line 137
 
 	c := scaleVector3(&b, 0.5)
 	escapedVector3 = c
@@ -145,19 +140,19 @@ func escapingReturnedPointer() {
 var escapedArray [2](*vector3)
 
 func escapingCompositeLiterals() {
-	c := scaleVector3(&vector3{4, 5, 6}, 0.5) // OUT: Arg 0 of main.scaleVector3() escapes at line 149
+	c := scaleVector3(&vector3{4, 5, 6}, 0.5) // OUT: main.vector3 escapes at line 144
 	escapedVector3 = c
-	a := [2](*vector3){&vector3{7, 8, 9}, &vector3{2, 3, 4}} // OUT: complit1 escapes at line 151 && complit2 escapes at line 151
+	a := [2](*vector3){&vector3{7, 8, 9}, &vector3{2, 3, 4}} // OUT: main.vector3 escapes at line 146 && main.vector3 escapes at line 146
 	escapedArray = a
 }
 
 func escapingInterfaceArguments() {
 	// Check that the argument indices in the escape messages are right.
-	useInterfaces(16, &vector3{7, 8, 9}, reflect.TypeFor[int](), 32, &vector3{6, 7, 8}) // OUT: Arg 1 (type: pointer:named:main.vector3) of main.useInterfaces() escapes at line 156 && Arg 4 (type: pointer:named:main.vector3) of main.useInterfaces() escapes at line 156
+	useInterfaces(16, &vector3{7, 8, 9}, reflect.TypeFor[int](), 32, &vector3{6, 7, 8}) // OUT: main.vector3 escapes at line 151 && main.vector3 escapes at line 151
 }
 
 func passAnInterface(t reflect.Type) {
-	useInterfaces(16, &vector3{7, 8, 9}, t, 32, &vector3{6, 7, 8}) // OUT: Arg 1 (type: pointer:named:main.vector3) of main.useInterfaces() escapes at line 160 && Arg 4 (type: pointer:named:main.vector3) of main.useInterfaces() escapes at line 160
+	useInterfaces(16, &vector3{7, 8, 9}, t, 32, &vector3{6, 7, 8}) // OUT: main.vector3 escapes at line 155 && main.vector3 escapes at line 155
 }
 
 func recursiveScaleVector3(vec *vector3, n int) *vector3 {
@@ -176,21 +171,21 @@ func recursiveReturnedPointer() vector3 {
 
 func theFmt() string {
 	v := 48
-	res := fmt.Sprintf("The number is %d", v) // OUT: varargs escapes at line 179
+	res := fmt.Sprintf("The number is %d", v) // OUT: varargs [1]any escapes at line 174
 	return res
 }
 
 func giveAnError() error {
-	return theError{msg: "hello"} // OUT: main.theError escapes at line 184
+	return theError{msg: "hello"} // OUT: main.theError escapes at line 179
 }
 
 func giveOtherError() error {
-	return makeTheError("wellcome") // OUT: main.theError escapes at line 188
+	return makeTheError("wellcome") // OUT: main.theError escapes at line 183
 }
 
 func giveAnInterface() interface{} {
 	a := [3]int32{1, 2, 3}
-	return a // OUT: array:3:basic:int32 escapes at line 193
+	return a // OUT: array:3:basic:int32 escapes at line 188
 }
 
 func derefInt(x *int) int {

@@ -27,19 +27,19 @@ define linkonce_odr hidden %"main.Point[float32]" @"main.Add[float32]"(float %a.
 entry:
   %stackalloc = alloca i8, align 1
   %a = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %a, ptr nonnull %stackalloc, ptr undef) #3
+  call void @runtime.trackPointer(ptr nonnull %a, ptr nonnull %stackalloc, ptr undef) #4
   store float %a.X, ptr %a, align 4
   %a.repack5 = getelementptr inbounds nuw i8, ptr %a, i32 4
   store float %a.Y, ptr %a.repack5, align 4
-  %b = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %b, ptr nonnull %stackalloc, ptr undef) #3
+  %b = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
+  call void @runtime.trackPointer(ptr nonnull %b, ptr nonnull %stackalloc, ptr undef) #4
   store float %b.X, ptr %b, align 4
   %b.repack7 = getelementptr inbounds nuw i8, ptr %b, i32 4
   store float %b.Y, ptr %b.repack7, align 4
-  call void @main.checkSize(i32 4, ptr undef) #3
-  call void @main.checkSize(i32 8, ptr undef) #3
-  %complit = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #3
+  call void @main.checkSize(i32 4, ptr undef) #4
+  call void @main.checkSize(i32 8, ptr undef) #4
+  %complit = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #6
+  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #4
   br i1 false, label %deref.throw, label %deref.next
 
 deref.next:                                       ; preds = %entry
@@ -89,20 +89,20 @@ declare void @runtime.nilPanic(ptr) #0
 define linkonce_odr hidden %"main.Point[int]" @"main.Add[int]"(i32 %a.X, i32 %a.Y, i32 %b.X, i32 %b.Y, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %a = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %a, ptr nonnull %stackalloc, ptr undef) #3
+  %a = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #7
+  call void @runtime.trackPointer(ptr nonnull %a, ptr nonnull %stackalloc, ptr undef) #4
   store i32 %a.X, ptr %a, align 4
   %a.repack5 = getelementptr inbounds nuw i8, ptr %a, i32 4
   store i32 %a.Y, ptr %a.repack5, align 4
-  %b = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %b, ptr nonnull %stackalloc, ptr undef) #3
+  %b = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #8
+  call void @runtime.trackPointer(ptr nonnull %b, ptr nonnull %stackalloc, ptr undef) #4
   store i32 %b.X, ptr %b, align 4
   %b.repack7 = getelementptr inbounds nuw i8, ptr %b, i32 4
   store i32 %b.Y, ptr %b.repack7, align 4
-  call void @main.checkSize(i32 4, ptr undef) #3
-  call void @main.checkSize(i32 8, ptr undef) #3
-  %complit = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
-  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #3
+  call void @main.checkSize(i32 4, ptr undef) #4
+  call void @main.checkSize(i32 8, ptr undef) #4
+  %complit = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #9
+  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #4
   br i1 false, label %deref.throw, label %deref.next
 
 deref.next:                                       ; preds = %entry
@@ -144,4 +144,10 @@ deref.throw:                                      ; preds = %store.next, %deref.
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nounwind }
+attributes #3 = { nounwind "tinygo-alloc-name"="a" "tinygo-alloc-type"="*main.Point[float32]" }
+attributes #4 = { nounwind }
+attributes #5 = { nounwind "tinygo-alloc-name"="b" "tinygo-alloc-type"="*main.Point[float32]" }
+attributes #6 = { nounwind "tinygo-alloc-name"="complit" "tinygo-alloc-type"="*main.Point[float32]" }
+attributes #7 = { nounwind "tinygo-alloc-name"="a" "tinygo-alloc-type"="*main.Point[int]" }
+attributes #8 = { nounwind "tinygo-alloc-name"="b" "tinygo-alloc-type"="*main.Point[int]" }
+attributes #9 = { nounwind "tinygo-alloc-name"="complit" "tinygo-alloc-type"="*main.Point[int]" }

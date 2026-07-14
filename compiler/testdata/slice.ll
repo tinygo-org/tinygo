@@ -45,7 +45,7 @@ declare void @runtime.lookupPanic(ptr) #0
 define hidden { ptr, i32, i32 } @main.sliceAppendValues(ptr %ints.data, i32 %ints.len, i32 %ints.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %varargs = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
+  %varargs = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #6
   call void @runtime.trackPointer(ptr nonnull %varargs, ptr nonnull %stackalloc, ptr undef) #5
   store i32 1, ptr %varargs, align 4
   %0 = getelementptr inbounds nuw i8, ptr %varargs, i32 4
@@ -106,7 +106,7 @@ entry:
   br i1 %slice.maxcap, label %slice.throw, label %slice.next
 
 slice.next:                                       ; preds = %entry
-  %makeslice.buf = call align 1 ptr @runtime.alloc(i32 %len, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
+  %makeslice.buf = call align 1 ptr @runtime.alloc(i32 %len, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #7
   %0 = insertvalue { ptr, i32, i32 } undef, ptr %makeslice.buf, 0
   %1 = insertvalue { ptr, i32, i32 } %0, i32 %len, 1
   %2 = insertvalue { ptr, i32, i32 } %1, i32 %len, 2
@@ -129,7 +129,7 @@ entry:
 
 slice.next:                                       ; preds = %entry
   %makeslice.cap = shl nuw i32 %len, 1
-  %makeslice.buf = call align 2 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
+  %makeslice.buf = call align 2 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #8
   %0 = insertvalue { ptr, i32, i32 } undef, ptr %makeslice.buf, 0
   %1 = insertvalue { ptr, i32, i32 } %0, i32 %len, 1
   %2 = insertvalue { ptr, i32, i32 } %1, i32 %len, 2
@@ -150,7 +150,7 @@ entry:
 
 slice.next:                                       ; preds = %entry
   %makeslice.cap = mul i32 %len, 3
-  %makeslice.buf = call align 1 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
+  %makeslice.buf = call align 1 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #9
   %0 = insertvalue { ptr, i32, i32 } undef, ptr %makeslice.buf, 0
   %1 = insertvalue { ptr, i32, i32 } %0, i32 %len, 1
   %2 = insertvalue { ptr, i32, i32 } %1, i32 %len, 2
@@ -171,7 +171,7 @@ entry:
 
 slice.next:                                       ; preds = %entry
   %makeslice.cap = shl nuw i32 %len, 2
-  %makeslice.buf = call align 4 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
+  %makeslice.buf = call align 4 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #10
   %0 = insertvalue { ptr, i32, i32 } undef, ptr %makeslice.buf, 0
   %1 = insertvalue { ptr, i32, i32 } %0, i32 %len, 1
   %2 = insertvalue { ptr, i32, i32 } %1, i32 %len, 2
@@ -222,7 +222,7 @@ declare void @runtime.sliceToArrayPointerPanic(ptr) #0
 define hidden ptr @main.SliceToArrayConst(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %makeslice = call align 4 dereferenceable(24) ptr @runtime.alloc(i32 24, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
+  %makeslice = call align 4 dereferenceable(24) ptr @runtime.alloc(i32 24, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #11
   call void @runtime.trackPointer(ptr nonnull %makeslice, ptr nonnull %stackalloc, ptr undef) #5
   br i1 false, label %slicetoarray.throw, label %slicetoarray.next
 
@@ -334,3 +334,9 @@ attributes #2 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime
 attributes #3 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #4 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #5 = { nounwind }
+attributes #6 = { nounwind "tinygo-alloc-name"="varargs" "tinygo-alloc-type"="*[3]int" }
+attributes #7 = { nounwind "tinygo-alloc-name"="entry" "tinygo-alloc-type"="[]byte" }
+attributes #8 = { nounwind "tinygo-alloc-name"="entry" "tinygo-alloc-type"="[]int16" }
+attributes #9 = { nounwind "tinygo-alloc-name"="entry" "tinygo-alloc-type"="[][3]byte" }
+attributes #10 = { nounwind "tinygo-alloc-name"="entry" "tinygo-alloc-type"="[]int32" }
+attributes #11 = { nounwind "tinygo-alloc-name"="makeslice" "tinygo-alloc-type"="*[6]int" }

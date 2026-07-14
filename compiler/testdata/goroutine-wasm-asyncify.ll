@@ -61,7 +61,7 @@ entry:
 define hidden void @main.closureFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %n = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #11
+  %n = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #12
   call void @runtime.trackPointer(ptr nonnull %n, ptr nonnull %stackalloc, ptr undef) #11
   store i32 3, ptr %n, align 4
   call void @runtime.trackPointer(ptr nonnull %n, ptr nonnull %stackalloc, ptr undef) #11
@@ -209,3 +209,4 @@ attributes #8 = { nocallback nofree nounwind willreturn memory(argmem: readwrite
 attributes #9 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-invoke"="reflect/methods.Print(string)" "tinygo-methods"="reflect/methods.Print(string)" }
 attributes #10 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="interface:{Print:func:{basic:string}{}}.Print$invoke" }
 attributes #11 = { nounwind }
+attributes #12 = { nounwind "tinygo-alloc-name"="n" "tinygo-alloc-type"="*int" }
