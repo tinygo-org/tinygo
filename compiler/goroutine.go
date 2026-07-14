@@ -50,7 +50,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 	// Get all function parameters to pass to the goroutine.
 	var params []llvm.Value
 	for _, param := range instr.Call.Args {
-		params = append(params, b.expandFormalParam(b.getValue(param, getPos(instr)))...)
+		params = append(params, b.getGoroutineCallArgument(param)...)
 	}
 
 	var prefix string
@@ -120,6 +120,10 @@ func (b *builder) createGo(instr *ssa.Go) {
 	}
 	fnType, start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
 	b.createCall(fnType, start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.dataPtrType)}, "")
+}
+
+func (b *builder) getGoroutineCallArgument(value ssa.Value) []llvm.Value {
+	return b.expandFormalParam(b.getValue(value, getPos(value)))
 }
 
 // Create an exported wrapper function for functions with the //go:wasmexport
