@@ -79,18 +79,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		return llvmFn.GlobalValueType(), llvmFn
 	}
 
-	var retType llvm.Type
-	if fn.Signature.Results() == nil {
-		retType = c.ctx.VoidType()
-	} else if fn.Signature.Results().Len() == 1 {
-		retType = c.getLLVMType(fn.Signature.Results().At(0).Type())
-	} else {
-		results := make([]llvm.Type, 0, fn.Signature.Results().Len())
-		for v := range fn.Signature.Results().Variables() {
-			results = append(results, c.getLLVMType(v.Type()))
-		}
-		retType = c.ctx.StructType(results, false)
-	}
+	retType := c.getLLVMResultType(fn.Signature)
 
 	var paramInfos []paramInfo
 	for _, param := range getParams(fn.Signature) {

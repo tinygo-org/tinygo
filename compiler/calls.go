@@ -102,6 +102,10 @@ func (b *builder) createInvoke(fnType llvm.Type, fn llvm.Value, args []llvm.Valu
 // Expand an argument type to a list that can be used in a function call
 // parameter list.
 func (c *compilerContext) expandFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
+	return c.expandDirectFormalParamType(t, name, goType)
+}
+
+func (c *compilerContext) expandDirectFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		fieldInfos := c.flattenAggregateType(t, name, goType)
