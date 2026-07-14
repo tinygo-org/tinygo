@@ -100,14 +100,14 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m llvm.Value, k
 	} else {
 		// Key stored at actual type: either binary-comparable or with
 		// compiler-generated hash/equal.
-		mapKeyAlloca, mapKeySize := b.getValueStorage(key, "hashmap.key")
-		params := []llvm.Value{m, mapKeyAlloca, mapValueAlloca, mapValueSize}
+		mapKey := b.getValueStorage(key, "hashmap.key")
+		params := []llvm.Value{m, mapKey.ptr, mapValueAlloca, mapValueSize}
 		fnName := "hashmapBinaryGet"
 		if !hashmapIsBinaryKey(keyType) {
 			fnName = "hashmapGenericGet"
 		}
 		commaOkValue = b.createRuntimeCall(fnName, params, "")
-		b.emitLifetimeEnd(mapKeyAlloca, mapKeySize)
+		b.endValueStorage(mapKey)
 	}
 
 	// The value is set to the zero value if the key doesn't exist.
@@ -117,24 +117,24 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m llvm.Value, k
 // createMapUpdate updates a map key to a given value, by creating an
 // appropriate runtime call.
 func (b *builder) createMapUpdate(keyType types.Type, m llvm.Value, key, value ssa.Value, pos token.Pos) {
-	valueAlloca, valueSize := b.getValueStorage(value, "hashmap.value")
+	storedValue := b.getValueStorage(value, "hashmap.value")
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
-		params := []llvm.Value{m, b.getValue(key, getPos(key)), valueAlloca}
+		params := []llvm.Value{m, b.getValue(key, getPos(key)), storedValue.ptr}
 		b.createRuntimeInvoke("hashmapStringSet", params, "")
 	} else {
 		// Key stored at actual type.
-		keyAlloca, keySize := b.getValueStorage(key, "hashmap.key")
+		keyStorage := b.getValueStorage(key, "hashmap.key")
 		fnName := "hashmapBinarySet"
 		if !hashmapIsBinaryKey(keyType) {
 			fnName = "hashmapGenericSet"
 		}
-		params := []llvm.Value{m, keyAlloca, valueAlloca}
+		params := []llvm.Value{m, keyStorage.ptr, storedValue.ptr}
 		b.createRuntimeInvoke(fnName, params, "")
-		b.emitLifetimeEnd(keyAlloca, keySize)
+		b.endValueStorage(keyStorage)
 	}
-	b.emitLifetimeEnd(valueAlloca, valueSize)
+	b.endValueStorage(storedValue)
 }
 
 // createMapDelete deletes a key from a map by calling the appropriate runtime

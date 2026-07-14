@@ -155,6 +155,8 @@ type builder struct {
 	llvmFn            llvm.Value
 	info              functionInfo
 	locals            map[ssa.Value]llvm.Value // local variables
+	indirectValues    map[ssa.Value]llvm.Value
+	indirectReturn    llvm.Value
 	blockInfo         []blockInfo
 	currentBlock      *ssa.BasicBlock
 	currentBlockInfo  *blockInfo
@@ -193,6 +195,7 @@ func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *bu
 		llvmFn:          fn,
 		info:            c.getFunctionInfo(f),
 		locals:          make(map[ssa.Value]llvm.Value),
+		indirectValues:  make(map[ssa.Value]llvm.Value),
 		dilocals:        make(map[*types.Var]llvm.Metadata),
 	}
 }
@@ -1282,10 +1285,28 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 
 	// Load function parameters
 	llvmParamIndex := 0
+	if _, indirectResult := b.hasIndirectResult(b.fn.Signature); indirectResult && !b.info.exported {
+		b.indirectReturn = b.llvmFn.Param(llvmParamIndex)
+		b.indirectReturn.SetName("return")
+		llvmParamIndex++
+	}
 	for _, param := range b.fn.Params {
 		llvmType := b.getLLVMType(param.Type())
+		if b.isIndirectParam(llvmType, b.info.exported) {
+			llvmParam := b.llvmFn.Param(llvmParamIndex)
+			llvmParam.SetName(param.Name())
+			b.indirectValues[param] = llvmParam
+			llvmParamIndex++
+			continue
+		}
+		var paramInfos []paramInfo
+		if b.info.exported {
+			paramInfos = b.expandDirectFormalParamType(llvmType, param.Name(), param.Type())
+		} else {
+			paramInfos = b.expandFormalParamType(llvmType, param.Name(), param.Type())
+		}
 		fields := make([]llvm.Value, 0, 1)
-		for _, info := range b.expandFormalParamType(llvmType, param.Name(), param.Type()) {
+		for _, info := range paramInfos {
 			param := b.llvmFn.Param(llvmParamIndex)
 			param.SetName(info.name)
 			fields = append(fields, param)
@@ -1423,7 +1444,7 @@ func (b *builder) createFunction() {
 	for _, phi := range b.phis {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
-			llvmVal := b.getValue(edge, getPos(phi.ssa))
+			llvmVal := b.getCallArgument(edge, false)
 			llvmBlock := b.blockInfo[block.Preds[i].Index].exit
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
@@ -1432,6 +1453,9 @@ func (b *builder) createFunction() {
 	if b.NeedsStackObjects {
 		// Track phi nodes.
 		for _, phi := range b.phis {
+			if b.isOversizedAggregate(phi.ssa.Type()) {
+				continue
+			}
 			insertPoint := llvm.NextInstruction(phi.llvm)
 			for !insertPoint.IsAPHINode().IsNil() {
 				insertPoint = llvm.NextInstruction(insertPoint)
@@ -1580,6 +1604,10 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 }
 
 func (b *builder) setValue(value ssa.Value, llvmValue llvm.Value) {
+	if b.isAggregateValue(value.Type()) && !llvmValue.IsNil() && llvmValue.Type().TypeKind() == llvm.PointerTypeKind {
+		b.indirectValues[value] = llvmValue
+		return
+	}
 	b.locals[value] = llvmValue
 	if len(*value.Referrers()) != 0 && b.NeedsStackObjects {
 		b.trackExpr(value, llvmValue)
@@ -1587,12 +1615,22 @@ func (b *builder) setValue(value ssa.Value, llvmValue llvm.Value) {
 }
 
 func (b *builder) createReturn(results []ssa.Value, pos token.Pos) {
-	switch len(results) {
-	case 0:
+	if len(results) == 0 {
 		b.CreateRetVoid()
-	case 1:
+	} else if !b.indirectReturn.IsNil() {
+		if len(results) == 1 {
+			b.storeValue(b.indirectReturn, results[0])
+		} else {
+			returnType := b.getLLVMResultType(b.fn.Signature)
+			for i, result := range results {
+				fieldPtr := b.CreateStructGEP(returnType, b.indirectReturn, i, "")
+				b.storeValue(fieldPtr, result)
+			}
+		}
+		b.CreateRetVoid()
+	} else if len(results) == 1 {
 		b.CreateRet(b.getValue(results[0], pos))
-	default:
+	} else {
 		result := llvm.ConstNull(b.llvmFn.GlobalValueType().ReturnType())
 		for i, value := range results {
 			result = b.CreateInsertValue(result, b.getValue(value, pos), i, "")
@@ -1601,24 +1639,138 @@ func (b *builder) createReturn(results []ssa.Value, pos token.Pos) {
 	}
 }
 
+func (b *builder) isOversizedAggregate(typ types.Type) bool {
+	if !b.isAggregateValue(typ) {
+		return false
+	}
+	return b.isIndirectAggregate(b.getLLVMType(typ))
+}
+
+func (b *builder) isAggregateValue(typ types.Type) bool {
+	if tuple, ok := typ.(*types.Tuple); ok {
+		for i := 0; i < tuple.Len(); i++ {
+			if !isLLVMValueType(tuple.At(i).Type()) {
+				return false
+			}
+		}
+	} else {
+		switch typ.Underlying().(type) {
+		case *types.Array, *types.Struct:
+		default:
+			return false
+		}
+		if !isLLVMValueType(typ) {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *builder) getValuePointer(value ssa.Value) llvm.Value {
+	if ptr, ok := b.indirectValues[value]; ok {
+		return ptr
+	}
+	llvmType := b.getLLVMType(value.Type())
+	ptr := b.createIndirectStorage(llvmType, value.Name())
+	b.storeValue(ptr, value)
+	return ptr
+}
+
+func (b *builder) getCallArgument(value ssa.Value, exported bool) llvm.Value {
+	paramType := b.getLLVMType(value.Type())
+	if b.isIndirectParam(paramType, exported) {
+		return b.getValuePointer(value)
+	}
+	return b.getValue(value, getPos(value))
+}
+
+func (b *builder) createIndirectStorage(typ llvm.Type, name string) llvm.Value {
+	// Use runtime.alloc here so storage that escapes remains valid. The
+	// allocation optimizer moves bounded non-escaping storage to the stack.
+	size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(typ), false)
+	layout := b.createObjectLayout(typ, b.fn.Pos())
+	ptr := b.createAlloc(size, layout, b.targetData.ABITypeAlignment(typ), name)
+	if b.NeedsStackObjects {
+		b.trackPointer(ptr)
+	}
+	return ptr
+}
+
+func (b *builder) copyIndirectAggregate(dst, src llvm.Value, typ llvm.Type) {
+	size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(typ), false)
+	b.createMemCopy("memcpy", dst, src, size)
+}
+
 func (b *builder) storeValue(dst llvm.Value, value ssa.Value) {
-	b.CreateStore(b.getValue(value, getPos(value)), dst)
+	typ := b.getLLVMType(value.Type())
+	if src, ok := b.indirectValues[value]; ok {
+		b.copyIndirectAggregate(dst, src, typ)
+	} else {
+		b.CreateStore(b.getValue(value, getPos(value)), dst)
+	}
+}
+
+func (b *builder) copyToIndirectStorage(src llvm.Value, typ llvm.Type, name string) llvm.Value {
+	dst := b.createIndirectStorage(typ, name)
+	b.copyIndirectAggregate(dst, src, typ)
+	return dst
 }
 
 func (b *builder) loadFromStorage(ptr llvm.Value, typ types.Type, name string) llvm.Value {
-	return b.CreateLoad(b.getLLVMType(typ), ptr, name)
+	llvmType := b.getLLVMType(typ)
+	if b.isIndirectAggregate(llvmType) {
+		return b.copyToIndirectStorage(ptr, llvmType, name)
+	}
+	return b.CreateLoad(llvmType, ptr, name)
 }
 
-func (b *builder) getValueStorage(value ssa.Value, name string) (ptr, size llvm.Value) {
+func (b *builder) getValueField(value ssa.Value, index int, resultType types.Type, name string) (llvm.Value, bool) {
+	if !b.isAggregateValue(value.Type()) {
+		return llvm.Value{}, false
+	}
+	valueType := b.getLLVMType(value.Type())
+	if _, indirect := b.indirectValues[value]; !indirect && !b.isIndirectAggregate(valueType) {
+		return llvm.Value{}, false
+	}
+	fieldPtr := b.CreateStructGEP(valueType, b.getValuePointer(value), index, "")
+	return b.loadFromStorage(fieldPtr, resultType, name), true
+}
+
+func (b *builder) zeroIndirectStorage(ptr llvm.Value, typ llvm.Type) {
+	memset := b.getMemsetFunc()
+	b.createCall(memset.GlobalValueType(), memset, []llvm.Value{
+		ptr,
+		llvm.ConstInt(b.ctx.Int8Type(), 0, false),
+		llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(typ), false),
+		llvm.ConstInt(b.ctx.Int1Type(), 0, false),
+	}, "")
+}
+
+type valueStorage struct {
+	ptr, size llvm.Value
+	temporary bool
+}
+
+func (b *builder) getValueStorage(value ssa.Value, name string) valueStorage {
 	typ := b.getLLVMType(value.Type())
-	ptr, size = b.createTemporaryAlloca(typ, name)
+	if b.isIndirectAggregate(typ) {
+		return valueStorage{ptr: b.getValuePointer(value)}
+	}
+	ptr, size := b.createTemporaryAlloca(typ, name)
 	b.storeValue(ptr, value)
-	return ptr, size
+	return valueStorage{ptr: ptr, size: size, temporary: true}
+}
+
+func (b *builder) endValueStorage(storage valueStorage) {
+	if storage.temporary {
+		b.emitLifetimeEnd(storage.ptr, storage.size)
+	}
 }
 
 type runtimeValueResult struct {
 	valueType  llvm.Type
 	resultType llvm.Type
+	result     llvm.Value
 	valuePtr   llvm.Value
 	valueSize  llvm.Value
 	temporary  bool
@@ -1630,10 +1782,19 @@ func (b *builder) createRuntimeValueResult(valueType llvm.Type, commaOk, zeroAsN
 	result := runtimeValueResult{
 		valueType:  valueType,
 		resultType: valueType,
+		valueSize:  llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(valueType), false),
 		commaOk:    commaOk,
 	}
 	if commaOk {
 		result.resultType = b.ctx.StructType([]llvm.Type{valueType, b.ctx.Int1Type()}, false)
+	}
+	if b.isIndirectAggregate(result.resultType) {
+		result.result = b.createIndirectStorage(result.resultType, name+".result")
+		result.valuePtr = result.result
+		if commaOk {
+			result.valuePtr = b.CreateStructGEP(result.resultType, result.result, 0, "")
+		}
+		return result
 	}
 	if zeroAsNull && b.targetData.TypeAllocSize(valueType) == 0 {
 		result.valuePtr = llvm.ConstNull(b.dataPtrType)
@@ -1646,6 +1807,13 @@ func (b *builder) createRuntimeValueResult(valueType llvm.Type, commaOk, zeroAsN
 }
 
 func (r runtimeValueResult) finish(b *builder, commaOk llvm.Value, name string) llvm.Value {
+	if !r.result.IsNil() {
+		if r.commaOk {
+			b.CreateStore(commaOk, b.CreateStructGEP(r.resultType, r.result, 1, ""))
+		}
+		return r.result
+	}
+
 	var value llvm.Value
 	if r.zero {
 		value = llvm.ConstNull(r.valueType)
@@ -2157,7 +2325,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 
 	var params []llvm.Value
 	for _, param := range instr.Args {
-		params = append(params, b.getValue(param, getPos(instr)))
+		params = append(params, b.getCallArgument(param, exported))
 	}
 	if instr.IsInvoke() {
 		params = append([]llvm.Value{invokeReceiver}, params...)
@@ -2165,6 +2333,13 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 	}
 
 	if !exported {
+		if resultType, indirectResult := b.hasIndirectResult(instr.Signature()); indirectResult {
+			result := b.createIndirectStorage(resultType, "call.result")
+			params = append([]llvm.Value{result}, params...)
+			params = append(params, context)
+			b.createInvoke(calleeType, callee, params, "")
+			return result, nil
+		}
 		// This function takes a context parameter.
 		// Add it to the end of the parameter list.
 		params = append(params, context)
@@ -2203,6 +2378,9 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 		return value
 	default:
 		// other (local) SSA value
+		if value, ok := b.indirectValues[expr]; ok {
+			return b.CreateLoad(b.getLLVMType(expr.Type()), value, "")
+		}
 		if value, ok := b.locals[expr]; ok {
 			return value
 		} else {
@@ -2285,8 +2463,15 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		// This instruction changes the type, but the underlying value remains
 		// the same. This is often a no-op, but sometimes we have to change the
 		// LLVM type as well.
-		x := b.getValue(expr.X, getPos(expr))
 		llvmType := b.getLLVMType(expr.Type())
+		if b.isIndirectAggregate(llvmType) {
+			sourceType := b.getLLVMType(expr.X.Type())
+			if !b.isIndirectAggregate(sourceType) || b.targetData.TypeAllocSize(sourceType) != b.targetData.TypeAllocSize(llvmType) {
+				return llvm.Value{}, errors.New("todo: indirect aggregate ChangeType with different layout")
+			}
+			return b.getValuePointer(expr.X), nil
+		}
+		x := b.getValue(expr.X, getPos(expr))
 		if x.Type() == llvmType {
 			// Different Go type but same LLVM type (for example, named int).
 			// This is the common case.
@@ -2316,9 +2501,15 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if _, ok := expr.Tuple.(*ssa.Select); ok {
 			return b.getChanSelectResult(expr), nil
 		}
+		if value, ok := b.getValueField(expr.Tuple, expr.Index, expr.Type(), expr.Name()); ok {
+			return value, nil
+		}
 		value := b.getValue(expr.Tuple, getPos(expr))
 		return b.CreateExtractValue(value, expr.Index, ""), nil
 	case *ssa.Field:
+		if value, ok := b.getValueField(expr.X, expr.Field, expr.Type(), expr.Name()); ok {
+			return value, nil
+		}
 		value := b.getValue(expr.X, getPos(expr))
 		result := b.CreateExtractValue(value, expr.Field, "")
 		return result, nil
@@ -2380,11 +2571,11 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			// Can't load directly from array (as index is non-constant), so
 			// have to do it using an alloca+gep+load.
 			arrayType := b.getLLVMType(expr.X.Type())
-			alloca, allocaSize := b.getValueStorage(expr.X, "index.alloca")
+			storage := b.getValueStorage(expr.X, "index.alloca")
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			ptr := b.CreateInBoundsGEP(arrayType, alloca, []llvm.Value{zero, index}, "index.gep")
+			ptr := b.CreateInBoundsGEP(arrayType, storage.ptr, []llvm.Value{zero, index}, "index.gep")
 			result := b.loadFromStorage(ptr, expr.Type(), "index.load")
-			b.emitLifetimeEnd(alloca, allocaSize)
+			b.endValueStorage(storage)
 			return result, nil
 		default:
 			panic("unknown *ssa.Index type")
@@ -2453,6 +2644,11 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	case *ssa.MakeClosure:
 		return b.parseMakeClosure(expr)
 	case *ssa.MakeInterface:
+		if b.isOversizedAggregate(expr.X.Type()) {
+			typ := b.getLLVMType(expr.X.Type())
+			ptr := b.copyToIndirectStorage(b.getValuePointer(expr.X), typ, "interface.value")
+			return b.createMakeInterfaceFromPointer(ptr, expr.X.Type()), nil
+		}
 		val := b.getValue(expr.X, getPos(expr))
 		return b.createMakeInterface(val, expr.X.Type(), expr.Pos()), nil
 	case *ssa.MakeMap:
@@ -2519,7 +2715,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return b.createMapIteratorNext(rangeVal, llvmRangeVal, it), nil
 		}
 	case *ssa.Phi:
-		phi := b.CreatePHI(b.getLLVMType(expr.Type()), "")
+		phiType := b.storedParamType(b.getLLVMType(expr.Type()), false)
+		phi := b.CreatePHI(phiType, "")
 		b.phis = append(b.phis, phiNode{expr, phi})
 		return phi, nil
 	case *ssa.Range:
