@@ -1,0 +1,13 @@
+{
+    "inherits": [
+        "py32"
+    ],
+    "build-tags": [
+        "py32f003xx"
+    ],
+    "linkerscript": "targets/py32f003_32k_4k.ld",
+    "extra-files": [
+        "src/device/py32/py32f003xx.s"
+    ],
+    "flash-command": "pyocd load -t py32f003 {bin}"
+}
