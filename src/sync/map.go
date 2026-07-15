@@ -1,6 +1,8 @@
 package sync
 
-import "internal/task"
+import (
+	"internal/task"
+)
 
 // This file implements just enough of sync.Map to get packages to compile. It
 // is no more efficient than a map with a lock.
@@ -56,17 +58,27 @@ func (m *Map) Store(key, value interface{}) {
 	m.m[key] = value
 }
 
+// Range calls f for each key and value in the map.  If f returns false, the iteration stops.
 func (m *Map) Range(f func(key, value interface{}) bool) {
+	// Iterate over a key snapshot instead of holding the lock across the callback,
+	// to prevent deadlock when a Map method is called inside f.
+	//
+	// Using a key snapshot in Map.Range is sufficient because Go specifies that:
+	// - Range only requires that no key is visited more than once, and
+	// - Range may reflect any mapping from any point during the Range call.
+
 	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	if m.m == nil {
-		return
+	keys := make([]interface{}, 0, len(m.m))
+	for k := range m.m {
+		keys = append(keys, k)
 	}
+	m.lock.Unlock()
 
-	for k, v := range m.m {
-		if !f(k, v) {
-			break
+	for _, k := range keys {
+		if v, ok := m.Load(k); ok {
+			if !f(k, v) {
+				break
+			}
 		}
 	}
 }
