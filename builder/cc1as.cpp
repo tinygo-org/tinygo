@@ -109,7 +109,7 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   // Construct the invocation.
 
   // Target Options
-  Opts.Triple = llvm::Triple::normalize(Args.getLastArgValue(OPT_triple));
+  Opts.Triple = llvm::Triple(llvm::Triple::normalize(Args.getLastArgValue(OPT_triple)));
   if (Arg *A = Args.getLastArg(options::OPT_darwin_target_variant_triple))
     Opts.DarwinTargetVariantTriple = llvm::Triple(A->getValue());
   if (Arg *A = Args.getLastArg(OPT_darwin_target_variant_sdk_version_EQ)) {
@@ -125,8 +125,8 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   Opts.Features = Args.getAllArgValues(OPT_target_feature);
 
   // Use the default target triple if unspecified.
-  if (Opts.Triple.empty())
-    Opts.Triple = llvm::sys::getDefaultTargetTriple();
+  if (Opts.Triple.getTriple().empty())
+    Opts.Triple = llvm::Triple(llvm::sys::getDefaultTargetTriple());
 
   // Language Options
   Opts.IncludePaths = Args.getAllArgValues(OPT_I);
@@ -267,7 +267,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(Opts.Triple, Error);
   if (!TheTarget)
-    return Diags.Report(diag::err_target_unknown_triple) << Opts.Triple;
+    return Diags.Report(diag::err_target_unknown_triple) << Opts.Triple.str();
 
   ErrorOr<std::unique_ptr<MemoryBuffer>> Buffer =
       MemoryBuffer::getFileOrSTDIN(Opts.InputFile, /*IsText=*/true);
@@ -327,7 +327,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
       TheTarget->createMCSubtargetInfo(Opts.Triple, Opts.CPU, FS));
   assert(STI && "Unable to create subtarget info!");
 
-  MCContext Ctx(Triple(Opts.Triple), MAI.get(), MRI.get(), STI.get(), &SrcMgr,
+  MCContext Ctx(Opts.Triple, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
                 &MCOptions);
 
   bool PIC = false;
@@ -391,7 +391,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   // FIXME: There is a bit of code duplication with addPassesToEmitFile.
   if (Opts.OutputType == AssemblerInvocation::FT_Asm) {
     std::unique_ptr<MCInstPrinter> IP(TheTarget->createMCInstPrinter(
-        llvm::Triple(Opts.Triple), Opts.OutputAsmVariant, *MAI, *MCII, *MRI));
+        Opts.Triple, Opts.OutputAsmVariant, *MAI, *MCII, *MRI));
 
     std::unique_ptr<MCCodeEmitter> CE;
     if (Opts.ShowEncoding)
@@ -422,7 +422,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
         DwoOS ? MAB->createDwoObjectWriter(*Out, *DwoOS)
               : MAB->createObjectWriter(*Out);
 
-    Triple T(Opts.Triple);
+    Triple T = Opts.Triple;
     Str.reset(TheTarget->createMCObjectStreamer(
         T, Ctx, std::move(MAB), std::move(OW), std::move(CE), *STI));
     Str.get()->initSections(Opts.NoExecStack, *STI);
@@ -453,7 +453,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   std::unique_ptr<MCTargetAsmParser> TAP(
       TheTarget->createMCAsmParser(*STI, *Parser, *MCII, MCOptions));
   if (!TAP)
-    Failed = Diags.Report(diag::err_target_unknown_triple) << Opts.Triple;
+    Failed = Diags.Report(diag::err_target_unknown_triple) << Opts.Triple.str();
 
   // Set values for symbols, if any.
   for (auto &S : Opts.SymbolDefs) {
