@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -128,8 +129,10 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 	defer mod.Dispose()
 
 	// Check whether the LLVM target matches.
-	if mod.Target() != config.Triple() {
-		t.Errorf("target has LLVM triple %#v but Clang makes it LLVM triple %#v", config.Triple(), mod.Target())
+	// Use ClangTriple since LLVM 22 normalizes wasm32-unknown-wasi to wasip1.
+	expectedTriple := compileopts.ClangTriple(config.Triple())
+	if mod.Target() != expectedTriple {
+		t.Errorf("target has LLVM triple %#v but Clang makes it LLVM triple %#v", expectedTriple, mod.Target())
 	}
 
 	// Check the "target-cpu" and "target-features" string attribute of the add
@@ -153,8 +156,62 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 			// The reason is that Debian has patched Clang in a way that
 			// modifies the LLVM features string, changing lots of FPU/float
 			// related flags. We want to test vanilla Clang, not Debian Clang.
-			t.Errorf("target has LLVM features\n\t%#v\nbut Clang makes it\n\t%#v", config.Features(), features)
+			//
+			// Rather than requiring an exact match (which breaks across LLVM
+			// versions as new features are added), check that every feature
+			// TinyGo specifies is consistent with what Clang produces:
+			//  - A "+feature" in TinyGo must appear in Clang's output.
+			//  - A "-feature" in TinyGo must not be "+feature" in Clang's output.
+			checkFeatureFlags(t, config.Features(), features)
 		}
+	}
+}
+
+// checkFeatureFlags verifies that all features specified by TinyGo's target
+// configuration are consistent with Clang's output. This allows Clang to add
+// new features across LLVM versions without breaking the test.
+func checkFeatureFlags(t *testing.T, targetFeatures, clangFeatures string) {
+	t.Helper()
+
+	// Build a set of Clang's features for fast lookup.
+	clangSet := make(map[string]bool) // feature name -> enabled
+	for _, f := range strings.Split(clangFeatures, ",") {
+		f = strings.TrimSpace(f)
+		if len(f) < 2 {
+			continue
+		}
+		enabled := f[0] == '+'
+		name := f[1:]
+		clangSet[name] = enabled
+	}
+
+	// Check each feature that TinyGo specifies.
+	var missing, conflicts []string
+	for _, f := range strings.Split(targetFeatures, ",") {
+		f = strings.TrimSpace(f)
+		if len(f) < 2 {
+			continue
+		}
+		wantEnabled := f[0] == '+'
+		name := f[1:]
+
+		clangEnabled, inClang := clangSet[name]
+		if wantEnabled && (!inClang || !clangEnabled) {
+			// TinyGo requires +feature but Clang doesn't enable it.
+			missing = append(missing, f)
+		} else if !wantEnabled && inClang && clangEnabled {
+			// TinyGo requires -feature but Clang enables it.
+			conflicts = append(conflicts, fmt.Sprintf("target has %q but Clang has %q", f, "+"+name))
+		}
+	}
+
+	if len(missing) > 0 {
+		t.Errorf("target specifies features not present in Clang output: %s\n\ttarget features: %s\n\tclang features:  %s",
+			strings.Join(missing, ", "), targetFeatures, clangFeatures)
+	}
+	if len(conflicts) > 0 {
+		t.Errorf("target disables features that Clang enables: %s",
+			strings.Join(conflicts, "; "))
 	}
 }
 

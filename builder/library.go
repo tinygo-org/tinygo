@@ -133,7 +133,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// Note: -fdebug-prefix-map is necessary to make the output archive
 	// reproducible. Otherwise the temporary directory is stored in the archive
 	// itself, which varies each run.
-	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+target, "-fdebug-prefix-map="+dir+"="+remapDir)
+	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+compileopts.ClangTriple(target), "-fdebug-prefix-map="+dir+"="+remapDir)
 	resourceDir := goenv.ClangResourceDir(false)
 	if resourceDir != "" {
 		args = append(args, "-resource-dir="+resourceDir)
