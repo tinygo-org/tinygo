@@ -66,7 +66,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-20-linux-alpine-v2
+          key: llvm-source-22-linux-alpine-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -91,7 +91,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-linux-alpine-v3
+          key: llvm-build-22-linux-alpine-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -220,7 +220,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-20-linux-asserts-v1
+          key: llvm-source-22-linux-asserts-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -245,7 +245,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-linux-asserts-v2
+          key: llvm-build-22-linux-asserts-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -329,7 +329,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-20-linux-v1
+          key: llvm-source-22-linux-v1
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -354,7 +354,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-linux-${{ matrix.goarch }}-v2
+          key: llvm-build-22-linux-${{ matrix.goarch }}-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
