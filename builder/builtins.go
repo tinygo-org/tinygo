@@ -204,7 +204,8 @@ var avrBuiltins = []string{
 
 // Builtins needed specifically for windows/386.
 var windowsI386Builtins = []string{
-	"i386/chkstk.S", // also _alloca
+	"i386/chkstk.S",  // __chkstk_ms
+	"i386/chkstk2.S", // _alloca (__alloca)
 }
 
 // Builtins needed specifically for windows/amd64.
