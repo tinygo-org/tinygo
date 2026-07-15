@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-20-linux-compat
+          key: llvm-source-22-linux-compat
           path: llvm-project/compiler-rt
       - name: Download LLVM source
         if: steps.cache-llvm-source.outputs.cache-hit != 'true'
