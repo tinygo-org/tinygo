@@ -61,13 +61,15 @@ func (c *Config) BuildMode() string {
 // RISC-V processor, that could be "+a,+c,+m". For many targets, an empty list
 // will be returned.
 func (c *Config) Features() string {
+	var features string
 	if c.Target.Features == "" {
-		return c.Options.LLVMFeatures
+		features = c.Options.LLVMFeatures
+	} else if c.Options.LLVMFeatures == "" {
+		features = c.Target.Features
+	} else {
+		features = c.Target.Features + "," + c.Options.LLVMFeatures
 	}
-	if c.Options.LLVMFeatures == "" {
-		return c.Target.Features
-	}
-	return c.Target.Features + "," + c.Options.LLVMFeatures
+	return patchFeatures(features)
 }
 
 // ABI returns the -mabi= flag for this target (like -mabi=lp64). A zero-length
@@ -347,7 +349,7 @@ func (c *Config) CFlags(libclang bool) []string {
 	// Use the same optimization level as TinyGo.
 	cflags = append(cflags, "-O"+c.Options.Opt)
 	// Set the LLVM target triple.
-	cflags = append(cflags, "--target="+c.Triple())
+	cflags = append(cflags, "--target="+ClangTriple(c.Triple()))
 	// Set the -mcpu (or similar) flag.
 	if c.Target.CPU != "" {
 		if c.GOARCH() == "amd64" || c.GOARCH() == "386" {
