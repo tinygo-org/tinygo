@@ -1,4 +1,4 @@
-//go:build stamp_s3a
+//go:build m5stamp_s3a
 
 // This file contains the pin mappings for the M5Stack Stamp-S3A module.
 //
