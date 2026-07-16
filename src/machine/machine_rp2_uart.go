@@ -53,17 +53,17 @@ func (uart *UART) Configure(config UARTConfig) error {
 	if config.TX != NoPin {
 		config.TX.Configure(PinConfig{Mode: PinUART})
 		if config.InvertTX {
-			config.TX.ioCtrl().ReplaceBits(rp.IO_BANK0_GPIO0_CTRL_OUTOVER_INVERT<<rp.IO_BANK0_GPIO0_CTRL_OUTOVER_Pos, rp.IO_BANK0_GPIO0_CTRL_OUTOVER_Msk, 0)
+			config.TX.setOutOver(rp.IO_BANK0_GPIO0_CTRL_OUTOVER_INVERT)
 		} else {
-			config.TX.ioCtrl().ReplaceBits(rp.IO_BANK0_GPIO0_CTRL_OUTOVER_NORMAL<<rp.IO_BANK0_GPIO0_CTRL_OUTOVER_Pos, rp.IO_BANK0_GPIO0_CTRL_OUTOVER_Msk, 0)
+			config.TX.setOutOver(rp.IO_BANK0_GPIO0_CTRL_OUTOVER_NORMAL)
 		}
 	}
 	if config.RX != NoPin {
 		config.RX.Configure(PinConfig{Mode: PinUART})
 		if config.InvertRX {
-			config.RX.ioCtrl().ReplaceBits(rp.IO_BANK0_GPIO0_CTRL_INOVER_INVERT<<rp.IO_BANK0_GPIO0_CTRL_INOVER_Pos, rp.IO_BANK0_GPIO0_CTRL_INOVER_Msk, 0)
+			config.RX.setInOver(rp.IO_BANK0_GPIO0_CTRL_INOVER_INVERT)
 		} else {
-			config.RX.ioCtrl().ReplaceBits(rp.IO_BANK0_GPIO0_CTRL_INOVER_NORMAL<<rp.IO_BANK0_GPIO0_CTRL_INOVER_Pos, rp.IO_BANK0_GPIO0_CTRL_INOVER_Msk, 0)
+			config.RX.setInOver(rp.IO_BANK0_GPIO0_CTRL_INOVER_NORMAL)
 		}
 	}
 	if config.RTS != 0 {

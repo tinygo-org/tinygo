@@ -2,18 +2,16 @@
 
 package machine
 
-import "device/sam"
-
 // Configure UART TX/RX line inversion using SVD-generated APIs.
 func (uart *UART) setInversion(config UARTConfig) {
 	if config.InvertTX {
-		uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_INT_CTRLA_TXINV)
+		uart.Bus.SetCTRLA_TXINV(1)
 	} else {
-		uart.Bus.CTRLA.ClearBits(sam.SERCOM_USART_INT_CTRLA_TXINV)
+		uart.Bus.SetCTRLA_TXINV(0)
 	}
 	if config.InvertRX {
-		uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_INT_CTRLA_RXINV)
+		uart.Bus.SetCTRLA_RXINV(1)
 	} else {
-		uart.Bus.CTRLA.ClearBits(sam.SERCOM_USART_INT_CTRLA_RXINV)
+		uart.Bus.SetCTRLA_RXINV(0)
 	}
 }
