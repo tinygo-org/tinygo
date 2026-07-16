@@ -1,0 +1,8 @@
+{
+    "inherits": [
+        "esp32s3"
+    ],
+    "build-tags": [
+        "m5stamp_s3a"
+    ]
+}
