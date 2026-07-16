@@ -967,6 +967,8 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5stack             examples/machinetest
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target stamp-s3a           examples/machinetest
+	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5stick-c           examples/machinetest
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5paper             examples/machinetest
