@@ -363,6 +363,8 @@ func chanClose(ch *channel) {
 	}
 
 	// Collect waiters and wake them after unlocking.
+	// pop() removes each op from the channel queue, so next can be reused
+	// to link the temporary wake list.
 	var wakeHead, wakeTail *channelOp
 
 	// Proceed all receiving operations that are blocked.
