@@ -163,6 +163,17 @@ func (f *File) Truncate(size int64) (err error) {
 	return Truncate(f.name, size)
 }
 
+// Chown changes the numeric uid and gid of the named file.
+// A uid or gid of -1 means to not change that value.
+// If there is an error, it will be of type *PathError.
+func (f *File) Chown(uid, gid int) error {
+	if f.handle == nil {
+		return ErrClosed
+	}
+
+	return Chown(f.name, uid, gid)
+}
+
 func (f *File) chmod(mode FileMode) error {
 	if f.handle == nil {
 		return ErrClosed
