@@ -95,21 +95,21 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 		s2 := rp.USB.BUFF_STATUS.Get()
 		rp.USB.BUFF_STATUS.Set(s2)
 
+		// IN (rp2350 -> PC)
+		for i := 0; i < 16; i++ {
+			if s2&(1<<(i*2)) > 0 {
+				if usbTxHandler[i] != nil {
+					usbTxHandler[i]()
+				}
+			}
+		}
+
 		// OUT (PC -> rp2350)
 		for i := 0; i < 16; i++ {
 			if s2&(1<<(i*2+1)) > 0 {
 				buf := handleEndpointRx(uint32(i))
 				if usbRxHandler[i] == nil || usbRxHandler[i](buf) {
 					AckUsbOutTransfer(uint32(i))
-				}
-			}
-		}
-
-		// IN (rp2350 -> PC)
-		for i := 0; i < 16; i++ {
-			if s2&(1<<(i*2)) > 0 {
-				if usbTxHandler[i] != nil {
-					usbTxHandler[i]()
 				}
 			}
 		}
