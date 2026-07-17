@@ -52,9 +52,19 @@ func (uart *UART) Configure(config UARTConfig) error {
 	// set GPIO mux to UART for the pins
 	if config.TX != NoPin {
 		config.TX.Configure(PinConfig{Mode: PinUART})
+		if config.InvertTX {
+			config.TX.setOutOver(rp.IO_BANK0_GPIO0_CTRL_OUTOVER_INVERT)
+		} else {
+			config.TX.setOutOver(rp.IO_BANK0_GPIO0_CTRL_OUTOVER_NORMAL)
+		}
 	}
 	if config.RX != NoPin {
 		config.RX.Configure(PinConfig{Mode: PinUART})
+		if config.InvertRX {
+			config.RX.setInOver(rp.IO_BANK0_GPIO0_CTRL_INOVER_INVERT)
+		} else {
+			config.RX.setInOver(rp.IO_BANK0_GPIO0_CTRL_INOVER_NORMAL)
+		}
 	}
 	if config.RTS != 0 {
 		config.RTS.Configure(PinConfig{Mode: PinOutput})
