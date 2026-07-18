@@ -15,10 +15,9 @@
 
 MEMORY
 {
-    /* SRAM2 usable DRAM (0x3FFB0000-0x3FFE0000, 192K): reserve the first 8KB
-     * (0x3FFAE000-0x3FFB0000) for ROM conventions, then use the rest for the
-     * stack, initialized .data, .bss, and the whole Go GC heap. */
-    DRAM  (rw) : ORIGIN = 0x3FFB0000, LENGTH = 192K
+    /* SRAM2 (0x3FFAE000-0x3FFE0000, 200K): a single safe contiguous block used
+     * for the stack, initialized .data, .bss, and the whole Go GC heap. */
+    DRAM  (rw) : ORIGIN = 0x3FFAE000, LENGTH = 200K
 
     /* Top of SRAM1 (0x3FFF0000-0x40000000, 64K): pool 7 + pool 6. This is the
      * ONLY part of SRAM1 that is safe for us to use:
@@ -186,19 +185,13 @@ SECTIONS
 _globals_start = _sbss;
 _globals_end = _wifi_bss_end;
 _heap_start = _edata;
-/* Go GC heap = the rest of SRAM2 above .bss (~113KB), a single safe contiguous
+/* Go GC heap = the rest of SRAM2 above .bss (~121KB), a single safe contiguous
  * block. The WiFi arena lives in DRAM1 (SRAM1 pool 7/6), so its ~64KB does not
  * consume Go heap and its DMA is isolated from GC objects. The heap never
  * touches SRAM1's ROM/MAC-dump regions (0x3FFE0000-0x3FFF0000, left unused). */
 _heap_end = 0x3FFE0000;
 
 _stack_size = 4K;
-
-/* ESP32 ROM-owned PHY DRAM symbols from ESP-IDF esp32.rom.ld.
- * Exposed as linker symbols so firmware code can reference them without
- * hardcoding addresses in C sources. */
-PROVIDE ( rom_phyFuns = 0x3ffae0c0 );
-PROVIDE ( g_phyFuns_instance = 0x3ffae0c4 );
 
 /* From ESP-IDF:
  * components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
