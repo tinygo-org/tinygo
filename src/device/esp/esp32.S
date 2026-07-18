@@ -60,10 +60,14 @@ call_start_cpu0:
     // version of the following code:
     // https://github.com/espressif/esp-idf/blob/c77c4ccf/components/xtensa/include/xt_instr_macros.h#L47
 
-    // Disable WOE.
+    // Disable WOE (bit 18 of PS).
+    // Avoid large movi constants to prevent auto-generated .literal section
+    // entries, which cause l32r offset miscalculation in LLVM 22 / lld.
     rsr.ps a2
-    movi a3, ~(PS_WOE_MASK)
-    and a2, a2, a3
+    movi a3, 1
+    slli a3, a3, 18         // a3 = PS_WOE_MASK (0x40000)
+    and  a3, a2, a3         // a3 = a2 & WOE_MASK (isolate WOE bit)
+    xor  a2, a2, a3         // clear WOE bit
     wsr.ps a2
     rsync
 
@@ -80,7 +84,8 @@ call_start_cpu0:
 
     // Re-enable WOE.
     rsr.ps a2
-    movi a3, PS_WOE
+    movi a3, 1
+    slli a3, a3, 18         // a3 = PS_WOE (0x40000)
     or a2, a2, a3
     wsr.ps a2
     rsync
@@ -129,43 +134,34 @@ call_start_cpu0:
     rsync
 
     // ---- Configure flash cache and MMU ----
-    // The ROM bootloader only loaded IRAM/DRAM segments. We must now set up
-    // the ICache MMU to map DROM (.rodata) and IROM (.text) from flash.
-
-    // 0. Disable cache and flush before reconfiguring MMU.
-    //    The ROM bootloader may leave the cache enabled.
-    movi a6, 0             // cpu_no = 0
+    movi a6, 0
     mov  a5, a1
     l32r a4, .Lrom_Cache_Read_Disable
     callx4 a4
 
-    movi a6, 0             // cpu_no = 0
+    movi a6, 0
     mov  a5, a1
     l32r a4, .Lrom_Cache_Flush
     callx4 a4
 
-    // 1. Reset MMU tables for PRO CPU (clear all entries to invalid).
-    movi a6, 0             // cpu_no = 0 (PRO)
+    movi a6, 0
     mov  a5, a1
     l32r a4, .Lrom_mmu_init
     callx4 a4
 
-    // 2. Map DROM pages via ROM cache_flash_mmu_set:
-    //    vaddr=0x3F400000, paddr=0x10000, page_size=64KB, count=ceil(size/64KB)
     l32r a2, .Lrodata_end
     l32r a3, .Lrodata_start
-    sub  a2, a2, a3        // a2 = rodata size in bytes
-    beqz a2, .Lskip_drom  // skip if no rodata
+    sub  a2, a2, a3
+    beqz a2, .Lskip_drom
     addi a2, a2, -1
     srli a2, a2, 16
-    addi a2, a2, 1         // a2 = drom page count
+    addi a2, a2, 1
 
-    // cache_flash_mmu_set(cpu=0, pid=0, vaddr, paddr, psize=64, num)
     movi a6, 0
     movi a7, 0
-    l32r a8, .Ldrom_vaddr  // 0x3F400000
+    l32r a8, .Ldrom_vaddr
     l32r a9, .Ldrom_paddr_ptr
-    l32i a9, a9, 0         // a9 = DROM flash offset (builder-patched)
+    l32i a9, a9, 0
     movi a10, 64
     mov  a11, a2
     mov  a5, a1
@@ -173,34 +169,31 @@ call_start_cpu0:
     callx4 a4
 .Lskip_drom:
 
-    // 3. Map IROM pages via ROM cache_flash_mmu_set:
-    //    vaddr=0x400D0000, paddr=0x10000 + drom_pages*64KB
     l32r a2, .Ltext_end
     l32r a3, .Ltext_start
-    sub  a2, a2, a3        // a2 = text size in bytes
-    beqz a2, .Lskip_irom  // skip if no text
+    sub  a2, a2, a3
+    beqz a2, .Lskip_irom
     addi a2, a2, -1
     srli a2, a2, 16
-    addi a2, a2, 1         // a2 = irom page count
+    addi a2, a2, 1
 
-    // Compute IROM paddr into a3 = DROM flash offset + drom_pages * 64KB
     l32r a9, .Lrodata_end
     l32r a3, .Lrodata_start
-    sub  a9, a9, a3        // a9 = rodata size
+    sub  a9, a9, a3
     l32r a3, .Ldrom_paddr_ptr
-    l32i a3, a3, 0         // a3 = DROM flash offset (builder-patched)
+    l32i a3, a3, 0
     beqz a9, .Lirom_paddr_ready
     addi a9, a9, -1
     srli a9, a9, 16
-    addi a9, a9, 1         // a9 = drom page count
-    slli a9, a9, 16        // a9 = drom_pages * 64KB
-    add  a3, a3, a9        // a3 = drom_flash_addr + drom_pages * 64KB
+    addi a9, a9, 1
+    slli a9, a9, 16
+    add  a3, a3, a9
 .Lirom_paddr_ready:
 
     movi a6, 0
     movi a7, 0
-    l32r a8, .Lirom_vaddr  // 0x400D0000
-    mov  a9, a3            // irom paddr
+    l32r a8, .Lirom_vaddr
+    mov  a9, a3
     movi a10, 64
     mov  a11, a2
     mov  a5, a1
@@ -208,18 +201,14 @@ call_start_cpu0:
     callx4 a4
 .Lskip_irom:
 
-    // 4. Unmask DROM0 and IRAM0 cache buses in DPORT_PRO_CACHE_CTRL1_REG:
-    //      bit 4: PRO_CACHE_MASK_DROM0 (data flash, 0x3F400000)
-    //      bit 0: PRO_CACHE_MASK_IRAM0 (instruction flash, 0x400D0000 window)
     l32r a2, .Ldport_pro_cache_ctrl1
     l32i a3, a2, 0
-    movi a4, ~0x11           // clear bit 0 (IRAM0) and bit 4 (DROM0)
+    movi a4, ~0x11
     and  a3, a3, a4
     s32i a3, a2, 0
     memw
 
-    // 5. Enable flash cache for PRO CPU.
-    movi a6, 0             // cpu_no = 0
+    movi a6, 0
     mov  a5, a1
     l32r a4, .Lrom_Cache_Read_Enable
     callx4 a4
