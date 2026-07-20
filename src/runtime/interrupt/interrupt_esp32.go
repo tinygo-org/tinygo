@@ -53,13 +53,6 @@ const (
 	lastCPUInt  = 30
 )
 
-// cpuIntUsed tracks which CPU interrupt lines have been allocated.
-var cpuIntUsed [32]bool
-
-// cpuIntToPeripheral maps CPU interrupt number → peripheral IRQ source,
-// so that handleInterrupt can dispatch to the correct Go handler.
-var cpuIntToPeripheral [32]int
-
 // inInterrupt is set while we're inside the interrupt handler so that
 // interrupt.In() returns the correct value.
 var inInterrupt bool
@@ -74,9 +67,6 @@ func (i Interrupt) Enable() error {
 	if i.num < firstCPUInt || i.num > lastCPUInt {
 		return errInterruptRange
 	}
-
-	// Mark as used.
-	cpuIntUsed[i.num] = true
 
 	// Read current INTENABLE, set the bit for this CPU interrupt.
 	cur := readINTENABLE()
