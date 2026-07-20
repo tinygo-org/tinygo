@@ -25,8 +25,8 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	}
 
 	// Version range supported by TinyGo.
-	const minorMin = 24 // when updating the min version, also update .github/workflows/compat.yml
-	const minorMax = 26
+	const minorMin = 25 // when updating the min version, also update .github/workflows/compat.yml
+	const minorMax = 27
 
 	// Check that we support this Go toolchain version.
 	gorootMajor, gorootMinor, err := goenv.GetGorootVersion()

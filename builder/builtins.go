@@ -204,7 +204,18 @@ var avrBuiltins = []string{
 
 // Builtins needed specifically for windows/386.
 var windowsI386Builtins = []string{
-	"i386/chkstk.S", // also _alloca
+	"i386/chkstk.S",  // __chkstk_ms
+	"i386/chkstk2.S", // _alloca (__alloca)
+}
+
+// Builtins needed specifically for windows/amd64.
+var windowsAMD64Builtins = []string{
+	"x86_64/chkstk.S",
+}
+
+// Builtins needed specifically for windows/arm64.
+var windowsARM64Builtins = []string{
+	"aarch64/chkstk.S",
 }
 
 // libCompilerRT is a library with symbols required by programs compiled with
@@ -233,13 +244,28 @@ var libCompilerRT = Library{
 			builtins = append(builtins, aeabiBuiltins...)
 		case "avr":
 			builtins = append(builtins, avrBuiltins...)
-		case "x86_64", "aarch64", "riscv64": // any 64-bit arch
+		case "x86_64":
+			builtins = append(builtins, genericBuiltins128...)
+			if isWindowsTriple(target) {
+				builtins = append(builtins, windowsAMD64Builtins...)
+			}
+		case "aarch64":
+			builtins = append(builtins, genericBuiltins128...)
+			if isWindowsTriple(target) {
+				builtins = append(builtins, windowsARM64Builtins...)
+			}
+		case "riscv64":
 			builtins = append(builtins, genericBuiltins128...)
 		case "i386":
-			if strings.Split(target, "-")[2] == "windows" {
+			if isWindowsTriple(target) {
 				builtins = append(builtins, windowsI386Builtins...)
 			}
 		}
 		return builtins, nil
 	},
+}
+
+func isWindowsTriple(target string) bool {
+	parts := strings.Split(target, "-")
+	return len(parts) > 2 && parts[2] == "windows"
 }

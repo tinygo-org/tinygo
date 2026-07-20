@@ -330,10 +330,8 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 				NamePos: pos,
 				Name:    typeName,
 			},
-			Type: f.makeASTType(underlyingType, pos),
-		}
-		if underlyingType.kind != C.CXType_Enum {
-			typeSpec.Assign = pos
+			Assign: pos,
+			Type:   f.makeASTType(underlyingType, pos),
 		}
 		return typeSpec, nil
 	case C.CXCursor_VarDecl:
@@ -806,6 +804,14 @@ func (f *cgoFile) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 			f.addError(pos, fmt.Sprintf("unknown elaborated type (libclang type kind %s)", typeKindSpelling))
 			typeName = "<unknown>"
 		}
+	case C.CXType_Unexposed:
+		// LLVM 22+ may report certain builtin type aliases (e.g. __size_t)
+		// as Unexposed. Resolve via the canonical type.
+		canonical := C.clang_getCanonicalType(typ)
+		if canonical.kind != C.CXType_Unexposed && canonical.kind != C.CXType_Invalid {
+			return f.makeASTType(canonical, pos)
+		}
+		// If still unexposed, fall through to the error below.
 	case C.CXType_Record:
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
 		name := getString(C.tinygo_clang_getCursorSpelling(cursor))

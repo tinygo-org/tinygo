@@ -27,9 +27,9 @@ bool tinygo_clang_driver(int argc, char **argv) {
 	std::vector<const char*> args(argv, argv + argc);
 
 	// The compiler invocation needs a DiagnosticsEngine so it can report problems
-	llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts = new clang::DiagnosticOptions();
-	clang::TextDiagnosticPrinter DiagnosticPrinter(llvm::errs(), &*DiagOpts);
-	clang::DiagnosticsEngine Diags(llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs>(new clang::DiagnosticIDs()), &*DiagOpts, &DiagnosticPrinter, false);
+	clang::DiagnosticOptions DiagOpts;
+	clang::TextDiagnosticPrinter DiagnosticPrinter(llvm::errs(), DiagOpts);
+	clang::DiagnosticsEngine Diags(llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs>(new clang::DiagnosticIDs()), DiagOpts, &DiagnosticPrinter, false);
 
 	// Create the clang driver
 	clang::driver::Driver TheDriver(args[0], llvm::sys::getDefaultTargetTriple(), Diags);
@@ -60,7 +60,7 @@ bool tinygo_clang_driver(int argc, char **argv) {
 			}
 
 			// Create the actual diagnostics engine.
-			Clang->createDiagnostics(*llvm::vfs::getRealFileSystem());
+			Clang->createDiagnostics();
 			if (!Clang->hasDiagnostics()) {
 				return false;
 			}

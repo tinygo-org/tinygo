@@ -931,10 +931,10 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 				return llvm.Value{}, err
 			}
 		}
-		if llvmType.StructName() != "" {
-			return llvm.ConstNamedStruct(llvmType, fields), nil
-		}
-		return llvmType.Context().ConstStruct(fields, false), nil
+		// Always use ConstNamedStruct to preserve the exact type identity.
+		// ConstStruct creates a literal struct type which may differ from an
+		// anonymous identified struct even when structurally identical.
+		return llvm.ConstNamedStruct(llvmType, fields), nil
 	case llvm.ArrayTypeKind:
 		numElements := llvmType.ArrayLength()
 		childType := llvmType.ElementType()

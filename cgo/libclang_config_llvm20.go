@@ -1,4 +1,4 @@
-//go:build !byollvm && !llvm15 && !llvm16 && !llvm17 && !llvm18 && !llvm19
+//go:build !byollvm && !llvm15 && !llvm16 && !llvm17 && !llvm18 && !llvm19 && !llvm21 && !llvm22
 
 package cgo
 

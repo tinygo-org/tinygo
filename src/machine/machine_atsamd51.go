@@ -1102,6 +1102,9 @@ func (uart *UART) Configure(config UARTConfig) error {
 	//sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN | SERCOM_USART_CTRLB_RXEN ;
 	uart.Bus.CTRLB.SetBits(sam.SERCOM_USART_INT_CTRLB_TXEN | sam.SERCOM_USART_INT_CTRLB_RXEN)
 
+	// Configure RX/TX inversion
+	uart.setInversion(config)
+
 	// Enable USART1 port.
 	// sercom->USART.CTRLA.bit.ENABLE = 0x1u;
 	uart.Bus.CTRLA.SetBits(sam.SERCOM_USART_INT_CTRLA_ENABLE)

@@ -140,13 +140,25 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					panic("unknown number of operands")
 				}
 			case llvm.Switch:
-				// A switch is an array of (value, label) pairs, of which the
+				// Compile to an array of (value, label) pairs, of which the
 				// first one indicates the to-switch value and the default
 				// label.
-				numOperands := llvmInst.OperandsCount()
-				for i := 0; i < numOperands; i += 2 {
-					inst.operands = append(inst.operands, r.getValue(llvmInst.Operand(i)))
-					inst.operands = append(inst.operands, literalValue{uint32(blockIndices[llvmInst.Operand(i+1)])})
+				//
+				// Successor 0 is always the default destination; successors
+				// 1..N-1 are the individual cases. This must be read via
+				// GetSwitchCaseValue/Successor rather than raw operands,
+				// because LLVM 22 stopped exposing switch case values as
+				// regular instruction operands (only the condition and
+				// destination-block operands remain).
+				inst.operands = append(inst.operands,
+					r.getValue(llvmInst.Operand(0)),
+					literalValue{uint32(blockIndices[llvmInst.Successor(0).AsValue()])},
+				)
+				for i := 1; i < llvmInst.SuccessorsCount(); i++ {
+					inst.operands = append(inst.operands,
+						r.getValue(llvmInst.GetSwitchCaseValue(i)),
+						literalValue{uint32(blockIndices[llvmInst.Successor(i).AsValue()])},
+					)
 				}
 			case llvm.PHI:
 				inst.name = llvmInst.Name()

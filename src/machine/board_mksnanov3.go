@@ -10,6 +10,8 @@ import (
 	"runtime/interrupt"
 )
 
+const xtalHz = 8_000_000
+
 // LED is also wired to the SD card card detect (CD) pin.
 const LED = PD12
 

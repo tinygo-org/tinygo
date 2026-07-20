@@ -196,9 +196,9 @@ func (ch *channel) bufferPop(value unsafe.Pointer) {
 }
 
 // Try to proceed with this send operation without blocking, and return whether
-// the send succeeded. Interrupts must be disabled and the lock must be held
-// when calling this function.
-func (ch *channel) trySend(value unsafe.Pointer) bool {
+// the send succeeded. Schedule a returned task only after releasing all locks.
+// Interrupts must be disabled and the channel lock must be held.
+func (ch *channel) trySend(value unsafe.Pointer) (sent bool, wake *task.Task) {
 	// To make sure we send values in the correct order, we can only send
 	// directly to a receiver when there are no values in the buffer.
 
@@ -215,8 +215,7 @@ func (ch *channel) trySend(value unsafe.Pointer) bool {
 	if ch.bufLen == 0 {
 		if receiver := ch.receivers.pop(chanOperationOk); receiver != nil {
 			memcpy(receiver.task.Ptr, value, ch.elementSize)
-			scheduleTask(receiver.task)
-			return true
+			return true, receiver.task
 		}
 	}
 
@@ -224,9 +223,9 @@ func (ch *channel) trySend(value unsafe.Pointer) bool {
 	// store the value in the buffer and continue.
 	if ch.bufLen < ch.bufCap {
 		ch.bufferPush(value)
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
 func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
@@ -239,8 +238,11 @@ func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
 	ch.lock.Lock()
 
 	// See whether we can proceed immediately, and if so, return early.
-	if ch.trySend(value) {
+	if sent, wake := ch.trySend(value); sent {
 		ch.lock.Unlock()
+		if wake != nil {
+			scheduleTask(wake)
+		}
 		interrupt.Restore(mask)
 		return
 	}
@@ -269,9 +271,9 @@ func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
 }
 
 // Try to proceed with this receive operation without blocking, and return
-// whether the receive operation succeeded. Interrupts must be disabled and the
-// lock must be held when calling this function.
-func (ch *channel) tryRecv(value unsafe.Pointer) (received, ok bool) {
+// whether it succeeded. Schedule a returned task only after releasing all locks.
+// Interrupts must be disabled and the channel lock must be held.
+func (ch *channel) tryRecv(value unsafe.Pointer) (received, ok bool, wake *task.Task) {
 	// To make sure we keep the values in the channel in the correct order, we
 	// first have to read values from the buffer before we can look at the
 	// senders.
@@ -284,27 +286,26 @@ func (ch *channel) tryRecv(value unsafe.Pointer) (received, ok bool) {
 		// Check for the next sender available and push it to the buffer.
 		if sender := ch.senders.pop(chanOperationOk); sender != nil {
 			ch.bufferPush(sender.value)
-			scheduleTask(sender.task)
+			return true, true, sender.task
 		}
 
-		return true, true
+		return true, true, nil
 	}
 
 	if ch.closed {
 		// Channel is closed, so proceed immediately.
 		memzero(value, ch.elementSize)
-		return true, false
+		return true, false, nil
 	}
 
 	// If there is a sender, we can proceed with the channel operation
 	// immediately.
 	if sender := ch.senders.pop(chanOperationOk); sender != nil {
 		memcpy(value, sender.value, ch.elementSize)
-		scheduleTask(sender.task)
-		return true, true
+		return true, true, sender.task
 	}
 
-	return false, false
+	return false, false, nil
 }
 
 func chanRecv(ch *channel, value unsafe.Pointer, op *channelOp) bool {
@@ -316,8 +317,11 @@ func chanRecv(ch *channel, value unsafe.Pointer, op *channelOp) bool {
 	mask := interrupt.Disable()
 	ch.lock.Lock()
 
-	if received, ok := ch.tryRecv(value); received {
+	if received, ok, wake := ch.tryRecv(value); received {
 		ch.lock.Unlock()
+		if wake != nil {
+			scheduleTask(wake)
+		}
 		interrupt.Restore(mask)
 		return ok
 	}
@@ -358,6 +362,11 @@ func chanClose(ch *channel) {
 		runtimePanic("close of closed channel")
 	}
 
+	// Collect waiters and wake them after unlocking.
+	// pop() removes each op from the channel queue, so next can be reused
+	// to link the temporary wake list.
+	var wakeHead, wakeTail *channelOp
+
 	// Proceed all receiving operations that are blocked.
 	for {
 		receiver := ch.receivers.pop(chanOperationClosed)
@@ -369,8 +378,13 @@ func chanClose(ch *channel) {
 		// Zero the value that the receiver is getting.
 		memzero(receiver.task.Ptr, ch.elementSize)
 
-		// Wake up the receiving goroutine.
-		scheduleTask(receiver.task)
+		receiver.next = nil
+		if wakeTail == nil {
+			wakeHead = receiver
+		} else {
+			wakeTail.next = receiver
+		}
+		wakeTail = receiver
 	}
 
 	// Let all senders panic.
@@ -380,13 +394,25 @@ func chanClose(ch *channel) {
 			break // processed all senders
 		}
 
-		// Wake up the sender.
-		scheduleTask(sender.task)
+		sender.next = nil
+		if wakeTail == nil {
+			wakeHead = sender
+		} else {
+			wakeTail.next = sender
+		}
+		wakeTail = sender
 	}
 
 	ch.closed = true
-
 	ch.lock.Unlock()
+
+	// Wake waiters only after releasing the channel lock.
+	for wakeHead != nil {
+		wake := wakeHead
+		wakeHead = wake.next
+		scheduleTask(wake.task)
+	}
+
 	interrupt.Restore(mask)
 }
 
@@ -439,6 +465,7 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 	const selectNoIndex = ^uint32(0)
 	selectIndex := selectNoIndex
 	selectOk := true
+	var wake *task.Task
 
 	// Iterate over each state, and see if it can proceed.
 	// TODO: start from a random index.
@@ -450,14 +477,16 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 		}
 
 		if state.value == nil { // chan receive
-			if received, ok := state.ch.tryRecv(recvbuf); received {
+			if received, ok, sender := state.ch.tryRecv(recvbuf); received {
 				selectIndex = uint32(i)
 				selectOk = ok
+				wake = sender
 				break
 			}
 		} else { // chan send
-			if state.ch.trySend(state.value) {
+			if sent, receiver := state.ch.trySend(state.value); sent {
 				selectIndex = uint32(i)
+				wake = receiver
 				break
 			}
 		}
@@ -469,6 +498,9 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 	if selectIndex != selectNoIndex || !blocking {
 		unlockAllStates(states)
 		chanSelectLock.Unlock()
+		if wake != nil {
+			scheduleTask(wake)
+		}
 		interrupt.Restore(mask)
 		return selectIndex, selectOk
 	}

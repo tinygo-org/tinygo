@@ -447,9 +447,17 @@ func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
 	config.TX.Configure(PinConfig{Mode: PinInputPullup})
 
 	// link TX with GPIO signal X (technical reference manual 5.10) (this is not interrupt signal!)
-	config.TX.outFunc().Set(regs.gpioMatrixSignal)
+	if config.InvertTX {
+		config.TX.outFunc().Set(regs.gpioMatrixSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
+	} else {
+		config.TX.outFunc().Set(regs.gpioMatrixSignal)
+	}
 	// link RX with GPIO signal X and route signals via GPIO matrix (GPIO_SIGn_IN_SEL 0x40)
-	inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
+	if config.InvertRX {
+		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX) | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
+	} else {
+		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
+	}
 }
 
 func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) { // Disable all UART interrupts

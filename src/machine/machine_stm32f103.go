@@ -12,7 +12,10 @@ import (
 )
 
 func CPUFrequency() uint32 {
-	return 72000000
+	pll := PLLParams72MHz()
+	// Prediv/Mul are raw RCC_CFGR register field values: the prescaler is
+	// encoded as (divisor-1) and the multiplier as (multiplier-2).
+	return xtalHz / (pll.Prediv + 1) * (pll.Mul + 2)
 }
 
 var deviceIDAddr = []uintptr{0x1FFFF7E8, 0x1FFFF7EC, 0x1FFFF7F0}

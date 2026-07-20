@@ -8,15 +8,15 @@ import (
 )
 
 const (
-	// +----------------------+
-	// |    Clock Settings    |
-	// +-------------+--------+
-	// | HSE         | 12mhz  |
-	// | SYSCLK      | 168mhz |
-	// | HCLK        | 168mhz |
-	// | APB1(PCLK1) | 42mhz  |
-	// | APB2(PCLK2) | 84mhz  |
-	// +-------------+--------+
+	// +---------------------------------------------+
+	// |    Clock Settings                           |
+	// +-------------+-------------------------------+
+	// | HSE         | selectable (xtal_8/12/16_mhz) |
+	// | SYSCLK      | 168mhz                        |
+	// | HCLK        | 168mhz                        |
+	// | APB1(PCLK1) | 42mhz                         |
+	// | APB2(PCLK2) | 84mhz                         |
+	// +-------------+-------------------------------+
 	HCLK_FREQ_HZ  = 168000000
 	PCLK1_FREQ_HZ = HCLK_FREQ_HZ / 4
 	PCLK2_FREQ_HZ = HCLK_FREQ_HZ / 2
@@ -28,11 +28,6 @@ const (
 
 	PLL_SRC_HSE = 1 << stm32.RCC_PLLCFGR_PLLSRC_Pos // use HSE for PLL and PLLI2S
 	PLL_SRC_HSI = 0                                 // use HSI for PLL and PLLI2S
-
-	PLL_DIV_M = 6 << stm32.RCC_PLLCFGR_PLLM_Pos
-	PLL_MLT_N = 168 << stm32.RCC_PLLCFGR_PLLN_Pos
-	PLL_DIV_P = ((2 >> 1) - 1) << stm32.RCC_PLLCFGR_PLLP_Pos
-	PLL_DIV_Q = 7 << stm32.RCC_PLLCFGR_PLLQ_Pos
 
 	SYSCLK_SRC_PLL  = stm32.RCC_CFGR_SW_PLL << stm32.RCC_CFGR_SW_Pos
 	SYSCLK_STAT_PLL = stm32.RCC_CFGR_SWS_PLL << stm32.RCC_CFGR_SWS_Pos
@@ -94,7 +89,12 @@ func initOSC() {
 	}
 
 	// set HSE as PLL source and configure clock divisors
-	stm32.RCC.PLLCFGR.Set(PLL_SRC_HSE | PLL_DIV_M | PLL_MLT_N | PLL_DIV_P | PLL_DIV_Q)
+	pll := machine.PLLParams168MHz()
+	stm32.RCC.PLLCFGR.Set(PLL_SRC_HSE |
+		pll.M<<stm32.RCC_PLLCFGR_PLLM_Pos |
+		pll.N<<stm32.RCC_PLLCFGR_PLLN_Pos |
+		((pll.P>>1)-1)<<stm32.RCC_PLLCFGR_PLLP_Pos |
+		pll.Q<<stm32.RCC_PLLCFGR_PLLQ_Pos)
 
 	// enable PLL and wait for it to sync
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)

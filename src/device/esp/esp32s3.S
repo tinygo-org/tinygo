@@ -102,10 +102,14 @@ call_start_cpu0:
 
     // ---- 1. Windowed-ABI register file setup ----
 
-    // Disable WOE so we can safely manipulate WINDOWSTART.
+    // Disable WOE (bit 18 of PS).
+    // Avoid large movi constants to prevent auto-generated .literal section
+    // entries, which cause l32r offset miscalculation in LLVM 22 / lld.
     rsr.ps a2
-    movi a3, ~(PS_WOE)
-    and a2, a2, a3
+    movi a3, 1
+    slli a3, a3, 18         // a3 = PS_WOE (0x40000)
+    and  a3, a2, a3         // isolate WOE bit
+    xor  a2, a2, a3         // clear WOE bit
     wsr.ps a2
     rsync
 
@@ -122,7 +126,8 @@ call_start_cpu0:
 
     // Re-enable WOE.
     rsr.ps a2
-    movi a3, PS_WOE
+    movi a3, 1
+    slli a3, a3, 18         // a3 = PS_WOE (0x40000)
     or a2, a2, a3
     wsr.ps a2
     rsync
@@ -213,7 +218,9 @@ call_start_cpu0:
     // and cannot service flash accesses.
 
     // 4a. Configure ICache mode: 16KB, 8-way, 32-byte line
-    movi a6, 0x4000         // cache_size = 16KB
+    // Use movi+slli to avoid auto-literal generation (lld l32r bug).
+    movi a6, 1
+    slli a6, a6, 14         // a6 = 0x4000 = 16KB
     movi a7, 8              // ways = 8
     movi a8, 32             // line_size = 32
     mov  a5, a1
@@ -226,7 +233,8 @@ call_start_cpu0:
     callx4 a4
 
     // 4c. Configure DCache mode: 32KB, 8-way, 32-byte line
-    movi a6, 0x8000         // cache_size = 32KB
+    movi a6, 1
+    slli a6, a6, 15         // a6 = 0x8000 = 32KB
     movi a7, 8              // ways = 8
     movi a8, 32             // line_size = 32
     mov  a5, a1

@@ -56,6 +56,9 @@ func (uart *UART) Configure(config UARTConfig) {
 	// Set baud rate
 	uart.SetBaudRate(config.BaudRate)
 
+	// Configure RX/TX inversion
+	uart.setInversion(config)
+
 	// Enable USART port, tx, rx and rx interrupts
 	uart.Bus.CR1.Set(stm32.USART_CR1_TE | stm32.USART_CR1_RE | stm32.USART_CR1_RXNEIE | stm32.USART_CR1_UE)
 

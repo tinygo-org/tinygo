@@ -133,7 +133,7 @@ endif
 
 .PHONY: all tinygo test $(LLVM_BUILDDIR) llvm-source clean fmt gen-device gen-device-nrf gen-device-nxp gen-device-avr gen-device-rp
 
-LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf debuginfopdb executionengine frontenddriver frontendhlsl frontendopenmp instrumentation interpreter ipo irreader libdriver linker lto mc mcjit objcarcopts option profiledata scalaropts support target windowsdriver windowsmanifest
+LLVM_COMPONENTS = all-targets analysis asmparser asmprinter bitreader bitwriter codegen core coroutines coverage debuginfodwarf debuginfopdb dtlto executionengine frontenddriver frontendhlsl frontendopenmp instrumentation interpreter ipo irreader libdriver linker lto mc mcjit objcarcopts option profiledata scalaropts support target windowsdriver windowsmanifest
 
 ifeq ($(OS),Windows_NT)
     EXE = .exe
@@ -172,7 +172,7 @@ endif
 MD5SUM ?= md5sum
 
 # Libraries that should be linked in for the statically linked Clang.
-CLANG_LIB_NAMES = clangAnalysis clangAPINotes clangAST clangASTMatchers clangBasic clangCodeGen clangCrossTU clangDriver clangDynamicASTMatchers clangEdit clangExtractAPI clangFormat clangFrontend clangFrontendTool clangHandleCXX clangHandleLLVM clangIndex clangInstallAPI clangLex clangParse clangRewrite clangRewriteFrontend clangSema clangSerialization clangSupport clangTooling clangToolingASTDiff clangToolingCore clangToolingInclusions
+CLANG_LIB_NAMES = clangAnalysis clangAnalysisLifetimeSafety clangAPINotes clangAST clangASTMatchers clangBasic clangCodeGen clangCrossTU clangDriver clangDynamicASTMatchers clangEdit clangExtractAPI clangFormat clangFrontend clangFrontendTool clangHandleCXX clangHandleLLVM clangIndex clangInstallAPI clangLex clangOptions clangParse clangRewrite clangRewriteFrontend clangSema clangSerialization clangSupport clangTooling clangToolingASTDiff clangToolingCore clangToolingInclusions
 CLANG_LIBS = $(START_GROUP) $(addprefix -l,$(CLANG_LIB_NAMES)) $(END_GROUP) -lstdc++
 
 # Libraries that should be linked in for the statically linked LLD.
@@ -180,7 +180,7 @@ LLD_LIB_NAMES = lldCOFF lldCommon lldELF lldMachO lldMinGW lldWasm
 LLD_LIBS = $(START_GROUP) $(addprefix -l,$(LLD_LIB_NAMES)) $(END_GROUP)
 
 # Other libraries that are needed to link TinyGo.
-EXTRA_LIB_NAMES = LLVMInterpreter LLVMMCA LLVMRISCVTargetMCA LLVMX86TargetMCA
+EXTRA_LIB_NAMES = LLVMDTLTO LLVMInterpreter LLVMMCA LLVMRISCVTargetMCA LLVMX86TargetMCA
 
 # All libraries to be built and linked with the tinygo binary (lib/lib*.a).
 LIB_NAMES = clang $(CLANG_LIB_NAMES) $(LLD_LIB_NAMES) $(EXTRA_LIB_NAMES)
@@ -272,7 +272,7 @@ gen-device-renesas: build/gen-device-svd
 	GO111MODULE=off $(GO) fmt ./src/device/renesas
 
 $(LLVM_PROJECTDIR)/llvm:
-	git clone -b tinygo_20.x --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
+	git clone -b tinygo_22.x --depth=1 https://github.com/tinygo-org/llvm-project $(LLVM_PROJECTDIR)
 llvm-source: $(LLVM_PROJECTDIR)/llvm ## Get LLVM sources
 
 # Configure LLVM.
@@ -319,9 +319,9 @@ check-nodejs-version:
 
 tinygo: ## Build the TinyGo compiler
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  $(MAKE) llvm-source"; echo "  $(MAKE) $(LLVM_BUILDDIR)"; exit 1; fi
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CFLAGS="$(CGO_CFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags "byollvm osusergo" .
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CFLAGS="$(CGO_CFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GOENVFLAGS) $(GO) build -buildmode exe -o build/tinygo$(EXE) -tags "byollvm llvm22 osusergo" .
 test: check-nodejs-version
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags "byollvm osusergo" $(GOTESTPKGS)
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags "byollvm llvm22 osusergo" $(GOTESTPKGS)
 
 # Standard library packages that pass tests on darwin, linux, wasi, and windows, but take over a minute in wasi
 TEST_PACKAGES_SLOW = \
@@ -387,7 +387,9 @@ TEST_PACKAGES_FAST = \
 
 # archive/zip requires os.ReadAt, which is not yet supported on windows
 # bytes requires mmap
-# compress/flate appears to hang on wasi
+# compress/flate appears to hang on wasi; on all targets Go 1.27's new
+#   compress/flate.indexTokens returns a ~262KB struct by value which crashes
+#   LLVM's X86 instruction selector during LTO codegen
 # crypto/aes needs reflect.Type.Method(), not yet implemented
 # crypto/des fails on wasi, needs panic()/recover()
 # crypto/hmac fails on wasi, it exits with a "slice out of range" panic
@@ -409,7 +411,6 @@ TEST_PACKAGES_FAST = \
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
-	compress/flate \
 	context \
 	crypto/aes \
 	crypto/des \
@@ -437,7 +438,6 @@ TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 
 # os/user requires t.Skip() support
 TEST_PACKAGES_WINDOWS := \
-	compress/flate \
 	crypto/des \
 	crypto/hmac \
 	image \
@@ -477,6 +477,11 @@ TEST_PACKAGES_BAREMETAL = $(filter-out $(TEST_PACKAGES_NONBAREMETAL), $(TEST_PAC
 TEST_PACKAGES_NONBAREMETAL = \
 	$(TEST_PACKAGES_NONWASM) \
 	math \
+	$(nil)
+
+TEST_PACKAGES_FAST_WASI = $(filter-out $(TEST_PACKAGES_NOWASI), $(TEST_PACKAGES_FAST))
+TEST_PACKAGES_NOWASI = \
+	crypto/ecdsa \
 	$(nil)
 
 # Report platforms on which each standard library package is known to pass tests
@@ -539,12 +544,12 @@ tinygo-test-wasi:
 tinygo-test-wasip1:
 	GOOS=wasip1 GOARCH=wasm $(TINYGO) test $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_SLOW) ./tests/runtime_wasi
 tinygo-test-wasip1-fast:
-	$(TINYGO) test -target=wasip1 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
+	$(TINYGO) test -target=wasip1 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST_WASI) ./tests/runtime_wasi
 
 tinygo-test-wasip2-slow:
 	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_SLOW)
 tinygo-test-wasip2-fast:
-	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST) ./tests/runtime_wasi
+	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST_WASI) ./tests/runtime_wasi
 
 tinygo-test-wasip2-sum-slow:
 	TINYGO=$(TINYGO) \
@@ -574,13 +579,13 @@ tinygo-test-baremetal:
 
 # Test external packages in a large corpus.
 test-corpus:
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus . -corpus=testdata/corpus.yaml
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags "byollvm llvm22" -run TestCorpus . -corpus=testdata/corpus.yaml
 test-corpus-fast:
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus -short . -corpus=testdata/corpus.yaml
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags "byollvm llvm22" -run TestCorpus -short . -corpus=testdata/corpus.yaml
 test-corpus-wasi:
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus . -corpus=testdata/corpus.yaml -target=wasip1
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags "byollvm llvm22" -run TestCorpus . -corpus=testdata/corpus.yaml -target=wasip1
 test-corpus-wasip2:
-	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags byollvm -run TestCorpus . -corpus=testdata/corpus.yaml -target=wasip2
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags "byollvm llvm22" -run TestCorpus . -corpus=testdata/corpus.yaml -target=wasip2
 
 .PHONY: testchdir
 testchdir:
@@ -968,6 +973,8 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target m5stack-core2       examples/machinetest
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5stack             examples/machinetest
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target m5stamp-s3a         examples/machinetest
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target m5stick-c           examples/machinetest
 	@$(MD5SUM) test.bin

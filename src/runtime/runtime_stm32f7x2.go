@@ -10,21 +10,15 @@ import (
 /*
 clock settings
 
-	+-------------+--------+
-	| HSE         | 8mhz   |
-	| SYSCLK      | 216mhz |
-	| HCLK        | 216mhz |
-	| APB1(PCLK1) | 27mhz  |
-	| APB2(PCLK2) | 108mhz |
-	+-------------+--------+
+	+-------------+--------------------------------+
+	| HSE         | selectable (xtal_8/12/16_mhz)   |
+	| SYSCLK      | 216mhz                          |
+	| HCLK        | 216mhz                          |
+	| APB1(PCLK1) | 27mhz                           |
+	| APB2(PCLK2) | 108mhz                          |
+	+-------------+--------------------------------+
 */
-const (
-	HSE_STARTUP_TIMEOUT = 0x0500
-	PLL_M               = 4
-	PLL_N               = 216
-	PLL_P               = 2
-	PLL_Q               = 9
-)
+const HSE_STARTUP_TIMEOUT = 0x0500
 
 func init() {
 	initCLK()
@@ -107,12 +101,13 @@ func initOsc() {
 	}
 
 	// Configure the PLL: HSE as source, use SVD constants for positions.
+	pll := machine.PLLParams216MHz()
 	stm32.RCC.PLLCFGR.Set(
 		(stm32.RCC_PLLCFGR_PLLSRC_HSE << stm32.RCC_PLLCFGR_PLLSRC_Pos) |
-			(PLL_M << stm32.RCC_PLLCFGR_PLLM_Pos) |
-			(PLL_N << stm32.RCC_PLLCFGR_PLLN_Pos) |
-			(((PLL_P >> 1) - 1) << stm32.RCC_PLLCFGR_PLLP_Pos) |
-			(PLL_Q << stm32.RCC_PLLCFGR_PLLQ_Pos))
+			(pll.M << stm32.RCC_PLLCFGR_PLLM_Pos) |
+			(pll.N << stm32.RCC_PLLCFGR_PLLN_Pos) |
+			(((pll.P >> 1) - 1) << stm32.RCC_PLLCFGR_PLLP_Pos) |
+			(pll.Q << stm32.RCC_PLLCFGR_PLLQ_Pos))
 
 	// Enable the PLL, wait until ready
 	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)

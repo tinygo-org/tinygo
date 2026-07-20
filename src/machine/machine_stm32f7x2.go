@@ -9,7 +9,8 @@ import (
 )
 
 func CPUFrequency() uint32 {
-	return 216000000
+	pll := PLLParams216MHz()
+	return xtalHz / pll.M * pll.N / pll.P
 }
 
 // Internal use: configured speed of the APB1 and APB2 timers, this should be kept

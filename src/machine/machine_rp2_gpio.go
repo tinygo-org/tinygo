@@ -141,6 +141,16 @@ func (p Pin) setSchmitt(trigger bool) {
 	p.padCtrl().ReplaceBits(boolToBit(trigger)<<rp.PADS_BANK0_GPIO0_SCHMITT_Pos, rp.PADS_BANK0_GPIO0_SCHMITT_Msk, 0)
 }
 
+// setOutOver sets the output override (OUTOVER field) for the pin.
+func (p Pin) setOutOver(over uint32) {
+	p.ioCtrl().ReplaceBits(over<<rp.IO_BANK0_GPIO0_CTRL_OUTOVER_Pos, rp.IO_BANK0_GPIO0_CTRL_OUTOVER_Msk, 0)
+}
+
+// setInOver sets the input override (INOVER field) for the pin.
+func (p Pin) setInOver(over uint32) {
+	p.ioCtrl().ReplaceBits(over<<rp.IO_BANK0_GPIO0_CTRL_INOVER_Pos, rp.IO_BANK0_GPIO0_CTRL_INOVER_Msk, 0)
+}
+
 // setFunc will set pin function to fn.
 func (p Pin) setFunc(fn pinFunc) {
 	// Set input enable, Clear output disable

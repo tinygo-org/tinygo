@@ -65,15 +65,6 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 	// Sort the segments by address. This is what esptool does too.
 	sort.SliceStable(segments, func(i, j int) bool { return segments[i].addr < segments[j].addr })
 
-	// Calculate checksum over the segment data. This is used in the image
-	// footer.
-	checksum := uint8(0xef)
-	for _, segment := range segments {
-		for _, b := range segment.data {
-			checksum ^= b
-		}
-	}
-
 	// Write first to an in-memory buffer, primarily so that we can easily
 	// calculate a hash over the entire image.
 	// An added benefit is that we don't need to check for errors all the time.
@@ -86,6 +77,86 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 	if strings.HasSuffix(format, "-img") {
 		makeImage = true
 		chip = format[:len(format)-len("-img")]
+	}
+
+	// For ESP32 (original): separate RAM segments (loadable by ROM bootloader)
+	// from flash-mapped segments (DROM/IROM, require MMU setup by startup code).
+	// The ROM bootloader on ESP32 does NOT handle flash-mapped segments —
+	// it tries to memcpy to the virtual address, which crashes.
+	var flashSegments []*espImageSegment
+	if chip == "esp32" {
+		var ramSegments []*espImageSegment
+		for _, seg := range segments {
+			if (seg.addr >= 0x3F400000 && seg.addr < 0x3F800000) || // DROM
+				(seg.addr >= 0x400D0000 && seg.addr < 0x40400000) { // IROM
+				flashSegments = append(flashSegments, seg)
+			} else {
+				ramSegments = append(ramSegments, seg)
+			}
+		}
+		segments = ramSegments
+	}
+
+	// ESP32 flash XIP: compute where the DROM segment will be placed in flash
+	// (page-aligned, right after the RAM segments) and patch the
+	// _drom_flash_addr variable so the startup code can program the cache MMU.
+	// This must happen before the checksum/hash are computed so the patched
+	// value is covered by both.
+	const esp32FlashBase = 0x1000 // esptool flashes the image at 0x1000
+	// The ESP32 flash cache MMU supports configurable page sizes down to 256 B. 64 KiB is the reset/default size.
+	// If the startup code ever changes the MMU page size, this constant must change too.
+	const esp32PageSize = 0x10000 // 64KB MMU pages
+	var esp32DromFlashAddr uint32
+	if chip == "esp32" && len(flashSegments) > 0 {
+		// Compute the size of the RAM portion of the image (everything the ROM
+		// bootloader loads, up to and including the appended SHA256 hash).
+		ramImageSize := 0
+		if makeImage {
+			ramImageSize += 4096
+		}
+		ramImageSize += 24 // image header (8) + trailer fields (16)
+		for _, seg := range segments {
+			ramImageSize += 8 + len(seg.data) // segment header + data (4-aligned)
+		}
+		ramImageSize += 16 - ramImageSize%16 // footer padding + checksum byte
+		ramImageSize += 32                   // appended SHA256 hash
+
+		// DROM flash address must be 64KB page-aligned.
+		esp32DromFlashAddr = uint32(esp32FlashBase+ramImageSize+esp32PageSize-1) &^ (esp32PageSize - 1)
+
+		// Patch _drom_flash_addr in whichever RAM segment contains it.
+		syms, _ := inf.Symbols()
+		var dromSymAddr uint64
+		for _, s := range syms {
+			if s.Name == "_drom_flash_addr" {
+				dromSymAddr = s.Value
+				break
+			}
+		}
+		if dromSymAddr == 0 {
+			return fmt.Errorf("ESP32: _drom_flash_addr symbol not found")
+		}
+		patched := false
+		for _, seg := range segments {
+			if dromSymAddr >= uint64(seg.addr) && dromSymAddr+4 <= uint64(seg.addr)+uint64(len(seg.data)) {
+				off := int(dromSymAddr - uint64(seg.addr))
+				binary.LittleEndian.PutUint32(seg.data[off:], esp32DromFlashAddr)
+				patched = true
+				break
+			}
+		}
+		if !patched {
+			return fmt.Errorf("ESP32: _drom_flash_addr (0x%x) not in any RAM segment", dromSymAddr)
+		}
+	}
+
+	// Calculate checksum over the segment data. This is used in the image
+	// footer.
+	checksum := uint8(0xef)
+	for _, segment := range segments {
+		for _, b := range segment.data {
+			checksum ^= b
+		}
 	}
 
 	if makeImage {
@@ -189,6 +260,58 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		// SHA256 hash (to protect against image corruption, not for security).
 		hash := sha256.Sum256(outf.Bytes())
 		outf.Write(hash[:])
+	}
+
+	// For ESP32: append flash-mapped segments (DROM/IROM) at page-aligned flash
+	// offsets after the RAM portion. The startup code maps them via the flash
+	// cache MMU (DROM at esp32DromFlashAddr, patched into _drom_flash_addr).
+	if len(flashSegments) > 0 {
+		const flashBase = esp32FlashBase
+		const pageSize = esp32PageSize
+		dromFlashAddr := esp32DromFlashAddr
+
+		// Separate DROM and IROM segments.
+		var dromSegs, iromSegs []*espImageSegment
+		for _, seg := range flashSegments {
+			if seg.addr >= 0x3F400000 && seg.addr < 0x3F800000 {
+				dromSegs = append(dromSegs, seg)
+			} else {
+				iromSegs = append(iromSegs, seg)
+			}
+		}
+
+		// Write DROM segments at the computed page-aligned flash offset.
+		dromSize := 0
+		if len(dromSegs) > 0 {
+			targetImageOffset := int(dromFlashAddr - flashBase)
+			if outf.Len() > targetImageOffset {
+				return fmt.Errorf("ESP32: RAM segments too large (%d bytes), overlap DROM at flash 0x%x", outf.Len(), dromFlashAddr)
+			}
+			outf.Write(make([]byte, targetImageOffset-outf.Len()))
+			for _, seg := range dromSegs {
+				outf.Write(seg.data)
+				dromSize += len(seg.data)
+			}
+		}
+
+		// Write IROM segments immediately after DROM, at the next page boundary.
+		// IROM flash addr = dromFlashAddr + ceil(dromSize/pageSize)*pageSize
+		// (must match the computation in the startup assembly).
+		if len(iromSegs) > 0 {
+			dromPages := (dromSize + pageSize - 1) / pageSize
+			if dromPages == 0 {
+				dromPages = 1
+			}
+			iromFlashAddr := dromFlashAddr + uint32(dromPages)*pageSize
+			targetImageOffset := int(iromFlashAddr - flashBase)
+			if outf.Len() > targetImageOffset {
+				return fmt.Errorf("ESP32: DROM too large, overlaps IROM at flash 0x%x", iromFlashAddr)
+			}
+			outf.Write(make([]byte, targetImageOffset-outf.Len()))
+			for _, seg := range iromSegs {
+				outf.Write(seg.data)
+			}
+		}
 	}
 
 	// QEMU (or more precisely, qemu-system-xtensa from Espressif) expects the

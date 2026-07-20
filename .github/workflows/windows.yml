@@ -34,13 +34,13 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Restore cached LLVM source
         uses: actions/cache/restore@v5
         id: cache-llvm-source
         with:
-          key: llvm-source-20-windows-v3
+          key: llvm-source-22-windows-v3
           path: |
             llvm-project/clang/lib/Headers
             llvm-project/clang/include
@@ -65,7 +65,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-20-windows-v5
+          key: llvm-build-22-windows-v1
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -129,7 +129,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -150,7 +150,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -176,7 +176,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.4'
+          go-version: '1.27.0-rc.2'
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8

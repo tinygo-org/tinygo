@@ -31,8 +31,10 @@ func buffered() int {
 	return machine.Serial.Buffered()
 }
 
-// initCLK sets clock to 72MHz using HSE 8MHz crystal w/ PLL X 9 (8MHz x 9 = 72MHz).
+// initCLK sets clock to 72MHz using the board's HSE crystal (defined by the xtalHz) w/ PLL.
 func initCLK() {
+	pll := machine.PLLParams72MHz()
+
 	stm32.FLASH.ACR.SetBits(stm32.FLASH_ACR_LATENCY_WS2)                            // Two wait states, per datasheet
 	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE1_Div2 << stm32.RCC_CFGR_PPRE1_Pos)   // prescale PCLK1 = HCLK/2
 	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PPRE2_Div1 << stm32.RCC_CFGR_PPRE2_Pos)   // prescale PCLK2 = HCLK/1
@@ -49,9 +51,10 @@ func initCLK() {
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSIRDY) {
 	}
 
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLSRC)                                   // set PLL source to HSE
-	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLMUL_Mul9 << stm32.RCC_CFGR_PLLMUL_Pos) // multiply by 9
-	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)                                        // enable the PLL
+	stm32.RCC.CFGR.SetBits(stm32.RCC_CFGR_PLLSRC)                     // set PLL source to HSE
+	stm32.RCC.CFGR.SetBits(pll.Prediv << stm32.RCC_CFGR_PLLXTPRE_Pos) // optional HSE /2 prescaler
+	stm32.RCC.CFGR.SetBits(pll.Mul << stm32.RCC_CFGR_PLLMUL_Pos)      // PLL multiplier
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_PLLON)                          // enable the PLL
 
 	// wait for the PLLRDY flag
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_PLLRDY) {
