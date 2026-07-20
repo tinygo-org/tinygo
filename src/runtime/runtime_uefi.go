@@ -56,6 +56,11 @@ func sleepTicks(d timeUnit) {
 
 func putchar(c byte) {
 	buf := [2]uefi.CHAR16{uefi.CHAR16(c), 0}
+	if c == '\n' {
+		buf := [4]uefi.CHAR16{'\r', 0, '\n', 0}
+		uefi.ST().ConOut.OutputString(&buf[0])
+		return
+	}
 	uefi.ST().ConOut.OutputString(&buf[0])
 }
 
