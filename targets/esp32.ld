@@ -185,7 +185,7 @@ SECTIONS
 
 /* For the garbage collector. */
 _globals_start = _sbss;
-_globals_end = _wifi_bss_end;
+_globals_end = _edata;
 _heap_start = _edata;
 /* Go GC heap = the rest of SRAM2 above .data (~113KB), a single safe contiguous
  * block. The WiFi arena lives in DRAM1 (SRAM1 pool 7/6), so its ~64KB does not
