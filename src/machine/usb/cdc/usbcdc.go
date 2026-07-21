@@ -145,7 +145,7 @@ func (usbcdc *USBCDC) txhandler() {
 // still held from the previous packet when entered via txhandler).
 func (usbcdc *USBCDC) sendFromRing() {
 	for {
-		d1, _ := usbcdc.tx.Peek()
+		d1, d2 := usbcdc.tx.Peek()
 		if len(d1) == 0 {
 			// Release the pump, then re-scan the ring: closes the missed-wakeup
 			// race where Write Put()s data and kickTx's CAS then fails (txActive
@@ -165,7 +165,37 @@ func (usbcdc *USBCDC) sendFromRing() {
 			continue // re-claimed; re-peek and keep pumping
 		}
 
-		chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
+		var chunk []byte
+
+		// Prefer filling a full USB packet whenever possible.
+		// When the ring buffer wraps, the readable data may be split into two
+		// segments. Sending only the first segment can create a short packet
+		// before all pending data has been transmitted (for example, 7 bytes
+		// followed by 64 bytes).
+		//
+		// A short packet should normally only be generated at the end of the
+		// transfer, so combine wrapped segments to fill the endpoint packet size.
+
+		// The first segment is large enough: use it directly without copying.
+		if len(d1) >= usb.EndpointPacketSize {
+			chunk = d1[:usb.EndpointPacketSize]
+
+			// The data wraps around the ring buffer: combine segments.
+		} else if len(d1)+len(d2) >= usb.EndpointPacketSize {
+			var buf [usb.EndpointPacketSize]byte
+
+			n := copy(buf[:], d1)
+			copy(buf[n:], d2)
+
+			// sendUSBPacket() copies the data into USB DPRAM immediately.
+			// Do not keep this slice after returning from sendUSBPacket().
+			chunk = buf[:usb.EndpointPacketSize]
+
+			// Less than one full packet remains: send the final short packet.
+		} else {
+			chunk = d1
+		}
+
 		usbcdc.inflight.Store(uint32(len(chunk)))
 		machine.SendUSBInPacket(cdcEndpointIn, chunk)
 		return // in flight; txActive stays set, txhandler continues
