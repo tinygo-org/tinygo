@@ -1193,8 +1193,7 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 // thunk is declared, not defined: it will be defined by the interface lowering
 // pass.
 func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
-	s, _ := c.getTypeCodeName(instr.Value.Type().Underlying())
-	fnName := s + "." + instr.Method.Name() + "$invoke"
+	fnName := c.getInvokeFunctionName(instr)
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
 		sig := instr.Method.Type().(*types.Signature)
@@ -1211,6 +1210,11 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))
 	}
 	return llvmFn
+}
+
+func (c *compilerContext) getInvokeFunctionName(instr *ssa.CallCommon) string {
+	s, _ := c.getTypeCodeName(instr.Value.Type().Underlying())
+	return s + "." + instr.Method.Name() + "$invoke"
 }
 
 // createInterfaceTypeAssert creates a call to a declared-but-not-defined

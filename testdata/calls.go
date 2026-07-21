@@ -70,6 +70,7 @@ func main() {
 
 	// regression testing
 	regression1033()
+	regression5541()
 
 	//Test deferred builtins
 	testDeferBuiltinClose()
@@ -222,6 +223,46 @@ func foo(bar *Bar) error {
 	defer c.Close()
 
 	return nil
+}
+
+var regression5541RuntimeClosed, regression5541ModuleClosed int
+
+type regression5541Closer interface {
+	Close()
+}
+
+type regression5541Runtime interface {
+	Foo()
+	regression5541Closer
+}
+
+type regression5541RuntimeImpl struct{}
+
+func (*regression5541RuntimeImpl) Foo() {
+}
+
+func (*regression5541RuntimeImpl) Close() {
+	regression5541RuntimeClosed++
+}
+
+type regression5541Module struct{}
+
+func (*regression5541Module) Close() {
+	regression5541ModuleClosed++
+}
+
+func regression5541() {
+	func() {
+		var runtime regression5541Runtime = &regression5541RuntimeImpl{}
+		defer runtime.Close()
+
+		var module regression5541Closer = &regression5541Module{}
+		defer module.Close()
+	}()
+
+	if regression5541RuntimeClosed != 1 || regression5541ModuleClosed != 1 {
+		println("deferred interface methods were not both called")
+	}
 }
 
 type issue1304 struct {
