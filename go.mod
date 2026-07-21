@@ -23,7 +23,7 @@ require (
 	golang.org/x/tools v0.47.0
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/espflasher v0.7.1
-	tinygo.org/x/go-llvm v0.0.0-20260707200325-ddd595b68360
+	tinygo.org/x/go-llvm v0.0.0-20260721072906-185673ef46a5
 )
 
 require (
