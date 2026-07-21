@@ -372,12 +372,12 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// Method call on an interface.
 
 		// Get callback type number.
-		methodName := instr.Call.Method.FullName()
-		if _, ok := b.deferInvokeFuncs[methodName]; !ok {
-			b.deferInvokeFuncs[methodName] = len(b.allDeferFuncs)
+		key := b.getInvokeFunctionName(&instr.Call)
+		if _, ok := b.deferInvokeFuncs[key]; !ok {
+			b.deferInvokeFuncs[key] = len(b.allDeferFuncs)
 			b.allDeferFuncs = append(b.allDeferFuncs, &instr.Call)
 		}
-		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferInvokeFuncs[methodName]), false)
+		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferInvokeFuncs[key]), false)
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by the call parameters).
