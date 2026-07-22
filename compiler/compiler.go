@@ -1981,7 +1981,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 	if fn := instr.StaticCallee(); fn != nil {
 		// Direct function call, either to a named or anonymous (directly
 		// applied) function call. If it is anonymous, it may be a closure.
-		name := fn.RelString(nil)
+		name := b.getFunctionInfo(fn).linkName
 		switch {
 		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
