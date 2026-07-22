@@ -65,6 +65,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 
 		// Run TinyGo-specific optimization passes.
 		OptimizeStringToBytes(mod)
+		OptimizeStringFromBytes(mod)
 		maxStackSize := config.MaxStackAlloc()
 		OptimizeAllocs(mod, nil, maxStackSize, nil)
 		err = LowerInterfaces(mod, config)
@@ -90,6 +91,8 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 			// The go coverage tool expects this header before any blocks.
 			fmt.Fprintln(os.Stderr, "mode: set")
 		}
+		OptimizeStringToBytes(mod)
+		OptimizeStringFromBytes(mod)
 		OptimizeAllocs(mod, config.Options.PrintAllocs, maxStackSize,
 			func(pos token.Position, reason string) {
 				var line string
@@ -103,10 +106,11 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 				}
 			},
 		)
-		OptimizeStringToBytes(mod)
 		OptimizeStringEqual(mod)
 
 	} else {
+		OptimizeStringFromBytes(mod)
+
 		// Must be run at any optimization level.
 		err := LowerInterfaces(mod, config)
 		if err != nil {

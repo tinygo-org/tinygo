@@ -3,9 +3,7 @@ package transform
 // This file implements several small optimizations of runtime and reflect
 // calls.
 
-import (
-	"tinygo.org/x/go-llvm"
-)
+import "tinygo.org/x/go-llvm"
 
 // OptimizeStringToBytes transforms runtime.stringToBytes(...) calls into const
 // []byte slices whenever possible. This optimizes the following pattern:
@@ -69,6 +67,158 @@ func OptimizeStringToBytes(mod llvm.Module) {
 			call.EraseFromParentAsInstruction()
 		}
 	}
+}
+
+// OptimizeStringFromBytes transforms temporary strings created from []byte
+// slices into direct uses of the slice data when no instruction between the
+// conversion and use can mutate the slice.
+func OptimizeStringFromBytes(mod llvm.Module) {
+	stringFromBytes := mod.NamedFunction("runtime.stringFromBytes")
+	if stringFromBytes.IsNil() {
+		// nothing to optimize
+		return
+	}
+
+	stringEqual := mod.NamedFunction("runtime.stringEqual")
+	if stringEqual.IsNil() {
+		// nothing to optimize
+		return
+	}
+
+	// String comparisons only read their operands, so they are safe between a
+	// conversion and another supported use of that conversion.
+	safeCalls := map[llvm.Value]struct{}{}
+	for _, call := range getUses(stringEqual) {
+		safeCalls[call] = struct{}{}
+	}
+
+	// Rewrite each supported use independently, and remove the conversion only
+	// when no unconverted uses remain.
+	for _, call := range getUses(stringFromBytes) {
+		for _, extract := range getUses(call) {
+			if extract.IsAExtractValueInst().IsNil() {
+				continue
+			}
+			indices := extract.Indices()
+			if len(indices) != 1 || indices[0] != 0 {
+				continue
+			}
+			for _, use := range getUses(extract) {
+				if _, ok := safeCalls[use]; !ok {
+					continue
+				}
+				if !isSafeStringFromBytesUse(call, stringFromBytes, use, safeCalls) {
+					continue
+				}
+				replaceStringFromBytesCompareUse(use, extract, call, stringFromBytes)
+			}
+		}
+		removeDeadStringFromBytes(call)
+	}
+}
+
+func replaceStringFromBytesCompareUse(compare, ptrExtract, call, stringFromBytes llvm.Value) {
+	for _, pair := range [][2]int{{0, 1}, {2, 3}} {
+		if compare.Operand(pair[0]) != ptrExtract {
+			continue
+		}
+		lenExtract, ok := getStringFromBytesExtract(compare.Operand(pair[1]), stringFromBytes, 1)
+		if !ok || lenExtract.Operand(0) != call {
+			continue
+		}
+		compare.SetOperand(pair[0], call.Operand(0))
+		compare.SetOperand(pair[1], call.Operand(1))
+	}
+}
+
+func getStringFromBytesExtract(value, stringFromBytes llvm.Value, index uint64) (llvm.Value, bool) {
+	if value.IsAExtractValueInst().IsNil() {
+		return llvm.Value{}, false
+	}
+	indices := value.Indices()
+	if len(indices) != 1 || indices[0] != uint32(index) {
+		return llvm.Value{}, false
+	}
+	call := value.Operand(0)
+	if call.IsACallInst().IsNil() {
+		return llvm.Value{}, false
+	}
+	called := call.CalledValue()
+	if called.IsNil() || called != stringFromBytes {
+		return llvm.Value{}, false
+	}
+	return value, true
+}
+
+func isStringFromBytesCall(value, stringFromBytes llvm.Value) bool {
+	if value.IsACallInst().IsNil() {
+		return false
+	}
+	called := value.CalledValue()
+	return !called.IsNil() && called == stringFromBytes
+}
+
+// isSafeStringFromBytesUse reports whether replacing the copied string with the
+// source slice preserves the bytes observed by use.
+func isSafeStringFromBytesUse(call, stringFromBytes, use llvm.Value, allowedCalls map[llvm.Value]struct{}) bool {
+	if call.InstructionParent() != use.InstructionParent() {
+		return false
+	}
+	for inst := llvm.NextInstruction(call); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+		if inst == use {
+			return true
+		}
+		if !isSafeStringFromBytesInterveningInstruction(inst, stringFromBytes, allowedCalls) {
+			return false
+		}
+	}
+	return false
+}
+
+func isSafeStringFromBytesInterveningInstruction(inst, stringFromBytes llvm.Value, allowedCalls map[llvm.Value]struct{}) bool {
+	if _, ok := allowedCalls[inst]; ok {
+		return true
+	}
+	switch {
+	case !inst.IsAExtractValueInst().IsNil():
+		return true
+	case isTrackPointerCall(inst):
+		return true
+	case isStringFromBytesCall(inst, stringFromBytes):
+		return true
+	default:
+		return false
+	}
+}
+
+func removeDeadStringFromBytes(call llvm.Value) {
+	for _, use := range getUses(call) {
+		if use.IsAExtractValueInst().IsNil() {
+			return
+		}
+		for _, extractUse := range getUses(use) {
+			if !isTrackPointerCall(extractUse) {
+				return
+			}
+		}
+	}
+	for _, use := range getUses(call) {
+		for _, extractUse := range getUses(use) {
+			extractUse.EraseFromParentAsInstruction()
+		}
+		use.EraseFromParentAsInstruction()
+	}
+	if !hasUses(call) {
+		call.EraseFromParentAsInstruction()
+	}
+}
+
+func isTrackPointerCall(value llvm.Value) bool {
+	if value.IsACallInst().IsNil() {
+		return false
+	}
+	called := value.CalledValue()
+	return !called.IsNil() && called.Name() == "runtime.trackPointer"
 }
 
 // OptimizeStringEqual transforms runtime.stringEqual(...) calls into simple
