@@ -36,3 +36,10 @@ func TestOptimizeStringFromBytesStringLess(t *testing.T) {
 		transform.OptimizeStringFromBytes(mod)
 	})
 }
+
+func TestOptimizeStringFromBytesLen(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/stringfrombytes-len", func(mod llvm.Module) {
+		// TODO: optimize the []byte-to-string conversion away.
+	})
+}
