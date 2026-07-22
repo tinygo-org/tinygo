@@ -136,6 +136,16 @@ func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
 	return pkgPathPtr
 }
 
+// isGenericMethod returns true for a method that has its own type parameters
+// (independent of any type parameters on its receiver), e.g. the N method in
+// "func (r *Rand) N[Int intType](n Int) Int { ... }". Like the reflect
+// package, such methods are excluded from runtime method sets: they aren't
+// instantiated, so their signature can't be represented in a type code, and
+// they can never satisfy an interface method anyway.
+func isGenericMethod(fn *types.Func) bool {
+	return fn.Signature().TypeParams().Len() > 0
+}
+
 // getTypeCode returns a reference to a type code.
 // A type code is a pointer to a constant global that describes the type.
 // This function returns a pointer to the 'kind' field (which might not be the
@@ -157,6 +167,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 	// For an interface type, it returns the number of exported and unexported methods.
 	var numMethods int
 	for method := range ms.Methods() {
+		if isGenericMethod(method.Obj().(*types.Func)) {
+			continue
+		}
 		if isInterface || method.Obj().Exported() {
 			numMethods++
 		}
@@ -205,7 +218,11 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		// Compute the method set value for types that support methods.
 		var methods []*types.Func
 		for method := range ms.Methods() {
-			methods = append(methods, method.Obj().(*types.Func))
+			fn := method.Obj().(*types.Func)
+			if isGenericMethod(fn) {
+				continue
+			}
+			methods = append(methods, fn)
 		}
 		methodSetType := types.NewStruct([]*types.Var{
 			types.NewVar(token.NoPos, nil, "length", types.Typ[types.Uintptr]),
@@ -961,6 +978,9 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 		// Create method set.
 		var signatures, wrappers []llvm.Value
 		for method := range ms.Methods() {
+			if isGenericMethod(method.Obj().(*types.Func)) {
+				continue
+			}
 			signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
 			signatures = append(signatures, signatureGlobal)
 			fn := c.program.MethodValue(method)
@@ -975,7 +995,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 
 		// Construct global value.
 		globalValue := c.ctx.ConstStruct([]llvm.Value{
-			llvm.ConstInt(c.uintptrType, uint64(ms.Len()), false),
+			llvm.ConstInt(c.uintptrType, uint64(len(signatures)), false),
 			llvm.ConstArray(c.dataPtrType, signatures),
 			c.ctx.ConstStruct(wrappers, false),
 		}, false)
