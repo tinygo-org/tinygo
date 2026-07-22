@@ -20,26 +20,11 @@
 package poll
 
 import (
-	"errors"
 	"internal/task"
 	"syscall"
 	"time"
 	"unsafe"
 )
-
-// ErrFileClosing is returned when a Read or Write is started on a closed FD.
-var ErrFileClosing = errors.New("use of closed file")
-
-// ErrNetClosing is returned for network operations on a closed FD.
-var ErrNetClosing = errors.New("use of closed network connection")
-
-// ErrDeadlineExceeded is returned by Read/Write when a deadline expired.
-// Matches the error returned by os.IsTimeout-style helpers.
-var ErrDeadlineExceeded = errors.New("i/o timeout")
-
-// ErrNoDeadline is returned if SetDeadline is called on an FD whose
-// underlying type does not support deadlines.
-var ErrNoDeadline = errors.New("file type does not support deadline")
 
 // pollMode constants must mirror runtime/netpoll_wasip1.go's pollRead/
 // pollWrite values.

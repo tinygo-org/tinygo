@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"go/build"
 	"io"
 	"io/fs"
 	"os"
@@ -48,7 +49,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()))
 
 	// Resolve the merge links within the goroot.
-	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
+	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides, config)
 	if err != nil {
 		return "", err
 	}
@@ -143,10 +144,22 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 }
 
 // listGorootMergeLinks searches goroot and tinygoroot for all symlinks that must be created within the merged goroot.
-func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) (map[string]string, error) {
+func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool, config *compileopts.Config) (map[string]string, error) {
 	goSrc := filepath.Join(goroot, "src")
 	tinygoSrc := filepath.Join(tinygoroot, "src")
 	merges := make(map[string]string)
+
+	// buildContext is used to evaluate //go:build constraints on TinyGo
+	// source files. A TinyGo file that doesn't match the current target
+	// (e.g. a *_wasip2.go file in a wasip1 build) must not be treated as
+	// "TinyGo owns this directory" — otherwise wasip1 builds would lose
+	// upstream Go files at the same level.
+	bctx := build.Default
+	bctx.GOOS = config.GOOS()
+	bctx.GOARCH = config.GOARCH()
+	bctx.BuildTags = config.BuildTags()
+	bctx.Compiler = "gc"
+
 	for dir, merge := range overrides {
 		if !merge {
 			// Use the TinyGo version.
@@ -168,6 +181,14 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 
 			// Link this file.
 			name := e.Name()
+			// Only count this file as a TinyGo override of the directory
+			// when its build tags match the current target. Files with a
+			// non-matching //go:build are invisible to this build anyway
+			// (the compiler would skip them), so they shouldn't cause
+			// upstream files to be dropped from the merge.
+			if matched, _ := bctx.MatchFile(tinygoDir, name); !matched {
+				continue
+			}
 			merges[filepath.Join("src", dir, name)] = filepath.Join(tinygoDir, name)
 
 			hasTinyGoFiles = true
