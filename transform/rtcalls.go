@@ -92,26 +92,37 @@ func OptimizeStringFromBytes(mod llvm.Module) {
 		}
 	}
 
-	// Rewrite each supported use independently, and remove the conversion only
-	// when no unconverted uses remain.
+	// Rewrite each supported use independently. Length extracts are delayed so
+	// comparison operands can still be matched as pointer/length pairs.
 	for _, call := range getUses(stringFromBytes) {
+		var lengthExtracts []llvm.Value
 		for _, extract := range getUses(call) {
 			if extract.IsAExtractValueInst().IsNil() {
 				continue
 			}
 			indices := extract.Indices()
-			if len(indices) != 1 || indices[0] != 0 {
+			if len(indices) != 1 {
 				continue
 			}
-			for _, use := range getUses(extract) {
-				if _, ok := safeCalls[use]; !ok {
-					continue
+			switch indices[0] {
+			case 0:
+				for _, use := range getUses(extract) {
+					if _, ok := safeCalls[use]; !ok {
+						continue
+					}
+					if !isSafeStringFromBytesUse(call, stringFromBytes, use, safeCalls) {
+						continue
+					}
+					replaceStringFromBytesCompareUse(use, extract, call, stringFromBytes)
 				}
-				if !isSafeStringFromBytesUse(call, stringFromBytes, use, safeCalls) {
-					continue
-				}
-				replaceStringFromBytesCompareUse(use, extract, call, stringFromBytes)
+			case 1:
+				lengthExtracts = append(lengthExtracts, extract)
 			}
+		}
+
+		for _, extract := range lengthExtracts {
+			extract.ReplaceAllUsesWith(call.Operand(1))
+			extract.EraseFromParentAsInstruction()
 		}
 		removeDeadStringFromBytes(call)
 	}

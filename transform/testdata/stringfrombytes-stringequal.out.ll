@@ -31,21 +31,16 @@ define i1 @main.keepStringConversion(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b
 entry:
   %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef)
   %1 = extractvalue %runtime._string %0, 0
-  %2 = extractvalue %runtime._string %0, 1
-  call void @useString(ptr %1, i32 %2)
-  %3 = call i1 @runtime.stringEqual(ptr %1, i32 %2, ptr %b.data, i32 %b.len, ptr undef)
-  ret i1 %3
+  call void @useString(ptr %1, i32 %a.len)
+  %2 = call i1 @runtime.stringEqual(ptr %1, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef)
+  ret i1 %2
 }
 
 define i32 @main.equalAndLen(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %s.data, i32 %s.len, ptr %context) {
 entry:
-  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef)
-  %1 = extractvalue %runtime._string %0, 0
-  %2 = extractvalue %runtime._string %0, 1
   %equal = call i1 @runtime.stringEqual(ptr %a.data, i32 %a.len, ptr %s.data, i32 %s.len, ptr undef)
-  %len = extractvalue %runtime._string %0, 1
   %equal.ext = zext i1 %equal to i32
-  %result = add i32 %len, %equal.ext
+  %result = add i32 %a.len, %equal.ext
   ret i32 %result
 }
 
@@ -53,9 +48,8 @@ define i1 @main.equalBeforeOtherUse(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %s.
 entry:
   %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef)
   %1 = extractvalue %runtime._string %0, 0
-  %2 = extractvalue %runtime._string %0, 1
   %equal = call i1 @runtime.stringEqual(ptr %a.data, i32 %a.len, ptr %s.data, i32 %s.len, ptr undef)
-  call void @useString(ptr %1, i32 %2)
+  call void @useString(ptr %1, i32 %a.len)
   ret i1 %equal
 }
 
@@ -71,10 +65,9 @@ define i1 @main.keepComparisonAfterMutation(ptr %a.data, i32 %a.len, i32 %a.cap,
 entry:
   %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef)
   %1 = extractvalue %runtime._string %0, 0
-  %2 = extractvalue %runtime._string %0, 1
   %equal1 = call i1 @runtime.stringEqual(ptr %a.data, i32 %a.len, ptr %s.data, i32 %s.len, ptr undef)
   store i8 1, ptr %a.data, align 1
-  %equal2 = call i1 @runtime.stringEqual(ptr %1, i32 %2, ptr %s.data, i32 %s.len, ptr undef)
+  %equal2 = call i1 @runtime.stringEqual(ptr %1, i32 %a.len, ptr %s.data, i32 %s.len, ptr undef)
   %result = and i1 %equal1, %equal2
   ret i1 %result
 }
@@ -84,9 +77,8 @@ entry:
   %a.data = alloca [4 x i8], align 1
   %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 4, i32 4, ptr undef)
   %1 = extractvalue %runtime._string %0, 0
-  %2 = extractvalue %runtime._string %0, 1
   call void @llvm.lifetime.end.p0(ptr %a.data)
-  %equal = call i1 @runtime.stringEqual(ptr %1, i32 %2, ptr %s.data, i32 %s.len, ptr undef)
+  %equal = call i1 @runtime.stringEqual(ptr %1, i32 4, ptr %s.data, i32 %s.len, ptr undef)
   ret i1 %equal
 }
 
