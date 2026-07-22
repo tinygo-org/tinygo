@@ -25,6 +25,7 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+	_ "unsafe"
 )
 
 // Testing flags.
@@ -215,7 +216,10 @@ func (c *common) Failed() bool {
 func (c *common) FailNow() {
 	c.Fail()
 	c.finished = true
-	runtime.Goexit()
+	if supportsRecover() {
+		runtime.Goexit()
+	}
+	c.Error("FailNow is incomplete, requires runtime.Goexit()")
 }
 
 // log generates the output.
@@ -287,12 +291,18 @@ func (c *common) Skipf(format string, args ...any) {
 func (c *common) SkipNow() {
 	c.skip()
 	c.finished = true
-	runtime.Goexit()
+	if supportsRecover() {
+		runtime.Goexit()
+	}
+	c.Error("SkipNow is incomplete, requires runtime.Goexit()")
 }
 
 func (c *common) skip() {
 	c.skipped = true
 }
+
+//go:linkname supportsRecover runtime.supportsRecover
+func supportsRecover() bool
 
 // Skipped reports whether the test was skipped.
 func (c *common) Skipped() bool {
