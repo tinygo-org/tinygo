@@ -33,6 +33,6 @@ func TestOptimizeStringFromBytesStringEqual(t *testing.T) {
 func TestOptimizeStringFromBytesStringLess(t *testing.T) {
 	t.Parallel()
 	testTransform(t, "testdata/stringfrombytes-stringless", func(mod llvm.Module) {
-		// TODO: optimize the []byte-to-string conversions away.
+		transform.OptimizeStringFromBytes(mod)
 	})
 }

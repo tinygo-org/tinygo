@@ -79,17 +79,17 @@ func OptimizeStringFromBytes(mod llvm.Module) {
 		return
 	}
 
-	stringEqual := mod.NamedFunction("runtime.stringEqual")
-	if stringEqual.IsNil() {
-		// nothing to optimize
-		return
-	}
-
 	// String comparisons only read their operands, so they are safe between a
 	// conversion and another supported use of that conversion.
 	safeCalls := map[llvm.Value]struct{}{}
-	for _, call := range getUses(stringEqual) {
-		safeCalls[call] = struct{}{}
+	for _, name := range []string{"runtime.stringEqual", "runtime.stringLess"} {
+		compare := mod.NamedFunction(name)
+		if compare.IsNil() {
+			continue
+		}
+		for _, call := range getUses(compare) {
+			safeCalls[call] = struct{}{}
+		}
 	}
 
 	// Rewrite each supported use independently, and remove the conversion only
