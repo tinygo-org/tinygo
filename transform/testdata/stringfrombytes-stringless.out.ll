@@ -34,8 +34,7 @@ define i1 @main.keepStringConversion(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b
 entry:
   %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef)
   %1 = extractvalue %runtime._string %0, 0
-  %2 = extractvalue %runtime._string %0, 1
-  call void @useString(ptr %1, i32 %2)
-  %3 = call i1 @runtime.stringLess(ptr %1, i32 %2, ptr %b.data, i32 %b.len, ptr undef)
-  ret i1 %3
+  call void @useString(ptr %1, i32 %a.len)
+  %2 = call i1 @runtime.stringLess(ptr %1, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef)
+  ret i1 %2
 }

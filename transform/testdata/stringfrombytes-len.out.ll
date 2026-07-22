@@ -12,20 +12,13 @@ declare void @useString(ptr, i32)
 define i32 @main.stringFromBytesLen(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %context) {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef)
-  %1 = extractvalue %runtime._string %0, 0
-  call void @runtime.trackPointer(ptr %1, ptr %stackalloc, ptr undef)
-  %2 = extractvalue %runtime._string %0, 1
-  %len = extractvalue %runtime._string %0, 1
-  ret i32 %len
+  ret i32 %a.len
 }
 
 define i32 @main.keepStringConversion(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %context) {
 entry:
   %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef)
   %1 = extractvalue %runtime._string %0, 0
-  %2 = extractvalue %runtime._string %0, 1
-  call void @useString(ptr %1, i32 %2)
-  %len = extractvalue %runtime._string %0, 1
-  ret i32 %len
+  call void @useString(ptr %1, i32 %a.len)
+  ret i32 %a.len
 }
