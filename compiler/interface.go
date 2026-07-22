@@ -155,24 +155,25 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 	typ = types.Unalias(typ)
 
 	ms := c.program.MethodSets.MethodSet(typ)
-	hasMethodSet := ms.Len() != 0
 	_, isInterface := typ.Underlying().(*types.Interface)
-	if isInterface {
-		hasMethodSet = false
-	}
 
 	// As defined in https://pkg.go.dev/reflect#Type:
 	// NumMethod returns the number of methods accessible using Method.
 	// For a non-interface type, it returns the number of exported methods.
 	// For an interface type, it returns the number of exported and unexported methods.
 	var numMethods int
+	var hasMethodSet bool
 	for method := range ms.Methods() {
 		if isGenericMethod(method.Obj().(*types.Func)) {
 			continue
 		}
+		hasMethodSet = true
 		if isInterface || method.Obj().Exported() {
 			numMethods++
 		}
+	}
+	if isInterface {
+		hasMethodSet = false
 	}
 
 	// Short-circuit all the global pointer logic here for pointers to pointers.
