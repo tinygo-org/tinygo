@@ -422,19 +422,19 @@ func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 			return c.ctx.Int8Type()
 		case types.Int16, types.Uint16:
 			return c.ctx.Int16Type()
-		case types.Int32, types.Uint32:
+		case types.Int32, types.Uint32, types.UntypedRune:
 			return c.ctx.Int32Type()
-		case types.Int, types.Uint:
+		case types.Int, types.Uint, types.UntypedInt:
 			return c.intType
 		case types.Int64, types.Uint64:
 			return c.ctx.Int64Type()
 		case types.Float32:
 			return c.ctx.FloatType()
-		case types.Float64:
+		case types.Float64, types.UntypedFloat:
 			return c.ctx.DoubleType()
 		case types.Complex64:
 			return c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false)
-		case types.Complex128:
+		case types.Complex128, types.UntypedComplex:
 			return c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false)
 		case types.String, types.UntypedString:
 			return c.getLLVMRuntimeType("_string")
