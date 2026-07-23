@@ -33,10 +33,24 @@ type finalizerEntry struct {
 	fn interface{}
 }
 
+// finalizerGCThreshold bounds how many finalizers may be registered since the
+// last collection before the scheduler proactively runs one at its idle point.
+// A registered finalizer almost always guards an external resource, most
+// importantly a syscall/js bridge-table slot (js.Value or js.Func), that costs
+// only a few bytes of Go heap but pins a whole JS object and its slot. Without
+// this, a long-lived instance with a large resident heap defers GC (and thus
+// finalizer draining) until the Go heap itself fills, which for a bursty,
+// mostly-idle workload may be never, so the external resources accumulate
+// without bound. Coupling a GC to finalizer-registration pressure caps that
+// accumulation at roughly this many entries regardless of heap size. Zero
+// disables the trigger.
+const finalizerGCThreshold = 32
+
 var (
 	finalizers        *finalizerEntry // registered finalizers; a GC root that keeps fn values alive
 	finalizerPending  *finalizerEntry // finalizers whose object died, waiting to run
 	numFinalizers     uintptr         // number of registered finalizers; fast-path gate for scanFinalizers
+	finalizersSinceGC uintptr         // finalizers registered since the last GC; drives the scheduler idle-point pressure trigger
 	finalizersQueued  bool            // set when scanFinalizers queued at least one finalizer to run
 	finalizerFutex    task.Futex      // wakes the finalizerRunner goroutine after a GC queues work
 	finalizerDraining bool            // guards against re-entrant inline draining (scheduler.none)
@@ -106,6 +120,7 @@ func registerFinalizer(addr uintptr, fn interface{}) {
 	entry.next = finalizers
 	finalizers = entry
 	numFinalizers++
+	finalizersSinceGC++ // pressure signal for the proactive GC trigger at the scheduler's idle point
 	// A finalizer is registered, so make sure the runner exists. The flag is
 	// serialized by gcLock; the spawn itself allocates, so it must run after the
 	// lock is released.
@@ -121,6 +136,11 @@ func registerFinalizer(addr uintptr, fn interface{}) {
 // current GC cycle and queues their finalizers. It must be called under gcLock,
 // after marking is complete and before sweep frees anything.
 func scanFinalizers() {
+	// A collection is running now, so reset the registration-pressure counter
+	// that drives the proactive idle-point trigger, regardless of whether any
+	// finalizer is registered or fires this cycle.
+	finalizersSinceGC = 0
+
 	// Nothing registered and nothing waiting to run: fast path.
 	if numFinalizers == 0 && finalizerPending == nil {
 		return
@@ -155,7 +175,7 @@ func scanFinalizers() {
 	// found above and any queued by an earlier cycle that the runner has not
 	// drained yet. Otherwise the next GC would not mark them (their only
 	// reference is the encoded, scanner-invisible pending entry) and sweep would
-	// free them out from under a finalizer that hasn't run — a use-after-free.
+	// free them out from under a finalizer that hasn't run, a use-after-free.
 	// Walking the pending list is safe: scanFinalizers and dequeueFinalizer are
 	// both serialized under gcLock.
 	var resurrected bool
@@ -223,6 +243,34 @@ func dequeueFinalizer() (*finalizerEntry, unsafe.Pointer) {
 	}
 	gcLock.Unlock()
 	return n, objPtr
+}
+
+// finalizerPressureGC collects when at least finalizerGCThreshold finalizers
+// have been registered since the last GC, then hands any freshly-queued
+// finalizers to the runner. It reports whether it collected. A registered
+// finalizer almost always guards an external resource whose Go-heap cost is tiny
+// (a few bytes) relative to what it pins, so the registration count is a proxy
+// for external memory pressure that the heap-size GC trigger cannot see.
+//
+// It is installed as the cooperative scheduler's idle hook by the first
+// SetFinalizer (see spawnFinalizerRunner) and called only from the scheduler's
+// drained-runqueue point, where no goroutine is running on its own stack. That
+// reclaims a completed run of goroutines' now-dead values in a single pass,
+// rather than forcing a collection synchronously inside alloc while an
+// operation's values are still live, which would scale GC frequency with
+// allocation churn and waste most collections on still-live values.
+func finalizerPressureGC() bool {
+	if finalizerGCThreshold == 0 || finalizersSinceGC < finalizerGCThreshold {
+		return false
+	}
+	gcLock.Lock()
+	runGC()
+	gcLock.Unlock()
+	if finalizersQueued {
+		finalizersQueued = false
+		wakeFinalizer()
+	}
+	return true
 }
 
 // wakeFinalizer is called after a GC (with gcLock already released) that queued

@@ -60,6 +60,7 @@ func TestBuild(t *testing.T) {
 		"channel.go",
 		"embed/",
 		"finalizer.go",
+		"finalizeridle.go",
 		"float.go",
 		"gc.go",
 		"generics.go",
@@ -359,9 +360,9 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 			}
 		}
-		if name == "finalizer.go" && options.Target != "wasm" {
-			// runtime.SetFinalizer is implemented for the block GC, but the
-			// test asserts deterministic collection of a dropped object, which
+		if (name == "finalizer.go" || name == "finalizeridle.go") && options.Target != "wasm" {
+			// runtime.SetFinalizer is implemented for the block GC, but these
+			// tests assert deterministic collection of a dropped object, which
 			// only holds on the GOOS=js wasm target. The host default GC is
 			// boehm (SetFinalizer is a no-op there); conservative stack scanning
 			// on the emulated targets can pin the object; and the wasip2

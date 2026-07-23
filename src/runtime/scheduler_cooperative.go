@@ -41,6 +41,13 @@ var (
 	sleepQueueBaseTime timeUnit
 )
 
+// finalizerIdleGC, when non-nil, is called at the scheduler's idle point to
+// collect on finalizer-registration pressure (returning whether it did). It is
+// installed lazily by the first SetFinalizer, so a program that never registers
+// a finalizer never assigns it and the linker drops the whole collection path.
+// It is nil under GCs without a finalizer table.
+var finalizerIdleGC func() bool
+
 // deadlock is called when a goroutine cannot proceed any more, but is in theory
 // not exited (so deferred calls won't run). This can happen for example in code
 // like this, that blocks forever:
@@ -49,12 +56,18 @@ var (
 //
 //go:noinline
 func deadlock() {
+	// A goroutine reaches deadlock when it can make no further progress. The
+	// common case by far is a goroutine that ran to completion: the compiler
+	// emits a deadlock call at the end of every goroutine wrapper. Flag it so
+	// the scheduler can reclaim the finished goroutine's stack.
+	task.MarkFinishing()
 	// call yield without requesting a wakeup
 	task.Pause()
 	panic("unreachable")
 }
 
 func goexit() {
+	task.MarkFinishing()
 	task.Exit()
 }
 
@@ -183,6 +196,20 @@ func scheduler(returnAtDeadlock bool) {
 
 		t := runqueue.Pop()
 		if t == nil {
+			// Idle point: the run queue is drained, so no goroutine is running on
+			// its own stack. This is the safe place to reclaim external resources
+			// whose finalizers have piled up since the last collection. Running it
+			// here, once per drained run queue and only at the top level
+			// (task.Current() == nil, so a re-entrant call from a suspended
+			// goroutine does not collect while that goroutine is mid-operation),
+			// reclaims a completed run of goroutines' now-dead values in one pass.
+			// Forcing the collection inside alloc instead would scale GC frequency
+			// with allocation churn: a goroutine that allocates hundreds of
+			// short-lived finalized objects would trigger dozens of collections
+			// mid-run, most of them wasted on values that are still live.
+			if task.Current() == nil && finalizerIdleGC != nil && finalizerIdleGC() {
+				continue
+			}
 			if sleepQueue == nil && timerQueue == nil {
 				if returnAtDeadlock {
 					return
