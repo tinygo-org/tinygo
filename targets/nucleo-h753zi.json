@@ -1,0 +1,12 @@
+{
+  "inherits": ["cortex-m7"],
+  "build-tags": ["nucleoh753zi", "stm32h753", "stm32h7", "stm32"],
+  "serial": "uart",
+  "linkerscript": "targets/stm32h7.ld",
+  "extra-files": [
+    "src/device/stm32/stm32h753.s"
+  ],
+  "flash-method": "openocd",
+  "openocd-interface": "stlink",
+  "openocd-target": "stm32h7x"
+}

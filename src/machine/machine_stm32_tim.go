@@ -79,6 +79,25 @@ func (t *TIM) Count() uint32 {
 	return uint32(t.Device.CNT.Get())
 }
 
+// SetOnePulseMode enables or disables the one-pulse mode.
+// When enabled, the timer will automatically stop at the next update event.
+func (t *TIM) SetOnePulseMode(enable bool) {
+	if enable {
+		t.Device.CR1.SetBits(stm32.TIM_CR1_OPM)
+	} else {
+		t.Device.CR1.ClearBits(stm32.TIM_CR1_OPM)
+	}
+}
+
+// SetEnabled enables or disables the timer.
+func (t *TIM) SetEnabled(enable bool) {
+	if enable {
+		t.Device.CR1.SetBits(stm32.TIM_CR1_CEN)
+	} else {
+		t.Device.CR1.ClearBits(stm32.TIM_CR1_CEN)
+	}
+}
+
 // SetWraparoundInterrupt configures a callback to be called each
 // time the timer 'wraps-around'.
 //
