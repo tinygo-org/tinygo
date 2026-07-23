@@ -657,6 +657,8 @@ smoketest: testchdir
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pico2-ice           examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build             -o test.efi -target=uefi-amd64          examples/test
+	@$(MD5SUM) test.efi
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=arduino_uno          examples/blinky1

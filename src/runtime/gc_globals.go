@@ -1,4 +1,4 @@
-//go:build baremetal || tinygo.wasm
+//go:build (baremetal || tinygo.wasm) && !uefi
 
 package runtime
 
