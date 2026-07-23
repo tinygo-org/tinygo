@@ -359,6 +359,44 @@ type tarjanNode struct {
 	cyclic bool
 }
 
+type llvmValueList struct {
+	values []llvm.Value
+	types  []llvm.Type
+}
+
+func newLLVMValueList(values ...llvm.Value) llvmValueList {
+	var list llvmValueList
+	list.append(values...)
+	return list
+}
+
+func (l *llvmValueList) append(values ...llvm.Value) {
+	for _, value := range values {
+		l.values = append(l.values, value)
+		l.types = append(l.types, value.Type())
+	}
+}
+
+func (l *llvmValueList) appendSSAValues(values []ssa.Value, lower func(ssa.Value) llvm.Value) {
+	for _, value := range values {
+		l.append(lower(value))
+	}
+}
+
+func (b *builder) loadDeferredCallParams(structType llvm.Type, ptr llvm.Value) []llvm.Value {
+	fieldTypes := structType.StructElementTypes()
+	values := make([]llvm.Value, 0, len(fieldTypes)-2)
+	zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+	for i := 2; i < len(fieldTypes); i++ {
+		fieldPtr := b.CreateInBoundsGEP(structType, ptr, []llvm.Value{
+			zero,
+			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+		}, "gep")
+		values = append(values, b.CreateLoad(fieldTypes[i], fieldPtr, "param"))
+	}
+	return values
+}
+
 // createDefer emits a single defer instruction, to be run when this function
 // returns.
 func (b *builder) createDefer(instr *ssa.Defer) {
@@ -366,31 +404,28 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 	// make a linked list.
 	next := b.CreateLoad(b.dataPtrType, b.deferPtr, "defer.next")
 
-	var values []llvm.Value
-	valueTypes := []llvm.Type{b.uintptrType, next.Type()}
+	var values llvmValueList
+	lowerArgument := func(value ssa.Value) llvm.Value {
+		return b.getCallArgument(value, false)
+	}
 	if instr.Call.IsInvoke() {
 		// Method call on an interface.
 
 		// Get callback type number.
-		methodName := instr.Call.Method.FullName()
-		if _, ok := b.deferInvokeFuncs[methodName]; !ok {
-			b.deferInvokeFuncs[methodName] = len(b.allDeferFuncs)
+		key := b.getInvokeFunctionName(&instr.Call)
+		if _, ok := b.deferInvokeFuncs[key]; !ok {
+			b.deferInvokeFuncs[key] = len(b.allDeferFuncs)
 			b.allDeferFuncs = append(b.allDeferFuncs, &instr.Call)
 		}
-		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferInvokeFuncs[methodName]), false)
+		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferInvokeFuncs[key]), false)
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by the call parameters).
 		itf := b.getValue(instr.Call.Value, getPos(instr)) // interface
 		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
 		receiverValue := b.CreateExtractValue(itf, 1, "invoke.func.receiver")
-		values = []llvm.Value{callback, next, typecode, receiverValue}
-		valueTypes = append(valueTypes, b.dataPtrType, b.dataPtrType)
-		for _, arg := range instr.Call.Args {
-			val := b.getValue(arg, getPos(instr))
-			values = append(values, val)
-			valueTypes = append(valueTypes, val.Type())
-		}
+		values = newLLVMValueList(callback, next, typecode, receiverValue)
+		values.appendSSAValues(instr.Call.Args, lowerArgument)
 
 	} else if callee, ok := instr.Call.Value.(*ssa.Function); ok {
 		// Regular function call.
@@ -402,12 +437,11 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
-		values = []llvm.Value{callback, next}
-		for _, param := range instr.Call.Args {
-			llvmParam := b.getValue(param, getPos(instr))
-			values = append(values, llvmParam)
-			valueTypes = append(valueTypes, llvmParam.Type())
-		}
+		values = newLLVMValueList(callback, next)
+		exported := b.getFunctionInfo(callee).exported
+		values.appendSSAValues(instr.Call.Args, func(value ssa.Value) llvm.Value {
+			return b.getCallArgument(value, exported)
+		})
 
 	} else if makeClosure, ok := instr.Call.Value.(*ssa.MakeClosure); ok {
 		// Immediately applied function literal with free variables.
@@ -430,14 +464,9 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by all parameters including the
 		// context pointer).
-		values = []llvm.Value{callback, next}
-		for _, param := range instr.Call.Args {
-			llvmParam := b.getValue(param, getPos(instr))
-			values = append(values, llvmParam)
-			valueTypes = append(valueTypes, llvmParam.Type())
-		}
-		values = append(values, context)
-		valueTypes = append(valueTypes, context.Type())
+		values = newLLVMValueList(callback, next)
+		values.appendSSAValues(instr.Call.Args, lowerArgument)
+		values.append(context)
 
 	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		var argTypes []types.Type
@@ -460,11 +489,8 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
-		values = []llvm.Value{callback, next}
-		for _, param := range argValues {
-			values = append(values, param)
-			valueTypes = append(valueTypes, param.Type())
-		}
+		values = newLLVMValueList(callback, next)
+		values.append(argValues...)
 
 	} else {
 		funcValue := b.getValue(instr.Call.Value, getPos(instr))
@@ -479,20 +505,15 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by all parameters including the
 		// context pointer).
-		values = []llvm.Value{callback, next, funcValue}
-		valueTypes = append(valueTypes, funcValue.Type())
-		for _, param := range instr.Call.Args {
-			llvmParam := b.getValue(param, getPos(instr))
-			values = append(values, llvmParam)
-			valueTypes = append(valueTypes, llvmParam.Type())
-		}
+		values = newLLVMValueList(callback, next, funcValue)
+		values.appendSSAValues(instr.Call.Args, lowerArgument)
 	}
 
 	// Make a struct out of the collected values to put in the deferred call
 	// struct.
-	deferredCallType := b.ctx.StructType(valueTypes, false)
+	deferredCallType := b.ctx.StructType(values.types, false)
 	deferredCall := llvm.ConstNull(deferredCallType)
-	for i, value := range values {
+	for i, value := range values.values {
 		deferredCall = b.CreateInsertValue(deferredCall, value, i, "")
 	}
 
@@ -508,8 +529,9 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// This may be hit a variable number of times, so use a heap allocation.
 		size := b.targetData.TypeAllocSize(deferredCallType)
 		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
-		nilPtr := llvm.ConstNull(b.dataPtrType)
-		alloca = b.createAlloc(sizeValue, nilPtr, 0, "defer.alloc.call")
+		layoutValue := b.createObjectLayout(deferredCallType, instr.Pos())
+		align := b.targetData.ABITypeAlignment(deferredCallType)
+		alloca = b.createAlloc(sizeValue, layoutValue, align, "defer.alloc.call")
 	}
 	if b.NeedsStackObjects {
 		b.trackPointer(alloca)
@@ -593,19 +615,11 @@ func (b *builder) createRunDefers() {
 				valueTypes = append(valueTypes, b.dataPtrType, b.dataPtrType)
 			}
 
-			for _, arg := range callback.Args {
-				valueTypes = append(valueTypes, b.getLLVMType(arg.Type()))
-			}
+			valueTypes = b.appendStoredValueTypes(valueTypes, callback.Args, false)
 
 			// Extract the params from the struct (including receiver).
-			forwardParams := []llvm.Value{}
-			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			deferredCallType := b.ctx.StructType(valueTypes, false)
-			for i := 2; i < len(valueTypes); i++ {
-				gep := b.CreateInBoundsGEP(deferredCallType, deferData, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "gep")
-				forwardParam := b.CreateLoad(valueTypes[i], gep, "param")
-				forwardParams = append(forwardParams, forwardParam)
-			}
+			forwardParams := b.loadDeferredCallParams(deferredCallType, deferData)
 
 			var fnPtr llvm.Value
 			var fnType llvm.Type
@@ -634,6 +648,7 @@ func (b *builder) createRunDefers() {
 				// with a strict calling convention.
 				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
 			}
+			forwardParams = b.prependIndirectResult(callback.Signature(), false, forwardParams, "defer.result")
 
 			b.createCall(fnType, fnPtr, forwardParams, "")
 
@@ -642,27 +657,21 @@ func (b *builder) createRunDefers() {
 
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
-			for _, param := range getParams(callback.Signature) {
-				valueTypes = append(valueTypes, b.getLLVMType(param.Type()))
-			}
+			exported := b.getFunctionInfo(callback).exported
+			valueTypes = b.appendStoredParamTypes(valueTypes, getParams(callback.Signature), exported)
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 
 			// Extract the params from the struct.
-			forwardParams := []llvm.Value{}
-			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			for i := range getParams(callback.Signature) {
-				gep := b.CreateInBoundsGEP(deferredCallType, deferData, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
-				forwardParam := b.CreateLoad(valueTypes[i+2], gep, "param")
-				forwardParams = append(forwardParams, forwardParam)
-			}
+			forwardParams := b.loadDeferredCallParams(deferredCallType, deferData)
 
 			// Plain TinyGo functions add some extra parameters to implement async functionality and function receivers.
 			// These parameters should not be supplied when calling into an external C/ASM function.
-			if !b.getFunctionInfo(callback).exported {
+			if !exported {
 				// Add the context parameter. We know it is ignored by the receiving
 				// function, but we have to pass one anyway.
 				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
 			}
+			forwardParams = b.prependIndirectResult(callback.Signature, exported, forwardParams, "defer.result")
 
 			// Call real function.
 			fnType, fn := b.getFunction(callback)
@@ -672,24 +681,16 @@ func (b *builder) createRunDefers() {
 			// Get the real defer struct type and cast to it.
 			fn := callback.Fn.(*ssa.Function)
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
-			params := fn.Signature.Params()
-			for v := range params.Variables() {
-				valueTypes = append(valueTypes, b.getLLVMType(v.Type()))
-			}
+			valueTypes = b.appendStoredParamTypes(valueTypes, getParams(fn.Signature), false)
 			valueTypes = append(valueTypes, b.dataPtrType) // closure
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 
 			// Extract the params from the struct.
-			forwardParams := []llvm.Value{}
-			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			for i := 2; i < len(valueTypes); i++ {
-				gep := b.CreateInBoundsGEP(deferredCallType, deferData, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)}, "")
-				forwardParam := b.CreateLoad(valueTypes[i], gep, "param")
-				forwardParams = append(forwardParams, forwardParam)
-			}
+			forwardParams := b.loadDeferredCallParams(deferredCallType, deferData)
 
 			// Call deferred function.
 			fnType, llvmFn := b.getFunction(fn)
+			forwardParams = b.prependIndirectResult(fn.Signature, false, forwardParams, "defer.result")
 			b.createCall(fnType, llvmFn, forwardParams, "")
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]
@@ -706,13 +707,7 @@ func (b *builder) createRunDefers() {
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 
 			// Extract the params from the struct.
-			var argValues []llvm.Value
-			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			for i := 0; i < params.Len(); i++ {
-				gep := b.CreateInBoundsGEP(deferredCallType, deferData, []llvm.Value{zero, llvm.ConstInt(b.ctx.Int32Type(), uint64(i+2), false)}, "gep")
-				forwardParam := b.CreateLoad(valueTypes[i+2], gep, "param")
-				argValues = append(argValues, forwardParam)
-			}
+			argValues := b.loadDeferredCallParams(deferredCallType, deferData)
 
 			_, err := b.createBuiltin(db.argTypes, argValues, db.callName, db.pos)
 			if err != nil {

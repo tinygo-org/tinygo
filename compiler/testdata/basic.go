@@ -66,6 +66,11 @@ func complexSub(x, y complex64) complex64 {
 	return x - y
 }
 
+func shiftNested(x uint64) uint64 {
+	k := 3
+	return x >> (1 << k) // https://github.com/tinygo-org/tinygo/issues/5496
+}
+
 func complexMul(x, y complex64) complex64 {
 	return x * y
 }

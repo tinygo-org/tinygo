@@ -155,6 +155,8 @@ type builder struct {
 	llvmFn            llvm.Value
 	info              functionInfo
 	locals            map[ssa.Value]llvm.Value // local variables
+	indirectValues    map[ssa.Value]llvm.Value
+	indirectReturn    llvm.Value
 	blockInfo         []blockInfo
 	currentBlock      *ssa.BasicBlock
 	currentBlockInfo  *blockInfo
@@ -193,6 +195,7 @@ func newBuilder(c *compilerContext, irbuilder llvm.Builder, f *ssa.Function) *bu
 		llvmFn:          fn,
 		info:            c.getFunctionInfo(f),
 		locals:          make(map[ssa.Value]llvm.Value),
+		indirectValues:  make(map[ssa.Value]llvm.Value),
 		dilocals:        make(map[*types.Var]llvm.Metadata),
 	}
 }
@@ -422,19 +425,19 @@ func (c *compilerContext) makeLLVMType(goType types.Type) llvm.Type {
 			return c.ctx.Int8Type()
 		case types.Int16, types.Uint16:
 			return c.ctx.Int16Type()
-		case types.Int32, types.Uint32:
+		case types.Int32, types.Uint32, types.UntypedRune:
 			return c.ctx.Int32Type()
-		case types.Int, types.Uint:
+		case types.Int, types.Uint, types.UntypedInt:
 			return c.intType
 		case types.Int64, types.Uint64:
 			return c.ctx.Int64Type()
 		case types.Float32:
 			return c.ctx.FloatType()
-		case types.Float64:
+		case types.Float64, types.UntypedFloat:
 			return c.ctx.DoubleType()
 		case types.Complex64:
 			return c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false)
-		case types.Complex128:
+		case types.Complex128, types.UntypedComplex:
 			return c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false)
 		case types.String, types.UntypedString:
 			return c.getLLVMRuntimeType("_string")
@@ -1282,10 +1285,28 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 
 	// Load function parameters
 	llvmParamIndex := 0
+	if _, indirectResult := b.hasIndirectResult(b.fn.Signature); indirectResult && !b.info.exported {
+		b.indirectReturn = b.llvmFn.Param(llvmParamIndex)
+		b.indirectReturn.SetName("return")
+		llvmParamIndex++
+	}
 	for _, param := range b.fn.Params {
 		llvmType := b.getLLVMType(param.Type())
+		if b.isIndirectParam(llvmType, b.info.exported) {
+			llvmParam := b.llvmFn.Param(llvmParamIndex)
+			llvmParam.SetName(param.Name())
+			b.indirectValues[param] = llvmParam
+			llvmParamIndex++
+			continue
+		}
+		var paramInfos []paramInfo
+		if b.info.exported {
+			paramInfos = b.expandDirectFormalParamType(llvmType, param.Name(), param.Type())
+		} else {
+			paramInfos = b.expandFormalParamType(llvmType, param.Name(), param.Type())
+		}
 		fields := make([]llvm.Value, 0, 1)
-		for _, info := range b.expandFormalParamType(llvmType, param.Name(), param.Type()) {
+		for _, info := range paramInfos {
 			param := b.llvmFn.Param(llvmParamIndex)
 			param.SetName(info.name)
 			fields = append(fields, param)
@@ -1423,7 +1444,7 @@ func (b *builder) createFunction() {
 	for _, phi := range b.phis {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
-			llvmVal := b.getValue(edge, getPos(phi.ssa))
+			llvmVal := b.getCallArgument(edge, false)
 			llvmBlock := b.blockInfo[block.Preds[i].Index].exit
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
@@ -1432,6 +1453,9 @@ func (b *builder) createFunction() {
 	if b.NeedsStackObjects {
 		// Track phi nodes.
 		for _, phi := range b.phis {
+			if b.isOversizedAggregate(phi.ssa.Type()) {
+				continue
+			}
 			insertPoint := llvm.NextInstruction(phi.llvm)
 			for !insertPoint.IsAPHINode().IsNil() {
 				insertPoint = llvm.NextInstruction(insertPoint)
@@ -1523,10 +1547,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 			b.diagnostics = append(b.diagnostics, err)
 			b.locals[instr] = llvm.Undef(b.getLLVMType(instr.Type()))
 		} else {
-			b.locals[instr] = value
-			if len(*instr.Referrers()) != 0 && b.NeedsStackObjects {
-				b.trackExpr(instr, value)
-			}
+			b.setValue(instr, value)
 		}
 	case *ssa.DebugRef:
 		// ignore
@@ -1546,10 +1567,8 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		b.CreateBr(blockJump)
 	case *ssa.MapUpdate:
 		m := b.getValue(instr.Map, getPos(instr))
-		key := b.getValue(instr.Key, getPos(instr))
-		value := b.getValue(instr.Value, getPos(instr))
 		mapType := instr.Map.Type().Underlying().(*types.Map)
-		b.createMapUpdate(mapType.Key(), m, key, value, instr.Pos())
+		b.createMapUpdate(mapType.Key(), m, instr.Key, instr.Value, instr.Pos())
 	case *ssa.Panic:
 		value := b.getValue(instr.X, getPos(instr))
 		b.createRuntimeInvoke("_panic", []llvm.Value{value}, "")
@@ -1558,19 +1577,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		if b.hasDeferFrame() {
 			b.createRuntimeCall("destroyDeferFrame", []llvm.Value{b.deferFrame}, "")
 		}
-		if len(instr.Results) == 0 {
-			b.CreateRetVoid()
-		} else if len(instr.Results) == 1 {
-			b.CreateRet(b.getValue(instr.Results[0], getPos(instr)))
-		} else {
-			// Multiple return values. Put them all in a struct.
-			retVal := llvm.ConstNull(b.llvmFn.GlobalValueType().ReturnType())
-			for i, result := range instr.Results {
-				val := b.getValue(result, getPos(instr))
-				retVal = b.CreateInsertValue(retVal, val, i, "")
-			}
-			b.CreateRet(retVal)
-		}
+		b.createReturn(instr.Results, getPos(instr))
 	case *ssa.RunDefers:
 		// Note where we're going to put the rundefers block
 		run := b.insertBasicBlock("rundefers.block")
@@ -1584,16 +1591,244 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		b.createChanSend(instr)
 	case *ssa.Store:
 		llvmAddr := b.getValue(instr.Addr, getPos(instr))
-		llvmVal := b.getValue(instr.Val, getPos(instr))
 		b.createNilCheck(instr.Addr, llvmAddr, "store")
-		if b.targetData.TypeAllocSize(llvmVal.Type()) == 0 {
+		llvmType := b.getLLVMType(instr.Val.Type())
+		if b.targetData.TypeAllocSize(llvmType) == 0 {
 			// nothing to store
 			return
 		}
-		b.CreateStore(llvmVal, llvmAddr)
+		b.storeValue(llvmAddr, instr.Val)
 	default:
 		b.addError(instr.Pos(), "unknown instruction: "+instr.String())
 	}
+}
+
+func (b *builder) setValue(value ssa.Value, llvmValue llvm.Value) {
+	if b.isAggregateValue(value.Type()) && !llvmValue.IsNil() && llvmValue.Type().TypeKind() == llvm.PointerTypeKind {
+		b.indirectValues[value] = llvmValue
+		return
+	}
+	b.locals[value] = llvmValue
+	if len(*value.Referrers()) != 0 && b.NeedsStackObjects {
+		b.trackExpr(value, llvmValue)
+	}
+}
+
+func (b *builder) createReturn(results []ssa.Value, pos token.Pos) {
+	if len(results) == 0 {
+		b.CreateRetVoid()
+	} else if !b.indirectReturn.IsNil() {
+		if len(results) == 1 {
+			b.storeValue(b.indirectReturn, results[0])
+		} else {
+			returnType := b.getLLVMResultType(b.fn.Signature)
+			for i, result := range results {
+				fieldPtr := b.CreateStructGEP(returnType, b.indirectReturn, i, "")
+				b.storeValue(fieldPtr, result)
+			}
+		}
+		b.CreateRetVoid()
+	} else if len(results) == 1 {
+		b.CreateRet(b.getValue(results[0], pos))
+	} else {
+		result := llvm.ConstNull(b.llvmFn.GlobalValueType().ReturnType())
+		for i, value := range results {
+			result = b.CreateInsertValue(result, b.getValue(value, pos), i, "")
+		}
+		b.CreateRet(result)
+	}
+}
+
+func (b *builder) isOversizedAggregate(typ types.Type) bool {
+	if !b.isAggregateValue(typ) {
+		return false
+	}
+	return b.isIndirectAggregate(b.getLLVMType(typ))
+}
+
+func (b *builder) isAggregateValue(typ types.Type) bool {
+	if tuple, ok := typ.(*types.Tuple); ok {
+		for i := 0; i < tuple.Len(); i++ {
+			if !isLLVMValueType(tuple.At(i).Type()) {
+				return false
+			}
+		}
+	} else {
+		switch typ.Underlying().(type) {
+		case *types.Array, *types.Struct:
+		default:
+			return false
+		}
+		if !isLLVMValueType(typ) {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *builder) getValuePointer(value ssa.Value) llvm.Value {
+	if ptr, ok := b.indirectValues[value]; ok {
+		return ptr
+	}
+	llvmType := b.getLLVMType(value.Type())
+	ptr := b.createIndirectStorage(llvmType, value.Name())
+	b.storeValue(ptr, value)
+	return ptr
+}
+
+func (b *builder) getCallArgument(value ssa.Value, exported bool) llvm.Value {
+	paramType := b.getLLVMType(value.Type())
+	if b.isIndirectParam(paramType, exported) {
+		return b.getValuePointer(value)
+	}
+	return b.getValue(value, getPos(value))
+}
+
+func (b *builder) createIndirectStorage(typ llvm.Type, name string) llvm.Value {
+	// Use runtime.alloc here so storage that escapes remains valid. The
+	// allocation optimizer moves bounded non-escaping storage to the stack.
+	size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(typ), false)
+	layout := b.createObjectLayout(typ, b.fn.Pos())
+	ptr := b.createAlloc(size, layout, b.targetData.ABITypeAlignment(typ), name)
+	if b.NeedsStackObjects {
+		b.trackPointer(ptr)
+	}
+	return ptr
+}
+
+func (b *builder) copyIndirectAggregate(dst, src llvm.Value, typ llvm.Type) {
+	size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(typ), false)
+	b.createMemCopy("memcpy", dst, src, size)
+}
+
+func (b *builder) storeValue(dst llvm.Value, value ssa.Value) {
+	typ := b.getLLVMType(value.Type())
+	if src, ok := b.indirectValues[value]; ok {
+		b.copyIndirectAggregate(dst, src, typ)
+	} else {
+		b.CreateStore(b.getValue(value, getPos(value)), dst)
+	}
+}
+
+func (b *builder) copyToIndirectStorage(src llvm.Value, typ llvm.Type, name string) llvm.Value {
+	dst := b.createIndirectStorage(typ, name)
+	b.copyIndirectAggregate(dst, src, typ)
+	return dst
+}
+
+func (b *builder) loadFromStorage(ptr llvm.Value, typ types.Type, name string) llvm.Value {
+	llvmType := b.getLLVMType(typ)
+	if b.isIndirectAggregate(llvmType) {
+		return b.copyToIndirectStorage(ptr, llvmType, name)
+	}
+	return b.CreateLoad(llvmType, ptr, name)
+}
+
+func (b *builder) getValueField(value ssa.Value, index int, resultType types.Type, name string) (llvm.Value, bool) {
+	if !b.isAggregateValue(value.Type()) {
+		return llvm.Value{}, false
+	}
+	valueType := b.getLLVMType(value.Type())
+	if _, indirect := b.indirectValues[value]; !indirect && !b.isIndirectAggregate(valueType) {
+		return llvm.Value{}, false
+	}
+	fieldPtr := b.CreateStructGEP(valueType, b.getValuePointer(value), index, "")
+	return b.loadFromStorage(fieldPtr, resultType, name), true
+}
+
+func (b *builder) zeroIndirectStorage(ptr llvm.Value, typ llvm.Type) {
+	memset := b.getMemsetFunc()
+	b.createCall(memset.GlobalValueType(), memset, []llvm.Value{
+		ptr,
+		llvm.ConstInt(b.ctx.Int8Type(), 0, false),
+		llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(typ), false),
+		llvm.ConstInt(b.ctx.Int1Type(), 0, false),
+	}, "")
+}
+
+type valueStorage struct {
+	ptr, size llvm.Value
+	temporary bool
+}
+
+func (b *builder) getValueStorage(value ssa.Value, name string) valueStorage {
+	typ := b.getLLVMType(value.Type())
+	if b.isIndirectAggregate(typ) {
+		return valueStorage{ptr: b.getValuePointer(value)}
+	}
+	ptr, size := b.createTemporaryAlloca(typ, name)
+	b.storeValue(ptr, value)
+	return valueStorage{ptr: ptr, size: size, temporary: true}
+}
+
+func (b *builder) endValueStorage(storage valueStorage) {
+	if storage.temporary {
+		b.emitLifetimeEnd(storage.ptr, storage.size)
+	}
+}
+
+type runtimeValueResult struct {
+	valueType  llvm.Type
+	resultType llvm.Type
+	result     llvm.Value
+	valuePtr   llvm.Value
+	valueSize  llvm.Value
+	temporary  bool
+	zero       bool
+	commaOk    bool
+}
+
+func (b *builder) createRuntimeValueResult(valueType llvm.Type, commaOk, zeroAsNull bool, name string) runtimeValueResult {
+	result := runtimeValueResult{
+		valueType:  valueType,
+		resultType: valueType,
+		valueSize:  llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(valueType), false),
+		commaOk:    commaOk,
+	}
+	if commaOk {
+		result.resultType = b.ctx.StructType([]llvm.Type{valueType, b.ctx.Int1Type()}, false)
+	}
+	if b.isIndirectAggregate(result.resultType) {
+		result.result = b.createIndirectStorage(result.resultType, name+".result")
+		result.valuePtr = result.result
+		if commaOk {
+			result.valuePtr = b.CreateStructGEP(result.resultType, result.result, 0, "")
+		}
+		return result
+	}
+	if zeroAsNull && b.targetData.TypeAllocSize(valueType) == 0 {
+		result.valuePtr = llvm.ConstNull(b.dataPtrType)
+		result.zero = true
+		return result
+	}
+	result.valuePtr, result.valueSize = b.createTemporaryAlloca(valueType, name+".value")
+	result.temporary = true
+	return result
+}
+
+func (r runtimeValueResult) finish(b *builder, commaOk llvm.Value, name string) llvm.Value {
+	if !r.result.IsNil() {
+		if r.commaOk {
+			b.CreateStore(commaOk, b.CreateStructGEP(r.resultType, r.result, 1, ""))
+		}
+		return r.result
+	}
+
+	var value llvm.Value
+	if r.zero {
+		value = llvm.ConstNull(r.valueType)
+	} else {
+		value = b.CreateLoad(r.valueType, r.valuePtr, name)
+	}
+	if r.temporary {
+		b.emitLifetimeEnd(r.valuePtr, r.valueSize)
+	}
+	if !r.commaOk {
+		return value
+	}
+	result := llvm.Undef(r.resultType)
+	result = b.CreateInsertValue(result, value, 0, "")
+	return b.CreateInsertValue(result, commaOk, 1, "")
 }
 
 // createBuiltin lowers a builtin Go function (append, close, delete, etc.) to
@@ -1981,7 +2216,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 	if fn := instr.StaticCallee(); fn != nil {
 		// Direct function call, either to a named or anonymous (directly
 		// applied) function call. If it is anonymous, it may be a closure.
-		name := fn.RelString(nil)
+		name := b.getFunctionInfo(fn).linkName
 		switch {
 		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
@@ -2030,14 +2265,10 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		}
 	}
 
-	var params []llvm.Value
-	for _, param := range instr.Args {
-		params = append(params, b.getValue(param, getPos(instr)))
-	}
-
 	// Try to call the function directly for trivially static calls.
 	var callee, context llvm.Value
 	var calleeType llvm.Type
+	var invokeTypecode, invokeReceiver llvm.Value
 	exported := false
 	if fn := instr.StaticCallee(); fn != nil {
 		calleeType, callee = b.getFunction(fn)
@@ -2067,19 +2298,18 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		exported = info.exported
 	} else if call, ok := instr.Value.(*ssa.Builtin); ok {
 		// Builtin function (append, close, delete, etc.).)
+		var params []llvm.Value
 		var argTypes []types.Type
 		for _, arg := range instr.Args {
 			argTypes = append(argTypes, arg.Type())
+			params = append(params, b.getValue(arg, getPos(instr)))
 		}
 		return b.createBuiltin(argTypes, params, call.Name(), instr.Pos())
 	} else if instr.IsInvoke() {
 		// Interface method call (aka invoke call).
 		itf := b.getValue(instr.Value, getPos(instr)) // interface value (runtime._interface)
-		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
-		value := b.CreateExtractValue(itf, 1, "invoke.func.value") // receiver
-		// Prefix the params with receiver value and suffix with typecode.
-		params = append([]llvm.Value{value}, params...)
-		params = append(params, typecode)
+		invokeTypecode = b.CreateExtractValue(itf, 0, "invoke.func.typecode")
+		invokeReceiver = b.CreateExtractValue(itf, 1, "invoke.func.value")
 		callee = b.getInvokeFunction(instr)
 		calleeType = callee.GlobalValueType()
 		context = llvm.Undef(b.dataPtrType)
@@ -2093,7 +2323,23 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		b.createNilCheck(instr.Value, callee, "fpcall")
 	}
 
+	var params []llvm.Value
+	for _, param := range instr.Args {
+		params = append(params, b.getCallArgument(param, exported))
+	}
+	if instr.IsInvoke() {
+		params = append([]llvm.Value{invokeReceiver}, params...)
+		params = append(params, invokeTypecode)
+	}
+
 	if !exported {
+		if resultType, indirectResult := b.hasIndirectResult(instr.Signature()); indirectResult {
+			result := b.createIndirectStorage(resultType, "call.result")
+			params = append([]llvm.Value{result}, params...)
+			params = append(params, context)
+			b.createInvoke(calleeType, callee, params, "")
+			return result, nil
+		}
 		// This function takes a context parameter.
 		// Add it to the end of the parameter list.
 		params = append(params, context)
@@ -2132,6 +2378,9 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 		return value
 	default:
 		// other (local) SSA value
+		if value, ok := b.indirectValues[expr]; ok {
+			return b.CreateLoad(b.getLLVMType(expr.Type()), value, "")
+		}
 		if value, ok := b.locals[expr]; ok {
 			return value
 		} else {
@@ -2214,8 +2463,15 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		// This instruction changes the type, but the underlying value remains
 		// the same. This is often a no-op, but sometimes we have to change the
 		// LLVM type as well.
-		x := b.getValue(expr.X, getPos(expr))
 		llvmType := b.getLLVMType(expr.Type())
+		if b.isIndirectAggregate(llvmType) {
+			sourceType := b.getLLVMType(expr.X.Type())
+			if !b.isIndirectAggregate(sourceType) || b.targetData.TypeAllocSize(sourceType) != b.targetData.TypeAllocSize(llvmType) {
+				return llvm.Value{}, errors.New("todo: indirect aggregate ChangeType with different layout")
+			}
+			return b.getValuePointer(expr.X), nil
+		}
+		x := b.getValue(expr.X, getPos(expr))
 		if x.Type() == llvmType {
 			// Different Go type but same LLVM type (for example, named int).
 			// This is the common case.
@@ -2245,9 +2501,15 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		if _, ok := expr.Tuple.(*ssa.Select); ok {
 			return b.getChanSelectResult(expr), nil
 		}
+		if value, ok := b.getValueField(expr.Tuple, expr.Index, expr.Type(), expr.Name()); ok {
+			return value, nil
+		}
 		value := b.getValue(expr.Tuple, getPos(expr))
 		return b.CreateExtractValue(value, expr.Index, ""), nil
 	case *ssa.Field:
+		if value, ok := b.getValueField(expr.X, expr.Field, expr.Type(), expr.Name()); ok {
+			return value, nil
+		}
 		value := b.getValue(expr.X, getPos(expr))
 		result := b.CreateExtractValue(value, expr.Field, "")
 		return result, nil
@@ -2270,11 +2532,11 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	case *ssa.Global:
 		panic("global is not an expression")
 	case *ssa.Index:
-		collection := b.getValue(expr.X, getPos(expr))
 		index := b.getValue(expr.Index, getPos(expr))
 
 		switch xType := expr.X.Type().Underlying().(type) {
 		case *types.Basic: // extract byte from string
+			collection := b.getValue(expr.X, getPos(expr))
 			// Value type must be a string, which is a basic type.
 			if xType.Info()&types.IsString == 0 {
 				panic("lookup on non-string?")
@@ -2308,13 +2570,12 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 			// Can't load directly from array (as index is non-constant), so
 			// have to do it using an alloca+gep+load.
-			arrayType := collection.Type()
-			alloca, allocaSize := b.createTemporaryAlloca(arrayType, "index.alloca")
-			b.CreateStore(collection, alloca)
+			arrayType := b.getLLVMType(expr.X.Type())
+			storage := b.getValueStorage(expr.X, "index.alloca")
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			ptr := b.CreateInBoundsGEP(arrayType, alloca, []llvm.Value{zero, index}, "index.gep")
-			result := b.CreateLoad(arrayType.ElementType(), ptr, "index.load")
-			b.emitLifetimeEnd(alloca, allocaSize)
+			ptr := b.CreateInBoundsGEP(arrayType, storage.ptr, []llvm.Value{zero, index}, "index.gep")
+			result := b.loadFromStorage(ptr, expr.Type(), "index.load")
+			b.endValueStorage(storage)
 			return result, nil
 		default:
 			panic("unknown *ssa.Index type")
@@ -2373,17 +2634,21 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 	case *ssa.Lookup: // map lookup
 		value := b.getValue(expr.X, getPos(expr))
-		index := b.getValue(expr.Index, getPos(expr))
 		valueType := expr.Type()
 		if expr.CommaOk {
 			valueType = valueType.(*types.Tuple).At(0).Type()
 		}
-		return b.createMapLookup(expr.X.Type().Underlying().(*types.Map).Key(), valueType, value, index, expr.CommaOk, expr.Pos())
+		return b.createMapLookup(expr.X.Type().Underlying().(*types.Map).Key(), valueType, value, expr.Index, expr.CommaOk, expr.Pos())
 	case *ssa.MakeChan:
 		return b.createMakeChan(expr), nil
 	case *ssa.MakeClosure:
 		return b.parseMakeClosure(expr)
 	case *ssa.MakeInterface:
+		if b.isOversizedAggregate(expr.X.Type()) {
+			typ := b.getLLVMType(expr.X.Type())
+			ptr := b.copyToIndirectStorage(b.getValuePointer(expr.X), typ, "interface.value")
+			return b.createMakeInterfaceFromPointer(ptr, expr.X.Type()), nil
+		}
 		val := b.getValue(expr.X, getPos(expr))
 		return b.createMakeInterface(val, expr.X.Type(), expr.Pos()), nil
 	case *ssa.MakeMap:
@@ -2417,8 +2682,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 		sliceSize := b.CreateBinOp(llvm.Mul, elemSizeValue, sliceCapCast, "makeslice.cap")
 		layoutValue := b.createObjectLayout(llvmElemType, expr.Pos())
-		slicePtr := b.createAlloc(sliceSize, layoutValue, 0, "makeslice.buf")
-		slicePtr.AddCallSiteAttribute(0, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elemAlign)))
+		slicePtr := b.createAlloc(sliceSize, layoutValue, elemAlign, "makeslice.buf")
 
 		// Extend or truncate if necessary. This is safe as we've already done
 		// the bounds check.
@@ -2451,7 +2715,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return b.createMapIteratorNext(rangeVal, llvmRangeVal, it), nil
 		}
 	case *ssa.Phi:
-		phi := b.CreatePHI(b.getLLVMType(expr.Type()), "")
+		phiType := b.storedParamType(b.getLLVMType(expr.Type()), false)
+		phi := b.CreatePHI(phiType, "")
 		b.phis = append(b.phis, phiNode{expr, phi})
 		return phi, nil
 	case *ssa.Range:
@@ -3454,8 +3719,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			return fn, nil
 		} else {
 			b.createNilCheck(unop.X, x, "deref")
-			load := b.CreateLoad(valueType, x, "")
-			return load, nil
+			return b.loadFromStorage(x, unop.Type(), ""), nil
 		}
 	case token.XOR: // ^x, toggle all bits in integer
 		return b.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil

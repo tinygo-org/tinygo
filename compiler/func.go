@@ -10,6 +10,91 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+// LLVM recursively expands each struct field and array element in parameters
+// and results into separate values. It gets very slow with too many values, so
+// pass larger aggregates indirectly before LLVM expands them.
+const maxDirectAggregateValues = 1024
+
+func (c *compilerContext) getLLVMResultType(sig *types.Signature) llvm.Type {
+	switch sig.Results().Len() {
+	case 0:
+		return c.ctx.VoidType()
+	case 1:
+		return c.getLLVMType(sig.Results().At(0).Type())
+	default:
+		results := make([]llvm.Type, sig.Results().Len())
+		for i := range results {
+			results[i] = c.getLLVMType(sig.Results().At(i).Type())
+		}
+		return c.ctx.StructType(results, false)
+	}
+}
+
+func (c *compilerContext) hasIndirectResult(sig *types.Signature) (llvm.Type, bool) {
+	resultType := c.getLLVMResultType(sig)
+	return resultType, c.isIndirectAggregate(resultType)
+}
+
+func (c *compilerContext) isIndirectAggregate(typ llvm.Type) bool {
+	switch typ.TypeKind() {
+	case llvm.ArrayTypeKind, llvm.StructTypeKind:
+		_, exceeded := aggregateValueCount(typ, 0)
+		return exceeded
+	default:
+		return false
+	}
+}
+
+func aggregateValueCount(typ llvm.Type, count uint64) (uint64, bool) {
+	switch typ.TypeKind() {
+	case llvm.ArrayTypeKind:
+		length := uint64(typ.ArrayLength())
+		if length == 0 {
+			return count, false
+		}
+		elementCount, exceeded := aggregateValueCount(typ.ElementType(), 0)
+		if exceeded {
+			return count, true
+		}
+		if elementCount != 0 && length > (maxDirectAggregateValues-count)/elementCount {
+			return count, true
+		}
+		return count + length*elementCount, false
+	case llvm.StructTypeKind:
+		for _, field := range typ.StructElementTypes() {
+			var exceeded bool
+			count, exceeded = aggregateValueCount(field, count)
+			if exceeded {
+				return count, true
+			}
+		}
+		return count, false
+	default:
+		count++
+		return count, count > maxDirectAggregateValues
+	}
+}
+
+func isLLVMValueType(typ types.Type) bool {
+	switch typ := typ.Underlying().(type) {
+	case *types.Basic:
+		return typ.Kind() != types.Invalid
+	case *types.Array:
+		return isLLVMValueType(typ.Elem())
+	case *types.Struct:
+		for field := range typ.Fields() {
+			if !isLLVMValueType(field.Type()) {
+				return false
+			}
+		}
+		return true
+	case *types.Chan, *types.Interface, *types.Map, *types.Pointer, *types.Signature, *types.Slice:
+		return true
+	default:
+		return false
+	}
+}
+
 // createFuncValue creates a function value from a raw function pointer with no
 // context.
 func (b *builder) createFuncValue(funcPtr, context llvm.Value, sig *types.Signature) llvm.Value {
@@ -48,28 +133,18 @@ func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 
 // getLLVMFunctionType returns a LLVM function type for a given signature.
 func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
-	// Get the return type.
-	var returnType llvm.Type
-	switch typ.Results().Len() {
-	case 0:
-		// No return values.
-		returnType = c.ctx.VoidType()
-	case 1:
-		// Just one return value.
-		returnType = c.getLLVMType(typ.Results().At(0).Type())
-	default:
-		// Multiple return values. Put them together in a struct.
-		// This appears to be the common way to handle multiple return values in
-		// LLVM.
-		members := make([]llvm.Type, typ.Results().Len())
-		for i := 0; i < typ.Results().Len(); i++ {
-			members[i] = c.getLLVMType(typ.Results().At(i).Type())
-		}
-		returnType = c.ctx.StructType(members, false)
-	}
+	returnType, indirectResult := c.hasIndirectResult(typ)
 
 	// Get the parameter types.
 	var paramTypes []llvm.Type
+	if indirectResult {
+		// LLVM expands aggregate returns into scalar leaves before deciding
+		// whether to pass them indirectly, so a large IR return can exhaust
+		// memory. Returning void avoids that expansion and cannot be demoted
+		// again. Keep the result pointer first so the context remains last.
+		paramTypes = append(paramTypes, c.dataPtrType)
+		returnType = c.ctx.VoidType()
+	}
 	if typ.Recv() != nil {
 		recv := c.getLLVMType(typ.Recv().Type())
 		if recv.StructName() == "runtime._interface" {
@@ -112,7 +187,7 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 
 	// Store the bound variables in a single object, allocating it on the heap
 	// if necessary.
-	context := b.emitPointerPack(boundVars)
+	context := b.emitPointerPack(boundVars, expr.Pos())
 
 	// Create the closure.
 	_, fn := b.getFunction(f)

@@ -47,20 +47,16 @@ func (b *builder) createGo(instr *ssa.Go) {
 		return
 	}
 
-	// Get all function parameters to pass to the goroutine.
 	var params []llvm.Value
-	for _, param := range instr.Call.Args {
-		params = append(params, b.expandFormalParam(b.getValue(param, getPos(instr)))...)
-	}
-
 	var prefix string
 	var funcPtr llvm.Value
 	var funcType llvm.Type
+	var context llvm.Value
 	hasContext := false
+	exported := false
 	if callee := instr.Call.StaticCallee(); callee != nil {
 		// Static callee is known. This makes it easier to start a new
 		// goroutine.
-		var context llvm.Value
 		switch value := instr.Call.Value.(type) {
 		case *ssa.Function:
 			// Goroutine call is regular function call. No context is necessary.
@@ -73,10 +69,10 @@ func (b *builder) createGo(instr *ssa.Go) {
 			panic("StaticCallee returned an unexpected value")
 		}
 		if !context.IsNil() {
-			params = append(params, context) // context parameter
 			hasContext = true
 		}
 		funcType, funcPtr = b.getFunction(callee)
+		exported = b.getFunctionInfo(callee).exported
 	} else if instr.Call.IsInvoke() {
 		// This is a method call on an interface value.
 		itf := b.getValue(instr.Call.Value, getPos(instr))
@@ -84,23 +80,32 @@ func (b *builder) createGo(instr *ssa.Go) {
 		itfValue := b.CreateExtractValue(itf, 1, "")
 		funcPtr = b.getInvokeFunction(&instr.Call)
 		funcType = funcPtr.GlobalValueType()
-		params = append([]llvm.Value{itfValue}, params...) // start with receiver
-		params = append(params, itfTypeCode)               // end with typecode
+		params = append(params, itfValue)
+		context = itfTypeCode
 	} else {
 		// This is a function pointer.
 		// At the moment, two extra params are passed to the newly started
 		// goroutine:
 		//   * The function context, for closures.
 		//   * The function pointer (for tasks).
-		var context llvm.Value
 		funcPtr, context = b.decodeFuncValue(b.getValue(instr.Call.Value, getPos(instr)))
 		funcType = b.getLLVMFunctionType(instr.Call.Value.Type().Underlying().(*types.Signature))
-		params = append(params, context, funcPtr)
 		hasContext = true
 		prefix = b.getFunctionInfo(b.fn).linkName
 	}
 
-	paramBundle := b.emitPointerPack(params)
+	for _, param := range instr.Call.Args {
+		params = append(params, b.getGoroutineCallArgument(param, exported)...)
+	}
+	if !context.IsNil() {
+		params = append(params, context)
+	}
+	if hasContext && instr.Call.StaticCallee() == nil {
+		params = append(params, funcPtr)
+	}
+	params = b.prependIndirectResult(instr.Call.Signature(), exported, params, "go.result")
+
+	paramBundle := b.emitPointerPack(params, instr.Pos())
 	var stackSize llvm.Value
 	callee := b.createGoroutineStartWrapper(funcType, funcPtr, prefix, hasContext, false, instr.Pos())
 	if b.AutomaticStackSize {
@@ -120,6 +125,15 @@ func (b *builder) createGo(instr *ssa.Go) {
 	}
 	fnType, start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
 	b.createCall(fnType, start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.dataPtrType)}, "")
+}
+
+func (b *builder) getGoroutineCallArgument(value ssa.Value, exported bool) []llvm.Value {
+	typ := b.getLLVMType(value.Type())
+	arg := b.getCallArgument(value, exported)
+	if b.isIndirectParam(typ, exported) {
+		return []llvm.Value{b.copyToIndirectStorage(arg, typ, "go.param")}
+	}
+	return b.expandFormalParam(arg)
 }
 
 // Create an exported wrapper function for functions with the //go:wasmexport

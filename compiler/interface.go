@@ -84,7 +84,11 @@ const (
 //
 // An interface value is a {typecode, value} tuple named runtime._interface.
 func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) llvm.Value {
-	itfValue := b.emitPointerPack([]llvm.Value{val})
+	itfValue := b.emitPointerPack([]llvm.Value{val}, pos)
+	return b.createMakeInterfaceFromPointer(itfValue, typ)
+}
+
+func (b *builder) createMakeInterfaceFromPointer(itfValue llvm.Value, typ types.Type) llvm.Value {
 	itfType := b.getTypeCode(typ)
 	itf := llvm.Undef(b.getLLVMRuntimeType("_interface"))
 	itf = b.CreateInsertValue(itf, itfType, 0, "")
@@ -98,7 +102,14 @@ func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.
 // doesn't match the underlying type of the interface.
 func (b *builder) extractValueFromInterface(itf llvm.Value, llvmType llvm.Type) llvm.Value {
 	valuePtr := b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
+	if b.isIndirectAggregate(llvmType) {
+		return valuePtr
+	}
 	return b.emitPointerUnpack(valuePtr, []llvm.Type{llvmType})[0]
+}
+
+func (b *builder) extractValuePointerFromInterface(itf llvm.Value) llvm.Value {
+	return b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
 }
 
 func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
@@ -1067,6 +1078,21 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	if expr.CommaOk {
 		nextBlock := b.insertBasicBlock("typeassert.next")
 		b.currentBlockInfo.exit = nextBlock
+		if b.isIndirectAggregate(assertedType) {
+			resultType := b.getLLVMType(expr.Type())
+			result := b.createIndirectStorage(resultType, "typeassert.result")
+			b.zeroIndirectStorage(result, resultType)
+			b.CreateCondBr(commaOk, okBlock, nextBlock)
+
+			b.SetInsertPointAtEnd(okBlock)
+			valuePtr := b.extractValuePointerFromInterface(itf)
+			b.copyIndirectAggregate(b.CreateStructGEP(resultType, result, 0, ""), valuePtr, assertedType)
+			b.CreateBr(nextBlock)
+
+			b.SetInsertPointAtEnd(nextBlock)
+			b.CreateStore(commaOk, b.CreateStructGEP(resultType, result, 1, ""))
+			return result
+		}
 		b.CreateCondBr(commaOk, okBlock, nextBlock)
 
 		// Retrieve the value from the interface if the type assert was
@@ -1193,8 +1219,7 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 // thunk is declared, not defined: it will be defined by the interface lowering
 // pass.
 func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
-	s, _ := c.getTypeCodeName(instr.Value.Type().Underlying())
-	fnName := s + "." + instr.Method.Name() + "$invoke"
+	fnName := c.getInvokeFunctionName(instr)
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
 		sig := instr.Method.Type().(*types.Signature)
@@ -1207,10 +1232,18 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
 		c.addStandardDeclaredAttributes(llvmFn)
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-invoke", c.getMethodSignatureName(instr.Method)))
+		if _, indirect := c.hasIndirectResult(sig); indirect {
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-indirect-result", "true"))
+		}
 		methods := c.getMethodsString(instr.Value.Type().Underlying().(*types.Interface))
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))
 	}
 	return llvmFn
+}
+
+func (c *compilerContext) getInvokeFunctionName(instr *ssa.CallCommon) string {
+	s, _ := c.getTypeCodeName(instr.Value.Type().Underlying())
+	return s + "." + instr.Method.Name() + "$invoke"
 }
 
 // createInterfaceTypeAssert creates a call to a declared-but-not-defined
@@ -1247,6 +1280,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	// Get the expanded receiver type.
 	receiverType := c.getLLVMType(fn.Signature.Recv().Type())
 	var expandedReceiverType []llvm.Type
+	receiverIndirect := c.isIndirectAggregate(receiverType)
 	for _, info := range c.expandFormalParamType(receiverType, "", nil) {
 		expandedReceiverType = append(expandedReceiverType, info.llvmType)
 	}
@@ -1261,7 +1295,13 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	}
 
 	// create wrapper function
-	paramTypes := append([]llvm.Type{c.dataPtrType}, llvmFnType.ParamTypes()[len(expandedReceiverType):]...)
+	resultOffset := 0
+	if _, indirect := c.hasIndirectResult(fn.Signature); indirect {
+		resultOffset = 1
+	}
+	paramTypes := append([]llvm.Type{}, llvmFnType.ParamTypes()[:resultOffset]...)
+	paramTypes = append(paramTypes, c.dataPtrType)
+	paramTypes = append(paramTypes, llvmFnType.ParamTypes()[resultOffset+len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(llvmFnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
 	c.addStandardAttributes(wrapper)
@@ -1287,8 +1327,15 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	block := b.ctx.AddBasicBlock(wrapper, "entry")
 	b.SetInsertPointAtEnd(block)
 
-	receiverValue := b.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
-	params := append(b.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
+	params := append([]llvm.Value{}, wrapper.Params()[:resultOffset]...)
+	receiverParam := wrapper.Param(resultOffset)
+	if receiverIndirect {
+		params = append(params, receiverParam)
+	} else {
+		receiverValue := b.emitPointerUnpack(receiverParam, []llvm.Type{receiverType})[0]
+		params = append(params, b.expandFormalParam(receiverValue)...)
+	}
+	params = append(params, wrapper.Params()[resultOffset+1:]...)
 	if llvmFnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
 		b.CreateCall(llvmFnType, llvmFn, params, "")
 		b.CreateRetVoid()

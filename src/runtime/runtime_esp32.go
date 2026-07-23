@@ -6,6 +6,7 @@ import (
 	"device"
 	"device/esp"
 	"machine"
+	"unsafe"
 )
 
 // This is the function called on startup right after the stack pointer has been
@@ -46,11 +47,20 @@ func main() {
 	// faster.
 	clearbss()
 
-	// Initialize UART.
-	machine.InitSerial()
-
 	// Initialize main system timer used for time.Now.
 	initTimer()
+
+	// Set up the Xtensa interrupt vector table. This zeroes INTENABLE, so it
+	// must run before any peripheral (UART, timer, etc) enables its own CPU
+	// interrupt line - otherwise that enable would be wiped out here.
+	interruptInit()
+
+	// Initialize timer alarm interrupt for the scheduler.
+	initTimerInterrupt()
+
+	// Initialize UART. This enables the UART RX interrupt, which must happen
+	// after interruptInit so the INTENABLE bit is not cleared again.
+	machine.InitSerial()
 
 	// Initialize the heap, call main.main, etc.
 	run()
@@ -65,16 +75,47 @@ var _sbss [0]byte
 //go:extern _ebss
 var _ebss [0]byte
 
-// sleepTicks busy-waits until the given number of ticks have passed.
-func sleepTicks(d timeUnit) {
-	sleepUntil := ticks() + d
-	for ticks() < sleepUntil {
-		// TODO: suspend the CPU to not burn power here unnecessarily.
-	}
-}
+//go:extern _vector_table
+var _vector_table [0]uintptr
 
 func abort() {
 	for {
 		device.Asm("waiti 0")
 	}
+}
+
+// interruptInit installs the Xtensa vector table by writing its address
+// to the VECBASE special register and ensures all CPU interrupts are
+// initially disabled.
+func interruptInit() {
+	// Disable all CPU interrupts while we configure.
+	device.AsmFull("wsr {zero}, INTENABLE", map[string]interface{}{
+		"zero": uintptr(0),
+	})
+
+	// Write the vector table address to VECBASE (SR 231).
+	vecbase := uintptr(unsafe.Pointer(&_vector_table))
+	device.AsmFull("wsr {vecbase}, VECBASE", map[string]interface{}{
+		"vecbase": vecbase,
+	})
+
+	// Clear PS.EXCM and PS.INTLEVEL so that level-1 interrupts can fire.
+	// The ROM bootloader leaves PS.EXCM=1 (exception mode), which masks
+	// all interrupts at level ≤ EXCMLEVEL (level 1 on ESP32).
+	// PS.INTLEVEL may also be non-zero. Both must be 0 for peripheral
+	// interrupts to trigger.
+	//
+	// We also set PS.UM=1 (bit 5) so that level-1 interrupts route to
+	// the User exception vector at VECBASE+0x340, where our handler lives.
+	// With PS.UM=0 (the ROM default), they would go to the Kernel exception
+	// vector at VECBASE+0x300 which is a reset stub.
+	ps := uintptr(device.AsmFull("rsr {}, PS", nil))
+	ps &^= 0x1F // clear INTLEVEL (bits 0-3) and EXCM (bit 4)
+	ps |= 0x20  // set PS.UM (bit 5) — use User exception vector
+	device.AsmFull("wsr {ps}, PS", map[string]interface{}{
+		"ps": ps,
+	})
+
+	// Synchronize pipeline after writing special registers.
+	device.Asm("rsync")
 }

@@ -72,19 +72,20 @@ func (b *builder) getRuntimeFunctionValue(name string, sig *types.Signature) llv
 
 // createMapLookup returns the value in a map. It calls a runtime function
 // depending on the map key type to load the map value and its comma-ok value.
-func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Value, commaOk bool, pos token.Pos) (llvm.Value, error) {
+func (b *builder) createMapLookup(keyType, valueType types.Type, m llvm.Value, key ssa.Value, commaOk bool, pos token.Pos) (llvm.Value, error) {
 	llvmValueType := b.getLLVMType(valueType)
 
 	// Allocate the memory for the resulting type. Do not zero this memory: it
 	// will be zeroed by the hashmap get implementation if the key is not
 	// present in the map.
-	mapValueAlloca, mapValueAllocaSize := b.createTemporaryAlloca(llvmValueType, "hashmap.value")
+	result := b.createRuntimeValueResult(llvmValueType, commaOk, false, "hashmap")
+	mapValueAlloca := result.valuePtr
 
 	// We need the map size (with type uintptr) to pass to the hashmap*Get
 	// functions. This is necessary because those *Get functions are valid on
 	// nil maps, and they'll need to zero the value pointer by that number of
 	// bytes.
-	mapValueSize := mapValueAllocaSize
+	mapValueSize := result.valueSize
 	if mapValueSize.Type().IntTypeWidth() > b.uintptrType.IntTypeWidth() {
 		mapValueSize = llvm.ConstTrunc(mapValueSize, b.uintptrType)
 	}
@@ -94,60 +95,46 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m, key llvm.Val
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
-		params := []llvm.Value{m, key, mapValueAlloca, mapValueSize}
+		params := []llvm.Value{m, b.getValue(key, getPos(key)), mapValueAlloca, mapValueSize}
 		commaOkValue = b.createRuntimeCall("hashmapStringGet", params, "")
 	} else {
 		// Key stored at actual type: either binary-comparable or with
 		// compiler-generated hash/equal.
-		mapKeyAlloca, mapKeySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
-		b.CreateStore(key, mapKeyAlloca)
-		params := []llvm.Value{m, mapKeyAlloca, mapValueAlloca, mapValueSize}
+		mapKey := b.getValueStorage(key, "hashmap.key")
+		params := []llvm.Value{m, mapKey.ptr, mapValueAlloca, mapValueSize}
 		fnName := "hashmapBinaryGet"
 		if !hashmapIsBinaryKey(keyType) {
 			fnName = "hashmapGenericGet"
 		}
 		commaOkValue = b.createRuntimeCall(fnName, params, "")
-		b.emitLifetimeEnd(mapKeyAlloca, mapKeySize)
+		b.endValueStorage(mapKey)
 	}
 
-	// Load the resulting value from the hashmap. The value is set to the zero
-	// value if the key doesn't exist in the hashmap.
-	mapValue := b.CreateLoad(llvmValueType, mapValueAlloca, "")
-	b.emitLifetimeEnd(mapValueAlloca, mapValueAllocaSize)
-
-	if commaOk {
-		tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{llvmValueType, b.ctx.Int1Type()}, false))
-		tuple = b.CreateInsertValue(tuple, mapValue, 0, "")
-		tuple = b.CreateInsertValue(tuple, commaOkValue, 1, "")
-		return tuple, nil
-	} else {
-		return mapValue, nil
-	}
+	// The value is set to the zero value if the key doesn't exist.
+	return result.finish(b, commaOkValue, ""), nil
 }
 
 // createMapUpdate updates a map key to a given value, by creating an
 // appropriate runtime call.
-func (b *builder) createMapUpdate(keyType types.Type, m, key, value llvm.Value, pos token.Pos) {
-	valueAlloca, valueSize := b.createTemporaryAlloca(value.Type(), "hashmap.value")
-	b.CreateStore(value, valueAlloca)
+func (b *builder) createMapUpdate(keyType types.Type, m llvm.Value, key, value ssa.Value, pos token.Pos) {
+	storedValue := b.getValueStorage(value, "hashmap.value")
 	keyType = keyType.Underlying()
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		// key is a string
-		params := []llvm.Value{m, key, valueAlloca}
+		params := []llvm.Value{m, b.getValue(key, getPos(key)), storedValue.ptr}
 		b.createRuntimeInvoke("hashmapStringSet", params, "")
 	} else {
 		// Key stored at actual type.
-		keyAlloca, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
-		b.CreateStore(key, keyAlloca)
+		keyStorage := b.getValueStorage(key, "hashmap.key")
 		fnName := "hashmapBinarySet"
 		if !hashmapIsBinaryKey(keyType) {
 			fnName = "hashmapGenericSet"
 		}
-		params := []llvm.Value{m, keyAlloca, valueAlloca}
+		params := []llvm.Value{m, keyStorage.ptr, storedValue.ptr}
 		b.createRuntimeInvoke(fnName, params, "")
-		b.emitLifetimeEnd(keyAlloca, keySize)
+		b.endValueStorage(keyStorage)
 	}
-	b.emitLifetimeEnd(valueAlloca, valueSize)
+	b.endValueStorage(storedValue)
 }
 
 // createMapDelete deletes a key from a map by calling the appropriate runtime

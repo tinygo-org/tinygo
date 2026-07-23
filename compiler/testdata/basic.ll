@@ -177,6 +177,13 @@ entry:
 }
 
 ; Function Attrs: nounwind
+define hidden i64 @main.shiftNested(i64 %x, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = lshr i64 %x, 8
+  ret i64 %0
+}
+
+; Function Attrs: nounwind
 define hidden { float, float } @main.complexMul(float %x.r, float %x.i, float %y.r, float %y.i, ptr %context) unnamed_addr #1 {
 entry:
   %0 = fmul float %x.r, %y.r

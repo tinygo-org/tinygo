@@ -52,6 +52,7 @@ func TestCompiler(t *testing.T) {
 		{"gc.go", "", ""},
 		{"zeromap.go", "", ""},
 		{"generics.go", "", ""},
+		{"large.go", "", ""},
 	}
 	if goMinor >= 20 {
 		tests = append(tests, testCase{"go1.20.go", "", ""})
@@ -123,53 +124,119 @@ func TestCompiler(t *testing.T) {
 				t.Fatal("failed to read golden file:", err)
 			}
 
-			if !fuzzyEqualIR(mod.String(), string(expected)) {
-				t.Errorf("output does not match expected output:\n%s", mod.String())
+			if diff := diffIR(string(expected), mod.String()); diff != "" {
+				t.Errorf("output does not match expected output (re-run with -update to regenerate):\n%s", diff)
 			}
 		})
 	}
 }
 
-// fuzzyEqualIR returns true if the two LLVM IR strings passed in are roughly
-// equal. That means, only relevant lines are compared (excluding comments
-// etc.).
-func fuzzyEqualIR(s1, s2 string) bool {
+func TestOptimizedLargeAggregateABI(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "large-optimized.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	passOptions := llvm.NewPassBuilderOptions()
+	defer passOptions.Dispose()
+	if err := mod.RunPasses("default<O2>", llvm.TargetMachine{}, passOptions); err != nil {
+		t.Fatal(err)
+	}
+
+	resultFn := mod.NamedFunction("main.makeLargeOptimizedValue")
+	if resultFn.IsNil() {
+		t.Fatal("missing function main.makeLargeOptimizedValue")
+	}
+	if resultType := resultFn.GlobalValueType().ReturnType(); resultType.TypeKind() != llvm.VoidTypeKind {
+		t.Errorf("large aggregate result was promoted to %s", resultType)
+	}
+
+	for _, name := range []string{
+		"main.makeLargeOptimizedValue",
+		"main.readLargeOptimizedValue",
+		"main.readMixedLargeOptimizedValue",
+	} {
+		fn := mod.NamedFunction(name)
+		if fn.IsNil() {
+			t.Fatalf("missing function %s", name)
+		}
+		if paramType := fn.GlobalValueType().ParamTypes()[0]; paramType.TypeKind() != llvm.PointerTypeKind {
+			t.Errorf("%s aggregate parameter was promoted to %s", name, paramType)
+		}
+	}
+}
+
+// normalizeIR canonicalizes LLVM IR so a single golden file keeps matching
+// across LLVM versions. Golden files are written against LLVM <21; newer LLVM
+// prints some attributes differently.
+func normalizeIR(s string) string {
 	// Golden files are written using the pre-LLVM21 'nocapture' spelling,
 	// which LLVM printed before any co-occurring attribute such as
 	// 'readonly' (e.g. "ptr nocapture readonly"). LLVM 21+ prints the
 	// equivalent 'captures(none)' instead, and after such attributes (e.g.
 	// "ptr readonly captures(none)"). Normalize both name and position back
-	// to the old spelling to keep a single golden file working across LLVM
-	// versions.
-	s1 = normalizeCapturesAttr(s1)
-	s2 = normalizeCapturesAttr(s2)
+	// to the old spelling.
+	s = normalizeCapturesAttr(s)
 
 	// LLVM 21+ also added an explicit 'nocreateundeforpoison' attribute to
 	// certain intrinsic declarations (e.g. llvm.umin) that were implicitly
 	// assumed not to create undef/poison before. It's unrelated to the
 	// behavior under test, so ignore it for comparison.
-	s1 = strings.ReplaceAll(s1, "nocreateundeforpoison ", "")
-	s2 = strings.ReplaceAll(s2, "nocreateundeforpoison ", "")
+	s = strings.ReplaceAll(s, "nocreateundeforpoison ", "")
 
 	// LLVM 22 dropped the (redundant) i64 size argument from
 	// llvm.lifetime.start/end. Normalize away that argument so golden files
 	// written against the two-argument form still match.
-	s1 = lifetimeSizeArgRe.ReplaceAllString(s1, "$1")
-	s2 = lifetimeSizeArgRe.ReplaceAllString(s2, "$1")
+	s = lifetimeSizeArgRe.ReplaceAllString(s, "$1")
 
-	lines1 := filterIrrelevantIRLines(strings.Split(s1, "\n"))
-	lines2 := filterIrrelevantIRLines(strings.Split(s2, "\n"))
-	if len(lines1) != len(lines2) {
-		return false
+	return s
+}
+
+// diffIR compares two LLVM IR strings, ignoring irrelevant lines (comments,
+// empty lines, etc.) and normalizing LLVM-version-specific spellings via
+// normalizeIR. It returns "" when they are equal. Otherwise it returns a
+// compact diff of only the region that differs: the common prefix and suffix
+// are trimmed, then the differing expected lines (prefixed "-") are shown
+// followed by the differing actual lines (prefixed "+").
+func diffIR(expected, actual string) string {
+	exp := filterIrrelevantIRLines(strings.Split(normalizeIR(expected), "\n"))
+	act := filterIrrelevantIRLines(strings.Split(normalizeIR(actual), "\n"))
+
+	// Trim the common prefix.
+	start := 0
+	for start < len(exp) && start < len(act) && exp[start] == act[start] {
+		start++
 	}
-	for i, line1 := range lines1 {
-		line2 := lines2[i]
-		if line1 != line2 {
-			return false
-		}
+	// Trim the common suffix.
+	e, a := len(exp), len(act)
+	for e > start && a > start && exp[e-1] == act[a-1] {
+		e--
+		a--
+	}
+	if start == e && start == a {
+		return "" // equal
 	}
 
-	return true
+	var b strings.Builder
+	b.WriteString("first difference at relevant line ")
+	b.WriteString(strconv.Itoa(start + 1))
+	b.WriteString(":\n")
+	for _, line := range exp[start:e] {
+		b.WriteString("- ")
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	for _, line := range act[start:a] {
+		b.WriteString("+ ")
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 // capturesNoneAttrRe matches a co-occurring attribute directly followed by
@@ -254,6 +321,49 @@ func TestCompilerErrors(t *testing.T) {
 			continue
 		}
 		expectedErrorsIdx++
+	}
+}
+
+func TestAggregateValueCount(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+
+	byteType := ctx.Int8Type()
+	tests := []struct {
+		name     string
+		typ      llvm.Type
+		count    uint64
+		exceeded bool
+	}{
+		{"empty", llvm.ArrayType(byteType, 0), 0, false},
+		{"limit", llvm.ArrayType(byteType, 1024), 1024, false},
+		{"over limit", llvm.ArrayType(byteType, 1025), 0, true},
+		{"combined limit", ctx.StructType([]llvm.Type{
+			llvm.ArrayType(byteType, 512),
+			llvm.ArrayType(byteType, 512),
+		}, false), 1024, false},
+		{"combined over limit", ctx.StructType([]llvm.Type{
+			llvm.ArrayType(byteType, 1000),
+			llvm.ArrayType(byteType, 1000),
+		}, false), 0, true},
+		{"comma-ok over limit", ctx.StructType([]llvm.Type{
+			llvm.ArrayType(byteType, 1024),
+			ctx.Int1Type(),
+		}, false), 0, true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			count, exceeded := aggregateValueCount(test.typ, 0)
+			if exceeded != test.exceeded {
+				t.Errorf("expected exceeded=%t, got %t", test.exceeded, exceeded)
+			}
+			if !exceeded && count != test.count {
+				t.Errorf("expected count=%d, got %d", test.count, count)
+			}
+		})
 	}
 }
 

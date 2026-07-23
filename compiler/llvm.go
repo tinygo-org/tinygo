@@ -54,7 +54,7 @@ func (b *builder) emitLifetimeEnd(ptr, size llvm.Value) {
 // pointer value directly. It returns the pointer with the packed data.
 // If the values are all constants, they are be stored in a constant global and
 // deduplicated.
-func (b *builder) emitPointerPack(values []llvm.Value) llvm.Value {
+func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value {
 	valueTypes := make([]llvm.Type, len(values))
 	for i, value := range values {
 		valueTypes[i] = value.Type()
@@ -128,8 +128,9 @@ func (b *builder) emitPointerPack(values []llvm.Value) llvm.Value {
 
 		// Packed data is bigger than a pointer, so allocate it on the heap.
 		sizeValue := llvm.ConstInt(b.uintptrType, size, false)
+		layoutValue := b.createObjectLayout(packedType, pos)
 		align := b.targetData.ABITypeAlignment(packedType)
-		packedAlloc := b.createAlloc(sizeValue, llvm.ConstNull(b.dataPtrType), align, "")
+		packedAlloc := b.createAlloc(sizeValue, layoutValue, align, "")
 		if b.NeedsStackObjects {
 			b.trackPointer(packedAlloc)
 		}
