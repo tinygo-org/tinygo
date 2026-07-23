@@ -42,8 +42,17 @@ type finalizerEntry struct {
 // finalizer draining) until the Go heap itself fills, which for a bursty,
 // mostly-idle workload may be never, so the external resources accumulate
 // without bound. Coupling a GC to finalizer-registration pressure caps that
-// accumulation at roughly this many entries regardless of heap size. Zero
-// disables the trigger.
+// accumulation at roughly this many entries regardless of heap size.
+//
+// This is a compile-time policy constant, in the spirit of Go's forcegcperiod.
+// The trigger only fires at the scheduler's idle point (a drained run queue) and
+// each firing resets the count (see scanFinalizers), so it is throttled to that
+// point rather than firing once per this-many registrations: a setup phase that
+// registers many long-lived finalizers pays at most one extra collection at the
+// first idle point after it, not one per threshold, and that collection just
+// marks still-live data during otherwise-idle time without freeing anything
+// early. Keeping it a const also lets the compiler constant-fold the check and,
+// with zero, drop the pressure path entirely. Zero disables the trigger.
 const finalizerGCThreshold = 32
 
 var (

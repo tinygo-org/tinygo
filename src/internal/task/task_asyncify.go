@@ -28,6 +28,12 @@ type state struct {
 	stackState
 
 	launched bool
+
+	// finishing is set immediately before this goroutine, having run to
+	// completion, pauses for the last time. Resume observes it and clears the
+	// goroutine's stack. It lives on the task so each finishing goroutine owns
+	// its own flag, independent of scheduler timing.
+	finishing bool
 }
 
 // stackState is the saved state of a stack while unwound.
@@ -92,16 +98,12 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 //go:linkname memzero runtime.memzero
 func memzero(ptr unsafe.Pointer, size uintptr)
 
-// finishing is set by the runtime immediately before a goroutine that has run
-// to completion pauses for the last time. Resume observes it and clears the
-// goroutine's stack. It is written and read on the same (cooperative) scheduler
-// thread with no suspension point in between, so a plain global is safe.
-var finishing bool
-
 // MarkFinishing records that the current goroutine has finished and will not be
 // resumed, so Resume may reclaim its stack once control returns to the scheduler.
+// The flag lives on the task itself, so each finishing goroutine owns its own and
+// the handoff to Resume does not depend on scheduler timing.
 func MarkFinishing() {
-	finishing = true
+	currentTask.state.finishing = true
 }
 
 // clearStack zeroes a finished goroutine's entire stack buffer. The buffer is a
@@ -160,11 +162,11 @@ func (t *Task) Resume() {
 	if uintptr(t.state.asyncifysp) > uintptr(t.state.csp) {
 		runtimePanic("stack overflow")
 	}
-	if finishing {
+	if t.state.finishing {
 		// The goroutine just ran to completion and paused for the last time. It
 		// will never be resumed, so its stack can be cleared now to drop any
 		// pointers its returned frames left behind (see clearStack).
-		finishing = false
+		t.state.finishing = false
 		t.clearStack()
 	}
 }
