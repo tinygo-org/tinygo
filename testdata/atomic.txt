@@ -3,6 +3,16 @@ AddInt64: 3 3
 AddUint32: 13 13
 AddUint64: 13 13
 AddUintptr: 13 13
+AndInt32: 12 8
+AndInt64: 12 8
+AndUint32: 12 8
+AndUint64: 12 8
+AndUintptr: 12 8
+OrInt32: 8 11
+OrInt64: 8 11
+OrUint32: 8 11
+OrUint64: 8 11
+OrUintptr: 8 11
 SwapInt32: 3 33
 SwapInt64: 3 33
 SwapUint32: 13 33
