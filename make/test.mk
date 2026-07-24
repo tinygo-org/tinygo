@@ -19,8 +19,10 @@ TEST_PACKAGES_FAST = \
 	container/heap \
 	container/list \
 	container/ring \
+	crypto/des \
 	crypto/ecdsa \
 	crypto/elliptic \
+	crypto/hmac \
 	crypto/md5 \
 	crypto/sha1 \
 	crypto/sha256 \
@@ -47,6 +49,7 @@ TEST_PACKAGES_FAST = \
 	hash/crc64 \
 	hash/fnv \
 	html \
+	image \
 	internal/itoa \
 	internal/profile \
 	math \
@@ -57,10 +60,14 @@ TEST_PACKAGES_FAST = \
 	os \
 	path \
 	reflect \
+	regexp/syntax \
+	strconv \
 	sync \
 	testing \
 	testing/iotest \
 	text/scanner \
+	text/tabwriter \
+	text/template/parse \
 	unicode \
 	unicode/utf16 \
 	unicode/utf8 \
@@ -71,21 +78,14 @@ TEST_PACKAGES_FAST = \
 # bytes requires mmap
 # compress/flate appears to hang on wasi
 # crypto/aes needs reflect.Type.Method(), not yet implemented
-# crypto/des fails on wasi, needs panic()/recover()
-# crypto/hmac fails on wasi, it exits with a "slice out of range" panic
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # encoding/xml takes a minute on linux and gives a stack overflow on wasi
-# image fails on wasi, needs panic()/recover()
 # io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
-# mime: fails on wasi, needs panic()/recover()
+# mime fails on wasi: bufio.Scanner reports an impossible read count
 # mime/multipart: needs wasip1 syscall.FDFLAG_NONBLOCK
 # mime/quotedprintable requires syscall.Faccessat
 # net/mail: needs wasip1  syscall.FDFLAG_NONBLOCK
 # net/ntextproto: needs wasip1 syscall.FDFLAG_NONBLOCK
-# regexp/syntax: fails on wasip1, needs panic()/recover()
-# strconv: fails on wasi, needs panic()/recover()
-# text/tabwriter: fails on wasi, needs panic()/recover()
-# text/template/parse: fails on wasi, needs panic()/recover()
 # testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
 
 # Additional standard library packages that pass tests on individual platforms
@@ -94,13 +94,10 @@ TEST_PACKAGES_LINUX := \
 	compress/flate \
 	context \
 	crypto/aes \
-	crypto/des \
 	crypto/ecdh \
-	crypto/hmac \
 	debug/dwarf \
 	debug/plan9obj \
 	encoding/xml \
-	image \
 	io/ioutil \
 	mime \
 	mime/multipart \
@@ -109,25 +106,15 @@ TEST_PACKAGES_LINUX := \
 	net/mail \
 	net/textproto \
 	os/user \
-	regexp/syntax \
-	strconv \
 	testing/fstest \
-	text/tabwriter \
-	text/template/parse
+	$(nil)
 
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 
 # os/user requires t.Skip() support
 TEST_PACKAGES_WINDOWS := \
 	compress/flate \
-	crypto/des \
-	crypto/hmac \
-	image \
 	mime \
-	regexp/syntax \
-	strconv \
-	text/tabwriter \
-	text/template/parse \
 	$(nil)
 
 
@@ -143,6 +130,7 @@ TEST_PACKAGES_NONWASM = \
 	embed/internal/embedtest \
 	expvar \
 	go/format \
+	image \
 	os \
 	testing \
 	$(nil)
@@ -164,12 +152,13 @@ TEST_PACKAGES_BAREMETAL = $(filter-out $(TEST_PACKAGES_NONBAREMETAL), $(TEST_PAC
 TEST_PACKAGES_NONBAREMETAL = \
 	$(TEST_PACKAGES_NONWASM) \
 	$(TEST_PACKAGES_NOBOUNDARYSLICES) \
+	crypto/des \
 	math \
+	regexp/syntax \
 	$(nil)
 
 TEST_PACKAGES_FAST_WASI = $(filter-out $(TEST_PACKAGES_NOWASI), $(TEST_PACKAGES_FAST))
 TEST_PACKAGES_NOWASI = \
-	crypto/ecdsa \
 	$(nil)
 
 # wasip1 reports GOOS=wasip1 and so gets the boundary_compat.go fallback, but
@@ -179,6 +168,7 @@ TEST_PACKAGES_NOWASI = \
 TEST_PACKAGES_FAST_WASIP2 = $(filter-out $(TEST_PACKAGES_NOBOUNDARYSLICES), $(TEST_PACKAGES_FAST_WASI))
 
 TEST_PACKAGES_NOBOUNDARYSLICES = \
+	crypto/hmac \
 	crypto/md5 \
 	crypto/sha1 \
 	crypto/sha256 \
