@@ -13,6 +13,7 @@ func TestVerifyOptions(t *testing.T) {
 	expectedSchedulerError := errors.New(`invalid scheduler option 'incorrect': valid values are none, tasks, asyncify, threads, cores`)
 	expectedPrintSizeError := errors.New(`invalid size option 'incorrect': valid values are none, short, full, html`)
 	expectedPanicStrategyError := errors.New(`invalid panic option 'incorrect': valid values are print, trap`)
+	expectedPanicUnwindError := errors.New(`invalid panic-unwind option 'incorrect': valid values are auto, explicit`)
 
 	testCases := []struct {
 		name          string
@@ -115,6 +116,25 @@ func TestVerifyOptions(t *testing.T) {
 			name: "PanicOptionTrap",
 			opts: compileopts.Options{
 				PanicStrategy: "trap",
+			},
+		},
+		{
+			name: "InvalidPanicUnwindOption",
+			opts: compileopts.Options{
+				PanicUnwind: "incorrect",
+			},
+			expectedError: expectedPanicUnwindError,
+		},
+		{
+			name: "PanicUnwindOptionAuto",
+			opts: compileopts.Options{
+				PanicUnwind: "auto",
+			},
+		},
+		{
+			name: "PanicUnwindOptionExplicit",
+			opts: compileopts.Options{
+				PanicUnwind: "explicit",
 			},
 		},
 	}

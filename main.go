@@ -1766,6 +1766,7 @@ func main() {
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative, custom, precise, boehm)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
+	panicUnwind := flag.String("panic-unwind", "", "panic unwind strategy (auto, explicit)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, cores, threads, asyncify)")
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb, rtt)")
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
@@ -1905,6 +1906,7 @@ func main() {
 		Opt:                     *opt,
 		GC:                      *gc,
 		PanicStrategy:           *panicStrategy,
+		PanicUnwind:             *panicUnwind,
 		Scheduler:               *scheduler,
 		Serial:                  *serial,
 		Work:                    *work,

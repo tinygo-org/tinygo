@@ -23,7 +23,10 @@ fpcall.next:                                      ; preds = %entry
 
 fpcall.throw:                                     ; preds = %entry
   call void @runtime.nilPanic(ptr undef) #2
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %fpcall.throw
+  ret void
 }
 
 declare void @runtime.nilPanic(ptr) #0

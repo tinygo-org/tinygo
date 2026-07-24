@@ -6,6 +6,7 @@ import (
 )
 
 var wg sync.WaitGroup
+var panicMap = map[interface{}]int{}
 
 func main() {
 	println("# simple recover")
@@ -274,6 +275,21 @@ func recoverRuntimeError() {
 		_ = x.(string)
 	})
 	recoverEmptyInterfaceTypeAssert()
+	recoverMustPanic("interface compare", func() {
+		var x interface{} = []int{}
+		_ = x == x
+	})
+	recoverMustPanic("map key", func() {
+		panicMap[[]int{}] = 1
+	})
+	recoverMustPanic("map lookup key", func() {
+		m := map[interface{}]int{}
+		_ = m[[]int{}]
+	})
+	recoverMustPanic("map delete key", func() {
+		m := map[interface{}]int{}
+		delete(m, []int{})
+	})
 }
 
 //go:noinline
