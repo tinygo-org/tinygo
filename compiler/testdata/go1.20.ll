@@ -41,7 +41,10 @@ unsafe.String.next:                               ; preds = %entry
 
 unsafe.String.throw:                              ; preds = %entry
   call void @runtime.unsafeSlicePanic(ptr undef) #2
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %unsafe.String.throw
+  ret %runtime._string undef
 }
 
 declare void @runtime.unsafeSlicePanic(ptr) #0

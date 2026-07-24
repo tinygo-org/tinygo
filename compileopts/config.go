@@ -114,6 +114,7 @@ func (c *Config) BuildTags() []string {
 		"osusergo",                                   // to get os/user to work
 		"math_big_pure_go",                           // to get math/big to work
 		"gc." + c.GC(), "scheduler." + c.Scheduler(), // used inside the runtime package
+		"tinygo.unwind." + c.PanicUnwind(),
 		"serial." + c.Serial()}...) // used inside the machine package
 	switch c.Scheduler() {
 	case "threads", "cores":
@@ -201,6 +202,42 @@ func (c *Config) OptLevel() (level string, speedLevel, sizeLevel int) {
 // instruction).
 func (c *Config) PanicStrategy() string {
 	return c.Options.PanicStrategy
+}
+
+// PanicUnwind returns the mechanism used to unwind panics and Goexit. Asyncify
+// provides unwinding whenever that scheduler is selected. Explicit
+// return-based unwinding must be requested by the command line or target
+// specification.
+func (c *Config) PanicUnwind() string {
+	if c.Scheduler() == "asyncify" {
+		return "asyncify"
+	}
+	requested := c.Target.PanicUnwind
+	if c.Options.PanicUnwind != "" {
+		requested = c.Options.PanicUnwind
+	}
+	if requested == "explicit" {
+		return "explicit"
+	}
+	arch, _, _ := strings.Cut(c.Triple(), "-")
+	switch arch {
+	case "wasm32", "xtensa":
+		return "none"
+	default:
+		return "setjmp"
+	}
+}
+
+// SupportsExplicitUnwind reports whether the target can use return-based
+// panic unwinding.
+func (c *Config) SupportsExplicitUnwind() bool {
+	arch, _, _ := strings.Cut(c.Triple(), "-")
+	switch arch {
+	case "wasm32", "riscv64", "xtensa":
+		return true
+	default:
+		return false
+	}
 }
 
 // AutomaticStackSize returns whether goroutine stack sizes should be determined

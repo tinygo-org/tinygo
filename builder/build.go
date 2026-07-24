@@ -217,6 +217,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		Debug:              !config.Options.SkipDWARF, // emit DWARF except when -internal-nodwarf is passed
 		Nobounds:           config.Options.Nobounds,
 		PanicStrategy:      config.PanicStrategy(),
+		PanicUnwind:        config.PanicUnwind(),
 	}
 
 	// Load the target machine, which is the LLVM object that contains all

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"io"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -26,16 +25,14 @@ func TestBar(t *testing.T) {
 		t.Log("after failed")
 	})
 	t.Run("Bar3", func(t *testing.T) {})
-	if runtime.GOARCH != "wasm" {
-		t.Run("Bar4", func(t *testing.T) {
-			t.Fatal("fatal")
-			t.Log("after fatal")
-		})
-		t.Run("Bar5", func(t *testing.T) {
-			t.SkipNow()
-			t.Error("after skip")
-		})
-	}
+	t.Run("Bar4", func(t *testing.T) {
+		t.Fatal("fatal")
+		t.Log("after fatal")
+	})
+	t.Run("Bar5", func(t *testing.T) {
+		t.SkipNow()
+		t.Error("after skip")
+	})
 	t.Log("log Bar end")
 }
 

@@ -1163,11 +1163,13 @@ func (b *builder) getInterfaceAssertBlock() llvm.BasicBlock {
 	block := b.ctx.AddBasicBlock(b.llvmFn, "typeassert.throw")
 	b.interfaceAssertBlock = block
 	b.SetInsertPointAtEnd(block)
+	b.inFaultBlock = true
 	if b.hasDeferFrame() {
 		b.createFaultCheckpoint()
 	}
-	b.createRuntimeCall("interfaceTypeAssert", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
-	b.CreateUnreachable()
+	b.createRuntimeInvoke("interfaceTypeAssert", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
+	b.createUnwindReturnOrUnreachable()
+	b.inFaultBlock = false
 	b.SetInsertPointAtEnd(savedBlock)
 	return block
 }

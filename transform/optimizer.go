@@ -137,6 +137,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		}
 	}
 
+	if speedLevel > 0 && config.PanicUnwind() == "asyncify" {
+		AddUnwindAssumptions(mod)
+	}
+
 	if config.VerifyIR() {
 		if errs := ircheck.Module(mod); errs != nil {
 			return errs

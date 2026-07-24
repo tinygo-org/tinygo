@@ -106,7 +106,11 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m llvm.Value, k
 		if !hashmapIsBinaryKey(keyType) {
 			fnName = "hashmapGenericGet"
 		}
-		commaOkValue = b.createRuntimeCall(fnName, params, "")
+		if fnName == "hashmapGenericGet" {
+			commaOkValue = b.createRuntimeInvoke(fnName, params, "")
+		} else {
+			commaOkValue = b.createRuntimeCall(fnName, params, "")
+		}
 		b.endValueStorage(mapKey)
 	}
 
@@ -155,7 +159,11 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 			fnName = "hashmapGenericDelete"
 		}
 		params := []llvm.Value{m, keyAlloca}
-		b.createRuntimeCall(fnName, params, "")
+		if fnName == "hashmapGenericDelete" {
+			b.createRuntimeInvoke(fnName, params, "")
+		} else {
+			b.createRuntimeCall(fnName, params, "")
+		}
 		b.emitLifetimeEnd(keyAlloca, keySize)
 		return nil
 	}

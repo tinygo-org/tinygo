@@ -106,6 +106,10 @@ func (t *Task) clearStack() {
 // currentTask is the current running task, or nil if currently in the scheduler.
 var currentTask *Task
 
+// Panic unwinding is synchronous: it either reaches a defer frame or aborts
+// without switching tasks. A single transient header is therefore sufficient.
+var panicStackState stackState
+
 // Current returns the current active task.
 func Current() *Task {
 	return currentTask
@@ -119,6 +123,14 @@ func Pause() {
 	}
 
 	currentTask.state.unwind()
+}
+
+// PanicUnwind starts an Asyncify unwind without pausing the task. A defer
+// frame stops the unwind before it reaches the scheduler.
+func PanicUnwind() {
+	panicStackState.asyncifysp = currentTask.state.asyncifysp
+	panicStackState.csp = currentTask.state.csp
+	panicStackState.unwind()
 }
 
 //export tinygo_unwind
