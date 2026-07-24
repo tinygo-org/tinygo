@@ -91,6 +91,18 @@ func runtimePanic(msg string) {
 	runtimePanicAt(returnAddress(0), msg)
 }
 
+// runtimeFatal terminates for runtime failures that cannot safely be
+// recovered, such as exhausting the heap.
+func runtimeFatal(msg string) {
+	if panicStrategy() == tinygo.PanicStrategyTrap {
+		trap()
+	}
+	printstring("fatal error: ")
+	printstring(msg)
+	printnl()
+	abort()
+}
+
 func runtimePanicAt(addr unsafe.Pointer, msg string) {
 	if panicStrategy() == tinygo.PanicStrategyTrap {
 		trap()

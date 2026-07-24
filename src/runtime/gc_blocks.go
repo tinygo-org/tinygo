@@ -416,7 +416,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	size += bytesPerBlock - 1
 	if size < rawSize {
 		// The size overflowed.
-		runtimePanicAt(returnAddress(0), "out of memory")
+		runtimeFatal("out of memory")
 	}
 	neededBlocks := size / bytesPerBlock
 	size = neededBlocks * bytesPerBlock
@@ -465,7 +465,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		// Unfortunately the heap could not be increased. This
 		// happens on baremetal systems for example (where all
 		// available RAM has already been dedicated to the heap).
-		runtimePanicAt(returnAddress(0), "out of memory")
+		runtimeFatal("out of memory")
 	}
 
 	// Set the block states.

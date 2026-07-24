@@ -53,7 +53,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			continue
 		}
 		// Failed to make the heap bigger, so we must really be out of memory.
-		runtimePanic("out of memory")
+		runtimeFatal("out of memory")
 	}
 	gcLock.Unlock()
 
