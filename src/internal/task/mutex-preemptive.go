@@ -49,7 +49,7 @@ func (m *Mutex) Lock() {
 func (m *Mutex) Unlock() {
 	if old := m.futex.Swap(0); old == 0 {
 		// Mutex wasn't locked before.
-		panic("sync: unlock of unlocked Mutex")
+		runtimeFatal("sync: unlock of unlocked Mutex")
 	} else if old == 2 {
 		// Mutex was a contended lock, so we need to wake the next waiter.
 		m.futex.Wake()

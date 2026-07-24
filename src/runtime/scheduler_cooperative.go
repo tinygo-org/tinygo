@@ -51,7 +51,7 @@ var (
 func deadlock() {
 	// call yield without requesting a wakeup
 	task.Pause()
-	panic("unreachable")
+	runtimeFatal("unreachable")
 }
 
 func goexit() {
@@ -78,7 +78,7 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 	if schedulerDebug {
 		println("  set sleep:", t, duration)
 		if t.Next != nil {
-			panic("runtime: addSleepTask: expected next task to be nil")
+			runtimeFatal("runtime: addSleepTask: expected next task to be nil")
 		}
 	}
 	now := ticks()

@@ -75,7 +75,7 @@ func abort() {
 func preinit() {
 	uefi.BS().SetWatchdogTimer(0, 0, 0, nil)
 	if !growHeap() {
-		runtimePanic("could not allocate initial UEFI heap")
+		runtimeFatal("could not allocate initial UEFI heap")
 	}
 }
 
