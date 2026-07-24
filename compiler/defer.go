@@ -32,7 +32,7 @@ func (b *builder) supportsRecover() bool {
 		// proposal of WebAssembly:
 		// https://github.com/WebAssembly/exception-handling
 		return false
-	case "riscv64", "xtensa":
+	case "xtensa":
 		// TODO: add support for these architectures
 		return false
 	default:
@@ -217,12 +217,20 @@ sw $$ra, 4($$5)
 			// So only add them when using hardfloat.
 			constraints += ",~{$f0},~{$f1},~{$f2},~{$f3},~{$f4},~{$f5},~{$f6},~{$f7},~{$f8},~{$f9},~{$f10},~{$f11},~{$f12},~{$f13},~{$f14},~{$f15},~{$f16},~{$f17},~{$f18},~{$f19},~{$f20},~{$f21},~{$f22},~{$f23},~{$f24},~{$f25},~{$f26},~{$f27},~{$f28},~{$f29},~{$f30},~{$f31}"
 		}
-	case "riscv32":
-		asmString = `
+	case "riscv32", "riscv64":
+		if b.archFamily() == "riscv32" {
+			asmString = `
 la a2, 1f
 sw a2, 4(a1)
 li a0, 0
 1:`
+		} else {
+			asmString = `
+la a2, 1f
+sd a2, 8(a1)
+li a0, 0
+1:`
+		}
 		constraints = "={a0},{a1},~{a1},~{a2},~{a3},~{a4},~{a5},~{a6},~{a7},~{s0},~{s1},~{s2},~{s3},~{s4},~{s5},~{s6},~{s7},~{s8},~{s9},~{s10},~{s11},~{t0},~{t1},~{t2},~{t3},~{t4},~{t5},~{t6},~{ra},~{f0},~{f1},~{f2},~{f3},~{f4},~{f5},~{f6},~{f7},~{f8},~{f9},~{f10},~{f11},~{f12},~{f13},~{f14},~{f15},~{f16},~{f17},~{f18},~{f19},~{f20},~{f21},~{f22},~{f23},~{f24},~{f25},~{f26},~{f27},~{f28},~{f29},~{f30},~{f31},~{memory}"
 	default:
 		// This case should have been handled by b.supportsRecover().
