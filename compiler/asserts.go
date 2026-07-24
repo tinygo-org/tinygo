@@ -263,11 +263,13 @@ func (b *builder) getRuntimeAssertBlock(blockPrefix, assertFunc string) llvm.Bas
 	block := b.ctx.AddBasicBlock(b.llvmFn, blockPrefix+".throw")
 	b.runtimeAssertBlocks[assertFunc] = block
 	b.SetInsertPointAtEnd(block)
+	b.inFaultBlock = true
 	if b.hasDeferFrame() {
 		b.createFaultCheckpoint()
 	}
-	b.createRuntimeCall(assertFunc, nil, "")
-	b.CreateUnreachable()
+	b.createRuntimeInvoke(assertFunc, nil, "")
+	b.createUnwindReturnOrUnreachable()
+	b.inFaultBlock = false
 	b.SetInsertPointAtEnd(savedBlock)
 	return block
 }

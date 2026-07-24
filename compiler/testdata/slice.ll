@@ -36,7 +36,10 @@ lookup.next:                                      ; preds = %entry
 
 lookup.throw:                                     ; preds = %entry
   call void @runtime.lookupPanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i32 undef
 }
 
 declare void @runtime.lookupPanic(ptr) #0
@@ -115,7 +118,10 @@ slice.next:                                       ; preds = %entry
 
 slice.throw:                                      ; preds = %entry
   call void @runtime.slicePanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
 }
 
 declare void @runtime.slicePanic(ptr) #0
@@ -138,7 +144,10 @@ slice.next:                                       ; preds = %entry
 
 slice.throw:                                      ; preds = %entry
   call void @runtime.slicePanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
 }
 
 ; Function Attrs: nounwind
@@ -159,7 +168,10 @@ slice.next:                                       ; preds = %entry
 
 slice.throw:                                      ; preds = %entry
   call void @runtime.slicePanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
 }
 
 ; Function Attrs: nounwind
@@ -180,7 +192,10 @@ slice.next:                                       ; preds = %entry
 
 slice.throw:                                      ; preds = %entry
   call void @runtime.slicePanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
 }
 
 ; Function Attrs: nounwind
@@ -213,7 +228,10 @@ slicetoarray.next:                                ; preds = %entry
 
 slicetoarray.throw:                               ; preds = %entry
   call void @runtime.sliceToArrayPointerPanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slicetoarray.throw
+  ret ptr undef
 }
 
 declare void @runtime.sliceToArrayPointerPanic(ptr) #0
@@ -230,7 +248,10 @@ slicetoarray.next:                                ; preds = %entry
   ret ptr %makeslice
 
 slicetoarray.throw:                               ; preds = %entry
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slicetoarray.throw
+  ret ptr undef
 }
 
 ; Function Attrs: nounwind
@@ -253,7 +274,10 @@ unsafe.Slice.next:                                ; preds = %entry
 
 unsafe.Slice.throw:                               ; preds = %entry
   call void @runtime.unsafeSlicePanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %unsafe.Slice.throw
+  ret { ptr, i32, i32 } undef
 }
 
 declare void @runtime.unsafeSlicePanic(ptr) #0
@@ -277,7 +301,10 @@ unsafe.Slice.next:                                ; preds = %entry
 
 unsafe.Slice.throw:                               ; preds = %entry
   call void @runtime.unsafeSlicePanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %unsafe.Slice.throw
+  ret { ptr, i32, i32 } undef
 }
 
 ; Function Attrs: nounwind
@@ -301,7 +328,10 @@ unsafe.Slice.next:                                ; preds = %entry
 
 unsafe.Slice.throw:                               ; preds = %entry
   call void @runtime.unsafeSlicePanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %unsafe.Slice.throw
+  ret { ptr, i32, i32 } undef
 }
 
 ; Function Attrs: nounwind
@@ -325,7 +355,10 @@ unsafe.Slice.next:                                ; preds = %entry
 
 unsafe.Slice.throw:                               ; preds = %entry
   call void @runtime.unsafeSlicePanic(ptr undef) #5
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %unsafe.Slice.throw
+  ret { ptr, i32, i32 } undef
 }
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }

@@ -208,7 +208,7 @@ TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
 TEST_IOFS := false
 endif
 
-TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic|TestAsValidation|TestUnmarshalNestingLimitSlice|TestUnmarshalNestingLimitStruct'
+TEST_SKIP_FLAG := -skip='TestExtraMethods|TestAsValidation|TestUnmarshalNestingLimitSlice|TestUnmarshalNestingLimitStruct'
 TEST_ADDITIONAL_FLAGS ?=
 
 # These packages spend almost all of their test time in a few tests that Go
@@ -227,7 +227,6 @@ TEST_PACKAGES_SHORT_HOST := $(filter $(TEST_PACKAGES_SHORT),$(TEST_PACKAGES_HOST
 .PHONY: tinygo-test
 tinygo-test:
 	@# TestExtraMethods: used by many crypto packages and uses reflect.Type.Method which is not implemented.
-	@# TestParseAndBytesRoundTrip/P256/Generic: needs Goexit to run defers on wasm.
 	@# TestUnmarshalNestingLimit{Slice,Struct}: encoding/asn1 nesting limit added in
 	@# https://github.com/golang/go/commit/6a6d115f9a7422b2fa081ba6f567eefb4a099462
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml $(TEST_PACKAGES_SHORT),$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW))

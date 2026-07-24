@@ -105,7 +105,10 @@ store.next4:                                      ; preds = %store.next
   ret %"main.Point[float32]" %10
 
 deref.throw:                                      ; preds = %store.next, %deref.next3, %deref.next2, %deref.next1, %deref.next, %entry
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret %"main.Point[float32]" undef
 }
 
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
@@ -168,7 +171,10 @@ store.next4:                                      ; preds = %store.next
   ret %"main.Point[int]" %10
 
 deref.throw:                                      ; preds = %store.next, %deref.next3, %deref.next2, %deref.next1, %deref.next, %entry
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret %"main.Point[int]" undef
 }
 
 declare void @main.checkBool(i1, ptr) #0

@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 
@@ -54,10 +55,24 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		return nil, fmt.Errorf("cannot compile with Go toolchain version go%d.%d (TinyGo was built using toolchain version %s)", gorootMajor, gorootMinor, runtime.Version())
 	}
 
-	return &compileopts.Config{
+	config := &compileopts.Config{
 		Options:        options,
 		Target:         spec,
 		GoMinorVersion: gorootMinor,
 		TestConfig:     options.TestConfig,
-	}, nil
+	}
+	requestedPanicUnwind := options.PanicUnwind
+	if requestedPanicUnwind == "" {
+		requestedPanicUnwind = spec.PanicUnwind
+	}
+	if requestedPanicUnwind == "explicit" && config.Scheduler() == "asyncify" {
+		return nil, errors.New("explicit panic unwinding cannot be used with the asyncify scheduler")
+	}
+	if config.PanicUnwind() == "explicit" && !config.SupportsExplicitUnwind() {
+		return nil, fmt.Errorf("explicit panic unwinding is not supported on %s", config.Triple())
+	}
+	if config.PanicUnwind() == "explicit" && config.Scheduler() == "threads" {
+		return nil, errors.New("explicit panic unwinding is not supported with the threads scheduler")
+	}
+	return config, nil
 }
