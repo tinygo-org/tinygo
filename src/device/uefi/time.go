@@ -27,6 +27,9 @@ func GetTime() (EFI_TIME, EFI_STATUS) {
 }
 
 func (t *EFI_TIME) GetEpoch() (sec int64, nsec int32) {
+	if t.TimeZone != 0x07FF { // EFI_UNSPECIFIED_TIMEZONE
+		sec -= int64(t.TimeZone) * 60
+	}
 	year := int(t.Year)
 	month := int(t.Month)
 

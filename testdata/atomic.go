@@ -23,6 +23,30 @@ func main() {
 	uptr := uintptr(5)
 	println("AddUintptr:", uint64(atomic.AddUintptr(&uptr, 8)), uint64(uptr))
 
+	i32 = 12
+	i64 = 12
+	u32 = 12
+	u64 = 12
+	uptr = 12
+
+	println("AndInt32:", atomic.AndInt32(&i32, 10), i32)
+	println("AndInt64:", atomic.AndInt64(&i64, 10), i64)
+	println("AndUint32:", atomic.AndUint32(&u32, 10), u32)
+	println("AndUint64:", atomic.AndUint64(&u64, 10), u64)
+	println("AndUintptr:", uint64(atomic.AndUintptr(&uptr, 10)), uint64(uptr))
+
+	println("OrInt32:", atomic.OrInt32(&i32, 3), i32)
+	println("OrInt64:", atomic.OrInt64(&i64, 3), i64)
+	println("OrUint32:", atomic.OrUint32(&u32, 3), u32)
+	println("OrUint64:", atomic.OrUint64(&u64, 3), u64)
+	println("OrUintptr:", uint64(atomic.OrUintptr(&uptr, 3)), uint64(uptr))
+
+	i32 = 3
+	i64 = 3
+	u32 = 13
+	u64 = 13
+	uptr = 13
+
 	println("SwapInt32:", atomic.SwapInt32(&i32, 33), i32)
 	println("SwapInt64:", atomic.SwapInt64(&i64, 33), i64)
 	println("SwapUint32:", atomic.SwapUint32(&u32, 33), u32)
