@@ -87,7 +87,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcResumeWorld()
 	gcLock.Unlock()
 	if ptr == nil {
-		runtimePanic("gc: out of memory")
+		runtimeFatal("gc: out of memory")
 	}
 
 	return ptr
