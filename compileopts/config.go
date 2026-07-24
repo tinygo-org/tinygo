@@ -482,7 +482,11 @@ func (c *Config) LinkerFlavor() string {
 // ExtraFiles returns the list of extra files to be built and linked with the
 // executable. This can include extra C and assembly files.
 func (c *Config) ExtraFiles() []string {
-	return c.Target.ExtraFiles
+	files := append([]string(nil), c.Target.ExtraFiles...)
+	if c.Scheduler() == "tasks" && c.GOARCH() == "amd64" && slices.Contains(c.Target.BuildTags, "uefi") {
+		files = append(files, "src/internal/task/task_stack_amd64_windows.S")
+	}
+	return files
 }
 
 // DumpSSA returns whether to dump Go SSA while compiling (-dumpssa flag). Only
