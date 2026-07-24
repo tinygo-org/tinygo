@@ -9,8 +9,10 @@ import (
 const deviceName = "UEFI"
 
 type (
-	EFI_STATUS = deviceuefi.EFI_STATUS
-	TextOutput = deviceuefi.TextOutput
+	EFI_STATUS            = deviceuefi.EFI_STATUS
+	EFI_TIME              = deviceuefi.EFI_TIME
+	EFI_TIME_CAPABILITIES = deviceuefi.EFI_TIME_CAPABILITIES
+	TextOutput            = deviceuefi.TextOutput
 
 	Error = deviceuefi.Error
 )
@@ -87,6 +89,10 @@ var (
 	ErrIPAddressConflict   = deviceuefi.ErrIPAddressConflict
 	ErrHTTPError           = deviceuefi.ErrHTTPError
 )
+
+func GetTime() (EFI_TIME, EFI_STATUS) {
+	return deviceuefi.GetTime()
+}
 
 func ConsoleOut() *TextOutput {
 	return deviceuefi.ConsoleOut()

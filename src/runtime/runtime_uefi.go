@@ -56,9 +56,8 @@ func sleepTicks(d timeUnit) {
 
 func putchar(c byte) {
 	if c == '\n' {
-		buf := [4]uefi.CHAR16{'\r', 0, '\n', 0}
+		buf := [2]uefi.CHAR16{uefi.CHAR16('\r'), 0}
 		uefi.ST().ConOut.OutputString(&buf[0])
-		return
 	}
 	buf := [2]uefi.CHAR16{uefi.CHAR16(c), 0}
 	uefi.ST().ConOut.OutputString(&buf[0])
@@ -101,6 +100,15 @@ func growHeap() bool {
 		newHeapSize /= 2
 	}
 	return false
+}
+
+func init() {
+	mono := nanotime()
+	efiTime, status := uefi.GetTime()
+	if status == uefi.EFI_SUCCESS {
+		sec, nsec := efiTime.GetEpoch()
+		timeOffset.Store(sec*1000000000 + int64(nsec) - mono)
+	}
 }
 
 func SetWaitForEvents(f func()) {
