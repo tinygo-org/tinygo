@@ -47,8 +47,8 @@ tinygo_scanCurrentStack:
 tinygo_longjmp:
     // Note: the code we jump to assumes a0 is non-zero, which is already the
     // case because that's the defer frame pointer.
-    lw sp, 0(a0)       // jumpSP
-    lw a1, REGSIZE(a0) // jumpPC
+    LREG sp, 0(a0)       // jumpSP
+    LREG a1, REGSIZE(a0) // jumpPC
     jr a1
 
 .section .text.tinygo_checkpointJump
