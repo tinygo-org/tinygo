@@ -270,7 +270,7 @@ func coreStackTop(core uint32) uintptr {
 	case 1:
 		return uintptr(unsafe.Pointer(&stack1TopSymbol))
 	default:
-		runtimePanic("unexpected core")
+		runtimeFatal("unexpected core")
 		return 0
 	}
 }

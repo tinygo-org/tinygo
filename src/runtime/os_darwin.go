@@ -80,7 +80,7 @@ func findGlobals(found func(start, end uintptr)) {
 
 	// Sanity check that we're actually looking at a MachO header.
 	if gcAsserts && libc_mh_execute_header.magic != MH_MAGIC_64 {
-		runtimePanic("gc: unexpected MachO header")
+		runtimeFatal("gc: unexpected MachO header")
 	}
 
 	// Iterate through the load commands.
@@ -106,7 +106,7 @@ func findGlobals(found func(start, end uintptr)) {
 					// Note that when ASLR is disabled (for example, when
 					// running inside lldb), the offset is zero. That's why we
 					// need a separate hasOffset for this assert.
-					runtimePanic("gc: did not detect ASLR offset")
+					runtimeFatal("gc: did not detect ASLR offset")
 				}
 				// Scan this segment for GC roots.
 				// This could be improved by only reading the memory areas

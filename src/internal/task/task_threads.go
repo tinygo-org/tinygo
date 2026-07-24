@@ -48,7 +48,7 @@ var activeTaskLock PMutex
 var mainExitedByGoexit bool
 
 func OnSystemStack() bool {
-	runtimePanic("todo: task.OnSystemStack")
+	runtimeFatal("todo: task.OnSystemStack")
 	return false
 }
 
@@ -63,7 +63,7 @@ func Init(sp uintptr) {
 func Current() *Task {
 	t := (*Task)(tinygo_task_current())
 	if t == nil {
-		runtimePanic("unknown current task")
+		runtimeFatal("unknown current task")
 	}
 	return t
 }
@@ -112,7 +112,7 @@ func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	activeTaskLock.Lock()
 	errCode := tinygo_task_start(fn, args, t, &t.state.thread, &t.state.stackTop, stackSize)
 	if errCode != 0 {
-		runtimePanic("could not start thread")
+		runtimeFatal("could not start thread")
 	}
 	t.state.QueueNext = activeTasks
 	activeTasks = t
@@ -127,7 +127,7 @@ func taskExited(t *Task) {
 	}
 
 	if exit(t) {
-		runtimePanic("all goroutines are asleep - deadlock!")
+		runtimeFatal("all goroutines are asleep - deadlock!")
 	}
 }
 
@@ -149,7 +149,7 @@ func exit(t *Task) bool {
 
 	// Sanity check.
 	if !found {
-		runtimePanic("taskExited failed")
+		runtimeFatal("taskExited failed")
 	}
 	return deadlocked
 }
@@ -173,11 +173,11 @@ func Exit() {
 		}
 		activeTaskLock.Unlock()
 		if noOtherTasks {
-			runtimePanic("all goroutines are asleep - deadlock!")
+			runtimeFatal("all goroutines are asleep - deadlock!")
 		}
 	}
 	if exit(t) {
-		runtimePanic("all goroutines are asleep - deadlock!")
+		runtimeFatal("all goroutines are asleep - deadlock!")
 	}
 	tinygo_task_exit()
 }
@@ -324,9 +324,6 @@ func stacksave() unsafe.Pointer
 func StackTop() uintptr {
 	return Current().state.stackTop
 }
-
-//go:linkname runtimePanic runtime.runtimePanic
-func runtimePanic(msg string)
 
 // Using //go:linkname instead of //export so that we don't tell the compiler
 // that the 't' parameter won't escape (because it will).

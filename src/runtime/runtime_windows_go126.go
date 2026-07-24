@@ -13,5 +13,6 @@ package runtime
 
 //go:linkname syscall_syscalln syscall.syscalln
 func syscall_syscalln(fn, n uintptr, args ...uintptr) (r1, r2, err uintptr) {
-	panic("unreachable: syscall.syscalln should be handled by the compiler")
+	runtimeFatal("unreachable: syscall.syscalln should be handled by the compiler")
+	return 0, 0, 0
 }

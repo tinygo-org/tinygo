@@ -33,7 +33,7 @@ func GC() {
 }
 
 func markRoots(start, end uintptr) {
-	runtimePanic("unreachable: markRoots")
+	runtimeFatal("unreachable: markRoots")
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {

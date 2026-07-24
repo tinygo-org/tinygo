@@ -54,7 +54,7 @@ func scheduleTask(t *task.Task) {
 		t.RunState = task.RunStateResuming
 	default:
 		if schedulerAsserts {
-			runtimePanic("scheduler: unknown run state")
+			runtimeFatal("scheduler: unknown run state")
 		}
 	}
 	schedulerLock.Unlock()

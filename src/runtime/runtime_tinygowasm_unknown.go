@@ -54,6 +54,6 @@ func hardwareRand() (n uint64, ok bool) {
 
 func libc_errno_location() *int32 {
 	// CGo is unavailable, so this function should be unreachable.
-	runtimePanic("runtime: no cgo errno")
+	runtimeFatal("runtime: no cgo errno")
 	return nil
 }

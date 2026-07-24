@@ -15,7 +15,7 @@ func (q *Queue) Push(t *Task) {
 	mask := lockAtomics()
 	if asserts && t.Next != nil {
 		unlockAtomics(mask)
-		panic("runtime: pushing a task to a queue with a non-nil Next pointer")
+		runtimeFatal("runtime: pushing a task to a queue with a non-nil Next pointer")
 	}
 	if q.tail != nil {
 		q.tail.Next = t
@@ -78,7 +78,7 @@ func (s *Stack) Push(t *Task) {
 	mask := lockAtomics()
 	if asserts && t.Next != nil {
 		unlockAtomics(mask)
-		panic("runtime: pushing a task to a stack with a non-nil Next pointer")
+		runtimeFatal("runtime: pushing a task to a stack with a non-nil Next pointer")
 	}
 	s.top, t.Next = t, s.top
 	unlockAtomics(mask)
