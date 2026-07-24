@@ -25,6 +25,7 @@ const batch = 64
 var (
 	ranDropped int
 	ranOnStack int
+	ranInArgs  int
 	sink       int
 )
 
@@ -101,8 +102,47 @@ func testFinishedGoroutineStacks() {
 	}
 }
 
+// launchArgGoroutine allocates a finalized object and launches a goroutine that
+// receives it as an argument, then returns without leaving any reference behind.
+// The object reaches the goroutine only through its argument bundle, and the
+// only transient copies (of the pointer and the bundle) live in this frame, which
+// returns immediately so the later scrubStack recursion reuses and clears it.
+//
+//go:noinline
+func launchArgGoroutine(done chan struct{}) {
+	p := new([2]int)
+	runtime.SetFinalizer(p, func(*[2]int) { ranInArgs++ })
+	go func(q *[2]int) {
+		sink += q[0]
+		done <- struct{}{}
+	}(p)
+}
+
+// testFinishedGoroutineArgs checks that a goroutine which receives a finalized
+// object as an argument no longer pins it once finished: the argument bundle the
+// goroutine was launched with is dropped when it completes, so the idle collection
+// reclaims the object. Without clearing a finished goroutine's args pointer the
+// bundle would keep the object alive even after its stack has been zeroed.
+func testFinishedGoroutineArgs() {
+	done := make(chan struct{})
+	for i := 0; i < batch; i++ {
+		launchArgGoroutine(done)
+	}
+	for i := 0; i < batch; i++ {
+		<-done
+	}
+	for i := 0; i < 500 && ranInArgs < batch; i++ {
+		sink += scrubStack(40)
+		time.Sleep(time.Millisecond)
+	}
+	if ranInArgs != batch {
+		panic("finished goroutine args still pinned finalized objects")
+	}
+}
+
 func main() {
 	testIdleCollect()
 	testFinishedGoroutineStacks()
+	testFinishedGoroutineArgs()
 	println("ok")
 }

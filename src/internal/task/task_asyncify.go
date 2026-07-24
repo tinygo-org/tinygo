@@ -165,9 +165,12 @@ func (t *Task) Resume() {
 	if t.state.finishing {
 		// The goroutine just ran to completion and paused for the last time. It
 		// will never be resumed, so its stack can be cleared now to drop any
-		// pointers its returned frames left behind (see clearStack).
+		// pointers its returned frames left behind (see clearStack). The args
+		// bundle is likewise no longer needed, so drop that reference too, else
+		// any pointers in the arguments would keep their objects reachable.
 		t.state.finishing = false
 		t.clearStack()
+		t.state.args = nil
 	}
 }
 
