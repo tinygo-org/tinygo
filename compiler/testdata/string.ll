@@ -46,7 +46,10 @@ lookup.next:                                      ; preds = %entry
 
 lookup.throw:                                     ; preds = %entry
   call void @runtime.lookupPanic(ptr undef) #2
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i8 undef
 }
 
 declare void @runtime.lookupPanic(ptr) #0
@@ -91,7 +94,10 @@ lookup.next:                                      ; preds = %entry
 
 lookup.throw:                                     ; preds = %entry
   call void @runtime.lookupPanic(ptr undef) #2
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i8 undef
 }
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
