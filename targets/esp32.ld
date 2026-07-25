@@ -101,9 +101,24 @@ SECTIONS
         _wifi_bss_end = ABSOLUTE(.);
     } >DRAM
 
-    /* WiFi blob arena (DMA buffers): owns all of DRAM1 (SRAM1 pool 7/6,
-     * 0x3FFF0000-0x40000000, 64K) — the only SRAM1 region safe from ROM/MAC
-     * writes. Outside the Go GC heap; DMA-capable; isolated from GC objects. */
+    /* RX ring buffer: placed in DRAM1 (ahead of the arena) to free ~9.6 KB
+     * of SRAM2 for the Go GC heap. espradio's netif.c tags the RX ring
+     * with __attribute__((section(".rxring"))) on ESP32. */
+    .rxring (NOLOAD) : ALIGN(16)
+    {
+        *(.rxring .rxring.*)
+    } >DRAM1
+
+    /* WiFi-only BSS: ISR tables, timer slots, and ISR ring buffers moved
+     * from SRAM2 to DRAM1 to free ~2.8 KB for the Go GC heap. */
+    .wifibss (NOLOAD) : ALIGN(4)
+    {
+        *(.wifibss .wifibss.*)
+    } >DRAM1
+
+    /* WiFi blob arena (DMA buffers): owns the remainder of DRAM1 (SRAM1
+     * pool 7/6) after the RX ring. Outside the Go GC heap; DMA-capable;
+     * isolated from GC objects. */
     .arena (NOLOAD) : ALIGN(16)
     {
         _arena_start = ABSOLUTE(.);
