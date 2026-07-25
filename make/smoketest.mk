@@ -547,6 +547,8 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32s3-box-3       examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32s3-psram-octal examples/psram
+	@$(MD5SUM) $(SMOKE_OUT).bin
 endif
 
 smoketest-riscv: SMOKE_OUT = build/smoke/riscv
