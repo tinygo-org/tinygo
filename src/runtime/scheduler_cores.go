@@ -22,8 +22,9 @@ var secondaryCoresStarted bool
 var cpuTasks [numCPU]*task.Task
 
 var (
-	sleepQueue *task.Task
-	runqueue   task.Queue
+	sleepQueue     *task.Task
+	runqueueShared task.Queue         // For unpinned tasks (affinity = -1)
+	runqueueCore   [numCPU]task.Queue // Per-core queues for pinned tasks
 )
 
 func deadlock() {
@@ -43,8 +44,14 @@ func scheduleTask(t *task.Task) {
 	switch t.RunState {
 	case task.RunStatePaused:
 		// Paused, state is saved on the stack.
-		// Add it to the runqueue...
-		runqueue.Push(t)
+		// Route to appropriate queue based on affinity.
+		if t.Affinity >= 0 && t.Affinity < numCPU {
+			// Pinned to specific core
+			runqueueCore[t.Affinity].Push(t)
+		} else {
+			// Not pinned, use shared queue
+			runqueueShared.Push(t)
+		}
 		// ...and wake up a sleeping core, if there is one.
 		// (If all cores are already busy, this is a no-op).
 		schedulerWake()
@@ -90,13 +97,65 @@ func addSleepTask(t *task.Task, wakeup timeUnit) {
 
 func Gosched() {
 	schedulerLock.Lock()
-	runqueue.Push(task.Current())
+	t := task.Current()
+
+	// Respect affinity when re-queueing.
+	if t.Affinity >= 0 && t.Affinity < numCPU {
+		runqueueCore[t.Affinity].Push(t)
+	} else {
+		runqueueShared.Push(t)
+	}
+
 	task.PauseLocked()
 }
 
 // NumCPU returns the number of CPU cores on this system.
 func NumCPU() int {
 	return numCPU
+}
+
+//
+// Warning: Pinning goroutines can lead to load imbalance. The goroutine will
+// wait in the specified core's queue even if other cores are idle. Use this
+// feature carefully and only when you need explicit core affinity.
+//
+// Valid core values are 0 and 1. Panics if core is out of range.
+//
+
+// machineLockCore pins the current goroutine to the specified CPU core.
+// This is called by machine.LockCore() on RP2040/RP2350.
+// It does not validate the core number - validation is done in machine package.
+func machineLockCore(core int) {
+	schedulerLock.Lock()
+	t := task.Current()
+	if t != nil {
+		t.Affinity = int8(core)
+	}
+	schedulerLock.Unlock()
+	Gosched()
+}
+
+// machineUnlockCore unpins the current goroutine.
+// This is called by machine.UnlockCore() on RP2040/RP2350.
+func machineUnlockCore() {
+	schedulerLock.Lock()
+	t := task.Current()
+	if t != nil {
+		t.Affinity = -1
+	}
+	schedulerLock.Unlock()
+}
+
+// lockOSThreadImpl implements LockOSThread for the cores scheduler.
+// It pins the current goroutine to whichever core it's currently running on.
+func lockOSThreadImpl() {
+	core := int(currentCPU())
+	machineLockCore(core)
+}
+
+// unlockOSThreadImpl implements UnlockOSThread for the cores scheduler.
+func unlockOSThreadImpl() {
+	machineUnlockCore()
 }
 
 func addTimer(tn *timerNode) {
@@ -143,7 +202,7 @@ func removeTimer(t *timer) *timerNode {
 }
 
 func schedulerRunQueue() *task.Queue {
-	return &runqueue
+	return &runqueueShared
 }
 
 // Pause the current task for a given time.
@@ -194,9 +253,33 @@ func run() {
 }
 
 func scheduler(_ bool) {
+	currentCore := int(currentCPU())
+
 	for mainExited.Load() == 0 {
 		// Check for ready-to-run tasks.
-		if runnable := runqueue.Pop(); runnable != nil {
+		// First, try to get a task pinned to this core.
+		var runnable *task.Task
+		if currentCore < numCPU {
+			runnable = runqueueCore[currentCore].Pop()
+		}
+
+		// If no pinned tasks, try the shared queue.
+		if runnable == nil {
+			runnable = runqueueShared.Pop()
+		}
+
+		if runnable != nil {
+			// Verify affinity constraint (sanity check).
+			if runnable.Affinity >= 0 && runnable.Affinity != int8(currentCore) {
+				// Shouldn't happen, but put it back on correct queue.
+				if runnable.Affinity < numCPU {
+					runqueueCore[runnable.Affinity].Push(runnable)
+				} else {
+					runqueueShared.Push(runnable)
+				}
+				continue
+			}
+
 			// Resume it now.
 			setCurrentTask(runnable)
 			runnable.RunState = task.RunStateRunning
@@ -216,6 +299,19 @@ func scheduler(_ bool) {
 				// It is, pop it from the queue.
 				sleepQueue = sleepQueue.Next
 				sleepingTask.Next = nil
+
+				// Check affinity before running.
+				if sleepingTask.Affinity >= 0 && sleepingTask.Affinity != int8(currentCore) {
+					// Task is pinned to a different core, re-queue it.
+					sleepingTask.RunState = task.RunStatePaused
+					if sleepingTask.Affinity < numCPU {
+						runqueueCore[sleepingTask.Affinity].Push(sleepingTask)
+					} else {
+						runqueueShared.Push(sleepingTask)
+					}
+					schedulerWake()
+					continue
+				}
 
 				// Run it now.
 				setCurrentTask(sleepingTask)

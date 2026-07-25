@@ -98,14 +98,23 @@ func os_sigpipe() {
 }
 
 // LockOSThread wires the calling goroutine to its current operating system thread.
-// Stub for now
+// On microcontrollers with multiple cores (e.g., RP2040/RP2350), this pins the
+// goroutine to the core it's currently running on.
+// With the "cores" scheduler on RP2040/RP2350, this pins the goroutine to the
+// core it's currently running on. The pinning takes effect at the next
+// scheduling point (e.g., channel operation, time.Sleep, or Gosched).
 // Called by go1.18 standard library on windows, see https://github.com/golang/go/issues/49320
 func LockOSThread() {
+	lockOSThreadImpl()
 }
 
 // UnlockOSThread undoes an earlier call to LockOSThread.
-// Stub for now
+// On microcontrollers with multiple cores, this unpins the goroutine, allowing
+// it to run on any available core.
+// With the "cores" scheduler, this unpins the goroutine, allowing it to run on
+// any available core.
 func UnlockOSThread() {
+	unlockOSThreadImpl()
 }
 
 // KeepAlive makes sure the value in the interface is alive until at least the

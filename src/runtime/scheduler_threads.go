@@ -208,3 +208,13 @@ func lockAtomics() interrupt.State {
 func unlockAtomics(mask interrupt.State) {
 	atomicsLock.Unlock()
 }
+
+// lockOSThreadImpl is a no-op for the cooperative scheduler (single-threaded).
+func lockOSThreadImpl() {
+	// Single-threaded, nothing to do.
+}
+
+// unlockOSThreadImpl is a no-op for the cooperative scheduler (single-threaded).
+func unlockOSThreadImpl() {
+	// Single-threaded, nothing to do.
+}
