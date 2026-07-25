@@ -74,6 +74,9 @@ func main() {
 		clearbss()
 	}
 
+	// Initialize PSRAM if numa_psram_* build tag is enabled.
+	initPSRAM()
+
 	// Initialize main system timer used for time.Now.
 	initTimer()
 

@@ -6,11 +6,21 @@
  *   - SRAM1 (416KB): dual-mapped as IRAM 0x40378000-0x403DFFFF and
  *     DRAM 0x3FC88000-0x3FCEFFFF.
  *
- * Flash is memory-mapped via the cache:
- *   - DROM (read-only data): 0x3C000000, up to 32MB
- *   - IROM (executable code): 0x42000000, up to 32MB
- * The MMU uses 64KB pages, so the bottom 16 bits of the virtual address
- * and the flash offset must match. Dummy sections handle this alignment.
+ * Flash is memory-mapped via the cache, backed by the 512-entry MMU table
+ * (see esp32s3.S). The table is a SINGLE array shared by the instruction
+ * bus (IROM window at 0x42000000) and the data bus (DROM window at
+ * 0x3C000000), indexed by LINEAR address:
+ *
+ *     entry = (vaddr & 0x1FFFFFF) >> 16
+ *
+ * so 0x42800000 and 0x3C800000 decode to the SAME entry (128). There is no
+ * ICache/DCache half-split (verified on hardware via the CACHE_MMU_FAULT_*
+ * registers and ROM's Cache_Dbus_MMU_Set during Octal PSRAM bring-up).
+ * 512 entries x 64KB = 32M of linear space per window. Flash XIP
+ * identity-maps linear page N -> flash page N for both buses, so the image
+ * occupies entries 0..(image pages - 1). The MMU uses 64KB pages, so the
+ * bottom 16 bits of the virtual address and the flash offset must match;
+ * dummy sections handle this alignment.
  */
 
 MEMORY
@@ -18,8 +28,17 @@ MEMORY
     DRAM (rw) : ORIGIN = 0x3FC88000, LENGTH = 416K
     IRAM (x)  : ORIGIN = 0x40378000, LENGTH = 416K /* SRAM1 only (SRAM0 used by ICache) */
 
-    DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 32M /* Flash data bus (read-only) */
-    IROM (rx) : ORIGIN = 0x42000000, LENGTH = 32M /* Flash instruction bus */
+    /* DROM and IROM share MMU entries 0-255 by linear address (see above);
+     * the flash image (rodata + text, identity-mapped) may use the full
+     * 16M. The DBUS cache window extends to 0x3E000000
+     * (SOC_DRAM0_CACHE_ADDRESS_HIGH), so PSRAM lives in its upper half. */
+    DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 16M /* Flash data bus (read-only) */
+    IROM (rx) : ORIGIN = 0x42000000, LENGTH = 16M /* Flash instruction bus; shares entries 0-255 with DROM */
+
+    /* External PSRAM: upper half of the DBUS cache window, MMU entries
+     * 256-511 (linear pages of 0x3D000000..0x3DFFFFFF), mapped at runtime
+     * by runtime_esp32_psram*.go. Disjoint from all flash entries. */
+    PSRAM (rw): ORIGIN = 0x3D000000, LENGTH = 16M
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be
@@ -139,11 +158,22 @@ SECTIONS
         _irom_end = .;
     } >IROM
 
+    .psram (NOLOAD) : ALIGN(4)
+    {
+        _spsram = ABSOLUTE(.);
+        *(.psram .psram.*)
+        . = ALIGN(4);
+        _epsram = ABSOLUTE(.);
+    } > PSRAM
+
     /DISCARD/ :
     {
         *(.eh_frame)
     }
 }
+
+_psram_start = ORIGIN(PSRAM);
+_psram_end = ORIGIN(PSRAM) + LENGTH(PSRAM);
 
 /* For the garbage collector.
  * _heap_start must be after the DRAM shadow of the IRAM section.
@@ -165,9 +195,13 @@ _heap_start = _iram_end - 0x6F0000 - (__init_end - __init_start);
  *   - 0x3fcef3d4-0x3fcef66c : PHY function table (g_phyFuns, 0x298 bytes)
  *   - 0x3fcef81c-0x3fcef954 : ROM global variables (phy_param_rom … pTxRx)
  *   - 0x3fcefe6d            : g_scan_forever
+ *   - 0x3fcefffd            : g_rom_spiflash_dummy_len_plus[1], read/adjusted
+ *     by esp_rom_opiflash_exec_cmd() during Octal PSRAM timing calibration
  * The Go GC stores metadata at [metadataStart, heapEnd) and will corrupt
  * any blob data that overlaps this range. */
 _heap_end = 0x3fceb710;
+
+PROVIDE( g_rom_spiflash_dummy_len_plus = 0x3fcefffd );
 
 _stack_size = 4K;
 
@@ -301,6 +335,16 @@ ets_install_putc1 = 0x400005dc;
 ets_install_uart_printf = 0x400005e8;
 ets_install_putc2 = 0x400005f4;
 PROVIDE( ets_delay_us = 0x40000600 );
+PROVIDE( esp_rom_opiflash_pin_config = 0x40000894 );
+PROVIDE( esp_rom_opiflash_exec_cmd = 0x400008b8 );
+PROVIDE( esp_rom_spi_set_dtr_swap_mode = 0x4000093c );
+PROVIDE( Cache_Disable_ICache = 0x4000186c );
+PROVIDE( Cache_Enable_ICache = 0x40001878 );
+PROVIDE( Cache_Disable_DCache = 0x40001884 );
+PROVIDE( Cache_Enable_DCache = 0x40001890 );
+PROVIDE( Cache_Dbus_MMU_Set = 0x400019b0 );
+PROVIDE( rom_spi_flash_disable_cache = 0x40000c0c );
+PROVIDE( rom_spi_flash_restore_cache = 0x40000c18 );
 ets_get_stack_info = 0x4000060c;
 ets_install_lock = 0x40000618;
 ets_backup_dma_copy = 0x40000624;
