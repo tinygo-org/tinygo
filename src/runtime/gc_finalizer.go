@@ -78,6 +78,98 @@ var (
 // finalizable object forever and the object could never be detected as dead.
 // Under the precise GC a plain uintptr field is not scanned anyway, so the
 // encoding is harmless there and required for the conservative build.
+// finalizerGCDivisor scales the registration trigger with the size of the
+// table: the next collection is due after roughly numFinalizers/this many new
+// registrations, never fewer than finalizerGCThreshold.
+const finalizerGCDivisor = 2
+
+// finalizerGCTrigger returns how many registrations since the last collection
+// are needed to run the next one. Each collection scans the whole table, which
+// costs O(numFinalizers), so a trigger that stays constant while the table grows
+// makes N registrations cost O(N^2) in scanning alone. Scaling the trigger with
+// the table keeps the amortized scan cost per registration constant, the same
+// reasoning behind Go's proportional GOGC pacing: collect when the tracked set
+// has grown by a fraction of itself, not by a fixed count.
+//
+// The floor keeps the original behaviour for small tables, where a proportional
+// trigger would fire too rarely to be useful.
+func finalizerGCTrigger() uintptr {
+	if finalizerGCThreshold == 0 {
+		return 0
+	}
+	if proportional := numFinalizers / finalizerGCDivisor; proportional > finalizerGCThreshold {
+		return proportional
+	}
+	return finalizerGCThreshold
+}
+
+// finalizerBits records, one bit per heap block, whether the object starting at
+// that block already has a registered finalizer. It answers the "is this object
+// already registered?" question that SetFinalizer's replace semantics require
+// without walking the table, so the common case (a fresh object, which is every
+// syscall/js value) never scans anything.
+//
+// This mirrors what upstream Go gets from its per-span specials plus the
+// arena-level "span has specials" bitmap: a constant-time way to skip objects
+// that have nothing registered.
+//
+// The bitmap is allocated on the first registration and grown with the heap, so
+// a program that never registers a finalizer keeps the whole feature dead.
+var finalizerBits []byte
+
+// finalizerBitsNeeded is the bitmap length that covers the current heap.
+func finalizerBitsNeeded() uintptr { return (uintptr(endBlock) + 7) / 8 }
+
+// growFinalizerBits allocates a wider bitmap if the heap outgrew the current
+// one. It must run with gcLock released, because allocating takes gcLock.
+func growFinalizerBits() []byte {
+	need := finalizerBitsNeeded()
+	if uintptr(len(finalizerBits)) >= need {
+		return nil
+	}
+	return make([]byte, need)
+}
+
+// adoptFinalizerBits installs a wider bitmap under gcLock, carrying the old bits
+// over. A nil or already-obsolete buffer is ignored.
+func adoptFinalizerBits(buf []byte) {
+	if len(buf) <= len(finalizerBits) {
+		return
+	}
+	copy(buf, finalizerBits)
+	finalizerBits = buf
+}
+
+func finalizerBitIndex(addr uintptr) uintptr { return uintptr(blockFromAddr(addr)) }
+
+func finalizerBitGet(addr uintptr) bool {
+	i := finalizerBitIndex(addr)
+	if i/8 >= uintptr(len(finalizerBits)) {
+		// The bitmap does not describe this address yet (the heap grew since it
+		// was sized). Answer conservatively: a spurious "maybe" only costs one
+		// scan, while a wrong "no" would let a second entry be registered for an
+		// object that already has one, and its finalizer would run twice.
+		return true
+	}
+	return finalizerBits[i/8]&(1<<(i%8)) != 0
+}
+
+func finalizerBitSet(addr uintptr) {
+	i := finalizerBitIndex(addr)
+	if i/8 >= uintptr(len(finalizerBits)) {
+		return
+	}
+	finalizerBits[i/8] |= 1 << (i % 8)
+}
+
+func finalizerBitClear(addr uintptr) {
+	i := finalizerBitIndex(addr)
+	if i/8 >= uintptr(len(finalizerBits)) {
+		return
+	}
+	finalizerBits[i/8] &^= 1 << (i % 8)
+}
+
 func encodeFinalizerPtr(addr uintptr) uintptr { return ^addr }
 func decodeFinalizerPtr(enc uintptr) uintptr  { return ^enc }
 
@@ -89,9 +181,18 @@ func decodeFinalizerPtr(enc uintptr) uintptr  { return ^enc }
 func registerFinalizer(addr uintptr, fn interface{}) {
 	enc := encodeFinalizerPtr(addr)
 
+	tracked := isOnHeap(addr)
+
 	if fn == nil {
-		// Clear: remove every registration for this object.
+		// Clear: remove every registration for this object. The bit proves in
+		// one test that there is nothing to remove.
+		if tracked && !finalizerBitGet(addr) {
+			return
+		}
 		gcLock.Lock()
+		if tracked {
+			finalizerBitClear(addr)
+		}
 		prev := &finalizers
 		for n := *prev; n != nil; n = *prev {
 			if n.obj == enc {
@@ -108,8 +209,13 @@ func registerFinalizer(addr uintptr, fn interface{}) {
 	// Register or replace. The allocation happens before gcLock is taken,
 	// because alloc acquires gcLock itself.
 	entry := &finalizerEntry{obj: enc, fn: fn}
+	wider := growFinalizerBits()
 	gcLock.Lock()
-	for n := finalizers; n != nil; n = n.next {
+	adoptFinalizerBits(wider)
+	// Only an object whose bit is set can already be in the table, so a fresh
+	// object skips the scan entirely. An address the bitmap cannot describe
+	// (not on the heap) always scans, as before.
+	for n := finalizers; (!tracked || finalizerBitGet(addr)) && n != nil; n = n.next {
 		if n.obj == enc {
 			// Replace the finalizer for an already-registered object, so it
 			// still runs only once (Go SetFinalizer replace semantics).
@@ -128,6 +234,9 @@ func registerFinalizer(addr uintptr, fn interface{}) {
 	}
 	entry.next = finalizers
 	finalizers = entry
+	if tracked {
+		finalizerBitSet(addr)
+	}
 	numFinalizers++
 	finalizersSinceGC++ // pressure signal for the proactive GC trigger at the scheduler's idle point
 	// A finalizer is registered, so make sure the runner exists. The flag is
@@ -175,6 +284,9 @@ func scanFinalizers() {
 		// and into the pending queue (alloc-free), so its finalizer runs once.
 		*prev = n.next
 		numFinalizers--
+		// The object is gone; clear its bit so a later object reusing the
+		// address starts clean.
+		finalizerBitClear(addr)
 		n.next = finalizerPending
 		finalizerPending = n
 		finalizersQueued = true
@@ -269,7 +381,8 @@ func dequeueFinalizer() (*finalizerEntry, unsafe.Pointer) {
 // operation's values are still live, which would scale GC frequency with
 // allocation churn and waste most collections on still-live values.
 func finalizerPressureGC() bool {
-	if finalizerGCThreshold == 0 || finalizersSinceGC < finalizerGCThreshold {
+	trigger := finalizerGCTrigger()
+	if trigger == 0 || finalizersSinceGC < trigger {
 		return false
 	}
 	gcLock.Lock()

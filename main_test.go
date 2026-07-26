@@ -60,6 +60,7 @@ func TestBuild(t *testing.T) {
 		"channel.go",
 		"embed/",
 		"finalizer.go",
+		"finalizerbits.go",
 		"finalizeridle.go",
 		"float.go",
 		"gc.go",
@@ -360,16 +361,20 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 			}
 		}
-		if (name == "finalizer.go" || name == "finalizeridle.go") && options.Target != "wasm" {
-			// runtime.SetFinalizer is implemented for the block GC, but these
-			// tests assert deterministic collection of a dropped object, which
-			// only holds on the GOOS=js wasm target. The host default GC is
-			// boehm (SetFinalizer is a no-op there); conservative stack scanning
-			// on the emulated targets can pin the object; and the wasip2
-			// component entry lays out the stack differently, so collection is
-			// not deterministic on those. The feature still works on all of
-			// them, it just can't be golden-tested for firing.
-			continue
+		if options.Target != "wasm" {
+			switch name {
+			case "finalizer.go", "finalizerbits.go", "finalizeridle.go":
+				// runtime.SetFinalizer is implemented for the block GC, but the
+				// finalizer tests assert deterministic collection of a dropped
+				// object, which only holds on the GOOS=js wasm target. The host
+				// default GC is boehm (SetFinalizer is a no-op there);
+				// conservative stack scanning on the emulated targets can pin the
+				// object; and the wasip2 component entry lays out the stack
+				// differently, so collection is not deterministic on those. The
+				// feature still works on all of them, it just can't be
+				// golden-tested for firing.
+				continue
+			}
 		}
 
 		name := name // redefine to avoid race condition
