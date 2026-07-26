@@ -86,12 +86,6 @@ func (p Pin) PortMaskClear() (*uint32, uint32) {
 	return &port.BSRR.Reg, 1 << (pin + 16)
 }
 
-// EnterBootloader resets the chip into the bootloader.
-// This is currently a stub for STM32, required to satisfy machine.EnterBootloader
-// called by machine/usb/cdc.
-func EnterBootloader() {
-}
-
 var deviceID [12]byte
 
 // DeviceID returns an identifier that is unique within

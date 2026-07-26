@@ -30,17 +30,15 @@ func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
 // actual channel send operation during goroutine lowering.
 func (b *builder) createChanSend(instr *ssa.Send) {
 	ch := b.getValue(instr.Chan, getPos(instr))
-	chanValue := b.getValue(instr.X, getPos(instr))
 
 	// store value-to-send
 	valueType := b.getLLVMType(instr.X.Type())
 	isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
-	var valueAlloca, valueAllocaSize llvm.Value
+	var storage valueStorage
 	if isZeroSize {
-		valueAlloca = llvm.ConstNull(b.dataPtrType)
+		storage.ptr = llvm.ConstNull(b.dataPtrType)
 	} else {
-		valueAlloca, valueAllocaSize = b.createTemporaryAlloca(valueType, "chan.value")
-		b.CreateStore(chanValue, valueAlloca)
+		storage = b.getValueStorage(instr.X, "chan.value")
 	}
 
 	// Allocate buffer for the channel operation.
@@ -48,15 +46,13 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	channelOpAlloca, channelOpAllocaSize := b.createTemporaryAlloca(channelOp, "chan.op")
 
 	// Do the send.
-	b.createRuntimeInvoke("chanSend", []llvm.Value{ch, valueAlloca, channelOpAlloca}, "")
+	b.createRuntimeInvoke("chanSend", []llvm.Value{ch, storage.ptr, channelOpAlloca}, "")
 
 	// End the lifetime of the allocas.
 	// This also works around a bug in CoroSplit, at least in LLVM 8:
 	// https://bugs.llvm.org/show_bug.cgi?id=41742
 	b.emitLifetimeEnd(channelOpAlloca, channelOpAllocaSize)
-	if !isZeroSize {
-		b.emitLifetimeEnd(valueAlloca, valueAllocaSize)
-	}
+	b.endValueStorage(storage)
 }
 
 // createChanRecv emits a pseudo chan receive operation. It is lowered to the
@@ -66,37 +62,17 @@ func (b *builder) createChanRecv(unop *ssa.UnOp) llvm.Value {
 	ch := b.getValue(unop.X, getPos(unop))
 
 	// Allocate memory to receive into.
-	isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
-	var valueAlloca, valueAllocaSize llvm.Value
-	if isZeroSize {
-		valueAlloca = llvm.ConstNull(b.dataPtrType)
-	} else {
-		valueAlloca, valueAllocaSize = b.createTemporaryAlloca(valueType, "chan.value")
-	}
+	result := b.createRuntimeValueResult(valueType, unop.CommaOk, true, "chan")
 
 	// Allocate buffer for the channel operation.
 	channelOp := b.getLLVMRuntimeType("channelOp")
 	channelOpAlloca, channelOpAllocaSize := b.createTemporaryAlloca(channelOp, "chan.op")
 
 	// Do the receive.
-	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, valueAlloca, channelOpAlloca}, "")
-	var received llvm.Value
-	if isZeroSize {
-		received = llvm.ConstNull(valueType)
-	} else {
-		received = b.CreateLoad(valueType, valueAlloca, "chan.received")
-		b.emitLifetimeEnd(valueAlloca, valueAllocaSize)
-	}
+	commaOk := b.createRuntimeCall("chanRecv", []llvm.Value{ch, result.valuePtr, channelOpAlloca}, "")
+	received := result.finish(b, commaOk, "chan.received")
 	b.emitLifetimeEnd(channelOpAlloca, channelOpAllocaSize)
-
-	if unop.CommaOk {
-		tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{valueType, b.ctx.Int1Type()}, false))
-		tuple = b.CreateInsertValue(tuple, received, 0, "")
-		tuple = b.CreateInsertValue(tuple, commaOk, 1, "")
-		return tuple
-	} else {
-		return received
-	}
+	return received
 }
 
 // createChanClose closes the given channel.
@@ -170,9 +146,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		case types.SendOnly:
 			// Store this value in an alloca and put a pointer to this alloca
 			// in the send state.
-			sendValue := b.getValue(state.Send, state.Pos)
-			alloca := llvmutil.CreateEntryBlockAlloca(b.Builder, sendValue.Type(), "select.send.value")
-			b.CreateStore(sendValue, alloca)
+			alloca := b.getSelectSendStorage(state.Send)
 			selectState = b.CreateInsertValue(selectState, alloca, 1, "")
 		default:
 			panic("unreachable")
@@ -280,7 +254,17 @@ func (b *builder) getChanSelectResult(expr *ssa.Extract) llvm.Value {
 		// receive can proceed at a time) so we'll get that alloca, bitcast
 		// it to the correct type, and dereference it.
 		recvbuf := b.selectRecvBuf[expr.Tuple.(*ssa.Select)]
-		typ := b.getLLVMType(expr.Type())
-		return b.CreateLoad(typ, recvbuf, "")
+		return b.loadFromStorage(recvbuf, expr.Type(), "select.received")
 	}
+}
+
+func (b *builder) getSelectSendStorage(value ssa.Value) llvm.Value {
+	typ := b.getLLVMType(value.Type())
+	if b.isIndirectAggregate(typ) {
+		return b.getValuePointer(value)
+	}
+	llvmValue := b.getValue(value, getPos(value))
+	ptr := llvmutil.CreateEntryBlockAlloca(b.Builder, typ, "select.send.value")
+	b.CreateStore(llvmValue, ptr)
+	return ptr
 }

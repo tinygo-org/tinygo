@@ -35,6 +35,9 @@ const (
 
 	// Whether this is a readonly parameter (for example, a string pointer).
 	paramIsReadonly
+
+	// Whether this parameter is passed through backing storage.
+	paramIsIndirect
 )
 
 // createRuntimeCallCommon creates a runtime call. Use createRuntimeCall or
@@ -102,6 +105,18 @@ func (b *builder) createInvoke(fnType llvm.Type, fn llvm.Value, args []llvm.Valu
 // Expand an argument type to a list that can be used in a function call
 // parameter list.
 func (c *compilerContext) expandFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
+	if c.isIndirectAggregate(t) {
+		return []paramInfo{{
+			llvmType: c.dataPtrType,
+			name:     name,
+			elemSize: c.targetData.TypeAllocSize(t),
+			flags:    paramIsGoParam | paramIsReadonly | paramIsIndirect,
+		}}
+	}
+	return c.expandDirectFormalParamType(t, name, goType)
+}
+
+func (c *compilerContext) expandDirectFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		fieldInfos := c.flattenAggregateType(t, name, goType)
@@ -113,6 +128,38 @@ func (c *compilerContext) expandFormalParamType(t llvm.Type, name string, goType
 	}
 	// TODO: split small arrays
 	return []paramInfo{c.getParamInfo(t, name, goType)}
+}
+
+func (c *compilerContext) storedParamType(t llvm.Type, exported bool) llvm.Type {
+	if c.isIndirectParam(t, exported) {
+		return c.dataPtrType
+	}
+	return t
+}
+
+func (c *compilerContext) isIndirectParam(t llvm.Type, exported bool) bool {
+	return !exported && c.isIndirectAggregate(t)
+}
+
+func (b *builder) appendStoredValueTypes(valueTypes []llvm.Type, values []ssa.Value, exported bool) []llvm.Type {
+	for _, value := range values {
+		valueTypes = append(valueTypes, b.storedParamType(b.getLLVMType(value.Type()), exported))
+	}
+	return valueTypes
+}
+
+func (b *builder) appendStoredParamTypes(valueTypes []llvm.Type, params []*types.Var, exported bool) []llvm.Type {
+	for _, param := range params {
+		valueTypes = append(valueTypes, b.storedParamType(b.getLLVMType(param.Type()), exported))
+	}
+	return valueTypes
+}
+
+func (b *builder) prependIndirectResult(sig *types.Signature, exported bool, params []llvm.Value, name string) []llvm.Value {
+	if resultType, indirect := b.hasIndirectResult(sig); !exported && indirect {
+		return append([]llvm.Value{b.createIndirectStorage(resultType, name)}, params...)
+	}
+	return params
 }
 
 // expandFormalParamOffsets returns a list of offsets from the start of an

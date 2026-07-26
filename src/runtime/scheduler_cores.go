@@ -54,7 +54,7 @@ func scheduleTask(t *task.Task) {
 		t.RunState = task.RunStateResuming
 	default:
 		if schedulerAsserts {
-			runtimePanic("scheduler: unknown run state")
+			runtimeFatal("scheduler: unknown run state")
 		}
 	}
 	schedulerLock.Unlock()
@@ -195,18 +195,6 @@ func run() {
 
 func scheduler(_ bool) {
 	for mainExited.Load() == 0 {
-		// Check for ready-to-run tasks.
-		if runnable := runqueue.Pop(); runnable != nil {
-			// Resume it now.
-			setCurrentTask(runnable)
-			runnable.RunState = task.RunStateRunning
-			schedulerLock.Unlock() // unlock before resuming, Pause() will lock again
-			runnable.Resume()
-			setCurrentTask(nil)
-
-			continue
-		}
-
 		var now timeUnit
 		if sleepQueue != nil || timerQueue != nil {
 			now = ticks()
@@ -251,6 +239,18 @@ func scheduler(_ bool) {
 				}
 				continue
 			}
+		}
+
+		// Check for ready-to-run tasks.
+		if runnable := runqueue.Pop(); runnable != nil {
+			// Resume it now.
+			setCurrentTask(runnable)
+			runnable.RunState = task.RunStateRunning
+			schedulerLock.Unlock() // unlock before resuming, Pause() will lock again
+			runnable.Resume()
+			setCurrentTask(nil)
+
+			continue
 		}
 
 		// At this point, there are no runnable tasks anymore.

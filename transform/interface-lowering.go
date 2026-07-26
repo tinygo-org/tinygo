@@ -517,6 +517,10 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	context := fn.LastParam()
 	actualType := llvm.PrevParam(context)
 	returnType := fn.GlobalValueType().ReturnType()
+	resultOffset := 0
+	if fn.GetStringAttributeAtIndex(-1, "tinygo-indirect-result").GetStringValue() == "true" {
+		resultOffset = 1
+	}
 	context.SetName("context")
 	actualType.SetName("actualType")
 	fn.SetLinkage(llvm.InternalLinkage)
@@ -526,9 +530,9 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	// Collect the params that will be passed to the functions to call.
 	// These params exclude the receiver (which may actually consist of multiple
 	// parts).
-	params := make([]llvm.Value, fn.ParamsCount()-3)
+	params := make([]llvm.Value, fn.ParamsCount()-3-resultOffset)
 	for i := range params {
-		params[i] = fn.Param(i + 1)
+		params[i] = fn.Param(i + 1 + resultOffset)
 	}
 	params = append(params,
 		llvm.Undef(p.ptrType),
@@ -570,14 +574,20 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 		function := typ.getMethod(signature).function
 
 		p.builder.SetInsertPointAtEnd(bb)
-		receiver := fn.FirstParam()
+		receiver := fn.Param(resultOffset)
 
-		paramTypes := []llvm.Type{receiver.Type()}
-		for _, param := range params {
-			paramTypes = append(paramTypes, param.Type())
+		callParams := make([]llvm.Value, 0, len(params)+2+resultOffset)
+		if resultOffset != 0 {
+			callParams = append(callParams, fn.FirstParam())
+		}
+		callParams = append(callParams, receiver)
+		callParams = append(callParams, params...)
+		paramTypes := make([]llvm.Type, len(callParams))
+		for i, param := range callParams {
+			paramTypes[i] = param.Type()
 		}
 		functionType := llvm.FunctionType(returnType, paramTypes, false)
-		retval := p.builder.CreateCall(functionType, function, append([]llvm.Value{receiver}, params...), "")
+		retval := p.builder.CreateCall(functionType, function, callParams, "")
 		if retval.Type().TypeKind() == llvm.VoidTypeKind {
 			p.builder.CreateRetVoid()
 		} else {

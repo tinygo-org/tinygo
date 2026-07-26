@@ -55,7 +55,7 @@ func markCurrentGoroutineStack(sp uintptr) {
 	// more pointers alive than needed on the current stack).
 	base := libgc_base(sp)
 	if base == 0 { // && asserts
-		runtimePanic("goroutine stack not in a heap allocation?")
+		runtimeFatal("goroutine stack not in a heap allocation?")
 	}
 	stackBottom := base + libgc_size(base)
 	libgc_push_all_stack(sp, stackBottom)
@@ -69,6 +69,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 
 	gcLock.Lock()
 	var ptr unsafe.Pointer
+	var needsZero bool
 	if layout == gclayout.NoPtrs.AsPtr() {
 		// This object is entirely pointer free, for example make([]int, ...).
 		// Make sure the GC knows this so it doesn't scan the object
@@ -76,7 +77,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		ptr = libgc_malloc_atomic(size)
 		// Memory returned from libgc_malloc_atomic has not been zeroed so we
 		// have to do that manually.
-		memzero(ptr, size)
+		needsZero = true
 	} else {
 		// TODO: bdwgc supports typed allocations, which could be useful to
 		// implement a mostly-precise GC.
@@ -87,7 +88,11 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcResumeWorld()
 	gcLock.Unlock()
 	if ptr == nil {
-		runtimePanic("gc: out of memory")
+		runtimeFatal("gc: out of memory")
+		return nil
+	}
+	if needsZero {
+		memzero(ptr, size)
 	}
 
 	return ptr
@@ -129,7 +134,7 @@ func ReadMemStats(m *MemStats) {
 }
 
 func setHeapEnd(newHeapEnd uintptr) {
-	runtimePanic("gc: did not expect setHeapEnd call")
+	runtimeFatal("gc: did not expect setHeapEnd call")
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {

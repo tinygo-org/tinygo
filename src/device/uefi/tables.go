@@ -20,6 +20,10 @@ type EFI_RUNTIME_SERVICES struct {
 	queryVariableInfo    uintptr
 }
 
+func (p *EFI_RUNTIME_SERVICES) GetTime(time *EFI_TIME, capabilities *EFI_TIME_CAPABILITIES) EFI_STATUS {
+	return UefiCall2(p.getTime, uintptr(unsafe.Pointer(time)), uintptr(unsafe.Pointer(capabilities)))
+}
+
 type EFI_BOOT_SERVICES struct {
 	Hdr                       EFI_TABLE_HEADER
 	raiseTPL                  uintptr
@@ -80,6 +84,10 @@ func (p *EFI_BOOT_SERVICES) SetTimer(event EFI_EVENT, typ EFI_TIMER_DELAY, trigg
 
 func (p *EFI_BOOT_SERVICES) WaitForEvent(numberOfEvents UINTN, event *EFI_EVENT, index *UINTN) EFI_STATUS {
 	return UefiCall3(p.waitForEvent, uintptr(numberOfEvents), uintptr(unsafe.Pointer(event)), uintptr(unsafe.Pointer(index)))
+}
+
+func (p *EFI_BOOT_SERVICES) SignalEvent(event EFI_EVENT) EFI_STATUS {
+	return UefiCall1(p.signalEvent, uintptr(event))
 }
 
 func (p *EFI_BOOT_SERVICES) CloseEvent(event EFI_EVENT) EFI_STATUS {

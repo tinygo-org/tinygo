@@ -5,7 +5,9 @@ package machine
 import (
 	"device/esp"
 	"errors"
+	"runtime/interrupt"
 	"runtime/volatile"
+	"sync"
 	"unsafe"
 )
 
@@ -291,6 +293,107 @@ func (p Pin) mux() *volatile.Register32 {
 	}
 }
 
+const maxPin = 40
+
+// cpuInterruptFromPin selects an edge-triggered CPU interrupt line for GPIO.
+// CPU interrupt 10 is edge-triggered level-1 on the Xtensa LX6, which prevents
+// the ISR from re-entering continuously when other peripherals (e.g. SPI via
+// the GPIO Matrix) keep GPIO.STATUS bits asserted.
+const cpuInterruptFromPin = 10
+
+type PinChange uint8
+
+// Pin change interrupt constants for SetInterrupt.
+const (
+	PinRising PinChange = iota + 1
+	PinFalling
+	PinToggle
+)
+
+// SetInterrupt sets an interrupt to be executed when a particular pin changes
+// state. The pin should already be configured as an input, including a pull up
+// or down if no external pull is provided.
+//
+// You can pass a nil func to unset the pin change interrupt. If you do so,
+// the change parameter is ignored and can be set to any value (such as 0).
+// If the pin is already configured with a callback, you must first unset
+// this pins interrupt before you can set a new callback.
+func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
+	if p >= maxPin {
+		return ErrInvalidInputPin
+	}
+
+	if callback == nil {
+		// Disable this pin interrupt
+		p.pinReg().ClearBits(esp.GPIO_PIN_INT_TYPE_Msk | esp.GPIO_PIN_INT_ENA_Msk)
+
+		if pinCallbacks[p] != nil {
+			pinCallbacks[p] = nil
+		}
+		return nil
+	}
+
+	if pinCallbacks[p] != nil {
+		// The pin was already configured.
+		// To properly re-configure a pin, unset it first and set a new
+		// configuration.
+		return ErrNoPinChangeChannel
+	}
+	pinCallbacks[p] = callback
+
+	onceSetupPinInterrupt.Do(func() {
+		setupPinInterruptErr = setupPinInterrupt()
+	})
+	if setupPinInterruptErr != nil {
+		return setupPinInterruptErr
+	}
+
+	p.pinReg().Set(
+		(p.pinReg().Get() & ^uint32(esp.GPIO_PIN_INT_TYPE_Msk|esp.GPIO_PIN_INT_ENA_Msk)) |
+			uint32(change)<<esp.GPIO_PIN_INT_TYPE_Pos | uint32(1)<<esp.GPIO_PIN_INT_ENA_Pos)
+
+	return nil
+}
+
+var (
+	pinCallbacks          [maxPin]func(Pin)
+	onceSetupPinInterrupt sync.Once
+	setupPinInterruptErr  error
+)
+
+func setupPinInterrupt() error {
+	esp.DPORT.SetPRO_GPIO_INTERRUPT_MAP_PRO_GPIO_INTERRUPT_PRO_MAP(cpuInterruptFromPin)
+	return interrupt.New(cpuInterruptFromPin, handleGPIOInterrupt).Enable()
+}
+
+// handleGPIOInterrupt is the GPIO pin change interrupt handler. It must be a
+// plain function (not a closure) because interrupt.New is a compiler intrinsic
+// that does not support closures.
+func handleGPIOInterrupt(interrupt.Interrupt) {
+	// Read and immediately clear interrupt status bits.
+	// Clearing before processing is critical for edge-triggered CPU
+	// interrupts: any new GPIO events that arrive during callback
+	// execution will set fresh STATUS bits, generating a new edge
+	// on the CPU interrupt line so they are not lost.
+	status := esp.GPIO.STATUS.Get()
+	status1 := esp.GPIO.STATUS1.Get()
+	esp.GPIO.STATUS_W1TC.Set(status)
+	esp.GPIO.STATUS1_W1TC.Set(status1)
+
+	// Check status for GPIO0-31
+	for i, mask := 0, uint32(1); i < 32; i, mask = i+1, mask<<1 {
+		if (status&mask) != 0 && pinCallbacks[i] != nil {
+			pinCallbacks[i](Pin(i))
+		}
+	}
+	// Check status for GPIO32-39
+	for i, mask := 32, uint32(1); i < maxPin; i, mask = i+1, mask<<1 {
+		if (status1&mask) != 0 && pinCallbacks[i] != nil {
+			pinCallbacks[i](Pin(i))
+		}
+	}
+}
+
 var DefaultUART = UART0
 
 var (
@@ -298,63 +401,209 @@ var (
 	_UART0 = UART{
 		Bus:          esp.UART0,
 		Buffer:       NewRingBuffer(),
-		TXRXSignal:   14,
-		RTSCTSSignal: 15,
+		txrxSignal:   14,
+		rtsctsSignal: 15,
 	}
 	UART1  = &_UART1
 	_UART1 = UART{
 		Bus:          esp.UART1,
 		Buffer:       NewRingBuffer(),
-		TXRXSignal:   17,
-		RTSCTSSignal: 18,
+		txrxSignal:   17,
+		rtsctsSignal: 18,
 	}
 	UART2  = &_UART2
 	_UART2 = UART{
 		Bus:          esp.UART2,
 		Buffer:       NewRingBuffer(),
-		TXRXSignal:   198,
-		RTSCTSSignal: 199,
+		txrxSignal:   198,
+		rtsctsSignal: 199,
 	}
+
+	onceUart = sync.Once{}
 )
 
+// CPU interrupt line used for all UART peripherals.
+//
+// On the ESP32 (Xtensa LX6) the 32 CPU interrupt lines have fixed hardware
+// roles. Lines 6, 7, 11, 14, 15, 16 and 29 are internal (Xtensa timers,
+// software and profiling/NMI) and are NOT wired to the peripheral interrupt
+// matrix, so a peripheral routed to one of them via DPORT never fires.
+// The usable level-1 peripheral lines are 2, 3, 5, 8, 9, 10 (edge), 12, 13,
+// 17 and 18. We use line 8 for UART (9 is the timer alarm, 10 is GPIO).
+const cpuInterruptFromUART = 8
+
+// uartInterrupts is the set of UART interrupt flags we care about for RX.
+const uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
+	esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA |
+	esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
+	esp.UART_INT_ENA_FRM_ERR_INT_ENA |
+	esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
+	esp.UART_INT_ENA_GLITCH_DET_INT_ENA
+
 type UART struct {
-	Bus          *esp.UART_Type
-	Buffer       *RingBuffer
-	TXRXSignal   uint32
-	RTSCTSSignal uint32
+	Bus    *esp.UART_Type
+	Buffer *RingBuffer
+
+	txrxSignal           uint32
+	rtsctsSignal         uint32
+	parityErrorDetected  bool
+	dataErrorDetected    bool
+	dataOverflowDetected bool
 }
 
-func (uart *UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) error {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
+
+	// If no pins are specified (the zero value is GPIO0, which is never a
+	// sensible default for both TX and RX), pick sensible defaults per UART.
+	//
+	// For UART0 (the console) we deliberately leave the pins untouched: the
+	// ROM bootloader has already wired GPIO1 (TX) and GPIO3 (RX) directly via
+	// the IO MUX to the USB-serial bridge. Re-routing them through the GPIO
+	// matrix is unnecessary and can break RX, so we keep the bootloader setup
+	// which is exactly what makes the boot log and greeting appear.
+	// We still fall through to configure baud rate, interrupts, and the RX
+	// FIFO even when pins are already wired.
+	if config.TX == 0 && config.RX == 0 {
+		switch uart.Bus {
+		case esp.UART0:
+			config.TX = NoPin
+			config.RX = NoPin
+		case esp.UART1:
+			config.TX = 10
+			config.RX = 9
+		case esp.UART2:
+			config.TX = 17
+			config.RX = 16
+		}
+	}
+
 	uart.Bus.CLKDIV.Set(peripheralClock / config.BaudRate)
 
 	if config.RX != NoPin {
-		config.RX.configure(PinConfig{Mode: PinInputPullup}, uart.TXRXSignal)
+		config.RX.configure(PinConfig{Mode: PinInputPullup}, uart.txrxSignal)
 		if config.InvertRX {
-			inFunc(uart.TXRXSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
+			inFunc(uart.txrxSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
 		} else {
-			inFunc(uart.TXRXSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
+			inFunc(uart.txrxSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
 		}
 	}
 
 	if config.TX != NoPin {
-		config.TX.configure(PinConfig{Mode: PinOutput}, uart.TXRXSignal)
+		config.TX.configure(PinConfig{Mode: PinOutput}, uart.txrxSignal)
 		if config.InvertTX {
-			config.TX.outFunc().Set(uart.TXRXSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
+			config.TX.outFunc().Set(uart.txrxSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
 		} else {
-			config.TX.outFunc().Set(uart.TXRXSignal)
+			config.TX.outFunc().Set(uart.txrxSignal)
 		}
 	}
 
 	if config.RTS != NoPin {
-		config.RTS.configure(PinConfig{Mode: PinOutput}, uart.RTSCTSSignal)
+		config.RTS.configure(PinConfig{Mode: PinOutput}, uart.rtsctsSignal)
 	}
 
 	if config.CTS != NoPin {
-		config.CTS.configure(PinConfig{Mode: PinInputPullup}, uart.RTSCTSSignal)
+		config.CTS.configure(PinConfig{Mode: PinInputPullup}, uart.rtsctsSignal)
 	}
+
+	uart.configureInterrupt()
+	uart.enableReceiver()
+
+	return nil
+}
+
+func (uart *UART) configureInterrupt() {
+	// Disable all UART interrupts while configuring.
+	uart.Bus.INT_ENA.ClearBits(0x0ffff)
+
+	// Map this UART's peripheral interrupt to a CPU interrupt line via DPORT.
+	switch uart.Bus {
+	case esp.UART0:
+		esp.DPORT.SetPRO_UART_INTR_MAP(cpuInterruptFromUART)
+	case esp.UART1:
+		esp.DPORT.SetPRO_UART1_INTR_MAP(cpuInterruptFromUART)
+	case esp.UART2:
+		esp.DPORT.SetPRO_UART2_INTR_MAP(cpuInterruptFromUART)
+	}
+
+	// Register the ISR only once (shared across all UARTs on the same CPU int).
+	// interrupt.New is a compiler intrinsic and requires a plain (non-capturing)
+	// handler function, so we use a named package-level function.
+	onceUart.Do(func() {
+		_ = interrupt.New(cpuInterruptFromUART, handleUARTInterrupt).Enable()
+	})
+}
+
+// handleUARTInterrupt is the shared UART interrupt handler. It must be a plain
+// function (not a closure) because interrupt.New is a compiler intrinsic that
+// does not support closures.
+func handleUARTInterrupt(interrupt.Interrupt) {
+	UART0.serveInterrupt()
+	UART1.serveInterrupt()
+	UART2.serveInterrupt()
+}
+
+func (uart *UART) serveInterrupt() {
+	// Check masked interrupt status.
+	interruptFlag := uart.Bus.INT_ST.Get()
+	if (interruptFlag & uartInterrupts) == 0 {
+		return
+	}
+
+	// Block UART interrupts while processing.
+	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
+
+	if interruptFlag&(esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA|esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA) != 0 {
+		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
+			// The ESP32 UART FIFO must be accessed through the AHB address
+			// (base + 0x200C0000 == 0x60000000 for UART0), not the APB FIFO
+			// register, due to a silicon erratum. This mirrors writeByte.
+			b := (*volatile.Register8)(unsafe.Add(unsafe.Pointer(uart.Bus), 0x200C0000)).Get()
+			if !uart.Buffer.Put(b) {
+				uart.dataOverflowDetected = true
+			}
+		}
+	}
+	if interruptFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
+		uart.parityErrorDetected = true
+	}
+	if interruptFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA != 0 {
+		uart.dataErrorDetected = true
+	}
+	if interruptFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA != 0 {
+		uart.dataOverflowDetected = true
+	}
+	if interruptFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA != 0 {
+		uart.dataErrorDetected = true
+	}
+
+	// Clear the interrupt status bits.
+	uart.Bus.INT_CLR.SetBits(interruptFlag)
+	uart.Bus.INT_CLR.ClearBits(interruptFlag)
+	// Re-enable UART interrupts.
+	uart.Bus.INT_ENA.Set(uartInterrupts)
+}
+
+func (uart *UART) enableReceiver() {
+	// Reset the RX FIFO.
+	uart.Bus.SetCONF0_RXFIFO_RST(1)
+	uart.Bus.SetCONF0_RXFIFO_RST(0)
+	// Trigger interrupt when 1 byte is available (low latency).
+	uart.Bus.SetCONF1_RXFIFO_FULL_THRHD(1)
+	// Enable the RX timeout so that a single byte still generates an interrupt
+	// once the line has been idle for the given number of bit periods. Without
+	// this, RXFIFO_FULL only fires once more than the threshold has arrived.
+	uart.Bus.SetCONF1_RX_TOUT_THRHD(2)
+	uart.Bus.SetCONF1_RX_TOUT_EN(1)
+	// Enable RX-related interrupts.
+	uart.Bus.SetINT_ENA_RXFIFO_FULL_INT_ENA(1)
+	uart.Bus.SetINT_ENA_RXFIFO_TOUT_INT_ENA(1)
+	uart.Bus.SetINT_ENA_FRM_ERR_INT_ENA(1)
+	uart.Bus.SetINT_ENA_PARITY_ERR_INT_ENA(1)
+	uart.Bus.SetINT_ENA_GLITCH_DET_INT_ENA(1)
+	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
 }
 
 func (uart *UART) writeByte(b byte) error {

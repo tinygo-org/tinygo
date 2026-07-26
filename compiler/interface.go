@@ -85,6 +85,10 @@ const (
 // An interface value is a {typecode, value} tuple named runtime._interface.
 func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.Pos) llvm.Value {
 	itfValue := b.emitPointerPack([]llvm.Value{val}, pos)
+	return b.createMakeInterfaceFromPointer(itfValue, typ)
+}
+
+func (b *builder) createMakeInterfaceFromPointer(itfValue llvm.Value, typ types.Type) llvm.Value {
 	itfType := b.getTypeCode(typ)
 	itf := llvm.Undef(b.getLLVMRuntimeType("_interface"))
 	itf = b.CreateInsertValue(itf, itfType, 0, "")
@@ -98,7 +102,14 @@ func (b *builder) createMakeInterface(val llvm.Value, typ types.Type, pos token.
 // doesn't match the underlying type of the interface.
 func (b *builder) extractValueFromInterface(itf llvm.Value, llvmType llvm.Type) llvm.Value {
 	valuePtr := b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
+	if b.isIndirectAggregate(llvmType) {
+		return valuePtr
+	}
 	return b.emitPointerUnpack(valuePtr, []llvm.Type{llvmType})[0]
+}
+
+func (b *builder) extractValuePointerFromInterface(itf llvm.Value) llvm.Value {
+	return b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
 }
 
 func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
@@ -125,6 +136,16 @@ func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
 	return pkgPathPtr
 }
 
+// isGenericMethod returns true for a method that has its own type parameters
+// (independent of any type parameters on its receiver), e.g. the N method in
+// "func (r *Rand) N[Int intType](n Int) Int { ... }". Like the reflect
+// package, such methods are excluded from runtime method sets: they aren't
+// instantiated, so their signature can't be represented in a type code, and
+// they can never satisfy an interface method anyway.
+func isGenericMethod(fn *types.Func) bool {
+	return fn.Signature().TypeParams().Len() > 0
+}
+
 // getTypeCode returns a reference to a type code.
 // A type code is a pointer to a constant global that describes the type.
 // This function returns a pointer to the 'kind' field (which might not be the
@@ -134,21 +155,25 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 	typ = types.Unalias(typ)
 
 	ms := c.program.MethodSets.MethodSet(typ)
-	hasMethodSet := ms.Len() != 0
 	_, isInterface := typ.Underlying().(*types.Interface)
-	if isInterface {
-		hasMethodSet = false
-	}
 
 	// As defined in https://pkg.go.dev/reflect#Type:
 	// NumMethod returns the number of methods accessible using Method.
 	// For a non-interface type, it returns the number of exported methods.
 	// For an interface type, it returns the number of exported and unexported methods.
 	var numMethods int
+	var hasMethodSet bool
 	for method := range ms.Methods() {
+		if isGenericMethod(method.Obj().(*types.Func)) {
+			continue
+		}
+		hasMethodSet = true
 		if isInterface || method.Obj().Exported() {
 			numMethods++
 		}
+	}
+	if isInterface {
+		hasMethodSet = false
 	}
 
 	// Short-circuit all the global pointer logic here for pointers to pointers.
@@ -194,7 +219,11 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 		// Compute the method set value for types that support methods.
 		var methods []*types.Func
 		for method := range ms.Methods() {
-			methods = append(methods, method.Obj().(*types.Func))
+			fn := method.Obj().(*types.Func)
+			if isGenericMethod(fn) {
+				continue
+			}
+			methods = append(methods, fn)
 		}
 		methodSetType := types.NewStruct([]*types.Var{
 			types.NewVar(token.NoPos, nil, "length", types.Typ[types.Uintptr]),
@@ -950,6 +979,9 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 		// Create method set.
 		var signatures, wrappers []llvm.Value
 		for method := range ms.Methods() {
+			if isGenericMethod(method.Obj().(*types.Func)) {
+				continue
+			}
 			signatureGlobal := c.getMethodSignature(method.Obj().(*types.Func))
 			signatures = append(signatures, signatureGlobal)
 			fn := c.program.MethodValue(method)
@@ -964,7 +996,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 
 		// Construct global value.
 		globalValue := c.ctx.ConstStruct([]llvm.Value{
-			llvm.ConstInt(c.uintptrType, uint64(ms.Len()), false),
+			llvm.ConstInt(c.uintptrType, uint64(len(signatures)), false),
 			llvm.ConstArray(c.dataPtrType, signatures),
 			c.ctx.ConstStruct(wrappers, false),
 		}, false)
@@ -1067,6 +1099,21 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	if expr.CommaOk {
 		nextBlock := b.insertBasicBlock("typeassert.next")
 		b.currentBlockInfo.exit = nextBlock
+		if b.isIndirectAggregate(assertedType) {
+			resultType := b.getLLVMType(expr.Type())
+			result := b.createIndirectStorage(resultType, "typeassert.result")
+			b.zeroIndirectStorage(result, resultType)
+			b.CreateCondBr(commaOk, okBlock, nextBlock)
+
+			b.SetInsertPointAtEnd(okBlock)
+			valuePtr := b.extractValuePointerFromInterface(itf)
+			b.copyIndirectAggregate(b.CreateStructGEP(resultType, result, 0, ""), valuePtr, assertedType)
+			b.CreateBr(nextBlock)
+
+			b.SetInsertPointAtEnd(nextBlock)
+			b.CreateStore(commaOk, b.CreateStructGEP(resultType, result, 1, ""))
+			return result
+		}
 		b.CreateCondBr(commaOk, okBlock, nextBlock)
 
 		// Retrieve the value from the interface if the type assert was
@@ -1206,6 +1253,9 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
 		c.addStandardDeclaredAttributes(llvmFn)
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-invoke", c.getMethodSignatureName(instr.Method)))
+		if _, indirect := c.hasIndirectResult(sig); indirect {
+			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-indirect-result", "true"))
+		}
 		methods := c.getMethodsString(instr.Value.Type().Underlying().(*types.Interface))
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))
 	}
@@ -1251,6 +1301,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	// Get the expanded receiver type.
 	receiverType := c.getLLVMType(fn.Signature.Recv().Type())
 	var expandedReceiverType []llvm.Type
+	receiverIndirect := c.isIndirectAggregate(receiverType)
 	for _, info := range c.expandFormalParamType(receiverType, "", nil) {
 		expandedReceiverType = append(expandedReceiverType, info.llvmType)
 	}
@@ -1265,7 +1316,13 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	}
 
 	// create wrapper function
-	paramTypes := append([]llvm.Type{c.dataPtrType}, llvmFnType.ParamTypes()[len(expandedReceiverType):]...)
+	resultOffset := 0
+	if _, indirect := c.hasIndirectResult(fn.Signature); indirect {
+		resultOffset = 1
+	}
+	paramTypes := append([]llvm.Type{}, llvmFnType.ParamTypes()[:resultOffset]...)
+	paramTypes = append(paramTypes, c.dataPtrType)
+	paramTypes = append(paramTypes, llvmFnType.ParamTypes()[resultOffset+len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(llvmFnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
 	c.addStandardAttributes(wrapper)
@@ -1291,8 +1348,15 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 	block := b.ctx.AddBasicBlock(wrapper, "entry")
 	b.SetInsertPointAtEnd(block)
 
-	receiverValue := b.emitPointerUnpack(wrapper.Param(0), []llvm.Type{receiverType})[0]
-	params := append(b.expandFormalParam(receiverValue), wrapper.Params()[1:]...)
+	params := append([]llvm.Value{}, wrapper.Params()[:resultOffset]...)
+	receiverParam := wrapper.Param(resultOffset)
+	if receiverIndirect {
+		params = append(params, receiverParam)
+	} else {
+		receiverValue := b.emitPointerUnpack(receiverParam, []llvm.Type{receiverType})[0]
+		params = append(params, b.expandFormalParam(receiverValue)...)
+	}
+	params = append(params, wrapper.Params()[resultOffset+1:]...)
 	if llvmFnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
 		b.CreateCall(llvmFnType, llvmFn, params, "")
 		b.CreateRetVoid()

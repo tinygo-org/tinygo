@@ -79,24 +79,27 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		return llvmFn.GlobalValueType(), llvmFn
 	}
 
-	var retType llvm.Type
-	if fn.Signature.Results() == nil {
-		retType = c.ctx.VoidType()
-	} else if fn.Signature.Results().Len() == 1 {
-		retType = c.getLLVMType(fn.Signature.Results().At(0).Type())
-	} else {
-		results := make([]llvm.Type, 0, fn.Signature.Results().Len())
-		for v := range fn.Signature.Results().Variables() {
-			results = append(results, c.getLLVMType(v.Type()))
-		}
-		retType = c.ctx.StructType(results, false)
+	retType, indirectResult := c.hasIndirectResult(fn.Signature)
+	if info.exported {
+		indirectResult = false
 	}
 
 	var paramInfos []paramInfo
+	if indirectResult {
+		paramInfos = append(paramInfos, paramInfo{
+			llvmType: c.dataPtrType,
+			name:     "return",
+			elemSize: c.targetData.TypeAllocSize(retType),
+		})
+		retType = c.ctx.VoidType()
+	}
 	for _, param := range getParams(fn.Signature) {
 		paramType := c.getLLVMType(param.Type())
-		paramFragmentInfos := c.expandFormalParamType(paramType, param.Name(), param.Type())
-		paramInfos = append(paramInfos, paramFragmentInfos...)
+		if info.exported {
+			paramInfos = append(paramInfos, c.expandDirectFormalParamType(paramType, param.Name(), param.Type())...)
+		} else {
+			paramInfos = append(paramInfos, c.expandFormalParamType(paramType, param.Name(), param.Type())...)
+		}
 	}
 
 	// Add an extra parameter as the function context. This context is used in
@@ -106,12 +109,20 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	}
 
 	var paramTypes []llvm.Type
+	hasIndirectABI := indirectResult
 	for _, info := range paramInfos {
 		paramTypes = append(paramTypes, info.llvmType)
+		hasIndirectABI = hasIndirectABI || info.flags&paramIsIndirect != 0
 	}
 
 	fnType := llvm.FunctionType(retType, paramTypes, info.variadic)
 	llvmFn = llvm.AddFunction(c.mod, info.linkName, fnType)
+	if hasIndirectABI {
+		// Argument promotion only rewrites functions whose uses are all direct
+		// calls. Keep an address use so LLVM cannot reconstruct the large
+		// aggregate signature that this ABI exists to avoid.
+		llvmutil.AppendToGlobal(c.mod, "llvm.used", llvmFn)
+	}
 	if strings.HasPrefix(c.Triple, "wasm") {
 		// C functions without prototypes like this:
 		//   void foo();

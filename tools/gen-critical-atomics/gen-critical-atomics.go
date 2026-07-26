@@ -145,6 +145,8 @@ func __atomic_{{$opname}}_fetch_{{$bytes}}(ptr *{{$type}}, value {{$type}}, orde
 {{template "cas" .}}
 {{template "swap" .}}
 {{template "rmw" (tuple "add" . false "new = old + value")}}
+{{template "rmw" (tuple "and" . false "new = old & value")}}
+{{template "rmw" (tuple "or" . false "new = old | value")}}
 
 {{- end}}
 {{template "atomics" 2 -}}

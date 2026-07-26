@@ -18,10 +18,10 @@ func Pause() {
 	// Check whether the canary (the lowest address of the stack) is still
 	// valid. If it is not, a stack overflow has occurred.
 	if *currentTask.state.canaryPtr != stackCanary {
-		runtimePanic("goroutine stack overflow")
+		runtimeFatal("goroutine stack overflow")
 	}
 	if interrupt.In() {
-		runtimePanic("blocked inside interrupt")
+		runtimeFatal("blocked inside interrupt")
 	}
 	currentTask.state.pause()
 }

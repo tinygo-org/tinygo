@@ -28,15 +28,15 @@ func exit(goexit bool) {
 	if t == mainTask {
 		if goexit {
 			if remaining == 0 {
-				runtimePanic("all goroutines are asleep - deadlock!")
+				runtimeFatal("all goroutines are asleep - deadlock!")
 			}
 			atomic.StoreUint32(&mainExitedByGoexit, 1)
 		}
 	} else if atomic.LoadUint32(&mainExitedByGoexit) != 0 && remaining == 0 {
-		runtimePanic("all goroutines are asleep - deadlock!")
+		runtimeFatal("all goroutines are asleep - deadlock!")
 	}
 
 	// TODO: explicitly free the stack after switching back to the scheduler.
 	Pause()
-	runtimePanic("unreachable")
+	runtimeFatal("unreachable")
 }

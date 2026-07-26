@@ -91,6 +91,18 @@ func runtimePanic(msg string) {
 	runtimePanicAt(returnAddress(0), msg)
 }
 
+// runtimeFatal terminates for runtime failures that cannot safely be
+// recovered, such as exhausting the heap.
+func runtimeFatal(msg string) {
+	if panicStrategy() == tinygo.PanicStrategyTrap {
+		trap()
+	}
+	printstring("fatal error: ")
+	printstring(msg)
+	printnl()
+	abort()
+}
+
 func runtimePanicAt(addr unsafe.Pointer, msg string) {
 	if panicStrategy() == tinygo.PanicStrategyTrap {
 		trap()
@@ -133,7 +145,7 @@ func setupDeferFrame(frame *deferFrame, jumpSP unsafe.Pointer) {
 		// Defer is not currently allowed in interrupts.
 		// We could add support for this, but since defer might also allocate
 		// (especially in loops) it might not be a good idea anyway.
-		runtimePanicAt(returnAddress(0), "defer in interrupt")
+		runtimeFatal("defer in interrupt")
 	}
 	currentTask := task.Current()
 	frame.Previous = (*deferFrame)(currentTask.DeferFrame)
@@ -260,5 +272,5 @@ func blockingPanic() {
 
 //go:linkname fips_fatal crypto/internal/fips140.fatal
 func fips_fatal(msg string) {
-	runtimePanic(msg)
+	runtimeFatal(msg)
 }

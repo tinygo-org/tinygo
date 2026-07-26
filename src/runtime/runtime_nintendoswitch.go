@@ -181,7 +181,7 @@ func setupEnv() {
 			default:
 				if entry.Flags&1 > 0 {
 					// Mandatory but not parsed
-					runtimePanic("mandatory config entry not parsed")
+					runtimeFatal("mandatory config entry not parsed")
 				}
 			}
 			ptr += unsafe.Sizeof(configEntry{})
@@ -224,7 +224,7 @@ func setupHeap() {
 	svcSetHeapSize(&heapStart, uint64(size))
 
 	if heapStart == 0 {
-		runtimePanic("failed to allocate heap")
+		runtimeFatal("failed to allocate heap")
 	}
 
 	totalHeap = uint64(size)
@@ -340,6 +340,6 @@ func hardwareRand() (n uint64, ok bool) {
 
 func libc_errno_location() *int32 {
 	// CGo is unavailable, so this function should be unreachable.
-	runtimePanic("runtime: no cgo errno")
+	runtimeFatal("runtime: no cgo errno")
 	return nil
 }

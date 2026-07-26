@@ -15,5 +15,5 @@ func sleepTicks(d timeUnit) {
 // Without the cooperative scheduler running poll_oneoff on FDs, wasip1 has
 // nothing to wake on, so this is a hard deadlock.
 func waitForEvents() {
-	runtimePanic("deadlocked: no event source")
+	runtimeFatal("deadlocked: no event source")
 }
