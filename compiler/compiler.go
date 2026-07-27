@@ -88,7 +88,7 @@ type compilerContext struct {
 	program          *ssa.Program
 	diagnostics      []error
 	functionInfos    map[*ssa.Function]functionInfo
-	maySuspend       map[*ssa.Function]suspendState
+	callProperties   map[*ssa.Function]functionCallProperties
 	asyncifyCatchers map[llvm.Type]llvm.Value
 	astComments      map[string]*ast.CommentGroup
 	embedGlobals     map[string][]*loader.EmbedFile
@@ -110,7 +110,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		machine:          machine,
 		targetData:       machine.CreateTargetData(),
 		functionInfos:    map[*ssa.Function]functionInfo{},
-		maySuspend:       map[*ssa.Function]suspendState{},
+		callProperties:   map[*ssa.Function]functionCallProperties{},
 		asyncifyCatchers: map[llvm.Type]llvm.Value{},
 		astComments:      map[string]*ast.CommentGroup{},
 	}
@@ -2348,12 +2348,11 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 	}
 
 	if !exported {
-		maySuspend := b.callMaySuspend(instr)
 		if resultType, indirectResult := b.hasIndirectResult(instr.Signature()); indirectResult {
 			result := b.createIndirectStorage(resultType, "call.result")
 			params = append([]llvm.Value{result}, params...)
 			params = append(params, context)
-			b.createInvokeWithSuspend(calleeType, callee, params, "", maySuspend)
+			b.createInvoke(calleeType, callee, params, "", instr)
 			return result, nil
 		}
 		// This function takes a context parameter.
@@ -2361,7 +2360,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		params = append(params, context)
 	}
 
-	return b.createInvokeWithSuspend(calleeType, callee, params, "", b.callMaySuspend(instr)), nil
+	return b.createInvoke(calleeType, callee, params, "", instr), nil
 }
 
 // getValue returns the LLVM value of a constant, function value, global, or

@@ -661,7 +661,7 @@ func (b *builder) createRunDefers() {
 			}
 			forwardParams = b.prependIndirectResult(callback.Signature(), false, forwardParams, "defer.result")
 
-			b.createInvokeWithSuspend(fnType, fnPtr, forwardParams, "", true)
+			b.createInvokeWithAnalysis(fnType, fnPtr, forwardParams, "", true, true)
 
 		case *ssa.Function:
 			// Direct call.
@@ -686,7 +686,7 @@ func (b *builder) createRunDefers() {
 
 			// Call real function.
 			fnType, fn := b.getFunction(callback)
-			b.createInvokeWithSuspend(fnType, fn, forwardParams, "", b.functionMaySuspend(callback))
+			b.createInvokeWithAnalysis(fnType, fn, forwardParams, "", b.functionMayUnwind(callback), b.functionMaySuspend(callback))
 
 		case *ssa.MakeClosure:
 			// Get the real defer struct type and cast to it.
@@ -702,7 +702,7 @@ func (b *builder) createRunDefers() {
 			// Call deferred function.
 			fnType, llvmFn := b.getFunction(fn)
 			forwardParams = b.prependIndirectResult(fn.Signature, false, forwardParams, "defer.result")
-			b.createInvokeWithSuspend(fnType, llvmFn, forwardParams, "", b.functionMaySuspend(fn))
+			b.createInvokeWithAnalysis(fnType, llvmFn, forwardParams, "", b.functionMayUnwind(fn), b.functionMaySuspend(fn))
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]
 
