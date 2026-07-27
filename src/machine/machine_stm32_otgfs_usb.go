@@ -25,8 +25,8 @@ const (
 
 // OTG FS register blocks.
 var (
-	otgDevice = (*usbDeviceRegs)(unsafe.Pointer(stm32.OTG_FS_DEVICE))
-	otgPower  = (*usbPowerRegs)(unsafe.Pointer(stm32.OTG_FS_PWRCLK))
+	otgDevice = stm32.OTG_FS_DEVICE
+	otgPower  = stm32.OTG_FS_PWRCLK
 )
 
 // usbDeviceRegs represents the USB device-mode control block at base+0x800.
@@ -143,22 +143,22 @@ const (
 
 // GINTSTS / GINTMSK bits (values taken from stm32f405 SVD constants).
 const (
-	gintRXFLVL  = uint32(stm32.USB_OTG_FS_GINTSTS_RXFLVL)  // 0x10
-	gintUSBRST  = uint32(stm32.USB_OTG_FS_GINTSTS_USBRST)  // 0x1000
-	gintENUMDNE = uint32(stm32.USB_OTG_FS_GINTSTS_ENUMDNE) // 0x2000
-	gintUSBSUSP = uint32(stm32.USB_OTG_FS_GINTSTS_USBSUSP) // 0x800
-	gintWKUPINT = uint32(stm32.USB_OTG_FS_GINTSTS_WKUPINT) // 0x80000000
-	gintIEPINT  = uint32(stm32.USB_OTG_FS_GINTSTS_IEPINT)  // 0x40000
-	gintOEPINT  = uint32(stm32.USB_OTG_FS_GINTSTS_OEPINT)  // 0x80000
+	gintRXFLVL  = uint32(stm32.USB_OTG_FS_GLOBAL_GINTSTS_RXFLVL)  // 0x10
+	gintUSBRST  = uint32(stm32.USB_OTG_FS_GLOBAL_GINTSTS_USBRST)  // 0x1000
+	gintENUMDNE = uint32(stm32.USB_OTG_FS_GLOBAL_GINTSTS_ENUMDNE) // 0x2000
+	gintUSBSUSP = uint32(stm32.USB_OTG_FS_GLOBAL_GINTSTS_USBSUSP) // 0x800
+	gintWKUPINT = uint32(stm32.USB_OTG_FS_GLOBAL_GINTSTS_WKUPINT) // 0x80000000
+	gintIEPINT  = uint32(stm32.USB_OTG_FS_GLOBAL_GINTSTS_IEPINT)  // 0x40000
+	gintOEPINT  = uint32(stm32.USB_OTG_FS_GLOBAL_GINTSTS_OEPINT)  // 0x80000
 )
 
 // GRSTCTL bits.
 const (
-	grstCSRST      = uint32(stm32.USB_OTG_FS_GRSTCTL_CSRST)   // core soft reset
-	grstRXFFLSH    = uint32(stm32.USB_OTG_FS_GRSTCTL_RXFFLSH) // RX FIFO flush
-	grstTXFFLSH    = uint32(stm32.USB_OTG_FS_GRSTCTL_TXFFLSH) // TX FIFO flush
-	grstTXFNUM_Pos = uint32(stm32.USB_OTG_FS_GRSTCTL_TXFNUM_Pos)
-	grstAHBIDL     = uint32(stm32.USB_OTG_FS_GRSTCTL_AHBIDL) // AHB master idle
+	grstCSRST      = uint32(stm32.USB_OTG_FS_GLOBAL_GRSTCTL_CSRST)   // core soft reset
+	grstRXFFLSH    = uint32(stm32.USB_OTG_FS_GLOBAL_GRSTCTL_RXFFLSH) // RX FIFO flush
+	grstTXFFLSH    = uint32(stm32.USB_OTG_FS_GLOBAL_GRSTCTL_TXFFLSH) // TX FIFO flush
+	grstTXFNUM_Pos = uint32(stm32.USB_OTG_FS_GLOBAL_GRSTCTL_TXFNUM_Pos)
+	grstAHBIDL     = uint32(stm32.USB_OTG_FS_GLOBAL_GRSTCTL_AHBIDL) // AHB master idle
 )
 
 // FIFO size layout in 32-bit words (total budget = 320 words).
@@ -236,11 +236,11 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	// ---- 4. Force device mode, set turnaround time --------------------------
 
 	gusbcfg := stm32.OTG_FS_GLOBAL.GUSBCFG.Get()
-	gusbcfg &^= stm32.USB_OTG_FS_GUSBCFG_FHMOD |
-		stm32.USB_OTG_FS_GUSBCFG_FDMOD |
-		stm32.USB_OTG_FS_GUSBCFG_TRDT_Msk
-	gusbcfg |= stm32.USB_OTG_FS_GUSBCFG_FDMOD |
-		(9 << stm32.USB_OTG_FS_GUSBCFG_TRDT_Pos) // turnaround time = 9 for 216MHz HCLK
+	gusbcfg &^= stm32.USB_OTG_FS_GLOBAL_GUSBCFG_FHMOD |
+		stm32.USB_OTG_FS_GLOBAL_GUSBCFG_FDMOD |
+		stm32.USB_OTG_FS_GLOBAL_GUSBCFG_TRDT_Msk
+	gusbcfg |= stm32.USB_OTG_FS_GLOBAL_GUSBCFG_FDMOD |
+		(9 << stm32.USB_OTG_FS_GLOBAL_GUSBCFG_TRDT_Pos) // turnaround time = 9 for 216MHz HCLK
 	stm32.OTG_FS_GLOBAL.GUSBCFG.Set(gusbcfg)
 
 	// ---- 5. PHY / VBUS configuration (platform-specific) --------------------
@@ -301,7 +301,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	otgDevice.DOEPMSK.Set(depintXFRC | depintSTUP)
 
 	// Enable global interrupt
-	stm32.OTG_FS_GLOBAL.GAHBCFG.SetBits(stm32.USB_OTG_FS_GAHBCFG_GINT)
+	stm32.OTG_FS_GLOBAL.GAHBCFG.SetBits(stm32.USB_OTG_FS_GLOBAL_GAHBCFG_GINT)
 
 	// ---- 11. Register and enable NVIC interrupt -----------------------------
 
@@ -405,10 +405,10 @@ func handleRxFIFO() {
 	for stm32.OTG_FS_GLOBAL.GINTSTS.HasBits(gintRXFLVL) {
 		status := stm32.OTG_FS_GLOBAL.GRXSTSP_Device.Get()
 
-		ep := status & stm32.USB_OTG_FS_GRXSTSP_Device_EPNUM_Msk
-		bcnt := (status & stm32.USB_OTG_FS_GRXSTSP_Device_BCNT_Msk) >>
-			stm32.USB_OTG_FS_GRXSTSP_Device_BCNT_Pos
-		pktsts := (status >> stm32.USB_OTG_FS_GRXSTSP_Device_PKTSTS_Pos) & 0xF
+		ep := status & stm32.USB_OTG_FS_GLOBAL_GRXSTSP_Device_EPNUM_Msk
+		bcnt := (status & stm32.USB_OTG_FS_GLOBAL_GRXSTSP_Device_BCNT_Msk) >>
+			stm32.USB_OTG_FS_GLOBAL_GRXSTSP_Device_BCNT_Pos
+		pktsts := (status >> stm32.USB_OTG_FS_GLOBAL_GRXSTSP_Device_PKTSTS_Pos) & 0xF
 
 		pep := ep // GRXSTSP.EPNUM is already a physical endpoint (0–3)
 
