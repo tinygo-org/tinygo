@@ -77,7 +77,7 @@ type SVDField struct {
 }
 
 type SVDCluster struct {
-	Dim           *int           `xml:"dim"`
+	Dim           *string        `xml:"dim"`
 	DimIncrement  string         `xml:"dimIncrement"`
 	DimIndex      *string        `xml:"dimIndex"`
 	Name          string         `xml:"name"`
@@ -231,13 +231,8 @@ func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64,
 		if err != nil {
 			panic(err)
 		}
-		subdim := *subClusterEl.Dim
-		subdimIncrement, err := strconv.ParseInt(subClusterEl.DimIncrement, 0, 32)
-		if err != nil {
-			panic(err)
-		}
-
-		if subdim > 1 {
+		subDA := decodeDimArray(subClusterEl.Dim, subClusterEl.DimIndex, subClusterEl.DimIncrement, "subCluster", subclusterName)
+		if subDA != nil && subDA.dim > 1 {
 			subcpRegisters := []*PeripheralField{}
 			for _, regEl := range subClusterEl.Registers {
 				subcpRegisters = append(subcpRegisters, parseRegister(p.GroupName, regEl, p.BaseAddress+clusterOffset+subclusterOffset, subclusterPrefix)...)
@@ -248,8 +243,8 @@ func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64,
 				Address:     p.BaseAddress + clusterOffset + subclusterOffset,
 				Description: subClusterEl.Description,
 				Registers:   subcpRegisters,
-				Array:       subdim,
-				ElementSize: int(subdimIncrement),
+				Array:       subDA.dim,
+				ElementSize: int(subDA.incr),
 				ShortName:   clusterPrefix + subclusterName,
 			})
 		} else {
@@ -290,7 +285,8 @@ func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[st
 			panic(err)
 		}
 		var dim, dimIncrement int
-		if cluster.Dim == nil {
+		da := decodeDimArray(cluster.Dim, cluster.DimIndex, cluster.DimIncrement, "cluster", clusterName)
+		if da == nil {
 			// Nordic SVD have sub-clusters with another sub-clusters.
 			if clusterOffset == 0 || len(cluster.Clusters) > 0 {
 				peripheralsList = append(peripheralsList, processSubCluster(p, cluster, clusterOffset, clusterName, peripheralDict)...)
@@ -299,15 +295,11 @@ func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[st
 			dim = -1
 			dimIncrement = -1
 		} else {
-			dim = *cluster.Dim
+			dim = da.dim
 			if dim == 1 {
 				dimIncrement = -1
 			} else {
-				inc, err := strconv.ParseUint(cluster.DimIncrement, 0, 32)
-				if err != nil {
-					panic(err)
-				}
-				dimIncrement = int(inc)
+				dimIncrement = int(da.incr)
 			}
 		}
 		clusterRegisters := []*PeripheralField{}
