@@ -207,7 +207,7 @@ func (ch *channel) trySend(value unsafe.Pointer) (sent bool, wake *task.Task) {
 		// Note: we cannot currently recover from this panic.
 		// There's some state in the select statement especially that would be
 		// corrupted if we allowed recovering from this panic.
-		runtimePanic("send on closed channel")
+		runtimePanic(errSendOnClosedChannel)
 	}
 
 	// There is no value in the buffer and we have a receiver available. Copy
@@ -266,7 +266,7 @@ func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
 	// closed while sending).
 	if t.DataUint32() == chanOperationClosed {
 		// Oops, this channel was closed while sending!
-		runtimePanic("send on closed channel")
+		runtimePanic(errSendOnClosedChannel)
 	}
 }
 
@@ -349,7 +349,7 @@ func chanRecv(ch *channel, value unsafe.Pointer, op *channelOp) bool {
 func chanClose(ch *channel) {
 	if ch == nil {
 		// Not allowed by the language spec.
-		runtimePanic("close of nil channel")
+		runtimePanic(errCloseNilChannel)
 	}
 
 	mask := interrupt.Disable()
@@ -359,7 +359,7 @@ func chanClose(ch *channel) {
 		// Not allowed by the language spec.
 		ch.lock.Unlock()
 		interrupt.Restore(mask)
-		runtimePanic("close of closed channel")
+		runtimePanic(errCloseClosedChannel)
 	}
 
 	// Collect waiters and wake them after unlocking.

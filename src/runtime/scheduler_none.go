@@ -60,15 +60,15 @@ func NumCPU() int {
 }
 
 func addTimer(tim *timerNode) {
-	runtimePanic("timers not supported without a scheduler")
+	runtimePanic(errTimersUnsupported)
 }
 
 func reAddTimer(tn *timerNode) {
-	runtimePanic("timers not supported without a scheduler")
+	runtimePanic(errTimersUnsupported)
 }
 
 func removeTimer(tim *timer) *timerNode {
-	runtimePanic("timers not supported without a scheduler")
+	runtimePanic(errTimersUnsupported)
 	return nil
 }
 

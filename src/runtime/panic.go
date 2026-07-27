@@ -84,11 +84,11 @@ func panicOrGoexit(message interface{}, panicking panicState) {
 	abort()
 }
 
-// Cause a runtime panic, which is (currently) always a string.
-func runtimePanic(msg string) {
-	// As long as this function is inined, llvm.returnaddress(0) will return
+// Cause a recoverable runtime panic.
+func runtimePanic(err Error) {
+	// As long as this function is inlined, llvm.returnaddress(0) will return
 	// something sensible.
-	runtimePanicAt(returnAddress(0), msg)
+	runtimePanicAt(returnAddress(0), err)
 }
 
 // runtimeFatal terminates for runtime failures that cannot safely be
@@ -103,7 +103,7 @@ func runtimeFatal(msg string) {
 	abort()
 }
 
-func runtimePanicAt(addr unsafe.Pointer, msg string) {
+func runtimePanicAt(addr unsafe.Pointer, err Error) {
 	if panicStrategy() == tinygo.PanicStrategyTrap {
 		trap()
 	}
@@ -112,7 +112,7 @@ func runtimePanicAt(addr unsafe.Pointer, msg string) {
 		if frame != nil {
 			// Use the normal panic mechanism so that this runtime error
 			// can be recovered with recover().
-			frame.PanicValue = plainError(msg)
+			frame.PanicValue = err
 			frame.Panicking = panicTrue | (frame.Panicking & panicGoexit)
 			tinygo_longjmp(frame)
 			// unreachable
@@ -128,9 +128,13 @@ func runtimePanicAt(addr unsafe.Pointer, msg string) {
 	} else {
 		printstring("panic: runtime error: ")
 	}
-	printstring(msg)
+	printstring(err.Error())
 	printnl()
 	abort()
+}
+
+func runtimePanicSchedulerDisabled() {
+	runtimePanicAt(returnAddress(0), errSchedulerDisabled)
 }
 
 // Called at the start of a function that includes a deferred call.
@@ -220,54 +224,54 @@ func _recover(useParentFrame bool) interface{} {
 
 // Panic when trying to dereference a nil pointer.
 func nilPanic() {
-	runtimePanicAt(returnAddress(0), "nil pointer dereference")
+	runtimePanicAt(returnAddress(0), errNilPointer)
 }
 
 // Panic when trying to add an entry to a nil map
 func nilMapPanic() {
-	runtimePanicAt(returnAddress(0), "assignment to entry in nil map")
+	runtimePanicAt(returnAddress(0), errNilMap)
 }
 
 // Panic when trying to access an array or slice out of bounds.
 func lookupPanic() {
-	runtimePanicAt(returnAddress(0), "index out of range")
+	runtimePanicAt(returnAddress(0), errIndexOutOfRange)
 }
 
 // Panic when trying to slice a slice out of bounds.
 func slicePanic() {
-	runtimePanicAt(returnAddress(0), "slice out of range")
+	runtimePanicAt(returnAddress(0), errSliceOutOfRange)
 }
 
 // Panic when trying to convert a slice to an array pointer (Go 1.17+) and the
 // slice is shorter than the array.
 func sliceToArrayPointerPanic() {
-	runtimePanicAt(returnAddress(0), "slice smaller than array")
+	runtimePanicAt(returnAddress(0), errSliceToArray)
 }
 
 // Panic when calling unsafe.Slice() (Go 1.17+) or unsafe.String() (Go 1.20+)
 // with a len that's too large (which includes if the ptr is nil and len is
 // nonzero).
 func unsafeSlicePanic() {
-	runtimePanicAt(returnAddress(0), "unsafe.Slice/String: len out of range")
+	runtimePanicAt(returnAddress(0), errUnsafeSliceLength)
 }
 
 // Panic when trying to create a new channel that is too big.
 func chanMakePanic() {
-	runtimePanicAt(returnAddress(0), "new channel is too big")
+	runtimePanicAt(returnAddress(0), errChannelTooBig)
 }
 
 // Panic when a shift value is negative.
 func negativeShiftPanic() {
-	runtimePanicAt(returnAddress(0), "negative shift")
+	runtimePanicAt(returnAddress(0), errNegativeShift)
 }
 
 // Panic when there is a divide by zero.
 func divideByZeroPanic() {
-	runtimePanicAt(returnAddress(0), "divide by zero")
+	runtimePanicAt(returnAddress(0), errDivideByZero)
 }
 
 func blockingPanic() {
-	runtimePanicAt(returnAddress(0), "trying to do blocking operation in exported function")
+	runtimePanicAt(returnAddress(0), errBlockingExported)
 }
 
 //go:linkname fips_fatal crypto/internal/fips140.fatal
