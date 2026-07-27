@@ -140,6 +140,23 @@ func TestBuild(t *testing.T) {
 			runTestWithConfig("print.go", t, opts, nil, nil)
 		})
 
+		t.Run("gc=none-runtime-panic", func(t *testing.T) {
+			t.Parallel()
+			opts := optionsFromTarget("cortex-m-qemu", sema)
+			opts.GC = "none"
+			opts.Scheduler = "none"
+			config, err := builder.NewConfig(&opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = Build("testdata/trivialpanic.go", t.TempDir()+"/trivialpanic", config)
+			if err != nil {
+				w := &bytes.Buffer{}
+				diagnostics.CreateDiagnostics(err).WriteTo(w, "")
+				t.Fatal(w.String())
+			}
+		})
+
 		t.Run("ldflags", func(t *testing.T) {
 			t.Parallel()
 			opts := optionsFromTarget("", sema)

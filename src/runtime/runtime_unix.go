@@ -151,9 +151,9 @@ func tinygo_sigpanic() {
 	sig := tinygo_caught_signal
 	switch sig {
 	case sig_SIGSEGV, sig_SIGBUS:
-		runtimePanic("nil pointer dereference")
+		runtimePanic(errNilPointer)
 	case sig_SIGFPE:
-		runtimePanic("divide by zero")
+		runtimePanic(errDivideByZero)
 	default:
 		runtimeFatal("signal")
 	}
@@ -382,7 +382,7 @@ func signal_enable(s uint32) {
 	if s >= 32 {
 		// TODO: to support higher signal numbers, we need to turn
 		// receivedSignals into a uint32 array.
-		runtimePanicAt(returnAddress(0), "unsupported signal number")
+		runtimePanicAt(returnAddress(0), errUnsupportedSignal)
 	}
 
 	// This is intentonally a non-atomic store. This is safe, since hasSignals
@@ -399,7 +399,7 @@ func signal_ignore(s uint32) {
 	if s >= 32 {
 		// TODO: to support higher signal numbers, we need to turn
 		// receivedSignals into a uint32 array.
-		runtimePanicAt(returnAddress(0), "unsupported signal number")
+		runtimePanicAt(returnAddress(0), errUnsupportedSignal)
 	}
 	tinygo_signal_ignore(s)
 }
@@ -409,7 +409,7 @@ func signal_disable(s uint32) {
 	if s >= 32 {
 		// TODO: to support higher signal numbers, we need to turn
 		// receivedSignals into a uint32 array.
-		runtimePanicAt(returnAddress(0), "unsupported signal number")
+		runtimePanicAt(returnAddress(0), errUnsupportedSignal)
 	}
 	tinygo_signal_disable(s)
 }

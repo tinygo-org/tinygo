@@ -67,9 +67,9 @@ var initializeCalled bool
 func wasmExportCheckRun() {
 	switch {
 	case !initializeCalled:
-		runtimePanic("//go:wasmexport function called before runtime initialization")
+		runtimePanic(errWasmBeforeInit)
 	case mainExited:
-		runtimePanic("//go:wasmexport function called after main.main returned")
+		runtimePanic(errWasmAfterMain)
 	}
 }
 
@@ -82,7 +82,7 @@ func wasmExportCheckRun() {
 func wasmExportRun(done *bool) {
 	scheduler(true)
 	if !*done {
-		runtimePanic("//go:wasmexport function did not finish")
+		runtimePanic(errWasmDidNotFinish)
 	}
 }
 

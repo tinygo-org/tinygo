@@ -7,11 +7,11 @@ import "unsafe"
 // There is only one goroutine so the task struct can be a global.
 var mainTask Task
 
-//go:linkname runtimePanic runtime.runtimePanic
-func runtimePanic(str string)
+//go:linkname runtimePanicSchedulerDisabled runtime.runtimePanicSchedulerDisabled
+func runtimePanicSchedulerDisabled()
 
 func Pause() {
-	runtimePanic("scheduler is disabled")
+	runtimePanicSchedulerDisabled()
 }
 
 func Current() *Task {
@@ -22,13 +22,13 @@ func Current() *Task {
 //go:noinline
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// The compiler will error if this is reachable.
-	runtimePanic("scheduler is disabled")
+	runtimePanicSchedulerDisabled()
 }
 
 type state struct{}
 
 func (t *Task) Resume() {
-	runtimePanic("scheduler is disabled")
+	runtimePanicSchedulerDisabled()
 }
 
 // OnSystemStack returns whether the caller is running on the system stack.
@@ -39,7 +39,7 @@ func OnSystemStack() bool {
 
 func SystemStack() uintptr {
 	// System stack is the current stack, so this shouldn't be called.
-	runtimePanic("scheduler is disabled")
+	runtimePanicSchedulerDisabled()
 	return 0 // unreachable
 }
 
