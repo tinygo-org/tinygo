@@ -90,18 +90,19 @@ type interfaceInfo struct {
 // pass has been implemented as an object type because of its complexity, but
 // should be seen as a regular function call (see LowerInterfaces).
 type lowerInterfacesPass struct {
-	mod         llvm.Module
-	config      *compileopts.Config
-	builder     llvm.Builder
-	dibuilder   *llvm.DIBuilder
-	difiles     map[string]llvm.Metadata
-	ctx         llvm.Context
-	uintptrType llvm.Type
-	targetData  llvm.TargetData
-	ptrType     llvm.Type
-	types       map[string]*typeInfo
-	signatures  map[string]*signatureInfo
-	interfaces  map[string]*interfaceInfo
+	mod             llvm.Module
+	config          *compileopts.Config
+	builder         llvm.Builder
+	dibuilder       *llvm.DIBuilder
+	difiles         map[string]llvm.Metadata
+	ctx             llvm.Context
+	uintptrType     llvm.Type
+	targetData      llvm.TargetData
+	ptrType         llvm.Type
+	types           map[string]*typeInfo
+	signatures      map[string]*signatureInfo
+	interfaces      map[string]*interfaceInfo
+	keepMethodNames bool // true when reflection methods can inspect method names
 }
 
 // LowerInterfaces lowers all intermediate interface calls and globals that are
@@ -342,9 +343,50 @@ func (p *lowerInterfacesPass) run() error {
 		stripMethodSets = true
 	}
 
-	// TODO: Restore method-set pruning once reflective method calls can be
-	// distinguished from calls made inside the reflect implementation.
-	// For now, preserve complete method sets whenever reflection needs them.
+	keepAllMethods := p.usesReflectMethods()
+	if keepAllMethods {
+		stripMethodSets = false // Method sets are needed.
+	}
+
+	p.keepMethodNames = keepAllMethods
+
+	// Collect all method signatures that appear in any interface type
+	// descriptor. When reflect is imported and method sets are kept,
+	// concrete type method sets are pruned: individual methods not in any
+	// interface are removed, and types that can't fully satisfy at least
+	// one interface have their method sets emptied entirely.
+	//
+	// When keepAllMethods is true, pruning is disabled and all methods are
+	// kept.
+	//
+	// When method sets are stripped entirely (reflect not imported),
+	// methodFilter is nil and filterMethodSet replaces with empty.
+	var methodFilter map[string]struct{}
+	var ifaceMethodSets []map[string]struct{}
+	if !stripMethodSets && !keepAllMethods {
+		methodFilter = make(map[string]struct{})
+		for _, name := range typeNames {
+			if !strings.HasPrefix(name, "interface:") {
+				continue
+			}
+			t := p.types[name]
+			initializer := t.typecode.Initializer()
+			ifaceSet := make(map[string]struct{})
+			for i := 0; i < initializer.Type().StructElementTypesCount(); i++ {
+				field := p.builder.CreateExtractValue(initializer, i, "")
+				for _, sig := range p.extractMethodSigs(field) {
+					methodFilter[sig] = struct{}{}
+					ifaceSet[sig] = struct{}{}
+				}
+			}
+			if len(ifaceSet) > 0 {
+				ifaceMethodSets = append(ifaceMethodSets, ifaceSet)
+			}
+		}
+	}
+
+	// Remove all method sets, which are now unnecessary and inhibit later
+	// optimizations if they are left in place.
 	zero := llvm.ConstInt(p.ctx.Int32Type(), 0, false)
 	for _, name := range typeNames {
 		t := p.types[name]
@@ -370,8 +412,8 @@ func (p *lowerInterfacesPass) run() error {
 			numMethodFieldIdx := -1 // index into newInitializerFields
 			for i := 1; i < numFields; i++ {
 				field := p.builder.CreateExtractValue(initializer, i, "")
-				if stripMethodSets {
-					field = p.filterMethodSet(field, nil, nil)
+				if !keepAllMethods {
+					field = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
 				}
 				// Track where the numMethod field lands in the new slice.
 				if i == 2 && numMethodsIsI16 {
@@ -420,10 +462,43 @@ func (p *lowerInterfacesPass) run() error {
 			t.typecode.EraseFromParentAsGlobal()
 			newGlobal.SetName(typecodeName)
 			t.typecode = newGlobal
+		} else if !keepAllMethods {
+			// Types without an external method set (e.g., interface types)
+			// may still have inline method sets with name pointers that
+			// should be nulled out when reflection cannot inspect methods.
+			initializer := t.typecode.Initializer()
+			if initializer.Type().TypeKind() != llvm.StructTypeKind {
+				continue
+			}
+			numFields := initializer.Type().StructElementTypesCount()
+			changed := false
+			var fields []llvm.Value
+			for i := 0; i < numFields; i++ {
+				field := p.builder.CreateExtractValue(initializer, i, "")
+				filtered := p.filterMethodSet(field, methodFilter, ifaceMethodSets)
+				if filtered.C != field.C {
+					changed = true
+				}
+				fields = append(fields, filtered)
+			}
+			if changed {
+				newInitializer := p.ctx.ConstStruct(fields, false)
+				t.typecode.SetInitializer(newInitializer)
+			}
 		}
 	}
 
 	return nil
+}
+
+func (p *lowerInterfacesPass) usesReflectMethods() bool {
+	for fn := p.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-method")
+		if !attr.IsNil() && (fn.Linkage() != llvm.InternalLinkage || hasUses(fn)) {
+			return true
+		}
+	}
+	return false
 }
 
 // addTypeMethods reads the method set of the given type info struct. It
@@ -757,14 +832,24 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 	}
 
 	// Prune: keep only method entries whose signature appears in keepSigs.
+	// When reflection cannot inspect methods, null out name pointers so LLVM
+	// can eliminate the name string globals.
 	var kept []llvm.Value
 	for _, e := range entries {
 		if _, ok := keepSigs[e.name]; ok {
-			kept = append(kept, e.pair)
+			if p.keepMethodNames {
+				kept = append(kept, e.pair)
+			} else {
+				sig := p.builder.CreateExtractValue(e.pair, 0, "")
+				kept = append(kept, p.ctx.ConstStruct([]llvm.Value{
+					sig,
+					llvm.ConstNull(p.ptrType),
+				}, false))
+			}
 		}
 	}
 
-	if len(kept) == numMethods {
+	if len(kept) == numMethods && p.keepMethodNames {
 		return field
 	}
 
