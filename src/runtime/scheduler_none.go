@@ -39,7 +39,7 @@ func sleep(duration int64) {
 
 func deadlock() {
 	// The only goroutine available is deadlocked.
-	runtimePanic("all goroutines are asleep - deadlock!")
+	runtimeFatal("all goroutines are asleep - deadlock!")
 }
 
 func goexit() {
@@ -75,14 +75,14 @@ func removeTimer(tim *timer) *timerNode {
 func schedulerRunQueue() *task.Queue {
 	// This function is not actually used, it is only called when hasScheduler
 	// is true.
-	runtimePanic("unreachable: no runqueue without a scheduler")
+	runtimeFatal("unreachable: no runqueue without a scheduler")
 	return nil
 }
 
 func scheduler(returnAtDeadlock bool) {
 	// The scheduler should never be run when using -scheduler=none. Meaning,
 	// this code should be unreachable.
-	runtimePanic("unreachable: scheduler must not be called with the 'none' scheduler")
+	runtimeFatal("unreachable: scheduler must not be called with the 'none' scheduler")
 }
 
 func lockAtomics() interrupt.State {

@@ -657,6 +657,8 @@ smoketest: testchdir
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pico2-ice           examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build             -o test.efi -target=uefi-amd64          examples/test
+	@$(MD5SUM) test.efi
 	# test simulated boards on play.tinygo.org
 ifneq ($(WASM), 0)
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o test.wasm -tags=arduino_uno          examples/blinky1
@@ -807,6 +809,8 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pico -gc=leaking    examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pico-w              examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nano-33-ble         examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nano-rp2040         examples/blinky1
@@ -845,7 +849,13 @@ endif
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pico2               examples/blinky1
 	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=pico2-w             examples/blinky1
+	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=tiny2350            examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=badger2350          examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=blinky2350          examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=pico-plus2          examples/blinky1
 	@$(MD5SUM) test.hex
@@ -887,6 +897,8 @@ ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o test.hex -target=nucleo-f103rb       examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-f722ze       examples/blinky1
+	@$(MD5SUM) test.hex
+	$(TINYGO) build -size short -o test.hex -target=nucleo-h753zi       examples/blinky1
 	@$(MD5SUM) test.hex
 	$(TINYGO) build -size short -o test.hex -target=nucleo-l031k6       examples/blinky1
 	@$(MD5SUM) test.hex

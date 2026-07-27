@@ -23,10 +23,10 @@ func PauseLocked() {
 	// valid. If it is not, a stack overflow has occurred.
 	current := Current()
 	if *current.state.canaryPtr != stackCanary {
-		runtimePanic("goroutine stack overflow")
+		runtimeFatal("goroutine stack overflow")
 	}
 	if interrupt.In() {
-		runtimePanic("blocked inside interrupt")
+		runtimeFatal("blocked inside interrupt")
 	}
 	if current.RunState == RunStateResuming {
 		// Another core already marked this goroutine as ready to resume.

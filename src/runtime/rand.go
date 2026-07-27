@@ -8,4 +8,4 @@ import _ "unsafe"
 func vgetrandom(p []byte, flags uint32) (ret int, supported bool) { return 0, false }
 
 //go:linkname fatal crypto/internal/sysrand.fatal
-func fatal(msg string) { runtimePanic(msg) }
+func fatal(msg string) { runtimeFatal(msg) }

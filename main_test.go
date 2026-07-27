@@ -280,6 +280,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 
 	for _, name := range tests {
+		if name == "goroutines.go" && (spec.Scheduler == "threads" || spec.Scheduler == "cores") {
+			// This test intentionally checks concurrent scheduling by comparing
+			// output order, so only run it with non-threaded schedulers.
+			continue
+		}
 		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
 			switch name {
 			case "timers.go":
@@ -988,15 +993,15 @@ func TestGoexitCrash(t *testing.T) {
 		name string
 		want string
 	}{
-		{"main", "all goroutines are asleep - deadlock!"},
-		{"deadlock", "all goroutines are asleep - deadlock!"},
-		{"exit", "all goroutines are asleep - deadlock!"},
-		{"main-other", "all goroutines are asleep - deadlock!"},
-		{"in-panic", "all goroutines are asleep - deadlock!"},
+		{"main", "fatal error: all goroutines are asleep - deadlock!"},
+		{"deadlock", "fatal error: all goroutines are asleep - deadlock!"},
+		{"exit", "fatal error: all goroutines are asleep - deadlock!"},
+		{"main-other", "fatal error: all goroutines are asleep - deadlock!"},
+		{"in-panic", "fatal error: all goroutines are asleep - deadlock!"},
 		{"panic", "panic: panic after Goexit"},
-		{"recovered-panic", "all goroutines are asleep - deadlock!"},
-		{"recover-before-panic", "all goroutines are asleep - deadlock!"},
-		{"recover-before-panic-loop", "all goroutines are asleep - deadlock!"},
+		{"recovered-panic", "fatal error: all goroutines are asleep - deadlock!"},
+		{"recover-before-panic", "fatal error: all goroutines are asleep - deadlock!"},
+		{"recover-before-panic-loop", "fatal error: all goroutines are asleep - deadlock!"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			output := &bytes.Buffer{}
@@ -1014,6 +1019,34 @@ func TestGoexitCrash(t *testing.T) {
 				t.Fatalf("output does not contain %q:\n%s", tc.want, output.String())
 			}
 		})
+	}
+}
+
+func TestRuntimeFatal(t *testing.T) {
+	t.Parallel()
+
+	options := optionsFromTarget("", sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output := &bytes.Buffer{}
+	_, err = buildAndRun("testdata/runtimefatal.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+		data, err := cmd.CombinedOutput()
+		output.Write(data)
+		return err
+	})
+	if err == nil {
+		t.Fatal("program unexpectedly exited successfully")
+	}
+	if want := "fatal error: sync: unlock of unlocked Mutex"; !strings.Contains(output.String(), want) {
+		t.Fatalf("output does not contain %q:\n%s", want, output.String())
+	}
+	if strings.Contains(output.String(), "recovered:") {
+		t.Fatalf("fatal runtime error was recovered:\n%s", output.String())
 	}
 }
 

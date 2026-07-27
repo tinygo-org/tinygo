@@ -105,6 +105,62 @@ func __atomic_add_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
 	return new
 }
 
+//go:inline
+func doAtomicAnd16(ptr *uint16, value uint16) (old, new uint16) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old & value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_and_2
+func __atomic_fetch_and_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
+	old, _ := doAtomicAnd16(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_and_2
+func __sync_fetch_and_and_2(ptr *uint16, value uint16) uint16 {
+	old, _ := doAtomicAnd16(ptr, value)
+	return old
+}
+
+//export __atomic_and_fetch_2
+func __atomic_and_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
+	_, new := doAtomicAnd16(ptr, value)
+	return new
+}
+
+//go:inline
+func doAtomicOr16(ptr *uint16, value uint16) (old, new uint16) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old | value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_or_2
+func __atomic_fetch_or_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
+	old, _ := doAtomicOr16(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_or_2
+func __sync_fetch_and_or_2(ptr *uint16, value uint16) uint16 {
+	old, _ := doAtomicOr16(ptr, value)
+	return old
+}
+
+//export __atomic_or_fetch_2
+func __atomic_or_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
+	_, new := doAtomicOr16(ptr, value)
+	return new
+}
+
 // 32-bit atomics.
 
 //export __atomic_load_4
@@ -194,6 +250,62 @@ func __atomic_add_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
 	return new
 }
 
+//go:inline
+func doAtomicAnd32(ptr *uint32, value uint32) (old, new uint32) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old & value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_and_4
+func __atomic_fetch_and_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
+	old, _ := doAtomicAnd32(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_and_4
+func __sync_fetch_and_and_4(ptr *uint32, value uint32) uint32 {
+	old, _ := doAtomicAnd32(ptr, value)
+	return old
+}
+
+//export __atomic_and_fetch_4
+func __atomic_and_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
+	_, new := doAtomicAnd32(ptr, value)
+	return new
+}
+
+//go:inline
+func doAtomicOr32(ptr *uint32, value uint32) (old, new uint32) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old | value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_or_4
+func __atomic_fetch_or_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
+	old, _ := doAtomicOr32(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_or_4
+func __sync_fetch_and_or_4(ptr *uint32, value uint32) uint32 {
+	old, _ := doAtomicOr32(ptr, value)
+	return old
+}
+
+//export __atomic_or_fetch_4
+func __atomic_or_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
+	_, new := doAtomicOr32(ptr, value)
+	return new
+}
+
 // 64-bit atomics.
 
 //export __atomic_load_8
@@ -280,5 +392,61 @@ func __sync_fetch_and_add_8(ptr *uint64, value uint64) uint64 {
 //export __atomic_add_fetch_8
 func __atomic_add_fetch_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
 	_, new := doAtomicAdd64(ptr, value)
+	return new
+}
+
+//go:inline
+func doAtomicAnd64(ptr *uint64, value uint64) (old, new uint64) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old & value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_and_8
+func __atomic_fetch_and_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
+	old, _ := doAtomicAnd64(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_and_8
+func __sync_fetch_and_and_8(ptr *uint64, value uint64) uint64 {
+	old, _ := doAtomicAnd64(ptr, value)
+	return old
+}
+
+//export __atomic_and_fetch_8
+func __atomic_and_fetch_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
+	_, new := doAtomicAnd64(ptr, value)
+	return new
+}
+
+//go:inline
+func doAtomicOr64(ptr *uint64, value uint64) (old, new uint64) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old | value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_or_8
+func __atomic_fetch_or_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
+	old, _ := doAtomicOr64(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_or_8
+func __sync_fetch_and_or_8(ptr *uint64, value uint64) uint64 {
+	old, _ := doAtomicOr64(ptr, value)
+	return old
+}
+
+//export __atomic_or_fetch_8
+func __atomic_or_fetch_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
+	_, new := doAtomicOr64(ptr, value)
 	return new
 }

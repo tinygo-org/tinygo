@@ -11,9 +11,6 @@ import (
 // otherwise Go wouldn't allow the cast to a smaller integer size.
 const stackCanary = uintptr(uint64(0x670c1333b83bf575) & uint64(^uintptr(0)))
 
-//go:linkname runtimePanic runtime.runtimePanic
-func runtimePanic(str string)
-
 // state is a structure which holds a reference to the state of the task.
 // When the task is suspended, the stack pointers are saved here.
 type state struct {
@@ -95,7 +92,7 @@ func Current() *Task {
 // This function may only be called when running on a goroutine stack, not when running on the system stack.
 func Pause() {
 	if *currentTask.state.canaryPtr != stackCanary {
-		runtimePanic("stack overflow")
+		runtimeFatal("stack overflow")
 	}
 
 	currentTask.state.unwind()
@@ -124,7 +121,7 @@ func (t *Task) Resume() {
 	currentTask = prevTask
 	t.gcData.swap()
 	if uintptr(t.state.asyncifysp) > uintptr(t.state.csp) {
-		runtimePanic("stack overflow")
+		runtimeFatal("stack overflow")
 	}
 }
 

@@ -28,5 +28,5 @@ func waitForEvents() {
 		pollIO(-1)
 		return
 	}
-	runtimePanic("deadlocked: no event source")
+	runtimeFatal("deadlocked: no event source")
 }

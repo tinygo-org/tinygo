@@ -1,4 +1,4 @@
-//go:build stm32l5 || stm32f7 || stm32l4 || stm32l0 || stm32wlx || stm32g0 || stm32u0 || stm32u5
+//go:build stm32l5 || stm32f7 || stm32l4 || stm32l0 || stm32wlx || stm32g0 || stm32u0 || stm32u5 || stm32h7
 
 package machine
 

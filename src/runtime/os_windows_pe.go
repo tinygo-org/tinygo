@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows || uefi
 
 package runtime
 
@@ -48,7 +48,7 @@ func findGlobalsForPE(found func(start, end uintptr)) {
 
 	pe := (*peHeader)(unsafe.Add(unsafe.Pointer(module), module.peHeader))
 	if gcAsserts && pe.magic != 0x00004550 { // 0x4550 is "PE"
-		runtimePanic("cannot find PE header")
+		runtimeFatal("cannot find PE header")
 	}
 
 	section := (*peSection)(unsafe.Pointer(uintptr(unsafe.Pointer(pe)) + uintptr(pe.sizeOfOptionalHeader) + unsafe.Sizeof(peHeader{})))

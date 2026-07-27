@@ -49,7 +49,7 @@ func dynamicLoader(base uintptr, dyn *dyn64) {
 	}
 
 	if rela == nil {
-		runtimePanic("bad reloc")
+		runtimeFatal("bad reloc")
 	}
 
 	if debugLoader {

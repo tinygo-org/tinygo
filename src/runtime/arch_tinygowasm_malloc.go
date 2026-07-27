@@ -34,7 +34,7 @@ func libc_free(ptr unsafe.Pointer) {
 	if _, ok := allocs[(*byte)(ptr)]; ok {
 		delete(allocs, (*byte)(ptr))
 	} else {
-		panic("free: invalid pointer")
+		runtimeFatal("free: invalid pointer")
 	}
 }
 
@@ -63,7 +63,7 @@ func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
 			copy(newBuf, oldBuf)
 			delete(allocs, (*byte)(oldPtr))
 		} else {
-			panic("realloc: invalid pointer")
+			runtimeFatal("realloc: invalid pointer")
 		}
 	}
 

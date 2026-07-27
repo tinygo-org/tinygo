@@ -6,8 +6,8 @@ import (
 
 type Mutex = task.Mutex
 
-//go:linkname runtimePanic runtime.runtimePanic
-func runtimePanic(msg string)
+//go:linkname runtimeFatal runtime.runtimeFatal
+func runtimeFatal(msg string)
 
 type RWMutex struct {
 	// Reader count, with the number of readers that currently have read-locked
@@ -124,7 +124,7 @@ func (rw *RWMutex) RUnlock() {
 
 	// Check whether RUnlock was called too often.
 	if readers == -1 || readers == (-rwMutexMaxReaders)-1 {
-		runtimePanic("sync: RUnlock of unlocked RWMutex")
+		runtimeFatal("sync: RUnlock of unlocked RWMutex")
 	}
 
 	if readers == -rwMutexMaxReaders {
