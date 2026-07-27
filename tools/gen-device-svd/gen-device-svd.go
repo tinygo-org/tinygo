@@ -282,7 +282,12 @@ func (cluster *SVDCluster) name() string {
 
 func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[string]*Peripheral) []*Peripheral {
 	var peripheralsList []*Peripheral
-	for _, cluster := range clusters {
+	skipNext := false
+	for i, cluster := range clusters {
+		if skipNext {
+			skipNext = false
+			continue
+		}
 		clusterName := cluster.name()
 		clusterPrefix := clusterName + "_"
 		clusterOffset, err := strconv.ParseUint(cluster.AddressOffset, 0, 32)
@@ -299,6 +304,33 @@ func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[st
 			}
 			dim = -1
 			dimIncrement = -1
+			if i+1 < len(clusters) {
+				// If the next cluster is an array and has a name matching
+				// the current cluster's name, like DIEP%s matches DIEP0,
+				// and if it is directly adjacent to the current cluster,
+				// merge the next cluster into the current one consistently.
+				// This avoids having types like ..DEVICE_DIEP0_Type and
+				// ..DEVICE_DIEP_Type at the same time, also
+				next := clusters[i+1]
+				nextClusterName := next.name()
+				if strings.HasPrefix(clusterName, nextClusterName) {
+					if nextDA := decodeDimArray(next.Dim, next.DimIndex, next.DimIncrement, "cluster", nextClusterName); nextDA != nil {
+						nextClusterOffset, err := strconv.ParseUint(next.AddressOffset, 0, 32)
+						if err != nil {
+							panic(err)
+						}
+						// Test if current and next clusters are adjacent.
+						if uint32(nextClusterOffset-clusterOffset) == nextDA.incr {
+							// merge
+							skipNext = true
+							dim = 1 + nextDA.dim
+							dimIncrement = int(nextDA.incr)
+							clusterName = nextClusterName
+							clusterPrefix = clusterName + "_"
+						}
+					}
+				}
+			}
 		} else {
 			dim = da.dim
 			if dim == 1 {
