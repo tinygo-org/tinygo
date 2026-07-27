@@ -272,13 +272,18 @@ func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64,
 	return peripheralsList
 }
 
+func (cluster *SVDCluster) name() string {
+	clusterName := strings.ReplaceAll(cluster.Name, "[%s]", "")
+	if cluster.DimIndex != nil {
+		clusterName = strings.ReplaceAll(clusterName, "%s", "")
+	}
+	return clusterName
+}
+
 func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[string]*Peripheral) []*Peripheral {
 	var peripheralsList []*Peripheral
 	for _, cluster := range clusters {
-		clusterName := strings.ReplaceAll(cluster.Name, "[%s]", "")
-		if cluster.DimIndex != nil {
-			clusterName = strings.ReplaceAll(clusterName, "%s", "")
-		}
+		clusterName := cluster.name()
 		clusterPrefix := clusterName + "_"
 		clusterOffset, err := strconv.ParseUint(cluster.AddressOffset, 0, 32)
 		if err != nil {
