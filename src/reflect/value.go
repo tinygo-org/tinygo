@@ -214,11 +214,11 @@ func (v Value) Equal(u Value) bool {
 }
 
 func (v Value) Method(i int) Value {
-	panic("unimplemented: (reflect.Value).Method()")
+	return Value{v.Value.Method(i)}
 }
 
 func (v Value) MethodByName(name string) Value {
-	panic("unimplemented: (reflect.Value).MethodByName()")
+	return Value{v.Value.MethodByName(name)}
 }
 
 func (v Value) Recv() (x Value, ok bool) {

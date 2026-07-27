@@ -530,4 +530,36 @@ blue gopher
 v.Interface() method
 kind: interface
 int 5
+
+type method sets
+struct NumMethod: 2
+struct Method: Len
+struct Method: String
+pointer NumMethod: 3
+pointer Method: Len
+pointer Method: PtrMethod
+pointer Method: String
+MethodByName(String): String true
+MethodByName(Len): Len true
+MethodByName(Nonexistent): false
+pointer MethodByName(PtrMethod): PtrMethod true
+struct MethodByName(PtrMethod): false
+embedded NumMethod: 2
+embedded Method: InnerMethod
+embedded Method: OuterMethod
+interface NumMethod: 2
+interface Method: Alpha
+interface Method: Beta
+Value.MethodByName(String).IsValid(): true
+Value.MethodByName(String).Kind(): func
+Value.MethodByName(Nonexistent).IsValid(): false
+Value.Method(0).IsValid(): true
+Value.Method(0).Kind(): func
+Value.Method(0).IsNil(): false
+ptrValue.MethodByName(PtrMethod).IsValid(): true
+ptrValue.MethodByName(PtrMethod).Kind(): func
+MethodByName(hidden): false
+Method(String).IsExported(): true
+int NumMethod: 0
+int MethodByName(Foo): false
 reflect map interface key ok
