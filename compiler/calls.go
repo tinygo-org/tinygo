@@ -397,6 +397,11 @@ func (b *builder) functionMayUnwind(fn *ssa.Function) bool {
 
 func instructionCallProperties(instruction ssa.Instruction) callProperties {
 	switch instruction := instruction.(type) {
+	case *ssa.Alloc, *ssa.Call, *ssa.ChangeInterface, *ssa.ChangeType,
+		*ssa.Convert, *ssa.DebugRef, *ssa.Defer, *ssa.Extract, *ssa.Field,
+		*ssa.Go, *ssa.If, *ssa.Jump, *ssa.MakeClosure, *ssa.MakeInterface,
+		*ssa.MakeMap, *ssa.Phi, *ssa.Range, *ssa.Return, *ssa.RunDefers:
+		return 0
 	case *ssa.Send:
 		return callMaySuspend | callMayUnwind
 	case *ssa.Next:
@@ -421,7 +426,9 @@ func instructionCallProperties(instruction ssa.Instruction) callProperties {
 		}
 		return properties
 	}
-	return 0
+	// New SSA instructions must be treated conservatively until their lowering
+	// is audited for suspension and unwind paths.
+	return callMaySuspend | callMayUnwind
 }
 
 func binOpMayUnwind(instruction *ssa.BinOp) bool {
