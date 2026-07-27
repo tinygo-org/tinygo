@@ -52,6 +52,7 @@ outer recovered: repanic value
 
 # recover from nil map and closed channel
   recovered: nil map
+  recovered runtime error: assignment to entry in nil map
   recovered: closed chan
   recovered: close nil chan
 

@@ -315,11 +315,11 @@ func tinygo_init_exception_handler()
 func tinygo_sigpanic_windows(exceptionCode int32) {
 	switch uint32(exceptionCode) {
 	case _EXCEPTION_ACCESS_VIOLATION, _EXCEPTION_IN_PAGE_ERROR:
-		runtimePanic("nil pointer dereference")
+		runtimePanic(errNilPointer)
 	case _EXCEPTION_INT_DIVIDE_BY_ZERO:
-		runtimePanic("divide by zero")
+		runtimePanic(errDivideByZero)
 	case _EXCEPTION_INT_OVERFLOW:
-		runtimePanic("integer overflow")
+		runtimePanic(errIntegerOverflow)
 	default:
 		runtimeFatal("unknown exception")
 	}

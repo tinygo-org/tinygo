@@ -77,7 +77,7 @@ func reflectValueEqual(x, y reflectlite.Value) bool {
 	case reflectlite.Interface:
 		return reflectValueEqual(x.Elem(), y.Elem())
 	default:
-		runtimePanic("comparing un-comparable type")
+		runtimePanic(errUncomparable)
 		return false // unreachable
 	}
 }
@@ -86,7 +86,7 @@ func reflectValueEqual(x, y reflectlite.Value) bool {
 // returns false.
 func interfaceTypeAssert(ok bool) {
 	if !ok {
-		runtimePanic("type assert failed")
+		runtimePanic(errTypeAssert)
 	}
 }
 
