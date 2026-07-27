@@ -49,7 +49,7 @@ func (b *builder) createRuntimeCallCommon(fnName string, args []llvm.Value, name
 	if isInvoke {
 		// chanSend is the only panic-capable runtime operation that can also
 		// suspend the task.
-		return b.createInvokeWithSuspend(fnType, llvmFn, args, name, fnName == "chanSend")
+		return b.createInvokeWithAnalysis(fnType, llvmFn, args, name, true, fnName == "chanSend")
 	}
 	return b.createCall(fnType, llvmFn, args, name)
 }
@@ -106,29 +106,33 @@ func (b *builder) expandFormalParams(args []llvm.Value) []llvm.Value {
 	return expanded
 }
 
-// createInvoke is like createCall but continues execution at the landing pad if
-// the call resulted in a panic.
-func (b *builder) createInvoke(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string) llvm.Value {
-	return b.createInvokeWithSuspend(fnType, fn, args, name, false)
+// createInvoke emits a Go call, adding unwind handling only when the static
+// call graph indicates the call can unwind.
+func (b *builder) createInvoke(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string, call *ssa.CallCommon) llvm.Value {
+	properties := b.callPropertiesFor(call)
+	return b.createInvokeWithAnalysis(fnType, fn, args, name, properties&callMayUnwind != 0, properties&callMaySuspend != 0)
 }
 
-func (b *builder) createInvokeWithSuspend(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string, maySuspend bool) llvm.Value {
+func (b *builder) createInvokeWithAnalysis(fnType llvm.Type, fn llvm.Value, args []llvm.Value, name string, mayUnwind, maySuspend bool) llvm.Value {
+	if !mayUnwind {
+		return b.createCall(fnType, fn, args, name)
+	}
 	if b.usesReturnUnwind() {
-		var call llvm.Value
+		var result llvm.Value
 		if b.usesAsyncifyUnwind() && b.hasDeferFrame() {
 			if maySuspend {
-				call = b.createAsyncifySuspendInvoke(fnType, fn, args, name)
+				result = b.createAsyncifySuspendInvoke(fnType, fn, args, name)
 			} else {
-				call = b.createAsyncifyNoSuspendInvoke(fnType, fn, args, name)
+				result = b.createAsyncifyNoSuspendInvoke(fnType, fn, args, name)
 			}
 		} else {
-			call = b.createCall(fnType, fn, args, name)
+			result = b.createCall(fnType, fn, args, name)
 		}
 		if b.needsPostCallUnwindCheck() {
 			b.createUnwindCheck(true)
 		}
 
-		return call
+		return result
 	}
 	if b.hasDeferFrame() {
 		b.createInvokeCheckpoint()
@@ -309,74 +313,146 @@ func (b *builder) emitAsyncifyCatchReturn(builder llvm.Builder, fnType llvm.Type
 	builder.CreateRet(phi)
 }
 
-type suspendState uint8
+type callProperties uint8
 
 const (
-	suspendUnknown suspendState = iota
-	suspendVisiting
-	suspendNo
-	suspendYes
+	callMaySuspend callProperties = 1 << iota
+	callMayUnwind
 )
 
-func (b *builder) functionMaySuspend(fn *ssa.Function) bool {
-	// Calls through unknown targets are conservatively treated as suspending.
-	// Cycles are also considered suspending so recursive call graphs cannot
-	// hide a path to task.Pause.
-	switch b.maySuspend[fn] {
-	case suspendVisiting:
-		return true
-	case suspendNo:
-		return false
-	case suspendYes:
-		return true
+type functionCallProperties struct {
+	properties callProperties
+	visiting   bool
+	complete   bool
+}
+
+func (b *builder) functionCallProperties(fn *ssa.Function) callProperties {
+	analysis := b.callProperties[fn]
+	if analysis.complete {
+		return analysis.properties
+	}
+	if analysis.visiting || len(fn.Blocks) == 0 {
+		return callMaySuspend | callMayUnwind
 	}
 
-	b.maySuspend[fn] = suspendVisiting
+	analysis.visiting = true
+	b.callProperties[fn] = analysis
+
+	var properties callProperties
 	if fn.Pkg != nil && fn.Pkg.Pkg.Path() == "internal/task" && fn.Name() == "Pause" {
-		b.maySuspend[fn] = suspendYes
-		return true
-	}
-	if len(fn.Blocks) == 0 {
-		b.maySuspend[fn] = suspendYes
-		return true
+		properties |= callMaySuspend
 	}
 	for _, block := range fn.Blocks {
 		if block == nil {
 			continue
 		}
 		for _, instruction := range block.Instrs {
-			switch instruction := instruction.(type) {
-			case *ssa.Send, *ssa.Select, *ssa.Next:
-				b.maySuspend[fn] = suspendYes
-				return true
-			case *ssa.UnOp:
-				if instruction.Op == token.ARROW {
-					b.maySuspend[fn] = suspendYes
-					return true
-				}
-			}
+			properties |= instructionCallProperties(instruction)
 			call, ok := instruction.(ssa.CallInstruction)
 			if !ok {
 				continue
 			}
 			common := call.Common()
-			if _, ok := common.Value.(*ssa.Builtin); ok {
+			if builtin, ok := common.Value.(*ssa.Builtin); ok {
+				switch builtin.Name() {
+				case "close", "delete", "panic":
+					properties |= callMayUnwind
+				}
 				continue
 			}
 			callee := common.StaticCallee()
-			if callee == nil || b.functionMaySuspend(callee) {
-				b.maySuspend[fn] = suspendYes
+			if callee == nil {
+				properties |= callMaySuspend | callMayUnwind
+			} else {
+				properties |= b.functionCallProperties(callee)
+			}
+			if properties == callMaySuspend|callMayUnwind {
+				break
+			}
+		}
+	}
+
+	b.callProperties[fn] = functionCallProperties{
+		properties: properties,
+		complete:   true,
+	}
+	return properties
+}
+
+func (b *builder) callPropertiesFor(call *ssa.CallCommon) callProperties {
+	callee := call.StaticCallee()
+	if callee == nil {
+		return callMaySuspend | callMayUnwind
+	}
+	return b.functionCallProperties(callee)
+}
+
+func (b *builder) functionMaySuspend(fn *ssa.Function) bool {
+	return b.functionCallProperties(fn)&callMaySuspend != 0
+}
+
+func (b *builder) functionMayUnwind(fn *ssa.Function) bool {
+	return b.functionCallProperties(fn)&callMayUnwind != 0
+}
+
+func instructionCallProperties(instruction ssa.Instruction) callProperties {
+	switch instruction := instruction.(type) {
+	case *ssa.Send:
+		return callMaySuspend | callMayUnwind
+	case *ssa.Next:
+		return callMaySuspend
+	case *ssa.Select:
+		return callMaySuspend | callMayUnwind
+	case *ssa.FieldAddr, *ssa.Index, *ssa.IndexAddr, *ssa.Lookup,
+		*ssa.MakeChan, *ssa.MakeSlice, *ssa.MapUpdate, *ssa.Panic,
+		*ssa.Slice, *ssa.SliceToArrayPointer, *ssa.Store, *ssa.TypeAssert:
+		return callMayUnwind
+	case *ssa.BinOp:
+		if binOpMayUnwind(instruction) {
+			return callMayUnwind
+		}
+	case *ssa.UnOp:
+		var properties callProperties
+		if instruction.Op == token.ARROW {
+			properties |= callMaySuspend
+		}
+		if instruction.Op == token.MUL {
+			properties |= callMayUnwind
+		}
+		return properties
+	}
+	return 0
+}
+
+func binOpMayUnwind(instruction *ssa.BinOp) bool {
+	switch instruction.Op {
+	case token.QUO, token.REM:
+		basic, ok := instruction.X.Type().Underlying().(*types.Basic)
+		return ok && basic.Info()&types.IsInteger != 0
+	case token.SHL, token.SHR:
+		basic, ok := instruction.Y.Type().Underlying().(*types.Basic)
+		return ok && basic.Info()&types.IsUnsigned == 0
+	case token.EQL, token.NEQ:
+		return typeMayPanicOnCompare(instruction.X.Type())
+	default:
+		return false
+	}
+}
+
+func typeMayPanicOnCompare(typ types.Type) bool {
+	switch typ := typ.Underlying().(type) {
+	case *types.Interface:
+		return true
+	case *types.Array:
+		return typeMayPanicOnCompare(typ.Elem())
+	case *types.Struct:
+		for i := 0; i < typ.NumFields(); i++ {
+			if typeMayPanicOnCompare(typ.Field(i).Type()) {
 				return true
 			}
 		}
 	}
-	b.maySuspend[fn] = suspendNo
 	return false
-}
-
-func (b *builder) callMaySuspend(call *ssa.CallCommon) bool {
-	callee := call.StaticCallee()
-	return callee == nil || b.functionMaySuspend(callee)
 }
 
 func (b *builder) inFunctionBody() bool {
