@@ -390,6 +390,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		if groupName == "" {
 			groupName = cleanName(periphEl.Name)
 		}
+		groupName = tweakPeriphGroup(periphEl, groupName)
 
 		for _, interrupt := range periphEl.Interrupts {
 			addInterrupt(interrupts, interrupt.Name, interrupt.Name, interrupt.Index, description)
