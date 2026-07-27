@@ -9,6 +9,17 @@ func deferSimple() {
 	external()
 }
 
+func noPanicCall() {
+	print(1)
+}
+
+func deferNoPanicCall() {
+	defer func() {
+		print(2)
+	}()
+	noPanicCall()
+}
+
 func deferMultiple() {
 	defer func() {
 		print(3)
