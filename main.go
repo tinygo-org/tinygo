@@ -1135,9 +1135,6 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 	opts := espflasher.DefaultOptions()
 	opts.Compress = true
 	opts.Logger = &espflasher.StdoutLogger{W: os.Stdout}
-	if options.BaudRate != 0 {
-		opts.FlashBaudRate = options.BaudRate
-	}
 
 	if resetMode == jtagReset {
 		opts.ResetMode = espflasher.ResetUSBJTAG
