@@ -18,6 +18,7 @@ func tweakDevice(d *Device, pkgName string) {
 	addUnnumberedPeriphAlias(d, "IWDG", "IWDG1")
 
 	addUnnumberedPeriphAlias(d, "WWDG", "WWDG1")
+	addUnnumberedIRQAlias(d, "TIM_CC", "TIM1_CC")
 
 	for _, p := range d.Peripherals {
 		switch p.GroupName {
@@ -63,6 +64,23 @@ func addUnnumberedPeriphAlias(d *Device, dest, src string) {
 			p.Alias = dest
 		}
 	}
+}
+
+func addUnnumberedIRQAlias(d *Device, dest, src string) {
+	var iSrc *Interrupt
+
+	for _, i := range d.Interrupts {
+		if i.Name == dest {
+			return
+		}
+		if i.Name == src {
+			iSrc = i
+		}
+	}
+	if iSrc == nil {
+		return
+	}
+	iSrc.Alias = dest
 }
 
 func stm32EnsureCCMROrder(registers []*PeripheralField) {
