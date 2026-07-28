@@ -39,6 +39,9 @@ const (
 
 	// for USB (DP/DM lines)
 	PinModeUSB PinMode = 13
+
+	// for Ethernet
+	PinModeETH PinMode = 14
 )
 
 // Define several bitfields that have different names across chip families but
@@ -158,6 +161,12 @@ func (p Pin) ConfigureAltFunc(config PinConfig, altFunc uint8) {
 	case PinInputAnalog:
 		port.MODER.ReplaceBits(gpioModeAnalog, gpioModeMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
+
+	case PinModeETH:
+		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
+		port.OSPEEDR.ReplaceBits(gpioOutputSpeedVeryHigh, gpioOutputSpeedMask, pos)
+		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
+		p.SetAltFunc(altFunc)
 	}
 }
 
