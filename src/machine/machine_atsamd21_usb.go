@@ -68,6 +68,20 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	dev.initcomplete = true
 }
 
+// Attach connects the device to the USB bus, allowing the host to detect and
+// enumerate it. It can be used together with Detach to delay enumeration
+// until the USB configuration (device identifiers, classes, ...) is complete.
+func (dev *USBDevice) Attach() {
+	sam.USB_DEVICE.CTRLB.ClearBits(sam.USB_DEVICE_CTRLB_DETACH)
+}
+
+// Detach disconnects the device from the USB bus. To the host this appears
+// as if the device was unplugged. A subsequent Attach makes the host
+// enumerate the device again.
+func (dev *USBDevice) Detach() {
+	sam.USB_DEVICE.CTRLB.SetBits(sam.USB_DEVICE_CTRLB_DETACH)
+}
+
 func handlePadCalibration() {
 	// Load Pad Calibration data from non-volatile memory
 	// This requires registers that are not included in the SVD file.

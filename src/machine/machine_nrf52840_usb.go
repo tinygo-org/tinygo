@@ -89,6 +89,21 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	dev.initcomplete = true
 }
 
+// Attach connects the device to the USB bus by enabling the DP pull-up,
+// allowing the host to detect and enumerate it. It can be used together with
+// Detach to delay enumeration until the USB configuration (device
+// identifiers, classes, ...) is complete.
+func (dev *USBDevice) Attach() {
+	nrf.USBD.USBPULLUP.Set(1)
+}
+
+// Detach disconnects the device from the USB bus by disabling the DP pull-up.
+// To the host this appears as if the device was unplugged. A subsequent
+// Attach makes the host enumerate the device again.
+func (dev *USBDevice) Detach() {
+	nrf.USBD.USBPULLUP.Set(0)
+}
+
 func handleUSBIRQ(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_SOF.Get() == 1 {
 		nrf.USBD.EVENTS_SOF.Set(0)
