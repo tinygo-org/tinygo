@@ -15,7 +15,9 @@ func tweakDevice(d *Device, pkgName string) {
 	// a register IWDG. On some devices, though, like the h723,
 	// there are two registers, IWDG1 and IWDG2. In this case we
 	// define an alias IWDG for IWDG1.
-	addUnnumberedAlias(d, "IWDG", "IWDG1")
+	addUnnumberedPeriphAlias(d, "IWDG", "IWDG1")
+
+	addUnnumberedPeriphAlias(d, "WWDG", "WWDG1")
 
 	for _, p := range d.Peripherals {
 		switch p.GroupName {
@@ -55,7 +57,7 @@ func tweakDevice(d *Device, pkgName string) {
 	}
 }
 
-func addUnnumberedAlias(d *Device, dest, src string) {
+func addUnnumberedPeriphAlias(d *Device, dest, src string) {
 	if _, ok := d.PeripheralDict[dest]; !ok {
 		if p := d.PeripheralDict[src]; p != nil {
 			p.Alias = dest
