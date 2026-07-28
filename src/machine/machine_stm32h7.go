@@ -317,7 +317,7 @@ func (p Pin) getPort() *stm32.GPIO_Type {
 	case 7:
 		return stm32.GPIOH
 	case 8:
-		return stm32.GPIOI
+		return pinGetPortI()
 	case 9:
 		return stm32.GPIOJ
 	case 10:
@@ -345,12 +345,12 @@ func (p Pin) enableClock() {
 		stm32.RCC.AHB4ENR.SetBits(stm32.RCC_AHB4ENR_GPIOGEN)
 	case stm32.GPIOH:
 		stm32.RCC.AHB4ENR.SetBits(stm32.RCC_AHB4ENR_GPIOHEN)
-	case stm32.GPIOI:
-		stm32.RCC.AHB4ENR.SetBits(stm32.RCC_AHB4ENR_GPIOIEN)
 	case stm32.GPIOJ:
 		stm32.RCC.AHB4ENR.SetBits(stm32.RCC_AHB4ENR_GPIOJEN)
 	case stm32.GPIOK:
 		stm32.RCC.AHB4ENR.SetBits(stm32.RCC_AHB4ENR_GPIOKEN)
+	default:
+		p.enableClockOther()
 	}
 }
 

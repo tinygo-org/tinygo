@@ -1,4 +1,4 @@
-//go:build stm32 && stm32h7
+//go:build stm32 && stm32h7 && !stm32h723
 
 package machine
 
