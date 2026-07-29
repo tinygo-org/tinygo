@@ -3,7 +3,7 @@
 	"inheritable-only": true,
 	"cpu": "esp32",
 	"features": "+atomctl,+bool,+clamps,+coprocessor,+debug,+density,+dfpaccel,+div32,+exception,+fp,+highpriinterrupts,+interrupt,+loop,+mac16,+memctl,+minmax,+miscsr,+mul32,+mul32high,+nsa,+prid,+regprotect,+rvector,+s32c1i,+sext,+threadptr,+timerint,+windowed",
-	"build-tags": ["esp32", "esp"],
+	"build-tags": ["esp32", "esp", "espradio"],
 	"scheduler": "tasks",
 	"serial": "uart",
 	"linker": "ld.lld",
