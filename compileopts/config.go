@@ -25,6 +25,7 @@ import (
 var libVersions = map[string]int{
 	"musl":         3,
 	"bdwgc":        2,
+	"picolibc":     1,
 	"wasmbuiltins": 1,
 }
 
@@ -384,13 +385,13 @@ func (c *Config) LibcCFlags() []string {
 		}
 	case "picolibc":
 		root := goenv.Get("TINYGOROOT")
-		picolibcDir := filepath.Join(root, "lib", "picolibc", "newlib", "libc")
+		picolibcDir := filepath.Join(root, "lib", "picolibc", "libc")
 		path := c.LibraryPath("picolibc")
 		return []string{
 			"-nostdlibinc",
 			"-isystem", filepath.Join(path, "include"),
 			"-isystem", filepath.Join(picolibcDir, "include"),
-			"-isystem", filepath.Join(picolibcDir, "tinystdio"),
+			"-isystem", filepath.Join(picolibcDir, "stdio"),
 			"-D__PICOLIBC_ERRNO_FUNCTION=__errno_location",
 		}
 	case "musl":
