@@ -16,11 +16,19 @@
  * so 0x42800000 and 0x3C800000 decode to the SAME entry (128). There is no
  * ICache/DCache half-split (verified on hardware via the CACHE_MMU_FAULT_*
  * registers and ROM's Cache_Dbus_MMU_Set during Octal PSRAM bring-up).
- * 512 entries x 64KB = 32M of linear space per window. Flash XIP
- * identity-maps linear page N -> flash page N for both buses, so the image
- * occupies entries 0..(image pages - 1). The MMU uses 64KB pages, so the
- * bottom 16 bits of the virtual address and the flash offset must match;
- * dummy sections handle this alignment.
+ * 512 entries x 64KB = 32M of linear space per window.
+ *
+ * Because the two windows share entries, IROM and DROM must occupy disjoint
+ * linear ranges: .text starts at ORIGIN(IROM) (entry 0) and .rodata starts
+ * one whole 64KB page past the end of .text (.rodata_dummy pads for this),
+ * so DROM takes the entries right after IROM.
+ *
+ * Virtual pages are NOT tied to flash pages. The image builder
+ * (builder/esp.go) keeps DROM/IROM out of the ROM-loaded segment table --
+ * the ROM bootloader rejects images with a DROM segment over 1MB -- and
+ * appends them at 64KB-aligned flash offsets after the RAM image, patching
+ * those offsets into _irom_flash_addr/_drom_flash_addr. The startup code
+ * (esp32s3.S) programs the MMU entries from them.
  */
 
 MEMORY
@@ -28,11 +36,14 @@ MEMORY
     DRAM (rw) : ORIGIN = 0x3FC88000, LENGTH = 416K
     IRAM (x)  : ORIGIN = 0x40378000, LENGTH = 416K /* SRAM1 only (SRAM0 used by ICache) */
 
-    /* DROM and IROM share MMU entries 0-255 by linear address (see above);
-     * the flash image (rodata + text, identity-mapped) may use the full
-     * 16M. The DBUS cache window extends to 0x3E000000
+    /* DROM and IROM share MMU entries 0-255 by linear address (see above),
+     * so their combined size must stay below 16M. The DROM region length
+     * enforces that: .rodata_dummy first burns the IROM pages out of this
+     * region, so a link that would push .rodata into the PSRAM window at
+     * 0x3D000000 overflows DROM and fails at link time.
+     * The DBUS cache window extends to 0x3E000000
      * (SOC_DRAM0_CACHE_ADDRESS_HIGH), so PSRAM lives in its upper half. */
-    DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 16M /* Flash data bus (read-only) */
+    DROM (r)  : ORIGIN = 0x3C000000, LENGTH = 16M /* Flash data bus (read-only); holds IROM padding + .rodata */
     IROM (rx) : ORIGIN = 0x42000000, LENGTH = 16M /* Flash instruction bus; shares entries 0-255 with DROM */
 
     /* External PSRAM: upper half of the DBUS cache window, MMU entries
@@ -48,23 +59,6 @@ ENTRY(call_start_cpu0)
 
 SECTIONS
 {
-    /* Dummy section so that .rodata starts right after the image header
-     * and DROM segment header in the flash image.
-     */
-    .rodata_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18; /* esp_image_header_t at start of flash */
-        . += 0x8;  /* DROM segment header (8 bytes) */
-    } > DROM
-
-    /* Constant global variables, stored in flash (DROM). */
-    .rodata : ALIGN(4)
-    {
-        *(.rodata*)
-        . = ALIGN (4);
-        _drom_end = .;
-    } >DROM
-
     /* Put the stack at the bottom of DRAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      */
@@ -92,6 +86,15 @@ SECTIONS
         _sdata = ABSOLUTE(.);
         *(.data .data.*)
         *(.dram*)
+
+        /* Physical flash offsets patched by the ESP image builder. The
+         * startup code reads them with l32i, so they must be 4-aligned. */
+        . = ALIGN (4);
+        _irom_flash_addr = ABSOLUTE(.);
+        LONG(0);
+        _drom_flash_addr = ABSOLUTE(.);
+        LONG(0);
+
         . = ALIGN (4);
         _edata = ABSOLUTE(.);
     } >DRAM
@@ -140,23 +143,36 @@ SECTIONS
         _iram_end = .;
     } >IRAM
 
-    /* Dummy section to put the IROM segment at the correct flash offset. */
-    .text_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18;                                                  /* esp_image_header_t */
-        . += SIZEOF(.rodata) + ((SIZEOF(.rodata) != 0) ? 0x8 : 0); /* DROM segment (optional) */
-        . += SIZEOF(.data)   + ((SIZEOF(.data)   != 0) ? 0x8 : 0); /* DRAM segment (optional) */
-        . += SIZEOF(.iram)   + 0x8;                                 /* IRAM segment */
-        . += 0x8;                                                   /* IROM segment header */
-    } > IROM
-
-    /* IROM segment: main code executed from flash via cache. */
+    /* IROM occupies the first entries in the shared flash MMU table. */
     .text : ALIGN(4)
     {
+        _irom_start = .;
         *(.literal .text)
         *(.literal.* .text.*)
         _irom_end = .;
     } >IROM
+
+    /* DROM starts after all MMU pages reserved for IROM. */
+    .rodata_dummy (NOLOAD): ALIGN(4)
+    {
+        . += ((SIZEOF(.text) + 0xFFFF) / 0x10000) * 0x10000;
+    } >DROM
+
+    .rodata : ALIGN(4)
+    {
+        _drom_start = .;
+        *(.rodata*)
+        . = ALIGN(4);
+        _drom_end = .;
+    } >DROM
+
+    /* The MMU mapping loops in esp32s3.S compute a page count as
+     * ((end - start - 1) >> 16) + 1, which underflows to 65536 pages for an
+     * empty region and would scribble over the whole MMU window. The image
+     * builder also requires exactly one segment per region.
+     */
+    ASSERT(_irom_end > _irom_start, "IROM (.text) must not be empty")
+    ASSERT(_drom_end > _drom_start, "DROM (.rodata) must not be empty")
 
     .psram (NOLOAD) : ALIGN(4)
     {

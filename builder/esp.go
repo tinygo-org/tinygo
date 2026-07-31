@@ -23,6 +23,30 @@ type espImageSegment struct {
 	data []byte
 }
 
+// ESP32-S3 flash-mapped virtual address windows (esp-idf
+// soc/esp32s3/ext_mem_defs.h, narrowed to what targets/esp32s3.ld uses).
+// Segments in these ranges are XIP'd from flash through the cache MMU
+// instead of being loaded into RAM by the ROM bootloader.
+const (
+	esp32s3DromLow  = 0x3C000000 // DBUS window; its upper half (0x3D000000+) is PSRAM, not flash.
+	esp32s3DromHigh = 0x3D000000
+	esp32s3IromLow  = 0x42000000 // IBUS window.
+	esp32s3IromHigh = 0x44000000
+)
+
+const (
+	// esp32FlashBase is the flash offset esptool writes the ESP32 image to.
+	// ESP32-S3 images are written at offset 0 instead (see
+	// flashBinUsingEsp32), so there image offsets are flash offsets.
+	esp32FlashBase = 0x1000
+
+	// espFlashPageSize is the flash cache MMU page size. The MMU supports
+	// page sizes down to 256 B, but 64 KiB is the reset/default value and is
+	// what the startup code relies on. If the startup code ever changes the
+	// page size, this constant must change with it.
+	espFlashPageSize = 0x10000
+)
+
 // makeESPFirmwareImage converts an input ELF file to an image file for an ESP32 or
 // ESP8266 chip. This is a special purpose image format just for the ESP chip
 // family, and is parsed by the on-chip mask ROM bootloader.
@@ -79,16 +103,30 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		chip = format[:len(format)-len("-img")]
 	}
 
-	// For ESP32 (original): separate RAM segments (loadable by ROM bootloader)
-	// from flash-mapped segments (DROM/IROM, require MMU setup by startup code).
-	// The ROM bootloader on ESP32 does NOT handle flash-mapped segments —
-	// it tries to memcpy to the virtual address, which crashes.
+	// Separate RAM segments loaded by the ROM bootloader from flash-mapped
+	// segments initialized by the TinyGo startup code.
 	var flashSegments []*espImageSegment
-	if chip == "esp32" {
+	switch chip {
+	case "esp32":
 		var ramSegments []*espImageSegment
 		for _, seg := range segments {
-			if (seg.addr >= 0x3F400000 && seg.addr < 0x3F800000) || // DROM
-				(seg.addr >= 0x400D0000 && seg.addr < 0x40400000) { // IROM
+			if (seg.addr >= 0x3F400000 && seg.addr < 0x3F800000) ||
+				(seg.addr >= 0x400D0000 && seg.addr < 0x40400000) {
+				flashSegments = append(flashSegments, seg)
+			} else {
+				ramSegments = append(ramSegments, seg)
+			}
+		}
+		segments = ramSegments
+
+	case "esp32s3":
+		// The DBUS cache window runs to 0x3E000000, but its upper half is
+		// reserved for PSRAM (targets/esp32s3.ld), which is never backed by
+		// flash. Only the DROM half below 0x3D000000 is flash-mapped.
+		var ramSegments []*espImageSegment
+		for _, seg := range segments {
+			if (seg.addr >= esp32s3DromLow && seg.addr < esp32s3DromHigh) ||
+				(seg.addr >= esp32s3IromLow && seg.addr < esp32s3IromHigh) {
 				flashSegments = append(flashSegments, seg)
 			} else {
 				ramSegments = append(ramSegments, seg)
@@ -100,53 +138,54 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 	// ESP32 flash XIP: compute where the DROM segment will be placed in flash
 	// (page-aligned, right after the RAM segments) and patch the
 	// _drom_flash_addr variable so the startup code can program the cache MMU.
-	// This must happen before the checksum/hash are computed so the patched
-	// value is covered by both.
-	const esp32FlashBase = 0x1000 // esptool flashes the image at 0x1000
-	// The ESP32 flash cache MMU supports configurable page sizes down to 256 B. 64 KiB is the reset/default size.
-	// If the startup code ever changes the MMU page size, this constant must change too.
-	const esp32PageSize = 0x10000 // 64KB MMU pages
 	var esp32DromFlashAddr uint32
 	if chip == "esp32" && len(flashSegments) > 0 {
-		// Compute the size of the RAM portion of the image (everything the ROM
-		// bootloader loads, up to and including the appended SHA256 hash).
-		ramImageSize := 0
-		if makeImage {
-			ramImageSize += 4096
-		}
-		ramImageSize += 24 // image header (8) + trailer fields (16)
-		for _, seg := range segments {
-			ramImageSize += 8 + len(seg.data) // segment header + data (4-aligned)
-		}
-		ramImageSize += 16 - ramImageSize%16 // footer padding + checksum byte
-		ramImageSize += 32                   // appended SHA256 hash
+		esp32DromFlashAddr = uint32(alignUpFlashPage(esp32FlashBase + ramImageSize(segments, makeImage)))
 
-		// DROM flash address must be 64KB page-aligned.
-		esp32DromFlashAddr = uint32(esp32FlashBase+ramImageSize+esp32PageSize-1) &^ (esp32PageSize - 1)
+		syms, err := inf.Symbols()
+		if err != nil {
+			return fmt.Errorf("ESP32: %w", err)
+		}
+		if err := patchFlashAddr(syms, segments, "_drom_flash_addr", esp32DromFlashAddr); err != nil {
+			return fmt.Errorf("ESP32: %w", err)
+		}
+	}
 
-		// Patch _drom_flash_addr in whichever RAM segment contains it.
-		syms, _ := inf.Symbols()
-		var dromSymAddr uint64
-		for _, s := range syms {
-			if s.Name == "_drom_flash_addr" {
-				dromSymAddr = s.Value
-				break
-			}
+	// ESP32-S3 flash XIP: the ROM bootloader rejects images with a DROM
+	// segment over 1MB, so IROM and DROM are kept out of the segment table
+	// (see above) and appended at page-aligned flash offsets instead. Those
+	// offsets are patched into the RAM image for the startup code to program
+	// the cache MMU with.
+	var esp32s3Irom, esp32s3Drom *espImageSegment
+	var esp32s3IromFlashAddr, esp32s3DromFlashAddr uint32
+	if chip == "esp32s3" && len(flashSegments) > 0 {
+		var err error
+		esp32s3Irom, err = singleFlashSegment(flashSegments, esp32s3IromLow, esp32s3IromHigh, "IROM")
+		if err != nil {
+			return fmt.Errorf("ESP32-S3: %w", err)
 		}
-		if dromSymAddr == 0 {
-			return fmt.Errorf("ESP32: _drom_flash_addr symbol not found")
+		esp32s3Drom, err = singleFlashSegment(flashSegments, esp32s3DromLow, esp32s3DromHigh, "DROM")
+		if err != nil {
+			return fmt.Errorf("ESP32-S3: %w", err)
 		}
-		patched := false
-		for _, seg := range segments {
-			if dromSymAddr >= uint64(seg.addr) && dromSymAddr+4 <= uint64(seg.addr)+uint64(len(seg.data)) {
-				off := int(dromSymAddr - uint64(seg.addr))
-				binary.LittleEndian.PutUint32(seg.data[off:], esp32DromFlashAddr)
-				patched = true
-				break
-			}
+
+		// The image is flashed at offset 0, so image offsets are flash
+		// offsets. IROM goes right after the RAM image and DROM right after
+		// IROM, each rounded up to an MMU page. The linker script rounds the
+		// virtual addresses up the same way, so the offsets within a page
+		// match on both sides of the mapping.
+		esp32s3IromFlashAddr = uint32(alignUpFlashPage(ramImageSize(segments, makeImage)))
+		esp32s3DromFlashAddr = esp32s3IromFlashAddr + uint32(alignUpFlashPage(len(esp32s3Irom.data)))
+
+		syms, err := inf.Symbols()
+		if err != nil {
+			return fmt.Errorf("ESP32-S3: %w", err)
 		}
-		if !patched {
-			return fmt.Errorf("ESP32: _drom_flash_addr (0x%x) not in any RAM segment", dromSymAddr)
+		if err := patchFlashAddr(syms, segments, "_irom_flash_addr", esp32s3IromFlashAddr); err != nil {
+			return fmt.Errorf("ESP32-S3: %w", err)
+		}
+		if err := patchFlashAddr(syms, segments, "_drom_flash_addr", esp32s3DromFlashAddr); err != nil {
+			return fmt.Errorf("ESP32-S3: %w", err)
 		}
 	}
 
@@ -265,9 +304,9 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 	// For ESP32: append flash-mapped segments (DROM/IROM) at page-aligned flash
 	// offsets after the RAM portion. The startup code maps them via the flash
 	// cache MMU (DROM at esp32DromFlashAddr, patched into _drom_flash_addr).
-	if len(flashSegments) > 0 {
+	if chip == "esp32" && len(flashSegments) > 0 {
 		const flashBase = esp32FlashBase
-		const pageSize = esp32PageSize
+		const pageSize = espFlashPageSize
 		dromFlashAddr := esp32DromFlashAddr
 
 		// Separate DROM and IROM segments.
@@ -314,6 +353,27 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		}
 	}
 
+	// For ESP32-S3: append the XIP segments at the flash offsets patched into
+	// the image above. Both are page-aligned and in ascending order, so each
+	// one only needs padding up to its own offset.
+	if chip == "esp32s3" && len(flashSegments) > 0 {
+		for _, region := range []struct {
+			name    string
+			offset  uint32
+			segment *espImageSegment
+		}{
+			{"IROM", esp32s3IromFlashAddr, esp32s3Irom},
+			{"DROM", esp32s3DromFlashAddr, esp32s3Drom},
+		} {
+			if outf.Len() > int(region.offset) {
+				return fmt.Errorf("ESP32-S3: image is %d bytes, overlapping %s at flash offset 0x%x",
+					outf.Len(), region.name, region.offset)
+			}
+			outf.Write(make([]byte, int(region.offset)-outf.Len()))
+			outf.Write(region.segment.data)
+		}
+	}
+
 	// QEMU (or more precisely, qemu-system-xtensa from Espressif) expects the
 	// image to be a certain size.
 	if makeImage {
@@ -326,4 +386,82 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 
 	// Write the image to the output file.
 	return os.WriteFile(outfile, outf.Bytes(), 0666)
+}
+
+// alignUpFlashPage rounds size up to the next flash cache MMU page boundary.
+func alignUpFlashPage(size int) int {
+	return (size + espFlashPageSize - 1) &^ (espFlashPageSize - 1)
+}
+
+// ramImageSize returns the size of the part of the image that the ROM
+// bootloader loads: the header, the segment headers and their data, the
+// footer holding the checksum, and the appended SHA256 hash.
+//
+// Flash-mapped (XIP) segments are appended after this portion, and their
+// flash offsets have to be known before the image is written, because they
+// are patched into the image itself. This function must therefore predict
+// exactly what makeESPFirmwareImage writes; keep the two in sync.
+func ramImageSize(segments []*espImageSegment, makeImage bool) int {
+	size := 0
+	if makeImage {
+		size += 4096 // padding in front of the image header
+	}
+	size += 24 // image header (8) + trailer fields (16)
+	for _, segment := range segments {
+		size += 8 + len(segment.data) // segment header + data (4-aligned)
+	}
+	size += 16 - size%16 // footer padding + checksum byte
+	size += 32           // appended SHA256 hash
+	return size
+}
+
+// patchFlashAddr stores value in the 32-bit variable named by symbol, which
+// must live in one of the RAM segments. The startup code reads it to program
+// the flash cache MMU. Patching must happen before the checksum and hash are
+// computed, so that the patched value is covered by both.
+func patchFlashAddr(syms []elf.Symbol, segments []*espImageSegment, symbol string, value uint32) error {
+	var symbolAddr uint64
+	found := false
+	for _, sym := range syms {
+		if sym.Name == symbol {
+			symbolAddr = sym.Value
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("symbol %s not found", symbol)
+	}
+
+	for _, segment := range segments {
+		start := uint64(segment.addr)
+		end := start + uint64(len(segment.data))
+		if symbolAddr >= start && symbolAddr+4 <= end {
+			binary.LittleEndian.PutUint32(segment.data[symbolAddr-start:], value)
+			return nil
+		}
+	}
+	return fmt.Errorf("symbol %s (0x%x) not in a RAM segment", symbol, symbolAddr)
+}
+
+// singleFlashSegment returns the one segment inside the [low, high) virtual
+// address window, named name in error messages. The startup code maps each
+// XIP region as a single run of MMU pages and the linker script sizes the
+// regions accordingly, so anything other than exactly one segment per window
+// means the two have drifted apart and the image would not boot.
+func singleFlashSegment(segments []*espImageSegment, low, high uint32, name string) (*espImageSegment, error) {
+	var found *espImageSegment
+	for _, segment := range segments {
+		if segment.addr < low || segment.addr >= high {
+			continue
+		}
+		if found != nil {
+			return nil, fmt.Errorf("expected a single %s segment, found more than one", name)
+		}
+		found = segment
+	}
+	if found == nil {
+		return nil, fmt.Errorf("%s segment not found", name)
+	}
+	return found, nil
 }
