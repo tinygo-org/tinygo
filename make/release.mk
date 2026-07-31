@@ -14,8 +14,8 @@ build/release: tinygo gen-device $(if $(filter 1,$(USE_SYSTEM_BINARYEN)),,binary
 	@mkdir -p build/release/tinygo/lib/musl/crt
 	@mkdir -p build/release/tinygo/lib/musl/src
 	@mkdir -p build/release/tinygo/lib/nrfx
-	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libc
-	@mkdir -p build/release/tinygo/lib/picolibc/newlib/libm
+	@mkdir -p build/release/tinygo/lib/picolibc/libc
+	@mkdir -p build/release/tinygo/lib/picolibc/libm
 	@mkdir -p build/release/tinygo/lib/wasi-libc/dlmalloc
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-bottom-half
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/arch
@@ -80,13 +80,14 @@ endif
 	@cp -rp lib/mingw-w64/mingw-w64-headers/defaults/include        build/release/tinygo/lib/mingw-w64/mingw-w64-headers/defaults
 	@cp -rp lib/mingw-w64/mingw-w64-headers/include                 build/release/tinygo/lib/mingw-w64/mingw-w64-headers
 	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
-	@cp -rp lib/picolibc/newlib/libc/ctype       build/release/tinygo/lib/picolibc/newlib/libc
-	@cp -rp lib/picolibc/newlib/libc/include     build/release/tinygo/lib/picolibc/newlib/libc
-	@cp -rp lib/picolibc/newlib/libc/locale      build/release/tinygo/lib/picolibc/newlib/libc
-	@cp -rp lib/picolibc/newlib/libc/string      build/release/tinygo/lib/picolibc/newlib/libc
-	@cp -rp lib/picolibc/newlib/libc/tinystdio   build/release/tinygo/lib/picolibc/newlib/libc
-	@cp -rp lib/picolibc/newlib/libm/common      build/release/tinygo/lib/picolibc/newlib/libm
-	@cp -rp lib/picolibc/newlib/libm/math        build/release/tinygo/lib/picolibc/newlib/libm
+	@cp -rp lib/picolibc/libc/ctype       build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/include     build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/locale      build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/stdlib      build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/string      build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/stdio       build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libm/common      build/release/tinygo/lib/picolibc/libm
+	@cp -rp lib/picolibc/libm/math        build/release/tinygo/lib/picolibc/libm
 	@cp -rp lib/picolibc-stdio.c         build/release/tinygo/lib
 	@cp -rp lib/wasi-libc/dlmalloc/src                              build/release/tinygo/lib/wasi-libc/dlmalloc
 	@cp -rp lib/wasi-libc/libc-bottom-half/cloudlibc                build/release/tinygo/lib/wasi-libc/libc-bottom-half
