@@ -153,8 +153,6 @@ TEST_PACKAGES_NONWASM = \
 #
 #   * No filesystem is available, so packages like compress/zlib can't be tested
 #     (just like wasm).
-#   * picolibc math functions apparently are less precise, the math package
-#     fails on baremetal.
 #   * Since Go 1.27 the crypto tests below go through cryptotest.TestHash, which
 #     calls cryptotest.BoundarySlices. These targets report GOOS=linux, so they
 #     build boundary.go (//go:build linux || darwin) rather than
@@ -164,7 +162,6 @@ TEST_PACKAGES_BAREMETAL = $(filter-out $(TEST_PACKAGES_NONBAREMETAL), $(TEST_PAC
 TEST_PACKAGES_NONBAREMETAL = \
 	$(TEST_PACKAGES_NONWASM) \
 	$(TEST_PACKAGES_NOBOUNDARYSLICES) \
-	math \
 	$(nil)
 
 TEST_PACKAGES_FAST_WASI = $(filter-out $(TEST_PACKAGES_NOWASI), $(TEST_PACKAGES_FAST))

@@ -3,7 +3,6 @@ package builder
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/tinygo-org/tinygo/goenv"
 )
@@ -25,16 +24,13 @@ var libPicolibc = Library{
 			"-Werror",
 			"-Wall",
 			"-std=gnu11",
-			"-D_COMPILING_NEWLIB",
-			"-D_HAVE_ALIAS_ATTRIBUTE",
 			"-D__TINY_STDIO",
 			"-D_XOPEN_SOURCE=700",
-			"-DPOSIX_IO",
 			"-D__IO_DEFAULT='i'", // use __i_vfprintf and __i_vfscanf by default
 			"-D__IEEE_LIBM",
 			"-D__OBSOLETE_MATH_FLOAT=1", // use old math code that doesn't expect a FPU
 			"-D__OBSOLETE_MATH_DOUBLE=0",
-			"-D_WANT_IO_C99_FORMATS",
+			"-D__IO_C99_FORMATS",
 			"-D__PICOLIBC_ERRNO_FUNCTION=__errno_location",
 			"-nostdlibinc",
 			"-isystem", picolibcDir + "/libc/include",
@@ -46,17 +42,7 @@ var libPicolibc = Library{
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc") },
 	librarySources: func(target string, _ bool) ([]string, error) {
-		sources := append([]string(nil), picolibcSources...)
-		if !strings.HasPrefix(target, "avr") {
-			// Small chips without long jumps can't compile many files (printf,
-			// pow, etc). Therefore exclude those source files for those chips.
-			// Unfortunately it's difficult to exclude only some chips, so this
-			// excludes those files on all AVR chips for now.
-			// More information:
-			// https://github.com/llvm/llvm-project/issues/67042
-			sources = append(sources, picolibcSourcesLarge...)
-		}
-		return sources, nil
+		return append([]string(nil), picolibcSources...), nil
 	},
 }
 
@@ -165,10 +151,7 @@ var picolibcSources = []string{
 	"libc/string/wmempcpy.c",
 	"libc/string/wmemset.c",
 	"libc/string/xpg_strerror_r.c",
-}
 
-// Parts of picolibc that are too large for small AVRs.
-var picolibcSourcesLarge = []string{
 	// srcs_stdio
 	"libc/stdio/asprintf.c",
 	"libc/stdio/bufio.c",
