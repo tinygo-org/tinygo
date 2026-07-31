@@ -201,6 +201,17 @@ func (b *builder) defineMathOp() bool {
 	if !ok {
 		return false
 	}
+	if strings.HasPrefix(b.Triple, "avr") {
+		// LLVM assumes the traditional AVR ABI where double is 32 bits and
+		// therefore does not provide f64 runtime libcalls for sin and cos.
+		// TinyGo uses 64-bit doubles on AVR, which picolibc supports directly.
+		switch b.fn.Name() {
+		case "Cos":
+			llvmName = "cos"
+		case "Sin":
+			llvmName = "sin"
+		}
+	}
 	if strings.HasSuffix(b.Triple, "-wasi") || llvmutil.Version() < 19 {
 		// We don't have a real libc for wasip2. Until that is fixed, we need to
 		// limit math intrinsics on WASI to a subset supported natively in
