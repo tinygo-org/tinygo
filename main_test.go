@@ -371,7 +371,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 
 			case "math.go":
-				// Needs newer picolibc version (for sqrt).
+				// LLVM fails to lower one of the required library calls.
 				continue
 
 			case "cgo/":
