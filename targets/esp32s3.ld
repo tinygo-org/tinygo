@@ -29,23 +29,6 @@ ENTRY(call_start_cpu0)
 
 SECTIONS
 {
-    /* Dummy section so that .rodata starts right after the image header
-     * and DROM segment header in the flash image.
-     */
-    .rodata_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18; /* esp_image_header_t at start of flash */
-        . += 0x8;  /* DROM segment header (8 bytes) */
-    } > DROM
-
-    /* Constant global variables, stored in flash (DROM). */
-    .rodata : ALIGN(4)
-    {
-        *(.rodata*)
-        . = ALIGN (4);
-        _drom_end = .;
-    } >DROM
-
     /* Put the stack at the bottom of DRAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      */
@@ -73,6 +56,13 @@ SECTIONS
         _sdata = ABSOLUTE(.);
         *(.data .data.*)
         *(.dram*)
+
+        /* Physical flash offsets patched by the ESP image builder. */
+        _irom_flash_addr = ABSOLUTE(.);
+        LONG(0);
+        _drom_flash_addr = ABSOLUTE(.);
+        LONG(0);
+
         . = ALIGN (4);
         _edata = ABSOLUTE(.);
     } >DRAM
@@ -121,23 +111,28 @@ SECTIONS
         _iram_end = .;
     } >IRAM
 
-    /* Dummy section to put the IROM segment at the correct flash offset. */
-    .text_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18;                                                  /* esp_image_header_t */
-        . += SIZEOF(.rodata) + ((SIZEOF(.rodata) != 0) ? 0x8 : 0); /* DROM segment (optional) */
-        . += SIZEOF(.data)   + ((SIZEOF(.data)   != 0) ? 0x8 : 0); /* DRAM segment (optional) */
-        . += SIZEOF(.iram)   + 0x8;                                 /* IRAM segment */
-        . += 0x8;                                                   /* IROM segment header */
-    } > IROM
-
-    /* IROM segment: main code executed from flash via cache. */
+    /* IROM occupies the first entries in the shared flash MMU table. */
     .text : ALIGN(4)
     {
+        _irom_start = .;
         *(.literal .text)
         *(.literal.* .text.*)
         _irom_end = .;
     } >IROM
+
+    /* DROM starts after all MMU pages reserved for IROM. */
+    .rodata_dummy (NOLOAD): ALIGN(4)
+    {
+        . += ((SIZEOF(.text) + 0xFFFF) / 0x10000) * 0x10000;
+    } >DROM
+
+    .rodata : ALIGN(4)
+    {
+        _drom_start = .;
+        *(.rodata*)
+        . = ALIGN(4);
+        _drom_end = .;
+    } >DROM
 
     /DISCARD/ :
     {
