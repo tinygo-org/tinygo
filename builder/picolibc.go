@@ -199,7 +199,7 @@ var picolibcSourcesLarge = []string{
 	"libc/stdio/fputc.c",
 	"libc/stdio/fputs.c",
 	"libc/stdio/fread.c",
-	//"libc/stdio/freopen.c", // crashes with AVR, see: https://github.com/picolibc/picolibc/pull/369
+	"libc/stdio/freopen.c",
 	"libc/stdio/fscanf.c",
 	"libc/stdio/fseek.c",
 	"libc/stdio/fseeko.c",
