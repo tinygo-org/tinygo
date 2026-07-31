@@ -20,11 +20,18 @@
 //	            invalid (SOC_MMU_INVALID), bit 15 = target type, 0 = flash,
 //	            1 = PSRAM (SOC_MMU_ACCESS_SPIRAM).
 //
-//	Flash XIP identity-maps linear page N -> flash page N for both IROM
-//	and DROM (esp32s3.S), so the flash image occupies entries
-//	0..(image pages - 1), up to 16M. PSRAM lives in the upper half of the
-//	DBUS window (0x3D000000, entries 256-511; targets/esp32s3.ld),
-//	disjoint from all flash entries.
+//	Flash XIP takes the low entries: IROM starts at entry 0 and DROM
+//	follows immediately after it (esp32s3.S, targets/esp32s3.ld), so
+//	.text + .rodata together occupy a prefix of entries 0..255, capped at
+//	16M by the length of the DROM linker region. PSRAM lives in the upper
+//	half of the DBUS window (0x3D000000, entries 256-511), disjoint from
+//	all flash entries.
+//
+//	The IROM/DROM boundary is variable, since it follows the size of
+//	.text. The PSRAM window sits above it either way: the boundary can
+//	only move down, never above 0x3D000000, so the vaddr the drivers pass
+//	to romCacheDbusMMUSet always stays inside whatever DROM range
+//	Cache_Set_IDROM_MMU_Size left behind.
 //
 //	DCache (data cache) is the L1/L2 cache in front of the DBUS window.
 //	It is disabled (ROM Cache_Disable_DCache, which also invalidates all
