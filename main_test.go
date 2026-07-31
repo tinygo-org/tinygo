@@ -370,10 +370,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Too big for AVR. Doesn't fit in flash/RAM.
 				continue
 
-			case "math.go":
-				// LLVM fails to lower one of the required library calls.
-				continue
-
 			case "cgo/":
 				// CGo function pointers don't work on AVR (needs LLVM 16 and
 				// some compiler changes).
@@ -431,6 +427,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			testOptions := compileopts.Options(options)
 			if name == "finalizerinvariants.go" || name == "finalizerlarge.go" {
 				testOptions.Tags = append(append([]string(nil), options.Tags...), "runtime_asserts")
+			}
+			if testOptions.Target == "simavr" && name == "math.go" {
+				// This test exceeds simavr's default 384-byte goroutine stack.
+				testOptions.StackSize = 512
 			}
 			runTest(name, testOptions, t, nil, nil)
 		})
