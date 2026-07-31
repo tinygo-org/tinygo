@@ -79,16 +79,27 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		chip = format[:len(format)-len("-img")]
 	}
 
-	// For ESP32 (original): separate RAM segments (loadable by ROM bootloader)
-	// from flash-mapped segments (DROM/IROM, require MMU setup by startup code).
-	// The ROM bootloader on ESP32 does NOT handle flash-mapped segments —
-	// it tries to memcpy to the virtual address, which crashes.
+	// Separate RAM segments loaded by the ROM bootloader from flash-mapped
+	// segments initialized by the TinyGo startup code.
 	var flashSegments []*espImageSegment
-	if chip == "esp32" {
+	switch chip {
+	case "esp32":
 		var ramSegments []*espImageSegment
 		for _, seg := range segments {
-			if (seg.addr >= 0x3F400000 && seg.addr < 0x3F800000) || // DROM
-				(seg.addr >= 0x400D0000 && seg.addr < 0x40400000) { // IROM
+			if (seg.addr >= 0x3F400000 && seg.addr < 0x3F800000) ||
+				(seg.addr >= 0x400D0000 && seg.addr < 0x40400000) {
+				flashSegments = append(flashSegments, seg)
+			} else {
+				ramSegments = append(ramSegments, seg)
+			}
+		}
+		segments = ramSegments
+
+	case "esp32s3":
+		var ramSegments []*espImageSegment
+		for _, seg := range segments {
+			if (seg.addr >= 0x3C000000 && seg.addr < 0x3E000000) ||
+				(seg.addr >= 0x42000000 && seg.addr < 0x44000000) {
 				flashSegments = append(flashSegments, seg)
 			} else {
 				ramSegments = append(ramSegments, seg)
@@ -147,6 +158,98 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		}
 		if !patched {
 			return fmt.Errorf("ESP32: _drom_flash_addr (0x%x) not in any RAM segment", dromSymAddr)
+		}
+	}
+
+	var esp32s3IromSegment *espImageSegment
+	var esp32s3DromSegment *espImageSegment
+	var esp32s3IromFlashAddr uint32
+	var esp32s3DromFlashAddr uint32
+
+	if chip == "esp32s3" && len(flashSegments) > 0 {
+		for _, seg := range flashSegments {
+			switch {
+			case seg.addr >= 0x42000000 && seg.addr < 0x44000000:
+				if esp32s3IromSegment != nil {
+					return fmt.Errorf("ESP32-S3: multiple IROM segments")
+				}
+				esp32s3IromSegment = seg
+			case seg.addr >= 0x3C000000 && seg.addr < 0x3E000000:
+				if esp32s3DromSegment != nil {
+					return fmt.Errorf("ESP32-S3: multiple DROM segments")
+				}
+				esp32s3DromSegment = seg
+			}
+		}
+
+		if esp32s3IromSegment == nil {
+			return fmt.Errorf("ESP32-S3: IROM segment not found")
+		}
+		if esp32s3DromSegment == nil {
+			return fmt.Errorf("ESP32-S3: DROM segment not found")
+		}
+
+		ramImageSize := 24
+		if makeImage {
+			ramImageSize += 4096
+		}
+		for _, seg := range segments {
+			ramImageSize += 8 + len(seg.data)
+		}
+		ramImageSize += 16 - ramImageSize%16
+		ramImageSize += 32
+
+		const pageSize = 0x10000
+		alignUp := func(value int) int {
+			return (value + pageSize - 1) &^ (pageSize - 1)
+		}
+
+		esp32s3IromFlashAddr = uint32(alignUp(ramImageSize))
+		esp32s3DromFlashAddr = esp32s3IromFlashAddr +
+			uint32(alignUp(len(esp32s3IromSegment.data)))
+
+		syms, err := inf.Symbols()
+		if err != nil {
+			return fmt.Errorf("ESP32-S3: failed to read symbols: %w", err)
+		}
+
+		patchSymbol := func(name string, value uint32) error {
+			var symbolAddr uint64
+			found := false
+
+			for _, sym := range syms {
+				if sym.Name == name {
+					symbolAddr = sym.Value
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("ESP32-S3: symbol %s not found", name)
+			}
+
+			for _, seg := range segments {
+				start := uint64(seg.addr)
+				end := start + uint64(len(seg.data))
+				if symbolAddr >= start && symbolAddr+4 <= end {
+					offset := int(symbolAddr - start)
+					binary.LittleEndian.PutUint32(seg.data[offset:], value)
+					return nil
+				}
+			}
+
+			return fmt.Errorf(
+				"ESP32-S3: symbol %s (0x%x) not in a RAM segment",
+				name,
+				symbolAddr,
+			)
+		}
+
+		if err := patchSymbol("_irom_flash_addr", esp32s3IromFlashAddr); err != nil {
+			return err
+		}
+		if err := patchSymbol("_drom_flash_addr", esp32s3DromFlashAddr); err != nil {
+			return err
 		}
 	}
 
@@ -265,7 +368,7 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 	// For ESP32: append flash-mapped segments (DROM/IROM) at page-aligned flash
 	// offsets after the RAM portion. The startup code maps them via the flash
 	// cache MMU (DROM at esp32DromFlashAddr, patched into _drom_flash_addr).
-	if len(flashSegments) > 0 {
+	if chip == "esp32" && len(flashSegments) > 0 {
 		const flashBase = esp32FlashBase
 		const pageSize = esp32PageSize
 		dromFlashAddr := esp32DromFlashAddr
@@ -312,6 +415,22 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 				outf.Write(seg.data)
 			}
 		}
+	}
+
+	if chip == "esp32s3" && len(flashSegments) > 0 {
+		iromOffset := int(esp32s3IromFlashAddr)
+		if outf.Len() > iromOffset {
+			return fmt.Errorf("ESP32-S3: RAM image overlaps IROM")
+		}
+		outf.Write(make([]byte, iromOffset-outf.Len()))
+		outf.Write(esp32s3IromSegment.data)
+
+		dromOffset := int(esp32s3DromFlashAddr)
+		if outf.Len() > dromOffset {
+			return fmt.Errorf("ESP32-S3: IROM overlaps DROM")
+		}
+		outf.Write(make([]byte, dromOffset-outf.Len()))
+		outf.Write(esp32s3DromSegment.data)
 	}
 
 	// QEMU (or more precisely, qemu-system-xtensa from Espressif) expects the
