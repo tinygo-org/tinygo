@@ -414,13 +414,23 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("alias.go", options, t, nil, nil)
 		})
 	}
-	if options.Target == "" {
+	buildGOOS := options.GOOS
+	if buildGOOS == "" {
+		buildGOOS = runtime.GOOS
+	}
+	if options.Target == "" && (buildGOOS == "linux" || buildGOOS == "darwin") {
 		// The host default GC is boehm, where SetFinalizer is unimplemented, so
 		// the plain host run of finalizerinvariants.go passes without exercising
 		// anything. Re-run it on the block GC to cover the two schedulers no
 		// other target in this suite reaches: threads (the host default) and
 		// none. Together with cortex-m-qemu (tasks), riscv-qemu (cores) and the
 		// wasm targets (asyncify), that covers every scheduler variant.
+		//
+		// Restricted to linux and darwin: internal/task only defines threadID
+		// for those two, so scheduler.threads does not build anywhere else, and
+		// scheduler.none does not link on Windows either. Both predate this test
+		// (they reproduce with any testdata file), so this skips rather than
+		// works around them. Same reasoning as TestTimerStopResetRace above.
 		for _, scheduler := range []string{"threads", "none"} {
 			t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
 				t.Parallel()
