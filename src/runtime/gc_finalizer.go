@@ -73,11 +73,6 @@ var (
 	finalizerRunnerStarted bool
 )
 
-// The object address is stored bitwise-NOT so it never looks like a live heap
-// pointer to the conservative scanner. Otherwise the entry would pin every
-// finalizable object forever and the object could never be detected as dead.
-// Under the precise GC a plain uintptr field is not scanned anyway, so the
-// encoding is harmless there and required for the conservative build.
 // finalizerGCDivisor scales the registration trigger with the size of the
 // table: the next collection is due after roughly numFinalizers/this many new
 // registrations, never fewer than finalizerGCThreshold.
@@ -115,23 +110,33 @@ func finalizerGCTrigger() uintptr {
 //
 // The bitmap is allocated on the first registration and grown with the heap, so
 // a program that never registers a finalizer keeps the whole feature dead.
+//
+// Every access goes through gcLock, including the reads. The slice header itself
+// is replaced when the heap grows, so an unlocked reader on a parallel scheduler
+// (cores, threads) could observe a stale bit, or tear the header and index the
+// old, shorter buffer with the new length.
 var finalizerBits []byte
 
-// finalizerBitsNeeded is the bitmap length that covers the current heap.
-func finalizerBitsNeeded() uintptr { return (uintptr(endBlock) + 7) / 8 }
-
-// growFinalizerBits allocates a wider bitmap if the heap outgrew the current
-// one. It must run with gcLock released, because allocating takes gcLock.
-func growFinalizerBits() []byte {
-	need := finalizerBitsNeeded()
+// finalizerBitsShortfall returns the bitmap length needed to cover the current
+// heap, or zero if the current bitmap already covers it. It must be called under
+// gcLock: that is what makes reading finalizerBits and endBlock safe against a
+// concurrent adoptFinalizerBits on another core. The caller then allocates with
+// the lock released (allocating takes gcLock) and installs the result with
+// adoptFinalizerBits.
+func finalizerBitsShortfall() uintptr {
+	need := (uintptr(endBlock) + 7) / 8
 	if uintptr(len(finalizerBits)) >= need {
-		return nil
+		return 0
 	}
-	return make([]byte, need)
+	return need
 }
 
 // adoptFinalizerBits installs a wider bitmap under gcLock, carrying the old bits
-// over. A nil or already-obsolete buffer is ignored.
+// over. A nil or already-obsolete buffer is ignored, which is what makes it safe
+// for the heap to have grown again (or another core to have installed its own
+// wider bitmap) while the caller was allocating with the lock released. A buffer
+// that covers less than the current heap is still an improvement: addresses past
+// its end just keep answering conservatively in finalizerBitGet.
 func adoptFinalizerBits(buf []byte) {
 	if len(buf) <= len(finalizerBits) {
 		return
@@ -170,6 +175,11 @@ func finalizerBitClear(addr uintptr) {
 	finalizerBits[i/8] &^= 1 << (i % 8)
 }
 
+// The object address is stored bitwise-NOT so it never looks like a live heap
+// pointer to the conservative scanner. Otherwise the entry would pin every
+// finalizable object forever and the object could never be detected as dead.
+// Under the precise GC a plain uintptr field is not scanned anyway, so the
+// encoding is harmless there and required for the conservative build.
 func encodeFinalizerPtr(addr uintptr) uintptr { return ^addr }
 func decodeFinalizerPtr(enc uintptr) uintptr  { return ^enc }
 
@@ -181,15 +191,20 @@ func decodeFinalizerPtr(enc uintptr) uintptr  { return ^enc }
 func registerFinalizer(addr uintptr, fn interface{}) {
 	enc := encodeFinalizerPtr(addr)
 
-	tracked := isOnHeap(addr)
-
 	if fn == nil {
 		// Clear: remove every registration for this object. The bit proves in
-		// one test that there is nothing to remove.
+		// one test that there is nothing to remove, but only while gcLock is
+		// held: a registration on another core may be setting that same bit (and
+		// replacing the bitmap) right now, and a stale read of zero would skip
+		// the removal and leave the finalizer registered on a live object.
+		// Holding the lock for the check costs nothing extra, because the removal
+		// below needs it anyway; what the bit saves is the O(numFinalizers) walk.
+		gcLock.Lock()
+		tracked := isOnHeap(addr)
 		if tracked && !finalizerBitGet(addr) {
+			gcLock.Unlock()
 			return
 		}
-		gcLock.Lock()
 		if tracked {
 			finalizerBitClear(addr)
 		}
@@ -206,12 +221,21 @@ func registerFinalizer(addr uintptr, fn interface{}) {
 		return
 	}
 
-	// Register or replace. The allocation happens before gcLock is taken,
-	// because alloc acquires gcLock itself.
+	// Register or replace. Allocating acquires gcLock, so the entry is allocated
+	// before the lock is taken and a wider bitmap is allocated by dropping the
+	// lock for just that call. Only a heap that outgrew the bitmap pays that
+	// round trip; the common case holds the lock once, and adoptFinalizerBits
+	// tolerates the heap having grown again (or another core having installed a
+	// wider bitmap) while this one was allocating.
 	entry := &finalizerEntry{obj: enc, fn: fn}
-	wider := growFinalizerBits()
 	gcLock.Lock()
-	adoptFinalizerBits(wider)
+	if shortfall := finalizerBitsShortfall(); shortfall != 0 {
+		gcLock.Unlock()
+		wider := make([]byte, shortfall)
+		gcLock.Lock()
+		adoptFinalizerBits(wider)
+	}
+	tracked := isOnHeap(addr)
 	// Only an object whose bit is set can already be in the table, so a fresh
 	// object skips the scan entirely. An address the bitmap cannot describe
 	// (not on the heap) always scans, as before.
