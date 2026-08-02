@@ -62,6 +62,7 @@ func TestBuild(t *testing.T) {
 		"finalizer.go",
 		"finalizerbits.go",
 		"finalizeridle.go",
+		"finalizerinvariants.go",
 		"float.go",
 		"gc.go",
 		"generics.go",
@@ -369,15 +370,26 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		if options.Target != "wasm" {
 			switch name {
 			case "finalizer.go", "finalizerbits.go", "finalizeridle.go":
-				// runtime.SetFinalizer is implemented for the block GC, but the
-				// finalizer tests assert deterministic collection of a dropped
-				// object, which only holds on the GOOS=js wasm target. The host
-				// default GC is boehm (SetFinalizer is a no-op there);
-				// conservative stack scanning on the emulated targets can pin the
-				// object; and the wasip2 component entry lays out the stack
-				// differently, so collection is not deterministic on those. The
-				// feature still works on all of them, it just can't be
-				// golden-tested for firing.
+				// runtime.SetFinalizer is implemented for the block GC, but these
+				// tests assert deterministic collection of a dropped object,
+				// which only holds on the GOOS=js wasm target. The host default
+				// GC is boehm (SetFinalizer is a no-op there); conservative stack
+				// scanning on the emulated targets can pin the object; and the
+				// wasip2 component entry lays out the stack differently, so
+				// collection is not deterministic on those. The feature still
+				// works on all of them, it just can't be golden-tested for
+				// firing, which is what finalizerinvariants.go covers instead.
+				continue
+			}
+		}
+		if options.Target == "simavr" {
+			switch name {
+			case "finalizerinvariants.go":
+				// Finalizers are detected by the GC, and gc.go is already skipped
+				// on AVR for its high mark false positive rate (see the simavr
+				// switch above). Registering and clearing a finalizer works
+				// there, but a single runtime.GC() call does not return, so this
+				// test inherits that limitation rather than adding a new one.
 				continue
 			}
 		}
@@ -401,6 +413,23 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			options.Scheduler = "none"
 			runTest("alias.go", options, t, nil, nil)
 		})
+	}
+	if options.Target == "" {
+		// The host default GC is boehm, where SetFinalizer is unimplemented, so
+		// the plain host run of finalizerinvariants.go passes without exercising
+		// anything. Re-run it on the block GC to cover the two schedulers no
+		// other target in this suite reaches: threads (the host default) and
+		// none. Together with cortex-m-qemu (tasks), riscv-qemu (cores) and the
+		// wasm targets (asyncify), that covers every scheduler variant.
+		for _, scheduler := range []string{"threads", "none"} {
+			t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
+				t.Parallel()
+				options := compileopts.Options(options)
+				options.GC = "conservative"
+				options.Scheduler = scheduler
+				runTest("finalizerinvariants.go", options, t, nil, nil)
+			})
+		}
 	}
 	if options.Target == "" || isWASI {
 		t.Run("filesystem.go", func(t *testing.T) {
