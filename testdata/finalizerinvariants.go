@@ -17,7 +17,10 @@ package main
 // replace semantics of SetFinalizer depend on. A stale or torn bit therefore
 // shows up here as a finalizer that runs when it must not.
 
-import "runtime"
+import (
+	"runtime"
+	"time"
+)
 
 type obj struct{ x int }
 
@@ -86,6 +89,67 @@ func keepReachable(id int) {
 	reachable = append(reachable, p)
 }
 
+// finalizerRuns is the total number of finalizer invocations observed so far,
+// across every counter. Individual counters are asserted on at the end; this
+// sum exists only to tell "the runner is still working" from "the queue is
+// empty".
+func finalizerRuns() int {
+	n := clearedRan + replacedRan + reachedRan + ranTwice
+	for _, s := range seen {
+		n += s
+	}
+	return n
+}
+
+// Bounds for drainFinalizers. quietRounds is how many consecutive rounds must
+// observe no new invocation before the queue counts as drained; maxRounds caps
+// a target that never runs a finalizer at all, which the vacuity check in main
+// then reports.
+//
+// Measured, every target here drains in 4 rounds and then 3, including
+// scheduler.threads, so maxRounds is headroom for a loaded machine rather than
+// an expected cost: the loop exits on quiescence long before reaching it.
+const (
+	quietRounds = 3
+	maxRounds   = 50
+)
+
+// drainFinalizers collects until the finalizer queue is drained, and returns
+// only once it is.
+//
+// It waits on the observable result rather than on a fixed delay. Gosched does
+// not synchronize with the runner under scheduler.threads, where it is a no-op
+// (every goroutine is its own thread, so there is nothing to yield to) and the
+// runner is a separate thread blocked on a futex. Sleeping a fixed amount would
+// only make the race less likely; polling until invocations stop arriving is
+// what actually establishes that the queue is empty. The sleep below is the
+// poll interval, not the wait.
+//
+// Quiescence alone is not enough to start with, because a runner that has not
+// been scheduled yet looks identical to a drained queue. So the quiet rounds
+// only count once at least one finalizer has run.
+func drainFinalizers() {
+	quiet := 0
+	for i := 0; i < maxRounds; i++ {
+		before := finalizerRuns()
+		runtime.GC()
+		runtime.Gosched()
+		time.Sleep(time.Millisecond)
+		switch {
+		case finalizerRuns() != before:
+			quiet = 0
+		case before == 0:
+			// Nothing has run yet: cannot tell a drained queue from a runner
+			// that has not started, so keep polling.
+		default:
+			quiet++
+			if quiet == quietRounds {
+				return
+			}
+		}
+	}
+}
+
 func main() {
 	for i := 0; i < batch; i++ {
 		dropCleared()
@@ -101,17 +165,9 @@ func main() {
 		keepReachable(i)
 	}
 
-	// Collect repeatedly, yielding so the finalizer runner goroutine gets to
-	// drain anything that was queued.
-	for i := 0; i < 4; i++ {
-		runtime.GC()
-		runtime.Gosched()
-	}
+	drainFinalizers()
 	scrubStack(12)
-	for i := 0; i < 4; i++ {
-		runtime.GC()
-		runtime.Gosched()
-	}
+	drainFinalizers()
 
 	// Touch the reachable set after the collections so it stays a live root
 	// across all of them.
@@ -124,7 +180,21 @@ func main() {
 		return
 	}
 
+	// Count the replacement finalizers that ran. The assertions below are all of
+	// the "must never run" kind, so they are only meaningful if something was
+	// collected and drained at all: with nothing collected they hold trivially
+	// and the test reports success while checking nothing. Requiring at least
+	// one firing turns that silent pass into a failure. It stays at "at least
+	// one" rather than "all", because a conservative stack scan is allowed to
+	// pin any individual object.
+	replacementsRan := 0
+	for _, n := range seen {
+		replacementsRan += n
+	}
+
 	switch {
+	case replacementsRan == 0:
+		println("FAIL: no finalizer ran at all, the assertions below prove nothing")
 	case clearedRan != 0:
 		println("FAIL: cleared finalizer ran:", clearedRan)
 	case replacedRan != 0:

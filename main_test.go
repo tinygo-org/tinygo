@@ -382,6 +382,15 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 			}
 		}
+		if options.Target == "" && options.GC == "" {
+			switch name {
+			case "finalizerinvariants.go":
+				// The default GC on these is boehm, where SetFinalizer is
+				// unimplemented, so there is nothing to assert. The explicit
+				// -gc=conservative variants below cover the host instead.
+				continue
+			}
+		}
 		if options.Target == "simavr" {
 			switch name {
 			case "finalizerinvariants.go":
@@ -420,11 +429,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 	if options.Target == "" && (buildGOOS == "linux" || buildGOOS == "darwin") {
 		// The host default GC is boehm, where SetFinalizer is unimplemented, so
-		// the plain host run of finalizerinvariants.go passes without exercising
-		// anything. Re-run it on the block GC to cover the two schedulers no
-		// other target in this suite reaches: threads (the host default) and
-		// none. Together with cortex-m-qemu (tasks), riscv-qemu (cores) and the
-		// wasm targets (asyncify), that covers every scheduler variant.
+		// the plain host run of finalizerinvariants.go is skipped above. Run it
+		// on the block GC instead, which also covers the two schedulers no other
+		// target in this suite reaches: threads (the host default) and none.
+		// Together with cortex-m-qemu (tasks), riscv-qemu (cores) and the wasm
+		// targets (asyncify), that covers every scheduler variant.
 		//
 		// Restricted to linux and darwin: internal/task only defines threadID
 		// for those two, so scheduler.threads does not build anywhere else, and
