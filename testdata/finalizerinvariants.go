@@ -19,6 +19,7 @@ package main
 
 import (
 	"runtime"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,12 +27,16 @@ type obj struct{ x int }
 
 const batch = 8
 
+// The counters are written by finalizers and read by main. Under
+// scheduler.threads and scheduler.cores those are different threads running at
+// the same time, so every access goes through sync/atomic rather than a plain
+// int.
 var (
-	clearedRan  int
-	replacedRan int
-	reachedRan  int
-	ranTwice    int
-	seen        [batch]int
+	clearedRan  atomic.Int32
+	replacedRan atomic.Int32
+	reachedRan  atomic.Int32
+	ranTwice    atomic.Int32
+	seen        [batch]atomic.Int32
 	reachable   []*obj
 	sink        int
 )
@@ -59,7 +64,7 @@ func scrubStack(depth int) int {
 //go:noinline
 func dropCleared() {
 	p := &obj{}
-	runtime.SetFinalizer(p, func(*obj) { clearedRan++ })
+	runtime.SetFinalizer(p, func(*obj) { clearedRan.Add(1) })
 	runtime.SetFinalizer(p, nil)
 }
 
@@ -70,11 +75,10 @@ func dropCleared() {
 //go:noinline
 func dropReplaced(id int) {
 	p := &obj{}
-	runtime.SetFinalizer(p, func(*obj) { replacedRan++ })
+	runtime.SetFinalizer(p, func(*obj) { replacedRan.Add(1) })
 	runtime.SetFinalizer(p, func(*obj) {
-		seen[id]++
-		if seen[id] > 1 {
-			ranTwice++
+		if seen[id].Add(1) > 1 {
+			ranTwice.Add(1)
 		}
 	})
 }
@@ -85,69 +89,55 @@ func dropReplaced(id int) {
 //go:noinline
 func keepReachable(id int) {
 	p := &obj{x: id}
-	runtime.SetFinalizer(p, func(*obj) { reachedRan++ })
+	runtime.SetFinalizer(p, func(*obj) { reachedRan.Add(1) })
 	reachable = append(reachable, p)
 }
 
-// finalizerRuns is the total number of finalizer invocations observed so far,
-// across every counter. Individual counters are asserted on at the end; this
-// sum exists only to tell "the runner is still working" from "the queue is
-// empty".
-func finalizerRuns() int {
-	n := clearedRan + replacedRan + reachedRan + ranTwice
-	for _, s := range seen {
-		n += s
+// replacementsRan is how many of the batch replacement finalizers have run.
+func replacementsRan() int {
+	n := 0
+	for i := range seen {
+		n += int(seen[i].Load())
 	}
 	return n
 }
 
-// Bounds for drainFinalizers. quietRounds is how many consecutive rounds must
-// observe no new invocation before the queue counts as drained; maxRounds caps
-// a target that never runs a finalizer at all, which the vacuity check in main
-// then reports.
-//
-// Measured, every target here drains in 4 rounds and then 3, including
-// scheduler.threads, so maxRounds is headroom for a loaded machine rather than
-// an expected cost: the loop exits on quiescence long before reaching it.
-const (
-	quietRounds = 3
-	maxRounds   = 50
-)
+// maxRounds bounds waitForDrain. Measured, every target here reaches the full
+// count within a handful of rounds, so this is headroom for a loaded machine
+// rather than an expected cost.
+const maxRounds = 500
 
-// drainFinalizers collects until the finalizer queue is drained, and returns
-// only once it is.
+// waitForDrain collects until every replacement finalizer has run, and reports
+// whether it got there.
 //
-// It waits on the observable result rather than on a fixed delay. Gosched does
-// not synchronize with the runner under scheduler.threads, where it is a no-op
-// (every goroutine is its own thread, so there is nothing to yield to) and the
-// runner is a separate thread blocked on a futex. Sleeping a fixed amount would
-// only make the race less likely; polling until invocations stop arriving is
-// what actually establishes that the queue is empty. The sleep below is the
-// poll interval, not the wait.
+// It waits for a known count rather than for the queue to look idle. Idleness
+// cannot be observed from here: runtime exposes no way to ask whether the
+// finalizer queue is empty, and under scheduler.threads the runner is a
+// separate thread, so a stretch with no new invocation is indistinguishable
+// from a runner that has simply not been scheduled yet. Waiting for a specific
+// number of invocations has no such ambiguity, and not reaching it is a test
+// failure rather than a silently short wait.
 //
-// Quiescence alone is not enough to start with, because a runner that has not
-// been scheduled yet looks identical to a drained queue. So the quiet rounds
-// only count once at least one finalizer has run.
-func drainFinalizers() {
-	quiet := 0
+// batch is the right target because these objects are allocated and dropped
+// inside a //go:noinline helper whose frame scrubStack then overwrites, so
+// nothing is left pointing at them for a conservative scan to find.
+func waitForDrain() bool {
 	for i := 0; i < maxRounds; i++ {
-		before := finalizerRuns()
 		runtime.GC()
 		runtime.Gosched()
 		time.Sleep(time.Millisecond)
-		switch {
-		case finalizerRuns() != before:
-			quiet = 0
-		case before == 0:
-			// Nothing has run yet: cannot tell a drained queue from a runner
-			// that has not started, so keep polling.
-		default:
-			quiet++
-			if quiet == quietRounds {
-				return
-			}
+		if replacementsRan() == batch {
+			// The runner has worked through the queue these objects were in. Do
+			// one more pass so that a finalizer which must NOT run, but which a
+			// wrong bitmap bit left registered, is queued and drained here
+			// instead of after the counters are read.
+			runtime.GC()
+			runtime.Gosched()
+			time.Sleep(time.Millisecond)
+			return true
 		}
 	}
+	return false
 }
 
 func main() {
@@ -165,9 +155,7 @@ func main() {
 		keepReachable(i)
 	}
 
-	drainFinalizers()
-	scrubStack(12)
-	drainFinalizers()
+	drained := waitForDrain()
 
 	// Touch the reachable set after the collections so it stays a live root
 	// across all of them.
@@ -180,29 +168,17 @@ func main() {
 		return
 	}
 
-	// Count the replacement finalizers that ran. The assertions below are all of
-	// the "must never run" kind, so they are only meaningful if something was
-	// collected and drained at all: with nothing collected they hold trivially
-	// and the test reports success while checking nothing. Requiring at least
-	// one firing turns that silent pass into a failure. It stays at "at least
-	// one" rather than "all", because a conservative stack scan is allowed to
-	// pin any individual object.
-	replacementsRan := 0
-	for _, n := range seen {
-		replacementsRan += n
-	}
-
 	switch {
-	case replacementsRan == 0:
-		println("FAIL: no finalizer ran at all, the assertions below prove nothing")
-	case clearedRan != 0:
-		println("FAIL: cleared finalizer ran:", clearedRan)
-	case replacedRan != 0:
-		println("FAIL: replaced finalizer ran:", replacedRan)
-	case reachedRan != 0:
-		println("FAIL: reachable object was finalized:", reachedRan)
-	case ranTwice != 0:
-		println("FAIL: finalizer ran more than once:", ranTwice)
+	case !drained:
+		println("FAIL: only", replacementsRan(), "of", batch, "replacement finalizers ran, the assertions below prove nothing")
+	case clearedRan.Load() != 0:
+		println("FAIL: cleared finalizer ran:", clearedRan.Load())
+	case replacedRan.Load() != 0:
+		println("FAIL: replaced finalizer ran:", replacedRan.Load())
+	case reachedRan.Load() != 0:
+		println("FAIL: reachable object was finalized:", reachedRan.Load())
+	case ranTwice.Load() != 0:
+		println("FAIL: finalizer ran more than once:", ranTwice.Load())
 	default:
 		println("ok")
 	}
