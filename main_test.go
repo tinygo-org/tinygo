@@ -1166,6 +1166,42 @@ func TestGoexitCrash(t *testing.T) {
 	}
 }
 
+func TestWASIPanicTraceback(t *testing.T) {
+	t.Parallel()
+
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
+	options := optionsFromTarget("wasip1", sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := builder.Build("testdata/panic-traceback.go", ".wasm", t.TempDir(), config)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+	data, err := os.ReadFile(result.Binary)
+	if err != nil {
+		t.Fatal("failed to read binary:", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	defer r.Close(ctx)
+	wasi_snapshot_preview1.MustInstantiate(ctx, r)
+	_, err = r.InstantiateWithConfig(ctx, data, wazero.NewModuleConfig())
+	if err == nil {
+		t.Fatal("program unexpectedly exited successfully")
+	}
+	if !strings.Contains(err.Error(), "main.panicHere") {
+		t.Fatalf("panic traceback does not contain main.panicHere:\n%s", err)
+	}
+}
+
 func TestRuntimeFatal(t *testing.T) {
 	t.Parallel()
 

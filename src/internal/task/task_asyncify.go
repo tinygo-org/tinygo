@@ -28,7 +28,11 @@ type state struct {
 
 	// finishing marks a goroutine that paused after it completed.
 	// Resume uses this per task flag to clear the stack.
-	finishing bool
+	finishing      bool
+	panicCapturing bool
+	panicOrigin    stackState
+	panicReplay    uintptr
+	panicTarget    uintptr
 }
 
 // stackState is the saved state of a stack while unwound.
@@ -128,10 +132,58 @@ func Pause() {
 // PanicUnwind starts an Asyncify unwind without pausing the task. A defer
 // frame stops the unwind before it reaches the scheduler.
 func PanicUnwind() {
+	currentTask.state.panicCapturing = true
 	panicStackState.asyncifysp = currentTask.state.asyncifysp
+	if currentTask.state.panicReplay != 0 {
+		// Preserve the first unwind segment while later defer frames unwind.
+		panicStackState.asyncifysp = currentTask.state.panicOrigin.asyncifysp
+	}
 	panicStackState.csp = currentTask.state.csp
 	panicStackState.unwind()
 }
+
+func StopPanicUnwind(replay, target uintptr) {
+	if !currentTask.state.panicCapturing {
+		return
+	}
+	currentTask.state.panicCapturing = false
+	if currentTask.state.panicReplay == 0 {
+		currentTask.state.panicOrigin = panicStackState
+		currentTask.state.panicReplay = replay
+		currentTask.state.panicTarget = target
+	}
+}
+
+func ClearPanicReplay() {
+	if currentTask == nil {
+		return
+	}
+	// An older continuation may reference stack memory reused while handling a
+	// nested panic, so discard it instead of attempting an unsafe replay.
+	currentTask.state.panicCapturing = false
+	currentTask.state.panicOrigin = stackState{}
+	currentTask.state.panicReplay = 0
+	currentTask.state.panicTarget = 0
+}
+
+func PanicRewindData() unsafe.Pointer {
+	return unsafe.Pointer(&currentTask.state.panicOrigin)
+}
+
+func PanicRewindStackPointer() unsafe.Pointer {
+	return currentTask.state.panicOrigin.csp
+}
+
+func RewindPanic() bool {
+	if currentTask.state.panicReplay == 0 {
+		return false
+	}
+	tinygoPanicReplay(currentTask.state.panicReplay, currentTask.state.panicTarget)
+	return true
+}
+
+//go:linkname tinygoPanicReplay tinygo_panic_replay
+func tinygoPanicReplay(replay, target uintptr)
 
 //export tinygo_unwind
 func (*stackState) unwind()

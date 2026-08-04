@@ -53,6 +53,7 @@ const (
 
 // Builtin function panic(msg), used as a compiler intrinsic.
 func _panic(message interface{}) {
+	clearPanicReplay()
 	panicOrGoexit(message, panicTrue)
 }
 
@@ -92,6 +93,11 @@ func panicOrGoexit(message interface{}, panicking panicState) {
 	printstring("panic: ")
 	printitf(message)
 	printnl()
+	// Reconstruct the original Wasm frames before trapping so the host can
+	// report the panic site instead of only the final defer frame.
+	if rewindPanic() {
+		return
+	}
 	abort()
 }
 
@@ -115,6 +121,7 @@ func runtimeFatal(msg string) {
 }
 
 func runtimePanicAt(addr unsafe.Pointer, msg string) {
+	clearPanicReplay()
 	if panicStrategy() == tinygo.PanicStrategyTrap {
 		trap()
 	}
@@ -226,6 +233,7 @@ func _recover(useParentFrame bool) interface{} {
 		// Only the first call to recover returns the panic value. It also stops
 		// the panicking sequence, hence setting panicking to false.
 		frame.PanicState &^= panicTrue
+		clearPanicReplay()
 		return frame.PanicValue
 	}
 	// Not panicking, so return a nil interface.
