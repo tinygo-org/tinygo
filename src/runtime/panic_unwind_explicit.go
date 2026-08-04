@@ -7,3 +7,10 @@ func startUnwind(frame *deferFrame) bool {
 	setUnwindSignal(true)
 	return true
 }
+
+func clearPanicReplay() {
+}
+
+func rewindPanic() bool {
+	return false
+}
