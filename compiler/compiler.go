@@ -90,6 +90,7 @@ type compilerContext struct {
 	functionInfos    map[*ssa.Function]functionInfo
 	callProperties   map[*ssa.Function]functionCallProperties
 	asyncifyCatchers map[llvm.Type]llvm.Value
+	asyncifyReplays  map[llvm.Type]llvm.Value
 	astComments      map[string]*ast.CommentGroup
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
@@ -112,6 +113,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		functionInfos:    map[*ssa.Function]functionInfo{},
 		callProperties:   map[*ssa.Function]functionCallProperties{},
 		asyncifyCatchers: map[llvm.Type]llvm.Value{},
+		asyncifyReplays:  map[llvm.Type]llvm.Value{},
 		astComments:      map[string]*ast.CommentGroup{},
 	}
 

@@ -25,6 +25,12 @@ tinygo_unwind: // func (state *stackState) unwind()
     // Stop rewinding.
     call stop_rewind
     i32.const 0
+    i32.load8_u tinygo_panic_rewinding
+    if
+    // Trap as soon as the original frames have been reconstructed.
+    unreachable
+    end_if
+    i32.const 0
     i32.const 0
     i32.store8 tinygo_rewinding // tinygo_rewinding = false;
     else
@@ -97,6 +103,27 @@ tinygo_rewind: // func (state *state) rewind()
     return
     end_function
 
+.global tinygo_panic_replay
+.hidden tinygo_panic_replay
+.type tinygo_panic_replay,@function
+tinygo_panic_replay:
+    .functype tinygo_panic_replay (i32, i32, i32) -> ()
+    local.get 1
+    local.get 0
+    call_indirect (i32) -> ()
+    return
+    end_function
+
+.global tinygo_set_panic_rewind_stack_pointer
+.hidden tinygo_set_panic_rewind_stack_pointer
+.type tinygo_set_panic_rewind_stack_pointer,@function
+tinygo_set_panic_rewind_stack_pointer:
+    .functype tinygo_set_panic_rewind_stack_pointer (i32, i32) -> ()
+    local.get 0
+    global.set __stack_pointer
+    return
+    end_function
+
         .hidden tinygo_rewinding                # @tinygo_rewinding
         .type   tinygo_rewinding,@object
         .section        .bss.tinygo_rewinding,"",@
@@ -104,3 +131,11 @@ tinygo_rewind: // func (state *state) rewind()
 tinygo_rewinding:
         .int8   0                               # 0x0
         .size   tinygo_rewinding, 1
+
+        .hidden tinygo_panic_rewinding
+        .type   tinygo_panic_rewinding,@object
+        .section        .bss.tinygo_panic_rewinding,"",@
+        .globl  tinygo_panic_rewinding
+tinygo_panic_rewinding:
+        .int8   0
+        .size   tinygo_panic_rewinding, 1
