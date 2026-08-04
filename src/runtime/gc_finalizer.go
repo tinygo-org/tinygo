@@ -183,6 +183,38 @@ func finalizerBitClear(addr uintptr) {
 func encodeFinalizerPtr(addr uintptr) uintptr { return ^addr }
 func decodeFinalizerPtr(enc uintptr) uintptr  { return ^enc }
 
+// finalizerRegistered reports whether the table holds an entry for enc. This is
+// the linear answer the registration bitmap exists to avoid, so it is only used
+// under gcAsserts, to check the bitmap against the table it summarizes.
+func finalizerRegistered(enc uintptr) bool {
+	for n := finalizers; n != nil; n = n.next {
+		if n.obj == enc {
+			return true
+		}
+	}
+	return false
+}
+
+// assertFinalizerTable verifies the bookkeeping that the table, the counter and
+// the registration bitmap have to agree on. A registered entry without its bit
+// is the dangerous direction: the clear and replace paths trust a clear bit to
+// mean "nothing registered" and skip the table walk, so a missing bit turns
+// SetFinalizer(obj, nil) into a silent no-op and lets a re-registration add a
+// second entry, which runs the finalizer twice. Only called under gcAsserts.
+func assertFinalizerTable() {
+	var count uintptr
+	for n := finalizers; n != nil; n = n.next {
+		count++
+		addr := decodeFinalizerPtr(n.obj)
+		if isOnHeap(addr) && !finalizerBitGet(addr) {
+			runtimeFatal("gc: registered finalizer without its bitmap bit")
+		}
+	}
+	if count != numFinalizers {
+		runtimeFatal("gc: numFinalizers does not match the finalizer table")
+	}
+}
+
 // registerFinalizer records fn as the finalizer for the object at addr. A nil fn
 // removes any registration for the object. Growing the table (allocating a node)
 // is the only allocation and it happens here, on the caller, never during GC.
@@ -202,6 +234,11 @@ func registerFinalizer(addr uintptr, fn interface{}) {
 		gcLock.Lock()
 		tracked := isOnHeap(addr)
 		if tracked && !finalizerBitGet(addr) {
+			// Taking this shortcut on a stale bit would silently skip the
+			// removal, so check the answer against the table it stands in for.
+			if gcAsserts && finalizerRegistered(enc) {
+				runtimeFatal("gc: finalizer bit clear but the object is registered")
+			}
 			gcLock.Unlock()
 			return
 		}
@@ -236,6 +273,11 @@ func registerFinalizer(addr uintptr, fn interface{}) {
 		adoptFinalizerBits(wider)
 	}
 	tracked := isOnHeap(addr)
+	// Skipping the scan on a stale bit would add a second entry for an object
+	// that already has one, and its finalizer would then run twice.
+	if gcAsserts && tracked && !finalizerBitGet(addr) && finalizerRegistered(enc) {
+		runtimeFatal("gc: finalizer bit clear but the object is registered")
+	}
 	// Only an object whose bit is set can already be in the table, so a fresh
 	// object skips the scan entirely. An address the bitmap cannot describe
 	// (not on the heap) always scans, as before.
@@ -325,13 +367,33 @@ func scanFinalizers() {
 	// both serialized under gcLock.
 	var resurrected bool
 	for n := finalizerPending; n != nil; n = n.next {
-		markRoot(0, decodeFinalizerPtr(n.obj))
+		addr := decodeFinalizerPtr(n.obj)
+		if gcAsserts && !isOnHeap(addr) {
+			runtimeFatal("gc: pending finalizer for an object off the heap")
+		}
+		markRoot(0, addr)
 		resurrected = true
 	}
 	if resurrected {
 		// Re-scan so objects reachable only from resurrected objects also
 		// survive this sweep.
 		finishMark()
+		if gcAsserts {
+			// Every pending object must have survived the resurrection above.
+			// One that did not is about to be swept while its finalizer is
+			// still queued, which is a use-after-free in callFinalizer.
+			for n := finalizerPending; n != nil; n = n.next {
+				// Inside the collection, so the resurrected object is expected
+				// to carry the mark state rather than plain head.
+				if blockFromAddr(decodeFinalizerPtr(n.obj)).state() != blockStateMark {
+					runtimeFatal("gc: pending finalizer object was not resurrected")
+				}
+			}
+		}
+	}
+
+	if gcAsserts {
+		assertFinalizerTable()
 	}
 }
 
@@ -384,7 +446,21 @@ func dequeueFinalizer() (*finalizerEntry, unsafe.Pointer) {
 	var objPtr unsafe.Pointer
 	if n != nil {
 		finalizerPending = n.next
-		objPtr = unsafe.Pointer(decodeFinalizerPtr(n.obj))
+		addr := decodeFinalizerPtr(n.obj)
+		if gcAsserts {
+			if !isOnHeap(addr) {
+				runtimeFatal("gc: dequeued finalizer for an object off the heap")
+			}
+			// scanFinalizers resurrects everything still pending, so sweep must
+			// have left the object allocated. A freed block here means
+			// callFinalizer is about to run on memory that is back in the free
+			// list. The mark bit is not the thing to check: this runs outside a
+			// collection, where unmark has already turned mark back into head.
+			if blockFromAddr(addr).state() == blockStateFree {
+				runtimeFatal("gc: dequeued finalizer for a freed object")
+			}
+		}
+		objPtr = unsafe.Pointer(addr)
 	}
 	gcLock.Unlock()
 	return n, objPtr
