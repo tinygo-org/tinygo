@@ -1,6 +1,6 @@
 {
   "inherits": [
-    "py32f002b"
+    "py32f002bx5"
   ],
   "build-tags": [
     "embedfire_py32f002b",

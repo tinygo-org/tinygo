@@ -6,9 +6,9 @@
         "py32f002bxx",
         "no_gpio_afrh"
     ],
-    "linkerscript": "targets/py32f002b.ld",
+    "linkerscript": "targets/py32f002bx5.ld",
     "extra-files": [
-        "src/device/py32/py32f002axx.s"
+        "src/device/py32/py32f002bxx.s"
     ],
     "flash-command": "pyocd load -t py32f002bx5 {bin}"
 }

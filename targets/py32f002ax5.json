@@ -1,0 +1,14 @@
+{
+    "inherits": [
+        "py32"
+    ],
+    "build-tags": [
+        "py32f002axx",
+        "no_gpio_afrh"
+    ],
+    "linkerscript": "targets/py32f002ax5.ld",
+    "extra-files": [
+        "src/device/py32/py32f002axx.s"
+    ],
+    "flash-command": "pyocd load -t py32f002ax5 {bin}"
+}
