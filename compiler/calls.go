@@ -170,7 +170,8 @@ func (b *builder) createAsyncifyNoSuspendInvoke(fnType llvm.Type, fn llvm.Value,
 	result := builder.CreateCall(fnType, target, callArgs, "")
 	unwindType, unwindLLVMFn := b.getRuntimeFunction("unwindPending")
 	unwinding := builder.CreateCall(unwindType, unwindLLVMFn, []llvm.Value{llvm.Undef(b.dataPtrType)}, "")
-	b.emitAsyncifyCatchReturn(builder, fnType, result, entry, unwinding)
+	replay := b.createAsyncifyPanicReplay(wrapperType)
+	b.emitAsyncifyCatchReturn(builder, fnType, result, entry, unwinding, replay, wrapper)
 	builder.Dispose()
 
 	wrapperArgs := expanded
@@ -278,7 +279,8 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	unwindPointer := builder.CreateLoad(unwindLLVMFn.Type(), unwindGlobal, "")
 	unwindPointer.SetVolatile(true)
 	unwinding := builder.CreateCall(unwindType, unwindPointer, []llvm.Value{llvm.Undef(b.dataPtrType)}, "")
-	b.emitAsyncifyCatchReturn(builder, fnType, result, entry, unwinding)
+	replay := b.createAsyncifyPanicReplay(wrapperType)
+	b.emitAsyncifyCatchReturn(builder, fnType, result, entry, unwinding, replay, catchWrapper)
 	builder.Dispose()
 
 	// Keep the caller-to-catcher edge opaque so Binaryen instruments the
@@ -292,7 +294,55 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	return b.CreateCall(wrapperType, catchPointer, wrapperArgs, name)
 }
 
-func (b *builder) emitAsyncifyCatchReturn(builder llvm.Builder, fnType llvm.Type, result llvm.Value, entry llvm.BasicBlock, unwinding llvm.Value) {
+func (b *builder) createAsyncifyPanicReplay(catcherType llvm.Type) llvm.Value {
+	if replay, ok := b.asyncifyReplays[catcherType]; ok {
+		return replay
+	}
+
+	replayType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.uintptrType}, false)
+	replay := llvm.AddFunction(b.mod, "tinygo.asyncify.panicreplay."+strconv.Itoa(len(b.asyncifyReplays)), replayType)
+	replay.SetLinkage(llvm.InternalLinkage)
+	replay.AddFunctionAttr(b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0))
+	b.asyncifyReplays[catcherType] = replay
+
+	builder := b.ctx.NewBuilder()
+	defer builder.Dispose()
+	entry := b.ctx.AddBasicBlock(replay, "entry")
+	builder.SetInsertPointAtEnd(entry)
+
+	dataType, dataFn := b.getRuntimeFunction("panicRewindData")
+	data := builder.CreateCall(dataType, dataFn, []llvm.Value{llvm.Undef(b.dataPtrType)}, "")
+	stackType, stackFn := b.getRuntimeFunction("panicRewindStackPointer")
+	stackPointer := builder.CreateCall(stackType, stackFn, []llvm.Value{llvm.Undef(b.dataPtrType)}, "")
+	targetPointer := builder.CreateIntToPtr(replay.Param(0), b.dataPtrType, "")
+	setStackType, setStackFn := b.getRuntimeFunction("setPanicRewindStackPointer")
+	builder.CreateCall(setStackType, setStackFn, []llvm.Value{stackPointer, llvm.Undef(b.dataPtrType)}, "")
+
+	rewinding := b.mod.NamedGlobal("tinygo_rewinding")
+	if rewinding.IsNil() {
+		rewinding = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), "tinygo_rewinding")
+		rewinding.SetLinkage(llvm.ExternalLinkage)
+	}
+	builder.CreateStore(llvm.ConstInt(b.ctx.Int8Type(), 1, false), rewinding)
+	panicRewinding := b.mod.NamedGlobal("tinygo_panic_rewinding")
+	if panicRewinding.IsNil() {
+		panicRewinding = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), "tinygo_panic_rewinding")
+		panicRewinding.SetLinkage(llvm.ExternalLinkage)
+	}
+	builder.CreateStore(llvm.ConstInt(b.ctx.Int8Type(), 1, false), panicRewinding)
+
+	startType, startFn := b.getRuntimeFunction("asyncifyStartRewindImport")
+	builder.CreateCall(startType, startFn, []llvm.Value{data}, "")
+	args := make([]llvm.Value, len(catcherType.ParamTypes()))
+	for i, typ := range catcherType.ParamTypes() {
+		args[i] = llvm.Undef(typ)
+	}
+	builder.CreateCall(catcherType, targetPointer, args, "")
+	builder.CreateUnreachable()
+	return replay
+}
+
+func (b *builder) emitAsyncifyCatchReturn(builder llvm.Builder, fnType llvm.Type, result llvm.Value, entry llvm.BasicBlock, unwinding, replay, replayTarget llvm.Value) {
 	wrapper := entry.Parent()
 	stopBlock := b.ctx.AddBasicBlock(wrapper, "unwind.stop")
 	returnBlock := b.ctx.AddBasicBlock(wrapper, "return")
@@ -301,6 +351,10 @@ func (b *builder) emitAsyncifyCatchReturn(builder llvm.Builder, fnType llvm.Type
 	builder.SetInsertPointAtEnd(stopBlock)
 	stopType, stopFn := b.getRuntimeFunction("asyncifyStopUnwindImport")
 	builder.CreateCall(stopType, stopFn, nil, "")
+	saveType, saveFn := b.getRuntimeFunction("savePanicReplay")
+	replayPointer := builder.CreatePtrToInt(replay, b.uintptrType, "")
+	targetPointer := builder.CreatePtrToInt(replayTarget, b.uintptrType, "")
+	builder.CreateCall(saveType, saveFn, []llvm.Value{replayPointer, targetPointer, llvm.Undef(b.dataPtrType)}, "")
 	builder.CreateBr(returnBlock)
 
 	builder.SetInsertPointAtEnd(returnBlock)
@@ -489,7 +543,9 @@ func (b *builder) isUnwindRuntime() bool {
 	}
 	switch b.fn.Name() {
 	case "startUnwind", "currentDeferFrame", "unwindPending", "clearUnwind",
-		"getUnwindSignal", "setUnwindSignal":
+		"getUnwindSignal", "setUnwindSignal", "savePanicReplay",
+		"panicRewindData", "panicRewindStackPointer",
+		"setPanicRewindStackPointer", "rewindPanic":
 		return true
 	default:
 		return false
