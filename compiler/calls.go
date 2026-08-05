@@ -216,9 +216,9 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	var resultGlobal llvm.Value
 	if fnType.ReturnType().TypeKind() != llvm.VoidTypeKind {
 		targetType = llvm.FunctionType(b.ctx.VoidType(), paramTypes, false)
-		resultGlobal = llvm.AddGlobal(b.mod, b.dataPtrType, wrapperName+".result.ptr")
+		resultGlobal = llvm.AddGlobal(b.mod, fnType.ReturnType(), wrapperName+".result")
 		resultGlobal.SetLinkage(llvm.InternalLinkage)
-		resultGlobal.SetInitializer(llvm.ConstNull(b.dataPtrType))
+		resultGlobal.SetInitializer(llvm.ConstNull(fnType.ReturnType()))
 	}
 	targetWrapper := llvm.AddFunction(b.mod, wrapperName+".target", targetType)
 	targetWrapper.SetLinkage(llvm.InternalLinkage)
@@ -235,9 +235,8 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	if fnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
 		builder.CreateRetVoid()
 	} else {
-		resultPointer := builder.CreateLoad(b.dataPtrType, resultGlobal, "")
-		resultPointer.SetVolatile(true)
-		builder.CreateStore(result, resultPointer)
+		storeResult := builder.CreateStore(result, resultGlobal)
+		storeResult.SetVolatile(true)
 		builder.CreateRetVoid()
 	}
 	builder.Dispose()
@@ -255,19 +254,13 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	if fnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
 		result = builder.CreateCall(targetType, targetWrapper, catchArgs, "")
 	} else {
-		// Asyncify can restore a stale hidden result pointer during rewind. Use
-		// a volatile slot to select the current catcher's storage, restoring its
-		// previous value before the unwind can reach the scheduler. This also
-		// makes recursive use safe.
-		resultStorage := builder.CreateAlloca(fnType.ReturnType(), "")
-		previousResultPointer := builder.CreateLoad(b.dataPtrType, resultGlobal, "")
-		previousResultPointer.SetVolatile(true)
-		storeResultPointer := builder.CreateStore(resultStorage, resultGlobal)
-		storeResultPointer.SetVolatile(true)
+		// Asyncify runs one task at a time, and the target stores its result only
+		// after it finishes, so nested calls consume their results first.
 		builder.CreateCall(targetType, targetWrapper, catchArgs, "")
-		restoreResultPointer := builder.CreateStore(previousResultPointer, resultGlobal)
-		restoreResultPointer.SetVolatile(true)
-		result = builder.CreateLoad(fnType.ReturnType(), resultStorage, "")
+		result = builder.CreateLoad(fnType.ReturnType(), resultGlobal, "")
+		result.SetVolatile(true)
+		clearResult := builder.CreateStore(llvm.ConstNull(fnType.ReturnType()), resultGlobal)
+		clearResult.SetVolatile(true)
 	}
 	unwindType, unwindLLVMFn := b.getRuntimeFunction("unwindPending")
 	// This call must stay opaque to AddUnwindAssumptions. This catcher observes

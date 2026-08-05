@@ -20,6 +20,10 @@ func startUnwind(frame *deferFrame) bool {
 	return true
 }
 
+// Keep this bookkeeping out of the uninstrumented panic catcher so ordinary
+// scheduler unwinds do not retain its stack frame.
+//
+//go:noinline
 func savePanicReplay(replay, target uintptr) {
 	task.StopPanicUnwind(replay, target)
 }
