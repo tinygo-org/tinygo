@@ -6,21 +6,16 @@ import (
 	"device/arm"
 	"machine"
 
-	"device/py32"
-
 	"runtime/volatile"
 )
 
 var tickCounter volatile.Register64
 
-// Puya's raw SVDs define HSI_FS but omit its enumerated values.
-const rccICSCRHSIFrequency24MHz = 4
-
 //export Reset_Handler
 func main() {
 	preinit()
 
-	py32.RCC.SetICSCR_HSI_FS(rccICSCRHSIFrequency24MHz)
+	configureHSI()
 
 	ConfigureSystemTimer()
 	machine.InitSerial()

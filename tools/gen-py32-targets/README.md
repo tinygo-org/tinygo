@@ -22,6 +22,19 @@ Cortex-M0+ families inherit `py32`; PY32E407, PY32F403, and PY32F410 families
 inherit `py32-m4`, which uses TinyGo's standard soft-float Cortex-M4 ABI. Targets
 whose SVD has no `GPIO.AFRH` register receive the `no_gpio_afrh` build tag.
 
+Puya's SVDs are inconsistent about GPIO `groupName`: some describe identical
+ports as `GPIOA_Type`, `GPIOB_Type`, and so on, while others use one
+`GPIO_Type`. The `py32-svd` updater validates the register structures and
+patches the published SVDs to use the common `GPIO` group. This is a correction
+to the vendor metadata, not a target capability, so neither TinyGo's generic
+SVD generator nor the target build tags need PY32-specific handling for it.
+
+Real register-layout differences are selected by generated capability tags.
+These cover the `OSPEEDR`/`OSPDDER` GPIO spelling, RCC GPIO and UART clock
+registers, `USART` versus `UART` blocks, split USART receive/transmit data
+registers, and HSI selector availability. Keep these classifications in the
+target generator rather than adding long family expressions to machine files.
+
 Existing PY32 target files are retained for compatibility. In particular, their
 established aliases and flashing commands are not regenerated. Newly generated
 targets intentionally omit flashing commands because a compatible programmer
@@ -29,10 +42,11 @@ identifier has not been verified for every Puya part.
 
 ## Machine support status
 
-All target definitions can be loaded independently of machine-driver support.
-A minimal program currently compiles for 68 of the 87 concrete targets. The
-remaining targets are E407, F001C, F002C, F032, F403, F410, L090, T020, T090,
-and T092 devices whose raw SVD register layouts do not match assumptions in the
-existing generic PY32 GPIO, RCC, or UART implementations. Their definitions are
-included deliberately so machine support can be added without revisiting target
-and linker metadata.
+A minimal program compiles for all 87 concrete targets. GPIO, RCC, runtime
+clock setup, and the default serial block are selected according to each SVD's
+register layout. This is compile-time coverage, not hardware validation for
+every device. In particular, PY32F410 SVD interrupt metadata stops before the
+serial interrupts, so its default USART is configured without receive
+interrupts rather than assigning an unverified IRQ number. The M4 SVDs also do
+not expose the M0+ `ICSCR.HSI_FS` selector, so the runtime preserves their reset
+clock configuration.

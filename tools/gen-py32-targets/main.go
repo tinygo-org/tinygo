@@ -49,6 +49,51 @@ var noGPIOAFRH = map[string]bool{
 	"py32m010xx":  true,
 }
 
+var gpioOSPDDER = familySet("py32e407xx", "py32f410xx", "py32l090xx", "py32t090xx", "py32t092xx")
+var gpioClockAHB1 = familySet("py32e407xx", "py32f403xx")
+var gpioClockAHB = familySet("py32f410xx")
+var hsiFSOP = familySet("py32l090xx", "py32t090xx", "py32t092xx")
+var noHSIFS = familySet("py32e407xx", "py32f403xx", "py32f410xx")
+var uartType = familySet("py32t020xx")
+var usartSplitData = familySet("py32e407xx")
+var usartUnnumbered = familySet("py32f410xx")
+var uartClockAPB2 = familySet("py32e407xx", "py32f403xx", "py32f410xx")
+var uartNoInterrupt = familySet("py32f410xx")
+
+func familySet(names ...string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, name := range names {
+		set[name] = true
+	}
+	return set
+}
+
+func familyBuildTags(family string) []string {
+	tags := []string{family}
+	features := []struct {
+		name string
+		set  map[string]bool
+	}{
+		{"no_gpio_afrh", noGPIOAFRH},
+		{"py32_gpio_ospdder", gpioOSPDDER},
+		{"py32_gpio_clock_ahb1", gpioClockAHB1},
+		{"py32_gpio_clock_ahb", gpioClockAHB},
+		{"py32_hsi_fs_op", hsiFSOP},
+		{"py32_no_hsi_fs", noHSIFS},
+		{"py32_uart_type", uartType},
+		{"py32_usart_split_data", usartSplitData},
+		{"py32_usart_unnumbered", usartUnnumbered},
+		{"py32_uart_clock_apb2", uartClockAPB2},
+		{"py32_uart_no_interrupt", uartNoInterrupt},
+	}
+	for _, feature := range features {
+		if feature.set[family] {
+			tags = append(tags, feature.name)
+		}
+	}
+	return tags
+}
+
 var legacyTargets = map[string]bool{
 	// Keep pre-existing definitions, including established aliases and flashing
 	// commands. New definitions intentionally contain no flashing command.
@@ -158,13 +203,9 @@ func generate(out string, devices []device) error {
 		if families[family] == "m4" {
 			base = "py32-m4"
 		}
-		tags := []string{family}
-		if noGPIOAFRH[family] {
-			tags = append(tags, "no_gpio_afrh")
-		}
 		spec := target{
 			Inherits:   []string{base},
-			BuildTags:  tags,
+			BuildTags:  familyBuildTags(family),
 			ExtraFiles: []string{"src/device/py32/" + family + ".s"},
 		}
 		if err := writeJSON(filepath.Join(out, family+".json"), spec); err != nil {

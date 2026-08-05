@@ -3,7 +3,13 @@
         "py32-m4"
     ],
     "build-tags": [
-        "py32f410xx"
+        "py32f410xx",
+        "py32_gpio_ospdder",
+        "py32_gpio_clock_ahb",
+        "py32_no_hsi_fs",
+        "py32_usart_unnumbered",
+        "py32_uart_clock_apb2",
+        "py32_uart_no_interrupt"
     ],
     "extra-files": [
         "src/device/py32/py32f410xx.s"

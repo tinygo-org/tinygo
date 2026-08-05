@@ -152,18 +152,18 @@ const (
 	gpioModeOutput    = 1
 	gpioModeAlternate = 2
 	gpioModeAnalog    = 3
-	gpioModeMask      = py32.GPIO_MODER_MODE0_Msk
+	gpioModeMask      = 0x3
 
 	gpioPullFloating = 0
 	gpioPullUp       = 1
 	gpioPullDown     = 2
-	gpioPullMask     = py32.GPIO_PUPDR_PUPD0_Msk
+	gpioPullMask     = 0x3
 
 	gpioOutputSpeedLow      = 0
 	gpioOutputSpeedMedium   = 1
 	gpioOutputSpeedHigh     = 2
 	gpioOutputSpeedVeryHigh = 3
-	gpioOutputSpeedMask     = py32.GPIO_OSPEEDR_OSPEED0_Msk
+	gpioOutputSpeedMask     = 0x3
 
 	gpioOutputTypePushPull = 0
 )
@@ -214,18 +214,13 @@ func (p Pin) Configure(config PinConfig) {
 		port.PUPDR.ReplaceBits(gpioPullUp, gpioPullMask, pos)
 	case PinOutput:
 		port.MODER.ReplaceBits(gpioModeOutput, gpioModeMask, pos)
-		port.OTYPER.ReplaceBits(gpioOutputTypePushPull, py32.GPIO_OTYPER_OT0_Msk, pos>>1)
-		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
+		port.OTYPER.ReplaceBits(gpioOutputTypePushPull, 0x1, pos>>1)
+		setPinOutputSpeed(port, gpioOutputSpeedHigh, pos)
 	case PinInputAnalog:
 		port.MODER.ReplaceBits(gpioModeAnalog, gpioModeMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 	case PinAlternate:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
-		port.OSPEEDR.ReplaceBits(gpioOutputSpeedHigh, gpioOutputSpeedMask, pos)
+		setPinOutputSpeed(port, gpioOutputSpeedHigh, pos)
 	}
-}
-
-func (p Pin) enableClock() {
-	portNo := p.getPortNumber()
-	py32.RCC.IOPENR.SetBits(1 << portNo)
 }

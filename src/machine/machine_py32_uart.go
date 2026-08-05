@@ -1,4 +1,4 @@
-//go:build py32
+//go:build py32 && !py32_uart_type
 
 package machine
 
@@ -6,21 +6,6 @@ import (
 	"device/py32"
 	"runtime/interrupt"
 )
-
-// errUARTWriteTimeout is returned by writeByte when the TX register does not
-// become empty within the retry budget.
-type uartError string
-
-func (e uartError) Error() string { return string(e) }
-
-const errUARTWriteTimeout uartError = "UART: write timeout"
-
-// uartTXRetries is the upper bound on the SR polling loop in writeByte and
-// flush. At the PY32F maximum CPU frequency of 48 MHz, an APB peripheral read
-// plus loop overhead costs roughly 5 cycles (~104 ns). One byte at 9600 baud
-// takes ~1.04 ms, which at that rate corresponds to ~10 000 iterations — the
-// worst case for any standard baud rate at the highest supported clock.
-const uartTXRetries = 10000
 
 // UART implements a minimal USART driver for PY32 parts. It works with any of
 // the on-chip USART peripherals: the peripheral-specific wiring (clock gate and
@@ -34,7 +19,7 @@ type UART struct {
 }
 
 // DefaultUART is the first USART (USART1) and backs machine.Serial.
-var DefaultUART = &UART{Bus: py32.USART1, Buffer: NewRingBuffer(), setup: setupUSART1}
+var DefaultUART = &UART{Bus: defaultUSART(), Buffer: NewRingBuffer(), setup: setupUSART1}
 
 func (uart *UART) Configure(config UARTConfig) error {
 
@@ -69,14 +54,12 @@ func (uart *UART) Configure(config UARTConfig) error {
 // without the var initializer forming an initialization cycle.
 func setupUSART1(uart *UART) {
 	usart1RX = uart
-	py32.RCC.APBENR2.SetBits(py32.RCC_APBENR2_USART1EN)
-	uart.irq = interrupt.New(py32.IRQ_USART1, handleUSART1Interrupt)
-	uart.irq.SetPriority(0xc0)
-	uart.irq.Enable()
+	enableUSART1Clock()
+	configureUSART1Interrupt(uart)
 }
 
 func handleUSART1Interrupt(interrupt.Interrupt) {
-	usart1RX.Receive(uint8(usart1RX.Bus.DR.Get()))
+	usart1RX.Receive(uint8(readUSARTData(usart1RX.Bus)))
 }
 
 // usart1RX is the UART whose RX interrupt is serviced by handleUSART1Interrupt.
@@ -87,19 +70,19 @@ var usart1RX *UART
 
 func (uart *UART) writeByte(c byte) error {
 	retries := uartTXRetries
-	for retries > 0 && uart.Bus.SR.Get()&py32.USART_SR_TXE == 0 {
+	for retries > 0 && !usartTXReady(uart.Bus) {
 		retries--
 	}
 	if retries <= 0 {
 		return errUARTWriteTimeout
 	}
-	uart.Bus.DR.Set(uint32(c))
+	writeUSARTData(uart.Bus, uint32(c))
 	return nil
 }
 
 func (uart *UART) flush() {
 	retries := uartTXRetries
-	for retries > 0 && uart.Bus.SR.Get()&py32.USART_SR_TC == 0 {
+	for retries > 0 && !usartTXComplete(uart.Bus) {
 		retries--
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,9 @@ func TestGenerate(t *testing.T) {
 	checkTarget(t, filepath.Join(out, "py32e407xc.json"), "py32e407xx", "targets/py32e407xc.ld")
 	checkTarget(t, filepath.Join(out, "py32f001xx.json"), "py32", "")
 	checkTarget(t, filepath.Join(out, "py32f410xx.json"), "py32-m4", "")
+	checkBuildTags(t, filepath.Join(out, "py32e407xx.json"), "py32e407xx", "py32_gpio_ospdder", "py32_gpio_clock_ahb1", "py32_no_hsi_fs", "py32_usart_split_data", "py32_uart_clock_apb2")
+	checkBuildTags(t, filepath.Join(out, "py32f410xx.json"), "py32f410xx", "py32_gpio_ospdder", "py32_gpio_clock_ahb", "py32_no_hsi_fs", "py32_usart_unnumbered", "py32_uart_clock_apb2", "py32_uart_no_interrupt")
+	checkBuildTags(t, filepath.Join(out, "py32t020xx.json"), "py32t020xx", "py32_uart_type")
 
 	data, err := os.ReadFile(filepath.Join(out, "py32e407xc.ld"))
 	if err != nil {
@@ -69,6 +73,21 @@ func TestGenerate(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(out, "py32f030x8.json")); !os.IsNotExist(err) {
 		t.Fatalf("legacy target was generated: %v", err)
+	}
+}
+
+func checkBuildTags(t *testing.T, path string, want ...string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec target
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(spec.BuildTags, ","); got != strings.Join(want, ",") {
+		t.Errorf("%s build tags are %q, want %q", path, got, strings.Join(want, ","))
 	}
 }
 
