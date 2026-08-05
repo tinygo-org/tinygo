@@ -13,11 +13,14 @@ import (
 
 var tickCounter volatile.Register64
 
+// Puya's raw SVDs define HSI_FS but omit its enumerated values.
+const rccICSCRHSIFrequency24MHz = 4
+
 //export Reset_Handler
 func main() {
 	preinit()
 
-	py32.RCC.SetICSCR_HSI_FS(py32.RCC_ICSCR_HSI_FS_Freq24MHz)
+	py32.RCC.SetICSCR_HSI_FS(rccICSCRHSIFrequency24MHz)
 
 	ConfigureSystemTimer()
 	machine.InitSerial()

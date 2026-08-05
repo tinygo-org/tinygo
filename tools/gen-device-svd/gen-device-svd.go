@@ -668,12 +668,12 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 			// try use bitRange
 			// example string: "[20:16]"
 			parts := strings.Split(strings.Trim(*fieldEl.BitRange, "[]"), ":")
-			l, err := strconv.ParseUint(parts[1], 0, 32)
+			l, err := strconv.ParseUint(parts[1], 10, 32)
 			if err != nil {
 				panic(err)
 			}
 			lsb = uint32(l)
-			m, err := strconv.ParseUint(parts[0], 0, 32)
+			m, err := strconv.ParseUint(parts[0], 10, 32)
 			if err != nil {
 				panic(err)
 			}
@@ -1281,7 +1281,7 @@ const (
 	{{- "\n"}}
 {{- end}}
 	// Highest interrupt number on this device.
-	IRQ_max = {{.interruptMax}} 
+	IRQ_max = {{.interruptMax}}
 )
 
 // Pseudo function call that is replaced by the compiler with the actual

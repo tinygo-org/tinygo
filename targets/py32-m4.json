@@ -1,0 +1,10 @@
+{
+    "inherits": [
+        "cortex-m4"
+    ],
+    "scheduler": "none",
+    "gc": "none",
+    "build-tags": [
+        "py32"
+    ]
+}

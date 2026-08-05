@@ -1,0 +1,9 @@
+{
+    "inherits": [
+        "py32md420xx"
+    ],
+    "build-tags": [
+        "py32md420x8"
+    ],
+    "linkerscript": "targets/py32md420x8.ld"
+}

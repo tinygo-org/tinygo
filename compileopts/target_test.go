@@ -1,8 +1,10 @@
 package compileopts
 
 import (
+	"encoding/csv"
 	"errors"
 	"io/fs"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -51,6 +53,38 @@ func TestLoadTarget_InheritableOnlyTargetStillLoadable(t *testing.T) {
 	_, err := LoadTarget(&Options{Target: "esp32"})
 	if err != nil {
 		t.Errorf("LoadTarget should still load inheritable-only target esp32: %v", err)
+	}
+}
+
+func TestLoadPY32ConcreteTargets(t *testing.T) {
+	file, err := os.Open("../tools/gen-py32-targets/devices.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	records, err := csv.NewReader(file).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range records[1:] {
+		part, core := record[0], record[2]
+		t.Run(part, func(t *testing.T) {
+			spec, err := LoadTarget(&Options{Target: part})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if spec.LinkerScript == "" {
+				t.Error("concrete target has no linker script")
+			}
+			wantCPU := "cortex-m0plus"
+			if core == "m4" {
+				wantCPU = "cortex-m4"
+			}
+			if spec.CPU != wantCPU {
+				t.Errorf("CPU is %q, want %q", spec.CPU, wantCPU)
+			}
+		})
 	}
 }
 
