@@ -1173,7 +1173,7 @@ func TestGoexitCrash(t *testing.T) {
 		panicStrategy string
 		want          string
 	}{
-		{"wasip1-deadlock", "deadlock", "", "deadlocked: no event source"},
+		{"wasip1-deadlock", "deadlock", "", "fatal error: all goroutines are asleep - deadlock!"},
 		{"wasip1-goexit-panic-trap", "defer", "trap", "defer ran"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
