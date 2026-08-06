@@ -17,8 +17,8 @@ func addLiveTask(t *Task) {
 	atomic.AddUint32(&liveTasks, 1)
 }
 
-// Exit exits the current task because runtime.Goexit was called.
-func Exit() {
+// Goexit exits the current task because runtime.Goexit was called.
+func Goexit() {
 	exit(true)
 }
 
