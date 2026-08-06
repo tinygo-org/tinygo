@@ -2,6 +2,8 @@
 
 package machine
 
+import "device/py32"
+
 // SetAltFunc selects the alternate function for a GPIO pin on PY32F devices.
 //
 // Each pin supports up to 16 alternate functions (AF0–AF15), encoded as a
@@ -17,8 +19,8 @@ package machine
 func (p Pin) SetAltFunc(af uint8) {
 	port, pin := p.getPort()
 	if pin >= 8 {
-		port.AFRH.ReplaceBits(uint32(af), 0xF, (pin%8)*4)
+		port.AFRH.ReplaceBits(uint32(af), py32.GPIO_AFRL_AFSEL0_Msk, (pin%8)*4)
 	} else {
-		port.AFRL.ReplaceBits(uint32(af), 0xF, (pin%8)*4)
+		port.AFRL.ReplaceBits(uint32(af), py32.GPIO_AFRL_AFSEL0_Msk, (pin%8)*4)
 	}
 }

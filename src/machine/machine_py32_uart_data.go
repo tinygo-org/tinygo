@@ -1,4 +1,4 @@
-//go:build py32 && !py32_uart_type && !py32_usart_split_data
+//go:build py32 && !py32_uart_type && !py32_usart_split_data && !py32_usart_txe_txf
 
 package machine
 
@@ -13,9 +13,9 @@ func writeUSARTData(bus *py32.USART_Type, value uint32) {
 }
 
 func usartTXReady(bus *py32.USART_Type) bool {
-	return bus.SR.Get()&0x80 != 0
+	return bus.SR.Get()&py32.USART_SR_TXE != 0
 }
 
 func usartTXComplete(bus *py32.USART_Type) bool {
-	return bus.SR.Get()&0x40 != 0
+	return bus.SR.Get()&py32.USART_SR_TC != 0
 }

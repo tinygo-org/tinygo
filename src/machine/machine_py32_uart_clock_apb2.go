@@ -5,5 +5,5 @@ package machine
 import "device/py32"
 
 func enableUSART1Clock() {
-	py32.RCC.APB2ENR.SetBits(1 << 14)
+	py32.RCC.APB2ENR.SetBits(py32.RCC_APB2ENR_USART1EN)
 }

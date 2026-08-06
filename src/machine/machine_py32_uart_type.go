@@ -20,9 +20,9 @@ func (uart *UART) Configure(config UARTConfig) error {
 		config.BaudRate = 115200
 	}
 
-	py32.RCC.APBENR1.SetBits(1 << 17)
+	py32.RCC.APBENR1.SetBits(py32.RCC_APBENR1_UART1EN)
 	uart.Bus.CR1.Set(0)
-	uart.Bus.CR2.Set(1) // RXNEIE
+	uart.Bus.CR2.Set(py32.UART_CR2_RXNEIE)
 	uart.Bus.CR3.Set(0)
 	uart.Bus.BRR.Set((CPUFrequency() + config.BaudRate/2) / config.BaudRate)
 
@@ -39,7 +39,7 @@ func handleUART1Interrupt(interrupt.Interrupt) {
 
 func (uart *UART) writeByte(c byte) error {
 	retries := uartTXRetries
-	for retries > 0 && uart.Bus.SR.Get()&0x40 == 0 {
+	for retries > 0 && uart.Bus.SR.Get()&py32.UART_SR_TXE == 0 {
 		retries--
 	}
 	if retries <= 0 {
@@ -51,7 +51,7 @@ func (uart *UART) writeByte(c byte) error {
 
 func (uart *UART) flush() {
 	retries := uartTXRetries
-	for retries > 0 && uart.Bus.SR.Get()&0x40 == 0 {
+	for retries > 0 && uart.Bus.SR.Get()&py32.UART_SR_TXE == 0 {
 		retries--
 	}
 }

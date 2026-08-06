@@ -145,27 +145,26 @@ const (
 )
 const PinInput PinMode = PinInputFloating
 
-// Puya's raw SVDs define these fields and masks but do not provide their
-// enumerated values. These encodings are shared by the supported PY32 parts.
+// These unshifted encodings are shared by the supported PY32 parts. Register
+// masks come from the generated device definitions.
 const (
 	gpioModeInput     = 0
 	gpioModeOutput    = 1
 	gpioModeAlternate = 2
 	gpioModeAnalog    = 3
-	gpioModeMask      = 0x3
 
 	gpioPullFloating = 0
 	gpioPullUp       = 1
 	gpioPullDown     = 2
-	gpioPullMask     = 0x3
+	gpioPullMask     = py32.GPIO_PUPDR_PUPD0_Msk
 
 	gpioOutputSpeedLow      = 0
 	gpioOutputSpeedMedium   = 1
 	gpioOutputSpeedHigh     = 2
 	gpioOutputSpeedVeryHigh = 3
-	gpioOutputSpeedMask     = 0x3
 
 	gpioOutputTypePushPull = 0
+	gpioOutputTypeMask     = py32.GPIO_OTYPER_OT0_Msk
 )
 
 func (p Pin) getPortNumber() uint8 {
@@ -184,15 +183,15 @@ func (p Pin) getPort() (*py32.GPIO_Type, uint8) {
 func (p Pin) Set(high bool) {
 	port, pin := p.getPort()
 	if high {
-		port.BSRR.Set(1 << pin)
+		port.BSRR.Set(py32.GPIO_BSRR_BS0 << pin)
 	} else {
-		port.BSRR.Set(1 << (pin + 16))
+		port.BSRR.Set(py32.GPIO_BSRR_BR0 << pin)
 	}
 }
 
 func (p Pin) Get() bool {
 	port, pin := p.getPort()
-	val := port.IDR.Get() & (1 << pin)
+	val := port.IDR.Get() & (py32.GPIO_IDR_ID0 << pin)
 	return val > 0
 }
 
@@ -214,7 +213,7 @@ func (p Pin) Configure(config PinConfig) {
 		port.PUPDR.ReplaceBits(gpioPullUp, gpioPullMask, pos)
 	case PinOutput:
 		port.MODER.ReplaceBits(gpioModeOutput, gpioModeMask, pos)
-		port.OTYPER.ReplaceBits(gpioOutputTypePushPull, 0x1, pos>>1)
+		port.OTYPER.ReplaceBits(gpioOutputTypePushPull, gpioOutputTypeMask, pos>>1)
 		setPinOutputSpeed(port, gpioOutputSpeedHigh, pos)
 	case PinInputAnalog:
 		port.MODER.ReplaceBits(gpioModeAnalog, gpioModeMask, pos)

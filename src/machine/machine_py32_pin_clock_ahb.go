@@ -5,6 +5,5 @@ package machine
 import "device/py32"
 
 func (p Pin) enableClock() {
-	// PY32F410 places IOPAEN at bit 8 of AHBENR.
-	py32.RCC.AHBENR.SetBits(1 << (p.getPortNumber() + 8))
+	py32.RCC.AHBENR.SetBits(py32.RCC_AHBENR_IOPAEN << p.getPortNumber())
 }

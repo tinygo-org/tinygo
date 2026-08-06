@@ -4,7 +4,9 @@
     ],
     "build-tags": [
         "py32f001cxx",
-        "no_gpio_afrh"
+        "no_gpio_afrh",
+        "py32_hsi_fs_literal4",
+        "py32_usart1_clock_literal"
     ],
     "extra-files": [
         "src/device/py32/py32f001cxx.s"

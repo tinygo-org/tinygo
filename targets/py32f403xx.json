@@ -4,7 +4,7 @@
     ],
     "build-tags": [
         "py32f403xx",
-        "py32_gpio_clock_ahb1",
+        "py32_gpio_clock_ahb2",
         "py32_no_hsi_fs",
         "py32_uart_clock_apb2"
     ],
