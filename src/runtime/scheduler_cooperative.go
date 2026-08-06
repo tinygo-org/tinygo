@@ -89,7 +89,7 @@ func goexit() {
 	if finalizerIdleGC != nil {
 		task.MarkFinishing()
 	}
-	task.Exit()
+	task.Goexit()
 }
 
 // Add this task to the end of the run queue.
