@@ -72,6 +72,10 @@ func free(ptr unsafe.Pointer) {
 	// Memory is never freed.
 }
 
+//go:noinline
+func freeTaskStack(ptr uintptr) {
+}
+
 func markRoots(start, end uintptr) {
 	runtimeFatal("unreachable: markRoots")
 }

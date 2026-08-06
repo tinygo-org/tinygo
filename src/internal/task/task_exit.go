@@ -22,8 +22,16 @@ func Goexit() {
 	exit(true)
 }
 
+// Exit exits the current task after its entry function returns.
+func Exit() {
+	exit(false)
+}
+
 func exit(goexit bool) {
 	t := Current()
+	if hasReleasableStack {
+		t.Exited = true
+	}
 	remaining := atomic.AddUint32(&liveTasks, ^uint32(0))
 	if t == mainTask {
 		if goexit {
