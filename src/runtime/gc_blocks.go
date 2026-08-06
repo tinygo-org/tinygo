@@ -537,6 +537,22 @@ func free(ptr unsafe.Pointer) {
 	// TODO: free blocks on request, when the compiler knows they're unused.
 }
 
+//go:noinline
+func freeTaskStack(addr uintptr) {
+	ptr := unsafe.Pointer(addr)
+	gcLock.Lock()
+	firstBlock := blockFromAddr(addr)
+	if gcAsserts && firstBlock.pointer() != ptr {
+		runtimeFatal("gc: freeing pointer inside allocation")
+	}
+	lastBlock := firstBlock.findHead()
+	for block := firstBlock; block <= lastBlock; block++ {
+		block.free()
+	}
+	insertFreeRange(ptr, uintptr(lastBlock-firstBlock+1))
+	gcLock.Unlock()
+}
+
 // GC performs a garbage collection cycle.
 func GC() {
 	gcLock.Lock()

@@ -28,6 +28,10 @@ func free(ptr unsafe.Pointer) {
 	// Nothing to free when nothing gets allocated.
 }
 
+//go:noinline
+func freeTaskStack(ptr uintptr) {
+}
+
 func GC() {
 	// Unimplemented.
 }

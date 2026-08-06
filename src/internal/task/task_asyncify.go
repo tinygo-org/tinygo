@@ -24,7 +24,8 @@ type state struct {
 	// stackState is the state of the stack while unwound.
 	stackState
 
-	launched bool
+	stackBase uintptr
+	launched  bool
 
 	// finishing marks a goroutine that paused after it completed.
 	// Resume uses this per task flag to clear the stack.
@@ -34,6 +35,8 @@ type state struct {
 	panicReplay    uintptr
 	panicTarget    uintptr
 }
+
+const hasReleasableStack = true
 
 // stackState is the saved state of a stack while unwound.
 // The stack is arranged with asyncify at the bottom, C stack at the top, and a gap of available stack space between the two.
@@ -76,8 +79,8 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	s.entry = fn
 	s.args = args
 
-	// Create a stack.
 	stack := runtime_alloc(stackSize, nil)
+	s.stackBase = uintptr(stack)
 
 	// Set up the stack canary, a random number that should be checked when
 	// switching from the task back to the scheduler. The stack canary pointer
@@ -152,6 +155,7 @@ func StopPanicUnwind(replay, target uintptr) {
 		currentTask.state.panicReplay = replay
 		currentTask.state.panicTarget = target
 	}
+	panicStackState = stackState{}
 }
 
 func ClearPanicReplay() {
@@ -164,6 +168,7 @@ func ClearPanicReplay() {
 	currentTask.state.panicOrigin = stackState{}
 	currentTask.state.panicReplay = 0
 	currentTask.state.panicTarget = 0
+	panicStackState = stackState{}
 }
 
 func PanicRewindData() unsafe.Pointer {
@@ -210,7 +215,12 @@ func (t *Task) Resume() {
 	if uintptr(t.state.asyncifysp) > uintptr(t.state.csp) {
 		runtimeFatal("stack overflow")
 	}
-	if t.state.finishing {
+	if t.Exited {
+		runtime_freeTaskStack(t.state.stackBase)
+		t.state = state{}
+		t.gcData = gcData{}
+		t.DeferFrame = nil
+	} else if t.state.finishing {
 		// The task is complete. Clear stale stack pointers and release its argument bundle.
 		t.state.finishing = false
 		t.clearStack()
