@@ -33,7 +33,7 @@ func deadlock() {
 }
 
 func goexit() {
-	task.Exit()
+	task.Goexit()
 }
 
 // Mark the given task as ready to resume.
