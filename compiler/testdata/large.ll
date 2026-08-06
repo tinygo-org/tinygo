@@ -287,22 +287,6 @@ declare void @runtime.savePanicReplay(i32, i32, ptr) #0
 
 declare void @runtime.clearUnwind(ptr) #0
 
-; Function Attrs: noinline
-define internal i8 @main.deferLargeValue.asyncifycatch.1(ptr %0, ptr %1) #7 {
-entry:
-  %2 = call i8 @main.readLargeValue(ptr %0, ptr %1)
-  %3 = call i1 @runtime.unwindPending(ptr undef)
-  br i1 %3, label %unwind.stop, label %return
-
-unwind.stop:                                      ; preds = %entry
-  call void @runtime.asyncifyStopUnwindImport()
-  call void @runtime.savePanicReplay(i32 ptrtoint (ptr @tinygo.asyncify.panicreplay.0 to i32), i32 ptrtoint (ptr @main.deferLargeValue.asyncifycatch.1 to i32), ptr undef)
-  br label %return
-
-return:                                           ; preds = %unwind.stop, %entry
-  ret i8 %2
-}
-
 ; Function Attrs: nounwind
 define hidden void @main.goLargeValue(ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
