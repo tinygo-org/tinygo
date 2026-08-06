@@ -148,6 +148,13 @@ func (b *builder) createAsyncifyNoSuspendInvoke(fnType llvm.Type, fn llvm.Value,
 		paramTypes = append([]llvm.Type{fn.Type()}, paramTypes...)
 	}
 	wrapperType := llvm.FunctionType(fnType.ReturnType(), paramTypes, false)
+	if direct {
+		if wrapper, ok := b.directCatchers[fn]; ok {
+			return b.CreateCall(wrapperType, wrapper, expanded, name)
+		}
+	} else if wrapper, ok := b.indirectCatchers[wrapperType]; ok {
+		return b.CreateCall(wrapperType, wrapper, append([]llvm.Value{fn}, expanded...), name)
+	}
 	wrapperName := b.llvmFn.Name() + ".asyncifycatch." + strconv.Itoa(b.asyncifyCatchIndex)
 	b.asyncifyCatchIndex++
 	wrapper := llvm.AddFunction(b.mod, wrapperName, wrapperType)
@@ -177,6 +184,9 @@ func (b *builder) createAsyncifyNoSuspendInvoke(fnType llvm.Type, fn llvm.Value,
 	wrapperArgs := expanded
 	if !direct {
 		wrapperArgs = append([]llvm.Value{fn}, expanded...)
+		b.indirectCatchers[wrapperType] = wrapper
+	} else {
+		b.directCatchers[fn] = wrapper
 	}
 	return b.CreateCall(wrapperType, wrapper, wrapperArgs, name)
 }
