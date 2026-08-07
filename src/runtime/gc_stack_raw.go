@@ -12,7 +12,7 @@ var gcScanState atomic.Uint32
 
 func gcMarkReachable() {
 	markStack()
-	findGlobals(markRoots)
+	markGlobals()
 }
 
 // markStack marks all root pointers found on the stack.

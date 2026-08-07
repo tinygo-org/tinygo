@@ -1293,6 +1293,9 @@ func makeGlobalsModule(ctx llvm.Context, globals map[string]map[string]string, m
 			global := llvm.AddGlobal(mod, stringType, globalName)
 			global.SetInitializer(initializer)
 			global.SetAlignment(targetData.PrefTypeAlignment(stringType))
+			// Keep external linkage for module resolution. Hidden visibility permits internalization.
+			// See https://llvm.org/docs/LangRef.html#visibility-styles.
+			global.SetVisibility(llvm.HiddenVisibility)
 		}
 	}
 
