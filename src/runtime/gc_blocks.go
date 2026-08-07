@@ -31,6 +31,7 @@ package runtime
 // Moss.
 
 import (
+	"internal/gclayout"
 	"internal/reflectlite"
 	"internal/task"
 	"runtime/interrupt"
@@ -501,7 +502,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 
 func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	if ptr == nil {
-		return alloc(size, nil)
+		return alloc(size, gclayout.NoPtrs.AsPtr())
 	}
 
 	// Find the first block of the original allocation.
@@ -526,7 +527,7 @@ func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	}
 
 	// Create a new allocation and copy the old data.
-	newAlloc := alloc(size, nil)
+	newAlloc := alloc(size, gclayout.NoPtrs.AsPtr())
 	memcpy(newAlloc, ptr, oldSize)
 	free(ptr)
 

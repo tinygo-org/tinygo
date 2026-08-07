@@ -166,6 +166,11 @@ type RawType struct {
 	meta uint8 // metadata byte, contains kind and flags (see constants above)
 }
 
+type basicType struct {
+	RawType
+	ptrTo *RawType
+}
+
 // All types that have an element type: named, chan, slice, array, map (but not
 // pointer because it doesn't have ptrTo).
 type elemType struct {
@@ -200,6 +205,7 @@ type arrayType struct {
 	elem      *RawType
 	arrayLen  uintptr
 	slicePtr  *RawType
+	layout    unsafe.Pointer
 }
 
 type mapType struct {
@@ -208,6 +214,7 @@ type mapType struct {
 	ptrTo     *RawType
 	elem      *RawType
 	key       *RawType
+	typeInfo  unsafe.Pointer
 }
 
 // namedType is the type descriptor for named types. The numMethod field uses
@@ -243,6 +250,7 @@ type structType struct {
 	pkgpath   *byte
 	size      uint32
 	numField  uint16
+	layout    unsafe.Pointer
 	fields    [1]structField // the remaining fields are all of type structField
 	// methods methodSet follows after fields, only when numMethod & numMethodHasMethodSet != 0
 }
@@ -298,6 +306,8 @@ func pointerTo(t *RawType) *RawType {
 	}
 
 	switch t.Kind() {
+	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr, Complex64, Complex128, Float32, Float64, String, UnsafePointer:
+		return (*basicType)(unsafe.Pointer(t)).ptrTo
 	case Pointer:
 		if tag := t.ptrtag(); tag < 3 {
 			return (*RawType)(unsafe.Add(unsafe.Pointer(t), 1))
@@ -306,6 +316,8 @@ func pointerTo(t *RawType) *RawType {
 		// TODO(dgryski): This is blocking https://github.com/tinygo-org/tinygo/issues/3131
 		// We need to be able to create types that match existing types to prevent typecode equality.
 		panic("reflect: cannot make *****T type")
+	case Interface, Func:
+		return (*interfaceType)(unsafe.Pointer(t)).ptrTo
 	case Struct:
 		return (*structType)(unsafe.Pointer(t)).ptrTo
 	default:
@@ -729,6 +741,7 @@ func (t *RawType) Align() int {
 }
 
 func (r *RawType) gcLayout() unsafe.Pointer {
+	r = r.underlying()
 	kind := r.Kind()
 
 	if kind < String {
@@ -736,16 +749,26 @@ func (r *RawType) gcLayout() unsafe.Pointer {
 	}
 
 	switch kind {
-	case Pointer, UnsafePointer, Chan, Map:
-		return gclayout.Pointer.AsPtr()
 	case String:
 		return gclayout.String.AsPtr()
+	case UnsafePointer, Chan, Pointer, Map:
+		return gclayout.Pointer.AsPtr()
+	case Interface, Func:
+		return gclayout.PointerPair.AsPtr()
 	case Slice:
 		return gclayout.Slice.AsPtr()
+	case Array:
+		return (*arrayType)(unsafe.Pointer(r)).layout
+	case Struct:
+		return (*structType)(unsafe.Pointer(r)).layout
+	default:
+		panic("reflect: invalid GC layout kind")
 	}
+}
 
-	// Unknown (for now); let the conservative pointer scanning handle it
-	return nil
+func (r *RawType) hashmapTypeInfo() unsafe.Pointer {
+	r = r.underlying()
+	return (*mapType)(unsafe.Pointer(r)).typeInfo
 }
 
 // FieldAlign returns the alignment if this type is used in a struct field. It

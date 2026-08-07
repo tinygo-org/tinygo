@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"internal/gclayout"
 	"sync/atomic"
 	"unsafe"
 )
@@ -11,7 +12,7 @@ import (
 func libc_malloc(size uintptr) unsafe.Pointer {
 	// Note: this zeroes the returned buffer which is not necessary.
 	// The same goes for bytealg.MakeNoZero.
-	return alloc(size, nil)
+	return alloc(size, gclayout.NoPtrs.AsPtr())
 }
 
 //export calloc

@@ -10,6 +10,7 @@ target triple = "wasm32--wasi"
 @layout3 = local_unnamed_addr global ptr @"main$alloc.6"
 @layout4 = local_unnamed_addr global ptr @"main$alloc.7"
 @bigobj1 = local_unnamed_addr global ptr @"main$alloc.8"
+@pointerFree10 = local_unnamed_addr global ptr @"main$alloc.9"
 @"main$alloc" = internal global [12 x i8] zeroinitializer, align 4
 @"main$alloc.1" = internal global [7 x i8] zeroinitializer, align 4
 @"main$alloc.2" = internal global [3 x i8] zeroinitializer, align 4
@@ -19,6 +20,7 @@ target triple = "wasm32--wasi"
 @"main$alloc.6" = internal global { ptr, ptr, ptr, i32, i32, ptr, ptr, i32, i32, i32, i32, i32, i32, ptr, ptr, i32, i32, i32, ptr, ptr, i32, i32, ptr, i32, i32, ptr } zeroinitializer, align 4
 @"main$alloc.7" = internal global [3 x { ptr, ptr, ptr, i32, i32, ptr, ptr, i32, i32, i32, i32, i32, i32, ptr, ptr, i32, i32, i32, ptr, ptr, i32, i32, ptr, i32, i32, ptr }] zeroinitializer, align 4
 @"main$alloc.8" = internal global { ptr, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, ptr } zeroinitializer, align 4
+@"main$alloc.9" = internal global [10 x i8] zeroinitializer, align 4
 
 define void @runtime.initAll() unnamed_addr {
   ret void

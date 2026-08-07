@@ -9,6 +9,7 @@ target triple = "wasm32-unknown-wasi"
 
 @"runtime/gc.layout:258-000000000000000000000000000000000000000000000000000000000000000002" = linkonce_odr unnamed_addr constant { i32, [33 x i8] } { i32 258, [33 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\02" }
 @"reflect/types.typeid:named:main.largeValue" = external constant i8
+@"runtime.hashmapType:[1025]byte:[1025]byte" = linkonce_odr unnamed_addr constant { ptr, ptr, ptr } { ptr inttoptr (i32 3 to ptr), ptr inttoptr (i32 3 to ptr), ptr inttoptr (i32 67108137 to ptr) }
 @llvm.used = appending global [15 x ptr] [ptr @"(main.largeReceiver).makeLargeValue", ptr @"(main.largeReceiver).readLargeValue", ptr @main.makeLargeValue, ptr @main.makeZeroLargeValue, ptr @main.readLargeValue, ptr @main.deferLargeValue, ptr @main.goLargeValue, ptr @main.makeLargeResults, ptr @main.makeTwoLargeResults, ptr @main.makeMixedLargeResults, ptr @main.chooseLargeValue, ptr @main.makePointerLargeValue, ptr @main.useLargeMap, ptr @main.useLargeChannel, ptr @main.selectLargeChannel]
 @"main$string" = internal unnamed_addr constant [31 x i8] c"blocking select matched no case", align 1
 @"main$pack" = internal unnamed_addr constant { %runtime._string } { %runtime._string { ptr @"main$string", i32 31 } }
@@ -350,7 +351,7 @@ declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #7
 define hidden i8 @main.useLargeMap(ptr readonly dereferenceable_or_null(1025) %key, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call ptr @runtime.hashmapMakeGeneric(i32 1025, i32 1025, i32 1, ptr null, ptr nonnull @runtime.hash32, ptr null, ptr nonnull @runtime.memequal, ptr undef) #9
+  %0 = call ptr @runtime.hashmapMakeGeneric(i32 1025, i32 1025, i32 1, ptr nonnull @"runtime.hashmapType:[1025]byte:[1025]byte", ptr null, ptr nonnull @runtime.hash32, ptr null, ptr nonnull @runtime.memequal, ptr undef) #9
   call void @runtime.trackPointer(ptr %0, ptr nonnull %stackalloc, ptr undef) #9
   call void @runtime.hashmapBinarySet(ptr %0, ptr %key, ptr %value, ptr undef) #9
   %result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #9
@@ -381,11 +382,11 @@ declare i32 @runtime.hash32(ptr, i32, i32, ptr) #0
 
 declare i1 @runtime.memequal(ptr, ptr, i32, ptr) #0
 
-declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr) #0
+declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr) #0
 
-declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(48), ptr, ptr, ptr) #0
+declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr, ptr, ptr) #0
 
-declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(48), ptr, ptr, i32, ptr) #0
+declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr, ptr, i32, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(36) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {

@@ -6,6 +6,12 @@ target triple = "wasm32-unknown-wasi"
 %main.hasPadding = type { i1, i32, i1 }
 %runtime._string = type { ptr, i32 }
 
+@"runtime/gc.layout:44-545555550500" = linkonce_odr unnamed_addr constant { i32, [6 x i8] } { i32 44, [6 x i8] c"TUUU\05\00" }
+@"runtime.hashmapType:struct{string; string}:int" = linkonce_odr unnamed_addr constant { ptr, ptr, ptr } { ptr inttoptr (i32 329 to ptr), ptr inttoptr (i32 3 to ptr), ptr @"runtime/gc.layout:44-545555550500" }
+@"runtime.hashmapType:[2]string:int" = linkonce_odr unnamed_addr constant { ptr, ptr, ptr } { ptr inttoptr (i32 69 to ptr), ptr inttoptr (i32 3 to ptr), ptr @"runtime/gc.layout:44-545555550500" }
+@"runtime/gc.layout:92-545555555555555555550500" = linkonce_odr unnamed_addr constant { i32, [12 x i8] } { i32 92, [12 x i8] c"TUUUUUUUUU\05\00" }
+@"runtime.hashmapType:[5]string:int" = linkonce_odr unnamed_addr constant { ptr, ptr, ptr } { ptr inttoptr (i32 69 to ptr), ptr inttoptr (i32 3 to ptr), ptr @"runtime/gc.layout:92-545555555555555555550500" }
+
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
@@ -15,7 +21,7 @@ entry:
 }
 
 ; Function Attrs: noinline nounwind
-define hidden i32 @main.testZeroGet(ptr dereferenceable_or_null(48) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.testZeroGet(ptr dereferenceable_or_null(52) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #2 {
 entry:
   %hashmap.key = alloca %main.hasPadding, align 8
   %hashmap.value = alloca i32, align 4
@@ -35,13 +41,13 @@ entry:
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr nocapture) #3
 
-declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(48), ptr nocapture, ptr nocapture, i32, ptr) #0
+declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, i32, ptr) #0
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr nocapture) #3
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.testZeroSet(ptr dereferenceable_or_null(48) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #2 {
+define hidden void @main.testZeroSet(ptr dereferenceable_or_null(52) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #2 {
 entry:
   %hashmap.key = alloca %main.hasPadding, align 8
   %hashmap.value = alloca i32, align 4
@@ -58,10 +64,10 @@ entry:
   ret void
 }
 
-declare void @runtime.hashmapGenericSet(ptr dereferenceable_or_null(48), ptr nocapture, ptr nocapture, ptr) #0
+declare void @runtime.hashmapGenericSet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, ptr) #0
 
 ; Function Attrs: noinline nounwind
-define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(48) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #2 {
+define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(52) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #2 {
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
@@ -80,7 +86,7 @@ entry:
 }
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.testZeroArraySet(ptr dereferenceable_or_null(48) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #2 {
+define hidden void @main.testZeroArraySet(ptr dereferenceable_or_null(52) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #2 {
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
@@ -102,7 +108,7 @@ entry:
 define hidden ptr @main.makeStringStructMap(ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call ptr @runtime.hashmapMakeGeneric(i32 16, i32 4, i32 8, ptr null, ptr nonnull @"hashmapKeyHash.struct{string; string}", ptr null, ptr nonnull @"hashmapKeyEqual.struct{string; string}", ptr undef) #4
+  %0 = call ptr @runtime.hashmapMakeGeneric(i32 16, i32 4, i32 8, ptr nonnull @"runtime.hashmapType:struct{string; string}:int", ptr null, ptr nonnull @"hashmapKeyHash.struct{string; string}", ptr null, ptr nonnull @"hashmapKeyEqual.struct{string; string}", ptr undef) #4
   call void @runtime.trackPointer(ptr %0, ptr nonnull %stackalloc, ptr undef) #4
   ret ptr %0
 }
@@ -145,13 +151,13 @@ entry:
 
 declare i1 @runtime.stringEqual(ptr readonly, i32, ptr readonly, i32, ptr) #0
 
-declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr) #0
+declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr) #0
 
 ; Function Attrs: noinline nounwind
 define hidden ptr @main.makeShortStringArrayMap(ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call ptr @runtime.hashmapMakeGeneric(i32 16, i32 4, i32 8, ptr null, ptr nonnull @"hashmapKeyHash.[2]string", ptr null, ptr nonnull @"hashmapKeyEqual.[2]string", ptr undef) #4
+  %0 = call ptr @runtime.hashmapMakeGeneric(i32 16, i32 4, i32 8, ptr nonnull @"runtime.hashmapType:[2]string:int", ptr null, ptr nonnull @"hashmapKeyHash.[2]string", ptr null, ptr nonnull @"hashmapKeyEqual.[2]string", ptr undef) #4
   call void @runtime.trackPointer(ptr %0, ptr nonnull %stackalloc, ptr undef) #4
   ret ptr %0
 }
@@ -194,7 +200,7 @@ entry:
 define hidden ptr @main.makeLongStringArrayMap(ptr %context) unnamed_addr #2 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call ptr @runtime.hashmapMakeGeneric(i32 40, i32 4, i32 8, ptr null, ptr nonnull @"hashmapKeyHash.[5]string", ptr null, ptr nonnull @"hashmapKeyEqual.[5]string", ptr undef) #4
+  %0 = call ptr @runtime.hashmapMakeGeneric(i32 40, i32 4, i32 8, ptr nonnull @"runtime.hashmapType:[5]string:int", ptr null, ptr nonnull @"hashmapKeyHash.[5]string", ptr null, ptr nonnull @"hashmapKeyEqual.[5]string", ptr undef) #4
   call void @runtime.trackPointer(ptr %0, ptr nonnull %stackalloc, ptr undef) #4
   ret ptr %0
 }
