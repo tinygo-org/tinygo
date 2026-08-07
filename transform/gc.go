@@ -1,6 +1,8 @@
 package transform
 
 import (
+	"strings"
+
 	"tinygo.org/x/go-llvm"
 )
 
@@ -12,6 +14,8 @@ const shiftExcludeArgMem = 2
 // MakeGCStackSlots converts all calls to runtime.trackPointer to explicit
 // stores to stack slots that are scannable by the GC.
 func MakeGCStackSlots(mod llvm.Module) bool {
+	hasGlobalRoots := makeGCGlobalRoots(mod)
+
 	// Check whether there are allocations at all.
 	alloc := mod.NamedFunction("runtime.alloc")
 	if alloc.IsNil() {
@@ -26,12 +30,12 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.GlobalValueType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
-		return false
+		return hasGlobalRoots
 	}
 
 	trackPointer := mod.NamedFunction("runtime.trackPointer")
 	if trackPointer.IsNil() || trackPointer.FirstUse().IsNil() {
-		return false // nothing to do
+		return hasGlobalRoots
 	}
 
 	ctx := mod.Context()
@@ -107,7 +111,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		for _, use := range getUses(trackPointer) {
 			use.EraseFromParentAsInstruction()
 		}
-		return false
+		return hasGlobalRoots
 	}
 	stackChainStart.SetLinkage(llvm.InternalLinkage)
 	stackChainStartType := stackChainStart.GlobalValueType()
@@ -283,6 +287,174 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	}
 
 	return true
+}
+
+func makeGCGlobalRoots(mod llvm.Module) bool {
+	rootCount := mod.NamedFunction("runtime.gcGlobalRootCount")
+	rootAt := mod.NamedFunction("runtime.gcGlobalRoot")
+	rootSize := mod.NamedFunction("runtime.gcGlobalRootSize")
+	rootValues := mod.NamedFunction("runtime.gcGlobalRootValues")
+	if rootCount.IsNil() || rootAt.IsNil() || rootSize.IsNil() ||
+		!rootCount.FirstBasicBlock().IsNil() ||
+		!rootAt.FirstBasicBlock().IsNil() ||
+		!rootSize.FirstBasicBlock().IsNil() {
+		return false
+	}
+	if !rootValues.IsNil() && !rootValues.FirstBasicBlock().IsNil() {
+		return false
+	}
+
+	ctx := mod.Context()
+	uintptrType := rootCount.GlobalValueType().ReturnType()
+	targetData := llvm.NewTargetData(mod.DataLayout())
+	defer targetData.Dispose()
+	var roots []gcGlobalRootRange
+	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		if strings.HasPrefix(global.Name(), "llvm.") ||
+			global.IsGlobalConstant() ||
+			global.Initializer().IsNil() ||
+			!gcTypeHasPointers(global.GlobalValueType()) {
+			continue
+		}
+		roots = appendGCGlobalRootRanges(roots, global, global.GlobalValueType(), targetData, ctx.Int8Type(), uintptrType)
+	}
+
+	ptrType := rootAt.GlobalValueType().ReturnType()
+	rootType := ctx.StructType([]llvm.Type{ptrType, uintptrType}, false)
+	rootInitializers := make([]llvm.Value, len(roots))
+	for i, root := range roots {
+		rootInitializers[i] = llvm.ConstNamedStruct(rootType, []llvm.Value{
+			root.address,
+			llvm.ConstInt(uintptrType, root.size, false),
+		})
+	}
+	rootArrayType := llvm.ArrayType(rootType, len(roots))
+	rootArray := llvm.AddGlobal(mod, rootArrayType, "runtime.gcGlobalRoots")
+	rootArray.SetInitializer(llvm.ConstArray(rootType, rootInitializers))
+	rootArray.SetGlobalConstant(true)
+	rootArray.SetLinkage(llvm.InternalLinkage)
+
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	entry := ctx.AddBasicBlock(rootCount, "entry")
+	builder.SetInsertPointAtEnd(entry)
+	builder.CreateRet(llvm.ConstInt(rootCount.GlobalValueType().ReturnType(), uint64(len(roots)), false))
+
+	entry = ctx.AddBasicBlock(rootAt, "entry")
+	builder.SetInsertPointAtEnd(entry)
+	index := rootAt.FirstParam()
+	root := builder.CreateInBoundsGEP(rootArrayType, rootArray, []llvm.Value{
+		llvm.ConstInt(ctx.Int32Type(), 0, false),
+		index,
+	}, "")
+	addr := builder.CreateStructGEP(rootType, root, 0, "")
+	builder.CreateRet(builder.CreateLoad(ptrType, addr, ""))
+
+	entry = ctx.AddBasicBlock(rootSize, "entry")
+	builder.SetInsertPointAtEnd(entry)
+	index = rootSize.FirstParam()
+	root = builder.CreateInBoundsGEP(rootArrayType, rootArray, []llvm.Value{
+		llvm.ConstInt(ctx.Int32Type(), 0, false),
+		index,
+	}, "")
+	size := builder.CreateStructGEP(rootType, root, 1, "")
+	builder.CreateRet(builder.CreateLoad(uintptrType, size, ""))
+
+	if !rootValues.IsNil() {
+		pointerSize := uint64(targetData.PointerSize())
+		var rootValueCount uint64
+		for _, root := range roots {
+			rootValueCount += root.size / pointerSize
+		}
+		rootValueArray := llvm.AddGlobal(mod, llvm.ArrayType(uintptrType, int(rootValueCount)), "runtime.gcGlobalRootValueArray")
+		rootValueArray.SetInitializer(llvm.ConstNull(rootValueArray.GlobalValueType()))
+		rootValueArray.SetLinkage(llvm.InternalLinkage)
+
+		entry = ctx.AddBasicBlock(rootValues, "entry")
+		builder.SetInsertPointAtEnd(entry)
+		builder.CreateRet(rootValueArray)
+	}
+
+	return true
+}
+
+// gcGlobalRootRange is a contiguous range of pointer slots.
+// It never includes padding or non-pointer fields.
+type gcGlobalRootRange struct {
+	address llvm.Value
+	size    uint64
+}
+
+func appendGCGlobalRootRanges(roots []gcGlobalRootRange, global llvm.Value, typ llvm.Type, targetData llvm.TargetData, i8Type, uintptrType llvm.Type) []gcGlobalRootRange {
+	var offsets []uint64
+	offsets = appendGCGlobalRootOffsets(offsets, typ, targetData, 0)
+	if len(offsets) == 0 {
+		return roots
+	}
+
+	pointerSize := uint64(targetData.PointerSize())
+	rangeStart := offsets[0]
+	rangeEnd := rangeStart + pointerSize
+	for _, offset := range offsets[1:] {
+		if offset == rangeEnd {
+			rangeEnd += pointerSize
+			continue
+		}
+		roots = appendGCGlobalRootRange(roots, global, rangeStart, rangeEnd-rangeStart, i8Type, uintptrType)
+		rangeStart = offset
+		rangeEnd = offset + pointerSize
+	}
+	return appendGCGlobalRootRange(roots, global, rangeStart, rangeEnd-rangeStart, i8Type, uintptrType)
+}
+
+func appendGCGlobalRootRange(roots []gcGlobalRootRange, global llvm.Value, offset, size uint64, i8Type, uintptrType llvm.Type) []gcGlobalRootRange {
+	address := global
+	if offset != 0 {
+		address = llvm.ConstGEP(i8Type, global, []llvm.Value{
+			llvm.ConstInt(uintptrType, offset, false),
+		})
+	}
+	return append(roots, gcGlobalRootRange{address: address, size: size})
+}
+
+func appendGCGlobalRootOffsets(offsets []uint64, typ llvm.Type, targetData llvm.TargetData, baseOffset uint64) []uint64 {
+	switch typ.TypeKind() {
+	case llvm.PointerTypeKind:
+		return append(offsets, baseOffset)
+	case llvm.StructTypeKind:
+		for i, fieldType := range typ.StructElementTypes() {
+			if gcTypeHasPointers(fieldType) {
+				fieldOffset := targetData.ElementOffset(typ, i)
+				offsets = appendGCGlobalRootOffsets(offsets, fieldType, targetData, baseOffset+fieldOffset)
+			}
+		}
+	case llvm.ArrayTypeKind:
+		elemType := typ.ElementType()
+		if gcTypeHasPointers(elemType) {
+			elemSize := targetData.TypeAllocSize(elemType)
+			for i := 0; i < typ.ArrayLength(); i++ {
+				offsets = appendGCGlobalRootOffsets(offsets, elemType, targetData, baseOffset+uint64(i)*elemSize)
+			}
+		}
+	}
+	return offsets
+}
+
+func gcTypeHasPointers(typ llvm.Type) bool {
+	switch typ.TypeKind() {
+	case llvm.PointerTypeKind:
+		return true
+	case llvm.StructTypeKind:
+		for _, field := range typ.StructElementTypes() {
+			if gcTypeHasPointers(field) {
+				return true
+			}
+		}
+	case llvm.ArrayTypeKind:
+		return typ.ArrayLength() != 0 && gcTypeHasPointers(typ.ElementType())
+	}
+	return false
 }
 
 // markParentFunctions traverses all parent function calls (recursively) and
