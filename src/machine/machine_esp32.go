@@ -112,6 +112,11 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	// Configure the pad with the given IO mux configuration.
 	p.mux().Set(muxConfig)
 
+	// Internal pull resistors for pins with RTC function ignore
+	// the IO_MUX_GPIO0_FUN_WPU and IO_MUX_GPIO0_FUN_WPD bits set
+	// above and are instead controlled by the RTC_IO registers.
+	p.configureRTCPull(config.Mode)
+
 	switch config.Mode {
 	case PinOutput:
 		// Set the 'output enable' bit.
@@ -290,6 +295,60 @@ func (p Pin) mux() *volatile.Register32 {
 		return &esp.IO_MUX.GPIO24
 	default:
 		return nil
+	}
+}
+
+// configureRTCPull applies the pullup/pulldown setting to a pin.
+// This mirrors ESP-IDF:
+// https://github.com/espressif/esp-idf/blob/08e0d30/components/esp_driver_gpio/src/gpio.c#L283
+// https://github.com/espressif/esp-idf/blob/08e0d30/components/esp_hal_gpio/esp32/rtc_io_periph.c#L57
+// https://github.com/espressif/esp-idf/blob/08e0d30/components/esp_hal_gpio/esp32/include/hal/rtc_io_ll.h#L175
+func (p Pin) configureRTCPull(mode PinMode) {
+	var rue, rde uint32
+	switch mode {
+	case PinInputPullup:
+		rue = 1
+	case PinInputPulldown:
+		rde = 1
+	}
+
+	switch p {
+	case 0:
+		esp.RTC_IO.SetTOUCH_PAD1_RUE(rue)
+		esp.RTC_IO.SetTOUCH_PAD1_RDE(rde)
+	case 2:
+		esp.RTC_IO.SetTOUCH_PAD2_RUE(rue)
+		esp.RTC_IO.SetTOUCH_PAD2_RDE(rde)
+	case 4:
+		esp.RTC_IO.SetTOUCH_PAD0_RUE(rue)
+		esp.RTC_IO.SetTOUCH_PAD0_RDE(rde)
+	case 12:
+		esp.RTC_IO.SetTOUCH_PAD5_RUE(rue)
+		esp.RTC_IO.SetTOUCH_PAD5_RDE(rde)
+	case 13:
+		esp.RTC_IO.SetTOUCH_PAD4_RUE(rue)
+		esp.RTC_IO.SetTOUCH_PAD4_RDE(rde)
+	case 14:
+		esp.RTC_IO.SetTOUCH_PAD6_RUE(rue)
+		esp.RTC_IO.SetTOUCH_PAD6_RDE(rde)
+	case 15:
+		esp.RTC_IO.SetTOUCH_PAD3_RUE(rue)
+		esp.RTC_IO.SetTOUCH_PAD3_RDE(rde)
+	case 25:
+		esp.RTC_IO.SetPAD_DAC1_PDAC1_RUE(rue)
+		esp.RTC_IO.SetPAD_DAC1_PDAC1_RDE(rde)
+	case 26:
+		esp.RTC_IO.SetPAD_DAC2_PDAC2_RUE(rue)
+		esp.RTC_IO.SetPAD_DAC2_PDAC2_RDE(rde)
+	case 27:
+		esp.RTC_IO.SetTOUCH_PAD7_RUE(rue)
+		esp.RTC_IO.SetTOUCH_PAD7_RDE(rde)
+	case 32:
+		esp.RTC_IO.SetXTAL_32K_PAD_X32P_RUE(rue)
+		esp.RTC_IO.SetXTAL_32K_PAD_X32P_RDE(rde)
+	case 33:
+		esp.RTC_IO.SetXTAL_32K_PAD_X32N_RUE(rue)
+		esp.RTC_IO.SetXTAL_32K_PAD_X32N_RDE(rde)
 	}
 }
 
