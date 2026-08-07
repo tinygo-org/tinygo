@@ -13,7 +13,7 @@ func gcMarkReachable() {
 //
 //go:linkname gcScanGlobals internal/task.gcScanGlobals
 func gcScanGlobals() {
-	findGlobals(markRoots)
+	markGlobals()
 }
 
 // Function called from assembly with all registers pushed, to actually scan the
