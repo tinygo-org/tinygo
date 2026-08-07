@@ -13,3 +13,10 @@ func TestMakeGCStackSlots(t *testing.T) {
 		transform.MakeGCStackSlots(mod)
 	})
 }
+
+func TestMakeGCGlobalRootsAVR(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/gc-globals-avr", func(mod llvm.Module) {
+		transform.MakeGCStackSlots(mod)
+	})
+}
