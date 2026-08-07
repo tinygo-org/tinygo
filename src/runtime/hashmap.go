@@ -14,6 +14,7 @@ import (
 // The underlying hashmap structure for Go.
 type hashmap struct {
 	buckets       unsafe.Pointer // pointer to array of buckets
+	typeInfo      *hashmapTypeInfo
 	seed          uintptr
 	count         uintptr
 	keySize       uintptr
@@ -24,6 +25,17 @@ type hashmap struct {
 	flags         uint8
 	keyEqual      func(x, y unsafe.Pointer, n uintptr) bool
 	keyHash       func(key unsafe.Pointer, size, seed uintptr) uint32
+}
+
+type hashmapTypeInfo struct {
+	keyLayout    unsafe.Pointer
+	valueLayout  unsafe.Pointer
+	bucketLayout unsafe.Pointer
+}
+
+//go:inline
+func hashmapType(m *hashmap) *hashmapTypeInfo {
+	return m.typeInfo
 }
 
 const (
@@ -113,7 +125,7 @@ func hashmapTopHash(hash uint32) uint8 {
 }
 
 // Create a new hashmap with the given keySize and valueSize.
-func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashmap {
+func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, typeInfo unsafe.Pointer, alg uint8) *hashmap {
 	bucketBits := uint8(0)
 	for hashmapHasSpaceToGrow(bucketBits) && hashmapOverLoadFactor(sizeHint, bucketBits) {
 		bucketBits++
@@ -132,13 +144,14 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) *hashm
 	}
 
 	bucketBufSize := hashmapBucketHeaderSize + keySlotSize*8 + valueSlotSize*8
-	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
+	buckets := alloc(bucketBufSize*(1<<bucketBits), (*hashmapTypeInfo)(typeInfo).bucketLayout)
 
 	keyHash := hashmapKeyHashAlg(tinygo.HashmapAlgorithm(alg))
 	keyEqual := hashmapKeyEqualAlg(tinygo.HashmapAlgorithm(alg))
 
 	return &hashmap{
 		buckets:       buckets,
+		typeInfo:      (*hashmapTypeInfo)(typeInfo),
 		seed:          uintptr(fastrand()),
 		keySize:       keySize,
 		valueSize:     valueSize,
@@ -325,7 +338,7 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 //go:inline
 func hashmapStoreKey(m *hashmap, slotKey, key unsafe.Pointer) {
 	if m.flags&hashmapFlagIndirectKey != 0 {
-		p := alloc(m.keySize, nil)
+		p := alloc(m.keySize, hashmapType(m).keyLayout)
 		memcpy(p, key, m.keySize)
 		*(*unsafe.Pointer)(slotKey) = p
 	} else {
@@ -343,7 +356,7 @@ func hashmapStoreValue(m *hashmap, slotValue, value unsafe.Pointer) {
 		p := *(*unsafe.Pointer)(slotValue)
 		if p == nil {
 			// First insert: allocate backing storage.
-			p = alloc(m.valueSize, nil)
+			p = alloc(m.valueSize, hashmapType(m).valueLayout)
 			*(*unsafe.Pointer)(slotValue) = p
 		}
 		memcpy(p, value, m.valueSize)
@@ -356,7 +369,7 @@ func hashmapStoreValue(m *hashmap, slotValue, value unsafe.Pointer) {
 // value into the bucket, and returns a pointer to this bucket.
 func hashmapInsertIntoNewBucket(m *hashmap, key, value unsafe.Pointer, tophash uint8) *hashmapBucket {
 	bucketBufSize := hashmapBucketSize(m)
-	bucketBuf := alloc(bucketBufSize, nil)
+	bucketBuf := alloc(bucketBufSize, hashmapType(m).bucketLayout)
 	bucket := (*hashmapBucket)(bucketBuf)
 
 	// Insert into the first slot, which is empty as it has just been allocated.
@@ -392,13 +405,13 @@ func hashmapCopy(m *hashmap, sizeBits uint8) hashmap {
 	n.bucketBits = sizeBits
 	numBuckets := uintptr(1) << n.bucketBits
 	bucketBufSize := hashmapBucketSize(m)
-	n.buckets = alloc(bucketBufSize*numBuckets, nil)
+	n.buckets = alloc(bucketBufSize*numBuckets, hashmapType(m).bucketLayout)
 
 	// use a hashmap iterator to go through the old map
 	var it hashmapIterator
 
-	var key = alloc(m.keySize, nil)
-	var value = alloc(m.valueSize, nil)
+	var key = alloc(m.keySize, hashmapType(m).keyLayout)
+	var value = alloc(m.valueSize, hashmapType(m).valueLayout)
 
 	for hashmapNext(m, &it, key, value) {
 		h := n.keyHash(key, uintptr(n.keySize), n.seed)
@@ -624,6 +637,7 @@ func hashmapGenericDelete(m *hashmap, key unsafe.Pointer) {
 // equal functions. This avoids the interface/reflection path for composite
 // key types like structs containing strings.
 func hashmapMakeGeneric(keySize, valueSize uintptr, sizeHint uintptr,
+	typeInfo unsafe.Pointer,
 	keyHash func(key unsafe.Pointer, size, seed uintptr) uint32,
 	keyEqual func(x, y unsafe.Pointer, n uintptr) bool) *hashmap {
 	bucketBits := uint8(0)
@@ -644,10 +658,11 @@ func hashmapMakeGeneric(keySize, valueSize uintptr, sizeHint uintptr,
 	}
 
 	bucketBufSize := hashmapBucketHeaderSize + keySlotSize*8 + valueSlotSize*8
-	buckets := alloc(bucketBufSize*(1<<bucketBits), nil)
+	buckets := alloc(bucketBufSize*(1<<bucketBits), (*hashmapTypeInfo)(typeInfo).bucketLayout)
 
 	return &hashmap{
 		buckets:       buckets,
+		typeInfo:      (*hashmapTypeInfo)(typeInfo),
 		seed:          uintptr(fastrand()),
 		keySize:       keySize,
 		valueSize:     valueSize,
@@ -663,12 +678,12 @@ func hashmapMakeGeneric(keySize, valueSize uintptr, sizeHint uintptr,
 // hashmapMakeReflect creates a hashmap for reflect.MakeMapWithSize using
 // closures that reconstruct interface{} values from raw key bytes,
 // delegating to hashmapInterfaceHash for hashing and == for equality.
-func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, keyType unsafe.Pointer) *hashmap {
+func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, typeInfo, keyType unsafe.Pointer) *hashmap {
 	t := (*reflectlite.RawType)(keyType)
 	if t.Kind() == reflectlite.Interface {
 		// Interface keys are already stored as interface values in the
 		// bucket; use the existing interface hash/equal directly.
-		return hashmapMakeGeneric(keySize, valueSize, sizeHint,
+		return hashmapMakeGeneric(keySize, valueSize, sizeHint, typeInfo,
 			hashmapInterfacePtrHash, hashmapInterfaceEqual)
 	}
 	keyHash := func(key unsafe.Pointer, size, seed uintptr) uint32 {
@@ -677,7 +692,7 @@ func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, keyType unsafe.Poi
 	keyEqual := func(x, y unsafe.Pointer, n uintptr) bool {
 		return rawToInterface(t, x) == rawToInterface(t, y)
 	}
-	return hashmapMakeGeneric(keySize, valueSize, sizeHint, keyHash, keyEqual)
+	return hashmapMakeGeneric(keySize, valueSize, sizeHint, typeInfo, keyHash, keyEqual)
 }
 
 // rawToInterface reconstructs an interface{} from raw bytes at ptr.

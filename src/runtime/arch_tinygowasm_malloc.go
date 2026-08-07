@@ -2,7 +2,10 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"internal/gclayout"
+	"unsafe"
+)
 
 // The below functions override the default allocator of wasi-libc. This ensures
 // code linked from other languages can allocate memory without colliding with
@@ -21,7 +24,7 @@ func libc_malloc(size uintptr) unsafe.Pointer {
 	if size == 0 {
 		return nil
 	}
-	ptr := alloc(size, nil)
+	ptr := alloc(size, gclayout.NoPtrs.AsPtr())
 	allocs[(*byte)(ptr)] = size
 	return ptr
 }
@@ -54,7 +57,7 @@ func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	// It's hard to optimize this to expand the current buffer with our GC, but
 	// it is theoretically possible. For now, just always allocate fresh.
 	// TODO: we could skip this if the new allocation is smaller than the old.
-	ptr := alloc(size, nil)
+	ptr := alloc(size, gclayout.NoPtrs.AsPtr())
 
 	if oldPtr != nil {
 		if oldSize, ok := allocs[(*byte)(oldPtr)]; ok {

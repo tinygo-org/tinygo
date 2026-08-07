@@ -3,6 +3,7 @@
 package task
 
 import (
+	"internal/gclayout"
 	"unsafe"
 )
 
@@ -36,7 +37,7 @@ func taskExit() {
 // initialize the state and prepare to call the specified function with the specified argument bundle.
 func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// Create a stack.
-	stack := runtime_alloc(stackSize, nil)
+	stack := runtime_alloc(stackSize, gclayout.Conservative.AsPtr())
 
 	// Set up the stack canary, a random number that should be checked when
 	// switching from the task back to the scheduler. The stack canary pointer

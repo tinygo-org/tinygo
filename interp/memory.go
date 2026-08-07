@@ -1278,11 +1278,10 @@ func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 	// integer value, or can be nil.
 	ptr, err := layoutValue.asPointer(r)
 	if err == errIntegerAsPointer {
-		// It's an integer, which means it's a small object or unknown.
+		// It's an integer, which means it's a small object.
 		layout := layoutValue.Uint(r)
 		if layout == 0 {
-			// Nil pointer, which means the layout is unknown.
-			return 0, nil
+			panic("runtime.alloc called without a GC layout")
 		}
 		if layout%2 != 1 {
 			// Sanity check: the least significant bit must be set. This is how
@@ -1331,11 +1330,6 @@ func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 // have some additional repetition, for example in the buffer of a slice.
 func (r *runner) getLLVMTypeFromLayout(layoutValue value) llvm.Type {
 	objectSizeWords, bitmap := r.readObjectLayout(layoutValue)
-	if bitmap == nil {
-		// No information available.
-		return llvm.Type{}
-	}
-
 	if bitmap.BitLen() == 0 {
 		// There are no pointers in this object, so treat this as a raw byte
 		// buffer. This is important because objects without pointers may have

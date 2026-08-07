@@ -284,6 +284,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "elementType", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "length", types.Typ[types.Uintptr]),
 				types.NewVar(token.NoPos, nil, "sliceOf", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "layout", types.Typ[types.UnsafePointer]),
 			)
 		case *types.Map:
 			typeFieldTypes = append(typeFieldTypes,
@@ -291,6 +292,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "elementType", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "keyType", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "hashmapTypeInfo", types.Typ[types.UnsafePointer]),
 			)
 		case *types.Struct:
 			typeFieldTypes = append(typeFieldTypes,
@@ -299,6 +301,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "pkgpath", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "size", types.Typ[types.Uint32]),
 				types.NewVar(token.NoPos, nil, "numFields", types.Typ[types.Uint16]),
+				types.NewVar(token.NoPos, nil, "layout", types.Typ[types.UnsafePointer]),
 				types.NewVar(token.NoPos, nil, "fields", types.NewArray(c.getRuntimeType("structField"), int64(typ.NumFields()))),
 			)
 			if len(methods) > 0 {
@@ -418,6 +421,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeCode(typ.Elem()),                              // elementType
 				llvm.ConstInt(c.uintptrType, uint64(typ.Len()), false), // length
 				c.getTypeCode(types.NewSlice(typ.Elem())),              // slicePtr
+				c.createObjectLayout(c.getLLVMType(typ), token.NoPos),  // layout
 			}
 		case *types.Map:
 			typeFields = []llvm.Value{
@@ -425,6 +429,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				c.getTypeCode(types.NewPointer(typ)),       // ptrTo
 				c.getTypeCode(typ.Elem()),                  // elem
 				c.getTypeCode(typ.Key()),                   // key
+				c.getHashmapTypeInfo(typ, token.NoPos),     // hashmapTypeInfo
 			}
 		case *types.Struct:
 			var pkgpath string
@@ -450,6 +455,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				pkgPathPtr,
 				llvm.ConstInt(c.ctx.Int32Type(), uint64(size), false),            // size
 				llvm.ConstInt(c.ctx.Int16Type(), uint64(typ.NumFields()), false), // numFields
+				c.createObjectLayout(llvmStructType, token.NoPos),                // layout
 			}
 			structFieldType := c.getLLVMRuntimeType("structField")
 
@@ -510,7 +516,7 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			typeFields = []llvm.Value{c.getTypeCode(types.NewPointer(typ))}
 			// TODO: params, return values, etc
 		}
-		// Prepend metadata byte.
+		// Prepend the common RawType field.
 		typeFields = append([]llvm.Value{
 			llvm.ConstInt(c.ctx.Int8Type(), uint64(metabyte), false),
 		}, typeFields...)

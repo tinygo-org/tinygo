@@ -55,7 +55,10 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"internal/gclayout"
+	"unsafe"
+)
 
 const sizeFieldBits = 4 + (unsafe.Sizeof(uintptr(0)) / 4)
 
@@ -76,9 +79,7 @@ func (layout gcLayout) pointerFree() bool {
 // The length is rounded down to a multiple of the element size.
 func (layout gcLayout) scan(start, len uintptr) {
 	switch {
-	case layout == 0:
-		// This is an unknown layout.
-		// Scan conservatively.
+	case layout == gcLayout(gclayout.Conservative):
 		// NOTE: This is *NOT* equivalent to a slice of pointers on AVR.
 		scanConservative(start, len)
 

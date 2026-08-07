@@ -21,7 +21,7 @@ define ptr @needsStackSlots() {
   %2 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 0
   store ptr %1, ptr %2, align 4
   store ptr %gc.stackobject, ptr @runtime.stackChainStart, align 4
-  %ptr = call ptr @runtime.alloc(i32 4, ptr null)
+  %ptr = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   %3 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 2
   store ptr %ptr, ptr %3, align 4
   call void @someArbitraryFunction()
@@ -47,7 +47,7 @@ define ptr @needsStackSlots2() {
   %ptr2 = getelementptr i8, ptr @someGlobal, i32 0
   %6 = getelementptr { ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %gc.stackobject, i32 0, i32 5
   store ptr %ptr2, ptr %6, align 4
-  %unused = call ptr @runtime.alloc(i32 4, ptr null)
+  %unused = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   %7 = getelementptr { ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %gc.stackobject, i32 0, i32 6
   store ptr %unused, ptr %7, align 4
   store ptr %1, ptr @runtime.stackChainStart, align 4
@@ -69,7 +69,7 @@ define ptr @fibNext(ptr %x, ptr %y) {
   %x.val = load i8, ptr %x, align 1
   %y.val = load i8, ptr %y, align 1
   %out.val = add i8 %x.val, %y.val
-  %out.alloc = call ptr @runtime.alloc(i32 1, ptr null)
+  %out.alloc = call ptr @runtime.alloc(i32 1, ptr inttoptr (i32 3 to ptr))
   %3 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 2
   store ptr %out.alloc, ptr %3, align 4
   store i8 %out.val, ptr %out.alloc, align 1
@@ -85,10 +85,10 @@ entry:
   %1 = getelementptr { ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %gc.stackobject, i32 0, i32 0
   store ptr %0, ptr %1, align 4
   store ptr %gc.stackobject, ptr @runtime.stackChainStart, align 4
-  %entry.x = call ptr @runtime.alloc(i32 1, ptr null)
+  %entry.x = call ptr @runtime.alloc(i32 1, ptr inttoptr (i32 3 to ptr))
   %2 = getelementptr { ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %gc.stackobject, i32 0, i32 2
   store ptr %entry.x, ptr %2, align 4
-  %entry.y = call ptr @runtime.alloc(i32 1, ptr null)
+  %entry.y = call ptr @runtime.alloc(i32 1, ptr inttoptr (i32 3 to ptr))
   %3 = getelementptr { ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %gc.stackobject, i32 0, i32 3
   store ptr %entry.y, ptr %3, align 4
   store i8 1, ptr %entry.y, align 1
@@ -126,7 +126,7 @@ define void @testGEPBitcast() {
   %arr.bitcast = getelementptr [32 x i8], ptr %arr, i32 0, i32 0
   %3 = getelementptr { ptr, i32, ptr, ptr }, ptr %gc.stackobject, i32 0, i32 2
   store ptr %arr.bitcast, ptr %3, align 4
-  %other = call ptr @runtime.alloc(i32 1, ptr null)
+  %other = call ptr @runtime.alloc(i32 1, ptr inttoptr (i32 3 to ptr))
   %4 = getelementptr { ptr, i32, ptr, ptr }, ptr %gc.stackobject, i32 0, i32 3
   store ptr %other, ptr %4, align 4
   store ptr %1, ptr @runtime.stackChainStart, align 4
@@ -144,7 +144,7 @@ define void @earlyPopRegression() {
   %2 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 0
   store ptr %1, ptr %2, align 4
   store ptr %gc.stackobject, ptr @runtime.stackChainStart, align 4
-  %x.alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %x.alloc = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   %3 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 2
   store ptr %x.alloc, ptr %3, align 4
   call void @allocAndSave(ptr %x.alloc)
@@ -159,7 +159,7 @@ define void @allocAndSave(ptr %x) {
   %2 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 0
   store ptr %1, ptr %2, align 4
   store ptr %gc.stackobject, ptr @runtime.stackChainStart, align 4
-  %y = call ptr @runtime.alloc(i32 4, ptr null)
+  %y = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   %3 = getelementptr { ptr, i32, ptr }, ptr %gc.stackobject, i32 0, i32 2
   store ptr %y, ptr %3, align 4
   store ptr %y, ptr %x, align 4

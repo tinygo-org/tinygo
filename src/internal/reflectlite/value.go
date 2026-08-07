@@ -1,6 +1,7 @@
 package reflectlite
 
 import (
+	"internal/gclayout"
 	"math"
 	"unsafe"
 )
@@ -1644,7 +1645,7 @@ func makeInt(flags valueFlags, bits uint64, t *RawType) Value {
 
 	ptr := unsafe.Pointer(&v.value)
 	if size > unsafe.Sizeof(uintptr(0)) {
-		ptr = alloc(size, nil)
+		ptr = alloc(size, gclayout.NoPtrs.AsPtr())
 		v.value = ptr
 	}
 
@@ -1671,7 +1672,7 @@ func makeFloat(flags valueFlags, f float64, t *RawType) Value {
 
 	ptr := unsafe.Pointer(&v.value)
 	if size > unsafe.Sizeof(uintptr(0)) {
-		ptr = alloc(size, nil)
+		ptr = alloc(size, gclayout.NoPtrs.AsPtr())
 		v.value = ptr
 	}
 
@@ -1703,7 +1704,7 @@ func makeComplex(flags valueFlags, f complex128, t *RawType) Value {
 
 	ptr := unsafe.Pointer(&v.value)
 	if size > unsafe.Sizeof(uintptr(0)) {
-		ptr = alloc(size, nil)
+		ptr = alloc(size, gclayout.NoPtrs.AsPtr())
 		v.value = ptr
 	}
 
@@ -1834,7 +1835,7 @@ func Zero(typ Type) Value {
 
 	return Value{
 		typecode: typ.(*RawType),
-		value:    alloc(size, nil),
+		value:    alloc(size, typ.(*RawType).gcLayout()),
 		flags:    valueFlagExported | valueFlagRO,
 	}
 }
@@ -1844,7 +1845,7 @@ func Zero(typ Type) Value {
 func New(typ Type) Value {
 	return Value{
 		typecode: pointerTo(typ.(*RawType)),
-		value:    alloc(typ.Size(), nil),
+		value:    alloc(typ.Size(), typ.(*RawType).gcLayout()),
 		flags:    valueFlagExported,
 	}
 }
@@ -2203,10 +2204,10 @@ func (v Value) FieldByNameFunc(match func(string) bool) Value {
 }
 
 //go:linkname hashmapMake runtime.hashmapMake
-func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, alg uint8) unsafe.Pointer
+func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, typeInfo unsafe.Pointer, alg uint8) unsafe.Pointer
 
 //go:linkname hashmapMakeReflect runtime.hashmapMakeReflect
-func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, keyType unsafe.Pointer) unsafe.Pointer
+func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, typeInfo, keyType unsafe.Pointer) unsafe.Pointer
 
 //go:linkname chanMake runtime.chanMake
 func chanMake(elementSize uintptr, bufSize uintptr) unsafe.Pointer
@@ -2231,18 +2232,19 @@ func MakeMapWithSize(typ Type, n int) Value {
 
 	key := typ.Key().(*RawType)
 	val := typ.Elem().(*RawType)
+	typeInfo := typ.(*RawType).hashmapTypeInfo()
 
 	var m unsafe.Pointer
 
 	if key.Kind() == String {
-		m = hashmapMake(key.Size(), val.Size(), uintptr(n), hashmapAlgorithmString)
+		m = hashmapMake(key.Size(), val.Size(), uintptr(n), typeInfo, hashmapAlgorithmString)
 	} else if key.isBinary() {
-		m = hashmapMake(key.Size(), val.Size(), uintptr(n), hashmapAlgorithmBinary)
+		m = hashmapMake(key.Size(), val.Size(), uintptr(n), typeInfo, hashmapAlgorithmBinary)
 	} else {
 		// Composite key type (struct with strings, floats, etc.).
 		// Use runtime-generated hash/equal closures that walk the
 		// type structure, matching the compiler-generated functions.
-		m = hashmapMakeReflect(key.Size(), val.Size(), uintptr(n), unsafe.Pointer(key))
+		m = hashmapMakeReflect(key.Size(), val.Size(), uintptr(n), typeInfo, unsafe.Pointer(key))
 	}
 
 	return Value{

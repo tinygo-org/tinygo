@@ -14,8 +14,10 @@ import (
 )
 
 func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
-	elementSize := b.targetData.TypeAllocSize(b.getLLVMType(expr.Type().Underlying().(*types.Chan).Elem()))
+	elementType := b.getLLVMType(expr.Type().Underlying().(*types.Chan).Elem())
+	elementSize := b.targetData.TypeAllocSize(elementType)
 	elementSizeValue := llvm.ConstInt(b.uintptrType, elementSize, false)
+	elementLayout := b.createObjectLayout(elementType, expr.Pos())
 	bufSize := b.getValue(expr.Size, getPos(expr))
 	b.createChanBoundsCheck(elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
 	if bufSize.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
@@ -23,7 +25,7 @@ func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
 	} else if bufSize.Type().IntTypeWidth() > b.uintptrType.IntTypeWidth() {
 		bufSize = b.CreateTrunc(bufSize, b.uintptrType, "")
 	}
-	return b.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize}, "")
+	return b.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize, elementLayout}, "")
 }
 
 // createChanSend emits a pseudo chan send operation. It is lowered to the

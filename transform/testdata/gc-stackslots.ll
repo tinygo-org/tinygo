@@ -18,7 +18,7 @@ define ptr @getPointer() {
 define ptr @needsStackSlots() {
   ; Tracked pointer. Although, in this case the value is immediately returned
   ; so tracking it is not really necessary.
-  %ptr = call ptr @runtime.alloc(i32 4, ptr null)
+  %ptr = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   call void @runtime.trackPointer(ptr %ptr)
   call void @someArbitraryFunction()
   %val = load i8, ptr @someGlobal
@@ -39,7 +39,7 @@ define ptr @needsStackSlots2() {
   call void @runtime.trackPointer(ptr %ptr2)
 
   ; Here is finally the point where an allocation happens.
-  %unused = call ptr @runtime.alloc(i32 4, ptr null)
+  %unused = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   call void @runtime.trackPointer(ptr %unused)
 
   ret ptr %ptr1
@@ -57,7 +57,7 @@ define ptr @fibNext(ptr %x, ptr %y) {
   %x.val = load i8, ptr %x
   %y.val = load i8, ptr %y
   %out.val = add i8 %x.val, %y.val
-  %out.alloc = call ptr @runtime.alloc(i32 1, ptr null)
+  %out.alloc = call ptr @runtime.alloc(i32 1, ptr inttoptr (i32 3 to ptr))
   call void @runtime.trackPointer(ptr %out.alloc)
   store i8 %out.val, ptr %out.alloc
   ret ptr %out.alloc
@@ -65,9 +65,9 @@ define ptr @fibNext(ptr %x, ptr %y) {
 
 define ptr @allocLoop() {
 entry:
-  %entry.x = call ptr @runtime.alloc(i32 1, ptr null)
+  %entry.x = call ptr @runtime.alloc(i32 1, ptr inttoptr (i32 3 to ptr))
   call void @runtime.trackPointer(ptr %entry.x)
-  %entry.y = call ptr @runtime.alloc(i32 1, ptr null)
+  %entry.y = call ptr @runtime.alloc(i32 1, ptr inttoptr (i32 3 to ptr))
   call void @runtime.trackPointer(ptr %entry.y)
   store i8 1, ptr %entry.y
   br label %loop
@@ -93,7 +93,7 @@ define void @testGEPBitcast() {
   %arr = call ptr @arrayAlloc()
   %arr.bitcast = getelementptr [32 x i8], ptr %arr, i32 0, i32 0
   call void @runtime.trackPointer(ptr %arr.bitcast)
-  %other = call ptr @runtime.alloc(i32 1, ptr null)
+  %other = call ptr @runtime.alloc(i32 1, ptr inttoptr (i32 3 to ptr))
   call void @runtime.trackPointer(ptr %other)
   ret void
 }
@@ -103,7 +103,7 @@ define void @someArbitraryFunction() {
 }
 
 define void @earlyPopRegression() {
-  %x.alloc = call ptr @runtime.alloc(i32 4, ptr null)
+  %x.alloc = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   call void @runtime.trackPointer(ptr %x.alloc)
   ; At this point the pass used to pop the stack chain, resulting in a potential use-after-free during allocAndSave.
   musttail call void @allocAndSave(ptr %x.alloc)
@@ -111,7 +111,7 @@ define void @earlyPopRegression() {
 }
 
 define void @allocAndSave(ptr %x) {
-  %y = call ptr @runtime.alloc(i32 4, ptr null)
+  %y = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   call void @runtime.trackPointer(ptr %y)
   store ptr %y, ptr %x
   store ptr %x, ptr @ptrGlobal

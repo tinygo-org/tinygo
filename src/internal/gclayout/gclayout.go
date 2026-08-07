@@ -17,10 +17,15 @@ const (
 
 	sizeShift = sizeBits + 1
 
-	NoPtrs  = Layout((0 << sizeShift) | (1 << 1) | 1)
-	Pointer = Layout((1 << sizeShift) | ((unsafe.Sizeof(unsafe.Pointer(nil)) / ptrAlign) << 1) | 1)
-	String  = Layout((1 << sizeShift) | ((unsafe.Sizeof("") / ptrAlign) << 1) | 1)
-	Slice   = Layout((1 << sizeShift) | ((unsafe.Sizeof([]byte{}) / ptrAlign) << 1) | 1)
+	NoPtrs      = Layout((0 << sizeShift) | (1 << 1) | 1)
+	Pointer     = Layout((1 << sizeShift) | ((unsafe.Sizeof(unsafe.Pointer(nil)) / ptrAlign) << 1) | 1)
+	PointerPair = Layout((3 << sizeShift) | ((2 * unsafe.Sizeof(unsafe.Pointer(nil)) / ptrAlign) << 1) | 1)
+	String      = Layout((1 << sizeShift) | ((unsafe.Sizeof("") / ptrAlign) << 1) | 1)
+	Slice       = Layout((1 << sizeShift) | ((unsafe.Sizeof([]byte{}) / ptrAlign) << 1) | 1)
+
+	// Conservative is reserved for stack storage, which does not have an
+	// ordinary Go object layout.
+	Conservative = Layout(2)
 )
 
 func (l Layout) AsPtr() unsafe.Pointer { return unsafe.Pointer(l) }
