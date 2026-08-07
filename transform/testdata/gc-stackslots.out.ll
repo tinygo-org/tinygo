@@ -8,7 +8,6 @@ target triple = "wasm32-unknown-unknown-wasm"
 @structGlobal = global { ptr, i32, [2 x ptr] } zeroinitializer
 @constantPtrGlobal = constant ptr @someGlobal
 @runtime.gcGlobalRoots = internal constant [4 x ptr] [ptr @ptrGlobal, ptr @structGlobal, ptr getelementptr ({ ptr, i32, [2 x ptr] }, ptr @structGlobal, i32 0, i32 2), ptr getelementptr ([2 x ptr], ptr getelementptr ({ ptr, i32, [2 x ptr] }, ptr @structGlobal, i32 0, i32 2), i32 0, i32 1)]
-@runtime.gcGlobalRootValueArray = internal global [4 x i32] zeroinitializer
 
 declare void @runtime.trackPointer(ptr nocapture readonly)
 
@@ -24,11 +23,6 @@ entry:
   %1 = getelementptr inbounds [4 x ptr], ptr @runtime.gcGlobalRoots, i32 0, i32 %0
   %2 = load ptr, ptr %1, align 4
   ret ptr %2
-}
-
-define ptr @runtime.gcGlobalRootValues() {
-entry:
-  ret ptr @runtime.gcGlobalRootValueArray
 }
 
 define ptr @getPointer() {

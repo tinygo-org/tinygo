@@ -16,8 +16,6 @@ declare i32 @runtime.gcGlobalRootCount()
 
 declare ptr @runtime.gcGlobalRoot(i32)
 
-declare ptr @runtime.gcGlobalRootValues()
-
 ; Generic function that returns a pointer (that must be tracked).
 define ptr @getPointer() {
     ret ptr @someGlobal

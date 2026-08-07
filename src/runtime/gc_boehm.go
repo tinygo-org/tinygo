@@ -165,6 +165,9 @@ func libgc_size(ptr uintptr) uintptr
 //export GC_push_all
 func libgc_push_all(bottom, top uintptr)
 
+//export GC_push_all_eager
+func libgc_push_all_eager(bottom, top uintptr)
+
 //export GC_push_all_stack
 func libgc_push_all_stack(bottom, top uintptr)
 
