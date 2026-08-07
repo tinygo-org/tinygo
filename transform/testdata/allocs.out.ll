@@ -42,13 +42,13 @@ define void @testUnknownAlign() {
 }
 
 define void @testEscapingCall() {
-  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   %val = call ptr @escapeIntPtr(ptr %alloc)
   ret void
 }
 
 define void @testEscapingCall2() {
-  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   %val = call ptr @escapeIntPtrSometimes(ptr %alloc, ptr %alloc)
   ret void
 }
@@ -61,7 +61,7 @@ define void @testNonEscapingCall() {
 }
 
 define ptr @testEscapingReturn() {
-  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
   ret ptr %alloc
 }
 

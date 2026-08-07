@@ -7,6 +7,7 @@ package runtime
 // may be the only memory allocator possible.
 
 import (
+	"internal/gclayout"
 	"internal/task"
 	"sync/atomic"
 	"unsafe"
@@ -69,7 +70,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 }
 
 func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
-	newAlloc := alloc(size, nil)
+	newAlloc := alloc(size, gclayout.NoPtrs.AsPtr())
 	if ptr == nil {
 		return newAlloc
 	}
