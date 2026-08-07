@@ -123,8 +123,15 @@ func main() {
 	println(`structMap[{"tau", 6.28}]:`, structMap[namedFloat{"tau", 6.28}])
 
 	// test preallocated map
-	squares := make(map[int]int, 200)
-	testBigMap(squares, 100)
+	mapSize := 200
+	mapEntries := 100
+	if unsafe.Sizeof(uintptr(0)) < 4 {
+		// Leave enough heap for the rest of this test on low-memory devices.
+		mapSize = 100
+		mapEntries = 50
+	}
+	squares := make(map[int]int, mapSize)
+	testBigMap(squares, mapEntries)
 	println("tested preallocated map")
 
 	// test growing maps
