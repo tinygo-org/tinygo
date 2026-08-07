@@ -5,10 +5,18 @@ target triple = "wasm32-unknown-unknown-wasm"
 @someGlobal = global i8 3
 @ptrGlobal = global ptr null
 @arrGlobal = global [8 x i8] zeroinitializer
+@structGlobal = global {ptr, i32, [2 x ptr]} zeroinitializer
+@constantPtrGlobal = constant ptr @someGlobal
 
 declare void @runtime.trackPointer(ptr nocapture readonly)
 
 declare noalias nonnull ptr @runtime.alloc(i32, ptr)
+
+declare i32 @runtime.gcGlobalRootCount()
+
+declare ptr @runtime.gcGlobalRoot(i32)
+
+declare ptr @runtime.gcGlobalRootValues()
 
 ; Generic function that returns a pointer (that must be tracked).
 define ptr @getPointer() {

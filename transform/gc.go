@@ -1,6 +1,8 @@
 package transform
 
 import (
+	"strings"
+
 	"tinygo.org/x/go-llvm"
 )
 
@@ -12,6 +14,8 @@ const shiftExcludeArgMem = 2
 // MakeGCStackSlots converts all calls to runtime.trackPointer to explicit
 // stores to stack slots that are scannable by the GC.
 func MakeGCStackSlots(mod llvm.Module) bool {
+	hasGlobalRoots := makeGCGlobalRoots(mod)
+
 	// Check whether there are allocations at all.
 	alloc := mod.NamedFunction("runtime.alloc")
 	if alloc.IsNil() {
@@ -26,12 +30,12 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			stackChainStart.SetInitializer(llvm.ConstNull(stackChainStart.GlobalValueType()))
 			stackChainStart.SetGlobalConstant(true)
 		}
-		return false
+		return hasGlobalRoots
 	}
 
 	trackPointer := mod.NamedFunction("runtime.trackPointer")
 	if trackPointer.IsNil() || trackPointer.FirstUse().IsNil() {
-		return false // nothing to do
+		return hasGlobalRoots
 	}
 
 	ctx := mod.Context()
@@ -107,7 +111,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		for _, use := range getUses(trackPointer) {
 			use.EraseFromParentAsInstruction()
 		}
-		return false
+		return hasGlobalRoots
 	}
 	stackChainStart.SetLinkage(llvm.InternalLinkage)
 	stackChainStartType := stackChainStart.GlobalValueType()
@@ -283,6 +287,110 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	}
 
 	return true
+}
+
+func makeGCGlobalRoots(mod llvm.Module) bool {
+	rootCount := mod.NamedFunction("runtime.gcGlobalRootCount")
+	rootAt := mod.NamedFunction("runtime.gcGlobalRoot")
+	rootValues := mod.NamedFunction("runtime.gcGlobalRootValues")
+	if rootCount.IsNil() || rootAt.IsNil() ||
+		!rootCount.FirstBasicBlock().IsNil() || !rootAt.FirstBasicBlock().IsNil() {
+		return false
+	}
+	if !rootValues.IsNil() && !rootValues.FirstBasicBlock().IsNil() {
+		return false
+	}
+
+	ctx := mod.Context()
+	uintptrType := rootCount.GlobalValueType().ReturnType()
+	var roots []llvm.Value
+	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		if strings.HasPrefix(global.Name(), "llvm.") ||
+			global.IsGlobalConstant() ||
+			global.Initializer().IsNil() ||
+			!gcTypeHasPointers(global.GlobalValueType()) {
+			continue
+		}
+		roots = appendGCGlobalRoots(roots, global, global.GlobalValueType(), ctx.Int32Type())
+	}
+
+	ptrType := rootAt.GlobalValueType().ReturnType()
+	rootArray := llvm.AddGlobal(mod, llvm.ArrayType(ptrType, len(roots)), "runtime.gcGlobalRoots")
+	rootArray.SetInitializer(llvm.ConstArray(ptrType, roots))
+	rootArray.SetGlobalConstant(true)
+	rootArray.SetLinkage(llvm.InternalLinkage)
+
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	entry := ctx.AddBasicBlock(rootCount, "entry")
+	builder.SetInsertPointAtEnd(entry)
+	builder.CreateRet(llvm.ConstInt(rootCount.GlobalValueType().ReturnType(), uint64(len(roots)), false))
+
+	entry = ctx.AddBasicBlock(rootAt, "entry")
+	builder.SetInsertPointAtEnd(entry)
+	index := rootAt.FirstParam()
+	addr := builder.CreateInBoundsGEP(rootArray.GlobalValueType(), rootArray, []llvm.Value{
+		llvm.ConstInt(ctx.Int32Type(), 0, false),
+		index,
+	}, "")
+	builder.CreateRet(builder.CreateLoad(ptrType, addr, ""))
+
+	if !rootValues.IsNil() {
+		rootValueArray := llvm.AddGlobal(mod, llvm.ArrayType(uintptrType, len(roots)), "runtime.gcGlobalRootValueArray")
+		rootValueArray.SetInitializer(llvm.ConstNull(rootValueArray.GlobalValueType()))
+		rootValueArray.SetLinkage(llvm.InternalLinkage)
+
+		entry = ctx.AddBasicBlock(rootValues, "entry")
+		builder.SetInsertPointAtEnd(entry)
+		builder.CreateRet(rootValueArray)
+	}
+	return true
+}
+
+func appendGCGlobalRoots(roots []llvm.Value, addr llvm.Value, typ llvm.Type, i32Type llvm.Type) []llvm.Value {
+	switch typ.TypeKind() {
+	case llvm.PointerTypeKind:
+		return append(roots, addr)
+	case llvm.StructTypeKind:
+		for i, fieldType := range typ.StructElementTypes() {
+			if gcTypeHasPointers(fieldType) {
+				field := llvm.ConstGEP(typ, addr, []llvm.Value{
+					llvm.ConstInt(i32Type, 0, false),
+					llvm.ConstInt(i32Type, uint64(i), false),
+				})
+				roots = appendGCGlobalRoots(roots, field, fieldType, i32Type)
+			}
+		}
+	case llvm.ArrayTypeKind:
+		elemType := typ.ElementType()
+		if gcTypeHasPointers(elemType) {
+			for i := 0; i < typ.ArrayLength(); i++ {
+				elem := llvm.ConstGEP(typ, addr, []llvm.Value{
+					llvm.ConstInt(i32Type, 0, false),
+					llvm.ConstInt(i32Type, uint64(i), false),
+				})
+				roots = appendGCGlobalRoots(roots, elem, elemType, i32Type)
+			}
+		}
+	}
+	return roots
+}
+
+func gcTypeHasPointers(typ llvm.Type) bool {
+	switch typ.TypeKind() {
+	case llvm.PointerTypeKind:
+		return true
+	case llvm.StructTypeKind:
+		for _, field := range typ.StructElementTypes() {
+			if gcTypeHasPointers(field) {
+				return true
+			}
+		}
+	case llvm.ArrayTypeKind:
+		return typ.ArrayLength() != 0 && gcTypeHasPointers(typ.ElementType())
+	}
+	return false
 }
 
 // markParentFunctions traverses all parent function calls (recursively) and

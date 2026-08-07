@@ -10,7 +10,7 @@ import (
 
 func gcMarkReachable() {
 	markStack()
-	findGlobals(markRoots)
+	markGlobals()
 }
 
 //go:extern runtime.stackChainStart
