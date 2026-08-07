@@ -58,7 +58,9 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 			// LLVM 17 doesn't have the no-verify-fixpoint flag.
 			optPasses = "globaldce,globalopt,ipsccp,instcombine,adce,function-attrs"
 		}
+		blockGlobalAllocPromotion(mod)
 		err := mod.RunPasses(optPasses, llvm.TargetMachine{}, po)
+		removeGlobalAllocPromotionMarker(mod)
 		if err != nil {
 			return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
 		}
@@ -80,7 +82,9 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		// After interfaces are lowered, there are many more opportunities for
 		// interprocedural optimizations. To get them to work, function
 		// attributes have to be updated first.
+		blockGlobalAllocPromotion(mod)
 		err = mod.RunPasses(optPasses, llvm.TargetMachine{}, po)
+		removeGlobalAllocPromotionMarker(mod)
 		if err != nil {
 			return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
 		}
@@ -162,7 +166,9 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	po := llvm.NewPassBuilderOptions()
 	defer po.Dispose()
 	passes := fmt.Sprintf("thinlto-pre-link<%s>", optLevel)
+	blockGlobalAllocPromotion(mod)
 	err := mod.RunPasses(passes, llvm.TargetMachine{}, po)
+	removeGlobalAllocPromotionMarker(mod)
 	if err != nil {
 		return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
 	}
@@ -175,6 +181,61 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	}
 
 	return nil
+}
+
+func blockGlobalAllocPromotion(mod llvm.Module) {
+	ctx := mod.Context()
+	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+	marker := llvm.AddFunction(mod, "tinygo.gc.alloc.marker", llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false))
+
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+	var marked bool
+	for _, name := range []string{"runtime.alloc", "runtime.alloc_noheap"} {
+		alloc := mod.NamedFunction(name)
+		if alloc.IsNil() {
+			continue
+		}
+		for _, call := range getUses(alloc) {
+			if isPointerFreeAllocation(call) {
+				continue
+			}
+
+			// GlobalOpt may otherwise turn this allocation into an untyped
+			// global, hiding its pointer fields from makeGCGlobalRoots.
+			next := llvm.NextInstruction(call)
+			if next.IsNil() {
+				continue
+			}
+			builder.SetInsertPointBefore(next)
+			builder.CreateCall(marker.GlobalValueType(), marker, []llvm.Value{call}, "")
+			marked = true
+		}
+	}
+	if !marked {
+		marker.EraseFromParentAsFunction()
+	}
+}
+
+func isPointerFreeAllocation(call llvm.Value) bool {
+	const noPointerLayout = 3
+
+	layout := call.Operand(1)
+	return !layout.IsAConstantExpr().IsNil() &&
+		layout.Opcode() == llvm.IntToPtr &&
+		!layout.Operand(0).IsAConstantInt().IsNil() &&
+		layout.Operand(0).ZExtValue() == noPointerLayout
+}
+
+func removeGlobalAllocPromotionMarker(mod llvm.Module) {
+	marker := mod.NamedFunction("tinygo.gc.alloc.marker")
+	if marker.IsNil() {
+		return
+	}
+	for _, call := range getUses(marker) {
+		call.EraseFromParentAsInstruction()
+	}
+	marker.EraseFromParentAsFunction()
 }
 
 // functionsUsedInTransform is a list of function symbols that may be used

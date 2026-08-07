@@ -1293,6 +1293,7 @@ func makeGlobalsModule(ctx llvm.Context, globals map[string]map[string]string, m
 			global := llvm.AddGlobal(mod, stringType, globalName)
 			global.SetInitializer(initializer)
 			global.SetAlignment(targetData.PrefTypeAlignment(stringType))
+			global.SetVisibility(llvm.HiddenVisibility)
 		}
 	}
 

@@ -1,4 +1,4 @@
-//go:build gc.boehm && tinygo.wasm
+//go:build gc.boehm
 
 package runtime
 
