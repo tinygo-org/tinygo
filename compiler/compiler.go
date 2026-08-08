@@ -296,6 +296,9 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 }
 
 // CompilePackage compiles a single package to a LLVM module.
+//
+// The SSA package must already be built. When packages are compiled
+// concurrently, the entire SSA program must be built before compilation starts.
 func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
 	c := newCompilerContext(moduleName, machine, config, dumpSSA)
 	defer c.dispose()
@@ -305,9 +308,6 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	c.loaderPkg = pkg
 	c.runtimePkg = ssaPkg.Prog.ImportedPackage("runtime").Pkg
 	c.program = ssaPkg.Prog
-
-	// Convert AST to SSA.
-	ssaPkg.Build()
 
 	// Assign names to function-local named types before compiling the
 	// package, so that types declared in different functions (or in
