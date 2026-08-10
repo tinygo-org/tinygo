@@ -23,14 +23,7 @@ package runtime
 // - func SetFinalizer(obj interface{}, finalizer interface{})
 // - func ReadMemStats(ms *runtime.MemStats)
 //
-//
-// In addition, if targeting wasi, the following functions should be exported for interoperability
-// with wasi libraries that use them. Note, this requires the export directive, not go:linkname.
-//
-// - func malloc(size uintptr) unsafe.Pointer
-// - func free(ptr unsafe.Pointer)
-// - func calloc(nmemb, size uintptr) unsafe.Pointer
-// - func realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer
+// The compiler provides the global root ranges used by markRoots.
 
 import (
 	"unsafe"
