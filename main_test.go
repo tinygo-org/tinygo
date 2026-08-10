@@ -261,6 +261,21 @@ func TestTimerStopResetRace(t *testing.T) {
 	runTest("timer_stop_reset_race.go", optionsFromTarget("", sema), t, nil, nil)
 }
 
+func TestESP32QEMU(t *testing.T) {
+	t.Parallel()
+
+	options := optionsFromTarget("esp32-qemu", sema)
+	emuCheck(t, options)
+	machines, err := exec.Command("qemu-system-xtensa", "-machine", "help").Output()
+	if err != nil {
+		t.Fatal("failed to list qemu-system-xtensa machines:", err)
+	}
+	if !regexp.MustCompile(`(?m)^esp32\s`).Match(machines) {
+		t.Skip("qemu-system-xtensa does not support the ESP32 machine")
+	}
+	runTest("print.go", options, t, nil, nil)
+}
+
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	emuCheck(t, options)
 
@@ -539,6 +554,9 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	if config.EmulatorName() == "simavr" {
 		actual = cleanSimAVRTestOutput(actual)
 	}
+	if config.EmulatorName() == "qemu-system-xtensa" {
+		actual = cleanESP32QEMUOutput(actual)
+	}
 	if name == "testing.go" {
 		// Strip actual time.
 		re := regexp.MustCompile(`\([0-9]\.[0-9][0-9]s\)`)
@@ -562,6 +580,18 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 		}
 		t.Fail()
 	}
+}
+
+func cleanESP32QEMUOutput(output []byte) []byte {
+	entryLine := bytes.Index(output, []byte("\nentry "))
+	if entryLine < 0 {
+		return output
+	}
+	entryLineEnd := bytes.IndexByte(output[entryLine+1:], '\n')
+	if entryLineEnd < 0 {
+		return output
+	}
+	return output[entryLine+1+entryLineEnd+1:]
 }
 
 func cleanSimAVRTestOutput(output []byte) []byte {
