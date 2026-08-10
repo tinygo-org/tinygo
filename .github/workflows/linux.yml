@@ -196,6 +196,10 @@ jobs:
           cat /proc/cpuinfo
           sudo apt-get update
           sudo apt-get install --no-install-recommends \
+              libgcrypt20 \
+              libpixman-1-0 \
+              libsdl2-2.0-0 \
+              libslirp0 \
               qemu-system-arm \
               qemu-system-riscv32 \
               qemu-user \
@@ -216,6 +220,14 @@ jobs:
           version: "29.0.1"
       - name: Setup `wasm-tools`
         uses: bytecodealliance/actions/wasm-tools/setup@v1
+      - name: Install Espressif QEMU
+        run: |
+          release=esp-develop-9.2.2-20260417
+          archive=qemu-xtensa-softmmu-${release//-/_}-x86_64-linux-gnu.tar.xz
+          curl -fL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/espressif/qemu/releases/download/$release/$archive"
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/qemu/bin" >> "$GITHUB_PATH"
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5
         id: cache-llvm-source

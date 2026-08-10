@@ -1,0 +1,5 @@
+{
+	"inherits": ["esp32-generic"],
+	"build-tags": ["qemu"],
+	"emulator": "qemu-system-xtensa -machine esp32 -nographic -semihosting -drive file={img},if=mtd,format=raw"
+}

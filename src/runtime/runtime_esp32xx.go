@@ -55,10 +55,6 @@ func ticksToNanoseconds(ticks timeUnit) int64 {
 	return int64(ticks) * 25
 }
 
-func exit(code int) {
-	abort()
-}
-
 func putchar(c byte) {
 	machine.Serial.WriteByte(c)
 }
