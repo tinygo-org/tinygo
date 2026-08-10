@@ -111,9 +111,6 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		// Compute the size of the RAM portion of the image (everything the ROM
 		// bootloader loads, up to and including the appended SHA256 hash).
 		ramImageSize := 0
-		if makeImage {
-			ramImageSize += 4096
-		}
 		ramImageSize += 24 // image header (8) + trailer fields (16)
 		for _, seg := range segments {
 			ramImageSize += 8 + len(seg.data) // segment header + data (4-aligned)
@@ -284,6 +281,9 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		dromSize := 0
 		if len(dromSegs) > 0 {
 			targetImageOffset := int(dromFlashAddr - flashBase)
+			if makeImage {
+				targetImageOffset = int(dromFlashAddr)
+			}
 			if outf.Len() > targetImageOffset {
 				return fmt.Errorf("ESP32: RAM segments too large (%d bytes), overlap DROM at flash 0x%x", outf.Len(), dromFlashAddr)
 			}
@@ -304,6 +304,9 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 			}
 			iromFlashAddr := dromFlashAddr + uint32(dromPages)*pageSize
 			targetImageOffset := int(iromFlashAddr - flashBase)
+			if makeImage {
+				targetImageOffset = int(iromFlashAddr)
+			}
 			if outf.Len() > targetImageOffset {
 				return fmt.Errorf("ESP32: DROM too large, overlaps IROM at flash 0x%x", iromFlashAddr)
 			}
