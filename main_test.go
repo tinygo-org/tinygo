@@ -295,7 +295,12 @@ func TestESP32QEMU(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^esp32\s`).Match(machines) {
 		t.Skip("qemu-system-xtensa does not support the ESP32 machine")
 	}
-	runTest("print.go", options, t, nil, nil)
+	for _, name := range []string{"print.go", "recover.go"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			runTest(name, options, t, nil, nil)
+		})
+	}
 }
 
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
