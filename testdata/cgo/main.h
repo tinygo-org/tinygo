@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <errno.h>
 
@@ -157,3 +158,15 @@ double doSqrt(double);
 void printf_single_int(char *format, int arg);
 
 int set_errno(int err);
+
+void *makeMallocChain(void);
+void clobberMalloc(void);
+int mallocChainValue(void *ptr);
+uintptr_t makeHiddenMalloc(void);
+int hiddenMallocValue(uintptr_t hidden);
+void freeHiddenMalloc(uintptr_t hidden);
+void mallocFreeStress(void);
+void mallocZero(void);
+void *callCalloc(size_t nmemb, size_t size);
+int callocOverflowReturnsNull(void);
+void clobberStack(void);

@@ -114,7 +114,13 @@ func TestBuild(t *testing.T) {
 		// This makes it possible to run one specific test (instead of all),
 		// which is especially useful to quickly check whether some changes
 		// affect a particular target architecture.
-		runPlatTests(optionsFromTarget(*testTarget, sema), tests, t)
+		options := optionsFromTarget(*testTarget, sema)
+		runPlatTests(options, tests, t)
+		if *testTarget == "wasip1" {
+			t.Run("cgo-realloc", func(t *testing.T) {
+				runTest("cgo-realloc/", options, t, nil, nil)
+			})
+		}
 		return
 	}
 
@@ -223,7 +229,11 @@ func TestBuild(t *testing.T) {
 		})
 		t.Run("WASIp1", func(t *testing.T) {
 			t.Parallel()
-			runPlatTests(optionsFromTarget("wasip1", sema), tests, t)
+			options := optionsFromTarget("wasip1", sema)
+			runPlatTests(options, tests, t)
+			t.Run("cgo-realloc", func(t *testing.T) {
+				runTest("cgo-realloc/", options, t, nil, nil)
+			})
 
 			// Test with -gc=boehm.
 			t.Run("gc.go-boehm", func(t *testing.T) {

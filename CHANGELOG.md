@@ -84,6 +84,7 @@
   - gc: correct the old size calculation in block realloc
   - gc: correct the leaking allocator bounds and overflow checks
   - gc: move objHeader to the end of the block header
+  - cgo: keep malloc allocations alive until free and stop the program for invalid or repeated free calls
   - fix the leaking GC build with the cores scheduler
   - rp2040: fix -gc=leaking and -gc=none
   - rp2: handle the RP2350 shared FIFO IRQ for GC (#5482)
