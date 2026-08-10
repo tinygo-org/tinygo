@@ -7,7 +7,6 @@ package runtime
 // may be the only memory allocator possible.
 
 import (
-	"internal/gclayout"
 	"internal/task"
 	"sync/atomic"
 	"unsafe"
@@ -67,18 +66,6 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	pointer := unsafe.Pointer(addr)
 	zero_new_alloc(pointer, size)
 	return pointer
-}
-
-func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
-	newAlloc := alloc(size, gclayout.NoPtrs.AsPtr())
-	if ptr == nil {
-		return newAlloc
-	}
-	// according to POSIX everything beyond the previous pointer's
-	// size will have indeterminate values so we can just copy garbage
-	memcpy(newAlloc, ptr, size)
-
-	return newAlloc
 }
 
 func free(ptr unsafe.Pointer) {

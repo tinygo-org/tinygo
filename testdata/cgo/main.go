@@ -19,6 +19,7 @@ import "C"
 import "C"
 
 import (
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -170,6 +171,35 @@ func main() {
 	println("len(C.GoBytes(nil, 0)):", len(C.GoBytes(nil, 0)))
 	println("len(C.GoBytes(C.CBytes(nil),0)):", len(C.GoBytes(C.CBytes(nil), 0)))
 	println(`rountrip CBytes:`, C.GoString((*C.char)(C.CBytes([]byte("hello\000")))))
+
+	// malloc allocations remain live until free, even when C pointers are the
+	// only links between them.
+	mallocChain := C.makeMallocChain()
+	runtime.GC()
+	C.clobberMalloc()
+	println("malloc chain:", C.mallocChainValue(mallocChain))
+
+	// malloc lifetime ends at free, not when the allocation becomes invisible
+	// to the GC. Encode the address so neither Go nor C exposes a pointer root.
+	hiddenMallocChan := make(chan C.uintptr_t, 1)
+	hiddenMallocDone := make(chan struct{})
+	go func() {
+		hiddenMallocChan <- C.makeHiddenMalloc()
+		close(hiddenMallocDone)
+	}()
+	hiddenMalloc := <-hiddenMallocChan
+	<-hiddenMallocDone
+	C.clobberStack()
+	runtime.GC()
+	C.clobberMalloc()
+	println("hidden malloc:", C.hiddenMallocValue(hiddenMalloc))
+	C.freeHiddenMalloc(hiddenMalloc)
+
+	C.mallocFreeStress()
+	println("malloc/free stress: ok")
+	C.mallocZero()
+	println("malloc zero: ok")
+	println("calloc overflow:", C.callocOverflowReturnsNull() != 0)
 
 	// Check that errno is returned from the second return value, and that it
 	// matches the errno value that was just set.
