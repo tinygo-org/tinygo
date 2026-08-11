@@ -26,6 +26,8 @@ import (
 
 const needsStaticHeap = false
 
+const boehmLayoutSizeBits = 4 + unsafe.Sizeof(uintptr(0))/4
+
 var gcLock task.PMutex
 
 func initHeap() {
@@ -70,7 +72,8 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcLock.Lock()
 	var ptr unsafe.Pointer
 	var needsZero bool
-	if layout == gclayout.NoPtrs.AsPtr() {
+	switch layout {
+	case gclayout.NoPtrs.AsPtr():
 		// This object is entirely pointer free, for example make([]int, ...).
 		// Make sure the GC knows this so it doesn't scan the object
 		// unnecessarily to improve performance.
@@ -78,12 +81,31 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		// Memory returned from libgc_malloc_atomic has not been zeroed so we
 		// have to do that manually.
 		needsZero = true
-	} else {
-		// TODO: bdwgc supports typed allocations, which could be useful to
-		// implement a mostly-precise GC.
+	case gclayout.Conservative.AsPtr():
+		// Stack storage does not have an ordinary repeating Go object layout.
 		ptr = libgc_malloc(size)
-		// Memory returned from libgc_malloc has already been zeroed, so nothing
-		// to do here.
+	default:
+		elementWords := boehmLayoutElementWords(layout)
+		pointerSize := unsafe.Sizeof(uintptr(0))
+		if elementWords == 0 || elementWords > size/pointerSize {
+			// This should not happen for compiler-generated Go allocations.
+			ptr = libgc_malloc(size)
+			break
+		}
+		elementSize := elementWords * pointerSize
+		if size%elementSize != 0 {
+			ptr = libgc_malloc(size)
+			break
+		}
+
+		descriptor := libgc_make_descriptor(uintptr(layout))
+		if descriptor == 0 {
+			// Descriptor construction can fail under memory pressure. A
+			// conservative allocation remains correct in that case.
+			ptr = libgc_malloc(size)
+			break
+		}
+		ptr = libgc_calloc_explicitly_typed(size/elementSize, elementSize, descriptor)
 	}
 	gcResumeWorld()
 	gcLock.Unlock()
@@ -96,6 +118,14 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 
 	return ptr
+}
+
+func boehmLayoutElementWords(layout unsafe.Pointer) uintptr {
+	value := uintptr(layout)
+	if value&1 != 0 {
+		return (value >> 1) & (1<<boehmLayoutSizeBits - 1)
+	}
+	return *(*uintptr)(layout)
 }
 
 func allocManual(size uintptr) unsafe.Pointer {
@@ -175,6 +205,12 @@ func libgc_malloc_atomic(uintptr) unsafe.Pointer
 
 //export GC_malloc_atomic_uncollectable
 func libgc_malloc_atomic_uncollectable(uintptr) unsafe.Pointer
+
+//export tinygo_runtime_bdwgc_make_descriptor
+func libgc_make_descriptor(uintptr) uintptr
+
+//export GC_calloc_explicitly_typed
+func libgc_calloc_explicitly_typed(uintptr, uintptr, uintptr) unsafe.Pointer
 
 //export GC_free
 func libgc_free(unsafe.Pointer)
