@@ -502,12 +502,6 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		return nil, fmt.Errorf("unknown GOOS=%s", options.GOOS)
 	}
 
-	if spec.GC == "boehm" {
-		// Add this file only when needed. This fixes a build failure on
-		// Windows.
-		spec.ExtraFiles = append(spec.ExtraFiles, "src/runtime/gc_boehm.c")
-	}
-
 	// Target triples (which actually have four components, but are called
 	// triples for historical reasons) have the form:
 	//   arch-vendor-os-environment

@@ -24,7 +24,7 @@ import (
 // library path in advance in several places).
 var libVersions = map[string]int{
 	"musl":         3,
-	"bdwgc":        3,
+	"bdwgc":        4,
 	"picolibc":     2,
 	"wasmbuiltins": 1,
 }
@@ -383,6 +383,11 @@ func (c *Config) CFlags(libclang bool) []string {
 		)
 	}
 	cflags = append(cflags, c.LibcCFlags()...)
+	if c.GC() == "boehm" {
+		cflags = append(cflags,
+			"-I"+filepath.Join(goenv.Get("TINYGOROOT"), "lib", "bdwgc", "include"),
+		)
+	}
 	// Always emit debug information. It is optionally stripped at link time.
 	cflags = append(cflags, "-gdwarf-4")
 	// Use the same optimization level as TinyGo.
@@ -521,7 +526,11 @@ func (c *Config) LinkerFlavor() string {
 // ExtraFiles returns the list of extra files to be built and linked with the
 // executable. This can include extra C and assembly files.
 func (c *Config) ExtraFiles() []string {
-	return c.Target.ExtraFiles
+	files := c.Target.ExtraFiles
+	if c.GC() == "boehm" && !slices.Contains(files, "src/runtime/gc_boehm.c") {
+		files = append(slices.Clone(files), "src/runtime/gc_boehm.c")
+	}
+	return files
 }
 
 // DumpSSA returns whether to dump Go SSA while compiling (-dumpssa flag). Only
