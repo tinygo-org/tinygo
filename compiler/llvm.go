@@ -252,14 +252,30 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	// Create the pointer bitmap.
 	objectSizeBytes := c.targetData.TypeAllocSize(t)
 	pointerAlignment := uint64(c.targetData.PrefTypeAlignment(c.dataPtrType))
+	pointerSize := c.targetData.TypeAllocSize(c.dataPtrType)
+	pointerBits := pointerSize * 8
 	bitmapLen := objectSizeBytes / pointerAlignment
 	bitmapBytes := (bitmapLen + 7) / 8
 	bitmap := make([]byte, bitmapBytes, max(bitmapBytes, 8))
 	c.buildPointerBitmap(bitmap, pointerAlignment, pos, t, 0)
 
+	// Use the one-pointer layout when every pointer-sized word is a pointer.
+	// Repeating this layout is equivalent for objects of any size.
+	pointerUnits := pointerSize / pointerAlignment
+	allPointers := bitmapLen != 0 && bitmapLen%pointerUnits == 0
+	for i := uint64(0); allPointers && i < bitmapLen; i++ {
+		isPointer := bitmap[i/8]&(1<<(i%8)) != 0
+		if isPointer != (i%pointerUnits == 0) {
+			allPointers = false
+		}
+	}
+	if allPointers {
+		layout := (pointerBits + pointerUnits) << 1
+		layout |= 1
+		return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, layout, false), c.dataPtrType)
+	}
+
 	// Try to encode the layout inline.
-	pointerSize := c.targetData.TypeAllocSize(c.dataPtrType)
-	pointerBits := pointerSize * 8
 	if bitmapLen < pointerBits {
 		rawMask := binary.LittleEndian.Uint64(bitmap[0:8])
 		layout := rawMask*pointerBits + bitmapLen

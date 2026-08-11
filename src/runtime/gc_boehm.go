@@ -27,6 +27,10 @@ import (
 const needsStaticHeap = false
 
 const boehmLayoutSizeBits = 4 + unsafe.Sizeof(uintptr(0))/4
+const (
+	boehmPtrFreeKind = 0
+	boehmNormalKind  = 1
+)
 
 var gcLock task.PMutex
 
@@ -77,35 +81,43 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		// This object is entirely pointer free, for example make([]int, ...).
 		// Make sure the GC knows this so it doesn't scan the object
 		// unnecessarily to improve performance.
-		ptr = libgc_malloc_atomic(size)
-		// Memory returned from libgc_malloc_atomic has not been zeroed so we
-		// have to do that manually.
+		ptr = libgc_malloc_kind(size, boehmPtrFreeKind)
 		needsZero = true
 	case gclayout.Conservative.AsPtr():
 		// Stack storage does not have an ordinary repeating Go object layout.
-		ptr = libgc_malloc(size)
+		ptr = libgc_malloc_kind(size, boehmNormalKind)
+	case gclayout.Pointer.AsPtr(), gclayout.PointerPair.AsPtr():
+		// Conservative scanning is exact when every word is a pointer.
+		ptr = libgc_malloc_kind(size, boehmNormalKind)
 	default:
 		elementWords := boehmLayoutElementWords(layout)
-		pointerSize := unsafe.Sizeof(uintptr(0))
-		if elementWords == 0 || elementWords > size/pointerSize {
+		pointerAlign := unsafe.Alignof(uintptr(0))
+		if elementWords == 0 || elementWords > size/pointerAlign {
 			// This should not happen for compiler-generated Go allocations.
-			ptr = libgc_malloc(size)
+			ptr = libgc_malloc_kind(size, boehmNormalKind)
 			break
 		}
-		elementSize := elementWords * pointerSize
+		elementSize := elementWords * pointerAlign
 		if size%elementSize != 0 {
-			ptr = libgc_malloc(size)
+			ptr = libgc_malloc_kind(size, boehmNormalKind)
 			break
 		}
 
 		descriptor := libgc_make_descriptor(uintptr(layout))
 		if descriptor == 0 {
-			// Descriptor construction can fail under memory pressure. A
-			// conservative allocation remains correct in that case.
-			ptr = libgc_malloc(size)
+			// The bridge returns zero if its cache or bitmap allocation fails.
+			// It also rejects the no-pointer descriptor, which is handled above.
+			ptr = libgc_malloc_kind(size, boehmNormalKind)
 			break
 		}
-		ptr = libgc_calloc_explicitly_typed(size/elementSize, elementSize, descriptor)
+		elementCount := size / elementSize
+		if elementCount == 1 {
+			ptr = libgc_malloc_explicitly_typed(size, descriptor)
+		} else {
+			ptr = libgc_calloc_explicitly_typed(
+				elementCount, elementSize, descriptor,
+			)
+		}
 	}
 	gcResumeWorld()
 	gcLock.Unlock()
@@ -116,7 +128,6 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if needsZero {
 		memzero(ptr, size)
 	}
-
 	return ptr
 }
 
@@ -202,11 +213,8 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 //export GC_init
 func libgc_init()
 
-//export GC_malloc
-func libgc_malloc(uintptr) unsafe.Pointer
-
-//export GC_malloc_atomic
-func libgc_malloc_atomic(uintptr) unsafe.Pointer
+//export GC_malloc_kind
+func libgc_malloc_kind(uintptr, int32) unsafe.Pointer
 
 //export GC_malloc_atomic_uncollectable
 func libgc_malloc_atomic_uncollectable(uintptr) unsafe.Pointer
@@ -216,6 +224,9 @@ func libgc_make_descriptor(uintptr) uintptr
 
 //export GC_calloc_explicitly_typed
 func libgc_calloc_explicitly_typed(uintptr, uintptr, uintptr) unsafe.Pointer
+
+//export GC_malloc_explicitly_typed
+func libgc_malloc_explicitly_typed(uintptr, uintptr) unsafe.Pointer
 
 //export GC_free
 func libgc_free(unsafe.Pointer)
