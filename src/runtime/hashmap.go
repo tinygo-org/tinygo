@@ -807,13 +807,13 @@ func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 	case reflectlite.Array:
 		var hash uint32
 		for i := 0; i < x.Len(); i++ {
-			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)), seed)
+			hash = (hash * 31) ^ hashmapInterfaceHash(valueInterfaceUnsafe(x.Index(i)), seed)
 		}
 		return hash
 	case reflectlite.Struct:
 		var hash uint32
 		for i := 0; i < x.NumField(); i++ {
-			hash ^= hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)), seed)
+			hash = (hash * 31) ^ hashmapInterfaceHash(valueInterfaceUnsafe(x.Field(i)), seed)
 		}
 		return hash
 	default:
