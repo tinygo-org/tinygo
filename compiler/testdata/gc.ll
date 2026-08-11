@@ -100,7 +100,7 @@ declare noalias nonnull ptr @runtime.alloc_zero(i32, ptr, ptr) #2
 define hidden ptr @main.newFuncValue(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %new = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 197 to ptr), ptr undef) #3
+  %new = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 67 to ptr), ptr undef) #3
   call void @runtime.trackPointer(ptr nonnull %new, ptr nonnull %stackalloc, ptr undef) #3
   ret ptr %new
 }
