@@ -928,11 +928,9 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		llvmFn := operands[len(operands)-1]
 		args := operands[:len(operands)-1]
 		for _, op := range operands {
-			if op.Type().TypeKind() == llvm.PointerTypeKind {
-				err := mem.markExternalStore(op)
-				if err != nil {
-					return r.errorAt(inst, err)
-				}
+			err := mem.markExternalStore(op)
+			if err != nil {
+				return r.errorAt(inst, err)
 			}
 		}
 		result = r.builder.CreateCall(inst.llvmInst.CalledFunctionType(), llvmFn, args, inst.name)
