@@ -109,6 +109,7 @@ func ReadMemStats(m *MemStats) {
 	m.HeapAlloc = gcTotalAlloc
 	m.HeapObjects = gcMallocs
 	m.Alloc = m.HeapAlloc
+	m.NumGC = 0 // this GC never collects, so no cycle ever completes
 
 	gcLock.Unlock()
 }

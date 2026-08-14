@@ -82,4 +82,9 @@ type MemStats struct {
 
 	// GCSys is bytes of memory in garbage collection metadata.
 	GCSys uint64
+
+	// NumGC is the number of completed GC cycles.
+	//
+	// The leaking collector never collects, so it always reports 0.
+	NumGC uint32
 }
