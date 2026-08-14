@@ -56,6 +56,7 @@ type PackageJSON struct {
 		Dir       string
 		GoMod     string
 		GoVersion string
+		Version   string // module version, e.g. "v1.2.3" (empty for the main module)
 	}
 
 	// Source files

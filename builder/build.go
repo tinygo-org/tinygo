@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gofrs/flock"
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -34,6 +35,8 @@ import (
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/stacksize"
 	"github.com/tinygo-org/tinygo/transform"
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -247,6 +250,22 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	err = lprogram.Parse()
 	if err != nil {
 		return result, err
+	}
+
+	// Embed module build information so runtime/debug.ReadBuildInfo() works,
+	// mirroring what the standard `go build` toolchain does. We fill
+	// runtime/debug.modinfo (a plain string global) from the module info that
+	// `go list` already reported for the loaded packages; runtime/debug parses
+	// it back into a *BuildInfo. An explicit -ldflags="-X runtime/debug.modinfo=..."
+	// takes precedence. This is skipped in GOPATH mode (no module info) and when
+	// the main package isn't in a module.
+	if _, overridden := globalValues["runtime/debug"]["modinfo"]; !overridden {
+		if mi := moduleBuildInfo(lprogram); mi != "" {
+			if globalValues["runtime/debug"] == nil {
+				globalValues["runtime/debug"] = map[string]string{}
+			}
+			globalValues["runtime/debug"]["modinfo"] = mi
+		}
 	}
 
 	// Store which filesystem paths map to which package name.
@@ -1602,4 +1621,149 @@ func b2u8(b bool) uint8 {
 		return 1
 	}
 	return 0
+}
+
+// moduleBuildInfo constructs the module build-info string embedded into the
+// runtime/debug.modinfo global, in the same textual format that
+// runtime/debug.BuildInfo.String() produces (minus the leading "go" line, which
+// runtime/debug supplies from runtime.Version()). runtime/debug.ReadBuildInfo
+// parses it back into a *BuildInfo, so `go build`-style version reporting works
+// under TinyGo without -ldflags. It returns "" when there is no module
+// information to embed (e.g. GOPATH mode, or a main package outside any module).
+//
+// The layout is the reverse of runtime/debug.ParseBuildInfo:
+//
+//	path\t<main package import path>\n
+//	mod\t<main module path>\t<version>\t<sum>\n
+//	dep\t<module path>\t<version>\t<sum>\n   (one per contributing module, sorted)
+//
+// The main module version is reported as "(devel)" for a local checkout, as the
+// go toolchain does; VCS-derived pseudo-version stamping is a separate follow-up.
+func moduleBuildInfo(lprogram *loader.Program) string {
+	main := lprogram.MainPkg()
+	if main == nil || main.Module.Path == "" {
+		return "" // GOPATH mode or no module: nothing to embed.
+	}
+
+	// Collect the distinct non-main modules that contributed packages to the
+	// build. As in the go toolchain, a module is listed if any of its packages
+	// are part of the build graph.
+	depVersions := make(map[string]string) // module path -> version
+	for _, pkg := range lprogram.Sorted() {
+		m := pkg.Module
+		if m.Path == "" || m.Main || m.Path == main.Module.Path {
+			continue
+		}
+		depVersions[m.Path] = m.Version
+	}
+	deps := make([]string, 0, len(depVersions))
+	for path := range depVersions {
+		deps = append(deps, path)
+	}
+	sort.Strings(deps)
+
+	// Derive the main module version. `go list` leaves it empty for a local
+	// checkout, so fall back to VCS stamping (as `go build` does): an exact tag
+	// on HEAD, otherwise a pseudo-version. This also yields the vcs.* build
+	// settings appended below. If VCS info isn't available, use "(devel)".
+	mainVersion := main.Module.Version
+	var vcsSettings string
+	if mainVersion == "" {
+		if v, s := gitVCSStamp(main.Module.Dir); v != "" {
+			mainVersion, vcsSettings = v, s
+		} else {
+			mainVersion = "(devel)"
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("path\t")
+	b.WriteString(main.ImportPath)
+	b.WriteByte('\n')
+	b.WriteString("mod\t")
+	b.WriteString(main.Module.Path)
+	b.WriteByte('\t')
+	b.WriteString(mainVersion)
+	b.WriteString("\t\n") // trailing tab leaves the checksum column empty
+	for _, path := range deps {
+		b.WriteString("dep\t")
+		b.WriteString(path)
+		b.WriteByte('\t')
+		b.WriteString(depVersions[path])
+		b.WriteString("\t\n") // go list -json carries no checksum; leave it empty
+	}
+	// Build settings (vcs.*) come after the module lines, matching
+	// runtime/debug.BuildInfo.String().
+	b.WriteString(vcsSettings)
+	return b.String()
+}
+
+// gitVCSStamp derives the main-module version and the vcs.* build settings from
+// the git checkout at dir, mirroring what the standard `go build` toolchain
+// records under -buildvcs. It returns ("", "") when dir is not a git work tree
+// or git is unavailable, so the caller can fall back to "(devel)".
+func gitVCSStamp(dir string) (version, settings string) {
+	if dir == "" {
+		return "", ""
+	}
+	git := func(args ...string) (string, bool) {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
+		if err != nil {
+			return "", false
+		}
+		return strings.TrimSpace(string(out)), true
+	}
+	if out, ok := git("rev-parse", "--is-inside-work-tree"); !ok || out != "true" {
+		return "", ""
+	}
+	rev, ok := git("rev-parse", "HEAD")
+	if !ok || rev == "" {
+		return "", ""
+	}
+
+	// Commit time (Unix seconds → UTC), used in the pseudo-version and vcs.time.
+	var commitTime time.Time
+	if s, ok := git("show", "-s", "--format=%ct", "HEAD"); ok {
+		if sec, err := strconv.ParseInt(s, 10, 64); err == nil {
+			commitTime = time.Unix(sec, 0).UTC()
+		}
+	}
+
+	// The tree is "modified" if there are any uncommitted changes (tracked or
+	// untracked), as reported by `git status --porcelain` — same as `go build`.
+	modified := false
+	if status, ok := git("status", "--porcelain"); ok && status != "" {
+		modified = true
+	}
+
+	// Version: an exact semver tag pointing at HEAD, else a Go-style
+	// pseudo-version based on the most recent reachable tag.
+	if tags, ok := git("tag", "--points-at", "HEAD"); ok {
+		for _, t := range strings.Fields(tags) {
+			if semver.IsValid(t) && semver.Canonical(t) == t {
+				version = t
+				break
+			}
+		}
+	}
+	if version == "" {
+		older := ""
+		if base, ok := git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"); ok && semver.IsValid(base) {
+			older = base
+		}
+		short := rev
+		if len(short) > 12 {
+			short = short[:12]
+		}
+		version = module.PseudoVersion(semver.Major(older), older, commitTime, short)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("build\tvcs=git\n")
+	sb.WriteString("build\tvcs.revision=" + rev + "\n")
+	if !commitTime.IsZero() {
+		sb.WriteString("build\tvcs.time=" + commitTime.Format(time.RFC3339) + "\n")
+	}
+	sb.WriteString("build\tvcs.modified=" + strconv.FormatBool(modified) + "\n")
+	return version, sb.String()
 }

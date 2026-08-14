@@ -18,6 +18,7 @@ require (
 	go.bug.st/serial v1.8.0
 	go.bytecodealliance.org v0.6.2
 	go.bytecodealliance.org/cm v0.2.2
+	golang.org/x/mod v0.37.0
 	golang.org/x/net v0.56.0
 	golang.org/x/sys v0.47.0
 	golang.org/x/tools v0.47.0
@@ -47,6 +48,5 @@ require (
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
 	github.com/urfave/cli/v3 v3.0.0-beta1 // indirect
-	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 )
