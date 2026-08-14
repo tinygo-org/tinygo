@@ -129,6 +129,7 @@ func ReadMemStats(m *MemStats) {
 	m.Mallocs = 0 // not provided by bdwgc
 	m.Frees = 0   // not provided by bdwgc
 	m.Sys = uint64(gcMemStats.obtained_from_os_bytes)
+	m.NumGC = uint32(gcMemStats.gc_no)
 
 	gcLock.Unlock()
 }
