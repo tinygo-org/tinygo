@@ -968,6 +968,8 @@ endif
 ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target=esp32-generic       examples/machinetest
 	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32-coreboard-v2  examples/adc
+	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=esp32c3-generic     examples/machinetest
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=esp32s3-generic     examples/machinetest
