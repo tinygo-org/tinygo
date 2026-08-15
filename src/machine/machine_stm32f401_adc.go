@@ -1,4 +1,4 @@
-//go:build stm32f4 && !stm32f401
+//go:build stm32f401
 
 package machine
 
@@ -7,70 +7,44 @@ import (
 	"unsafe"
 )
 
-// InitADC initializes the registers needed for ADC1.
+// InitADC initializes the registers needed for ADC1 on STM32F401.
 func InitADC() {
-	// Enable ADC clock
 	enableAltFuncClock(unsafe.Pointer(stm32.ADC1))
 
-	// stop scan, and clear scan resolution
 	stm32.ADC1.CR1.ClearBits(stm32.ADC_CR1_SCAN | stm32.ADC_CR1_RES_Msk)
-
-	// set conversion mode and resolution
 	stm32.ADC1.CR1.SetBits(stm32.ADC_CR1_RES_TwelveBit)
-
-	// clear CONT, ALIGN, EXTEN and EXTSEL bits from CR2
 	stm32.ADC1.CR2.ClearBits(stm32.ADC_CR2_CONT | stm32.ADC_CR2_ALIGN | stm32.ADC_CR2_EXTEN_Msk | stm32.ADC_CR2_EXTSEL_Msk)
-
-	// set CONT, ALIGN, EXTEN and EXTSEL bits from CR2
 	stm32.ADC1.CR2.SetBits(stm32.ADC_CR2_CONT_Single | stm32.ADC_CR2_ALIGN_Right)
-
 	stm32.ADC1.SQR1.ClearBits(stm32.ADC_SQR1_L_Msk)
-	stm32.ADC1.SQR1.SetBits(2 << stm32.ADC_SQR1_L_Pos) // 2 means 3 conversions
-
-	// enable
+	stm32.ADC1.SQR1.SetBits(2 << stm32.ADC_SQR1_L_Pos)
 	stm32.ADC1.CR2.SetBits(stm32.ADC_CR2_ADON)
-
-	return
 }
 
-// Configure configures an ADC pin to be able to read analog data.
+// Configure configures an ADC pin on STM32F401.
+// The F401 ADC SVD does not provide named Cycles84 constants per channel;
+// the value 4 (binary 100) selects 84-cycle sample time in the 3-bit field.
 func (a ADC) Configure(ADCConfig) {
 	a.Pin.ConfigureAltFunc(PinConfig{Mode: PinInputAnalog}, 0)
 
-	// set sample time
+	const cycles84 = 4
 	ch := a.getChannel()
 	if ch > 9 {
-		stm32.ADC1.SMPR1.SetBits(stm32.ADC_SMPR1_SMP11_Cycles84 << (ch - 10) * stm32.ADC_SMPR1_SMP11_Pos)
+		stm32.ADC1.SMPR1.SetBits(cycles84 << ((ch - 10) * 3))
 	} else {
-		stm32.ADC1.SMPR2.SetBits(stm32.ADC_SMPR2_SMP1_Cycles84 << (ch * stm32.ADC_SMPR2_SMP1_Pos))
+		stm32.ADC1.SMPR2.SetBits(cycles84 << (ch * 3))
 	}
-
-	return
 }
 
 // Get returns the current value of a ADC pin in the range 0..0xffff.
-// TODO: DMA based implementation.
 func (a ADC) Get() uint16 {
-	// set rank
 	ch := uint32(a.getChannel())
 	stm32.ADC1.SQR3.SetBits(ch)
-
-	// start conversion
 	stm32.ADC1.CR2.SetBits(stm32.ADC_CR2_SWSTART)
-
-	// wait for conversion to complete
 	for !stm32.ADC1.SR.HasBits(stm32.ADC_SR_EOC) {
 	}
-
-	// read 12-bit result as 16 bit value
 	result := uint16(stm32.ADC1.DR.Get()) << 4
-
-	// clear flag
 	stm32.ADC1.SR.ClearBits(stm32.ADC_SR_EOC)
-
-	// clear rank
 	stm32.ADC1.SQR3.ClearBits(ch)
-
 	return result
 }
 
@@ -109,6 +83,5 @@ func (a ADC) getChannel() uint8 {
 	case PC5:
 		return 15
 	}
-
 	return 0
 }

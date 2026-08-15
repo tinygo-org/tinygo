@@ -1,4 +1,4 @@
-//go:build stm32f4 || stm32f7
+//go:build (stm32f4 && !stm32f401) || stm32f7
 
 package machine
 
