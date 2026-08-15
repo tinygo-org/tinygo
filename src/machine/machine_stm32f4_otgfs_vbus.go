@@ -1,4 +1,4 @@
-//go:build stm32f4 && (stm32f429 || stm32f427 || stm32f411 || stm32f407 || stm32f405 || stm32f401)
+//go:build stm32f4 && (stm32f429 || stm32f427 || stm32f411 || stm32f407 || stm32f405)
 
 package machine
 
