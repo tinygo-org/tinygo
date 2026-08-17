@@ -20,6 +20,7 @@ var (
 	errMapAlreadyCreated      = errors.New("interp: map already created")
 	errLoopUnrolled           = errors.New("interp: loop unrolled")
 	errLoopTooLong            = errors.New("interp: loop ran too many iterations")
+	errTimeout                = errors.New("interp: timeout exceeded")
 )
 
 // This is one of the errors that can be returned from toLLVMValue when the
@@ -30,7 +31,8 @@ var errInvalidPtrToIntSize = errors.New("interp: ptrtoint integer size does not 
 func isRecoverableError(err error) bool {
 	return err == errIntegerAsPointer || err == errUnsupportedInst ||
 		err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated ||
-		err == errLoopUnrolled || err == errLoopTooLong || err == errInvalidPtrToIntSize
+		err == errLoopUnrolled || err == errLoopTooLong || err == errInvalidPtrToIntSize ||
+		err == errTimeout
 }
 
 // ErrorLine is one line in a traceback. The position may be missing.

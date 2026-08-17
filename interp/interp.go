@@ -121,6 +121,11 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 		if r.debug {
 			fmt.Fprintln(os.Stderr, "call:", fn.Name())
 		}
+		// Give each package initializer its own timeout budget (errTimeout is
+		// recoverable): one heavy compile-time-uncomputable init — e.g. crypto
+		// AES/secp256k1 key expansion — reverts to a runtime call without
+		// starving the remaining packages of precomputation time.
+		r.start = time.Now()
 		_, mem, callErr := r.run(r.getFunction(fn), nil, nil, "    ")
 		call.EraseFromParentAsInstruction()
 		if callErr != nil {
