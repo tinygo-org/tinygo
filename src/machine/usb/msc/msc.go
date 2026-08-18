@@ -1,6 +1,7 @@
 package msc
 
 import (
+	"encoding/binary"
 	"machine"
 	"machine/usb"
 	"machine/usb/descriptor"
@@ -72,9 +73,7 @@ func newMSC(dev machine.BlockDevice) *msc {
 	maxPacketSize := descriptor.EndpointMSCIN.GetMaxPacketSize()
 	m := &msc{
 		// Some platforms require reads/writes to be aligned to the full underlying hardware block
-		blockCache:    make([]byte, dev.WriteBlockSize()),
 		blockSizeUSB:  512,
-		buf:           make([]byte, dev.WriteBlockSize()),
 		cswBuf:        make([]byte, csw.MsgLen),
 		cbw:           &CBW{Data: make([]byte, 31)},
 		maxPacketSize: uint32(maxPacketSize),
@@ -122,19 +121,22 @@ func (m *msc) processTasks() {
 	for {
 		if m.taskQueued {
 			cmd := m.cbw.SCSICmd()
+			ack := true
 			switch cmd.CmdType() {
 			case scsi.CmdWrite:
-				m.scsiWrite(cmd, m.buf)
+				ack = m.scsiWrite(cmd, m.buf)
 			case scsi.CmdUnmap:
 				m.scsiUnmap(m.buf)
 			}
 
-			// Acknowledge the received data from the host
-			m.queuedBytes = 0
 			m.taskQueued = false
-			machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
+			if ack {
+				// Acknowledge the received data from the host
+				m.queuedBytes = 0
+				machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
+			}
 		}
-		time.Sleep(100 * time.Microsecond)
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
@@ -161,8 +163,8 @@ func (m *msc) sendCSW(status csw.Status) {
 	// Generate CSW packet into m.cswBuf and send it
 	residue := uint32(0)
 	expected := m.cbw.transferLength()
-	if expected >= m.sentBytes {
-		residue = expected - m.sentBytes
+	if expected >= m.sentBytes+m.queuedBytes {
+		residue = expected - (m.sentBytes + m.queuedBytes)
 	}
 	m.cbw.CSW(status, residue, m.cswBuf)
 	m.queuedBytes = csw.MsgLen
@@ -252,6 +254,7 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 		m.queuedBytes = 0
 		m.sentBytes = 0
 		m.respStatus = csw.StatusPassed
+		m.sendZLP = false
 
 		m.scsiCmdBegin()
 
@@ -294,9 +297,53 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 			m.sendUSBPacket(m.buf[:0])
 		} else {
 			m.sendCSW(m.respStatus)
-			m.state = mscStateCmd
 		}
 	}
 
 	return ack
+}
+
+// RegisterBlockDevice registers a BlockDevice provider with the MSC driver
+func (m *msc) RegisterBlockDevice(dev machine.BlockDevice) {
+	m.dev = dev
+
+	bufSize := max(dev.WriteBlockSize(), int64(m.maxPacketSize))
+
+	if cap(m.blockCache) != int(bufSize) {
+		m.blockCache = make([]byte, bufSize)
+		m.buf = make([]byte, bufSize)
+	}
+
+	m.blockSizeRaw = uint32(m.dev.WriteBlockSize())
+	m.blockCount = uint32(m.dev.Size()) / m.blockSizeUSB
+	// Read/write/erase operations must be aligned to the underlying hardware blocks. In order to align
+	// them we assume the provided block device is aligned to the end of the underlying hardware block
+	// device and offset all reads/writes by the remaining bytes that don't make up a full block.
+	m.blockOffset = uint32(m.dev.Size()) % m.blockSizeUSB
+
+	// Set VPD UNMAP fields
+	for i := range vpdPages {
+		if vpdPages[i].PageCode == 0xb0 {
+			// 0xb0 - 5.4.5 Block Limits VPD page (B0h)
+			if len(vpdPages[i].Data) >= 28 {
+				// Set the OPTIMAL UNMAP GRANULARITY (write blocks per erase block)
+				granularity := uint32(dev.EraseBlockSize()) / m.blockSizeUSB
+				binary.BigEndian.PutUint32(vpdPages[i].Data[24:28], granularity)
+			}
+			if len(vpdPages[i].Data) >= 32 {
+				// Set the UNMAP GRANULARITY ALIGNMENT (first sector of first full erase block)
+				// The unmap granularity alignment is used to calculate an optimal unmap request starting LBA as follows:
+				// optimal unmap request starting LBA = (n * OPTIMAL UNMAP GRANULARITY) + UNMAP GRANULARITY ALIGNMENT
+				// where n is zero or any positive integer value
+				// https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf
+
+				// We assume the block device is aligned to the end of the underlying block device
+				blockOffset := uint32(dev.EraseBlockSize()) % m.blockSizeUSB
+				// Set the UGAVALID bit to indicate that the UNMAP GRANULARITY ALIGNMENT is valid
+				blockOffset |= 0x80000000
+				binary.BigEndian.PutUint32(vpdPages[i].Data[28:32], blockOffset)
+			}
+			break
+		}
+	}
 }

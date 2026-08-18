@@ -50,6 +50,7 @@ func (m *msc) scsiCmdBegin() {
 	default:
 		// We don't support this command, error out
 		m.sendScsiError(csw.StatusFailed, scsi.SenseIllegalRequest, scsi.SenseCodeInvalidCmdOpCode)
+		return
 	}
 
 	if len(m.buf) == 0 {
@@ -93,6 +94,7 @@ func (m *msc) scsiDataTransfer(b []byte) bool {
 
 	// Update our sent bytes count to include the just-confirmed bytes
 	m.sentBytes += m.queuedBytes
+	m.queuedBytes = 0
 
 	if m.sentBytes >= m.transferBytes {
 		// Transfer complete, send CSW after transfer confirmed
@@ -287,7 +289,6 @@ func (m *msc) sendScsiError(status csw.Status, key scsi.Sense, code scsi.SenseCo
 	}
 
 	// Prepare to send CSW
-	m.sendZLP = true // Ensure the transaction is signaled as ended before a CSW is sent
 	m.respStatus = status
 	m.state = mscStateStatus
 
