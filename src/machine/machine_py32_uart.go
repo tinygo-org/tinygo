@@ -12,10 +12,11 @@ import (
 // RX interrupt) is provided by the setup function stored on the instance, which
 // is set when the instance is created (see setupUSART1 / setupUSART2).
 type UART struct {
-	Bus    *py32.USART_Type
-	Buffer *RingBuffer
-	irq    interrupt.Interrupt
-	setup  func(*UART)
+	Bus       *py32.USART_Type
+	Buffer    *RingBuffer
+	irq       interrupt.Interrupt
+	setup     func(*UART)
+	txRetries uint32
 }
 
 // DefaultUART is the first USART (USART1) and backs machine.Serial.
@@ -26,6 +27,7 @@ func (uart *UART) Configure(config UARTConfig) error {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
+	uart.txRetries = uartTXRetryBudget(config.BaudRate)
 
 	// Enable the peripheral clock and hook its RX interrupt.
 	uart.setup(uart)
@@ -69,8 +71,9 @@ func handleUSART1Interrupt(interrupt.Interrupt) {
 var usart1RX *UART
 
 func (uart *UART) writeByte(c byte) error {
-	retries := uartTXRetries
+	retries := uart.txRetries
 	for retries > 0 && !usartTXReady(uart.Bus) {
+		uartYield()
 		retries--
 	}
 	if retries <= 0 {
@@ -81,8 +84,9 @@ func (uart *UART) writeByte(c byte) error {
 }
 
 func (uart *UART) flush() {
-	retries := uartTXRetries
+	retries := uart.txRetries
 	for retries > 0 && !usartTXComplete(uart.Bus) {
+		uartYield()
 		retries--
 	}
 }

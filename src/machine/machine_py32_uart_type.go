@@ -8,9 +8,10 @@ import (
 )
 
 type UART struct {
-	Bus    *py32.UART_Type
-	Buffer *RingBuffer
-	irq    interrupt.Interrupt
+	Bus       *py32.UART_Type
+	Buffer    *RingBuffer
+	irq       interrupt.Interrupt
+	txRetries uint32
 }
 
 var DefaultUART = &UART{Bus: py32.UART1, Buffer: NewRingBuffer()}
@@ -19,6 +20,7 @@ func (uart *UART) Configure(config UARTConfig) error {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
+	uart.txRetries = uartTXRetryBudget(config.BaudRate)
 
 	py32.RCC.APBENR1.SetBits(py32.RCC_APBENR1_UART1EN)
 	uart.Bus.CR1.Set(0)
@@ -38,8 +40,9 @@ func handleUART1Interrupt(interrupt.Interrupt) {
 }
 
 func (uart *UART) writeByte(c byte) error {
-	retries := uartTXRetries
+	retries := uart.txRetries
 	for retries > 0 && uart.Bus.SR.Get()&py32.UART_SR_TXE == 0 {
+		uartYield()
 		retries--
 	}
 	if retries <= 0 {
@@ -50,8 +53,9 @@ func (uart *UART) writeByte(c byte) error {
 }
 
 func (uart *UART) flush() {
-	retries := uartTXRetries
+	retries := uart.txRetries
 	for retries > 0 && uart.Bus.SR.Get()&py32.UART_SR_TXE == 0 {
+		uartYield()
 		retries--
 	}
 }
