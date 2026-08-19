@@ -177,7 +177,7 @@ func (p Pin) getPinNumber() uint8 {
 
 func (p Pin) getPort() (*py32.GPIO_Type, uint8) {
 	offset := uintptr(p.getPortNumber()) * (uintptr(unsafe.Pointer(py32.GPIOB)) - uintptr(unsafe.Pointer(py32.GPIOA)))
-	return (*py32.GPIO_Type)(unsafe.Pointer(uintptr(unsafe.Pointer(py32.GPIOA)) + offset)), p.getPinNumber()
+	return (*py32.GPIO_Type)(unsafe.Add(unsafe.Pointer(py32.GPIOA), offset)), p.getPinNumber()
 }
 
 func (p Pin) Set(high bool) {
