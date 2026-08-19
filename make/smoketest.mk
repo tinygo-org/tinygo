@@ -415,6 +415,12 @@ ifneq ($(PY32), 0)
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f002b examples/echo
 	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f002bx5         ./testdata/py32-uart
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f003x6         ./testdata/py32-uart
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f030x8         ./testdata/py32-uart
+	@$(MD5SUM) $(SMOKE_OUT).hex
 endif
 
 smoketest-avr: SMOKE_OUT = build/smoke/avr

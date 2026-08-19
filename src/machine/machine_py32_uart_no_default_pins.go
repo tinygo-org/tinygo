@@ -2,6 +2,6 @@
 
 package machine
 
-func configureDefaultUARTPins() {
-	// There are no default UART pins for this target.
+func defaultUARTPins() (Pin, Pin) {
+	return NoPin, NoPin
 }

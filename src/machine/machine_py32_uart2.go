@@ -10,7 +10,7 @@ import (
 // UART2 is the second USART (USART2), available on PY32 parts that provide it.
 // It shares the generic UART driver; its clock gate and interrupt are wired up
 // by setupUSART2.
-var UART2 = &UART{Bus: py32.USART2, Buffer: NewRingBuffer(), setup: setupUSART2}
+var UART2 = &UART{Bus: py32.USART2, Buffer: NewRingBuffer(), setup: setupUSART2, num: 2}
 
 // setupUSART2 enables the USART2 peripheral clock and installs its RX interrupt
 // handler.

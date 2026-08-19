@@ -17,10 +17,11 @@ type UART struct {
 	irq       interrupt.Interrupt
 	setup     func(*UART)
 	txRetries uint32
+	num       uint8
 }
 
 // DefaultUART is the first USART (USART1) and backs machine.Serial.
-var DefaultUART = &UART{Bus: defaultUSART(), Buffer: NewRingBuffer(), setup: setupUSART1}
+var DefaultUART = &UART{Bus: defaultUSART(), Buffer: NewRingBuffer(), setup: setupUSART1, num: 1}
 
 func (uart *UART) Configure(config UARTConfig) error {
 
@@ -28,6 +29,9 @@ func (uart *UART) Configure(config UARTConfig) error {
 		config.BaudRate = 115200
 	}
 	uart.txRetries = uartTXRetryBudget(config.BaudRate)
+	if err := configureUARTPins(uart.num, config); err != nil {
+		return err
+	}
 
 	// Enable the peripheral clock and hook its RX interrupt.
 	uart.setup(uart)
@@ -45,8 +49,6 @@ func (uart *UART) Configure(config UARTConfig) error {
 
 	// Enable transmitter, receiver, RX interrupt, and the peripheral.
 	uart.Bus.CR1.Set(py32.USART_CR1_TE | py32.USART_CR1_RE | py32.USART_CR1_RXNEIE | py32.USART_CR1_UE)
-
-	configureDefaultUARTPins()
 
 	return nil
 }

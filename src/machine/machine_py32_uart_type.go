@@ -12,15 +12,19 @@ type UART struct {
 	Buffer    *RingBuffer
 	irq       interrupt.Interrupt
 	txRetries uint32
+	num       uint8
 }
 
-var DefaultUART = &UART{Bus: py32.UART1, Buffer: NewRingBuffer()}
+var DefaultUART = &UART{Bus: py32.UART1, Buffer: NewRingBuffer(), num: 1}
 
 func (uart *UART) Configure(config UARTConfig) error {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
 	uart.txRetries = uartTXRetryBudget(config.BaudRate)
+	if err := configureUARTPins(uart.num, config); err != nil {
+		return err
+	}
 
 	py32.RCC.APBENR1.SetBits(py32.RCC_APBENR1_UART1EN)
 	uart.Bus.CR1.Set(0)
@@ -31,7 +35,6 @@ func (uart *UART) Configure(config UARTConfig) error {
 	uart.irq = interrupt.New(py32.IRQ_UART1, handleUART1Interrupt)
 	uart.irq.SetPriority(0xc0)
 	uart.irq.Enable()
-	configureDefaultUARTPins()
 	return nil
 }
 

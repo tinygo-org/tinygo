@@ -18,9 +18,11 @@ const (
 	KEY2 = PA6
 )
 
-func configureDefaultUARTPins() {
-	PA7.Configure(PinConfig{Mode: PinAlternate})
-	PA7.SetAltFunc(8)
-	PA8.Configure(PinConfig{Mode: PinAlternate})
-	PA8.SetAltFunc(8)
+const (
+	UART_TX_PIN = PA7
+	UART_RX_PIN = PA8
+)
+
+func defaultUARTPins() (Pin, Pin) {
+	return UART_TX_PIN, UART_RX_PIN
 }
