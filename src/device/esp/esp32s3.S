@@ -18,7 +18,8 @@
 //     e. Disable caches
 //     f. Cache_MMU_Init() — reset all MMU entries to invalid
 //     g. Cache_Set_IDROM_MMU_Size() — set IROM/DROM entry split
-//     h. Write MMU entries mapping flash page 0 for IROM and DROM
+//     h. Write MMU entries mapping the IROM and DROM flash pages, using the
+//        physical flash offsets patched into .data by builder/esp.go
 //     i. Clear bus-shut bits
 //     j. Enable caches + isync
 
@@ -87,15 +88,23 @@
     .long 0x600C4064
 .Ldcache_ctrl1_reg:
     .long 0x600C4004
-// End-of-section symbols for multi-page MMU mapping.
+// Flash section bounds, window bases, and builder-patched physical offsets.
+.Lirom_start:
+    .long _irom_start
 .Lirom_end:
     .long _irom_end
-.Ldrom_end:
-    .long _drom_end
 .Lirom_base:
     .long 0x42000000
+.Ldrom_start:
+    .long _drom_start
+.Ldrom_end:
+    .long _drom_end
 .Ldrom_base:
     .long 0x3C000000
+.Lirom_flash_addr_ptr:
+    .long _irom_flash_addr
+.Ldrom_flash_addr_ptr:
+    .long _drom_flash_addr
 
 .global call_start_cpu0
 call_start_cpu0:
@@ -264,51 +273,79 @@ call_start_cpu0:
     l32r a4, .LCache_MMU_Init
     callx4 a4
 
-    // 4h. Set IDROM MMU size: even 256/256 split.
-    //     Each entry is 4 bytes, so 256 entries = 0x400 bytes per region.
-    movi a6, 0x400          // irom_mmu_size  (256 entries × 4 bytes)
-    movi a7, 0x400          // drom_mmu_size  (256 entries × 4 bytes)
+    // 4h. Split the shared 512-entry MMU table between IROM and DROM.
+    // DROM begins at the virtual page immediately after IROM.
+    l32r a2, .Ldrom_start
+    l32r a3, .Ldrom_base
+    sub  a2, a2, a3
+    srli a2, a2, 16                    // a2 = first DROM MMU entry
+
+    slli a6, a2, 2                     // IROM table size in bytes
+    movi a7, 0x400                     // movi takes a 12-bit signed immediate,
+    add  a7, a7, a7                    // so build 0x800 (full table) with an add
+    sub  a7, a7, a6                    // DROM table size in bytes
     mov  a5, a1
     l32r a4, .LCache_Set_IDROM_MMU_Size
     callx4 a4
 
-    // 4i. Map flash pages for IROM and DROM using identity mapping.
-    //     MMU table at 0x600C5000: entries 0-255 = ICache, 256-511 = DCache.
-    //     Entry value N = flash page N (SOC_MMU_VALID = 0 on S3).
-    //     Each 64KB page needs one 4-byte entry.
+    // 4i. Map physical flash pages into the shared MMU table. One 4-byte
+    //     entry per 64KB page; entry value = physical flash page number
+    //     (SOC_MMU_VALID = 0 on S3, SOC_MMU_ACCESS_SPIRAM bit clear for
+    //     flash). The physical base of each region is patched into
+    //     _irom_flash_addr/_drom_flash_addr by builder/esp.go, so virtual
+    //     pages are independent of flash pages.
     //
-    //     IROM: map pages 0..N where N = (_irom_end - 0x42000000) >> 16
-    //     DROM: map pages 0..M where M = (_drom_end - 0x3C000000) >> 16
+    //     Both regions use the hand-rolled store loop below. ROM's
+    //     Cache_Ibus_MMU_Set boots but then hangs at entry for reasons not
+    //     yet understood -- do not swap the IROM loop for it without a new
+    //     hypothesis. (The runtime PSRAM driver does use the ROM's
+    //     Cache_Dbus_MMU_Set, but only after the caches are up.)
+    l32r a8, .Lmmu_table_base
 
-    l32r a8, .Lmmu_table_base          // a8 = 0x600C5000
+    // map_flash_pages maps one XIP region into the shared MMU table:
+    //
+    //   base_lit   literal holding the base VMA of the region's cache window
+    //   start_lit  literal holding the region's start VMA (page-aligned)
+    //   end_lit    literal holding the region's end VMA
+    //   addr_lit   literal holding the address of the physical flash offset
+    //              that builder/esp.go patched into .data
+    //
+    // Requires a8 = MMU table base. Clobbers a2, a3, a9, a10, a11. The
+    // region must be non-empty; targets/esp32s3.ld asserts that, because the
+    // page count below underflows for a zero-length region.
+    .macro map_flash_pages base_lit, start_lit, end_lit, addr_lit
+    // First table entry, from the region's virtual page in its window.
+    l32r a2, \start_lit
+    l32r a3, \base_lit
+    sub  a2, a2, a3
+    srli a2, a2, 16
+    slli a10, a2, 2
+    add  a10, a8, a10
 
-    // --- IROM pages ---
-    l32r a2, .Lirom_end                // a2 = _irom_end (VMA in 0x42xxxxxx)
-    l32r a3, .Lirom_base               // a3 = 0x42000000
-    sub  a2, a2, a3                    // a2 = byte offset past IROM base
-    srli a2, a2, 16                    // a2 = last page index
-    addi a2, a2, 1                     // a2 = number of pages to map
-    movi a9, 0                         // a9 = page counter (and entry value)
-    mov  a10, a8                       // a10 = current MMU entry pointer
-.Lirom_loop:
+    // Number of pages covering [start, end).
+    l32r a2, \end_lit
+    l32r a3, \start_lit
+    sub  a2, a2, a3
+    addi a2, a2, -1
+    srli a2, a2, 16
+    addi a2, a2, 1
+
+    // First physical flash page.
+    l32r a3, \addr_lit
+    l32i a9, a3, 0
+    srli a9, a9, 16
+
+    movi a11, 0
+1:
     s32i a9, a10, 0
     addi a9, a9, 1
     addi a10, a10, 4
-    blt  a9, a2, .Lirom_loop
+    addi a11, a11, 1
+    blt  a11, a2, 1b
+    .endm
 
-    // --- DROM pages ---
-    l32r a2, .Ldrom_end                // a2 = _drom_end (VMA in 0x3Cxxxxxx)
-    l32r a3, .Ldrom_base               // a3 = 0x3C000000
-    sub  a2, a2, a3                    // a2 = byte offset past DROM base
-    srli a2, a2, 16                    // a2 = last page index
-    addi a2, a2, 1                     // a2 = number of pages to map
-    movi a9, 0                         // a9 = page counter (and entry value)
-    addmi a10, a8, 0x400              // a10 = 0x600C5400 (DCache entry 256)
-.Ldrom_loop:
-    s32i a9, a10, 0
-    addi a9, a9, 1
-    addi a10, a10, 4
-    blt  a9, a2, .Ldrom_loop
+    map_flash_pages .Lirom_base, .Lirom_start, .Lirom_end, .Lirom_flash_addr_ptr
+    map_flash_pages .Ldrom_base, .Ldrom_start, .Ldrom_end, .Ldrom_flash_addr_ptr
     memw
 
     // 4j. Clear bus-shut bits so core 0 can access ICache and DCache buses.
