@@ -57,6 +57,7 @@ func TestBuild(t *testing.T) {
 		"alias.go",
 		"atomic.go",
 		"binop.go",
+		"buildinfo.go",
 		"calls.go",
 		"cgo/",
 		"channel.go",

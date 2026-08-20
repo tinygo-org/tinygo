@@ -1,0 +1,25 @@
+read ok: true
+info not nil: true
+go version set: true
+names the compiler: true
+path: example.com/prog
+main path: example.com/prog
+main version: (devel)
+deps: 2
+dep: example.com/a v1.2.3 h1:aaa=
+dep: example.com/b v0.1.0 
+  replaced by: example.com/b-fork v0.2.0 h1:bbb=
+settings: 2
+setting: -tags sample
+setting: CGO_ENABLED 0
+round trip path: true
+round trip main: true
+round trip deps: true
+round trip settings: true
+unknown line skipped: true
+unknown line skipped: true
+unknown line skipped: true
+malformed rejected: true
+malformed rejected: true
+malformed rejected: true
+malformed rejected: true
