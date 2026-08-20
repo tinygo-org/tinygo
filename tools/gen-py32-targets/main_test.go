@@ -63,7 +63,7 @@ func TestGenerate(t *testing.T) {
 	checkBuildTags(t, filepath.Join(out, "py32f001cxx.json"), "py32f001cxx", "no_gpio_afrh", "py32_hsi_fs_literal4", "py32_usart1_clock_literal")
 	checkBuildTags(t, filepath.Join(out, "py32f002cxx.json"), "py32f002cxx", "no_gpio_afrh", "py32_hsi_fs_literal4")
 	checkBuildTags(t, filepath.Join(out, "py32f032xx.json"), "py32f032xx", "py32_hsi_fs_literal3")
-	checkBuildTags(t, filepath.Join(out, "py32f410xx.json"), "py32f410xx", "py32_gpio_ospdder", "py32_gpio_clock_ahb", "py32_no_hsi_fs", "py32_usart_unnumbered", "py32_usart_txe_txf", "py32_uart_clock_apb2", "py32_uart_no_interrupt")
+	checkBuildTags(t, filepath.Join(out, "py32f410xx.json"), "py32f410xx", "py32_gpio_ospdder", "py32_gpio_clock_ahb", "py32_no_hsi_fs", "py32_usart_unnumbered", "py32_uart_clock_apb2", "py32_uart_no_interrupt")
 	checkBuildTags(t, filepath.Join(out, "py32t020xx.json"), "py32t020xx", "py32_uart_type")
 
 	data, err := os.ReadFile(filepath.Join(out, "py32e407xc.ld"))
