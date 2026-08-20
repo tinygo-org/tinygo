@@ -268,6 +268,21 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	usbOTG.DCTL.ClearBits(DCTL_SDIS)
 }
 
+// Attach connects the device to the USB bus by releasing soft disconnect,
+// allowing the host to detect and enumerate it. It can be used together with
+// Detach to delay enumeration until the USB configuration (device
+// identifiers, classes, ...) is complete.
+func (dev *USBDevice) Attach() {
+	usbOTG.DCTL.ClearBits(DCTL_SDIS)
+}
+
+// Detach disconnects the device from the USB bus by asserting soft
+// disconnect. To the host this appears as if the device was unplugged. A
+// subsequent Attach makes the host enumerate the device again.
+func (dev *USBDevice) Detach() {
+	usbOTG.DCTL.SetBits(DCTL_SDIS)
+}
+
 func initEndpoint(ep, config uint32) {
 	if ep == 0 {
 		// Control endpoint
