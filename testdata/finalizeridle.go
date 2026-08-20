@@ -84,6 +84,10 @@ func testPermanentlyBlockedStacks() {
 	if controlRan.Load() != 1 {
 		panic("control finalizer did not prove GC progress")
 	}
+	// Collect once more so transient scheduler roots cannot mask an unrooted
+	// blocked task during the progress-control collection.
+	runtime.GC()
+	runtime.Gosched()
 	for i, name := range [...]string{"select{}", "nil-channel send", "nil-channel receive"} {
 		if blockedRan[i].Load() != 0 {
 			panic(name + " stack-held object was finalized")
