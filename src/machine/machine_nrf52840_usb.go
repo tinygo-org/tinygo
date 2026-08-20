@@ -22,6 +22,11 @@ var (
 	epinen      uint32
 	epouten     uint32
 	easyDMABusy volatile.Register8
+
+	// usbDetached keeps the device detached from the bus after Detach: the
+	// USB IRQ handler re-enables the DP pull-up on every power-ready event,
+	// which would otherwise silently undo a Detach.
+	usbDetached bool
 )
 
 // enterCriticalSection is used to protect access to easyDMA - only one thing
@@ -94,6 +99,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 // Detach to delay enumeration until the USB configuration (device
 // identifiers, classes, ...) is complete.
 func (dev *USBDevice) Attach() {
+	usbDetached = false
 	nrf.USBD.USBPULLUP.Set(1)
 }
 
@@ -101,6 +107,7 @@ func (dev *USBDevice) Attach() {
 // To the host this appears as if the device was unplugged. A subsequent
 // Attach makes the host enumerate the device again.
 func (dev *USBDevice) Detach() {
+	usbDetached = true
 	nrf.USBD.USBPULLUP.Set(0)
 }
 
@@ -118,7 +125,9 @@ func handleUSBIRQ(interrupt.Interrupt) {
 
 			// Configure control endpoint
 			initEndpoint(0, usb.ENDPOINT_TYPE_CONTROL)
-			nrf.USBD.USBPULLUP.Set(1)
+			if !usbDetached {
+				nrf.USBD.USBPULLUP.Set(1)
+			}
 
 			usbConfiguration = 0
 		}
