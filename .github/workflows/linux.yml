@@ -23,7 +23,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.0-rc.3'
+          go-version: '1.27.0'
           cache: true
       - name: Run go mod tidy
         run: go mod tidy
@@ -36,7 +36,7 @@ jobs:
     # statically linked binary.
     runs-on: ubuntu-latest
     container:
-      image: golang:1.27rc3-alpine
+      image: golang:1.27-alpine
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -160,7 +160,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.0-rc.3'
+          go-version: '1.27.0'
           cache: true
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
@@ -204,7 +204,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.0-rc.3'
+          go-version: '1.27.0'
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v6
@@ -323,7 +323,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.0-rc.3'
+          go-version: '1.27.0'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5
