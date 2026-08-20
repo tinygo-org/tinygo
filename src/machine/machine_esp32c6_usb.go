@@ -66,6 +66,11 @@ func (dev *USBDevice) SetStallEPOut(ep uint32)   {}
 func (dev *USBDevice) ClearStallEPIn(ep uint32)  {}
 func (dev *USBDevice) ClearStallEPOut(ep uint32) {}
 
+// Attach and Detach are no-ops: the USB Serial/JTAG controller has no
+// software-controlled soft-connect, it is always attached to the bus.
+func (dev *USBDevice) Attach() {}
+func (dev *USBDevice) Detach() {}
+
 // initUSB is intentionally empty — the interp phase evaluates init()
 // functions at compile time and cannot access hardware registers.
 // Actual hardware setup is deferred to the first Configure() call.
