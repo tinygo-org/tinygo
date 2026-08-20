@@ -1,6 +1,9 @@
 
 // Xtensa interrupt/exception vector table for the ESP32-S3.
 //
+// See Xtensa ISA Reference Manual for details on the vector table layout and exception handling.
+// https://www.cadence.com/content/dam/cadence-www/global/en_US/documents/tools/silicon-solutions/compute-ip/isa-summary.pdf
+//
 // The ESP32-S3 uses an Xtensa LX7 core with the windowed register ABI.
 // Interrupt vectors are placed at fixed offsets from the VECBASE special
 // register.  We only handle level-1 (user) interrupts for now.
@@ -299,13 +302,26 @@ _handle_kernel_exc:
 
     .global _handle_level1
 _handle_level1:
-    // --- allocate 96-byte exception frame on the interrupted stack ---
+    // EXCCAUSE 5 (AllocaCause) is a MOVSP window-spill request, not a fault, so
+    // it is checked before any state is touched: a0 is still in EXCSAVE1.
+    // Xtensa ISA Reference Manual, Table 4-64 "Exception Causes".
+    rsr     a0, EXCCAUSE
+    bnei    a0, 5, 1f
+    j       _xt_alloca_exc
+1:
+    rsr     a0, EXCSAVE1        // restore a0 clobbered by the EXCCAUSE read
+
+    // --- allocate the exception frame on the interrupted stack ---
     // Layout (offsets from a1 after adjustment):
     //   0: a0   4: a1(orig)  8: a2  12: a3  16: a4  20: a5
     //  24: a6  28: a7  32: a8  36: a9  40: a10 44: a11
     //  48: a12 52: a13 56: a14 60: a15
-    //  64: SAR 68: EPC1  72: PS
-    addi    a0, a1, -96         // a0 = new frame pointer
+    //  64: SAR 68: EPC1  72: PS  76: WINDOWBASE  80: WINDOWSTART
+    //
+    // 128, not the 84 the layout needs: the low 16 bytes are the interruptee's
+    // windowed-ABI base save area, as in ESP-IDF's XT_STK_FRMSZ (+0x20).
+    // https://github.com/espressif/esp-idf/blob/master/components/xtensa/include/xtensa_context.h
+    addi    a0, a1, -128        // a0 = new frame pointer
     s32i    a1, a0, 4           // save original a1 (SP)
     mov     a1, a0              // a1 = frame pointer
 
@@ -339,6 +355,14 @@ _handle_level1:
     // level-1 interrupts.
     rsr     a2, PS
     s32i    a2, a1, 72          // save PS (with EXCM=1 set by hardware)
+
+    // Captured here, not in the C handler: getting there costs a callx4 and the
+    // printfs rotate and spill windows, so they would report their own state.
+    rsr     a3, WINDOWBASE
+    s32i    a3, a1, 76
+    rsr     a3, WINDOWSTART
+    s32i    a3, a1, 80
+
     movi    a3, ~0x1F           // mask: clear INTLEVEL (bits 0-3) + EXCM (bit 4)
     and     a2, a2, a3
     movi    a3, 1               // INTLEVEL = 1
@@ -411,6 +435,37 @@ _handle_level1:
     l32i    a1, a1, 4           // restores original SP (deallocates frame)
 
     rfe
+
+// Alloca (MOVSP) exception: rotate back to the MOVSP window, fix PS.OWB, then
+// fall into the matching window underflow handler, which spills and rfwu's back.
+// Ported from ESP-IDF _xt_alloca_exc:
+// https://github.com/espressif/esp-idf/blob/master/components/xtensa/xtensa_vectors.S
+    .balign 4
+    .global _xt_alloca_exc
+_xt_alloca_exc:
+    rsr     a0, WINDOWBASE      // grab WINDOWBASE before rotw changes it
+    rotw    -1                  // WINDOWBASE goes to a4, new a0-a3 are scratch
+    rsr     a2, PS
+    extui   a3, a2, 8, 4        // a3 = PS.OWB  (shift 8, 4 bits)
+    xor     a3, a3, a4          // bits that changed from old to current WB
+    rsr     a4, EXCSAVE1        // restore the interruptee's a0 (now in a4)
+    slli    a3, a3, 8
+    xor     a2, a2, a3          // flip those bits in PS.OWB
+    wsr     a2, PS              // PS.OWB now matches the new WINDOWBASE
+    rsync
+
+    // Dispatch on the call size in bits 31:30 of the interruptee's a0; plain `j`
+    // because _bbci.l's 8-bit range cannot reach the underflow vectors.
+    // Xtensa ISA Reference Manual, RETW, section 8.3.253, p.565 (a0 encoding).
+    _bbsi.l a4, 31, 1f
+    j       _window_underflow4
+1:
+    rotw    -1                  // interruptee's a0 moves to a8
+    _bbsi.l a8, 30, 2f
+    j       _window_underflow8
+2:
+    rotw    -1
+    j       _window_underflow12
 
 // -----------------------------------------------------------------------
 // Default weak espradio_user_exception: infinite loop halt.
