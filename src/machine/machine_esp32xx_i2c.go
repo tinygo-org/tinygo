@@ -186,6 +186,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 	timeoutNS := int64(timeoutMS) * 1000000
 	needAddress := true
 	needRestart := false
+	readLast := false
 	var readTo []byte
 	for cmdIdx, reg := 0, &i2c.Bus.COMD0; cmdIdx < len(cmd); {
 		c := &cmd[cmdIdx]
@@ -253,6 +254,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				reg = nextAddress(reg)
 			}
 			if split {
+				readLast = true
 				reg.Set(i2cCMD_READLAST | 1)
 				reg = nextAddress(reg)
 				readTo = c.data[c.head : c.head+bytes+1] // read bytes + 1 last byte
@@ -283,7 +285,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				}
 			}
 			switch {
-			case mask&esp.I2C_INT_STATUS_NACK_INT_ST_Msk != 0:
+			case mask&esp.I2C_INT_STATUS_NACK_INT_ST_Msk != 0 && !readLast:
 				return errI2CAckExpected
 			case mask&esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk != 0:
 				if readTo != nil {
