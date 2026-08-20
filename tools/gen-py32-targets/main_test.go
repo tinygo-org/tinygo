@@ -36,6 +36,25 @@ func TestDeviceTable(t *testing.T) {
 	}
 }
 
+func TestSystemStackSize(t *testing.T) {
+	tests := []struct {
+		ramSize uint64
+		want    uint64
+	}{
+		{2 * 1024, 1024},
+		{4 * 1024, 1024},
+		{4*1024 + 1, 2 * 1024},
+		{16 * 1024, 2 * 1024},
+		{16*1024 + 1, 4 * 1024},
+		{144 * 1024, 4 * 1024},
+	}
+	for _, test := range tests {
+		if got := systemStackSize(test.ramSize); got != test.want {
+			t.Errorf("systemStackSize(%d) = %d, want %d", test.ramSize, got, test.want)
+		}
+	}
+}
+
 func TestGenerate(t *testing.T) {
 	devices, err := readDevices("devices.csv")
 	if err != nil {
@@ -50,9 +69,9 @@ func TestGenerate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 41 family JSON files plus JSON and linker files for the 77 non-legacy
-	// concrete targets.
-	if got, want := len(entries), 195; got != want {
+	// 41 family JSON files, 77 generated concrete JSON files, and linker
+	// scripts for all 87 concrete targets.
+	if got, want := len(entries), 205; got != want {
 		t.Fatalf("generated %d files, want %d", got, want)
 	}
 
@@ -76,6 +95,20 @@ func TestGenerate(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(out, "py32f030x8.json")); !os.IsNotExist(err) {
 		t.Fatalf("legacy target was generated: %v", err)
+	}
+	checkFileContains(t, filepath.Join(out, "py32f002ax5.ld"), "_stack_size = 1K;")
+	checkFileContains(t, filepath.Join(out, "py32f030x8.ld"), "_stack_size = 2K;")
+	checkFileContains(t, filepath.Join(out, "py32l090xc.ld"), "_stack_size = 4K;")
+}
+
+func checkFileContains(t *testing.T, path, want string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), want) {
+		t.Errorf("%s does not contain %q", path, want)
 	}
 }
 

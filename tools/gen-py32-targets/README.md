@@ -35,10 +35,17 @@ registers, `USART` versus `UART` blocks, split USART receive/transmit data
 registers, and HSI selector availability. Keep these classifications in the
 target generator rather than adding long family expressions to machine files.
 
-Existing PY32 target files are retained for compatibility. In particular, their
-established aliases and flashing commands are not regenerated. Newly generated
-targets intentionally omit flashing commands because a compatible programmer
-identifier has not been verified for every Puya part.
+Existing PY32 target JSON files are retained for compatibility. In particular,
+their established aliases and flashing commands are not regenerated. Linker
+scripts are generated for every concrete target so memory definitions and stack
+sizes remain consistent. Newly generated targets intentionally omit flashing
+commands because a compatible programmer identifier has not been verified for
+every Puya part.
+
+The system and interrupt stack is sized from available RAM: targets with up to
+4 KiB use 1 KiB, targets with up to 16 KiB use 2 KiB, and larger targets use
+4 KiB. This linker-defined stack is distinct from goroutine fallback stacks
+selected by TinyGo's `--stack-size` option.
 
 ## Machine support status
 

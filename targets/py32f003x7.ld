@@ -1,10 +1,9 @@
-
 MEMORY
 {
-  FLASH_TEXT (rx) : ORIGIN = 0x08000000, LENGTH = 48K
-  RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 6K
+  FLASH_TEXT (rx) : ORIGIN = 0x8000000, LENGTH = 0xc000
+  RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 0x1800
 }
 
-_stack_size = 512;
+_stack_size = 2K;
 
 INCLUDE "targets/arm.ld"

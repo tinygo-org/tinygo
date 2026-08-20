@@ -4,6 +4,6 @@ MEMORY
   RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 0x2000
 }
 
-_stack_size = 512;
+_stack_size = 2K;
 
 INCLUDE "targets/arm.ld"
