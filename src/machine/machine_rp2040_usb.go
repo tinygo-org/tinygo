@@ -43,7 +43,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 		rp.USBCTRL_REGS_INTE_SETUP_REQ)
 
 	// Present full speed device by enabling pull up on DP
-	rp.USBCTRL_REGS.SIE_CTRL.SetBits(rp.USBCTRL_REGS_SIE_CTRL_PULLUP_EN)
+	dev.Attach()
 }
 
 // Attach connects the device to the USB bus by enabling the DP pull-up,

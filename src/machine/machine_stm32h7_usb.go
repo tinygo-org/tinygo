@@ -206,7 +206,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 
 	// Stay soft-disconnected until configuration is complete; CSRST left
 	// DCTL at its default "connected" state.
-	usbOTG.DCTL.SetBits(DCTL_SDIS)
+	dev.Detach()
 
 	// 5. Force device mode now that the core is out of reset. The mode
 	// change takes effect only after up to 25 ms (RM0433); poll GINTSTS.CMOD
@@ -265,7 +265,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	dev.initcomplete = true
 
 	// Release soft-disconnect: pulls D+ high, making device visible to host.
-	usbOTG.DCTL.ClearBits(DCTL_SDIS)
+	dev.Attach()
 }
 
 // Attach connects the device to the USB bus by releasing soft disconnect,

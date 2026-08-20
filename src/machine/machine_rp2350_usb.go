@@ -43,7 +43,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 		rp.USB_INTE_SETUP_REQ)
 
 	// Present full speed device by enabling pull up on DP
-	rp.USB.SIE_CTRL.SetBits(rp.USB_SIE_CTRL_PULLUP_EN)
+	dev.Attach()
 
 	// 12.7.2 Disable phy isolation
 	rp.USB.SetMAIN_CTRL_PHY_ISO(0x0)

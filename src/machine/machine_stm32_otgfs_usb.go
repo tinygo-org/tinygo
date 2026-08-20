@@ -254,7 +254,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	otgPower.PCGCCTL.Set(0)
 
 	// Soft-disconnect now (after CSRST reset DCTL to its default connected state).
-	otgDevice.DCTL.SetBits(dctlSDIS)
+	dev.Detach()
 
 	// ---- 7. Configure data FIFOs --------------------------------------------
 
@@ -311,7 +311,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 
 	// ---- 12. Connect to host (clear soft-disconnect) -----------------------
 
-	otgDevice.DCTL.ClearBits(dctlSDIS)
+	dev.Attach()
 
 	dev.initcomplete = true
 }

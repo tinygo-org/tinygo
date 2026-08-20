@@ -51,7 +51,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	sam.USB_DEVICE.CTRLB.SetBits(sam.USB_DEVICE_CTRLB_SPDCONF_FS << sam.USB_DEVICE_CTRLB_SPDCONF_Pos)
 
 	// attach
-	sam.USB_DEVICE.CTRLB.ClearBits(sam.USB_DEVICE_CTRLB_DETACH)
+	dev.Attach()
 
 	// enable interrupt for end of reset
 	sam.USB_DEVICE.INTENSET.SetBits(sam.USB_DEVICE_INTENSET_EORST)
