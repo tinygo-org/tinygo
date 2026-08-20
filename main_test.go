@@ -119,7 +119,24 @@ func TestBuild(t *testing.T) {
 
 	t.Run("Host", func(t *testing.T) {
 		t.Parallel()
-		runPlatTests(optionsFromTarget("", sema), tests, t)
+		hostOptions := optionsFromTarget("", sema)
+		runPlatTests(hostOptions, tests, t)
+
+		// Exercise the host-only schedulers with a GC that implements finalizers.
+		switch runtime.GOOS {
+		case "darwin", "linux":
+			for _, scheduler := range []string{"threads", "none"} {
+				scheduler := scheduler
+				t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
+					t.Parallel()
+					options := compileopts.Options(hostOptions)
+					options.GC = "conservative"
+					options.Scheduler = scheduler
+					options.Tags = append(append([]string(nil), hostOptions.Tags...), "runtime_asserts")
+					runTest("finalizerinvariants.go", options, t, nil, nil)
+				})
+			}
+		}
 	})
 
 	// Test a few build options.
@@ -387,7 +404,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			case "finalizerinvariants.go":
 				// The default GC on these is boehm, where SetFinalizer is
 				// unimplemented, so there is nothing to assert. The explicit
-				// -gc=conservative variants below cover the host instead.
+				// -gc=conservative host variants cover it instead.
 				continue
 			}
 		}
@@ -406,7 +423,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		name := name // redefine to avoid race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			runTest(name, options, t, nil, nil)
+			testOptions := compileopts.Options(options)
+			if name == "finalizerinvariants.go" {
+				// Exercise finalizer bookkeeping assertions during registration and GC.
+				testOptions.Tags = append(append([]string(nil), options.Tags...), "runtime_asserts")
+			}
+			runTest(name, testOptions, t, nil, nil)
 		})
 	}
 	if !strings.HasPrefix(spec.Emulator, "simavr ") {
@@ -422,33 +444,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			options.Scheduler = "none"
 			runTest("alias.go", options, t, nil, nil)
 		})
-	}
-	buildGOOS := options.GOOS
-	if buildGOOS == "" {
-		buildGOOS = runtime.GOOS
-	}
-	if options.Target == "" && (buildGOOS == "linux" || buildGOOS == "darwin") {
-		// The host default GC is boehm, where SetFinalizer is unimplemented, so
-		// the plain host run of finalizerinvariants.go is skipped above. Run it
-		// on the block GC instead, which also covers the two schedulers no other
-		// target in this suite reaches: threads (the host default) and none.
-		// Together with cortex-m-qemu (tasks), riscv-qemu (cores) and the wasm
-		// targets (asyncify), that covers every scheduler variant.
-		//
-		// Restricted to linux and darwin: internal/task only defines threadID
-		// for those two, so scheduler.threads does not build anywhere else, and
-		// scheduler.none does not link on Windows either. Both predate this test
-		// (they reproduce with any testdata file), so this skips rather than
-		// works around them. Same reasoning as TestTimerStopResetRace above.
-		for _, scheduler := range []string{"threads", "none"} {
-			t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
-				t.Parallel()
-				options := compileopts.Options(options)
-				options.GC = "conservative"
-				options.Scheduler = scheduler
-				runTest("finalizerinvariants.go", options, t, nil, nil)
-			})
-		}
 	}
 	if options.Target == "" || isWASI {
 		t.Run("filesystem.go", func(t *testing.T) {

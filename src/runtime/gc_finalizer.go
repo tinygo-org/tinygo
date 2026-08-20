@@ -33,16 +33,17 @@ type finalizerEntry struct {
 	fn interface{}
 }
 
-// finalizerGCThreshold bounds how many finalizers may be registered since the
-// last collection before the scheduler proactively runs one at its idle point.
+// finalizerGCThreshold is the minimum net registration pressure accumulated
+// since the last collection before the scheduler runs one at its idle point.
+// finalizerGCTrigger raises this floor proportionally for larger tables.
 // A registered finalizer almost always guards an external resource, most
 // importantly a syscall/js bridge-table slot (js.Value or js.Func), that costs
 // only a few bytes of Go heap but pins a whole JS object and its slot. Without
 // this, a long-lived instance with a large resident heap defers GC (and thus
 // finalizer draining) until the Go heap itself fills, which for a bursty,
 // mostly-idle workload may be never, so the external resources accumulate
-// without bound. Coupling a GC to finalizer-registration pressure caps that
-// accumulation at roughly this many entries regardless of heap size.
+// without bound. Coupling a GC to finalizer-registration pressure bounds that
+// accumulation.
 //
 // This is a compile-time policy constant, in the spirit of Go's forcegcperiod.
 // The trigger only fires at the scheduler's idle point (a drained run queue) and
@@ -59,7 +60,7 @@ var (
 	finalizers        *finalizerEntry // registered finalizers; a GC root that keeps fn values alive
 	finalizerPending  *finalizerEntry // finalizers whose object died, waiting to run
 	numFinalizers     uintptr         // number of registered finalizers; fast-path gate for scanFinalizers
-	finalizersSinceGC uintptr         // finalizers registered since the last GC; drives the scheduler idle-point pressure trigger
+	finalizersSinceGC uintptr         // net registration pressure since the last GC; drives the scheduler idle-point trigger
 	finalizersQueued  bool            // set when scanFinalizers queued at least one finalizer to run
 	finalizerFutex    task.Futex      // wakes the finalizerRunner goroutine after a GC queues work
 	finalizerDraining bool            // guards against re-entrant inline draining (scheduler.none)
@@ -74,12 +75,12 @@ var (
 )
 
 // finalizerGCDivisor scales the registration trigger with the size of the
-// table: the next collection is due after roughly numFinalizers/this many new
-// registrations, never fewer than finalizerGCThreshold.
+// table: the next collection is due after roughly numFinalizers/this much net
+// pressure, never less than finalizerGCThreshold.
 const finalizerGCDivisor = 2
 
-// finalizerGCTrigger returns how many registrations since the last collection
-// are needed to run the next one. Each collection scans the whole table, which
+// finalizerGCTrigger returns how much net registration pressure is needed to run
+// the next collection. Each collection scans the whole table, which
 // costs O(numFinalizers), so a trigger that stays constant while the table grows
 // makes N registrations cost O(N^2) in scanning alone. Scaling the trigger with
 // the table keeps the amortized scan cost per registration constant, the same
@@ -250,6 +251,11 @@ func registerFinalizer(addr uintptr, fn interface{}) {
 			if n.obj == enc {
 				*prev = n.next
 				numFinalizers--
+				// Clearing offsets net registration pressure. Saturate at zero
+				// because the cleared entry may predate the last collection.
+				if finalizersSinceGC != 0 {
+					finalizersSinceGC--
+				}
 			} else {
 				prev = &n.next
 			}
@@ -466,9 +472,9 @@ func dequeueFinalizer() (*finalizerEntry, unsafe.Pointer) {
 	return n, objPtr
 }
 
-// finalizerPressureGC collects when at least finalizerGCThreshold finalizers
-// have been registered since the last GC, then hands any freshly-queued
-// finalizers to the runner. It reports whether it collected. A registered
+// finalizerPressureGC collects when net registration pressure since the last GC
+// reaches finalizerGCTrigger, then hands any freshly-queued finalizers to the
+// runner. It reports whether it collected. A registered
 // finalizer almost always guards an external resource whose Go-heap cost is tiny
 // (a few bytes) relative to what it pins, so the registration count is a proxy
 // for external memory pressure that the heap-size GC trigger cannot see.

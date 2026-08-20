@@ -39,6 +39,7 @@ var (
 	runqueue           task.Queue
 	sleepQueue         *task.Task
 	sleepQueueBaseTime timeUnit
+	deadlockedTasks    task.Queue
 )
 
 // finalizerIdleGC, when non-nil, is called at the scheduler's idle point to
@@ -56,18 +57,28 @@ var finalizerIdleGC func() bool
 //
 //go:noinline
 func deadlock() {
-	// A goroutine reaches deadlock when it can make no further progress. The
-	// common case by far is a goroutine that ran to completion: the compiler
-	// emits a deadlock call at the end of every goroutine wrapper. Flag it so
-	// the scheduler can reclaim the finished goroutine's stack.
-	task.MarkFinishing()
-	// call yield without requesting a wakeup
+	// Keep permanently blocked tasks reachable so their suspended stacks remain
+	// GC roots, but never put them back on the runnable queue.
+	deadlockedTasks.Push(task.Current())
+	task.Pause()
+	runtimeFatal("unreachable")
+}
+
+// exitGoroutine is called by asyncify goroutine wrappers after the wrapped
+// function returns. Unlike deadlock, this path means the task is truly finished
+// and will never be resumed.
+func exitGoroutine() {
+	if finalizerIdleGC != nil {
+		task.MarkFinishing()
+	}
 	task.Pause()
 	runtimeFatal("unreachable")
 }
 
 func goexit() {
-	task.MarkFinishing()
+	if finalizerIdleGC != nil {
+		task.MarkFinishing()
+	}
 	task.Exit()
 }
 

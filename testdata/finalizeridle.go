@@ -1,20 +1,19 @@
 package main
 
-// Tests that the cooperative scheduler reclaims finalizer-guarded objects on its
-// own, without an explicit runtime.GC(), once enough finalizers have been
-// registered since the last collection. A registered finalizer usually guards an
-// external resource whose Go-heap cost is tiny relative to what it pins, so the
-// registration count drives a proactive collection at the scheduler's idle
-// point. The second case additionally checks that a finished goroutine's stack
-// no longer pins the objects its frames held.
+// Tests idle finalizer collection and goroutine-stack lifetime on precise wasm.
+// The idle-collection cases verify that registration pressure triggers a
+// collection without an explicit runtime.GC. The permanently blocked goroutine
+// cases use explicit GCs and a control finalizer to distinguish live stacks from
+// stalled GC progress.
 //
 // Like finalizer.go, this is only run on the precise wasm target (see the tests
 // slice and the skip in main_test.go): there a dropped object is deterministically
-// collected, so the finalizers fire predictably. It never calls runtime.GC(): the
-// point is that the idle-point trigger collects on its own.
+// collected, so the finalizers fire predictably. The idle-collection cases do
+// not call runtime.GC: their purpose is to prove the idle trigger itself works.
 
 import (
 	"runtime"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,7 +26,70 @@ var (
 	ranOnStack int
 	ranInArgs  int
 	sink       int
+
+	blockedRan [3]atomic.Int32
+	controlRan atomic.Int32
 )
+
+type blockedObject struct{ x int }
+
+//go:noinline
+func blockOperation(kind int, ready chan<- struct{}, ch chan struct{}) {
+	ready <- struct{}{}
+	switch kind {
+	case 0:
+		select {}
+	case 1:
+		ch <- struct{}{}
+	case 2:
+		<-ch
+	}
+}
+
+//go:noinline
+func holdWhileBlocked(kind int, ready chan<- struct{}, ch chan struct{}) {
+	p := &blockedObject{x: kind}
+	runtime.SetFinalizer(p, func(*blockedObject) { blockedRan[kind].Add(1) })
+	blockOperation(kind, ready, ch)
+	// blockOperation can return, so p remains live on this suspended stack.
+	runtime.KeepAlive(p)
+}
+
+//go:noinline
+func dropProgressControl() {
+	p := &blockedObject{x: 8}
+	runtime.SetFinalizer(p, func(*blockedObject) { controlRan.Add(1) })
+}
+
+// testPermanentlyBlockedStacks verifies that permanent blocks preserve their
+// suspended stacks. The control object is intentionally unreachable and is
+// deterministic on precise wasm; once its finalizer runs, GC and finalizer
+// progress are proven without sleeps. A blocked-object finalizer running by
+// then therefore means its task was incorrectly treated as completed.
+func testPermanentlyBlockedStacks() {
+	ready := make(chan struct{}, 3)
+	go holdWhileBlocked(0, ready, nil) // select{}
+	go holdWhileBlocked(1, ready, nil) // nil-channel send
+	go holdWhileBlocked(2, ready, nil) // nil-channel receive
+	<-ready
+	<-ready
+	<-ready
+
+	dropProgressControl()
+	for i := 0; i < 100 && controlRan.Load() == 0; i++ {
+		sink += scrubStack(40)
+		runtime.GC()
+		runtime.Gosched()
+	}
+	if controlRan.Load() != 1 {
+		panic("control finalizer did not prove GC progress")
+	}
+	for i, name := range [...]string{"select{}", "nil-channel send", "nil-channel receive"} {
+		if blockedRan[i].Load() != 0 {
+			panic(name + " stack-held object was finalized")
+		}
+	}
+}
 
 // scrubStack overwrites the stack region used by an alloc-and-drop helper with
 // non-pointer words. It is called at the same depth as that helper so this
@@ -141,6 +203,7 @@ func testFinishedGoroutineArgs() {
 }
 
 func main() {
+	testPermanentlyBlockedStacks()
 	testIdleCollect()
 	testFinishedGoroutineStacks()
 	testFinishedGoroutineArgs()
