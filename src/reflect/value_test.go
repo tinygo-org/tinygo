@@ -1045,8 +1045,11 @@ func TestTinyMakeChan(t *testing.T) {
 	// The three cases below rely on recovering from a panic, which wasm
 	// cannot do yet without exceptions. Log and return rather than Skip:
 	// t.Skip needs the same machinery it is standing in for.
+	//
+	// Checked on GOARCH rather than GOOS because the limitation is wasm's, not
+	// any one platform's: this covers wasip1, wasip2 and js/wasm alike.
 	// TODO: drop this once tinygo-org/tinygo#5550 lands.
-	if runtime.GOOS == "wasip1" {
+	if runtime.GOARCH == "wasm" {
 		t.Log("not running the panic cases: panic/recover on wasm needs #5550")
 		return
 	}
