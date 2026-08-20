@@ -2,4 +2,4 @@
 
 package machine
 
-const cpuFrequencyHz = 24_000_000
+const defaultCPUFrequencyHz = 24_000_000

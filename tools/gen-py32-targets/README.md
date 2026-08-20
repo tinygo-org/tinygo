@@ -49,4 +49,7 @@ every device. In particular, PY32F410 SVD interrupt metadata stops before the
 serial interrupts, so its default USART is configured without receive
 interrupts rather than assigning an unverified IRQ number. The M4 SVDs also do
 not expose the M0+ `ICSCR.HSI_FS` selector, so the runtime preserves their reset
-clock configuration and reports the vendor-defined 8 MHz reset frequency.
+clock configuration and initially reports the vendor-defined 8 MHz reset
+frequency. Applications that establish a different clock tree must update
+`machine.CPUFrequencyHz`, then reconfigure SysTick and frequency-dependent
+peripherals.
