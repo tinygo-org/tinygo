@@ -9,7 +9,7 @@ package task
 //   a7:    stack frame pointer (optional, normally unused in TinyGo)
 // Sources:
 //   http://cholla.mmto.org/esp8266/xtensa.html
-//   https://0x04.net/~mwk/doc/xtensa.pdf
+//   https://www.cadence.com/content/dam/cadence-www/global/en_US/documents/tools/silicon-solutions/compute-ip/isa-summary.pdf
 
 import (
 	"unsafe"
