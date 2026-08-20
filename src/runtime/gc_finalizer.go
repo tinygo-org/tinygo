@@ -391,7 +391,7 @@ func scanFinalizers() {
 			for n := finalizerPending; n != nil; n = n.next {
 				// Inside the collection, so the resurrected object is expected
 				// to carry the mark state rather than plain head.
-				if blockFromAddr(decodeFinalizerPtr(n.obj)).state() != blockStateMark {
+				if blockFromAddr(decodeFinalizerPtr(n.obj)).findHead().state() != blockStateMark {
 					runtimeFatal("gc: pending finalizer object was not resurrected")
 				}
 			}
@@ -479,12 +479,12 @@ func dequeueFinalizer() (*finalizerEntry, unsafe.Pointer) {
 // (a few bytes) relative to what it pins, so the registration count is a proxy
 // for external memory pressure that the heap-size GC trigger cannot see.
 //
-// It is installed as the cooperative scheduler's idle hook by the first
-// SetFinalizer (see spawnFinalizerRunner) and called only from the scheduler's
-// drained-runqueue point, where no goroutine is running on its own stack. That
-// reclaims a completed run of goroutines' now-dead values in a single pass,
-// rather than forcing a collection synchronously inside alloc while an
-// operation's values are still live, which would scale GC frequency with
+// It is installed as the cooperative scheduler's pressure hook by the first
+// SetFinalizer (see spawnFinalizerRunner) and called where no goroutine is
+// running on its own stack: at a drained run queue or before a top-level wasm
+// export returns. That reclaims a completed run of goroutines' now-dead values
+// in one pass, rather than forcing a collection synchronously inside alloc while
+// an operation's values are still live, which would scale GC frequency with
 // allocation churn and waste most collections on still-live values.
 func finalizerPressureGC() bool {
 	trigger := finalizerGCTrigger()

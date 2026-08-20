@@ -63,6 +63,7 @@ func TestBuild(t *testing.T) {
 		"finalizerbits.go",
 		"finalizeridle.go",
 		"finalizerinvariants.go",
+		"finalizerlarge.go",
 		"float.go",
 		"gc.go",
 		"generics.go",
@@ -386,7 +387,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		}
 		if options.Target != "wasm" {
 			switch name {
-			case "finalizer.go", "finalizerbits.go", "finalizeridle.go":
+			case "finalizer.go", "finalizerbits.go", "finalizeridle.go", "finalizerlarge.go":
 				// runtime.SetFinalizer is implemented for the block GC, but these
 				// tests assert deterministic collection of a dropped object,
 				// which only holds on the GOOS=js wasm target. The host default
@@ -424,8 +425,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			testOptions := compileopts.Options(options)
-			if name == "finalizerinvariants.go" {
-				// Exercise finalizer bookkeeping assertions during registration and GC.
+			if name == "finalizerinvariants.go" || name == "finalizerlarge.go" {
+				// Exercise finalizer assertions during registration and GC.
 				testOptions.Tags = append(append([]string(nil), options.Tags...), "runtime_asserts")
 			}
 			runTest(name, testOptions, t, nil, nil)
@@ -966,6 +967,30 @@ func TestWasmExportJS(t *testing.T) {
 			}
 			checkOutput(t, "testdata/wasmexport.txt", output.Bytes())
 		})
+	}
+}
+
+func TestWasmExportFinalizersJS(t *testing.T) {
+	t.Parallel()
+
+	tmpdir := t.TempDir()
+	options := optionsFromTarget("wasm", sema)
+	options.BuildMode = "c-shared"
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/wasmexport-finalizer.go", ".wasm", tmpdir, buildConfig)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+
+	output := &bytes.Buffer{}
+	cmd := exec.Command("node", "testdata/wasmexport-finalizer.js", result.Binary)
+	cmd.Stdout = output
+	cmd.Stderr = output
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to run node: %v\n%s", err, output)
 	}
 }
 

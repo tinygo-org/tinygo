@@ -42,11 +42,12 @@ var (
 	deadlockedTasks    task.Queue
 )
 
-// finalizerIdleGC, when non-nil, is called at the scheduler's idle point to
-// collect on finalizer-registration pressure (returning whether it did). It is
-// installed lazily by the first SetFinalizer, so a program that never registers
-// a finalizer never assigns it and the linker drops the whole collection path.
-// It is nil under GCs without a finalizer table.
+// finalizerIdleGC, when non-nil, collects on finalizer-registration pressure
+// (returning whether it did). It is called at the scheduler's idle point and
+// before a top-level wasm export returns. It is installed lazily by the first
+// SetFinalizer, so a program that never registers a finalizer never assigns it
+// and the linker drops the whole collection path. It is nil under GCs without a
+// finalizer table.
 var finalizerIdleGC func() bool
 
 // deadlock is called when a goroutine cannot proceed any more, but is in theory
@@ -73,6 +74,25 @@ func exitGoroutine() {
 	}
 	task.Pause()
 	runtimeFatal("unreachable")
+}
+
+// Called from the goroutine wrapper for the //go:wasmexport function. It just
+// signals to the runtime that the //go:wasmexport call has finished, and can
+// switch back to the wasmExportRun function.
+//
+// This function is not called when the scheduler is disabled.
+func wasmExportExit() {
+	// Signal to the scheduler that it should return, since this call to a
+	// //go:wasmexport function has exited.
+	schedulerExit = true
+	if finalizerIdleGC != nil {
+		task.MarkFinishing()
+	}
+
+	task.Pause()
+
+	// TODO: we could cache the allocated stack so we don't have to keep
+	// allocating a new stack on every //go:wasmexport call.
 }
 
 func goexit() {
@@ -274,6 +294,16 @@ func scheduler(returnAtDeadlock bool) {
 		// //go:wasmexport function returned.
 		if GOARCH == "wasm" && schedulerExit {
 			schedulerExit = false // reset the signal
+			if task.Current() == nil && finalizerIdleGC != nil {
+				finalizerIdleGC()
+				// A wasm export must return as soon as its own task finishes instead
+				// of also running the finalizer runner or unrelated goroutines. On
+				// JavaScript, resume the scheduler in a fresh event-loop turn after
+				// control has returned to the caller.
+				if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueue != nil) {
+					sleepTicks(0)
+				}
+			}
 			return
 		}
 	}
