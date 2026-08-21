@@ -260,7 +260,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// takes precedence. This is skipped in GOPATH mode (no module info) and when
 	// the main package isn't in a module.
 	if _, overridden := globalValues["runtime/debug"]["modinfo"]; !overridden {
-		if mi := moduleBuildInfo(lprogram); mi != "" {
+		mi, err := moduleBuildInfo(lprogram, config.Options.BuildVCS)
+		if err != nil {
+			return BuildResult{}, err
+		}
+		if mi != "" {
 			if globalValues["runtime/debug"] == nil {
 				globalValues["runtime/debug"] = map[string]string{}
 			}
@@ -1639,10 +1643,16 @@ func b2u8(b bool) uint8 {
 //
 // The main module version is reported as "(devel)" for a local checkout, as the
 // go toolchain does; VCS-derived pseudo-version stamping is a separate follow-up.
-func moduleBuildInfo(lprogram *loader.Program) string {
+// buildVCS selects whether the vcs.* settings and a VCS-derived version are
+// stamped in: "false" skips it, "true" and "auto" (and "", the zero value, for
+// callers that don't set it) stamp when a usable repository is found. This
+// mirrors the go toolchain's -buildvcs, including its reason for existing:
+// stamping shells out to git on every build, which a caller may not want to
+// pay for.
+func moduleBuildInfo(lprogram *loader.Program, buildVCS string) (string, error) {
 	main := lprogram.MainPkg()
 	if main == nil || main.Module.Path == "" {
-		return "" // GOPATH mode or no module: nothing to embed.
+		return "", nil // GOPATH mode or no module: nothing to embed.
 	}
 
 	// Collect the distinct non-main modules that contributed packages to the
@@ -1669,10 +1679,23 @@ func moduleBuildInfo(lprogram *loader.Program) string {
 	mainVersion := main.Module.Version
 	var vcsSettings string
 	if mainVersion == "" {
-		if v, s := gitVCSStamp(main.Module.Dir); v != "" {
-			mainVersion, vcsSettings = v, s
-		} else {
+		switch {
+		case buildVCS == "false":
+			// Don't touch the repository at all: no git subprocesses run.
 			mainVersion = "(devel)"
+		default:
+			if v, s := gitVCSStamp(main.Module.Dir); v != "" {
+				mainVersion, vcsSettings = v, s
+			} else if buildVCS == "true" {
+				// -buildvcs=true means the stamp was demanded, so failing to
+				// produce one is an error rather than a silent fallback. This
+				// matches the go toolchain.
+				return "", fmt.Errorf("error obtaining VCS status for %s: "+
+					"not a git work tree, or git is unavailable\n"+
+					"\tUse -buildvcs=false to disable VCS stamping.", main.Module.Dir)
+			} else {
+				mainVersion = "(devel)"
+			}
 		}
 	}
 
@@ -1695,7 +1718,7 @@ func moduleBuildInfo(lprogram *loader.Program) string {
 	// Build settings (vcs.*) come after the module lines, matching
 	// runtime/debug.BuildInfo.String().
 	b.WriteString(vcsSettings)
-	return b.String()
+	return b.String(), nil
 }
 
 // gitVCSStamp derives the main-module version and the vcs.* build settings from
