@@ -174,6 +174,32 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
+func TestDarwinCgoImportDynamic(t *testing.T) {
+	options := &compileopts.Options{GOOS: "darwin", GOARCH: "arm64"}
+	mod, errs := testCompilePackage(t, options, "cgo-import-dynamic.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	ir := mod.String()
+	if !strings.Contains(ir, `declare void @"remote$INODE64"()`) {
+		t.Error("missing external declaration for cgo_import_dynamic remote symbol")
+	}
+	if !strings.Contains(ir, `ptrtoint (ptr @"remote$INODE64" to i64)`) {
+		t.Error("trampoline address load was not replaced with the remote symbol address")
+	}
+	if strings.Contains(ir, "load i64, ptr @main.libc_test_trampoline_addr") {
+		t.Error("trampoline address global was loaded instead of using the remote symbol address")
+	}
+	if !strings.Contains(ir, "ptrtoint (ptr @syscall_libc_ioctl to i64)") {
+		t.Error("variadic ioctl import was not routed through its fixed-signature wrapper")
+	}
+}
+
 // normalizeIR canonicalizes LLVM-version-specific IR spellings for comparison
 // and when regenerating golden files.
 func normalizeIR(s string) string {

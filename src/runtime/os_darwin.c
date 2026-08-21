@@ -4,12 +4,21 @@
 
 #include <fcntl.h>
 
+extern int ioctl(int fd, unsigned long request, ...);
+
 // Wrapper function because 'open' is a variadic function and variadic functions
 // use a different (incompatible) calling convention on darwin/arm64.
 // This function is referenced from the compiler, when it sees a
 // syscall.libc_open_trampoline function.
 int syscall_libc_open(const char *pathname, int flags, mode_t mode) {
     return open(pathname, flags, mode);
+}
+
+// Wrapper for ioctl, which is variadic just like open and therefore also uses
+// an incompatible calling convention on darwin/arm64. Use uintptr_t arguments
+// to match the fixed-signature call made by tinygo_syscall below.
+int syscall_libc_ioctl(uintptr_t fd, uintptr_t request, uintptr_t arg) {
+    return ioctl((int)fd, request, (void *)arg);
 }
 
 // The following functions are called by the runtime because Go can't call

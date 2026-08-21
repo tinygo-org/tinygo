@@ -763,10 +763,25 @@ func (c *compilerContext) fileForFunc(f *ssa.Function) *ast.File {
 	return nil
 }
 
-// loadASTComments loads comments on globals from the AST, for use later in the
-// program. In particular, they are required for //go:extern pragmas on globals.
+// loadASTComments loads comments from the AST that cannot be read on demand
+// while compiling a function, for use later in the program. This covers doc
+// comments on globals (required for //go:extern pragmas) and free-standing
+// file-level //go:cgo_import_dynamic directives, which are not attached to any
+// declaration and apply to the whole package.
 func (c *compilerContext) loadASTComments(pkg *loader.Package) {
 	for _, file := range pkg.Files {
+		// cgo_import_dynamic directives are file-level pragmas. Darwin's
+		// generated syscall wrappers use the local symbol to name an assembly
+		// trampoline and the remote symbol to name the actual dylib function.
+		for _, group := range file.Comments {
+			for _, comment := range group.List {
+				parts := strings.Fields(comment.Text)
+				if len(parts) == 4 && parts[0] == "//go:cgo_import_dynamic" {
+					c.cgoImportDynamic[parts[1]] = parts[2]
+				}
+			}
+		}
+
 		for _, decl := range file.Decls {
 			switch decl := decl.(type) {
 			case *ast.GenDecl:
