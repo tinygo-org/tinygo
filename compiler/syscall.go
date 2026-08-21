@@ -538,16 +538,50 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 		}
 	}
 
-	// Obtain the C function.
-	// Use a simple function (no parameters or return value) because all we need
-	// is the address of the function.
+	return b.createDarwinImportedFunctionAddr(name)
+}
+
+// Lower a load from a Darwin libc trampoline address global. Packages such as
+// golang.org/x/sys/unix declare globals named libc_*_trampoline_addr and use
+// assembly to initialize them to trampolines for symbols imported with
+// //go:cgo_import_dynamic. TinyGo cannot compile that assembly, so use the
+// imported dylib symbol directly, just like createDarwinFuncPCABI0Call does for
+// the standard library's function-based trampoline pattern.
+func (b *builder) createDarwinCgoImportDynamicLoad(unop *ssa.UnOp) llvm.Value {
+	if b.GOOS != "darwin" {
+		return llvm.Value{}
+	}
+
+	global, ok := unop.X.(*ssa.Global)
+	if !ok {
+		return llvm.Value{}
+	}
+	const suffix = "_trampoline_addr"
+	if !strings.HasPrefix(global.Name(), "libc_") || !strings.HasSuffix(global.Name(), suffix) {
+		return llvm.Value{}
+	}
+
+	local := strings.TrimSuffix(global.Name(), suffix)
+	remote, ok := b.cgoImportDynamic[local]
+	if !ok {
+		return llvm.Value{}
+	}
+	if remote == "ioctl" {
+		// ioctl is variadic, which uses an incompatible calling convention on
+		// darwin/arm64. Route it through the fixed-signature C wrapper.
+		remote = "syscall_libc_ioctl"
+	}
+
+	return b.createDarwinImportedFunctionAddr(remote)
+}
+
+func (b *builder) createDarwinImportedFunctionAddr(name string) llvm.Value {
+	// The signature does not matter: the declaration is only used for its
+	// address, which is passed to a syscall implementation as a uintptr.
 	llvmFn := b.mod.NamedFunction(name)
 	if llvmFn.IsNil() {
 		llvmFnType := llvm.FunctionType(b.ctx.VoidType(), nil, false)
 		llvmFn = llvm.AddFunction(b.mod, name, llvmFnType)
 	}
-
-	// Cast the function pointer to a uintptr (because that's what
-	// abi.FuncPCABI0 returns).
 	return b.CreatePtrToInt(llvmFn, b.uintptrType, "")
 }
