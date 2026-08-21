@@ -4,6 +4,7 @@ package compiler
 // compiler builtins.
 
 import (
+	"go/types"
 	"strconv"
 	"strings"
 
@@ -541,6 +542,30 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 	return b.createDarwinImportedFunctionAddr(name)
 }
 
+// darwinVariadicImports maps the variadic libc functions imported with
+// //go:cgo_import_dynamic on Darwin to fixed-signature C wrappers defined in
+// src/runtime/os_darwin.c. The syscall engine calls an imported address
+// through a fixed-signature function pointer (tinygo_syscallX and friends in
+// src/runtime/os_darwin.c), which passes every argument in a register. A
+// variadic callee, however, takes its variadic arguments from the stack on
+// darwin/arm64, so calling one of these functions directly makes it read
+// garbage arguments (the direct ioctl call observably failed with EFAULT).
+// The same problem is solved the same way for the standard library's open in
+// createDarwinFuncPCABI0Call above.
+//
+// The set comes from cross-referencing the symbols that darwin's generated
+// syscall wrappers import (the //go:cgo_import_dynamic directives in
+// zsyscall_darwin_*.go, both in golang.org/x/sys/unix and in the standard
+// library) against their Darwin SDK declarations: of those imports, exactly
+// open(2), openat(2), fcntl(2), and ioctl(2) are declared variadic (see
+// sys/fcntl.h and sys/ioctl.h, or lib/macos-minimal-sdk's copies).
+var darwinVariadicImports = map[string]string{
+	"fcntl":  "syscall_libc_fcntl",
+	"ioctl":  "syscall_libc_ioctl",
+	"open":   "syscall_libc_open",
+	"openat": "syscall_libc_openat",
+}
+
 // Lower a load from a Darwin libc trampoline address global. Packages such as
 // golang.org/x/sys/unix declare globals named libc_*_trampoline_addr and use
 // assembly to initialize them to trampolines for symbols imported with
@@ -560,16 +585,20 @@ func (b *builder) createDarwinCgoImportDynamicLoad(unop *ssa.UnOp) llvm.Value {
 	if !strings.HasPrefix(global.Name(), "libc_") || !strings.HasSuffix(global.Name(), suffix) {
 		return llvm.Value{}
 	}
+	// The replacement value is a ptrtoint to uintptr, so only replace loads of
+	// uintptr-typed globals; the trampoline address pattern always uses plain
+	// uintptr variables. Anything else keeps its normal load.
+	if basic, ok := global.Type().(*types.Pointer).Elem().Underlying().(*types.Basic); !ok || basic.Kind() != types.Uintptr {
+		return llvm.Value{}
+	}
 
 	local := strings.TrimSuffix(global.Name(), suffix)
 	remote, ok := b.cgoImportDynamic[local]
 	if !ok {
 		return llvm.Value{}
 	}
-	if remote == "ioctl" {
-		// ioctl is variadic, which uses an incompatible calling convention on
-		// darwin/arm64. Route it through the fixed-signature C wrapper.
-		remote = "syscall_libc_ioctl"
+	if wrapper, ok := darwinVariadicImports[remote]; ok {
+		remote = wrapper
 	}
 
 	return b.createDarwinImportedFunctionAddr(remote)

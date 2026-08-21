@@ -21,6 +21,31 @@ int syscall_libc_ioctl(uintptr_t fd, uintptr_t request, uintptr_t arg) {
     return ioctl((int)fd, request, (void *)arg);
 }
 
+// Wrappers for the remaining variadic libc functions that darwin syscall
+// wrappers import with //go:cgo_import_dynamic (see darwinVariadicImports in
+// compiler/syscall.go): of the symbols imported by the generated
+// zsyscall_darwin_*.go files in golang.org/x/sys/unix and the standard
+// library, exactly open, openat, fcntl, and ioctl are declared variadic in
+// the Darwin SDK headers (sys/fcntl.h and sys/ioctl.h). The tinygo_syscall*
+// functions below call through fixed-signature function pointers that pass
+// every argument in a register, while a variadic callee takes its variadic
+// arguments from the stack on darwin/arm64, so each of these needs a
+// fixed-signature wrapper. The uintptr_t parameters match the uintptr
+// arguments the Go syscall engine passes.
+
+// fcntl's third argument is an int for some commands and a pointer for
+// others; passing the raw pointer-sized value covers both.
+int syscall_libc_fcntl(uintptr_t fd, uintptr_t cmd, uintptr_t arg) {
+    return fcntl((int)fd, (int)cmd, (void *)arg);
+}
+
+// openat is invoked by x/sys through syscall6 with six arguments, the last
+// two of which are zero padding; the two extra register arguments are
+// harmless to a four-parameter callee.
+int syscall_libc_openat(uintptr_t dirfd, uintptr_t pathname, uintptr_t flags, uintptr_t mode) {
+    return openat((int)dirfd, (const char *)pathname, (int)flags, (mode_t)mode);
+}
+
 // The following functions are called by the runtime because Go can't call
 // function pointers directly.
 
