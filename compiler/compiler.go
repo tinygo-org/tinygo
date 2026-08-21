@@ -1444,8 +1444,13 @@ func (b *builder) createFunction() {
 	for _, phi := range b.phis {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
-			llvmVal := b.getCallArgument(edge, false)
 			llvmBlock := b.blockInfo[block.Preds[i].Index].exit
+			// Materializing an indirect phi input may emit an allocation and a
+			// copy. Put those instructions in the corresponding predecessor,
+			// before its terminator, rather than at the builder's current end
+			// position after the function body has been emitted.
+			b.SetInsertPointBefore(llvmBlock.LastInstruction())
+			llvmVal := b.getCallArgument(edge, false)
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
 	}
