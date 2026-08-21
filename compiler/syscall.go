@@ -524,11 +524,10 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 
 	// Extract the libc function name.
 	name := strings.TrimPrefix(strings.TrimSuffix(calledFn.Name(), "_trampoline"), "libc_")
-	if name == "open" {
-		// Special case: open() is a variadic function and can't be called like
-		// a regular function. Therefore, we need to use a wrapper implemented
-		// in C.
-		name = "syscall_libc_open"
+	if wrapper, ok := darwinVariadicImports[name]; ok {
+		// Variadic functions can't be called like a regular function, so use a
+		// wrapper implemented in C. See the comment on darwinVariadicImports.
+		name = wrapper
 	}
 	if b.GOARCH == "amd64" {
 		if name == "fdopendir" || name == "readdir_r" {
@@ -542,16 +541,18 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 	return b.createDarwinImportedFunctionAddr(name)
 }
 
-// darwinVariadicImports maps the variadic libc functions imported with
-// //go:cgo_import_dynamic on Darwin to fixed-signature C wrappers defined in
+// darwinVariadicImports maps the variadic libc functions imported by Darwin
+// syscall wrappers to fixed-signature C wrappers defined in
 // src/runtime/os_darwin.c. The syscall engine calls an imported address
 // through a fixed-signature function pointer (tinygo_syscallX and friends in
 // src/runtime/os_darwin.c), which passes every argument in a register. A
 // variadic callee, however, takes its variadic arguments from the stack on
 // darwin/arm64, so calling one of these functions directly makes it read
-// garbage arguments (the direct ioctl call observably failed with EFAULT).
-// The same problem is solved the same way for the standard library's open in
-// createDarwinFuncPCABI0Call above.
+// garbage arguments (a direct ioctl call observably failed with EFAULT, and
+// a direct fcntl(F_SETFL) wrote garbage flags). This applies to both
+// trampoline flavors: the standard library's function-based pattern
+// (createDarwinFuncPCABI0Call above) and the address-global pattern used by
+// golang.org/x/sys (createDarwinCgoImportDynamicLoad below).
 //
 // The set comes from cross-referencing the symbols that darwin's generated
 // syscall wrappers import (the //go:cgo_import_dynamic directives in
