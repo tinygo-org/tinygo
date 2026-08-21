@@ -17,6 +17,7 @@ var (
 	validPanicStrategyOptions = []string{"print", "trap"}
 	validPanicUnwindOptions   = []string{"auto", "explicit"}
 	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
+	validBuildVCSOptions      = []string{"auto", "true", "false"}
 )
 
 // Options contains extra options to give to the compiler. These options are
@@ -64,7 +65,8 @@ type Options struct {
 	WITPackage              string // pass through to wasm-tools component embed invocation
 	WITWorld                string // pass through to wasm-tools component embed -w option
 	ExtLDFlags              []string
-	GoCompatibility         bool // enable to check for Go version compatibility
+	GoCompatibility         bool   // enable to check for Go version compatibility
+	BuildVCS                string // -buildvcs: "auto" (default), "true" or "false"
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.
@@ -134,6 +136,12 @@ func (o *Options) Verify() error {
 	if o.Opt != "" {
 		if !slices.Contains(validOptOptions, o.Opt) {
 			return fmt.Errorf("invalid -opt=%s: valid values are %s", o.Opt, strings.Join(validOptOptions, ", "))
+		}
+	}
+
+	if o.BuildVCS != "" {
+		if !slices.Contains(validBuildVCSOptions, o.BuildVCS) {
+			return fmt.Errorf("invalid -buildvcs=%s: valid values are %s", o.BuildVCS, strings.Join(validBuildVCSOptions, ", "))
 		}
 	}
 
