@@ -6,7 +6,7 @@
 package debug
 
 import (
-	"fmt"
+	"errors"
 	"runtime"
 	"strconv"
 	"strings"
@@ -74,6 +74,24 @@ func ReadBuildInfo() (info *BuildInfo, ok bool) {
 	return bi, true
 }
 
+// parseError reports which line of the module string failed to parse.
+//
+// Upstream spells this fmt.Errorf("...: line %d: %w", ...). Doing the same
+// here would link fmt into every binary that calls ReadBuildInfo, which on a
+// small target costs more flash than the feature is worth, so the wrapping is
+// written out by hand. The message is identical and Unwrap keeps errors.Is
+// and errors.As working as they do upstream.
+type parseError struct {
+	line int
+	err  error
+}
+
+func (e *parseError) Error() string {
+	return "could not parse Go build info: line " + strconv.Itoa(e.line) + ": " + e.err.Error()
+}
+
+func (e *parseError) Unwrap() error { return e.err }
+
 // ParseBuildInfo parses the string returned by BuildInfo.String (excluding the
 // leading "go" line) back into a BuildInfo. It is the reverse of that method
 // and is ported from the standard library's runtime/debug.
@@ -81,7 +99,7 @@ func ParseBuildInfo(data string) (bi *BuildInfo, err error) {
 	lineNum := 1
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("could not parse Go build info: line %d: %w", lineNum, err)
+			err = &parseError{line: lineNum, err: err}
 		}
 	}()
 
@@ -97,7 +115,7 @@ func ParseBuildInfo(data string) (bi *BuildInfo, err error) {
 
 	readModuleLine := func(elem []string) (Module, error) {
 		if len(elem) != 2 && len(elem) != 3 {
-			return Module{}, fmt.Errorf("expected 2 or 3 columns; got %d", len(elem))
+			return Module{}, errors.New("expected 2 or 3 columns; got " + strconv.Itoa(len(elem)))
 		}
 		version := elem[1]
 		sum := ""
@@ -145,10 +163,10 @@ func ParseBuildInfo(data string) (bi *BuildInfo, err error) {
 		case strings.HasPrefix(line, repLine):
 			elem := strings.Split(line[len(repLine):], tab)
 			if len(elem) != 3 {
-				return nil, fmt.Errorf("expected 3 columns for replacement; got %d", len(elem))
+				return nil, errors.New("expected 3 columns for replacement; got " + strconv.Itoa(len(elem)))
 			}
 			if last == nil {
-				return nil, fmt.Errorf("replacement with no module on previous line")
+				return nil, errors.New("replacement with no module on previous line")
 			}
 			last.Replace = &Module{
 				Path:    elem[0],
@@ -159,24 +177,25 @@ func ParseBuildInfo(data string) (bi *BuildInfo, err error) {
 		case strings.HasPrefix(line, buildLine):
 			kv := line[len(buildLine):]
 			if len(kv) < 1 {
-				return nil, fmt.Errorf("build line missing '='")
+				return nil, errors.New("build line missing '='")
 			}
 
 			var key, rawValue string
 			switch kv[0] {
 			case '=':
-				return nil, fmt.Errorf("build line with missing key")
+				return nil, errors.New("build line with missing key")
 
 			case '`', '"':
 				rawKey, err := strconv.QuotedPrefix(kv)
 				if err != nil {
-					return nil, fmt.Errorf("invalid quoted key in build line")
+					return nil, errors.New("invalid quoted key in build line")
 				}
 				if len(kv) == len(rawKey) {
-					return nil, fmt.Errorf("build line missing '=' after quoted key")
+					return nil, errors.New("build line missing '=' after quoted key")
 				}
 				if c := kv[len(rawKey)]; c != '=' {
-					return nil, fmt.Errorf("unexpected character after quoted key: %q", c)
+					// %q on a byte formats a single-quoted rune, not a string.
+					return nil, errors.New("unexpected character after quoted key: " + strconv.QuoteRune(rune(c)))
 				}
 				key, _ = strconv.Unquote(rawKey)
 				rawValue = kv[len(rawKey)+1:]
@@ -185,10 +204,10 @@ func ParseBuildInfo(data string) (bi *BuildInfo, err error) {
 				var ok bool
 				key, rawValue, ok = strings.Cut(kv, "=")
 				if !ok {
-					return nil, fmt.Errorf("build line missing '=' after key")
+					return nil, errors.New("build line missing '=' after key")
 				}
 				if quoteKey(key) {
-					return nil, fmt.Errorf("unquoted key %q must be quoted", key)
+					return nil, errors.New("unquoted key " + strconv.Quote(key) + " must be quoted")
 				}
 			}
 
@@ -199,13 +218,13 @@ func ParseBuildInfo(data string) (bi *BuildInfo, err error) {
 					var err error
 					value, err = strconv.Unquote(rawValue)
 					if err != nil {
-						return nil, fmt.Errorf("invalid quoted value in build line")
+						return nil, errors.New("invalid quoted value in build line")
 					}
 
 				default:
 					value = rawValue
 					if quoteValue(value) {
-						return nil, fmt.Errorf("unquoted value %q must be quoted", value)
+						return nil, errors.New("unquoted value " + strconv.Quote(value) + " must be quoted")
 					}
 				}
 			}
@@ -262,10 +281,14 @@ func quoteValue(value string) bool {
 func (bi *BuildInfo) String() string {
 	buf := new(strings.Builder)
 	if bi.GoVersion != "" {
-		fmt.Fprintf(buf, "go\t%s\n", bi.GoVersion)
+		buf.WriteString("go\t")
+		buf.WriteString(bi.GoVersion)
+		buf.WriteByte('\n')
 	}
 	if bi.Path != "" {
-		fmt.Fprintf(buf, "path\t%s\n", bi.Path)
+		buf.WriteString("path\t")
+		buf.WriteString(bi.Path)
+		buf.WriteByte('\n')
 	}
 	var formatMod func(string, Module)
 	formatMod = func(word string, m Module) {
@@ -298,7 +321,11 @@ func (bi *BuildInfo) String() string {
 		if quoteValue(value) {
 			value = strconv.Quote(value)
 		}
-		fmt.Fprintf(buf, "build\t%s=%s\n", key, value)
+		buf.WriteString("build\t")
+		buf.WriteString(key)
+		buf.WriteByte('=')
+		buf.WriteString(value)
+		buf.WriteByte('\n')
 	}
 
 	return buf.String()
