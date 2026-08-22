@@ -38,15 +38,13 @@ func Stack() []byte {
 // builder.Build, which fills runtime/debug.modinfo from `go list -json`), or it
 // was set explicitly via -ldflags="-X runtime/debug.modinfo=...".
 //
-// Unlike the standard Go toolchain, TinyGo controls both the writer and this
-// reader, so the value is NOT wrapped in the 16-byte magic delimiters that
-// runtime.modinfo uses; for robustness ReadBuildInfo tolerates them anyway.
+// TinyGo controls both the writer and this reader, so the value is stored bare:
+// it carries none of the delimiters cmd/go wraps around runtime.modinfo.
+//
+// What TinyGo writes is deliberately a subset. There are no "=>" replacement
+// lines and no checksums, and none of the build settings the go toolchain
+// records (-tags, GOOS, GOARCH, CGO_ENABLED and so on) beyond the vcs.* ones.
 var modinfo string
-
-// buildInfoMagic is the 16-byte header/footer the standard Go linker wraps
-// around the module string in runtime.modinfo. TinyGo doesn't emit it, but we
-// strip it if present so a value copied from a Go binary still parses.
-const buildInfoMagic = "\xff Go buildinf:"
 
 // ReadBuildInfo returns the build information embedded
 // in the running binary. The information is available only
@@ -57,9 +55,6 @@ const buildInfoMagic = "\xff Go buildinf:"
 func ReadBuildInfo() (info *BuildInfo, ok bool) {
 	goVersion := runtime.Compiler + runtime.Version()
 	data := modinfo
-	if len(data) >= 32 && strings.HasPrefix(data, buildInfoMagic) {
-		data = data[16 : len(data)-16]
-	}
 	if data == "" {
 		// No module info embedded; still report the toolchain version so
 		// callers that only want GoVersion keep working.
