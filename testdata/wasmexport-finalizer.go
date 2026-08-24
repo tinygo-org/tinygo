@@ -8,6 +8,13 @@ func finalizerRan()
 //go:wasmimport tester backgroundRan
 func backgroundRan()
 
+//go:wasmexport launchBackground
+func launchBackground() {
+	go func() {
+		backgroundRan()
+	}()
+}
+
 //go:noinline
 func registerFinalizersImpl() {
 	for i := 0; i < 32; i++ {

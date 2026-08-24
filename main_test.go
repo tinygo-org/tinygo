@@ -124,6 +124,8 @@ func TestBuild(t *testing.T) {
 		runPlatTests(hostOptions, tests, t)
 
 		// Exercise the host-only schedulers with a GC that implements finalizers.
+		// scheduler.threads needs threadID, which internal/task only defines on
+		// Linux and Darwin, while scheduler.none does not link on Windows.
 		switch runtime.GOOS {
 		case "darwin", "linux":
 			for _, scheduler := range []string{"threads", "none"} {

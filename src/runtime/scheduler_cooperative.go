@@ -70,6 +70,8 @@ func deadlock() {
 // and will never be resumed.
 func exitGoroutine() {
 	if finalizerIdleGC != nil {
+		// Finalizer use enables clearing finished asyncify stacks so stale
+		// pointers do not delay collection of finalized objects.
 		task.MarkFinishing()
 	}
 	task.Pause()
@@ -86,6 +88,7 @@ func wasmExportExit() {
 	// //go:wasmexport function has exited.
 	schedulerExit = true
 	if finalizerIdleGC != nil {
+		// See exitGoroutine: stack clearing is enabled only after finalizer use.
 		task.MarkFinishing()
 	}
 
@@ -97,6 +100,7 @@ func wasmExportExit() {
 
 func goexit() {
 	if finalizerIdleGC != nil {
+		// See exitGoroutine: stack clearing is enabled only after finalizer use.
 		task.MarkFinishing()
 	}
 	task.Exit()
@@ -296,13 +300,13 @@ func scheduler(returnAtDeadlock bool) {
 			schedulerExit = false // reset the signal
 			if task.Current() == nil && finalizerIdleGC != nil {
 				finalizerIdleGC()
-				// A wasm export must return as soon as its own task finishes instead
-				// of also running the finalizer runner or unrelated goroutines. On
-				// JavaScript, resume the scheduler in a fresh event-loop turn after
-				// control has returned to the caller.
-				if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueue != nil) {
-					sleepTicks(0)
-				}
+			}
+			// A wasm export must return as soon as its own task finishes instead
+			// of also running the finalizer runner or unrelated goroutines. On
+			// JavaScript, resume the scheduler in a fresh event-loop turn after
+			// control has returned to the caller.
+			if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueue != nil) {
+				sleepTicks(0)
 			}
 			return
 		}
