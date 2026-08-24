@@ -36,6 +36,10 @@ const (
 	adcClkDiv = 2
 )
 
+var (
+	ErrInvalidADCPin = errors.New("invalid ADC pin for ESP32")
+)
+
 // InitADC powers up SAR ADC1 and puts it under software control.
 func InitADC() {
 	// The SAR front end is shared with the hall sensor and an internal
@@ -75,7 +79,7 @@ func InitADC() {
 func (a ADC) Configure(config ADCConfig) error {
 	ch, ok := adc1Channel(a.Pin)
 	if !ok {
-		return errors.New("invalid ADC pin for ESP32")
+		return ErrInvalidADCPin
 	}
 
 	configureADCPad(a.Pin)
@@ -188,32 +192,38 @@ func configureADCPad(p Pin) {
 		return
 	}
 
+	ch, ok := adcRTCGPIO(p)
+
+	if !ok {
+		return
+	}
+
 	// Take the RTC output driver off the pad so nothing fights the input.
-	esp.RTC_IO.SetENABLE_W1TC(1 << adcRTCGPIO(p))
+	esp.RTC_IO.SetENABLE_W1TC(1 << ch)
 }
 
 // adcRTCGPIO maps a pin to its index within the RTC GPIO block, which is
 // numbered independently of the main GPIO matrix.
-func adcRTCGPIO(p Pin) uint32 {
+func adcRTCGPIO(p Pin) (uint32, bool) {
 	switch p {
 	case GPIO36:
-		return 0
+		return 0, true
 	case GPIO37:
-		return 1
+		return 1, true
 	case GPIO38:
-		return 2
+		return 2, true
 	case GPIO39:
-		return 3
+		return 3, true
 	case GPIO34:
-		return 4
+		return 4, true
 	case GPIO35:
-		return 5
+		return 5, true
 	case GPIO33:
-		return 8
+		return 8, true
 	case GPIO32:
-		return 9
+		return 9, true
 	}
-	return 0
+	return 0, false
 }
 
 // setSensAtten1 sets the 2-bit attenuation field for one ADC1 channel. The
