@@ -23,15 +23,19 @@ var rp2040FlashSafeState volatile.Register8
 // rp2040EnterFlashSafeSection enters a section in which RP2040 flash operations
 // may temporarily disable XIP.
 //
-// The multicore path asks the other core to enter the flash-safe interrupt
-// handler and waits until it acknowledges that it is parked. Local interrupts
-// are disabled after the other core is parked.
+// The multicore path serializes flash-safe initiators, then disables local
+// interrupts before asking the other core to park. Keeping local interrupts
+// disabled while waiting for the acknowledgement prevents a GC stop-the-world
+// interrupt from blocking this core while the other core is parked in the
+// flash-safe handler.
 func rp2040EnterFlashSafeSection() interrupt.State {
 	if !secondaryCoresStarted {
 		return interrupt.Disable()
 	}
 
 	flashSafeLock.Lock()
+
+	state := interrupt.Disable()
 
 	core := currentCPU()
 	rp2040FlashSafeState.Set(rp2040FlashSafeIdle)
@@ -47,7 +51,7 @@ func rp2040EnterFlashSafeSection() interrupt.State {
 		spinLoopWait()
 	}
 
-	return interrupt.Disable()
+	return state
 }
 
 // rp2040ExitFlashSafeSection exits a section entered by
