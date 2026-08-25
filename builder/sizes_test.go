@@ -42,9 +42,9 @@ func TestBinarySize(t *testing.T) {
 	// This is a small number of very diverse targets that we want to test.
 	tests := []sizeTest{
 		// microcontrollers
-		{"hifive1b", "examples/echo", 4321, 323, 0, 2268},
-		{"microbit", "examples/serial", 2842, 382, 8, 2264},
-		{"wioterminal", "examples/pininterrupt", 8039, 1665, 132, 7496},
+		{"hifive1b", "examples/echo", 4310, 346, 0, 2268},
+		{"microbit", "examples/serial", 2833, 391, 8, 2264},
+		{"wioterminal", "examples/pininterrupt", 8013, 1687, 132, 7496},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the

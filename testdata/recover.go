@@ -313,9 +313,26 @@ func recoverMustPanic(name string, f func()) {
 	f()
 }
 
+func recoverRuntimeErrorValue(f func()) {
+	defer func() {
+		r := recover()
+		err, ok := r.(runtime.Error)
+		if ok {
+			println("  recovered runtime error:", err.Error())
+		} else {
+			println("  failed runtime error:", r)
+		}
+	}()
+	f()
+}
+
 // Test recovering from nil map assignment and closed channel send.
 func recoverNilMapAndChan() {
 	recoverMustPanic("nil map", func() {
+		var m map[string]int
+		m["x"] = 1
+	})
+	recoverRuntimeErrorValue(func() {
 		var m map[string]int
 		m["x"] = 1
 	})

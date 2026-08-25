@@ -817,7 +817,7 @@ func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 		}
 		return hash
 	default:
-		runtimePanic("comparing un-comparable type")
+		runtimePanic(errUncomparable)
 		return 0 // unreachable
 	}
 }

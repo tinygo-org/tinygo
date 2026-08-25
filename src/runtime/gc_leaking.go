@@ -49,7 +49,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	heapptr += size
 	if heapptr < addr {
 		// The allocation size overflowed the heap pointer.
-		runtimePanic("out of memory")
+		runtimePanic(errOutOfMemory)
 	}
 	for heapptr > heapEnd {
 		// Try to increase the heap and check again.
