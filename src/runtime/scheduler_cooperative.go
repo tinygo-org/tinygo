@@ -298,15 +298,18 @@ func scheduler(returnAtDeadlock bool) {
 		// //go:wasmexport function returned.
 		if GOARCH == "wasm" && schedulerExit {
 			schedulerExit = false // reset the signal
-			if task.Current() == nil && finalizerIdleGC != nil {
-				finalizerIdleGC()
-			}
-			// A wasm export must return as soon as its own task finishes instead
-			// of also running the finalizer runner or unrelated goroutines. On
-			// JavaScript, resume the scheduler in a fresh event-loop turn after
-			// control has returned to the caller.
-			if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueue != nil) {
-				sleepTicks(0)
+			if task.Current() == nil {
+				if finalizerIdleGC != nil {
+					finalizerIdleGC()
+				}
+				// A top-level wasm export must return as soon as its own task finishes
+				// instead of also running unrelated goroutines. On JavaScript, resume
+				// the scheduler in a fresh event-loop turn after control has returned
+				// to the caller. A re-entrant export leaves its outer scheduler active,
+				// so that scheduler will drain the queues without another wakeup.
+				if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueue != nil) {
+					sleepTicks(0)
+				}
 			}
 			return
 		}
