@@ -57,6 +57,5 @@ serial interrupts, so its default USART is configured without receive
 interrupts rather than assigning an unverified IRQ number. The M4 SVDs also do
 not expose the M0+ `ICSCR.HSI_FS` selector, so the runtime preserves their reset
 clock configuration and initially reports the vendor-defined 8 MHz reset
-frequency. Applications that establish a different clock tree must update
-`machine.CPUFrequencyHz`, then reconfigure SysTick and frequency-dependent
-peripherals.
+frequency. Custom clock HALs must update TinyGo's internal clock state, then
+reconfigure SysTick and frequency-dependent peripherals.

@@ -17,16 +17,15 @@ func main() {
 
 	configureHSI()
 
-	ConfigureSystemTimer()
+	configureSystemTimer()
 	machine.InitSerial()
 
 	run()
 	exit(0)
 }
 
-// Configure SysTick to fire every 1ms on given system frequency.
-// This should be called after any change to the system clock frequency.
-func ConfigureSystemTimer() {
+// configureSystemTimer configures SysTick for 1ms ticks.
+func configureSystemTimer() {
 	arm.SetupSystemTimer(machine.CPUFrequency() / 1000)
 }
 
