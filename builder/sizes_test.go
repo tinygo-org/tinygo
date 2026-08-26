@@ -1,8 +1,13 @@
 package builder
 
 import (
+	"flag"
+	"fmt"
+	"os"
 	"regexp"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,21 +16,19 @@ import (
 
 var sema = make(chan struct{}, runtime.NumCPU())
 
+var flagUpdate = flag.Bool("update", false, "update builder package tests")
+
 type sizeTest struct {
-	target     string
-	path       string
-	codeSize   uint64
-	rodataSize uint64
-	dataSize   uint64
-	bssSize    uint64
+	target string
+	path   string
 }
 
 // Test whether code and data size is as expected for the given targets.
 // This tests both the logic of loadProgramSize and checks that code size
 // doesn't change unintentionally.
 //
-// If you find that code or data size is reduced, then great! You can reduce the
-// number in this test.
+// If you find that code or data size is reduced, then great! You can update the
+// golden file by passing -update to the test.
 // If you find that the code or data size is increased, take a look as to why
 // this is. It could be due to an update (LLVM version, Go version, etc) which
 // is fine, but it could also mean that a recent change introduced this size
@@ -42,34 +45,110 @@ func TestBinarySize(t *testing.T) {
 	// This is a small number of very diverse targets that we want to test.
 	tests := []sizeTest{
 		// microcontrollers
-		{"hifive1b", "examples/echo", 4321, 323, 0, 2268},
-		{"microbit", "examples/serial", 2842, 382, 8, 2264},
-		{"wioterminal", "examples/pininterrupt", 8039, 1665, 132, 7496},
+		{"hifive1b", "examples/echo"},
+		{"microbit", "examples/serial"},
+		{"wioterminal", "examples/pininterrupt"},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
 		// output varies by binaryen version.
 	}
-	for _, tc := range tests {
-		t.Run(tc.target+"/"+tc.path, func(t *testing.T) {
-			t.Parallel()
+	sizes := measureBinarySizes(t, tests)
+	output := formatSizeTable(tests, sizes)
+	checkGolden(t, "testdata/binary-size.txt", output)
+}
 
-			// Build the binary.
-			result := buildBinary(t, tc.target, tc.path)
-
-			// Check whether the size of the binary matches the expected size.
-			sizes, err := loadProgramSize(result.Executable, nil)
-			if err != nil {
-				t.Fatal("could not read program size:", err)
-			}
-			if sizes.Code != tc.codeSize || sizes.ROData != tc.rodataSize || sizes.Data != tc.dataSize || sizes.BSS != tc.bssSize {
-				t.Errorf("Unexpected code size when compiling: -target=%s %s", tc.target, tc.path)
-				t.Errorf("            code rodata   data    bss")
-				t.Errorf("expected: %6d %6d %6d %6d", tc.codeSize, tc.rodataSize, tc.dataSize, tc.bssSize)
-				t.Errorf("actual:   %6d %6d %6d %6d", sizes.Code, sizes.ROData, sizes.Data, sizes.BSS)
-			}
-		})
+func checkGolden(t *testing.T, path, actual string) {
+	t.Helper()
+	if *flagUpdate {
+		if err := os.WriteFile(path, []byte(actual), 0o666); err != nil {
+			t.Fatal("failed to write updated golden file:", err)
+		}
+		return
 	}
+	expected, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("failed to read golden file:", err)
+	}
+	if actual != string(expected) {
+		t.Errorf("%s does not match expected output (re-run with -update to regenerate):\nexpected:\n%sactual:\n%s", path, expected, actual)
+	}
+}
+
+func measureBinarySizes(t *testing.T, tests []sizeTest) []*programSize {
+	t.Helper()
+	type result struct {
+		index int
+		size  *programSize
+		err   error
+	}
+
+	results := make(chan result, len(tests))
+	for i, tc := range tests {
+		tmpdir := t.TempDir()
+		go func() {
+			size, err := measureBinarySize(tc, tmpdir)
+			results <- result{i, size, err}
+		}()
+	}
+
+	sizes := make([]*programSize, len(tests))
+	failed := false
+	for range tests {
+		result := <-results
+		if result.err != nil {
+			tc := tests[result.index]
+			t.Errorf("%s/%s: %v", tc.target, tc.path, result.err)
+			failed = true
+		}
+		sizes[result.index] = result.size
+	}
+	if failed {
+		t.FailNow()
+	}
+	return sizes
+}
+
+func measureBinarySize(tc sizeTest, tmpdir string) (*programSize, error) {
+	result, err := buildBinaryInDir(tc.target, tc.path, tmpdir)
+	if err != nil {
+		return nil, err
+	}
+	size, err := loadProgramSize(result.Executable, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not read program size: %w", err)
+	}
+	return size, nil
+}
+
+func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
+	targetWidth := len("target")
+	packageWidth := len("package")
+	codeWidth := len("code")
+	rodataWidth := len("rodata")
+	dataWidth := len("data")
+	bssWidth := len("bss")
+	for i, tc := range tests {
+		targetWidth = max(targetWidth, len(tc.target))
+		packageWidth = max(packageWidth, len(tc.path))
+		codeWidth = max(codeWidth, len(strconv.FormatUint(sizes[i].Code, 10)))
+		rodataWidth = max(rodataWidth, len(strconv.FormatUint(sizes[i].ROData, 10)))
+		dataWidth = max(dataWidth, len(strconv.FormatUint(sizes[i].Data, 10)))
+		bssWidth = max(bssWidth, len(strconv.FormatUint(sizes[i].BSS, 10)))
+	}
+
+	var output strings.Builder
+	fmt.Fprintf(&output, "%-*s %-*s %*s %*s %*s %*s\n",
+		targetWidth, "target", packageWidth, "package",
+		codeWidth, "code", rodataWidth, "rodata", dataWidth, "data", bssWidth, "bss")
+	for i, tc := range tests {
+		size := sizes[i]
+		fmt.Fprintf(&output, "%-*s %-*s %*d %*d %*d %*d\n",
+			targetWidth, tc.target, packageWidth, tc.path,
+			codeWidth, size.Code, rodataWidth, size.ROData,
+			dataWidth, size.Data, bssWidth, size.BSS)
+	}
+	return output.String()
 }
 
 // Check that the -size=full flag attributes binary size to the correct package
@@ -114,6 +193,15 @@ func TestSizeFull(t *testing.T) {
 }
 
 func buildBinary(t *testing.T, targetString, pkgName string) BuildResult {
+	t.Helper()
+	result, err := buildBinaryInDir(targetString, pkgName, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func buildBinaryInDir(targetString, pkgName, tmpdir string) (BuildResult, error) {
 	options := compileopts.Options{
 		Target:        targetString,
 		Opt:           "z",
@@ -124,15 +212,15 @@ func buildBinary(t *testing.T, targetString, pkgName string) BuildResult {
 	}
 	target, err := compileopts.LoadTarget(&options)
 	if err != nil {
-		t.Fatal("could not load target:", err)
+		return BuildResult{}, fmt.Errorf("could not load target: %w", err)
 	}
 	config := &compileopts.Config{
 		Options: &options,
 		Target:  target,
 	}
-	result, err := Build(pkgName, "", t.TempDir(), config)
+	result, err := Build(pkgName, "", tmpdir, config)
 	if err != nil {
-		t.Fatal("could not build:", err)
+		return BuildResult{}, fmt.Errorf("could not build: %w", err)
 	}
-	return result
+	return result, nil
 }
