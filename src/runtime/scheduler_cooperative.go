@@ -42,12 +42,8 @@ var (
 	deadlockedTasks    task.Queue
 )
 
-// finalizerIdleGC, when non-nil, collects on finalizer-registration pressure
-// (returning whether it did). It is called at the scheduler's idle point and
-// before a top-level wasm export returns. It is installed lazily by the first
-// SetFinalizer, so a program that never registers a finalizer never assigns it
-// and the linker drops the whole collection path. It is nil under GCs without a
-// finalizer table.
+// finalizerIdleGC runs pressure GC at safe points and enables asyncify stack cleanup.
+// The first finalizer installs it so unused code can be removed.
 var finalizerIdleGC func() bool
 
 // deadlock is called when a goroutine cannot proceed any more, but is in theory
@@ -65,30 +61,21 @@ func deadlock() {
 	runtimeFatal("unreachable")
 }
 
-// exitGoroutine is called by asyncify goroutine wrappers after the wrapped
-// function returns. Unlike deadlock, this path means the task is truly finished
-// and will never be resumed.
+// exitGoroutine ends an asyncify task that returned from its function.
+// Unlike deadlock, this task will not resume.
 func exitGoroutine() {
 	if finalizerIdleGC != nil {
-		// Finalizer use enables clearing finished asyncify stacks so stale
-		// pointers do not delay collection of finalized objects.
 		task.MarkFinishing()
 	}
 	task.Pause()
 	runtimeFatal("unreachable")
 }
 
-// Called from the goroutine wrapper for the //go:wasmexport function. It just
-// signals to the runtime that the //go:wasmexport call has finished, and can
-// switch back to the wasmExportRun function.
-//
-// This function is not called when the scheduler is disabled.
+// wasmExportExit stops the scheduler after a //go:wasmexport function returns.
+// It is not used when the scheduler is disabled.
 func wasmExportExit() {
-	// Signal to the scheduler that it should return, since this call to a
-	// //go:wasmexport function has exited.
 	schedulerExit = true
 	if finalizerIdleGC != nil {
-		// See exitGoroutine: stack clearing is enabled only after finalizer use.
 		task.MarkFinishing()
 	}
 
@@ -100,7 +87,6 @@ func wasmExportExit() {
 
 func goexit() {
 	if finalizerIdleGC != nil {
-		// See exitGoroutine: stack clearing is enabled only after finalizer use.
 		task.MarkFinishing()
 	}
 	task.Exit()
@@ -231,17 +217,8 @@ func scheduler(returnAtDeadlock bool) {
 
 		t := runqueue.Pop()
 		if t == nil {
-			// Idle point: the run queue is drained, so no goroutine is running on
-			// its own stack. This is the safe place to reclaim external resources
-			// whose finalizers have piled up since the last collection. Running it
-			// here, once per drained run queue and only at the top level
-			// (task.Current() == nil, so a re-entrant call from a suspended
-			// goroutine does not collect while that goroutine is mid-operation),
-			// reclaims a completed run of goroutines' now-dead values in one pass.
-			// Forcing the collection inside alloc instead would scale GC frequency
-			// with allocation churn: a goroutine that allocates hundreds of
-			// short-lived finalized objects would trigger dozens of collections
-			// mid-run, most of them wasted on values that are still live.
+			// Run the pressure GC only when the scheduler is idle at the top level.
+			// This batches completed work and avoids collections during allocation.
 			if task.Current() == nil && finalizerIdleGC != nil && finalizerIdleGC() {
 				continue
 			}
@@ -302,11 +279,8 @@ func scheduler(returnAtDeadlock bool) {
 				if finalizerIdleGC != nil {
 					finalizerIdleGC()
 				}
-				// A top-level wasm export must return as soon as its own task finishes
-				// instead of also running unrelated goroutines. On JavaScript, resume
-				// the scheduler in a fresh event-loop turn after control has returned
-				// to the caller. A re-entrant export leaves its outer scheduler active,
-				// so that scheduler will drain the queues without another wakeup.
+				// Return from an export at the top level before unrelated goroutines run.
+				// A nested export returns to its active outer scheduler.
 				if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueue != nil) {
 					sleepTicks(0)
 				}

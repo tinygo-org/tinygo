@@ -26,10 +26,8 @@ type state struct {
 
 	launched bool
 
-	// finishing is set immediately before this goroutine, having run to
-	// completion, pauses for the last time. Resume observes it and clears the
-	// goroutine's stack. It lives on the task so each finishing goroutine owns
-	// its own flag, independent of scheduler timing.
+	// finishing marks a goroutine that paused after it completed.
+	// Resume uses this per task flag to clear the stack.
 	finishing bool
 }
 
@@ -49,9 +47,7 @@ type stackState struct {
 	// overflow happened in the past.
 	canaryPtr *uintptr
 
-	// top is the first address past the end of the stack allocation (the
-	// initial C stack pointer). Kept so the whole stack buffer can be located
-	// again after the goroutine finishes.
+	// top marks the end of the stack buffer so it can be cleared after completion.
 	top unsafe.Pointer
 }
 
@@ -95,22 +91,13 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 //go:linkname memzero runtime.memzero
 func memzero(ptr unsafe.Pointer, size uintptr)
 
-// MarkFinishing records that the current goroutine has finished and will not be
-// resumed, so Resume may reclaim its stack once control returns to the scheduler.
-// The flag lives on the task itself, so each finishing goroutine owns its own and
-// the handoff to Resume does not depend on scheduler timing.
+// MarkFinishing marks the current goroutine for stack cleanup after it returns to the scheduler.
 func MarkFinishing() {
 	currentTask.state.finishing = true
 }
 
-// clearStack zeroes a finished goroutine's entire stack buffer. The buffer is a
-// plain heap allocation scanned conservatively by the GC (it can hold arbitrary
-// pointers), so any stale pointer left in it by the goroutine's now-returned
-// call frames would keep unrelated objects reachable (and, transitively, other
-// finished stacks reachable through them) until a later collection happens to
-// break the chain. Zeroing the buffer the moment the goroutine finishes drops
-// those stale references immediately, so the objects they pointed at (and the
-// stack itself) become collectable at the next cycle.
+// clearStack removes stale pointers from a finished asyncify stack.
+// The GC can then collect the stack and referenced objects.
 func (t *Task) clearStack() {
 	base := unsafe.Pointer(t.state.canaryPtr)
 	memzero(base, uintptr(t.state.top)-uintptr(base))
@@ -160,11 +147,7 @@ func (t *Task) Resume() {
 		runtimeFatal("stack overflow")
 	}
 	if t.state.finishing {
-		// The goroutine just ran to completion and paused for the last time. It
-		// will never be resumed, so its stack can be cleared now to drop any
-		// pointers its returned frames left behind (see clearStack). The args
-		// bundle is likewise no longer needed, so drop that reference too, else
-		// any pointers in the arguments would keep their objects reachable.
+		// The task is complete. Clear stale stack pointers and release its argument bundle.
 		t.state.finishing = false
 		t.clearStack()
 		t.state.args = nil

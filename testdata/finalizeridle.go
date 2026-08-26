@@ -1,15 +1,7 @@
 package main
 
-// Tests idle finalizer collection and goroutine-stack lifetime on precise wasm.
-// The idle-collection cases verify that registration pressure triggers a
-// collection without an explicit runtime.GC. The permanently blocked goroutine
-// cases use explicit GCs and a control finalizer to distinguish live stacks from
-// stalled GC progress.
-//
-// Like finalizer.go, this is only run on the precise wasm target (see the tests
-// slice and the skip in main_test.go): there a dropped object is deterministically
-// collected, so the finalizers fire predictably. The idle-collection cases do
-// not call runtime.GC: their purpose is to prove the idle trigger itself works.
+// Test idle finalizer collection and the lifetime of blocked and completed asyncify stacks.
+// The wasm target provides deterministic finalization for these tests.
 
 import (
 	"runtime"
@@ -17,8 +9,7 @@ import (
 	"time"
 )
 
-// batch must exceed the runtime's finalizer-registration threshold so the idle
-// collection is guaranteed to trigger.
+// batch must exceed the finalizer registration threshold to trigger idle collection.
 const batch = 64
 
 var (
@@ -61,16 +52,13 @@ func dropProgressControl() {
 	runtime.SetFinalizer(p, func(*blockedObject) { controlRan.Add(1) })
 }
 
-// testPermanentlyBlockedStacks verifies that permanent blocks preserve their
-// suspended stacks. The control object is intentionally unreachable and is
-// deterministic on precise wasm; once its finalizer runs, GC and finalizer
-// progress are proven without sleeps. A blocked-object finalizer running by
-// then therefore means its task was incorrectly treated as completed.
+// testPermanentlyBlockedStacks checks that blocked task stacks remain GC roots.
+// A control finalizer confirms that GC and finalizer processing made progress.
 func testPermanentlyBlockedStacks() {
 	ready := make(chan struct{}, 3)
 	go holdWhileBlocked(0, ready, nil) // select{}
-	go holdWhileBlocked(1, ready, nil) // nil-channel send
-	go holdWhileBlocked(2, ready, nil) // nil-channel receive
+	go holdWhileBlocked(1, ready, nil) // nil channel send
+	go holdWhileBlocked(2, ready, nil) // nil channel receive
 	<-ready
 	<-ready
 	<-ready
@@ -84,8 +72,8 @@ func testPermanentlyBlockedStacks() {
 	if controlRan.Load() != 1 {
 		panic("control finalizer did not prove GC progress")
 	}
-	// Collect once more so transient scheduler roots cannot mask an unrooted
-	// blocked task during the progress-control collection.
+	// Collect once more so temporary scheduler roots cannot hide an unrooted
+	// blocked task during the control collection.
 	runtime.GC()
 	runtime.Gosched()
 	for i, name := range [...]string{"select{}", "nil-channel send", "nil-channel receive"} {
@@ -95,11 +83,8 @@ func testPermanentlyBlockedStacks() {
 	}
 }
 
-// scrubStack overwrites the stack region used by an alloc-and-drop helper with
-// non-pointer words. It is called at the same depth as that helper so this
-// recursion reuses (and clears) the frame that just held the dropped pointers;
-// otherwise a stale copy keeps an object marked and it is never collected. The
-// returned value derived from buf keeps the writes live.
+// scrubStack removes stale pointers from the helper frame so collection is deterministic.
+// Call it at the same call depth as the allocation helper.
 //
 //go:noinline
 func scrubStack(depth int) int {
@@ -114,10 +99,8 @@ func scrubStack(depth int) int {
 	return scrubStack(depth-1) + buf[0]
 }
 
-// registerAndDrop registers `batch` finalizers and returns without leaking any
-// reference to the objects, so they become unreachable. The finalizer must not
-// capture its object (that would pin it forever): it takes the pointer as its
-// argument and touches only a package global.
+// registerAndDrop creates unreachable objects with finalizers that do not capture them.
+// This allows the idle GC to collect the objects.
 //
 //go:noinline
 func registerAndDrop() {
@@ -127,9 +110,6 @@ func registerAndDrop() {
 	}
 }
 
-// testIdleCollect checks that registering many finalizers and then only parking
-// the goroutine (time.Sleep, never runtime.GC()) is enough for the objects to be
-// collected and their finalizers to run.
 func testIdleCollect() {
 	registerAndDrop()
 	for i := 0; i < 500 && ranDropped < batch; i++ {
@@ -141,11 +121,6 @@ func testIdleCollect() {
 	}
 }
 
-// testFinishedGoroutineStacks checks that a goroutine which registers a finalizer
-// on a stack-local object and then returns no longer pins that object: once the
-// goroutine has finished, the idle collection reclaims the object. Without
-// zeroing a finished goroutine's conservatively scanned stack, the stale pointer
-// would keep the object alive.
 func testFinishedGoroutineStacks() {
 	done := make(chan struct{})
 	for i := 0; i < batch; i++ {
@@ -168,11 +143,8 @@ func testFinishedGoroutineStacks() {
 	}
 }
 
-// launchArgGoroutine allocates a finalized object and launches a goroutine that
-// receives it as an argument, then returns without leaving any reference behind.
-// The object reaches the goroutine only through its argument bundle, and the
-// only transient copies (of the pointer and the bundle) live in this frame, which
-// returns immediately so the later scrubStack recursion reuses and clears it.
+// launchArgGoroutine passes an object through the task argument bundle.
+// The caller returns so scrubStack can remove its transient pointer.
 //
 //go:noinline
 func launchArgGoroutine(done chan struct{}) {
@@ -184,11 +156,6 @@ func launchArgGoroutine(done chan struct{}) {
 	}(p)
 }
 
-// testFinishedGoroutineArgs checks that a goroutine which receives a finalized
-// object as an argument no longer pins it once finished: the argument bundle the
-// goroutine was launched with is dropped when it completes, so the idle collection
-// reclaims the object. Without clearing a finished goroutine's args pointer the
-// bundle would keep the object alive even after its stack has been zeroed.
 func testFinishedGoroutineArgs() {
 	done := make(chan struct{})
 	for i := 0; i < batch; i++ {

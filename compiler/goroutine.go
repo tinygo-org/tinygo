@@ -535,7 +535,6 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 	}
 
 	if c.Scheduler == "asyncify" {
-		// The goroutine was terminated via exitGoroutine.
 		b.CreateUnreachable()
 	} else {
 		// Finish the function. Every basic block must end in a terminator, and

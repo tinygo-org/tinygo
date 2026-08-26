@@ -8,12 +8,8 @@ import (
 	"testing"
 )
 
-// TestFinalizerRunnerSchedulerCoverage checks that the build constraints on the
-// gc_finalizer_sched*.go files define spawnFinalizerRunner for exactly one file
-// per scheduler. The three constraints must partition the scheduler space: every
-// scheduler matches exactly one file, so none can be left with the symbol
-// undefined or defined twice. It iterates validSchedulerOptions as the source of
-// truth, so a newly added scheduler is covered by this check automatically.
+// TestFinalizerRunnerSchedulerCoverage verifies that each scheduler selects one runner file.
+// It uses validSchedulerOptions so new schedulers are included.
 func TestFinalizerRunnerSchedulerCoverage(t *testing.T) {
 	files := []string{
 		"gc_finalizer_sched.go",
@@ -26,8 +22,8 @@ func TestFinalizerRunnerSchedulerCoverage(t *testing.T) {
 	}
 
 	for _, sched := range validSchedulerOptions {
-		// The finalizer table exists under the block GCs; gc.conservative
-		// satisfies the "gc.conservative || gc.precise" half of every constraint.
+		// The finalizer table exists under block GCs.
+		// gc.conservative satisfies the GC condition in every constraint.
 		tags := map[string]bool{
 			"gc.conservative":    true,
 			"scheduler." + sched: true,
@@ -45,7 +41,6 @@ func TestFinalizerRunnerSchedulerCoverage(t *testing.T) {
 	}
 }
 
-// readBuildConstraint returns the parsed //go:build expression of a Go file.
 func readBuildConstraint(t *testing.T, path string) constraint.Expr {
 	t.Helper()
 	data, err := os.ReadFile(path)

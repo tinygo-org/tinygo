@@ -2,11 +2,8 @@
 
 package runtime
 
-// The go statement and the idle-hook install live in this scheduler-gated file,
-// not inline in registerFinalizer, so a build that never calls SetFinalizer
-// keeps internal/task.start and the whole finalizer collection path DCE'd. The
-// cooperative scheduler additionally collects on finalizer-registration pressure
-// at its idle point (see finalizerIdleGC in scheduler_cooperative.go).
+// Keep this setup in a file for these schedulers so unused finalizer code can be removed.
+// Cooperative schedulers also install the idle GC hook.
 func spawnFinalizerRunner() {
 	finalizerIdleGC = finalizerPressureGC
 	go finalizerRunner()

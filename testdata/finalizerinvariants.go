@@ -1,17 +1,7 @@
 package main
 
-// Portable negative invariants of runtime.SetFinalizer on the block GCs.
-// Conservative stack scanning may retain an unreachable object indefinitely,
-// so this test never requires a dropped object's finalizer to run. On targets
-// that do collect one, its callbacks reject invalid behavior: cleared and
-// replaced finalizers running, reachable objects being finalized, or one
-// registration running more than once.
-//
-// The harness builds this file with runtime_asserts. Those checks
-// deterministically validate clear/replace behavior and agreement between the
-// finalizer table, count, and registration bitmap during these operations and
-// collections. Bookkeeping coverage therefore does not depend on a conservative
-// collector reclaiming any particular dropped object.
+// Test finalizer invariants that do not require unreachable objects to be collected.
+// runtime_asserts checks the finalizer table, count, and bitmap.
 
 import (
 	"runtime"
@@ -65,9 +55,8 @@ func main() {
 		keepReachable(i)
 	}
 
-	// Exercise scan-time bookkeeping assertions and give finalizers bounded
-	// opportunities to run on targets which collect the dropped objects. No
-	// assertion below requires one of them to have been collected.
+	// Run GC to check bookkeeping and give finalizers bounded opportunities to run.
+	// The checks do not require finalization of an unreachable object.
 	for i := 0; i < 8; i++ {
 		runtime.GC()
 		runtime.Gosched()
