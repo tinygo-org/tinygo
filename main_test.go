@@ -60,6 +60,10 @@ func TestBuild(t *testing.T) {
 		"channel.go",
 		"embed/",
 		"finalizer.go",
+		"finalizerbits.go",
+		"finalizeridle.go",
+		"finalizerinvariants.go",
+		"finalizerlarge.go",
 		"float.go",
 		"gc.go",
 		"generics.go",
@@ -116,7 +120,25 @@ func TestBuild(t *testing.T) {
 
 	t.Run("Host", func(t *testing.T) {
 		t.Parallel()
-		runPlatTests(optionsFromTarget("", sema), tests, t)
+		hostOptions := optionsFromTarget("", sema)
+		runPlatTests(hostOptions, tests, t)
+
+		// scheduler.threads needs threadID, which exists only on Linux and Darwin.
+		// scheduler.none does not link on Windows.
+		switch runtime.GOOS {
+		case "darwin", "linux":
+			for _, scheduler := range []string{"threads", "none"} {
+				scheduler := scheduler
+				t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
+					t.Parallel()
+					options := compileopts.Options(hostOptions)
+					options.GC = "conservative"
+					options.Scheduler = scheduler
+					options.Tags = append(append([]string(nil), hostOptions.Tags...), "runtime_asserts")
+					runTest("finalizerinvariants.go", options, t, nil, nil)
+				})
+			}
+		}
 	})
 
 	// Test a few build options.
@@ -379,22 +401,38 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 			}
 		}
-		if name == "finalizer.go" && options.Target != "wasm" {
-			// runtime.SetFinalizer is implemented for the block GC, but the
-			// test asserts deterministic collection of a dropped object, which
-			// only holds on the GOOS=js wasm target. The host default GC is
-			// boehm (SetFinalizer is a no-op there); conservative stack scanning
-			// on the emulated targets can pin the object; and the wasip2
-			// component entry lays out the stack differently, so collection is
-			// not deterministic on those. The feature still works on all of
-			// them, it just can't be golden-tested for firing.
-			continue
+		if options.Target != "wasm" {
+			switch name {
+			case "finalizer.go", "finalizerbits.go", "finalizeridle.go", "finalizerlarge.go":
+				// These tests require deterministic finalization on target wasm.
+				// finalizerinvariants.go covers other block GC targets.
+				continue
+			}
+		}
+		if options.Target == "" && options.GC == "" {
+			switch name {
+			case "finalizerinvariants.go":
+				// Skip the default host GC because it does not implement finalizers.
+				// Explicit conservative GC variants cover this test.
+				continue
+			}
+		}
+		if options.Target == "simavr" {
+			switch name {
+			case "finalizerinvariants.go":
+				// Skip because runtime.GC does not return. See the gc.go exclusion above.
+				continue
+			}
 		}
 
 		name := name // redefine to avoid race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			runTest(name, options, t, nil, nil)
+			testOptions := compileopts.Options(options)
+			if name == "finalizerinvariants.go" || name == "finalizerlarge.go" {
+				testOptions.Tags = append(append([]string(nil), options.Tags...), "runtime_asserts")
+			}
+			runTest(name, testOptions, t, nil, nil)
 		})
 	}
 	if !strings.HasPrefix(spec.Emulator, "simavr ") {
@@ -947,6 +985,30 @@ func TestWasmExportJS(t *testing.T) {
 			}
 			checkOutput(t, "testdata/wasmexport.txt", output.Bytes())
 		})
+	}
+}
+
+func TestWasmExportFinalizersJS(t *testing.T) {
+	t.Parallel()
+
+	tmpdir := t.TempDir()
+	options := optionsFromTarget("wasm", sema)
+	options.BuildMode = "c-shared"
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/wasmexport-finalizer.go", ".wasm", tmpdir, buildConfig)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+
+	output := &bytes.Buffer{}
+	cmd := exec.Command("node", "testdata/wasmexport-finalizer.js", result.Binary)
+	cmd.Stdout = output
+	cmd.Stderr = output
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to run node: %v\n%s", err, output)
 	}
 }
 

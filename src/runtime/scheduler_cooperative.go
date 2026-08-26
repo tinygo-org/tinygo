@@ -39,7 +39,12 @@ var (
 	runqueue           task.Queue
 	sleepQueue         *task.Task
 	sleepQueueBaseTime timeUnit
+	deadlockedTasks    task.Queue
 )
+
+// finalizerIdleGC runs pressure GC at safe points and enables asyncify stack cleanup.
+// The first finalizer installs it so unused code can be removed.
+var finalizerIdleGC func() bool
 
 // deadlock is called when a goroutine cannot proceed any more, but is in theory
 // not exited (so deferred calls won't run). This can happen for example in code
@@ -49,12 +54,41 @@ var (
 //
 //go:noinline
 func deadlock() {
-	// call yield without requesting a wakeup
+	// Keep permanently blocked tasks reachable so their suspended stacks remain
+	// GC roots, but never put them back on the runnable queue.
+	deadlockedTasks.Push(task.Current())
 	task.Pause()
 	runtimeFatal("unreachable")
 }
 
+// exitGoroutine ends an asyncify task that returned from its function.
+// Unlike deadlock, this task will not resume.
+func exitGoroutine() {
+	if finalizerIdleGC != nil {
+		task.MarkFinishing()
+	}
+	task.Pause()
+	runtimeFatal("unreachable")
+}
+
+// wasmExportExit stops the scheduler after a //go:wasmexport function returns.
+// It is not used when the scheduler is disabled.
+func wasmExportExit() {
+	schedulerExit = true
+	if finalizerIdleGC != nil {
+		task.MarkFinishing()
+	}
+
+	task.Pause()
+
+	// TODO: we could cache the allocated stack so we don't have to keep
+	// allocating a new stack on every //go:wasmexport call.
+}
+
 func goexit() {
+	if finalizerIdleGC != nil {
+		task.MarkFinishing()
+	}
 	task.Exit()
 }
 
@@ -183,6 +217,11 @@ func scheduler(returnAtDeadlock bool) {
 
 		t := runqueue.Pop()
 		if t == nil {
+			// Run the pressure GC only when the scheduler is idle at the top level.
+			// This batches completed work and avoids collections during allocation.
+			if task.Current() == nil && finalizerIdleGC != nil && finalizerIdleGC() {
+				continue
+			}
 			if sleepQueue == nil && timerQueue == nil {
 				if returnAtDeadlock {
 					return
@@ -236,6 +275,16 @@ func scheduler(returnAtDeadlock bool) {
 		// //go:wasmexport function returned.
 		if GOARCH == "wasm" && schedulerExit {
 			schedulerExit = false // reset the signal
+			if task.Current() == nil {
+				if finalizerIdleGC != nil {
+					finalizerIdleGC()
+				}
+				// Return from an export at the top level before unrelated goroutines run.
+				// A nested export returns to its active outer scheduler.
+				if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueue != nil) {
+					sleepTicks(0)
+				}
+			}
 			return
 		}
 	}

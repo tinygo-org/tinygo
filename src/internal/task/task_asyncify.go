@@ -25,6 +25,10 @@ type state struct {
 	stackState
 
 	launched bool
+
+	// finishing marks a goroutine that paused after it completed.
+	// Resume uses this per task flag to clear the stack.
+	finishing bool
 }
 
 // stackState is the saved state of a stack while unwound.
@@ -42,6 +46,9 @@ type stackState struct {
 	// overwritten. It can be checked from time to time to see whether a stack
 	// overflow happened in the past.
 	canaryPtr *uintptr
+
+	// top marks the end of the stack buffer so it can be cleared after completion.
+	top unsafe.Pointer
 }
 
 // start creates and starts a new goroutine with the given function and arguments.
@@ -78,6 +85,22 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// Calculate stack base addresses.
 	s.asyncifysp = unsafe.Add(stack, unsafe.Sizeof(uintptr(0)))
 	s.csp = unsafe.Add(stack, stackSize)
+	s.top = unsafe.Add(stack, stackSize)
+}
+
+//go:linkname memzero runtime.memzero
+func memzero(ptr unsafe.Pointer, size uintptr)
+
+// MarkFinishing marks the current goroutine for stack cleanup after it returns to the scheduler.
+func MarkFinishing() {
+	currentTask.state.finishing = true
+}
+
+// clearStack removes stale pointers from a finished asyncify stack.
+// The GC can then collect the stack and referenced objects.
+func (t *Task) clearStack() {
+	base := unsafe.Pointer(t.state.canaryPtr)
+	memzero(base, uintptr(t.state.top)-uintptr(base))
 }
 
 // currentTask is the current running task, or nil if currently in the scheduler.
@@ -122,6 +145,12 @@ func (t *Task) Resume() {
 	t.gcData.swap()
 	if uintptr(t.state.asyncifysp) > uintptr(t.state.csp) {
 		runtimeFatal("stack overflow")
+	}
+	if t.state.finishing {
+		// The task is complete. Clear stale stack pointers and release its argument bundle.
+		t.state.finishing = false
+		t.clearStack()
+		t.state.args = nil
 	}
 }
 

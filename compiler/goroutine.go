@@ -309,10 +309,10 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 	}
 	defer b.Dispose()
 
-	var deadlock llvm.Value
-	var deadlockType llvm.Type
+	var exitGoroutine llvm.Value
+	var exitGoroutineType llvm.Type
 	if c.Scheduler == "asyncify" {
-		deadlockType, deadlock = c.getFunction(c.program.ImportedPackage("runtime").Members["deadlock"].(*ssa.Function))
+		exitGoroutineType, exitGoroutine = c.getFunction(c.program.ImportedPackage("runtime").Members["exitGoroutine"].(*ssa.Function))
 	}
 
 	if !fn.IsAFunction().IsNil() {
@@ -377,7 +377,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 			b.CreateCall(fnType, fn, params, "")
 
 			if c.Scheduler == "asyncify" {
-				b.CreateCall(deadlockType, deadlock, []llvm.Value{
+				b.CreateCall(exitGoroutineType, exitGoroutine, []llvm.Value{
 					llvm.Undef(c.dataPtrType),
 				}, "")
 			}
@@ -528,14 +528,13 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 		b.CreateCall(fnType, fnPtr, params, "")
 
 		if c.Scheduler == "asyncify" {
-			b.CreateCall(deadlockType, deadlock, []llvm.Value{
+			b.CreateCall(exitGoroutineType, exitGoroutine, []llvm.Value{
 				llvm.Undef(c.dataPtrType),
 			}, "")
 		}
 	}
 
 	if c.Scheduler == "asyncify" {
-		// The goroutine was terminated via deadlock.
 		b.CreateUnreachable()
 	} else {
 		// Finish the function. Every basic block must end in a terminator, and

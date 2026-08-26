@@ -22,14 +22,14 @@ entry:
 
 declare void @main.regularFunction(i32, ptr) #0
 
-declare void @runtime.deadlock(ptr) #0
+declare void @runtime.exitGoroutine(ptr) #0
 
 ; Function Attrs: nounwind
 define linkonce_odr void @"main.regularFunction$gowrapper"(ptr %0) unnamed_addr #2 {
 entry:
   %unpack.int = ptrtoint ptr %0 to i32
   call void @main.regularFunction(i32 %unpack.int, ptr undef) #11
-  call void @runtime.deadlock(ptr undef) #11
+  call void @runtime.exitGoroutine(ptr undef) #11
   unreachable
 }
 
@@ -53,7 +53,7 @@ define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(ptr %0) unn
 entry:
   %unpack.int = ptrtoint ptr %0 to i32
   call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.int, ptr undef)
-  call void @runtime.deadlock(ptr undef) #11
+  call void @runtime.exitGoroutine(ptr undef) #11
   unreachable
 }
 
@@ -96,7 +96,7 @@ entry:
   %2 = getelementptr inbounds nuw i8, ptr %0, i32 4
   %3 = load ptr, ptr %2, align 4
   call void @"main.closureFunctionGoroutine$1"(i32 %1, ptr %3)
-  call void @runtime.deadlock(ptr undef) #11
+  call void @runtime.exitGoroutine(ptr undef) #11
   unreachable
 }
 
@@ -130,7 +130,7 @@ entry:
   %4 = getelementptr inbounds nuw i8, ptr %0, i32 8
   %5 = load ptr, ptr %4, align 4
   call void %5(i32 %1, ptr %3) #11
-  call void @runtime.deadlock(ptr undef) #11
+  call void @runtime.exitGoroutine(ptr undef) #11
   unreachable
 }
 
@@ -193,7 +193,7 @@ entry:
   %6 = getelementptr inbounds nuw i8, ptr %0, i32 12
   %7 = load ptr, ptr %6, align 4
   call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr %1, ptr %3, i32 %5, ptr %7, ptr undef) #11
-  call void @runtime.deadlock(ptr undef) #11
+  call void @runtime.exitGoroutine(ptr undef) #11
   unreachable
 }
 

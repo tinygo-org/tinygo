@@ -203,13 +203,13 @@ entry:
   ret void
 }
 
-declare void @runtime.deadlock(ptr) #0
+declare void @runtime.exitGoroutine(ptr) #0
 
 ; Function Attrs: nounwind
 define linkonce_odr void @"main.readLargeValue$gowrapper"(ptr %0) unnamed_addr #6 {
 entry:
   %1 = call i8 @main.readLargeValue(ptr %0, ptr undef)
-  call void @runtime.deadlock(ptr undef) #9
+  call void @runtime.exitGoroutine(ptr undef) #9
   unreachable
 }
 
