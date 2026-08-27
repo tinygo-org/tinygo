@@ -180,7 +180,43 @@ jobs:
       - run: make tinygo-test-wasip1-fast
       - run: make tinygo-test-wasip2-fast
       - run: make tinygo-test-wasm
-      - run: make smoketest
+  smoketest-linux:
+    # Build a binary for every supported board, using the binaries built in the
+    # build-linux job. This is the only job that runs the full smoke test. The
+    # result does not depend on the host OS, so the other jobs build a
+    # representative board for each architecture with smoketest-quick.
+    runs-on: ubuntu-latest
+    needs: build-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        # Balanced with the measured build time of each group, so that the
+        # shards finish at about the same time.
+        group:
+          - smoketest-rp2xxx smoketest-selftest smoketest-wasm-sim
+          - smoketest-esp smoketest-riscv smoketest-flags
+          - smoketest-examples smoketest-nxp smoketest-pwm-usb smoketest-avr
+          - smoketest-samd smoketest-stm32 smoketest-nrf smoketest-wasm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.0'
+          cache: true
+      - name: Download release artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: tinygo${{ needs.build-linux.outputs.version }}.linux-amd64.tar.gz
+      - name: Extract release tarball
+        run: |
+          mkdir -p ~/lib
+          tar -C ~/lib -xf tinygo${{ needs.build-linux.outputs.version }}.linux-amd64.tar.gz
+          ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
+      - run: make testchdir ${{ matrix.group }}
   assert-test-linux:
     # Run all tests that can run on Linux, with LLVM assertions enabled to catch
     # potential bugs.
@@ -293,7 +329,7 @@ jobs:
           echo "$(pwd)/build" >> $GITHUB_PATH
       - name: Test stdlib packages
         run: make tinygo-test
-      - run: make smoketest
+      - run: make smoketest-quick
       - run: make wasmtest
       - run: make tinygo-test-baremetal
       - name: Check Go code formatting
