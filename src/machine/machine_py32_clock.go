@@ -2,16 +2,7 @@
 
 package machine
 
-import "device/py32"
-
-var cpuFrequencyHz = initialCPUFrequency()
-
-func initialCPUFrequency() uint32 {
-	if py32.CPU == "CM4" {
-		return 8_000_000
-	}
-	return 24_000_000
-}
+var cpuFrequencyHz uint32 = defaultCPUFrequencyHz
 
 func CPUFrequency() uint32 {
 	return cpuFrequencyHz
