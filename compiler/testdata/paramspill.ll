@@ -770,7 +770,7 @@ fpcall.next:                                      ; preds = %entry
   %go.param = call align 4 dereferenceable(68) ptr @runtime.alloc(i32 68, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #9
   call void @runtime.trackPointer(ptr nonnull %go.param, ptr nonnull %stackalloc, ptr undef) #9
   call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 4 dereferenceable(68) %go.param, ptr noundef nonnull align 1 dereferenceable(68) %b, i32 68, i1 false)
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.spawnBig$gowrapper" to i32), ptr nonnull %go.param, i32 65536, ptr undef) #9
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.spawnBig$gowrapper" to i32), ptr nonnull %go.param, i32 131072, ptr undef) #9
   ret i32 %38
 
 fpcall.throw:                                     ; preds = %entry

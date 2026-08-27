@@ -16,7 +16,7 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.regularFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.regularFunction$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 65536, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.regularFunction$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 131072, ptr undef) #11
   ret void
 }
 
@@ -38,7 +38,7 @@ declare void @"internal/task.start"(i32, ptr, i32, ptr) #0
 ; Function Attrs: nounwind
 define hidden void @main.inlineFunctionGoroutine(ptr %context) unnamed_addr #1 {
 entry:
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.inlineFunctionGoroutine$1$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 65536, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.inlineFunctionGoroutine$1$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 131072, ptr undef) #11
   ret void
 }
 
@@ -71,7 +71,7 @@ entry:
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr %n, ptr %1, align 4
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr nonnull %0, i32 65536, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr nonnull %0, i32 131072, ptr undef) #11
   %2 = load i32, ptr %n, align 4
   call void @runtime.printlock(ptr undef) #11
   call void @runtime.printint32(i32 %2, ptr undef) #11
@@ -117,7 +117,7 @@ entry:
   store ptr %fn.context, ptr %1, align 4
   %2 = getelementptr inbounds nuw i8, ptr %0, i32 8
   store ptr %fn.funcptr, ptr %2, align 4
-  call void @"internal/task.start"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr nonnull %0, i32 65536, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr nonnull %0, i32 131072, ptr undef) #11
   ret void
 }
 
@@ -176,7 +176,7 @@ entry:
   store i32 4, ptr %2, align 4
   %3 = getelementptr inbounds nuw i8, ptr %0, i32 12
   store ptr %itf.typecode, ptr %3, align 4
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr nonnull %0, i32 65536, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr nonnull %0, i32 131072, ptr undef) #11
   ret void
 }
 

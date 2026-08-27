@@ -199,7 +199,7 @@ entry:
   %go.param = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #9
   call void @runtime.trackPointer(ptr nonnull %go.param, ptr nonnull %stackalloc, ptr undef) #9
   call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %go.param, ptr noundef nonnull align 1 dereferenceable(1025) %value, i32 1025, i1 false)
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.readLargeValue$gowrapper" to i32), ptr nonnull %go.param, i32 65536, ptr undef) #9
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.readLargeValue$gowrapper" to i32), ptr nonnull %go.param, i32 131072, ptr undef) #9
   ret void
 }
 
