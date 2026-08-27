@@ -5,7 +5,6 @@ package runtime
 import (
 	"device/arm"
 	"machine"
-
 	"runtime/volatile"
 )
 
@@ -29,8 +28,8 @@ func configureSystemTimer() {
 	arm.SetupSystemTimer(machine.CPUFrequency() / 1000)
 }
 
-func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks * 1000_000)
+func ticksToNanoseconds(value timeUnit) int64 {
+	return int64(value * 1000_000)
 }
 
 func nanosecondsToTicks(ns int64) timeUnit {

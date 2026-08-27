@@ -1,4 +1,4 @@
-//go:build py32f003xx || py32f030xx || py32f040xx
+//go:build py32 && (py32f003xx || py32f030xx || py32f040xx)
 
 package machine
 
@@ -23,7 +23,7 @@ func setupUSART2(uart *UART) {
 }
 
 func handleUSART2Interrupt(interrupt.Interrupt) {
-	usart2RX.Receive(uint8(usart2RX.Bus.DR.Get()))
+	usart2RX.Receive(uint8(readUSARTData(usart2RX.Bus)))
 }
 
 // usart2RX is the UART serviced by handleUSART2Interrupt, set by setupUSART2.

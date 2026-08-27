@@ -4,14 +4,14 @@ package machine
 
 import "runtime/interrupt"
 
-// errUARTWriteTimeout is returned by writeByte when the TX register does not
-// become empty within the retry budget.
 type uartError string
 
 func (e uartError) Error() string { return string(e) }
 
+// errUARTWriteTimeout is returned when the transmit register stays busy.
+const errUARTWriteTimeout uartError = "UART: write timeout"
+
 const (
-	errUARTWriteTimeout uartError = "UART: write timeout"
 	errUARTInvalidTXPin uartError = "UART: invalid TX pin"
 	errUARTInvalidRXPin uartError = "UART: invalid RX pin"
 	errUARTPinsEqual    uartError = "UART: TX and RX pins must differ"
