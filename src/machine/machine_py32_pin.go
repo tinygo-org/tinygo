@@ -137,13 +137,12 @@ const (
 
 const (
 	PinOutput PinMode = iota
-	PinInputFloating
+	PinInput
 	PinInputPulldown
 	PinInputPullup
 	PinInputAnalog
 	PinAlternate
 )
-const PinInput PinMode = PinInputFloating
 
 // These unshifted encodings are shared by the supported PY32 parts. Register
 // masks come from the generated device definitions.
@@ -198,11 +197,11 @@ func (p Pin) Get() bool {
 func (p Pin) Configure(config PinConfig) {
 	p.enableClock()
 	port, pin := p.getPort()
-	pos := (pin % 16) * 2
+	pos := pin * 2
 
 	switch config.Mode {
 
-	case PinInputFloating:
+	case PinInput:
 		port.MODER.ReplaceBits(gpioModeInput, gpioModeMask, pos)
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 	case PinInputPulldown:
@@ -220,6 +219,8 @@ func (p Pin) Configure(config PinConfig) {
 		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
 	case PinAlternate:
 		port.MODER.ReplaceBits(gpioModeAlternate, gpioModeMask, pos)
+		port.PUPDR.ReplaceBits(gpioPullFloating, gpioPullMask, pos)
+		port.OTYPER.ReplaceBits(gpioOutputTypePushPull, gpioOutputTypeMask, pos>>1)
 		setPinOutputSpeed(port, gpioOutputSpeedHigh, pos)
 	}
 }
