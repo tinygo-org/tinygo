@@ -483,9 +483,6 @@ func (c *Config) LinkerFlavor() string {
 // executable. This can include extra C and assembly files.
 func (c *Config) ExtraFiles() []string {
 	files := append([]string(nil), c.Target.ExtraFiles...)
-	if c.Scheduler() == "tasks" && c.GOARCH() == "amd64" && slices.Contains(c.Target.BuildTags, "uefi") {
-		files = append(files, "src/internal/task/task_stack_amd64_windows.S")
-	}
 	return files
 }
 

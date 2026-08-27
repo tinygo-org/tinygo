@@ -35,7 +35,8 @@
   "extra-files": [
     "src/device/amd64/cpu_amd64.S",
     "src/device/uefi/asm_amd64.S",
-    "src/runtime/asm_amd64_windows.S"
+    "src/runtime/asm_amd64_windows.S",
+    "src/internal/task/task_stack_amd64_windows.S"
   ],
   "gdb": ["gdb-multiarch", "gdb"]
 }

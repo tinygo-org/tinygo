@@ -19,6 +19,11 @@ func Current() *Task {
 	return &mainTask
 }
 
+//export tinygo_task_exit
+func taskExit() {
+	runtimePanic("scheduler is disabled")
+}
+
 //go:noinline
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// The compiler will error if this is reachable.
