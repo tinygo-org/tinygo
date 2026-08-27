@@ -7,8 +7,7 @@
         "py32_gpio_ospdder",
         "py32_gpio_clock_ahb2",
         "py32_no_hsi_fs",
-        "py32_usart_split_data",
-        "py32_uart_clock_apb2"
+        "py32_usart_split_data"
     ],
     "extra-files": [
         "src/device/py32/py32e407xx.s"

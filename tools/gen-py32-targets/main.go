@@ -60,8 +60,6 @@ var noHSIFS = familySet("py32e407xx", "py32f403xx", "py32f410xx")
 var uartType = familySet("py32t020xx")
 var usartSplitData = familySet("py32e407xx")
 var usartUnnumbered = familySet("py32f410xx")
-var usart1ClockLiteral = familySet("py32f001cxx", "py32f001xx")
-var uartClockAPB2 = familySet("py32e407xx", "py32f403xx", "py32f410xx")
 var uartNoInterrupt = familySet("py32f410xx")
 
 func familySet(names ...string) map[string]bool {
@@ -89,8 +87,6 @@ func familyBuildTags(family string) []string {
 		{"py32_uart_type", uartType},
 		{"py32_usart_split_data", usartSplitData},
 		{"py32_usart_unnumbered", usartUnnumbered},
-		{"py32_usart1_clock_literal", usart1ClockLiteral},
-		{"py32_uart_clock_apb2", uartClockAPB2},
 		{"py32_uart_no_interrupt", uartNoInterrupt},
 	}
 	for _, feature := range features {
