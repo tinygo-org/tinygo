@@ -632,6 +632,9 @@ smoketest-quick: testchdir | build/smoke
 	# x86-64 with PE/COFF output
 	$(TINYGO) build -size short -o $(SMOKE_OUT).efi -target=uefi-amd64          examples/test
 	@$(MD5SUM) $(SMOKE_OUT).efi
+	# aarch64
+	$(TINYGO) build             -o $(SMOKE_OUT).nro -target=nintendoswitch      examples/echo2
+	@$(MD5SUM) $(SMOKE_OUT).nro
 	# cross compilation with cgo
 	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o $(SMOKE_OUT).elf       ./testdata/cgo
 ifneq ($(STM32), 0)
