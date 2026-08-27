@@ -482,8 +482,7 @@ func (c *Config) LinkerFlavor() string {
 // ExtraFiles returns the list of extra files to be built and linked with the
 // executable. This can include extra C and assembly files.
 func (c *Config) ExtraFiles() []string {
-	files := append([]string(nil), c.Target.ExtraFiles...)
-	return files
+	return c.Target.ExtraFiles
 }
 
 // DumpSSA returns whether to dump Go SSA while compiling (-dumpssa flag). Only
