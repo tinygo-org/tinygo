@@ -27,7 +27,7 @@ func (uart *UART) Configure(config UARTConfig) error {
 	}
 
 	py32.RCC.APBENR1.SetBits(py32.RCC_APBENR1_UART1EN)
-	uart.Bus.CR1.Set(py32.UART_CR1_M_Msk)
+	uart.Bus.CR1.Set(py32.UART_CR1_M_Char8Bits)
 	uart.Bus.CR2.Set(py32.UART_CR2_RXNEIE)
 	uart.Bus.CR3.Set(0)
 	divider := (CPUFrequency() + config.BaudRate*8) / (config.BaudRate * 16)
