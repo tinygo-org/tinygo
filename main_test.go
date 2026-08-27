@@ -81,6 +81,7 @@ func TestBuild(t *testing.T) {
 		"print.go",
 		"reflect.go",
 		"signal.go",
+		"signalnotify.go",
 		"slice.go",
 		"sort.go",
 		"stdlib.go",
@@ -440,7 +441,14 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 			}
 		}
-		if isWebAssembly || isBaremetal || options.GOOS == "windows" {
+		if options.GOOS == "windows" {
+			switch name {
+			case "signal.go", "signalnotify.go":
+				// os/signal does not link on Windows.
+				continue
+			}
+		}
+		if isWebAssembly || isBaremetal {
 			switch name {
 			case "signal.go":
 				// Signals only work on POSIX-like systems.
