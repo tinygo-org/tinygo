@@ -490,6 +490,14 @@
 			this._idPool = [];      // unused ids that have been garbage collected
 			this.exited = false;    // whether the Go program has exited
 			this.exitCode = 0;
+			// syscall/js.handleEvent reads _pendingEvent and returns early only when
+			// it IsNull(). Leaving it `undefined` is not null, so handleEvent falls
+			// through to cb.Get("id") and panics with "call of Value.Get on
+			// undefined", which surfaces as RuntimeError: unreachable. Upstream Go's
+			// wasm_exec.js initializes this in its constructor; this line restores
+			// parity. Any resume() that runs without a pending event -- and resume()
+			// always spawns a handleEvent goroutine -- depends on it.
+			this._pendingEvent = null; // event awaiting dispatch by syscall/js.handleEvent
 
 			if (this._inst.exports._start) {
 				let exitPromise = new Promise((resolve, reject) => {
