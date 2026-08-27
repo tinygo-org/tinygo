@@ -1,9 +1,9 @@
-//go:build py32 && !py32_hsi_fs_op && !py32_hsi_fs_literal3 && !py32_hsi_fs_literal4 && !py32_no_hsi_fs
+//go:build py32 && !py32_hsi_fs_op && !py32_hsi_fs_literal4 && !py32_no_hsi_fs
 
 package runtime
 
 import "device/py32"
 
 func configureHSI() {
-	py32.RCC.SetICSCR_HSI_FS(py32.RCC_ICSCR_HSI_FS_2)
+	py32.RCC.SetICSCR_HSI_FS(py32.RCC_ICSCR_HSI_FS_Freq24MHz)
 }

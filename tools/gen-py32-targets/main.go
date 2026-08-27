@@ -54,8 +54,7 @@ var gpioOSPDDER = familySet("py32e407xx", "py32f410xx", "py32l090xx", "py32t090x
 var gpioClockAHB2 = familySet("py32e407xx", "py32f403xx")
 var gpioClockAHB = familySet("py32f410xx")
 var hsiFSOP = familySet("py32l090xx", "py32t090xx", "py32t092xx")
-var hsiFSLiteral3 = familySet("py32f032xx")
-var hsiFSLiteral4 = familySet("py32f001cxx", "py32f001xx", "py32f002cxx")
+var hsiFSLiteral4 = familySet("py32f001cxx", "py32f002cxx")
 var noHSIFS = familySet("py32e407xx", "py32f403xx", "py32f410xx")
 var uartType = familySet("py32t020xx")
 var usartSplitData = familySet("py32e407xx")
@@ -82,7 +81,6 @@ func familyBuildTags(family string) []string {
 		{"py32_gpio_clock_ahb2", gpioClockAHB2},
 		{"py32_gpio_clock_ahb", gpioClockAHB},
 		{"py32_hsi_fs_op", hsiFSOP},
-		{"py32_hsi_fs_literal3", hsiFSLiteral3},
 		{"py32_hsi_fs_literal4", hsiFSLiteral4},
 		{"py32_no_hsi_fs", noHSIFS},
 		{"py32_uart_type", uartType},

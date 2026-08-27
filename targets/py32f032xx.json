@@ -3,8 +3,7 @@
         "py32"
     ],
     "build-tags": [
-        "py32f032xx",
-        "py32_hsi_fs_literal3"
+        "py32f032xx"
     ],
     "extra-files": [
         "src/device/py32/py32f032xx.s"
