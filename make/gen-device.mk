@@ -60,7 +60,7 @@ gen-device-renesas: build/gen-device-svd
 	GO111MODULE=off $(GO) fmt ./src/device/renesas
 
 gen-device-py32: build/gen-device-svd
-	./build/gen-device-svd -source=https://github.com/burgrp/py32-svd lib/py32-svd/svd src/device/py32/
+	./build/gen-device-svd -source=https://github.com/tinygo-org/py32-svd lib/py32-svd/svd src/device/py32/
 	GO111MODULE=off $(GO) fmt ./src/device/py32
 
 gen-target-py32: ## Generate PY32 target and linker definitions

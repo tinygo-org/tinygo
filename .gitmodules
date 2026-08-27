@@ -43,4 +43,4 @@
 	url = https://github.com/ivmai/bdwgc.git
 [submodule "lib/py32-svd"]
 	path = lib/py32-svd
-	url = https://github.com/burgrp/py32-svd.git
+	url = https://github.com/tinygo-org/py32-svd.git
