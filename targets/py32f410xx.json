@@ -8,6 +8,7 @@
         "py32_gpio_clock_ahb",
         "py32_no_hsi_fs",
         "py32_usart_unnumbered",
+        "py32_uart_clock_apb2",
         "py32_uart_no_interrupt"
     ],
     "extra-files": [

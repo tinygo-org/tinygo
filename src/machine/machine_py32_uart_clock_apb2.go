@@ -1,4 +1,4 @@
-//go:build py32 && !py32_uart_type && py32_no_hsi_fs
+//go:build py32 && !py32_uart_type && py32_uart_clock_apb2
 
 package machine
 
