@@ -124,11 +124,17 @@ func (i2c *I2C) initFrequency() {
 	halfCycle := sclkFreq / i2c.config.Frequency / 2
 	//SCL
 	sclLow := halfCycle
-	sclWaitHigh := uint32(0)
-	if i2c.config.Frequency > 50000 {
-		sclWaitHigh = halfCycle / 8 // compensate the time when freq > 50K
-	}
-	sclHigh := halfCycle - sclWaitHigh
+	// SCL_HIGH_PERIOD must be reduced to compensate for the SCL noise
+	// filter's propagation delay, per the TRM (see i2c_ll_master_set_bus_timing
+	// in components/esp_hal_i2c/esp32/include/hal/i2c_ll.h:110-127): with the
+	// filter enabled (initNoiseFilter sets SCL_FILTER_CFG=0xF, i.e. thres=7,
+	// en=1 — bit layout in components/soc/esp32/register/soc/i2c_struct.h:230-236),
+	// the correct compensation for thres in [3,7] is thres+6 = 13, a fixed
+	// amount independent of the bus frequency (not halfCycle/8, and not only
+	// applied above 50kHz — ESP-IDF applies it unconditionally whenever the
+	// filter is enabled).
+	const sclHighFilterCompensation = 13
+	sclHigh := halfCycle - sclHighFilterCompensation
 	// SDA
 	sdaHold := halfCycle / 4
 	sda_sample := halfCycle / 2

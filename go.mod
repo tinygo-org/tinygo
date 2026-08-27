@@ -26,6 +26,8 @@ require (
 	tinygo.org/x/go-llvm v0.0.0-20260721072906-185673ef46a5
 )
 
+replace tinygo.org/x/espflasher => github.com/flrossetto/espflasher v0.0.0-20260827223712-de27f3043f8f
+
 require (
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/chavacava/garif v0.1.0 // indirect

@@ -539,7 +539,27 @@ func (uart *UART) Configure(config UARTConfig) error {
 		}
 	}
 
-	uart.Bus.CLKDIV.Set(peripheralClock / config.BaudRate)
+	// Select APB (80MHz) as the UART source clock. ESP-IDF always writes
+	// this explicitly (uart_ll_set_sclk, UART_SCLK_DEFAULT = APB,
+	// components/soc/esp32/include/soc/clk_tree_defs.h:238-240) rather than
+	// relying on the register's power-on-reset state — CONF0.TICK_REF_ALWAYS_ON
+	// selects APB when 1, REF_TICK (~1MHz) when 0 (components/esp_hal_uart/
+	// esp32/include/hal/uart_ll.h:179-189). Without this, UART0 happens to
+	// work because the ROM bootloader already leaves it in APB mode for its
+	// own console output, but UART1/UART2 (never touched by ROM) have no such
+	// guarantee, and the CLKDIV math below assumes an 80MHz source either way.
+	uart.Bus.SetCONF0_TICK_REF_ALWAYS_ON(1)
+
+	// UART_CLKDIV_REG packs a 20-bit integer divider (bits 19:0) and a 4-bit
+	// fractional divider (bits 23:20) — see components/soc/esp32/register/
+	// soc/uart_struct.h:123-129. Writing a plain integer division result
+	// (as before) zeroes the fractional part, which is usually a negligible
+	// rounding error at low baud rates but can be a significant fraction of
+	// the divider at high baud rates (small divider values). Compute both
+	// parts the way ESP-IDF's uart_ll_set_baudrate does (components/
+	// esp_hal_uart/esp32/include/hal/uart_ll.h:265-278): clk_div = (sclk<<4)/baud.
+	clkDiv := (uint32(peripheralClock) << 4) / config.BaudRate
+	uart.Bus.CLKDIV.Set((clkDiv >> 4) | ((clkDiv & 0xf) << 20))
 
 	if config.RX != NoPin {
 		config.RX.configure(PinConfig{Mode: PinInputPullup}, uart.txrxSignal)

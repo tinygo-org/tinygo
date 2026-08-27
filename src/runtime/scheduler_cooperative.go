@@ -326,10 +326,24 @@ func unlockAtomics(mask interrupt.State) {
 	interrupt.Restore(mask)
 }
 
+// printLocked serializes concurrent goroutines' print output. Without it,
+// two goroutines calling println at the same time on this cooperative
+// scheduler can interleave their output mid-line, since a print call can
+// yield (e.g. while waiting on a UART FIFO) before it finishes writing.
+var printLocked bool
+
+const printlockMaxWait = 10000
+
 func printlock() {
-	// nothing to do
+	for i := 0; printLocked; i++ {
+		if i >= printlockMaxWait {
+			break
+		}
+		Gosched()
+	}
+	printLocked = true
 }
 
 func printunlock() {
-	// nothing to do
+	printLocked = false
 }

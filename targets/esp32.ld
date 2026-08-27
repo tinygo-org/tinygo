@@ -37,7 +37,14 @@ MEMORY
     IRAM  (x)  : ORIGIN = 0x40080000, LENGTH = 128K /* SRAM0 (usable portion) */
 
     DROM (r)  : ORIGIN = 0x3F400000, LENGTH = 4M /* Flash data bus (page-aligned) */
-    IROM (rx) : ORIGIN = 0x400D0000, LENGTH = 4M /* Flash instruction bus (page-aligned) */
+
+    /* IROM's real hardware ceiling is SOC_IROM_HIGH = 0x40400000
+     * (components/soc/esp32/include/soc/soc.h:166-167 in esp-idf), only
+     * 0x330000 (3.1875M) above SOC_IROM_LOW = 0x400D0000 — NOT 4M. A prior
+     * 4M declaration here silently accepted a .text large enough to map
+     * past the real flash-cache-mappable range into invalid address space;
+     * ld would not catch it until (or unless) an app grew that large. */
+    IROM (rx) : ORIGIN = 0x400D0000, LENGTH = 0x330000 /* Flash instruction bus (page-aligned) */
 }
 
 ENTRY(call_start_cpu0)
@@ -174,6 +181,7 @@ SECTIONS
         *(.wifiorslpiram*)
         *(.iram1*)
         *(.coexiram*)
+        *(.coexsleepiram*)
 
         . = ALIGN(4);
         _iram_end = .;
