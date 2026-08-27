@@ -3,5 +3,5 @@
 package runtime
 
 func waitForEvents() {
-	runtimePanic("deadlocked: no event source")
+	runtimeFatal("deadlocked: no event source")
 }

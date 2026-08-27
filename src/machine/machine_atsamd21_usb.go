@@ -51,7 +51,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	sam.USB_DEVICE.CTRLB.SetBits(sam.USB_DEVICE_CTRLB_SPDCONF_FS << sam.USB_DEVICE_CTRLB_SPDCONF_Pos)
 
 	// attach
-	sam.USB_DEVICE.CTRLB.ClearBits(sam.USB_DEVICE_CTRLB_DETACH)
+	dev.Attach()
 
 	// enable interrupt for end of reset
 	sam.USB_DEVICE.INTENSET.SetBits(sam.USB_DEVICE_INTENSET_EORST)
@@ -66,6 +66,20 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	interrupt.New(sam.IRQ_USB, handleUSBIRQ).Enable()
 
 	dev.initcomplete = true
+}
+
+// Attach connects the device to the USB bus, allowing the host to detect and
+// enumerate it. It can be used together with Detach to delay enumeration
+// until the USB configuration (device identifiers, classes, ...) is complete.
+func (dev *USBDevice) Attach() {
+	sam.USB_DEVICE.CTRLB.ClearBits(sam.USB_DEVICE_CTRLB_DETACH)
+}
+
+// Detach disconnects the device from the USB bus. To the host this appears
+// as if the device was unplugged. A subsequent Attach makes the host
+// enumerate the device again.
+func (dev *USBDevice) Detach() {
+	sam.USB_DEVICE.CTRLB.SetBits(sam.USB_DEVICE_CTRLB_DETACH)
 }
 
 func handlePadCalibration() {

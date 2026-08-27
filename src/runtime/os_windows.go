@@ -29,7 +29,7 @@ func findGlobals(found func(start, end uintptr)) {
 		// it using GetModuleHandle to account for ASLR etc.
 		result := _GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, nil, &module)
 		if gcAsserts && (!result || module.signature != 0x5A4D) { // 0x4D5A is "MZ"
-			runtimePanic("cannot get module handle")
+			runtimeFatal("cannot get module handle")
 		}
 	}
 

@@ -23,7 +23,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.0-rc.2'
+          go-version: '1.27.0'
           cache: true
       - name: Run go mod tidy
         run: go mod tidy
@@ -36,7 +36,7 @@ jobs:
     # statically linked binary.
     runs-on: ubuntu-latest
     container:
-      image: golang:1.27rc2-alpine
+      image: golang:1.27-alpine
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -160,7 +160,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.0-rc.2'
+          go-version: '1.27.0'
           cache: true
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
@@ -196,6 +196,10 @@ jobs:
           cat /proc/cpuinfo
           sudo apt-get update
           sudo apt-get install --no-install-recommends \
+              libgcrypt20 \
+              libpixman-1-0 \
+              libsdl2-2.0-0 \
+              libslirp0 \
               qemu-system-arm \
               qemu-system-riscv32 \
               qemu-user \
@@ -204,7 +208,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.0-rc.2'
+          go-version: '1.27.0'
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v6
@@ -216,6 +220,14 @@ jobs:
           version: "29.0.1"
       - name: Setup `wasm-tools`
         uses: bytecodealliance/actions/wasm-tools/setup@v1
+      - name: Install Espressif QEMU
+        run: |
+          release=esp-develop-9.2.2-20260417
+          archive=qemu-xtensa-softmmu-${release//-/_}-x86_64-linux-gnu.tar.xz
+          curl -fL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/espressif/qemu/releases/download/$release/$archive"
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/qemu/bin" >> "$GITHUB_PATH"
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5
         id: cache-llvm-source
@@ -323,7 +335,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.0-rc.2'
+          go-version: '1.27.0'
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5

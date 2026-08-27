@@ -94,7 +94,7 @@ func nanotime() int64 {
 //
 //go:linkname os_sigpipe os.sigpipe
 func os_sigpipe() {
-	runtimePanic("too many writes on closed pipe")
+	runtimeFatal("too many writes on closed pipe")
 }
 
 // LockOSThread wires the calling goroutine to its current operating system thread.

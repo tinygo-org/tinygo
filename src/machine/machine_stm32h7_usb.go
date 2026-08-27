@@ -206,7 +206,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 
 	// Stay soft-disconnected until configuration is complete; CSRST left
 	// DCTL at its default "connected" state.
-	usbOTG.DCTL.SetBits(DCTL_SDIS)
+	dev.Detach()
 
 	// 5. Force device mode now that the core is out of reset. The mode
 	// change takes effect only after up to 25 ms (RM0433); poll GINTSTS.CMOD
@@ -265,7 +265,22 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	dev.initcomplete = true
 
 	// Release soft-disconnect: pulls D+ high, making device visible to host.
+	dev.Attach()
+}
+
+// Attach connects the device to the USB bus by releasing soft disconnect,
+// allowing the host to detect and enumerate it. It can be used together with
+// Detach to delay enumeration until the USB configuration (device
+// identifiers, classes, ...) is complete.
+func (dev *USBDevice) Attach() {
 	usbOTG.DCTL.ClearBits(DCTL_SDIS)
+}
+
+// Detach disconnects the device from the USB bus by asserting soft
+// disconnect. To the host this appears as if the device was unplugged. A
+// subsequent Attach makes the host enumerate the device again.
+func (dev *USBDevice) Detach() {
+	usbOTG.DCTL.SetBits(DCTL_SDIS)
 }
 
 func initEndpoint(ep, config uint32) {

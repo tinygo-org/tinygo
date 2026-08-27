@@ -20,7 +20,7 @@ func (m *Mutex) Lock() {
 
 func (m *Mutex) Unlock() {
 	if !m.locked {
-		panic("sync: unlock of unlocked Mutex")
+		runtimeFatal("sync: unlock of unlocked Mutex")
 	}
 
 	// Wake up a blocked task, if applicable.

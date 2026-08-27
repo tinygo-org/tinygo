@@ -47,13 +47,19 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	gcTotalAlloc += uint64(size)
 	gcMallocs++
 	heapptr += size
-	for heapptr >= heapEnd {
+	if heapptr < addr {
+		// The allocation size overflowed the heap pointer.
+		runtimePanic("out of memory")
+	}
+	for heapptr > heapEnd {
 		// Try to increase the heap and check again.
+		// Use > instead of >= because an allocation that exactly
+		// ends at heapEnd is still within heap boundaries.
 		if growHeap() {
 			continue
 		}
 		// Failed to make the heap bigger, so we must really be out of memory.
-		runtimePanic("out of memory")
+		runtimeFatal("out of memory")
 	}
 	gcLock.Unlock()
 
@@ -79,7 +85,7 @@ func free(ptr unsafe.Pointer) {
 }
 
 func markRoots(start, end uintptr) {
-	runtimePanic("unreachable: markRoots")
+	runtimeFatal("unreachable: markRoots")
 }
 
 // ReadMemStats populates m with memory statistics.
@@ -103,6 +109,7 @@ func ReadMemStats(m *MemStats) {
 	m.HeapAlloc = gcTotalAlloc
 	m.HeapObjects = gcMallocs
 	m.Alloc = m.HeapAlloc
+	m.NumGC = 0 // this GC never collects, so no cycle ever completes
 
 	gcLock.Unlock()
 }

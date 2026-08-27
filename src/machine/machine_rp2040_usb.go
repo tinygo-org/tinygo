@@ -43,7 +43,22 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 		rp.USBCTRL_REGS_INTE_SETUP_REQ)
 
 	// Present full speed device by enabling pull up on DP
+	dev.Attach()
+}
+
+// Attach connects the device to the USB bus by enabling the DP pull-up,
+// allowing the host to detect and enumerate it. It can be used together with
+// Detach to delay enumeration until the USB configuration (device
+// identifiers, classes, ...) is complete.
+func (dev *USBDevice) Attach() {
 	rp.USBCTRL_REGS.SIE_CTRL.SetBits(rp.USBCTRL_REGS_SIE_CTRL_PULLUP_EN)
+}
+
+// Detach disconnects the device from the USB bus by disabling the DP pull-up.
+// To the host this appears as if the device was unplugged. A subsequent
+// Attach makes the host enumerate the device again.
+func (dev *USBDevice) Detach() {
+	rp.USBCTRL_REGS.SIE_CTRL.ClearBits(rp.USBCTRL_REGS_SIE_CTRL_PULLUP_EN)
 }
 
 func handleUSBIRQ(intr interrupt.Interrupt) {

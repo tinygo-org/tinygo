@@ -1,8 +1,10 @@
-//go:build (gc.conservative || gc.precise) && !scheduler.none
+//go:build (gc.conservative || gc.precise) && (scheduler.tasks || scheduler.asyncify)
 
 package runtime
 
-// The go statement lives in this scheduler-gated file, not inline in
-// registerFinalizer, so scheduler.none builds never reference internal/task.start
-// and the runner is DCE'd when SetFinalizer is unused.
-func spawnFinalizerRunner() { go finalizerRunner() }
+// Keep this setup in a file for these schedulers so unused finalizer code can be removed.
+// Cooperative schedulers also install the idle GC hook.
+func spawnFinalizerRunner() {
+	finalizerIdleGC = finalizerPressureGC
+	go finalizerRunner()
+}

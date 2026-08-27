@@ -473,15 +473,34 @@ TEST_PACKAGES_NONWASM = \
 #     (just like wasm).
 #   * picolibc math functions apparently are less precise, the math package
 #     fails on baremetal.
+#   * Since Go 1.27 the crypto tests below go through cryptotest.TestHash, which
+#     calls cryptotest.BoundarySlices. These targets report GOOS=linux, so they
+#     build boundary.go (//go:build linux || darwin) rather than
+#     boundary_compat.go, and that needs a working syscall.Mmap/syscall.Mprotect
+#     which we don't have. See #5593.
 TEST_PACKAGES_BAREMETAL = $(filter-out $(TEST_PACKAGES_NONBAREMETAL), $(TEST_PACKAGES_FAST))
 TEST_PACKAGES_NONBAREMETAL = \
 	$(TEST_PACKAGES_NONWASM) \
+	$(TEST_PACKAGES_NOBOUNDARYSLICES) \
 	math \
 	$(nil)
 
 TEST_PACKAGES_FAST_WASI = $(filter-out $(TEST_PACKAGES_NOWASI), $(TEST_PACKAGES_FAST))
 TEST_PACKAGES_NOWASI = \
 	crypto/ecdsa \
+	$(nil)
+
+# wasip1 reports GOOS=wasip1 and so gets the boundary_compat.go fallback, but
+# wasip2 reports GOOS=linux and hits the same BoundarySlices problem as
+# baremetal. On wasip2 syscall.Mmap returns ENOSYS and t.Fatalf cannot Goexit,
+# so the test falls through and panics with "slice out of range".
+TEST_PACKAGES_FAST_WASIP2 = $(filter-out $(TEST_PACKAGES_NOBOUNDARYSLICES), $(TEST_PACKAGES_FAST_WASI))
+
+TEST_PACKAGES_NOBOUNDARYSLICES = \
+	crypto/md5 \
+	crypto/sha1 \
+	crypto/sha256 \
+	crypto/sha512 \
 	$(nil)
 
 # Report platforms on which each standard library package is known to pass tests
@@ -510,7 +529,7 @@ TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
 TEST_IOFS := false
 endif
 
-TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic|TestAsValidation'
+TEST_SKIP_FLAG := -skip='TestExtraMethods|TestParseAndBytesRoundTrip/P256/Generic|TestAsValidation|TestUnmarshalNestingLimitSlice|TestUnmarshalNestingLimitStruct'
 TEST_ADDITIONAL_FLAGS ?=
 
 # Test known-working standard library packages.
@@ -519,6 +538,8 @@ TEST_ADDITIONAL_FLAGS ?=
 tinygo-test:
 	@# TestExtraMethods: used by many crypto packages and uses reflect.Type.Method which is not implemented.
 	@# TestParseAndBytesRoundTrip/P256/Generic: needs Goexit to run defers on wasm.
+	@# TestUnmarshalNestingLimit{Slice,Struct}: encoding/asn1 nesting limit added in
+	@# https://github.com/golang/go/commit/6a6d115f9a7422b2fa081ba6f567eefb4a099462
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml,$(TEST_PACKAGES_HOST)) $(TEST_PACKAGES_SLOW)
 ifeq ($(TEST_ENCODING_XML),true)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) -stack-size=16MB encoding/xml
@@ -549,7 +570,7 @@ tinygo-test-wasip1-fast:
 tinygo-test-wasip2-slow:
 	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_SLOW)
 tinygo-test-wasip2-fast:
-	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST_WASI) ./tests/runtime_wasi
+	$(TINYGO) test -target=wasip2 $(TEST_SKIP_FLAG) $(TEST_PACKAGES_FAST_WASIP2) ./tests/runtime_wasi
 
 tinygo-test-wasip2-sum-slow:
 	TINYGO=$(TINYGO) \
@@ -967,6 +988,8 @@ endif
 	@$(MD5SUM) test.hex
 ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o test.bin -target=esp32-generic       examples/machinetest
+	@$(MD5SUM) test.bin
+	$(TINYGO) build -size short -o test.bin -target=esp32-coreboard-v2  examples/adc
 	@$(MD5SUM) test.bin
 	$(TINYGO) build -size short -o test.bin -target=esp32c3-generic     examples/machinetest
 	@$(MD5SUM) test.bin

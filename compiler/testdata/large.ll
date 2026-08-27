@@ -15,7 +15,7 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:basic:string" = linkonce_odr constant { i8, ptr } { i8 81, ptr @"reflect/types.type:pointer:basic:string" }, align 4
 @"reflect/types.type:pointer:basic:string" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:string" }, align 4
 
-declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -31,7 +31,7 @@ entry:
 }
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i32, i1 immarg) #2
 
 ; Function Attrs: nounwind
 define hidden i8 @"(main.largeReceiver).readLargeValue"(ptr readonly dereferenceable_or_null(1025) %receiver, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
@@ -203,13 +203,13 @@ entry:
   ret void
 }
 
-declare void @runtime.deadlock(ptr) #0
+declare void @runtime.exitGoroutine(ptr) #0
 
 ; Function Attrs: nounwind
 define linkonce_odr void @"main.readLargeValue$gowrapper"(ptr %0) unnamed_addr #6 {
 entry:
   %1 = call i8 @main.readLargeValue(ptr %0, ptr undef)
-  call void @runtime.deadlock(ptr undef) #9
+  call void @runtime.exitGoroutine(ptr undef) #9
   unreachable
 }
 
@@ -344,7 +344,7 @@ if.then:                                          ; preds = %typeassert.next
 declare i1 @runtime.typeAssert(ptr, ptr dereferenceable_or_null(1), ptr) #0
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
-declare void @llvm.memset.p0.i32(ptr writeonly captures(none), i8, i32, i1 immarg) #7
+declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #7
 
 ; Function Attrs: nounwind
 define hidden i8 @main.useLargeMap(ptr readonly dereferenceable_or_null(1025) %key, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
@@ -423,12 +423,12 @@ if.then:                                          ; preds = %entry
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.start.p0(ptr captures(none)) #8
+declare void @llvm.lifetime.start.p0(ptr nocapture) #8
 
 declare void @runtime.chanSend(ptr dereferenceable_or_null(36), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.end.p0(ptr captures(none)) #8
+declare void @llvm.lifetime.end.p0(ptr nocapture) #8
 
 declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(36), ptr, ptr dereferenceable_or_null(16), ptr) #0
 

@@ -1,5 +1,8 @@
 //go:build tinygo
 
+// See Xtensa ISA Reference Manual for details.
+// https://www.cadence.com/content/dam/cadence-www/global/en_US/documents/tools/silicon-solutions/compute-ip/isa-summary.pdf
+
 .section .text.tinygo_startTask,"ax",@progbits
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
@@ -68,14 +71,12 @@ tinygo_swapTask:
 
     // After the recursive spill returns, the physical register file still
     // has WindowStart bits set for the spill helper frames.
-    // We will clear WindowStart completely (to 0) right before the retw.n
-    // below, after the stack switch is done.  This prevents stale overflow
-    // when the new goroutine's calls rotate back into these panes.
+    // These are dropped below, once the stack switch is done.
 
-    // Restore interrupts.
-    l32i a4, sp, 4          // reload saved PS
-    wsr.ps a4
-    rsync
+    // Mask interrupts until WindowStart matches the new stack, or one lands in
+    // the gap and clobbers the a0-a3 that retw.n reloads.
+    // Xtensa ISA Reference Manual, RETW, section 8.3.253, p.565.
+    l32i a4, sp, 4          // reload saved PS, restored below
 
     // At this point, the following is true:
     //     WindowStart == 1 << WindowBase
@@ -97,14 +98,18 @@ tinygo_swapTask:
     // register also stores the parent register window.
     l32i.n a0, sp, 0
 
-    // Clear ALL WindowStart bits.  With all windows spilled to the stack,
-    // we must ensure no stale WS bits remain: the retw.n below will trigger
-    // underflow4 to load the new goroutine's registers from the new stack
-    // (which sets the appropriate WS bit via rfwu).  Any stale WS bits
-    // (from spill helpers or the old goroutine) would cause spurious
-    // overflows of garbage register values into memory.
-    movi a5, 0
+    // Drop every WindowStart bit but this window's: stale bits overflow garbage,
+    // and an all-zero WindowStart marks the running frame dead.
+    // Xtensa ISA Reference Manual, WINDOWSTART (SR 73), Table 5-148.
+    rsr  a6, WINDOWBASE
+    movi a5, 1
+    ssl  a6
+    sll  a5, a5             // a5 = 1 << WindowBase
     wsr  a5, WINDOWSTART
+    rsync
+
+    // Window state now matches the new stack, so unmask interrupts.
+    wsr.ps a4
     rsync
 
     // Return into the new stack. This instruction will trigger a window

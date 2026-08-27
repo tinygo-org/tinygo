@@ -994,6 +994,86 @@ func TestTypeAssertPanic(t *testing.T) {
 	})
 }
 
+func TestTinyMakeChan(t *testing.T) {
+	// Value.Send and Value.Recv are not implemented yet, so the channel is
+	// exercised through Interface(): that proves MakeChan returns a working
+	// channel rather than merely a value of the right kind.
+	t.Run("buffered", func(t *testing.T) {
+		v := MakeChan(TypeOf(make(chan int)), 2)
+		if got, want := v.Kind(), Chan; got != want {
+			t.Errorf("Kind()=%v, want %v", got, want)
+		}
+		if got, want := v.Cap(), 2; got != want {
+			t.Errorf("Cap()=%v, want %v", got, want)
+		}
+		if got, want := v.Len(), 0; got != want {
+			t.Errorf("Len()=%v, want %v", got, want)
+		}
+
+		ch, ok := v.Interface().(chan int)
+		if !ok {
+			t.Fatalf("Interface() is %T, want chan int", v.Interface())
+		}
+		ch <- 1
+		ch <- 2
+		if got, want := v.Len(), 2; got != want {
+			t.Errorf("Len()=%v after two sends, want %v", got, want)
+		}
+		if got, want := <-ch, 1; got != want {
+			t.Errorf("<-ch=%v, want %v", got, want)
+		}
+		if got, want := <-ch, 2; got != want {
+			t.Errorf("<-ch=%v, want %v", got, want)
+		}
+	})
+
+	t.Run("unbuffered", func(t *testing.T) {
+		v := MakeChan(TypeOf(make(chan string)), 0)
+		if got, want := v.Cap(), 0; got != want {
+			t.Errorf("Cap()=%v, want %v", got, want)
+		}
+		ch, ok := v.Interface().(chan string)
+		if !ok {
+			t.Fatalf("Interface() is %T, want chan string", v.Interface())
+		}
+		go func() { ch <- "hello" }()
+		if got, want := <-ch, "hello"; got != want {
+			t.Errorf("<-ch=%q, want %q", got, want)
+		}
+	})
+
+	// The three cases below rely on recovering from a panic, which wasm
+	// cannot do yet without exceptions. Log and return rather than Skip:
+	// t.Skip needs the same machinery it is standing in for.
+	//
+	// Checked on GOARCH rather than GOOS because the limitation is wasm's, not
+	// any one platform's: this covers wasip1, wasip2 and js/wasm alike.
+	// TODO: drop this once tinygo-org/tinygo#5550 lands.
+	if runtime.GOARCH == "wasm" {
+		t.Log("not running the panic cases: panic/recover on wasm needs #5550")
+		return
+	}
+
+	t.Run("not a channel", func(t *testing.T) {
+		defer func() { recover() }()
+		MakeChan(TypeOf(0), 0)
+		t.Fatalf("MakeChan did not panic on a non-channel type")
+	})
+
+	t.Run("negative buffer", func(t *testing.T) {
+		defer func() { recover() }()
+		MakeChan(TypeOf(make(chan int)), -1)
+		t.Fatalf("MakeChan did not panic on a negative buffer size")
+	})
+
+	t.Run("directional", func(t *testing.T) {
+		defer func() { recover() }()
+		var recvOnly <-chan int
+		MakeChan(TypeOf(recvOnly), 0)
+		t.Fatalf("MakeChan did not panic on a unidirectional channel type")
+	})
+}
+
 // Functions needed by all_test.go
 
 func IsRO(v Value) bool {

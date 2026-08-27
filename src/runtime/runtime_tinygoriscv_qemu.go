@@ -117,7 +117,7 @@ func handleInterrupt() {
 				sleepCheckpoint.Jump()
 			}
 		default:
-			runtimePanic("unknown interrupt")
+			runtimeFatal("unknown interrupt")
 			abort()
 		}
 	} else {
@@ -200,7 +200,7 @@ func coreStackTop(core uint32) uintptr {
 	case 3:
 		return uintptr(unsafe.Pointer(&stack3TopSymbol))
 	default:
-		runtimePanic("unexpected core")
+		runtimeFatal("unexpected core")
 		return 0
 	}
 }
@@ -367,7 +367,7 @@ func (l *spinLock) Lock() {
 func (l *spinLock) Unlock() {
 	// Safety check: the spinlock should have been locked.
 	if schedulerAsserts && l.Uint32.Load() != 1 {
-		runtimePanic("unlock of unlocked spinlock")
+		runtimeFatal("unlock of unlocked spinlock")
 	}
 
 	// Unlock the lock. Simply write 0, because we already know it is locked.
@@ -417,7 +417,7 @@ func schedulerUnlockAndWait() {
 	// We can do this check since this is not baremetal: there won't be any
 	// external interrupts that might unblock a goroutine.
 	if sleepingHarts == (1<<numCPU)-1 {
-		runtimePanic("all cores are sleeping - deadlock!")
+		runtimeFatal("all cores are sleeping - deadlock!")
 	}
 
 	// Need to disable interrupts while saving the checkpoint, otherwise if the

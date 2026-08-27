@@ -177,8 +177,15 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 				// Pick a default output path based on the main directory.
 				outpath = filepath.Base(result.MainDir) + config.DefaultBinaryExtension()
 			}
+		} else if fi, statErr := os.Stat(outpath); statErr == nil && fi.IsDir() {
+			var name string
+			if strings.HasSuffix(pkgName, ".go") {
+				name = filepath.Base(pkgName[:len(pkgName)-3]) + config.DefaultBinaryExtension()
+			} else {
+				name = filepath.Base(result.MainDir) + config.DefaultBinaryExtension()
+			}
+			outpath = filepath.Join(outpath, name)
 		}
-
 		if err := os.Rename(result.Binary, outpath); err != nil {
 			// Moving failed. Do a file copy.
 			inf, err := os.Open(result.Binary)
@@ -1135,9 +1142,6 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 	opts := espflasher.DefaultOptions()
 	opts.Compress = true
 	opts.Logger = &espflasher.StdoutLogger{W: os.Stdout}
-	if options.BaudRate != 0 {
-		opts.FlashBaudRate = options.BaudRate
-	}
 
 	if resetMode == jtagReset {
 		opts.ResetMode = espflasher.ResetUSBJTAG

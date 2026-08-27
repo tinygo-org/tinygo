@@ -254,7 +254,7 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	otgPower.PCGCCTL.Set(0)
 
 	// Soft-disconnect now (after CSRST reset DCTL to its default connected state).
-	otgDevice.DCTL.SetBits(dctlSDIS)
+	dev.Detach()
 
 	// ---- 7. Configure data FIFOs --------------------------------------------
 
@@ -311,9 +311,24 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 
 	// ---- 12. Connect to host (clear soft-disconnect) -----------------------
 
-	otgDevice.DCTL.ClearBits(dctlSDIS)
+	dev.Attach()
 
 	dev.initcomplete = true
+}
+
+// Attach connects the device to the USB bus by releasing soft disconnect,
+// allowing the host to detect and enumerate it. It can be used together with
+// Detach to delay enumeration until the USB configuration (device
+// identifiers, classes, ...) is complete.
+func (dev *USBDevice) Attach() {
+	otgDevice.DCTL.ClearBits(dctlSDIS)
+}
+
+// Detach disconnects the device from the USB bus by asserting soft
+// disconnect. To the host this appears as if the device was unplugged. A
+// subsequent Attach makes the host enumerate the device again.
+func (dev *USBDevice) Detach() {
+	otgDevice.DCTL.SetBits(dctlSDIS)
 }
 
 // handleUSBIRQ is the OTG FS interrupt handler, dispatching on GINTSTS bits.

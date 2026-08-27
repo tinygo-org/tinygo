@@ -321,6 +321,6 @@ func tinygo_sigpanic_windows(exceptionCode int32) {
 	case _EXCEPTION_INT_OVERFLOW:
 		runtimePanic("integer overflow")
 	default:
-		runtimePanic("unknown exception")
+		runtimeFatal("unknown exception")
 	}
 }

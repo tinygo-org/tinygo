@@ -1782,36 +1782,76 @@ rwip_priority = 0x3ff1ee94;
 veryBigHexP256 = 0x3ff1ee48;
 
 /* bluetooth hook funcs */
-r_llc_loc_encrypt_proc_continue_hook = 0x40001c60;
-r_llc_loc_phy_upd_proc_continue_hook = 0x40001c64;
-r_llc_rem_phy_upd_proc_continue_hook = 0x40001c68;
-r_lld_scan_frm_eof_isr_hook = 0x40001c6c;
-r_lld_scan_evt_start_cbk_hook = 0x40001c70;
-r_lld_scan_process_pkt_rx_ext_adv_hook = 0x40001c78;
-r_lld_scan_sched_hook = 0x40001c7c;
-r_lld_adv_evt_start_cbk_hook = 0x40001c84;
-r_lld_adv_aux_evt_start_cbk_hook = 0x40001c88;
-r_lld_adv_frm_isr_hook = 0x40001c8c;
-r_lld_adv_start_init_evt_param_hook = 0x40001c90;
-r_lld_con_evt_canceled_cbk_hook = 0x40001c94;
-r_lld_con_frm_isr_hook = 0x40001c98;
-r_lld_con_tx_hook = 0x40001c9c;
-r_lld_con_rx_hook = 0x40001ca0;
-r_lld_con_evt_start_cbk_hook = 0x40001ca4;
-r_lld_con_tx_prog_new_packet_hook = 0x40001cac;
-r_lld_init_frm_eof_isr_hook = 0x40001cb0;
-r_lld_init_evt_start_cbk_hook = 0x40001cb4;
-r_lld_init_sched_hook = 0x40001cbc;
-r_lld_init_process_pkt_tx_hook = 0x40001cc0;
-r_lld_per_adv_evt_start_cbk_hook = 0x40001cc4;
-r_lld_per_adv_frm_isr_hook = 0x40001cc8;
-r_lld_per_adv_start_hook = 0x40001ccc;
-r_lld_sync_frm_eof_isr_hook = 0x40001cd0;
-r_lld_sync_evt_start_cbk_hook = 0x40001cd4;
-r_lld_sync_start_hook = 0x40001cd8;
-r_lld_sync_process_pkt_rx_pkt_check_hook = 0x40001cdc;
-r_sch_arb_insert_hook = 0x40001ce0;
-r_sch_plan_offset_req_hook = 0x40001ce4;
+PROVIDE( r_llc_loc_encrypt_proc_continue_hook = 0x40001c60 );
+PROVIDE( r_llc_loc_phy_upd_proc_continue_hook = 0x40001c64 );
+PROVIDE( r_llc_rem_phy_upd_proc_continue_hook = 0x40001c68 );
+PROVIDE( r_lld_scan_frm_eof_isr_hook = 0x40001c6c );
+PROVIDE( r_lld_scan_evt_start_cbk_hook = 0x40001c70 );
+PROVIDE( r_lld_scan_process_pkt_rx_ext_adv_hook = 0x40001c78 );
+PROVIDE( r_lld_scan_sched_hook = 0x40001c7c );
+PROVIDE( r_lld_adv_evt_start_cbk_hook = 0x40001c84 );
+PROVIDE( r_lld_adv_aux_evt_start_cbk_hook = 0x40001c88 );
+PROVIDE( r_lld_adv_frm_isr_hook = 0x40001c8c );
+PROVIDE( r_lld_adv_start_init_evt_param_hook = 0x40001c90 );
+PROVIDE( r_lld_con_evt_canceled_cbk_hook = 0x40001c94 );
+PROVIDE( r_lld_con_frm_isr_hook = 0x40001c98 );
+PROVIDE( r_lld_con_tx_hook = 0x40001c9c );
+PROVIDE( r_lld_con_rx_hook = 0x40001ca0 );
+PROVIDE( r_lld_con_evt_start_cbk_hook = 0x40001ca4 );
+PROVIDE( r_lld_con_tx_prog_new_packet_hook = 0x40001cac );
+PROVIDE( r_lld_init_frm_eof_isr_hook = 0x40001cb0 );
+PROVIDE( r_lld_init_evt_start_cbk_hook = 0x40001cb4 );
+PROVIDE( r_lld_init_sched_hook = 0x40001cbc );
+PROVIDE( r_lld_init_process_pkt_tx_hook = 0x40001cc0 );
+PROVIDE( r_lld_per_adv_evt_start_cbk_hook = 0x40001cc4 );
+PROVIDE( r_lld_per_adv_frm_isr_hook = 0x40001cc8 );
+PROVIDE( r_lld_per_adv_start_hook = 0x40001ccc );
+PROVIDE( r_lld_sync_frm_eof_isr_hook = 0x40001cd0 );
+PROVIDE( r_lld_sync_evt_start_cbk_hook = 0x40001cd4 );
+PROVIDE( r_lld_sync_start_hook = 0x40001cd8 );
+PROVIDE( r_lld_sync_process_pkt_rx_pkt_check_hook = 0x40001cdc );
+PROVIDE( r_sch_arb_insert_hook = 0x40001ce0 );
+PROVIDE( r_sch_plan_offset_req_hook = 0x40001ce4 );
+
+/* Additional BT ROM functions from esp32c3.rom.bt_funcs.ld
+ * (referenced by libbtdm_app.a function pointer tables) */
+r_bt_bb_isr = 0x40000b9c;
+r_btdm_task_post = 0x40000c14;
+r_btdm_task_post_from_isr = 0x40000c18;
+r_btdm_task_recycle = 0x40000c1c;
+r_bt_rf_coex_conn_phy_coded_data_time_limit_en_get = 0x40000ba8;
+r_bt_rtp_get_txpwr_idx_by_act = 0x40000c00;
+r_hci_register_vendor_desc_tab = 0x40000d9c;
+r_ke_task_schedule = 0x40000e80;
+r_llc_hci_command_handler = 0x40000ef0;
+r_llc_loc_con_upd_proc_continue = 0x40000f60;
+r_llc_loc_phy_upd_proc_continue = 0x40000f78;
+r_llc_rem_con_upd_proc_continue = 0x40000fb4;
+r_lld_con_sched = 0x40001118;
+r_lld_con_stop = 0x40001124;
+r_lld_llcp_rx_ind_handler = 0x400011b0;
+r_lld_per_adv_sched = 0x400011f8;
+r_lld_res_list_clear = 0x4000121c;
+r_lld_res_list_rem = 0x40001234;
+r_lld_scan_process_pkt_rx = 0x40001280;
+r_lld_scan_process_pkt_rx_adv_rep = 0x40001284;
+r_llm_le_features_get = 0x400013b0;
+r_register_esp_vendor_cmd_handler = 0x40001400;
+r_rf_txpwr_cs_get = 0x40001428;
+r_rf_txpwr_dbm_get = 0x4000142c;
+r_rwble_isr = 0x40001464;
+r_sch_arb_event_start_isr = 0x400014f8;
+r_sch_plan_set = 0x40001534;
+r_sch_prog_end_isr = 0x40001538;
+
+/* ECO3 BT ROM functions (from esp32c3.rom.eco3_bt_funcs.ld) */
+r_lld_adv_ext_pkt_prepare_set = 0x40001b4c;
+r_lld_adv_ext_chain_none_construct = 0x40001b50;
+r_lld_adv_ext_chain_scannable_construct = 0x40001b58;
+r_lld_adv_start_update_filter_policy = 0x40001b68;
+r_lld_con_tx_prog_new_packet = 0x40001b74;
+r_lld_scan_try_sched = 0x40001b84;
+r_sch_prog_ble_push = 0x40001b8c;
 
 /***************************************
  Group rom_pp

@@ -56,6 +56,7 @@ var (
 	endBlock      gcBlock        // the block just past the end of the available space
 	gcTotalAlloc  uint64         // total number of bytes allocated
 	gcMallocs     uint64         // total number of allocations
+	gcNumGC       uint32         // total number of completed collection cycles
 	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
 )
 
@@ -108,7 +109,7 @@ type gcBlock uintptr
 // might not be heap-aligned).
 func blockFromAddr(addr uintptr) gcBlock {
 	if gcAsserts && (addr < heapStart || addr >= uintptr(metadataStart)) {
-		runtimePanic("gc: trying to get block from invalid address")
+		runtimeFatal("gc: trying to get block from invalid address")
 	}
 	return gcBlock((addr - heapStart) / bytesPerBlock)
 }
@@ -122,7 +123,7 @@ func (b gcBlock) pointer() unsafe.Pointer {
 func (b gcBlock) address() uintptr {
 	addr := heapStart + uintptr(b)*bytesPerBlock
 	if gcAsserts && addr > uintptr(metadataStart) {
-		runtimePanic("gc: block pointing inside metadata")
+		runtimeFatal("gc: block pointing inside metadata")
 	}
 	return addr
 }
@@ -154,7 +155,7 @@ func (b gcBlock) findHead() gcBlock {
 	}
 	if gcAsserts {
 		if b.state() != blockStateHead && b.state() != blockStateMark {
-			runtimePanic("gc: found tail without head")
+			runtimeFatal("gc: found tail without head")
 		}
 	}
 	return b
@@ -182,14 +183,14 @@ func (b gcBlock) setState(newState blockState) {
 	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 	*stateBytePtr |= uint8(newState << (b % blocksPerStateByte))
 	if gcAsserts && b.state() != newState {
-		runtimePanic("gc: setState() was not successful")
+		runtimeFatal("gc: setState() was not successful")
 	}
 }
 
 // unmark changes the state of b from blockStateMark to blockStateHead.
 func (b gcBlock) unmark() {
 	if gcAsserts && b.state() != blockStateMark {
-		runtimePanic("gc: block not marked")
+		runtimeFatal("gc: block not marked")
 	}
 	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 	*stateBytePtr ^= uint8(blockStateMark^blockStateHead) << (b % blocksPerStateByte)
@@ -234,7 +235,7 @@ type freeRangeMore struct {
 // insertFreeRange inserts a range of len blocks starting at ptr into the free list.
 func insertFreeRange(ptr unsafe.Pointer, len uintptr) {
 	if gcAsserts && len == 0 {
-		runtimePanic("gc: insert 0-length free range")
+		runtimeFatal("gc: insert 0-length free range")
 	}
 
 	// Find the insertion point by length.
@@ -267,7 +268,7 @@ func insertFreeRange(ptr unsafe.Pointer, len uintptr) {
 // It returns nil if there are no sufficiently long ranges.
 func popFreeRange(len uintptr) unsafe.Pointer {
 	if gcAsserts && len == 0 {
-		runtimePanic("gc: pop 0-length free range")
+		runtimeFatal("gc: pop 0-length free range")
 	}
 
 	// Find the removal point by length.
@@ -331,7 +332,7 @@ func initHeap() {
 // will be expensive.
 func setHeapEnd(newHeapEnd uintptr) {
 	if gcAsserts && newHeapEnd <= heapEnd {
-		runtimePanic("gc: setHeapEnd didn't grow the heap")
+		runtimeFatal("gc: setHeapEnd didn't grow the heap")
 	}
 
 	// Save some old variables we need later.
@@ -354,7 +355,7 @@ func setHeapEnd(newHeapEnd uintptr) {
 	// should be used to avoid corruption.
 	// This assert checks whether that's true.
 	if gcAsserts && uintptr(metadataStart) < uintptr(oldMetadataStart)+oldMetadataSize {
-		runtimePanic("gc: heap did not grow enough at once")
+		runtimeFatal("gc: heap did not grow enough at once")
 	}
 
 	// Insert the new free range. This range will be separate from any previous
@@ -393,7 +394,7 @@ func calculateHeapAddresses() {
 	}
 	if gcAsserts && metadataSize*blocksPerStateByte < numBlocks {
 		// sanity check
-		runtimePanic("gc: metadata array is too small")
+		runtimeFatal("gc: metadata array is too small")
 	}
 }
 
@@ -407,7 +408,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 
 	if interrupt.In() {
-		runtimePanicAt(returnAddress(0), "heap alloc in interrupt")
+		runtimeFatal("heap alloc in interrupt")
 	}
 
 	// Round the size up to a multiple of blocks, adding space for the header.
@@ -416,7 +417,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	size += bytesPerBlock - 1
 	if size < rawSize {
 		// The size overflowed.
-		runtimePanicAt(returnAddress(0), "out of memory")
+		runtimeFatal("out of memory")
 	}
 	neededBlocks := size / bytesPerBlock
 	size = neededBlocks * bytesPerBlock
@@ -465,7 +466,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		// Unfortunately the heap could not be increased. This
 		// happens on baremetal systems for example (where all
 		// available RAM has already been dedicated to the heap).
-		runtimePanicAt(returnAddress(0), "out of memory")
+		runtimeFatal("out of memory")
 	}
 
 	// Set the block states.
@@ -510,7 +511,7 @@ func realloc(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	lastBlock := firstBlock.findHead()
 
 	// Calculate the size of the original allocation body.
-	oldSize := uintptr(lastBlock-firstBlock)*blocksPerStateByte + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
+	oldSize := uintptr(lastBlock-firstBlock)*bytesPerBlock + (bytesPerBlock - unsafe.Sizeof(objHeader{}))
 
 	if size <= oldSize {
 		// The requested size is less than the old size.
@@ -610,6 +611,11 @@ func runGC() (freeBytes uintptr) {
 		dumpHeap()
 	}
 
+	// The cycle is complete. Counted here rather than in GC() so that
+	// collections triggered by an allocation are counted too. Every caller
+	// holds gcLock, the same lock ReadMemStats reads it under.
+	gcNumGC++
+
 	return
 }
 
@@ -622,10 +628,10 @@ func markRoots(start, end uintptr) {
 	}
 	if gcAsserts {
 		if start >= end {
-			runtimePanic("gc: unexpected range to mark")
+			runtimeFatal("gc: unexpected range to mark")
 		}
 		if start%unsafe.Alignof(start) != 0 {
-			runtimePanic("gc: unaligned start pointer")
+			runtimeFatal("gc: unaligned start pointer")
 		}
 	}
 
@@ -850,6 +856,9 @@ func ReadMemStats(m *MemStats) {
 	// Record the total allocated bytes.
 	m.TotalAlloc = gcTotalAlloc
 
+	// Record the number of completed collection cycles.
+	m.NumGC = gcNumGC
+
 	gcLock.Unlock()
 }
 
@@ -881,10 +890,10 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 	// exact func(*T) match is not checked; the closure ABI is uniform for any
 	// single pointer argument, which is why callFinalizer can reinterpret it.
 	if reflectlite.ValueOf(obj).Kind() != reflectlite.Pointer {
-		runtimePanic("runtime.SetFinalizer: first argument is not a pointer")
+		runtimeFatal("runtime.SetFinalizer: first argument is not a pointer")
 	}
 	if finalizer != nil && reflectlite.ValueOf(finalizer).Kind() != reflectlite.Func {
-		runtimePanic("runtime.SetFinalizer: second argument is not a function")
+		runtimeFatal("runtime.SetFinalizer: second argument is not a function")
 	}
 
 	// For an interface holding a pointer, the value word is the pointer itself.

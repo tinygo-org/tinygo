@@ -115,7 +115,7 @@ func TestCompiler(t *testing.T) {
 
 			// Update test if needed. Do not check the result.
 			if *flagUpdate {
-				err := os.WriteFile(outPath, []byte(mod.String()), 0666)
+				err := os.WriteFile(outPath, []byte(normalizeIR(mod.String())), 0666)
 				if err != nil {
 					t.Error("failed to write updated output file:", err)
 				}
@@ -174,9 +174,8 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
-// normalizeIR canonicalizes LLVM IR so a single golden file keeps matching
-// across LLVM versions. Golden files are written against LLVM <21; newer LLVM
-// prints some attributes differently.
+// normalizeIR canonicalizes LLVM-version-specific IR spellings for comparison
+// and when regenerating golden files.
 func normalizeIR(s string) string {
 	// Golden files are written using the pre-LLVM21 'nocapture' spelling,
 	// which LLVM printed before any co-occurring attribute such as
@@ -414,5 +413,7 @@ func testCompilePackage(t *testing.T, options *compileopts.Options, file string)
 	// Compile AST to IR.
 	program := lprogram.LoadSSA()
 	pkg := lprogram.MainPkg()
-	return CompilePackage(file, pkg, program.Package(pkg.Pkg), machine, compilerConfig, false)
+	ssaPkg := program.Package(pkg.Pkg)
+	ssaPkg.Build()
+	return CompilePackage(file, pkg, ssaPkg, machine, compilerConfig, false)
 }
