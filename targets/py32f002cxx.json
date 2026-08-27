@@ -4,7 +4,7 @@
     ],
     "build-tags": [
         "py32f002cxx",
-        "no_gpio_afrh",
+        "py32_no_gpio_afrh",
         "py32_hsi_fs_literal4"
     ],
     "extra-files": [

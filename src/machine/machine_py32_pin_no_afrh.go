@@ -1,4 +1,4 @@
-//go:build py32 && no_gpio_afrh
+//go:build py32 && py32_no_gpio_afrh
 
 package machine
 

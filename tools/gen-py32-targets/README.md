@@ -20,7 +20,7 @@ Together these inputs produce family targets for all 41 available SVDs.
 
 Cortex-M0+ families inherit `py32`; PY32E407, PY32F403, and PY32F410 families
 inherit `py32-m4`, which uses TinyGo's standard soft-float Cortex-M4 ABI. Targets
-whose SVD has no `GPIO.AFRH` register receive the `no_gpio_afrh` build tag.
+whose SVD has no `GPIO.AFRH` register receive the `py32_no_gpio_afrh` build tag.
 
 Puya's SVDs are inconsistent about GPIO `groupName`: some describe identical
 ports as `GPIOA_Type`, `GPIOB_Type`, and so on, while others use one
@@ -35,12 +35,10 @@ registers, `USART` versus `UART` blocks, split USART receive/transmit data
 registers, and HSI selector availability. Keep these classifications in the
 target generator rather than adding long family expressions to machine files.
 
-Existing PY32 target JSON files are retained for compatibility. In particular,
-their established aliases and flashing commands are not regenerated. Linker
-scripts are generated for every concrete target so memory definitions and stack
-sizes remain consistent. Newly generated targets intentionally omit flashing
-commands because a compatible programmer identifier has not been verified for
-every Puya part.
+All concrete target JSON files and linker scripts are generated so inheritance,
+memory definitions, and stack sizes remain consistent. Verified flashing
+commands are preserved in the generator; other targets omit them until a
+compatible programmer identifier is known.
 
 The system and interrupt stack is sized from available RAM: targets with up to
 4 KiB use 1 KiB, targets with up to 16 KiB use 2 KiB, and larger targets use

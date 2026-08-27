@@ -4,6 +4,7 @@
     ],
     "scheduler": "none",
     "gc": "none",
+    "serial": "uart",
     "build-tags": [
         "py32"
     ]

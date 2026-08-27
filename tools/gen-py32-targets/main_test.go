@@ -69,18 +69,20 @@ func TestGenerate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 41 family JSON files, 77 generated concrete JSON files, and linker
+	// 41 family JSON files, 87 generated concrete JSON files, and linker
 	// scripts for all 87 concrete targets.
-	if got, want := len(entries), 205; got != want {
+	if got, want := len(entries), 215; got != want {
 		t.Fatalf("generated %d files, want %d", got, want)
 	}
 
-	checkTarget(t, filepath.Join(out, "py32e407xc.json"), "py32e407xx", "targets/py32e407xc.ld")
-	checkTarget(t, filepath.Join(out, "py32f001xx.json"), "py32", "")
-	checkTarget(t, filepath.Join(out, "py32f410xx.json"), "py32-m4", "")
+	checkTarget(t, filepath.Join(out, "py32e407xc.json"), "py32e407xx", "targets/py32e407xc.ld", "")
+	checkTarget(t, filepath.Join(out, "py32f001xx.json"), "py32", "", "")
+	checkTarget(t, filepath.Join(out, "py32f002ax5.json"), "py32f002axx", "targets/py32f002ax5.ld", "pyocd load -t py32f002ax5 {bin}")
+	checkTarget(t, filepath.Join(out, "py32f030x8.json"), "py32f030xx", "targets/py32f030x8.ld", "pyocd load -t py32f030x8 {bin}")
+	checkTarget(t, filepath.Join(out, "py32f410xx.json"), "py32-m4", "", "")
 	checkBuildTags(t, filepath.Join(out, "py32e407xx.json"), "py32e407xx", "py32_gpio_ospdder", "py32_gpio_clock_ahb2", "py32_no_hsi_fs", "py32_usart_split_data", "py32_uart_clock_apb2")
-	checkBuildTags(t, filepath.Join(out, "py32f001cxx.json"), "py32f001cxx", "no_gpio_afrh", "py32_hsi_fs_literal4", "py32_usart1_clock_literal")
-	checkBuildTags(t, filepath.Join(out, "py32f002cxx.json"), "py32f002cxx", "no_gpio_afrh", "py32_hsi_fs_literal4")
+	checkBuildTags(t, filepath.Join(out, "py32f001cxx.json"), "py32f001cxx", "py32_no_gpio_afrh", "py32_hsi_fs_literal4", "py32_usart1_clock_literal")
+	checkBuildTags(t, filepath.Join(out, "py32f002cxx.json"), "py32f002cxx", "py32_no_gpio_afrh", "py32_hsi_fs_literal4")
 	checkBuildTags(t, filepath.Join(out, "py32f032xx.json"), "py32f032xx", "py32_hsi_fs_literal3")
 	checkBuildTags(t, filepath.Join(out, "py32f410xx.json"), "py32f410xx", "py32_gpio_ospdder", "py32_gpio_clock_ahb", "py32_no_hsi_fs", "py32_usart_unnumbered", "py32_uart_clock_apb2", "py32_uart_no_interrupt")
 	checkBuildTags(t, filepath.Join(out, "py32t020xx.json"), "py32t020xx", "py32_uart_type")
@@ -92,9 +94,6 @@ func TestGenerate(t *testing.T) {
 	want := "ORIGIN = 0x20000000, LENGTH = 0x1c000"
 	if !contains(string(data), want) {
 		t.Fatalf("E407 linker script does not contain combined contiguous RAM %q", want)
-	}
-	if _, err := os.Stat(filepath.Join(out, "py32f030x8.json")); !os.IsNotExist(err) {
-		t.Fatalf("legacy target was generated: %v", err)
 	}
 	checkFileContains(t, filepath.Join(out, "py32f002ax5.ld"), "_stack_size = 1K;")
 	checkFileContains(t, filepath.Join(out, "py32f030x8.ld"), "_stack_size = 2K;")
@@ -127,7 +126,7 @@ func checkBuildTags(t *testing.T, path string, want ...string) {
 	}
 }
 
-func checkTarget(t *testing.T, path, inherited, linker string) {
+func checkTarget(t *testing.T, path, inherited, linker, flashCommand string) {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -142,6 +141,9 @@ func checkTarget(t *testing.T, path, inherited, linker string) {
 	}
 	if spec.LinkerScript != linker {
 		t.Errorf("%s linker script is %q, want %q", path, spec.LinkerScript, linker)
+	}
+	if spec.FlashCommand != flashCommand {
+		t.Errorf("%s flash command is %q, want %q", path, spec.FlashCommand, flashCommand)
 	}
 }
 

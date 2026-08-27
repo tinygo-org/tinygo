@@ -1,6 +1,6 @@
 {
     "inherits": [
-        "py32f003"
+        "py32f003xx"
     ],
     "build-tags": [
         "py32f003x7"

@@ -31,6 +31,7 @@ type target struct {
 	BuildTags    []string `json:"build-tags,omitempty"`
 	LinkerScript string   `json:"linkerscript,omitempty"`
 	ExtraFiles   []string `json:"extra-files,omitempty"`
+	FlashCommand string   `json:"flash-command,omitempty"`
 }
 
 var orphanFamilies = map[string]string{
@@ -77,7 +78,7 @@ func familyBuildTags(family string) []string {
 		name string
 		set  map[string]bool
 	}{
-		{"no_gpio_afrh", noGPIOAFRH},
+		{"py32_no_gpio_afrh", noGPIOAFRH},
 		{"py32_gpio_ospdder", gpioOSPDDER},
 		{"py32_gpio_clock_ahb2", gpioClockAHB2},
 		{"py32_gpio_clock_ahb", gpioClockAHB},
@@ -100,20 +101,17 @@ func familyBuildTags(family string) []string {
 	return tags
 }
 
-var legacyTargetJSON = map[string]bool{
-	// Keep pre-existing JSON definitions, including established aliases and
-	// flashing commands. Their linker scripts are still generated from the
-	// normalized device table.
-	"py32f002ax5": true,
-	"py32f002bx5": true,
-	"py32f003x4":  true,
-	"py32f003x6":  true,
-	"py32f003x7":  true,
-	"py32f003x8":  true,
-	"py32f030x4":  true,
-	"py32f030x6":  true,
-	"py32f030x7":  true,
-	"py32f030x8":  true,
+var flashCommands = map[string]string{
+	"py32f002ax5": "pyocd load -t py32f002ax5 {bin}",
+	"py32f002bx5": "pyocd load -t py32f002bx5 {bin}",
+	"py32f003x4":  "pyocd load -t py32f003x4 {bin}",
+	"py32f003x6":  "pyocd load -t py32f003x6 {bin}",
+	"py32f003x7":  "pyocd load -t py32f003x7 {bin}",
+	"py32f003x8":  "pyocd load -t py32f003x8 {bin}",
+	"py32f030x4":  "pyocd load -t py32f030x4 {bin}",
+	"py32f030x6":  "pyocd load -t py32f030x6 {bin}",
+	"py32f030x7":  "pyocd load -t py32f030x7 {bin}",
+	"py32f030x8":  "pyocd load -t py32f030x8 {bin}",
 }
 
 func main() {
@@ -232,15 +230,14 @@ func generate(out string, devices []device) error {
 	}
 
 	for _, device := range devices {
-		if !legacyTargetJSON[device.Part] {
-			spec := target{
-				Inherits:     []string{device.Family},
-				BuildTags:    []string{device.Part},
-				LinkerScript: "targets/" + device.Part + ".ld",
-			}
-			if err := writeJSON(filepath.Join(out, device.Part+".json"), spec); err != nil {
-				return err
-			}
+		spec := target{
+			Inherits:     []string{device.Family},
+			BuildTags:    []string{device.Part},
+			LinkerScript: "targets/" + device.Part + ".ld",
+			FlashCommand: flashCommands[device.Part],
+		}
+		if err := writeJSON(filepath.Join(out, device.Part+".json"), spec); err != nil {
+			return err
 		}
 		stackSize := systemStackSize(device.RAMSize)
 		linker := fmt.Sprintf("MEMORY\n{\n  FLASH_TEXT (rx) : ORIGIN = %#x, LENGTH = %#x\n  RAM (xrw)       : ORIGIN = %#x, LENGTH = %#x\n}\n\n_stack_size = %dK;\n\nINCLUDE \"targets/arm.ld\"\n", device.FlashStart, device.FlashSize, device.RAMStart, device.RAMSize, stackSize/1024)

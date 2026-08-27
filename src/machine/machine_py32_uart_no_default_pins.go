@@ -1,4 +1,4 @@
-//go:build py32 && !default_uart_pins
+//go:build py32 && !py32_default_uart_pins
 
 package machine
 
