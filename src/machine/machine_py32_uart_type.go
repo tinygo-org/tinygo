@@ -27,10 +27,11 @@ func (uart *UART) Configure(config UARTConfig) error {
 	}
 
 	py32.RCC.APBENR1.SetBits(py32.RCC_APBENR1_UART1EN)
-	uart.Bus.CR1.Set(0)
+	uart.Bus.CR1.Set(py32.UART_CR1_M_Msk)
 	uart.Bus.CR2.Set(py32.UART_CR2_RXNEIE)
 	uart.Bus.CR3.Set(0)
-	uart.Bus.BRR.Set((CPUFrequency() + config.BaudRate/2) / config.BaudRate)
+	divider := (CPUFrequency() + config.BaudRate*8) / (config.BaudRate * 16)
+	uart.Bus.BRR.Set(divider)
 
 	uart.irq = interrupt.New(py32.IRQ_UART1, handleUART1Interrupt)
 	uart.irq.SetPriority(0xc0)
@@ -44,7 +45,7 @@ func handleUART1Interrupt(interrupt.Interrupt) {
 
 func (uart *UART) writeByte(c byte) error {
 	retries := uart.txRetries
-	for retries > 0 && uart.Bus.SR.Get()&py32.UART_SR_TXE == 0 {
+	for retries > 0 && uart.Bus.SR.Get()&py32.UART_SR_TDRE == 0 {
 		uartYield()
 		retries--
 	}
