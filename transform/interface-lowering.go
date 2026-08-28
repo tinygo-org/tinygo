@@ -29,6 +29,7 @@ package transform
 // compiler does it: https://research.swtch.com/interfaces
 
 import (
+	"go/scanner"
 	"sort"
 	"strings"
 
@@ -267,6 +268,30 @@ func (p *lowerInterfacesPass) run() error {
 		sort.Slice(itf.types, func(i, j int) bool {
 			return itf.types[i].name > itf.types[j].name
 		})
+	}
+
+	// Report incompatible exported methods before defining any invoke thunks.
+	var abiErrors scanner.ErrorList
+	seenABIErrors := make(map[llvm.Value]struct{})
+	for _, fn := range interfaceInvokeFunctions {
+		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
+		invokeAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
+		itf := p.interfaces[methodsAttr.GetStringValue()]
+		signature := itf.signatures[invokeAttr.GetStringValue()]
+		for _, typ := range itf.types {
+			function := typ.getMethod(signature).function
+			if attr := function.GetStringAttributeAtIndex(-1, "tinygo-interface-abi-error"); !attr.IsNil() {
+				if _, ok := seenABIErrors[function]; ok {
+					continue
+				}
+				err := errorAt(function, attr.GetStringValue())
+				abiErrors = append(abiErrors, &err)
+				seenABIErrors[function] = struct{}{}
+			}
+		}
+	}
+	if len(abiErrors) != 0 {
+		return abiErrors
 	}
 
 	// Define all interface invoke thunks.
