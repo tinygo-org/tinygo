@@ -126,6 +126,13 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		}
 	}
 
+	llvmutil.RemoveGlobalReferences(mod, "llvm.used", "tinygo.indirect-abi")
+	cleanupOptions := llvm.NewPassBuilderOptions()
+	defer cleanupOptions.Dispose()
+	if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, cleanupOptions); err != nil {
+		return []error{fmt.Errorf("could not run final globaldce pass: %w", err)}
+	}
+
 	if config.Scheduler() == "none" {
 		// Check for any goroutine starts.
 		if start := mod.NamedFunction("internal/task.start"); !start.IsNil() && len(getUses(start)) > 0 {

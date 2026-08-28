@@ -102,20 +102,6 @@ func (b *builder) createInvoke(fnType llvm.Type, fn llvm.Value, args []llvm.Valu
 	return b.createCall(fnType, fn, args, name)
 }
 
-// Expand an argument type to a list that can be used in a function call
-// parameter list.
-func (c *compilerContext) expandFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
-	if c.isIndirectAggregate(t) {
-		return []paramInfo{{
-			llvmType: c.dataPtrType,
-			name:     name,
-			elemSize: c.targetData.TypeAllocSize(t),
-			flags:    paramIsGoParam | paramIsReadonly | paramIsIndirect,
-		}}
-	}
-	return c.expandDirectFormalParamType(t, name, goType)
-}
-
 func (c *compilerContext) expandDirectFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
@@ -130,34 +116,36 @@ func (c *compilerContext) expandDirectFormalParamType(t llvm.Type, name string, 
 	return []paramInfo{c.getParamInfo(t, name, goType)}
 }
 
-func (c *compilerContext) storedParamType(t llvm.Type, exported bool) llvm.Type {
-	if c.isIndirectParam(t, exported) {
+func (c *compilerContext) storedParamType(t llvm.Type) llvm.Type {
+	if c.isIndirectAggregate(t) {
 		return c.dataPtrType
 	}
 	return t
 }
 
-func (c *compilerContext) isIndirectParam(t llvm.Type, exported bool) bool {
-	return !exported && c.isIndirectAggregate(t)
-}
-
-func (b *builder) appendStoredValueTypes(valueTypes []llvm.Type, values []ssa.Value, exported bool) []llvm.Type {
-	for _, value := range values {
-		valueTypes = append(valueTypes, b.storedParamType(b.getLLVMType(value.Type()), exported))
-	}
-	return valueTypes
-}
-
-func (b *builder) appendStoredParamTypes(valueTypes []llvm.Type, params []*types.Var, exported bool) []llvm.Type {
+func (b *builder) appendStoredParamTypes(valueTypes []llvm.Type, params []functionABIParam) []llvm.Type {
 	for _, param := range params {
-		valueTypes = append(valueTypes, b.storedParamType(b.getLLVMType(param.Type()), exported))
+		if param.indirect {
+			valueTypes = append(valueTypes, b.dataPtrType)
+		} else {
+			valueTypes = append(valueTypes, param.llvmType)
+		}
 	}
 	return valueTypes
+}
+
+func (b *builder) getCallArguments(values []ssa.Value, params []functionABIParam) []llvm.Value {
+	args := make([]llvm.Value, len(values))
+	for i, value := range values {
+		args[i] = b.getCallArgument(value, params[i].indirect)
+	}
+	return args
 }
 
 func (b *builder) prependIndirectResult(sig *types.Signature, exported bool, params []llvm.Value, name string) []llvm.Value {
-	if resultType, indirect := b.hasIndirectResult(sig); !exported && indirect {
-		return append([]llvm.Value{b.createIndirectStorage(resultType, name)}, params...)
+	abi := b.getFunctionABI(sig, exported)
+	if abi.indirectResult {
+		return append([]llvm.Value{b.createIndirectStorage(abi.resultType, name)}, params...)
 	}
 	return params
 }

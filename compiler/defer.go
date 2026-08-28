@@ -413,9 +413,6 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 	next := b.CreateLoad(b.dataPtrType, b.deferPtr, "defer.next")
 
 	var values llvmValueList
-	lowerArgument := func(value ssa.Value) llvm.Value {
-		return b.getCallArgument(value, false)
-	}
 	if instr.Call.IsInvoke() {
 		// Method call on an interface.
 
@@ -433,7 +430,8 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		typecode := b.CreateExtractValue(itf, 0, "invoke.func.typecode")
 		receiverValue := b.CreateExtractValue(itf, 1, "invoke.func.receiver")
 		values = newLLVMValueList(callback, next, typecode, receiverValue)
-		values.appendSSAValues(instr.Call.Args, lowerArgument)
+		abi := b.getInterfaceFunctionABI(instr.Call.Signature())
+		values.append(b.getCallArguments(instr.Call.Args, abi.params[1:])...)
 
 	} else if callee, ok := instr.Call.Value.(*ssa.Function); ok {
 		// Regular function call.
@@ -447,9 +445,8 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// runtime._defer fields).
 		values = newLLVMValueList(callback, next)
 		exported := b.getFunctionInfo(callee).exported
-		values.appendSSAValues(instr.Call.Args, func(value ssa.Value) llvm.Value {
-			return b.getCallArgument(value, exported)
-		})
+		abi := b.getFunctionABI(callee.Signature, exported)
+		values.append(b.getCallArguments(instr.Call.Args, abi.params)...)
 
 	} else if makeClosure, ok := instr.Call.Value.(*ssa.MakeClosure); ok {
 		// Immediately applied function literal with free variables.
@@ -473,7 +470,8 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// runtime._defer fields, followed by all parameters including the
 		// context pointer).
 		values = newLLVMValueList(callback, next)
-		values.appendSSAValues(instr.Call.Args, lowerArgument)
+		abi := b.getFunctionABI(fn.Signature, false)
+		values.append(b.getCallArguments(instr.Call.Args, abi.params)...)
 		values.append(context)
 
 	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
@@ -514,7 +512,8 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// runtime._defer fields, followed by all parameters including the
 		// context pointer).
 		values = newLLVMValueList(callback, next, funcValue)
-		values.appendSSAValues(instr.Call.Args, lowerArgument)
+		abi := b.getFunctionABI(instr.Call.Signature(), false)
+		values.append(b.getCallArguments(instr.Call.Args, abi.params)...)
 	}
 
 	// Make a struct out of the collected values to put in the deferred call
@@ -623,7 +622,14 @@ func (b *builder) createRunDefers() {
 				valueTypes = append(valueTypes, b.dataPtrType, b.dataPtrType)
 			}
 
-			valueTypes = b.appendStoredValueTypes(valueTypes, callback.Args, false)
+			abi := b.getFunctionABI(callback.Signature(), false)
+			params := abi.params
+			if callback.IsInvoke() {
+				abi = b.getInterfaceFunctionABI(callback.Signature())
+				params = abi.params
+				params = params[1:]
+			}
+			valueTypes = b.appendStoredParamTypes(valueTypes, params)
 
 			// Extract the params from the struct (including receiver).
 			deferredCallType := b.ctx.StructType(valueTypes, false)
@@ -666,7 +672,8 @@ func (b *builder) createRunDefers() {
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
 			exported := b.getFunctionInfo(callback).exported
-			valueTypes = b.appendStoredParamTypes(valueTypes, getParams(callback.Signature), exported)
+			abi := b.getFunctionABI(callback.Signature, exported)
+			valueTypes = b.appendStoredParamTypes(valueTypes, abi.params)
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 
 			// Extract the params from the struct.
@@ -689,7 +696,8 @@ func (b *builder) createRunDefers() {
 			// Get the real defer struct type and cast to it.
 			fn := callback.Fn.(*ssa.Function)
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
-			valueTypes = b.appendStoredParamTypes(valueTypes, getParams(fn.Signature), false)
+			abi := b.getFunctionABI(fn.Signature, false)
+			valueTypes = b.appendStoredParamTypes(valueTypes, abi.params)
 			valueTypes = append(valueTypes, b.dataPtrType) // closure
 			deferredCallType := b.ctx.StructType(valueTypes, false)
 

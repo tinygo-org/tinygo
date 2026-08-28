@@ -4,16 +4,143 @@ package compiler
 // in a later step, see func-lowering.go.
 
 import (
+	"fmt"
 	"go/types"
+	"sort"
 
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
-// LLVM recursively expands each struct field and array element in parameters
-// and results into separate values. It gets very slow with too many values, so
-// pass larger aggregates indirectly before LLVM expands them.
+// LLVM recursively expands each struct field and array element into separate
+// values. Pass larger aggregates indirectly before LLVM expands them.
 const maxDirectAggregateValues = 1024
+
+// The WebAssembly JavaScript API limits function types to 1000 parameters.
+// Apply the same internal ABI cap on every target.
+const maxFunctionParams = 1000
+
+type functionABIParam struct {
+	llvmType  llvm.Type
+	indirect  bool
+	leafCount uint64
+}
+
+type functionABI struct {
+	resultType     llvm.Type
+	indirectResult bool
+	params         []functionABIParam
+}
+
+type functionABIKey struct {
+	signature         *types.Signature
+	exported          bool
+	interfaceReceiver bool
+}
+
+func (c *compilerContext) getFunctionABI(sig *types.Signature, exported bool) functionABI {
+	return c.getFunctionABIWithReceiver(sig, exported, false)
+}
+
+func (c *compilerContext) getInterfaceFunctionABI(sig *types.Signature) functionABI {
+	return c.getFunctionABIWithReceiver(sig, false, true)
+}
+
+// getFunctionABIWithReceiver lowers the fewest aggregate parameters necessary
+// to keep the complete scalarized signature within the internal ABI cap.
+func (c *compilerContext) getFunctionABIWithReceiver(sig *types.Signature, exported, interfaceReceiver bool) functionABI {
+	key := functionABIKey{sig, exported, interfaceReceiver}
+	if abi, ok := c.functionABIs[key]; ok {
+		return abi
+	}
+
+	abi := functionABI{}
+	abi.resultType, abi.indirectResult = c.hasIndirectResult(sig)
+	if exported {
+		abi.indirectResult = false
+	}
+
+	for i, param := range getParams(sig) {
+		llvmType := c.getLLVMType(param.Type())
+		if i == 0 && interfaceReceiver {
+			llvmType = c.dataPtrType
+		}
+		leafCount, exceeded := aggregateValueCountLimit(llvmType, 0, maxFunctionParams)
+		if exceeded {
+			leafCount = maxFunctionParams + 1
+		}
+		abi.params = append(abi.params, functionABIParam{
+			llvmType:  llvmType,
+			indirect:  !exported && c.isIndirectAggregate(llvmType),
+			leafCount: leafCount,
+		})
+	}
+
+	if exported {
+		c.functionABIs[key] = abi
+		return abi
+	}
+
+	count := uint64(1) // context
+	if abi.indirectResult {
+		count++
+	} else if aggregateValueCountExceeds(abi.resultType, 1) {
+		count++
+	}
+
+	var candidates []int
+	for i, param := range abi.params {
+		if param.indirect {
+			count++
+			continue
+		}
+		count += param.leafCount
+		switch param.llvmType.TypeKind() {
+		case llvm.ArrayTypeKind, llvm.StructTypeKind:
+			if param.leafCount > 1 {
+				candidates = append(candidates, i)
+			}
+		}
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return abi.params[candidates[i]].leafCount > abi.params[candidates[j]].leafCount
+	})
+	// Minimize ABI changes by lowering the largest aggregates first.
+	for _, i := range candidates {
+		if count <= maxFunctionParams {
+			break
+		}
+		abi.params[i].indirect = true
+		count -= abi.params[i].leafCount - 1
+	}
+
+	c.functionABIs[key] = abi
+	return abi
+}
+
+// ValidateWasmFunctionParameters checks the final LLVM module before the
+// WebAssembly backend expands aggregate parameters into scalar values.
+func ValidateWasmFunctionParameters(mod llvm.Module) error {
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		if fn.IsDeclaration() && fn.FirstUse().IsNil() {
+			continue
+		}
+		count := uint64(0)
+		if returnType := fn.GlobalValueType().ReturnType(); returnType.TypeKind() == llvm.ArrayTypeKind || returnType.TypeKind() == llvm.StructTypeKind {
+			if _, indirect := aggregateValueCountLimit(returnType, 0, 1); indirect {
+				count++
+			}
+		}
+		for _, paramType := range fn.GlobalValueType().ParamTypes() {
+			var exceeded bool
+			count, exceeded = aggregateValueCountLimit(paramType, count, maxFunctionParams)
+			if exceeded {
+				return fmt.Errorf("function %s has more than %d WebAssembly parameters after ABI lowering", fn.Name(), maxFunctionParams)
+			}
+		}
+	}
+	return nil
+}
 
 func (c *compilerContext) getLLVMResultType(sig *types.Signature) llvm.Type {
 	switch sig.Results().Len() {
@@ -36,9 +163,13 @@ func (c *compilerContext) hasIndirectResult(sig *types.Signature) (llvm.Type, bo
 }
 
 func (c *compilerContext) isIndirectAggregate(typ llvm.Type) bool {
+	return aggregateValueCountExceeds(typ, maxDirectAggregateValues)
+}
+
+func aggregateValueCountExceeds(typ llvm.Type, limit uint64) bool {
 	switch typ.TypeKind() {
 	case llvm.ArrayTypeKind, llvm.StructTypeKind:
-		_, exceeded := aggregateValueCount(typ, 0)
+		_, exceeded := aggregateValueCountLimit(typ, 0, limit)
 		return exceeded
 	default:
 		return false
@@ -46,24 +177,28 @@ func (c *compilerContext) isIndirectAggregate(typ llvm.Type) bool {
 }
 
 func aggregateValueCount(typ llvm.Type, count uint64) (uint64, bool) {
+	return aggregateValueCountLimit(typ, count, maxDirectAggregateValues)
+}
+
+func aggregateValueCountLimit(typ llvm.Type, count, limit uint64) (uint64, bool) {
 	switch typ.TypeKind() {
 	case llvm.ArrayTypeKind:
 		length := uint64(typ.ArrayLength())
 		if length == 0 {
 			return count, false
 		}
-		elementCount, exceeded := aggregateValueCount(typ.ElementType(), 0)
+		elementCount, exceeded := aggregateValueCountLimit(typ.ElementType(), 0, limit)
 		if exceeded {
 			return count, true
 		}
-		if elementCount != 0 && length > (maxDirectAggregateValues-count)/elementCount {
+		if elementCount != 0 && length > (limit-count)/elementCount {
 			return count, true
 		}
 		return count + length*elementCount, false
 	case llvm.StructTypeKind:
 		for _, field := range typ.StructElementTypes() {
 			var exceeded bool
-			count, exceeded = aggregateValueCount(field, count)
+			count, exceeded = aggregateValueCountLimit(field, count, limit)
 			if exceeded {
 				return count, true
 			}
@@ -71,7 +206,7 @@ func aggregateValueCount(typ llvm.Type, count uint64) (uint64, bool) {
 		return count, false
 	default:
 		count++
-		return count, count > maxDirectAggregateValues
+		return count, count > limit
 	}
 }
 
@@ -133,11 +268,15 @@ func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 
 // getLLVMFunctionType returns a LLVM function type for a given signature.
 func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
-	returnType, indirectResult := c.hasIndirectResult(typ)
+	abi := c.getFunctionABI(typ, false)
+	if typ.Recv() != nil && c.getLLVMType(typ.Recv().Type()).StructName() == "runtime._interface" {
+		abi = c.getInterfaceFunctionABI(typ)
+	}
+	returnType := abi.resultType
 
 	// Get the parameter types.
 	var paramTypes []llvm.Type
-	if indirectResult {
+	if abi.indirectResult {
 		// LLVM expands aggregate returns into scalar leaves before deciding
 		// whether to pass them indirectly, so a large IR return can exhaust
 		// memory. Returning void avoids that expansion and cannot be demoted
@@ -145,21 +284,13 @@ func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
 		paramTypes = append(paramTypes, c.dataPtrType)
 		returnType = c.ctx.VoidType()
 	}
-	if typ.Recv() != nil {
-		recv := c.getLLVMType(typ.Recv().Type())
-		if recv.StructName() == "runtime._interface" {
-			// This is a call on an interface, not a concrete type.
-			// The receiver is not an interface, but a i8* type.
-			recv = c.dataPtrType
-		}
-		for _, info := range c.expandFormalParamType(recv, "", nil) {
-			paramTypes = append(paramTypes, info.llvmType)
-		}
-	}
-	for v := range typ.Params().Variables() {
-		subType := c.getLLVMType(v.Type())
-		for _, info := range c.expandFormalParamType(subType, "", nil) {
-			paramTypes = append(paramTypes, info.llvmType)
+	for _, param := range abi.params {
+		if param.indirect {
+			paramTypes = append(paramTypes, c.dataPtrType)
+		} else {
+			for _, info := range c.expandDirectFormalParamType(param.llvmType, "", nil) {
+				paramTypes = append(paramTypes, info.llvmType)
+			}
 		}
 	}
 	// All functions take these parameters at the end.

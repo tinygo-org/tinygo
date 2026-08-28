@@ -174,6 +174,147 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
+func TestAggregateFunctionABI(t *testing.T) {
+	for _, target := range []string{"wasm", "cortex-m-qemu"} {
+		t.Run(target, func(t *testing.T) {
+			options := &compileopts.Options{Target: target}
+			if target != "wasm" {
+				options.Scheduler = "tasks"
+			}
+			mod, errs := testCompilePackage(t, options, "aggregate-abi.go")
+			if len(errs) != 0 {
+				for _, err := range errs {
+					t.Error(err)
+				}
+				return
+			}
+			defer mod.Dispose()
+
+			passOptions := llvm.NewPassBuilderOptions()
+			defer passOptions.Dispose()
+			if err := mod.RunPasses("default<O2>", llvm.TargetMachine{}, passOptions); err != nil {
+				t.Fatal(err)
+			}
+			if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+				t.Fatal(err)
+			}
+
+			checkFunctionParamABI(t, mod, "main.readDirectAggregates", false, false)
+			checkFunctionParamABI(t, mod, "main.readLimitAggregates", false, false)
+			checkFunctionParamABI(t, mod, "main.readBoundaryAggregates", true, false)
+			checkFunctionParamABI(t, mod, "main.readAggregates", true, false)
+			checkFunctionParamABI(t, mod, "main.readSingleAggregate", false)
+			checkFunctionParamABI(t, mod, "main.readThreeAggregates", true, false, false)
+			checkFunctionParamABI(t, mod, "main.readResultBudget", false, true)
+			checkFunctionParamABI(t, mod, "readAggregateExport", false)
+			if target == "wasm" {
+				if err := ValidateWasmFunctionParameters(mod); err != nil {
+					t.Error(err)
+				}
+			}
+		})
+	}
+}
+
+func checkFunctionParamABI(t *testing.T, mod llvm.Module, name string, indirect ...bool) {
+	t.Helper()
+	fn := mod.NamedFunction(name)
+	if fn.IsNil() {
+		t.Fatalf("missing function %s", name)
+	}
+	paramTypes := fn.GlobalValueType().ParamTypes()
+	for i, wantIndirect := range indirect {
+		gotIndirect := paramTypes[i].TypeKind() == llvm.PointerTypeKind
+		if gotIndirect != wantIndirect {
+			t.Errorf("%s parameter %d indirect=%t, want %t", name, i, gotIndirect, wantIndirect)
+		}
+	}
+}
+
+func TestAggregateExportedInterfaceABI(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "aggregate-export-abi.go")
+	defer mod.Dispose()
+
+	for _, err := range errs {
+		t.Error(err)
+	}
+
+	var markedWrappers int
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		if attr := fn.GetStringAttributeAtIndex(-1, "tinygo-interface-abi-error"); !attr.IsNil() {
+			markedWrappers++
+		}
+	}
+	if markedWrappers != 1 {
+		t.Errorf("found %d exported interface ABI markers, want 1", markedWrappers)
+	}
+	if err := ValidateWasmFunctionParameters(mod); err == nil {
+		t.Error("missing oversized WebAssembly signature error")
+	}
+}
+
+func TestValidateWasmFunctionParameters(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		params       int
+		resultFields int
+		declaration  bool
+		used         bool
+		wantError    bool
+	}{
+		{"at limit", 999, 2, false, false, false},
+		{"hidden result over limit", 1000, 2, false, false, true},
+		{"single result at limit", 1000, 1, false, false, false},
+		{"empty result at limit", 1000, 0, false, false, false},
+		{"unused declaration", 1001, 0, true, false, false},
+		{"used declaration", 1001, 0, true, true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("test")
+			defer mod.Dispose()
+			builder := ctx.NewBuilder()
+			defer builder.Dispose()
+
+			paramTypes := make([]llvm.Type, test.params)
+			for i := range paramTypes {
+				paramTypes[i] = ctx.Int32Type()
+			}
+			resultFields := make([]llvm.Type, test.resultFields)
+			for i := range resultFields {
+				resultFields[i] = ctx.Int32Type()
+			}
+			resultType := ctx.StructType(resultFields, false)
+			fnType := llvm.FunctionType(resultType, paramTypes, false)
+			fn := llvm.AddFunction(mod, "test", fnType)
+			if test.declaration {
+				if test.used {
+					caller := llvm.AddFunction(mod, "caller", llvm.FunctionType(ctx.VoidType(), nil, false))
+					block := ctx.AddBasicBlock(caller, "entry")
+					builder.SetInsertPointAtEnd(block)
+					args := make([]llvm.Value, len(paramTypes))
+					for i, paramType := range paramTypes {
+						args[i] = llvm.Undef(paramType)
+					}
+					builder.CreateCall(fnType, fn, args, "")
+					builder.CreateRetVoid()
+				}
+			} else {
+				block := ctx.AddBasicBlock(fn, "entry")
+				builder.SetInsertPointAtEnd(block)
+				builder.CreateRet(llvm.Undef(resultType))
+			}
+
+			err := ValidateWasmFunctionParameters(mod)
+			if (err != nil) != test.wantError {
+				t.Errorf("ValidateWasmFunctionParameters() error = %v, wantError = %t", err, test.wantError)
+			}
+		})
+	}
+}
+
 // normalizeIR canonicalizes LLVM-version-specific IR spellings for comparison
 // and when regenerating golden files.
 func normalizeIR(s string) string {
@@ -278,6 +419,9 @@ func filterIrrelevantIRLines(lines []string) []string {
 			continue
 		}
 		if strings.HasPrefix(line, "source_filename = ") {
+			continue
+		}
+		if strings.HasPrefix(line, "@tinygo.indirect-abi = ") {
 			continue
 		}
 		if llvmVersion < 15 && strings.HasPrefix(line, "target datalayout = ") {

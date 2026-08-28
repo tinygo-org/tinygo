@@ -228,6 +228,63 @@ func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
 	used.SetLinkage(llvm.AppendingLinkage)
 }
 
+// RemoveFromGlobal removes values matching the predicate from an appending
+// global such as llvm.used.
+func RemoveFromGlobal(mod llvm.Module, globalName string, remove func(llvm.Value) bool) {
+	global := mod.NamedGlobal(globalName)
+	if global.IsNil() {
+		return
+	}
+
+	builder := mod.Context().NewBuilder()
+	defer builder.Dispose()
+	initializer := global.Initializer()
+	var kept []llvm.Value
+	for i := 0; i < initializer.Type().ArrayLength(); i++ {
+		value := builder.CreateExtractValue(initializer, i, "")
+		base := value
+		for !base.IsAConstantExpr().IsNil() && base.OperandsCount() == 1 {
+			base = base.Operand(0)
+		}
+		if !remove(base) {
+			kept = append(kept, value)
+		}
+	}
+	global.EraseFromParentAsGlobal()
+	if len(kept) != 0 {
+		AppendToGlobal(mod, globalName, kept...)
+	}
+}
+
+// RemoveGlobalReferences removes one occurrence from targetGlobal for each
+// value listed in referenceGlobal, then removes referenceGlobal itself.
+func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal string) {
+	references := mod.NamedGlobal(referenceGlobal)
+	if references.IsNil() {
+		return
+	}
+
+	builder := mod.Context().NewBuilder()
+	defer builder.Dispose()
+	initializer := references.Initializer()
+	values := make(map[llvm.Value]int, initializer.Type().ArrayLength())
+	for i := 0; i < initializer.Type().ArrayLength(); i++ {
+		value := builder.CreateExtractValue(initializer, i, "")
+		for !value.IsAConstantExpr().IsNil() && value.OperandsCount() == 1 {
+			value = value.Operand(0)
+		}
+		values[value]++
+	}
+	references.EraseFromParentAsGlobal()
+	RemoveFromGlobal(mod, targetGlobal, func(value llvm.Value) bool {
+		if values[value] == 0 {
+			return false
+		}
+		values[value]--
+		return true
+	})
+}
+
 // Version returns the LLVM major version.
 func Version() int {
 	majorStr := strings.Split(llvm.Version, ".")[0]
