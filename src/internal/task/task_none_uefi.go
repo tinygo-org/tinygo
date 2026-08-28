@@ -1,8 +1,8 @@
-//go:build scheduler.none && uefi
+//go:build scheduler.none
 
 package task
 
-//export tinygo_task_exit
+//go:export tinygo_task_exit
 func taskExit() {
 	runtimePanic("scheduler is disabled")
 }
