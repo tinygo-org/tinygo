@@ -270,15 +270,24 @@
 
 					// func sleepTicks(timeout int64)
 					"runtime.sleepTicks": (timeout) => {
-						// Do not sleep, only reactivate scheduler after the given timeout.
-						setTimeout(() => {
+						// Do not sleep, only reactivate the scheduler after the given
+						// timeout, keeping exactly one pending wakeup.
+						const ms = Number(timeout) / 1e6;
+						const due = Date.now() + ms;
+						if (this._scheduledWakeup !== undefined) {
+							if (this._scheduledWakeupDue <= due) return;
+							clearTimeout(this._scheduledWakeup);
+						}
+						this._scheduledWakeupDue = due;
+						this._scheduledWakeup = setTimeout(() => {
+							this._scheduledWakeup = undefined;
 							if (this.exited) return;
 							try {
 								this._inst.exports.go_scheduler();
 							} catch (e) {
 								if (e !== wasmExit) throw e;
 							}
-						}, Number(timeout) / 1e6);
+						}, ms);
 					},
 
 					// func finalizeRef(v ref)
@@ -489,6 +498,12 @@
 			this._ids = new Map();  // mapping from JS values to reference ids
 			this._idPool = [];      // unused ids that have been garbage collected
 			this.exited = false;    // whether the Go program has exited
+			// A wakeup left pending by a previous run would otherwise suppress the
+			// first one this run asks for, and the scheduler would never start.
+			if (this._scheduledWakeup !== undefined) {
+				clearTimeout(this._scheduledWakeup);
+				this._scheduledWakeup = undefined;
+			}
 			this.exitCode = 0;
 			// syscall/js.handleEvent reads _pendingEvent and returns early only when
 			// it IsNull(). Leaving it `undefined` is not null, so handleEvent falls
