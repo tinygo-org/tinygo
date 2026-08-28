@@ -115,6 +115,17 @@ func timerRunner() {
 	}
 }
 
+// lockTimerQueue and unlockTimerQueue guard direct mutation of a timer's
+// when/period fields from outside the normal addTimer/removeTimer/reAddTimer
+// path (see resetTimer in time.go), using the same lock those functions use.
+func lockTimerQueue() {
+	timerQueueLock.Lock()
+}
+
+func unlockTimerQueue() {
+	timerQueueLock.Unlock()
+}
+
 func addTimer(tim *timerNode) {
 	timerQueueLock.Lock()
 
