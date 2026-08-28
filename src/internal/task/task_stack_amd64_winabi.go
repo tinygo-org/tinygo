@@ -1,9 +1,9 @@
-//go:build scheduler.tasks && amd64 && windows
+//go:build scheduler.tasks && amd64 && (windows || uefi)
 
 package task
 
 // This is almost the same as task_stack_amd64.go, but with the extra rdi and
-// rsi registers saved: Windows has a slightly different calling convention.
+// rsi registers saved: Windows and UEFI use the Win64 calling convention.
 
 import "unsafe"
 

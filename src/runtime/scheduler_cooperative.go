@@ -297,10 +297,6 @@ func sleep(duration int64) {
 	if duration <= 0 {
 		return
 	}
-	if schedulerSleepCustom(duration) {
-		return
-	}
-
 	addSleepTask(task.Current(), nanosecondsToTicks(duration))
 	task.Pause()
 }
