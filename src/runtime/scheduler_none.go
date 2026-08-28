@@ -59,6 +59,14 @@ func NumCPU() int {
 	return 1
 }
 
+// lockTimerQueue and unlockTimerQueue guard direct mutation of a timer's
+// when/period fields from outside the normal addTimer/removeTimer/reAddTimer
+// path (see resetTimer in time.go). Timers aren't supported at all without a
+// scheduler (addTimer below panics), so there's nothing to synchronize here.
+func lockTimerQueue() {}
+
+func unlockTimerQueue() {}
+
 func addTimer(tim *timerNode) {
 	runtimePanic("timers not supported without a scheduler")
 }
