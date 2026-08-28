@@ -193,7 +193,7 @@ jobs:
         # Balanced with the measured build time of each group, so that the
         # shards finish at about the same time.
         group:
-          - smoketest-rp2xxx smoketest-selftest smoketest-wasm-sim
+          - smoketest-rp2xxx smoketest-selftest smoketest-wasm-sim smoketest-py32
           - smoketest-esp smoketest-riscv smoketest-flags
           - smoketest-examples smoketest-nxp smoketest-pwm-usb smoketest-avr
           - smoketest-samd smoketest-stm32 smoketest-nrf smoketest-wasm
