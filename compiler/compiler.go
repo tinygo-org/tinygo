@@ -93,6 +93,7 @@ type compilerContext struct {
 	directCatchers   map[llvm.Value]llvm.Value
 	indirectCatchers map[llvm.Type]llvm.Value
 	asyncifyReplays  map[llvm.Type]llvm.Value
+	functionABIs     map[functionABIKey]functionABI
 	astComments      map[string]*ast.CommentGroup
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
@@ -118,6 +119,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		directCatchers:   map[llvm.Value]llvm.Value{},
 		indirectCatchers: map[llvm.Type]llvm.Value{},
 		asyncifyReplays:  map[llvm.Type]llvm.Value{},
+		functionABIs:     map[functionABIKey]functionABI{},
 		astComments:      map[string]*ast.CommentGroup{},
 	}
 
@@ -805,7 +807,7 @@ func (b *builder) getLocalVariable(variable *types.Var) llvm.Metadata {
 	return dilocal
 }
 
-// attachDebugInfo adds debug info to a function declaration. It returns the
+// attachDebugInfo adds debug info to a function. It returns the
 // DISubprogram metadata node.
 func (c *compilerContext) attachDebugInfo(f *ssa.Function) llvm.Metadata {
 	pos := c.program.Fset.Position(f.Syntax().Pos())
@@ -813,10 +815,18 @@ func (c *compilerContext) attachDebugInfo(f *ssa.Function) llvm.Metadata {
 	return c.attachDebugInfoRaw(f, fn, "", pos.Filename, pos.Line)
 }
 
-// attachDebugInfo adds debug info to a function declaration. It returns the
+// attachDebugInfoRaw adds debug info to a function. It returns the
 // DISubprogram metadata node. This method allows some more control over how
 // debug info is added to the function.
 func (c *compilerContext) attachDebugInfoRaw(f *ssa.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
+	return c.attachDebugInfoRawWithDefinition(f, llvmFn, suffix, filename, line, true)
+}
+
+func (c *compilerContext) attachDebugInfoDeclarationRaw(f *ssa.Function, llvmFn llvm.Value, suffix, filename string, line int) llvm.Metadata {
+	return c.attachDebugInfoRawWithDefinition(f, llvmFn, suffix, filename, line, false)
+}
+
+func (c *compilerContext) attachDebugInfoRawWithDefinition(f *ssa.Function, llvmFn llvm.Value, suffix, filename string, line int, isDefinition bool) llvm.Metadata {
 	// Debug info for this function.
 	params := getParams(f.Signature)
 	diparams := make([]llvm.Metadata, 0, len(params))
@@ -835,7 +845,7 @@ func (c *compilerContext) attachDebugInfoRaw(f *ssa.Function, llvmFn llvm.Value,
 		Line:         line,
 		Type:         diFuncType,
 		LocalToUnit:  true,
-		IsDefinition: true,
+		IsDefinition: isDefinition,
 		ScopeLine:    0,
 		Flags:        llvm.FlagPrototyped,
 		Optimized:    true,
@@ -1300,27 +1310,23 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	}
 
 	// Load function parameters
+	abi := b.getFunctionABI(b.fn.Signature, b.info.exported)
 	llvmParamIndex := 0
-	if _, indirectResult := b.hasIndirectResult(b.fn.Signature); indirectResult && !b.info.exported {
+	if abi.indirectResult {
 		b.indirectReturn = b.llvmFn.Param(llvmParamIndex)
 		b.indirectReturn.SetName("return")
 		llvmParamIndex++
 	}
-	for _, param := range b.fn.Params {
-		llvmType := b.getLLVMType(param.Type())
-		if b.isIndirectParam(llvmType, b.info.exported) {
+	for i, param := range b.fn.Params {
+		llvmType := abi.params[i].llvmType
+		if abi.params[i].indirect {
 			llvmParam := b.llvmFn.Param(llvmParamIndex)
 			llvmParam.SetName(param.Name())
 			b.indirectValues[param] = llvmParam
 			llvmParamIndex++
 			continue
 		}
-		var paramInfos []paramInfo
-		if b.info.exported {
-			paramInfos = b.expandDirectFormalParamType(llvmType, param.Name(), param.Type())
-		} else {
-			paramInfos = b.expandFormalParamType(llvmType, param.Name(), param.Type())
-		}
+		paramInfos := b.expandDirectFormalParamType(llvmType, param.Name(), param.Type())
 		fields := make([]llvm.Value, 0, 1)
 		for _, info := range paramInfos {
 			param := b.llvmFn.Param(llvmParamIndex)
@@ -1459,14 +1465,20 @@ func (b *builder) createFunction() {
 	}
 
 	// Resolve phi nodes
+	phiBuilder := b.ctx.NewBuilder()
+	originalBuilder := b.Builder
+	b.Builder = phiBuilder
 	for _, phi := range b.phis {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
-			llvmVal := b.getCallArgument(edge, false)
 			llvmBlock := b.blockInfo[block.Preds[i].Index].exit
+			b.SetInsertPointBefore(llvmBlock.LastInstruction())
+			llvmVal := b.getCallArgument(edge, b.isIndirectAggregate(b.getLLVMType(edge.Type())))
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
 	}
+	b.Builder = originalBuilder
+	phiBuilder.Dispose()
 
 	if b.NeedsStackObjects {
 		// Track phi nodes.
@@ -1697,9 +1709,8 @@ func (b *builder) getValuePointer(value ssa.Value) llvm.Value {
 	return ptr
 }
 
-func (b *builder) getCallArgument(value ssa.Value, exported bool) llvm.Value {
-	paramType := b.getLLVMType(value.Type())
-	if b.isIndirectParam(paramType, exported) {
+func (b *builder) getCallArgument(value ssa.Value, indirect bool) llvm.Value {
+	if indirect {
 		return b.getValuePointer(value)
 	}
 	return b.getValue(value, getPos(value))
@@ -2344,18 +2355,21 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		b.createNilCheck(instr.Value, callee, "fpcall")
 	}
 
-	var params []llvm.Value
-	for _, param := range instr.Args {
-		params = append(params, b.getCallArgument(param, exported))
+	abi := b.getFunctionABI(instr.Signature(), exported)
+	paramOffset := 0
+	if instr.IsInvoke() {
+		abi = b.getInterfaceFunctionABI(instr.Signature())
+		paramOffset = 1
 	}
+	params := b.getCallArguments(instr.Args, abi.params[paramOffset:])
 	if instr.IsInvoke() {
 		params = append([]llvm.Value{invokeReceiver}, params...)
 		params = append(params, invokeTypecode)
 	}
 
 	if !exported {
-		if resultType, indirectResult := b.hasIndirectResult(instr.Signature()); indirectResult {
-			result := b.createIndirectStorage(resultType, "call.result")
+		if abi.indirectResult {
+			result := b.createIndirectStorage(abi.resultType, "call.result")
 			params = append([]llvm.Value{result}, params...)
 			params = append(params, context)
 			b.createInvoke(calleeType, callee, params, "", instr)
@@ -2736,7 +2750,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return b.createMapIteratorNext(rangeVal, llvmRangeVal, it), nil
 		}
 	case *ssa.Phi:
-		phiType := b.storedParamType(b.getLLVMType(expr.Type()), false)
+		phiType := b.storedParamType(b.getLLVMType(expr.Type()))
 		phi := b.CreatePHI(phiType, "")
 		b.phis = append(b.phis, phiNode{expr, phi})
 		return phi, nil

@@ -79,13 +79,11 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		return llvmFn.GlobalValueType(), llvmFn
 	}
 
-	retType, indirectResult := c.hasIndirectResult(fn.Signature)
-	if info.exported {
-		indirectResult = false
-	}
+	abi := c.getFunctionABI(fn.Signature, info.exported)
+	retType := abi.resultType
 
 	var paramInfos []paramInfo
-	if indirectResult {
+	if abi.indirectResult {
 		paramInfos = append(paramInfos, paramInfo{
 			llvmType: c.dataPtrType,
 			name:     "return",
@@ -93,12 +91,16 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		})
 		retType = c.ctx.VoidType()
 	}
-	for _, param := range getParams(fn.Signature) {
-		paramType := c.getLLVMType(param.Type())
-		if info.exported {
-			paramInfos = append(paramInfos, c.expandDirectFormalParamType(paramType, param.Name(), param.Type())...)
+	for i, param := range getParams(fn.Signature) {
+		if abi.params[i].indirect {
+			paramInfos = append(paramInfos, paramInfo{
+				llvmType: c.dataPtrType,
+				name:     param.Name(),
+				elemSize: c.targetData.TypeAllocSize(abi.params[i].llvmType),
+				flags:    paramIsGoParam | paramIsReadonly | paramIsIndirect,
+			})
 		} else {
-			paramInfos = append(paramInfos, c.expandFormalParamType(paramType, param.Name(), param.Type())...)
+			paramInfos = append(paramInfos, c.expandDirectFormalParamType(abi.params[i].llvmType, param.Name(), param.Type())...)
 		}
 	}
 
@@ -109,7 +111,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	}
 
 	var paramTypes []llvm.Type
-	hasIndirectABI := indirectResult
+	hasIndirectABI := abi.indirectResult
 	for _, info := range paramInfos {
 		paramTypes = append(paramTypes, info.llvmType)
 		hasIndirectABI = hasIndirectABI || info.flags&paramIsIndirect != 0
@@ -120,8 +122,10 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 	if hasIndirectABI {
 		// Argument promotion only rewrites functions whose uses are all direct
 		// calls. Keep an address use so LLVM cannot reconstruct the large
-		// aggregate signature that this ABI exists to avoid.
+		// aggregate signature that this ABI exists to avoid. The optimizer
+		// removes this temporary root before its final dead-code elimination.
 		llvmutil.AppendToGlobal(c.mod, "llvm.used", llvmFn)
+		llvmutil.AppendToGlobal(c.mod, "tinygo.indirect-abi", llvmFn)
 	}
 	if strings.HasPrefix(c.Triple, "wasm") {
 		// C functions without prototypes like this:
