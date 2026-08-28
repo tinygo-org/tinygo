@@ -79,7 +79,7 @@ jobs:
         run: make llvm-source
       - name: Save LLVM source cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && github.ref_type != 'tag'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
           path: |
@@ -108,7 +108,7 @@ jobs:
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && github.ref_type != 'tag'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
@@ -281,7 +281,7 @@ jobs:
         run: make llvm-source
       - name: Save LLVM source cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && github.ref_type != 'tag'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
           path: |
@@ -308,7 +308,7 @@ jobs:
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && github.ref_type != 'tag'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
@@ -390,7 +390,7 @@ jobs:
         run: make llvm-source
       - name: Save LLVM source cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true' && github.ref_type != 'tag'
         with:
           key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
           path: |
@@ -419,7 +419,7 @@ jobs:
           find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
       - name: Save LLVM build cache
         uses: actions/cache/save@v5
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+        if: steps.cache-llvm-build.outputs.cache-hit != 'true' && github.ref_type != 'tag'
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
