@@ -1,4 +1,4 @@
-//go:build scheduler.none
+//go:build scheduler.none && uefi
 
 package task
 
