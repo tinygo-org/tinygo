@@ -69,6 +69,13 @@ func CreateInstructionAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type,
 	return alloca
 }
 
+// EmitLifetimeStart starts an alloca lifetime at the current builder
+// position. Use it together with EmitLifetimeEnd.
+func EmitLifetimeStart(builder llvm.Builder, mod llvm.Module, ptr, size llvm.Value) {
+	fnType, fn := getLifetimeStartFunc(mod)
+	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, ptr), "")
+}
+
 // EmitLifetimeEnd signals the end of an (alloca) lifetime by calling the
 // llvm.lifetime.end intrinsic. It is commonly used together with
 // createTemporaryAlloca.

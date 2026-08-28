@@ -141,7 +141,118 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			bitcast.EraseFromParentAsInstruction()
 		}
 		heapalloc.EraseFromParentAsInstruction()
+
+		// Add lifetime markers so that LLVM can reuse the stack slot.
+		addLifetimeMarkers(mod, builder, alloca, store, size)
 	}
+}
+
+// addLifetimeMarkers adds llvm.lifetime.start and llvm.lifetime.end to a
+// promoted allocation when all uses stay in the block of the allocation.
+func addLifetimeMarkers(mod llvm.Module, builder llvm.Builder, alloca, firstUse llvm.Value, size uint64) {
+	block := firstUse.InstructionParent()
+
+	// Collect each instruction that uses the pointer or a derived pointer.
+	// One call can use several of these pointers. Examine each argument.
+	users := map[llvm.Value]struct{}{}
+	visited := map[llvm.Value]struct{}{alloca: {}}
+	worklist := []llvm.Value{alloca}
+	push := func(derived llvm.Value) {
+		if _, ok := visited[derived]; !ok {
+			visited[derived] = struct{}{}
+			worklist = append(worklist, derived)
+		}
+	}
+	for len(worklist) != 0 {
+		value := worklist[len(worklist)-1]
+		worklist = worklist[:len(worklist)-1]
+		for _, use := range getUses(value) {
+			if use.InstructionParent() != block {
+				// A use in another block. Add no markers.
+				return
+			}
+			users[use] = struct{}{}
+			switch use.InstructionOpcode() {
+			case llvm.GetElementPtr, llvm.BitCast:
+				// The result is a new pointer to the allocation.
+				push(use)
+			case llvm.Load, llvm.ICmp:
+				// The pointer does not leave through these.
+			case llvm.Store:
+				if use.Operand(0) == value {
+					// A stored pointer escapes. Promotion prevents this, but
+					// add no markers to be safe.
+					return
+				}
+			case llvm.Call:
+				// The callee cannot capture the pointer but can return it.
+				// Follow a pointer result. Add no markers for an aggregate.
+				if callMayReturnValue(use, value) {
+					if use.Type().TypeKind() == llvm.PointerTypeKind {
+						push(use)
+					} else {
+						return
+					}
+				}
+			default:
+				// An unknown use. Add no markers.
+				return
+			}
+		}
+	}
+
+	// Find the last use in the block.
+	last := block.LastInstruction()
+	for !last.IsNil() {
+		if _, ok := users[last]; ok {
+			break
+		}
+		last = llvm.PrevInstruction(last)
+	}
+	if last.IsNil() {
+		return // not reached, the zeroing store is always a use
+	}
+	after := llvm.NextInstruction(last)
+	if after.IsNil() {
+		// The last use is the terminator. The lifetime cannot end in
+		// this block.
+		return
+	}
+
+	sizeValue := llvm.ConstInt(mod.Context().Int64Type(), size, false)
+	builder.SetInsertPointBefore(firstUse)
+	llvmutil.EmitLifetimeStart(builder, mod, alloca, sizeValue)
+	builder.SetInsertPointBefore(after)
+	llvmutil.EmitLifetimeEnd(builder, mod, alloca, sizeValue)
+}
+
+// callMayReturnValue reports whether the call can return value, directly or
+// inside an aggregate. It uses the same rules as callValueEscapesAt.
+func callMayReturnValue(call, value llvm.Value) bool {
+	called := call.CalledValue()
+	if called.IsAFunction().IsNil() {
+		// An unknown callee. Assume that it returns the pointer.
+		return true
+	}
+	kindReturned := llvm.AttributeKindID("returned")
+	for i := 0; i < called.ParamsCount(); i++ {
+		if call.Operand(i) != value {
+			continue
+		}
+		if !called.GetEnumAttributeAtIndex(i+1, kindReturned).IsNil() {
+			return true
+		}
+		if called.IsDeclaration() {
+			// A declaration can only return a nocapture argument when the
+			// parameter has the returned attribute.
+			continue
+		}
+		result := valueEscapesAtImpl(called.Param(i), true, nil)
+		if !result.escapeAt.IsNil() || result.returned {
+			return true
+		}
+	}
+	return false
 }
 
 // FormatAllocReason renders the heap allocation in a human-readable format.
