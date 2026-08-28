@@ -1,4 +1,4 @@
-//go:build py32 && !py32_hsi_fs_op && !py32_hsi_fs_literal4 && !py32_no_hsi_fs
+//go:build py32 && !py32_hsi_fs_op && !py32_no_hsi_fs
 
 package runtime
 
