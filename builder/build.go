@@ -651,6 +651,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			if err != nil {
 				return err
 			}
+			if strings.HasPrefix(config.Triple(), "wasm") {
+				if err := compiler.ValidateWasmFunctionParameters(mod); err != nil {
+					return err
+				}
+			}
 
 			// Make sure stack sizes are loaded from a separate section so they can be
 			// modified after linking.

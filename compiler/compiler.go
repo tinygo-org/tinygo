@@ -87,6 +87,7 @@ type compilerContext struct {
 	program          *ssa.Program
 	diagnostics      []error
 	functionInfos    map[*ssa.Function]functionInfo
+	functionABIs     map[functionABIKey]functionABI
 	astComments      map[string]*ast.CommentGroup
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
@@ -107,6 +108,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		machine:       machine,
 		targetData:    machine.CreateTargetData(),
 		functionInfos: map[*ssa.Function]functionInfo{},
+		functionABIs:  map[functionABIKey]functionABI{},
 		astComments:   map[string]*ast.CommentGroup{},
 	}
 
@@ -1284,27 +1286,23 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	}
 
 	// Load function parameters
+	abi := b.getFunctionABI(b.fn.Signature, b.info.exported)
 	llvmParamIndex := 0
-	if _, indirectResult := b.hasIndirectResult(b.fn.Signature); indirectResult && !b.info.exported {
+	if abi.indirectResult {
 		b.indirectReturn = b.llvmFn.Param(llvmParamIndex)
 		b.indirectReturn.SetName("return")
 		llvmParamIndex++
 	}
-	for _, param := range b.fn.Params {
-		llvmType := b.getLLVMType(param.Type())
-		if b.isIndirectParam(llvmType, b.info.exported) {
+	for i, param := range b.fn.Params {
+		llvmType := abi.params[i].llvmType
+		if abi.params[i].indirect {
 			llvmParam := b.llvmFn.Param(llvmParamIndex)
 			llvmParam.SetName(param.Name())
 			b.indirectValues[param] = llvmParam
 			llvmParamIndex++
 			continue
 		}
-		var paramInfos []paramInfo
-		if b.info.exported {
-			paramInfos = b.expandDirectFormalParamType(llvmType, param.Name(), param.Type())
-		} else {
-			paramInfos = b.expandFormalParamType(llvmType, param.Name(), param.Type())
-		}
+		paramInfos := b.expandDirectFormalParamType(llvmType, param.Name(), param.Type())
 		fields := make([]llvm.Value, 0, 1)
 		for _, info := range paramInfos {
 			param := b.llvmFn.Param(llvmParamIndex)
@@ -1444,7 +1442,7 @@ func (b *builder) createFunction() {
 	for _, phi := range b.phis {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
-			llvmVal := b.getCallArgument(edge, false)
+			llvmVal := b.getCallArgument(edge, b.isIndirectAggregate(b.getLLVMType(edge.Type())))
 			llvmBlock := b.blockInfo[block.Preds[i].Index].exit
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
@@ -1676,9 +1674,8 @@ func (b *builder) getValuePointer(value ssa.Value) llvm.Value {
 	return ptr
 }
 
-func (b *builder) getCallArgument(value ssa.Value, exported bool) llvm.Value {
-	paramType := b.getLLVMType(value.Type())
-	if b.isIndirectParam(paramType, exported) {
+func (b *builder) getCallArgument(value ssa.Value, indirect bool) llvm.Value {
+	if indirect {
 		return b.getValuePointer(value)
 	}
 	return b.getValue(value, getPos(value))
@@ -2323,18 +2320,21 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		b.createNilCheck(instr.Value, callee, "fpcall")
 	}
 
-	var params []llvm.Value
-	for _, param := range instr.Args {
-		params = append(params, b.getCallArgument(param, exported))
+	abi := b.getFunctionABI(instr.Signature(), exported)
+	paramOffset := 0
+	if instr.IsInvoke() {
+		abi = b.getInterfaceFunctionABI(instr.Signature())
+		paramOffset = 1
 	}
+	params := b.getCallArguments(instr.Args, abi.params[paramOffset:])
 	if instr.IsInvoke() {
 		params = append([]llvm.Value{invokeReceiver}, params...)
 		params = append(params, invokeTypecode)
 	}
 
 	if !exported {
-		if resultType, indirectResult := b.hasIndirectResult(instr.Signature()); indirectResult {
-			result := b.createIndirectStorage(resultType, "call.result")
+		if abi.indirectResult {
+			result := b.createIndirectStorage(abi.resultType, "call.result")
 			params = append([]llvm.Value{result}, params...)
 			params = append(params, context)
 			b.createInvoke(calleeType, callee, params, "")
@@ -2715,7 +2715,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return b.createMapIteratorNext(rangeVal, llvmRangeVal, it), nil
 		}
 	case *ssa.Phi:
-		phiType := b.storedParamType(b.getLLVMType(expr.Type()), false)
+		phiType := b.storedParamType(b.getLLVMType(expr.Type()))
 		phi := b.CreatePHI(phiType, "")
 		b.phis = append(b.phis, phiNode{expr, phi})
 		return phi, nil
