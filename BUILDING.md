@@ -30,7 +30,10 @@ on a different system like Mac.
 
 ## Using GNU Make
 
-The static build of TinyGo is driven by GNUmakefile, which provides a help target for quick reference:
+The static build of TinyGo is driven by GNUmakefile, which includes the topic
+files in the `make/` directory (`config.mk`, `llvm.mk`, `gen-device.mk`,
+`build.mk`, `test.mk`, `smoketest.mk`, `release.mk`, and `tools.mk`).
+It provides a help target for quick reference:
 
     % make help
     clean                           Remove build directory
@@ -64,7 +67,7 @@ while producing binaries that are about as fast.
     export CC=clang
     export CXX=clang++
 
-The Makefile includes a default configuration that is good for most users. It
+`make/config.mk` holds a default configuration that is good for most users. It
 builds a release version of LLVM (optimized, no asserts) and includes all
 targets supported by TinyGo:
 

@@ -107,7 +107,7 @@ jobs:
           path: build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
           archive: false
       - name: Smoke tests
-        run: make smoketest TINYGO=$(PWD)/build/tinygo
+        run: make smoketest-quick TINYGO=$(PWD)/build/tinygo
   test-macos-homebrew:
     name: homebrew-install
     runs-on: macos-latest

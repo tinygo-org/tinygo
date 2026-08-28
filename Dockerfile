@@ -10,6 +10,7 @@ RUN apt-get update && \
         /tmp/*
 
 COPY ./GNUmakefile /tinygo/GNUmakefile
+COPY ./make /tinygo/make
 
 RUN cd /tinygo/ && \
     make llvm-source

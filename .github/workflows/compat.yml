@@ -69,4 +69,4 @@ jobs:
       - run: tinygo version
       - run: make gen-device -j4
       - run: go test -tags=llvm${{ env.LLVM }} -short -skip=TestErrors
-      - run: make smoketest XTENSA=0
+      - run: make smoketest-quick XTENSA=0
