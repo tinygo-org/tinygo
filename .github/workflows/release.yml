@@ -1,0 +1,108 @@
+# Build and publish a GitHub Release when a version tag is pushed.
+#
+# This workflow does not build anything itself: it calls the regular Linux,
+# macOS and Windows workflows, which already produce every file a release
+# needs, and then collects their artifacts into a single draft release.
+#
+# The release is created as a draft on purpose, so the release notes can be
+# reviewed (and the CHANGELOG.md entry pasted in) before publishing.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-version:
+    # The release filenames are derived from goenv/version.go, not from the
+    # tag, so check they agree before spending an hour building everything.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Check the tag matches goenv/version.go
+        run: |
+          version=$(./.github/workflows/tinygo-extract-version.sh | cut -d= -f2-)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $version in goenv/version.go"
+            exit 1
+          fi
+
+  linux:
+    needs: check-version
+    uses: ./.github/workflows/linux.yml
+  macos:
+    needs: check-version
+    uses: ./.github/workflows/build-macos.yml
+  windows:
+    needs: check-version
+    uses: ./.github/workflows/windows.yml
+
+  release:
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Download all release artifacts
+        # Every build job uploads with `archive: false`, which names the
+        # artifact after the file, so this leaves the release files (and
+        # nothing else) directly in dist/.
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Check all release files are present
+        # A build that silently stopped uploading must not result in a
+        # half-complete release, so list what is expected explicitly.
+        run: |
+          version=$(./.github/workflows/tinygo-extract-version.sh | cut -d= -f2-)
+          missing=0
+          for file in \
+              "tinygo$version.linux-amd64.tar.gz"  "tinygo_${version}_amd64.deb" \
+              "tinygo$version.linux-arm.tar.gz"    "tinygo_${version}_armhf.deb" \
+              "tinygo$version.linux-arm64.tar.gz"  "tinygo_${version}_arm64.deb" \
+              "tinygo$version.darwin-amd64.tar.gz" \
+              "tinygo$version.darwin-arm64.tar.gz" \
+              "tinygo$version.windows-amd64.zip"; do
+            if [ ! -f "dist/$file" ]; then
+              echo "::error::missing release file $file"
+              missing=1
+            fi
+          done
+          ls -l dist
+          exit $missing
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # GitHub computes a SHA-256 digest for every asset it stores, but
+          # only exposes it through the API, so say how to read it. These notes
+          # are prepended to the notes GitHub generates from the commit log.
+          notes=$(cat <<EOF
+          ## Verifying downloads
+
+          GitHub records a SHA-256 digest for every asset below. To print them:
+
+              gh release view $GITHUB_REF_NAME --repo $GITHUB_REPOSITORY --json assets --jq '.assets[] | "\(.digest)  \(.name)"'
+          EOF
+          )
+          prerelease=
+          case "$GITHUB_REF_NAME" in
+            *-alpha*|*-beta*|*-rc*) prerelease=--prerelease ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --verify-tag \
+            $prerelease \
+            --title "$GITHUB_REF_NAME" \
+            --notes "$notes" \
+            --generate-notes \
+            dist/*

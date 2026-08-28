@@ -119,3 +119,31 @@ the following command (for example in ~/lib):
 TinyGo will get extracted to a `tinygo` directory. You can then call it with:
 
     ./tinygo/bin/tinygo
+
+## Publish a release
+
+Releases are built and published by the `Release` workflow
+(`.github/workflows/release.yml`), which runs when a `v*` tag is pushed. There
+is no need to build or upload anything by hand.
+
+ 1. On the `dev` branch, set `const version` in `goenv/version.go` to the new
+    version (without a `v` prefix) and update `CHANGELOG.md`.
+ 2. Merge `dev` into the `release` branch.
+ 3. Tag the release and push the tag:
+
+        git tag v0.42.0
+        git push origin v0.42.0
+
+    The tag must match `goenv/version.go`; the workflow refuses to build
+    otherwise, because the release filenames are derived from that constant.
+ 4. The workflow runs the full Linux, macOS and Windows workflows, so
+    everything that ships is also tested, and then collects their artifacts
+    into a **draft** release: tarballs for linux/darwin, a zip for Windows, and
+    Debian packages for linux.
+ 5. Review the generated release notes, paste in the `CHANGELOG.md` entry, and
+    publish the draft.
+
+GitHub records a SHA-256 digest for every published asset. It is not shown on
+the release page, but it can be read with:
+
+    gh release view v0.42.0 --json assets --jq '.assets[] | "\(.digest)  \(.name)"'

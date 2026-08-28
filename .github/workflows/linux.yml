@@ -6,9 +6,10 @@ on:
     branches:
       - dev
       - release
+  workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: linux-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
