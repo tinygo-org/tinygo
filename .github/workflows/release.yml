@@ -54,11 +54,14 @@ jobs:
       - name: Download all release artifacts
         # Every build job uploads with `archive: false`, which names the
         # artifact after the file, so this leaves the release files (and
-        # nothing else) directly in dist/.
+        # nothing else) directly in dist/. skip-decompress matters for the
+        # Windows release, which is itself a .zip: without it the download
+        # would helpfully unpack the release instead of keeping the file.
         uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+          skip-decompress: true
       - name: Check all release files are present
         # A build that silently stopped uploading must not result in a
         # half-complete release, so list what is expected explicitly.
