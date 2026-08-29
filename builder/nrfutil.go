@@ -19,7 +19,7 @@ type jsonManifest struct {
 			DataFile       string        `json:"dat_file"`
 			InitPacketData nrfInitPacket `json:"init_packet_data"`
 		} `json:"application"`
-		DFUVersion float64 `json:"dfu_version"` // yes, this is a JSON number, not a string
+		DFUVersion float64 `json:"dfu_version,omitempty"` // yes, this is a JSON number, not a string
 	} `json:"manifest"`
 }
 
@@ -93,7 +93,19 @@ func makeDFUFirmwareImage(options *compileopts.Options, infile, outfile string) 
 	manifest.Manifest.Application.BinaryFile = "application.bin"
 	manifest.Manifest.Application.DataFile = "application.dat"
 	manifest.Manifest.Application.InitPacketData = initPacket
-	manifest.Manifest.DFUVersion = 0.5
+
+	// use build tag "nrf_open_dfu" to indicate open DFU format, otherwise defaults to secure DFU
+	openDFU := false
+	for _, tag := range options.Tags {
+		if tag == "nrf_open_dfu" {
+			openDFU = true
+			break
+		}
+	}
+
+	if !openDFU {
+		manifest.Manifest.DFUVersion = 0.5
+	}
 
 	// Write the JSON manifest to the file.
 	jsonw, err := w.Create("manifest.json")
