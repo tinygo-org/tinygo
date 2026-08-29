@@ -8,6 +8,8 @@ type boundaryAggregate [500]int32
 
 type moderateAggregate [400]int32
 
+type interfaceBoundaryAggregate [998]int32
+
 //go:noinline
 func readDirectAggregates(x, y directAggregate) int32 {
 	return x[0] + y[len(y)-1]
@@ -43,6 +45,14 @@ func readResultBudget(x directAggregate, y boundaryAggregate) (int32, int32) {
 	return x[0], y[0]
 }
 
+func selectAggregate(cond bool, x, y aggregateValue) int32 {
+	selected := x
+	if cond {
+		selected = y
+	}
+	return readSingleAggregate(selected)
+}
+
 func callAggregates(x, y aggregateValue) int32 {
 	return readAggregates(x, y)
 }
@@ -55,6 +65,10 @@ type aggregateReceiver struct{}
 
 type aggregateInterface interface {
 	read(aggregateValue, aggregateValue) int32
+}
+
+type boundaryInterface interface {
+	readBoundary(interfaceBoundaryAggregate) int32
 }
 
 //go:noinline
@@ -73,6 +87,14 @@ func callBoundAggregateMethod(receiver aggregateReceiver, x, y aggregateValue) i
 
 func callAggregateInterface(receiver aggregateInterface, x, y aggregateValue) int32 {
 	return receiver.read(x, y)
+}
+
+func (aggregateReceiver) readBoundary(value interfaceBoundaryAggregate) int32 {
+	return value[0]
+}
+
+func callBoundaryInterface(receiver boundaryInterface, value interfaceBoundaryAggregate) int32 {
+	return receiver.readBoundary(value)
 }
 
 func deferAggregates(x, y aggregateValue) {

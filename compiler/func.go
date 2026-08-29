@@ -36,20 +36,29 @@ type functionABIKey struct {
 	signature         *types.Signature
 	exported          bool
 	interfaceReceiver bool
+	budgetReceiverPtr bool
+	extraParams       uint64
 }
 
 func (c *compilerContext) getFunctionABI(sig *types.Signature, exported bool) functionABI {
-	return c.getFunctionABIWithReceiver(sig, exported, false)
+	budgetReceiverPtr := sig.Recv() != nil && !exported
+	extraParams := uint64(0)
+	if budgetReceiverPtr {
+		// Keep ordinary parameter decisions identical between concrete method
+		// calls and interface invokes.
+		extraParams++ // interface typecode
+	}
+	return c.getFunctionABIWithReceiver(sig, exported, false, budgetReceiverPtr, extraParams)
 }
 
 func (c *compilerContext) getInterfaceFunctionABI(sig *types.Signature) functionABI {
-	return c.getFunctionABIWithReceiver(sig, false, true)
+	return c.getFunctionABIWithReceiver(sig, false, true, false, 1)
 }
 
 // getFunctionABIWithReceiver lowers the fewest aggregate parameters necessary
 // to keep the complete scalarized signature within the internal ABI cap.
-func (c *compilerContext) getFunctionABIWithReceiver(sig *types.Signature, exported, interfaceReceiver bool) functionABI {
-	key := functionABIKey{sig, exported, interfaceReceiver}
+func (c *compilerContext) getFunctionABIWithReceiver(sig *types.Signature, exported, interfaceReceiver, budgetReceiverPtr bool, extraParams uint64) functionABI {
+	key := functionABIKey{sig, exported, interfaceReceiver, budgetReceiverPtr, extraParams}
 	if abi, ok := c.functionABIs[key]; ok {
 		return abi
 	}
@@ -81,7 +90,7 @@ func (c *compilerContext) getFunctionABIWithReceiver(sig *types.Signature, expor
 		return abi
 	}
 
-	count := uint64(1) // context
+	count := uint64(1) + extraParams // context and synthetic parameters
 	if abi.indirectResult {
 		count++
 	} else if aggregateValueCountExceeds(abi.resultType, 1) {
@@ -91,6 +100,10 @@ func (c *compilerContext) getFunctionABIWithReceiver(sig *types.Signature, expor
 	var candidates []int
 	for i, param := range abi.params {
 		if param.indirect {
+			count++
+			continue
+		}
+		if i == 0 && budgetReceiverPtr {
 			count++
 			continue
 		}
@@ -112,6 +125,12 @@ func (c *compilerContext) getFunctionABIWithReceiver(sig *types.Signature, expor
 		}
 		abi.params[i].indirect = true
 		count -= abi.params[i].leafCount - 1
+	}
+	if budgetReceiverPtr && !abi.params[0].indirect {
+		concreteCount := count - extraParams - 1 + abi.params[0].leafCount
+		if concreteCount > maxFunctionParams {
+			abi.params[0].indirect = true
+		}
 	}
 
 	c.functionABIs[key] = abi
@@ -268,9 +287,11 @@ func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
 
 // getLLVMFunctionType returns a LLVM function type for a given signature.
 func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
-	abi := c.getFunctionABI(typ, false)
+	var abi functionABI
 	if typ.Recv() != nil && c.getLLVMType(typ.Recv().Type()).StructName() == "runtime._interface" {
-		abi = c.getInterfaceFunctionABI(typ)
+		abi = c.getFunctionABIWithReceiver(typ, false, true, false, 0)
+	} else {
+		abi = c.getFunctionABI(typ, false)
 	}
 	returnType := abi.resultType
 

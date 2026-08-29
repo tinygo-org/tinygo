@@ -126,24 +126,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		}
 	}
 
-	llvmutil.RemoveGlobalReferences(mod, "llvm.used", "tinygo.indirect-abi")
-	cleanupOptions := llvm.NewPassBuilderOptions()
-	defer cleanupOptions.Dispose()
-	if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, cleanupOptions); err != nil {
-		return []error{fmt.Errorf("could not run final globaldce pass: %w", err)}
-	}
-
-	if config.Scheduler() == "none" {
-		// Check for any goroutine starts.
-		if start := mod.NamedFunction("internal/task.start"); !start.IsNil() && len(getUses(start)) > 0 {
-			errs := []error{}
-			for _, call := range getUses(start) {
-				errs = append(errs, errorAt(call, "attempted to start a goroutine without a scheduler"))
-			}
-			return errs
-		}
-	}
-
 	if config.VerifyIR() {
 		if errs := ircheck.Module(mod); errs != nil {
 			return errs
@@ -172,6 +154,24 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	err := mod.RunPasses(passes, llvm.TargetMachine{}, po)
 	if err != nil {
 		return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
+	}
+
+	llvmutil.RemoveGlobalReferences(mod, "llvm.used", "tinygo.indirect-abi")
+	cleanupOptions := llvm.NewPassBuilderOptions()
+	defer cleanupOptions.Dispose()
+	if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, cleanupOptions); err != nil {
+		return []error{fmt.Errorf("could not run final globaldce pass: %w", err)}
+	}
+
+	if config.Scheduler() == "none" {
+		// Check for any goroutine starts.
+		if start := mod.NamedFunction("internal/task.start"); !start.IsNil() && len(getUses(start)) > 0 {
+			errs := []error{}
+			for _, call := range getUses(start) {
+				errs = append(errs, errorAt(call, "attempted to start a goroutine without a scheduler"))
+			}
+			return errs
+		}
 	}
 
 	hasGCPass := MakeGCStackSlots(mod)
