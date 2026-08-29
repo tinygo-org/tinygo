@@ -1,0 +1,158 @@
+# Publish a GitHub release from the artifacts that CI already built.
+#
+# The Linux, macOS and Windows workflows build every file that a release needs
+# when the release branch is pushed. This workflow collects the artifacts of
+# those runs for the tagged commit, so what ships is what was tested.
+#
+# The release is a draft, so the notes can be reviewed before publication.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release, for example v0.42.0'
+        required: true
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+      - name: Read the version
+        id: version
+        # The release file names come from goenv/version.go, not from the tag,
+        # so the two must agree.
+        run: |
+          version=$(./.github/workflows/tinygo-extract-version.sh | cut -d= -f2-)
+          case "$version" in
+            *-dev)
+              echo "::error::goenv/version.go has development version $version"
+              exit 1
+              ;;
+          esac
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match version $version in goenv/version.go"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Wait for the CI runs of this commit
+        id: runs
+        # A pull request run has the merge commit as its head, so look at push
+        # runs only.
+        run: |
+          sha=$(git rev-parse HEAD)
+          for workflow in linux.yml build-macos.yml windows.yml; do
+            id=
+            for _ in $(seq 20); do
+              id=$(gh run list --workflow "$workflow" --commit "$sha" --event push --limit 1 --json databaseId --jq '.[0].databaseId')
+              if [ -n "$id" ]; then
+                break
+              fi
+              echo "waiting for $workflow to start on $sha"
+              sleep 30
+            done
+            if [ -z "$id" ]; then
+              echo "::error::no $workflow run for commit $sha"
+              exit 1
+            fi
+            echo "$workflow: run $id"
+            gh run watch "$id" --exit-status > /dev/null || true
+            conclusion=$(gh run view "$id" --json conclusion --jq .conclusion)
+            if [ "$conclusion" != "success" ]; then
+              echo "::error::$workflow run $id concluded with $conclusion"
+              exit 1
+            fi
+            case "$workflow" in
+              linux.yml)       echo "linux=$id"   >> "$GITHUB_OUTPUT" ;;
+              build-macos.yml) echo "macos=$id"   >> "$GITHUB_OUTPUT" ;;
+              windows.yml)     echo "windows=$id" >> "$GITHUB_OUTPUT" ;;
+            esac
+          done
+      # The build jobs upload with `archive: false`, so the artifact is the
+      # release file itself. skip-decompress keeps it that way. The Windows
+      # release is a .zip, which a download would otherwise unpack.
+      - name: Download the Linux artifacts
+        uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ steps.runs.outputs.linux }}
+          github-token: ${{ github.token }}
+          path: artifacts
+          skip-decompress: true
+      - name: Download the macOS artifacts
+        uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ steps.runs.outputs.macos }}
+          github-token: ${{ github.token }}
+          path: artifacts
+          skip-decompress: true
+      - name: Download the Windows artifacts
+        uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ steps.runs.outputs.windows }}
+          github-token: ${{ github.token }}
+          path: artifacts
+          skip-decompress: true
+      - name: Collect the release files
+        # A build that stopped uploading must not give a half complete release,
+        # so list the files that are expected. The search is by file name, not
+        # by artifact name, because the artifact names are not uniform.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          version=$VERSION
+          mkdir -p dist
+          missing=0
+          for file in \
+              "tinygo$version.linux-amd64.tar.gz"  "tinygo_${version}_amd64.deb" \
+              "tinygo$version.linux-arm.tar.gz"    "tinygo_${version}_armhf.deb" \
+              "tinygo$version.linux-arm64.tar.gz"  "tinygo_${version}_arm64.deb" \
+              "tinygo$version.darwin-amd64.tar.gz" \
+              "tinygo$version.darwin-arm64.tar.gz" \
+              "tinygo$version.windows-amd64.zip"; do
+            found=$(find artifacts -type f -name "$file" | head -1)
+            if [ -z "$found" ]; then
+              echo "::error::missing release file $file"
+              missing=1
+            else
+              mv "$found" "dist/$file"
+            fi
+          done
+          ls -l dist
+          exit $missing
+      - name: Extract the release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./.github/workflows/extract-changelog.sh "$VERSION" > notes.md
+      - name: Create the draft release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          version=$VERSION
+          set --
+          case "$version" in
+            *-*) set -- --prerelease ;;
+          esac
+          gh release create "$TAG" --draft --verify-tag "$@" \
+            --title "$version" \
+            --notes-file notes.md \
+            dist/*
