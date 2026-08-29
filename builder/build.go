@@ -1687,6 +1687,9 @@ func moduleBuildInfo(lprogram *loader.Program, buildVCS string) (string, error) 
 			switch {
 			case v != "":
 				mainVersion, vcsSettings = v, s
+			case s != "":
+				// A repository with no commits gives settings but no version.
+				mainVersion, vcsSettings = "(devel)", s
 			case buildVCS == "true":
 				// -buildvcs=true means the stamp was demanded, so failing to
 				// produce one is an error rather than a silent fallback. This
@@ -1734,13 +1737,20 @@ func moduleBuildInfo(lprogram *loader.Program, buildVCS string) (string, error) 
 // git work tree, or git is unavailable — so the caller falls back to "(devel)".
 // The error is non-nil only when git itself failed in a way worth reporting,
 // which -buildvcs=true turns into a hard failure.
+// resolvePath makes an absolute path with symbolic links resolved.
+func resolvePath(p string) (string, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(abs)
+}
+
 func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
 	if dir == "" {
 		return "", "", nil
 	}
-	// Keep the first real git failure, so -buildvcs=true can say what actually
-	// went wrong. "not a work tree" and a refusal over safe.directory or file
-	// permissions are very different problems and should not share a message.
+	// Keep the first git failure so -buildvcs=true can report the true cause.
 	var firstErr error
 	git := func(args ...string) (string, bool) {
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
@@ -1762,28 +1772,41 @@ func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
 	if out, ok := git("rev-parse", "--is-inside-work-tree"); !ok || out != "true" {
 		return "", "", firstErr
 	}
-	// The tags below are searched from the module directory, so they can belong
-	// to a parent repository. Only stamp when the module is itself the thing the
-	// repository is versioning; otherwise a monorepo, or a nested module, gets a
-	// version that is not its own. The go toolchain makes the same check.
+	// Tags found from the module directory can belong to a parent repository.
+	// Only stamp when the module is at the repository root, as the go tool does.
 	root, ok := git("rev-parse", "--show-toplevel")
 	if !ok {
 		return "", "", firstErr
 	}
-	if absDir, err := filepath.Abs(dir); err == nil {
-		if absRoot, err := filepath.Abs(root); err == nil && absDir != absRoot {
-			return "", "", nil // module is not at the repository root; no stamp
-		}
+	// git gives the physical path but go list can give one with a symbolic link.
+	// Resolve both before the comparison, and do not stamp if that is not possible.
+	absDir, dirErr := resolvePath(dir)
+	absRoot, rootErr := resolvePath(root)
+	if dirErr != nil || rootErr != nil || absDir != absRoot {
+		return "", "", nil
+	}
+	// The module path major version decides which tags can belong to this module.
+	// See https://go.dev/ref/mod#major-version-suffixes
+	major, tagMatch := "", "v[0-9]*"
+	if _, pathMajor, ok := module.SplitPathVersion(modPath); ok && pathMajor != "" {
+		major = strings.TrimLeft(pathMajor, "/.")
+		tagMatch = major + ".*"
 	}
 	rev, ok := git("rev-parse", "HEAD")
 	if !ok || rev == "" {
+		// A repository with no commits has no revision. The go tool still records
+		// vcs and vcs.modified here and uses (devel). See cmd/go/internal/load/pkg.go
+		if inside, ok := git("rev-parse", "--is-bare-repository"); ok && inside == "false" {
+			var sb strings.Builder
+			sb.WriteString("build\tvcs=git\n")
+			sb.WriteString("build\tvcs.modified=true\n")
+			return "", sb.String(), nil
+		}
 		return "", "", firstErr
 	}
 
-	// Commit time (Unix seconds → UTC), used in the pseudo-version and vcs.time.
-	// A missing or unparsable time is a stamp failure rather than something to
-	// paper over: module.PseudoVersion would otherwise encode the zero time as
-	// 00010101000000 and produce a version that looks real but is not.
+	// An unparsable commit time is a stamp failure. module.PseudoVersion would
+	// otherwise encode the zero time as 00010101000000 and look real.
 	var commitTime time.Time
 	s, ok := git("show", "-s", "--format=%ct", "HEAD")
 	if !ok {
@@ -1795,15 +1818,14 @@ func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
 	}
 	commitTime = time.Unix(sec, 0).UTC()
 
-	// The tree is "modified" if there are any uncommitted changes (tracked or
-	// untracked), as reported by `git status --porcelain` — same as `go build`.
+	// The tree is modified when git status reports any change, tracked or not.
+	// This is what go build does.
 	modified := false
 	if status, ok := git("status", "--porcelain"); ok && status != "" {
 		modified = true
 	}
 
-	// Version: an exact semver tag pointing at HEAD, else a Go-style
-	// pseudo-version based on the most recent reachable tag.
+	// Use an exact semver tag on HEAD, else a pseudo-version from the last tag.
 	if tags, ok := git("tag", "--points-at", "HEAD"); ok {
 		for _, t := range strings.Fields(tags) {
 			if semver.IsValid(t) && semver.Canonical(t) == t {
@@ -1814,32 +1836,29 @@ func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
 	}
 	if version == "" {
 		older := ""
-		if base, ok := git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"); ok && semver.IsValid(base) {
+		if base, ok := git("describe", "--tags", "--abbrev=0", "--match", tagMatch); ok && semver.IsValid(base) {
 			older = base
 		}
 		short := rev
 		if len(short) > 12 {
 			short = short[:12]
 		}
-		version = module.PseudoVersion(semver.Major(older), older, commitTime, short)
+		pseudoMajor := major
+		if pseudoMajor == "" {
+			pseudoMajor = semver.Major(older)
+		}
+		version = module.PseudoVersion(pseudoMajor, older, commitTime, short)
 	}
 
-	// The version came from whatever tags git found, which says nothing about
-	// the module path. Reject the mismatch that produces: a v1 tag on a module
-	// whose path ends in /v2, and the reverse.
-	//
-	// This deliberately checks only the major version, not the whole path.
-	// module.Check would also reject a path with no dot in its first element,
-	// which is a perfectly ordinary thing for a module that is never published,
-	// and stripping the stamp from those would be a regression.
+	// Final safety check on the major version only. module.Check would also
+	// reject an unpublished module path with no dot in its first element.
 	if _, pathMajor, ok := module.SplitPathVersion(modPath); ok {
 		if err := module.CheckPathMajor(version, pathMajor); err != nil {
-			return "", "", nil // not our version to claim; fall back to (devel)
+			return "", "", nil // not our version, fall back to (devel)
 		}
 	}
 
-	// A modified work tree does not describe the tagged commit any more, so say
-	// so, exactly as `go build` does.
+	// A modified tree no longer describes the tagged commit.
 	if modified {
 		version += "+dirty"
 	}
@@ -1847,8 +1866,7 @@ func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
 	var sb strings.Builder
 	sb.WriteString("build\tvcs=git\n")
 	sb.WriteString("build\tvcs.revision=" + rev + "\n")
-	// RFC3339Nano, matching cmd/go. %ct only gives whole seconds, so nothing is
-	// lost either way, but the format should be the one Go readers expect.
+	// RFC3339Nano is the format cmd/go writes.
 	sb.WriteString("build\tvcs.time=" + commitTime.Format(time.RFC3339Nano) + "\n")
 	sb.WriteString("build\tvcs.modified=" + strconv.FormatBool(modified) + "\n")
 	return version, sb.String(), nil
