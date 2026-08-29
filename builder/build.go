@@ -792,6 +792,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			}
 			linkerDependencies = append(linkerDependencies, job)
 		}
+
+		// Add .syso files
+		// TODO: is this the right way to do this?
+		for _, filename := range pkg.SysoFiles {
+			ldflags = append(ldflags, filepath.Join(pkg.Dir, filename))
+		}
 	}
 
 	// Linker flags from CGo lines:
