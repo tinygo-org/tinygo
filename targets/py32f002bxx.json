@@ -1,0 +1,12 @@
+{
+    "inherits": [
+        "py32"
+    ],
+    "build-tags": [
+        "py32f002bxx",
+        "py32_no_gpio_afrh"
+    ],
+    "extra-files": [
+        "src/device/py32/py32f002bxx.s"
+    ]
+}

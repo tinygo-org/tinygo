@@ -1,4 +1,4 @@
-//go:build atsamd21 || nrf51
+//go:build atsamd21 || nrf51 || py32
 
 package runtime
 

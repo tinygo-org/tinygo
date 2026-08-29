@@ -1,0 +1,11 @@
+{
+    "inherits": [
+        "cortex-m0plus"
+    ],
+    "scheduler": "none",
+    "gc": "none",
+    "serial": "uart",
+    "build-tags": [
+        "py32"
+    ]
+}

@@ -1,0 +1,9 @@
+{
+	"inherits": [
+		"py32f030x8"
+	],
+	"build-tags": [
+		"embedfire_py32f030",
+		"py32_default_uart_pins"
+	]
+}

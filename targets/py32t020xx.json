@@ -1,0 +1,12 @@
+{
+    "inherits": [
+        "py32"
+    ],
+    "build-tags": [
+        "py32t020xx",
+        "py32_uart_type"
+    ],
+    "extra-files": [
+        "src/device/py32/py32t020xx.s"
+    ]
+}

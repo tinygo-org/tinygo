@@ -1,0 +1,12 @@
+{
+    "inherits": [
+        "py32"
+    ],
+    "build-tags": [
+        "py32f001xx",
+        "py32_usart1_clock_literal"
+    ],
+    "extra-files": [
+        "src/device/py32/py32f001xx.s"
+    ]
+}

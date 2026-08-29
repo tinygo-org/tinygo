@@ -1,0 +1,11 @@
+{
+    "inherits": [
+        "py32"
+    ],
+    "build-tags": [
+        "py32md320xx"
+    ],
+    "extra-files": [
+        "src/device/py32/py32md320xx.s"
+    ]
+}

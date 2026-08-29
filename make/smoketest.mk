@@ -19,6 +19,7 @@ SMOKETEST_SUBTARGETS = \
 	smoketest-rp2xxx \
 	smoketest-pwm-usb \
 	smoketest-stm32 \
+	smoketest-py32 \
 	smoketest-avr \
 	smoketest-esp \
 	smoketest-riscv \
@@ -400,6 +401,37 @@ ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=arduino-uno-q       examples/serial
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=arduino-uno-q       examples/blinkm
+	@$(MD5SUM) $(SMOKE_OUT).hex
+endif
+
+smoketest-py32: SMOKE_OUT = build/smoke/py32
+smoketest-py32: | build/smoke
+ifneq ($(PY32), 0)
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f030  examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f030  examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f002b examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=embedfire-py32f002b examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f002bx5         ./testdata/py32-uart
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f003x6         ./testdata/py32-uart
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f030x8         ./testdata/py32-uart
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f403xb         examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f030x8         ./testdata/py32-clock
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f403xb         ./testdata/py32-clock
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32e407xc         examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32f410xb         examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=py32t020x5         examples/echo
 	@$(MD5SUM) $(SMOKE_OUT).hex
 endif
 

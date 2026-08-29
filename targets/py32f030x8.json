@@ -1,0 +1,10 @@
+{
+    "inherits": [
+        "py32f030xx"
+    ],
+    "build-tags": [
+        "py32f030x8"
+    ],
+    "linkerscript": "targets/py32f030x8.ld",
+    "flash-command": "pyocd load -t py32f030x8 {bin}"
+}

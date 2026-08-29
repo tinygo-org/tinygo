@@ -1,0 +1,13 @@
+{
+    "inherits": [
+        "py32"
+    ],
+    "build-tags": [
+        "py32l090xx",
+        "py32_gpio_ospdder",
+        "py32_hsi_fs_op"
+    ],
+    "extra-files": [
+        "src/device/py32/py32l090xx.s"
+    ]
+}
