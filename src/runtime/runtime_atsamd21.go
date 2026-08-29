@@ -66,7 +66,7 @@ func initClocks() {
 	// #define SYSCTRL_FUSES_OSC32K_CAL(value) ((SYSCTRL_FUSES_OSC32K_CAL_Msk & ((value) << SYSCTRL_FUSES_OSC32K_CAL_Pos)))
 	// u32_t fuse = *(u32_t *)FUSES_OSC32K_CAL_ADDR;
 	// u32_t calib = (fuse & FUSES_OSC32K_CAL_Msk) >> FUSES_OSC32K_CAL_Pos;
-	fuse := *(*uint32)(unsafe.Pointer(uintptr(0x00806020) + 4))
+	fuse := *(*uint32)(unsafe.Add(0x00806020, 4))
 	calib := (fuse & uint32(0x7f<<6)) >> 6
 
 	// SYSCTRL_OSC32K_CALIB(calib) |

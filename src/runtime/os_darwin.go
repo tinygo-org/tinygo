@@ -88,7 +88,7 @@ func findGlobals(found func(start, end uintptr)) {
 	// pointer to that struct in advance.
 	var offset uintptr
 	var hasOffset bool
-	cmd := (*segmentLoadCommand)(unsafe.Pointer(uintptr(unsafe.Pointer(&libc_mh_execute_header)) + unsafe.Sizeof(machHeader{})))
+	cmd := (*segmentLoadCommand)(unsafe.Add(unsafe.Pointer(&libc_mh_execute_header), unsafe.Sizeof(machHeader{})))
 	for i := libc_mh_execute_header.ncmds; i != 0; i-- {
 		if cmd.cmd == LC_SEGMENT_64 {
 			if cmd.fileoff == 0 && cmd.nsects != 0 {
