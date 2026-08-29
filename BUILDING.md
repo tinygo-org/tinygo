@@ -53,6 +53,10 @@ the git repository). Then, inside the directory, download the LLVM source:
 
     make llvm-source
 
+The LLVM commit to use is pinned in `llvm-version.txt`. A change to that file
+makes CI build LLVM again, because the file is part of the LLVM cache key. All
+other changes reuse the cached LLVM build.
+
 You can also store LLVM outside of the TinyGo root directory by setting the
 `LLVM_BUILDDIR`, `CLANG_SRC` and `LLD_SRC` make variables, but that is not
 covered by this guide.
