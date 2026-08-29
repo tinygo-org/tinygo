@@ -130,24 +130,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		}
 	}
 
-	llvmutil.RemoveGlobalReferences(mod, "llvm.used", "tinygo.indirect-abi")
-	cleanupOptions := llvm.NewPassBuilderOptions()
-	defer cleanupOptions.Dispose()
-	if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, cleanupOptions); err != nil {
-		return []error{fmt.Errorf("could not run final globaldce pass: %w", err)}
-	}
-
-	if config.Scheduler() == "none" {
-		// Check for any goroutine starts.
-		if start := mod.NamedFunction("internal/task.start"); !start.IsNil() && len(getUses(start)) > 0 {
-			errs := []error{}
-			for _, call := range getUses(start) {
-				errs = append(errs, errorAt(call, "attempted to start a goroutine without a scheduler"))
-			}
-			return errs
-		}
-	}
-
 	if config.VerifyIR() {
 		if errs := ircheck.Module(mod); errs != nil {
 			return errs
@@ -178,6 +160,30 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	removeGlobalAllocPromotionMarker(mod)
 	if err != nil {
 		return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
+	}
+
+	// Keep these temporary roots through the ThinLTO pre-link pipeline, which
+	// can run argument promotion and reconstruct the oversized signatures.
+	if !mod.NamedGlobal("tinygo.indirect-abi").IsNil() {
+		llvmutil.RemoveGlobalReferences(mod, "llvm.used", "tinygo.indirect-abi")
+		cleanupOptions := llvm.NewPassBuilderOptions()
+		defer cleanupOptions.Dispose()
+		if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, cleanupOptions); err != nil {
+			return []error{fmt.Errorf("could not run final globaldce pass: %w", err)}
+		}
+	}
+
+	if config.Scheduler() == "none" {
+		// Check only after temporary ABI roots have been removed and dead code
+		// eliminated. Otherwise, a dead function kept alive solely to prevent
+		// argument promotion can produce a spurious scheduler error.
+		if start := mod.NamedFunction("internal/task.start"); !start.IsNil() && len(getUses(start)) > 0 {
+			errs := []error{}
+			for _, call := range getUses(start) {
+				errs = append(errs, errorAt(call, "attempted to start a goroutine without a scheduler"))
+			}
+			return errs
+		}
 	}
 
 	hasGCPass := MakeGCStackSlots(mod)

@@ -18,6 +18,13 @@ func (exportedAggregateResultMethod) call() [1025]int32 {
 	return [1025]int32{}
 }
 
+type exportedLargeReceiver [600]int32
+
+//export exportedLargeReceiverCall
+func (receiver exportedLargeReceiver) call(value [399]int32) int32 {
+	return receiver[0] + value[0]
+}
+
 func exerciseExportedAggregateMethods() {
 	var paramMethod interface {
 		call([600]int32, [600]int32) int32
@@ -28,4 +35,9 @@ func exerciseExportedAggregateMethods() {
 		call() [1025]int32
 	} = exportedAggregateResultMethod{}
 	resultMethod.call()
+
+	var receiverMethod interface {
+		call([399]int32) int32
+	} = exportedLargeReceiver{}
+	receiverMethod.call([399]int32{})
 }
