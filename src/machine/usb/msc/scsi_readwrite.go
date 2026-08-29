@@ -91,6 +91,16 @@ func (m *msc) writeBlock(b []byte, lba, offset uint32) (n int, err error) {
 		return 0, invalidWriteError
 	}
 
+	// Erase the block first if needed.
+	// Data packets arrive in order, so if we want to write to the start of a
+	// block, that means it's the first write to this erase block and it needs
+	// to be erased first.
+	if uint32(blockStart)%m.blockSizeUSB == 0 {
+		firstBlock := uint32(blockStart) / uint32(m.dev.EraseBlockSize())
+		numBlocks := (m.blockSizeUSB + uint32(m.dev.EraseBlockSize()) - 1) / uint32(m.dev.EraseBlockSize())
+		m.dev.EraseBlocks(int64(firstBlock), int64(numBlocks))
+	}
+
 	// Write the full block to the underlying device
 	n, err = m.dev.WriteAt(b, blockStart)
 	n -= int(blockOffset)
