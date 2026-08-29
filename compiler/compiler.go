@@ -1439,14 +1439,20 @@ func (b *builder) createFunction() {
 	}
 
 	// Resolve phi nodes
+	phiBuilder := b.ctx.NewBuilder()
+	originalBuilder := b.Builder
+	b.Builder = phiBuilder
 	for _, phi := range b.phis {
 		block := phi.ssa.Block()
 		for i, edge := range phi.ssa.Edges {
-			llvmVal := b.getCallArgument(edge, b.isIndirectAggregate(b.getLLVMType(edge.Type())))
 			llvmBlock := b.blockInfo[block.Preds[i].Index].exit
+			b.SetInsertPointBefore(llvmBlock.LastInstruction())
+			llvmVal := b.getCallArgument(edge, b.isIndirectAggregate(b.getLLVMType(edge.Type())))
 			phi.llvm.AddIncoming([]llvm.Value{llvmVal}, []llvm.BasicBlock{llvmBlock})
 		}
 	}
+	b.Builder = originalBuilder
+	phiBuilder.Dispose()
 
 	if b.NeedsStackObjects {
 		// Track phi nodes.
