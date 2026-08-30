@@ -283,6 +283,19 @@ func TestTimerStopResetRace(t *testing.T) {
 	runTest("timer_stop_reset_race.go", optionsFromTarget("", sema), t, nil, nil)
 }
 
+// TestHostCryptoTLS checks that a hosted target gets the real crypto/tls and
+// not the stub, whose handshake does nothing. Only linux and macOS do.
+func TestHostCryptoTLS(t *testing.T) {
+	t.Parallel()
+
+	switch runtime.GOOS {
+	case "darwin", "linux":
+	default:
+		t.Skipf("host GOOS %s keeps the crypto/tls stub", runtime.GOOS)
+	}
+	runTest("hostcryptotls.go", optionsFromTarget("", sema), t, nil, nil)
+}
+
 func TestESP32QEMU(t *testing.T) {
 	t.Parallel()
 
