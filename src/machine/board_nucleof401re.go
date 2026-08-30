@@ -39,6 +39,26 @@ const (
 	D15 = PB8
 )
 
+// Analog pins (ADC1 channels).
+const (
+	ADC0  = PA0
+	ADC1  = PA1
+	ADC2  = PA2
+	ADC3  = PA3
+	ADC4  = PA4
+	ADC5  = PA5
+	ADC6  = PA6
+	ADC7  = PA7
+	ADC8  = PB0
+	ADC9  = PB1
+	ADC10 = PC0
+	ADC11 = PC1
+	ADC12 = PC2
+	ADC13 = PC3
+	ADC14 = PC4
+	ADC15 = PC5
+)
+
 // User LD2: the green LED is a user LED connected to Arduino signal D13
 // corresponding to STM32 I/O PA5.
 const (

@@ -4,7 +4,7 @@ package machine
 
 // STM32F401 peripheral implementations. The F401 has a reduced set of
 // peripherals compared to F405/F407, so this file provides F401-specific
-// versions of the functions in machine_stm32f4_extended.go.
+// versions of the functions in machine_stm32f40x_periph.go.
 
 import (
 	"device/stm32"
@@ -131,14 +131,3 @@ func (t *TIM) registerOCInterrupt() interrupt.Interrupt {
 
 // initRNG is a no-op on STM32F401 which has no hardware RNG peripheral.
 func initRNG() {}
-
-func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
-	var clock uint32
-	switch uart.Bus {
-	case stm32.USART1, stm32.USART6:
-		clock = CPUFrequency() // APB2 = HCLK (no prescaler)
-	case stm32.USART2:
-		clock = CPUFrequency() / 2 // APB1 = HCLK/2
-	}
-	return clock / baudRate
-}

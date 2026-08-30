@@ -69,7 +69,7 @@ func initOSC() {
 	stm32.PWR.CR.SetBits(PWR_SCALE1)
 
 	// enable HSE
-	stm32.RCC.CR.Set(stm32.RCC_CR_HSEON)
+	stm32.RCC.CR.SetBits(stm32.RCC_CR_HSEON)
 	for !stm32.RCC.CR.HasBits(stm32.RCC_CR_HSERDY) {
 	}
 
@@ -98,11 +98,12 @@ func initCLK() {
 	for !stm32.FLASH.ACR.HasBits(FLASH_LATENCY) {
 	}
 
+	// Set bus prescalers before switching SYSCLK to PLL so APB1 never
+	// exceeds its 42 MHz maximum.
+	stm32.RCC.CFGR.SetBits(RCC_DIV_PCLK1 | RCC_DIV_PCLK2 | RCC_DIV_HCLK)
+
 	// set CPU clock source to PLL
 	stm32.RCC.CFGR.SetBits(SYSCLK_SRC_PLL)
-
-	// update PCLK1/2 and HCLK divisors
-	stm32.RCC.CFGR.SetBits(RCC_DIV_PCLK1 | RCC_DIV_PCLK2 | RCC_DIV_HCLK)
 
 	// verify system clock source is ready
 	for !stm32.RCC.CFGR.HasBits(SYSCLK_STAT_PLL) {
