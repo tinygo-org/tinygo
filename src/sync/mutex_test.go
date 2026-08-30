@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type mutex interface {
@@ -266,5 +267,81 @@ func TestRWMutex(t *testing.T) {
 	}
 	for range 10 {
 		<-c
+	}
+}
+
+// A writer must not wait forever for readers that arrive after it does.
+func TestRWMutexWriterNotStarvedByLateReaders(t *testing.T) {
+	var m sync.RWMutex
+	locked := make(chan struct{})
+
+	// A reader holds the lock, so the writer has to wait for it.
+	m.RLock()
+
+	go func() {
+		m.Lock()
+		m.Unlock()
+		close(locked)
+	}()
+	// Give the writer time to register itself.
+	time.Sleep(50 * time.Millisecond)
+
+	// A second reader arrives while the writer waits. It must queue behind the
+	// writer and not join the count that the writer waits on.
+	secondReader := make(chan struct{})
+	go func() {
+		m.RLock()
+		m.RUnlock()
+		close(secondReader)
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	// The first reader leaves, which is the last reader the writer waits for.
+	m.RUnlock()
+
+	select {
+	case <-locked:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the writer did not wake after the last reader unlocked")
+	}
+	select {
+	case <-secondReader:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the queued reader did not wake after the writer unlocked")
+	}
+}
+
+// Readers released by an Unlock must take a permit and not read the reader
+// count again, which a writer that arrives in between can change back.
+func TestRWMutexHandoffToQueuedReaders(t *testing.T) {
+	var m sync.RWMutex
+	const iterations = 5000
+	done := make(chan struct{})
+
+	for range 4 {
+		go func() {
+			for range iterations {
+				m.RLock()
+				m.RUnlock()
+			}
+			done <- struct{}{}
+		}()
+	}
+	for range 3 {
+		go func() {
+			for range iterations {
+				m.Lock()
+				m.Unlock()
+			}
+			done <- struct{}{}
+		}()
+	}
+
+	for range 7 {
+		select {
+		case <-done:
+		case <-time.After(30 * time.Second):
+			t.Fatal("readers and writers stopped while they hand the lock over")
+		}
 	}
 }
