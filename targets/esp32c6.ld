@@ -65,7 +65,9 @@ SECTIONS
         . = ALIGN (4);
         _sbss = ABSOLUTE(.);
         *(.sbss)
+        *(.sbss.*)
         *(.bss .bss.*)
+        *(COMMON)
         . = ALIGN (4);
         _ebss = ABSOLUTE(.);
     } >SRAM
@@ -78,10 +80,13 @@ SECTIONS
         . = ALIGN (4);
         _sdata = ABSOLUTE(.);
         *(.sdata)
+        *(.sdata.*)
         *(.data .data.*)
         *(.dram*)
         . = ALIGN (4);
         _edata = ABSOLUTE(.);
+        /* Keep the image segment a multiple of 8; see the MMU note below. */
+        . = ALIGN (8);
     } >SRAM
 
     /* Code that must run from IRAM (not flash-mapped), for example interrupt
@@ -113,6 +118,8 @@ SECTIONS
         . = ALIGN(256);
         *(.text.exception_vectors)
         . = ALIGN(4);
+        /* Keep the image segment a multiple of 8; see the MMU note below. */
+        . = ALIGN(8);
     } > SRAM
 
     /* Heap starts after IRAM.
@@ -149,6 +156,8 @@ SECTIONS
     .text : ALIGN(4)
     {
         *(.text .text.*)
+        /* Keep the image segment a multiple of 8; see the MMU note below. */
+        . = ALIGN(8);
     } > IROM
 
     /* === DROM sections (flash-mapped read-only data) === */
@@ -168,12 +177,38 @@ SECTIONS
         . += 0x8;                                               /* rodata segment header */
     } > DROM
 
-    /* Constant global variables, stored in DROM. */
+    /* Constant global variables, stored in DROM.
+     *
+     * The flash MMU maps 64kB pages, so a flash-mapped section is only read
+     * correctly when its virtual address and its offset within the firmware
+     * image agree modulo 64kB. The dummy section above reproduces the image
+     * offset by accumulating the preceding segment sizes and headers, but that
+     * only works if the linker does not then insert alignment padding between
+     * the dummy and this section: the padding moves the virtual address without
+     * moving the image offset. lld gives .rodata 8-byte alignment, so every
+     * preceding segment is padded to a multiple of 8 above to keep the two in
+     * step. Getting this wrong shifts the whole of .rodata by a few bytes, which
+     * is silent and looks like arbitrary data corruption rather than a mapping
+     * bug -- it was found via a WiFi blob rejecting a struct whose first field
+     * read back as a code pointer. The ASSERT after this section catches it.
+     */
     .rodata : ALIGN(4)
     {
         *(.rodata*)
+        *(.srodata*)
         . = ALIGN (4);
     } >DROM
+
+    /* The flash MMU constraint described above, enforced at link time for both
+     * flash-mapped sections. */
+    ASSERT(((ADDR(.text) - ORIGIN(IROM)) & 0xffff) ==
+           ((0x18 + ((SIZEOF(.data) > 0) ? (SIZEOF(.data) + 0x8) : 0)
+                  + SIZEOF(.iram) + 0x8 + 0x8) & 0xffff),
+           ".text virtual address and flash offset disagree modulo 64kB")
+    ASSERT(((ADDR(.rodata) - ORIGIN(DROM)) & 0xffff) ==
+           ((0x18 + ((SIZEOF(.data) > 0) ? (SIZEOF(.data) + 0x8) : 0)
+                  + SIZEOF(.iram) + 0x8 + SIZEOF(.text) + 0x8 + 0x8) & 0xffff),
+           ".rodata virtual address and flash offset disagree modulo 64kB")
 
     /DISCARD/ :
     {
