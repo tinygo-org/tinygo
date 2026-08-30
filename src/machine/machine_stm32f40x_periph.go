@@ -1,10 +1,10 @@
-//go:build stm32f4 && !stm32f401
+//go:build stm32f4 && (stm32f405 || stm32f407 || stm32f469)
 
 package machine
 
 // This file contains stm32f4 peripheral implementations for chips that have the
-// full set of F4 peripherals (F405, F407, F469, etc.). Chips with fewer
-// peripherals (e.g. F401) use machine_stm32f401_periph.go instead.
+// full set of F4 peripherals (F405, F407, F469). Chips with fewer peripherals
+// (e.g. F401) use machine_stm32f401_periph.go instead.
 
 import (
 	"device/stm32"
@@ -272,15 +272,4 @@ func (t *TIM) registerOCInterrupt() interrupt.Interrupt {
 func initRNG() {
 	stm32.RCC.AHB2ENR.SetBits(stm32.RCC_AHB2ENR_RNGEN)
 	stm32.RNG.CR.SetBits(stm32.RNG_CR_RNGEN)
-}
-
-func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
-	var clock uint32
-	switch uart.Bus {
-	case stm32.USART1, stm32.USART6:
-		clock = CPUFrequency() / 2 // APB2 Frequency
-	case stm32.USART2, stm32.USART3, stm32.UART4, stm32.UART5:
-		clock = CPUFrequency() / 4 // APB1 Frequency
-	}
-	return clock / baudRate
 }

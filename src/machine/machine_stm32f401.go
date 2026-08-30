@@ -1,4 +1,4 @@
-//go:build stm32f4 && stm32f401
+//go:build stm32f401
 
 package machine
 
@@ -9,9 +9,11 @@ func CPUFrequency() uint32 {
 	return xtalHz / pll.M * pll.N / pll.P
 }
 
-// Internal use: configured speed of the APB1 and APB2 timers.
+// Internal use: configured speed of the APB1 and APB2 buses and timers.
 // STM32F401 at 84MHz: SYSCLK=84MHz, AHB=84MHz, APB1=42MHz, APB2=84MHz.
 // APB1 prescaler = 2, so APB1 timer clock = 42MHz × 2 = 84MHz.
 // APB2 prescaler = 1, so APB2 timer clock = 84MHz × 1 = 84MHz.
-const APB1_TIM_FREQ = 84_000_000
-const APB2_TIM_FREQ = 84_000_000
+const APB1_FREQ = 42_000_000
+const APB2_FREQ = 84_000_000
+const APB1_TIM_FREQ = APB1_FREQ * 2
+const APB2_TIM_FREQ = APB2_FREQ

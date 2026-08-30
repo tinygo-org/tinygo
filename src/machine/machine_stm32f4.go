@@ -395,6 +395,18 @@ func (uart *UART) setRegisters() {
 	uart.txEmptyFlag = stm32.USART_SR_TXE
 }
 
+func (uart *UART) getBaudRateDivisor(baudRate uint32) uint32 {
+	var clock uint32
+	switch uart.Bus {
+	case stm32.USART1, stm32.USART6:
+		clock = APB2_FREQ
+	default:
+		// USART2 and (when present) USART3/UART4/UART5 are on APB1.
+		clock = APB1_FREQ
+	}
+	return clock / baudRate
+}
+
 // -- SPI ----------------------------------------------------------------------
 
 type SPI struct {
@@ -416,9 +428,9 @@ func (spi *SPI) getBaudRate(config SPIConfig) uint32 {
 	var clock uint32
 	switch spi.Bus {
 	case stm32.SPI1:
-		clock = CPUFrequency() / 2
+		clock = APB2_FREQ
 	case stm32.SPI2, stm32.SPI3:
-		clock = CPUFrequency() / 4
+		clock = APB1_FREQ
 	}
 
 	// limit requested frequency to bus frequency and min frequency (DIV256)
@@ -462,7 +474,7 @@ func (i2c *I2C) configurePins(config I2CConfig) {
 
 func (i2c *I2C) getFreqRange(config I2CConfig) uint32 {
 	// all I2C interfaces are on APB1
-	clock := CPUFrequency() / 4
+	clock := APB1_FREQ
 	// convert to MHz
 	clock /= 1000000
 	// must be between 2 MHz (or 4 MHz for fast mode (Fm)) and 50 MHz, inclusive
@@ -513,7 +525,7 @@ func (i2c *I2C) getSpeed(config I2CConfig) uint32 {
 		}
 	}
 	// all I2C interfaces are on APB1
-	clock := CPUFrequency() / 4
+	clock := APB1_FREQ
 	if config.Frequency <= 100000 {
 		return sm(clock, config.Frequency)
 	} else {
