@@ -474,7 +474,7 @@ func (i2c *I2C) configurePins(config I2CConfig) {
 
 func (i2c *I2C) getFreqRange(config I2CConfig) uint32 {
 	// all I2C interfaces are on APB1
-	clock := APB1_FREQ
+	var clock uint32 = APB1_FREQ
 	// convert to MHz
 	clock /= 1000000
 	// must be between 2 MHz (or 4 MHz for fast mode (Fm)) and 50 MHz, inclusive
@@ -525,7 +525,7 @@ func (i2c *I2C) getSpeed(config I2CConfig) uint32 {
 		}
 	}
 	// all I2C interfaces are on APB1
-	clock := APB1_FREQ
+	var clock uint32 = APB1_FREQ
 	if config.Frequency <= 100000 {
 		return sm(clock, config.Frequency)
 	} else {
