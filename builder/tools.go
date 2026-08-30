@@ -7,27 +7,96 @@ import (
 	"go/token"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+
+	"tinygo.org/x/go-llvm"
 )
+
+func appendCacheStableCFlags(flags []string) []string {
+	return append(flags, "-fdebug-compilation-dir=.")
+}
+
+var (
+	clangCompilerOnce    sync.Once
+	clangCompilerPath    string
+	clangCompilerID      string
+	clangCompilerInfoErr error
+)
+
+func loadClangCompiler() {
+	if hasBuiltinTools {
+		cmd := exec.Command(os.Args[0], "clang", "--version")
+		cmd.Env = []string{}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			clangCompilerInfoErr = fmt.Errorf("failed to identify builtin clang: %w", err)
+			return
+		}
+		clangCompilerPath = os.Args[0]
+		clangCompilerID = "builtin clang llvm " + llvm.Version + "\n" + string(out)
+		return
+	}
+
+	name, err := LookupCommand("clang")
+	if err != nil {
+		clangCompilerInfoErr = err
+		return
+	}
+	path, err := exec.LookPath(name)
+	if err != nil {
+		clangCompilerInfoErr = err
+		return
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		clangCompilerInfoErr = err
+		return
+	}
+	compilerHash, err := hashFile(path)
+	if err != nil {
+		clangCompilerInfoErr = err
+		return
+	}
+	cmd := exec.Command(path, "--version")
+	cmd.Env = []string{}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		clangCompilerInfoErr = fmt.Errorf("failed to identify clang: %w", err)
+		return
+	}
+	clangCompilerPath = path
+	clangCompilerID = path + "\n" + compilerHash + "\n" + string(out)
+}
+
+func clangCompilerIdentity() (string, error) {
+	clangCompilerOnce.Do(loadClangCompiler)
+	return clangCompilerID, clangCompilerInfoErr
+}
 
 // runCCompiler invokes a C compiler with the given arguments.
 func runCCompiler(flags ...string) error {
-	// Find the right command to run Clang.
+	cmd, err := cCompilerCommand(flags...)
+	if err != nil {
+		return err
+	}
+	return cmd.Run()
+}
+
+func cCompilerCommand(flags ...string) (*exec.Cmd, error) {
+	clangCompilerOnce.Do(loadClangCompiler)
+	if clangCompilerInfoErr != nil {
+		return nil, clangCompilerInfoErr
+	}
 	var cmd *exec.Cmd
 	if hasBuiltinTools {
-		// Compile this with the internal Clang compiler.
-		cmd = exec.Command(os.Args[0], append([]string{"clang"}, flags...)...)
+		cmd = exec.Command(clangCompilerPath, append([]string{"clang"}, flags...)...)
 	} else {
-		// Compile this with an external invocation of the Clang compiler.
-		name, err := LookupCommand("clang")
-		if err != nil {
-			return err
-		}
-		cmd = exec.Command(name, flags...)
+		cmd = exec.Command(clangCompilerPath, flags...)
 	}
-
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -52,7 +121,7 @@ func runCCompiler(flags ...string) error {
 		}
 	}
 
-	return cmd.Run()
+	return cmd, nil
 }
 
 // link invokes a linker with the given name and flags.
