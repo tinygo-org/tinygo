@@ -43,11 +43,11 @@ var libWasmBuiltins = Library{
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/wasi-libc") },
 	librarySources: func(target string, _ bool) ([]string, error) {
 		return []string{
-			// memory builtins needed for llvm.memcpy.*, llvm.memmove.*, and
-			// llvm.memset.* LLVM intrinsics.
+			// Memory builtins needed for LLVM intrinsics and library calls.
 			"libc-top-half/musl/src/string/memcpy.c",
 			"libc-top-half/musl/src/string/memmove.c",
 			"libc-top-half/musl/src/string/memset.c",
+			"libc-top-half/musl/src/string/strlen.c",
 
 			// exp, exp2, and log are needed for LLVM math builtin functions
 			// like llvm.exp.*.
