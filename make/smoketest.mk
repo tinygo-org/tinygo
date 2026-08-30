@@ -573,9 +573,10 @@ smoketest-riscv: | build/smoke
 smoketest-wasm: SMOKE_OUT = build/smoke/wasm
 smoketest-wasm: | build/smoke
 ifneq ($(WASM), 0)
-	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm               examples/wasm/export
-	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm               examples/wasm/main
-	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm-unknown       examples/hello-wasm-unknown
+	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm                examples/wasm/export
+	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm                examples/wasm/main
+	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm-unknown        examples/hello-wasm-unknown
+	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm-unknown -opt=2 ./testdata/wasm-unknown-opt
 endif
 
 smoketest-flags: SMOKE_OUT = build/smoke/flags
