@@ -4,7 +4,6 @@ package runtime
 
 import (
 	"internal/futex"
-	"internal/task"
 	"math/bits"
 	"sync/atomic"
 	"tinygo"
@@ -414,17 +413,6 @@ func signal_disable(s uint32) {
 	tinygo_signal_disable(s)
 }
 
-//go:linkname signal_waitUntilIdle os/signal.signalWaitUntilIdle
-func signal_waitUntilIdle() {
-	// Wait until signal_recv has processed all signals.
-	for receivedSignals.Load() != 0 {
-		// TODO: this becomes a busy loop when using threads.
-		// We might want to pause until signal_recv has no more incoming signals
-		// to process.
-		Gosched()
-	}
-}
-
 //export tinygo_signal_enable
 func tinygo_signal_enable(s uint32)
 
@@ -448,48 +436,28 @@ func tinygo_signal_handler(s int32) {
 		// goroutines.
 		signalFutex.WakeAll()
 	}
+
+	// Wake the goroutine inside os/signal that gives signals to the channels
+	// of signal.Notify. This is a no-op with the cooperative scheduler, which
+	// resumes that goroutine from checkSignals instead.
+	signalRecvWake()
 }
 
-// Task waiting for a signal to arrive, or nil if it is running or there are no
-// signals.
-var signalRecvWaiter atomic.Pointer[task.Task]
-
-//go:linkname signal_recv os/signal.signal_recv
-func signal_recv() uint32 {
-	// Function called from os/signal to get the next received signal.
-	for {
-		val := receivedSignals.Load()
-		if val == 0 {
-			// There are no signals to receive. Sleep until there are.
-			if signalRecvWaiter.Swap(task.Current()) != nil {
-				// We expect only a single goroutine to call signal_recv.
-				runtimeFatal("signal_recv called concurrently")
-			}
-			task.Pause()
-			continue
-		}
-
-		// Extract the lowest numbered signal number from receivedSignals.
-		num := uint32(bits.TrailingZeros32(val))
-
-		// Atomically clear the signal number from receivedSignals.
-		receivedSignals.And(^(uint32(1) << num))
-
-		return num
+// nextReceivedSignal takes the lowest numbered signal out of receivedSignals,
+// or returns 0, false when there are none pending.
+func nextReceivedSignal() (uint32, bool) {
+	val := receivedSignals.Load()
+	if val == 0 {
+		return 0, false
 	}
-}
 
-// Reactivate the goroutine waiting for signals, if there are any.
-// Return true if it was reactivated (and therefore the scheduler should run
-// again), and false otherwise.
-func checkSignals() bool {
-	if receivedSignals.Load() != 0 {
-		if waiter := signalRecvWaiter.Swap(nil); waiter != nil {
-			scheduleTask(waiter)
-			return true
-		}
-	}
-	return false
+	// Extract the lowest numbered signal number from receivedSignals.
+	num := uint32(bits.TrailingZeros32(val))
+
+	// Atomically clear the signal number from receivedSignals.
+	receivedSignals.And(^(uint32(1) << num))
+
+	return num, true
 }
 
 func waitForEvents() {

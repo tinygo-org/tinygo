@@ -1,2 +1,3 @@
 got expected signal
+got expected signal
 exiting signal program
