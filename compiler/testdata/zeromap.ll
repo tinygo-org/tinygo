@@ -113,8 +113,9 @@ entry:
   %hash = call i32 @runtime.hashmapStringPtrHash(ptr %0, i32 8, i32 %2, ptr undef) #4
   %4 = getelementptr inbounds nuw i8, ptr %0, i32 8
   %hash1 = call i32 @runtime.hashmapStringPtrHash(ptr nonnull %4, i32 8, i32 %2, ptr undef) #4
-  %5 = xor i32 %hash, %hash1
-  ret i32 %5
+  %5 = mul i32 %hash, 31
+  %6 = xor i32 %5, %hash1
+  ret i32 %6
 }
 
 declare i32 @runtime.hashmapStringPtrHash(ptr, i32, i32, ptr) #0
@@ -161,8 +162,9 @@ entry:
   %hash = call i32 @runtime.hashmapStringPtrHash(ptr %0, i32 8, i32 %2, ptr undef) #4
   %4 = getelementptr inbounds nuw i8, ptr %0, i32 8
   %hash1 = call i32 @runtime.hashmapStringPtrHash(ptr nonnull %4, i32 8, i32 %2, ptr undef) #4
-  %5 = xor i32 %hash, %hash1
-  ret i32 %5
+  %5 = mul i32 %hash, 31
+  %6 = xor i32 %5, %hash1
+  ret i32 %6
 }
 
 ; Function Attrs: nounwind
@@ -203,17 +205,18 @@ entry:
   br label %hash.array.body
 
 hash.array.body:                                  ; preds = %hash.array.body, %entry
-  %i = phi i32 [ 0, %entry ], [ %6, %hash.array.body ]
-  %hash.acc = phi i32 [ 0, %entry ], [ %5, %hash.array.body ]
+  %i = phi i32 [ 0, %entry ], [ %7, %hash.array.body ]
+  %hash.acc = phi i32 [ 0, %entry ], [ %6, %hash.array.body ]
   %4 = getelementptr inbounds nuw %runtime._string, ptr %0, i32 %i
   %hash = call i32 @runtime.hashmapStringPtrHash(ptr %4, i32 8, i32 %2, ptr undef) #4
-  %5 = xor i32 %hash.acc, %hash
-  %6 = add nuw nsw i32 %i, 1
-  %7 = icmp samesign ult i32 %i, 4
-  br i1 %7, label %hash.array.body, label %hash.array.done
+  %5 = mul i32 %hash.acc, 31
+  %6 = xor i32 %5, %hash
+  %7 = add nuw nsw i32 %i, 1
+  %8 = icmp samesign ult i32 %i, 4
+  br i1 %8, label %hash.array.body, label %hash.array.done
 
 hash.array.done:                                  ; preds = %hash.array.body
-  ret i32 %5
+  ret i32 %6
 }
 
 ; Function Attrs: nounwind
