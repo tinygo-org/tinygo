@@ -417,6 +417,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 		return b.createRuntimeCall("hashmapInterfacePtrHash", []llvm.Value{keyPtr, size, seed}, "hash")
 	case *types.Struct:
 		hash := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+		multiplier := llvm.ConstInt(b.ctx.Int32Type(), 31, false)
 		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 		for i := 0; i < keyType.NumFields(); i++ {
 			if keyType.Field(i).Name() == "_" {
@@ -430,7 +431,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 			idx := llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)
 			fieldPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, idx}, "")
 			fieldHash := b.generateKeyHash(fieldType, llvmFieldType, fieldPtr, seed)
-			hash = b.CreateXor(hash, fieldHash, "")
+			hash = b.CreateXor(b.CreateMul(hash, multiplier, ""), fieldHash, "")
 		}
 		return hash
 	case *types.Array:
@@ -445,6 +446,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 		if arrayLen == 0 {
 			return llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 		}
+		multiplier := llvm.ConstInt(b.ctx.Int32Type(), 31, false)
 		if arrayLen <= hashArrayUnrollLimit {
 			hash := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
@@ -452,7 +454,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 				idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
 				elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, idx}, "")
 				elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
-				hash = b.CreateXor(hash, elemHash, "")
+				hash = b.CreateXor(b.CreateMul(hash, multiplier, ""), elemHash, "")
 			}
 			return hash
 		}
@@ -471,7 +473,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 
 		elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, phiI}, "")
 		elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
-		newHash := b.CreateXor(phiHash, elemHash, "")
+		newHash := b.CreateXor(b.CreateMul(phiHash, multiplier, ""), elemHash, "")
 		nextI := b.CreateAdd(phiI, llvm.ConstInt(b.uintptrType, 1, false), "")
 		cond := b.CreateICmp(llvm.IntULT, nextI, llvm.ConstInt(b.uintptrType, uint64(arrayLen), false), "")
 		b.CreateCondBr(cond, loopBody, loopDone)
