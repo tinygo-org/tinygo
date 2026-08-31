@@ -1,3 +1,163 @@
+0.42.0
+---
+* **general**
+  - all: add LLVM 22 support, and support LLVM 19 and LLVM 20 on Fedora 43
+  - all: build and test using Go 1.27, and raise the max supported Go version to 1.27
+  - all: modernize and clean up code with Go 1.24+ in mind (#5489, #5498)
+  - all: use unsafe.SliceData where appropriate
+  - all: update golang.org/x/tools and go-llvm
+  - cli: add basic probe-rs support
+  - cli: clarify the runtime.alloc linker error with -gc=none
+  - main: allow the -o flag to point to a directory
+  - main: make the -monitor flag on flash respect the port
+  - main: update to espflasher 0.8.0 with fixes for esp32c3 and esp32s3
+  - cgo: add CGO_CFLAGS support (#5453)
+  - version: update to 0.42.0 for the new dev cycle
+  - docs: add agents.md guideline for use of ASD-STE100 (#5566)
+* **compiler**
+  - compiler, runtime: make runtime, map, and channel panics recoverable
+  - compiler, runtime: support recover on riscv64
+  - compiler, runtime, reflect: generate type-specific hash/equal (#5359)
+  - support Go 1.27 generic methods via the x/tools upgrade
+  - canonicalize generic instance and method signature identities
+  - disambiguate function-local named types and generic instance link names (#5336)
+  - exclude generic methods from runtime method sets
+  - support file-level //go:linkname directives and the //go:linknamestd pragma
+  - add the //go:noheap pragma
+  - pass large aggregates by pointer
+  - use LLVM intrinsics for math trig operations
+  - optimize zero-sized allocations
+  - consistently pass layout and alignment to createAlloc
+  - handle nested unsigned shift being untyped after type resolution (#5497)
+  - store the defer list head in the defer frame and centralize deferred call records
+  - centralize SSA loads, stores, result handling, and LLVM function type construction
+  - transform, compiler: support the captures(none) attribute of LLVM 21
+  - compiler: make composite map hashes order dependent
+* **core**
+  - reflect: add Type.ConvertibleTo and complex, rune, and integer string conversions
+  - reflect: implement MakeChan
+  - reflect: add missing iterator methods
+  - reflect, reflectlite: make IsRO and MakeRO package methods
+  - sync: add Map.CompareAndSwap and Map.CompareAndDelete
+  - sync: fix deadlock in the Map.Range callback
+  - os, syscall: add Statfs and Fstatfs stubs and Getpagesize for non-hosted targets
+  - os: add File.Chown on the unix path
+  - runtime, syscall, internal/poll, os: wasip1 poll_oneoff scheduler integration and net.FileListener (#5386)
+  - runtime, testing: support Goexit, SkipNow, and FailNow
+  - syscall: remove sliceHeader, use unsafe.SliceData more
+  - builder, cgo, syscall: replace fixed-size array casts with unsafe.Slice
+  - builder, loader: fix -ldflags -X not overriding variables with default values
+  - builder: build SSA before compiling packages
+  - builder: increase the stack size margin for automatic stack allocation
+  - builder: do not count non-writable SHT_NOBITS sections as RAM or bss
+  - builder: link stack probes on Windows amd64 and arm64, and add chkstk2.S for windows/386
+  - builder: add strlen to the wasm builtins
+  - builder: retry cached archive renames on Windows (#5462)
+  - loader: avoid a race condition when loading the package list, and skip object resolution
+  - interp: bail out of loops that iterate too many times (#5395)
+  - interp: fix partial store aliasing and avoid repeated object clones
+  - interp: defer out-of-bounds loads to runtime instead of crashing
+  - interp: mark pointers in aggregate call operands as external
+  - interp: fix switch-instruction handling for the new case-value API of LLVM 22
+  - transform: follow returned pointer and aggregate alloc aliases
+  - transform: add -print-allocs-cover and restore the -print-allocs reason output
+  - device: add device/uefi and device/amd64
+  - wasm: patch wasm_exec.js and wasm_exec_node.js from Go 1.18+ (#5483)
+* **net**
+  - update the net module with a roundtrip fix for js/wasm
+* **runtime**
+  - make divide-by-zero and nil dereference panics recoverable
+  - add a Windows vectored exception handler for recoverable panics
+  - make Goexit exit host threads, and encode a pending Goexit in the panic state
+  - make out-of-memory and fatal failures unrecoverable
+  - improve the hardfault handler and stack reporting on Cortex-M
+  - prevent timer starvation in the cores scheduler
+  - do not access the timer queue outside of the lock
+  - fix ticker not stopping when Stop races with its callback (#5487)
+  - wake channel waiters after releasing locks (#5513)
+  - implement SetFinalizer and run syscall/js finalizers without a manual GC (#5545)
+  - implement MemStats.NumGC
+  - add runtime.fastrandn (#5502)
+  - make arrays and struct field hashes order dependent
+  - add critical-section fallbacks for atomic And and Or
+  - gc: pause all cores before scanning the stack and globals
+  - gc: correct the old size calculation in block realloc
+  - gc: correct the leaking allocator bounds and overflow checks
+  - gc: move objHeader to the end of the block header
+  - fix the leaking GC build with the cores scheduler
+  - rp2040: fix -gc=leaking and -gc=none
+  - rp2: handle the RP2350 shared FIFO IRQ for GC (#5482)
+  - esp32c6: select the 80MHz PLL as the TIMG0 timer clock source
+  - split baremetal memory setup and the Windows PE globals scan for UEFI (#5360, #5361)
+* **machine**
+  - usb: support bidirectional endpoints by dynamic registration on RP2, SAMD21/51, and nRF52840 (#5447)
+  - usb: generate endpoint descriptors dynamically
+  - usb: implement endpoint stall for nRF52840
+  - usb: fix a truncated string descriptor when the host requests a short maxLen (#5449)
+  - usb: add USBDevice.Attach and USBDevice.Detach (#5563)
+  - usb/cdc: fix the RP2 USB CDC TX race with the cores scheduler (#5391)
+  - add UART line inversion support (#5522)
+  - optimize RTT initialization
+  - device/arm: add ARM v7-M MPU support
+  - esp32: add interrupt support with vector table, timer alarm, and GPIO SetInterrupt
+  - esp32: add interrupt-based UART RX and fix the init order
+  - esp32: implement flash XIP (execute-in-place) support
+  - esp32: add ADC driver (#5595)
+  - esp32: fix pullup and pulldown on RTC GPIO pins
+  - esp32: remove dead code and fix GC root scanning
+  - esp32: configure UARTs to the specified pins and yield while waiting for the buffer
+  - esp32, esp32s3: fix the boot crash caused by the LLVM 22 lld l32r relocation bug
+  - esp32s3: fix register-window corruption under interrupt load
+  - esp32s3: add temperature reading
+  - esp32c6: add a minimal implementation with I2C and ADC support
+  - stm32: fix UART transmission, baud rate, and interrupt handling
+  - stm32: add an OTG FS USB driver for F4 and F7
+  - stm32: add STM32H7 and NUCLEO-H753ZI support
+  - stm32: add support for the STM32U031 chip
+  - stm32: make the HSE crystal frequency selectable
+  - stm32u5: configure the system clock to 160 MHz
+  - nrf: avoid a too high priority interrupt on SoftDevice
+  - rp2: allow SPI transmit-only without SDI (#5437)
+  - rp2: clear the USB buffer status before the endpoint handlers
+  - rp2350: fix the ROM CS control for the RP2350 ROM code
+  - add GP aliases for waveshare-rp2040-zero
+  - gba: add support for mGBA debugging
+  - gba: add bios interrupt flags and sound register constants (#5445)
+* **targets**
+  - add minimal uefi target support with the LinkerFlavor option (#5452, #5465)
+  - uefi: add support for UEFI time and events, fix STOP newline conversion (#5549)
+  - uefi: add support for the tasks scheduler and make it the default (#5553)
+  - add Puya PY32F MCU support (#5106)
+  - add esp32s3-box-3 (#5388)
+  - add M5Stack Stamp-S3A (#5524)
+  - add Pimoroni Blinky 2350 and Badger 2350 (#5434)
+  - add the 'Plus' board variant of SeeedStudio XIAO nrf52840 (#5479)
+  - esp32: adjust memory usage, add DRAM1 sections, and export the symbols needed for wifi
+  - esp32c3: add the BT ROM functions to the linker
+  - esp32: add the espradio tag for convenience
+  - builder: fix esp32 XIP so large programs flash correctly, including QEMU image offsets
+  - wasm_exec.js: add runtime.getRandomData to the gojs imports, coerce memory offsets to unsigned, and reset _pendingEvent
+* **libs**
+  - update macos-minimal-sdk to v0.1.0
+* **build/test**
+  - ci: run the full smoke test once, and split the GNUmakefile (#5616)
+  - ci: publish a draft release from the artifacts that CI already built
+  - ci: stop the LLVM caches from being evicted
+  - ci: modify builds to use LLVM 22
+  - ci: add a check for compatibility with older Go and LLVM versions
+  - ci: add a job to make sure go.sum stays in sync with go.mod
+  - ci: re-add fmt-check, and remove the CircleCI configuration
+  - ci: adjust runner sizes for Linux, Windows, and macOS
+  - build: statically link the MinGW runtime in the LLVM tools on Windows
+  - Makefile: use ${LLVM_PROJECTDIR} during the copy phase
+  - GNUmakefile: disable DWARF compression for CGo objects, and update the stdlib test lists
+  - test: run ESP32 programs in QEMU
+  - test: support simavr 1.8+
+  - test: normalize LLVM IR when updating goldens
+  - test: convert TestBinarySize to a golden file test
+  - testdata: add regression tests for generic instances, generic aliases, and large aggregates
+  - test: skip flaky and Go 1.27 affected tests for now
+
 0.41.1
 ---
 * **machine**
