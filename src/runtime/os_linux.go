@@ -160,3 +160,7 @@ func fcntl(fd int32, cmd int32, arg int32) (ret int32, errno int32) {
 	errno = *libc_errno_location()
 	return
 }
+
+func platform_argv(argc int32, argv *unsafe.Pointer) {
+	// nothing
+}

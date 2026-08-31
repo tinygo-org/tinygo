@@ -168,10 +168,18 @@ func call_syscall6X(fn, a1, a2, a3, a4, a5, a6 uintptr) uintptr
 
 //go:linkname os_runtime_executable_path os.runtime_executable_path
 func os_runtime_executable_path() string {
-	argv := (*unsafe.Pointer)(unsafe.Pointer(main_argv))
+	return executablePath
+}
 
+var executablePath string
+
+func platform_argv(argc int32, argv *unsafe.Pointer) {
+	executablePath = executable_path(argc, argv)
+}
+
+func executable_path(argc int32, argv *unsafe.Pointer) string {
 	// skip over argv
-	argv = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(argv), (uintptr(main_argc)+1)*unsafe.Sizeof(argv)))
+	argv = (*unsafe.Pointer)(unsafe.Add(unsafe.Pointer(argv), (uintptr(argc)+1)*unsafe.Sizeof(argv)))
 
 	// skip over envv
 	for (*argv) != nil {
@@ -187,11 +195,21 @@ func os_runtime_executable_path() string {
 		length: length,
 		ptr:    (*byte)(cstr),
 	}
-	executablePath := *(*string)(unsafe.Pointer(&argString))
+	path := *(*string)(unsafe.Pointer(&argString))
 
 	// strip "executable_path=" prefix if available, it's added after OS X 10.11.
-	executablePath = stringsTrimPrefix(executablePath, "executable_path=")
-	return executablePath
+	path = stringsTrimPrefix(path, "executable_path=")
+
+	if path != "" && path[0] == '/' {
+		// absolute path
+		return path
+	}
+
+	cwd := getcwd()
+	if cwd != "" {
+		path = joinPath(cwd, path)
+	}
+	return path
 }
 
 func stringsTrimPrefix(s, prefix string) string {
@@ -200,3 +218,40 @@ func stringsTrimPrefix(s, prefix string) string {
 	}
 	return s
 }
+
+func joinPath(dir, name string) string {
+	if len(dir) > 0 && dir[len(dir)-1] == '/' {
+		return dir + name
+	}
+	return dir + "/" + name
+}
+
+// from syscall
+func getcwd() string {
+	const pathMax = 1024
+	var buf [4 * pathMax]byte
+	s := libc_getcwd(&buf[0], uint(len(buf)))
+	if s == nil {
+		return ""
+	}
+	n := clen(buf[:])
+	if n < 1 {
+		return ""
+	}
+	return string(buf[:n])
+}
+
+// clen returns the index of the first NULL byte in n or len(n) if n contains no NULL byte.
+func clen(n []byte) int {
+	for i := 0; i < len(n); i++ {
+		if n[i] == 0 {
+			return i
+		}
+	}
+	return len(n)
+}
+
+// char *getcwd(char *buf, size_t size)
+//
+//export getcwd
+func libc_getcwd(buf *byte, size uint) *byte
