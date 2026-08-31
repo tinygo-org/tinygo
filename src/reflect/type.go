@@ -569,8 +569,20 @@ func ArrayOf(n int, t Type) Type {
 	return toType(reflectlite.ArrayOf(n, toRawType(t)))
 }
 
-func StructOf([]StructField) Type {
-	return toType(reflectlite.StructOf([]reflectlite.StructField{}))
+func StructOf(fields []StructField) Type {
+	rf := make([]reflectlite.StructField, len(fields))
+	for i := range fields {
+		rf[i] = reflectlite.StructField{
+			Name:      fields[i].Name,
+			PkgPath:   fields[i].PkgPath,
+			Type:      toRawType(fields[i].Type),
+			Tag:       fields[i].Tag,
+			Offset:    fields[i].Offset,
+			Index:     fields[i].Index,
+			Anonymous: fields[i].Anonymous,
+		}
+	}
+	return toType(reflectlite.StructOf(rf))
 }
 
 func MapOf(key, value Type) Type {
