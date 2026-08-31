@@ -96,8 +96,11 @@ func rp2FlashSafeInterruptHandler(core uint32) {
 		arm.Asm("wfe")
 	}
 
-	interrupt.Restore(state)
-
+	// Publish Idle before restoring interrupts. The initiator spins for Idle
+	// with interrupts disabled, so taking a pending GC interrupt first would
+	// deadlock: it would wait for an ACK the initiator cannot send.
 	rp2040FlashSafeState.Set(rp2040FlashSafeIdle)
 	arm.Asm("sev")
+
+	interrupt.Restore(state)
 }
