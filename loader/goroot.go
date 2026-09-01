@@ -232,7 +232,6 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"":                            true,
 		"crypto/":                     true,
 		"crypto/rand/":                false,
-		"crypto/tls/":                 false,
 		"crypto/x509/":                true,
 		"crypto/x509/internal/":       true,
 		"crypto/x509/internal/macos/": false,
@@ -277,6 +276,17 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		// since TinyGo targets never use FIPS jitter entropy.
 		paths["crypto/internal/entropy/"] = true
 		paths["crypto/internal/entropy/v1.0.0/"] = false
+	}
+
+	// crypto/tls: TinyGo's version is a thin wrapper around a netdev-provided
+	// (hardware/firmware-offloaded) TLS socket, which only makes sense on
+	// embedded/wasm targets that have such a netdev. On the host/native target
+	// (raw-syscall netdev, no TLS offload) there is no real TLS that way, so use
+	// Go's full software crypto/tls instead — leaving crypto/tls out of the
+	// overrides map makes the goroot link Go's implementation. needsSyscallPackage
+	// is true exactly for the embedded/wasm targets.
+	if needsSyscallPackage {
+		paths["crypto/tls/"] = false
 	}
 
 	if needsSyscallPackage {
