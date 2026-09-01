@@ -1,0 +1,128 @@
+//go:build espidf
+
+package runtime
+
+import "unsafe"
+
+var (
+	heapStart    uintptr
+	heapEnd      uintptr
+	globalsStart uintptr
+	globalsEnd   uintptr
+	stackTop     uintptr
+)
+
+// Allows C consumers of the library to set the GC variables.
+//
+//export tinygo_init
+func tinygo_init(heap, heapSize, glob, globEnd, stack uintptr) {
+	heapStart, heapEnd = heap, heap+heapSize
+	globalsStart, globalsEnd = glob, globEnd
+	stackTop = stack
+	initRand()
+	initHeap()
+	initAll()
+}
+
+func growHeap() bool {
+	return false
+}
+
+//export abort
+func abort()
+
+//export exit
+func exit(code int)
+
+//export putchar
+func libc_putchar(c byte)
+
+func putchar(c byte) {
+	libc_putchar(c)
+}
+
+//export getchar
+func libc_getchar() byte
+
+func getchar() byte {
+	return libc_getchar()
+}
+
+func buffered() int {
+	return 0
+}
+
+const (
+	clock_REALTIME  = 1
+	clock_MONOTONIC = 4
+)
+
+type timespec struct {
+	tv_sec  int64
+	tv_nsec int32
+}
+
+//export clock_gettime
+func clock_gettime(clock int32, ts *timespec)
+
+func getTime(clock int32) uint64 {
+	var ts timespec
+	clock_gettime(clock, &ts)
+	return uint64(ts.tv_sec)*1e9 + uint64(ts.tv_nsec)
+}
+
+func monotime() uint64 {
+	return getTime(clock_MONOTONIC)
+}
+
+func ticks() timeUnit {
+	return timeUnit(monotime())
+}
+
+func ticksToNanoseconds(ticks timeUnit) int64 {
+	return int64(ticks)
+}
+
+func nanosecondsToTicks(ns int64) timeUnit {
+	return timeUnit(ns)
+}
+
+//export usleep
+func usleep(usec uint) int
+
+func sleepTicks(d timeUnit) {
+	usleep(uint(d / 1e3))
+}
+
+const baremetal = true
+
+//go:linkname now time.now
+func now() (sec int64, nsec int32, mono int64) {
+	var ts timespec
+	clock_gettime(clock_REALTIME, &ts)
+	sec = ts.tv_sec
+	nsec = ts.tv_nsec
+	mono = nanotime()
+	return
+}
+
+// Picolibc is not configured to define its own errno value, instead it calls
+// __errno_location.
+// TODO: a global works well enough for now (same as errno on Linux with
+// -scheduler=tasks), but this should ideally be a thread-local variable stored
+// in task.Task.
+// Especially when we add multicore support for microcontrollers.
+var errno int32
+
+//export __errno_location
+func libc_errno_location() *int32 {
+	return &errno
+}
+
+//export esp_fill_random
+func esp_fill_random(buf unsafe.Pointer, len uintptr)
+
+func hardwareRand() (n uint64, ok bool) {
+	esp_fill_random(unsafe.Pointer(&n), 8)
+	return n, true
+}
