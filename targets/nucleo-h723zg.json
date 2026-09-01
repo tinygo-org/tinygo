@@ -1,0 +1,13 @@
+{
+    "inherits": ["cortex-m7"],
+    "build-tags": ["nucleoh723zg", "stm32h723", "stm32h7", "stm32"],
+    "serial": "uart",
+    "linkerscript": "targets/stm32h723xg.ld",
+    "extra-files": [
+        "src/device/stm32/stm32h723.s"
+    ],
+    "flash-method": "openocd",
+    "openocd-interface": "stlink",
+    "openocd-target": "stm32h7x",
+    "openocd-commands": ["reset_config srst_only srst_nogate connect_assert_srst"]
+}
