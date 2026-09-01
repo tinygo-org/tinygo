@@ -38,6 +38,13 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		if gorootMajor != 1 || gorootMinor < minorMin || gorootMinor > minorMax {
 			// Note: when this gets updated, also update the Go compatibility matrix:
 			// https://github.com/tinygo-org/tinygo-site/blob/dev/content/docs/reference/go-compat-matrix.md
+			if gorootMajor == 1 && gorootMinor > minorMax {
+				// A too-new Go toolchain is the common case right after a Go
+				// release: point at Go's own toolchain switching, which lets
+				// the user build with a supported toolchain without
+				// downgrading their installation.
+				return nil, fmt.Errorf("requires go version 1.%d through 1.%d, got go%d.%d (to use a supported toolchain without downgrading, set GOTOOLCHAIN=go1.%d.x; to skip this check, use -go-compatibility=false)", minorMin, minorMax, gorootMajor, gorootMinor, minorMax)
+			}
 			return nil, fmt.Errorf("requires go version 1.%d through 1.%d, got go%d.%d", minorMin, minorMax, gorootMajor, gorootMinor)
 		}
 	}
