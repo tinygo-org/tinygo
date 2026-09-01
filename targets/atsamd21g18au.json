@@ -1,0 +1,11 @@
+{
+	"inherits": ["cortex-m0plus"],
+	"build-tags": ["atsamd21g18au", "atsamd21g18", "atsamd21", "sam"],
+	"serial": "usb",
+	"linkerscript": "targets/atsamd21.ld",
+	"extra-files": [
+		"src/device/sam/atsamd21g18au.s"
+	],
+	"openocd-transport": "swd",
+	"openocd-target": "at91samdXX"
+}
