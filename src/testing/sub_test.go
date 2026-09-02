@@ -8,6 +8,18 @@ import (
 	"reflect"
 )
 
+func TestSynctestDuringCleanup(t *T) {
+	parent := &T{}
+	parent.cleanupStarted = true
+	defer func() {
+		const want = "testing: synctest.Run called during t.Cleanup"
+		if got := recover(); got != want {
+			t.Errorf("panic = %v, want %q", got, want)
+		}
+	}()
+	testingSynctestTest(parent, func(*T) {})
+}
+
 func TestCleanup(t *T) {
 	var cleanups []int
 	t.Run("test", func(t *T) {
