@@ -33,9 +33,15 @@ type Task struct {
 	// Exited is set after a task with a releasable stack has finished.
 	Exited bool
 
+	// SynctestBlocked is set while this task is durably blocked.
+	SynctestBlocked bool
+
 	// DeferFrame stores a pointer to the (stack allocated) defer frame of the
 	// goroutine that is used for the recover builtin.
 	DeferFrame unsafe.Pointer
+
+	// SynctestBubble identifies the synctest bubble this task belongs to.
+	SynctestBubble unsafe.Pointer
 }
 
 const (
@@ -80,3 +86,34 @@ func runtime_freeTaskStack(ptr uintptr)
 
 //go:linkname scheduleTask runtime.scheduleTask
 func scheduleTask(*Task)
+
+func inheritSynctest(t *Task) {
+	if !synctestIsEnabled() {
+		return
+	}
+	parent := Current()
+	if parent == nil || parent.SynctestBubble == nil {
+		return
+	}
+	t.SynctestBubble = parent.SynctestBubble
+	synctestTaskCreated(t)
+}
+
+func exitSynctest(t *Task) {
+	if !synctestIsEnabled() {
+		return
+	}
+	if t.SynctestBubble != nil {
+		synctestTaskExited(t)
+		t.SynctestBubble = nil
+	}
+}
+
+//go:linkname synctestTaskCreated runtime.synctestTaskCreated
+func synctestTaskCreated(*Task)
+
+//go:linkname synctestTaskExited runtime.synctestTaskExited
+func synctestTaskExited(*Task)
+
+//go:linkname synctestIsEnabled runtime.synctestIsEnabled
+func synctestIsEnabled() bool
