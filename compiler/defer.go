@@ -23,30 +23,27 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// supportsRecover returns whether the compiler supports the recover() builtin
-// for the current architecture.
+// supportsRecover reports whether the selected unwind mode supports recover.
 func (b *builder) supportsRecover() bool {
-	switch b.archFamily() {
-	case "wasm32":
-		// Probably needs to be implemented using the exception handling
-		// proposal of WebAssembly:
-		// https://github.com/WebAssembly/exception-handling
-		return false
-	case "xtensa":
-		// TODO: add support for these architectures
-		return false
-	default:
-		return true
-	}
+	return b.PanicUnwind != "none"
+}
+
+func (b *builder) usesExplicitUnwind() bool {
+	return b.PanicUnwind == "explicit"
+}
+
+func (b *builder) usesAsyncifyUnwind() bool {
+	return b.PanicUnwind == "asyncify"
+}
+
+func (b *builder) usesReturnUnwind() bool {
+	return b.usesExplicitUnwind() || b.usesAsyncifyUnwind()
 }
 
 // hasDeferFrame returns whether the current function needs to catch panics and
 // run defers.
 func (b *builder) hasDeferFrame() bool {
-	if b.fn.Recover == nil {
-		return false
-	}
-	return b.supportsRecover()
+	return b.fn.Recover != nil && b.supportsRecover()
 }
 
 // deferInitFunc sets up this function for future deferred calls. It must be
@@ -94,6 +91,9 @@ func (b *builder) deferInitFunc() {
 // destroyDeferFrame.
 func (b *builder) createLandingPad() {
 	b.SetInsertPointAtEnd(b.landingpad)
+	if b.usesReturnUnwind() {
+		b.createRuntimeCall("clearUnwind", nil, "")
+	}
 
 	// Add debug info, if needed.
 	// The location used is the closing bracket of the function.
@@ -233,7 +233,6 @@ li a0, 0
 		}
 		constraints = "={a0},{a1},~{a1},~{a2},~{a3},~{a4},~{a5},~{a6},~{a7},~{s0},~{s1},~{s2},~{s3},~{s4},~{s5},~{s6},~{s7},~{s8},~{s9},~{s10},~{s11},~{t0},~{t1},~{t2},~{t3},~{t4},~{t5},~{t6},~{ra},~{f0},~{f1},~{f2},~{f3},~{f4},~{f5},~{f6},~{f7},~{f8},~{f9},~{f10},~{f11},~{f12},~{f13},~{f14},~{f15},~{f16},~{f17},~{f18},~{f19},~{f20},~{f21},~{f22},~{f23},~{f24},~{f25},~{f26},~{f27},~{f28},~{f29},~{f30},~{f31},~{memory}"
 	default:
-		// This case should have been handled by b.supportsRecover().
 		b.addError(b.fn.Pos(), "unknown architecture for defer: "+b.archFamily())
 	}
 	asmType := llvm.FunctionType(resultType, []llvm.Type{b.dataPtrType}, false)
@@ -260,6 +259,9 @@ func (b *builder) createInvokeCheckpoint() {
 // not update currentBlockInfo.exit because the fault block is a dead-end that
 // does not participate in phi node resolution.
 func (b *builder) createFaultCheckpoint() {
+	if b.usesReturnUnwind() {
+		return
+	}
 	isZero := b.createCheckpoint(b.deferFrame)
 	continueBB := b.insertBasicBlock("")
 	b.CreateCondBr(isZero, continueBB, b.landingpad)
@@ -553,6 +555,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 // createRunDefers emits code to run all deferred functions.
 func (b *builder) createRunDefers() {
 	deferType := b.getLLVMRuntimeType("_defer")
+	b.runningDefers = true
 
 	// Add a loop like the following:
 	//     for stack != nil {
@@ -658,7 +661,7 @@ func (b *builder) createRunDefers() {
 			}
 			forwardParams = b.prependIndirectResult(callback.Signature(), false, forwardParams, "defer.result")
 
-			b.createCall(fnType, fnPtr, forwardParams, "")
+			b.createInvokeWithAnalysis(fnType, fnPtr, forwardParams, "", true, true)
 
 		case *ssa.Function:
 			// Direct call.
@@ -683,7 +686,7 @@ func (b *builder) createRunDefers() {
 
 			// Call real function.
 			fnType, fn := b.getFunction(callback)
-			b.createInvoke(fnType, fn, forwardParams, "")
+			b.createInvokeWithAnalysis(fnType, fn, forwardParams, "", b.functionMayUnwind(callback), b.functionMaySuspend(callback))
 
 		case *ssa.MakeClosure:
 			// Get the real defer struct type and cast to it.
@@ -699,7 +702,7 @@ func (b *builder) createRunDefers() {
 			// Call deferred function.
 			fnType, llvmFn := b.getFunction(fn)
 			forwardParams = b.prependIndirectResult(fn.Signature, false, forwardParams, "defer.result")
-			b.createCall(fnType, llvmFn, forwardParams, "")
+			b.createInvokeWithAnalysis(fnType, llvmFn, forwardParams, "", b.functionMayUnwind(fn), b.functionMaySuspend(fn))
 		case *ssa.Builtin:
 			db := b.deferBuiltinFuncs[callback]
 
@@ -725,6 +728,13 @@ func (b *builder) createRunDefers() {
 			panic("unknown deferred function type")
 		}
 
+		if b.usesReturnUnwind() {
+			// A panic in a deferred call has reached its target frame. Keep
+			// running the remaining defers; destroyDeferFrame will propagate
+			// the panic afterwards if it was not recovered.
+			b.createRuntimeCall("clearUnwind", nil, "")
+		}
+
 		// Branch back to the start of the loop.
 		b.CreateBr(loophead)
 	}
@@ -738,4 +748,5 @@ func (b *builder) createRunDefers() {
 
 	// End of loop.
 	b.SetInsertPointAtEnd(end)
+	b.runningDefers = false
 }

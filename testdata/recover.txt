@@ -49,6 +49,10 @@ outer recovered: repanic value
   recovered: slice
   recovered: type assert
   recovered: empty interface type assert
+  recovered: interface compare
+  recovered: map key
+  recovered: map lookup key
+  recovered: map delete key
 
 # recover from nil map and closed channel
   recovered: nil map

@@ -15,6 +15,7 @@ var (
 	validSerialOptions        = []string{"none", "uart", "usb", "rtt"}
 	validPrintSizeOptions     = []string{"none", "short", "full", "html"}
 	validPanicStrategyOptions = []string{"print", "trap"}
+	validPanicUnwindOptions   = []string{"auto", "explicit"}
 	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
 )
 
@@ -32,6 +33,7 @@ type Options struct {
 	Opt                     string
 	GC                      string
 	PanicStrategy           string
+	PanicUnwind             string
 	Scheduler               string
 	StackSize               uint64 // goroutine stack size (if none could be automatically determined)
 	Serial                  string
@@ -117,6 +119,15 @@ func (o *Options) Verify() error {
 			return fmt.Errorf(`invalid panic option '%s': valid values are %s`,
 				o.PanicStrategy,
 				strings.Join(validPanicStrategyOptions, ", "))
+		}
+	}
+
+	if o.PanicUnwind != "" {
+		valid := slices.Contains(validPanicUnwindOptions, o.PanicUnwind)
+		if !valid {
+			return fmt.Errorf(`invalid panic-unwind option '%s': valid values are %s`,
+				o.PanicUnwind,
+				strings.Join(validPanicUnwindOptions, ", "))
 		}
 	}
 

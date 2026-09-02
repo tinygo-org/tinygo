@@ -10,6 +10,9 @@ func main() {
 	switch os.Args[1] {
 	case "main":
 		runtime.Goexit()
+	case "defer":
+		defer println("defer ran")
+		runtime.Goexit()
 	case "deadlock":
 		f := func() {
 			for i := 0; i < 10; i++ {

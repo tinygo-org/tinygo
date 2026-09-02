@@ -30,6 +30,9 @@ type Task struct {
 	// since it falls into the padding of the FipsIndicator bit above.
 	RunState uint8
 
+	// Exited is set after a task with a releasable stack has finished.
+	Exited bool
+
 	// DeferFrame stores a pointer to the (stack allocated) defer frame of the
 	// goroutine that is used for the recover builtin.
 	DeferFrame unsafe.Pointer
@@ -71,6 +74,9 @@ func getGoroutineStackSize(fn uintptr) uintptr
 
 //go:linkname runtime_alloc runtime.alloc
 func runtime_alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
+
+//go:linkname runtime_freeTaskStack runtime.freeTaskStack
+func runtime_freeTaskStack(ptr uintptr)
 
 //go:linkname scheduleTask runtime.scheduleTask
 func scheduleTask(*Task)

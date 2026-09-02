@@ -461,11 +461,17 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("rand.go", options, t, nil, nil)
 		})
 	}
-	if !isWebAssembly {
-		// The recover() builtin isn't supported yet on WebAssembly and Windows.
-		t.Run("recover.go", func(t *testing.T) {
+	t.Run("recover.go", func(t *testing.T) {
+		t.Parallel()
+		runTest("recover.go", options, t, nil, nil)
+	})
+	if isWebAssembly {
+		t.Run("recover-explicit.go", func(t *testing.T) {
 			t.Parallel()
-			runTest("recover.go", options, t, nil, nil)
+			options := compileopts.Options(options)
+			options.Scheduler = "none"
+			options.PanicUnwind = "explicit"
+			runTest("recover-explicit.go", options, t, nil, nil)
 		})
 	}
 }
@@ -666,7 +672,7 @@ func TestWebAssembly(t *testing.T) {
 	for _, tc := range []testCase{
 		// Test whether there really are no imports when using -panic=trap. This
 		// tests the bugfix for https://github.com/tinygo-org/tinygo/issues/4161.
-		{name: "panic-default", target: "wasip1", imports: []string{"wasi_snapshot_preview1.fd_write", "wasi_snapshot_preview1.random_get"}},
+		{name: "panic-default", target: "wasip1", imports: []string{"wasi_snapshot_preview1.fd_write", "wasi_snapshot_preview1.proc_exit", "wasi_snapshot_preview1.random_get"}},
 		{name: "panic-trap", target: "wasm-unknown", panicStrategy: "trap", imports: []string{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1111,6 +1117,88 @@ func TestGoexitCrash(t *testing.T) {
 				t.Fatalf("output does not contain %q:\n%s", tc.want, output.String())
 			}
 		})
+	}
+
+	for _, tc := range []struct {
+		name          string
+		arg           string
+		panicStrategy string
+		want          string
+	}{
+		{"wasip1-deadlock", "deadlock", "", "fatal error: all goroutines are asleep - deadlock!"},
+		{"wasip1-goexit-panic-trap", "defer", "trap", "defer ran"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			options := optionsFromTarget("wasip1", sema)
+			options.PanicStrategy = tc.panicStrategy
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := builder.Build("testdata/goexit.go", ".wasm", t.TempDir(), config)
+			if err != nil {
+				t.Fatal("failed to build binary:", err)
+			}
+			data, err := os.ReadFile(result.Binary)
+			if err != nil {
+				t.Fatal("failed to read binary:", err)
+			}
+
+			output := &bytes.Buffer{}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+			defer r.Close(ctx)
+			wasi_snapshot_preview1.MustInstantiate(ctx, r)
+			moduleConfig := wazero.NewModuleConfig().
+				WithArgs(result.Binary, tc.arg).
+				WithStdout(output).
+				WithStderr(output)
+			_, err = r.InstantiateWithConfig(ctx, data, moduleConfig)
+			if err == nil {
+				t.Fatal("program unexpectedly exited successfully")
+			}
+			if !strings.Contains(output.String(), tc.want) {
+				t.Fatalf("output does not contain %q:\n%s", tc.want, output.String())
+			}
+		})
+	}
+}
+
+func TestWASIPanicTraceback(t *testing.T) {
+	t.Parallel()
+
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
+	options := optionsFromTarget("wasip1", sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := builder.Build("testdata/panic-traceback.go", ".wasm", t.TempDir(), config)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+	data, err := os.ReadFile(result.Binary)
+	if err != nil {
+		t.Fatal("failed to read binary:", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	defer r.Close(ctx)
+	wasi_snapshot_preview1.MustInstantiate(ctx, r)
+	_, err = r.InstantiateWithConfig(ctx, data, wazero.NewModuleConfig())
+	if err == nil {
+		t.Fatal("program unexpectedly exited successfully")
+	}
+	if !strings.Contains(err.Error(), "main.panicHere") {
+		t.Fatalf("panic traceback does not contain main.panicHere:\n%s", err)
 	}
 }
 

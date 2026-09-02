@@ -195,3 +195,49 @@ func TestConfigLinkerFlavor(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigPanicUnwind(t *testing.T) {
+	tests := []struct {
+		name    string
+		options Options
+		target  TargetSpec
+		want    string
+	}{
+		{
+			name:   "native defaults to setjmp",
+			target: TargetSpec{Triple: "x86_64-unknown-linux"},
+			want:   "setjmp",
+		},
+		{
+			name:   "riscv64 defaults to setjmp",
+			target: TargetSpec{Triple: "riscv64-unknown-unknown"},
+			want:   "setjmp",
+		},
+		{
+			name:    "explicit command line opt in",
+			options: Options{PanicUnwind: "explicit"},
+			target:  TargetSpec{Triple: "riscv64-unknown-unknown"},
+			want:    "explicit",
+		},
+		{
+			name:    "auto overrides target opt in",
+			options: Options{PanicUnwind: "auto"},
+			target:  TargetSpec{Triple: "riscv64-unknown-unknown", PanicUnwind: "explicit"},
+			want:    "setjmp",
+		},
+		{
+			name:    "asyncify enables unwinding",
+			options: Options{Scheduler: "asyncify"},
+			target:  TargetSpec{Triple: "wasm32-unknown-unknown", PanicUnwind: "auto"},
+			want:    "asyncify",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			config := Config{Options: &tc.options, Target: &tc.target}
+			if got := config.PanicUnwind(); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

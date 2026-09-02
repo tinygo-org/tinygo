@@ -102,6 +102,11 @@ func free(ptr unsafe.Pointer) {
 	libgc_free(ptr)
 }
 
+//go:noinline
+func freeTaskStack(ptr uintptr) {
+	free(unsafe.Pointer(ptr))
+}
+
 func GC() {
 	gcLock.Lock()
 	libgc_gcollect()
