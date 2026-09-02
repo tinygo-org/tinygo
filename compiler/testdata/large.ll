@@ -388,7 +388,7 @@ declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(48), ptr, ptr
 declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(48), ptr, ptr, i32, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(36) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(40) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op1 = alloca %runtime.channelOp, align 8
   %chan.op = alloca %runtime.channelOp, align 8
@@ -425,15 +425,15 @@ if.then:                                          ; preds = %entry
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr nocapture) #8
 
-declare void @runtime.chanSend(ptr dereferenceable_or_null(36), ptr, ptr dereferenceable_or_null(16), ptr) #0
+declare void @runtime.chanSend(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr nocapture) #8
 
-declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(36), ptr, ptr dereferenceable_or_null(16), ptr) #0
+declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i8 @main.selectLargeChannel(ptr dereferenceable_or_null(36) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @main.selectLargeChannel(ptr dereferenceable_or_null(40) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %select.block.alloca = alloca [2 x %runtime.channelOp], align 8
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8

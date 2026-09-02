@@ -69,6 +69,7 @@ var startTask [0]uint8
 // The new goroutine is scheduled to run later.
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	t := &Task{}
+	inheritSynctest(t)
 	addLiveTask(t)
 	t.state.initialize(fn, args, stackSize)
 	scheduleTask(t)
