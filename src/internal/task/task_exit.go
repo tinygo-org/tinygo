@@ -32,6 +32,7 @@ func exit(goexit bool) {
 	if hasReleasableStack {
 		t.Exited = true
 	}
+	exitSynctest(t)
 	remaining := atomic.AddUint32(&liveTasks, ^uint32(0))
 	if t == mainTask {
 		if goexit {

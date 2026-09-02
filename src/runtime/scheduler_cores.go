@@ -28,6 +28,7 @@ var (
 
 func deadlock() {
 	// Call yield without requesting a wakeup.
+	synctestTaskBlock(task.Current())
 	task.Pause()
 	trap()
 }
@@ -39,6 +40,7 @@ func goexit() {
 // Mark the given task as ready to resume.
 // This is allowed even if the task isn't paused yet, but will pause soon.
 func scheduleTask(t *task.Task) {
+	synctestTaskWake(t)
 	schedulerLock.Lock()
 	switch t.RunState {
 	case task.RunStatePaused:
@@ -106,9 +108,8 @@ func addTimer(tn *timerNode) {
 	schedulerLock.Unlock()
 }
 
-// reAddTimer advances and re-adds a periodic timer (a ticker) after its
-// callback has run, unless it was stopped or reset while the callback was
-// running (in which case it must not be re-added).
+// reAddTimer finishes firing a timer. It re-adds periodic timers unless they
+// were stopped or reset while the callback was running.
 func reAddTimer(tn *timerNode) {
 	schedulerLock.Lock()
 
@@ -121,6 +122,10 @@ func reAddTimer(tn *timerNode) {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
 		// already been re-added by resetTimer.
+		schedulerLock.Unlock()
+		return
+	}
+	if tn.timer.period == 0 {
 		schedulerLock.Unlock()
 		return
 	}
@@ -151,6 +156,9 @@ func schedulerRunQueue() *task.Queue {
 //go:linkname sleep time.Sleep
 func sleep(duration int64) {
 	if duration <= 0 {
+		return
+	}
+	if synctestSleep(duration) {
 		return
 	}
 
@@ -231,12 +239,6 @@ func scheduler(_ bool) {
 				schedulerLock.Unlock()
 				tn.callback(tn, delay)
 				schedulerLock.Lock()
-				// A periodic timer (a ticker) already removed itself from the
-				// firing list in reAddTimer; a one-shot timer isn't re-added, so
-				// remove it from the firing list here.
-				if tn.timer.period == 0 {
-					firingTimersRemove(tn)
-				}
 				continue
 			}
 		}
