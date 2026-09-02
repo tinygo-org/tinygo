@@ -5,23 +5,22 @@ import (
 	"unsafe"
 )
 
-// Condition variable.
-// A goroutine that called Wait() can be in one of a few states depending on the
-// Task.Data field:
-// - When entering Wait, and before going to sleep, the data field is 0.
-// - When the goroutine that calls Wait changes its data value from 0 to 1, it
-//   is going to sleep. It has not been awoken early.
-// - When instead a call to Signal or Broadcast can change the data field from 0
-//   to 1, it will _not_ go to sleep but be signalled early.
-//   This can happen when a concurrent call to Signal happens, or the Unlock
-//   function calls Signal for some reason.
-
+// Cond is a condition variable.
 type Cond struct {
 	L Locker
 
 	blocked task.Stack
 	lock    task.PMutex
 }
+
+// A waiting task stores one of these states in Task.Data.
+// Signal schedules only a task that has reached condBlocked.
+const (
+	condWaiting = iota
+	condCommitting
+	condSignaled
+	condBlocked
+)
 
 func NewCond(l Locker) *Cond {
 	return &Cond{L: l}
@@ -31,12 +30,12 @@ func (c *Cond) trySignal() bool {
 	// Pop a blocked task off of the stack, and schedule it if applicable.
 	t := c.blocked.Pop()
 	if t != nil {
+		if t.SynctestBubble != nil && task.Current().SynctestBubble != t.SynctestBubble {
+			runtimeFatal("semaphore wake of synctest goroutine from outside bubble")
+		}
 		dataPtr := (*task.Uint32)(unsafe.Pointer(&t.Data))
 
-		// The data value is 0 when the task is not yet sleeping, and 1 when it is.
-		if dataPtr.Swap(1) != 0 {
-			// The value was already 1, so the task went to sleep (or is about to go
-			// to sleep). Schedule the task to be resumed.
+		if dataPtr.Swap(condSignaled) == condBlocked {
 			scheduleTask(t)
 		}
 		return true
@@ -64,12 +63,14 @@ func (c *Cond) Wait() {
 	// Mark us as not yet signalled or sleeping.
 	t := task.Current()
 	dataPtr := (*task.Uint32)(unsafe.Pointer(&t.Data))
-	dataPtr.Store(0)
+	dataPtr.Store(condWaiting)
 
 	// Add us to the list of waiting goroutines.
 	c.lock.Lock()
 	c.blocked.Push(t)
 	c.lock.Unlock()
+
+	transition := synctestBlockBegin(t)
 
 	// Temporarily unlock L.
 	c.L.Unlock()
@@ -77,18 +78,32 @@ func (c *Cond) Wait() {
 	// Re-acquire the lock before returning.
 	defer c.L.Lock()
 
-	// If we were signaled while unlocking, immediately complete.
-	if dataPtr.Swap(1) != 0 {
-		// The data value was already 1, so we got a signal already (and weren't
-		// scheduled because trySignal was the first to change the value).
+	// Commit to blocking unless a signal arrived while unlocking.
+	if !dataPtr.CompareAndSwap(condWaiting, condCommitting) {
+		if transition {
+			synctestBlockEnd(t, false)
+		}
 		return
 	}
 
-	// We were the first to change the value from 0 to 1, meaning we did not get
-	// a signal during the call to Unlock(). So we wait until we do get a
-	// signal.
+	if transition {
+		if !synctestBlockCommit(t, dataPtr, condCommitting, condBlocked) {
+			return
+		}
+	} else if !dataPtr.CompareAndSwap(condCommitting, condBlocked) {
+		return
+	}
 	task.Pause()
 }
 
 //go:linkname scheduleTask runtime.scheduleTask
 func scheduleTask(*task.Task)
+
+//go:linkname synctestBlockBegin runtime.synctestBlockBegin
+func synctestBlockBegin(*task.Task) bool
+
+//go:linkname synctestBlockEnd runtime.synctestBlockEnd
+func synctestBlockEnd(*task.Task, bool)
+
+//go:linkname synctestBlockCommit runtime.synctestBlockCommit
+func synctestBlockCommit(*task.Task, *task.Uint32, uint32, uint32) bool

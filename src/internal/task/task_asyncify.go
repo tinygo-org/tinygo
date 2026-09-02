@@ -63,6 +63,7 @@ type stackState struct {
 // The new goroutine is immediately started.
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	t := &Task{}
+	inheritSynctest(t)
 	addLiveTask(t)
 	t.state.initialize(fn, args, stackSize)
 	scheduleTask(t)

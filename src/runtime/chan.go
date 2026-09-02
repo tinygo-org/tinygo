@@ -61,6 +61,7 @@ type channel struct {
 	receivers    chanQueue
 	lock         task.PMutex
 	buf          unsafe.Pointer
+	synctest     unsafe.Pointer
 }
 
 const (
@@ -142,6 +143,23 @@ func chanMake(elementSize uintptr, bufSize uintptr, elementLayout unsafe.Pointer
 		elementSize: elementSize,
 		bufCap:      bufSize,
 		buf:         alloc(elementSize*bufSize, elementLayout),
+		synctest:    currentTaskSynctestBubble(),
+	}
+}
+
+func currentTaskSynctestBubble() unsafe.Pointer {
+	if !synctestIsEnabled() {
+		return nil
+	}
+	if current := task.Current(); current != nil {
+		return current.SynctestBubble
+	}
+	return nil
+}
+
+func (ch *channel) checkSynctest(op string) {
+	if synctestIsEnabled() && ch.synctest != nil && currentTaskSynctestBubble() != ch.synctest {
+		runtimeFatal(op + " synctest channel from outside bubble")
 	}
 }
 
@@ -233,6 +251,7 @@ func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
 		// A nil channel blocks forever. Do not schedule this goroutine again.
 		deadlock()
 	}
+	ch.checkSynctest("send on")
 
 	mask := interrupt.Disable()
 	ch.lock.Lock()
@@ -254,6 +273,9 @@ func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
 	op.index = 0
 	op.value = value
 	ch.senders.push(op)
+	if synctestIsEnabled() && ch.synctest != nil {
+		synctestTaskBlock(t)
+	}
 	ch.lock.Unlock()
 	interrupt.Restore(mask)
 
@@ -313,6 +335,7 @@ func chanRecv(ch *channel, value unsafe.Pointer, op *channelOp) bool {
 		// A nil channel blocks forever. Do not schedule this goroutine again.
 		deadlock()
 	}
+	ch.checkSynctest("receive on")
 
 	mask := interrupt.Disable()
 	ch.lock.Lock()
@@ -334,6 +357,9 @@ func chanRecv(ch *channel, value unsafe.Pointer, op *channelOp) bool {
 	op.task = t
 	op.index = 0
 	ch.receivers.push(op)
+	if synctestIsEnabled() && ch.synctest != nil {
+		synctestTaskBlock(t)
+	}
 	ch.lock.Unlock()
 	interrupt.Restore(mask)
 
@@ -351,6 +377,7 @@ func chanClose(ch *channel) {
 		// Not allowed by the language spec.
 		runtimePanic(errCloseNilChannel)
 	}
+	ch.checkSynctest("close of")
 
 	mask := interrupt.Disable()
 	ch.lock.Lock()
@@ -457,6 +484,12 @@ func unlockAllStates(states []chanSelectState) {
 // The 'ops' slice must be set if (and only if) this is a blocking select.
 func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelOp) (uint32, bool) {
 	mask := interrupt.Disable()
+	var currentBubble unsafe.Pointer
+	var synctestDurable bool
+	if synctestIsEnabled() {
+		currentBubble = currentTaskSynctestBubble()
+		synctestDurable = currentBubble != nil
+	}
 
 	// Lock everything.
 	chanSelectLock.Lock()
@@ -474,6 +507,17 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 			// A nil channel blocks forever, so it won't take part of the select
 			// operation.
 			continue
+		}
+		if synctestIsEnabled() {
+			if state.ch.synctest != nil && state.ch.synctest != currentBubble {
+				unlockAllStates(states)
+				chanSelectLock.Unlock()
+				interrupt.Restore(mask)
+				runtimeFatal("select on synctest channel from outside bubble")
+			}
+			if state.ch.synctest == nil {
+				synctestDurable = false
+			}
 		}
 
 		if state.value == nil { // chan receive
@@ -527,6 +571,9 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 			op.value = state.value
 			state.ch.senders.push(op)
 		}
+	}
+	if synctestDurable {
+		synctestTaskBlock(t)
 	}
 
 	// Now we wait until one of the send/receive operations can proceed.

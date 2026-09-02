@@ -5,8 +5,134 @@
 package testing
 
 import (
+	"internal/synctest"
 	"reflect"
+	"time"
 )
+
+func TestSynctestDuringCleanup(t *T) {
+	parent := &T{}
+	parent.cleanupStarted.Store(true)
+	defer func() {
+		const want = "testing: synctest.Run called during t.Cleanup"
+		if got := recover(); got != want {
+			t.Errorf("panic = %v, want %q", got, want)
+		}
+	}()
+	testingSynctestTest(parent, func(*T) {})
+}
+
+func TestSynctestAcquireDelaysRun(t *T) {
+	acquired := make(chan *synctest.Bubble)
+	release := make(chan struct{})
+	runDone := make(chan struct{})
+
+	go func() {
+		bubble := <-acquired
+		<-release
+		bubble.Release()
+	}()
+
+	go func() {
+		synctest.Run(func() {
+			acquired <- synctest.Acquire()
+		})
+		close(runDone)
+	}()
+
+	select {
+	case <-runDone:
+		t.Fatal("synctest.Run returned before the bubble reference was released")
+	case <-time.After(time.Millisecond):
+	}
+	close(release)
+	<-runDone
+}
+
+func TestSynctestSleepOverflow(t *T) {
+	synctest.Run(func() {
+		start := time.Now()
+		time.Sleep(time.Duration(1<<63 - 1))
+		if elapsed := time.Since(start); elapsed == 0 {
+			t.Fatal("maximum-duration sleep returned without advancing fake time")
+		}
+		time.Sleep(time.Nanosecond)
+		synctest.Wait()
+	})
+}
+
+func TestSynctestTickerConcurrentStopAndReset(t *T) {
+	for range 100 {
+		synctest.Run(func() {
+			ticker := time.NewTicker(time.Nanosecond)
+			stopped := make(chan struct{})
+			go func() {
+				<-ticker.C
+				ticker.Stop()
+				close(stopped)
+			}()
+			<-stopped
+			time.Sleep(time.Nanosecond)
+			select {
+			case <-ticker.C:
+				t.Fatal("stopped ticker fired again")
+			default:
+			}
+		})
+
+		synctest.Run(func() {
+			ticker := time.NewTicker(time.Nanosecond)
+			reset := make(chan struct{})
+			go func() {
+				<-ticker.C
+				ticker.Reset(10 * time.Nanosecond)
+				close(reset)
+			}()
+			<-reset
+			start := time.Now()
+			<-ticker.C
+			if elapsed := time.Since(start); elapsed != 10*time.Nanosecond {
+				t.Fatalf("reset ticker fired after %v, want 10ns", elapsed)
+			}
+			ticker.Stop()
+		})
+	}
+}
+
+func TestSynctestTimerImmediateReset(t *T) {
+	synctest.Run(func() {
+		timer := time.NewTimer(time.Hour)
+		timer.Reset(0)
+		<-timer.C
+	})
+}
+
+func TestSynctestTickerConcurrentResets(t *T) {
+	for range 100 {
+		synctest.Run(func() {
+			ticker := time.NewTicker(time.Hour)
+			start := make(chan struct{})
+			done := make(chan struct{}, 2)
+			for _, duration := range []time.Duration{10, 20} {
+				go func() {
+					<-start
+					ticker.Reset(duration)
+					done <- struct{}{}
+				}()
+			}
+			close(start)
+			<-done
+			<-done
+			ticker.Stop()
+			time.Sleep(100 * time.Nanosecond)
+			select {
+			case <-ticker.C:
+				t.Fatal("stopped ticker fired after concurrent resets")
+			default:
+			}
+		})
+	}
+}
 
 func TestCleanup(t *T) {
 	var cleanups []int

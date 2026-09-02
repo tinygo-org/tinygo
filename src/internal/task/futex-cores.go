@@ -42,19 +42,21 @@ func (f *Futex) Wait(cmp uint32) (awoken bool) {
 // Wake a single waiter.
 func (f *Futex) Wake() {
 	mask := lockFutex()
-	if t := f.waiters.Pop(); t != nil {
+	t := f.waiters.Pop()
+	unlockFutex(mask)
+	if t != nil {
 		scheduleTask(t)
 	}
-	unlockFutex(mask)
 }
 
 // Wake all waiters.
 func (f *Futex) WakeAll() {
 	mask := lockFutex()
-	for t := f.waiters.Pop(); t != nil; t = f.waiters.Pop() {
+	waiters := f.waiters.Queue()
+	unlockFutex(mask)
+	for t := waiters.Pop(); t != nil; t = waiters.Pop() {
 		scheduleTask(t)
 	}
-	unlockFutex(mask)
 }
 
 //go:linkname lockFutex runtime.lockFutex

@@ -1,9 +1,13 @@
 package runtime
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 // This is the timer that's used internally inside the runtime.
 type timer struct {
+	lock timerLock
+
 	// When to call the timer, and the interval for the ticker.
 	when   int64
 	period int64
@@ -11,6 +15,8 @@ type timer struct {
 	// Callback from the time package.
 	f   func(arg any, seq uintptr, delta int64)
 	arg any
+
+	synctest *synctestBubble
 }
 
 func (tim *timer) callCallback(delta int64) {
@@ -21,61 +27,115 @@ func (tim *timer) callCallback(delta int64) {
 // the same as time.Timer and time.Ticker so it can be used as-is in the time
 // package.
 type timeTimer struct {
-	c    unsafe.Pointer // <-chan time.Time
-	init bool
+	c         unsafe.Pointer // <-chan time.Time
+	initTimer bool
 	timer
 }
 
 //go:linkname newTimer time.newTimer
 func newTimer(when, period int64, f func(arg any, seq uintptr, delta int64), arg any, c unsafe.Pointer) *timeTimer {
+	bubble := currentSynctestBubble()
 	tim := &timeTimer{
-		c:    c,
-		init: true,
+		c:         c,
+		initTimer: true,
 		timer: timer{
-			when:   when,
-			period: period,
-			f:      f,
-			arg:    arg,
+			when:     when,
+			period:   period,
+			f:        f,
+			arg:      arg,
+			synctest: bubble,
 		},
 	}
 	scheduleLog("new timer")
-	addTimer(&timerNode{
+	node := &timerNode{
 		timer:    &tim.timer,
 		callback: timerCallback,
-	})
+	}
+	if bubble != nil {
+		bubble.addTimer(node)
+	} else {
+		addTimer(node)
+	}
 	return tim
 }
 
 //go:linkname stopTimer time.stopTimer
 func stopTimer(tim *timeTimer) bool {
-	return removeTimer(&tim.timer) != nil
+	if tim.timer.synctest != nil {
+		tim.timer.synctest.checkTimerAccess("stop")
+	}
+	tim.timer.lock.Lock()
+	var removed bool
+	if tim.timer.synctest != nil {
+		removed = tim.timer.synctest.removeTimer(&tim.timer) != nil
+	} else {
+		removed = removeTimer(&tim.timer) != nil
+	}
+	tim.timer.lock.Unlock()
+	return removed
 }
 
 //go:linkname resetTimer time.resetTimer
 func resetTimer(t *timeTimer, when, period int64) bool {
-	n := removeTimer(&t.timer)
+	if t.timer.synctest != nil {
+		t.timer.synctest.checkTimerAccess("reset")
+	}
+	t.timer.lock.Lock()
+	var n *timerNode
+	if t.timer.synctest != nil {
+		n = t.timer.synctest.removeTimer(&t.timer)
+	} else {
+		n = removeTimer(&t.timer)
+	}
 	removed := n != nil
 	if n == nil {
-		n = new(timerNode)
+		// Allocation can start GC, so do not hold the cores spin lock.
+		t.timer.lock.Unlock()
+		replacement := new(timerNode)
+		t.timer.lock.Lock()
+		// A concurrent reset can queue the timer during allocation.
+		// Remove it again so this reset takes effect after that operation.
+		if t.timer.synctest != nil {
+			n = t.timer.synctest.removeTimer(&t.timer)
+		} else {
+			n = removeTimer(&t.timer)
+		}
+		removed = n != nil
+		if n == nil {
+			n = replacement
+		}
 	}
 	t.timer.when = when
 	t.timer.period = period
 	n.timer = &t.timer
 	n.callback = timerCallback
-	addTimer(n)
+	var runNow bool
+	if t.timer.synctest != nil {
+		runNow = t.timer.synctest.queueTimer(n)
+	} else {
+		addTimer(n)
+	}
+	t.timer.lock.Unlock()
+	if runNow {
+		n.callback(n, 0)
+	}
 	return removed
 }
 
 //go:linkname time_runtimeNano time.runtimeNano
 func time_runtimeNano() int64 {
-	// Note: we're ignoring sync groups here (package testing/synctest).
-	// See: https://github.com/golang/go/issues/67434
+	if bubble := currentSynctestBubble(); bubble != nil {
+		return bubble.time()
+	}
 	return nanotime()
 }
 
 //go:linkname time_runtimeNow time.runtimeNow
 func time_runtimeNow() (sec int64, nsec int32, mono int64) {
-	// Also ignoring the sync group here, like time_runtimeNano above.
+	if bubble := currentSynctestBubble(); bubble != nil {
+		now := bubble.time()
+		return now / 1e9, int32(now % 1e9), 0
+	}
 	return now()
 }
 
@@ -90,7 +150,7 @@ type timerNode struct {
 	// schedulers). They make it possible to stop or reset a periodic timer (a
 	// ticker) while its callback is running, without the callback re-adding the
 	// timer to the queue afterwards. They are protected by the scheduler's
-	// timer lock.
+	// timer lock for normal timers and the bubble lock for synctest timers.
 	//
 	// firingNext links nodes whose callback is currently running into the
 	// firingTimers list. stopped is set when the timer was stopped or reset
@@ -119,14 +179,17 @@ func timerCallback(tn *timerNode, delta int64) {
 	// package so is left zero.
 	tn.timer.callCallback(delta)
 
-	// If this is a periodic timer (a ticker), re-add it to the queue.
-	if tn.timer.period != 0 {
+	// Finish firing the timer and re-add it if it is periodic.
+	tn.timer.lock.Lock()
+	if tn.timer.synctest != nil {
+		tn.timer.synctest.finishTimer(tn)
+	} else {
 		reAddTimer(tn)
 	}
+	tn.timer.lock.Unlock()
 }
 
 //go:linkname time_runtimeIsBubbled time.runtimeIsBubbled
 func time_runtimeIsBubbled() bool {
-	// We don't currently support bubbles.
-	return false
+	return currentSynctestBubble() != nil
 }
