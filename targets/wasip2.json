@@ -7,7 +7,7 @@
 	"goos":          "linux",
 	"goarch":        "arm",
 	"linker":        "wasm-ld",
-	"libc":          "wasmbuiltins",
+	"libc":          "wasi-libc",
 	"rtlib":         "compiler-rt",
 	"gc":            "precise",
 	"scheduler":     "asyncify",
