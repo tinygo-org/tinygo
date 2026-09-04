@@ -35,11 +35,15 @@ func sleep(duration int64) {
 	if duration <= 0 {
 		return
 	}
+	if synctestSleep(duration) {
+		return
+	}
 
 	sleepTicks(nanosecondsToTicks(duration))
 }
 
 func deadlock() {
+	synctestTaskBlock(task.Current())
 	task.Pause()
 }
 
@@ -48,6 +52,7 @@ func goexit() {
 }
 
 func scheduleTask(t *task.Task) {
+	synctestTaskWake(t)
 	t.Resume()
 }
 

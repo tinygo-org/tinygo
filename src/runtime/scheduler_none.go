@@ -47,6 +47,7 @@ func goexit() {
 }
 
 func scheduleTask(t *task.Task) {
+	synctestTaskWake(t)
 	// Pause() will panic, so this should not be reachable.
 }
 

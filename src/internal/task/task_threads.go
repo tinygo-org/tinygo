@@ -100,6 +100,7 @@ func (t *Task) Resume() {
 // Start a new OS thread.
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	t := &Task{}
+	inheritSynctest(t)
 	t.state.id = atomic.AddUintptr(&goroutineID, 1)
 	if verbose {
 		println("*** start:  ", t.state.id, "from", Current().state.id)
@@ -132,6 +133,8 @@ func taskExited(t *Task) {
 }
 
 func exit(t *Task) bool {
+	exitSynctest(t)
+
 	// Remove from the queue.
 	// TODO: this can be made more efficient by using a doubly linked list.
 	activeTaskLock.Lock()

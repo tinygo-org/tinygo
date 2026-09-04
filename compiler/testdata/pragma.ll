@@ -84,10 +84,10 @@ entry:
 
 declare void @main.undefinedFunctionNotInSection(ptr) #0
 
-declare void @main.doesNotEscapeParam(ptr nocapture dereferenceable_or_null(4), ptr nocapture, i32, i32, ptr nocapture dereferenceable_or_null(36), ptr nocapture, ptr) #0
+declare void @main.doesNotEscapeParam(ptr nocapture dereferenceable_or_null(4), ptr nocapture, i32, i32, ptr nocapture dereferenceable_or_null(40), ptr nocapture, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.stillEscapes(ptr dereferenceable_or_null(4) %a, ptr %b.data, i32 %b.len, i32 %b.cap, ptr dereferenceable_or_null(36) %c, ptr %d, ptr %context) unnamed_addr #1 {
+define hidden void @main.stillEscapes(ptr dereferenceable_or_null(4) %a, ptr %b.data, i32 %b.len, i32 %b.cap, ptr dereferenceable_or_null(40) %c, ptr %d, ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
