@@ -9,8 +9,6 @@ concurrency:
 
 jobs:
   sizediff:
-    # Note: when updating the Ubuntu version, also update the Ubuntu version in
-    # sizediff-install-pkgs.sh
     runs-on: ubuntu-24.04
     permissions:
       pull-requests: write
@@ -28,18 +26,9 @@ jobs:
         with:
           fetch-depth: 0 # fetch all history (no sparse checkout)
           submodules: true
-      - name: Install apt dependencies
-        run: ./.github/workflows/sizediff-install-pkgs.sh
-      - name: Restore LLVM source cache
-        uses: actions/cache@v5
-        id: cache-llvm-source
+      - uses: ./.github/actions/setup-llvm
         with:
-          key: llvm-source-22-sizediff-v1-${{ hashFiles('llvm-version.txt') }}
-          path: |
-            llvm-project/compiler-rt
-      - name: Download LLVM source
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
+          save-cache: "false"
       - name: Cache Go
         uses: actions/cache@v5
         with:
@@ -50,27 +39,52 @@ jobs:
       - run: make gen-device -j4
       - name: Download drivers repo
         run: git clone https://github.com/tinygo-org/drivers.git
-      - name: Save HEAD
-        run: git branch github-actions-saved-HEAD HEAD
+      - name: Save PR configuration
+        id: pr
+        run: |
+          # Keep the action available after checking out the base commit.
+          cp -r .github/actions/setup-llvm .github/actions/setup-llvm-base
+          echo "base_sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+          echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
 
       # Compute sizes for the PR branch
       - name: Build tinygo binary for the PR branch
-        run: go install
+        run: make tinygo
       - name: Determine binary sizes on the PR branch
-        run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-pr.txt)
+        run: |
+          set -o pipefail
+          export PATH="$PWD/build:$PATH"
+          (cd drivers; make smoke-test | tee sizes-pr.txt)
 
       # Compute sizes for the dev branch
       - name: Checkout dev branch
+        id: dev
         run: |
-          git reset --hard origin/dev
-          git checkout --no-recurse-submodules `git merge-base HEAD origin/dev`
-      - name: Install apt dependencies on the dev branch
-        # this is only needed on a PR that changes the LLVM version
-        run: ./.github/workflows/sizediff-install-pkgs.sh
+          git checkout --force "${{ steps.pr.outputs.base_sha }}"
+          git submodule update --init
+          rm -rf build
+          git clean -fdX src/device
+          export GOCACHE="$RUNNER_TEMP/go-build-base"
+          export XDG_CACHE_HOME="$RUNNER_TEMP/cache-base"
+          echo "GOCACHE=$GOCACHE" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$XDG_CACHE_HOME" >> "$GITHUB_ENV"
+          make gen-device -j4
+          echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
+      - name: Remove LLVM build for the PR branch
+        if: steps.pr.outputs.llvm_version != steps.dev.outputs.llvm_version
+        run: rm -rf llvm-build llvm-project
+      - name: Set up LLVM for the dev branch
+        uses: ./.github/actions/setup-llvm-base
+        if: steps.pr.outputs.llvm_version != steps.dev.outputs.llvm_version
+        with:
+          save-cache: "false"
       - name: Build tinygo binary for the dev branch
-        run: go install
+        run: make tinygo
       - name: Determine binary sizes on the dev branch
-        run: (cd drivers; make smoke-test XTENSA=0 | tee sizes-dev.txt)
+        run: |
+          set -o pipefail
+          export PATH="$PWD/build:$PATH"
+          (cd drivers; make smoke-test | tee sizes-dev.txt)
 
       # Create comment
       # TODO: add a summary, something like:
@@ -78,7 +92,9 @@ jobs:
       #  - number of binaries that grew / shrank / remained the same
       #  - don't show the full diff when no binaries changed
       - name: Calculate size diff
-        run: ./tools/sizediff drivers/sizes-dev.txt drivers/sizes-pr.txt | tee sizediff.txt
+        run: |
+          set -o pipefail
+          ./tools/sizediff drivers/sizes-dev.txt drivers/sizes-pr.txt | tee sizediff.txt
       - name: Create comment
         run: |
           echo "Size difference with the dev branch:" > comment.txt
