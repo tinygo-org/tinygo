@@ -225,9 +225,13 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 			}
 			methods = append(methods, fn)
 		}
+		methodEntryType := types.NewStruct([]*types.Var{
+			types.NewVar(token.NoPos, nil, "signature", types.Typ[types.UnsafePointer]),
+			types.NewVar(token.NoPos, nil, "name", types.Typ[types.UnsafePointer]),
+		}, nil)
 		methodSetType := types.NewStruct([]*types.Var{
 			types.NewVar(token.NoPos, nil, "length", types.Typ[types.Uintptr]),
-			types.NewVar(token.NoPos, nil, "methods", types.NewArray(types.Typ[types.UnsafePointer], int64(len(methods)))),
+			types.NewVar(token.NoPos, nil, "methods", types.NewArray(methodEntryType, int64(len(methods)))),
 		}, nil)
 		methodSetValue := c.getMethodSetValue(methods)
 		switch typ := typ.(type) {
@@ -1183,12 +1187,15 @@ func (c *compilerContext) getMethodsString(itf *types.Interface) string {
 }
 
 // getMethodSetValue creates the method set struct value for a list of methods.
-// The struct contains a length and a sorted array of method signature pointers.
+// The struct contains a length and a sorted array of {signature, name} entries.
+// Each entry pairs a method signature pointer (for Implements comparison) with
+// a pointer to the method's null-terminated name string.
 func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 	// Create a sorted list of method signature global names.
 	type methodRef struct {
-		name  string
-		value llvm.Value
+		sigGlobalName string
+		methodName    string
+		sigValue      llvm.Value
 	}
 	var refs []methodRef
 	for _, method := range methods {
@@ -1219,21 +1226,42 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 				value.AddMetadata(0, diglobal)
 			}
 		}
-		refs = append(refs, methodRef{globalName, value})
+		refs = append(refs, methodRef{globalName, name, value})
 	}
 	sort.Slice(refs, func(i, j int) bool {
-		return refs[i].name < refs[j].name
+		return refs[i].sigGlobalName < refs[j].sigGlobalName
 	})
 
-	var values []llvm.Value
+	pairType := c.ctx.StructType([]llvm.Type{c.dataPtrType, c.dataPtrType}, false)
+	var pairs []llvm.Value
 	for _, ref := range refs {
-		values = append(values, ref.value)
+		nameGlobal := c.getMethodNameGlobal(ref.methodName)
+		pair := c.ctx.ConstStruct([]llvm.Value{ref.sigValue, nameGlobal}, false)
+		pairs = append(pairs, pair)
 	}
 
 	return c.ctx.ConstStruct([]llvm.Value{
-		llvm.ConstInt(c.uintptrType, uint64(len(values)), false),
-		llvm.ConstArray(c.dataPtrType, values),
+		llvm.ConstInt(c.uintptrType, uint64(len(pairs)), false),
+		llvm.ConstArray(pairType, pairs),
 	}, false)
+}
+
+// getMethodNameGlobal returns a global containing the null-terminated method
+// name string, creating it if needed.
+func (c *compilerContext) getMethodNameGlobal(name string) llvm.Value {
+	globalName := "reflect/types.methodname:" + name
+	g := c.mod.NamedGlobal(globalName)
+	if !g.IsNil() {
+		return g
+	}
+	nameBytes := c.ctx.ConstString(name+"\x00", false)
+	g = llvm.AddGlobal(c.mod, nameBytes.Type(), globalName)
+	g.SetInitializer(nameBytes)
+	g.SetGlobalConstant(true)
+	g.SetLinkage(llvm.LinkOnceODRLinkage)
+	g.SetAlignment(1)
+	g.SetUnnamedAddr(true)
+	return g
 }
 
 // getInvokeFunction returns the thunk to call the given interface method. The

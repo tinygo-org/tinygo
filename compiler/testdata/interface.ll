@@ -10,13 +10,15 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:pointer:basic:int" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:int" }, align 4
 @"reflect/types.type:pointer:named:error" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:named:error" }, align 4
 @"reflect/types.signature:Error:func:{}{basic:string}" = linkonce_odr constant i8 0, align 1
-@"reflect/types.type:named:error" = linkonce_odr constant { i8, i16, ptr, ptr, ptr, { i32, [1 x ptr] }, [7 x i8] } { i8 116, i16 -32767, ptr @"reflect/types.type:pointer:named:error", ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}", ptr @"reflect/types.type.pkgpath.empty", { i32, [1 x ptr] } { i32 1, [1 x ptr] [ptr @"reflect/types.signature:Error:func:{}{basic:string}"] }, [7 x i8] c".error\00" }, align 4
+@"reflect/types.methodname:Error" = linkonce_odr unnamed_addr constant [6 x i8] c"Error\00", align 1
+@"reflect/types.type:named:error" = linkonce_odr constant { i8, i16, ptr, ptr, ptr, { i32, [1 x { ptr, ptr }] }, [7 x i8] } { i8 116, i16 -32767, ptr @"reflect/types.type:pointer:named:error", ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}", ptr @"reflect/types.type.pkgpath.empty", { i32, [1 x { ptr, ptr }] } { i32 1, [1 x { ptr, ptr }] [{ ptr, ptr } { ptr @"reflect/types.signature:Error:func:{}{basic:string}", ptr @"reflect/types.methodname:Error" }] }, [7 x i8] c".error\00" }, align 4
 @"reflect/types.type.pkgpath.empty" = linkonce_odr unnamed_addr constant [1 x i8] zeroinitializer, align 1
-@"reflect/types.type:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant { i8, ptr, { i32, [1 x ptr] } } { i8 84, ptr @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}", { i32, [1 x ptr] } { i32 1, [1 x ptr] [ptr @"reflect/types.signature:Error:func:{}{basic:string}"] } }, align 4
+@"reflect/types.type:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant { i8, ptr, { i32, [1 x { ptr, ptr }] } } { i8 84, ptr @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}", { i32, [1 x { ptr, ptr }] } { i32 1, [1 x { ptr, ptr }] [{ ptr, ptr } { ptr @"reflect/types.signature:Error:func:{}{basic:string}", ptr @"reflect/types.methodname:Error" }] } }, align 4
 @"reflect/types.type:pointer:interface:{Error:func:{}{basic:string}}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:interface:{Error:func:{}{basic:string}}" }, align 4
 @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:interface:{String:func:{}{basic:string}}" }, align 4
 @"reflect/types.signature:String:func:{}{basic:string}" = linkonce_odr constant i8 0, align 1
-@"reflect/types.type:interface:{String:func:{}{basic:string}}" = linkonce_odr constant { i8, ptr, { i32, [1 x ptr] } } { i8 84, ptr @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}", { i32, [1 x ptr] } { i32 1, [1 x ptr] [ptr @"reflect/types.signature:String:func:{}{basic:string}"] } }, align 4
+@"reflect/types.methodname:String" = linkonce_odr unnamed_addr constant [7 x i8] c"String\00", align 1
+@"reflect/types.type:interface:{String:func:{}{basic:string}}" = linkonce_odr constant { i8, ptr, { i32, [1 x { ptr, ptr }] } } { i8 84, ptr @"reflect/types.type:pointer:interface:{String:func:{}{basic:string}}", { i32, [1 x { ptr, ptr }] } { i32 1, [1 x { ptr, ptr }] [{ ptr, ptr } { ptr @"reflect/types.signature:String:func:{}{basic:string}", ptr @"reflect/types.methodname:String" }] } }, align 4
 @"reflect/types.typeid:basic:int" = external constant i8
 
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
