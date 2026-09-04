@@ -33,7 +33,9 @@ func enableSIOFifoInterruptCore1() {
 
 func handleSIOFifoInterrupt(intr interrupt.Interrupt) {
 	switch rp.SIO.FIFO_RD.Get() {
-	case 1:
+	case rp2SIOFIFOCommandGC:
 		gcInterruptHandler(currentCPU())
+	case rp2SIOFIFOCommandFlashSafe:
+		rp2FlashSafeInterruptHandler(currentCPU())
 	}
 }
