@@ -25,7 +25,7 @@ import (
 var libVersions = map[string]int{
 	"musl":         3,
 	"bdwgc":        2,
-	"picolibc":     1,
+	"picolibc":     2,
 	"wasmbuiltins": 1,
 }
 

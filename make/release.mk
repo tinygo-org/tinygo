@@ -15,12 +15,14 @@ build/release: tinygo gen-device $(if $(filter 1,$(USE_SYSTEM_BINARYEN)),,binary
 	@mkdir -p build/release/tinygo/lib/musl/src
 	@mkdir -p build/release/tinygo/lib/nrfx
 	@mkdir -p build/release/tinygo/lib/picolibc/libc
+	@mkdir -p build/release/tinygo/lib/picolibc/libc/machine
 	@mkdir -p build/release/tinygo/lib/picolibc/libm
 	@mkdir -p build/release/tinygo/lib/wasi-libc/dlmalloc
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-bottom-half
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/arch
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
 	@mkdir -p build/release/tinygo/lib/wasi-cli/
+	@mkdir -p build/release/tinygo/lib/xtensa
 	@echo copying source files
 	@cp -p  build/tinygo$(EXE)           build/release/tinygo/bin
 ifneq ($(USE_SYSTEM_BINARYEN),1)
@@ -80,15 +82,16 @@ endif
 	@cp -rp lib/mingw-w64/mingw-w64-headers/defaults/include        build/release/tinygo/lib/mingw-w64/mingw-w64-headers/defaults
 	@cp -rp lib/mingw-w64/mingw-w64-headers/include                 build/release/tinygo/lib/mingw-w64/mingw-w64-headers
 	@cp -rp lib/nrfx/*                   build/release/tinygo/lib/nrfx
-	@cp -rp lib/picolibc/libc/ctype       build/release/tinygo/lib/picolibc/libc
-	@cp -rp lib/picolibc/libc/include     build/release/tinygo/lib/picolibc/libc
-	@cp -rp lib/picolibc/libc/locale      build/release/tinygo/lib/picolibc/libc
-	@cp -rp lib/picolibc/libc/stdlib      build/release/tinygo/lib/picolibc/libc
-	@cp -rp lib/picolibc/libc/string      build/release/tinygo/lib/picolibc/libc
-	@cp -rp lib/picolibc/libc/stdio       build/release/tinygo/lib/picolibc/libc
-	@cp -rp lib/picolibc/libm/common      build/release/tinygo/lib/picolibc/libm
-	@cp -rp lib/picolibc/libm/math        build/release/tinygo/lib/picolibc/libm
-	@cp -rp lib/picolibc-stdio.c         build/release/tinygo/lib
+	@cp -rp lib/picolibc/libc/ctype              build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/include            build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/locale             build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/machine/xtensa     build/release/tinygo/lib/picolibc/libc/machine
+	@cp -rp lib/picolibc/libc/stdlib             build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/string             build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libc/stdio              build/release/tinygo/lib/picolibc/libc
+	@cp -rp lib/picolibc/libm/common             build/release/tinygo/lib/picolibc/libm
+	@cp -rp lib/picolibc/libm/math               build/release/tinygo/lib/picolibc/libm
+	@cp -rp lib/picolibc-stdio.c                 build/release/tinygo/lib
 	@cp -rp lib/wasi-libc/dlmalloc/src                              build/release/tinygo/lib/wasi-libc/dlmalloc
 	@cp -rp lib/wasi-libc/libc-bottom-half/cloudlibc                build/release/tinygo/lib/wasi-libc/libc-bottom-half
 	@cp -rp lib/wasi-libc/libc-bottom-half/headers                  build/release/tinygo/lib/wasi-libc/libc-bottom-half
@@ -121,6 +124,7 @@ endif
 	@cp -rp lib/wasi-libc/libc-top-half/musl/src/unistd             build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
 	@cp -rp lib/wasi-libc/libc-top-half/sources                     build/release/tinygo/lib/wasi-libc/libc-top-half
 	@cp -rp lib/wasi-cli/wit                                        build/release/tinygo/lib/wasi-cli/wit
+	@cp -rp lib/xtensa/include                                      build/release/tinygo/lib/xtensa
 	@cp -rp ${LLVM_PROJECTDIR}/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp ${LLVM_PROJECTDIR}/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp src                          build/release/tinygo/src

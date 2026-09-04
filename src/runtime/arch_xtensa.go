@@ -11,7 +11,9 @@ const zeroSizeAllocPtr uintptr = 16 // part of early flash: partition table, etc
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 32
 
-const deferExtraRegs = 0
+// Xtensa's windowed ABI uses a 17-word jmp_buf. JumpSP and JumpPC provide the
+// first two words.
+const deferExtraRegs = 15
 
 const callInstSize = 3 // "callx0 someFunction" (and similar) is 3 bytes
 

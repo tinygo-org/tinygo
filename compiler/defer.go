@@ -32,9 +32,6 @@ func (b *builder) supportsRecover() bool {
 		// proposal of WebAssembly:
 		// https://github.com/WebAssembly/exception-handling
 		return false
-	case "xtensa":
-		// TODO: add support for these architectures
-		return false
 	default:
 		return true
 	}
@@ -109,11 +106,21 @@ func (b *builder) createLandingPad() {
 	b.CreateBr(b.blockInfo[b.fn.Recover.Index].entry)
 }
 
-// Create a checkpoint (similar to setjmp). This emits inline assembly that
-// stores the current program counter inside the ptr address (actually
-// ptr+sizeof(ptr)) and then returns a boolean indicating whether this is the
-// normal flow (false) or we jumped here from somewhere else (true).
+// Create a checkpoint (similar to setjmp). It returns whether execution is
+// continuing normally instead of resuming after a longjmp.
 func (b *builder) createCheckpoint(ptr llvm.Value) llvm.Value {
+	if b.archFamily() == "xtensa" {
+		fnType := llvm.FunctionType(b.ctx.Int32Type(), []llvm.Type{b.dataPtrType}, false)
+		fn := b.mod.NamedFunction("setjmp")
+		if fn.IsNil() {
+			fn = llvm.AddFunction(b.mod, "setjmp", fnType)
+			fn.AddFunctionAttr(b.ctx.CreateEnumAttribute(llvm.AttributeKindID("returns_twice"), 0))
+		}
+		result := b.CreateCall(fnType, fn, []llvm.Value{ptr}, "setjmp")
+		result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("returns_twice"), 0))
+		return b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(b.ctx.Int32Type(), 0, false), "setjmp.result")
+	}
+
 	// Construct inline assembly equivalents of setjmp.
 	// The assembly works as follows:
 	//   * Registers are either clobbered or, on 386, saved for longjmp to

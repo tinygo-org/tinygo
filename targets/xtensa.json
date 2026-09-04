@@ -14,5 +14,6 @@
 	],
 	"ldflags": [
 		"--gc-sections"
-	]
+	],
+	"extra-files": ["src/runtime/asm_xtensa.S"]
 }
