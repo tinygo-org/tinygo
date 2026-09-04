@@ -478,7 +478,7 @@ var (
 		rtsctsSignal: 199,
 	}
 
-	onceUart = sync.Once{}
+	uartInterruptConfigured bool
 )
 
 // CPU interrupt line used for all UART peripherals.
@@ -588,11 +588,13 @@ func (uart *UART) configureInterrupt() {
 	}
 
 	// Register the ISR only once (shared across all UARTs on the same CPU int).
-	// interrupt.New is a compiler intrinsic and requires a plain (non-capturing)
-	// handler function, so we use a named package-level function.
-	onceUart.Do(func() {
+	// Avoid sync.Once here because serial is initialized before a task exists.
+	state := interrupt.Disable()
+	if !uartInterruptConfigured {
 		_ = interrupt.New(cpuInterruptFromUART, handleUARTInterrupt).Enable()
-	})
+		uartInterruptConfigured = true
+	}
+	interrupt.Restore(state)
 }
 
 // handleUARTInterrupt is the shared UART interrupt handler. It must be a plain
