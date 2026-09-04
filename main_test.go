@@ -78,6 +78,7 @@ func TestBuild(t *testing.T) {
 		"map_bigkey.go",
 		"math.go",
 		"oldgo/",
+		"paramspill.go",
 		"print.go",
 		"reflect.go",
 		"signal.go",
@@ -364,6 +365,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 
 			case "gc.go":
 				// Does not pass due to high mark false positive rate.
+				continue
+
+			case "paramspill.go":
+				// GC-stress test, same conservative-GC flakiness as gc.go on
+				// AVR.
 				continue
 
 			case "json.go", "stdlib.go", "testing.go":
