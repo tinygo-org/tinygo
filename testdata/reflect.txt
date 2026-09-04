@@ -531,3 +531,12 @@ v.Interface() method
 kind: interface
 int 5
 reflect map interface key ok
+
+func type reflection
+func() NumIn=0 NumOut=0 Variadic=false
+func(int) NumIn=1 NumOut=0 Variadic=false In(0)=int
+func(int) int NumIn=1 NumOut=1 Variadic=false In(0)=int Out(0)=int
+func(int, string) (bool, error) NumIn=2 NumOut=2 Variadic=false In(0)=int In(1)=string Out(0)=bool Out(1)=error
+func(...int) NumIn=1 NumOut=0 Variadic=true In(0)=[]int
+func(string, ...int) error NumIn=2 NumOut=1 Variadic=true In(0)=string In(1)=[]int Out(0)=error
+main.namedFunc NumIn= 1 In(0)= int NumOut= 1 Out(0)= string

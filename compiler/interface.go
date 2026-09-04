@@ -312,10 +312,14 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "methods", methodSetType),
 			)
 		case *types.Signature:
+			numIn := typ.Params().Len()
+			numOut := typ.Results().Len()
 			typeFieldTypes = append(typeFieldTypes,
+				types.NewVar(token.NoPos, nil, "numIn", types.Typ[types.Uint8]),
+				types.NewVar(token.NoPos, nil, "numOut", types.Typ[types.Uint8]), // high bit = variadic
 				types.NewVar(token.NoPos, nil, "ptrTo", types.Typ[types.UnsafePointer]),
+				types.NewVar(token.NoPos, nil, "inOut", types.NewArray(types.Typ[types.UnsafePointer], int64(numIn+numOut))),
 			)
-			// TODO: signature params and return values
 		}
 		if hasMethodSet {
 			// This method set is appended at the start of the struct. It is
@@ -507,8 +511,31 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 				methodSetValue,
 			}
 		case *types.Signature:
-			typeFields = []llvm.Value{c.getTypeCode(types.NewPointer(typ))}
-			// TODO: params, return values, etc
+			params := typ.Params()
+			results := typ.Results()
+			if params.Len() >= 0x100 {
+				c.addError(token.NoPos, fmt.Sprintf("too many function parameters for typecode (%d): %s", params.Len(), typ.String()))
+			}
+			if results.Len() >= 0x80 {
+				c.addError(token.NoPos, fmt.Sprintf("too many function results for typecode (%d): %s", results.Len(), typ.String()))
+			}
+			numOut := uint64(results.Len())
+			if typ.Variadic() {
+				numOut |= 0x80 // variadic flag in high bit
+			}
+			inOut := make([]llvm.Value, 0, params.Len()+results.Len())
+			for i := 0; i < params.Len(); i++ {
+				inOut = append(inOut, c.getTypeCode(params.At(i).Type()))
+			}
+			for i := 0; i < results.Len(); i++ {
+				inOut = append(inOut, c.getTypeCode(results.At(i).Type()))
+			}
+			typeFields = []llvm.Value{
+				llvm.ConstInt(c.ctx.Int8Type(), uint64(params.Len()), false),
+				llvm.ConstInt(c.ctx.Int8Type(), numOut, false),
+				c.getTypeCode(types.NewPointer(typ)),
+				llvm.ConstArray(c.dataPtrType, inOut),
+			}
 		}
 		// Prepend metadata byte.
 		typeFields = append([]llvm.Value{
