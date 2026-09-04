@@ -29,6 +29,7 @@ package transform
 // compiler does it: https://research.swtch.com/interfaces
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -275,6 +276,12 @@ func (p *lowerInterfacesPass) run() error {
 		invokeAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
 		itf := p.interfaces[methodsAttr.GetStringValue()]
 		signature := itf.signatures[invokeAttr.GetStringValue()]
+		for _, typ := range itf.types {
+			function := typ.getMethod(signature).function
+			if attr := function.GetStringAttributeAtIndex(-1, "tinygo-interface-abi-error"); !attr.IsNil() {
+				return fmt.Errorf("%s", attr.GetStringValue())
+			}
+		}
 		p.defineInterfaceMethodFunc(fn, itf, signature)
 	}
 
