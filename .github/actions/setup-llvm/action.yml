@@ -1,0 +1,64 @@
+name: Set up LLVM
+description: Restore or build LLVM with assertions enabled
+
+inputs:
+  save-cache:
+    description: Save LLVM caches after a cache miss
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Restore LLVM source cache
+      uses: actions/cache/restore@v5
+      id: cache-llvm-source
+      with:
+        key: llvm-source-22-linux-ubuntu-24.04-asserts-v1-${{ hashFiles('llvm-version.txt') }}
+        path: |
+          llvm-project/clang/lib/Headers
+          llvm-project/clang/include
+          llvm-project/compiler-rt
+          llvm-project/lld/include
+          llvm-project/llvm/include
+    - name: Download LLVM source
+      if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+      shell: bash
+      run: make llvm-source
+    - name: Save LLVM source cache
+      uses: actions/cache/save@v5
+      if: inputs.save-cache == 'true' && steps.cache-llvm-source.outputs.cache-hit != 'true'
+      with:
+        key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+        path: |
+          llvm-project/clang/lib/Headers
+          llvm-project/clang/include
+          llvm-project/compiler-rt
+          llvm-project/lld/include
+          llvm-project/llvm/include
+    - name: Restore LLVM build cache
+      uses: actions/cache/restore@v5
+      id: cache-llvm-build
+      with:
+        key: llvm-build-22-linux-ubuntu-24.04-asserts-v1-${{ hashFiles('llvm-version.txt') }}
+        path: llvm-build
+    - name: Install Ninja
+      if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends ninja-build
+    - name: Build LLVM
+      if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        rm -rf llvm-project
+        make llvm-source
+        make llvm-build ASSERT=1
+        find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+    - name: Save LLVM build cache
+      uses: actions/cache/save@v5
+      if: inputs.save-cache == 'true' && steps.cache-llvm-build.outputs.cache-hit != 'true'
+      with:
+        key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+        path: llvm-build
