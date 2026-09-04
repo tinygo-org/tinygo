@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -19,8 +20,9 @@ var libPicolibc = Library{
 		return f.Close()
 	},
 	cflags: func(target, headerPath string) []string {
-		picolibcDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc")
-		return []string{
+		root := goenv.Get("TINYGOROOT")
+		picolibcDir := filepath.Join(root, "lib/picolibc")
+		flags := []string{
 			"-Werror",
 			"-Wall",
 			"-std=gnu11",
@@ -39,10 +41,22 @@ var libPicolibc = Library{
 			"-I" + picolibcDir + "/libm/common",
 			"-I" + headerPath,
 		}
+		if compileopts.CanonicalArchName(target) == "xtensa" {
+			flags = append(flags,
+				"-I"+filepath.Join(root, "lib/xtensa/include"),
+				"-I"+picolibcDir+"/libc/machine/xtensa",
+				"-D_XTENSA_HAVE_CONFIG_CORE_ISA_H",
+			)
+		}
+		return flags
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/picolibc") },
 	librarySources: func(target string, _ bool) ([]string, error) {
-		return append([]string(nil), picolibcSources...), nil
+		sources := append([]string(nil), picolibcSources...)
+		if compileopts.CanonicalArchName(target) == "xtensa" {
+			sources = append(sources, "libc/machine/xtensa/setjmp.S")
+		}
+		return sources, nil
 	},
 }
 

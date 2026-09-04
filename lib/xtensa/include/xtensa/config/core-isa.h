@@ -1,0 +1,18 @@
+#ifndef TINYGO_XTENSA_CONFIG_CORE_ISA_H
+#define TINYGO_XTENSA_CONFIG_CORE_ISA_H
+
+#ifdef __XTENSA_WINDOWED_ABI__
+#define XCHAL_HAVE_WINDOWED 1
+#else
+#define XCHAL_HAVE_WINDOWED 0
+#endif
+
+#ifdef __XTENSA_EB__
+#define XCHAL_HAVE_BE 1
+#else
+#define XCHAL_HAVE_BE 0
+#endif
+
+#define XCHAL_MAYHAVE_ERRATUM_XEA1KWIN 1
+
+#endif
