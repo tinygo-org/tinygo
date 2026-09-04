@@ -1,0 +1,62 @@
+name: Set up LLVM
+description: Restore or build the LLVM source and build directories
+
+inputs:
+  cache-suffix:
+    description: Suffix for the LLVM cache keys
+    required: false
+    default: linux-asserts-v1
+  assertions:
+    description: Enable LLVM assertions
+    required: false
+    default: "1"
+
+runs:
+  using: composite
+  steps:
+    - name: Restore LLVM source cache
+      uses: actions/cache/restore@v5
+      id: cache-llvm-source
+      with:
+        key: llvm-source-22-${{ inputs.cache-suffix }}-${{ hashFiles('llvm-version.txt') }}
+        path: |
+          llvm-project/clang/lib/Headers
+          llvm-project/clang/include
+          llvm-project/compiler-rt
+          llvm-project/lld/include
+          llvm-project/llvm/include
+    - name: Download LLVM source
+      if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+      shell: bash
+      run: make llvm-source
+    - name: Save LLVM source cache
+      uses: actions/cache/save@v5
+      if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+      with:
+        key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+        path: |
+          llvm-project/clang/lib/Headers
+          llvm-project/clang/include
+          llvm-project/compiler-rt
+          llvm-project/lld/include
+          llvm-project/llvm/include
+    - name: Restore LLVM build cache
+      uses: actions/cache/restore@v5
+      id: cache-llvm-build
+      with:
+        key: llvm-build-22-${{ inputs.cache-suffix }}-${{ hashFiles('llvm-version.txt') }}
+        path: llvm-build
+    - name: Build LLVM
+      if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        rm -rf llvm-project
+        make llvm-source
+        make llvm-build ASSERT=${{ inputs.assertions }}
+        find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+    - name: Save LLVM build cache
+      uses: actions/cache/save@v5
+      if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+      with:
+        key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+        path: llvm-build
