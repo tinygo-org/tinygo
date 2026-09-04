@@ -88,6 +88,7 @@ type compilerContext struct {
 	diagnostics      []error
 	functionInfos    map[*ssa.Function]functionInfo
 	astComments      map[string]*ast.CommentGroup
+	cgoImportDynamic map[string]string // //go:cgo_import_dynamic local name -> remote symbol
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
 	loaderPkg        *loader.Package // current package being compiled (for AST access)
@@ -100,14 +101,15 @@ type compilerContext struct {
 // importantly with a newly created LLVM context and module.
 func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, dumpSSA bool) *compilerContext {
 	c := &compilerContext{
-		Config:        config,
-		DumpSSA:       dumpSSA,
-		difiles:       make(map[string]llvm.Metadata),
-		ditypes:       make(map[types.Type]llvm.Metadata),
-		machine:       machine,
-		targetData:    machine.CreateTargetData(),
-		functionInfos: map[*ssa.Function]functionInfo{},
-		astComments:   map[string]*ast.CommentGroup{},
+		Config:           config,
+		DumpSSA:          dumpSSA,
+		difiles:          make(map[string]llvm.Metadata),
+		ditypes:          make(map[types.Type]llvm.Metadata),
+		machine:          machine,
+		targetData:       machine.CreateTargetData(),
+		functionInfos:    map[*ssa.Function]functionInfo{},
+		astComments:      map[string]*ast.CommentGroup{},
+		cgoImportDynamic: map[string]string{},
 	}
 
 	c.ctx = llvm.NewContext()
@@ -3670,6 +3672,11 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 // which can all be directly lowered to IR. However, there is also the channel
 // receive operator which is handled in the runtime directly.
 func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
+	if unop.Op == token.MUL {
+		if value := b.createDarwinCgoImportDynamicLoad(unop); !value.IsNil() {
+			return value, nil
+		}
+	}
 	x := b.getValue(unop.X, getPos(unop))
 	switch unop.Op {
 	case token.NOT: // !x
