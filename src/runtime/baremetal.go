@@ -11,18 +11,20 @@ import (
 func libc_malloc(size uintptr) unsafe.Pointer {
 	// Note: this zeroes the returned buffer which is not necessary.
 	// The same goes for bytealg.MakeNoZero.
-	return alloc(size, nil)
+	return allocManual(size)
 }
 
 //export calloc
 func libc_calloc(nmemb, size uintptr) unsafe.Pointer {
-	// No difference between calloc and malloc.
+	if size != 0 && nmemb > ^uintptr(0)/size {
+		return nil
+	}
 	return libc_malloc(nmemb * size)
 }
 
 //export free
 func libc_free(ptr unsafe.Pointer) {
-	free(ptr)
+	freeManual(ptr)
 }
 
 //export runtime_putchar

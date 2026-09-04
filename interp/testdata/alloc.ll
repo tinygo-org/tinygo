@@ -11,6 +11,7 @@ target triple = "wasm32--wasi"
 @layout3 = global ptr null
 @layout4 = global ptr null
 @bigobj1 = global ptr null
+@pointerFree10 = global ptr null
 
 declare ptr @runtime.alloc(i32, ptr) unnamed_addr
 
@@ -49,5 +50,9 @@ define internal void @main.init() unnamed_addr {
   ; Large object that needs to be stored in a separate global.
   %bigobj1 = call ptr @runtime.alloc(i32 248, ptr @"runtime/gc.layout:62-2000000000000001")
   store ptr %bigobj1, ptr @bigobj1
+
+  ; Another pointer-free object.
+  %pointerFree10 = call ptr @runtime.alloc(i32 10, ptr inttoptr (i32 3 to ptr))
+  store ptr %pointerFree10, ptr @pointerFree10
   ret void
 }

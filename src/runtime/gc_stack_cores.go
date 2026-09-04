@@ -26,7 +26,7 @@ func gcMarkReachable() {
 		}
 
 		// Scan globals.
-		findGlobals(markRoots)
+		markGlobals()
 
 		// Nothing more to do: the other cores haven't started yet.
 		return
@@ -57,7 +57,7 @@ func gcMarkReachable() {
 	}
 
 	// Scan globals.
-	findGlobals(markRoots)
+	markGlobals()
 
 	// Signal each core in turn that they can scan the stack.
 	for i := uint32(0); i < numCPU; i++ {

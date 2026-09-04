@@ -1,4 +1,4 @@
 target      package               code rodata data  bss
-hifive1b    examples/echo         4321    323    0 2268
-microbit    examples/serial       2842    382    8 2264
-wioterminal examples/pininterrupt 8039   1665  132 7496
+hifive1b    examples/echo         4477    323    0 2268
+microbit    examples/serial       2946    382    8 2264
+wioterminal examples/pininterrupt 8507   1717  148 7496

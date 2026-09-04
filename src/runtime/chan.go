@@ -137,11 +137,11 @@ type chanSelectState struct {
 	value unsafe.Pointer
 }
 
-func chanMake(elementSize uintptr, bufSize uintptr) *channel {
+func chanMake(elementSize uintptr, bufSize uintptr, elementLayout unsafe.Pointer) *channel {
 	return &channel{
 		elementSize: elementSize,
 		bufCap:      bufSize,
-		buf:         alloc(elementSize*bufSize, nil),
+		buf:         alloc(elementSize*bufSize, elementLayout),
 	}
 }
 

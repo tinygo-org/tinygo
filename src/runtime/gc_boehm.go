@@ -98,8 +98,28 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	return ptr
 }
 
+func allocManual(size uintptr) unsafe.Pointer {
+	if size == 0 {
+		return alloc_zero(size, gclayout.NoPtrs.AsPtr())
+	}
+
+	gcLock.Lock()
+	ptr := libgc_malloc_atomic_uncollectable(size)
+	gcResumeWorld()
+	gcLock.Unlock()
+	if ptr == nil {
+		runtimeFatal("gc: out of memory")
+		return nil
+	}
+	memzero(ptr, size)
+	return ptr
+}
+
 func free(ptr unsafe.Pointer) {
+	gcLock.Lock()
 	libgc_free(ptr)
+	gcResumeWorld()
+	gcLock.Unlock()
 }
 
 func GC() {
@@ -153,6 +173,9 @@ func libgc_malloc(uintptr) unsafe.Pointer
 //export GC_malloc_atomic
 func libgc_malloc_atomic(uintptr) unsafe.Pointer
 
+//export GC_malloc_atomic_uncollectable
+func libgc_malloc_atomic_uncollectable(uintptr) unsafe.Pointer
+
 //export GC_free
 func libgc_free(unsafe.Pointer)
 
@@ -164,6 +187,9 @@ func libgc_size(ptr uintptr) uintptr
 
 //export GC_push_all
 func libgc_push_all(bottom, top uintptr)
+
+//export GC_push_all_eager
+func libgc_push_all_eager(bottom, top uintptr)
 
 //export GC_push_all_stack
 func libgc_push_all_stack(bottom, top uintptr)

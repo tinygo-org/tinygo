@@ -48,7 +48,6 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 func free(ptr unsafe.Pointer)
 
 // markRoots is called with the start and end addresses to scan for references.
-// It is currently only called with the top and bottom of the stack.
 func markRoots(start, end uintptr)
 
 // GC is called to explicitly run garbage collection.
