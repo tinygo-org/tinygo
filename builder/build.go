@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gofrs/flock"
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -34,6 +35,8 @@ import (
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/stacksize"
 	"github.com/tinygo-org/tinygo/transform"
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -247,6 +250,26 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	err = lprogram.Parse()
 	if err != nil {
 		return result, err
+	}
+
+	// Embed module build information so runtime/debug.ReadBuildInfo() works,
+	// mirroring what the standard `go build` toolchain does. We fill
+	// runtime/debug.modinfo (a plain string global) from the module info that
+	// `go list` already reported for the loaded packages; runtime/debug parses
+	// it back into a *BuildInfo. An explicit -ldflags="-X runtime/debug.modinfo=..."
+	// takes precedence. This is skipped in GOPATH mode (no module info) and when
+	// the main package isn't in a module.
+	if _, overridden := globalValues["runtime/debug"]["modinfo"]; !overridden {
+		mi, err := moduleBuildInfo(lprogram, config.Options.BuildVCS)
+		if err != nil {
+			return result, err
+		}
+		if mi != "" {
+			if globalValues["runtime/debug"] == nil {
+				globalValues["runtime/debug"] = map[string]string{}
+			}
+			globalValues["runtime/debug"]["modinfo"] = mi
+		}
 	}
 
 	// Store which filesystem paths map to which package name.
@@ -1602,4 +1625,249 @@ func b2u8(b bool) uint8 {
 		return 1
 	}
 	return 0
+}
+
+// moduleBuildInfo constructs the module build-info string embedded into the
+// runtime/debug.modinfo global, in the same textual format that
+// runtime/debug.BuildInfo.String() produces (minus the leading "go" line, which
+// runtime/debug supplies from runtime.Version()). runtime/debug.ReadBuildInfo
+// parses it back into a *BuildInfo, so `go build`-style version reporting works
+// under TinyGo without -ldflags. It returns "" when there is no module
+// information to embed (e.g. GOPATH mode, or a main package outside any module).
+//
+// The layout is the reverse of runtime/debug.ParseBuildInfo:
+//
+//	path\t<main package import path>\n
+//	mod\t<main module path>\t<version>\t<sum>\n
+//	dep\t<module path>\t<version>\t<sum>\n   (one per contributing module, sorted)
+//
+// The main module version is reported as "(devel)" for a local checkout, as the
+// go toolchain does; VCS-derived pseudo-version stamping is a separate follow-up.
+// buildVCS selects whether the vcs.* settings and a VCS-derived version are
+// stamped in: "false" skips it, "true" and "auto" (and "", the zero value, for
+// callers that don't set it) stamp when a usable repository is found. This
+// mirrors the go toolchain's -buildvcs, including its reason for existing:
+// stamping shells out to git on every build, which a caller may not want to
+// pay for.
+func moduleBuildInfo(lprogram *loader.Program, buildVCS string) (string, error) {
+	main := lprogram.MainPkg()
+	if main == nil || main.Module.Path == "" {
+		return "", nil // GOPATH mode or no module: nothing to embed.
+	}
+
+	// Collect the distinct non-main modules that contributed packages to the
+	// build. As in the go toolchain, a module is listed if any of its packages
+	// are part of the build graph.
+	depVersions := make(map[string]string) // module path -> version
+	for _, pkg := range lprogram.Sorted() {
+		m := pkg.Module
+		if m.Path == "" || m.Main || m.Path == main.Module.Path {
+			continue
+		}
+		depVersions[m.Path] = m.Version
+	}
+	deps := make([]string, 0, len(depVersions))
+	for path := range depVersions {
+		deps = append(deps, path)
+	}
+	sort.Strings(deps)
+
+	// Derive the main module version. `go list` leaves it empty for a local
+	// checkout, so fall back to VCS stamping (as `go build` does): an exact tag
+	// on HEAD, otherwise a pseudo-version. This also yields the vcs.* build
+	// settings appended below. If VCS info isn't available, use "(devel)".
+	mainVersion := main.Module.Version
+	var vcsSettings string
+	if mainVersion == "" {
+		if buildVCS == "false" {
+			// Don't touch the repository at all: no git subprocesses run.
+			mainVersion = "(devel)"
+		} else {
+			v, s, gitErr := gitVCSStamp(main.Module.Dir, main.Module.Path)
+			switch {
+			case v != "":
+				mainVersion, vcsSettings = v, s
+			case s != "":
+				// A repository with no commits gives settings but no version.
+				mainVersion, vcsSettings = "(devel)", s
+			case buildVCS == "true":
+				// -buildvcs=true means the stamp was demanded, so failing to
+				// produce one is an error rather than a silent fallback. This
+				// matches the go toolchain.
+				reason := "not a git work tree, the module is not at the repository root, or git is unavailable"
+				if gitErr != nil {
+					reason = gitErr.Error()
+				}
+				return "", fmt.Errorf("error obtaining VCS status for %s: %s\n"+
+					"\tUse -buildvcs=false to disable VCS stamping.", main.Module.Dir, reason)
+			default:
+				mainVersion = "(devel)"
+			}
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("path\t")
+	b.WriteString(main.ImportPath)
+	b.WriteByte('\n')
+	b.WriteString("mod\t")
+	b.WriteString(main.Module.Path)
+	b.WriteByte('\t')
+	b.WriteString(mainVersion)
+	b.WriteString("\t\n") // trailing tab leaves the checksum column empty
+	for _, path := range deps {
+		b.WriteString("dep\t")
+		b.WriteString(path)
+		b.WriteByte('\t')
+		b.WriteString(depVersions[path])
+		b.WriteString("\t\n") // go list -json carries no checksum; leave it empty
+	}
+	// Build settings (vcs.*) come after the module lines, matching
+	// runtime/debug.BuildInfo.String().
+	b.WriteString(vcsSettings)
+	return b.String(), nil
+}
+
+// gitVCSStamp derives the main-module version and the vcs.* build settings from
+// the git checkout at dir, mirroring what the standard `go build` toolchain
+// records under -buildvcs. modPath is the main module's path, used to reject a
+// version that belongs to some other module.
+//
+// It returns ("", "", nil) when there is simply no stamp to make — dir is not a
+// git work tree, or git is unavailable — so the caller falls back to "(devel)".
+// The error is non-nil only when git itself failed in a way worth reporting,
+// which -buildvcs=true turns into a hard failure.
+// resolvePath makes an absolute path with symbolic links resolved.
+func resolvePath(p string) (string, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(abs)
+}
+
+func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
+	if dir == "" {
+		return "", "", nil
+	}
+	// Keep the first git failure so -buildvcs=true can report the true cause.
+	var firstErr error
+	git := func(args ...string) (string, bool) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+		out, err := cmd.Output()
+		if err != nil {
+			if firstErr == nil {
+				msg := strings.TrimSpace(stderr.String())
+				if msg == "" {
+					msg = err.Error()
+				}
+				firstErr = fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
+			}
+			return "", false
+		}
+		return strings.TrimSpace(string(out)), true
+	}
+	if out, ok := git("rev-parse", "--is-inside-work-tree"); !ok || out != "true" {
+		return "", "", firstErr
+	}
+	// Tags found from the module directory can belong to a parent repository.
+	// Only stamp when the module is at the repository root, as the go tool does.
+	root, ok := git("rev-parse", "--show-toplevel")
+	if !ok {
+		return "", "", firstErr
+	}
+	// git gives the physical path but go list can give one with a symbolic link.
+	// Resolve both before the comparison, and do not stamp if that is not possible.
+	absDir, dirErr := resolvePath(dir)
+	absRoot, rootErr := resolvePath(root)
+	if dirErr != nil || rootErr != nil || absDir != absRoot {
+		return "", "", nil
+	}
+	// The module path major version decides which tags can belong to this module.
+	// See https://go.dev/ref/mod#major-version-suffixes
+	major, tagMatch := "", "v[0-9]*"
+	if _, pathMajor, ok := module.SplitPathVersion(modPath); ok && pathMajor != "" {
+		major = strings.TrimLeft(pathMajor, "/.")
+		tagMatch = major + ".*"
+	}
+	rev, ok := git("rev-parse", "HEAD")
+	if !ok || rev == "" {
+		// A repository with no commits has no revision. The go tool still records
+		// vcs and vcs.modified here and uses (devel). See cmd/go/internal/load/pkg.go
+		if inside, ok := git("rev-parse", "--is-bare-repository"); ok && inside == "false" {
+			var sb strings.Builder
+			sb.WriteString("build\tvcs=git\n")
+			sb.WriteString("build\tvcs.modified=true\n")
+			return "", sb.String(), nil
+		}
+		return "", "", firstErr
+	}
+
+	// An unparsable commit time is a stamp failure. module.PseudoVersion would
+	// otherwise encode the zero time as 00010101000000 and look real.
+	var commitTime time.Time
+	s, ok := git("show", "-s", "--format=%ct", "HEAD")
+	if !ok {
+		return "", "", firstErr
+	}
+	sec, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return "", "", fmt.Errorf("git show -s --format=%%ct: unparsable commit time %q", s)
+	}
+	commitTime = time.Unix(sec, 0).UTC()
+
+	// The tree is modified when git status reports any change, tracked or not.
+	// This is what go build does.
+	modified := false
+	if status, ok := git("status", "--porcelain"); ok && status != "" {
+		modified = true
+	}
+
+	// Use an exact semver tag on HEAD, else a pseudo-version from the last tag.
+	if tags, ok := git("tag", "--points-at", "HEAD"); ok {
+		for _, t := range strings.Fields(tags) {
+			if semver.IsValid(t) && semver.Canonical(t) == t {
+				version = t
+				break
+			}
+		}
+	}
+	if version == "" {
+		older := ""
+		if base, ok := git("describe", "--tags", "--abbrev=0", "--match", tagMatch); ok && semver.IsValid(base) {
+			older = base
+		}
+		short := rev
+		if len(short) > 12 {
+			short = short[:12]
+		}
+		pseudoMajor := major
+		if pseudoMajor == "" {
+			pseudoMajor = semver.Major(older)
+		}
+		version = module.PseudoVersion(pseudoMajor, older, commitTime, short)
+	}
+
+	// Final safety check on the major version only. module.Check would also
+	// reject an unpublished module path with no dot in its first element.
+	if _, pathMajor, ok := module.SplitPathVersion(modPath); ok {
+		if err := module.CheckPathMajor(version, pathMajor); err != nil {
+			return "", "", nil // not our version, fall back to (devel)
+		}
+	}
+
+	// A modified tree no longer describes the tagged commit.
+	if modified {
+		version += "+dirty"
+	}
+
+	var sb strings.Builder
+	sb.WriteString("build\tvcs=git\n")
+	sb.WriteString("build\tvcs.revision=" + rev + "\n")
+	// RFC3339Nano is the format cmd/go writes.
+	sb.WriteString("build\tvcs.time=" + commitTime.Format(time.RFC3339Nano) + "\n")
+	sb.WriteString("build\tvcs.modified=" + strconv.FormatBool(modified) + "\n")
+	return version, sb.String(), nil
 }
