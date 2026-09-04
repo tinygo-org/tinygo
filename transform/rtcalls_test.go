@@ -22,3 +22,24 @@ func TestOptimizeStringEqual(t *testing.T) {
 		transform.OptimizeStringEqual(mod)
 	})
 }
+
+func TestOptimizeStringFromBytesStringEqual(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/stringfrombytes-stringequal", func(mod llvm.Module) {
+		transform.OptimizeStringFromBytes(mod)
+	})
+}
+
+func TestOptimizeStringFromBytesStringLess(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/stringfrombytes-stringless", func(mod llvm.Module) {
+		transform.OptimizeStringFromBytes(mod)
+	})
+}
+
+func TestOptimizeStringFromBytesLen(t *testing.T) {
+	t.Parallel()
+	testTransform(t, "testdata/stringfrombytes-len", func(mod llvm.Module) {
+		transform.OptimizeStringFromBytes(mod)
+	})
+}
