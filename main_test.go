@@ -122,6 +122,7 @@ func TestBuild(t *testing.T) {
 		t.Parallel()
 		hostOptions := optionsFromTarget("", sema)
 		runPlatTests(hostOptions, tests, t)
+		runPlatTests(hostOptions, []string{"cookiejar.go"}, t)
 
 		// scheduler.threads needs threadID, which exists only on Linux and Darwin.
 		// scheduler.none does not link on Windows.
