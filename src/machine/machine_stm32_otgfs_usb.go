@@ -1,3 +1,5 @@
+// NUCLEO-F401RE has no USB OTG connector. This chip-wide exclude
+// also blocks later F401 boards that have USB (for example Blackpill F401CC).
 //go:build (stm32f4 && !stm32f401) || stm32f7
 
 package machine

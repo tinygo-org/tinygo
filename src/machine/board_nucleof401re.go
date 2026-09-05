@@ -40,6 +40,7 @@ const (
 )
 
 // Analog pins (ADC1 channels).
+// examples/adc uses ADC2 (PA2). That pin is ST-Link VCP TX, so use A0 instead.
 const (
 	ADC0  = PA0
 	ADC1  = PA1
