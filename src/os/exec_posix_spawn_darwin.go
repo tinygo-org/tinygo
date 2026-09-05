@@ -4,7 +4,7 @@ package os
 
 import (
 	"syscall"
-	_ "unsafe"
+	_ "unsafe" // Required by go:linkname. See https://pkg.go.dev/cmd/compile#hdr-Compiler_Directives.
 )
 
 var spawnDevNull = [...]byte{'/', 'd', 'e', 'v', '/', 'n', 'u', 'l', 'l', 0}
