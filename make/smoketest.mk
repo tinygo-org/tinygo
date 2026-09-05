@@ -362,6 +362,8 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-f103rb       examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-f401re       examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-f722ze       examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-h753zi       examples/blinky1
@@ -383,6 +385,8 @@ ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=stm32f4disco-1      examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=stm32f4disco-1      examples/pwm
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-f401re       examples/pwm
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=stm32f469disco      examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
