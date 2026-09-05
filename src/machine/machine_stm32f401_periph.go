@@ -128,6 +128,3 @@ func (t *TIM) registerOCInterrupt() interrupt.Interrupt {
 
 	return interrupt.Interrupt{}
 }
-
-// initRNG is a no-op on STM32F401 which has no hardware RNG peripheral.
-func initRNG() {}
