@@ -225,14 +225,8 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
-// needsTLSStubPackage returns whether the crypto/tls package should be
-// overridden with the TinyGo stub version, whose handshake is a no-op. A target
-// with no OS below it has neither the code size for a full TLS implementation
-// nor usually a socket to speak it over.
-//
-// Hosted linux and macOS have both, so they use the real crypto/tls of the Go
-// standard library. GOOS alone cannot decide this, because a baremetal target
-// reports GOOS=linux, so the build tags decide as well.
+// Keep the netdev TLS wrapper except on hosted Linux and Darwin.
+// The baremetal tag is needed because those targets also report GOOS=linux.
 func needsTLSStubPackage(goos string, buildTags []string) bool {
 	if goos != "linux" && goos != "darwin" {
 		return true
