@@ -4,6 +4,13 @@ package os
 
 import "syscall"
 
+func addSpawnClose(fa *spawnFileActions, fd int32) error {
+	if errno := posix_spawn_file_actions_addclose(fa, fd); errno != 0 {
+		return syscall.Errno(errno)
+	}
+	return nil
+}
+
 // Storage for the two by-value POSIX objects posix_spawn takes. musl declares
 // them in lib/musl/include/spawn.h as
 //

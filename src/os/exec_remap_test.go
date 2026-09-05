@@ -11,6 +11,9 @@ import (
 )
 
 func TestForkExecFileRemapping(t *testing.T) {
+	if _, err := Stat("/bin/bash"); err != nil {
+		t.Skip("file remapping checks need /bin/bash for descriptors above 9")
+	}
 	for _, name := range []string{"cycle", "repeated", "closed-source", "identity", "sparse"} {
 		t.Run(name, func(t *testing.T) {
 			a, err := CreateTemp(t.TempDir(), "source-a")
@@ -29,7 +32,7 @@ func TestForkExecFileRemapping(t *testing.T) {
 			}
 			defer out.Close()
 			for i, f := range []*File{a, b} {
-				if _, err := f.WriteString([]string{"A", "B"}[i]); err != nil {
+				if _, err := f.WriteString([]string{"A\n", "B\n"}[i]); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := f.Seek(0, 0); err != nil {
@@ -58,11 +61,18 @@ func TestForkExecFileRemapping(t *testing.T) {
 				files[y+2] = a
 				targets = []int{y + 2}
 			}
-			argv := []string{"sh", "-c", "", "sh"}
-			script := ""
-			for i, fd := range targets {
-				script += fmt.Sprintf("test /dev/fd/%d -ef \"$%d\" && ", fd, i+1)
-				argv = append(argv, files[fd].Name())
+			for _, fd := range targets {
+				for _, f := range []*File{a, b} {
+					if _, err := f.Seek(0, 0); err != nil {
+						t.Fatal(err)
+					}
+				}
+				want := "A"
+				if files[fd] == b {
+					want = "B"
+				}
+				script := fmt.Sprintf("exec 0<&%d; IFS= read -r value; test \"$value\" = \"$1\"", fd)
+				checkRemapChild(t, files, script, want, true)
 			}
 			nextfd := len(files)
 			for _, f := range files {
@@ -71,23 +81,15 @@ func TestForkExecFileRemapping(t *testing.T) {
 				}
 			}
 			for i, f := range files {
+				if f == nil && i >= 3 {
+					script := fmt.Sprintf("exec 2>/dev/null; exec 0<&%d", i)
+					checkRemapChild(t, files, script, "", false)
+				}
 				if f != nil && int(f.Fd()) < i {
-					script += fmt.Sprintf("test ! -e /dev/fd/%d && ", nextfd)
+					script := fmt.Sprintf("exec 2>/dev/null; exec 0<&%d", nextfd)
+					checkRemapChild(t, files, script, "", false)
 					nextfd++
 				}
-			}
-			argv[2] = script + "printf ok"
-			proc, err := StartProcess("/bin/sh", argv, &ProcAttr{Files: files})
-			if err != nil {
-				t.Fatal(err)
-			}
-			state, err := proc.Wait()
-			if err != nil || !state.Success() {
-				t.Fatalf("Wait = %v, %v", state, err)
-			}
-			got, err := ReadFile(out.Name())
-			if err != nil || string(got) != "ok" {
-				t.Fatalf("output = %q, %v, want ok", got, err)
 			}
 			for i, f := range []*File{a, b} {
 				got := make([]byte, 1)
@@ -97,6 +99,18 @@ func TestForkExecFileRemapping(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func checkRemapChild(t *testing.T, files []*File, script, want string, success bool) {
+	t.Helper()
+	proc, err := StartProcess("/bin/bash", []string{"bash", "-c", script, "bash", want}, &ProcAttr{Files: files})
+	if err != nil {
+		t.Fatalf("StartProcess for %q = %v", script, err)
+	}
+	state, err := proc.Wait()
+	if err != nil || state.Success() != success {
+		t.Fatalf("Wait for %q = %v, %v, want success %v", script, state, err, success)
 	}
 }
 

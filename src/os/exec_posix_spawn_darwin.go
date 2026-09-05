@@ -2,7 +2,27 @@
 
 package os
 
-import "syscall"
+import (
+	"syscall"
+	_ "unsafe"
+)
+
+var spawnDevNull = [...]byte{'/', 'd', 'e', 'v', '/', 'n', 'u', 'l', 'l', 0}
+
+func addSpawnClose(fa *spawnFileActions, fd int32) error {
+	// Darwin rejects close actions on unopened descriptors.
+	// See posix_spawn(2), ERRORS, EBADF.
+	if errno := posix_spawn_file_actions_addopen(fa, fd, &spawnDevNull[0], syscall.O_RDONLY, 0); errno != 0 {
+		return syscall.Errno(errno)
+	}
+	if errno := posix_spawn_file_actions_addclose(fa, fd); errno != 0 {
+		return syscall.Errno(errno)
+	}
+	return nil
+}
+
+//go:linkname posix_spawn_file_actions_addopen posix_spawn_file_actions_addopen
+func posix_spawn_file_actions_addopen(fa *spawnFileActions, fd int32, path *byte, flags int32, mode uint16) int32
 
 // Darwin <spawn.h> declares both POSIX objects as opaque pointers, so the
 // object a caller allocates is one pointer wide and libc allocates the rest.

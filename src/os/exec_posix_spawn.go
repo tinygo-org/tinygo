@@ -322,8 +322,8 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 
 	for i, fd := range fds {
 		if fd == -1 {
-			if errno := posix_spawn_file_actions_addclose(&fa, int32(i)); errno != 0 {
-				return 0, syscall.Errno(errno)
+			if err := addSpawnClose(&fa, int32(i)); err != nil {
+				return 0, err
 			}
 			continue
 		}
@@ -337,8 +337,8 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 	// Close the standard descriptors that ProcAttr.Files does not name, which
 	// is what syscall.forkAndExecInChild does in the standard library.
 	for i := len(attr.Files); i < 3; i++ {
-		if errno := posix_spawn_file_actions_addclose(&fa, int32(i)); errno != 0 {
-			return 0, syscall.Errno(errno)
+		if err := addSpawnClose(&fa, int32(i)); err != nil {
+			return 0, err
 		}
 	}
 	for fd := firstTemp; fd < nextfd; fd++ {
