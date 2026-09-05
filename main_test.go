@@ -122,6 +122,9 @@ func TestBuild(t *testing.T) {
 		t.Parallel()
 		hostOptions := optionsFromTarget("", sema)
 		runPlatTests(hostOptions, tests, t)
+		if runtime.GOOS == "darwin" {
+			runPlatTests(hostOptions, []string{"darwinsockets.go"}, t)
+		}
 
 		// scheduler.threads needs threadID, which exists only on Linux and Darwin.
 		// scheduler.none does not link on Windows.
