@@ -336,7 +336,7 @@ func tinygo_task_init(t *Task, thread *threadID, numCPU *int32)
 //go:linkname tinygo_task_start tinygo_task_start
 func tinygo_task_start(fn uintptr, args unsafe.Pointer, t *Task, thread *threadID, stackTop *uintptr, stackSize uintptr) int32
 
-//go:linkname tinygo_task_exit tinygo_task_exit
+//go:linkname tinygo_task_exit tinygo_task_exit_thread
 func tinygo_task_exit()
 
 // Pause the thread by sending it a signal.

@@ -146,7 +146,7 @@ void* tinygo_task_current(void) {
 }
 
 // Exit the current thread.
-void tinygo_task_exit(void) {
+void tinygo_task_exit_thread(void) {
     pthread_exit(NULL);
 }
 
