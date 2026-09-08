@@ -38,7 +38,7 @@ func dynamicLoader(base uintptr, dyn *dyn64) {
 	for dyn.Tag != dtNULL {
 		switch dyn.Tag {
 		case dtRELA:
-			rela = (*rela64)(unsafe.Pointer(base + uintptr(dyn.Val)))
+			rela = (*rela64)(unsafe.Add(base, dyn.Val))
 		case dtRELASZ:
 			relasz = uint64(dyn.Val) / uint64(unsafe.Sizeof(rela64{}))
 		}
@@ -62,7 +62,7 @@ func dynamicLoader(base uintptr, dyn *dyn64) {
 			if debugLoader {
 				println("relocating ", uintptr(rela.Addend), " to ", base+uintptr(rela.Addend))
 			}
-			ptr := (*uint64)(unsafe.Pointer(base + uintptr(rela.Off)))
+			ptr := (*uint64)(unsafe.Add(base, rela.Off))
 			*ptr = uint64(base + uintptr(rela.Addend))
 		default:
 			if debugLoader {

@@ -103,7 +103,7 @@ func findGlobals(found func(start, end uintptr)) {
 		PF_W    = 0x2 // program flag: write access
 	)
 
-	headerPtr := unsafe.Pointer(uintptr(unsafe.Pointer(&ehdr_start)) + ehdr_start.phoff)
+	headerPtr := unsafe.Add(unsafe.Pointer(&ehdr_start), ehdr_start.phoff)
 	for i := 0; i < int(ehdr_start.phnum); i++ {
 		// Look for a writable segment and scan its contents.
 		// There is a little bit of duplication here, which is unfortunate. But

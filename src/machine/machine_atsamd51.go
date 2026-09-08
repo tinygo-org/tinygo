@@ -2191,7 +2191,7 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
 		// page buffer is 512 bytes long, but only 4 bytes can be written at once
 		for k := 0; k < int(f.WriteBlockSize()); k += 4 {
-			*(*uint32)(unsafe.Pointer(address + uintptr(k))) = binary.LittleEndian.Uint32(padded[j+k : j+k+4])
+			*(*uint32)(unsafe.Add(address, k)) = binary.LittleEndian.Uint32(padded[j+k : j+k+4])
 		}
 
 		sam.NVMCTRL.SetADDR(uint32(address))
