@@ -42,13 +42,14 @@ type msc struct {
 	cswBuf        []byte // CSW response buffer
 	state         mscState
 
-	maxLUN       uint8 // Maximum Logical Unit Number (n-1 for n LUNs)
-	dev          machine.BlockDevice
-	blockCount   uint32 // Number of blocks in the device
-	blockOffset  uint32 // Byte offset of the first block in the device for aligned writes
-	blockSizeUSB uint32 // Write block size as presented to the host over USB
-	blockSizeRaw uint32 // Write block size of the underlying device hardware
-	readOnly     bool
+	maxLUN           uint8 // Maximum Logical Unit Number (n-1 for n LUNs)
+	dev              machine.BlockDevice
+	blockCount       uint32 // Number of blocks in the device
+	blockOffset      uint32 // Byte offset of the first block in the device for aligned writes
+	blockSizeUSB     uint32 // Write block size as presented to the host over USB
+	blockSizeRaw     uint32 // Write block size of the underlying device hardware
+	eraseBlockOffset uint32 // Number of USB blocks before the first full erase block in the device
+	readOnly         bool
 
 	vendorID   [8]byte  // Max 8 ASCII characters
 	productID  [16]byte // Max 16 ASCII characters

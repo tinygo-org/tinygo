@@ -27,7 +27,6 @@ func (m *msc) RegisterBlockDevice(dev machine.BlockDevice) {
 	// them we assume the provided block device is aligned to the end of the underlying hardware block
 	// device and offset all reads/writes by the remaining bytes that don't make up a full block.
 	m.blockOffset = uint32(m.dev.Size()) % m.blockSizeUSB
-	// FIXME: Figure out what to do if the emulated write block size is larger than the erase block size
 
 	// Set VPD UNMAP fields
 	for i := range vpdPages {
@@ -46,10 +45,11 @@ func (m *msc) RegisterBlockDevice(dev machine.BlockDevice) {
 				// https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf
 
 				// We assume the block device is aligned to the end of the underlying block device
-				blockOffset := uint32(dev.EraseBlockSize()) % m.blockSizeUSB
+				eraseBlockOffset := uint32(dev.EraseBlockSize()) % m.blockSizeUSB
+				m.eraseBlockOffset = eraseBlockOffset
 				// Set the UGAVALID bit to indicate that the UNMAP GRANULARITY ALIGNMENT is valid
-				blockOffset |= 0x80000000
-				binary.BigEndian.PutUint32(vpdPages[i].Data[28:32], blockOffset)
+				eraseBlockOffset |= 0x80000000
+				binary.BigEndian.PutUint32(vpdPages[i].Data[28:32], eraseBlockOffset)
 			}
 			break
 		}
