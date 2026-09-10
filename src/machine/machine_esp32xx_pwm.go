@@ -1,23 +1,30 @@
-//go:build esp32c3 || esp32s3
+//go:build esp32 || esp32c3 || esp32s3
 
-// PWM on ESP32-C3/S3 uses the LEDC (LED Control) peripheral, low-speed mode only.
-// One timer drives multiple channels; each channel has its own duty, shared frequency.
-// Pin routing is via GPIO matrix (SigOutBase + channel index).
+// PWM on ESP32 chips uses the LEDC peripheral. LEDC means "LED Control", but it
+// works for any PWM job, not only LEDs.
 //
-// Channel config (chanOp) follows the hardware contract from:
-//   - ESP-IDF: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/ledc.html
-//     (timer config → channel config → duty + update_duty).
-//   - SVD (e.g. lib/cmsis-svd/data/Espressif/esp32s3.svd): CONF0.PARA_UP "updates
-//     HPOINT, DUTY_START, SIG_OUT_EN, TIMER_SEL, DUTY_NUM, DUTY_CYCLE, DUTY_SCALE,
-//     DUTY_INC for channel and is auto-cleared by hardware"; CONF1.DUTY_START "other
-//     CONF1 fields take effect when this bit is set to 1".
+// A timer sets the frequency. Channels hang off a timer. Every channel on the
+// same timer shares that frequency, but each channel has its own duty. The
+// signal reaches a pin through the GPIO matrix, using signal number
+// SigOutBase + channel.
+//
+// This file holds the part that is the same on every chip. Three functions are
+// different per chip and live in other files:
+//
+//	enableClock   turn the LEDC hardware on and pick its clock
+//	setTimerConf  program one timer
+//	chanOp        set up a channel, change its duty, or invert it
+//
+// The classic ESP32 has them in machine_esp32_pwm.go. The C3 and S3 have them in
+// machine_esp32xx_ls_pwm.go and machine_esp32{c3,s3}_pwm.go.
+//
+// The order of setup is the one ESP-IDF uses: configure the timer, then the
+// channel, then write the duty and tell the hardware to use it. See
+// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/ledc.html
 
 package machine
 
-import (
-	"device/esp"
-	"errors"
-)
+import "errors"
 
 const ledcApbClock = 80_000000
 
@@ -45,14 +52,9 @@ const (
 )
 
 func (pwm *LEDCPWM) Configure(config PWMConfig) error {
-	// Enable LEDC clock and release reset (SYSTEM perip_clk_en0 / perip_rst_en0).
-	esp.SYSTEM.SetPERIP_RST_EN0_LEDC_RST(1)
-	esp.SYSTEM.SetPERIP_CLK_EN0_LEDC_CLK_EN(1)
-	esp.SYSTEM.SetPERIP_RST_EN0_LEDC_RST(0)
-
-	// LEDC global: APB clock source, enable internal clock.
-	esp.LEDC.SetCONF_APB_CLK_SEL(1)
-	esp.LEDC.SetCONF_CLK_EN(1)
+	// Turn the LEDC hardware on and pick its clock source. The registers have
+	// different names on each chip, so this lives in the per-chip file.
+	pwm.enableClock()
 
 	period := config.Period
 	if period == 0 {
@@ -88,44 +90,6 @@ func (pwm *LEDCPWM) Configure(config PWMConfig) error {
 		pwm.channelPin[i] = NoPin
 	}
 	return nil
-}
-
-func (pwm *LEDCPWM) setTimerConf(dutyRes uint8, divReg uint32) {
-	t := pwm.timerNum
-	switch t {
-	case 0:
-		esp.LEDC.SetTIMER0_CONF_DUTY_RES(uint32(dutyRes))
-		esp.LEDC.SetTIMER0_CONF_CLK_DIV(divReg)
-		esp.LEDC.SetTIMER0_CONF_TICK_SEL(0)
-		esp.LEDC.SetTIMER0_CONF_PAUSE(0)
-		esp.LEDC.SetTIMER0_CONF_RST(1)
-		esp.LEDC.SetTIMER0_CONF_RST(0)
-		esp.LEDC.SetTIMER0_CONF_PARA_UP(1)
-	case 1:
-		esp.LEDC.SetTIMER1_CONF_DUTY_RES(uint32(dutyRes))
-		esp.LEDC.SetTIMER1_CONF_CLK_DIV(divReg)
-		esp.LEDC.SetTIMER1_CONF_TICK_SEL(0)
-		esp.LEDC.SetTIMER1_CONF_PAUSE(0)
-		esp.LEDC.SetTIMER1_CONF_RST(1)
-		esp.LEDC.SetTIMER1_CONF_RST(0)
-		esp.LEDC.SetTIMER1_CONF_PARA_UP(1)
-	case 2:
-		esp.LEDC.SetTIMER2_CONF_DUTY_RES(uint32(dutyRes))
-		esp.LEDC.SetTIMER2_CONF_CLK_DIV(divReg)
-		esp.LEDC.SetTIMER2_CONF_TICK_SEL(0)
-		esp.LEDC.SetTIMER2_CONF_PAUSE(0)
-		esp.LEDC.SetTIMER2_CONF_RST(1)
-		esp.LEDC.SetTIMER2_CONF_RST(0)
-		esp.LEDC.SetTIMER2_CONF_PARA_UP(1)
-	case 3:
-		esp.LEDC.SetTIMER3_CONF_DUTY_RES(uint32(dutyRes))
-		esp.LEDC.SetTIMER3_CONF_CLK_DIV(divReg)
-		esp.LEDC.SetTIMER3_CONF_TICK_SEL(0)
-		esp.LEDC.SetTIMER3_CONF_PAUSE(0)
-		esp.LEDC.SetTIMER3_CONF_RST(1)
-		esp.LEDC.SetTIMER3_CONF_RST(0)
-		esp.LEDC.SetTIMER3_CONF_PARA_UP(1)
-	}
 }
 
 func (pwm *LEDCPWM) Channel(pin Pin) (uint8, error) {
