@@ -78,17 +78,32 @@ func (a ADC) Get() uint16 {
 	if a.Pin > 6 {
 		return 0
 	}
-	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten11dB)
+
+	// Clear stale DONE
 	esp.APB_SARADC.SetINT_CLR_APB_SARADC1_DONE_INT_CLR(1)
-	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
+
+	// Disable oneshot conversion trigger for all the ADC units
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC2_ONETIME_SAMPLE(0)
+
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_CHANNEL(uint32(a.Pin))
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten11dB)
+
+	// Select ADC1 one-time mode
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(1)
+
+	// Trigger one-time conversion
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
+	// No delay needed here because adc_ctrl_clk is fast (>= APB_CLK_FREQ/8).
+	// ESP-IDF evaluates this condition and calls esp_rom_delay_us(0).
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(1)
+
 	for esp.APB_SARADC.GetINT_RAW_APB_SARADC1_DONE_INT_RAW() == 0 {
 	}
 	raw := esp.APB_SARADC.GetSAR1DATA_STATUS_APB_SARADC1_DATA()
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
+
 	return uint16(raw&0xfff) << 4
 }
 
