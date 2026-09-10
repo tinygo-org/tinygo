@@ -118,10 +118,17 @@ jobs:
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
         with:
-          name: darwin-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
+          # An artifact uploaded with "archive: false" takes the name of the
+          # file, not the name given to upload-artifact. See the comment on
+          # "Collect the release files" in release.yml.
+          name: tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
           path: build/
+          skip-decompress: true
       - name: Unpack TinyGo build
-        run: tar -xzf build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz -C build
+        run: |
+          tarball=$(find build -type f -name 'tinygo*.darwin-*.tar.gz' | head -1)
+          test -n "$tarball"
+          tar -xzf "$tarball" -C build
       - name: Test stdlib packages
         run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
@@ -159,10 +166,17 @@ jobs:
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
         with:
-          name: darwin-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
+          # An artifact uploaded with "archive: false" takes the name of the
+          # file, not the name given to upload-artifact. See the comment on
+          # "Collect the release files" in release.yml.
+          name: tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
           path: build/
+          skip-decompress: true
       - name: Unpack TinyGo build
-        run: tar -xzf build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz -C build
+        run: |
+          tarball=$(find build -type f -name 'tinygo*.darwin-*.tar.gz' | head -1)
+          test -n "$tarball"
+          tar -xzf "$tarball" -C build
       - name: Smoke tests
         run: make ${{ matrix.smoketest }} TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
