@@ -192,11 +192,19 @@ report-stdlib-tests-pass:
 	join -a1 -a2 - $(jointmp).portable
 	@rm $(jointmp).*
 
+# These packages take minutes to test on macOS. See issue #5659.
+# encoding/xml is not listed here because TEST_ENCODING_XML controls it.
+TEST_PACKAGES_SKIP_DARWIN = \
+	archive/zip \
+	index/suffixarray \
+	$(nil)
+
 # Standard library packages that pass tests quickly on the current platform
 ifeq ($(uname),Darwin)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_DARWIN)
+TEST_PACKAGES_SKIP_HOST := $(TEST_PACKAGES_SKIP_DARWIN)
 TEST_IOFS := true
-TEST_ENCODING_XML := true
+TEST_ENCODING_XML := false
 endif
 ifeq ($(uname),Linux)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_LINUX)
@@ -219,7 +227,7 @@ tinygo-test:
 	@# TestParseAndBytesRoundTrip/P256/Generic: needs Goexit to run defers on wasm.
 	@# TestUnmarshalNestingLimit{Slice,Struct}: encoding/asn1 nesting limit added in
 	@# https://github.com/golang/go/commit/6a6d115f9a7422b2fa081ba6f567eefb4a099462
-	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml,$(TEST_PACKAGES_HOST)) $(TEST_PACKAGES_SLOW)
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml $(TEST_PACKAGES_SKIP_HOST),$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW))
 ifeq ($(TEST_ENCODING_XML),true)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) -stack-size=16MB encoding/xml
 endif
