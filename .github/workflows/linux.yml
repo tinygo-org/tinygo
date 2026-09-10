@@ -276,17 +276,125 @@ jobs:
       - run: make gen-device -j4
       - name: Test TinyGo
         run: make ASSERT=1 test
-      - name: Build TinyGo
+      - name: Check Go code formatting
+        run: make fmt-check lint
+
+  assert-build-linux:
+    # Build TinyGo with LLVM assertions enabled and publish it for the jobs
+    # below, so that they do not have to build it again. The tarball is not a
+    # release file, thus its name does not hold the version.
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - uses: ./.github/actions/setup-llvm
+        with:
+          # assert-test-linux saves the cache. This job only reads it, so that
+          # the two jobs do not write the same key.
+          save-cache: "false"
+      - name: Restore Binaryen
+        uses: actions/cache/restore@v5
+        id: cache-binaryen
+        with:
+          key: binaryen-linux-asserts-v1
+          path: build/wasm-opt
+      - name: Build Binaryen
+        if: steps.cache-binaryen.outputs.cache-hit != 'true'
+        run: make binaryen
+      - run: make gen-device -j4
+      - name: Build TinyGo release tarball
         run: |
-          make ASSERT=1
-          echo "$(pwd)/build" >> $GITHUB_PATH
+          make release ASSERT=1 -j4
+          cp -p build/release.tar.gz /tmp/tinygo-asserts.linux-amd64.tar.gz
+      - name: Publish TinyGo build
+        uses: actions/upload-artifact@v7
+        with:
+          name: tinygo-asserts.linux-amd64.tar.gz
+          path: /tmp/tinygo-asserts.linux-amd64.tar.gz
+          archive: false
+
+  assert-stdlib-test-linux:
+    # Test the standard library with the assertions build.
+    runs-on: ubuntu-24.04
+    needs: assert-build-linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v8
+        with:
+          name: tinygo-asserts.linux-amd64.tar.gz
+      - name: Extract TinyGo build
+        run: |
+          mkdir -p ~/lib
+          tar -C ~/lib -xf tinygo-asserts.linux-amd64.tar.gz
+          ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
       - name: Test stdlib packages
         run: make tinygo-test
+
+  assert-smoketest-linux:
+    # The smoke test, the wasm tests, and the baremetal tests, with the
+    # assertions build.
+    runs-on: ubuntu-24.04
+    needs: assert-build-linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+              libgcrypt20 \
+              libpixman-1-0 \
+              libsdl2-2.0-0 \
+              libslirp0 \
+              qemu-system-arm \
+              qemu-system-riscv32 \
+              qemu-user \
+              simavr
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install wasmtime
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+        with:
+          version: "29.0.1"
+      - name: Setup `wasm-tools`
+        uses: bytecodealliance/actions/wasm-tools/setup@v1
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v8
+        with:
+          name: tinygo-asserts.linux-amd64.tar.gz
+      - name: Extract TinyGo build
+        run: |
+          mkdir -p ~/lib
+          tar -C ~/lib -xf tinygo-asserts.linux-amd64.tar.gz
+          ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
       - run: make smoketest-quick
       - run: make wasmtest
       - run: make tinygo-test-baremetal
-      - name: Check Go code formatting
-        run: make fmt-check lint
   build-linux-cross:
     # Build ARM Linux binaries, ready for release.
     # This intentionally uses an older Linux image, so that we compile against
