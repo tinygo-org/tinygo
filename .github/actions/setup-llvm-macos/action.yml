@@ -1,0 +1,65 @@
+name: Set up LLVM on macOS
+description: Restore or build LLVM
+
+inputs:
+  os:
+    description: Runner image name, used in the cache key
+    required: true
+  save-cache:
+    description: Save LLVM caches after a cache miss
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Restore LLVM source cache
+      uses: actions/cache/restore@v5
+      id: cache-llvm-source
+      with:
+        key: llvm-source-22-${{ inputs.os }}-v1-${{ hashFiles('llvm-version.txt') }}
+        path: |
+          llvm-project/clang/lib/Headers
+          llvm-project/clang/include
+          llvm-project/compiler-rt
+          llvm-project/lld/include
+          llvm-project/llvm/include
+    - name: Download LLVM source
+      if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+      shell: bash
+      run: make llvm-source
+    - name: Save LLVM source cache
+      uses: actions/cache/save@v5
+      if: inputs.save-cache == 'true' && steps.cache-llvm-source.outputs.cache-hit != 'true'
+      with:
+        key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+        path: |
+          llvm-project/clang/lib/Headers
+          llvm-project/clang/include
+          llvm-project/compiler-rt
+          llvm-project/lld/include
+          llvm-project/llvm/include
+    - name: Restore LLVM build cache
+      uses: actions/cache/restore@v5
+      id: cache-llvm-build
+      with:
+        key: llvm-build-22-${{ inputs.os }}-v1-${{ hashFiles('llvm-version.txt') }}
+        path: llvm-build
+    - name: Build LLVM
+      if: steps.cache-llvm-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        # fetch LLVM source
+        rm -rf llvm-project
+        make llvm-source
+        # install dependencies
+        HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
+        # build!
+        make llvm-build
+        find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
+    - name: Save LLVM build cache
+      uses: actions/cache/save@v5
+      if: inputs.save-cache == 'true' && steps.cache-llvm-build.outputs.cache-hit != 'true'
+      with:
+        key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
+        path: llvm-build
