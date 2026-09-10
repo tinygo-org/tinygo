@@ -13,6 +13,8 @@ concurrency:
 
 jobs:
   build-macos:
+    # Build the release tarball. The jobs below download it, so that they do not
+    # have to build the compiler again.
     name: build-macos
     strategy:
       matrix:
@@ -42,62 +44,13 @@ jobs:
         with:
           go-version: '1.27.1'
           cache: true
-      - name: Restore LLVM source cache
-        uses: actions/cache/restore@v5
-        id: cache-llvm-source
+      - uses: ./.github/actions/setup-llvm-macos
         with:
-          key: llvm-source-22-${{ matrix.os }}-v1-${{ hashFiles('llvm-version.txt') }}
-          path: |
-            llvm-project/clang/lib/Headers
-            llvm-project/clang/include
-            llvm-project/compiler-rt
-            llvm-project/lld/include
-            llvm-project/llvm/include
-      - name: Download LLVM source
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
-      - name: Save LLVM source cache
-        uses: actions/cache/save@v5
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        with:
-          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
-          path: |
-            llvm-project/clang/lib/Headers
-            llvm-project/clang/include
-            llvm-project/compiler-rt
-            llvm-project/lld/include
-            llvm-project/llvm/include
-      - name: Restore LLVM build cache
-        uses: actions/cache/restore@v5
-        id: cache-llvm-build
-        with:
-          key: llvm-build-22-${{ matrix.os }}-v1-${{ hashFiles('llvm-version.txt') }}
-          path: llvm-build
-      - name: Build LLVM
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
-        run: |
-          # fetch LLVM source
-          rm -rf llvm-project
-          make llvm-source
-          # install dependencies
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
-          # build!
-          make llvm-build
-          find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
-      - name: Save LLVM build cache
-        uses: actions/cache/save@v5
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
-        with:
-          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
-          path: llvm-build
+          os: ${{ matrix.os }}
       - name: make gen-device
         run: make -j3 gen-device
-      - name: Test TinyGo
-        run: make test GOTESTFLAGS="-only-current-os"
       - name: Build TinyGo release tarball
         run: make release -j3
-      - name: Test stdlib packages
-        run: make tinygo-test
       - name: Make release artifact
         run: cp -p build/release.tar.gz build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
       - name: Publish release artifact
@@ -106,8 +59,113 @@ jobs:
           name: darwin-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
           path: build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
           archive: false
+
+  test-macos:
+    # The compiler test suite. It needs LLVM, thus it cannot use the release
+    # tarball. It restores the LLVM cache and runs at the same time as
+    # build-macos. Only build-macos saves that cache.
+    name: test-macos
+    strategy:
+      matrix:
+        os: [macos-14, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install Dependencies
+        run: |
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - uses: ./.github/actions/setup-llvm-macos
+        with:
+          os: ${{ matrix.os }}
+          save-cache: "false"
+      - name: make gen-device
+        run: make -j3 gen-device
+      - name: Test TinyGo
+        run: make test GOTESTFLAGS="-only-current-os"
+
+  stdlib-test-macos:
+    # Test the standard library, compiled and run on the host itself.
+    name: stdlib-test-macos
+    needs: build-macos
+    strategy:
+      matrix:
+        os: [macos-14, macos-15-intel]
+        include:
+          - os: macos-14
+            goarch: arm64
+          - os: macos-15-intel
+            goarch: amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Extract TinyGo version
+        id: version
+        run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v8
+        with:
+          name: darwin-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
+          path: build/
+      - name: Unpack TinyGo build
+        run: tar -xzf build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz -C build
+      - name: Test stdlib packages
+        run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
+
+  smoke-test-macos:
+    # Cross compilation gives the same result on every host. Thus only one macOS
+    # runner does the full set, and the other one does the host dependent part
+    # plus a canary. See the smoketest-linux comment in linux.yml.
+    name: smoke-test-macos
+    needs: build-macos
+    strategy:
+      matrix:
+        os: [macos-14, macos-15-intel]
+        include:
+          - os: macos-14
+            goarch: arm64
+            smoketest: smoketest-quick
+          - os: macos-15-intel
+            goarch: amd64
+            smoketest: smoketest-host
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install Dependencies
+        run: |
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install binaryen
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Extract TinyGo version
+        id: version
+        run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - name: Download TinyGo build
+        uses: actions/download-artifact@v8
+        with:
+          name: darwin-${{ matrix.goarch }}-double-zipped-${{ steps.version.outputs.version }}
+          path: build/
+      - name: Unpack TinyGo build
+        run: tar -xzf build/tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz -C build
       - name: Smoke tests
-        run: make smoketest-quick TINYGO=$(PWD)/build/tinygo
+        run: make ${{ matrix.smoketest }} TINYGO=$(PWD)/build/tinygo/bin/tinygo
+
   test-macos-homebrew:
     name: homebrew-install
     runs-on: macos-latest
