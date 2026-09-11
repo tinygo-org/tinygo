@@ -1,4 +1,4 @@
-//go:build baremetal && !tinygo.wasm
+//go:build baremetal && !tinygo.wasm && !espidf
 
 // Automatically generated file. DO NOT EDIT.
 // This file implements standins for non-native atomics using critical sections.

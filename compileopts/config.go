@@ -436,7 +436,7 @@ func (c *Config) LibcCFlags() []string {
 			)
 		}
 		return cflags
-	case "":
+	case "", "none":
 		// No libc specified, nothing to add.
 		return nil
 	default:

@@ -1,4 +1,4 @@
-//go:build baremetal && !(nrf || (stm32 && !(stm32f103 || stm32l0x1 || stm32g0 || stm32u0)) || (sam && atsamd51) || (sam && atsame5x) || esp32c3 || esp32s3 || tkey || (tinygo.riscv32 && virt) || rp2040 || rp2350)
+//go:build baremetal && !(nrf || (stm32 && !(stm32f103 || stm32l0x1 || stm32g0 || stm32u0)) || (sam && atsamd51) || (sam && atsame5x) || esp32c3 || esp32s3 || espidf || tkey || (tinygo.riscv32 && virt) || rp2040 || rp2350)
 
 package runtime
 
