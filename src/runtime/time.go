@@ -58,8 +58,15 @@ func resetTimer(t *timeTimer, when, period int64) bool {
 	if n == nil {
 		n = new(timerNode)
 	}
+	// A periodic timer's underlying *timer can still be referenced by a
+	// second timerNode while its callback is running (see reAddTimer and
+	// timerCallback), so t.timer.when/period must be mutated under the
+	// same lock every other writer and reader of those fields uses, not
+	// just left as a plain unsynchronized store.
+	lockTimerQueue()
 	t.timer.when = when
 	t.timer.period = period
+	unlockTimerQueue()
 	n.timer = &t.timer
 	n.callback = timerCallback
 	addTimer(n)
