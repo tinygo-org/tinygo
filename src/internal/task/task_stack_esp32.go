@@ -1,4 +1,4 @@
-//go:build scheduler.tasks && (esp32 || esp32s3)
+//go:build (scheduler.tasks || scheduler.cores) && (esp32 || esp32s3)
 
 package task
 
@@ -12,10 +12,12 @@ package task
 //   https://www.cadence.com/content/dam/cadence-www/global/en_US/documents/tools/silicon-solutions/compute-ip/isa-summary.pdf
 
 import (
+	_ "unsafe"
 	"unsafe"
 )
 
-var systemStack uintptr
+//go:linkname runtime_systemStackPtr runtime.systemStackPtr
+func runtime_systemStackPtr() *uintptr
 
 // calleeSavedRegs is the list of registers that must be saved and restored when
 // switching between tasks. Also see task_stack_esp8266.S that relies on the
@@ -60,19 +62,20 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 }
 
 func (s *state) resume() {
-	swapTask(s.sp, &systemStack)
+	swapTask(s.sp, runtime_systemStackPtr())
 }
 
 func (s *state) pause() {
-	newStack := systemStack
-	systemStack = 0
+	systemStackPtr := runtime_systemStackPtr()
+	newStack := *systemStackPtr
+	*systemStackPtr = 0
 	swapTask(newStack, &s.sp)
 }
 
 // SystemStack returns the system stack pointer when called from a task stack.
 // When called from the system stack, it returns 0.
 func SystemStack() uintptr {
-	return systemStack
+	return *runtime_systemStackPtr()
 }
 
 //export tinygo_task_current
