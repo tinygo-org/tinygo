@@ -1,0 +1,10 @@
+{
+    "inherits": [
+        "rp2350b"
+    ],
+    "build-tags": ["waveshare_rp2350_pizero"],
+    "ldflags": [
+        "--defsym=__flash_size=16M"
+    ],
+    "default-stack-size": 8192
+}
