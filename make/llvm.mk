@@ -78,13 +78,16 @@ endif
 # Pinned in llvm-version.txt. Branch tinygo_22.x of tinygo-org/llvm-project.
 LLVM_REVISION = $(shell cat llvm-version.txt)
 
-$(LLVM_PROJECTDIR)/llvm:
-	git init $(LLVM_PROJECTDIR)
+llvm-source: ## Get or update LLVM sources
+	@if [ ! -e "$(LLVM_PROJECTDIR)/.git" ]; then \
+	  git init $(LLVM_PROJECTDIR); \
+	fi
 	cd $(LLVM_PROJECTDIR) && \
-	  git remote add origin https://github.com/tinygo-org/llvm-project && \
+	  if ! git remote get-url origin >/dev/null 2>&1; then \
+	    git remote add origin https://github.com/tinygo-org/llvm-project; \
+	  fi && \
 	  git fetch --depth=1 origin $(LLVM_REVISION) && \
 	  git checkout FETCH_HEAD
-llvm-source: $(LLVM_PROJECTDIR)/llvm ## Get LLVM sources
 
 # Configure LLVM.
 TINYGO_SOURCE_DIR=$(shell pwd)
