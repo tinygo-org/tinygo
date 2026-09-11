@@ -485,6 +485,10 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.wasmModule = parts[1]
 			info.wasmName = parts[2]
 		case "//go:wasmexport":
+			if c.archFamily() != "wasm32" {
+				// go:wasmimport is ignored on non-wasm architectures
+				continue
+			}
 			if f.Blocks == nil {
 				c.addError(f.Pos(), "can only use //go:wasmexport on definitions")
 				continue
@@ -501,9 +505,6 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			if c.BuildMode != "c-shared" && f.RelString(nil) == "main.main" {
 				c.addError(f.Pos(), fmt.Sprintf("//go:wasmexport does not allow main.main to be exported with -buildmode=%s", c.BuildMode))
 				continue
-			}
-			if c.archFamily() != "wasm32" {
-				c.addError(f.Pos(), "//go:wasmexport is only supported on wasm")
 			}
 			c.checkWasmImportExport(f, comment.Text)
 			info.wasmExport = name
