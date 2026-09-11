@@ -251,7 +251,7 @@ func (m *msc) scsiQueueTask(cmdType scsi.CmdType, b []byte) bool {
 	}
 
 	// Save the incoming data in our buffer for processing outside of interrupt context.
-	if m.taskQueued {
+	if m.taskWaiter.Working() {
 		// If we already have a full task queue we can't accept this data
 		m.sendScsiError(csw.StatusFailed, scsi.SenseAbortedCommand, scsi.SenseCodeMsgReject)
 		return true
@@ -268,14 +268,14 @@ func (m *msc) scsiQueueTask(cmdType scsi.CmdType, b []byte) bool {
 	case scsi.CmdWrite:
 		// If we're writing data wait until we have a full write block of data that can be processed.
 		if m.queuedBytes == uint32(cap(m.blockCache)) || (m.sentBytes+m.queuedBytes >= m.transferBytes) {
-			m.taskQueued = true
+			m.taskWaiter.Resume()
 		}
 	case scsi.CmdUnmap:
-		m.taskQueued = true
+		m.taskWaiter.Resume()
 	}
 
 	// Don't acknowledge the incoming data until we can process it.
-	return !m.taskQueued
+	return !m.taskWaiter.Working()
 }
 
 func (m *msc) sendScsiError(status csw.Status, key scsi.Sense, code scsi.SenseCode) {
