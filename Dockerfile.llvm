@@ -1,0 +1,33 @@
+# Build the LLVM base image for the TinyGo compiler image.
+# It is built again only when llvm-version.txt or the build recipe changes.
+# tools/llvm-image-tag.sh prints the tag and lists the files that set it.
+
+# tinygo-llvm stage obtains the llvm source for TinyGo
+FROM golang:1.27 AS tinygo-llvm
+
+RUN apt-get update && \
+    apt-get install -y apt-utils make cmake clang-17 ninja-build && \
+    rm -rf \
+        /var/lib/apt/lists/* \
+        /var/log/* \
+        /var/tmp/* \
+        /tmp/*
+
+COPY ./GNUmakefile /tinygo/GNUmakefile
+COPY ./make /tinygo/make
+COPY ./llvm-version.txt /tinygo/llvm-version.txt
+
+RUN cd /tinygo/ && \
+    make llvm-source
+
+# tinygo-llvm-build stage build the custom llvm with xtensa support.
+# The object files and the git history are removed in the same layer to keep
+# the image small. The static libraries and the headers stay, because TinyGo
+# links to them. The CI caches keep the same subset, see
+# .github/actions/setup-llvm/action.yml.
+FROM tinygo-llvm AS tinygo-llvm-build
+
+RUN cd /tinygo/ && \
+    make llvm-build && \
+    find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \; && \
+    rm -rf llvm-project/.git
