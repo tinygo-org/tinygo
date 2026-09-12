@@ -77,6 +77,8 @@ type common struct {
 	start    time.Time // Time test or benchmark started
 	duration time.Duration
 
+	cleanupStarted bool
+
 	tempDir    string
 	tempDirErr error
 	tempDirSeq int32
@@ -184,7 +186,8 @@ var _ TB = (*B)(nil)
 // Logs are accumulated during execution and dumped to standard output when done.
 type T struct {
 	common
-	context *testContext // For running tests and subtests.
+	context    *testContext // For running tests and subtests.
+	isSynctest bool
 }
 
 // Name returns the name of the running test or benchmark.
@@ -460,6 +463,11 @@ func (c *common) Chdir(dir string) {
 
 // runCleanup is called at the end of the test.
 func (c *common) runCleanup() {
+	c.cleanupStarted = true
+	if c.cancelCtx != nil {
+		c.cancelCtx()
+		c.cancelCtx = nil
+	}
 	for {
 		var cleanup func()
 		if len(c.cleanups) > 0 {
@@ -470,15 +478,15 @@ func (c *common) runCleanup() {
 		if cleanup == nil {
 			return
 		}
-		if c.cancelCtx != nil {
-			c.cancelCtx()
-		}
 		cleanup()
 	}
 }
 
 // Parallel is not implemented, it is only provided for compatibility.
 func (t *T) Parallel() {
+	if t.isSynctest {
+		panic("testing: t.Parallel called inside synctest bubble")
+	}
 	// Unimplemented.
 }
 
@@ -504,9 +512,41 @@ func tRunner(t *T, fn func(t *T)) {
 	t.finished = true
 }
 
+//go:linkname testingSynctestTest testing/synctest.testingSynctestTest
+func testingSynctestTest(t *T, f func(*T)) bool {
+	if t.cleanupStarted {
+		panic("testing: synctest.Run called during t.Cleanup")
+	}
+
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	synctestT := T{
+		common: common{
+			output:    &logger{logToStdout: flagVerbose},
+			name:      t.name,
+			parent:    &t.common,
+			level:     t.level + 1,
+			ctx:       ctx,
+			cancelCtx: cancelCtx,
+		},
+		context:    t.context,
+		isSynctest: true,
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		tRunner(&synctestT, f)
+	}()
+	<-done
+	return !synctestT.failed
+}
+
 // Run runs f as a subtest of t called name. It waits until the subtest is finished
 // and returns whether the subtest succeeded.
 func (t *T) Run(name string, f func(t *T)) bool {
+	if t.isSynctest {
+		panic("testing: t.Run called inside synctest bubble")
+	}
 	t.hasSub = true
 	testName, ok, _ := t.context.match.fullName(&t.common, name)
 	if !ok {
@@ -550,6 +590,9 @@ func (t *T) Run(name string, f func(t *T)) bool {
 //
 // Not Implemented.
 func (t *T) Deadline() (deadline time.Time, ok bool) {
+	if t.isSynctest {
+		panic("testing: t.Deadline called inside synctest bubble")
+	}
 	deadline = t.context.deadline
 	return deadline, !deadline.IsZero()
 }

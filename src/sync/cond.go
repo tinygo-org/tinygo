@@ -31,6 +31,9 @@ func (c *Cond) trySignal() bool {
 	// Pop a blocked task off of the stack, and schedule it if applicable.
 	t := c.blocked.Pop()
 	if t != nil {
+		if t.SynctestBubble != nil && task.Current().SynctestBubble != t.SynctestBubble {
+			runtimeFatal("semaphore wake of synctest goroutine from outside bubble")
+		}
 		dataPtr := (*task.Uint32)(unsafe.Pointer(&t.Data))
 
 		// The data value is 0 when the task is not yet sleeping, and 1 when it is.
@@ -71,6 +74,8 @@ func (c *Cond) Wait() {
 	c.blocked.Push(t)
 	c.lock.Unlock()
 
+	transition := synctestBlockBegin(t)
+
 	// Temporarily unlock L.
 	c.L.Unlock()
 
@@ -79,6 +84,9 @@ func (c *Cond) Wait() {
 
 	// If we were signaled while unlocking, immediately complete.
 	if dataPtr.Swap(1) != 0 {
+		if transition {
+			synctestBlockEnd(t, false)
+		}
 		// The data value was already 1, so we got a signal already (and weren't
 		// scheduled because trySignal was the first to change the value).
 		return
@@ -87,8 +95,17 @@ func (c *Cond) Wait() {
 	// We were the first to change the value from 0 to 1, meaning we did not get
 	// a signal during the call to Unlock(). So we wait until we do get a
 	// signal.
+	if transition {
+		synctestBlockEnd(t, true)
+	}
 	task.Pause()
 }
 
 //go:linkname scheduleTask runtime.scheduleTask
 func scheduleTask(*task.Task)
+
+//go:linkname synctestBlockBegin runtime.synctestBlockBegin
+func synctestBlockBegin(*task.Task) bool
+
+//go:linkname synctestBlockEnd runtime.synctestBlockEnd
+func synctestBlockEnd(*task.Task, bool)
