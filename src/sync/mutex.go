@@ -9,21 +9,52 @@ type Mutex = task.Mutex
 //go:linkname runtimeFatal runtime.runtimeFatal
 func runtimeFatal(msg string)
 
+// rwSem is a counting semaphore on a futex. A release makes n permits
+// available and each acquire takes one, so a woken waiter holds a permit.
+type rwSem struct {
+	permits task.Futex
+}
+
+// release makes n more permits available and wakes everyone waiting for one.
+func (s *rwSem) release(n uint32) {
+	s.permits.Add(n)
+	s.permits.WakeAll()
+}
+
+// acquire consumes one permit, waiting for one to appear if there are none.
+func (s *rwSem) acquire() {
+	for {
+		v := s.permits.Load()
+		if v == 0 {
+			// A release between the load and the wait changes the futex word,
+			// and the futex compares the word before it sleeps.
+			s.permits.Wait(0)
+			continue
+		}
+		if s.permits.CompareAndSwap(v, v-1) {
+			return
+		}
+	}
+}
+
 type RWMutex struct {
-	// Reader count, with the number of readers that currently have read-locked
-	// this mutex.
+	// Reader count, counting every caller of RLock that has not yet returned
+	// from RUnlock.
 	// The value can be in two states: one where 0 means no readers and another
 	// where -rwMutexMaxReaders means no readers. A base of 0 is normal
 	// uncontended operation, a base of -rwMutexMaxReaders means a writer has
-	// the lock or is trying to get the lock. In the second case, readers should
-	// wait until the reader count becomes non-negative again to give the writer
-	// a chance to obtain the lock.
+	// the lock or is trying to get the lock. In the second case, readers must
+	// wait until the writer hands them the lock.
 	readers task.Futex
 
-	// Writer futex, normally 0. If there is a writer waiting until all readers
-	// have unlocked, this value is 1. It will be changed to a 2 (and get a
-	// wake) when the last reader unlocks.
-	writer task.Futex
+	// The number of readers a waiting writer is still owed. Readers that
+	// arrive later queue on readerSem, so they cannot starve the writer.
+	readerWait task.Futex
+
+	// Hand-offs. Unlock releases one permit for each queued reader, and the
+	// last reader to leave releases one permit to the waiting writer.
+	readerSem rwSem
+	writerSem rwSem
 
 	// Writer lock. Held between Lock() and Unlock().
 	writerLock Mutex
@@ -38,25 +69,16 @@ func (rw *RWMutex) Lock() {
 	// Exclusive lock for writers.
 	rw.writerLock.Lock()
 
-	// Flag that we need to be awakened after the last read-lock unlocks.
-	rw.writer.Store(1)
-
-	// Signal to readers that they can't lock this mutex anymore.
+	// Signal to readers that they can't lock this mutex anymore, and count the
+	// readers that hold it now. Later readers queue on readerSem instead.
 	n := uint32(rwMutexMaxReaders)
-	waiting := rw.readers.Add(-n)
-	if int32(waiting) == -rwMutexMaxReaders {
-		// All readers were already unlocked, so we don't need to wait for them.
-		rw.writer.Store(0)
-		return
-	}
+	r := int32(rw.readers.Add(-n)) + rwMutexMaxReaders
 
-	// There is at least one reader.
-	// Wait until all readers are unlocked. The last reader to unlock will set
-	// rw.writer to 2 and awaken us.
-	for rw.writer.Load() == 1 {
-		rw.writer.Wait(1)
+	// Wait for those readers. The last one to leave hands the lock over
+	// through writerSem.
+	if r != 0 && int32(rw.readerWait.Add(uint32(r))) != 0 {
+		rw.writerSem.acquire()
 	}
-	rw.writer.Store(0)
 }
 
 // Unlock unlocks rw for writing. It is a run-time error if rw is
@@ -67,10 +89,15 @@ func (rw *RWMutex) Lock() {
 // arrange for another goroutine to [RWMutex.RUnlock] ([RWMutex.Unlock]) it.
 func (rw *RWMutex) Unlock() {
 	// Signal that new readers can lock this mutex.
-	waiting := rw.readers.Add(rwMutexMaxReaders)
-	if waiting != 0 {
-		// Awaken all waiting readers.
-		rw.readers.WakeAll()
+	r := int32(rw.readers.Add(rwMutexMaxReaders))
+	if r >= rwMutexMaxReaders {
+		runtimeFatal("sync: Unlock of unlocked RWMutex")
+	}
+
+	// Hand the lock to each reader that queued behind us. They are still
+	// counted in rw.readers, so the next writer waits for them in turn.
+	if r > 0 {
+		rw.readerSem.release(uint32(r))
 	}
 
 	// Done with this lock (next writer can try to get a lock).
@@ -104,12 +131,10 @@ func (rw *RWMutex) TryLock() bool {
 // documentation on the [RWMutex] type.
 func (rw *RWMutex) RLock() {
 	// Add us as a reader.
-	newVal := rw.readers.Add(1)
-
-	// Wait until the RWMutex is available for readers.
-	for int32(newVal) <= 0 {
-		rw.readers.Wait(newVal)
-		newVal = rw.readers.Load()
+	if int32(rw.readers.Add(1)) < 0 {
+		// A writer holds the lock or waits for one, so queue up. Unlock hands
+		// over a permit, which the next writer cannot take back.
+		rw.readerSem.acquire()
 	}
 }
 
@@ -120,19 +145,22 @@ func (rw *RWMutex) RLock() {
 func (rw *RWMutex) RUnlock() {
 	// Remove us as a reader.
 	one := uint32(1)
-	readers := int32(rw.readers.Add(-one))
+	if readers := int32(rw.readers.Add(-one)); readers < 0 {
+		rw.rUnlockSlow(readers)
+	}
+}
 
+// rUnlockSlow handles the RUnlock of a reader that a writer is waiting behind.
+func (rw *RWMutex) rUnlockSlow(readers int32) {
 	// Check whether RUnlock was called too often.
-	if readers == -1 || readers == (-rwMutexMaxReaders)-1 {
+	if readers+1 == 0 || readers+1 == -rwMutexMaxReaders {
 		runtimeFatal("sync: RUnlock of unlocked RWMutex")
 	}
 
-	if readers == -rwMutexMaxReaders {
-		// This was the last read lock. Check whether we need to wake up a write
-		// lock.
-		if rw.writer.CompareAndSwap(1, 2) {
-			rw.writer.Wake()
-		}
+	// A writer waits for the readers it found when it arrived. Hand the lock
+	// over if we are the last of them.
+	if int32(rw.readerWait.Add(^uint32(0))) == 0 {
+		rw.writerSem.release(1)
 	}
 }
 
