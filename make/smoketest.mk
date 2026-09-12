@@ -295,6 +295,8 @@ smoketest-rp2xxx: | build/smoke
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=waveshare-rp2040-zero examples/echo
 	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=waveshare-rp2040-pizero examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=challenger-rp2040    examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=trinkey-qt2040      examples/temp
