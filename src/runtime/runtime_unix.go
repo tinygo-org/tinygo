@@ -318,13 +318,24 @@ func procUnpin() {
 var heapSize uintptr = 128 * 1024 // small amount to start
 var heapMaxSize uintptr
 
+// heapMaxReserve is how much virtual address space to reserve for the heap:
+// 16GB (1<<34) on 64-bit targets and 1GB (1<<30) on 32-bit ones. The
+// reservation is not a commitment: pages cost physical RAM only when first
+// touched, and allocateHeap's halving loop still adapts if mmap refuses.
+// A flat 1GB cap on 64-bit made any single allocation approaching 1GB
+// (e.g. a scrypt key-derivation buffer with N=1<<20, r=8) fail regardless
+// of available system memory. Deriving the shift from TargetBits keeps the
+// constant within uintptr range on 32-bit targets, where a plain 16GB
+// literal would not compile even in a dead branch.
+const heapMaxReserve = 1 << (30 + 4*(TargetBits/64))
+
 var heapStart, heapEnd uintptr
 
 func allocateHeap() {
 	// Allocate a large chunk of virtual memory. Because it is virtual, it won't
 	// really be allocated in RAM. Memory will only be allocated when it is
 	// first touched.
-	heapMaxSize = 1 * 1024 * 1024 * 1024 // 1GB for the entire heap
+	heapMaxSize = heapMaxReserve
 	for {
 		addr := mmap(nil, heapMaxSize, flag_PROT_READ|flag_PROT_WRITE, flag_MAP_PRIVATE|flag_MAP_ANONYMOUS, -1, 0)
 		if addr == unsafe.Pointer(^uintptr(0)) {
