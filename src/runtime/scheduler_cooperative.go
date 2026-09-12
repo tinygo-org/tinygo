@@ -64,10 +64,7 @@ func deadlock() {
 // exitGoroutine ends an asyncify task that returned from its function.
 // Unlike deadlock, this task will not resume.
 func exitGoroutine() {
-	if finalizerIdleGC != nil {
-		task.MarkFinishing()
-	}
-	task.Pause()
+	task.Exit()
 	runtimeFatal("unreachable")
 }
 
@@ -86,10 +83,7 @@ func wasmExportExit() {
 }
 
 func goexit() {
-	if finalizerIdleGC != nil {
-		task.MarkFinishing()
-	}
-	task.Exit()
+	task.Goexit()
 }
 
 // Add this task to the end of the run queue.

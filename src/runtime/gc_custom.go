@@ -40,6 +40,11 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer
 // free is called to explicitly free a previously allocated pointer.
 func free(ptr unsafe.Pointer)
 
+//go:noinline
+func freeTaskStack(ptr uintptr) {
+	free(unsafe.Pointer(ptr))
+}
+
 // markRoots is called with the start and end addresses to scan for references.
 func markRoots(start, end uintptr)
 

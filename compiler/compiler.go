@@ -60,6 +60,7 @@ type Config struct {
 	Debug              bool // Whether to emit debug information in the LLVM module.
 	Nobounds           bool // Whether to skip bounds checks
 	PanicStrategy      string
+	PanicUnwind        string
 }
 
 // compilerContext contains function-independent data that should still be
@@ -87,6 +88,11 @@ type compilerContext struct {
 	program          *ssa.Program
 	diagnostics      []error
 	functionInfos    map[*ssa.Function]functionInfo
+	callProperties   map[*ssa.Function]functionCallProperties
+	asyncifyCatchers map[llvm.Type]llvm.Value
+	directCatchers   map[llvm.Value]llvm.Value
+	indirectCatchers map[llvm.Type]llvm.Value
+	asyncifyReplays  map[llvm.Type]llvm.Value
 	astComments      map[string]*ast.CommentGroup
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
@@ -100,14 +106,19 @@ type compilerContext struct {
 // importantly with a newly created LLVM context and module.
 func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *Config, dumpSSA bool) *compilerContext {
 	c := &compilerContext{
-		Config:        config,
-		DumpSSA:       dumpSSA,
-		difiles:       make(map[string]llvm.Metadata),
-		ditypes:       make(map[types.Type]llvm.Metadata),
-		machine:       machine,
-		targetData:    machine.CreateTargetData(),
-		functionInfos: map[*ssa.Function]functionInfo{},
-		astComments:   map[string]*ast.CommentGroup{},
+		Config:           config,
+		DumpSSA:          dumpSSA,
+		difiles:          make(map[string]llvm.Metadata),
+		ditypes:          make(map[types.Type]llvm.Metadata),
+		machine:          machine,
+		targetData:       machine.CreateTargetData(),
+		functionInfos:    map[*ssa.Function]functionInfo{},
+		callProperties:   map[*ssa.Function]functionCallProperties{},
+		asyncifyCatchers: map[llvm.Type]llvm.Value{},
+		directCatchers:   map[llvm.Value]llvm.Value{},
+		indirectCatchers: map[llvm.Type]llvm.Value{},
+		asyncifyReplays:  map[llvm.Type]llvm.Value{},
+		astComments:      map[string]*ast.CommentGroup{},
 	}
 
 	c.ctx = llvm.NewContext()
@@ -150,36 +161,41 @@ func (c *compilerContext) dispose() {
 type builder struct {
 	*compilerContext
 	llvm.Builder
-	fn                *ssa.Function
-	llvmFnType        llvm.Type
-	llvmFn            llvm.Value
-	info              functionInfo
-	locals            map[ssa.Value]llvm.Value // local variables
-	indirectValues    map[ssa.Value]llvm.Value
-	indirectReturn    llvm.Value
-	blockInfo         []blockInfo
-	currentBlock      *ssa.BasicBlock
-	currentBlockInfo  *blockInfo
-	tarjanStack       []uint
-	tarjanIndex       uint
-	phis              []phiNode
-	deferPtr          llvm.Value
-	deferFrame        llvm.Value
-	stackChainAlloca  llvm.Value
-	landingpad        llvm.BasicBlock
-	difunc            llvm.Metadata
-	dilocals          map[*types.Var]llvm.Metadata
-	initInlinedAt     llvm.Metadata            // fake inlinedAt position
-	initPseudoFuncs   map[string]llvm.Metadata // fake "inlined" functions for proper init debug locations
-	allDeferFuncs     []any
-	deferFuncs        map[*ssa.Function]int
-	deferInvokeFuncs  map[string]int
-	deferClosureFuncs map[*ssa.Function]int
-	deferExprFuncs    map[ssa.Value]int
-	selectRecvBuf     map[*ssa.Select]llvm.Value
-	deferBuiltinFuncs map[ssa.Value]deferBuiltin
-	runDefersBlock    []llvm.BasicBlock
-	afterDefersBlock  []llvm.BasicBlock
+	fn                 *ssa.Function
+	llvmFnType         llvm.Type
+	llvmFn             llvm.Value
+	info               functionInfo
+	locals             map[ssa.Value]llvm.Value // local variables
+	indirectValues     map[ssa.Value]llvm.Value
+	indirectReturn     llvm.Value
+	blockInfo          []blockInfo
+	currentBlock       *ssa.BasicBlock
+	currentBlockInfo   *blockInfo
+	tarjanStack        []uint
+	tarjanIndex        uint
+	phis               []phiNode
+	deferPtr           llvm.Value
+	deferFrame         llvm.Value
+	stackChainAlloca   llvm.Value
+	landingpad         llvm.BasicBlock
+	unwindReturn       llvm.BasicBlock
+	asyncifyCatchIndex int
+	difunc             llvm.Metadata
+	dilocals           map[*types.Var]llvm.Metadata
+	initInlinedAt      llvm.Metadata            // fake inlinedAt position
+	initPseudoFuncs    map[string]llvm.Metadata // fake "inlined" functions for proper init debug locations
+	allDeferFuncs      []any
+	deferFuncs         map[*ssa.Function]int
+	deferInvokeFuncs   map[string]int
+	deferClosureFuncs  map[*ssa.Function]int
+	deferExprFuncs     map[ssa.Value]int
+	selectRecvBuf      map[*ssa.Select]llvm.Value
+	deferBuiltinFuncs  map[ssa.Value]deferBuiltin
+	runningDefers      bool
+	loweringBody       bool
+	inFaultBlock       bool
+	runDefersBlock     []llvm.BasicBlock
+	afterDefersBlock   []llvm.BasicBlock
 
 	runtimeAssertBlocks  map[string]llvm.BasicBlock
 	interfaceAssertBlock llvm.BasicBlock
@@ -1379,6 +1395,7 @@ func (b *builder) createFunction() {
 	b.createFunctionStart(false)
 
 	// Fill blocks with instructions.
+	b.loweringBody = true
 	for _, block := range b.fn.DomPreorder() {
 		if b.DumpSSA {
 			fmt.Printf("%d: %s:\n", block.Index, block.Comment)
@@ -1424,6 +1441,7 @@ func (b *builder) createFunction() {
 			b.CreateRetVoid()
 		}
 	}
+	b.loweringBody = false
 
 	// The rundefers instruction needs to be created after all defer
 	// instructions have been created. Otherwise it won't handle all defer
@@ -1572,10 +1590,13 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	case *ssa.Panic:
 		value := b.getValue(instr.X, getPos(instr))
 		b.createRuntimeInvoke("_panic", []llvm.Value{value}, "")
-		b.CreateUnreachable()
+		b.createUnwindReturnOrUnreachable()
 	case *ssa.Return:
 		if b.hasDeferFrame() {
 			b.createRuntimeCall("destroyDeferFrame", []llvm.Value{b.deferFrame}, "")
+			if b.usesReturnUnwind() {
+				b.createUnwindCheck(false)
+			}
 		}
 		b.createReturn(instr.Results, getPos(instr))
 	case *ssa.RunDefers:
@@ -2337,7 +2358,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			result := b.createIndirectStorage(resultType, "call.result")
 			params = append([]llvm.Value{result}, params...)
 			params = append(params, context)
-			b.createInvoke(calleeType, callee, params, "")
+			b.createInvoke(calleeType, callee, params, "", instr)
 			return result, nil
 		}
 		// This function takes a context parameter.
@@ -2345,7 +2366,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		params = append(params, context)
 	}
 
-	return b.createInvoke(calleeType, callee, params, ""), nil
+	return b.createInvoke(calleeType, callee, params, "", instr), nil
 }
 
 // getValue returns the LLVM value of a constant, function value, global, or
@@ -3231,7 +3252,7 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 				result = b.CreateICmp(llvm.IntEQ, typecodeX, typecodeY, "")
 			} else {
 				// Fall back to a full interface comparison.
-				result = b.createRuntimeCall("interfaceEqual", []llvm.Value{x, y}, "")
+				result = b.createRuntimeInvoke("interfaceEqual", []llvm.Value{x, y}, "")
 			}
 			if op == token.NEQ {
 				result = b.CreateNot(result, "")
