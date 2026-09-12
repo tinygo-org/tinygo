@@ -1304,11 +1304,62 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 		return wrapper
 	}
 
+	exported := c.getFunctionInfo(fn).exported
+	abi := c.getFunctionABI(fn.Signature, exported)
+	if exported {
+		internalABI := c.getFunctionABI(fn.Signature, false)
+		var abiError string
+		if internalABI.indirectResult {
+			abiError = fmt.Sprintf("exported method %s with a large aggregate result cannot be called through an interface", fn.RelString(nil))
+		}
+		if abiError == "" {
+			for _, param := range internalABI.params[1:] {
+				if param.indirect {
+					abiError = fmt.Sprintf("exported method %s with an aggregate parameter passed indirectly by the internal ABI cannot be called through an interface", fn.RelString(nil))
+					break
+				}
+			}
+		}
+		if abiError != "" {
+			resultType := internalABI.resultType
+			var paramTypes []llvm.Type
+			if internalABI.indirectResult {
+				paramTypes = append(paramTypes, c.dataPtrType)
+				resultType = c.ctx.VoidType()
+			}
+			paramTypes = append(paramTypes, c.dataPtrType)
+			for _, param := range internalABI.params[1:] {
+				if param.indirect {
+					paramTypes = append(paramTypes, c.dataPtrType)
+					continue
+				}
+				for _, info := range c.expandDirectFormalParamType(param.llvmType, "", nil) {
+					paramTypes = append(paramTypes, info.llvmType)
+				}
+			}
+			paramTypes = append(paramTypes, c.dataPtrType)
+			wrapper = llvm.AddFunction(c.mod, wrapperName, llvm.FunctionType(resultType, paramTypes, false))
+			c.addStandardDeclaredAttributes(wrapper)
+			if c.Debug {
+				pos := c.program.Fset.Position(fn.Pos())
+				c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
+			}
+			wrapper.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-interface-abi-error", abiError))
+			return wrapper
+		}
+	}
+
 	// Get the expanded receiver type.
-	receiverType := c.getLLVMType(fn.Signature.Recv().Type())
+	receiverType := abi.params[0].llvmType
 	var expandedReceiverType []llvm.Type
-	receiverIndirect := c.isIndirectAggregate(receiverType)
-	for _, info := range c.expandFormalParamType(receiverType, "", nil) {
+	receiverIndirect := abi.params[0].indirect
+	var receiverInfos []paramInfo
+	if receiverIndirect {
+		receiverInfos = []paramInfo{{llvmType: c.dataPtrType}}
+	} else {
+		receiverInfos = c.expandDirectFormalParamType(receiverType, "", nil)
+	}
+	for _, info := range receiverInfos {
 		expandedReceiverType = append(expandedReceiverType, info.llvmType)
 	}
 
@@ -1323,7 +1374,7 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 
 	// create wrapper function
 	resultOffset := 0
-	if _, indirect := c.hasIndirectResult(fn.Signature); indirect {
+	if abi.indirectResult {
 		resultOffset = 1
 	}
 	paramTypes := append([]llvm.Type{}, llvmFnType.ParamTypes()[:resultOffset]...)
