@@ -105,3 +105,34 @@ func invalidreturn_chan_int() chan int
 //
 //go:wasmimport modulename invalidreturn_string
 func invalidreturn_string() string
+
+// Exported methods keep the C calling convention, but interface invoke thunks
+// use the Go internal convention. When a method's result or a parameter is a
+// large aggregate the two conventions place values differently, so calling
+// such a method through an interface is not supported and must be reported
+// instead of silently miscompiled.
+
+type exportedBigResult struct{}
+
+// ERROR: exported method (main.exportedBigResult).makeBig with a large aggregate result cannot be called through an interface
+//
+//export makeBigExported
+func (exportedBigResult) makeBig() [1025]byte {
+	return [1025]byte{}
+}
+
+type exportedBigParam struct{}
+
+// ERROR: exported method (main.exportedBigParam).takeBig with a large aggregate parameter cannot be called through an interface
+//
+//export takeBigExported
+func (exportedBigParam) takeBig(a [17]int32) int32 {
+	return a[16]
+}
+
+func useExportedMethodsThroughInterfaces() {
+	var m interface{ makeBig() [1025]byte } = exportedBigResult{}
+	m.makeBig()
+	var t interface{ takeBig([17]int32) int32 } = exportedBigParam{}
+	t.takeBig([17]int32{})
+}

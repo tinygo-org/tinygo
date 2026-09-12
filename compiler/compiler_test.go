@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"tinygo.org/x/go-llvm"
@@ -53,6 +54,7 @@ func TestCompiler(t *testing.T) {
 		{"zeromap.go", "", ""},
 		{"generics.go", "", ""},
 		{"large.go", "", ""},
+		{"paramspill.go", "", ""},
 	}
 	if goMinor >= 20 {
 		tests = append(tests, testCase{"go1.20.go", "", ""})
@@ -97,9 +99,18 @@ func TestCompiler(t *testing.T) {
 			}
 
 			// Optimize IR a little.
+			// Run instcombine without fixpoint verification: standalone textual
+			// instcombine fatally aborts when it needs more than one iteration
+			// (an LLVM 18+ testing aid); real pass pipelines run it with
+			// no-verify-fixpoint (see transform/optimizer.go).
+			passes := "instcombine<no-verify-fixpoint>"
+			if llvmutil.Version() < 18 {
+				// LLVM 17 doesn't have the no-verify-fixpoint flag.
+				passes = "instcombine"
+			}
 			passOptions := llvm.NewPassBuilderOptions()
 			defer passOptions.Dispose()
-			err = mod.RunPasses("instcombine", llvm.TargetMachine{}, passOptions)
+			err = mod.RunPasses(passes, llvm.TargetMachine{}, passOptions)
 			if err != nil {
 				t.Error(err)
 			}
@@ -323,6 +334,9 @@ func TestCompilerErrors(t *testing.T) {
 			continue
 		}
 		expectedErrorsIdx++
+	}
+	for _, missing := range expectedErrors[expectedErrorsIdx:] {
+		t.Errorf("expected compiler error was not produced: %s", missing)
 	}
 }
 

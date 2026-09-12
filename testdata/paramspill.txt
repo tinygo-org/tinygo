@@ -1,0 +1,8 @@
+direct: 32
+after mutate: 5 17
+funcvalue: 32
+iface: 32
+iface: 100
+defer: 32
+goroutine: 32
+array: 190

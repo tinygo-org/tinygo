@@ -11,7 +11,7 @@
 	"rtlib":         "compiler-rt",
 	"gc":            "precise",
 	"scheduler":     "asyncify",
-	"default-stack-size": 65536,
+	"default-stack-size": 131072,
 	"cflags": [
 		"-mbulk-memory",
 		"-mnontrapping-fptoint",
