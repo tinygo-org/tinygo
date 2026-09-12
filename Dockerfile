@@ -1,29 +1,12 @@
-# tinygo-llvm stage obtains the llvm source for TinyGo
-FROM golang:1.27 AS tinygo-llvm
-
-RUN apt-get update && \
-    apt-get install -y apt-utils make cmake clang-17 ninja-build && \
-    rm -rf \
-        /var/lib/apt/lists/* \
-        /var/log/* \
-        /var/tmp/* \
-        /tmp/*
-
-COPY ./GNUmakefile /tinygo/GNUmakefile
-COPY ./make /tinygo/make
-COPY ./llvm-version.txt /tinygo/llvm-version.txt
-
-RUN cd /tinygo/ && \
-    make llvm-source
-
-# tinygo-llvm-build stage build the custom llvm with xtensa support
-FROM tinygo-llvm AS tinygo-llvm-build
-
-RUN cd /tinygo/ && \
-    make llvm-build
+# Build the TinyGo compiler on top of a prebuilt LLVM image.
+# Build the base image first with:
+#   docker build -t tinygo-llvm-build -f Dockerfile.llvm .
+# Or use the image that CI published:
+#   docker build --build-arg LLVM_IMAGE=ghcr.io/tinygo-org/llvm-22:<tag> .
+ARG LLVM_IMAGE=tinygo-llvm-build
 
 # tinygo-compiler-build stage builds the compiler itself
-FROM tinygo-llvm-build AS tinygo-compiler-build
+FROM ${LLVM_IMAGE} AS tinygo-compiler-build
 
 COPY . /tinygo
 

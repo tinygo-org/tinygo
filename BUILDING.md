@@ -45,6 +45,9 @@ It provides a help target for quick reference:
     tinygo                          Build the TinyGo compiler
     lint                            Lint source tree
     spell                           Spellcheck source tree
+    llvm-image-tag                  Print the tag of the prebuilt LLVM Docker image
+    docker-llvm                     Build the LLVM base image (slow)
+    docker-tinygo                   Build the TinyGo compiler image
 
 ## Download the source
 
@@ -54,8 +57,8 @@ the git repository). Then, inside the directory, download the LLVM source:
     make llvm-source
 
 The LLVM commit to use is pinned in `llvm-version.txt`. A change to that file
-makes CI build LLVM again, because the file is part of the LLVM cache key. All
-other changes reuse the cached LLVM build.
+makes CI build LLVM again. The file is part of the LLVM cache key and of the
+Docker image tag. All other changes reuse the cached LLVM build.
 
 You can also store LLVM outside of the TinyGo root directory by setting the
 `LLVM_BUILDDIR`, `CLANG_SRC` and `LLD_SRC` make variables, but that is not
@@ -104,6 +107,29 @@ On macOS, use otool -L:
     otool -L ./build/tinygo
 
 The result should not contain libclang or libLLVM.
+
+## Build with Docker
+
+The Docker build uses two images. The LLVM image holds the LLVM build, and the
+compiler image holds TinyGo. The LLVM image changes only when
+`llvm-version.txt`, `Dockerfile.llvm`, or the make files change, so the slow
+LLVM build does not run again for each change to TinyGo.
+
+To build both images:
+
+    make docker-llvm
+    make docker-tinygo
+
+The first command takes 1-2 hours. To use the LLVM image that CI published
+instead of a local build:
+
+    docker build -t tinygo-dev \
+        --build-arg LLVM_IMAGE=ghcr.io/tinygo-org/llvm-22:$(sh tools/llvm-image-tag.sh) .
+
+`tools/llvm-image-tag.sh` prints the tag of the LLVM image for the current
+source tree, and `make llvm-image-tag` does the same. CI uses that script, so
+the tag agrees. If the registry does not hold that tag, or you are not able to
+pull it, build the LLVM image with `make docker-llvm`.
 
 ## Make a release tarball
 

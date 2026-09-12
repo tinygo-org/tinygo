@@ -26,6 +26,18 @@ spell: tools ## Spellcheck source tree
 spellfix: tools ## Same as spell, but fixes what it finds
 	misspell -w --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.go *.md
 
+.PHONY: llvm-image-tag
+llvm-image-tag: ## Print the tag of the prebuilt LLVM Docker image
+	@sh tools/llvm-image-tag.sh
+
+.PHONY: docker-llvm
+docker-llvm: ## Build the LLVM base image (slow)
+	docker build -t tinygo-llvm-build -f Dockerfile.llvm .
+
+.PHONY: docker-tinygo
+docker-tinygo: ## Build the TinyGo compiler image
+	docker build -t tinygo-dev .
+
 # https://www.client9.com/self-documenting-makefiles/
 .PHONY: help
 help:
