@@ -37,12 +37,15 @@ func InitADC() {
 func (a ADC) Configure(ADCConfig) {
 	a.Pin.ConfigureAltFunc(PinConfig{Mode: PinInputAnalog}, 0)
 
-	// set sample time
+	// set sample time (84 ADC cycles). Each SMPx field is 3 bits wide; the
+	// encoding for 84 cycles is 4. Named Cycles84 constants are not present
+	// in every F4 SVD, so use the literal values.
+	const cycles84 = 4
 	ch := a.getChannel()
 	if ch > 9 {
-		stm32.ADC1.SMPR1.SetBits(stm32.ADC_SMPR1_SMP11_Cycles84 << (ch - 10) * stm32.ADC_SMPR1_SMP11_Pos)
+		stm32.ADC1.SMPR1.SetBits(cycles84 << ((ch - 10) * 3))
 	} else {
-		stm32.ADC1.SMPR2.SetBits(stm32.ADC_SMPR2_SMP1_Cycles84 << (ch * stm32.ADC_SMPR2_SMP1_Pos))
+		stm32.ADC1.SMPR2.SetBits(cycles84 << (ch * 3))
 	}
 
 	return
