@@ -108,6 +108,7 @@ func TestBuild(t *testing.T) {
 	}
 	if minor >= 24 {
 		tests = append(tests, "typealias.go")
+		tests = append(tests, "weak.go")
 	}
 
 	if *testTarget != "" {
