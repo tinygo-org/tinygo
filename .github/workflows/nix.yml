@@ -22,9 +22,9 @@ jobs:
         run: sudo apt-get remove llvm-18
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Pull musl, bdwgc
+      - name: Pull musl, bdwgc, and net
         run: |
-            git submodule update --init lib/musl lib/bdwgc
+            git submodule update --init lib/musl lib/bdwgc src/net
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5
         id: cache-llvm-source
