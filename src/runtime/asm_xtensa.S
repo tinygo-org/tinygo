@@ -21,6 +21,10 @@ __xtensa_libgcc_window_spill:
 #endif
 
 .section .text.tinygo_longjmp,"ax",@progbits
+// Literal data for l32r (must be at a lower address than the l32r).
+.balign 4
+.Llongjmp_addr:
+    .word longjmp
 .global tinygo_longjmp
 .type tinygo_longjmp, %function
 tinygo_longjmp:
@@ -30,5 +34,8 @@ tinygo_longjmp:
 #else
     movi a3, 1
 #endif
-    j longjmp
+    // j only reaches 128 KB (Xtensa ISA Reference Manual, J instruction) and
+    // longjmp can be further away. a8 is free to use in both ABIs.
+    l32r a8, .Llongjmp_addr
+    jx a8
 .size tinygo_longjmp, .-tinygo_longjmp
