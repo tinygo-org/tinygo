@@ -45,7 +45,7 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	}
 
 	// Find the overrides needed for the goroot.
-	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()))
+	overrides := pathsToOverride(config.GoMinorVersion, needsSyscallPackage(config.BuildTags()), needsTLSStubPackage(config.GOOS(), config.BuildTags()))
 
 	// Resolve the merge links within the goroot.
 	merge, err := listGorootMergeLinks(goroot, tinygoroot, overrides)
@@ -225,14 +225,27 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
+// Keep the netdev TLS wrapper except on hosted Linux and Darwin.
+// The baremetal tag is needed because those targets also report GOOS=linux.
+func needsTLSStubPackage(goos string, buildTags []string) bool {
+	if goos != "linux" && goos != "darwin" {
+		return true
+	}
+	for _, tag := range buildTags {
+		if tag == "baremetal" || tag == "nintendoswitch" || tag == "tinygo.wasm" || tag == "wasm_unknown" {
+			return true
+		}
+	}
+	return false
+}
+
 // The boolean indicates whether to merge the subdirs. True means merge, false
 // means use the TinyGo version.
-func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
+func pathsToOverride(goMinor int, needsSyscallPackage, needsTLSStubPackage bool) map[string]bool {
 	paths := map[string]bool{
 		"":                            true,
 		"crypto/":                     true,
 		"crypto/rand/":                false,
-		"crypto/tls/":                 false,
 		"crypto/x509/":                true,
 		"crypto/x509/internal/":       true,
 		"crypto/x509/internal/macos/": false,
@@ -261,6 +274,12 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"testing/":                    true,
 		"tinygo/":                     false,
 		"unique/":                     false,
+	}
+
+	if needsTLSStubPackage {
+		// Without this entry crypto/tls falls under the "crypto/" merge above,
+		// which links in the package of the standard library.
+		paths["crypto/tls/"] = false
 	}
 
 	if goMinor >= 19 {
