@@ -128,8 +128,8 @@ instead of a local build:
 
 `tools/llvm-image-tag.sh` prints the tag of the LLVM image for the current
 source tree, and `make llvm-image-tag` does the same. CI uses that script, so
-the tag agrees. If the registry does not hold that tag, build the LLVM image
-with `make docker-llvm`.
+the tag agrees. If the registry does not hold that tag, or you are not able to
+pull it, build the LLVM image with `make docker-llvm`.
 
 ## Make a release tarball
 

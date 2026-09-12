@@ -30,6 +30,10 @@ RUN cd /tinygo/ && \
 # .github/actions/setup-llvm/action.yml.
 FROM tinygo-llvm AS tinygo-llvm-build
 
+# Link the package to the repository. See
+# https://docs.github.com/en/packages/learn-github-packages/connecting-a-repository-to-a-package
+LABEL org.opencontainers.image.source=https://github.com/tinygo-org/tinygo
+
 RUN cd /tinygo/ && \
     make llvm-build && \
     find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
