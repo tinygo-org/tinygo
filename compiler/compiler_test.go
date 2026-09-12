@@ -174,6 +174,52 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
+func TestDarwinCgoImportDynamic(t *testing.T) {
+	options := &compileopts.Options{GOOS: "darwin", GOARCH: "arm64"}
+	mod, errs := testCompilePackage(t, options, "cgo-import-dynamic.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	ir := mod.String()
+	if !strings.Contains(ir, `declare void @"remote$INODE64"()`) {
+		t.Error("missing external declaration for cgo_import_dynamic remote symbol")
+	}
+	if !strings.Contains(ir, `ptrtoint (ptr @"remote$INODE64" to i64)`) {
+		t.Error("trampoline address load was not replaced with the remote symbol address")
+	}
+	if strings.Contains(ir, "load i64, ptr @main.libc_test_trampoline_addr") {
+		t.Error("trampoline address global was loaded instead of using the remote symbol address")
+	}
+	if !strings.Contains(ir, "ptrtoint (ptr @syscall_libc_ioctl to i64)") {
+		t.Error("variadic ioctl import was not routed through its fixed-signature wrapper")
+	}
+	for _, remote := range []string{"open", "openat", "fcntl"} {
+		if !strings.Contains(ir, "ptrtoint (ptr @syscall_libc_"+remote+" to i64)") {
+			t.Errorf("variadic %s import was not routed through its fixed-signature wrapper", remote)
+		}
+		if strings.Contains(ir, "declare void @"+remote+"()") {
+			t.Errorf("variadic %s import was declared directly instead of using its wrapper", remote)
+		}
+	}
+	if !strings.Contains(ir, "ptrtoint (ptr @remote_nolib to i64)") {
+		t.Error("cgo_import_dynamic without a library operand was not honored")
+	}
+	if !strings.Contains(ir, "ptrtoint (ptr @libc_self to i64)") {
+		t.Error("cgo_import_dynamic without a remote symbol did not default to the local symbol")
+	}
+	if !strings.Contains(ir, "load i32, ptr @main.libc_badtype_trampoline_addr") {
+		t.Error("load of a non-uintptr trampoline global was replaced instead of being left alone")
+	}
+	if strings.Contains(ir, "@bad_remote") {
+		t.Error("a declaration was created for the remote symbol of a non-uintptr trampoline global")
+	}
+}
+
 // normalizeIR canonicalizes LLVM-version-specific IR spellings for comparison
 // and when regenerating golden files.
 func normalizeIR(s string) string {

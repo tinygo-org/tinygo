@@ -4,6 +4,7 @@ package compiler
 // compiler builtins.
 
 import (
+	"go/types"
 	"strconv"
 	"strings"
 
@@ -523,11 +524,10 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 
 	// Extract the libc function name.
 	name := strings.TrimPrefix(strings.TrimSuffix(calledFn.Name(), "_trampoline"), "libc_")
-	if name == "open" {
-		// Special case: open() is a variadic function and can't be called like
-		// a regular function. Therefore, we need to use a wrapper implemented
-		// in C.
-		name = "syscall_libc_open"
+	if wrapper, ok := darwinVariadicImports[name]; ok {
+		// Variadic functions can't be called like a regular function, so use a
+		// wrapper implemented in C. See the comment on darwinVariadicImports.
+		name = wrapper
 	}
 	if b.GOARCH == "amd64" {
 		if name == "fdopendir" || name == "readdir_r" {
@@ -538,16 +538,80 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 		}
 	}
 
-	// Obtain the C function.
-	// Use a simple function (no parameters or return value) because all we need
-	// is the address of the function.
+	return b.createDarwinImportedFunctionAddr(name)
+}
+
+// darwinVariadicImports maps the variadic libc functions imported by Darwin
+// syscall wrappers to fixed-signature C wrappers defined in
+// src/runtime/os_darwin.c. The syscall engine calls an imported address
+// through a fixed-signature function pointer (tinygo_syscallX and friends in
+// src/runtime/os_darwin.c), which passes every argument in a register. A
+// variadic callee, however, takes its variadic arguments from the stack on
+// darwin/arm64, so calling one of these functions directly makes it read
+// garbage arguments (a direct ioctl call observably failed with EFAULT, and
+// a direct fcntl(F_SETFL) wrote garbage flags). This applies to both
+// trampoline flavors: the standard library's function-based pattern
+// (createDarwinFuncPCABI0Call above) and the address-global pattern used by
+// golang.org/x/sys (createDarwinCgoImportDynamicLoad below).
+//
+// The set comes from cross-referencing the symbols that darwin's generated
+// syscall wrappers import (the //go:cgo_import_dynamic directives in
+// zsyscall_darwin_*.go, both in golang.org/x/sys/unix and in the standard
+// library) against their Darwin SDK declarations: of those imports, exactly
+// open(2), openat(2), fcntl(2), and ioctl(2) are declared variadic (see
+// sys/fcntl.h and sys/ioctl.h, or lib/macos-minimal-sdk's copies).
+var darwinVariadicImports = map[string]string{
+	"fcntl":  "syscall_libc_fcntl",
+	"ioctl":  "syscall_libc_ioctl",
+	"open":   "syscall_libc_open",
+	"openat": "syscall_libc_openat",
+}
+
+// Lower a load from a Darwin libc trampoline address global. Packages such as
+// golang.org/x/sys/unix declare globals named libc_*_trampoline_addr and use
+// assembly to initialize them to trampolines for symbols imported with
+// //go:cgo_import_dynamic. TinyGo cannot compile that assembly, so use the
+// imported dylib symbol directly, just like createDarwinFuncPCABI0Call does for
+// the standard library's function-based trampoline pattern.
+func (b *builder) createDarwinCgoImportDynamicLoad(unop *ssa.UnOp) llvm.Value {
+	if b.GOOS != "darwin" {
+		return llvm.Value{}
+	}
+
+	global, ok := unop.X.(*ssa.Global)
+	if !ok {
+		return llvm.Value{}
+	}
+	const suffix = "_trampoline_addr"
+	if !strings.HasPrefix(global.Name(), "libc_") || !strings.HasSuffix(global.Name(), suffix) {
+		return llvm.Value{}
+	}
+	// The replacement value is a ptrtoint to uintptr, so only replace loads of
+	// uintptr-typed globals; the trampoline address pattern always uses plain
+	// uintptr variables. Anything else keeps its normal load.
+	if basic, ok := global.Type().(*types.Pointer).Elem().Underlying().(*types.Basic); !ok || basic.Kind() != types.Uintptr {
+		return llvm.Value{}
+	}
+
+	local := strings.TrimSuffix(global.Name(), suffix)
+	remote, ok := b.cgoImportDynamic[local]
+	if !ok {
+		return llvm.Value{}
+	}
+	if wrapper, ok := darwinVariadicImports[remote]; ok {
+		remote = wrapper
+	}
+
+	return b.createDarwinImportedFunctionAddr(remote)
+}
+
+func (b *builder) createDarwinImportedFunctionAddr(name string) llvm.Value {
+	// The signature does not matter: the declaration is only used for its
+	// address, which is passed to a syscall implementation as a uintptr.
 	llvmFn := b.mod.NamedFunction(name)
 	if llvmFn.IsNil() {
 		llvmFnType := llvm.FunctionType(b.ctx.VoidType(), nil, false)
 		llvmFn = llvm.AddFunction(b.mod, name, llvmFnType)
 	}
-
-	// Cast the function pointer to a uintptr (because that's what
-	// abi.FuncPCABI0 returns).
 	return b.CreatePtrToInt(llvmFn, b.uintptrType, "")
 }
