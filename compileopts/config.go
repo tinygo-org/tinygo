@@ -716,6 +716,7 @@ type TestConfig struct {
 	RunRegexp         string
 	SkipRegexp        string
 	Count             *int
+	Parallel          *int
 	BenchRegexp       string
 	BenchTime         string
 	BenchMem          bool

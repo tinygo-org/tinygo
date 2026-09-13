@@ -31,6 +31,12 @@ type testStruct struct {
 }
 
 func TestHandle(t *testing.T) {
+	t.Cleanup(func() {
+		globalMapMutex.Lock()
+		globalMap = nil
+		globalMapMutex.Unlock()
+	})
+
 	testHandle[testString](t, "foo")
 	testHandle[testString](t, "bar")
 	testHandle[testString](t, "")
@@ -61,16 +67,5 @@ func testHandle[T comparable](t *testing.T, value T) {
 		if v0 != v1 {
 			t.Error("v0 != v1")
 		}
-
-		drainMaps(t)
 	})
-}
-
-// drainMaps ensures that the internal maps are drained.
-func drainMaps(t *testing.T) {
-	t.Helper()
-
-	globalMapMutex.Lock()
-	globalMap = nil
-	globalMapMutex.Unlock()
 }

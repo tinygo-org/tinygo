@@ -252,6 +252,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	if testConfig.Count != nil && *testConfig.Count != 1 {
 		flags = append(flags, "-test.count="+strconv.Itoa(*testConfig.Count))
 	}
+	if testConfig.Parallel != nil {
+		flags = append(flags, "-test.parallel="+strconv.Itoa(*testConfig.Parallel))
+	}
 	if testConfig.Shuffle != "" {
 		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
 	}
@@ -1843,6 +1846,14 @@ func main() {
 		flag.StringVar(&testConfig.RunRegexp, "run", "", "run: regexp of tests to run")
 		flag.StringVar(&testConfig.SkipRegexp, "skip", "", "skip: regexp of tests to skip")
 		testConfig.Count = flag.Int("count", 1, "count: number of times to run tests/benchmarks `count` times")
+		flag.Func("parallel", "run at most `n` tests in parallel", func(value string) error {
+			parallel, err := strconv.Atoi(value)
+			if err != nil {
+				return err
+			}
+			testConfig.Parallel = &parallel
+			return nil
+		})
 		flag.StringVar(&testConfig.BenchRegexp, "bench", "", "bench: regexp of benchmarks to run")
 		flag.StringVar(&testConfig.BenchTime, "benchtime", "", "run each benchmark for duration `d`")
 		flag.BoolVar(&testConfig.BenchMem, "benchmem", false, "show memory stats for benchmarks")
