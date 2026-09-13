@@ -56,20 +56,27 @@ func (s *state) archInit(r *calleeSavedRegs, fn uintptr, args unsafe.Pointer) {
 }
 
 func (s *state) resume() {
-	swapTask(s.sp, runtime_systemStackPtr())
+	swapTaskRISC(s.sp, runtime_systemStackPtr(), nil)
 }
 
 func (s *state) pause() {
 	systemStackPtr := runtime_systemStackPtr()
 	newStack := *systemStackPtr
-	*systemStackPtr = 0
-	swapTask(newStack, &s.sp)
+	swapTaskRISC(newStack, &s.sp, systemStackPtr)
 }
+
+//export tinygo_swapTaskRISC
+func swapTaskRISC(oldStack uintptr, newStack, clearStack *uintptr)
 
 // SystemStack returns the system stack pointer when called from a task stack.
 // When called from the system stack, it returns 0.
 func SystemStack() uintptr {
 	return *runtime_systemStackPtr()
+}
+
+// OnSystemStack returns whether the caller is running on the system stack.
+func OnSystemStack() bool {
+	return SystemStack() == 0
 }
 
 //export tinygo_task_current
