@@ -56,7 +56,7 @@ func main() {
 		// should exit immediately.
 		// Signal hart 0 to exit.
 		exitCodePlusOne.Store(0 + 1) // exit code 0
-		aclintMSWI.MSIP[0].Set(1)
+		signalHart(0)
 
 		// Unlock the scheduler to be sure. Shouldn't be needed.
 		schedulerLock.Unlock()
@@ -96,16 +96,24 @@ func handleInterrupt() {
 		hartID := currentCPU()
 		switch code {
 		case riscv.MachineSoftwareInterrupt:
+			// Clear the interrupt before checking state so a new request stays pending.
+			// See RISC-V Unprivileged ISA, section 2.7.
+			aclintMSWI.MSIP[hartID].Set(0)
+			riscv.Asm("fence")
 			if exitCodePlusOne.Load() != 0 {
 				exitNow(exitCodePlusOne.Load() - 1)
 			}
-			if gcScanState.Load() != 0 {
+			if gcPauseRequest[hartID].Swap(0) != 0 {
 				// The GC needs to run.
 				gcInterruptHandler(hartID)
 			}
+			if exitCodePlusOne.Load() != 0 {
+				exitNow(exitCodePlusOne.Load() - 1)
+			}
 			checkpoint := &schedulerWaitCheckpoints[hartID]
-			if checkpoint.Saved() {
-				aclintMSWI.MSIP[hartID].Set(0)
+			// schedulerLock prevents this flag from being set before the
+			// checkpoint is saved.
+			if schedulerWakePending[hartID].Swap(0) != 0 && checkpoint.Saved() {
 				riscv.MCAUSE.Set(0)
 				checkpoint.Jump()
 			}
@@ -132,6 +140,14 @@ func handleInterrupt() {
 	riscv.MCAUSE.Set(0)
 }
 
+var (
+	// State used to request a GC pause on each hart.
+	gcPauseRequest [numCPU]atomic.Uint32
+
+	// State used to signal the next GC phase to each paused hart.
+	gcSignalWait [numCPU]atomic.Uint32
+)
+
 // The GC interrupted this core for the stop-the-world phase.
 // This function handles that, and only returns after the stop-the-world phase
 // ended.
@@ -140,17 +156,11 @@ func gcInterruptHandler(hartID uint32) {
 	savedMIE := riscv.MIE.Get()
 	riscv.MIE.Set(riscv.MIE_MSIE)
 
-	// Disable this interrupt (to be enabled again soon).
-	aclintMSWI.MSIP[hartID].Set(0)
-
 	// Let the GC know we're ready.
 	gcScanState.Add(1)
 
 	// Wait until we get a signal to start scanning.
-	for riscv.MIP.Get()&riscv.MIP_MSIP == 0 {
-		riscv.Asm("wfi")
-	}
-	aclintMSWI.MSIP[hartID].Set(0)
+	gcWaitForSignal(hartID)
 
 	// Scan the stack(s) of this core.
 	scanCurrentStack()
@@ -163,16 +173,31 @@ func gcInterruptHandler(hartID uint32) {
 	gcScanState.Store(1)
 
 	// Wait until we get a signal that the stop-the-world phase has ended.
-	for riscv.MIP.Get()&riscv.MIP_MSIP == 0 {
-		riscv.Asm("wfi")
-	}
-	aclintMSWI.MSIP[hartID].Set(0)
+	gcWaitForSignal(hartID)
 
 	// Restore MIE bits.
 	riscv.MIE.Set(savedMIE)
 
 	// Signal we received the signal and are going to exit the interrupt.
 	gcScanState.Add(1)
+}
+
+func gcWaitForSignal(hartID uint32) {
+	for gcSignalWait[hartID].Load() == 0 {
+		// Clear unrelated wakeups before checking state to avoid losing a signal.
+		// See RISC-V Unprivileged ISA, section 2.7.
+		aclintMSWI.MSIP[hartID].Set(0)
+		riscv.Asm("fence")
+		if hartID == 0 && exitCodePlusOne.Load() != 0 {
+			exitNow(exitCodePlusOne.Load() - 1)
+		}
+		if gcSignalWait[hartID].Load() == 0 {
+			riscv.Asm("wfi")
+		}
+	}
+	gcSignalWait[hartID].Store(0)
+	aclintMSWI.MSIP[hartID].Set(0)
+	riscv.Asm("fence")
 }
 
 //go:extern _stack_top
@@ -391,7 +416,7 @@ func startSecondaryCores() {
 	for hart := 1; hart < numCPU; hart++ {
 		// Signal the given hart it is ready to start using a software
 		// interrupt.
-		aclintMSWI.MSIP[hart].Set(1)
+		signalHart(uint32(hart))
 	}
 }
 
@@ -402,6 +427,9 @@ var sleepingHarts uint8
 
 // Checkpoints for cores waiting for runnable tasks.
 var schedulerWaitCheckpoints [numCPU]interrupt.Checkpoint
+
+// State used to distinguish scheduler wakeups from other software interrupts.
+var schedulerWakePending [numCPU]atomic.Uint32
 
 // Put the scheduler to sleep, since there are no tasks to run.
 // This will unlock the scheduler lock, and must be called with the scheduler
@@ -449,21 +477,32 @@ func schedulerWake() {
 
 	if hart < 8 {
 		// There is a sleeping hart. Wake it.
-		sleepingHarts &^= 1 << hart  // clear the bit
-		aclintMSWI.MSIP[hart].Set(1) // send software interrupt
+		// Clear the sleeping bit before sending the wakeup.
+		sleepingHarts &^= 1 << hart
+		schedulerWakePending[hart].Store(1)
+		signalHart(uint32(hart))
 	}
 }
 
 // Pause the given core by sending it an interrupt.
 func gcPauseCore(core uint32) {
-	aclintMSWI.MSIP[core].Set(1) // send software interrupt
+	gcPauseRequest[core].Store(1)
+	signalHart(core)
 }
 
 // Signal the given core that it can resume one step.
 // This is called twice after gcPauseCore: the first time to scan the stack of
 // the core, and the second time to end the stop-the-world phase.
 func gcSignalCore(core uint32) {
-	aclintMSWI.MSIP[core].Set(1) // send software interrupt
+	gcSignalWait[core].Store(1)
+	signalHart(core)
+}
+
+func signalHart(hart uint32) {
+	// Order state writes before the interrupt notification.
+	// See RISC-V Unprivileged ISA, section 2.7.
+	riscv.Asm("fence")
+	aclintMSWI.MSIP[hart].Set(1)
 }
 
 func abort() {
@@ -485,7 +524,7 @@ func exit(code int) {
 	if currentCPU() != 0 {
 		// Signal hart 0 to exit.
 		exitCodePlusOne.Store(uint32(code) + 1)
-		aclintMSWI.MSIP[0].Set(1)
+		signalHart(0)
 
 		// Wait for the interrupt to happen. This should happen immediately.
 		for {
@@ -519,6 +558,6 @@ func exitNow(code uint32) {
 func handleException(code uint) {
 	// For a list of exception codes, see:
 	// https://content.riscv.org/wp-content/uploads/2019/08/riscv-privileged-20190608-1.pdf#page=49
-	print("fatal error: exception with mcause=", code, " pc=", riscv.MEPC.Get(), " hart=", uint(riscv.MHARTID.Get()), "\r\n")
+	print("fatal error: exception with mcause=", code, " pc=", riscv.MEPC.Get(), " mtval=", riscv.MTVAL.Get(), " hart=", uint(riscv.MHARTID.Get()), "\r\n")
 	abort()
 }

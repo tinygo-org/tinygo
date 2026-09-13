@@ -21,13 +21,21 @@ tinygo_startTask:
     // After return, exit this goroutine. This is a tail call.
     tail  tinygo_task_exit
 
-.section .text.tinygo_swapTask
+.section .text.tinygo_swapTaskRISC
+.global  tinygo_swapTaskRISC
+.type    tinygo_swapTaskRISC, %function
+tinygo_swapTaskRISC:
 .global  tinygo_swapTask
 .type    tinygo_swapTask, %function
-tinygo_swapTask:
+.set     tinygo_swapTask, tinygo_swapTaskRISC
+
     // This function gets the following parameters:
     //   a0 = newStack uintptr
     //   a1 = oldStack *uintptr
+    //   a2 = stack pointer to clear after switching, or nil
+
+    // Keep the prior hart state in t0. It is not part of the task context.
+    csrrci t0, mstatus, 8
 
     // Push all callee-saved registers.
     addi sp, sp, -52
@@ -51,6 +59,11 @@ tinygo_swapTask:
     // Switch to the new stack pointer.
     mv sp,  a0
 
+    // Clear the saved system stack only after switching back to it.
+    beqz a2, 1f
+    sw zero, 0(a2)
+1:
+
     // Pop all saved registers from this new stack.
     lw ra,  48(sp)
     lw s11, 44(sp)
@@ -66,6 +79,12 @@ tinygo_swapTask:
     lw s1,   4(sp)
     lw s0,    (sp)
     addi sp, sp, 52
+
+    // Restore the interrupt-enable state.
+    andi t0, t0, 8
+    beqz t0, 2f
+    csrsi mstatus, 8
+2:
 
     // Return into the task.
     ret
