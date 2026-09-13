@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"runtime"
 	"slices"
 	"strconv"
@@ -475,7 +474,7 @@ func (b *B) processBench(ctx *benchContext) {
 			// Print any benchmark output
 			if b.output.Len() > 0 {
 				fmt.Printf("--- BENCH: %s\n", benchName)
-				b.output.WriteTo(os.Stdout)
+				b.output.writeToStdout()
 			}
 		}
 	}

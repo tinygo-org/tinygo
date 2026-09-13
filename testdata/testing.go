@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -25,6 +26,57 @@ func TestBar(t *testing.T) {
 		t.Log("after failed")
 	})
 	t.Run("Bar3", func(t *testing.T) {})
+	t.Run("BarParallel", func(t *testing.T) {
+		started := make(chan struct{})
+		release := make(chan struct{})
+		go func() {
+			<-started
+			<-started
+			close(release)
+		}()
+		for i := 0; i < 2; i++ {
+			t.Run("child", func(t *testing.T) {
+				t.Parallel()
+				started <- struct{}{}
+				<-release
+			})
+		}
+	})
+	t.Run("BarNestedParallel", func(t *testing.T) {
+		for i := 0; i < 2; i++ {
+			t.Run("parent", func(t *testing.T) {
+				t.Parallel()
+				t.Run("middle", func(t *testing.T) {
+					t.Run("leaf", func(t *testing.T) {
+						t.Parallel()
+					})
+				})
+			})
+		}
+	})
+	cleanups := 0
+	t.Run("BarManyCleanups", func(t *testing.T) {
+		for range 100 {
+			t.Cleanup(func() {
+				cleanups++
+			})
+		}
+	})
+	if cleanups != 100 {
+		t.Errorf("ran %d cleanups, want 100", cleanups)
+	}
+	if runtime.GOARCH != "wasm" {
+		cleaned := false
+		t.Run("BarCleanupSkip", func(t *testing.T) {
+			t.Cleanup(func() {
+				cleaned = true
+			})
+			t.Cleanup(t.SkipNow)
+		})
+		if !cleaned {
+			t.Error("cleanup after SkipNow did not run")
+		}
+	}
 	t.Run("Bar4", func(t *testing.T) {
 		t.Fatal("fatal")
 		t.Log("after fatal")
@@ -85,6 +137,7 @@ func main() {
 		println("not running a test at the moment, testing.Testing() should return false")
 	}
 	testing.Init()
+	flag.Set("test.parallel", "2")
 	flag.Set("test.run", ".*/B")
 	m := testing.MainStart(matchStringOnly(fakeMatchString /*regexp.MatchString*/), tests, benchmarks, fuzzes, examples)
 

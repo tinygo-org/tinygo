@@ -14,7 +14,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/fs"
 	"math/rand"
 	"os"
@@ -22,6 +21,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -37,6 +37,7 @@ var (
 	flagSkipRegexp string
 	flagShuffle    string
 	flagCount      int
+	flagParallel   int
 )
 
 var initRan bool
@@ -55,6 +56,7 @@ func Init() {
 	flag.StringVar(&flagShuffle, "test.shuffle", "off", "shuffle: off, on, <numeric-seed>")
 
 	flag.IntVar(&flagCount, "test.count", 1, "run each test or benchmark `count` times")
+	flag.IntVar(&flagParallel, "test.parallel", runtime.NumCPU(), "run at most `n` tests in parallel")
 
 	initBenchmarkFlags()
 }
@@ -62,6 +64,7 @@ func Init() {
 // common holds the elements common between T and B and
 // captures common methods such as Errorf.
 type common struct {
+	mu       sync.Mutex
 	output   *logger
 	indent   string
 	ran      bool     // Test or benchmark (or one of its subtests) was executed.
@@ -86,30 +89,52 @@ type common struct {
 
 	ctx       context.Context
 	cancelCtx context.CancelFunc
+
+	barrier         chan struct{}
+	signal          chan bool
+	sub             []*T
+	isParallel      bool
+	parallelRunning bool
+	denyParallel    string
 }
 
+var testOutputMu sync.Mutex
+var errNilPanicOrGoexit = errors.New("test executed panic(nil) or runtime.Goexit")
+
 type logger struct {
+	mu          sync.Mutex
 	logToStdout bool
 	b           bytes.Buffer
 }
 
 func (l *logger) Write(p []byte) (int, error) {
 	if l.logToStdout {
+		testOutputMu.Lock()
+		defer testOutputMu.Unlock()
+		l.mu.Lock()
+		defer l.mu.Unlock()
 		return os.Stdout.Write(p)
 	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.b.Write(p)
 }
 
-func (l *logger) WriteTo(w io.Writer) (int64, error) {
+func (l *logger) writeToStdout() (int64, error) {
+	testOutputMu.Lock()
+	defer testOutputMu.Unlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if l.logToStdout {
 		// We've already been logging to stdout; nothing to do.
 		return 0, nil
 	}
-	return l.b.WriteTo(w)
-
+	return l.b.WriteTo(os.Stdout)
 }
 
 func (l *logger) Len() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.b.Len()
 }
 
@@ -142,13 +167,31 @@ func Testing() bool {
 // flushToParent writes c.output to the parent after first writing the header
 // with the given format and arguments.
 func (c *common) flushToParent(testName, format string, args ...any) {
+	testOutputMu.Lock()
+	defer testOutputMu.Unlock()
+
+	c.output.mu.Lock()
+	defer c.output.mu.Unlock()
 	if c.parent == nil {
 		// The fake top-level test doesn't want a FAIL or PASS banner.
 		// Not quite sure how this works upstream.
-		c.output.WriteTo(os.Stdout)
+		if !c.output.logToStdout {
+			c.output.b.WriteTo(os.Stdout)
+		}
 	} else {
-		fmt.Fprintf(c.parent.output, format, args...)
-		c.output.WriteTo(c.parent.output)
+		c.parent.output.mu.Lock()
+		defer c.parent.output.mu.Unlock()
+		if c.parent.output.logToStdout {
+			fmt.Fprintf(os.Stdout, format, args...)
+			if !c.output.logToStdout {
+				c.output.b.WriteTo(os.Stdout)
+			}
+		} else {
+			fmt.Fprintf(&c.parent.output.b, format, args...)
+			if !c.output.logToStdout {
+				c.output.b.WriteTo(&c.parent.output.b)
+			}
+		}
 	}
 }
 
@@ -200,18 +243,23 @@ func (c *common) setRan() {
 	if c.parent != nil {
 		c.parent.setRan()
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.ran = true
 }
 
 // Fail marks the function as having failed but continues execution.
 func (c *common) Fail() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.failed = true
 }
 
 // Failed reports whether the function has failed.
 func (c *common) Failed() bool {
-	failed := c.failed
-	return failed
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.failed
 }
 
 // FailNow marks the function as having failed and stops its execution
@@ -219,7 +267,9 @@ func (c *common) Failed() bool {
 // current goroutine).
 func (c *common) FailNow() {
 	c.Fail()
+	c.mu.Lock()
 	c.finished = true
+	c.mu.Unlock()
 	if supportsRecover() {
 		runtime.Goexit()
 	}
@@ -294,7 +344,9 @@ func (c *common) Skipf(format string, args ...any) {
 // by calling runtime.Goexit.
 func (c *common) SkipNow() {
 	c.skip()
+	c.mu.Lock()
 	c.finished = true
+	c.mu.Unlock()
 	if supportsRecover() {
 		runtime.Goexit()
 	}
@@ -302,6 +354,8 @@ func (c *common) SkipNow() {
 }
 
 func (c *common) skip() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.skipped = true
 }
 
@@ -310,6 +364,8 @@ func supportsRecover() bool
 
 // Skipped reports whether the test was skipped.
 func (c *common) Skipped() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.skipped
 }
 
@@ -419,6 +475,11 @@ func (c *common) Setenv(key, value string) {
 	}
 }
 
+func (t *T) Setenv(key, value string) {
+	t.checkParallel("t.Setenv")
+	t.common.Setenv(key, value)
+}
+
 // Chdir calls os.Chdir(dir) and uses Cleanup to restore the current
 // working directory to its original value after the test. On Unix, it
 // also sets PWD environment variable for the duration of the test.
@@ -462,6 +523,34 @@ func (c *common) Chdir(dir string) {
 	})
 }
 
+func (t *T) Chdir(dir string) {
+	t.checkParallel("t.Chdir")
+	t.common.Chdir(dir)
+}
+
+func parallelConflict(op string) string {
+	return "testing: test using " + op + " can not use t.Parallel"
+}
+
+// checkParallel is called by testing/cryptotest.SetGlobalRandom.
+func checkParallel(t *T) {
+	t.checkParallel("cryptotest.SetGlobalRandom")
+}
+
+func (t *T) checkParallel(op string) {
+	for common := &t.common; common != nil; common = common.parent {
+		common.mu.Lock()
+		parallel := common.isParallel
+		common.mu.Unlock()
+		if parallel {
+			panic(parallelConflict(op))
+		}
+	}
+	t.mu.Lock()
+	t.denyParallel = op
+	t.mu.Unlock()
+}
+
 // runCleanup is called at the end of the test.
 func (c *common) runCleanup() {
 	c.cleanupStarted.Store(true)
@@ -469,26 +558,56 @@ func (c *common) runCleanup() {
 		c.cancelCtx()
 		c.cancelCtx = nil
 	}
-	for {
-		var cleanup func()
-		if len(c.cleanups) > 0 {
-			last := len(c.cleanups) - 1
-			cleanup = c.cleanups[last]
-			c.cleanups = c.cleanups[:last]
+
+	// If a cleanup exits early, continue with the remaining cleanups.
+	defer func() {
+		if len(c.cleanups) != 0 {
+			c.runCleanup()
 		}
-		if cleanup == nil {
-			return
-		}
+	}()
+
+	for len(c.cleanups) != 0 {
+		last := len(c.cleanups) - 1
+		cleanup := c.cleanups[last]
+		c.cleanups = c.cleanups[:last]
 		cleanup()
 	}
 }
 
-// Parallel is not implemented, it is only provided for compatibility.
+// Parallel signals that this test can run with other parallel tests.
 func (t *T) Parallel() {
 	if t.isSynctest {
 		panic("testing: t.Parallel called inside synctest bubble")
 	}
-	// Unimplemented.
+	t.mu.Lock()
+	if t.isParallel {
+		t.mu.Unlock()
+		panic("testing: t.Parallel called multiple times")
+	}
+	if t.denyParallel != "" {
+		op := t.denyParallel
+		t.mu.Unlock()
+		panic(parallelConflict(op))
+	}
+	if t.parent == nil {
+		t.mu.Unlock()
+		return
+	}
+
+	t.isParallel = true
+	t.parallelRunning = false
+	t.mu.Unlock()
+	t.duration += time.Since(t.start)
+	t.parent.mu.Lock()
+	t.parent.sub = append(t.parent.sub, t)
+	t.parent.mu.Unlock()
+	t.signal <- true
+	<-t.parent.barrier
+	t.context.waitParallel()
+	t.mu.Lock()
+	t.parallelRunning = true
+	t.mu.Unlock()
+	t.start = time.Now()
 }
 
 // InternalTest is a reference to a test that should be called during a test suite run.
@@ -500,17 +619,124 @@ type InternalTest struct {
 func tRunner(t *T, fn func(t *T)) {
 	t.start = time.Now()
 	defer func() {
+		err := recover()
+		signal := true
+		t.mu.Lock()
+		finished := t.finished
+		t.mu.Unlock()
+		if !finished && err == nil {
+			for parent := t.parent; parent != nil; parent = parent.parent {
+				parent.mu.Lock()
+				parentFinished := parent.finished
+				parent.mu.Unlock()
+				if parentFinished {
+					if !t.isParallel {
+						t.Errorf("subtest may have called FailNow on a parent test")
+					}
+					signal = false
+					break
+				}
+			}
+			if signal {
+				err = errNilPanicOrGoexit
+			}
+		}
+		reported := false
+		defer func() {
+			if !reported {
+				t.report()
+				if t.parent != nil {
+					t.mu.Lock()
+					hasSub := t.hasSub
+					t.mu.Unlock()
+					if !hasSub {
+						t.setRan()
+					}
+				}
+			}
+			t.mu.Lock()
+			release := t.isParallel && t.parallelRunning
+			if release {
+				t.parallelRunning = false
+			}
+			t.mu.Unlock()
+			if release {
+				t.context.releaseParallel()
+			}
+			if t.parent != nil && !t.isSynctest && err == nil {
+				t.signal <- signal
+			}
+			if err != nil {
+				panic(err)
+			}
+		}()
+
 		t.duration += time.Since(t.start) // TODO: capture cleanup time, too.
-		t.runCleanup()
+		if err != nil {
+			t.Fail()
+			if cleanupErr := recoverCleanup(t); cleanupErr != nil {
+				t.Logf("cleanup panicked with %v", cleanupErr)
+			}
+			return
+		}
+
+		t.mu.Lock()
+		sub := append([]*T(nil), t.sub...)
+		wasRunning := t.parallelRunning
+		if len(sub) != 0 && wasRunning {
+			t.parallelRunning = false
+		}
+		t.mu.Unlock()
+		if len(sub) != 0 {
+			if wasRunning {
+				t.context.releaseParallel()
+			}
+			close(t.barrier)
+			for _, sub := range sub {
+				<-sub.signal
+			}
+			if wasRunning {
+				t.context.waitParallel()
+				t.mu.Lock()
+				t.parallelRunning = true
+				t.mu.Unlock()
+			}
+		}
+		if cleanupErr := recoverCleanup(t); cleanupErr != nil {
+			err = cleanupErr
+			t.Fail()
+			return
+		}
 		t.report() // Report after all subtests have finished.
-		if t.parent != nil && !t.hasSub {
-			t.setRan()
+		reported = true
+		if t.parent != nil {
+			t.mu.Lock()
+			hasSub := t.hasSub
+			t.mu.Unlock()
+			if !hasSub {
+				t.setRan()
+			}
 		}
 	}()
 
 	// Run the test.
 	fn(t)
+	t.mu.Lock()
 	t.finished = true
+	t.mu.Unlock()
+}
+
+func recoverCleanup(t *T) (err any) {
+	finished := false
+	defer func() {
+		err = recover()
+		if !finished && err == nil {
+			err = errNilPanicOrGoexit
+		}
+	}()
+	t.runCleanup()
+	finished = true
+	return nil
 }
 
 //go:linkname testingSynctestTest testing/synctest.testingSynctestTest
@@ -542,13 +768,16 @@ func testingSynctestTest(t *T, f func(*T)) bool {
 	return !synctestT.failed
 }
 
-// Run runs f as a subtest of t called name. It waits until the subtest is finished
-// and returns whether the subtest succeeded.
+// Run runs f as a subtest of t called name. It blocks until the subtest
+// finishes or calls Parallel.
 func (t *T) Run(name string, f func(t *T)) bool {
 	if t.isSynctest {
 		panic("testing: t.Run called inside synctest bubble")
 	}
+	t.mu.Lock()
 	t.hasSub = true
+	parallelRunning := t.parallelRunning
+	t.mu.Unlock()
 	testName, ok, _ := t.context.match.fullName(&t.common, name)
 	if !ok {
 		return true
@@ -558,12 +787,15 @@ func (t *T) Run(name string, f func(t *T)) bool {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	sub := T{
 		common: common{
-			output:    &logger{logToStdout: flagVerbose},
-			name:      testName,
-			parent:    &t.common,
-			level:     t.level + 1,
-			ctx:       ctx,
-			cancelCtx: cancelCtx,
+			output:          &logger{logToStdout: flagVerbose},
+			name:            testName,
+			parent:          &t.common,
+			level:           t.level + 1,
+			ctx:             ctx,
+			cancelCtx:       cancelCtx,
+			barrier:         make(chan struct{}),
+			signal:          make(chan bool, 1),
+			parallelRunning: parallelRunning,
 		},
 		context: t.context,
 	}
@@ -574,13 +806,13 @@ func (t *T) Run(name string, f func(t *T)) bool {
 		fmt.Fprintf(t.output, "=== RUN   %s\n", sub.name)
 	}
 
-	done := make(chan struct{})
 	go func() {
-		defer close(done)
 		tRunner(&sub, f)
 	}()
-	<-done
-	return !sub.failed
+	if !<-sub.signal {
+		runtime.Goexit()
+	}
+	return !sub.Failed()
 }
 
 // Deadline reports the time at which the test binary will have
@@ -601,14 +833,24 @@ func (t *T) Deadline() (deadline time.Time, ok bool) {
 // testContext holds all fields that are common to all tests. This includes
 // synchronization primitives to run at most *parallel tests.
 type testContext struct {
-	match    *matcher
-	deadline time.Time
+	match       *matcher
+	deadline    time.Time
+	parallelSem chan struct{}
 }
 
 func newTestContext(m *matcher) *testContext {
 	return &testContext{
-		match: m,
+		match:       m,
+		parallelSem: make(chan struct{}, flagParallel),
 	}
+}
+
+func (c *testContext) waitParallel() {
+	c.parallelSem <- struct{}{}
+}
+
+func (c *testContext) releaseParallel() {
+	<-c.parallelSem
 }
 
 // M is a test suite.
@@ -658,6 +900,11 @@ func (m *M) Run() (code int) {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
+	if flagParallel < 1 {
+		fmt.Fprintln(os.Stderr, "testing: -test.parallel must be at least 1")
+		m.exitCode = 2
+		return
+	}
 
 	if flagShuffle != "off" {
 		if err := m.shuffle(); err != nil {
@@ -683,27 +930,29 @@ func (m *M) Run() (code int) {
 func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
 	ok = true
 
-	ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp))
-	runCtx, cancelCtx := context.WithCancel(context.Background())
-	t := &T{
-		common: common{
-			output:    &logger{logToStdout: flagVerbose},
-			ctx:       runCtx,
-			cancelCtx: cancelCtx,
-		},
-		context: ctx,
-	}
-
 	for i := 0; i < flagCount; i++ {
+		ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp))
+		runCtx, cancelCtx := context.WithCancel(context.Background())
+		t := &T{
+			common: common{
+				output:    &logger{logToStdout: flagVerbose},
+				ctx:       runCtx,
+				cancelCtx: cancelCtx,
+				barrier:   make(chan struct{}),
+				signal:    make(chan bool, 1),
+			},
+			context: ctx,
+		}
 		tRunner(t, func(t *T) {
 			for _, test := range tests {
 				t.Run(test.Name, test.F)
-				ok = ok && !t.Failed()
 			}
 		})
+		ran = ran || t.ran
+		ok = ok && !t.Failed()
 	}
 
-	return t.ran, ok
+	return ran, ok
 }
 
 func (t *T) report() {
@@ -711,7 +960,7 @@ func (t *T) report() {
 	format := t.indent + "--- %s: %s (%s)\n"
 	if t.Failed() {
 		if t.parent != nil {
-			t.parent.failed = true
+			t.parent.Fail()
 		}
 		t.flushToParent(t.name, format, "FAIL", t.name, dstr)
 	} else if flagVerbose {
