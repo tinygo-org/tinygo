@@ -24,7 +24,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	enableEXTIConfigRegisters()
 
 	if callback == nil {
-		stm32.EXTI.CPUIMR1.ClearBits(1 << pin)
+		intrMaskReg().ClearBits(1 << pin)
 		pinCallbacks[pin] = nil
 		return nil
 	}
@@ -46,7 +46,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 	if (change & PinFalling) != 0 {
 		stm32.EXTI.FTSR1.SetBits(1 << pin)
 	}
-	stm32.EXTI.CPUIMR1.SetBits(1 << pin)
+	intrMaskReg().SetBits(1 << pin)
 
 	intr := p.registerInterrupt()
 	intr.SetPriority(0)
@@ -98,10 +98,10 @@ func handlePinInterrupt15_10(interrupt.Interrupt) {
 }
 
 func handlePinInterrupt(pin uint8) {
-	if stm32.EXTI.CPUPR1.HasBits(1 << pin) {
+	if intrPendReg().HasBits(1 << pin) {
 		// Writing 1 to the pending register clears the
 		// pending flag for that bit
-		stm32.EXTI.CPUPR1.Set(1 << pin)
+		intrPendReg().Set(1 << pin)
 
 		callback := pinCallbacks[pin]
 		if callback != nil {

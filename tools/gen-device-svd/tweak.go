@@ -15,7 +15,10 @@ func tweakDevice(d *Device, pkgName string) {
 	// a register IWDG. On some devices, though, like the h723,
 	// there are two registers, IWDG1 and IWDG2. In this case we
 	// define an alias IWDG for IWDG1.
-	addUnnumberedAlias(d, "IWDG", "IWDG1")
+	addUnnumberedPeriphAlias(d, "IWDG", "IWDG1")
+
+	addUnnumberedPeriphAlias(d, "WWDG", "WWDG1")
+	addUnnumberedIRQAlias(d, "TIM_CC", "TIM1_CC")
 
 	for _, p := range d.Peripherals {
 		switch p.GroupName {
@@ -55,12 +58,29 @@ func tweakDevice(d *Device, pkgName string) {
 	}
 }
 
-func addUnnumberedAlias(d *Device, dest, src string) {
+func addUnnumberedPeriphAlias(d *Device, dest, src string) {
 	if _, ok := d.PeripheralDict[dest]; !ok {
 		if p := d.PeripheralDict[src]; p != nil {
 			p.Alias = dest
 		}
 	}
+}
+
+func addUnnumberedIRQAlias(d *Device, dest, src string) {
+	var iSrc *Interrupt
+
+	for _, i := range d.Interrupts {
+		if i.Name == dest {
+			return
+		}
+		if i.Name == src {
+			iSrc = i
+		}
+	}
+	if iSrc == nil {
+		return
+	}
+	iSrc.Alias = dest
 }
 
 func stm32EnsureCCMROrder(registers []*PeripheralField) {
