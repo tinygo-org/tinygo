@@ -81,6 +81,7 @@ func TestBuild(t *testing.T) {
 		"print.go",
 		"reflect.go",
 		"signal.go",
+		"signalnotify.go",
 		"slice.go",
 		"sort.go",
 		"stdlib.go",

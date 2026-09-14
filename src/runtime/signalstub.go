@@ -18,4 +18,12 @@ func signal_ignore(uint32) {}
 func signal_waitUntilIdle() {}
 
 //go:linkname signal_recv os/signal.signal_recv
-func signal_recv() uint32 { return ^uint32(0) }
+func signal_recv() uint32 {
+	// Signals can never arrive on these platforms, so block forever, like the
+	// real implementation does while no signal is pending. os/signal.loop
+	// calls this function in a tight loop; returning immediately would make
+	// that goroutine spin, which starves cooperative schedulers: on wasm the
+	// program never yields back to the host again after signal.Notify.
+	deadlock()
+	return 0
+}
