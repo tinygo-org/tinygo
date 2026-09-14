@@ -424,21 +424,21 @@ func c6ApplyADC1Code(reg regI2C, code uint32) {
 
 // ── Modem Clock for ADC ──────────────────────────────────────────────────────
 
-// Enable the clock for the shared ADC and Front-End (FE) controller logic (?).
+// Enable the clock for the shared ADC and Front-End (FE) controller logic.
 // ESP-IDF initializes this during ADC setup with:
 // modem_clock_module_enable(PERIPH_MODEM_ADC_COMMON_FE_MODULE);
 // (see esp_hw_support/port/esp32c6/sar_periph_ctrl.c).
 func modemClockModuleEnableForADC() {
 	// BEGIN code for modem_clock_module_icg_map_init_all();
 	for domain := modemClockDomainModemAPB; domain < modemClockDomainMax; domain++ {
-		code := modemClockGetClockDomainICGBitmap(domain)
-		modemClockSetClockDomainICGBitmap(domain, initialGatingMode[domain]|code)
+		bitmap := getInitialGatingMode(domain)
+		modemClockSetClockDomainICGBitmap(domain, bitmap)
 	}
 	// END code for modem_clock_module_icg_map_init_all();
 
-	// Enable Modem Clk - ADC ( => modem_clock_device_enable(ctx, 1))
-	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_APB_EN(1) // hw->clk_conf1.clk_fe_apb_en = 1
-	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_80M_EN(1) // hw->clk_conf1.clk_fe_80m_en = 1
+	// Enable Modem Clk - ADC ( => see modem_clock_device_enable(ctx, 1))
+	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_APB_EN(1)
+	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_80M_EN(1)
 }
 
 type c6ModemClockDomain int
@@ -471,19 +471,34 @@ const (
 	icgNogatingModem  = 1 << pmuHpIcgModemCodeModem
 )
 
-// initialGatingMode represents the baseline gating configurations per domain.
-// see esp_hw_support/modem_clock.c
-var initialGatingMode = [modemClockDomainMax]uint32{
-	modemClockDomainModemAPB:    icgNogatingActive | icgNogatingModem,
-	modemClockDomainModemPeriph: icgNogatingActive,
-	modemClockDomainWiFi:        icgNogatingActive | icgNogatingModem,
-	modemClockDomainBT:          icgNogatingActive,
-	modemClockDomainModemFE:     icgNogatingActive | icgNogatingModem,
-	modemClockDomainIEEE802154:  icgNogatingActive,
-	modemClockDomainLPAPB:       icgNogatingActive | icgNogatingModem,
-	modemClockDomainI2CMaster:   icgNogatingActive | icgNogatingModem,
-	modemClockDomainCoex:        icgNogatingActive | icgNogatingModem,
-	modemClockDomainWiFiPwr:     icgNogatingActive | icgNogatingModem,
+// getInitialGatingMode returns the baseline gating configuration for a given modem clock domain.
+// Replaces ESP-IDF's static DRAM array `initial_gating_mode` with a switch statement to avoid
+// allocating DRAM in embedded environments.
+// See: esp_hw_support/modem_clock.c, void modem_clock_module_icg_map_init_all()
+func getInitialGatingMode(domain c6ModemClockDomain) uint32 {
+	switch domain {
+	case modemClockDomainModemAPB:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_MODEM_APB_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainModemPeriph:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_MODEM_PERI_ST_MAP() | icgNogatingActive
+	case modemClockDomainWiFi:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_WIFI_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainBT:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_BT_ST_MAP() | icgNogatingActive
+	case modemClockDomainModemFE:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_FE_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainIEEE802154:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_ZB_ST_MAP() | icgNogatingActive
+	case modemClockDomainLPAPB:
+		return esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_LP_APB_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainI2CMaster:
+		return esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_I2C_MST_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainCoex:
+		return esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_COEX_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainWiFiPwr:
+		return esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_WIFIPWR_ST_MAP() | icgNogatingActive | icgNogatingModem
+	}
+	return 0
 }
 
 // see hal/esp32c6/modem_clock_hal.c
@@ -492,59 +507,27 @@ var initialGatingMode = [modemClockDomainMax]uint32{
 // see hal/esp32c6/include/hal/modem_syscon_ll.h for definition of modem_syscon_ll_get_modem_apb_icg_bitmap, ...
 func modemClockSetClockDomainICGBitmap(domain c6ModemClockDomain, bitmap uint32) {
 	switch domain {
-	case modemClockDomainModemAPB: // modem_syscon_ll_set_modem_apb_icg_bitmap
-		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_MODEM_APB_ST_MAP(bitmap) //hw->clk_conf_power_st.clk_modem_apb_st_map = bitmap
-	case modemClockDomainModemPeriph: // modem_syscon_ll_set_modem_periph_icg_bitmap(hal->syscon_dev, bitmap);
-		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_MODEM_PERI_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_modem_peri_st_map
-	case modemClockDomainWiFi: // modem_syscon_ll_set_wifi_icg_bitmap(hal->syscon_dev, bitmap);
-		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_WIFI_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_wifi_st_map
-	case modemClockDomainBT: // modem_syscon_ll_set_bt_icg_bitmap(hal->syscon_dev, bitmap);
-		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_BT_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_bt_st_map
-	case modemClockDomainModemFE: // modem_syscon_ll_set_fe_icg_bitmap(hal->syscon_dev, bitmap);
-		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_FE_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_fe_st_map
-	case modemClockDomainIEEE802154: // modem_syscon_ll_set_ieee802154_icg_bitmap(hal->syscon_dev, bitmap);
-		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_ZB_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_zb_st_map
-	case modemClockDomainLPAPB: // modem_lpcon_ll_set_lp_apb_icg_bitmap(hal->lpcon_dev, bitmap);
-		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_LP_APB_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_lp_apb_st_map
-	case modemClockDomainI2CMaster: // modem_lpcon_ll_set_i2c_master_icg_bitmap(hal->lpcon_dev, bitmap);
-		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_I2C_MST_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_i2c_mst_st_map
-	case modemClockDomainCoex: // modem_lpcon_ll_set_coex_icg_bitmap(hal->lpcon_dev, bitmap);
-		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_COEX_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_coex_st_map
-	case modemClockDomainWiFiPwr: // modem_lpcon_ll_set_wifipwr_icg_bitmap(hal->lpcon_dev, bitmap);
-		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_WIFIPWR_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_wifipwr_st_map
-	default:
-		panic("unhandled domain")
-	}
-}
-
-func modemClockGetClockDomainICGBitmap(domain c6ModemClockDomain) uint32 {
-	var bitmap uint32
-
-	switch domain {
 	case modemClockDomainModemAPB:
-		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_MODEM_APB_ST_MAP()
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_MODEM_APB_ST_MAP(bitmap)
 	case modemClockDomainModemPeriph:
-		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_MODEM_PERI_ST_MAP()
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_MODEM_PERI_ST_MAP(bitmap)
 	case modemClockDomainWiFi:
-		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_WIFI_ST_MAP()
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_WIFI_ST_MAP(bitmap)
 	case modemClockDomainBT:
-		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_BT_ST_MAP()
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_BT_ST_MAP(bitmap)
 	case modemClockDomainModemFE:
-		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_FE_ST_MAP()
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_FE_ST_MAP(bitmap)
 	case modemClockDomainIEEE802154:
-		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_ZB_ST_MAP()
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_ZB_ST_MAP(bitmap)
 	case modemClockDomainLPAPB:
-		bitmap = esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_LP_APB_ST_MAP()
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_LP_APB_ST_MAP(bitmap)
 	case modemClockDomainI2CMaster:
-		bitmap = esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_I2C_MST_ST_MAP()
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_I2C_MST_ST_MAP(bitmap)
 	case modemClockDomainCoex:
-		bitmap = esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_COEX_ST_MAP()
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_COEX_ST_MAP(bitmap)
 	case modemClockDomainWiFiPwr:
-		bitmap = esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_WIFIPWR_ST_MAP()
-	default:
-		panic("unhandled domain")
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_WIFIPWR_ST_MAP(bitmap)
 	}
-	return bitmap
 }
 
 // ── Modem Clock for ADC END ──────────────────────────────────────────────────
