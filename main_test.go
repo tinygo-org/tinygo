@@ -468,15 +468,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 			}
 		}
-		if options.Target == "riscv-qemu" {
-			switch name {
-			case "finalizerinvariants.go":
-				// The finalizer code stops or fails on multicore RISC-V.
-				// See https://github.com/tinygo-org/tinygo/issues/5679
-				continue
-			}
-		}
-
 		name := name // redefine to avoid race condition
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
