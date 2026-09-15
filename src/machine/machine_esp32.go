@@ -409,7 +409,7 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 
 	p.pinReg().Set(
 		(p.pinReg().Get() & ^uint32(esp.GPIO_PIN_INT_TYPE_Msk|esp.GPIO_PIN_INT_ENA_Msk)) |
-			uint32(change)<<esp.GPIO_PIN_INT_TYPE_Pos | uint32(1)<<esp.GPIO_PIN_INT_ENA_Pos)
+			uint32(change)<<esp.GPIO_PIN_INT_TYPE_Pos | uint32(4)<<esp.GPIO_PIN_INT_ENA_Pos)
 
 	return nil
 }
