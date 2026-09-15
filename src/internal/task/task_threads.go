@@ -161,9 +161,9 @@ func otherTasks(current *Task) uint32 {
 	return activeTaskCount - 1
 }
 
-// Exit exits the current task. If this is the main task and there are no other
+// Goexit exits the current task. If this is the main task and there are no other
 // goroutines, it reports a deadlock.
-func Exit() {
+func Goexit() {
 	t := Current()
 	if t == &mainTask {
 		activeTaskLock.Lock()

@@ -1,0 +1,28 @@
+# direct panic
+recovered direct: true
+
+# results
+scalar result: 3
+aggregate result: 1 2
+
+# nested panics
+nested defer ran
+recovered nested: true
+recovered inner: true
+recovered outer: true
+recovered replacement: true
+recovered deferred: true
+recovered repanic: true
+
+# runtime panics
+recovered: index
+recovered: index from helper
+recovered: slice
+recovered: type assertion
+recovered: interface comparison
+recovered: map assignment
+recovered: map lookup
+recovered: map delete
+recovered: nil map
+recovered: divide by zero
+recovered: nil pointer

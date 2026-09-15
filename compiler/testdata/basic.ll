@@ -48,7 +48,10 @@ divbyzero.next:                                   ; preds = %entry
 
 divbyzero.throw:                                  ; preds = %entry
   call void @runtime.divideByZeroPanic(ptr undef) #2
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %divbyzero.throw
+  ret i32 undef
 }
 
 declare void @runtime.divideByZeroPanic(ptr) #0
@@ -65,7 +68,10 @@ divbyzero.next:                                   ; preds = %entry
 
 divbyzero.throw:                                  ; preds = %entry
   call void @runtime.divideByZeroPanic(ptr undef) #2
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %divbyzero.throw
+  ret i32 undef
 }
 
 ; Function Attrs: nounwind
@@ -84,7 +90,10 @@ divbyzero.next:                                   ; preds = %entry
 
 divbyzero.throw:                                  ; preds = %entry
   call void @runtime.divideByZeroPanic(ptr undef) #2
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %divbyzero.throw
+  ret i32 undef
 }
 
 ; Function Attrs: nounwind
@@ -99,7 +108,10 @@ divbyzero.next:                                   ; preds = %entry
 
 divbyzero.throw:                                  ; preds = %entry
   call void @runtime.divideByZeroPanic(ptr undef) #2
-  unreachable
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %divbyzero.throw
+  ret i32 undef
 }
 
 ; Function Attrs: nounwind

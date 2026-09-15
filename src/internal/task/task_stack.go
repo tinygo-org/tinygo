@@ -29,6 +29,8 @@ type state struct {
 	canaryPtr *uintptr
 }
 
+const hasReleasableStack = false
+
 //export tinygo_task_exit
 func taskExit() {
 	exit(false)

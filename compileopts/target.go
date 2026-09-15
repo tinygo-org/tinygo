@@ -35,6 +35,7 @@ type TargetSpec struct {
 	BuildTags        []string `json:"build-tags,omitempty"`
 	BuildMode        string   `json:"buildmode,omitempty"` // default build mode (if nothing specified)
 	GC               string   `json:"gc,omitempty"`
+	PanicUnwind      string   `json:"panic-unwind,omitempty"`
 	Scheduler        string   `json:"scheduler,omitempty"`
 	Serial           string   `json:"serial,omitempty"` // which serial output to use (uart, usb, none)
 	Linker           string   `json:"linker,omitempty"`
@@ -223,6 +224,11 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 	err = spec.resolveInherits()
 	if err != nil {
 		return nil, fmt.Errorf("%s : %w", options.Target, err)
+	}
+	switch spec.PanicUnwind {
+	case "", "auto", "explicit":
+	default:
+		return nil, fmt.Errorf("%s: invalid panic-unwind option %q", options.Target, spec.PanicUnwind)
 	}
 
 	if spec.Scheduler == "asyncify" {

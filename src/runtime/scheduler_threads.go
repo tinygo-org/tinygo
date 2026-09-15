@@ -44,7 +44,7 @@ func deadlock() {
 }
 
 func goexit() {
-	task.Exit()
+	task.Goexit()
 }
 
 func scheduleTask(t *task.Task) {
