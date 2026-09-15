@@ -83,11 +83,13 @@ llvm-source: ## Get or update LLVM sources
 	  git init $(LLVM_PROJECTDIR); \
 	fi
 	cd $(LLVM_PROJECTDIR) && \
-	  if ! git remote get-url origin >/dev/null 2>&1; then \
-	    git remote add origin https://github.com/tinygo-org/llvm-project; \
+	  if ! git cat-file -e "$(LLVM_REVISION)^{commit}" 2>/dev/null; then \
+	    if ! git remote get-url origin >/dev/null 2>&1; then \
+	      git remote add origin https://github.com/tinygo-org/llvm-project; \
+	    fi && \
+	    git fetch --depth=1 origin $(LLVM_REVISION); \
 	  fi && \
-	  git fetch --depth=1 origin $(LLVM_REVISION) && \
-	  git checkout FETCH_HEAD
+	  git checkout $(LLVM_REVISION)
 
 # Configure LLVM.
 TINYGO_SOURCE_DIR=$(shell pwd)
