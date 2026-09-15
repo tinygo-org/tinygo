@@ -268,7 +268,8 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 			reg.Set(i2cCMD_WRITE | uint32(32-count))
 			reg = nextAddress(reg)
 
-			// A resuming segment must not overwrite the slot with END.
+			// Always end a write segment with END, so STOP goes out alone
+			// in its own segment (ref: ESP32 TRM v5.8, section 21.3.5).
 			reg.Set(i2cCMD_END)
 			reg = nil
 			if c.head >= len(c.data) {
