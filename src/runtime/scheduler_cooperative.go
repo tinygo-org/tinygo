@@ -147,6 +147,21 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 // queue already.
 // This function is very similar to addSleepTask but for timerQueue instead of
 // sleepQueue.
+// lockTimerQueue and unlockTimerQueue guard direct mutation of a timer's
+// when/period fields from outside the normal addTimer/removeTimer/reAddTimer
+// path (see resetTimer in time.go). On this scheduler there's no real
+// parallelism, so disabling interrupts is enough to make the pair of writes
+// atomic with respect to a timer callback running from an interrupt handler.
+var timerQueueLockMask interrupt.State
+
+func lockTimerQueue() {
+	timerQueueLockMask = interrupt.Disable()
+}
+
+func unlockTimerQueue() {
+	interrupt.Restore(timerQueueLockMask)
+}
+
 func addTimer(tim *timerNode) {
 	mask := interrupt.Disable()
 	timerQueueAdd(tim)

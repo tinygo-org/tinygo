@@ -99,6 +99,17 @@ func NumCPU() int {
 	return numCPU
 }
 
+// lockTimerQueue and unlockTimerQueue guard direct mutation of a timer's
+// when/period fields from outside the normal addTimer/removeTimer/reAddTimer
+// path (see resetTimer in time.go), using the same lock those functions use.
+func lockTimerQueue() {
+	schedulerLock.Lock()
+}
+
+func unlockTimerQueue() {
+	schedulerLock.Unlock()
+}
+
 func addTimer(tn *timerNode) {
 	schedulerLock.Lock()
 	timerQueueAdd(tn)
