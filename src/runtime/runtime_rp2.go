@@ -12,6 +12,11 @@ import (
 	"unsafe"
 )
 
+const (
+	rp2SIOFIFOCommandGC uint32 = iota + 1
+	rp2SIOFIFOCommandFlashSafe
+)
+
 const numCPU = 2
 const numSpinlocks = 32
 
@@ -250,7 +255,7 @@ func gcInterruptHandler(hartID uint32) {
 
 // Pause the given core by sending it an interrupt.
 func gcPauseCore(core uint32) {
-	rp.SIO.FIFO_WR.Set(1)
+	rp.SIO.FIFO_WR.Set(rp2SIOFIFOCommandGC)
 }
 
 // Signal the given core that it can resume one step.
@@ -281,6 +286,15 @@ var (
 	schedulerLock = spinLock{id: 21}
 	atomicsLock   = spinLock{id: 22}
 	futexLock     = spinLock{id: 23}
+
+	// flashSafeLock serializes RP2040 flash-safe Enter/Exit so that only one
+	// core owns the flash-safe state machine at a time. The other core can
+	// still participate as a victim through the FIFO interrupt while spinning
+	// on this lock.
+	//
+	// It is defined here with the other RP2 spinLocks so spinLock IDs remain
+	// visible in one place.
+	flashSafeLock = spinLock{id: 24}
 )
 
 func resetSpinLocks() {
