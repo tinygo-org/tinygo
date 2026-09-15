@@ -24,7 +24,7 @@ import (
 // library path in advance in several places).
 var libVersions = map[string]int{
 	"musl":         3,
-	"bdwgc":        3,
+	"bdwgc":        4,
 	"picolibc":     2,
 	"wasmbuiltins": 1,
 }
