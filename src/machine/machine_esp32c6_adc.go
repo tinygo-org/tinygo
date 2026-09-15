@@ -46,6 +46,19 @@ func InitADC() {
 	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(1)   // PCR.saradc_conf.saradc_reg_rst_en = 1
 	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(0)   // PCR.saradc_conf.saradc_reg_rst_en = 0
 
+	// Select clock source 2 (PLL_F80M), divider = 1, no fractional.
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(2)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_NUM(1)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_B(0)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_A(0)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
+
+	// Power up the SAR ADC and configure FSM timing (same register layout as C3).
+	esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(1)
+	esp.APB_SARADC.SetFSM_WAIT_SARADC_XPD_WAIT(8)
+	esp.APB_SARADC.SetFSM_WAIT_SARADC_RSTB_WAIT(8)
+	esp.APB_SARADC.SetFSM_WAIT_SARADC_STANDBY_WAIT(100)
+
 	modemClockModuleEnableForADC()
 
 	// Enable REG_I2C: Enter regi2c reset mode
