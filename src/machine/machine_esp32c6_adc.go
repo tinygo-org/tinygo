@@ -429,12 +429,7 @@ func c6ApplyADC1Code(reg regI2C, code uint32) {
 // modem_clock_module_enable(PERIPH_MODEM_ADC_COMMON_FE_MODULE);
 // (see esp_hw_support/port/esp32c6/sar_periph_ctrl.c).
 func modemClockModuleEnableForADC() {
-	// BEGIN code for modem_clock_module_icg_map_init_all();
-	for domain := modemClockDomainModemAPB; domain < modemClockDomainMax; domain++ {
-		bitmap := getInitialGatingMode(domain)
-		modemClockSetClockDomainICGBitmap(domain, bitmap)
-	}
-	// END code for modem_clock_module_icg_map_init_all();
+	initModemClocks()
 
 	// Enable Modem Clk - ADC ( => see modem_clock_device_enable(ctx, 1))
 	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_APB_EN(1)
@@ -470,6 +465,16 @@ const (
 	icgNogatingSleep  = 1 << pmuHpIcgModemCodeSleep
 	icgNogatingModem  = 1 << pmuHpIcgModemCodeModem
 )
+
+// Set default ICG (Internal Clock Gating) bitmaps for modem modules (ADC, Wi-Fi, BT, 802.15.4).
+// Ported from modem_clock_module_icg_map_init_all()
+// TODO: Consider moving this code into a global ESP32-C6 peripheral setup.
+func initModemClocks() {
+	for domain := modemClockDomainModemAPB; domain < modemClockDomainMax; domain++ {
+		bitmap := getInitialGatingMode(domain)
+		modemClockSetClockDomainICGBitmap(domain, bitmap)
+	}
+}
 
 // getInitialGatingMode returns the baseline gating configuration for a given modem clock domain.
 // Replaces ESP-IDF's static DRAM array `initial_gating_mode` with a switch statement to avoid
