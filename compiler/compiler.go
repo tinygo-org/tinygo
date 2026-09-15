@@ -1536,6 +1536,15 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	}
 
 	switch instr := instr.(type) {
+	case *ssa.Call:
+		b.markReflectMethodUse(&instr.Call)
+	case *ssa.Defer:
+		b.markReflectMethodUse(&instr.Call)
+	case *ssa.Go:
+		b.markReflectMethodUse(&instr.Call)
+	}
+
+	switch instr := instr.(type) {
 	case ssa.Value:
 		if value, err := b.createExpr(instr); err != nil {
 			// This expression could not be parsed. Add the error to the list
@@ -1600,6 +1609,36 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		b.storeValue(llvmAddr, instr.Val)
 	default:
 		b.addError(instr.Pos(), "unknown instruction: "+instr.String())
+	}
+}
+
+func (b *builder) markReflectMethodUse(call *ssa.CallCommon) {
+	pkg := b.fn.Pkg
+	if pkg == nil && b.fn.Origin() != nil {
+		pkg = b.fn.Origin().Pkg
+	}
+	if pkg != nil {
+		switch pkg.Pkg.Path() {
+		case "reflect", "internal/reflectlite":
+			return
+		}
+	}
+
+	var method *types.Func
+	if call.IsInvoke() {
+		method = call.Method
+	} else if callee := call.StaticCallee(); callee != nil {
+		if object := callee.Object(); object != nil {
+			method, _ = object.(*types.Func)
+		}
+	}
+	if method == nil || method.Pkg() == nil || method.Pkg().Path() != "reflect" {
+		return
+	}
+	switch method.Name() {
+	case "Method", "MethodByName", "Methods":
+		attr := b.ctx.CreateStringAttribute("tinygo-reflect-method", "")
+		b.llvmFn.AddFunctionAttr(attr)
 	}
 }
 
