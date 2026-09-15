@@ -28,6 +28,7 @@ var (
 
 func deadlock() {
 	// Call yield without requesting a wakeup.
+	synctestTaskBlock(task.Current())
 	task.Pause()
 	trap()
 }
@@ -39,6 +40,7 @@ func goexit() {
 // Mark the given task as ready to resume.
 // This is allowed even if the task isn't paused yet, but will pause soon.
 func scheduleTask(t *task.Task) {
+	synctestTaskWake(t)
 	schedulerLock.Lock()
 	switch t.RunState {
 	case task.RunStatePaused:
@@ -151,6 +153,9 @@ func schedulerRunQueue() *task.Queue {
 //go:linkname sleep time.Sleep
 func sleep(duration int64) {
 	if duration <= 0 {
+		return
+	}
+	if synctestSleep(duration) {
 		return
 	}
 

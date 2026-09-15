@@ -234,6 +234,9 @@ tinygo-test:
 ifneq ($(TEST_PACKAGES_SHORT_HOST),)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) -short $(TEST_PACKAGES_SHORT_HOST)
 endif
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestReflectFuncOf|TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount)$$' internal/synctest
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$$' testing/synctest
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -run='^TestSynctestMarshal$$' encoding/json
 ifeq ($(TEST_ENCODING_XML),true)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) -short -stack-size=16MB encoding/xml
 endif

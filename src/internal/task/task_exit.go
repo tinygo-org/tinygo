@@ -24,6 +24,7 @@ func Exit() {
 
 func exit(goexit bool) {
 	t := Current()
+	exitSynctest(t)
 	remaining := atomic.AddUint32(&liveTasks, ^uint32(0))
 	if t == mainTask {
 		if goexit {

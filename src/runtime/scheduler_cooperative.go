@@ -56,7 +56,9 @@ var finalizerIdleGC func() bool
 func deadlock() {
 	// Keep permanently blocked tasks reachable so their suspended stacks remain
 	// GC roots, but never put them back on the runnable queue.
-	deadlockedTasks.Push(task.Current())
+	current := task.Current()
+	synctestTaskBlock(current)
+	deadlockedTasks.Push(current)
 	task.Pause()
 	runtimeFatal("unreachable")
 }
@@ -94,6 +96,7 @@ func goexit() {
 
 // Add this task to the end of the run queue.
 func scheduleTask(t *task.Task) {
+	synctestTaskWake(t)
 	runqueue.Push(t)
 }
 
@@ -295,6 +298,9 @@ func scheduler(returnAtDeadlock bool) {
 //go:linkname sleep time.Sleep
 func sleep(duration int64) {
 	if duration <= 0 {
+		return
+	}
+	if synctestSleep(duration) {
 		return
 	}
 	addSleepTask(task.Current(), nanosecondsToTicks(duration))
