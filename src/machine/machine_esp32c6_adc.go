@@ -21,32 +21,27 @@ const (
 	atten11dB = 3
 )
 
-type c6PWDET_Type struct {
-	CONF_REG volatile.Register32 // 0x0
-}
-
-// see soc/esp32c6/register/soc/reg_base.h
 const (
-	c6PWDET_CONF_REG               = 0x600A0810
-	c6PWDET_LL_SAR_POWER_FORCE_BIT = 1 << 24
-	c6PWDET_LL_SAR_POWER_CNTL_BIT  = 1 << 23
+	c6PwDetConfigReg          = uintptr(0x600A0810) // see soc/esp32c6/register/soc/reg_base.h
+	c6PwDetSarPowerForceBit   = uint32(1 << 24)     // bits are defined in hal/esp32c6/include/hal/sar_ctrl_ll.h
+	c6PwDetSarPowerControlBit = uint32(1 << 23)
 )
 
-var c6PWDET = (*c6PWDET_Type)(unsafe.Pointer(uintptr(c6PWDET_CONF_REG)))
+var c6PwDetConfReg = (*volatile.Register32)(unsafe.Pointer(c6AnaConfigReg))
 
 // InitADC initialises the APB_SARADC and Modem/ADC peripheral on ESP32-C6.
 // On C6 the clock/reset gating moved to PCR (not SYSTEM as on C3), and the
 // SARADC CLKM divider configuration also lives in PCR.
 func InitADC() {
 	// Reset and enable the SARADC bus clock via PCR.
-	esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)   // PCR.saradc_conf.saradc_reg_clk_en = 1
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1) // PCR.saradc_clkm_conf.saradc_clkm_en = 1
-	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(1)       // PCR.saradc_conf.saradc_rst_en = 1
-	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(0)       // PCR.saradc_conf.saradc_rst_en = 0
-	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(1)   // PCR.saradc_conf.saradc_reg_rst_en = 1
-	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(0)   // PCR.saradc_conf.saradc_reg_rst_en = 0
+	esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
+	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(1)
+	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(0)
+	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(1)
+	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(0)
 
-	// Select clock source 2 (PLL_F80M), divider = 1, no fractional.
+	// Select clock source 2 (XTAL), divider = 1, no fractional.
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(2)
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_NUM(1)
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_B(0)
@@ -62,15 +57,16 @@ func InitADC() {
 	modemClockModuleEnableForADC()
 
 	// Enable REG_I2C: Enter regi2c reset mode
-	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(0) // CLEAR_PERI_REG_MASK(PMU_RF_PWC_REG, PMU_PERIF_I2C_RSTB);
+	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(0)
 	// Enable REGI2C for SAR_ADC and TSENS
-	esp.PMU.SetRF_PWC_XPD_PERIF_I2C(1) // SET_PERI_REG_MASK(PMU_RF_PWC_REG, PMU_XPD_PERIF_I2C);
+	esp.PMU.SetRF_PWC_XPD_PERIF_I2C(1)
 	// Release regi2c reset mode, enter work mode
-	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(1) // SET_PERI_REG_MASK(PMU_RF_PWC_REG, PMU_PERIF_I2C_RSTB);
+	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(1)
 
 	// Enable PWDET see hal at: sar_ctrl_ll_set_power_mode_from_pwdet(SAR_CTRL_LL_POWER_ON);
-	c6PWDET.CONF_REG.SetBits(c6PWDET_LL_SAR_POWER_FORCE_BIT) // REG_SET_BIT(PWDET_CONF_REG, PWDET_LL_SAR_POWER_FORCE_BIT);
-	c6PWDET.CONF_REG.SetBits(c6PWDET_LL_SAR_POWER_CNTL_BIT)  // REG_SET_BIT(PWDET_CONF_REG, PWDET_LL_SAR_POWER_CNTL_BIT);
+	c6PwDetCfg := (*volatile.Register32)(unsafe.Pointer(c6PwDetConfReg))
+	c6PwDetCfg.SetBits(c6PwDetSarPowerForceBit)
+	c6PwDetCfg.SetBits(c6PwDetSarPowerControlBit)
 
 	adcSelfCalibrate()
 }
@@ -95,9 +91,8 @@ func (a ADC) Get() uint16 {
 	// Clear stale DONE
 	esp.APB_SARADC.SetINT_CLR_APB_SARADC1_DONE_INT_CLR(1)
 
-	// Disable oneshot conversion trigger for all the ADC units
+	// Disable oneshot conversion trigger for ADC unit
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
-	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC2_ONETIME_SAMPLE(0)
 
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_CHANNEL(uint32(a.Pin))
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten11dB)
@@ -479,7 +474,7 @@ const (
 	icgNogatingModem  = 1 << pmuHpIcgModemCodeModem
 )
 
-// Set default ICG (Internal Clock Gating) bitmaps for modem modules (ADC, Wi-Fi, BT, 802.15.4).
+// Set default ICG (Internal Clock Gating) bitmaps for modem modules (ADC, WiFi, BT, 802.15.4).
 // Ported from modem_clock_module_icg_map_init_all()
 // TODO: Consider moving this code into a global ESP32-C6 peripheral setup.
 func initModemClocks() {
