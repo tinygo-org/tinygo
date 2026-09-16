@@ -258,6 +258,15 @@ _handle_kernel_exc:
 
     .global _handle_level1
 _handle_level1:
+    // EXCCAUSE 5 (AllocaCause) is a MOVSP window-spill request, not a fault, so
+    // it is checked before any state is touched: a0 is still in EXCSAVE1.
+    // Xtensa ISA Reference Manual, Table 4-64 "Exception Causes".
+    rsr     a0, EXCCAUSE
+    bnei    a0, 5, 1f
+    j       _xt_alloca_exc
+1:
+    rsr     a0, EXCSAVE1        // restore a0 clobbered by the EXCCAUSE read
+
     // --- allocate 96-byte exception frame on the interrupted stack ---
     // Layout (offsets from a1 after adjustment):
     //   0: a0   4: a1(orig)  8: a2  12: a3  16: a4  20: a5
@@ -436,3 +445,35 @@ _handle_level1:
     mov     a0, a10             // restore return address
     ret
 
+// -----------------------------------------------------------------------
+// MOVSP raises AllocaCause when the caller window is not yet spilled. The
+// handler rotates back to the caller window and enters the matching window
+// underflow routine, which does the spill and returns to the MOVSP.
+// Ported from ESP-IDF components/xtensa/xtensa_vectors.S, _xt_alloca_exc.
+// -----------------------------------------------------------------------
+    .balign 4
+    .global _xt_alloca_exc
+_xt_alloca_exc:
+    rsr     a0, WINDOWBASE      // grab WINDOWBASE before rotw changes it
+    rotw    -1                  // WINDOWBASE goes to a4, new a0-a3 are scratch
+    rsr     a2, PS
+    extui   a3, a2, 8, 4        // a3 = PS.OWB  (shift 8, 4 bits)
+    xor     a3, a3, a4          // bits that changed from old to current WB
+    rsr     a4, EXCSAVE1        // restore the interruptee's a0 (now in a4)
+    slli    a3, a3, 8
+    xor     a2, a2, a3          // flip those bits in PS.OWB
+    wsr     a2, PS              // PS.OWB now matches the new WINDOWBASE
+    rsync
+
+    // Dispatch on the call size in bits 31:30 of the interruptee's a0; plain `j`
+    // because _bbci.l's 8-bit range cannot reach the underflow vectors.
+    // Xtensa ISA Reference Manual, RETW, section 8.3.253, p.565 (a0 encoding).
+    _bbsi.l a4, 31, 1f
+    j       _window_underflow4
+1:
+    rotw    -1                  // interruptee's a0 moves to a8
+    _bbsi.l a8, 30, 2f
+    j       _window_underflow8
+2:
+    rotw    -1
+    j       _window_underflow12
