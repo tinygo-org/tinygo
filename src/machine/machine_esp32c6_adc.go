@@ -21,27 +21,43 @@ const (
 	atten11dB = 3
 )
 
-// InitADC initialises the APB_SARADC peripheral on ESP32-C6.
+type c6PWDET_Type struct {
+	CONF_REG volatile.Register32 // 0x0
+}
+
+// see soc/esp32c6/register/soc/reg_base.h
+const (
+	c6PWDET_CONF_REG               = 0x600A0810
+	c6PWDET_LL_SAR_POWER_FORCE_BIT = 1 << 24
+	c6PWDET_LL_SAR_POWER_CNTL_BIT  = 1 << 23
+)
+
+var c6PWDET = (*c6PWDET_Type)(unsafe.Pointer(uintptr(c6PWDET_CONF_REG)))
+
+// InitADC initialises the APB_SARADC and Modem/ADC peripheral on ESP32-C6.
 // On C6 the clock/reset gating moved to PCR (not SYSTEM as on C3), and the
 // SARADC CLKM divider configuration also lives in PCR.
 func InitADC() {
 	// Reset and enable the SARADC bus clock via PCR.
-	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(1)
-	esp.PCR.SetSARADC_CONF_SARADC_CLK_EN(1)
-	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(0)
+	esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)   // PCR.saradc_conf.saradc_reg_clk_en = 1
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1) // PCR.saradc_clkm_conf.saradc_clkm_en = 1
+	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(1)       // PCR.saradc_conf.saradc_rst_en = 1
+	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(0)       // PCR.saradc_conf.saradc_rst_en = 0
+	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(1)   // PCR.saradc_conf.saradc_reg_rst_en = 1
+	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(0)   // PCR.saradc_conf.saradc_reg_rst_en = 0
 
-	// Select clock source 2 (PLL_F80M), divider = 1, no fractional.
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(2)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_NUM(1)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_B(0)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_A(0)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
+	modemClockModuleEnableForADC()
 
-	// Power up the SAR ADC and configure FSM timing (same register layout as C3).
-	esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(1)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_XPD_WAIT(8)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_RSTB_WAIT(8)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_STANDBY_WAIT(100)
+	// Enable REG_I2C: Enter regi2c reset mode
+	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(0) // CLEAR_PERI_REG_MASK(PMU_RF_PWC_REG, PMU_PERIF_I2C_RSTB);
+	// Enable REGI2C for SAR_ADC and TSENS
+	esp.PMU.SetRF_PWC_XPD_PERIF_I2C(1) // SET_PERI_REG_MASK(PMU_RF_PWC_REG, PMU_XPD_PERIF_I2C);
+	// Release regi2c reset mode, enter work mode
+	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(1) // SET_PERI_REG_MASK(PMU_RF_PWC_REG, PMU_PERIF_I2C_RSTB);
+
+	// Enable PWDET see hal at: sar_ctrl_ll_set_power_mode_from_pwdet(SAR_CTRL_LL_POWER_ON);
+	c6PWDET.CONF_REG.SetBits(c6PWDET_LL_SAR_POWER_FORCE_BIT) // REG_SET_BIT(PWDET_CONF_REG, PWDET_LL_SAR_POWER_FORCE_BIT);
+	c6PWDET.CONF_REG.SetBits(c6PWDET_LL_SAR_POWER_CNTL_BIT)  // REG_SET_BIT(PWDET_CONF_REG, PWDET_LL_SAR_POWER_CNTL_BIT);
 
 	adcSelfCalibrate()
 }
@@ -62,17 +78,32 @@ func (a ADC) Get() uint16 {
 	if a.Pin > 6 {
 		return 0
 	}
-	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten11dB)
+
+	// Clear stale DONE
 	esp.APB_SARADC.SetINT_CLR_APB_SARADC1_DONE_INT_CLR(1)
-	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
+
+	// Disable oneshot conversion trigger for all the ADC units
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC2_ONETIME_SAMPLE(0)
+
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_CHANNEL(uint32(a.Pin))
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten11dB)
+
+	// Select ADC1 one-time mode
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(1)
+
+	// Trigger one-time conversion
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
+	// No delay needed here because adc_ctrl_clk is fast (>= APB_CLK_FREQ/8).
+	// ESP-IDF evaluates this condition and calls esp_rom_delay_us(0).
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(1)
+
 	for esp.APB_SARADC.GetINT_RAW_APB_SARADC1_DONE_INT_RAW() == 0 {
 	}
 	raw := esp.APB_SARADC.GetSAR1DATA_STATUS_APB_SARADC1_DATA()
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
+
 	return uint16(raw&0xfff) << 4
 }
 
@@ -390,3 +421,130 @@ func c6ApplyADC1Code(reg regI2C, code uint32) {
 	reg.setCalibrationParam(0, code)
 	reg.calibrationFinish(0)
 }
+
+// ── Modem Clock for ADC ──────────────────────────────────────────────────────
+
+// Enable the clock for the shared ADC and Front-End (FE) controller logic (?).
+// ESP-IDF initializes this during ADC setup with:
+// modem_clock_module_enable(PERIPH_MODEM_ADC_COMMON_FE_MODULE);
+// (see esp_hw_support/port/esp32c6/sar_periph_ctrl.c).
+func modemClockModuleEnableForADC() {
+	// BEGIN code for modem_clock_module_icg_map_init_all();
+	for domain := modemClockDomainModemAPB; domain < modemClockDomainMax; domain++ {
+		code := modemClockGetClockDomainICGBitmap(domain)
+		modemClockSetClockDomainICGBitmap(domain, initialGatingMode[domain]|code)
+	}
+	// END code for modem_clock_module_icg_map_init_all();
+
+	// Enable Modem Clk - ADC ( => modem_clock_device_enable(ctx, 1))
+	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_APB_EN(1) // hw->clk_conf1.clk_fe_apb_en = 1
+	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_80M_EN(1) // hw->clk_conf1.clk_fe_80m_en = 1
+}
+
+type c6ModemClockDomain int
+
+const (
+	modemClockDomainModemAPB c6ModemClockDomain = iota // see hal/include/hal/modem_clock_types.h
+	modemClockDomainModemPeriph
+	modemClockDomainWiFi
+	modemClockDomainBT
+	modemClockDomainModemFE
+	modemClockDomainIEEE802154
+	modemClockDomainLPAPB
+	modemClockDomainI2CMaster
+	modemClockDomainCoex
+	modemClockDomainWiFiPwr
+	modemClockDomainMax
+)
+
+const (
+	pmuHpIcgModemCodeSleep  = 0 // see esp_hw_support/include/esp_private/esp_pmu.h
+	pmuHpIcgModemCodeModem  = 1
+	pmuHpIcgModemCodeActive = 2
+)
+
+// The ICG code's bit 0, 1 and 2 indicates the ICG state
+// of pmu SLEEP, MODEM and ACTIVE mode respectively
+const (
+	icgNogatingActive = 1 << pmuHpIcgModemCodeActive // see esp_hw_support/modem_clock.c
+	icgNogatingSleep  = 1 << pmuHpIcgModemCodeSleep
+	icgNogatingModem  = 1 << pmuHpIcgModemCodeModem
+)
+
+// initialGatingMode represents the baseline gating configurations per domain.
+// see esp_hw_support/modem_clock.c
+var initialGatingMode = [modemClockDomainMax]uint32{
+	modemClockDomainModemAPB:    icgNogatingActive | icgNogatingModem,
+	modemClockDomainModemPeriph: icgNogatingActive,
+	modemClockDomainWiFi:        icgNogatingActive | icgNogatingModem,
+	modemClockDomainBT:          icgNogatingActive,
+	modemClockDomainModemFE:     icgNogatingActive | icgNogatingModem,
+	modemClockDomainIEEE802154:  icgNogatingActive,
+	modemClockDomainLPAPB:       icgNogatingActive | icgNogatingModem,
+	modemClockDomainI2CMaster:   icgNogatingActive | icgNogatingModem,
+	modemClockDomainCoex:        icgNogatingActive | icgNogatingModem,
+	modemClockDomainWiFiPwr:     icgNogatingActive | icgNogatingModem,
+}
+
+// see hal/esp32c6/modem_clock_hal.c
+// see soc/esp32c6/include/modem/modem_syscon_struct.h for SysconDev
+// see hal/esp32c6/include/hal/modem_lpcon_ll.h for LPConDev
+// see hal/esp32c6/include/hal/modem_syscon_ll.h for definition of modem_syscon_ll_get_modem_apb_icg_bitmap, ...
+func modemClockSetClockDomainICGBitmap(domain c6ModemClockDomain, bitmap uint32) {
+	switch domain {
+	case modemClockDomainModemAPB: // modem_syscon_ll_set_modem_apb_icg_bitmap
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_MODEM_APB_ST_MAP(bitmap) //hw->clk_conf_power_st.clk_modem_apb_st_map = bitmap
+	case modemClockDomainModemPeriph: // modem_syscon_ll_set_modem_periph_icg_bitmap(hal->syscon_dev, bitmap);
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_MODEM_PERI_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_modem_peri_st_map
+	case modemClockDomainWiFi: // modem_syscon_ll_set_wifi_icg_bitmap(hal->syscon_dev, bitmap);
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_WIFI_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_wifi_st_map
+	case modemClockDomainBT: // modem_syscon_ll_set_bt_icg_bitmap(hal->syscon_dev, bitmap);
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_BT_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_bt_st_map
+	case modemClockDomainModemFE: // modem_syscon_ll_set_fe_icg_bitmap(hal->syscon_dev, bitmap);
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_FE_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_fe_st_map
+	case modemClockDomainIEEE802154: // modem_syscon_ll_set_ieee802154_icg_bitmap(hal->syscon_dev, bitmap);
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_ZB_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_zb_st_map
+	case modemClockDomainLPAPB: // modem_lpcon_ll_set_lp_apb_icg_bitmap(hal->lpcon_dev, bitmap);
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_LP_APB_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_lp_apb_st_map
+	case modemClockDomainI2CMaster: // modem_lpcon_ll_set_i2c_master_icg_bitmap(hal->lpcon_dev, bitmap);
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_I2C_MST_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_i2c_mst_st_map
+	case modemClockDomainCoex: // modem_lpcon_ll_set_coex_icg_bitmap(hal->lpcon_dev, bitmap);
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_COEX_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_coex_st_map
+	case modemClockDomainWiFiPwr: // modem_lpcon_ll_set_wifipwr_icg_bitmap(hal->lpcon_dev, bitmap);
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_WIFIPWR_ST_MAP(bitmap) // hw->clk_conf_power_st.clk_wifipwr_st_map
+	default:
+		panic("unhandled domain")
+	}
+}
+
+func modemClockGetClockDomainICGBitmap(domain c6ModemClockDomain) uint32 {
+	var bitmap uint32
+
+	switch domain {
+	case modemClockDomainModemAPB:
+		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_MODEM_APB_ST_MAP()
+	case modemClockDomainModemPeriph:
+		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_MODEM_PERI_ST_MAP()
+	case modemClockDomainWiFi:
+		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_WIFI_ST_MAP()
+	case modemClockDomainBT:
+		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_BT_ST_MAP()
+	case modemClockDomainModemFE:
+		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_FE_ST_MAP()
+	case modemClockDomainIEEE802154:
+		bitmap = esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_ZB_ST_MAP()
+	case modemClockDomainLPAPB:
+		bitmap = esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_LP_APB_ST_MAP()
+	case modemClockDomainI2CMaster:
+		bitmap = esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_I2C_MST_ST_MAP()
+	case modemClockDomainCoex:
+		bitmap = esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_COEX_ST_MAP()
+	case modemClockDomainWiFiPwr:
+		bitmap = esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_WIFIPWR_ST_MAP()
+	default:
+		panic("unhandled domain")
+	}
+	return bitmap
+}
+
+// ── Modem Clock for ADC END ──────────────────────────────────────────────────
