@@ -50,6 +50,7 @@ type Config struct {
 	RelocationModel string
 	SizeLevel       int
 	TinyGoVersion   string // for llvm.ident
+	TrimPath        bool
 
 	// Various compiler options that determine how code is generated.
 	Scheduler          string
@@ -861,7 +862,8 @@ func (c *compilerContext) attachDebugInfoRawWithDefinition(f *ssa.Function, llvm
 // one.
 func (c *compilerContext) getDIFile(filename string) llvm.Metadata {
 	if _, ok := c.difiles[filename]; !ok {
-		dir, file := filepath.Split(filename)
+		recordedPath := c.loaderPkg.RecordedPath(filename)
+		dir, file := filepath.Split(recordedPath)
 		if dir != "" {
 			dir = dir[:len(dir)-1]
 		}

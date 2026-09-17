@@ -208,6 +208,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		RelocationModel: config.RelocationModel(),
 		SizeLevel:       sizeLevel,
 		TinyGoVersion:   goenv.Version(),
+		TrimPath:        config.TrimPath(),
 
 		Scheduler:          config.Scheduler(),
 		AutomaticStackSize: config.AutomaticStackSize(),
@@ -324,7 +325,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						}
 					}
 
-					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.OriginalDir(), tmpdir, compilerConfig)
+					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.RecordedDir(), tmpdir, compilerConfig)
 					return err
 				},
 			}
@@ -358,7 +359,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					CompilerBuildID:  string(compilerBuildID),
 					LLVMVersion:      llvm.Version,
 					Config:           compilerConfig,
-					CFlags:           pkg.CFlags,
+					CFlags:           pkg.RecordedCFlags(),
 					FileHashes:       make(map[string]string, len(pkg.FileHashes)),
 					EmbeddedFiles:    make(map[string]string, len(allFiles)),
 					Imports:          make(map[string]string, len(pkg.Pkg.Imports())),
@@ -366,7 +367,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					UndefinedGlobals: undefinedGlobals,
 				}
 				for filePath, hash := range pkg.FileHashes {
-					actionID.FileHashes[filePath] = hex.EncodeToString(hash)
+					actionID.FileHashes[pkg.RecordedPath(filePath)] = hex.EncodeToString(hash)
 				}
 				for name, files := range allFiles {
 					actionID.EmbeddedFiles[name] = files[0].Hash
@@ -425,9 +426,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				// These headers could be compiled in parallel but the benefit
 				// is so small that it's probably not worth parallelizing.
 				// Packages are compiled independently anyway.
-				for _, cgoHeader := range pkg.CGoHeaders {
+				for i, cgoHeader := range pkg.CGoHeaders {
 					// Store the header text in a temporary file.
-					f, err := os.CreateTemp(tmpdir, "cgosnippet-*.c")
+					f, err := os.Create(filepath.Join(tmpdir, fmt.Sprintf("cgosnippet-%s-%d.c", packageActionIDJob.result, i)))
 					if err != nil {
 						return err
 					}
@@ -439,6 +440,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 					// Compile the code (if there is any) to bitcode.
 					flags := append([]string{"-c", "-emit-llvm", "-o", f.Name() + ".bc", f.Name()}, pkg.CFlags...)
+					if config.TrimPath() {
+						flags = append(flags,
+							pkg.DebugPrefixMap(),
+							"-ffile-prefix-map="+tmpdir+"="+pkg.RecordedDir(),
+						)
+					}
 					if config.Options.PrintCommands != nil {
 						config.Options.PrintCommands("clang", flags...)
 					}
@@ -791,7 +798,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			job := &compileJob{
 				description: "compile CGo file " + abspath,
 				run: func(job *compileJob) error {
-					result, err := compileAndCacheCFile(abspath, tmpdir, pkg.CFlags, config.Options.PrintCommands)
+					cflags := pkg.CFlags
+					if config.TrimPath() {
+						cflags = append(slices.Clone(cflags), pkg.DebugPrefixMap())
+					}
+					result, err := compileAndCacheCFile(abspath, tmpdir, cflags, config.Options.PrintCommands)
 					job.result = result
 					return err
 				},
@@ -1200,7 +1211,8 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 		return "", err
 	}
 	defer machine.Dispose()
-	outfile, err := os.CreateTemp(tmpdir, "embed-"+hexSum+"-*.o")
+	sourcePathHash := sha256.Sum256([]byte(filepath.ToSlash(filepath.Join(sourceDir, sourceFile))))
+	outfile, err := os.Create(filepath.Join(tmpdir, "embed-"+hexSum+"-"+hex.EncodeToString(sourcePathHash[:8])+".o"))
 	if err != nil {
 		return "", err
 	}
