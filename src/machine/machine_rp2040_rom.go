@@ -209,8 +209,8 @@ func doFlashCommand(tx []byte, rx []byte) error {
 		return nil
 	}
 
-	state := rp2040EnterFlashSafeSection()
-	defer rp2040ExitFlashSafeSection(state)
+	state, multicore := rp2040EnterFlashSafeSection()
+	defer rp2040ExitFlashSafeSection(state, multicore)
 
 	C.flash_do_cmd(
 		(*C.uint8_t)(unsafe.Pointer(&tx[0])),
@@ -237,8 +237,8 @@ func (f flashBlockDevice) writeAt(p []byte, off int64) (n int, err error) {
 		return 0, nil
 	}
 
-	state := rp2040EnterFlashSafeSection()
-	defer rp2040ExitFlashSafeSection(state)
+	state, multicore := rp2040EnterFlashSafeSection()
+	defer rp2040ExitFlashSafeSection(state, multicore)
 
 	C.flash_range_write(C.uint32_t(address),
 		(*C.uint8_t)(unsafe.Pointer(&padded[0])),
@@ -253,8 +253,8 @@ func (f flashBlockDevice) eraseBlocks(start, length int64) error {
 		return errFlashCannotErasePastEOF
 	}
 
-	state := rp2040EnterFlashSafeSection()
-	defer rp2040ExitFlashSafeSection(state)
+	state, multicore := rp2040EnterFlashSafeSection()
+	defer rp2040ExitFlashSafeSection(state, multicore)
 
 	C.flash_erase_blocks(C.uint32_t(address), C.ulong(length*f.EraseBlockSize()))
 

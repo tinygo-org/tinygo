@@ -28,9 +28,10 @@ var rp2040FlashSafeState volatile.Register8
 // disabled while waiting for the acknowledgement prevents a GC stop-the-world
 // interrupt from blocking this core while the other core is parked in the
 // flash-safe handler.
-func rp2040EnterFlashSafeSection() interrupt.State {
-	if !secondaryCoresStarted {
-		return interrupt.Disable()
+func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
+	multicore := secondaryCoresStarted
+	if !multicore {
+		return interrupt.Disable(), false
 	}
 
 	flashSafeLock.Lock()
@@ -51,13 +52,13 @@ func rp2040EnterFlashSafeSection() interrupt.State {
 		spinLoopWait()
 	}
 
-	return state
+	return state, true
 }
 
 // rp2040ExitFlashSafeSection exits a section entered by
 // rp2040EnterFlashSafeSection.
-func rp2040ExitFlashSafeSection(state interrupt.State) {
-	if secondaryCoresStarted {
+func rp2040ExitFlashSafeSection(state interrupt.State, multicore bool) {
+	if multicore {
 		rp2040FlashSafeState.Set(rp2040FlashSafeRelease)
 		arm.Asm("sev")
 
