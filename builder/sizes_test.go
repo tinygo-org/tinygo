@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 var sema = make(chan struct{}, runtime.NumCPU())
@@ -22,6 +24,29 @@ type sizeTest struct {
 	target string
 	path   string
 	opt    string
+}
+
+func TestTrimPathPackageSize(t *testing.T) {
+	root := goenv.Get("TINYGOROOT")
+	packages := map[string]string{
+		filepath.FromSlash("example.com/main"):                         "main",
+		filepath.FromSlash("example.com/dependency@v1.2.3/subpackage"): "example.com/dependency/subpackage",
+		filepath.Join(root, "src", "runtime"):                          "runtime",
+	}
+	for _, tc := range []struct{ path, pkg, file string }{
+		{"example.com/main/main.go", "main", "main.go"},
+		{"/_/example.com/main/main.c", "main", "main.c"},
+		{"//_/_/example.com/main/main.c", "main", "main.c"},
+		{"/_/example.com/dependency@v1.2.3/subpackage/dependency.c", "example.com/dependency/subpackage", "dependency.c"},
+		{"/_/github.com/tinygo-org/tinygo/src/runtime/runtime_unix.c", "runtime", "runtime_unix.c"},
+		{"/_/github.com/tinygo-org/tinygo/lib/musl/src/stdio/puts.c", "C musl", filepath.FromSlash("src/stdio/puts.c")},
+		{"//_/_/github.com/tinygo-org/tinygo/lib/bdwgc/alloc.c", "C bdwgc", "alloc.c"},
+	} {
+		pkg, file := findPackagePath(filepath.FromSlash(tc.path), packages)
+		if pkg != tc.pkg || file != tc.file {
+			t.Errorf("findPackagePath(%q) = %q, %q; want %q, %q", tc.path, pkg, file, tc.pkg, tc.file)
+		}
+	}
 }
 
 // Test whether code and data size is as expected for the given targets.
@@ -116,7 +141,7 @@ func measureBinarySizes(t *testing.T, tests []sizeTest) []*programSize {
 }
 
 func measureBinarySize(tc sizeTest, tmpdir string) (*programSize, error) {
-	result, err := buildBinaryInDir(tc.target, tc.path, tc.opt, tmpdir)
+	result, err := buildBinaryInDir(tc.target, tc.path, tc.opt, tmpdir, false)
 	if err != nil {
 		return nil, err
 	}
@@ -162,20 +187,25 @@ func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
 // Check that the -size=full flag attributes binary size to the correct package
 // without filesystem paths and things like that.
 func TestSizeFull(t *testing.T) {
-	tests := []string{
-		"microbit",
-		"wasip1",
+	tests := []struct {
+		target   string
+		trimPath bool
+	}{
+		{"microbit", false},
+		{"microbit", true},
+		{"wasip1", false},
+		{"wasip1", true},
 	}
 
 	libMatch := regexp.MustCompile(`^C [a-z -]+$`) // example: "C interrupt vector"
 	pkgMatch := regexp.MustCompile(`^[a-z/]+$`)    // example: "internal/task"
 
-	for _, target := range tests {
-		t.Run(target, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%s/trimpath=%v", test.target, test.trimPath), func(t *testing.T) {
 			t.Parallel()
 
 			// Build the binary.
-			result := buildBinary(t, target, "examples/serial")
+			result := buildBinary(t, test.target, "examples/serial", test.trimPath)
 
 			// Check whether the binary doesn't contain any unexpected package
 			// names.
@@ -200,16 +230,16 @@ func TestSizeFull(t *testing.T) {
 	}
 }
 
-func buildBinary(t *testing.T, targetString, pkgName string) BuildResult {
+func buildBinary(t *testing.T, targetString, pkgName string, trimPath bool) BuildResult {
 	t.Helper()
-	result, err := buildBinaryInDir(targetString, pkgName, "z", t.TempDir())
+	result, err := buildBinaryInDir(targetString, pkgName, "z", t.TempDir(), trimPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return result
 }
 
-func buildBinaryInDir(targetString, pkgName, opt, tmpdir string) (BuildResult, error) {
+func buildBinaryInDir(targetString, pkgName, opt, tmpdir string, trimPath bool) (BuildResult, error) {
 	options := compileopts.Options{
 		Target:        targetString,
 		Opt:           opt,
@@ -217,6 +247,7 @@ func buildBinaryInDir(targetString, pkgName, opt, tmpdir string) (BuildResult, e
 		InterpTimeout: 60 * time.Second,
 		Debug:         true,
 		VerifyIR:      true,
+		TrimPath:      trimPath,
 	}
 	target, err := compileopts.LoadTarget(&options)
 	if err != nil {

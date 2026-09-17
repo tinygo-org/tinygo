@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/aykevl/go-wasm"
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
@@ -946,6 +947,17 @@ func readSection(section memorySection, addresses []addressLine, program *progra
 // findPackagePath returns the Go package (or a pseudo package) for the given
 // path. It uses some heuristics, for example for some C libraries.
 func findPackagePath(path string, packagePathMap map[string]string) (packagePath, filename string) {
+	for _, prefix := range []string{compileopts.CSourcePathRoot + "/", compileopts.CSourcePathRootWindows + "/"} {
+		if strings.HasPrefix(filepath.ToSlash(path), prefix) {
+			recordedPath := strings.TrimPrefix(filepath.ToSlash(path), prefix)
+			if rel, ok := strings.CutPrefix(recordedPath, "github.com/tinygo-org/tinygo/"); ok {
+				path = filepath.Join(goenv.Get("TINYGOROOT"), filepath.FromSlash(rel))
+			} else {
+				path = filepath.FromSlash(recordedPath)
+			}
+			break
+		}
+	}
 	// Check whether this path is part of one of the compiled packages.
 	packagePath, ok := packagePathMap[filepath.Dir(path)]
 	if ok {

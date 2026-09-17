@@ -9,14 +9,18 @@ import (
 	"context"
 	"debug/dwarf"
 	"debug/elf"
+	"debug/pe"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -49,6 +53,265 @@ var supportedLinuxArches = map[string]string{
 }
 
 var sema = make(chan struct{}, runtime.NumCPU())
+
+func TestTrimPath(t *testing.T) {
+	t.Setenv("CGO_CFLAGS", "-iquoteinclude -includestdint.h -imacros relative.h")
+	root := t.TempDir()
+	var binaries [][]byte
+	options := optionsFromTarget(*testTarget, sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"a", "b"} {
+		dir := filepath.Join(root, name)
+		if err := os.CopyFS(dir, os.DirFS(filepath.Join(TESTDATA, "trimpath"))); err != nil {
+			t.Fatal(err)
+		}
+
+		outpath := filepath.Join(root, name+".out")
+		cache := filepath.Join(root, "cache-"+name)
+		cmd := trimPathCommand(t, dir, "build", "-trimpath", "-p=4", "-o", outpath, ".")
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+cache, "HOME="+cache, "LocalAppData="+cache)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("build failed: %v\n%s", err, output)
+		}
+		binary, err := os.ReadFile(outpath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, localPath := range []string{root, goenv.Get("GOROOT"), goenv.Get("TINYGOROOT"), goenv.Get("GOCACHE")} {
+			if bytes.Contains(binary, []byte(localPath)) || bytes.Contains(binary, []byte(filepath.ToSlash(localPath))) {
+				t.Errorf("trimmed binary contains local path %q", localPath)
+			}
+		}
+		binaries = append(binaries, binary)
+	}
+
+	if !bytes.Equal(binaries[0], binaries[1]) {
+		t.Error("trimmed binaries built in different directories are not identical")
+	}
+	if config.GOOS() != "darwin" {
+		files := trimPathDWARFFiles(t, filepath.Join(root, "a.out"), config.GOOS())
+		headerPath := "/_/example.com/dependency@v1.2.3/include/shared.h"
+		if config.GOOS() == "windows" {
+			headerPath = "//_/_/example.com/dependency@v1.2.3/include/shared.h"
+		}
+		for _, want := range []string{
+			"example.com/trimpath/main.go",
+			"example.com/dependency@v1.2.3/subpackage/dependency.go",
+			headerPath,
+		} {
+			if !slices.Contains(files, want) {
+				t.Errorf("missing DWARF path %q in %v", want, files)
+			}
+		}
+		for _, file := range files {
+			if strings.Contains(file, filepath.ToSlash(root)) || strings.Count(file, "example.com/") > 1 {
+				t.Errorf("invalid DWARF path %q", file)
+			}
+		}
+	}
+
+	dir := filepath.Join(root, "a")
+	for _, trim := range []bool{false, true} {
+		outpath := filepath.Join(root, "nodebug.out")
+		args := []string{"build", "-no-debug", "-o", outpath}
+		if trim {
+			args = append(args, "-trimpath")
+		}
+		cmd := trimPathCommand(t, dir, append(args, ".")...)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("build failed: %v\n%s", err, output)
+		}
+		binary, err := os.ReadFile(outpath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		containsPath := bytes.Contains(binary, []byte(dir)) || bytes.Contains(binary, []byte(filepath.ToSlash(dir)))
+		if containsPath == trim {
+			t.Errorf("trimpath=%v: contains local __FILE__ path=%v", trim, containsPath)
+		}
+	}
+}
+
+func TestTrimPathStackSizes(t *testing.T) {
+	dir := t.TempDir()
+	source := `package main
+func main() {
+	done := make(chan int)
+	go func() { done <- 42 }()
+	println(<-done)
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, trim := range []bool{false, true} {
+		t.Run(fmt.Sprintf("trimpath=%v", trim), func(t *testing.T) {
+			outpath := filepath.Join(dir, "main.elf")
+			args := []string{"build", "-target=pico2", "-o", outpath}
+			if trim {
+				args = append(args, "-trimpath")
+			}
+			cmd := trimPathCommand(t, dir, append(args, "main.go")...)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("build failed: %v\n%s", err, output)
+			}
+			file, err := elf.Open(outpath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			if section := file.Section(".tinygo_stacksizes"); section == nil || section.Size == 0 {
+				t.Fatal("missing automatic stack-size data")
+			}
+			binary, err := os.ReadFile(outpath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(binary, []byte("task_stack.go")) {
+				t.Fatal("missing stack-size source file")
+			}
+			sourceDir := filepath.Join(goenv.Get("TINYGOROOT"), "src")
+			containsPath := bytes.Contains(binary, []byte(sourceDir)) || bytes.Contains(binary, []byte(filepath.ToSlash(sourceDir)))
+			if containsPath == trim {
+				t.Errorf("trimpath=%v: contains local runtime source directory=%v", trim, containsPath)
+			}
+		})
+	}
+}
+
+func trimPathCommand(t *testing.T, dir string, args ...string) *exec.Cmd {
+	t.Helper()
+	options := optionsFromTarget(*testTarget, sema)
+	if options.Target != "" {
+		args = slices.Insert(args, 1, "-target="+options.Target)
+	}
+	cmd := exec.Command(os.Args[0], append([]string{"test-main"}, args...)...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"TINYGOROOT="+goenv.Get("TINYGOROOT"),
+		"GOPATH="+goenv.Get("GOPATH"),
+		"GOOS="+options.GOOS,
+		"GOARCH="+options.GOARCH,
+		"GOARM="+options.GOARM,
+	)
+	return cmd
+}
+
+func trimPathDWARFFiles(t *testing.T, filename, goos string) []string {
+	t.Helper()
+	f, err := os.Open(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	var data *dwarf.Data
+	switch goos {
+	case "windows":
+		file, parseErr := pe.NewFile(f)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		data, err = file.DWARF()
+	case "wasip1", "wasip2", "js":
+		file, parseErr := wasm.Parse(f)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		data, err = file.DWARF()
+	default:
+		file, parseErr := elf.NewFile(f)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		data, err = file.DWARF()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var files []string
+	reader := data.Reader()
+	for {
+		entry, err := reader.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if entry == nil {
+			break
+		}
+		if entry.Tag != dwarf.TagCompileUnit {
+			continue
+		}
+		lines, err := data.LineReader(entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lines == nil {
+			continue
+		}
+		var line dwarf.LineEntry
+		for {
+			if err := lines.Next(&line); err != nil {
+				if err != io.EOF {
+					t.Fatal(err)
+				}
+				break
+			}
+		}
+		for _, file := range lines.Files() {
+			if file != nil {
+				files = append(files, strings.ReplaceAll(file.Name, "\\", "/"))
+			}
+		}
+	}
+	return files
+}
+
+func TestTrimPathTestPackages(t *testing.T) {
+	options := optionsFromTarget(*testTarget, sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.GOOS() == "darwin" {
+		t.Skip("Mach-O executables keep DWARF in separate object files")
+	}
+	for _, externalOnly := range []bool{false, true} {
+		dir := t.TempDir()
+		files := map[string]string{
+			"go.mod":           "module example.com/pkg_test\n\ngo 1.23\n",
+			"external_test.go": "package pkg_test\nimport \"testing\"\nfunc TestPath(t *testing.T) { t.Log(\"path\") }\n",
+		}
+		if !externalOnly {
+			files["pkg.go"] = "package pkg\nvar Value = 1\n"
+		}
+		for name, data := range files {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		outpath := filepath.Join(dir, "test.out")
+		cmd := trimPathCommand(t, dir, "test", "-trimpath", "-c", "-o", outpath, ".")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("test build failed: %v\n%s", err, output)
+		}
+		got := trimPathDWARFFiles(t, outpath, config.GOOS())
+		if !slices.Contains(got, "example.com/pkg_test/external_test.go") {
+			t.Errorf("externalOnly=%v: incorrect test paths: %v", externalOnly, got)
+		}
+		if !slices.Contains(got, "_testmain.go") {
+			t.Errorf("externalOnly=%v: missing generated test main path", externalOnly)
+		}
+		for _, file := range got {
+			if filepath.IsAbs(filepath.FromSlash(file)) && !strings.HasPrefix(file, "/_/") && !strings.HasPrefix(file, "//_/_/") {
+				t.Errorf("externalOnly=%v: untrimmed test path %q", externalOnly, file)
+			}
+		}
+	}
+}
 
 func TestBuild(t *testing.T) {
 	t.Parallel()
@@ -1572,6 +1835,11 @@ func TestMain(m *testing.M) {
 				// Don't print another error message here.
 				os.Exit(1)
 			}
+			os.Exit(0)
+		case "test-main":
+			os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+			main()
 			os.Exit(0)
 		}
 	}

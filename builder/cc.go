@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,6 +21,10 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"tinygo.org/x/go-llvm"
 )
+
+type cFileCompileConfig struct {
+	recordedPath string
+}
 
 // compileAndCacheCFile compiles a C or assembly file using a build cache.
 // Compiling the same file again (if nothing changed, including included header
@@ -56,7 +61,7 @@ import (
 //     depfile but without invalidating its name. For this reason, the depfile is
 //     written on each new compilation (even when it seems unnecessary). However, it
 //     could in rare cases lead to a stale file fetched from the cache.
-func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands func(string, ...string)) (string, error) {
+func compileAndCacheCFile(abspath, tmpdir string, cflags []string, compileConfig *cFileCompileConfig, printCommands func(string, ...string)) (string, error) {
 	// Hash input file.
 	fileHash, err := hashFile(abspath)
 	if err != nil {
@@ -68,16 +73,22 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 	defer unlock()
 
 	// Create cache key for the dependencies file.
+	recordedPath := ""
+	if compileConfig != nil {
+		recordedPath = compileConfig.recordedPath
+	}
 	buf, err := json.Marshal(struct {
-		Path        string
-		Hash        string
-		Flags       []string
-		LLVMVersion string
+		Path         string
+		Hash         string
+		Flags        []string
+		RecordedPath string
+		LLVMVersion  string
 	}{
-		Path:        abspath,
-		Hash:        fileHash,
-		Flags:       cflags,
-		LLVMVersion: llvm.Version,
+		Path:         abspath,
+		Hash:         fileHash,
+		Flags:        cflags,
+		RecordedPath: recordedPath,
+		LLVMVersion:  llvm.Version,
 	})
 	if err != nil {
 		panic(err) // shouldn't happen
@@ -124,7 +135,17 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 	depTmpFile.Close()
 	flags := append([]string{}, cflags...)                                                 // copy cflags
 	flags = append(flags, "-MD", "-MV", "-MTdeps", "-MF", depTmpFile.Name(), "-flto=thin") // autogenerate dependencies
-	flags = append(flags, "-c", "-o", objTmpFile.Name(), abspath)
+	// Match cmd/go/internal/work/exec.go's ccompile directory in both modes.
+	workingDir := filepath.Dir(abspath)
+	flags = append(flags, "-working-directory="+workingDir)
+	if compileConfig != nil {
+		seed := sha512.Sum512_224([]byte(compileConfig.recordedPath))
+		flags = append(flags,
+			"-fdebug-compilation-dir="+path.Dir(compileConfig.recordedPath),
+			"-frandom-seed="+hex.EncodeToString(seed[:]),
+		)
+	}
+	flags = append(flags, "-c", "-o", objTmpFile.Name(), filepath.Base(abspath))
 	if strings.ToLower(filepath.Ext(abspath)) == ".s" {
 		// If this is an assembly file (.s or .S, lowercase or uppercase), then
 		// we'll need to add -Qunused-arguments because many parameters are
@@ -144,6 +165,11 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 	dependencyPaths, err := readDepFile(depTmpFile.Name())
 	if err != nil {
 		return "", err
+	}
+	for i, dependencyPath := range dependencyPaths {
+		if !filepath.IsAbs(dependencyPath) {
+			dependencyPaths[i] = filepath.Join(workingDir, dependencyPath)
+		}
 	}
 	dependencyPaths = append(dependencyPaths, abspath) // necessary for .s files
 	dependencySet := make(map[string]struct{}, len(dependencyPaths))
