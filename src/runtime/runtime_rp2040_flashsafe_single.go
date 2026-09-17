@@ -4,11 +4,11 @@ package runtime
 
 import "runtime/interrupt"
 
-func rp2040EnterFlashSafeSection() interrupt.State {
-	return interrupt.Disable()
+func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
+	return interrupt.Disable(), false
 }
 
-func rp2040ExitFlashSafeSection(state interrupt.State) {
+func rp2040ExitFlashSafeSection(state interrupt.State, _ bool) {
 	interrupt.Restore(state)
 }
 

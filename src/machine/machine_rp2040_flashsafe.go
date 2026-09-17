@@ -14,7 +14,7 @@ import (
 )
 
 //go:linkname rp2040EnterFlashSafeSection runtime.rp2040EnterFlashSafeSection
-func rp2040EnterFlashSafeSection() interrupt.State
+func rp2040EnterFlashSafeSection() (interrupt.State, bool)
 
 //go:linkname rp2040ExitFlashSafeSection runtime.rp2040ExitFlashSafeSection
-func rp2040ExitFlashSafeSection(state interrupt.State)
+func rp2040ExitFlashSafeSection(state interrupt.State, multicore bool)
