@@ -12,6 +12,7 @@ import (
 	"unsafe"
 )
 
+// Commands sent to the other core through the SIO FIFO. They start at 1.
 const (
 	rp2SIOFIFOCommandGC uint32 = iota + 1
 	rp2SIOFIFOCommandFlashSafe
@@ -289,13 +290,7 @@ var (
 	atomicsLock   = spinLock{id: 22}
 	futexLock     = spinLock{id: 23}
 
-	// flashSafeLock serializes RP2040 flash-safe Enter/Exit so that only one
-	// core owns the flash-safe state machine at a time. The other core can
-	// still participate as a victim through the FIFO interrupt while spinning
-	// on this lock.
-	//
-	// It is defined here with the other RP2 spinLocks so spinLock IDs remain
-	// visible in one place.
+	// flashSafeLock is used for RP2040-specific XIP operations.
 	flashSafeLock = spinLock{id: 24}
 )
 
