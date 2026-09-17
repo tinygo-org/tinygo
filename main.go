@@ -1785,6 +1785,7 @@ func main() {
 	target := flag.String("target", "", "chip/board name or JSON target specification file")
 	buildMode := flag.String("buildmode", "", "build mode to use (default, c-shared, wasi-legacy)")
 	buildVCS := flag.String("buildvcs", "auto", "whether to stamp version control information (true, false, auto)")
+	trimPath := flag.Bool("trimpath", false, "remove all file system paths from the resulting executable")
 	var stackSize uint64
 	flag.Func("stack-size", "goroutine stack size (if unknown at compile time)", func(s string) error {
 		size, err := bytesize.Parse(s)
@@ -1920,6 +1921,7 @@ func main() {
 		Target:                  *target,
 		BuildMode:               *buildMode,
 		BuildVCS:                *buildVCS,
+		TrimPath:                *trimPath,
 		StackSize:               stackSize,
 		Opt:                     *opt,
 		GC:                      *gc,

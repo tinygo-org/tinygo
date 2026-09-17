@@ -1,0 +1,1 @@
+#define RELATIVE_VALUE 42

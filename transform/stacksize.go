@@ -81,9 +81,13 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 				},
 			},
 		})
+		sourceDir := ""
+		if !config.TrimPath() {
+			sourceDir = filepath.Join(goenv.Get("TINYGOROOT"), "src")
+		}
 		diglobal := dibuilder.CreateGlobalVariableExpression(llvm.Metadata{}, llvm.DIGlobalVariableExpression{
 			Name: "internal/task.stackSizes",
-			File: dibuilder.CreateFile("internal/task/task_stack.go", filepath.Join(goenv.Get("TINYGOROOT"), "src")),
+			File: dibuilder.CreateFile("internal/task/task_stack.go", sourceDir),
 			Line: 1,
 			Type: ditype,
 			Expr: dibuilder.CreateExpression(nil),

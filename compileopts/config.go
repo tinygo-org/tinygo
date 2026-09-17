@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -57,6 +58,26 @@ func (c *Config) BuildMode() string {
 		return c.Target.BuildMode
 	}
 	return "default"
+}
+
+// TrimPath reports whether local file system paths must be removed from the
+// output.
+func (c *Config) TrimPath() bool {
+	return c.Options.TrimPath
+}
+
+const (
+	CSourcePathRoot        = "/_"
+	CSourcePathRootWindows = "//_/_"
+)
+
+// CSourcePath avoids relative DWARF paths being joined to DW_AT_comp_dir.
+// See go.dev/src/cmd/go/internal/work/exec.go (Builder.ccompile).
+func (c *Config) CSourcePath(filename string) string {
+	if c.GOOS() == "windows" {
+		return "/" + path.Join(CSourcePathRootWindows, filepath.ToSlash(filename))
+	}
+	return path.Join(CSourcePathRoot, filepath.ToSlash(filename))
 }
 
 // Features returns a list of features this CPU supports. For example, for a
@@ -336,6 +357,9 @@ func (c *Config) LibraryPath(name string) string {
 	if c.LibcNeedsMalloc() {
 		options += "+malloc"
 	}
+	if c.TrimPath() {
+		options += "+trimpath-v1"
+	}
 
 	// No precompiled library found. Determine the path name that will be used
 	// in the build cache.
@@ -386,6 +410,13 @@ func (c *Config) CFlags(libclang bool) []string {
 	if c.GC() == "boehm" {
 		cflags = append(cflags,
 			"-I"+filepath.Join(goenv.Get("TINYGOROOT"), "lib", "bdwgc", "include"),
+		)
+	}
+	if c.TrimPath() {
+		cflags = append(cflags,
+			"-ffile-prefix-map="+goenv.Get("TINYGOROOT")+"="+c.CSourcePath("github.com/tinygo-org/tinygo"),
+			"-ffile-prefix-map="+goenv.Get("GOCACHE")+"="+c.CSourcePath("tinygo-cache"),
+			"-fdebug-compilation-dir=.",
 		)
 	}
 	// Always emit debug information. It is optionally stripped at link time.
