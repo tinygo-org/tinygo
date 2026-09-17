@@ -27,7 +27,7 @@ const (
 	c6PwDetSarPowerControlBit = uint32(1 << 23)
 )
 
-var c6PwDetConfReg = (*volatile.Register32)(unsafe.Pointer(c6AnaConfigReg))
+var c6PwDetConfReg = (*volatile.Register32)(unsafe.Pointer(c6PwDetConfigReg))
 
 // InitADC initialises the APB_SARADC and Modem/ADC peripheral on ESP32-C6.
 // On C6 the clock/reset gating moved to PCR (not SYSTEM as on C3), and the
@@ -35,14 +35,13 @@ var c6PwDetConfReg = (*volatile.Register32)(unsafe.Pointer(c6AnaConfigReg))
 func InitADC() {
 	// Reset and enable the SARADC bus clock via PCR.
 	esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
 	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(1)
 	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(0)
 	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(1)
 	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(0)
 
-	// Select clock source 2 (XTAL), divider = 1, no fractional.
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(2)
+	// Select clock source 1 (PLL_F80M), divider = 1, no fractional.
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(1)
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_NUM(1)
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_B(0)
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_A(0)
