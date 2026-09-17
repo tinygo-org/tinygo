@@ -43,7 +43,7 @@ func handleSIOFifoInterruptCore0(intr interrupt.Interrupt) {
 	case rp2SIOFIFOCommandGC:
 		gcInterruptHandler(0)
 	case rp2SIOFIFOCommandFlashSafe:
-		rp2FlashSafeInterruptHandler(0)
+		rp2FlashSafeInterruptHandler()
 	}
 }
 
@@ -56,6 +56,6 @@ func handleSIOFifoInterruptCore1(intr interrupt.Interrupt) {
 	case rp2SIOFIFOCommandGC:
 		gcInterruptHandler(1)
 	case rp2SIOFIFOCommandFlashSafe:
-		rp2FlashSafeInterruptHandler(1)
+		rp2FlashSafeInterruptHandler()
 	}
 }
