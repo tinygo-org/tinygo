@@ -10,27 +10,18 @@ import (
 	_ "unsafe" // required for //go:section
 )
 
+// Values of rp2040FlashSafeState.
 const (
-	rp2040FlashSafeIdle uint8 = iota
-	rp2040FlashSafeLocked
-	rp2040FlashSafeRelease
+	rp2040FlashSafeIdle    uint8 = iota // not in a flash-safe section, or the other core has resumed
+	rp2040FlashSafeLocked               // the other core is waiting in RAM
+	rp2040FlashSafeRelease              // flash operation complete; the other core may resume
 )
 
-// rp2040FlashSafeState is used to synchronize the core that performs a flash
-// operation with the other core that must stop executing from XIP flash.
+// rp2040FlashSafeState synchronizes both cores during flash operations.
 var rp2040FlashSafeState volatile.Register8
 
-// rp2040EnterFlashSafeSection enters a section in which RP2040 flash operations
-// may temporarily disable XIP.
-//
-// Flash operations must not be called from an interrupt handler or while
-// interrupts are disabled.
-//
-// The multicore path serializes flash-safe initiators, then disables local
-// interrupts before asking the other core to park. Keeping local interrupts
-// disabled while waiting for the acknowledgement prevents a GC stop-the-world
-// interrupt from blocking this core while the other core is parked in the
-// flash-safe handler.
+// rp2040EnterFlashSafeSection enters a section where flash operations may disable XIP.
+// It must not be called from an interrupt handler or with interrupts disabled.
 func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
 	multicore := secondaryCoresStarted
 	if !multicore {
@@ -58,8 +49,6 @@ func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
 	return state, true
 }
 
-// rp2040ExitFlashSafeSection exits a section entered by
-// rp2040EnterFlashSafeSection.
 func rp2040ExitFlashSafeSection(state interrupt.State, multicore bool) {
 	if multicore {
 		rp2040FlashSafeState.Set(rp2040FlashSafeRelease)
@@ -76,18 +65,14 @@ func rp2040ExitFlashSafeSection(state interrupt.State, multicore bool) {
 }
 
 func rp2040FlashSafePauseCore() {
-	// RP2040 SIO FIFO writes to the other core.
+	// Values written to FIFO_WR are received by the other core.
 	rp.SIO.FIFO_WR.Set(rp2SIOFIFOCommandFlashSafe)
 	arm.Asm("sev")
 }
 
-// rp2FlashSafeInterruptHandler runs on the other core while this core is
-// performing a flash operation that temporarily disables XIP.
-//
-// This function MUST be placed in RAM (.ramfuncs section). During the
-// flash operation the QSPI flash is in non-XIP mode and instruction
-// fetches from the 0x10000000 region will fail. The wait loop below
-// runs entirely from RAM so that the parked core can keep executing.
+// rp2FlashSafeInterruptHandler waits in RAM with interrupts disabled
+// while XIP is unavailable.
+// See RP2040 datasheet section 2.6.3 for XIP access during flash operations.
 //
 //go:section .ramfuncs
 func rp2FlashSafeInterruptHandler() {
@@ -100,9 +85,8 @@ func rp2FlashSafeInterruptHandler() {
 		arm.Asm("wfe")
 	}
 
-	// Publish Idle before restoring interrupts. The initiator spins for Idle
-	// with interrupts disabled, so taking a pending GC interrupt first would
-	// deadlock: it would wait for an ACK the initiator cannot send.
+	// Set Idle before restoring interrupts to avoid deadlocking with
+	// a pending GC interrupt.
 	rp2040FlashSafeState.Set(rp2040FlashSafeIdle)
 	arm.Asm("sev")
 

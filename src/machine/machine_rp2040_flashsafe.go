@@ -1,10 +1,7 @@
 //go:build tinygo && rp2040
 
-// "Flash safe" follows the RP2040/Pico SDK terminology: flash operations
-// must run while the other core is not executing from XIP flash.
-//
-// Use linkname to call runtime hooks from package machine without creating
-// an import cycle.
+// "Flash safe" is RP2040/Pico SDK terminology: flash operations must run
+// while the other core is not executing from XIP flash.
 
 package machine
 
@@ -12,6 +9,9 @@ import (
 	"runtime/interrupt"
 	_ "unsafe"
 )
+
+// The flash-safe hooks are implemented in package runtime and accessed via
+// linkname to avoid an import cycle.
 
 //go:linkname rp2040EnterFlashSafeSection runtime.rp2040EnterFlashSafeSection
 func rp2040EnterFlashSafeSection() (interrupt.State, bool)

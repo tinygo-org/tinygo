@@ -3,5 +3,5 @@
 package runtime
 
 func rp2FlashSafeInterruptHandler() {
-	// No-op on RP2350. RP2350 flash-safe handling is intentionally unchanged.
+	// No-op to match the RP2040 interface.
 }
