@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,6 +21,10 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 	"tinygo.org/x/go-llvm"
 )
+
+type cFileCompileConfig struct {
+	recordedPath string
+}
 
 // compileAndCacheCFile compiles a C or assembly file using a build cache.
 // Compiling the same file again (if nothing changed, including included header
@@ -56,7 +61,7 @@ import (
 //     depfile but without invalidating its name. For this reason, the depfile is
 //     written on each new compilation (even when it seems unnecessary). However, it
 //     could in rare cases lead to a stale file fetched from the cache.
-func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands func(string, ...string)) (string, error) {
+func compileAndCacheCFile(abspath, tmpdir string, cflags []string, compileConfig *cFileCompileConfig, printCommands func(string, ...string)) (string, error) {
 	// Hash input file.
 	fileHash, err := hashFile(abspath)
 	if err != nil {
@@ -68,16 +73,22 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 	defer unlock()
 
 	// Create cache key for the dependencies file.
+	recordedPath := ""
+	if compileConfig != nil {
+		recordedPath = compileConfig.recordedPath
+	}
 	buf, err := json.Marshal(struct {
-		Path        string
-		Hash        string
-		Flags       []string
-		LLVMVersion string
+		Path         string
+		Hash         string
+		Flags        []string
+		RecordedPath string
+		LLVMVersion  string
 	}{
-		Path:        abspath,
-		Hash:        fileHash,
-		Flags:       cflags,
-		LLVMVersion: llvm.Version,
+		Path:         abspath,
+		Hash:         fileHash,
+		Flags:        cflags,
+		RecordedPath: recordedPath,
+		LLVMVersion:  llvm.Version,
 	})
 	if err != nil {
 		panic(err) // shouldn't happen
@@ -124,7 +135,26 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 	depTmpFile.Close()
 	flags := append([]string{}, cflags...)                                                 // copy cflags
 	flags = append(flags, "-MD", "-MV", "-MTdeps", "-MF", depTmpFile.Name(), "-flto=thin") // autogenerate dependencies
-	flags = append(flags, "-c", "-o", objTmpFile.Name(), abspath)
+	sourcePath := abspath
+	workingDir := ""
+	if compileConfig != nil {
+		workingDir = filepath.Dir(abspath)
+		// Keep relative flags based on the caller's directory before Clang
+		// changes to the source directory for a stable module name.
+		currentDir, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		flags = makeCCompilerPathsAbsolute(flags, currentDir)
+		seed := sha512.Sum512_224([]byte(compileConfig.recordedPath))
+		flags = append(flags,
+			"-working-directory="+workingDir,
+			"-fdebug-compilation-dir="+path.Dir(compileConfig.recordedPath),
+			"-frandom-seed="+hex.EncodeToString(seed[:]),
+		)
+		sourcePath = filepath.Base(abspath)
+	}
+	flags = append(flags, "-c", "-o", objTmpFile.Name(), sourcePath)
 	if strings.ToLower(filepath.Ext(abspath)) == ".s" {
 		// If this is an assembly file (.s or .S, lowercase or uppercase), then
 		// we'll need to add -Qunused-arguments because many parameters are
@@ -144,6 +174,13 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 	dependencyPaths, err := readDepFile(depTmpFile.Name())
 	if err != nil {
 		return "", err
+	}
+	if workingDir != "" {
+		for i, dependencyPath := range dependencyPaths {
+			if !filepath.IsAbs(dependencyPath) {
+				dependencyPaths[i] = filepath.Join(workingDir, dependencyPath)
+			}
+		}
 	}
 	dependencyPaths = append(dependencyPaths, abspath) // necessary for .s files
 	dependencySet := make(map[string]struct{}, len(dependencyPaths))
@@ -191,6 +228,44 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, printCommands
 	}
 
 	return outpath, nil
+}
+
+func makeCCompilerPathsAbsolute(flags []string, workingDir string) []string {
+	flags = append([]string(nil), flags...)
+	nextIsPath := false
+	for i, flag := range flags {
+		if nextIsPath {
+			if !filepath.IsAbs(flag) {
+				flags[i] = filepath.Join(workingDir, flag)
+			}
+			nextIsPath = false
+			continue
+		}
+		switch flag {
+		case "-I", "-L", "-F", "-isystem", "-iquote", "-idirafter", "-include", "-imacros", "-include-pch", "-isysroot", "--sysroot", "-resource-dir":
+			nextIsPath = true
+			continue
+		}
+		for _, prefix := range []string{
+			"-I",
+			"-L",
+			"-F",
+			"--sysroot=",
+			"-isysroot=",
+			"-resource-dir=",
+			"-fmodule-map-file=",
+			"-fmodules-cache-path=",
+		} {
+			if strings.HasPrefix(flag, prefix) {
+				path := strings.TrimPrefix(flag, prefix)
+				if !filepath.IsAbs(path) {
+					flags[i] = prefix + filepath.Join(workingDir, path)
+				}
+				break
+			}
+		}
+	}
+	return flags
 }
 
 // Create a cache path (a path in GOCACHE) to store the output of a compiler

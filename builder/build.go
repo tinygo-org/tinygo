@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"go/types"
 	"hash/crc32"
+	"io"
 	"maps"
 	"math/bits"
 	"os"
@@ -208,6 +209,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		RelocationModel: config.RelocationModel(),
 		SizeLevel:       sizeLevel,
 		TinyGoVersion:   goenv.Version(),
+		TrimPath:        config.TrimPath(),
 
 		Scheduler:          config.Scheduler(),
 		AutomaticStackSize: config.AutomaticStackSize(),
@@ -324,7 +326,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 						}
 					}
 
-					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.OriginalDir(), tmpdir, compilerConfig)
+					job.result, err = createEmbedObjectFile(string(data), hexSum, name, pkg.RecordedDir(), tmpdir, compilerConfig)
 					return err
 				},
 			}
@@ -358,7 +360,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					CompilerBuildID:  string(compilerBuildID),
 					LLVMVersion:      llvm.Version,
 					Config:           compilerConfig,
-					CFlags:           pkg.CFlags,
+					CFlags:           pkg.RecordedCFlags(),
 					FileHashes:       make(map[string]string, len(pkg.FileHashes)),
 					EmbeddedFiles:    make(map[string]string, len(allFiles)),
 					Imports:          make(map[string]string, len(pkg.Pkg.Imports())),
@@ -366,7 +368,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					UndefinedGlobals: undefinedGlobals,
 				}
 				for filePath, hash := range pkg.FileHashes {
-					actionID.FileHashes[filePath] = hex.EncodeToString(hash)
+					actionID.FileHashes[pkg.RecordedPath(filePath)] = hex.EncodeToString(hash)
 				}
 				for name, files := range allFiles {
 					actionID.EmbeddedFiles[name] = files[0].Hash
@@ -425,9 +427,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				// These headers could be compiled in parallel but the benefit
 				// is so small that it's probably not worth parallelizing.
 				// Packages are compiled independently anyway.
-				for _, cgoHeader := range pkg.CGoHeaders {
+				packageNameHash := sha256.Sum256([]byte(pkg.ImportPath))
+				for i, cgoHeader := range pkg.CGoHeaders {
 					// Store the header text in a temporary file.
-					f, err := os.CreateTemp(tmpdir, "cgosnippet-*.c")
+					f, err := os.Create(filepath.Join(tmpdir, fmt.Sprintf("cgosnippet-%x-%d.c", packageNameHash, i)))
 					if err != nil {
 						return err
 					}
@@ -439,6 +442,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 					// Compile the code (if there is any) to bitcode.
 					flags := append([]string{"-c", "-emit-llvm", "-o", f.Name() + ".bc", f.Name()}, pkg.CFlags...)
+					if config.TrimPath() {
+						flags = append(flags,
+							pkg.DebugPrefixMap(),
+							"-ffile-prefix-map="+tmpdir+"="+pkg.RecordedDir(),
+						)
+					}
 					if config.Options.PrintCommands != nil {
 						config.Options.PrintCommands("clang", flags...)
 					}
@@ -774,7 +783,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
-				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(false), config.Options.PrintCommands)
+				var compileConfig *cFileCompileConfig
+				if config.TrimPath() {
+					compileConfig = &cFileCompileConfig{
+						recordedPath: filepath.ToSlash(filepath.Join("github.com/tinygo-org/tinygo", path)),
+					}
+				}
+				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(false), compileConfig, config.Options.PrintCommands)
 				job.result = result
 				return err
 			},
@@ -791,7 +806,17 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			job := &compileJob{
 				description: "compile CGo file " + abspath,
 				run: func(job *compileJob) error {
-					result, err := compileAndCacheCFile(abspath, tmpdir, pkg.CFlags, config.Options.PrintCommands)
+					cflags := pkg.CFlags
+					var compileConfig *cFileCompileConfig
+					if config.TrimPath() {
+						cflags = append(slices.Clone(cflags),
+							pkg.DebugPrefixMap(),
+						)
+						compileConfig = &cFileCompileConfig{
+							recordedPath: pkg.RecordedPath(abspath),
+						}
+					}
+					result, err := compileAndCacheCFile(abspath, tmpdir, cflags, compileConfig, config.Options.PrintCommands)
 					job.result = result
 					return err
 				},
@@ -844,11 +869,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		description:  "link",
 		dependencies: linkerDependencies,
 		run: func(job *compileJob) error {
-			for _, dependency := range job.dependencies {
+			for i, dependency := range job.dependencies {
 				if dependency.result == "" {
 					return errors.New("dependency without result: " + dependency.description)
 				}
-				ldflags = append(ldflags, dependency.result)
+				linkerInput := dependency.result
+				if config.TrimPath() && config.LinkerFlavor() == "darwin" {
+					linkerInput = filepath.Join(tmpdir, fmt.Sprintf("link-input-%d%s", i, filepath.Ext(linkerInput)))
+					if err := linkOrCopyFile(dependency.result, linkerInput); err != nil {
+						return err
+					}
+				}
+				ldflags = append(ldflags, linkerInput)
 			}
 			ldflags = append(ldflags, "-mllvm", "-mcpu="+config.CPU())
 			ldflags = append(ldflags, "-mllvm", "-mattr="+config.Features()) // needed for MIPS softfloat
@@ -863,6 +895,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 				ldflags = append(ldflags,
 					"--lto-O"+strconv.Itoa(speedLevel),
 					"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
+				if config.TrimPath() {
+					ldflags = append(ldflags, "-oso_prefix", tmpdir+string(filepath.Separator))
+				}
 			case "gnu":
 				// Options for the ELF linker.
 				ldflags = append(ldflags,
@@ -1111,6 +1146,34 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	return result, nil
 }
 
+func linkOrCopyFile(src, dst string) error {
+	if err := os.Link(src, dst); err == nil {
+		return nil
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(destination, source)
+	closeErr := destination.Close()
+	if copyErr != nil {
+		os.Remove(dst)
+		return copyErr
+	}
+	if closeErr != nil {
+		os.Remove(dst)
+		return closeErr
+	}
+	return nil
+}
+
 // createEmbedObjectFile creates a new object file with the given contents, for
 // the embed package.
 func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, compilerConfig *compiler.Config) (string, error) {
@@ -1200,7 +1263,8 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 		return "", err
 	}
 	defer machine.Dispose()
-	outfile, err := os.CreateTemp(tmpdir, "embed-"+hexSum+"-*.o")
+	sourcePathHash := sha256.Sum256([]byte(filepath.ToSlash(filepath.Join(sourceDir, sourceFile))))
+	outfile, err := os.Create(filepath.Join(tmpdir, "embed-"+hexSum+"-"+hex.EncodeToString(sourcePathHash[:8])+".o"))
 	if err != nil {
 		return "", err
 	}

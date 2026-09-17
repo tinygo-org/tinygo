@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -47,6 +48,94 @@ var supportedLinuxArches = map[string]string{
 }
 
 var sema = make(chan struct{}, runtime.NumCPU())
+
+func TestTrimPath(t *testing.T) {
+	root := t.TempDir()
+	var binaries [][]byte
+
+	for _, name := range []string{"a", "b"} {
+		dir := filepath.Join(root, name)
+		copyTrimPathTestModule(t, dir)
+
+		options := optionsFromTarget("", sema)
+		options.Directory = dir
+		options.TrimPath = true
+		config, err := builder.NewConfig(&options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outpath := filepath.Join(root, name+".out")
+		if err := Build(".", outpath, config); err != nil {
+			t.Fatal(err)
+		}
+		binary, err := os.ReadFile(outpath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, localPath := range []string{dir, goenv.Get("GOROOT"), goenv.Get("TINYGOROOT"), goenv.Get("GOCACHE")} {
+			if bytes.Contains(binary, []byte(localPath)) {
+				t.Errorf("trimmed binary contains local path %q", localPath)
+			}
+		}
+		binaries = append(binaries, binary)
+	}
+
+	if !bytes.Equal(binaries[0], binaries[1]) {
+		t.Error("trimmed binaries built in different directories are not identical")
+	}
+
+	dir := filepath.Join(root, "a")
+	options := optionsFromTarget("", sema)
+	options.Directory = dir
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outpath := filepath.Join(root, "untrimmed.out")
+	if err := Build(".", outpath, config); err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.ReadFile(outpath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(binary, []byte(dir)) {
+		t.Errorf("untrimmed binary does not contain local path %q", dir)
+	}
+}
+
+func TestTrimPathFlag(t *testing.T) {
+	cmd := exec.Command(os.Args[0], "test-main", "help", "-trimpath")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("tinygo help -trimpath failed: %v\n%s", err, output)
+	}
+}
+
+func copyTrimPathTestModule(t *testing.T, dst string) {
+	t.Helper()
+	for _, name := range []string{
+		"go.mod",
+		"main.go",
+		"main.c",
+		"data.txt",
+		"dependency/go.mod",
+		"dependency/include/shared.h",
+		"dependency/subpackage/dependency.c",
+		"dependency/subpackage/dependency.go",
+	} {
+		data, err := os.ReadFile(filepath.Join(TESTDATA, "trimpath", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(dst, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0o666); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 func TestBuild(t *testing.T) {
 	t.Parallel()
@@ -1511,6 +1600,11 @@ func TestMain(m *testing.M) {
 				// Don't print another error message here.
 				os.Exit(1)
 			}
+			os.Exit(0)
+		case "test-main":
+			os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+			main()
 			os.Exit(0)
 		}
 	}
