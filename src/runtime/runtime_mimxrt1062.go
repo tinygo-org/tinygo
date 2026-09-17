@@ -18,6 +18,15 @@ var _svectors [0]byte
 //go:extern _flexram_cfg
 var _flexram_cfg [0]byte
 
+//go:extern _sramfuncs
+var _sramfuncs [0]byte
+
+//go:extern _eramfuncs
+var _eramfuncs [0]byte
+
+//go:extern _framfuncs
+var _framfuncs [0]byte
+
 //export Reset_Handler
 func main() {
 
@@ -32,6 +41,9 @@ func main() {
 
 	// copy data/bss sections from flash to RAM
 	preinit()
+
+	// copy the .ramfuncs section to OCRAM
+	initRamFuncs()
 
 	// initialize cache and MPU
 	initCache()
@@ -96,6 +108,17 @@ func initSystem() {
 	}
 	nxp.RTWDOG.TOVAL.Set(0xFFFF)
 	nxp.RTWDOG.CS.Set((nxp.RTWDOG.CS.Get() & ^uint32(nxp.RTWDOG_CS_EN_Msk)) | nxp.RTWDOG_CS_UPDATE_Msk)
+}
+
+// initRamFuncs copies the .ramfuncs section to its OCRAM run address.
+// See machine_mimxrt1062_flash.go for the functions in this section.
+func initRamFuncs() {
+	src := uintptr(unsafe.Pointer(&_framfuncs))
+	dst := uintptr(unsafe.Pointer(&_sramfuncs))
+	length := uintptr(unsafe.Pointer(&_eramfuncs)) - dst
+	for i := uintptr(0); i < length; i += 4 {
+		*(*uint32)(unsafe.Pointer(dst + i)) = *(*uint32)(unsafe.Pointer(src + i))
+	}
 }
 
 func initPeripherals() {
