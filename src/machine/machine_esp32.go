@@ -407,6 +407,8 @@ func (p Pin) SetInterrupt(change PinChange, callback func(Pin)) error {
 		return setupPinInterruptErr
 	}
 
+	// Bit 2 is the PRO CPU interrupt enable. See ESP32 TRM section 6.13.1,
+	// register 6.30 GPIO_PINn_REG.
 	p.pinReg().Set(
 		(p.pinReg().Get() & ^uint32(esp.GPIO_PIN_INT_TYPE_Msk|esp.GPIO_PIN_INT_ENA_Msk)) |
 			uint32(change)<<esp.GPIO_PIN_INT_TYPE_Pos | uint32(4)<<esp.GPIO_PIN_INT_ENA_Pos)
