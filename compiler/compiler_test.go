@@ -402,6 +402,18 @@ func TestDarwinCgoImportDynamic(t *testing.T) {
 	if strings.Contains(ir, "@bad_remote") {
 		t.Error("a declaration was created for the remote symbol of a non-uintptr trampoline global")
 	}
+	if !strings.Contains(ir, "load i64, ptr @main.libc_misplaced_trampoline_addr") {
+		t.Error("a directive that shares a line with code was honored")
+	}
+	if strings.Contains(ir, "@misplaced_remote") {
+		t.Error("a declaration was created for the remote symbol of a misplaced directive")
+	}
+	if strings.Contains(ir, "@indented_remote") {
+		t.Error("an indented directive was honored")
+	}
+	if strings.Contains(ir, "@brace_remote") {
+		t.Error("a directive after code on a function line was honored")
+	}
 }
 
 // normalizeIR canonicalizes LLVM-version-specific IR spellings for comparison

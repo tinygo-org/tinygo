@@ -779,13 +779,19 @@ func (c *compilerContext) loadASTComments(pkg *loader.Package) {
 		for _, group := range file.Comments {
 			for _, comment := range group.List {
 				parts := strings.Fields(comment.Text)
-				if len(parts) >= 2 && parts[0] == "//go:cgo_import_dynamic" {
-					local, remote := parts[1], parts[1]
-					if len(parts) >= 3 {
-						remote = parts[2]
-					}
-					c.cgoImportDynamic[local] = remote
+				if len(parts) < 2 || parts[0] != "//go:cgo_import_dynamic" {
+					continue
 				}
+				// Accept a directive only in column 1. The gc compiler also
+				// accepts an indented directive on a line of its own.
+				if c.program.Fset.Position(comment.Slash).Column != 1 {
+					continue
+				}
+				local, remote := parts[1], parts[1]
+				if len(parts) >= 3 {
+					remote = parts[2]
+				}
+				c.cgoImportDynamic[local] = remote
 			}
 		}
 
