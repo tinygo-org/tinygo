@@ -353,6 +353,8 @@ func TestValidateWasmFunctionParameters(t *testing.T) {
 }
 
 func TestDarwinCgoImportDynamic(t *testing.T) {
+	t.Parallel()
+
 	options := &compileopts.Options{GOOS: "darwin", GOARCH: "arm64"}
 	mod, errs := testCompilePackage(t, options, "cgo-import-dynamic.go")
 	if len(errs) != 0 {
@@ -362,6 +364,10 @@ func TestDarwinCgoImportDynamic(t *testing.T) {
 		return
 	}
 	defer mod.Dispose()
+
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
 
 	ir := mod.String()
 	if !strings.Contains(ir, `declare void @"remote$INODE64"()`) {

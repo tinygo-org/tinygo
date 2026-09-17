@@ -4,44 +4,29 @@
 
 #include <fcntl.h>
 
+// sys/ioctl.h is not in lib/macos-minimal-sdk. Declare ioctl here.
 extern int ioctl(int fd, unsigned long request, ...);
 
-// Wrapper function because 'open' is a variadic function and variadic functions
-// use a different (incompatible) calling convention on darwin/arm64.
-// This function is referenced from the compiler, when it sees a
-// syscall.libc_open_trampoline function.
-int syscall_libc_open(const char *pathname, int flags, mode_t mode) {
-    return open(pathname, flags, mode);
+// Fixed-signature wrappers for the variadic libc imports. Variadic functions
+// take stack arguments on darwin/arm64. See darwinVariadicImports in
+// compiler/syscall.go.
+
+int syscall_libc_open(uintptr_t pathname, uintptr_t flags, uintptr_t mode) {
+    return open((const char *)pathname, (int)flags, (mode_t)mode);
 }
 
-// Wrapper for ioctl, which is variadic just like open and therefore also uses
-// an incompatible calling convention on darwin/arm64. Use uintptr_t arguments
-// to match the fixed-signature call made by tinygo_syscall below.
 int syscall_libc_ioctl(uintptr_t fd, uintptr_t request, uintptr_t arg) {
-    return ioctl((int)fd, request, (void *)arg);
+    return ioctl((int)fd, (unsigned long)request, (void *)arg);
 }
 
-// Wrappers for the remaining variadic libc functions that darwin syscall
-// wrappers import with //go:cgo_import_dynamic (see darwinVariadicImports in
-// compiler/syscall.go): of the symbols imported by the generated
-// zsyscall_darwin_*.go files in golang.org/x/sys/unix and the standard
-// library, exactly open, openat, fcntl, and ioctl are declared variadic in
-// the Darwin SDK headers (sys/fcntl.h and sys/ioctl.h). The tinygo_syscall*
-// functions below call through fixed-signature function pointers that pass
-// every argument in a register, while a variadic callee takes its variadic
-// arguments from the stack on darwin/arm64, so each of these needs a
-// fixed-signature wrapper. The uintptr_t parameters match the uintptr
-// arguments the Go syscall engine passes.
-
-// fcntl's third argument is an int for some commands and a pointer for
-// others; passing the raw pointer-sized value covers both.
+// The third fcntl argument is an int for some commands and a pointer for
+// other commands. The raw pointer-sized value is correct for both.
 int syscall_libc_fcntl(uintptr_t fd, uintptr_t cmd, uintptr_t arg) {
     return fcntl((int)fd, (int)cmd, (void *)arg);
 }
 
-// openat is invoked by x/sys through syscall6 with six arguments, the last
-// two of which are zero padding; the two extra register arguments are
-// harmless to a four-parameter callee.
+// x/sys calls openat through syscall6 with two trailing zero arguments. The
+// two extra register arguments are harmless to a four-parameter callee.
 int syscall_libc_openat(uintptr_t dirfd, uintptr_t pathname, uintptr_t flags, uintptr_t mode) {
     return openat((int)dirfd, (const char *)pathname, (int)flags, (mode_t)mode);
 }

@@ -525,8 +525,8 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 	// Extract the libc function name.
 	name := strings.TrimPrefix(strings.TrimSuffix(calledFn.Name(), "_trampoline"), "libc_")
 	if wrapper, ok := darwinVariadicImports[name]; ok {
-		// Variadic functions can't be called like a regular function, so use a
-		// wrapper implemented in C. See the comment on darwinVariadicImports.
+		// A variadic function does not use the standard calling convention.
+		// Use its C wrapper. See darwinVariadicImports.
 		name = wrapper
 	}
 	if b.GOARCH == "amd64" {
@@ -541,25 +541,8 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 	return b.createDarwinImportedFunctionAddr(name)
 }
 
-// darwinVariadicImports maps the variadic libc functions imported by Darwin
-// syscall wrappers to fixed-signature C wrappers defined in
-// src/runtime/os_darwin.c. The syscall engine calls an imported address
-// through a fixed-signature function pointer (tinygo_syscallX and friends in
-// src/runtime/os_darwin.c), which passes every argument in a register. A
-// variadic callee, however, takes its variadic arguments from the stack on
-// darwin/arm64, so calling one of these functions directly makes it read
-// garbage arguments (a direct ioctl call observably failed with EFAULT, and
-// a direct fcntl(F_SETFL) wrote garbage flags). This applies to both
-// trampoline flavors: the standard library's function-based pattern
-// (createDarwinFuncPCABI0Call above) and the address-global pattern used by
-// golang.org/x/sys (createDarwinCgoImportDynamicLoad below).
-//
-// The set comes from cross-referencing the symbols that darwin's generated
-// syscall wrappers import (the //go:cgo_import_dynamic directives in
-// zsyscall_darwin_*.go, both in golang.org/x/sys/unix and in the standard
-// library) against their Darwin SDK declarations: of those imports, exactly
-// open(2), openat(2), fcntl(2), and ioctl(2) are declared variadic (see
-// sys/fcntl.h and sys/ioctl.h, or lib/macos-minimal-sdk's copies).
+// darwinVariadicImports maps each variadic libc import to a fixed-signature C
+// wrapper in src/runtime/os_darwin.c. See sys/fcntl.h and sys/ioctl.h.
 var darwinVariadicImports = map[string]string{
 	"fcntl":  "syscall_libc_fcntl",
 	"ioctl":  "syscall_libc_ioctl",

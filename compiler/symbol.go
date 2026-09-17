@@ -774,19 +774,8 @@ func (c *compilerContext) fileForFunc(f *ssa.Function) *ast.File {
 // declaration and apply to the whole package.
 func (c *compilerContext) loadASTComments(pkg *loader.Package) {
 	for _, file := range pkg.Files {
-		// cgo_import_dynamic directives are file-level pragmas. Darwin's
-		// generated syscall wrappers use the local symbol to name an assembly
-		// trampoline and the remote symbol to name the actual dylib function.
-		// Like the gc compiler, accept all three operand forms:
-		//
-		//	//go:cgo_import_dynamic local [remote ["library"]]
-		//
-		// The remote symbol defaults to the local symbol when omitted. The
-		// library operand is not needed here (the linker resolves the symbol
-		// against the libraries it already links) and is ignored, so a library
-		// path containing spaces does not break parsing. A repeated local
-		// symbol keeps the last remote symbol, matching gc's behavior of
-		// simply recording each directive.
+		// Collect //go:cgo_import_dynamic local [remote ["library"]] directives.
+		// The remote symbol defaults to local. The library operand is ignored.
 		for _, group := range file.Comments {
 			for _, comment := range group.List {
 				parts := strings.Fields(comment.Text)
