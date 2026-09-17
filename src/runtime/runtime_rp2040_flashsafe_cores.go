@@ -23,6 +23,9 @@ var rp2040FlashSafeState volatile.Register8
 // rp2040EnterFlashSafeSection enters a section in which RP2040 flash operations
 // may temporarily disable XIP.
 //
+// Flash operations must not be called from an interrupt handler or while
+// interrupts are disabled.
+//
 // The multicore path serializes flash-safe initiators, then disables local
 // interrupts before asking the other core to park. Keeping local interrupts
 // disabled while waiting for the acknowledgement prevents a GC stop-the-world
