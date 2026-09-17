@@ -25,13 +25,15 @@ func initCache() {
 	nxp.MPU.SetRBAR(2, 0x00000000)
 	nxp.MPU.SetRASR(nxp.RGNSZ_1GB, nxp.PERM_FULL, nxp.EXTN_DEVICE, true, false, false, false, false)
 
-	// [3] ITCM: 512 KiB, +ACCESS, #NORMAL, +EXEC, -share, -cache, -buffer, -subregion
+	// [3] ITCM: 512 KiB, +ACCESS, #NORMAL (non-cacheable), +EXEC, -share, -subregion
+	// TEX 0b001 with C=0 B=0 is Normal non cacheable memory. TEX 0 is Strongly
+	// Ordered and unaligned accesses fault there. See Arm DDI 0403, PMSAv7.
 	nxp.MPU.SetRBAR(3, 0x00000000)
-	nxp.MPU.SetRASR(nxp.RGNSZ_512KB, nxp.PERM_FULL, nxp.EXTN_NORMAL, true, false, false, false, false)
+	nxp.MPU.SetRASR(nxp.RGNSZ_512KB, nxp.PERM_FULL, nxp.Extension(1), true, false, false, false, false)
 
-	// [4] DTCM: 512 KiB, +ACCESS, #NORMAL, +EXEC, -share, -cache, -buffer, -subregion
+	// [4] DTCM: 512 KiB, +ACCESS, #NORMAL (non-cacheable), +EXEC, -share, -subregion
 	nxp.MPU.SetRBAR(4, 0x20000000)
-	nxp.MPU.SetRASR(nxp.RGNSZ_512KB, nxp.PERM_FULL, nxp.EXTN_NORMAL, true, false, false, false, false)
+	nxp.MPU.SetRASR(nxp.RGNSZ_512KB, nxp.PERM_FULL, nxp.Extension(1), true, false, false, false, false)
 
 	// [5] RAM (AXI): 512 KiB, +ACCESS, #NORMAL, +EXEC, -share, +CACHE, +BUFFER, -subregion
 	nxp.MPU.SetRBAR(5, 0x20200000)
