@@ -48,7 +48,7 @@ func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
 		if i == core {
 			continue
 		}
-		rp2040FlashSafePauseCore(i)
+		rp2040FlashSafePauseCore()
 	}
 
 	for rp2040FlashSafeState.Get() != rp2040FlashSafeLocked {
@@ -75,7 +75,7 @@ func rp2040ExitFlashSafeSection(state interrupt.State, multicore bool) {
 	interrupt.Restore(state)
 }
 
-func rp2040FlashSafePauseCore(core uint32) {
+func rp2040FlashSafePauseCore() {
 	// RP2040 SIO FIFO writes to the other core.
 	rp.SIO.FIFO_WR.Set(rp2SIOFIFOCommandFlashSafe)
 	arm.Asm("sev")
@@ -90,7 +90,7 @@ func rp2040FlashSafePauseCore(core uint32) {
 // runs entirely from RAM so that the parked core can keep executing.
 //
 //go:section .ramfuncs
-func rp2FlashSafeInterruptHandler(core uint32) {
+func rp2FlashSafeInterruptHandler() {
 	state := interrupt.Disable()
 
 	rp2040FlashSafeState.Set(rp2040FlashSafeLocked)

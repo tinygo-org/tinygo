@@ -2,6 +2,6 @@
 
 package runtime
 
-func rp2FlashSafeInterruptHandler(uint32) {
+func rp2FlashSafeInterruptHandler() {
 	// No-op on RP2350. RP2350 flash-safe handling is intentionally unchanged.
 }
