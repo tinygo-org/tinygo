@@ -96,6 +96,10 @@ SECTIONS
   _heap_start = ORIGIN(RAM);
   _heap_end = ORIGIN(RAM) + LENGTH(RAM);
 
+  /* USB DMA region, the 4 KiB reserved above RAM. */
+  _usb_dma_start = ORIGIN(RAM) + LENGTH(RAM);
+  ASSERT((_usb_dma_start & 0x7FF) == 0, "_usb_dma_start must be 2 KiB aligned for ENDPTLISTADDR")
+
   _globals_start = _sdata;
   _globals_end = _ebss;
 

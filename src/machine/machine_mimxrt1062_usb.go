@@ -25,16 +25,20 @@ import (
 
 const NumberOfUSBEndpoints = 8
 
+//go:extern _usb_dma_start
+var _usb_dma_start [0]byte
+
 // Layout of the non-cacheable USB DMA region (4 KiB, see linker script).
-const (
-	usbRAMBase    uintptr = 0x2027F000
-	usbDQHBase            = usbRAMBase + 0x000 // 16 * 64 B, 2 KiB aligned
-	usbDTDBase            = usbRAMBase + 0x400 // 16 * 32 B
-	usbOutBufBase         = usbRAMBase + 0x600 // 8 * 64 B
-	usbInBufBase          = usbRAMBase + 0x800 // 8 * 64 B
-	usbEP0InBase          = usbRAMBase + 0xA00 // 256 B for EP0 IN control data
-	usbEP0InLen           = 256
+var (
+	usbRAMBase    = uintptr(unsafe.Pointer(&_usb_dma_start))
+	usbDQHBase    = usbRAMBase + 0x000 // 16 * 64 B, 2 KiB aligned
+	usbDTDBase    = usbRAMBase + 0x400 // 16 * 32 B
+	usbOutBufBase = usbRAMBase + 0x600 // 8 * 64 B
+	usbInBufBase  = usbRAMBase + 0x800 // 8 * 64 B
+	usbEP0InBase  = usbRAMBase + 0xA00 // 256 B for EP0 IN control data
 )
+
+const usbEP0InLen = 256
 
 // Endpoint queue head (dQH), 64 bytes.
 type usbDQH struct {
