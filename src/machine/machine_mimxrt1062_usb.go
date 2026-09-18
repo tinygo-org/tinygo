@@ -2,17 +2,8 @@
 
 package machine
 
-// USB device driver for the i.MX RT1062 (Teensy 4.x).
-//
-// The USB1 device controller reads one queue head (dQH) for each endpoint
-// direction and transfer descriptors (dTD). See the device data structures
-// section of the USB chapter in IMXRT1060RM.
-//
-// The dQH and dTD structures and the endpoint buffers are in a non cacheable
-// region at the top of OCRAM. The USB DMA cannot access DTCM.
-//
-// The controller runs at full speed (PORTSC1.PFSC). The machine/usb stack
-// assumes 64 byte endpoints.
+// USB device driver for the i.MX RT1062 (Teensy 4.x). See the device data
+// structures section of the USB chapter in IMXRT1060RM.
 
 import (
 	"device/arm"
@@ -28,7 +19,8 @@ const NumberOfUSBEndpoints = 8
 //go:extern _usb_dma_start
 var _usb_dma_start [0]byte
 
-// Layout of the non-cacheable USB DMA region (4 KiB, see linker script).
+// Layout of the non cacheable USB DMA region (4 KiB, see linker script).
+// The USB DMA cannot access DTCM, so the region is at the top of OCRAM.
 var (
 	usbRAMBase    = uintptr(unsafe.Pointer(&_usb_dma_start))
 	usbDQHBase    = usbRAMBase + 0x000 // 16 * 64 B, 2 KiB aligned
@@ -366,9 +358,8 @@ func initEndpoint(ep, config uint32) {
 
 	in := config&usb.EndpointIn != 0
 
-	// A repeated SET_CONFIGURATION can find a transfer still active. Stop the
-	// endpoint before the dQH and dTD writes below, and record a cancelled IN
-	// transfer so its completion callback runs.
+	// Stop the endpoint before the dQH and dTD writes below. Record a
+	// cancelled IN transfer so its completion callback runs.
 	if in && dtd(ep, true).token.Get()&dtdTokenActive != 0 {
 		usbTxCancelled |= 1 << ep
 	}
@@ -402,9 +393,8 @@ func initEndpoint(ep, config uint32) {
 	}
 }
 
-// SendUSBInPacket sends a packet for USB (interrupt in / bulk in).
-// It reports false when the data does not fit in one packet or when the
-// previous transfer on this endpoint is still active.
+// SendUSBInPacket sends a packet for USB (interrupt in / bulk in). It reports
+// false when the data does not fit or the previous transfer is still active.
 func SendUSBInPacket(ep uint32, data []byte) bool {
 	ep &= 0x7F
 	if ep != 0 {

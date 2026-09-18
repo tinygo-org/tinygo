@@ -111,8 +111,8 @@ func initPeripherals() {
 }
 
 func init() {
-	// InitSerial must run from a package init function (inside run()), after
-	// the heap is initialized: with -serial usb it allocates for the USB stack.
+	// InitSerial must run from a package init function, after the heap is
+	// initialized. With -serial usb it allocates for the USB stack.
 	machine.InitSerial()
 }
 
