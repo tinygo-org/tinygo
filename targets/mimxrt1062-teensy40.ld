@@ -2,7 +2,7 @@ MEMORY
 {
   ITCM      (rwx): ORIGIN = 0x00000000, LENGTH = 0x00080000 /*  512 Kib */
   DTCM      (rwx): ORIGIN = 0x20000000, LENGTH = 0x00080000 /*  512 Kib */
-  RAM       (rwx): ORIGIN = 0x20200000, LENGTH = 0x00080000 /*  512 Kib */
+  RAM       (rwx): ORIGIN = 0x20200000, LENGTH = 0x0007F000 /*  512 KiB minus 4 KiB reserved for USB DMA descriptors/buffers */
   FLASH      (rx): ORIGIN = 0x60000000, LENGTH = 0x001FFFF0 /* 1984 Kib */
 }
 

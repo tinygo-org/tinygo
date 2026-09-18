@@ -47,5 +47,10 @@ func initCache() {
 	nxp.MPU.SetRBAR(7, 0x60000000)
 	nxp.MPU.SetRASR(nxp.RGNSZ_2MB, nxp.PERM_FULL, nxp.EXTN_NORMAL, true, false, true, true, false)
 
+	// [8] USB DMA region, top 4 KiB of OCRAM, #NORMAL non cacheable, -EXEC.
+	// It holds the USB dQH and dTD descriptors and the endpoint buffers.
+	nxp.MPU.SetRBAR(8, 0x2027F000)
+	nxp.MPU.SetRASR(nxp.RGNSZ_4KB, nxp.PERM_FULL, nxp.Extension(1), false, false, false, false, false)
+
 	nxp.MPU.Enable(true)
 }
