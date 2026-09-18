@@ -778,6 +778,9 @@ func (c *compilerContext) loadASTComments(pkg *loader.Package) {
 		// The remote symbol defaults to local. The library operand is ignored.
 		for _, group := range file.Comments {
 			for _, comment := range group.List {
+				if !strings.HasPrefix(comment.Text, "//go:cgo_import_dynamic") {
+					continue
+				}
 				parts := strings.Fields(comment.Text)
 				if len(parts) < 2 || parts[0] != "//go:cgo_import_dynamic" {
 					continue

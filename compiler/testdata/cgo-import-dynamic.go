@@ -8,9 +8,6 @@ var libc_fcntl_trampoline_addr uintptr
 var libc_nolib_trampoline_addr uintptr
 var libc_self_trampoline_addr uintptr
 var libc_badtype_trampoline_addr uint32
-var libc_misplaced_trampoline_addr uintptr //go:cgo_import_dynamic libc_misplaced misplaced_remote "/usr/lib/libSystem.B.dylib"
-var libc_indented_trampoline_addr uintptr
-var libc_brace_trampoline_addr uintptr
 
 //go:cgo_import_dynamic libc_test remote$INODE64 "/usr/lib/libSystem.B.dylib"
 //go:cgo_import_dynamic libc_ioctl ioctl "/usr/lib/libSystem.B.dylib"
@@ -51,17 +48,4 @@ func loadImportedSelfAddress() uintptr {
 
 func loadImportedBadTypeAddress() uint32 {
 	return libc_badtype_trampoline_addr
-}
-
-func loadMisplacedAddress() uintptr {
-	return libc_misplaced_trampoline_addr
-}
-
-func loadIndentedAddress() uintptr {
-	//go:cgo_import_dynamic libc_indented indented_remote "/usr/lib/libSystem.B.dylib"
-	return libc_indented_trampoline_addr
-}
-
-func loadBraceAddress() uintptr { //go:cgo_import_dynamic libc_brace brace_remote "/usr/lib/libSystem.B.dylib"
-	return libc_brace_trampoline_addr
 }

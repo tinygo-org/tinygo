@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -402,17 +403,37 @@ func TestDarwinCgoImportDynamic(t *testing.T) {
 	if strings.Contains(ir, "@bad_remote") {
 		t.Error("a declaration was created for the remote symbol of a non-uintptr trampoline global")
 	}
-	if !strings.Contains(ir, "load i64, ptr @main.libc_misplaced_trampoline_addr") {
-		t.Error("a directive that shares a line with code was honored")
+}
+
+// TestDarwinCgoImportDynamicErrors checks the compile errors for misplaced
+// directives and for a remote symbol that collides with a global variable.
+func TestDarwinCgoImportDynamicErrors(t *testing.T) {
+	t.Parallel()
+
+	// Read the expected errors from the test file.
+	var expected []string
+	data, err := os.ReadFile("testdata/cgo-import-dynamic-errors.go")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(ir, "@misplaced_remote") {
-		t.Error("a declaration was created for the remote symbol of a misplaced directive")
+	for line := range strings.SplitSeq(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
+		if after, ok := strings.CutPrefix(line, "// ERROR: "); ok {
+			expected = append(expected, after)
+		}
 	}
-	if strings.Contains(ir, "@indented_remote") {
-		t.Error("an indented directive was honored")
+
+	options := &compileopts.Options{GOOS: "darwin", GOARCH: "arm64"}
+	mod, errs := testCompilePackage(t, options, "cgo-import-dynamic-errors.go")
+	defer mod.Dispose()
+
+	var actual []string
+	for _, err := range errs {
+		actual = append(actual, err.(types.Error).Msg)
 	}
-	if strings.Contains(ir, "@brace_remote") {
-		t.Error("a directive after code on a function line was honored")
+	slices.Sort(expected)
+	slices.Sort(actual)
+	if !slices.Equal(expected, actual) {
+		t.Errorf("expected errors %q, got %q", expected, actual)
 	}
 }
 

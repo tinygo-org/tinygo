@@ -4,6 +4,7 @@ package compiler
 // compiler builtins.
 
 import (
+	"go/token"
 	"go/types"
 	"strconv"
 	"strings"
@@ -538,7 +539,7 @@ func (b *builder) createDarwinFuncPCABI0Call(instr *ssa.CallCommon) llvm.Value {
 		}
 	}
 
-	return b.createDarwinImportedFunctionAddr(name)
+	return b.createDarwinImportedFunctionAddr(name, instr.Pos())
 }
 
 // darwinVariadicImports maps each variadic libc import to a fixed-signature C
@@ -579,20 +580,28 @@ func (b *builder) createDarwinCgoImportDynamicLoad(unop *ssa.UnOp) llvm.Value {
 	local := strings.TrimSuffix(global.Name(), suffix)
 	remote, ok := b.cgoImportDynamic[local]
 	if !ok {
+		// Without a directive the global stays zero and the syscall would
+		// jump to address zero at run time. Report this at compile time.
+		b.addError(unop.Pos(), global.Name()+" has no //go:cgo_import_dynamic directive")
 		return llvm.Value{}
 	}
 	if wrapper, ok := darwinVariadicImports[remote]; ok {
 		remote = wrapper
 	}
 
-	return b.createDarwinImportedFunctionAddr(remote)
+	return b.createDarwinImportedFunctionAddr(remote, unop.Pos())
 }
 
-func (b *builder) createDarwinImportedFunctionAddr(name string) llvm.Value {
-	// The signature does not matter: the declaration is only used for its
-	// address, which is passed to a syscall implementation as a uintptr.
+func (b *builder) createDarwinImportedFunctionAddr(name string, pos token.Pos) llvm.Value {
+	// The signature does not matter. The declaration is only used for its
+	// address, which goes to the syscall implementation as a uintptr.
 	llvmFn := b.mod.NamedFunction(name)
 	if llvmFn.IsNil() {
+		if !b.mod.NamedGlobal(name).IsNil() {
+			// AddFunction would silently rename the new declaration.
+			b.addError(pos, "cgo_import_dynamic remote symbol "+name+" is already a global variable")
+			return llvm.Value{}
+		}
 		llvmFnType := llvm.FunctionType(b.ctx.VoidType(), nil, false)
 		llvmFn = llvm.AddFunction(b.mod, name, llvmFnType)
 	}
