@@ -1277,6 +1277,27 @@ func TestRuntimeFatal(t *testing.T) {
 	}
 }
 
+// Test that the program can read stdin when the caller supplies it.
+func TestStdin(t *testing.T) {
+	t.Parallel()
+
+	options := optionsFromTarget("", sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output := &bytes.Buffer{}
+	_, err = buildAndRun(TESTDATA+"/stdin.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		cmd.Stdin = strings.NewReader("hello\nworld\n")
+		return cmd.Run()
+	})
+	if err != nil {
+		t.Error("failed to run:", err)
+	}
+	checkOutput(t, TESTDATA+"/stdin.txt", output.Bytes())
+}
+
 func TestTest(t *testing.T) {
 	t.Parallel()
 

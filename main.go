@@ -870,6 +870,9 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 	}
 
 	_, err = buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+		// Give the program our stdin, as `go run` does.
+		// See https://github.com/tinygo-org/tinygo/issues/1287
+		cmd.Stdin = os.Stdin
 		return cmd.Run()
 	})
 	return err
@@ -1021,6 +1024,8 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 
 	// Configure stdout/stderr. The stdout may go to a buffer, not a real
 	// stdout.
+	// Stdin stays unset here, which gives the program /dev/null. The run
+	// callback sets it when the program must read stdin.
 	cmd.Stdout = newOutputWriter(stdout, result.Executable)
 	cmd.Stderr = os.Stderr
 	if config.EmulatorName() == "simavr" {
