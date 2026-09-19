@@ -48,7 +48,6 @@ const (
 const (
 	ledcTimerSelPos  = 0       // CONF0, which timer the channel follows
 	ledcSigOutEn     = 1 << 2  // CONF0, let the channel drive the pin
-	ledcIdleLv       = 1 << 3  // CONF0, pin level when the channel is off
 	ledcDutyCyclePos = 10      // CONF1
 	ledcDutyNumPos   = 20      // CONF1
 	ledcDutyInc      = 1 << 30 // CONF1
@@ -64,11 +63,6 @@ var (
 	PWM2 = &LEDCPWM{SigOutBase: LEDC_HS_SIG_OUT0_IDX, NumChannels: ledcChannelsESP32, timerNum: 2}
 	PWM3 = &LEDCPWM{SigOutBase: LEDC_HS_SIG_OUT0_IDX, NumChannels: ledcChannelsESP32, timerNum: 3}
 )
-
-// ledcStarted is true after the LEDC block came out of reset. The reset clears
-// every timer and every channel, so it must happen one time only. Without this
-// a second Configure would erase the settings of the first one.
-var ledcStarted bool
 
 // chanReg returns a register of channel ch, given the register of channel 0.
 func chanReg(channel0 *volatile.Register32, ch uint8) *volatile.Register32 {
@@ -116,12 +110,17 @@ func (pwm *LEDCPWM) setTimerConf(dutyRes uint8, divReg uint32) {
 	conf.Set(value)
 }
 
+// chanDisable stops a channel from driving its pin.
+func chanDisable(ch uint8) {
+	chanReg(&esp.LEDC.HSCH0_CONF0, ch).ClearBits(ledcSigOutEn)
+}
+
 // chanOp does the work for one channel, numbered 0 to 7. It either sets the
-// channel up, changes its duty, or flips its idle level.
+// channel up or changes its duty.
 //
 // DUTY_SCALE stays 0. LEDC can fade slowly from one duty to the next, and 0
 // turns that off, so the duty changes in a single step.
-func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool) {
+func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32) {
 	conf0 := chanReg(&esp.LEDC.HSCH0_CONF0, ch)
 
 	// DUTY_NUM and DUTY_CYCLE are 1 step of 1 period, which is the smallest
@@ -138,11 +137,5 @@ func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool)
 		chanReg(&esp.LEDC.HSCH0_DUTY, ch).Set(duty)
 		chanReg(&esp.LEDC.HSCH0_CONF1, ch).Set(conf1)
 		conf0.SetBits(ledcSigOutEn)
-	case ledcChanOpSetInvert:
-		if inverting {
-			conf0.SetBits(ledcIdleLv)
-		} else {
-			conf0.ClearBits(ledcIdleLv)
-		}
 	}
 }

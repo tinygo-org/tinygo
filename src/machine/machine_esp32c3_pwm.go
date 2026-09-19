@@ -23,12 +23,32 @@ var (
 	PWM3 = &LEDCPWM{SigOutBase: LEDC_LS_SIG_OUT0_IDX, NumChannels: ledcChannelsC3, timerNum: 3}
 )
 
-// chanOp implements LEDC low-speed channel ops for ESP32-C3 (channels 0–5 only).
-func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool) {
-	invVal := uint32(0)
-	if inverting {
-		invVal = 1
+// chanDisable stops a channel from driving its pin.
+func chanDisable(ch uint8) {
+	switch ch {
+	case 0:
+		esp.LEDC.SetCH0_CONF0_SIG_OUT_EN(0)
+		esp.LEDC.SetCH0_CONF0_PARA_UP(1)
+	case 1:
+		esp.LEDC.SetCH1_CONF0_SIG_OUT_EN(0)
+		esp.LEDC.SetCH1_CONF0_PARA_UP(1)
+	case 2:
+		esp.LEDC.SetCH2_CONF0_SIG_OUT_EN(0)
+		esp.LEDC.SetCH2_CONF0_PARA_UP(1)
+	case 3:
+		esp.LEDC.SetCH3_CONF0_SIG_OUT_EN(0)
+		esp.LEDC.SetCH3_CONF0_PARA_UP(1)
+	case 4:
+		esp.LEDC.SetCH4_CONF0_SIG_OUT_EN(0)
+		esp.LEDC.SetCH4_CONF0_PARA_UP(1)
+	case 5:
+		esp.LEDC.SetCH5_CONF0_SIG_OUT_EN(0)
+		esp.LEDC.SetCH5_CONF0_PARA_UP(1)
 	}
+}
+
+// chanOp implements LEDC low-speed channel ops for ESP32-C3 (channels 0–5 only).
+func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32) {
 	switch ch {
 	case 0:
 		switch op {
@@ -51,8 +71,6 @@ func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool)
 			esp.LEDC.SetCH0_CONF1_DUTY_START(1)
 			esp.LEDC.SetCH0_CONF0_SIG_OUT_EN(1)
 			esp.LEDC.SetCH0_CONF0_PARA_UP(1)
-		case ledcChanOpSetInvert:
-			esp.LEDC.SetCH0_CONF0_IDLE_LV(invVal)
 		}
 	case 1:
 		switch op {
@@ -75,8 +93,6 @@ func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool)
 			esp.LEDC.SetCH1_CONF1_DUTY_START(1)
 			esp.LEDC.SetCH1_CONF0_SIG_OUT_EN(1)
 			esp.LEDC.SetCH1_CONF0_PARA_UP(1)
-		case ledcChanOpSetInvert:
-			esp.LEDC.SetCH1_CONF0_IDLE_LV(invVal)
 		}
 	case 2:
 		switch op {
@@ -99,8 +115,6 @@ func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool)
 			esp.LEDC.SetCH2_CONF1_DUTY_START(1)
 			esp.LEDC.SetCH2_CONF0_SIG_OUT_EN(1)
 			esp.LEDC.SetCH2_CONF0_PARA_UP(1)
-		case ledcChanOpSetInvert:
-			esp.LEDC.SetCH2_CONF0_IDLE_LV(invVal)
 		}
 	case 3:
 		switch op {
@@ -123,8 +137,6 @@ func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool)
 			esp.LEDC.SetCH3_CONF1_DUTY_START(1)
 			esp.LEDC.SetCH3_CONF0_SIG_OUT_EN(1)
 			esp.LEDC.SetCH3_CONF0_PARA_UP(1)
-		case ledcChanOpSetInvert:
-			esp.LEDC.SetCH3_CONF0_IDLE_LV(invVal)
 		}
 	case 4:
 		switch op {
@@ -147,8 +159,6 @@ func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool)
 			esp.LEDC.SetCH4_CONF1_DUTY_START(1)
 			esp.LEDC.SetCH4_CONF0_SIG_OUT_EN(1)
 			esp.LEDC.SetCH4_CONF0_PARA_UP(1)
-		case ledcChanOpSetInvert:
-			esp.LEDC.SetCH4_CONF0_IDLE_LV(invVal)
 		}
 	case 5:
 		switch op {
@@ -171,8 +181,6 @@ func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32, inverting bool)
 			esp.LEDC.SetCH5_CONF1_DUTY_START(1)
 			esp.LEDC.SetCH5_CONF0_SIG_OUT_EN(1)
 			esp.LEDC.SetCH5_CONF0_PARA_UP(1)
-		case ledcChanOpSetInvert:
-			esp.LEDC.SetCH5_CONF0_IDLE_LV(invVal)
 		}
 	}
 }
