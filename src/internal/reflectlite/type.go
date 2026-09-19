@@ -388,6 +388,27 @@ var sliceTypeLinks **RawType
 //go:extern internal/reflectlite.sliceTypeLinksLen
 var sliceTypeLinksLen uintptr
 
+func SliceOf(t Type) Type {
+	elem := t.(*RawType)
+	key := cacheKey{kind: Slice, t1: elem}
+	if typ := loadCachedType(key); typ != nil {
+		return typ
+	}
+
+	for _, typ := range unsafe.Slice(sliceTypeLinks, sliceTypeLinksLen) {
+		if (*elemType)(unsafe.Pointer(typ)).elem == elem {
+			return loadOrStoreCachedType(key, typ)
+		}
+	}
+
+	typ := &elemType{
+		RawType: RawType{meta: uint8(Slice)},
+		elem:    elem,
+	}
+	typ.ptrTo = (*RawType)(unsafe.Add(unsafe.Pointer(&typ.RawType), 1))
+	return loadOrStoreCachedType(key, &typ.RawType)
+}
+
 func pointerTo(t *RawType) *RawType {
 	if t.isNamed() {
 		return (*elemType)(unsafe.Pointer(t)).ptrTo
@@ -1407,10 +1428,6 @@ func (e *TypeError) Error() string {
 
 func align(offset uintptr, alignment uintptr) uintptr {
 	return (offset + alignment - 1) &^ (alignment - 1)
-}
-
-func SliceOf(t Type) Type {
-	panic("unimplemented: reflect.SliceOf()")
 }
 
 func ArrayOf(n int, t Type) Type {
