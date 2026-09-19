@@ -162,6 +162,7 @@ func (b *B) ReportAllocs() {
 
 // runN runs a single benchmark for the specified number of iterations.
 func (b *B) runN(n int) {
+	defer b.runCleanup()
 	b.N = n
 	runtime.GC()
 	b.ResetTimer()
