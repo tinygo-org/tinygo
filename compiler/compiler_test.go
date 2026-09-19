@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -349,6 +350,90 @@ func TestValidateWasmFunctionParameters(t *testing.T) {
 				t.Errorf("ValidateWasmFunctionParameters() error = %v, wantError = %t", err, test.wantError)
 			}
 		})
+	}
+}
+
+func TestDarwinCgoImportDynamic(t *testing.T) {
+	t.Parallel()
+
+	options := &compileopts.Options{GOOS: "darwin", GOARCH: "arm64"}
+	mod, errs := testCompilePackage(t, options, "cgo-import-dynamic.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+
+	ir := mod.String()
+	if !strings.Contains(ir, `declare void @"remote$INODE64"()`) {
+		t.Error("missing external declaration for cgo_import_dynamic remote symbol")
+	}
+	if !strings.Contains(ir, `ptrtoint (ptr @"remote$INODE64" to i64)`) {
+		t.Error("trampoline address load was not replaced with the remote symbol address")
+	}
+	if strings.Contains(ir, "load i64, ptr @main.libc_test_trampoline_addr") {
+		t.Error("trampoline address global was loaded instead of using the remote symbol address")
+	}
+	if !strings.Contains(ir, "ptrtoint (ptr @syscall_libc_ioctl to i64)") {
+		t.Error("variadic ioctl import was not routed through its fixed-signature wrapper")
+	}
+	for _, remote := range []string{"open", "openat", "fcntl"} {
+		if !strings.Contains(ir, "ptrtoint (ptr @syscall_libc_"+remote+" to i64)") {
+			t.Errorf("variadic %s import was not routed through its fixed-signature wrapper", remote)
+		}
+		if strings.Contains(ir, "declare void @"+remote+"()") {
+			t.Errorf("variadic %s import was declared directly instead of using its wrapper", remote)
+		}
+	}
+	if !strings.Contains(ir, "ptrtoint (ptr @remote_nolib to i64)") {
+		t.Error("cgo_import_dynamic without a library operand was not honored")
+	}
+	if !strings.Contains(ir, "ptrtoint (ptr @libc_self to i64)") {
+		t.Error("cgo_import_dynamic without a remote symbol did not default to the local symbol")
+	}
+	if !strings.Contains(ir, "load i32, ptr @main.libc_badtype_trampoline_addr") {
+		t.Error("load of a non-uintptr trampoline global was replaced instead of being left alone")
+	}
+	if strings.Contains(ir, "@bad_remote") {
+		t.Error("a declaration was created for the remote symbol of a non-uintptr trampoline global")
+	}
+}
+
+// TestDarwinCgoImportDynamicErrors checks the compile errors for misplaced
+// directives and for a remote symbol that collides with a global variable.
+func TestDarwinCgoImportDynamicErrors(t *testing.T) {
+	t.Parallel()
+
+	// Read the expected errors from the test file.
+	var expected []string
+	data, err := os.ReadFile("testdata/cgo-import-dynamic-errors.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line := range strings.SplitSeq(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
+		if after, ok := strings.CutPrefix(line, "// ERROR: "); ok {
+			expected = append(expected, after)
+		}
+	}
+
+	options := &compileopts.Options{GOOS: "darwin", GOARCH: "arm64"}
+	mod, errs := testCompilePackage(t, options, "cgo-import-dynamic-errors.go")
+	defer mod.Dispose()
+
+	var actual []string
+	for _, err := range errs {
+		actual = append(actual, err.(types.Error).Msg)
+	}
+	slices.Sort(expected)
+	slices.Sort(actual)
+	if !slices.Equal(expected, actual) {
+		t.Errorf("expected errors %q, got %q", expected, actual)
 	}
 }
 

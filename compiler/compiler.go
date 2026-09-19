@@ -95,6 +95,7 @@ type compilerContext struct {
 	asyncifyReplays  map[llvm.Type]llvm.Value
 	functionABIs     map[functionABIKey]functionABI
 	astComments      map[string]*ast.CommentGroup
+	cgoImportDynamic map[string]string // //go:cgo_import_dynamic local name -> remote symbol
 	embedGlobals     map[string][]*loader.EmbedFile
 	pkg              *types.Package
 	loaderPkg        *loader.Package // current package being compiled (for AST access)
@@ -121,6 +122,7 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		asyncifyReplays:  map[llvm.Type]llvm.Value{},
 		functionABIs:     map[functionABIKey]functionABI{},
 		astComments:      map[string]*ast.CommentGroup{},
+		cgoImportDynamic: map[string]string{},
 	}
 
 	c.ctx = llvm.NewContext()
@@ -3705,6 +3707,11 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 // which can all be directly lowered to IR. However, there is also the channel
 // receive operator which is handled in the runtime directly.
 func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
+	if unop.Op == token.MUL {
+		if value := b.createDarwinCgoImportDynamicLoad(unop); !value.IsNil() {
+			return value, nil
+		}
+	}
 	x := b.getValue(unop.X, getPos(unop))
 	switch unop.Op {
 	case token.NOT: // !x
