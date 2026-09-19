@@ -18,4 +18,9 @@ func signal_ignore(uint32) {}
 func signal_waitUntilIdle() {}
 
 //go:linkname signal_recv os/signal.signal_recv
-func signal_recv() uint32 { return ^uint32(0) }
+func signal_recv() uint32 {
+	// Block to prevent os/signal.loop from running continuously.
+	// See https://go.dev/src/os/signal/signal_unix.go.
+	deadlock()
+	return 0
+}
