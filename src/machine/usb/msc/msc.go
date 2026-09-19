@@ -1,11 +1,13 @@
 package msc
 
 import (
+	"errors"
 	"machine"
 	"machine/usb"
 	"machine/usb/descriptor"
 	"machine/usb/msc/csw"
 	"machine/usb/msc/scsi"
+	"math/bits"
 	"time"
 )
 
@@ -22,6 +24,8 @@ const (
 const (
 	mscInterface = 2
 )
+
+var errInvalidBlockSize = errors.New("usb/msc: invalid block size")
 
 var MSC *msc
 
@@ -60,20 +64,41 @@ type msc struct {
 }
 
 // Port returns the USB Mass Storage port
-func Port(dev machine.BlockDevice) *msc {
+func Port(dev machine.BlockDevice) (*msc, error) {
 	if MSC == nil {
-		MSC = newMSC(dev)
+		msc, err := newMSC(dev)
+		if err != nil {
+			return nil, err
+		}
+		MSC = msc
 	}
-	return MSC
+	return MSC, nil
 }
 
-func newMSC(dev machine.BlockDevice) *msc {
+func newMSC(dev machine.BlockDevice) (*msc, error) {
 	// Size our buffer to match the maximum packet size of the IN endpoint
 	maxPacketSize := descriptor.EndpointMSCIN.GetMaxPacketSize()
+
+	// Windows only supports block sizes of 512 or 4096 bytes, other systems are
+	// probably similar.
+	blockSize := max(dev.EraseBlockSize(), dev.WriteBlockSize())
+	if bits.OnesCount32(uint32(blockSize)) != 1 {
+		return nil, errInvalidBlockSize // not a power of two
+	}
+	var blockSizeUSB uint32
+	switch {
+	case blockSize <= 512:
+		blockSizeUSB = 512
+	case blockSize <= 4096:
+		blockSizeUSB = 4096
+	default:
+		return nil, errInvalidBlockSize
+	}
+
 	m := &msc{
 		// Some platforms require reads/writes to be aligned to the full underlying hardware block
 		blockCache:    make([]byte, dev.WriteBlockSize()),
-		blockSizeUSB:  512,
+		blockSizeUSB:  blockSizeUSB,
 		buf:           make([]byte, dev.WriteBlockSize()),
 		cswBuf:        make([]byte, csw.MsgLen),
 		cbw:           &CBW{Data: make([]byte, 31)},
@@ -114,7 +139,7 @@ func newMSC(dev machine.BlockDevice) *msc {
 
 	go m.processTasks()
 
-	return m
+	return m, nil
 }
 
 func (m *msc) processTasks() {
