@@ -3,8 +3,8 @@ MEMORY
   ITCM      (rwx): ORIGIN = 0x00000000, LENGTH = 0x00080000 /*  512 Kib */
   DTCM      (rwx): ORIGIN = 0x20000000, LENGTH = 0x00080000 /*  512 Kib */
   RAM       (rwx): ORIGIN = 0x20200000, LENGTH = 0x0007F000 /*  512 KiB minus 4 KiB reserved for USB DMA descriptors/buffers */
-  /* The last 64 KiB of the flash are reserved for machine.Flash data. */
-  FLASH      (rx): ORIGIN = 0x60000000, LENGTH = 0x001F0000 /* 1984 KiB */
+  /* The last 256 KiB of the flash are reserved for machine.Flash data. */
+  FLASH      (rx): ORIGIN = 0x60000000, LENGTH = 0x007C0000 /* 7936 KiB */
 }
 
 ENTRY(Reset_Handler);
@@ -117,7 +117,7 @@ SECTIONS
   /* Fixed data area for machine.Flash. The Teensy bootloader does not
      erase it, see Teensyduino cores/teensy4/eeprom.c FLASH_BASEADDR. */
   __flash_data_start = ORIGIN(FLASH) + LENGTH(FLASH);
-  __flash_data_end = 0x601FF000;
+  __flash_data_end = 0x607FF000;
 
   _globals_start = _sdata;
   _globals_end = _ebss;

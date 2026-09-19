@@ -6,6 +6,8 @@ import (
 	"device/arm"
 	"device/nxp"
 	"machine"
+
+	_ "machine/usb/cdc"
 	"math/bits"
 	"unsafe"
 )
@@ -15,6 +17,15 @@ var _svectors [0]byte
 
 //go:extern _flexram_cfg
 var _flexram_cfg [0]byte
+
+//go:extern _sramfuncs
+var _sramfuncs [0]byte
+
+//go:extern _eramfuncs
+var _eramfuncs [0]byte
+
+//go:extern _framfuncs
+var _framfuncs [0]byte
 
 //export Reset_Handler
 func main() {
@@ -30,6 +41,9 @@ func main() {
 
 	// copy data/bss sections from flash to RAM
 	preinit()
+
+	// copy the .ramfuncs section to OCRAM
+	initRamFuncs()
 
 	// initialize cache and MPU
 	initCache()
@@ -96,6 +110,17 @@ func initSystem() {
 	nxp.RTWDOG.CS.Set((nxp.RTWDOG.CS.Get() & ^uint32(nxp.RTWDOG_CS_EN_Msk)) | nxp.RTWDOG_CS_UPDATE_Msk)
 }
 
+// initRamFuncs copies the .ramfuncs section to its OCRAM run address.
+// See machine_mimxrt1062_flash.go for the functions in this section.
+func initRamFuncs() {
+	src := uintptr(unsafe.Pointer(&_framfuncs))
+	dst := uintptr(unsafe.Pointer(&_sramfuncs))
+	length := uintptr(unsafe.Pointer(&_eramfuncs)) - dst
+	for i := uintptr(0); i < length; i += 4 {
+		*(*uint32)(unsafe.Pointer(dst + i)) = *(*uint32)(unsafe.Pointer(src + i))
+	}
+}
+
 func initPeripherals() {
 
 	enableTimerClocks() // activate GPT/PIT clock gates
@@ -106,7 +131,12 @@ func initPeripherals() {
 	initPins()        // configure GPIO
 
 	enablePeripheralClocks() // activate peripheral clock gates
-	initUART()               // configure UART (initialized first for debugging)
+}
+
+func init() {
+	// InitSerial must run from a package init function, after the heap is
+	// initialized. With -serial usb it allocates for the USB stack.
+	machine.InitSerial()
 }
 
 func initPins() {
@@ -117,24 +147,25 @@ func initPins() {
 	nxp.IOMUXC_GPR.GPR29.Set(0xFFFFFFFF)
 }
 
-func initUART() {
-	machine.InitSerial()
-}
-
 func putchar(c byte) {
+	// Serial is nil until InitSerial runs. Drop early output so a print
+	// from a fault handler does not cause a second fault.
+	if machine.Serial == nil {
+		return
+	}
 	machine.Serial.WriteByte(c)
 }
 
 func getchar() byte {
-	for machine.UART1.Buffered() == 0 {
+	for machine.Serial.Buffered() == 0 {
 		Gosched()
 	}
-	v, _ := machine.UART1.ReadByte()
+	v, _ := machine.Serial.ReadByte()
 	return v
 }
 
 func buffered() int {
-	return machine.UART1.Buffered()
+	return machine.Serial.Buffered()
 }
 
 func exit(code int) {
