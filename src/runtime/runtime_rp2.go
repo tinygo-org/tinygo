@@ -159,6 +159,8 @@ var stack1TopSymbol [0]uint32
 //
 //export tinygo_runCore1
 func runCore1() {
+	initCore()
+
 	// Clear sticky bit that seems to have been set while starting this core.
 	rp.SIO.FIFO_ST.Set(rp.SIO_FIFO_ST_ROE)
 
@@ -349,6 +351,8 @@ func init() {
 }
 
 func prerun() {
+	initCore()
+
 	// Reset spinlocks before the full machineInit() so the scheduler doesn't
 	// hang waiting for schedulerLock after a soft reset.
 	resetSpinLocks()
