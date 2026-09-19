@@ -190,7 +190,6 @@ func TestTypeFor(t *testing.T) {
 		}
 	}
 }
-
 func TestElemOfNamedMultiPointer(t *testing.T) {
 	type recursive ***recursive
 
@@ -226,5 +225,44 @@ func TestReflectedPointerTypeAssertions(t *testing.T) {
 	value = reflect.New(pointer.Type()).Interface()
 	if _, ok := value.(**named); !ok {
 		t.Fatalf("constructed %T failed a type assertion", value)
+	}
+}
+
+func TestSliceOfRuntimeConstruction(t *testing.T) {
+	type compiledElem int
+	compiledType := reflect.TypeOf([]compiledElem(nil))
+	if got := reflect.SliceOf(reflect.TypeOf(compiledElem(0))); got != compiledType {
+		t.Fatalf("SliceOf(compiledElem) = %v, want existing type %v", got, compiledType)
+	}
+
+	type elem struct {
+		Value *int
+	}
+
+	elemType := reflect.TypeOf(elem{})
+	sliceType := reflect.SliceOf(elemType)
+	if got, want := sliceType.String(), "[]reflect_test.elem"; got != want {
+		t.Fatalf("SliceOf(elem).String() = %q, want %q", got, want)
+	}
+	if got := sliceType.Kind(); got != reflect.Slice {
+		t.Fatalf("SliceOf(elem).Kind() = %v, want %v", got, reflect.Slice)
+	}
+	if got := sliceType.Elem(); got != elemType {
+		t.Fatalf("SliceOf(elem).Elem() = %v, want %v", got, elemType)
+	}
+	if got := reflect.SliceOf(elemType); got != sliceType {
+		t.Fatalf("second SliceOf(elem) = %v, want %v", got, sliceType)
+	}
+	if got := reflect.PointerTo(sliceType).Elem(); got != sliceType {
+		t.Fatalf("PointerTo(SliceOf(elem)).Elem() = %v, want %v", got, sliceType)
+	}
+
+	value := 42
+	slice := reflect.MakeSlice(sliceType, 1, 1)
+	slice.Index(0).Field(0).Set(reflect.ValueOf(&value))
+	checkConstructedType[[]elem](t, slice)
+	runtime.GC()
+	if got := slice.Index(0).Field(0).Elem().Int(); got != int64(value) {
+		t.Fatalf("slice element after GC = %d, want %d", got, value)
 	}
 }
