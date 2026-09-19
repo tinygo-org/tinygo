@@ -49,6 +49,21 @@ func TestBenchmark(t *testing.T) {
 	}
 }
 
+func TestBenchmarkCleanup(t *testing.T) {
+	var runs, cleanups int
+	testing.Benchmark(func(b *testing.B) {
+		runs++
+		b.Cleanup(func() {
+			cleanups++
+		})
+		for i := 0; i < b.N; i++ {
+		}
+	})
+	if cleanups != runs {
+		t.Fatalf("cleanup ran %d times, want %d", cleanups, runs)
+	}
+}
+
 func BenchmarkSub(b *testing.B) {
 	b.Run("Fast", func(b *testing.B) { BenchmarkFastNonASCII(b) })
 	b.Run("Slow", func(b *testing.B) { BenchmarkSlowNonASCII(b) })
