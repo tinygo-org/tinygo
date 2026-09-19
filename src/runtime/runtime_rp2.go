@@ -161,8 +161,8 @@ var stack1TopSymbol [0]uint32
 func runCore1() {
 	initCore()
 
-	// Clear sticky bit that seems to have been set while starting this core.
-	rp.SIO.FIFO_ST.Set(rp.SIO_FIFO_ST_ROE)
+	// Clear the sticky bits that were set while starting this core.
+	rp.SIO.FIFO_ST.Set(rp.SIO_FIFO_ST_ROE | rp.SIO_FIFO_ST_WOF)
 
 	// Enable the FIFO interrupt, mainly used for the stop-the-world phase of
 	// the GC.
