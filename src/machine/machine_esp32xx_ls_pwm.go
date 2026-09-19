@@ -21,9 +21,14 @@ import "device/esp"
 // enableClock turns the LEDC hardware on and picks APB_CLK as its clock.
 func (pwm *LEDCPWM) enableClock() {
 	// Enable LEDC clock and release reset (SYSTEM perip_clk_en0 / perip_rst_en0).
-	esp.SYSTEM.SetPERIP_RST_EN0_LEDC_RST(1)
-	esp.SYSTEM.SetPERIP_CLK_EN0_LEDC_CLK_EN(1)
-	esp.SYSTEM.SetPERIP_RST_EN0_LEDC_RST(0)
+	// The reset clears every timer and channel, so it runs only once. Without
+	// the guard a Configure of one timer would erase all the others.
+	if !ledcStarted {
+		esp.SYSTEM.SetPERIP_CLK_EN0_LEDC_CLK_EN(1)
+		esp.SYSTEM.SetPERIP_RST_EN0_LEDC_RST(1)
+		esp.SYSTEM.SetPERIP_RST_EN0_LEDC_RST(0)
+		ledcStarted = true
+	}
 
 	// LEDC global: APB clock source, enable internal clock.
 	esp.LEDC.SetCONF_APB_CLK_SEL(1)
