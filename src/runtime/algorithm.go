@@ -67,6 +67,11 @@ func memhash(p unsafe.Pointer, seed, s uintptr) uintptr {
 	return uintptr(hash32(p, s, seed))
 }
 
+// This function is used by hash/maphash.
+func comparablehash(v any, seed uintptr) uint32 {
+	return hashmapInterfaceHash(v, seed)
+}
+
 // Function that's called from various packages starting with Go 1.22.
 func rand() uint64 {
 	// Return a random number from hardware, falling back to software if
