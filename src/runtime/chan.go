@@ -344,6 +344,51 @@ func chanRecv(ch *channel, value unsafe.Pointer, op *channelOp) bool {
 	return t.DataUint32() != chanOperationClosed
 }
 
+// chanTrySend attempts a non-blocking send to ch. It reports whether the send
+// completed.
+func chanTrySend(ch *channel, value unsafe.Pointer) bool {
+	if ch == nil {
+		return false
+	}
+
+	mask := interrupt.Disable()
+	ch.lock.Lock()
+
+	sent, wake := ch.trySend(value)
+
+	ch.lock.Unlock()
+	if wake != nil {
+		scheduleTask(wake)
+	}
+	interrupt.Restore(mask)
+
+	return sent
+}
+
+// chanTryRecv attempts a non-blocking receive from ch.
+//
+// received reports whether the receive completed. If received is true, ok has
+// the same meaning as the second result of a channel receive. If received is
+// false, ok is false.
+func chanTryRecv(ch *channel, value unsafe.Pointer) (received, ok bool) {
+	if ch == nil {
+		return false, false
+	}
+
+	mask := interrupt.Disable()
+	ch.lock.Lock()
+
+	received, ok, wake := ch.tryRecv(value)
+
+	ch.lock.Unlock()
+	if wake != nil {
+		scheduleTask(wake)
+	}
+	interrupt.Restore(mask)
+
+	return received, ok
+}
+
 // chanClose closes the given channel. If this channel has a receiver or is
 // empty, it closes the channel. Else, it panics.
 func chanClose(ch *channel) {
