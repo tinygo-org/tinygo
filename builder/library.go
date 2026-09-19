@@ -123,6 +123,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	}
 
 	remapDir := filepath.Join(os.TempDir(), "tinygo-"+l.name)
+	if config.TrimPath() {
+		remapDir = filepath.ToSlash(filepath.Join("github.com/tinygo-org/tinygo", ".tinygo-build", l.name))
+	}
 	dir := filepath.Join(tmpdir, "build-lib-"+l.name)
 	err = os.Mkdir(dir, 0777)
 	if err != nil {
@@ -134,6 +137,13 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// reproducible. Otherwise the temporary directory is stored in the archive
 	// itself, which varies each run.
 	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+compileopts.ClangTriple(target), "-fdebug-prefix-map="+dir+"="+remapDir)
+	if config.TrimPath() {
+		args = append(args,
+			"-ffile-prefix-map="+goenv.Get("TINYGOROOT")+"=github.com/tinygo-org/tinygo",
+			"-ffile-prefix-map="+goenv.Get("GOCACHE")+"=tinygo-cache",
+			"-fdebug-compilation-dir=.",
+		)
+	}
 	resourceDir := goenv.ClangResourceDir(false)
 	if resourceDir != "" {
 		args = append(args, "-resource-dir="+resourceDir)

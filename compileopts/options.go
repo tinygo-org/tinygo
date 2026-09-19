@@ -30,6 +30,7 @@ type Options struct {
 	Directory               string // working dir, leave it unset to use the current working dir
 	Target                  string
 	BuildMode               string // -buildmode flag
+	TrimPath                bool   // -trimpath flag
 	Opt                     string
 	GC                      string
 	PanicStrategy           string
