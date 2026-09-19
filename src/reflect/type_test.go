@@ -166,6 +166,61 @@ func checkConstructedType[T any](t *testing.T, value reflect.Value) {
 	}
 }
 
+func TestMapOfRuntimeConstruction(t *testing.T) {
+	type key string
+	type elem float64
+
+	keyType := reflect.TypeOf(key(""))
+	elemType := reflect.TypeOf(elem(0))
+	compiledType := reflect.TypeOf(map[key]elem(nil))
+	mapType := reflect.MapOf(keyType, elemType)
+	if mapType != compiledType {
+		t.Fatalf("MapOf(key, elem) = %v, want existing type %v", mapType, compiledType)
+	}
+	if got, want := mapType.String(), "map[reflect_test.key]reflect_test.elem"; got != want {
+		t.Fatalf("MapOf(key, elem).String() = %q, want %q", got, want)
+	}
+	if got := mapType.Key(); got != keyType {
+		t.Fatalf("MapOf(key, elem).Key() = %v, want %v", got, keyType)
+	}
+	if got := mapType.Elem(); got != elemType {
+		t.Fatalf("MapOf(key, elem).Elem() = %v, want %v", got, elemType)
+	}
+	if got := reflect.MapOf(keyType, elemType); got != mapType {
+		t.Fatalf("second MapOf(key, elem) = %v, want %v", got, mapType)
+	}
+
+	m := reflect.MakeMap(mapType)
+	m.SetMapIndex(reflect.ValueOf(key("a")), reflect.ValueOf(elem(1)))
+	runtime.GC()
+	if got := m.MapIndex(reflect.ValueOf(key("a"))).Float(); got != 1 {
+		t.Fatalf("constructed map value = %v, want 1", got)
+	}
+
+	pointerType := reflect.TypeOf((*int)(nil))
+	pointerMap := reflect.MakeMap(reflect.MapOf(pointerType, pointerType))
+	keyPointer := new(int)
+	valuePointer := new(int)
+	*valuePointer = 42
+	pointerMap.SetMapIndex(reflect.ValueOf(keyPointer), reflect.ValueOf(valuePointer))
+	runtime.GC()
+	if got := pointerMap.MapIndex(reflect.ValueOf(keyPointer)).Elem().Int(); got != 42 {
+		t.Fatalf("pointer map element after GC = %d, want 42", got)
+	}
+
+	type assertionElem uint32
+	assertionType := reflect.TypeOf(assertionElem(0))
+	checkConstructedType[map[assertionElem]assertionElem](t,
+		reflect.MakeMap(reflect.MapOf(assertionType, assertionType)))
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MapOf accepted an invalid key type")
+		}
+	}()
+	reflect.MapOf(reflect.TypeOf((func())(nil)), reflect.TypeOf(false))
+}
+
 func TestTypeFor(t *testing.T) {
 	type (
 		mystring string

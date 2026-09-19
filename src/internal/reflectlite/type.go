@@ -277,6 +277,12 @@ type mapType struct {
 	typeInfo  unsafe.Pointer
 }
 
+type hashmapTypeInfo struct {
+	keyLayout    unsafe.Pointer
+	valueLayout  unsafe.Pointer
+	bucketLayout unsafe.Pointer
+}
+
 //go:extern internal/reflectlite.mapTypeLinks
 var mapTypeLinks **RawType
 
@@ -1439,7 +1445,36 @@ func StructOf([]StructField) Type {
 }
 
 func MapOf(key, value Type) Type {
-	panic("unimplemented: reflect.MapOf()")
+	keyType := key.(*RawType)
+	if !keyType.Comparable() {
+		panic("reflect.MapOf: invalid key type " + keyType.String())
+	}
+	valueType := value.(*RawType)
+	lookupKey := cacheKey{kind: Map, t1: keyType, t2: valueType}
+	if typ := loadCachedType(lookupKey); typ != nil {
+		return typ
+	}
+
+	for _, typ := range unsafe.Slice(mapTypeLinks, mapTypeLinksLen) {
+		candidate := (*mapType)(unsafe.Pointer(typ))
+		if candidate.key == keyType && candidate.elem == valueType {
+			return loadOrStoreCachedType(lookupKey, typ)
+		}
+	}
+
+	typ := &mapType{
+		RawType: RawType{meta: uint8(Map)},
+		elem:    valueType,
+		key:     keyType,
+	}
+	typeInfo := &hashmapTypeInfo{
+		keyLayout:    keyType.gcLayout(),
+		valueLayout:  valueType.gcLayout(),
+		bucketLayout: gclayout.Conservative.AsPtr(),
+	}
+	typ.ptrTo = (*RawType)(unsafe.Add(unsafe.Pointer(&typ.RawType), 1))
+	typ.typeInfo = unsafe.Pointer(typeInfo)
+	return loadOrStoreCachedType(lookupKey, &typ.RawType)
 }
 
 func FuncOf(in, out []Type, variadic bool) Type {
