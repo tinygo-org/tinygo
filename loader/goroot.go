@@ -248,6 +248,8 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 		"crypto/x509/internal/macos/":     false,
 		"device/":                         false,
 		"examples/":                       false,
+		"hash/":                           true,
+		"hash/maphash/":                   false,
 		"internal/":                       true,
 		"internal/abi/":                   false,
 		"internal/binary/":                false,
