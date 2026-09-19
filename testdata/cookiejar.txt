@@ -1,0 +1,1 @@
+cookie stored; secure cookie refused over HTTP
