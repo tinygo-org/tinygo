@@ -12,6 +12,11 @@ const (
 	sioIrqFifoProc1 = rp.IRQ_SIO_IRQ_PROC1
 )
 
+// The Cortex-M0+ has no exclusive access instructions, so there is nothing to
+// set up per core.
+func initCore() {
+}
+
 // On RP2040, each core has its own SIO FIFO IRQ. Core0 enables
 // IRQ_SIO_IRQ_PROC0 and Core1 enables IRQ_SIO_IRQ_PROC1, so each handler can
 // use a fixed core ID.
