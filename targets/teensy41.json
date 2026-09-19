@@ -1,7 +1,9 @@
 {
   "inherits": ["cortex-m7"],
   "build-tags": ["teensy41", "teensy", "mimxrt1062", "nxp"],
-  "serial": "uart",
+  "serial": "usb",
+  "serial-port": ["16c0:0483"],
+  "flash-1200-bps-reset": "true",
   "automatic-stack-size": false,
   "linkerscript": "targets/mimxrt1062-teensy40.ld",
   "extra-files": [

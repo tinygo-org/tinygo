@@ -4,7 +4,11 @@ package runtime
 
 import (
 	"device/nxp"
+	"unsafe"
 )
+
+//go:extern _usb_dma_start
+var _usb_dma_start [0]byte
 
 func initCache() {
 
@@ -26,8 +30,7 @@ func initCache() {
 	nxp.MPU.SetRASR(nxp.RGNSZ_1GB, nxp.PERM_FULL, nxp.EXTN_DEVICE, true, false, false, false, false)
 
 	// [3] ITCM: 512 KiB, +ACCESS, #NORMAL (non-cacheable), +EXEC, -share, -subregion
-	// TEX 0b001 with C=0 B=0 is Normal non cacheable memory. TEX 0 is Strongly
-	// Ordered and unaligned accesses fault there. See Arm DDI 0403, PMSAv7.
+	// TEX 0 is Strongly Ordered and faults on unaligned access, see Arm DDI 0403.
 	nxp.MPU.SetRBAR(3, 0x00000000)
 	nxp.MPU.SetRASR(nxp.RGNSZ_512KB, nxp.PERM_FULL, nxp.Extension(1), true, false, false, false, false)
 
@@ -46,6 +49,11 @@ func initCache() {
 	// [7] QSPI flash: 2 MiB, +ACCESS, #NORMAL, +EXEC, -share, +CACHE, +BUFFER, -subregion
 	nxp.MPU.SetRBAR(7, 0x60000000)
 	nxp.MPU.SetRASR(nxp.RGNSZ_2MB, nxp.PERM_FULL, nxp.EXTN_NORMAL, true, false, true, true, false)
+
+	// [8] USB DMA region, top 4 KiB of OCRAM, #NORMAL non cacheable, -EXEC.
+	// It holds the USB dQH and dTD descriptors and the endpoint buffers.
+	nxp.MPU.SetRBAR(8, uint32(uintptr(unsafe.Pointer(&_usb_dma_start))))
+	nxp.MPU.SetRASR(nxp.RGNSZ_4KB, nxp.PERM_FULL, nxp.Extension(1), false, false, false, false, false)
 
 	nxp.MPU.Enable(true)
 }
