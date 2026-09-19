@@ -54,6 +54,9 @@ SECTIONS
         . = ALIGN(16);
         . += _stack_size;
         _stack_top = .;
+        . = ALIGN(16);
+        . += _stack_size;
+        _stack1_top = .;
     } >DRAM
 
     /* Global variables that are mutable and zero-initialized. */
@@ -180,6 +183,7 @@ memset = 0x400011e8;
 memcpy = 0x400011f4;
 memmove = 0x40001200;
 memcmp = 0x4000120c;
+ets_set_appcpu_boot_addr = 0x40000720;
 
 /* From ESP-IDF:
  * components/esp_rom/esp32/ld/esp32.rom.libgcc.ld
