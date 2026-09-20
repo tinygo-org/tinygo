@@ -499,6 +499,13 @@ func TestTinyStruct(t *testing.T) {
 }
 
 func TestTinyZero(t *testing.T) {
+	for _, value := range []any{(*int)(nil), [16]byte{}, [64]byte{}} {
+		zero := Zero(TypeOf(value))
+		if IsRO(zero) {
+			t.Errorf("Zero(%v) is read-only", zero.Type())
+		}
+	}
+
 	s := "hello, world"
 	sptr := &s
 	v := ValueOf(&sptr).Elem()
