@@ -311,9 +311,6 @@ func (v Value) UnsafePointer() unsafe.Pointer {
 		return slice.data
 	case Func:
 		fn := (*funcHeader)(v.value)
-		if fn.Context != nil {
-			return fn.Context
-		}
 		return fn.Code
 	default:
 		panic(&ValueError{Method: "UnsafePointer", Kind: v.Kind()})
