@@ -3,6 +3,7 @@ package reflectlite
 import (
 	"internal/gclayout"
 	"internal/itoa"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -166,6 +167,46 @@ type RawType struct {
 	meta uint8 // metadata byte, contains kind and flags (see constants above)
 }
 
+type cacheKey struct {
+	kind  Kind
+	t1    *RawType
+	t2    *RawType
+	extra uintptr
+}
+
+type cacheEntry struct {
+	key  cacheKey
+	typ  *RawType
+	next *cacheEntry
+}
+
+var lookupCache atomic.Pointer[cacheEntry]
+
+func loadCachedType(key cacheKey) *RawType {
+	for entry := lookupCache.Load(); entry != nil; entry = entry.next {
+		if entry.key == key {
+			return entry.typ
+		}
+	}
+	return nil
+}
+
+func loadOrStoreCachedType(key cacheKey, typ *RawType) *RawType {
+	entry := &cacheEntry{key: key, typ: typ}
+	for {
+		head := lookupCache.Load()
+		for existing := head; existing != nil; existing = existing.next {
+			if existing.key == key {
+				return existing.typ
+			}
+		}
+		entry.next = head
+		if lookupCache.CompareAndSwap(head, entry) {
+			return typ
+		}
+	}
+}
+
 type basicType struct {
 	RawType
 	ptrTo *RawType
@@ -186,6 +227,12 @@ type elemType struct {
 	ptrTo     *RawType
 	elem      *RawType
 }
+
+//go:extern internal/reflectlite.chanTypeLinks
+var chanTypeLinks **RawType
+
+//go:extern internal/reflectlite.chanTypeLinksLen
+var chanTypeLinksLen uintptr
 
 // ptrType is the type descriptor for pointer types.
 // The numMethod field stores the number of exported methods in the lower bits,
@@ -215,6 +262,12 @@ type arrayType struct {
 	layout    unsafe.Pointer
 }
 
+//go:extern internal/reflectlite.arrayTypeLinks
+var arrayTypeLinks **RawType
+
+//go:extern internal/reflectlite.arrayTypeLinksLen
+var arrayTypeLinksLen uintptr
+
 type mapType struct {
 	RawType
 	numMethod uint16
@@ -223,6 +276,12 @@ type mapType struct {
 	key       *RawType
 	typeInfo  unsafe.Pointer
 }
+
+//go:extern internal/reflectlite.mapTypeLinks
+var mapTypeLinks **RawType
+
+//go:extern internal/reflectlite.mapTypeLinksLen
+var mapTypeLinksLen uintptr
 
 // namedType is the type descriptor for named types. The numMethod field uses
 // bit 15 (numMethodHasMethodSet) to indicate whether an inline method set is
@@ -261,6 +320,12 @@ type structType struct {
 	fields    [1]structField // the remaining fields are all of type structField
 	// methods methodSet follows after fields, only when numMethod & numMethodHasMethodSet != 0
 }
+
+//go:extern internal/reflectlite.structTypeLinks
+var structTypeLinks **RawType
+
+//go:extern internal/reflectlite.structTypeLinksLen
+var structTypeLinksLen uintptr
 
 type structField struct {
 	fieldType *RawType
@@ -316,6 +381,12 @@ func PtrTo(t Type) Type { return PointerTo(t) }
 func PointerTo(t Type) Type {
 	return pointerTo(t.(*RawType))
 }
+
+//go:extern internal/reflectlite.sliceTypeLinks
+var sliceTypeLinks **RawType
+
+//go:extern internal/reflectlite.sliceTypeLinksLen
+var sliceTypeLinksLen uintptr
 
 func pointerTo(t *RawType) *RawType {
 	if t.isNamed() {
