@@ -11,6 +11,11 @@ func NewHeapTimer(when int64) *HeapTimer {
 	return &timer{when: when}
 }
 
+func TimerNextWhen(when, period, delta int64) int64 {
+	t := timer{when: when, period: period}
+	return t.nextWhen(delta)
+}
+
 func (h *TimerHeap) Len() int {
 	return len(h.h.nodes)
 }

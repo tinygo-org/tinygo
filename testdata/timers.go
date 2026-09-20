@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 var timer = time.NewTimer(time.Millisecond)
 
@@ -62,4 +65,16 @@ func main() {
 	<-timer.C
 	println("waited on timer at 750ms")
 	time.Sleep(time.Millisecond * 500)
+	testHugeTicker()
+}
+
+func testHugeTicker() {
+	ticker := time.NewTicker(math.MaxInt64)
+	defer ticker.Stop()
+	time.Sleep(10 * time.Millisecond)
+	select {
+	case <-ticker.C:
+		panic("maximal-period ticker fired early")
+	default:
+	}
 }
