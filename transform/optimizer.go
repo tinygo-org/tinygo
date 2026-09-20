@@ -73,6 +73,9 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		OptimizeStringFromBytes(mod)
 		maxStackSize := config.MaxStackAlloc()
 		OptimizeAllocs(mod, nil, maxStackSize, nil)
+		if err := pruneDeadCodeBeforeInterfaceLowering(mod); err != nil {
+			return []error{err}
+		}
 		err = LowerInterfaces(mod, config)
 		if err != nil {
 			return []error{err}
@@ -116,6 +119,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		OptimizeStringEqual(mod)
 
 	} else {
+		if err := pruneDeadCodeBeforeInterfaceLowering(mod); err != nil {
+			return []error{err}
+		}
+
 		// Must be run at any optimization level.
 		err := LowerInterfaces(mod, config)
 		if err != nil {
@@ -213,6 +220,16 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		}
 	}
 
+	return nil
+}
+
+func pruneDeadCodeBeforeInterfaceLowering(mod llvm.Module) error {
+	pruneUnusedReflectMakeFunc(mod)
+	options := llvm.NewPassBuilderOptions()
+	defer options.Dispose()
+	if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, options); err != nil {
+		return fmt.Errorf("could not run pre-interface globaldce pass: %w", err)
+	}
 	return nil
 }
 

@@ -62,6 +62,45 @@ func main() {
 	}
 }
 
+func TestReflectMakeFuncReachability(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, source string
+	}{
+		{"function value", `
+var makeCallback = reflect.MakeFunc
+
+func main() {
+	f := makeCallback(reflect.TypeFor[func(int) int](), func(args []reflect.Value) []reflect.Value {
+		return args
+	}).Interface().(func(int) int)
+	if f(42) != 42 {
+		panic("wrong callback result")
+	}
+}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "main.go")
+			if err := os.WriteFile(path, []byte("package main\nimport \"reflect\"\n"+tc.source), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			options := optionsFromTarget("", sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			_, err = buildAndRun(path, config, &output, nil, nil, 2*time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatalf("reflected program failed: %v\n%s", err, output.String())
+			}
+		})
+	}
+}
+
 func TestBuild(t *testing.T) {
 	t.Parallel()
 

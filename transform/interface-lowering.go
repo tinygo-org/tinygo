@@ -62,12 +62,13 @@ type methodInfo struct {
 // typeInfo describes a single concrete Go type, which can be a basic or a named
 // type. If it is a named type, it may have methods.
 type typeInfo struct {
-	name        string
-	typecode    llvm.Value
-	typecodeGEP llvm.Value
-	methodSet   llvm.Value
-	methods     []*methodInfo
-	callAdapter llvm.Value
+	name            string
+	typecode        llvm.Value
+	typecodeGEP     llvm.Value
+	methodSet       llvm.Value
+	methods         []*methodInfo
+	callAdapter     llvm.Value
+	makeFuncAdapter llvm.Value
 }
 
 // getMethod looks up the method on this type with the given signature and
@@ -182,7 +183,8 @@ func (p *lowerInterfacesPass) run() error {
 						llvm.ConstInt(p.ctx.Int32Type(), 1, false),
 					})
 					if strings.HasPrefix(name, "func:") {
-						t.callAdapter = stripPointerCasts(firstField)
+						t.callAdapter = stripPointerCasts(firstField.Operand(0))
+						t.makeFuncAdapter = stripPointerCasts(firstField.Operand(1))
 					} else {
 						methodSet := stripPointerCasts(firstField)
 						if !strings.HasSuffix(methodSet.Name(), "$methodset") {
@@ -484,7 +486,7 @@ func (p *lowerInterfacesPass) run() error {
 			}
 			// Fallback.
 			if hasUses(t.typecode) {
-				negativeOffset := -int64(p.targetData.TypeAllocSize(p.ptrType))
+				negativeOffset := -int64(p.targetData.ElementOffset(t.typecode.GlobalValueType(), 1))
 				gep := llvm.ConstInBoundsGEP(p.ctx.Int8Type(), newGlobal, []llvm.Value{llvm.ConstInt(p.ctx.Int32Type(), uint64(negativeOffset), true)})
 				t.typecode.ReplaceAllUsesWith(gep)
 			}
@@ -519,6 +521,7 @@ func (p *lowerInterfacesPass) run() error {
 
 	p.createReflectTypeLinks(typeNames)
 	p.createReflectCallLinks(typeNames)
+	p.createReflectMakeFuncLinks(typeNames)
 
 	p.createReflectPointerTypeLinks(typeNames)
 
@@ -665,6 +668,7 @@ func (p *lowerInterfacesPass) createReflectCallLinks(typeNames []string) {
 	adaptersGlobal := p.mod.NamedGlobal("internal/reflectlite.funcCallAdapters")
 	lengthGlobal := p.mod.NamedGlobal("internal/reflectlite.funcCallLinksLen")
 	if typesGlobal.IsNil() && adaptersGlobal.IsNil() && lengthGlobal.IsNil() {
+		p.internalizeFunctionsWithPrefix("reflect/call:")
 		return
 	}
 	if typesGlobal.IsNil() || adaptersGlobal.IsNil() || lengthGlobal.IsNil() {
@@ -686,6 +690,7 @@ func (p *lowerInterfacesPass) createReflectCallLinks(typeNames []string) {
 		}))
 		adapters = append(adapters, llvm.ConstIntToPtr(typ.callAdapter, p.ptrType))
 	}
+	p.internalizeFunctionsWithPrefix("reflect/call:")
 
 	lengthGlobal.SetInitializer(llvm.ConstInt(p.uintptrType, uint64(len(typeCodes)), false))
 	lengthGlobal.SetGlobalConstant(true)
@@ -766,6 +771,116 @@ func (p *lowerInterfacesPass) createReflectPointerTypeLinks(typeNames []string) 
 		llvm.ConstInt(p.ctx.Int32Type(), 0, false),
 	}))
 	dataGlobal.SetGlobalConstant(true)
+}
+
+func (p *lowerInterfacesPass) usesReflectMakeFunc() bool {
+	for fn := p.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-makefunc")
+		if (!attr.IsNil() || fn.Name() == "reflect.MakeFunc") && hasUses(fn) {
+			return true
+		}
+	}
+	return false
+}
+
+func pruneUnusedReflectMakeFunc(mod llvm.Module) {
+	p := lowerInterfacesPass{mod: mod}
+	if p.usesReflectMakeFunc() {
+		return
+	}
+
+	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		if !strings.HasPrefix(global.Name(), "reflect/types.type:func:") {
+			continue
+		}
+		initializer := global.Initializer()
+		adapters := initializer.Operand(0)
+		fields := []llvm.Value{llvm.ConstArray(adapters.Type().ElementType(), []llvm.Value{
+			adapters.Operand(0), llvm.ConstNull(adapters.Operand(1).Type()),
+		})}
+		for i := 1; i < initializer.OperandsCount(); i++ {
+			fields = append(fields, initializer.Operand(i))
+		}
+		global.SetInitializer(mod.Context().ConstStruct(fields, false))
+	}
+	p.internalizeFunctionsWithPrefix("reflect/makefunc:")
+}
+
+func (p *lowerInterfacesPass) createReflectMakeFuncLinks(typeNames []string) {
+	used := p.usesReflectMakeFunc()
+
+	typesGlobal := p.mod.NamedGlobal("internal/reflectlite.makeFuncTypes")
+	adaptersGlobal := p.mod.NamedGlobal("internal/reflectlite.makeFuncAdapters")
+	lengthGlobal := p.mod.NamedGlobal("internal/reflectlite.makeFuncLinksLen")
+	if typesGlobal.IsNil() && adaptersGlobal.IsNil() && lengthGlobal.IsNil() {
+		p.internalizeFunctionsWithPrefix("reflect/makefunc:")
+		return
+	}
+	if typesGlobal.IsNil() || adaptersGlobal.IsNil() || lengthGlobal.IsNil() {
+		panic("reflect MakeFunc link globals must be defined together")
+	}
+	if !used {
+		p.internalizeFunctionsWithPrefix("reflect/makefunc:")
+		lengthGlobal.SetInitializer(llvm.ConstInt(p.uintptrType, 0, false))
+		lengthGlobal.SetGlobalConstant(true)
+		typesGlobal.SetInitializer(llvm.ConstPointerNull(p.ptrType))
+		typesGlobal.SetGlobalConstant(true)
+		adaptersGlobal.SetInitializer(llvm.ConstPointerNull(p.ptrType))
+		adaptersGlobal.SetGlobalConstant(true)
+		return
+	}
+
+	var typeCodes, adapters []llvm.Value
+	for _, name := range typeNames {
+		if !strings.HasPrefix(name, "func:") {
+			continue
+		}
+		typ := p.types[name]
+		if typ.makeFuncAdapter.IsNil() || typ.makeFuncAdapter.IsNull() {
+			panic("missing reflect MakeFunc adapter for " + name)
+		}
+		typeCodes = append(typeCodes, llvm.ConstGEP(typ.typecode.GlobalValueType(), typ.typecode, []llvm.Value{
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+		}))
+		adapters = append(adapters, llvm.ConstIntToPtr(typ.makeFuncAdapter, p.ptrType))
+	}
+	p.internalizeFunctionsWithPrefix("reflect/makefunc:")
+
+	lengthGlobal.SetInitializer(llvm.ConstInt(p.uintptrType, uint64(len(typeCodes)), false))
+	lengthGlobal.SetGlobalConstant(true)
+	for _, table := range []struct {
+		global llvm.Value
+		values []llvm.Value
+		name   string
+	}{
+		{typesGlobal, typeCodes, "internal/reflectlite.makeFuncTypes.data"},
+		{adaptersGlobal, adapters, "internal/reflectlite.makeFuncAdapters.data"},
+	} {
+		if len(table.values) == 0 {
+			table.global.SetInitializer(llvm.ConstPointerNull(p.ptrType))
+			table.global.SetGlobalConstant(true)
+			continue
+		}
+		arrayType := llvm.ArrayType(p.ptrType, len(table.values))
+		array := llvm.AddGlobal(p.mod, arrayType, table.name)
+		array.SetInitializer(llvm.ConstArray(p.ptrType, table.values))
+		array.SetGlobalConstant(true)
+		array.SetLinkage(llvm.InternalLinkage)
+		table.global.SetInitializer(llvm.ConstGEP(arrayType, array, []llvm.Value{
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+		}))
+		table.global.SetGlobalConstant(true)
+	}
+}
+
+func (p *lowerInterfacesPass) internalizeFunctionsWithPrefix(prefix string) {
+	for fn := p.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		if strings.HasPrefix(fn.Name(), prefix) {
+			fn.SetLinkage(llvm.InternalLinkage)
+		}
+	}
 }
 
 // addTypeMethods reads the method set of the given type info struct. It
