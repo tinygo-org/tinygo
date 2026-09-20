@@ -397,9 +397,7 @@ func (t *rawType) CanSeq() bool {
 	case Int8, Int16, Int32, Int64, Int, Uint8, Uint16, Uint32, Uint64, Uint, Uintptr, Array, Slice, Chan, String, Map:
 		return true
 	case Func:
-		// TODO: implement canRangeFunc
-		// return canRangeFunc(t)
-		panic("unimplemented: (reflect.Type).CanSeq() for functions")
+		return canRangeFunc(t, 1)
 	case Pointer:
 		return t.Elem().Kind() == Array
 	}
@@ -411,13 +409,23 @@ func (t *rawType) CanSeq2() bool {
 	case Array, Slice, String, Map:
 		return true
 	case Func:
-		// TODO: implement canRangeFunc2
-		// return canRangeFunc2(t)
-		panic("unimplemented: (reflect.Type).CanSeq2() for functions")
+		return canRangeFunc(t, 2)
 	case Pointer:
 		return t.Elem().Kind() == Array
 	}
 	return false
+}
+
+func canRangeFunc(t Type, seq int) bool {
+	if t.NumIn() != 1 || t.NumOut() != 0 {
+		return false
+	}
+	yield := t.In(0)
+	return yield.Kind() == Func &&
+		yield.NumIn() == seq &&
+		yield.NumOut() == 1 &&
+		yield.Out(0).Kind() == Bool &&
+		yield.Out(0).PkgPath() == ""
 }
 
 func (t *rawType) ConvertibleTo(u Type) bool {
