@@ -3653,6 +3653,9 @@ func TestIndex(t *testing.T) {
 	if v != xa[2] {
 		t.Errorf("xa.Index(2) = %v; expected %v", v, xa[2])
 	}
+	inline := ValueOf([1]byte{7})
+	shouldPanic("array index out of range", func() { inline.Index(-1) })
+	shouldPanic("array index out of range", func() { inline.Index(1) })
 	s := "0123456789"
 	v = ValueOf(s).Index(3).Interface().(byte)
 	if v != s[3] {
