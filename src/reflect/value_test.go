@@ -413,6 +413,98 @@ func TestTinySlice(t *testing.T) {
 	}
 }
 
+func TestTinySlice3(t *testing.T) {
+	slice := make([]int, 3, 6)
+	for i := range cap(slice) {
+		slice[:cap(slice)][i] = i
+	}
+
+	value := ValueOf(slice)
+	sliced := value.Slice3(4, 5, 6).Interface().([]int)
+	if len(sliced) != 1 || cap(sliced) != 2 || sliced[0] != 4 {
+		t.Fatalf("Slice3(4, 5, 6) = %v with cap %d, want [4] with cap 2", sliced, cap(sliced))
+	}
+
+	first := value.Slice3(2, 4, 6)
+	empty := first.Slice3(4, 4, 4)
+	if got, want := empty.UnsafePointer(), first.UnsafePointer(); got != want {
+		t.Fatalf("empty Slice3 pointer = %p, want %p", got, want)
+	}
+
+	array := [4]int{1, 2, 3, 4}
+	arraySlice := ValueOf(&array).Elem().Slice3(1, 2, 3).Interface().([]int)
+	if len(arraySlice) != 1 || cap(arraySlice) != 2 || arraySlice[0] != 2 {
+		t.Fatalf("array Slice3(1, 2, 3) = %v with cap %d, want [2] with cap 2", arraySlice, cap(arraySlice))
+	}
+
+	checkPanic := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s did not panic", name)
+			}
+		}()
+		fn()
+	}
+	checkPanic("Slice3 with reversed indexes", func() {
+		value.Slice3(2, 1, 3)
+	})
+	checkPanic("Slice3 with negative index", func() {
+		value.Slice3(-1, 1, 2)
+	})
+	checkPanic("Slice3 beyond capacity", func() {
+		value.Slice3(0, 3, 7)
+	})
+	checkPanic("Slice3 on unaddressable array", func() {
+		ValueOf(array).Slice3(0, 1, 2)
+	})
+	checkPanic("Slice3 on unsupported kind", func() {
+		ValueOf("abc").Slice3(0, 1, 2)
+	})
+}
+
+func TestTinySetCap(t *testing.T) {
+	slice := make([]int, 3, 6)
+	settable := ValueOf(&slice).Elem()
+	settable.SetCap(5)
+	if len(slice) != 3 || cap(slice) != 5 {
+		t.Fatalf("after SetCap(5), len, cap = %d, %d, want 3, 5", len(slice), cap(slice))
+	}
+	settable.SetLen(5)
+	settable.SetCap(5)
+
+	checkPanic := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s did not panic", name)
+			}
+		}()
+		fn()
+	}
+	checkPanic("SetCap below length", func() {
+		settable.SetCap(4)
+	})
+	checkPanic("SetCap above capacity", func() {
+		settable.SetCap(6)
+	})
+	checkPanic("SetCap with negative capacity", func() {
+		settable.SetCap(-1)
+	})
+	checkPanic("SetCap on non-slice", func() {
+		ValueOf(new(string)).Elem().SetCap(0)
+	})
+	checkPanic("SetCap on unaddressable slice", func() {
+		ValueOf(slice).SetCap(5)
+	})
+	checkPanic("SetCap on read-only slice", func() {
+		value := ValueOf(&struct {
+			slice []int
+		}{slice}).Elem().Field(0)
+		value.SetCap(5)
+	})
+}
+
 func TestTinyBytes(t *testing.T) {
 	s := []byte("abcde")
 	refs := ValueOf(s)
