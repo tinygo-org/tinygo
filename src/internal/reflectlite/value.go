@@ -90,6 +90,9 @@ func composeInterface(unsafe.Pointer, unsafe.Pointer) interface{}
 //go:linkname decomposeInterface runtime.decomposeInterface
 func decomposeInterface(i interface{}) (unsafe.Pointer, unsafe.Pointer)
 
+//go:linkname runtimeKeepAlive runtime.KeepAlive
+func runtimeKeepAlive(x interface{})
+
 func ValueOf(i interface{}) Value {
 	typecode, value := decomposeInterface(i)
 	return Value{
@@ -2074,6 +2077,17 @@ type funcHeader struct {
 	Code    unsafe.Pointer
 }
 
+type reflectCallAdapter func(uintptr, unsafe.Pointer, *unsafe.Pointer, *unsafe.Pointer)
+
+//go:extern internal/reflectlite.funcCallTypes
+var funcCallTypes **RawType
+
+//go:extern internal/reflectlite.funcCallAdapters
+var funcCallAdapters *unsafe.Pointer
+
+//go:extern internal/reflectlite.funcCallLinksLen
+var funcCallLinksLen uintptr
+
 // Slice header that matches the underlying structure. Used for when we switch
 // to a precise GC, which needs to know exactly where pointers live.
 type sliceHeader struct {
@@ -2529,11 +2543,117 @@ func MakeChan(typ Type, size int) Value {
 }
 
 func (v Value) Call(in []Value) []Value {
-	panic("unimplemented: (reflect.Value).Call()")
+	return v.call(in, false)
 }
 
 func (v Value) CallSlice(in []Value) []Value {
-	panic("unimplemented: (reflect.Value).CallSlice()")
+	return v.call(in, true)
+}
+
+func (v Value) call(in []Value, callSlice bool) []Value {
+	method := "Call"
+	if callSlice {
+		method = "CallSlice"
+	}
+	if v.Kind() != Func {
+		panic(&ValueError{Method: method, Kind: v.Kind()})
+	}
+	if !v.isExported() || v.isRO() {
+		panic("reflect: " + method + " using value obtained using unexported field")
+	}
+	fn := (*funcHeader)(v.value)
+	if fn.Code == nil {
+		panic("reflect: call of nil function")
+	}
+
+	typ := v.typecode
+	numIn := typ.NumIn()
+	var args []Value
+	if callSlice {
+		if !typ.IsVariadic() {
+			panic("reflect: CallSlice of non-variadic function")
+		}
+		if len(in) != numIn {
+			panic("reflect: CallSlice with wrong argument count")
+		}
+		args = in
+	} else if typ.IsVariadic() {
+		fixed := numIn - 1
+		if len(in) < fixed {
+			panic("reflect: Call with too few input arguments")
+		}
+		args = make([]Value, numIn)
+		copy(args, in[:fixed])
+		sliceType := typ.In(fixed).(*RawType)
+		variadic := MakeSlice(sliceType, len(in)-fixed, len(in)-fixed)
+		elemType := sliceType.elem()
+		for i, arg := range in[fixed:] {
+			checkCallArgument(arg, elemType)
+			variadic.Index(i).Set(arg)
+		}
+		args[fixed] = variadic
+	} else {
+		if len(in) != numIn {
+			panic("reflect: Call with wrong argument count")
+		}
+		args = in
+	}
+
+	argPointers := make([]unsafe.Pointer, numIn)
+	for i, arg := range args {
+		paramType := typ.In(i).(*RawType)
+		checkCallArgument(arg, paramType)
+		storage := New(paramType).Elem()
+		storage.Set(arg)
+		argPointers[i] = storage.value
+	}
+
+	numOut := typ.NumOut()
+	resultStorage := make([]Value, numOut)
+	resultPointers := make([]unsafe.Pointer, numOut)
+	for i := range numOut {
+		result := &resultStorage[i]
+		result.typecode = typ.Out(i).(*RawType)
+		result.flags = valueFlagExported
+		if result.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
+			resultPointers[i] = unsafe.Pointer(&result.value)
+		} else {
+			result.value = alloc(result.typecode.Size(), result.typecode.gcLayout())
+			resultPointers[i] = result.value
+		}
+	}
+
+	adapter := reflectCallAdapterFor(typ)
+	call := *(*reflectCallAdapter)(unsafe.Pointer(&funcHeader{Code: adapter}))
+	call(uintptr(fn.Code), fn.Context, unsafe.SliceData(argPointers), unsafe.SliceData(resultPointers))
+	runtimeKeepAlive(v.typecode)
+	runtimeKeepAlive(v.value)
+	runtimeKeepAlive(unsafe.SliceData(argPointers))
+	return resultStorage
+}
+
+func checkCallArgument(arg Value, typ *RawType) {
+	if !arg.IsValid() {
+		panic("reflect: Call using zero Value argument")
+	}
+	if !arg.isExported() || arg.isRO() {
+		panic("reflect: Call using value obtained using unexported field")
+	}
+	if !arg.typecode.AssignableTo(typ) {
+		panic("reflect: Call using " + arg.typecode.String() + " as type " + typ.String())
+	}
+}
+
+func reflectCallAdapterFor(typ *RawType) unsafe.Pointer {
+	typ = typ.underlying()
+	types := unsafe.Slice(funcCallTypes, funcCallLinksLen)
+	adapters := unsafe.Slice(funcCallAdapters, funcCallLinksLen)
+	for i, candidate := range types {
+		if candidate == typ {
+			return adapters[i]
+		}
+	}
+	panic("reflect: function type has no call adapter")
 }
 
 func (v Value) Method(i int) Value {
