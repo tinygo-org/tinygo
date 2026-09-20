@@ -238,6 +238,12 @@ func NewAt(typ Type, p unsafe.Pointer) Value {
 	return Value{reflectlite.NewAt(toRawType(typ), p)}
 }
 
+// SliceAt returns a Value representing a slice whose underlying data starts at
+// p, with length and capacity equal to n.
+func SliceAt(typ Type, p unsafe.Pointer, n int) Value {
+	return Value{reflectlite.SliceAt(toRawType(typ), p, n)}
+}
+
 // Deprecated: Use unsafe.Slice or unsafe.SliceData instead.
 type SliceHeader struct {
 	Data uintptr
