@@ -363,6 +363,62 @@ func checkFeatureFlags(t *testing.T, targetFeatures, clangFeatures string) {
 	}
 }
 
+func TestLinkReflectAttributes(t *testing.T) {
+	kinds := []string{
+		"tinygo-reflect-method",
+		"tinygo-reflect-method-names",
+		"tinygo-reflect-makefunc",
+		"tinygo-reflect-structof",
+	}
+	for _, declarationFirst := range []bool{true, false} {
+		t.Run(fmt.Sprintf("declaration-first=%v", declarationFirst), func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("destination")
+			defer mod.Dispose()
+			pkgMod := ctx.NewModule("source")
+			builder := ctx.NewBuilder()
+			defer builder.Dispose()
+			typ := llvm.FunctionType(ctx.VoidType(), nil, false)
+			dst := llvm.AddFunction(mod, "lookup", typ)
+			src := llvm.AddFunction(pkgMod, "lookup", typ)
+			declaration, definition := dst, src
+			if !declarationFirst {
+				declaration, definition = src, dst
+			}
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(definition, "entry"))
+			builder.CreateRetVoid()
+			for _, kind := range kinds {
+				value := ""
+				if kind == "tinygo-reflect-method-names" {
+					value = "Keep"
+					definition.AddFunctionAttr(ctx.CreateStringAttribute(kind, "Other Keep"))
+				}
+				declaration.AddFunctionAttr(ctx.CreateStringAttribute(kind, value))
+			}
+			linker := llvm.NewLinker(mod)
+			defer linker.Dispose()
+			if err := linkPackageModule(linker, mod, pkgMod); err != nil {
+				t.Fatal(err)
+			}
+			for _, kind := range kinds {
+				attr := mod.NamedFunction("lookup").GetStringAttributeAtIndex(-1, kind)
+				if attr.IsNil() {
+					t.Errorf("lost %s", kind)
+					continue
+				}
+				want := ""
+				if kind == "tinygo-reflect-method-names" {
+					want = "Keep Other"
+				}
+				if got := attr.GetStringValue(); got != want {
+					t.Errorf("%s = %q, want %q", kind, got, want)
+				}
+			}
+		})
+	}
+}
+
 // This TestMain is necessary because TinyGo may also be invoked to run certain
 // LLVM tools in a separate process. Not capturing these invocations would lead
 // to recursive tests.
