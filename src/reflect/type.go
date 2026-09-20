@@ -509,6 +509,7 @@ func toMethod(method reflectlite.MethodInfo) Method {
 		Name:    method.Name,
 		PkgPath: method.PkgPath,
 		Type:    toType(method.Type),
+		Func:    Value{method.Func},
 		Index:   method.Index,
 	}
 }

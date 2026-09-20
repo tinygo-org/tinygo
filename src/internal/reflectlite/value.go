@@ -2789,11 +2789,67 @@ func callMakeFunc(context unsafe.Pointer, argPointers, resultPointers []unsafe.P
 }
 
 func (v Value) Method(i int) Value {
-	panic("unimplemented: (reflect.Value).Method()")
+	if !v.IsValid() {
+		panic(&ValueError{Method: "Method", Kind: Invalid})
+	}
+	if i < 0 || i >= v.NumMethod() {
+		panic("reflect: Method index out of range")
+	}
+	method := v.typecode.Method(i)
+	isInterface := v.Kind() == Interface
+	boundType := method.Type
+	if isInterface {
+		if v.IsNil() {
+			panic("reflect: Method on nil interface value")
+		}
+	} else {
+		if !method.Func.IsValid() {
+			panic("reflect: method function is unavailable")
+		}
+		ft := method.Type.funcDescriptor()
+		numIn, numOut := int(ft.numIn), int(ft.numOut&^funcTypeVariadic)
+		inOut := unsafe.Slice((**RawType)(unsafe.Pointer(&ft.inOut)), numIn+numOut)
+		boundType = funcOf(inOut[1:numIn], inOut[numIn:], ft.numOut&funcTypeVariadic != 0)
+	}
+	callback := func(args []Value) []Value {
+		receiver, fn := v, method.Func
+		if isInterface {
+			receiver = v.Elem()
+			if !receiver.IsValid() {
+				panic("reflect: call of method on nil interface value")
+			}
+			concrete, ok := receiver.typecode.MethodByName(method.Name)
+			if !ok || !concrete.Func.IsValid() {
+				panic("reflect: method function is unavailable")
+			}
+			fn = concrete.Func
+		}
+		callArgs := make([]Value, len(args)+1)
+		callArgs[0] = receiver
+		copy(callArgs[1:], args)
+		if method.Type.IsVariadic() {
+			return fn.CallSlice(callArgs)
+		}
+		return fn.Call(callArgs)
+	}
+	callbackHeader := (*funcHeader)(unsafe.Pointer(&callback))
+	result := MakeFunc(boundType, callbackHeader.Context, callbackHeader.Code)
+	result.flags = v.flags & (valueFlagExported | valueFlagRO)
+	if method.PkgPath != "" {
+		result.flags &^= valueFlagExported
+	}
+	return result
 }
 
 func (v Value) MethodByName(name string) Value {
-	panic("unimplemented: (reflect.Value).MethodByName()")
+	if !v.IsValid() {
+		panic(&ValueError{Method: "MethodByName", Kind: Invalid})
+	}
+	method, ok := v.typecode.MethodByName(name)
+	if !ok {
+		return Value{}
+	}
+	return v.Method(method.Index)
 }
 
 func (v Value) Send(x Value) {

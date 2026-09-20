@@ -227,8 +227,9 @@ TEST_SKIP_FLAG := -skip='TestAsValidation|TestUnmarshalNestingLimitSlice|TestUnm
 TEST_ADDITIONAL_FLAGS ?=
 
 TEST_OPTIONS_crypto/dsa := -short
-TEST_OPTIONS_crypto/sha256 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
-TEST_OPTIONS_crypto/sha512 := -skip='^(TestExtraMethods|TestAllocations)$$'
+TEST_OPTIONS_crypto/sha256 := -skip='^(TestAllocations|TestAllocatonsWithTypeAsserts)$$'
+TEST_OPTIONS_crypto/sha512 := -skip='^TestAllocations$$'
+TEST_OPTIONS_fmt := -stack-size=1MB -skip='^TestCountMallocs$$'
 TEST_OPTIONS_strconv := -skip='^(TestCountMallocs|TestAllocationsFromBytes)$$'
 TEST_OPTIONS_unicode/utf16 := -skip='^(TestAllocationsDecode)$$'
 TEST_OPTIONS_mime := -skip='^TestLookupMallocs$$'

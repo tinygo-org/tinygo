@@ -301,12 +301,11 @@ func RemoveFromGlobal(mod llvm.Module, globalName string, remove func(llvm.Value
 	}
 }
 
-// RemoveGlobalReferences removes one occurrence from targetGlobal for each
-// value listed in referenceGlobal, then removes referenceGlobal itself.
-func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal string) {
-	references := mod.NamedGlobal(referenceGlobal)
+// GlobalReferenceCounts counts pointers in an appending global after unwrapping constant casts.
+func GlobalReferenceCounts(mod llvm.Module, globalName string) map[llvm.Value]int {
+	references := mod.NamedGlobal(globalName)
 	if references.IsNil() {
-		return
+		return nil
 	}
 
 	initializer := references.Initializer()
@@ -318,6 +317,17 @@ func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal strin
 		}
 		values[value]++
 	}
+	return values
+}
+
+// RemoveGlobalReferences removes one occurrence from targetGlobal for each
+// value listed in referenceGlobal, then removes referenceGlobal itself.
+func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal string) {
+	references := mod.NamedGlobal(referenceGlobal)
+	if references.IsNil() {
+		return
+	}
+	values := GlobalReferenceCounts(mod, referenceGlobal)
 	references.EraseFromParentAsGlobal()
 	RemoveFromGlobal(mod, targetGlobal, func(value llvm.Value) bool {
 		if values[value] == 0 {

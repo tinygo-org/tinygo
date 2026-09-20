@@ -29,6 +29,9 @@ func TestReflectMethodReferences(t *testing.T) {
 	}{
 		{"expression", "var lookup = reflect.Type.MethodByName", `lookup(reflect.TypeOf(target{}), "Kept")`},
 		{"bound", "var lookup = reflect.TypeOf(target{}).MethodByName", `lookup("Kept")`},
+		{"interface", `func lookup(t interface{ MethodByName(string) (reflect.Method, bool) }) (reflect.Method, bool) {
+			return t.MethodByName("Kept")
+		}`, `lookup(reflect.TypeOf(target{}))`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source := `package main
@@ -107,6 +110,44 @@ func main() {
 		panic("wrong sequence pair")
 	}
 }`},
+		{"dead indirect ABI boxing", `
+import "os"
+
+type method interface{ Value() int }
+type first int
+type second int
+type dead struct{}
+
+func (v first) Value() int  { return int(v) }
+func (v second) Value() int { return int(v) + 1 }
+func (dead) Value() int {
+	f := reflect.MakeFunc(reflect.TypeFor[func() int](), func([]reflect.Value) []reflect.Value {
+		return []reflect.Value{reflect.ValueOf(7)}
+	}).Interface().(func() int)
+	return f()
+}
+
+var sink method
+
+//go:noinline
+func deadBox() [16384]byte {
+	sink = dead{}
+	return [16384]byte{}
+}
+
+func main() {
+	n := len(os.Args)
+	want := n
+	if n > 1 {
+		sink = first(n)
+	} else {
+		sink = second(n)
+		want++
+	}
+	if sink.Value() != want {
+		panic("wrong interface dispatch result")
+	}
+}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "main.go")
@@ -173,6 +214,8 @@ func TestBuild(t *testing.T) {
 		"print.go",
 		"promoted.go",
 		"reflect.go",
+		"reflect-method-values.go",
+		"reflect-promoted-lookup.go",
 		"signal.go",
 		"signalnotify.go",
 		"slice.go",
@@ -710,7 +753,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
 			switch name {
-			case "reflect.go":
+			case "reflect.go", "reflect-method-values.go", "reflect-promoted-lookup.go":
 				// Reflect tests do not run correctly, probably because of the
 				// limited amount of memory.
 				continue
@@ -805,6 +848,9 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			if testOptions.Target == "simavr" && (name == "math.go" || name == "string.go") {
 				// These tests exceed simavr's default 384-byte goroutine stack.
 				testOptions.StackSize = 512
+			}
+			if testOptions.Target == "cortex-m-qemu" && name == "reflect-method-values.go" {
+				testOptions.StackSize = 8192
 			}
 			runTest(name, testOptions, t, nil, nil)
 		})
