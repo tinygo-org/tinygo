@@ -544,6 +544,26 @@ func TestTinySetCap(t *testing.T) {
 	})
 }
 
+func TestTinySetLen(t *testing.T) {
+	slice := []int{1, 2, 3}
+	value := ValueOf(&slice).Elem()
+	value.SetLen(1)
+	if len(slice) != 1 || cap(slice) != 3 || slice[0] != 1 {
+		t.Fatalf("SetLen changed the wrong slice data: %v, cap %d", slice, cap(slice))
+	}
+	value.SetLen(3)
+	shouldPanic("", func() { value.SetLen(-1) })
+	shouldPanic("", func() { value.SetLen(4) })
+	shouldPanic("", func() { ValueOf(slice).SetLen(1) })
+	shouldPanic("", func() { ValueOf(new(int)).Elem().SetLen(1) })
+
+	fields := struct{ slice []int }{slice}
+	shouldPanic("", func() { ValueOf(&fields).Elem().Field(0).SetLen(1) })
+	if len(fields.slice) != 3 {
+		t.Fatal("SetLen changed an unexported field")
+	}
+}
+
 func TestTinyBytes(t *testing.T) {
 	s := []byte("abcde")
 	refs := ValueOf(s)
@@ -1168,11 +1188,6 @@ func (v testTypeWithMethod) String() string { return v.val }
 func (v testTypeWithMethod) M()             {}
 
 func TestTypeAssertPanic(t *testing.T) {
-	if runtime.GOARCH == "wasm" {
-		t.Log("recover not supported")
-		return
-	}
-
 	t.Run("zero val", func(t *testing.T) {
 		defer func() { recover() }()
 		TypeAssert[int](Value{})
