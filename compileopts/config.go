@@ -23,6 +23,8 @@ const (
 	MaximumGoMinorVersion = 27
 )
 
+const MaxTypePointerDepth = 5
+
 // Library versions. Whenever an existing library is changed, this number should
 // be added/increased so that existing caches are invalidated.
 //

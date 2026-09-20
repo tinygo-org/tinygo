@@ -51,6 +51,7 @@ func main() {
 
 	var n int
 	var f float32
+	type intPointer = *int
 	var interfaceEqualTests = []struct {
 		equal bool
 		lhs   interface{}
@@ -85,6 +86,7 @@ func main() {
 		{false, &n, new(int)},
 		{false, new(int), new(int)},
 		{false, &n, &f},
+		{true, (*intPointer)(nil), (**int)(nil)},
 		{true, struct {
 			a int
 			b int
@@ -403,6 +405,27 @@ func ptrptrswitch() {
 	identify(0)
 	identify(new(int))
 	identify(new(*int))
+
+	var shallow ***int
+	var deep ****int
+	var deeper *****int
+	if _, ok := any(&shallow).(****int); !ok {
+		panic("pointer assertion at depth 4")
+	}
+	if _, ok := any(&deep).(*****int); !ok {
+		panic("pointer assertion at depth 5")
+	}
+	if _, ok := any(&deeper).(******int); !ok {
+		panic("pointer assertion at depth 6")
+	}
+	switch any(&deeper).(type) {
+	case ******int:
+	default:
+		panic("pointer type switch at depth 6")
+	}
+	if _, ok := any(&deep).(******int); ok {
+		panic("distinct pointer depths matched")
+	}
 }
 
 func identify(itf any) {
