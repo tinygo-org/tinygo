@@ -129,7 +129,6 @@ var typeTests = []pair{
 	}{},
 		"struct { c chan *int32; d float32 }",
 	},
-	/* // TODO(tinygo): No function support
 	{struct{ x (func(a int8, b int32)) }{}, "func(int8, int32)"},
 	{struct {
 		x struct {
@@ -137,7 +136,7 @@ var typeTests = []pair{
 		}
 	}{},
 		"struct { c func(chan *reflect_test.integer, *int8) }",
-	}, */
+	},
 	{struct {
 		x struct {
 			a int8
@@ -202,7 +201,6 @@ var typeTests = []pair{
 	}{},
 		`struct { a int8 "reflect:\"hi \\x00there\\t\\n\\\"\\\\\"" }`,
 	},
-	/* // TODO(tinygo):  Functions not supported
 	{struct {
 		x struct {
 			f func(args ...int)
@@ -210,6 +208,7 @@ var typeTests = []pair{
 	}{},
 		"struct { f func(...int) }",
 	},
+	/* // TODO(tinygo): Interface method strings are not supported.
 	{struct {
 		x (interface {
 			a(func(func(int) int) func(func(int)) int)
@@ -218,6 +217,7 @@ var typeTests = []pair{
 	}{},
 		"interface { reflect_test.a(func(func(int) int) func(func(int)) int); reflect_test.b() }",
 	},
+	*/
 	{struct {
 		x struct {
 			int32
@@ -226,7 +226,6 @@ var typeTests = []pair{
 	}{},
 		"struct { int32; int64 }",
 	},
-	*/
 }
 
 var valueTests = []pair{
@@ -252,18 +251,16 @@ var valueTests = []pair{
 	{new(**integer), "**reflect_test.integer(0)"},
 	{new(map[string]int32), "map[string]int32{<can't iterate on maps>}"},
 	{new(chan<- string), "chan<- string"},
-	//{new(func(a int8, b int32)), "func(int8, int32)(0)"}, // TODO(tinygo): No function support
+	{new(func(a int8, b int32)), "func(int8, int32)(0)"},
 	{new(struct {
 		c chan *int32
 		d float32
 	}),
 		"struct { c chan *int32; d float32 }{chan *int32, 0}",
 	},
-	/* // TODO(tinygo): No function support
 	{new(struct{ c func(chan *integer, *int8) }),
 		"struct { c func(chan *reflect_test.integer, *int8) }{func(chan *reflect_test.integer, *int8)(0)}",
 	},
-	*/
 	{new(struct {
 		a int8
 		b int32
@@ -771,8 +768,6 @@ func TestInterfaceValue(t *testing.T) {
 	}
 }
 
-/*
-
 func TestFunctionValue(t *testing.T) {
 	var x any = func() {}
 	v := ValueOf(x)
@@ -781,8 +776,6 @@ func TestFunctionValue(t *testing.T) {
 	}
 	assert(t, v.Type().String(), "func()")
 }
-
-*/
 
 func TestGrow(t *testing.T) {
 	v := ValueOf([]int(nil))
@@ -3286,8 +3279,7 @@ func TestFieldPkgPath(t *testing.T) {
 	})
 }
 
-/*
-
+/* // TODO(tinygo): Method lookup is not supported.
 func TestMethodPkgPath(t *testing.T) {
 	type I interface {
 		x()
@@ -3320,6 +3312,7 @@ func TestMethodPkgPath(t *testing.T) {
 		}
 	}
 }
+*/
 
 func TestVariadicType(t *testing.T) {
 	// Test example from Type documentation.
@@ -3344,10 +3337,7 @@ func TestVariadicType(t *testing.T) {
 	t.Error(s)
 }
 
-*/
-
 /*
-
 type inner struct {
 	x int
 }

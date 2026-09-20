@@ -368,6 +368,19 @@ type structField struct {
 	data unsafe.Pointer
 }
 
+// funcType is the type descriptor for function types. The high bit of numOut
+// marks a variadic function. The remaining bits hold the result count.
+// Parameter types are followed by result types in inOut.
+type funcType struct {
+	RawType
+	numIn  uint8
+	numOut uint16
+	ptrTo  *RawType
+	inOut  [0]*RawType
+}
+
+const funcTypeVariadic = 0x8000
+
 // Method set, as emitted by the compiler.
 type methodSet struct {
 	length  uintptr
@@ -459,8 +472,10 @@ func pointerTo(t *RawType) *RawType {
 		// TODO(dgryski): This is blocking https://github.com/tinygo-org/tinygo/issues/3131
 		// We need to be able to create types that match existing types to prevent typecode equality.
 		panic("reflect: cannot make *****T type")
-	case Interface, Func:
+	case Interface:
 		return (*interfaceType)(unsafe.Pointer(t)).ptrTo
+	case Func:
+		return (*funcType)(unsafe.Pointer(t)).ptrTo
 	case Struct:
 		return (*structType)(unsafe.Pointer(t)).ptrTo
 	default:
@@ -529,6 +544,39 @@ func (t *RawType) String() string {
 	case Interface:
 		// TODO(dgryski): Needs actual method set info
 		return "interface {}"
+	case Func:
+		ft := t.funcDescriptor()
+		numIn := int(ft.numIn)
+		numOut := int(ft.numOut &^ funcTypeVariadic)
+		variadic := ft.numOut&funcTypeVariadic != 0
+		inOut := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
+		s := "func("
+		for i := 0; i < numIn; i++ {
+			if i > 0 {
+				s += ", "
+			}
+			if variadic && i == numIn-1 {
+				s += "..." + inOut[i].elem().String()
+			} else {
+				s += inOut[i].String()
+			}
+		}
+		s += ")"
+		switch numOut {
+		case 0:
+		case 1:
+			s += " " + inOut[numIn].String()
+		default:
+			s += " ("
+			for i := 0; i < numOut; i++ {
+				if i > 0 {
+					s += ", "
+				}
+				s += inOut[numIn+i].String()
+			}
+			s += ")"
+		}
+		return s
 	default:
 		return t.Kind().String()
 	}
@@ -1154,6 +1202,58 @@ func (t *RawType) ChanDir() ChanDir {
 
 	// nummethod is overloaded for channel to store channel direction
 	return ChanDir(dir)
+}
+
+func (t *RawType) funcDescriptor() *funcType {
+	return (*funcType)(unsafe.Pointer(t.underlying()))
+}
+
+func (t *RawType) NumIn() int {
+	if t.Kind() != Func {
+		panic(TypeError{"NumIn"})
+	}
+	return int(t.funcDescriptor().numIn)
+}
+
+func (t *RawType) NumOut() int {
+	if t.Kind() != Func {
+		panic(TypeError{"NumOut"})
+	}
+	return int(t.funcDescriptor().numOut &^ funcTypeVariadic)
+}
+
+func (t *RawType) IsVariadic() bool {
+	if t.Kind() != Func {
+		panic(TypeError{"IsVariadic"})
+	}
+	return t.funcDescriptor().numOut&funcTypeVariadic != 0
+}
+
+func (t *RawType) In(i int) Type {
+	if t.Kind() != Func {
+		panic(TypeError{"In"})
+	}
+	ft := t.funcDescriptor()
+	numIn := int(ft.numIn)
+	if i < 0 || i >= numIn {
+		panic("reflect: Type.In: index out of range")
+	}
+	inOut := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
+	return inOut[i]
+}
+
+func (t *RawType) Out(i int) Type {
+	if t.Kind() != Func {
+		panic(TypeError{"Out"})
+	}
+	ft := t.funcDescriptor()
+	numIn := int(ft.numIn)
+	numOut := int(ft.numOut &^ funcTypeVariadic)
+	if i < 0 || i >= numOut {
+		panic("reflect: Type.Out: index out of range")
+	}
+	inOut := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
+	return inOut[numIn+i]
 }
 
 func (t *RawType) NumMethod() int {
