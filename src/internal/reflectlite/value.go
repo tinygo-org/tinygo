@@ -2482,6 +2482,37 @@ func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, typeInfo, keyType 
 //go:linkname chanMake runtime.chanMake
 func chanMake(elementSize uintptr, bufSize uintptr, elementLayout unsafe.Pointer) unsafe.Pointer
 
+type channelOp struct {
+	next  unsafe.Pointer
+	task  unsafe.Pointer
+	index uint32
+	value unsafe.Pointer
+}
+
+type chanSelectState struct {
+	ch      unsafe.Pointer
+	value   unsafe.Pointer
+	recvbuf unsafe.Pointer
+}
+
+//go:linkname chanSend runtime.chanSend
+func chanSend(ch, value unsafe.Pointer, op *channelOp)
+
+//go:linkname chanRecv runtime.chanRecv
+func chanRecv(ch, value unsafe.Pointer, op *channelOp) bool
+
+//go:linkname chanTrySend runtime.chanTrySend
+func chanTrySend(ch, value unsafe.Pointer) bool
+
+//go:linkname chanTryRecv runtime.chanTryRecv
+func chanTryRecv(ch, value unsafe.Pointer) (received, ok bool)
+
+//go:linkname chanClose runtime.chanClose
+func chanClose(ch unsafe.Pointer)
+
+//go:linkname chanSelect runtime.chanSelect
+func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelOp) (uint32, bool)
+
 // MakeMapWithSize creates a new map with the specified type and initial space
 // for approximately n elements.
 func MakeMapWithSize(typ Type, n int) Value {
@@ -2664,8 +2695,233 @@ func (v Value) MethodByName(name string) Value {
 	panic("unimplemented: (reflect.Value).MethodByName()")
 }
 
+func (v Value) Send(x Value) {
+	v.send(x, false, "reflect.Value.Send")
+}
+
+func (v Value) TrySend(x Value) bool {
+	return v.send(x, true, "reflect.Value.TrySend")
+}
+
+func (v Value) send(x Value, nonBlocking bool, method string) bool {
+	v.sendCheck(x, method)
+	var iface interface{}
+	value := chanSendValue(&x, v.typecode.elem(), &iface)
+	if chanTrySend(v.pointer(), value) {
+		return true
+	}
+	if nonBlocking {
+		return false
+	}
+	v.sendBlocking(x)
+	return true
+}
+
+//go:noinline
+func (v Value) sendBlocking(x Value) {
+	var iface interface{}
+	value := chanSendValue(&x, v.typecode.elem(), &iface)
+	var op channelOp
+	chanSend(v.pointer(), value, &op)
+}
+
 func (v Value) Recv() (x Value, ok bool) {
-	panic("unimplemented: (reflect.Value).Recv()")
+	return v.recv(false, "reflect.Value.Recv")
+}
+
+func (v Value) TryRecv() (x Value, ok bool) {
+	return v.recv(true, "reflect.Value.TryRecv")
+}
+
+func (v Value) recv(nonBlocking bool, method string) (Value, bool) {
+	v.recvCheck(method)
+	value := New(v.typecode.elem()).Elem()
+	received, ok := chanTryRecv(v.pointer(), value.value)
+	if received {
+		return chanRecvValue(value), ok
+	}
+	if nonBlocking {
+		return Value{}, false
+	}
+	return v.recvBlocking(value)
+}
+
+//go:noinline
+func (v Value) recvBlocking(value Value) (Value, bool) {
+	var op channelOp
+	ok := chanRecv(v.pointer(), value.value, &op)
+	return chanRecvValue(value), ok
+}
+
+func (v Value) Close() {
+	if v.Kind() != Chan {
+		panic(&ValueError{Method: "reflect.Value.Close", Kind: v.Kind()})
+	}
+	if !v.isExported() {
+		panic("reflect: cannot use value obtained using unexported field as channel")
+	}
+	if v.typecode.ChanDir()&SendDir == 0 {
+		panic("reflect: close of receive-only channel")
+	}
+	chanClose(v.pointer())
+}
+
+type SelectDir int
+
+const (
+	SelectSend SelectDir = iota + 1
+	SelectRecv
+	SelectDefault
+)
+
+type SelectCase struct {
+	Dir  SelectDir
+	Chan Value
+	Send Value
+}
+
+func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
+	if len(cases) > 65536 {
+		panic("reflect.Select: too many cases (max 65536)")
+	}
+
+	states := make([]chanSelectState, len(cases))
+	defaultIndex := -1
+	for i, c := range cases {
+		switch c.Dir {
+		default:
+			panic("reflect.Select: invalid Dir")
+		case SelectDefault:
+			if defaultIndex >= 0 {
+				panic("reflect.Select: multiple default cases")
+			}
+			if c.Chan.IsValid() {
+				panic("reflect.Select: default case has Chan value")
+			}
+			if c.Send.IsValid() {
+				panic("reflect.Select: default case has Send value")
+			}
+			defaultIndex = i
+		case SelectSend:
+			if !c.Chan.IsValid() {
+				continue
+			}
+			if !c.Send.IsValid() {
+				panic("reflect.Select: SendDir case missing Send value")
+			}
+			c.Chan.sendCheck(c.Send, "reflect.Select")
+			states[i].ch = c.Chan.pointer()
+			send := c.Send
+			var iface interface{}
+			states[i].value = chanSendValue(&send, c.Chan.typecode.elem(), &iface)
+		case SelectRecv:
+			if c.Send.IsValid() {
+				panic("reflect.Select: RecvDir case has Send value")
+			}
+			if !c.Chan.IsValid() {
+				continue
+			}
+			c.Chan.recvCheck("reflect.Select")
+			states[i].ch = c.Chan.pointer()
+			elem := c.Chan.typecode.elem()
+			states[i].recvbuf = alloc(elem.Size(), elem.gcLayout())
+		}
+	}
+
+	if len(cases) == 0 {
+		var op channelOp
+		chanRecv(nil, nil, &op)
+	}
+
+	var ops []channelOp
+	if defaultIndex < 0 {
+		ops = make([]channelOp, len(states))
+	}
+	index, ok := chanSelect(nil, states, ops)
+	if index == ^uint32(0) {
+		return defaultIndex, Value{}, false
+	}
+	chosen = int(index)
+	if cases[chosen].Dir == SelectRecv {
+		value := Value{
+			typecode: cases[chosen].Chan.typecode.elem(),
+			value:    states[chosen].recvbuf,
+		}
+		return chosen, chanRecvValue(value), ok
+	}
+	return chosen, Value{}, false
+}
+
+func (v Value) sendCheck(x Value, method string) {
+	if v.Kind() != Chan {
+		panic(&ValueError{Method: method, Kind: v.Kind()})
+	}
+	if !v.isExported() {
+		panic("reflect: cannot use value obtained using unexported field as channel")
+	}
+	if v.typecode.ChanDir()&SendDir == 0 {
+		if method == "reflect.Select" {
+			panic("reflect.Select: SendDir case using recv-only channel")
+		}
+		panic("reflect: send on recv-only channel")
+	}
+	if !x.IsValid() {
+		panic(&ValueError{Method: method, Kind: Invalid})
+	}
+	if !x.isExported() {
+		panic("reflect: cannot use value obtained using unexported field as value in Send")
+	}
+	if !x.typecode.AssignableTo(v.typecode.elem()) {
+		context := "reflect.Value.Send"
+		if method == "reflect.Select" {
+			context = method
+		}
+		panic(context + ": value of type " + x.typecode.String() + " is not assignable to type " + v.typecode.elem().String())
+	}
+}
+
+func (v Value) recvCheck(method string) {
+	if v.Kind() != Chan {
+		panic(&ValueError{Method: method, Kind: v.Kind()})
+	}
+	if !v.isExported() {
+		panic("reflect: cannot use value obtained using unexported field as channel")
+	}
+	if v.typecode.ChanDir()&RecvDir == 0 {
+		panic("reflect: recv on send-only channel")
+	}
+}
+
+func chanRecvValue(value Value) Value {
+	value.flags = valueFlagExported
+	if value.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
+		if isBigEndian && value.Kind() >= Bool && value.Kind() <= Uintptr {
+			value.value = unsafe.Pointer(loadValue(value.value, value.typecode.Size()))
+		} else {
+			var data unsafe.Pointer
+			memcpy(unsafe.Pointer(&data), value.value, value.typecode.Size())
+			value.value = data
+		}
+	}
+	return value
+}
+
+func chanSendValue(x *Value, elem *RawType, iface *interface{}) unsafe.Pointer {
+	if elem.Kind() == Interface && x.Kind() != Interface {
+		value := x.value
+		if x.isIndirect() && x.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
+			value = chanRecvValue(*x).value
+		}
+		*iface = composeInterface(unsafe.Pointer(x.typecode), value)
+		return unsafe.Pointer(iface)
+	}
+	if x.isIndirect() || x.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
+		return x.value
+	}
+	if isBigEndian && x.Kind() >= Bool && x.Kind() <= Uintptr {
+		return unsafe.Add(unsafe.Pointer(&x.value), unsafe.Sizeof(x.value)-x.typecode.Size())
+	}
+	return unsafe.Pointer(&x.value)
 }
 
 func NewAt(typ Type, p unsafe.Pointer) Value {

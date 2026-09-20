@@ -5,7 +5,7 @@ target triple = "wasm32-unknown-wasip1"
 
 %runtime._string = type { ptr, i32 }
 %runtime.channelOp = type { ptr, ptr, i32, ptr }
-%runtime.chanSelectState = type { ptr, ptr }
+%runtime.chanSelectState = type { ptr, ptr, ptr }
 
 @"main$string" = internal unnamed_addr constant [31 x i8] c"blocking select matched no case", align 1
 @"main$pack" = internal unnamed_addr constant { %runtime._string } { %runtime._string { ptr @"main$string", i32 31 } }
@@ -87,10 +87,14 @@ entry:
   store ptr %ch1, ptr %select.states.alloca, align 4
   %select.states.alloca.repack1 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 4
   store ptr %select.send.value, ptr %select.states.alloca.repack1, align 4
-  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  %select.states.alloca.repack3 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  store ptr null, ptr %select.states.alloca.repack3, align 4
+  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
   store ptr %ch2, ptr %0, align 4
-  %.repack3 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
-  store ptr null, ptr %.repack3, align 4
+  %.repack5 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 16
+  store ptr null, ptr %.repack5, align 4
+  %.repack7 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 20
+  store ptr null, ptr %.repack7, align 4
   %select.result = call { i32, i1 } @runtime.chanSelect(ptr undef, ptr nonnull %select.states.alloca, i32 2, i32 2, ptr null, i32 0, i32 0, ptr undef) #3
   call void @llvm.lifetime.end.p0(ptr nonnull %select.states.alloca)
   %1 = extractvalue { i32, i1 } %select.result, 0
@@ -108,7 +112,7 @@ select.body:                                      ; preds = %select.next
   br label %select.done
 }
 
-declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 536870912), i32 range(i32 0, 536870912), ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr) #0
+declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 357913942), i32 range(i32 0, 357913942), ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i1 @main.selectNonBlockingSend(ptr dereferenceable_or_null(44) %ch, i32 %value, ptr %context) unnamed_addr #1 {
@@ -125,7 +129,7 @@ select.next:                                      ; preds = %entry
   ret i1 false
 }
 
-declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(44), ptr, ptr) #0
+declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(44), ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden { i32, i1, i1 } @main.selectNonBlockingRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
@@ -150,7 +154,7 @@ select.next:                                      ; preds = %entry
   ret { i32, i1, i1 } zeroinitializer
 }
 
-declare { i1, i1 } @runtime.chanTryRecv(ptr dereferenceable_or_null(44), ptr, ptr) #0
+declare { i1, i1 } @runtime.chanTryRecv(ptr dereferenceable_or_null(44), ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i1 @main.selectNonBlockingZeroSend(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
@@ -194,10 +198,14 @@ entry:
   store ptr %ch1, ptr %select.states.alloca, align 4
   %select.states.alloca.repack4 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 4
   store ptr null, ptr %select.states.alloca.repack4, align 4
-  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  %select.states.alloca.repack6 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  store ptr null, ptr %select.states.alloca.repack6, align 4
+  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
   store ptr %ch2, ptr %0, align 4
-  %.repack6 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
-  store ptr null, ptr %.repack6, align 4
+  %.repack8 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 16
+  store ptr null, ptr %.repack8, align 4
+  %.repack10 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 20
+  store ptr null, ptr %.repack10, align 4
   call void @llvm.lifetime.start.p0(ptr nonnull %select.block.alloca)
   %select.result = call { i32, i1 } @runtime.chanSelect(ptr nonnull %select.recvbuf.alloca, ptr nonnull %select.states.alloca, i32 2, i32 2, ptr nonnull %select.block.alloca, i32 2, i32 2, ptr undef) #3
   call void @llvm.lifetime.end.p0(ptr nonnull %select.block.alloca)
