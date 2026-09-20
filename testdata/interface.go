@@ -1,6 +1,10 @@
 package main
 
-import "time"
+import (
+	"time"
+
+	"github.com/tinygo-org/tinygo/testdata/interfacepkg"
+)
 
 func main() {
 	thing := &Thing{"foo"}
@@ -119,6 +123,50 @@ func main() {
 
 	// check that type asserts to interfaces with no methods work
 	emptyintfcrash()
+
+	testUnexportedFieldIdentity()
+}
+
+func testUnexportedFieldIdentity() {
+	type localStruct = struct{ x int }
+	foreign := interfacepkg.New()
+	local := localStruct{x: 1}
+
+	checkTypeIdentity[localStruct]("struct", foreign)
+	checkTypeIdentity[[1]localStruct]("array", [1]interfacepkg.Unexported{foreign})
+	checkTypeIdentity[*localStruct]("pointer", (*interfacepkg.Unexported)(nil))
+	checkTypeIdentity[[]localStruct]("slice", []interfacepkg.Unexported{foreign})
+	checkTypeIdentity[map[int]localStruct]("map", map[int]interfacepkg.Unexported{0: foreign})
+	checkTypeIdentity[chan localStruct]("channel", (chan interfacepkg.Unexported)(nil))
+	checkTypeIdentity[func() localStruct]("function", (func() interfacepkg.Unexported)(nil))
+	checkTypeIdentity[interfacepkg.Unexported]("same package", foreign)
+	checkTypeIdentity[struct{ X int }]("exported", interfacepkg.Exported{X: 1})
+
+	for _, tc := range []struct {
+		name           string
+		foreign, local interface{}
+	}{
+		{"struct", foreign, local},
+		{"array", [1]interfacepkg.Unexported{foreign}, [1]localStruct{local}},
+		{"pointer", (*interfacepkg.Unexported)(nil), (*localStruct)(nil)},
+		{"channel", (chan interfacepkg.Unexported)(nil), (chan localStruct)(nil)},
+		{"exported", interfacepkg.Exported{X: 1}, struct{ X int }{X: 1}},
+	} {
+		println(tc.name, "equality:", tc.foreign == tc.local)
+		keys := map[interface{}]int{tc.foreign: 1, tc.local: 2}
+		println(tc.name, "map keys:", len(keys), keys[tc.foreign], keys[tc.local])
+	}
+}
+
+func checkTypeIdentity[T any](name string, value interface{}) {
+	_, ok := value.(T)
+	println(name, "assertion:", ok)
+	matched := false
+	switch value.(type) {
+	case T:
+		matched = true
+	}
+	println(name, "switch:", matched)
 }
 
 func printItf(val interface{}) {
