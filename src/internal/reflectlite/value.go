@@ -2303,5 +2303,9 @@ func (v Value) Recv() (x Value, ok bool) {
 }
 
 func NewAt(typ Type, p unsafe.Pointer) Value {
-	panic("unimplemented: reflect.New()")
+	return Value{
+		typecode: pointerTo(typ.(*RawType)),
+		value:    p,
+		flags:    valueFlagExported,
+	}
 }
