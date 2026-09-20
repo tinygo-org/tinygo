@@ -11,6 +11,7 @@ import (
 	"math/bits"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1698,7 +1699,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	}
 }
 
-func (b *builder) markReflectMethodUse(call *ssa.CallCommon) {
+func (b *builder) inReflectPackage() bool {
 	pkg := b.fn.Pkg
 	if pkg == nil && b.fn.Origin() != nil {
 		pkg = b.fn.Origin().Pkg
@@ -1715,11 +1716,16 @@ func (b *builder) markReflectMethodUse(call *ssa.CallCommon) {
 			callerPkg = named.Obj().Pkg()
 		}
 	}
-	if callerPkg != nil {
-		switch callerPkg.Path() {
-		case "reflect", "internal/reflectlite":
-			return
-		}
+	return callerPkg != nil && (callerPkg.Path() == "reflect" || callerPkg.Path() == "internal/reflectlite")
+}
+
+func (b *builder) markReflectMethodUse(call *ssa.CallCommon) {
+	b.markReflectMethodUseFor(call, b.llvmFn)
+}
+
+func (b *builder) markReflectMethodUseFor(call *ssa.CallCommon, target llvm.Value) {
+	if b.inReflectPackage() {
+		return
 	}
 
 	var method *types.Func
@@ -1730,14 +1736,70 @@ func (b *builder) markReflectMethodUse(call *ssa.CallCommon) {
 			method, _ = object.(*types.Func)
 		}
 	}
-	if method == nil || method.Pkg() == nil || method.Pkg().Path() != "reflect" {
+	if method == nil || method.Pkg() == nil {
 		return
 	}
 	switch method.Name() {
 	case "Method", "MethodByName", "Methods":
-		attr := b.ctx.CreateStringAttribute("tinygo-reflect-method", "")
-		b.llvmFn.AddFunctionAttr(attr)
+	default:
+		return
 	}
+	if method.Pkg().Path() != "reflect" {
+		recv := method.Type().(*types.Signature).Recv()
+		if recv == nil || !types.IsInterface(recv.Type()) || !b.canInvokeReflectMethod(method) {
+			return
+		}
+	}
+	// Method sets reference synthetic promotion wrappers even when they are
+	// never called. Mark the call sites instead of the wrappers.
+	if b.fn.Pkg == nil && b.fn.Signature.Recv() != nil && b.fn.Object() == method {
+		return
+	}
+	target.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-reflect-makefunc", ""))
+	switch method.Name() {
+	case "MethodByName":
+		if len(call.Args) == 0 {
+			break
+		}
+		if name, ok := call.Args[len(call.Args)-1].(*ssa.Const); ok && name.Value.Kind() == constant.String {
+			var names []string
+			if attr := target.GetStringAttributeAtIndex(-1, "tinygo-reflect-method-names"); !attr.IsNil() {
+				names = strings.Fields(attr.GetStringValue())
+			}
+			methodName := constant.StringVal(name.Value)
+			if methodName == "Method" || methodName == "MethodByName" || methodName == "Methods" {
+				break
+			}
+			if token.IsIdentifier(methodName) && token.IsExported(methodName) {
+				names = append(names, methodName)
+			}
+			sort.Strings(names)
+			names = slices.Compact(names)
+			target.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-reflect-method-names", strings.Join(names, " ")))
+			return
+		}
+	}
+	target.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-reflect-method", ""))
+}
+
+func (b *builder) canInvokeReflectMethod(method *types.Func) bool {
+	pkg := b.program.ImportedPackage("reflect")
+	if pkg == nil {
+		return false
+	}
+	for _, name := range []string{"Type", "Value"} {
+		obj, _, _ := types.LookupFieldOrMethod(pkg.Pkg.Scope().Lookup(name).Type(), false, pkg.Pkg, method.Name())
+		if obj != nil && types.Identical(obj.Type(), method.Type()) {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *builder) markReflectFunctionValue(fn *ssa.Function, value llvm.Value) {
+	call := &ssa.CallCommon{Value: fn}
+	b.markReflectMethodUse(call)
+	b.markReflectMethodUseFor(call, value)
 }
 
 func (b *builder) setValue(value ssa.Value, llvmValue llvm.Value) {
@@ -2604,6 +2666,7 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 			return llvm.Undef(b.getLLVMType(expr.Type()))
 		}
 		_, fn := b.getFunction(expr)
+		b.markReflectFunctionValue(expr, fn)
 		return b.createFuncValue(fn, b.dataPtrUndef, expr.Signature)
 	case *ssa.Global:
 		value := b.getGlobal(expr)

@@ -78,7 +78,7 @@ attributes #0 = { "tinygo-invoke"="reflect/methods.Double() int" "tinygo-methods
 	const methodMetadata = `
 @"reflect/methods.Unused(float64)" = linkonce_odr constant i8 0
 @"Metadata$methodset" = linkonce_odr unnamed_addr constant { i32, [1 x ptr], { ptr } } { i32 1, [1 x ptr] [ptr @"reflect/methods.Unused(float64)"], { ptr } { ptr @"Metadata.Unused$invoke" } }
-@"reflect/types.type:struct:metadata" = linkonce_odr constant { ptr, i8, i16, { i32, [1 x ptr], [1 x ptr], [1 x ptr] } } { ptr @"Metadata$methodset", i8 25, i16 -32768, { i32, [1 x ptr], [1 x ptr], [1 x ptr] } { i32 1, [1 x ptr] [ptr @"reflect/methods.Unused(float64)"], [1 x ptr] zeroinitializer, [1 x ptr] [ptr @"reflect/types.type:func:{basic:float64}{}"] } }, align 4
+@"reflect/types.type:struct:metadata" = linkonce_odr constant { ptr, i8, i16, { i32, [1 x ptr], [1 x ptr], [1 x ptr], [1 x i32] } } { ptr @"Metadata$methodset", i8 25, i16 -32768, { i32, [1 x ptr], [1 x ptr], [1 x ptr], [1 x i32] } { i32 1, [1 x ptr] [ptr @"reflect/methods.Unused(float64)"], [1 x ptr] zeroinitializer, [1 x ptr] [ptr @"reflect/types.type:func:{basic:float64}{}"], [1 x i32] zeroinitializer } }, align 4
 
 define void @"Metadata.Unused$invoke"(ptr %receiver, double %arg, ptr %context) {
   ret void

@@ -1397,7 +1397,25 @@ func linkPackageModule(linker llvm.Linker, mod, pkgMod llvm.Module) error {
 		}
 		fn.SetLinkage(llvm.LinkOnceODRLinkage)
 	}
-	return linker.LinkModule(pkgMod)
+	attributes := make(map[string]llvmutil.FunctionUsageAttributes)
+	for fn := range llvmutil.Functions(pkgMod) {
+		attrs := llvmutil.ReadFunctionUsageAttributes(fn)
+		attrs = attrs.Merge(llvmutil.ReadFunctionUsageAttributes(mod.NamedFunction(fn.Name())))
+		if len(attrs) != 0 {
+			attributes[fn.Name()] = attrs
+		}
+	}
+	if err := linker.LinkModule(pkgMod); err != nil {
+		return err
+	}
+	for name, attrs := range attributes {
+		fn := mod.NamedFunction(name)
+		if fn.IsNil() {
+			continue
+		}
+		attrs.Apply(fn)
+	}
+	return nil
 }
 
 // optimizeProgram runs a series of optimizations and transformations that are

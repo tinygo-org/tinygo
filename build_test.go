@@ -29,6 +29,9 @@ func TestReflectMethodReferences(t *testing.T) {
 	}{
 		{"expression", "var lookup = reflect.Type.MethodByName", `lookup(reflect.TypeOf(target{}), "Kept")`},
 		{"bound", "var lookup = reflect.TypeOf(target{}).MethodByName", `lookup("Kept")`},
+		{"interface", `func lookup(t interface{ MethodByName(string) (reflect.Method, bool) }) (reflect.Method, bool) {
+			return t.MethodByName("Kept")
+		}`, `lookup(reflect.TypeOf(target{}))`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source := `package main
@@ -173,6 +176,8 @@ func TestBuild(t *testing.T) {
 		"print.go",
 		"promoted.go",
 		"reflect.go",
+		"reflect-method-values.go",
+		"reflect-promoted-lookup.go",
 		"signal.go",
 		"signalnotify.go",
 		"slice.go",
@@ -710,7 +715,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
 			switch name {
-			case "reflect.go":
+			case "reflect.go", "reflect-method-values.go", "reflect-promoted-lookup.go":
 				// Reflect tests do not run correctly, probably because of the
 				// limited amount of memory.
 				continue

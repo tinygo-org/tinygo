@@ -340,5 +340,6 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 
 	// Create the closure.
 	_, fn := b.getFunction(f)
+	b.markReflectFunctionValue(f, fn)
 	return b.createFuncValue(fn, context, f.Signature), nil
 }

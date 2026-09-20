@@ -176,21 +176,7 @@ func TypeAssert[T any](v Value) (T, bool) {
 	return *(*T)(v.value), true
 }
 
-// valueInterfaceUnsafe is used by the runtime to hash map keys. It should not
-// be subject to the isExported check.
-// loadSmallValue loads a value of size <= sizeof(uintptr) from ptr into
-// a pointer-sized value suitable for storing in an interface's data field.
-func loadSmallValue(ptr unsafe.Pointer, size uintptr) unsafe.Pointer {
-	if size == unsafe.Sizeof(uintptr(0)) {
-		return *(*unsafe.Pointer)(ptr)
-	}
-	var value uintptr
-	for j := size; j != 0; j-- {
-		value = (value << 8) | uintptr(*(*uint8)(unsafe.Add(ptr, j-1)))
-	}
-	return unsafe.Pointer(value)
-}
-
+// valueInterfaceUnsafe is used by the runtime to hash map keys.
 func valueInterfaceUnsafe(v Value) interface{} {
 	if v.typecode.Kind() == Interface {
 		// The value itself is an interface. This can happen when getting the
@@ -203,7 +189,7 @@ func valueInterfaceUnsafe(v Value) interface{} {
 	if v.isIndirect() && v.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
 		// Value was indirect but must be put back directly in the interface
 		// value.
-		v.value = loadSmallValue(v.value, v.typecode.Size())
+		v.value = loadInlineValue(v.value, v.typecode)
 	} else if v.isIndirect() {
 		size := v.typecode.Size()
 		value := alloc(size, v.typecode.gcLayout())
@@ -311,9 +297,6 @@ func (v Value) UnsafePointer() unsafe.Pointer {
 		return slice.data
 	case Func:
 		fn := (*funcHeader)(v.value)
-		if fn.Context != nil {
-			return fn.Context
-		}
 		return fn.Code
 	default:
 		panic(&ValueError{Method: "UnsafePointer", Kind: v.Kind()})
@@ -1002,7 +985,7 @@ func (v Value) Field(i int) Value {
 		// afterwards, so load the value (from the correct offset) and return
 		// it.
 		ptr := unsafe.Add(v.value, uintptr(offset))
-		value := unsafe.Pointer(loadValue(ptr, fieldSize))
+		value := loadInlineValue(ptr, fieldType)
 		return Value{
 			flags:    flags &^ valueFlagIndirect,
 			typecode: fieldType,
@@ -1012,11 +995,11 @@ func (v Value) Field(i int) Value {
 
 	// The value was already stored directly in the interface and it still
 	// is. Cut out the part of the value that we need.
-	value := maskAndShift(uintptr(v.value), uintptr(offset), fieldSize)
+	value := loadInlineValue(unsafe.Add(unsafe.Pointer(&v.value), offset), fieldType)
 	return Value{
 		flags:    flags,
 		typecode: fieldType,
-		value:    unsafe.Pointer(value),
+		value:    value,
 	}
 }
 
@@ -1051,6 +1034,9 @@ func (v Value) Index(i int) Value {
 			flags:    v.flags & valueFlagExported,
 		}
 	case Array:
+		if uint(i) >= uint(v.Len()) {
+			panic("reflect: array index out of range")
+		}
 		// Extract an element from the array.
 		elemType := v.typecode.elem()
 		elemSize := elemType.Size()
@@ -1083,7 +1069,7 @@ func (v Value) Index(i int) Value {
 			if !v.isIndirect() {
 				// Use a pointer to the value (don't load the value) if the
 				// 'indirect' flag is set.
-				value = unsafe.Pointer(loadValue(addr, elemSize))
+				value = loadInlineValue(addr, elemType)
 			}
 			return Value{
 				typecode: v.typecode.elem(),
@@ -1092,14 +1078,12 @@ func (v Value) Index(i int) Value {
 			}
 		}
 
-		// The value fits in a pointer, so extract it with some shifting and
-		// masking.
+		// Extract the element from the inline array.
 		offset := elemSize * uintptr(i)
-		value := maskAndShift(uintptr(v.value), offset, elemSize)
 		return Value{
 			typecode: v.typecode.elem(),
 			flags:    v.flags,
-			value:    unsafe.Pointer(value),
+			value:    loadInlineValue(unsafe.Add(unsafe.Pointer(&v.value), offset), elemType),
 		}
 	default:
 		panic(&ValueError{Method: "Index", Kind: v.Kind()})
@@ -1198,7 +1182,7 @@ func genericKeyPtr(vkey *RawType, key Value) unsafe.Pointer {
 		// valueInterfaceUnsafe.
 		val := key.value
 		if key.isIndirect() && key.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
-			val = loadSmallValue(key.value, key.typecode.Size())
+			val = loadInlineValue(key.value, key.typecode)
 		}
 		intf := composeInterface(unsafe.Pointer(key.typecode), val)
 		return unsafe.Pointer(&intf)
@@ -1386,7 +1370,7 @@ func (v Value) Set(x Value) {
 	if v.typecode.Kind() == Interface && x.typecode.Kind() != Interface {
 		// move the value of x back into the interface, if possible
 		if x.isIndirect() && x.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
-			x.value = unsafe.Pointer(loadValue(x.value, x.typecode.Size()))
+			x.value = loadInlineValue(x.value, x.typecode)
 		}
 
 		intf := composeInterface(unsafe.Pointer(x.typecode), x.value)
@@ -1398,7 +1382,7 @@ func (v Value) Set(x Value) {
 
 	size := v.typecode.Size()
 	if size <= unsafe.Sizeof(uintptr(0)) && !x.isIndirect() {
-		storeValue(v.value, size, uintptr(x.value))
+		memcpy(v.value, x.inlineValuePointer(), size)
 	} else {
 		memcpy(v.value, x.value, size)
 	}
@@ -1687,7 +1671,7 @@ func convertOp(src Value, typ Type) (Value, bool) {
 				size := rtype.Size()
 				var value unsafe.Pointer
 				if size <= unsafe.Sizeof(uintptr(0)) {
-					value = loadSmallValue((*sliceHeader)(src.value).data, size)
+					value = loadInlineValue((*sliceHeader)(src.value).data, rtype)
 				} else {
 					value = alloc(size, rtype.gcLayout())
 					memcpy(value, (*sliceHeader)(src.value).data, size)
@@ -1791,7 +1775,7 @@ func cvtDirect(v Value, t *RawType) Value {
 	if v.isIndirect() {
 		size := v.typecode.Size()
 		if size <= unsafe.Sizeof(uintptr(0)) {
-			value = loadSmallValue(value, size)
+			value = loadInlineValue(value, t)
 		} else {
 			value = alloc(size, v.typecode.gcLayout())
 			memcpy(value, v.value, size)
@@ -2358,7 +2342,7 @@ func (v Value) SetMapIndex(key, elem Value) {
 	if !del && v.typecode.elem().Kind() == Interface && elem.typecode.Kind() != Interface {
 		val := elem.value
 		if elem.isIndirect() && elem.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
-			val = loadSmallValue(elem.value, elem.typecode.Size())
+			val = loadInlineValue(elem.value, elem.typecode)
 		}
 		intf := composeInterface(unsafe.Pointer(elem.typecode), val)
 		elem = Value{
@@ -2661,10 +2645,11 @@ func (v Value) call(in []Value, callSlice bool) []Value {
 		result := &resultStorage[i]
 		result.typecode = typ.Out(i).(*RawType)
 		result.flags = valueFlagExported
-		if result.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
-			resultPointers[i] = unsafe.Pointer(&result.value)
+		size := result.typecode.Size()
+		if size <= unsafe.Sizeof(uintptr(0)) {
+			resultPointers[i] = result.inlineValuePointer()
 		} else {
-			result.value = alloc(result.typecode.Size(), result.typecode.gcLayout())
+			result.value = alloc(size, result.typecode.gcLayout())
 			resultPointers[i] = result.value
 		}
 	}
@@ -2761,7 +2746,7 @@ func callMakeFunc(context unsafe.Pointer, argPointers, resultPointers []unsafe.P
 		size := typ.Size()
 		value := ptr
 		if size <= unsafe.Sizeof(uintptr(0)) {
-			value = loadSmallValue(ptr, size)
+			value = loadInlineValue(ptr, typ)
 		} else if copyArgs {
 			value = alloc(size, typ.gcLayout())
 			memcpy(value, ptr, size)
@@ -2805,11 +2790,72 @@ func callMakeFunc(context unsafe.Pointer, argPointers, resultPointers []unsafe.P
 }
 
 func (v Value) Method(i int) Value {
-	panic("unimplemented: (reflect.Value).Method()")
+	if !v.IsValid() {
+		panic(&ValueError{Method: "Method", Kind: Invalid})
+	}
+	if i < 0 || i >= v.NumMethod() {
+		panic("reflect: Method index out of range")
+	}
+	method := v.typecode.Method(i)
+	isInterface := v.Kind() == Interface
+	var boundType Type = method.Type
+	if isInterface {
+		if v.IsNil() {
+			panic("reflect: Method on nil interface value")
+		}
+	} else {
+		if !method.Func.IsValid() {
+			panic("reflect: method function is unavailable")
+		}
+		in := make([]Type, method.Type.NumIn()-1)
+		for i := range in {
+			in[i] = method.Type.In(i + 1)
+		}
+		out := make([]Type, method.Type.NumOut())
+		for i := range out {
+			out[i] = method.Type.Out(i)
+		}
+		boundType = FuncOf(in, out, method.Type.IsVariadic())
+	}
+	callback := func(args []Value) []Value {
+		receiver, fn := v, method.Func
+		if isInterface {
+			receiver = v.Elem()
+			if !receiver.IsValid() {
+				panic("reflect: call of method on nil interface value")
+			}
+			concrete, ok := receiver.typecode.MethodByName(method.Name)
+			if !ok || !concrete.Func.IsValid() {
+				panic("reflect: method function is unavailable")
+			}
+			fn = concrete.Func
+		}
+		callArgs := make([]Value, len(args)+1)
+		callArgs[0] = receiver
+		copy(callArgs[1:], args)
+		if method.Type.IsVariadic() {
+			return fn.CallSlice(callArgs)
+		}
+		return fn.Call(callArgs)
+	}
+	callbackHeader := (*funcHeader)(unsafe.Pointer(&callback))
+	result := MakeFunc(boundType, callbackHeader.Context, callbackHeader.Code)
+	result.flags = v.flags & (valueFlagExported | valueFlagRO)
+	if method.PkgPath != "" {
+		result.flags &^= valueFlagExported
+	}
+	return result
 }
 
 func (v Value) MethodByName(name string) Value {
-	panic("unimplemented: (reflect.Value).MethodByName()")
+	if !v.IsValid() {
+		panic(&ValueError{Method: "MethodByName", Kind: Invalid})
+	}
+	method, ok := v.typecode.MethodByName(name)
+	if !ok {
+		return Value{}
+	}
+	return v.Method(method.Index)
 }
 
 func (v Value) Send(x Value) {
@@ -3012,15 +3058,27 @@ func (v Value) recvCheck(method string) {
 func chanRecvValue(value Value) Value {
 	value.flags = valueFlagExported
 	if value.typecode.Size() <= unsafe.Sizeof(uintptr(0)) {
-		if isBigEndian && value.Kind() >= Bool && value.Kind() <= Uintptr {
-			value.value = unsafe.Pointer(loadValue(value.value, value.typecode.Size()))
-		} else {
-			var data unsafe.Pointer
-			memcpy(unsafe.Pointer(&data), value.value, value.typecode.Size())
-			value.value = data
-		}
+		value.value = loadInlineValue(value.value, value.typecode)
 	}
 	return value
+}
+
+func loadInlineValue(ptr unsafe.Pointer, typ *RawType) unsafe.Pointer {
+	size := typ.Size()
+	if isBigEndian && typ.Kind() >= Bool && typ.Kind() <= Uintptr {
+		return unsafe.Pointer(loadValue(ptr, size))
+	}
+	var value unsafe.Pointer
+	memcpy(unsafe.Pointer(&value), ptr, size)
+	return value
+}
+
+func (v *Value) inlineValuePointer() unsafe.Pointer {
+	ptr := unsafe.Pointer(&v.value)
+	if isBigEndian && v.Kind() >= Bool && v.Kind() <= Uintptr {
+		return unsafe.Add(ptr, unsafe.Sizeof(v.value)-v.typecode.Size())
+	}
+	return ptr
 }
 
 func chanSendValue(x *Value, elem *RawType, iface *interface{}) unsafe.Pointer {
@@ -3035,10 +3093,7 @@ func chanSendValue(x *Value, elem *RawType, iface *interface{}) unsafe.Pointer {
 	if x.isIndirect() || x.typecode.Size() > unsafe.Sizeof(uintptr(0)) {
 		return x.value
 	}
-	if isBigEndian && x.Kind() >= Bool && x.Kind() <= Uintptr {
-		return unsafe.Add(unsafe.Pointer(&x.value), unsafe.Sizeof(x.value)-x.typecode.Size())
-	}
-	return unsafe.Pointer(&x.value)
+	return x.inlineValuePointer()
 }
 
 func NewAt(typ Type, p unsafe.Pointer) Value {

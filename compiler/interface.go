@@ -371,6 +371,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			types.NewVar(token.NoPos, nil, "signatures", types.NewArray(types.Typ[types.UnsafePointer], int64(len(methods)))),
 			types.NewVar(token.NoPos, nil, "names", types.NewArray(types.Typ[types.UnsafePointer], int64(len(methods)))),
 			types.NewVar(token.NoPos, nil, "types", types.NewArray(types.Typ[types.UnsafePointer], int64(len(methods)))),
+			types.NewVar(token.NoPos, nil, "functions", types.NewArray(types.Typ[types.Uintptr], int64(len(methods)))),
 		}, nil)
 		var methodSetValue llvm.Value
 		switch typ := typ.(type) {
@@ -1612,6 +1613,8 @@ func (c *context) getMethodSetValue(owner types.Type, methods []*types.Func) llv
 		pkgName       string
 		signature     llvm.Value
 		methodType    llvm.Value
+		callType      *types.Signature
+		method        *types.Func
 	}
 	var refs []methodRef
 	_, ownerIsInterface := owner.Underlying().(*types.Interface)
@@ -1650,7 +1653,7 @@ func (c *context) getMethodSetValue(owner types.Type, methods []*types.Func) llv
 				value.AddMetadata(0, diglobal)
 			}
 		}
-		reflectedType := method.Type()
+		reflectedType := method.Type().(*types.Signature)
 		if !ownerIsInterface {
 			signature := method.Type().(*types.Signature)
 			params := make([]*types.Var, 0, signature.Params().Len()+1)
@@ -1675,19 +1678,32 @@ func (c *context) getMethodSetValue(owner types.Type, methods []*types.Func) llv
 			pkgName:       pkgName,
 			signature:     value,
 			methodType:    c.getTypeCode(reflectedType),
+			callType:      reflectedType,
+			method:        method,
 		})
 	}
 	sort.Slice(refs, func(i, j int) bool {
 		return refs[i].signatureName < refs[j].signatureName
 	})
 
-	var signatures []llvm.Value
-	var names []llvm.Value
-	var types []llvm.Value
+	var signatures, names, types, functions []llvm.Value
+	methodSelections := c.program.MethodSets.MethodSet(owner)
 	for _, ref := range refs {
 		signatures = append(signatures, ref.signature)
 		names = append(names, c.getMethodNameGlobal(ref.metadataName, ref.pkgPath, ref.pkgName, ref.name))
 		types = append(types, ref.methodType)
+		function := llvm.ConstInt(c.uintptrType, 0, false)
+		if !ownerIsInterface {
+			for selection := range methodSelections.Methods() {
+				if selection.Obj() != ref.method {
+					continue
+				}
+				llvmFn := c.getReflectMethodFunction(c.program.MethodValue(selection), ref.callType)
+				function = llvm.ConstPtrToInt(llvmFn, c.uintptrType)
+				break
+			}
+		}
+		functions = append(functions, function)
 	}
 
 	return c.ctx.ConstStruct([]llvm.Value{
@@ -1695,7 +1711,85 @@ func (c *context) getMethodSetValue(owner types.Type, methods []*types.Func) llv
 		llvm.ConstArray(c.dataPtrType, signatures),
 		llvm.ConstArray(c.dataPtrType, names),
 		llvm.ConstArray(c.dataPtrType, types),
+		llvm.ConstArray(c.uintptrType, functions),
 	}, false)
+}
+
+func (c *context) getReflectMethodFunction(method *ssa.Function, sig *types.Signature) llvm.Value {
+	methodType, methodFn := c.getFunction(method)
+	wrapperType := c.getLLVMFunctionType(sig)
+	exported := c.getFunctionInfo(method).isExported()
+	from := c.getFunctionABI(sig, false)
+	to := c.getFunctionABI(method.Signature, exported)
+	// Method calls budget the receiver separately from the other parameters.
+	sameABI := methodType == wrapperType && from.indirectResult == to.indirectResult
+	for i, param := range from.params {
+		sameABI = sameABI && param.indirect == to.params[i].indirect
+	}
+	if sameABI {
+		return methodFn
+	}
+
+	name := "reflect/method:" + methodFn.Name()
+	if wrapper := c.mod.NamedFunction(name); !wrapper.IsNil() {
+		return wrapper
+	}
+	wrapper := llvm.AddFunction(c.mod, name, wrapperType)
+	wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
+	c.addStandardAttributes(wrapper)
+	b := builder{context: c, Builder: c.ctx.NewBuilder()}
+	defer b.Builder.Dispose()
+	b.SetInsertPointAtEnd(c.ctx.AddBasicBlock(wrapper, "entry"))
+
+	params := wrapper.Params()
+	var args []llvm.Value
+	var resultPtr llvm.Value
+	if from.indirectResult {
+		resultPtr, params = params[0], params[1:]
+		if to.indirectResult {
+			args = append(args, resultPtr)
+		}
+	}
+	for i, param := range from.params {
+		target := to.params[i]
+		if param.indirect {
+			ptr := params[0]
+			params = params[1:]
+			if target.indirect {
+				args = append(args, ptr)
+			} else {
+				args = append(args, b.expandFormalParam(b.CreateLoad(param.llvmType, ptr, ""))...)
+			}
+			continue
+		}
+		count := len(c.expandDirectFormalParamType(param.llvmType, "", nil))
+		fields := params[:count]
+		params = params[count:]
+		if target.indirect {
+			ptr := b.CreateAlloca(param.llvmType, "arg")
+			b.CreateStore(b.collapseFormalParam(param.llvmType, fields), ptr)
+			args = append(args, ptr)
+		} else {
+			args = append(args, fields...)
+		}
+	}
+	if !exported {
+		args = append(args, params[0])
+	}
+	result := b.CreateCall(methodType, methodFn, args, "")
+	result.SetInstructionCallConv(methodFn.FunctionCallConv())
+	switch {
+	case from.indirectResult:
+		if !to.indirectResult {
+			b.CreateStore(result, resultPtr)
+		}
+		b.CreateRetVoid()
+	case methodType.ReturnType() == c.void:
+		b.CreateRetVoid()
+	default:
+		b.CreateRet(result)
+	}
+	return wrapper
 }
 
 func (c *context) getMethodNameGlobal(identity, pkgPath, pkgName, name string) llvm.Value {
