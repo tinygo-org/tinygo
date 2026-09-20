@@ -392,6 +392,22 @@ type methodEntry struct {
 	typ  *RawType
 }
 
+type funcCacheEntry struct {
+	typ     *RawType
+	in      []*RawType
+	out     []*RawType
+	storage []byte
+	next    *funcCacheEntry
+}
+
+var funcLookupCache atomic.Pointer[funcCacheEntry]
+
+//go:extern internal/reflectlite.funcTypeLinks
+var funcTypeLinks **RawType
+
+//go:extern internal/reflectlite.funcTypeLinksLen
+var funcTypeLinksLen uintptr
+
 // Method set, as emitted by the compiler.
 type methodSet struct {
 	length     uintptr
@@ -2230,7 +2246,100 @@ func MapOf(key, value Type) Type {
 }
 
 func FuncOf(in, out []Type, variadic bool) Type {
-	panic("unimplemented: reflect.FuncOf()")
+	if variadic && (len(in) == 0 || in[len(in)-1].Kind() != Slice) {
+		panic("reflect.FuncOf: last arg of variadic func must be slice")
+	}
+	if len(in)+len(out) > 128 {
+		panic("reflect.FuncOf: too many arguments")
+	}
+
+	rawIn := make([]*RawType, len(in))
+	for i, typ := range in {
+		rawIn[i] = typ.(*RawType)
+	}
+	rawOut := make([]*RawType, len(out))
+	for i, typ := range out {
+		rawOut[i] = typ.(*RawType)
+	}
+
+	if typ := loadCachedFuncType(rawIn, rawOut, variadic); typ != nil {
+		return typ
+	}
+	for _, typ := range unsafe.Slice(funcTypeLinks, funcTypeLinksLen) {
+		if funcTypeMatches(typ, rawIn, rawOut, variadic) {
+			return loadOrStoreCachedFuncType(rawIn, rawOut, variadic, typ, nil)
+		}
+	}
+
+	size := unsafe.Sizeof(funcType{}) + uintptr(len(rawIn)+len(rawOut))*unsafe.Sizeof(unsafe.Pointer(nil))
+	storage := make([]byte, size+3)
+	addr := align(uintptr(unsafe.Pointer(unsafe.SliceData(storage))), 4)
+	typ := (*funcType)(unsafe.Pointer(addr))
+	typ.meta = uint8(Func)
+	typ.numIn = uint8(len(rawIn))
+	typ.numOut = uint16(len(rawOut))
+	if variadic {
+		typ.numOut |= funcTypeVariadic
+	}
+	typ.ptrTo = (*RawType)(unsafe.Add(unsafe.Pointer(&typ.RawType), 1))
+	inOut := unsafe.Slice((**RawType)(unsafe.Pointer(&typ.inOut)), len(rawIn)+len(rawOut))
+	copy(inOut, rawIn)
+	copy(inOut[len(rawIn):], rawOut)
+	return loadOrStoreCachedFuncType(rawIn, rawOut, variadic, &typ.RawType, storage)
+}
+
+func funcTypeMatches(typ *RawType, in, out []*RawType, variadic bool) bool {
+	if typ.Kind() != Func {
+		return false
+	}
+	ft := (*funcType)(unsafe.Pointer(typ.underlying()))
+	if int(ft.numIn) != len(in) ||
+		int(ft.numOut&^funcTypeVariadic) != len(out) ||
+		(ft.numOut&funcTypeVariadic != 0) != variadic {
+		return false
+	}
+	inOut := unsafe.Slice((**RawType)(unsafe.Pointer(&ft.inOut)), len(in)+len(out))
+	for i, typ := range in {
+		if inOut[i] != typ {
+			return false
+		}
+	}
+	for i, typ := range out {
+		if inOut[len(in)+i] != typ {
+			return false
+		}
+	}
+	return true
+}
+
+func loadCachedFuncType(in, out []*RawType, variadic bool) *RawType {
+	for entry := funcLookupCache.Load(); entry != nil; entry = entry.next {
+		if funcTypeMatches(entry.typ, in, out, variadic) {
+			return entry.typ
+		}
+	}
+	return nil
+}
+
+func loadOrStoreCachedFuncType(in, out []*RawType, variadic bool, typ *RawType, storage []byte) *RawType {
+	entry := &funcCacheEntry{
+		typ:     typ,
+		in:      in,
+		out:     out,
+		storage: storage,
+	}
+	for {
+		head := funcLookupCache.Load()
+		for existing := head; existing != nil; existing = existing.next {
+			if funcTypeMatches(existing.typ, in, out, variadic) {
+				return existing.typ
+			}
+		}
+		entry.next = head
+		if funcLookupCache.CompareAndSwap(head, entry) {
+			return typ
+		}
+	}
 }
 
 const maxVarintLen32 = 5

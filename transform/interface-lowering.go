@@ -616,6 +616,7 @@ func (p *lowerInterfacesPass) createReflectTypeLinks(typeNames []string) {
 		{"array:", "internal/reflectlite.arrayTypeLinks", "internal/reflectlite.arrayTypeLinksLen"},
 		{"chan:", "internal/reflectlite.chanTypeLinks", "internal/reflectlite.chanTypeLinksLen"},
 		{"struct:", "internal/reflectlite.structTypeLinks", "internal/reflectlite.structTypeLinksLen"},
+		{"func:", "internal/reflectlite.funcTypeLinks", "internal/reflectlite.funcTypeLinksLen"},
 	} {
 		dataGlobal := p.mod.NamedGlobal(spec.data)
 		lengthGlobal := p.mod.NamedGlobal(spec.length)
