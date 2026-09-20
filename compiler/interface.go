@@ -31,13 +31,128 @@ func reflectTypeName(typ *types.Named) string {
 	if typ.TypeArgs().Len() == 0 {
 		return name
 	}
-	qualified := types.TypeString(typ, func(pkg *types.Package) string {
-		return pkg.Name()
-	})
-	if pkg := typ.Obj().Pkg(); pkg != nil {
-		return strings.TrimPrefix(qualified, pkg.Name()+".")
+	args := make([]string, typ.TypeArgs().Len())
+	for i := range args {
+		args[i] = reflectTypeArgumentName(typ.TypeArgs().At(i))
 	}
-	return qualified
+	return name + "[" + strings.Join(args, ",") + "]"
+}
+
+// Generic arguments use the Go compiler's LinkString format.
+// https://github.com/golang/go/blob/master/src/cmd/compile/internal/types/fmt.go
+func reflectTypeArgumentName(typ types.Type) string {
+	switch typ := types.Unalias(typ).(type) {
+	case *types.Basic:
+		return basicTypeNames[typ.Kind()]
+	case *types.Named:
+		name := reflectTypeName(typ)
+		if pkg := typ.Obj().Pkg(); pkg != nil {
+			name = pkg.Path() + "." + name
+		}
+		return name
+	case *types.Pointer:
+		return "*" + reflectTypeArgumentName(typ.Elem())
+	case *types.Slice:
+		return "[]" + reflectTypeArgumentName(typ.Elem())
+	case *types.Array:
+		return "[" + strconv.FormatInt(typ.Len(), 10) + "]" + reflectTypeArgumentName(typ.Elem())
+	case *types.Map:
+		return "map[" + reflectTypeArgumentName(typ.Key()) + "]" + reflectTypeArgumentName(typ.Elem())
+	case *types.Chan:
+		elem := reflectTypeArgumentName(typ.Elem())
+		switch typ.Dir() {
+		case types.SendOnly:
+			return "chan<- " + elem
+		case types.RecvOnly:
+			return "<-chan " + elem
+		default:
+			if ch, ok := types.Unalias(typ.Elem()).(*types.Chan); ok && ch.Dir() == types.RecvOnly {
+				elem = "(" + elem + ")"
+			}
+			return "chan " + elem
+		}
+	case *types.Signature:
+		params := make([]string, typ.Params().Len())
+		for i := range params {
+			param := typ.Params().At(i).Type()
+			if typ.Variadic() && i == len(params)-1 {
+				params[i] = "..." + reflectTypeArgumentName(param.(*types.Slice).Elem())
+			} else {
+				params[i] = reflectTypeArgumentName(param)
+			}
+		}
+		name := "func(" + strings.Join(params, ", ") + ")"
+		results := make([]string, typ.Results().Len())
+		for i := range results {
+			results[i] = reflectTypeArgumentName(typ.Results().At(i).Type())
+		}
+		switch len(results) {
+		case 0:
+			return name
+		case 1:
+			return name + " " + results[0]
+		default:
+			return name + " (" + strings.Join(results, ", ") + ")"
+		}
+	case *types.Struct:
+		if typ.NumFields() == 0 {
+			return "struct {}"
+		}
+		fields := make([]string, typ.NumFields())
+		for i := range fields {
+			field := typ.Field(i)
+			name := field.Name()
+			if !field.Exported() && field.Pkg() != nil {
+				name = field.Pkg().Path() + "." + name
+			}
+			separator := " "
+			if field.Embedded() {
+				separator = " = "
+				base := types.Unalias(field.Type())
+				if ptr, ok := base.(*types.Pointer); ok {
+					base = types.Unalias(ptr.Elem())
+				}
+				if named, ok := base.(*types.Named); ok && field.Name() == reflectTypeName(named) &&
+					(field.Exported() || field.Pkg() == named.Obj().Pkg()) {
+					name, separator = "", ""
+				}
+			}
+			fields[i] = name + separator + reflectTypeArgumentName(field.Type())
+			if tag := typ.Tag(i); tag != "" {
+				fields[i] += " " + strconv.Quote(tag)
+			}
+		}
+		return "struct { " + strings.Join(fields, "; ") + " }"
+	case *types.Interface:
+		methods := make([]*types.Func, typ.NumMethods())
+		for i := range methods {
+			methods[i] = typ.Method(i)
+		}
+		sort.Slice(methods, func(i, j int) bool {
+			a, b := methods[i], methods[j]
+			if a.Exported() != b.Exported() {
+				return a.Exported()
+			}
+			if a.Name() != b.Name() {
+				return a.Name() < b.Name()
+			}
+			return a.Pkg().Path() < b.Pkg().Path()
+		})
+		names := make([]string, len(methods))
+		for i, method := range methods {
+			name := method.Name()
+			if !method.Exported() && method.Pkg() != nil {
+				name = method.Pkg().Path() + "." + name
+			}
+			names[i] = name + strings.TrimPrefix(reflectTypeArgumentName(method.Type()), "func")
+		}
+		if len(names) == 0 {
+			return "interface {}"
+		}
+		return "interface { " + strings.Join(names, "; ") + " }"
+	default:
+		panic("compiler: unsupported generic type argument " + typ.String())
+	}
 }
 
 // Type kinds for basic types.

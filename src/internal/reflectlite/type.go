@@ -977,9 +977,6 @@ func (t *RawType) FieldAlign() int {
 
 // ConvertibleTo returns whether a value of type t can be converted to a variable of type u
 func (r *RawType) ConvertibleTo(u *RawType) bool {
-
-	// This logic is mostly copied from Value.CanConvert
-
 	switch r.Kind() {
 	case Int, Int8, Int16, Int32, Int64:
 		switch u.Kind() {
@@ -1046,25 +1043,89 @@ func (r *RawType) ConvertibleTo(u *RawType) bool {
 		}
 
 	case Pointer:
-		if !r.isNamed() && u.Kind() == Pointer && !u.isNamed() && r.elem().underlying() == u.elem().underlying() {
+		if !r.isNamed() && u.Kind() == Pointer && !u.isNamed() &&
+			haveIdenticalUnderlyingType(r.elem(), u.elem(), false) {
+			return true
+		}
+
+	case Chan:
+		if u.Kind() == Chan && r.underlying().ChanDir() == BothDir &&
+			(!r.isNamed() || !u.isNamed()) && r.elem() == u.elem() {
 			return true
 		}
 	}
 
-	if r.underlying() == u.underlying() {
+	if haveIdenticalUnderlyingType(r, u, false) {
 		return true
 	}
 
-	if u.Kind() == Interface && u.NumMethod() == 0 {
+	if u.Kind() == Interface && r.Implements(u) {
 		return true
 	}
-
-	// TODO(dgryski): Unimplemented
-	// struct types
-	// channels
 
 	return false
 
+}
+
+func haveIdenticalType(t, u *RawType, compareTags bool) bool {
+	if t == u {
+		return true
+	}
+	// Named types use declaration and argument identity, not display names.
+	// https://go.dev/ref/spec#Type_identity
+	if t.Kind() != u.Kind() || t.isNamed() || u.isNamed() {
+		return false
+	}
+	return haveIdenticalUnderlyingType(t, u, compareTags)
+}
+
+func haveIdenticalUnderlyingType(t, u *RawType, compareTags bool) bool {
+	t = t.underlying()
+	u = u.underlying()
+	if t == u {
+		return true
+	}
+	if t.Kind() != u.Kind() {
+		return false
+	}
+
+	switch t.Kind() {
+	case Bool, Int, Int8, Int16, Int32, Int64,
+		Uint, Uint8, Uint16, Uint32, Uint64, Uintptr,
+		Float32, Float64, Complex64, Complex128, String, UnsafePointer:
+		return true
+	case Array:
+		return t.Len() == u.Len() && haveIdenticalType(t.elem(), u.elem(), compareTags)
+	case Chan:
+		return t.ChanDir() == u.ChanDir() && haveIdenticalType(t.elem(), u.elem(), compareTags)
+	case Interface:
+		return (*interfaceType)(unsafe.Pointer(t)).methods.length == 0 &&
+			(*interfaceType)(unsafe.Pointer(u)).methods.length == 0
+	case Map:
+		return haveIdenticalType(t.key(), u.key(), compareTags) &&
+			haveIdenticalType(t.elem(), u.elem(), compareTags)
+	case Pointer, Slice:
+		return haveIdenticalType(t.elem(), u.elem(), compareTags)
+	case Struct:
+		if t.NumField() != u.NumField() {
+			return false
+		}
+		for i := 0; i < t.NumField(); i++ {
+			tf := t.rawField(i)
+			uf := u.rawField(i)
+			if tf.Name != uf.Name ||
+				tf.PkgPath != uf.PkgPath ||
+				!haveIdenticalType(tf.Type, uf.Type, compareTags) ||
+				compareTags && tf.Tag != uf.Tag ||
+				tf.Offset != uf.Offset ||
+				tf.Anonymous != uf.Anonymous {
+				return false
+			}
+		}
+		return true
+	}
+
+	return false
 }
 
 // AssignableTo returns whether a value of type t can be assigned to a variable
