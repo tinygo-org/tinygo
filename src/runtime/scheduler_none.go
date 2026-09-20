@@ -66,7 +66,7 @@ func addTimer(tim *timerNode) {
 	runtimePanic(errTimersUnsupported)
 }
 
-func reAddTimer(tn *timerNode) {
+func reAddTimer(tn *timerNode, delta int64) {
 	runtimePanic(errTimersUnsupported)
 }
 
