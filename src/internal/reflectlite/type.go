@@ -1437,7 +1437,44 @@ func align(offset uintptr, alignment uintptr) uintptr {
 }
 
 func ArrayOf(n int, t Type) Type {
-	panic("unimplemented: reflect.ArrayOf()")
+	if n < 0 {
+		panic("reflect: negative length passed to ArrayOf")
+	}
+
+	elemType := t.(*RawType)
+	elemSize := elemType.Size()
+	if elemSize != 0 && uintptr(n) > ^uintptr(0)/elemSize {
+		panic("reflect.ArrayOf: array size would exceed virtual address space")
+	}
+
+	lookupKey := cacheKey{kind: Array, t1: elemType, extra: uintptr(n)}
+	if typ := loadCachedType(lookupKey); typ != nil {
+		return typ
+	}
+
+	for _, typ := range unsafe.Slice(arrayTypeLinks, arrayTypeLinksLen) {
+		candidate := (*arrayType)(unsafe.Pointer(typ))
+		if candidate.elem == elemType && candidate.arrayLen == uintptr(n) {
+			return loadOrStoreCachedType(lookupKey, typ)
+		}
+	}
+
+	meta := uint8(Array)
+	if elemType.Comparable() {
+		meta |= flagComparable
+	}
+	if elemType.isBinary() {
+		meta |= flagIsBinary
+	}
+	typ := &arrayType{
+		RawType:  RawType{meta: meta},
+		elem:     elemType,
+		arrayLen: uintptr(n),
+		slicePtr: SliceOf(elemType).(*RawType),
+		layout:   elemType.gcLayout(),
+	}
+	typ.ptrTo = (*RawType)(unsafe.Add(unsafe.Pointer(&typ.RawType), 1))
+	return loadOrStoreCachedType(lookupKey, &typ.RawType)
 }
 
 func StructOf([]StructField) Type {
