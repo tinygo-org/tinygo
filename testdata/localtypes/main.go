@@ -17,6 +17,12 @@ func callLocal(fn, input any) any {
 	return value.Call([]reflect.Value{arg})[0].Interface()
 }
 
+func makeLocal(fn any) any {
+	return reflect.MakeFunc(reflect.TypeOf(fn), func(args []reflect.Value) []reflect.Value {
+		return []reflect.Value{args[0].Field(0)}
+	}).Interface()
+}
+
 func expect(name string, ok bool) {
 	if ok {
 		println("ok:", name)
@@ -55,4 +61,8 @@ func main() {
 	array := [4]int{1, 2, 3, 4}
 	expect("Call aggregate generic local in main", callLocal(arrayFunction, array).([4]int) == array)
 	expect("Call aggregate generic local in lib2", callLocal(lib2.ArrayFunction, array).([4]int) == array)
+	expect("MakeFunc generic local in main", callLocal(makeLocal(intFunction), 42).(int) == 42)
+	expect("MakeFunc generic local in lib2", callLocal(makeLocal(lib2.IntFunction), 43).(int) == 43)
+	expect("MakeFunc aggregate generic local in main", callLocal(makeLocal(arrayFunction), array).([4]int) == array)
+	expect("MakeFunc aggregate generic local in lib2", callLocal(makeLocal(lib2.ArrayFunction), array).([4]int) == array)
 }

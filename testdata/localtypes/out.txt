@@ -14,3 +14,7 @@ ok: Call generic local in main
 ok: Call generic local in lib2
 ok: Call aggregate generic local in main
 ok: Call aggregate generic local in lib2
+ok: MakeFunc generic local in main
+ok: MakeFunc generic local in lib2
+ok: MakeFunc aggregate generic local in main
+ok: MakeFunc aggregate generic local in lib2

@@ -5,18 +5,19 @@ target triple = "wasm32-unknown-wasip1"
 
 %runtime.structField = type { ptr, ptr }
 %runtime._interface = type { ptr, ptr }
+%main.genericMethod = type {}
 
-@"reflect/types.type:named:main.genericMethod" = linkonce_odr constant { ptr, i8, i16, ptr, ptr, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] }, [19 x i8] } { ptr @"named:main.genericMethod$methodset", i8 122, i16 -32767, ptr getelementptr ({ ptr, i8, i16, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] } }, ptr @"reflect/types.type:pointer:named:main.genericMethod", i32 0, i32 1), ptr @"reflect/types.type:struct:{}", ptr @"reflect/types.type.pkgpath:main", { i32, [1 x ptr], [1 x ptr], [1 x ptr] } { i32 1, [1 x ptr] [ptr @"reflect/types.signature:Regular:func:{basic:int}{basic:int}"], [1 x ptr] [ptr @"reflect/types.methodname:Regular:func:{basic:int}{basic:int}"], [1 x ptr] [ptr getelementptr ({ i32, i8, i8, i16, ptr, [3 x ptr] }, ptr @"reflect/types.type:func:{named:main.genericMethod,basic:int}{basic:int}", i32 0, i32 1)] }, [19 x i8] c"main.genericMethod\00" }, align 4
+@"reflect/types.type:named:main.genericMethod" = linkonce_odr constant { ptr, i8, i16, ptr, ptr, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] }, [19 x i8] } { ptr @"named:main.genericMethod$methodset", i8 122, i16 -32767, ptr getelementptr ({ ptr, i8, i16, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] } }, ptr @"reflect/types.type:pointer:named:main.genericMethod", i32 0, i32 1), ptr @"reflect/types.type:struct:{}", ptr @"reflect/types.type.pkgpath:main", { i32, [1 x ptr], [1 x ptr], [1 x ptr] } { i32 1, [1 x ptr] [ptr @"reflect/types.signature:Regular:func:{basic:int}{basic:int}"], [1 x ptr] [ptr @"reflect/types.methodname:Regular:func:{basic:int}{basic:int}"], [1 x ptr] [ptr getelementptr ({ [2 x i32], i8, i8, i16, ptr, [3 x ptr] }, ptr @"reflect/types.type:func:{named:main.genericMethod,basic:int}{basic:int}", i32 0, i32 1)] }, [19 x i8] c"main.genericMethod\00" }, align 4
 @"reflect/types.signature:Regular:func:{basic:int}{basic:int}" = linkonce_odr constant i8 0, align 1
-@"reflect/types.type:func:{named:main.genericMethod,basic:int}{basic:int}" = linkonce_odr constant { i32, i8, i8, i16, ptr, [3 x ptr] } { i32 ptrtoint (ptr @"reflect/call:func:{named:main.genericMethod,basic:int}{basic:int}" to i32), i8 24, i8 2, i16 1, ptr @"reflect/types.type:pointer:func:{named:main.genericMethod,basic:int}{basic:int}", [3 x ptr] [ptr getelementptr ({ ptr, i8, i16, ptr, ptr, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] }, [19 x i8] }, ptr @"reflect/types.type:named:main.genericMethod", i32 0, i32 1), ptr @"reflect/types.type:basic:int", ptr @"reflect/types.type:basic:int"] }, align 4
+@"reflect/types.type:func:{named:main.genericMethod,basic:int}{basic:int}" = linkonce_odr constant { [2 x i32], i8, i8, i16, ptr, [3 x ptr] } { [2 x i32] [i32 ptrtoint (ptr @"reflect/call:func:{named:main.genericMethod,basic:int}{basic:int}" to i32), i32 ptrtoint (ptr @"reflect/makefunc:func:{named:main.genericMethod,basic:int}{basic:int}" to i32)], i8 24, i8 2, i16 1, ptr @"reflect/types.type:pointer:func:{named:main.genericMethod,basic:int}{basic:int}", [3 x ptr] [ptr getelementptr ({ ptr, i8, i16, ptr, ptr, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] }, [19 x i8] }, ptr @"reflect/types.type:named:main.genericMethod", i32 0, i32 1), ptr @"reflect/types.type:basic:int", ptr @"reflect/types.type:basic:int"] }, align 4
 @"reflect/types.type:basic:int" = linkonce_odr constant { i8, ptr } { i8 -62, ptr @"reflect/types.type:pointer:basic:int" }, align 4
 @"reflect/types.type:pointer:basic:int" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:int" }, align 4
-@"reflect/types.type:pointer:func:{named:main.genericMethod,basic:int}{basic:int}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr getelementptr ({ i32, i8, i8, i16, ptr, [3 x ptr] }, ptr @"reflect/types.type:func:{named:main.genericMethod,basic:int}{basic:int}", i32 0, i32 1) }, align 4
+@"reflect/types.type:pointer:func:{named:main.genericMethod,basic:int}{basic:int}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr getelementptr ({ [2 x i32], i8, i8, i16, ptr, [3 x ptr] }, ptr @"reflect/types.type:func:{named:main.genericMethod,basic:int}{basic:int}", i32 0, i32 1) }, align 4
 @"reflect/types.methodname:Regular:func:{basic:int}{basic:int}" = linkonce_odr unnamed_addr constant [10 x i8] c"\00\00Regular\00", align 1
 @"reflect/types.type.pkgpath:main" = linkonce_odr unnamed_addr constant [5 x i8] c"main\00", align 1
-@"reflect/types.type:pointer:named:main.genericMethod" = linkonce_odr constant { ptr, i8, i16, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] } } { ptr @"pointer:named:main.genericMethod$methodset", i8 -43, i16 -32767, ptr getelementptr ({ ptr, i8, i16, ptr, ptr, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] }, [19 x i8] }, ptr @"reflect/types.type:named:main.genericMethod", i32 0, i32 1), { i32, [1 x ptr], [1 x ptr], [1 x ptr] } { i32 1, [1 x ptr] [ptr @"reflect/types.signature:Regular:func:{basic:int}{basic:int}"], [1 x ptr] [ptr @"reflect/types.methodname:Regular:func:{basic:int}{basic:int}"], [1 x ptr] [ptr getelementptr ({ i32, i8, i8, i16, ptr, [3 x ptr] }, ptr @"reflect/types.type:func:{pointer:named:main.genericMethod,basic:int}{basic:int}", i32 0, i32 1)] } }, align 4
-@"reflect/types.type:func:{pointer:named:main.genericMethod,basic:int}{basic:int}" = linkonce_odr constant { i32, i8, i8, i16, ptr, [3 x ptr] } { i32 ptrtoint (ptr @"reflect/call:func:{pointer:named:main.genericMethod,basic:int}{basic:int}" to i32), i8 24, i8 2, i16 1, ptr @"reflect/types.type:pointer:func:{pointer:named:main.genericMethod,basic:int}{basic:int}", [3 x ptr] [ptr getelementptr ({ ptr, i8, i16, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] } }, ptr @"reflect/types.type:pointer:named:main.genericMethod", i32 0, i32 1), ptr @"reflect/types.type:basic:int", ptr @"reflect/types.type:basic:int"] }, align 4
-@"reflect/types.type:pointer:func:{pointer:named:main.genericMethod,basic:int}{basic:int}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr getelementptr ({ i32, i8, i8, i16, ptr, [3 x ptr] }, ptr @"reflect/types.type:func:{pointer:named:main.genericMethod,basic:int}{basic:int}", i32 0, i32 1) }, align 4
+@"reflect/types.type:pointer:named:main.genericMethod" = linkonce_odr constant { ptr, i8, i16, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] } } { ptr @"pointer:named:main.genericMethod$methodset", i8 -43, i16 -32767, ptr getelementptr ({ ptr, i8, i16, ptr, ptr, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] }, [19 x i8] }, ptr @"reflect/types.type:named:main.genericMethod", i32 0, i32 1), { i32, [1 x ptr], [1 x ptr], [1 x ptr] } { i32 1, [1 x ptr] [ptr @"reflect/types.signature:Regular:func:{basic:int}{basic:int}"], [1 x ptr] [ptr @"reflect/types.methodname:Regular:func:{basic:int}{basic:int}"], [1 x ptr] [ptr getelementptr ({ [2 x i32], i8, i8, i16, ptr, [3 x ptr] }, ptr @"reflect/types.type:func:{pointer:named:main.genericMethod,basic:int}{basic:int}", i32 0, i32 1)] } }, align 4
+@"reflect/types.type:func:{pointer:named:main.genericMethod,basic:int}{basic:int}" = linkonce_odr constant { [2 x i32], i8, i8, i16, ptr, [3 x ptr] } { [2 x i32] [i32 ptrtoint (ptr @"reflect/call:func:{pointer:named:main.genericMethod,basic:int}{basic:int}" to i32), i32 ptrtoint (ptr @"reflect/makefunc:func:{pointer:named:main.genericMethod,basic:int}{basic:int}" to i32)], i8 24, i8 2, i16 1, ptr @"reflect/types.type:pointer:func:{pointer:named:main.genericMethod,basic:int}{basic:int}", [3 x ptr] [ptr getelementptr ({ ptr, i8, i16, ptr, { i32, [1 x ptr], [1 x ptr], [1 x ptr] } }, ptr @"reflect/types.type:pointer:named:main.genericMethod", i32 0, i32 1), ptr @"reflect/types.type:basic:int", ptr @"reflect/types.type:basic:int"] }, align 4
+@"reflect/types.type:pointer:func:{pointer:named:main.genericMethod,basic:int}{basic:int}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr getelementptr ({ [2 x i32], i8, i8, i16, ptr, [3 x ptr] }, ptr @"reflect/types.type:func:{pointer:named:main.genericMethod,basic:int}{basic:int}", i32 0, i32 1) }, align 4
 @"reflect/methods.Regular:func:{basic:int}{basic:int}" = linkonce_odr constant i8 0, align 1
 @"main$string" = internal unnamed_addr constant [18 x i8] c"main.genericMethod", align 1
 @"main$string.1" = internal unnamed_addr constant [7 x i8] c"Regular", align 1
@@ -65,6 +66,25 @@ entry:
   ret void
 }
 
+define weak_odr i32 @"reflect/makefunc:func:{named:main.genericMethod,basic:int}{basic:int}"(i32 %0, ptr %1) {
+entry:
+  %arg = alloca %main.genericMethod, align 8
+  %arg1 = alloca i32, align 4
+  store i32 %0, ptr %arg1, align 4
+  %result = alloca i32, align 4
+  %args = alloca [2 x ptr], align 4
+  store ptr %arg, ptr %args, align 4
+  %2 = getelementptr inbounds nuw i8, ptr %args, i32 4
+  store ptr %arg1, ptr %2, align 4
+  %results = alloca [1 x ptr], align 4
+  store ptr %result, ptr %results, align 4
+  call void @"internal/reflectlite.makeFuncCall"(ptr %1, ptr nonnull %args, ptr nonnull %results, ptr undef)
+  %3 = load i32, ptr %result, align 4
+  ret i32 %3
+}
+
+declare void @"internal/reflectlite.makeFuncCall"(ptr, ptr, ptr, ptr)
+
 define weak_odr void @"reflect/call:func:{pointer:named:main.genericMethod,basic:int}{basic:int}"(i32 %0, ptr %1, ptr %2, ptr %3, ptr %4) {
 entry:
   %5 = inttoptr i32 %0 to ptr
@@ -77,6 +97,24 @@ entry:
   %12 = load ptr, ptr %3, align 4
   store i32 %11, ptr %12, align 4
   ret void
+}
+
+define weak_odr i32 @"reflect/makefunc:func:{pointer:named:main.genericMethod,basic:int}{basic:int}"(ptr %0, i32 %1, ptr %2) {
+entry:
+  %arg = alloca ptr, align 4
+  store ptr %0, ptr %arg, align 4
+  %arg1 = alloca i32, align 4
+  store i32 %1, ptr %arg1, align 4
+  %result = alloca i32, align 4
+  %args = alloca [2 x ptr], align 4
+  store ptr %arg, ptr %args, align 4
+  %3 = getelementptr inbounds nuw i8, ptr %args, i32 4
+  store ptr %arg1, ptr %3, align 4
+  %results = alloca [1 x ptr], align 4
+  store ptr %result, ptr %results, align 4
+  call void @"internal/reflectlite.makeFuncCall"(ptr %2, ptr nonnull %args, ptr nonnull %results, ptr undef)
+  %4 = load i32, ptr %result, align 4
+  ret i32 %4
 }
 
 ; Function Attrs: nounwind
