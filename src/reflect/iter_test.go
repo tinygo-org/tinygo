@@ -176,18 +176,18 @@ func TestValueSeq(t *testing.T) {
 				t.Fatalf("should loop four times")
 			}
 		}},
-		// {"method", ValueOf(methodIter{}).MethodByName("Seq"), func(t *testing.T, s iter.Seq[Value]) {
-		// 	i := int64(0)
-		// 	for v := range s {
-		// 		if v.Int() != i {
-		// 			t.Fatalf("got %d, want %d", v.Int(), i)
-		// 		}
-		// 		i++
-		// 	}
-		// 	if i != 4 {
-		// 		t.Fatalf("should loop four times")
-		// 	}
-		// }},
+		{"method", ValueOf(methodIter{}).MethodByName("Seq"), func(t *testing.T, s iter.Seq[Value]) {
+			i := int64(0)
+			for v := range s {
+				if v.Int() != i {
+					t.Fatalf("got %d, want %d", v.Int(), i)
+				}
+				i++
+			}
+			if i != 4 {
+				t.Fatalf("should loop four times")
+			}
+		}},
 		{"type N int8", ValueOf(N(4)), func(t *testing.T, s iter.Seq[Value]) {
 			i := N(0)
 			for v := range s {
@@ -327,21 +327,21 @@ func TestValueSeq2(t *testing.T) {
 				t.Fatalf("should loop four times")
 			}
 		}},
-		// {"method", ValueOf(methodIter2{}).MethodByName("Seq2"), func(t *testing.T, s iter.Seq2[Value, Value]) {
-		// 	i := int64(0)
-		// 	for v1, v2 := range s {
-		// 		if v1.Int() != i {
-		// 			t.Fatalf("got %d, want %d", v1.Int(), i)
-		// 		}
-		// 		i++
-		// 		if v2.Int() != i {
-		// 			t.Fatalf("got %d, want %d", v2.Int(), i)
-		// 		}
-		// 	}
-		// 	if i != 4 {
-		// 		t.Fatalf("should loop four times")
-		// 	}
-		// }},
+		{"method", ValueOf(methodIter2{}).MethodByName("Seq2"), func(t *testing.T, s iter.Seq2[Value, Value]) {
+			i := int64(0)
+			for v1, v2 := range s {
+				if v1.Int() != i {
+					t.Fatalf("got %d, want %d", v1.Int(), i)
+				}
+				i++
+				if v2.Int() != i {
+					t.Fatalf("got %d, want %d", v2.Int(), i)
+				}
+			}
+			if i != 4 {
+				t.Fatalf("should loop four times")
+			}
+		}},
 		{"[4]N", ValueOf([4]N{0, 1, 2, 3}), func(t *testing.T, s iter.Seq2[Value, Value]) {
 			i := N(0)
 			for v1, v2 := range s {
