@@ -3,8 +3,44 @@ package transform
 import (
 	"testing"
 
+	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
+
+func TestOptimizeInterfacesIndirectABIRoots(t *testing.T) {
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("indirect-abi-roots")
+	defer mod.Dispose()
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	for _, name := range []string{"dead", "retained"} {
+		fn := llvm.AddFunction(mod, name, llvm.FunctionType(ctx.VoidType(), nil, false))
+		fn.SetLinkage(llvm.InternalLinkage)
+		builder.SetInsertPointAtEnd(ctx.AddBasicBlock(fn, "entry"))
+		builder.CreateRetVoid()
+		llvmutil.AppendToGlobal(mod, indirectABIRoots, fn)
+		llvmutil.AppendToGlobal(mod, "llvm.used", fn)
+		if name == "retained" {
+			llvmutil.AppendToGlobal(mod, "llvm.used", fn)
+		}
+	}
+
+	config := &compileopts.Config{Options: &compileopts.Options{}}
+	if err := optimizeInterfaces(mod, config); err != nil {
+		t.Fatal(err)
+	}
+	if !mod.NamedFunction("dead").IsNil() {
+		t.Fatal("function with only a temporary ABI root survived")
+	}
+	retained := mod.NamedFunction("retained")
+	roots := mod.NamedGlobal(indirectABIRoots)
+	if retained.IsNil() || roots.IsNil() || roots.Initializer().Operand(0) != retained {
+		t.Fatal("temporary ABI root for the independently retained function was lost")
+	}
+}
 
 func TestUsesReflectMethods(t *testing.T) {
 	t.Parallel()
