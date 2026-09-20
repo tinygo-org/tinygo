@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -192,16 +193,22 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 
 	// Short-circuit all the global pointer logic here for pointers to pointers.
 	if typ, ok := typ.(*types.Pointer); ok {
-		if _, ok := typ.Elem().(*types.Pointer); ok {
-			// For a pointer to a pointer, we just increase the pointer by 1
-			ptr := c.getTypeCode(typ.Elem())
-			// if the type is already *****T or higher, we can't make it.
-			if typstr := typ.String(); strings.HasPrefix(typstr, "*****") {
-				c.addError(token.NoPos, fmt.Sprintf("too many levels of pointers for typecode: %s", typstr))
+		if _, ok := types.Unalias(typ.Elem()).(*types.Pointer); ok {
+			depth := 1
+			for elem := typ.Elem(); ; depth++ {
+				pointer, ok := types.Unalias(elem).(*types.Pointer)
+				if !ok {
+					break
+				}
+				elem = pointer.Elem()
 			}
-			return llvm.ConstGEP(c.i8, ptr, []llvm.Value{
-				llvm.ConstInt(c.i32, 1, false),
-			})
+			if depth < compileopts.MaxTypePointerDepth {
+				// For shallow pointers to pointers, increase the pointer by 1.
+				ptr := c.getTypeCode(typ.Elem())
+				return llvm.ConstGEP(c.i8, ptr, []llvm.Value{
+					llvm.ConstInt(c.i32, 1, false),
+				})
+			}
 		}
 	}
 
@@ -1122,16 +1129,22 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		}
 	} else {
 		baseType := types.Unalias(expr.AssertedType)
+		pointerDepth := 0
 		for {
 			ptr, ok := baseType.(*types.Pointer)
 			if !ok {
 				break
 			}
 			baseType = types.Unalias(ptr.Elem())
+			pointerDepth++
 		}
 		// getTypeCode emits pointer descriptors with basic, named, and interface types.
+		var useTypeID bool
 		switch baseType.(type) {
 		case *types.Basic, *types.Named, *types.Interface:
+			useTypeID = pointerDepth < compileopts.MaxTypePointerDepth
+		}
+		if useTypeID {
 			name, _ := b.getTypeCodeName(expr.AssertedType)
 			globalName := "reflect/types.typeid:" + name
 			assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
@@ -1140,7 +1153,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 				assertedTypeCodeGlobal.SetGlobalConstant(true)
 			}
 			commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
-		default:
+		} else {
 			assertedTypeCode := b.getTypeCode(expr.AssertedType)
 			commaOk = b.CreateICmp(llvm.IntEQ, actualTypeNum, assertedTypeCode, "typecode")
 		}

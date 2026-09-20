@@ -259,6 +259,21 @@ type ptrType struct {
 	methods   methodSet // only present when numMethod & numMethodHasMethodSet != 0
 }
 
+type pointerCacheEntry struct {
+	elem       *RawType
+	typ        *RawType
+	allocation unsafe.Pointer
+	next       *pointerCacheEntry
+}
+
+var pointerTypeCache atomic.Pointer[pointerCacheEntry]
+
+//go:extern internal/reflectlite.pointerTypeLinks
+var pointerTypeLinks **RawType
+
+//go:extern internal/reflectlite.pointerTypeLinksLen
+var pointerTypeLinksLen uintptr
+
 type interfaceType struct {
 	RawType
 	ptrTo   *RawType
@@ -456,7 +471,74 @@ func SliceOf(t Type) Type {
 	return loadOrStoreCachedType(key, &typ.RawType)
 }
 
+func loadPointerType(elem *RawType) *RawType {
+	for entry := pointerTypeCache.Load(); entry != nil; entry = entry.next {
+		if entry.elem == elem {
+			return entry.typ
+		}
+	}
+	return nil
+}
+
+func loadLinkedPointerType(elem *RawType) *RawType {
+	for _, typ := range unsafe.Slice(pointerTypeLinks, pointerTypeLinksLen) {
+		if (*ptrType)(unsafe.Pointer(typ)).elem == elem {
+			return typ
+		}
+	}
+	return nil
+}
+
+func isLinkedPointerType(typ *RawType) bool {
+	for _, linked := range unsafe.Slice(pointerTypeLinks, pointerTypeLinksLen) {
+		if linked == typ {
+			return true
+		}
+	}
+	return false
+}
+
+func loadOrStorePointerType(elem, typ *RawType, allocation unsafe.Pointer) *RawType {
+	entry := &pointerCacheEntry{elem: elem, typ: typ, allocation: allocation}
+	for {
+		head := pointerTypeCache.Load()
+		for existing := head; existing != nil; existing = existing.next {
+			if existing.elem == elem {
+				return existing.typ
+			}
+		}
+		entry.next = head
+		if pointerTypeCache.CompareAndSwap(head, entry) {
+			return typ
+		}
+	}
+}
+
+func makePointerType(elem *RawType) (*RawType, unsafe.Pointer) {
+	allocation := new([unsafe.Sizeof(ptrType{}) + 3]byte)
+	address := (uintptr(unsafe.Pointer(allocation)) + 3) &^ 3
+	typ := (*ptrType)(unsafe.Pointer(address))
+	*typ = ptrType{
+		RawType: RawType{meta: uint8(Pointer) | flagComparable | flagIsBinary},
+		elem:    elem,
+	}
+	return &typ.RawType, unsafe.Pointer(allocation)
+}
+
+func isDynamicPointerType(typ *RawType) bool {
+	for entry := pointerTypeCache.Load(); entry != nil; entry = entry.next {
+		if entry.typ == typ {
+			return true
+		}
+	}
+	return false
+}
+
 func pointerTo(t *RawType) *RawType {
+	if typ := loadPointerType(t); typ != nil {
+		return typ
+	}
+
 	if t.isNamed() {
 		return (*elemType)(unsafe.Pointer(t)).ptrTo
 	}
@@ -465,13 +547,17 @@ func pointerTo(t *RawType) *RawType {
 	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr, Complex64, Complex128, Float32, Float64, String, UnsafePointer:
 		return (*basicType)(unsafe.Pointer(t)).ptrTo
 	case Pointer:
-		if tag := t.ptrtag(); tag < 3 {
+		if typ := loadLinkedPointerType(t); typ != nil {
+			return loadOrStorePointerType(t, typ, nil)
+		}
+
+		if tag := t.ptrtag(); tag < 3 &&
+			(tag != 0 || (!isDynamicPointerType(t) && !isLinkedPointerType(t))) {
 			return (*RawType)(unsafe.Add(unsafe.Pointer(t), 1))
 		}
 
-		// TODO(dgryski): This is blocking https://github.com/tinygo-org/tinygo/issues/3131
-		// We need to be able to create types that match existing types to prevent typecode equality.
-		panic("reflect: cannot make *****T type")
+		typ, allocation := makePointerType(t)
+		return loadOrStorePointerType(t, typ, allocation)
 	case Interface:
 		return (*interfaceType)(unsafe.Pointer(t)).ptrTo
 	case Func:
@@ -1257,9 +1343,11 @@ func (t *RawType) Out(i int) Type {
 }
 
 func (t *RawType) NumMethod() int {
-
 	if t.isNamed() {
 		return int((*namedType)(unsafe.Pointer(t)).numMethod & ^uint16(numMethodHasMethodSet))
+	}
+	if t.ptrtag() != 0 {
+		return 0
 	}
 
 	switch t.Kind() {
