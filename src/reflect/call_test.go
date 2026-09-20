@@ -167,6 +167,31 @@ func TestValueCallAggregate(t *testing.T) {
 	}
 }
 
+func TestCallInlineValues(t *testing.T) {
+	const number = uint16(0x1234)
+	pair := [2]byte{0x56, 0x78}
+	fn := reflect.ValueOf(func(n uint16, p [2]byte) (uint16, [2]byte) {
+		return n + 1, [2]byte{p[1], p[0]}
+	})
+	out := fn.Call([]reflect.Value{reflect.ValueOf(number), reflect.ValueOf(pair)})
+	if got := out[0].Interface().(uint16); got != number+1 {
+		t.Errorf("Call returned %#x, want %#x", got, number+1)
+	}
+	if got := out[1].Interface().([2]byte); got != ([2]byte{pair[1], pair[0]}) {
+		t.Errorf("Call returned %#v, want reversed input", got)
+	}
+
+	generated := reflect.MakeFunc(fn.Type(), func(in []reflect.Value) []reflect.Value {
+		if n, p := in[0].Interface().(uint16), in[1].Interface().([2]byte); n != number || p != pair {
+			t.Errorf("MakeFunc callback received %#x, %#v", n, p)
+		}
+		return in
+	}).Interface().(func(uint16, [2]byte) (uint16, [2]byte))
+	if n, p := generated(number, pair); n != number || p != pair {
+		t.Errorf("MakeFunc returned %#x, %#v", n, p)
+	}
+}
+
 func TestValueCallZeroSized(t *testing.T) {
 	type empty struct{}
 	fn := func(empty) empty {
