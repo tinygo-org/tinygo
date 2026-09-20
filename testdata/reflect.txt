@@ -570,6 +570,7 @@ interface Method: Alpha func() true
 interface Method: Beta func(int) string true
 interface Method: hidden func() false
 interface Method(out of range).Name: 
+anonymous interface String: interface { Alpha(); main.hidden() }
 int MethodByName(Missing): false
 reflect map interface key ok
 elemStringer 7

@@ -23,8 +23,8 @@ riscv-qemu               ./testdata/size-corpus                   z      16125  
 riscv-qemu               ./testdata/size-corpus                   2      22770      854       64    16668
 cortex-m-qemu            ./testdata/size-init-recover             z       2558      762        4     4168
 cortex-m-qemu            ./testdata/size-init-recover             2       6496      312        4     4168
-pico2                    ./testdata/size-init-regexp              z      12725    10915      908     5848
-pico2                    ./testdata/size-init-regexp              2      24374    10722      904     5852
+pico2                    ./testdata/size-init-regexp              z      12773    11011      908     5848
+pico2                    ./testdata/size-init-regexp              2      24422    10818      904     5852
 cortex-m-qemu            ./testdata/size-init-crc                 z       3737      767        4     4424
 cortex-m-qemu            ./testdata/size-init-crc                 2       8032      312        4     4424
 cortex-m-qemu            ./testdata/size-init-map                 z       2811      813      148     4168

@@ -982,6 +982,10 @@ func testMethodSets() {
 		println("interface Method:", m.Name, m.Type.String(), m.IsExported())
 	}
 	println("interface Method(out of range).Name:", iface.Method(iface.NumMethod()).Name)
+	println("anonymous interface String:", reflect.TypeOf((*interface {
+		Alpha()
+		hidden()
+	})(nil)).Elem().String())
 
 	_, ok = reflect.TypeOf(0).MethodByName("Missing")
 	println("int MethodByName(Missing):", ok)
