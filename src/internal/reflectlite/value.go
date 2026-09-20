@@ -1051,6 +1051,9 @@ func (v Value) Index(i int) Value {
 			flags:    v.flags & valueFlagExported,
 		}
 	case Array:
+		if uint(i) >= uint(v.Len()) {
+			panic("reflect: array index out of range")
+		}
 		// Extract an element from the array.
 		elemType := v.typecode.elem()
 		elemSize := elemType.Size()
