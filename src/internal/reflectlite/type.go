@@ -4,6 +4,7 @@ import (
 	"internal/gclayout"
 	"internal/itoa"
 	"sync/atomic"
+	"unicode"
 	"unsafe"
 )
 
@@ -339,6 +340,21 @@ type structType struct {
 	// methods methodSet follows after fields, only when numMethod & numMethodHasMethodSet != 0
 }
 
+type dynamicStructType struct {
+	structType
+	dynamicFields []structField
+	fieldData     []string
+	pkgpathData   string
+	layoutData    []byte
+}
+
+type structCacheEntry struct {
+	typ  *RawType
+	next *structCacheEntry
+}
+
+var structLookupCache atomic.Pointer[structCacheEntry]
+
 //go:extern internal/reflectlite.structTypeLinks
 var structTypeLinks **RawType
 
@@ -495,7 +511,11 @@ func (t *RawType) String() string {
 		s := "struct {"
 		for i := 0; i < numField; i++ {
 			f := t.rawField(i)
-			s += " " + f.Name + " " + f.Type.String()
+			s += " "
+			if !f.Anonymous {
+				s += f.Name + " "
+			}
+			s += f.Type.String()
 			if f.Tag != "" {
 				s += " " + quote(string(f.Tag))
 			}
@@ -637,7 +657,7 @@ func (t *RawType) rawFieldDescriptor(n int) (*structType, *structField) {
 		panic("reflect: field index out of range")
 	}
 
-	field := (*structField)(unsafe.Add(unsafe.Pointer(&descriptor.fields[0]), uintptr(n)*unsafe.Sizeof(structField{})))
+	field := structFieldAt(descriptor, n)
 	return descriptor, field
 }
 
@@ -645,6 +665,13 @@ func (field *structField) decode() (flagsByte uint8, name string, offset uint32)
 	data := unsafe.Add(field.data, 1)
 	offset, lenOffs := uvarint32(unsafe.Slice((*byte)(data), maxVarintLen32))
 	return *(*uint8)(field.data), readStringZ(unsafe.Add(data, lenOffs)), offset
+}
+
+func structFieldAt(descriptor *structType, n int) *structField {
+	if descriptor.ptrTo == (*RawType)(unsafe.Add(unsafe.Pointer(&descriptor.RawType), 1)) {
+		return &(*dynamicStructType)(unsafe.Pointer(descriptor)).dynamicFields[n]
+	}
+	return (*structField)(unsafe.Add(unsafe.Pointer(&descriptor.fields[0]), uintptr(n)*unsafe.Sizeof(structField{})))
 }
 
 // rawFieldByNameFunc returns nearly the same value as FieldByNameFunc but without converting the
@@ -682,7 +709,7 @@ func (t *RawType) rawFieldByNameFunc(match func(string) bool) (rawStructField, [
 			descriptor := (*structType)(unsafe.Pointer(scan.t.underlying()))
 
 			for i := uint16(0); i < descriptor.numField; i++ {
-				field := (*structField)(unsafe.Add(unsafe.Pointer(&descriptor.fields[0]), uintptr(i)*unsafe.Sizeof(structField{})))
+				field := structFieldAt(descriptor, int(i))
 				flagsByte, name, _ := field.decode()
 				if match(name) {
 					if count[scan.t] > 1 || found {
@@ -1521,8 +1548,298 @@ func ArrayOf(n int, t Type) Type {
 	return loadOrStoreCachedType(lookupKey, &typ.RawType)
 }
 
-func StructOf([]StructField) Type {
-	panic("unimplemented: reflect.StructOf()")
+func StructOf(fields []StructField) Type {
+	if uint(len(fields)) > uint(^uint16(0)) {
+		panic("reflect.StructOf: too many fields")
+	}
+
+	rawFields := make([]rawStructField, len(fields))
+	fieldNames := make(map[string]struct{}, len(fields))
+	var size uintptr
+	var alignment uintptr = 1
+	var pkgpath string
+	pkgpathSet := false
+	hasUnexported := false
+	comparable := true
+	for i, field := range fields {
+		if field.Name == "" {
+			panic("reflect.StructOf: field " + itoa.Itoa(i) + " has no name")
+		}
+		if !isValidFieldName(field.Name) {
+			panic("reflect.StructOf: field " + itoa.Itoa(i) + " has invalid name")
+		}
+		if field.Type == nil {
+			panic("reflect.StructOf: field " + itoa.Itoa(i) + " has no type")
+		}
+		if field.Anonymous && field.PkgPath != "" {
+			panic("reflect.StructOf: field \"" + field.Name + "\" is anonymous but has PkgPath set")
+		}
+		if field.PkgPath == "" && (field.Name[0] == '_' || 'a' <= field.Name[0] && field.Name[0] <= 'z') {
+			panic("reflect.StructOf: field \"" + field.Name + "\" is unexported but missing PkgPath")
+		}
+		if len(field.Tag) > 255 {
+			panic("reflect.StructOf: field " + itoa.Itoa(i) + " has tag longer than 255 bytes")
+		}
+		if _, ok := fieldNames[field.Name]; ok && field.Name != "_" {
+			panic("reflect.StructOf: duplicate field " + field.Name)
+		}
+		fieldNames[field.Name] = struct{}{}
+
+		fieldType := field.Type.(*RawType)
+		if field.Anonymous {
+			if fieldType.Kind() == Pointer {
+				elemKind := fieldType.elem().Kind()
+				if elemKind == Pointer || elemKind == Interface {
+					panic("reflect.StructOf: illegal embedded field type " + fieldType.String())
+				}
+			}
+		}
+
+		if field.PkgPath != "" || !isExportedFieldName(field.Name) {
+			hasUnexported = true
+			if !pkgpathSet {
+				pkgpath = field.PkgPath
+				pkgpathSet = true
+			} else if pkgpath != field.PkgPath {
+				panic("reflect.StructOf: fields with different PkgPath " + pkgpath + " and " + field.PkgPath)
+			}
+		}
+
+		fieldAlignment := uintptr(fieldType.Align())
+		offset := align(size, fieldAlignment)
+		if offset < size {
+			panic("reflect.StructOf: struct size would exceed virtual address space")
+		}
+		size = offset + fieldType.Size()
+		if size < offset || uint64(size) > uint64(^uint32(0)) {
+			panic("reflect.StructOf: struct size would exceed virtual address space")
+		}
+		if fieldAlignment > alignment {
+			alignment = fieldAlignment
+		}
+		comparable = comparable && fieldType.Comparable()
+		rawFields[i] = rawStructField{
+			Name:      field.Name,
+			PkgPath:   field.PkgPath,
+			Type:      fieldType,
+			Tag:       field.Tag,
+			Offset:    offset,
+			Anonymous: field.Anonymous,
+		}
+	}
+
+	alignedSize := align(size, alignment)
+	if alignedSize < size || uint64(alignedSize) > uint64(^uint32(0)) {
+		panic("reflect.StructOf: struct size would exceed virtual address space")
+	}
+	size = alignedSize
+
+	if typ := loadCachedStructType(rawFields); typ != nil {
+		return typ
+	}
+	for _, typ := range unsafe.Slice(structTypeLinks, structTypeLinksLen) {
+		if structTypeMatches(typ, rawFields) {
+			return loadOrStoreCachedStructType(rawFields, typ)
+		}
+	}
+
+	for _, field := range rawFields {
+		if field.Anonymous && embeddedTypeHasMethods(field.Type) {
+			panic("reflect.StructOf: embedded type with methods not implemented")
+		}
+	}
+
+	dynamic := &dynamicStructType{
+		structType: structType{
+			RawType:  RawType{meta: uint8(Struct)},
+			size:     uint32(size),
+			numField: uint16(len(rawFields)),
+		},
+		dynamicFields: make([]structField, len(rawFields)),
+		fieldData:     make([]string, len(rawFields)),
+	}
+	if comparable {
+		dynamic.meta |= flagComparable
+	}
+	if hasUnexported {
+		dynamic.pkgpathData = pkgpath + "\x00"
+		dynamic.pkgpath = unsafe.StringData(dynamic.pkgpathData)
+	}
+	for i, field := range rawFields {
+		var flags byte
+		if field.Anonymous {
+			flags |= structFieldFlagAnonymous | structFieldFlagIsEmbedded
+		}
+		if field.Tag != "" {
+			flags |= structFieldFlagHasTag
+		}
+		if field.PkgPath == "" {
+			flags |= structFieldFlagIsExported
+		}
+		data := []byte{flags}
+		data = appendUvarint32(data, uint32(field.Offset))
+		data = append(data, field.Name...)
+		data = append(data, 0)
+		if field.Tag != "" {
+			data = append(data, byte(len(field.Tag)))
+			data = append(data, field.Tag...)
+		}
+		dynamic.fieldData[i] = string(data)
+		dynamic.dynamicFields[i] = structField{
+			fieldType: field.Type,
+			data:      unsafe.Pointer(unsafe.StringData(dynamic.fieldData[i])),
+		}
+	}
+	dynamic.layout, dynamic.layoutData = makeStructGCLayout(rawFields, size)
+	dynamic.ptrTo = (*RawType)(unsafe.Add(unsafe.Pointer(&dynamic.RawType), 1))
+	return loadOrStoreCachedStructType(rawFields, &dynamic.RawType)
+}
+
+func isExportedFieldName(name string) bool {
+	for _, r := range name {
+		return unicode.IsUpper(r)
+	}
+	return false
+}
+
+func isValidFieldName(name string) bool {
+	for i, r := range name {
+		if i == 0 && !(r == '_' || unicode.IsLetter(r)) {
+			return false
+		}
+		if !(r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return false
+		}
+	}
+	return name != ""
+}
+
+func appendUvarint32(buf []byte, value uint32) []byte {
+	for value >= 0x80 {
+		buf = append(buf, byte(value)|0x80)
+		value >>= 7
+	}
+	return append(buf, byte(value))
+}
+
+func embeddedTypeHasMethods(typ *RawType) bool {
+	if typ.NumMethod() != 0 {
+		return true
+	}
+	return typ.Kind() == Pointer && typ.elem().NumMethod() != 0
+}
+
+func structTypeMatches(typ *RawType, fields []rawStructField) bool {
+	if typ.Kind() != Struct || typ.NumField() != len(fields) {
+		return false
+	}
+	for i, field := range fields {
+		candidate := typ.rawField(i)
+		if candidate.Name != field.Name ||
+			candidate.PkgPath != field.PkgPath ||
+			candidate.Type != field.Type ||
+			candidate.Tag != field.Tag ||
+			candidate.Anonymous != field.Anonymous {
+			return false
+		}
+	}
+	return true
+}
+
+func loadCachedStructType(fields []rawStructField) *RawType {
+	for entry := structLookupCache.Load(); entry != nil; entry = entry.next {
+		if structTypeMatches(entry.typ, fields) {
+			return entry.typ
+		}
+	}
+	return nil
+}
+
+func loadOrStoreCachedStructType(fields []rawStructField, typ *RawType) *RawType {
+	entry := &structCacheEntry{typ: typ}
+	for {
+		head := structLookupCache.Load()
+		for existing := head; existing != nil; existing = existing.next {
+			if structTypeMatches(existing.typ, fields) {
+				return existing.typ
+			}
+		}
+		entry.next = head
+		if structLookupCache.CompareAndSwap(head, entry) {
+			return typ
+		}
+	}
+}
+
+func makeStructGCLayout(fields []rawStructField, size uintptr) (unsafe.Pointer, []byte) {
+	hasPointers := false
+	for _, field := range fields {
+		if field.Type.gcLayout() != gclayout.NoPtrs.AsPtr() {
+			hasPointers = true
+			break
+		}
+	}
+	if !hasPointers {
+		return gclayout.NoPtrs.AsPtr(), nil
+	}
+
+	pointerAlign := unsafe.Alignof(uintptr(0))
+	bitmapLen := size / pointerAlign
+	bitmap := make([]byte, (bitmapLen+7)/8)
+	for _, field := range fields {
+		addTypeToGCBitmap(bitmap, field.Offset, field.Type)
+	}
+
+	hasPointers = false
+	for _, bits := range bitmap {
+		hasPointers = hasPointers || bits != 0
+	}
+	if !hasPointers {
+		return gclayout.NoPtrs.AsPtr(), nil
+	}
+
+	layoutAlign := pointerAlign
+	if layoutAlign < 2 {
+		layoutAlign = 2
+	}
+	headerSize := unsafe.Sizeof(uintptr(0))
+	storage := make([]byte, layoutAlign-1+headerSize+uintptr(len(bitmap)))
+	base := uintptr(unsafe.Pointer(unsafe.SliceData(storage)))
+	layoutAddr := align(base, layoutAlign)
+	layout := unsafe.Pointer(layoutAddr)
+	*(*uintptr)(layout) = bitmapLen
+	copy(unsafe.Slice((*byte)(unsafe.Add(layout, headerSize)), len(bitmap)), bitmap)
+	return layout, storage
+}
+
+func addTypeToGCBitmap(bitmap []byte, offset uintptr, typ *RawType) {
+	if typ.gcLayout() == gclayout.NoPtrs.AsPtr() {
+		return
+	}
+	typ = typ.underlying()
+	switch typ.Kind() {
+	case String, UnsafePointer, Chan, Pointer, Map, Slice:
+		setGCBitmapBit(bitmap, offset)
+	case Interface, Func:
+		setGCBitmapBit(bitmap, offset)
+		setGCBitmapBit(bitmap, offset+unsafe.Sizeof(uintptr(0)))
+	case Array:
+		elem := typ.elem()
+		elemSize := elem.Size()
+		for i := 0; i < typ.Len(); i++ {
+			addTypeToGCBitmap(bitmap, offset+uintptr(i)*elemSize, elem)
+		}
+	case Struct:
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.rawField(i)
+			addTypeToGCBitmap(bitmap, offset+field.Offset, field.Type)
+		}
+	}
+}
+
+func setGCBitmapBit(bitmap []byte, offset uintptr) {
+	bit := offset / unsafe.Alignof(uintptr(0))
+	bitmap[bit/8] |= 1 << (bit % 8)
 }
 
 func MapOf(key, value Type) Type {

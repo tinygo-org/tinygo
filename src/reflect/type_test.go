@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 func TestLongStructTags(t *testing.T) {
@@ -165,6 +166,14 @@ func checkConstructedType[T any](t *testing.T, value reflect.Value) {
 		t.Fatalf("constructed %v failed a type switch", value.Type())
 	}
 }
+
+type StructOfEmbedded struct {
+	Value int
+}
+
+type StructOfEmbeddedWithMethod struct{}
+
+func (StructOfEmbeddedWithMethod) Method() {}
 
 func TestArrayOfRuntimeConstruction(t *testing.T) {
 	type elem struct {
@@ -460,5 +469,208 @@ func TestSliceOfRuntimeConstruction(t *testing.T) {
 	runtime.GC()
 	if got := slice.Index(0).Field(0).Elem().Int(); got != int64(value) {
 		t.Fatalf("slice element after GC = %d, want %d", got, value)
+	}
+}
+
+func TestStructOfRuntimeConstruction(t *testing.T) {
+	uint64Type := reflect.TypeOf(uint64(0))
+	if got, want := reflect.StructOf([]reflect.StructField{{Name: "Y", Type: uint64Type}}), reflect.TypeOf(struct{ Y uint64 }{}); got != want {
+		t.Fatalf("StructOf({Y uint64}) = %v, want existing type %v", got, want)
+	}
+	if got, want := reflect.StructOf(nil), reflect.TypeOf(struct{}{}); got != want {
+		t.Fatalf("StructOf(nil) = %v, want existing type %v", got, want)
+	}
+
+	pointerType := reflect.TypeOf((*int)(nil))
+	arrayType := reflect.ArrayOf(2, pointerType)
+	fields := []reflect.StructField{
+		{Name: "Byte", Type: reflect.TypeOf(byte(0))},
+		{Name: "Pointer", Type: pointerType},
+		{Name: "Pointers", Type: arrayType, Tag: `json:"pointers"`},
+	}
+	structType := reflect.StructOf(fields)
+	if got, want := structType.String(), `struct { Byte uint8; Pointer *int; Pointers [2]*int "json:\"pointers\"" }`; got != want {
+		t.Fatalf("StructOf(fields).String() = %q, want %q", got, want)
+	}
+	if got := reflect.StructOf(fields); got != structType {
+		t.Fatalf("second StructOf(fields) = %v, want %v", got, structType)
+	}
+	if got := reflect.PointerTo(structType).Elem(); got != structType {
+		t.Fatalf("PointerTo(StructOf(fields)).Elem() = %v, want %v", got, structType)
+	}
+	if !structType.Comparable() {
+		t.Fatal("StructOf(fields).Comparable() = false, want true")
+	}
+
+	type layout struct {
+		A byte
+		B *int
+		C [2]*int
+	}
+	if got, want := structType.Size(), unsafe.Sizeof(layout{}); got != want {
+		t.Fatalf("StructOf(fields).Size() = %d, want %d", got, want)
+	}
+	if got, want := structType.Align(), int(unsafe.Alignof(layout{})); got != want {
+		t.Fatalf("StructOf(fields).Align() = %d, want %d", got, want)
+	}
+	wantOffsets := []uintptr{
+		unsafe.Offsetof(layout{}.A),
+		unsafe.Offsetof(layout{}.B),
+		unsafe.Offsetof(layout{}.C),
+	}
+	for i, want := range wantOffsets {
+		if got := structType.Field(i).Offset; got != want {
+			t.Errorf("StructOf(fields).Field(%d).Offset = %d, want %d", i, got, want)
+		}
+	}
+	if got := structType.Field(2).Tag.Get("json"); got != "pointers" {
+		t.Fatalf("StructOf(fields).Field(2).Tag.Get(\"json\") = %q, want %q", got, "pointers")
+	}
+
+	type trailingZeroLayout struct {
+		A byte
+		B [0]uint64
+	}
+	trailingZeroType := reflect.StructOf([]reflect.StructField{
+		{Name: "Byte", Type: reflect.TypeOf(byte(0))},
+		{Name: "Zero", Type: reflect.TypeOf([0]uint64{})},
+	})
+	if got, want := trailingZeroType.Size(), unsafe.Sizeof(trailingZeroLayout{}); got != want {
+		t.Fatalf("StructOf with trailing zero-sized field has size %d, want %d", got, want)
+	}
+
+	first := 41
+	second := 42
+	value := reflect.New(structType).Elem()
+	value.Field(1).Set(reflect.ValueOf(&first))
+	value.Field(2).Index(1).Set(reflect.ValueOf(&second))
+	checkConstructedType[struct {
+		Byte     byte
+		Pointer  *int
+		Pointers [2]*int `json:"pointers"`
+	}](t, value)
+	runtime.GC()
+	if got := value.Field(1).Elem().Int(); got != int64(first) {
+		t.Fatalf("first pointer field after GC = %d, want %d", got, first)
+	}
+	if got := value.Field(2).Index(1).Elem().Int(); got != int64(second) {
+		t.Fatalf("array pointer field after GC = %d, want %d", got, second)
+	}
+	iface := value.Interface()
+	runtime.GC()
+	if got := reflect.ValueOf(iface).Field(1).Elem().Int(); got != int64(first) {
+		t.Fatalf("interface struct pointer field after GC = %d, want %d", got, first)
+	}
+	if iface != value.Interface() {
+		t.Fatal("dynamic struct value is not equal to itself")
+	}
+
+	structMap := reflect.MakeMap(reflect.MapOf(structType, reflect.TypeOf(int(0))))
+	structMap.SetMapIndex(value, reflect.ValueOf(7))
+	if got := structMap.MapIndex(value).Int(); got != 7 {
+		t.Fatalf("map value with dynamic struct key = %d, want 7", got)
+	}
+
+	embeddedType := reflect.StructOf([]reflect.StructField{{
+		Name:      "StructOfEmbedded",
+		Type:      reflect.TypeOf(StructOfEmbedded{}),
+		Anonymous: true,
+	}})
+	if got, want := embeddedType.String(), "struct { reflect_test.StructOfEmbedded }"; got != want {
+		t.Fatalf("embedded StructOf.String() = %q, want %q", got, want)
+	}
+	embedded := reflect.New(embeddedType).Elem()
+	embedded.FieldByName("Value").SetInt(9)
+	if got := embedded.Field(0).Field(0).Int(); got != 9 {
+		t.Fatalf("promoted embedded field = %d, want 9", got)
+	}
+
+	unexportedType := reflect.StructOf([]reflect.StructField{{
+		Name:    "value",
+		PkgPath: "reflect_test",
+		Type:    reflect.TypeOf(int(0)),
+	}})
+	if got := unexportedType.Field(0).PkgPath; got != "reflect_test" {
+		t.Fatalf("unexported field PkgPath = %q, want %q", got, "reflect_test")
+	}
+
+	if reflect.StructOf([]reflect.StructField{{
+		Name: "Values",
+		Type: reflect.TypeOf([]int(nil)),
+	}}).Comparable() {
+		t.Fatal("StructOf with slice field is comparable")
+	}
+
+	checkPanic := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s did not panic", name)
+			}
+		}()
+		fn()
+	}
+	checkPanic("missing field name", func() {
+		reflect.StructOf([]reflect.StructField{{Type: uint64Type}})
+	})
+	checkPanic("invalid field name", func() {
+		reflect.StructOf([]reflect.StructField{{Name: "1field", Type: uint64Type}})
+	})
+	checkPanic("missing field type", func() {
+		reflect.StructOf([]reflect.StructField{{Name: "Field"}})
+	})
+	checkPanic("duplicate field name", func() {
+		reflect.StructOf([]reflect.StructField{
+			{Name: "Field", Type: uint64Type},
+			{Name: "Field", Type: uint64Type},
+		})
+	})
+	checkPanic("different package paths", func() {
+		reflect.StructOf([]reflect.StructField{
+			{Name: "first", PkgPath: "one", Type: uint64Type},
+			{Name: "second", PkgPath: "two", Type: uint64Type},
+		})
+	})
+	checkPanic("long struct tag", func() {
+		reflect.StructOf([]reflect.StructField{{
+			Name: "Field",
+			Type: uint64Type,
+			Tag:  reflect.StructTag(strings.Repeat("x", 256)),
+		}})
+	})
+	checkPanic("embedded type with methods", func() {
+		reflect.StructOf([]reflect.StructField{{
+			Name:      "StructOfEmbeddedWithMethod",
+			Type:      reflect.TypeOf(StructOfEmbeddedWithMethod{}),
+			Anonymous: true,
+		}})
+	})
+	checkPanic("map with uncomparable struct key", func() {
+		reflect.MapOf(reflect.StructOf([]reflect.StructField{{
+			Name: "Values",
+			Type: reflect.TypeOf([]int(nil)),
+		}}), uint64Type)
+	})
+}
+
+func TestStructOfConcurrentConstruction(t *testing.T) {
+	fields := []reflect.StructField{{
+		Name: "Value",
+		Type: reflect.TypeOf(int(0)),
+		Tag:  "concurrent",
+	}}
+	const count = 8
+	results := make(chan reflect.Type, count)
+	for range count {
+		go func() {
+			results <- reflect.StructOf(fields)
+		}()
+	}
+
+	want := <-results
+	for range count - 1 {
+		if got := <-results; got != want {
+			t.Fatalf("concurrent StructOf returned %v, want %v", got, want)
+		}
 	}
 }
