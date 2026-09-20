@@ -1593,7 +1593,6 @@ func TestIsZero(t *testing.T) {
 		}
 	}
 
-	/* // TODO(tinygo): panic/recover support
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
@@ -1602,7 +1601,6 @@ func TestIsZero(t *testing.T) {
 		}()
 		(Value{}).IsZero()
 	}()
-	*/
 }
 
 // extra comment for gofmt
@@ -4805,8 +4803,6 @@ func TestConvert(t *testing.T) {
 	}
 }
 
-/*
-
 func TestConvertPanic(t *testing.T) {
 	s := make([]byte, 4)
 	p := new([8]byte)
@@ -4850,8 +4846,6 @@ func TestConvertSlice2Array(t *testing.T) {
 		}
 	}
 }
-
-*/
 
 var gFloat32 float32
 
@@ -7992,8 +7986,6 @@ func iterateToString(it *MapIter) string {
 	return "[" + strings.Join(got, ", ") + "]"
 }
 
-/*
-
 func TestConvertibleTo(t *testing.T) {
 	t1 := ValueOf(example1.MyStruct{}).Type()
 	t2 := ValueOf(example2.MyStruct{}).Type()
@@ -8010,8 +8002,6 @@ func TestConvertibleTo(t *testing.T) {
 		t.Fatalf("(%s).ConvertibleTo(%s) = true, want false", t3, t4)
 	}
 }
-
-*/
 
 func TestSetIter(t *testing.T) {
 	data := map[string]int{

@@ -2,7 +2,11 @@ package compiler
 
 import (
 	"flag"
+	"go/ast"
+	"go/importer"
+	"go/parser"
 	"go/scanner"
+	"go/token"
 	"go/types"
 	"os"
 	"regexp"
@@ -26,6 +30,93 @@ type testCase struct {
 	file      string
 	target    string
 	scheduler string
+}
+
+func TestReflectGenericTypeName(t *testing.T) {
+	const source = `package names
+import "unsafe"
+type Box[T any] struct{}
+type Pair[A, B any] struct{}
+type Token int
+type Alias = Token
+type Int = int
+var byteBox Box[byte]
+var runeBox Box[rune]
+var anyBox Box[any]
+var aliasBox Box[Alias]
+var pointerBox Box[*Alias]
+var arrayBox Box[[2]byte]
+var mapBox Box[map[Alias][]rune]
+var channelBox Box[chan (<-chan Alias)]
+var sendBox Box[chan<- Alias]
+var receiveBox Box[<-chan Alias]
+var functionBox Box[func(value Alias, rest ...byte) (result []rune, err error)]
+var emptyStructBox Box[struct{}]
+var blankBox Box[struct { _ int }]
+var structBox Box[struct { X byte; value Alias ` + "`json:\"value\"`" + ` }]
+var embeddedBox Box[struct { Token }]
+var embeddedPointerBox Box[struct { *Token }]
+var embeddedAliasBox Box[struct { Int }]
+var embeddedGenericBox Box[struct { Box[int] }]
+var interfaceBox Box[interface { z(); Exported(value int) bool; a() }]
+var unsafeBox Box[unsafe.Pointer]
+var pairBox Pair[Alias, Box[byte]]
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "names.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := types.Config{Importer: importer.Default()}
+	pkg, err := config.Check("example.com/names", fset, []*ast.File{file}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, want string
+	}{
+		{"byteBox", "Box[uint8]"},
+		{"runeBox", "Box[int32]"},
+		{"anyBox", "Box[interface {}]"},
+		{"aliasBox", "Box[example.com/names.Token]"},
+		{"pointerBox", "Box[*example.com/names.Token]"},
+		{"arrayBox", "Box[[2]uint8]"},
+		{"mapBox", "Box[map[example.com/names.Token][]int32]"},
+		{"channelBox", "Box[chan (<-chan example.com/names.Token)]"},
+		{"sendBox", "Box[chan<- example.com/names.Token]"},
+		{"receiveBox", "Box[<-chan example.com/names.Token]"},
+		{"functionBox", "Box[func(example.com/names.Token, ...uint8) ([]int32, error)]"},
+		{"emptyStructBox", "Box[struct {}]"},
+		{"blankBox", "Box[struct { example.com/names._ int }]"},
+		{"structBox", `Box[struct { X uint8; example.com/names.value example.com/names.Token "json:\"value\"" }]`},
+		{"embeddedBox", "Box[struct { example.com/names.Token }]"},
+		{"embeddedPointerBox", "Box[struct { *example.com/names.Token }]"},
+		{"embeddedAliasBox", "Box[struct { Int = int }]"},
+		{"embeddedGenericBox", "Box[struct { Box = example.com/names.Box[int] }]"},
+		{"interfaceBox", "Box[interface { Exported(int) bool; example.com/names.a(); example.com/names.z() }]"},
+		{"unsafeBox", "Box[unsafe.Pointer]"},
+		{"pairBox", "Pair[example.com/names.Token,example.com/names.Box[uint8]]"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			typ := pkg.Scope().Lookup(test.name).Type().(*types.Named)
+			if got := reflectTypeName(typ); got != test.want {
+				t.Errorf("name = %q, want %q", got, test.want)
+			}
+		})
+	}
+	box := pkg.Scope().Lookup("Box").Type()
+	for _, path := range []string{"example.com/one", "example.com/two"} {
+		fieldPkg := types.NewPackage(path, "same")
+		field := types.NewVar(token.NoPos, fieldPkg, "value", types.Typ[types.Int])
+		arg := types.NewStruct([]*types.Var{field}, nil)
+		instance, err := types.Instantiate(nil, box, []types.Type{arg}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := reflectTypeName(instance.(*types.Named)), "Box[struct { "+path+".value int }]"; got != want {
+			t.Errorf("name = %q, want %q", got, want)
+		}
+	}
 }
 
 // Basic tests for the compiler. Build some Go files and compare the output with
