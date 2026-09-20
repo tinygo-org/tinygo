@@ -166,6 +166,64 @@ func checkConstructedType[T any](t *testing.T, value reflect.Value) {
 	}
 }
 
+func TestArrayOfRuntimeConstruction(t *testing.T) {
+	type elem struct {
+		Value *int
+	}
+
+	elemType := reflect.TypeOf(elem{})
+	compiledType := reflect.TypeOf([3]elem{})
+	if got := reflect.ArrayOf(3, elemType); got != compiledType {
+		t.Fatalf("ArrayOf(3, elem) = %v, want existing type %v", got, compiledType)
+	}
+
+	arrayType := reflect.ArrayOf(4, elemType)
+	if got, want := arrayType.String(), "[4]reflect_test.elem"; got != want {
+		t.Fatalf("ArrayOf(4, elem).String() = %q, want %q", got, want)
+	}
+	if got := arrayType.Kind(); got != reflect.Array {
+		t.Fatalf("ArrayOf(4, elem).Kind() = %v, want %v", got, reflect.Array)
+	}
+	if got := arrayType.Len(); got != 4 {
+		t.Fatalf("ArrayOf(4, elem).Len() = %d, want 4", got)
+	}
+	if got := arrayType.Elem(); got != elemType {
+		t.Fatalf("ArrayOf(4, elem).Elem() = %v, want %v", got, elemType)
+	}
+	if got := reflect.ArrayOf(4, elemType); got != arrayType {
+		t.Fatalf("second ArrayOf(4, elem) = %v, want %v", got, arrayType)
+	}
+	if got := reflect.PointerTo(arrayType).Elem(); got != arrayType {
+		t.Fatalf("PointerTo(ArrayOf(4, elem)).Elem() = %v, want %v", got, arrayType)
+	}
+
+	value := 42
+	array := reflect.New(arrayType).Elem()
+	array.Index(0).Field(0).Set(reflect.ValueOf(&value))
+	runtime.GC()
+	if got := array.Index(0).Field(0).Elem().Int(); got != int64(value) {
+		t.Fatalf("array element after GC = %d, want %d", got, value)
+	}
+	checkConstructedType[[4]elem](t, array)
+	checkConstructedType[*[4]elem](t, array.Addr())
+
+	checkPanic := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s did not panic", name)
+			}
+		}()
+		fn()
+	}
+	checkPanic("negative ArrayOf length", func() {
+		reflect.ArrayOf(-1, elemType)
+	})
+	checkPanic("overflowing ArrayOf size", func() {
+		reflect.ArrayOf(int(^uint(0)>>1), reflect.TypeOf(int(0)))
+	})
+}
+
 func TestMapOfRuntimeConstruction(t *testing.T) {
 	type key string
 	type elem float64
