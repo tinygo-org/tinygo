@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -1562,6 +1563,8 @@ type tinyMakeChanElement struct {
 	text string
 }
 
+type namedReflectChan chan int
+
 var tinyMakeChanChurn []*int
 
 //go:noinline
@@ -1571,10 +1574,417 @@ func fillTinyMakeChan(ch chan tinyMakeChanElement) {
 	ch <- tinyMakeChanElement{ptr: value, text: "hello"}
 }
 
+func TestChannelSmallValues(t *testing.T) {
+	testChannelSmallValue(t, true)
+	testChannelSmallValue(t, int8(-7))
+	testChannelSmallValue(t, int16(-0x1234))
+	testChannelSmallValue(t, uint16(0xabcd))
+	testChannelSmallValue(t, float32(1.25))
+	testChannelSmallValue(t, [3]byte{0x12, 0x34, 0x56})
+}
+
+func testChannelSmallValue[T comparable](t *testing.T, want T) {
+	t.Helper()
+	t.Run(TypeFor[T]().String(), func(t *testing.T) {
+		ch := make(chan T, 1)
+		channel := ValueOf(ch)
+		for _, value := range []Value{ValueOf(want), ValueOf(&want).Elem()} {
+			channel.Send(value)
+			if got := <-ch; got != want {
+				t.Fatalf("Send = %v, want %v", got, want)
+			}
+			if !channel.TrySend(value) {
+				t.Fatal("TrySend failed")
+			}
+			if got := <-ch; got != want {
+				t.Fatalf("TrySend = %v, want %v", got, want)
+			}
+			Select([]SelectCase{{Dir: SelectSend, Chan: channel, Send: value}})
+			if got := <-ch; got != want {
+				t.Fatalf("Select send = %v, want %v", got, want)
+			}
+			interfaceChannel := make(chan any, 1)
+			for _, method := range []string{"Send", "TrySend", "Select"} {
+				channel := ValueOf(interfaceChannel)
+				switch method {
+				case "Send":
+					channel.Send(value)
+				case "TrySend":
+					if !channel.TrySend(value) {
+						t.Fatal("TrySend to interface channel failed")
+					}
+				case "Select":
+					Select([]SelectCase{{Dir: SelectSend, Chan: channel, Send: value}})
+				}
+				if got := (<-interfaceChannel).(T); got != want {
+					t.Fatalf("%s to interface channel = %v, want %v", method, got, want)
+				}
+			}
+		}
+		for _, method := range []string{"Recv", "TryRecv", "Select"} {
+			ch <- want
+			var value Value
+			var ok bool
+			switch method {
+			case "Recv":
+				value, ok = channel.Recv()
+			case "TryRecv":
+				value, ok = channel.TryRecv()
+			case "Select":
+				_, value, ok = Select([]SelectCase{{Dir: SelectRecv, Chan: channel}})
+			}
+			if !ok || value.Interface().(T) != want {
+				t.Fatalf("%s = %v, %t, want %v, true", method, value, ok, want)
+			}
+		}
+	})
+}
+
+func TestChannelSendAssignabilityPanic(t *testing.T) {
+	channel := ValueOf(make(chan int, 1))
+	value := ValueOf("invalid")
+	const message = "reflect.Value.Send: value of type string is not assignable to type int"
+	shouldPanic(message, func() { channel.Send(value) })
+	shouldPanic(message, func() { channel.TrySend(value) })
+	shouldPanic("reflect.Select: value of type string is not assignable to type int", func() {
+		Select([]SelectCase{{Dir: SelectSend, Chan: channel, Send: value}})
+	})
+}
+
+func TestChannelSelectNilBlocks(t *testing.T) {
+	for _, cases := range [][]SelectCase{
+		nil,
+		{{Dir: SelectRecv}},
+		{{Dir: SelectRecv, Chan: ValueOf((chan int)(nil))}},
+		{
+			{Dir: SelectRecv, Chan: ValueOf((chan int)(nil))},
+			{Dir: SelectSend, Chan: ValueOf((chan int)(nil)), Send: ValueOf(1)},
+		},
+	} {
+		started := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			close(started)
+			Select(cases)
+			close(done)
+		}()
+		<-started
+		select {
+		case <-done:
+			t.Fatalf("Select(%v) returned", cases)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func TestChannelOperations(t *testing.T) {
+	channel := make(chan int, 1)
+	value := ValueOf(channel)
+
+	value.Send(ValueOf(1))
+	if got := <-channel; got != 1 {
+		t.Fatalf("Send value = %d, want 1", got)
+	}
+
+	channel <- 2
+	got, ok := value.Recv()
+	if !ok || got.Int() != 2 {
+		t.Fatalf("Recv = %v, %t, want 2, true", got, ok)
+	}
+
+	if got, ok := value.TryRecv(); got.IsValid() || ok {
+		t.Fatalf("TryRecv on empty channel = %v, %t, want invalid, false", got, ok)
+	}
+	channel <- 3
+	if got, ok := value.TryRecv(); !ok || got.Int() != 3 {
+		t.Fatalf("TryRecv = %v, %t, want 3, true", got, ok)
+	}
+
+	channel <- 4
+	if value.TrySend(ValueOf(5)) {
+		t.Fatal("TrySend on full channel succeeded")
+	}
+	<-channel
+	if !value.TrySend(ValueOf(6)) {
+		t.Fatal("TrySend on empty channel failed")
+	}
+	if got := <-channel; got != 6 {
+		t.Fatalf("TrySend value = %d, want 6", got)
+	}
+
+	channel <- 7
+	value.Close()
+	if got, ok := value.Recv(); !ok || got.Int() != 7 {
+		t.Fatalf("Recv after Close = %v, %t, want 7, true", got, ok)
+	}
+	if got, ok := value.Recv(); ok || got.Int() != 0 {
+		t.Fatalf("Recv from closed channel = %v, %t, want 0, false", got, ok)
+	}
+	if got, ok := value.TryRecv(); ok || got.Int() != 0 {
+		t.Fatalf("TryRecv from closed channel = %v, %t, want 0, false", got, ok)
+	}
+
+	interfaceChannel := make(chan any, 1)
+	ValueOf(interfaceChannel).Send(ValueOf("value"))
+	if got := <-interfaceChannel; got != "value" {
+		t.Fatalf("interface channel value = %v, want value", got)
+	}
+
+	named := make(namedReflectChan, 1)
+	namedValue := ValueOf(named)
+	namedValue.Send(ValueOf(8))
+	if got, ok := namedValue.Recv(); !ok || got.Int() != 8 {
+		t.Fatalf("named channel Recv = %v, %t, want 8, true", got, ok)
+	}
+}
+
+func TestChannelBlockedOperations(t *testing.T) {
+	a, b := 7, 8
+	want := [2]*int{&a, &b}
+	for _, channel := range []Value{
+		ValueOf(make(chan [2]*int)),
+		ValueOf(make(chan any)),
+	} {
+		t.Run(channel.Type().String(), func(t *testing.T) {
+			started := make(chan struct{})
+			done := make(chan struct{})
+			go func() {
+				close(started)
+				channel.Send(ValueOf(want))
+				close(done)
+			}()
+			<-started
+			runtime.Gosched()
+			runtime.GC()
+			got, ok := channel.Recv()
+			if !ok || got.Interface().([2]*int) != want {
+				t.Fatalf("blocked Send delivered %v, %t, want %v, true", got, ok, want)
+			}
+			<-done
+
+			started = make(chan struct{})
+			received := make(chan Value)
+			go func() {
+				close(started)
+				value, ok := channel.Recv()
+				if !ok {
+					panic("blocked Recv failed")
+				}
+				received <- value
+			}()
+			<-started
+			runtime.Gosched()
+			runtime.GC()
+			channel.Send(ValueOf(want))
+			got = <-received
+			if got.Interface().([2]*int) != want || got.CanAddr() || got.CanSet() {
+				t.Fatalf("blocked Recv returned %v with incorrect value or flags", got)
+			}
+		})
+	}
+}
+
+func TestChannelReceiveFlags(t *testing.T) {
+	channels := []Value{
+		ValueOf(make(chan int, 1)),
+		ValueOf(make(chan [2]*int, 1)),
+		ValueOf(make(chan any, 1)),
+		ValueOf(make(chan struct{}, 1)),
+	}
+	for _, channel := range channels {
+		elem := channel.Type().Elem()
+		t.Run(elem.String(), func(t *testing.T) {
+			for _, closed := range []bool{false, true} {
+				if closed {
+					channel.Close()
+				}
+				for _, method := range []string{"Recv", "TryRecv", "Select"} {
+					if !closed {
+						channel.Send(Zero(elem))
+					}
+					var got Value
+					var ok bool
+					switch method {
+					case "Recv":
+						got, ok = channel.Recv()
+					case "TryRecv":
+						got, ok = channel.TryRecv()
+					case "Select":
+						_, got, ok = Select([]SelectCase{{Dir: SelectRecv, Chan: channel}})
+					}
+					if !got.IsValid() || got.Type() != elem || ok == closed {
+						t.Fatalf("%s on closed=%t returned %v, %t", method, closed, got, ok)
+					}
+					if got.CanAddr() || got.CanSet() {
+						t.Errorf("%s on closed=%t returned an addressable or settable value", method, closed)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestChannelSelect(t *testing.T) {
+	t.Run("blocked interface sends", func(t *testing.T) {
+		first := make(chan any)
+		second := make(chan any)
+		started := make(chan struct{})
+		chosen := make(chan int, 1)
+		a, b := 1, 2
+		go func() {
+			close(started)
+			index, _, _ := Select([]SelectCase{
+				{Dir: SelectSend, Chan: ValueOf(first), Send: ValueOf(&a)},
+				{Dir: SelectSend, Chan: ValueOf(second), Send: ValueOf(&b)},
+			})
+			chosen <- index
+		}()
+		<-started
+		runtime.Gosched()
+		runtime.GC()
+		if got := <-second; got != &b {
+			t.Fatalf("Select sent %v, want %p", got, &b)
+		}
+		if index := <-chosen; index != 1 {
+			t.Fatalf("Select chose %d, want 1", index)
+		}
+	})
+
+	t.Run("ready receive before send", func(t *testing.T) {
+		for _, blocking := range []bool{false, true} {
+			received := false
+			for range 64 {
+				in := make(chan int, 1)
+				out := make(chan int, 1)
+				in <- 42
+				cases := []SelectCase{
+					{Dir: SelectRecv, Chan: ValueOf(in)},
+					{Dir: SelectSend, Chan: ValueOf(out), Send: ValueOf(42)},
+				}
+				if !blocking {
+					cases = append(cases, SelectCase{Dir: SelectDefault})
+				}
+				chosen, _, _ := Select(cases)
+				received = received || chosen == 0
+			}
+			if !received {
+				t.Fatalf("Select blocking=%t always preferred the ready send", blocking)
+			}
+		}
+	})
+
+	t.Run("mixed case ordering", func(t *testing.T) {
+		for _, blocking := range []bool{false, true} {
+			for ready := 0; ready < 4; ready++ {
+				var channels [4]chan int
+				channels[ready] = make(chan int, 1)
+				if ready%2 == 0 {
+					channels[ready] <- 42
+				}
+				cases := []SelectCase{
+					{Dir: SelectRecv, Chan: ValueOf(channels[0])},
+					{Dir: SelectSend, Chan: ValueOf(channels[1]), Send: ValueOf(42)},
+					{Dir: SelectRecv, Chan: ValueOf(channels[2])},
+					{Dir: SelectSend, Chan: ValueOf(channels[3]), Send: ValueOf(42)},
+				}
+				if !blocking {
+					cases = append(cases, SelectCase{Dir: SelectDefault})
+				}
+				chosen, recv, ok := Select(cases)
+				if chosen != ready {
+					t.Fatalf("Select blocking=%t chose %d, want %d", blocking, chosen, ready)
+				}
+				if ready%2 == 0 {
+					if !ok || recv.Int() != 42 {
+						t.Fatalf("Select receive = %v, %t, want 42, true", recv, ok)
+					}
+				} else {
+					if recv.IsValid() || ok {
+						t.Fatalf("Select send = %v, %t, want invalid, false", recv, ok)
+					}
+					if got := <-channels[ready]; got != 42 {
+						t.Fatalf("Select sent %d, want 42", got)
+					}
+				}
+			}
+		}
+	})
+
+	first := make(chan *int)
+	second := make(chan [2]*int, 1)
+	a, b := 1, 2
+	second <- [2]*int{&a, &b}
+
+	chosen, recv, ok := Select([]SelectCase{
+		{Dir: SelectRecv, Chan: ValueOf(first)},
+		{Dir: SelectRecv, Chan: ValueOf(second)},
+	})
+	if chosen != 1 || !ok {
+		t.Fatalf("Select receive chose %d, %t, want 1, true", chosen, ok)
+	}
+	got := recv.Interface().([2]*int)
+	if got[0] != &a || got[1] != &b {
+		t.Fatalf("Select receive = %v, want [%p %p]", got, &a, &b)
+	}
+
+	sendChannel := make(chan string, 1)
+	chosen, recv, ok = Select([]SelectCase{
+		{Dir: SelectSend, Chan: ValueOf(sendChannel), Send: ValueOf("sent")},
+	})
+	if chosen != 0 || recv.IsValid() || ok {
+		t.Fatalf("Select send = %d, %v, %t, want 0, invalid, false", chosen, recv, ok)
+	}
+	if got := <-sendChannel; got != "sent" {
+		t.Fatalf("Select sent %q, want sent", got)
+	}
+
+	chosen, recv, ok = Select([]SelectCase{
+		{Dir: SelectRecv, Chan: ValueOf(first)},
+		{Dir: SelectDefault},
+	})
+	if chosen != 1 || recv.IsValid() || ok {
+		t.Fatalf("Select default = %d, %v, %t, want 1, invalid, false", chosen, recv, ok)
+	}
+
+	blocking := make(chan int)
+	go func() {
+		blocking <- 9
+	}()
+	chosen, recv, ok = Select([]SelectCase{
+		{Dir: SelectRecv, Chan: ValueOf(blocking)},
+	})
+	if chosen != 0 || !ok || recv.Int() != 9 {
+		t.Fatalf("blocking Select = %d, %v, %t, want 0, 9, true", chosen, recv, ok)
+	}
+
+	blockingSend := make(chan int)
+	done := make(chan int)
+	go func() {
+		done <- <-blockingSend
+	}()
+	chosen, recv, ok = Select([]SelectCase{
+		{Dir: SelectSend, Chan: ValueOf(blockingSend), Send: ValueOf(10)},
+	})
+	if chosen != 0 || recv.IsValid() || ok {
+		t.Fatalf("blocking send Select = %d, %v, %t, want 0, invalid, false", chosen, recv, ok)
+	}
+	if got := <-done; got != 10 {
+		t.Fatalf("blocking Select sent %d, want 10", got)
+	}
+
+	interfaceChannel := make(chan any, 1)
+	chosen, _, _ = Select([]SelectCase{
+		{Dir: SelectSend, Chan: ValueOf(interfaceChannel), Send: ValueOf("interface")},
+	})
+	if chosen != 0 {
+		t.Fatalf("interface send Select chose %d, want 0", chosen)
+	}
+	if got := <-interfaceChannel; got != "interface" {
+		t.Fatalf("interface send Select value = %v, want interface", got)
+	}
+}
+
 func TestTinyMakeChan(t *testing.T) {
-	// Value.Send and Value.Recv are not implemented yet, so the channel is
-	// exercised through Interface(): that proves MakeChan returns a working
-	// channel rather than merely a value of the right kind.
 	t.Run("buffered", func(t *testing.T) {
 		v := MakeChan(TypeOf(make(chan int)), 2)
 		if got, want := v.Kind(), Chan; got != want {

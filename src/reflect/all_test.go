@@ -1704,8 +1704,6 @@ func TestNilMap(t *testing.T) {
 	mv.SetMapIndex(ValueOf("hi"), Value{})
 }
 
-/* // TODO(tinygo): missing chan reflect support
-
 func TestChan(t *testing.T) {
 	for loop := 0; loop < 2; loop++ {
 		var c chan int
@@ -1812,6 +1810,54 @@ type caseInfo struct {
 	closed    bool
 	helper    func()
 	panic     bool
+}
+
+type exhaustive struct {
+	r    *rand.Rand
+	pos  int
+	last []choice
+}
+
+type choice struct {
+	off int
+	n   int
+	max int
+}
+
+func (x *exhaustive) Next() bool {
+	if x.r == nil {
+		x.r = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	x.pos = 0
+	if x.last == nil {
+		x.last = []choice{}
+		return true
+	}
+	for i := len(x.last) - 1; i >= 0; i-- {
+		c := &x.last[i]
+		if c.n+1 < c.max {
+			c.n++
+			x.last = x.last[:i+1]
+			return true
+		}
+	}
+	return false
+}
+
+func (x *exhaustive) Choose(max int) int {
+	if x.pos >= len(x.last) {
+		x.last = append(x.last, choice{x.r.Intn(max), 0, max})
+	}
+	c := &x.last[x.pos]
+	x.pos++
+	if c.max != max {
+		panic("inconsistent use of exhaustive tester")
+	}
+	return (c.n + c.off) % max
+}
+
+func (x *exhaustive) Maybe() bool {
+	return x.Choose(2) == 1
 }
 
 var allselect = flag.Bool("allselect", false, "exhaustive select test")
@@ -2173,8 +2219,6 @@ func fmtSelect(info []caseInfo) string {
 	fmt.Fprintf(&buf, "}")
 	return buf.String()
 }
-
-*/
 
 type two [2]uintptr
 
@@ -6635,96 +6679,6 @@ func TestAllocsInterfaceSmall(t *testing.T) {
 	}
 }
 
-// An exhaustive is a mechanism for writing exhaustive or stochastic tests.
-// The basic usage is:
-//
-//	for x.Next() {
-//		... code using x.Maybe() or x.Choice(n) to create test cases ...
-//	}
-//
-// Each iteration of the loop returns a different set of results, until all
-// possible result sets have been explored. It is okay for different code paths
-// to make different method call sequences on x, but there must be no
-// other source of non-determinism in the call sequences.
-//
-// When faced with a new decision, x chooses randomly. Future explorations
-// of that path will choose successive values for the result. Thus, stopping
-// the loop after a fixed number of iterations gives somewhat stochastic
-// testing.
-//
-// Example:
-//
-//	for x.Next() {
-//		v := make([]bool, x.Choose(4))
-//		for i := range v {
-//			v[i] = x.Maybe()
-//		}
-//		fmt.Println(v)
-//	}
-//
-// prints (in some order):
-//
-//	[]
-//	[false]
-//	[true]
-//	[false false]
-//	[false true]
-//	...
-//	[true true]
-//	[false false false]
-//	...
-//	[true true true]
-//	[false false false false]
-//	...
-//	[true true true true]
-type exhaustive struct {
-	r    *rand.Rand
-	pos  int
-	last []choice
-}
-
-type choice struct {
-	off int
-	n   int
-	max int
-}
-
-func (x *exhaustive) Next() bool {
-	if x.r == nil {
-		x.r = rand.New(rand.NewSource(time.Now().UnixNano()))
-	}
-	x.pos = 0
-	if x.last == nil {
-		x.last = []choice{}
-		return true
-	}
-	for i := len(x.last) - 1; i >= 0; i-- {
-		c := &x.last[i]
-		if c.n+1 < c.max {
-			c.n++
-			x.last = x.last[:i+1]
-			return true
-		}
-	}
-	return false
-}
-
-func (x *exhaustive) Choose(max int) int {
-	if x.pos >= len(x.last) {
-		x.last = append(x.last, choice{x.r.Intn(max), 0, max})
-	}
-	c := &x.last[x.pos]
-	x.pos++
-	if c.max != max {
-		panic("inconsistent use of exhaustive tester")
-	}
-	return (c.n + c.off) % max
-}
-
-func (x *exhaustive) Maybe() bool {
-	return x.Choose(2) == 1
-}
-
 func GCFunc(args []Value) []Value {
 	runtime.GC()
 	return []Value{}
@@ -7528,6 +7482,8 @@ func TestMapAlloc(t *testing.T) {
 	// map, but to still catch a regression where we keep re-allocating in the hashmap as new entries are added.
 }
 
+*/
+
 func TestChanAlloc(t *testing.T) {
 	// Note: for a chan int, the return Value must be allocated, so we
 	// use a chan *int instead.
@@ -7544,8 +7500,6 @@ func TestChanAlloc(t *testing.T) {
 	// a limitation of escape analysis. If that is ever fixed the
 	// allocs < 0.5 condition will trigger and this test should be fixed.
 }
-
-*/
 
 type TheNameOfThisTypeIsExactly255BytesLongSoWhenTheCompilerPrependsTheReflectTestPackageNameAndExtraStarTheLinkerRuntimeAndReflectPackagesWillHaveToCorrectlyDecodeTheSecondLengthByte0123456789_0123456789_0123456789_0123456789_0123456789_012345678 int
 

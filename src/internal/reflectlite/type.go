@@ -1335,7 +1335,7 @@ func (t *RawType) ChanDir() ChanDir {
 		panic(errTypeChanDir)
 	}
 
-	dir := int((*elemType)(unsafe.Pointer(t)).numMethod)
+	dir := int((*elemType)(unsafe.Pointer(t.underlying())).numMethod)
 
 	// nummethod is overloaded for channel to store channel direction
 	return ChanDir(dir)

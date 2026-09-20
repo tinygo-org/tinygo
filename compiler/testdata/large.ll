@@ -7,7 +7,7 @@ target triple = "wasm32-unknown-wasip1"
 %runtime.deferFrame = type { ptr, ptr, [0 x ptr], ptr, i8, %runtime._interface, ptr }
 %runtime._interface = type { ptr, ptr }
 %runtime.channelOp = type { ptr, ptr, i32, ptr }
-%runtime.chanSelectState = type { ptr, ptr }
+%runtime.chanSelectState = type { ptr, ptr, ptr }
 
 @tinygo_rewinding = external global i8
 @tinygo_panic_rewinding = external global i8
@@ -555,10 +555,14 @@ entry:
   store ptr %ch, ptr %select.states.alloca, align 4
   %select.states.alloca.repack3 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 4
   store ptr %value, ptr %select.states.alloca.repack3, align 4
-  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  %select.states.alloca.repack5 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  store ptr null, ptr %select.states.alloca.repack5, align 4
+  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
   store ptr %ch, ptr %0, align 4
-  %.repack5 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
-  store ptr null, ptr %.repack5, align 4
+  %.repack7 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 16
+  store ptr null, ptr %.repack7, align 4
+  %.repack9 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 20
+  store ptr null, ptr %.repack9, align 4
   call void @llvm.lifetime.start.p0(ptr nonnull %select.block.alloca)
   %select.result = call { i32, i1 } @runtime.chanSelect(ptr nonnull %select.recvbuf.alloca, ptr nonnull %select.states.alloca, i32 2, i32 2, ptr nonnull %select.block.alloca, i32 2, i32 2, ptr undef) #14
   call void @llvm.lifetime.end.p0(ptr nonnull %select.block.alloca)
@@ -596,7 +600,7 @@ unwind.return:                                    ; preds = %select.next2
   ret i8 undef
 }
 
-declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 536870912), i32 range(i32 0, 536870912), ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr) #0
+declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 357913942), i32 range(i32 0, 357913942), ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr) #0
 
 declare void @runtime._panic(ptr, ptr, ptr) #0
 
@@ -629,7 +633,7 @@ select.next:                                      ; preds = %entry
   ret i1 false
 }
 
-declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(44), ptr, ptr) #0
+declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(44), ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.storeZeroLargeMap(ptr dereferenceable_or_null(52) %values, ptr %context) unnamed_addr #1 {

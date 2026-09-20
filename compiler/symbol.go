@@ -274,6 +274,8 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 		llvmFn.AddAttributeAtIndex(3, c.nocapture)
 	case "runtime.hashmapBinaryDelete", "runtime.hashmapGenericDelete":
 		llvmFn.AddAttributeAtIndex(2, c.nocapture)
+	case "runtime.chanTrySend", "runtime.chanTryRecv":
+		llvmFn.AddAttributeAtIndex(2, c.nocapture)
 	case "runtime.trackPointer":
 		// This function is necessary for tracking pointers on the stack in a
 		// portable way (see gc_stack_portable.go). Indicate to the optimizer
