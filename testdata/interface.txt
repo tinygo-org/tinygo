@@ -28,3 +28,31 @@ type is int
 type is *int
 type is **int
 x is 5
+struct assertion: false
+struct switch: false
+array assertion: false
+array switch: false
+pointer assertion: false
+pointer switch: false
+slice assertion: false
+slice switch: false
+map assertion: false
+map switch: false
+channel assertion: false
+channel switch: false
+function assertion: false
+function switch: false
+same package assertion: true
+same package switch: true
+exported assertion: true
+exported switch: true
+struct equality: false
+struct map keys: 2 1 2
+array equality: false
+array map keys: 2 1 2
+pointer equality: false
+pointer map keys: 2 1 2
+channel equality: false
+channel map keys: 2 1 2
+exported equality: true
+exported map keys: 1 2 2

@@ -7,8 +7,11 @@ import (
 	"unsafe"
 )
 
+type typeNamePair[A, B any] struct{}
+
 type (
 	myint    int
+	mystring string
 	myslice  []byte
 	myslice2 []myint
 	mychan   chan int
@@ -49,6 +52,32 @@ func main() {
 	println(reflect.TypeOf(myslice{}) == reflect.TypeOf([]byte{}))
 	println(reflect.TypeOf(myslice2{}) == reflect.TypeOf([]myint{}))
 	println(reflect.TypeOf(myslice2{}) == reflect.TypeOf([]int{}))
+
+	println("\nbuilt-in assignability")
+	for _, pair := range [][2]reflect.Type{
+		{reflect.TypeFor[int](), reflect.TypeFor[myint]()},
+		{reflect.TypeFor[string](), reflect.TypeFor[mystring]()},
+	} {
+		for _, types := range [][2]reflect.Type{pair, {pair[1], pair[0]}} {
+			source, target := types[0], types[1]
+			println(source.Name(), "to", target.Name(), "assignable:", source.AssignableTo(target),
+				"convertible:", source.ConvertibleTo(target), "self:", source.AssignableTo(source))
+		}
+	}
+
+	println("\ngeneric type names")
+	for _, typ := range []reflect.Type{
+		reflect.TypeFor[typeNamePair[int, string]](),
+		reflect.TypeFor[typeNamePair[typeNamePair[int, string], bool]](),
+		reflect.TypeFor[typeNamePair[func(int, string) (bool, error), string]](),
+		reflect.TypeFor[typeNamePair[struct {
+			X int `json:"x, [y]"`
+			y string
+		}, struct{}]](),
+	} {
+		println(typ.Name())
+		println(typ.String())
+	}
 
 	println("\nvalues of interfaces")
 	var zeroSlice []byte

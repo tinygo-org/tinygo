@@ -286,6 +286,14 @@ func (t *RawType) isNamed() bool {
 	return t.meta&flagNamed != 0
 }
 
+func (t *RawType) isNamedForAssign() bool {
+	if t.isNamed() {
+		return true
+	}
+	kind := t.Kind()
+	return kind >= Bool && kind <= String || kind == UnsafePointer
+}
+
 func TypeOf(i interface{}) Type {
 	if i == nil {
 		return nil
@@ -886,8 +894,8 @@ func (t *RawType) AssignableTo(u Type) bool {
 		return typeImplementsMethodSet(unsafe.Pointer(t), unsafe.Pointer(&u_itf.methods))
 	}
 
-	t_named := t.isNamed()
-	u_named := u_raw.isNamed()
+	t_named := t.isNamedForAssign()
+	u_named := u_raw.isNamedForAssign()
 	if t_named && u_named {
 		return false
 	}

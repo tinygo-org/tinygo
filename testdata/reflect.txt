@@ -6,6 +6,22 @@ false
 false
 false
 
+built-in assignability
+int to myint assignable: false convertible: true self: true
+myint to int assignable: false convertible: true self: true
+string to mystring assignable: false convertible: true self: true
+mystring to string assignable: false convertible: true self: true
+
+generic type names
+typeNamePair[int, string]
+main.typeNamePair[int, string]
+typeNamePair[main.typeNamePair[int, string], bool]
+main.typeNamePair[main.typeNamePair[int, string], bool]
+typeNamePair[func(int, string) (bool, error), string]
+main.typeNamePair[func(int, string) (bool, error), string]
+typeNamePair[struct{X int "json:\"x, [y]\""; y string}, struct{}]
+main.typeNamePair[struct{X int "json:\"x, [y]\""; y string}, struct{}]
+
 values of interfaces
 reflect type: bool name=bool
   bool: true

@@ -8080,6 +8080,8 @@ func TestMethodCallValueCodePtr(t *testing.T) {
 	}
 }
 
+*/
+
 type A struct{}
 type B[T any] struct{}
 
@@ -8093,8 +8095,6 @@ func TestIssue50208(t *testing.T) {
 		t.Errorf("name of type parameter mismatched, want:%s, got:%s", want2, got)
 	}
 }
-
-*/
 
 func TestNegativeKindString(t *testing.T) {
 	x := -1
