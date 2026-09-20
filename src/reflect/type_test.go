@@ -224,6 +224,89 @@ func TestArrayOfRuntimeConstruction(t *testing.T) {
 	})
 }
 
+func TestChanOfRuntimeConstruction(t *testing.T) {
+	type elem int
+
+	elemType := reflect.TypeOf(elem(0))
+	compiledTypes := []struct {
+		dir  reflect.ChanDir
+		want reflect.Type
+	}{
+		{reflect.RecvDir, reflect.TypeOf((<-chan elem)(nil))},
+		{reflect.SendDir, reflect.TypeOf((chan<- elem)(nil))},
+		{reflect.BothDir, reflect.TypeOf((chan elem)(nil))},
+	}
+	for _, test := range compiledTypes {
+		if got := reflect.ChanOf(test.dir, elemType); got != test.want {
+			t.Errorf("ChanOf(%v, elem) = %v, want existing type %v", test.dir, got, test.want)
+		}
+	}
+
+	dynamicElemType := reflect.ArrayOf(3, reflect.TypeOf(uint8(0)))
+	dynamicTypes := []struct {
+		dir  reflect.ChanDir
+		name string
+	}{
+		{reflect.RecvDir, "<-chan [3]uint8"},
+		{reflect.SendDir, "chan<- [3]uint8"},
+		{reflect.BothDir, "chan [3]uint8"},
+	}
+	var chanType reflect.Type
+	for _, test := range dynamicTypes {
+		typ := reflect.ChanOf(test.dir, dynamicElemType)
+		if got := typ.String(); got != test.name {
+			t.Errorf("ChanOf(%v, [3]uint8).String() = %q, want %q", test.dir, got, test.name)
+		}
+		if got := typ.ChanDir(); got != test.dir {
+			t.Errorf("ChanOf(%v, [3]uint8).ChanDir() = %v", test.dir, got)
+		}
+		if got := typ.Elem(); got != dynamicElemType {
+			t.Errorf("ChanOf(%v, [3]uint8).Elem() = %v, want %v", test.dir, got, dynamicElemType)
+		}
+		if got := reflect.ChanOf(test.dir, dynamicElemType); got != typ {
+			t.Errorf("second ChanOf(%v, [3]uint8) = %v, want %v", test.dir, got, typ)
+		}
+		if test.dir == reflect.BothDir {
+			chanType = typ
+		}
+	}
+	if got := chanType.Kind(); got != reflect.Chan {
+		t.Fatalf("ChanOf(BothDir, [3]uint8).Kind() = %v, want %v", got, reflect.Chan)
+	}
+	if !chanType.Comparable() {
+		t.Fatal("ChanOf(BothDir, [3]uint8).Comparable() = false, want true")
+	}
+	if got := reflect.PointerTo(chanType).Elem(); got != chanType {
+		t.Fatalf("PointerTo(ChanOf(BothDir, [3]uint8)).Elem() = %v, want %v", got, chanType)
+	}
+	channel := reflect.MakeChan(chanType, 3)
+	if got := channel.Cap(); got != 3 {
+		t.Fatalf("MakeChan(ChanOf(BothDir, [3]uint8), 3).Cap() = %d, want 3", got)
+	}
+	checkConstructedType[chan [3]uint8](t, channel)
+	channelMap := reflect.MakeMap(reflect.MapOf(chanType, reflect.TypeOf(int(0))))
+	channelMap.SetMapIndex(channel, reflect.ValueOf(42))
+	if got := channelMap.MapIndex(channel).Int(); got != 42 {
+		t.Fatalf("map value with dynamic channel key = %d, want 42", got)
+	}
+
+	checkPanic := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s did not panic", name)
+			}
+		}()
+		fn()
+	}
+	checkPanic("invalid ChanDir", func() {
+		reflect.ChanOf(0, elemType)
+	})
+	checkPanic("oversized channel element", func() {
+		reflect.ChanOf(reflect.BothDir, reflect.TypeOf((*[1 << 16]byte)(nil)).Elem())
+	})
+}
+
 func TestMapOfRuntimeConstruction(t *testing.T) {
 	type key string
 	type elem float64
