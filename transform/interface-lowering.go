@@ -493,12 +493,16 @@ func (p *lowerInterfacesPass) run() error {
 			if initializer.Type().TypeKind() != llvm.StructTypeKind {
 				continue
 			}
+			keepInterfaceMethods := strings.HasPrefix(name, "interface:")
 			numFields := initializer.Type().StructElementTypesCount()
 			changed := false
 			fields := make([]llvm.Value, 0, numFields)
 			for i := 0; i < numFields; i++ {
 				field := p.builder.CreateExtractValue(initializer, i, "")
-				filtered := p.filterMethodSet(field, methodFilter, ifaceMethodSets)
+				filtered := field
+				if !keepInterfaceMethods {
+					filtered = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
+				}
 				if filtered.C != field.C {
 					changed = true
 				}

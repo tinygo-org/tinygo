@@ -1599,16 +1599,10 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	}
 
 	switch instr := instr.(type) {
-	case *ssa.Call:
-		b.markReflectMethodUse(&instr.Call)
-	case *ssa.Defer:
-		b.markReflectMethodUse(&instr.Call)
-	case *ssa.Go:
-		b.markReflectMethodUse(&instr.Call)
-	}
-
-	switch instr := instr.(type) {
 	case ssa.Value:
+		if call, ok := instr.(*ssa.Call); ok {
+			b.markReflectMethodUse(&call.Call)
+		}
 		if value, err := b.createExpr(instr); err != nil {
 			// This expression could not be parsed. Add the error to the list
 			// of diagnostics and continue with an undef value.
@@ -1624,8 +1618,10 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	case *ssa.DebugRef:
 		// ignore
 	case *ssa.Defer:
+		b.markReflectMethodUse(&instr.Call)
 		b.createDefer(instr)
 	case *ssa.Go:
+		b.markReflectMethodUse(&instr.Call)
 		// Start a new goroutine.
 		b.createGo(instr)
 	case *ssa.If:
