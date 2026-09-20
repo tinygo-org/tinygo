@@ -546,6 +546,31 @@ blue gopher
 v.Interface() method
 kind: interface
 int 5
+
+type method sets
+struct NumMethod: 2
+struct Method: Len func(main.methodType) int true
+struct Method: String func(main.methodType) string true
+pointer NumMethod: 3
+pointer Method: Len func(*main.methodType) int
+pointer Method: PtrMethod func(*main.methodType)
+pointer Method: String func(*main.methodType) string
+prefix Method: Int
+prefix Method: Int32
+prefix Method: Uint
+prefix Method: Uint32
+MethodByName(String): String func(main.methodType) string 1 true
+struct MethodByName(PtrMethod): false
+struct MethodByName(hidden): false
+embedded NumMethod: 2
+embedded Method: InnerMethod func(main.methodOuter) int
+embedded Method: OuterMethod func(main.methodOuter)
+interface NumMethod: 3
+interface Method: Alpha func() true
+interface Method: Beta func(int) string true
+interface Method: hidden func() false
+interface Method(out of range).Name: 
+int MethodByName(Missing): false
 reflect map interface key ok
 elemStringer 7
 
