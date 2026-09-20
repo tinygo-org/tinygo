@@ -128,6 +128,18 @@ const (
 	BothDir = RecvDir | SendDir             // chan
 )
 
+func (d ChanDir) String() string {
+	switch d {
+	case SendDir:
+		return "chan<-"
+	case RecvDir:
+		return "<-chan"
+	case BothDir:
+		return "chan"
+	}
+	return "ChanDir" + itoa.Itoa(int(d))
+}
+
 // Type represents the minimal interface for a Go type.
 type Type interface {
 	// These should match the reflectlite.Type implementation in Go.
@@ -1434,6 +1446,38 @@ func (e *TypeError) Error() string {
 
 func align(offset uintptr, alignment uintptr) uintptr {
 	return (offset + alignment - 1) &^ (alignment - 1)
+}
+
+func ChanOf(dir ChanDir, t Type) Type {
+	elem := t.(*RawType)
+	lookupKey := cacheKey{kind: Chan, t1: elem, extra: uintptr(dir)}
+	if typ := loadCachedType(lookupKey); typ != nil {
+		return typ
+	}
+
+	if uint64(elem.Size()) >= 1<<16 {
+		panic("reflect.ChanOf: element size too large")
+	}
+	switch dir {
+	case RecvDir, SendDir, BothDir:
+	default:
+		panic("reflect.ChanOf: invalid dir")
+	}
+
+	for _, typ := range unsafe.Slice(chanTypeLinks, chanTypeLinksLen) {
+		candidate := (*elemType)(unsafe.Pointer(typ))
+		if candidate.elem == elem && ChanDir(candidate.numMethod) == dir {
+			return loadOrStoreCachedType(lookupKey, typ)
+		}
+	}
+
+	typ := &elemType{
+		RawType:   RawType{meta: uint8(Chan) | flagComparable},
+		numMethod: uint16(dir),
+		elem:      elem,
+	}
+	typ.ptrTo = (*RawType)(unsafe.Add(unsafe.Pointer(&typ.RawType), 1))
+	return loadOrStoreCachedType(lookupKey, &typ.RawType)
 }
 
 func ArrayOf(n int, t Type) Type {

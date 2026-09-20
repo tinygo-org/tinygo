@@ -592,5 +592,5 @@ func FuncOf(in, out []Type, variadic bool) Type {
 }
 
 func ChanOf(dir ChanDir, t Type) Type {
-	panic("unimplemented: reflect.ChanOf")
+	return toType(reflectlite.ChanOf(dir, toRawType(t)))
 }
