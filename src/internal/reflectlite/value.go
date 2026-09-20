@@ -1821,7 +1821,7 @@ func Zero(typ Type) Value {
 		return Value{
 			typecode: typ.(*RawType),
 			value:    nil,
-			flags:    valueFlagExported | valueFlagRO,
+			flags:    valueFlagExported,
 		}
 	}
 
@@ -1829,14 +1829,14 @@ func Zero(typ Type) Value {
 		return Value{
 			typecode: typ.(*RawType),
 			value:    unsafe.Pointer(zerobuffer),
-			flags:    valueFlagExported | valueFlagRO,
+			flags:    valueFlagExported,
 		}
 	}
 
 	return Value{
 		typecode: typ.(*RawType),
 		value:    alloc(size, typ.(*RawType).gcLayout()),
-		flags:    valueFlagExported | valueFlagRO,
+		flags:    valueFlagExported,
 	}
 }
 
