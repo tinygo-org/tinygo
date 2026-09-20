@@ -1773,6 +1773,7 @@ func main() {
 
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative, custom, precise, boehm)")
+	libc := flag.String("libc", "", "libc to use on linux (musl, glibc)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
 	panicUnwind := flag.String("panic-unwind", "", "panic unwind strategy (auto, explicit)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, cores, threads, asyncify)")
@@ -1952,6 +1953,7 @@ func main() {
 		Monitor:                 *monitor,
 		BaudRate:                *baudrate,
 		Timeout:                 *timeout,
+		Libc:                    *libc,
 		WITPackage:              witPackage,
 		WITWorld:                witWorld,
 		GoCompatibility:         *gocompatibility,
