@@ -784,3 +784,32 @@ func TestStructOfConcurrentConstruction(t *testing.T) {
 		}
 	}
 }
+
+func TestCanSeqFunction(t *testing.T) {
+	type namedBool bool
+
+	tests := []struct {
+		name     string
+		typ      reflect.Type
+		wantSeq  bool
+		wantSeq2 bool
+	}{
+		{"seq", reflect.TypeOf(func(func(int) bool) {}), true, false},
+		{"seq2", reflect.TypeOf(func(func(int, string) bool) {}), false, true},
+		{"no result", reflect.TypeOf(func(func(int)) {}), false, false},
+		{"named bool", reflect.TypeOf(func(func(int) namedBool) {}), false, false},
+		{"outer result", reflect.TypeOf(func(func(int) bool) bool { return false }), false, false},
+		{"two inputs", reflect.TypeOf(func(func(int) bool, int) {}), false, false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.typ.CanSeq(); got != test.wantSeq {
+				t.Errorf("CanSeq() = %v, want %v", got, test.wantSeq)
+			}
+			if got := test.typ.CanSeq2(); got != test.wantSeq2 {
+				t.Errorf("CanSeq2() = %v, want %v", got, test.wantSeq2)
+			}
+		})
+	}
+}
