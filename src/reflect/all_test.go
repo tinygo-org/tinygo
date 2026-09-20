@@ -6288,8 +6288,6 @@ func TestStructOfTooLarge(t *testing.T) {
 	}
 }
 
-/*
-
 func TestChanOf(t *testing.T) {
 	// check construction and use of type not in binary
 	type T string
@@ -6326,8 +6324,6 @@ func TestChanOf(t *testing.T) {
 	}
 }
 
-*/
-
 func TestChanOfDir(t *testing.T) {
 	// check construction and use of type not in binary
 	type T string
@@ -6347,8 +6343,6 @@ func TestChanOfDir(t *testing.T) {
 		t.Errorf("chan dir: have %q, want %q", cst.ChanDir().String(), "chan<-")
 	}
 }
-
-/*
 
 func TestChanOfGC(t *testing.T) {
 	done := make(chan bool, 1)
@@ -6397,8 +6391,6 @@ func TestChanOfGC(t *testing.T) {
 		}
 	}
 }
-
-*/
 
 func TestMapOf(t *testing.T) {
 	// check construction and use of type not in binary
@@ -6507,6 +6499,8 @@ func TestTypelinksSorted(t *testing.T) {
 	}
 }
 
+*/
+
 func TestFuncOf(t *testing.T) {
 	// check construction and use of type not in binary
 	type K string
@@ -6564,8 +6558,6 @@ func TestFuncOf(t *testing.T) {
 	}
 	FuncOf(in, nil, false)
 }
-
-*/
 
 type R0 struct {
 	*R1
@@ -7436,8 +7428,6 @@ func TestPtrToMethods(t *testing.T) {
 	}
 }
 
-/*
-
 func TestMapAlloc(t *testing.T) {
 	m := ValueOf(make(map[int]int, 10))
 	k := ValueOf(5)
@@ -7467,8 +7457,6 @@ func TestMapAlloc(t *testing.T) {
 	// the threshold to 10, to not make it overly brittle if something changes in the initial allocation of the
 	// map, but to still catch a regression where we keep re-allocating in the hashmap as new entries are added.
 }
-
-*/
 
 func TestChanAlloc(t *testing.T) {
 	// Note: for a chan int, the return Value must be allocated, so we
@@ -7556,6 +7544,8 @@ func TestExported(t *testing.T) {
 	}
 }
 
+*/
+
 func TestTypeStrings(t *testing.T) {
 	type stringTest struct {
 		typ  Type
@@ -7580,6 +7570,8 @@ func TestTypeStrings(t *testing.T) {
 		}
 	}
 }
+
+/*
 
 func TestOffsetLock(t *testing.T) {
 	var wg sync.WaitGroup
@@ -7680,8 +7672,6 @@ func TestSwapper(t *testing.T) {
 	}
 }
 
-/*
-
 // TestUnaddressableField tests that the reflect package will not allow
 // a type from another package to be used as a named type with an
 // unexported field.
@@ -7698,8 +7688,6 @@ func TestUnaddressableField(t *testing.T) {
 		lv.Set(rv)
 	})
 }
-
-*/
 
 type Tint int
 
