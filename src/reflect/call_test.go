@@ -8,6 +8,19 @@ import (
 	"testing"
 )
 
+//go:noinline
+func captureFunctionPointer(value int) func() int {
+	return func() int { return value }
+}
+
+func TestClosureCodePointer(t *testing.T) {
+	first := reflect.ValueOf(captureFunctionPointer(1))
+	second := reflect.ValueOf(captureFunctionPointer(2))
+	if first.Pointer() == 0 || first.Pointer() != second.Pointer() {
+		t.Fatal("closures from the same expression did not share a code pointer")
+	}
+}
+
 func callAllocationCases() []struct {
 	name string
 	fn   reflect.Value
