@@ -711,7 +711,7 @@ func hashmapMakeReflect(keySize, valueSize, sizeHint uintptr, typeInfo, keyType 
 func rawToInterface(t *reflectlite.RawType, ptr unsafe.Pointer) interface{} {
 	var val unsafe.Pointer
 	if t.Size() <= unsafe.Sizeof(uintptr(0)) {
-		val = reflectliteLoadSmallValue(ptr, t.Size())
+		val = reflectliteLoadInlineValue(ptr, t)
 	} else {
 		val = ptr
 	}
@@ -719,8 +719,8 @@ func rawToInterface(t *reflectlite.RawType, ptr unsafe.Pointer) interface{} {
 	return *(*interface{})(unsafe.Pointer(&i))
 }
 
-//go:linkname reflectliteLoadSmallValue internal/reflectlite.loadSmallValue
-func reflectliteLoadSmallValue(ptr unsafe.Pointer, size uintptr) unsafe.Pointer
+//go:linkname reflectliteLoadInlineValue internal/reflectlite.loadInlineValue
+func reflectliteLoadInlineValue(ptr unsafe.Pointer, t *reflectlite.RawType) unsafe.Pointer
 
 // Hashmap with string keys (a common case).
 
