@@ -26,6 +26,14 @@ func (tim *timer) callCallback(delta int64) {
 	tim.f(tim.arg, 0, delta)
 }
 
+func (tim *timer) nextWhen(delta int64) int64 {
+	next := tim.when + tim.period*(1+delta/tim.period)
+	if next < 0 {
+		return 1<<63 - 1
+	}
+	return next
+}
+
 // This is the struct used internally in the runtime. The first two fields are
 // the same as time.Timer and time.Ticker so it can be used as-is in the time
 // package.
@@ -198,7 +206,7 @@ func timerCallback(tn *timerNode, delta int64) {
 	if tim.synctest != nil {
 		tim.synctest.finishTimer(tn)
 	} else {
-		reAddTimer(tn)
+		reAddTimer(tn, delta)
 	}
 	tim.lock.Unlock()
 }

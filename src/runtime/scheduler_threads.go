@@ -132,7 +132,7 @@ func addTimer(tim *timerNode) {
 
 // reAddTimer finishes firing a timer. It re-adds periodic timers unless they
 // were stopped or reset while the callback was running.
-func reAddTimer(tn *timerNode) {
+func reAddTimer(tn *timerNode, delta int64) {
 	timerQueueLock.Lock()
 
 	// Remove the timer from the firing list before re-adding it to the queue,
@@ -154,7 +154,7 @@ func reAddTimer(tn *timerNode) {
 		return
 	}
 
-	tn.timer.when += tn.timer.period
+	tn.timer.when = tn.timer.nextWhen(delta)
 	timerQueueAdd(tn)
 
 	timerFutex.Add(1)
