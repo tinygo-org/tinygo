@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 func TestTinyIndirectPointers(t *testing.T) {
@@ -42,6 +43,29 @@ func TestTinyIndirectPointers(t *testing.T) {
 func TestTinyInvalidValueString(t *testing.T) {
 	if got := (Value{}).String(); got != "<invalid Value>" {
 		t.Errorf("Value{}.String() = %q, want %q", got, "<invalid Value>")
+	}
+}
+
+func TestNewAt(t *testing.T) {
+	value := 42
+	v := NewAt(TypeOf(value), unsafe.Pointer(&value))
+	if got, want := v.Type(), TypeOf((*int)(nil)); got != want {
+		t.Fatalf("NewAt type = %v, want %v", got, want)
+	}
+	if got := v.Interface().(*int); got != &value {
+		t.Fatalf("NewAt pointer = %p, want %p", got, &value)
+	}
+	v.Elem().SetInt(23)
+	if value != 23 {
+		t.Fatalf("NewAt value = %d, want 23", value)
+	}
+
+	nilValue := NewAt(TypeOf(value), nil)
+	if !nilValue.IsNil() {
+		t.Fatal("NewAt with nil pointer is not nil")
+	}
+	if nilValue.Elem().IsValid() {
+		t.Fatal("Elem of NewAt with nil pointer is valid")
 	}
 }
 
