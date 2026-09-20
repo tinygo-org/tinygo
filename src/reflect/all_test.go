@@ -2545,8 +2545,6 @@ func (p *Point) Int32Method(x int32) int32 {
 	return x
 }
 
-/*
-// TODO(tinygo): missing method support
 func TestMethod(t *testing.T) {
 	// Non-curried method of type.
 	p := Point{3, 4}
@@ -3003,8 +3001,6 @@ func TestInterfaceSet(t *testing.T) {
 	}
 }
 
-*/
-
 type T1 struct {
 	a string
 	int
@@ -3377,7 +3373,6 @@ func TestVariadicType(t *testing.T) {
 	t.Error(s)
 }
 
-/*
 type inner struct {
 	x int
 }
@@ -3387,21 +3382,23 @@ type outer struct {
 	inner
 }
 
-func (*inner) M() {}
-func (*outer) M() {}
+func (i *inner) M() int { return i.x }
+func (o *outer) M() int { return o.y }
 
 func TestNestedMethods(t *testing.T) {
-	typ := TypeOf((*outer)(nil))
-	if typ.NumMethod() != 1 || typ.Method(0).Func.UnsafePointer() != ValueOf((*outer).M).UnsafePointer() {
-		t.Errorf("Wrong method table for outer: (M=%p)", (*outer).M)
-		for i := 0; i < typ.NumMethod(); i++ {
-			m := typ.Method(i)
-			t.Errorf("\t%d: %s %p\n", i, m.Name, m.Func.UnsafePointer())
-		}
+	receiver := ValueOf(&outer{y: 42, inner: inner{x: 17}})
+	typ := receiver.Type()
+	if got := typ.NumMethod(); got != 1 {
+		t.Fatalf("outer has %d methods, want 1", got)
+	}
+	method := typ.Method(0)
+	if !method.Func.IsValid() || method.Func.Type() != TypeOf((*outer).M) {
+		t.Fatalf("wrong method function for outer: %v", method.Func)
+	}
+	if got := method.Func.Call([]Value{receiver})[0].Int(); got != 42 {
+		t.Errorf("reflected outer.M returned %d, want 42", got)
 	}
 }
-
-*/
 
 type unexp struct{}
 
@@ -3435,11 +3432,9 @@ func (i *InnerInt) M() int {
 	return i.X
 }
 
-/*
-
 func TestEmbeddedMethods(t *testing.T) {
 	typ := TypeOf((*OuterInt)(nil))
-	if typ.NumMethod() != 1 || typ.Method(0).Func.UnsafePointer() != ValueOf((*OuterInt).M).UnsafePointer() {
+	if typ.NumMethod() != 1 || typ.Method(0).Func.Type() != ValueOf((*OuterInt).M).Type() {
 		t.Errorf("Wrong method table for OuterInt: (m=%p)", (*OuterInt).M)
 		for i := 0; i < typ.NumMethod(); i++ {
 			m := typ.Method(i)
@@ -3462,8 +3457,6 @@ func TestEmbeddedMethods(t *testing.T) {
 		t.Errorf("f(o) = %d, want 2", v)
 	}
 }
-
-*/
 
 type FuncDDD func(...any) error
 
@@ -3779,8 +3772,6 @@ func TestSetLenCap(t *testing.T) {
 	shouldPanic("SetCap", func() { va.SetCap(8) })
 }
 
-/*
-
 func TestVariadic(t *testing.T) {
 	var b strings.Builder
 	V := ValueOf
@@ -3928,8 +3919,6 @@ type Public struct {
 func (p *Public) M() {
 }
 
-/*
-
 func TestUnexported(t *testing.T) {
 	var pub Public
 	pub.S = "S"
@@ -3969,8 +3958,6 @@ func TestUnexported(t *testing.T) {
 	shouldPanic("Interface", func() { v.Elem().FieldByName("y").Interface() })
 	shouldPanic("Method", func() { v.Type().Method(0) })
 }
-
-*/
 
 func TestSetPanic(t *testing.T) {
 	ok := func(f func()) { f() }
@@ -4064,8 +4051,6 @@ func (t timp) W() {}
 func (t timp) Y() {}
 func (t timp) w() {}
 func (t timp) y() {}
-
-/*
 
 func TestCallPanic(t *testing.T) {
 	type t0 interface {
@@ -4183,8 +4168,6 @@ func TestValuePanic(t *testing.T) {
 	shouldPanic("call of reflect.Value.TrySend on string Value", func() { vo("").TrySend(vo("")) })
 	shouldPanic("call of reflect.Value.Uint on float64 Value", func() { vo(0.0).Uint() })
 }
-
-*/
 
 func shouldPanic(expect string, f func()) {
 	defer func() {
@@ -6692,8 +6675,6 @@ func TestReflectFuncTraceback(t *testing.T) {
 	f.Call([]Value{})
 }
 
-/*
-
 func TestReflectMethodTraceback(t *testing.T) {
 	p := Point{3, 4}
 	m := ValueOf(p).MethodByName("GCMethod")
@@ -6702,8 +6683,6 @@ func TestReflectMethodTraceback(t *testing.T) {
 		t.Errorf("Call returned %d; want 8", i)
 	}
 }
-
-*/
 
 func TestSmallZero(t *testing.T) {
 	type T [10]byte
@@ -6900,8 +6879,6 @@ func useStack(n int) {
 	useStack(n - 1 + int(b[99]))
 }
 
-/*
-
 type Impl struct{}
 
 func (Impl) F() {}
@@ -6918,8 +6895,6 @@ func TestValueString(t *testing.T) {
 	}
 }
 
-*/
-
 func TestInvalid(t *testing.T) {
 	// Used to have inconsistency between IsValid() and Kind() != Invalid.
 	type T struct{ v any }
@@ -6933,8 +6908,6 @@ func TestInvalid(t *testing.T) {
 		t.Errorf("field elem: IsValid=%v, Kind=%v, want false, Invalid", v.IsValid(), v.Kind())
 	}
 }
-
-/*
 
 // Issue 8917.
 func TestLargeGCProg(t *testing.T) {
@@ -7074,6 +7047,8 @@ func clobber() {
 	}
 	runtime.GC()
 }
+
+/*
 
 func TestFuncLayout(t *testing.T) {
 	align := func(x uintptr) uintptr {
@@ -7446,6 +7421,8 @@ func TestTypeOfTypeOf(t *testing.T) {
 	check("SliceOf", SliceOf(TypeOf(T{})))
 }
 
+*/
+
 type XM struct{ _ bool }
 
 func (*XM) String() string { return "" }
@@ -7458,6 +7435,8 @@ func TestPtrToMethods(t *testing.T) {
 		t.Fatal("does not implement Stringer, but should")
 	}
 }
+
+/*
 
 func TestMapAlloc(t *testing.T) {
 	m := ValueOf(make(map[int]int, 10))
@@ -7773,8 +7752,6 @@ func TestIssue22031(t *testing.T) {
 	}
 }
 
-/*
-
 type NonExportedFirst int
 
 func (i NonExportedFirst) ΦExported()       {}
@@ -7790,8 +7767,6 @@ func TestIssue22073(t *testing.T) {
 	// Shouldn't panic.
 	m.Call(nil)
 }
-
-*/
 
 func TestMapIterNonEmptyMap(t *testing.T) {
 	m := map[string]int{"one": 1, "two": 2, "three": 3}
@@ -8578,8 +8553,6 @@ func TestValue_EqualNonComparable(t *testing.T) {
 	}
 }
 
-/*
-
 func TestInitFuncTypes(t *testing.T) {
 	n := 100
 	var wg sync.WaitGroup
@@ -8596,5 +8569,3 @@ func TestInitFuncTypes(t *testing.T) {
 	}
 	wg.Wait()
 }
-
-*/

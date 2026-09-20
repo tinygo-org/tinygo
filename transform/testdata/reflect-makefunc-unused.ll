@@ -9,7 +9,7 @@ entry:
   ret void
 }
 
-define internal void @unused() #0 {
+define internal void @unused() addrspace(1) #0 {
 entry:
   ret void
 }

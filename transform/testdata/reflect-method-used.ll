@@ -1,4 +1,4 @@
-@used.function = internal constant ptr @used
+@used.function = alias void (), ptr @used
 
 define internal void @used() #0 {
 entry:

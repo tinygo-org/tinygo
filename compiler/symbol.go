@@ -413,6 +413,15 @@ func (c *context) canonicalFunctionName(f *ssa.Function) string {
 			parts[i], _ = c.getTypeCodeName(ta)
 		}
 		name = f.Origin().RelString(nil) + "[" + strings.Join(parts, ",") + "]"
+	} else if recv := f.Signature.Recv(); recv != nil && f.Synthetic != "" {
+		t := types.Unalias(recv.Type())
+		if ptr, ok := t.(*types.Pointer); ok {
+			t = types.Unalias(ptr.Elem())
+		}
+		if named, ok := t.(*types.Named); ok && named.TypeArgs().Len() != 0 {
+			receiver, _ := c.getTypeCodeName(recv.Type())
+			name = "(" + receiver + ")." + f.Name()
+		}
 	}
 	return name + methodPackageQualifier(f)
 }
