@@ -208,7 +208,6 @@ var typeTests = []pair{
 	}{},
 		"struct { f func(...int) }",
 	},
-	/* // TODO(tinygo): Interface method strings are not supported.
 	{struct {
 		x (interface {
 			a(func(func(int) int) func(func(int)) int)
@@ -217,7 +216,6 @@ var typeTests = []pair{
 	}{},
 		"interface { reflect_test.a(func(func(int) int) func(func(int)) int); reflect_test.b() }",
 	},
-	*/
 	{struct {
 		x struct {
 			int32

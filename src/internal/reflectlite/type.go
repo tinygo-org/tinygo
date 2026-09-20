@@ -547,8 +547,23 @@ func (t *RawType) String() string {
 		s += " }"
 		return s
 	case Interface:
-		// TODO(dgryski): Needs actual method set info
-		return "interface {}"
+		methods := &(*interfaceType)(unsafe.Pointer(t)).methods
+		if methods.length == 0 {
+			return "interface {}"
+		}
+		s := "interface { "
+		for i := 0; i < int(methods.length); i++ {
+			if i != 0 {
+				s += "; "
+			}
+			entry := methodSetEntry(methods, i)
+			name, _, pkgName := methodName(entry)
+			if pkgName != "" {
+				s += pkgName + "."
+			}
+			s += name + entry.typ.String()[4:]
+		}
+		return s + " }"
 	case Func:
 		ft := t.funcDescriptor()
 		numIn := int(ft.numIn)
@@ -1389,21 +1404,20 @@ func methodSetEntry(methods *methodSet, i int) methodEntry {
 	}
 }
 
-func methodName(entry methodEntry) (name, pkgPath string) {
+func methodName(entry methodEntry) (name, pkgPath, pkgName string) {
 	if entry.name == nil {
-		return "", ""
+		return "", "", ""
 	}
-	full := readStringZ(unsafe.Pointer(entry.name))
-	for i := len(full) - 1; i >= 0; i-- {
-		if full[i] == '.' {
-			return full[i+1:], full[:i]
-		}
-	}
-	return full, ""
+	ptr := unsafe.Pointer(entry.name)
+	pkgPath = readStringZ(ptr)
+	ptr = unsafe.Add(ptr, uintptr(len(pkgPath)+1))
+	pkgName = readStringZ(ptr)
+	ptr = unsafe.Add(ptr, uintptr(len(pkgName)+1))
+	return readStringZ(ptr), pkgPath, pkgName
 }
 
 func isExportedMethod(entry methodEntry) bool {
-	name, pkgPath := methodName(entry)
+	name, pkgPath, _ := methodName(entry)
 	return name != "" && pkgPath == ""
 }
 
@@ -1426,7 +1440,7 @@ func (t *RawType) Method(i int) MethodInfo {
 			continue
 		}
 		if index == i {
-			name, pkgPath := methodName(entry)
+			name, pkgPath, _ := methodName(entry)
 			return MethodInfo{
 				Name:    name,
 				PkgPath: pkgPath,
@@ -1454,7 +1468,7 @@ func (t *RawType) MethodByName(name string) (MethodInfo, bool) {
 		if !isInterface && !isExportedMethod(entry) {
 			continue
 		}
-		entryName, pkgPath := methodName(entry)
+		entryName, pkgPath, _ := methodName(entry)
 		if entryName == name {
 			return MethodInfo{
 				Name:    entryName,
