@@ -2181,7 +2181,28 @@ func (v Value) FieldByIndex(index []int) Value {
 
 // FieldByIndexErr returns the nested field corresponding to index.
 func (v Value) FieldByIndexErr(index []int) (Value, error) {
-	return Value{}, &ValueError{Method: "FieldByIndexErr"}
+	if len(index) == 1 {
+		return v.Field(index[0]), nil
+	}
+	if v.Kind() != Struct {
+		panic(&ValueError{"FieldByIndexErr", v.Kind()})
+	}
+	for i, x := range index {
+		if i > 0 && v.Kind() == Pointer && v.typecode.elem().Kind() == Struct {
+			if v.IsNil() {
+				return Value{}, fieldByIndexError("reflect: indirection through nil pointer to embedded struct field " + v.typecode.elem().Name())
+			}
+			v = v.Elem()
+		}
+		v = v.Field(x)
+	}
+	return v, nil
+}
+
+type fieldByIndexError string
+
+func (e fieldByIndexError) Error() string {
+	return string(e)
 }
 
 func (v Value) FieldByName(name string) Value {
