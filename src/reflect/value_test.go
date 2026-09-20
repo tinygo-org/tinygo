@@ -846,6 +846,19 @@ func TestTinyNumMethods(t *testing.T) {
 	if got, want := reft.NumMethod(), 1; got != want {
 		t.Errorf("Value Methods=%v, want %v", got, want)
 	}
+
+	for _, typ := range []Type{
+		TypeOf((**methodStruct)(nil)),
+		TypeOf((***methodStruct)(nil)),
+		TypeOf((****methodStruct)(nil)),
+	} {
+		if got := typ.NumMethod(); got != 0 {
+			t.Errorf("%v Methods=%v, want 0", typ, got)
+		}
+		if method, ok := typ.MethodByName("ValueMethod1"); ok {
+			t.Errorf("%v MethodByName=%v, want no method", typ, method)
+		}
+	}
 }
 
 func TestAssignableTo(t *testing.T) {
