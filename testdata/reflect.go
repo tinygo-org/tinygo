@@ -389,6 +389,9 @@ func main() {
 	println("\nv.Interface() method")
 	testInterfaceMethod()
 
+	println("\ntype method sets")
+	testMethodSets()
+
 	// Test reflect.DeepEqual.
 	var selfref1, selfref2 selfref
 	selfref1.x = &selfref1
@@ -692,7 +695,7 @@ func (*myWriter) Write(p []byte) (int, error) { return 0, nil }
 type myReadWriter struct{}
 
 func (myReadWriter) Read(p []byte) (int, error)   { return 0, nil }
-func (*myReadWriter) Write(p []byte) (int, error)  { return 0, nil }
+func (*myReadWriter) Write(p []byte) (int, error) { return 0, nil }
 
 type myStringer struct{}
 
@@ -733,24 +736,24 @@ func testImplements() {
 	println("concrete implements:")
 
 	// myReader has value receiver Read → implements Reader
-	println("myReader → Reader:", reflect.TypeOf(myReader{}).Implements(readerType))           // true
+	println("myReader → Reader:", reflect.TypeOf(myReader{}).Implements(readerType))            // true
 	println("*myReader → Reader:", reflect.TypeOf(new(myReader)).Elem().Implements(readerType)) // true (value method in pointer set)
 
 	// myWriter has pointer receiver Write → only *myWriter implements Writer
-	println("myWriter → Writer:", reflect.TypeOf(myWriter{}).Implements(writerType))    // false (pointer receiver)
-	println("*myWriter → Writer:", reflect.TypeOf(&myWriter{}).Implements(writerType))  // true
+	println("myWriter → Writer:", reflect.TypeOf(myWriter{}).Implements(writerType))   // false (pointer receiver)
+	println("*myWriter → Writer:", reflect.TypeOf(&myWriter{}).Implements(writerType)) // true
 
 	// myReadWriter: Read on value, Write on pointer
-	println("myReadWriter → Reader:", reflect.TypeOf(myReadWriter{}).Implements(readerType))      // true
-	println("myReadWriter → Writer:", reflect.TypeOf(myReadWriter{}).Implements(writerType))      // false (Write is ptr recv)
-	println("myReadWriter → ReadWriter:", reflect.TypeOf(myReadWriter{}).Implements(readWriterType)) // false
-	println("*myReadWriter → Reader:", reflect.TypeOf(&myReadWriter{}).Implements(readerType))       // true
-	println("*myReadWriter → Writer:", reflect.TypeOf(&myReadWriter{}).Implements(writerType))       // true
+	println("myReadWriter → Reader:", reflect.TypeOf(myReadWriter{}).Implements(readerType))           // true
+	println("myReadWriter → Writer:", reflect.TypeOf(myReadWriter{}).Implements(writerType))           // false (Write is ptr recv)
+	println("myReadWriter → ReadWriter:", reflect.TypeOf(myReadWriter{}).Implements(readWriterType))   // false
+	println("*myReadWriter → Reader:", reflect.TypeOf(&myReadWriter{}).Implements(readerType))         // true
+	println("*myReadWriter → Writer:", reflect.TypeOf(&myReadWriter{}).Implements(writerType))         // true
 	println("*myReadWriter → ReadWriter:", reflect.TypeOf(&myReadWriter{}).Implements(readWriterType)) // true
 
 	// Nothing implements Closer (none of our types have Close)
-	println("myReader → Closer:", reflect.TypeOf(myReader{}).Implements(closerType))             // false
-	println("*myReadWriter → Closer:", reflect.TypeOf(&myReadWriter{}).Implements(closerType))   // false
+	println("myReader → Closer:", reflect.TypeOf(myReader{}).Implements(closerType))           // false
+	println("*myReadWriter → Closer:", reflect.TypeOf(&myReadWriter{}).Implements(closerType)) // false
 
 	// errorValue (*errors.errorString) implements error but not Stringer
 	println("errorValue → error:", reflect.TypeOf(errorValue).Implements(errorType))       // true
@@ -761,23 +764,23 @@ func testImplements() {
 	println("myErrorStringer → Stringer:", reflect.TypeOf(myErrorStringer{}).Implements(stringerType)) // true
 
 	// Everything implements empty interface
-	println("myReader → interface{}:", reflect.TypeOf(myReader{}).Implements(emptyItf))   // true
-	println("int → interface{}:", reflect.TypeOf(0).Implements(emptyItf))                 // true
+	println("myReader → interface{}:", reflect.TypeOf(myReader{}).Implements(emptyItf)) // true
+	println("int → interface{}:", reflect.TypeOf(0).Implements(emptyItf))               // true
 
 	// --- Interface implements interface (superset check, issue #3580) ---
 	println("interface implements interface:")
 
 	// ReadWriter is a superset of Reader and Writer
-	println("ReadWriter → Reader:", readWriterType.Implements(readerType))         // true
-	println("ReadWriter → Writer:", readWriterType.Implements(writerType))         // true
-	println("Reader → ReadWriter:", readerType.Implements(readWriterType))         // false
-	println("Writer → ReadWriter:", writerType.Implements(readWriterType))         // false
+	println("ReadWriter → Reader:", readWriterType.Implements(readerType)) // true
+	println("ReadWriter → Writer:", readWriterType.Implements(writerType)) // true
+	println("Reader → ReadWriter:", readerType.Implements(readWriterType)) // false
+	println("Writer → ReadWriter:", writerType.Implements(readWriterType)) // false
 
 	// ReadCloser has Read+Close, Reader has Read
-	println("ReadCloser → Reader:", readCloserType.Implements(readerType))         // true
-	println("ReadCloser → Closer:", readCloserType.Implements(closerType))         // true
-	println("ReadCloser → Writer:", readCloserType.Implements(writerType))         // false
-	println("Reader → ReadCloser:", readerType.Implements(readCloserType))         // false
+	println("ReadCloser → Reader:", readCloserType.Implements(readerType)) // true
+	println("ReadCloser → Closer:", readCloserType.Implements(closerType)) // true
+	println("ReadCloser → Writer:", readCloserType.Implements(writerType)) // false
+	println("Reader → ReadCloser:", readerType.Implements(readCloserType)) // false
 
 	// Self-implements
 	println("Reader → Reader:", readerType.Implements(readerType))                 // true
@@ -788,51 +791,51 @@ func testImplements() {
 	println("Stringer → error:", stringerType.Implements(errorType)) // false
 
 	// Everything implements empty interface
-	println("Reader → interface{}:", readerType.Implements(emptyItf))       // true
+	println("Reader → interface{}:", readerType.Implements(emptyItf))         // true
 	println("ReadWriter → interface{}:", readWriterType.Implements(emptyItf)) // true
 
 	// --- AssignableTo ---
 	println("assignable to:")
 
 	// Identical types
-	println("int → int:", reflect.TypeOf(0).AssignableTo(reflect.TypeOf(0)))          // true
-	println("string → string:", reflect.TypeOf("").AssignableTo(reflect.TypeOf("")))   // true
+	println("int → int:", reflect.TypeOf(0).AssignableTo(reflect.TypeOf(0)))         // true
+	println("string → string:", reflect.TypeOf("").AssignableTo(reflect.TypeOf(""))) // true
 
 	// Different types
 	println("int → string:", reflect.TypeOf(0).AssignableTo(reflect.TypeOf("")))      // false
 	println("int → int64:", reflect.TypeOf(0).AssignableTo(reflect.TypeOf(int64(0)))) // false
 
 	// Concrete assignable to interface (implements check)
-	println("myReader → Reader:", reflect.TypeOf(myReader{}).AssignableTo(readerType))         // true
-	println("*myWriter → Writer:", reflect.TypeOf(&myWriter{}).AssignableTo(writerType))       // true
-	println("myWriter → Writer:", reflect.TypeOf(myWriter{}).AssignableTo(writerType))         // false
+	println("myReader → Reader:", reflect.TypeOf(myReader{}).AssignableTo(readerType))                   // true
+	println("*myWriter → Writer:", reflect.TypeOf(&myWriter{}).AssignableTo(writerType))                 // true
+	println("myWriter → Writer:", reflect.TypeOf(myWriter{}).AssignableTo(writerType))                   // false
 	println("*myReadWriter → ReadWriter:", reflect.TypeOf(&myReadWriter{}).AssignableTo(readWriterType)) // true
 
 	// Interface assignable to interface
-	println("ReadWriter → Reader:", readWriterType.AssignableTo(readerType))         // true
-	println("Reader → ReadWriter:", readerType.AssignableTo(readWriterType))         // false
+	println("ReadWriter → Reader:", readWriterType.AssignableTo(readerType)) // true
+	println("Reader → ReadWriter:", readerType.AssignableTo(readWriterType)) // false
 
 	// Everything assignable to empty interface
-	println("int → interface{}:", reflect.TypeOf(0).AssignableTo(emptyItf))             // true
-	println("Reader → interface{}:", readerType.AssignableTo(emptyItf))                 // true
+	println("int → interface{}:", reflect.TypeOf(0).AssignableTo(emptyItf)) // true
+	println("Reader → interface{}:", readerType.AssignableTo(emptyItf))     // true
 
 	// --- Upstream set_test.go: unexported method interfaces ---
 	println("unexported method interface:")
 	exprType := reflect.TypeOf((*exprLike)(nil)).Elem()
-	println("*notAnExpr → exprLike:", reflect.TypeOf(new(notAnExpr)).Implements(exprType))       // true
-	println("notAnExpr → exprLike:", reflect.TypeOf(notAnExpr{}).Implements(exprType))            // true
+	println("*notAnExpr → exprLike:", reflect.TypeOf(new(notAnExpr)).Implements(exprType))                  // true
+	println("notAnExpr → exprLike:", reflect.TypeOf(notAnExpr{}).Implements(exprType))                      // true
 	println("*notAnExpr → exprLike (AssignableTo):", reflect.TypeOf(new(notAnExpr)).AssignableTo(exprType)) // true
 
 	// --- Upstream set_test.go: channel direction assignability ---
 	println("channel direction:")
-	println("chan int → <-chan int:", reflect.TypeOf(make(chan int)).AssignableTo(reflect.TypeOf(make(<-chan int))))    // true
-	println("<-chan int → chan int:", reflect.TypeOf(make(<-chan int)).AssignableTo(reflect.TypeOf(make(chan int))))    // false
+	println("chan int → <-chan int:", reflect.TypeOf(make(chan int)).AssignableTo(reflect.TypeOf(make(<-chan int)))) // true
+	println("<-chan int → chan int:", reflect.TypeOf(make(<-chan int)).AssignableTo(reflect.TypeOf(make(chan int)))) // false
 
 	// --- Upstream set_test.go: named type assignability ---
 	println("named types:")
-	println("*int → IntPtr:", reflect.TypeOf(new(int)).AssignableTo(reflect.TypeOf(IntPtr(nil))))     // true
-	println("IntPtr → *int:", reflect.TypeOf(IntPtr(nil)).AssignableTo(reflect.TypeOf(new(int))))     // true
-	println("IntPtr → IntPtr1:", reflect.TypeOf(IntPtr(nil)).AssignableTo(reflect.TypeOf(IntPtr1(nil)))) // false
+	println("*int → IntPtr:", reflect.TypeOf(new(int)).AssignableTo(reflect.TypeOf(IntPtr(nil))))                       // true
+	println("IntPtr → *int:", reflect.TypeOf(IntPtr(nil)).AssignableTo(reflect.TypeOf(new(int))))                       // true
+	println("IntPtr → IntPtr1:", reflect.TypeOf(IntPtr(nil)).AssignableTo(reflect.TypeOf(IntPtr1(nil))))                // false
 	println("Ch → <-chan interface{}:", reflect.TypeOf(Ch(nil)).AssignableTo(reflect.TypeOf(make(<-chan interface{})))) // true
 
 	// --- reflect.Value.Set with interface (issue #4277) ---
@@ -897,6 +900,91 @@ func xorshift32(x uint32) uint32 {
 func randuint32() uint32 {
 	xorshift32State = xorshift32(xorshift32State)
 	return xorshift32State
+}
+
+type methodType struct {
+	Name string
+}
+
+func (m methodType) Len() int {
+	return len(m.Name)
+}
+
+func (m methodType) String() string {
+	return m.Name
+}
+
+func (m methodType) hidden() {}
+
+func (m *methodType) PtrMethod() {}
+
+type methodPrefixType struct{}
+
+func (methodPrefixType) Int()    {}
+func (methodPrefixType) Int32()  {}
+func (methodPrefixType) Uint()   {}
+func (methodPrefixType) Uint32() {}
+
+type methodInner struct{ X int }
+
+func (m methodInner) InnerMethod() int { return m.X }
+
+type methodOuter struct {
+	methodInner
+}
+
+func (m methodOuter) OuterMethod() {}
+
+type methodInterface interface {
+	Alpha()
+	Beta(int) string
+	hidden()
+}
+
+func testMethodSets() {
+	t := reflect.TypeOf(methodType{})
+	println("struct NumMethod:", t.NumMethod())
+	for i := 0; i < t.NumMethod(); i++ {
+		m := t.Method(i)
+		println("struct Method:", m.Name, m.Type.String(), m.IsExported())
+	}
+
+	pt := reflect.TypeOf(new(methodType))
+	println("pointer NumMethod:", pt.NumMethod())
+	for i := 0; i < pt.NumMethod(); i++ {
+		m := pt.Method(i)
+		println("pointer Method:", m.Name, m.Type.String())
+	}
+
+	prefix := reflect.TypeOf(methodPrefixType{})
+	for i := 0; i < prefix.NumMethod(); i++ {
+		println("prefix Method:", prefix.Method(i).Name)
+	}
+
+	m, ok := t.MethodByName("String")
+	println("MethodByName(String):", m.Name, m.Type.String(), m.Index, ok)
+	_, ok = t.MethodByName("PtrMethod")
+	println("struct MethodByName(PtrMethod):", ok)
+	_, ok = t.MethodByName("hidden")
+	println("struct MethodByName(hidden):", ok)
+
+	outer := reflect.TypeOf(methodOuter{})
+	println("embedded NumMethod:", outer.NumMethod())
+	for i := 0; i < outer.NumMethod(); i++ {
+		m := outer.Method(i)
+		println("embedded Method:", m.Name, m.Type.String())
+	}
+
+	iface := reflect.TypeOf((*methodInterface)(nil)).Elem()
+	println("interface NumMethod:", iface.NumMethod())
+	for i := 0; i < iface.NumMethod(); i++ {
+		m := iface.Method(i)
+		println("interface Method:", m.Name, m.Type.String(), m.IsExported())
+	}
+	println("interface Method(out of range).Name:", iface.Method(iface.NumMethod()).Name)
+
+	_, ok = reflect.TypeOf(0).MethodByName("Missing")
+	println("int MethodByName(Missing):", ok)
 }
 
 type compositeKey struct {

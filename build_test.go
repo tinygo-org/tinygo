@@ -3,18 +3,64 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
 )
+
+func TestReflectMethodReferences(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name        string
+		declaration string
+		call        string
+	}{
+		{"expression", "var lookup = reflect.Type.MethodByName", `lookup(reflect.TypeOf(target{}), "Kept")`},
+		{"bound", "var lookup = reflect.TypeOf(target{}).MethodByName", `lookup("Kept")`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := `package main
+import "reflect"
+type target struct{}
+func (target) Kept() {}
+` + tc.declaration + `
+func main() {
+	method, ok := ` + tc.call + `
+	if !ok || method.Name != "Kept" {
+		panic("indirect method lookup lost metadata")
+	}
+}`
+			path := filepath.Join(t.TempDir(), "main.go")
+			if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			options := optionsFromTarget("", sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			_, err = buildAndRun(path, config, &output, nil, nil, 2*time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatalf("indirect method lookup failed: %v\n%s", err, output.String())
+			}
+		})
+	}
+}
 
 func TestBuild(t *testing.T) {
 	t.Parallel()
@@ -23,7 +69,6 @@ func TestBuild(t *testing.T) {
 		"alias.go",
 		"atomic.go",
 		"binop.go",
-		"buildinfo.go",
 		"calls.go",
 		"cgo/",
 		"channel.go",
@@ -596,7 +641,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Too many goroutines for the available RAM.
 				continue
 
-			case "buildinfo.go", "json.go", "stdlib.go", "testing.go":
+			case "buildinfo.go", "json.go", "localtypes.go", "stdlib.go", "testing.go":
 				// Too big for AVR. Doesn't fit in flash/RAM.
 				continue
 

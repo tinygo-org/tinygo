@@ -29,11 +29,13 @@ package transform
 // compiler does it: https://research.swtch.com/interfaces
 
 import (
+	"fmt"
 	"go/scanner"
 	"sort"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -91,18 +93,19 @@ type interfaceInfo struct {
 // pass has been implemented as an object type because of its complexity, but
 // should be seen as a regular function call (see LowerInterfaces).
 type lowerInterfacesPass struct {
-	mod         llvm.Module
-	config      *compileopts.Config
-	builder     llvm.Builder
-	dibuilder   *llvm.DIBuilder
-	difiles     map[string]llvm.Metadata
-	ctx         llvm.Context
-	uintptrType llvm.Type
-	targetData  llvm.TargetData
-	ptrType     llvm.Type
-	types       map[string]*typeInfo
-	signatures  map[string]*signatureInfo
-	interfaces  map[string]*interfaceInfo
+	mod             llvm.Module
+	config          *compileopts.Config
+	builder         llvm.Builder
+	dibuilder       *llvm.DIBuilder
+	difiles         map[string]llvm.Metadata
+	ctx             llvm.Context
+	uintptrType     llvm.Type
+	targetData      llvm.TargetData
+	ptrType         llvm.Type
+	types           map[string]*typeInfo
+	signatures      map[string]*signatureInfo
+	interfaces      map[string]*interfaceInfo
+	keepMethodNames bool
 }
 
 // LowerInterfaces lowers all intermediate interface calls and globals that are
@@ -147,6 +150,10 @@ func (p *lowerInterfacesPass) run() error {
 			Producer:  "TinyGo",
 			Optimized: true,
 		})
+	}
+
+	if err := p.pruneUnusedMethodMetadata(); err != nil {
+		return err
 	}
 
 	// Collect all type codes.
@@ -336,9 +343,8 @@ func (p *lowerInterfacesPass) run() error {
 			gepOffset++
 		}
 
-		if t, ok := p.types[name]; ok {
-			// The type exists in the program, so lower to a regular pointer
-			// comparison.
+		if t, ok := p.types[name]; ok && (allBoxable || isBoxable(t.typecode)) {
+			// Values of this type can occur in an interface.
 			p.builder.SetInsertPointBefore(use)
 			typecodeGEP := t.typecodeGEP
 			if gepOffset != 0 {
@@ -350,8 +356,7 @@ func (p *lowerInterfacesPass) run() error {
 			commaOk := p.builder.CreateICmp(llvm.IntEQ, typecodeGEP, actualType, "typeassert.ok")
 			use.ReplaceAllUsesWith(commaOk)
 		} else {
-			// The type does not exist in the program, so lower to a constant
-			// false. This is trivially further optimized.
+			// This type cannot occur in an interface, so the assertion is false.
 			use.ReplaceAllUsesWith(llvmFalse)
 		}
 		use.EraseFromParentAsInstruction()
@@ -375,6 +380,12 @@ func (p *lowerInterfacesPass) run() error {
 		stripMethodSets = true
 	}
 
+	keepAllMethods := p.usesReflectMethods()
+	if keepAllMethods {
+		stripMethodSets = false
+	}
+	p.keepMethodNames = keepAllMethods
+
 	// Collect all method signatures that appear in any interface type
 	// descriptor. When reflect is imported and method sets are kept,
 	// concrete type method sets are pruned: individual methods not in any
@@ -385,7 +396,7 @@ func (p *lowerInterfacesPass) run() error {
 	// methodFilter is nil and filterMethodSet replaces with empty.
 	var methodFilter map[string]struct{}
 	var ifaceMethodSets []map[string]struct{}
-	if !stripMethodSets {
+	if !stripMethodSets && !keepAllMethods {
 		methodFilter = make(map[string]struct{})
 		for _, name := range typeNames {
 			if !strings.HasPrefix(name, "interface:") {
@@ -433,7 +444,9 @@ func (p *lowerInterfacesPass) run() error {
 			var newInitializerFields []llvm.Value
 			for i := 1; i < numFields; i++ {
 				field := p.builder.CreateExtractValue(initializer, i, "")
-				field = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
+				if !keepAllMethods {
+					field = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
+				}
 				// Strip empty inline method sets for Named, Pointer, and
 				// Struct types. When the method set is pruned to empty, we
 				// remove it and clear the numMethodHasMethodSet flag (bit 15
@@ -475,11 +488,87 @@ func (p *lowerInterfacesPass) run() error {
 			t.typecode.EraseFromParentAsGlobal()
 			newGlobal.SetName(typecodeName)
 			t.typecode = newGlobal
+		} else if !keepAllMethods {
+			initializer := t.typecode.Initializer()
+			if initializer.Type().TypeKind() != llvm.StructTypeKind {
+				continue
+			}
+			numFields := initializer.Type().StructElementTypesCount()
+			changed := false
+			fields := make([]llvm.Value, 0, numFields)
+			for i := 0; i < numFields; i++ {
+				field := p.builder.CreateExtractValue(initializer, i, "")
+				filtered := p.filterMethodSet(field, methodFilter, ifaceMethodSets)
+				if filtered.C != field.C {
+					changed = true
+				}
+				fields = append(fields, filtered)
+			}
+			if changed {
+				t.typecode.SetInitializer(p.ctx.ConstStruct(fields, false))
+			}
 		}
 	}
 
 	p.createReflectTypeLinks(typeNames)
 
+	return nil
+}
+
+func (p *lowerInterfacesPass) pruneUnusedMethodMetadata() error {
+	if p.usesReflectMethods() {
+		return nil
+	}
+
+	changed := false
+	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		name, ok := strings.CutPrefix(global.Name(), "reflect/types.type:")
+		if !ok || strings.HasPrefix(name, "interface:") {
+			continue
+		}
+		initializer := global.Initializer()
+		if initializer.Type().TypeKind() != llvm.StructTypeKind {
+			continue
+		}
+		fields := make([]llvm.Value, initializer.Type().StructElementTypesCount())
+		globalChanged := false
+		for i := range fields {
+			field := p.builder.CreateExtractValue(initializer, i, "")
+			if p.isMethodSetType(field.Type()) {
+				names := p.builder.CreateExtractValue(field, 2, "")
+				types := p.builder.CreateExtractValue(field, 3, "")
+				if !names.IsNull() || !types.IsNull() {
+					field = p.ctx.ConstStruct([]llvm.Value{
+						p.builder.CreateExtractValue(field, 0, ""),
+						p.builder.CreateExtractValue(field, 1, ""),
+						llvm.ConstNull(names.Type()),
+						llvm.ConstNull(types.Type()),
+					}, false)
+					globalChanged = true
+				}
+			}
+			fields[i] = field
+		}
+		if globalChanged {
+			global.SetInitializer(p.ctx.ConstStruct(fields, false))
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+
+	// Discard metadata-only types before deciding which interfaces they implement.
+	if nilPanic := p.mod.NamedFunction("runtime.nilPanic"); !nilPanic.IsNil() {
+		llvmutil.AppendToGlobal(p.mod, "llvm.compiler.used", nilPanic)
+		llvmutil.AppendToGlobal(p.mod, "tinygo.interface.metadata.used", nilPanic)
+		defer llvmutil.RemoveGlobalReferences(p.mod, "llvm.compiler.used", "tinygo.interface.metadata.used")
+	}
+	options := llvm.NewPassBuilderOptions()
+	defer options.Dispose()
+	if err := p.mod.RunPasses("globaldce", llvm.TargetMachine{}, options); err != nil {
+		return fmt.Errorf("could not eliminate unused method metadata: %w", err)
+	}
 	return nil
 }
 
@@ -558,6 +647,16 @@ func (p *lowerInterfacesPass) createReflectTypeLinks(typeNames []string) {
 		}))
 		dataGlobal.SetGlobalConstant(true)
 	}
+}
+
+func (p *lowerInterfacesPass) usesReflectMethods() bool {
+	for fn := p.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-method")
+		if !attr.IsNil() && (fn.Linkage() != llvm.InternalLinkage || hasUses(fn)) {
+			return true
+		}
+	}
+	return false
 }
 
 // addTypeMethods reads the method set of the given type info struct. It
@@ -780,24 +879,31 @@ func (p *lowerInterfacesPass) defineInterfaceAssertFunc(fn llvm.Value, itf *inte
 }
 
 // isMethodSetType reports whether ty has the shape of a method-set struct:
-// { uintptr, [N x ptr] }.
+// { uintptr, [N x ptr], [N x ptr], [N x ptr] }.
 func (p *lowerInterfacesPass) isMethodSetType(ty llvm.Type) bool {
 	if ty.TypeKind() != llvm.StructTypeKind {
 		return false
 	}
 	elems := ty.StructElementTypes()
-	if len(elems) != 2 {
+	if len(elems) != 4 {
 		return false
 	}
 	if elems[0] != p.uintptrType {
 		return false
 	}
-	return elems[1].TypeKind() == llvm.ArrayTypeKind && elems[1].ElementType() == p.ptrType
+	length := elems[1].ArrayLength()
+	for _, elem := range elems[1:] {
+		if elem.TypeKind() != llvm.ArrayTypeKind ||
+			elem.ElementType() != p.ptrType ||
+			elem.ArrayLength() != length {
+			return false
+		}
+	}
+	return true
 }
 
 // extractMethodSigs returns the names of method signature globals inside a
-// method-set field ({ uintptr, [N x ptr] }). Returns nil if field is not a
-// method set.
+// method-set field. Returns nil if field is not a method set.
 func (p *lowerInterfacesPass) extractMethodSigs(field llvm.Value) []string {
 	if !p.isMethodSetType(field.Type()) {
 		return nil
@@ -828,12 +934,16 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 	}
 
 	methodArray := p.builder.CreateExtractValue(field, 1, "")
+	nameArray := p.builder.CreateExtractValue(field, 2, "")
+	typeArray := p.builder.CreateExtractValue(field, 3, "")
 	numMethods := methodArray.Type().ArrayLength()
 
 	// Strip mode: replace with empty method set.
 	if keepSigs == nil {
 		return p.ctx.ConstStruct([]llvm.Value{
 			llvm.ConstInt(p.uintptrType, 0, false),
+			llvm.ConstArray(p.ptrType, nil),
+			llvm.ConstArray(p.ptrType, nil),
 			llvm.ConstArray(p.ptrType, nil),
 		}, false)
 	}
@@ -844,8 +954,10 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 
 	// Extract all methods and their signature names.
 	type methodEntry struct {
-		value llvm.Value
-		name  string
+		signature llvm.Value
+		namePtr   llvm.Value
+		typePtr   llvm.Value
+		name      string
 	}
 	entries := make([]methodEntry, numMethods)
 	nameSet := make(map[string]struct{}, numMethods)
@@ -853,7 +965,12 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 		sig := p.builder.CreateExtractValue(methodArray, j, "")
 		stripped := stripPointerCasts(sig)
 		name := stripped.Name()
-		entries[j] = methodEntry{sig, name}
+		entries[j] = methodEntry{
+			signature: sig,
+			namePtr:   p.builder.CreateExtractValue(nameArray, j, ""),
+			typePtr:   p.builder.CreateExtractValue(typeArray, j, ""),
+			name:      name,
+		}
 		nameSet[name] = struct{}{}
 	}
 
@@ -871,24 +988,37 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 		return p.ctx.ConstStruct([]llvm.Value{
 			llvm.ConstInt(p.uintptrType, 0, false),
 			llvm.ConstArray(p.ptrType, nil),
+			llvm.ConstArray(p.ptrType, nil),
+			llvm.ConstArray(p.ptrType, nil),
 		}, false)
 	}
 
 	// Prune: keep only methods whose signature appears in keepSigs.
-	var kept []llvm.Value
+	var keptSignatures []llvm.Value
+	var keptNames []llvm.Value
+	var keptTypes []llvm.Value
 	for _, e := range entries {
 		if _, ok := keepSigs[e.name]; ok {
-			kept = append(kept, e.value)
+			keptSignatures = append(keptSignatures, e.signature)
+			if p.keepMethodNames {
+				keptNames = append(keptNames, e.namePtr)
+				keptTypes = append(keptTypes, e.typePtr)
+			} else {
+				keptNames = append(keptNames, llvm.ConstNull(p.ptrType))
+				keptTypes = append(keptTypes, llvm.ConstNull(p.ptrType))
+			}
 		}
 	}
 
-	if len(kept) == numMethods {
+	if len(keptSignatures) == numMethods && p.keepMethodNames {
 		return field
 	}
 
 	return p.ctx.ConstStruct([]llvm.Value{
-		llvm.ConstInt(p.uintptrType, uint64(len(kept)), false),
-		llvm.ConstArray(p.ptrType, kept),
+		llvm.ConstInt(p.uintptrType, uint64(len(keptSignatures)), false),
+		llvm.ConstArray(p.ptrType, keptSignatures),
+		llvm.ConstArray(p.ptrType, keptNames),
+		llvm.ConstArray(p.ptrType, keptTypes),
 	}, false)
 }
 

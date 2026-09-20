@@ -3277,7 +3277,6 @@ func TestFieldPkgPath(t *testing.T) {
 	})
 }
 
-/* // TODO(tinygo): Method lookup is not supported.
 func TestMethodPkgPath(t *testing.T) {
 	type I interface {
 		x()
@@ -3310,7 +3309,6 @@ func TestMethodPkgPath(t *testing.T) {
 		}
 	}
 }
-*/
 
 func TestVariadicType(t *testing.T) {
 	// Test example from Type documentation.
