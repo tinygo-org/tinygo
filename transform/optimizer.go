@@ -12,6 +12,40 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+const indirectABIRoots = "tinygo.indirect-abi"
+
+// suspendIndirectABIRoots lets reachability passes see dead code. Call the
+// returned function before running passes that can rewrite signatures.
+func suspendIndirectABIRoots(mod llvm.Module) func() {
+	global := mod.NamedGlobal(indirectABIRoots)
+	if global.IsNil() {
+		return func() {}
+	}
+	init := global.Initializer()
+	names := make([]string, init.Type().ArrayLength())
+	for i := range names {
+		fn := init.Operand(i)
+		for !fn.IsAConstantExpr().IsNil() && fn.OperandsCount() == 1 {
+			fn = fn.Operand(0)
+		}
+		names[i] = fn.Name()
+	}
+	llvmutil.RemoveGlobalReferences(mod, "llvm.used", indirectABIRoots)
+
+	return func() {
+		var roots []llvm.Value
+		for _, name := range names {
+			if fn := mod.NamedFunction(name); !fn.IsNil() {
+				roots = append(roots, fn)
+			}
+		}
+		if len(roots) != 0 {
+			llvmutil.AppendToGlobal(mod, "llvm.used", roots...)
+			llvmutil.AppendToGlobal(mod, indirectABIRoots, roots...)
+		}
+	}
+}
+
 // OptimizePackage runs optimization passes over the LLVM module for the given
 // Go package.
 func OptimizePackage(mod llvm.Module, config *compileopts.Config) {

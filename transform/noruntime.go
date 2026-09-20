@@ -21,34 +21,11 @@ func CheckNoRuntime(mod llvm.Module) []error {
 		return nil
 	}
 
-	// Ignore temporary ABI roots, then restore surviving roots for the optimizer.
-	// See compiler.getFunction and transform.Optimize.
-	var abiNames []string
-	if roots := mod.NamedGlobal("tinygo.indirect-abi"); !roots.IsNil() {
-		initializer := roots.Initializer()
-		for i := 0; i < initializer.Type().ArrayLength(); i++ {
-			value := initializer.Operand(i)
-			for !value.IsAConstantExpr().IsNil() && value.OperandsCount() == 1 {
-				value = value.Operand(0)
-			}
-			abiNames = append(abiNames, value.Name())
-		}
-		llvmutil.RemoveGlobalReferences(mod, "llvm.used", "tinygo.indirect-abi")
-	}
-
+	restoreRoots := suspendIndirectABIRoots(mod)
 	options := llvm.NewPassBuilderOptions()
 	defer options.Dispose()
 	err := mod.RunPasses("globaldce", llvm.TargetMachine{}, options)
-	var abiRoots []llvm.Value
-	for _, name := range abiNames {
-		if fn := mod.NamedFunction(name); !fn.IsNil() {
-			abiRoots = append(abiRoots, fn)
-		}
-	}
-	if len(abiRoots) != 0 {
-		llvmutil.AppendToGlobal(mod, "llvm.used", abiRoots...)
-		llvmutil.AppendToGlobal(mod, "tinygo.indirect-abi", abiRoots...)
-	}
+	restoreRoots()
 	if err != nil {
 		return []error{fmt.Errorf("could not remove dead code before //go:noruntime check: %w", err)}
 	}
