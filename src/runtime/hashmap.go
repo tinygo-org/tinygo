@@ -114,6 +114,14 @@ func hashmapNewIterator() unsafe.Pointer {
 	return unsafe.Pointer(new(hashmapIterator))
 }
 
+func hashmapResetIterator(it unsafe.Pointer) unsafe.Pointer {
+	if it == nil {
+		return hashmapNewIterator()
+	}
+	*(*hashmapIterator)(it) = hashmapIterator{}
+	return it
+}
+
 // Get the topmost 8 bits of the hash, without using a special value (like 0).
 func hashmapTopHash(hash uint32) uint8 {
 	tophash := uint8(hash >> 24)

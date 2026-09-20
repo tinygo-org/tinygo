@@ -1198,6 +1198,9 @@ func (v Value) MapIndex(key Value) Value {
 //go:linkname hashmapNewIterator runtime.hashmapNewIterator
 func hashmapNewIterator() unsafe.Pointer
 
+//go:linkname hashmapResetIterator runtime.hashmapResetIterator
+func hashmapResetIterator(it unsafe.Pointer) unsafe.Pointer
+
 //go:linkname hashmapNext runtime.hashmapNext
 func hashmapNext(m unsafe.Pointer, it unsafe.Pointer, key, value unsafe.Pointer) bool
 
@@ -1213,50 +1216,104 @@ type MapIter struct {
 	key Value
 	val Value
 
-	valid bool
+	started bool
+	valid   bool
 }
 
 func (it *MapIter) Key() Value {
+	if !it.started {
+		panic("reflect: MapIter.Key called before Next")
+	}
 	if !it.valid {
-		panic("reflect.MapIter.Key called on invalid iterator")
+		panic("reflect: MapIter.Key called on exhausted iterator")
 	}
 
-	return it.key.Elem()
+	key := it.key.Elem()
+	key.flags |= it.m.flags & valueFlagRO
+	return key
 }
 
 func (v Value) SetIterKey(iter *MapIter) {
-	v.Set(iter.Key())
+	if !iter.started {
+		panic("reflect: Value.SetIterKey called before Next")
+	}
+	if !iter.valid {
+		panic("reflect: Value.SetIterKey called on exhausted iterator")
+	}
+	if !v.isIndirect() {
+		panic("reflect.Value.SetIterKey using unaddressable value")
+	}
+	if v.isRO() || iter.m.isRO() {
+		panic("reflect.Value.SetIterKey using value obtained using unexported field")
+	}
+	key := iter.key.Elem()
+	if !key.typecode.AssignableTo(v.typecode) {
+		panic("reflect.Value.SetIterKey: value of type " + key.typecode.String() + " is not assignable to type " + v.typecode.String())
+	}
+	v.Set(key)
 }
 
 func (it *MapIter) Value() Value {
+	if !it.started {
+		panic("reflect: MapIter.Value called before Next")
+	}
 	if !it.valid {
-		panic("reflect.MapIter.Value called on invalid iterator")
+		panic("reflect: MapIter.Value called on exhausted iterator")
 	}
 
-	return it.val.Elem()
+	value := it.val.Elem()
+	value.flags |= it.m.flags & valueFlagRO
+	return value
 }
 
 func (v Value) SetIterValue(iter *MapIter) {
-	v.Set(iter.Value())
+	if !iter.started {
+		panic("reflect: Value.SetIterValue called before Next")
+	}
+	if !iter.valid {
+		panic("reflect: Value.SetIterValue called on exhausted iterator")
+	}
+	if !v.isIndirect() {
+		panic("reflect.Value.SetIterValue using unaddressable value")
+	}
+	if v.isRO() || iter.m.isRO() {
+		panic("reflect.Value.SetIterValue using value obtained using unexported field")
+	}
+	value := iter.val.Elem()
+	if !value.typecode.AssignableTo(v.typecode) {
+		panic("reflect.Value.SetIterValue: value of type " + value.typecode.String() + " is not assignable to type " + v.typecode.String())
+	}
+	v.Set(value)
 }
 
 func (it *MapIter) Next() bool {
+	if !it.m.IsValid() {
+		panic("reflect: MapIter.Next called on an iterator that does not have an associated map Value")
+	}
+	if it.started && !it.valid {
+		panic("reflect: MapIter.Next called on exhausted iterator")
+	}
 	it.key = New(it.m.typecode.Key())
 	it.val = New(it.m.typecode.Elem())
 
+	it.started = true
 	it.valid = hashmapNext(it.m.pointer(), it.it, it.key.value, it.val.value)
 	return it.valid
 }
 
 func (iter *MapIter) Reset(v Value) {
-	if v.Kind() != Map {
+	if v.IsValid() && v.Kind() != Map {
 		panic(&ValueError{Method: "MapRange", Kind: v.Kind()})
 	}
 
-	*iter = MapIter{
-		m:  v,
-		it: hashmapNewIterator(),
+	if v.IsValid() || iter.it != nil {
+		iter.it = hashmapResetIterator(iter.it)
 	}
+	iter.m = v
+	iter.key = Value{}
+	iter.val = Value{}
+	iter.started = false
+	iter.valid = false
 }
 
 func (v Value) Set(x Value) {
