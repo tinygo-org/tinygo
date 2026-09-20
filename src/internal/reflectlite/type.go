@@ -1306,7 +1306,7 @@ func (t *RawType) In(i int) Type {
 	if i < 0 || i >= numIn {
 		panic("reflect: Type.In: index out of range")
 	}
-	inOut := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
+	inOut := unsafe.Slice((**RawType)(unsafe.Pointer(&ft.inOut)), numIn)
 	return inOut[i]
 }
 
@@ -1320,8 +1320,8 @@ func (t *RawType) Out(i int) Type {
 	if i < 0 || i >= numOut {
 		panic("reflect: Type.Out: index out of range")
 	}
-	inOut := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
-	return inOut[numIn+i]
+	out := unsafe.Add(unsafe.Pointer(&ft.inOut), uintptr(numIn)*unsafe.Sizeof(ft.ptrTo))
+	return unsafe.Slice((**RawType)(out), numOut)[i]
 }
 
 func (t *RawType) NumMethod() int {

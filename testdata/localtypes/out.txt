@@ -10,3 +10,7 @@ ok: lib.SiblingClosures.Foo#1 accepts own
 ok: lib.SiblingClosures.Foo#2 accepts own
 ok: lib.SiblingClosures.Foo#1 rejects Foo#2
 ok: lib.SiblingClosures.Foo#2 rejects Foo#1
+ok: Call generic local in main
+ok: Call generic local in lib2
+ok: Call aggregate generic local in main
+ok: Call aggregate generic local in lib2

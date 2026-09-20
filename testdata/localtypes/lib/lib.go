@@ -2,6 +2,11 @@ package lib
 
 type Checker = func(any) bool
 
+func GenericFunction[T any]() any {
+	type Local struct{ Value T }
+	return func(value Local) T { return value.Value }
+}
+
 func GenericWithLocals[T any]() (any, any, Checker, Checker) {
 	type UsesT struct{ V T }
 	type NoT struct{ V int }
