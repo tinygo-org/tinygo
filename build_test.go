@@ -79,6 +79,34 @@ func main() {
 		panic("wrong callback result")
 	}
 }`},
+		{"Seq", `
+func values(yield func(int) bool) {
+	yield(42)
+}
+
+func main() {
+	var got int64
+	for value := range reflect.ValueOf(values).Seq() {
+		got += value.Int()
+	}
+	if got != 42 {
+		panic("wrong sequence result")
+	}
+}`},
+		{"Seq2", `
+func pairs(yield func(int, int) bool) {
+	yield(1, 42)
+}
+
+func main() {
+	var key, value int64
+	for k, v := range reflect.ValueOf(pairs).Seq2() {
+		key, value = k.Int(), v.Int()
+	}
+	if key != 1 || value != 42 {
+		panic("wrong sequence pair")
+	}
+}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "main.go")
