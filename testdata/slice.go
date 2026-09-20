@@ -158,6 +158,13 @@ func main() {
 	slice3[1] = 15
 	println("unsafe.Slice array:", len(slice3), cap(slice3), slice3[0], slice3[1], slice3[2])
 
+	var zero struct{}
+	zeroSlice := unsafe.Slice(&zero, 40000)
+	reflected := reflect.SliceAt(reflect.TypeOf(zero), unsafe.Pointer(&zero), len(zeroSlice))
+	assert(reflected.Len() == len(zeroSlice))
+	assert(reflected.Cap() == cap(zeroSlice))
+	assert(!reflected.IsNil())
+
 	// Verify the fix in https://github.com/tinygo-org/tinygo/pull/119
 	var unnamed [32]byte
 	var named MySlice

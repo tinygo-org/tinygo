@@ -564,6 +564,24 @@ func TestTinySetLen(t *testing.T) {
 	}
 }
 
+func TestSliceAtSet(t *testing.T) {
+	array := [3]int{1, 2, 3}
+	value := SliceAt(TypeOf(0), unsafe.Pointer(&array[0]), len(array))
+	if got, want := value.Type(), TypeOf([]int{}); got != want {
+		t.Fatalf("SliceAt type = %v, want %v", got, want)
+	}
+	if got, want := value.Len(), len(array); got != want {
+		t.Fatalf("SliceAt len = %d, want %d", got, want)
+	}
+	if got, want := value.Cap(), len(array); got != want {
+		t.Fatalf("SliceAt cap = %d, want %d", got, want)
+	}
+	value.Index(1).SetInt(4)
+	if array[1] != 4 {
+		t.Fatalf("SliceAt update = %d, want 4", array[1])
+	}
+}
+
 func TestTinyBytes(t *testing.T) {
 	s := []byte("abcde")
 	refs := ValueOf(s)
