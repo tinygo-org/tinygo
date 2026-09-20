@@ -235,7 +235,7 @@ func (v Value) TryRecv() (x Value, ok bool) {
 }
 
 func NewAt(typ Type, p unsafe.Pointer) Value {
-	panic("unimplemented: reflect.New()")
+	return Value{reflectlite.NewAt(toRawType(typ), p)}
 }
 
 // Deprecated: Use unsafe.Slice or unsafe.SliceData instead.
