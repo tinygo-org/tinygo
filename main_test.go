@@ -122,6 +122,7 @@ func TestBuild(t *testing.T) {
 		t.Parallel()
 		hostOptions := optionsFromTarget("", sema)
 		runPlatTests(hostOptions, tests, t)
+		// cookiejar.go runs only on the host. See testdata/cookiejar.go.
 		runPlatTests(hostOptions, []string{"cookiejar.go"}, t)
 
 		// scheduler.threads needs threadID, which exists only on Linux and Darwin.
