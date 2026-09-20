@@ -286,6 +286,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 
 	ms := c.program.MethodSets.MethodSet(typ)
 	_, isInterface := typ.Underlying().(*types.Interface)
+	_, isSignature := typ.(*types.Signature)
 
 	// As defined in https://pkg.go.dev/reflect#Type:
 	// NumMethod returns the number of methods accessible using Method.
@@ -340,6 +341,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 	}
 	if global.IsNil() {
 		var typeFields []llvm.Value
+		var callAdapter llvm.Value
 		// Define the type fields. These must match the structs in
 		// src/reflect/type.go (ptrType, arrayType, etc). See the comment at the
 		// top of src/reflect/type.go for more information on the layout of these structs.
@@ -447,6 +449,11 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 		case *types.Signature:
 			numIn := typ.Params().Len()
 			numOut := typ.Results().Len()
+			adapterType := typ
+			if typ.Recv() != nil {
+				adapterType = types.NewSignatureType(nil, nil, nil, typ.Params(), typ.Results(), typ.Variadic())
+			}
+			callAdapter = llvm.ConstPtrToInt(c.getReflectCallWrapper(adapterType), c.uintptrType)
 			typeFieldTypes = append(typeFieldTypes,
 				types.NewVar(token.NoPos, nil, "numIn", types.Typ[types.Uint8]),
 				types.NewVar(token.NoPos, nil, "numOut", types.Typ[types.Uint16]), // high bit = variadic
@@ -463,6 +470,10 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			// https://llvm.org/docs/TypeMetadata.html.
 			typeFieldTypes = append([]*types.Var{
 				types.NewVar(token.NoPos, nil, "methodSet", types.Typ[types.UnsafePointer]),
+			}, typeFieldTypes...)
+		} else if isSignature {
+			typeFieldTypes = append([]*types.Var{
+				types.NewVar(token.NoPos, nil, "callAdapter", types.Typ[types.Uintptr]),
 			}, typeFieldTypes...)
 		}
 		globalType := types.NewStruct(typeFieldTypes, nil)
@@ -680,6 +691,8 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			typeFields = append([]llvm.Value{
 				c.getTypeMethodSet(typ),
 			}, typeFields...)
+		} else if isSignature {
+			typeFields = append([]llvm.Value{callAdapter}, typeFields...)
 		}
 		alignment := max(c.ptrBits/8, 4)
 		globalValue := c.ctx.ConstStruct(typeFields, false)
@@ -706,16 +719,96 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 		}
 	}
 	offset := uint64(0)
-	if hasMethodSet {
-		// The pointer to the method set is always the first element of the
-		// global (if there is a method set). However, the pointer we return
-		// should point to the 'kind' field not the method set.
+	if hasMethodSet || isSignature {
+		// Temporary metadata precedes the kind field until interface lowering.
 		offset = 1
 	}
 	return llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
 		llvm.ConstInt(c.i32, 0, false),
 		llvm.ConstInt(c.i32, offset, false),
 	})
+}
+
+func (c *context) getReflectCallWrapper(sig *types.Signature) llvm.Value {
+	typeName, _ := c.getTypeCodeName(sig)
+	name := "reflect/call:" + typeName
+	if wrapper := c.mod.NamedFunction(name); !wrapper.IsNil() {
+		return wrapper
+	}
+
+	wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{
+		c.uintptrType,
+		c.dataPtrType,
+		c.dataPtrType,
+		c.dataPtrType,
+		c.dataPtrType,
+	}, false)
+	wrapper := llvm.AddFunction(c.mod, name, wrapperType)
+	wrapper.SetLinkage(llvm.WeakODRLinkage)
+
+	irbuilder := c.ctx.NewBuilder()
+	defer irbuilder.Dispose()
+	b := &builder{context: c, Builder: irbuilder}
+	entry := c.ctx.AddBasicBlock(wrapper, "entry")
+	b.SetInsertPointAtEnd(entry)
+
+	fn := b.CreateIntToPtr(wrapper.Param(0), c.funcPtrType, "")
+	context := wrapper.Param(1)
+	args := wrapper.Param(2)
+	results := wrapper.Param(3)
+	abi := c.getFunctionABI(sig, false)
+
+	var callArgs []llvm.Value
+	var indirectResult llvm.Value
+	if abi.indirectResult {
+		indirectResult = b.CreateAlloca(abi.resultType, "result")
+		callArgs = append(callArgs, indirectResult)
+	}
+	for i, param := range abi.params {
+		slot := b.CreateInBoundsGEP(c.dataPtrType, args, []llvm.Value{
+			llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false),
+		}, "")
+		valuePtr := b.CreateLoad(c.dataPtrType, slot, "")
+		if param.indirect {
+			callArgs = append(callArgs, valuePtr)
+			continue
+		}
+		var value llvm.Value
+		if c.targetData.TypeAllocSize(param.llvmType) == 0 {
+			value = llvm.ConstNull(param.llvmType)
+		} else {
+			value = b.CreateLoad(param.llvmType, valuePtr, "")
+		}
+		callArgs = append(callArgs, b.expandFormalParam(value)...)
+	}
+	callArgs = append(callArgs, context)
+
+	call := b.CreateCall(c.getLLVMFunctionType(sig), fn, callArgs, "")
+	var result llvm.Value
+	if abi.indirectResult {
+		result = b.CreateLoad(abi.resultType, indirectResult, "")
+	} else {
+		result = call
+	}
+
+	for i := 0; i < sig.Results().Len(); i++ {
+		resultType := c.getLLVMType(sig.Results().At(i).Type())
+		if c.targetData.TypeAllocSize(resultType) == 0 {
+			continue
+		}
+		slot := b.CreateInBoundsGEP(c.dataPtrType, results, []llvm.Value{
+			llvm.ConstInt(c.ctx.Int32Type(), uint64(i), false),
+		}, "")
+		resultPtr := b.CreateLoad(c.dataPtrType, slot, "")
+		value := result
+		if sig.Results().Len() != 1 {
+			value = b.CreateExtractValue(result, i, "")
+		}
+		b.CreateStore(value, resultPtr)
+	}
+	b.CreateRetVoid()
+
+	return wrapper
 }
 
 // getTypeKind returns the type kind for the given type, as defined by
@@ -880,7 +973,11 @@ func (c *context) getTypeCodeName(t types.Type) (name string, isLocal bool) {
 			}
 			results[i] = s
 		}
-		return "func:" + "{" + strings.Join(params, ",") + "}{" + strings.Join(results, ",") + "}", isLocal
+		prefix := "func:"
+		if t.Variadic() {
+			prefix = "func:variadic:"
+		}
+		return prefix + "{" + strings.Join(params, ",") + "}{" + strings.Join(results, ",") + "}", isLocal
 	case *types.Slice:
 		s, isLocal := c.getTypeCodeName(t.Elem())
 		return "slice:" + s, isLocal

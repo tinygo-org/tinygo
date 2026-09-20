@@ -65,6 +65,7 @@ type typeInfo struct {
 	typecodeGEP llvm.Value
 	methodSet   llvm.Value
 	methods     []*methodInfo
+	callAdapter llvm.Value
 }
 
 // getMethod looks up the method on this type with the given signature and
@@ -165,17 +166,20 @@ func (p *lowerInterfacesPass) run() error {
 				initializer := global.Initializer()
 				firstField := p.builder.CreateExtractValue(initializer, 0, "")
 				if firstField.Type() != p.ctx.Int8Type() {
-					// This type has a method set at index 0. Change the GEP to
-					// point to index 1 (the meta byte).
+					// Temporary metadata precedes the kind byte at index 1.
 					t.typecodeGEP = llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
 						llvm.ConstInt(p.ctx.Int32Type(), 0, false),
 						llvm.ConstInt(p.ctx.Int32Type(), 1, false),
 					})
-					methodSet := stripPointerCasts(firstField)
-					if !strings.HasSuffix(methodSet.Name(), "$methodset") {
-						panic("expected method set")
+					if strings.HasPrefix(name, "func:") {
+						t.callAdapter = stripPointerCasts(firstField)
+					} else {
+						methodSet := stripPointerCasts(firstField)
+						if !strings.HasSuffix(methodSet.Name(), "$methodset") {
+							panic("expected method set")
+						}
+						p.addTypeMethods(t, methodSet)
 					}
-					p.addTypeMethods(t, methodSet)
 				} else {
 					// This type has no method set.
 					t.typecodeGEP = llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
@@ -407,12 +411,12 @@ func (p *lowerInterfacesPass) run() error {
 		}
 	}
 
-	// Remove all method sets, which are now unnecessary and inhibit later
+	// Remove temporary type metadata, which is now unnecessary and inhibits later
 	// optimizations if they are left in place.
 	zero := llvm.ConstInt(p.ctx.Int32Type(), 0, false)
 	for _, name := range typeNames {
 		t := p.types[name]
-		if !t.methodSet.IsNil() {
+		if !t.methodSet.IsNil() || !t.callAdapter.IsNil() {
 			initializer := t.typecode.Initializer()
 			numFields := initializer.Type().StructElementTypesCount()
 
@@ -479,6 +483,7 @@ func (p *lowerInterfacesPass) run() error {
 	}
 
 	p.createReflectTypeLinks(typeNames)
+	p.createReflectCallLinks(typeNames)
 
 	return nil
 }
@@ -557,6 +562,61 @@ func (p *lowerInterfacesPass) createReflectTypeLinks(typeNames []string) {
 			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
 		}))
 		dataGlobal.SetGlobalConstant(true)
+	}
+}
+
+func (p *lowerInterfacesPass) createReflectCallLinks(typeNames []string) {
+	typesGlobal := p.mod.NamedGlobal("internal/reflectlite.funcCallTypes")
+	adaptersGlobal := p.mod.NamedGlobal("internal/reflectlite.funcCallAdapters")
+	lengthGlobal := p.mod.NamedGlobal("internal/reflectlite.funcCallLinksLen")
+	if typesGlobal.IsNil() && adaptersGlobal.IsNil() && lengthGlobal.IsNil() {
+		return
+	}
+	if typesGlobal.IsNil() || adaptersGlobal.IsNil() || lengthGlobal.IsNil() {
+		panic("reflect call link globals must be defined together")
+	}
+
+	var typeCodes, adapters []llvm.Value
+	for _, name := range typeNames {
+		if !strings.HasPrefix(name, "func:") {
+			continue
+		}
+		typ := p.types[name]
+		if typ.callAdapter.IsNil() {
+			panic("missing reflect call adapter for " + name)
+		}
+		typeCodes = append(typeCodes, llvm.ConstGEP(typ.typecode.GlobalValueType(), typ.typecode, []llvm.Value{
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+		}))
+		adapters = append(adapters, llvm.ConstIntToPtr(typ.callAdapter, p.ptrType))
+	}
+
+	lengthGlobal.SetInitializer(llvm.ConstInt(p.uintptrType, uint64(len(typeCodes)), false))
+	lengthGlobal.SetGlobalConstant(true)
+	for _, table := range []struct {
+		global llvm.Value
+		values []llvm.Value
+		name   string
+	}{
+		{typesGlobal, typeCodes, "internal/reflectlite.funcCallTypes.data"},
+		{adaptersGlobal, adapters, "internal/reflectlite.funcCallAdapters.data"},
+	} {
+		if len(table.values) == 0 {
+			table.global.SetInitializer(llvm.ConstPointerNull(p.ptrType))
+			table.global.SetGlobalConstant(true)
+			continue
+		}
+		arrayType := llvm.ArrayType(p.ptrType, len(table.values))
+		array := llvm.AddGlobal(p.mod, arrayType, table.name)
+		array.SetInitializer(llvm.ConstArray(p.ptrType, table.values))
+		array.SetGlobalConstant(true)
+		array.SetLinkage(llvm.InternalLinkage)
+		table.global.SetInitializer(llvm.ConstGEP(arrayType, array, []llvm.Value{
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+		}))
+		table.global.SetGlobalConstant(true)
 	}
 }
 
