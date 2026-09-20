@@ -2,6 +2,7 @@ package reflectlite
 
 import (
 	"internal/gclayout"
+	"internal/itoa"
 	"math"
 	"unsafe"
 )
@@ -1566,14 +1567,41 @@ func (v Value) OverflowUint(x uint64) bool {
 }
 
 func (v Value) CanConvert(t Type) bool {
-	// TODO: Optimize this to not actually perform a conversion
-	_, ok := convertOp(v, t)
-	return ok
+	if v.typecode == nil {
+		panic(&ValueError{Method: "reflect.Value.Type", Kind: Invalid})
+	}
+	target := t.(*RawType)
+	if !v.typecode.ConvertibleTo(target) {
+		return false
+	}
+	if v.Kind() == Slice {
+		if target.Kind() == Array {
+			return target.Len() <= v.Len()
+		}
+		if target.Kind() == Pointer && target.elem().Kind() == Array {
+			return target.elem().Len() <= v.Len()
+		}
+	}
+	return true
 }
 
 func (v Value) Convert(t Type) Value {
 	if v, ok := convertOp(v, t); ok {
 		return v
+	}
+
+	target := t.(*RawType)
+	if v.Kind() == Slice {
+		array := target
+		targetName := "array"
+		if target.Kind() == Pointer {
+			array = target.elem()
+			targetName = "pointer to array"
+		}
+		if array.Kind() == Array && v.typecode.elem() == array.elem() && v.Len() < array.Len() {
+			panic("reflect: cannot convert slice with length " + itoa.Itoa(v.Len()) +
+				" to " + targetName + " with length " + itoa.Itoa(array.Len()))
+		}
 	}
 
 	panic("reflect.Value.Convert: value of type " + v.typecode.String() + " cannot be converted to type " + t.String())
@@ -1583,19 +1611,21 @@ func convertOp(src Value, typ Type) (Value, bool) {
 
 	// Easy check first.  Do we even need to do anything?
 	if src.typecode.underlying() == typ.(*RawType).underlying() {
-		return Value{
-			typecode: typ.(*RawType),
-			value:    src.value,
-			flags:    src.flags,
-		}, true
+		return cvtDirect(src, typ.(*RawType)), true
 	}
 
-	if rtype := typ.(*RawType); rtype.Kind() == Interface && rtype.NumMethod() == 0 {
-		iface := composeInterface(unsafe.Pointer(src.typecode), src.value)
+	if rtype := typ.(*RawType); rtype.Kind() == Interface && src.typecode.Implements(rtype) {
+		var iface interface{}
+		if src.Kind() == Interface {
+			iface = *(*interface{})(src.value)
+		} else {
+			value := cvtDirect(src, src.typecode)
+			iface = composeInterface(unsafe.Pointer(src.typecode), value.value)
+		}
 		return Value{
 			typecode: rtype,
 			value:    unsafe.Pointer(&iface),
-			flags:    valueFlagExported,
+			flags:    src.flags & (valueFlagExported | valueFlagRO),
 		}, true
 	}
 
@@ -1640,10 +1670,18 @@ func convertOp(src Value, typ Type) (Value, bool) {
 		switch rtype := typ.(*RawType); rtype.Kind() {
 		case Array:
 			if src.typecode.elem() == rtype.elem() && rtype.Len() <= src.Len() {
+				size := rtype.Size()
+				var value unsafe.Pointer
+				if size <= unsafe.Sizeof(uintptr(0)) {
+					value = loadSmallValue((*sliceHeader)(src.value).data, size)
+				} else {
+					value = alloc(size, rtype.gcLayout())
+					memcpy(value, (*sliceHeader)(src.value).data, size)
+				}
 				return Value{
 					typecode: rtype,
-					value:    (*sliceHeader)(src.value).data,
-					flags:    src.flags | valueFlagIndirect,
+					value:    value,
+					flags:    src.flags & (valueFlagExported | valueFlagRO),
 				}, true
 			}
 		case Pointer:
@@ -1680,15 +1718,22 @@ func convertOp(src Value, typ Type) (Value, bool) {
 
 	case Pointer:
 		rtype := typ.(*RawType)
-		if rtype.Kind() == Pointer && !src.typecode.isNamed() && !rtype.isNamed() && src.typecode.elem().underlying() == rtype.elem().underlying() {
+		if rtype.Kind() == Pointer && !src.typecode.isNamed() && !rtype.isNamed() &&
+			haveIdenticalUnderlyingType(src.typecode.elem(), rtype.elem(), false) {
+			return cvtDirect(src, rtype), true
+		}
+
+	case Chan:
+		rtype := typ.(*RawType)
+		if rtype.Kind() == Chan && src.typecode.underlying().ChanDir() == BothDir &&
+			(!src.typecode.isNamed() || !rtype.isNamed()) && src.typecode.elem() == rtype.elem() {
 			return cvtDirect(src, rtype), true
 		}
 	}
 
-	// TODO(dgryski): Unimplemented:
-	// Chan
-	// Non-defined pointers types with same underlying base type
-	// Interface <-> Type conversions
+	if haveIdenticalUnderlyingType(src.typecode, typ.(*RawType), false) {
+		return cvtDirect(src, typ.(*RawType)), true
+	}
 
 	return Value{}, false
 }
@@ -1728,10 +1773,20 @@ func cvtFloat(v Value, t *RawType) Value {
 }
 
 func cvtDirect(v Value, t *RawType) Value {
+	value := v.value
+	if v.isIndirect() {
+		size := v.typecode.Size()
+		if size <= unsafe.Sizeof(uintptr(0)) {
+			value = loadSmallValue(value, size)
+		} else {
+			value = alloc(size, v.typecode.gcLayout())
+			memcpy(value, v.value, size)
+		}
+	}
 	return Value{
 		typecode: t,
-		value:    v.value,
-		flags:    v.flags,
+		value:    value,
+		flags:    v.flags &^ valueFlagIndirect,
 	}
 }
 

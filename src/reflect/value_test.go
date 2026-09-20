@@ -954,6 +954,185 @@ func TestConvertToEmptyInterface(t *testing.T) {
 	_ = v.Interface().(interface{}).(map[string]string)
 }
 
+type conversionInt int
+
+type conversionStructA struct {
+	Value int `json:"a"`
+}
+
+type conversionStructB struct {
+	Value int `json:"b"`
+}
+
+type conversionChan chan int
+
+type conversionInterface interface {
+	Value() int
+}
+
+type conversionExtendedInterface interface {
+	conversionInterface
+	Extra()
+}
+
+type conversionMethods int
+
+func (v conversionMethods) Value() int {
+	return int(v)
+}
+
+func (conversionMethods) Extra() {
+}
+
+type conversionLarge struct {
+	N       int
+	Padding int
+}
+
+func (v conversionLarge) Value() int {
+	return v.N
+}
+
+func TestConvertInterfaces(t *testing.T) {
+	for _, test := range []struct {
+		from, to Type
+		want     bool
+	}{
+		{TypeFor[any](), TypeFor[error](), false},
+		{TypeFor[error](), TypeFor[any](), true},
+		{TypeFor[conversionInterface](), TypeFor[error](), false},
+		{TypeFor[conversionInterface](), TypeFor[conversionExtendedInterface](), false},
+		{TypeFor[conversionExtendedInterface](), TypeFor[conversionInterface](), true},
+	} {
+		t.Run(test.from.String()+"->"+test.to.String(), func(t *testing.T) {
+			value := New(test.from).Elem()
+			if got := test.from.ConvertibleTo(test.to); got != test.want {
+				t.Fatalf("ConvertibleTo = %v, want %v", got, test.want)
+			}
+			if got := value.CanConvert(test.to); got != test.want {
+				t.Fatalf("CanConvert = %v, want %v", got, test.want)
+			}
+			if !test.want {
+				shouldPanic("", func() { value.Convert(test.to) })
+			} else if converted := value.Convert(test.to); !converted.IsNil() || converted.CanAddr() {
+				t.Fatal("converting a nil interface did not produce a non-addressable nil interface")
+			}
+		})
+	}
+}
+
+func TestConvertSnapshots(t *testing.T) {
+	channel := make(chan int)
+	for _, test := range []struct {
+		name        string
+		value, want any
+	}{
+		{"struct", conversionStructA{23}, conversionStructB{23}},
+		{"large-struct", struct {
+			Value [2]int `json:"a"`
+		}{[2]int{23, 24}}, struct {
+			Value [2]int `json:"b"`
+		}{[2]int{23, 24}}},
+		{"channel", conversionChan(channel), (<-chan int)(channel)},
+		{"same-struct", conversionStructA{23}, conversionStructA{23}},
+		{"same-large-struct", conversionLarge{23, 24}, conversionLarge{23, 24}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			value := New(TypeOf(test.value)).Elem()
+			value.Set(ValueOf(test.value))
+			converted := value.Convert(TypeOf(test.want))
+			if converted.CanAddr() || converted.CanSet() {
+				t.Error("converted value is addressable or settable")
+			}
+			value.Set(Zero(value.Type()))
+			if got := converted.Interface(); !DeepEqual(got, test.want) {
+				t.Errorf("converted value = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestConvertInterfaceSnapshots(t *testing.T) {
+	for _, original := range []conversionInterface{conversionMethods(9), conversionLarge{11, 12}} {
+		t.Run(TypeOf(original).String(), func(t *testing.T) {
+			value := New(TypeOf(original)).Elem()
+			value.Set(ValueOf(original))
+			converted := value.Convert(TypeFor[conversionInterface]())
+			value.Set(Zero(value.Type()))
+			if got, want := converted.Interface().(conversionInterface).Value(), original.Value(); got != want {
+				t.Errorf("converted interface value = %d, want %d", got, want)
+			}
+		})
+	}
+}
+
+func TestConvertCompositeTypes(t *testing.T) {
+	n := 42
+	pointer := ValueOf(&n).Convert(TypeOf((*conversionInt)(nil))).Interface().(*conversionInt)
+	if got := int(*pointer); got != n {
+		t.Fatalf("converted pointer value = %d, want %d", got, n)
+	}
+
+	structValue := conversionStructA{Value: 23}
+	convertedStruct := ValueOf(structValue).Convert(TypeOf(conversionStructB{})).Interface().(conversionStructB)
+	if convertedStruct.Value != structValue.Value {
+		t.Fatalf("converted struct value = %d, want %d", convertedStruct.Value, structValue.Value)
+	}
+	structPointer := ValueOf(&structValue)
+	pointerType := TypeOf((*conversionStructB)(nil))
+	if !structPointer.Type().ConvertibleTo(pointerType) || !structPointer.CanConvert(pointerType) {
+		t.Fatal("pointers to structs with different tags should be convertible")
+	}
+	convertedPointer := structPointer.Convert(pointerType).Interface().(*conversionStructB)
+	if convertedPointer.Value != structValue.Value {
+		t.Fatalf("converted struct pointer value = %d, want %d", convertedPointer.Value, structValue.Value)
+	}
+
+	channel := make(conversionChan)
+	recv := ValueOf(channel).Convert(TypeOf((<-chan int)(nil))).Interface().(<-chan int)
+	send := ValueOf(channel).Convert(TypeOf((chan<- int)(nil))).Interface().(chan<- int)
+	go func() {
+		send <- 7
+	}()
+	if got := <-recv; got != 7 {
+		t.Fatalf("converted channel received %d, want 7", got)
+	}
+
+	concrete := ValueOf(conversionMethods(9)).Convert(TypeFor[conversionInterface]())
+	if got := concrete.Interface().(conversionInterface).Value(); got != 9 {
+		t.Fatalf("converted concrete interface value = %d, want 9", got)
+	}
+
+	var extended conversionExtendedInterface = conversionMethods(11)
+	convertedInterface := ValueOf(&extended).Elem().Convert(TypeFor[conversionInterface]())
+	if got := convertedInterface.Interface().(conversionInterface).Value(); got != 11 {
+		t.Fatalf("converted interface value = %d, want 11", got)
+	}
+}
+
+func TestCanConvertNoAlloc(t *testing.T) {
+	slice := make([]byte, 32)
+	for _, test := range []struct {
+		value  Value
+		target Type
+	}{
+		{ValueOf("conversion"), TypeFor[[]byte]()},
+		{ValueOf("conversion"), TypeFor[[]rune]()},
+		{ValueOf(slice), TypeFor[[32]byte]()},
+		{ValueOf(slice), TypeFor[*[32]byte]()},
+	} {
+		if allocations := testing.AllocsPerRun(100, func() {
+			if !test.value.CanConvert(test.target) {
+				t.Fatal("CanConvert rejected a valid conversion")
+			}
+		}); allocations != 0 {
+			t.Errorf("CanConvert(%v to %v) allocated %v times", test.value.Type(), test.target, allocations)
+		}
+	}
+	shouldPanic("", func() { Value{}.CanConvert(TypeFor[int]()) })
+	shouldPanic("", func() { ValueOf(1).CanConvert(nil) })
+}
+
 func TestClearSlice(t *testing.T) {
 	type stringSlice []string
 	for _, test := range []struct {
