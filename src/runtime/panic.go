@@ -130,17 +130,12 @@ func runtimePanicAt(addr unsafe.Pointer, err Error) {
 	if startPanicUnwind(err, panicTrue) {
 		return
 	}
-	if hasReturnAddr {
-		// Note: the string "panic: runtime error at " is also used in
-		// runtime_cortexm_hardfault.go. It is kept the same so that the string
-		// can be deduplicated by the compiler.
-		printstring("panic: runtime error at ")
-		printptr(uintptr(addr) - callInstSize)
-		printstring(": ")
-	} else {
-		printstring("panic: runtime error: ")
-	}
+	printstring("panic: ")
 	printstring(err.Error())
+	if hasReturnAddr {
+		printstring(" at ")
+		printptr(uintptr(addr) - callInstSize)
+	}
 	printnl()
 	abort()
 }

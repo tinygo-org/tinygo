@@ -54,6 +54,16 @@ outer recovered: repanic value
   recovered: map lookup key
   recovered: map delete key
 
+# recover runtime error messages
+  recovered runtime error: runtime error: invalid memory address or nil pointer dereference
+  recovered runtime error: runtime error: integer divide by zero
+  recovered runtime error: runtime error: index out of range
+  recovered runtime error: runtime error: slice out of range
+  recovered runtime error: runtime error: slice smaller than array
+  recovered runtime error: runtime error: unsafe.Slice/String: len out of range
+  recovered runtime error: runtime error: negative shift
+  recovered runtime error: runtime error: comparing un-comparable type
+
 # recover from nil map and closed channel
   recovered: nil map
   recovered runtime error: assignment to entry in nil map

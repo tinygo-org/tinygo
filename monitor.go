@@ -278,9 +278,9 @@ func ListSerialPorts() ([]SerialPortInfo, error) {
 	return serialPortInfo, nil
 }
 
-var addressMatch = regexp.MustCompile(`panic: runtime error at 0x([0-9a-f]+): `)
+var addressMatch = regexp.MustCompile(`panic: runtime error.* at 0x([0-9a-f]+)(: |$)`)
 
-// Extract the address from the "panic: runtime error at" message.
+// Extract the address from a runtime error message.
 func extractPanicAddress(line []byte) uint64 {
 	matches := addressMatch.FindSubmatch(line)
 	if matches != nil {

@@ -15,8 +15,6 @@ func HardFault_Handler() {
 	// to print the PC value at the time of the hard fault, for example.
 	sp := (*interruptStack)(llvm_sponentry())
 
-	// Note: by reusing the string "panic: runtime error at " we save a little
-	// bit in terms of code size as the string can be deduplicated.
 	print("panic: runtime error at ", sp.PC, ": HardFault with sp=", sp)
 	// TODO: try to find the cause of the hard fault. Especially on Cortex-M3
 	// and higher it is possible to find more detailed information in special
