@@ -16,6 +16,7 @@ func init() {
 	if value := startupEnv("GOROOT"); value != "" {
 		goroot = value
 	}
+	godebugStartup = startupEnv("GODEBUG")
 
 	wasiclirun.Exports.Run = func() cm.BoolResult {
 		callMain()
