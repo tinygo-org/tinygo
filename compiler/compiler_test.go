@@ -177,6 +177,26 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
+func TestLargeSliceElement(t *testing.T) {
+	options := &compileopts.Options{GOOS: "linux", GOARCH: "amd64"}
+	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	fn := mod.NamedFunction("main.makeLargeElementSlice")
+	if fn.IsNil() {
+		t.Fatal("missing function main.makeLargeElementSlice")
+	}
+	if ir := fn.String(); !strings.Contains(ir, "icmp ugt i64 %len, 8388608") {
+		t.Errorf("large element slice does not use the 48-bit allocation limit:\n%s", ir)
+	}
+}
+
 func TestNonBlockingSelectLargeSend(t *testing.T) {
 	options := &compileopts.Options{Target: "wasm"}
 	mod, errs := testCompilePackage(t, options, "channel-nonblocking-large.go")
