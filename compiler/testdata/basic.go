@@ -10,6 +10,20 @@ func equalInt(x, y int) bool {
 	return x == y
 }
 
+func equalByteArray(x, y *[4096]byte) bool {
+	return *x == *y
+}
+
+func notEqualByteArray(x, y *[4096]byte) bool {
+	return *x != *y
+}
+
+func equalMutatedByteArray(x *[5]byte) bool {
+	value := *x
+	x[0] = 1
+	return value == *x
+}
+
 func divInt(x, y int) int {
 	return x / y
 }
