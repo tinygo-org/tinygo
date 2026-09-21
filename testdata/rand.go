@@ -1,8 +1,17 @@
 package main
 
-import "crypto/rand"
+import (
+	"crypto/rand"
+	"errors"
+)
 
 // TODO: make this a test in the crypto/rand package.
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) {
+	return 0, errors.New("test failure")
+}
 
 func main() {
 	buf := make([]byte, 500)
@@ -21,4 +30,31 @@ func main() {
 	} else {
 		println("random number check was successful")
 	}
+
+	text := rand.Text()
+	valid := len(text) == 26
+	for _, c := range text {
+		if (c < 'A' || c > 'Z') && (c < '2' || c > '7') {
+			valid = false
+		}
+	}
+	if !valid {
+		println("random text is invalid:", text)
+	} else {
+		println("random text check was successful")
+	}
+
+	reader := rand.Reader
+	rand.Reader = failingReader{}
+	func() {
+		defer func() {
+			if value := recover(); value != "crypto/rand: failed to read random data: test failure" {
+				println("unexpected panic from random text")
+			} else {
+				println("random text read failure was caught")
+			}
+		}()
+		rand.Text()
+	}()
+	rand.Reader = reader
 }
