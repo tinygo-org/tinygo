@@ -33,6 +33,55 @@ entry:
 }
 
 ; Function Attrs: nounwind
+define hidden i1 @main.equalByteArray(ptr dereferenceable_or_null(4096) %x, ptr dereferenceable_or_null(4096) %y, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %x, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %1 = icmp eq ptr %y, null
+  br i1 %1, label %deref.throw, label %deref.next1
+
+deref.next1:                                      ; preds = %deref.next
+  %arraycmp = call i1 @runtime.memequal(ptr nonnull %x, ptr nonnull %y, i32 4096, ptr undef) #2
+  ret i1 %arraycmp
+
+deref.throw:                                      ; preds = %deref.next, %entry
+  call void @runtime.nilPanic(ptr undef) #2
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i1 undef
+}
+
+declare void @runtime.nilPanic(ptr) #0
+
+declare i1 @runtime.memequal(ptr, ptr, i32, ptr) #0
+
+; Function Attrs: nounwind
+define hidden i1 @main.notEqualByteArray(ptr dereferenceable_or_null(4096) %x, ptr dereferenceable_or_null(4096) %y, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %x, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %1 = icmp eq ptr %y, null
+  br i1 %1, label %deref.throw, label %deref.next1
+
+deref.next1:                                      ; preds = %deref.next
+  %arraycmp = call i1 @runtime.memequal(ptr nonnull %x, ptr nonnull %y, i32 4096, ptr undef) #2
+  %2 = xor i1 %arraycmp, true
+  ret i1 %2
+
+deref.throw:                                      ; preds = %deref.next, %entry
+  call void @runtime.nilPanic(ptr undef) #2
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i1 undef
+}
+
+; Function Attrs: nounwind
 define hidden i32 @main.divInt(i32 %x, i32 %y, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq i32 %y, 0

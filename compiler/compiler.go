@@ -1711,6 +1711,39 @@ func (b *builder) getValuePointer(value ssa.Value) llvm.Value {
 	return ptr
 }
 
+func isMemequalArrayComparison(expr *ssa.BinOp) bool {
+	typ, ok := expr.X.Type().Underlying().(*types.Array)
+	return ok &&
+		typ.Len() > hashArrayUnrollLimit &&
+		isBinaryComparable(typ.Elem()) &&
+		(expr.Op == token.EQL || expr.Op == token.NEQ)
+}
+
+func canUseDereferencePointer(unop *ssa.UnOp) bool {
+	if unop.Op != token.MUL {
+		return false
+	}
+	referrers := unop.Referrers()
+	if referrers == nil {
+		return false
+	}
+	var comparison *ssa.BinOp
+	for _, referrer := range *referrers {
+		switch referrer := referrer.(type) {
+		case *ssa.DebugRef:
+			continue
+		case *ssa.BinOp:
+			if comparison != nil {
+				return false
+			}
+			comparison = referrer
+		default:
+			return false
+		}
+	}
+	return comparison != nil && isMemequalArrayComparison(comparison)
+}
+
 func (b *builder) getCallArgument(value ssa.Value, indirect bool) llvm.Value {
 	if indirect {
 		return b.getValuePointer(value)
@@ -2483,6 +2516,17 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return buf, nil
 		}
 	case *ssa.BinOp:
+		if isMemequalArrayComparison(expr) {
+			typ := expr.X.Type().Underlying().(*types.Array)
+			x := b.getValuePointer(expr.X)
+			y := b.getValuePointer(expr.Y)
+			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(b.getLLVMType(typ)), false)
+			result := b.createRuntimeCall("memequal", []llvm.Value{x, y, size}, "arraycmp")
+			if expr.Op == token.NEQ {
+				result = b.CreateNot(result, "")
+			}
+			return result, nil
+		}
 		x := b.getValue(expr.X, getPos(expr))
 		y := b.getValue(expr.Y, getPos(expr))
 		return b.createBinOp(expr.Op, expr.X.Type(), expr.Y.Type(), x, y, expr.Pos())
@@ -3309,15 +3353,27 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 		//     Array values are comparable if values of the array element type
 		//     are comparable. Two array values are equal if their corresponding
 		//     elements are equal.
-		result := llvm.ConstInt(b.ctx.Int1Type(), 1, true)
-		for i := 0; i < int(typ.Len()); i++ {
-			xField := b.CreateExtractValue(x, i, "")
-			yField := b.CreateExtractValue(y, i, "")
-			fieldEqual, err := b.createBinOp(token.EQL, typ.Elem(), typ.Elem(), xField, yField, pos)
-			if err != nil {
-				return llvm.Value{}, err
+		var result llvm.Value
+		if typ.Len() > hashArrayUnrollLimit && isBinaryComparable(typ.Elem()) {
+			xPtr, xSize := b.createTemporaryAlloca(x.Type(), "arraycmp.x")
+			yPtr, ySize := b.createTemporaryAlloca(y.Type(), "arraycmp.y")
+			b.CreateStore(x, xPtr)
+			b.CreateStore(y, yPtr)
+			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(x.Type()), false)
+			result = b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "arraycmp")
+			b.emitLifetimeEnd(xPtr, xSize)
+			b.emitLifetimeEnd(yPtr, ySize)
+		} else {
+			result = llvm.ConstInt(b.ctx.Int1Type(), 1, true)
+			for i := 0; i < int(typ.Len()); i++ {
+				xField := b.CreateExtractValue(x, i, "")
+				yField := b.CreateExtractValue(y, i, "")
+				fieldEqual, err := b.createBinOp(token.EQL, typ.Elem(), typ.Elem(), xField, yField, pos)
+				if err != nil {
+					return llvm.Value{}, err
+				}
+				result = b.CreateAnd(result, fieldEqual, "")
 			}
-			result = b.CreateAnd(result, fieldEqual, "")
 		}
 		switch op {
 		case token.EQL: // ==
@@ -3761,6 +3817,9 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			return fn, nil
 		} else {
 			b.createNilCheck(unop.X, x, "deref")
+			if canUseDereferencePointer(unop) {
+				return x, nil
+			}
 			return b.loadFromStorage(x, unop.Type(), ""), nil
 		}
 	case token.XOR: // ^x, toggle all bits in integer

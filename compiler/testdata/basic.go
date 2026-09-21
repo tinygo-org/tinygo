@@ -10,6 +10,14 @@ func equalInt(x, y int) bool {
 	return x == y
 }
 
+func equalByteArray(x, y *[4096]byte) bool {
+	return *x == *y
+}
+
+func notEqualByteArray(x, y *[4096]byte) bool {
+	return *x != *y
+}
+
 func divInt(x, y int) int {
 	return x / y
 }
