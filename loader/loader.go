@@ -54,14 +54,15 @@ type Program struct {
 
 // PackageJSON is a subset of the JSON struct returned from `go list`.
 type PackageJSON struct {
-	Dir        string
-	ImportPath string
-	Name       string
-	ForTest    string
-	Root       string
-	Standard   bool
-	DepOnly    bool
-	Module     struct {
+	Dir            string
+	ImportPath     string
+	Name           string
+	ForTest        string
+	Root           string
+	Standard       bool
+	DepOnly        bool
+	DefaultGODEBUG string
+	Module         struct {
 		Path      string
 		Main      bool
 		Dir       string
