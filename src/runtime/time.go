@@ -1,8 +1,11 @@
 package runtime
 
 import (
+	"internal/task"
 	"unsafe"
 )
+
+var timerChannelsEnabled task.Uint32
 
 // This is the timer that's used internally inside the runtime.
 type timer struct {
@@ -17,7 +20,10 @@ type timer struct {
 	arg any
 
 	synctest           *synctestBubble
+	pausedNode         *timerNode
+	blocked            uint32
 	isChan             bool
+	stopped            bool
 	suppressedCallback bool
 
 	// node is the node of this timer that is waiting in a timer heap, if any.
@@ -61,13 +67,16 @@ func newTimer(when, period int64, f func(arg any, seq uintptr, delta int64), arg
 		},
 	}
 	if c != nil {
-		(*channel)(c).timer = true
+		timerChannelsEnabled.Store(1)
+		(*channel)(c).timer = &tim.timer
 	}
 	scheduleLog("new timer")
 	node := newTimerNode()
 	node.timer = &tim.timer
 	node.callback = timerCallback
-	if bubble != nil {
+	if c != nil && (hasScheduler || hasParallelism) {
+		tim.timer.pausedNode = node
+	} else if bubble != nil {
 		bubble.addTimer(node)
 	} else {
 		addTimer(node)
@@ -82,13 +91,19 @@ func stopTimer(tim *timeTimer) bool {
 	}
 	tim.timer.lock.Lock()
 	tim.timer.suppressedCallback = false
+	tim.timer.stopped = true
 	var removed bool
 	var n *timerNode
 	if tim.timer.synctest != nil {
-		removed = tim.timer.synctest.removeTimer(&tim.timer) != nil
+		removed = tim.timer.synctest.removeTimer(&tim.timer, true) != nil
 	} else {
-		n = removeTimer(&tim.timer)
+		n = removeTimer(&tim.timer, true)
 		removed = n != nil
+	}
+	if tim.timer.pausedNode != nil {
+		n = tim.timer.pausedNode
+		tim.timer.pausedNode = nil
+		removed = true
 	}
 	drained := timerChanDrain(tim.c)
 	suppressed := tim.timer.suppressedCallback
@@ -109,9 +124,13 @@ func resetTimer(t *timeTimer, when, period int64) bool {
 	t.timer.suppressedCallback = false
 	var n *timerNode
 	if t.timer.synctest != nil {
-		n = t.timer.synctest.removeTimer(&t.timer)
+		n = t.timer.synctest.removeTimer(&t.timer, true)
 	} else {
-		n = removeTimer(&t.timer)
+		n = removeTimer(&t.timer, true)
+	}
+	if n == nil && t.timer.pausedNode != nil {
+		n = t.timer.pausedNode
+		t.timer.pausedNode = nil
 	}
 	removed := n != nil
 	drained := timerChanDrain(t.c)
@@ -124,21 +143,30 @@ func resetTimer(t *timeTimer, when, period int64) bool {
 		// A concurrent reset can queue the timer during allocation.
 		// Remove it again so this reset takes effect after that operation.
 		if t.timer.synctest != nil {
-			n = t.timer.synctest.removeTimer(&t.timer)
+			n = t.timer.synctest.removeTimer(&t.timer, true)
 		} else {
-			n = removeTimer(&t.timer)
+			n = removeTimer(&t.timer, true)
+		}
+		if n == nil && t.timer.pausedNode != nil {
+			n = t.timer.pausedNode
+			t.timer.pausedNode = nil
 		}
 		removed = n != nil
 		if n == nil {
 			n = replacement
 		}
+		drained = timerChanDrain(t.c) || drained
+		suppressed = t.timer.suppressedCallback || suppressed
 	}
 	t.timer.when = when
 	t.timer.period = period
+	t.timer.stopped = false
 	n.timer = &t.timer
 	n.callback = timerCallback
 	var runNow bool
-	if t.timer.synctest != nil {
+	if t.timer.isChan && t.timer.blocked == 0 {
+		t.timer.pausedNode = n
+	} else if t.timer.synctest != nil {
 		runNow = t.timer.synctest.queueTimer(n)
 	} else {
 		addTimer(n)
@@ -148,6 +176,86 @@ func resetTimer(t *timeTimer, when, period int64) bool {
 		n.callback(n, 0)
 	}
 	return removed || drained || suppressed
+}
+
+func timerChanRun(tim *timer) {
+	if timerChannelsEnabled.Load() == 0 || tim == nil {
+		return
+	}
+	tim.lock.Lock()
+	tn := tim.pausedNode
+	if tn == nil || tim.stopped {
+		tim.lock.Unlock()
+		return
+	}
+	now := nanotime()
+	if tim.synctest != nil {
+		now = tim.synctest.time()
+	}
+	if now >= tim.when {
+		var current *task.Task
+		var bubble unsafe.Pointer
+		if synctestIsEnabled() {
+			current = task.Current()
+			bubble = current.SynctestBubble
+			current.SynctestBubble = unsafe.Pointer(tim.synctest)
+		}
+		tim.callCallback(now - tim.when)
+		if current != nil {
+			current.SynctestBubble = bubble
+		}
+		if tim.period != 0 {
+			tim.when = tim.nextWhen(now - tim.when)
+		} else {
+			tim.pausedNode = nil
+		}
+	}
+	tim.lock.Unlock()
+}
+
+func timerChanBlock(tim *timer) {
+	if timerChannelsEnabled.Load() == 0 || tim == nil {
+		return
+	}
+	tim.lock.Lock()
+	tim.blocked++
+	tn := tim.pausedNode
+	var runNow bool
+	if tn != nil && !tim.stopped {
+		tim.pausedNode = nil
+		if tim.synctest != nil {
+			runNow = tim.synctest.queueTimer(tn)
+		} else {
+			addTimer(tn)
+		}
+	}
+	tim.lock.Unlock()
+	if runNow {
+		tn.callback(tn, 0)
+	}
+}
+
+func timerChanUnblock(tim *timer) {
+	if timerChannelsEnabled.Load() == 0 || tim == nil {
+		return
+	}
+	tim.lock.Lock()
+	if tim.blocked == 0 {
+		runtimeFatal("timer channel receive count underflow")
+	}
+	tim.blocked--
+	if tim.blocked == 0 {
+		var tn *timerNode
+		if tim.synctest != nil {
+			tn = tim.synctest.removeTimer(tim, false)
+		} else {
+			tn = removeTimer(tim, false)
+		}
+		if tn != nil {
+			tim.pausedNode = tn
+		}
+	}
+	tim.lock.Unlock()
 }
 
 //go:linkname time_runtimeNano time.runtimeNano

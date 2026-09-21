@@ -184,7 +184,7 @@ func reAddTimer(tn *timerNode, delta int64) {
 	// firing list a second time (which would corrupt the list).
 	firingTimersRemove(tn)
 
-	if tn.stopped {
+	if tn.stopped || tn.timer.stopped {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
 		// already been re-added by resetTimer.
@@ -198,15 +198,20 @@ func reAddTimer(tn *timerNode, delta int64) {
 		return
 	}
 	tn.timer.when = tn.timer.nextWhen(delta)
+	if tn.timer.isChan && tn.timer.blocked == 0 {
+		tn.timer.pausedNode = tn
+		schedulerLock.Unlock()
+		return
+	}
 	timerQueueAdd(tn)
 	interruptSleepTicksMulticore(tn.whenTicks())
 	schedulerLock.Unlock()
 }
 
-func removeTimer(t *timer) *timerNode {
+func removeTimer(t *timer, stopFiring bool) *timerNode {
 	schedulerLock.Lock()
 	n := timerQueueRemove(t)
-	if n == nil {
+	if n == nil && stopFiring {
 		// The timer wasn't in the queue. It might be running its callback right
 		// now; if so, mark it stopped so it won't be re-added.
 		firingTimerStop(t)

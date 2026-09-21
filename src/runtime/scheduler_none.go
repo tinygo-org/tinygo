@@ -70,7 +70,7 @@ func reAddTimer(tn *timerNode, delta int64) {
 	runtimePanic(errTimersUnsupported)
 }
 
-func removeTimer(tim *timer) *timerNode {
+func removeTimer(tim *timer, stopFiring bool) *timerNode {
 	runtimePanic(errTimersUnsupported)
 	return nil
 }
