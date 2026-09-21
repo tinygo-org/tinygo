@@ -17,6 +17,10 @@ func addLiveTask(t *Task) {
 	atomic.AddUint32(&liveTasks, 1)
 }
 
+func NumGoroutine() int {
+	return int(atomic.LoadUint32(&liveTasks))
+}
+
 // Goexit exits the current task because runtime.Goexit was called.
 func Goexit() {
 	exit(true)

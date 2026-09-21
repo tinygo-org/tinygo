@@ -19,6 +19,10 @@ func Current() *Task {
 	return &mainTask
 }
 
+func NumGoroutine() int {
+	return 1
+}
+
 //go:noinline
 func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	// The compiler will error if this is reachable.
