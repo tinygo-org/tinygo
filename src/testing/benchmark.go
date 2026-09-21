@@ -552,6 +552,13 @@ func (b *B) RunParallel(body func(*PB)) {
 	return
 }
 
+// SetParallelism configures RunParallel.
+//
+// Not implemented
+func (b *B) SetParallelism(p int) {
+	return
+}
+
 func (b *B) Loop() bool {
 	panic("unimplemented: testing.B.Loop")
 }
