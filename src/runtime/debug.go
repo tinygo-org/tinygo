@@ -1,13 +1,14 @@
 package runtime
 
+import "internal/task"
+
 // Stub for NumCgoCall, does not return the real value
 func NumCgoCall() int {
 	return 0
 }
 
-// Stub for NumGoroutine, does not return the real value
 func NumGoroutine() int {
-	return 1
+	return task.NumGoroutine()
 }
 
 // Stub for Breakpoint, does not do anything.

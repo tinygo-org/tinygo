@@ -68,6 +68,13 @@ func Current() *Task {
 	return t
 }
 
+func NumGoroutine() int {
+	activeTaskLock.Lock()
+	count := activeTaskCount
+	activeTaskLock.Unlock()
+	return int(count)
+}
+
 // Pause pauses the current task, until it is resumed by another task.
 // It is possible that another task has called Resume() on the task before it
 // hits Pause(), in which case the task won't be paused but continues
