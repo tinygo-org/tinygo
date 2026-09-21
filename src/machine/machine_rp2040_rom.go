@@ -201,6 +201,8 @@ func enterBootloader() {
 	C.reset_usb_boot(0, 0)
 }
 
+// With scheduler=cores this must not be called from an interrupt handler or with
+// interrupts disabled; the GC stop-the-world path has the same constraint (see #5610).
 func doFlashCommand(tx []byte, rx []byte) error {
 	if len(tx) != len(rx) {
 		return errFlashInvalidWriteLength

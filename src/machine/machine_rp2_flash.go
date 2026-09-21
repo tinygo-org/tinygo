@@ -62,6 +62,8 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 // Only word (32 bits) length data can be programmed.
 // If the length of p is not long enough it will be padded with 0xFF bytes.
 // This method assumes that the destination is already erased.
+// With scheduler=cores this must not be called from an interrupt handler or with
+// interrupts disabled; the GC stop-the-world path has the same constraint (see #5610).
 func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 	return f.writeAt(p, off)
 }
@@ -96,6 +98,8 @@ func (f flashBlockDevice) EraseBlockSize() int64 {
 // transparently coalesce ranges of blocks into larger bundles if the chip
 // supports this. The start and len parameters are in block numbers, use
 // EraseBlockSize to map addresses to blocks.
+// With scheduler=cores this must not be called from an interrupt handler or with
+// interrupts disabled; the GC stop-the-world path has the same constraint (see #5610).
 func (f flashBlockDevice) EraseBlocks(start, length int64) error {
 	return f.eraseBlocks(start, length)
 }

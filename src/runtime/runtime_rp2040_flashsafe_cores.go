@@ -21,8 +21,11 @@ const (
 var rp2040FlashSafeState volatile.Register8
 
 // rp2040EnterFlashSafeSection enters a section where flash operations may disable XIP.
-// It must not be called from an interrupt handler or with interrupts disabled.
+// With scheduler=cores it must not be called from an interrupt handler or with
+// interrupts disabled; the GC stop-the-world path has the same constraint (see #5610).
 func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
+	// secondaryCoresStarted is set after startSecondaryCores() returns, so core 1
+	// may already run Go code in this window. The GC shares it (see #5610).
 	multicore := secondaryCoresStarted
 	if !multicore {
 		return interrupt.Disable(), false
@@ -30,17 +33,14 @@ func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
 
 	flashSafeLock.Lock()
 
+	// Disable local interrupts before the handshake. A GC interrupt here would
+	// block this core while the other core is parked.
 	state := interrupt.Disable()
 
-	core := currentCPU()
 	rp2040FlashSafeState.Set(rp2040FlashSafeIdle)
 
-	for i := uint32(0); i < numCPU; i++ {
-		if i == core {
-			continue
-		}
-		rp2040FlashSafePauseCore()
-	}
+	// RP2040 always has two cores, so there is exactly one core to pause.
+	rp2040FlashSafePauseCore()
 
 	for rp2040FlashSafeState.Get() != rp2040FlashSafeLocked {
 		spinLoopWait()
@@ -72,6 +72,7 @@ func rp2040FlashSafePauseCore() {
 
 // rp2FlashSafeInterruptHandler waits in RAM with interrupts disabled
 // while XIP is unavailable.
+
 // See RP2040 datasheet section 2.6.3 for XIP access during flash operations.
 //
 //go:section .ramfuncs
