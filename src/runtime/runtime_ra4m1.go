@@ -5,24 +5,38 @@ package runtime
 import (
 	"device/arm"
 	"machine"
+	"runtime/interrupt"
+	"runtime/volatile"
 )
 
-// machineTicks is provided by package machine.
-func machineTicks() uint64 {
-	return 0
-}
+const (
+	cpuFrequency             = 48_000_000
+	cyclesPerMicrosecond     = cpuFrequency / 1_000_000
+	microsecondsPerInterrupt = 1_000
+	sysTickReload            = cpuFrequency/1_000 - 1
+)
 
-// machineLightSleep is provided by package machine.
-func machineLightSleep(uint64) {
-	return
-}
+var sysTickCount volatile.Register64
 
-type timeUnit int64
-
-// ticks returns the number of ticks (microseconds) elapsed since power up.
+// ticks returns the number of microseconds elapsed since power up.
 func ticks() timeUnit {
-	t := machineTicks()
-	return timeUnit(t)
+	for {
+		state := interrupt.Disable()
+		milliseconds := sysTickCount.Get()
+		current := arm.SYST.SYST_CVR.Get()
+		pending := arm.SCB.ICSR.HasBits(arm.SCB_ICSR_PENDSTSET)
+		interrupt.Restore(state)
+
+		if pending {
+			continue
+		}
+
+		elapsedCycles := uint32(sysTickReload) - current
+		microseconds := elapsedCycles / cyclesPerMicrosecond
+		return timeUnit(
+			milliseconds*microsecondsPerInterrupt + uint64(microseconds),
+		)
+	}
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -39,16 +53,15 @@ func sleepTicks(d timeUnit) {
 	}
 
 	if hasScheduler {
-		// With scheduler, sleepTicks may return early if an interrupt or
-		// event fires - so scheduler can schedule any go routines now
-		// eligible to run
-		machineLightSleep(uint64(d))
+		if d >= microsecondsPerInterrupt {
+			waitForEvents()
+		}
 		return
 	}
 
-	// Busy loop
 	sleepUntil := ticks() + d
 	for ticks() < sleepUntil {
+		waitForEvents()
 	}
 }
 
@@ -72,13 +85,14 @@ func buffered() int {
 	return machine.Serial.Buffered()
 }
 
-// machineInit is provided by package machine.
-func machineInit() {
-	return
+func init() {
+	arm.SetupSystemTimer(sysTickReload)
+	arm.EnableInterrupts(0)
 }
 
-func init() {
-	machineInit()
+//go:export SysTick_Handler
+func handleSysTick() {
+	sysTickCount.Set(sysTickCount.Get() + 1)
 }
 
 //export Reset_Handler

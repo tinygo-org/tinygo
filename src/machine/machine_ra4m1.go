@@ -3,9 +3,10 @@
 package machine
 
 import (
+	"unsafe"
+
 	"device/renesas"
 	"runtime/volatile"
-	"unsafe"
 )
 
 const deviceName = renesas.Device
@@ -126,9 +127,9 @@ func (p Pin) Configure(config PinConfig) {
 
 	switch config.Mode {
 	case PinOutput:
-		setPDR(p, renesas.PFS_P000PFS_PDR_1)
+		configureGPIO(p, renesas.PFS_P000PFS_PDR_1)
 	default:
-		setPDR(p, renesas.PFS_P000PFS_PDR_0)
+		configureGPIO(p, renesas.PFS_P000PFS_PDR_0)
 	}
 
 	disableWritingPmnPFS()
@@ -186,7 +187,11 @@ func getPort(p Pin) gpioPort {
 }
 
 func getPortNumber(p Pin) int {
-	return int(p) >> 8
+	return int(p) >> 4
+}
+
+func getPinNumber(p Pin) uint32 {
+	return uint32(p) & 0x0f
 }
 
 type gpioPort interface {
@@ -199,11 +204,11 @@ type gpioPortType0 struct {
 }
 
 func (p gpioPortType0) set(pin Pin) {
-	p.port.SetPCNTR3_PORR(1 << pin)
+	p.port.SetPCNTR3_POSR(1 << getPinNumber(pin))
 }
 
 func (p gpioPortType0) clr(pin Pin) {
-	p.port.SetPCNTR3_POSR(1 << pin)
+	p.port.SetPCNTR3_PORR(1 << getPinNumber(pin))
 }
 
 type gpioPortType1 struct {
@@ -211,11 +216,11 @@ type gpioPortType1 struct {
 }
 
 func (p gpioPortType1) set(pin Pin) {
-	p.port.SetPCNTR3_PORR(1 << pin)
+	p.port.SetPCNTR3_POSR(1 << getPinNumber(pin))
 }
 
 func (p gpioPortType1) clr(pin Pin) {
-	p.port.SetPCNTR3_POSR(1 << pin)
+	p.port.SetPCNTR3_PORR(1 << getPinNumber(pin))
 }
 
 func enableWritingPmnPFS() {
@@ -228,9 +233,16 @@ func disableWritingPmnPFS() {
 	renesas.PMISC.SetPWPR_B0WI(0x1)
 }
 
-func setPDR(p Pin, value uint32) {
+func configureGPIO(p Pin, direction uint32) {
 	port := getPortNumber(p)
-	bit := int(p) & 0xff
-	reg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(uintptr(0x40040800)), 0x40*port+4*bit))
-	reg.SetBits(value << renesas.PFS_P000PFS_PDR_Pos)
+	bit := getPinNumber(p)
+	reg := (*volatile.Register32)(
+		unsafe.Add(unsafe.Pointer(uintptr(0x40040800)), 0x40*port+4*int(bit)),
+	)
+	modeMask := uint32(renesas.PFS_P000PFS_PSEL_Msk |
+		renesas.PFS_P000PFS_PMR_Msk |
+		renesas.PFS_P000PFS_ASEL_Msk |
+		renesas.PFS_P000PFS_ISEL_Msk |
+		renesas.PFS_P000PFS_PDR_Msk)
+	reg.Set(reg.Get()&^modeMask | direction<<renesas.PFS_P000PFS_PDR_Pos)
 }

@@ -1,22 +1,22 @@
-//go:build arduino_unor4
+//go:build arduino_uno_r4
 
 // This contains the pin mappings for the Arduino Uno R4 board.
 //
-// For more information, see: 
+// For more information, see:
 package machine
 
 // GPIO Pins
 const (
-	D0 Pin = P3_01
-	D1 Pin = P3_02
-	D2 Pin = P1_04
-	D3 Pin = P1_05
-	D4 Pin = P1_06
-	D5 Pin = P1_07
-	D6 Pin = P1_11
-	D7 Pin = P1_12
-	D8 Pin = P3_04
-	D9 Pin = P3_03
+	D0  Pin = P3_01
+	D1  Pin = P3_02
+	D2  Pin = P1_04
+	D3  Pin = P1_05
+	D4  Pin = P1_06
+	D5  Pin = P1_07
+	D6  Pin = P1_11
+	D7  Pin = P1_12
+	D8  Pin = P3_04
+	D9  Pin = P3_03
 	D10 Pin = P1_03
 	D11 Pin = P4_11
 	D12 Pin = P4_10
@@ -36,7 +36,6 @@ const (
 const (
 	LED = D13
 )
-
 
 // UART1 pins
 const (

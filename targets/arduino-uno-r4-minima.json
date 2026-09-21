@@ -1,0 +1,6 @@
+{
+  "inherits": ["arduino-uno-r4"],
+  "build-tags": ["arduino_uno_r4_minima"],
+  "flash-command": "dfu-util --device 2341:0069,:0369 -D {bin} -a0 -Q",
+  "serial-port": ["2341:0069", "2341:0369"]
+}
