@@ -1,1 +1,3 @@
 random number check was successful
+random text check was successful
+random text read failure was caught
