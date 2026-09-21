@@ -658,6 +658,9 @@ func (v Value) Complex() complex128 {
 }
 
 func (v Value) String() string {
+	if !v.IsValid() {
+		return "<invalid Value>"
+	}
 	switch v.Kind() {
 	case String:
 		// A string value is always bigger than a pointer as it is made of a
