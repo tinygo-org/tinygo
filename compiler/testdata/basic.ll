@@ -33,6 +33,104 @@ entry:
 }
 
 ; Function Attrs: nounwind
+define hidden i1 @main.equalByteArray(ptr dereferenceable_or_null(4096) %x, ptr dereferenceable_or_null(4096) %y, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %x, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %1 = icmp eq ptr %y, null
+  br i1 %1, label %deref.throw, label %deref.next1
+
+deref.next1:                                      ; preds = %deref.next
+  %arraycmp = call i1 @runtime.memequal(ptr nonnull %x, ptr nonnull %y, i32 4096, ptr undef) #3
+  ret i1 %arraycmp
+
+deref.throw:                                      ; preds = %deref.next, %entry
+  call void @runtime.nilPanic(ptr undef) #3
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i1 undef
+}
+
+declare void @runtime.nilPanic(ptr) #0
+
+declare i1 @runtime.memequal(ptr, ptr, i32, ptr) #0
+
+; Function Attrs: nounwind
+define hidden i1 @main.notEqualByteArray(ptr dereferenceable_or_null(4096) %x, ptr dereferenceable_or_null(4096) %y, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %x, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %1 = icmp eq ptr %y, null
+  br i1 %1, label %deref.throw, label %deref.next1
+
+deref.next1:                                      ; preds = %deref.next
+  %arraycmp = call i1 @runtime.memequal(ptr nonnull %x, ptr nonnull %y, i32 4096, ptr undef) #3
+  %2 = xor i1 %arraycmp, true
+  ret i1 %2
+
+deref.throw:                                      ; preds = %deref.next, %entry
+  call void @runtime.nilPanic(ptr undef) #3
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i1 undef
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.equalMutatedByteArray(ptr dereferenceable_or_null(5) %x, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = icmp eq ptr %x, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %.unpack = load i8, ptr %x, align 1
+  %.elt2 = getelementptr inbounds nuw i8, ptr %x, i32 1
+  %.unpack3 = load i8, ptr %.elt2, align 1
+  %.elt4 = getelementptr inbounds nuw i8, ptr %x, i32 2
+  %.unpack5 = load i8, ptr %.elt4, align 1
+  %.elt6 = getelementptr inbounds nuw i8, ptr %x, i32 3
+  %.unpack7 = load i8, ptr %.elt6, align 1
+  %.elt8 = getelementptr inbounds nuw i8, ptr %x, i32 4
+  %.unpack9 = load i8, ptr %.elt8, align 1
+  br i1 false, label %deref.throw, label %gep.next
+
+gep.next:                                         ; preds = %deref.next
+  store i8 1, ptr %x, align 1
+  br i1 false, label %deref.throw, label %deref.next1
+
+deref.next1:                                      ; preds = %gep.next
+  %t0 = call align 1 dereferenceable(5) ptr @runtime.alloc(i32 5, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
+  call void @runtime.trackPointer(ptr nonnull %t0, ptr nonnull %stackalloc, ptr undef) #3
+  store i8 %.unpack, ptr %t0, align 1
+  %t0.repack10 = getelementptr inbounds nuw i8, ptr %t0, i32 1
+  store i8 %.unpack3, ptr %t0.repack10, align 1
+  %t0.repack12 = getelementptr inbounds nuw i8, ptr %t0, i32 2
+  store i8 %.unpack5, ptr %t0.repack12, align 1
+  %t0.repack14 = getelementptr inbounds nuw i8, ptr %t0, i32 3
+  store i8 %.unpack7, ptr %t0.repack14, align 1
+  %t0.repack16 = getelementptr inbounds nuw i8, ptr %t0, i32 4
+  store i8 %.unpack9, ptr %t0.repack16, align 1
+  %arraycmp = call i1 @runtime.memequal(ptr nonnull %t0, ptr nonnull %x, i32 5, ptr undef) #3
+  ret i1 %arraycmp
+
+deref.throw:                                      ; preds = %gep.next, %deref.next, %entry
+  call void @runtime.nilPanic(ptr undef) #3
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i1 undef
+}
+
+; Function Attrs: allockind("alloc,zeroed") allocsize(0)
+declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #2
+
+; Function Attrs: nounwind
 define hidden i32 @main.divInt(i32 %x, i32 %y, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp eq i32 %y, 0
@@ -47,7 +145,7 @@ divbyzero.next:                                   ; preds = %entry
   ret i32 %5
 
 divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(ptr undef) #2
+  call void @runtime.divideByZeroPanic(ptr undef) #3
   br label %unwind.return
 
 unwind.return:                                    ; preds = %divbyzero.throw
@@ -67,7 +165,7 @@ divbyzero.next:                                   ; preds = %entry
   ret i32 %1
 
 divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(ptr undef) #2
+  call void @runtime.divideByZeroPanic(ptr undef) #3
   br label %unwind.return
 
 unwind.return:                                    ; preds = %divbyzero.throw
@@ -89,7 +187,7 @@ divbyzero.next:                                   ; preds = %entry
   ret i32 %5
 
 divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(ptr undef) #2
+  call void @runtime.divideByZeroPanic(ptr undef) #3
   br label %unwind.return
 
 unwind.return:                                    ; preds = %divbyzero.throw
@@ -107,7 +205,7 @@ divbyzero.next:                                   ; preds = %entry
   ret i32 %1
 
 divbyzero.throw:                                  ; preds = %entry
-  call void @runtime.divideByZeroPanic(ptr undef) #2
+  call void @runtime.divideByZeroPanic(ptr undef) #3
   br label %unwind.return
 
 unwind.return:                                    ; preds = %divbyzero.throw
@@ -224,4 +322,5 @@ entry:
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nounwind }
+attributes #2 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #3 = { nounwind }
