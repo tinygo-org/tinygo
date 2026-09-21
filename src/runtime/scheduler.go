@@ -212,6 +212,9 @@ func firingTimerStop(tim *timer) bool {
 	for tn := firingTimers; tn != nil; tn = tn.firingNext {
 		if tn.timer == tim {
 			tn.stopped = true
+			if tim.isChan {
+				tim.suppressedCallback = true
+			}
 			return true
 		}
 	}

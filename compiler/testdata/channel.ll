@@ -21,7 +21,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.chanIntSend(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.chanIntSend(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   %chan.value = alloca i32, align 4
@@ -37,13 +37,13 @@ entry:
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr captures(none)) #2
 
-declare void @runtime.chanSend(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
+declare void @runtime.chanSend(ptr dereferenceable_or_null(44), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr captures(none)) #2
 
 ; Function Attrs: nounwind
-define hidden void @main.chanIntRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.chanIntRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   %chan.value = alloca i32, align 4
@@ -55,10 +55,10 @@ entry:
   ret void
 }
 
-declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
+declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(44), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
@@ -68,7 +68,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.chanZeroRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.chanZeroRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
@@ -78,7 +78,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.selectZeroRecv(ptr dereferenceable_or_null(40) %ch1, ptr dereferenceable_or_null(40) %ch2, ptr %context) unnamed_addr #1 {
+define hidden void @main.selectZeroRecv(ptr dereferenceable_or_null(44) %ch1, ptr dereferenceable_or_null(44) %ch2, ptr %context) unnamed_addr #1 {
 entry:
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
   %select.send.value = alloca i32, align 4
@@ -111,7 +111,7 @@ select.body:                                      ; preds = %select.next
 declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 536870912), i32 range(i32 0, 536870912), ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i1 @main.selectNonBlockingSend(ptr dereferenceable_or_null(40) %ch, i32 %value, ptr %context) unnamed_addr #1 {
+define hidden i1 @main.selectNonBlockingSend(ptr dereferenceable_or_null(44) %ch, i32 %value, ptr %context) unnamed_addr #1 {
 entry:
   %select.send.value = alloca i32, align 4
   store i32 %value, ptr %select.send.value, align 4
@@ -125,10 +125,10 @@ select.next:                                      ; preds = %entry
   ret i1 false
 }
 
-declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(40), ptr, ptr) #0
+declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(44), ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden { i32, i1, i1 } @main.selectNonBlockingRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden { i32, i1, i1 } @main.selectNonBlockingRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %select.recvbuf = alloca i32, align 4
   %stackalloc = alloca i8, align 1
@@ -150,10 +150,10 @@ select.next:                                      ; preds = %entry
   ret { i32, i1, i1 } zeroinitializer
 }
 
-declare { i1, i1 } @runtime.chanTryRecv(ptr dereferenceable_or_null(40), ptr, ptr) #0
+declare { i1, i1 } @runtime.chanTryRecv(ptr dereferenceable_or_null(44), ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i1 @main.selectNonBlockingZeroSend(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden i1 @main.selectNonBlockingZeroSend(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %select.sent = call i1 @runtime.chanTrySend(ptr %ch, ptr null, ptr undef) #3
   br i1 %select.sent, label %select.body, label %select.next
@@ -166,7 +166,7 @@ select.next:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define hidden { i1, i1 } @main.selectNonBlockingZeroRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden { i1, i1 } @main.selectNonBlockingZeroRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %select.recv = call { i1, i1 } @runtime.chanTryRecv(ptr %ch, ptr null, ptr undef) #3
   %select.received = extractvalue { i1, i1 } %select.recv, 0
@@ -183,7 +183,7 @@ select.next:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define hidden { i32, i1 } @main.selectBlocking(ptr dereferenceable_or_null(40) %ch1, ptr dereferenceable_or_null(40) %ch2, ptr %context) unnamed_addr #1 {
+define hidden { i32, i1 } @main.selectBlocking(ptr dereferenceable_or_null(44) %ch1, ptr dereferenceable_or_null(44) %ch2, ptr %context) unnamed_addr #1 {
 entry:
   %select.block.alloca = alloca [2 x %runtime.channelOp], align 8
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
