@@ -425,6 +425,9 @@ func (t *RawType) elem() *RawType {
 	}
 
 	underlying := t.underlying()
+	if underlying.ptrtag() != 0 {
+		return underlying.elem()
+	}
 	switch underlying.Kind() {
 	case Pointer:
 		return (*ptrType)(unsafe.Pointer(underlying)).elem
