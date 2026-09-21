@@ -91,6 +91,7 @@ TEST_PACKAGES_FAST = \
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
 	archive/zip \
+	bytes \
 	compress/flate \
 	context \
 	crypto/aes \
@@ -108,6 +109,8 @@ TEST_PACKAGES_LINUX := \
 	net/mail \
 	net/textproto \
 	os/user \
+	slices \
+	strings \
 	testing/fstest \
 	$(nil)
 
@@ -214,6 +217,8 @@ TEST_PACKAGES_SHORT = \
 
 TEST_PACKAGES_SHORT_HOST := $(filter $(TEST_PACKAGES_SHORT),$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW))
 TEST_PACKAGES_PRINTER_HOST := $(filter go/printer,$(TEST_PACKAGES_HOST))
+TEST_PACKAGES_ALLOCS_HOST := $(filter slices strings,$(TEST_PACKAGES_HOST))
+TEST_ALLOCS_SKIP_FLAG := -skip='^(TestBuilderAllocs|TestBuilderGrow|TestGrow)$$'
 
 # Test known-working standard library packages.
 # TODO: parallelize, and only show failing tests (no implied -v flag).
@@ -222,12 +227,15 @@ tinygo-test:
 	@# TestExtraMethods: used by many crypto packages and uses reflect.Type.Method which is not implemented.
 	@# TestUnmarshalNestingLimit{Slice,Struct}: encoding/asn1 nesting limit added in
 	@# https://github.com/golang/go/commit/6a6d115f9a7422b2fa081ba6f567eefb4a099462
-	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml $(TEST_PACKAGES_SHORT) $(TEST_PACKAGES_PRINTER_HOST),$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW))
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml $(TEST_PACKAGES_SHORT) $(TEST_PACKAGES_PRINTER_HOST) $(TEST_PACKAGES_ALLOCS_HOST),$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW))
 ifneq ($(TEST_PACKAGES_SHORT_HOST),)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) -short $(TEST_PACKAGES_SHORT_HOST)
 endif
 ifneq ($(TEST_PACKAGES_PRINTER_HOST),)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -stack-size=1MB $(TEST_PACKAGES_PRINTER_HOST)
+endif
+ifneq ($(TEST_PACKAGES_ALLOCS_HOST),)
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_ALLOCS_SKIP_FLAG) $(TEST_PACKAGES_ALLOCS_HOST)
 endif
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestReflectFuncOf|TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount)$$' internal/synctest
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$$' testing/synctest
@@ -242,7 +250,10 @@ ifeq ($(TEST_IOFS),true)
 	$(TINYGO) test -stack-size=6MB io/fs
 endif
 tinygo-test-fast:
-	$(TINYGO) test $(TEST_SKIP_FLAG) $(TEST_PACKAGES_HOST)
+	$(TINYGO) test $(TEST_SKIP_FLAG) $(filter-out $(TEST_PACKAGES_ALLOCS_HOST),$(TEST_PACKAGES_HOST))
+ifneq ($(TEST_PACKAGES_ALLOCS_HOST),)
+	$(TINYGO) test $(TEST_ALLOCS_SKIP_FLAG) $(TEST_PACKAGES_ALLOCS_HOST)
+endif
 tinygo-bench:
 	$(TINYGO) test -bench . $(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW)
 tinygo-bench-fast:
