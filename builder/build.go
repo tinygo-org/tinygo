@@ -124,6 +124,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	globalValues := map[string]map[string]string{
 		"runtime": {
 			"buildVersion": goenv.Version(),
+			"goroot":       goenv.Get("GOROOT"),
 		},
 		"testing": {},
 	}

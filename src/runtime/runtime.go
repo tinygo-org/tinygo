@@ -31,9 +31,11 @@ func GOMAXPROCS(n int) int {
 	return 1
 }
 
+var goroot string // set by the builder
+
 func GOROOT() string {
-	// TODO: don't hardcode but take the one at compile time.
-	return "/usr/local/go"
+	// TODO: Use GOROOT from the startup environment when it is set.
+	return goroot
 }
 
 // Copy size bytes from src to dst. The memory areas must not overlap.
