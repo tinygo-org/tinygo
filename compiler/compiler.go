@@ -2483,6 +2483,22 @@ func (c *compilerContext) maxSliceSize(elementType llvm.Type) uint64 {
 	return maxSize
 }
 
+// maxSliceAllocationSize determines the maximum length of an allocated slice.
+func (c *compilerContext) maxSliceAllocationSize(elementType llvm.Type) uint64 {
+	maxSize := c.maxSliceSize(elementType)
+	if c.uintptrType.IntTypeWidth() <= 48 {
+		return maxSize
+	}
+
+	// Match Go's 48-bit heap address limit on 64-bit systems.
+	// See https://github.com/golang/go/blob/master/src/runtime/malloc.go.
+	elementSize := c.targetData.TypeAllocSize(elementType)
+	if elementSize == 0 {
+		return maxSize
+	}
+	return min(maxSize, (uint64(1)<<48)/elementSize)
+}
+
 // createExpr translates a Go SSA expression to LLVM IR. This can be zero, one,
 // or multiple LLVM IR instructions and/or runtime calls.
 func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
@@ -2753,7 +2769,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		// Bounds checking.
 		lenType := expr.Len.Type().Underlying().(*types.Basic)
 		capType := expr.Cap.Type().Underlying().(*types.Basic)
-		maxSizeValue := llvm.ConstInt(b.uintptrType, maxSize, false)
+		maxAllocationSize := b.maxSliceAllocationSize(llvmElemType)
+		maxSizeValue := llvm.ConstInt(b.uintptrType, maxAllocationSize, false)
 		b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
 
 		// Allocate the backing array.
