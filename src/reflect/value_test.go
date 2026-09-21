@@ -39,6 +39,12 @@ func TestTinyIndirectPointers(t *testing.T) {
 	}
 }
 
+func TestTinyInvalidValueString(t *testing.T) {
+	if got := (Value{}).String(); got != "<invalid Value>" {
+		t.Errorf("Value{}.String() = %q, want %q", got, "<invalid Value>")
+	}
+}
+
 func TestTinyMap(t *testing.T) {
 
 	m := make(map[string]int)
