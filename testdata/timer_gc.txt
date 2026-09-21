@@ -1,0 +1,1 @@
+timer collection tests passed
