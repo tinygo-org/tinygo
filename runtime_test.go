@@ -200,3 +200,35 @@ func TestRuntimeGOROOT(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimeGODEBUG(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name        string
+		environment []string
+		want        string
+	}{
+		{"compiled default", nil, "true \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\n"},
+		{"environment override", []string{"GODEBUG=tarinsecurepath=1"}, "true \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := optionsFromTarget(*testTarget, sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun("testdata/runtimegodebug.go", config, output, nil, test.environment, time.Minute, func(cmd *exec.Cmd, _ builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != test.want {
+				t.Fatalf("unexpected output:\n%s\nwant:\n%s", output.String(), test.want)
+			}
+		})
+	}
+}
