@@ -66,6 +66,42 @@ func main() {
 	println("waited on timer at 750ms")
 	time.Sleep(time.Millisecond * 500)
 	testHugeTicker()
+	testTimerStopReset()
+}
+
+func testTimerStopReset() {
+	stopped := time.NewTimer(time.Millisecond)
+	if len(stopped.C) != 0 || cap(stopped.C) != 0 {
+		panic("timer channel was not synchronous")
+	}
+	time.Sleep(10 * time.Millisecond)
+	if !stopped.Stop() {
+		panic("Stop returned false for an unread fired timer")
+	}
+	select {
+	case <-stopped.C:
+		panic("Stop left a stale timer value")
+	default:
+	}
+	if stopped.Stop() {
+		panic("Stop returned true for a stopped timer")
+	}
+
+	reset := time.NewTimer(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+	if !reset.Reset(time.Hour) {
+		panic("Reset returned false for an unread fired timer")
+	}
+	select {
+	case <-reset.C:
+		panic("Reset left a stale timer value")
+	default:
+	}
+	reset.Reset(time.Millisecond)
+	<-reset.C
+	if reset.Stop() {
+		panic("Stop returned true for a received timer")
+	}
 }
 
 func testHugeTicker() {

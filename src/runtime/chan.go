@@ -62,6 +62,7 @@ type channel struct {
 	lock         channelLock
 	buf          unsafe.Pointer
 	synctest     unsafe.Pointer
+	timer        bool
 }
 
 const (
@@ -169,6 +170,9 @@ func chanLen(c *channel) int {
 	if c == nil {
 		return 0
 	}
+	if c.timer {
+		return 0
+	}
 	return int(c.bufLen)
 }
 
@@ -178,7 +182,34 @@ func chanCap(c *channel) int {
 	if c == nil {
 		return 0
 	}
+	if c.timer {
+		return 0
+	}
 	return int(c.bufCap)
+}
+
+func timerChanDrain(c unsafe.Pointer) bool {
+	if c == nil {
+		return false
+	}
+	ch := (*channel)(c)
+	mask := interrupt.Disable()
+	ch.lock.Lock()
+	if ch.bufLen == 0 {
+		ch.lock.Unlock()
+		interrupt.Restore(mask)
+		return false
+	}
+	elemAddr := unsafe.Add(ch.buf, ch.bufTail*ch.elementSize)
+	ch.bufLen--
+	ch.bufTail++
+	if ch.bufTail == ch.bufCap {
+		ch.bufTail = 0
+	}
+	memzero(elemAddr, ch.elementSize)
+	ch.lock.Unlock()
+	interrupt.Restore(mask)
+	return true
 }
 
 // Push the value to the channel buffer array, for a send operation.
