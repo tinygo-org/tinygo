@@ -100,6 +100,7 @@ TEST_PACKAGES_LINUX := \
 	encoding/xml \
 	go/printer \
 	io/ioutil \
+	iter \
 	mime \
 	mime/multipart \
 	mime/quotedprintable \
