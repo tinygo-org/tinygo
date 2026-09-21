@@ -95,14 +95,18 @@ func NewListener(inner net.Listener, config *Config) net.Listener {
 //
 // DialWithDialer uses context.Background internally; to specify the context,
 // use Dialer.DialContext with NetDialer set to the desired dialer.
-func DialWithDialer(dialer *net.Dialer, network, addr string, config *Config) (*net.TLSConn, error) {
+func DialWithDialer(dialer *net.Dialer, network, addr string, config *Config) (*Conn, error) {
 	switch network {
 	case "tcp", "tcp4":
 	default:
 		return nil, fmt.Errorf("Network %s not supported", network)
 	}
 
-	return net.DialTLS(addr)
+	conn, err := net.DialTLS(addr)
+	if err != nil {
+		return nil, err
+	}
+	return Client(conn, config), nil
 }
 
 // Dial connects to the given network address using net.Dial
@@ -111,7 +115,7 @@ func DialWithDialer(dialer *net.Dialer, network, addr string, config *Config) (*
 // Dial interprets a nil configuration as equivalent to
 // the zero configuration; see the documentation of Config
 // for the defaults.
-func Dial(network, addr string, config *Config) (*net.TLSConn, error) {
+func Dial(network, addr string, config *Config) (*Conn, error) {
 	return DialWithDialer(new(net.Dialer), network, addr, config)
 }
 
@@ -140,13 +144,7 @@ type Dialer struct {
 //
 // The returned Conn, if any, will always be of type *Conn.
 func (d *Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	switch network {
-	case "tcp", "tcp4":
-	default:
-		return nil, fmt.Errorf("Network %s not supported", network)
-	}
-
-	return net.DialTLS(addr)
+	return DialWithDialer(d.NetDialer, network, addr, d.Config)
 }
 
 // LoadX509KeyPair reads and parses a public/private key pair from a pair
