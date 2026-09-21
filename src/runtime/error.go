@@ -41,3 +41,8 @@ const (
 	errSchedulerDisabled   = plainError("scheduler is disabled")
 	errOutOfMemory         = plainError("out of memory")
 )
+
+var (
+	divideError   error = plainError(runtimeErrorPrefix + "integer divide by zero")
+	overflowError error = plainError(runtimeErrorPrefix + "integer overflow")
+)

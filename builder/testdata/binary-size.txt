@@ -10,7 +10,7 @@ esp32c3-generic          examples/serial                          z       4914  
 esp32c3-generic          examples/serial                          2       7742      362        8     8656
 cortex-m-qemu            ./testdata/size-slice                    z       3087      793        4     4168
 cortex-m-qemu            ./testdata/size-slice                    2       7331      341        4     4168
-cortex-m-qemu            ./testdata/size-defer                    z       3750      818        4     4176
+cortex-m-qemu            ./testdata/size-defer                    z       3754      814        4     4176
 cortex-m-qemu            ./testdata/size-contains                 z       3093      763        4     4200
 pico2                    ./testdata/size-contains                 z       6670     1162      112     5632
 pico2                    ./testdata/size-os                       z       6181     1211      128     5592
