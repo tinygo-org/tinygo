@@ -33,3 +33,21 @@ func TestTypeFor(t *testing.T) {
 		}
 	}
 }
+
+func TestElemOfNamedMultiPointer(t *testing.T) {
+	type recursive ***recursive
+
+	tests := []struct {
+		typ  reflect.Type
+		want reflect.Type
+	}{
+		{reflect.TypeFor[recursive](), reflect.TypeFor[**recursive]()},
+		{reflect.TypeFor[**recursive](), reflect.TypeFor[*recursive]()},
+		{reflect.TypeFor[*recursive](), reflect.TypeFor[recursive]()},
+	}
+	for _, test := range tests {
+		if got := test.typ.Elem(); got != test.want {
+			t.Errorf("%v.Elem() = %v; want %v", test.typ, got, test.want)
+		}
+	}
+}
