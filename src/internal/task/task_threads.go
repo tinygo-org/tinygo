@@ -192,18 +192,19 @@ type waitGroup struct {
 	f Futex
 }
 
-func initWaitGroup(n uint32) waitGroup {
-	var wg waitGroup
+//go:noheap
+func (wg *waitGroup) reset(n uint32) {
 	wg.f.Store(n)
-	return wg
 }
 
+//go:noheap
 func (wg *waitGroup) done() {
 	if wg.f.Add(^uint32(0)) == 0 {
 		wg.f.WakeAll()
 	}
 }
 
+//go:noheap
 func (wg *waitGroup) wait() {
 	for {
 		val := wg.f.Load()
@@ -227,6 +228,8 @@ const (
 //
 // After calling this function, GCResumeWorld needs to be called once to resume
 // all threads again.
+//
+//go:noheap
 func GCStopWorldAndScan() {
 	current := Current()
 
@@ -244,7 +247,7 @@ func GCStopWorldAndScan() {
 		gcState.Store(gcStateStopped)
 
 		// Set the number of threads to wait for.
-		scanWaitGroup = initWaitGroup(otherTasks(current))
+		scanWaitGroup.reset(otherTasks(current))
 
 		// Pause all other threads.
 		for t := activeTasks; t != nil; t = t.state.QueueNext {
@@ -272,6 +275,8 @@ func GCStopWorldAndScan() {
 }
 
 // After the GC is done scanning, resume all other threads.
+//
+//go:noheap
 func GCResumeWorld() {
 	// NOTE: This does not need to be atomic.
 	if gcState.Load() == gcStateResumed {
@@ -280,7 +285,7 @@ func GCResumeWorld() {
 	}
 
 	// Set the wait group to track resume progress.
-	scanWaitGroup = initWaitGroup(otherTasks(Current()))
+	scanWaitGroup.reset(otherTasks(Current()))
 
 	// Set the state to resumed.
 	gcState.Store(gcStateResumed)

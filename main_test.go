@@ -169,6 +169,14 @@ func TestBuild(t *testing.T) {
 			runTestWithConfig("print.go", t, opts, nil, nil)
 		})
 
+		t.Run("opt=0-gc=boehm", func(t *testing.T) {
+			t.Parallel()
+			opts := optionsFromTarget("", sema)
+			opts.Opt = "0"
+			opts.GC = "boehm"
+			runTestWithConfig("gc-boehm-opt0.go", t, opts, nil, nil)
+		})
+
 		t.Run("gc=none-runtime-panic", func(t *testing.T) {
 			t.Parallel()
 			opts := optionsFromTarget("cortex-m-qemu", sema)
