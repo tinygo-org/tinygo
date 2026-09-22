@@ -3,7 +3,6 @@
 package machine
 
 import (
-	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -202,10 +201,18 @@ func enterBootloader() {
 	C.reset_usb_boot(0, 0)
 }
 
+// With scheduler=cores this must not be called from an interrupt handler or with
+// interrupts disabled; the GC stop-the-world path has the same constraint (see #5610).
 func doFlashCommand(tx []byte, rx []byte) error {
 	if len(tx) != len(rx) {
 		return errFlashInvalidWriteLength
 	}
+	if len(tx) == 0 {
+		return nil
+	}
+
+	state, multicore := rp2040EnterFlashSafeSection()
+	defer rp2040ExitFlashSafeSection(state, multicore)
 
 	C.flash_do_cmd(
 		(*C.uint8_t)(unsafe.Pointer(&tx[0])),
@@ -223,14 +230,17 @@ func (f flashBlockDevice) writeAt(p []byte, off int64) (n int, err error) {
 		return 0, errFlashCannotWritePastEOF
 	}
 
-	state := interrupt.Disable()
-	defer interrupt.Restore(state)
-
 	// rp2040 writes to offset, not actual address
 	// e.g. real address 0x10003000 is written to at
 	// 0x00003000
 	address := writeAddress(off)
 	padded := flashPad(p, int(f.WriteBlockSize()))
+	if len(padded) == 0 {
+		return 0, nil
+	}
+
+	state, multicore := rp2040EnterFlashSafeSection()
+	defer rp2040ExitFlashSafeSection(state, multicore)
 
 	C.flash_range_write(C.uint32_t(address),
 		(*C.uint8_t)(unsafe.Pointer(&padded[0])),
@@ -245,8 +255,8 @@ func (f flashBlockDevice) eraseBlocks(start, length int64) error {
 		return errFlashCannotErasePastEOF
 	}
 
-	state := interrupt.Disable()
-	defer interrupt.Restore(state)
+	state, multicore := rp2040EnterFlashSafeSection()
+	defer rp2040ExitFlashSafeSection(state, multicore)
 
 	C.flash_erase_blocks(C.uint32_t(address), C.ulong(length*f.EraseBlockSize()))
 

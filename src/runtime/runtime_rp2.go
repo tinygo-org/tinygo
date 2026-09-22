@@ -12,6 +12,12 @@ import (
 	"unsafe"
 )
 
+// Commands sent to the other core through the SIO FIFO. They start at 1.
+const (
+	rp2SIOFIFOCommandGC uint32 = iota + 1
+	rp2SIOFIFOCommandFlashSafe
+)
+
 const numCPU = 2
 const numSpinlocks = 32
 
@@ -252,7 +258,7 @@ func gcInterruptHandler(hartID uint32) {
 
 // Pause the given core by sending it an interrupt.
 func gcPauseCore(core uint32) {
-	rp.SIO.FIFO_WR.Set(1)
+	rp.SIO.FIFO_WR.Set(rp2SIOFIFOCommandGC)
 }
 
 // Signal the given core that it can resume one step.
@@ -283,6 +289,9 @@ var (
 	schedulerLock = spinLock{id: 21}
 	atomicsLock   = spinLock{id: 22}
 	futexLock     = spinLock{id: 23}
+
+	// flashSafeLock is used for RP2040-specific XIP operations.
+	flashSafeLock = spinLock{id: 24}
 )
 
 func resetSpinLocks() {
