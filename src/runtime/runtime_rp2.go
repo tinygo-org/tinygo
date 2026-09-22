@@ -258,7 +258,7 @@ func gcInterruptHandler(hartID uint32) {
 
 // Pause the given core by sending it an interrupt.
 func gcPauseCore(core uint32) {
-	rp.SIO.FIFO_WR.Set(rp2SIOFIFOCommandGC)
+	multicore_fifo_push_blocking(rp2SIOFIFOCommandGC)
 }
 
 // Signal the given core that it can resume one step.
