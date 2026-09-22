@@ -4,7 +4,6 @@ package runtime
 
 import (
 	"device/arm"
-	"device/rp"
 	"runtime/interrupt"
 	"runtime/volatile"
 	_ "unsafe" // required for //go:section
@@ -65,9 +64,7 @@ func rp2040ExitFlashSafeSection(state interrupt.State, multicore bool) {
 }
 
 func rp2040FlashSafePauseCore() {
-	// Values written to FIFO_WR are received by the other core.
-	rp.SIO.FIFO_WR.Set(rp2SIOFIFOCommandFlashSafe)
-	arm.Asm("sev")
+	multicore_fifo_push_blocking(rp2SIOFIFOCommandFlashSafe)
 }
 
 // rp2FlashSafeInterruptHandler waits in RAM with interrupts disabled
