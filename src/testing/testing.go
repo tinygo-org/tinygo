@@ -601,12 +601,18 @@ func (t *T) Parallel() {
 	t.parent.mu.Lock()
 	t.parent.sub = append(t.parent.sub, t)
 	t.parent.mu.Unlock()
+	if flagVerbose {
+		fmt.Fprintf(t.output, "=== PAUSE %s\n", t.name)
+	}
 	t.signal <- true
 	<-t.parent.barrier
 	t.context.waitParallel()
 	t.mu.Lock()
 	t.parallelRunning = true
 	t.mu.Unlock()
+	if flagVerbose {
+		fmt.Fprintf(t.output, "=== CONT  %s\n", t.name)
+	}
 	t.start = time.Now()
 }
 
