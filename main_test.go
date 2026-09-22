@@ -129,6 +129,10 @@ func TestBuild(t *testing.T) {
 		t.Parallel()
 		hostOptions := optionsFromTarget("", sema)
 		runPlatTests(hostOptions, tests, t)
+		t.Run("testing.go-verbose", func(t *testing.T) {
+			t.Parallel()
+			runTest("testing-verbose.go", hostOptions, t, nil, nil)
+		})
 
 		// scheduler.threads needs threadID, which exists only on Linux and Darwin.
 		// scheduler.none does not link on Windows.
@@ -658,7 +662,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 	if config.EmulatorName() == "qemu-system-xtensa" {
 		actual = cleanESP32QEMUOutput(actual)
 	}
-	if name == "testing.go" {
+	if name == "testing.go" || name == "testing-verbose.go" {
 		// Strip actual time.
 		re := regexp.MustCompile(`\([0-9]\.[0-9][0-9]s\)`)
 		actual = re.ReplaceAllLiteral(actual, []byte{'(', '0', '.', '0', '0', 's', ')'})
