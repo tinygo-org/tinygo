@@ -285,6 +285,22 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			case callFn.name == "internal/task.Pause":
 				// Task scheduling isn't possible at compile time.
 				return nil, mem, r.errorAt(inst, errUnsupportedRuntimeInst)
+			case callFn.name == "runtime.fastrand" || callFn.name == "runtime.fastrand64":
+				// Use a local sequence instead of the global RNG state. The
+				// state is replaced by initRand before initAll runs anyway.
+				bits := inst.llvmInst.Type().IntTypeWidth()
+				var result uint64
+				if bits == 64 {
+					r.xorshift64State = xorshiftMult64(r.xorshift64State)
+					result = r.xorshift64State
+				} else {
+					r.xorshift32State = xorshift32(r.xorshift32State)
+					result = uint64(r.xorshift32State)
+				}
+				locals[inst.localIndex] = makeLiteralInt(result, bits)
+				if r.debug {
+					fmt.Fprintln(os.Stderr, indent+callFn.name, "->", result)
+				}
 			case callFn.name == "runtime.nanotime" && r.pkgName == "time":
 				// The time package contains a call to runtime.nanotime.
 				// This appears to be to work around a limitation in Windows

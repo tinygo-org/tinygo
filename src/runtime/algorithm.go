@@ -7,9 +7,8 @@ import (
 	"unsafe"
 )
 
-// This function is used by hash/maphash.
-// This function isn't required anymore since Go 1.22, so should be removed once
-// that becomes the minimum requirement.
+// interp folds fastrand and fastrand64 at build time. Init code that needs
+// device randomness must use rand.
 func fastrand() uint32 {
 	xorshift32State = xorshift32(xorshift32State)
 	return xorshift32State
@@ -31,6 +30,7 @@ func initRand() {
 
 var xorshift32State uint32 = 1
 
+// Keep this the same as the copy in interp/interp.go.
 func xorshift32(x uint32) uint32 {
 	// Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs".
 	// Improved sequence based on
@@ -41,9 +41,6 @@ func xorshift32(x uint32) uint32 {
 	return x
 }
 
-// This function is used by hash/maphash.
-// This function isn't required anymore since Go 1.22, so should be removed once
-// that becomes the minimum requirement.
 func fastrand64() uint64 {
 	xorshift64State = xorshiftMult64(xorshift64State)
 	return xorshift64State
@@ -52,6 +49,7 @@ func fastrand64() uint64 {
 var xorshift64State uint64 = 1
 
 // 64-bit xorshift multiply rng from http://vigna.di.unimi.it/ftp/papers/xorshift.pdf
+// Keep this the same as the copy in interp/interp.go.
 func xorshiftMult64(x uint64) uint64 {
 	x ^= x >> 12 // a
 	x ^= x << 25 // b
