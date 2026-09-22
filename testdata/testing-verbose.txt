@@ -2,6 +2,6 @@
 === RUN   TestParent/parallel
 === PAUSE TestParent/parallel
 === CONT  TestParent/parallel
-    --- PASS: TestParent/parallel (0.00s)
 --- PASS: TestParent (0.00s)
+    --- PASS: TestParent/parallel (0.00s)
 PASS

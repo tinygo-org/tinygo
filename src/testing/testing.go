@@ -181,16 +181,12 @@ func (c *common) flushToParent(testName, format string, args ...any) {
 	} else {
 		c.parent.output.mu.Lock()
 		defer c.parent.output.mu.Unlock()
-		if c.parent.output.logToStdout {
+		if c.parent.output.logToStdout && c.parent.parent == nil {
 			fmt.Fprintf(os.Stdout, format, args...)
-			if !c.output.logToStdout {
-				c.output.b.WriteTo(os.Stdout)
-			}
+			c.output.b.WriteTo(os.Stdout)
 		} else {
 			fmt.Fprintf(&c.parent.output.b, format, args...)
-			if !c.output.logToStdout {
-				c.output.b.WriteTo(&c.parent.output.b)
-			}
+			c.output.b.WriteTo(&c.parent.output.b)
 		}
 	}
 }
