@@ -25,6 +25,17 @@ func decomposeInterface(i _interface) (unsafe.Pointer, unsafe.Pointer) {
 	return i.typecode, i.value
 }
 
+// decomposeAny splits an interface value into its type code and value word.
+//
+// The usual way to do this inside the runtime is
+// *(*_interface)(unsafe.Pointer(&i)), but that takes the address of a local,
+// which escapes and therefore allocates at -opt=0. Reach decomposeInterface by
+// linkname instead. interface{} and _interface have the same layout, so the
+// call needs no address and no allocation.
+//
+//go:linkname decomposeAny runtime.decomposeInterface
+func decomposeAny(i interface{}) (typecode, value unsafe.Pointer)
+
 // Return true iff both interfaces are equal.
 func interfaceEqual(x, y interface{}) bool {
 	return reflectValueEqual(reflectlite.ValueOf(x), reflectlite.ValueOf(y))
