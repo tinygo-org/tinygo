@@ -13,6 +13,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"github.com/tinygo-org/tinygo/builder"
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 // TestTimerStopResetRace checks that stopping or resetting a timer while its
@@ -165,4 +166,37 @@ func TestStdin(t *testing.T) {
 		t.Error("failed to run:", err)
 	}
 	checkOutput(t, TESTDATA+"/stdin.txt", output.Bytes())
+}
+
+func TestRuntimeGOROOT(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name        string
+		environment []string
+		want        string
+	}{
+		{"startup environment", []string{"GOROOT=/startup"}, "/startup"},
+		{"empty startup environment", []string{"GOROOT="}, goenv.Get("GOROOT")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := optionsFromTarget(*testTarget, sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun("testdata/runtimegoroot.go", config, output, nil, test.environment, time.Minute, func(cmd *exec.Cmd, _ builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := test.want + "\n" + test.want + "\n"
+			if output.String() != want {
+				t.Fatalf("unexpected output:\n%s\nwant:\n%s", output.String(), want)
+			}
+		})
+	}
 }
