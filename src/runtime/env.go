@@ -25,6 +25,9 @@ func syscallSetenv(key, value string) {
 func syscallUnsetenv(key string) {
 	keydata := cstring(key)
 	unsetenv(&keydata[0])
+	if key == "GODEBUG" {
+		godebugUnsetEnv()
+	}
 }
 
 // Clear the environment.
