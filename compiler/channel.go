@@ -97,31 +97,19 @@ func (b *builder) createNonBlockingSelect(expr *ssa.Select) llvm.Value {
 
 	switch state.Dir {
 	case types.SendOnly:
-		sendValue := b.getValue(state.Send, state.Pos)
 		valueType := b.getLLVMType(state.Send.Type())
 		isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
 
 		valuePtr := llvm.ConstNull(b.dataPtrType)
-		var valueAlloca, valueAllocaSize llvm.Value
-
 		if !isZeroSize {
-			valueAlloca, valueAllocaSize = b.createTemporaryAlloca(
-				valueType,
-				"select.send.value",
-			)
-			b.CreateStore(sendValue, valueAlloca)
-			valuePtr = valueAlloca
+			valuePtr = b.getSelectSendStorage(state.Send)
 		}
 
-		selected = b.createRuntimeCall(
+		selected = b.createRuntimeInvoke(
 			"chanTrySend",
 			[]llvm.Value{ch, valuePtr},
 			"select.sent",
 		)
-
-		if !isZeroSize {
-			b.emitLifetimeEnd(valueAlloca, valueAllocaSize)
-		}
 
 	case types.RecvOnly:
 		valueType := b.getLLVMType(

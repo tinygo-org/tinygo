@@ -177,6 +177,33 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
+func TestNonBlockingSelectLargeSend(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "channel-nonblocking-large.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	function := mod.NamedFunction("main.selectNonBlockingLargeSend")
+	if function.IsNil() {
+		t.Fatal("missing function main.selectNonBlockingLargeSend")
+	}
+	ir := function.String()
+	if strings.Contains(ir, "load %main.largeChannelValue") {
+		t.Error("non-blocking select send loads the large channel value")
+	}
+	if strings.Contains(ir, "store %main.largeChannelValue") {
+		t.Error("non-blocking select send copies the large channel value")
+	}
+	if !strings.Contains(ir, "@runtime.chanTrySend") {
+		t.Error("non-blocking select send does not call runtime.chanTrySend")
+	}
+}
+
 func TestAggregateFunctionABI(t *testing.T) {
 	for _, target := range []string{"wasm", "cortex-m-qemu"} {
 		t.Run(target, func(t *testing.T) {

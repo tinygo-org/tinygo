@@ -376,6 +376,7 @@ func chanTrySend(ch *channel, value unsafe.Pointer) bool {
 	if ch == nil {
 		return false
 	}
+	ch.checkSynctest("send on")
 
 	mask := interrupt.Disable()
 	ch.lock.Lock()
@@ -400,6 +401,7 @@ func chanTryRecv(ch *channel, value unsafe.Pointer) (received, ok bool) {
 	if ch == nil {
 		return false, false
 	}
+	ch.checkSynctest("receive on")
 
 	mask := interrupt.Disable()
 	ch.lock.Lock()
