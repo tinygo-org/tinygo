@@ -209,8 +209,8 @@ func TestRuntimeGODEBUG(t *testing.T) {
 		environment []string
 		want        string
 	}{
-		{"compiled default", nil, "true \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\n"},
-		{"environment override", []string{"GODEBUG=tarinsecurepath=1"}, "true \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\n"},
+		{"compiled default", nil, "true \"\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
+		{"environment override", []string{"GODEBUG=tarinsecurepath=1"}, "true \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			options := optionsFromTarget(*testTarget, sema)

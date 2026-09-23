@@ -54,5 +54,9 @@ func Unsetenv(key string) (err error) {
 }
 
 func Clearenv() {
+	_, hadGODEBUG := libc_envs["GODEBUG"]
 	clear(libc_envs)
+	if hadGODEBUG {
+		runtimeUnsetenv("GODEBUG")
+	}
 }
