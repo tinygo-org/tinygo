@@ -69,7 +69,9 @@ func memhash(p unsafe.Pointer, seed, s uintptr) uintptr {
 
 // This function is used by hash/maphash.
 func comparablehash(v any, seed uintptr) uint32 {
-	return hashmapInterfaceHash(v, seed)
+	// hashmapInterfaceHash ignores the seed for a value with no bytes, such as
+	// an empty struct, so mix in the hash of the empty byte sequence.
+	return hashmapInterfaceHash(v, seed) ^ hash32(nil, 0, seed)
 }
 
 // Function that's called from various packages starting with Go 1.22.
