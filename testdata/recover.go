@@ -357,6 +357,14 @@ func recoverNilMapAndChan() {
 		close(ch)
 		ch <- 1
 	})
+	recoverMustPanic("closed chan select", func() {
+		ch := make(chan int)
+		close(ch)
+		select {
+		case ch <- 1:
+		default:
+		}
+	})
 	recoverMustPanic("close nil chan", func() {
 		var ch chan int
 		close(ch)
