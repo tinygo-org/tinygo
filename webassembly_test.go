@@ -30,7 +30,7 @@ func TestWebAssembly(t *testing.T) {
 	for _, tc := range []testCase{
 		// Test whether there really are no imports when using -panic=trap. This
 		// tests the bugfix for https://github.com/tinygo-org/tinygo/issues/4161.
-		{name: "panic-default", target: "wasip1", imports: []string{"wasi_snapshot_preview1.fd_write", "wasi_snapshot_preview1.proc_exit", "wasi_snapshot_preview1.random_get"}},
+		{name: "panic-default", target: "wasip1", imports: []string{"wasi_snapshot_preview1.fd_write", "wasi_snapshot_preview1.proc_exit", "wasi_snapshot_preview1.environ_get", "wasi_snapshot_preview1.environ_sizes_get", "wasi_snapshot_preview1.random_get"}},
 		{name: "panic-trap", target: "wasm-unknown", panicStrategy: "trap", imports: []string{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

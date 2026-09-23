@@ -34,7 +34,6 @@ func GOMAXPROCS(n int) int {
 var goroot string // set by the builder
 
 func GOROOT() string {
-	// TODO: Use GOROOT from the startup environment when it is set.
 	return goroot
 }
 
