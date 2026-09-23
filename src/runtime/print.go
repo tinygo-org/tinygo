@@ -290,6 +290,10 @@ func printnl() {
 	putchar('\n')
 }
 
+// printitf prints a value held in an interface. It runs on the panic path, so
+// it must not allocate.
+//
+//go:noheap
 func printitf(msg interface{}) {
 	switch msg := msg.(type) {
 	case bool:
@@ -342,11 +346,11 @@ func printitf(msg interface{}) {
 		printstring(msg.String())
 	default:
 		// cast to underlying type
-		itf := *(*_interface)(unsafe.Pointer(&msg))
+		typecode, value := decomposeAny(msg)
 		putchar('(')
-		printuintptr(uintptr(itf.typecode))
+		printuintptr(uintptr(typecode))
 		putchar(':')
-		printptr(uintptr(itf.value))
+		printptr(uintptr(value))
 		putchar(')')
 	}
 }

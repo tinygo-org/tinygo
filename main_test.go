@@ -181,6 +181,26 @@ func TestBuild(t *testing.T) {
 			runTestWithConfig("gc-boehm-opt0.go", t, opts, nil, nil)
 		})
 
+		// Regression test: at -opt=0 the compiler does not always remove a
+		// local escaping through a pointer cast, so printitf used to
+		// allocate on the panic path. printitf is //go:noheap, so a
+		// regression here makes the build fail with a linker error.
+		t.Run("opt=0-printitf-cortex-m-qemu", func(t *testing.T) {
+			t.Parallel()
+			opts := optionsFromTarget("cortex-m-qemu", sema)
+			opts.Opt = "0"
+			config, err := builder.NewConfig(&opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = Build("testdata/panic-value.go", t.TempDir()+"/panic-value", config)
+			if err != nil {
+				w := &bytes.Buffer{}
+				diagnostics.CreateDiagnostics(err).WriteTo(w, "")
+				t.Fatal(w.String())
+			}
+		})
+
 		t.Run("gc=none-runtime-panic", func(t *testing.T) {
 			t.Parallel()
 			opts := optionsFromTarget("cortex-m-qemu", sema)
