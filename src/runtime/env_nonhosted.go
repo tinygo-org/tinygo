@@ -31,6 +31,9 @@ func syscallUnsetenv(key string) {
 			return
 		}
 	}
+	if key == "GODEBUG" {
+		godebugUnsetEnv()
+	}
 }
 
 func envKey(entry string) string {
