@@ -176,6 +176,8 @@ func runCore1() {
 	// interrupts can still happen while the GC is running.
 	enableSIOFifoInterruptCore1()
 
+	waitForSecondaryCoresReady()
+
 	// Now start running the scheduler on this core.
 	schedulerLock.Lock()
 	scheduler(false)

@@ -23,9 +23,7 @@ var rp2040FlashSafeState volatile.Register8
 // With scheduler=cores it must not be called from an interrupt handler or with
 // interrupts disabled; the GC stop-the-world path has the same constraint (see #5610).
 func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
-	// secondaryCoresStarted is set after startSecondaryCores() returns, so core 1
-	// may already run Go code in this window. The GC shares it (see #5610).
-	multicore := secondaryCoresStarted
+	multicore := secondaryCoresStarted.Load() != 0
 	if !multicore {
 		return interrupt.Disable(), false
 	}
