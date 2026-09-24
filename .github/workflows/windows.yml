@@ -94,7 +94,7 @@ jobs:
       - name: Install wasmtime
         run: |
           scoop config use_external_7zip true
-          scoop install wasmtime@29.0.1
+          scoop install wasmtime@48.0.2
       - name: make gen-device
         run: make -j3 gen-device
       - name: Test TinyGo
@@ -170,7 +170,7 @@ jobs:
         shell: bash
         run: |
           scoop config use_external_7zip true
-          scoop install binaryen wasmtime@29.0.1
+          scoop install binaryen wasmtime@48.0.2
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install Go

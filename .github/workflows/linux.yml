@@ -168,7 +168,7 @@ jobs:
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
         with:
-          version: "29.0.1"
+          version: "48.0.2"
       - name: Install wasm-tools
         uses: bytecodealliance/actions/wasm-tools/setup@v1
       - name: Download release artifact
@@ -255,7 +255,7 @@ jobs:
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
         with:
-          version: "29.0.1"
+          version: "48.0.2"
       - name: Setup `wasm-tools`
         uses: bytecodealliance/actions/wasm-tools/setup@v1
       - name: Install Espressif QEMU
@@ -389,7 +389,7 @@ jobs:
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
         with:
-          version: "29.0.1"
+          version: "48.0.2"
       - name: Setup `wasm-tools`
         uses: bytecodealliance/actions/wasm-tools/setup@v1
       - name: Download TinyGo build
