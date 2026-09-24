@@ -61,6 +61,13 @@ var (
 	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
 )
 
+// markedTaskQueue holds the tasks that runGC has already marked while scanning
+// the runqueue. It is a package level variable because a local would have its
+// address taken by Queue.Push, which makes it escape and allocate at -opt=0.
+// The collector must never allocate. Every runGC caller holds gcLock, so a
+// single shared queue is safe.
+var markedTaskQueue task.Queue
+
 // Provide some abstraction over heap blocks.
 
 // blockState stores the four states in which a block can be.
@@ -591,6 +598,8 @@ func GC() {
 // runGC performs a garbage collection cycle. It is the internal implementation
 // of the runtime.GC() function. The difference is that it returns the number of
 // free bytes in the heap after the GC is finished.
+//
+//go:noheap
 func runGC() (freeBytes uintptr) {
 	if gcDebug {
 		println("running collection cycle...")
@@ -602,7 +611,7 @@ func runGC() (freeBytes uintptr) {
 	if baremetal && hasScheduler {
 		// Channel operations in interrupts may move task pointers around while we are marking.
 		// Therefore we need to scan the runqueue separately.
-		var markedTaskQueue task.Queue
+		markedTaskQueue = task.Queue{}
 	runqueueScan:
 		runqueue := schedulerRunQueue()
 		for !runqueue.Empty() {
