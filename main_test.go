@@ -201,6 +201,19 @@ func TestBuild(t *testing.T) {
 			}
 		})
 
+		// Regression test: at -opt=0 the compiler does not always remove a
+		// local escaping through Queue.Push, so runGC used to allocate while
+		// marking the runqueue. runGC is //go:noheap, so a regression here
+		// makes the build fail with a linker error instead of silently
+		// hanging like it used to.
+		t.Run("opt=0-gc-cortex-m-qemu", func(t *testing.T) {
+			t.Parallel()
+			opts := optionsFromTarget("cortex-m-qemu", sema)
+			opts.Opt = "0"
+			emuCheck(t, opts)
+			runTestWithConfig("gc.go", t, opts, nil, nil)
+		})
+
 		t.Run("gc=none-runtime-panic", func(t *testing.T) {
 			t.Parallel()
 			opts := optionsFromTarget("cortex-m-qemu", sema)
