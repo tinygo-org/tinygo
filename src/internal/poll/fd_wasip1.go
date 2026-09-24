@@ -2,18 +2,18 @@
 
 // Package poll is a minimal subset of upstream Go's internal/poll, scoped
 // to what is needed to back a wasip1 net implementation on top of
-// TinyGo's cooperative-scheduler netpoll integration.
+// TinyGo's poll_oneoff integration.
 //
 // On wasip1 the cooperative scheduler integrates poll_oneoff with FD
 // waiters (see runtime/netpoll_wasip1.go and syscall/syscall_libc_wasip1.go).
+// Without a scheduler, FD waits use poll_oneoff directly.
 // This package wraps the syscall layer to:
 //
 //   - own the O_NONBLOCK policy decision (set on Init for pollable FDs),
-//     unblocking the EAGAIN→park retry loop that syscall.Read already has;
+//     unblocking the EAGAIN retry loop;
 //   - provide a Go-shaped FD type that net.* can use without reaching
 //     into syscall directly;
-//   - thread per-FD read/write deadlines through a runtime helper that
-//     lets a time.AfterFunc callback wake the parked goroutine;
+//   - thread per-FD read/write deadlines through a runtime helper;
 //   - dispatch socket FDs through wasi sock_recv / sock_send / sock_accept
 //     / sock_shutdown so net.Conn/net.Listener (via upstream Go's
 //     net/file_wasip1.go) work end-to-end.
@@ -21,7 +21,6 @@ package poll
 
 import (
 	"errors"
-	"internal/task"
 	"syscall"
 	"time"
 	"unsafe"
@@ -47,18 +46,6 @@ const (
 	pollModeRead  uint8 = 1
 	pollModeWrite uint8 = 2
 )
-
-//go:linkname runtime_netpoll_addwait runtime.runtime_netpoll_addwait
-func runtime_netpoll_addwait(fd uint32, mode uint8) uintptr
-
-//go:linkname runtime_netpoll_done runtime.runtime_netpoll_done
-func runtime_netpoll_done(pd uintptr)
-
-//go:linkname runtime_netpoll_pdfired runtime.runtime_netpoll_pdfired
-func runtime_netpoll_pdfired(pd uintptr) bool
-
-//go:linkname runtime_netpoll_wake runtime.runtime_netpoll_wake
-func runtime_netpoll_wake(pd uintptr)
 
 //go:linkname fd_fdstat_get_type syscall.fd_fdstat_get_type
 func fd_fdstat_get_type(fd int) (syscall.Filetype, error)
@@ -164,8 +151,7 @@ type FD struct {
 
 // Init readies the FD for use. When pollable is true (i.e. the FD might
 // block — sockets, pipes, FIFOs), Init sets O_NONBLOCK so that
-// Read/Write enter the EAGAIN→park retry loop instead of blocking the
-// entire wasm module.
+// Read/Write can wait on EAGAIN instead of blocking in the syscall.
 //
 // Init also caches the wasi filetype so the Read/Write hot path can
 // dispatch socket vs file with a single integer compare.
@@ -239,8 +225,8 @@ type String string
 // RawControl / RawRead / RawWrite back syscall.RawConn's three callback
 // methods. They invoke f with the underlying FD; the bool return of
 // RawRead / RawWrite controls retry-on-EAGAIN, which we implement by
-// parking the goroutine on the netpoll registry and retrying until f
-// returns true (the same loop upstream uses).
+// waiting for the FD and retrying until f returns true (the same loop
+// upstream uses).
 func (fd *FD) RawControl(f func(uintptr)) error {
 	if fd.closed {
 		return ErrFileClosing
@@ -257,7 +243,9 @@ func (fd *FD) RawRead(f func(uintptr) bool) error {
 		if f(uintptr(fd.Sysfd)) {
 			return nil
 		}
-		wait(fd.Sysfd, pollModeRead)
+		if err := wait(fd.Sysfd, pollModeRead); err != nil {
+			return err
+		}
 	}
 }
 
@@ -269,7 +257,9 @@ func (fd *FD) RawWrite(f func(uintptr) bool) error {
 		if f(uintptr(fd.Sysfd)) {
 			return nil
 		}
-		wait(fd.Sysfd, pollModeWrite)
+		if err := wait(fd.Sysfd, pollModeWrite); err != nil {
+			return err
+		}
 	}
 }
 
@@ -279,8 +269,8 @@ func (fd *FD) Shutdown(how int) error {
 	return syscall.Shutdown(fd.Sysfd, how)
 }
 
-// Accept loops over wasi sock_accept, parking the goroutine on EAGAIN
-// (waiting for a new connection) through the netpoll registry. Returns
+// Accept loops over wasi sock_accept, waiting on EAGAIN for a new
+// connection. Returns
 // (newfd, sockaddr=nil, errcall, error) — sockaddr is always nil because
 // wasi sock_accept doesn't return one.
 func (fd *FD) Accept() (int, syscall.Sockaddr, string, error) {
@@ -300,7 +290,9 @@ func (fd *FD) Accept() (int, syscall.Sockaddr, string, error) {
 			return -1, nil, "accept", err
 		}
 		if deadline.IsZero() {
-			wait(fd.Sysfd, pollModeRead)
+			if err := wait(fd.Sysfd, pollModeRead); err != nil {
+				return -1, nil, "accept", err
+			}
 		} else {
 			if perr := fd.parkUntil(pollModeRead, deadline); perr != nil {
 				return -1, nil, "accept", perr
@@ -331,9 +323,25 @@ func (fd *FD) Read(p []byte) (int, error) {
 		return fd.sockRecv(p)
 	}
 	if fd.rDeadline.IsZero() {
-		return byteCount(syscall.Read(fd.Sysfd, p))
+		return byteCount(readNoDeadline(fd.Sysfd, p))
 	}
 	return fd.readWithDeadline(p)
+}
+
+func readNoDeadline(fd int, p []byte) (int, error) {
+	for {
+		n, err := syscall.Read(fd, p)
+		switch err {
+		case syscall.EAGAIN:
+			if err := wait(fd, pollModeRead); err != nil {
+				return 0, err
+			}
+		case syscall.EINTR:
+			continue
+		default:
+			return n, err
+		}
+	}
 }
 
 // Write writes p to the FD. Sockets dispatch to sock_send. Regular
@@ -346,9 +354,25 @@ func (fd *FD) Write(p []byte) (int, error) {
 		return fd.sockSend(p)
 	}
 	if fd.wDeadline.IsZero() {
-		return byteCount(syscall.Write(fd.Sysfd, p))
+		return byteCount(writeNoDeadline(fd.Sysfd, p))
 	}
 	return fd.writeWithDeadline(p)
+}
+
+func writeNoDeadline(fd int, p []byte) (int, error) {
+	for {
+		n, err := syscall.Write(fd, p)
+		switch err {
+		case syscall.EAGAIN:
+			if err := wait(fd, pollModeWrite); err != nil {
+				return 0, err
+			}
+		case syscall.EINTR:
+			continue
+		default:
+			return n, err
+		}
+	}
 }
 
 // Pread reads from the FD at the given offset. Always file semantics —
@@ -464,7 +488,9 @@ func (fd *FD) sockRecv(p []byte) (int, error) {
 			continue
 		case wasiErrnoAgain:
 			if deadline.IsZero() {
-				wait(fd.Sysfd, pollModeRead)
+				if err := wait(fd.Sysfd, pollModeRead); err != nil {
+					return 0, err
+				}
 			} else if err := fd.parkUntil(pollModeRead, deadline); err != nil {
 				return 0, err
 			}
@@ -495,7 +521,9 @@ func (fd *FD) sockSend(p []byte) (int, error) {
 			// retry
 		case wasiErrnoAgain:
 			if deadline.IsZero() {
-				wait(fd.Sysfd, pollModeWrite)
+				if err := wait(fd.Sysfd, pollModeWrite); err != nil {
+					return nn, err
+				}
 			} else if err := fd.parkUntil(pollModeWrite, deadline); err != nil {
 				return nn, err
 			}
@@ -513,40 +541,6 @@ const (
 	wasiErrnoAgain uint32 = 6
 	wasiErrnoIntr  uint32 = 27
 )
-
-// wait parks the current goroutine until the FD becomes ready in the
-// given direction. No deadline; mirrors the helper of the same name in
-// package syscall (intentionally duplicated rather than linknamed
-// across the package boundary — see project memory on shim avoidance).
-func wait(fd int, mode uint8) {
-	pd := runtime_netpoll_addwait(uint32(fd), mode)
-	task.Pause()
-	runtime_netpoll_done(pd)
-}
-
-// parkUntil parks the current goroutine on (fd, mode) with a deadline.
-// Returns nil if the FD became ready or the timer fired (caller's loop
-// re-checks the deadline at top); ErrDeadlineExceeded if the deadline
-// was already in the past.
-//
-// Race handling: the deadline timer's callback and pollIO's event walk
-// can both target the same pollDesc. The pd.fired flag guards against
-// double-pushing the task to the run queue; whichever arrives second
-// is a no-op.
-func (fd *FD) parkUntil(mode uint8, deadline time.Time) error {
-	d := time.Until(deadline)
-	if d <= 0 {
-		return ErrDeadlineExceeded
-	}
-	pd := runtime_netpoll_addwait(uint32(fd.Sysfd), mode)
-	timer := time.AfterFunc(d, func() {
-		runtime_netpoll_wake(pd)
-	})
-	task.Pause()
-	timer.Stop()
-	runtime_netpoll_done(pd)
-	return nil
-}
 
 // byteCount turns the -1 a failed read or write returns into 0, as Go's
 // internal/poll does in fd_unix.go.
