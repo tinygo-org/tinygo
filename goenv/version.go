@@ -50,9 +50,6 @@ func GetGorootVersion() (major, minor int, err error) {
 // major, minor, and patch version: 1, 3, and 2 in this example.
 // If there is an error, (0, 0, 0) and an error will be returned.
 func Parse(version string) (major, minor, patch int, err error) {
-	if strings.HasPrefix(version, "devel ") {
-		version = strings.Split(strings.TrimPrefix(version, "devel "), version)[0]
-	}
 	if version == "" || version[:2] != "go" {
 		return 0, 0, 0, errors.New("could not parse Go version: version does not start with 'go' prefix")
 	}
