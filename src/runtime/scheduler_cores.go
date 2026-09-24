@@ -14,8 +14,13 @@ const hasParallelism = true
 
 var mainExited atomic.Uint32
 
-// True after the secondary cores have started.
-var secondaryCoresStarted bool
+// Non-zero when secondary cores may enter the scheduler.
+var secondaryCoresStarted atomic.Uint32
+
+func waitForSecondaryCoresReady() {
+	for secondaryCoresStarted.Load() == 0 {
+	}
+}
 
 // Which task is running on a given core (or nil if there is no task running on
 // the core).
@@ -186,7 +191,7 @@ func run() {
 
 		// After package initializers have finished, start all the other cores.
 		startSecondaryCores()
-		secondaryCoresStarted = true
+		secondaryCoresStarted.Store(1)
 
 		// Run main.main.
 		callMain()

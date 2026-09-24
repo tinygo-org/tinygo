@@ -48,6 +48,8 @@ func main() {
 		// Also enable timer interrupts, for sleepTicksMulticore.
 		riscv.MIE.SetBits(riscv.MIE_MTIE)
 
+		waitForSecondaryCoresReady()
+
 		// Now start running the scheduler on this core.
 		schedulerLock.Lock()
 		scheduler(false)
