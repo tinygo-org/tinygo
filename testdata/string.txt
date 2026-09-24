@@ -17,3 +17,7 @@
 7 176
 8 120
 string from runes: abcü¢€𐍈°x
+true
+false
+true
+false

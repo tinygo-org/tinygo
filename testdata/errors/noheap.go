@@ -1,7 +1,13 @@
 package main
 
+import "bytes"
+
 //go:noheap
 func main() {
+	var data [100]byte
+	var sep [20]byte
+	bytes.Index(data[:], sep[:])
+
 	// This object is optimized away, and won't cause a linker failure.
 	var a int
 	add(&a)
@@ -64,6 +70,6 @@ func escape(n *int) {
 	println(n2)
 }
 
-// ERROR: noheap.go:10: object allocated on the heap in //go:noheap function
-// ERROR: noheap.go:20: object allocated on the heap in //go:noheap function
-// ERROR: noheap.go:30: object allocated on the heap in //go:noheap function
+// ERROR: noheap.go:16: object allocated on the heap in //go:noheap function
+// ERROR: noheap.go:26: object allocated on the heap in //go:noheap function
+// ERROR: noheap.go:36: object allocated on the heap in //go:noheap function
