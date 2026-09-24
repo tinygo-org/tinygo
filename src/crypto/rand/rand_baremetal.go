@@ -26,7 +26,7 @@ func (r *reader) Read(b []byte) (n int, err error) {
 		if i%4 == 0 {
 			randomByte, err = machine.GetRNG()
 			if err != nil {
-				return n, err
+				return i, err
 			}
 		} else {
 			randomByte >>= 8
