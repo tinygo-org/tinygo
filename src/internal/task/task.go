@@ -87,6 +87,9 @@ func runtime_freeTaskStack(ptr uintptr)
 //go:linkname scheduleTask runtime.scheduleTask
 func scheduleTask(*Task)
 
+//go:linkname scheduleTaskNoWake runtime.scheduleTaskNoWake
+func scheduleTaskNoWake(*Task)
+
 func inheritSynctest(t *Task) {
 	if !synctestIsEnabled() {
 		return
@@ -114,6 +117,9 @@ func synctestTaskCreated(*Task)
 
 //go:linkname synctestTaskExited runtime.synctestTaskExited
 func synctestTaskExited(*Task)
+
+//go:linkname synctestTaskWake runtime.synctestTaskWake
+func synctestTaskWake(*Task)
 
 //go:linkname synctestIsEnabled runtime.synctestIsEnabled
 func synctestIsEnabled() bool

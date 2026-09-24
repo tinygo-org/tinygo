@@ -192,6 +192,16 @@ func Goexit() {
 	tinygo_task_exit()
 }
 
+func CoroExit(next *Task) {
+	t := Current()
+	synctestTaskWake(next)
+	if exit(t) {
+		runtimeFatal("all goroutines are asleep - deadlock!")
+	}
+	scheduleTaskNoWake(next)
+	tinygo_task_exit()
+}
+
 // scanWaitGroup is used to wait on until all threads have finished the current state transition.
 var scanWaitGroup waitGroup
 

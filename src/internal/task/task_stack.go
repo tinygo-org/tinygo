@@ -33,7 +33,7 @@ const hasReleasableStack = false
 
 //export tinygo_task_exit
 func taskExit() {
-	exit(false)
+	exit(false, nil)
 }
 
 // initialize the state and prepare to call the specified function with the specified argument bundle.
