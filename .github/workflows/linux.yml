@@ -111,11 +111,14 @@ jobs:
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
+      - name: Get Binaryen revision
+        id: binaryen-revision
+        run: echo "revision=$(git rev-parse HEAD:lib/binaryen)" >> "$GITHUB_OUTPUT"
       - name: Cache Binaryen
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-alpine-v3
+          key: binaryen-linux-alpine-v3-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -264,11 +267,14 @@ jobs:
           tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/qemu/bin" >> "$GITHUB_PATH"
       - uses: ./.github/actions/setup-llvm
+      - name: Get Binaryen revision
+        id: binaryen-revision
+        run: echo "revision=$(git rev-parse HEAD:lib/binaryen)" >> "$GITHUB_OUTPUT"
       - name: Cache Binaryen
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-asserts-v1
+          key: binaryen-linux-asserts-v1-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -299,11 +305,14 @@ jobs:
           # assert-test-linux saves the cache. This job only reads it, so that
           # the two jobs do not write the same key.
           save-cache: "false"
+      - name: Get Binaryen revision
+        id: binaryen-revision
+        run: echo "revision=$(git rev-parse HEAD:lib/binaryen)" >> "$GITHUB_OUTPUT"
       - name: Restore Binaryen
         uses: actions/cache/restore@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-asserts-v1
+          key: binaryen-linux-asserts-v1-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -483,11 +492,14 @@ jobs:
         with:
           key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
           path: llvm-build
+      - name: Get Binaryen revision
+        id: binaryen-revision
+        run: echo "revision=$(git rev-parse HEAD:lib/binaryen)" >> "$GITHUB_OUTPUT"
       - name: Cache Binaryen
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-${{ matrix.goarch }}-v5
+          key: binaryen-linux-${{ matrix.goarch }}-v5-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
