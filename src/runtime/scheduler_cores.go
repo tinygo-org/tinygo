@@ -41,6 +41,10 @@ func goexit() {
 // This is allowed even if the task isn't paused yet, but will pause soon.
 func scheduleTask(t *task.Task) {
 	synctestTaskWake(t)
+	scheduleTaskNoWake(t)
+}
+
+func scheduleTaskNoWake(t *task.Task) {
 	schedulerLock.Lock()
 	switch t.RunState {
 	case task.RunStatePaused:

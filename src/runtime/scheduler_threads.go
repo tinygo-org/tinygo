@@ -53,6 +53,10 @@ func goexit() {
 
 func scheduleTask(t *task.Task) {
 	synctestTaskWake(t)
+	scheduleTaskNoWake(t)
+}
+
+func scheduleTaskNoWake(t *task.Task) {
 	t.Resume()
 }
 

@@ -50,6 +50,9 @@ func scheduleTask(t *task.Task) {
 	// Pause() will panic, so this should not be reachable.
 }
 
+func scheduleTaskNoWake(t *task.Task) {
+}
+
 func Gosched() {
 	// There are no other goroutines, so there's nothing to schedule.
 }
