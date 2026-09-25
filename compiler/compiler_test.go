@@ -319,6 +319,44 @@ func TestAggregateExportedInterfaceABI(t *testing.T) {
 	}
 }
 
+func TestWrapperDebugInfo(t *testing.T) {
+	mod, errs := testCompilePackageWithDebug(t, &compileopts.Options{Target: "wasm"}, "wrapper-debug.go", true)
+	defer mod.Dispose()
+	for _, err := range errs {
+		t.Error(err)
+	}
+
+	for _, name := range []string{
+		"(main.wrapperValue).get$bound",
+		"(main.wrapperValue).get$thunk",
+		"(*main.wrapperValue).get",
+	} {
+		fn := mod.NamedFunction(name)
+		if fn.IsNil() {
+			t.Errorf("missing function %s", name)
+			continue
+		}
+		sp := fn.Subprogram()
+		if sp.IsNil() {
+			t.Errorf("%s has no subprogram", name)
+			continue
+		}
+		if line := sp.SubprogramLine(); line != 5 {
+			t.Errorf("%s subprogram line is %d, want 5", name, line)
+		}
+		if file := sp.ScopeFile().FileFilename(); !strings.HasSuffix(file, "wrapper-debug.go") {
+			t.Errorf("%s subprogram file is %q", name, file)
+		}
+		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if !inst.IsACallInst().IsNil() && inst.InstructionDebugLoc().IsNil() {
+					t.Errorf("%s has a call without a debug location", name)
+				}
+			}
+		}
+	}
+}
+
 func TestValidateWasmFunctionParameters(t *testing.T) {
 	for _, test := range []struct {
 		name         string
