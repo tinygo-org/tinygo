@@ -9,6 +9,7 @@ target triple = "x86_64--linux"
 @main.v5 = global i8 0
 @main.v6 = global { i8, i8 } { i8 ptrtoint (ptr @main.global to i8), i8 7 }
 @main.v7 = global i8 0
+@main.v8 = global i1 0
 
 define void @runtime.initAll() unnamed_addr {
 entry:
@@ -38,6 +39,9 @@ entry:
   ; A global whose initializer can't be computed at compile time.
   %v7 = load i8, ptr getelementptr inbounds (i8, ptr @main.v6, i64 1)
   store i8 %v7, ptr @main.v7
+
+  ; A result narrower than its allocation size is left for runtime.
+  store i1 ptrtoint (ptr inttoptr (i64 2 to ptr) to i1), ptr @main.v8
   ret void
 }
 

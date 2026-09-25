@@ -9,6 +9,7 @@ target triple = "x86_64--linux"
 @main.v5 = local_unnamed_addr global i8 0
 @main.v6 = local_unnamed_addr global { i8, i8 } { i8 ptrtoint (ptr @main.global to i8), i8 7 }
 @main.v7 = local_unnamed_addr global i8 0
+@main.v8 = local_unnamed_addr global i1 false
 
 define void @runtime.initAll() unnamed_addr {
 entry:
@@ -16,5 +17,6 @@ entry:
   store i8 ptrtoint (ptr @main.global to i8), ptr @main.v5, align 1
   %v7 = load i8, ptr getelementptr inbounds (i8, ptr @main.v6, i64 1), align 1
   store i8 %v7, ptr @main.v7, align 1
+  store i1 ptrtoint (ptr inttoptr (i64 2 to ptr) to i1), ptr @main.v8, align 1
   ret void
 }

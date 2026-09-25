@@ -1035,6 +1035,10 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 			if src.len(r) != size && src.hasPointer() {
 				return false
 			}
+			if llvmValue.Type().TypeKind() == llvm.IntegerTypeKind && uint32(llvmValue.Type().IntTypeWidth()) != size*8 {
+				// Widths like i1 don't fill their bytes, so leave them for runtime.
+				return false
+			}
 			copy(v.buf[:size], src.buf)
 		case llvm.GetElementPtr:
 			ptr := llvmValue.Operand(0)
