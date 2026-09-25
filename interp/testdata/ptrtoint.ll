@@ -5,6 +5,10 @@ target triple = "x86_64--linux"
 @main.v2 = global i64 0
 @main.v3 = global i8 0
 @main.global = global i8 0
+@main.v4 = global i8 0
+@main.v5 = global i8 0
+@main.v6 = global { i8, i8 } { i8 ptrtoint (ptr @main.global to i8), i8 7 }
+@main.v7 = global i8 0
 
 define void @runtime.initAll() unnamed_addr {
 entry:
@@ -26,6 +30,14 @@ entry:
   ; A real pointer can't be truncated at compile time.
   %v3 = ptrtoint ptr @main.global to i8
   store i8 %v3, ptr @main.v3
+
+  ; The same conversions as constant expressions.
+  store i8 ptrtoint (ptr inttoptr (i64 258 to ptr) to i8), ptr @main.v4
+  store i8 ptrtoint (ptr @main.global to i8), ptr @main.v5
+
+  ; A global whose initializer can't be computed at compile time.
+  %v7 = load i8, ptr getelementptr inbounds (i8, ptr @main.v6, i64 1)
+  store i8 %v7, ptr @main.v7
   ret void
 }
 
