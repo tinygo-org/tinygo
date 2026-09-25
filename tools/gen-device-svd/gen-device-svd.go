@@ -121,6 +121,7 @@ type Metadata struct {
 
 type Interrupt struct {
 	Name            string
+	Alias           string
 	HandlerName     string
 	PeripheralIndex int
 	Value           int // interrupt number
@@ -1278,6 +1279,9 @@ const (
 		{{- end}}
 	{{- end}}
 	IRQ_{{.Name}} = {{.Value}}
+	{{- if .Alias}}
+	IRQ_{{.Alias}} = IRQ_{{.Name}}
+	{{- end}}
 	{{- "\n"}}
 {{- end}}
 	// Highest interrupt number on this device.
