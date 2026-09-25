@@ -88,6 +88,9 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 	// instruction (init call) that we are removing after successful
 	// interpretation.
 	r.builder.SetInsertPointBefore(bb.FirstInstruction())
+	if subprogram := initAll.Subprogram(); !subprogram.IsNil() {
+		r.builder.SetCurrentDebugLocation(subprogram.SubprogramLine(), 0, subprogram, llvm.Metadata{})
+	}
 	dummy := r.builder.CreateAlloca(r.mod.Context().Int8Type(), "dummy")
 	r.builder.SetInsertPointBefore(dummy)
 	defer dummy.EraseFromParentAsInstruction()
