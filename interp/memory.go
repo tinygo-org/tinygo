@@ -1004,10 +1004,11 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 	}
 }
 
-func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
+// set returns false if the constant can only be computed at runtime.
+func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 	if llvmValue.IsNull() {
 		// A zero value is common so check that first.
-		return
+		return true
 	}
 	if !llvmValue.IsAGlobalValue().IsNil() {
 		ptrSize := r.pointerSize
@@ -1020,11 +1021,25 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 		}
 	} else if !llvmValue.IsAConstantExpr().IsNil() {
 		switch llvmValue.Opcode() {
-		case llvm.IntToPtr, llvm.PtrToInt, llvm.BitCast:
-			// All these instructions effectively just reinterprets the bits
-			// (like a bitcast) while no bits change and keeping the same
-			// length, so just read its contents.
-			v.set(llvmValue.Operand(0), r)
+		case llvm.BitCast:
+			return v.set(llvmValue.Operand(0), r)
+		case llvm.IntToPtr, llvm.PtrToInt:
+			// These truncate or zero-extend when sizes differ.
+			// https://llvm.org/docs/LangRef.html#ptrtoint-to-instruction
+			operand := llvmValue.Operand(0)
+			src := newRawValue(uint32(r.targetData.TypeAllocSize(operand.Type())))
+			if !src.set(operand, r) {
+				return false
+			}
+			size := uint32(r.targetData.TypeAllocSize(llvmValue.Type()))
+			if src.len(r) != size && src.hasPointer() {
+				return false
+			}
+			if llvmValue.Type().TypeKind() == llvm.IntegerTypeKind && uint32(llvmValue.Type().IntTypeWidth()) != size*8 {
+				// Widths like i1 don't fill their bytes, so leave them for runtime.
+				return false
+			}
+			copy(v.buf[:size], src.buf)
 		case llvm.GetElementPtr:
 			ptr := llvmValue.Operand(0)
 			index := llvmValue.Operand(1)
@@ -1065,8 +1080,9 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			size := r.targetData.TypeAllocSize(llvmValue.Operand(0).Type())
 			lhs := newRawValue(uint32(size))
 			rhs := newRawValue(uint32(size))
-			lhs.set(llvmValue.Operand(0), r)
-			rhs.set(llvmValue.Operand(1), r)
+			if !lhs.set(llvmValue.Operand(0), r) || !rhs.set(llvmValue.Operand(1), r) {
+				return false
+			}
 			if r.interpretICmp(lhs, rhs, llvmValue.IntPredicate()) {
 				v.buf[0] = 1 // result is true
 			} else {
@@ -1118,7 +1134,9 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r)
+				if !field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r) {
+					return false
+				}
 			}
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
@@ -1129,7 +1147,9 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r)
+				if !field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r) {
+					return false
+				}
 			}
 		case llvm.DoubleTypeKind:
 			f, _ := llvmValue.DoubleValue()
@@ -1151,6 +1171,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) {
 			panic("unknown constant")
 		}
 	}
+	return true
 }
 
 // hasPointer returns true if this raw value contains a pointer somewhere in the
@@ -1219,8 +1240,12 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 			if !llvmValue.IsAGlobalVariable().IsNil() {
 				obj.size = uint32(r.targetData.TypeAllocSize(llvmValue.GlobalValueType()))
 				if initializer := llvmValue.Initializer(); !initializer.IsNil() {
-					obj.buffer = r.getValue(initializer)
-					obj.constant = llvmValue.IsGlobalConstant()
+					// Treat the global as external if its initializer is only known at runtime.
+					buf := r.getValue(initializer)
+					if _, ok := buf.(localValue); !ok {
+						obj.buffer = buf
+						obj.constant = llvmValue.IsGlobalConstant()
+					}
 				}
 			} else if !llvmValue.IsAFunction().IsNil() {
 				// OK
@@ -1251,7 +1276,9 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 		}
 		size := r.targetData.TypeAllocSize(llvmValue.Type())
 		v := newRawValue(uint32(size))
-		v.set(llvmValue, r)
+		if !v.set(llvmValue, r) {
+			return localValue{llvmValue}
+		}
 		return v
 	} else if !llvmValue.IsAInstruction().IsNil() || !llvmValue.IsAArgument().IsNil() {
 		return localValue{llvmValue}
