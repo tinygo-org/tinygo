@@ -46,6 +46,12 @@ func (b *builder) trackExpr(expr ssa.Value, value llvm.Value) {
 	case *ssa.Alloc, *ssa.MakeChan, *ssa.MakeMap:
 		// These values are always of pointer type in IR.
 		b.trackPointer(value)
+	case *ssa.Parameter:
+		// A pointer held only in a parameter is invisible to the GC once the
+		// function allocates, so it must be spilled like any other value.
+		if !value.IsNil() {
+			b.trackValue(value)
+		}
 	case *ssa.Call, *ssa.Convert, *ssa.MakeClosure, *ssa.MakeInterface, *ssa.MakeSlice, *ssa.Next:
 		if !value.IsNil() {
 			b.trackValue(value)
