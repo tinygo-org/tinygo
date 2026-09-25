@@ -1,12 +1,13 @@
-// This is a very minimal bootloader for the ESP32-C6. It only initializes the
-// flash and then continues with the generic RISC-V initialization code, which
-// in turn will call runtime.main.
+// This is a very minimal bootloader for the ESP32-C6 and ESP32-H2. It only
+// initializes the flash and then continues with the generic RISC-V
+// initialization code, which in turn will call runtime.main.
 // It is written in assembly (and not in a higher level language) to make sure
 // it is entirely loaded into IRAM and doesn't accidentally call functions
 // stored in IROM.
 //
-// The ESP32-C6 has a unified IRAM/DRAM address space at 0x40800000, and
-// separate DROM (0x42800000) / IROM (0x42000000) flash-mapped regions.
+// The ESP32-C6 and ESP32-H2 have a unified IRAM/DRAM address space at
+// 0x40800000, and separate DROM (0x42800000) / IROM (0x42000000) flash-mapped
+// regions.
 
 .section .init
 .global call_start_cpu0
@@ -26,8 +27,8 @@ call_start_cpu0:
     call Cache_MMU_Init
 
     // Set up flash mapping (both IROM and DROM).
-    // On ESP32-C6, Cache_Dbus_MMU_Set is replaced by Cache_MSPI_MMU_Set
-    // which has an extra "sensitive" parameter.
+    // On ESP32-C6 and ESP32-H2, Cache_Dbus_MMU_Set is replaced by
+    // Cache_MSPI_MMU_Set which has an extra "sensitive" parameter.
     // C equivalent:
     //   Cache_MSPI_MMU_Set(0, 0, 0x42000000, 0, 64, 256, 0)
     // Maps 16MB starting at 0x42000000, covering both IROM and DROM.

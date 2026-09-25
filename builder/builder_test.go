@@ -30,6 +30,7 @@ func TestClangAttributes(t *testing.T) {
 		"cortex-m7",
 		"esp32c3",
 		"esp32c6",
+		"esp32h2",
 		"esp32s3",
 		"fe310",
 		"gameboy-advance",

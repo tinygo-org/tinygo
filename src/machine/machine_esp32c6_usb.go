@@ -1,4 +1,4 @@
-//go:build esp32c6
+//go:build esp32c6 || esp32h2
 
 package machine
 
@@ -11,10 +11,10 @@ import (
 )
 
 // USB Serial/JTAG Controller
-// The ESP32-C6 has the same built-in USB Serial/JTAG hardware IP as the
-// ESP32-C3. The only difference at the machine level is how the peripheral
-// clock is enabled: C3 uses SYSTEM.PERIP_CLK_EN0, while C6 uses the PCR
-// (Peripheral Clock Reset) block.
+// The ESP32-C6 and ESP32-H2 have the same built-in USB Serial/JTAG hardware IP
+// as the ESP32-C3. The only difference at the machine level is how the
+// peripheral clock is enabled: C3 uses SYSTEM.PERIP_CLK_EN0, while C6 and H2
+// use the PCR (Peripheral Clock Reset) block.
 
 const cpuInterruptFromUSB = 10
 
@@ -51,9 +51,9 @@ type Serialer interface {
 
 var usbConfigured bool
 
-// USBDevice provides a stub USB device for the ESP32-C6. The hardware
-// only supports a fixed-function CDC-ACM serial port, so the programmable
-// USB device features are no-ops.
+// USBDevice provides a stub USB device for the ESP32-C6 and ESP32-H2. The
+// hardware only supports a fixed-function CDC-ACM serial port, so the
+// programmable USB device features are no-ops.
 type USBDevice struct {
 	initcomplete         bool
 	InitEndpointComplete bool
@@ -84,8 +84,8 @@ func (usbdev *USB_DEVICE) Configure(config UARTConfig) error {
 	}
 	usbConfigured = true
 
-	// Enable the USB_DEVICE peripheral clock via PCR (C6 uses PCR instead
-	// of SYSTEM.PERIP_CLK_EN0 that C3 used).
+	// Enable the USB_DEVICE peripheral clock via PCR (C6 and H2 use PCR
+	// instead of SYSTEM.PERIP_CLK_EN0 that C3 used).
 	esp.PCR.SetUSB_DEVICE_CONF_USB_DEVICE_CLK_EN(1)
 	esp.PCR.SetUSB_DEVICE_CONF_USB_DEVICE_RST_EN(0)
 
@@ -240,16 +240,16 @@ func FlushSerial() {
 	}
 }
 
-// ConfigureUSBEndpoint is a no-op on ESP32-C6 — the hardware does not
-// support programmable USB endpoints.
+// ConfigureUSBEndpoint is a no-op on ESP32-C6 and ESP32-H2. The hardware does
+// not support programmable USB endpoints.
 func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointConfig, setup []usb.SetupConfig) {
 }
 
-// SendZlp is a no-op on ESP32-C6.
+// SendZlp is a no-op on ESP32-C6 and ESP32-H2.
 func SendZlp() {
 }
 
-// SendUSBInPacket is a no-op on ESP32-C6.
+// SendUSBInPacket is a no-op on ESP32-C6 and ESP32-H2.
 func SendUSBInPacket(ep uint32, data []byte) bool {
 	return false
 }
