@@ -22,10 +22,9 @@ func initTimer() {
 	// Configure timer 0 in timer group 0, for timekeeping.
 	//   EN:       Enable the timer.
 	//   INCREASE: Count up every tick (as opposed to counting down).
-	//   DIVIDER:  16-bit prescaler, set to 2 for dividing the APB clock by two
-	//             (40MHz).
+	//   DIVIDER:  16-bit prescaler. Each chip sets timerDivider.
 	// esp.TIMG0.T0CONFIG.Set(0 << esp.TIMG_T0CONFIG_T0_EN_Pos)
-	esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_EN | esp.TIMG_T0CONFIG_INCREASE | 2<<esp.TIMG_T0CONFIG_DIVIDER_Pos)
+	esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_EN | esp.TIMG_T0CONFIG_INCREASE | timerDivider<<esp.TIMG_T0CONFIG_DIVIDER_Pos)
 	// esp.TIMG0.T0CONFIG.Set(1 << esp.TIMG_T0CONFIG_T0_DIVCNT_RST_Pos)
 	// esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_T0_EN)
 
@@ -44,15 +43,14 @@ func ticks() timeUnit {
 }
 
 func nanosecondsToTicks(ns int64) timeUnit {
-	// Calculate the number of ticks from the number of nanoseconds. At a 80MHz
-	// APB clock, that's 25 nanoseconds per tick with a timer prescaler of 2:
-	// 25 = 1e9 / (80MHz / 2)
-	return timeUnit(ns / 25)
+	// Calculate the number of ticks from the number of nanoseconds. Each chip
+	// sets nsPerTick.
+	return timeUnit(ns / nsPerTick)
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	// See nanosecondsToTicks.
-	return int64(ticks) * 25
+	return int64(ticks) * nsPerTick
 }
 
 func putchar(c byte) {

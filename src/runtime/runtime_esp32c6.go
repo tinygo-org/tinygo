@@ -11,6 +11,12 @@ import (
 	"unsafe"
 )
 
+// TIMG0 counts at 40MHz. The 80MHz timer clock is divided by 2.
+const (
+	timerDivider = 2
+	nsPerTick    = 25
+)
+
 // This is the function called on startup after the flash (IROM/DROM) is
 // initialized and the stack pointer has been set.
 //
