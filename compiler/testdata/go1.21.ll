@@ -94,6 +94,8 @@ entry:
   %2 = insertvalue %runtime._string zeroinitializer, ptr %b.data, 0
   %3 = insertvalue %runtime._string %2, i32 %b.len, 1
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
   %4 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #4
   %5 = select i1 %4, %runtime._string %1, %runtime._string %3
   %6 = select i1 %4, ptr %a.data, ptr %b.data
@@ -141,6 +143,8 @@ entry:
   %2 = insertvalue %runtime._string zeroinitializer, ptr %b.data, 0
   %3 = insertvalue %runtime._string %2, i32 %b.len, 1
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
   %4 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #4
   %5 = select i1 %4, %runtime._string %1, %runtime._string %3
   %6 = select i1 %4, ptr %a.data, ptr %b.data
@@ -151,6 +155,8 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.clearSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #4
   %0 = shl i32 %s.len, 2
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
   ret void
@@ -162,12 +168,16 @@ declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #3
 ; Function Attrs: nounwind
 define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #4
   ret void
 }
 
 ; Function Attrs: nounwind
 define hidden void @main.clearMap(ptr dereferenceable_or_null(52) %m, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %m, ptr nonnull %stackalloc, ptr undef) #4
   call void @runtime.hashmapClear(ptr %m, ptr undef) #4
   ret void
 }

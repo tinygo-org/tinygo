@@ -110,6 +110,8 @@ declare void @runtime.printunlock(ptr) #0
 define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %fn.context, ptr nonnull %stackalloc, ptr undef) #11
+  call void @runtime.trackPointer(ptr %fn.funcptr, ptr nonnull %stackalloc, ptr undef) #11
   %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 391 to ptr), ptr undef) #11
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #11
   store i32 5, ptr %0, align 4
@@ -143,6 +145,9 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.copyBuiltinGoroutine(ptr %dst.data, i32 %dst.len, i32 %dst.cap, ptr %src.data, i32 %src.len, i32 %src.cap, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %dst.data, ptr nonnull %stackalloc, ptr undef) #11
+  call void @runtime.trackPointer(ptr %src.data, ptr nonnull %stackalloc, ptr undef) #11
   %copy.n = call i32 @llvm.umin.i32(i32 %dst.len, i32 %src.len)
   call void @llvm.memmove.p0.p0.i32(ptr align 1 %dst.data, ptr align 1 %src.data, i32 %copy.n, i1 false)
   ret void
@@ -157,6 +162,8 @@ declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture read
 ; Function Attrs: nounwind
 define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #11
   call void @runtime.chanClose(ptr %ch, ptr undef) #11
   ret void
 }
@@ -167,6 +174,8 @@ declare void @runtime.chanClose(ptr dereferenceable_or_null(40), ptr) #0
 define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %itf.typecode, ptr nonnull %stackalloc, ptr undef) #11
+  call void @runtime.trackPointer(ptr %itf.value, ptr nonnull %stackalloc, ptr undef) #11
   %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 713 to ptr), ptr undef) #11
   call void @runtime.trackPointer(ptr nonnull %0, ptr nonnull %stackalloc, ptr undef) #11
   store ptr %itf.value, ptr %0, align 4

@@ -14,18 +14,24 @@ entry:
 ; Function Attrs: nounwind
 define hidden i32 @main.sliceLen(ptr %ints.data, i32 %ints.len, i32 %ints.cap, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ints.data, ptr nonnull %stackalloc, ptr undef) #5
   ret i32 %ints.len
 }
 
 ; Function Attrs: nounwind
 define hidden i32 @main.sliceCap(ptr %ints.data, i32 %ints.len, i32 %ints.cap, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ints.data, ptr nonnull %stackalloc, ptr undef) #5
   ret i32 %ints.cap
 }
 
 ; Function Attrs: nounwind
 define hidden i32 @main.sliceElement(ptr %ints.data, i32 %ints.len, i32 %ints.cap, i32 %index, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ints.data, ptr nonnull %stackalloc, ptr undef) #5
   %.not = icmp ult i32 %index, %ints.len
   br i1 %.not, label %lookup.next, label %lookup.throw
 
@@ -48,6 +54,7 @@ declare void @runtime.lookupPanic(ptr) #0
 define hidden { ptr, i32, i32 } @main.sliceAppendValues(ptr %ints.data, i32 %ints.len, i32 %ints.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ints.data, ptr nonnull %stackalloc, ptr undef) #5
   %varargs = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
   call void @runtime.trackPointer(ptr nonnull %varargs, ptr nonnull %stackalloc, ptr undef) #5
   store i32 1, ptr %varargs, align 4
@@ -75,6 +82,8 @@ declare { ptr, i32, i32 } @runtime.sliceAppend(ptr, ptr nocapture readonly, i32,
 define hidden { ptr, i32, i32 } @main.sliceAppendSlice(ptr %ints.data, i32 %ints.len, i32 %ints.cap, ptr %added.data, i32 %added.len, i32 %added.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ints.data, ptr nonnull %stackalloc, ptr undef) #5
+  call void @runtime.trackPointer(ptr %added.data, ptr nonnull %stackalloc, ptr undef) #5
   %append.new = call { ptr, i32, i32 } @runtime.sliceAppend(ptr %ints.data, ptr %added.data, i32 %ints.len, i32 %ints.cap, i32 %added.len, i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
   %append.newPtr = extractvalue { ptr, i32, i32 } %append.new, 0
   %append.newLen = extractvalue { ptr, i32, i32 } %append.new, 1
@@ -89,6 +98,9 @@ entry:
 ; Function Attrs: nounwind
 define hidden i32 @main.sliceCopy(ptr %dst.data, i32 %dst.len, i32 %dst.cap, ptr %src.data, i32 %src.len, i32 %src.cap, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %dst.data, ptr nonnull %stackalloc, ptr undef) #5
+  call void @runtime.trackPointer(ptr %src.data, ptr nonnull %stackalloc, ptr undef) #5
   %copy.n = call i32 @llvm.umin.i32(i32 %dst.len, i32 %src.len)
   %copy.size = shl nuw i32 %copy.n, 2
   call void @llvm.memmove.p0.p0.i32(ptr align 4 %dst.data, ptr align 4 %src.data, i32 %copy.size, i1 false)
@@ -202,6 +214,7 @@ unwind.return:                                    ; preds = %slice.throw
 define hidden ptr @main.Add32(ptr %p, i32 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %p, ptr nonnull %stackalloc, ptr undef) #5
   %0 = getelementptr i8, ptr %p, i32 %len
   call void @runtime.trackPointer(ptr %0, ptr nonnull %stackalloc, ptr undef) #5
   ret ptr %0
@@ -211,6 +224,7 @@ entry:
 define hidden ptr @main.Add64(ptr %p, i64 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %p, ptr nonnull %stackalloc, ptr undef) #5
   %0 = trunc i64 %len to i32
   %1 = getelementptr i8, ptr %p, i32 %0
   call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #5
@@ -220,6 +234,8 @@ entry:
 ; Function Attrs: nounwind
 define hidden ptr @main.SliceToArray(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #5
   %0 = icmp ult i32 %s.len, 4
   br i1 %0, label %slicetoarray.throw, label %slicetoarray.next
 
@@ -258,6 +274,7 @@ unwind.return:                                    ; preds = %slicetoarray.throw
 define hidden { ptr, i32, i32 } @main.SliceInt(ptr dereferenceable_or_null(4) %ptr, i32 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #5
   %0 = icmp ugt i32 %len, 1073741823
   %1 = icmp eq ptr %ptr, null
   %2 = icmp ne i32 %len, 0
@@ -286,6 +303,7 @@ declare void @runtime.unsafeSlicePanic(ptr) #0
 define hidden { ptr, i32, i32 } @main.SliceUint16(ptr dereferenceable_or_null(1) %ptr, i16 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #5
   %0 = icmp eq ptr %ptr, null
   %1 = icmp ne i16 %len, 0
   %2 = and i1 %0, %1
@@ -311,6 +329,7 @@ unwind.return:                                    ; preds = %unsafe.Slice.throw
 define hidden { ptr, i32, i32 } @main.SliceUint64(ptr dereferenceable_or_null(4) %ptr, i64 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #5
   %0 = icmp ugt i64 %len, 1073741823
   %1 = icmp eq ptr %ptr, null
   %2 = icmp ne i64 %len, 0
@@ -338,6 +357,7 @@ unwind.return:                                    ; preds = %unsafe.Slice.throw
 define hidden { ptr, i32, i32 } @main.SliceInt64(ptr dereferenceable_or_null(4) %ptr, i64 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #5
   %0 = icmp ugt i64 %len, 1073741823
   %1 = icmp eq ptr %ptr, null
   %2 = icmp ne i64 %len, 0

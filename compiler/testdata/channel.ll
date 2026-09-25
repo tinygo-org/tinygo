@@ -25,6 +25,8 @@ define hidden void @main.chanIntSend(ptr dereferenceable_or_null(40) %ch, ptr %c
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   %chan.value = alloca i32, align 4
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #3
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.value)
   store i32 3, ptr %chan.value, align 4
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
@@ -47,6 +49,8 @@ define hidden void @main.chanIntRecv(ptr dereferenceable_or_null(40) %ch, ptr %c
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   %chan.value = alloca i32, align 4
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #3
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.value)
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
   %0 = call i1 @runtime.chanRecv(ptr %ch, ptr nonnull %chan.value, ptr nonnull %chan.op, ptr undef) #3
@@ -61,6 +65,8 @@ declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(40), ptr, ptr dereferen
 define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #3
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
   call void @runtime.chanSend(ptr %ch, ptr null, ptr nonnull %chan.op, ptr undef) #3
   call void @llvm.lifetime.end.p0(ptr nonnull %chan.op)
@@ -71,6 +77,8 @@ entry:
 define hidden void @main.chanZeroRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #3
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
   %0 = call i1 @runtime.chanRecv(ptr %ch, ptr null, ptr nonnull %chan.op, ptr undef) #3
   call void @llvm.lifetime.end.p0(ptr nonnull %chan.op)
@@ -82,6 +90,9 @@ define hidden void @main.selectZeroRecv(ptr dereferenceable_or_null(40) %ch1, pt
 entry:
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
   %select.send.value = alloca i32, align 4
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch1, ptr nonnull %stackalloc, ptr undef) #3
+  call void @runtime.trackPointer(ptr %ch2, ptr nonnull %stackalloc, ptr undef) #3
   store i32 1, ptr %select.send.value, align 4
   call void @llvm.lifetime.start.p0(ptr nonnull %select.states.alloca)
   store ptr %ch1, ptr %select.states.alloca, align 4
@@ -114,6 +125,8 @@ declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32, i32, ptr, i32, i32, ptr) 
 define hidden i1 @main.selectNonBlockingSend(ptr dereferenceable_or_null(40) %ch, i32 %value, ptr %context) unnamed_addr #1 {
 entry:
   %select.send.value = alloca i32, align 4
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #3
   store i32 %value, ptr %select.send.value, align 4
   %select.sent = call i1 @runtime.chanTrySend(ptr %ch, ptr nonnull %select.send.value, ptr undef) #3
   br i1 %select.sent, label %select.body, label %select.next
@@ -132,6 +145,7 @@ define hidden { i32, i1, i1 } @main.selectNonBlockingRecv(ptr dereferenceable_or
 entry:
   %select.recvbuf = alloca i32, align 4
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #3
   call void @llvm.lifetime.start.p0(ptr nonnull %select.recvbuf)
   %select.recv = call { i1, i1 } @runtime.chanTryRecv(ptr %ch, ptr nonnull %select.recvbuf, ptr undef) #3
   %select.received = extractvalue { i1, i1 } %select.recv, 0
@@ -155,6 +169,8 @@ declare { i1, i1 } @runtime.chanTryRecv(ptr dereferenceable_or_null(40), ptr, pt
 ; Function Attrs: nounwind
 define hidden i1 @main.selectNonBlockingZeroSend(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #3
   %select.sent = call i1 @runtime.chanTrySend(ptr %ch, ptr null, ptr undef) #3
   br i1 %select.sent, label %select.body, label %select.next
 
@@ -168,6 +184,8 @@ select.next:                                      ; preds = %entry
 ; Function Attrs: nounwind
 define hidden { i1, i1 } @main.selectNonBlockingZeroRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #3
   %select.recv = call { i1, i1 } @runtime.chanTryRecv(ptr %ch, ptr null, ptr undef) #3
   %select.received = extractvalue { i1, i1 } %select.recv, 0
   br i1 %select.received, label %select.body, label %select.next
@@ -189,6 +207,8 @@ entry:
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
   %select.recvbuf.alloca = alloca [4 x i8], align 4
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch1, ptr nonnull %stackalloc, ptr undef) #3
+  call void @runtime.trackPointer(ptr %ch2, ptr nonnull %stackalloc, ptr undef) #3
   call void @llvm.lifetime.start.p0(ptr nonnull %select.recvbuf.alloca)
   call void @llvm.lifetime.start.p0(ptr nonnull %select.states.alloca)
   store ptr %ch1, ptr %select.states.alloca, align 4

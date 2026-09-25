@@ -113,6 +113,8 @@ entry:
 define hidden i8 @main.useLargeFunctionValue(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %fn.context, ptr nonnull %stackalloc, ptr undef) #13
+  call void @runtime.trackPointer(ptr %fn.funcptr, ptr nonnull %stackalloc, ptr undef) #13
   %call.result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
   call void @runtime.trackPointer(ptr nonnull %call.result, ptr nonnull %stackalloc, ptr undef) #13
   call void @main.makeLargeValue(ptr nonnull %call.result, i8 42, ptr undef)
@@ -137,6 +139,8 @@ declare void @runtime.nilPanic(ptr) #0
 define hidden i8 @main.useLargeInterface(ptr %value.typecode, ptr %value.value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %value.typecode, ptr nonnull %stackalloc, ptr undef) #13
+  call void @runtime.trackPointer(ptr %value.value, ptr nonnull %stackalloc, ptr undef) #13
   %call.result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
   call void @runtime.trackPointer(ptr nonnull %call.result, ptr nonnull %stackalloc, ptr undef) #13
   call void @"interface:{main.makeLargeValue:func:{}{named:main.largeValue},main.readLargeValue:func:{named:main.largeValue}{basic:uint8}}.makeLargeValue$invoke"(ptr nonnull %call.result, ptr %value.value, ptr %value.typecode, ptr undef) #13
@@ -386,6 +390,7 @@ if.done:                                          ; preds = %if.then, %entry
 define hidden void @main.makePointerLargeValue(ptr dereferenceable_or_null(1032) %return, ptr dereferenceable_or_null(1) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %value, ptr nonnull %stackalloc, ptr undef) #13
   %complit = call align 4 dereferenceable(1032) ptr @runtime.alloc(i32 1032, ptr nonnull @"runtime/gc.layout:258-000000000000000000000000000000000000000000000000000000000000000002", ptr undef) #13
   call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #13
   br i1 false, label %store.throw, label %store.next
@@ -410,6 +415,8 @@ unwind.return:                                    ; preds = %store.throw
 define hidden i8 @main.assertLargeValue(ptr %value.typecode, ptr %value.value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %value.typecode, ptr nonnull %stackalloc, ptr undef) #13
+  call void @runtime.trackPointer(ptr %value.value, ptr nonnull %stackalloc, ptr undef) #13
   %large = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
   call void @runtime.trackPointer(ptr nonnull %large, ptr nonnull %stackalloc, ptr undef) #13
   %typecode = call i1 @runtime.typeAssert(ptr %value.typecode, ptr nonnull @"reflect/types.typeid:named:main.largeValue", ptr undef) #13
@@ -492,6 +499,7 @@ entry:
   %chan.op1 = alloca %runtime.channelOp, align 8
   %chan.op = alloca %runtime.channelOp, align 8
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #13
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
   call void @runtime.chanSend(ptr %ch, ptr %value, ptr nonnull %chan.op, ptr undef) #13
   call void @llvm.lifetime.end.p0(ptr nonnull %chan.op)
@@ -538,6 +546,7 @@ entry:
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
   %select.recvbuf.alloca = alloca [1025 x i8], align 1
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ch, ptr nonnull %stackalloc, ptr undef) #13
   call void @llvm.lifetime.start.p0(ptr nonnull %select.recvbuf.alloca)
   call void @llvm.lifetime.start.p0(ptr nonnull %select.states.alloca)
   store ptr %ch, ptr %select.states.alloca, align 4

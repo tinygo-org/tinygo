@@ -182,6 +182,9 @@ declare void @main.checkBool(i1, ptr) #0
 ; Function Attrs: nounwind
 define hidden void @main.aliasMethod32(ptr %x.typecode, ptr %x.value, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %x.typecode, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %x.value, ptr nonnull %stackalloc, ptr undef) #4
   %0 = call i1 @"interface:{Get:func:{}{named:main.aliasMethodResult[basic:float32]}}.$typeassert"(ptr %x.typecode) #4
   br i1 %0, label %typeassert.ok, label %typeassert.next
 

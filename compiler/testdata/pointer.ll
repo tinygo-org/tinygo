@@ -14,6 +14,8 @@ entry:
 ; Function Attrs: nounwind
 define hidden [0 x i32] @main.pointerDerefZero(ptr %x, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   ret [0 x i32] zeroinitializer
 }
 
@@ -21,6 +23,7 @@ entry:
 define hidden ptr @main.pointerCastFromUnsafe(ptr %x, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %x
 }
@@ -30,6 +33,7 @@ define hidden ptr @main.pointerCastToUnsafe(ptr dereferenceable_or_null(4) %x, p
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
+  call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %x
 }
 
@@ -37,6 +41,7 @@ entry:
 define hidden ptr @main.pointerCastToUnsafeNoop(ptr dereferenceable_or_null(1) %x, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   call void @runtime.trackPointer(ptr %x, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %x
 }

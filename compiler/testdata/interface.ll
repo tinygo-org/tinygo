@@ -66,6 +66,9 @@ entry:
 ; Function Attrs: nounwind
 define hidden i1 @main.isInt(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %itf.typecode, ptr nonnull %stackalloc, ptr undef) #6
+  call void @runtime.trackPointer(ptr %itf.value, ptr nonnull %stackalloc, ptr undef) #6
   %typecode = call i1 @runtime.typeAssert(ptr %itf.typecode, ptr nonnull @"reflect/types.typeid:basic:int", ptr undef) #6
   br i1 %typecode, label %typeassert.ok, label %typeassert.next
 
@@ -81,6 +84,9 @@ declare i1 @runtime.typeAssert(ptr, ptr dereferenceable_or_null(1), ptr) #0
 ; Function Attrs: nounwind
 define hidden i1 @main.isError(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %itf.typecode, ptr nonnull %stackalloc, ptr undef) #6
+  call void @runtime.trackPointer(ptr %itf.value, ptr nonnull %stackalloc, ptr undef) #6
   %0 = call i1 @"interface:{Error:func:{}{basic:string}}.$typeassert"(ptr %itf.typecode) #6
   br i1 %0, label %typeassert.ok, label %typeassert.next
 
@@ -96,6 +102,9 @@ declare i1 @"interface:{Error:func:{}{basic:string}}.$typeassert"(ptr) #2
 ; Function Attrs: nounwind
 define hidden i1 @main.isStringer(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %itf.typecode, ptr nonnull %stackalloc, ptr undef) #6
+  call void @runtime.trackPointer(ptr %itf.value, ptr nonnull %stackalloc, ptr undef) #6
   %0 = call i1 @"interface:{String:func:{}{basic:string}}.$typeassert"(ptr %itf.typecode) #6
   br i1 %0, label %typeassert.ok, label %typeassert.next
 
@@ -111,6 +120,9 @@ declare i1 @"interface:{String:func:{}{basic:string}}.$typeassert"(ptr) #3
 ; Function Attrs: nounwind
 define hidden i8 @main.callFooMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %itf.typecode, ptr nonnull %stackalloc, ptr undef) #6
+  call void @runtime.trackPointer(ptr %itf.value, ptr nonnull %stackalloc, ptr undef) #6
   %0 = call i8 @"interface:{String:func:{}{basic:string},main.foo:func:{basic:int}{basic:uint8}}.foo$invoke"(ptr %itf.value, i32 3, ptr %itf.typecode, ptr undef) #6
   ret i8 %0
 }
@@ -121,6 +133,8 @@ declare i8 @"interface:{String:func:{}{basic:string},main.foo:func:{basic:int}{b
 define hidden %runtime._string @main.callErrorMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %itf.typecode, ptr nonnull %stackalloc, ptr undef) #6
+  call void @runtime.trackPointer(ptr %itf.value, ptr nonnull %stackalloc, ptr undef) #6
   %0 = call %runtime._string @"interface:{Error:func:{}{basic:string}}.Error$invoke"(ptr %itf.value, ptr %itf.typecode, ptr undef) #6
   %1 = extractvalue %runtime._string %0, 0
   call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #6

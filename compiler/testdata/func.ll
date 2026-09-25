@@ -14,6 +14,9 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.foo(ptr %callback.context, ptr %callback.funcptr, ptr %context) unnamed_addr #1 {
 entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %callback.context, ptr nonnull %stackalloc, ptr undef) #2
+  call void @runtime.trackPointer(ptr %callback.funcptr, ptr nonnull %stackalloc, ptr undef) #2
   %0 = icmp eq ptr %callback.funcptr, null
   br i1 %0, label %fpcall.throw, label %fpcall.next
 

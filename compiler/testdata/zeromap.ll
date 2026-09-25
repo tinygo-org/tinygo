@@ -28,6 +28,8 @@ entry:
   %0 = insertvalue %main.hasPadding zeroinitializer, i1 %s.b1, 0
   %1 = insertvalue %main.hasPadding %0, i32 %s.i, 1
   %2 = insertvalue %main.hasPadding %1, i1 %s.b2, 2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %m, ptr nonnull %stackalloc, ptr undef) #4
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.value)
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.key)
   store %main.hasPadding %2, ptr %hashmap.key, align 4
@@ -54,6 +56,8 @@ entry:
   %0 = insertvalue %main.hasPadding zeroinitializer, i1 %s.b1, 0
   %1 = insertvalue %main.hasPadding %0, i32 %s.i, 1
   %2 = insertvalue %main.hasPadding %1, i1 %s.b2, 2
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %m, ptr nonnull %stackalloc, ptr undef) #4
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.value)
   store i32 5, ptr %hashmap.value, align 4
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.key)
@@ -71,6 +75,8 @@ define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(52) %m, [2 
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %m, ptr nonnull %stackalloc, ptr undef) #4
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.value)
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.key)
   %s.elt = extractvalue [2 x %main.hasPadding] %s, 0
@@ -90,6 +96,8 @@ define hidden void @main.testZeroArraySet(ptr dereferenceable_or_null(52) %m, [2
 entry:
   %hashmap.key = alloca [2 x %main.hasPadding], align 8
   %hashmap.value = alloca i32, align 4
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %m, ptr nonnull %stackalloc, ptr undef) #4
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.value)
   store i32 5, ptr %hashmap.value, align 4
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.key)

@@ -51,6 +51,7 @@ define linkonce_odr hidden i32 @"(*main.genericMethod).Regular"(ptr %t, i32 %n, 
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %t, ptr nonnull %stackalloc, ptr undef) #2
+  call void @runtime.trackPointer(ptr %t, ptr nonnull %stackalloc, ptr undef) #2
   %0 = call i32 @"(main.genericMethod).Regular"(i32 %n, ptr undef)
   ret i32 %0
 }

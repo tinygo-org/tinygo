@@ -18,6 +18,7 @@ define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 %s.len, i32 %s.cap, ptr
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %s.data
 }
 
@@ -25,6 +26,7 @@ entry:
 define hidden %runtime._string @main.unsafeString(ptr dereferenceable_or_null(1) %ptr, i16 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %ptr, ptr nonnull %stackalloc, ptr undef) #2
   %0 = icmp slt i16 %len, 0
   %1 = icmp eq ptr %ptr, null
   %2 = icmp ne i16 %len, 0
@@ -53,6 +55,7 @@ declare void @runtime.unsafeSlicePanic(ptr) #0
 define hidden ptr @main.unsafeStringData(ptr readonly %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2
   ret ptr %s.data
 }
