@@ -7,8 +7,10 @@ func CPUFrequency() uint32 {
 	return xtalHz / pll.M * pll.N / pll.P
 }
 
-// Internal use: configured speed of the APB1 and APB2 timers, this should be kept
-// in sync with any changes to runtime package which configures the oscillators
-// and clock frequencies
-const APB1_TIM_FREQ = 42000000 * 2
-const APB2_TIM_FREQ = 84000000 * 2
+// Internal use: configured speed of the APB1 and APB2 buses and timers, this
+// should be kept in sync with any changes to runtime package which configures
+// the oscillators and clock frequencies.
+const APB1_FREQ = 42000000
+const APB2_FREQ = 84000000
+const APB1_TIM_FREQ = APB1_FREQ * 2
+const APB2_TIM_FREQ = APB2_FREQ * 2
