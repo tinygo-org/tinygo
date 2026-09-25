@@ -65,12 +65,12 @@ func NumCPU() int {
 // Separate goroutine (thread) that runs timer callbacks when they expire.
 func timerRunner() {
 	for {
-		timerQueueLock.Lock()
+		lockTimerQueue()
 
 		if timerQueue == nil {
 			// No timer in the queue, so wait until one becomes available.
 			val := timerFutex.Load()
-			timerQueueLock.Unlock()
+			unlockTimerQueue()
 			timerFutex.Wait(val)
 			continue
 		}
@@ -83,7 +83,7 @@ func timerRunner() {
 			// (sooner-to-expire) timer.
 			val := timerFutex.Load()
 			timeout := ticksToNanoseconds(timerQueue.whenTicks() - now)
-			timerQueueLock.Unlock()
+			unlockTimerQueue()
 			timerFutex.WaitUntil(val, uint64(timeout))
 			continue
 		}
@@ -97,21 +97,21 @@ func timerRunner() {
 		// removeTimer) can prevent a periodic timer from re-adding itself in its
 		// callback below.
 		firingTimersAdd(tn)
+		delay := ticksToNanoseconds(now - tn.whenTicks())
 
-		timerQueueLock.Unlock()
+		unlockTimerQueue()
 
 		// Run the callback stored in this timer node.
-		delay := ticksToNanoseconds(now - tn.whenTicks())
 		tn.callback(tn, delay)
 
 		// The callback has finished running. A periodic timer (a ticker) already
 		// removed itself from the firing list in reAddTimer; a one-shot timer
 		// isn't re-added, so remove it from the firing list here.
-		timerQueueLock.Lock()
+		lockTimerQueue()
 		if tn.timer.period == 0 {
 			firingTimersRemove(tn)
 		}
-		timerQueueLock.Unlock()
+		unlockTimerQueue()
 	}
 }
 
@@ -127,7 +127,7 @@ func unlockTimerQueue() {
 }
 
 func addTimer(tim *timerNode) {
-	timerQueueLock.Lock()
+	lockTimerQueue()
 
 	if !timerQueueStarted {
 		timerQueueStarted = true
@@ -139,14 +139,14 @@ func addTimer(tim *timerNode) {
 	timerFutex.Add(1)
 	timerFutex.Wake()
 
-	timerQueueLock.Unlock()
+	unlockTimerQueue()
 }
 
 // reAddTimer advances and re-adds a periodic timer (a ticker) after its
 // callback has run, unless it was stopped or reset while the callback was
 // running (in which case it must not be re-added).
 func reAddTimer(tn *timerNode) {
-	timerQueueLock.Lock()
+	lockTimerQueue()
 
 	// Remove the timer from the firing list before re-adding it to the queue,
 	// so that another core popping it off the queue can't insert it into the
@@ -157,7 +157,7 @@ func reAddTimer(tn *timerNode) {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
 		// already been re-added by resetTimer.
-		timerQueueLock.Unlock()
+		unlockTimerQueue()
 		return
 	}
 
@@ -167,18 +167,18 @@ func reAddTimer(tn *timerNode) {
 	timerFutex.Add(1)
 	timerFutex.Wake()
 
-	timerQueueLock.Unlock()
+	unlockTimerQueue()
 }
 
 func removeTimer(tim *timer) *timerNode {
-	timerQueueLock.Lock()
+	lockTimerQueue()
 	n := timerQueueRemove(tim)
 	if n == nil {
 		// The timer wasn't in the queue. It might be running its callback right
 		// now; if so, mark it stopped so it won't be re-added.
 		firingTimerStop(tim)
 	}
-	timerQueueLock.Unlock()
+	unlockTimerQueue()
 	return n
 }
 

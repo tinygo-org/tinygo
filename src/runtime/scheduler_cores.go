@@ -111,17 +111,17 @@ func unlockTimerQueue() {
 }
 
 func addTimer(tn *timerNode) {
-	schedulerLock.Lock()
+	lockTimerQueue()
 	timerQueueAdd(tn)
 	interruptSleepTicksMulticore(tn.whenTicks())
-	schedulerLock.Unlock()
+	unlockTimerQueue()
 }
 
 // reAddTimer advances and re-adds a periodic timer (a ticker) after its
 // callback has run, unless it was stopped or reset while the callback was
 // running (in which case it must not be re-added).
 func reAddTimer(tn *timerNode) {
-	schedulerLock.Lock()
+	lockTimerQueue()
 
 	// Remove the timer from the firing list before re-adding it to the queue,
 	// so that another core popping it off the queue can't insert it into the
@@ -132,24 +132,24 @@ func reAddTimer(tn *timerNode) {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
 		// already been re-added by resetTimer.
-		schedulerLock.Unlock()
+		unlockTimerQueue()
 		return
 	}
 	tn.timer.when += tn.timer.period
 	timerQueueAdd(tn)
 	interruptSleepTicksMulticore(tn.whenTicks())
-	schedulerLock.Unlock()
+	unlockTimerQueue()
 }
 
 func removeTimer(t *timer) *timerNode {
-	schedulerLock.Lock()
+	lockTimerQueue()
 	n := timerQueueRemove(t)
 	if n == nil {
 		// The timer wasn't in the queue. It might be running its callback right
 		// now; if so, mark it stopped so it won't be re-added.
 		firingTimerStop(t)
 	}
-	schedulerLock.Unlock()
+	unlockTimerQueue()
 	return n
 }
 

@@ -163,9 +163,9 @@ func unlockTimerQueue() {
 }
 
 func addTimer(tim *timerNode) {
-	mask := interrupt.Disable()
+	lockTimerQueue()
 	timerQueueAdd(tim)
-	interrupt.Restore(mask)
+	unlockTimerQueue()
 }
 
 // reAddTimer advances and re-adds a periodic timer (a ticker) after its
@@ -173,16 +173,18 @@ func addTimer(tim *timerNode) {
 // completion inside the scheduler loop, so a timer can't be stopped or reset
 // while its callback is running and the timer can always be re-added directly.
 func reAddTimer(tn *timerNode) {
+	lockTimerQueue()
 	tn.timer.when += tn.timer.period
-	addTimer(tn)
+	timerQueueAdd(tn)
+	unlockTimerQueue()
 }
 
 // removeTimer is the implementation of time.stopTimer. It removes a timer from
 // the timer queue, returning it if the timer is present in the timer queue.
 func removeTimer(tim *timer) *timerNode {
-	mask := interrupt.Disable()
+	lockTimerQueue()
 	n := timerQueueRemove(tim)
-	interrupt.Restore(mask)
+	unlockTimerQueue()
 	return n
 }
 
