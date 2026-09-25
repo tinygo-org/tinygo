@@ -1,0 +1,7 @@
+{
+	"inherits": ["esp32h2"],
+	"build-tags": ["esp32h2_devkitm_1"],
+	"serial": "uart",
+	"flash-method": "esp32flash",
+	"serial-port": ["10c4:ea60"]
+}

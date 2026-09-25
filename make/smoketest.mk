@@ -510,6 +510,11 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32c6   		examples/blinkm
 	@$(MD5SUM) $(SMOKE_OUT).bin
+	# esp32h2-devkitm-1
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32h2-devkitm-1 	examples/machinetest
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32h2-devkitm-1 	examples/serial
+	@$(MD5SUM) $(SMOKE_OUT).bin
 	# xiao-esp32s3
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32s3   		examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).bin
