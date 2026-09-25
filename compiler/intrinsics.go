@@ -28,7 +28,7 @@ func (b *builder) defineIntrinsicFunction() {
 		b.createStackSaveImpl()
 	case name == "runtime.KeepAlive":
 		b.createKeepAliveImpl()
-	case name == "machine.keepAliveNoEscape":
+	case name == "machine.keepAliveNoEscape", name == "runtime.keepAlivePointer":
 		b.createMachineKeepAliveImpl()
 	case strings.HasPrefix(name, "runtime/volatile.Load"):
 		b.createVolatileLoad()
@@ -126,6 +126,12 @@ func (b *builder) createKeepAliveImpl() {
 	asmFn := llvm.InlineAsm(asmType, "", "r", true, false, 0, false)
 	b.createCall(asmType, asmFn, []llvm.Value{pointerValue}, "")
 
+	// Pinning the value in a register is not enough where the collector cannot
+	// scan registers. Record it as a stack root as well.
+	if b.NeedsStackObjects {
+		b.trackPointer(pointerValue)
+	}
+
 	b.CreateRetVoid()
 }
 
@@ -162,6 +168,11 @@ func (b *builder) createMachineKeepAliveImpl() {
 	asmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType}, false)
 	asmFn := llvm.InlineAsm(asmType, "", "r", true, false, 0, false)
 	b.createCall(asmType, asmFn, []llvm.Value{pointerValue}, "")
+
+	// See createKeepAliveImpl: registers are not scannable everywhere.
+	if b.NeedsStackObjects {
+		b.trackPointer(pointerValue)
+	}
 
 	b.CreateRetVoid()
 }

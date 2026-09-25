@@ -164,6 +164,12 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 			// Some trivial optimizations.
 			if ptr.IsAInstruction().IsNil() {
+				if !ptr.IsAArgument().IsNil() {
+					// Parameters are not instructions, but a pointer held only
+					// in a parameter is invisible to the GC across a call that
+					// allocates, so it still needs a stack slot.
+					pointers = append(pointers, ptr)
+				}
 				continue
 			}
 			switch ptr.InstructionOpcode() {
@@ -243,13 +249,20 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			llvm.ConstInt(ctx.Int32Type(), 0, false),
 		}, "")
 		builder.CreateStore(parent, gep)
-		builder.CreateStore(stackObject, stackChainStart)
+		setupEnd := builder.CreateStore(stackObject, stackChainStart)
 
 		// Do a store to the stack object after each new pointer that is created.
 		pointerStores := make(map[llvm.Value]struct{})
 		for i, ptr := range pointers {
-			// Insert the store after the pointer value is created.
-			insertionPoint := llvm.NextInstruction(ptr)
+			// Insert the store after the pointer value is created. Parameters
+			// are live from entry, so spill them right after the stack object
+			// has been linked into the chain.
+			var insertionPoint llvm.Value
+			if !ptr.IsAArgument().IsNil() {
+				insertionPoint = llvm.NextInstruction(setupEnd)
+			} else {
+				insertionPoint = llvm.NextInstruction(ptr)
+			}
 			for !insertionPoint.IsAPHINode().IsNil() {
 				// PHI nodes are required to be at the start of the block.
 				// Insert after the last PHI node.
