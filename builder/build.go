@@ -609,7 +609,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			irbuilder := mod.Context().NewBuilder()
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
-			if config.Debug() {
+			if config.Debug() && !config.Options.SkipDWARF {
 				addInitAllDebugInfo(mod, llvmInitFn, irbuilder, program)
 			}
 			ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)

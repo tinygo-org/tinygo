@@ -7,6 +7,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"debug/dwarf"
+	"debug/elf"
 	"errors"
 	"flag"
 	"io"
@@ -1562,4 +1564,44 @@ func TestMain(m *testing.M) {
 
 	// Run normal tests.
 	os.Exit(m.Run())
+}
+
+func TestInitAllDWARF(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS != "linux" {
+		t.Skip("test reads ELF DWARF")
+	}
+
+	options := optionsFromTarget("", sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/init.go", "", t.TempDir(), config)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+	f, err := elf.Open(result.Binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	d, err := f.DWARF()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := d.Reader()
+	for {
+		entry, err := r.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if entry == nil {
+			t.Fatal("no DWARF subprogram for runtime.initAll")
+		}
+		if entry.Tag == dwarf.TagSubprogram && entry.Val(dwarf.AttrName) == "runtime.initAll" {
+			return
+		}
+	}
 }
