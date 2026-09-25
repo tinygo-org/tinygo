@@ -144,15 +144,7 @@ func addSleepTask(t *task.Task, duration timeUnit) {
 	*q = t
 }
 
-// addTimer adds the given timer node to the timer queue. It must not be in the
-// queue already.
-// This function is very similar to addSleepTask but for timerQueue instead of
-// sleepQueue.
-// lockTimerQueue and unlockTimerQueue guard direct mutation of a timer's
-// when/period fields from outside the normal addTimer/removeTimer/reAddTimer
-// path (see resetTimer in time.go). On this scheduler there's no real
-// parallelism, so disabling interrupts is enough to make the pair of writes
-// atomic with respect to a timer callback running from an interrupt handler.
+// Timer queue critical sections disable interrupts and must not be nested.
 var timerQueueLockMask interrupt.State
 
 func lockTimerQueue() {
@@ -163,28 +155,35 @@ func unlockTimerQueue() {
 	interrupt.Restore(timerQueueLockMask)
 }
 
+// addTimer adds the given timer node to the timer queue. It must not be in the
+// queue already.
+// This function is very similar to addSleepTask but for timerQueue instead of
+// sleepQueue.
 func addTimer(tim *timerNode) {
-	mask := interrupt.Disable()
+	lockTimerQueue()
 	timerQueueAdd(tim)
-	interrupt.Restore(mask)
+	unlockTimerQueue()
 }
 
 // reAddTimer finishes firing a timer. The cooperative scheduler runs timer
 // callbacks to completion, so periodic timers can be re-added directly.
 func reAddTimer(tn *timerNode) {
+	lockTimerQueue()
 	if tn.timer.period == 0 {
+		unlockTimerQueue()
 		return
 	}
 	tn.timer.when += tn.timer.period
-	addTimer(tn)
+	timerQueueAdd(tn)
+	unlockTimerQueue()
 }
 
 // removeTimer is the implementation of time.stopTimer. It removes a timer from
 // the timer queue, returning it if the timer is present in the timer queue.
 func removeTimer(tim *timer) *timerNode {
-	mask := interrupt.Disable()
+	lockTimerQueue()
 	n := timerQueueRemove(tim)
-	interrupt.Restore(mask)
+	unlockTimerQueue()
 	return n
 }
 
