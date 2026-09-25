@@ -1264,6 +1264,10 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		} else if b.fn.Syntax() != nil {
 			// Create debug info file if needed.
 			b.difunc = b.attachDebugInfo(b.fn)
+		} else if b.fn.Pos().IsValid() {
+			// Synthetic wrappers use the position of the wrapped method.
+			pos := b.program.Fset.Position(b.fn.Pos())
+			b.difunc = b.attachDebugInfoRaw(b.fn, b.llvmFn, "", pos.Filename, pos.Line)
 		}
 		b.setDebugLocation(b.fn.Pos())
 	}
