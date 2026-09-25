@@ -1,4 +1,4 @@
-//go:build esp32c6
+//go:build esp32c6 || esp32h2
 
 package runtime
 

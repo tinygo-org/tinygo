@@ -1,4 +1,4 @@
-//go:build esp32c6
+//go:build esp32c6 || esp32h2
 
 package interrupt
 
@@ -12,12 +12,11 @@ import (
 //go:extern tinygo_saved_ra
 var tinygo_saved_ra uintptr
 
-// plicType maps the ESP32-C6 PLIC (Platform-Level Interrupt Controller)
-// machine-mode registers. The C6 uses the PLIC — not the INTPRI/INTC block
-// that the ESP32-C3 uses — as its CPU interrupt controller
-// (SOC_INT_PLIC_SUPPORTED). The INTPRI registers at 0x600c5000 are vestigial
-// backward-compatibility aliases on the C6 and are not wired to the CPU, so
-// writing them never delivers an interrupt.
+// plicType maps the PLIC (Platform-Level Interrupt Controller) machine-mode
+// registers. The ESP32-C6 and ESP32-H2 use the PLIC, not the INTPRI/INTC
+// block of the ESP32-C3, as the CPU interrupt controller
+// (SOC_INT_PLIC_SUPPORTED).
+// The INTPRI registers at 0x600c5000 are not wired to the CPU.
 type plicType struct {
 	MXINT_ENABLE     volatile.Register32     // 0x00 bit N enables CPU interrupt line N
 	MXINT_TYPE       volatile.Register32     // 0x04 bit N: 1=edge, 0=level
@@ -31,10 +30,10 @@ type plicType struct {
 var plic = (*plicType)(unsafe.Pointer(uintptr(0x20001000)))
 
 // Enable registers a CPU interrupt.
-// The ESP32-C6 has 31 CPU independent interrupts (1..31).
+// The ESP32-C6 and ESP32-H2 have 31 CPU independent interrupts (1..31).
 func (i Interrupt) Enable() error {
 	if i.num < 1 || i.num > 31 {
-		return errors.New("interrupt for ESP32-C6 must be in range of 1 through 31")
+		return errors.New("interrupt must be in range of 1 through 31")
 	}
 	mask := riscv.DisableInterrupts()
 	defer riscv.EnableInterrupts(mask)
@@ -101,7 +100,7 @@ const (
 
 const (
 	defaultThreshold = 5
-	// Priority 0 disables an interrupt on ESP32-C6.
+	// Priority 0 disables an interrupt on ESP32-C6 and ESP32-H2.
 	disableThreshold = 0
 )
 
