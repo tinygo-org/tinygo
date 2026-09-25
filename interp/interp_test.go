@@ -24,6 +24,7 @@ func TestInterp(t *testing.T) {
 		"slicedata",
 		"aggregate",
 		"fastrand",
+		"ptrtoint",
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
