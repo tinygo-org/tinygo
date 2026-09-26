@@ -125,9 +125,9 @@ func initPins() {
 }
 
 func putchar(c byte) {
-	// Serial is nil until InitSerial runs. Drop early output so a print
-	// from a fault handler does not cause a second fault.
-	if machine.Serial == nil {
+	// Drop early output so a print from a fault handler before InitSerial
+	// does not cause a second fault.
+	if !serialReady() {
 		return
 	}
 	machine.Serial.WriteByte(c)
