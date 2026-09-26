@@ -50,7 +50,7 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
 		hashFn = b.getRuntimeFunctionValue("hashmapStringPtrHash", hashmapKeyHashSignature())
 		equalFn = b.getRuntimeFunctionValue("hashmapStringEqual", hashmapKeyEqualSignature())
-	} else if hashmapIsBinaryKey(keyType) {
+	} else if isBinaryComparable(keyType) {
 		hashFn = b.getRuntimeFunctionValue("hash32", hashmapKeyHashSignature())
 		equalFn = b.getRuntimeFunctionValue("memequal", hashmapKeyEqualSignature())
 	} else {
@@ -172,7 +172,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m llvm.Value, k
 		mapKey := b.getValueStorage(key, "hashmap.key")
 		params := []llvm.Value{m, mapKey.ptr, mapValueAlloca, mapValueSize}
 		fnName := "hashmapBinaryGet"
-		if !hashmapIsBinaryKey(keyType) {
+		if !isBinaryComparable(keyType) {
 			fnName = "hashmapGenericGet"
 		}
 		if fnName == "hashmapGenericGet" {
@@ -200,7 +200,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m llvm.Value, key, value s
 		// Key stored at actual type.
 		keyStorage := b.getValueStorage(key, "hashmap.key")
 		fnName := "hashmapBinarySet"
-		if !hashmapIsBinaryKey(keyType) {
+		if !isBinaryComparable(keyType) {
 			fnName = "hashmapGenericSet"
 		}
 		params := []llvm.Value{m, keyStorage.ptr, storedValue.ptr}
@@ -224,7 +224,7 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 		keyAlloca, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
 		fnName := "hashmapBinaryDelete"
-		if !hashmapIsBinaryKey(keyType) {
+		if !isBinaryComparable(keyType) {
 			fnName = "hashmapGenericDelete"
 		}
 		params := []llvm.Value{m, keyAlloca}
@@ -279,14 +279,14 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 // Returns true if this key type does not contain strings, interfaces etc., so
 // can be compared with runtime.memequal.  Note that padding bytes are undef
 // and can alter two "equal" structs being equal when compared with memequal.
-func hashmapIsBinaryKey(keyType types.Type) bool {
+func isBinaryComparable(keyType types.Type) bool {
 	switch keyType := keyType.Underlying().(type) {
 	case *types.Basic:
 		return keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 || keyType.Kind() == types.UnsafePointer
 	case *types.Pointer:
 		return true
 	case *types.Array:
-		return hashmapIsBinaryKey(keyType.Elem())
+		return isBinaryComparable(keyType.Elem())
 	default:
 		return false
 	}
@@ -515,7 +515,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 		elemType := keyType.Elem()
 		llvmElemType := b.getLLVMType(elemType)
 		arrayLen := keyType.Len()
-		if hashmapIsBinaryKey(elemType) {
+		if isBinaryComparable(elemType) {
 			// All elements are binary-comparable; hash the entire array as raw bytes.
 			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
 			return b.createRuntimeCall("hash32", []llvm.Value{keyPtr, size, seed}, "hash")
@@ -641,7 +641,7 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 		elemType := keyType.Elem()
 		llvmElemType := b.getLLVMType(elemType)
 		arrayLen := keyType.Len()
-		if hashmapIsBinaryKey(elemType) {
+		if isBinaryComparable(elemType) {
 			// All elements are binary-comparable; compare the entire array.
 			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
 			return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")

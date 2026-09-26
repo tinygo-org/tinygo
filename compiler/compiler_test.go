@@ -177,6 +177,22 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
+func TestLargeSliceElement(t *testing.T) {
+	options := &compileopts.Options{GOOS: "linux", GOARCH: "amd64"}
+	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	if fn := mod.NamedFunction("main.makeLargeElementSlice"); fn.IsNil() {
+		t.Fatal("missing function main.makeLargeElementSlice")
+	}
+}
+
 func TestNonBlockingSelectLargeSend(t *testing.T) {
 	options := &compileopts.Options{Target: "wasm"}
 	mod, errs := testCompilePackage(t, options, "channel-nonblocking-large.go")
