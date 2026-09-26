@@ -36,8 +36,6 @@ define ptr @needsStackSlots() {
 
 ; Check some edge cases of pointer tracking.
 define ptr @needsStackSlots2() {
-  ; Only one stack slot should be created for this (but at the moment, one is
-  ; created for each call to runtime.trackPointer).
   %ptr1 = call ptr @getPointer()
   call void @runtime.trackPointer(ptr %ptr1)
   call void @runtime.trackPointer(ptr %ptr1)
@@ -139,6 +137,74 @@ latch:
 
 end:
   ret ptr %original
+}
+
+define ptr @duplicateAcrossBranches(i1 %condition) {
+entry:
+  %original = call ptr @getPointer()
+  br i1 %condition, label %left, label %right
+
+left:
+  call void @runtime.trackPointer(ptr %original)
+  br label %join
+
+right:
+  call void @runtime.trackPointer(ptr %original)
+  br label %join
+
+join:
+  call void @runtime.trackPointer(ptr %original)
+  %unused = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  ret ptr %original
+}
+
+define ptr @duplicateNestedLoopPhis(i1 %repeat.inner, i1 %repeat.outer) {
+entry:
+  %original = call ptr @getPointer()
+  call void @runtime.trackPointer(ptr %original)
+  call void @runtime.trackPointer(ptr %original)
+  br label %outer
+
+outer:
+  %outer.ptr = phi ptr [ %original, %entry ], [ %inner.ptr, %latch ]
+  call void @runtime.trackPointer(ptr %outer.ptr)
+  call void @runtime.trackPointer(ptr %outer.ptr)
+  br label %inner
+
+inner:
+  %inner.ptr = phi ptr [ %outer.ptr, %outer ], [ %next, %inner ]
+  call void @runtime.trackPointer(ptr %inner.ptr)
+  call void @runtime.trackPointer(ptr %inner.ptr)
+  %next = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  call void @runtime.trackPointer(ptr %next)
+  call void @runtime.trackPointer(ptr %next)
+  br i1 %repeat.inner, label %inner, label %latch
+
+latch:
+  br i1 %repeat.outer, label %outer, label %end
+
+end:
+  ret ptr %inner.ptr
+}
+
+define ptr @duplicateAcyclicPhi(i1 %condition) {
+entry:
+  br i1 %condition, label %left, label %right
+
+left:
+  %left.ptr = call ptr @getPointer()
+  br label %join
+
+right:
+  %right.ptr = call ptr @getPointer()
+  br label %join
+
+join:
+  %merged = phi ptr [ %left.ptr, %left ], [ %right.ptr, %right ]
+  call void @runtime.trackPointer(ptr %merged)
+  call void @runtime.trackPointer(ptr %merged)
+  %unused = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  ret ptr %merged
 }
 
 declare ptr @arrayAlloc()
