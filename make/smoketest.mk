@@ -248,6 +248,10 @@ smoketest-nxp: | build/smoke
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=teensy36            examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=teensy41            examples/pwm
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=teensy40            examples/pwm
+	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=p1am-100            examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=atsame54-xpro       examples/blinky1
