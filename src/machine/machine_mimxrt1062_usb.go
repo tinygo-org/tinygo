@@ -238,6 +238,10 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 // Only touched from the USB interrupt handler.
 var usbTxCancelled uint32
 
+// usbSetupIn is true while the current EP0 setup is a control read
+// (device to host). Its status stage is an OUT packet.
+var usbSetupIn bool
+
 func handleUSBBusReset() {
 	// See the Bus Reset section of the USB chapter in IMXRT1060RM.
 	nxp.USB1.ENDPTSETUPSTAT.Set(nxp.USB1.ENDPTSETUPSTAT.Get())
@@ -287,10 +291,11 @@ func handleEP0Setup() {
 	}
 
 	setup := usb.NewSetup(raw[:])
+	usbSetupIn = setup.BmRequestType&0x80 != 0
 
 	// A control write has an OUT data stage. Prime EP0 OUT before the
 	// dispatch so the handler can read it with ReceiveUSBControlPacket.
-	if setup.BmRequestType&0x80 == 0 && setup.WLength > 0 {
+	if !usbSetupIn && setup.WLength > 0 {
 		usbPrime(0, false, usbOutBufBase, 64)
 	}
 
@@ -428,8 +433,9 @@ func sendUSBPacket(ep uint32, data []byte) {
 		}
 		copy(ep0InXferBuf(), data[:n])
 		usbPrime(0, true, usbEP0InBase, n)
-		if n > 0 {
-			// A control read has an OUT status stage. Prime for it.
+		if usbSetupIn {
+			// A control read ends with an OUT status stage, also when the
+			// data stage is empty. A control write ends with this IN packet.
 			usbPrime(0, false, usbOutBufBase, 64)
 		}
 	} else {
