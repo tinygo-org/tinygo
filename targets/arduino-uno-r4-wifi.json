@@ -1,0 +1,21 @@
+{
+  "inherits": [
+    "arduino-uno-r4"
+  ],
+  "build-tags": [
+    "arduino_uno_r4_wifi"
+  ],
+  "flash-command": "bossac --port={port} -U -e -w {bin} -R",
+  "serial-port": [
+    "2341:1002",
+    "2341:006d"
+  ],
+  "flash-1200-bps-reset": "true",
+  "openocd-commands": [
+    "source [find interface/cmsis-dap.cfg]",
+    "cmsis_dap_vid_pid 0x2341 0x1002",
+    "cmsis_dap_backend hid",
+    "transport select swd",
+    "source [find target/r7fa4m1ab.cfg]"
+  ]
+}
