@@ -17,6 +17,7 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
+	pathpkg "path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -35,6 +36,7 @@ type cgoPackage struct {
 	errors          []error
 	currentDir      string // current working directory
 	packageDir      string // full path to the package to process
+	recordedDir     string // package directory recorded in debug information
 	importPath      string
 	fset            *token.FileSet
 	tokenFiles      map[string]*token.File
@@ -250,11 +252,12 @@ func _Cgo___get_errno() error {
 // functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
 // hashes of the accessed C header files. If there is one or more error, it
 // returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir, importPath, recordedDir string, fset *token.FileSet, cflags []string, goos string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		packageName:     files[0].Name.Name,
 		currentDir:      dir,
 		importPath:      importPath,
+		recordedDir:     recordedDir,
 		fset:            fset,
 		tokenFiles:      map[string]*token.File{},
 		definedGlobally: map[string]ast.Node{},
@@ -337,6 +340,11 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 			// Iterate through all parts of the CGo header. Note that every //
 			// line is a new comment.
 			position := fset.Position(genDecl.Doc.Pos())
+			if p.recordedDir != "" {
+				if rel, err := filepath.Rel(p.packageDir, position.Filename); err == nil {
+					position.Filename = pathpkg.Join(p.recordedDir, filepath.ToSlash(rel))
+				}
+			}
 			var fragment strings.Builder
 			fragment.WriteString(fmt.Sprintf("# %d %#v\n", position.Line, position.Filename))
 			for _, comment := range genDecl.Doc.List {

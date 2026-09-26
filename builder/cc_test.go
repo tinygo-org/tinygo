@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -29,5 +30,26 @@ func TestSplitDepFile(t *testing.T) {
 			t.Errorf("test #%d failed: expected %#v but got %#v", i, tc.out, out)
 			continue
 		}
+	}
+}
+
+func TestMakeCCompilerPathsAbsolute(t *testing.T) {
+	workingDir := t.TempDir()
+	flags := []string{
+		"-include", "config.h",
+		"-Iinclude",
+		"-isystem", "system",
+		"--sysroot=sdk",
+		`-DCONFIG_PATH="/work"`,
+	}
+	want := []string{
+		"-include", filepath.Join(workingDir, "config.h"),
+		"-I" + filepath.Join(workingDir, "include"),
+		"-isystem", filepath.Join(workingDir, "system"),
+		"--sysroot=" + filepath.Join(workingDir, "sdk"),
+		`-DCONFIG_PATH="/work"`,
+	}
+	if got := makeCCompilerPathsAbsolute(flags, workingDir); !reflect.DeepEqual(got, want) {
+		t.Fatalf("makeCCompilerPathsAbsolute() = %q, want %q", got, want)
 	}
 }

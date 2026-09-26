@@ -52,6 +52,7 @@ type PackageJSON struct {
 	Root       string
 	Module     struct {
 		Path      string
+		Version   string
 		Main      bool
 		Dir       string
 		GoMod     string
@@ -364,6 +365,171 @@ func (p *Package) OriginalDir() string {
 	return strings.TrimSuffix(p.program.getOriginalPath(p.Dir+string(os.PathSeparator)), string(os.PathSeparator))
 }
 
+// OriginalModuleDir returns the real module directory.
+func (p *Package) OriginalModuleDir() string {
+	if p.Module.Dir != "" {
+		return strings.TrimSuffix(p.program.getOriginalPath(p.Module.Dir+string(os.PathSeparator)), string(os.PathSeparator))
+	}
+	if p.Module.Path == "" && p.Root != "" {
+		root := filepath.Join(p.Root, "src")
+		return strings.TrimSuffix(p.program.getOriginalPath(root+string(os.PathSeparator)), string(os.PathSeparator))
+	}
+	if p.Module.Path != "" {
+		rel := "."
+		if p.ImportPath != p.Module.Path {
+			rel = strings.TrimPrefix(p.ImportPath, p.Module.Path+"/")
+		}
+		if rel == "." || rel != p.ImportPath {
+			dir := p.OriginalDir()
+			if rel != "." {
+				for range strings.Split(rel, "/") {
+					dir = filepath.Dir(dir)
+				}
+			}
+			return dir
+		}
+	}
+	return p.OriginalDir()
+}
+
+// RecordedModuleDir returns the module directory to record in the output.
+func (p *Package) RecordedModuleDir() string {
+	if !p.program.config.TrimPath() {
+		return p.OriginalModuleDir()
+	}
+	if p.Module.Path == "" {
+		if p.Root != "" {
+			return "."
+		}
+		return p.RecordedDir()
+	}
+	if p.Module.Version != "" {
+		return p.Module.Path + "@" + p.Module.Version
+	}
+	return p.Module.Path
+}
+
+// RecordedDir returns the source directory to record in the output.
+func (p *Package) RecordedDir() string {
+	if !p.program.config.TrimPath() {
+		return p.OriginalDir()
+	}
+	if p.Module.Path != "" && p.Module.Version != "" {
+		return path.Join(p.Module.Path+"@"+p.Module.Version, strings.TrimPrefix(p.ImportPath, p.Module.Path))
+	}
+	return p.ImportPath
+}
+
+// RecordedPath returns the source path to record in the output.
+func (p *Package) RecordedPath(filename string) string {
+	if !p.program.config.TrimPath() {
+		return filename
+	}
+	if filepath.Base(filename) == "!cgo.go" {
+		return path.Join(p.RecordedDir(), "!cgo.go")
+	}
+	for _, root := range []string{
+		filepath.Join(goenv.Get("GOROOT"), "src"),
+		filepath.Join(goenv.Get("TINYGOROOT"), "src"),
+	} {
+		rel, err := filepath.Rel(root, filename)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return filepath.ToSlash(rel)
+		}
+	}
+
+	var recordedPath string
+	var matchedDirLength int
+	for _, sourcePkg := range p.program.Packages {
+		dir := sourcePkg.OriginalDir()
+		rel, err := filepath.Rel(dir, filename)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		candidate := path.Join(sourcePkg.RecordedDir(), filepath.ToSlash(rel))
+		if len(dir) > matchedDirLength || len(dir) == matchedDirLength && candidate < recordedPath {
+			matchedDirLength = len(dir)
+			recordedPath = candidate
+		}
+	}
+	if recordedPath != "" {
+		return recordedPath
+	}
+	for _, sourcePkg := range p.program.Packages {
+		dir := sourcePkg.OriginalModuleDir()
+		rel, err := filepath.Rel(dir, filename)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		candidate := path.Join(sourcePkg.RecordedModuleDir(), filepath.ToSlash(rel))
+		if len(dir) > matchedDirLength || len(dir) == matchedDirLength && candidate < recordedPath {
+			matchedDirLength = len(dir)
+			recordedPath = candidate
+		}
+	}
+	if recordedPath != "" {
+		return recordedPath
+	}
+	if filepath.IsAbs(filename) {
+		return filename
+	}
+	return filepath.ToSlash(filename)
+}
+
+// DebugPrefixMap returns the Clang flag that maps this package to its recorded
+// source directory.
+func (p *Package) DebugPrefixMap() string {
+	return "-ffile-prefix-map=" + p.OriginalModuleDir() + "=" + p.RecordedModuleDir()
+}
+
+// RecordedCFlags returns C flags with path options rewritten to use recorded
+// paths.
+func (p *Package) RecordedCFlags() []string {
+	if !p.program.config.TrimPath() {
+		return p.CFlags
+	}
+	flags := make([]string, len(p.CFlags))
+	nextIsPath := false
+	for i, flag := range p.CFlags {
+		if nextIsPath {
+			flags[i] = p.recordedCFlagPath(flag)
+			nextIsPath = false
+			continue
+		}
+		switch flag {
+		case "-I", "-L", "-F", "-isystem", "-iquote", "-idirafter", "-include", "-imacros", "-isysroot", "-resource-dir":
+			flags[i] = flag
+			nextIsPath = true
+			continue
+		}
+		flags[i] = flag
+		for _, prefix := range []string{
+			"-I",
+			"-L",
+			"-F",
+			"--sysroot=",
+			"-isysroot=",
+			"-resource-dir=",
+			"-fdebug-prefix-map=",
+			"-ffile-prefix-map=",
+			"-fmacro-prefix-map=",
+		} {
+			if strings.HasPrefix(flag, prefix) {
+				flags[i] = prefix + p.recordedCFlagPath(strings.TrimPrefix(flag, prefix))
+				break
+			}
+		}
+	}
+	return flags
+}
+
+func (p *Package) recordedCFlagPath(flag string) string {
+	flag = strings.ReplaceAll(flag, p.OriginalModuleDir(), p.RecordedModuleDir())
+	flag = strings.ReplaceAll(flag, goenv.Get("TINYGOROOT"), "github.com/tinygo-org/tinygo")
+	flag = strings.ReplaceAll(flag, goenv.Get("GOCACHE"), "tinygo-cache")
+	return flag
+}
+
 // parseFile is a wrapper around parser.ParseFile.
 func (p *Package) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 	originalPath := p.program.getOriginalPath(path)
@@ -512,7 +678,11 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			return nil, fmt.Errorf("failed to split CGO_CFLAGS: %w", err)
 		}
 		initialCFlags = append(initialCFlags, cgoCFlags...)
-		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, initialCFlags, p.program.config.GOOS())
+		recordedDir := ""
+		if p.program.config.TrimPath() {
+			recordedDir = p.RecordedDir()
+		}
+		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, recordedDir, p.program.fset, initialCFlags, p.program.config.GOOS())
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
 		for path, hash := range accessedFiles {
