@@ -158,6 +158,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 		// Determine what to do with each call.
 		var pointers []llvm.Value
+		rooted := make(map[llvm.Value]struct{}, len(calls))
 		var cyclicPHIs []llvm.Value
 		for _, call := range calls {
 			ptr := call.Operand(0)
@@ -165,6 +166,9 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 			// Some trivial optimizations.
 			if ptr.IsAInstruction().IsNil() {
+				continue
+			}
+			if _, ok := rooted[ptr]; ok {
 				continue
 			}
 			switch ptr.InstructionOpcode() {
@@ -216,6 +220,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 				// on the C stack which is scanned separately.
 				continue
 			}
+			rooted[ptr] = struct{}{}
 			pointers = append(pointers, ptr)
 		}
 
@@ -234,10 +239,6 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		// can pick up a slot of its own. That is another slot rather than
 		// another root, so it is left alone for now.
 		if len(cyclicPHIs) != 0 {
-			rooted := make(map[llvm.Value]struct{}, len(pointers))
-			for _, ptr := range pointers {
-				rooted[ptr] = struct{}{}
-			}
 			expanded := make(map[llvm.Value]struct{}, len(cyclicPHIs))
 			worklist := append([]llvm.Value(nil), cyclicPHIs...)
 			for len(worklist) != 0 {
