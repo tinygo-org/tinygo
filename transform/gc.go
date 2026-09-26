@@ -224,15 +224,15 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		// pointers into a single call on this phi, leaving whichever pointer
 		// the phi did not select unrooted while it is still live.
 		//
-		// Inputs are followed through every phi, not only through those that
-		// can be re-evaluated. A merge that runs at most once stores its slot
-		// once and never overwrites it, so it already roots the value the run
-		// selected; following its inputs too is conservative and costs a slot.
+		// Inputs are followed only through phis that can themselves repeat.
+		// A merge that runs at most once stores its slot once and never
+		// overwrites it, so that slot continues to root the selected value
+		// for the rest of the frame.
 		//
-		// Inputs are also not screened by the non-zero-offset GEP rule the
-		// loop above applies, so an interior pointer whose base is already
-		// tracked can pick up a slot of its own. That is another slot rather
-		// than another root, so it is left alone for now.
+		// Inputs are not screened by the non-zero-offset GEP rule the loop
+		// above applies, so an interior pointer whose base is already tracked
+		// can pick up a slot of its own. That is another slot rather than
+		// another root, so it is left alone for now.
 		if len(cyclicPHIs) != 0 {
 			rooted := make(map[llvm.Value]struct{}, len(pointers))
 			for _, ptr := range pointers {
@@ -254,7 +254,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 						// Constants and arguments cannot be given a slot here.
 						continue
 					}
-					if incoming.InstructionOpcode() == llvm.PHI {
+					if incoming.InstructionOpcode() == llvm.PHI && blockInCycle(incoming.InstructionParent()) {
 						worklist = append(worklist, incoming)
 					}
 					if stripped := stripPointerCasts(incoming); !stripped.IsAAllocaInst().IsNil() {
