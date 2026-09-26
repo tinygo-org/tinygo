@@ -16,6 +16,10 @@ const deviceName = esp.Device
 const maxPin = 31
 const cpuInterruptFromPin = 6
 
+// CPU interrupts 3, 4 and 7 are bound to the CLINT and cannot be used.
+// See ESP-IDF esp_hw_support/port/esp32c6/esp_cpu_intr.c.
+const cpuInterruptFromUART = 13
+
 // CPUFrequency returns the current CPU frequency of the chip.
 // Currently it is a fixed frequency but it may allow changing in the future.
 func CPUFrequency() uint32 {
@@ -477,9 +481,9 @@ func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
 	// Disable all UART interrupts
 	uart.Bus.INT_ENA.ClearBits(0x0ffff)
 
-	intrMapReg.Set(7)
+	intrMapReg.Set(cpuInterruptFromUART)
 	onceUart.Do(func() {
-		_ = interrupt.New(7, func(i interrupt.Interrupt) {
+		_ = interrupt.New(cpuInterruptFromUART, func(i interrupt.Interrupt) {
 			UART0.serveInterrupt(0)
 			UART1.serveInterrupt(1)
 		}).Enable()
