@@ -4,7 +4,11 @@ package runtime
 
 import (
 	"device/nxp"
+	"unsafe"
 )
+
+//go:extern _usb_dma_start
+var _usb_dma_start [0]byte
 
 func initCache() {
 
@@ -46,6 +50,11 @@ func initCache() {
 	// [7] QSPI flash: 2 MiB, +ACCESS, #NORMAL, +EXEC, -share, +CACHE, +BUFFER, -subregion
 	nxp.MPU.SetRBAR(7, 0x60000000)
 	nxp.MPU.SetRASR(nxp.RGNSZ_2MB, nxp.PERM_FULL, nxp.EXTN_NORMAL, true, false, true, true, false)
+
+	// [8] USB DMA region, top 4 KiB of OCRAM, #NORMAL non cacheable, -EXEC.
+	// It holds the USB dQH and dTD descriptors and the endpoint buffers.
+	nxp.MPU.SetRBAR(8, uint32(uintptr(unsafe.Pointer(&_usb_dma_start))))
+	nxp.MPU.SetRASR(nxp.RGNSZ_4KB, nxp.PERM_FULL, nxp.Extension(1), false, false, false, false, false)
 
 	nxp.MPU.Enable(true)
 }

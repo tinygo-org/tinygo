@@ -388,3 +388,14 @@ var (
 		},
 	}
 )
+
+// USB identifiers
+const (
+	usb_STRING_PRODUCT      = "Teensy 4.0"
+	usb_STRING_MANUFACTURER = "PJRC"
+)
+
+var (
+	usb_VID uint16 = 0x16C0
+	usb_PID uint16 = 0x0483
+)

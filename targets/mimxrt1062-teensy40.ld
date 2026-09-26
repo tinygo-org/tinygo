@@ -2,7 +2,7 @@ MEMORY
 {
   ITCM      (rwx): ORIGIN = 0x00000000, LENGTH = 0x00080000 /*  512 Kib */
   DTCM      (rwx): ORIGIN = 0x20000000, LENGTH = 0x00080000 /*  512 Kib */
-  RAM       (rwx): ORIGIN = 0x20200000, LENGTH = 0x00080000 /*  512 Kib */
+  RAM       (rwx): ORIGIN = 0x20200000, LENGTH = 0x0007F000 /*  512 KiB minus 4 KiB reserved for USB DMA descriptors/buffers */
   FLASH      (rx): ORIGIN = 0x60000000, LENGTH = 0x001FFFF0 /* 1984 Kib */
 }
 
@@ -95,6 +95,10 @@ SECTIONS
 
   _heap_start = ORIGIN(RAM);
   _heap_end = ORIGIN(RAM) + LENGTH(RAM);
+
+  /* USB DMA region, the 4 KiB reserved above RAM. */
+  _usb_dma_start = ORIGIN(RAM) + LENGTH(RAM);
+  ASSERT((_usb_dma_start & 0x7FF) == 0, "_usb_dma_start must be 2 KiB aligned for ENDPTLISTADDR")
 
   _globals_start = _sdata;
   _globals_end = _ebss;

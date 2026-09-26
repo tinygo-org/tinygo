@@ -6,6 +6,8 @@ import (
 	"device/arm"
 	"device/nxp"
 	"machine"
+
+	_ "machine/usb/cdc"
 	"math/bits"
 	"unsafe"
 )
@@ -106,7 +108,12 @@ func initPeripherals() {
 	initPins()        // configure GPIO
 
 	enablePeripheralClocks() // activate peripheral clock gates
-	initUART()               // configure UART (initialized first for debugging)
+}
+
+func init() {
+	// InitSerial must run from a package init function, after the heap is
+	// initialized. With -serial usb it allocates for the USB stack.
+	machine.InitSerial()
 }
 
 func initPins() {
@@ -117,24 +124,28 @@ func initPins() {
 	nxp.IOMUXC_GPR.GPR29.Set(0xFFFFFFFF)
 }
 
-func initUART() {
-	machine.InitSerial()
-}
-
 func putchar(c byte) {
+	// Drop early output so a print from a fault handler before InitSerial
+	// does not cause a second fault.
+	if !serialReady() {
+		return
+	}
 	machine.Serial.WriteByte(c)
 }
 
 func getchar() byte {
-	for machine.UART1.Buffered() == 0 {
+	for !serialReady() || machine.Serial.Buffered() == 0 {
 		Gosched()
 	}
-	v, _ := machine.UART1.ReadByte()
+	v, _ := machine.Serial.ReadByte()
 	return v
 }
 
 func buffered() int {
-	return machine.UART1.Buffered()
+	if !serialReady() {
+		return 0
+	}
+	return machine.Serial.Buffered()
 }
 
 func exit(code int) {
