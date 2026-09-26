@@ -146,9 +146,8 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	nxp.USB1.PORTSC1.SetBits(nxp.USB_PORTSC1_PFSC)
 	nxp.USB1.BURSTSIZE.Set(0x0404)
 
-	// Enable the transfer, error, reset, and suspend interrupts.
-	nxp.USB1.USBINTR.Set(nxp.USB_USBSTS_UI | nxp.USB_USBSTS_UEI |
-		nxp.USB_USBSTS_URI | nxp.USB_USBSTS_SLI)
+	// Enable the transfer and reset interrupts, the two handleUSBIRQ acts on.
+	nxp.USB1.USBINTR.Set(nxp.USB_USBSTS_UI | nxp.USB_USBSTS_URI)
 
 	intr := interrupt.New(nxp.IRQ_USB_OTG1, handleUSBIRQ)
 	intr.Enable()
