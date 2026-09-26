@@ -2533,6 +2533,12 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		panic("const is not an expression")
 	case *ssa.Convert:
 		x := b.getValue(expr.X, getPos(expr))
+		if isByteSliceToStringComparison(expr) {
+			str := llvm.Undef(b.getLLVMRuntimeType("_string"))
+			str = b.CreateInsertValue(str, b.CreateExtractValue(x, 0, ""), 0, "")
+			str = b.CreateInsertValue(str, b.CreateExtractValue(x, 1, ""), 1, "")
+			return str, nil
+		}
 		return b.createConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
 	case *ssa.Extract:
 		if _, ok := expr.Tuple.(*ssa.Select); ok {
@@ -2942,6 +2948,72 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	default:
 		return llvm.Value{}, b.makeError(expr.Pos(), "todo: unknown expression: "+expr.String())
 	}
+}
+
+func isByteSliceToStringComparison(expr *ssa.Convert) bool {
+	if !isByteSliceToStringConvert(expr) {
+		return false
+	}
+
+	referrers := expr.Referrers()
+	if referrers == nil {
+		return false
+	}
+	var binop *ssa.BinOp
+	for _, referrer := range *referrers {
+		switch referrer := referrer.(type) {
+		case *ssa.BinOp:
+			if binop != nil {
+				return false
+			}
+			binop = referrer
+		case *ssa.DebugRef:
+		default:
+			return false
+		}
+	}
+	if binop == nil || binop.Op != token.EQL && binop.Op != token.NEQ {
+		return false
+	}
+
+	x, ok := binop.X.(*ssa.Convert)
+	if !ok || !isByteSliceToStringConvert(x) {
+		return false
+	}
+	y, ok := binop.Y.(*ssa.Convert)
+	if !ok || !isByteSliceToStringConvert(y) {
+		return false
+	}
+
+	block := binop.Block()
+	if x.Block() != block || y.Block() != block {
+		return false
+	}
+	var previous []ssa.Instruction
+	for _, instr := range block.Instrs {
+		if _, ok := instr.(*ssa.DebugRef); ok {
+			continue
+		}
+		if instr == binop {
+			n := len(previous)
+			return n >= 2 && previous[n-2] == x && previous[n-1] == y
+		}
+		previous = append(previous, instr)
+	}
+	return false
+}
+
+func isByteSliceToStringConvert(expr *ssa.Convert) bool {
+	target, ok := expr.Type().Underlying().(*types.Basic)
+	if !ok || target.Info()&types.IsString == 0 {
+		return false
+	}
+	source, ok := expr.X.Type().Underlying().(*types.Slice)
+	if !ok {
+		return false
+	}
+	element, ok := source.Elem().Underlying().(*types.Basic)
+	return ok && element.Kind() == types.Byte
 }
 
 // createBinOp creates a LLVM binary operation (add, sub, mul, etc) for a Go
