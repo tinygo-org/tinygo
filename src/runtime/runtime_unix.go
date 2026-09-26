@@ -390,8 +390,70 @@ func signal_enable(s uint32) {
 	// scheduler (and therefore there is no parallelism).
 	hasSignals = true
 
+	// Under the threads scheduler checkSignals() is only reached from
+	// sleepTicks(), so start a watcher thread; a no-op for other schedulers.
+	startSignalWatcher(s)
+
 	// It's easier to implement this function in C.
 	tinygo_signal_enable(s)
+}
+
+// signalWatcherStarted is owned by signalWatcher: whoever flips it from false to
+// true starts one, and the watcher clears it as it returns.
+var signalWatcherStarted atomic.Bool
+
+// enabledSignals is the set of signals os/signal currently wants delivered. The
+// watcher thread serves them, so it runs exactly while this is non-zero.
+var enabledSignals atomic.Uint32
+
+// startSignalWatcher starts the watcher thread on the first enabled signal,
+// under the threads scheduler only (!hasScheduler && hasParallelism).
+func startSignalWatcher(s uint32) {
+	if hasScheduler || !hasParallelism {
+		return
+	}
+	enabledSignals.Or(uint32(1) << s)
+	if !signalWatcherStarted.Swap(true) {
+		go signalWatcher()
+	}
+}
+
+// stopSignalWatcher wakes the watcher once the signal it was serving is the last
+// one to go away, so it can see enabledSignals is empty and return.
+func stopSignalWatcher(s uint32) {
+	if hasScheduler || !hasParallelism {
+		return
+	}
+	// And returns the value from before the mask was applied, so clear the bit
+	// from that too to get what is left enabled.
+	bit := uint32(1) << s
+	if enabledSignals.And(^bit)&^bit != 0 {
+		return // still serving other signals
+	}
+	// WakeAll, not Wake: sleepTicks and waitForEvents sleep on this futex too,
+	// and waking one of those instead would leave the watcher parked.
+	signalFutex.Store(1)
+	signalFutex.WakeAll()
+}
+
+// signalWatcher runs on its own thread under the threads scheduler, mirroring
+// the signal half of waitForEvents(), which that scheduler never calls.
+func signalWatcher() {
+	for {
+		for enabledSignals.Load() != 0 {
+			// Block until the signal handler bumps the futex from 0 to 1.
+			signalFutex.Wait(0)
+			if signalFutex.Swap(0) != 0 {
+				checkSignals()
+			}
+		}
+		// Clear the flag before rechecking, so an enable racing this exit either
+		// starts a replacement or is caught here.
+		signalWatcherStarted.Store(false)
+		if enabledSignals.Load() == 0 || signalWatcherStarted.Swap(true) {
+			return
+		}
+	}
 }
 
 //go:linkname signal_ignore os/signal.signal_ignore
@@ -401,6 +463,7 @@ func signal_ignore(s uint32) {
 		// receivedSignals into a uint32 array.
 		runtimePanicAt(returnAddress(0), errUnsupportedSignal)
 	}
+	stopSignalWatcher(s)
 	tinygo_signal_ignore(s)
 }
 
@@ -411,6 +474,7 @@ func signal_disable(s uint32) {
 		// receivedSignals into a uint32 array.
 		runtimePanicAt(returnAddress(0), errUnsupportedSignal)
 	}
+	stopSignalWatcher(s)
 	tinygo_signal_disable(s)
 }
 
