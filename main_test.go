@@ -298,6 +298,7 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
+			runGCLivenessTest(optionsFromTarget("wasm", sema), t)
 			// Test with -gc=boehm.
 			t.Run("gc.go-boehm", func(t *testing.T) {
 				t.Parallel()
@@ -311,6 +312,7 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			options := optionsFromTarget("wasip1", sema)
 			runPlatTests(options, tests, t)
+			runGCLivenessTest(options, t)
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
 			})
@@ -327,6 +329,7 @@ func TestBuild(t *testing.T) {
 		t.Run("WASIp2", func(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
+			runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
 		})
 	}
 
@@ -639,6 +642,16 @@ func optionsFromOSARCH(osarch string, sema chan struct{}) compileopts.Options {
 		options.GOMIPS = parts[2]
 	}
 	return options
+}
+
+// runGCLivenessTest runs testdata/gc-liveness-repro.go. Only targets with
+// stack objects can lose a GC root the way it reproduces, so it is registered
+// per wasm target instead of being part of the shared test list.
+func runGCLivenessTest(options compileopts.Options, t *testing.T) {
+	t.Run("gc-liveness-repro.go", func(t *testing.T) {
+		t.Parallel()
+		runTest("gc-liveness-repro.go", options, t, nil, nil)
+	})
 }
 
 func runTest(name string, options compileopts.Options, t *testing.T, cmdArgs, environmentVars []string) {
