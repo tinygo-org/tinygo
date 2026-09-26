@@ -96,6 +96,51 @@ end:
   ret ptr %next.x
 }
 
+; Unlike @allocLoop above, the loop header phi here carries the only marker:
+; neither incoming value is tracked on its own. This is what SimplifyCFG leaves
+; behind when it sinks two runtime.trackPointer calls into a common successor
+; and merges them. A slot for the phi alone roots whichever value the current
+; iteration selected, so %loop.entry and %loop.next each need one too.
+define ptr @loopPhiUntrackedInput(i1 %repeat) {
+entry:
+  %loop.entry = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br label %loop
+
+loop:
+  %loop.cur = phi ptr [ %loop.entry, %entry ], [ %loop.next, %loop ]
+  call void @runtime.trackPointer(ptr %loop.cur)
+  %loop.next = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br i1 %repeat, label %loop, label %end
+
+end:
+  ret ptr %loop.cur
+}
+
+; Nested loops merge the markers through one phi per loop, so the input of the
+; inner phi is the outer phi rather than a plain value. Expanding only the
+; inner one would leave %original unrooted once the outer loop repeats.
+define ptr @nestedLoopPhiUntrackedInput(i1 %repeat.inner, i1 %repeat.outer) {
+entry:
+  %original = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br label %outer
+
+outer:
+  %outer.ptr = phi ptr [ %original, %entry ], [ %inner.ptr, %latch ]
+  br label %inner
+
+inner:
+  %inner.ptr = phi ptr [ %outer.ptr, %outer ], [ %next, %inner ]
+  call void @runtime.trackPointer(ptr %inner.ptr)
+  %next = call ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br i1 %repeat.inner, label %inner, label %latch
+
+latch:
+  br i1 %repeat.outer, label %outer, label %end
+
+end:
+  ret ptr %original
+}
+
 declare ptr @arrayAlloc()
 
 define void @testGEPBitcast() {
