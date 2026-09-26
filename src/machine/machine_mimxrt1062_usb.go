@@ -334,7 +334,9 @@ func usbPrime(ep uint32, in bool, addr uintptr, size int) {
 	// Clear a stale completion bit from an earlier transfer so it is not
 	// read as the completion of this transfer.
 	nxp.USB1.ENDPTCOMPLETE.Set(mask)
-	nxp.USB1.ENDPTPRIME.SetBits(mask)
+	// The hardware clears ENDPTPRIME bits on its own. A read modify write
+	// can set a cleared bit of another endpoint again. Zero bits are ignored.
+	nxp.USB1.ENDPTPRIME.Set(mask)
 	for i := 0; nxp.USB1.ENDPTPRIME.HasBits(mask); i++ {
 		if i > usbSpinLimit {
 			return
@@ -401,9 +403,16 @@ func SendUSBInPacket(ep uint32, data []byte) bool {
 		if len(data) > 64 {
 			return false
 		}
+		// The USB interrupt handler primes the same endpoint. Keep the
+		// active check and the prime together.
+		mask := interrupt.Disable()
 		if dtd(ep, true).token.Get()&dtdTokenActive != 0 {
+			interrupt.Restore(mask)
 			return false
 		}
+		sendUSBPacket(ep, data)
+		interrupt.Restore(mask)
+		return true
 	}
 	sendUSBPacket(ep, data)
 	return true
@@ -456,9 +465,12 @@ func ReceiveUSBControlPacket() (b [cdcLineInfoSize]byte, err error) {
 }
 
 // AckUsbOutTransfer re-arms an OUT endpoint after its data was consumed.
+// Thread context callers must not interleave with the USB interrupt handler.
 func AckUsbOutTransfer(ep uint32) {
 	ep &= 0x7F
+	mask := interrupt.Disable()
 	usbPrime(ep, false, usbOutBufBase+uintptr(ep)*64, 64)
+	interrupt.Restore(mask)
 }
 
 func SendZlp() {
