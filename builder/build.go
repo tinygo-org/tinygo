@@ -34,6 +34,7 @@ import (
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/stacksize"
 	"github.com/tinygo-org/tinygo/transform"
+	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -608,6 +609,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			irbuilder := mod.Context().NewBuilder()
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
+			if config.Debug() && !config.Options.SkipDWARF {
+				addInitAllDebugInfo(mod, llvmInitFn, irbuilder, program)
+			}
 			ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
 			for _, pkg := range lprogram.Sorted() {
 				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
@@ -1250,6 +1254,37 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	}
 
 	return nil
+}
+
+// addInitAllDebugInfo gives runtime.initAll a subprogram so that code emitted
+// into it by interp or the inliner keeps its line information.
+func addInitAllDebugInfo(mod llvm.Module, fn llvm.Value, irbuilder llvm.Builder, program *ssa.Program) {
+	pos := program.Fset.Position(program.ImportedPackage("runtime").Members["initAll"].Pos())
+	dir, file := filepath.Split(pos.Filename)
+	dibuilder := llvm.NewDIBuilder(mod)
+	defer dibuilder.Destroy()
+	dibuilder.CreateCompileUnit(llvm.DICompileUnit{
+		Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
+		File:      file,
+		Dir:       filepath.Clean(dir),
+		Producer:  "TinyGo",
+		Optimized: true,
+	})
+	difile := dibuilder.CreateFile(file, filepath.Clean(dir))
+	subprogram := dibuilder.CreateFunction(difile, llvm.DIFunction{
+		Name:         "runtime.initAll",
+		LinkageName:  "runtime.initAll",
+		File:         difile,
+		Line:         pos.Line,
+		Type:         dibuilder.CreateSubroutineType(llvm.DISubroutineType{File: difile}),
+		LocalToUnit:  true,
+		IsDefinition: true,
+		Flags:        llvm.FlagPrototyped,
+		Optimized:    true,
+	})
+	fn.SetSubprogram(subprogram)
+	irbuilder.SetCurrentDebugLocation(uint(pos.Line), 0, subprogram, llvm.Metadata{})
+	dibuilder.Finalize()
 }
 
 func makeGlobalsModule(ctx llvm.Context, globals map[string]map[string]string, machine llvm.TargetMachine) llvm.Module {
