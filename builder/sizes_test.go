@@ -21,6 +21,7 @@ var flagUpdate = flag.Bool("update", false, "update builder package tests")
 type sizeTest struct {
 	target string
 	path   string
+	opt    string
 }
 
 // Test whether code and data size is as expected for the given targets.
@@ -45,9 +46,14 @@ func TestBinarySize(t *testing.T) {
 	// This is a small number of very diverse targets that we want to test.
 	tests := []sizeTest{
 		// microcontrollers
-		{"hifive1b", "examples/echo"},
-		{"microbit", "examples/serial"},
-		{"wioterminal", "examples/pininterrupt"},
+		{target: "hifive1b", path: "examples/echo", opt: "z"},
+		{target: "microbit", path: "examples/serial", opt: "z"},
+		{target: "wioterminal", path: "examples/pininterrupt", opt: "z"},
+
+		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "2"},
+		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "z"},
+		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "2"},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
@@ -98,7 +104,7 @@ func measureBinarySizes(t *testing.T, tests []sizeTest) []*programSize {
 		result := <-results
 		if result.err != nil {
 			tc := tests[result.index]
-			t.Errorf("%s/%s: %v", tc.target, tc.path, result.err)
+			t.Errorf("%s/%s opt=%s: %v", tc.target, tc.path, tc.opt, result.err)
 			failed = true
 		}
 		sizes[result.index] = result.size
@@ -110,7 +116,7 @@ func measureBinarySizes(t *testing.T, tests []sizeTest) []*programSize {
 }
 
 func measureBinarySize(tc sizeTest, tmpdir string) (*programSize, error) {
-	result, err := buildBinaryInDir(tc.target, tc.path, tmpdir)
+	result, err := buildBinaryInDir(tc.target, tc.path, tc.opt, tmpdir)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +130,7 @@ func measureBinarySize(tc sizeTest, tmpdir string) (*programSize, error) {
 func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
 	targetWidth := len("target")
 	packageWidth := len("package")
+	optWidth := len("opt")
 	codeWidth := len("code")
 	rodataWidth := len("rodata")
 	dataWidth := len("data")
@@ -131,6 +138,7 @@ func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
 	for i, tc := range tests {
 		targetWidth = max(targetWidth, len(tc.target))
 		packageWidth = max(packageWidth, len(tc.path))
+		optWidth = max(optWidth, len(tc.opt))
 		codeWidth = max(codeWidth, len(strconv.FormatUint(sizes[i].Code, 10)))
 		rodataWidth = max(rodataWidth, len(strconv.FormatUint(sizes[i].ROData, 10)))
 		dataWidth = max(dataWidth, len(strconv.FormatUint(sizes[i].Data, 10)))
@@ -138,13 +146,13 @@ func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
 	}
 
 	var output strings.Builder
-	fmt.Fprintf(&output, "%-*s %-*s %*s %*s %*s %*s\n",
-		targetWidth, "target", packageWidth, "package",
+	fmt.Fprintf(&output, "%-*s %-*s %-*s %*s %*s %*s %*s\n",
+		targetWidth, "target", packageWidth, "package", optWidth, "opt",
 		codeWidth, "code", rodataWidth, "rodata", dataWidth, "data", bssWidth, "bss")
 	for i, tc := range tests {
 		size := sizes[i]
-		fmt.Fprintf(&output, "%-*s %-*s %*d %*d %*d %*d\n",
-			targetWidth, tc.target, packageWidth, tc.path,
+		fmt.Fprintf(&output, "%-*s %-*s %-*s %*d %*d %*d %*d\n",
+			targetWidth, tc.target, packageWidth, tc.path, optWidth, tc.opt,
 			codeWidth, size.Code, rodataWidth, size.ROData,
 			dataWidth, size.Data, bssWidth, size.BSS)
 	}
@@ -194,17 +202,17 @@ func TestSizeFull(t *testing.T) {
 
 func buildBinary(t *testing.T, targetString, pkgName string) BuildResult {
 	t.Helper()
-	result, err := buildBinaryInDir(targetString, pkgName, t.TempDir())
+	result, err := buildBinaryInDir(targetString, pkgName, "z", t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	return result
 }
 
-func buildBinaryInDir(targetString, pkgName, tmpdir string) (BuildResult, error) {
+func buildBinaryInDir(targetString, pkgName, opt, tmpdir string) (BuildResult, error) {
 	options := compileopts.Options{
 		Target:        targetString,
-		Opt:           "z",
+		Opt:           opt,
 		Semaphore:     sema,
 		InterpTimeout: 60 * time.Second,
 		Debug:         true,
