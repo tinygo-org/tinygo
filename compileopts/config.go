@@ -417,6 +417,7 @@ func (c *Config) CFlags(libclang bool) []string {
 			"-ffile-prefix-map="+goenv.Get("TINYGOROOT")+"="+c.CSourcePath("github.com/tinygo-org/tinygo"),
 			"-ffile-prefix-map="+goenv.Get("GOCACHE")+"="+c.CSourcePath("tinygo-cache"),
 			"-fdebug-compilation-dir=.",
+			"-gno-record-command-line",
 		)
 	}
 	// Always emit debug information. It is optionally stripped at link time.

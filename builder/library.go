@@ -142,6 +142,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			"-ffile-prefix-map="+goenv.Get("TINYGOROOT")+"="+config.CSourcePath("github.com/tinygo-org/tinygo"),
 			"-ffile-prefix-map="+goenv.Get("GOCACHE")+"="+config.CSourcePath("tinygo-cache"),
 			"-fdebug-compilation-dir=.",
+			"-gno-record-command-line",
 		)
 	}
 	resourceDir := goenv.ClangResourceDir(false)
