@@ -17,3 +17,31 @@
 7 176
 8 120
 string from runes: abcü¢€𐍈°x
+true
+false
+true
+false
+empty: true true true
+compare: true false true
+compare: true false true
+compare: true false true
+compare: false true false
+compare: true false true
+compare: false true false
+compare: false true false
+compare: true false true
+escape: true abc zbc
+store: true abc zbc
+box: true abc zbc
+mutation: false abc zbc
+mutation single use: false
+mutation aliased call: false
+mutation cross block: true false
+after: true false zbc
+fallbacks: true true true false
+boxed: true abc abc
+empty comparisons: true false
+named: true false abc abc
+named runes: a€😀
+index: 7 -1
+index absent: -1

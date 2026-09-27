@@ -2633,6 +2633,12 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		panic("const is not an expression")
 	case *ssa.Convert:
 		x := b.getValue(expr.X, getPos(expr))
+		if isByteSliceToStringComparison(expr) {
+			str := llvm.Undef(b.getLLVMRuntimeType("_string"))
+			str = b.CreateInsertValue(str, b.CreateExtractValue(x, 0, ""), 0, "")
+			str = b.CreateInsertValue(str, b.CreateExtractValue(x, 1, ""), 1, "")
+			return str, nil
+		}
 		return b.createConvert(expr.X.Type(), expr.Type(), x, expr.Pos())
 	case *ssa.Extract:
 		if _, ok := expr.Tuple.(*ssa.Select); ok {
@@ -3043,6 +3049,34 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	default:
 		return llvm.Value{}, b.makeError(expr.Pos(), "todo: unknown expression: "+expr.String())
 	}
+}
+
+func isByteSliceToStringComparison(expr *ssa.Convert) bool {
+	if !isByteSliceToStringConvert(expr) {
+		return false
+	}
+	comparison := adjacentComparison(expr, isByteSliceToStringConvert)
+	return comparison != nil &&
+		(comparison.Op == token.EQL || comparison.Op == token.NEQ) &&
+		isByteSliceToStringConvert(comparison.X) &&
+		isByteSliceToStringConvert(comparison.Y)
+}
+
+func isByteSliceToStringConvert(value ssa.Value) bool {
+	expr, ok := value.(*ssa.Convert)
+	if !ok {
+		return false
+	}
+	target, ok := expr.Type().Underlying().(*types.Basic)
+	if !ok || target.Info()&types.IsString == 0 {
+		return false
+	}
+	source, ok := expr.X.Type().Underlying().(*types.Slice)
+	if !ok {
+		return false
+	}
+	element, ok := source.Elem().Underlying().(*types.Basic)
+	return ok && element.Kind() == types.Byte
 }
 
 // createBinOp creates a LLVM binary operation (add, sub, mul, etc) for a Go
@@ -3646,7 +3680,7 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 				}
 				return b.createRuntimeCall("stringFromUnicode", []llvm.Value{value}, ""), nil
 			case *types.Slice:
-				switch typeFrom.Elem().(*types.Basic).Kind() {
+				switch typeFrom.Elem().Underlying().(*types.Basic).Kind() {
 				case types.Byte:
 					return b.createRuntimeCall("stringFromBytes", []llvm.Value{value}, ""), nil
 				case types.Rune:
