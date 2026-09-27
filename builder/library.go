@@ -137,6 +137,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// reproducible. Otherwise the temporary directory is stored in the archive
 	// itself, which varies each run.
 	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+compileopts.ClangTriple(target), "-fdebug-prefix-map="+dir+"="+remapDir)
+	resourceDir := goenv.ClangResourceDir(config.TrimPath())
 	if config.TrimPath() {
 		args = append(args,
 			"-ffile-prefix-map="+goenv.Get("TINYGOROOT")+"="+config.CSourcePath("github.com/tinygo-org/tinygo"),
@@ -144,8 +145,10 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 			"-fdebug-compilation-dir=.",
 			"-gno-record-command-line",
 		)
+		if resourceDir != "" {
+			args = append(args, "-ffile-prefix-map="+resourceDir+"="+config.CSourcePath("clang"))
+		}
 	}
-	resourceDir := goenv.ClangResourceDir(false)
 	if resourceDir != "" {
 		args = append(args, "-resource-dir="+resourceDir)
 	}

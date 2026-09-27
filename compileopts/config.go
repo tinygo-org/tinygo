@@ -396,7 +396,7 @@ func (c *Config) CFlags(libclang bool) []string {
 	for _, flag := range c.Target.CFlags {
 		cflags = append(cflags, strings.ReplaceAll(flag, "{root}", goenv.Get("TINYGOROOT")))
 	}
-	resourceDir := goenv.ClangResourceDir(libclang)
+	resourceDir := goenv.ClangResourceDir(libclang || c.TrimPath())
 	if resourceDir != "" {
 		// The resource directory contains the built-in clang headers like
 		// stdbool.h, stdint.h, float.h, etc.
@@ -419,6 +419,9 @@ func (c *Config) CFlags(libclang bool) []string {
 			"-fdebug-compilation-dir=.",
 			"-gno-record-command-line",
 		)
+		if resourceDir != "" {
+			cflags = append(cflags, "-ffile-prefix-map="+resourceDir+"="+c.CSourcePath("clang"))
+		}
 	}
 	// Always emit debug information. It is optionally stripped at link time.
 	cflags = append(cflags, "-gdwarf-4")
