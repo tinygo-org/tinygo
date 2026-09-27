@@ -69,4 +69,5 @@ jobs:
       - run: tinygo version
       - run: make gen-device -j4
       - run: go test -tags=llvm${{ env.LLVM }} -short -skip=TestErrors
+      - run: go test -tags=llvm${{ env.LLVM }} -run TestTrimPath -target=darwin/amd64
       - run: make smoketest-quick XTENSA=0
