@@ -34,6 +34,8 @@ func GOMAXPROCS(n int) int {
 
 var goroot string // set by the builder
 
+func gorootEnvEnabled() bool
+
 func GOROOT() string {
 	return goroot
 }
@@ -152,8 +154,13 @@ var godebugEmpty string
 var godebugEnv atomic.Pointer[string]
 var godebugUpdate atomic.Pointer[func(string, string)]
 
+func godebugEnvEnabled() bool
+
 //go:linkname godebug_setUpdate internal/godebug.setUpdate
 func godebug_setUpdate(update func(string, string)) {
+	if !godebugEnvEnabled() {
+		return
+	}
 	// The 'update' function needs to be called whenever the GODEBUG environment
 	// variable changes (for example, via os.Setenv).
 	p := new(func(string, string))
