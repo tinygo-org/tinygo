@@ -14,6 +14,8 @@ import (
 
 // createGo emits code to start a new goroutine.
 func (b *builder) createGo(instr *ssa.Go) {
+	b.markRuntimeFeatureUse(&instr.Call)
+
 	if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		// We cheat. None of the builtins do any long or blocking operation, so
 		// we might as well run these builtins right away without the program

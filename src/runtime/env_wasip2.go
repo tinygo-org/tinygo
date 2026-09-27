@@ -8,14 +8,14 @@ package runtime
 
 //go:linkname syscallSetenv syscall.runtimeSetenv
 func syscallSetenv(key, value string) {
-	if key == "GODEBUG" {
+	if key == "GODEBUG" && godebugEnvEnabled() {
 		godebugSetEnv(value)
 	}
 }
 
 //go:linkname syscallUnsetenv syscall.runtimeUnsetenv
 func syscallUnsetenv(key string) {
-	if key == "GODEBUG" {
+	if key == "GODEBUG" && godebugEnvEnabled() {
 		godebugUnsetEnv()
 	}
 }

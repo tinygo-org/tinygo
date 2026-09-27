@@ -420,6 +420,8 @@ func (b *builder) loadDeferredCallParams(structType llvm.Type, ptr llvm.Value) [
 // createDefer emits a single defer instruction, to be run when this function
 // returns.
 func (b *builder) createDefer(instr *ssa.Defer) {
+	b.markRuntimeFeatureUse(&instr.Call)
+
 	// The pointer to the previous defer struct, which we will replace to
 	// make a linked list.
 	next := b.CreateLoad(b.dataPtrType, b.deferPtr, "defer.next")
