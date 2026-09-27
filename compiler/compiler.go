@@ -883,7 +883,7 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 	sort.Slice(members, func(i, j int) bool {
 		iPos := pkg.Members[members[i]].Pos()
 		jPos := pkg.Members[members[j]].Pos()
-		if i == j {
+		if iPos == jPos {
 			// Cannot sort by pos, so do it by name.
 			return members[i] < members[j]
 		}
