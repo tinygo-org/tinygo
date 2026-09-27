@@ -137,6 +137,25 @@ func TestCompiler(t *testing.T) {
 	}
 }
 
+func TestCGoGlobalOrder(t *testing.T) {
+	for range 10 {
+		mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "cgo-global-order.go")
+		if len(errs) != 0 {
+			t.Fatal(errs)
+		}
+		var names []string
+		for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+			if strings.HasSuffix(global.Name(), "$funcaddr") {
+				names = append(names, global.Name())
+			}
+		}
+		mod.Dispose()
+		if len(names) != 4 || !slices.IsSorted(names) {
+			t.Fatalf("CGo globals are not in name order: %v", names)
+		}
+	}
+}
+
 func TestOptimizedLargeAggregateABI(t *testing.T) {
 	options := &compileopts.Options{Target: "wasm"}
 	mod, errs := testCompilePackage(t, options, "large-optimized.go")
