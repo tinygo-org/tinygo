@@ -8,14 +8,14 @@ func syscallSetenv(key, value string) {
 	for i, e := range env {
 		if envKey(e) == key {
 			env[i] = entry
-			if key == "GODEBUG" {
+			if key == "GODEBUG" && godebugEnvEnabled() {
 				godebugSetEnv(value)
 			}
 			return
 		}
 	}
 	env = append(env, entry)
-	if key == "GODEBUG" {
+	if key == "GODEBUG" && godebugEnvEnabled() {
 		godebugSetEnv(value)
 	}
 }
@@ -25,7 +25,7 @@ func syscallUnsetenv(key string) {
 	for i, e := range env {
 		if envKey(e) == key {
 			env = append(env[:i], env[i+1:]...)
-			if key == "GODEBUG" {
+			if key == "GODEBUG" && godebugEnvEnabled() {
 				godebugUnsetEnv()
 			}
 			return

@@ -206,11 +206,14 @@ func TestRuntimeGODEBUG(t *testing.T) {
 
 	for _, test := range []struct {
 		name        string
+		program     string
 		environment []string
 		want        string
 	}{
-		{"compiled default", nil, "true \"\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
-		{"environment override", []string{"GODEBUG=tarinsecurepath=1"}, "true \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
+		{"compiled default", "testdata/runtimegodebug.go", nil, "true \"\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
+		{"environment override", "testdata/runtimegodebug.go", []string{"GODEBUG=tarinsecurepath=1"}, "true \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
+		{"setting compiled default", "testdata/runtimegodebugsetting.go", nil, "true\nfalse\ntrue\ntrue\n"},
+		{"setting environment override", "testdata/runtimegodebugsetting.go", []string{"GODEBUG=tarinsecurepath=1"}, "false\nfalse\ntrue\ntrue\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			options := optionsFromTarget(*testTarget, sema)
@@ -220,7 +223,7 @@ func TestRuntimeGODEBUG(t *testing.T) {
 			}
 
 			output := &bytes.Buffer{}
-			_, err = buildAndRun("testdata/runtimegodebug.go", config, output, nil, test.environment, time.Minute, func(cmd *exec.Cmd, _ builder.BuildResult) error {
+			_, err = buildAndRun(test.program, config, output, nil, test.environment, time.Minute, func(cmd *exec.Cmd, _ builder.BuildResult) error {
 				return cmd.Run()
 			})
 			if err != nil {
