@@ -198,7 +198,6 @@
 				return decoder.decode(new DataView(this._inst.exports.memory.buffer, ptr, len));
 			}
 
-			const timeOrigin = Date.now() - performance.now();
 			const wasi_EBADF = 8;
 			const wasi_ENOSYS = 52;
 			this.importObject = {
@@ -258,8 +257,10 @@
 				gojs: {
 					// func ticks() int64
 					"runtime.ticks": () => {
-						return BigInt((timeOrigin + performance.now()) * 1e6);
+						return BigInt(Math.floor(performance.now() * 1e6));
 					},
+
+					"runtime.walltime": () => BigInt(Date.now()) * 1000000n,
 
 					// func getRandomData(r []byte)
 					"runtime.getRandomData": (slice_ptr, slice_len, slice_cap) => {
@@ -277,7 +278,7 @@
 						// down to a millisecond, so a fractional remainder would be
 						// slept again and again without the clock ever moving.
 						const ms = Math.ceil(Number(timeout) / 1e6);
-						const due = Date.now() + ms;
+						const due = performance.now() + ms;
 						if (this._scheduledWakeup !== undefined) {
 							if (this._scheduledWakeupDue <= due) return;
 							clearTimeout(this._scheduledWakeup);
@@ -563,4 +564,3 @@
 		}
 	}
 })();
-

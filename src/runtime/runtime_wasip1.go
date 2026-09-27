@@ -62,7 +62,11 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns)
 }
 
-const timePrecisionNanoseconds = 1000 // TODO: how can we determine the appropriate `precision`?
+const (
+	timePrecisionNanoseconds = 1000 // TODO: how can we determine the appropriate `precision`?
+	wasiClockRealtime        = 0
+	wasiClockMonotonic       = 1
+)
 
 var (
 	sleepTicksSubscription = __wasi_subscription_t{
@@ -70,7 +74,7 @@ var (
 		u: __wasi_subscription_u_t{
 			tag: __wasi_eventtype_t_clock,
 			u: __wasi_subscription_clock_t{
-				id:        0,
+				id:        wasiClockMonotonic,
 				timeout:   0,
 				precision: timePrecisionNanoseconds,
 				flags:     0,
@@ -82,9 +86,24 @@ var (
 )
 
 func ticks() timeUnit {
+	return timeUnit(wasiClockTime(wasiClockMonotonic))
+}
+
+func wasiClockTime(id uint32) uint64 {
 	var nano uint64
-	clock_time_get(0, timePrecisionNanoseconds, &nano)
-	return timeUnit(nano)
+	if errno := clock_time_get(id, timePrecisionNanoseconds, &nano); errno != 0 {
+		runtimeFatal("runtime: clock_time_get failed")
+	}
+	return nano
+}
+
+//go:linkname now time.now
+func now() (sec int64, nsec int32, mono int64) {
+	wall := wasiClockTime(wasiClockRealtime)
+	sec = int64(wall / 1e9)
+	nsec = int32(wall % 1e9)
+	mono = nanotime()
+	return
 }
 
 // Implementations of WASI APIs

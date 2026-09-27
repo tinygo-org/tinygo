@@ -130,7 +130,7 @@ func pollIO(timeoutNs int64) {
 
 	if addClock {
 		pollSubs[i].userData = 0
-		pollSubs[i].u.setClock(0, uint64(timeoutNs), timePrecisionNanoseconds, 0)
+		pollSubs[i].u.setClock(wasiClockMonotonic, uint64(timeoutNs), timePrecisionNanoseconds, 0)
 		i++
 	}
 
