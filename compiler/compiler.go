@@ -1720,58 +1720,66 @@ func isMemequalArrayComparison(expr *ssa.BinOp) bool {
 }
 
 func canUseDereferencePointer(unop *ssa.UnOp) bool {
-	if unop.Op != token.MUL {
+	if !isDereference(unop) {
 		return false
 	}
-	referrers := unop.Referrers()
+	comparison := adjacentComparison(unop, isDereference)
+	return comparison != nil && isMemequalArrayComparison(comparison)
+}
+
+func isDereference(value ssa.Value) bool {
+	unop, ok := value.(*ssa.UnOp)
+	return ok && unop.Op == token.MUL
+}
+
+// adjacentComparison returns the only binary operation that uses instr, if
+// only debug refs and other operands accepted by operandOK run in between.
+func adjacentComparison(instr ssa.Instruction, operandOK func(ssa.Value) bool) *ssa.BinOp {
+	value, ok := instr.(ssa.Value)
+	if !ok {
+		return nil
+	}
+	referrers := value.Referrers()
 	if referrers == nil {
-		return false
+		return nil
 	}
 	var comparison *ssa.BinOp
 	for _, referrer := range *referrers {
 		switch referrer := referrer.(type) {
 		case *ssa.DebugRef:
-			continue
 		case *ssa.BinOp:
 			if comparison != nil {
-				return false
+				return nil
 			}
 			comparison = referrer
 		default:
-			return false
+			return nil
 		}
 	}
-	if comparison == nil || !isMemequalArrayComparison(comparison) || unop.Block() != comparison.Block() {
-		return false
+	if comparison == nil || instr.Block() != comparison.Block() {
+		return nil
 	}
 
-	unopIndex := -1
-	comparisonIndex := -1
-	for i, instruction := range unop.Block().Instrs {
-		switch instruction {
-		case unop:
-			unopIndex = i
-		case comparison:
-			comparisonIndex = i
+	found := false
+	for _, instruction := range instr.Block().Instrs {
+		if !found {
+			found = instruction == instr
+			continue
 		}
-	}
-	if unopIndex == -1 || comparisonIndex <= unopIndex {
-		return false
-	}
-
-	for _, instruction := range unop.Block().Instrs[unopIndex+1 : comparisonIndex] {
+		if instruction == comparison {
+			return comparison
+		}
 		switch instruction := instruction.(type) {
 		case *ssa.DebugRef:
-		case *ssa.UnOp:
-			if instruction.Op != token.MUL ||
-				(comparison.X != instruction && comparison.Y != instruction) {
-				return false
+		case ssa.Value:
+			if comparison.X != instruction && comparison.Y != instruction || !operandOK(instruction) {
+				return nil
 			}
 		default:
-			return false
+			return nil
 		}
 	}
-	return true
+	return nil
 }
 
 func (b *builder) getCallArgument(value ssa.Value, indirect bool) llvm.Value {
