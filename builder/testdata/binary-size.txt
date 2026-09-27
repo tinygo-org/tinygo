@@ -19,8 +19,8 @@ pico2                    ./testdata/size-timer                    z      13791  
 pico2                    ./testdata/size-timer                    2      33399     2809      136     5672
 cortex-m-qemu            ./testdata/size-corpus                   z       8775     1297       80     4188
 cortex-m-qemu            ./testdata/size-corpus                   2      17034      862       72     4188
-riscv-qemu               ./testdata/size-corpus                   z      16052     1028       88    16660
-riscv-qemu               ./testdata/size-corpus                   2      24808      744       80    16644
+riscv-qemu               ./testdata/size-corpus                   z      16100     1028       88    16660
+riscv-qemu               ./testdata/size-corpus                   2      22873      935       80    16644
 cortex-m-qemu            ./testdata/size-init-recover             z       2559      761        4     4168
 cortex-m-qemu            ./testdata/size-init-recover             2       6499      309        4     4168
 pico2                    ./testdata/size-init-regexp              z      16047    11809      940     5736
