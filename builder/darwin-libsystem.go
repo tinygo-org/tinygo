@@ -52,7 +52,7 @@ func makeDarwinLibSystemJob(config *compileopts.Config, tmpdir string) *compileJ
 			if config.Options.PrintCommands != nil {
 				config.Options.PrintCommands("ld.lld", flags...)
 			}
-			return link("ld.lld", flags...)
+			return link("ld.lld", flags)
 		},
 	}
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
@@ -925,9 +926,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					"--thinlto-cache-dir="+filepath.Join(cacheDir, "thinlto"))
 			case "darwin":
 				// Options for the ld64-compatible lld linker.
-				ldflags = append(ldflags,
-					"--lto-O"+strconv.Itoa(speedLevel),
-					"-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
+				ldflags = append(ldflags, "--lto-O"+strconv.Itoa(speedLevel))
+				// LLD 15 embeds cache paths in OSO symbols, unlike LLD 16+.
+				// Fixed in LLD 16 by https://reviews.llvm.org/D131624.
+				if !config.TrimPath() || llvmutil.Version() >= 16 {
+					ldflags = append(ldflags, "-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
+				}
 				if config.TrimPath() {
 					ldflags = append(ldflags, "-oso_prefix", tmpdir+string(filepath.Separator))
 				}
@@ -954,7 +958,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			if config.Options.PrintCommands != nil {
 				config.Options.PrintCommands(config.Target.Linker, ldflags...)
 			}
-			err = link(config.Target.Linker, ldflags...)
+			var linkEnv []string
+			if config.TrimPath() && config.LinkerFlavor() == "darwin" {
+				linkEnv = append(linkEnv, "ZERO_AR_DATE=1")
+			}
+			err = link(config.Target.Linker, ldflags, linkEnv...)
 			if err != nil {
 				return err
 			}

@@ -56,7 +56,7 @@ func runCCompiler(flags ...string) error {
 }
 
 // link invokes a linker with the given name and flags.
-func link(linker string, flags ...string) error {
+func link(linker string, flags []string, env ...string) error {
 	// We only support LLD.
 	if linker != "ld.lld" && linker != "wasm-ld" {
 		return fmt.Errorf("unexpected: linker %s should be ld.lld or wasm-ld", linker)
@@ -75,6 +75,7 @@ func link(linker string, flags ...string) error {
 	var buf bytes.Buffer
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = &buf
+	cmd.Env = append(os.Environ(), env...)
 	err := cmd.Run()
 	if err != nil {
 		if buf.Len() == 0 {
