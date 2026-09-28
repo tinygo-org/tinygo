@@ -97,10 +97,6 @@ func byteSliceStringCompareLiteral(a []byte) bool {
 	return string(a) == "abc"
 }
 
-func byteSliceStringCompareOrdered(a, b []byte) bool {
-	return string(a) < string(b)
-}
-
 type namedByte byte
 type namedBytes []namedByte
 type namedRune rune
@@ -124,6 +120,96 @@ func namedByteSliceToNamedString(a namedBytes) namedString {
 
 func namedRuneSliceToString(a []namedRune) string {
 	return string(a)
+}
+
+func byteSliceStringCompareLess(a, b []byte) bool {
+	return string(a) < string(b)
+}
+
+func byteSliceStringLessEscape(a, b []byte) (bool, string) {
+	s := string(a)
+	t := string(b)
+	return s < t, s
+}
+
+func byteSliceStringLessMutation(a, b []byte, c byte) bool {
+	s := string(a)
+	b[0] = c
+	return s < string(b)
+}
+
+func namedByteSliceStringLess(a, b namedBytes) bool {
+	return namedString(a) < namedString(b)
+}
+
+func byteSliceStringLessReuse(a, b []byte) (bool, bool) {
+	s := string(a)
+	t := string(b)
+	return s < t, t < s
+}
+
+func byteSliceStringLessLiteral(a []byte) bool {
+	return string(a) < "abc"
+}
+
+func byteSliceStringCompareLessEqual(a, b []byte) bool {
+	return string(a) <= string(b)
+}
+
+func byteSliceStringLessEqualEscape(a, b []byte) (bool, string) {
+	s := string(a)
+	t := string(b)
+	return s <= t, s
+}
+
+func byteSliceStringLessEqualMutation(a, b []byte, c byte) bool {
+	s := string(a)
+	b[0] = c
+	return s <= string(b)
+}
+
+func namedByteSliceStringLessEqual(a, b namedBytes) bool {
+	return namedString(a) <= namedString(b)
+}
+
+func byteSliceStringCompareGreater(a, b []byte) bool {
+	return string(a) > string(b)
+}
+
+func byteSliceStringGreaterEscape(a, b []byte) (bool, string) {
+	s := string(a)
+	t := string(b)
+	return s > t, s
+}
+
+func byteSliceStringGreaterMutation(a, b []byte, c byte) bool {
+	s := string(a)
+	b[0] = c
+	return s > string(b)
+}
+
+func namedByteSliceStringGreater(a, b namedBytes) bool {
+	return namedString(a) > namedString(b)
+}
+
+func byteSliceStringCompareGreaterEqual(a, b []byte) bool {
+	return string(a) >= string(b)
+}
+
+func byteSliceStringGreaterEqualEscape(a, b []byte) (bool, string) {
+	s := string(a)
+	t := string(b)
+	return s >= t, s
+}
+
+func byteSliceStringGreaterEqualMutation(a, b []byte, c byte) bool {
+	s := string(a)
+	b[0] = c
+	return s >= string(b)
+}
+
+func namedByteSliceStringGreaterEqual(a, b namedBytes) bool {
+	return namedString(a) >= namedString(b)
 }
 
 //go:noinline

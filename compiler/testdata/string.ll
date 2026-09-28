@@ -10,6 +10,7 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:basic:string" = linkonce_odr constant { i8, ptr } { i8 81, ptr @"reflect/types.type:pointer:basic:string" }, align 4
 @"reflect/types.type:pointer:basic:string" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:string" }, align 4
 @"main$string.1" = internal unnamed_addr constant [3 x i8] c"abc", align 1
+@"main$string.2" = internal unnamed_addr constant [3 x i8] c"abc", align 1
 
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
@@ -357,26 +358,6 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.byteSliceStringCompareOrdered(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
-entry:
-  %stackalloc = alloca i8, align 1
-  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
-  %1 = extractvalue %runtime._string %0, 0
-  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
-  %2 = call %runtime._string @runtime.stringFromBytes(ptr %b.data, i32 %b.len, i32 %b.cap, ptr undef) #4
-  %3 = extractvalue %runtime._string %2, 0
-  call void @runtime.trackPointer(ptr %3, ptr nonnull %stackalloc, ptr undef) #4
-  %4 = extractvalue %runtime._string %0, 0
-  %5 = extractvalue %runtime._string %0, 1
-  %6 = extractvalue %runtime._string %2, 0
-  %7 = extractvalue %runtime._string %2, 1
-  %8 = call i1 @runtime.stringLess(ptr %4, i32 %5, ptr %6, i32 %7, ptr undef) #4
-  ret i1 %8
-}
-
-declare i1 @runtime.stringLess(ptr readonly, i32, ptr readonly, i32, ptr) #0
-
-; Function Attrs: nounwind
 define hidden i1 @main.namedByteSliceStringCompare(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
@@ -428,6 +409,302 @@ entry:
 }
 
 declare %runtime._string @runtime.stringFromRunes(ptr nocapture readonly, i32, i32, ptr) #0
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringCompareLess(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #4
+  ret i1 %0
+}
+
+declare i1 @runtime.stringLess(ptr readonly, i32, ptr readonly, i32, ptr) #0
+
+; Function Attrs: nounwind
+define hidden { i1, %runtime._string } @main.byteSliceStringLessEscape(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = extractvalue %runtime._string %0, 0
+  %3 = extractvalue %runtime._string %0, 1
+  %4 = call i1 @runtime.stringLess(ptr %2, i32 %3, ptr %b.data, i32 %b.len, ptr undef) #4
+  %5 = insertvalue { i1, %runtime._string } zeroinitializer, i1 %4, 0
+  %6 = insertvalue { i1, %runtime._string } %5, %runtime._string %0, 1
+  ret { i1, %runtime._string } %6
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringLessMutation(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, i8 %c, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = icmp eq i32 %b.len, 0
+  br i1 %2, label %lookup.throw, label %lookup.next
+
+lookup.next:                                      ; preds = %entry
+  store i8 %c, ptr %b.data, align 1
+  call void @runtime.trackPointer(ptr nonnull %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %3 = extractvalue %runtime._string %0, 0
+  %4 = extractvalue %runtime._string %0, 1
+  %5 = call i1 @runtime.stringLess(ptr %3, i32 %4, ptr nonnull %b.data, i32 %b.len, ptr undef) #4
+  ret i1 %5
+
+lookup.throw:                                     ; preds = %entry
+  call void @runtime.lookupPanic(ptr undef) #4
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i1 undef
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.namedByteSliceStringLess(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #4
+  ret i1 %0
+}
+
+; Function Attrs: nounwind
+define hidden { i1, i1 } @main.byteSliceStringLessReuse(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = call %runtime._string @runtime.stringFromBytes(ptr %b.data, i32 %b.len, i32 %b.cap, ptr undef) #4
+  %3 = extractvalue %runtime._string %2, 0
+  call void @runtime.trackPointer(ptr %3, ptr nonnull %stackalloc, ptr undef) #4
+  %4 = extractvalue %runtime._string %0, 0
+  %5 = extractvalue %runtime._string %0, 1
+  %6 = extractvalue %runtime._string %2, 0
+  %7 = extractvalue %runtime._string %2, 1
+  %8 = call i1 @runtime.stringLess(ptr %4, i32 %5, ptr %6, i32 %7, ptr undef) #4
+  %9 = extractvalue %runtime._string %2, 0
+  %10 = extractvalue %runtime._string %2, 1
+  %11 = extractvalue %runtime._string %0, 0
+  %12 = extractvalue %runtime._string %0, 1
+  %13 = call i1 @runtime.stringLess(ptr %9, i32 %10, ptr %11, i32 %12, ptr undef) #4
+  %14 = insertvalue { i1, i1 } zeroinitializer, i1 %8, 0
+  %15 = insertvalue { i1, i1 } %14, i1 %13, 1
+  ret { i1, i1 } %15
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringLessLiteral(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = extractvalue %runtime._string %0, 0
+  %3 = extractvalue %runtime._string %0, 1
+  %4 = call i1 @runtime.stringLess(ptr %2, i32 %3, ptr nonnull @"main$string.2", i32 3, ptr undef) #4
+  ret i1 %4
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringCompareLessEqual(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #4
+  %1 = xor i1 %0, true
+  ret i1 %1
+}
+
+; Function Attrs: nounwind
+define hidden { i1, %runtime._string } @main.byteSliceStringLessEqualEscape(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = extractvalue %runtime._string %0, 0
+  %3 = extractvalue %runtime._string %0, 1
+  %4 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %2, i32 %3, ptr undef) #4
+  %5 = xor i1 %4, true
+  %6 = insertvalue { i1, %runtime._string } zeroinitializer, i1 %5, 0
+  %7 = insertvalue { i1, %runtime._string } %6, %runtime._string %0, 1
+  ret { i1, %runtime._string } %7
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringLessEqualMutation(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, i8 %c, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = icmp eq i32 %b.len, 0
+  br i1 %2, label %lookup.throw, label %lookup.next
+
+lookup.next:                                      ; preds = %entry
+  store i8 %c, ptr %b.data, align 1
+  call void @runtime.trackPointer(ptr nonnull %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %3 = extractvalue %runtime._string %0, 0
+  %4 = extractvalue %runtime._string %0, 1
+  %5 = call i1 @runtime.stringLess(ptr nonnull %b.data, i32 %b.len, ptr %3, i32 %4, ptr undef) #4
+  %6 = xor i1 %5, true
+  ret i1 %6
+
+lookup.throw:                                     ; preds = %entry
+  call void @runtime.lookupPanic(ptr undef) #4
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i1 undef
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.namedByteSliceStringLessEqual(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #4
+  %1 = xor i1 %0, true
+  ret i1 %1
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringCompareGreater(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #4
+  ret i1 %0
+}
+
+; Function Attrs: nounwind
+define hidden { i1, %runtime._string } @main.byteSliceStringGreaterEscape(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = extractvalue %runtime._string %0, 0
+  %3 = extractvalue %runtime._string %0, 1
+  %4 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %2, i32 %3, ptr undef) #4
+  %5 = insertvalue { i1, %runtime._string } zeroinitializer, i1 %4, 0
+  %6 = insertvalue { i1, %runtime._string } %5, %runtime._string %0, 1
+  ret { i1, %runtime._string } %6
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringGreaterMutation(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, i8 %c, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = icmp eq i32 %b.len, 0
+  br i1 %2, label %lookup.throw, label %lookup.next
+
+lookup.next:                                      ; preds = %entry
+  store i8 %c, ptr %b.data, align 1
+  call void @runtime.trackPointer(ptr nonnull %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %3 = extractvalue %runtime._string %0, 0
+  %4 = extractvalue %runtime._string %0, 1
+  %5 = call i1 @runtime.stringLess(ptr nonnull %b.data, i32 %b.len, ptr %3, i32 %4, ptr undef) #4
+  ret i1 %5
+
+lookup.throw:                                     ; preds = %entry
+  call void @runtime.lookupPanic(ptr undef) #4
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i1 undef
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.namedByteSliceStringGreater(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = call i1 @runtime.stringLess(ptr %b.data, i32 %b.len, ptr %a.data, i32 %a.len, ptr undef) #4
+  ret i1 %0
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringCompareGreaterEqual(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #4
+  %1 = xor i1 %0, true
+  ret i1 %1
+}
+
+; Function Attrs: nounwind
+define hidden { i1, %runtime._string } @main.byteSliceStringGreaterEqualEscape(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = extractvalue %runtime._string %0, 0
+  %3 = extractvalue %runtime._string %0, 1
+  %4 = call i1 @runtime.stringLess(ptr %2, i32 %3, ptr %b.data, i32 %b.len, ptr undef) #4
+  %5 = xor i1 %4, true
+  %6 = insertvalue { i1, %runtime._string } zeroinitializer, i1 %5, 0
+  %7 = insertvalue { i1, %runtime._string } %6, %runtime._string %0, 1
+  ret { i1, %runtime._string } %7
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.byteSliceStringGreaterEqualMutation(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, i8 %c, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
+  %1 = extractvalue %runtime._string %0, 0
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  %2 = icmp eq i32 %b.len, 0
+  br i1 %2, label %lookup.throw, label %lookup.next
+
+lookup.next:                                      ; preds = %entry
+  store i8 %c, ptr %b.data, align 1
+  call void @runtime.trackPointer(ptr nonnull %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %3 = extractvalue %runtime._string %0, 0
+  %4 = extractvalue %runtime._string %0, 1
+  %5 = call i1 @runtime.stringLess(ptr %3, i32 %4, ptr nonnull %b.data, i32 %b.len, ptr undef) #4
+  %6 = xor i1 %5, true
+  ret i1 %6
+
+lookup.throw:                                     ; preds = %entry
+  call void @runtime.lookupPanic(ptr undef) #4
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i1 undef
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.namedByteSliceStringGreaterEqual(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = call i1 @runtime.stringLess(ptr %a.data, i32 %a.len, ptr %b.data, i32 %b.len, ptr undef) #4
+  %1 = xor i1 %0, true
+  ret i1 %1
+}
 
 ; Function Attrs: nounwind
 define hidden i1 @main.stringCompareLarger(ptr readonly %s1.data, i32 %s1.len, ptr readonly %s2.data, i32 %s2.len, ptr %context) unnamed_addr #1 {

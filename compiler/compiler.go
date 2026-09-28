@@ -3057,9 +3057,17 @@ func isByteSliceToStringComparison(expr *ssa.Convert) bool {
 	}
 	comparison := adjacentComparison(expr, isByteSliceToStringConvert)
 	return comparison != nil &&
-		(comparison.Op == token.EQL || comparison.Op == token.NEQ) &&
+		isComparisonOp(comparison.Op) &&
 		isByteSliceToStringConvert(comparison.X) &&
 		isByteSliceToStringConvert(comparison.Y)
+}
+
+func isComparisonOp(op token.Token) bool {
+	switch op {
+	case token.EQL, token.NEQ, token.LSS, token.LEQ, token.GTR, token.GEQ:
+		return true
+	}
+	return false
 }
 
 func isByteSliceToStringConvert(value ssa.Value) bool {
