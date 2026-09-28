@@ -34,6 +34,10 @@ func GC() {
 	// Unimplemented.
 }
 
+func mallocs() uint64 {
+	return 0
+}
+
 func markRoots(start, end uintptr) {
 	runtimeFatal("unreachable: markRoots")
 }

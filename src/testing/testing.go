@@ -977,15 +977,22 @@ func (t *T) report() {
 // AllocsPerRun returns the average number of allocations during calls to f.
 // Although the return value has type float64, it will always be an integral
 // value.
-//
-// Not implemented.
 func AllocsPerRun(runs int, f func()) (avg float64) {
 	f()
+
+	mallocs := 0 - runtimeMallocs()
+
 	for range runs {
 		f()
 	}
-	return 0
+
+	mallocs += runtimeMallocs()
+
+	return float64(mallocs / uint64(runs))
 }
+
+//go:linkname runtimeMallocs runtime.mallocs
+func runtimeMallocs() uint64
 
 type InternalExample struct {
 	Name      string

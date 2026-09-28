@@ -57,6 +57,12 @@ func SetFinalizer(obj interface{}, finalizer interface{})
 // ReadMemStats populates m with memory statistics.
 func ReadMemStats(ms *MemStats)
 
+func mallocs() uint64 {
+	var stats MemStats
+	ReadMemStats(&stats)
+	return stats.Mallocs
+}
+
 func setHeapEnd(newHeapEnd uintptr) {
 	// Heap is in custom GC so ignore for when called from wasm initialization.
 }

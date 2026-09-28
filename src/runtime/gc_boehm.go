@@ -32,7 +32,10 @@ const (
 	boehmNormalKind  = 1
 )
 
-var gcLock task.PMutex
+var (
+	gcLock    task.PMutex
+	gcMallocs uint64
+)
 
 func initHeap() {
 	libgc_init()
@@ -74,6 +77,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 
 	gcLock.Lock()
+	gcMallocs++
 	var ptr unsafe.Pointer
 	var needsZero bool
 	switch layout {
@@ -198,6 +202,13 @@ func ReadMemStats(m *MemStats) {
 	m.NumGC = uint32(gcMemStats.gc_no)
 
 	gcLock.Unlock()
+}
+
+func mallocs() uint64 {
+	gcLock.Lock()
+	mallocs := gcMallocs
+	gcLock.Unlock()
+	return mallocs
 }
 
 func setHeapEnd(newHeapEnd uintptr) {
