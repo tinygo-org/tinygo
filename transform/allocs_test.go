@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -98,6 +99,63 @@ func TestAllocsAggregateEdges(t *testing.T) {
 				t.Errorf("got %d heap and %d stack allocations, want %d and %d:\n%s", heap, stack, want, 1-want, fn.String())
 			}
 		})
+	}
+}
+
+func TestAllocsRuntimePhi(t *testing.T) {
+	t.Parallel()
+
+	mod := compileGoFileForTesting(t, "../testdata/calls.go")
+	defer mod.Context().Dispose()
+	defer mod.Dispose()
+	po := llvm.NewPassBuilderOptions()
+	defer po.Dispose()
+	passes := "globalopt,ipsccp,instcombine,adce,function-attrs"
+	if llvmutil.Version() >= 18 {
+		passes = "globalopt,ipsccp,instcombine<no-verify-fixpoint>,adce,function-attrs"
+	}
+	if err := mod.RunPasses(passes, llvm.TargetMachine{}, po); err != nil {
+		t.Fatal(err)
+	}
+	fn := mod.NamedFunction("main.phiReturnEscape")
+	if fn.IsNil() {
+		t.Fatal("phiReturnEscape not found")
+	}
+	var returnedPhi llvm.Value
+	for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+			if !inst.IsAReturnInst().IsNil() && !inst.Operand(0).IsAPHINode().IsNil() {
+				returnedPhi = inst.Operand(0)
+			}
+		}
+	}
+	if returnedPhi.IsNil() {
+		t.Fatalf("runtime regression does not return a phi before escape analysis:\n%s", fn.String())
+	}
+	var extracted bool
+	for i := 0; i < returnedPhi.IncomingCount(); i++ {
+		if !returnedPhi.IncomingValue(i).IsAExtractValueInst().IsNil() {
+			extracted = true
+		}
+	}
+	if !extracted {
+		t.Fatalf("returned phi does not merge an extracted aggregate:\n%s", fn.String())
+	}
+
+	transform.OptimizeAllocs(mod, nil, 256, nil)
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	var allocations int
+	for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+			if !inst.IsACallInst().IsNil() && inst.CalledValue() == mod.NamedFunction("runtime.alloc") {
+				allocations++
+			}
+		}
+	}
+	if allocations != 1 {
+		t.Fatalf("got %d heap allocations, want 1:\n%s", allocations, fn.String())
 	}
 }
 

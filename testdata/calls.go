@@ -109,9 +109,12 @@ func main() {
 	fn := closureReturnEscape()
 	clobberStack()
 	println("closure escape:", fn())
-	err = phiReturnEscape(false)
+	var phiCond uint32
+	err = phiReturnEscape(volatile.LoadUint32(&phiCond) != 0)
 	clobberStack()
 	println("phi escape:", err.(*multiReturnErr).x[1])
+	volatile.StoreUint32(&phiCond, 1)
+	println("phi nil:", phiReturnEscape(volatile.LoadUint32(&phiCond) != 0) == nil)
 	g := interfaceReturnEscape()
 	clobberStack()
 	println("interface return:", g.get())
@@ -196,15 +199,13 @@ func closureReturnEscape() func() int {
 	return func() int { return err.(*multiReturnErr).x[1] }
 }
 
-// The extracted value reaches the return through a phi.
-//
 //go:noinline
 func phiReturnEscape(cond bool) error {
 	e := &multiReturnErr{}
 	e.x[1] = 48
 	_, err := wrapMultiReturn(e)
 	if cond {
-		return nil
+		err = nil
 	}
 	return err
 }

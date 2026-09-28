@@ -23,5 +23,6 @@ slice return: 45
 global escape: 46
 closure escape: 47
 phi escape: 48
+phi nil: true
 interface return: 49
 deep forward: 50
