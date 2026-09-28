@@ -16,3 +16,12 @@ thing inside closure: foo
 inside fp closure: foo 3
 Thing.Print:  arg: functional args 1
 Thing.Print: named thing arg: functional args 2
+multiple return values: 42
+single array return: 43
+forwarded return: 44
+slice return: 45
+global escape: 46
+closure escape: 47
+phi escape: 48
+interface return: 49
+deep forward: 50

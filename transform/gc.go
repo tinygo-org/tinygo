@@ -372,7 +372,7 @@ func makeGCGlobalRoots(mod llvm.Module) bool {
 		if strings.HasPrefix(global.Name(), "llvm.") ||
 			global.IsGlobalConstant() ||
 			global.Initializer().IsNil() ||
-			!gcTypeHasPointers(global.GlobalValueType()) {
+			!typeHasPointers(global.GlobalValueType()) {
 			continue
 		}
 		roots = appendGCGlobalRootRanges(roots, global, global.GlobalValueType(), targetData, ctx.Int8Type(), uintptrType)
@@ -483,14 +483,14 @@ func appendGCGlobalRootOffsets(offsets []uint64, typ llvm.Type, targetData llvm.
 		return append(offsets, baseOffset)
 	case llvm.StructTypeKind:
 		for i, fieldType := range typ.StructElementTypes() {
-			if gcTypeHasPointers(fieldType) {
+			if typeHasPointers(fieldType) {
 				fieldOffset := targetData.ElementOffset(typ, i)
 				offsets = appendGCGlobalRootOffsets(offsets, fieldType, targetData, baseOffset+fieldOffset)
 			}
 		}
 	case llvm.ArrayTypeKind:
 		elemType := typ.ElementType()
-		if gcTypeHasPointers(elemType) {
+		if typeHasPointers(elemType) {
 			elemSize := targetData.TypeAllocSize(elemType)
 			for i := 0; i < typ.ArrayLength(); i++ {
 				offsets = appendGCGlobalRootOffsets(offsets, elemType, targetData, baseOffset+uint64(i)*elemSize)
@@ -498,22 +498,6 @@ func appendGCGlobalRootOffsets(offsets []uint64, typ llvm.Type, targetData llvm.
 		}
 	}
 	return offsets
-}
-
-func gcTypeHasPointers(typ llvm.Type) bool {
-	switch typ.TypeKind() {
-	case llvm.PointerTypeKind:
-		return true
-	case llvm.StructTypeKind:
-		for _, field := range typ.StructElementTypes() {
-			if gcTypeHasPointers(field) {
-				return true
-			}
-		}
-	case llvm.ArrayTypeKind:
-		return typ.ArrayLength() != 0 && gcTypeHasPointers(typ.ElementType())
-	}
-	return false
 }
 
 // markParentFunctions traverses all parent function calls (recursively) and

@@ -30,6 +30,30 @@ func hasUses(value llvm.Value) bool {
 	return !value.FirstUse().IsNil()
 }
 
+// typeHasPointers returns whether a value of this type can hold a pointer.
+//
+// Vectors report false. That is precise for the IR TinyGo produces: nothing
+// lowers a Go value into a vector of pointers, and OptimizeAllocs runs long
+// before any vectorizer. It is also why escape analysis may rely on this: a
+// pointer can only reach a vector lane through insertelement, which
+// valueEscapesAtImpl treats as an escape. A pass that starts feeding pointer
+// vectors to either caller needs a case here first.
+func typeHasPointers(typ llvm.Type) bool {
+	switch typ.TypeKind() {
+	case llvm.PointerTypeKind:
+		return true
+	case llvm.StructTypeKind:
+		for _, field := range typ.StructElementTypes() {
+			if typeHasPointers(field) {
+				return true
+			}
+		}
+	case llvm.ArrayTypeKind:
+		return typ.ArrayLength() != 0 && typeHasPointers(typ.ElementType())
+	}
+	return false
+}
+
 // makeGlobalArray creates a new LLVM global with the given name and integers as
 // contents, and returns the global and initializer type.
 // Note that it is left with the default linkage etc., you should set

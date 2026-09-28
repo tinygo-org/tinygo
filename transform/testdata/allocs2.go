@@ -174,3 +174,186 @@ func unsafeNoEscape(ptr unsafe.Pointer) uintptr
 func keepAliveNoEscape(ptr unsafe.Pointer)
 
 var pseudoVolatile volatile.Register32
+
+type errT struct{ x [4]int }
+
+func (e *errT) Error() string { return "errT" }
+
+type ptrStruct struct {
+	n int
+	p *errT
+}
+
+func wrapError(e *errT) (int, error) { return 1, e }
+
+func wrapErrorFirst(e *errT) (error, int) { return e, 1 }
+
+func wrapAny(e *errT) (int, any) { return 1, e }
+
+func wrapSlice(b []byte) (int, []byte) { return 1, b }
+
+func wrapStruct(e *errT) (int, ptrStruct) { return 1, ptrStruct{1, e} }
+
+func wrapArray(e *errT) (int, [2]*errT) { return 1, [2]*errT{e, nil} }
+
+var globalErr error
+
+// The pointer is returned as one of multiple return values, wrapped in an
+// interface, slice, struct or array, and then escapes from the caller.
+func escapingMultiReturn() error {
+	e := &errT{} // OUT: escapes at line 206
+	_, err := wrapError(e)
+	return err
+}
+
+func escapingMultiReturnFirst() error {
+	e := &errT{} // OUT: escapes at line 212
+	err, _ := wrapErrorFirst(e)
+	return err
+}
+
+func escapingMultiReturnAny() any {
+	e := &errT{} // OUT: escapes at line 218
+	_, v := wrapAny(e)
+	return v
+}
+
+func escapingMultiReturnSlice() []byte {
+	b := make([]byte, 8) // OUT: escapes at line 224
+	_, s := wrapSlice(b)
+	return s
+}
+
+func escapingMultiReturnStruct() *errT {
+	e := &errT{} // OUT: escapes at line 195
+	_, s := wrapStruct(e)
+	return s.p
+}
+
+func escapingMultiReturnArray() *errT {
+	e := &errT{} // OUT: escapes at line 236
+	_, a := wrapArray(e)
+	return a[0]
+}
+
+func escapingMultiReturnGlobal() {
+	e := &errT{} // OUT: escapes at line 242
+	_, err := wrapError(e)
+	globalErr = err
+}
+
+// The pointer is returned as one of multiple return values, but the caller
+// does not let it escape, so it can stay on the stack.
+func nonEscapingMultiReturnInt() int {
+	e := &errT{}
+	n, _ := wrapError(e)
+	return n
+}
+
+func nonEscapingMultiReturnNilCheck() bool {
+	e := &errT{}
+	_, err := wrapError(e)
+	return err != nil
+}
+
+func nonEscapingMultiReturnSliceLen() int {
+	b := make([]byte, 8)
+	_, s := wrapSlice(b)
+	return len(s)
+}
+
+func nonEscapingMultiReturnArrayLoad() int {
+	e := &errT{}
+	e.x[1] = 42
+	_, a := wrapArray(e)
+	return a[0].x[1]
+}
+
+func wrapSingleArray(e *errT) [1]error { return [1]error{e} }
+
+func wrapNestedArray(e *errT) (int, [2][2]*errT) { return 1, [2][2]*errT{{}, {nil, e}} }
+
+func forwardError(e *errT) error {
+	_, err := wrapError(e)
+	return err
+}
+
+func escapingSingleArray() error {
+	e := &errT{} // OUT: escapes at line 284
+	a := wrapSingleArray(e)
+	return a[0]
+}
+
+func escapingNestedArray() [2]*errT {
+	e := &errT{} // OUT: escapes at line 290
+	_, a := wrapNestedArray(e)
+	return a[1]
+}
+
+func escapingForwardedError() error {
+	e := &errT{} // OUT: escapes at line 295
+	return forwardError(e)
+}
+
+func escapingMultiReturnField() *int {
+	e := &errT{} // OUT: escapes at line 301
+	_, a := wrapArray(e)
+	return &a[0].x[1]
+}
+
+func escapingMultiReturnCall() {
+	e := &errT{} // OUT: escapes at line 307
+	_, err := wrapError(e)
+	useInterface(err)
+}
+
+func escapingMultiReturnClosure() func() error {
+	e := &errT{}           // OUT: escapes at line 312
+	_, err := wrapError(e) // OUT: escapes at line 313
+	return func() error { return err }
+}
+
+func escapingMultiReturnPhi(cond bool) error {
+	e := &errT{} // OUT: escapes at line 318
+	_, err := wrapError(e)
+	if cond {
+		err = nil
+	}
+	return err
+}
+
+func nonEscapingSingleArray() bool {
+	e := &errT{}
+	a := wrapSingleArray(e)
+	return a[0] != nil
+}
+
+func nonEscapingNestedArray() int {
+	e := &errT{}
+	_, a := wrapNestedArray(e)
+	return a[1][1].x[0]
+}
+
+func nonEscapingForwardedError() bool {
+	e := &errT{}
+	return forwardError(e) != nil
+}
+
+func nonEscapingMultiReturnSliceCap() int {
+	b := make([]byte, 8)
+	_, s := wrapSlice(b)
+	return cap(s)
+}
+
+func nonEscapingMultiReturnDiscard() {
+	e := &errT{}
+	wrapError(e)
+}
+
+func wrapPointerFreeArray(e *errT) (error, [2]int) { return e, [2]int{e.x[0], 1} }
+
+func nonEscapingPointerFreeArray() [2]int {
+	e := &errT{}
+	_, a := wrapPointerFreeArray(e)
+	return a
+}
