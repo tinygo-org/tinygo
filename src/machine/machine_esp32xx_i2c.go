@@ -201,11 +201,16 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 		case i2cCMD_WRITE:
 			count := 32
 			if needAddress {
+				// Own WRITE plus END for the address, else an address NACK hangs the controller.
+				// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1296
 				needAddress = false
 				i2c.Bus.SetDATA_FIFO_RDATA((uint32(addr) & 0x7f) << 1)
-				count--
 				i2c.Bus.SLAVE_ADDR.Set(uint32(addr))
-				i2c.Bus.SetCTR_CONF_UPGATE(1)
+				reg.Set(i2cCMD_WRITE | 1)
+				reg = nextAddress(reg)
+				reg.Set(i2cCMD_END)
+				reg = nil
+				break
 			}
 			for ; count > 0 && c.head < len(c.data); count, c.head = count-1, c.head+1 {
 				i2c.Bus.SetDATA_FIFO_RDATA(uint32(c.data[c.head]))
@@ -223,11 +228,15 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 
 		case i2cCMD_READ:
 			if needAddress {
+				// Own WRITE plus END for the address, see i2cCMD_WRITE above.
 				needAddress = false
 				i2c.Bus.SetDATA_FIFO_RDATA((uint32(addr)&0x7f)<<1 | 1)
 				i2c.Bus.SLAVE_ADDR.Set(uint32(addr))
 				reg.Set(i2cCMD_WRITE | 1)
 				reg = nextAddress(reg)
+				reg.Set(i2cCMD_END)
+				reg = nil
+				break
 			}
 			if needRestart {
 				// We need to send RESTART again after i2cCMD_WRITE.
