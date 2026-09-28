@@ -21,6 +21,11 @@ func isCondBranch(inst llvm.Value) bool {
 	return isBranch(inst) && inst.SuccessorsCount() == 2
 }
 
+// isUncondBranch returns whether inst is an unconditional br instruction.
+func isUncondBranch(inst llvm.Value) bool {
+	return isBranch(inst) && inst.SuccessorsCount() == 1
+}
+
 // branchCondition returns the i1 condition of a conditional br instruction.
 func branchCondition(inst llvm.Value) llvm.Value {
 	// The bindings lack LLVMGetCondition, so read the operand directly.

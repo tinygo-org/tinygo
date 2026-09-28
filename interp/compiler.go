@@ -86,6 +86,15 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 		index := len(blockIndices)
 		blockIndices[llvmBB.AsValue()] = index
 	}
+	blockIndex := func(bb llvm.BasicBlock) literalValue {
+		// A missing block would otherwise silently become block 0 (the entry
+		// block) and miscompile the interpreted code.
+		index, ok := blockIndices[bb.AsValue()]
+		if !ok {
+			panic("interp: reference to unknown basic block")
+		}
+		return literalValue{uint32(index)}
+	}
 
 	// Compile every block.
 	for llvmBB := llvmFn.FirstBasicBlock(); !llvmBB.IsNil(); llvmBB = llvm.NextBasicBlock(llvmBB) {
@@ -120,20 +129,23 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 			case opBr:
 				// Branch instruction. Can be either a conditional branch or an
 				// unconditional branch.
-				if isCondBranch(llvmInst) {
+				switch {
+				case isCondBranch(llvmInst):
 					// Conditional jump to one of two blocks. Comparable to an
 					// if/else in procedural languages.
 					inst.operands = []value{
 						r.getValue(branchCondition(llvmInst)),
-						literalValue{uint32(blockIndices[branchThen(llvmInst).AsValue()])},
-						literalValue{uint32(blockIndices[branchElse(llvmInst).AsValue()])},
+						blockIndex(branchThen(llvmInst)),
+						blockIndex(branchElse(llvmInst)),
 					}
-				} else {
+				case isUncondBranch(llvmInst):
 					// Unconditional jump to a target basic block. Comparable to
 					// a jump in C and Go.
 					inst.operands = []value{
-						literalValue{uint32(blockIndices[branchTarget(llvmInst).AsValue()])},
+						blockIndex(branchTarget(llvmInst)),
 					}
+				default:
+					panic("interp: unknown branch instruction form")
 				}
 			case llvm.Switch:
 				// Compile to an array of (value, label) pairs, of which the
@@ -148,12 +160,12 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				// destination-block operands remain).
 				inst.operands = append(inst.operands,
 					r.getValue(llvmInst.Operand(0)),
-					literalValue{uint32(blockIndices[llvmInst.Successor(0).AsValue()])},
+					blockIndex(llvmInst.Successor(0)),
 				)
 				for i := 1; i < llvmInst.SuccessorsCount(); i++ {
 					inst.operands = append(inst.operands,
 						r.getValue(llvmInst.GetSwitchCaseValue(i)),
-						literalValue{uint32(blockIndices[llvmInst.Successor(i).AsValue()])},
+						blockIndex(llvmInst.Successor(i)),
 					)
 				}
 			case llvm.PHI:
@@ -163,7 +175,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					incomingBB := inst.llvmInst.IncomingBlock(i)
 					incomingValue := inst.llvmInst.IncomingValue(i)
 					inst.operands = append(inst.operands,
-						literalValue{uint32(blockIndices[incomingBB.AsValue()])},
+						blockIndex(incomingBB),
 						r.getValue(incomingValue),
 					)
 				}
