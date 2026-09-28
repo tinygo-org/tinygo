@@ -37,8 +37,8 @@ func runTest(t *testing.T, pathPrefix string) {
 	// Read the input IR.
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
+	ensureTestCacheFreshness(t, pathPrefix+".ll")
 	buf, err := llvm.NewMemoryBufferFromFile(pathPrefix + ".ll")
-	os.Stat(pathPrefix + ".ll") // make sure this file is tracked by `go test` caching
 	if err != nil {
 		t.Fatalf("could not read file %s: %v", pathPrefix+".ll", err)
 	}
@@ -152,4 +152,13 @@ func filterIrrelevantIRLines(lines []string) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+// ensureTestCacheFreshness registers path as an input of the running test.
+// see https://github.com/tinygo-org/tinygo/issues/5780.
+func ensureTestCacheFreshness(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("could not stat test fixture %s: %v", path, err)
+	}
 }
