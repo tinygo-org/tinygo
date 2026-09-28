@@ -44,6 +44,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 	i2c.initClock(config)
 	i2c.initNoiseFilter()
+	i2c.clearBus(config)
 	i2c.initPins(config)
 	i2c.initFrequency(config)
 	i2c.startMaster()
@@ -70,6 +71,36 @@ func (i2c *I2C) initClock(config I2CConfig) {
 //go:inline
 func (i2c *I2C) initNoiseFilter() {
 	i2c.Bus.FILTER_CFG.Set(0x377)
+}
+
+// clearBus clocks SCL until SDA is released and then sends a STOP, both as GPIOs.
+// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L579
+func (i2c *I2C) clearBus(config I2CConfig) {
+	const halfPeriodNS = 5000
+	wait := func() {
+		end := nanotime() + halfPeriodNS
+		for nanotime() < end {
+		}
+	}
+	scl, sda := config.SCL, config.SDA
+	scl.Configure(PinConfig{Mode: PinOutput})
+	scl.pinReg().SetBits(esp.GPIO_PIN_PAD_DRIVER)
+	sda.Configure(PinConfig{Mode: PinOutput})
+	sda.pinReg().SetBits(esp.GPIO_PIN_PAD_DRIVER)
+	scl.Low()
+	sda.High()
+	wait()
+	for i := 0; i < 9 && !sda.Get(); i++ {
+		scl.High()
+		wait()
+		scl.Low()
+		wait()
+	}
+	sda.Low()
+	scl.High()
+	wait()
+	sda.High()
+	wait()
 }
 
 //go:inline
@@ -139,8 +170,6 @@ func (i2c *I2C) startMaster() {
 func (i2c *I2C) resetMaster() {
 	// reset FSM
 	i2c.Bus.SetCTR_FSM_RST(1)
-	// No bus clear (SCL_RST_SLV), a GT911 did not ACK the next transaction after it.
-	// ESP-IDF does not clear the bus on init either https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L673
 	i2c.Bus.SetSCL_STRETCH_CONF_SLAVE_SCL_STRETCH_EN(1)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
 	i2c.Bus.FILTER_CFG.Set(0x377)
