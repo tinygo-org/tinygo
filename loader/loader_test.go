@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"fmt"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -8,6 +9,93 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
+
+func BenchmarkRecordedPath(b *testing.B) {
+	for _, count := range []int{10, 100, 1000} {
+		b.Run(fmt.Sprintf("packages=%d", count), func(b *testing.B) {
+			program := &Program{
+				config: &compileopts.Config{
+					Options: &compileopts.Options{TrimPath: true},
+				},
+				goroot:   filepath.FromSlash("/goroot"),
+				Packages: make(map[string]*Package),
+			}
+			var pkg *Package
+			for i := 0; i < count; i++ {
+				pkg = &Package{
+					program: program,
+					PackageJSON: PackageJSON{
+						Dir:        filepath.FromSlash(fmt.Sprintf("/tmp/module/pkg%d", i)),
+						ImportPath: fmt.Sprintf("example.com/module/pkg%d", i),
+					},
+				}
+				pkg.Module.Path = "example.com/module"
+				pkg.Module.Dir = filepath.FromSlash("/tmp/module")
+				program.Packages[pkg.ImportPath] = pkg
+			}
+			program.initRecordedPaths()
+			for _, name := range []string{"package", "module"} {
+				b.Run(name, func(b *testing.B) {
+					filename := filepath.Join(pkg.Dir, "file.go")
+					want := pkg.ImportPath + "/file.go"
+					if name == "module" {
+						filename = filepath.FromSlash("/tmp/module/include/shared.h")
+						want = "example.com/module/include/shared.h"
+					}
+					b.ReportAllocs()
+					for b.Loop() {
+						if got := pkg.RecordedPath(filename); got != want {
+							b.Fatalf("RecordedPath() = %q, want %q", got, want)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestRecordedPathPrecedence(t *testing.T) {
+	program := &Program{
+		config: &compileopts.Config{
+			Options: &compileopts.Options{TrimPath: true},
+		},
+		goroot:   filepath.FromSlash("/goroot"),
+		Packages: make(map[string]*Package),
+	}
+	var pkg *Package
+	for _, entry := range []struct{ dir, name, moduleDir, modulePath string }{
+		{"/tmp/root/pkg", "example.com/z", "/tmp/root", "example.com/root"},
+		{"/tmp/root/pkg", "example.com/a", "/tmp/root", "example.com/root"},
+		{"/tmp/root/pkg/nested", "example.com/nested", "/tmp/root", "example.com/root"},
+		{"/tmp/root/pkg/include/sub", "example.com/includes/sub", "/tmp/root/pkg/include", "example.com/includes"},
+		{"/tmp/root/extra/sub", "example.com/extra/sub", "/tmp/root/extra", "example.com/extra"},
+	} {
+		pkg = &Package{
+			program: program,
+			PackageJSON: PackageJSON{
+				Dir:        filepath.FromSlash(entry.dir),
+				ImportPath: entry.name,
+			},
+		}
+		pkg.Module.Dir = filepath.FromSlash(entry.moduleDir)
+		pkg.Module.Path = entry.modulePath
+		program.Packages[pkg.ImportPath] = pkg
+	}
+	program.initRecordedPaths()
+	for _, tc := range []struct{ filename, want string }{
+		{"/tmp/root/pkg/file.go", "example.com/a/file.go"},
+		{"/tmp/root/pkg/nested/file.go", "example.com/nested/file.go"},
+		{"/tmp/root/pkg/include/shared.h", "example.com/a/include/shared.h"},
+		{"/tmp/root/extra/include/shared.h", "example.com/extra/include/shared.h"},
+		{"/tmp/root/include/shared.h", "example.com/root/include/shared.h"},
+		{"/tmp/root/pkg-other/file.go", "example.com/root/pkg-other/file.go"},
+		{"/tmp/root-other/file.go", filepath.FromSlash("/tmp/root-other/file.go")},
+	} {
+		if got := pkg.RecordedPath(filepath.FromSlash(tc.filename)); got != tc.want {
+			t.Errorf("RecordedPath(%q) = %q, want %q", tc.filename, got, tc.want)
+		}
+	}
+}
 
 func TestRecordedPath(t *testing.T) {
 	config := &compileopts.Config{
@@ -48,6 +136,7 @@ func TestRecordedPath(t *testing.T) {
 	}
 	program.Packages[pkg.ImportPath] = pkg
 	program.Packages[dependency.ImportPath] = dependency
+	program.initRecordedPaths()
 
 	if got, want := dependency.RecordedDir(), "example.com/dependency@v1.2.3/subpackage"; got != want {
 		t.Fatalf("RecordedDir() = %q, want %q", got, want)
@@ -98,6 +187,7 @@ func TestRecordedPath(t *testing.T) {
 	vendored.Module.Path = "example.com/dependency"
 	vendored.Module.Version = "v1.2.3"
 	program.Packages[vendored.ImportPath] = vendored
+	program.initRecordedPaths()
 	if got, want := vendored.OriginalModuleDir(), filepath.FromSlash("/tmp/main/vendor/example.com/dependency"); got != want {
 		t.Fatalf("vendored OriginalModuleDir() = %q, want %q", got, want)
 	}
@@ -118,6 +208,7 @@ func TestRecordedPath(t *testing.T) {
 		},
 	}
 	program.Packages[gopath.ImportPath] = gopath
+	program.initRecordedPaths()
 	if got, want := gopath.OriginalModuleDir(), filepath.FromSlash("/gopath/src"); got != want {
 		t.Fatalf("GOPATH OriginalModuleDir() = %q, want %q", got, want)
 	}

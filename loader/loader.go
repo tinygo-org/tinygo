@@ -18,6 +18,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -38,6 +39,9 @@ type Program struct {
 	Packages map[string]*Package
 	sorted   []*Package
 	fset     *token.FileSet
+
+	packagePaths []recordedPathMapping
+	modulePaths  []recordedPathMapping
 
 	// Information obtained during parsing.
 	LDFlags []string
@@ -262,6 +266,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 		return p, NoTestFilesError{p.sorted[len(p.sorted)-1].ImportPath}
 	}
 
+	p.initRecordedPaths()
 	return p, nil
 }
 
@@ -431,6 +436,38 @@ func (p *Package) sourceImportPath() string {
 	return p.ImportPath
 }
 
+type recordedPathMapping struct {
+	original string
+	recorded string
+}
+
+func (p *Program) initRecordedPaths() {
+	if !p.config.TrimPath() {
+		return
+	}
+	packages := make(map[recordedPathMapping]struct{})
+	modules := make(map[recordedPathMapping]struct{})
+	for _, pkg := range p.Packages {
+		packages[recordedPathMapping{pkg.OriginalDir(), pkg.RecordedDir()}] = struct{}{}
+		modules[recordedPathMapping{pkg.OriginalModuleDir(), pkg.RecordedModuleDir()}] = struct{}{}
+	}
+	sorted := func(paths map[recordedPathMapping]struct{}) []recordedPathMapping {
+		result := make([]recordedPathMapping, 0, len(paths))
+		for mapping := range paths {
+			result = append(result, mapping)
+		}
+		slices.SortFunc(result, func(a, b recordedPathMapping) int {
+			if len(a.original) != len(b.original) {
+				return len(b.original) - len(a.original)
+			}
+			return strings.Compare(a.recorded, b.recorded)
+		})
+		return result
+	}
+	p.packagePaths = sorted(packages)
+	p.modulePaths = sorted(modules)
+}
+
 // RecordedPath returns the source path to record in the output.
 func (p *Package) RecordedPath(filename string) string {
 	if !p.program.config.TrimPath() {
@@ -459,13 +496,16 @@ func (p *Package) RecordedPath(filename string) string {
 
 	var recordedPath string
 	var matchedDirLength int
-	for _, sourcePkg := range p.program.Packages {
-		dir := sourcePkg.OriginalDir()
+	for _, mapping := range p.program.packagePaths {
+		dir := mapping.original
+		if len(dir) < matchedDirLength {
+			break
+		}
 		rel, err := filepath.Rel(dir, filename)
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			continue
 		}
-		candidate := path.Join(sourcePkg.RecordedDir(), filepath.ToSlash(rel))
+		candidate := path.Join(mapping.recorded, filepath.ToSlash(rel))
 		if len(dir) > matchedDirLength || len(dir) == matchedDirLength && candidate < recordedPath {
 			matchedDirLength = len(dir)
 			recordedPath = candidate
@@ -474,13 +514,16 @@ func (p *Package) RecordedPath(filename string) string {
 	if recordedPath != "" {
 		return recordedPath
 	}
-	for _, sourcePkg := range p.program.Packages {
-		dir := sourcePkg.OriginalModuleDir()
+	for _, mapping := range p.program.modulePaths {
+		dir := mapping.original
+		if len(dir) < matchedDirLength {
+			break
+		}
 		rel, err := filepath.Rel(dir, filename)
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			continue
 		}
-		candidate := path.Join(sourcePkg.RecordedModuleDir(), filepath.ToSlash(rel))
+		candidate := path.Join(mapping.recorded, filepath.ToSlash(rel))
 		if len(dir) > matchedDirLength || len(dir) == matchedDirLength && candidate < recordedPath {
 			matchedDirLength = len(dir)
 			recordedPath = candidate
