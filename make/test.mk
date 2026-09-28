@@ -223,6 +223,12 @@ TEST_PACKAGES_ALLOCS_HOST := $(filter slices strings,$(TEST_PACKAGES_HOST))
 TEST_ALLOCS_SKIP_FLAG := -skip='^(TestBuilderAllocs|TestBuilderGrow|TestGrow)$$'
 TEST_PACKAGES_NETIP_HOST := $(filter net/netip,$(TEST_PACKAGES_HOST))
 
+# https://go.dev/src/internal/synctest/synctest_test.go creates 100 x 100
+# goroutines, which can exceed macOS's thread limit with the threads scheduler.
+ifeq ($(uname),Darwin)
+TEST_SYNCTEST_THREAD_LIMIT_SKIP := |TestWaitGroupManyBubbles
+endif
+
 # Test known-working standard library packages.
 # TODO: parallelize, and only show failing tests (no implied -v flag).
 .PHONY: tinygo-test
@@ -243,7 +249,7 @@ endif
 ifneq ($(TEST_PACKAGES_NETIP_HOST),)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^TestAddrStringAllocs$$' $(TEST_PACKAGES_NETIP_HOST)
 endif
-	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestReflectFuncOf|TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount)$$' internal/synctest
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestReflectFuncOf|TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount$(TEST_SYNCTEST_THREAD_LIMIT_SKIP))$$' internal/synctest
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$$' testing/synctest
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -run='^TestSynctestMarshal$$' encoding/json
 ifeq ($(TEST_ENCODING_XML),true)
