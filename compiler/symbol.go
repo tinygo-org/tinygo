@@ -459,6 +459,11 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			}
 
 			info.linkName = parts[1]
+			if info.linkName == "llvm.returnaddress" && llvmutil.Version() >= 23 {
+				// LLVM 23 requires the pointer-type suffix on this
+				// intrinsic's mangled name.
+				info.linkName = "llvm.returnaddress.p0"
+			}
 			info.wasmName = info.linkName
 			info.exported = true
 		case "//go:interrupt":

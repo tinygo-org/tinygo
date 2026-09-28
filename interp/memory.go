@@ -166,7 +166,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 								}
 							}
 						}
-						if opcode == llvm.Br || opcode == llvm.Switch {
+						if isBranch(inst) || opcode == llvm.Switch {
 							// These don't affect memory. Skipped here because
 							// they also have a label as operand.
 							continue
