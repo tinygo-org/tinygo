@@ -139,16 +139,11 @@ func (i2c *I2C) startMaster() {
 func (i2c *I2C) resetMaster() {
 	// reset FSM
 	i2c.Bus.SetCTR_FSM_RST(1)
-	// clear the bus
-	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_NUM(9)
-	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_EN(1)
+	// No bus clear (SCL_RST_SLV), a GT911 did not ACK the next transaction after it.
+	// ESP-IDF does not clear the bus on init either https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L673
 	i2c.Bus.SetSCL_STRETCH_CONF_SLAVE_SCL_STRETCH_EN(1)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
 	i2c.Bus.FILTER_CFG.Set(0x377)
-	// wait for SCL_RST_SLV_EN
-	for i2c.Bus.GetSCL_SP_CONF_SCL_RST_SLV_EN() != 0 {
-	}
-	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_NUM(0)
 }
 
 type i2cCommandType = uint32
