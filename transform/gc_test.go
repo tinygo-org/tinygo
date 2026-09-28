@@ -2,7 +2,6 @@ package transform_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/transform"
@@ -37,8 +36,8 @@ func TestGCStackSlotCounts(t *testing.T) {
 
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
+	ensureTestCacheFreshness(t, "testdata/gc-slotcounts.ll")
 	buf, err := llvm.NewMemoryBufferFromFile("testdata/gc-slotcounts.ll")
-	os.Stat("testdata/gc-slotcounts.ll") // make sure `go test` caching tracks this file
 	if err != nil {
 		t.Fatalf("could not read file: %v", err)
 	}
