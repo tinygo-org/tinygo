@@ -154,11 +154,13 @@ func (i2c *I2C) resetMaster() {
 type i2cCommandType = uint32
 type i2cAck = uint32
 
+// READ commands have no ack_check_en, with it a successful read raises NACK_INT.
+// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1227
 const (
 	i2cCMD_RSTART   i2cCommandType = 6 << 11
-	i2cCMD_WRITE    i2cCommandType = 1<<11 | 1<<8 // WRITE + ack_check_en
-	i2cCMD_READ     i2cCommandType = 3<<11 | 1<<8 // READ + ack_check_en
-	i2cCMD_READLAST i2cCommandType = 3<<11 | 5<<8 // READ + ack_check_en + NACK
+	i2cCMD_WRITE    i2cCommandType = 1<<11 | 1<<8  // WRITE + ack_check_en
+	i2cCMD_READ     i2cCommandType = 3 << 11       // READ
+	i2cCMD_READLAST i2cCommandType = 3<<11 | 1<<10 // READ + NACK
 	i2cCMD_STOP     i2cCommandType = 2 << 11
 	i2cCMD_END      i2cCommandType = 4 << 11
 )
@@ -186,7 +188,6 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 	timeoutNS := int64(timeoutMS) * 1000000
 	needAddress := true
 	needRestart := false
-	readLast := false
 	var readTo []byte
 	for cmdIdx, reg := 0, &i2c.Bus.COMD0; cmdIdx < len(cmd); {
 		c := &cmd[cmdIdx]
@@ -254,7 +255,6 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				reg = nextAddress(reg)
 			}
 			if split {
-				readLast = true
 				reg.Set(i2cCMD_READLAST | 1)
 				reg = nextAddress(reg)
 				readTo = c.data[c.head : c.head+bytes+1] // read bytes + 1 last byte
@@ -285,7 +285,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				}
 			}
 			switch {
-			case mask&esp.I2C_INT_STATUS_NACK_INT_ST_Msk != 0 && !readLast:
+			case mask&esp.I2C_INT_STATUS_NACK_INT_ST_Msk != 0:
 				return errI2CAckExpected
 			case mask&esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk != 0:
 				if readTo != nil {
