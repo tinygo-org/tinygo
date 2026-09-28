@@ -20,6 +20,87 @@ func TestAllocs(t *testing.T) {
 	})
 }
 
+func TestAllocsAggregateEdges(t *testing.T) {
+	t.Parallel()
+
+	const path = "testdata/allocs-aggregate.ll"
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	ensureTestCacheFreshness(t, path)
+	buf, err := llvm.NewMemoryBufferFromFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+
+	transform.OptimizeAllocs(mod, nil, 256, nil)
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, wantHeap := range map[string]bool{
+		"nestedStructReturn":  true,
+		"nestedArrayReturn":   true,
+		"arrayOfStructReturn": true,
+		"structOfArrayReturn": true,
+		"singleArrayReturn":   true,
+		"aggregateStore":      true,
+		"pointerStore":        true,
+		"aggregateCall":       true,
+		"unknownCall":         true,
+		"indirectCall":        true,
+		"repackReturn":        true,
+		"forwardReturn":       true,
+		"forwardLoad":         false,
+		"gepReturn":           true,
+		"gepLoad":             false,
+		"aggregatePhi":        true,
+		"aggregateSelect":     true,
+		"recursiveReturn":     true,
+		"duplicateArguments":  true,
+		"nonEscapingScalar":   false,
+		"nonEscapingLoad":     false,
+		"nonEscapingNilCheck": false,
+		"nonEscapingDiscard":  false,
+		"nonEscapingCall":     false,
+		"pointerFreeStruct":   false,
+		"pointerFreeArray":    false,
+		"emptyPointerArray":   false,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fn := mod.NamedFunction(name)
+			if fn.IsNil() {
+				t.Fatal("function not found")
+			}
+			var heap, stack int
+			for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+				for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+					if !inst.IsACallInst().IsNil() && inst.CalledValue() == mod.NamedFunction("runtime.alloc") {
+						heap++
+					}
+					if !inst.IsAAllocaInst().IsNil() {
+						stack++
+					}
+				}
+			}
+			want := 0
+			if wantHeap {
+				want = 1
+			}
+			if heap != want || stack != 1-want {
+				t.Errorf("got %d heap and %d stack allocations, want %d and %d:\n%s", heap, stack, want, 1-want, fn.String())
+			}
+		})
+	}
+}
+
 // Test with a Go file as input (for more accurate tests).
 func TestAllocs2(t *testing.T) {
 	t.Parallel()
