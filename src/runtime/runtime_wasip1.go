@@ -63,9 +63,9 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 const (
-	timePrecisionNanoseconds = 1000 // TODO: how can we determine the appropriate `precision`?
-	wasiClockRealtime        = 0
-	wasiClockMonotonic       = 1
+	sleepPrecisionNanoseconds = 1000
+	wasiClockRealtime         = 0
+	wasiClockMonotonic        = 1
 )
 
 var (
@@ -76,7 +76,7 @@ var (
 			u: __wasi_subscription_clock_t{
 				id:        wasiClockMonotonic,
 				timeout:   0,
-				precision: timePrecisionNanoseconds,
+				precision: sleepPrecisionNanoseconds,
 				flags:     0,
 			},
 		},
@@ -91,7 +91,9 @@ func ticks() timeUnit {
 
 func wasiClockTime(id uint32) uint64 {
 	var nano uint64
-	if errno := clock_time_get(id, timePrecisionNanoseconds, &nano); errno != 0 {
+	// Match Go's WASIp1 clock reads, which request the freshest available time.
+	// https://github.com/golang/go/blob/master/src/runtime/os_wasip1.go
+	if errno := clock_time_get(id, 0, &nano); errno != 0 {
 		runtimeFatal("runtime: clock_time_get failed")
 	}
 	return nano
