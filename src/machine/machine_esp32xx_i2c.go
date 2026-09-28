@@ -171,6 +171,12 @@ func nanotime() int64
 
 func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 	const intMask = esp.I2C_INT_STATUS_END_DETECT_INT_ST_Msk | esp.I2C_INT_STATUS_TRANS_COMPLETE_INT_ST_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_NACK_INT_ST_Msk
+	// Reset the FIFOs, bytes left after a NACK would go out in the next transaction.
+	// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1456
+	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(1)
+	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(0)
+	i2c.Bus.SetFIFO_CONF_RX_FIFO_RST(1)
+	i2c.Bus.SetFIFO_CONF_RX_FIFO_RST(0)
 	i2c.Bus.INT_CLR.SetBits(intMask)
 	i2c.Bus.INT_ENA.SetBits(intMask)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
