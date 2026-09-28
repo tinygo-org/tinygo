@@ -912,6 +912,13 @@ func ReadMemStats(m *MemStats) {
 	gcLock.Unlock()
 }
 
+func mallocs() uint64 {
+	gcLock.Lock()
+	mallocs := gcMallocs
+	gcLock.Unlock()
+	return mallocs
+}
+
 // count4LUT is a lookup table used to count set bits in a 4-bit mask.
 // TODO: replace with popcnt when available
 var count4LUT = [16]uint8{

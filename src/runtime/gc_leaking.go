@@ -106,6 +106,13 @@ func ReadMemStats(m *MemStats) {
 	gcLock.Unlock()
 }
 
+func mallocs() uint64 {
+	gcLock.Lock()
+	mallocs := gcMallocs
+	gcLock.Unlock()
+	return mallocs
+}
+
 func GC() {
 	// No-op.
 }
