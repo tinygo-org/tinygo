@@ -561,12 +561,40 @@ var capturesNoneAttrRe = regexp.MustCompile(`\b(readonly|readnone|writeonly|nonn
 // llvm.lifetime.start/end call or declaration, which LLVM 22 removed.
 var lifetimeSizeArgRe = regexp.MustCompile(`(@llvm\.lifetime\.(?:start|end)\.p0\()i64(?: immarg| \d+), `)
 
+// nosyncAttrRe matches the standalone 'nosync' function attribute, which
+// LLVM 23 started inferring for llvm.memcpy/llvm.memmove declarations.
+var nosyncAttrRe = regexp.MustCompile(`\bnosync\s+`)
+
+// guidAttachmentRe matches the inline '!guid !N' metadata LLVM 23 attaches
+// to every GlobalValue once a pass builds a module summary. A global's
+// attachment is comma separated, a function's is space separated.
+var guidAttachmentRe = regexp.MustCompile(`,?\s*!guid\s+!\d+`)
+
+// guidMetadataRe matches the standalone metadata node backing a '!guid'
+// attachment.
+var guidMetadataRe = regexp.MustCompile(`(?m)^!\d+ = !\{i64 -?\d+\}\n?`)
+
+// targetMemAttrRe matches the target_mem entries of a memory() attribute.
+// Older LLVM numbered them target_mem0/target_mem1; LLVM 23 emits one
+// unnumbered target_mem instead.
+var targetMemAttrRe = regexp.MustCompile(`(,\s*target_mem\d*: none)+`)
+
+// nofreeNocaptureRe matches LLVM 23's added 'nofree' on a parameter that's
+// already 'nocapture'.
+var nofreeNocaptureRe = regexp.MustCompile(`\bnofree\s+nocapture\b`)
+
 // normalizeCapturesAttr rewrites LLVM 21+'s 'captures(none)' attribute back
-// to the pre-LLVM21 'nocapture' spelling and position, so golden IR files
-// written against LLVM <21 keep matching.
+// to the pre-LLVM21 'nocapture' spelling, and drops LLVM 23's added
+// 'nosync' attribute and '!guid' metadata, so golden files keep matching
+// across versions.
 func normalizeCapturesAttr(s string) string {
 	s = capturesNoneAttrRe.ReplaceAllString(s, "nocapture $1")
 	s = strings.ReplaceAll(s, "captures(none)", "nocapture")
+	s = nosyncAttrRe.ReplaceAllString(s, "")
+	s = guidAttachmentRe.ReplaceAllString(s, "")
+	s = guidMetadataRe.ReplaceAllString(s, "")
+	s = targetMemAttrRe.ReplaceAllString(s, "")
+	s = nofreeNocaptureRe.ReplaceAllString(s, "nocapture")
 	return s
 }
 

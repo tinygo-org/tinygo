@@ -6,6 +6,7 @@ package interp
 import (
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -122,8 +123,17 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				case 3:
 					// Conditional jump to one of two blocks. Comparable to an
 					// if/else in procedural languages.
-					thenBB := llvmInst.Operand(2)
-					elseBB := llvmInst.Operand(1)
+					//
+					// LLVM 23 swapped operand order from (cond, else, then)
+					// to (cond, then, else).
+					var thenBB, elseBB llvm.Value
+					if llvmutil.Version() >= 23 {
+						thenBB = llvmInst.Operand(1)
+						elseBB = llvmInst.Operand(2)
+					} else {
+						thenBB = llvmInst.Operand(2)
+						elseBB = llvmInst.Operand(1)
+					}
 					inst.operands = []value{
 						r.getValue(llvmInst.Operand(0)),
 						literalValue{uint32(blockIndices[thenBB])},

@@ -1,4 +1,4 @@
-//go:build !llvm22 && !llvm14 && !llvm15 && !llvm16 && !llvm17 && !llvm18 && !llvm19
+//go:build !llvm22 && !llvm23 && !llvm14 && !llvm15 && !llvm16 && !llvm17 && !llvm18 && !llvm19
 
 package compileopts
 
