@@ -45,3 +45,112 @@ named: true false abc abc
 named runes: a€😀
 index: 7 -1
 index absent: -1
+order: < 0 false
+order: < 1 false
+order: < 2 false
+order: < 3 true
+order: < 4 false
+order: < 5 false
+order: < 6 true
+order: < 7 false
+order: < 8 true
+order: < 9 false
+order: < 10 false
+order: < 11 true
+order: < 12 false
+order: < 13 true
+order: < 14 false
+order: < 15 false
+order escape: < 97 false mbc xbc
+order mutation: < 97 false abc
+order escape: < 109 false mbc xbc
+order mutation: < 109 false mbc
+order escape: < 122 true mbc xbc
+order mutation: < 122 true zbc
+named order: < false
+named order: < true
+named order: < false
+named order: < true
+named order: < false
+order reuse: true false
+order: <= 0 true
+order: <= 1 true
+order: <= 2 true
+order: <= 3 true
+order: <= 4 false
+order: <= 5 true
+order: <= 6 true
+order: <= 7 false
+order: <= 8 true
+order: <= 9 false
+order: <= 10 false
+order: <= 11 true
+order: <= 12 false
+order: <= 13 true
+order: <= 14 false
+order: <= 15 true
+order escape: <= 97 false mbc xbc
+order mutation: <= 97 false abc
+order escape: <= 109 true mbc xbc
+order mutation: <= 109 true mbc
+order escape: <= 122 true mbc xbc
+order mutation: <= 122 true zbc
+named order: <= true
+named order: <= true
+named order: <= false
+named order: <= true
+named order: <= false
+order: > 0 false
+order: > 1 false
+order: > 2 false
+order: > 3 false
+order: > 4 true
+order: > 5 false
+order: > 6 false
+order: > 7 true
+order: > 8 false
+order: > 9 true
+order: > 10 true
+order: > 11 false
+order: > 12 true
+order: > 13 false
+order: > 14 true
+order: > 15 false
+order escape: > 97 true mbc xbc
+order mutation: > 97 true abc
+order escape: > 109 false mbc xbc
+order mutation: > 109 false mbc
+order escape: > 122 false mbc xbc
+order mutation: > 122 false zbc
+named order: > false
+named order: > false
+named order: > true
+named order: > false
+named order: > true
+order: >= 0 true
+order: >= 1 true
+order: >= 2 true
+order: >= 3 false
+order: >= 4 true
+order: >= 5 true
+order: >= 6 false
+order: >= 7 true
+order: >= 8 false
+order: >= 9 true
+order: >= 10 true
+order: >= 11 false
+order: >= 12 true
+order: >= 13 false
+order: >= 14 true
+order: >= 15 true
+order escape: >= 97 true mbc xbc
+order mutation: >= 97 true abc
+order escape: >= 109 true mbc xbc
+order mutation: >= 109 true mbc
+order escape: >= 122 false mbc xbc
+order mutation: >= 122 false zbc
+named order: >= true
+named order: >= false
+named order: >= true
+named order: >= false
+named order: >= true
