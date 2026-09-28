@@ -536,8 +536,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			if name == "finalizerinvariants.go" || name == "finalizerlarge.go" {
 				testOptions.Tags = append(append([]string(nil), options.Tags...), "runtime_asserts")
 			}
-			if testOptions.Target == "simavr" && name == "math.go" {
-				// This test exceeds simavr's default 384-byte goroutine stack.
+			if testOptions.Target == "simavr" && (name == "math.go" || name == "string.go") {
+				// These tests exceed simavr's default 384-byte goroutine stack.
 				testOptions.StackSize = 512
 			}
 			runTest(name, testOptions, t, nil, nil)
@@ -1405,6 +1405,26 @@ func TestTest(t *testing.T) {
 			t.Parallel()
 
 			emuCheck(t, targ.opts)
+
+			t.Run("StringComparisons", func(t *testing.T) {
+				t.Parallel()
+
+				var wg sync.WaitGroup
+				defer wg.Wait()
+
+				out := ioLogger(t, &wg)
+				defer out.Close()
+
+				opts := targ.opts
+				opts.GC = "conservative"
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/stringcompare", out, out, &opts, "")
+				if err != nil {
+					t.Errorf("test error: %v", err)
+				}
+				if !passed {
+					t.Error("test failed")
+				}
+			})
 
 			t.Run("Pass", func(t *testing.T) {
 				t.Parallel()
