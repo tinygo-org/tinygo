@@ -33,10 +33,6 @@ type finalizerEntry struct {
 	fn interface{}
 }
 
-// finalizerGCThreshold starts pressure GC when registrations indicate external memory pressure.
-// Larger tables use a proportional threshold. Zero disables this trigger.
-const finalizerGCThreshold = 32
-
 var (
 	finalizers        *finalizerEntry // registered finalizers; a GC root that keeps fn values alive
 	finalizerPending  *finalizerEntry // finalizers whose object died, waiting to run
@@ -54,20 +50,6 @@ var (
 	// no-op there, and the linker drops the flag).
 	finalizerRunnerStarted bool
 )
-
-const finalizerGCDivisor = 2
-
-// finalizerGCTrigger scales the threshold so scan work stays proportional to registrations.
-// It uses finalizerGCThreshold as the minimum.
-func finalizerGCTrigger() uintptr {
-	if finalizerGCThreshold == 0 {
-		return 0
-	}
-	if proportional := numFinalizers / finalizerGCDivisor; proportional > finalizerGCThreshold {
-		return proportional
-	}
-	return finalizerGCThreshold
-}
 
 // finalizerBits records finalizer registrations by heap block for fast lookup.
 // Hold gcLock for every access because heap growth can replace the slice.
@@ -328,18 +310,6 @@ func scanFinalizers() {
 	}
 }
 
-// callFinalizer invokes a finalizer func value on the given object pointer.
-func callFinalizer(objPtr unsafe.Pointer, fn interface{}) {
-	// SetFinalizer already validated that fn is a func. A finalizer is
-	// contractually func(ptrType), and func(*T) and func(unsafe.Pointer) are
-	// ABI-identical in TinyGo (one pointer arg + trailing context, no result).
-	// reflect.Value.Call is unimplemented, so reinterpret the boxed closure and
-	// call it via the same closure-ABI indirect call the runtime uses elsewhere.
-	fnBox := (*_interface)(unsafe.Pointer(&fn)).value
-	f := *(*func(unsafe.Pointer))(fnBox)
-	f(objPtr)
-}
-
 // drainFinalizers runs every queued finalizer, with gcLock released so the
 // finalizers may allocate.
 func drainFinalizers() {
@@ -397,7 +367,7 @@ func dequeueFinalizer() (*finalizerEntry, unsafe.Pointer) {
 // finalizerPressureGC runs a GC when registrations indicate external memory pressure.
 // It wakes the finalizer runner when the GC queues work.
 func finalizerPressureGC() bool {
-	trigger := finalizerGCTrigger()
+	trigger := finalizerGCTrigger(numFinalizers)
 	if trigger == 0 || finalizersSinceGC < trigger {
 		return false
 	}

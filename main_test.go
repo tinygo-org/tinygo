@@ -155,6 +155,27 @@ func TestBuild(t *testing.T) {
 		}
 	})
 
+	t.Run("boehm-finalizers", func(t *testing.T) {
+		t.Parallel()
+		options := optionsFromTarget("wasm", sema)
+		options.GC = "boehm"
+		for _, name := range []string{
+			"finalizer.go",
+			"finalizerbits.go",
+			"finalizergraph.go",
+			"finalizeridle.go",
+			"finalizerlarge.go",
+			"finalizerinvariants.go",
+		} {
+			name := name
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				testOptions := compileopts.Options(options)
+				runTest(name, testOptions, t, nil, nil)
+			})
+		}
+	})
+
 	// Test a few build options.
 	t.Run("build-options", func(t *testing.T) {
 		t.Parallel()
@@ -511,14 +532,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			case "finalizer.go", "finalizerbits.go", "finalizeridle.go", "finalizerlarge.go":
 				// These tests require deterministic finalization on target wasm.
 				// finalizerinvariants.go covers other block GC targets.
-				continue
-			}
-		}
-		if options.Target == "" && options.GC == "" {
-			switch name {
-			case "finalizerinvariants.go":
-				// Skip the default host GC because it does not implement finalizers.
-				// Explicit conservative GC variants cover this test.
 				continue
 			}
 		}
