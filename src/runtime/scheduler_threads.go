@@ -61,9 +61,9 @@ func scheduleTaskNoWake(t *task.Task) {
 }
 
 func Gosched() {
-	// Each goroutine runs in a thread, so there's not much we can do here.
-	// There is sched_yield but it's only really intended for realtime
-	// operation, so is probably best not to use.
+	// Each goroutine runs in a thread, so yield the thread to let other
+	// goroutines make progress.
+	task.Yield()
 }
 
 // NumCPU returns the number of logical CPUs usable by the current process.
