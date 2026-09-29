@@ -119,6 +119,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			)
 		}
 	}
+	queued := finalizersQueued
 	gcResumeWorld()
 	gcLock.Unlock()
 	if ptr == nil {
@@ -127,6 +128,9 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	}
 	if needsZero {
 		memzero(ptr, size)
+	}
+	if queued {
+		finalizerCollect()
 	}
 	return ptr
 }
@@ -171,8 +175,12 @@ func freeTaskStack(ptr uintptr) {
 func GC() {
 	gcLock.Lock()
 	libgc_gcollect()
+	queued := finalizersQueued
 	gcResumeWorld()
 	gcLock.Unlock()
+	if queued {
+		finalizerCollect()
+	}
 }
 
 // This should be stack-allocated, but we don't currently have a good way of
@@ -202,12 +210,6 @@ func ReadMemStats(m *MemStats) {
 
 func setHeapEnd(newHeapEnd uintptr) {
 	runtimeFatal("gc: did not expect setHeapEnd call")
-}
-
-func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
-	// The GC *does* support finalization, so this could be added relatively
-	// easily I think.
 }
 
 //export GC_init

@@ -1,4 +1,4 @@
-//go:build (gc.conservative || gc.precise) && (scheduler.tasks || scheduler.asyncify)
+//go:build (gc.conservative || gc.precise || gc.boehm) && (scheduler.tasks || scheduler.asyncify)
 
 package runtime
 
