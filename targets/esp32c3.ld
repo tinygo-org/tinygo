@@ -191,7 +191,9 @@ SECTIONS
  */
 _globals_start = _sbss;
 _globals_end = _edata;
-_heap_start = _edata + SIZEOF(.iram) - (__init_end - __init_start);
+/* Goroutine stacks come from the heap and need 16 byte alignment
+ * (RISC-V ELF psABI, integer calling convention). */
+_heap_start = ALIGN(_edata + SIZEOF(.iram) - (__init_end - __init_start), 16);
 _heap_end = ORIGIN(DRAM) + LENGTH(DRAM);
 
 _stack_size = 4K;
