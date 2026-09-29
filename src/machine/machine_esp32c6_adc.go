@@ -27,31 +27,19 @@ const (
 	c6PwDetSarPowerControlBit = uint32(1 << 23)
 )
 
-var c6PwDetConfReg = (*volatile.Register32)(unsafe.Pointer(c6PwDetConfigReg))
-
 // InitADC initialises the APB_SARADC and Modem/ADC peripheral on ESP32-C6.
 // On C6 the clock/reset gating moved to PCR (not SYSTEM as on C3), and the
 // SARADC CLKM divider configuration also lives in PCR.
 func InitADC() {
+	// Disable SARADC module, see esp_system/port/soc/esp32c6/clk.c, periph_ll_disable_clk_set_rst(PERIPH_SARADC_MODULE)
+	esp.PCR.SetSARADC_CONF_SARADC_CLK_EN(0) // This bit is cleared during boot and unexpectedly never set to 1 again.
+
 	// Reset and enable the SARADC bus clock via PCR.
 	esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)
 	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(1)
 	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(0)
 	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(1)
 	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(0)
-
-	// Select clock source 1 (PLL_F80M), divider = 1, no fractional.
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(1)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_NUM(1)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_B(0)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_A(0)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
-
-	// Power up the SAR ADC and configure FSM timing (same register layout as C3).
-	esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(1)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_XPD_WAIT(8)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_RSTB_WAIT(8)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_STANDBY_WAIT(100)
 
 	modemClockModuleEnableForADC()
 
@@ -63,9 +51,27 @@ func InitADC() {
 	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(1)
 
 	// Enable PWDET see hal at: sar_ctrl_ll_set_power_mode_from_pwdet(SAR_CTRL_LL_POWER_ON);
-	c6PwDetCfg := (*volatile.Register32)(unsafe.Pointer(c6PwDetConfReg))
-	c6PwDetCfg.SetBits(c6PwDetSarPowerForceBit)
-	c6PwDetCfg.SetBits(c6PwDetSarPowerControlBit)
+	// Commented out: esp-idf writes to these bits, but the write operations currently have no effect!
+	// Note: This might be required if the Wifi module is powered on.
+	// c6PwDetCfg := (*volatile.Register32)(unsafe.Pointer(c6PwDetConfigReg))
+	// // println(c6PwDetCfg.Get())
+	// c6PwDetCfg.SetBits(c6PwDetSarPowerForceBit)
+	// c6PwDetCfg.SetBits(c6PwDetSarPowerControlBit)
+	// // println(c6PwDetCfg.Get())
+
+	// Select clock source 1 (PLL_F80M)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(1)
+	// At boot we have the CLKM values (4, 0, 0) but in ADC one-shot mode
+	// the CLKM values are changed to (15, 1, 0) (source: esp-idf hal/adc_oneshot_hal.c)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_NUM(15) // see ADC_LL_CLKM_DIV_NUM_DEFAULT hal/esp32c6/include/hal/adc_ll.h
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_B(1)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_A(0)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
+
+	// Power up the SAR ADC in software  mode (3), no FSM config needed, FSM_REG defaults to 0x00FF0808
+	esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(3)
+	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_GATED(1)
+	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_DIV(1)
 
 	adcSelfCalibrate()
 }
