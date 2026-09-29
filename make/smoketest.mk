@@ -72,6 +72,8 @@ smoketest-examples: | build/smoke
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=circuitplay-express examples/i2s
 	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pca10040            examples/i2s-tone
+	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pca10040            examples/mcp3008
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pca10040            examples/memstats
@@ -141,6 +143,8 @@ smoketest-nrf: | build/smoke
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=microbit-s110v8     examples/echo
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=microbit-v2         examples/microbit-blink
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=microbit-v2         examples/i2s-tone
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=microbit-v2-s113v7  examples/microbit-blink
 	@$(MD5SUM) $(SMOKE_OUT).hex
@@ -236,6 +240,8 @@ smoketest-samd: | build/smoke
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=feather-nrf52840-sense examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=itsybitsy-nrf52840  examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=itsybitsy-nrf52840  examples/i2s-tone
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=qtpy                examples/machinetest
 	@$(MD5SUM) $(SMOKE_OUT).hex
