@@ -418,9 +418,6 @@ func signal_disable(s uint32) {
 func signal_waitUntilIdle() {
 	// Wait until signal_recv has processed all signals.
 	for receivedSignals.Load() != 0 {
-		// TODO: this becomes a busy loop when using threads.
-		// We might want to pause until signal_recv has no more incoming signals
-		// to process.
 		Gosched()
 	}
 }
