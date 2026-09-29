@@ -1,4 +1,4 @@
-//go:build (sam && atsamd21) || nrf52 || nrf52833 || nrf52840
+//go:build (sam && atsamd21) || nrf52 || nrf52833 || nrf52840 || esp32c3 || esp32c6 || esp32s3
 
 // This is the definition for I2S bus functions.
 // Actual implementations if available for any given hardware
