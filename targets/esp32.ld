@@ -218,7 +218,9 @@ SECTIONS
 /* For the garbage collector. */
 _globals_start = _sbss;
 _globals_end = _edata;
-_heap_start = _edata;
+/* Goroutine stacks come from the heap and need 16 byte alignment
+ * (GCC gcc/config/xtensa/xtensa.h STACK_BOUNDARY). */
+_heap_start = ALIGN(_edata, 16);
 /* Go GC heap = the rest of SRAM2 above .data (~113KB), a single safe contiguous
  * block. The WiFi arena lives in DRAM1 (SRAM1 pool 7/6), so its ~64KB does not
  * consume Go heap and its DMA is isolated from GC objects. The heap never

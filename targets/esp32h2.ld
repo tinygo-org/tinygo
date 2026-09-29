@@ -79,8 +79,9 @@ SECTIONS
         . = ALIGN(4);
     } > SRAM
 
-    /* Heap starts after IRAM. */
-    . = ALIGN(4);
+    /* Heap starts after IRAM. Goroutine stacks come from the heap and need
+     * 16 byte alignment (RISC-V ELF psABI, integer calling convention). */
+    . = ALIGN(16);
     _heap_start = ABSOLUTE(.);
     _heap_end = ORIGIN(SRAM) + LENGTH(SRAM);
 

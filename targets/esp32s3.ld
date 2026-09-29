@@ -155,7 +155,9 @@ SECTIONS
  */
 _globals_start = _sbss;
 _globals_end = _edata;
-_heap_start = _iram_end - 0x6F0000 - (__init_end - __init_start);
+/* Goroutine stacks come from the heap and need 16 byte alignment
+ * (GCC gcc/config/xtensa/xtensa.h STACK_BOUNDARY). */
+_heap_start = ALIGN(_iram_end - 0x6F0000 - (__init_end - __init_start), 16);
 /* Stop the heap before the ROM BSS/data region.
  * ESP-IDF defines SOC_ROM_STACK_START = 0x3fceb710 as the top of the ROM boot
  * stack.  Everything from 0x3fceb710 up to SOC_DIRAM_DRAM_HIGH (0x3fcf0000)
