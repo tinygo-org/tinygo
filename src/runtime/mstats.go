@@ -4,6 +4,9 @@ package runtime
 
 // Subset of memory statistics from upstream Go.
 // Works with conservative gc only.
+//
+// Fields tracking runtime structures that TinyGo does not have are present for
+// API compatibility only and always report 0.
 
 // A MemStats records statistics about the memory allocator.
 type MemStats struct {
@@ -20,6 +23,10 @@ type MemStats struct {
 	// address space reserved by the runtime for the
 	// heap, stacks, and other internal data structures.
 	Sys uint64
+
+	// Lookups is the number of pointer lookups performed by the
+	// runtime. Unused, as in upstream Go.
+	Lookups uint64
 
 	// Heap memory statistics.
 
@@ -80,11 +87,47 @@ type MemStats struct {
 	// structures that are not allocated from heap memory (usually
 	// because they are part of implementing the heap).
 
+	// StackInuse is bytes in stack spans.
+	StackInuse uint64
+
+	// StackSys is bytes of stack memory obtained from the OS.
+	StackSys uint64
+
+	// MSpanInuse is bytes of allocated mspan structures.
+	MSpanInuse uint64
+
+	// MSpanSys is bytes of memory obtained from the OS for mspan
+	// structures.
+	MSpanSys uint64
+
+	// MCacheInuse is bytes of allocated mcache structures.
+	MCacheInuse uint64
+
+	// MCacheSys is bytes of memory obtained from the OS for mcache
+	// structures.
+	MCacheSys uint64
+
+	// BuckHashSys is bytes of memory in profiling bucket hash tables.
+	BuckHashSys uint64
+
 	// GCSys is bytes of memory in garbage collection metadata.
 	GCSys uint64
+
+	// OtherSys is bytes of memory in miscellaneous off-heap runtime
+	// allocations.
+	OtherSys uint64
+
+	// Garbage collector statistics.
+
+	// NextGC is the target heap size of the next GC cycle.
+	NextGC uint64
 
 	// NumGC is the number of completed GC cycles.
 	//
 	// The leaking collector never collects, so it always reports 0.
 	NumGC uint32
+
+	// GCCPUFraction is the fraction of available CPU time used by the GC
+	// since the program started.
+	GCCPUFraction float64
 }
