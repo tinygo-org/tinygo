@@ -36,10 +36,11 @@ const (
 var gcLock task.PMutex
 
 type boehmFinalizer struct {
-	next *boehmFinalizer
-	obj  uintptr // complemented so the registration does not keep the object alive
-	fn   interface{}
-	ptr  unsafe.Pointer // keeps the object alive after Boehm dequeues its callback
+	next   *boehmFinalizer
+	obj    uintptr // allocation base, complemented so the registration does not keep the object alive
+	offset uintptr // distance from the base to the pointer given to SetFinalizer
+	fn     interface{}
+	ptr    unsafe.Pointer // keeps the object alive after Boehm dequeues its callback
 }
 
 var (
@@ -251,23 +252,31 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 		return
 	}
 
-	// Keep the object address hidden from Boehm's conservative scanner.
-	addr := ^uintptr(objPtr)
+	// Allocate before taking gcLock because allocation also takes this lock.
 	var entry *boehmFinalizer
 	if finalizer != nil {
-		entry = &boehmFinalizer{obj: addr, fn: finalizer}
+		entry = &boehmFinalizer{fn: finalizer}
 	}
 	gcLock.Lock()
-	// Only the base of a collectible allocation can be finalized.
-	if libgc_base(uintptr(objPtr)) != uintptr(objPtr) {
+	// Boehm finalizes whole allocations. An interior pointer is registered
+	// on its base and the finalizer gets the original pointer back.
+	base := libgc_base(uintptr(objPtr))
+	if base == 0 {
 		gcLock.Unlock()
 		return
+	}
+	offset := uintptr(objPtr) - base
+	// Keep the object address hidden from Boehm's conservative scanner.
+	addr := ^base
+	if entry != nil {
+		entry.obj = addr
+		entry.offset = offset
 	}
 	prev := &finalizers
 	for n := *prev; n != nil; n = *prev {
 		if n.obj == addr {
 			if finalizer == nil {
-				libgc_register_finalizer(objPtr, nil)
+				libgc_register_finalizer(unsafe.Pointer(base), nil)
 				*prev = n.next
 				n.fn = nil
 				numFinalizers--
@@ -276,6 +285,7 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 				}
 			} else {
 				n.fn = finalizer
+				n.offset = offset
 			}
 			gcResumeWorld()
 			gcLock.Unlock()
@@ -284,7 +294,7 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 		prev = &n.next
 	}
 	if entry != nil {
-		libgc_register_finalizer(objPtr, unsafe.Pointer(entry))
+		libgc_register_finalizer(unsafe.Pointer(base), unsafe.Pointer(entry))
 		entry.next = finalizers
 		finalizers = entry
 		numFinalizers++
@@ -317,7 +327,7 @@ func boehmQueueFinalizer(obj unsafe.Pointer, data unsafe.Pointer) {
 	*prev = n.next
 	numFinalizers--
 	if n.fn != nil {
-		n.ptr = obj
+		n.ptr = unsafe.Add(obj, n.offset)
 		n.next = finalizerPending
 		finalizerPending = n
 		finalizerQueued = true

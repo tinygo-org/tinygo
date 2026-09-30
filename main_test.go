@@ -65,6 +65,7 @@ func TestBuild(t *testing.T) {
 		"finalizer.go",
 		"finalizerbits.go",
 		"finalizeridle.go",
+		"finalizerinterior.go",
 		"finalizerinvariants.go",
 		"finalizerlarge.go",
 		"float.go",
@@ -164,6 +165,7 @@ func TestBuild(t *testing.T) {
 			"finalizerbits.go",
 			"finalizergraph.go",
 			"finalizeridle.go",
+			"finalizerinterior.go",
 			"finalizerlarge.go",
 			"finalizerinvariants.go",
 		} {
@@ -529,7 +531,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		}
 		if options.Target != "wasm" {
 			switch name {
-			case "finalizer.go", "finalizerbits.go", "finalizeridle.go", "finalizerlarge.go":
+			case "finalizer.go", "finalizerbits.go", "finalizeridle.go", "finalizerinterior.go", "finalizerlarge.go":
 				// These tests require deterministic finalization on target wasm.
 				// finalizerinvariants.go covers other block GC targets.
 				continue
