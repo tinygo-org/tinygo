@@ -1,12 +1,12 @@
 package msc
 
 import (
+	"internal/task"
 	"machine"
 	"machine/usb"
 	"machine/usb/descriptor"
 	"machine/usb/msc/csw"
 	"machine/usb/msc/scsi"
-	"time"
 )
 
 type mscState uint8
@@ -26,14 +26,14 @@ const (
 var MSC *msc
 
 type msc struct {
-	buf           []byte     // Buffer for incoming/outgoing data
-	blockCache    []byte     // Buffer for block read/write data
-	taskQueued    bool       // Flag to indicate if the buffer has a task queued
-	rxStalled     bool       // Flag to indicate if the RX endpoint is stalled
-	txStalled     bool       // Flag to indicate if the TX endpoint is stalled
-	maxPacketSize uint32     // Maximum packet size for the IN endpoint
-	respStatus    csw.Status // Response status for the last command
-	sendZLP       bool       // Flag to indicate if a zero-length packet should be sent before sending CSW
+	buf           []byte      // Buffer for incoming/outgoing data
+	blockCache    []byte      // Buffer for block read/write data
+	taskWaiter    task.Waiter // Waiter for events outside interrupt context
+	rxStalled     bool        // Flag to indicate if the RX endpoint is stalled
+	txStalled     bool        // Flag to indicate if the TX endpoint is stalled
+	maxPacketSize uint32      // Maximum packet size for the IN endpoint
+	respStatus    csw.Status  // Response status for the last command
+	sendZLP       bool        // Flag to indicate if a zero-length packet should be sent before sending CSW
 
 	cbw           *CBW   // Last received Command Block Wrapper
 	queuedBytes   uint32 // Number of bytes queued for sending
@@ -120,21 +120,21 @@ func newMSC(dev machine.BlockDevice) *msc {
 func (m *msc) processTasks() {
 	// Process tasks that cannot be done in an interrupt context
 	for {
-		if m.taskQueued {
-			cmd := m.cbw.SCSICmd()
-			switch cmd.CmdType() {
-			case scsi.CmdWrite:
-				m.scsiWrite(cmd, m.buf)
-			case scsi.CmdUnmap:
-				m.scsiUnmap(m.buf)
-			}
+		// Wait for the next task to arrive.
+		m.taskWaiter.Wait()
 
-			// Acknowledge the received data from the host
-			m.queuedBytes = 0
-			m.taskQueued = false
-			machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
+		cmd := m.cbw.SCSICmd()
+		switch cmd.CmdType() {
+		case scsi.CmdWrite:
+			m.scsiWrite(cmd, m.buf)
+		case scsi.CmdUnmap:
+			m.scsiUnmap(m.buf)
 		}
-		time.Sleep(100 * time.Microsecond)
+
+		// Acknowledge the received data from the host
+		m.queuedBytes = 0
+		m.taskWaiter.Done()
+		machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
 	}
 }
 
