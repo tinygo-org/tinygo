@@ -2,6 +2,8 @@ package msc
 
 import (
 	"errors"
+	"machine"
+	"machine/usb"
 	"machine/usb/msc/csw"
 	"machine/usb/msc/scsi"
 )
@@ -118,18 +120,28 @@ func (m *msc) writeBlock(b []byte, lba, offset uint32) (n int, err error) {
 	// Convert the emulated block address to the underlying hardware block's start and offset
 	blockStart, blockOffset := m.usbToRawOffset(lba, offset)
 
-	if blockOffset != 0 || len(b) != int(m.blockSizeRaw) {
-		return 0, invalidWriteError
+	if blockOffset == 0 && len(b) == int(m.blockSizeRaw) {
+		// Fast path: writing a full aligned block
+		return m.dev.WriteAt(b, blockStart)
 	}
 
-	// Write the full block to the underlying device
-	n, err = m.dev.WriteAt(b, blockStart)
-	n -= int(blockOffset)
-	if n > len(b) {
-		n = len(b)
+	// Read-modify-write for unaligned/partial blocks
+	// Read the existing block
+	_, err = m.dev.ReadAt(m.blockCache, blockStart)
+	if err != nil {
+		return 0, err
 	}
 
-	return n, err
+	// Modify the block with new data
+	copy(m.blockCache[blockOffset:], b)
+
+	// Write the full block back
+	_, err = m.dev.WriteAt(m.blockCache, blockStart)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
 }
 
 // scsiReadNext sends the next packet from the block cache, or leaves the
@@ -197,6 +209,13 @@ func (m *msc) scsiWrite(b []byte, gen uint32) {
 	}
 
 	if m.sentBytes >= m.transferBytes {
+		// Acknowledge the received data from the host
+		m.queuedBytes = 0
+		if m.rxPending {
+			m.rxPending = false
+			machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
+		}
+
 		// Data transfer is complete, send CSW
 		m.state = mscStateStatus
 		m.run([]byte{}, true)
