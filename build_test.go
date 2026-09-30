@@ -36,6 +36,7 @@ func TestBuild(t *testing.T) {
 		"finalizerinvariants.go",
 		"finalizerlarge.go",
 		"float.go",
+		"gc-register-root.go",
 		"gc.go",
 		"gcstacks.go",
 		"generics.go",
@@ -221,7 +222,23 @@ func TestBuild(t *testing.T) {
 			opts.Opt = "0"
 			emuCheck(t, opts)
 			runTestWithConfig("gc.go", t, opts, nil, nil)
+			runTestWithConfig("gc-register-root.go", t, opts, nil, nil)
 		})
+
+		// At -opt=0 the compiler keeps roots in callee-saved registers
+		// across a call. The host only runs the block GC when asked for it.
+		if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
+			for _, gc := range []string{"conservative", "precise"} {
+				t.Run("opt=0-scheduler=tasks-gc="+gc, func(t *testing.T) {
+					t.Parallel()
+					opts := optionsFromTarget("", sema)
+					opts.Opt = "0"
+					opts.GC = gc
+					opts.Scheduler = "tasks"
+					runTestWithConfig("gc-register-root.go", t, opts, nil, nil)
+				})
+			}
+		}
 
 		t.Run("gc=none-runtime-panic", func(t *testing.T) {
 			t.Parallel()
@@ -584,8 +601,9 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// map keys, overflowing the goroutine stack (384 bytes).
 				continue
 
-			case "gc.go":
-				// Does not pass due to high mark false positive rate.
+			case "gc.go", "gc-register-root.go":
+				// High mark false positive rate, and runtime.GC does not
+				// return. See the finalizerinvariants.go exclusion below.
 				continue
 
 			case "chanrecover.go":
