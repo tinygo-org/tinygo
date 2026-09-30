@@ -20,6 +20,11 @@ func main() {
 	}
 	if runtime.GOOS == "windows" {
 		cwd = filepath.ToSlash(cwd)
+	} else {
+		expectDir, err = filepath.EvalSymlinks(expectDir)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	if cwd != expectDir {
 		log.Fatalf("expected:\"%v\" != os.Getwd():\"%v\"", expectDir, cwd)
