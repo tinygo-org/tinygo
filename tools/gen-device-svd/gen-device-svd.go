@@ -281,7 +281,7 @@ func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[st
 	var peripheralsList []*Peripheral
 	for _, cluster := range clusters {
 		clusterName := strings.ReplaceAll(cluster.Name, "[%s]", "")
-		if cluster.DimIndex != nil {
+		if cluster.DimIndex != nil || cluster.Dim != nil {
 			clusterName = strings.ReplaceAll(clusterName, "%s", "")
 		}
 		clusterPrefix := clusterName + "_"
