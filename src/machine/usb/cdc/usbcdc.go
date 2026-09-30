@@ -32,6 +32,9 @@ type USBCDC struct {
 	// inflight is the number of bytes currently submitted to the USB IN endpoint.
 	inflight atomic.Uint32
 
+	// needZLP is set when the last packet was full size, so the transfer is not yet ended.
+	needZLP bool
+
 	// txActive is the TX-pump ownership flag: 0 = idle, 1 = a pump owns the TX
 	// path. Claimed once (kickTx, CAS 0->1), held across every in-flight packet
 	// and the TX-complete IRQ, and released only when the ring drains. While it
@@ -44,6 +47,9 @@ type USBCDC struct {
 	rbuf [1]byte
 	wbuf [1]byte
 }
+
+// zlpInflight marks a zero-length packet in inflight.
+const zlpInflight = ^uint32(0)
 
 var (
 	// USB is a USB CDC interface.
@@ -135,7 +141,9 @@ func (usbcdc *USBCDC) txhandler() {
 	if inflight == 0 {
 		return
 	}
-	usbcdc.tx.Discard(inflight)
+	if inflight != zlpInflight {
+		usbcdc.tx.Discard(inflight)
+	}
 	usbcdc.inflight.Store(0)
 	usbcdc.sendFromRing()
 }
@@ -146,6 +154,13 @@ func (usbcdc *USBCDC) txhandler() {
 func (usbcdc *USBCDC) sendFromRing() {
 	for {
 		d1, _ := usbcdc.tx.Peek()
+		if len(d1) == 0 && usbcdc.needZLP {
+			// A bulk transfer ends on a short or zero-length packet. USB 2.0 section 5.8.3.
+			usbcdc.needZLP = false
+			usbcdc.inflight.Store(zlpInflight)
+			machine.SendUSBInPacket(cdcEndpointIn, usbcdc.wbuf[:0])
+			return
+		}
 		if len(d1) == 0 {
 			// Release the pump, then re-scan the ring: closes the missed-wakeup
 			// race where Write Put()s data and kickTx's CAS then fails (txActive
@@ -166,6 +181,7 @@ func (usbcdc *USBCDC) sendFromRing() {
 		}
 
 		chunk := d1[:min(usb.EndpointPacketSize, len(d1))]
+		usbcdc.needZLP = len(chunk) == usb.EndpointPacketSize
 		usbcdc.inflight.Store(uint32(len(chunk)))
 		machine.SendUSBInPacket(cdcEndpointIn, chunk)
 		return // in flight; txActive stays set, txhandler continues
