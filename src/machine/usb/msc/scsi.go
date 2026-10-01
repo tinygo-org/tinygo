@@ -98,7 +98,7 @@ func (m *msc) scsiDataTransfer(b []byte) bool {
 		// Transfer complete, send CSW after transfer confirmed
 		m.state = mscStateStatus
 	} else if cmdType == scsi.CmdRead {
-		m.scsiRead(cmd)
+		m.scsiReadNext(cmd)
 	} else {
 		// Other multi-packet commands are rejected in m.scsiCmdBegin()
 	}

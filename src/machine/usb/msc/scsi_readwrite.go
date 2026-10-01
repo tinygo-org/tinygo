@@ -9,12 +9,13 @@ import (
 var invalidWriteError = errors.New("invalid write offset or length")
 
 func (m *msc) scsiCmdReadWrite(cmd scsi.Cmd) {
+	m.cachedBlock = -1
 	status := m.validateScsiReadWrite(cmd)
 	if status != csw.StatusPassed {
 		m.sendScsiError(status, scsi.SenseIllegalRequest, scsi.SenseCodeInvalidCmdOpCode)
 	} else if m.transferBytes > 0 {
 		if cmd.CmdType() == scsi.CmdRead {
-			m.scsiRead(cmd)
+			m.scsiReadNext(cmd)
 		} else {
 			// WRITE(10) and UNMAP commands don't take any action until the data stage begins
 		}
@@ -72,7 +73,14 @@ func (m *msc) readBlock(b []byte, lba, offset uint32) (n int, err error) {
 	blockStart, blockOffset := m.usbToRawOffset(lba, offset)
 
 	// Read a full block from the underlying device into the block cache
-	n, err = m.dev.ReadAt(m.blockCache, blockStart)
+	n = len(m.blockCache)
+	if blockStart != m.cachedBlock {
+		m.cachedBlock = -1
+		n, err = m.dev.ReadAt(m.blockCache, blockStart)
+		if err == nil {
+			m.cachedBlock = blockStart
+		}
+	}
 	n -= int(blockOffset)
 	if n > len(b) {
 		n = len(b)
@@ -99,6 +107,17 @@ func (m *msc) writeBlock(b []byte, lba, offset uint32) (n int, err error) {
 	}
 
 	return n, err
+}
+
+// scsiReadNext sends the next packet from the block cache, or leaves the
+// device read to processTasks so BlockDevice.ReadAt never runs in an interrupt.
+func (m *msc) scsiReadNext(cmd scsi.Cmd) {
+	blockStart, _ := m.usbToRawOffset(cmd.LBA(), m.sentBytes)
+	if blockStart == m.cachedBlock {
+		m.scsiRead(cmd)
+	} else {
+		m.taskQueued = true
+	}
 }
 
 func (m *msc) scsiRead(cmd scsi.Cmd) {

@@ -28,6 +28,7 @@ var MSC *msc
 type msc struct {
 	buf           []byte     // Buffer for incoming/outgoing data
 	blockCache    []byte     // Buffer for block read/write data
+	cachedBlock   int64      // Device offset of the block in blockCache, -1 if none
 	taskQueued    bool       // Flag to indicate if the buffer has a task queued
 	rxStalled     bool       // Flag to indicate if the RX endpoint is stalled
 	txStalled     bool       // Flag to indicate if the TX endpoint is stalled
@@ -73,6 +74,7 @@ func newMSC(dev machine.BlockDevice) *msc {
 	m := &msc{
 		// Some platforms require reads/writes to be aligned to the full underlying hardware block
 		blockCache:    make([]byte, dev.WriteBlockSize()),
+		cachedBlock:   -1,
 		blockSizeUSB:  512,
 		buf:           make([]byte, dev.WriteBlockSize()),
 		cswBuf:        make([]byte, csw.MsgLen),
@@ -123,6 +125,12 @@ func (m *msc) processTasks() {
 		if m.taskQueued {
 			cmd := m.cbw.SCSICmd()
 			switch cmd.CmdType() {
+			case scsi.CmdRead:
+				// Clear first since sending the packet lets the next IN
+				// completion queue another read.
+				m.taskQueued = false
+				m.scsiRead(cmd)
+				continue
 			case scsi.CmdWrite:
 				m.scsiWrite(cmd, m.buf)
 			case scsi.CmdUnmap:
