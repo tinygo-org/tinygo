@@ -21,18 +21,11 @@ const (
 	atten11dB = 3
 )
 
-const (
-	c6PwDetConfigReg          = uintptr(0x600A0810) // see soc/esp32c6/register/soc/reg_base.h
-	c6PwDetSarPowerForceBit   = uint32(1 << 24)     // bits are defined in hal/esp32c6/include/hal/sar_ctrl_ll.h
-	c6PwDetSarPowerControlBit = uint32(1 << 23)
-)
-
 // InitADC initialises the APB_SARADC and Modem/ADC peripheral on ESP32-C6.
 // On C6 the clock/reset gating moved to PCR (not SYSTEM as on C3), and the
 // SARADC CLKM divider configuration also lives in PCR.
 func InitADC() {
-	// Disable SARADC module, see esp_system/port/soc/esp32c6/clk.c, periph_ll_disable_clk_set_rst(PERIPH_SARADC_MODULE)
-	esp.PCR.SetSARADC_CONF_SARADC_CLK_EN(0) // This bit is cleared during boot and unexpectedly never set to 1 again.
+	esp.PCR.SetSARADC_CONF_SARADC_CLK_EN(1)
 
 	// Reset and enable the SARADC bus clock via PCR.
 	esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)
@@ -49,15 +42,6 @@ func InitADC() {
 	esp.PMU.SetRF_PWC_XPD_PERIF_I2C(1)
 	// Release regi2c reset mode, enter work mode
 	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(1)
-
-	// Enable PWDET see hal at: sar_ctrl_ll_set_power_mode_from_pwdet(SAR_CTRL_LL_POWER_ON);
-	// Commented out: esp-idf writes to these bits, but the write operations currently have no effect!
-	// Note: This might be required if the Wifi module is powered on.
-	// c6PwDetCfg := (*volatile.Register32)(unsafe.Pointer(c6PwDetConfigReg))
-	// // println(c6PwDetCfg.Get())
-	// c6PwDetCfg.SetBits(c6PwDetSarPowerForceBit)
-	// c6PwDetCfg.SetBits(c6PwDetSarPowerControlBit)
-	// // println(c6PwDetCfg.Get())
 
 	// Select clock source 1 (PLL_F80M)
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(1)
