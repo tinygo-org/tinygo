@@ -4,7 +4,7 @@
 	gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp \
 	gen-device-stm32 gen-device-renesas gen-device-py32 gen-target-py32
 
-gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp gen-device-py32 ## Generate microcontroller-specific sources
+gen-device: gen-device-avr gen-device-esp gen-device-nrf gen-device-sam gen-device-sifive gen-device-kendryte gen-device-nxp gen-device-rp gen-device-py32 gen-device-ch32 ## Generate microcontroller-specific sources
 ifneq ($(RENESAS), 0)
 gen-device: gen-device-renesas
 endif
@@ -65,3 +65,7 @@ gen-device-py32: build/gen-device-svd
 
 gen-target-py32: ## Generate PY32 target and linker definitions
 	$(GO) run ./tools/gen-py32-targets
+
+gen-device-ch32: build/gen-device-svd
+	./build/gen-device-svd -source=https://github.com/jwetzell/ch32-svd lib/ch32-svd/svd src/device/ch32/
+	GO111MODULE=off $(GO) fmt ./src/device/ch32
