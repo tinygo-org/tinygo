@@ -323,7 +323,7 @@ func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[st
 		})
 		if dimIncrement == -1 && len(clusterRegisters) > 0 {
 			lastReg := clusterRegisters[len(clusterRegisters)-1]
-			lastAddress := lastReg.Address
+			lastAddress := lastReg.Address + uint64(lastReg.ElementSize)
 			if lastReg.Array != -1 {
 				lastAddress = lastReg.Address + uint64(lastReg.Array*lastReg.ElementSize)
 			}
