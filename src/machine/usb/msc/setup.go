@@ -105,6 +105,8 @@ func (m *msc) handleReset(setup usb.Setup, wValue uint16) bool {
 	}
 	// Reset to command waiting state
 	m.state = mscStateCmd
+	m.cmdGen++
+	m.cachedBlock = -1
 
 	// Reset transfer state
 	m.resetBuffer(0)

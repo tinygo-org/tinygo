@@ -4,9 +4,13 @@ import (
 	"errors"
 	"machine/usb/msc/csw"
 	"machine/usb/msc/scsi"
+	"runtime/interrupt"
 )
 
-var invalidWriteError = errors.New("invalid write offset or length")
+var (
+	invalidWriteError = errors.New("invalid write offset or length")
+	errBlockNotCached = errors.New("block not cached")
+)
 
 func (m *msc) scsiCmdReadWrite(cmd scsi.Cmd) {
 	m.cachedBlock = -1
@@ -72,23 +76,38 @@ func (m *msc) readBlock(b []byte, lba, offset uint32) (n int, err error) {
 	// Convert the emulated block address to the underlying hardware block's start and offset
 	blockStart, blockOffset := m.usbToRawOffset(lba, offset)
 
-	// Read a full block from the underlying device into the block cache
-	n = len(m.blockCache)
 	if blockStart != m.cachedBlock {
-		m.cachedBlock = -1
-		n, err = m.dev.ReadAt(m.blockCache, blockStart)
-		if err == nil {
-			m.cachedBlock = blockStart
-		}
+		return 0, errBlockNotCached
 	}
-	n -= int(blockOffset)
+	n = len(m.blockCache) - int(blockOffset)
 	if n > len(b) {
 		n = len(b)
 	}
 
 	copy(b, m.blockCache[blockOffset:])
 
-	return n, err
+	return n, nil
+}
+
+// fillBlockCache reads the block for the next READ(10) packet. It runs in
+// processTasks, and the block is only kept if the command is still current.
+func (m *msc) fillBlockCache(cmd scsi.Cmd, gen uint32) {
+	blockStart, _ := m.usbToRawOffset(cmd.LBA(), m.sentBytes)
+	mask := interrupt.Disable()
+	if gen != m.cmdGen || blockStart == m.cachedBlock {
+		interrupt.Restore(mask)
+		return
+	}
+	m.cachedBlock = -1
+	interrupt.Restore(mask)
+
+	n, err := m.dev.ReadAt(m.blockCache, blockStart)
+
+	mask = interrupt.Disable()
+	if err == nil && n == len(m.blockCache) && gen == m.cmdGen {
+		m.cachedBlock = blockStart
+	}
+	interrupt.Restore(mask)
 }
 
 func (m *msc) writeBlock(b []byte, lba, offset uint32) (n int, err error) {
@@ -116,6 +135,7 @@ func (m *msc) scsiReadNext(cmd scsi.Cmd) {
 	if blockStart == m.cachedBlock {
 		m.scsiRead(cmd)
 	} else {
+		m.taskGen = m.cmdGen
 		m.taskQueued = true
 	}
 }

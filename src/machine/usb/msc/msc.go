@@ -6,6 +6,7 @@ import (
 	"machine/usb/descriptor"
 	"machine/usb/msc/csw"
 	"machine/usb/msc/scsi"
+	"runtime/interrupt"
 	"time"
 )
 
@@ -29,6 +30,8 @@ type msc struct {
 	buf           []byte     // Buffer for incoming/outgoing data
 	blockCache    []byte     // Buffer for block read/write data
 	cachedBlock   int64      // Device offset of the block in blockCache, -1 if none
+	cmdGen        uint32     // Bumped on each CBW and reset so stale read tasks are dropped
+	taskGen       uint32     // cmdGen when the read task was queued
 	taskQueued    bool       // Flag to indicate if the buffer has a task queued
 	rxStalled     bool       // Flag to indicate if the RX endpoint is stalled
 	txStalled     bool       // Flag to indicate if the TX endpoint is stalled
@@ -128,8 +131,16 @@ func (m *msc) processTasks() {
 			case scsi.CmdRead:
 				// Clear first since sending the packet lets the next IN
 				// completion queue another read.
+				mask := interrupt.Disable()
+				gen := m.taskGen
 				m.taskQueued = false
-				m.scsiRead(cmd)
+				interrupt.Restore(mask)
+				m.fillBlockCache(cmd, gen)
+				mask = interrupt.Disable()
+				if gen == m.cmdGen && m.state == mscStateData {
+					m.scsiRead(cmd)
+				}
+				interrupt.Restore(mask)
 				continue
 			case scsi.CmdWrite:
 				m.scsiWrite(cmd, m.buf)
@@ -253,6 +264,7 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 
 		// Save the validated CBW for later reference
 		copy(m.cbw.Data, b)
+		m.cmdGen++
 
 		// Move on to the data transfer phase next go around (after sending the first message)
 		m.state = mscStateData
