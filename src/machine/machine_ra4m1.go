@@ -3,14 +3,14 @@
 package machine
 
 import (
-	"unsafe"
-
 	"device/renesas"
 	"runtime/volatile"
+	"unsafe"
 )
 
 const deviceName = renesas.Device
 
+// P0_00 through P5_15 identify the RA4M1 port pins.
 const (
 	P0_00 Pin = 0
 	P0_01 Pin = 1
@@ -110,14 +110,17 @@ const (
 	P5_15 Pin = 95
 )
 
+// PinOutput through PinInputPullDown select the GPIO pin mode.
 const (
 	PinOutput PinMode = iota
 	PinInput
 	PinInputPullUp
+	// PinInputPullDown acts as PinInput because the RA4M1 has no internal pull-down.
+	// See ArduinoCore-renesas 1.6.0 cores/arduino/digital.cpp.
 	PinInputPullDown
 )
 
-// Configure configures the gpio pin as per mode.
+// Configure sets the pin mode.
 func (p Pin) Configure(config PinConfig) {
 	if p == NoPin {
 		return
@@ -127,15 +130,17 @@ func (p Pin) Configure(config PinConfig) {
 
 	switch config.Mode {
 	case PinOutput:
-		configureGPIO(p, renesas.PFS_P000PFS_PDR_1)
+		configureGPIO(p, renesas.PFS_P000PFS_PDR_Msk)
+	case PinInputPullUp:
+		configureGPIO(p, renesas.PFS_P000PFS_PCR_Msk)
 	default:
-		configureGPIO(p, renesas.PFS_P000PFS_PDR_0)
+		configureGPIO(p, 0)
 	}
 
 	disableWritingPmnPFS()
 }
 
-// Set drives the pin high if value is true else drives it low.
+// Set drives the pin high if value is true, or low if value is false.
 func (p Pin) Set(value bool) {
 	if p == NoPin {
 		return
@@ -146,16 +151,23 @@ func (p Pin) Set(value bool) {
 		return
 	}
 
-	if value == true {
+	if value {
 		port.set(p)
 	} else {
 		port.clr(p)
 	}
 }
 
-// Get reads the pin value.
+// Get reports whether the pin input is high.
 func (p Pin) Get() bool {
-	return false
+	if p == NoPin {
+		return false
+	}
+	port := getPort(p)
+	if port == nil {
+		return false
+	}
+	return port.get(p)
 }
 
 var (
@@ -194,9 +206,11 @@ func getPinNumber(p Pin) uint32 {
 	return uint32(p) & 0x0f
 }
 
+// PCNTR3 is write-only. See ArduinoCore-renesas 1.6.0 R7FA4M1AB.h.
 type gpioPort interface {
 	set(p Pin)
 	clr(p Pin)
+	get(p Pin) bool
 }
 
 type gpioPortType0 struct {
@@ -204,11 +218,15 @@ type gpioPortType0 struct {
 }
 
 func (p gpioPortType0) set(pin Pin) {
-	p.port.SetPCNTR3_POSR(1 << getPinNumber(pin))
+	p.port.PCNTR3.Set(1 << getPinNumber(pin))
 }
 
 func (p gpioPortType0) clr(pin Pin) {
-	p.port.SetPCNTR3_PORR(1 << getPinNumber(pin))
+	p.port.PCNTR3.Set(1 << (16 + getPinNumber(pin)))
+}
+
+func (p gpioPortType0) get(pin Pin) bool {
+	return p.port.PCNTR2.HasBits(1 << getPinNumber(pin))
 }
 
 type gpioPortType1 struct {
@@ -216,11 +234,15 @@ type gpioPortType1 struct {
 }
 
 func (p gpioPortType1) set(pin Pin) {
-	p.port.SetPCNTR3_POSR(1 << getPinNumber(pin))
+	p.port.PCNTR3.Set(1 << getPinNumber(pin))
 }
 
 func (p gpioPortType1) clr(pin Pin) {
-	p.port.SetPCNTR3_PORR(1 << getPinNumber(pin))
+	p.port.PCNTR3.Set(1 << (16 + getPinNumber(pin)))
+}
+
+func (p gpioPortType1) get(pin Pin) bool {
+	return p.port.PCNTR2.HasBits(1 << getPinNumber(pin))
 }
 
 func enableWritingPmnPFS() {
@@ -233,16 +255,17 @@ func disableWritingPmnPFS() {
 	renesas.PMISC.SetPWPR_B0WI(0x1)
 }
 
-func configureGPIO(p Pin, direction uint32) {
+func configureGPIO(p Pin, mode uint32) {
 	port := getPortNumber(p)
 	bit := getPinNumber(p)
 	reg := (*volatile.Register32)(
-		unsafe.Add(unsafe.Pointer(uintptr(0x40040800)), 0x40*port+4*int(bit)),
+		unsafe.Add(unsafe.Pointer(renesas.PFS), 0x40*port+4*int(bit)),
 	)
 	modeMask := uint32(renesas.PFS_P000PFS_PSEL_Msk |
 		renesas.PFS_P000PFS_PMR_Msk |
 		renesas.PFS_P000PFS_ASEL_Msk |
 		renesas.PFS_P000PFS_ISEL_Msk |
+		renesas.PFS_P000PFS_PCR_Msk |
 		renesas.PFS_P000PFS_PDR_Msk)
-	reg.Set(reg.Get()&^modeMask | direction<<renesas.PFS_P000PFS_PDR_Pos)
+	reg.ReplaceBits(mode, modeMask, 0)
 }
