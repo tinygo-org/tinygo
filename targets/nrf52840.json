@@ -1,5 +1,6 @@
 {
 	"inherits": ["cortex-m4"],
+	"default-stack-size": 8192,
 	"build-tags": ["nrf52840", "nrf"],
 	"cflags": [
 		"-DNRF52840_XXAA",
