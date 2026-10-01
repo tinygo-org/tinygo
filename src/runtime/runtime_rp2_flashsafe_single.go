@@ -1,14 +1,14 @@
-//go:build rp2040 && !scheduler.cores
+//go:build (rp2040 || rp2350) && !scheduler.cores
 
 package runtime
 
 import "runtime/interrupt"
 
-func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
+func rp2EnterFlashSafeSection() (interrupt.State, bool) {
 	return interrupt.Disable(), false
 }
 
-func rp2040ExitFlashSafeSection(state interrupt.State, _ bool) {
+func rp2ExitFlashSafeSection(state interrupt.State, _ bool) {
 	interrupt.Restore(state)
 }
 

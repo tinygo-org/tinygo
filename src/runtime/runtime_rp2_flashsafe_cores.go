@@ -1,4 +1,4 @@
-//go:build rp2040 && scheduler.cores
+//go:build (rp2040 || rp2350) && scheduler.cores
 
 package runtime
 
@@ -9,20 +9,20 @@ import (
 	_ "unsafe" // required for //go:section
 )
 
-// Values of rp2040FlashSafeState.
+// Values of rp2FlashSafeState.
 const (
-	rp2040FlashSafeIdle    uint8 = iota // not in a flash-safe section, or the other core has resumed
-	rp2040FlashSafeLocked               // the other core is waiting in RAM
-	rp2040FlashSafeRelease              // flash operation complete; the other core may resume
+	rp2FlashSafeIdle    uint8 = iota // not in a flash-safe section, or the other core has resumed
+	rp2FlashSafeLocked               // the other core is waiting in RAM
+	rp2FlashSafeRelease              // flash operation complete; the other core may resume
 )
 
-// rp2040FlashSafeState synchronizes both cores during flash operations.
-var rp2040FlashSafeState volatile.Register8
+// rp2FlashSafeState synchronizes both cores during flash operations.
+var rp2FlashSafeState volatile.Register8
 
-// rp2040EnterFlashSafeSection enters a section where flash operations may disable XIP.
+// rp2EnterFlashSafeSection enters a section where flash operations may disable XIP.
 // With scheduler=cores it must not be called from an interrupt handler or with
 // interrupts disabled; the GC stop-the-world path has the same constraint (see #5610).
-func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
+func rp2EnterFlashSafeSection() (interrupt.State, bool) {
 	multicore := secondaryCoresReady.Load() != 0
 	if !multicore {
 		return interrupt.Disable(), false
@@ -34,24 +34,24 @@ func rp2040EnterFlashSafeSection() (interrupt.State, bool) {
 	// block this core while the other core is parked.
 	state := interrupt.Disable()
 
-	rp2040FlashSafeState.Set(rp2040FlashSafeIdle)
+	rp2FlashSafeState.Set(rp2FlashSafeIdle)
 
-	// RP2040 always has two cores, so there is exactly one core to pause.
-	rp2040FlashSafePauseCore()
+	// RP2040 and RP2350 have two cores, so there is exactly one core to pause.
+	rp2FlashSafePauseCore()
 
-	for rp2040FlashSafeState.Get() != rp2040FlashSafeLocked {
+	for rp2FlashSafeState.Get() != rp2FlashSafeLocked {
 		spinLoopWait()
 	}
 
 	return state, true
 }
 
-func rp2040ExitFlashSafeSection(state interrupt.State, multicore bool) {
+func rp2ExitFlashSafeSection(state interrupt.State, multicore bool) {
 	if multicore {
-		rp2040FlashSafeState.Set(rp2040FlashSafeRelease)
+		rp2FlashSafeState.Set(rp2FlashSafeRelease)
 		arm.Asm("sev")
 
-		for rp2040FlashSafeState.Get() != rp2040FlashSafeIdle {
+		for rp2FlashSafeState.Get() != rp2FlashSafeIdle {
 			spinLoopWait()
 		}
 
@@ -61,7 +61,7 @@ func rp2040ExitFlashSafeSection(state interrupt.State, multicore bool) {
 	interrupt.Restore(state)
 }
 
-func rp2040FlashSafePauseCore() {
+func rp2FlashSafePauseCore() {
 	multicore_fifo_push_blocking(rp2SIOFIFOCommandFlashSafe)
 }
 
@@ -74,16 +74,16 @@ func rp2040FlashSafePauseCore() {
 func rp2FlashSafeInterruptHandler() {
 	state := interrupt.Disable()
 
-	rp2040FlashSafeState.Set(rp2040FlashSafeLocked)
+	rp2FlashSafeState.Set(rp2FlashSafeLocked)
 	arm.Asm("sev")
 
-	for rp2040FlashSafeState.Get() == rp2040FlashSafeLocked {
+	for rp2FlashSafeState.Get() == rp2FlashSafeLocked {
 		arm.Asm("wfe")
 	}
 
 	// Set Idle before restoring interrupts to avoid deadlocking with
 	// a pending GC interrupt.
-	rp2040FlashSafeState.Set(rp2040FlashSafeIdle)
+	rp2FlashSafeState.Set(rp2FlashSafeIdle)
 	arm.Asm("sev")
 
 	interrupt.Restore(state)

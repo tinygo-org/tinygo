@@ -294,7 +294,7 @@ var (
 	atomicsLock   = spinLock{id: 22}
 	futexLock     = spinLock{id: 23}
 
-	// flashSafeLock is used for RP2040-specific XIP operations.
+	// flashSafeLock is used for XIP operations on RP2040 and RP2350.
 	flashSafeLock = spinLock{id: 24}
 )
 
