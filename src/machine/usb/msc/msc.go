@@ -113,8 +113,9 @@ func newMSC(dev machine.BlockDevice) *msc {
 		},
 		[]usb.SetupConfig{
 			{
-				Index:   mscInterface,
-				Handler: setupPacketHandler,
+				Index:        mscInterface,
+				Handler:      setupPacketHandler,
+				ResetHandler: configurationReset,
 			},
 		},
 	)

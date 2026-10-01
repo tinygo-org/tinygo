@@ -107,7 +107,31 @@ func (m *msc) handleReset(setup usb.Setup, wValue uint16) bool {
 	if setup.WIndex != mscInterface || setup.WLength != 0 || wValue != 0 {
 		return false
 	}
-	// Reset to command waiting state
+	m.resetState()
+
+	// Send a zero-length packet (ZLP) to indicate the reset is complete
+	machine.SendZlp()
+
+	// Return true to indicate successful reset
+	return true
+}
+
+// configurationReset runs when the host sets the configuration, for example
+// after a USB reset in the middle of a transfer.
+func configurationReset() {
+	if MSC != nil {
+		state := MSC.mu.lock()
+		MSC.resetState()
+		MSC.txStalled = false
+		MSC.rxStalled = false
+		// The endpoints were set up again, so a stale task must not ack OUT.
+		MSC.rxPending = false
+		MSC.mu.unlock(state)
+	}
+}
+
+// resetState goes back to waiting for a CBW and drops any queued read.
+func (m *msc) resetState() {
 	m.state = mscStateCmd
 	m.cmdGen++
 	m.cachedBlock = -1
@@ -115,18 +139,10 @@ func (m *msc) handleReset(setup usb.Setup, wValue uint16) bool {
 		// A queued read does not own m.buf, so drop it now.
 		m.taskQueued = false
 	}
-
-	// Reset transfer state
 	m.resetBuffer(0)
 	m.senseKey = 0
 	m.addlSenseCode = 0
 	m.addlSenseQualifier = 0
-
-	// Send a zero-length packet (ZLP) to indicate the reset is complete
-	machine.SendZlp()
-
-	// Return true to indicate successful reset
-	return true
 }
 
 func (m *msc) stallEndpointIn(ep uint8) {

@@ -131,6 +131,7 @@ var (
 	usbTxHandler    [NumberOfUSBEndpoints]func()
 	usbRxHandler    [NumberOfUSBEndpoints]func([]byte) bool
 	usbSetupHandler [usb.NumberOfInterfaces]func(usb.Setup) bool
+	usbResetHandler [usb.NumberOfInterfaces]func()
 	usbStallHandler [NumberOfUSBEndpoints]func(usb.Setup) bool
 )
 
@@ -301,6 +302,12 @@ func handleStandardSetup(setup usb.Setup) bool {
 			usbConfiguration = setup.WValueL
 			USBDev.InitEndpointComplete = true
 
+			for _, h := range usbResetHandler {
+				if h != nil {
+					h()
+				}
+			}
+
 			SendZlp()
 			return true
 		} else {
@@ -408,5 +415,8 @@ func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointC
 
 	for _, s := range setup {
 		usbSetupHandler[s.Index] = s.Handler
+		if s.ResetHandler != nil {
+			usbResetHandler[s.Index] = s.ResetHandler
+		}
 	}
 }
