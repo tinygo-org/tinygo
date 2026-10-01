@@ -48,7 +48,8 @@ func chanDisable(ch uint8) {
 }
 
 // chanOp implements LEDC low-speed channel ops for ESP32-C3 (channels 0–5 only).
-// DUTY_NUM is 0 so a new DUTY_START is not dropped, see machine_esp32_pwm.go.
+// DUTY_NUM is 0 so a new DUTY_START is not dropped (see machine_esp32_pwm.go).
+// Two Set calls within about 100 ns can still both be dropped.
 func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32) {
 	switch ch {
 	case 0:
