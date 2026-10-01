@@ -8,5 +8,5 @@ import "device/stm32"
 // GCCFG.PWRDWN deactivates the PHY power-down; NOVBUSSENS skips the VBUS pin
 // check so boards without PA9 connected to VBUS still enumerate.
 func initOTGFSPHY() {
-	stm32.OTG_FS_GLOBAL.GCCFG.Set(stm32.USB_OTG_FS_GCCFG_PWRDWN)
+	stm32.OTG_FS_GLOBAL.GCCFG.Set(stm32.USB_OTG_FS_GLOBAL_GCCFG_PWRDWN)
 }
