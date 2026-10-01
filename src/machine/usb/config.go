@@ -13,4 +13,7 @@ type EndpointConfig struct {
 type SetupConfig struct {
 	Index   uint8
 	Handler func(Setup) bool
+	// ResetHandler is called on SET_CONFIGURATION, which the host sends again
+	// after every USB reset.
+	ResetHandler func()
 }
