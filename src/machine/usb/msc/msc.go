@@ -1,6 +1,7 @@
 package msc
 
 import (
+	"encoding/binary"
 	"machine"
 	"machine/usb"
 	"machine/usb/descriptor"
@@ -40,6 +41,7 @@ type msc struct {
 	maxPacketSize uint32       // Maximum packet size for the IN endpoint
 	respStatus    csw.Status   // Response status for the last command
 	sendZLP       bool         // Flag to indicate if a zero-length packet should be sent before sending CSW
+	skipTxDone    bool         // Flag to ignore the late IN completion of a CSW the host already received
 
 	cbw           *CBW   // Last received Command Block Wrapper
 	queuedBytes   uint32 // Number of bytes queued for sending
@@ -78,10 +80,8 @@ func newMSC(dev machine.BlockDevice) *msc {
 	maxPacketSize := descriptor.EndpointMSCIN.GetMaxPacketSize()
 	m := &msc{
 		// Some platforms require reads/writes to be aligned to the full underlying hardware block
-		blockCache:    make([]byte, dev.WriteBlockSize()),
 		cachedBlock:   -1,
 		blockSizeUSB:  512,
-		buf:           make([]byte, dev.WriteBlockSize()),
 		cswBuf:        make([]byte, csw.MsgLen),
 		cbw:           &CBW{Data: make([]byte, 31)},
 		maxPacketSize: uint32(maxPacketSize),
@@ -162,7 +162,7 @@ func (m *msc) processTasks() {
 		if m.taskGen == gen {
 			m.taskQueued = false
 		}
-		if gen == m.cmdGen {
+		if gen == m.cmdGen && m.state == mscStateData {
 			m.queuedBytes = 0
 		}
 		ack := m.rxPending
@@ -199,8 +199,8 @@ func (m *msc) sendCSW(status csw.Status) {
 	// Generate CSW packet into m.cswBuf and send it
 	residue := uint32(0)
 	expected := m.cbw.transferLength()
-	if expected >= m.sentBytes {
-		residue = expected - m.sentBytes
+	if expected >= m.sentBytes+m.queuedBytes {
+		residue = expected - (m.sentBytes + m.queuedBytes)
 	}
 	m.cbw.CSW(status, residue, m.cswBuf)
 	m.queuedBytes = csw.MsgLen
@@ -261,6 +261,16 @@ command execution and moves to mscStateStatusSent.
 func (m *msc) run(b []byte, isEpOut bool) bool {
 	ack := true
 
+	// The host only sends a CBW after it has the previous CSW, so its IN completion may still be pending.
+	// 5 Transport Protocol, Figure 1, https://usb.org/sites/default/files/usbmassbulk_10.pdf
+	if isEpOut && m.state == mscStateStatusSent {
+		m.state = mscStateCmd
+		m.skipTxDone = true
+	} else if !isEpOut && m.skipTxDone {
+		m.skipTxDone = false
+		return ack
+	}
+
 	switch m.state {
 	case mscStateCmd:
 		// Receiving a new command block wrapper (CBW)
@@ -295,6 +305,7 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 		m.queuedBytes = 0
 		m.sentBytes = 0
 		m.respStatus = csw.StatusPassed
+		m.sendZLP = false
 
 		m.scsiCmdBegin()
 
@@ -337,9 +348,54 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 			m.sendUSBPacket(m.buf[:0])
 		} else {
 			m.sendCSW(m.respStatus)
-			m.state = mscStateCmd
 		}
 	}
 
 	return ack
+}
+
+// RegisterBlockDevice registers a BlockDevice provider with the MSC driver
+func (m *msc) RegisterBlockDevice(dev machine.BlockDevice) {
+	m.dev = dev
+	m.cachedBlock = -1
+
+	bufSize := max(dev.WriteBlockSize(), int64(m.maxPacketSize))
+
+	if cap(m.blockCache) != int(bufSize) {
+		m.blockCache = make([]byte, bufSize)
+		m.buf = make([]byte, bufSize)
+	}
+
+	m.blockSizeRaw = uint32(m.dev.WriteBlockSize())
+	m.blockCount = uint32(m.dev.Size()) / m.blockSizeUSB
+	// Read/write/erase operations must be aligned to the underlying hardware blocks. In order to align
+	// them we assume the provided block device is aligned to the end of the underlying hardware block
+	// device and offset all reads/writes by the remaining bytes that don't make up a full block.
+	m.blockOffset = uint32(m.dev.Size()) % m.blockSizeUSB
+
+	// Set VPD UNMAP fields
+	for i := range vpdPages {
+		if vpdPages[i].PageCode == 0xb0 {
+			// 0xb0 - 5.4.5 Block Limits VPD page (B0h)
+			if len(vpdPages[i].Data) >= 28 {
+				// Set the OPTIMAL UNMAP GRANULARITY (write blocks per erase block)
+				granularity := uint32(dev.EraseBlockSize()) / m.blockSizeUSB
+				binary.BigEndian.PutUint32(vpdPages[i].Data[24:28], granularity)
+			}
+			if len(vpdPages[i].Data) >= 32 {
+				// Set the UNMAP GRANULARITY ALIGNMENT (first sector of first full erase block)
+				// The unmap granularity alignment is used to calculate an optimal unmap request starting LBA as follows:
+				// optimal unmap request starting LBA = (n * OPTIMAL UNMAP GRANULARITY) + UNMAP GRANULARITY ALIGNMENT
+				// where n is zero or any positive integer value
+				// https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf
+
+				// We assume the block device is aligned to the end of the underlying block device
+				blockOffset := uint32(dev.EraseBlockSize()) % m.blockSizeUSB
+				// Set the UGAVALID bit to indicate that the UNMAP GRANULARITY ALIGNMENT is valid
+				blockOffset |= 0x80000000
+				binary.BigEndian.PutUint32(vpdPages[i].Data[28:32], blockOffset)
+			}
+			break
+		}
+	}
 }

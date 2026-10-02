@@ -2,6 +2,8 @@ package msc
 
 import (
 	"errors"
+	"machine"
+	"machine/usb"
 	"machine/usb/msc/csw"
 	"machine/usb/msc/scsi"
 )
@@ -115,21 +117,35 @@ func (m *msc) fillBlockCache(gen uint32) {
 }
 
 func (m *msc) writeBlock(b []byte, lba, offset uint32) (n int, err error) {
-	// Convert the emulated block address to the underlying hardware block's start and offset
-	blockStart, blockOffset := m.usbToRawOffset(lba, offset)
+	// A queued write can start in the middle of a raw block and run into the
+	// next one, so write it one raw block at a time.
+	for n < len(b) {
+		// Convert the emulated block address to the underlying hardware block's start and offset
+		blockStart, blockOffset := m.usbToRawOffset(lba, offset+uint32(n))
+		chunk := b[n:]
+		if room := int(m.blockSizeRaw) - int(blockOffset); len(chunk) > room {
+			chunk = chunk[:room]
+		}
 
-	if blockOffset != 0 || len(b) != int(m.blockSizeRaw) {
-		return 0, invalidWriteError
+		if blockOffset == 0 && len(chunk) == int(m.blockSizeRaw) {
+			// Fast path: writing a full aligned block
+			if _, err = m.dev.WriteAt(chunk, blockStart); err != nil {
+				return n, err
+			}
+		} else {
+			// Read-modify-write for unaligned/partial blocks
+			m.cachedBlock = -1
+			if _, err = m.dev.ReadAt(m.blockCache, blockStart); err != nil {
+				return n, err
+			}
+			copy(m.blockCache[blockOffset:], chunk)
+			if _, err = m.dev.WriteAt(m.blockCache, blockStart); err != nil {
+				return n, err
+			}
+		}
+		n += len(chunk)
 	}
-
-	// Write the full block to the underlying device
-	n, err = m.dev.WriteAt(b, blockStart)
-	n -= int(blockOffset)
-	if n > len(b) {
-		n = len(b)
-	}
-
-	return n, err
+	return n, nil
 }
 
 // scsiReadNext sends the next packet from the block cache, or leaves the
@@ -197,6 +213,13 @@ func (m *msc) scsiWrite(b []byte, gen uint32) {
 	}
 
 	if m.sentBytes >= m.transferBytes {
+		// Acknowledge the received data from the host
+		m.queuedBytes = 0
+		if m.rxPending {
+			m.rxPending = false
+			machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
+		}
+
 		// Data transfer is complete, send CSW
 		m.state = mscStateStatus
 		m.run([]byte{}, true)
