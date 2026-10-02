@@ -3623,8 +3623,6 @@ func TestIndex(t *testing.T) {
 	}
 }
 
-/*
-
 func TestSlice(t *testing.T) {
 	xs := []int{1, 2, 3, 4, 5, 6, 7, 8}
 	v := ValueOf(xs).Slice(3, 5).Interface().([]int)
@@ -3740,6 +3738,8 @@ func TestSetLenCap(t *testing.T) {
 	shouldPanic("SetLen", func() { va.SetLen(8) })
 	shouldPanic("SetCap", func() { va.SetCap(8) })
 }
+
+/*
 
 func TestVariadic(t *testing.T) {
 	var b strings.Builder

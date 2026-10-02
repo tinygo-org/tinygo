@@ -710,7 +710,9 @@ func (v Value) Slice(i, j int) Value {
 
 		hdr.len = j - i
 		hdr.cap = hdr.cap - i
-		hdr.data = unsafe.Add(hdr.data, i*elemSize)
+		if hdr.cap > 0 {
+			hdr.data = unsafe.Add(hdr.data, i*elemSize)
+		}
 
 		return Value{
 			typecode: v.typecode,
@@ -731,7 +733,10 @@ func (v Value) Slice(i, j int) Value {
 		var hdr sliceHeader
 		hdr.len = j - i
 		hdr.cap = length - i
-		hdr.data = unsafe.Add(buf, i*elemSize)
+		hdr.data = buf
+		if hdr.cap > 0 {
+			hdr.data = unsafe.Add(buf, i*elemSize)
+		}
 
 		sliceType := (*arrayType)(unsafe.Pointer(v.typecode.underlying())).slicePtr
 		return Value{
@@ -760,16 +765,17 @@ func (v Value) Slice3(i, j, k int) Value {
 	case Slice:
 		hdr := *(*sliceHeader)(v.value)
 		i, j, k := uintptr(i), uintptr(j), uintptr(k)
-
-		if j < i || k < j || hdr.len < k {
-			slicePanic()
+		if j < i || k < j || hdr.cap < k {
+			panic("reflect.Value.Slice3: slice index out of bounds")
 		}
 
 		elemSize := v.typecode.underlying().elem().Size()
 
 		hdr.len = j - i
 		hdr.cap = k - i
-		hdr.data = unsafe.Add(hdr.data, i*elemSize)
+		if k > i {
+			hdr.data = unsafe.Add(hdr.data, i*elemSize)
+		}
 
 		return Value{
 			typecode: v.typecode,
@@ -782,7 +788,7 @@ func (v Value) Slice3(i, j, k int) Value {
 		buf, length := buflen(v)
 		i, j, k := uintptr(i), uintptr(j), uintptr(k)
 		if j < i || k < j || length < k {
-			slicePanic()
+			panic("reflect.Value.Slice3: slice index out of bounds")
 		}
 
 		elemSize := v.typecode.underlying().elem().Size()
@@ -790,7 +796,10 @@ func (v Value) Slice3(i, j, k int) Value {
 		var hdr sliceHeader
 		hdr.len = j - i
 		hdr.cap = k - i
-		hdr.data = unsafe.Add(buf, i*elemSize)
+		hdr.data = buf
+		if k > i {
+			hdr.data = unsafe.Add(buf, i*elemSize)
+		}
 
 		sliceType := (*arrayType)(unsafe.Pointer(v.typecode.underlying())).slicePtr
 		return Value{
@@ -800,7 +809,7 @@ func (v Value) Slice3(i, j, k int) Value {
 		}
 	}
 
-	panic("unimplemented: (reflect.Value).Slice3()")
+	panic(&ValueError{Method: "reflect.Value.Slice3", Kind: v.Kind()})
 }
 
 //go:linkname maplen runtime.hashmapLen
@@ -1394,7 +1403,16 @@ func (v Value) SetBytes(x []byte) {
 }
 
 func (v Value) SetCap(n int) {
-	panic("unimplemented: (reflect.Value).SetCap()")
+	if v.typecode.Kind() != Slice {
+		panic(&ValueError{Method: "reflect.Value.SetCap", Kind: v.Kind()})
+	}
+	v.checkAddressable()
+	v.checkRO()
+	hdr := (*sliceHeader)(v.value)
+	if int(uintptr(n)) != n || uintptr(n) < hdr.len || uintptr(n) > hdr.cap {
+		panic("reflect.Value.SetCap: slice capacity out of range")
+	}
+	hdr.cap = uintptr(n)
 }
 
 func (v Value) SetLen(n int) {
