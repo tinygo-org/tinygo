@@ -3154,8 +3154,6 @@ func TestFieldByIndex(t *testing.T) {
 	}
 }
 
-/*
-
 func TestFieldByName(t *testing.T) {
 	for _, test := range fieldTests {
 		s := TypeOf(test.s)
@@ -3195,8 +3193,6 @@ func TestFieldByName(t *testing.T) {
 		}
 	}
 }
-
-*/
 
 func TestImportPath(t *testing.T) {
 	tests := []struct {
@@ -3347,6 +3343,10 @@ func TestVariadicType(t *testing.T) {
 	}
 	t.Error(s)
 }
+
+*/
+
+/*
 
 type inner struct {
 	x int
@@ -6723,6 +6723,8 @@ func TestZeroSet(t *testing.T) {
 	}
 }
 
+*/
+
 func TestFieldByIndexNil(t *testing.T) {
 	type P struct {
 		F int
@@ -6745,6 +6747,8 @@ func TestFieldByIndexNil(t *testing.T) {
 
 	t.Fatalf("did not panic")
 }
+
+/*
 
 // Given
 //	type Outer struct {
