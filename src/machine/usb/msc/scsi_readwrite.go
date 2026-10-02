@@ -190,11 +190,12 @@ func (m *msc) scsiWrite(b []byte, gen uint32) {
 		return
 	}
 	if err != nil || n < len(b) {
-		m.sentBytes += uint32(n)
 		m.sendScsiError(csw.StatusFailed, scsi.SenseNotReady, scsi.SenseCodeMediumNotPresent)
-	} else {
-		m.sentBytes += uint32(len(b))
+		m.sentBytes += uint32(n)
+		m.run([]byte{}, true)
+		return
 	}
+	m.sentBytes += uint32(len(b))
 
 	if m.sentBytes >= m.transferBytes {
 		// Data transfer is complete, send CSW
