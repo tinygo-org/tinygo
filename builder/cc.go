@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -30,37 +29,21 @@ type cFileCompileConfig struct {
 // Compiling the same file again (if nothing changed, including included header
 // files) the output is loaded from the build cache instead.
 //
-// Its operation is a bit complex (more complex than Go package build caching)
-// because the list of file dependencies is only known after the file is
-// compiled. However, luckily compilers have a flag to write a list of file
-// dependencies in Makefile syntax which can be used for caching.
+// Its operation is a bit complex (more complex than Go package build caching),
+// because the list of file dependencies depends on C include path resolution.
+// TinyGo asks Clang for the current dependency list before looking for an object
+// cache hit, then uses the hashes of those dependencies in the object key.
 //
-// Because of this complexity, every file has in fact two cached build outputs:
-// the file itself, and the list of dependencies. Its operation is as follows:
-//
-//	depfile = hash(path, compiler, cflags, ...)
-//	if depfile exists:
-//	  outfile = hash of all files and depfile name
-//	  if outfile exists:
-//	    # cache hit
-//	    return outfile
-//	# cache miss
+//	dependencies = clang -M source
+//	outfile = hash(path, compiler, cflags, dependencies, ...)
+//	if outfile exists:
+//	  # cache hit
+//	  return outfile
 //	tmpfile = compile file
-//	read dependencies (side effect of compile)
-//	write depfile
-//	outfile = hash of all files and depfile name
 //	rename tmpfile to outfile
 //
-// There are a few edge cases that are not handled:
-//   - If a file is added to an include path, that file may be included instead of
-//     some other file. This would be fixed by also including lookup failures in the
-//     dependencies file, but I'm not aware of a compiler which does that.
-//   - The Makefile syntax that compilers output has issues, see readDepFile for
-//     details.
-//   - A header file may be changed to add/remove an include. This invalidates the
-//     depfile but without invalidating its name. For this reason, the depfile is
-//     written on each new compilation (even when it seems unnecessary). However, it
-//     could in rare cases lead to a stale file fetched from the cache.
+// The Makefile syntax that compilers output has issues, see readDepFile for
+// details.
 func compileAndCacheCFile(abspath, tmpdir string, cflags []string, compileConfig *cFileCompileConfig, printCommands func(string, ...string)) (string, error) {
 	// Hash input file.
 	fileHash, err := hashFile(abspath)
@@ -72,81 +55,52 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, compileConfig
 	unlock := lock(filepath.Join(goenv.Get("GOCACHE"), fileHash+".c.lock"))
 	defer unlock()
 
-	// Create cache key for the dependencies file.
-	recordedPath := ""
-	if compileConfig != nil {
-		recordedPath = compileConfig.recordedPath
-	}
-	buf, err := json.Marshal(struct {
-		Path         string
-		Hash         string
-		Flags        []string
-		RecordedPath string
-		LLVMVersion  string
-	}{
-		Path:         abspath,
-		Hash:         fileHash,
-		Flags:        cflags,
-		RecordedPath: recordedPath,
-		LLVMVersion:  llvm.Version,
-	})
-	if err != nil {
-		panic(err) // shouldn't happen
-	}
-	depfileNameHashBuf := sha512.Sum512_224(buf)
-	depfileNameHash := hex.EncodeToString(depfileNameHashBuf[:])
-
-	// Load dependencies file, if possible.
-	depfileName := "dep-" + depfileNameHash + ".json"
-	depfileCachePath := filepath.Join(goenv.Get("GOCACHE"), depfileName)
-	depfileBuf, err := os.ReadFile(depfileCachePath)
-	var dependencies []string // sorted list of dependency paths
-	if err == nil {
-		// There is a dependency file, that's great!
-		// Parse it first.
-		err := json.Unmarshal(depfileBuf, &dependencies)
-		if err != nil {
-			return "", fmt.Errorf("could not parse dependencies JSON: %w", err)
-		}
-
-		// Obtain hashes of all the files listed as a dependency.
-		outpath, err := makeCFileCachePath(dependencies, depfileNameHash)
-		if err == nil {
-			if _, err := os.Stat(outpath); err == nil {
-				return outpath, nil
-			} else if !errors.Is(err, fs.ErrNotExist) {
-				return "", err
-			}
-		}
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		// expected either nil or IsNotExist
-		return "", err
-	}
-
-	objTmpFile, err := os.CreateTemp(goenv.Get("GOCACHE"), "tmp-*.bc")
+	compilerID, err := clangCompilerIdentity()
 	if err != nil {
 		return "", err
 	}
-	objTmpFile.Close()
+
+	dependencies, err := scanCFileDependencies(abspath, tmpdir, cflags, printCommands)
+	if err != nil {
+		return "", err
+	}
+	outpath, err := makeCFileCachePath(abspath, cFileCompileArgs(abspath, "$OBJ", cflags, compileConfig), compilerID, dependencies)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(outpath); err == nil {
+		return outpath, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	objTmpFile, err := compileCFile(goenv.Get("GOCACHE"), abspath, cflags, compileConfig, printCommands)
+	if err != nil {
+		return "", err
+	}
+	if err := os.Rename(objTmpFile, outpath); err != nil {
+		os.Remove(objTmpFile)
+		return "", err
+	}
+	return outpath, nil
+}
+
+func scanCFileDependencies(abspath, tmpdir string, cflags []string, printCommands func(string, ...string)) ([]string, error) {
 	depTmpFile, err := os.CreateTemp(tmpdir, "dep-*.d")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	depTmpFile.Close()
-	flags := append([]string{}, cflags...)                                                 // copy cflags
-	flags = append(flags, "-MD", "-MV", "-MTdeps", "-MF", depTmpFile.Name(), "-flto=thin") // autogenerate dependencies
-	// Match cmd/go/internal/work/exec.go's ccompile directory in both modes.
+	defer os.Remove(depTmpFile.Name())
+
+	flags := appendCacheStableCFlags(append([]string{}, cflags...))
 	workingDir := filepath.Dir(abspath)
-	flags = append(flags, "-working-directory="+workingDir)
-	if compileConfig != nil {
-		seed := sha512.Sum512_224([]byte(compileConfig.recordedPath))
-		flags = append(flags,
-			"-fdebug-compilation-dir="+path.Dir(compileConfig.recordedPath),
-			"-frandom-seed="+hex.EncodeToString(seed[:]),
-		)
-	}
-	flags = append(flags, "-c", "-o", objTmpFile.Name(), filepath.Base(abspath))
-	if strings.ToLower(filepath.Ext(abspath)) == ".s" {
+	flags = append(flags,
+		"-M", "-MV", "-MTdeps", "-MF", depTmpFile.Name(),
+		"-working-directory="+workingDir,
+		filepath.Base(abspath),
+	)
+	if isAssemblyFile(abspath) {
 		// If this is an assembly file (.s or .S, lowercase or uppercase), then
 		// we'll need to add -Qunused-arguments because many parameters are
 		// relevant to C, not assembly. And with -Werror, having meaningless
@@ -158,13 +112,12 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, compileConfig
 	}
 	err = runCCompiler(flags...)
 	if err != nil {
-		return "", &commandError{"failed to build", abspath, err}
+		return nil, &commandError{"failed to scan dependencies", abspath, err}
 	}
 
-	// Create sorted and uniqued slice of dependencies.
 	dependencyPaths, err := readDepFile(depTmpFile.Name())
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	for i, dependencyPath := range dependencyPaths {
 		if !filepath.IsAbs(dependencyPath) {
@@ -182,50 +135,53 @@ func compileAndCacheCFile(abspath, tmpdir string, cflags []string, compileConfig
 		dependencySlice = append(dependencySlice, path)
 	}
 	sort.Strings(dependencySlice)
+	return dependencySlice, nil
+}
 
-	// Write dependencies file.
-	f, err := os.CreateTemp(filepath.Dir(depfileCachePath), depfileName)
-	if err != nil {
-		return "", err
+func cFileCompileArgs(abspath, objpath string, cflags []string, compileConfig *cFileCompileConfig) []string {
+	flags := append([]string{}, cflags...)
+	flags = append(flags, "-flto=thin")
+	flags = append(flags, "-working-directory="+filepath.Dir(abspath))
+	if compileConfig != nil {
+		seed := sha512.Sum512_224([]byte(compileConfig.recordedPath))
+		flags = append(flags,
+			"-fdebug-compilation-dir="+path.Dir(compileConfig.recordedPath),
+			"-frandom-seed="+hex.EncodeToString(seed[:]),
+		)
 	}
+	flags = append(flags, "-c", "-o", objpath, filepath.Base(abspath))
+	if isAssemblyFile(abspath) {
+		flags = append(flags, "-Qunused-arguments")
+	}
+	return flags
+}
 
-	buf, err = json.MarshalIndent(dependencySlice, "", "\t")
-	if err != nil {
-		panic(err) // shouldn't happen
-	}
-	_, err = f.Write(buf)
+func compileCFile(cacheDir, abspath string, cflags []string, compileConfig *cFileCompileConfig, printCommands func(string, ...string)) (string, error) {
+	objTmpFile, err := os.CreateTemp(cacheDir, "tmp-*.bc")
 	if err != nil {
 		return "", err
 	}
-	err = f.Close()
-	if err != nil {
-		return "", err
-	}
-	err = os.Rename(f.Name(), depfileCachePath)
-	if err != nil {
-		return "", err
-	}
+	objTmpFile.Close()
 
-	// Move temporary object file to final location.
-	outpath, err := makeCFileCachePath(dependencySlice, depfileNameHash)
-	if err != nil {
-		return "", err
+	flags := cFileCompileArgs(abspath, objTmpFile.Name(), cflags, compileConfig)
+	if printCommands != nil {
+		printCommands("clang", flags...)
 	}
-	err = os.Rename(objTmpFile.Name(), outpath)
+	err = runCCompiler(flags...)
 	if err != nil {
-		return "", err
+		os.Remove(objTmpFile.Name())
+		return "", &commandError{"failed to build", abspath, err}
 	}
-
-	return outpath, nil
+	return objTmpFile.Name(), nil
 }
 
 // Create a cache path (a path in GOCACHE) to store the output of a compiler
-// job. This path is based on the dep file name (which is a hash of metadata
-// including compiler flags) and the hash of all input files in the paths slice.
-func makeCFileCachePath(paths []string, depfileNameHash string) (string, error) {
+// job. This path is based on the compiler identity, compiler flags, and the
+// hash of all dependency files.
+func makeCFileCachePath(path string, flags []string, compilerID string, dependencies []string) (string, error) {
 	// Hash all input files.
-	fileHashes := make(map[string]string, len(paths))
-	for _, path := range paths {
+	fileHashes := make(map[string]string, len(dependencies))
+	for _, path := range dependencies {
 		hash, err := hashFile(path)
 		if err != nil {
 			return "", err
@@ -235,11 +191,17 @@ func makeCFileCachePath(paths []string, depfileNameHash string) (string, error) 
 
 	// Calculate a cache key based on the above hashes.
 	buf, err := json.Marshal(struct {
-		DepfileHash string
-		FileHashes  map[string]string
+		Path             string
+		Flags            []string
+		LLVMVersion      string
+		CompilerIdentity string
+		FileHashes       map[string]string
 	}{
-		DepfileHash: depfileNameHash,
-		FileHashes:  fileHashes,
+		Path:             path,
+		Flags:            flags,
+		LLVMVersion:      llvm.Version,
+		CompilerIdentity: compilerID,
+		FileHashes:       fileHashes,
 	})
 	if err != nil {
 		panic(err) // shouldn't happen
@@ -249,6 +211,10 @@ func makeCFileCachePath(paths []string, depfileNameHash string) (string, error) 
 
 	outpath := filepath.Join(goenv.Get("GOCACHE"), "obj-"+cacheKey+".bc")
 	return outpath, nil
+}
+
+func isAssemblyFile(path string) bool {
+	return strings.ToLower(filepath.Ext(path)) == ".s"
 }
 
 // hashFile hashes the given file path and returns the hash as a hex string.
