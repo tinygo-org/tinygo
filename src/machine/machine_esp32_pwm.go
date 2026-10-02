@@ -46,15 +46,13 @@ const (
 
 // Bit positions in HSCHn_CONF0, HSCHn_CONF1 and HSTIMERn_CONF.
 const (
-	ledcTimerSelPos  = 0       // CONF0, which timer the channel follows
-	ledcSigOutEn     = 1 << 2  // CONF0, let the channel drive the pin
-	ledcDutyCyclePos = 10      // CONF1
-	ledcDutyNumPos   = 20      // CONF1
-	ledcDutyInc      = 1 << 30 // CONF1
-	ledcDutyStart    = 1 << 31 // CONF1, apply the other CONF1 fields
-	ledcDivNumPos    = 5       // TIMER CONF, clock divider
-	ledcTimerRst     = 1 << 24 // TIMER CONF
-	ledcTickSelAPB   = 1 << 25 // TIMER CONF, 1 is APB_CLK and 0 is REF_TICK
+	ledcTimerSelPos = 0       // CONF0, which timer the channel follows
+	ledcSigOutEn    = 1 << 2  // CONF0, let the channel drive the pin
+	ledcDutyInc     = 1 << 30 // CONF1
+	ledcDutyStart   = 1 << 31 // CONF1, apply the other CONF1 fields
+	ledcDivNumPos   = 5       // TIMER CONF, clock divider
+	ledcTimerRst    = 1 << 24 // TIMER CONF
+	ledcTickSelAPB  = 1 << 25 // TIMER CONF, 1 is APB_CLK and 0 is REF_TICK
 )
 
 var (
@@ -123,9 +121,9 @@ func chanDisable(ch uint8) {
 func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32) {
 	conf0 := chanReg(&esp.LEDC.HSCH0_CONF0, ch)
 
-	// DUTY_NUM and DUTY_CYCLE are 1 step of 1 period, which is the smallest
-	// fade. With DUTY_SCALE at 0 the step size is 0, so no fade happens.
-	const conf1 = 1<<ledcDutyCyclePos | 1<<ledcDutyNumPos | ledcDutyInc | ledcDutyStart
+	// No fade steps. With DUTY_NUM 1 the channel stays busy one more period and
+	// drops a new DUTY_START. See ESP32 TRM v5.8 section 28.2.3 Channels.
+	const conf1 = ledcDutyInc | ledcDutyStart
 
 	switch op {
 	case ledcChanOpInit:
