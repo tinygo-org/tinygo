@@ -18,9 +18,10 @@ var (
 		count  int
 		offset int
 	}
-	epinen      uint32
-	epouten     uint32
-	easyDMABusy volatile.Register8
+	epinen  uint32
+	epouten uint32
+	// easyDMAOwner is the transfer holding EasyDMA, or 0 when it is free.
+	easyDMAOwner volatile.Register8
 
 	// usbDetached keeps the device detached from the bus after Detach: the
 	// USB IRQ handler re-enables the DP pull-up on every power-ready event,
@@ -37,22 +38,64 @@ var (
 	}
 )
 
-// tryEnterCriticalSection attempts to claim EasyDMA access.
-// It returns true if successful, false if EasyDMA is busy.
-// Safe to call from both Thread and ISR context.
-func tryEnterCriticalSection() bool {
+// Values of easyDMAOwner, ORed with the endpoint number for IN and OUT.
+const (
+	easyDMAIn     = 0x80
+	easyDMAOut    = 0x40
+	easyDMAStatus = 0x20 // EP0STATUS, which does not use EasyDMA
+)
+
+// tryClaimEasyDMA claims EasyDMA, which USBD can only use for one transfer at a
+// time, see https://docs.nordicsemi.com/bundle/ps_nrf52840/page/usbd.html
+func tryClaimEasyDMA(owner uint8) bool {
 	state := interrupt.Disable()
-	if easyDMABusy.HasBits(1) {
-		interrupt.Restore(state)
-		return false
+	free := easyDMAOwner.Get() == 0
+	if free {
+		easyDMAOwner.Set(owner)
 	}
-	easyDMABusy.SetBits(1)
 	interrupt.Restore(state)
-	return true
+	return free
 }
 
-func exitCriticalSection() {
-	easyDMABusy.ClearBits(1)
+// releaseEasyDMA frees EasyDMA if owner still holds it.
+func releaseEasyDMA(owner uint8) {
+	state := interrupt.Disable()
+	if easyDMAOwner.Get() == owner {
+		easyDMAOwner.Set(0)
+	}
+	interrupt.Restore(state)
+}
+
+// claimEasyDMA waits for EasyDMA. If the USB interrupt cannot run, it frees
+// EasyDMA itself once the transfer holding it has ended.
+func claimEasyDMA(owner uint8) {
+	for !tryClaimEasyDMA(owner) {
+		switch {
+		case interrupt.In():
+			checkCompletions()
+		case interruptsDisabled():
+			releaseEndedEasyDMA()
+		default:
+			gosched()
+		}
+	}
+}
+
+// releaseEndedEasyDMA frees EasyDMA when its transfer has ended. The END event
+// stays set so the USB interrupt still handles it.
+func releaseEndedEasyDMA() {
+	owner := easyDMAOwner.Get()
+	ep := owner & 0x0f
+	if owner&easyDMAIn != 0 && nrf.USBD.EVENTS_ENDEPIN[ep].Get() != 0 ||
+		owner&easyDMAOut != 0 && nrf.USBD.EVENTS_ENDEPOUT[ep].Get() != 0 {
+		releaseEasyDMA(owner)
+	}
+}
+
+func interruptsDisabled() bool {
+	state := interrupt.Disable()
+	interrupt.Restore(state)
+	return state != 0
 }
 
 // Configure the USB peripheral. The config is here for compatibility with the UART interface.
@@ -125,7 +168,7 @@ func checkCompletions() {
 	for i := 0; i < NumberOfUSBEndpoints; i++ {
 		if nrf.USBD.EVENTS_ENDEPOUT[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPOUT[i].Set(0)
-			exitCriticalSection() // Release lock before callback
+			releaseEasyDMA(easyDMAOut | uint8(i)) // Release lock before callback
 
 			buf := handleEndpointRx(uint32(i))
 			success := usbRxHandler[i] == nil || usbRxHandler[i](buf)
@@ -146,7 +189,7 @@ func checkCompletions() {
 	for i := 0; i < NumberOfUSBEndpoints; i++ {
 		if nrf.USBD.EVENTS_ENDEPIN[i].Get() > 0 {
 			nrf.USBD.EVENTS_ENDEPIN[i].Set(0)
-			exitCriticalSection()
+			releaseEasyDMA(easyDMAIn | uint8(i))
 		}
 	}
 }
@@ -158,8 +201,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 
 	checkCompletions()
 
-	busy := easyDMABusy.Get()
-	if busy > 0 {
+	if easyDMAOwner.Get() != 0 {
 		return
 	}
 
@@ -260,7 +302,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 				nak := epOutFlowControl[i].nak
 
 				// Try to start DMA
-				if tryEnterCriticalSection() {
+				if tryClaimEasyDMA(easyDMAOut | uint8(i)) {
 					nrf.USBD.EPOUT[i].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[i]))))
 					count := nrf.USBD.SIZE.EPOUT[i].Get()
 					nrf.USBD.EPOUT[i].MAXCNT.Set(count)
@@ -271,7 +313,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 					} else {
 						// NAK case: We want to NAK, so DO NOT start DMA.
 						epOutFlowControl[i].dataPending = true
-						exitCriticalSection()
+						releaseEasyDMA(easyDMAOut | uint8(i))
 					}
 					processedBits |= mask
 				} else {
@@ -334,9 +376,6 @@ func initEndpoint(ep, config uint32) {
 func SendUSBInPacket(ep uint32, data []byte) bool {
 	sendUSBPacket(ep, data)
 
-	// clear transfer complete flag
-	nrf.USBD.INTENCLR.Set(nrf.USBD_INTENCLR_ENDEPOUT0 << ep)
-
 	return true
 }
 
@@ -386,14 +425,7 @@ func AckUsbOutTransfer(ep uint32) {
 	// If we ignored a packet earlier (Buffer Full strategy), we must manually
 	// trigger the DMA now to pull it from the HW buffer.
 	if epOutFlowControl[ep].dataPending {
-		inInterrupt := interrupt.In()
-		for !tryEnterCriticalSection() {
-			if !inInterrupt {
-				gosched()
-			} else {
-				checkCompletions()
-			}
-		}
+		claimEasyDMA(easyDMAOut | uint8(ep))
 
 		epOutFlowControl[ep].dataPending = false
 
@@ -402,11 +434,8 @@ func AckUsbOutTransfer(ep uint32) {
 		count := nrf.USBD.SIZE.EPOUT[ep].Get()
 		nrf.USBD.EPOUT[ep].MAXCNT.Set(count)
 
-		// Kick the DMA
+		// Kick the DMA, checkCompletions releases EasyDMA on ENDEPOUT
 		nrf.USBD.TASKS_STARTEPOUT[ep].Set(1)
-
-		// We must release the critical section here because we are returning early.
-		exitCriticalSection()
 		return
 	}
 
@@ -414,34 +443,20 @@ func AckUsbOutTransfer(ep uint32) {
 	nrf.USBD.SIZE.EPOUT[ep].Set(0)
 }
 func SendZlp() {
-	inInterrupt := interrupt.In()
-	for !tryEnterCriticalSection() {
-		if !inInterrupt {
-			gosched()
-		} else {
-			checkCompletions()
-		}
-	}
+	claimEasyDMA(easyDMAStatus)
 	nrf.USBD.TASKS_EP0STATUS.Set(1)
 	// EP0STATUS doesn't trigger ENDEPIN/ENDEPOUT, so we clear lock immediately
-	exitCriticalSection()
+	releaseEasyDMA(easyDMAStatus)
 }
 
 func sendViaEPIn(ep uint32, ptr *byte, count int) {
-	inInterrupt := interrupt.In()
-	for !tryEnterCriticalSection() {
-		if !inInterrupt {
-			gosched()
-		} else {
-			checkCompletions()
-		}
-	}
+	claimEasyDMA(easyDMAIn | uint8(ep))
 	nrf.USBD.EPIN[ep].PTR.Set(
 		uint32(uintptr(unsafe.Pointer(ptr))),
 	)
 	nrf.USBD.EPIN[ep].MAXCNT.Set(uint32(count))
+	// checkCompletions releases EasyDMA on ENDEPIN
 	nrf.USBD.TASKS_STARTEPIN[ep].Set(1)
-	exitCriticalSection()
 }
 
 func enableEPOut(ep uint32) {
