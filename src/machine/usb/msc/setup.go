@@ -136,6 +136,7 @@ func configurationReset() {
 // resetState goes back to waiting for a CBW and drops any queued read.
 func (m *msc) resetState() {
 	m.state = mscStateCmd
+	m.skipTxDone = false
 	m.cmdGen++
 	m.cachedBlock = -1
 	if m.taskCmd == scsi.CmdRead {
