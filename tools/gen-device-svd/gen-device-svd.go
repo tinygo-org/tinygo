@@ -649,6 +649,9 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		// names like "CNT[31]". Replace invalid characters with "_" when
 		// needed.
 		fieldNameTpl := cleanDimableName(fieldEl.Name)
+		if strings.EqualFold(fieldNameTpl, "reserved") {
+			continue
+		}
 		if !unicode.IsUpper(rune(fieldNameTpl[0])) && !unicode.IsDigit(rune(fieldNameTpl[0])) {
 			fieldNameTpl = strings.ReplaceAll(strings.ToUpper(fieldNameTpl), "%S", "%s")
 		}
@@ -1174,12 +1177,15 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 		// we need to generate a separate register for each "element"
 		var results []*PeripheralField
 		shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(name, "_%s", ""), "%s", ""))
+		if regEl.DimIndex != nil && da.idx[0] != "0" && da.idx[0] != "1" {
+			shortName = strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(name, "_%s", ""), "%s", da.idx[0]))
+		}
 		for i := range da.idx {
 			regAddress := reg.address() + (uint64(i) * uint64(da.incr))
 			results = append(results, &PeripheralField{
 				Name:        strings.ToUpper(da.replace(name, i)),
 				Address:     regAddress,
-				Description: reg.description(),
+				Description: da.replace(reg.description(), i),
 				Array:       -1,
 				ElementSize: reg.size(),
 				ShortName:   shortName,
