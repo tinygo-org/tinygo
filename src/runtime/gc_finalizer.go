@@ -33,10 +33,6 @@ type finalizerEntry struct {
 	fn interface{}
 }
 
-// finalizerGCThreshold starts pressure GC when registrations indicate external memory pressure.
-// Larger tables use a proportional threshold. Zero disables this trigger.
-const finalizerGCThreshold = 32
-
 var (
 	finalizers        *finalizerEntry // registered finalizers; a GC root that keeps fn values alive
 	finalizerPending  *finalizerEntry // finalizers whose object died, waiting to run
