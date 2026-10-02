@@ -1,13 +1,12 @@
 package main
 
-// Tests for runtime.SetFinalizer on the block GC.
+// Tests for runtime.SetFinalizer.
 //
-// This test is only run on the precise wasm/wasi targets (see the tests slice
-// and the skip in main_test.go): they track stack pointers precisely and
-// reliably collect a dropped object, so the finalizer deterministically fires.
-// The host default GC is boehm, where SetFinalizer is a no-op, and conservative
-// stack scanning on the emulated targets cannot reliably collect the object, so
-// firing cannot be asserted there.
+// This test is only run on the wasm target (see the tests slice and the skip
+// in main_test.go). It reliably collects a dropped object there, so the
+// finalizer deterministically fires. Conservative stack scanning on the host
+// and the emulated targets cannot reliably collect the object, so firing
+// cannot be asserted there.
 
 import "runtime"
 
