@@ -3,6 +3,7 @@ package builder
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -25,20 +26,24 @@ func init() {
 	// Add the path to a Homebrew-installed LLVM for ease of use (no need to
 	// manually set $PATH).
 	if runtime.GOOS == "darwin" {
-		var prefix string
+		// The newest LLVM release may still be under Homebrew's unversioned
+		// "llvm" formula, so that path is tried too.
+		var prefix, unversionedPrefix string
 		switch runtime.GOARCH {
 		case "amd64":
 			prefix = "/usr/local/opt/llvm@" + llvmMajor + "/bin/"
+			unversionedPrefix = "/usr/local/opt/llvm/bin/"
 		case "arm64":
 			prefix = "/opt/homebrew/opt/llvm@" + llvmMajor + "/bin/"
+			unversionedPrefix = "/opt/homebrew/opt/llvm/bin/"
 		default:
 			// unknown GOARCH
 			panic(fmt.Sprintf("unknown GOARCH: %s on darwin", runtime.GOARCH))
 		}
-		commands["clang"] = append(commands["clang"], prefix+"clang-"+llvmMajor)
-		commands["ld.lld"] = append(commands["ld.lld"], prefix+"ld.lld")
-		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld")
-		commands["lldb"] = append(commands["lldb"], prefix+"lldb")
+		commands["clang"] = append(commands["clang"], prefix+"clang-"+llvmMajor, unversionedPrefix+"clang-"+llvmMajor)
+		commands["ld.lld"] = append(commands["ld.lld"], prefix+"ld.lld", unversionedPrefix+"ld.lld")
+		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld", unversionedPrefix+"wasm-ld")
+		commands["lldb"] = append(commands["lldb"], prefix+"lldb", unversionedPrefix+"lldb")
 	}
 	// Add the path for when LLVM was installed with the installer from
 	// llvm.org, which by default doesn't add LLVM to the $PATH environment
@@ -66,7 +71,9 @@ func LookupCommand(name string) (string, error) {
 	for _, cmdName := range commands[name] {
 		_, err := exec.LookPath(cmdName)
 		if err != nil {
-			if errors.Unwrap(err) == exec.ErrNotFound {
+			// A missing bare command wraps exec.ErrNotFound. A missing
+			// absolute path surfaces fs.ErrNotExist instead. Skip either.
+			if errors.Unwrap(err) == exec.ErrNotFound || errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
 			return cmdName, err

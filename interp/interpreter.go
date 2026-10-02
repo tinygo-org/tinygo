@@ -182,7 +182,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			// Return instruction doesn't return anything, it's just 'ret void'.
 			return nil, mem, nil
-		case llvm.Br:
+		case opBr:
 			switch len(operands) {
 			case 1:
 				// Unconditional branch: [nextBB]

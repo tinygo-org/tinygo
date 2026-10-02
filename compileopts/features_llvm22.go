@@ -1,11 +1,11 @@
-//go:build llvm22
+//go:build llvm22 || llvm23
 
 package compileopts
 
 import "strings"
 
 // patchFeatures applies LLVM-version-specific feature name mappings.
-// LLVM 22 renamed several Xtensa target features.
+// LLVM 22 renamed several Xtensa target features, assumed unchanged in 23.
 func patchFeatures(features string) string {
 	// Xtensa feature renames in LLVM 22:
 	//   atomctl → (removed, no direct replacement)
