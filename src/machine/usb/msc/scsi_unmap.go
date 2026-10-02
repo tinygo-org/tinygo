@@ -21,18 +21,54 @@ func (e Error) Error() string {
 	}
 }
 
-func (m *msc) scsiUnmap(b []byte) {
+// scsiUnmap runs in processTasks. It drops the result if a reset or a new
+// CBW replaced the command it was queued for.
+func (m *msc) scsiUnmap(gen uint32) {
+	// A parameter list with 3 descriptors fits in one 64 byte packet.
+	var params [64]byte
+	state := m.mu.lock()
+	if gen != m.cmdGen {
+		m.mu.unlock(state)
+		return
+	}
+	b := params[:copy(params[:], m.buf)]
+	m.mu.unlock(state)
+
+	key, code, ok := m.unmapBlocks(b)
+
+	state = m.mu.lock()
+	defer m.mu.unlock(state)
+	if gen != m.cmdGen {
+		return
+	}
+	if !ok {
+		m.sendScsiError(csw.StatusFailed, key, code)
+		return
+	}
+
+	m.sentBytes += uint32(len(b))
+	if m.sentBytes >= m.transferBytes {
+		// Order 66 complete, send CSW to establish galactic empire
+		m.state = mscStateStatus
+		m.run([]byte{}, true)
+	}
+}
+
+func (m *msc) unmapBlocks(b []byte) (scsi.Sense, scsi.SenseCode, bool) {
 	// Execute Order 66 (0x42) to wipe out the blocks
 	// 3.54 Unmap Command (SBC-4)
 	// https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf
 	if m.readOnly {
-		m.sendScsiError(csw.StatusFailed, scsi.SenseDataProtect, scsi.SenseCodeWriteProtected)
-		return
+		return scsi.SenseDataProtect, scsi.SenseCodeWriteProtected, false
 	}
 
 	// blockDescLen is the remaining length of block descriptors in the message, offset 8 bytes from
 	// the start of this packet
 	var blockDescLen uint16
+
+	if len(b) < 8 {
+		return scsi.SenseIllegalRequest, scsi.SenseCodeInvalidFieldInCDB, false
+	}
 
 	// Decode the parameter list
 	msgLen := binary.BigEndian.Uint16(b[:2])
@@ -40,8 +76,7 @@ func (m *msc) scsiUnmap(b []byte) {
 	blockDescLen = binary.BigEndian.Uint16(b[2:4])
 	// Do some sanity checks on the message lengths (max 3 block descriptors to fit in one 64 byte packet)
 	if msgLen < 8 || blockDescLen < 16 || msgLen-blockDescLen != 6 || blockDescLen > (3*16) {
-		m.sendScsiError(csw.StatusFailed, scsi.SenseIllegalRequest, scsi.SenseCodeInvalidFieldInCDB)
-		return
+		return scsi.SenseIllegalRequest, scsi.SenseCodeInvalidFieldInCDB, false
 	}
 
 	// descEnd marks the end of the last full block descriptor in this packet
@@ -52,19 +87,13 @@ func (m *msc) scsiUnmap(b []byte) {
 		err := m.unmapBlocksFromDescriptor(b[i:], uint64(m.blockCount))
 		if err != nil {
 			// TODO: Might need a better error code here for device errors?
-			m.sendScsiError(csw.StatusFailed, scsi.SenseVolumeOverflow, scsi.SenseCodeLBAOutOfRange)
-			return
+			return scsi.SenseVolumeOverflow, scsi.SenseCodeLBAOutOfRange, false
 		}
 	}
 
 	// FIXME: We need to handle erase block alignment
 
-	m.sentBytes += uint32(len(b))
-	if m.sentBytes >= m.transferBytes {
-		// Order 66 complete, send CSW to establish galactic empire
-		m.state = mscStateStatus
-		m.run([]byte{}, true)
-	}
+	return 0, 0, true
 }
 
 func (m *msc) unmapBlocksFromDescriptor(b []byte, numBlocks uint64) error {

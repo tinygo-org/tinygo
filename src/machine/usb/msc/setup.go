@@ -3,6 +3,7 @@ package msc
 import (
 	"machine"
 	"machine/usb"
+	"machine/usb/msc/scsi"
 )
 
 func setupPacketHandler(setup usb.Setup) bool {
@@ -12,7 +13,9 @@ func setupPacketHandler(setup usb.Setup) bool {
 	return false
 }
 
+// setupPacketHandler runs in the USB interrupt, so it unlocks without defer.
 func (m *msc) setupPacketHandler(setup usb.Setup) bool {
+	state := m.mu.lock()
 	ok := false
 	wValue := (uint16(setup.WValueH) << 8) | uint16(setup.WValueL)
 	switch setup.BRequest {
@@ -29,6 +32,7 @@ func (m *msc) setupPacketHandler(setup usb.Setup) bool {
 			ok = m.handleReset(setup, wValue)
 		}
 	}
+	m.mu.unlock(state)
 	return ok
 }
 
@@ -105,6 +109,12 @@ func (m *msc) handleReset(setup usb.Setup, wValue uint16) bool {
 	}
 	// Reset to command waiting state
 	m.state = mscStateCmd
+	m.cmdGen++
+	m.cachedBlock = -1
+	if m.taskCmd == scsi.CmdRead {
+		// A queued read does not own m.buf, so drop it now.
+		m.taskQueued = false
+	}
 
 	// Reset transfer state
 	m.resetBuffer(0)

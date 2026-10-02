@@ -98,7 +98,7 @@ func (m *msc) scsiDataTransfer(b []byte) bool {
 		// Transfer complete, send CSW after transfer confirmed
 		m.state = mscStateStatus
 	} else if cmdType == scsi.CmdRead {
-		m.scsiRead(cmd)
+		m.scsiReadNext(cmd)
 	} else {
 		// Other multi-packet commands are rejected in m.scsiCmdBegin()
 	}
@@ -272,6 +272,11 @@ func (m *msc) scsiQueueTask(cmdType scsi.CmdType, b []byte) bool {
 		}
 	case scsi.CmdUnmap:
 		m.taskQueued = true
+	}
+	if m.taskQueued {
+		m.taskCmd = cmdType
+		m.taskGen = m.cmdGen
+		m.rxPending = true
 	}
 
 	// Don't acknowledge the incoming data until we can process it.

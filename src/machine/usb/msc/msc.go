@@ -26,14 +26,20 @@ const (
 var MSC *msc
 
 type msc struct {
-	buf           []byte     // Buffer for incoming/outgoing data
-	blockCache    []byte     // Buffer for block read/write data
-	taskQueued    bool       // Flag to indicate if the buffer has a task queued
-	rxStalled     bool       // Flag to indicate if the RX endpoint is stalled
-	txStalled     bool       // Flag to indicate if the TX endpoint is stalled
-	maxPacketSize uint32     // Maximum packet size for the IN endpoint
-	respStatus    csw.Status // Response status for the last command
-	sendZLP       bool       // Flag to indicate if a zero-length packet should be sent before sending CSW
+	mu            spinLock
+	buf           []byte       // Buffer for incoming/outgoing data
+	blockCache    []byte       // Buffer for block read/write data
+	cachedBlock   int64        // Device offset of the block in blockCache, -1 if none
+	cmdGen        uint32       // Bumped on each CBW and reset so stale tasks are dropped
+	taskGen       uint32       // cmdGen when the task was queued
+	taskCmd       scsi.CmdType // Command type of the queued task
+	taskQueued    bool         // Flag to indicate if the buffer has a task queued
+	rxPending     bool         // OUT transfer waits for AckUsbOutTransfer
+	rxStalled     bool         // Flag to indicate if the RX endpoint is stalled
+	txStalled     bool         // Flag to indicate if the TX endpoint is stalled
+	maxPacketSize uint32       // Maximum packet size for the IN endpoint
+	respStatus    csw.Status   // Response status for the last command
+	sendZLP       bool         // Flag to indicate if a zero-length packet should be sent before sending CSW
 
 	cbw           *CBW   // Last received Command Block Wrapper
 	queuedBytes   uint32 // Number of bytes queued for sending
@@ -73,6 +79,7 @@ func newMSC(dev machine.BlockDevice) *msc {
 	m := &msc{
 		// Some platforms require reads/writes to be aligned to the full underlying hardware block
 		blockCache:    make([]byte, dev.WriteBlockSize()),
+		cachedBlock:   -1,
 		blockSizeUSB:  512,
 		buf:           make([]byte, dev.WriteBlockSize()),
 		cswBuf:        make([]byte, csw.MsgLen),
@@ -120,21 +127,51 @@ func newMSC(dev machine.BlockDevice) *msc {
 func (m *msc) processTasks() {
 	// Process tasks that cannot be done in an interrupt context
 	for {
-		if m.taskQueued {
-			cmd := m.cbw.SCSICmd()
-			switch cmd.CmdType() {
-			case scsi.CmdWrite:
-				m.scsiWrite(cmd, m.buf)
-			case scsi.CmdUnmap:
-				m.scsiUnmap(m.buf)
-			}
-
-			// Acknowledge the received data from the host
-			m.queuedBytes = 0
+		state := m.mu.lock()
+		queued, taskCmd, gen := m.taskQueued, m.taskCmd, m.taskGen
+		if taskCmd == scsi.CmdRead {
+			// Clear first since sending the packet lets the next IN
+			// completion queue another read.
 			m.taskQueued = false
+		}
+		m.mu.unlock(state)
+
+		if !queued {
+			time.Sleep(100 * time.Microsecond)
+			continue
+		}
+
+		switch taskCmd {
+		case scsi.CmdRead:
+			m.fillBlockCache(gen)
+			state = m.mu.lock()
+			if gen == m.cmdGen && m.state == mscStateData {
+				m.scsiRead(m.cbw.SCSICmd())
+			}
+			m.mu.unlock(state)
+			continue
+		case scsi.CmdWrite:
+			m.scsiWrite(m.buf, gen)
+		case scsi.CmdUnmap:
+			m.scsiUnmap(gen)
+		}
+
+		// A reset may have queued a new task while this one ran.
+		state = m.mu.lock()
+		if m.taskGen == gen {
+			m.taskQueued = false
+		}
+		if gen == m.cmdGen {
+			m.queuedBytes = 0
+		}
+		ack := m.rxPending
+		m.rxPending = false
+		m.mu.unlock(state)
+
+		// Acknowledge the received data from the host
+		if ack {
 			machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
 		}
-		time.Sleep(100 * time.Microsecond)
 	}
 }
 
@@ -178,13 +215,17 @@ func txHandler() {
 }
 
 func (m *msc) txHandler() {
+	state := m.mu.lock()
 	m.run([]byte{}, false)
+	m.mu.unlock(state)
 }
 
 func rxHandler(b []byte) bool {
 	ack := true
 	if MSC != nil {
+		state := MSC.mu.lock()
 		ack = MSC.run(b, true)
+		MSC.mu.unlock(state)
 	}
 	return ack
 }
@@ -245,6 +286,7 @@ func (m *msc) run(b []byte, isEpOut bool) bool {
 
 		// Save the validated CBW for later reference
 		copy(m.cbw.Data, b)
+		m.cmdGen++
 
 		// Move on to the data transfer phase next go around (after sending the first message)
 		m.state = mscStateData

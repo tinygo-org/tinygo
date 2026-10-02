@@ -15,6 +15,7 @@ var (
 // RegisterBlockDevice registers a BlockDevice provider with the MSC driver
 func (m *msc) RegisterBlockDevice(dev machine.BlockDevice) {
 	m.dev = dev
+	m.cachedBlock = -1
 
 	if cap(m.blockCache) != int(dev.WriteBlockSize()) {
 		m.blockCache = make([]byte, dev.WriteBlockSize())
