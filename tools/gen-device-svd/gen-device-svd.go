@@ -686,10 +686,6 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 
 		da := decodeDimArray(fieldEl.Dim, fieldEl.DimIndex, fieldEl.DimIncrement, "field", fieldNameTpl)
 		da.rangeElems(func(ia int, _ uint32) bool {
-			if da != nil {
-				lsb += da.incr
-				msb += da.incr
-			}
 			fieldName := da.replace(fieldNameTpl, ia)
 
 			// The enumerated values can be the same as another field, so to avoid
@@ -802,6 +798,12 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 				}
 				enumDefault.resolve()
 			}
+
+			if da != nil {
+				lsb += da.incr
+				msb += da.incr
+			}
+
 			return true
 		})
 	}
