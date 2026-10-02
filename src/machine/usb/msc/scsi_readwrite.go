@@ -117,31 +117,35 @@ func (m *msc) fillBlockCache(gen uint32) {
 }
 
 func (m *msc) writeBlock(b []byte, lba, offset uint32) (n int, err error) {
-	// Convert the emulated block address to the underlying hardware block's start and offset
-	blockStart, blockOffset := m.usbToRawOffset(lba, offset)
+	// A queued write can start in the middle of a raw block and run into the
+	// next one, so write it one raw block at a time.
+	for n < len(b) {
+		// Convert the emulated block address to the underlying hardware block's start and offset
+		blockStart, blockOffset := m.usbToRawOffset(lba, offset+uint32(n))
+		chunk := b[n:]
+		if room := int(m.blockSizeRaw) - int(blockOffset); len(chunk) > room {
+			chunk = chunk[:room]
+		}
 
-	if blockOffset == 0 && len(b) == int(m.blockSizeRaw) {
-		// Fast path: writing a full aligned block
-		return m.dev.WriteAt(b, blockStart)
+		if blockOffset == 0 && len(chunk) == int(m.blockSizeRaw) {
+			// Fast path: writing a full aligned block
+			if _, err = m.dev.WriteAt(chunk, blockStart); err != nil {
+				return n, err
+			}
+		} else {
+			// Read-modify-write for unaligned/partial blocks
+			m.cachedBlock = -1
+			if _, err = m.dev.ReadAt(m.blockCache, blockStart); err != nil {
+				return n, err
+			}
+			copy(m.blockCache[blockOffset:], chunk)
+			if _, err = m.dev.WriteAt(m.blockCache, blockStart); err != nil {
+				return n, err
+			}
+		}
+		n += len(chunk)
 	}
-
-	// Read-modify-write for unaligned/partial blocks
-	// Read the existing block
-	_, err = m.dev.ReadAt(m.blockCache, blockStart)
-	if err != nil {
-		return 0, err
-	}
-
-	// Modify the block with new data
-	copy(m.blockCache[blockOffset:], b)
-
-	// Write the full block back
-	_, err = m.dev.WriteAt(m.blockCache, blockStart)
-	if err != nil {
-		return 0, err
-	}
-
-	return len(b), nil
+	return n, nil
 }
 
 // scsiReadNext sends the next packet from the block cache, or leaves the

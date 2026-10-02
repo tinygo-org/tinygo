@@ -41,6 +41,7 @@ type msc struct {
 	maxPacketSize uint32       // Maximum packet size for the IN endpoint
 	respStatus    csw.Status   // Response status for the last command
 	sendZLP       bool         // Flag to indicate if a zero-length packet should be sent before sending CSW
+	skipTxDone    bool         // Flag to ignore the late IN completion of a CSW the host already received
 
 	cbw           *CBW   // Last received Command Block Wrapper
 	queuedBytes   uint32 // Number of bytes queued for sending
@@ -259,6 +260,16 @@ command execution and moves to mscStateStatusSent.
 */
 func (m *msc) run(b []byte, isEpOut bool) bool {
 	ack := true
+
+	// The host only sends a CBW after it has the previous CSW, so its IN completion may still be pending.
+	// 5 Transport Protocol, Figure 1, https://usb.org/sites/default/files/usbmassbulk_10.pdf
+	if isEpOut && m.state == mscStateStatusSent {
+		m.state = mscStateCmd
+		m.skipTxDone = true
+	} else if !isEpOut && m.skipTxDone {
+		m.skipTxDone = false
+		return ack
+	}
 
 	switch m.state {
 	case mscStateCmd:
