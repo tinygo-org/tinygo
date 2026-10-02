@@ -219,8 +219,8 @@ func (dev *USBDevice) ClearStallEPIn(ep uint32) {
 // Clear the ENDPOINT_HALT/stall on a USB OUT endpoint.
 func (dev *USBDevice) ClearStallEPOut(ep uint32) {
 	ep = ep & 0x7F
-	val := uint32(usbBuf0CtrlStall)
-	_usbDPSRAM.EPxBufferControl[ep].Out.ClearBits(val)
+	// SetStallEPOut cleared the buffer length, so set it again before re-arming.
+	_usbDPSRAM.EPxBufferControl[ep].Out.Set(usbBufferLen & usbBuf0CtrlLenMask)
 	if epXPIDResetOut[ep] {
 		// Reset the PID to DATA0
 		setEPDataPIDOut(ep, false)

@@ -43,6 +43,7 @@ func (m *msc) scsiUnmap(gen uint32) {
 	}
 	if !ok {
 		m.sendScsiError(csw.StatusFailed, key, code)
+		m.run([]byte{}, true)
 		return
 	}
 
