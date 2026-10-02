@@ -7782,8 +7782,6 @@ func TestMapIterNilMap(t *testing.T) {
 	}
 }
 
-/*
-
 func TestMapIterReset(t *testing.T) {
 	iter := new(MapIter)
 
@@ -7903,8 +7901,6 @@ func TestMapIterSafety(t *testing.T) {
 		t.Fatal("Next did not panic")
 	}()
 }
-
-*/
 
 func TestMapIterNext(t *testing.T) {
 	// The first call to Next should reflect any
