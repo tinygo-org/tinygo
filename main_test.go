@@ -332,6 +332,7 @@ func TestBuild(t *testing.T) {
 		"finalizerlarge.go",
 		"float.go",
 		"gc.go",
+		"gc-register-root.go",
 		"generics.go",
 		"goroutines.go",
 		"init.go",
@@ -478,7 +479,23 @@ func TestBuild(t *testing.T) {
 			opts.Opt = "0"
 			emuCheck(t, opts)
 			runTestWithConfig("gc.go", t, opts, nil, nil)
+			runTestWithConfig("gc-register-root.go", t, opts, nil, nil)
 		})
+
+		// At -opt=0 the compiler keeps roots in callee-saved registers
+		// across a call. The host only runs the block GC when asked for it.
+		if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
+			for _, gc := range []string{"conservative", "precise"} {
+				t.Run("opt=0-scheduler=tasks-gc="+gc, func(t *testing.T) {
+					t.Parallel()
+					opts := optionsFromTarget("", sema)
+					opts.Opt = "0"
+					opts.GC = gc
+					opts.Scheduler = "tasks"
+					runTestWithConfig("gc-register-root.go", t, opts, nil, nil)
+				})
+			}
+		}
 
 		t.Run("gc=none-runtime-panic", func(t *testing.T) {
 			t.Parallel()
@@ -708,6 +725,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 			}
 		}
+		if options.Target == "riscv-qemu" && name == "gc-register-root.go" {
+			// Each collection cycle stops all four harts and busy-waits, so
+			// the run times out when the host CPU is oversubscribed.
+			continue
+		}
 		if options.Target == "cortex-m-qemu" && goMinor >= 27 && name == "json.go" {
 			// Go 1.27 jsonv2 exceeds the LM3S6965's 256KiB flash. json.go
 			// is still covered by larger targets such as riscv-qemu.
@@ -727,8 +749,9 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// map keys, overflowing the goroutine stack (384 bytes).
 				continue
 
-			case "gc.go":
-				// Does not pass due to high mark false positive rate.
+			case "gc.go", "gc-register-root.go":
+				// High mark false positive rate, and runtime.GC does not
+				// return. See the finalizerinvariants.go exclusion below.
 				continue
 
 			case "buildinfo.go", "json.go", "stdlib.go", "testing.go":

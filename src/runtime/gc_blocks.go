@@ -699,9 +699,20 @@ func scanConservative(addr, len uintptr) {
 }
 
 func markCurrentGoroutineStack(sp uintptr) {
-	// This could be optimized by only marking the stack area that's currently
-	// in use.
 	markRoot(0, sp)
+	if !isOnHeap(sp) {
+		return
+	}
+	block := blockFromAddr(sp)
+	if block.state() == blockStateFree {
+		// findHead needs an allocated block.
+		return
+	}
+
+	// Scan the live part now. The callee-saved registers pushed by
+	// scanCurrentStack are gone by the time finishMark scans the stack object.
+	head := block.findHead()
+	markRoots(sp, head.address()+bytesPerBlock-unsafe.Sizeof(objHeader{}))
 }
 
 // finishMark finishes the marking process by scanning all heap objects on scanList.
