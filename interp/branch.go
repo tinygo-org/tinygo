@@ -12,8 +12,7 @@ const opBr = llvm.Br
 // isBranch returns whether inst is a (conditional or unconditional) br
 // instruction.
 func isBranch(inst llvm.Value) bool {
-	// LLVM 23 splits Br into UncondBr and CondBr: check for both here.
-	return inst.InstructionOpcode() == llvm.Br
+	return !inst.IsABranchInst().IsNil()
 }
 
 // isCondBranch returns whether inst is a conditional br instruction.
