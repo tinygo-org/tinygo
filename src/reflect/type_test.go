@@ -472,6 +472,47 @@ func TestSliceOfRuntimeConstruction(t *testing.T) {
 	}
 }
 
+func TestStructOfLongTags(t *testing.T) {
+	uint64Type := reflect.TypeOf(uint64(0))
+	for _, length := range []int{0, 1, 127, 128, 255, 256, 16383, 16384} {
+		tag := reflect.StructTag(strings.Repeat("x", length))
+		fields := []reflect.StructField{{Name: "Field", Type: uint64Type, Tag: tag}}
+		typ := reflect.StructOf(fields)
+		if got := typ.Field(0).Tag; got != tag {
+			t.Errorf("Field tag has length %d, want %d", len(got), length)
+		}
+		field, ok := typ.FieldByName("Field")
+		if !ok || field.Tag != tag {
+			t.Errorf("FieldByName returned an incorrect tag of length %d", length)
+		}
+		field, ok = typ.FieldByNameFunc(func(name string) bool { return name == "Field" })
+		if !ok || field.Tag != tag {
+			t.Errorf("FieldByNameFunc returned an incorrect tag of length %d", length)
+		}
+		if length != 0 && !strings.Contains(typ.String(), `"`+string(tag)+`"`) {
+			t.Errorf("Type.String omitted the tag of length %d", length)
+		}
+		if reflect.StructOf(fields) != typ {
+			t.Errorf("StructOf did not reuse the type with tag of length %d", length)
+		}
+		fields[0].Tag += "y"
+		if reflect.StructOf(fields) == typ {
+			t.Errorf("StructOf conflated different tags of length %d", length)
+		}
+	}
+	compiled := reflect.TypeOf(struct {
+		Field uint64 `1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456`
+	}{})
+	if got := reflect.StructOf([]reflect.StructField{compiled.Field(0)}); got != compiled {
+		t.Fatal("StructOf did not reuse the compiled type with a long tag")
+	}
+	tag := reflect.StructTag(`json:"` + strings.Repeat("x", 256) + `"`)
+	typ := reflect.StructOf([]reflect.StructField{{Name: "Field", Type: uint64Type, Tag: tag}})
+	if got := typ.Field(0).Tag.Get("json"); got != strings.Repeat("x", 256) {
+		t.Fatal("StructTag.Get returned an incorrect long value")
+	}
+}
+
 func TestStructOfRuntimeConstruction(t *testing.T) {
 	uint64Type := reflect.TypeOf(uint64(0))
 	if got, want := reflect.StructOf([]reflect.StructField{{Name: "Y", Type: uint64Type}}), reflect.TypeOf(struct{ Y uint64 }{}); got != want {
@@ -630,13 +671,6 @@ func TestStructOfRuntimeConstruction(t *testing.T) {
 			{Name: "first", PkgPath: "one", Type: uint64Type},
 			{Name: "second", PkgPath: "two", Type: uint64Type},
 		})
-	})
-	checkPanic("long struct tag", func() {
-		reflect.StructOf([]reflect.StructField{{
-			Name: "Field",
-			Type: uint64Type,
-			Tag:  reflect.StructTag(strings.Repeat("x", 256)),
-		}})
 	})
 	checkPanic("embedded type with methods", func() {
 		reflect.StructOf([]reflect.StructField{{
