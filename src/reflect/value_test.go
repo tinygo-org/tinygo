@@ -1256,6 +1256,45 @@ func TestTinyMakeChan(t *testing.T) {
 	})
 }
 
+func TestTinyDeepEqualInterfaceVisits(t *testing.T) {
+	type pair struct {
+		First, Second any
+	}
+	for _, tc := range []struct {
+		name string
+		x, y any
+		want bool
+	}{
+		{"equal slice", []any{1, 2}, []any{1, 2}, true},
+		{"unequal slice", []any{1, 2}, []any{1, 3}, false},
+		{"unequal array", &[2]any{1, 2}, &[2]any{1, 3}, false},
+		{"equal fields", &pair{1, 2}, &pair{1, 2}, true},
+		{"unequal fields", &pair{1, 2}, &pair{1, 3}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := DeepEqual(tc.x, tc.y); got != tc.want {
+				t.Errorf("DeepEqual(%v, %v) = %v, want %v", tc.x, tc.y, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTinyDeepEqualSliceVisits(t *testing.T) {
+	type pair struct {
+		First, Second []int
+	}
+	left, right := []int{1, 2, 3}, []int{1, 2, 3}
+	x := &pair{left[:1], left[:2]}
+	y := &pair{right[:1], right[:3]}
+	if DeepEqual(x, y) {
+		t.Error("DeepEqual conflated slices with different lengths")
+	}
+	y.Second = right[:2]
+	if !DeepEqual(x, y) {
+		t.Error("DeepEqual rejected equal slices")
+	}
+}
+
 // Functions needed by all_test.go
 
 func IsRO(v Value) bool {
