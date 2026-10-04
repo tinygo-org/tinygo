@@ -6,8 +6,43 @@ package reflect_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestLongStructTags(t *testing.T) {
+	typ := reflect.TypeOf(struct {
+		Empty int
+		Short int `x`
+		At127 int `1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567`
+		At128 int `12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678`
+		At255 int `123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345`
+		At256 int `1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456`
+	}{})
+	for i, length := range []int{0, 1, 127, 128, 255, 256} {
+		want := (strings.Repeat("1234567890", 26))[:length]
+		if length == 1 {
+			want = "x"
+		}
+		field := typ.Field(i)
+		t.Run(field.Name, func(t *testing.T) {
+			if got := string(field.Tag); got != want {
+				t.Errorf("Field(%d).Tag has length %d, want %d", i, len(got), length)
+			}
+			byName, ok := typ.FieldByName(field.Name)
+			if !ok || string(byName.Tag) != want {
+				t.Error("FieldByName returned an incorrect tag")
+			}
+			byFunc, ok := typ.FieldByNameFunc(func(name string) bool { return name == field.Name })
+			if !ok || string(byFunc.Tag) != want {
+				t.Error("FieldByNameFunc returned an incorrect tag")
+			}
+			if length != 0 && !strings.Contains(typ.String(), string(field.Tag)) {
+				t.Error("Type.String omitted the tag")
+			}
+		})
+	}
+}
 
 func TestTypeFor(t *testing.T) {
 	type (
