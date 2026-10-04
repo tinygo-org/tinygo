@@ -1334,6 +1334,37 @@ func TestTinyDeepEqualSliceVisits(t *testing.T) {
 	}
 }
 
+func TestTinyDeepEqualLargeCycle(t *testing.T) {
+	type node struct {
+		Value int
+		Next  *node
+	}
+	makeCycle := func(backEdge int) []*node {
+		nodes := make([]*node, 32)
+		for i := range nodes {
+			nodes[i] = &node{Value: i}
+		}
+		for i := range nodes {
+			nodes[i].Next = nodes[(i+1)%len(nodes)]
+		}
+		nodes[len(nodes)-1].Next = nodes[backEdge]
+		return nodes
+	}
+	for _, backEdge := range []int{0, 16} {
+		left, right := makeCycle(backEdge), makeCycle(backEdge)
+		if !DeepEqual(left[0], right[0]) {
+			t.Fatalf("equal large cycles compare unequal with back edge %d", backEdge)
+		}
+		right[24].Value++
+		if DeepEqual(left[0], right[0]) {
+			t.Errorf("unequal large cycles compare equal with back edge %d", backEdge)
+		}
+		if DeepEqual(right[0], left[0]) {
+			t.Errorf("reverse comparison of unequal large cycles compares equal with back edge %d", backEdge)
+		}
+	}
+}
+
 // Functions needed by all_test.go
 
 func IsRO(v Value) bool {
