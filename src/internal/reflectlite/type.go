@@ -1577,9 +1577,6 @@ func StructOf(fields []StructField) Type {
 		if field.PkgPath == "" && (field.Name[0] == '_' || 'a' <= field.Name[0] && field.Name[0] <= 'z') {
 			panic("reflect.StructOf: field \"" + field.Name + "\" is unexported but missing PkgPath")
 		}
-		if len(field.Tag) > 255 {
-			panic("reflect.StructOf: field " + itoa.Itoa(i) + " has tag longer than 255 bytes")
-		}
 		if _, ok := fieldNames[field.Name]; ok && field.Name != "_" {
 			panic("reflect.StructOf: duplicate field " + field.Name)
 		}
@@ -1677,11 +1674,11 @@ func StructOf(fields []StructField) Type {
 			flags |= structFieldFlagIsExported
 		}
 		data := []byte{flags}
-		data = appendUvarint32(data, uint32(field.Offset))
+		data = appendUvarint(data, field.Offset)
 		data = append(data, field.Name...)
 		data = append(data, 0)
 		if field.Tag != "" {
-			data = append(data, byte(len(field.Tag)))
+			data = appendUvarint(data, uintptr(len(field.Tag)))
 			data = append(data, field.Tag...)
 		}
 		dynamic.fieldData[i] = string(data)
@@ -1714,7 +1711,7 @@ func isValidFieldName(name string) bool {
 	return name != ""
 }
 
-func appendUvarint32(buf []byte, value uint32) []byte {
+func appendUvarint(buf []byte, value uintptr) []byte {
 	for value >= 0x80 {
 		buf = append(buf, byte(value)|0x80)
 		value >>= 7
