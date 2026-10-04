@@ -5,10 +5,6 @@ package interp
 
 import "tinygo.org/x/go-llvm"
 
-// opBr is the opcode interp uses for every branch instruction, conditional or
-// not. The two forms are told apart by their number of operands.
-const opBr = llvm.Br
-
 // isBranch returns whether inst is a (conditional or unconditional) br
 // instruction.
 func isBranch(inst llvm.Value) bool {

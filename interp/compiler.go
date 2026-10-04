@@ -36,6 +36,7 @@ type basicBlock struct {
 // interpreter will replace the operand with that local value.
 type instruction struct {
 	opcode     llvm.Opcode
+	branch     bool
 	localIndex int
 	operands   []value
 	llvmInst   llvm.Value
@@ -50,7 +51,9 @@ func (inst *instruction) String() string {
 	}
 
 	name := ""
-	if int(inst.opcode) < len(instructionNameMap) {
+	if inst.branch {
+		name = "br"
+	} else if int(inst.opcode) < len(instructionNameMap) {
 		name = instructionNameMap[inst.opcode]
 	}
 	if name == "" {
@@ -104,28 +107,15 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 		for llvmInst := llvmBB.FirstInstruction(); !llvmInst.IsNil(); llvmInst = llvm.NextInstruction(llvmInst) {
 			// Create instruction skeleton.
 			opcode := llvmInst.InstructionOpcode()
-			if isBranch(llvmInst) {
-				opcode = opBr
-			}
 			inst := instruction{
 				opcode:     opcode,
+				branch:     isBranch(llvmInst),
 				localIndex: len(fn.locals),
 				llvmInst:   llvmInst,
 			}
 			fn.locals[llvmInst] = len(fn.locals)
 
-			// Add operands specific for this instruction.
-			switch opcode {
-			case llvm.Ret:
-				// Return instruction, which can either be a `ret void` (no
-				// return value) or return a value.
-				numOperands := llvmInst.OperandsCount()
-				if numOperands != 0 {
-					inst.operands = []value{
-						r.getValue(llvmInst.Operand(0)),
-					}
-				}
-			case opBr:
+			if inst.branch {
 				// Branch instruction. Can be either a conditional branch or an
 				// unconditional branch.
 				switch {
@@ -145,6 +135,19 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					}
 				default:
 					panic("interp: unknown branch instruction form")
+				}
+			}
+
+			// Add operands specific for this instruction.
+			switch opcode {
+			case llvm.Ret:
+				// Return instruction, which can either be a `ret void` (no
+				// return value) or return a value.
+				numOperands := llvmInst.OperandsCount()
+				if numOperands != 0 {
+					inst.operands = []value{
+						r.getValue(llvmInst.Operand(0)),
+					}
 				}
 			case llvm.Switch:
 				// Compile to an array of (value, label) pairs, of which the
@@ -392,7 +395,6 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 // can be useful for debug logging.
 var instructionNameMap = [...]string{
 	llvm.Ret:         "ret",
-	opBr:             "br",
 	llvm.Switch:      "switch",
 	llvm.IndirectBr:  "indirectbr",
 	llvm.Invoke:      "invoke",
