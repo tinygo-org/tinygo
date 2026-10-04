@@ -8,20 +8,40 @@ package reflectlite
 
 import "unsafe"
 
-// During deepValueEqual, must keep track of checks that are
-// in progress. The comparison algorithm assumes that all
-// checks in progress are true when it reencounters them.
-// Visited comparisons are stored in a map indexed by visit.
 type visit struct {
 	a1  unsafe.Pointer
 	a2  unsafe.Pointer
 	typ *RawType
 }
 
-// Tests for deep equality using reflected types. The map argument tracks
-// comparisons that have already been seen, which allows short circuiting on
-// recursive types.
-func deepValueEqual(v1, v2 Value, visited map[visit]struct{}) bool {
+type visitSet struct {
+	inline   [8]visit
+	length   int
+	overflow map[visit]struct{}
+}
+
+func (s *visitSet) seen(v visit) bool {
+	for i := range s.length {
+		if s.inline[i] == v {
+			return true
+		}
+	}
+	if s.length < len(s.inline) {
+		s.inline[s.length] = v
+		s.length++
+		return false
+	}
+	if _, ok := s.overflow[v]; ok {
+		return true
+	}
+	if s.overflow == nil {
+		s.overflow = make(map[visit]struct{})
+	}
+	s.overflow[v] = struct{}{}
+	return false
+}
+
+func deepValueEqual(v1, v2 Value, visited *visitSet) bool {
 	if !v1.IsValid() || !v2.IsValid() {
 		return v1.IsValid() == v2.IsValid()
 	}
@@ -53,14 +73,10 @@ func deepValueEqual(v1, v2 Value, visited map[visit]struct{}) bool {
 			addr1, addr2 = addr2, addr1
 		}
 
-		// Short circuit if references are already seen.
 		v := visit{addr1, addr2, v1.typecode}
-		if _, ok := visited[v]; ok {
+		if visited.seen(v) {
 			return true
 		}
-
-		// Remember for later.
-		visited[v] = struct{}{}
 	}
 
 	switch v1.Kind() {
@@ -128,6 +144,18 @@ func deepValueEqual(v1, v2 Value, visited map[visit]struct{}) bool {
 		}
 		// Can't do better than this:
 		return false
+	case Int, Int8, Int16, Int32, Int64:
+		return v1.Int() == v2.Int()
+	case Uint, Uint8, Uint16, Uint32, Uint64, Uintptr:
+		return v1.Uint() == v2.Uint()
+	case Bool:
+		return v1.Bool() == v2.Bool()
+	case String:
+		return v1.String() == v2.String()
+	case Float32, Float64:
+		return v1.Float() == v2.Float()
+	case Complex64, Complex128:
+		return v1.Complex() == v2.Complex()
 	default:
 		// Normal equality suffices
 		return valueInterfaceUnsafe(v1) == valueInterfaceUnsafe(v2)
@@ -194,5 +222,6 @@ func DeepEqual(x, y interface{}) bool {
 	if v1.typecode != v2.typecode {
 		return false
 	}
-	return deepValueEqual(v1, v2, make(map[visit]struct{}))
+	var visited visitSet
+	return deepValueEqual(v1, v2, &visited)
 }
