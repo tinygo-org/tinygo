@@ -1,6 +1,7 @@
 package reflectlite
 
 import (
+	"internal/abi"
 	"internal/gclayout"
 	"math"
 	"unsafe"
@@ -94,6 +95,15 @@ func ValueOf(i interface{}) Value {
 		value:    value,
 		flags:    valueFlagExported,
 	}
+}
+
+// InterfaceData returns two unspecified words for an interface Value or panics.
+// Deprecated: https://pkg.go.dev/reflect#Value.InterfaceData.
+func (v Value) InterfaceData() [2]uintptr {
+	if v.Kind() != Interface {
+		panic(&ValueError{Method: "reflect.Value.InterfaceData", Kind: v.Kind()})
+	}
+	return *abi.Escape((*[2]uintptr)(v.value))
 }
 
 func (v Value) Interface() interface{} {
