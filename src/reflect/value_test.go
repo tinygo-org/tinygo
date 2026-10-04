@@ -79,6 +79,26 @@ func TestSetPointer(t *testing.T) {
 	}
 }
 
+func TestTinyInterfaceData(t *testing.T) {
+	var empty any
+	var nonempty = fmt.Errorf("interface data")
+	fields := struct{ hidden any }{new(int)}
+	for _, test := range []struct {
+		value  Value
+		header unsafe.Pointer
+	}{
+		{ValueOf(&empty).Elem(), unsafe.Pointer(&empty)},
+		{ValueOf(&nonempty).Elem(), unsafe.Pointer(&nonempty)},
+		{ValueOf(&fields).Elem().Field(0), unsafe.Pointer(&fields.hidden)},
+	} {
+		if got, want := test.value.InterfaceData(), *(*[2]uintptr)(test.header); got != want {
+			t.Errorf("InterfaceData = %v, want %v", got, want)
+		}
+	}
+	shouldPanic("", func() { ValueOf(1).InterfaceData() })
+	shouldPanic("", func() { Value{}.InterfaceData() })
+}
+
 func TestTinyInvalidValueString(t *testing.T) {
 	if got := (Value{}).String(); got != "<invalid Value>" {
 		t.Errorf("Value{}.String() = %q, want %q", got, "<invalid Value>")
