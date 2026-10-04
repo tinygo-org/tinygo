@@ -1437,6 +1437,15 @@ func (v Value) SetComplex(x complex128) {
 	}
 }
 
+func (v Value) SetPointer(x unsafe.Pointer) {
+	v.checkAddressable()
+	v.checkRO()
+	if v.Kind() != UnsafePointer {
+		panic(&ValueError{Method: "reflect.Value.SetPointer", Kind: v.Kind()})
+	}
+	*(*unsafe.Pointer)(v.value) = x
+}
+
 func (v Value) SetString(x string) {
 	v.checkAddressable()
 	v.checkRO()

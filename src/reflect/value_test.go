@@ -40,6 +40,45 @@ func TestTinyIndirectPointers(t *testing.T) {
 	}
 }
 
+func TestSetPointer(t *testing.T) {
+	type pointer unsafe.Pointer
+	var p pointer
+	value := ValueOf(&p).Elem()
+	object := new(int)
+	*object = 17
+	value.SetPointer(unsafe.Pointer(object))
+	runtime.GC()
+	if got := *(*int)(unsafe.Pointer(p)); got != 17 {
+		t.Fatalf("SetPointer stored %d, want 17", got)
+	}
+	value.SetPointer(nil)
+	if p != nil {
+		t.Fatal("SetPointer(nil) did not clear the pointer")
+	}
+	fields := struct{ pointer unsafe.Pointer }{unsafe.Pointer(object)}
+	for _, tc := range []struct {
+		name string
+		fn   func()
+	}{
+		{"Unaddressable", func() { ValueOf(p).SetPointer(nil) }},
+		{"WrongKind", func() { ValueOf(new(*int)).Elem().SetPointer(nil) }},
+		{"ZeroValue", func() { Value{}.SetPointer(nil) }},
+		{"UnexportedField", func() { ValueOf(&fields).Elem().Field(0).SetPointer(nil) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("SetPointer did not panic")
+				}
+			}()
+			tc.fn()
+		})
+	}
+	if fields.pointer != unsafe.Pointer(object) {
+		t.Fatal("SetPointer changed an unexported field")
+	}
+}
+
 func TestTinyInvalidValueString(t *testing.T) {
 	if got := (Value{}).String(); got != "<invalid Value>" {
 		t.Errorf("Value{}.String() = %q, want %q", got, "<invalid Value>")
