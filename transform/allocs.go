@@ -287,6 +287,10 @@ func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[l
 		if called.IsDeclaration() {
 			return escapeResult{escapeAt: call}
 		}
+		if _, recursive := visiting[called.Param(i)]; recursive && !typeHasPointers(call.Type()) {
+			// valueEscapesAtImpl is already checking this parameter's other uses.
+			continue
+		}
 		if !result.merge(valueEscapesAtImpl(called.Param(i), true, visiting)) {
 			return result
 		}
