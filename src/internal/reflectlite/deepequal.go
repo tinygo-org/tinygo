@@ -43,8 +43,10 @@ func deepValueEqual(v1, v2 Value, visited map[visit]struct{}) bool {
 	}
 
 	if hard(v1, v2) {
-		addr1 := v1.pointer()
-		addr2 := v2.pointer()
+		addr1, addr2 := v1.value, v2.value
+		if kind := v1.Kind(); kind == Ptr || kind == Map {
+			addr1, addr2 = v1.pointer(), v2.pointer()
+		}
 		if uintptr(addr1) > uintptr(addr2) {
 			// Canonicalize order to reduce number of entries in visited.
 			// Assumes non-moving garbage collector.
