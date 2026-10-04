@@ -496,10 +496,9 @@ func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
 
 				data := string(flags) + string(offsBytes[:offLen]) + field.Name() + "\x00"
 				if typ.Tag(i) != "" {
-					if len(typ.Tag(i)) > 0xff {
-						c.addError(field.Pos(), fmt.Sprintf("struct tag is %d bytes which is too long, max is 255", len(typ.Tag(i))))
-					}
-					data += string([]byte{byte(len(typ.Tag(i)))}) + typ.Tag(i)
+					var tagBytes [binary.MaxVarintLen64]byte
+					tagLen := binary.PutUvarint(tagBytes[:], uint64(len(typ.Tag(i))))
+					data += string(tagBytes[:tagLen]) + typ.Tag(i)
 				}
 				dataInitializer := c.ctx.ConstString(data, false)
 				dataGlobal := llvm.AddGlobal(c.mod, dataInitializer.Type(), globalName+"."+field.Name())
