@@ -170,12 +170,14 @@ func (b *builder) createAsyncifyNoSuspendInvoke(fnType llvm.Type, fn llvm.Value,
 		target = wrapperParams[0]
 		wrapperParams = wrapperParams[1:]
 	}
+	stackType, stackFn := b.getRuntimeFunction("getCurrentStackPointer")
+	stackPointer := builder.CreateCall(stackType, stackFn, nil, "")
 	result := builder.CreateCall(fnType, target, wrapperParams, "")
 	result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0))
 	unwindType, unwindLLVMFn := b.getRuntimeFunction("unwindPending")
 	unwinding := builder.CreateCall(unwindType, unwindLLVMFn, []llvm.Value{b.dataPtrUndef}, "")
 	replay := b.createAsyncifyPanicReplay(wrapperType)
-	b.emitAsyncifyCatchReturn(builder, fnType, result, entry, unwinding, replay, wrapper)
+	b.emitAsyncifyCatchReturn(builder, fnType, result, entry, unwinding, replay, wrapper, stackPointer)
 	builder.Dispose()
 
 	wrapperArgs := expanded
@@ -254,6 +256,8 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	for i := range catchArgs {
 		catchArgs[i] = catchWrapper.Param(i)
 	}
+	stackType, stackFn := b.getRuntimeFunction("getCurrentStackPointer")
+	stackPointer := builder.CreateCall(stackType, stackFn, nil, "")
 	if fnType.ReturnType() == b.void {
 		result = builder.CreateCall(targetType, targetWrapper, catchArgs, "")
 	} else {
@@ -276,7 +280,7 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	unwindPointer.SetVolatile(true)
 	unwinding := builder.CreateCall(unwindType, unwindPointer, []llvm.Value{b.dataPtrUndef}, "")
 	replay := b.createAsyncifyPanicReplay(wrapperType)
-	b.emitAsyncifyCatchReturn(builder, fnType, result, entry, unwinding, replay, catchWrapper)
+	b.emitAsyncifyCatchReturn(builder, fnType, result, entry, unwinding, replay, catchWrapper, stackPointer)
 	builder.Dispose()
 
 	// Keep the caller-to-catcher edge opaque so Binaryen instruments the
@@ -339,7 +343,7 @@ func (b *builder) createAsyncifyPanicReplay(catcherType llvm.Type) llvm.Value {
 	return replay
 }
 
-func (b *builder) emitAsyncifyCatchReturn(builder llvm.Builder, fnType llvm.Type, result llvm.Value, entry llvm.BasicBlock, unwinding, replay, replayTarget llvm.Value) {
+func (b *builder) emitAsyncifyCatchReturn(builder llvm.Builder, fnType llvm.Type, result llvm.Value, entry llvm.BasicBlock, unwinding, replay, replayTarget, stackPointer llvm.Value) {
 	wrapper := entry.Parent()
 	stopBlock := b.ctx.AddBasicBlock(wrapper, "unwind.stop")
 	returnBlock := b.ctx.AddBasicBlock(wrapper, "return")
@@ -352,6 +356,9 @@ func (b *builder) emitAsyncifyCatchReturn(builder llvm.Builder, fnType llvm.Type
 	replayPointer := builder.CreatePtrToInt(replay, b.uintptrType, "")
 	targetPointer := builder.CreatePtrToInt(replayTarget, b.uintptrType, "")
 	builder.CreateCall(saveType, saveFn, []llvm.Value{replayPointer, targetPointer, b.dataPtrUndef}, "")
+	setStackType, setStackFn := b.getRuntimeFunction("setPanicRewindStackPointer")
+	stackPointer = builder.CreateIntToPtr(stackPointer, b.dataPtrType, "")
+	builder.CreateCall(setStackType, setStackFn, []llvm.Value{stackPointer, b.dataPtrUndef}, "")
 	builder.CreateBr(returnBlock)
 
 	builder.SetInsertPointAtEnd(returnBlock)
