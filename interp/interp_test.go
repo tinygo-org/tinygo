@@ -28,6 +28,85 @@ func TestInterp(t *testing.T) {
 	}
 }
 
+func TestInterpFunctionUsageAttributes(t *testing.T) {
+	for _, wholeProgram := range []bool{false, true} {
+		name := "package"
+		if wholeProgram {
+			name = "program"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("test")
+			defer mod.Dispose()
+			mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
+			builder := ctx.NewBuilder()
+			defer builder.Dispose()
+			typ := llvm.FunctionType(ctx.VoidType(), nil, false)
+			helper := llvm.AddFunction(mod, "helper", typ)
+			helper.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-reflect-method-names", "Alpha Beta"))
+			helper.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-reflect-structof", ""))
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(helper, "entry"))
+			builder.CreateRetVoid()
+			dead := llvm.AddFunction(mod, "dead", typ)
+			dead.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-reflect-method-names", "Unused"))
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(dead, "entry"))
+			builder.CreateRetVoid()
+			init := llvm.AddFunction(mod, "example.init", typ)
+			init.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-reflect-method", ""))
+			init.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-reflect-method-names", "Zeta Alpha"))
+			init.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-reflect-makefunc", ""))
+			init.AddFunctionAttr(ctx.CreateStringAttribute("unrelated", ""))
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(init, "entry"))
+			builder.CreateCall(typ, helper, nil, "")
+			builder.CreateRetVoid()
+			resultName := init.Name()
+			if wholeProgram {
+				initAll := llvm.AddFunction(mod, "runtime.initAll", typ)
+				initAll.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-reflect-method-names", "Gamma"))
+				other := llvm.AddFunction(mod, "other.init", typ)
+				other.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-reflect-method-names", "Delta Alpha"))
+				builder.SetInsertPointAtEnd(ctx.AddBasicBlock(other, "entry"))
+				builder.CreateRetVoid()
+				builder.SetInsertPointAtEnd(ctx.AddBasicBlock(initAll, "entry"))
+				builder.CreateCall(typ, init, nil, "")
+				builder.CreateCall(typ, other, nil, "")
+				builder.CreateRetVoid()
+				resultName = initAll.Name()
+				if err := Run(mod, time.Second, DefaultMaxInterpBlockEntries, false); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := RunFunc(init, time.Second, DefaultMaxInterpBlockEntries, false); err != nil {
+				t.Fatal(err)
+			}
+			result := mod.NamedFunction(resultName)
+			methodNames := "Alpha Beta Zeta"
+			if wholeProgram {
+				methodNames = "Alpha Beta Delta Gamma Zeta"
+			}
+			for kind, want := range map[string]string{
+				"tinygo-reflect-method":       "",
+				"tinygo-reflect-method-names": methodNames,
+				"tinygo-reflect-makefunc":     "",
+				"tinygo-reflect-structof":     "",
+			} {
+				attr := result.GetStringAttributeAtIndex(-1, kind)
+				if attr.IsNil() {
+					t.Errorf("lost %s", kind)
+				} else if got := attr.GetStringValue(); got != want {
+					t.Errorf("%s = %q, want %q", kind, got, want)
+				}
+			}
+			if !result.GetStringAttributeAtIndex(-1, "unrelated").IsNil() {
+				t.Error("copied an unrelated attribute")
+			}
+			if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func runTest(t *testing.T, pathPrefix string) {
 	// Read the input IR.
 	ctx := llvm.NewContext()

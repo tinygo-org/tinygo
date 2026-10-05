@@ -10,10 +10,60 @@ package llvmutil
 import (
 	"encoding/binary"
 	"math"
+	"slices"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
 )
+
+type FunctionUsageAttributes map[string]string
+
+func ReadFunctionUsageAttributes(fn llvm.Value) FunctionUsageAttributes {
+	var attrs FunctionUsageAttributes
+	if fn.IsNil() {
+		return attrs
+	}
+	for _, kind := range [...]string{
+		"tinygo-reflect-method",
+		"tinygo-reflect-method-names",
+		"tinygo-reflect-makefunc",
+		"tinygo-reflect-structof",
+	} {
+		attr := fn.GetStringAttributeAtIndex(-1, kind)
+		if attr.IsNil() {
+			continue
+		}
+		if attrs == nil {
+			attrs = make(FunctionUsageAttributes)
+		}
+		attrs[kind] = attr.GetStringValue()
+	}
+	return attrs
+}
+
+func (attrs FunctionUsageAttributes) Merge(other FunctionUsageAttributes) FunctionUsageAttributes {
+	if len(other) == 0 {
+		return attrs
+	}
+	if attrs == nil {
+		attrs = make(FunctionUsageAttributes, len(other))
+	}
+	for kind, value := range other {
+		if kind == "tinygo-reflect-method-names" {
+			names := strings.Fields(attrs[kind] + " " + value)
+			slices.Sort(names)
+			value = strings.Join(slices.Compact(names), " ")
+		}
+		attrs[kind] = value
+	}
+	return attrs
+}
+
+func (attrs FunctionUsageAttributes) Apply(fn llvm.Value) {
+	for kind, value := range attrs {
+		fn.AddFunctionAttr(fn.GlobalParent().Context().CreateStringAttribute(kind, value))
+	}
+}
 
 // CreateEntryBlockAlloca creates a new alloca in the entry block, even though
 // the IR builder is located elsewhere. It assumes that the insert point is
