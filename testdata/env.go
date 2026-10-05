@@ -2,9 +2,39 @@ package main
 
 import (
 	"os"
+	"runtime"
 )
 
 func main() {
+	if expected, ok := os.LookupEnv("EXPECT_CWD"); ok {
+		cwd, err := os.Getwd()
+		if err != nil || cwd != expected {
+			println("cwd:", cwd, "expected:", expected, "PWD:", os.Getenv("PWD"))
+			panic("unexpected initial working directory")
+		}
+		if err := os.Setenv("PWD", "/another"); err != nil {
+			panic(err)
+		}
+		if changed, err := os.Getwd(); err != nil || changed != cwd {
+			panic("changing PWD should not change the working directory")
+		}
+		runtime.GC()
+		if file := os.Getenv("EXPECT_FILE"); file != "" {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				panic(err)
+			}
+			if len(data) == 0 {
+				panic("relative file access returned an empty file")
+			}
+		}
+		if file := os.Getenv("EXPECT_FILE_FAILURE"); file != "" {
+			if _, err := os.ReadFile(file); err == nil {
+				panic("unmapped working directory should not grant file access")
+			}
+		}
+	}
+
 	// Check for environment variables (set by the test runner).
 	println("ENV1:", os.Getenv("ENV1"))
 	v, ok := os.LookupEnv("ENV2")
