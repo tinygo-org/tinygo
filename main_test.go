@@ -1632,6 +1632,49 @@ func TestStdin(t *testing.T) {
 	checkOutput(t, TESTDATA+"/stdin.txt", output.Bytes())
 }
 
+func TestWASIWorkingDirectory(t *testing.T) {
+	opts := optionsFromTarget("wasip1", sema)
+	emuCheck(t, opts)
+	config, err := builder.NewConfig(&opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build(TESTDATA+"/env.go", "wasm", t.TempDir(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	preopen := "--dir=" + wd + "::/workspace"
+	for _, tc := range []struct {
+		name string
+		cwd  string
+		args []string
+	}{
+		{"NoPreopens", "", nil},
+		{"FirstPreopen", "/workspace", []string{preopen, "--env=EXPECT_FILE=testdata/filesystem.txt"}},
+		{"PWD", "/workspace/testdata", []string{preopen, "--env=PWD=/workspace/testdata", "--env=EXPECT_FILE=filesystem.txt"}},
+		{"NormalizedPWD", "/workspace/testdata", []string{preopen, "--env=PWD=/workspace/../workspace/testdata", "--env=EXPECT_FILE=filesystem.txt"}},
+		{"TrailingSlash", "/workspace/testdata/", []string{preopen, "--env=PWD=/workspace/testdata/", "--env=EXPECT_FILE=filesystem.txt"}},
+		{"UnmappedPWD", "/no-access", []string{"--env=PWD=/no-access", "--env=EXPECT_FILE_FAILURE=missing"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{"run", "--env=ENV1=VALUE1", "--env=ENV2=VALUE2", "--env=EXPECT_CWD=" + tc.cwd}
+			args = append(args, tc.args...)
+			args = append(args, result.Binary, "first", "second")
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			output, err := exec.CommandContext(ctx, "wasmtime", args...).CombinedOutput()
+			if err != nil {
+				t.Fatalf("failed to run: %v\n%s", err, output)
+			}
+			checkOutput(t, TESTDATA+"/env.txt", output)
+		})
+	}
+}
+
 func TestTest(t *testing.T) {
 	t.Parallel()
 
