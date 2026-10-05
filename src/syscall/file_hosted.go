@@ -1,4 +1,4 @@
-//go:build !(baremetal || (wasm && !tinygo.wasi) || wasm_unknown)
+//go:build nintendoswitch || wasip2
 
 // This file assumes there is a libc available that runs on a real operating
 // system.
