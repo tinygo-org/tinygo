@@ -5,6 +5,7 @@
 package testing_test
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -80,5 +81,19 @@ func TestBenchmarkLoop(t *testing.T) {
 	})
 	if n != N || n == 0 {
 		t.Fatalf("Loop ran %d times, N=%d", n, N)
+	}
+}
+
+func TestBenchmarkReportMetric(t *testing.T) {
+	r := testing.Benchmark(func(b *testing.B) {
+		for b.Loop() {
+		}
+		b.ReportMetric(42, "widgets/op")
+	})
+	if r.Extra["widgets/op"] != 42 {
+		t.Fatalf("Extra = %v, want widgets/op=42", r.Extra)
+	}
+	if !strings.Contains(r.String(), "42.00 widgets/op") {
+		t.Fatalf("String() = %q, want widgets/op metric", r.String())
 	}
 }

@@ -136,6 +136,13 @@ func (b *B) StopTimer() {
 // ResetTimer zeroes the elapsed benchmark time and memory allocation counters
 // and deletes user-reported metrics.
 func (b *B) ResetTimer() {
+	if b.extra == nil {
+		// Allocate the extra map before reading memory stats.
+		// Pre-size it to make more allocation unlikely.
+		b.extra = make(map[string]float64, 16)
+	} else {
+		clear(b.extra)
+	}
 	if b.timerOn {
 		b.start = time.Now()
 
