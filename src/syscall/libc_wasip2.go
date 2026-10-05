@@ -784,14 +784,19 @@ func populatePreopens() {
 	preopens := make(map[string]types.Descriptor, len(dirs))
 	for _, tup := range dirs {
 		desc, path := tup.F0, tup.F1
-		if path == cwd {
-			libcCWD.d = desc
-			libcCWD.root = path
-			libcCWD.rel = ""
-		}
 		preopens[path] = desc
 	}
 	wasiPreopens = preopens
+	if cwd != "" {
+		cwd = joinPath("/", cwd)
+		dir, rel := findPreopenForPath(cwd)
+		if dir.d == cm.ResourceNone {
+			dir.root = cwd
+		} else {
+			dir.rel = rel
+		}
+		libcCWD = dir
+	}
 }
 
 // -- BEGIN fs_wasip1.go --
@@ -918,7 +923,8 @@ func findPreopenForPath(path string) (wasiDir, string) {
 
 	var best string
 	for k, v := range wasiPreopens {
-		if len(k) > len(best) && hasPrefix(path, k) {
+		if len(k) > len(best) && hasPrefix(path, k) &&
+			(hasSuffix(k, "/") || len(path) == len(k) || path[len(k)] == '/') {
 			wasidir = wasiDir{d: v, root: k}
 			best = wasidir.root
 		}
@@ -1277,7 +1283,7 @@ func getcwd(buf *byte, size uint) *byte {
 
 	cwd := libcCWD.root
 	if libcCWD.rel != "" && libcCWD.rel != "." && libcCWD.rel != "./" {
-		cwd += libcCWD.rel
+		cwd = joinPath(cwd, libcCWD.rel)
 	}
 
 	if buf == nil {
