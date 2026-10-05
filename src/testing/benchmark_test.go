@@ -5,6 +5,7 @@
 package testing_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -95,5 +96,21 @@ func TestBenchmarkReportMetric(t *testing.T) {
 	}
 	if !strings.Contains(r.String(), "42.00 widgets/op") {
 		t.Fatalf("String() = %q, want widgets/op metric", r.String())
+	}
+}
+
+func TestBenchmarkContext(t *testing.T) {
+	var ctx context.Context
+	testing.Benchmark(func(b *testing.B) {
+		ctx = b.Context()
+		if ctx == nil || ctx.Err() != nil {
+			b.Fatal("bad context")
+		}
+		for b.Loop() {
+			_ = ctx.Done()
+		}
+	})
+	if ctx.Err() == nil {
+		t.Fatal("context not canceled after benchmark")
 	}
 }

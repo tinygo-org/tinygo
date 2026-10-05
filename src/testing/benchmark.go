@@ -7,6 +7,7 @@
 package testing
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -169,6 +170,7 @@ func (b *B) ReportAllocs() {
 
 // runN runs a single benchmark for the specified number of iterations.
 func (b *B) runN(n int) {
+	b.ctx, b.cancelCtx = context.WithCancel(context.Background())
 	defer b.runCleanup()
 	b.N = n
 	b.loopN = 0
