@@ -68,3 +68,17 @@ func BenchmarkSub(b *testing.B) {
 	b.Run("Fast", func(b *testing.B) { BenchmarkFastNonASCII(b) })
 	b.Run("Slow", func(b *testing.B) { BenchmarkSlowNonASCII(b) })
 }
+
+func TestBenchmarkLoop(t *testing.T) {
+	var n, N int
+	testing.Benchmark(func(b *testing.B) {
+		n = 0
+		for b.Loop() {
+			n++
+		}
+		N = b.N
+	})
+	if n != N || n == 0 {
+		t.Fatalf("Loop ran %d times, N=%d", n, N)
+	}
+}
