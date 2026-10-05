@@ -6,8 +6,13 @@ package main
 
 import (
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
+
+func resolveDirectory(name string) (string, error) {
+	return filepath.EvalSymlinks(name)
+}
 
 // setCommandAsDaemon makes sure this command does not receive signals sent to
 // the parent.
