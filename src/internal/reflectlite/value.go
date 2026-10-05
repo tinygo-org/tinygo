@@ -3,6 +3,7 @@ package reflectlite
 import (
 	"internal/gclayout"
 	"math"
+	"tinygo"
 	"unsafe"
 )
 
@@ -2405,13 +2406,6 @@ func chanMake(elementSize uintptr, bufSize uintptr, elementLayout unsafe.Pointer
 // MakeMapWithSize creates a new map with the specified type and initial space
 // for approximately n elements.
 func MakeMapWithSize(typ Type, n int) Value {
-
-	// TODO(dgryski): deduplicate these?  runtime and reflect both need them.
-	const (
-		hashmapAlgorithmBinary uint8 = iota
-		hashmapAlgorithmString
-	)
-
 	if typ.Kind() != Map {
 		panic(&ValueError{Method: "MakeMap", Kind: typ.Kind()})
 	}
@@ -2427,9 +2421,9 @@ func MakeMapWithSize(typ Type, n int) Value {
 	var m unsafe.Pointer
 
 	if key.Kind() == String {
-		m = hashmapMake(key.Size(), val.Size(), uintptr(n), typeInfo, hashmapAlgorithmString)
+		m = hashmapMake(key.Size(), val.Size(), uintptr(n), typeInfo, uint8(tinygo.HashmapAlgorithmString))
 	} else if key.isBinary() {
-		m = hashmapMake(key.Size(), val.Size(), uintptr(n), typeInfo, hashmapAlgorithmBinary)
+		m = hashmapMake(key.Size(), val.Size(), uintptr(n), typeInfo, uint8(tinygo.HashmapAlgorithmBinary))
 	} else {
 		// Composite key type (struct with strings, floats, etc.).
 		// Use runtime-generated hash/equal closures that walk the
