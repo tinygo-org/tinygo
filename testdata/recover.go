@@ -3,6 +3,7 @@ package main
 import (
 	"runtime"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -475,10 +476,119 @@ func recoverNilMapAndChan() {
 		default:
 		}
 	})
+	func() {
+		defer func() { println("  recovered closed chan blocking select:", recover() != nil) }()
+		ch := make(chan int, 1)
+		block := make(chan int)
+		close(ch)
+		select {
+		case ch <- 1:
+		case <-block:
+		}
+	}()
+	func() {
+		other := make(chan int, 1)
+		block := make(chan int)
+		select {
+		case other <- 1:
+		case <-block:
+		}
+		println("  select after recover ok")
+	}()
 	recoverMustPanic("close nil chan", func() {
 		var ch chan int
 		close(ch)
 	})
+	for _, size := range []int{0, 1} {
+		for mode := 0; mode < 6; mode++ {
+			testClosedSend(size, mode)
+		}
+	}
+	println("  closed send recovery: ok")
+}
+
+func testClosedSend(size, mode int) {
+	ch := make(chan int, size)
+	if size != 0 {
+		ch <- 7
+	}
+	other := make(chan int, 1)
+	send := func() {
+		defer func() {
+			err, ok := recover().(error)
+			if !ok || err.Error() != "send on closed channel" {
+				panic("unexpected closed send panic")
+			}
+		}()
+		switch mode {
+		case 0, 4:
+			ch <- 1
+		case 1:
+			select {
+			case ch <- 1:
+			default:
+				panic("closed send chose default")
+			}
+		case 2, 5:
+			select {
+			case ch <- 1:
+			case <-other:
+				panic("closed send chose blocked receive")
+			}
+		case 3:
+			select {
+			case ch <- 1:
+			case ch <- 2:
+			case <-other:
+				panic("closed send chose blocked receive")
+			default:
+				panic("closed send chose default")
+			}
+		}
+		panic("closed send did not panic")
+	}
+	if mode < 4 {
+		close(ch)
+		send()
+	} else {
+		started := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			close(started)
+			send()
+			close(done)
+		}()
+		<-started
+		time.Sleep(time.Millisecond)
+		close(ch)
+		<-done
+	}
+
+	if size != 0 {
+		if value := <-ch; value != 7 {
+			panic("closed send changed buffered value")
+		}
+	}
+	if value, ok := <-ch; value != 0 || ok {
+		panic("closed send changed closed receive")
+	}
+	select {
+	case other <- 2:
+	case <-other:
+		panic("blocked receive selected")
+	}
+	select {
+	case value := <-other:
+		if value != 2 {
+			panic("incorrect send after recovery")
+		}
+	default:
+		panic("send after recovery failed")
+	}
+	other <- 4
+	if value := <-other; value != 4 {
+		panic("incorrect receive after recovery")
+	}
 }
 
 // Test recovering from hardware signals (SIGFPE, SIGSEGV).

@@ -292,7 +292,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
 		}, "select.block")
 
-		results = b.createRuntimeCall("chanSelect", []llvm.Value{
+		results = b.createRuntimeInvoke("chanSelect", []llvm.Value{
 			recvbuf,
 			statesPtr, statesLen, statesLen, // []chanSelectState
 			opsPtr, opsLen, opsLen, // []channelOp
@@ -303,7 +303,7 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	} else {
 		opsPtr := llvm.ConstNull(b.dataPtrType)
 		opsLen := llvm.ConstInt(b.uintptrType, 0, false)
-		results = b.createRuntimeCall("chanSelect", []llvm.Value{
+		results = b.createRuntimeInvoke("chanSelect", []llvm.Value{
 			recvbuf,
 			statesPtr, statesLen, statesLen, // []chanSelectState
 			opsPtr, opsLen, opsLen, // []channelOp (nil slice)
