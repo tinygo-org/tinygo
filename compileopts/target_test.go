@@ -9,6 +9,39 @@ import (
 	"testing"
 )
 
+func TestEmulator(t *testing.T) {
+	for _, test := range []bool{false, true} {
+		for _, tc := range []struct {
+			name     string
+			template string
+			want     []string
+		}{
+			{"wasmtime", "wasmtime run --dir={tmpDir}::/tmp {}", []string{"wasmtime", "run", "--dir=" + os.TempDir() + "::/tmp", "program.wasm"}},
+			{"wasmtime-windows-path", `wasmtime run '--dir=C:\Temp files\package::/custom' {}`, []string{"wasmtime", "run", `--dir=C:\Temp files\package::/custom`, "program.wasm"}},
+			{"wazero", "wazero run -mount={tmpDir}:/tmp {}", []string{"wazero", "run", "-mount=" + os.TempDir() + ":/tmp", "program.wasm"}},
+			{"qemu", "qemu-system-arm -kernel {} -chardev file,path={tmpDir}/output", []string{"qemu-system-arm", "-kernel", "program.wasm", "-chardev", "file,path=" + os.TempDir() + "/output"}},
+		} {
+			mode := "Run"
+			if test {
+				mode = "Test"
+			}
+			t.Run(tc.name+"/"+mode, func(t *testing.T) {
+				config := Config{
+					Target:     &TargetSpec{Emulator: tc.template},
+					TestConfig: TestConfig{CompileTestBinary: test},
+				}
+				got, err := config.Emulator("", "program.wasm")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(got, tc.want) {
+					t.Fatalf("emulator = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	}
+}
+
 func TestLoadTarget(t *testing.T) {
 	_, err := LoadTarget(&Options{Target: "arduino"})
 	if err != nil {
