@@ -158,6 +158,7 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 		for index, obj := range mem.objects {
 			r.objects[index] = obj
 		}
+		llvmutil.ReadFunctionUsageAttributes(initAll).Merge(mem.attributes).Apply(initAll)
 	}
 	r.pkgName = ""
 
@@ -293,6 +294,7 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 	// Finalize: remove the old init function and replace it with the new
 	// (.init.tmp) function.
 	r.builder.CreateRetVoid()
+	pkgMem.attributes.Apply(newFn)
 	fnName := fn.Name()
 	fn.ReplaceAllUsesWith(newFn)
 	fn.EraseFromParentAsFunction()
