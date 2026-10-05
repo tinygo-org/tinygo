@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/tinygo-org/tinygo/builder"
@@ -312,5 +313,272 @@ func TestWASIp2WorkingDirectory(t *testing.T) {
 				t.Fatalf("failed to run: %v\n%s", err, output)
 			}
 		})
+	}
+}
+
+func TestWasmtimePreopens(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"None", nil, false},
+		{"Root", []string{"--dir=/"}, false},
+		{"Custom", []string{"--dir=/host::/custom"}, false},
+		{"Tmp", []string{"--dir=/tmp"}, true},
+		{"AliasedTmp", []string{"--dir=/host::/tmp"}, true},
+		{"SeparateFlag", []string{"--dir", "/host::/tmp"}, true},
+		{"TrailingSlash", []string{"--dir=/host::/tmp/"}, true},
+		{"UnnormalizedGuest", []string{"--dir=/host::/other/../tmp"}, false},
+		{"IncompleteFlag", []string{"--dir"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hasWasmtimePreopen(tc.args, "/tmp"); got != tc.want {
+				t.Fatalf("tmp preopen = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveDirectory(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	type directory struct {
+		name   string
+		target string
+	}
+	dirs := []directory{{target, target}}
+	longTarget := filepath.Join(root, strings.Repeat("x", 240))
+	if err := os.Mkdir(longTarget, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dirs = append(dirs, directory{longTarget, longTarget})
+	link := filepath.Join(root, "link")
+	if runtime.GOOS == "windows" {
+		if output, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err != nil {
+			t.Fatalf("creating junction: %v\n%s", err, output)
+		}
+	} else if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	dirs = append(dirs, directory{link, target})
+	for _, tc := range dirs {
+		resolved, err := resolveDirectory(tc.name)
+		if err != nil {
+			t.Fatalf("resolve %q: %v", tc.name, err)
+		}
+		parent, err := os.Stat(filepath.Dir(resolved))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := os.Stat(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !os.SameFile(parent, want) || filepath.Base(resolved) != filepath.Base(tc.target) {
+			t.Fatalf("resolved %q to %q, want %q", tc.name, resolved, tc.target)
+		}
+	}
+	if _, err := resolveDirectory(filepath.Join(root, "missing")); !os.IsNotExist(err) {
+		t.Fatalf("missing directory: %v", err)
+	}
+}
+
+func TestWasmtimeWorkingDirectory(t *testing.T) {
+	type testCase struct {
+		name string
+		wd   string
+		tmp  string
+		test bool
+		dirs []string
+		pwd  string
+	}
+	tests := []testCase{
+		{"Run", "/workspace/package", "/host/tmp", false, []string{"--dir=.", "--dir=/workspace/package", "--dir=/host/tmp::/tmp"}, "/workspace/package"},
+		{"Test", "/workspace/package", "/host/tmp", true, []string{"--dir=/"}, "/workspace/package"},
+		{"Root", "/", "/host/tmp", true, []string{"--dir=/"}, "/"},
+		{"Backslash", `/workspace/a\b`, "/host/tmp", true, []string{"--dir=/"}, `/workspace/a\b`},
+	}
+	if runtime.GOOS == "windows" {
+		tests = []testCase{
+			{"Run", `D:\workspace\package`, `C:\Temp`, false, []string{"--dir=.", `--dir=D:\workspace\package::/workspace/package`, `--dir=C:\Temp::/tmp`}, "/workspace/package"},
+			{"Test", `D:\workspace\package`, `C:\Temp`, true, []string{`--dir=D:\::/`, `--dir=C:\Temp::/tmp`}, "/workspace/package"},
+			{"Root", `D:\`, `C:\Temp`, true, []string{`--dir=D:\::/`, `--dir=C:\Temp::/tmp`}, "/"},
+			{"UNC", `\\server\share\package`, `C:\Temp`, true, []string{`--dir=\\server\share\::/`, `--dir=C:\Temp::/tmp`}, "/package"},
+			{"UNCRoot", `\\server\share`, `C:\Temp`, true, []string{`--dir=\\server\share\::/`, `--dir=C:\Temp::/tmp`}, "/"},
+			{"ExtendedPath", `\\?\D:\workspace\package`, `C:\Temp`, true, []string{`--dir=\\?\D:\::/`, `--dir=C:\Temp::/tmp`}, "/workspace/package"},
+			{"SpacesAndQuotes", `D:\workspace\package's files`, `C:\Temp files`, true, []string{`--dir=D:\::/`, `--dir=C:\Temp files::/tmp`}, "/workspace/package's files"},
+		}
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dirs, pwd := wasmtimePreopens(tc.wd, tc.tmp, tc.test, nil)
+			if !slices.Equal(dirs, tc.dirs) || pwd != tc.pwd {
+				t.Fatalf("preopens = %q, PWD = %q; want %q, %q", dirs, pwd, tc.dirs, tc.pwd)
+			}
+			custom := []string{"--dir=/custom::/tmp"}
+			dirs, pwd = wasmtimePreopens(tc.wd, tc.tmp, tc.test, custom)
+			want := tc.dirs
+			if !tc.test || runtime.GOOS == "windows" {
+				want = want[:len(want)-1]
+			}
+			if !slices.Equal(dirs, want) || pwd != tc.pwd {
+				t.Fatalf("explicit tmp preopen: preopens = %q, PWD = %q; want %q, %q", dirs, pwd, want, tc.pwd)
+			}
+		})
+	}
+}
+
+func TestWASITestPreopens(t *testing.T) {
+	if testing.Short() {
+		t.Skip("cross-target tests disabled")
+	}
+	t.Parallel()
+	dir := filepath.Join(t.TempDir(), "spaces and 'quotes'")
+	pkgDir := filepath.Join(dir, "package")
+	if err := os.MkdirAll(filepath.Join(pkgDir, "child"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pkgNameForTest := pkgDir
+	if runtime.GOOS != "windows" {
+		pkgNameForTest = filepath.Join(dir, "alias")
+		if err := os.Symlink(pkgDir, pkgNameForTest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, data := range map[string]string{
+		"go.mod":              "module example.com/wasi-test-root\n\ngo 1.23\n",
+		"parent.txt":          "fixture\n",
+		"package/fixture.txt": "fixture\n",
+		"package/access_test.go": `package access
+
+import (
+	"os"
+	"testing"
+)
+
+var initialCWD, initialCWDError = os.Getwd()
+
+func TestFileAccess(t *testing.T) {
+	if initialCWDError != nil {
+		t.Fatal(initialCWDError)
+	}
+	if initialCWD != os.Getenv("PWD") {
+		t.Fatalf("initial cwd = %q, want %q", initialCWD, os.Getenv("PWD"))
+	}
+	for _, name := range []string{"fixture.txt", "../parent.txt", "/custom/parent.txt"} {
+		if data, err := os.ReadFile(name); err != nil || string(data) != "fixture\n" {
+			t.Fatalf("read %q: %q, %v", name, data, err)
+		}
+	}
+	if err := os.Chdir("child"); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile("../../parent.txt"); err != nil || string(data) != "fixture\n" {
+		t.Fatalf("read after chdir: %q, %v", data, err)
+	}
+	tmp, err := os.CreateTemp("", "wasi-root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{"wasip1", "wasip2"} {
+		for _, tc := range []struct {
+			name        string
+			compileTest bool
+			tmpMount    bool
+		}{
+			{"Run", false, false},
+			{"RunWithTmpMount", false, true},
+			{"Test", true, false},
+		} {
+			pkgName := "testdata/stdlib.go"
+			if tc.compileTest {
+				pkgName = pkgNameForTest
+			}
+			t.Run(target+"/"+tc.name, func(t *testing.T) {
+				t.Parallel()
+				opts := optionsFromTarget(target, sema)
+				opts.TestConfig.CompileTestBinary = tc.compileTest
+				if tc.compileTest {
+					opts.Directory = pkgDir
+				}
+				emuCheck(t, opts)
+				config, err := builder.NewConfig(&opts)
+				if err != nil {
+					t.Fatal(err)
+				}
+				custom := "--dir=" + dir + "::/custom"
+				mounts := "'" + strings.ReplaceAll(custom, `'`, `'\''`) + "'"
+				customTmp := "--dir=" + dir + "::/tmp"
+				if tc.tmpMount {
+					mounts += " '" + strings.ReplaceAll(customTmp, `'`, `'\''`) + "'"
+				}
+				config.Target.Emulator = strings.Replace(config.Target.Emulator, " {}", " "+mounts+" {}", 1)
+				output := &bytes.Buffer{}
+				_, err = buildAndRun(pkgName, config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, _ builder.BuildResult) error {
+					var dirs []string
+					for _, arg := range cmd.Args {
+						if strings.HasPrefix(arg, "--dir=") {
+							dirs = append(dirs, arg)
+						}
+					}
+					guestWD := wd
+					mount := wd
+					if runtime.GOOS == "windows" {
+						volume := filepath.VolumeName(wd)
+						guestWD = filepath.ToSlash(wd[len(volume):])
+						mount += "::" + guestWD
+					}
+					want := []string{"--dir=.", "--dir=" + mount}
+					if tc.compileTest {
+						resolved, err := resolveDirectory(pkgDir)
+						if err != nil {
+							t.Fatal(err)
+						}
+						guestWD = filepath.ToSlash(resolved[len(filepath.VolumeName(resolved)):])
+						root := "/"
+						if runtime.GOOS == "windows" {
+							root = filepath.VolumeName(resolved) + `\::/`
+						}
+						want = []string{"--dir=" + root}
+					}
+					if (!tc.compileTest || runtime.GOOS == "windows") && !tc.tmpMount {
+						want = append(want, "--dir="+os.TempDir()+"::/tmp")
+					}
+					want = append(want, custom)
+					if tc.tmpMount {
+						want = append(want, customTmp)
+					}
+					if !slices.Equal(dirs, want) {
+						t.Errorf("preopens = %v, want %v", dirs, want)
+					}
+					if !slices.Contains(cmd.Args, "--env=PWD="+guestWD) {
+						t.Errorf("missing guest PWD %q in %v", guestWD, cmd.Args)
+					}
+					return cmd.Run()
+				})
+				if err != nil {
+					t.Fatalf("failed to run: %v\n%s", err, output)
+				}
+			})
+		}
 	}
 }
