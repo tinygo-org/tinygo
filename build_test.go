@@ -527,6 +527,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("filesystem.go", options, t, nil, nil)
 		})
 	}
+	if options.Target == "wasm" || isBaremetal {
+		t.Run("devnull.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("devnull.go", options, t, nil, nil)
+		})
+	}
 	if options.Target == "" || options.Target == "wasm" || isWASI {
 		t.Run("rand.go", func(t *testing.T) {
 			t.Parallel()

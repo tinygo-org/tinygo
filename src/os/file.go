@@ -43,6 +43,9 @@ var lstat = Lstat
 func Mkdir(path string, perm FileMode) error {
 	fs, suffix := findMount(path)
 	if fs == nil {
+		if !isOS && path == DevNull {
+			return &PathError{Op: "mkdir", Path: path, Err: ErrExist}
+		}
 		return &PathError{Op: "mkdir", Path: path, Err: ErrNotExist}
 	}
 	err := fs.Mkdir(suffix, perm)
@@ -66,6 +69,9 @@ func fixCount(n int, err error) (int, error) {
 func Remove(path string) error {
 	fs, suffix := findMount(path)
 	if fs == nil {
+		if !isOS && path == DevNull {
+			return &PathError{Op: "remove", Path: path, Err: ErrPermission}
+		}
 		return &PathError{Op: "remove", Path: path, Err: ErrNotExist}
 	}
 	err := fs.Remove(suffix)
@@ -85,7 +91,7 @@ func (f *File) Name() string {
 func OpenFile(name string, flag int, perm FileMode) (*File, error) {
 	fs, suffix := findMount(name)
 	if fs == nil {
-		return nil, &PathError{Op: "open", Path: name, Err: ErrNotExist}
+		return openFileNoMount(name, flag)
 	}
 	handle, err := fs.OpenFile(suffix, flag, perm)
 	if err != nil {
