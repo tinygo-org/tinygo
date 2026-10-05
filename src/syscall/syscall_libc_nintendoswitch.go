@@ -36,6 +36,30 @@ var signals = [...]string{}
 
 // File system
 
+func Chown(path string, uid, gid int) (err error) {
+	data := cstring(path)
+	fail := int(libc_chown(&data[0], uid, gid))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+func Lchown(path string, uid, gid int) (err error) {
+	data := cstring(path)
+	fail := int(libc_lchown(&data[0], uid, gid))
+	if fail < 0 {
+		err = getErrno()
+	}
+	return
+}
+
+//export chown
+func libc_chown(pathname *byte, owner, group int) int32
+
+//export lchown
+func libc_lchown(pathname *byte, owner, group int) int32
+
 const (
 	Stdin  = 0
 	Stdout = 1
