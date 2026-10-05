@@ -22,7 +22,8 @@
 	"ldflags": [
 		"--stack-first",
 		"--no-demangle",
-		"--no-entry"
+		"--no-entry",
+		"--undefined=__wasilibc_find_relpath_alloc"
 	],
 	"extra-files": [
 		"src/runtime/asm_tinygowasm.S"
