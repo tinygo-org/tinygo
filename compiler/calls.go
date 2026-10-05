@@ -171,6 +171,7 @@ func (b *builder) createAsyncifyNoSuspendInvoke(fnType llvm.Type, fn llvm.Value,
 		wrapperParams = wrapperParams[1:]
 	}
 	result := builder.CreateCall(fnType, target, wrapperParams, "")
+	result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0))
 	unwindType, unwindLLVMFn := b.getRuntimeFunction("unwindPending")
 	unwinding := builder.CreateCall(unwindType, unwindLLVMFn, []llvm.Value{b.dataPtrUndef}, "")
 	replay := b.createAsyncifyPanicReplay(wrapperType)

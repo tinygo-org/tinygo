@@ -259,7 +259,7 @@ declare i1 @runtime.unwindPending(ptr) #0
 ; Function Attrs: noinline
 define internal i8 @main.deferLargeValue.asyncifycatch.0(ptr %0, ptr %1) #8 {
 entry:
-  %2 = call i8 @main.readLargeValue(ptr %0, ptr %1)
+  %2 = call i8 @main.readLargeValue(ptr %0, ptr %1) #8
   %3 = call i1 @runtime.unwindPending(ptr undef)
   br i1 %3, label %unwind.stop, label %return
 
