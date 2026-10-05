@@ -52,6 +52,26 @@ func makeLongStringArrayMap() map[[5]string]int {
 	return make(map[[5]string]int)
 }
 
+//go:noinline
+func testBinarySet(m map[int]int, key, value int) {
+	m[key] = value
+}
+
+//go:noinline
+func testBinaryGet(m map[int]int, key int) int {
+	return m[key]
+}
+
+//go:noinline
+func testBinaryDelete(m map[int]int, key int) {
+	delete(m, key)
+}
+
+//go:noinline
+func testStringSet(m map[string]int, key string, value int) {
+	m[key] = value
+}
+
 func main() {
 
 }

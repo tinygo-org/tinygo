@@ -472,14 +472,12 @@ entry:
   call void @runtime.trackPointer(ptr nonnull %t3, ptr nonnull %stackalloc, ptr undef) #13
   call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %t3, ptr noundef nonnull align 1 dereferenceable(1025) %hashmap.result, i32 1025, i1 false)
   call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %result, ptr noundef nonnull align 1 dereferenceable(1025) %t3, i32 1025, i1 false)
-  %3 = getelementptr inbounds nuw i8, ptr %hashmap.result, i32 1025
-  %t4 = load i1, ptr %3, align 1
-  br i1 %t4, label %if.done, label %if.then
+  br i1 %1, label %if.done, label %if.then
 
 if.done:                                          ; preds = %entry
-  %4 = getelementptr inbounds nuw i8, ptr %result, i32 1024
-  %5 = load i8, ptr %4, align 1
-  ret i8 %5
+  %3 = getelementptr inbounds nuw i8, ptr %result, i32 1024
+  %4 = load i8, ptr %3, align 1
+  ret i8 %4
 
 if.then:                                          ; preds = %entry
   ret i8 0
@@ -491,9 +489,9 @@ declare i1 @runtime.memequal(ptr, ptr, i32, ptr) #0
 
 declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr) #0
 
-declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr, ptr, ptr) #0
+declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, ptr) #0
 
-declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr, ptr, i32, ptr) #0
+declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, i32, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(40) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {

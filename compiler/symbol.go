@@ -258,15 +258,15 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 	case "runtime.hashmapDelete":
 		// The key (param 2) is read-only and never captured.
 		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
-	case "runtime.hashmapGenericSet":
-		// Same as hashmapBinarySet: key (param 2) and value (param 3) are
-		// not captured.
+	case "runtime.hashmapBinarySet", "runtime.hashmapGenericSet":
 		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
 		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
-	case "runtime.hashmapGenericGet":
+	case "runtime.hashmapStringSet":
+		llvmFn.AddAttributeAtIndex(4, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+	case "runtime.hashmapBinaryGet", "runtime.hashmapGenericGet":
 		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
 		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
-	case "runtime.hashmapGenericDelete":
+	case "runtime.hashmapBinaryDelete", "runtime.hashmapGenericDelete":
 		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
 	case "runtime.trackPointer":
 		// This function is necessary for tracking pointers on the stack in a
