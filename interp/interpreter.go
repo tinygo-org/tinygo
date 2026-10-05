@@ -22,6 +22,7 @@ const DefaultMaxInterpBlockEntries = 1000
 
 func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames []value, depth int) (value, memoryView, *Error) {
 	mem := memoryView{r: r, parent: parentMem}
+	mem.attributes = mem.attributes.Merge(fn.attributes)
 	frames = slices.Grow(frames, len(fn.locals))[:len(fn.locals)] // make room for this call's slots; a reallocation copies nothing
 	locals, frames := frames, frames[len(fn.locals):]             // take this call's slots from the head, keep the free space after them for children
 	clear(locals)                                                 // these slots may hold values from an earlier sibling
