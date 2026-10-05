@@ -20,7 +20,9 @@
 	],
 	"ldflags": [
 		"--stack-first",
-		"--no-demangle"
+		"--no-demangle",
+		"-u",
+		"__wasilibc_find_relpath_alloc"
 	],
 	"extra-files": [
 		"src/runtime/asm_tinygowasm.S"
