@@ -411,6 +411,19 @@ func Chmod(path string, mode uint32) (err error) {
 	return Lstat(path, &stat)
 }
 
+// WASI has no ownership operations. Match Go's syscall/fs_wasip1.go.
+func Chown(path string, uid, gid int) error {
+	return ENOSYS
+}
+
+func Fchown(fd int, uid, gid int) error {
+	return ENOSYS
+}
+
+func Lchown(path string, uid, gid int) error {
+	return ENOSYS
+}
+
 // TODO: should this return runtime.wasmPageSize?
 func Getpagesize() int {
 	return libc_getpagesize()

@@ -125,24 +125,6 @@ func Unlink(path string) (err error) {
 	return
 }
 
-func Chown(path string, uid, gid int) (err error) {
-	data := cstring(path)
-	fail := int(libc_chown(&data[0], uid, gid))
-	if fail < 0 {
-		err = getErrno()
-	}
-	return
-}
-
-func Lchown(path string, uid, gid int) (err error) {
-	data := cstring(path)
-	fail := int(libc_lchown(&data[0], uid, gid))
-	if fail < 0 {
-		err = getErrno()
-	}
-	return
-}
-
 func Fork() (err error) {
 	fail := int(libc_fork())
 	if fail < 0 {
@@ -328,16 +310,6 @@ func libc_chdir(pathname *byte) int32
 //
 //export chmod
 func libc_chmod(pathname *byte, mode uint32) int32
-
-// int chown(const char *pathname, uid_t owner, gid_t group);
-//
-//export chown
-func libc_chown(pathname *byte, owner, group int) int32
-
-// int lchown(const char *pathname, uid_t owner, gid_t group);
-//
-//export lchown
-func libc_lchown(pathname *byte, owner, group int) int32
 
 // int mkdir(const char *pathname, mode_t mode);
 //
