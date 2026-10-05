@@ -1,4 +1,4 @@
-//go:build nintendoswitch || wasip2
+//go:build nintendoswitch
 
 // This file assumes there is a libc available that runs on a real operating
 // system.

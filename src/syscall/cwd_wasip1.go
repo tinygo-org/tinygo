@@ -2,43 +2,7 @@
 
 package syscall
 
-import (
-	"path"
-	_ "runtime" // Run libc constructors in runtime_wasip1.go before reading PWD.
-	"unsafe"
-)
-
-// Defined in wasi-libc's libc-bottom-half/sources/getcwd.c.
-//
-//go:extern __wasilibc_cwd
-var libcCwd *byte
-
-var initialWorkingDir string
-var initialWorkingDirBuffer []byte
-
-func init() {
-	if pwd, _ := Getenv("PWD"); pwd != "" {
-		initialWorkingDir = path.Join("/", pwd)
-		if pwd[len(pwd)-1] == '/' && initialWorkingDir[len(initialWorkingDir)-1] != '/' {
-			initialWorkingDir += "/"
-		}
-	} else {
-		initialWorkingDir = firstPreopenDirectory()
-	}
-	cwd := initialWorkingDir
-	if cwd == "" {
-		cwd = "/"
-	}
-	initialWorkingDirBuffer = cstring(cwd)
-	libcCwd = unsafe.SliceData(initialWorkingDirBuffer)
-}
-
-func Getwd() (string, error) {
-	if libcCwd == unsafe.SliceData(initialWorkingDirBuffer) {
-		return initialWorkingDir, nil
-	}
-	return string(unsafe.Slice(libcCwd, libc_strlen(unsafe.Pointer(libcCwd)))), nil
-}
+import "unsafe"
 
 func firstPreopenDirectory() string {
 	for fd := int32(3); ; fd++ {

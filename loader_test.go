@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -263,13 +264,67 @@ func TestGetListOfPackages(t *testing.T) {
 }
 
 func TestWASIWorkingDirectory(t *testing.T) {
-	opts := optionsFromTarget("wasip1", sema)
+	for _, target := range []string{"wasip1", "wasip2"} {
+		t.Run(target, func(t *testing.T) {
+			opts := optionsFromTarget(target, sema)
+			emuCheck(t, opts)
+			config, err := builder.NewConfig(&opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := builder.Build(TESTDATA+"/env.go", "wasm", t.TempDir(), config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wd, err := os.Getwd()
+			if err != nil {
+				t.Fatal(err)
+			}
+			preopen := "--dir=" + wd + "::/workspace"
+			for _, tc := range []struct {
+				name string
+				cwd  string
+				args []string
+			}{
+				{"NoPreopens", "", nil},
+				{"FirstPreopen", "/workspace", []string{preopen, "--env=EXPECT_FILE=testdata/filesystem.txt"}},
+				{"PWD", "/workspace/testdata", []string{preopen, "--env=PWD=/workspace/testdata", "--env=EXPECT_FILE=filesystem.txt"}},
+				{"RelativePWD", "/workspace/testdata", []string{preopen, "--env=PWD=workspace/testdata", "--env=EXPECT_FILE=filesystem.txt"}},
+				{"NormalizedPWD", "/workspace/testdata", []string{preopen, "--env=PWD=/workspace/../workspace/testdata", "--env=EXPECT_FILE=filesystem.txt"}},
+				{"TrailingSlash", "/workspace/testdata/", []string{preopen, "--env=PWD=/workspace/testdata/", "--env=EXPECT_FILE=filesystem.txt"}},
+				{"UnmappedPWD", "/no-access", []string{"--env=PWD=/no-access", "--env=EXPECT_FILE_FAILURE=missing"}},
+				{"UnmappedPWDWithPreopen", "/no-access", []string{preopen, "--env=PWD=/no-access", "--env=EXPECT_FILE_FAILURE=missing"}},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					args := []string{"run", "--env=ENV1=VALUE1", "--env=ENV2=VALUE2", "--env=EXPECT_CWD=" + tc.cwd}
+					args = append(args, tc.args...)
+					args = append(args, result.Binary, "first", "second")
+					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					defer cancel()
+					output, err := exec.CommandContext(ctx, "wasmtime", args...).CombinedOutput()
+					if err != nil {
+						t.Fatalf("failed to run: %v\n%s", err, output)
+					}
+					checkOutput(t, TESTDATA+"/env.txt", output)
+				})
+			}
+		})
+	}
+}
+
+func TestWASIp2WorkingDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("cross-target tests disabled")
+	}
+	opts := optionsFromTarget("wasip2", sema)
+	opts.Tags = append(opts.Tags, "runtime_asserts")
 	emuCheck(t, opts)
 	config, err := builder.NewConfig(&opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := builder.Build(TESTDATA+"/env.go", "wasm", t.TempDir(), config)
+	dir := t.TempDir()
+	result, err := builder.Build("testdata/wasip2_cwd.go", "wasm", dir, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,30 +332,35 @@ func TestWASIWorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preopen := "--dir=" + wd + "::/workspace"
 	for _, tc := range []struct {
-		name string
-		cwd  string
-		args []string
+		name     string
+		pwd      string
+		cwd      string
+		unmapped bool
 	}{
-		{"NoPreopens", "", nil},
-		{"FirstPreopen", "/workspace", []string{preopen, "--env=EXPECT_FILE=testdata/filesystem.txt"}},
-		{"PWD", "/workspace/testdata", []string{preopen, "--env=PWD=/workspace/testdata", "--env=EXPECT_FILE=filesystem.txt"}},
-		{"NormalizedPWD", "/workspace/testdata", []string{preopen, "--env=PWD=/workspace/../workspace/testdata", "--env=EXPECT_FILE=filesystem.txt"}},
-		{"TrailingSlash", "/workspace/testdata/", []string{preopen, "--env=PWD=/workspace/testdata/", "--env=EXPECT_FILE=filesystem.txt"}},
-		{"UnmappedPWD", "/no-access", []string{"--env=PWD=/no-access", "--env=EXPECT_FILE_FAILURE=missing"}},
+		{"FirstPreopen", "", "/workspace/test", false},
+		{"NestedPreopen", "/workspace/testdata", "/workspace/testdata", false},
+		{"NormalizedPWD", "/workspace/../workspace/testdata/", "/workspace/testdata/", false},
+		{"UnmappedPWD", "/no-access", "/no-access", true},
+		{"UnmappedNormalizedPWD", "/no-access/../no-access/", "/no-access/", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			args := []string{"run", "--env=ENV1=VALUE1", "--env=ENV2=VALUE2", "--env=EXPECT_CWD=" + tc.cwd}
-			args = append(args, tc.args...)
-			args = append(args, result.Binary, "first", "second")
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
+			args := []string{"run"}
+			preopens := []string{"--dir=" + wd + "::/workspace", "--dir=" + filepath.Join(wd, "testdata") + "::/workspace/test"}
+			if tc.name == "FirstPreopen" {
+				preopens[0], preopens[1] = preopens[1], preopens[0]
+				args = append(args, "--env=EXPECT_CHDIR=.")
+			}
+			args = append(args, preopens...)
+			args = append(args,
+				"--env=PWD="+tc.pwd, "--env=EXPECT_CWD="+tc.cwd,
+				"--env=EXPECT_UNMAPPED_CWD="+fmt.Sprint(tc.unmapped), result.Binary)
 			output, err := exec.CommandContext(ctx, "wasmtime", args...).CombinedOutput()
 			if err != nil {
 				t.Fatalf("failed to run: %v\n%s", err, output)
 			}
-			checkOutput(t, TESTDATA+"/env.txt", output)
 		})
 	}
 }
