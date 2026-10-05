@@ -227,8 +227,12 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 				return result
 			}
-		case llvm.BitCast:
-			// A bitcast escapes if the casted-to value escapes.
+		case llvm.PHI:
+			if blockInCycle(use.InstructionParent()) {
+				return escapeResult{escapeAt: use}
+			}
+			fallthrough
+		case llvm.BitCast, llvm.Select:
 			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 				return result
 			}
@@ -241,11 +245,6 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 				if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 					return result
 				}
-			}
-		case llvm.Select:
-			// A select escapes if the selected value escapes.
-			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
-				return result
 			}
 		case llvm.Load:
 			// Load does not escape.

@@ -80,6 +80,87 @@ end:                                              ; preds = %loop
   ret void
 }
 
+define i32 @testNonEscapingSelect(i1 %condition, ptr %other) {
+  %stackalloc = alloca [4 x i8], align 4
+  store [4 x i8] zeroinitializer, ptr %stackalloc, align 4
+  %selected = select i1 %condition, ptr %stackalloc, ptr %other
+  %value = load i32, ptr %selected, align 4
+  ret i32 %value
+}
+
+define ptr @testEscapingSelect(i1 %condition, ptr %other) {
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  %selected = select i1 %condition, ptr %alloc, ptr %other
+  ret ptr %selected
+}
+
+define i32 @testNonEscapingPhi(i1 %condition, ptr %other) {
+entry:
+  %stackalloc = alloca [4 x i8], align 4
+  store [4 x i8] zeroinitializer, ptr %stackalloc, align 4
+  br i1 %condition, label %allocated, label %existing
+
+allocated:                                        ; preds = %entry
+  br label %merge
+
+existing:                                         ; preds = %entry
+  br label %merge
+
+merge:                                            ; preds = %existing, %allocated
+  %selected = phi ptr [ %stackalloc, %allocated ], [ %other, %existing ]
+  %value = load i32, ptr %selected, align 4
+  ret i32 %value
+}
+
+define ptr @testEscapingPhi(i1 %condition, ptr %other) {
+entry:
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br i1 %condition, label %allocated, label %existing
+
+allocated:                                        ; preds = %entry
+  br label %merge
+
+existing:                                         ; preds = %entry
+  br label %merge
+
+merge:                                            ; preds = %existing, %allocated
+  %selected = phi ptr [ %alloc, %allocated ], [ %other, %existing ]
+  ret ptr %selected
+}
+
+define i32 @testLoopCarriedPhi(i32 %count, ptr %initial) {
+entry:
+  br label %loop
+
+loop:                                             ; preds = %loop, %entry
+  %index = phi i32 [ 0, %entry ], [ %next, %loop ]
+  %previous = phi ptr [ %initial, %entry ], [ %alloc, %loop ]
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  store i32 %index, ptr %alloc, align 4
+  %value = load i32, ptr %previous, align 4
+  %next = add i32 %index, 1
+  %done = icmp eq i32 %next, %count
+  br i1 %done, label %end, label %loop
+
+end:                                              ; preds = %loop
+  ret i32 %value
+}
+
+define i32 @testPointerPhiCycle(i1 %condition) {
+entry:
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br label %loop
+
+loop:                                             ; preds = %loop, %entry
+  %selected = phi ptr [ %alloc, %entry ], [ %next, %loop ]
+  %next = getelementptr i8, ptr %selected, i32 0
+  br i1 %condition, label %loop, label %end
+
+end:                                              ; preds = %loop
+  %value = load i32, ptr %selected, align 4
+  ret i32 %value
+}
+
 define void @testZeroSizedAlloc() {
   %ptr = call ptr @noescapeIntPtr(ptr @runtime.zeroSizedAlloc)
   ret void

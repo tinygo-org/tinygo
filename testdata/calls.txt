@@ -24,5 +24,6 @@ global escape: 46
 closure escape: 47
 phi escape: 48
 phi nil: true
+loop allocation: 3
 interface return: 49
 deep forward: 50
