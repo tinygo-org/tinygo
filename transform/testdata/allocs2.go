@@ -314,7 +314,7 @@ func escapingMultiReturnClosure() func() error {
 }
 
 func escapingMultiReturnPhi(cond bool) error {
-	e := &errT{} // OUT: escapes at line 318
+	e := &errT{} // OUT: escapes at line 322
 	_, err := wrapError(e)
 	if cond {
 		err = nil
