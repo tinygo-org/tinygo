@@ -12,6 +12,9 @@ running panic...
 recovering...
 recovered: panic
 
+# repeated recover
+repeated recovery: ok
+
 # recover with result
 running panic...
 recovered: panic
