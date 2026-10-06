@@ -1681,7 +1681,7 @@ func TestTest(t *testing.T) {
 				defer out.Close()
 
 				opts := targ.opts
-				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/pass", out, out, &opts, "")
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/pass", false, out, out, &opts, "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}
@@ -1702,7 +1702,7 @@ func TestTest(t *testing.T) {
 				defer out.Close()
 
 				opts := targ.opts
-				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/fail", out, out, &opts, "")
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/fail", false, out, out, &opts, "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}
@@ -1729,7 +1729,7 @@ func TestTest(t *testing.T) {
 
 				var output bytes.Buffer
 				opts := targ.opts
-				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/nothing", io.MultiWriter(&output, out), out, &opts, "")
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/nothing", false, io.MultiWriter(&output, out), out, &opts, "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}
@@ -1753,7 +1753,7 @@ func TestTest(t *testing.T) {
 				defer out.Close()
 
 				opts := targ.opts
-				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/builderr", out, out, &opts, "")
+				passed, err := Test("github.com/tinygo-org/tinygo/tests/testing/builderr", false, out, out, &opts, "")
 				if err == nil {
 					t.Error("test did not error")
 				}
@@ -1802,19 +1802,33 @@ func TestGetListOfPackages(t *testing.T) {
 			},
 		},
 		{
+			pkgs: []string{"fmt", "./tests/testing/pass"},
+			expectedPkgs: []string{
+				"fmt",
+				"github.com/tinygo-org/tinygo/tests/testing/pass",
+			},
+		},
+		{
 			pkgs:          []string{"./tests/testing"},
 			expectesError: true,
 		},
 	}
 
 	for _, test := range tests {
-		actualPkgs, err := getListOfPackages(test.pkgs, &opts)
+		packages, err := getListOfPackages(test.pkgs, &opts)
 		if err != nil && !test.expectesError {
 			t.Errorf("unexpected error: %v", err)
 		} else if err == nil && test.expectesError {
 			t.Error("expected error, but got none")
 		}
 
+		var actualPkgs []string
+		for _, pkg := range packages {
+			actualPkgs = append(actualPkgs, pkg.ImportPath)
+			if pkg.Standard != (pkg.ImportPath == "fmt") {
+				t.Errorf("package %s: unexpected Standard value %v", pkg.ImportPath, pkg.Standard)
+			}
+		}
 		if !reflect.DeepEqual(test.expectedPkgs, actualPkgs) {
 			t.Errorf("expected two slices to be equal, expected %v got %v", test.expectedPkgs, actualPkgs)
 		}
