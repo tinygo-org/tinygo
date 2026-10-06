@@ -1415,6 +1415,11 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 // diagnostic.
 func (b *builder) createFunction() {
 	b.createFunctionStart(false)
+	if len(b.blockInfo) == 0 && len(b.fn.Blocks) != 0 {
+		// createFunctionStart reported an error (a redeclared function) and
+		// built nothing, so there is no body to fill.
+		return
+	}
 
 	// Fill blocks with instructions.
 	b.loweringBody = true
