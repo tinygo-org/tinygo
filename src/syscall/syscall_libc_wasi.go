@@ -225,6 +225,10 @@ const (
 	EXDEV           Errno = 75 /* Cross-device link */
 	ENOTCAPABLE     Errno = 76 /* Extension: Capabilities insufficient. */
 
+	// Not a WASI errno. Go's js syscall carries the Linux set and code written
+	// for it (spf13/afero among it) names this one, so it exists to compile.
+	EBADFD Errno = 77 /* f.d. invalid for this operation */
+
 	EWASIERROR Errno = 255 /* Unknown WASI error */
 )
 
