@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -582,6 +583,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		packageJobs = append(packageJobs, job)
 	}
 
+	// The link job needs only these names, so go/ssa can be freed before it.
+	var initFuncs []string
+	for _, pkg := range lprogram.Sorted() {
+		initFuncs = append(initFuncs, pkg.Pkg.Path()+".init")
+	}
+	debugInitAll := config.Debug() && !config.Options.SkipDWARF
+	var initAllPos token.Position
+	if debugInitAll {
+		initAllPos = program.Fset.Position(program.ImportedPackage("runtime").Members["initAll"].Pos())
+		initAllPos.Filename = lprogram.Packages["runtime"].RecordedPath(initAllPos.Filename)
+	}
+
 	// Add job that links and optimizes all packages together.
 	var mod llvm.Module
 	defer func() {
@@ -598,6 +611,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		run: func(*compileJob) error {
 			// Load and link all the bitcode files. This does not yet optimize
 			// anything, it only links the bitcode files together.
+			debug.FreeOSMemory()
 			ctx := llvm.NewContext()
 			mod = ctx.NewModule("main")
 			// Use one Linker for all packages. LinkModules rescans the whole
@@ -654,16 +668,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			irbuilder := mod.Context().NewBuilder()
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
-			if config.Debug() && !config.Options.SkipDWARF {
-				pos := program.Fset.Position(program.ImportedPackage("runtime").Members["initAll"].Pos())
-				pos.Filename = lprogram.Packages["runtime"].RecordedPath(pos.Filename)
-				addInitAllDebugInfo(mod, llvmInitFn, irbuilder, pos, config.TrimPath())
+			if debugInitAll {
+				addInitAllDebugInfo(mod, llvmInitFn, irbuilder, initAllPos, config.TrimPath())
 			}
 			ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-			for _, pkg := range lprogram.Sorted() {
-				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
+			for _, name := range initFuncs {
+				pkgInit := mod.NamedFunction(name)
 				if pkgInit.IsNil() {
-					panic("init not found for " + pkg.Pkg.Path())
+					panic("init not found for " + name)
 				}
 				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(ptrType)}, "")
 			}
