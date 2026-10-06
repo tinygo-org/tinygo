@@ -76,7 +76,8 @@ func timerRunner() {
 	for {
 		timerQueueLock.Lock()
 
-		if timerQueue == nil {
+		next := timerQueuePeek()
+		if next == nil {
 			// No timer in the queue, so wait until one becomes available.
 			val := timerFutex.Load()
 			timerQueueLock.Unlock()
@@ -85,22 +86,20 @@ func timerRunner() {
 		}
 
 		now := ticks()
-		if now < timerQueue.whenTicks() {
+		if now < next.whenTicks() {
 			// There is a timer in the queue, but we need to wait until it
 			// expires.
 			// Using a futex, so that the wait is exited early when adding a new
 			// (sooner-to-expire) timer.
 			val := timerFutex.Load()
-			timeout := ticksToNanoseconds(timerQueue.whenTicks() - now)
+			timeout := ticksToNanoseconds(next.whenTicks() - now)
 			timerQueueLock.Unlock()
 			timerFutex.WaitUntil(val, uint64(timeout))
 			continue
 		}
 
 		// Pop timer from queue.
-		tn := timerQueue
-		timerQueue = tn.next
-		tn.next = nil
+		tn := timerQueuePop()
 		delay := ticksToNanoseconds(now - tn.whenTicks())
 
 		// Mark the timer as firing, so that a concurrent Stop or Reset (via

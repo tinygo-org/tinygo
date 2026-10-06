@@ -16,7 +16,7 @@ func synctestIsEnabled() bool {
 type synctestBubble struct {
 	lock synctestLock
 
-	timers       *timerNode
+	timers       timerHeap
 	firingTimers *timerNode
 
 	root   *task.Task
@@ -53,7 +53,7 @@ func (bubble *synctestBubble) wakeLocked() *task.Task {
 		return nil
 	}
 	bubble.active++
-	if bubble.timers != nil && bubble.timers.timer.when <= bubble.now {
+	if bubble.timerDueLocked() {
 		if bubble.rootSleeping {
 			bubble.rootSleeping = false
 			return bubble.root
@@ -147,30 +147,19 @@ func (bubble *synctestBubble) finishTimer(tn *timerNode) {
 func (bubble *synctestBubble) addTimerLocked(tn *timerNode) {
 	bubble.timerSeq++
 	insertBeforeEqual := (bubble.timerSeq/2)&1 != 0
-	queue := &bubble.timers
-	for *queue != nil {
-		if (*queue).timer.when > tn.timer.when {
-			break
-		}
-		if insertBeforeEqual && (*queue).timer.when == tn.timer.when {
-			break
-		}
-		queue = &(*queue).next
-	}
-	tn.next = *queue
-	*queue = tn
+	bubble.timers.push(tn, insertBeforeEqual)
+}
+
+func (bubble *synctestBubble) timerDueLocked() bool {
+	next := bubble.timers.peek()
+	return next != nil && next.when <= bubble.now
 }
 
 func (bubble *synctestBubble) removeTimer(tim *timer) *timerNode {
 	bubble.lock.Lock()
 	defer bubble.lock.Unlock()
-	for queue := &bubble.timers; *queue != nil; queue = &(*queue).next {
-		if (*queue).timer == tim {
-			node := *queue
-			*queue = node.next
-			node.next = nil
-			return node
-		}
+	if node := bubble.timers.remove(tim); node != nil {
+		return node
 	}
 	bubble.stopFiringTimerLocked(tim)
 	return nil
@@ -430,11 +419,9 @@ func synctest_run(f func()) {
 			return
 		}
 		if bubble.running == 0 && bubble.active == 0 {
-			dueTimer := bubble.timers != nil && bubble.timers.timer.when <= bubble.now
-			if bubble.timers != nil && !bubble.done && (dueTimer || bubble.waiter == nil) {
-				timer := bubble.timers
-				bubble.timers = timer.next
-				timer.next = nil
+			dueTimer := bubble.timerDueLocked()
+			if bubble.timers.peek() != nil && !bubble.done && (dueTimer || bubble.waiter == nil) {
+				timer := bubble.timers.pop()
 				bubble.addFiringTimerLocked(timer)
 				bubble.active++
 				if timer.timer.when > bubble.now {
@@ -499,7 +486,7 @@ func synctest_wait() {
 	bubble.waiting = true
 	current.SynctestBlocked = true
 	bubble.running--
-	dueTimer := bubble.timers != nil && bubble.timers.timer.when <= bubble.now
+	dueTimer := bubble.timerDueLocked()
 	if bubble.running == 0 && bubble.active == 0 && !dueTimer {
 		current.SynctestBlocked = false
 		bubble.running++

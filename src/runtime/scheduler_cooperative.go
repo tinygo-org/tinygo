@@ -191,7 +191,7 @@ func scheduler(returnAtDeadlock bool) {
 	for !mainExited {
 		scheduleLog("")
 		scheduleLog("  schedule")
-		if sleepQueue != nil || timerQueue != nil {
+		if sleepQueue != nil || timerQueuePeek() != nil {
 			now = ticks()
 		}
 
@@ -207,13 +207,11 @@ func scheduler(returnAtDeadlock bool) {
 		}
 
 		// Check for expired timers to trigger.
-		if timerQueue != nil && now >= timerQueue.whenTicks() {
+		if next := timerQueuePeek(); next != nil && now >= next.whenTicks() {
 			scheduleLog("--- timer awoke")
-			delay := ticksToNanoseconds(now - timerQueue.whenTicks())
+			delay := ticksToNanoseconds(now - next.whenTicks())
 			// Pop timer from queue.
-			tn := timerQueue
-			timerQueue = tn.next
-			tn.next = nil
+			tn := timerQueuePop()
 			// Run the callback stored in this timer node.
 			tn.callback(tn, delay)
 		}
@@ -225,7 +223,7 @@ func scheduler(returnAtDeadlock bool) {
 			if task.Current() == nil && finalizerIdleGC != nil && finalizerIdleGC() {
 				continue
 			}
-			if sleepQueue == nil && timerQueue == nil {
+			if sleepQueue == nil && timerQueuePeek() == nil {
 				if returnAtDeadlock {
 					return
 				}
@@ -241,8 +239,8 @@ func scheduler(returnAtDeadlock bool) {
 			if sleepQueue != nil {
 				timeLeft = timeUnit(sleepQueue.Data) - (now - sleepQueueBaseTime)
 			}
-			if timerQueue != nil {
-				timeLeftForTimer := timerQueue.whenTicks() - now
+			if next := timerQueuePeek(); next != nil {
+				timeLeftForTimer := next.whenTicks() - now
 				if sleepQueue == nil || timeLeftForTimer < timeLeft {
 					timeLeft = timeLeftForTimer
 				}
@@ -253,8 +251,10 @@ func scheduler(returnAtDeadlock bool) {
 				for t := sleepQueue; t != nil; t = t.Next {
 					println("    task sleeping:", t, timeUnit(t.Data))
 				}
-				for tim := timerQueue; tim != nil; tim = tim.next {
-					println("---   timer waiting:", tim, tim.whenTicks())
+				if timerQueue != nil {
+					for _, tim := range timerQueue.nodes {
+						println("---   timer waiting:", tim, tim.whenTicks())
+					}
 				}
 			}
 			if timeLeft > 0 {
@@ -284,7 +284,7 @@ func scheduler(returnAtDeadlock bool) {
 				}
 				// Return from an export at the top level before unrelated goroutines run.
 				// A nested export returns to its active outer scheduler.
-				if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueue != nil) {
+				if asyncScheduler && (!runqueue.Empty() || sleepQueue != nil || timerQueuePeek() != nil) {
 					sleepTicks(0)
 				}
 			}
