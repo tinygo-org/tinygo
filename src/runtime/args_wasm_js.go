@@ -13,11 +13,15 @@ func jsArgvString(buf unsafe.Pointer, n uint32) uint32
 //go:wasmimport gojs runtime.envString
 func jsEnvString(buf unsafe.Pointer, n uint32) uint32
 
+func argvString(buf unsafe.Pointer, n uint32) uint32 { return jsArgvString(buf, n) }
+
+func envString(buf unsafe.Pointer, n uint32) uint32 { return jsEnvString(buf, n) }
+
 func init() {
-	if a := jsStrings(jsArgvString); len(a) > 0 {
+	if a := jsStrings(argvString); len(a) > 0 {
 		args = a
 	}
-	if e := jsStrings(jsEnvString); len(e) > 0 {
+	if e := jsStrings(envString); len(e) > 0 {
 		env = e
 	}
 }
