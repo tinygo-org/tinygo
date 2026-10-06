@@ -147,6 +147,10 @@ func Chown(name string, uid, gid int) error {
 	return ErrNotImplemented
 }
 
+func Lchown(name string, uid, gid int) error {
+	return ErrNotImplemented
+}
+
 func Link(oldname, newname string) error {
 	return ErrNotImplemented
 }
