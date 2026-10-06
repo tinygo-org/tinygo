@@ -98,6 +98,8 @@
 
 	globalThis.Go = class {
 		constructor() {
+			this.argv = ["js"];
+			this.env = {};
 			this._callbackTimeouts = new Map();
 			this._nextCallbackTimeoutID = 1;
 
@@ -182,6 +184,21 @@
 				mem().setBigUint64(addr, v_ref, true);
 			}
 
+			// writeStrings copies list, joined by NUL, into memory when it fits in n
+			// bytes, and returns its length so the caller can size a buffer.
+			const writeStrings = (list, buf, n) => {
+				if (!Array.isArray(list) || list.length === 0) {
+					return 0;
+				}
+				const bytes = encoder.encode(list.join("\0"));
+				buf >>>= 0;
+				n >>>= 0;
+				if (bytes.length <= n) {
+					new Uint8Array(this._inst.exports.memory.buffer, buf, bytes.length).set(bytes);
+				}
+				return bytes.length;
+			}
+
 			const loadSlice = (array, len, cap) => {
 				return new Uint8Array(this._inst.exports.memory.buffer, array, len);
 			}
@@ -255,6 +272,12 @@
 					},
 				},
 				gojs: {
+					// func argvString(buf unsafe.Pointer, n uint32) uint32
+					"runtime.argvString": (buf, n) => writeStrings(this.argv, buf, n),
+
+					// func envString(buf unsafe.Pointer, n uint32) uint32
+					"runtime.envString": (buf, n) => writeStrings(Object.entries(this.env || {}).map(([k, v]) => k + "=" + v), buf, n),
+
 					// func ticks() int64
 					"runtime.ticks": () => {
 						return BigInt(Math.floor(performance.now() * 1e6));
