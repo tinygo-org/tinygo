@@ -390,8 +390,39 @@ func signal_enable(s uint32) {
 	// scheduler (and therefore there is no parallelism).
 	hasSignals = true
 
+	// Under the threads scheduler checkSignals() is only reached from
+	// sleepTicks(), so start a watcher thread. Other schedulers skip this.
+	startSignalWatcher()
+
 	// It's easier to implement this function in C.
 	tinygo_signal_enable(s)
+}
+
+// signalWatcherStarted is set by whoever starts the watcher thread. It stays
+// set, because the watcher serves signals for the rest of the process.
+var signalWatcherStarted atomic.Bool
+
+// startSignalWatcher starts the watcher thread on the first enabled signal,
+// under the threads scheduler only (!hasScheduler && hasParallelism).
+func startSignalWatcher() {
+	if hasScheduler || !hasParallelism {
+		return
+	}
+	if !signalWatcherStarted.Swap(true) {
+		go signalWatcher()
+	}
+}
+
+// signalWatcher runs on its own thread under the threads scheduler, mirroring
+// the signal half of waitForEvents(), which that scheduler never calls.
+func signalWatcher() {
+	for {
+		// Block until the signal handler bumps the futex from 0 to 1.
+		signalFutex.Wait(0)
+		if signalFutex.Swap(0) != 0 {
+			checkSignals()
+		}
+	}
 }
 
 //go:linkname signal_ignore os/signal.signal_ignore
