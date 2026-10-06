@@ -204,3 +204,22 @@ func TestReadOnDir(t *testing.T) {
 		t.Errorf("Wrong read bytes: %s", err)
 	}
 }
+
+// A failed read reports 0 bytes, not the -1 that read(2) returns.
+func TestReadWriteOnlyFile(t *testing.T) {
+	f, err := CreateTemp("", "readwriteonly")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Remove(f.Name())
+	f.Close()
+	f, err = OpenFile(f.Name(), O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	n, err := f.Read(make([]byte, 8))
+	if n != 0 || err == nil {
+		t.Fatalf("Read on a write-only file: got %d, %v; want 0 and an error", n, err)
+	}
+}
