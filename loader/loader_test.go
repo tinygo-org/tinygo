@@ -2,13 +2,70 @@ package loader
 
 import (
 	"fmt"
+	"go/types"
+	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
+
+func TestPackageTestContext(t *testing.T) {
+	t.Setenv("GOFLAGS", "")
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		"go.mod":        "module example.com/testcontext\n\ngo 1.25.0\n",
+		"go.work":       "go 1.25.0\n\nuse .\n",
+		"probe.go":      "package probe\n",
+		"probe_test.go": "package probe\nimport \"testing\"\nfunc TestProbe(t *testing.T) {}\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+	_, minor, err := goenv.GetGorootVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := &compileopts.Config{
+		Options:        &compileopts.Options{Directory: dir},
+		Target:         &compileopts.TargetSpec{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
+		GoMinorVersion: minor,
+		TestConfig:     compileopts.TestConfig{CompileTestBinary: true},
+	}
+	goroot, err := GetCachedGoroot(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdlibDir := filepath.Join(goroot, "src")
+	for _, test := range []struct {
+		name     string
+		pkg      string
+		wantDir  string
+		standard bool
+	}{
+		{"stdlib tests", "fmt", stdlibDir, true},
+		{"module tests", ".", dir, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config.TestConfig.StandardPackage = test.standard
+			program, err := Load(config, test.pkg, types.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if program.workingDir != test.wantDir {
+				t.Errorf("working directory = %q, want %q", program.workingDir, test.wantDir)
+			}
+			if config.Options.Directory != dir {
+				t.Fatal("Load changed the caller's directory")
+			}
+		})
+	}
+}
 
 func BenchmarkRecordedPath(b *testing.B) {
 	for _, count := range []int{10, 100, 1000} {

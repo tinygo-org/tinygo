@@ -117,7 +117,7 @@ func TestCorpus(t *testing.T) {
 				opts.Tags = []string(tags)
 				opts.TestConfig.Verbose = testing.Verbose()
 
-				passed, err := Test(path, out, out, &opts, "")
+				passed, err := Test(path, false, out, out, &opts, "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
 				}

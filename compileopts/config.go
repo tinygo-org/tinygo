@@ -745,6 +745,7 @@ func (c *Config) Emulator(format, binary string) ([]string, error) {
 
 type TestConfig struct {
 	CompileTestBinary bool
+	StandardPackage   bool
 	CompileOnly       bool
 	Verbose           bool
 	Short             bool
