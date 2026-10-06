@@ -92,13 +92,6 @@ func nanotime() int64 {
 	return ticksToNanoseconds(ticks())
 }
 
-// Copied from the Go runtime source code.
-//
-//go:linkname os_sigpipe os.sigpipe
-func os_sigpipe() {
-	runtimeFatal("too many writes on closed pipe")
-}
-
 // LockOSThread wires the calling goroutine to its current operating system thread.
 // Stub for now
 // Called by go1.18 standard library on windows, see https://github.com/golang/go/issues/49320

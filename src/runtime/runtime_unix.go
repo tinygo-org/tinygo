@@ -458,6 +458,17 @@ func tinygo_signal_ignore(s uint32)
 //export tinygo_signal_disable
 func tinygo_signal_disable(s uint32)
 
+// os calls this when a write to stdout or stderr fails with EPIPE. As in Go,
+// the process then dies by SIGPIPE unless the program asked for the signal.
+//
+//go:linkname os_sigpipe os.sigpipe
+func os_sigpipe() {
+	tinygo_sigpipe()
+}
+
+//export tinygo_sigpipe
+func tinygo_sigpipe()
+
 // void tinygo_signal_handler(int sig);
 //
 //export tinygo_signal_handler

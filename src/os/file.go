@@ -161,6 +161,7 @@ func (f *File) Write(b []byte) (n int, err error) {
 	} else {
 		n, err = f.handle.Write(b)
 	}
+	epipecheck(f, err)
 	if err != nil {
 		err = &PathError{Op: "write", Path: f.name, Err: err}
 	}

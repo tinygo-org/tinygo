@@ -1773,6 +1773,59 @@ func TestRuntimeFatal(t *testing.T) {
 	}
 }
 
+// Test that SIGPIPE is handled as in Go. The child inherits SIGPIPE ignored
+// and writes to a pipe without a reader.
+func TestSigpipe(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no SIGPIPE on Windows")
+	}
+	t.Parallel()
+
+	options := optionsFromTarget("", sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		state  string
+		stderr string
+	}{
+		{"stdout", "signal: broken pipe", ""},
+		{"notify", "exit status 0", "EPIPE\nstill running\n"},
+		{"reset", "exit status 0", "EPIPE\nstill running\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stderr := &bytes.Buffer{}
+			var state *os.ProcessState
+			_, err := buildAndRun("testdata/sigpipe.go", config, io.Discard, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+				r, w, err := os.Pipe()
+				if err != nil {
+					return err
+				}
+				r.Close()
+				defer w.Close()
+				sh := exec.Command("sh", "-c", `trap "" PIPE; exec "$0" "$1"`, result.Binary, tc.name)
+				sh.Stdout = w
+				sh.Stderr = stderr
+				err = sh.Run()
+				state = sh.ProcessState
+				return err
+			})
+			if state == nil {
+				t.Fatal(err)
+			}
+			if state.String() != tc.state {
+				t.Errorf("got %v, want %s", state, tc.state)
+			}
+			if stderr.String() != tc.stderr {
+				t.Errorf("got stderr %q, want %q", stderr.String(), tc.stderr)
+			}
+		})
+	}
+}
+
 // Test that the program can read stdin when the caller supplies it.
 func TestStdin(t *testing.T) {
 	t.Parallel()
