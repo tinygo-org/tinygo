@@ -20,6 +20,9 @@ var (
 	}
 	epinen  uint32
 	epouten uint32
+	// epOutWaiting has a bit per OUT endpoint whose data waits for EasyDMA.
+	epOutWaiting uint32
+
 	// easyDMAOwner is the transfer holding EasyDMA, or 0 when it is free.
 	easyDMAOwner volatile.Register8
 
@@ -204,6 +207,7 @@ func handleUSBIRQ(interrupt.Interrupt) {
 	if easyDMAOwner.Get() != 0 {
 		return
 	}
+	startWaitingOut()
 
 	// USBD ready event
 	if nrf.USBD.EVENTS_USBEVENT.Get() == 1 {
@@ -282,7 +286,9 @@ func handleUSBIRQ(interrupt.Interrupt) {
 	if nrf.USBD.EVENTS_EPDATA.Get() > 0 {
 		nrf.USBD.EVENTS_EPDATA.Set(0)
 		epDataStatus := nrf.USBD.EPDATASTATUS.Get()
-		processedBits := uint32(0)
+		// Clear all bits now and keep OUT endpoints waiting for EasyDMA in software, as nrfx does.
+		// https://github.com/nordicsemi/nrfx/blob/d1f2c35a4820961f4f7b7b2ece007f8e037842db/drivers/src/nrfx_usbd.c#L1279-L1298
+		nrf.USBD.EPDATASTATUS.Set(epDataStatus)
 
 		// 1. Process IN events (Tx Done)
 		for i := 1; i < NumberOfUSBEndpoints; i++ {
@@ -291,40 +297,12 @@ func handleUSBIRQ(interrupt.Interrupt) {
 				if usbTxHandler[i] != nil {
 					usbTxHandler[i]()
 				}
-				processedBits |= mask
 			}
 		}
 
 		// 2. Process OUT events (Rx Ready)
-		for i := 1; i < NumberOfUSBEndpoints; i++ {
-			mask := uint32(nrf.USBD_EPDATASTATUS_EPOUT1 << (i - 1))
-			if epDataStatus&mask > 0 {
-				nak := epOutFlowControl[i].nak
-
-				// Try to start DMA
-				if tryClaimEasyDMA(easyDMAOut | uint8(i)) {
-					nrf.USBD.EPOUT[i].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[i]))))
-					count := nrf.USBD.SIZE.EPOUT[i].Get()
-					nrf.USBD.EPOUT[i].MAXCNT.Set(count)
-					if !nak {
-						// Normal case: We want data, so start DMA immediately
-						nrf.USBD.TASKS_STARTEPOUT[i].Set(1)
-						epOutFlowControl[i].dataPending = false
-					} else {
-						// NAK case: We want to NAK, so DO NOT start DMA.
-						epOutFlowControl[i].dataPending = true
-						releaseEasyDMA(easyDMAOut | uint8(i))
-					}
-					processedBits |= mask
-				} else {
-					// Lock busy. Skip this endpoint. Bit remains set in EPDATASTATUS.
-					// Interrupt will re-fire.
-				}
-			}
-		}
-
-		// Clear only processed bits
-		nrf.USBD.EPDATASTATUS.Set(processedBits)
+		epOutWaiting |= (epDataStatus >> 16) & 0xfe
+		startWaitingOut()
 	}
 }
 
@@ -408,6 +386,32 @@ func sendUSBPacket(ep uint32, data []byte) {
 		&buffer[0],
 		count,
 	)
+}
+
+// startWaitingOut starts EasyDMA for OUT endpoints in epOutWaiting. It runs in
+// the USB interrupt, which fires again on the END event that frees EasyDMA.
+func startWaitingOut() {
+	for i := 1; i < NumberOfUSBEndpoints && epOutWaiting != 0; i++ {
+		if epOutWaiting&(1<<i) == 0 {
+			continue
+		}
+		if !tryClaimEasyDMA(easyDMAOut | uint8(i)) {
+			return
+		}
+		epOutWaiting &^= 1 << i
+		nrf.USBD.EPOUT[i].PTR.Set(uint32(uintptr(unsafe.Pointer(&udd_ep_out_cache_buffer[i]))))
+		count := nrf.USBD.SIZE.EPOUT[i].Get()
+		nrf.USBD.EPOUT[i].MAXCNT.Set(count)
+		if !epOutFlowControl[i].nak {
+			// Normal case: We want data, so start DMA immediately
+			nrf.USBD.TASKS_STARTEPOUT[i].Set(1)
+			epOutFlowControl[i].dataPending = false
+		} else {
+			// NAK case: We want to NAK, so DO NOT start DMA.
+			epOutFlowControl[i].dataPending = true
+			releaseEasyDMA(easyDMAOut | uint8(i))
+		}
+	}
 }
 
 func handleEndpointRx(ep uint32) []byte {
