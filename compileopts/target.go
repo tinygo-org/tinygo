@@ -221,8 +221,10 @@ func loadTarget(options *Options) (*TargetSpec, error) {
 			options.Target = "wasip1"
 		case "wasip2":
 			options.Target = "wasip2"
+		case "wasip3":
+			options.Target = "wasip3"
 		default:
-			return nil, errors.New("GOARCH=wasm but GOOS is not set correctly. Please set GOOS to js, wasip1, or wasip2.")
+			return nil, errors.New("GOARCH=wasm but GOOS is not set correctly. Please set GOOS to js, wasip1, wasip2, or wasip3.")
 		}
 	}
 
@@ -458,7 +460,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			return nil, fmt.Errorf("invalid GOMIPS=%s: must be hardfloat or softfloat", options.GOMIPS)
 		}
 	case "wasm":
-		return nil, fmt.Errorf("GOARCH=wasm but GOOS is unset. Please set GOOS to js, wasip1, or wasip2.")
+		return nil, fmt.Errorf("GOARCH=wasm but GOOS is unset. Please set GOOS to js, wasip1, wasip2, or wasip3.")
 	default:
 		return nil, fmt.Errorf("unknown GOARCH=%s", options.GOARCH)
 	}
@@ -574,7 +576,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		)
 		spec.ExtraFiles = append(spec.ExtraFiles,
 			"src/runtime/runtime_windows.c")
-	case "wasm", "wasip1", "wasip2":
+	case "wasm", "wasip1", "wasip2", "wasip3":
 		return nil, fmt.Errorf("GOOS=%s but GOARCH is unset. Please set GOARCH to wasm", options.GOOS)
 	default:
 		return nil, fmt.Errorf("unknown GOOS=%s", options.GOOS)

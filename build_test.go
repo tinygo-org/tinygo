@@ -425,6 +425,11 @@ func TestBuild(t *testing.T) {
 			runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
 			runGCStackTests(t, optionsFromTarget("wasip2", sema))
 		})
+		t.Run("WASIp3", func(t *testing.T) {
+			t.Parallel()
+			runPlatTests(optionsFromTarget("wasip3", sema), tests, t)
+			runGCLivenessTest(optionsFromTarget("wasip3", sema), t)
+		})
 	}
 
 	// Linux CI also tests the other Linux architectures without -short, so
@@ -677,7 +682,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			default:
 			}
 		}
-		if options.Target == "wasip2" {
+		if options.Target == "wasip2" || options.Target == "wasip3" {
 			switch name {
 			case "cgo/":
 				// waisp2 use our own libc; cgo tests fail

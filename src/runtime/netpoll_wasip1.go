@@ -1,4 +1,4 @@
-//go:build wasip1 && (scheduler.tasks || scheduler.asyncify)
+//go:build wasip1 && !wasip3 && (scheduler.tasks || scheduler.asyncify)
 
 package runtime
 
