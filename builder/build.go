@@ -781,8 +781,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		result:       objfile,
 		run: func(*compileJob) error {
 			llvmBuf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
-			defer llvmBuf.Dispose()
-			return os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+			err := os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+			llvmBuf.Dispose()
+			// Only the stack size analysis reads the module after this point.
+			// Free it now so the linker and wasm-opt do not run alongside it.
+			if !config.AutomaticStackSize() {
+				ctx := mod.Context()
+				mod.Dispose()
+				ctx.Dispose()
+				mod = llvm.Module{}
+				releaseCHeap()
+			}
+			return err
 		},
 	}
 
