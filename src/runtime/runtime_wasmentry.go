@@ -36,6 +36,11 @@ func wasmEntryReactor() {
 	initHeap()
 	initRand()
 
+	if initInRun {
+		// Package initializers run later, from the exported entry point.
+		return
+	}
+
 	if hasScheduler {
 		// A package initializer might do funky stuff like start a goroutine and
 		// wait until it completes, so we have to run package initializers in a

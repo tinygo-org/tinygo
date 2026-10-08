@@ -15,7 +15,7 @@ import (
 
 func TestTruncate(t *testing.T) {
 	// Truncate is not supported on Windows or wasi at the moment
-	if runtime.GOOS == "windows" || runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
+	if runtime.GOOS == "windows" || runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" || runtime.GOOS == "wasip3" {
 		t.Logf("skipping test on %s", runtime.GOOS)
 		return
 	}

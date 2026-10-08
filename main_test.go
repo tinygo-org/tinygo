@@ -413,7 +413,7 @@ func trimPathDWARFFiles(t *testing.T, filename, goos string) []string {
 			t.Fatal(parseErr)
 		}
 		data, err = file.DWARF()
-	case "wasip1", "wasip2", "js":
+	case "wasip1", "wasip2", "wasip3", "js":
 		file, parseErr := wasm.Parse(f)
 		if parseErr != nil {
 			t.Fatal(parseErr)

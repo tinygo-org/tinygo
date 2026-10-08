@@ -34,10 +34,11 @@ func generateWasiVersionHeader(includeDir, preview string) error {
 	return os.WriteFile(filepath.Join(includeDir, "wasi", "version.h"), []byte(strings.Join(lines, "\n")), 0o666)
 }
 
-// libWasiLibc and libWasiLibcWasip2 use different library names.
-// The build cache uses the name and the triple, and the triple is the same.
+// libWasiLibc, libWasiLibcWasip2 and libWasiLibcWasip3 use different library names.
+// The build cache uses the name and the triple.
 var libWasiLibc = newWasiLibc("1", "wasi-libc")
 var libWasiLibcWasip2 = newWasiLibc("2", "wasi-libc-wasip2")
+var libWasiLibcWasip3 = newWasiLibc("3", "wasi-libc-wasip3")
 
 func newWasiLibc(preview, name string) Library {
 	return Library{
@@ -174,20 +175,29 @@ func newWasiLibc(preview, name string) Library {
 			// wasip1 and wasip2 have socket sources with the same symbol names.
 			// Compile only one set for each preview.
 			cloudlibcSockSrcExclude := []string{}
-			bottomHalfSrcExclude := []string{
-				"wasip3.c", "wasip3_block_on.c", "wasip3_stdio.c", "wasip3_tls.c", // wasip3-only, not yet supported
-			}
+			// wasip3_tls.c is only built when the compiler has libcall thread
+			// context support, which stores the stack pointer in a component
+			// context slot. TinyGo uses a normal stack pointer global instead.
+			bottomHalfSrcExclude := []string{"wasip3_tls.c"}
+			wasip3Sources := []string{"wasip3.c", "wasip3_block_on.c", "wasip3_stdio.c"}
+			wasip2Sources := []string{"wasip2.c", "wasip2_stdio.c"}
 			switch preview {
 			case "1":
+				bottomHalfSrcExclude = append(bottomHalfSrcExclude, wasip2Sources...)
+				bottomHalfSrcExclude = append(bottomHalfSrcExclude, wasip3Sources...)
 				bottomHalfSrcExclude = append(bottomHalfSrcExclude,
 					"accept.c", "bind.c", "connect.c", "descriptor_table.c",
 					"file.c", "file_utils.c", "getsockpeername.c", "listen.c",
 					"netdb.c", "recv.c", "send.c", "shutdown.c", "socket.c",
 					"sockets_utils.c", "sockopt.c", "tcp.c", "udp.c",
-					"wasip2.c", "wasip2_stdio.c",
 				)
-			case "2":
+			case "2", "3":
 				bottomHalfSrcExclude = append(bottomHalfSrcExclude, "accept-wasip1.c")
+				if preview == "2" {
+					bottomHalfSrcExclude = append(bottomHalfSrcExclude, wasip3Sources...)
+				} else {
+					bottomHalfSrcExclude = append(bottomHalfSrcExclude, wasip2Sources...)
+				}
 				cloudlibcSockSrcExclude = append(cloudlibcSockSrcExclude,
 					"getsockopt.c", "recv.c", "send.c", "shutdown.c")
 			default:
@@ -324,9 +334,9 @@ func newWasiLibc(preview, name string) Library {
 			}
 			// See lib/wasi-libc-lockfile-stub.c.
 			sources = append(sources, "../wasi-libc-lockfile-stub.c")
-			if preview == "2" {
-				// See lib/wasi-libc-wasip2-stub.c.
-				sources = append(sources, "../wasi-libc-wasip2-stub.c")
+			if preview == "2" || preview == "3" {
+				// See lib/wasi-libc-wasip2-stub.c and lib/wasi-libc-wasip3-stub.c.
+				sources = append(sources, "../wasi-libc-wasip"+preview+"-stub.c")
 			}
 
 			basepath := goenv.Get("TINYGOROOT") + "/lib/wasi-libc/"

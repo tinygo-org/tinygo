@@ -10,6 +10,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	wasi := hasTag("tinygo.wasi")
 	wasip1 := target.GOOS == "wasip1"
 	wasip2 := hasTag("wasip2")
+	wasip3 := hasTag("wasip3")
 	hosted := !wasm && !baremetal
 	linux := hosted && target.GOOS == "linux"
 	darwin := hosted && target.GOOS == "darwin"
@@ -248,8 +249,9 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	}
 
 	// Go 1.27 hash boundary tests need mmap and mprotect on targets reporting
-	// GOOS=linux, including WASIp2 and QEMU. See tinygo-org/tinygo#5593.
-	if baremetal || wasip2 {
+	// GOOS=linux, including WASIp2 and QEMU. WASIp3 skips them too.
+	// See tinygo-org/tinygo#5593.
+	if baremetal || wasip2 || wasip3 {
 		r.skipPackage("crypto/hmac")
 		r.skipPackage("crypto/md5")
 		r.skipPackage("crypto/sha1")
@@ -272,7 +274,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("testing/synctest")
 		r.skipPackage("io/fs")
 	}
-	if !opts.bench && (wasip1 || (wasip2 && opts.mode == modeFast)) {
+	if !opts.bench && (wasip1 || ((wasip2 || wasip3) && opts.mode == modeFast)) {
 		r.includePackage("./tests/runtime_wasi")
 	}
 
@@ -410,7 +412,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipTest("html/template", `^TestParseZipFS$`)
 	}
 	// The Windows host volume mounted as the WASI root lacks /dev/null.
-	if hostOS == "windows" && (wasip1 || wasip2) {
+	if hostOS == "windows" && (wasip1 || wasip2 || wasip3) {
 		r.skipTest("html/template", `^TestEmptyTemplateHTML$`)
 	}
 	// TestWalkDir needs File.Chdir, a stub in src/os/file_windows.go.
