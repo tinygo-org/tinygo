@@ -835,6 +835,20 @@
 			if (this._jsfs) {
 				Object.assign(wasi, jsfsWasi(this._jsfs, () => this._inst.exports.memory.buffer));
 			}
+			// wasi-libc has no chown, so syscall.Chown imports it. jsfs has no
+			// owners, so like Chmod on WASI it succeeds when the path exists.
+			this.importObject.env.chown = (pathPtr, uid, gid) => {
+				if (!this._jsfs) return -1;
+				const bytes = new Uint8Array(this._inst.exports.memory.buffer);
+				let end = pathPtr >>> 0;
+				while (bytes[end] !== 0) end++;
+				try {
+					this._jsfs.sync.stat(decoder.decode(bytes.subarray(pathPtr >>> 0, end)));
+					return 0;
+				} catch (e) {
+					return -1;
+				}
+			};
 			// wasi-libc exits when the environment sizes fail, so they answer empty.
 			const sizes = (a, b) => { mem().setUint32(a >>> 0, 0, true); mem().setUint32(b >>> 0, 0, true); return 0; };
 			const stubs = {
