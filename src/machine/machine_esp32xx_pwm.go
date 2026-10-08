@@ -36,7 +36,10 @@ const ledcDutyFracBits = 4 // DUTY register has 4 fractional bits; write value<<
 
 const ledcDividerFracBits = 8 // Clock divider register = actual_divider * 256
 
-var errPWMNoChannel = errors.New("pwm: no free channel")
+var (
+	errPWMNoChannel      = errors.New("pwm: no free channel")
+	errPWMPeriodTooShort = errors.New("pwm: period too short")
+)
 
 // ledcStarted is true once the LEDC block has come out of reset. The reset
 // clears every timer and channel, so it must happen only once.
@@ -80,6 +83,10 @@ func (pwm *LEDCPWM) Configure(config PWMConfig) error {
 		// divider below a division by zero.
 		return ErrPWMPeriodTooLong
 	}
+	// 1 duty bit and a divider of 1 give the highest frequency, 40 MHz.
+	if freq > ledcApbClock/2 {
+		return errPWMPeriodTooShort
+	}
 	dutyRes := uint8(10)
 	switch {
 	case freq < 100:
@@ -89,13 +96,17 @@ func (pwm *LEDCPWM) Configure(config PWMConfig) error {
 	case freq > 100_000:
 		dutyRes = 8
 	}
-
-	// Timer divider: period_ns = (2^dutyRes * divActual/256) / 80MHz * 1e9 => divReg = divActual<<8.
-	divActual := ledcApbClock / (uint32(freq) * (1 << dutyRes))
-	if divActual == 0 {
-		divActual = 1
+	// One period is 2^dutyRes ticks of APB_CLK, so use fewer bits when that
+	// does not fit. See ESP32 TRM v5.8 section 28.2.2 Timers.
+	for dutyRes > 1 && freq<<dutyRes > ledcApbClock {
+		dutyRes--
 	}
-	divReg := divActual << ledcDividerFracBits
+
+	// divReg is the divider times 256. Keep the fraction bits, like ESP-IDF.
+	divReg := uint32((ledcApbClock << ledcDividerFracBits) / (freq << dutyRes))
+	if divReg < 1<<ledcDividerFracBits {
+		divReg = 1 << ledcDividerFracBits
+	}
 	if divReg > 0x3ffff {
 		return ErrPWMPeriodTooLong
 	}
