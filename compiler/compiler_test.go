@@ -793,3 +793,52 @@ func testCompilePackageWithDebug(t *testing.T, options *compileopts.Options, fil
 	ssaPkg.Build()
 	return CompilePackage(file, pkg, ssaPkg, machine, compilerConfig, false)
 }
+
+// Imports can be used as function values, //export functions cannot.
+func TestImportFuncValue(t *testing.T) {
+	t.Parallel()
+
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "wasmimport-funcvalue.go")
+	defer mod.Dispose()
+	for _, err := range errs {
+		t.Error(err)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+
+	// Each wrapper takes the import parameters plus a context pointer.
+	for _, name := range []string{"voidimport", "intimport"} {
+		importFn := mod.NamedFunction("main." + name)
+		wrapper := mod.NamedFunction("main." + name + "$funcvalue")
+		if importFn.IsNil() || wrapper.IsNil() {
+			t.Errorf("%s: missing import (%t) or wrapper (%t)", name, importFn.IsNil(), wrapper.IsNil())
+			continue
+		}
+		if got, want := len(wrapper.Params()), len(importFn.Params())+1; got != want {
+			t.Errorf("%s: wrapper has %d parameters, want %d", name, got, want)
+		}
+		if wrapper.IsDeclaration() {
+			t.Errorf("%s: wrapper has no body", name)
+			continue
+		}
+		called := false
+		for inst := wrapper.EntryBasicBlock().FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+			if !inst.IsACallInst().IsNil() && inst.CalledValue() == importFn {
+				called = true
+			}
+		}
+		if !called {
+			t.Errorf("%s: wrapper does not call the import", name)
+		}
+	}
+
+	_, errs = testCompilePackage(t, options, "export-funcvalue.go")
+	if len(errs) != 1 {
+		t.Fatalf("got %d errors for exported function value, want 1: %v", len(errs), errs)
+	}
+	if want := "cannot use an exported function as value: main.exported"; !strings.Contains(errs[0].Error(), want) {
+		t.Errorf("got error %q, want it to contain %q", errs[0], want)
+	}
+}

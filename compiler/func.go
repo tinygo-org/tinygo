@@ -341,3 +341,60 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	_, fn := b.getFunction(f)
 	return b.createFuncValue(fn, context, f.Signature), nil
 }
+
+// getImportFuncValueWrapper returns a Go ABI function that calls the given
+// import, so the import can be used as a function value. It returns a nil
+// value if the import and Go ABIs differ for this signature.
+func (c *compilerContext) getImportFuncValueWrapper(fn *ssa.Function) llvm.Value {
+	importType, importFn := c.getFunction(fn)
+	wrapperName := importFn.Name() + "$funcvalue"
+	if wrapper := c.mod.NamedFunction(wrapperName); !wrapper.IsNil() {
+		return wrapper
+	}
+
+	// The Go ABI parameters must match the import parameters.
+	abi := c.getFunctionABI(fn.Signature, false)
+	if abi.indirectResult {
+		return llvm.Value{}
+	}
+	var goParams []llvm.Type
+	for i, param := range getParams(fn.Signature) {
+		if abi.params[i].indirect {
+			return llvm.Value{}
+		}
+		for _, info := range c.expandDirectFormalParamType(abi.params[i].llvmType, param.Name(), param.Type()) {
+			goParams = append(goParams, info.llvmType)
+		}
+	}
+	importParams := importType.ParamTypes()
+	if len(goParams) != len(importParams) || abi.resultType != importType.ReturnType() {
+		return llvm.Value{}
+	}
+	for i := range goParams {
+		if goParams[i] != importParams[i] {
+			return llvm.Value{}
+		}
+	}
+
+	paramTypes := append(append([]llvm.Type{}, importParams...), c.dataPtrType)
+	wrapper := llvm.AddFunction(c.mod, wrapperName, llvm.FunctionType(importType.ReturnType(), paramTypes, false))
+	c.addStandardAttributes(wrapper)
+	wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
+	wrapper.SetUnnamedAddr(true)
+
+	b := builder{
+		compilerContext: c,
+		Builder:         c.ctx.NewBuilder(),
+	}
+	defer b.Builder.Dispose()
+	block := b.ctx.AddBasicBlock(wrapper, "entry")
+	b.SetInsertPointAtEnd(block)
+	args := wrapper.Params()[:len(importParams)]
+	result := b.CreateCall(importType, importFn, args, "")
+	if importType.ReturnType().TypeKind() == llvm.VoidTypeKind {
+		b.CreateRetVoid()
+	} else {
+		b.CreateRet(result)
+	}
+	return wrapper
+}
