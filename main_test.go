@@ -330,6 +330,7 @@ func TestBuild(t *testing.T) {
 		"finalizeridle.go",
 		"finalizerinvariants.go",
 		"finalizerlarge.go",
+		"finalizerreferent.go",
 		"float.go",
 		"gc.go",
 		"generics.go",
@@ -404,16 +405,17 @@ func TestBuild(t *testing.T) {
 		// scheduler.none does not link on Windows.
 		switch runtime.GOOS {
 		case "darwin", "linux":
-			for _, scheduler := range []string{"threads", "none"} {
-				scheduler := scheduler
-				t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
-					t.Parallel()
-					options := compileopts.Options(hostOptions)
-					options.GC = "conservative"
-					options.Scheduler = scheduler
-					options.Tags = append(append([]string(nil), hostOptions.Tags...), "runtime_asserts")
-					runTest("finalizerinvariants.go", options, t, nil, nil)
-				})
+			for _, gc := range []string{"conservative", "boehm"} {
+				for _, scheduler := range []string{"threads", "none"} {
+					t.Run("finalizerinvariants.go-gc-"+gc+"-scheduler-"+scheduler, func(t *testing.T) {
+						t.Parallel()
+						options := compileopts.Options(hostOptions)
+						options.GC = gc
+						options.Scheduler = scheduler
+						options.Tags = append(append([]string(nil), hostOptions.Tags...), "runtime_asserts")
+						runTest("finalizerinvariants.go", options, t, nil, nil)
+					})
+				}
 			}
 		}
 	})
@@ -573,6 +575,21 @@ func TestBuild(t *testing.T) {
 				runTest("gc.go", optionsBoehm, t, nil, nil)
 				runTest("gc-boehm.go", optionsBoehm, t, nil, nil)
 			})
+			for _, name := range []string{
+				"finalizer.go",
+				"finalizerbits.go",
+				"finalizeridle.go",
+				"finalizerinvariants.go",
+				"finalizerlarge.go",
+				"finalizerreferent.go",
+			} {
+				t.Run(name+"-boehm", func(t *testing.T) {
+					t.Parallel()
+					optionsBoehm := optionsFromTarget("wasm", sema)
+					optionsBoehm.GC = "boehm"
+					runTest(name, optionsBoehm, t, nil, nil)
+				})
+			}
 		})
 		t.Run("WASIp1", func(t *testing.T) {
 			t.Parallel()
@@ -590,6 +607,12 @@ func TestBuild(t *testing.T) {
 				optionsBoehm.GC = "boehm"
 				runTest("gc.go", optionsBoehm, t, nil, nil)
 				runTest("gc-boehm.go", optionsBoehm, t, nil, nil)
+			})
+			t.Run("finalizerinvariants.go-boehm", func(t *testing.T) {
+				t.Parallel()
+				optionsBoehm := optionsFromTarget("wasip1", sema)
+				optionsBoehm.GC = "boehm"
+				runTest("finalizerinvariants.go", optionsBoehm, t, nil, nil)
 			})
 		})
 		t.Run("WASIp2", func(t *testing.T) {
@@ -771,17 +794,9 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		}
 		if options.Target != "wasm" {
 			switch name {
-			case "finalizer.go", "finalizerbits.go", "finalizeridle.go", "finalizerlarge.go":
+			case "finalizer.go", "finalizerbits.go", "finalizeridle.go", "finalizerlarge.go", "finalizerreferent.go":
 				// These tests require deterministic finalization on target wasm.
 				// finalizerinvariants.go covers other block GC targets.
-				continue
-			}
-		}
-		if options.Target == "" && options.GC == "" {
-			switch name {
-			case "finalizerinvariants.go":
-				// Skip the default host GC because it does not implement finalizers.
-				// Explicit conservative GC variants cover this test.
 				continue
 			}
 		}
@@ -1378,24 +1393,60 @@ func TestWasmExportJS(t *testing.T) {
 func TestWasmExportFinalizersJS(t *testing.T) {
 	t.Parallel()
 
-	tmpdir := t.TempDir()
-	options := optionsFromTarget("wasm", sema)
-	options.BuildMode = "c-shared"
-	buildConfig, err := builder.NewConfig(&options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := builder.Build("testdata/wasmexport-finalizer.go", ".wasm", tmpdir, buildConfig)
-	if err != nil {
-		t.Fatal("failed to build binary:", err)
-	}
+	for _, gc := range []string{"", "boehm"} {
+		t.Run("gc="+gc, func(t *testing.T) {
+			t.Parallel()
+			tmpdir := t.TempDir()
+			options := optionsFromTarget("wasm", sema)
+			options.BuildMode = "c-shared"
+			options.GC = gc
+			buildConfig, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := builder.Build("testdata/wasmexport-finalizer.go", ".wasm", tmpdir, buildConfig)
+			if err != nil {
+				t.Fatal("failed to build binary:", err)
+			}
 
-	output := &bytes.Buffer{}
-	cmd := exec.Command("node", "testdata/wasmexport-finalizer.js", result.Binary)
-	cmd.Stdout = output
-	cmd.Stderr = output
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("failed to run node: %v\n%s", err, output)
+			output := &bytes.Buffer{}
+			cmd := exec.Command("node", "testdata/wasmexport-finalizer.js", result.Binary)
+			cmd.Stdout = output
+			cmd.Stderr = output
+			if err := cmd.Run(); err != nil {
+				t.Fatalf("failed to run node: %v\n%s", err, output)
+			}
+		})
+	}
+}
+
+// Test that syscall/js releases JavaScript values under each collector.
+func TestWasmJSValuesReleased(t *testing.T) {
+	t.Parallel()
+
+	for _, gc := range []string{"", "conservative", "boehm"} {
+		t.Run("gc="+gc, func(t *testing.T) {
+			t.Parallel()
+			tmpdir := t.TempDir()
+			options := optionsFromTarget("wasm", sema)
+			options.GC = gc
+			buildConfig, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := builder.Build("testdata/wasm-jsrelease.go", ".wasm", tmpdir, buildConfig)
+			if err != nil {
+				t.Fatal("failed to build binary:", err)
+			}
+
+			output := &bytes.Buffer{}
+			cmd := exec.Command("node", "testdata/wasm-jsrelease.js", result.Binary)
+			cmd.Stdout = output
+			cmd.Stderr = output
+			if err := cmd.Run(); err != nil {
+				t.Fatalf("failed to run node: %v\n%s", err, output)
+			}
+		})
 	}
 }
 
