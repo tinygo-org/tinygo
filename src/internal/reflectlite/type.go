@@ -257,7 +257,9 @@ type structType struct {
 
 type structField struct {
 	fieldType *RawType
-	data      unsafe.Pointer // various bits of information, packed in a byte array
+	// Field data contains flags, a varint offset, a NUL-terminated name, and
+	// optional varint tag length and tag bytes. See compiler/interface.go.
+	data unsafe.Pointer
 }
 
 // Method set, as emitted by the compiler.
@@ -474,8 +476,8 @@ func rawStructFieldFromPointer(descriptor *structType, fieldType *RawType, data 
 	var tag string
 	if flagsByte&structFieldFlagHasTag != 0 {
 		data = unsafe.Add(data, 1) // C: data+1
-		tagLen := uintptr(*(*byte)(data))
-		data = unsafe.Add(data, 1) // C: data+1
+		tagLen, prefixLen := readUvarint(data)
+		data = unsafe.Add(data, prefixLen)
 		tag = unsafe.String((*byte)(data), tagLen)
 	}
 
@@ -1356,6 +1358,17 @@ func FuncOf(in, out []Type, variadic bool) Type {
 }
 
 const maxVarintLen32 = 5
+
+func readUvarint(data unsafe.Pointer) (uintptr, int) {
+	var value uintptr
+	for i := 0; ; i++ {
+		b := *(*byte)(unsafe.Add(data, i))
+		value |= uintptr(b&0x7f) << (uint(i) * 7)
+		if b < 0x80 {
+			return value, i + 1
+		}
+	}
+}
 
 // encoding/binary.Uvarint, specialized for uint32
 func uvarint32(buf []byte) (uint32, int) {
