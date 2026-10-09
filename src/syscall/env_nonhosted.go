@@ -18,6 +18,7 @@ func Getenv(key string) (value string, found bool) {
 			if keyval[i] == '=' {
 				k = keyval[:i]
 				v = keyval[i+1:]
+				break
 			}
 		}
 		if k == key {
