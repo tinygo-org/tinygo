@@ -4,8 +4,6 @@ package runtime
 
 import "device/ch32"
 
-var currentTicks timeUnit
-
 // startup and general functionality mostly inspired by https://github.com/cnlohr/ch32fun
 
 //export main
@@ -52,7 +50,8 @@ func main() {
 }
 
 func ticks() timeUnit {
-	return currentTicks
+	// TODO: handle systick overflow?
+	return timeUnit(ch32.SYSTICK.CNT.Get())
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
