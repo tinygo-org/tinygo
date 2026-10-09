@@ -319,18 +319,12 @@ func (i2c *I2C) signalStop() error {
 	return nil
 }
 
-var rngStarted = false
-
 // getRNG returns 32 bits of non-deterministic random data based on internal thermal noise.
 // According to Nordic's documentation, the random output is suitable for cryptographic purposes.
 func getRNG() (ret uint32, err error) {
-	// There's no apparent way to check the status of the RNG peripheral's task, so simply start it
-	// to avoid deadlocking while waiting for output.
-	if !rngStarted {
-		nrf.RNG.TASKS_START.Set(1)
-		nrf.RNG.SetCONFIG_DERCEN(nrf.RNG_CONFIG_DERCEN_Enabled)
-		rngStarted = true
-	}
+	nrf.RNG.SetCONFIG_DERCEN(nrf.RNG_CONFIG_DERCEN_Enabled)
+	nrf.RNG.EVENTS_VALRDY.Set(0)
+	nrf.RNG.TASKS_START.Set(1)
 
 	// The RNG returns one byte at a time, so stack up four bytes into a single uint32 for return.
 	for i := 0; i < 4; i++ {
@@ -342,6 +336,10 @@ func getRNG() (ret uint32, err error) {
 		// Unset the EVENTS_VALRDY register to avoid reading the same random output twice.
 		nrf.RNG.EVENTS_VALRDY.Set(0)
 	}
+
+	// A running RNG uses current all the time, so stop it after each read.
+	// See https://docs.nordicsemi.com/bundle/ps_nrf52840/page/rng.html, electrical specification.
+	nrf.RNG.TASKS_STOP.Set(1)
 
 	return ret, nil
 }
