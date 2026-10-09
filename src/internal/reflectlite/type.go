@@ -171,6 +171,13 @@ type basicType struct {
 	ptrTo *RawType
 }
 
+// Go allows interior targets whose types could fit its tiny allocator.
+// See runtime.SetFinalizer in https://go.dev/src/runtime/mfinal.go.
+func FinalizerAllowsInterior(t *RawType) bool {
+	elem := t.elem()
+	return elem.Size() < 16 && elem.gcLayout() == gclayout.NoPtrs.AsPtr()
+}
+
 // All types that have an element type: named, chan, slice, array, map (but not
 // pointer because it doesn't have ptrTo).
 type elemType struct {
