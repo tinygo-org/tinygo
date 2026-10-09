@@ -26,6 +26,12 @@ import (
 #include <stdlib.h>
 #include <stdint.h>
 
+#if LLVM_VERSION_MAJOR >= 23
+#define tinygo_CXType_PredefinedSugar CXType_PredefinedSugar
+#else
+#define tinygo_CXType_PredefinedSugar CXType_Unexposed
+#endif
+
 // This struct should be ABI-compatible on all platforms (uintptr_t has the same
 // alignment etc. as void*) but does not include void* pointers that are not
 // always real pointers.
@@ -694,6 +700,12 @@ func (f *cgoFile) makeDecayingASTType(typ C.CXType, pos token.Pos) ast.Expr {
 // makeASTType return the ast.Expr for the given libclang type. In other words,
 // it converts a libclang type to a type in the Go AST.
 func (f *cgoFile) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
+	if typ.kind == C.CXType_Unexposed || typ.kind == C.tinygo_CXType_PredefinedSugar {
+		canonical := C.clang_getCanonicalType(typ)
+		if canonical.kind != C.CXType_Invalid && canonical.kind != C.CXType_Unexposed && canonical.kind != C.tinygo_CXType_PredefinedSugar {
+			return f.makeASTType(canonical, pos)
+		}
+	}
 	var typeName string
 	switch typ.kind {
 	case C.CXType_Char_S, C.CXType_Char_U:
@@ -804,14 +816,6 @@ func (f *cgoFile) makeASTType(typ C.CXType, pos token.Pos) ast.Expr {
 			f.addError(pos, fmt.Sprintf("unknown elaborated type (libclang type kind %s)", typeKindSpelling))
 			typeName = "<unknown>"
 		}
-	case C.CXType_Unexposed:
-		// LLVM 22+ may report certain builtin type aliases (e.g. __size_t)
-		// as Unexposed. Resolve via the canonical type.
-		canonical := C.clang_getCanonicalType(typ)
-		if canonical.kind != C.CXType_Unexposed && canonical.kind != C.CXType_Invalid {
-			return f.makeASTType(canonical, pos)
-		}
-		// If still unexposed, fall through to the error below.
 	case C.CXType_Record:
 		cursor := C.tinygo_clang_getTypeDeclaration(typ)
 		name := getString(C.tinygo_clang_getCursorSpelling(cursor))

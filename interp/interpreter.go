@@ -162,27 +162,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			continue
 		}
-		switch inst.opcode {
-		case llvm.Ret:
-			if time.Since(r.start) > r.timeout {
-				// Running for more than the allowed timeout; This shouldn't happen, but it does.
-				// See github.com/tinygo-org/tinygo/issues/2124
-				return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than %s, timing out (executed calls: %d)", r.timeout, r.callsExecuted))
-			}
-
-			if len(operands) != 0 {
-				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"ret", operands[0])
-				}
-				// Return instruction has a value to return.
-				return operands[0], mem, nil
-			}
-			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"ret")
-			}
-			// Return instruction doesn't return anything, it's just 'ret void'.
-			return nil, mem, nil
-		case llvm.Br:
+		if inst.branch {
 			switch len(operands) {
 			case 1:
 				// Unconditional branch: [nextBB]
@@ -212,6 +192,28 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			default:
 				panic("unknown operands length")
 			}
+			continue
+		}
+		switch inst.opcode {
+		case llvm.Ret:
+			if time.Since(r.start) > r.timeout {
+				// Running for more than the allowed timeout; This shouldn't happen, but it does.
+				// See github.com/tinygo-org/tinygo/issues/2124
+				return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than %s, timing out (executed calls: %d)", r.timeout, r.callsExecuted))
+			}
+
+			if len(operands) != 0 {
+				if r.debug {
+					fmt.Fprintln(os.Stderr, indent+"ret", operands[0])
+				}
+				// Return instruction has a value to return.
+				return operands[0], mem, nil
+			}
+			if r.debug {
+				fmt.Fprintln(os.Stderr, indent+"ret")
+			}
+			// Return instruction doesn't return anything, it's just 'ret void'.
+			return nil, mem, nil
 		case llvm.Switch:
 			// Switch statement: [value, defaultLabel, case0, label0, case1, label1, ...]
 			value := operands[0].Uint(r)
