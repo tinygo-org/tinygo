@@ -5,3 +5,5 @@ package runtime
 // spawnFinalizerRunner is the fallback for noncooperative schedulers.
 // These schedulers run finalizers but do not install the idle GC hook.
 func spawnFinalizerRunner() { go finalizerRunner() }
+
+func initFinalizerScheduler() {}

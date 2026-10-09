@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"runtime"
+	"sync/atomic"
+	"time"
 )
 
 type largeFinalizerObject struct {
@@ -11,6 +13,37 @@ type largeFinalizerObject struct {
 
 var largeFinalizerRan bool
 var largeFinalizerSink int
+var runnerCallbackDone, runnerPayloadDone atomic.Uint32
+var finalizerLargeMode string
+
+//go:noinline
+func registerRunnerPayload() {
+	payload := new(largeFinalizerObject)
+	payload.data[0] = 42
+	runtime.SetFinalizer(payload, func(*largeFinalizerObject) { runnerPayloadDone.Add(1) })
+	target := new(largeFinalizerObject)
+	runtime.SetFinalizer(target, func(*largeFinalizerObject) {
+		if payload.data[0] != 42 {
+			panic("finalizer lost its callback payload")
+		}
+		runnerCallbackDone.Add(1)
+	})
+}
+
+func testRunnerReleasesPayload() {
+	registerRunnerPayload()
+	for i := 0; i < 200 && (runnerCallbackDone.Load() != 1 || runnerPayloadDone.Load() != 1); i++ {
+		largeFinalizerSink += scrubLargeFinalizerStack(40)
+		runtime.GC()
+		runtime.Gosched()
+		if runtime.GOARCH != "wasm" {
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if runnerCallbackDone.Load() != 1 || runnerPayloadDone.Load() != 1 {
+		panic("finalizer runner retained its callback payload")
+	}
+}
 
 //go:noinline
 func scrubLargeFinalizerStack(depth int) int {
@@ -21,6 +54,7 @@ func scrubLargeFinalizerStack(depth int) int {
 	for i := range buf {
 		buf[i] = depth + i
 	}
+	largeFinalizerSink += buf[depth&63]
 	return scrubLargeFinalizerStack(depth-1) + buf[0]
 }
 
@@ -42,7 +76,11 @@ func registerLargeFinalizer() {
 }
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "graph" {
+	mode := finalizerLargeMode
+	if len(os.Args) > 1 {
+		mode = os.Args[1]
+	}
+	if mode == "graph" {
 		testFinalizerGraph()
 		println("ok")
 		return
@@ -55,6 +93,9 @@ func main() {
 	}
 	if !largeFinalizerRan {
 		panic("large object finalizer did not run")
+	}
+	if mode == "runner-payload" {
+		testRunnerReleasesPayload()
 	}
 	println("ok")
 }

@@ -54,6 +54,32 @@ var supportedLinuxArches = map[string]string{
 
 var sema = make(chan struct{}, runtime.NumCPU())
 
+func TestFinalizerRunnerRegistration(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		target, gc, scheduler string
+	}{
+		{"wasm", "boehm", "asyncify"},
+		{"wasm", "conservative", "asyncify"},
+		{"", "boehm", "tasks"},
+		{"", "boehm", "threads"},
+	} {
+		if test.target == "" && runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+			continue
+		}
+		t.Run(test.target+"/"+test.gc+"/"+test.scheduler, func(t *testing.T) {
+			t.Parallel()
+			options := optionsFromTarget(test.target, sema)
+			options.GC = test.gc
+			options.Scheduler = test.scheduler
+			options.GlobalValues = map[string]map[string]string{
+				"main": {"finalizerIdleMode": "registration"},
+			}
+			runTest("finalizeridle.go", options, t, nil, nil)
+		})
+	}
+}
+
 func TestTrimPath(t *testing.T) {
 	t.Setenv("CGO_CFLAGS", "-iquoteinclude -includestdint.h -imacros relative.h")
 	root := t.TempDir()
@@ -424,7 +450,11 @@ func TestBuild(t *testing.T) {
 		options.GC = "boehm"
 		t.Run("finalizerlarge.go-graph", func(t *testing.T) {
 			t.Parallel()
-			runTest("finalizerlarge.go", compileopts.Options(options), t, []string{"graph"}, nil)
+			testOptions := compileopts.Options(options)
+			testOptions.GlobalValues = map[string]map[string]string{
+				"main": {"finalizerLargeMode": "graph"},
+			}
+			runTest("finalizerlarge.go", testOptions, t, nil, nil)
 		})
 		for _, name := range []string{
 			"finalizer.go",
@@ -437,6 +467,11 @@ func TestBuild(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()
 				testOptions := compileopts.Options(options)
+				if name == "finalizerlarge.go" {
+					testOptions.GlobalValues = map[string]map[string]string{
+						"main": {"finalizerLargeMode": "runner-payload"},
+					}
+				}
 				runTest(name, testOptions, t, nil, nil)
 			})
 		}
