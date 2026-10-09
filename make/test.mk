@@ -100,6 +100,8 @@ TEST_PACKAGES_LINUX := \
 	debug/gosym \
 	debug/plan9obj \
 	encoding/xml \
+	go/build/constraint \
+	go/parser \
 	go/printer \
 	io/ioutil \
 	iter \
@@ -111,6 +113,8 @@ TEST_PACKAGES_LINUX := \
 	net/netip \
 	net/textproto \
 	os/user \
+	path/filepath \
+	regexp \
 	slices \
 	strings \
 	testing/fstest \
@@ -271,6 +275,9 @@ TEST_PACKAGES_NETIP_HOST := $(filter net/netip,$(TEST_PACKAGES_HOST))
 ifeq ($(uname),Darwin)
 TEST_SYNCTEST_THREAD_LIMIT_SKIP := |TestWaitGroupManyBubbles
 endif
+TEST_PACKAGES_LARGE_STACK_HOST := $(filter go/build/constraint regexp,$(TEST_PACKAGES_HOST))
+TEST_PACKAGES_DEEP_STACK_HOST := $(filter path/filepath,$(TEST_PACKAGES_HOST))
+TEST_PACKAGES_HUGE_STACK_HOST := $(filter go/parser,$(TEST_PACKAGES_HOST))
 
 # Test known-working standard library packages.
 # TODO: parallelize, and only show failing tests (no implied -v flag).
@@ -279,7 +286,7 @@ tinygo-test:
 	@# TestExtraMethods: used by many crypto packages and uses reflect.Type.Method which is not implemented.
 	@# TestUnmarshalNestingLimit{Slice,Struct}: encoding/asn1 nesting limit added in
 	@# https://github.com/golang/go/commit/6a6d115f9a7422b2fa081ba6f567eefb4a099462
-	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml $(TEST_PACKAGES_SHORT) $(TEST_PACKAGES_PRINTER_HOST) $(TEST_PACKAGES_ALLOCS) $(TEST_PACKAGES_NETIP_HOST),$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW))
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) $(filter-out encoding/xml $(TEST_PACKAGES_SHORT) $(TEST_PACKAGES_PRINTER_HOST) $(TEST_PACKAGES_ALLOCS) $(TEST_PACKAGES_NETIP_HOST) $(TEST_PACKAGES_LARGE_STACK_HOST) $(TEST_PACKAGES_DEEP_STACK_HOST) $(TEST_PACKAGES_HUGE_STACK_HOST),$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW))
 ifneq ($(TEST_PACKAGES_SHORT_HOST),)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) $(TEST_SKIP_FLAG) -short $(TEST_PACKAGES_SHORT_HOST)
 endif
@@ -289,6 +296,15 @@ endif
 	$(call run-tinygo-alloc-tests,$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW),$(TEST_ADDITIONAL_FLAGS))
 ifneq ($(TEST_PACKAGES_NETIP_HOST),)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^TestAddrStringAllocs$$|^TestNoAllocs$$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$$' $(TEST_PACKAGES_NETIP_HOST)
+endif
+ifneq ($(TEST_PACKAGES_LARGE_STACK_HOST),)
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -stack-size=1MB $(TEST_PACKAGES_LARGE_STACK_HOST)
+endif
+ifneq ($(TEST_PACKAGES_DEEP_STACK_HOST),)
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -stack-size=4MB $(TEST_PACKAGES_DEEP_STACK_HOST)
+endif
+ifneq ($(TEST_PACKAGES_HUGE_STACK_HOST),)
+	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -stack-size=256MB $(TEST_PACKAGES_HUGE_STACK_HOST)
 endif
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestReflectFuncOf|TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount$(TEST_SYNCTEST_THREAD_LIMIT_SKIP))$$' internal/synctest
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -skip='^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$$' testing/synctest
@@ -303,13 +319,22 @@ ifeq ($(TEST_IOFS),true)
 	$(TINYGO) test -stack-size=6MB io/fs
 endif
 tinygo-test-fast:
-	$(TINYGO) test $(TEST_SKIP_FLAG) $(filter-out encoding/xml $(TEST_PACKAGES_PRINTER_HOST) $(TEST_PACKAGES_ALLOCS),$(TEST_PACKAGES_HOST))
+	$(TINYGO) test $(TEST_SKIP_FLAG) $(filter-out encoding/xml $(TEST_PACKAGES_PRINTER_HOST) $(TEST_PACKAGES_ALLOCS) $(TEST_PACKAGES_LARGE_STACK_HOST) $(TEST_PACKAGES_DEEP_STACK_HOST) $(TEST_PACKAGES_HUGE_STACK_HOST),$(TEST_PACKAGES_HOST))
 ifneq ($(TEST_PACKAGES_PRINTER_HOST),)
 	$(TINYGO) test -stack-size=1MB $(TEST_PACKAGES_PRINTER_HOST)
 endif
 	$(call run-tinygo-alloc-tests,$(TEST_PACKAGES_HOST))
 ifeq ($(TEST_ENCODING_XML),true)
 	$(TINYGO) test $(TEST_SKIP_FLAG) -short -stack-size=16MB encoding/xml
+endif
+ifneq ($(TEST_PACKAGES_LARGE_STACK_HOST),)
+	$(TINYGO) test $(TEST_SKIP_FLAG) -stack-size=1MB $(TEST_PACKAGES_LARGE_STACK_HOST)
+endif
+ifneq ($(TEST_PACKAGES_DEEP_STACK_HOST),)
+	$(TINYGO) test $(TEST_SKIP_FLAG) -stack-size=4MB $(TEST_PACKAGES_DEEP_STACK_HOST)
+endif
+ifneq ($(TEST_PACKAGES_HUGE_STACK_HOST),)
+	$(TINYGO) test $(TEST_SKIP_FLAG) -stack-size=256MB $(TEST_PACKAGES_HUGE_STACK_HOST)
 endif
 tinygo-bench:
 	$(TINYGO) test -bench . $(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW)
