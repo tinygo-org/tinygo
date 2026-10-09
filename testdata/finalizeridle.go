@@ -4,9 +4,11 @@ package main
 // The wasm target provides deterministic finalization for these tests.
 
 import (
+	"os"
 	"runtime"
 	"sync/atomic"
 	"time"
+	_ "unsafe"
 )
 
 // batch must exceed the finalizer registration threshold to trigger idle collection.
@@ -23,6 +25,32 @@ var (
 )
 
 type blockedObject struct{ x int }
+
+var finalizerIdleMode string
+
+//go:linkname finalizerMallocs runtime.mallocs
+func finalizerMallocs() uint64
+
+func testRegistrationDoesNotSpawn() {
+	const registrations = 512
+	live := make([]*[2]int, registrations)
+	before := finalizerMallocs()
+	for i := range live {
+		p := new([2]int)
+		live[i] = p
+		runtime.SetFinalizer(p, func(*[2]int) { panic("live object finalized") })
+		runtime.Gosched()
+	}
+	allocations := finalizerMallocs() - before
+	if allocations > registrations*3 {
+		println("registration allocations:", allocations)
+		panic("empty finalizer runners were allocated")
+	}
+	for _, p := range live {
+		runtime.SetFinalizer(p, nil)
+	}
+	runtime.KeepAlive(live)
+}
 
 //go:noinline
 func blockOperation(kind int, ready chan<- struct{}, ch chan struct{}) {
@@ -174,6 +202,11 @@ func testFinishedGoroutineArgs() {
 }
 
 func main() {
+	if finalizerIdleMode == "registration" || len(os.Args) > 1 && os.Args[1] == "registration" {
+		testRegistrationDoesNotSpawn()
+		println("ok")
+		return
+	}
 	testPermanentlyBlockedStacks()
 	testIdleCollect()
 	testFinishedGoroutineStacks()
