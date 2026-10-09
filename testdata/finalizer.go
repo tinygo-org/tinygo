@@ -1,16 +1,24 @@
 package main
 
-import "runtime"
+import (
+	"os"
+	"runtime"
+	"sync/atomic"
+	"time"
+)
 
 type T struct{ x int }
 
 var (
-	ranCount   int
-	clearedRan int
-	f1Ran      int
-	f2Ran      int
-	sink       int
+	ranCount     int
+	clearedRan   int
+	f1Ran        int
+	f2Ran        int
+	sink         int
+	interiorDone [4]atomic.Int32
 )
+
+var finalizerTestMode string
 
 // scrubStack overwrites the stack region used by an alloc-and-drop helper with
 // non-pointer words. It must be called at the same call depth as that helper so
@@ -111,7 +119,104 @@ func testReplace() {
 	}
 }
 
+type interiorObject struct {
+	pad   [128]byte
+	value int
+	data  [8]byte
+}
+
+type interiorValue uint16
+
+//go:noinline
+func registerInteriorFinalizers() {
+	p := &interiorObject{value: 41}
+	p.data[1] = 42
+	runtime.SetFinalizer(p, func(*interiorObject) { panic("cleared base finalizer ran") })
+	runtime.SetFinalizer(&p.value, func(*int) { panic("cleared interior finalizer ran") })
+	runtime.SetFinalizer(&p.data[1], func(v *byte) {
+		if *v != 42 {
+			panic("wrong interior byte finalizer argument")
+		}
+		interiorDone[2].Add(1)
+	})
+	runtime.SetFinalizer(&p.data[2], func(*byte) { panic("cleared byte finalizer ran") })
+	runtime.SetFinalizer(&p.value, nil)
+	runtime.SetFinalizer(&p.data[2], nil)
+	runtime.SetFinalizer(&p.data[3], nil)
+	runtime.SetFinalizer(p, nil)
+	runtime.SetFinalizer(&p.value, func(v *int) {
+		if *v != 41 {
+			panic("wrong interior int finalizer argument")
+		}
+		interiorDone[1].Add(1)
+	})
+	runtime.SetFinalizer(p, func(v *interiorObject) {
+		if v.value != 41 {
+			panic("wrong base finalizer argument")
+		}
+		interiorDone[0].Add(1)
+	})
+	q := new(struct {
+		pad   [128]byte
+		value interiorValue
+	})
+	q.value = 43
+	runtime.SetFinalizer(&q.value, func(v *interiorValue) {
+		if *v != 43 {
+			panic("wrong named interior finalizer argument")
+		}
+		interiorDone[3].Add(1)
+	})
+}
+
+func testInteriorFinalizers() {
+	registerInteriorFinalizers()
+	for i := 0; i < 200; i++ {
+		sink += scrubStack(40)
+		runtime.GC()
+		runtime.Gosched()
+		if runtime.GOARCH != "wasm" {
+			time.Sleep(time.Millisecond)
+		}
+		done := true
+		for j := range interiorDone {
+			done = done && interiorDone[j].Load() == 1
+		}
+		if done {
+			return
+		}
+	}
+	panic("interior finalizers did not run exactly once")
+}
+
 func main() {
+	if finalizerTestMode == "interior" {
+		testInteriorFinalizers()
+		println("ok")
+		return
+	}
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "interior":
+			testInteriorFinalizers()
+			println("ok")
+		case "interior-pointer":
+			p := new(struct {
+				pad    [128]byte
+				target *T
+			})
+			runtime.SetFinalizer(&p.target, func(**T) {})
+			runtime.KeepAlive(p)
+		case "interior-large":
+			p := new(struct {
+				pad    [128]byte
+				target [16]byte
+			})
+			runtime.SetFinalizer(&p.target, func(*[16]byte) {})
+			runtime.KeepAlive(p)
+		}
+		return
+	}
 	testFires()
 	testClear()
 	testReplace()
