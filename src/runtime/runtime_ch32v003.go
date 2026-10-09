@@ -6,6 +6,8 @@ import "device/ch32"
 
 var currentTicks timeUnit
 
+// startup and general functionality mostly inspired by https://github.com/cnlohr/ch32fun
+
 //export main
 func main() {
 	// setup flash latency for higher clock speeds
@@ -41,6 +43,10 @@ func main() {
 	ch32.RCC.SetAPB2PCENR_IOPCEN(1)
 	ch32.RCC.SetAPB2PCENR_IOPDEN(1)
 
+	//Enable SysTick with HCLK/1
+	ch32.SYSTICK.SetCTLR_STE(1)
+	ch32.SYSTICK.SetCTLR_STCLK(1)
+
 	run()
 	exit(0)
 }
@@ -60,7 +66,10 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 func sleepTicks(ticks timeUnit) {
-	// dummy, TODO
+	target := ticks + timeUnit(ch32.SYSTICK.CNT.Get())
+	for timeUnit(ch32.SYSTICK.CNT.Get())-target < 0 {
+		// wait until the target tick count is reached
+	}
 }
 
 func putchar(c byte) {
