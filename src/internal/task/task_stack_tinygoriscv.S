@@ -71,8 +71,8 @@ tinygo_swapTaskRISC:
     SREG s0,   0*REGSIZE(sp)
 #else
     SREG ra, 2*REGSIZE(sp)
-    SREG s0, 1*REGSIZE(sp)
-    SREG s1, 0*REGSIZE(sp)
+    SREG s1, 1*REGSIZE(sp)
+    SREG s0, 0*REGSIZE(sp)
 #endif
 
     // Save the current stack pointer in oldStack.
@@ -103,8 +103,8 @@ tinygo_swapTaskRISC:
     LREG s0,   0*REGSIZE(sp)
 #else
     LREG ra, 2*REGSIZE(sp)
-    LREG s0, 1*REGSIZE(sp)
-    LREG s1, 0*REGSIZE(sp)
+    LREG s1, 1*REGSIZE(sp)
+    LREG s0, 0*REGSIZE(sp)
 #endif
     addi sp, sp, NREG*REGSIZE
 
