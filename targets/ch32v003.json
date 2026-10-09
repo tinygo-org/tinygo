@@ -20,5 +20,6 @@
 	],
 	"linkerscript": "targets/ch32v003.ld",
 	"extra-files": [],
-	"flash-command": "probe-rs download --chip=CH32V003F4U6 {elf}"
+	"flash-method": "probe-rs",
+	"probe-rs-chip": "CH32V003F4U6"
 }
