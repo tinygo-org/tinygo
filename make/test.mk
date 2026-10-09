@@ -96,6 +96,7 @@ TEST_PACKAGES_LINUX := \
 	context \
 	crypto/aes \
 	crypto/ecdh \
+	crypto/mldsa \
 	debug/dwarf \
 	debug/gosym \
 	debug/plan9obj \
@@ -239,6 +240,8 @@ TEST_PACKAGES_ALLOC_SLICES := slices
 TEST_ALLOC_SLICES_SKIP_FLAG := -skip='^(TestGrow|TestInsert|TestConcat)$$'
 TEST_PACKAGES_ALLOC_STRINGS := strings
 TEST_ALLOC_STRINGS_SKIP_FLAG := -skip='^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$$'
+TEST_PACKAGES_ALLOC_MLDSA := crypto/mldsa
+TEST_ALLOC_MLDSA_SKIP_FLAG := -skip='^TestAllocations$$'
 TEST_PACKAGES_ALLOCS := \
 	$(TEST_PACKAGES_ALLOC_SHA) \
 	$(TEST_PACKAGES_ALLOC_STRCONV) \
@@ -250,6 +253,7 @@ TEST_PACKAGES_ALLOCS := \
 	$(TEST_PACKAGES_ALLOC_BYTES) \
 	$(TEST_PACKAGES_ALLOC_SLICES) \
 	$(TEST_PACKAGES_ALLOC_STRINGS) \
+	$(TEST_PACKAGES_ALLOC_MLDSA) \
 	$(nil)
 
 define run-tinygo-alloc-tests
@@ -263,6 +267,7 @@ $(if $(filter $(TEST_PACKAGES_ALLOC_REFLECT),$(1)),$(3) $(TINYGO) test $(2) $(TE
 $(if $(filter $(TEST_PACKAGES_ALLOC_BYTES),$(1)),$(3) $(TINYGO) test $(2) $(TEST_ALLOC_BYTES_SKIP_FLAG) $(filter $(TEST_PACKAGES_ALLOC_BYTES),$(1)))
 $(if $(filter $(TEST_PACKAGES_ALLOC_SLICES),$(1)),$(3) $(TINYGO) test $(2) $(TEST_ALLOC_SLICES_SKIP_FLAG) $(filter $(TEST_PACKAGES_ALLOC_SLICES),$(1)))
 $(if $(filter $(TEST_PACKAGES_ALLOC_STRINGS),$(1)),$(3) $(TINYGO) test $(2) $(TEST_ALLOC_STRINGS_SKIP_FLAG) $(filter $(TEST_PACKAGES_ALLOC_STRINGS),$(1)))
+$(if $(filter $(TEST_PACKAGES_ALLOC_MLDSA),$(1)),$(3) $(TINYGO) test $(2) -short -stack-size=1MB $(TEST_ALLOC_MLDSA_SKIP_FLAG) $(filter $(TEST_PACKAGES_ALLOC_MLDSA),$(1)))
 endef
 TEST_PACKAGES_NETIP_HOST := $(filter net/netip,$(TEST_PACKAGES_HOST))
 
