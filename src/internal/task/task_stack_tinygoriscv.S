@@ -55,20 +55,24 @@ tinygo_swapTaskRISC:
 
     // Push all callee-saved registers.
     addi sp, sp, -NREG*REGSIZE
-    SREG ra,  0*REGSIZE(sp)
-    SREG s0,  1*REGSIZE(sp)
-    SREG s1,  2*REGSIZE(sp)
 #ifndef __riscv_32e
-    SREG s2,  3*REGSIZE(sp)
-    SREG s3,  4*REGSIZE(sp)
-    SREG s4,  5*REGSIZE(sp)
-    SREG s5,  6*REGSIZE(sp)
-    SREG s6,  7*REGSIZE(sp)
-    SREG s7,  8*REGSIZE(sp)
-    SREG s8,  9*REGSIZE(sp)
-    SREG s9,  10*REGSIZE(sp)
-    SREG s10, 11*REGSIZE(sp)
-    SREG s11, 12*REGSIZE(sp)
+    SREG ra,  12*REGSIZE(sp)
+    SREG s11, 11*REGSIZE(sp)
+    SREG s10, 10*REGSIZE(sp)
+    SREG s9,  9*REGSIZE(sp)
+    SREG s8,  8*REGSIZE(sp)
+    SREG s7,  7*REGSIZE(sp)
+    SREG s6,  6*REGSIZE(sp)
+    SREG s5,  5*REGSIZE(sp)
+    SREG s4,  4*REGSIZE(sp)
+    SREG s3,  3*REGSIZE(sp)
+    SREG s2,  2*REGSIZE(sp)
+    SREG s1,  1*REGSIZE(sp)
+    SREG s0,  (sp)
+#else
+    SREG ra,  2*REGSIZE(sp)
+    SREG s1,  1*REGSIZE(sp)
+    SREG s0,  (sp)
 #endif
 
     // Save the current stack pointer in oldStack.
@@ -84,20 +88,24 @@ tinygo_swapTaskRISC:
 
     // Pop all saved registers from this new stack.
 #ifndef __riscv_32e
-    LREG s11, 12*REGSIZE(sp)
-    LREG s10, 11*REGSIZE(sp)
-    LREG s9,  10*REGSIZE(sp)
-    LREG s8,  9*REGSIZE(sp)
-    LREG s7,  8*REGSIZE(sp)
-    LREG s6,  7*REGSIZE(sp)
-    LREG s5,  6*REGSIZE(sp)
-    LREG s4,  5*REGSIZE(sp)
-    LREG s3,  4*REGSIZE(sp)
-    LREG s2,  3*REGSIZE(sp)
+    LREG ra,  12*REGSIZE(sp)
+    LREG s11, 11*REGSIZE(sp)
+    LREG s10, 10*REGSIZE(sp)
+    LREG s9,  9*REGSIZE(sp)
+    LREG s8,  8*REGSIZE(sp)
+    LREG s7,  7*REGSIZE(sp)
+    LREG s6,  6*REGSIZE(sp)
+    LREG s5,  5*REGSIZE(sp)
+    LREG s4,  4*REGSIZE(sp)
+    LREG s3,  3*REGSIZE(sp)
+    LREG s2,  2*REGSIZE(sp)
+    LREG s1,  1*REGSIZE(sp)
+    LREG s0,  (sp)
+#else
+    LREG ra,  2*REGSIZE(sp)
+    LREG s1,  1*REGSIZE(sp)
+    LREG s0,  (sp)
 #endif
-    LREG s1,  2*REGSIZE(sp)
-    LREG s0,  1*REGSIZE(sp)
-    LREG ra,  0*REGSIZE(sp)
     addi sp, sp, NREG*REGSIZE
 
     // Restore the interrupt-enable state.
