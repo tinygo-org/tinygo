@@ -5,6 +5,8 @@ package runtime
 // Keep this setup in a file for these schedulers so unused finalizer code can be removed.
 // Cooperative schedulers also install the idle GC hook.
 func spawnFinalizerRunner() {
-	finalizerIdleGC = finalizerPressureGC
+	initFinalizerScheduler()
 	go finalizerRunner()
 }
+
+func initFinalizerScheduler() { finalizerIdleGC = finalizerPressureGC }
