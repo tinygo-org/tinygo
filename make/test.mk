@@ -113,6 +113,7 @@ TEST_PACKAGES_LINUX := \
 	os/user \
 	slices \
 	strings \
+	testing/cryptotest \
 	testing/fstest \
 	$(nil)
 

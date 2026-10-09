@@ -215,10 +215,11 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
+func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
 	optionsCopy := *options
 	options = &optionsCopy
 	options.TestConfig.CompileTestBinary = true
+	options.TestConfig.StandardPackage = standardPackage
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return false, err
@@ -1736,13 +1737,12 @@ func parseGoLinkFlag(flagsString string) (map[string]map[string]string, string, 
 
 // getListOfPackages returns a standard list of packages for a given list that might
 // include wildards using `go list`.
-// For example [./...] => ["pkg1", "pkg1/pkg12", "pkg2"]
-func getListOfPackages(pkgs []string, options *compileopts.Options) ([]string, error) {
+func getListOfPackages(pkgs []string, options *compileopts.Options) ([]loader.PackageJSON, error) {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return nil, err
 	}
-	cmd, err := loader.List(config, nil, pkgs)
+	cmd, err := loader.List(config, []string{"-json"}, pkgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run `go list`: %w", err)
 	}
@@ -1754,13 +1754,17 @@ func getListOfPackages(pkgs []string, options *compileopts.Options) ([]string, e
 		return nil, err
 	}
 
-	var pkgNames []string
-	sc := bufio.NewScanner(outputBuf)
-	for sc.Scan() {
-		pkgNames = append(pkgNames, sc.Text())
+	var packages []loader.PackageJSON
+	decoder := json.NewDecoder(outputBuf)
+	for {
+		var pkg loader.PackageJSON
+		if err := decoder.Decode(&pkg); err == io.EOF {
+			return packages, nil
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to decode go list output: %w", err)
+		}
+		packages = append(packages, pkg)
 	}
-
-	return pkgNames, nil
 }
 
 func main() {
@@ -2079,7 +2083,7 @@ func main() {
 		// Build and run the tests concurrently.
 		// This uses an additional semaphore to reduce the memory usage.
 		testSema := make(chan struct{}, cap(options.Semaphore))
-		for i, pkgName := range explicitPkgNames {
+		for i, pkg := range explicitPkgNames {
 			buf := &bufs[i]
 			testSema <- struct{}{}
 			wg.Add(1)
@@ -2089,7 +2093,7 @@ func main() {
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
 				stderr := (*testStderr)(buf)
-				passed, err := Test(pkgName, stdout, stderr, options, outpath)
+				passed, err := Test(pkg.ImportPath, pkg.Standard, stdout, stderr, options, outpath)
 				if err != nil {
 					wd, getwdErr := os.Getwd()
 					if getwdErr != nil {
