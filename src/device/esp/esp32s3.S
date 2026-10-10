@@ -87,15 +87,23 @@
     .long 0x600C4064
 .Ldcache_ctrl1_reg:
     .long 0x600C4004
-// End-of-section symbols for multi-page MMU mapping.
+// Flash section bounds and builder-patched physical offsets.
+.Lirom_start:
+    .long _irom_start
 .Lirom_end:
     .long _irom_end
+.Ldrom_start:
+    .long _drom_start
 .Ldrom_end:
     .long _drom_end
 .Lirom_base:
     .long 0x42000000
 .Ldrom_base:
     .long 0x3C000000
+.Lirom_flash_addr_ptr:
+    .long _irom_flash_addr
+.Ldrom_flash_addr_ptr:
+    .long _drom_flash_addr
 
 .global call_start_cpu0
 call_start_cpu0:
@@ -264,51 +272,76 @@ call_start_cpu0:
     l32r a4, .LCache_MMU_Init
     callx4 a4
 
-    // 4h. Set IDROM MMU size: even 256/256 split.
-    //     Each entry is 4 bytes, so 256 entries = 0x400 bytes per region.
-    movi a6, 0x400          // irom_mmu_size  (256 entries × 4 bytes)
-    movi a7, 0x400          // drom_mmu_size  (256 entries × 4 bytes)
+    // 4h. Split the shared 512-entry MMU table between IROM and DROM.
+    // DROM begins at the virtual page immediately after IROM.
+    l32r a2, .Ldrom_start
+    l32r a3, .Ldrom_base
+    sub  a2, a2, a3
+    srli a2, a2, 16                    // a2 = first DROM MMU entry
+
+    slli a6, a2, 2                     // IROM table size in bytes
+    movi a7, 0x400
+    add  a7, a7, a7                    // a7 = 0x800, full MMU table size
+    sub  a7, a7, a6                    // DROM table size in bytes
     mov  a5, a1
     l32r a4, .LCache_Set_IDROM_MMU_Size
     callx4 a4
 
-    // 4i. Map flash pages for IROM and DROM using identity mapping.
-    //     MMU table at 0x600C5000: entries 0-255 = ICache, 256-511 = DCache.
-    //     Entry value N = flash page N (SOC_MMU_VALID = 0 on S3).
-    //     Each 64KB page needs one 4-byte entry.
-    //
-    //     IROM: map pages 0..N where N = (_irom_end - 0x42000000) >> 16
-    //     DROM: map pages 0..M where M = (_drom_end - 0x3C000000) >> 16
+    // 4i. Map physical flash pages into the shared MMU table.
+    l32r a8, .Lmmu_table_base
 
-    l32r a8, .Lmmu_table_base          // a8 = 0x600C5000
+    // --- IROM ---
+    // Number of pages covering [_irom_start, _irom_end).
+    l32r a2, .Lirom_end
+    l32r a3, .Lirom_start
+    sub  a2, a2, a3
+    addi a2, a2, -1
+    srli a2, a2, 16
+    addi a2, a2, 1
 
-    // --- IROM pages ---
-    l32r a2, .Lirom_end                // a2 = _irom_end (VMA in 0x42xxxxxx)
-    l32r a3, .Lirom_base               // a3 = 0x42000000
-    sub  a2, a2, a3                    // a2 = byte offset past IROM base
-    srli a2, a2, 16                    // a2 = last page index
-    addi a2, a2, 1                     // a2 = number of pages to map
-    movi a9, 0                         // a9 = page counter (and entry value)
-    mov  a10, a8                       // a10 = current MMU entry pointer
+    // First physical IROM page.
+    l32r a3, .Lirom_flash_addr_ptr
+    l32i a9, a3, 0
+    srli a9, a9, 16
+
+    mov  a10, a8
+    movi a11, 0
 .Lirom_loop:
     s32i a9, a10, 0
     addi a9, a9, 1
     addi a10, a10, 4
-    blt  a9, a2, .Lirom_loop
+    addi a11, a11, 1
+    blt  a11, a2, .Lirom_loop
 
-    // --- DROM pages ---
-    l32r a2, .Ldrom_end                // a2 = _drom_end (VMA in 0x3Cxxxxxx)
-    l32r a3, .Ldrom_base               // a3 = 0x3C000000
-    sub  a2, a2, a3                    // a2 = byte offset past DROM base
-    srli a2, a2, 16                    // a2 = last page index
-    addi a2, a2, 1                     // a2 = number of pages to map
-    movi a9, 0                         // a9 = page counter (and entry value)
-    addmi a10, a8, 0x400              // a10 = 0x600C5400 (DCache entry 256)
+    // --- DROM ---
+    // First DROM table entry is encoded by its virtual page.
+    l32r a2, .Ldrom_start
+    l32r a3, .Ldrom_base
+    sub  a2, a2, a3
+    srli a2, a2, 16
+    slli a10, a2, 2
+    add  a10, a8, a10
+
+    // Number of pages covering [_drom_start, _drom_end).
+    l32r a2, .Ldrom_end
+    l32r a3, .Ldrom_start
+    sub  a2, a2, a3
+    addi a2, a2, -1
+    srli a2, a2, 16
+    addi a2, a2, 1
+
+    // First physical DROM page.
+    l32r a3, .Ldrom_flash_addr_ptr
+    l32i a9, a3, 0
+    srli a9, a9, 16
+
+    movi a11, 0
 .Ldrom_loop:
     s32i a9, a10, 0
     addi a9, a9, 1
     addi a10, a10, 4
-    blt  a9, a2, .Ldrom_loop
+    addi a11, a11, 1
+    blt  a11, a2, .Ldrom_loop
     memw
 
     // 4j. Clear bus-shut bits so core 0 can access ICache and DCache buses.
