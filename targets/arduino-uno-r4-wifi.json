@@ -5,6 +5,7 @@
   "build-tags": [
     "arduino_uno_r4_wifi"
   ],
+  "serial": "uart",
   "flash-command": "bossac --port={port} -U -e -w {bin} -R",
   "serial-port": [
     "2341:1002",

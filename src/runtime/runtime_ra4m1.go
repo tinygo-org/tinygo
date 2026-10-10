@@ -149,6 +149,7 @@ func init() {
 	initClocks()
 	arm.SetupSystemTimer(sysTickReload)
 	arm.EnableInterrupts(0)
+	machine.InitSerial()
 }
 
 //go:export SysTick_Handler
