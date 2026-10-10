@@ -1,0 +1,14 @@
+{
+	"inherits": ["xtensa"],
+	"cpu": "esp32s3",
+	"features": "+atomctl,+bool,+clamps,+coprocessor,+debug,+density,+div32,+esp32s3,+exception,+fp,+highpriinterrupts,+interrupt,+loop,+mac16,+memctl,+minmax,+miscsr,+mul32,+mul32high,+nsa,+prid,+regprotect,+rvector,+s32c1i,+sext,+threadptr,+timerint,+windowed",
+	"build-tags": ["espidf", "esp"],
+	"linker": "ld.lld",
+	"ldflags": [
+		"-r",
+		"--no-gc-sections"
+	],
+	"extra-files": [
+		"src/device/esp/esp32s3-stack.S"
+	]
+}
