@@ -5,6 +5,39 @@ import (
 	"strings"
 )
 
+func tweakPeriphGroup(p *SVDPeripheral, groupName string) string {
+	groupName, _ = tweakUSBOTGGroupName(p.Name, groupName)
+	return groupName
+}
+
+// Some peripherals, like OTG_{FS,HS}_{DEVICE,HOST,GLOBAL}
+// share the same group name USB_OTG_{FS,HS}.
+// Since currently the group name decides about the name of the
+// peripheral type declaration (which is reasonable for peripherals
+// like TIMn), in case of the OTG peripherals it results in only
+// one of the peripherals being present in the device .go file,
+// the other definitions get ignored, as they are wrongly recognized
+// as identical definitions, which they are not.
+// To avoid this behaviour, tweakUSBOTGroupName adjusts the group name
+// in these cases.
+func tweakUSBOTGGroupName(periphName, groupName string) (string, bool) {
+	speed, found := strings.CutPrefix(groupName, "USB_OTG_")
+	if !found {
+		return groupName, false
+	}
+	// speed normally is one of "FS" or "HS"
+	if !strings.HasPrefix(periphName, "OTG") {
+		return groupName, false
+	}
+	speedPart := "_" + speed + "_"
+	i := strings.Index(periphName, speedPart)
+	if i == -1 {
+		return groupName, false
+	}
+	return groupName + periphName[i+len(speedPart)-1:], true
+
+}
+
 func tweakDevice(d *Device, pkgName string) {
 	if pkgName != "stm32" {
 		// no-op for device types that do not need tweaks

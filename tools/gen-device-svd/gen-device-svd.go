@@ -77,7 +77,7 @@ type SVDField struct {
 }
 
 type SVDCluster struct {
-	Dim           *int           `xml:"dim"`
+	Dim           *string        `xml:"dim"`
 	DimIncrement  string         `xml:"dimIncrement"`
 	DimIndex      *string        `xml:"dimIndex"`
 	Name          string         `xml:"name"`
@@ -231,13 +231,8 @@ func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64,
 		if err != nil {
 			panic(err)
 		}
-		subdim := *subClusterEl.Dim
-		subdimIncrement, err := strconv.ParseInt(subClusterEl.DimIncrement, 0, 32)
-		if err != nil {
-			panic(err)
-		}
-
-		if subdim > 1 {
+		subDA := decodeDimArray(subClusterEl.Dim, subClusterEl.DimIndex, subClusterEl.DimIncrement, "subCluster", subclusterName)
+		if subDA != nil && subDA.dim > 1 {
 			subcpRegisters := []*PeripheralField{}
 			for _, regEl := range subClusterEl.Registers {
 				subcpRegisters = append(subcpRegisters, parseRegister(p.GroupName, regEl, p.BaseAddress+clusterOffset+subclusterOffset, subclusterPrefix)...)
@@ -248,8 +243,8 @@ func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64,
 				Address:     p.BaseAddress + clusterOffset + subclusterOffset,
 				Description: subClusterEl.Description,
 				Registers:   subcpRegisters,
-				Array:       subdim,
-				ElementSize: int(subdimIncrement),
+				Array:       subDA.dim,
+				ElementSize: int(subDA.incr),
 				ShortName:   clusterPrefix + subclusterName,
 			})
 		} else {
@@ -277,20 +272,31 @@ func processSubCluster(p *Peripheral, cluster *SVDCluster, clusterOffset uint64,
 	return peripheralsList
 }
 
+func (cluster *SVDCluster) name() string {
+	clusterName := strings.ReplaceAll(cluster.Name, "[%s]", "")
+	if cluster.DimIndex != nil {
+		clusterName = strings.ReplaceAll(clusterName, "%s", "")
+	}
+	return clusterName
+}
+
 func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[string]*Peripheral) []*Peripheral {
 	var peripheralsList []*Peripheral
-	for _, cluster := range clusters {
-		clusterName := strings.ReplaceAll(cluster.Name, "[%s]", "")
-		if cluster.DimIndex != nil {
-			clusterName = strings.ReplaceAll(clusterName, "%s", "")
+	skipNext := false
+	for i, cluster := range clusters {
+		if skipNext {
+			skipNext = false
+			continue
 		}
+		clusterName := cluster.name()
 		clusterPrefix := clusterName + "_"
 		clusterOffset, err := strconv.ParseUint(cluster.AddressOffset, 0, 32)
 		if err != nil {
 			panic(err)
 		}
 		var dim, dimIncrement int
-		if cluster.Dim == nil {
+		da := decodeDimArray(cluster.Dim, cluster.DimIndex, cluster.DimIncrement, "cluster", clusterName)
+		if da == nil {
 			// Nordic SVD have sub-clusters with another sub-clusters.
 			if clusterOffset == 0 || len(cluster.Clusters) > 0 {
 				peripheralsList = append(peripheralsList, processSubCluster(p, cluster, clusterOffset, clusterName, peripheralDict)...)
@@ -298,16 +304,39 @@ func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[st
 			}
 			dim = -1
 			dimIncrement = -1
+			if i+1 < len(clusters) {
+				// If the next cluster is an array and has a name matching
+				// the current cluster's name, like DIEP%s matches DIEP0,
+				// and if it is directly adjacent to the current cluster,
+				// merge the next cluster into the current one consistently.
+				// This avoids having types like ..DEVICE_DIEP0_Type and
+				// ..DEVICE_DIEP_Type at the same time, also
+				next := clusters[i+1]
+				nextClusterName := next.name()
+				if strings.HasPrefix(clusterName, nextClusterName) {
+					if nextDA := decodeDimArray(next.Dim, next.DimIndex, next.DimIncrement, "cluster", nextClusterName); nextDA != nil {
+						nextClusterOffset, err := strconv.ParseUint(next.AddressOffset, 0, 32)
+						if err != nil {
+							panic(err)
+						}
+						// Test if current and next clusters are adjacent.
+						if uint32(nextClusterOffset-clusterOffset) == nextDA.incr {
+							// merge
+							skipNext = true
+							dim = 1 + nextDA.dim
+							dimIncrement = int(nextDA.incr)
+							clusterName = nextClusterName
+							clusterPrefix = clusterName + "_"
+						}
+					}
+				}
+			}
 		} else {
-			dim = *cluster.Dim
+			dim = da.dim
 			if dim == 1 {
 				dimIncrement = -1
 			} else {
-				inc, err := strconv.ParseUint(cluster.DimIncrement, 0, 32)
-				if err != nil {
-					panic(err)
-				}
-				dimIncrement = int(inc)
+				dimIncrement = int(da.incr)
 			}
 		}
 		clusterRegisters := []*PeripheralField{}
@@ -325,7 +354,9 @@ func processCluster(p *Peripheral, clusters []*SVDCluster, peripheralDict map[st
 			lastReg := clusterRegisters[len(clusterRegisters)-1]
 			lastAddress := lastReg.Address
 			if lastReg.Array != -1 {
-				lastAddress = lastReg.Address + uint64(lastReg.Array*lastReg.ElementSize)
+				lastAddress += uint64(lastReg.Array * lastReg.ElementSize)
+			} else {
+				lastAddress += uint64(lastReg.ElementSize)
 			}
 			firstAddress := clusterRegisters[0].Address
 			dimIncrement = int(lastAddress - firstAddress)
@@ -390,6 +421,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		if groupName == "" {
 			groupName = cleanName(periphEl.Name)
 		}
+		groupName = tweakPeriphGroup(periphEl, groupName)
 
 		for _, interrupt := range periphEl.Interrupts {
 			addInterrupt(interrupts, interrupt.Name, interrupt.Name, interrupt.Index, description)
