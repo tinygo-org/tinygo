@@ -162,3 +162,42 @@ func ensureTestCacheFreshness(t *testing.T, path string) {
 		t.Fatalf("could not stat test fixture %s: %v", path, err)
 	}
 }
+
+// TestInterpLargeArray checks that a large global written by an init function
+// is serialized in linear time. It used to take about half an hour.
+func TestInterpLargeArray(t *testing.T) {
+	t.Parallel()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	ensureTestCacheFreshness(t, "testdata/largearray.ll")
+	buf, err := llvm.NewMemoryBufferFromFile("testdata/largearray.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+
+	start := time.Now()
+	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 30*time.Second {
+		t.Errorf("interp took %v", d)
+	}
+
+	init := mod.NamedGlobal("lut").Initializer()
+	plane := init.Operand(0)
+	if !plane.IsConstantString() {
+		t.Fatal("first plane is not a byte array")
+	}
+	got := plane.ConstGetAsString()
+	if len(got) != 0x110000 || got[0] != 1 || got[767] != 2 || strings.Trim(got[1:767]+got[768:], "\x00") != "" {
+		t.Error("first plane holds the wrong bytes")
+	}
+	if !init.Operand(1).IsNull() {
+		t.Error("second plane is not zero")
+	}
+}
