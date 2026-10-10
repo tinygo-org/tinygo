@@ -7,6 +7,7 @@
 package testing
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -90,6 +91,7 @@ type B struct {
 	benchTime    benchTimeFlag
 	timerOn      bool
 	result       BenchmarkResult
+	loopN        int // iterations done by Loop in the current runN
 
 	// report memory statistics
 	showAllocResult bool
@@ -135,6 +137,13 @@ func (b *B) StopTimer() {
 // ResetTimer zeroes the elapsed benchmark time and memory allocation counters
 // and deletes user-reported metrics.
 func (b *B) ResetTimer() {
+	if b.extra == nil {
+		// Allocate the extra map before reading memory stats.
+		// Pre-size it to make more allocation unlikely.
+		b.extra = make(map[string]float64, 16)
+	} else {
+		clear(b.extra)
+	}
 	if b.timerOn {
 		b.start = time.Now()
 
@@ -161,8 +170,10 @@ func (b *B) ReportAllocs() {
 
 // runN runs a single benchmark for the specified number of iterations.
 func (b *B) runN(n int) {
+	b.ctx, b.cancelCtx = context.WithCancel(context.Background())
 	defer b.runCleanup()
 	b.N = n
+	b.loopN = 0
 	runtime.GC()
 	b.ResetTimer()
 	b.StartTimer()
@@ -559,8 +570,36 @@ func (b *B) SetParallelism(p int) {
 	return
 }
 
+// Loop returns true as long as the benchmark should continue running.
+//
+// A typical benchmark is structured like:
+//
+//	func Benchmark(b *testing.B) {
+//		... setup ...
+//		for b.Loop() {
+//			... code to measure ...
+//		}
+//		... cleanup ...
+//	}
+//
+// Like upstream, the timer is reset on the first call and stopped when Loop
+// returns false, so setup and cleanup are not measured. Unlike upstream, the
+// iteration count is not scaled inside Loop. runN already ramps b.N, so Loop
+// simply runs b.N iterations per call of the benchmark function.
 func (b *B) Loop() bool {
-	panic("unimplemented: testing.B.Loop")
+	if !b.timerOn {
+		b.Fatal("B.Loop called with timer stopped")
+	}
+	if b.loopN < b.N {
+		if b.loopN == 0 {
+			b.ResetTimer()
+		}
+		b.loopN++
+		return true
+	}
+	b.StopTimer()
+	b.loopN = 0
+	return false
 }
 
 // Benchmark benchmarks a single function. It is useful for creating

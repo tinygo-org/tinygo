@@ -5,6 +5,8 @@
 package testing_test
 
 import (
+	"context"
+	"strings"
 	"testing"
 )
 
@@ -67,4 +69,48 @@ func TestBenchmarkCleanup(t *testing.T) {
 func BenchmarkSub(b *testing.B) {
 	b.Run("Fast", func(b *testing.B) { BenchmarkFastNonASCII(b) })
 	b.Run("Slow", func(b *testing.B) { BenchmarkSlowNonASCII(b) })
+}
+
+func TestBenchmarkLoop(t *testing.T) {
+	var n, N int
+	testing.Benchmark(func(b *testing.B) {
+		n = 0
+		for b.Loop() {
+			n++
+		}
+		N = b.N
+	})
+	if n != N || n == 0 {
+		t.Fatalf("Loop ran %d times, N=%d", n, N)
+	}
+}
+
+func TestBenchmarkReportMetric(t *testing.T) {
+	r := testing.Benchmark(func(b *testing.B) {
+		for b.Loop() {
+		}
+		b.ReportMetric(42, "widgets/op")
+	})
+	if r.Extra["widgets/op"] != 42 {
+		t.Fatalf("Extra = %v, want widgets/op=42", r.Extra)
+	}
+	if !strings.Contains(r.String(), "42.00 widgets/op") {
+		t.Fatalf("String() = %q, want widgets/op metric", r.String())
+	}
+}
+
+func TestBenchmarkContext(t *testing.T) {
+	var ctx context.Context
+	testing.Benchmark(func(b *testing.B) {
+		ctx = b.Context()
+		if ctx == nil || ctx.Err() != nil {
+			b.Fatal("bad context")
+		}
+		for b.Loop() {
+			_ = ctx.Done()
+		}
+	})
+	if ctx.Err() == nil {
+		t.Fatal("context not canceled after benchmark")
+	}
 }
