@@ -253,26 +253,32 @@ func genTable() {
 		return // Already generated.
 	}
 	for product := 1; product < len(pdTable); product++ {
-		bestProdhi := 255
-		bestProdlo := 255
-		for pd1 := 7; pd1 > 0; pd1-- {
-			for pd2 := pd1; pd2 > 0; pd2-- {
-				gotprod := pd1 * pd2
-				if abs(int64(gotprod-product)) < abs(int64(bestProdlo-product)) {
-					bestProdlo = gotprod
-					pdTable[product].lovco[0] = uint8(pd1)
-					pdTable[product].lovco[1] = uint8(pd2)
-				}
+		genTableEntry(product)
+	}
+}
+
+// genTableEntry stays separate to keep PLL calculation within interp's 1,000-entry
+// per-function basic block limit, rather than running at startup (interp/interpreter.go).
+func genTableEntry(product int) {
+	bestProdhi := 255
+	bestProdlo := 255
+	for pd1 := 7; pd1 > 0; pd1-- {
+		for pd2 := pd1; pd2 > 0; pd2-- {
+			gotprod := pd1 * pd2
+			if abs(int64(gotprod-product)) < abs(int64(bestProdlo-product)) {
+				bestProdlo = gotprod
+				pdTable[product].lovco[0] = uint8(pd1)
+				pdTable[product].lovco[1] = uint8(pd2)
 			}
 		}
-		for pd1 := 1; pd1 < 8; pd1++ {
-			for pd2 := 1; pd2 <= pd1; pd2++ {
-				gotprod := pd1 * pd2
-				if abs(int64(gotprod-product)) < abs(int64(bestProdhi-product)) {
-					bestProdhi = gotprod
-					pdTable[product].hivco[0] = uint8(pd1)
-					pdTable[product].hivco[1] = uint8(pd2)
-				}
+	}
+	for pd1 := 1; pd1 < 8; pd1++ {
+		for pd2 := 1; pd2 <= pd1; pd2++ {
+			gotprod := pd1 * pd2
+			if abs(int64(gotprod-product)) < abs(int64(bestProdhi-product)) {
+				bestProdhi = gotprod
+				pdTable[product].hivco[0] = uint8(pd1)
+				pdTable[product].hivco[1] = uint8(pd2)
 			}
 		}
 	}
