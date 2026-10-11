@@ -23,7 +23,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: "1.27.1"
           cache: true
       - name: Run go mod tidy
         run: go mod tidy
@@ -160,7 +160,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: "1.27.1"
           cache: true
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
@@ -194,7 +194,7 @@ jobs:
         # shards finish at about the same time.
         group:
           - smoketest-rp2xxx smoketest-selftest smoketest-wasm-sim smoketest-py32
-          - smoketest-esp smoketest-riscv smoketest-flags
+          - smoketest-esp smoketest-riscv smoketest-flags smoketest-renesas
           - smoketest-examples smoketest-nxp smoketest-pwm-usb smoketest-avr
           - smoketest-samd smoketest-stm32 smoketest-nrf smoketest-wasm
     steps:
@@ -205,7 +205,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: "1.27.1"
           cache: true
       - name: Download release artifact
         uses: actions/download-artifact@v8
@@ -243,12 +243,12 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: "1.27.1"
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
         with:
@@ -292,7 +292,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: "1.27.1"
           cache: true
       - uses: ./.github/actions/setup-llvm
         with:
@@ -332,7 +332,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: "1.27.1"
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -371,12 +371,12 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: "1.27.1"
           cache: true
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
         with:
@@ -406,7 +406,7 @@ jobs:
     # part of the release tarball.
     strategy:
       matrix:
-        goarch: [ arm, arm64 ]
+        goarch: [arm, arm64]
         include:
           - goarch: arm64
             toolchain: aarch64-linux-gnu
@@ -432,7 +432,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: "1.27.1"
           cache: true
       - name: Restore LLVM source cache
         uses: actions/cache/restore@v5

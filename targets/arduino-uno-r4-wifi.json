@@ -11,11 +11,9 @@
     "2341:006d"
   ],
   "flash-1200-bps-reset": "true",
+  "openocd-interface": "cmsis-dap",
   "openocd-commands": [
-    "source [find interface/cmsis-dap.cfg]",
     "cmsis_dap_vid_pid 0x2341 0x1002",
-    "cmsis_dap_backend hid",
-    "transport select swd",
-    "source [find target/r7fa4m1ab.cfg]"
+    "cmsis_dap_backend hid"
   ]
 }

@@ -49,23 +49,18 @@ var sysTickCount volatile.Register64
 
 // ticks returns the time in microseconds since reset.
 func ticks() timeUnit {
-	for {
-		state := interrupt.Disable()
-		milliseconds := sysTickCount.Get()
-		current := arm.SYST.SYST_CVR.Get()
-		pending := arm.SCB.ICSR.HasBits(arm.SCB_ICSR_PENDSTSET)
-		interrupt.Restore(state)
-
-		if pending {
-			continue
-		}
-
-		elapsedCycles := uint32(sysTickReload) - current
-		microseconds := elapsedCycles / cyclesPerMicrosecond
-		return timeUnit(
-			milliseconds*microsecondsPerInterrupt + uint64(microseconds),
-		)
+	state := interrupt.Disable()
+	milliseconds := sysTickCount.Get()
+	current := arm.SYST.SYST_CVR.Get()
+	if arm.SCB.ICSR.HasBits(arm.SCB_ICSR_PENDSTSET) {
+		current = arm.SYST.SYST_CVR.Get()
+		milliseconds++
 	}
+	interrupt.Restore(state)
+
+	elapsedCycles := uint32(sysTickReload) - current
+	microseconds := elapsedCycles / cyclesPerMicrosecond
+	return timeUnit(milliseconds*microsecondsPerInterrupt + uint64(microseconds))
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
@@ -115,7 +110,8 @@ func buffered() int {
 }
 
 func initClocks() {
-	const protectKey = renesas.SYSTEM_PRCR_PRKEY_0x5A << renesas.SYSTEM_PRCR_PRKEY_Pos
+	// Renesas FSP bsp/mcu/all/bsp_register_protection.c uses 0xA500 for PRCR.
+	const protectKey = 0xA5 << renesas.SYSTEM_PRCR_PRKEY_Pos
 
 	renesas.SYSTEM.PRCR.Set(
 		protectKey | renesas.SYSTEM_PRCR_PRC0_Msk | renesas.SYSTEM_PRCR_PRC1_Msk,

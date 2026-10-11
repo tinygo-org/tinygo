@@ -110,14 +110,14 @@ const (
 	P5_15 Pin = 95
 )
 
-// PinOutput through PinInputPullDown select the GPIO pin mode.
+// PinOutput through PinInputPulldown select the GPIO pin mode.
 const (
 	PinOutput PinMode = iota
 	PinInput
-	PinInputPullUp
-	// PinInputPullDown acts as PinInput because the RA4M1 has no internal pull-down.
+	PinInputPullup
+	// PinInputPulldown acts as PinInput because the RA4M1 has no internal pull-down.
 	// See ArduinoCore-renesas 1.6.0 cores/arduino/digital.cpp.
-	PinInputPullDown
+	PinInputPulldown
 )
 
 // Configure sets the pin mode.
@@ -131,7 +131,7 @@ func (p Pin) Configure(config PinConfig) {
 	switch config.Mode {
 	case PinOutput:
 		configureGPIO(p, renesas.PFS_P000PFS_PDR_Msk)
-	case PinInputPullUp:
+	case PinInputPullup:
 		configureGPIO(p, renesas.PFS_P000PFS_PCR_Msk)
 	default:
 		configureGPIO(p, 0)
