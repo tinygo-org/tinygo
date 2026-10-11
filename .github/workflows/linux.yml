@@ -197,7 +197,7 @@ jobs:
         # shards finish at about the same time.
         group:
           - smoketest-rp2xxx smoketest-selftest smoketest-wasm-sim smoketest-py32
-          - smoketest-esp smoketest-riscv smoketest-flags
+          - smoketest-esp smoketest-riscv smoketest-flags smoketest-renesas
           - smoketest-examples smoketest-nxp smoketest-pwm-usb smoketest-avr
           - smoketest-samd smoketest-stm32 smoketest-nrf smoketest-wasm
     steps:
