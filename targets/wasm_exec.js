@@ -106,6 +106,32 @@
 		EPIPE: 64, EROFS: 69, ESPIPE: 70, EXDEV: 75,
 	};
 
+	// nodeJsfs is Node's fs in the shape of bottle's jsfs, whose sync API is
+	// Node's without the Sync suffix, or null outside Node. A browser has a
+	// globalThis.fs too, but it only writes to the console.
+	const nodeJsfs = () => {
+		const fs = globalThis.fs;
+		if (typeof process === "undefined" || !process.versions || !process.versions.node || !fs || !fs.statSync) {
+			return null;
+		}
+		const sync = { constants: fs.constants };
+		for (const name of ["stat", "lstat", "fstat", "open", "read", "write", "close", "fsync",
+			"ftruncate", "mkdir", "rmdir", "unlink", "rename", "readdir", "readlink", "symlink",
+			"link", "utimes"]) {
+			sync[name] = fs[name + "Sync"];
+		}
+		const stdin = () => {
+			const b = new Uint8Array(65536);
+			try {
+				return b.subarray(0, fs.readSync(0, b, 0, b.length, null));
+			} catch (e) {
+				if (e.code === "EOF" || e.code === "EAGAIN") return null;
+				throw e;
+			}
+		};
+		return { sync, stdio: { stdin }, getCwd: () => process.cwd() };
+	};
+
 	// jsfsWasi serves the WASI filesystem imports from bottle's jsfs.sync, so os
 	// works on one in-memory tree shared with the page. The only preopen is "/".
 	const jsfsWasi = (jsfs, buffer) => {
@@ -829,9 +855,11 @@
 			this.importObject.env = this.importObject.gojs;
 
 			// With bottle's jsfs on the page, os reaches its filesystem through the
-			// WASI imports. Otherwise there are no preopens and every open fails.
+			// WASI imports. Under Node, Node's fs serves the same imports, as Go's
+			// own js target reaches it. Otherwise there are no preopens and every
+			// open fails.
 			const wasi = this.importObject.wasi_snapshot_preview1;
-			this._jsfs = globalThis.jsfs && globalThis.jsfs.sync ? globalThis.jsfs : null;
+			this._jsfs = globalThis.jsfs && globalThis.jsfs.sync ? globalThis.jsfs : nodeJsfs();
 			if (this._jsfs) {
 				Object.assign(wasi, jsfsWasi(this._jsfs, () => this._inst.exports.memory.buffer));
 			}
