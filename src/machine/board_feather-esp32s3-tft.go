@@ -5,6 +5,12 @@
 
 package machine
 
+// CPUFrequency returns the current CPU frequency for the Feather ESP32-S3 TFT
+// Returns 240MHz (max speed for ESP32-S3 with PSRAM)
+func CPUFrequency() uint32 {
+	return 240_000_000 // 240MHz
+}
+
 const (
 	SCL_PIN = GPIO41
 	SDA_PIN = GPIO42
