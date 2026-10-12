@@ -291,9 +291,11 @@ call_start_cpu0:
     l32r a8, .Lmmu_table_base
 
     // --- IROM ---
-    // Number of pages covering [_irom_start, _irom_end).
+    // Number of virtual pages occupied by IROM. IROM starts within
+    // virtual page zero, so count from the IROM virtual base rather
+    // than from _irom_start.
     l32r a2, .Lirom_end
-    l32r a3, .Lirom_start
+    l32r a3, .Lirom_base
     sub  a2, a2, a3
     addi a2, a2, -1
     srli a2, a2, 16
@@ -318,17 +320,20 @@ call_start_cpu0:
     l32r a2, .Ldrom_start
     l32r a3, .Ldrom_base
     sub  a2, a2, a3
-    srli a2, a2, 16
-    slli a10, a2, 2
+    srli a11, a2, 16                   // a11 = first DROM virtual page
+    slli a10, a11, 2
     add  a10, a8, a10
 
-    // Number of pages covering [_drom_start, _drom_end).
+    // One-past-last DROM virtual page.
     l32r a2, .Ldrom_end
-    l32r a3, .Ldrom_start
+    l32r a3, .Ldrom_base
     sub  a2, a2, a3
     addi a2, a2, -1
     srli a2, a2, 16
     addi a2, a2, 1
+
+    // Number of pages covering [_drom_start, _drom_end).
+    sub  a2, a2, a11
 
     // First physical DROM page.
     l32r a3, .Ldrom_flash_addr_ptr
