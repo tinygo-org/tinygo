@@ -113,6 +113,13 @@ func schedulerWake() {
 	}
 }
 
+// Wake the given core if it is waiting or sleeping. Must be called with the
+// scheduler lock held.
+// On rp2, a global sev is used to wake all cores as there is no alternative.
+func schedulerWakeCore(core uint32) {
+	arm.Asm("sev")
+}
+
 // Return the current core number: 0 or 1.
 func currentCPU() uint32 {
 	return rp.SIO.CPUID.Get()

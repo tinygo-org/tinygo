@@ -324,6 +324,7 @@ func TestBuild(t *testing.T) {
 		"calls.go",
 		"cgo/",
 		"channel.go",
+		"coreassign.go",
 		"embed/",
 		"finalizer.go",
 		"finalizerbits.go",
@@ -685,6 +686,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		if name == "goroutines.go" && (spec.Scheduler == "threads" || spec.Scheduler == "cores") {
 			// This test intentionally checks concurrent scheduling by comparing
 			// output order, so only run it with non-threaded schedulers.
+			continue
+		}
+		if name == "coreassign.go" && spec.Scheduler != "cores" {
+			// Core assignment needs the cores scheduler.
 			continue
 		}
 		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
