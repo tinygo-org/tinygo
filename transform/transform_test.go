@@ -166,8 +166,8 @@ func normalizeCapturesAttr(s string) string {
 func filterIrrelevantIRLines(lines []string) []string {
 	var out []string
 	for _, line := range lines {
-		line = strings.Split(line, ";")[0]    // strip out comments/info
-		line = strings.TrimRight(line, "\r ") // drop '\r' on Windows and remove trailing spaces from comments
+		line = strings.Split(line, ";")[0]  // strip out comments/info
+		line = strings.TrimRight(line, " ") // remove trailing spaces from comments
 		if line == "" {
 			continue
 		}

@@ -1450,7 +1450,6 @@ func checkOutput(t *testing.T, filename string, actual []byte) {
 
 func checkOutputData(t *testing.T, expectedOutput, actual []byte) {
 	t.Helper()
-	expectedOutput = bytes.ReplaceAll(expectedOutput, []byte("\r\n"), []byte("\n"))
 	actual = bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n"))
 
 	if !bytes.Equal(actual, expectedOutput) {

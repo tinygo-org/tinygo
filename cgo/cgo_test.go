@@ -24,8 +24,6 @@ var flagUpdate = flag.Bool("update", false, "Update images based on test output.
 // normalizeResult normalizes Go source code that comes out of tests across
 // platforms and Go versions.
 func normalizeResult(t *testing.T, result string) string {
-	result = strings.ReplaceAll(result, "\r\n", "\n")
-
 	// This changed to 'undefined:', in Go 1.20.
 	result = strings.ReplaceAll(result, ": undeclared name:", ": undefined:")
 	// Go 1.20 added a bit more detail
@@ -103,7 +101,7 @@ func TestCGo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not read expected output: %v", err)
 			}
-			expected := strings.ReplaceAll(string(expectedBytes), "\r\n", "\n")
+			expected := string(expectedBytes)
 
 			// Check whether the output is as expected.
 			if expected != actual {

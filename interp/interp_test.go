@@ -142,7 +142,7 @@ func normalizeCapturesAttr(s string) string {
 func filterIrrelevantIRLines(lines []string) []string {
 	var out []string
 	for _, line := range lines {
-		line = strings.TrimSpace(line) // drop '\r' on Windows
+		line = strings.TrimSpace(line)
 		if line == "" || line[0] == ';' {
 			continue
 		}
