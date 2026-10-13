@@ -1,0 +1,3 @@
+# Tests read these files byte for byte and compare them to generated output,
+# so check them out with LF line endings on all platforms.
+**/testdata/** text eol=lf
