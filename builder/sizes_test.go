@@ -224,6 +224,15 @@ func TestSizeFull(t *testing.T) {
 				if pkgMatch.MatchString(pkg) {
 					continue
 				}
+				if !test.trimPath && filepath.IsAbs(pkg) {
+					// Without -trimpath, C sources outside a Go package are
+					// recorded with the absolute path of their directory,
+					// such as lib/nrfx/mdk in the TinyGo root.
+					rel, err := filepath.Rel(goenv.Get("TINYGOROOT"), pkg)
+					if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+						continue
+					}
+				}
 				t.Error("unexpected package name in size output:", pkg)
 			}
 		})

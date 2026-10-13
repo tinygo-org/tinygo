@@ -1,7 +1,6 @@
 package loader
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -23,9 +22,13 @@ func List(config *compileopts.Config, extraArgs, pkgs []string) (*exec.Cmd, erro
 	}
 	args = append(args, pkgs...)
 	cmd := exec.Command(filepath.Join(goenv.Get("GOROOT"), "bin", "go"), args...)
-	cmd.Env = append(os.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED=1")
 	if config.Options.Directory != "" {
 		cmd.Dir = config.Options.Directory
 	}
+	// cmd.Environ sets PWD to cmd.Dir. Without it, go list gets the PWD of
+	// this process, and finds the current directory through the real path.
+	// That path can be different from the paths in go.work if the directory
+	// is in a symbolic link, such as /var on macOS.
+	cmd.Env = append(cmd.Environ(), "GOROOT="+goroot, "GOOS="+config.GOOS(), "GOARCH="+config.GOARCH(), "CGO_ENABLED=1")
 	return cmd, nil
 }

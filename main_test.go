@@ -41,8 +41,6 @@ const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
 
-var testOnlyCurrentOS = flag.Bool("only-current-os", false, "")
-
 var supportedLinuxArches = map[string]string{
 	"AMD64Linux": "linux/amd64",
 	"X86Linux":   "linux/386",
@@ -538,77 +536,81 @@ func TestBuild(t *testing.T) {
 		})
 	})
 
-	if testing.Short() {
-		// Don't test other targets when the -short flag is used. Only test the
-		// host system.
-		return
-	}
-
-	if !*testOnlyCurrentOS {
-		t.Run("EmulatedCortexM3", func(t *testing.T) {
-			t.Parallel()
-			runPlatTests(optionsFromTarget("cortex-m-qemu", sema), tests, t)
-		})
-
-		t.Run("EmulatedRISCV", func(t *testing.T) {
-			t.Parallel()
-			runPlatTests(optionsFromTarget("riscv-qemu", sema), tests, t)
-		})
-
-		t.Run("AVR", func(t *testing.T) {
-			t.Parallel()
-			runPlatTests(optionsFromTarget("simavr", sema), tests, t)
-		})
-
-		t.Run("WebAssembly", func(t *testing.T) {
-			t.Parallel()
-
-			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
-			runGCLivenessTest(optionsFromTarget("wasm", sema), t)
-			// Test with -gc=boehm.
-			t.Run("gc.go-boehm", func(t *testing.T) {
-				t.Parallel()
-				optionsBoehm := optionsFromTarget("wasm", sema)
-				optionsBoehm.GC = "boehm"
-				runTest("gc.go", optionsBoehm, t, nil, nil)
-				runTest("gc-boehm.go", optionsBoehm, t, nil, nil)
-			})
-		})
-		t.Run("WASIp1", func(t *testing.T) {
-			t.Parallel()
-			options := optionsFromTarget("wasip1", sema)
-			runPlatTests(options, tests, t)
-			runGCLivenessTest(options, t)
-			t.Run("cgo-realloc", func(t *testing.T) {
-				runTest("cgo-realloc/", options, t, nil, nil)
-			})
-
-			// Test with -gc=boehm.
-			t.Run("gc.go-boehm", func(t *testing.T) {
-				t.Parallel()
-				optionsBoehm := optionsFromTarget("wasip1", sema)
-				optionsBoehm.GC = "boehm"
-				runTest("gc.go", optionsBoehm, t, nil, nil)
-				runTest("gc-boehm.go", optionsBoehm, t, nil, nil)
-			})
-		})
-		t.Run("WASIp2", func(t *testing.T) {
-			t.Parallel()
-			runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
-			runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
+	// runCrossTarget runs a subtest for a target that is not the host system.
+	// The Linux workflow runs these subtests. Other workflows use the -short
+	// flag to skip them.
+	runCrossTarget := func(name string, f func(t *testing.T)) {
+		t.Run(name, func(t *testing.T) {
+			if testing.Short() {
+				t.Skip()
+			}
+			f(t)
 		})
 	}
+
+	runCrossTarget("EmulatedCortexM3", func(t *testing.T) {
+		t.Parallel()
+		runPlatTests(optionsFromTarget("cortex-m-qemu", sema), tests, t)
+	})
+
+	runCrossTarget("EmulatedRISCV", func(t *testing.T) {
+		t.Parallel()
+		runPlatTests(optionsFromTarget("riscv-qemu", sema), tests, t)
+	})
+
+	runCrossTarget("AVR", func(t *testing.T) {
+		t.Parallel()
+		runPlatTests(optionsFromTarget("simavr", sema), tests, t)
+	})
+
+	runCrossTarget("WebAssembly", func(t *testing.T) {
+		t.Parallel()
+
+		runPlatTests(optionsFromTarget("wasm", sema), tests, t)
+		runGCLivenessTest(optionsFromTarget("wasm", sema), t)
+		// Test with -gc=boehm.
+		t.Run("gc.go-boehm", func(t *testing.T) {
+			t.Parallel()
+			optionsBoehm := optionsFromTarget("wasm", sema)
+			optionsBoehm.GC = "boehm"
+			runTest("gc.go", optionsBoehm, t, nil, nil)
+			runTest("gc-boehm.go", optionsBoehm, t, nil, nil)
+		})
+	})
+	runCrossTarget("WASIp1", func(t *testing.T) {
+		t.Parallel()
+		options := optionsFromTarget("wasip1", sema)
+		runPlatTests(options, tests, t)
+		runGCLivenessTest(options, t)
+		t.Run("cgo-realloc", func(t *testing.T) {
+			runTest("cgo-realloc/", options, t, nil, nil)
+		})
+
+		// Test with -gc=boehm.
+		t.Run("gc.go-boehm", func(t *testing.T) {
+			t.Parallel()
+			optionsBoehm := optionsFromTarget("wasip1", sema)
+			optionsBoehm.GC = "boehm"
+			runTest("gc.go", optionsBoehm, t, nil, nil)
+			runTest("gc-boehm.go", optionsBoehm, t, nil, nil)
+		})
+	})
+	runCrossTarget("WASIp2", func(t *testing.T) {
+		t.Parallel()
+		runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
+		runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
+	})
 
 	if runtime.GOOS == "linux" {
 		for name, osArch := range supportedLinuxArches {
 			options := optionsFromOSARCH(osArch, sema)
 			if options.GOARCH != runtime.GOARCH { // Native architecture already run above.
-				t.Run(name, func(t *testing.T) {
+				runCrossTarget(name, func(t *testing.T) {
 					runPlatTests(options, tests, t)
 				})
 			}
 		}
-		t.Run("MIPS little-endian", func(t *testing.T) {
+		runCrossTarget("MIPS little-endian", func(t *testing.T) {
 			// Run a single test for GOARCH=mipsle to see whether it works at
 			// all. It is already mostly tested because GOARCH=mips and
 			// GOARCH=mipsle are so similar, but it's good to have an extra test
@@ -862,6 +864,19 @@ func emuCheck(t *testing.T, options compileopts.Options) {
 			}
 
 			t.Errorf("searching for emulator: %v", err)
+			return
+		}
+	}
+	if spec.WITPackage != "" && spec.WITWorld != "" {
+		// The build uses wasm-tools to make a component.
+		wasmtools := goenv.Get("WASMTOOLS")
+		_, err := exec.LookPath(wasmtools)
+		if err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				t.Skipf("wasm-tools not installed: %q", wasmtools)
+			}
+
+			t.Errorf("searching for wasm-tools: %v", err)
 			return
 		}
 	}
