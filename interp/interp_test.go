@@ -37,7 +37,6 @@ func runTest(t *testing.T, pathPrefix string) {
 	// Read the input IR.
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	ensureTestCacheFreshness(t, pathPrefix+".ll")
 	buf, err := llvm.NewMemoryBufferFromFile(pathPrefix + ".ll")
 	if err != nil {
 		t.Fatalf("could not read file %s: %v", pathPrefix+".ll", err)
@@ -154,22 +153,12 @@ func filterIrrelevantIRLines(lines []string) []string {
 	return out
 }
 
-// ensureTestCacheFreshness registers path as an input of the running test.
-// see https://github.com/tinygo-org/tinygo/issues/5780.
-func ensureTestCacheFreshness(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("could not stat test fixture %s: %v", path, err)
-	}
-}
-
 // TestInterpLargeArray checks that a large global written by an init function
 // is serialized in linear time. It used to take about half an hour.
 func TestInterpLargeArray(t *testing.T) {
 	t.Parallel()
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	ensureTestCacheFreshness(t, "testdata/largearray.ll")
 	buf, err := llvm.NewMemoryBufferFromFile("testdata/largearray.ll")
 	if err != nil {
 		t.Fatal(err)

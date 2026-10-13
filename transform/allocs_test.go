@@ -27,7 +27,6 @@ func TestAllocsAggregateEdges(t *testing.T) {
 	const path = "testdata/allocs-aggregate.ll"
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	ensureTestCacheFreshness(t, path)
 	buf, err := llvm.NewMemoryBufferFromFile(path)
 	if err != nil {
 		t.Fatal(err)
