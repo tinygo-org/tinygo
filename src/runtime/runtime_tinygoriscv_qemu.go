@@ -485,10 +485,20 @@ func schedulerWake() {
 
 	if hart < 8 {
 		// There is a sleeping hart. Wake it.
+		schedulerWakeCore(uint32(hart))
+	}
+}
+
+// Wake the given core if it is sleeping. Must be called with the scheduler lock
+// held.
+func schedulerWakeCore(hart uint32) {
+	if sleepingHarts&(1<<hart) != 0 {
 		// Clear the sleeping bit before sending the wakeup.
 		sleepingHarts &^= 1 << hart
 		schedulerWakePending[hart].Store(1)
-		signalHart(uint32(hart))
+		signalHart(hart)
+	} else if uint32(sleepingCore) == hart {
+		interruptSleepTicksMulticore(0)
 	}
 }
 
