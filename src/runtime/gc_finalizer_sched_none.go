@@ -1,4 +1,4 @@
-//go:build (gc.conservative || gc.precise) && scheduler.none
+//go:build (gc.conservative || gc.precise || gc.boehm) && scheduler.none
 
 package runtime
 

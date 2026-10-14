@@ -6,7 +6,25 @@ type largeFinalizerObject struct {
 	data [128]byte
 }
 
-var largeFinalizerRan bool
+var (
+	largeFinalizerRan bool
+	sink              int
+)
+
+// scrubStack removes stale pointers from the helper frame so collection is deterministic.
+//
+//go:noinline
+func scrubStack(depth int) int {
+	if depth <= 0 {
+		return sink
+	}
+	var buf [64]int
+	for i := range buf {
+		buf[i] = depth + i
+	}
+	sink += buf[depth&63]
+	return scrubStack(depth-1) + buf[0]
+}
 
 //go:noinline
 func registerLargeFinalizer() {
@@ -19,6 +37,7 @@ func registerLargeFinalizer() {
 func main() {
 	registerLargeFinalizer()
 	for i := 0; i < 100 && !largeFinalizerRan; i++ {
+		sink += scrubStack(40)
 		runtime.GC()
 		runtime.Gosched()
 	}
