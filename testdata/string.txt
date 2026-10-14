@@ -154,3 +154,4 @@ named order: >= false
 named order: >= true
 named order: >= false
 named order: >= true
+mixed comparisons: 612 snapshot and evaluation guards passed
