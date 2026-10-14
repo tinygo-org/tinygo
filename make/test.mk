@@ -61,6 +61,7 @@ TEST_PACKAGES_FAST = \
 	path \
 	reflect \
 	regexp/syntax \
+	runtime \
 	strconv \
 	sync \
 	testing \
@@ -165,6 +166,7 @@ TEST_PACKAGES_NONBAREMETAL = \
 	$(TEST_PACKAGES_NOBOUNDARYSLICES) \
 	crypto/des \
 	regexp/syntax \
+	runtime \
 	$(nil)
 
 TEST_PACKAGES_FAST_WASI = $(filter-out $(TEST_PACKAGES_NOWASI), $(TEST_PACKAGES_FAST))
@@ -274,8 +276,14 @@ tinygo-test:
 	@# https://github.com/golang/go/commit/6a6d115f9a7422b2fa081ba6f567eefb4a099462
 	$(call run-tinygo-tests,$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW) $(TEST_PACKAGES_HOST_FULL_ONLY),$(TEST_ADDITIONAL_FLAGS),$(TEST_SKIP_FLAG))
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -run='^TestSynctestMarshal$$' encoding/json
+	@# The block GC is not the host default, so run its own tests against it
+	@# with the GC assertions enabled.
+	$(TINYGO) test -tags=runtime_asserts -gc=conservative -scheduler=tasks runtime
 tinygo-test-fast:
 	$(call run-tinygo-tests,$(TEST_PACKAGES_HOST),,$(TEST_SKIP_FLAG))
+	@# The block GC is not the host default, so run its own tests against it
+	@# with the GC assertions enabled.
+	$(TINYGO) test -tags=runtime_asserts -gc=conservative -scheduler=tasks runtime
 tinygo-bench:
 	$(TINYGO) test -bench . $(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW)
 tinygo-bench-fast:
