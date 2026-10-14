@@ -47,9 +47,9 @@ func initCache() {
 	nxp.MPU.SetRBAR(6, 0x70000000)
 	nxp.MPU.SetRASR(nxp.RGNSZ_512MB, nxp.PERM_FULL, nxp.EXTN_NORMAL, true, false, true, true, false)
 
-	// [7] QSPI flash: 2 MiB, +ACCESS, #NORMAL, +EXEC, -share, +CACHE, +BUFFER, -subregion
+	// [7] QSPI flash: 2 or 8 MiB, +ACCESS, #NORMAL, +EXEC, -share, +CACHE, +BUFFER, -subregion
 	nxp.MPU.SetRBAR(7, 0x60000000)
-	nxp.MPU.SetRASR(nxp.RGNSZ_2MB, nxp.PERM_FULL, nxp.EXTN_NORMAL, true, false, true, true, false)
+	nxp.MPU.SetRASR(qspiFlashMPUSize, nxp.PERM_FULL, nxp.EXTN_NORMAL, true, false, true, true, false)
 
 	// [8] USB DMA region, top 4 KiB of OCRAM, #NORMAL non cacheable, -EXEC.
 	// It holds the USB dQH and dTD descriptors and the endpoint buffers.
