@@ -6,6 +6,7 @@ target triple = "x86_64--linux"
 @alias.dst = local_unnamed_addr global [2 x i8] c"\09\07"
 @reload.buf = local_unnamed_addr global [4 x i8] c"c\02\03\09"
 @reload.out = local_unnamed_addr global [2 x i8] c"\01\02"
+@struct.value = local_unnamed_addr global { i8, i64, { i32, i8 } } { i8 0, i64 42, { i32, i8 } { i32 0, i8 7 } }
 
 define void @runtime.initAll() unnamed_addr {
 entry:

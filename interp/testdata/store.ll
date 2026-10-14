@@ -6,12 +6,14 @@ target triple = "x86_64--linux"
 @alias.dst = global [2 x i8] zeroinitializer
 @reload.buf = global [4 x i8] c"\01\02\03\04"
 @reload.out = global [2 x i8] zeroinitializer
+@struct.value = global { i8, i64, { i32, i8 } } zeroinitializer
 
 define void @runtime.initAll() unnamed_addr {
 entry:
   call void @overlap.init(ptr undef)
   call void @alias.init(ptr undef)
   call void @reload.init(ptr undef)
+  call void @struct.init(ptr undef)
   ret void
 }
 
@@ -45,5 +47,14 @@ entry:
   store i8 99, ptr @reload.buf
   ; Write the originally-loaded value to a separate global.
   store i16 %val, ptr @reload.out
+  ret void
+}
+
+define internal void @struct.init(ptr %context) unnamed_addr {
+entry:
+  %b = getelementptr { i8, i64, { i32, i8 } }, ptr @struct.value, i32 0, i32 1
+  store i64 42, ptr %b
+  %e = getelementptr { i8, i64, { i32, i8 } }, ptr @struct.value, i32 0, i32 2, i32 1
+  store i8 7, ptr %e
   ret void
 }
