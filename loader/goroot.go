@@ -255,6 +255,7 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 		"internal/cm/":                    false,
 		"internal/futex/":                 false,
 		"internal/fuzz/":                  false,
+		"internal/godebug/":               false,
 		"internal/itoa/":                  false,
 		"internal/poll/":                  false,
 		"internal/reflectlite/":           false,
