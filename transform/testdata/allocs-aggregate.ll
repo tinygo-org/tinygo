@@ -203,14 +203,6 @@ end:
   ret %inner %value
 }
 
-define %inner @aggregateSelect(i1 %cond) {
-  %p = call ptr @runtime.alloc(i32 4, ptr null)
-  %result = call %outer @wrap(ptr %p)
-  %inner = extractvalue %outer %result, 1
-  %value = select i1 %cond, %inner %inner, %inner zeroinitializer
-  ret %inner %value
-}
-
 define %inner @recursiveReturn() {
   %p = call ptr @runtime.alloc(i32 4, ptr null)
   %result = call %outer @recursive(ptr %p, i1 true)

@@ -62,7 +62,6 @@ func TestAllocsAggregateEdges(t *testing.T) {
 		"gepReturn":           true,
 		"gepLoad":             false,
 		"aggregatePhi":        true,
-		"aggregateSelect":     true,
 		"recursiveReturn":     true,
 		"duplicateArguments":  true,
 		"nonEscapingScalar":   false,
@@ -156,6 +155,53 @@ func TestAllocsRuntimePhi(t *testing.T) {
 	if allocations != 1 {
 		t.Fatalf("got %d heap allocations, want 1:\n%s", allocations, fn.String())
 	}
+}
+
+func TestAllocsSelectAssertion(t *testing.T) {
+	t.Parallel()
+
+	load := func(t *testing.T) llvm.Module {
+		ctx := llvm.NewContext()
+		t.Cleanup(ctx.Dispose)
+		path := "testdata/allocs-select.ll"
+		if _, err := os.Stat(path); err != nil {
+			t.Fatal(err)
+		}
+		buf, err := llvm.NewMemoryBufferFromFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mod, err := ctx.ParseIR(buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(mod.Dispose)
+		return mod
+	}
+
+	t.Run("pointerBearingAggregate", func(t *testing.T) {
+		mod := load(t)
+		mod.NamedFunction("scalarSelect").EraseFromParentAsFunction()
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("no panic for a select over an aggregate holding a pointer")
+			}
+			if msg, ok := r.(string); !ok || !strings.Contains(msg, "aggregateSelect") {
+				t.Fatalf("panic = %v, want one naming aggregateSelect", r)
+			}
+		}()
+		transform.OptimizeAllocs(mod, nil, 256, nil)
+	})
+
+	t.Run("pointerFreeAggregate", func(t *testing.T) {
+		mod := load(t)
+		mod.NamedFunction("aggregateSelect").EraseFromParentAsFunction()
+		transform.OptimizeAllocs(mod, nil, 256, nil)
+		if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 // Test with a Go file as input (for more accurate tests).

@@ -223,6 +223,16 @@ func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Va
 					return result
 				}
 			}
+		case llvm.Select:
+			// Escape analysis does not follow pointers through selects. No pass
+			// before OptimizeAllocs should create a select over a pointer-bearing
+			// value, so fail if that pipeline assumption changes.
+			if typeHasPointers(use.Type()) {
+				panic("transform: escape analysis reached a select over a " +
+					"value holding a pointer in " +
+					use.InstructionParent().Parent().Name())
+			}
+			return escapeResult{escapeAt: use}
 		case llvm.Load:
 			// Load does not escape.
 		case llvm.Store:
