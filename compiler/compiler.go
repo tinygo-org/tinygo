@@ -89,6 +89,8 @@ type compilerContext struct {
 	program          *ssa.Program
 	diagnostics      []error
 	functionInfos    map[*ssa.Function]functionInfo
+	globalInfos      map[*ssa.Global]globalInfo
+	pragmaErrors     map[*ast.Comment]bool
 	callProperties   map[*ssa.Function]functionCallProperties
 	asyncifyCatchers map[llvm.Type]llvm.Value
 	directCatchers   map[llvm.Value]llvm.Value
@@ -116,6 +118,8 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		machine:          machine,
 		targetData:       machine.CreateTargetData(),
 		functionInfos:    map[*ssa.Function]functionInfo{},
+		globalInfos:      map[*ssa.Global]globalInfo{},
+		pragmaErrors:     map[*ast.Comment]bool{},
 		callProperties:   map[*ssa.Function]functionCallProperties{},
 		asyncifyCatchers: map[llvm.Type]llvm.Value{},
 		directCatchers:   map[llvm.Value]llvm.Value{},

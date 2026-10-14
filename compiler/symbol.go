@@ -385,11 +385,13 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 	if syntax == nil {
 		return
 	}
+	decl, _ := syntax.(*ast.FuncDecl)
+	hasBody := decl != nil && decl.Body != nil
 
 	// Read all pragmas of this function.
 	var pragmas []*ast.Comment
 	hasWasmExport := false
-	if decl, ok := syntax.(*ast.FuncDecl); ok && decl.Doc != nil {
+	if decl != nil && decl.Doc != nil {
 		for _, comment := range decl.Doc.List {
 			text := comment.Text
 			if strings.HasPrefix(text, "//go:") || strings.HasPrefix(text, "//export ") {
@@ -429,7 +431,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 		if file := c.fileForFunc(f); file != nil {
 			for _, group := range file.Comments {
 				// Skip the function's own doc comment — already handled above.
-				if decl, ok := syntax.(*ast.FuncDecl); ok && group == decl.Doc {
+				if decl != nil && group == decl.Doc {
 					continue
 				}
 				for _, comment := range group.List {
@@ -449,7 +451,11 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 	// Parse each pragma.
 	for _, comment := range pragmas {
 		parts := strings.Fields(comment.Text)
-		switch parts[0] {
+		if flagPragmas[parts[0]] && len(parts) != 1 {
+			c.addPragmaError(comment, parts[0]+" does not accept parameters")
+			continue
+		}
+		switch pragma := parts[0]; pragma {
 		case "//export", "//go:export":
 			if len(parts) != 2 {
 				continue
@@ -468,7 +474,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.wasmName = info.linkName
 			info.exported = true
 		case "//go:interrupt":
-			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
+			if c.checkDefinition(hasBody, comment, pragma) && c.checkUnsafe(f.Pkg, comment, pragma) {
 				info.interrupt = true
 			}
 		case "//go:wasm-module":
@@ -485,8 +491,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			if len(parts) != 3 {
 				continue
 			}
-			if f.Blocks != nil {
-				// Defined functions cannot be exported.
+			if hasBody {
 				c.addError(f.Pos(), "can only use //go:wasmimport on declarations")
 				continue
 			}
@@ -495,7 +500,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.wasmModule = parts[1]
 			info.wasmName = parts[2]
 		case "//go:wasmexport":
-			if f.Blocks == nil {
+			if !hasBody {
 				c.addError(f.Pos(), "can only use //go:wasmexport on definitions")
 				continue
 			}
@@ -519,7 +524,9 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.wasmExport = name
 			info.wasmExportPos = comment.Slash
 		case "//go:inline":
-			info.inline = inlineHint
+			if c.checkDefinition(hasBody, comment, pragma) {
+				info.inline = inlineHint
+			}
 		case "//go:noinline":
 			info.inline = inlineNone
 		case "//go:linkname", "//go:linknamestd":
@@ -537,7 +544,11 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// Only enable go:section when the package imports "unsafe".
 			// go:section also implies go:noinline since inlining could
 			// move the code to a different section than that requested.
-			if len(parts) == 2 && slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
+			if len(parts) != 2 {
+				c.addPragmaError(comment, fmt.Sprintf("expected one parameter to //go:section, not %d", len(parts)-1))
+				continue
+			}
+			if c.checkDefinition(hasBody, comment, pragma) && c.checkUnsafe(f.Pkg, comment, pragma) {
 				info.section = parts[1]
 				info.inline = inlineNone
 			}
@@ -546,29 +557,27 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// runtime functions.
 			// This is somewhat dangerous and thus only imported in packages
 			// that import unsafe.
-			if slices.Contains(f.Pkg.Pkg.Imports(), types.Unsafe) {
+			if c.checkDefinition(hasBody, comment, pragma) && c.checkUnsafe(f.Pkg, comment, pragma) {
 				info.nobounds = true
 			}
 		case "//go:noescape":
 			// Don't let pointer parameters escape.
 			// Following the upstream Go implementation, we only do this for
 			// declarations, not definitions.
-			if len(f.Blocks) == 0 {
-				info.noescape = true
+			if hasBody {
+				c.addPragmaError(comment, "can only use //go:noescape on declarations")
+				continue
 			}
+			info.noescape = true
 		case "//go:noheap":
 			// Ensure this function does not allocate on the heap.
-			info.noheap = true
+			if c.checkDefinition(hasBody, comment, pragma) {
+				info.noheap = true
+			}
 		case "//go:noruntime":
-			if len(parts) != 1 {
-				c.addError(comment.Slash, "//go:noruntime does not accept parameters")
-				continue
+			if c.checkDefinition(hasBody, comment, pragma) {
+				info.noruntime = true
 			}
-			if f.Blocks == nil {
-				c.addError(comment.Slash, "can only use //go:noruntime on definitions")
-				continue
-			}
-			info.noruntime = true
 		case "//go:variadic":
 			// The //go:variadic pragma is emitted by the CGo preprocessing
 			// pass for C variadic functions. This includes both explicit
@@ -584,6 +593,47 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 	if c.Nobounds {
 		info.nobounds = true
 	}
+}
+
+// flagPragmas are the function pragmas that do not accept parameters.
+var flagPragmas = map[string]bool{
+	"//go:inline":    true,
+	"//go:interrupt": true,
+	"//go:nobounds":  true,
+	"//go:noescape":  true,
+	"//go:noheap":    true,
+	"//go:noinline":  true,
+	"//go:noruntime": true,
+	"//go:variadic":  true,
+}
+
+// addPragmaError reports an error once per pragma, even when each generic
+// instantiation parses the same pragma.
+func (c *compilerContext) addPragmaError(comment *ast.Comment, msg string) {
+	if c.pragmaErrors[comment] {
+		return
+	}
+	c.pragmaErrors[comment] = true
+	c.addError(comment.Slash, msg)
+}
+
+// checkDefinition reports an error if the pragma is not on a function
+// definition.
+func (c *compilerContext) checkDefinition(hasBody bool, comment *ast.Comment, pragma string) bool {
+	if !hasBody {
+		c.addPragmaError(comment, "can only use "+pragma+" on definitions")
+		return false
+	}
+	return true
+}
+
+// checkUnsafe reports an error if the package does not import unsafe.
+func (c *compilerContext) checkUnsafe(pkg *ssa.Package, comment *ast.Comment, pragma string) bool {
+	if !slices.Contains(pkg.Pkg.Imports(), types.Unsafe) {
+		c.addPragmaError(comment, "can only use "+pragma+" in packages that import unsafe")
+		return false
+	}
+	return true
 }
 
 // Check whether this function can be used in //go:wasmimport or
@@ -879,6 +929,9 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 
 // getGlobalInfo returns some information about a specific global.
 func (c *compilerContext) getGlobalInfo(g *ssa.Global) globalInfo {
+	if info, ok := c.globalInfos[g]; ok {
+		return info
+	}
 	info := globalInfo{
 		// Pick the default linkName.
 		linkName: g.RelString(nil),
@@ -888,6 +941,7 @@ func (c *compilerContext) getGlobalInfo(g *ssa.Global) globalInfo {
 	if doc != nil {
 		info.parsePragmas(doc, c, g)
 	}
+	c.globalInfos[g] = info
 	return info
 }
 
@@ -901,19 +955,31 @@ func (info *globalInfo) parsePragmas(doc *ast.CommentGroup, c *compilerContext, 
 		parts := strings.Fields(comment.Text)
 		switch parts[0] {
 		case "//go:extern":
+			if len(parts) > 2 {
+				c.addPragmaError(comment, fmt.Sprintf("expected at most one parameter to //go:extern, not %d", len(parts)-1))
+				continue
+			}
 			info.extern = true
 			if len(parts) == 2 {
 				info.linkName = parts[1]
 			}
 		case "//go:align":
+			if len(parts) != 2 {
+				c.addPragmaError(comment, fmt.Sprintf("expected one parameter to //go:align, not %d", len(parts)-1))
+				continue
+			}
 			align, err := strconv.Atoi(parts[1])
-			if err == nil {
-				info.align = align
+			if err != nil {
+				c.addPragmaError(comment, "//go:align parameter must be an integer")
+				continue
 			}
+			info.align = align
 		case "//go:section":
-			if len(parts) == 2 {
-				info.section = parts[1]
+			if len(parts) != 2 {
+				c.addPragmaError(comment, fmt.Sprintf("expected one parameter to //go:section, not %d", len(parts)-1))
+				continue
 			}
+			info.section = parts[1]
 		case "//go:linkname":
 			if len(parts) != 3 || parts[1] != g.Name() {
 				continue
