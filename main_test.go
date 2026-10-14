@@ -337,6 +337,7 @@ func TestBuild(t *testing.T) {
 		"goroutines.go",
 		"init.go",
 		"init_multi.go",
+		"interface-blank.go",
 		"interface.go",
 		"json.go",
 		"localtypes/",
@@ -801,7 +802,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			testOptions := compileopts.Options(options)
-			if name == "finalizerinvariants.go" || name == "finalizerlarge.go" {
+			switch name {
+			case "finalizerinvariants.go", "finalizerlarge.go", "interface.go", "interface-blank.go":
 				testOptions.Tags = append(append([]string(nil), options.Tags...), "runtime_asserts")
 			}
 			if testOptions.Target == "simavr" && name == "math.go" {
