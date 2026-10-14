@@ -42,6 +42,7 @@ func TestErrors(t *testing.T) {
 		{name: "noruntime"},
 		{name: "noruntime-use"},
 		{name: "optimizer"},
+		{name: "pragma"},
 		{name: "syntax"},
 		{name: "types"},
 	} {
