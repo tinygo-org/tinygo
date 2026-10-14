@@ -1208,6 +1208,9 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	}
 
 	b.addStandardDefinedAttributes(b.llvmFn)
+	if b.info.noruntime {
+		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-noruntime", ""))
+	}
 	if !b.info.exported {
 		// Do not set visibility for local linkage (internal or private).
 		// Otherwise a "local linkage requires default visibility"

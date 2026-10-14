@@ -41,6 +41,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		fn.SetLinkage(llvm.ExternalLinkage)
 	}
 
+	if errs := CheckNoRuntime(mod); len(errs) != 0 {
+		return errs
+	}
+
 	// run a check of all of our code
 	if config.VerifyIR() {
 		errs := ircheck.Module(mod)
