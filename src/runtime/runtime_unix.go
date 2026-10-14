@@ -489,6 +489,11 @@ func signal_recv() uint32 {
 				// We expect only a single goroutine to call signal_recv.
 				runtimeFatal("signal_recv called concurrently")
 			}
+			// A signal that arrived before the waiter was published found no waiter.
+			// Take the waiter back and loop, unless checkSignals already took it.
+			if receivedSignals.Load() != 0 && signalRecvWaiter.Swap(nil) != nil {
+				continue
+			}
 			task.Pause()
 			continue
 		}
