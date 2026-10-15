@@ -1197,6 +1197,13 @@ func (t *RawType) FieldByNameFunc(match func(string) bool) (StructField, bool) {
 }
 
 func (t *RawType) FieldByIndex(index []int) StructField {
+	if t.Kind() != Struct {
+		panic(errTypeFieldByIndex)
+	}
+	if len(index) == 0 {
+		return StructField{Type: t}
+	}
+
 	ftype := t
 	var field rawStructField
 
