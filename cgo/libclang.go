@@ -272,10 +272,10 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 			doc = append(doc, "//go:noescape")
 			f.noescapingFuncs[name].used = true
 		}
-		if len(doc) != 0 {
+		for _, text := range doc {
 			decl.Doc.List = append(decl.Doc.List, &ast.Comment{
 				Slash: pos - 1,
-				Text:  strings.Join(doc, "\n"),
+				Text:  text,
 			})
 		}
 		for i := range numArgs {

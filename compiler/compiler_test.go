@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/transform"
@@ -153,6 +154,29 @@ func TestCGoGlobalOrder(t *testing.T) {
 		if len(names) != 4 || !slices.IsSorted(names) {
 			t.Fatalf("CGo globals are not in name order: %v", names)
 		}
+	}
+}
+
+func TestCGoPragmas(t *testing.T) {
+	mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "cgo-pragmas.go")
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	defer mod.Dispose()
+
+	fn := mod.NamedFunction("variadicNoescape")
+	if fn.IsNil() {
+		t.Fatal("missing variadicNoescape declaration")
+	}
+	if !fn.GlobalValueType().IsFunctionVarArg() {
+		t.Error("C function declaration is not variadic")
+	}
+	nocapture := fn.GetEnumAttributeAtIndex(1, llvm.AttributeKindID(llvmutil.NoCaptureAttrName()))
+	if !llvmutil.IsNoCapture(nocapture) {
+		t.Error("C function pointer parameter can escape")
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
 	}
 }
 
