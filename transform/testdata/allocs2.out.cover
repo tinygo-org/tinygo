@@ -24,3 +24,4 @@ testdata/allocs2.go:305.1,305.42 1 0
 testdata/allocs2.go:311.1,311.52 1 0
 testdata/allocs2.go:312.1,312.52 1 0
 testdata/allocs2.go:317.1,317.42 1 0
+testdata/allocs2.go:364.1,364.50 1 0
