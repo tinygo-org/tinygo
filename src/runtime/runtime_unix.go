@@ -385,13 +385,40 @@ func signal_enable(s uint32) {
 		runtimePanicAt(returnAddress(0), errUnsupportedSignal)
 	}
 
-	// This is intentonally a non-atomic store. This is safe, since hasSignals
-	// is only used in waitForEvents which is only called when there's a
-	// scheduler (and therefore there is no parallelism).
+	// Non-atomic on purpose. Only waitForEvents reads hasSignals, and the
+	// threads scheduler never calls it, so the watcher does not depend on it.
 	hasSignals = true
+
+	// Under the threads scheduler only sleepTicks reaches checkSignals.
+	startSignalWatcher()
 
 	// It's easier to implement this function in C.
 	tinygo_signal_enable(s)
+}
+
+// signalWatcherStarted is never cleared, the watcher never exits.
+var signalWatcherStarted atomic.Bool
+
+// startSignalWatcher starts the watcher once, under the threads scheduler only.
+func startSignalWatcher() {
+	if hasScheduler || !hasParallelism {
+		return
+	}
+	if !signalWatcherStarted.Swap(true) {
+		go signalWatcher()
+	}
+}
+
+// signalWatcher mirrors the signal half of waitForEvents. A futex wait that
+// returns early (EINTR) is harmless, Swap(0) is 0 and the loop waits again.
+func signalWatcher() {
+	for {
+		// Block until the signal handler bumps the futex from 0 to 1.
+		signalFutex.Wait(0)
+		if signalFutex.Swap(0) != 0 {
+			checkSignals()
+		}
+	}
 }
 
 //go:linkname signal_ignore os/signal.signal_ignore
@@ -461,6 +488,11 @@ func signal_recv() uint32 {
 			if signalRecvWaiter.Swap(task.Current()) != nil {
 				// We expect only a single goroutine to call signal_recv.
 				runtimeFatal("signal_recv called concurrently")
+			}
+			// A signal that arrived before the waiter was published found no waiter.
+			// Take the waiter back and loop, unless checkSignals already took it.
+			if receivedSignals.Load() != 0 && signalRecvWaiter.Swap(nil) != nil {
+				continue
 			}
 			task.Pause()
 			continue
