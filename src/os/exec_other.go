@@ -2,7 +2,10 @@
 
 package os
 
-import "syscall"
+import (
+	"syscall"
+	"time"
+)
 
 var (
 	Interrupt Signal = syscall.SIGINT
@@ -24,4 +27,24 @@ func forkExec(_ string, _ []string, _ *ProcAttr) (pid int, err error) {
 
 func startProcess(_ string, _ []string, _ *ProcAttr) (proc *Process, err error) {
 	return &Process{Pid: 0}, ErrNotImplemented
+}
+
+func (p *Process) wait() (*ProcessState, error) {
+	return nil, ErrNotImplemented
+}
+
+func (p *Process) signal(_ Signal) error {
+	return ErrNotImplemented
+}
+
+func (p *ProcessState) userTime() time.Duration {
+	return 0
+}
+
+func (p *ProcessState) systemTime() time.Duration {
+	return 0
+}
+
+func hostname() (string, error) {
+	return "", ErrNotImplemented
 }
