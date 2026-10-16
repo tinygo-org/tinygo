@@ -14,6 +14,7 @@ const (
 	flag_PROT_WRITE    = 0x2
 	flag_MAP_PRIVATE   = 0x2
 	flag_MAP_ANONYMOUS = 0x1000 // MAP_ANON
+	flag_MAP_NORESERVE = 0x0040
 )
 
 // Source: https://opensource.apple.com/source/Libc/Libc-1439.100.3/include/time.h.auto.html
