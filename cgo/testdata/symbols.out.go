@@ -70,6 +70,13 @@ func _Cgo_variadic2(x _Cgo_int, y _Cgo_int)
 
 var _Cgo_variadic2$funcaddr unsafe.Pointer
 
+//export variadicNoescape
+//go:variadic
+//go:noescape
+func _Cgo_variadicNoescape(a *_Cgo_int)
+
+var _Cgo_variadicNoescape$funcaddr unsafe.Pointer
+
 //export _Cgo_static_173c95a79b6df1980521_staticfunc
 func _Cgo_staticfunc!symbols.go(x _Cgo_int)
 
