@@ -223,6 +223,11 @@ func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Va
 					return result
 				}
 			}
+		case llvm.Select:
+			// A select escapes if the selected value escapes.
+			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				return result
+			}
 		case llvm.Load:
 			// Load does not escape.
 		case llvm.Store:
