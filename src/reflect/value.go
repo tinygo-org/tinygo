@@ -223,7 +223,7 @@ func (v Value) Method(i int) Value {
 }
 
 func (v Value) MethodByName(name string) Value {
-	panic("unimplemented: (reflect.Value).MethodByName()")
+	return Value{v.Value.MethodByName(name)}
 }
 
 func (v Value) Recv() (x Value, ok bool) {

@@ -2486,7 +2486,10 @@ func (v Value) Method(i int) Value {
 }
 
 func (v Value) MethodByName(name string) Value {
-	panic("unimplemented: (reflect.Value).MethodByName()")
+	if v.Kind() == Invalid {
+		panic(&ValueError{Method: "reflect.Value.MethodByName", Kind: Invalid})
+	}
+	return Value{}
 }
 
 func (v Value) Recv() (x Value, ok bool) {

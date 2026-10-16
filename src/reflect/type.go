@@ -497,7 +497,7 @@ func (t *rawType) Method(i int) Method {
 }
 
 func (t *rawType) MethodByName(name string) (Method, bool) {
-	panic("unimplemented: (reflect.Type).MethodByName()")
+	return Method{}, false
 }
 
 func (t *rawType) Methods() iter.Seq[Method] {
