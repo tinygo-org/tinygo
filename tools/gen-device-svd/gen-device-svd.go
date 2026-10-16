@@ -685,12 +685,9 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		}
 
 		da := decodeDimArray(fieldEl.Dim, fieldEl.DimIndex, fieldEl.DimIncrement, "field", fieldNameTpl)
-		da.rangeElems(func(ia int, _ uint32) bool {
-			if da != nil {
-				lsb += da.incr
-				msb += da.incr
-			}
+		da.rangeElems(func(ia int, offset uint32) bool {
 			fieldName := da.replace(fieldNameTpl, ia)
+			lsb, msb := lsb+offset, msb+offset
 
 			// The enumerated values can be the same as another field, so to avoid
 			// duplication SVD files can simply refer to another set of enumerated
@@ -802,6 +799,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 				}
 				enumDefault.resolve()
 			}
+
 			return true
 		})
 	}
