@@ -110,6 +110,72 @@ define { i32, { ptr, ptr } } @wrapInAggregate(ptr %p) {
   ret { i32, { ptr, ptr } } %result
 }
 
+; Two allocations in one block, used one after the other. Both get
+; lifetime markers so that they can share a stack slot.
+define void @testSequentialLifetimes() {
+  %alloc1 = call align 4 ptr @runtime.alloc(i32 12, ptr null)
+  %v1 = call ptr @noescapeIntPtr(ptr %alloc1)
+  %alloc2 = call align 4 ptr @runtime.alloc(i32 12, ptr null)
+  %v2 = call ptr @noescapeIntPtr(ptr %alloc2)
+  ret void
+}
+
+; The allocation has a use in another block. It gets no markers.
+define void @testCrossBlockUse(i1 %c) {
+entry:
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr null)
+  store i32 5, ptr %alloc
+  br i1 %c, label %then, label %done
+then:
+  %v = call ptr @noescapeIntPtr(ptr %alloc)
+  br label %done
+done:
+  ret void
+}
+
+; The callee returns its pointer argument. The lifetime includes the uses
+; of the returned pointer.
+define ptr @returnsArg(ptr %p) {
+  ret ptr %p
+}
+
+define void @testReturnedPointer() {
+  %alloc = call align 4 ptr @runtime.alloc(i32 8, ptr null)
+  %alias = call ptr @returnsArg(ptr %alloc)
+  store i32 7, ptr %alias
+  ret void
+}
+
+; The callee returns its pointer argument inside an aggregate. The
+; allocation gets no markers.
+define { ptr, i32 } @returnsArgInAggregate(ptr %p) {
+  %agg = insertvalue { ptr, i32 } undef, ptr %p, 0
+  %agg2 = insertvalue { ptr, i32 } %agg, i32 3, 1
+  ret { ptr, i32 } %agg2
+}
+
+define void @testReturnedAggregate() {
+  %alloc = call align 4 ptr @runtime.alloc(i32 8, ptr null)
+  %agg = call { ptr, i32 } @returnsArgInAggregate(ptr %alloc)
+  %ptr = extractvalue { ptr, i32 } %agg, 0
+  store i32 7, ptr %ptr
+  ret void
+}
+
+; One call gets the pointer and a derived pointer, and returns the second.
+; The lifetime includes the uses of the returned pointer.
+define ptr @returnsSecondArg(ptr %unused, ptr %p) {
+  ret ptr %p
+}
+
+define void @testReturnedDerivedArgument() {
+  %alloc = call align 4 ptr @runtime.alloc(i32 8, ptr null)
+  %derived = getelementptr i8, ptr %alloc, i32 0
+  %alias = call ptr @returnsSecondArg(ptr %alloc, ptr %derived)
+  store i32 9, ptr %alias
+  ret void
+}
+
 declare ptr @escapeIntPtr(ptr)
 
 declare ptr @noescapeIntPtr(ptr nocapture)
