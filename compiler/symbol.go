@@ -36,6 +36,7 @@ type functionInfo struct {
 	nobounds      bool       // go:nobounds
 	noescape      bool       // go:noescape
 	noheap        bool       // go:noheap
+	noruntime     bool       // go:noruntime
 	variadic      bool       // go:variadic (CGo only)
 	inline        inlineType // go:inline
 }
@@ -553,6 +554,16 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 		case "//go:noheap":
 			// Ensure this function does not allocate on the heap.
 			info.noheap = true
+		case "//go:noruntime":
+			if len(parts) != 1 {
+				c.addError(comment.Slash, "//go:noruntime does not accept parameters")
+				continue
+			}
+			if f.Blocks == nil {
+				c.addError(comment.Slash, "can only use //go:noruntime on definitions")
+				continue
+			}
+			info.noruntime = true
 		case "//go:variadic":
 			// The //go:variadic pragma is emitted by the CGo preprocessing
 			// pass for C variadic functions. This includes both explicit

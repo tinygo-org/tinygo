@@ -117,6 +117,7 @@ type pllSearch struct {
 	LockRefDiv uint8
 }
 
+//go:noruntime
 func (ps pllSearch) CalcDivs(xoscRef, targetFreq, MHz uint64) (fbdiv uint64, refdiv, pd1, pd2 uint8, err error) {
 	genTable()
 	var bestFreq, bestFbdiv uint64
@@ -191,6 +192,7 @@ func abs(a int64) int64 {
 	return a
 }
 
+//go:noruntime
 func pllFreqOutPostdiv(xosc, fbdiv, MHz uint64, refdiv, postdiv1, postdiv2 uint8) (foutpostdiv uint64, err error) {
 	// testing grounds.
 	const (
@@ -248,6 +250,7 @@ var pdTable = [50]struct {
 	lovco [2]uint8
 }{}
 
+//go:noruntime
 func genTable() {
 	if pdTable[1].hivco[1] != 0 {
 		return // Already generated.
@@ -259,6 +262,8 @@ func genTable() {
 
 // genTableEntry stays separate to keep PLL calculation within interp's 1,000-entry
 // per-function basic block limit, rather than running at startup (interp/interpreter.go).
+//
+//go:noruntime
 func genTableEntry(product int) {
 	bestProdhi := 255
 	bestProdlo := 255
