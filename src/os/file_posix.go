@@ -1,6 +1,9 @@
+//go:build !linux || baremetal || nintendoswitch || wasip1 || wasm_unknown || wasip2
+
 package os
 
 import (
+	"syscall"
 	"time"
 )
 
@@ -9,6 +12,18 @@ import (
 // Chtimes is a stub, not yet implemented
 func Chtimes(name string, atime time.Time, mtime time.Time) error {
 	return ErrNotImplemented
+}
+
+func (f *File) read(b []byte) (int, error) {
+	return f.handle.Read(b)
+}
+
+func (f *File) write(b []byte) (int, error) {
+	return f.handle.Write(b)
+}
+
+func (f *File) syscallConn() (syscall.RawConn, error) {
+	return nil, ErrNotImplemented
 }
 
 // setDeadline sets the read and write deadline.
