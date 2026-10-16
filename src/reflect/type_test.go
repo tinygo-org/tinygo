@@ -6,6 +6,7 @@ package reflect_test
 
 import (
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -39,6 +40,115 @@ func TestLongStructTags(t *testing.T) {
 			}
 			if length != 0 && !strings.Contains(typ.String(), string(field.Tag)) {
 				t.Error("Type.String omitted the tag")
+			}
+		})
+	}
+}
+
+func TestTypeFieldByIndexEmpty(t *testing.T) {
+	type item struct {
+		A string `json:"a"`
+	}
+	for _, typ := range []reflect.Type{
+		reflect.TypeFor[item](),
+		reflect.TypeFor[struct{}](),
+	} {
+		t.Run(typ.String(), func(t *testing.T) {
+			for _, test := range []struct {
+				name  string
+				index []int
+			}{
+				{"nil", nil},
+				{"empty", []int{}},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					field := typ.FieldByIndex(test.index)
+					if field.Type != typ {
+						t.Fatal("FieldByIndex returned a different type")
+					}
+					if got := field.Type.Kind(); got != reflect.Struct {
+						t.Fatalf("unexpected field kind: got %v want %v", got, reflect.Struct)
+					}
+					if want := (reflect.StructField{Type: typ}); !reflect.DeepEqual(field, want) {
+						t.Fatalf("unexpected field result\ngot %#v\nwant %#v", field, want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestTypeFieldByIndexFields(t *testing.T) {
+	type fields struct {
+		Pad    byte
+		Name   string `json:"name"`
+		hidden int
+	}
+	typ := reflect.TypeFor[fields]()
+	embedded := reflect.TypeFor[struct {
+		Pad byte
+		fields
+	}]()
+	pointer := reflect.TypeFor[struct {
+		Pad byte
+		*fields
+	}]()
+	for _, test := range []struct {
+		name  string
+		typ   reflect.Type
+		index []int
+		want  reflect.StructField
+	}{
+		{"direct", typ, []int{1}, typ.Field(1)},
+		{"unexported", typ, []int{2}, typ.Field(2)},
+		{"embedded", embedded, []int{1}, embedded.Field(1)},
+		{"promoted", embedded, []int{1, 1}, typ.Field(1)},
+		{"pointer", pointer, []int{1}, pointer.Field(1)},
+		{"pointer-promoted", pointer, []int{1, 1}, typ.Field(1)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			field := test.typ.FieldByIndex(test.index)
+			if field.Type != test.want.Type {
+				t.Fatal("FieldByIndex returned a different type")
+			}
+			if got, want := field.Type.Kind(), test.want.Type.Kind(); got != want {
+				t.Fatalf("unexpected field kind: got %v want %v", got, want)
+			}
+			field.Index = test.want.Index
+			if !reflect.DeepEqual(field, test.want) {
+				t.Fatalf("unexpected field result\ngot %#v\nwant %#v", field, test.want)
+			}
+		})
+	}
+}
+
+func TestTypeFieldByIndexNonStruct(t *testing.T) {
+	if runtime.GOARCH == "wasm" {
+		t.Log("recover is not supported on wasm")
+		return
+	}
+
+	type item struct {
+		A string
+	}
+	for _, typ := range []reflect.Type{
+		reflect.TypeFor[int](),
+		reflect.TypeFor[*item](),
+	} {
+		t.Run(typ.String(), func(t *testing.T) {
+			for _, test := range []struct {
+				name  string
+				index []int
+			}{
+				{"nil", nil},
+				{"empty", []int{}},
+				{"field", []int{0}},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					defer func() { recover() }()
+					typ.FieldByIndex(test.index)
+					t.Fatal("FieldByIndex did not panic")
+				})
 			}
 		})
 	}

@@ -120,6 +120,43 @@ func TestCGo(t *testing.T) {
 	}
 }
 
+func TestCGoPragmas(t *testing.T) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "testdata/symbols.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, _, _, _, _, errs := Process([]*ast.File{f}, "testdata", "main", fset, []string{"--target=armv6m-unknown-unknown-eabi"}, "linux")
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name.Name != "_Cgo_variadicNoescape" {
+				continue
+			}
+			if fn.Body != nil {
+				t.Error("generated C function has a body")
+			}
+			if fn.Doc == nil {
+				t.Fatal("generated C function has no pragma comments")
+			}
+			var pragmas []string
+			for _, comment := range fn.Doc.List {
+				if strings.HasPrefix(comment.Text, "//go:") {
+					pragmas = append(pragmas, comment.Text)
+				}
+			}
+			if len(pragmas) != 2 || pragmas[0] != "//go:variadic" || pragmas[1] != "//go:noescape" {
+				t.Errorf("expected separate variadic and noescape comments, got %q", pragmas)
+			}
+			return
+		}
+	}
+	t.Fatal("missing generated variadicNoescape declaration")
+}
+
 func Test_cgoPackage_isEquivalentAST(t *testing.T) {
 	fieldA := &ast.Field{Type: &ast.BasicLit{Kind: token.STRING, Value: "a"}}
 	fieldB := &ast.Field{Type: &ast.BasicLit{Kind: token.STRING, Value: "b"}}
