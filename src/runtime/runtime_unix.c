@@ -145,3 +145,63 @@ void tinygo_register_fatal_signals(void) {
 	sigaction(SIGILL, &act, NULL);
 	sigaction(SIGSEGV, &act, NULL);
 }
+
+#ifdef __linux__
+#include <poll.h>
+#include <sys/eventfd.h>
+#include <sys/syscall.h>
+#include <time.h>
+
+int32_t tinygo_poll_eventfd(void) {
+	return (int32_t)eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+}
+
+void tinygo_poll_wake(int32_t wakefd) {
+	uint64_t val = 1;
+	write(wakefd, &val, sizeof(val));
+}
+
+void tinygo_poll_close(int32_t wakefd) {
+	close(wakefd);
+}
+
+// Returns: 0 = fd ready, 1 = woken via wakefd, 2 = timeout, -1 = error/EINTR
+int32_t tinygo_poll_wait(int32_t fd, int32_t wakefd, int32_t mode, int64_t timeout_ns) {
+	struct pollfd fds[2];
+	fds[0].fd = fd;
+	fds[0].events = (mode == 'w') ? POLLOUT : (POLLIN | POLLRDHUP);
+	fds[0].revents = 0;
+	fds[1].fd = wakefd;
+	fds[1].events = POLLIN;
+	fds[1].revents = 0;
+
+	struct timespec ts;
+	struct timespec *pts = NULL;
+	if (timeout_ns >= 0) {
+		ts.tv_sec = timeout_ns / 1000000000LL;
+		ts.tv_nsec = timeout_ns % 1000000000LL;
+		pts = &ts;
+	}
+#ifdef SYS_ppoll_time64
+	long r = syscall(SYS_ppoll_time64, fds, 2, pts, NULL, _NSIG / 8);
+#else
+	long r = syscall(SYS_ppoll, fds, 2, pts, NULL, _NSIG / 8);
+#endif
+	if (r < 0) {
+		return -1;
+	}
+	if (r == 0) {
+		return 2;
+	}
+	if (fds[1].revents != 0) {
+		uint64_t val;
+		while (read(wakefd, &val, sizeof(val)) > 0) {
+		}
+		return 1;
+	}
+	if (fds[0].revents != 0) {
+		return 0;
+	}
+	return -1;
+}
+#endif

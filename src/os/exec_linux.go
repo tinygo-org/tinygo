@@ -8,6 +8,7 @@ package os
 
 import (
 	"errors"
+	"internal/poll"
 	"runtime"
 	"syscall"
 	"time"
@@ -135,6 +136,148 @@ func (p *ProcessState) systemTime() time.Duration {
 	return time.Duration(p.rusage.Stime.Nano()) * time.Nanosecond
 }
 
+type pollFD struct {
+	fd *poll.FD
+}
+
+func (p pollFD) Close() error {
+	return p.fd.Close()
+}
+
+func (p pollFD) Exist() bool {
+	return p.fd != nil
+}
+
+func (f *File) ensurePollFD() (*poll.FD, error) {
+	if f.handle == nil {
+		return nil, ErrClosed
+	}
+	if f.pfd.fd != nil {
+		return f.pfd.fd, nil
+	}
+	h, ok := f.handle.(fd)
+	if !ok {
+		return nil, ErrNotImplemented
+	}
+	pfd := &poll.FD{
+		Sysfd:         int(h.Fd()),
+		IsStream:      true,
+		ZeroReadIsEOF: true,
+	}
+	_ = pfd.Init("file", true)
+	f.pfd.fd = pfd
+	return pfd, nil
+}
+
+func (f *File) read(b []byte) (int, error) {
+	if f.pfd.fd != nil {
+		return f.pfd.fd.Read(b)
+	}
+	n, err := f.handle.Read(b)
+	if err == syscall.EAGAIN {
+		if pfd, perr := f.ensurePollFD(); perr == nil {
+			return pfd.Read(b)
+		}
+	}
+	return n, err
+}
+
+func (f *File) write(b []byte) (int, error) {
+	if f.pfd.fd != nil {
+		return f.pfd.fd.Write(b)
+	}
+	n, err := f.handle.Write(b)
+	if err == syscall.EAGAIN {
+		if pfd, perr := f.ensurePollFD(); perr == nil {
+			return pfd.Write(b)
+		}
+	}
+	return n, err
+}
+
+type rawConn struct {
+	file *File
+}
+
+func (c *rawConn) Control(fn func(uintptr)) error {
+	pfd, err := c.file.ensurePollFD()
+	if err != nil {
+		return err
+	}
+	err = pfd.RawControl(fn)
+	runtime.KeepAlive(c.file)
+	return err
+}
+
+func (c *rawConn) Read(fn func(uintptr) bool) error {
+	pfd, err := c.file.ensurePollFD()
+	if err != nil {
+		return err
+	}
+	err = pfd.RawRead(fn)
+	runtime.KeepAlive(c.file)
+	return err
+}
+
+func (c *rawConn) Write(fn func(uintptr) bool) error {
+	pfd, err := c.file.ensurePollFD()
+	if err != nil {
+		return err
+	}
+	err = pfd.RawWrite(fn)
+	runtime.KeepAlive(c.file)
+	return err
+}
+
+func (f *File) syscallConn() (syscall.RawConn, error) {
+	if _, err := f.ensurePollFD(); err != nil {
+		return nil, err
+	}
+	return &rawConn{file: f}, nil
+}
+
+func (f *File) setDeadline(t time.Time) error {
+	pfd, err := f.ensurePollFD()
+	if err != nil {
+		return err
+	}
+	return pfd.SetDeadline(t)
+}
+
+func (f *File) setReadDeadline(t time.Time) error {
+	pfd, err := f.ensurePollFD()
+	if err != nil {
+		return err
+	}
+	return pfd.SetReadDeadline(t)
+}
+
+func (f *File) setWriteDeadline(t time.Time) error {
+	pfd, err := f.ensurePollFD()
+	if err != nil {
+		return err
+	}
+	return pfd.SetWriteDeadline(t)
+}
+
+const _UTIME_OMIT = (1 << 30) - 2
+
+func Chtimes(name string, atime time.Time, mtime time.Time) error {
+	var utimes [2]syscall.Timespec
+	set := func(i int, t time.Time) {
+		if t.IsZero() {
+			utimes[i] = syscall.Timespec{Sec: _UTIME_OMIT, Nsec: _UTIME_OMIT}
+		} else {
+			utimes[i] = syscall.NsecToTimespec(t.UnixNano())
+		}
+	}
+	set(0, atime)
+	set(1, mtime)
+	if e := syscall.UtimesNano(fixLongPath(name), utimes[0:]); e != nil {
+		return &PathError{Op: "chtimes", Path: name, Err: e}
+	}
+	return nil
+}
 func hostname() (name string, err error) {
 	var un syscall.Utsname
 	err = syscall.Uname(&un)
