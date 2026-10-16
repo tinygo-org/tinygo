@@ -553,7 +553,14 @@ func TestBuild(t *testing.T) {
 
 		t.Run("EmulatedRISCV", func(t *testing.T) {
 			t.Parallel()
-			runPlatTests(optionsFromTarget("riscv-qemu", sema), tests, t)
+			for _, scheduler := range []string{"cores", "tasks"} {
+				t.Run(scheduler, func(t *testing.T) {
+					t.Parallel()
+					opts := optionsFromTarget("riscv-qemu", sema)
+					opts.Scheduler = scheduler
+					runPlatTests(opts, tests, t)
+				})
+			}
 		})
 
 		t.Run("AVR", func(t *testing.T) {
@@ -672,6 +679,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Fatal("failed to load target spec:", err)
 	}
 
+	scheduler := options.Scheduler
+	if scheduler == "" {
+		scheduler = spec.Scheduler
+	}
+
 	// FIXME: this should really be:
 	// isWebAssembly := strings.HasPrefix(spec.Triple, "wasm")
 	isWASI := strings.HasPrefix(options.Target, "wasi")
@@ -683,12 +695,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 
 	for _, name := range tests {
-		if name == "goroutines.go" && (spec.Scheduler == "threads" || spec.Scheduler == "cores") {
+		if name == "goroutines.go" && (scheduler == "threads" || scheduler == "cores") {
 			// This test intentionally checks concurrent scheduling by comparing
 			// output order, so only run it with non-threaded schedulers.
 			continue
 		}
-		if name == "coreassign.go" && spec.Scheduler != "cores" {
+		if name == "coreassign.go" && scheduler != "cores" {
 			// Core assignment needs the cores scheduler.
 			continue
 		}
