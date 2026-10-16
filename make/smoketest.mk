@@ -15,6 +15,7 @@ SMOKETEST_SUBTARGETS = \
 	smoketest-wasm-sim \
 	smoketest-nrf \
 	smoketest-samd \
+	smoketest-renesas \
 	smoketest-nxp \
 	smoketest-rp2xxx \
 	smoketest-pwm-usb \
@@ -244,6 +245,13 @@ smoketest-samd: | build/smoke
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=itsybitsy-nrf52840  examples/i2s-tone
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=qtpy                examples/machinetest
+	@$(MD5SUM) $(SMOKE_OUT).hex
+
+smoketest-renesas: SMOKE_OUT = build/smoke/renesas
+smoketest-renesas: | build/smoke
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=arduino-uno-r4-minima examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=arduino-uno-r4-wifi examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 
 smoketest-nxp: SMOKE_OUT = build/smoke/nxp
