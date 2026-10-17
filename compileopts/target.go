@@ -100,7 +100,7 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 			if src.Bool() {
 				dst.Set(src)
 			}
-		case reflect.Ptr: // for pointers, copy if not nil
+		case reflect.Pointer: // for pointers, copy if not nil
 			if !src.IsNil() {
 				dst.Set(src)
 			}
