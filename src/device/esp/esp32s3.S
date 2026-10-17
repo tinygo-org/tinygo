@@ -312,6 +312,7 @@ call_start_cpu0:
     memw
 
     // 4j. Clear bus-shut bits so core 0 can access ICache and DCache buses.
+    //     This also clears the core 1 bits, which call_start_cpu1 relies on.
     l32r a8, .Licache_ctrl1_reg         // 0x600C4064
     movi a9, 0
     s32i a9, a8, 0                      // Clear all ICACHE_CTRL1 shut bits
@@ -349,6 +350,74 @@ call_start_cpu0:
     callx4 a4
 
     // If main returns, loop forever.
+1:  j 1b
+
+// -----------------------------------------------------------------------
+// Core 1 entry point, set with ets_set_appcpu_boot_addr. Placed in IRAM by
+// the linker. Only the per core setup of call_start_cpu0 is done here.
+// -----------------------------------------------------------------------
+.section .text.call_start_cpu1
+    .literal_position
+    .align 4
+.Lstack1_top_addr:
+    .long _stack1_top
+.LrunCore1_addr:
+    .long tinygo_runCore1
+.Lvector_table_addr1:
+    .long _vector_table
+
+.global call_start_cpu1
+call_start_cpu1:
+    // Disable WOE.
+    rsr.ps a2
+    movi a3, 1
+    slli a3, a3, 18         // a3 = PS_WOE (0x40000)
+    and  a3, a2, a3
+    xor  a2, a2, a3
+    wsr.ps a2
+    rsync
+
+    // Set WINDOWSTART to 1 << WINDOWBASE.
+    rsr.windowbase  a2
+    ssl  a2
+    movi a2, 1
+    sll  a2, a2
+    wsr.windowstart a2
+    rsync
+
+    l32r a1, .Lstack1_top_addr
+
+    // Re-enable WOE.
+    rsr.ps a2
+    movi a3, 1
+    slli a3, a3, 18         // a3 = PS_WOE (0x40000)
+    or a2, a2, a3
+    wsr.ps a2
+    rsync
+
+    // Enable FPU (coprocessor 0).
+    movi a2, 1
+    wsr.cpenable a2
+    rsync
+
+    // VECBASE must be set before the first callx4.
+    l32r a8, .Lvector_table_addr1
+    wsr.vecbase a8
+    rsync
+
+    // Clear PS.EXCM and PS.INTLEVEL, set PS.UM.
+    rsr.ps a2
+    movi a3, ~0x1F
+    and a2, a2, a3
+    movi a3, 0x20
+    or a2, a2, a3
+    wsr.ps a2
+    rsync
+
+    mov  a5, a1
+    l32r a4, .LrunCore1_addr
+    callx4 a4
+
 1:  j 1b
 
 // -----------------------------------------------------------------------

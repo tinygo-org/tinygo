@@ -46,13 +46,13 @@ func Restore(state State) {
 //  4. The INTERRUPT special register (SR 226) shows which CPU interrupts are
 //     currently pending.
 //
-// We allocate CPU interrupt lines 6..30 for use by peripherals via
-// interrupt.New().  Lines 0-5 are reserved (timer, software, etc.) and
-// line 31 is avoided because some hardware treats it specially.
+// We allocate CPU interrupt lines 1..30 for use by peripherals via
+// interrupt.New().  Line 0 is reserved and line 31 is avoided because some
+// hardware treats it specially.
 
 const (
 	// First / last allocatable CPU interrupt for peripherals.
-	firstCPUInt = 6
+	firstCPUInt = 1
 	lastCPUInt  = 30
 )
 
@@ -64,8 +64,8 @@ var cpuIntUsed [32]bool
 var cpuIntToPeripheral [32]int
 
 // inInterrupt is set while we're inside the interrupt handler so that
-// interrupt.In() returns the correct value.
-var inInterrupt bool
+// interrupt.In() returns the correct value. One flag for each of the two cores.
+var inInterrupt [2]bool
 
 // Enable enables a CPU interrupt for the ESP32-S3.  The caller must first
 // map the peripheral to a CPU interrupt line using the interrupt matrix,
@@ -81,17 +81,25 @@ func (i Interrupt) Enable() error {
 	// Mark as used.
 	cpuIntUsed[i.num] = true
 
-	// Read current INTENABLE, set the bit for this CPU interrupt.
-	cur := readINTENABLE()
-	cur |= 1 << uint(i.num)
-	writeINTENABLE(cur)
+	// INTENABLE is per core and peripherals are routed to core 0, so core 1
+	// asks core 0 to enable the line.
+	if currentCPU() != 0 {
+		enableOnCore0(uint32(i.num))
+		return nil
+	}
+	enableLocal(1 << uint(i.num))
 
 	return nil
 }
 
+// enableLocal sets the given bits in INTENABLE of the calling core.
+func enableLocal(mask uint32) {
+	writeINTENABLE(readINTENABLE() | mask)
+}
+
 // In returns whether the CPU is currently inside an interrupt handler.
 func In() bool {
-	return inInterrupt
+	return inInterrupt[currentCPU()&1]
 }
 
 // handleInterrupt is called from the assembly vector code in esp32s3.S.
@@ -100,7 +108,8 @@ func In() bool {
 //
 //export handleInterrupt
 func handleInterrupt() {
-	inInterrupt = true
+	core := currentCPU() & 1
+	inInterrupt[core] = true
 
 	// INTERRUPT register shows pending + enabled CPU interrupts.
 	pending := readINTERRUPT()
@@ -124,12 +133,22 @@ func handleInterrupt() {
 	// Signal to sleepTicks that an interrupt has occurred.
 	signalInterrupt()
 
-	inInterrupt = false
+	inInterrupt[core] = false
 }
 
 //go:inline
 func callHandler(n int) {
 	switch n {
+	case 1:
+		callHandlers(1)
+	case 2:
+		callHandlers(2)
+	case 3:
+		callHandlers(3)
+	case 4:
+		callHandlers(4)
+	case 5:
+		callHandlers(5)
 	case 6:
 		callHandlers(6)
 	case 7:
@@ -192,7 +211,13 @@ func callHandlers(num int)
 //go:linkname signalInterrupt runtime.signalInterrupt
 func signalInterrupt()
 
-var errInterruptRange = constError("interrupt for ESP32-S3 must be in range 6 through 30")
+//go:linkname currentCPU runtime.currentCPU
+func currentCPU() uint32
+
+//go:linkname enableOnCore0 runtime.enableInterruptOnCore0
+func enableOnCore0(num uint32)
+
+var errInterruptRange = constError("interrupt for ESP32-S3 must be in range 1 through 30")
 
 type constError string
 

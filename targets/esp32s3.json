@@ -12,7 +12,8 @@
 		"--wrap=calloc",
 		"--wrap=free",
 		"--wrap=realloc",
-		"--wrap=ppCheckTxConnTrafficIdle"
+		"--wrap=ppCheckTxConnTrafficIdle",
+		"--defsym=__num_stacks=2"
 	],
 	"default-stack-size": 8192,
 	"rtlib": "compiler-rt",

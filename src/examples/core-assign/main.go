@@ -1,12 +1,11 @@
 // Assign goroutines to cores with machine.AssignCore.
 // Build with -scheduler=cores.
 
-//go:build scheduler.cores && (rp2040 || rp2350)
+//go:build scheduler.cores && (rp2040 || rp2350 || esp32s3)
 
 package main
 
 import (
-	"device/rp"
 	"machine"
 	"runtime"
 	"time"
@@ -30,13 +29,8 @@ func worker(name string, core int) {
 		machine.AssignCore(core)
 	}
 	for i := 0; i < 10; i++ {
-		println(name, "on core", currentCore())
+		println(name, "on core", machine.CurrentCore())
 		time.Sleep(700 * time.Millisecond)
 	}
 	println(name, "done")
-}
-
-// currentCore reads the core number, which is stable while assigned.
-func currentCore() uint32 {
-	return rp.SIO.CPUID.Get()
 }
