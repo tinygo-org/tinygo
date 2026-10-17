@@ -287,7 +287,7 @@ func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal strin
 
 // Version returns the LLVM major version.
 func Version() int {
-	majorStr := strings.Split(llvm.Version, ".")[0]
+	majorStr, _, _ := strings.Cut(llvm.Version, ".")
 	major, err := strconv.Atoi(majorStr)
 	if err != nil {
 		panic("unexpected error while parsing LLVM version: " + err.Error()) // should not happen
