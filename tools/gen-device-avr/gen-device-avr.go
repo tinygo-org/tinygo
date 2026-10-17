@@ -534,7 +534,7 @@ type {{.Name}}_Type struct {
 					allBits[bitfield.Name] = nil
 				} else {
 					n := 0
-					for i := uint(0); i < 8; i++ {
+					for i := range uint(8) {
 						if (bitfield.Mask>>i)&1 == 0 {
 							continue
 						}

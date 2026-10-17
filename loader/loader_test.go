@@ -78,7 +78,7 @@ func BenchmarkRecordedPath(b *testing.B) {
 				Packages: make(map[string]*Package),
 			}
 			var pkg *Package
-			for i := 0; i < count; i++ {
+			for i := range count {
 				pkg = &Package{
 					program: program,
 					PackageJSON: PackageJSON{
