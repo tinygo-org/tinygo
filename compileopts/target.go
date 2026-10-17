@@ -282,6 +282,38 @@ func GetTargetSpecs() (map[string]*TargetSpec, error) {
 	return maps, nil
 }
 
+// glibcLibDirs are where a distribution puts libc.so and the crt objects.
+// Debian and Ubuntu use a multiarch subdirectory, most others a flat lib or
+// lib64.
+var glibcLibDirs = []string{
+	"/usr/lib",
+	"/usr/lib64",
+	"/usr/lib/x86_64-linux-gnu",
+	"/usr/lib/aarch64-linux-gnu",
+}
+
+// GlibcLibDir returns the directory holding the glibc startup objects and
+// libc.so, for -libc=glibc. crt1.o is what it looks for, because that is the
+// object that must be linked; libc.so and the other crt files sit beside it.
+func GlibcLibDir() (string, error) {
+	for _, dir := range glibcLibDirs {
+		if _, err := os.Stat(filepath.Join(dir, "crt1.o")); err == nil {
+			return dir, nil
+		}
+	}
+	return "", fmt.Errorf("could not find glibc crt1.o in any of %v", glibcLibDirs)
+}
+
+// glibcDynamicLinkers is the path to ld.so per GOARCH, used by -libc=glibc.
+// These are fixed by each architecture's ABI rather than by the distribution,
+// which is why they can be a table rather than something to go looking for.
+var glibcDynamicLinkers = map[string]string{
+	"amd64": "/lib64/ld-linux-x86-64.so.2",
+	"arm64": "/lib/ld-linux-aarch64.so.1",
+	"386":   "/lib/ld-linux.so.2",
+	"arm":   "/lib/ld-linux-armhf.so.3",
+}
+
 // Load a target from environment variables (which default to
 // runtime.GOOS/runtime.GOARCH).
 func defaultTarget(options *Options) (*TargetSpec, error) {
@@ -436,6 +468,22 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		spec.Linker = "ld.lld"
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "musl"
+		if options.Libc == "glibc" {
+			spec.Libc = "glibc"
+			libDir, err := GlibcLibDir()
+			if err != nil {
+				return nil, err
+			}
+			// -L because ld.lld does not search the system library
+			// directories by itself, the way a compiler driver would.
+			spec.LDFlags = append(spec.LDFlags, "-L"+libDir, "-lc")
+			if linker, ok := glibcDynamicLinkers[options.GOARCH]; ok {
+				// Without this lld emits no PT_INTERP, and a binary with
+				// no interpreter never has its shared libraries resolved:
+				// every call through the PLT lands on a null GOT entry.
+				spec.LDFlags = append(spec.LDFlags, "--dynamic-linker="+linker)
+			}
+		}
 		spec.LDFlags = append(spec.LDFlags, "--gc-sections")
 		if options.GOARCH == "arm64" {
 			// Disable outline atomics. For details, see:
@@ -509,12 +557,19 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	if options.GOOS == "windows" {
 		spec.Triple += "-gnu"
 	} else if options.GOOS == "linux" {
-		// We use musl on Linux (not glibc) so we should use -musleabi* instead
-		// of -gnueabi*.
+		// We use musl on Linux by default (not glibc) so we should use
+		// -musleabi* instead of -gnueabi*. Under -libc=glibc it is the
+		// other way around: the triple has to say gnu, both so that clang
+		// lays out ABI-visible types the way glibc does and so that the
+		// cached compiler-rt and libc builds are keyed separately from the
+		// musl ones.
 		// The *hf suffix selects between soft/hard floating point ABI.
-		if spec.SoftFloat {
+		switch {
+		case spec.Libc == "glibc":
+			spec.Triple += "-gnu"
+		case spec.SoftFloat:
 			spec.Triple += "-musleabi"
-		} else {
+		default:
 			spec.Triple += "-musleabihf"
 		}
 	}
