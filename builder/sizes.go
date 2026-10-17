@@ -948,8 +948,7 @@ func readSection(section memorySection, addresses []addressLine, program *progra
 // path. It uses some heuristics, for example for some C libraries.
 func findPackagePath(path string, packagePathMap map[string]string) (packagePath, filename string) {
 	for _, prefix := range []string{compileopts.CSourcePathRoot + "/", compileopts.CSourcePathRootWindows + "/"} {
-		if strings.HasPrefix(filepath.ToSlash(path), prefix) {
-			recordedPath := strings.TrimPrefix(filepath.ToSlash(path), prefix)
+		if recordedPath, ok := strings.CutPrefix(filepath.ToSlash(path), prefix); ok {
 			if rel, ok := strings.CutPrefix(recordedPath, "github.com/tinygo-org/tinygo/"); ok {
 				path = filepath.Join(goenv.Get("TINYGOROOT"), filepath.FromSlash(rel))
 			} else {
