@@ -99,7 +99,7 @@ jobs:
         run: make -j3 gen-device
       - name: Test TinyGo
         shell: bash
-        run: make test GOTESTFLAGS="-only-current-os"
+        run: make test GOTESTFLAGS="-short"
       - name: Build TinyGo release tarball
         shell: bash
         run: make build/release -j4
