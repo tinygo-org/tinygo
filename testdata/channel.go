@@ -11,7 +11,30 @@ var wg sync.WaitGroup
 
 type intchan chan int
 
+var (
+	initValue   = 1
+	initPointer *int
+	initResult  int
+	initDone    = make(chan bool)
+)
+
+func initSet(p **int) {
+	**p = 2
+	initDone <- true
+}
+
+// The goroutine changes initValue through initPointer before init reads it,
+// so the read must not be done at compile time.
+func init() {
+	initPointer = &initValue
+	go initSet(&initPointer)
+	<-initDone
+	initResult = initValue
+}
+
 func main() {
+	println("value set by goroutine in init:", initResult)
+
 	ch := make(chan int, 2)
 	ch <- 1
 	println("len, cap of channel:", len(ch), cap(ch), ch == nil)
