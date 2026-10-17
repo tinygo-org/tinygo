@@ -323,13 +323,23 @@ func (mv *memoryView) load(p pointerValue, size uint32) value {
 	}
 	v := obj.buffer.asRawValue(mv.r)
 	loadedBuf := v.buf[p.offset() : p.offset()+size]
-	if _, writable := mv.objects[p.index()]; writable {
-		// This object's buffer is owned by this view, which means a later
-		// store may mutate it in place (see store below). Copy the loaded
-		// slice so the returned value is not aliased with the live buffer.
-		loadedBuf = append([]uint64(nil), loadedBuf...)
+	if mv.owned(p.index()) {
+		// A store in an owning view may change the buffer in place, so copy
+		// the slice to keep the loaded value independent of it.
+		loadedBuf = slices.Clone(loadedBuf)
 	}
 	return rawValue{buf: loadedBuf}
+}
+
+// owned reports whether this view or a parent view holds the object, so that a
+// store in that view may change its buffer in place.
+func (mv *memoryView) owned(index uint32) bool {
+	for v := mv; v != nil; v = v.parent {
+		if _, ok := v.objects[index]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Store to the value behind the given pointer. This overwrites the value in the
