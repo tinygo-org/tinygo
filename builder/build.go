@@ -1952,7 +1952,7 @@ func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
 
 	// Use an exact semver tag on HEAD, else a pseudo-version from the last tag.
 	if tags, ok := git("tag", "--points-at", "HEAD"); ok {
-		for _, t := range strings.Fields(tags) {
+		for t := range strings.FieldsSeq(tags) {
 			if semver.IsValid(t) && semver.Canonical(t) == t {
 				version = t
 				break
