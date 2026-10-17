@@ -1765,16 +1765,14 @@ func TestTest(t *testing.T) {
 
 func ioLogger(t *testing.T, wg *sync.WaitGroup) io.WriteCloser {
 	r, w := io.Pipe()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer r.Close()
 
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			t.Log(scanner.Text())
 		}
-	}()
+	})
 
 	return w
 }
