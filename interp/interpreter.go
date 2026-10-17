@@ -359,6 +359,33 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				locals[inst.localIndex] = makeLiteralInt(max(operands[1].Uint(r), operands[2].Uint(r)), inst.llvmInst.Type().IntTypeWidth())
 			case strings.HasPrefix(callFn.name, "llvm.smax."):
 				locals[inst.localIndex] = makeLiteralInt(uint64(max(operands[1].Int(r), operands[2].Int(r))), inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.memset.p0"):
+				nBytes := operands[3].Uint(r)
+				if operands[4].Uint(r) != 0 {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				if nBytes == 0 {
+					continue
+				}
+				dst, err := operands[1].asPointer(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				obj := mem.get(dst.index())
+				if mem.hasExternalLoadOrStore(dst) || obj.buffer == nil || uint64(dst.offset())+nBytes > uint64(obj.size) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				buf := newRawValue(uint32(nBytes))
+				for i := range buf.buf {
+					buf.buf[i] = operands[2].Uint(r)
+				}
+				mem.store(buf, dst)
 			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
 				// Copy a block of memory from one pointer to another.
 				if operands[4].Uint(r) != 0 {
