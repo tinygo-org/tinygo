@@ -911,17 +911,17 @@ func (v Value) Field(i int) Value {
 	if v.Kind() != Struct {
 		panic(&ValueError{Method: "Field", Kind: v.Kind()})
 	}
-	structField := v.typecode.rawField(i)
+	_, field := v.typecode.rawFieldDescriptor(i)
+	fieldFlags, _, offset := field.decode()
 
 	// Copy flags but clear EmbedRO; we're not an embedded field anymore
 	flags := v.flags & ^valueFlagEmbedRO
-	if structField.PkgPath != "" {
-		// No PkgPath => not exported.
+	if fieldFlags&structFieldFlagIsExported == 0 {
 		// Clear exported flag even if the parent was exported.
 		flags &^= valueFlagExported
 
 		// Update the RO flag
-		if structField.Anonymous {
+		if fieldFlags&structFieldFlagAnonymous != 0 {
 			// Embedded field
 			flags |= valueFlagEmbedRO
 		} else {
@@ -933,7 +933,7 @@ func (v Value) Field(i int) Value {
 	}
 
 	size := v.typecode.Size()
-	fieldType := structField.Type
+	fieldType := field.fieldType
 	fieldSize := fieldType.Size()
 	if v.isIndirect() || fieldSize > unsafe.Sizeof(uintptr(0)) {
 		// v.value was already a pointer to the value and it should stay that
@@ -941,7 +941,7 @@ func (v Value) Field(i int) Value {
 		return Value{
 			flags:    flags,
 			typecode: fieldType,
-			value:    unsafe.Add(v.value, structField.Offset),
+			value:    unsafe.Add(v.value, uintptr(offset)),
 		}
 	}
 
@@ -964,7 +964,7 @@ func (v Value) Field(i int) Value {
 		// The value was not stored in the interface before but will be
 		// afterwards, so load the value (from the correct offset) and return
 		// it.
-		ptr := unsafe.Add(v.value, structField.Offset)
+		ptr := unsafe.Add(v.value, uintptr(offset))
 		value := unsafe.Pointer(loadValue(ptr, fieldSize))
 		return Value{
 			flags:    flags &^ valueFlagIndirect,
@@ -975,7 +975,7 @@ func (v Value) Field(i int) Value {
 
 	// The value was already stored directly in the interface and it still
 	// is. Cut out the part of the value that we need.
-	value := maskAndShift(uintptr(v.value), structField.Offset, fieldSize)
+	value := maskAndShift(uintptr(v.value), uintptr(offset), fieldSize)
 	return Value{
 		flags:    flags,
 		typecode: fieldType,
