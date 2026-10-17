@@ -254,6 +254,49 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			callFn := r.getFunction(fnPtr.llvmValue(&mem))
 			switch {
+			case callFn.name == "sync/atomic.SwapInt32" || callFn.name == "sync/atomic.SwapInt64" ||
+				callFn.name == "sync/atomic.SwapUint32" || callFn.name == "sync/atomic.SwapUint64" ||
+				callFn.name == "sync/atomic.SwapUintptr" || callFn.name == "sync/atomic.SwapPointer" ||
+				callFn.name == "sync/atomic.CompareAndSwapInt32" || callFn.name == "sync/atomic.CompareAndSwapInt64" ||
+				callFn.name == "sync/atomic.CompareAndSwapUint32" || callFn.name == "sync/atomic.CompareAndSwapUint64" ||
+				callFn.name == "sync/atomic.CompareAndSwapUintptr" || callFn.name == "sync/atomic.CompareAndSwapPointer":
+				ptr, err := operands[1].asPointer(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				if mem.hasExternalLoadOrStore(ptr) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				old := mem.load(ptr, operands[2].len(r))
+				if old == nil {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				newValue := operands[2]
+				compare := strings.HasPrefix(callFn.name, "sync/atomic.CompareAndSwap")
+				if compare {
+					if !r.interpretICmp(old, operands[2], llvm.IntEQ) {
+						locals[inst.localIndex] = literalValue{uint8(0)}
+						continue
+					}
+					newValue = operands[3]
+				}
+				if !mem.store(newValue, ptr) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				if compare {
+					locals[inst.localIndex] = literalValue{uint8(1)}
+				} else {
+					locals[inst.localIndex] = old
+				}
 			case callFn.name == "runtime.trackPointer":
 				// Allocas and such are created as globals, so don't need a
 				// runtime.trackPointer.
@@ -583,7 +626,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				return nil, mem, r.errorAt(inst, err)
 			}
 			size := operands[1].(literalValue).value.(uint64)
-			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalStore(ptr) {
+			if inst.llvmInst.IsVolatile() || mem.hasExternalStore(ptr) {
 				// If there could be an external store (for example, because a
 				// pointer to the object was passed to a function that could not
 				// be interpreted at compile time) then the load must be done at
@@ -613,7 +656,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err != nil {
 				return nil, mem, r.errorAt(inst, err)
 			}
-			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalLoadOrStore(ptr) {
+			if inst.llvmInst.IsVolatile() || mem.hasExternalLoadOrStore(ptr) {
 				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 				if err != nil {
 					return nil, mem, err

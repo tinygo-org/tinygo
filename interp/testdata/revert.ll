@@ -5,6 +5,10 @@ declare void @externalCall(i64)
 
 declare i64 @ptrHash(ptr nocapture)
 
+declare void @modifyAtomic(ptr)
+declare i32 @"sync/atomic.SwapUint32"(ptr, i32, ptr)
+declare i1 @"sync/atomic.CompareAndSwapUint32"(ptr, i32, i32, ptr)
+
 @foo.knownAtRuntime = global i64 0
 @bar.knownAtRuntime = global i64 0
 @baz.someGlobal = external global [3 x {i64, i32}]
@@ -14,6 +18,14 @@ declare i64 @ptrHash(ptr nocapture)
 @y.ready = global i32 0
 @z.bloom = global i64 0
 @z.arr = global [32 x i8] zeroinitializer
+@atomic.value = global i32 0
+@atomic.old = global i32 0
+@atomic.success = global i1 false
+@atomic.failure = global i1 false
+@atomic.seen = global i32 0
+@atomic.runtimeOld = global i32 0
+@atomic.runtimeSuccess = global i1 false
+@atomic.runtimeSeen = global i32 0
 
 define void @runtime.initAll() unnamed_addr {
 entry:
@@ -22,6 +34,7 @@ entry:
   call void @bar.init(ptr undef)
   call void @main.init(ptr undef)
   call void @x.init(ptr undef)
+  call void @atomic.init(ptr undef)
   call void @y.init(ptr undef)
   call void @z.init(ptr undef)
   ret void
@@ -75,6 +88,27 @@ loop:
   br i1 %ready, label %end, label %loop
 
 end:
+  ret void
+}
+
+define internal void @atomic.init(ptr %context) unnamed_addr {
+  store atomic i32 7, ptr @atomic.value seq_cst, align 4
+  %old = call i32 @"sync/atomic.SwapUint32"(ptr @atomic.value, i32 9, ptr undef)
+  store i32 %old, ptr @atomic.old
+  %success = call i1 @"sync/atomic.CompareAndSwapUint32"(ptr @atomic.value, i32 9, i32 11, ptr undef)
+  store i1 %success, ptr @atomic.success
+  %failure = call i1 @"sync/atomic.CompareAndSwapUint32"(ptr @atomic.value, i32 9, i32 13, ptr undef)
+  store i1 %failure, ptr @atomic.failure
+  %seen = load atomic i32, ptr @atomic.value seq_cst, align 4
+  store i32 %seen, ptr @atomic.seen
+  call void @modifyAtomic(ptr @atomic.value)
+  %runtimeOld = call i32 @"sync/atomic.SwapUint32"(ptr @atomic.value, i32 15, ptr undef)
+  store i32 %runtimeOld, ptr @atomic.runtimeOld
+  %runtimeSuccess = call i1 @"sync/atomic.CompareAndSwapUint32"(ptr @atomic.value, i32 15, i32 17, ptr undef)
+  store i1 %runtimeSuccess, ptr @atomic.runtimeSuccess
+  %runtimeSeen = load atomic i32, ptr @atomic.value seq_cst, align 4
+  store i32 %runtimeSeen, ptr @atomic.runtimeSeen
+  store atomic i32 19, ptr @atomic.value seq_cst, align 4
   ret void
 }
 
