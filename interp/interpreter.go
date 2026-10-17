@@ -899,11 +899,33 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 	return nil, mem, r.errorAt(bb.instructions[len(bb.instructions)-1], errors.New("interp: reached end of basic block without terminator"))
 }
 
-// Interpret an icmp instruction. Doesn't have side effects, only returns the
-// output of the comparison.
+// hasPartialPointer returns true if v has pointer bytes but is not one whole
+// pointer. The values of these bytes are known only at runtime.
+func hasPartialPointer(r *runner, v value) bool {
+	raw, ok := v.(rawValue)
+	if !ok || !raw.hasPointer() {
+		return false
+	}
+	if uint32(len(raw.buf)) != r.pointerSize {
+		return true
+	}
+	for _, word := range raw.buf {
+		if word != raw.buf[0] {
+			return true
+		}
+	}
+	return false
+}
+
+// Interpret an icmp instruction and return the result. Sets r.interpErr if the
+// result is known only at runtime.
 func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) bool {
 	switch predicate {
 	case llvm.IntEQ, llvm.IntNE:
+		if hasPartialPointer(r, lhs) || hasPartialPointer(r, rhs) {
+			r.interpErr = errUnsupportedInst
+			return false
+		}
 		var result bool
 		lhsPointer, lhsErr := lhs.asPointer(r)
 		rhsPointer, rhsErr := rhs.asPointer(r)
