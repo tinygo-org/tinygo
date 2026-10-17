@@ -134,6 +134,9 @@ func sliceRight(a []byte, s string, n int) bool { return string(a) == s[:n] }
 //go:noinline
 func sliceLeft(a []byte, s string, n int) bool { return s[:n] == string(a) }
 
+//go:noinline
+func sliceComputed(a []byte, s string, n int) bool { return string(a) == s[:n-1] }
+
 func mustPanic(t *testing.T, f func()) {
 	t.Helper()
 	defer func() {
@@ -148,7 +151,7 @@ func TestFallbacks(t *testing.T) {
 	a := []byte("abc")
 	s := "abc"
 	if !loadRight(a, &s) || !loadLeft(a, &s) ||
-		!sliceRight(a, s, 3) || !sliceLeft(a, s, 3) {
+		!sliceRight(a, s, 3) || !sliceLeft(a, s, 3) || !sliceComputed(a, s, 4) {
 		t.Fatal("load or slice comparison failed")
 	}
 	for _, tc := range []struct {
@@ -161,6 +164,7 @@ func TestFallbacks(t *testing.T) {
 		{"boundsLeft", func() { sliceLeft(a, s, 4) }},
 		{"negativeRight", func() { sliceRight(a, s, -1) }},
 		{"negativeLeft", func() { sliceLeft(a, s, -1) }},
+		{"boundsComputed", func() { sliceComputed(a, s, 5) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mustPanic(t, tc.call)

@@ -1237,21 +1237,17 @@ unwind.return:                                    ; preds = %lookup.throw
 define hidden i1 @main.mixedByteStringLoad(ptr %a.data, i32 %a.len, i32 %a.cap, ptr dereferenceable_or_null(8) %s, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
-  %1 = extractvalue %runtime._string %0, 0
-  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
-  %2 = icmp eq ptr %s, null
-  br i1 %2, label %deref.throw, label %deref.next
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
+  %0 = icmp eq ptr %s, null
+  br i1 %0, label %deref.throw, label %deref.next
 
 deref.next:                                       ; preds = %entry
   %.unpack = load ptr, ptr %s, align 4
   %.elt1 = getelementptr inbounds nuw i8, ptr %s, i32 4
   %.unpack2 = load i32, ptr %.elt1, align 4
   call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
-  %3 = extractvalue %runtime._string %0, 0
-  %4 = extractvalue %runtime._string %0, 1
-  %5 = call i1 @runtime.stringEqual(ptr %3, i32 %4, ptr %.unpack, i32 %.unpack2, ptr undef) #4
-  ret i1 %5
+  %1 = call i1 @runtime.stringEqual(ptr %a.data, i32 %a.len, ptr %.unpack, i32 %.unpack2, ptr undef) #4
+  ret i1 %1
 
 deref.throw:                                      ; preds = %entry
   call void @runtime.nilPanic(ptr undef) #4
@@ -1289,17 +1285,13 @@ unwind.return:                                    ; preds = %deref.throw
 define hidden i1 @main.mixedByteStringSlice(ptr %a.data, i32 %a.len, i32 %a.cap, ptr readonly %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
-  %1 = extractvalue %runtime._string %0, 0
-  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %a.data, ptr nonnull %stackalloc, ptr undef) #4
   %slice.maxcap = icmp ult i32 %s.len, 2
   br i1 %slice.maxcap, label %slice.throw, label %slice.next
 
 slice.next:                                       ; preds = %entry
-  %2 = extractvalue %runtime._string %0, 0
-  %3 = extractvalue %runtime._string %0, 1
-  %4 = call i1 @runtime.stringEqual(ptr %2, i32 %3, ptr %s.data, i32 2, ptr undef) #4
-  ret i1 %4
+  %0 = call i1 @runtime.stringEqual(ptr %a.data, i32 %a.len, ptr %s.data, i32 2, ptr undef) #4
+  ret i1 %0
 
 slice.throw:                                      ; preds = %entry
   call void @runtime.slicePanic(ptr undef) #4

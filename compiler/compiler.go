@@ -3065,8 +3065,21 @@ func isByteSliceToStringComparison(expr *ssa.Convert) bool {
 	if !isByteSliceToStringConvert(expr) {
 		return false
 	}
-	comparison := adjacentComparison(expr, isByteSliceToStringConvert)
+	comparison := adjacentComparison(expr, isStringComparisonOperand)
 	return comparison != nil && isComparisonOp(comparison.Op)
+}
+
+// isStringComparisonOperand reports whether value cannot write memory or call
+// code, so it is safe to run between a conversion and its comparison.
+func isStringComparisonOperand(value ssa.Value) bool {
+	switch value := value.(type) {
+	case *ssa.UnOp:
+		return value.Op == token.MUL
+	case *ssa.Slice:
+		basic, ok := value.X.Type().Underlying().(*types.Basic)
+		return ok && basic.Info()&types.IsString != 0
+	}
+	return isByteSliceToStringConvert(value)
 }
 
 func isComparisonOp(op token.Token) bool {
