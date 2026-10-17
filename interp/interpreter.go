@@ -966,18 +966,8 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 	case llvm.Call:
 		llvmFn := operands[len(operands)-1]
 		args := operands[:len(operands)-1]
-		for _, op := range operands {
-			err := mem.markExternalStore(op)
-			if err != nil {
-				return r.errorAt(inst, err)
-			}
-		}
 		result = r.builder.CreateCall(inst.llvmInst.CalledFunctionType(), llvmFn, args, inst.name)
 	case llvm.Load:
-		err := mem.markExternalLoad(operands[0])
-		if err != nil {
-			return r.errorAt(inst, err)
-		}
 		result = r.builder.CreateLoad(inst.llvmInst.Type(), operands[0], inst.name)
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
@@ -986,10 +976,6 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			result.SetOrdering(ordering)
 		}
 	case llvm.Store:
-		err := mem.markExternalStore(operands[1])
-		if err != nil {
-			return r.errorAt(inst, err)
-		}
 		result = r.builder.CreateStore(operands[0], operands[1])
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
@@ -1056,6 +1042,19 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 	}
 	locals[inst.localIndex] = localValue{result}
 	mem.instructions = append(mem.instructions, result)
+	// Runtime code can use each pointer in the operands, for example through a
+	// stored value or the result. A load only reads through its pointer operand.
+	for _, op := range operands {
+		var err error
+		if inst.opcode == llvm.Load {
+			err = mem.markExternalLoad(op)
+		} else {
+			err = mem.markExternalStore(op)
+		}
+		if err != nil {
+			return r.errorAt(inst, err)
+		}
+	}
 	return nil
 }
 
