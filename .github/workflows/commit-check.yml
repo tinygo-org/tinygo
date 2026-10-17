@@ -1,0 +1,27 @@
+name: Commit check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-tool-authors:
+    # Reject commits authored or committed by coding tools.
+    runs-on: ubuntu-slim
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check commit authors
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if git log --format='%h %ae %ce' "origin/$BASE_REF..HEAD" | grep -iE 'noreply@anthropic\.com|copilot@users\.noreply\.github\.com'; then
+            echo "::error::Commits must not be authored or committed by Claude or Copilot."
+            exit 1
+          fi
