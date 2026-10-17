@@ -255,6 +255,61 @@ func (mv *memoryView) hasExternalStore(v pointerValue) bool {
 	return obj.marked >= 2 && !obj.constant
 }
 
+// pointersFit returns false if buf, written at p, puts a pointer where the LLVM
+// global has no pointer or uintptr element. The initializer cannot hold it.
+func (mv *memoryView) pointersFit(p pointerValue, buf []uint64) bool {
+	global := mv.get(p.index()).llvmGlobal
+	if global.IsNil() {
+		return true
+	}
+	ptrSize := int(mv.r.pointerSize)
+	for i := 0; i < len(buf); i++ {
+		if buf[i] <= 255 {
+			continue
+		}
+		if i+ptrSize > len(buf) || slices.ContainsFunc(buf[i:i+ptrSize], func(w uint64) bool { return w != buf[i] }) {
+			return false
+		}
+		if !mv.r.isPointerElement(global.GlobalValueType(), uint64(p.offset())+uint64(i)) {
+			return false
+		}
+		i += ptrSize - 1
+	}
+	return true
+}
+
+// isPointerElement returns true if a pointer or a pointer-sized integer starts
+// at offset in t.
+func (r *runner) isPointerElement(t llvm.Type, offset uint64) bool {
+	for {
+		switch t.TypeKind() {
+		case llvm.PointerTypeKind:
+			return offset == 0
+		case llvm.IntegerTypeKind:
+			return offset == 0 && t.IntTypeWidth() == int(r.pointerSize)*8
+		case llvm.ArrayTypeKind:
+			elementSize := r.targetData.TypeAllocSize(t.ElementType())
+			if elementSize == 0 || offset/elementSize >= uint64(t.ArrayLength()) {
+				return false
+			}
+			offset %= elementSize
+			t = t.ElementType()
+		case llvm.StructTypeKind:
+			i := t.StructElementTypesCount() - 1
+			for i >= 0 && r.targetData.ElementOffset(t, i) > offset {
+				i--
+			}
+			if i < 0 {
+				return false
+			}
+			offset -= r.targetData.ElementOffset(t, i)
+			t = t.StructElementTypes()[i]
+		default:
+			return false
+		}
+	}
+}
+
 // get returns an object that can only be read from, as it may return an object
 // of a parent view.
 func (mv *memoryView) get(index uint32) object {
@@ -366,6 +421,10 @@ func (mv *memoryView) store(v value, p pointerValue) bool {
 	valueLen := v.len(mv.r)
 	if checks && p.offset()+valueLen > obj.size {
 		panic("interp: store out of bounds")
+	}
+	if _, ok := v.(literalValue); !ok && !mv.pointersFit(p, v.asRawValue(mv.r).buf) {
+		// The global type cannot hold this pointer. Store it at runtime.
+		return false
 	}
 	if p.offset() == 0 && valueLen == obj.buffer.len(mv.r) {
 		obj.buffer = v.clone()
@@ -888,6 +947,14 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 	}
 	if isZero {
 		return llvm.ConstNull(llvmType), nil
+	}
+	if kind := llvmType.TypeKind(); kind != llvm.StructTypeKind && kind != llvm.ArrayTypeKind && v.hasPointer() {
+		// Only a pointer or uintptr element can hold a pointer, and only all of
+		// it. Do not write the pointer bytes as zero or as a different pointer.
+		whole := len(v.buf) == int(mem.r.pointerSize) && !slices.ContainsFunc(v.buf, func(w uint64) bool { return w != v.buf[0] })
+		if !whole || (kind != llvm.IntegerTypeKind && kind != llvm.PointerTypeKind) {
+			return llvm.Value{}, errInvalidPtrToIntSize
+		}
 	}
 	switch llvmType.TypeKind() {
 	case llvm.IntegerTypeKind:

@@ -339,6 +339,7 @@ func TestBuild(t *testing.T) {
 		"init_multi.go",
 		"interface.go",
 		"json.go",
+		"init_writeback.go",
 		"localtypes/",
 		"localtypes.go",
 		"map.go",

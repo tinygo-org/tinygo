@@ -411,6 +411,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						}
 						continue
 					}
+					if !mem.pointersFit(dst, srcObj.buffer.asRawValue(r).buf[src.offset():][:nBytes]) {
+						// The global type of dst cannot hold a copied pointer.
+						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						if err != nil {
+							return nil, mem, err
+						}
+						continue
+					}
 					dstBuf := dstObj.buffer.asRawValue(r)
 					srcBuf := srcObj.buffer.asRawValue(r)
 					copy(dstBuf.buf[dst.offset():][:nBytes], srcBuf.buf[src.offset():][:nBytes])
