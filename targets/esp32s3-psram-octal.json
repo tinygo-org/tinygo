@@ -1,0 +1,6 @@
+{
+	"inherits": ["esp32s3-generic"],
+	"build-tags": ["numa_psram_octal"],
+	"flash-method": "esp32flash",
+	"serial": "uart"
+}
