@@ -222,4 +222,8 @@ func TestReadWriteOnlyFile(t *testing.T) {
 	if n != 0 || err == nil {
 		t.Fatalf("Read on a write-only file: got %d, %v; want 0 and an error", n, err)
 	}
+	n, err = f.ReadAt(make([]byte, 8), 0)
+	if n != 0 || err == nil {
+		t.Fatalf("ReadAt on a write-only file: got %d, %v; want 0 and an error", n, err)
+	}
 }
