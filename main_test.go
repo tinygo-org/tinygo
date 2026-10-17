@@ -405,7 +405,6 @@ func TestBuild(t *testing.T) {
 		switch runtime.GOOS {
 		case "darwin", "linux":
 			for _, scheduler := range []string{"threads", "none"} {
-				scheduler := scheduler
 				t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
 					t.Parallel()
 					options := compileopts.Options(hostOptions)
