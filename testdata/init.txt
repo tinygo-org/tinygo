@@ -1,3 +1,4 @@
+shift
 init
 main
 v1: 3
@@ -14,3 +15,4 @@ v9: 3 2 3 4
 5
 5
 loaded: 1
+shifted: AABC 1

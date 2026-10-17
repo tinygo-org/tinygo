@@ -275,7 +275,10 @@ func (mv *memoryView) getWritable(index uint32) object {
 	}
 	// Object is not currently in this view. Get it, and clone it for use.
 	obj := mv.get(index).clone()
-	mv.r.objects[index] = obj
+	if mv.objects == nil {
+		mv.objects = make(map[uint32]object)
+	}
+	mv.objects[index] = obj
 	return obj
 }
 
