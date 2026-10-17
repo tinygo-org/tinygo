@@ -15,6 +15,7 @@ func TestInterp(t *testing.T) {
 		"basic",
 		"phi",
 		"consteval",
+		"rawlayout",
 		"intrinsics",
 		"copy",
 		"interface",
