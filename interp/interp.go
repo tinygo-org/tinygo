@@ -149,7 +149,7 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 				}
 				continue
 			}
-			return callErr
+			return callErr.materialize()
 		}
 		for index, obj := range mem.objects {
 			r.objects[index] = obj
@@ -257,7 +257,7 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 			newFn.EraseFromParentAsFunction()
 			return nil
 		}
-		return callErr
+		return callErr.materialize()
 	}
 	for index, obj := range pkgMem.objects {
 		r.objects[index] = obj
