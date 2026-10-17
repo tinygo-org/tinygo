@@ -486,10 +486,8 @@ func (p *Package) RecordedPath(filename string) string {
 		return path.Join(p.RecordedDir(), "!cgo.go")
 	}
 	if p.program.config.TestConfig.CompileTestBinary {
-		for _, generated := range p.program.MainPkg().GoFiles {
-			if filename == generated {
-				return "_testmain.go"
-			}
+		if slices.Contains(p.program.MainPkg().GoFiles, filename) {
+			return "_testmain.go"
 		}
 	}
 	for _, root := range []string{
