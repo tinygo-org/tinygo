@@ -1,7 +1,9 @@
-//go:build (gc.conservative || gc.precise) && !scheduler.none && !scheduler.tasks && !scheduler.asyncify
+//go:build (gc.conservative || gc.precise || gc.boehm) && !scheduler.none && !scheduler.tasks && !scheduler.asyncify
 
 package runtime
 
 // spawnFinalizerRunner is the fallback for noncooperative schedulers.
 // These schedulers run finalizers but do not install the idle GC hook.
 func spawnFinalizerRunner() { go finalizerRunner() }
+
+func initFinalizerScheduler() {}

@@ -54,6 +54,88 @@ var supportedLinuxArches = map[string]string{
 
 var sema = make(chan struct{}, runtime.NumCPU())
 
+func TestBoehmFinalizerInterior(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		target, scheduler string
+	}{
+		{"wasm", "asyncify"},
+		{"wasm", "none"},
+		{"", "tasks"},
+		{"", "threads"},
+		{"", "none"},
+	} {
+		if test.target == "" && runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+			continue
+		}
+		t.Run(test.target+"/"+test.scheduler, func(t *testing.T) {
+			t.Parallel()
+			options := optionsFromTarget(test.target, sema)
+			options.GC = "boehm"
+			options.Scheduler = test.scheduler
+			options.Tags = append(options.Tags, "runtime_asserts")
+			options.GlobalValues = map[string]map[string]string{
+				"main": {"finalizerTestMode": "interior"},
+			}
+			runTest("finalizer.go", options, t, nil, nil)
+		})
+	}
+}
+
+func TestBoehmFinalizerInteriorInvalid(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("host finalizers need Linux or Darwin")
+	}
+	options := optionsFromTarget("", sema)
+	options.GC = "boehm"
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"interior-pointer", "interior-large"} {
+		t.Run(name, func(t *testing.T) {
+			output := &bytes.Buffer{}
+			_, err := buildAndRun("testdata/finalizer.go", config, output, []string{name}, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+				cmd.Stdout = nil
+				cmd.Stderr = nil
+				data, err := cmd.CombinedOutput()
+				output.Write(data)
+				return err
+			})
+			if err == nil || !strings.Contains(output.String(), "pointer not at beginning of allocated block") {
+				t.Fatalf("interior registration result: %v\n%s", err, output.String())
+			}
+		})
+	}
+}
+
+func TestFinalizerRunnerRegistration(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		target, gc, scheduler string
+	}{
+		{"wasm", "boehm", "asyncify"},
+		{"wasm", "conservative", "asyncify"},
+		{"", "boehm", "tasks"},
+		{"", "boehm", "threads"},
+	} {
+		if test.target == "" && runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+			continue
+		}
+		t.Run(test.target+"/"+test.gc+"/"+test.scheduler, func(t *testing.T) {
+			t.Parallel()
+			options := optionsFromTarget(test.target, sema)
+			options.GC = test.gc
+			options.Scheduler = test.scheduler
+			options.GlobalValues = map[string]map[string]string{
+				"main": {"finalizerIdleMode": "registration"},
+			}
+			runTest("finalizeridle.go", options, t, nil, nil)
+		})
+	}
+}
+
 func TestTrimPath(t *testing.T) {
 	t.Setenv("CGO_CFLAGS", "-iquoteinclude -includestdint.h -imacros relative.h")
 	root := t.TempDir()
@@ -418,6 +500,39 @@ func TestBuild(t *testing.T) {
 		}
 	})
 
+	t.Run("boehm-finalizers", func(t *testing.T) {
+		t.Parallel()
+		options := optionsFromTarget("wasm", sema)
+		options.GC = "boehm"
+		t.Run("finalizerlarge.go-graph", func(t *testing.T) {
+			t.Parallel()
+			testOptions := compileopts.Options(options)
+			testOptions.GlobalValues = map[string]map[string]string{
+				"main": {"finalizerLargeMode": "graph"},
+			}
+			runTest("finalizerlarge.go", testOptions, t, nil, nil)
+		})
+		for _, name := range []string{
+			"finalizer.go",
+			"finalizerbits.go",
+			"finalizeridle.go",
+			"finalizerlarge.go",
+			"finalizerinvariants.go",
+		} {
+			name := name
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				testOptions := compileopts.Options(options)
+				if name == "finalizerlarge.go" {
+					testOptions.GlobalValues = map[string]map[string]string{
+						"main": {"finalizerLargeMode": "runner-payload"},
+					}
+				}
+				runTest(name, testOptions, t, nil, nil)
+			})
+		}
+	})
+
 	// Test a few build options.
 	t.Run("build-options", func(t *testing.T) {
 		t.Parallel()
@@ -774,14 +889,6 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			case "finalizer.go", "finalizerbits.go", "finalizeridle.go", "finalizerlarge.go":
 				// These tests require deterministic finalization on target wasm.
 				// finalizerinvariants.go covers other block GC targets.
-				continue
-			}
-		}
-		if options.Target == "" && options.GC == "" {
-			switch name {
-			case "finalizerinvariants.go":
-				// Skip the default host GC because it does not implement finalizers.
-				// Explicit conservative GC variants cover this test.
 				continue
 			}
 		}
