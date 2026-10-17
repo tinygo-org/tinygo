@@ -118,7 +118,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-alpine-v3-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-alpine-v4-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -274,7 +274,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-asserts-v1-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-asserts-v2-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -312,7 +312,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-asserts-v1-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-asserts-v2-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -499,7 +499,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-${{ matrix.goarch }}-v5-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-${{ matrix.goarch }}-v6-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
