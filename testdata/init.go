@@ -20,6 +20,7 @@ func main() {
 	println(uint8SliceDst[0])
 	println(intSliceSrc[0])
 	println(intSliceDst[0])
+	println("loaded:", loaded)
 }
 
 type (
@@ -111,6 +112,21 @@ func sliceSlice(s []int, start, end int) []int {
 }
 
 type outside struct{}
+
+var (
+	loadPair struct{ a, b int }
+	loaded   int
+)
+
+func loadA() int { return loadPair.a }
+
+// The value loaded by loadA must not change when init stores to loadPair.a.
+func init() {
+	loadPair.a = 1
+	x := loadA()
+	loadPair.a = 2
+	loaded = x
+}
 
 func init() {
 	_, _ = any(0).(interface{ DoesNotExist() })
