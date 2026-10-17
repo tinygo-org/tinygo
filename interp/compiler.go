@@ -15,11 +15,13 @@ import (
 // Functions are in SSA form, just like the LLVM version if it. The first block
 // (blocks[0]) is the entry block.
 type function struct {
-	llvmFn llvm.Value
-	name   string       // precalculated llvmFn.Name()
-	params []llvm.Value // precalculated llvmFn.Params()
-	blocks []*basicBlock
-	locals map[llvm.Value]int
+	llvmFn     llvm.Value
+	name       string       // precalculated llvmFn.Name()
+	params     []llvm.Value // precalculated llvmFn.Params()
+	blocks     []*basicBlock
+	locals     map[llvm.Value]int
+	deferFrame llvm.Value
+	deferStack llvm.Value
 }
 
 // basicBlock represents a LLVM basic block and contains a slice of
@@ -72,6 +74,22 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 	if llvmFn.IsDeclaration() {
 		// Nothing to do.
 		return fn
+	}
+
+	for inst := llvmFn.EntryBasicBlock().FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+		if inst.IsACallInst().IsNil() || inst.CalledValue().Name() != "runtime.setupDeferFrame" {
+			continue
+		}
+		frame := inst.Operand(0)
+		stack := inst.Operand(1)
+		if frame.IsAAllocaInst().IsNil() || stack.IsACallInst().IsNil() || !strings.HasPrefix(stack.CalledValue().Name(), "llvm.stacksave") {
+			continue
+		}
+		use := stack.FirstUse()
+		if !use.IsNil() && use.User() == inst && use.NextUse().IsNil() {
+			fn.deferFrame = frame
+			fn.deferStack = stack
+		}
 	}
 
 	for i, param := range fn.params {

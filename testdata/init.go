@@ -1,5 +1,7 @@
 package main
 
+import "sync"
+
 func init() {
 	println("init")
 }
@@ -15,11 +17,31 @@ func main() {
 	println("v7:", cap(v7), string(v7))
 	println("v8:", v8)
 	println("v9:", len(v9), v9[0], v9[1], v9[2])
+	println("deferred init:", deferredInitValue)
+	initOnce.Do(func() { initOnceCalls++ })
+	println("once init:", onceInitValue, initOnceCalls)
 
 	println(uint8SliceSrc[0])
 	println(uint8SliceDst[0])
 	println(intSliceSrc[0])
 	println(intSliceDst[0])
+}
+
+var deferredInitValue = deferredInit()
+var initOnce sync.Once
+var initOnceCalls int
+var onceInitValue = onceInit()
+
+func deferredInit() (result int) {
+	result = 20
+	defer func() { result++ }()
+	defer func() { result *= 2 }()
+	return
+}
+
+func onceInit() int {
+	initOnce.Do(func() { initOnceCalls++ })
+	return initOnceCalls
 }
 
 type (
