@@ -2062,10 +2062,7 @@ func main() {
 			bufs[i].done = make(chan struct{})
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			// Flush the output one test at a time.
 			// This ensures that outputs from different tests are not mixed together.
 			for i := range bufs {
@@ -2078,7 +2075,7 @@ func main() {
 					}
 				}
 			}
-		}()
+		})
 
 		// Build and run the tests concurrently.
 		// This uses an additional semaphore to reduce the memory usage.
@@ -2086,9 +2083,7 @@ func main() {
 		for i, pkg := range explicitPkgNames {
 			buf := &bufs[i]
 			testSema <- struct{}{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				defer func() { <-testSema }()
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
@@ -2108,7 +2103,7 @@ func main() {
 					default:
 					}
 				}
-			}()
+			})
 		}
 
 		// Wait for all tests to finish.
