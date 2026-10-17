@@ -780,8 +780,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 
 					var enumValue uint64
 					var err error
-					if strings.HasPrefix(enumEl.Value, "0b") {
-						val := strings.TrimPrefix(enumEl.Value, "0b")
+					if val, ok := strings.CutPrefix(enumEl.Value, "0b"); ok {
 						enumValue, err = strconv.ParseUint(val, 2, 64)
 					} else {
 						enumValue, err = strconv.ParseUint(enumEl.Value, 0, 64)
