@@ -206,6 +206,7 @@ func TestBuild(t *testing.T) {
 		"interface.go",
 		"makeslice.go",
 		"json.go",
+		"init_writeback.go",
 		"localtypes/",
 		"localtypes.go",
 		"map.go",
