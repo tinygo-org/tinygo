@@ -121,6 +121,25 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		}
 
 		inst := bb.instructions[instIndex]
+		// compiler/defer.go emits these checkpoints for panic recovery.
+		// A fully evaluated call cannot panic or need a runtime defer frame.
+		if !fn.deferFrame.IsNil() && inst.opcode == llvm.Call {
+			if inst.llvmInst == fn.deferStack {
+				locals[inst.localIndex] = literalValue{uint64(0)}
+				continue
+			}
+			called := inst.llvmInst.CalledValue()
+			if inst.llvmInst.OperandsCount() >= 2 && inst.llvmInst.Operand(0) == fn.deferFrame {
+				name := called.Name()
+				if name == "runtime.setupDeferFrame" || name == "runtime.destroyDeferFrame" {
+					continue
+				}
+				if attr := inst.llvmInst.GetCallSiteEnumAttribute(-1, llvm.AttributeKindID("returns_twice")); !attr.IsNil() {
+					locals[inst.localIndex] = makeLiteralInt(0, inst.llvmInst.Type().IntTypeWidth())
+					continue
+				}
+			}
+		}
 		operands = operands[:0]
 		isRuntimeInst := false
 		if inst.opcode != llvm.PHI {
@@ -164,6 +183,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		}
 		switch inst.opcode {
 		case llvm.Ret:
+			if !fn.deferFrame.IsNil() && len(mem.instructions) != 0 {
+				return nil, mem, r.errorAt(inst, errUnsupportedRuntimeInst)
+			}
 			if time.Since(r.start) > r.timeout {
 				// Running for more than the allowed timeout; This shouldn't happen, but it does.
 				// See github.com/tinygo-org/tinygo/issues/2124
@@ -254,6 +276,49 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			callFn := r.getFunction(fnPtr.llvmValue(&mem))
 			switch {
+			case callFn.name == "sync/atomic.SwapInt32" || callFn.name == "sync/atomic.SwapInt64" ||
+				callFn.name == "sync/atomic.SwapUint32" || callFn.name == "sync/atomic.SwapUint64" ||
+				callFn.name == "sync/atomic.SwapUintptr" || callFn.name == "sync/atomic.SwapPointer" ||
+				callFn.name == "sync/atomic.CompareAndSwapInt32" || callFn.name == "sync/atomic.CompareAndSwapInt64" ||
+				callFn.name == "sync/atomic.CompareAndSwapUint32" || callFn.name == "sync/atomic.CompareAndSwapUint64" ||
+				callFn.name == "sync/atomic.CompareAndSwapUintptr" || callFn.name == "sync/atomic.CompareAndSwapPointer":
+				ptr, err := operands[1].asPointer(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				if mem.hasExternalLoadOrStore(ptr) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				old := mem.load(ptr, operands[2].len(r))
+				if old == nil {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				newValue := operands[2]
+				compare := strings.HasPrefix(callFn.name, "sync/atomic.CompareAndSwap")
+				if compare {
+					if !r.interpretICmp(old, operands[2], llvm.IntEQ) {
+						locals[inst.localIndex] = literalValue{uint8(0)}
+						continue
+					}
+					newValue = operands[3]
+				}
+				if !mem.store(newValue, ptr) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				if compare {
+					locals[inst.localIndex] = literalValue{uint8(1)}
+				} else {
+					locals[inst.localIndex] = old
+				}
 			case callFn.name == "runtime.trackPointer":
 				// Allocas and such are created as globals, so don't need a
 				// runtime.trackPointer.
@@ -261,16 +326,13 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// which case this call won't even get to this point but will
 				// already be emitted in initAll.
 				continue
-			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" || callFn.name == "runtime.hashmapInterfaceHash" ||
+			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" ||
 				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current" ||
 				callFn.name == "time.startTimer" || callFn.name == "time.stopTimer" || callFn.name == "time.resetTimer":
 				// These functions should be run at runtime. Specifically:
 				//   * Print and panic functions are best emitted directly without
 				//     interpreting them, otherwise we get a ton of putchar (etc.)
 				//     calls.
-				//   * runtime.hashmapGet tries to access the map value directly.
-				//     This is not possible as the map value is treated as a special
-				//     kind of object in this package.
 				//   * os.runtime_args reads globals that are initialized outside
 				//     the view of the interp package so it always needs to be run
 				//     at runtime.
@@ -359,6 +421,33 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				locals[inst.localIndex] = makeLiteralInt(max(operands[1].Uint(r), operands[2].Uint(r)), inst.llvmInst.Type().IntTypeWidth())
 			case strings.HasPrefix(callFn.name, "llvm.smax."):
 				locals[inst.localIndex] = makeLiteralInt(uint64(max(operands[1].Int(r), operands[2].Int(r))), inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.memset.p0"):
+				nBytes := operands[3].Uint(r)
+				if operands[4].Uint(r) != 0 {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				if nBytes == 0 {
+					continue
+				}
+				dst, err := operands[1].asPointer(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				obj := mem.get(dst.index())
+				if mem.hasExternalLoadOrStore(dst) || obj.buffer == nil || uint64(dst.offset())+nBytes > uint64(obj.size) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				buf := newRawValue(uint32(nBytes))
+				for i := range buf.buf {
+					buf.buf[i] = operands[2].Uint(r)
+				}
+				mem.store(buf, dst)
 			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
 				// Copy a block of memory from one pointer to another.
 				if operands[4].Uint(r) != 0 {
@@ -556,7 +645,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				return nil, mem, r.errorAt(inst, err)
 			}
 			size := operands[1].(literalValue).value.(uint64)
-			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalStore(ptr) {
+			if inst.llvmInst.IsVolatile() || mem.hasExternalStore(ptr) {
 				// If there could be an external store (for example, because a
 				// pointer to the object was passed to a function that could not
 				// be interpreted at compile time) then the load must be done at
@@ -586,7 +675,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err != nil {
 				return nil, mem, r.errorAt(inst, err)
 			}
-			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalLoadOrStore(ptr) {
+			if inst.llvmInst.IsVolatile() || mem.hasExternalLoadOrStore(ptr) {
 				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
 				if err != nil {
 					return nil, mem, err
@@ -945,6 +1034,9 @@ func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) bool
 }
 
 func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
+	if !fn.deferFrame.IsNil() {
+		return r.errorAt(inst, errUnsupportedRuntimeInst)
+	}
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
 	for i := range numOperands {

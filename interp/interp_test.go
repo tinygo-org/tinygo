@@ -17,6 +17,7 @@ func TestInterp(t *testing.T) {
 		"consteval",
 		"intrinsics",
 		"copy",
+		"defer",
 		"interface",
 		"revert",
 		"store",
