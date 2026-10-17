@@ -141,11 +141,17 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 			}
 			mv.objects[objectIndex] = obj
 			if !llvmValue.IsAGlobalVariable().IsNil() {
-				initializer := llvmValue.Initializer()
-				if !initializer.IsNil() {
-					// Using mark '2' (which means read/write access) because
-					// even from an object that is only read from, the resulting
-					// loaded pointer can be written to.
+				// Using mark '2' (which means read/write access) because
+				// even from an object that is only read from, the resulting
+				// loaded pointer can be written to.
+				if obj.buffer != nil {
+					// The LLVM initializer is only updated after interp has
+					// finished, so walk the current value of the object.
+					err := mv.markExternalPointers(obj.buffer)
+					if err != nil {
+						return err
+					}
+				} else if initializer := llvmValue.Initializer(); !initializer.IsNil() {
 					err := mv.markExternal(initializer, 2)
 					if err != nil {
 						return err
@@ -236,6 +242,44 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		}
 	}
 	return nil
+}
+
+// markExternalPointers marks every object that the given value points to as
+// having an external load and store.
+func (mv *memoryView) markExternalPointers(v value) error {
+	for _, p := range v.asRawValue(mv.r).buf {
+		if p <= 255 {
+			continue // a byte, not a pointer
+		}
+		err := mv.markExternalObject(pointerValue{p}.index())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// markExternalObject marks the object with the given index, and the objects it
+// points to, as having an external load and store.
+func (mv *memoryView) markExternalObject(index uint32) error {
+	obj := mv.get(index)
+	if !obj.llvmGlobal.IsNil() {
+		return mv.markExternal(obj.llvmGlobal, 2)
+	}
+	if obj.marked >= 2 {
+		return nil
+	}
+	// This is a heap object that does not have an LLVM global yet.
+	obj = obj.clone()
+	obj.marked = 2
+	if mv.objects == nil {
+		mv.objects = make(map[uint32]object)
+	}
+	mv.objects[index] = obj
+	if obj.buffer == nil {
+		return nil
+	}
+	return mv.markExternalPointers(obj.buffer)
 }
 
 // hasExternalLoadOrStore returns true if this object has an external load or
