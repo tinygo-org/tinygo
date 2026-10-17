@@ -60,12 +60,18 @@ func TestComparisonAllocs(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		compare func([]byte, string) bool
+		allocs  uint64
 	}{
-		{"reused", reused},
-		{"afterCall", afterCall},
+		{"loadRight", func(a []byte, s string) bool { return loadRight(a, &s) }, 0},
+		{"loadLeft", func(a []byte, s string) bool { return loadLeft(a, &s) }, 0},
+		{"sliceRight", func(a []byte, s string) bool { return sliceRight(a, s, len(s)) }, 0},
+		{"sliceLeft", func(a []byte, s string) bool { return sliceLeft(a, s, len(s)) }, 0},
+		{"sliceComputed", func(a []byte, s string) bool { return sliceComputed(a, s, len(s)+1) }, 1},
+		{"reused", reused, 1},
+		{"afterCall", afterCall, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			checkAllocs(t, tc.compare, 64, 1)
+			checkAllocs(t, tc.compare, 64, tc.allocs)
 		})
 	}
 }
