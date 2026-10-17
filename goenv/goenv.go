@@ -346,7 +346,7 @@ func ClangResourceDir(libclang bool) string {
 		// Check whether we're running from the source directory.
 		// This typically happens when TinyGo was built using `make` as part of
 		// development.
-		llvmMajor := strings.Split(llvm.Version, ".")[0]
+		llvmMajor, _, _ := strings.Cut(llvm.Version, ".")
 		buildResourceDir := filepath.Join(root, "llvm-build", "lib", "clang", llvmMajor)
 		if _, err := os.Stat(buildResourceDir); !errors.Is(err, fs.ErrNotExist) {
 			return buildResourceDir
@@ -369,7 +369,7 @@ func ClangResourceDir(libclang bool) string {
 // Find the Clang resource dir on this particular system.
 // Return the empty string when they aren't found.
 func findSystemClangResources(TINYGOROOT string) string {
-	llvmMajor := strings.Split(llvm.Version, ".")[0]
+	llvmMajor, _, _ := strings.Cut(llvm.Version, ".")
 
 	switch runtime.GOOS {
 	case "linux", "android":

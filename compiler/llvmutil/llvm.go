@@ -159,7 +159,7 @@ func SplitBasicBlock(builder llvm.Builder, afterInst llvm.Value, insertAfter llv
 			}
 			needsUpdate := false
 			incomingCount := inst.IncomingCount()
-			for i := 0; i < incomingCount; i++ {
+			for i := range incomingCount {
 				if inst.IncomingBlock(i) == oldBlock {
 					needsUpdate = true
 					break
@@ -180,7 +180,7 @@ func SplitBasicBlock(builder llvm.Builder, afterInst llvm.Value, insertAfter llv
 		incomingCount := phi.IncomingCount()
 		incomingVals := make([]llvm.Value, incomingCount)
 		incomingBlocks := make([]llvm.BasicBlock, incomingCount)
-		for i := 0; i < incomingCount; i++ {
+		for i := range incomingCount {
 			value := phi.IncomingValue(i)
 			block := phi.IncomingBlock(i)
 			if block == oldBlock {
@@ -207,7 +207,7 @@ func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
 		defer builder.Dispose()
 		usedInitializer := used.Initializer()
 		num := usedInitializer.Type().ArrayLength()
-		for i := 0; i < num; i++ {
+		for i := range num {
 			usedValues = append(usedValues, builder.CreateExtractValue(usedInitializer, i, ""))
 		}
 		used.EraseFromParentAsGlobal()
@@ -287,7 +287,7 @@ func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal strin
 
 // Version returns the LLVM major version.
 func Version() int {
-	majorStr := strings.Split(llvm.Version, ".")[0]
+	majorStr, _, _ := strings.Cut(llvm.Version, ".")
 	major, err := strconv.Atoi(majorStr)
 	if err != nil {
 		panic("unexpected error while parsing LLVM version: " + err.Error()) // should not happen

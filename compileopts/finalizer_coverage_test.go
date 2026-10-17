@@ -47,7 +47,7 @@ func readBuildConstraint(t *testing.T, path string) constraint.Expr {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if constraint.IsGoBuild(line) {
 			expr, err := constraint.Parse(line)

@@ -405,7 +405,6 @@ func TestBuild(t *testing.T) {
 		switch runtime.GOOS {
 		case "darwin", "linux":
 			for _, scheduler := range []string{"threads", "none"} {
-				scheduler := scheduler
 				t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
 					t.Parallel()
 					options := compileopts.Options(hostOptions)
@@ -1766,16 +1765,14 @@ func TestTest(t *testing.T) {
 
 func ioLogger(t *testing.T, wg *sync.WaitGroup) io.WriteCloser {
 	r, w := io.Pipe()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer r.Close()
 
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			t.Log(scanner.Text())
 		}
-	}()
+	})
 
 	return w
 }
