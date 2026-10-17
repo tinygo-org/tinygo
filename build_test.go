@@ -45,6 +45,7 @@ func TestBuild(t *testing.T) {
 		"goroutines.go",
 		"init.go",
 		"init_multi.go",
+		"init_rawlayout.go",
 		"interface-blank.go",
 		"interface.go",
 		"json.go",
