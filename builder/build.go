@@ -247,6 +247,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if err != nil {
 		return BuildResult{}, err
 	}
+	if _, ok := globalValues["runtime"]["godebugDefault"]; !ok {
+		globalValues["runtime"]["godebugDefault"] = lprogram.MainPkg().DefaultGODEBUG
+	}
 	result := BuildResult{
 		ModuleRoot: lprogram.MainPkg().Module.Dir,
 		MainDir:    lprogram.MainPkg().Dir,

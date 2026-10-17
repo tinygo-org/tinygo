@@ -1615,6 +1615,74 @@ func TestRuntimeFatal(t *testing.T) {
 	}
 }
 
+func TestRuntimeGOROOT(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name        string
+		environment []string
+		want        string
+	}{
+		{"startup environment", []string{"GOROOT=/startup"}, "/startup"},
+		{"empty startup environment", []string{"GOROOT="}, goenv.Get("GOROOT")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := optionsFromTarget(*testTarget, sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun("testdata/runtimegoroot.go", config, output, nil, test.environment, time.Minute, func(cmd *exec.Cmd, _ builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := test.want + "\n" + test.want + "\n"
+			if output.String() != want {
+				t.Fatalf("unexpected output:\n%s\nwant:\n%s", output.String(), want)
+			}
+		})
+	}
+}
+
+func TestRuntimeGODEBUG(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name        string
+		program     string
+		environment []string
+		want        string
+	}{
+		{"compiled default", "testdata/runtimegodebug.go", nil, "true \"\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
+		{"environment override", "testdata/runtimegodebug.go", []string{"GODEBUG=tarinsecurepath=1"}, "true \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
+		{"setting compiled default", "testdata/runtimegodebugsetting.go", nil, "true\nfalse\ntrue\ntrue\n"},
+		{"setting environment override", "testdata/runtimegodebugsetting.go", []string{"GODEBUG=tarinsecurepath=1"}, "false\nfalse\ntrue\ntrue\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := optionsFromTarget(*testTarget, sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun(test.program, config, output, nil, test.environment, time.Minute, func(cmd *exec.Cmd, _ builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != test.want {
+				t.Fatalf("unexpected output:\n%s\nwant:\n%s", output.String(), test.want)
+			}
+		})
+	}
+}
+
 // Test that the program can read stdin when the caller supplies it.
 func TestStdin(t *testing.T) {
 	t.Parallel()
