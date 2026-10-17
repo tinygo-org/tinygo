@@ -17,6 +17,7 @@ var (
 	errIntegerAsPointer       = errors.New("interp: trying to use an integer as a pointer (memory-mapped I/O?)")
 	errUnsupportedInst        = errors.New("interp: unsupported instruction")
 	errUnsupportedRuntimeInst = errors.New("interp: unsupported instruction (to be emitted at runtime)")
+	errDeferUnsupported       = errors.New("interp: cannot partially evaluate a function with defer")
 	errMapAlreadyCreated      = errors.New("interp: map already created")
 	errLoopUnrolled           = errors.New("interp: loop unrolled")
 	errLoopTooLong            = errors.New("interp: loop ran too many iterations")
@@ -29,7 +30,7 @@ var errInvalidPtrToIntSize = errors.New("interp: ptrtoint integer size does not 
 
 func isRecoverableError(err error) bool {
 	return err == errIntegerAsPointer || err == errUnsupportedInst ||
-		err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated ||
+		err == errUnsupportedRuntimeInst || err == errDeferUnsupported || err == errMapAlreadyCreated ||
 		err == errLoopUnrolled || err == errLoopTooLong || err == errInvalidPtrToIntSize
 }
 

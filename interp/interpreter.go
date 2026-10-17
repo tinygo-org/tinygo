@@ -122,6 +122,25 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		}
 
 		inst := bb.instructions[instIndex]
+		// compiler/defer.go emits these checkpoints for panic recovery.
+		// A fully evaluated call cannot panic or need a runtime defer frame.
+		if !fn.deferFrame.IsNil() && inst.opcode == llvm.Call {
+			if inst.llvmInst == fn.deferStack {
+				locals[inst.localIndex] = literalValue{uint64(0)}
+				continue
+			}
+			called := inst.llvmInst.CalledValue()
+			if inst.llvmInst.OperandsCount() >= 2 && inst.llvmInst.Operand(0) == fn.deferFrame {
+				name := called.Name()
+				if name == "runtime.setupDeferFrame" || name == "runtime.destroyDeferFrame" {
+					continue
+				}
+				if attr := inst.llvmInst.GetCallSiteEnumAttribute(-1, llvm.AttributeKindID("returns_twice")); !attr.IsNil() {
+					locals[inst.localIndex] = makeLiteralInt(0, inst.llvmInst.Type().IntTypeWidth())
+					continue
+				}
+			}
+		}
 		operands = operands[:0]
 		isRuntimeInst := false
 		if inst.opcode != llvm.PHI {
@@ -201,6 +220,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		}
 		switch inst.opcode {
 		case llvm.Ret:
+			if !fn.deferFrame.IsNil() && len(mem.instructions) != 0 {
+				return nil, mem, r.errorAt(inst, errDeferUnsupported)
+			}
 			if time.Since(r.start) > r.timeout {
 				// Running for more than the allowed timeout; This shouldn't happen, but it does.
 				// See github.com/tinygo-org/tinygo/issues/2124
@@ -1154,6 +1176,9 @@ func intOperands(r *runner, lhs, rhs value) (int64, int64, error) {
 }
 
 func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
+	if !fn.deferFrame.IsNil() {
+		return r.errorAt(inst, errDeferUnsupported)
+	}
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
 	for i := range numOperands {
