@@ -409,6 +409,44 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					result = max(lhs, rhs)
 				}
 				locals[inst.localIndex] = makeLiteralInt(uint64(result), inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.memset.p0"):
+				nBytes, err := operands[3].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				volatile, err := operands[4].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				if volatile != 0 {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				if nBytes == 0 {
+					continue
+				}
+				dst, err := operands[1].asPointer(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				obj := mem.get(dst.index())
+				if mem.hasExternalLoadOrStore(dst) || obj.buffer == nil || uint64(dst.offset())+nBytes > uint64(obj.size) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				fill, err := operands[2].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				buf := newRawValue(uint32(nBytes))
+				for i := range buf.buf {
+					buf.buf[i] = fill
+				}
+				mem.store(buf, dst)
 			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
 				// Copy a block of memory from one pointer to another.
 				if operands[4].(literalValue).value.(uint8) != 0 {
