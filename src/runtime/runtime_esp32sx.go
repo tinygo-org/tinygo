@@ -56,6 +56,9 @@ func initTimer() {
 }
 
 func ticks() timeUnit {
+	// The update latch is shared by both cores, so take the timer lock.
+	mask := lockTicks()
+
 	// First, update the LO and HI register pair by writing any value to the
 	// register. This allows reading the pair atomically.
 	esp.TIMG0.T0UPDATE.Set(1)
@@ -63,7 +66,9 @@ func ticks() timeUnit {
 		// Register is cleared when the update is complete.
 	}
 	// Then read the two 32-bit parts of the timer.
-	return timeUnit(uint64(esp.TIMG0.T0LO.Get()) | uint64(esp.TIMG0.T0HI.Get())<<32)
+	t := timeUnit(uint64(esp.TIMG0.T0LO.Get()) | uint64(esp.TIMG0.T0HI.Get())<<32)
+	unlockTicks(mask)
+	return t
 }
 
 func nanosecondsToTicks(ns int64) timeUnit {
@@ -81,10 +86,10 @@ func ticksToNanoseconds(ticks timeUnit) int64 {
 // CPU interrupt number used for the TIMG0 timer alarm.
 const timerAlarmCPUInterrupt = 9
 
-var interruptPending volatile.Register8
+var interruptPending [numCPU]volatile.Register8
 
 func signalInterrupt() {
-	interruptPending.Set(1)
+	interruptPending[currentCPU()].Set(1)
 }
 
 var timerAlarmInterrupt interrupt.Interrupt
@@ -114,10 +119,11 @@ func initTimerInterrupt() {
 // TIMG0 alarm interrupt to avoid busy-waiting for the entire duration.
 func sleepTicks(d timeUnit) {
 	machine.FlushSerial()
+	core := currentCPU()
 	target := ticks() + d
 	for ticks() < target {
 		// Set the alarm to fire at the target tick count.
-		interruptPending.Set(0)
+		interruptPending[core].Set(0)
 
 		esp.TIMG0.T0ALARMLO.Set(uint32(target))
 		esp.TIMG0.T0ALARMHI.Set(uint32(target >> 32))
@@ -130,8 +136,8 @@ func sleepTicks(d timeUnit) {
 		esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
 
 		// Wait for any interrupt (timer alarm or other) or timeout.
-		for interruptPending.Get() == 0 {
-			if ticks() >= target {
+		for interruptPending[core].Get() == 0 {
+			if ticks() >= target || sleepWoken(core) {
 				return
 			}
 		}
