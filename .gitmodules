@@ -44,3 +44,6 @@
 [submodule "lib/py32-svd"]
 	path = lib/py32-svd
 	url = https://github.com/tinygo-org/py32-svd.git
+[submodule "lib/ch32-svd"]
+	path = lib/ch32-svd
+	url = https://github.com/jwetzell/ch32-svd
