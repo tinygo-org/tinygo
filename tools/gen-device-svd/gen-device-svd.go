@@ -1329,7 +1329,7 @@ var (
 	pkgName := filepath.Base(strings.TrimRight(outdir, "/"))
 	tweakDevice(device, pkgName)
 
-	err = t.Execute(w, map[string]interface{}{
+	err = t.Execute(w, map[string]any{
 		"device":            device,
 		"pkgName":           pkgName,
 		"interruptMax":      maxInterruptValue,
