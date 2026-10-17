@@ -397,7 +397,7 @@ func (p *Package) OriginalModuleDir() string {
 		if rel == "." || rel != importPath {
 			dir := p.OriginalDir()
 			if rel != "." {
-				for range strings.Split(rel, "/") {
+				for range strings.SplitSeq(rel, "/") {
 					dir = filepath.Dir(dir)
 				}
 			}
