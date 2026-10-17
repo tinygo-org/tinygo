@@ -510,8 +510,8 @@ func typeMayPanicOnCompare(typ types.Type) bool {
 	case *types.Array:
 		return typeMayPanicOnCompare(typ.Elem())
 	case *types.Struct:
-		for i := 0; i < typ.NumFields(); i++ {
-			if typeMayPanicOnCompare(typ.Field(i).Type()) {
+		for field := range typ.Fields() {
+			if typeMayPanicOnCompare(field.Type()) {
 				return true
 			}
 		}

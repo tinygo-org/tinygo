@@ -1693,8 +1693,8 @@ func (b *builder) isOversizedAggregate(typ types.Type) bool {
 
 func (b *builder) isAggregateValue(typ types.Type) bool {
 	if tuple, ok := typ.(*types.Tuple); ok {
-		for i := 0; i < tuple.Len(); i++ {
-			if !isLLVMValueType(tuple.At(i).Type()) {
+		for v := range tuple.Variables() {
+			if !isLLVMValueType(v.Type()) {
 				return false
 			}
 		}
