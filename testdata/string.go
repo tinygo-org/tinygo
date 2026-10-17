@@ -364,6 +364,206 @@ func namedGreaterEqualByteStrings(a, b myBytes) bool {
 	return myString(a) >= myString(b)
 }
 
+//go:noinline
+func mixedByteString(a []byte, s string) [6]bool {
+	return [6]bool{string(a) == s, string(a) != s, string(a) < s,
+		string(a) <= s, string(a) > s, string(a) >= s}
+}
+
+//go:noinline
+func mixedStringByte(s string, a []byte) [6]bool {
+	return [6]bool{s == string(a), s != string(a), s < string(a),
+		s <= string(a), s > string(a), s >= string(a)}
+}
+
+//go:noinline
+func mixedByteLiteral(a []byte) [6]bool {
+	return [6]bool{string(a) == "abc", string(a) != "abc", string(a) < "abc",
+		string(a) <= "abc", string(a) > "abc", string(a) >= "abc"}
+}
+
+//go:noinline
+func mixedLiteralByte(a []byte) [6]bool {
+	return [6]bool{"abc" == string(a), "abc" != string(a), "abc" < string(a),
+		"abc" <= string(a), "abc" > string(a), "abc" >= string(a)}
+}
+
+//go:noinline
+func mixedNamedByteString(a myBytes, s myString) [6]bool {
+	return [6]bool{myString(a) == s, myString(a) != s, myString(a) < s,
+		myString(a) <= s, myString(a) > s, myString(a) >= s}
+}
+
+//go:noinline
+func mixedNamedStringByte(s myString, a myBytes) [6]bool {
+	return [6]bool{s == myString(a), s != myString(a), s < myString(a),
+		s <= myString(a), s > myString(a), s >= myString(a)}
+}
+
+//go:noinline
+func mixedStringReference(s, t string) [6]bool {
+	return [6]bool{s == t, s != t, s < t, s <= t, s > t, s >= t}
+}
+
+//go:noinline
+func mixedByteStringReuse(a []byte, s string) (bool, bool) {
+	t := string(a)
+	equal := t == s
+	a[0] = 'z'
+	return equal, t < s
+}
+
+//go:noinline
+func mixedByteStringEscape(a []byte, s string) (bool, string) {
+	t := string(a)
+	return t == s, t
+}
+
+//go:noinline
+func mixedByteStringStore(a []byte, s string, dst *string) bool {
+	t := string(a)
+	equal := t == s
+	*dst = t
+	return equal
+}
+
+//go:noinline
+func mixedByteStringBox(a []byte, s string) (bool, any) {
+	t := string(a)
+	return t == s, any(t)
+}
+
+//go:noinline
+func mixedByteStringMutation(a, b []byte, s string) bool {
+	t := string(a)
+	b[0] = 'z'
+	return t == s
+}
+
+//go:noinline
+func mixedByteStringCall(a, b []byte, s string) bool {
+	t := string(a)
+	mutateByteSlice(b)
+	return s < t
+}
+
+//go:noinline
+func mixedByteStringAcrossBlock(a, b []byte, s string, mutate bool) bool {
+	t := string(a)
+	if mutate {
+		b[0] = 'z'
+	}
+	return t == s
+}
+
+//go:noinline
+func mixedByteStringAfter(a []byte, s string) bool {
+	result := string(a) == s
+	a[0] = 'z'
+	return result
+}
+
+var mixedEvaluationOrder int
+
+//go:noinline
+func mixedBytesOperand(a []byte) []byte {
+	mixedEvaluationOrder = mixedEvaluationOrder*10 + 1
+	return a
+}
+
+//go:noinline
+func mixedStringOperand(s string) string {
+	mixedEvaluationOrder = mixedEvaluationOrder*10 + 2
+	return s
+}
+
+//go:noinline
+func mixedByteStringEvaluation(a []byte, s string) bool {
+	return string(mixedBytesOperand(a)) == mixedStringOperand(s)
+}
+
+//go:noinline
+func mixedStringByteEvaluation(s string, a []byte) bool {
+	return mixedStringOperand(s) == string(mixedBytesOperand(a))
+}
+
+func testMixedByteStringComparisons() {
+	cases := append(byteStringOrderCases, struct{ a, b []byte }{
+		make([]byte, 0, 1), []byte{'x'}[:0],
+	})
+	for _, tc := range cases {
+		s, t := string(tc.a), string(tc.b)
+		if mixedByteString(tc.a, t) != mixedStringReference(s, t) ||
+			mixedStringByte(t, tc.a) != mixedStringReference(t, s) {
+			panic("mixed string comparison")
+		}
+		if mixedByteLiteral(tc.a) != mixedStringReference(s, "abc") ||
+			mixedLiteralByte(tc.a) != mixedStringReference("abc", s) {
+			panic("mixed literal comparison")
+		}
+		var named myBytes
+		for _, c := range tc.a {
+			named = append(named, myByte(c))
+		}
+		if mixedNamedByteString(named, myString(t)) != mixedStringReference(s, t) ||
+			mixedNamedStringByte(myString(t), named) != mixedStringReference(t, s) {
+			panic("mixed named string comparison")
+		}
+	}
+
+	a := []byte("abc")
+	equal, less := mixedByteStringReuse(a, "abd")
+	if equal || !less {
+		panic("mixed reused snapshot")
+	}
+	a[0] = 'a'
+	equal, snapshot := mixedByteStringEscape(a, "abc")
+	a[0] = 'z'
+	if !equal || snapshot != "abc" {
+		panic("mixed escaping snapshot")
+	}
+	a[0] = 'a'
+	equal = mixedByteStringStore(a, "abc", &snapshot)
+	a[0] = 'z'
+	if !equal || snapshot != "abc" {
+		panic("mixed stored snapshot")
+	}
+	a[0] = 'a'
+	equal, boxed := mixedByteStringBox(a, "abc")
+	a[0] = 'z'
+	if !equal || boxed.(string) != "abc" {
+		panic("mixed boxed snapshot")
+	}
+	a[0] = 'a'
+	if !mixedByteStringMutation(a, a, "abc") {
+		panic("mixed aliased mutation")
+	}
+	a[0] = 'a'
+	if mixedByteStringCall(a, a, "mbc") {
+		panic("mixed aliased call")
+	}
+	for _, mutate := range []bool{false, true} {
+		a[0] = 'a'
+		if !mixedByteStringAcrossBlock(a, a, "abc", mutate) {
+			panic("mixed cross block snapshot")
+		}
+	}
+	a[0] = 'a'
+	if !mixedByteStringAfter(a, "abc") || a[0] != 'z' {
+		panic("mixed mutation after comparison")
+	}
+	a[0] = 'a'
+	mixedEvaluationOrder = 0
+	if !mixedByteStringEvaluation(a, "abc") || mixedEvaluationOrder != 12 {
+		panic("mixed left evaluation order")
+	}
+	mixedEvaluationOrder = 0
+	if !mixedStringByteEvaluation("abc", a) || mixedEvaluationOrder != 21 {
+		panic("mixed right evaluation order")
+	}
+	println("mixed comparisons:", len(cases)*6*6, "snapshot and evaluation guards passed")
+}
+
 func main() {
 	testRangeString()
 	testStringToRunes()
@@ -381,5 +581,6 @@ func main() {
 		mutateGreaterByteString, namedGreaterByteStrings)
 	testByteSliceStringOrder(">=", greaterEqualByteStrings, escapeGreaterEqualByteString,
 		mutateGreaterEqualByteString, namedGreaterEqualByteStrings)
+	testMixedByteStringComparisons()
 	var _ = len([]byte(myString("foobar"))) // issue 1246
 }
