@@ -29,23 +29,6 @@ ENTRY(call_start_cpu0)
 
 SECTIONS
 {
-    /* Dummy section so that .rodata starts right after the image header
-     * and DROM segment header in the flash image.
-     */
-    .rodata_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18; /* esp_image_header_t at start of flash */
-        . += 0x8;  /* DROM segment header (8 bytes) */
-    } > DROM
-
-    /* Constant global variables, stored in flash (DROM). */
-    .rodata : ALIGN(4)
-    {
-        *(.rodata*)
-        . = ALIGN (4);
-        _drom_end = .;
-    } >DROM
-
     /* Put the stack at the bottom of DRAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      */
@@ -73,6 +56,13 @@ SECTIONS
         _sdata = ABSOLUTE(.);
         *(.data .data.*)
         *(.dram*)
+
+        /* Physical flash offsets patched by the ESP image builder. */
+        _irom_flash_addr = ABSOLUTE(.);
+        LONG(0);
+        _drom_flash_addr = ABSOLUTE(.);
+        LONG(0);
+
         . = ALIGN (4);
         _edata = ABSOLUTE(.);
     } >DRAM
@@ -121,23 +111,72 @@ SECTIONS
         _iram_end = .;
     } >IRAM
 
-    /* Dummy section to put the IROM segment at the correct flash offset. */
+    /*
+     * Size of the ESP image containing the RAM-loaded segments.
+     * Flash-mapped IROM/DROM data is appended after this image.
+     *
+     * 0x18: image header
+     * 0x08: segment header for each non-empty RAM segment
+     * 0x20: SHA256 digest
+     *
+     * The image builder always advances to the next 16-byte boundary
+     * before appending the digest.
+     */
+    _ram_image_payload_size =
+        0x18 +
+        SIZEOF(.data) +
+        ((SIZEOF(.data) != 0) ? 0x08 : 0) +
+        SIZEOF(.iram) +
+        ((SIZEOF(.iram) != 0) ? 0x08 : 0);
+
+    _ram_image_size =
+        _ram_image_payload_size +
+        16 - (_ram_image_payload_size % 16) +
+        0x20;
+
+    /*
+     * Keep the low 16 bits of the IROM VMA equal to its physical flash
+     * offset. The MMU maps 64KB pages, so the segment itself does not
+     * need to start on a page boundary.
+     */
     .text_dummy (NOLOAD): ALIGN(4)
     {
-        . += 0x18;                                                  /* esp_image_header_t */
-        . += SIZEOF(.rodata) + ((SIZEOF(.rodata) != 0) ? 0x8 : 0); /* DROM segment (optional) */
-        . += SIZEOF(.data)   + ((SIZEOF(.data)   != 0) ? 0x8 : 0); /* DRAM segment (optional) */
-        . += SIZEOF(.iram)   + 0x8;                                 /* IRAM segment */
-        . += 0x8;                                                   /* IROM segment header */
-    } > IROM
+        . += _ram_image_size % 0x10000;
+    } >IROM
 
-    /* IROM segment: main code executed from flash via cache. */
+    /* IROM occupies the first entries in the shared flash MMU table. */
     .text : ALIGN(4)
     {
+        _irom_start = .;
         *(.literal .text)
         *(.literal.* .text.*)
+        . = ALIGN(4);
         _irom_end = .;
     } >IROM
+
+    /*
+     * DROM uses MMU entries immediately after those occupied by IROM.
+     * Its low 16 VMA bits must also match its physical flash offset.
+     */
+    _irom_mmu_pages =
+        ((_irom_end - ORIGIN(IROM) + 0xFFFF) / 0x10000);
+
+    _drom_flash_offset =
+        _ram_image_size + SIZEOF(.text);
+
+    .rodata_dummy (NOLOAD): ALIGN(4)
+    {
+        . += _irom_mmu_pages * 0x10000;
+        . += _drom_flash_offset % 0x10000;
+    } >DROM
+
+    .rodata : ALIGN(4)
+    {
+        _drom_start = .;
+        *(.rodata*)
+        . = ALIGN(4);
+        _drom_end = .;
+    } >DROM
 
     /DISCARD/ :
     {
