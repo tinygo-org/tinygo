@@ -1,12 +1,15 @@
 package loader
 
 import (
+	"errors"
 	"fmt"
 	"go/types"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -59,6 +62,78 @@ func TestPackageTestContext(t *testing.T) {
 			}
 			if program.workingDir != test.wantDir {
 				t.Errorf("working directory = %q, want %q", program.workingDir, test.wantDir)
+			}
+			if config.Options.Directory != dir {
+				t.Fatal("Load changed the caller's directory")
+			}
+		})
+	}
+}
+
+func TestPackageWorkingDirectory(t *testing.T) {
+	t.Setenv("GOFLAGS", "")
+	_, minor, err := goenv.GetGorootVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"ordinary", "symlink"} {
+		t.Run(name, func(t *testing.T) {
+			dir, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if name == "symlink" {
+				link := filepath.Join(t.TempDir(), "workspace")
+				if err := os.Symlink(dir, link); err != nil {
+					if errors.Is(err, os.ErrPermission) || errors.Is(err, syscall.ENOSYS) || errors.Is(err, syscall.ENOTSUP) {
+						t.Skipf("cannot create a symlink: %v", err)
+					}
+					t.Fatal(err)
+				}
+				dir = link
+			}
+			for name, content := range map[string]string{
+				"go.mod":   "module example.com/workdir\n\ngo 1.25.0\n",
+				"go.work":  "go 1.25.0\n\nuse .\n",
+				"probe.go": "package probe\n",
+			} {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+			config := &compileopts.Config{
+				Options:        &compileopts.Options{Directory: dir},
+				Target:         &compileopts.TargetSpec{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
+				GoMinorVersion: minor,
+			}
+			cmd, err := List(config, []string{"-f", "{{.Dir}}"}, []string{"."})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if config.Options.Directory != dir {
+				t.Fatal("List changed the caller's directory")
+			}
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("go list failed: %v\n%s", err, output)
+			}
+			if got := strings.TrimSpace(string(output)); got != dir {
+				t.Fatalf("package directory = %q, want %q", got, dir)
+			}
+			program, err := Load(config, ".", types.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if program.workingDir != dir {
+				t.Errorf("working directory = %q, want %q", program.workingDir, dir)
+			}
+			pkg := program.Packages["example.com/workdir"]
+			if pkg == nil {
+				t.Fatal("Load did not find the workspace package")
+			}
+			if pkg.Dir != dir {
+				t.Errorf("loaded package directory = %q, want %q", pkg.Dir, dir)
 			}
 			if config.Options.Directory != dir {
 				t.Fatal("Load changed the caller's directory")
