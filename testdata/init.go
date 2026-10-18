@@ -1,6 +1,9 @@
 package main
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 func init() {
 	println("init")
@@ -172,4 +175,27 @@ func init() {
 
 	type inside struct{}
 	_, _ = any(inside{}).(interface{ DoesNotExist() })
+}
+
+// escapeLeak runs at runtime, so the atomic store also runs at runtime and lets
+// runtime code read escapeValue. escapeObserve must see the value from before the next store.
+var (
+	escapeValue   = 1
+	escapePointer atomic.Pointer[int]
+)
+
+func init() {
+	escapeLeak(&escapePointer)
+	escapePointer.Store(&escapeValue)
+	escapeObserve()
+	escapeValue = 2
+}
+
+func escapeLeak(p *atomic.Pointer[int]) {
+	defer func() {}()
+	println("escape loaded:", p.Load() == nil)
+}
+
+func escapeObserve() {
+	println("escape:", *escapePointer.Load())
 }

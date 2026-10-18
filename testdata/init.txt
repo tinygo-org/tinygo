@@ -1,5 +1,7 @@
 shift
 init
+escape loaded: true
+escape: 1
 main
 v1: 3
 v2: 2 5
