@@ -986,9 +986,12 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			result.SetOrdering(ordering)
 		}
 	case llvm.Store:
-		err := mem.markExternalStore(operands[1])
-		if err != nil {
-			return r.errorAt(inst, err)
+		// Runtime code can read objects through the stored value.
+		for _, op := range operands {
+			err := mem.markExternalStore(op)
+			if err != nil {
+				return r.errorAt(inst, err)
+			}
 		}
 		result = r.builder.CreateStore(operands[0], operands[1])
 		if inst.llvmInst.IsVolatile() {

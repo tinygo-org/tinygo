@@ -1,4 +1,5 @@
 init
+escape: 1
 main
 v1: 3
 v2: 2 5
