@@ -264,6 +264,7 @@ func scheduler(_ bool) {
 				}
 
 				// Run it now.
+				schedulerHandOffClock()
 				setCurrentTask(sleepingTask)
 				sleepingTask.RunState = task.RunStateRunning
 				schedulerLock.Unlock() // unlock before resuming, Pause() will lock again
@@ -286,6 +287,7 @@ func scheduler(_ bool) {
 				firingTimersAdd(tn)
 
 				// Run the callback stored in this timer node.
+				schedulerHandOffClock()
 				schedulerLock.Unlock()
 				tn.callback(tn, delay)
 				schedulerLock.Lock()
@@ -296,6 +298,7 @@ func scheduler(_ bool) {
 		// Check for ready-to-run tasks.
 		if runnable := runqueue.PopCore(currentCPU()); runnable != nil {
 			// Resume it now.
+			schedulerHandOffClock()
 			setCurrentTask(runnable)
 			runnable.RunState = task.RunStateRunning
 			schedulerLock.Unlock() // unlock before resuming, Pause() will lock again
@@ -342,6 +345,14 @@ func scheduler(_ bool) {
 		// do.
 		// Wait until something happens (like an interrupt).
 		schedulerUnlockAndWait()
+	}
+}
+
+// This core stops watching the clock while it runs a task, so wake a waiting core
+// to watch it if tasks sleep or timers wait. Call with the scheduler lock held.
+func schedulerHandOffClock() {
+	if (sleepQueue != nil || timerQueue != nil) && !hasSleepingCore() {
+		schedulerWake()
 	}
 }
 
