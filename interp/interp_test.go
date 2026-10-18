@@ -2,6 +2,7 @@ package interp
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -11,21 +12,15 @@ import (
 )
 
 func TestInterp(t *testing.T) {
-	for _, name := range []string{
-		"basic",
-		"phi",
-		"consteval",
-		"intrinsics",
-		"copy",
-		"interface",
-		"revert",
-		"store",
-		"alloc",
-		"slicedata",
-		"aggregate",
-		"fastrand",
-		"ptrtoint",
-	} {
+	matches, err := filepath.Glob("testdata/*.out.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("no test cases found in testdata")
+	}
+	for _, match := range matches {
+		name := strings.TrimSuffix(filepath.Base(match), ".out.ll")
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			runTest(t, "testdata/"+name)
