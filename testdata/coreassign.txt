@@ -6,3 +6,4 @@ second AssignCore panics: true
 AssignCore moves main: true
 assigned task woken from another core: true
 assigned waker stays on core: true
+sleeping task wakes while another core is busy: true

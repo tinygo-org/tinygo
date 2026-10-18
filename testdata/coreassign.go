@@ -4,6 +4,7 @@ import (
 	"machine"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 	_ "unsafe"
 )
@@ -102,4 +103,22 @@ func main() {
 	}
 	println("assigned task woken from another core:", woken)
 	println("assigned waker stays on core:", <-workerOK)
+
+	// A task sleeping on one core wakes on time while a task on another core is busy.
+	var busyOver atomic.Bool
+	wokeInTime := make(chan bool)
+	go func() {
+		machine.AssignCore(0)
+		time.Sleep(20 * time.Millisecond)
+		end := time.Now().Add(300 * time.Millisecond)
+		for time.Now().Before(end) {
+		}
+		busyOver.Store(true)
+	}()
+	go func() {
+		machine.AssignCore(1)
+		time.Sleep(50 * time.Millisecond)
+		wokeInTime <- !busyOver.Load()
+	}()
+	println("sleeping task wakes while another core is busy:", <-wokeInTime)
 }
