@@ -226,7 +226,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		return nil, fmt.Errorf("%s : %w", options.Target, err)
 	}
 	switch spec.PanicUnwind {
-	case "", "auto", "explicit":
+	case "", "auto", "explicit", "none":
 	default:
 		return nil, fmt.Errorf("%s: invalid panic-unwind option %q", options.Target, spec.PanicUnwind)
 	}

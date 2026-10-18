@@ -850,6 +850,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			options.PanicUnwind = "explicit"
 			runTest("recover-explicit.go", options, t, nil, nil)
 		})
+		t.Run("calls.go-unwind-none", func(t *testing.T) {
+			t.Parallel()
+			options := compileopts.Options(options)
+			options.PanicUnwind = "none"
+			runTest("calls.go", options, t, nil, nil)
+		})
 	}
 }
 
