@@ -236,6 +236,18 @@ func TestConfigPanicUnwind(t *testing.T) {
 			target:  TargetSpec{Triple: "wasm32-unknown-unknown", PanicUnwind: "auto"},
 			want:    "asyncify",
 		},
+		{
+			name:    "none disables asyncify unwinding",
+			options: Options{Scheduler: "asyncify", PanicUnwind: "none"},
+			target:  TargetSpec{Triple: "wasm32-unknown-unknown"},
+			want:    "none",
+		},
+		{
+			name:    "none disables setjmp unwinding",
+			options: Options{PanicUnwind: "none"},
+			target:  TargetSpec{Triple: "x86_64-unknown-linux"},
+			want:    "none",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
