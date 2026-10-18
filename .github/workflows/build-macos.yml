@@ -87,7 +87,7 @@ jobs:
       - name: make gen-device
         run: make -j3 gen-device
       - name: Test TinyGo
-        run: make test GOTESTFLAGS="-only-current-os"
+        run: make test GOTESTFLAGS="-short"
 
   stdlib-test-macos:
     # Test the standard library, compiled and run on the host itself.

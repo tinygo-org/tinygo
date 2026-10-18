@@ -41,8 +41,6 @@ const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
 
-var testOnlyCurrentOS = flag.Bool("only-current-os", false, "")
-
 var supportedLinuxArches = map[string]string{
 	"AMD64Linux": "linux/amd64",
 	"X86Linux":   "linux/386",
@@ -539,13 +537,9 @@ func TestBuild(t *testing.T) {
 		})
 	})
 
-	if testing.Short() {
-		// Don't test other targets when the -short flag is used. Only test the
-		// host system.
-		return
-	}
-
-	if !*testOnlyCurrentOS {
+	// Short mode skips the targets that every host can test. Linux CI tests
+	// them. The host-specific targets below continue to run.
+	if !testing.Short() {
 		t.Run("EmulatedCortexM3", func(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("cortex-m-qemu", sema), tests, t)
