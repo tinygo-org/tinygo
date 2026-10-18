@@ -198,23 +198,27 @@ type i2cCommand struct {
 //go:linkname nanotime runtime.nanotime
 func nanotime() int64
 
+const i2cIntMask = esp.I2C_INT_STATUS_END_DETECT_INT_ST_Msk | esp.I2C_INT_STATUS_TRANS_COMPLETE_INT_ST_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_NACK_INT_ST_Msk
+
 func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
-	const intMask = esp.I2C_INT_STATUS_END_DETECT_INT_ST_Msk | esp.I2C_INT_STATUS_TRANS_COMPLETE_INT_ST_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_NACK_INT_ST_Msk
 	// Reset the FIFOs, bytes left after a NACK would go out in the next transaction.
 	// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1456
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(1)
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(0)
 	i2c.Bus.SetFIFO_CONF_RX_FIFO_RST(1)
 	i2c.Bus.SetFIFO_CONF_RX_FIFO_RST(0)
-	i2c.Bus.INT_CLR.SetBits(intMask)
-	i2c.Bus.INT_ENA.SetBits(intMask)
+	i2c.Bus.INT_CLR.SetBits(i2cIntMask)
+	i2c.Bus.INT_ENA.SetBits(i2cIntMask)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
 
-	defer func() {
-		i2c.Bus.INT_CLR.SetBits(intMask)
-		i2c.Bus.INT_ENA.ClearBits(intMask)
-	}()
+	// No defer here, since a deferred closure allocates on every transaction.
+	err := i2c.runCommands(addr, cmd, timeoutMS)
+	i2c.Bus.INT_CLR.SetBits(i2cIntMask)
+	i2c.Bus.INT_ENA.ClearBits(i2cIntMask)
+	return err
+}
 
+func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 	timeoutNS := int64(timeoutMS) * 1000000
 	needAddress := true
 	needRestart := false
@@ -325,7 +329,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 			i2c.Bus.SetCTR_TRANS_START(1)
 			end := nanotime() + timeoutNS
 			var mask uint32
-			for mask = i2c.Bus.INT_STATUS.Get(); mask&intMask == 0; mask = i2c.Bus.INT_STATUS.Get() {
+			for mask = i2c.Bus.INT_STATUS.Get(); mask&i2cIntMask == 0; mask = i2c.Bus.INT_STATUS.Get() {
 				if nanotime() > end {
 					if readTo != nil {
 						return errI2CReadTimeout
@@ -342,7 +346,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				}
 				return errI2CWriteTimeout
 			}
-			i2c.Bus.INT_CLR.SetBits(intMask)
+			i2c.Bus.INT_CLR.SetBits(i2cIntMask)
 			for i := 0; i < len(readTo); i++ {
 				readTo[i] = byte(i2c.Bus.GetDATA_FIFO_RDATA() & 0xff)
 				c.head++
