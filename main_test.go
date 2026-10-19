@@ -340,6 +340,7 @@ func TestBuild(t *testing.T) {
 		"interface-blank.go",
 		"interface.go",
 		"json.go",
+		"init_writeback.go",
 		"localtypes/",
 		"localtypes.go",
 		"map.go",

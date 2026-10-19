@@ -14,6 +14,7 @@ func TestInterp(t *testing.T) {
 	for _, name := range []string{
 		"basic",
 		"phi",
+		"writeback",
 		"consteval",
 		"intrinsics",
 		"copy",
