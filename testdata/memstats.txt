@@ -1,0 +1,13 @@
+Lookups: 0
+StackInuse: 0
+StackSys: 0
+MSpanInuse: 0
+MSpanSys: 0
+MCacheInuse: 0
+MCacheSys: 0
+BuckHashSys: 0
+OtherSys: 0
+NextGC: 0
+GCCPUFraction: true
+ThreadCreateProfile: 0 true
+Stack: 2
