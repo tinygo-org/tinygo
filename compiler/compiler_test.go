@@ -684,12 +684,6 @@ func normalizeCapturesAttr(s string) string {
 // stripped out.
 func filterIrrelevantIRLines(lines []string) []string {
 	var out []string
-	llvmVersion, err := strconv.Atoi(strings.Split(llvm.Version, ".")[0])
-	if err != nil {
-		// Note: this should never happen and if it does, it will always happen
-		// for a particular build because llvm.Version is a constant.
-		panic(err)
-	}
 	for _, line := range lines {
 		line = strings.Split(line, ";")[0]  // strip out comments/info
 		line = strings.TrimRight(line, " ") // remove trailing spaces from comments
@@ -700,11 +694,6 @@ func filterIrrelevantIRLines(lines []string) []string {
 			continue
 		}
 		if strings.HasPrefix(line, "@tinygo.indirect-abi = ") {
-			continue
-		}
-		if llvmVersion < 15 && strings.HasPrefix(line, "target datalayout = ") {
-			// The datalayout string may vary betewen LLVM versions.
-			// Right now test outputs are for LLVM 15 and higher.
 			continue
 		}
 		out = append(out, line)
