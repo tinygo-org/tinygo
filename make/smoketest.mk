@@ -131,6 +131,8 @@ ifneq ($(WASM), 0)
 	@$(MD5SUM) $(SMOKE_OUT).wasm
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o $(SMOKE_OUT).wasm -tags=xiao_esp32s3         examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).wasm
+	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o $(SMOKE_OUT).wasm -tags=m5stamp_fly          examples/machinetest
+	@$(MD5SUM) $(SMOKE_OUT).wasm
 endif
 
 smoketest-nrf: SMOKE_OUT = build/smoke/nrf
