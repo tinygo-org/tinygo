@@ -51,13 +51,17 @@ func wasmEntryReactor() {
 	}
 }
 
-// This is the _start entry point, when using -buildmode=wasi-legacy.
+// This is the _start entry point, when using -buildmode=wasi-legacy. It returns
+// when main returns instead of exiting, so the module stays usable.
 func wasmEntryLegacy() {
 	// These need to be initialized early so that the heap can be initialized.
 	initializeCalled = true
 	heapStart = uintptr(unsafe.Pointer(&heapStartSymbol))
 	heapEnd = uintptr(wasm_memory_size(0) * wasmPageSize)
 	run()
+	if mainExited {
+		flushStdio()
+	}
 }
 
 // Whether the runtime was initialized by a call to _initialize or _start.

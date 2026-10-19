@@ -137,6 +137,13 @@ func TestWasmExport(t *testing.T) {
 			file:      "wasmexport-noscheduler.go",
 			command:   true,
 		},
+		// Test buildmode=wasi-legacy with the default scheduler.
+		{
+			name:      "WASIp1-legacy-scheduler",
+			target:    "wasip1",
+			buildMode: "wasi-legacy",
+			command:   true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -253,6 +260,10 @@ func TestWasmExport(t *testing.T) {
 					} else {
 						t.Error("failed to run _start:", err)
 					}
+				}
+				if tc.buildMode == "wasi-legacy" && mod.IsClosed() {
+					// A legacy command returns from _start without exiting.
+					t.Error("module exited in _start")
 				}
 			} else {
 				// Run the _initialize call, because this is reactor mode wasm.
