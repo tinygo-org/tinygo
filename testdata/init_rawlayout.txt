@@ -1,0 +1,5 @@
+aligned: true
+misaligned: true
+one: true
+self: true
+straddle: true

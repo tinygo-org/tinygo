@@ -333,6 +333,7 @@ func TestBuild(t *testing.T) {
 		"finalizerlarge.go",
 		"float.go",
 		"gc.go",
+		"init_rawlayout.go",
 		"generics.go",
 		"goroutines.go",
 		"init.go",

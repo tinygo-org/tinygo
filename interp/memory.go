@@ -636,57 +636,50 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 			// the runtime. Use a conservative default instead.
 			alignment = mem.r.maxAlign
 		}
-		if obj.llvmType.IsNil() && obj.llvmLayoutType.IsNil() {
-			// Create an initializer without knowing the global type.
-			// This is probably the result of a runtime.alloc call.
-			initializer, err := obj.buffer.asRawValue(mem.r).rawLLVMValue(mem)
-			if err != nil {
-				return llvm.Value{}, err
+		var globalType llvm.Type
+		if !obj.llvmType.IsNil() {
+			// The exact type is known.
+			globalType = obj.llvmType
+		} else if !obj.llvmLayoutType.IsNil() {
+			// The exact type isn't known, but the object layout is known.
+			globalType = obj.llvmLayoutType
+			// The layout may not span the full size of the global because
+			// of repetition. One example would be make([]string, 5) which
+			// would be 10 words in size but the layout would only be two
+			// words (for the string type).
+			typeSize := mem.r.targetData.TypeAllocSize(globalType)
+			if typeSize != uint64(obj.size) {
+				globalType = llvm.ArrayType(globalType, int(uint64(obj.size)/typeSize))
 			}
-			globalType := initializer.Type()
-			llvmValue = llvm.AddGlobal(mem.r.mod, globalType, obj.globalName)
-			llvmValue.SetInitializer(initializer)
-			llvmValue.SetAlignment(alignment)
-			obj.llvmGlobal = llvmValue
-			mem.put(v.index(), obj)
-		} else {
-			// The global type is known, or at least its structure.
-			var globalType llvm.Type
-			if !obj.llvmType.IsNil() {
-				// The exact type is known.
-				globalType = obj.llvmType
-			} else { // !obj.llvmLayoutType.IsNil()
-				// The exact type isn't known, but the object layout is known.
-				globalType = obj.llvmLayoutType
-				// The layout may not span the full size of the global because
-				// of repetition. One example would be make([]string, 5) which
-				// would be 10 words in size but the layout would only be two
-				// words (for the string type).
-				typeSize := mem.r.targetData.TypeAllocSize(globalType)
-				if typeSize != uint64(obj.size) {
-					globalType = llvm.ArrayType(globalType, int(uint64(obj.size)/typeSize))
-				}
-			}
-			if checks && mem.r.targetData.TypeAllocSize(globalType) != uint64(obj.size) {
-				panic("size of the globalType isn't the same as the object size")
-			}
-			llvmValue = llvm.AddGlobal(mem.r.mod, globalType, obj.globalName)
-			obj.llvmGlobal = llvmValue
-			mem.put(v.index(), obj)
-
-			// Set the initializer for the global. Do this after creation to avoid
-			// infinite recursion between creating the global and creating the
-			// contents of the global (if the global contains itself).
-			initializer, err := obj.buffer.toLLVMValue(globalType, mem)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			if checks && initializer.Type() != globalType {
-				return llvm.Value{}, errors.New("interp: allocated value does not match allocated type")
-			}
-			llvmValue.SetInitializer(initializer)
-			llvmValue.SetAlignment(alignment)
 		}
+		if buf := obj.buffer.asRawValue(mem.r); globalType.IsNil() || !buf.fitsType(globalType, mem.r) {
+			// The type is unknown or cannot hold a pointer stored as uintptr.
+			// Make a type from the buffer instead.
+			var err error
+			globalType, err = buf.rawLLVMType(mem.r)
+			if err != nil {
+				return llvm.Value{}, err
+			}
+		}
+		if checks && mem.r.targetData.TypeAllocSize(globalType) != uint64(obj.size) {
+			panic("size of the globalType isn't the same as the object size")
+		}
+		llvmValue = llvm.AddGlobal(mem.r.mod, globalType, obj.globalName)
+		obj.llvmGlobal = llvmValue
+		mem.put(v.index(), obj)
+
+		// Set the initializer for the global. Do this after creation to avoid
+		// infinite recursion between creating the global and creating the
+		// contents of the global (if the global contains itself).
+		initializer, err := obj.buffer.toLLVMValue(globalType, mem)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		if checks && initializer.Type() != globalType {
+			return llvm.Value{}, errors.New("interp: allocated value does not match allocated type")
+		}
+		llvmValue.SetInitializer(initializer)
+		llvmValue.SetAlignment(alignment)
 
 		// It should be included in r.globals because otherwise markExternal
 		// would consider it a new global (and would fail to mark this global as
@@ -832,53 +825,90 @@ func (v rawValue) equal(rhs rawValue) bool {
 	return true
 }
 
+// fitsType returns true if each pointer in this rawValue is a whole pointer in
+// a pointer-sized field of llvmType, so that toLLVMValue can write it.
+func (v rawValue) fitsType(llvmType llvm.Type, r *runner) bool {
+	if !v.hasPointer() {
+		return true
+	}
+	switch llvmType.TypeKind() {
+	case llvm.StructTypeKind:
+		end := uint64(0)
+		for i, fieldType := range llvmType.StructElementTypes() {
+			offset := r.targetData.ElementOffset(llvmType, i)
+			if (rawValue{v.buf[end:offset]}).hasPointer() {
+				return false // pointer in padding
+			}
+			end = offset + r.targetData.TypeStoreSize(fieldType)
+			if !(rawValue{v.buf[offset:end]}).fitsType(fieldType, r) {
+				return false
+			}
+		}
+		return !(rawValue{v.buf[end:]}).hasPointer()
+	case llvm.ArrayTypeKind:
+		elementType := llvmType.ElementType()
+		elementSize := int(r.targetData.TypeAllocSize(elementType))
+		for i := range llvmType.ArrayLength() {
+			if !(rawValue{v.buf[i*elementSize : (i+1)*elementSize]}).fitsType(elementType, r) {
+				return false
+			}
+		}
+		return true
+	case llvm.PointerTypeKind, llvm.IntegerTypeKind:
+		return len(v.buf) == int(r.pointerSize) && !slices.ContainsFunc(v.buf, func(p uint64) bool { return p != v.buf[0] })
+	}
+	return false
+}
+
+// rawLLVMType returns a packed LLVM type with the same size as this rawValue
+// and with a pointer field at the offset of each pointer in the buffer.
+func (v rawValue) rawLLVMType(r *runner) (llvm.Type, error) {
+	ctx := r.mod.Context()
+	int8Type := ctx.Int8Type()
+	var fields []llvm.Type
+	numBytes := 0
+	addBytes := func() {
+		if numBytes == 1 {
+			fields = append(fields, int8Type)
+		} else if numBytes > 1 {
+			fields = append(fields, llvm.ArrayType(int8Type, numBytes))
+		}
+		numBytes = 0
+	}
+	for i := 0; i < len(v.buf); {
+		if v.buf[i] <= 255 {
+			numBytes++
+			i++
+			continue
+		}
+		end := min(i+int(r.pointerSize), len(v.buf))
+		if !(rawValue{v.buf[i:end]}).fitsType(r.dataPtrType, r) {
+			return llvm.Type{}, errors.New("interp: cannot write part of a pointer as a constant")
+		}
+		addBytes()
+		fields = append(fields, r.dataPtrType)
+		i = end
+	}
+	addBytes()
+	switch len(fields) {
+	case 0:
+		return llvm.ArrayType(int8Type, 0), nil
+	case 1:
+		return fields[0], nil
+	}
+	return ctx.StructType(fields, true), nil
+}
+
 // rawLLVMValue returns a llvm.Value for this rawValue, making up a type as it
 // goes. The resulting value does not have a specified type, but it will be the
 // same size and have the same bytes if it was created with a provided LLVM type
 // (through toLLVMValue).
 func (v rawValue) rawLLVMValue(mem *memoryView) (llvm.Value, error) {
-	var structFields []llvm.Value
-	ctx := mem.r.mod.Context()
-	int8Type := ctx.Int8Type()
-
-	var bytesBuf []llvm.Value
-	// addBytes can be called after adding to bytesBuf to flush remaining bytes
-	// to a new array in structFields.
-	addBytes := func() {
-		if len(bytesBuf) == 0 {
-			return
-		}
-		if len(bytesBuf) == 1 {
-			structFields = append(structFields, bytesBuf[0])
-		} else {
-			structFields = append(structFields, llvm.ConstArray(int8Type, bytesBuf))
-		}
-		bytesBuf = nil
+	llvmType, err := v.rawLLVMType(mem.r)
+	if err != nil {
+		return llvm.Value{}, err
 	}
-
-	// Create structFields, converting the rawValue to a LLVM value.
-	for i := uint32(0); i < uint32(len(v.buf)); {
-		if v.buf[i] > 255 {
-			addBytes()
-			field, err := pointerValue{v.buf[i]}.toLLVMValue(llvm.Type{}, mem)
-			if err != nil {
-				return llvm.Value{}, err
-			}
-			structFields = append(structFields, field)
-			i += mem.r.pointerSize
-			continue
-		}
-		val := llvm.ConstInt(int8Type, uint64(v.buf[i]), false)
-		bytesBuf = append(bytesBuf, val)
-		i++
-	}
-	addBytes()
-
-	// Return the created data.
-	if len(structFields) == 1 {
-		return structFields[0], nil
-	}
-	return ctx.ConstStruct(structFields, false), nil
+	return v.toLLVMValue(llvmType, mem)
 }
 
 func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, error) {
