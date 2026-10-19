@@ -88,6 +88,52 @@ void tinygo_runtime_bdwgc_init(void) {
 #endif
 }
 
+// This matches the start of finalizerEntry in gc_boehm_finalizer.go.
+struct finalizer_entry {
+    struct finalizer_entry *next;
+    void *obj;
+    uintptr_t offset;
+};
+
+// These point to the Go variables finalizerPending and finalizersQueued.
+static struct finalizer_entry **finalizer_pending;
+static unsigned char *finalizers_queued;
+
+static void GC_CALLBACK finalizers_ready(void) {
+    *finalizers_queued = 1;
+}
+
+// Add the entry to the Go list. Go runs the finalizer later.
+static void GC_CALLBACK finalize(void *obj, void *data) {
+    struct finalizer_entry *entry = data;
+
+    entry->obj = (char *)obj + entry->offset;
+    entry->next = *finalizer_pending;
+    *finalizer_pending = entry;
+}
+
+// Queue finalizers during a collection and run them later from Go.
+void tinygo_runtime_bdwgc_enable_finalizers(uintptr_t pending,
+                                            uintptr_t queued) {
+    finalizer_pending = (struct finalizer_entry **)pending;
+    finalizers_queued = (unsigned char *)queued;
+    GC_set_finalize_on_demand(1);
+    // Keep what a queued object refers to alive until its finalizer ran.
+    // See GC_finalize in lib/bdwgc/finalize.c.
+    GC_set_java_finalization(1);
+    GC_set_finalizer_notifier(finalizers_ready);
+}
+
+// Set or clear the finalizer of obj and return the data of the old one.
+uintptr_t tinygo_runtime_bdwgc_register_finalizer(uintptr_t obj, uintptr_t data) {
+    GC_finalization_proc old_proc = 0;
+    void *old_data = NULL;
+
+    GC_register_finalizer_no_order((void *)obj, data != 0 ? finalize : 0,
+                                   (void *)data, &old_proc, &old_data);
+    return (uintptr_t)old_data;
+}
+
 GC_descr tinygo_runtime_bdwgc_make_descriptor(uintptr_t layout) {
     struct descriptor_cache_entry *entry;
     GC_word inline_bitmap;

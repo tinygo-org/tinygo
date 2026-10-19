@@ -21,22 +21,23 @@ func TestFinalizerRunnerSchedulerCoverage(t *testing.T) {
 		exprs[i] = readBuildConstraint(t, filepath.Join("..", "src", "runtime", name))
 	}
 
-	for _, sched := range validSchedulerOptions {
-		// The finalizer table exists under block GCs.
-		// gc.conservative satisfies the GC condition in every constraint.
-		tags := map[string]bool{
-			"gc.conservative":    true,
-			"scheduler." + sched: true,
-		}
-		var matched []string
-		for i, expr := range exprs {
-			if expr.Eval(func(tag string) bool { return tags[tag] }) {
-				matched = append(matched, files[i])
+	// These collectors implement SetFinalizer and need a runner.
+	for _, gc := range []string{"conservative", "precise", "boehm"} {
+		for _, sched := range validSchedulerOptions {
+			tags := map[string]bool{
+				"gc." + gc:           true,
+				"scheduler." + sched: true,
 			}
-		}
-		if len(matched) != 1 {
-			t.Errorf("scheduler.%s: spawnFinalizerRunner defined in %d files %v, want exactly 1",
-				sched, len(matched), matched)
+			var matched []string
+			for i, expr := range exprs {
+				if expr.Eval(func(tag string) bool { return tags[tag] }) {
+					matched = append(matched, files[i])
+				}
+			}
+			if len(matched) != 1 {
+				t.Errorf("gc.%s scheduler.%s: spawnFinalizerRunner defined in %d files %v, want exactly 1",
+					gc, sched, len(matched), matched)
+			}
 		}
 	}
 }
