@@ -63,12 +63,10 @@ jobs:
   test-macos:
     # The compiler test suite. It needs LLVM, thus it cannot use the release
     # tarball. It restores the LLVM cache and runs at the same time as
-    # build-macos. Only build-macos saves that cache.
+    # build-macos. Only build-macos saves that cache. The intel runner only
+    # runs the smoke tests below, as the full suite is slow there.
     name: test-macos
-    strategy:
-      matrix:
-        os: [macos-15, macos-15-intel]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     steps:
       - name: Install Dependencies
         run: |
@@ -84,7 +82,7 @@ jobs:
           cache: true
       - uses: ./.github/actions/setup-llvm-macos
         with:
-          os: ${{ matrix.os }}
+          os: macos-15
           save-cache: "false"
       - name: make gen-device
         run: make -j3 gen-device
@@ -95,15 +93,7 @@ jobs:
     # Test the standard library, compiled and run on the host itself.
     name: stdlib-test-macos
     needs: build-macos
-    strategy:
-      matrix:
-        os: [macos-15, macos-15-intel]
-        include:
-          - os: macos-15
-            goarch: arm64
-          - os: macos-15-intel
-            goarch: amd64
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -121,7 +111,7 @@ jobs:
           # An artifact uploaded with "archive: false" takes the name of the
           # file, not the name given to upload-artifact. See the comment on
           # "Collect the release files" in release.yml.
-          name: tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
+          name: tinygo${{ steps.version.outputs.version }}.darwin-arm64.tar.gz
           path: build/
           skip-decompress: true
       - name: Unpack TinyGo build
