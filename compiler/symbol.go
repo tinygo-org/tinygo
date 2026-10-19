@@ -375,8 +375,8 @@ func (c *compilerContext) canonicalFunctionName(f *ssa.Function) string {
 	return name + methodPackageQualifier(f)
 }
 
-// methodPackageQualifier names an unexported method promoted from another
-// package by that package, as RelString spells it like the type's own method.
+// methodPackageQualifier adds the declaring package to an unexported method
+// promoted from another package, since RelString names it like the type's own.
 func methodPackageQualifier(f *ssa.Function) string {
 	recv := f.Signature.Recv()
 	if recv == nil {
@@ -394,7 +394,7 @@ func methodPackageQualifier(f *ssa.Function) string {
 	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg() == obj.Pkg() {
 		return ""
 	}
-	return "·" + obj.Pkg().Path()
+	return "$" + obj.Pkg().Path()
 }
 
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
