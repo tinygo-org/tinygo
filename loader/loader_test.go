@@ -187,11 +187,15 @@ func BenchmarkRecordedPath(b *testing.B) {
 }
 
 func TestRecordedPathPrecedence(t *testing.T) {
+	root := t.TempDir()
+	testPath := func(path string) string {
+		return filepath.Join(root, filepath.FromSlash(path))
+	}
 	program := &Program{
 		config: &compileopts.Config{
 			Options: &compileopts.Options{TrimPath: true},
 		},
-		goroot:   filepath.FromSlash("/goroot"),
+		goroot:   testPath("/goroot"),
 		Packages: make(map[string]*Package),
 	}
 	var pkg *Package
@@ -205,11 +209,11 @@ func TestRecordedPathPrecedence(t *testing.T) {
 		pkg = &Package{
 			program: program,
 			PackageJSON: PackageJSON{
-				Dir:        filepath.FromSlash(entry.dir),
+				Dir:        testPath(entry.dir),
 				ImportPath: entry.name,
 			},
 		}
-		pkg.Module.Dir = filepath.FromSlash(entry.moduleDir)
+		pkg.Module.Dir = testPath(entry.moduleDir)
 		pkg.Module.Path = entry.modulePath
 		program.Packages[pkg.ImportPath] = pkg
 	}
@@ -221,49 +225,53 @@ func TestRecordedPathPrecedence(t *testing.T) {
 		{"/tmp/root/extra/include/shared.h", "example.com/extra/include/shared.h"},
 		{"/tmp/root/include/shared.h", "example.com/root/include/shared.h"},
 		{"/tmp/root/pkg-other/file.go", "example.com/root/pkg-other/file.go"},
-		{"/tmp/root-other/file.go", filepath.FromSlash("/tmp/root-other/file.go")},
+		{"/tmp/root-other/file.go", testPath("/tmp/root-other/file.go")},
 	} {
-		if got := pkg.RecordedPath(filepath.FromSlash(tc.filename)); got != tc.want {
+		if got := pkg.RecordedPath(testPath(tc.filename)); got != tc.want {
 			t.Errorf("RecordedPath(%q) = %q, want %q", tc.filename, got, tc.want)
 		}
 	}
 }
 
 func TestRecordedPath(t *testing.T) {
+	root := t.TempDir()
+	testPath := func(path string) string {
+		return filepath.Join(root, filepath.FromSlash(path))
+	}
 	config := &compileopts.Config{
 		Options: &compileopts.Options{TrimPath: true},
 		Target:  &compileopts.TargetSpec{GOOS: "linux"},
 	}
 	program := &Program{
 		config:   config,
-		goroot:   filepath.FromSlash("/goroot"),
+		goroot:   testPath("/goroot"),
 		Packages: make(map[string]*Package),
 	}
 	pkg := &Package{
 		program: program,
 		PackageJSON: PackageJSON{
-			Dir:        filepath.FromSlash("/tmp/module"),
+			Dir:        testPath("/tmp/module"),
 			ImportPath: "example.com/main",
 		},
 	}
 	pkg.Module.Path = "example.com/main"
-	pkg.Module.Dir = filepath.FromSlash("/tmp/module")
+	pkg.Module.Dir = testPath("/tmp/module")
 	dependency := &Package{
 		program: program,
 		PackageJSON: PackageJSON{
-			Dir:        filepath.FromSlash("/tmp/dependency/subpackage"),
+			Dir:        testPath("/tmp/dependency/subpackage"),
 			ImportPath: "example.com/dependency/subpackage",
 		},
 	}
 	dependency.Module.Path = "example.com/dependency"
 	dependency.Module.Version = "v1.2.3"
-	dependency.Module.Dir = filepath.FromSlash("/tmp/dependency")
+	dependency.Module.Dir = testPath("/tmp/dependency")
 	dependency.CFlags = []string{
-		"-I" + filepath.FromSlash("/tmp/dependency/include"),
+		"-I" + testPath("/tmp/dependency/include"),
 		"-isystem",
-		filepath.FromSlash("/tmp/dependency/system"),
-		"-iquote" + filepath.FromSlash("/tmp/dependency/include"),
-		"-ffile-prefix-map=" + filepath.FromSlash("/tmp/dependency") + "=/mapped",
+		testPath("/tmp/dependency/system"),
+		"-iquote" + testPath("/tmp/dependency/include"),
+		"-ffile-prefix-map=" + testPath("/tmp/dependency") + "=/mapped",
 		`-DCONFIG_PATH="/tmp/dependency"`,
 	}
 	program.Packages[pkg.ImportPath] = pkg
@@ -273,15 +281,15 @@ func TestRecordedPath(t *testing.T) {
 	if got, want := dependency.RecordedDir(), "example.com/dependency@v1.2.3/subpackage"; got != want {
 		t.Fatalf("RecordedDir() = %q, want %q", got, want)
 	}
-	filename := filepath.FromSlash("/tmp/dependency/subpackage/file.go")
+	filename := testPath("/tmp/dependency/subpackage/file.go")
 	if got, want := pkg.RecordedPath(filename), "example.com/dependency@v1.2.3/subpackage/file.go"; got != want {
 		t.Fatalf("RecordedPath() = %q, want %q", got, want)
 	}
-	header := filepath.FromSlash("/tmp/dependency/include/shared.h")
+	header := testPath("/tmp/dependency/include/shared.h")
 	if got, want := pkg.RecordedPath(header), "example.com/dependency@v1.2.3/include/shared.h"; got != want {
 		t.Fatalf("RecordedPath() = %q, want %q", got, want)
 	}
-	if got, want := dependency.DebugPrefixMap(), "-ffile-prefix-map="+filepath.FromSlash("/tmp/dependency")+"=/_/example.com/dependency@v1.2.3"; got != want {
+	if got, want := dependency.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/tmp/dependency")+"=/_/example.com/dependency@v1.2.3"; got != want {
 		t.Fatalf("DebugPrefixMap() = %q, want %q", got, want)
 	}
 	if got, want := dependency.RecordedCFlags(), []string{
@@ -304,7 +312,7 @@ func TestRecordedPath(t *testing.T) {
 			t.Errorf("recordedCFlagPath(%q) = %q", filename, got)
 		}
 	}
-	outside := filepath.FromSlash("/tmp/module-other/include")
+	outside := testPath("/tmp/module-other/include")
 	if got := pkg.recordedCFlagPath(outside); got != outside {
 		t.Errorf("rewrote a path outside the module: %q", got)
 	}
@@ -312,7 +320,7 @@ func TestRecordedPath(t *testing.T) {
 	vendored := &Package{
 		program: program,
 		PackageJSON: PackageJSON{
-			Dir:        filepath.FromSlash("/tmp/main/vendor/example.com/dependency/subpackage"),
+			Dir:        testPath("/tmp/main/vendor/example.com/dependency/subpackage"),
 			ImportPath: "example.com/dependency/subpackage",
 		},
 	}
@@ -320,35 +328,35 @@ func TestRecordedPath(t *testing.T) {
 	vendored.Module.Version = "v1.2.3"
 	program.Packages[vendored.ImportPath] = vendored
 	program.initRecordedPaths()
-	if got, want := vendored.OriginalModuleDir(), filepath.FromSlash("/tmp/main/vendor/example.com/dependency"); got != want {
+	if got, want := vendored.OriginalModuleDir(), testPath("/tmp/main/vendor/example.com/dependency"); got != want {
 		t.Fatalf("vendored OriginalModuleDir() = %q, want %q", got, want)
 	}
-	vendoredHeader := filepath.FromSlash("/tmp/main/vendor/example.com/dependency/include/shared.h")
+	vendoredHeader := testPath("/tmp/main/vendor/example.com/dependency/include/shared.h")
 	if got, want := pkg.RecordedPath(vendoredHeader), "example.com/dependency@v1.2.3/include/shared.h"; got != want {
 		t.Fatalf("vendored RecordedPath() = %q, want %q", got, want)
 	}
-	if got, want := vendored.DebugPrefixMap(), "-ffile-prefix-map="+filepath.FromSlash("/tmp/main/vendor/example.com/dependency")+"=/_/example.com/dependency@v1.2.3"; got != want {
+	if got, want := vendored.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/tmp/main/vendor/example.com/dependency")+"=/_/example.com/dependency@v1.2.3"; got != want {
 		t.Fatalf("vendored DebugPrefixMap() = %q, want %q", got, want)
 	}
 
 	gopath := &Package{
 		program: program,
 		PackageJSON: PackageJSON{
-			Dir:        filepath.FromSlash("/gopath/src/example.com/dependency/subpackage"),
+			Dir:        testPath("/gopath/src/example.com/dependency/subpackage"),
 			ImportPath: "example.com/dependency/subpackage",
-			Root:       filepath.FromSlash("/gopath"),
+			Root:       testPath("/gopath"),
 		},
 	}
 	program.Packages[gopath.ImportPath] = gopath
 	program.initRecordedPaths()
-	if got, want := gopath.OriginalModuleDir(), filepath.FromSlash("/gopath/src"); got != want {
+	if got, want := gopath.OriginalModuleDir(), testPath("/gopath/src"); got != want {
 		t.Fatalf("GOPATH OriginalModuleDir() = %q, want %q", got, want)
 	}
-	gopathHeader := filepath.FromSlash("/gopath/src/example.com/dependency/include/shared.h")
+	gopathHeader := testPath("/gopath/src/example.com/dependency/include/shared.h")
 	if got, want := pkg.RecordedPath(gopathHeader), "example.com/dependency/include/shared.h"; got != want {
 		t.Fatalf("GOPATH RecordedPath() = %q, want %q", got, want)
 	}
-	if got, want := gopath.DebugPrefixMap(), "-ffile-prefix-map="+filepath.FromSlash("/gopath/src")+"=/_"; got != want {
+	if got, want := gopath.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/gopath/src")+"=/_"; got != want {
 		t.Fatalf("GOPATH DebugPrefixMap() = %q, want %q", got, want)
 	}
 }
