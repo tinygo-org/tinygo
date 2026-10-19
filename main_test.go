@@ -1684,7 +1684,6 @@ func TestTest(t *testing.T) {
 				defer out.Close()
 
 				opts := targ.opts
-				opts.GC = "conservative"
 				passed, err := Test("github.com/tinygo-org/tinygo/tests/stringcompare", false, out, out, &opts, "")
 				if err != nil {
 					t.Errorf("test error: %v", err)
