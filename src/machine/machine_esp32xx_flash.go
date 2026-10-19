@@ -1,9 +1,8 @@
-//go:build esp32c3
+//go:build esp32c3 || esp32s3
 
 package machine
 
 import (
-	"runtime/interrupt"
 	"unsafe"
 )
 
@@ -39,6 +38,7 @@ func (f flashBlockDevice) ReadAt(p []byte, off int64) (n int, err error) {
 
 // WriteAt writes the given number of bytes to the block device.
 // Only word (32 bits) length data can be programmed.
+// It must not be called from an interrupt or with interrupts disabled.
 // If the length of p is not long enough it will be padded with 0xFF bytes.
 // This method assumes that the destination is already erased.
 func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
@@ -75,6 +75,7 @@ func (f flashBlockDevice) EraseBlockSize() int64 {
 // transparently coalesce ranges of blocks into larger bundles if the chip
 // supports this. The start and len parameters are in block numbers, use
 // EraseBlockSize to map addresses to blocks.
+// It must not be called from an interrupt or with interrupts disabled.
 func (f flashBlockDevice) EraseBlocks(start, length int64) error {
 	return f.eraseBlocks(start, length)
 }
@@ -100,8 +101,8 @@ func (f flashBlockDevice) writeAt(p []byte, off int64) (n int, err error) {
 	address := writeAddress(off)
 	padded := flashPad(p, int(f.WriteBlockSize()))
 
-	state := interrupt.Disable()
-	defer interrupt.Restore(state)
+	state, multicore := flashSafeEnter()
+	defer flashSafeExit(state, multicore)
 
 	C.esp_rom_spiflash_unlock()
 	res := C.esp_rom_spiflash_write(C.uint32_t(address), (*C.uint32_t)(unsafe.Pointer(&padded[0])), C.uint32_t(len(padded)))
@@ -119,8 +120,8 @@ func (f flashBlockDevice) eraseBlocks(start, length int64) error {
 		return errFlashCannotErasePastEOF
 	}
 
-	state := interrupt.Disable()
-	defer interrupt.Restore(state)
+	state, multicore := flashSafeEnter()
+	defer flashSafeExit(state, multicore)
 
 	C.esp_rom_spiflash_unlock()
 	sector := address / uint32(f.EraseBlockSize())

@@ -27,3 +27,11 @@ func sleepWoken(core uint32) bool {
 
 func enableInterruptOnCore0(num uint32) {
 }
+
+func esp32s3EnterFlashSafeSection() (interrupt.State, bool) {
+	return interrupt.Disable(), false
+}
+
+func esp32s3ExitFlashSafeSection(state interrupt.State, _ bool) {
+	interrupt.Restore(state)
+}
