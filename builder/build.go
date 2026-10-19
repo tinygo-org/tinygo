@@ -838,10 +838,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
 			return nil, fmt.Errorf("buildmode wasi-legacy is only supported on wasm")
 		}
-
-		if config.Options.Scheduler != "none" {
-			return nil, fmt.Errorf("buildmode wasi-legacy only supports scheduler=none")
-		}
 	}
 
 	// Add compiler-rt dependency if needed. Usually this is a simple load from
