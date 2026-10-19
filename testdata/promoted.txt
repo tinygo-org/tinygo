@@ -1,2 +1,4 @@
 own: 2
 promoted: 1
+own ptr: 2
+promoted ptr: 1
