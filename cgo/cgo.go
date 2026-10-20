@@ -5,6 +5,10 @@
 // There are a few advantages to modifying the AST directly instead of doing CGo
 // as a preprocessing step, with the main advantage being that debug information
 // is kept intact as much as possible.
+//
+// Conditional #cgo CFLAGS and LDFLAGS use Go build constraint syntax:
+// comma-separated terms are AND, whitespace-separated groups are OR, and !
+// negates a term. Conditions match the target GOOS, GOARCH, and active tags.
 package cgo
 
 // This file extracts the `import "C"` statement from the source and modifies
@@ -14,10 +18,12 @@ package cgo
 import (
 	"fmt"
 	"go/ast"
+	"go/build/constraint"
 	"go/parser"
 	"go/scanner"
 	"go/token"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +42,9 @@ type cgoPackage struct {
 	currentDir      string // current working directory
 	packageDir      string // full path to the package to process
 	importPath      string
+	goos            string
+	goarch          string
+	buildTags       []string
 	fset            *token.FileSet
 	tokenFiles      map[string]*token.File
 	definedGlobally map[string]ast.Node
@@ -250,11 +259,14 @@ func _Cgo___get_errno() error {
 // functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
 // hashes of the accessed C header files. If there is one or more error, it
 // returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos, goarch string, buildTags []string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		packageName:     files[0].Name.Name,
 		currentDir:      dir,
 		importPath:      importPath,
+		goos:            goos,
+		goarch:          goarch,
+		buildTags:       buildTags,
 		fset:            fset,
 		tokenFiles:      map[string]*token.File{},
 		definedGlobally: map[string]ast.Node{},
@@ -530,12 +542,10 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 			continue
 		}
 
-		if len(fields) > 1 {
-			p.addErrorAfter(pos, text[:lineStart+5], "not implemented: build constraints in #cgo line")
+		name := fields[len(fields)-1]
+		if len(fields) > 1 && !p.matchCGoBuildConstraints(fields[:len(fields)-1]) {
 			continue
 		}
-
-		name := fields[len(fields)-1]
 		value := line[colon+1:]
 		switch name {
 		case "CFLAGS":
@@ -571,6 +581,48 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 		}
 	}
 	return text
+}
+
+func (p *cgoPackage) matchCGoBuildConstraints(conditions []string) bool {
+	matchTag := func(tag string) bool {
+		if tag == p.goos || tag == p.goarch || tag == "gc" || tag == "cgo" {
+			return true
+		}
+		switch {
+		case p.goos == "android" && tag == "linux":
+			return true
+		case p.goos == "illumos" && tag == "solaris":
+			return true
+		case p.goos == "ios" && tag == "darwin":
+			return true
+		case tag == "unix" && isUnixGOOS(p.goos):
+			return true
+		case tag == "boringcrypto":
+			tag = "goexperiment.boringcrypto"
+		}
+		return slices.Contains(p.buildTags, tag)
+	}
+
+	for _, condition := range conditions {
+		prefix := "// +build "
+		if strings.ContainsAny(condition, "&|()") {
+			prefix = "//go:build "
+		}
+		expr, err := constraint.Parse(prefix + condition)
+		if err == nil && expr.Eval(matchTag) {
+			return true
+		}
+	}
+	return false
+}
+
+func isUnixGOOS(goos string) bool {
+	switch goos {
+	case "aix", "android", "darwin", "dragonfly", "freebsd", "hurd", "illumos", "ios", "linux", "netbsd", "openbsd", "solaris":
+		return true
+	default:
+		return false
+	}
 }
 
 // makeUnionField creates a new struct from an existing *elaboratedTypeInfo,

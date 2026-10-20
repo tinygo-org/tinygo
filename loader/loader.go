@@ -734,7 +734,16 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		// LLVM 15's driver changes the process cwd. Set only FileManager's cwd.
 		// See clang/lib/Driver/Driver.cpp and clang/lib/Basic/FileManager.cpp.
 		parseFlags := append(append([]string(nil), initialCFlags...), "-Xclang", "-working-directory", "-Xclang", p.Dir)
-		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, parseFlags, p.program.config.GOOS())
+		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(
+			files,
+			p.program.workingDir,
+			p.ImportPath,
+			p.program.fset,
+			parseFlags,
+			p.program.config.GOOS(),
+			p.program.config.GOARCH(),
+			p.program.config.BuildTags(),
+		)
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
 		maps.Copy(p.FileHashes, accessedFiles)
