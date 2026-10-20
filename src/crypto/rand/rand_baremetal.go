@@ -24,7 +24,7 @@ func (r *reader) Read(b []byte) (n int, err error) {
 	var randomByte uint32
 	for i := range b {
 		if i%4 == 0 {
-			randomByte, err = machine.GetRNG()
+			randomByte, err = machine.RandomUint32()
 			if err != nil {
 				return n, err
 			}

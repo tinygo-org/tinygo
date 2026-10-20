@@ -11,14 +11,14 @@ import (
 
 const numberOfCycles = 32
 
-// GetRNG returns 32 bits of semi-random data based on ring oscillator.
+// RandomUint32 returns 32 bits of semi-random data based on ring oscillator.
 //
 // It is safe to call from multiple goroutines.
 //
-// Unlike some other implementations of GetRNG, these random numbers are not
+// Unlike some other implementations of RandomUint32, these random numbers are not
 // cryptographically secure and must not be used for cryptographic operations
 // (nonces, etc).
-func GetRNG() (uint32, error) {
+func RandomUint32() (uint32, error) {
 	core := CurrentCore()
 	randomByte := randomBytes[core]
 	var val uint32
@@ -28,6 +28,15 @@ func GetRNG() (uint32, error) {
 	}
 	randomBytes[core] = randomByte
 	return val, nil
+}
+
+// GetRNG returns a random uint32. See RandomUint32 for details.
+//
+// Deprecated: use RandomUint32 instead.
+//
+//go:fix inline
+func GetRNG() (uint32, error) {
+	return RandomUint32()
 }
 
 // randomBytes holds the LFSR state for each core.

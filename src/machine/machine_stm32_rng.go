@@ -8,8 +8,8 @@ var rngInitDone = false
 
 const RNG_MAX_READ_RETRIES = 1000
 
-// GetRNG returns 32 bits of cryptographically secure random data
-func GetRNG() (uint32, error) {
+// RandomUint32 returns 32 bits of cryptographically secure random data.
+func RandomUint32() (uint32, error) {
 	if !rngInitDone {
 		initRNG()
 		rngInitDone = true
@@ -32,4 +32,13 @@ func GetRNG() (uint32, error) {
 
 	ret := stm32.RNG.DR.Get()
 	return ret, nil
+}
+
+// GetRNG returns a random uint32. See RandomUint32 for details.
+//
+// Deprecated: use RandomUint32 instead.
+//
+//go:fix inline
+func GetRNG() (uint32, error) {
+	return RandomUint32()
 }
