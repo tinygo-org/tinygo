@@ -1174,10 +1174,6 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 		return err
 	}
 
-	if err := flasher.EraseFlash(progressFunc); err != nil {
-		return fmt.Errorf("erase failed: %v", err)
-	}
-
 	// Flash with progress reporting
 	err = flasher.FlashImage(data, offset, progressFunc)
 	if err != nil {
