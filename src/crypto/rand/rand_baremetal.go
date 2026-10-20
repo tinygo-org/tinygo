@@ -9,6 +9,7 @@ import (
 	"machine"
 )
 
+//go:noruntime
 func init() {
 	Reader = &reader{}
 }

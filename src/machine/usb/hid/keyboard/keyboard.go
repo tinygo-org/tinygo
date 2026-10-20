@@ -57,6 +57,7 @@ const (
 	decodeByte3
 )
 
+//go:noruntime
 func init() {
 	if Keyboard == nil {
 		Keyboard = newKeyboard()
@@ -75,6 +76,7 @@ func Port() *keyboard {
 	return Keyboard
 }
 
+//go:noruntime
 func newKeyboard() *keyboard {
 	return &keyboard{
 		buf: hid.NewRingBuffer(),

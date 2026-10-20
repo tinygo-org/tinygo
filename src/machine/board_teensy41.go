@@ -112,6 +112,7 @@ var (
 	DefaultUART = UART1
 )
 
+//go:noruntime
 func init() {
 	// register any interrupt handlers for this board's peripherals
 	_UART1.Interrupt = interrupt.New(nxp.IRQ_LPUART6, _UART1.handleInterrupt)

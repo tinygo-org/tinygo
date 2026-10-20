@@ -183,6 +183,7 @@ func calcPLLDivs(ps pllSearch, xoscRef, targetFreq, MHz uint64) (fbdiv uint64, r
 	return bestFbdiv, bestRefdiv, bestpd1, bestpd2, nil
 }
 
+//go:noruntime
 func abs(a int64) int64 {
 	if a == math.MinInt64 {
 		return math.MaxInt64

@@ -11,6 +11,7 @@ import (
 	"syscall"
 )
 
+//go:noruntime
 func init() {
 	// Mount the host filesystem at the root directory. This is what most
 	// programs will be expecting.

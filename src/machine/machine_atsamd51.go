@@ -982,6 +982,7 @@ var (
 	sercomUSART5 = UART{Buffer: NewRingBuffer(), Bus: sam.SERCOM5_USART_INT, SERCOM: 5}
 )
 
+//go:noruntime
 func init() {
 	sercomUSART0.Interrupt = interrupt.New(sam.IRQ_SERCOM0_2, sercomUSART0.handleInterrupt)
 	sercomUSART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1_2, sercomUSART1.handleInterrupt)

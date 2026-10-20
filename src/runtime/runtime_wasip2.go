@@ -12,6 +12,7 @@ import (
 	"internal/cm"
 )
 
+//go:noruntime
 func init() {
 	wasiclirun.Exports.Run = func() cm.BoolResult {
 		callMain()

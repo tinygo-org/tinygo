@@ -28,6 +28,7 @@ var (
 	sercomSPIM3 = &SPI{Bus: sam.SERCOM3_SPI, SERCOM: 3}
 )
 
+//go:noruntime
 func init() {
 	sercomUSART0.Interrupt = interrupt.New(sam.IRQ_SERCOM0, sercomUSART0.handleInterrupt)
 	sercomUSART1.Interrupt = interrupt.New(sam.IRQ_SERCOM1, sercomUSART1.handleInterrupt)

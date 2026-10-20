@@ -69,6 +69,7 @@ const (
 	A6 = D22 // VBAT
 )
 
+//go:noruntime
 func init() {
 	initLED()
 	initUART()
@@ -146,6 +147,7 @@ var (
 	DefaultUART = UART1
 )
 
+//go:noruntime
 func initUART() {
 	UART1.Interrupt = interrupt.New(stm32.IRQ_USART3, _UART1.handleInterrupt)
 	UART2.Interrupt = interrupt.New(stm32.IRQ_USART6, _UART2.handleInterrupt)

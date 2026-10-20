@@ -49,6 +49,8 @@ type pwmGroup struct {
 //	return &pwmSlice[index]
 //
 // 0x14 is the size of a pwmGroup.
+//
+//go:noruntime
 func getPWMGroup(index uintptr) *pwmGroup {
 	return (*pwmGroup)(unsafe.Add(unsafe.Pointer(rp.PWM), 0x14*index))
 }

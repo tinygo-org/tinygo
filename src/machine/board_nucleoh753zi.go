@@ -71,6 +71,7 @@ var (
 	DefaultUART = UART1
 )
 
+//go:noruntime
 func init() {
 	UART1.Interrupt = interrupt.New(stm32.IRQ_USART3, _UART1.handleInterrupt)
 }

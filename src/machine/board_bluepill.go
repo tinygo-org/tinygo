@@ -93,6 +93,7 @@ var (
 	}
 )
 
+//go:noruntime
 func init() {
 	UART1.Interrupt = interrupt.New(stm32.IRQ_USART1, _UART1.handleInterrupt)
 	UART2.Interrupt = interrupt.New(stm32.IRQ_USART2, _UART2.handleInterrupt)

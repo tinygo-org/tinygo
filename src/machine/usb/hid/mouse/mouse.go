@@ -23,6 +23,7 @@ type mouse struct {
 	waitTxc bool
 }
 
+//go:noruntime
 func init() {
 	if Mouse == nil {
 		Mouse = newMouse()
@@ -41,6 +42,7 @@ func Port() *mouse {
 	return Mouse
 }
 
+//go:noruntime
 func newMouse() *mouse {
 	return &mouse{
 		buf: hid.NewRingBuffer(),

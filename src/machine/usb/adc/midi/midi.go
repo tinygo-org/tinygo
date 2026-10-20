@@ -21,6 +21,7 @@ type midi struct {
 	waitTxc   bool
 }
 
+//go:noruntime
 func init() {
 	if Midi == nil {
 		Midi = newMidi()
@@ -38,6 +39,7 @@ func Port() *midi {
 	return Midi
 }
 
+//go:noruntime
 func newMidi() *midi {
 	m := &midi{
 		buf: NewRingBuffer(),

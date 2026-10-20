@@ -91,7 +91,11 @@ const (
 )
 
 // Timer clock = 2×PCLK when both HPRE and PPREx prescalers are active (RM0433 §8.5.5).
+//
+//go:noruntime
 func apb1TimFreq() uint64 { return 2 * uint64(pclk1Freq()) }
+
+//go:noruntime
 func apb2TimFreq() uint64 { return 2 * uint64(pclk2Freq()) }
 
 //---------- Timer related code

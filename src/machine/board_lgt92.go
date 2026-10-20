@@ -90,6 +90,7 @@ var (
 	SPI1 = SPI0
 )
 
+//go:noruntime
 func init() {
 	// Enable UARTs Interrupts
 	UART0.Interrupt = interrupt.New(stm32.IRQ_AES_RNG_LPUART1, _UART0.handleInterrupt)

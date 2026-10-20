@@ -11,6 +11,7 @@ import (
 	"syscall"
 )
 
+//go:noruntime
 func init() {
 	Reader = &reader{}
 }

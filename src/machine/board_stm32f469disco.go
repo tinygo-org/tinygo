@@ -44,6 +44,8 @@ var (
 )
 
 // set up RX IRQ handler. Follow similar pattern for other UARTx instances
+//
+//go:noruntime
 func init() {
 	UART3.Interrupt = interrupt.New(stm32.IRQ_USART3, _UART3.handleInterrupt)
 }

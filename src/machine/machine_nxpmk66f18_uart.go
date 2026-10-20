@@ -111,6 +111,7 @@ var (
 	_UART4 = UART{UART_Type: nxp.UART4, SCGC: &nxp.SIM.SCGC1, SCGCMask: nxp.SIM_SCGC1_UART4, DefaultRX: defaultUART4RX, DefaultTX: defaultUART4TX}
 )
 
+//go:noruntime
 func init() {
 	UART0.Interrupt = interrupt.New(nxp.IRQ_UART0_RX_TX, _UART0.handleStatusInterrupt)
 	UART1.Interrupt = interrupt.New(nxp.IRQ_UART1_RX_TX, _UART1.handleStatusInterrupt)

@@ -155,6 +155,7 @@ var (
 	}
 )
 
+//go:noruntime
 func init() {
 	// Register the UART interrupt.
 	interrupt.New(irq_USART0_RX, _UART0.handleInterrupt)

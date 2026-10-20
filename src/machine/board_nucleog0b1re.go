@@ -124,6 +124,7 @@ var (
 	}
 )
 
+//go:noruntime
 func init() {
 	UART1.Interrupt = interrupt.New(stm32.IRQ_USART2_LPUART2, _UART1.handleInterrupt)
 	// Note: FDCAN interrupts share with USB (IRQ_UCPD1_UCPD2_USB = 8)

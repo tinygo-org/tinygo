@@ -20,6 +20,14 @@ func TestNoRuntime(t *testing.T) {
 //go:noruntime
 func calc(n int) int { return n * 7 }
 func main() { println(result) }`, false},
+		{"evaluated-init", `var result int
+//go:noruntime
+func init() { result = 12 * 7 }
+func main() { println(result) }`, false},
+		{"init-loop-limit", `var result int
+//go:noruntime
+func init() { for i := 0; i < 1001; i++ { result += i } }
+func main() { println(result) }`, true},
 		{"loop-limit", `var result = calc(1001)
 //go:noruntime
 func calc(n int) int { sum := 0; for i := 0; i < n; i++ { sum += i }; return sum }
@@ -153,6 +161,72 @@ func main() { println(callback.other()) }`, true},
 					}
 					if strings.Contains(string(data), "tinygo-noruntime") {
 						t.Fatal("noruntime function remains in output")
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestNoRuntimeStartup(t *testing.T) {
+	const pwm = `import "machine"
+func main() { println(machine.PWM0.Configure(machine.PWMConfig{Period: 1000000})) }`
+	const midi = `import "machine/usb/adc/midi"
+func main() { println(midi.Midi) }`
+	const files = `import "os"
+func main() { file, err := os.Open("."); println(file, err) }`
+	for _, tc := range []struct {
+		target string
+		name   string
+		source string
+	}{
+		{"circuitplay-express", "keyboard", `import "machine/usb/hid/keyboard"
+func main() { println(keyboard.Keyboard) }`},
+		{"feather-m4", "mouse", `import "machine/usb/hid/mouse"
+func main() { mouse.Port().Move(1, 0) }`},
+		{"pico", "joystick", `import "machine/usb/hid/joystick"
+func main() { joystick.Port().SendState() }`},
+		{"pico2", "midi", midi},
+		{"feather-nrf52840", "midi", midi},
+		{"pico", "pwm", pwm},
+		{"pico2", "pwm", pwm},
+		{"nucleo-h753zi", "timers", `import "machine"
+func main() {
+	println(machine.TIM1.Configure(machine.PWMConfig{Period: 1000000}))
+	println(machine.TIM2.Configure(machine.PWMConfig{Period: 1000000}))
+}`},
+		{"feather-stm32f405", "uart", `import "machine"
+func main() { machine.UART1.Configure(machine.UARTConfig{}) }`},
+		{"embedfire-py32f030", "uart", `import "machine"
+func main() {
+	println(machine.DefaultUART.Configure(machine.UARTConfig{}))
+	println(machine.UART2.Configure(machine.UARTConfig{}))
+}`},
+		{"py32f410xb", "uart", `import "machine"
+func main() { println(machine.DefaultUART.Configure(machine.UARTConfig{})) }`},
+		{"feather-nrf52840", "rand", `import "crypto/rand"
+func main() { var b [8]byte; n, err := rand.Read(b[:]); println(n, err) }`},
+		{"wasip1", "files", files},
+		{"wasip2", "files", files},
+	} {
+		t.Run(tc.target+"/"+tc.name, func(t *testing.T) {
+			for _, opt := range []string{"0", "2"} {
+				t.Run(opt, func(t *testing.T) {
+					tmpdir := t.TempDir()
+					path := filepath.Join(tmpdir, "main.go")
+					if err := os.WriteFile(path, []byte("package main\n"+tc.source+"\n"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+					options := optionsFromTarget(tc.target, sema)
+					options.Opt = opt
+					options.InterpMaxLoopIterations = interp.DefaultMaxInterpBlockEntries
+					config, err := builder.NewConfig(&options)
+					if err != nil {
+						t.Fatal(err)
+					}
+					out := filepath.Join(tmpdir, "main.ll")
+					if _, err := builder.Build(path, out, tmpdir, config); err != nil {
+						t.Fatal(err)
 					}
 				})
 			}

@@ -5,6 +5,7 @@ import (
 	"unsafe"
 )
 
+//go:noruntime
 func init() {
 	Reader = &reader{}
 }

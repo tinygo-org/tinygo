@@ -17,6 +17,7 @@ type joystick struct {
 	setupFunc     func(setup usb.Setup) bool
 }
 
+//go:noruntime
 func init() {
 	if Joystick == nil {
 		Joystick = newDefaultJoystick()
@@ -74,6 +75,7 @@ func UseSettings(def Definitions, rxHandlerFunc func(b []byte), setupFunc func(s
 	return js
 }
 
+//go:noruntime
 func newDefaultJoystick() *joystick {
 	def := DefaultDefinitions()
 	js := UseSettings(def, nil, nil, nil)
