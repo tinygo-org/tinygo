@@ -175,7 +175,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        version: [16, 20, 21, 22]
+        version: [16, 21, 22, 23]
     steps:
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@main
