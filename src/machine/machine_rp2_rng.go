@@ -19,14 +19,19 @@ const numberOfCycles = 32
 // cryptographically secure and must not be used for cryptographic operations
 // (nonces, etc).
 func GetRNG() (uint32, error) {
+	core := CurrentCore()
+	randomByte := randomBytes[core]
 	var val uint32
-	var randomByte uint8
 	for i := 0; i < 4; i++ {
 		randomByte = roscRandByte(randomByte)
 		val = (val << 8) | uint32(randomByte)
 	}
+	randomBytes[core] = randomByte
 	return val, nil
 }
+
+// randomBytes holds the LFSR state for each core.
+var randomBytes [2]uint8
 
 func roscRandByte(randomByte uint8) uint8 {
 	var poly uint8
