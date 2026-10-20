@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 	"os"
 	"slices"
 	"strconv"
@@ -371,6 +372,23 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					fmt.Fprintln(os.Stderr, indent+"runtime.alloc:", size, "->", ptr)
 				}
 				locals[inst.localIndex] = ptr
+			case strings.HasPrefix(callFn.name, "llvm.ctlz.i"):
+				width := inst.llvmInst.Type().IntTypeWidth()
+				x, isZeroPoison, err := uintOperands(r, operands[1], operands[2])
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				// A zero input is poison when the flag is set.
+				// https://llvm.org/docs/LangRef.html#llvm-ctlz-intrinsic
+				if (width != 8 && width != 16 && width != 32 && width != 64) || (x == 0 && isZeroPoison != 0) {
+					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+					if err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				count := width - bits.Len64(x)
+				locals[inst.localIndex] = makeLiteralInt(uint64(count), width)
 			case strings.HasPrefix(callFn.name, "llvm.umin."), strings.HasPrefix(callFn.name, "llvm.umax."):
 				lhs, rhs, err := uintOperands(r, operands[1], operands[2])
 				if err != nil {
