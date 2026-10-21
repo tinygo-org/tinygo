@@ -387,6 +387,33 @@ func TestCGoCompilerFlagValidation(t *testing.T) {
 	}
 }
 
+func TestCGoUnsigned(t *testing.T) {
+	source := `package main
+// unsigned int identity(unsigned int value);
+import "C"
+var value C.unsigned
+var _ C.uint = value
+var _ C.unsigned = C.uint(1)
+var _ = C.identity(C.unsigned(2))
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "unsigned.go", source, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, _, _, _, _, _, errs := Process(
+		[]*ast.File{f}, ".", "main", fset,
+		[]string{"--target=armv6m-unknown-unknown-eabi"}, "linux", "arm", nil,
+	)
+	if len(errs) != 0 {
+		t.Fatalf("CGo errors: %v", errs)
+	}
+	config := types.Config{Importer: newSimpleImporter(), Sizes: types.SizesFor("gccgo", "arm")}
+	if _, err := config.Check("main", fset, append([]*ast.File{f}, generated...), nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func Test_cgoPackage_isEquivalentAST(t *testing.T) {
 	fieldA := &ast.Field{Type: &ast.BasicLit{Kind: token.STRING, Value: "a"}}
 	fieldB := &ast.Field{Type: &ast.BasicLit{Kind: token.STRING, Value: "b"}}
