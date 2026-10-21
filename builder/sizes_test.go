@@ -14,6 +14,7 @@ import (
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/interp"
 )
 
 var sema = make(chan struct{}, runtime.NumCPU())
@@ -310,13 +311,14 @@ func buildBinary(t *testing.T, targetString, pkgName string, trimPath bool) Buil
 
 func buildBinaryInDir(targetString, pkgName, opt, tmpdir string, trimPath bool) (BuildResult, error) {
 	options := compileopts.Options{
-		Target:        targetString,
-		Opt:           opt,
-		Semaphore:     sema,
-		InterpTimeout: 60 * time.Second,
-		Debug:         true,
-		VerifyIR:      true,
-		TrimPath:      trimPath,
+		Target:                  targetString,
+		Opt:                     opt,
+		Semaphore:               sema,
+		InterpTimeout:           60 * time.Second,
+		InterpMaxLoopIterations: interp.DefaultMaxInterpBlockEntries,
+		Debug:                   true,
+		VerifyIR:                true,
+		TrimPath:                trimPath,
 	}
 	target, err := compileopts.LoadTarget(&options)
 	if err != nil {
