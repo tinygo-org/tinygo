@@ -10,7 +10,7 @@ const synctestBaseTime = 946684800000000000
 var synctestEnabled task.Uint32
 
 func synctestIsEnabled() bool {
-	return synctestEnabled.Load() != 0
+	return synctestSupported && synctestEnabled.Load() != 0
 }
 
 type synctestBubble struct {
@@ -398,6 +398,9 @@ func synctestBlock(t *task.Task) {
 
 //go:linkname synctest_run internal/synctest.Run
 func synctest_run(f func()) {
+	if !synctestSupported {
+		panic("synctest is not supported on bare metal")
+	}
 	synctestEnabled.Store(1)
 	root := task.Current()
 	if root.SynctestBubble != nil {
