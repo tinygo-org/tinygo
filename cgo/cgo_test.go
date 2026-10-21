@@ -56,7 +56,7 @@ func TestCGo(t *testing.T) {
 			}
 
 			// Process the AST with CGo.
-			cgoFiles, _, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", "main", fset, cflags, "linux", "arm", nil)
+			cgoFiles, _, _, _, _, _, cgoErrors := Process([]*ast.File{f}, "testdata", "main", fset, cflags, "linux", "arm", nil)
 
 			// Check the AST for type errors.
 			var typecheckErrors []error
@@ -129,7 +129,7 @@ func TestCGoPragmas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, _, _, _, _, errs := Process([]*ast.File{f}, "testdata", "main", fset, []string{"--target=armv6m-unknown-unknown-eabi"}, "linux", "arm", nil)
+	files, _, _, _, _, _, errs := Process([]*ast.File{f}, "testdata", "main", fset, []string{"--target=armv6m-unknown-unknown-eabi"}, "linux", "arm", nil)
 	if len(errs) != 0 {
 		t.Fatal(errs)
 	}
@@ -197,7 +197,7 @@ var _ C.size_t = C.strlen(nil)
 			if resourceDir := goenv.ClangResourceDir(true); resourceDir != "" {
 				cflags = append(cflags, "-resource-dir="+resourceDir)
 			}
-			cgoFiles, _, _, _, _, cgoErrors := Process([]*ast.File{f}, ".", "main", fset, cflags, "linux", tc.arch, nil)
+			cgoFiles, _, _, _, _, _, cgoErrors := Process([]*ast.File{f}, ".", "main", fset, cflags, "linux", tc.arch, nil)
 			if len(cgoErrors) != 0 {
 				t.Fatalf("cgo errors: %v", cgoErrors)
 			}
@@ -321,9 +321,69 @@ var _ C.unsupported_t
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, _, _, _, cgoErrors := Process([]*ast.File{f}, ".", "main", fset, []string{"--target=armv6m-unknown-unknown-eabi"}, "linux", "arm", nil)
+	_, _, _, _, _, _, cgoErrors := Process([]*ast.File{f}, ".", "main", fset, []string{"--target=armv6m-unknown-unknown-eabi"}, "linux", "arm", nil)
 	if len(cgoErrors) != 1 || !strings.Contains(cgoErrors[0].Error(), "unknown C type: _BitInt(17) (libclang type kind Unexposed)") {
 		t.Fatalf("unexpected cgo errors: %v", cgoErrors)
+	}
+}
+
+func TestCGoCompilerFlags(t *testing.T) {
+	source := `package main
+/*
+#cgo darwin,arm64 CPPFLAGS: -Iinclude -DSHARED=7
+#cgo darwin,amd64 CPPFLAGS: -DMISMATCHED
+#cgo CFLAGS: -DC_ONLY=3
+#cgo darwin,arm64 CXXFLAGS: -std=c++17 -DCXX_ONLY=5
+#cgo darwin,amd64 CXXFLAGS: -fdoes-not-exist
+#include "foo.h"
+#if defined(CXX_ONLY) || defined(MISMATCHED)
+#error incorrect flags used for C parsing
+#endif
+*/
+import "C"
+const Result = C.SHARED + C.C_ONLY + C.FOO_H
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "testdata/compiler-flags.go", source, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, _, cflags, cxxflags, _, _, errs := Process(
+		[]*ast.File{f}, "testdata", "main", fset,
+		[]string{"--target=armv6m-unknown-unknown-eabi"}, "darwin", "arm64", nil,
+	)
+	if len(errs) != 0 {
+		t.Fatalf("CGo errors: %v", errs)
+	}
+	includeDir, err := filepath.Abs("testdata/include")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"-I" + includeDir, "-DSHARED=7", "-DC_ONLY=3"}; !reflect.DeepEqual(cflags, want) {
+		t.Errorf("C flags = %v, want %v", cflags, want)
+	}
+	if want := []string{"-I" + includeDir, "-DSHARED=7", "-std=c++17", "-DCXX_ONLY=5"}; !reflect.DeepEqual(cxxflags, want) {
+		t.Errorf("C++ flags = %v, want %v", cxxflags, want)
+	}
+	config := types.Config{Importer: newSimpleImporter(), Sizes: types.SizesFor("gccgo", "arm")}
+	pkg, err := config.Check("main", fset, append([]*ast.File{f}, generated...), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pkg.Scope().Lookup("Result").(*types.Const).Val().ExactString(); got != "11" {
+		t.Errorf("Result = %s, want 11", got)
+	}
+}
+
+func TestCGoCompilerFlagValidation(t *testing.T) {
+	for _, directive := range []string{"CPPFLAGS", "CXXFLAGS"} {
+		t.Run(directive, func(t *testing.T) {
+			p := &cgoPackage{fset: token.NewFileSet()}
+			p.parseCGoPreprocessorLines("#cgo "+directive+": -fdoes-not-exist", token.NoPos)
+			if len(p.errors) != 1 || !strings.Contains(p.errors[0].Error(), "invalid flag: -fdoes-not-exist") {
+				t.Fatalf("errors = %v, want invalid flag error", p.errors)
+			}
+		})
 	}
 }
 

@@ -26,7 +26,7 @@ type cFileCompileConfig struct {
 	recordedPath string
 }
 
-// compileAndCacheCFile compiles a C or assembly file using a build cache.
+// compileAndCacheCFile compiles a C, C++, or assembly file using a build cache.
 // Compiling the same file again (if nothing changed, including included header
 // files) the output is loaded from the build cache instead.
 //
