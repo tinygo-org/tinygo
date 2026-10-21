@@ -1574,6 +1574,7 @@ commands:
 		ports:		list available serial ports
 		env:		list environment variables used during build
 		list:		run go list using the TinyGo root
+		fix:		apply Go fix analyzers using the TinyGo loader
 		clean:		empty cache directory (%s)
 		targets:	list targets
 		info:		show info for specified target
@@ -1584,6 +1585,7 @@ commands:
 var (
 	commandHelp = map[string]string{
 		"build":   usageBuild,
+		"fix":     usageFix,
 		"run":     usageRun,
 		"flash":   usageFlash,
 		"monitor": usageMonitor,
@@ -1870,6 +1872,8 @@ func main() {
 	// library.
 	handleChdirFlag()
 	switch command {
+	case "fix":
+		os.Exit(runFix(os.Args[2:], os.Stdout, os.Stderr))
 	case "clang", "ld.lld", "wasm-ld":
 		err := builder.RunTool(command, os.Args[2:]...)
 		if err != nil {
