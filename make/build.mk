@@ -5,7 +5,7 @@
 clean: ## Remove build directory
 	@rm -rf build
 
-FMT_PATHS = ./*.go builder cgo/*.go compiler interp loader src transform
+FMT_PATHS = ./*.go builder cgo/*.go compiler fix interp loader src transform
 fmt: ## Reformat source
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check: ## Warn if any source needs reformatting

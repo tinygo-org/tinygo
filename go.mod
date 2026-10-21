@@ -48,6 +48,7 @@ require (
 	github.com/urfave/cli/v3 v3.0.0-beta1 // indirect
 	go.bytecodealliance.org v0.6.2 // indirect
 	go.bytecodealliance.org/cm v0.2.2 // indirect
+	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 )
 

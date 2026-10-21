@@ -17,6 +17,12 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
+// Go minor version range supported by TinyGo.
+const (
+	MinimumGoMinorVersion = 25
+	MaximumGoMinorVersion = 27
+)
+
 // Library versions. Whenever an existing library is changed, this number should
 // be added/increased so that existing caches are invalidated.
 //
