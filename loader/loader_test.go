@@ -3,6 +3,7 @@ package loader
 import (
 	"errors"
 	"fmt"
+	"go/token"
 	"go/types"
 	"os"
 	"path/filepath"
@@ -15,6 +16,66 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
 )
+
+func TestCGoCompilerFlags(t *testing.T) {
+	t.Setenv("CGO_CPPFLAGS", "-DSHARED_ENV=1")
+	t.Setenv("CGO_CFLAGS", "-DC_ENV=1")
+	t.Setenv("CGO_CXXFLAGS", "-std=c++17 -DCXX_ENV=1")
+	dir := t.TempDir()
+	source := `package probe
+/*
+#cgo CPPFLAGS: -DSHARED_DIRECTIVE=1
+#cgo CFLAGS: -DC_DIRECTIVE=1
+#cgo CXXFLAGS: -std=c++17 -DCXX_DIRECTIVE=1
+#if !defined(SHARED_ENV) || !defined(C_ENV) || !defined(SHARED_DIRECTIVE) || !defined(C_DIRECTIVE)
+#error missing C flags
+#endif
+#if defined(CXX_ENV) || defined(CXX_DIRECTIVE)
+#error C++ flags passed to C parser
+#endif
+*/
+import "C"
+`
+	if err := os.WriteFile(filepath.Join(dir, "probe.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := &Package{
+		PackageJSON: PackageJSON{Dir: dir, ImportPath: "probe", CgoFiles: []string{"probe.go"}},
+		FileHashes:  make(map[string][]byte),
+		program: &Program{
+			workingDir: dir,
+			fset:       token.NewFileSet(),
+			config: &compileopts.Config{
+				Options: &compileopts.Options{Opt: "0"},
+				Target: &compileopts.TargetSpec{
+					Triple: "armv6m-unknown-unknown-eabi", GOOS: "linux", GOARCH: "arm",
+				},
+			},
+		},
+	}
+	if _, err := p.parseFiles(); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		flags []string
+		want  []string
+		omit  []string
+	}{
+		{p.CFlags, []string{"-DSHARED_ENV=1", "-DC_ENV=1", "-DSHARED_DIRECTIVE=1", "-DC_DIRECTIVE=1"}, []string{"-std=c++17", "-DCXX_ENV=1", "-DCXX_DIRECTIVE=1"}},
+		{p.CXXFlags, []string{"-DSHARED_ENV=1", "-std=c++17", "-DCXX_ENV=1", "-DSHARED_DIRECTIVE=1", "-DCXX_DIRECTIVE=1"}, []string{"-DC_ENV=1", "-DC_DIRECTIVE=1"}},
+	} {
+		for _, flag := range test.want {
+			if !slices.Contains(test.flags, flag) {
+				t.Errorf("flags %q do not contain %q", test.flags, flag)
+			}
+		}
+		for _, flag := range test.omit {
+			if slices.Contains(test.flags, flag) {
+				t.Errorf("flags %q contain %q", test.flags, flag)
+			}
+		}
+	}
+}
 
 func TestPackageTestContext(t *testing.T) {
 	t.Setenv("GOFLAGS", "")

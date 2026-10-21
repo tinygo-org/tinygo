@@ -6,9 +6,11 @@
 // as a preprocessing step, with the main advantage being that debug information
 // is kept intact as much as possible.
 //
-// Conditional #cgo CFLAGS and LDFLAGS use Go build constraint syntax:
-// comma-separated terms are AND, whitespace-separated groups are OR, and !
-// negates a term. Conditions match the target GOOS, GOARCH, and active tags.
+// Conditional #cgo flags match the target GOOS, GOARCH, and active tags.
+// See https://pkg.go.dev/cmd/cgo for the build constraint syntax.
+//
+// CPPFLAGS apply to both C and C++. CFLAGS and CXXFLAGS apply only to their
+// respective languages.
 package cgo
 
 // This file extracts the `import "C"` statement from the source and modifies
@@ -50,7 +52,9 @@ type cgoPackage struct {
 	definedGlobally map[string]ast.Node
 	noescapingFuncs map[string]*noescapingFunc // #cgo noescape lines
 	anonDecls       map[any]string
+	cppflags        []string // preprocessor flags shared by C and C++
 	cflags          []string // CFlags from #cgo lines
+	cxxflags        []string // C++ flags from #cgo lines
 	ldflags         []string // LDFlags from #cgo lines
 	visitedFiles    map[string][]byte
 	cgoHeaders      []string
@@ -256,10 +260,10 @@ func _Cgo___get_errno() error {
 // with libclang, and modifies the AST to use this information. It returns a
 // newly created *ast.File that should be added to the list of to-be-parsed
 // files, the CGo header snippets that should be compiled (for inline
-// functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
+// functions), the C, C++, and linker flags found in #cgo lines, and a map of file
 // hashes of the accessed C header files. If there is one or more error, it
 // returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos, goarch string, buildTags []string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos, goarch string, buildTags []string) ([]*ast.File, []string, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		packageName:     files[0].Name.Name,
 		currentDir:      dir,
@@ -283,7 +287,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Find the absolute path for this package.
 	packagePath, err := filepath.Abs(fset.File(files[0].Pos()).Name())
 	if err != nil {
-		return nil, nil, nil, nil, nil, []error{
+		return nil, nil, nil, nil, nil, nil, []error{
 			scanner.Error{
 				Pos: fset.Position(files[0].Pos()),
 				Msg: "cgo: cannot find absolute path: " + err.Error(), // TODO: wrap this error
@@ -381,6 +385,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Note that it is only disabled for memcpy (etc) calls made from Go, which
 	// have better alternatives anyway.
 	cflagsForCGo := append([]string{"-D_FORTIFY_SOURCE=0"}, cflags...)
+	cflagsForCGo = append(cflagsForCGo, p.cppflags...)
 	cflagsForCGo = append(cflagsForCGo, p.cflags...)
 
 	// Retrieve types such as C.int, C.longlong, etc from C.
@@ -438,7 +443,9 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.cgoFiles, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
+	cflags = append(append([]string(nil), p.cppflags...), p.cflags...)
+	cxxflags := append(append([]string(nil), p.cppflags...), p.cxxflags...)
+	return p.cgoFiles, p.cgoHeaders, cflags, cxxflags, p.ldflags, p.visitedFiles, p.errors
 }
 
 func (p *cgoPackage) newCGoFile(file *ast.File, index int) *cgoFile {
@@ -548,7 +555,7 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 		}
 		value := line[colon+1:]
 		switch name {
-		case "CFLAGS":
+		case "CFLAGS", "CPPFLAGS", "CXXFLAGS":
 			flags, err := shlex.Split(value)
 			if err != nil {
 				// TODO: find the exact location where the error happened.
@@ -560,7 +567,14 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 				continue
 			}
 			p.makePathsAbsolute(flags)
-			p.cflags = append(p.cflags, flags...)
+			switch name {
+			case "CFLAGS":
+				p.cflags = append(p.cflags, flags...)
+			case "CPPFLAGS":
+				p.cppflags = append(p.cppflags, flags...)
+			case "CXXFLAGS":
+				p.cxxflags = append(p.cxxflags, flags...)
+			}
 		case "LDFLAGS":
 			flags, err := shlex.Split(value)
 			if err != nil {

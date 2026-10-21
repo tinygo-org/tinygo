@@ -69,6 +69,7 @@ type PackageJSON struct {
 	GoFiles  []string
 	CgoFiles []string
 	CFiles   []string
+	CXXFiles []string
 
 	// Embedded files
 	EmbedFiles []string
@@ -93,6 +94,7 @@ type Package struct {
 	Files        []*ast.File
 	FileHashes   map[string][]byte
 	CFlags       []string // CFlags used during CGo preprocessing (only set if CGo is used)
+	CXXFlags     []string // flags used to compile C++ files
 	CGoHeaders   []string // text above 'import "C"' lines
 	EmbedGlobals map[string][]*EmbedFile
 	Pkg          *types.Package
@@ -720,21 +722,28 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags(true)...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
-		cgoCFlags, err := shlex.Split(goenv.Get("CGO_CFLAGS"))
-		if err != nil {
-			return nil, fmt.Errorf("failed to split CGO_CFLAGS: %w", err)
-		}
-		initialCFlags = append(initialCFlags, cgoCFlags...)
 		if p.program.config.TrimPath() {
 			initialCFlags = append(initialCFlags,
 				p.DebugPrefixMap(),
 				"-ffile-prefix-map="+filepath.Join(p.program.goroot, "src")+"="+p.program.config.CSourcePath("."),
 			)
 		}
+		cgoFlags := make(map[string][]string)
+		for _, name := range []string{"CGO_CPPFLAGS", "CGO_CFLAGS", "CGO_CXXFLAGS"} {
+			flags, err := shlex.Split(goenv.Get(name))
+			if err != nil {
+				return nil, fmt.Errorf("failed to split %s: %w", name, err)
+			}
+			cgoFlags[name] = flags
+		}
+		initialCFlags = append(initialCFlags, cgoFlags["CGO_CPPFLAGS"]...)
+		initialCXXFlags := append([]string(nil), initialCFlags...)
+		initialCXXFlags = append(initialCXXFlags, cgoFlags["CGO_CXXFLAGS"]...)
+		initialCFlags = append(initialCFlags, cgoFlags["CGO_CFLAGS"]...)
 		// LLVM 15's driver changes the process cwd. Set only FileManager's cwd.
 		// See clang/lib/Driver/Driver.cpp and clang/lib/Basic/FileManager.cpp.
 		parseFlags := append(append([]string(nil), initialCFlags...), "-Xclang", "-working-directory", "-Xclang", p.Dir)
-		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(
+		generated, headerCode, cflags, cxxflags, ldflags, accessedFiles, errs := cgo.Process(
 			files,
 			p.program.workingDir,
 			p.ImportPath,
@@ -745,6 +754,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			p.program.config.BuildTags(),
 		)
 		p.CFlags = append(initialCFlags, cflags...)
+		p.CXXFlags = append(initialCXXFlags, cxxflags...)
 		p.CGoHeaders = headerCode
 		maps.Copy(p.FileHashes, accessedFiles)
 		if errs != nil {
